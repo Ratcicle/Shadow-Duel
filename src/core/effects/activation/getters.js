@@ -82,32 +82,99 @@ export function getSpellTrapActivationEffect(card, options = {}) {
 /**
  * Get the ignition effect for a monster based on activation zone.
  */
-export function getMonsterIgnitionEffect(card, activationZone = "field") {
-  if (!card || !Array.isArray(card.effects)) {
-    return null;
-  }
+function monsterIgnitionMatchesActivationZone(effect, activationZone = "field") {
+  if (!effect || effect.timing !== "ignition") return false;
   if (activationZone === "graveyard") {
-    return (
-      card.effects.find(
-        (e) => e && e.timing === "ignition" && e.requireZone === "graveyard"
-      ) || null
-    );
+    return effect.requireZone === "graveyard";
   }
   if (activationZone === "hand") {
-    return (
-      card.effects.find(
-        (e) => e && e.timing === "ignition" && e.requireZone === "hand"
-      ) || null
-    );
+    return effect.requireZone === "hand";
   }
-  return (
-    card.effects.find(
-      (e) =>
-        e &&
-        e.timing === "ignition" &&
-        (!e.requireZone || e.requireZone === "field")
-    ) || null
+  return !effect.requireZone || effect.requireZone === "field";
+}
+
+export function getMonsterIgnitionEffects(card, activationZone = "field") {
+  if (!card || !Array.isArray(card.effects)) {
+    return [];
+  }
+  return card.effects.filter((effect) =>
+    monsterIgnitionMatchesActivationZone(effect, activationZone)
   );
+}
+
+export function getMonsterIgnitionEffect(
+  card,
+  activationZone = "field",
+  options = {},
+) {
+  const engine = this || {};
+  const effects = engine.getMonsterIgnitionEffects
+    ? engine.getMonsterIgnitionEffects(card, activationZone)
+    : getMonsterIgnitionEffects(card, activationZone);
+  const effectId =
+    typeof options === "string"
+      ? options
+      : options?.effectId || options?.activationContext?.effectId || null;
+  if (effectId) {
+    return effects.find((effect) => effect?.id === effectId) || null;
+  }
+  return effects[0] || null;
+}
+
+export function getActivatableMonsterIgnitionEffects(
+  card,
+  player,
+  activationZone = "field",
+  options = {},
+) {
+  const engine = this || {};
+  const effects = engine.getMonsterIgnitionEffects
+    ? engine.getMonsterIgnitionEffects(card, activationZone)
+    : getMonsterIgnitionEffects(card, activationZone);
+  return effects
+    .map((effect) => {
+      const activationContext = {
+        ...(options.activationContext || {}),
+        effectId: effect.id,
+      };
+      const preview =
+        typeof engine.canActivateMonsterEffectPreview === "function"
+          ? engine.canActivateMonsterEffectPreview(
+              card,
+              player,
+              activationZone,
+              null,
+              { ...options, effectId: effect.id, activationContext },
+            )
+          : { ok: false, reason: "Preview unavailable." };
+      return { effect, preview };
+    })
+    .filter((entry) => entry.preview?.ok !== false);
+}
+
+export function getFirstActivatableMonsterIgnitionEffect(
+  card,
+  player,
+  activationZone = "field",
+  options = {},
+) {
+  const engine = this || {};
+  const entries =
+    typeof engine.getActivatableMonsterIgnitionEffects === "function"
+      ? engine.getActivatableMonsterIgnitionEffects(
+          card,
+          player,
+          activationZone,
+          options,
+        )
+      : getActivatableMonsterIgnitionEffects.call(
+          engine,
+          card,
+          player,
+          activationZone,
+          options,
+        );
+  return entries?.[0] || null;
 }
 
 /**

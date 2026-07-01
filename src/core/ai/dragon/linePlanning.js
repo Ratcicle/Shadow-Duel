@@ -1086,13 +1086,6 @@ export function scoreDragonLineMilestones(context = {}) {
     ) {
       addLineMilestone(milestones, "Battle: Black Bull cleared multiple attacks", 3);
     }
-    const battleIndex = sequence.findIndex((action) => action?.type === "simulatedBattle");
-    if (
-      battleIndex >= 0 &&
-      sequence.slice(battleIndex + 1).some((action) => action?.type !== "simulatedBattle")
-    ) {
-      addLineMilestone(milestones, "Main2: battle opened payoff", 2);
-    }
     if (battleLostSelfCards > 0 && battleRemovedOpponentCards === 0 && battleDamage < 1000) {
       addLineMilestone(milestones, "Penalty: weak battle bridge lost material", -4);
     }

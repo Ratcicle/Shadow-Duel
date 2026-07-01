@@ -34,6 +34,15 @@ function buildTrapPlacementOnlyEffect(card) {
   };
 }
 
+function canUseTrapPlacementOnlyActivation(card) {
+  if (!card || card.cardKind !== "trap" || card.subtype !== "continuous") {
+    return false;
+  }
+  return !(card.effects || []).some(
+    (effect) => effect && effect.timing === "on_activate",
+  );
+}
+
 /**
  * Get all cards a player can activate in current chain context
  * @param {Object} player - The player to check
@@ -87,7 +96,7 @@ export function getActivatableCardsInChain(player, context) {
 
       const effect = this.findActivatableEffect(card, context, player);
       const responseEffect =
-        effect || (card.subtype === "continuous"
+        effect || (canUseTrapPlacementOnlyActivation(card)
           ? buildTrapPlacementOnlyEffect(card)
           : null);
       if (responseEffect) {

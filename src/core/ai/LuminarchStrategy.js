@@ -75,6 +75,7 @@ import {
 import {
   buildLuminarchPlanningProfile,
   describeLuminarchPlannedLine,
+  isLuminarchMain2BattlePayoffAction,
   scoreLuminarchLineMilestones,
   scoreLuminarchLineTerminal,
 } from "./luminarch/linePlanning.js";
@@ -231,6 +232,10 @@ export default class LuminarchStrategy extends BaseStrategy {
 
   describePlannedLine(context = {}) {
     return describeLuminarchPlannedLine(context);
+  }
+
+  isPostBattlePayoffAction(action, _context = {}) {
+    return isLuminarchMain2BattlePayoffAction(action);
   }
 
   prepareSimulatedBattle(context = {}) {

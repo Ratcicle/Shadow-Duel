@@ -141,7 +141,10 @@ export function attachEffectModules(EngineClass) {
   attachMethods(EngineClass, activation, [
     "getHandActivationEffect",
     "getSpellTrapActivationEffect",
+    "getMonsterIgnitionEffects",
     "getMonsterIgnitionEffect",
+    "getActivatableMonsterIgnitionEffects",
+    "getFirstActivatableMonsterIgnitionEffect",
     "getFieldSpellActivationEffect",
     "activateMonsterFromGraveyard",
     "activateFieldSpell",

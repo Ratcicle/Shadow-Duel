@@ -245,6 +245,7 @@ export function cleanupTempBoosts(player) {
       if (card.def < 0) card.def = 0;
       card.tempDefBoost = 0;
     }
+    delete card.temporarySuppressedDynamicBuffStatsByKey;
 
     // Restore stats if they were set to zero
     if (card.originalAtk != null) {
@@ -271,7 +272,8 @@ export function cleanupTempBoosts(player) {
     card.canAttackDirectlyThisTurn = false;
     delete card.attackLimitThisTurn;
     delete card.attackLimitDuration;
-    delete card.extraAttackTargetRestriction;
+    card.extraAttackTargetRestriction =
+      card.baseExtraAttackTargetRestriction || null;
     delete card.passiveExtraAttackTargetRestriction;
 
     // Reset multi-attack flags

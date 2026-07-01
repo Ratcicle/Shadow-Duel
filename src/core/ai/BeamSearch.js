@@ -1,6 +1,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // src/core/ai/BeamSearch.js
 import { resolvePerspectivePlayers } from "./StrategyUtils.js";
+import { filterAiActionsForCurrentPhase } from "./common/phaseTiming.js";
 
 function actionRequiresHand(actionType) {
   return (
@@ -70,10 +71,29 @@ function cloneDynamicBuffs(dynamicBuffs) {
   );
 }
 
+function cloneSuppressedDynamicBuffStats(suppressed) {
+  if (!suppressed || typeof suppressed !== "object") return suppressed;
+  return Object.fromEntries(
+    Object.entries(suppressed).map(([key, entry]) => [
+      key,
+      entry && typeof entry === "object" && !Array.isArray(entry)
+        ? { ...entry }
+        : Array.isArray(entry)
+          ? [...entry]
+          : entry,
+    ]),
+  );
+}
+
 function cloneCardForSim(card) {
   if (!card || typeof card !== "object") return card;
   const clone = { ...card };
   clone.dynamicBuffs = cloneDynamicBuffs(card.dynamicBuffs);
+  clone.suppressedDynamicBuffStatsByKey = cloneSuppressedDynamicBuffStats(
+    card.suppressedDynamicBuffStatsByKey,
+  );
+  clone.temporarySuppressedDynamicBuffStatsByKey =
+    cloneSuppressedDynamicBuffStats(card.temporarySuppressedDynamicBuffStatsByKey);
   if (Array.isArray(card.archetypes)) clone.archetypes = [...card.archetypes];
   if (Array.isArray(card.effects)) clone.effects = [...card.effects];
   if (card.counters instanceof Map) clone.counters = new Map(card.counters);
@@ -237,6 +257,17 @@ export async function beamSearchTurn(game, strategy, options = {}) {
     if (!candidates || candidates.length === 0) {
       candidates = strategy.generateMainPhaseActions(currentState);
     }
+    candidates = filterAiActionsForCurrentPhase(candidates, {
+      state: currentState,
+      game: currentState,
+      bot: currentState?.bot,
+      player: currentState?.bot,
+      strategy,
+      analysis: {
+        phase: currentState?.phase,
+        turnCounter: currentState?.turnCounter,
+      },
+    });
     if (!candidates || candidates.length === 0) {
       const score = evaluateState(currentState, currentState.bot);
       return { sequence: currentSequence, score, finalState: currentState };
@@ -433,6 +464,16 @@ export async function greedySearchWithEvalV2(game, strategy, options = {}) {
       originalHand
     );
   }
+  candidates = filterAiActionsForCurrentPhase(candidates, {
+    game,
+    bot: perspectiveBot || game?.bot,
+    player: perspectiveBot || game?.bot,
+    strategy,
+    analysis: {
+      phase: game?.phase,
+      turnCounter: game?.turnCounter,
+    },
+  });
   if (!candidates.length) {
     return null;
   }

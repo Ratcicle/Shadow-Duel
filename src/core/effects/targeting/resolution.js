@@ -66,8 +66,52 @@ function isExcludedContextCard(def, ctx, card) {
   );
 }
 
+function getSpecialSummonProcedureForTarget(def = {}) {
+  return def.summonProcedure || def.specialSummonProcedure || "special";
+}
+
+function getSpecialSummonDestinationPlayer(def = {}, ctx = {}) {
+  if (def.summonToOwner === "opponent" || def.destinationOwner === "opponent") {
+    return ctx.opponent || null;
+  }
+  return ctx.player || null;
+}
+
+function canTargetBeSpecialSummoned(engine, card, def = {}, ctx = {}) {
+  if (!card) return false;
+  if (card.cannotBeSpecialSummoned) return false;
+
+  const summonProcedure = getSpecialSummonProcedureForTarget(def);
+  if (
+    Array.isArray(card.specialSummonOnlyBy) &&
+    !card.specialSummonOnlyBy.includes(summonProcedure)
+  ) {
+    return false;
+  }
+
+  const destinationPlayer = getSpecialSummonDestinationPlayer(def, ctx);
+  const restrictionCheck =
+    engine?.game?.canSpecialSummonUnderRestrictions?.(
+      card,
+      destinationPlayer,
+      {
+        summonMethod: def.summonMethod || "special",
+        summonProcedure,
+        fromZone: def.zone || null,
+        silent: true,
+      },
+    );
+  return restrictionCheck?.ok !== false;
+}
+
 function contextTargetMatchesDef(engine, card, def = {}, ctx = {}) {
   if (!card) return false;
+  if (
+    def.excludeCannotBeSpecialSummoned &&
+    !canTargetBeSpecialSummoned(engine, card, def, ctx)
+  ) {
+    return false;
+  }
   const filters = buildContextTargetFilters(def);
   if (
     Object.keys(filters).length > 0 &&

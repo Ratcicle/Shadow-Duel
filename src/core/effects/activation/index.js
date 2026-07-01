@@ -7,7 +7,10 @@
 export {
   getHandActivationEffect,
   getSpellTrapActivationEffect,
+  getMonsterIgnitionEffects,
   getMonsterIgnitionEffect,
+  getActivatableMonsterIgnitionEffects,
+  getFirstActivatableMonsterIgnitionEffect,
   getFieldSpellActivationEffect,
 } from "./getters.js";
 

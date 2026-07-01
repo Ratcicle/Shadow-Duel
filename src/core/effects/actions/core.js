@@ -513,8 +513,33 @@ function buildTargetPreviewFilters(target = {}) {
 
 function matchesPreviewFilters(engine, card, filters, ctx = {}) {
   if (!card) return false;
-  if (filters.excludeCannotBeSpecialSummoned && card.cannotBeSpecialSummoned) {
-    return false;
+  if (filters.excludeCannotBeSpecialSummoned) {
+    if (card.cannotBeSpecialSummoned) return false;
+    const summonProcedure =
+      filters.summonProcedure || filters.specialSummonProcedure || "special";
+    if (
+      Array.isArray(card.specialSummonOnlyBy) &&
+      !card.specialSummonOnlyBy.includes(summonProcedure)
+    ) {
+      return false;
+    }
+    const destinationPlayer =
+      filters.summonToOwner === "opponent" ||
+      filters.destinationOwner === "opponent"
+        ? ctx?.opponent
+        : ctx?.player;
+    const restrictionCheck =
+      engine?.game?.canSpecialSummonUnderRestrictions?.(
+        card,
+        destinationPlayer,
+        {
+          summonMethod: filters.summonMethod || "special",
+          summonProcedure,
+          fromZone: filters.zone || null,
+          silent: true,
+        },
+      );
+    if (restrictionCheck?.ok === false) return false;
   }
   if (typeof engine?.cardMatchesFilters === "function") {
     if (!engine.cardMatchesFilters(card, filters)) return false;

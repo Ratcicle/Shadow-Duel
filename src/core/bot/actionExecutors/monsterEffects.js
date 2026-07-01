@@ -16,19 +16,26 @@ export async function executeMonsterEffectAction(bot, game, action) {
   }
 
   const actionActivationContext = action.activationContext || {};
+  const effectId =
+    action.effectId || action.effect?.id || actionActivationContext.effectId || null;
   const activationContext = {
     ...actionActivationContext,
     fromHand: false,
     activationZone: "field",
     sourceZone: "field",
+    effectId,
     autoSelectTargets: actionActivationContext.autoSelectTargets !== false,
   };
-  const activationEffect = (card.effects || []).find(
-    (e) =>
-      e &&
-      e.timing === "ignition" &&
-      (!e.requireZone || e.requireZone === "field"),
-  );
+  const activationEffect =
+    game.effectEngine?.getMonsterIgnitionEffect?.(card, "field", { effectId }) ||
+    (card.effects || []).find(
+      (e) =>
+        e &&
+        e.timing === "ignition" &&
+        (!e.requireZone || e.requireZone === "field") &&
+        (!effectId || e.id === effectId),
+    );
+  activationContext.effectId = activationEffect?.id || effectId || null;
 
   const pipelineResult = await game.runActivationPipeline({
     card,
@@ -90,10 +97,19 @@ export async function executeGraveyardMonsterEffectAction(bot, game, action) {
     return false;
   }
 
+  const actionActivationContext = action.activationContext || {};
+  const effectId =
+    action.effectId || action.effect?.id || actionActivationContext.effectId || null;
   const graveyardEffect =
-    game.effectEngine?.getMonsterIgnitionEffect?.(card, "graveyard") ||
+    game.effectEngine?.getMonsterIgnitionEffect?.(card, "graveyard", {
+      effectId,
+    }) ||
     (card.effects || []).find(
-      (e) => e && e.timing === "ignition" && e.requireZone === "graveyard",
+      (e) =>
+        e &&
+        e.timing === "ignition" &&
+        e.requireZone === "graveyard" &&
+        (!effectId || e.id === effectId),
     );
   if (!graveyardEffect) {
     console.log(
@@ -102,12 +118,12 @@ export async function executeGraveyardMonsterEffectAction(bot, game, action) {
     return false;
   }
 
-  const actionActivationContext = action.activationContext || {};
   const activationContext = {
     ...actionActivationContext,
     fromHand: false,
     activationZone: "graveyard",
     sourceZone: "graveyard",
+    effectId: graveyardEffect?.id || effectId || null,
     autoSelectTargets: actionActivationContext.autoSelectTargets !== false,
     autoSelectSingleTarget:
       actionActivationContext.autoSelectSingleTarget !== false,
@@ -165,9 +181,18 @@ export async function executeHandIgnitionAction(bot, game, action) {
   );
 
   // Verificar se o efeito pode ser ativado
-  const handIgnitionEffect = (card.effects || []).find(
-    (e) => e && e.timing === "ignition" && e.requireZone === "hand",
-  );
+  const actionActivationContext = action.activationContext || {};
+  const effectId =
+    action.effectId || action.effect?.id || actionActivationContext.effectId || null;
+  const handIgnitionEffect =
+    game.effectEngine?.getMonsterIgnitionEffect?.(card, "hand", { effectId }) ||
+    (card.effects || []).find(
+      (e) =>
+        e &&
+        e.timing === "ignition" &&
+        e.requireZone === "hand" &&
+        (!effectId || e.id === effectId),
+    );
   if (!handIgnitionEffect) {
     console.log(
       `[Bot.executeMainPhaseAction] ❌ No hand ignition effect found`,
@@ -175,12 +200,12 @@ export async function executeHandIgnitionAction(bot, game, action) {
     return false;
   }
 
-  const actionActivationContext = action.activationContext || {};
   const activationContext = {
     ...actionActivationContext,
     fromHand: true,
     activationZone: "hand",
     sourceZone: "hand",
+    effectId: handIgnitionEffect?.id || effectId || null,
     autoSelectTargets: actionActivationContext.autoSelectTargets !== false,
   };
 

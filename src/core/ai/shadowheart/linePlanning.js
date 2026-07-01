@@ -948,18 +948,6 @@ function scoreBattleBridgeMilestones(scoreState, context) {
     addMilestone(scoreState, "Battle: Leviathan converted combat into burn", 2);
   }
 
-  const battleIndex = sequence.findIndex(
-    (action) => action?.type === "simulatedBattle",
-  );
-  const hasMain2Payoff =
-    battleIndex >= 0 &&
-    sequence
-      .slice(battleIndex + 1)
-      .some((action) => action && action.type !== "simulatedBattle");
-  if (hasMain2Payoff && (impact.finalEnginePieces > 0 || impact.finalBossCount > 0)) {
-    addMilestone(scoreState, "Battle: opened Main2 payoff", 2);
-  }
-
   if (
     impact.simulatedBattleLostSelf > 0 &&
     impact.simulatedBattleRemovedOpponent <= 0 &&

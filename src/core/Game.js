@@ -608,12 +608,14 @@ export default class Game {
       fromHand: activationZone === "hand",
       activationZone,
       sourceZone: activationZone,
+      effectId: options.effectId || options.activationContext?.effectId || null,
       committed: false,
       actionContext: options.actionContext || null,
     };
     const activationEffect = this.effectEngine?.getMonsterIgnitionEffect?.(
       card,
       activationZone,
+      { effectId: activationContext.effectId },
     );
 
     const pipelineResult = await this.runActivationPipeline({

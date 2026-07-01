@@ -39,6 +39,20 @@ function cloneDynamicBuffs(dynamicBuffs) {
   );
 }
 
+function cloneSuppressedDynamicBuffStats(suppressed) {
+  if (!suppressed || typeof suppressed !== "object") return suppressed;
+  return Object.fromEntries(
+    Object.entries(suppressed).map(([key, entry]) => [
+      key,
+      entry && typeof entry === "object" && !Array.isArray(entry)
+        ? { ...entry }
+        : Array.isArray(entry)
+          ? [...entry]
+          : entry,
+    ]),
+  );
+}
+
 /**
  * Estado simulado do tabuleiro para cache de transposição
  */
@@ -68,6 +82,11 @@ function cloneCardForSim(card) {
   if (!card || typeof card !== "object") return card;
   const clone = { ...card };
   clone.dynamicBuffs = cloneDynamicBuffs(card.dynamicBuffs);
+  clone.suppressedDynamicBuffStatsByKey = cloneSuppressedDynamicBuffStats(
+    card.suppressedDynamicBuffStatsByKey,
+  );
+  clone.temporarySuppressedDynamicBuffStatsByKey =
+    cloneSuppressedDynamicBuffStats(card.temporarySuppressedDynamicBuffStatsByKey);
 
   if (Array.isArray(card.archetypes)) {
     clone.archetypes = [...card.archetypes];

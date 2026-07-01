@@ -165,18 +165,73 @@ function findActiveEquipCards(game, card) {
   return equips;
 }
 
-function suppressDynamicBuffStat(card, key, stat) {
+function suppressDynamicBuffStat(card, key, stat, options = {}) {
   if (!card || !key || !stat) return;
-  if (!card.suppressedDynamicBuffStatsByKey) {
-    card.suppressedDynamicBuffStatsByKey = {};
+  const mapKey =
+    options.temporary === true
+      ? "temporarySuppressedDynamicBuffStatsByKey"
+      : "suppressedDynamicBuffStatsByKey";
+  if (!card[mapKey]) {
+    card[mapKey] = {};
   }
-  const current = card.suppressedDynamicBuffStatsByKey[key];
+  const current = card[mapKey][key];
   const next =
     current && typeof current === "object" && !Array.isArray(current)
       ? current
       : {};
   next[stat] = true;
-  card.suppressedDynamicBuffStatsByKey[key] = next;
+  card[mapKey][key] = next;
+}
+
+function getDynamicBuffAppliedValue(entry, stat) {
+  const stats = Array.isArray(entry?.stats) ? entry.stats : ["atk", "def"];
+  if (!stats.includes(stat)) return 0;
+  const appliedValues =
+    entry?.appliedValues && typeof entry.appliedValues === "object"
+      ? entry.appliedValues
+      : null;
+  const applied = Number(
+    appliedValues?.[stat] ?? (stats.includes(stat) ? entry?.value : 0) ?? 0,
+  );
+  return Number.isFinite(applied) ? applied : 0;
+}
+
+function getPositiveDynamicStatEntries(card, stat) {
+  if (!card?.dynamicBuffs || typeof card.dynamicBuffs !== "object") return [];
+  return Object.entries(card.dynamicBuffs)
+    .map(([key, entry]) => ({
+      key,
+      entry,
+      applied: getDynamicBuffAppliedValue(entry, stat),
+    }))
+    .filter(({ applied }) => applied > 0);
+}
+
+function suppressTemporaryDynamicStatIncreasesForDebuff(card, stat, boost) {
+  if (!card || !stat || !Number.isFinite(Number(boost)) || boost >= 0) return 0;
+
+  const entries = getPositiveDynamicStatEntries(card, stat);
+  if (entries.length === 0) return 0;
+
+  const current = Number(card[stat] || 0);
+  const dynamicTotal = entries.reduce(
+    (total, { applied }) => total + applied,
+    0,
+  );
+  if (current - dynamicTotal + boost > 0) return 0;
+
+  let suppressed = 0;
+  for (const { key, entry, applied } of entries) {
+    const actual = subtractVisibleStat(card, stat, applied);
+    if (actual <= 0) continue;
+    suppressDynamicBuffStat(card, key, stat, { temporary: true });
+    if (!entry.appliedValues || typeof entry.appliedValues !== "object") {
+      entry.appliedValues = {};
+    }
+    entry.appliedValues[stat] = applied - actual;
+    suppressed += actual;
+  }
+  return suppressed;
 }
 
 function consumeTrackedStatIncrease(card, stat, remaining, game) {
@@ -228,15 +283,7 @@ function consumeTrackedStatIncrease(card, stat, remaining, game) {
   if (card.dynamicBuffs && removed < remaining) {
     for (const [key, entry] of Object.entries(card.dynamicBuffs)) {
       if (removed >= remaining) break;
-      const stats = Array.isArray(entry?.stats) ? entry.stats : ["atk", "def"];
-      if (!stats.includes(stat)) continue;
-      const appliedValues =
-        entry.appliedValues && typeof entry.appliedValues === "object"
-          ? entry.appliedValues
-          : null;
-      const applied = Number(
-        appliedValues?.[stat] ?? (stats.includes(stat) ? entry?.value : 0) ?? 0,
-      );
+      const applied = getDynamicBuffAppliedValue(entry, stat);
       if (applied <= 0) continue;
       const actual = consume(applied);
       if (actual > 0) {
@@ -543,6 +590,10 @@ export async function handleBuffStatsTemp(action, ctx, targets, engine) {
 
   const applyStatChange = (card, stat, boost) => {
     if (!boost) return 0;
+
+    if (boost < 0 && !permanent && !useTurnBasedBuff && !isDamageCalculationBuff) {
+      suppressTemporaryDynamicStatIncreasesForDebuff(card, stat, boost);
+    }
 
     const current = Number(card?.[stat] || 0);
     const next = Math.max(0, current + boost);

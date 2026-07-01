@@ -1,3 +1,15 @@
+import {
+  canSetReactiveBackrowNow,
+  isQuickSpellCard,
+} from "../../ai/common/phaseTiming.js";
+
+function markAiQuickSpellActivation(card, game) {
+  if (!isQuickSpellCard(card)) return;
+  card.lastAiActivatedTurn = Number.isFinite(Number(game?.turnCounter))
+    ? Number(game.turnCounter)
+    : null;
+}
+
 export async function executeSpellAction(bot, game, action) {
   const resolvedIndex = bot.resolveHandIndexForAction(action, "spell");
   if (resolvedIndex < 0) {
@@ -80,11 +92,12 @@ export async function executeSpellAction(bot, game, action) {
     },
   });
   // Pipeline retorna false, null, ou {success: false} quando falha
-  return (
+  const success =
     pipelineResult !== false &&
     pipelineResult !== null &&
-    pipelineResult?.success !== false
-  );
+    pipelineResult?.success !== false;
+  if (success) markAiQuickSpellActivation(card, game);
+  return success;
 }
 
 export async function executeSetSpellTrapAction(bot, game, action) {
@@ -101,6 +114,12 @@ export async function executeSetSpellTrapAction(bot, game, action) {
     return false;
   }
   const card = bot.hand[resolvedIndex];
+  if (!canSetReactiveBackrowNow(card, game)) {
+    console.log(
+      `[Bot.executeMainPhaseAction] Set spell/trap rejected by phase timing: ${card.name}`,
+    );
+    return false;
+  }
   const result = game.setSpellOrTrap(card, resolvedIndex, bot);
   if (result && result.ok === false) {
     console.log(
@@ -192,7 +211,9 @@ export async function executeSpellTrapEffectAction(bot, game, action) {
     },
   });
 
-  return !!pipelineResult && pipelineResult.success !== false;
+  const success = !!pipelineResult && pipelineResult.success !== false;
+  if (success) markAiQuickSpellActivation(card, game);
+  return success;
 }
 
 export async function executeGraveyardSpellEffectAction(bot, game, action) {
@@ -271,11 +292,12 @@ export async function executeGraveyardSpellEffectAction(bot, game, action) {
     },
   });
 
-  return (
+  const success =
     pipelineResult !== false &&
     pipelineResult !== null &&
-    pipelineResult?.success !== false
-  );
+    pipelineResult?.success !== false;
+  if (success) markAiQuickSpellActivation(card, game);
+  return success;
 }
 
 export async function executeFieldEffectAction(bot, game, action) {

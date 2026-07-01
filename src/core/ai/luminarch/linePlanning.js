@@ -731,10 +731,14 @@ function getMain2PayoffActionsAfterBattle(sequence = []) {
     (action) => action?.type === "simulatedBattle",
   );
   if (battleIndex < 0) return [];
-  return sequence.slice(battleIndex + 1).filter((action) =>
-    MAIN2_BATTLE_PAYOFF_NAMES.has(
-      action?.cardName || action?.card?.name || action?.name,
-    ),
+  return sequence
+    .slice(battleIndex + 1)
+    .filter(isLuminarchMain2BattlePayoffAction);
+}
+
+export function isLuminarchMain2BattlePayoffAction(action = {}) {
+  return MAIN2_BATTLE_PAYOFF_NAMES.has(
+    action?.cardName || action?.card?.name || action?.name,
   );
 }
 

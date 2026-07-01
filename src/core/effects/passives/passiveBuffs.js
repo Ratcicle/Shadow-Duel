@@ -74,22 +74,37 @@ function clearPassiveBuffEntry(card, entry) {
     return changed;
   }
 
-function getSuppressedPassiveStats(card, effectKey) {
-    const suppressed = card?.suppressedDynamicBuffStatsByKey;
-    if (!suppressed || !effectKey) return null;
-    const entry = suppressed[effectKey];
+function addSuppressedPassiveStats(result, entry) {
     if (!entry) return null;
-    if (entry === true) return new Set(["atk", "def"]);
-    if (Array.isArray(entry)) return new Set(entry);
-    if (entry instanceof Set) return entry;
-    if (typeof entry === "object") {
-      return new Set(
-        Object.entries(entry)
-          .filter(([, value]) => value === true)
-          .map(([stat]) => stat),
-      );
+    if (entry === true) {
+      result.add("atk");
+      result.add("def");
+      return result;
     }
-    return null;
+    if (Array.isArray(entry) || entry instanceof Set) {
+      for (const stat of entry) result.add(stat);
+      return result;
+    }
+    if (typeof entry === "object") {
+      for (const [stat, value] of Object.entries(entry)) {
+        if (value === true) result.add(stat);
+      }
+    }
+    return result;
+  }
+
+function getSuppressedPassiveStats(card, effectKey) {
+    if (!card || !effectKey) return null;
+    const result = new Set();
+    addSuppressedPassiveStats(
+      result,
+      card.suppressedDynamicBuffStatsByKey?.[effectKey],
+    );
+    addSuppressedPassiveStats(
+      result,
+      card.temporarySuppressedDynamicBuffStatsByKey?.[effectKey],
+    );
+    return result.size > 0 ? result : null;
   }
 
 export function applyPassiveBuffValue(card, effectKey, amount, stats = ["atk", "def"]) {
@@ -154,6 +169,7 @@ export function clearPassiveBuffsForCard(card) {
       card.dynamicBuffs = null;
     }
     delete card.suppressedDynamicBuffStatsByKey;
+    delete card.temporarySuppressedDynamicBuffStatsByKey;
   }
 
 function clearPassiveExtraAttacksForCard(card) {

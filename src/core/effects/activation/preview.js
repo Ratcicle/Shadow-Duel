@@ -41,11 +41,16 @@ export function hasActivatableGraveyardEffect(card, player = null) {
   if (!card) return false;
   if (player) {
     if (card.cardKind === "monster") {
-      return !!this.canActivateMonsterEffectPreview?.(
-        card,
-        player,
-        "graveyard"
-      )?.ok;
+      const firstActivatable =
+        this.getFirstActivatableMonsterIgnitionEffect?.(
+          card,
+          player,
+          "graveyard",
+        );
+      return !!(
+        firstActivatable ||
+        this.canActivateMonsterEffectPreview?.(card, player, "graveyard")?.ok
+      );
     }
     if (card.cardKind === "spell" || card.cardKind === "trap") {
       return !!this.canActivateSpellTrapEffectPreview?.(
@@ -248,15 +253,20 @@ export function canActivateMonsterEffectPreview(
     }
   }
 
+  const requestedEffectId =
+    options.effectId || options.activationContext?.effectId || null;
   const effect = this.getMonsterIgnitionEffect
-    ? this.getMonsterIgnitionEffect(card, activationZone)
+    ? this.getMonsterIgnitionEffect(card, activationZone, {
+        effectId: requestedEffectId,
+      })
     : (card.effects || []).find(
         (e) =>
           e &&
           e.timing === "ignition" &&
           (activationZone === "field"
             ? !e.requireZone || e.requireZone === "field"
-            : e.requireZone === activationZone)
+            : e.requireZone === activationZone) &&
+          (!requestedEffectId || e.id === requestedEffectId)
       );
 
   if (!effect) {
@@ -265,6 +275,7 @@ export function canActivateMonsterEffectPreview(
 
   const activationContext = {
     ...(options.activationContext || {}),
+    ...(effect?.id ? { effectId: effect.id } : {}),
     preview: true,
   };
   const ctx = {

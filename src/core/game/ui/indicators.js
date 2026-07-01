@@ -143,13 +143,23 @@ export function buildActivationIndicatorsForPlayer(player) {
       }
     } else if (card.cardKind === "monster") {
       const guard = canStart("monster_effect", ["main1", "main2"]);
-      const preview = this.effectEngine?.canActivateMonsterEffectPreview?.(
-        card,
-        player,
-        "hand",
-        null,
-        { activationContext }
-      ) || { ok: false };
+      const firstActivatable =
+        this.effectEngine?.getFirstActivatableMonsterIgnitionEffect?.(
+          card,
+          player,
+          "hand",
+          { activationContext },
+        );
+      const preview =
+        firstActivatable?.preview ||
+        this.effectEngine?.canActivateMonsterEffectPreview?.(
+          card,
+          player,
+          "hand",
+          null,
+          { activationContext },
+        ) ||
+        { ok: false };
       const hint = buildHint(guard, preview, "ignition disponivel");
       if (hint) {
         indicators.hand[index] = hint;
@@ -160,13 +170,23 @@ export function buildActivationIndicatorsForPlayer(player) {
   (player.field || []).forEach((card, index) => {
     if (!card || card.cardKind !== "monster") return;
     const guard = canStart("monster_effect", ["main1", "main2"]);
-    const preview = this.effectEngine?.canActivateMonsterEffectPreview?.(
-      card,
-      player,
-      "field",
-      null,
-      { activationContext }
-    ) || { ok: false };
+    const firstActivatable =
+      this.effectEngine?.getFirstActivatableMonsterIgnitionEffect?.(
+        card,
+        player,
+        "field",
+        { activationContext },
+      );
+    const preview =
+      firstActivatable?.preview ||
+      this.effectEngine?.canActivateMonsterEffectPreview?.(
+        card,
+        player,
+        "field",
+        null,
+        { activationContext },
+      ) ||
+      { ok: false };
     const hint = buildHint(guard, preview, "ignition disponivel");
     if (hint) {
       indicators.field[index] = hint;

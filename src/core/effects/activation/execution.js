@@ -83,10 +83,17 @@ export async function activateMonsterFromGraveyard(
     };
   }
 
-  // Busca efeito ignition com requireZone: "graveyard"
-  const effect = card.effects?.find(
-    (e) => e.timing === "ignition" && e.requireZone === "graveyard"
-  );
+  const requestedEffectId = activationContext?.effectId || null;
+  const effect = this.getMonsterIgnitionEffect
+    ? this.getMonsterIgnitionEffect(card, "graveyard", {
+        effectId: requestedEffectId,
+      })
+    : card.effects?.find(
+        (e) =>
+          e.timing === "ignition" &&
+          e.requireZone === "graveyard" &&
+          (!requestedEffectId || e.id === requestedEffectId)
+      );
 
   if (!effect) {
     return {
@@ -114,6 +121,7 @@ export async function activateMonsterFromGraveyard(
     fromHand: activationContext?.fromHand === true,
     activationZone: "graveyard",
     sourceZone: activationContext?.sourceZone || "graveyard",
+    effectId: effect.id,
     committed: activationContext?.committed === true,
     commitInfo: activationContext?.commitInfo || null,
     autoSelectSingleTarget: activationContext?.autoSelectSingleTarget,
@@ -753,22 +761,20 @@ export async function activateMonsterEffect(
     };
   }
 
-  // Find effect that matches activation zone
-  let effect = null;
-  if (activationZone === "hand") {
-    // For hand effects, look for ignition effects with requireZone: "hand"
-    effect = (card.effects || []).find(
-      (e) => e && e.timing === "ignition" && e.requireZone === "hand"
-    );
-  } else {
-    // For field effects, look for ignition effects without requireZone (or with requireZone: "field")
-    effect = (card.effects || []).find(
-      (e) =>
-        e &&
-        e.timing === "ignition" &&
-        (!e.requireZone || e.requireZone === "field")
-    );
-  }
+  const requestedEffectId = activationContext?.effectId || null;
+  const effect = this.getMonsterIgnitionEffect
+    ? this.getMonsterIgnitionEffect(card, activationZone, {
+        effectId: requestedEffectId,
+      })
+    : (card.effects || []).find(
+        (e) =>
+          e &&
+          e.timing === "ignition" &&
+          (activationZone === "hand"
+            ? e.requireZone === "hand"
+            : !e.requireZone || e.requireZone === "field") &&
+          (!requestedEffectId || e.id === requestedEffectId)
+      );
 
   if (!effect) {
     return {
@@ -785,6 +791,7 @@ export async function activateMonsterEffect(
     activationZone,
     sourceZone:
       activationContext?.sourceZone || (fromHand ? "hand" : activationZone),
+    effectId: effect.id,
     committed: activationContext?.committed === true,
     commitInfo: activationContext?.commitInfo || null,
     autoSelectSingleTarget: activationContext?.autoSelectSingleTarget,

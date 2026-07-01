@@ -1,4 +1,5 @@
 import { buildPrioritizedAction } from "./actionGeneration.js";
+import { canSetReactiveBackrowNow } from "./phaseTiming.js";
 
 function hasValue(value) {
   return value !== undefined && value !== null;
@@ -71,6 +72,7 @@ export function getGenericSetBackrowActions({
         ? policy.acceptsCard(card, baseContext)
         : defaultAcceptsBackrowCard(card);
     if (!acceptsCard) continue;
+    if (!canSetReactiveBackrowNow(card, game, analysis)) continue;
 
     if (
       typeof policy.skipIfAlreadySet === "function" &&
@@ -116,7 +118,10 @@ export function getGenericSetBackrowActions({
         card,
         priority,
         reason,
-        extra,
+        extra: {
+          timingRole: "reactive_backrow",
+          ...extra,
+        },
       }),
     );
   }

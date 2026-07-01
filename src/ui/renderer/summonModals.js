@@ -76,7 +76,23 @@ export function showSummonModal(cardIndex, callback, options = {}) {
     );
   }
 
-  if (options.specialSummonFromHandEffect) {
+  const handEffectChoices = Array.isArray(options.handEffectChoices)
+    ? options.handEffectChoices.filter((choice) => choice && choice.effectId)
+    : [];
+
+  if (handEffectChoices.length > 0) {
+    for (const choice of handEffectChoices) {
+      addChoiceButton(
+        choice.label ||
+          choice.handModalLabel ||
+          getUIText("ui.summon.special"),
+        {
+          type: "hand_effect",
+          effectId: choice.effectId,
+        },
+      );
+    }
+  } else if (options.specialSummonFromHandEffect) {
     addChoiceButton(
       options.specialSummonFromHandEffectLabel || getUIText("ui.summon.special"),
       "special_from_hand_effect",

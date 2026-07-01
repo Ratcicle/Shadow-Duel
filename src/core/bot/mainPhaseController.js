@@ -7,6 +7,10 @@ import {
   isMeaningfulPlanningDiff,
   summarizePlanningState,
 } from "../ai/common/planningDiagnostics.js";
+import {
+  filterAiActionsForCurrentPhase,
+  isMain2Phase,
+} from "../ai/common/phaseTiming.js";
 import { botLogger } from "../BotLogger.js";
 
 function hasValue(value) {
@@ -93,7 +97,7 @@ export async function playBotMainPhase(bot, game) {
     totalAttempts++;
 
     // Try Ascension before other actions if available
-    const ascended = useAutomaticAscension
+    const ascended = useAutomaticAscension && !isMain2Phase(game)
       ? await bot.tryAscensionIfAvailable(game)
       : false;
     if (ascended) {
@@ -109,11 +113,21 @@ export async function playBotMainPhase(bot, game) {
       if (game.gameOver || game.isDisposed?.()) return;
     }
 
+    const planningStrategy = bot.strategy || bot;
     const rawActions = bot.generateMainPhaseActions(game);
     const sequencedActions = bot.sequenceActions(rawActions);
+    const phaseFilteredActions = filterAiActionsForCurrentPhase(
+      sequencedActions,
+      {
+        game,
+        bot,
+        player: bot,
+        strategy: planningStrategy,
+      },
+    );
 
     // Filtrar ações que já falharam neste turno
-    const actions = sequencedActions.filter((a) => {
+    const actions = phaseFilteredActions.filter((a) => {
       const actionKey = `${a.type}:${a.cardId || a.card?.id || a.index}`;
       return !failedActionsThisTurn.has(actionKey);
     });
@@ -124,7 +138,7 @@ export async function playBotMainPhase(bot, game) {
     );
 
     console.log(
-      `[Bot.playMainPhase] Generated ${rawActions.length} raw actions, ${actions.length} sequenced actions (${failedActionsThisTurn.size} filtered)`,
+      `[Bot.playMainPhase] Generated ${rawActions.length} raw actions, ${actions.length} phase-valid actions (${failedActionsThisTurn.size} failed-action filtered)`,
     );
     game._arenaTracker?.recordProgress?.("ai_decision_before", game, {
       actor: bot.id,
@@ -170,7 +184,6 @@ export async function playBotMainPhase(bot, game) {
     let bestAction = null;
     let pendingPlannerTrace = null;
 
-    const planningStrategy = bot.strategy || bot;
     const planningContext = {
       game,
       bot: bot,
@@ -354,8 +367,17 @@ export async function playBotMainPhase(bot, game) {
         const regenerated = bot.sequenceActions(
           bot.generateMainPhaseActions(game),
         );
-        finalFallback = bot.filterValidActionsForCurrentState(
+        const phaseValidRegenerated = filterAiActionsForCurrentPhase(
           regenerated,
+          {
+            game,
+            bot,
+            player: bot,
+            strategy: planningStrategy,
+          },
+        );
+        finalFallback = bot.filterValidActionsForCurrentState(
+          phaseValidRegenerated,
           game,
         );
       }
@@ -530,7 +552,7 @@ export async function playBotMainPhase(bot, game) {
   }
 
   // Final chance to ascend if no actions left
-  if (useAutomaticAscension) {
+  if (useAutomaticAscension && !isMain2Phase(game)) {
     await bot.tryAscensionIfAvailable(game);
   }
 }

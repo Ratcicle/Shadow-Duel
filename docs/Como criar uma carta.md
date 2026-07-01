@@ -146,6 +146,25 @@ O validador aceita:
 | `passive` | Efeito contínuo recalculado pelo engine ou aplicado em custo. |
 | `manual` | Efeito manual/quick em janelas de chain. Usado por quick effects específicos; para efeitos normais prefira `ignition`. |
 
+### Múltiplos efeitos de monstro na mesma zona
+
+Monstros podem ter mais de um efeito `ignition` com o mesmo `requireZone`.
+Quando isso acontece, o engine identifica cada opção por `effect.id`; previews,
+modais, seleções e uso de uma vez por turno devem carregar esse `effectId`.
+
+Para efeitos ativáveis da mão, use `handModalLabelKey` quando o botão precisar
+de um texto específico no modal da mão:
+
+```js
+{
+  id: "example_hand_special_summon",
+  timing: "ignition",
+  requireZone: "hand",
+  handModalLabelKey: "ui.summon.specialAction",
+  actions: [{ type: "special_summon_from_zone", zone: "hand", requireSource: true }]
+}
+```
+
 ## Eventos suportados
 
 Eventos aceitos pelo validador:

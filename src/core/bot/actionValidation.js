@@ -4,6 +4,7 @@ import {
   getTributeValueTotal,
 } from "../game/summon/tributeValue.js";
 import { canUseNormalSummonForCard } from "../Player.js";
+import { canSetReactiveBackrowNow } from "../ai/common/phaseTiming.js";
 
 export function resolveHandIndexForAction(bot, action, expectedKind) {
   if (!action) return -1;
@@ -408,7 +409,10 @@ export function filterValidActionsForCurrentState(bot, actions, game) {
       return preview ? preview.ok !== false : true;
     }
     if (action.type === "set_spell_trap") {
-      return resolveHandIndexForAction(bot, action, ["spell", "trap"]) >= 0;
+      const handIndex = resolveHandIndexForAction(bot, action, ["spell", "trap"]);
+      if (handIndex < 0) return false;
+      const card = bot.hand?.[handIndex];
+      return canSetReactiveBackrowNow(card, game);
     }
     if (action.type === "spellTrapEffect") {
       const zoneIndex = Number.isInteger(action.zoneIndex)
@@ -487,6 +491,11 @@ export function filterValidActionsForCurrentState(bot, actions, game) {
       }
       const activationContext = {
         ...(action.activationContext || {}),
+        effectId:
+          action.effectId ||
+          action.effect?.id ||
+          action.activationContext?.effectId ||
+          null,
         fromHand: true,
         activationZone: "hand",
         sourceZone: "hand",
@@ -517,7 +526,16 @@ export function filterValidActionsForCurrentState(bot, actions, game) {
         bot,
         "graveyard",
         null,
-        { activationContext: action.activationContext || {} },
+        {
+          activationContext: {
+            ...(action.activationContext || {}),
+            effectId:
+              action.effectId ||
+              action.effect?.id ||
+              action.activationContext?.effectId ||
+              null,
+          },
+        },
       );
       return preview ? preview.ok !== false : true;
     }
@@ -539,7 +557,16 @@ export function filterValidActionsForCurrentState(bot, actions, game) {
         bot,
         "field",
         null,
-        { activationContext: action.activationContext || {} },
+        {
+          activationContext: {
+            ...(action.activationContext || {}),
+            effectId:
+              action.effectId ||
+              action.effect?.id ||
+              action.activationContext?.effectId ||
+              null,
+          },
+        },
       );
       return preview ? preview.ok !== false : true;
     }

@@ -387,8 +387,8 @@ export default class ArcanistStrategy extends BaseStrategy {
     });
   }
 
-  getSetSpellTrapActions(_game, bot) {
-    return getGenericSetBackrowActions({ player: bot });
+  getSetSpellTrapActions(game, bot) {
+    return getGenericSetBackrowActions({ game, player: bot });
   }
 
   getSummonActions(game, bot, analysis) {

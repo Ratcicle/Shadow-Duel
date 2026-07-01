@@ -5,6 +5,10 @@ import {
   summarizePlanningState,
 } from "./common/planningDiagnostics.js";
 import {
+  filterAiActionsForCurrentPhase,
+  hasPreBattleValueActions,
+} from "./common/phaseTiming.js";
+import {
   fieldHasTributeValue,
   getTributeCardsFromIndices,
   getTributeValueTotal,
@@ -1131,19 +1135,31 @@ function tryMainBattleMain2Bridge(state, sequence, strategy, options = {}) {
 }
 
 function getCandidatesForDepth(state, strategy, depth, options) {
+  const filterForPhase = (actions) =>
+    filterAiActionsForCurrentPhase(actions, {
+      state,
+      game: state,
+      bot: state?.bot,
+      player: state?.bot,
+      strategy,
+      analysis: { phase: state?.phase, turnCounter: state?.turnCounter },
+    });
+
   if (depth === 0 && Array.isArray(options.preGeneratedActions)) {
     const legal = filterStillLegalRootActions(
       options.preGeneratedActions,
       state,
       strategy,
     );
-    if (legal.length > 0) return legal;
+    const phaseLegal = filterForPhase(legal);
+    if (phaseLegal.length > 0) return phaseLegal;
   }
   if (typeof strategy?.generateMainPhaseActions !== "function") return [];
   const generated = strategy.generateMainPhaseActions(state) || [];
-  return depth === 0
+  const legal = depth === 0
     ? filterStillLegalRootActions(generated, state, strategy)
     : generated;
+  return filterForPhase(legal);
 }
 
 export async function turnLineSearch(game, strategy, options = {}) {
@@ -1228,6 +1244,18 @@ export async function turnLineSearch(game, strategy, options = {}) {
       };
     }
 
+    const hasPreBattleValueCandidate = hasPreBattleValueActions(candidates, {
+      state: currentState,
+      game: currentState,
+      bot: currentState?.bot,
+      player: currentState?.bot,
+      strategy,
+      analysis: {
+        phase: currentState?.phase,
+        turnCounter: currentState?.turnCounter,
+      },
+    });
+
     candidates = candidates
       .slice()
       .sort((a, b) => (b.priority || 0) - (a.priority || 0))
@@ -1263,7 +1291,9 @@ export async function turnLineSearch(game, strategy, options = {}) {
       });
     }
 
-    if (nodesEvaluated < nodeBudget) {
+    const canBridgeNow = !hasPreBattleValueCandidate;
+
+    if (nodesEvaluated < nodeBudget && canBridgeNow) {
       const bridge = tryMainBattleMain2Bridge(
         currentState,
         sequence,

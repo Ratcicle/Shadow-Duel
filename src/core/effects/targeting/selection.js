@@ -90,6 +90,44 @@ function isExcludedContextCard(def, ctx, card) {
   );
 }
 
+function getSpecialSummonProcedureForTarget(def = {}) {
+  return def.summonProcedure || def.specialSummonProcedure || "special";
+}
+
+function getSpecialSummonDestinationPlayer(def = {}, ctx = {}) {
+  if (def.summonToOwner === "opponent" || def.destinationOwner === "opponent") {
+    return ctx.opponent || null;
+  }
+  return ctx.player || null;
+}
+
+function canTargetBeSpecialSummoned(engine, card, def = {}, ctx = {}, zoneKey = null) {
+  if (!card) return false;
+  if (card.cannotBeSpecialSummoned) return false;
+
+  const summonProcedure = getSpecialSummonProcedureForTarget(def);
+  if (
+    Array.isArray(card.specialSummonOnlyBy) &&
+    !card.specialSummonOnlyBy.includes(summonProcedure)
+  ) {
+    return false;
+  }
+
+  const destinationPlayer = getSpecialSummonDestinationPlayer(def, ctx);
+  const restrictionCheck =
+    engine?.game?.canSpecialSummonUnderRestrictions?.(
+      card,
+      destinationPlayer,
+      {
+        summonMethod: def.summonMethod || "special",
+        summonProcedure,
+        fromZone: zoneKey || def.zone || null,
+        silent: true,
+      },
+    );
+  return restrictionCheck?.ok !== false;
+}
+
 function normalizeList(value, fallback = []) {
   if (Array.isArray(value)) return value.filter(Boolean);
   if (value === undefined || value === null) return fallback;
@@ -417,7 +455,10 @@ export function selectCandidates(def, ctx) {
   const anyOf = Array.isArray(def.anyOf) ? def.anyOf : null;
   const matchesFilter = (card, filter) => {
     if (!card || !filter) return false;
-    if (filter.excludeCannotBeSpecialSummoned && card.cannotBeSpecialSummoned) {
+    if (
+      filter.excludeCannotBeSpecialSummoned &&
+      !canTargetBeSpecialSummoned(this, card, filter, ctx, filter.zone)
+    ) {
       return false;
     }
     if (filter.owner === "self" && card.owner !== ctx?.player?.id) return false;
@@ -576,7 +617,10 @@ export function selectCandidates(def, ctx) {
           log(`[selectCandidates] Rejecting: card is source in hand zone`);
           continue;
         }
-        if (def.excludeCannotBeSpecialSummoned && card.cannotBeSpecialSummoned) {
+        if (
+          def.excludeCannotBeSpecialSummoned &&
+          !canTargetBeSpecialSummoned(this, card, def, ctx, zoneKey)
+        ) {
           log(
             `[selectCandidates] Rejecting: ${card.name} cannot be Special Summoned`
           );

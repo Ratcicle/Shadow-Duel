@@ -360,11 +360,11 @@ export const dragonCards = [
     type: "Dragon",
     attribute: "Light",
     level: 7,
-    atk: 2500,
-    def: 2400,
+    atk: 2400,
+    def: 2300,
     altTribute: { requiresType: "Dragon", tributes: 1 },
     description:
-      "Can be Tribute Summoned with 1 Tribute if you Tribute a Dragon-type monster. Once per turn: You can target 1 monster your opponent controls; change its battle position.",
+      "This card can be Tribute Summoned by Tributing 1 Dragon-type monster. Once per turn: You can target 1 face-up monster your opponent controls; change its battle position.",
     image: "assets/Majestic Silver Dragon.png",
     effects: [
       {
@@ -380,6 +380,7 @@ export const dragonCards = [
             owner: "opponent",
             zone: "field",
             cardKind: "monster",
+            requireFaceup: true,
             count: { min: 1, max: 1 },
           },
         ],
@@ -532,10 +533,10 @@ export const dragonCards = [
     type: "Dragon",
     attribute: "Fire",
     level: 7,
-    atk: 2300,
+    atk: 2200,
     def: 1900,
     description:
-      "You can send 1 Dragon you control to the GY; Special Summon this card from your hand. Once per turn: You can send this face-up card to the GY; Special Summon 1 Level 7 or lower Dragon from your GY.",
+      'You can send 1 Dragon you control to the GY; Special Summon this card from your hand. Once per turn: You can send this face-up card to the GY; Special Summon 1 Level 7 or lower Dragon from your GY, except "Hellkite Dragon".',
     image: "assets/Hellkite Dragon.png",
     effects: [
       {
@@ -579,7 +580,11 @@ export const dragonCards = [
           {
             type: "special_summon_from_zone",
             zone: "graveyard",
-            filters: { cardKind: "monster", type: "Dragon" },
+            filters: {
+              cardKind: "monster",
+              type: "Dragon",
+              excludeCardName: "Hellkite Dragon",
+            },
             maxLevel: 7,
             count: { min: 1, max: 1 },
             position: "choice",
@@ -644,7 +649,7 @@ export const dragonCards = [
     cardKind: "spell",
     subtype: "field",
     description:
-      "When this card is activated: You can add 1 Level 4 or lower Dragon from your GY to your hand. Each time a Dragon-type monster destroys an opponent's monster by battle, place 1 Dragon Peak counter on this card. Once per turn: If this card has 5 or more Dragon Peak counters; you can send it to the GY, and if you do, Special Summon 1 Dragon-type monster from your hand, Deck, or GY.",
+      "When this card is activated: You can add 1 Level 4 or lower Dragon from your GY to your hand. Each time a Dragon-type monster destroys an opponent's monster by battle, place 1 Dragon Peak counter on this card. Once per turn: If this card has 7 or more Dragon Peak counters; you can send it to the GY, and if you do, Special Summon 1 Dragon-type monster from your hand, Deck, or GY.",
     image: "assets/Jagged Peak of Dragons.png",
     effects: [
       {
@@ -695,7 +700,7 @@ export const dragonCards = [
           {
             type: "source_counters_at_least",
             counterType: "dragon_peak",
-            min: 5,
+            min: 7,
           },
         ],
         actions: [
@@ -761,7 +766,7 @@ export const dragonCards = [
     atk: 2500,
     def: 1700,
     description:
-      "You can Special Summon this card from your hand by banishing 3 Dragon monsters from your GY. If this card destroys a monster by battle: Gain LP equal to the destroyed monster's Level x100. Once per turn: You can target 1 other Dragon monster you control; it cannot be destroyed by card effects while it is face-up on the field.",
+      'You can Special Summon this card from your hand by banishing 3 Dragon monsters from your GY. If this card destroys a monster by battle: Gain LP equal to the destroyed monster\'s Level x100. Once per turn: You can target 1 other Dragon monster you control; it cannot be destroyed by card effects until the end of the next turn. You can only use each effect of "Purified Crystal Dragon" once per turn.',
     image: "assets/Purified Crystal Dragon.png",
     effects: [
       {
@@ -794,7 +799,9 @@ export const dragonCards = [
         id: "purified_crystal_heal_on_destroy",
         timing: "on_event",
         event: "battle_destroy",
-        requireSelfAsAttacker: true,
+        requireSelfAsBattleDestroyer: true,
+        oncePerTurn: true,
+        oncePerTurnName: "purified_crystal_heal_on_destroy",
         actions: [
           {
             type: "heal_from_destroyed_level",
@@ -827,7 +834,7 @@ export const dragonCards = [
             type: "grant_protection",
             targetRef: "purified_protection_target",
             protectionType: "effect_destruction",
-            duration: "while_faceup",
+            duration: "end_of_next_turn",
           },
         ],
       },
@@ -844,7 +851,7 @@ export const dragonCards = [
     type: "Dragon",
     attribute: "Dark",
     description:
-      "Voltaic Dragon + 1 Level 5+ Dragon monster. If this card is Fusion Summoned: You can target 1 Level 4 or lower Dragon monster in your GY; banish it, and if you do, this card gains ATK equal to the banished monster's ATK until the end of this turn. If this card is destroyed by battle: You can Special Summon 1 'Voltaic Dragon' from your GY. You can only use each effect of 'Tech-Void Dragon' once per turn.",
+      "Voltaic Dragon + 1 Level 5+ Dragon monster. If this card is Fusion Summoned: You can target 1 Level 4 or lower Dragon monster in your GY; banish it, and if you do, this card gains ATK equal to half the banished monster's ATK until the end of this turn. If this card is destroyed by battle: You can Special Summon 1 'Voltaic Dragon' from your GY. You can only use each effect of 'Tech-Void Dragon' once per turn.",
     image: "assets/Tech-Void Dragon.png",
     fusionMaterials: [
       { name: "Voltaic Dragon", count: 1 },
@@ -876,7 +883,7 @@ export const dragonCards = [
             targetRef: "tech_void_banish_target",
             buffTarget: "self",
             buffSource: "atk",
-            buffMultiplier: 1,
+            buffMultiplier: 0.5,
             buffType: "atk",
             duration: "end_of_turn",
           },
@@ -1739,24 +1746,24 @@ export const dragonCards = [
     cardKind: "spell",
     subtype: "continuous",
     description:
-      'When this card is activated: add 1 Level 8 or higher Dragon-type monster from your Deck to your hand. Once per turn: You can send 2 Dragon-type monsters you control to the GY; Special Summon 1 Level 8 or higher Dragon-type monster from your hand. You can only activate 1 "Extreme Dragon Awakening" per turn.',
+      'You can only control 1 "Extreme Dragon Awakening". Once per turn: You can send 2 Dragon-type monsters you control to the GY; Special Summon 1 Level 8 or higher Dragon-type monster from your hand. You can banish this card from your GY; add 1 "Extreme Dragons" monster from your Deck to your hand. You can only use each effect of "Extreme Dragon Awakening" once per turn.',
     image: "assets/Extreme Dragon Awakening.png",
     effects: [
       {
-        id: "extreme_dragon_awakening_search",
+        id: "extreme_dragon_awakening_control_limit",
         timing: "on_play",
-        oncePerTurn: true,
-        oncePerTurnName: "extreme_dragon_awakening_activate",
-        actions: [
+        conditions: [
           {
-            type: "search_any",
-            cardKind: "monster",
-            filters: { type: "Dragon" },
-            minLevel: 8,
-            count: { min: 1, max: 1 },
-            player: "self",
+            type: "control_card_max",
+            zone: "spellTrap",
+            max: 0,
+            includeFacedown: true,
+            filters: { cardId: 277 },
+            excludeSource: true,
+            reason: 'You can only control 1 "Extreme Dragon Awakening".',
           },
         ],
+        actions: [],
       },
       {
         id: "extreme_dragon_awakening_summon",
@@ -1765,7 +1772,6 @@ export const dragonCards = [
         requirePhase: ["main1", "main2"],
         oncePerTurn: true,
         oncePerTurnName: "extreme_dragon_awakening_summon",
-        oncePerTurnScope: "card",
         targets: [
           {
             id: "awakening_cost_dragons",
@@ -1775,15 +1781,6 @@ export const dragonCards = [
             filters: { type: "Dragon" },
             count: { min: 2, max: 2 },
             intent: "cost",
-          },
-          {
-            id: "awakening_summon_dragon",
-            owner: "self",
-            zone: "hand",
-            cardKind: "monster",
-            filters: { type: "Dragon" },
-            minLevel: 8,
-            count: { min: 1, max: 1 },
           },
         ],
         actions: [
@@ -1795,9 +1792,174 @@ export const dragonCards = [
           },
           {
             type: "special_summon_from_zone",
-            targetRef: "awakening_summon_dragon",
             zone: "hand",
+            filters: { cardKind: "monster", type: "Dragon" },
+            minLevel: 8,
+            count: { min: 1, max: 1 },
             position: "choice",
+            promptPlayer: true,
+            fieldSlotsFreedBeforeSummon: 2,
+          },
+        ],
+      },
+      {
+        id: "extreme_dragon_awakening_gy_search",
+        timing: "ignition",
+        requireZone: "graveyard",
+        requirePhase: ["main1", "main2"],
+        oncePerTurn: true,
+        oncePerTurnName: "extreme_dragon_awakening_gy_search",
+        actions: [
+          {
+            type: "banish",
+            targetRef: "self",
+            fromZone: "graveyard",
+          },
+          {
+            type: "add_from_zone_to_hand",
+            zone: "deck",
+            filters: {
+              cardKind: "monster",
+              archetype: "Extreme Dragons",
+            },
+            count: { min: 1, max: 1 },
+            promptPlayer: true,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 278,
+    name: "Stelya, Dragon Tamer",
+    cardKind: "monster",
+    isTuner: true,
+    type: "Dragon",
+    attribute: "Earth",
+    level: 4,
+    atk: 1700,
+    def: 1200,
+    tributeValue: {
+      countAs: 2,
+      summonMethods: ["tribute"],
+      summonedCardFilters: { type: "Dragon" },
+    },
+    description:
+      'This card can be treated as 2 Tributes for the Tribute Summon of a Dragon-Type monster. You can banish 1 Dragon monster you control; Special Summon this card from your hand or GY. You can discard 2 cards, including this card; add 1 Level 5 or higher Dragon monster from your Deck to your hand. You can only use each effect of "Stelya, Dragon Tamer" once per turn.',
+    image: "assets/Stelya, Dragon Tamer.png",
+    effects: [
+      {
+        id: "stelya_hand_banish_dragon_summon",
+        timing: "ignition",
+        requireZone: "hand",
+        requirePhase: ["main1", "main2"],
+        handModalLabelKey: "ui.summon.specialAction",
+        oncePerTurn: true,
+        oncePerTurnName: "stelya_banish_dragon_summon",
+        targets: [
+          {
+            id: "stelya_hand_banish_cost",
+            owner: "self",
+            zone: "field",
+            cardKind: "monster",
+            filters: { type: "Dragon" },
+            count: { min: 1, max: 1 },
+            intent: "cost",
+          },
+        ],
+        actions: [
+          {
+            type: "move",
+            targetRef: "stelya_hand_banish_cost",
+            player: "self",
+            to: "banished",
+            contextLabel: "cost",
+          },
+          {
+            type: "special_summon_from_zone",
+            zone: "hand",
+            requireSource: true,
+            position: "choice",
+            promptPlayer: true,
+            fieldSlotsFreedBeforeSummon: 1,
+          },
+        ],
+      },
+      {
+        id: "stelya_graveyard_banish_dragon_summon",
+        timing: "ignition",
+        requireZone: "graveyard",
+        requirePhase: ["main1", "main2"],
+        oncePerTurn: true,
+        oncePerTurnName: "stelya_banish_dragon_summon",
+        targets: [
+          {
+            id: "stelya_graveyard_banish_cost",
+            owner: "self",
+            zone: "field",
+            cardKind: "monster",
+            filters: { type: "Dragon" },
+            count: { min: 1, max: 1 },
+            intent: "cost",
+          },
+        ],
+        actions: [
+          {
+            type: "move",
+            targetRef: "stelya_graveyard_banish_cost",
+            player: "self",
+            to: "banished",
+            contextLabel: "cost",
+          },
+          {
+            type: "special_summon_from_zone",
+            zone: "graveyard",
+            requireSource: true,
+            position: "choice",
+            promptPlayer: true,
+            fieldSlotsFreedBeforeSummon: 1,
+          },
+        ],
+      },
+      {
+        id: "stelya_discard_search_dragon",
+        timing: "ignition",
+        requireZone: "hand",
+        requirePhase: ["main1", "main2"],
+        handModalLabelKey: "ui.summon.activateEffect",
+        oncePerTurn: true,
+        oncePerTurnName: "stelya_discard_search_dragon",
+        targets: [
+          {
+            id: "stelya_discard_other_card",
+            owner: "self",
+            zone: "hand",
+            excludeSelf: true,
+            count: { min: 1, max: 1 },
+            intent: "cost",
+          },
+        ],
+        actions: [
+          {
+            type: "move",
+            targetRef: "self",
+            player: "self",
+            to: "graveyard",
+            contextLabel: "cost",
+          },
+          {
+            type: "move",
+            targetRef: "stelya_discard_other_card",
+            player: "self",
+            to: "graveyard",
+            contextLabel: "cost",
+          },
+          {
+            type: "add_from_zone_to_hand",
+            zone: "deck",
+            filters: { cardKind: "monster", type: "Dragon" },
+            minLevel: 5,
+            count: { min: 1, max: 1 },
             promptPlayer: true,
           },
         ],

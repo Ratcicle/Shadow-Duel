@@ -10,6 +10,15 @@ function getPlayerByCardOwner(game, card) {
   return card.owner === "player" ? game.player : game.bot;
 }
 
+function getOwnerByCard(game, card) {
+  if (!game || !card) return null;
+  if (typeof game.getOwnerByCard === "function") {
+    const owner = game.getOwnerByCard(card);
+    if (owner) return owner;
+  }
+  return getPlayerByCardOwner(game, card);
+}
+
 function getAttackPassiveSources(player) {
   if (!player) return [];
   const field = Array.isArray(player.field) ? player.field : [];
@@ -304,6 +313,95 @@ function isBattleIndestructibleByStatMatchPassive(game, card, context = {}) {
   return false;
 }
 
+function equipIsActiveForCard(game, equip, card) {
+  if (!game || !equip || !card) return false;
+  if (typeof game.effectEngine?.isActiveEquipForCard === "function") {
+    return game.effectEngine.isActiveEquipForCard(equip, card);
+  }
+  if (equip.cardKind !== "spell" || equip.subtype !== "equip") return false;
+  if (equip.equippedTo !== card && equip.equipTarget !== card) return false;
+  const equipOwner = getOwnerByCard(game, equip);
+  return Array.isArray(equipOwner?.spellTrap) && equipOwner.spellTrap.includes(equip);
+}
+
+function battleProtectionSourceAffectsCard(game, card, sourceCard, sourceOwner) {
+  if (!game || !card || !sourceCard) return true;
+  if (sourceCard === card) return true;
+  const resolvedSourceOwner = sourceOwner || getOwnerByCard(game, sourceCard);
+  if (!resolvedSourceOwner) return true;
+  const immunity = game.effectEngine?.checkImmunity?.(card, resolvedSourceOwner, {
+    effectType: "battle_destruction_prevention",
+    sourceCard,
+  });
+  return immunity?.immune !== true;
+}
+
+function ownPositionBattleIndestructibleApplies(game, card, context = {}) {
+  if (!game || !card || !Array.isArray(card.effects)) return false;
+  if (card.isFacedown || card.effectsNegated) return false;
+  const owner =
+    getPlayerFromContext(game, context.owner) ||
+    getOwnerByCard(game, card) ||
+    getPlayerByCardOwner(game, card);
+  const sourceZone = findAttackPassiveSourceZone(game, owner, card);
+  for (const effect of card.effects) {
+    if (!effect || effect.timing !== "passive") continue;
+    const passive = effect.passive || {};
+    if (passive.type !== "position_status") continue;
+    const statusName = passive.status || "battleIndestructible";
+    if (statusName !== "battleIndestructible") continue;
+    if (effect.requireZone && sourceZone !== effect.requireZone) continue;
+    if (passive.requireZone && sourceZone !== passive.requireZone) continue;
+    if (
+      (effect.requireFaceup === true || passive.requireFaceup === true) &&
+      card.isFacedown
+    ) {
+      continue;
+    }
+    const activePosition = passive.activePosition || "defense";
+    if ((card.position || "attack") !== activePosition) continue;
+    return battleProtectionSourceAffectsCard(game, card, card, owner);
+  }
+  return false;
+}
+
+function equipBattleIndestructibleApplies(game, card) {
+  const equips = Array.isArray(card?.equips) ? card.equips : [];
+  for (const equip of equips) {
+    if (!equip?.grantsBattleIndestructible) continue;
+    if (!equipIsActiveForCard(game, equip, card)) continue;
+    const equipOwner = getOwnerByCard(game, equip);
+    if (battleProtectionSourceAffectsCard(game, card, equip, equipOwner)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function hasKnownBattleIndestructibleSource(card) {
+  if (!card) return false;
+  if (
+    (card.effects || []).some((effect) => {
+      const passive = effect?.passive || {};
+      return (
+        effect?.timing === "passive" &&
+        passive.type === "position_status" &&
+        (passive.status || "battleIndestructible") === "battleIndestructible"
+      );
+    })
+  ) {
+    return true;
+  }
+  return (card.equips || []).some((equip) => equip?.grantsBattleIndestructible);
+}
+
+function battleIndestructibleFlagApplies(game, card, context = {}) {
+  if (!card?.battleIndestructible) return false;
+  if (ownPositionBattleIndestructibleApplies(game, card, context)) return true;
+  if (equipBattleIndestructibleApplies(game, card)) return true;
+  return !hasKnownBattleIndestructibleSource(card);
+}
+
 function getCounterAttackLockReason(game, attacker) {
   const attackerOwner = getPlayerByCardOwner(game, attacker);
   const opponentOfAttacker =
@@ -594,7 +692,7 @@ export function canDestroyByBattle(card, context = {}) {
   if (isBattleIndestructibleByStatMatchPassive(this, card, context)) {
     return false;
   }
-  if (card.battleIndestructible) return false;
+  if (battleIndestructibleFlagApplies(this, card, context)) return false;
   if (card.tempBattleIndestructible) return false;
   if (card.battleIndestructibleOncePerTurn) {
     const turnCounter = Number.isFinite(Number(this?.turnCounter))

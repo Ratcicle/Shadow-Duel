@@ -58,6 +58,7 @@
     "summon": {
       "normal": "Invocação-Normal",
       "special": "Invocação-Especial",
+      "specialAction": "Invocação Especial",
       "set": "Baixar",
       "conditionalConfirm": "Invocar",
       "conditionalDecline": "Recusar",
@@ -800,7 +801,7 @@
     },
     "257": {
       "name": "Dragão de Prata Majestoso",
-      "description": "Pode ser Invocado por Invocação-Tributo com 1 Tributo se você Tributar um monstro Dragão. Uma vez por turno: você pode escolher 1 monstro que seu oponente controla; mude sua posição de batalha."
+      "description": "Este card pode ser Invocado por Invocação-Tributo ao tributar 1 monstro do tipo Dragão. Uma vez por turno: você pode escolher 1 monstro com a face para cima que seu oponente controla; mude sua posição de batalha."
     },
     "258": {
       "name": "Dragão das Trevas",
@@ -812,7 +813,7 @@
     },
     "260": {
       "name": "Dragão Infernal",
-      "description": "Você pode enviar 1 monstro Dragão que você controla para o Cemitério; Invoque por Invocação-Especial este card da sua mão. Uma vez por turno: você pode enviar este card com a face para cima para o Cemitério; Invoque por Invocação-Especial 1 monstro Dragão de Nível 7 ou menor do seu Cemitério."
+      "description": "Você pode enviar 1 monstro do tipo Dragão que você controla para o Cemitério; Invoque este card por Invocação-Especial da sua mão. Uma vez por turno: você pode enviar este card com a face para cima para o Cemitério; Invoque por Invocação-Especial 1 monstro Dragão de Nível 7 ou menor do seu Cemitério, exceto \"Dragão Infernal\"."
     },
     "261": {
       "name": "Rugido Infernal",
@@ -820,7 +821,7 @@
     },
     "262": {
       "name": "Pico Escarpado dos Dragões",
-      "description": "Quando este card é ativado: você pode adicionar 1 monstro Dragão de Nível 4 ou menor do seu Cemitério à sua mão. Cada vez que um monstro Dragão destruir um monstro do oponente em batalha, coloque 1 Marcador Pico Dragão neste card. Uma vez por turno: se este card tiver 5 ou mais Marcadores Pico Dragão; você pode enviá-lo para o Cemitério e, se fizer isso, Invoque por Invocação-Especial 1 monstro Dragão da sua mão, Deck ou Cemitério."
+      "description": "Quando este card for ativado: você pode adicionar 1 monstro Dragão de Nível 4 ou menor do seu Cemitério à sua mão. Cada vez que um monstro Dragão destruir um monstro do oponente em batalha, coloque 1 Marcador de Pico Dracônico neste card. Uma vez por turno: se este card tiver 7 ou mais Marcadores de Pico Dracônico, você pode enviar este card para o Cemitério; Invoque por Invocação-Especial 1 monstro do tipo Dragão da sua mão, Deck ou Cemitério."
     },
     "263": {
       "name": "Dragão Serpente Abissal",
@@ -828,11 +829,11 @@
     },
     "264": {
       "name": "Dragão de Cristal Purificado",
-      "description": "Você pode Invocar por Invocação-Especial este card da sua mão ao banir 3 monstros Dragão do seu Cemitério. Se este card destruir um monstro em batalha: ganhe PV igual ao Nível do monstro destruído x100. Uma vez por turno: você pode escolher 1 outro monstro Dragão que você controla; ele não pode ser destruído por efeitos de cards enquanto estiver com a face para cima no campo."
+      "description": "Você pode Invocar este card por Invocação-Especial da sua mão ao banir 3 monstros do tipo Dragão do seu Cemitério. Se este card destruir um monstro em batalha: ganhe LP igual ao Nível do monstro destruído x100. Você pode escolher 1 outro monstro Dragão que você controla; ele não pode ser destruído por efeitos de card até o final do próximo turno. Você só pode usar cada efeito de \"Dragão de Cristal Purificado\" uma vez por turno."
     },
     "265": {
       "name": "Dragão Tecno-Vazio",
-      "description": "Materiais: Dragão Voltaico + 1 monstro Dragão de Nível 5 ou maior Se este card for Invocado por Invocação-Fusão: você pode escolher 1 monstro Dragão de Nível 4 ou menor no seu Cemitério; bana-o e, se fizer isso, este card ganha ATK igual ao ATK do monstro banido até o final deste turno. Se este card for destruído em batalha: você pode Invocar por Invocação-Especial 1 'Dragão Voltaico' do seu Cemitério. Você só pode usar cada efeito de 'Dragão Tecno-Vazio' uma vez por turno."
+      "description": "Materiais: \"Dragão Voltaico\" + 1 monstro do tipo Dragão de Nível 5 ou maior Se este card for Invocado por Invocação-Fusão: você pode escolher 1 monstro do tipo Dragão de Nível 4 ou menor no seu Cemitério; bana-o e, se isso acontecer, este card ganha ATK igual à metade do ATK daquele monstro banido até o final deste turno. Se este card for destruído em batalha: você pode Invocar por Invocação-Especial 1 \"Dragão Voltaico\" do seu Cemitério. Você só pode usar cada efeito de \"Dragão Tecno-Vazio\" uma vez por turno."
     },
     "266": {
       "name": "Dragão Cósmico Radiante",
@@ -880,7 +881,11 @@
     },
     "277": {
       "name": "Despertar do Dragão Extremo",
-      "description": "Quando este card for ativado: adicione 1 monstro do Tipo Dragão de Nível 8 ou maior do seu Deck à sua mão. Uma vez por turno: você pode enviar 2 monstros do Tipo Dragão que você controla para o Cemitério; Invoque por Invocação-Especial 1 monstro do Tipo Dragão de Nível 8 ou maior da sua mão. Você só pode ativar 1 \"Despertar do Dragão Extremo\" por turno."
+      "description": "Você só pode controlar 1 \"Despertar do Dragão Extremo\". Uma vez por turno: você pode enviar 2 monstros do tipo Dragão que você controla para o Cemitério; Invoque por Invocação-Especial 1 monstro do tipo Dragão de Nível 8 ou maior da sua mão. Você pode banir este card do seu Cemitério; adicione 1 monstro \"Dragão Extremo\" do seu Deck à sua mão. Você só pode usar cada efeito de \"Despertar do Dragão Extremo\" uma vez por turno."
+    },
+    "278": {
+      "name": "Stelya, Domadora de Dragões",
+      "description": "Este card pode ser tratado como 2 Tributos para a Invocação-Tributo de um monstro do Tipo Dragão. Você pode banir 1 monstro Dragão que você controla; Invoque este card por Invocação-Especial da sua mão ou do seu Cemitério. Você pode descartar 2 cards, incluindo este card; adicione 1 monstro Dragão de Nível 5 ou maior do seu Deck à sua mão. Você só pode usar cada efeito de \"Stelya, Domadora de Dragões\" uma vez por turno."
     },
     "301": {
       "name": "Grimório do Arcanista Aprendiz",

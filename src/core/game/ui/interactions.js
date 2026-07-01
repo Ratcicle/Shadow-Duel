@@ -5,6 +5,7 @@ import {
   getTributeValueTotal,
 } from "../summon/tributeValue.js";
 import { canUseNormalSummonForCard } from "../../Player.js";
+import { getUIText } from "../../i18n.js";
 
 /**
  * UI Interactions Module - Card interactions for the Shadow Duel game
@@ -29,6 +30,31 @@ export function bindCardInteractions() {
     this.laboratoryModeEnabled === true && actor?.id === this.turn;
   const getOpponentOf = (actor) => (actor?.id === "player" ? this.bot : this.player);
   const isMainPhase = () => this.phase === "main1" || this.phase === "main2";
+  const getHandEffectButtonLabel = (effect, fallbackKey = "ui.summon.special") => {
+    if (effect?.handModalLabel) return effect.handModalLabel;
+    if (effect?.handModalLabelKey) {
+      return getUIText(effect.handModalLabelKey, {}, effect.handModalLabelKey);
+    }
+    return getUIText(fallbackKey);
+  };
+  const getAvailableHandEffectChoices = (actor, card) => {
+    if (!actor || !card || card.cardKind !== "monster") return [];
+    const entries =
+      this.effectEngine?.getActivatableMonsterIgnitionEffects?.(
+        card,
+        actor,
+        "hand",
+      ) || [];
+    return entries
+      .map(({ effect }) => {
+        if (!effect?.id) return null;
+        return {
+          effectId: effect.id,
+          label: getHandEffectButtonLabel(effect),
+        };
+      })
+      .filter(Boolean);
+  };
   const canNormalSummonFromHand = (actor, card, tributeInfo = null) => {
     if (!actor || !card || card.cardKind !== "monster") return false;
     if (card.cannotBeNormalSummonedOrSet) return false;
@@ -194,14 +220,8 @@ export function bindCardInteractions() {
 
       const tributeInfo = actor.getTributeRequirement(card);
       const tributesNeeded = tributeInfo.tributesNeeded;
-      const handEffect = (card.effects || []).find(
-        (effect) =>
-          effect && effect.timing === "ignition" && effect.requireZone === "hand"
-      );
-      const handEffectPreview = handEffect
-        ? this.effectEngine.canActivateMonsterEffectPreview(card, actor, "hand")
-        : { ok: false };
-      const canUseHandEffect = handEffectPreview.ok;
+      const handEffectChoices = getAvailableHandEffectChoices(actor, card);
+      const canUseHandEffect = handEffectChoices.length > 0;
 
       if (
         !canUseHandEffect &&
@@ -217,9 +237,14 @@ export function bindCardInteractions() {
         async (choice) => {
           if (
             choice === "special_from_void_forgotten" ||
-            choice === "special_from_hand_effect"
+            choice === "special_from_hand_effect" ||
+            choice?.type === "hand_effect"
           ) {
-            this.tryActivateMonsterEffect(card, null, "hand", actor);
+            const effectId =
+              choice?.effectId || handEffectChoices[0]?.effectId || null;
+            this.tryActivateMonsterEffect(card, null, "hand", actor, {
+              effectId,
+            });
             return;
           }
           if (choice !== "attack" && choice !== "defense") return;
@@ -286,7 +311,9 @@ export function bindCardInteractions() {
           canNormalSummon: canNormalSummonFromHand(actor, card, tributeInfo),
           canSet: canNormalSummonFromHand(actor, card, tributeInfo),
           specialSummonFromHand: false,
-          specialSummonFromHandEffect: canUseHandEffect,
+          handEffectChoices,
+          specialSummonFromHandEffect:
+            canUseHandEffect && handEffectChoices.length === 0,
           ownerId: actor.id,
         }
       );
@@ -549,21 +576,11 @@ export function bindCardInteractions() {
 
         const tributeInfo = this.player.getTributeRequirement(card);
         const tributesNeeded = tributeInfo.tributesNeeded;
-
-        const handEffect = (card.effects || []).find(
-          (e) => e && e.timing === "ignition" && e.requireZone === "hand"
+        const handEffectChoices = getAvailableHandEffectChoices(
+          this.player,
+          card,
         );
-
-        // Generic pre-check for hand effects (filters, OPT, targets, phase/turn)
-        const handEffectPreview = handEffect
-          ? this.effectEngine.canActivateMonsterEffectPreview(
-              card,
-              this.player,
-              "hand"
-            )
-          : { ok: false };
-
-        const canUseHandEffect = handEffectPreview.ok;
+        const canUseHandEffect = handEffectChoices.length > 0;
 
         if (
           !canUseHandEffect &&
@@ -582,11 +599,18 @@ export function bindCardInteractions() {
               return;
             }
 
-            if (choice === "special_from_hand_effect") {
+            if (
+              choice === "special_from_hand_effect" ||
+              choice?.type === "hand_effect"
+            ) {
               this.devLog?.("HAND_EFFECT", {
                 summary: `Activating hand effect for ${card.name}`,
               });
-              this.tryActivateMonsterEffect(card, null, "hand");
+              const effectId =
+                choice?.effectId || handEffectChoices[0]?.effectId || null;
+              this.tryActivateMonsterEffect(card, null, "hand", this.player, {
+                effectId,
+              });
               return;
             }
             if (choice === "attack" || choice === "defense") {
@@ -679,7 +703,9 @@ export function bindCardInteractions() {
             ),
             canSet: canNormalSummonFromHand(this.player, card, tributeInfo),
             specialSummonFromHand: false,
-            specialSummonFromHandEffect: canUseHandEffect,
+            handEffectChoices,
+            specialSummonFromHandEffect:
+              canUseHandEffect && handEffectChoices.length === 0,
           }
         );
         return;

@@ -64,6 +64,7 @@ const DEFAULT_LOCALE_TEXTS = {
     summon: {
       normal: "Normal Summon",
       special: "Special Summon",
+      specialAction: "Special Summon",
       set: "Set",
       conditionalConfirm: "Summon",
       conditionalDecline: "Decline",

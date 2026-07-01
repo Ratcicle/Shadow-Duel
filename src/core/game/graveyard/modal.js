@@ -34,17 +34,25 @@ export function openGraveyardModal(player, options = {}) {
       options.onSelect = (card) => {
         const isSpellTrap =
           card?.cardKind === "spell" || card?.cardKind === "trap";
+        const monsterEffectEntry = !isSpellTrap
+          ? this.effectEngine?.getFirstActivatableMonsterIgnitionEffect?.(
+              card,
+              player,
+              "graveyard",
+            )
+          : null;
         const preview = isSpellTrap
           ? this.effectEngine.canActivateSpellTrapEffectPreview?.(
               card,
               player,
               "graveyard",
             )
-          : this.effectEngine.canActivateMonsterEffectPreview?.(
-              card,
-              player,
-              "graveyard",
-            );
+          : monsterEffectEntry?.preview ||
+            this.effectEngine.canActivateMonsterEffectPreview?.(
+                card,
+                player,
+                "graveyard",
+              );
         if (!preview?.ok) {
           if (preview?.reason) {
             this.ui.log(preview.reason);
@@ -55,6 +63,7 @@ export function openGraveyardModal(player, options = {}) {
           fromHand: false,
           activationZone: "graveyard",
           sourceZone: "graveyard",
+          effectId: monsterEffectEntry?.effect?.id || null,
           committed: false,
         };
         const activationEffect = isSpellTrap
@@ -62,7 +71,9 @@ export function openGraveyardModal(player, options = {}) {
               fromHand: false,
               activationZone: "graveyard",
             })
-          : this.effectEngine?.getMonsterIgnitionEffect?.(card, "graveyard");
+          : this.effectEngine?.getMonsterIgnitionEffect?.(card, "graveyard", {
+              effectId: activationContext.effectId,
+            });
         this.runActivationPipeline({
           card,
           owner: player,
