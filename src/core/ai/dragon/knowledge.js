@@ -38,11 +38,11 @@ export const CARD_KNOWLEDGE = {
     isExtremeDragon: true,
     summonCondition: "special_via_jagged_peak_or_tribute",
     effect: "Battle indestructible when alone. 600 burn on battle. Once per duel, banish both GYs for 100 per card burn.",
-    synergies: ["Jagged Peak of the Dragons"],
+    synergies: ["Jagged Peak of the Dragons", "Extreme Dragon Awakening", "Call of the Haunted"],
     playPatterns: [
       "Best when alone (battle indestructible)",
       "Use both-GY banish effect only for lethal, a large burn swing, or to deny opponent GY value",
-      "Avoid the once-per-duel effect if own GY still fuels Purified, Boneflame, Luminous, Grey, Hellkite, or Radiant revive",
+      "Avoid the once-per-duel effect if own GY still fuels Solar, Lunar, Stelya, Purified, Luminous, Grey, Hellkite, Call, or Radiant revive",
     ],
     situationScore: {
       alone: 2,
@@ -52,7 +52,7 @@ export const CARD_KNOWLEDGE = {
   },
   "Mist Extreme Dragon": {
     role: "boss",
-    priority: 9,
+    priority: 5,
     atk: 2800,
     def: 2500,
     level: 10,
@@ -70,10 +70,12 @@ export const CARD_KNOWLEDGE = {
       oppFieldHasMultiple: 2,
     },
     value: 13,
+    legacyOnly: true,
+    outOfPlan: true,
   },
   "Galaxy Extreme Dragon": {
     role: "boss",
-    priority: 9,
+    priority: 5,
     atk: 2900,
     def: 2900,
     level: 10,
@@ -91,10 +93,12 @@ export const CARD_KNOWLEDGE = {
       endangered: 2,  // when would be destroyed otherwise
     },
     value: 14,
+    legacyOnly: true,
+    outOfPlan: true,
   },
   "Forest Extreme Dragon": {
     role: "boss",
-    priority: 7,
+    priority: 4,
     atk: 2500,
     def: 2700,
     level: 10,
@@ -112,9 +116,53 @@ export const CARD_KNOWLEDGE = {
       longGame: 2,
     },
     value: 11,
+    legacyOnly: true,
+    outOfPlan: true,
   },
 
   // ===== MAIN DECK MONSTERS =====
+  "Solar Eclipse Dragon": {
+    role: "eclipse_starter",
+    priority: 13,
+    atk: 1700,
+    def: 1100,
+    level: 4,
+    summonCondition: "hand_ignition_discard_self_for_lunar",
+    effect: "Discard self to Special Summon Lunar from hand or Deck, then reduce hand monster levels by 2. GY effect banishes self to revive a Level 4 or lower Dragon from GY.",
+    synergies: ["Lunar Eclipse Dragon", "Armored Dragon", "Stelya, Dragon Tamer", "Luminescent Dragon", "Radiant Cosmic Dragon"],
+    playPatterns: [
+      "Primary Eclipse starter: self-discard turns on Lunar and loads Solar's GY revive",
+      "Prefer the hand ignition when Lunar is available in Deck or hand and there is a monster zone",
+      "GY revive extends into Armored, Lunar, Stelya, Luminescent, Voltaic, or Grey lines",
+      "LIGHT Dragon body and level reducer can unlock Radiant or tribute lines after the Lunar follow-up",
+    ],
+    tags: ["eclipse", "hand_starter", "good_discard", "gy_revive_l4", "level_reduction", "light_material"],
+    goodDiscard: true,
+    eclipseEngine: true,
+    currentBotCore: true,
+    value: 12,
+  },
+  "Lunar Eclipse Dragon": {
+    role: "eclipse_searcher",
+    priority: 12,
+    atk: 1100,
+    def: 1700,
+    level: 4,
+    summonCondition: "normal_or_special_summon_search",
+    effect: "On Normal or Special Summon, discard 1 card to add a Level 4 or lower Dragon from Deck, then optionally Special Summon Solar from hand or GY. GY effect banishes self to Special Summon a Level 4 or lower Dragon from Deck.",
+    synergies: ["Solar Eclipse Dragon", "Armored Dragon", "Stelya, Dragon Tamer", "Voltaic Dragon", "Luminescent Dragon"],
+    playPatterns: [
+      "Best Normal Summon when hand has discard fodder and Deck has a low-level Dragon search target",
+      "Special Summon from Solar to convert Solar's cost into a search plus optional Solar revive",
+      "GY effect is a Deck extender and can summon another Lunar when that is the strongest available line",
+      "DARK level 4 body fills Eclipse, tribute, and fusion material roles",
+    ],
+    tags: ["eclipse", "normal_summon_starter", "special_summon_trigger", "discard_outlet", "deck_extender_l4"],
+    goodSearchTarget: "lv4_dragon",
+    eclipseEngine: true,
+    currentBotCore: true,
+    value: 12,
+  },
   "Black Bull Dragon": {
     role: "beater",
     priority: 8,
@@ -123,13 +171,13 @@ export const CARD_KNOWLEDGE = {
     level: 8,
     summonCondition: "discard_2_dragons_from_hand",
     effect: "SS by discarding 2 Dragons from hand (can't attack same turn). Double attack on monsters. GY banish self to search lv7-8 Dragon.",
-    synergies: ["Voltaic Dragon", "Grey Dragon", "GY setup"],
+    synergies: ["Voltaic Dragon", "Solar Eclipse Dragon", "Lunar Eclipse Dragon", "Grey Dragon", "GY setup"],
     playPatterns: [
       "Discard Voltaic Dragon (triggers 800 burn) + another Dragon for SS cost",
       "Use as GY search engine after it's destroyed",
       "Cannot attack turn summoned — best as defense or future attacker",
     ],
-    goodDiscard: false,
+    goodDiscard: true,
     value: 12,
   },
   "Luminous Dragon": {
@@ -140,7 +188,7 @@ export const CARD_KNOWLEDGE = {
     level: 5,
     summonCondition: "hand_ignition_empty_field",
     effect: "SS from hand if you control no monsters. While face-up, recovers a different Dragon from GY when a Dragon is discarded from hand to GY.",
-    synergies: ["Voltaic Dragon", "Grey Dragon", "Black Bull Dragon", "Converging Stars", "Polymerization", "Extreme Dragon Awakening"],
+    synergies: ["Solar Eclipse Dragon", "Lunar Eclipse Dragon", "Voltaic Dragon", "Grey Dragon", "Black Bull Dragon", "Polymerization", "Extreme Dragon Awakening"],
     playPatterns: [
       "Open with Luminous on an empty field when hand has follow-up",
       "Pairs with Voltaic for a free second body",
@@ -170,7 +218,7 @@ export const CARD_KNOWLEDGE = {
   },
   "Abyssal Serpent Dragon": {
     role: "control",
-    priority: 6,
+    priority: 3,
     atk: 2200,
     def: 1400,
     level: 7,
@@ -185,6 +233,8 @@ export const CARD_KNOWLEDGE = {
     ],
     convergingStarsPriority: true,
     value: 9,
+    legacyOnly: true,
+    outOfPlan: true,
   },
   "Hellkite Dragon": {
     role: "extender",
@@ -194,7 +244,7 @@ export const CARD_KNOWLEDGE = {
     level: 7,
     summonCondition: "hand_ignition_send_field_dragon",
     effect: "Send 1 field Dragon to GY → SS self from hand. Field: send self to GY → SS lv7- Dragon from GY.",
-    synergies: ["Luminescent Dragon", "Majestic Silver Dragon", "GY recursion"],
+    synergies: ["Stelya, Dragon Tamer", "Luminescent Dragon", "Majestic Silver Dragon", "GY recursion"],
     playPatterns: [
       "SS from hand by sending any field Dragon (including weak ones or Boneflame)",
       "Use field effect to recycle GY resources (get Luminescent, Armored, etc.)",
@@ -211,7 +261,7 @@ export const CARD_KNOWLEDGE = {
     level: 7,
     summonCondition: "1_dragon_tribute_or_converging",
     effect: "Alt tribute: 1 Dragon instead of 2. Once per turn: switch 1 opp monster's battle position.",
-    synergies: ["Converging Stars", "Dragon tribute fodder"],
+    synergies: ["Stelya, Dragon Tamer", "Black Bull Dragon", "Dragon tribute fodder"],
     playPatterns: [
       "Alt tribute: use 1 Dragon on field instead of 2 normal tributes",
       "Converging Stars makes it level 5 → 1 normal tribute (any monster)",
@@ -222,7 +272,7 @@ export const CARD_KNOWLEDGE = {
   },
   "Darkness Dragon": {
     role: "situational_boss",
-    priority: 5,
+    priority: 2,
     atk: 2000,
     def: 1700,
     level: 5,
@@ -237,6 +287,8 @@ export const CARD_KNOWLEDGE = {
     ],
     situationalOnly: true,  // Only summon when necessary to beat opponent's ATK
     value: 8,
+    legacyOnly: true,
+    outOfPlan: true,
   },
   "Armored Dragon": {
     role: "searcher",
@@ -246,9 +298,9 @@ export const CARD_KNOWLEDGE = {
     level: 4,
     summonCondition: "normal",
     effect: "Normal Summon: search 1 lv4- Dragon from deck. Battle destroy: draw 1, if lv4- Dragon can SS it.",
-    synergies: ["Grey Dragon", "Luminescent Dragon", "Voltaic Dragon", "Jagged Peak"],
+    synergies: ["Solar Eclipse Dragon", "Lunar Eclipse Dragon", "Stelya, Dragon Tamer", "Grey Dragon", "Luminescent Dragon", "Voltaic Dragon", "Jagged Peak"],
     playPatterns: [
-      "Normal Summon T1 to search key dragons (Grey Dragon or Luminescent Dragon)",
+      "Normal Summon T1 to search key dragons, especially Eclipse pieces or Stelya when the hand needs a bridge",
       "When destroyed by battle, draws a card for free recovery",
       "Excellent extender and draw engine in early game",
     ],
@@ -263,7 +315,7 @@ export const CARD_KNOWLEDGE = {
     level: 4,
     summonCondition: "special",
     effect: "Cannot direct attack. Special Summon: another Dragon you control gains +500 ATK. GY ignition: discard 1 Dragon → return self to hand.",
-    synergies: ["Armored Dragon", "Black Bull Dragon", "Hellkite Dragon"],
+    synergies: ["Armored Dragon", "Solar Eclipse Dragon", "Lunar Eclipse Dragon", "Black Bull Dragon", "Hellkite Dragon"],
     playPatterns: [
       "Best when Special Summoned (buff to another Dragon)",
       "GY return effect enables replaying from hand",
@@ -279,7 +331,7 @@ export const CARD_KNOWLEDGE = {
     level: 4,
     summonCondition: "normal",
     effect: "Normal Summon: SS 1 lv4- Dragon from GY. GY ignition: banish self → opp monster -600 ATK/DEF until end of turn.",
-    synergies: ["Armored Dragon", "Voltaic Dragon", "Grey Dragon", "Boneflame Dragon"],
+    synergies: ["Armored Dragon", "Solar Eclipse Dragon", "Lunar Eclipse Dragon", "Stelya, Dragon Tamer", "Voltaic Dragon", "Grey Dragon"],
     playPatterns: [
       "Normal Summon to revive any lv4- Dragon from GY",
       "Creates instant 2-body setup with one Normal Summon",
@@ -289,7 +341,7 @@ export const CARD_KNOWLEDGE = {
   },
   "Boneflame Dragon": {
     role: "gy_beater",
-    priority: 5,
+    priority: 2,
     atk: 0,
     def: 0,
     level: 3,
@@ -302,6 +354,8 @@ export const CARD_KNOWLEDGE = {
       "Sending a used-up Dragon to GY via cost improves GY resource density",
     ],
     value: 6,
+    legacyOnly: true,
+    outOfPlan: true,
   },
   "Voltaic Dragon": {
     role: "extender",
@@ -311,7 +365,7 @@ export const CARD_KNOWLEDGE = {
     level: 3,
     summonCondition: "hand_ignition_if_control_dragon",
     effect: "Discarded from hand: 800 damage. Hand ignition: SS self if control Dragon.",
-    synergies: ["Black Bull Dragon", "Tech-Void Dragon (fusion material)", "Luminescent Dragon"],
+    synergies: ["Solar Eclipse Dragon", "Lunar Eclipse Dragon", "Black Bull Dragon", "Tech-Void Dragon (fusion material)", "Luminescent Dragon"],
     playPatterns: [
       "SS from hand if control Dragon — free body on field",
       "Discard for Black Bull Dragon cost to trigger 800 burn",
@@ -320,11 +374,32 @@ export const CARD_KNOWLEDGE = {
     goodDiscard: true,  // Trigger burn when discarded
     value: 7,
   },
+  "Stelya, Dragon Tamer": {
+    role: "stelya_bridge",
+    priority: 11,
+    atk: 1700,
+    def: 1200,
+    level: 4,
+    summonCondition: "hand_or_gy_ignition_banish_field_dragon",
+    effect: "Counts as 2 tributes for Dragon Tribute Summons. Can Special Summon herself from hand or GY by banishing a Dragon you control. Can discard herself plus another hand card to search a Level 5+ Dragon from Deck.",
+    synergies: ["Solar Eclipse Dragon", "Lunar Eclipse Dragon", "Fire Extreme Dragon", "Volcanic Extreme Dragon", "Black Bull Dragon", "Purified Crystal Dragon", "Hellkite Dragon", "Majestic Silver Dragon"],
+    playPatterns: [
+      "Bridge piece for high-level Dragon Tribute Summons and Level 5+ Dragon searches",
+      "Hand/GY self-summon is strong when the banished field Dragon is expendable or already converted value",
+      "Discard-search mode finds bosses but should preserve critical Eclipse or fusion hands when possible",
+      "Treat as a Dragon bridge, not as a Synchro plan in the current list",
+    ],
+    tags: ["bridge_to_boss", "level5_search", "self_recur_hand_gy", "two_tributes_for_dragon", "banish_field_cost"],
+    goodDiscard: true,
+    isTuner: true,
+    currentBotCore: true,
+    value: 12,
+  },
 
   // ===== SPELLS =====
   "Converging Stars": {
     role: "enabler",
-    priority: 9,
+    priority: 2,
     playCondition: "has_high_level_target_in_hand",
     effect: "Discard 1 card; reduce all hand monster levels by 2 until end of turn.",
     synergies: ["Abyssal Serpent Dragon", "Majestic Silver Dragon", "Darkness Dragon"],
@@ -335,6 +410,8 @@ export const CARD_KNOWLEDGE = {
       "DO NOT play if only dragons that self-summon are in hand (Black Bull, Hellkite, Purified Crystal)",
     ],
     value: 9,
+    legacyOnly: true,
+    outOfPlan: true,
   },
   Polymerization: {
     role: "fusion_enabler",
@@ -354,7 +431,7 @@ export const CARD_KNOWLEDGE = {
     priority: 7,
     playCondition: "monster_in_gy",
     effect: "Revive 1 monster from GY (set as trap first, activate later).",
-    synergies: ["Extreme Dragons", "Black Bull Dragon", "Hellkite Dragon"],
+    synergies: ["Solar Eclipse Dragon", "Lunar Eclipse Dragon", "Stelya, Dragon Tamer", "Extreme Dragons", "Black Bull Dragon", "Hellkite Dragon"],
     playPatterns: [
       "Set as trap to activate reactively",
       "Best revival target: Extreme Dragon from GY",
@@ -367,7 +444,7 @@ export const CARD_KNOWLEDGE = {
     priority: 8,
     playCondition: "control_lv7_plus_dragon",
     effect: "If control lv7+ Dragon: destroy up to 1 opp spell/trap. GY banish self -> search Jagged Peak from deck.",
-    synergies: ["Extreme Dragons", "Jagged Peak of the Dragons", "Abyssal Serpent Dragon", "Majestic Silver Dragon"],
+    synergies: ["Extreme Dragons", "Jagged Peak of the Dragons", "Fire Extreme Dragon", "Volcanic Extreme Dragon", "Majestic Silver Dragon", "Hellkite Dragon"],
     playPatterns: [
       "Activate only if have lv7+ Dragon on field",
       "Use GY effect to search Jagged Peak if don't have it",
@@ -394,11 +471,11 @@ export const CARD_KNOWLEDGE = {
     priority: 11,
     playCondition: "lv8_plus_dragon_in_deck_or_hand_AND_dragon_fodder_plan",
     effect: "Continuous spell. On activation: search 1 lv8+ Dragon from Deck. Ignition (1/turn/copy): send 2 field Dragons to GY -> SS 1 lv8+ Dragon from hand.",
-    synergies: ["All Extreme Dragons", "Hellkite Dragon", "Luminescent Dragon", "Boneflame Dragon", "Voltaic Dragon", "Armored Dragon"],
+    synergies: ["Fire Extreme Dragon", "Volcanic Extreme Dragon", "Stelya, Dragon Tamer", "Solar Eclipse Dragon", "Lunar Eclipse Dragon", "Hellkite Dragon", "Luminescent Dragon", "Voltaic Dragon", "Armored Dragon"],
     playPatterns: [
       "Activate from hand to search a Level 8+ Dragon, then use ignition once 2 Dragon bodies are available",
       "Saves Normal Summon for Armored/Luminescent searcher",
-      "Best fodder: Voltaic, Boneflame, Grey, used-up Armored - preserves real value",
+      "Best fodder: used-up Lunar/Solar, Voltaic, Grey, used-up Armored, or expendable Stelya - preserves real value",
       "Avoid summoning a second face-up Extreme Dragon while fieldLimit would block it",
       "Pairs well with Luminescent revive / Hellkite SS to manufacture 2 fodder bodies cheaply",
     ],
@@ -409,7 +486,7 @@ export const CARD_KNOWLEDGE = {
     priority: 4,
     playCondition: "has_dragon_on_field_and_hand",
     effect: "Trap: when Dragon targeted by attack/effect → return to hand, SS Dragon from hand with <= level.",
-    synergies: ["Extreme Dragons", "High-level Dragon defense"],
+    synergies: ["Extreme Dragons", "High-level Dragon defense", "Solar Eclipse Dragon", "Lunar Eclipse Dragon"],
     playPatterns: [
       "Set in backrow, activate reactively",
       "Protects Extreme Dragons from targeted removal",
@@ -466,11 +543,11 @@ export const CARD_KNOWLEDGE = {
     level: 10,
     summonCondition: "ascension_from_purified_after_3_effect_activations",
     effect: "Protects a Dragon through next turn. Gains LP after battle destruction. GY effect sends up to 3 Extreme Dragons from Deck to GY.",
-    synergies: ["Purified Crystal Dragon", "Call of the Haunted", "Luminous Dragon", "Boneflame Dragon"],
+    synergies: ["Purified Crystal Dragon", "Call of the Haunted", "Solar Eclipse Dragon", "Lunar Eclipse Dragon", "Luminous Dragon"],
     playPatterns: [
       "Long-term boss after Purified has progressed",
       "GY effect is not an automatic win setup",
-      "Use GY effect only when it creates real follow-up for Call of the Haunted, Luminous recovery, Boneflame, or next turn",
+      "Use GY effect only when it creates real follow-up for Call of the Haunted, Eclipse recovery, Luminous recovery, or next turn",
     ],
     value: 15,
   },
@@ -485,12 +562,83 @@ export const EXTREME_DRAGON_NAMES = [
   "Forest Extreme Dragon",
 ];
 
+// ===== CURRENT DRAGON BOT LIST =====
+export const CURRENT_DRAGON_BOT_CARD_NAMES = [
+  "Voltaic Dragon",
+  "Armored Dragon",
+  "Grey Dragon",
+  "Luminescent Dragon",
+  "Lunar Eclipse Dragon",
+  "Solar Eclipse Dragon",
+  "Stelya, Dragon Tamer",
+  "Luminous Dragon",
+  "Hellkite Dragon",
+  "Majestic Silver Dragon",
+  "Black Bull Dragon",
+  "Purified Crystal Dragon",
+  "Fire Extreme Dragon",
+  "Volcanic Extreme Dragon",
+  "Polymerization",
+  "Hellkite Roar",
+  "Extreme Dragon Awakening",
+  "Jagged Peak of the Dragons",
+  "Dragon Spirit Sanctuary",
+  "Call of the Haunted",
+  "Tech-Void Dragon",
+  "Radiant Cosmic Dragon",
+  "Rainbow Cosmic Dragon",
+  "Metal Armored Dragon",
+];
+
+export const OUT_OF_PLAN_DRAGON_CARD_NAMES = [
+  "Abyssal Serpent Dragon",
+  "Darkness Dragon",
+  "Boneflame Dragon",
+  "Converging Stars",
+  "Mist Extreme Dragon",
+  "Galaxy Extreme Dragon",
+  "Forest Extreme Dragon",
+];
+
+export const ECLIPSE_ENGINE_NAMES = [
+  "Solar Eclipse Dragon",
+  "Lunar Eclipse Dragon",
+];
+
+export const DRAGON_SMALL_SEARCH_NAMES = [
+  "Solar Eclipse Dragon",
+  "Lunar Eclipse Dragon",
+  "Stelya, Dragon Tamer",
+  "Armored Dragon",
+  "Grey Dragon",
+  "Luminescent Dragon",
+  "Voltaic Dragon",
+];
+
+export const DRAGON_LEVEL5_PLUS_SEARCH_NAMES = [
+  "Fire Extreme Dragon",
+  "Volcanic Extreme Dragon",
+  "Purified Crystal Dragon",
+  "Black Bull Dragon",
+  "Hellkite Dragon",
+  "Majestic Silver Dragon",
+  "Luminous Dragon",
+];
+
+export const CURRENT_AWAKENING_TARGET_NAMES = [
+  "Fire Extreme Dragon",
+  "Volcanic Extreme Dragon",
+  "Purified Crystal Dragon",
+  "Black Bull Dragon",
+];
+
 // ===== SELF-SUMMONING MONSTER NAMES (don't need Converging Stars) =====
 export const SELF_SUMMON_MONSTERS = [
   "Black Bull Dragon",
   "Hellkite Dragon",
   "Purified Crystal Dragon",
   "Voltaic Dragon",
+  "Stelya, Dragon Tamer",
   "Boneflame Dragon",
   "Luminous Dragon",
 ];

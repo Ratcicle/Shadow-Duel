@@ -266,7 +266,7 @@ export function shouldPlaySpell(card, analysis) {
     if (canTechVoid) {
       return {
         yes: true,
-        priority: 9,
+        priority: hasUsefulGYTarget ? 10 : 8,
         reason: "Tech-Void Dragon fusion fallback",
       };
     }
@@ -372,6 +372,81 @@ export function shouldSummonMonster(card, analysis, tributeInfo, context = {}) {
   const oppHasThreats = oppFieldState.length > 0;
   const isSuicideSummon = oppHasThreats && cardATK < oppStrongestATK && cardATK > 0;
   const shouldDefend = isSuicideSummon && cardDEF >= cardATK;
+  const dragonState = analysis?.dragonState || {};
+
+  if (name === "Solar Eclipse Dragon") {
+    if (tributeInfo.tributesNeeded > 0) {
+      return { yes: false, reason: "Solar Eclipse Dragon: level check mismatch" };
+    }
+    if (
+      (dragonState.hasLunarInDeck || dragonState.hasLunarInHand) &&
+      (analysis?.fieldCapacity ?? 5 - fieldState.length) > 0
+    ) {
+      return {
+        yes: false,
+        reason: "Use Solar hand effect before Normal Summoning it",
+      };
+    }
+  }
+
+  if (name === "Lunar Eclipse Dragon") {
+    if (tributeInfo.tributesNeeded > 0) {
+      return { yes: false, reason: "Lunar Eclipse Dragon: level check mismatch" };
+    }
+    const hasDeckSearchTarget =
+      (dragonState.lunarDeckTargets || []).length > 0 ||
+      (analysis.deck || []).some(
+        (candidate) =>
+          isDragonMonster(candidate) &&
+          (candidate.level || 0) <= 4 &&
+          candidate.name !== "Luminous Dragon",
+      );
+    const hasDiscard =
+      (analysis.hand || []).some((candidate) => candidate !== card) ||
+      (dragonState.usefulDiscardCandidates || []).length > 0;
+    if (hasDeckSearchTarget && hasDiscard) {
+      const solarFollowUp =
+        dragonState.hasSolarInHand ||
+        dragonState.hasSolarInGY ||
+        (analysis.deck || []).some((candidate) => candidate?.name === "Solar Eclipse Dragon");
+      return {
+        yes: true,
+        position: shouldDefend ? "defense" : "attack",
+        priority: solarFollowUp ? 11 : 9,
+        reason: solarFollowUp
+          ? "Normal Summon Lunar: search low Dragon and bridge to Solar"
+          : "Normal Summon Lunar: search low Dragon starter",
+      };
+    }
+    return {
+      yes: true,
+      position: shouldDefend ? "defense" : "attack",
+      priority: 4,
+      reason: "Lunar Eclipse Dragon fallback body",
+    };
+  }
+
+  if (name === "Stelya, Dragon Tamer") {
+    if (tributeInfo.tributesNeeded > 0) {
+      return { yes: false, reason: "Stelya: level check mismatch" };
+    }
+    const emergencyDefense =
+      fieldState.length === 0 &&
+      oppHasThreats &&
+      cardDEF >= Math.min(oppStrongestATK, 1800);
+    if (emergencyDefense) {
+      return {
+        yes: true,
+        position: "defense",
+        priority: 3,
+        reason: "Emergency Stelya defense body",
+      };
+    }
+    return {
+      yes: false,
+      reason: "Preserve Stelya for search/self-summon bridge instead of a dead Normal Summon",
+    };
+  }
 
   // ── Armored Dragon ─────────────────────────────────────────────────────────
   if (name === "Armored Dragon") {
@@ -391,9 +466,19 @@ export function shouldSummonMonster(card, analysis, tributeInfo, context = {}) {
     if (tributeInfo.tributesNeeded > 0) {
       return { yes: false, reason: "Luminescent Dragon: level check mismatch" };
     }
-    const hasGYTarget = analysis.graveyard.some(
-      (c) => c.cardKind === "monster" && (c.level || 0) <= 4
+    const gyTargets = (analysis.graveyard || []).filter(
+      (c) => c.cardKind === "monster" && c.type === "Dragon" && (c.level || 0) <= 4
     );
+    const hasUsefulGYTarget = gyTargets.some((c) =>
+      [
+        "Lunar Eclipse Dragon",
+        "Solar Eclipse Dragon",
+        "Stelya, Dragon Tamer",
+        "Voltaic Dragon",
+        "Grey Dragon",
+      ].includes(c.name),
+    );
+    const hasGYTarget = gyTargets.length > 0;
     if (hasGYTarget) {
       return {
         yes: true,

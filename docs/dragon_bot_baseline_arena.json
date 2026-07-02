@@ -1,0 +1,2457 @@
+{
+  "generatedAt": "2026-07-02T17:16:40.505Z",
+  "speed": "instant",
+  "duelsPerMatchup": 1,
+  "planner": {
+    "plannerMode": null,
+    "plannerTurnMode": null,
+    "plannerBeamWidth": null,
+    "plannerMaxDepth": null,
+    "plannerNodeBudget": null,
+    "plannerCandidateLimit": null
+  },
+  "results": [
+    {
+      "matchup": "dragon:shadowheart",
+      "seat1": "dragon",
+      "seat2": "shadowheart",
+      "completion": {
+        "completed": 1,
+        "wins1": 1,
+        "wins2": 0,
+        "draws": 0,
+        "drawsByTimeout": 0,
+        "drawsByMaxTurns": 0,
+        "avgTurns": "5.0",
+        "avgDecisionTimeMs": null,
+        "batchDurationMs": 1315,
+        "endReasonBreakdown": {
+          "lp_zero": 1
+        }
+      },
+      "strategicReport": {
+        "generatedAt": "2026-07-02T17:16:35.925Z",
+        "version": 4,
+        "duelCount": 1,
+        "matchups": {
+          "dragon_vs_shadowheart": {
+            "totalDuels": 1,
+            "wins": {
+              "player": 1,
+              "bot": 0,
+              "draw": 0
+            },
+            "winRate": {
+              "player": 100,
+              "bot": 0
+            },
+            "avgTurns": 5,
+            "avgFinalLP": {
+              "player": 9900,
+              "bot": 0
+            },
+            "endReasons": {
+              "lp_zero": 1
+            },
+            "warnings": 0,
+            "errors": 0
+          }
+        },
+        "bots": {
+          "player:dragon": {
+            "archetype": "dragon",
+            "duels": 1,
+            "wins": 1,
+            "winRate": 100,
+            "actions": 13,
+            "monsterSets": 0,
+            "setMonsters": [],
+            "failedActions": 0,
+            "blockedActions": 0,
+            "noUsefulTurns": 0,
+            "planning": {
+              "attempts": 8,
+              "used": 4,
+              "usedRate": 50,
+              "executionMatches": 2,
+              "executionMismatches": 2,
+              "failedExecutions": 0,
+              "mismatchRate": 50,
+              "failedExecutionRate": 0,
+              "avgLineLength": 2.5,
+              "avgNodesEvaluated": 3,
+              "avgNodesWhenUsed": 6,
+              "avgPlannedScore": 42.49,
+              "modeCounts": [
+                {
+                  "name": "critical",
+                  "count": 8
+                }
+              ],
+              "turnModeCounts": [
+                {
+                  "name": "mainBattleMain2",
+                  "count": 7
+                },
+                {
+                  "name": "mainOnly",
+                  "count": 1
+                }
+              ],
+              "selectedFirstActions": [
+                {
+                  "name": "graveyardMonsterEffect:Lunar Eclipse Dragon",
+                  "count": 1
+                },
+                {
+                  "name": "graveyardMonsterEffect:Solar Eclipse Dragon",
+                  "count": 1
+                },
+                {
+                  "name": "spellTrapEffect:Extreme Dragon Awakening",
+                  "count": 1
+                },
+                {
+                  "name": "summon:Grey Dragon",
+                  "count": 1
+                }
+              ],
+              "executedFirstActions": [
+                {
+                  "name": "graveyardMonsterEffect:Lunar Eclipse Dragon",
+                  "count": 1
+                },
+                {
+                  "name": "graveyardMonsterEffect:Solar Eclipse Dragon",
+                  "count": 1
+                },
+                {
+                  "name": "spellTrapEffect:Extreme Dragon Awakening",
+                  "count": 1
+                },
+                {
+                  "name": "summon:Grey Dragon",
+                  "count": 1
+                }
+              ],
+              "topMilestones": [
+                {
+                  "name": "Battle: Dragon gained LP",
+                  "count": 4
+                },
+                {
+                  "name": "Battle: removed opposing monster",
+                  "count": 4
+                },
+                {
+                  "name": "Control: removed opposing cards",
+                  "count": 4
+                },
+                {
+                  "name": "Payoff: Purified entered with follow-up",
+                  "count": 4
+                },
+                {
+                  "name": "Engine: field reached 3 Dragons",
+                  "count": 1
+                },
+                {
+                  "name": "Payoff: Awakening converted bodies into boss",
+                  "count": 1
+                },
+                {
+                  "name": "Resource: useful GY follow-up preserved",
+                  "count": 1
+                }
+              ],
+              "mismatchReasons": [
+                {
+                  "name": "state_mismatch",
+                  "count": 2
+                }
+              ],
+              "planSamples": [
+                {
+                  "turn": 3,
+                  "phase": "main1",
+                  "mode": "critical",
+                  "turnMode": "mainBattleMain2",
+                  "score": 44.78,
+                  "lineLength": 3,
+                  "nodes": 8,
+                  "firstAction": "spellTrapEffect:Extreme Dragon Awakening",
+                  "milestones": [
+                    "Payoff: Awakening converted bodies into boss",
+                    "Payoff: Purified entered with follow-up",
+                    "Battle: removed opposing monster",
+                    "Resource: useful GY follow-up preserved"
+                  ],
+                  "reason": "Dragon planner: Battle bridge opens Main 2 | Extreme Dragon Awakening effect -> summon Grey Dragon -> Battle Purified Crystal Dragon > Shadow-Heart Void Mage | Payoff: Awakening converted bodies into boss; Payoff: Purified entered with follow-up; Battle: removed opposing monster"
+                },
+                {
+                  "turn": 3,
+                  "phase": "main1",
+                  "mode": "critical",
+                  "turnMode": "mainBattleMain2",
+                  "score": 40.13,
+                  "lineLength": 3,
+                  "nodes": 7,
+                  "firstAction": "graveyardMonsterEffect:Solar Eclipse Dragon",
+                  "milestones": [
+                    "Payoff: Purified entered with follow-up",
+                    "Engine: field reached 3 Dragons",
+                    "Battle: removed opposing monster",
+                    "Control: removed opposing cards"
+                  ],
+                  "reason": "Dragon planner: Battle bridge opens Main 2 | Solar Eclipse Dragon GY effect -> summon Grey Dragon -> Battle Purified Crystal Dragon > Shadow-Heart Void Mage | Payoff: Purified entered with follow-up; Engine: field reached 3 Dragons; Battle: removed opposing monster"
+                },
+                {
+                  "turn": 3,
+                  "phase": "main1",
+                  "mode": "critical",
+                  "turnMode": "mainBattleMain2",
+                  "score": 42.59,
+                  "lineLength": 2,
+                  "nodes": 6,
+                  "firstAction": "summon:Grey Dragon",
+                  "milestones": [
+                    "Payoff: Purified entered with follow-up",
+                    "Battle: removed opposing monster",
+                    "Control: removed opposing cards",
+                    "Battle: Dragon gained LP"
+                  ],
+                  "reason": "Dragon planner: Battle bridge opens Main 2 | summon Grey Dragon -> Battle Purified Crystal Dragon > Shadow-Heart Void Mage | Payoff: Purified entered with follow-up; Battle: removed opposing monster; Control: removed opposing cards"
+                },
+                {
+                  "turn": 3,
+                  "phase": "main1",
+                  "mode": "critical",
+                  "turnMode": "mainBattleMain2",
+                  "score": 42.44,
+                  "lineLength": 2,
+                  "nodes": 3,
+                  "firstAction": "graveyardMonsterEffect:Lunar Eclipse Dragon",
+                  "milestones": [
+                    "Payoff: Purified entered with follow-up",
+                    "Battle: removed opposing monster",
+                    "Control: removed opposing cards",
+                    "Battle: Dragon gained LP"
+                  ],
+                  "reason": "Dragon planner: Battle bridge opens Main 2 | Lunar Eclipse Dragon GY effect -> Battle Purified Crystal Dragon > Shadow-Heart Void Mage | Payoff: Purified entered with follow-up; Battle: removed opposing monster; Control: removed opposing cards"
+                }
+              ],
+              "mismatchSampleCount": 2
+            }
+          },
+          "bot:shadowheart": {
+            "archetype": "shadowheart",
+            "duels": 1,
+            "wins": 0,
+            "winRate": 0,
+            "actions": 1,
+            "monsterSets": 2,
+            "setMonsters": [
+              {
+                "name": "Shadow-Heart Imp",
+                "count": 1
+              },
+              {
+                "name": "Shadow-Heart Void Mage",
+                "count": 1
+              }
+            ],
+            "failedActions": 0,
+            "blockedActions": 0,
+            "noUsefulTurns": 0,
+            "planning": {
+              "attempts": 3,
+              "used": 3,
+              "usedRate": 100,
+              "executionMatches": 3,
+              "executionMismatches": 0,
+              "failedExecutions": 0,
+              "mismatchRate": 0,
+              "failedExecutionRate": 0,
+              "avgLineLength": 1.3,
+              "avgNodesEvaluated": 2,
+              "avgNodesWhenUsed": 2,
+              "avgPlannedScore": -18.4,
+              "modeCounts": [
+                {
+                  "name": "critical",
+                  "count": 3
+                }
+              ],
+              "turnModeCounts": [
+                {
+                  "name": "mainOnly",
+                  "count": 2
+                },
+                {
+                  "name": "mainBattleMain2",
+                  "count": 1
+                }
+              ],
+              "selectedFirstActions": [
+                {
+                  "name": "spell:Shadow-Heart Covenant",
+                  "count": 1
+                },
+                {
+                  "name": "summon:Shadow-Heart Imp",
+                  "count": 1
+                },
+                {
+                  "name": "summon:Shadow-Heart Void Mage",
+                  "count": 1
+                }
+              ],
+              "executedFirstActions": [
+                {
+                  "name": "spell:Shadow-Heart Covenant",
+                  "count": 1
+                },
+                {
+                  "name": "summon:Shadow-Heart Imp",
+                  "count": 1
+                },
+                {
+                  "name": "summon:Shadow-Heart Void Mage",
+                  "count": 1
+                }
+              ],
+              "topMilestones": [
+                {
+                  "name": "+ Engine: active engine remains with board",
+                  "count": 3
+                },
+                {
+                  "name": "+ Engine: Void Mage found relevant engine",
+                  "count": 2
+                },
+                {
+                  "name": "- Closing: low LP still exposed to lethal",
+                  "count": 1
+                },
+                {
+                  "name": "+ Conversion: Imp turned hand into board",
+                  "count": 1
+                },
+                {
+                  "name": "+ Engine: Covenant found a real line piece",
+                  "count": 1
+                }
+              ],
+              "mismatchReasons": [],
+              "planSamples": [
+                {
+                  "turn": 2,
+                  "phase": "main1",
+                  "mode": "critical",
+                  "turnMode": "mainOnly",
+                  "score": -2.56,
+                  "lineLength": 2,
+                  "nodes": 2,
+                  "firstAction": "spell:Shadow-Heart Covenant",
+                  "milestones": [
+                    "+ Engine: Void Mage found relevant engine",
+                    "+ Engine: Covenant found a real line piece",
+                    "+ Engine: active engine remains with board"
+                  ],
+                  "reason": "Shadow-Heart planner:\n1. Shadow-Heart Covenant\n2. Shadow-Heart Void Mage\nMilestones:\n+ Engine: Void Mage found relevant engine\n+ Engine: Covenant found a real line piece\n+ Engine: active engine remains with board\nScore: -2.6 (base -12.0, milestones 8.0)\nContext: weak field with Shadow-Heart starter; Covenant starter is live; visible Shadow-Heart conversion payoff"
+                },
+                {
+                  "turn": 2,
+                  "phase": "main1",
+                  "mode": "critical",
+                  "turnMode": "mainOnly",
+                  "score": -5.56,
+                  "lineLength": 1,
+                  "nodes": 1,
+                  "firstAction": "summon:Shadow-Heart Void Mage",
+                  "milestones": [
+                    "+ Engine: Void Mage found relevant engine",
+                    "+ Engine: active engine remains with board"
+                  ],
+                  "reason": "Shadow-Heart planner:\n1. Shadow-Heart Void Mage\nMilestones:\n+ Engine: Void Mage found relevant engine\n+ Engine: active engine remains with board\nScore: -5.6 (base -12.0, milestones 5.0)\nContext: weak field with Shadow-Heart starter; visible Shadow-Heart conversion payoff"
+                },
+                {
+                  "turn": 4,
+                  "phase": "main1",
+                  "mode": "critical",
+                  "turnMode": "mainBattleMain2",
+                  "score": -47.08,
+                  "lineLength": 1,
+                  "nodes": 3,
+                  "firstAction": "summon:Shadow-Heart Imp",
+                  "milestones": [
+                    "+ Engine: active engine remains with board",
+                    "+ Conversion: Imp turned hand into board",
+                    "- Closing: low LP still exposed to lethal"
+                  ],
+                  "reason": "Shadow-Heart planner:\n1. Shadow-Heart Imp\nMilestones:\n+ Engine: active engine remains with board\n+ Conversion: Imp turned hand into board\n- Closing: low LP still exposed to lethal\nScore: -47.1 (base -42.9, milestones -1.0)\nContext: opponent threatens lethal; low LP under pressure; opponent controls superior threat"
+                }
+              ],
+              "mismatchSampleCount": 0
+            }
+          }
+        },
+        "suspiciousPatterns": [],
+        "duels": [
+          {
+            "duelNumber": 1,
+            "matchup": "dragon_vs_shadowheart",
+            "winner": "player",
+            "turns": 5,
+            "endReason": "lp_zero",
+            "timeoutKind": "none",
+            "failedOrBlocked": {
+              "player": 0,
+              "bot": 0
+            },
+            "planning": {
+              "player": {
+                "attempts": 8,
+                "used": 4,
+                "usedRate": 50,
+                "executionMatches": 2,
+                "executionMismatches": 2,
+                "failedExecutions": 0,
+                "mismatchRate": 50,
+                "failedExecutionRate": 0,
+                "avgLineLength": 2.5,
+                "avgNodesEvaluated": 3,
+                "avgNodesWhenUsed": 6,
+                "avgPlannedScore": 42.49,
+                "modeCounts": [
+                  {
+                    "name": "critical",
+                    "count": 8
+                  }
+                ],
+                "turnModeCounts": [
+                  {
+                    "name": "mainBattleMain2",
+                    "count": 7
+                  },
+                  {
+                    "name": "mainOnly",
+                    "count": 1
+                  }
+                ],
+                "selectedFirstActions": [
+                  {
+                    "name": "graveyardMonsterEffect:Lunar Eclipse Dragon",
+                    "count": 1
+                  },
+                  {
+                    "name": "graveyardMonsterEffect:Solar Eclipse Dragon",
+                    "count": 1
+                  },
+                  {
+                    "name": "spellTrapEffect:Extreme Dragon Awakening",
+                    "count": 1
+                  },
+                  {
+                    "name": "summon:Grey Dragon",
+                    "count": 1
+                  }
+                ],
+                "executedFirstActions": [
+                  {
+                    "name": "graveyardMonsterEffect:Lunar Eclipse Dragon",
+                    "count": 1
+                  },
+                  {
+                    "name": "graveyardMonsterEffect:Solar Eclipse Dragon",
+                    "count": 1
+                  },
+                  {
+                    "name": "spellTrapEffect:Extreme Dragon Awakening",
+                    "count": 1
+                  },
+                  {
+                    "name": "summon:Grey Dragon",
+                    "count": 1
+                  }
+                ],
+                "topMilestones": [
+                  {
+                    "name": "Battle: Dragon gained LP",
+                    "count": 4
+                  },
+                  {
+                    "name": "Battle: removed opposing monster",
+                    "count": 4
+                  },
+                  {
+                    "name": "Control: removed opposing cards",
+                    "count": 4
+                  },
+                  {
+                    "name": "Payoff: Purified entered with follow-up",
+                    "count": 4
+                  },
+                  {
+                    "name": "Engine: field reached 3 Dragons",
+                    "count": 1
+                  },
+                  {
+                    "name": "Payoff: Awakening converted bodies into boss",
+                    "count": 1
+                  },
+                  {
+                    "name": "Resource: useful GY follow-up preserved",
+                    "count": 1
+                  }
+                ],
+                "mismatchReasons": [
+                  {
+                    "name": "state_mismatch",
+                    "count": 2
+                  }
+                ],
+                "planSamples": [
+                  {
+                    "turn": 3,
+                    "phase": "main1",
+                    "mode": "critical",
+                    "turnMode": "mainBattleMain2",
+                    "score": 44.78,
+                    "lineLength": 3,
+                    "nodes": 8,
+                    "firstAction": "spellTrapEffect:Extreme Dragon Awakening",
+                    "milestones": [
+                      "Payoff: Awakening converted bodies into boss",
+                      "Payoff: Purified entered with follow-up",
+                      "Battle: removed opposing monster",
+                      "Resource: useful GY follow-up preserved"
+                    ],
+                    "reason": "Dragon planner: Battle bridge opens Main 2 | Extreme Dragon Awakening effect -> summon Grey Dragon -> Battle Purified Crystal Dragon > Shadow-Heart Void Mage | Payoff: Awakening converted bodies into boss; Payoff: Purified entered with follow-up; Battle: removed opposing monster"
+                  },
+                  {
+                    "turn": 3,
+                    "phase": "main1",
+                    "mode": "critical",
+                    "turnMode": "mainBattleMain2",
+                    "score": 40.13,
+                    "lineLength": 3,
+                    "nodes": 7,
+                    "firstAction": "graveyardMonsterEffect:Solar Eclipse Dragon",
+                    "milestones": [
+                      "Payoff: Purified entered with follow-up",
+                      "Engine: field reached 3 Dragons",
+                      "Battle: removed opposing monster",
+                      "Control: removed opposing cards"
+                    ],
+                    "reason": "Dragon planner: Battle bridge opens Main 2 | Solar Eclipse Dragon GY effect -> summon Grey Dragon -> Battle Purified Crystal Dragon > Shadow-Heart Void Mage | Payoff: Purified entered with follow-up; Engine: field reached 3 Dragons; Battle: removed opposing monster"
+                  },
+                  {
+                    "turn": 3,
+                    "phase": "main1",
+                    "mode": "critical",
+                    "turnMode": "mainBattleMain2",
+                    "score": 42.59,
+                    "lineLength": 2,
+                    "nodes": 6,
+                    "firstAction": "summon:Grey Dragon",
+                    "milestones": [
+                      "Payoff: Purified entered with follow-up",
+                      "Battle: removed opposing monster",
+                      "Control: removed opposing cards",
+                      "Battle: Dragon gained LP"
+                    ],
+                    "reason": "Dragon planner: Battle bridge opens Main 2 | summon Grey Dragon -> Battle Purified Crystal Dragon > Shadow-Heart Void Mage | Payoff: Purified entered with follow-up; Battle: removed opposing monster; Control: removed opposing cards"
+                  },
+                  {
+                    "turn": 3,
+                    "phase": "main1",
+                    "mode": "critical",
+                    "turnMode": "mainBattleMain2",
+                    "score": 42.44,
+                    "lineLength": 2,
+                    "nodes": 3,
+                    "firstAction": "graveyardMonsterEffect:Lunar Eclipse Dragon",
+                    "milestones": [
+                      "Payoff: Purified entered with follow-up",
+                      "Battle: removed opposing monster",
+                      "Control: removed opposing cards",
+                      "Battle: Dragon gained LP"
+                    ],
+                    "reason": "Dragon planner: Battle bridge opens Main 2 | Lunar Eclipse Dragon GY effect -> Battle Purified Crystal Dragon > Shadow-Heart Void Mage | Payoff: Purified entered with follow-up; Battle: removed opposing monster; Control: removed opposing cards"
+                  }
+                ],
+                "mismatchSampleCount": 2
+              },
+              "bot": {
+                "attempts": 3,
+                "used": 3,
+                "usedRate": 100,
+                "executionMatches": 3,
+                "executionMismatches": 0,
+                "failedExecutions": 0,
+                "mismatchRate": 0,
+                "failedExecutionRate": 0,
+                "avgLineLength": 1.3,
+                "avgNodesEvaluated": 2,
+                "avgNodesWhenUsed": 2,
+                "avgPlannedScore": -18.4,
+                "modeCounts": [
+                  {
+                    "name": "critical",
+                    "count": 3
+                  }
+                ],
+                "turnModeCounts": [
+                  {
+                    "name": "mainOnly",
+                    "count": 2
+                  },
+                  {
+                    "name": "mainBattleMain2",
+                    "count": 1
+                  }
+                ],
+                "selectedFirstActions": [
+                  {
+                    "name": "spell:Shadow-Heart Covenant",
+                    "count": 1
+                  },
+                  {
+                    "name": "summon:Shadow-Heart Imp",
+                    "count": 1
+                  },
+                  {
+                    "name": "summon:Shadow-Heart Void Mage",
+                    "count": 1
+                  }
+                ],
+                "executedFirstActions": [
+                  {
+                    "name": "spell:Shadow-Heart Covenant",
+                    "count": 1
+                  },
+                  {
+                    "name": "summon:Shadow-Heart Imp",
+                    "count": 1
+                  },
+                  {
+                    "name": "summon:Shadow-Heart Void Mage",
+                    "count": 1
+                  }
+                ],
+                "topMilestones": [
+                  {
+                    "name": "+ Engine: active engine remains with board",
+                    "count": 3
+                  },
+                  {
+                    "name": "+ Engine: Void Mage found relevant engine",
+                    "count": 2
+                  },
+                  {
+                    "name": "- Closing: low LP still exposed to lethal",
+                    "count": 1
+                  },
+                  {
+                    "name": "+ Conversion: Imp turned hand into board",
+                    "count": 1
+                  },
+                  {
+                    "name": "+ Engine: Covenant found a real line piece",
+                    "count": 1
+                  }
+                ],
+                "mismatchReasons": [],
+                "planSamples": [
+                  {
+                    "turn": 2,
+                    "phase": "main1",
+                    "mode": "critical",
+                    "turnMode": "mainOnly",
+                    "score": -2.56,
+                    "lineLength": 2,
+                    "nodes": 2,
+                    "firstAction": "spell:Shadow-Heart Covenant",
+                    "milestones": [
+                      "+ Engine: Void Mage found relevant engine",
+                      "+ Engine: Covenant found a real line piece",
+                      "+ Engine: active engine remains with board"
+                    ],
+                    "reason": "Shadow-Heart planner:\n1. Shadow-Heart Covenant\n2. Shadow-Heart Void Mage\nMilestones:\n+ Engine: Void Mage found relevant engine\n+ Engine: Covenant found a real line piece\n+ Engine: active engine remains with board\nScore: -2.6 (base -12.0, milestones 8.0)\nContext: weak field with Shadow-Heart starter; Covenant starter is live; visible Shadow-Heart conversion payoff"
+                  },
+                  {
+                    "turn": 2,
+                    "phase": "main1",
+                    "mode": "critical",
+                    "turnMode": "mainOnly",
+                    "score": -5.56,
+                    "lineLength": 1,
+                    "nodes": 1,
+                    "firstAction": "summon:Shadow-Heart Void Mage",
+                    "milestones": [
+                      "+ Engine: Void Mage found relevant engine",
+                      "+ Engine: active engine remains with board"
+                    ],
+                    "reason": "Shadow-Heart planner:\n1. Shadow-Heart Void Mage\nMilestones:\n+ Engine: Void Mage found relevant engine\n+ Engine: active engine remains with board\nScore: -5.6 (base -12.0, milestones 5.0)\nContext: weak field with Shadow-Heart starter; visible Shadow-Heart conversion payoff"
+                  },
+                  {
+                    "turn": 4,
+                    "phase": "main1",
+                    "mode": "critical",
+                    "turnMode": "mainBattleMain2",
+                    "score": -47.08,
+                    "lineLength": 1,
+                    "nodes": 3,
+                    "firstAction": "summon:Shadow-Heart Imp",
+                    "milestones": [
+                      "+ Engine: active engine remains with board",
+                      "+ Conversion: Imp turned hand into board",
+                      "- Closing: low LP still exposed to lethal"
+                    ],
+                    "reason": "Shadow-Heart planner:\n1. Shadow-Heart Imp\nMilestones:\n+ Engine: active engine remains with board\n+ Conversion: Imp turned hand into board\n- Closing: low LP still exposed to lethal\nScore: -47.1 (base -42.9, milestones -1.0)\nContext: opponent threatens lethal; low LP under pressure; opponent controls superior threat"
+                  }
+                ],
+                "mismatchSampleCount": 0
+              }
+            },
+            "errors": [],
+            "warnings": []
+          }
+        ]
+      }
+    },
+    {
+      "matchup": "dragon:luminarch",
+      "seat1": "dragon",
+      "seat2": "luminarch",
+      "completion": {
+        "completed": 1,
+        "wins1": 1,
+        "wins2": 0,
+        "draws": 0,
+        "drawsByTimeout": 0,
+        "drawsByMaxTurns": 0,
+        "avgTurns": "13.0",
+        "avgDecisionTimeMs": null,
+        "batchDurationMs": 3232,
+        "endReasonBreakdown": {
+          "lp_zero": 1
+        }
+      },
+      "strategicReport": {
+        "generatedAt": "2026-07-02T17:16:39.162Z",
+        "version": 4,
+        "duelCount": 1,
+        "matchups": {
+          "dragon_vs_luminarch": {
+            "totalDuels": 1,
+            "wins": {
+              "player": 1,
+              "bot": 0,
+              "draw": 0
+            },
+            "winRate": {
+              "player": 100,
+              "bot": 0
+            },
+            "avgTurns": 13,
+            "avgFinalLP": {
+              "player": 2500,
+              "bot": 0
+            },
+            "endReasons": {
+              "lp_zero": 1
+            },
+            "warnings": 0,
+            "errors": 0
+          }
+        },
+        "bots": {
+          "player:dragon": {
+            "archetype": "dragon",
+            "duels": 1,
+            "wins": 1,
+            "winRate": 100,
+            "actions": 14,
+            "monsterSets": 2,
+            "setMonsters": [
+              {
+                "name": "Lunar Eclipse Dragon",
+                "count": 2
+              }
+            ],
+            "failedActions": 0,
+            "blockedActions": 0,
+            "noUsefulTurns": 0,
+            "planning": {
+              "attempts": 13,
+              "used": 13,
+              "usedRate": 100,
+              "executionMatches": 8,
+              "executionMismatches": 5,
+              "failedExecutions": 0,
+              "mismatchRate": 38.5,
+              "failedExecutionRate": 0,
+              "avgLineLength": 2.5,
+              "avgNodesEvaluated": 5.6,
+              "avgNodesWhenUsed": 5.6,
+              "avgPlannedScore": 1561.79,
+              "modeCounts": [
+                {
+                  "name": "critical",
+                  "count": 13
+                }
+              ],
+              "turnModeCounts": [
+                {
+                  "name": "mainBattleMain2",
+                  "count": 13
+                }
+              ],
+              "selectedFirstActions": [
+                {
+                  "name": "graveyardMonsterEffect:Stelya, Dragon Tamer",
+                  "count": 4
+                },
+                {
+                  "name": "monsterEffect:Majestic Silver Dragon",
+                  "count": 2
+                },
+                {
+                  "name": "summon:Lunar Eclipse Dragon",
+                  "count": 2
+                },
+                {
+                  "name": "graveyardMonsterEffect:Luminescent Dragon",
+                  "count": 1
+                },
+                {
+                  "name": "handIgnition:Hellkite Dragon",
+                  "count": 1
+                },
+                {
+                  "name": "monsterEffect:Hellkite Dragon",
+                  "count": 1
+                },
+                {
+                  "name": "summon:Fire Extreme Dragon",
+                  "count": 1
+                },
+                {
+                  "name": "summon:Majestic Silver Dragon",
+                  "count": 1
+                }
+              ],
+              "executedFirstActions": [
+                {
+                  "name": "graveyardMonsterEffect:Stelya, Dragon Tamer",
+                  "count": 4
+                },
+                {
+                  "name": "monsterEffect:Majestic Silver Dragon",
+                  "count": 2
+                },
+                {
+                  "name": "summon:Lunar Eclipse Dragon",
+                  "count": 2
+                },
+                {
+                  "name": "graveyardMonsterEffect:Luminescent Dragon",
+                  "count": 1
+                },
+                {
+                  "name": "handIgnition:Hellkite Dragon",
+                  "count": 1
+                },
+                {
+                  "name": "monsterEffect:Hellkite Dragon",
+                  "count": 1
+                },
+                {
+                  "name": "summon:Fire Extreme Dragon",
+                  "count": 1
+                },
+                {
+                  "name": "summon:Majestic Silver Dragon",
+                  "count": 1
+                }
+              ],
+              "topMilestones": [
+                {
+                  "name": "Battle: removed opposing monster",
+                  "count": 13
+                },
+                {
+                  "name": "Control: removed opposing cards",
+                  "count": 13
+                },
+                {
+                  "name": "Resource: useful GY follow-up preserved",
+                  "count": 9
+                },
+                {
+                  "name": "Battle: meaningful damage",
+                  "count": 5
+                },
+                {
+                  "name": "Control: reduced top battle threat",
+                  "count": 5
+                },
+                {
+                  "name": "Payoff: Radiant Cosmic Dragon reached field",
+                  "count": 3
+                },
+                {
+                  "name": "Payoff: Radiant death insurance online",
+                  "count": 3
+                },
+                {
+                  "name": "Pressure: meaningful damage dealt",
+                  "count": 3
+                },
+                {
+                  "name": "Battle: Radiant avoided battle damage",
+                  "count": 2
+                },
+                {
+                  "name": "Engine: field reached 2 Dragons",
+                  "count": 1
+                },
+                {
+                  "name": "Engine: generated body before Normal Summon",
+                  "count": 1
+                },
+                {
+                  "name": "Payoff: Radiant refund preserved hand",
+                  "count": 1
+                }
+              ],
+              "mismatchReasons": [
+                {
+                  "name": "state_mismatch",
+                  "count": 3
+                },
+                {
+                  "name": "host_equip_mismatch",
+                  "count": 1
+                },
+                {
+                  "name": "opponent_reaction_mismatch",
+                  "count": 1
+                }
+              ],
+              "planSamples": [
+                {
+                  "turn": 3,
+                  "phase": "main1",
+                  "mode": "critical",
+                  "turnMode": "mainBattleMain2",
+                  "score": 14.99,
+                  "lineLength": 2,
+                  "nodes": 2,
+                  "firstAction": "graveyardMonsterEffect:Stelya, Dragon Tamer",
+                  "milestones": [
+                    "Control: reduced top battle threat",
+                    "Battle: removed opposing monster",
+                    "Control: removed opposing cards"
+                  ],
+                  "reason": "Dragon planner: Battle bridge opens Main 2 | Stelya, Dragon Tamer GY effect -> Battle Stelya, Dragon Tamer > Luminarch Valiant - Knight of the Dawn | Control: reduced top battle threat; Battle: removed opposing monster; Control: removed opposing cards"
+                },
+                {
+                  "turn": 7,
+                  "phase": "main1",
+                  "mode": "critical",
+                  "turnMode": "mainBattleMain2",
+                  "score": 22.74,
+                  "lineLength": 3,
+                  "nodes": 12,
+                  "firstAction": "summon:Majestic Silver Dragon",
+                  "milestones": [
+                    "Battle: removed opposing monster",
+                    "Resource: useful GY follow-up preserved",
+                    "Control: removed opposing cards"
+                  ],
+                  "reason": "Dragon planner: Battle bridge opens Main 2 | summon Majestic Silver Dragon -> Hellkite Dragon hand effect -> Battle Majestic Silver Dragon > Luminarch Valiant - Knight of the Dawn | Battle: removed opposing monster; Resource: useful GY follow-up preserved; Control: removed opposing cards"
+                },
+                {
+                  "turn": 7,
+                  "phase": "main1",
+                  "mode": "critical",
+                  "turnMode": "mainBattleMain2",
+                  "score": 23.17,
+                  "lineLength": 3,
+                  "nodes": 8,
+                  "firstAction": "monsterEffect:Majestic Silver Dragon",
+                  "milestones": [
+                    "Battle: removed opposing monster",
+                    "Resource: useful GY follow-up preserved",
+                    "Control: removed opposing cards"
+                  ],
+                  "reason": "Dragon planner: Battle bridge opens Main 2 | Majestic Silver Dragon effect -> Hellkite Dragon hand effect -> Battle Majestic Silver Dragon > Luminarch Valiant - Knight of the Dawn | Battle: removed opposing monster; Resource: useful GY follow-up preserved; Control: removed opposing cards"
+                },
+                {
+                  "turn": 7,
+                  "phase": "main1",
+                  "mode": "critical",
+                  "turnMode": "mainBattleMain2",
+                  "score": 23.17,
+                  "lineLength": 2,
+                  "nodes": 5,
+                  "firstAction": "handIgnition:Hellkite Dragon",
+                  "milestones": [
+                    "Battle: removed opposing monster",
+                    "Resource: useful GY follow-up preserved",
+                    "Control: removed opposing cards"
+                  ],
+                  "reason": "Dragon planner: Battle bridge opens Main 2 | Hellkite Dragon hand effect -> Battle Majestic Silver Dragon > Luminarch Valiant - Knight of the Dawn | Battle: removed opposing monster; Resource: useful GY follow-up preserved; Control: removed opposing cards"
+                },
+                {
+                  "turn": 7,
+                  "phase": "main1",
+                  "mode": "critical",
+                  "turnMode": "mainBattleMain2",
+                  "score": 23.91,
+                  "lineLength": 2,
+                  "nodes": 6,
+                  "firstAction": "monsterEffect:Hellkite Dragon",
+                  "milestones": [
+                    "Resource: Hellkite recycled Dragon from GY",
+                    "Battle: removed opposing monster",
+                    "Resource: useful GY follow-up preserved",
+                    "Control: removed opposing cards"
+                  ],
+                  "reason": "Dragon planner: Battle bridge opens Main 2 | Hellkite Dragon effect -> Battle Majestic Silver Dragon > Luminarch Valiant - Knight of the Dawn | Resource: Hellkite recycled Dragon from GY; Battle: removed opposing monster; Resource: useful GY follow-up preserved"
+                }
+              ],
+              "mismatchSampleCount": 5
+            }
+          },
+          "bot:luminarch": {
+            "archetype": "luminarch",
+            "duels": 1,
+            "wins": 0,
+            "winRate": 0,
+            "actions": 24,
+            "monsterSets": 3,
+            "setMonsters": [
+              {
+                "name": "Luminarch Aegisbearer",
+                "count": 2
+              },
+              {
+                "name": "Luminarch Enchanted Halberd",
+                "count": 1
+              }
+            ],
+            "failedActions": 0,
+            "blockedActions": 0,
+            "noUsefulTurns": 0,
+            "planning": {
+              "attempts": 16,
+              "used": 16,
+              "usedRate": 100,
+              "executionMatches": 13,
+              "executionMismatches": 1,
+              "failedExecutions": 0,
+              "mismatchRate": 7.1,
+              "failedExecutionRate": 0,
+              "avgLineLength": 1.9,
+              "avgNodesEvaluated": 3.4,
+              "avgNodesWhenUsed": 3.4,
+              "avgPlannedScore": 17.58,
+              "modeCounts": [
+                {
+                  "name": "critical",
+                  "count": 16
+                }
+              ],
+              "turnModeCounts": [
+                {
+                  "name": "mainBattleMain2",
+                  "count": 8
+                },
+                {
+                  "name": "mainOnly",
+                  "count": 8
+                }
+              ],
+              "selectedFirstActions": [
+                {
+                  "name": "fieldEffect:Sanctum of the Luminarch Citadel",
+                  "count": 5
+                },
+                {
+                  "name": "simulatedBattle:Luminarch Valiant - Knight of the Dawn",
+                  "count": 2
+                },
+                {
+                  "name": "spell:Luminarch Moonlit Blessing",
+                  "count": 2
+                },
+                {
+                  "name": "summon:Luminarch Aegisbearer",
+                  "count": 2
+                },
+                {
+                  "name": "graveyardMonsterEffect:Luminarch Magic Sickle",
+                  "count": 1
+                },
+                {
+                  "name": "spell:Luminarch Spear of Dawnfall",
+                  "count": 1
+                },
+                {
+                  "name": "spell:Sanctum of the Luminarch Citadel",
+                  "count": 1
+                },
+                {
+                  "name": "summon:Luminarch Enchanted Halberd",
+                  "count": 1
+                },
+                {
+                  "name": "summon:Luminarch Valiant - Knight of the Dawn",
+                  "count": 1
+                }
+              ],
+              "executedFirstActions": [
+                {
+                  "name": "fieldEffect:Sanctum of the Luminarch Citadel",
+                  "count": 5
+                },
+                {
+                  "name": "spell:Luminarch Moonlit Blessing",
+                  "count": 2
+                },
+                {
+                  "name": "summon:Luminarch Aegisbearer",
+                  "count": 2
+                },
+                {
+                  "name": "graveyardMonsterEffect:Luminarch Magic Sickle",
+                  "count": 1
+                },
+                {
+                  "name": "spell:Luminarch Spear of Dawnfall",
+                  "count": 1
+                },
+                {
+                  "name": "spell:Sanctum of the Luminarch Citadel",
+                  "count": 1
+                },
+                {
+                  "name": "summon:Luminarch Enchanted Halberd",
+                  "count": 1
+                },
+                {
+                  "name": "summon:Luminarch Valiant - Knight of the Dawn",
+                  "count": 1
+                }
+              ],
+              "topMilestones": [
+                {
+                  "name": "+2 Control: reduced opponent board",
+                  "count": 8
+                },
+                {
+                  "name": "+1.5 Engine: Citadel supports wall",
+                  "count": 5
+                },
+                {
+                  "name": "+2.4 Control: reduced top threat",
+                  "count": 4
+                },
+                {
+                  "name": "+6 Defense: removed lethal pressure",
+                  "count": 4
+                },
+                {
+                  "name": "+1 Control: reduced top threat",
+                  "count": 3
+                },
+                {
+                  "name": "+1.2 Battle: useful damage",
+                  "count": 3
+                },
+                {
+                  "name": "+2.5 Grind: Moonlit converted GY to field",
+                  "count": 3
+                },
+                {
+                  "name": "-5 Risk: low LP still under lethal",
+                  "count": 2
+                },
+                {
+                  "name": "+2.5 Battle: removed real threat",
+                  "count": 2
+                },
+                {
+                  "name": "+2.5 LP: payment created wall",
+                  "count": 2
+                },
+                {
+                  "name": "+2.5 Starter: converted into resource",
+                  "count": 2
+                },
+                {
+                  "name": "+3 Battle: decisive damage",
+                  "count": 2
+                }
+              ],
+              "mismatchReasons": [
+                {
+                  "name": "hand_deck_mismatch",
+                  "count": 1
+                }
+              ],
+              "planSamples": [
+                {
+                  "turn": 2,
+                  "phase": "main1",
+                  "mode": "critical",
+                  "turnMode": "mainOnly",
+                  "score": 15.63,
+                  "lineLength": 3,
+                  "nodes": 7,
+                  "firstAction": "spell:Sanctum of the Luminarch Citadel",
+                  "milestones": [
+                    "+4 Engine: Citadel online",
+                    "+2.5 Starter: converted into resource",
+                    "+2.4 Control: reduced top threat"
+                  ],
+                  "reason": "Luminarch planned line: spell Sanctum of the Luminarch Citadel (CORE: Ativar field spell ANTES de setup - heal passivo é crítico) -> summon Luminarch Valiant - Knight of the Dawn (Buscar Aegisbearer (setup) - FACE-UP para trigger) -> spell Luminarch Spear of Dawnfall (Spear em Stelya, Dragon Tamer: janela real de combate) | Milestones: +4 Engine: Citadel online, +2.5 Starter: converted into resource, +2.4 Control: reduced top threat"
+                },
+                {
+                  "turn": 2,
+                  "phase": "main1",
+                  "mode": "critical",
+                  "turnMode": "mainOnly",
+                  "score": 11.63,
+                  "lineLength": 2,
+                  "nodes": 2,
+                  "firstAction": "summon:Luminarch Valiant - Knight of the Dawn",
+                  "milestones": [
+                    "+2.5 Starter: converted into resource",
+                    "+2.4 Control: reduced top threat"
+                  ],
+                  "reason": "Luminarch planned line: summon Luminarch Valiant - Knight of the Dawn (Buscar Aegisbearer (setup) - FACE-UP para trigger) -> spell Luminarch Spear of Dawnfall (Spear em Stelya, Dragon Tamer: janela real de combate) | Milestones: +2.5 Starter: converted into resource, +2.4 Control: reduced top threat"
+                },
+                {
+                  "turn": 2,
+                  "phase": "main1",
+                  "mode": "critical",
+                  "turnMode": "mainBattleMain2",
+                  "score": 28.73,
+                  "lineLength": 3,
+                  "nodes": 5,
+                  "firstAction": "fieldEffect:Sanctum of the Luminarch Citadel",
+                  "milestones": [
+                    "+3 Battle: decisive damage",
+                    "+3 Spear: converted threat into removal",
+                    "+2.5 Battle: removed real threat",
+                    "+2.4 Control: reduced top threat"
+                  ],
+                  "reason": "Luminarch planned line: fieldEffect Sanctum of the Luminarch Citadel -> spell Luminarch Spear of Dawnfall (Spear em Stelya, Dragon Tamer: janela real de combate) -> battle Luminarch Valiant - Knight of the Dawn -> Stelya, Dragon Tamer | Milestones: +3 Battle: decisive damage, +3 Spear: converted threat into removal, +2.5 Battle: removed real threat, +2.4 Control: reduced top threat, +2 Control: reduced opponent board"
+                },
+                {
+                  "turn": 2,
+                  "phase": "main1",
+                  "mode": "critical",
+                  "turnMode": "mainBattleMain2",
+                  "score": 27.53,
+                  "lineLength": 2,
+                  "nodes": 2,
+                  "firstAction": "spell:Luminarch Spear of Dawnfall",
+                  "milestones": [
+                    "+3 Battle: decisive damage",
+                    "+3 Spear: converted threat into removal",
+                    "+2.5 Battle: removed real threat",
+                    "+2.4 Control: reduced top threat"
+                  ],
+                  "reason": "Luminarch planned line: spell Luminarch Spear of Dawnfall (Spear em Stelya, Dragon Tamer: janela real de combate) -> battle Luminarch Valiant - Knight of the Dawn -> Stelya, Dragon Tamer | Milestones: +3 Battle: decisive damage, +3 Spear: converted threat into removal, +2.5 Battle: removed real threat, +2.4 Control: reduced top threat, +2 Control: reduced opponent board"
+                },
+                {
+                  "turn": 4,
+                  "phase": "main1",
+                  "mode": "critical",
+                  "turnMode": "mainBattleMain2",
+                  "score": 13.29,
+                  "lineLength": 2,
+                  "nodes": 4,
+                  "firstAction": "spell:Luminarch Moonlit Blessing",
+                  "milestones": [
+                    "+2.5 Grind: Moonlit converted GY to field"
+                  ],
+                  "reason": "Luminarch planned line: spell Luminarch Moonlit Blessing (COM CITADEL: recuperar Luminarch Valiant - Knight of the Dawn para pressure em attack) -> summon Luminarch Aegisbearer (Setup defensivo CRÍTICO - baixar Aegisbearer para sobreviver e virar depois) | Milestones: +2.5 Grind: Moonlit converted GY to field"
+                }
+              ],
+              "mismatchSampleCount": 1
+            }
+          }
+        },
+        "suspiciousPatterns": [],
+        "duels": [
+          {
+            "duelNumber": 1,
+            "matchup": "dragon_vs_luminarch",
+            "winner": "player",
+            "turns": 13,
+            "endReason": "lp_zero",
+            "timeoutKind": "none",
+            "failedOrBlocked": {
+              "player": 0,
+              "bot": 0
+            },
+            "planning": {
+              "player": {
+                "attempts": 13,
+                "used": 13,
+                "usedRate": 100,
+                "executionMatches": 8,
+                "executionMismatches": 5,
+                "failedExecutions": 0,
+                "mismatchRate": 38.5,
+                "failedExecutionRate": 0,
+                "avgLineLength": 2.5,
+                "avgNodesEvaluated": 5.6,
+                "avgNodesWhenUsed": 5.6,
+                "avgPlannedScore": 1561.79,
+                "modeCounts": [
+                  {
+                    "name": "critical",
+                    "count": 13
+                  }
+                ],
+                "turnModeCounts": [
+                  {
+                    "name": "mainBattleMain2",
+                    "count": 13
+                  }
+                ],
+                "selectedFirstActions": [
+                  {
+                    "name": "graveyardMonsterEffect:Stelya, Dragon Tamer",
+                    "count": 4
+                  },
+                  {
+                    "name": "monsterEffect:Majestic Silver Dragon",
+                    "count": 2
+                  },
+                  {
+                    "name": "summon:Lunar Eclipse Dragon",
+                    "count": 2
+                  },
+                  {
+                    "name": "graveyardMonsterEffect:Luminescent Dragon",
+                    "count": 1
+                  },
+                  {
+                    "name": "handIgnition:Hellkite Dragon",
+                    "count": 1
+                  },
+                  {
+                    "name": "monsterEffect:Hellkite Dragon",
+                    "count": 1
+                  },
+                  {
+                    "name": "summon:Fire Extreme Dragon",
+                    "count": 1
+                  },
+                  {
+                    "name": "summon:Majestic Silver Dragon",
+                    "count": 1
+                  }
+                ],
+                "executedFirstActions": [
+                  {
+                    "name": "graveyardMonsterEffect:Stelya, Dragon Tamer",
+                    "count": 4
+                  },
+                  {
+                    "name": "monsterEffect:Majestic Silver Dragon",
+                    "count": 2
+                  },
+                  {
+                    "name": "summon:Lunar Eclipse Dragon",
+                    "count": 2
+                  },
+                  {
+                    "name": "graveyardMonsterEffect:Luminescent Dragon",
+                    "count": 1
+                  },
+                  {
+                    "name": "handIgnition:Hellkite Dragon",
+                    "count": 1
+                  },
+                  {
+                    "name": "monsterEffect:Hellkite Dragon",
+                    "count": 1
+                  },
+                  {
+                    "name": "summon:Fire Extreme Dragon",
+                    "count": 1
+                  },
+                  {
+                    "name": "summon:Majestic Silver Dragon",
+                    "count": 1
+                  }
+                ],
+                "topMilestones": [
+                  {
+                    "name": "Battle: removed opposing monster",
+                    "count": 13
+                  },
+                  {
+                    "name": "Control: removed opposing cards",
+                    "count": 13
+                  },
+                  {
+                    "name": "Resource: useful GY follow-up preserved",
+                    "count": 9
+                  },
+                  {
+                    "name": "Battle: meaningful damage",
+                    "count": 5
+                  },
+                  {
+                    "name": "Control: reduced top battle threat",
+                    "count": 5
+                  },
+                  {
+                    "name": "Payoff: Radiant Cosmic Dragon reached field",
+                    "count": 3
+                  },
+                  {
+                    "name": "Payoff: Radiant death insurance online",
+                    "count": 3
+                  },
+                  {
+                    "name": "Pressure: meaningful damage dealt",
+                    "count": 3
+                  },
+                  {
+                    "name": "Battle: Radiant avoided battle damage",
+                    "count": 2
+                  },
+                  {
+                    "name": "Engine: field reached 2 Dragons",
+                    "count": 1
+                  },
+                  {
+                    "name": "Engine: generated body before Normal Summon",
+                    "count": 1
+                  },
+                  {
+                    "name": "Payoff: Radiant refund preserved hand",
+                    "count": 1
+                  }
+                ],
+                "mismatchReasons": [
+                  {
+                    "name": "state_mismatch",
+                    "count": 3
+                  },
+                  {
+                    "name": "host_equip_mismatch",
+                    "count": 1
+                  },
+                  {
+                    "name": "opponent_reaction_mismatch",
+                    "count": 1
+                  }
+                ],
+                "planSamples": [
+                  {
+                    "turn": 3,
+                    "phase": "main1",
+                    "mode": "critical",
+                    "turnMode": "mainBattleMain2",
+                    "score": 14.99,
+                    "lineLength": 2,
+                    "nodes": 2,
+                    "firstAction": "graveyardMonsterEffect:Stelya, Dragon Tamer",
+                    "milestones": [
+                      "Control: reduced top battle threat",
+                      "Battle: removed opposing monster",
+                      "Control: removed opposing cards"
+                    ],
+                    "reason": "Dragon planner: Battle bridge opens Main 2 | Stelya, Dragon Tamer GY effect -> Battle Stelya, Dragon Tamer > Luminarch Valiant - Knight of the Dawn | Control: reduced top battle threat; Battle: removed opposing monster; Control: removed opposing cards"
+                  },
+                  {
+                    "turn": 7,
+                    "phase": "main1",
+                    "mode": "critical",
+                    "turnMode": "mainBattleMain2",
+                    "score": 22.74,
+                    "lineLength": 3,
+                    "nodes": 12,
+                    "firstAction": "summon:Majestic Silver Dragon",
+                    "milestones": [
+                      "Battle: removed opposing monster",
+                      "Resource: useful GY follow-up preserved",
+                      "Control: removed opposing cards"
+                    ],
+                    "reason": "Dragon planner: Battle bridge opens Main 2 | summon Majestic Silver Dragon -> Hellkite Dragon hand effect -> Battle Majestic Silver Dragon > Luminarch Valiant - Knight of the Dawn | Battle: removed opposing monster; Resource: useful GY follow-up preserved; Control: removed opposing cards"
+                  },
+                  {
+                    "turn": 7,
+                    "phase": "main1",
+                    "mode": "critical",
+                    "turnMode": "mainBattleMain2",
+                    "score": 23.17,
+                    "lineLength": 3,
+                    "nodes": 8,
+                    "firstAction": "monsterEffect:Majestic Silver Dragon",
+                    "milestones": [
+                      "Battle: removed opposing monster",
+                      "Resource: useful GY follow-up preserved",
+                      "Control: removed opposing cards"
+                    ],
+                    "reason": "Dragon planner: Battle bridge opens Main 2 | Majestic Silver Dragon effect -> Hellkite Dragon hand effect -> Battle Majestic Silver Dragon > Luminarch Valiant - Knight of the Dawn | Battle: removed opposing monster; Resource: useful GY follow-up preserved; Control: removed opposing cards"
+                  },
+                  {
+                    "turn": 7,
+                    "phase": "main1",
+                    "mode": "critical",
+                    "turnMode": "mainBattleMain2",
+                    "score": 23.17,
+                    "lineLength": 2,
+                    "nodes": 5,
+                    "firstAction": "handIgnition:Hellkite Dragon",
+                    "milestones": [
+                      "Battle: removed opposing monster",
+                      "Resource: useful GY follow-up preserved",
+                      "Control: removed opposing cards"
+                    ],
+                    "reason": "Dragon planner: Battle bridge opens Main 2 | Hellkite Dragon hand effect -> Battle Majestic Silver Dragon > Luminarch Valiant - Knight of the Dawn | Battle: removed opposing monster; Resource: useful GY follow-up preserved; Control: removed opposing cards"
+                  },
+                  {
+                    "turn": 7,
+                    "phase": "main1",
+                    "mode": "critical",
+                    "turnMode": "mainBattleMain2",
+                    "score": 23.91,
+                    "lineLength": 2,
+                    "nodes": 6,
+                    "firstAction": "monsterEffect:Hellkite Dragon",
+                    "milestones": [
+                      "Resource: Hellkite recycled Dragon from GY",
+                      "Battle: removed opposing monster",
+                      "Resource: useful GY follow-up preserved",
+                      "Control: removed opposing cards"
+                    ],
+                    "reason": "Dragon planner: Battle bridge opens Main 2 | Hellkite Dragon effect -> Battle Majestic Silver Dragon > Luminarch Valiant - Knight of the Dawn | Resource: Hellkite recycled Dragon from GY; Battle: removed opposing monster; Resource: useful GY follow-up preserved"
+                  }
+                ],
+                "mismatchSampleCount": 5
+              },
+              "bot": {
+                "attempts": 16,
+                "used": 16,
+                "usedRate": 100,
+                "executionMatches": 13,
+                "executionMismatches": 1,
+                "failedExecutions": 0,
+                "mismatchRate": 7.1,
+                "failedExecutionRate": 0,
+                "avgLineLength": 1.9,
+                "avgNodesEvaluated": 3.4,
+                "avgNodesWhenUsed": 3.4,
+                "avgPlannedScore": 17.58,
+                "modeCounts": [
+                  {
+                    "name": "critical",
+                    "count": 16
+                  }
+                ],
+                "turnModeCounts": [
+                  {
+                    "name": "mainBattleMain2",
+                    "count": 8
+                  },
+                  {
+                    "name": "mainOnly",
+                    "count": 8
+                  }
+                ],
+                "selectedFirstActions": [
+                  {
+                    "name": "fieldEffect:Sanctum of the Luminarch Citadel",
+                    "count": 5
+                  },
+                  {
+                    "name": "simulatedBattle:Luminarch Valiant - Knight of the Dawn",
+                    "count": 2
+                  },
+                  {
+                    "name": "spell:Luminarch Moonlit Blessing",
+                    "count": 2
+                  },
+                  {
+                    "name": "summon:Luminarch Aegisbearer",
+                    "count": 2
+                  },
+                  {
+                    "name": "graveyardMonsterEffect:Luminarch Magic Sickle",
+                    "count": 1
+                  },
+                  {
+                    "name": "spell:Luminarch Spear of Dawnfall",
+                    "count": 1
+                  },
+                  {
+                    "name": "spell:Sanctum of the Luminarch Citadel",
+                    "count": 1
+                  },
+                  {
+                    "name": "summon:Luminarch Enchanted Halberd",
+                    "count": 1
+                  },
+                  {
+                    "name": "summon:Luminarch Valiant - Knight of the Dawn",
+                    "count": 1
+                  }
+                ],
+                "executedFirstActions": [
+                  {
+                    "name": "fieldEffect:Sanctum of the Luminarch Citadel",
+                    "count": 5
+                  },
+                  {
+                    "name": "spell:Luminarch Moonlit Blessing",
+                    "count": 2
+                  },
+                  {
+                    "name": "summon:Luminarch Aegisbearer",
+                    "count": 2
+                  },
+                  {
+                    "name": "graveyardMonsterEffect:Luminarch Magic Sickle",
+                    "count": 1
+                  },
+                  {
+                    "name": "spell:Luminarch Spear of Dawnfall",
+                    "count": 1
+                  },
+                  {
+                    "name": "spell:Sanctum of the Luminarch Citadel",
+                    "count": 1
+                  },
+                  {
+                    "name": "summon:Luminarch Enchanted Halberd",
+                    "count": 1
+                  },
+                  {
+                    "name": "summon:Luminarch Valiant - Knight of the Dawn",
+                    "count": 1
+                  }
+                ],
+                "topMilestones": [
+                  {
+                    "name": "+2 Control: reduced opponent board",
+                    "count": 8
+                  },
+                  {
+                    "name": "+1.5 Engine: Citadel supports wall",
+                    "count": 5
+                  },
+                  {
+                    "name": "+2.4 Control: reduced top threat",
+                    "count": 4
+                  },
+                  {
+                    "name": "+6 Defense: removed lethal pressure",
+                    "count": 4
+                  },
+                  {
+                    "name": "+1 Control: reduced top threat",
+                    "count": 3
+                  },
+                  {
+                    "name": "+1.2 Battle: useful damage",
+                    "count": 3
+                  },
+                  {
+                    "name": "+2.5 Grind: Moonlit converted GY to field",
+                    "count": 3
+                  },
+                  {
+                    "name": "-5 Risk: low LP still under lethal",
+                    "count": 2
+                  },
+                  {
+                    "name": "+2.5 Battle: removed real threat",
+                    "count": 2
+                  },
+                  {
+                    "name": "+2.5 LP: payment created wall",
+                    "count": 2
+                  },
+                  {
+                    "name": "+2.5 Starter: converted into resource",
+                    "count": 2
+                  },
+                  {
+                    "name": "+3 Battle: decisive damage",
+                    "count": 2
+                  }
+                ],
+                "mismatchReasons": [
+                  {
+                    "name": "hand_deck_mismatch",
+                    "count": 1
+                  }
+                ],
+                "planSamples": [
+                  {
+                    "turn": 2,
+                    "phase": "main1",
+                    "mode": "critical",
+                    "turnMode": "mainOnly",
+                    "score": 15.63,
+                    "lineLength": 3,
+                    "nodes": 7,
+                    "firstAction": "spell:Sanctum of the Luminarch Citadel",
+                    "milestones": [
+                      "+4 Engine: Citadel online",
+                      "+2.5 Starter: converted into resource",
+                      "+2.4 Control: reduced top threat"
+                    ],
+                    "reason": "Luminarch planned line: spell Sanctum of the Luminarch Citadel (CORE: Ativar field spell ANTES de setup - heal passivo é crítico) -> summon Luminarch Valiant - Knight of the Dawn (Buscar Aegisbearer (setup) - FACE-UP para trigger) -> spell Luminarch Spear of Dawnfall (Spear em Stelya, Dragon Tamer: janela real de combate) | Milestones: +4 Engine: Citadel online, +2.5 Starter: converted into resource, +2.4 Control: reduced top threat"
+                  },
+                  {
+                    "turn": 2,
+                    "phase": "main1",
+                    "mode": "critical",
+                    "turnMode": "mainOnly",
+                    "score": 11.63,
+                    "lineLength": 2,
+                    "nodes": 2,
+                    "firstAction": "summon:Luminarch Valiant - Knight of the Dawn",
+                    "milestones": [
+                      "+2.5 Starter: converted into resource",
+                      "+2.4 Control: reduced top threat"
+                    ],
+                    "reason": "Luminarch planned line: summon Luminarch Valiant - Knight of the Dawn (Buscar Aegisbearer (setup) - FACE-UP para trigger) -> spell Luminarch Spear of Dawnfall (Spear em Stelya, Dragon Tamer: janela real de combate) | Milestones: +2.5 Starter: converted into resource, +2.4 Control: reduced top threat"
+                  },
+                  {
+                    "turn": 2,
+                    "phase": "main1",
+                    "mode": "critical",
+                    "turnMode": "mainBattleMain2",
+                    "score": 28.73,
+                    "lineLength": 3,
+                    "nodes": 5,
+                    "firstAction": "fieldEffect:Sanctum of the Luminarch Citadel",
+                    "milestones": [
+                      "+3 Battle: decisive damage",
+                      "+3 Spear: converted threat into removal",
+                      "+2.5 Battle: removed real threat",
+                      "+2.4 Control: reduced top threat"
+                    ],
+                    "reason": "Luminarch planned line: fieldEffect Sanctum of the Luminarch Citadel -> spell Luminarch Spear of Dawnfall (Spear em Stelya, Dragon Tamer: janela real de combate) -> battle Luminarch Valiant - Knight of the Dawn -> Stelya, Dragon Tamer | Milestones: +3 Battle: decisive damage, +3 Spear: converted threat into removal, +2.5 Battle: removed real threat, +2.4 Control: reduced top threat, +2 Control: reduced opponent board"
+                  },
+                  {
+                    "turn": 2,
+                    "phase": "main1",
+                    "mode": "critical",
+                    "turnMode": "mainBattleMain2",
+                    "score": 27.53,
+                    "lineLength": 2,
+                    "nodes": 2,
+                    "firstAction": "spell:Luminarch Spear of Dawnfall",
+                    "milestones": [
+                      "+3 Battle: decisive damage",
+                      "+3 Spear: converted threat into removal",
+                      "+2.5 Battle: removed real threat",
+                      "+2.4 Control: reduced top threat"
+                    ],
+                    "reason": "Luminarch planned line: spell Luminarch Spear of Dawnfall (Spear em Stelya, Dragon Tamer: janela real de combate) -> battle Luminarch Valiant - Knight of the Dawn -> Stelya, Dragon Tamer | Milestones: +3 Battle: decisive damage, +3 Spear: converted threat into removal, +2.5 Battle: removed real threat, +2.4 Control: reduced top threat, +2 Control: reduced opponent board"
+                  },
+                  {
+                    "turn": 4,
+                    "phase": "main1",
+                    "mode": "critical",
+                    "turnMode": "mainBattleMain2",
+                    "score": 13.29,
+                    "lineLength": 2,
+                    "nodes": 4,
+                    "firstAction": "spell:Luminarch Moonlit Blessing",
+                    "milestones": [
+                      "+2.5 Grind: Moonlit converted GY to field"
+                    ],
+                    "reason": "Luminarch planned line: spell Luminarch Moonlit Blessing (COM CITADEL: recuperar Luminarch Valiant - Knight of the Dawn para pressure em attack) -> summon Luminarch Aegisbearer (Setup defensivo CRÍTICO - baixar Aegisbearer para sobreviver e virar depois) | Milestones: +2.5 Grind: Moonlit converted GY to field"
+                  }
+                ],
+                "mismatchSampleCount": 1
+              }
+            },
+            "errors": [],
+            "warnings": []
+          }
+        ]
+      }
+    },
+    {
+      "matchup": "dragon:void",
+      "seat1": "dragon",
+      "seat2": "void",
+      "completion": {
+        "completed": 1,
+        "wins1": 1,
+        "wins2": 0,
+        "draws": 0,
+        "drawsByTimeout": 0,
+        "drawsByMaxTurns": 0,
+        "avgTurns": "6.0",
+        "avgDecisionTimeMs": null,
+        "batchDurationMs": 1342,
+        "endReasonBreakdown": {
+          "lp_zero": 1
+        }
+      },
+      "strategicReport": {
+        "generatedAt": "2026-07-02T17:16:40.505Z",
+        "version": 4,
+        "duelCount": 1,
+        "matchups": {
+          "dragon_vs_void": {
+            "totalDuels": 1,
+            "wins": {
+              "player": 1,
+              "bot": 0,
+              "draw": 0
+            },
+            "winRate": {
+              "player": 100,
+              "bot": 0
+            },
+            "avgTurns": 6,
+            "avgFinalLP": {
+              "player": 7400,
+              "bot": 0
+            },
+            "endReasons": {
+              "lp_zero": 1
+            },
+            "warnings": 0,
+            "errors": 0
+          }
+        },
+        "bots": {
+          "player:dragon": {
+            "archetype": "dragon",
+            "duels": 1,
+            "wins": 1,
+            "winRate": 100,
+            "actions": 10,
+            "monsterSets": 0,
+            "setMonsters": [],
+            "failedActions": 0,
+            "blockedActions": 0,
+            "noUsefulTurns": 0,
+            "planning": {
+              "attempts": 7,
+              "used": 5,
+              "usedRate": 71.4,
+              "executionMatches": 0,
+              "executionMismatches": 5,
+              "failedExecutions": 0,
+              "mismatchRate": 100,
+              "failedExecutionRate": 0,
+              "avgLineLength": 2.2,
+              "avgNodesEvaluated": 4.6,
+              "avgNodesWhenUsed": 6.4,
+              "avgPlannedScore": 6015.33,
+              "modeCounts": [
+                {
+                  "name": "critical",
+                  "count": 7
+                }
+              ],
+              "turnModeCounts": [
+                {
+                  "name": "mainBattleMain2",
+                  "count": 7
+                }
+              ],
+              "selectedFirstActions": [
+                {
+                  "name": "summon:Armored Dragon",
+                  "count": 2
+                },
+                {
+                  "name": "graveyardMonsterEffect:Solar Eclipse Dragon",
+                  "count": 1
+                },
+                {
+                  "name": "graveyardMonsterEffect:Stelya, Dragon Tamer",
+                  "count": 1
+                },
+                {
+                  "name": "summon:Volcanic Extreme Dragon",
+                  "count": 1
+                }
+              ],
+              "executedFirstActions": [
+                {
+                  "name": "summon:Armored Dragon",
+                  "count": 2
+                },
+                {
+                  "name": "graveyardMonsterEffect:Solar Eclipse Dragon",
+                  "count": 1
+                },
+                {
+                  "name": "graveyardMonsterEffect:Stelya, Dragon Tamer",
+                  "count": 1
+                },
+                {
+                  "name": "summon:Volcanic Extreme Dragon",
+                  "count": 1
+                }
+              ],
+              "topMilestones": [
+                {
+                  "name": "Battle: removed opposing monster",
+                  "count": 4
+                },
+                {
+                  "name": "Control: removed opposing cards",
+                  "count": 4
+                },
+                {
+                  "name": "Battle: meaningful damage",
+                  "count": 3
+                },
+                {
+                  "name": "Battle: Volcanic burn mattered",
+                  "count": 3
+                },
+                {
+                  "name": "Control: Volcanic Extreme Dragon reached suitable context",
+                  "count": 3
+                },
+                {
+                  "name": "Engine: Armored Dragon search resolved",
+                  "count": 2
+                },
+                {
+                  "name": "Engine: field reached 3 Dragons",
+                  "count": 2
+                },
+                {
+                  "name": "Engine: Voltaic extender preserved Normal Summon",
+                  "count": 2
+                },
+                {
+                  "name": "Resource: useful GY follow-up preserved",
+                  "count": 2
+                },
+                {
+                  "name": "Control: reduced top battle threat",
+                  "count": 1
+                },
+                {
+                  "name": "Engine: field reached 2 Dragons",
+                  "count": 1
+                }
+              ],
+              "mismatchReasons": [
+                {
+                  "name": "hand_deck_mismatch",
+                  "count": 2
+                },
+                {
+                  "name": "state_mismatch",
+                  "count": 2
+                },
+                {
+                  "name": "opponent_reaction_mismatch",
+                  "count": 1
+                }
+              ],
+              "planSamples": [
+                {
+                  "turn": 2,
+                  "phase": "main1",
+                  "mode": "critical",
+                  "turnMode": "mainBattleMain2",
+                  "score": 40.02,
+                  "lineLength": 3,
+                  "nodes": 8,
+                  "firstAction": "summon:Armored Dragon",
+                  "milestones": [
+                    "Engine: Voltaic extender preserved Normal Summon",
+                    "Engine: Armored Dragon search resolved",
+                    "Engine: field reached 2 Dragons",
+                    "Control: reduced top battle threat"
+                  ],
+                  "reason": "Dragon planner: Battle bridge opens Main 2 | summon Armored Dragon -> Voltaic Dragon hand effect -> Battle Luminous Dragon > Void Ghost Wolf | Engine: Voltaic extender preserved Normal Summon; Engine: Armored Dragon search resolved; Engine: field reached 2 Dragons"
+                },
+                {
+                  "turn": 4,
+                  "phase": "main1",
+                  "mode": "critical",
+                  "turnMode": "mainBattleMain2",
+                  "score": 36.65,
+                  "lineLength": 2,
+                  "nodes": 8,
+                  "firstAction": "summon:Armored Dragon",
+                  "milestones": [
+                    "Engine: Voltaic extender preserved Normal Summon",
+                    "Engine: Armored Dragon search resolved",
+                    "Engine: field reached 3 Dragons"
+                  ],
+                  "reason": "Dragon planner: Armored Dragon starter search | summon Armored Dragon -> Voltaic Dragon hand effect | Engine: Voltaic extender preserved Normal Summon; Engine: Armored Dragon search resolved; Engine: field reached 3 Dragons"
+                },
+                {
+                  "turn": 6,
+                  "phase": "main1",
+                  "mode": "critical",
+                  "turnMode": "mainBattleMain2",
+                  "score": 10000,
+                  "lineLength": 2,
+                  "nodes": 6,
+                  "firstAction": "summon:Volcanic Extreme Dragon",
+                  "milestones": [
+                    "Control: Volcanic Extreme Dragon reached suitable context",
+                    "Battle: Volcanic burn mattered",
+                    "Battle: removed opposing monster",
+                    "Resource: useful GY follow-up preserved"
+                  ],
+                  "reason": "Dragon planner: Volcanic battle burn into Main 2 | summon Volcanic Extreme Dragon -> Battle Volcanic Extreme Dragon > Void Tenebris Horn | Control: Volcanic Extreme Dragon reached suitable context; Battle: Volcanic burn mattered; Battle: removed opposing monster"
+                },
+                {
+                  "turn": 6,
+                  "phase": "main1",
+                  "mode": "critical",
+                  "turnMode": "mainBattleMain2",
+                  "score": 10000,
+                  "lineLength": 2,
+                  "nodes": 6,
+                  "firstAction": "graveyardMonsterEffect:Stelya, Dragon Tamer",
+                  "milestones": [
+                    "Control: Volcanic Extreme Dragon reached suitable context",
+                    "Battle: Volcanic burn mattered",
+                    "Battle: removed opposing monster",
+                    "Resource: useful GY follow-up preserved"
+                  ],
+                  "reason": "Dragon planner: Volcanic battle burn into Main 2 | Stelya, Dragon Tamer GY effect -> Battle Volcanic Extreme Dragon > Void Tenebris Horn | Control: Volcanic Extreme Dragon reached suitable context; Battle: Volcanic burn mattered; Battle: removed opposing monster"
+                },
+                {
+                  "turn": 6,
+                  "phase": "main1",
+                  "mode": "critical",
+                  "turnMode": "mainBattleMain2",
+                  "score": 10000,
+                  "lineLength": 2,
+                  "nodes": 4,
+                  "firstAction": "graveyardMonsterEffect:Solar Eclipse Dragon",
+                  "milestones": [
+                    "Control: Volcanic Extreme Dragon reached suitable context",
+                    "Battle: Volcanic burn mattered",
+                    "Battle: removed opposing monster",
+                    "Control: removed opposing cards"
+                  ],
+                  "reason": "Dragon planner: Volcanic battle burn into Main 2 | Solar Eclipse Dragon GY effect -> Battle Volcanic Extreme Dragon > Void Tenebris Horn | Control: Volcanic Extreme Dragon reached suitable context; Battle: Volcanic burn mattered; Battle: removed opposing monster"
+                }
+              ],
+              "mismatchSampleCount": 5
+            }
+          },
+          "bot:void": {
+            "archetype": "void",
+            "duels": 1,
+            "wins": 0,
+            "winRate": 0,
+            "actions": 3,
+            "monsterSets": 0,
+            "setMonsters": [],
+            "failedActions": 0,
+            "blockedActions": 0,
+            "noUsefulTurns": 0,
+            "planning": {
+              "attempts": 2,
+              "used": 2,
+              "usedRate": 100,
+              "executionMatches": 2,
+              "executionMismatches": 0,
+              "failedExecutions": 0,
+              "mismatchRate": 0,
+              "failedExecutionRate": 0,
+              "avgLineLength": 1.5,
+              "avgNodesEvaluated": 3.5,
+              "avgNodesWhenUsed": 3.5,
+              "avgPlannedScore": -28.11,
+              "modeCounts": [
+                {
+                  "name": "critical",
+                  "count": 2
+                }
+              ],
+              "turnModeCounts": [
+                {
+                  "name": "mainOnly",
+                  "count": 2
+                }
+              ],
+              "selectedFirstActions": [
+                {
+                  "name": "graveyardMonsterEffect:Void Tenebris Horn",
+                  "count": 1
+                },
+                {
+                  "name": "summon:Void Tenebris Horn",
+                  "count": 1
+                }
+              ],
+              "executedFirstActions": [
+                {
+                  "name": "graveyardMonsterEffect:Void Tenebris Horn",
+                  "count": 1
+                },
+                {
+                  "name": "summon:Void Tenebris Horn",
+                  "count": 1
+                }
+              ],
+              "topMilestones": [],
+              "mismatchReasons": [],
+              "planSamples": [
+                {
+                  "turn": 5,
+                  "phase": "main1",
+                  "mode": "critical",
+                  "turnMode": "mainOnly",
+                  "score": -28.11,
+                  "lineLength": 2,
+                  "nodes": 6,
+                  "firstAction": "graveyardMonsterEffect:Void Tenebris Horn",
+                  "milestones": [],
+                  "reason": "Void planned line: graveyardMonsterEffect Void Tenebris Horn -> summon Void Tenebris Horn"
+                },
+                {
+                  "turn": 5,
+                  "phase": "main1",
+                  "mode": "critical",
+                  "turnMode": "mainOnly",
+                  "score": -28.11,
+                  "lineLength": 1,
+                  "nodes": 1,
+                  "firstAction": "summon:Void Tenebris Horn",
+                  "milestones": [],
+                  "reason": "Void planned line: summon Void Tenebris Horn"
+                }
+              ],
+              "mismatchSampleCount": 0
+            }
+          }
+        },
+        "suspiciousPatterns": [],
+        "duels": [
+          {
+            "duelNumber": 1,
+            "matchup": "dragon_vs_void",
+            "winner": "player",
+            "turns": 6,
+            "endReason": "lp_zero",
+            "timeoutKind": "none",
+            "failedOrBlocked": {
+              "player": 0,
+              "bot": 0
+            },
+            "planning": {
+              "player": {
+                "attempts": 7,
+                "used": 5,
+                "usedRate": 71.4,
+                "executionMatches": 0,
+                "executionMismatches": 5,
+                "failedExecutions": 0,
+                "mismatchRate": 100,
+                "failedExecutionRate": 0,
+                "avgLineLength": 2.2,
+                "avgNodesEvaluated": 4.6,
+                "avgNodesWhenUsed": 6.4,
+                "avgPlannedScore": 6015.33,
+                "modeCounts": [
+                  {
+                    "name": "critical",
+                    "count": 7
+                  }
+                ],
+                "turnModeCounts": [
+                  {
+                    "name": "mainBattleMain2",
+                    "count": 7
+                  }
+                ],
+                "selectedFirstActions": [
+                  {
+                    "name": "summon:Armored Dragon",
+                    "count": 2
+                  },
+                  {
+                    "name": "graveyardMonsterEffect:Solar Eclipse Dragon",
+                    "count": 1
+                  },
+                  {
+                    "name": "graveyardMonsterEffect:Stelya, Dragon Tamer",
+                    "count": 1
+                  },
+                  {
+                    "name": "summon:Volcanic Extreme Dragon",
+                    "count": 1
+                  }
+                ],
+                "executedFirstActions": [
+                  {
+                    "name": "summon:Armored Dragon",
+                    "count": 2
+                  },
+                  {
+                    "name": "graveyardMonsterEffect:Solar Eclipse Dragon",
+                    "count": 1
+                  },
+                  {
+                    "name": "graveyardMonsterEffect:Stelya, Dragon Tamer",
+                    "count": 1
+                  },
+                  {
+                    "name": "summon:Volcanic Extreme Dragon",
+                    "count": 1
+                  }
+                ],
+                "topMilestones": [
+                  {
+                    "name": "Battle: removed opposing monster",
+                    "count": 4
+                  },
+                  {
+                    "name": "Control: removed opposing cards",
+                    "count": 4
+                  },
+                  {
+                    "name": "Battle: meaningful damage",
+                    "count": 3
+                  },
+                  {
+                    "name": "Battle: Volcanic burn mattered",
+                    "count": 3
+                  },
+                  {
+                    "name": "Control: Volcanic Extreme Dragon reached suitable context",
+                    "count": 3
+                  },
+                  {
+                    "name": "Engine: Armored Dragon search resolved",
+                    "count": 2
+                  },
+                  {
+                    "name": "Engine: field reached 3 Dragons",
+                    "count": 2
+                  },
+                  {
+                    "name": "Engine: Voltaic extender preserved Normal Summon",
+                    "count": 2
+                  },
+                  {
+                    "name": "Resource: useful GY follow-up preserved",
+                    "count": 2
+                  },
+                  {
+                    "name": "Control: reduced top battle threat",
+                    "count": 1
+                  },
+                  {
+                    "name": "Engine: field reached 2 Dragons",
+                    "count": 1
+                  }
+                ],
+                "mismatchReasons": [
+                  {
+                    "name": "hand_deck_mismatch",
+                    "count": 2
+                  },
+                  {
+                    "name": "state_mismatch",
+                    "count": 2
+                  },
+                  {
+                    "name": "opponent_reaction_mismatch",
+                    "count": 1
+                  }
+                ],
+                "planSamples": [
+                  {
+                    "turn": 2,
+                    "phase": "main1",
+                    "mode": "critical",
+                    "turnMode": "mainBattleMain2",
+                    "score": 40.02,
+                    "lineLength": 3,
+                    "nodes": 8,
+                    "firstAction": "summon:Armored Dragon",
+                    "milestones": [
+                      "Engine: Voltaic extender preserved Normal Summon",
+                      "Engine: Armored Dragon search resolved",
+                      "Engine: field reached 2 Dragons",
+                      "Control: reduced top battle threat"
+                    ],
+                    "reason": "Dragon planner: Battle bridge opens Main 2 | summon Armored Dragon -> Voltaic Dragon hand effect -> Battle Luminous Dragon > Void Ghost Wolf | Engine: Voltaic extender preserved Normal Summon; Engine: Armored Dragon search resolved; Engine: field reached 2 Dragons"
+                  },
+                  {
+                    "turn": 4,
+                    "phase": "main1",
+                    "mode": "critical",
+                    "turnMode": "mainBattleMain2",
+                    "score": 36.65,
+                    "lineLength": 2,
+                    "nodes": 8,
+                    "firstAction": "summon:Armored Dragon",
+                    "milestones": [
+                      "Engine: Voltaic extender preserved Normal Summon",
+                      "Engine: Armored Dragon search resolved",
+                      "Engine: field reached 3 Dragons"
+                    ],
+                    "reason": "Dragon planner: Armored Dragon starter search | summon Armored Dragon -> Voltaic Dragon hand effect | Engine: Voltaic extender preserved Normal Summon; Engine: Armored Dragon search resolved; Engine: field reached 3 Dragons"
+                  },
+                  {
+                    "turn": 6,
+                    "phase": "main1",
+                    "mode": "critical",
+                    "turnMode": "mainBattleMain2",
+                    "score": 10000,
+                    "lineLength": 2,
+                    "nodes": 6,
+                    "firstAction": "summon:Volcanic Extreme Dragon",
+                    "milestones": [
+                      "Control: Volcanic Extreme Dragon reached suitable context",
+                      "Battle: Volcanic burn mattered",
+                      "Battle: removed opposing monster",
+                      "Resource: useful GY follow-up preserved"
+                    ],
+                    "reason": "Dragon planner: Volcanic battle burn into Main 2 | summon Volcanic Extreme Dragon -> Battle Volcanic Extreme Dragon > Void Tenebris Horn | Control: Volcanic Extreme Dragon reached suitable context; Battle: Volcanic burn mattered; Battle: removed opposing monster"
+                  },
+                  {
+                    "turn": 6,
+                    "phase": "main1",
+                    "mode": "critical",
+                    "turnMode": "mainBattleMain2",
+                    "score": 10000,
+                    "lineLength": 2,
+                    "nodes": 6,
+                    "firstAction": "graveyardMonsterEffect:Stelya, Dragon Tamer",
+                    "milestones": [
+                      "Control: Volcanic Extreme Dragon reached suitable context",
+                      "Battle: Volcanic burn mattered",
+                      "Battle: removed opposing monster",
+                      "Resource: useful GY follow-up preserved"
+                    ],
+                    "reason": "Dragon planner: Volcanic battle burn into Main 2 | Stelya, Dragon Tamer GY effect -> Battle Volcanic Extreme Dragon > Void Tenebris Horn | Control: Volcanic Extreme Dragon reached suitable context; Battle: Volcanic burn mattered; Battle: removed opposing monster"
+                  },
+                  {
+                    "turn": 6,
+                    "phase": "main1",
+                    "mode": "critical",
+                    "turnMode": "mainBattleMain2",
+                    "score": 10000,
+                    "lineLength": 2,
+                    "nodes": 4,
+                    "firstAction": "graveyardMonsterEffect:Solar Eclipse Dragon",
+                    "milestones": [
+                      "Control: Volcanic Extreme Dragon reached suitable context",
+                      "Battle: Volcanic burn mattered",
+                      "Battle: removed opposing monster",
+                      "Control: removed opposing cards"
+                    ],
+                    "reason": "Dragon planner: Volcanic battle burn into Main 2 | Solar Eclipse Dragon GY effect -> Battle Volcanic Extreme Dragon > Void Tenebris Horn | Control: Volcanic Extreme Dragon reached suitable context; Battle: Volcanic burn mattered; Battle: removed opposing monster"
+                  }
+                ],
+                "mismatchSampleCount": 5
+              },
+              "bot": {
+                "attempts": 2,
+                "used": 2,
+                "usedRate": 100,
+                "executionMatches": 2,
+                "executionMismatches": 0,
+                "failedExecutions": 0,
+                "mismatchRate": 0,
+                "failedExecutionRate": 0,
+                "avgLineLength": 1.5,
+                "avgNodesEvaluated": 3.5,
+                "avgNodesWhenUsed": 3.5,
+                "avgPlannedScore": -28.11,
+                "modeCounts": [
+                  {
+                    "name": "critical",
+                    "count": 2
+                  }
+                ],
+                "turnModeCounts": [
+                  {
+                    "name": "mainOnly",
+                    "count": 2
+                  }
+                ],
+                "selectedFirstActions": [
+                  {
+                    "name": "graveyardMonsterEffect:Void Tenebris Horn",
+                    "count": 1
+                  },
+                  {
+                    "name": "summon:Void Tenebris Horn",
+                    "count": 1
+                  }
+                ],
+                "executedFirstActions": [
+                  {
+                    "name": "graveyardMonsterEffect:Void Tenebris Horn",
+                    "count": 1
+                  },
+                  {
+                    "name": "summon:Void Tenebris Horn",
+                    "count": 1
+                  }
+                ],
+                "topMilestones": [],
+                "mismatchReasons": [],
+                "planSamples": [
+                  {
+                    "turn": 5,
+                    "phase": "main1",
+                    "mode": "critical",
+                    "turnMode": "mainOnly",
+                    "score": -28.11,
+                    "lineLength": 2,
+                    "nodes": 6,
+                    "firstAction": "graveyardMonsterEffect:Void Tenebris Horn",
+                    "milestones": [],
+                    "reason": "Void planned line: graveyardMonsterEffect Void Tenebris Horn -> summon Void Tenebris Horn"
+                  },
+                  {
+                    "turn": 5,
+                    "phase": "main1",
+                    "mode": "critical",
+                    "turnMode": "mainOnly",
+                    "score": -28.11,
+                    "lineLength": 1,
+                    "nodes": 1,
+                    "firstAction": "summon:Void Tenebris Horn",
+                    "milestones": [],
+                    "reason": "Void planned line: summon Void Tenebris Horn"
+                  }
+                ],
+                "mismatchSampleCount": 0
+              }
+            },
+            "errors": [],
+            "warnings": []
+          }
+        ]
+      }
+    }
+  ]
+}

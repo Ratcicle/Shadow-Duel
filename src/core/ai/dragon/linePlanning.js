@@ -18,58 +18,70 @@ const DEFAULT_PROFILE = {
 };
 
 const HIGH_LEVEL_DRAGON_NAMES = new Set([
-  "Darkness Dragon",
-  "Abyssal Serpent Dragon",
   "Majestic Silver Dragon",
   "Black Bull Dragon",
   "Purified Crystal Dragon",
   "Volcanic Extreme Dragon",
-  "Galaxy Extreme Dragon",
-  "Forest Extreme Dragon",
   "Fire Extreme Dragon",
-  "Mist Extreme Dragon",
 ]);
 
 const EXTENDER_NAMES = new Set([
+  "Solar Eclipse Dragon",
+  "Lunar Eclipse Dragon",
+  "Stelya, Dragon Tamer",
   "Voltaic Dragon",
   "Grey Dragon",
-  "Boneflame Dragon",
   "Hellkite Dragon",
   "Black Bull Dragon",
 ]);
 
 const PAYOFF_NAMES = new Set([
+  "Solar Eclipse Dragon",
+  "Lunar Eclipse Dragon",
+  "Stelya, Dragon Tamer",
   "Extreme Dragon Awakening",
   "Polymerization",
-  "Converging Stars",
+  "Dragon Spirit Sanctuary",
+  "Call of the Haunted",
   "Black Bull Dragon",
   "Purified Crystal Dragon",
+  "Fire Extreme Dragon",
+  "Volcanic Extreme Dragon",
   "Radiant Cosmic Dragon",
   "Tech-Void Dragon",
   "Jagged Peak of the Dragons",
 ]);
 
 const CHEAP_DRAGON_COST_NAMES = new Set([
+  "Solar Eclipse Dragon",
+  "Lunar Eclipse Dragon",
   "Voltaic Dragon",
   "Grey Dragon",
-  "Boneflame Dragon",
   "Luminescent Dragon",
   "Armored Dragon",
 ]);
 
 const CRITICAL_PAYOFF_NAMES = new Set([
+  "Solar Eclipse Dragon",
+  "Lunar Eclipse Dragon",
+  "Stelya, Dragon Tamer",
   "Luminous Dragon",
   "Black Bull Dragon",
   "Purified Crystal Dragon",
+  "Fire Extreme Dragon",
+  "Volcanic Extreme Dragon",
   "Hellkite Dragon",
   "Polymerization",
   "Extreme Dragon Awakening",
   "Jagged Peak of the Dragons",
+  "Dragon Spirit Sanctuary",
+  "Call of the Haunted",
 ]);
 
 const FIELD_IGNITION_RESPONSE_NAMES = new Set([
-  "Abyssal Serpent Dragon",
-  "Darkness Dragon",
+  "Solar Eclipse Dragon",
+  "Lunar Eclipse Dragon",
+  "Stelya, Dragon Tamer",
   "Majestic Silver Dragon",
   "Purified Crystal Dragon",
   "Rainbow Cosmic Dragon",
@@ -78,6 +90,9 @@ const FIELD_IGNITION_RESPONSE_NAMES = new Set([
 ]);
 
 const ARMORY_SEARCH_NAMES = new Set([
+  "Solar Eclipse Dragon",
+  "Lunar Eclipse Dragon",
+  "Stelya, Dragon Tamer",
   "Voltaic Dragon",
   "Grey Dragon",
   "Luminescent Dragon",
@@ -91,11 +106,10 @@ const DRAGON_BOSS_NAMES = new Set([
   "Rainbow Cosmic Dragon",
   "Purified Crystal Dragon",
   "Black Bull Dragon",
-  "Galaxy Extreme Dragon",
-  "Forest Extreme Dragon",
   "Volcanic Extreme Dragon",
   "Fire Extreme Dragon",
-  "Mist Extreme Dragon",
+  "Hellkite Dragon",
+  "Majestic Silver Dragon",
 ]);
 
 function getPlayer(analysis = {}, context = {}) {
@@ -194,7 +208,13 @@ function hasUsefulDiscard(cards = []) {
 function hasRealGreyDiscardValue({ hand = [], field = [], graveyard = [] } = {}) {
   const discardableDragons = (hand || []).filter(isDragonMonster);
   if (discardableDragons.some((card) => card.name === "Voltaic Dragon")) return true;
-  if (discardableDragons.some((card) => card.name === "Boneflame Dragon")) return true;
+  if (
+    discardableDragons.some((card) =>
+      ["Solar Eclipse Dragon", "Lunar Eclipse Dragon", "Stelya, Dragon Tamer"].includes(card.name),
+    )
+  ) {
+    return true;
+  }
   if (hasLuminousRecovery(field)) {
     return discardableDragons.some((discard) =>
       (graveyard || []).some(
@@ -226,7 +246,9 @@ function hasVolcanicGyRisk({ graveyard, opponent, opponentGraveyard }) {
   const ownDragonCount = countDragonMonsters(graveyard);
   const hasFollowUpResource =
     ownDragonCount >= 3 ||
-    hasName(graveyard, "Boneflame Dragon") ||
+    hasName(graveyard, "Solar Eclipse Dragon") ||
+    hasName(graveyard, "Lunar Eclipse Dragon") ||
+    hasName(graveyard, "Stelya, Dragon Tamer") ||
     hasName(graveyard, "Grey Dragon") ||
     hasName(graveyard, "Hellkite Dragon") ||
     hasName(graveyard, "Rainbow Cosmic Dragon") ||
@@ -300,12 +322,12 @@ function hasThreatResponse({ hand, field, graveyard, opponentField, opponentBack
   if (!hasLargeThreat && threats.length === 0 && opponentBackrow <= 0) return false;
 
   return (
-    hasName(field, "Abyssal Serpent Dragon") ||
-    hasName(field, "Darkness Dragon") ||
     hasName(field, "Majestic Silver Dragon") ||
     hasName(field, "Volcanic Extreme Dragon") ||
     (hasName(hand, "Hellkite Roar") && opponentBackrow > 0) ||
-    (hasName(graveyard, "Boneflame Dragon") && field.some(isFaceupDragon))
+    hasName(graveyard, "Solar Eclipse Dragon") ||
+    hasName(graveyard, "Lunar Eclipse Dragon") ||
+    (hasName(graveyard, "Stelya, Dragon Tamer") && field.some(isFaceupDragon))
   );
 }
 
@@ -1133,7 +1155,13 @@ export function scoreDragonLineMilestones(context = {}) {
   }
 
   if (
-    ["Black Bull Dragon", "Grey Dragon", "Converging Stars", "Darkness Dragon"].some((name) =>
+    [
+      "Solar Eclipse Dragon",
+      "Lunar Eclipse Dragon",
+      "Stelya, Dragon Tamer",
+      "Black Bull Dragon",
+      "Grey Dragon",
+    ].some((name) =>
       sequenceMentions(sequence, name),
     ) &&
     (damageDealt >= 800 ||
@@ -1210,7 +1238,7 @@ export function scoreDragonLineMilestones(context = {}) {
     addLineMilestone(milestones, "Control: Darkness Dragon pressure available", 3);
   }
 
-  for (const name of ["Galaxy Extreme Dragon", "Forest Extreme Dragon", "Volcanic Extreme Dragon"]) {
+  for (const name of ["Fire Extreme Dragon", "Volcanic Extreme Dragon"]) {
     if (findFinalFieldCard(finalBot, name) && (damageDealt > 0 || finalThreat > 0 || finalHasProtection)) {
       addLineMilestone(milestones, `Control: ${name} reached suitable context`, 3);
     }
@@ -1277,7 +1305,7 @@ export function scoreDragonLineMilestones(context = {}) {
   }
 
   if (banishedDragonDelta >= 3 && !finalHasBoss && !finalHasProtection && damageDealt < 1500) {
-    addLineMilestone(milestones, "Penalty: banished critical GY resources early", -5);
+    addLineMilestone(milestones, "Penalty: banished critical GY resources early", -7);
   }
 
   if (
@@ -1286,7 +1314,7 @@ export function scoreDragonLineMilestones(context = {}) {
     !finalHasProtection &&
     finalUsefulGy === 0
   ) {
-    addLineMilestone(milestones, "Penalty: Purified consumed GY without protection", -4);
+    addLineMilestone(milestones, "Penalty: Purified consumed GY without protection", -6);
   }
 
   if (
@@ -1419,16 +1447,20 @@ function hasHandFollowUp(player = {}) {
       card?.name === "Call of the Haunted" ||
       card?.name === "Dragon Spirit Sanctuary" ||
       card?.name === "Luminous Dragon" ||
+      card?.name === "Solar Eclipse Dragon" ||
+      card?.name === "Lunar Eclipse Dragon" ||
+      card?.name === "Stelya, Dragon Tamer" ||
       card?.name === "Voltaic Dragon" ||
-      card?.name === "Grey Dragon" ||
-      card?.name === "Boneflame Dragon",
+      card?.name === "Grey Dragon",
   );
 }
 
 function hasGraveyardFollowUp(player = {}) {
   const graveyard = getCards(player, "graveyard");
+  if (graveyard.some((card) => card?.name === "Solar Eclipse Dragon")) return true;
+  if (graveyard.some((card) => card?.name === "Lunar Eclipse Dragon")) return true;
+  if (graveyard.some((card) => card?.name === "Stelya, Dragon Tamer")) return true;
   if (graveyard.some((card) => card?.name === "Grey Dragon")) return true;
-  if (graveyard.some((card) => card?.name === "Boneflame Dragon")) return true;
   if (graveyard.some((card) => card?.name === "Black Bull Dragon")) return true;
   if (graveyard.some((card) => card?.name === "Hellkite Roar")) return true;
   if (graveyard.some((card) => card?.name === "Rainbow Cosmic Dragon")) return true;
@@ -1616,11 +1648,10 @@ function inferDragonLineHeadline(context = {}) {
     "Rainbow Cosmic Dragon",
     "Radiant Cosmic Dragon",
     "Tech-Void Dragon",
+    "Fire Extreme Dragon",
+    "Volcanic Extreme Dragon",
     "Black Bull Dragon",
     "Purified Crystal Dragon",
-    "Volcanic Extreme Dragon",
-    "Galaxy Extreme Dragon",
-    "Forest Extreme Dragon",
   ]);
 
   if (usedNames.includes("Supreme Bahamut Dragon")) {
@@ -1657,11 +1688,10 @@ function inferDragonLineHeadline(context = {}) {
   if (hasUsed("Extreme Dragon Awakening")) {
     const target =
       findFinalPayoffName(finalBot, [
+        "Fire Extreme Dragon",
+        "Volcanic Extreme Dragon",
         "Black Bull Dragon",
         "Purified Crystal Dragon",
-        "Volcanic Extreme Dragon",
-        "Galaxy Extreme Dragon",
-        "Forest Extreme Dragon",
         "Radiant Cosmic Dragon",
       ]) || "Level 8+ Dragon";
     return `Awakening converts two Dragons into ${target}`;
@@ -1703,7 +1733,7 @@ function inferDragonLineHeadline(context = {}) {
     return "Purified Crystal Dragon setup line";
   }
 
-  const controlNames = ["Abyssal Serpent Dragon", "Darkness Dragon", "Majestic Silver Dragon"];
+  const controlNames = ["Majestic Silver Dragon", "Volcanic Extreme Dragon", "Fire Extreme Dragon"];
   const controlUsed = controlNames.filter((name) => usedNames.includes(name));
   if (controlUsed.length > 0) {
     return `Control line with ${controlUsed.join("/")}`;
@@ -1725,7 +1755,12 @@ function inferDragonLineHeadline(context = {}) {
     return "Black Bull pressure and Level 7/8 access";
   }
 
-  if (usedNames.includes("Grey Dragon") || usedNames.includes("Boneflame Dragon")) {
+  if (
+    usedNames.includes("Solar Eclipse Dragon") ||
+    usedNames.includes("Lunar Eclipse Dragon") ||
+    usedNames.includes("Stelya, Dragon Tamer") ||
+    usedNames.includes("Grey Dragon")
+  ) {
     return "GY resource loop into board presence";
   }
 
@@ -1797,7 +1832,35 @@ export function buildDragonPlanningProfile(analysis = {}, context = {}) {
       (opponent.fieldSpell ? 1 : 0);
   const phase = String(analysis.phase || game.phase || "main1").toLowerCase();
   const manual = game?.turnLineSearchEnabled === true;
+  const dragonState = analysis.dragonState || {};
   const reasons = [];
+
+  if (
+    dragonState.hasSolarInHand &&
+    (dragonState.hasLunarInDeck || dragonState.hasLunarInHand) &&
+    dragonState.opt?.solarHand?.canUse !== false
+  ) {
+    reasons.push("Eclipse starter live");
+  }
+  if (
+    (dragonState.hasLunarInHand || dragonState.hasLunarInGY) &&
+    dragonState.hasUsefulLunarDiscard &&
+    dragonState.lunarDeckTargets?.length > 0
+  ) {
+    reasons.push("Lunar search has discard and Deck target");
+  }
+  if (
+    (dragonState.hasStelyaInHand || dragonState.hasStelyaInGY) &&
+    dragonState.hasDragonFieldBodyForStelya
+  ) {
+    reasons.push("Stelya bridge live");
+  }
+  if (dragonState.hasTwoDragonsForAwakening) {
+    reasons.push("Awakening has two Dragon bodies");
+  }
+  if (dragonState.gyResources?.length > 0) {
+    reasons.push("Dragon GY follow-up available");
+  }
 
   if (hasName(hand, "Luminous Dragon") && hasName(hand, "Voltaic Dragon")) {
     reasons.push("Luminous + Voltaic starter");

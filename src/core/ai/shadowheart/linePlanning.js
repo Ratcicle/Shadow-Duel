@@ -25,6 +25,8 @@ const SH = {
   battleHymn: "Shadow-Heart Battle Hymn",
   scale: "Shadow-Heart Scale Dragon",
   arctroth: "Shadow-Heart Demon Arctroth",
+  arctrothPursuer: "Shadow-Heart Arctroth Pursuer",
+  devastation: "Shadow-Heart Devastation Dragon",
   deathWyrm: "Shadow-Heart Death Wyrm",
   leviathan: "Shadow-Heart Leviathan",
   demonDragon: "Shadow-Heart Demon Dragon",
@@ -39,6 +41,8 @@ const BOSS_NAMES = new Set([
   SH.leviathan,
   SH.demonDragon,
   SH.warlord,
+  SH.arctrothPursuer,
+  SH.devastation,
 ]);
 
 const PREMIUM_NAMES = new Set([
@@ -48,6 +52,8 @@ const PREMIUM_NAMES = new Set([
   SH.leviathan,
   SH.demonDragon,
   SH.warlord,
+  SH.arctrothPursuer,
+  SH.devastation,
 ]);
 
 const ENGINE_NAMES = new Set([

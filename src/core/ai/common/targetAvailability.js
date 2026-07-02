@@ -39,7 +39,7 @@ function getOwnerRole(owner, context = {}) {
 }
 
 function getTargetFilter(targetSpec = {}) {
-  const { owner: _owner, zones: _zones, zone: _zone, anyOf: _anyOf, ...filter } =
+  const { id: _id, owner: _owner, zones: _zones, zone: _zone, anyOf: _anyOf, ...filter } =
     targetSpec;
   return filter;
 }

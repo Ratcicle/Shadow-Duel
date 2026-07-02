@@ -20,6 +20,7 @@ import { getGenericSetBackrowActions } from "./common/backrowPlanning.js";
 import { sequenceActionsByPriority } from "./common/actionSequencing.js";
 import {
   findIgnitionEffect,
+  findIgnitionEffects,
   hasOncePerTurnEffect,
 } from "./common/effectDiscovery.js";
 import { effectTargetsAvailable } from "./common/targetAvailability.js";
@@ -45,6 +46,7 @@ import {
 
 import {
   CARD_KNOWLEDGE,
+  CURRENT_AWAKENING_TARGET_NAMES,
   isExtremeDragon,
 } from "./dragon/knowledge.js";
 import { COMBO_DATABASE, detectAvailableCombos } from "./dragon/combos.js";
@@ -60,6 +62,22 @@ import {
   analyzeExtremeDragonEconomy,
   evaluateBoardDragon,
 } from "./dragon/scoring.js";
+import { analyzeDragonState } from "./dragon/stateAnalysis.js";
+import { rankDragonSearchCandidates } from "./dragon/searchPolicy.js";
+import {
+  buildDragonCostPreferences,
+  buildDragonTargetCostPreferences,
+} from "./dragon/costPolicy.js";
+import {
+  buildDragonBanishTargetPreferences,
+  shouldUsePurifiedBanishSummon,
+  shouldUseStelyaBanishSummon,
+} from "./dragon/banishPolicy.js";
+import {
+  evaluateDragonGraveyardIgnition,
+  evaluateDragonHandIgnition,
+  evaluateDragonRecruitCandidate,
+} from "./dragon/actionPolicy.js";
 import { getEffectiveAtk } from "./common/cardStats.js";
 import {
   getProjectedBoneflameAtk,
@@ -77,41 +95,103 @@ import {
 } from "./dragon/linePlanning.js";
 
 const DRAGON_COST_PREFER_NAMES = [
+  "Solar Eclipse Dragon",
   "Voltaic Dragon",
+  "Stelya, Dragon Tamer",
+  "Lunar Eclipse Dragon",
   "Grey Dragon",
-  "Boneflame Dragon",
   "Luminescent Dragon",
   "Armored Dragon",
 ];
 
 const DRAGON_COST_PRESERVE_NAMES = [
+  "Fire Extreme Dragon",
+  "Volcanic Extreme Dragon",
   "Luminous Dragon",
   "Black Bull Dragon",
   "Purified Crystal Dragon",
   "Hellkite Dragon",
+  "Majestic Silver Dragon",
   "Polymerization",
   "Extreme Dragon Awakening",
   "Jagged Peak of the Dragons",
+  "Dragon Spirit Sanctuary",
+  "Call of the Haunted",
 ];
 
-const AWAKENING_TARGET_ORDER = [
-  "Black Bull Dragon",
-  "Purified Crystal Dragon",
-  "Volcanic Extreme Dragon",
-  "Galaxy Extreme Dragon",
-  "Forest Extreme Dragon",
-];
+const AWAKENING_TARGET_ORDER = [...CURRENT_AWAKENING_TARGET_NAMES];
 
 const EXTREME_GY_SEND_ORDER = [
   "Volcanic Extreme Dragon",
-  "Forest Extreme Dragon",
-  "Galaxy Extreme Dragon",
   "Fire Extreme Dragon",
-  "Mist Extreme Dragon",
 ];
 
 function uniqueNames(names = []) {
   return [...new Set((names || []).filter(Boolean))];
+}
+
+function mergePreferenceArrays(...arrays) {
+  return [
+    ...new Set(
+      arrays
+        .flatMap((value) => value || [])
+        .filter((value) => value !== undefined && value !== null && value !== ""),
+    ),
+  ];
+}
+
+function mergeCostPreferences(base = {}, patch = {}) {
+  return {
+    ...(base || {}),
+    ...(patch || {}),
+    preferNames: mergePreferenceArrays(base.preferNames, patch.preferNames),
+    forceNames: mergePreferenceArrays(base.forceNames, patch.forceNames),
+    preserveNames: mergePreferenceArrays(base.preserveNames, patch.preserveNames),
+    avoidNames: mergePreferenceArrays(base.avoidNames, patch.avoidNames),
+    preferredInstanceIds: mergePreferenceArrays(
+      base.preferredInstanceIds,
+      patch.preferredInstanceIds,
+    ),
+    avoidInstanceIds: mergePreferenceArrays(
+      base.avoidInstanceIds,
+      patch.avoidInstanceIds,
+    ),
+    offensivePayoffNames: mergePreferenceArrays(
+      base.offensivePayoffNames,
+      patch.offensivePayoffNames,
+    ),
+  };
+}
+
+function mergeTargetPreference(base = {}, patch = {}) {
+  return {
+    ...(base || {}),
+    ...(patch || {}),
+    preferNames: mergePreferenceArrays(base.preferNames, patch.preferNames),
+    preferredNames: mergePreferenceArrays(
+      base.preferredNames,
+      patch.preferredNames,
+    ),
+    forceNames: mergePreferenceArrays(base.forceNames, patch.forceNames),
+    preserveNames: mergePreferenceArrays(base.preserveNames, patch.preserveNames),
+    avoidNames: mergePreferenceArrays(base.avoidNames, patch.avoidNames),
+    preferredInstanceIds: mergePreferenceArrays(
+      base.preferredInstanceIds,
+      patch.preferredInstanceIds,
+    ),
+    avoidInstanceIds: mergePreferenceArrays(
+      base.avoidInstanceIds,
+      patch.avoidInstanceIds,
+    ),
+  };
+}
+
+function mergeTargetPreferenceMaps(base = {}, patch = {}) {
+  const merged = { ...(base || {}) };
+  for (const [key, value] of Object.entries(patch || {})) {
+    merged[key] = mergeTargetPreference(merged[key] || {}, value || {});
+  }
+  return merged;
 }
 
 function isDragonMonster(card) {
@@ -189,29 +269,29 @@ function getCardInstanceId(card) {
 }
 
 function buildDragonActionContext(extra = {}) {
-  const costPreferences = {
-    preferNames: DRAGON_COST_PREFER_NAMES,
-    preserveNames: DRAGON_COST_PRESERVE_NAMES,
-    offensivePayoffNames: [
-      "Black Bull Dragon",
-      "Purified Crystal Dragon",
-      "Hellkite Dragon",
-      "Radiant Cosmic Dragon",
-      "Rainbow Cosmic Dragon",
-    ],
-    preserveLastOffensivePayoff: true,
-    ...(extra.costPreferences || {}),
-  };
-
-  costPreferences.preferNames = uniqueNames(costPreferences.preferNames);
-  costPreferences.preserveNames = uniqueNames(costPreferences.preserveNames);
-  costPreferences.offensivePayoffNames = uniqueNames(
-    costPreferences.offensivePayoffNames,
+  const dynamicCostPreferences = buildDragonCostPreferences(extra);
+  const costPreferences = mergeCostPreferences(
+    dynamicCostPreferences,
+    extra.costPreferences || {},
+  );
+  const baseTargetPreferences = mergeTargetPreferenceMaps(
+    buildDragonTargetCostPreferences({
+      ...extra,
+      costPreferences,
+    }),
+    buildDragonBanishTargetPreferences({
+      ...extra,
+      costPreferences,
+    }),
+  );
+  const targetPreferences = mergeTargetPreferenceMaps(
+    baseTargetPreferences,
+    extra.targetPreferences || {},
   );
 
   return {
     costPreferences,
-    targetPreferences: extra.targetPreferences || {},
+    targetPreferences,
     ...(extra.other || {}),
   };
 }
@@ -229,12 +309,15 @@ function buildActivationContext(zone, actionContext = null, extra = {}) {
 function hasLuminousFollowUp(bot) {
   const names = new Set((bot.hand || []).map((card) => card?.name));
   return [
+    "Solar Eclipse Dragon",
+    "Lunar Eclipse Dragon",
+    "Stelya, Dragon Tamer",
     "Voltaic Dragon",
     "Black Bull Dragon",
     "Hellkite Dragon",
     "Polymerization",
     "Extreme Dragon Awakening",
-    "Converging Stars",
+    "Jagged Peak of the Dragons",
   ].some((name) => names.has(name));
 }
 
@@ -244,9 +327,13 @@ function hasRainbowGyFollowUp(bot) {
   if ((bot.field || []).some((card) => card?.name === "Luminous Dragon" && !card.isFacedown)) {
     return true;
   }
-  const hasBoneflame = hasNamedCard(bot.graveyard, "Boneflame Dragon");
   const hasFieldDragon = (bot.field || []).some(isFaceupDragon);
-  if (hasBoneflame && hasFieldDragon) return true;
+  const hasEclipseRevive =
+    hasNamedCard(bot.graveyard, "Solar Eclipse Dragon") ||
+    hasNamedCard(bot.graveyard, "Lunar Eclipse Dragon");
+  const hasStelyaRevive =
+    hasNamedCard(bot.graveyard, "Stelya, Dragon Tamer") && hasFieldDragon;
+  if (hasEclipseRevive || hasStelyaRevive) return true;
   if (bot.fieldSpell?.name === "Jagged Peak of the Dragons") return true;
   return hasNamedCard(bot.hand, "Hellkite Dragon");
 }
@@ -308,6 +395,66 @@ export default class DragonStrategy extends BaseStrategy {
 
   simulateMainPhaseAction(state, action) {
     return simulateDragonAction(state, action);
+  }
+
+  rankSearchCandidates(cards, action, context = {}) {
+    const game = context.game || null;
+    const player = context.player || this.bot || game?.bot || {};
+    const opponent =
+      context.opponent ||
+      (game && player ? this.getOpponent(game?._gameRef || game, player) : null) ||
+      {};
+    return rankDragonSearchCandidates(cards, action, {
+      ...context,
+      player,
+      opponent,
+      game,
+      analysis: context.analysis || this.currentAnalysis,
+      fallbackValue: cardStrategicValue,
+    });
+  }
+
+  evaluateRecruitCandidate(candidates, context = {}) {
+    const game = context.game || null;
+    const player = context.player || this.bot || game?.bot || {};
+    const opponent =
+      context.opponent ||
+      (game && player ? this.getOpponent(game?._gameRef || game, player) : null) ||
+      {};
+    return evaluateDragonRecruitCandidate(candidates, {
+      ...context,
+      player,
+      opponent,
+      game,
+      analysis: context.analysis || this.currentAnalysis,
+      fallbackValue: cardStrategicValue,
+    });
+  }
+
+  buildActivationContextForEffect({
+    sourceCard,
+    effect,
+    player,
+    game,
+    activationZone,
+  } = {}) {
+    const owner = player || this.bot || game?.bot || {};
+    const opponent =
+      game && owner ? this.getOpponent(game?._gameRef || game, owner) || {} : {};
+    const zone = activationZone || "field";
+    const actionContext = buildDragonActionContext({
+      analysis: this.currentAnalysis,
+      player: owner,
+      bot: owner,
+      opponent,
+      game,
+      source: sourceCard,
+      sourceCard,
+      effect,
+    });
+    return buildActivationContext(zone, actionContext, {
+      logTargets: false,
+    });
   }
 
   getPlanningProfile(game, context = {}) {
@@ -398,6 +545,12 @@ export default class DragonStrategy extends BaseStrategy {
     const gyCards = bot.graveyard || [];
     const extremeDragonEconomy = analyzeExtremeDragonEconomy({ graveyard: gyCards });
     const extremeInGY = extremeDragonEconomy.extremeInGY;
+    const dragonState = analyzeDragonState({
+      game: isSimulatedState ? game._gameRef || game : game,
+      bot,
+      opponent,
+      isSimulatedState,
+    });
 
     const analysis = {
       hand: (bot.hand || []).map((c) => ({
@@ -463,6 +616,23 @@ export default class DragonStrategy extends BaseStrategy {
       extremeResourcePolicy: assessDragonExtremeResourcePolicy({ extremeDragonEconomy }),
       hasJaggedPeak: bot.fieldSpell?.name === "Jagged Peak of the Dragons",
       jaggedPeakCounters: bot.fieldSpell?.counters?.dragon_peak || 0,
+      dragonState,
+      hasSolarInHand: dragonState.hasSolarInHand,
+      hasSolarInGY: dragonState.hasSolarInGY,
+      hasLunarInHand: dragonState.hasLunarInHand,
+      hasLunarInDeck: dragonState.hasLunarInDeck,
+      hasLunarInGY: dragonState.hasLunarInGY,
+      hasStelyaInHand: dragonState.hasStelyaInHand,
+      hasStelyaInDeck: dragonState.hasStelyaInDeck,
+      hasStelyaInGY: dragonState.hasStelyaInGY,
+      hasUsefulLunarDiscard: dragonState.hasUsefulLunarDiscard,
+      hasDragonFieldBodyForStelya: dragonState.hasDragonFieldBodyForStelya,
+      hasTwoDragonsForAwakening: dragonState.hasTwoDragonsForAwakening,
+      hasLevel7PlusForRoar: dragonState.hasLevel7PlusForRoar,
+      hasVoltaicForTechVoid: dragonState.hasVoltaicForTechVoid,
+      hasLuminousForRadiant: dragonState.hasLuminousForRadiant,
+      hasThreeSafeGYDragonsForPurified: dragonState.hasThreeSafeGYDragonsForPurified,
+      hasExtremeDragonFaceup: dragonState.hasExtremeDragonFaceup,
 
       availableCombos: [],
     };
@@ -541,7 +711,15 @@ export default class DragonStrategy extends BaseStrategy {
         autoSelectTargets: true,
         autoSelectSingleTarget: true,
         logTargets: false,
-        actionContext: buildDragonActionContext(),
+        actionContext: buildDragonActionContext({
+          analysis,
+          player: bot,
+          bot,
+          opponent,
+          game: actualGame,
+          source: card,
+          sourceCard: card,
+        }),
       };
 
       const hasOncePerTurn = hasOncePerTurnEffect(card);
@@ -786,180 +964,169 @@ export default class DragonStrategy extends BaseStrategy {
     (bot.hand || []).forEach((card, index) => {
       if (card.cardKind !== "monster") return;
 
-      const handIgnitionEffect = findIgnitionEffect(card, "hand");
-      if (!handIgnitionEffect) return;
+      const handIgnitionEffects = findIgnitionEffects(card, "hand");
+      if (handIgnitionEffects.length === 0) return;
 
-      // Check if cost targets exist in field
-      const targets = handIgnitionEffect.targets || [];
-      const costTarget = targets.find((t) => t.zone === "field");
-      if (costTarget) {
-        const fieldCards = bot.field || [];
-        const hasValidCost = fieldCards.some((fieldCard) => {
-          if (fieldCard.cardKind !== "monster") return false;
-          if (costTarget.cardName && fieldCard.name !== costTarget.cardName) return false;
-          if (costTarget.archetype && !hasArchetype(fieldCard, costTarget.archetype)) return false;
-          if (costTarget.filters?.type && fieldCard.type !== costTarget.filters.type) return false;
-          return true;
-        });
-        if (!hasValidCost) {
-          log(`  ⏭️ Hand ignition ${card.name}: no valid field cost`);
-          return;
-        }
-      }
-
-      // Check GY cost targets (Purified Crystal Dragon: banish 3 GY dragons)
-      const gyCostTarget = targets.find((t) => t.zone === "graveyard");
-      if (gyCostTarget) {
-        const gyCards = bot.graveyard || [];
-        const minCount = gyCostTarget.count?.min || 1;
-        const gyMatches = gyCards.filter((c) => {
-          if (gyCostTarget.cardKind && c.cardKind !== gyCostTarget.cardKind) return false;
-          if (gyCostTarget.type && c.type !== gyCostTarget.type) return false;
-          return true;
-        });
-        if (gyMatches.length < minCount) {
-          log(`  ⏭️ Hand ignition ${card.name}: insufficient GY targets (need ${minCount}, have ${gyMatches.length})`);
-          return;
-        }
-
-        // Purified can spend any Dragon from the GY in this bot version.
-        // Extreme Dragons remain useful resources, but no longer block the action by themselves.
-      }
-
-      // Check once-per-turn
-      if (!isSimulatedState) {
-        const optCheck = checkOncePerTurnIfRealGame(
-          actualGame,
-          card,
-          bot,
-          handIgnitionEffect,
-        );
-        if (!optCheck?.ok) {
-          log(`  ⏭️ Hand ignition ${card.name}: already used this turn`);
-          return;
-        }
-      }
-
-      if (analysis.fieldCapacity <= 0 && !gyCostTarget && !costTarget) {
-        // Might be trying to SS itself without first freeing a field slot.
-        log(`  ⏭️ Hand ignition ${card.name}: field full`);
-        return;
-      }
-
-      // Calculate priority
-      let priority = 7;
-      const targetPreferences = {};
-
-      if (card.name === "Luminous Dragon") {
-        if ((bot.field || []).some((fieldCard) => fieldCard?.cardKind === "monster")) {
-          log(`  ⏭️ Hand ignition: Luminous Dragon — field is not empty`);
-          return;
-        }
-        const hasFollowUp = hasLuminousFollowUp(bot);
-        priority = hasFollowUp ? 10 : 6;
-        if ((opponent?.field || []).length > 0) priority += 1;
-        log(`  ✅ Hand ignition: Luminous Dragon → empty-field starter${hasFollowUp ? " with follow-up" : ""}`);
-      } else if (card.name === "Hellkite Dragon") {
-        // Only worthwhile if there's a field Dragon weaker than Hellkite (2300) to sacrifice
-        const fieldDragons = (bot.field || []).filter(isFaceupDragon);
-        const hasCheapCost = fieldDragons.some(
-          (c) => !isExtremeDragon(c) && (c.atk || 0) < (card.atk || 2300),
-        );
-        if (!hasCheapCost) {
-          log(`  ⏭️ Hand ignition: Hellkite Dragon — no expendable Dragon cost`);
-          return;
-        }
-        priority = 8 + ((bot.graveyard || []).some(isDragonMonster) ? 1 : 0);
-        targetPreferences.hellkite_cost_field_dragon = {
-          role: "cost",
-          preferNames: getFieldDragonCostNames(bot),
-          preserveNames: DRAGON_COST_PRESERVE_NAMES,
-        };
-        log(`  ✅ Hand ignition: Hellkite Dragon → 2300 ATK, GY setup`);
-      } else if (card.name === "Voltaic Dragon") {
-        const controlsDragon = (bot.field || []).some(isFaceupDragon);
-        if (!controlsDragon) {
-          log(`  ⏭️ Hand ignition: Voltaic Dragon — no face-up Dragon controlled`);
-          return;
-        }
-        priority = (bot.field || []).some((c) => c?.name === "Luminous Dragon" && !c.isFacedown)
-          ? 9
-          : 7;
-        log(`  ✅ Hand ignition: Voltaic Dragon → free body on field`);
-      } else if (card.name === "Black Bull Dragon") {
-        // Only if we have enough discard fodder
-        const handDragons = (bot.hand || []).filter(
-          (c) => isDragonMonster(c) && c !== card
-        );
-        if (handDragons.length >= 2) {
-          const usefulDiscards = handDragons.filter((candidate) =>
-            ["Voltaic Dragon", "Grey Dragon", "Boneflame Dragon"].includes(candidate.name),
-          );
-          const needsPressure =
-            (bot.field || []).length === 0 ||
-            (opponent?.field || []).some((candidate) => (candidate?.atk || 0) >= 2200);
-          if (usefulDiscards.length === 0 && !needsPressure && handDragons.length <= 2) {
-            log(`  ⏭️ Hand ignition: Black Bull Dragon — discard cost has no payoff`);
-            return;
+      for (const handIgnitionEffect of handIgnitionEffects) {
+        // Check if cost targets exist in field
+        const targets = handIgnitionEffect.targets || [];
+        const costTarget = targets.find((t) => t.zone === "field");
+        if (costTarget) {
+          const fieldCards = bot.field || [];
+          const hasValidCost = fieldCards.some((fieldCard) => {
+            if (fieldCard.cardKind !== "monster") return false;
+            if (costTarget.cardName && fieldCard.name !== costTarget.cardName) return false;
+            if (costTarget.archetype && !hasArchetype(fieldCard, costTarget.archetype)) return false;
+            if (costTarget.filters?.type && fieldCard.type !== costTarget.filters.type) return false;
+            return true;
+          });
+          if (!hasValidCost) {
+            log(`  ⏭️ Hand ignition ${card.name}: no valid field cost`);
+            continue;
           }
-          priority = usefulDiscards.length > 0 ? 10 : 7;
-          targetPreferences.bbd_cost = {
+        }
+
+        // Check GY cost targets (Purified Crystal Dragon: banish 3 GY dragons)
+        const gyCostTarget = targets.find((t) => t.zone === "graveyard");
+        if (gyCostTarget) {
+          const gyCards = bot.graveyard || [];
+          const minCount = gyCostTarget.count?.min || 1;
+          const gyMatches = gyCards.filter((c) => {
+            if (gyCostTarget.cardKind && c.cardKind !== gyCostTarget.cardKind) return false;
+            if (gyCostTarget.type && c.type !== gyCostTarget.type) return false;
+            return true;
+          });
+          if (gyMatches.length < minCount) {
+            log(`  ⏭️ Hand ignition ${card.name}: insufficient GY targets (need ${minCount}, have ${gyMatches.length})`);
+            continue;
+          }
+        }
+
+        // Check once-per-turn
+        if (!isSimulatedState) {
+          const optCheck = checkOncePerTurnIfRealGame(
+            actualGame,
+            card,
+            bot,
+            handIgnitionEffect,
+          );
+          if (!optCheck?.ok) {
+            log(`  ⏭️ Hand ignition ${card.name}: already used this turn`);
+            continue;
+          }
+        }
+
+        const needsMonsterZone = (handIgnitionEffect.actions || []).some(
+          (action) => action?.type === "special_summon_from_zone",
+        );
+        const freesMonsterZone = (handIgnitionEffect.actions || []).some(
+          (action) => Number(action?.fieldSlotsFreedBeforeSummon || 0) > 0,
+        );
+        if (analysis.fieldCapacity <= 0 && needsMonsterZone && !freesMonsterZone && !gyCostTarget && !costTarget) {
+          // Might be trying to SS itself without first freeing a field slot.
+          log(`  ⏭️ Hand ignition ${card.name}: field full`);
+          continue;
+        }
+
+        // Calculate priority
+        let priority = 7;
+        let targetPreferences = {};
+        const policyDecision = evaluateDragonHandIgnition(card, handIgnitionEffect, {
+          analysis,
+          player: bot,
+          bot,
+          opponent,
+          game: actualGame,
+          source: card,
+          sourceCard: card,
+          effect: handIgnitionEffect,
+        });
+
+        if (policyDecision?.handled) {
+          if (!policyDecision.ok) {
+            log(`  ⏭️ Hand ignition: ${card.name} — ${policyDecision.reason}`);
+            continue;
+          }
+          priority = policyDecision.priority ?? priority;
+          targetPreferences = {
+            ...targetPreferences,
+            ...(policyDecision.targetPreferences || {}),
+          };
+          log(`  ✅ Hand ignition: ${card.name} → ${policyDecision.reason}`);
+        } else if (card.name === "Luminous Dragon") {
+          if ((bot.field || []).some((fieldCard) => fieldCard?.cardKind === "monster")) {
+            log(`  ⏭️ Hand ignition: Luminous Dragon — field is not empty`);
+            continue;
+          }
+          const hasFollowUp = hasLuminousFollowUp(bot);
+          priority = hasFollowUp ? 10 : 6;
+          if ((opponent?.field || []).length > 0) priority += 1;
+          log(`  ✅ Hand ignition: Luminous Dragon → empty-field starter${hasFollowUp ? " with follow-up" : ""}`);
+        } else if (card.name === "Hellkite Dragon") {
+          // Only worthwhile if there's a field Dragon weaker than Hellkite (2300) to sacrifice
+          const fieldDragons = (bot.field || []).filter(isFaceupDragon);
+          const hasCheapCost = fieldDragons.some(
+            (c) => !isExtremeDragon(c) && (c.atk || 0) < (card.atk || 2300),
+          );
+          if (!hasCheapCost) {
+            log(`  ⏭️ Hand ignition: Hellkite Dragon — no expendable Dragon cost`);
+            continue;
+          }
+          priority = 8 + ((bot.graveyard || []).some(isDragonMonster) ? 1 : 0);
+          targetPreferences.hellkite_cost_field_dragon = {
             role: "cost",
-            preferNames: uniqueNames([
-              "Voltaic Dragon",
-              "Grey Dragon",
-              "Boneflame Dragon",
-              ...handDragons
-                .slice()
-                .sort((a, b) => cardStrategicValue(a) - cardStrategicValue(b))
-                .map((candidate) => candidate.name),
-            ]),
+            preferNames: getFieldDragonCostNames(bot),
             preserveNames: DRAGON_COST_PRESERVE_NAMES,
           };
-          log(`  ✅ Hand ignition: Black Bull Dragon → 2500 ATK (discard 2 Dragons)`);
+          log(`  ✅ Hand ignition: Hellkite Dragon → 2300 ATK, GY setup`);
+        } else if (card.name === "Purified Crystal Dragon") {
+          const purifiedDecision = shouldUsePurifiedBanishSummon({
+            analysis,
+            player: bot,
+            bot,
+            opponent,
+            game: actualGame,
+            source: card,
+            sourceCard: card,
+            effect: handIgnitionEffect,
+          });
+          if (!purifiedDecision.ok) {
+            log(`  ⏭️ Hand ignition: Purified Crystal Dragon — ${purifiedDecision.reason}`);
+            continue;
+          }
+          priority = purifiedDecision.priority;
+          targetPreferences.purified_banish_cost = purifiedDecision.targetPreference;
+          log(`  ✅ Hand ignition: Purified Crystal Dragon → 2500 ATK (banish GY Dragons)`);
         } else {
-          log(`  ⏭️ Hand ignition: Black Bull Dragon — insufficient hand Dragons to discard`);
-          return;
+          log(`  ✅ Hand ignition: ${card.name}`);
         }
-      } else if (card.name === "Purified Crystal Dragon") {
-        const gyDragons = (bot.graveyard || []).filter(isDragonMonster);
-        const nonExtremeGy = gyDragons.filter((candidate) => !isExtremeDragon(candidate));
-        if (nonExtremeGy.length < 3 && (opponent?.field || []).length === 0) {
-          log(`  ⏭️ Hand ignition: Purified Crystal Dragon — mostly Extreme GY cost without pressure`);
-          return;
-        }
-        priority = nonExtremeGy.length >= 3 ? 8 : 6;
-        if ((opponent?.field || []).some((candidate) => (candidate?.atk || 0) >= 2400)) {
-          priority += 1;
-        }
-        targetPreferences.purified_banish_cost = {
-          role: "cost",
-          preferNames: nonExtremeGy
-            .slice()
-            .sort((a, b) => cardStrategicValue(a) - cardStrategicValue(b))
-            .map((candidate) => candidate.name),
-          preserveNames: EXTREME_GY_SEND_ORDER,
-        };
-        log(`  ✅ Hand ignition: Purified Crystal Dragon → 2500 ATK (banish GY Dragons)`);
-      } else {
-        log(`  ✅ Hand ignition: ${card.name}`);
+
+        const actionContext = buildDragonActionContext({
+          analysis,
+          player: bot,
+          bot,
+          opponent,
+          game: actualGame,
+          source: card,
+          sourceCard: card,
+          effect: handIgnitionEffect,
+          targetPreferences,
+        });
+        const activationContext = buildActivationContext("hand", actionContext);
+        const macroBuff = calculateMacroPriorityBonus("handIgnition", card, macroStrategy);
+        priority += macroBuff;
+
+        actions.push({
+          type: "handIgnition",
+          index,
+          cardId: card.id,
+          priority,
+          cardName: card.name,
+          effectId: handIgnitionEffect.id,
+          macroBuff,
+          activationContext,
+        });
       }
-
-      const actionContext = buildDragonActionContext({ targetPreferences });
-      const activationContext = buildActivationContext("hand", actionContext);
-      const macroBuff = calculateMacroPriorityBonus("handIgnition", card, macroStrategy);
-      priority += macroBuff;
-
-      actions.push({
-        type: "handIgnition",
-        index,
-        cardId: card.id,
-        priority,
-        cardName: card.name,
-        effectId: handIgnitionEffect.id,
-        macroBuff,
-        activationContext,
-      });
     });
 
     // === FIELD MONSTER IGNITION ACTIONS ===
@@ -1049,7 +1216,17 @@ export default class DragonStrategy extends BaseStrategy {
         return;
       }
 
-      const actionContext = buildDragonActionContext({ targetPreferences });
+      const actionContext = buildDragonActionContext({
+        analysis,
+        player: bot,
+        bot,
+        opponent,
+        game: actualGame,
+        source: card,
+        sourceCard: card,
+        effect: ignition,
+        targetPreferences,
+      });
       const activationContext = buildActivationContext("field", actionContext);
 
       if (!isSimulatedState && actualGame.effectEngine) {
@@ -1095,14 +1272,39 @@ export default class DragonStrategy extends BaseStrategy {
       const graveyardIgnitionEffect = findIgnitionEffect(card, "graveyard");
       if (!graveyardIgnitionEffect) return;
 
-      const targetPreferences = {};
+      let targetPreferences = {};
       let priority = 7;
+      const policyDecision = evaluateDragonGraveyardIgnition(card, graveyardIgnitionEffect, {
+        analysis,
+        player: bot,
+        bot,
+        opponent,
+        game: actualGame,
+        source: card,
+        sourceCard: card,
+        effect: graveyardIgnitionEffect,
+      });
 
-      if (card.name === "Grey Dragon") {
+      if (policyDecision?.handled) {
+        if (!policyDecision.ok) {
+          log(`  Skipping Graveyard ignition: ${card.name} - ${policyDecision.reason}`);
+          return;
+        }
+        priority = policyDecision.priority ?? priority;
+        targetPreferences = {
+          ...targetPreferences,
+          ...(policyDecision.targetPreferences || {}),
+        };
+      } else if (card.name === "Grey Dragon") {
         const discardableDragons = (bot.hand || []).filter(isDragonMonster);
         if (discardableDragons.length === 0) return;
         const usefulDiscard = discardableDragons.some((candidate) =>
-          ["Voltaic Dragon", "Boneflame Dragon"].includes(candidate.name)
+          [
+            "Solar Eclipse Dragon",
+            "Lunar Eclipse Dragon",
+            "Stelya, Dragon Tamer",
+            "Voltaic Dragon",
+          ].includes(candidate.name)
         );
         const luminousRecovery =
           (bot.field || []).some(
@@ -1119,8 +1321,10 @@ export default class DragonStrategy extends BaseStrategy {
         targetPreferences.grey_dragon_discard_cost = {
           role: "cost",
           preferNames: uniqueNames([
+            "Solar Eclipse Dragon",
+            "Lunar Eclipse Dragon",
+            "Stelya, Dragon Tamer",
             "Voltaic Dragon",
-            "Boneflame Dragon",
             ...discardableDragons
               .slice()
               .sort((a, b) => cardStrategicValue(a) - cardStrategicValue(b))
@@ -1137,6 +1341,23 @@ export default class DragonStrategy extends BaseStrategy {
         );
         if (searchTargets.length === 0) return;
         priority = 8 + Math.min(2, searchTargets.length);
+      } else if (card.name === "Stelya, Dragon Tamer") {
+        const stelyaDecision = shouldUseStelyaBanishSummon({
+          analysis,
+          player: bot,
+          bot,
+          opponent,
+          game: actualGame,
+          source: card,
+          sourceCard: card,
+          effect: graveyardIgnitionEffect,
+        });
+        if (!stelyaDecision.ok) {
+          log(`  Skipping Graveyard ignition: Stelya, Dragon Tamer - ${stelyaDecision.reason}`);
+          return;
+        }
+        priority = stelyaDecision.priority + 1;
+        targetPreferences.stelya_graveyard_banish_cost = stelyaDecision.targetPreference;
       } else if (card.name === "Boneflame Dragon") {
         const validBoneflameCosts = getValidBoneflameCostCandidates(
           card,
@@ -1194,7 +1415,17 @@ export default class DragonStrategy extends BaseStrategy {
         };
       }
 
-      const actionContext = buildDragonActionContext({ targetPreferences });
+      const actionContext = buildDragonActionContext({
+        analysis,
+        player: bot,
+        bot,
+        opponent,
+        game: actualGame,
+        source: card,
+        sourceCard: card,
+        effect: graveyardIgnitionEffect,
+        targetPreferences,
+      });
       const activationContext = buildActivationContext("graveyard", actionContext);
 
       if (!isSimulatedState && actualGame.effectEngine) {
@@ -1296,6 +1527,14 @@ export default class DragonStrategy extends BaseStrategy {
         }
 
         const actionContext = buildDragonActionContext({
+          analysis,
+          player: bot,
+          bot,
+          opponent,
+          game: actualGame,
+          source: card,
+          sourceCard: card,
+          effect: ignition,
           targetPreferences: {
             awakening_cost_dragons: {
               role: "cost",
@@ -1357,6 +1596,14 @@ export default class DragonStrategy extends BaseStrategy {
           ...(bot.graveyard || []).filter(isDragonMonster).sort((a, b) => cardStrategicValue(b) - cardStrategicValue(a)),
         ];
         const actionContext = buildDragonActionContext({
+          analysis,
+          player: bot,
+          bot,
+          opponent,
+          game: actualGame,
+          source: fieldSpell,
+          sourceCard: fieldSpell,
+          effect: ignition,
           targetPreferences: {
             dragon_peak_ignite_summon: {
               role: "recursion",
@@ -1412,6 +1659,14 @@ export default class DragonStrategy extends BaseStrategy {
       if (!hasUsefulJaggedPeakSearch(bot)) return;
 
       const actionContext = buildDragonActionContext({
+        analysis,
+        player: bot,
+        bot,
+        opponent,
+        game: actualGame,
+        source: card,
+        sourceCard: card,
+        effect: ignition,
         targetPreferences: {
           hellkite_roar_gy_search_peak: {
             role: "named_preference",

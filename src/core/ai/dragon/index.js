@@ -5,7 +5,13 @@
 
 export {
   CARD_KNOWLEDGE,
+  CURRENT_AWAKENING_TARGET_NAMES,
+  CURRENT_DRAGON_BOT_CARD_NAMES,
+  DRAGON_LEVEL5_PLUS_SEARCH_NAMES,
+  DRAGON_SMALL_SEARCH_NAMES,
+  ECLIPSE_ENGINE_NAMES,
   EXTREME_DRAGON_NAMES,
+  OUT_OF_PLAN_DRAGON_CARD_NAMES,
   SELF_SUMMON_MONSTERS,
   CONVERGING_STARS_TARGETS,
   isExtremeDragon,
@@ -37,6 +43,45 @@ export {
   evaluateDragonMonster,
   evaluateBoardDragon,
 } from "./scoring.js";
+
+export {
+  DRAGON_OPT_NAMES,
+  analyzeDragonState,
+} from "./stateAnalysis.js";
+
+export {
+  getDragonSearchKind,
+  rankDragonSearchCandidates,
+} from "./searchPolicy.js";
+
+export {
+  DRAGON_CORE_PAYOFF_NAMES,
+  DRAGON_GOOD_DISCARD_NAMES,
+  DRAGON_MEDIUM_DISCARD_NAMES,
+  buildDragonCostPreferences,
+  buildDragonTargetCostPreferences,
+  rankDragonDiscardCandidates,
+  scoreDragonDiscardCandidate,
+} from "./costPolicy.js";
+
+export {
+  buildDragonBanishTargetPreferences,
+  rankDragonFieldBanishCosts,
+  rankDragonGyBanishCosts,
+  rankTechVoidBanishTargets,
+  scoreDragonFieldBanishCost,
+  scoreDragonGyBanishCost,
+  scoreTechVoidBanishTarget,
+  shouldUsePurifiedBanishSummon,
+  shouldUseStelyaBanishSummon,
+} from "./banishPolicy.js";
+
+export {
+  buildDragonRecruitTargetPreference,
+  evaluateDragonGraveyardIgnition,
+  evaluateDragonHandIgnition,
+  evaluateDragonRecruitCandidate,
+} from "./actionPolicy.js";
 
 export { simulateMainPhaseAction } from "./simulation.js";
 

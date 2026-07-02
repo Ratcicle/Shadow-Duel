@@ -67,17 +67,17 @@ export const CARD_KNOWLEDGE = {
     synergies: [
       "Shadow-Heart Imp",
       "tributes",
-      "Shadow-Heart Armored Arctroth",
+      "Shadow-Heart Arctroth Pursuer",
     ],
     playPatterns: [
       "Tribute Summon quando oponente tem monstro forte no campo",
       "Usar Imp + outro monstro como tributo",
       "Combina remoção com presença de 2600 ATK",
       "Destruir 2+ monstros oponentes para qualificar Ascensão",
-      "Ascender para Armored Arctroth (2800 ATK + zero stats de boss oponente)",
+      "Ascender para Arctroth Pursuer (2800 ATK + drain contra boss especial)",
     ],
     value: 10,
-    ascensionTarget: "Shadow-Heart Armored Arctroth",
+    ascensionTarget: "Shadow-Heart Arctroth Pursuer",
   },
   "Shadow-Heart Heartbearer": {
     role: "tribute_enabler",
@@ -233,20 +233,20 @@ export const CARD_KNOWLEDGE = {
     ],
     value: 8,
   },
-  "Shadow-Heart Armored Arctroth": {
+  "Shadow-Heart Arctroth Pursuer": {
     role: "ascension_boss",
-    priority: 10,
+    priority: 12,
     summonCondition: "ascension_from_demon_arctroth",
     effect:
-      "Ascensão de Demon Arctroth (2+ destruições). Ao ser Ascension Summoned: reduz ATK/DEF de 1 monstro oponente a 0. Força defensores a posição de ataque",
+      "Ascensão de Demon Arctroth. Ao ser Ascension Summoned: reduz pela metade ATK/DEF de 1 monstro Special Summoned e ganha os valores reduzidos. Ao destruir monstro por batalha, pode criar novo alvo e ganhar ataque adicional contra monstros",
     synergies: ["Shadow-Heart Demon Arctroth", "remoção", "OTK"],
     playPatterns: [
-      "Ascender Demon Arctroth após ele destruir 2+ monstros",
-      "Usar efeito para neutralizar boss do oponente (ATK/DEF 0)",
-      "Forçar defensores a ATK para limpar campo facilmente",
-      "2800 ATK sólido + efeitos de controle",
+      "Ascender Demon Arctroth quando houver alvo Special Summoned relevante",
+      "Usar o drain para superar boss do oponente",
+      "Transformar batalha vencida em ataque adicional contra monstros",
+      "Preservar no campo como Ascension boss de alto valor",
     ],
-    value: 12,
+    value: 16,
   },
   "Shadow-Heart Devastation Dragon": {
     role: "ascension_boss",
@@ -383,6 +383,8 @@ export const BOSS_NAMES = [
   "Shadow-Heart Scale Dragon",
   "Shadow-Heart Demon Dragon",
   "Shadow-Heart Demon Arctroth",
+  "Shadow-Heart Arctroth Pursuer",
+  "Shadow-Heart Devastation Dragon",
 ];
 
 /**
@@ -425,7 +427,11 @@ export function getCardKnowledge(name) {
  */
 export function isBoss(name) {
   const knowledge = CARD_KNOWLEDGE[name];
-  return knowledge?.role === "boss" || knowledge?.role === "fusion_boss";
+  return (
+    knowledge?.role === "boss" ||
+    knowledge?.role === "fusion_boss" ||
+    knowledge?.role === "ascension_boss"
+  );
 }
 
 /**

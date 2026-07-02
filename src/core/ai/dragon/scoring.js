@@ -6,6 +6,7 @@
 import { CARD_KNOWLEDGE, isExtremeDragon } from "./knowledge.js";
 import { analyzeResourceEconomy } from "../common/resourceEconomy.js";
 import { scoreResourcePressure } from "../common/resourcePolicy.js";
+import { analyzeDragonState } from "./stateAnalysis.js";
 
 export const DRAGON_EXTREME_RESOURCE_POLICY = {
   resourceName: "Extreme Dragon",
@@ -161,6 +162,27 @@ export function evaluateBoardDragon(gameOrState, perspectivePlayer, getOpponentF
   const myGY = perspective?.graveyard || [];
   const { extremeInGY } = analyzeExtremeDragonEconomy(myGY);
   score += Math.min(extremeInGY, 3) * 0.25; // Useful follow-up resource, not a win condition.
+  const dragonState =
+    gameOrState?.dragonState ||
+    gameOrState?.currentAnalysis?.dragonState ||
+    perspective?.strategy?.currentAnalysis?.dragonState ||
+    analyzeDragonState({
+      game: gameOrState,
+      bot: perspective,
+      opponent,
+      isSimulatedState: gameOrState?._isPerspectiveState === true,
+    });
+  const gyResourceValue = (dragonState.gyResources || []).reduce(
+    (sum, resource) => sum + Math.min(3, Number(resource.value || 0) / 4),
+    0,
+  );
+  score += Math.min(3, gyResourceValue * 0.25);
+  if (
+    myGY.filter((card) => card?.cardKind === "monster" && card.type === "Dragon").length >= 3 &&
+    !dragonState.hasThreeSafeGYDragonsForPurified
+  ) {
+    score -= 0.5;
+  }
 
   // ── Hand advantage ────────────────────────────────────────────────────────
   const myHand = perspective?.hand || [];

@@ -67,6 +67,8 @@ const SH = {
   leviathan: "Shadow-Heart Leviathan",
   scale: "Shadow-Heart Scale Dragon",
   arctroth: "Shadow-Heart Demon Arctroth",
+  arctrothPursuer: "Shadow-Heart Arctroth Pursuer",
+  devastation: "Shadow-Heart Devastation Dragon",
   deathWyrm: "Shadow-Heart Death Wyrm",
   griffin: "Shadow-Heart Griffin",
   specter: "Shadow-Heart Specter",
@@ -86,6 +88,8 @@ const SHADOW_HEART_BOSS_SUMMON_NAMES = new Set([
   SH.leviathan,
   SH.demonDragon,
   SH.warlord,
+  SH.arctrothPursuer,
+  SH.devastation,
 ]);
 const SHADOW_HEART_ENGINE_SUMMON_NAMES = new Set([
   SH.voidMage,
@@ -2365,6 +2369,20 @@ export function shouldSummonMonster(card, analysis, tributeInfo, context = {}) {
   // Scale Dragon - Boss principal
   if (name === "Shadow-Heart Scale Dragon") {
     if (fieldHasTributeValue(fieldState, tributeInfo.tributesNeeded, card)) {
+      if (tributeInfo.tributesNeeded > 0) {
+        const tradeCheck = evaluateTributeTrade(
+          card,
+          fieldState,
+          tributeInfo.tributesNeeded,
+          { oppField: oppFieldState },
+        );
+        if (!tradeCheck.ok) {
+          return {
+            yes: false,
+            reason: tradeCheck.reason,
+          };
+        }
+      }
       return {
         yes: true,
         position: "attack",
@@ -2623,6 +2641,27 @@ export function selectBestTributes(
   });
 }
 
+function isExtraDeckBoss(monster) {
+  const monsterType = monster?.monsterType;
+  const knowledge = CARD_KNOWLEDGE[monster?.name];
+  return (
+    monsterType === "fusion" ||
+    monsterType === "ascension" ||
+    knowledge?.role === "fusion_boss" ||
+    knowledge?.role === "ascension_boss"
+  );
+}
+
+function isPremiumShadowHeartMonster(monster) {
+  const knowledge = CARD_KNOWLEDGE[monster?.name];
+  return (
+    knowledge?.role === "boss" ||
+    knowledge?.role === "fusion_boss" ||
+    knowledge?.role === "ascension_boss" ||
+    monster?.monsterType === "fusion" ||
+    monster?.monsterType === "ascension"
+  );
+}
 
 function getTributeValue(monster, context = {}) {
   const isEmergencyRemoval = !!context.isEmergencyRemoval;
@@ -2652,11 +2691,7 @@ function getTributeValue(monster, context = {}) {
     value += isEmergencyRemoval ? 18 : 45;
   }
 
-  if (
-    knowledge?.role === "boss" ||
-    knowledge?.role === "fusion_boss" ||
-    knowledge?.role === "ascension_boss"
-  ) {
+  if (isPremiumShadowHeartMonster(monster)) {
     value += isEmergencyRemoval ? 25 : 60;
   }
 
@@ -2718,19 +2753,26 @@ export function evaluateTributeTrade(
   );
   const summonValue = getTributeValue(cardToSummon, {});
 
-  const knowledge = CARD_KNOWLEDGE[cardToSummon?.name];
-  const summonIsPremium =
-    knowledge?.role === "boss" ||
-    knowledge?.role === "fusion_boss" ||
-    knowledge?.role === "ascension_boss";
+  const summonIsPremium = isPremiumShadowHeartMonster(cardToSummon);
+  const tributeHasExtraDeckBoss = tributes.some((monster) =>
+    isExtraDeckBoss(monster)
+  );
+
+  if (
+    tributeHasExtraDeckBoss &&
+    !isExtraDeckBoss(cardToSummon) &&
+    !isEmergencyRemoval
+  ) {
+    return {
+      ok: false,
+      reason: "Nao vale tributar Fusion/Ascension boss para invocar monstro de Main Deck",
+    };
+  }
 
   const tributeHasPremium = tributes.some((monster) => {
     const tribKnowledge = CARD_KNOWLEDGE[monster.name];
     const tribIsPremium =
-      tribKnowledge?.role === "boss" ||
-      tribKnowledge?.role === "fusion_boss" ||
-      tribKnowledge?.role === "ascension_boss" ||
-      tribKnowledge?.ascensionTarget;
+      isPremiumShadowHeartMonster(monster) || tribKnowledge?.ascensionTarget;
     return (
       tribIsPremium ||
       monster.name === "Shadow-Heart Demon Dragon" ||

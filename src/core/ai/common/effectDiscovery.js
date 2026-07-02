@@ -7,17 +7,23 @@ function asArray(value) {
   return Array.isArray(value) ? value : [value];
 }
 
-export function findIgnitionEffect(card, zone = null) {
-  return (
-    getEffects(card).find((effect) => {
-      if (!effect || effect.timing !== "ignition") return false;
-      if (!zone) return true;
-      if (zone === "field" || zone === "spellTrap") {
-        return !effect.requireZone || effect.requireZone === zone;
-      }
-      return effect.requireZone === zone;
-    }) || null
+function ignitionEffectMatchesZone(effect, zone = null) {
+  if (!effect || effect.timing !== "ignition") return false;
+  if (!zone) return true;
+  if (zone === "field" || zone === "spellTrap") {
+    return !effect.requireZone || effect.requireZone === zone;
+  }
+  return effect.requireZone === zone;
+}
+
+export function findIgnitionEffects(card, zone = null) {
+  return getEffects(card).filter((effect) =>
+    ignitionEffectMatchesZone(effect, zone)
   );
+}
+
+export function findIgnitionEffect(card, zone = null) {
+  return findIgnitionEffects(card, zone)[0] || null;
 }
 
 export function findSpellActivationEffect(card, _game = null, options = {}) {

@@ -249,7 +249,6 @@ export function hasActionZoneCandidates(
       ...(action.excludeCardIds
         ? { excludeCardIds: action.excludeCardIds }
         : {}),
-      ...(action.position ? { position: action.position } : {}),
       ...(action.facedown !== undefined ? { facedown: action.facedown } : {}),
       ...(action.excludeSelf !== undefined ? { excludeSelf: action.excludeSelf } : {}),
       ...(Number.isFinite(action.minAtk) ? { minAtk: action.minAtk } : {}),
