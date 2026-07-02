@@ -1037,7 +1037,7 @@
     },
     "407": {
       "name": "Podriflora Viúva-Cogutumba",
-      "description": "Você pode Invocar este card por Invocação-Especial da sua mão removendo 2 Marcadores de Esporo do campo. Se este card for Invocado: escolha 1 monstro com Marcador de Esporo que seu oponente controla; destrua-o. Uma vez por turno, se um monstro com Marcador de Esporo que seu oponente controla for destruído: coloque 1 Marcador de Esporo em 1 card com a face para cima no campo. Você só pode usar cada efeito de \"Podriflora Viúva-Cogutumba\" uma vez por turno."
+      "description": "Você pode Invocar este card por Invocação-Especial da sua mão removendo 3 Marcadores de Esporo do campo. Se este card for Invocado: escolha 1 monstro com Marcador de Esporo que seu oponente controla; destrua-o. Uma vez por turno, se um monstro com Marcador de Esporo que seu oponente controla for destruído: coloque 1 Marcador de Esporo em 1 card com a face para cima que seu oponente controla. Você só pode usar cada efeito de \"Podriflora Viúva-Cogutumba\" uma vez por turno."
     },
     "408": {
       "name": "Podriflora Casca Ancestral",
@@ -1049,7 +1049,7 @@
     },
     "410": {
       "name": "Podriflora Colônia Viva",
-      "description": "Uma vez por turno: escolha 1 card com a face para cima no campo; coloque 1 Marcador de Esporo nele. Monstros que seu oponente controla perdem 100 de ATK/DEF para cada Marcador de Esporo neles. Cada vez que um ou mais Marcadores de Esporo forem removidos do campo: Invoque por Invocação-Especial 1 \"Ficha Podriflora\" (Planta/TERRA/Nível 1/ATK 0/DEF 0) em Posição de Defesa. Se uma Ficha \"Podriflora\" que você controla for destruída: coloque 1 Marcador de Esporo em cada card com a face para cima que seu oponente controla."
+      "description": "Uma vez por turno: escolha 1 card com a face para cima que seu oponente controla; coloque 1 Marcador de Esporo nele. Monstros que seu oponente controla perdem 100 de ATK/DEF para cada Marcador de Esporo neles. Cada vez que um ou mais Marcadores de Esporo forem removidos do campo: Invoque por Invocação-Especial 1 \"Ficha Podriflora\" (Planta/TERRA/Nível 1/ATK 0/DEF 0) em Posição de Defesa. Se uma Ficha \"Podriflora\" que você controla for destruída: coloque 1 Marcador de Esporo em cada card com a face para cima que seu oponente controla."
     },
     "411": {
       "name": "Podriflora Ritual de Compostagem",

@@ -403,7 +403,7 @@ export function evaluateBloomrotCounterSpend({
       return evaluateRotStag(amount || 2, analysis);
     case "widow_removal":
     case N.GRAVECAP_WIDOW:
-      return evaluateWidow(amount || 2, analysis);
+      return evaluateWidow(amount || 3, analysis);
     case "ancient_husk_body":
     case N.ANCIENT_HUSK:
       return evaluateAncientHusk(amount || 4, analysis);

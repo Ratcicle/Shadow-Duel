@@ -566,7 +566,7 @@ export const bloomrotCards = [
     attribute: "Earth",
     archetype: "Bloomrot",
     description:
-      'You can Special Summon this card from your hand by removing 2 Spore Counters from the field. If this card is Summoned: target 1 monster with a Spore Counter your opponent controls; destroy it. Once per turn, if a monster with a Spore Counter your opponent controls is destroyed: place 1 Spore Counter on 1 face-up card on the field. You can only use each effect of "Bloomrot Gravecap Widow" once per turn.',
+      'You can Special Summon this card from your hand by removing 3 Spore Counters from the field. If this card is Summoned: target 1 monster with a Spore Counter your opponent controls; destroy it. Once per turn, if a monster with a Spore Counter your opponent controls is destroyed: place 1 Spore Counter on 1 face-up card your opponent controls. You can only use each effect of "Bloomrot Gravecap Widow" once per turn.',
     image: "assets/Bloomrot Gravecap Widow.png",
     effects: [
       {
@@ -588,21 +588,21 @@ export const bloomrotCards = [
             owner: "any",
             zones: ["field", "spellTrap", "fieldSpell"],
             counterType: "spore",
-            min: 2,
+            min: 3,
             requireFaceup: true,
-            reason: "There must be at least 2 Spore Counters on the field.",
+            reason: "There must be at least 3 Spore Counters on the field.",
           },
         ],
         actions: [
           {
             type: "remove_counters_from_field",
             counterType: "spore",
-            amount: 2,
+            amount: 3,
             owner: "any",
             zones: ["field", "spellTrap", "fieldSpell"],
             requireFaceup: true,
             selectionMessage:
-              "Select card(s) to remove 2 Spore Counters from the field.",
+              "Select card(s) to remove 3 Spore Counters from the field.",
             haltOnFailure: true,
           },
           {
@@ -660,7 +660,7 @@ export const bloomrotCards = [
         targets: [
           {
             id: "bloomrot_gravecap_widow_spore_target",
-            owner: "any",
+            owner: "opponent",
             zones: ["field", "spellTrap", "fieldSpell"],
             requireFaceup: true,
             count: { min: 1, max: 1 },
@@ -849,7 +849,7 @@ export const bloomrotCards = [
     subtype: "field",
     archetype: "Bloomrot",
     description:
-      'Once per turn: target 1 face-up card on the field; place 1 Spore Counter on it. Monsters your opponent controls lose 100 ATK/DEF for each Spore Counter on them. Each time one or more Spore Counters are removed from the field: Special Summon 1 "Bloomrot Token" (Plant/EARTH/Level 1/ATK 0/DEF 0) in Defense Position. If a "Bloomrot Token" you control is destroyed: place 1 Spore Counter on each face-up card your opponent controls.',
+      'Once per turn: target 1 face-up card your opponent controls; place 1 Spore Counter on it. Monsters your opponent controls lose 100 ATK/DEF for each Spore Counter on them. Each time one or more Spore Counters are removed from the field: Special Summon 1 "Bloomrot Token" (Plant/EARTH/Level 1/ATK 0/DEF 0) in Defense Position. If a "Bloomrot Token" you control is destroyed: place 1 Spore Counter on each face-up card your opponent controls.',
     image: "assets/Bloomrot Living Colony.png",
     effects: [
       {
@@ -864,7 +864,7 @@ export const bloomrotCards = [
         targets: [
           {
             id: "bloomrot_living_colony_spore_target",
-            owner: "any",
+            owner: "opponent",
             zones: ["field", "spellTrap", "fieldSpell"],
             requireFaceup: true,
             count: { min: 1, max: 1 },
