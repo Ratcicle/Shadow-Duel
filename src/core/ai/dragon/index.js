@@ -77,6 +77,30 @@ export {
 } from "./banishPolicy.js";
 
 export {
+  DRAGON_BOSS_POLICY_NAMES,
+  actionBreaksSoloExtremeProtection,
+  buildDragonBossContext,
+  buildDragonBossPreferenceMap,
+  buildDragonBossTargetPreference,
+  hasActiveExtremeDragonConflict,
+  hasDragonBossRoute,
+  isDragonBossCandidate,
+  rankDragonBossCandidates,
+  scoreDragonBossCandidate,
+  selectBestDragonBoss,
+} from "./bossPolicy.js";
+
+export {
+  DRAGON_EXTRA_DECK_NAMES,
+  buildDragonExtraDeckActionContext,
+  chooseDragonAscensionPosition,
+  rankDragonAscensionChoices,
+  rankDragonFusionPlans,
+  selectDragonAscensionChoice,
+  selectDragonFusionPlan,
+} from "./extraDeckPolicy.js";
+
+export {
   buildDragonRecruitTargetPreference,
   evaluateDragonGraveyardIgnition,
   evaluateDragonHandIgnition,

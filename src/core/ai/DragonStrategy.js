@@ -46,7 +46,6 @@ import {
 
 import {
   CARD_KNOWLEDGE,
-  CURRENT_AWAKENING_TARGET_NAMES,
   isExtremeDragon,
 } from "./dragon/knowledge.js";
 import { COMBO_DATABASE, detectAvailableCombos } from "./dragon/combos.js";
@@ -78,6 +77,19 @@ import {
   evaluateDragonHandIgnition,
   evaluateDragonRecruitCandidate,
 } from "./dragon/actionPolicy.js";
+import {
+  DRAGON_BOSS_POLICY_NAMES,
+  buildDragonBossPreferenceMap,
+  buildDragonBossTargetPreference,
+  rankDragonBossCandidates,
+  selectBestDragonBoss,
+} from "./dragon/bossPolicy.js";
+import {
+  buildDragonExtraDeckActionContext,
+  chooseDragonAscensionPosition,
+  selectDragonAscensionChoice,
+  selectDragonFusionPlan,
+} from "./dragon/extraDeckPolicy.js";
 import { getEffectiveAtk } from "./common/cardStats.js";
 import {
   getProjectedBoneflameAtk,
@@ -119,7 +131,7 @@ const DRAGON_COST_PRESERVE_NAMES = [
   "Call of the Haunted",
 ];
 
-const AWAKENING_TARGET_ORDER = [...CURRENT_AWAKENING_TARGET_NAMES];
+const AWAKENING_TARGET_ORDER = [...DRAGON_BOSS_POLICY_NAMES];
 
 const EXTREME_GY_SEND_ORDER = [
   "Volcanic Extreme Dragon",
@@ -270,28 +282,54 @@ function getCardInstanceId(card) {
 
 function buildDragonActionContext(extra = {}) {
   const dynamicCostPreferences = buildDragonCostPreferences(extra);
-  const costPreferences = mergeCostPreferences(
+  let costPreferences = mergeCostPreferences(
     dynamicCostPreferences,
     extra.costPreferences || {},
   );
+  const extraDeckContext = buildDragonExtraDeckActionContext({
+    ...extra,
+    costPreferences,
+  });
+  costPreferences = mergeCostPreferences(
+    costPreferences,
+    extraDeckContext.costPreferences || {},
+  );
   const baseTargetPreferences = mergeTargetPreferenceMaps(
-    buildDragonTargetCostPreferences({
-      ...extra,
-      costPreferences,
-    }),
-    buildDragonBanishTargetPreferences({
+    mergeTargetPreferenceMaps(
+      buildDragonTargetCostPreferences({
+        ...extra,
+        costPreferences,
+      }),
+      buildDragonBanishTargetPreferences({
+        ...extra,
+        costPreferences,
+      }),
+    ),
+    buildDragonBossPreferenceMap({
       ...extra,
       costPreferences,
     }),
   );
   const targetPreferences = mergeTargetPreferenceMaps(
-    baseTargetPreferences,
+    mergeTargetPreferenceMaps(
+      baseTargetPreferences,
+      extraDeckContext.targetPreferences || {},
+    ),
     extra.targetPreferences || {},
   );
 
   return {
     costPreferences,
     targetPreferences,
+    ...(extraDeckContext.fusionPreferences
+      ? { fusionPreferences: extraDeckContext.fusionPreferences }
+      : {}),
+    ...(extraDeckContext.fusionPositions
+      ? { fusionPositions: extraDeckContext.fusionPositions }
+      : {}),
+    ...(extraDeckContext.dragonExtraDeckPlan
+      ? { dragonExtraDeckPlan: extraDeckContext.dragonExtraDeckPlan }
+      : {}),
     ...(extra.other || {}),
   };
 }
@@ -357,26 +395,14 @@ function getBestAwakeningTarget(bot, opponent, analysis) {
   );
   if (candidates.length === 0) return null;
 
-  const oppStrongest = (opponent?.field || []).reduce(
-    (max, card) => Math.max(max, card?.atk || 0),
-    0,
-  );
-  const ranked = candidates.slice().sort((a, b) => {
-    const orderA = AWAKENING_TARGET_ORDER.indexOf(a.name);
-    const orderB = AWAKENING_TARGET_ORDER.indexOf(b.name);
-    const rankA = orderA >= 0 ? 100 - orderA * 8 : 0;
-    const rankB = orderB >= 0 ? 100 - orderB * 8 : 0;
-    const pressureA = (a.atk || 0) > oppStrongest ? 10 : 0;
-    const pressureB = (b.atk || 0) > oppStrongest ? 10 : 0;
-    const defenseA = analysis?.lpRatio < 0.55 && a.name === "Purified Crystal Dragon" ? 8 : 0;
-    const defenseB = analysis?.lpRatio < 0.55 && b.name === "Purified Crystal Dragon" ? 8 : 0;
-    return (
-      rankB + pressureB + defenseB + cardStrategicValue(b) -
-      (rankA + pressureA + defenseA + cardStrategicValue(a))
-    );
+  return selectBestDragonBoss(candidates, {
+    analysis,
+    player: bot,
+    bot,
+    opponent,
+    routeKind: "awakening",
+    fieldCostCount: 2,
   });
-
-  return ranked[0] || null;
 }
 
 function hasUsefulJaggedPeakSearch(bot) {
@@ -495,6 +521,38 @@ export default class DragonStrategy extends BaseStrategy {
 
   sequenceActions(actions = []) {
     return sequenceActionsByPriority(actions);
+  }
+
+  selectAutomaticAscension({ choices = [], game, bot = this.bot, opponent } = {}) {
+    const selected = selectDragonAscensionChoice(choices, {
+      game,
+      player: bot,
+      bot,
+      opponent,
+      analysis: this.currentAnalysis,
+    });
+    if (!selected) return { skip: true };
+    return {
+      material: selected.material,
+      ascensionCard: selected.ascensionCard,
+      position: selected.position,
+    };
+  }
+
+  chooseAutomaticAscensionPosition({
+    ascensionCard,
+    material,
+    game,
+    bot = this.bot,
+    opponent,
+  } = {}) {
+    return chooseDragonAscensionPosition({
+      ascensionCard,
+      material,
+      game,
+      bot,
+      opponent,
+    });
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -707,6 +765,24 @@ export default class DragonStrategy extends BaseStrategy {
 
       // Traps are handled in the dedicated trap-set section below
       if (card.cardKind === "trap") return;
+      const extraDeckPlan =
+        card.name === "Polymerization"
+          ? selectDragonFusionPlan({
+              analysis,
+              player: bot,
+              bot,
+              opponent,
+              game: actualGame,
+            })
+          : null;
+      if (card.name === "Polymerization" && !extraDeckPlan?.ok) {
+        log(
+          `  ⏭️ Polymerization held: ${
+            extraDeckPlan?.reason || "no approved Extra Deck payoff"
+          }`,
+        );
+        return;
+      }
       const spellActivationContext = {
         autoSelectTargets: true,
         autoSelectSingleTarget: true,
@@ -719,6 +795,7 @@ export default class DragonStrategy extends BaseStrategy {
           game: actualGame,
           source: card,
           sourceCard: card,
+          extraDeckPlan,
         }),
       };
 
@@ -750,7 +827,14 @@ export default class DragonStrategy extends BaseStrategy {
         }
       }
 
-      const decision = shouldPlaySpell(card, analysis);
+      const decision =
+        card.name === "Polymerization" && extraDeckPlan?.ok
+          ? {
+              yes: true,
+              priority: extraDeckPlan.priority,
+              reason: extraDeckPlan.reason,
+            }
+          : shouldPlaySpell(card, analysis);
 
       if (decision.yes) {
         log(`  ✅ Spell: ${card.name} — ${decision.reason}`);
@@ -852,7 +936,24 @@ export default class DragonStrategy extends BaseStrategy {
 
           // Level 10 → 2 tributes (standard lv7+ rule)
           const tributesNeeded = 2;
-          const tributeIndices = selectBestTributes(fieldMonsters, tributesNeeded, card);
+          const bossRank = rankDragonBossCandidates([card], {
+            analysis,
+            player: bot,
+            bot,
+            opponent,
+            routeKind: "tribute",
+            tributeCount: tributesNeeded,
+          })[0];
+          if (!bossRank || bossRank.score < 55) {
+            log(`  ❌ Extreme Tribute: ${card.name} — boss policy does not value it now`);
+            return;
+          }
+
+          const tributeIndices = selectBestTributes(fieldMonsters, tributesNeeded, card, {
+            analysis,
+            opponent,
+            routeKind: "tribute",
+          });
           const tributedCards = tributeIndices.map((i) => fieldMonsters[i]).filter(Boolean);
           if (tributedCards.length === 0) return;
 
@@ -876,10 +977,11 @@ export default class DragonStrategy extends BaseStrategy {
           }
 
           // High priority: extreme dragon tribute is almost always the best play when available
-          let priority = 13;
+          let priority = 11 + Math.min(5, Math.max(0, bossRank.score) / 35);
           if (beatsThreat && oppHasMultipleThreats) priority = 15;
-          else if (beatsThreat) priority = 14;
-          else if (oppHasMultipleThreats) priority = 12;
+          else if (beatsThreat) priority = Math.max(priority, 14);
+          else if (oppHasMultipleThreats) priority = Math.max(priority, 12);
+          if (fieldMonsters.length === tributesNeeded) priority += 2;
 
           log(`  ✅ Extreme Tribute: ${card.name} (${extremeATK} ATK) — tributing ${tributedCards.map((m) => m.name).join(", ")} (priority ${priority})`);
 
@@ -917,6 +1019,20 @@ export default class DragonStrategy extends BaseStrategy {
           field: bot.field || [],
           oppField: opponent?.field || [],
         });
+        const bossRank = DRAGON_BOSS_POLICY_NAMES.includes(card.name)
+          ? rankDragonBossCandidates([card], {
+              analysis,
+              player: bot,
+              bot,
+              opponent,
+              routeKind: "tribute",
+              tributeCount: tributeInfo.tributesNeeded,
+            })[0]
+          : null;
+        if (bossRank && tributeInfo.tributesNeeded > 0 && bossRank.score < 45) {
+          log(`  ❌ Summon: ${card.name} — boss policy prefers holding it`);
+          return;
+        }
 
         if (decision.yes) {
           log(`  ✅ Summon: ${card.name} — ${decision.reason}`);
@@ -924,7 +1040,9 @@ export default class DragonStrategy extends BaseStrategy {
           const safety = assessActionSafety({ bot, player: opponent }, bot, opponent, "summon", card);
           const { priority: finalPriority, macroBuff, safetyScore } =
             applyMacroAndSafety({
-              basePriority: decision.priority || 5,
+              basePriority:
+                (decision.priority || 5) +
+                (bossRank ? Math.min(4, Math.max(0, bossRank.score) / 45) : 0),
               actionType: "summon",
               card,
               macroStrategy,
@@ -1176,14 +1294,44 @@ export default class DragonStrategy extends BaseStrategy {
       } else if (card.name === "Hellkite Dragon") {
         const gyTargets = (bot.graveyard || [])
           .filter((candidate) => isDragonMonster(candidate) && (candidate.level || 0) <= 7)
-          .sort((a, b) => cardStrategicValue(b) - cardStrategicValue(a));
+          .sort((a, b) => {
+            const bossDiff =
+              (rankDragonBossCandidates([b], {
+                analysis,
+                player: bot,
+                bot,
+                opponent,
+                routeKind: "recursion",
+              })[0]?.score || 0) -
+              (rankDragonBossCandidates([a], {
+                analysis,
+                player: bot,
+                bot,
+                opponent,
+                routeKind: "recursion",
+              })[0]?.score || 0);
+            return bossDiff || cardStrategicValue(b) - cardStrategicValue(a);
+          });
         if (gyTargets.length === 0) return;
+        const bossPref = buildDragonBossTargetPreference(
+          gyTargets,
+          { analysis, player: bot, bot, opponent, routeKind: "recursion" },
+          "recursion",
+        );
         priority = 8 + (gyTargets[0].atk || 0) / 1000;
+        if (bossPref.preferredNames?.includes(gyTargets[0].name)) priority += 2;
         targetPreferences.hellkite_dragon_field_revive = {
           role: "recursion",
           purpose: "pressure",
-          preferredNames: gyTargets.slice(0, 4).map((target) => target.name),
-          offensiveNames: gyTargets.slice(0, 4).map((target) => target.name),
+          preferredNames: uniqueNames([
+            ...(bossPref.preferredNames || []),
+            ...gyTargets.slice(0, 4).map((target) => target.name),
+          ]),
+          offensiveNames: uniqueNames([
+            ...(bossPref.offensiveNames || []),
+            ...gyTargets.slice(0, 4).map((target) => target.name),
+          ]),
+          preferredInstanceIds: bossPref.preferredInstanceIds,
         };
       } else if (card.name === "Purified Crystal Dragon") {
         const protectTargets = bestOwnDragons.filter((target) => target !== card);
@@ -1508,6 +1656,14 @@ export default class DragonStrategy extends BaseStrategy {
         if (nonExtreme.length < 2 || !bestDragon) return;
 
         let priority = 12;
+        const bossRank = rankDragonBossCandidates([bestDragon], {
+          analysis,
+          player: bot,
+          bot,
+          opponent,
+          routeKind: "awakening",
+          fieldCostCount: 2,
+        })[0];
         const oppStrongest = (opponent?.field || []).reduce(
           (m, c) => Math.max(m, c.atk || 0),
           0
@@ -1516,6 +1672,8 @@ export default class DragonStrategy extends BaseStrategy {
         if (bestDragon.name === "Black Bull Dragon") priority += 1;
         if (bestDragon.name === "Purified Crystal Dragon" && analysis.lpRatio < 0.65) priority += 1;
         if (bestDragon.name === "Volcanic Extreme Dragon" && (opponent?.graveyard || []).length >= 4) priority += 1;
+        if (bossRank) priority += Math.min(3, Math.max(0, bossRank.score) / 45);
+        if (fieldDragons.length === 2 && isExtremeDragon(bestDragon)) priority += 2;
 
         if (
           analysis.canNormalSummon &&
@@ -1548,6 +1706,21 @@ export default class DragonStrategy extends BaseStrategy {
               role: "named_preference",
               preferredNames: uniqueNames([
                 bestDragon.name,
+                ...(buildDragonBossTargetPreference(
+                  (bot.hand || []).filter(
+                    (candidate) =>
+                      isDragonMonster(candidate) &&
+                      (candidate.level || 0) >= 8,
+                  ),
+                  {
+                    analysis,
+                    player: bot,
+                    bot,
+                    opponent,
+                    routeKind: "awakening",
+                    fieldCostCount: 2,
+                  },
+                ).preferredNames || []),
                 ...AWAKENING_TARGET_ORDER,
               ]),
             },
@@ -1590,10 +1763,33 @@ export default class DragonStrategy extends BaseStrategy {
       const counters = fieldSpell.counters?.dragon_peak || 0;
       const ignition = findIgnitionEffect(fieldSpell, "fieldSpell");
       if (ignition && counters >= 5) {
-        const preferredDragons = [
+        const dragonCandidates = [
           ...rankOwnDragonsByValue(bot.hand || []),
           ...(bot.deck || []).filter(isDragonMonster).sort((a, b) => cardStrategicValue(b) - cardStrategicValue(a)),
           ...(bot.graveyard || []).filter(isDragonMonster).sort((a, b) => cardStrategicValue(b) - cardStrategicValue(a)),
+        ];
+        const bossPref = buildDragonBossTargetPreference(
+          dragonCandidates,
+          {
+            analysis,
+            player: bot,
+            bot,
+            opponent,
+            routeKind: "jaggedPeak",
+          },
+          "recursion",
+        );
+        const preferredDragons = [
+          ...dragonCandidates
+            .filter((candidate) => bossPref.preferredNames?.includes(candidate.name))
+            .sort(
+              (a, b) =>
+                bossPref.preferredNames.indexOf(a.name) -
+                bossPref.preferredNames.indexOf(b.name),
+            ),
+          ...dragonCandidates.filter(
+            (candidate) => !bossPref.preferredNames?.includes(candidate.name),
+          ),
         ];
         const actionContext = buildDragonActionContext({
           analysis,
@@ -1609,11 +1805,18 @@ export default class DragonStrategy extends BaseStrategy {
               role: "recursion",
               purpose: "pressure",
               preferredNames: uniqueNames(
-                preferredDragons.slice(0, 6).map((candidate) => candidate.name),
+                [
+                  ...(bossPref.preferredNames || []),
+                  ...preferredDragons.slice(0, 6).map((candidate) => candidate.name),
+                ],
               ),
               offensiveNames: uniqueNames(
-                preferredDragons.slice(0, 6).map((candidate) => candidate.name),
+                [
+                  ...(bossPref.offensiveNames || []),
+                  ...preferredDragons.slice(0, 6).map((candidate) => candidate.name),
+                ],
               ),
+              preferredInstanceIds: bossPref.preferredInstanceIds,
             },
           },
         });
@@ -1778,6 +1981,14 @@ export default class DragonStrategy extends BaseStrategy {
           if (card.name === "Polymerization") {
             const canActivate = actualGame.canActivatePolymerization?.() ?? false;
             if (!canActivate) return;
+            const extraDeckPlan = selectDragonFusionPlan({
+              analysis,
+              player: realBot2,
+              bot: realBot2,
+              opponent,
+              game: actualGame,
+            });
+            if (!extraDeckPlan?.ok) return;
           }
 
           actions.push({

@@ -4,6 +4,10 @@ import {
   isExtremeDragon,
 } from "./knowledge.js";
 import { analyzeDragonState } from "./stateAnalysis.js";
+import {
+  isDragonBossCandidate,
+  scoreDragonBossCandidate,
+} from "./bossPolicy.js";
 
 const LOW_DRAGON_NAMES = [
   "Solar Eclipse Dragon",
@@ -285,43 +289,16 @@ function scoreLunar(card, ctx) {
 function scoreStelya(card, ctx) {
   let score = scoreGeneric(card, ctx);
   const name = card?.name;
-  const ds = ctx.dragonState;
-  const noRoutePenalty = ctx.bossRoute ? 0 : 18;
-  const effectPressure = ctx.opponentEffectMonsters * 12 + ctx.opponentBackrow * 8;
-  const battlePressure =
-    ctx.opponentField.length * 10 +
-    (ctx.opponentStrongestAtk >= 2400 ? 20 : 0) +
-    (ctx.botLowLp ? 12 : 0);
 
   if (!isDragonMonster(card) || (card.level || 0) < 5) score -= 5000;
 
-  if (name === "Fire Extreme Dragon") {
-    score += 90 + effectPressure + (ctx.opponentLowLp ? 15 : 0) - noRoutePenalty;
-  } else if (name === "Volcanic Extreme Dragon") {
-    score +=
-      88 +
-      battlePressure +
-      Math.min(20, ctx.opponentGraveyardCount * 3) -
-      noRoutePenalty;
-  } else if (name === "Hellkite Dragon") {
-    score += 72;
-    if (ctx.hasHellkiteRoarAccess) score += 45;
-    if ((ds.lowLevelDragonGYTargets || []).length > 0) score += 20;
-    if (ds.hasLevel7PlusForRoar === false) score += 10;
-  } else if (name === "Majestic Silver Dragon") {
-    score += 68;
-    if (ctx.combatNeed) score += 35;
-    if (ctx.opponentField.some((card) => card?.position === "defense")) score += 10;
-  } else if (name === "Purified Crystal Dragon") {
-    score += 76;
-    if (ds.hasThreeSafeGYDragonsForPurified) score += 45;
-    if (ctx.botLowLp) score += 20;
-    if (ds.fusionPieces?.radiant?.hasMaterials || ds.hasLuminousForRadiant) score += 10;
-  } else if (name === "Black Bull Dragon") {
-    score += 70;
-    if ((ds.usefulDiscardCandidates || []).length >= 2) score += 35;
-    if (ctx.opponentField.length >= 2) score += 25;
+  if (isDragonBossCandidate(card)) {
+    score += scoreDragonBossCandidate(card, {
+      ...ctx,
+      routeKind: "stelyaSearch",
+    });
   } else if (name === "Luminous Dragon") {
+    const ds = ctx.dragonState;
     score += 58;
     if (ctx.hasPolymerization || ds.fusionPieces?.radiant?.hasMaterials) score += 35;
     if (ds.hasLuminousForRadiant) score += 15;
@@ -336,27 +313,12 @@ function scoreAwakening(card, ctx) {
   }
 
   let score = 100 + scoreGeneric(card, ctx);
-  const name = card?.name;
-  const ds = ctx.dragonState;
-  const effectPressure = ctx.opponentEffectMonsters * 14 + ctx.opponentBackrow * 9;
-  const battlePressure =
-    ctx.opponentField.length * 12 +
-    (ctx.opponentStrongestAtk >= 2400 ? 25 : 0) +
-    (ctx.botLowLp ? 10 : 0);
-
-  if (name === "Fire Extreme Dragon") {
-    score += effectPressure + (ctx.opponentLowLp ? 20 : 0);
-  } else if (name === "Volcanic Extreme Dragon") {
-    score += battlePressure + Math.min(25, ctx.opponentGraveyardCount * 4);
-  } else if (name === "Purified Crystal Dragon") {
-    score +=
-      (ds.hasThreeSafeGYDragonsForPurified ? 45 : 0) +
-      (ctx.botLowLp ? 20 : 0) +
-      (ds.hasLuminousForRadiant ? 10 : 0);
-  } else if (name === "Black Bull Dragon") {
-    score +=
-      ((ds.usefulDiscardCandidates || []).length >= 2 ? 35 : 0) +
-      (ctx.opponentField.length >= 2 ? 25 : 0);
+  if (isDragonBossCandidate(card)) {
+    score += scoreDragonBossCandidate(card, {
+      ...ctx,
+      routeKind: "awakening",
+      fieldCostCount: 2,
+    });
   }
 
   return score;
@@ -365,23 +327,14 @@ function scoreAwakening(card, ctx) {
 function scoreBlackBull(card, ctx) {
   let score = scoreGeneric(card, ctx);
   const name = card?.name;
-  const ds = ctx.dragonState;
 
-  if (name === "Purified Crystal Dragon") {
-    score += 90;
-    if (ds.hasThreeSafeGYDragonsForPurified) score += 45;
-    if (ctx.botLowLp) score += 20;
-    if (ds.hasLuminousForRadiant) score += 10;
-  } else if (name === "Hellkite Dragon") {
-    score += 80;
-    if (ctx.hasHellkiteRoarAccess) score += 45;
-    if ((ds.lowLevelDragonGYTargets || []).length > 0) score += 20;
-  } else if (name === "Majestic Silver Dragon") {
-    score += 72;
-    if (ctx.combatNeed) score += 35;
-  } else if (name === "Black Bull Dragon") {
-    score += 25;
-    if (ctx.opponentField.length >= 2) score += 15;
+  if (isDragonBossCandidate(card)) {
+    score += scoreDragonBossCandidate(card, {
+      ...ctx,
+      routeKind: "blackBullSearch",
+    });
+  } else if (name === "Luminous Dragon") {
+    score += 20;
   }
 
   return score;

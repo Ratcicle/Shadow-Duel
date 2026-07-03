@@ -19,6 +19,7 @@ import {
   shouldUseStelyaBanishSummon,
 } from "./banishPolicy.js";
 import { evaluateDragonRecruitCandidate } from "./actionPolicy.js";
+import { selectDragonFusionPlan } from "./extraDeckPolicy.js";
 import { getEffectiveAtk } from "../common/cardStats.js";
 import { isValidBoneflameCost } from "./boneflamePolicy.js";
 import { ascensionMaterialMatches } from "../../game/summon/ascension.js";
@@ -343,18 +344,26 @@ function simulateDragonSpellEffect(state, card, action) {
 
     case "Polymerization": {
       const materialEntries = getFusionMaterialEntries(player);
-      const radiantMaterials = selectRadiantCosmicMaterials(materialEntries);
-      const techVoidMaterials = selectTechVoidMaterials(materialEntries);
-      const canPlaceRadiant =
-        radiantMaterials.length === 3 &&
-        (player.field.length < 5 || radiantMaterials.some((entry) => entry.zone === "field"));
-      const canPlaceTechVoid =
-        techVoidMaterials.length === 2 &&
-        (player.field.length < 5 || techVoidMaterials.some((entry) => entry.zone === "field"));
-      const preferTechVoid = shouldPreferTechVoidFusion(state, techVoidMaterials, radiantMaterials);
+      const fusionPlan = selectDragonFusionPlan({
+        player,
+        bot: player,
+        opponent: state.player || {},
+        game: state,
+        isSimulatedState: true,
+        materialEntries,
+      });
+      if (!fusionPlan?.ok) break;
 
-      if (canPlaceTechVoid && preferTechVoid) {
-        moveFusionMaterialsToGY(player, techVoidMaterials);
+      const canPlace =
+        (fusionPlan.materialEntries || []).length > 0 &&
+        (
+          player.field.length < 5 ||
+          fusionPlan.materialEntries.some((entry) => entry.zone === "field")
+        );
+      if (!canPlace) break;
+
+      if (fusionPlan.fusionName === "Tech-Void Dragon") {
+        moveFusionMaterialsToGY(player, fusionPlan.materialEntries);
         const techVoidCard = takeExtraDeckCard(player, "Tech-Void Dragon", {
           name: "Tech-Void Dragon",
           atk: 2500,
@@ -367,12 +376,16 @@ function simulateDragonSpellEffect(state, card, action) {
         const summoned = specialSummonToField(state, player, techVoidCard, action, {
           method: "fusion",
         });
-        if (summoned) simulateTechVoidAfterSummon(state, player, summoned);
+        if (summoned) {
+          summoned.simDragonExtraDeckPlan = fusionPlan.reason;
+          summoned.simDragonExtraDeckScore = fusionPlan.score;
+          simulateTechVoidAfterSummon(state, player, summoned);
+        }
         break;
       }
 
-      if (canPlaceRadiant) {
-        moveFusionMaterialsToGY(player, radiantMaterials);
+      if (fusionPlan.fusionName === "Radiant Cosmic Dragon") {
+        moveFusionMaterialsToGY(player, fusionPlan.materialEntries);
         const radiantCard = takeExtraDeckCard(player, "Radiant Cosmic Dragon", {
           name: "Radiant Cosmic Dragon",
           atk: 3300,
@@ -387,30 +400,14 @@ function simulateDragonSpellEffect(state, card, action) {
           method: "fusion",
         });
         if (summoned) {
+          summoned.simDragonExtraDeckPlan = fusionPlan.reason;
+          summoned.simDragonExtraDeckScore = fusionPlan.score;
           summoned.simFutureRevive = (player.graveyard || []).some(
             (candidate) =>
               isDragonMonster(candidate) && candidate.name !== "Radiant Cosmic Dragon",
           );
           simulateRadiantCosmicRefund(player);
         }
-        break;
-      }
-
-      if (canPlaceTechVoid) {
-        moveFusionMaterialsToGY(player, techVoidMaterials);
-        const techVoidCard = takeExtraDeckCard(player, "Tech-Void Dragon", {
-          name: "Tech-Void Dragon",
-          atk: 2500,
-          def: 1000,
-          level: 8,
-          cardKind: "monster",
-          type: "Dragon",
-          monsterType: "fusion",
-        });
-        const summoned = specialSummonToField(state, player, techVoidCard, action, {
-          method: "fusion",
-        });
-        if (summoned) simulateTechVoidAfterSummon(state, player, summoned);
       }
       break;
     }

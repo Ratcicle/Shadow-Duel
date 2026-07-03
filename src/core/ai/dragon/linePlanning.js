@@ -4,6 +4,8 @@
 // -----------------------------------------------------------------------------
 
 import { getValidBoneflameCostCandidates } from "./boneflamePolicy.js";
+import { actionBreaksSoloExtremeProtection } from "./bossPolicy.js";
+import { selectDragonFusionPlan } from "./extraDeckPolicy.js";
 
 const DEFAULT_PROFILE = {
   enabled: false,
@@ -525,6 +527,13 @@ function getRetentionAdjustment(action = {}, context = {}) {
   const allFusionMaterials = [...hand, ...field];
   const hasRadiant = hasRadiantCosmicMaterials(allFusionMaterials);
   const hasTechVoid = hasTechVoidMaterials(allFusionMaterials);
+  const fusionPlan = selectDragonFusionPlan({
+    analysis,
+    game,
+    player,
+    bot: player,
+    opponent,
+  });
   const fieldHasExtreme = hasExtremeFaceup(field);
   const reasons = [];
   let boost = 0;
@@ -563,10 +572,12 @@ function getRetentionAdjustment(action = {}, context = {}) {
   }
 
   if (actionName === "Polymerization") {
-    if (hasRadiant) {
-      boost += addRetention(reasons, 9, "radiant_cosmic_fusion_available");
-    } else if (hasTechVoid) {
-      boost += addRetention(reasons, 7, "tech_void_fusion_available");
+    if (fusionPlan?.ok && fusionPlan.fusionName === "Radiant Cosmic Dragon") {
+      boost += addRetention(reasons, 9, "radiant_cosmic_fusion_payoff");
+    } else if (fusionPlan?.ok && fusionPlan.fusionName === "Tech-Void Dragon") {
+      boost += addRetention(reasons, 7, "tech_void_fusion_payoff");
+    } else {
+      boost -= addRetention(reasons, 8, "polymerization_no_extra_deck_payoff");
     }
   }
 
@@ -659,6 +670,18 @@ function getRetentionAdjustment(action = {}, context = {}) {
     )
   ) {
     boost -= addRetention(reasons, 8, "avoid_second_faceup_extreme");
+  }
+
+  if (
+    actionBreaksSoloExtremeProtection(action, {
+      analysis,
+      game,
+      player,
+      bot: player,
+      opponent,
+    })
+  ) {
+    boost -= addRetention(reasons, 7, "preserve_solo_extreme_protection");
   }
 
   if (
@@ -1217,6 +1240,17 @@ export function scoreDragonLineMilestones(context = {}) {
         ? "Payoff: Rainbow Cosmic entered with protection"
         : "Payoff: Rainbow Cosmic entered",
       finalHasProtection ? 7 : 4,
+    );
+  }
+
+  const metalArmored = findFinalFieldCard(finalBot, "Metal Armored Dragon");
+  if (metalArmored) {
+    addLineMilestone(
+      milestones,
+      metalArmored.position === "defense" && initialThreat >= 1800
+        ? "Defense: Metal Armored became a battle wall"
+        : "Penalty: Metal Armored ascension without defensive pressure",
+      metalArmored.position === "defense" && initialThreat >= 1800 ? 4 : -3,
     );
   }
 
@@ -1869,9 +1903,15 @@ export function buildDragonPlanningProfile(analysis = {}, context = {}) {
     reasons.push("Luminous + Awakening starter");
   }
   if (hasName(hand, "Polymerization")) {
-    const fusionCards = [...hand, ...field];
-    if (hasRadiantCosmicMaterials(fusionCards) || hasTechVoidMaterials(fusionCards)) {
-      reasons.push("Polymerization has Radiant/Tech materials");
+    const fusionPlan = selectDragonFusionPlan({
+      analysis,
+      game,
+      player,
+      bot: player,
+      opponent,
+    });
+    if (fusionPlan?.ok) {
+      reasons.push(`Polymerization has ${fusionPlan.fusionName} payoff`);
     }
   }
   if (hasName(hand, "Converging Stars") && hasHighLevelDragon(hand)) {

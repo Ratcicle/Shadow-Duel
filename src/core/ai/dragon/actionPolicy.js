@@ -7,6 +7,14 @@ import {
   scoreDragonDiscardCandidate,
 } from "./costPolicy.js";
 import { shouldUseStelyaBanishSummon } from "./banishPolicy.js";
+import {
+  DRAGON_BOSS_POLICY_NAMES,
+  buildDragonBossTargetPreference,
+  hasDragonBossRoute,
+  isDragonBossCandidate,
+  rankDragonBossCandidates,
+  selectBestDragonBoss,
+} from "./bossPolicy.js";
 
 const SMALL_DRAGON_RECRUIT_ORDER = [
   "Lunar Eclipse Dragon",
@@ -146,6 +154,11 @@ function makeContext(context = {}) {
     spellTrap,
     extraDeck: zoneCards(player, "extraDeck"),
     opponentField,
+    hasHellkiteRoarAccess:
+      context.hasHellkiteRoarAccess === true ||
+      hasName(hand, "Hellkite Roar") ||
+      hasName(graveyard, "Hellkite Roar") ||
+      hasName(spellTrap, "Hellkite Roar"),
     fieldCapacity: Math.max(0, 5 - field.length),
     source: context.source || context.sourceCard || context.card || null,
     sourceCard: context.sourceCard || context.source || context.card || null,
@@ -215,23 +228,11 @@ function hasStelyaBodyPayoff(ctx) {
 
 function hasStelyaSearchTargetPlan(target, ctx) {
   if (!target || !STELYA_BOSS_NAMES.has(target.name)) return false;
-  const canBridgeTribute =
-    ctx.canNormalSummon &&
-    ctx.field.some(isFaceupDragon) &&
-    (target.level || 0) >= 7;
-  if (canBridgeTribute) return true;
-
-  if (
-    target.name === "Black Bull Dragon" &&
-    (ctx.dragonState?.usefulDiscardCandidates || []).length >= 2
-  ) {
-    return true;
-  }
-  if (
-    target.name === "Purified Crystal Dragon" &&
-    ctx.dragonState?.hasThreeSafeGYDragonsForPurified
-  ) {
-    return true;
+  if (isDragonBossCandidate(target)) {
+    return hasDragonBossRoute(target, {
+      ...ctx,
+      routeKind: "stelyaSearch",
+    });
   }
   if (
     target.name === "Luminous Dragon" &&
@@ -268,12 +269,18 @@ function buildSearchAction(filters = {}, extra = {}) {
 }
 
 function bestStelyaSearchTarget(ctx) {
+  const candidates = ctx.deck.filter(
+    (card) => isDragonMonster(card) && (card.level || 0) >= 5,
+  );
+  const boss = selectBestDragonBoss(candidates, {
+    ...ctx,
+    routeKind: "stelyaSearch",
+  });
+  if (boss) return boss;
+
   const action = buildSearchAction(
     { cardKind: "monster", type: "Dragon" },
     { minLevel: 5 },
-  );
-  const candidates = ctx.deck.filter(
-    (card) => isDragonMonster(card) && (card.level || 0) >= 5,
   );
   return rankDragonSearchCandidates(candidates, action, {
     ...ctx,
@@ -309,6 +316,34 @@ function rankRecruitCards(candidates = [], context = {}) {
     effectId === "luminescent_dragon_normal_summon_revive";
   const isSolarGy = effectId === "solar_eclipse_gy_revive_dragon";
   const isLunarGy = effectId === "lunar_eclipse_gy_summon_deck_dragon";
+  const isBossRecruit =
+    effectId === "extreme_dragon_awakening_summon" ||
+    effectId === "dragon_peak_ignite_summon" ||
+    effectId === "call_of_the_haunted_activate" ||
+    action.type === "call_of_haunted_summon_and_bind" ||
+    sourceName === "Call of the Haunted" ||
+    sourceName === "Jagged Peak of the Dragons" ||
+    sourceName === "Hellkite Dragon";
+  if (isBossRecruit && candidates.some(isDragonBossCandidate)) {
+    const routeKind =
+      effectId === "extreme_dragon_awakening_summon"
+        ? "awakening"
+        : effectId === "dragon_peak_ignite_summon" || sourceName === "Jagged Peak of the Dragons"
+          ? "jaggedPeak"
+          : action.type === "call_of_haunted_summon_and_bind" ||
+              sourceName === "Call of the Haunted"
+            ? "call"
+            : "recursion";
+    return rankDragonBossCandidates(candidates, {
+      ...ctx,
+      routeKind,
+      fieldCostCount: routeKind === "awakening" ? 2 : undefined,
+    }).map((entry) => ({
+      card: entry.card,
+      index: entry.index,
+      score: entry.score,
+    }));
+  }
 
   return (candidates || [])
     .map((card, index) => {
@@ -521,8 +556,56 @@ export function evaluateDragonHandIgnition(card, effect, context = {}) {
       priority,
       targetPreferences: {
         stelya_discard_other_card: costPrefs.stelya_discard_other_card,
+        stelya_discard_search_dragon_selection: buildDragonBossTargetPreference(
+          ctx.deck.filter(
+            (candidate) => isDragonMonster(candidate) && (candidate.level || 0) >= 5,
+          ),
+          { ...ctx, routeKind: "stelyaSearch" },
+        ),
       },
       reason: `Stelya searches ${bossTarget.name} with usable plan`,
+    };
+  }
+
+  if (card.name === "Hellkite Dragon") {
+    const fieldDragons = ctx.field.filter(isFaceupDragon);
+    const costCandidates = fieldDragons.filter(
+      (candidate) => !isExtremeDragon(candidate) && (candidate.atk || 0) < (card.atk || 2300),
+    );
+    const bossScore = rankDragonBossCandidates([card], {
+      ...ctx,
+      routeKind: "hellkiteHand",
+    })[0]?.score ?? 0;
+    const hasPayoff =
+      ctx.hasHellkiteRoarAccess ||
+      (ctx.graveyard || []).some(
+        (candidate) =>
+          isDragonMonster(candidate) &&
+          candidate.name !== "Hellkite Dragon" &&
+          (candidate.level || 0) <= 7,
+      ) ||
+      ctx.dragonState?.hasLevel7PlusForRoar === false;
+    if (costCandidates.length === 0 || !hasPayoff) {
+      return {
+        handled: true,
+        ok: false,
+        reason: costCandidates.length === 0
+          ? "no expendable Dragon cost"
+          : "Hellkite has no Roar, revive, or Level 7 payoff",
+      };
+    }
+    return {
+      handled: true,
+      ok: true,
+      priority: 8 + Math.min(5, Math.max(0, bossScore) / 35),
+      targetPreferences: {
+        hellkite_cost_field_dragon: {
+          role: "cost",
+          preferNames: costCandidates.map((candidate) => candidate.name),
+          preserveNames: DRAGON_BOSS_POLICY_NAMES,
+        },
+      },
+      reason: "Hellkite has boss-policy payoff",
     };
   }
 
