@@ -87,6 +87,7 @@ export function attachEffectModules(EngineClass) {
     "collectCounterRemovedTriggers",
     "collectPositionChangeTriggers",
     "collectStandbyPhaseTriggers",
+    "collectEndPhaseTriggers",
   ]);
 
   attachMethods(EngineClass, blueprints, [

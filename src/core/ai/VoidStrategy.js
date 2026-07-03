@@ -518,10 +518,11 @@ export default class VoidStrategy extends BaseStrategy {
     const gyIds = (graveyard || []).map((c) => c?.id).filter(Boolean);
     const extraIds = (extraDeck || []).map((c) => c?.id).filter(Boolean);
     const hollowsOnField = (field || []).filter(
-      (m) => m?.id === VOID_IDS.HOLLOW,
+      (m) => m?.id === VOID_IDS.HOLLOW && !m.isFacedown,
     ).length;
     const hollowsInHand = handIds.filter((id) => id === VOID_IDS.HOLLOW).length;
     const hollowsInGY = gyIds.filter((id) => id === VOID_IDS.HOLLOW).length;
+    const hollowsFieldAndGY = hollowsOnField + hollowsInGY;
     const voidCountTotal =
       (hand || []).filter(isVoid).length + (field || []).filter(isVoid).length;
 
@@ -544,18 +545,18 @@ export default class VoidStrategy extends BaseStrategy {
       payoffs.reasons.push("Haunter pode tributar Hollow e reviver depois");
     }
 
-    // Slayer Brute (tributa 2 Voids → 2500 ATK com banish)
+    // Slayer Brute (tributa 2 Voids → 2500 ATK; banish se usar Hollow)
     if (handIds.includes(VOID_IDS.SLAYER_BRUTE)) {
       payoffs.hasBossPayoff = true;
       payoffs.totalPayoffValue += 4.0;
       payoffs.reasons.push("Slayer Brute pode tributar 2 Voids");
     }
 
-    // Serpent Drake (tributa 1-3 Hollows → 2300+ ATK com bônus)
+    // Serpent Drake (envia 1 Hollow → 2300 ATK com proteção)
     if (handIds.includes(VOID_IDS.SERPENT_DRAKE)) {
       payoffs.hasBossPayoff = true;
       payoffs.totalPayoffValue += 3.5;
-      payoffs.reasons.push("Serpent Drake escala com Hollows tributados");
+      payoffs.reasons.push("Serpent Drake usa Hollow para pressão protegida");
     }
 
     // Forgotten Knight (tributa 1 Void → 2000 ATK)
@@ -565,7 +566,7 @@ export default class VoidStrategy extends BaseStrategy {
       payoffs.reasons.push("Forgotten Knight pode tributar Void");
     }
 
-    // Thousand-Arms (tributa 1 Void → 2100 ATK + bounce-revive 2 Hollows do GY com +700)
+    // Thousand-Arms (tributa 1 Void → 2100 ATK + bounce-revive 2 Hollows do GY)
     if (handIds.includes(VOID_IDS.THOUSAND_ARMS)) {
       payoffs.hasBossPayoff = true;
       payoffs.totalPayoffValue += 3.5;
@@ -636,8 +637,8 @@ export default class VoidStrategy extends BaseStrategy {
       payoffs.reasons.push("Conjurer pode se reviver do GY");
     }
 
-    // Tenebris Horn no GY (once per duel revive)
-    if (gyIds.includes(VOID_IDS.TENEBRIS_HORN)) {
+    // Tenebris Horn no GY pode se reviver se houver 2+ Hollows no campo/GY.
+    if (gyIds.includes(VOID_IDS.TENEBRIS_HORN) && hollowsFieldAndGY >= 2) {
       payoffs.hasGYPayoff = true;
       payoffs.totalPayoffValue += 1.0;
       payoffs.reasons.push("Tenebris Horn pode se reviver");
@@ -672,6 +673,7 @@ export default class VoidStrategy extends BaseStrategy {
 
     const hand = bot?.hand || [];
     const field = bot?.field || [];
+    const graveyard = bot?.graveyard || [];
     const source = context.source || {};
     const action = context.action || {};
     const isWalkerBounce =
@@ -749,19 +751,26 @@ export default class VoidStrategy extends BaseStrategy {
           break;
 
         case VOID_IDS.BONE_SPIDER:
-          // Bone Spider é bom para controle
-          if ((analysis.oppFieldCount || 0) > 0) {
-            score += 1.5; // Pode reduzir ATK inimigo
-            reasons.push(`Bone Spider vs campo inimigo (+1.5)`);
+          // Bone Spider converte Hollow em lock de ataque e revive Hollow ao sair.
+          if (
+            (analysis.oppFieldCount || 0) > 0 &&
+            hollowsInHand + hollowsOnField > 0
+          ) {
+            score += 1.7;
+            reasons.push(`Bone Spider com Hollow para lock (+1.7)`);
+          } else if ((analysis.oppFieldCount || 0) > 0) {
+            score += 0.6;
+            reasons.push(`Bone Spider sem Hollow disponivel (+0.6)`);
           } else {
-            score += 0.5;
-            reasons.push(`Bone Spider sem alvos (+0.5)`);
+            score += 0.4;
+            reasons.push(`Bone Spider sem alvos (+0.4)`);
           }
           break;
 
         case VOID_IDS.TENEBRIS_HORN:
-          // Escala com Voids no campo
-          const voidCount = (analysis.voidCount || 0) + 1;
+          // Escala com Voids no campo proprio e no GY.
+          const voidCount =
+            field.filter(isVoid).length + graveyard.filter(isVoid).length + 1;
           const scalingBonus = voidCount * 0.3;
           score += scalingBonus;
           reasons.push(`Tenebris Horn escala +${scalingBonus.toFixed(1)}`);
@@ -1783,7 +1792,7 @@ export default class VoidStrategy extends BaseStrategy {
                   comboBoost += 1.5; // Slayer tributa 2 → 2500 ATK
                 }
                 if (handIds.includes(VOID_IDS.SERPENT_DRAKE)) {
-                  comboBoost += 1.0; // Drake tributa Hollows
+                  comboBoost += 1.0; // Drake usa Hollow como custo
                 }
               } else {
                 // Conjurer sem Hollow ainda é ok (recruta qualquer Void lv4-)
@@ -1963,7 +1972,6 @@ export default class VoidStrategy extends BaseStrategy {
                   if (
                     !candidate ||
                     candidate.cardKind !== "monster" ||
-                    candidate.isFacedown ||
                     !isVoid(candidate)
                   ) {
                     return false;
@@ -1977,9 +1985,16 @@ export default class VoidStrategy extends BaseStrategy {
                     return false;
                   }
                   return true;
-                }).length;
-                if (viableCosts < 2) return;
+                });
+                const hollowCostAvailable = viableCosts.some(
+                  (candidate) => candidate?.id === VOID_IDS.HOLLOW,
+                );
+                const viableCostCount = viableCosts.length;
+                if (viableCostCount < 2) return;
                 ignitionPriority += 2.5;
+                if (hollowCostAvailable) {
+                  ignitionPriority += 0.8;
+                }
                 // Extra se temos Poly para Berserker depois
                 if (handIds.includes(VOID_IDS.POLYMERIZATION)) {
                   ignitionPriority += 1.5;
@@ -1987,10 +2002,10 @@ export default class VoidStrategy extends BaseStrategy {
               }
             }
 
-            // Serpent Drake: prioriza baseado em quantos Hollows pode tributar
+            // Serpent Drake: prioriza quando há Hollow disponível como custo
             if (card.id === VOID_IDS.SERPENT_DRAKE) {
               if (hollowFieldCount >= 1) {
-                ignitionPriority += 1.5 + hollowFieldCount * 0.5;
+                ignitionPriority += 2.0;
               }
             }
 
@@ -2007,7 +2022,7 @@ export default class VoidStrategy extends BaseStrategy {
                   (c) => c?.id === VOID_IDS.HOLLOW,
                 ).length;
                 if (hollowsInGY >= 1) {
-                  // Cada Hollow no GY = +700 ATK potencial via bounce-revive
+                  // Cada Hollow no GY = corpo extra via bounce-revive
                   ignitionPriority += 1.0 + Math.min(hollowsInGY, 2) * 0.5;
                 }
                 // Caminho para Malicious Demon (precisa 2 ativações)
@@ -2091,7 +2106,7 @@ export default class VoidStrategy extends BaseStrategy {
     // ═══════════════════════════════════════════════════════════════════════════
     // FIELD MONSTER IGNITIONS
     // Cobre Conjurer (recruta deck), Walker (bounce + SS), Bone Spider (lock),
-    // Ghost Wolf (direct), Thousand-Arms (bounce-revive), Cosmic Walker (revive Hollow).
+    // Ghost Wolf (direct), Thousand-Arms (bounce-revive), Cosmic Walker (summon Hollow).
     // ═══════════════════════════════════════════════════════════════════════════
     (bot.field || []).forEach((card, fieldIndex) => {
       if (
@@ -2142,6 +2157,13 @@ export default class VoidStrategy extends BaseStrategy {
       const hollowsInGY = (bot.graveyard || []).filter(
         (c) => c?.id === VOID_IDS.HOLLOW,
       ).length;
+      const hollowsInHand = (bot.hand || []).filter(
+        (c) => c?.id === VOID_IDS.HOLLOW,
+      ).length;
+      const hollowsOnField = (bot.field || []).filter(
+        (c) => c?.id === VOID_IDS.HOLLOW && !c.isFacedown,
+      ).length;
+      const voidsInGY = (bot.graveyard || []).filter(isVoid).length;
       const fieldHasSpace = (bot.field || []).length < 5;
 
       let priority = 0;
@@ -2175,7 +2197,7 @@ export default class VoidStrategy extends BaseStrategy {
           break;
         }
         case VOID_IDS.THOUSAND_ARMS: {
-          // Bounce self → SS até 2 Hollows do GY com +700 ATK/DEF
+          // Bounce self → SS até 2 Hollows do GY
           const maliciousSetup = getThousandArmsMaliciousSetup(
             game,
             bot,
@@ -2201,9 +2223,10 @@ export default class VoidStrategy extends BaseStrategy {
           break;
         }
         case VOID_IDS.COSMIC_WALKER: {
-          // Revive 1 Void Hollow do GY.
-          if (!fieldHasSpace || hollowsInGY < 1) break;
-          priority = 7.0 + Math.min(hollowsInGY, 2) * 0.5;
+          // Summon 1 Void Hollow da mao ou GY.
+          const hollowsAccessible = hollowsInHand + hollowsInGY;
+          if (!fieldHasSpace || hollowsAccessible < 1) break;
+          priority = 7.0 + Math.min(hollowsAccessible, 2) * 0.5;
           if (swarmPayoffs.hasFusionPayoff || swarmPayoffs.hasBossPayoff) {
             priority += 0.5;
           }
@@ -2213,8 +2236,12 @@ export default class VoidStrategy extends BaseStrategy {
           break;
         }
         case VOID_IDS.BONE_SPIDER: {
-          // Locka 1 monstro inimigo até o final do próximo turno
+          // Envia Hollow como custo para lockar 1 monstro inimigo até o próximo turno.
+          const hasHollowCost =
+            (bot.hand || []).some((c) => c?.id === VOID_IDS.HOLLOW) ||
+            (bot.field || []).some((c) => c?.id === VOID_IDS.HOLLOW);
           if (oppFieldCount === 0) break;
+          if (!hasHollowCost) break;
           priority = 4.0;
           if (oppStrongestAtk >= 2000) priority += 1.5;
           if (oppStrongestAtk >= 2500) priority += 1.0;
@@ -2277,7 +2304,7 @@ export default class VoidStrategy extends BaseStrategy {
 
     // ═══════════════════════════════════════════════════════════════════════════
     // GRAVEYARD MONSTER IGNITIONS
-    // Cobre Conjurer GY-revive, Tenebris Horn once-per-duel revive,
+    // Cobre Conjurer GY-revive, Tenebris Horn revive limitado por duelo,
     // Forgotten Knight banish-to-destroy, Haunter banish-to-revive Hollows.
     // ═══════════════════════════════════════════════════════════════════════════
     (bot.graveyard || []).forEach((card, graveyardIndex) => {
@@ -2338,12 +2365,14 @@ export default class VoidStrategy extends BaseStrategy {
           break;
         }
         case VOID_IDS.TENEBRIS_HORN: {
-          // Once per duel: SS self do GY
+          // OPT, ate 3 vezes por duelo: SS self do GY com 2+ Hollows campo/GY.
           if (!fieldHasSpace) break;
+          if (hollowsOnField + hollowsInGY < 2) break;
           if (preserveArcturusSoloBuff) break;
           priority = 6.5;
-          // Cada Void no campo aumenta valor (passive scaling)
-          priority += Math.min(analysis.voidCount || 0, 4) * 0.4;
+          // Cada Void no campo proprio/GY aumenta valor (passive scaling)
+          priority +=
+            Math.min((analysis.voidCount || 0) + voidsInGY, 5) * 0.4;
           break;
         }
         case VOID_IDS.FORGOTTEN_KNIGHT: {

@@ -8,6 +8,7 @@ import {
   CONVERGING_STARS_TARGETS,
   SELF_SUMMON_MONSTERS,
   isExtremeDragon,
+  isOutOfPlanDragonCardName,
 } from "./knowledge.js";
 import {
   fieldHasTributeValue,
@@ -33,6 +34,10 @@ import { getEffectiveAtk, getEffectiveDef } from "../common/cardStats.js";
 
 function isDragonMonster(card) {
   return card?.cardKind === "monster" && card.type === "Dragon";
+}
+
+function isCurrentDragonListMode(analysis = {}) {
+  return analysis?.currentDragonBotList !== false;
 }
 
 function isProtectedDragonFieldBoss(card) {
@@ -175,6 +180,10 @@ export function shouldPlaySpell(card, analysis) {
 
   // ── Converging Stars ───────────────────────────────────────────────────────
   if (name === "Converging Stars") {
+    if (isCurrentDragonListMode(analysis)) {
+      return { yes: false, reason: "Converging Stars is legacy-only for the current Dragon bot list" };
+    }
+
     // Need a card to discard as cost
     if (analysis.hand.length < 2) {
       return { yes: false, reason: "Need 2+ cards in hand (1 for discard cost)" };
@@ -188,7 +197,7 @@ export function shouldPlaySpell(card, analysis) {
     const hasMajesticInHand = analysis.hand.some((c) => c.name === "Majestic Silver Dragon");
 
     // Also check if reducing levels would allow ANY useful summon
-    // Darkness Dragon: lv5 → lv3 = 0 tributes (highest benefit)
+    // Legacy Darkness line: lv5 -> lv3 = 0 tributes.
     if (hasDarknessInHand) {
       return {
         yes: true,
@@ -373,6 +382,13 @@ export function shouldSummonMonster(card, analysis, tributeInfo, context = {}) {
   const isSuicideSummon = oppHasThreats && cardATK < oppStrongestATK && cardATK > 0;
   const shouldDefend = isSuicideSummon && cardDEF >= cardATK;
   const dragonState = analysis?.dragonState || {};
+
+  if (isCurrentDragonListMode(analysis) && isOutOfPlanDragonCardName(name)) {
+    return {
+      yes: false,
+      reason: `${name}: legacy-only card outside the current Dragon bot list`,
+    };
+  }
 
   if (name === "Solar Eclipse Dragon") {
     if (tributeInfo.tributesNeeded > 0) {

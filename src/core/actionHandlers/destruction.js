@@ -492,6 +492,7 @@ export async function handleBanish(action, ctx, targets, engine) {
       fromZone,
       contextLabel: action.contextLabel || "banish",
       sourceCard: ctx?.source || null,
+      sourcePlayer: ctx?.player || null,
       effectId: ctx?.effect?.id || action.effectId || null,
       movedByEffect: true,
       awaitCardMovedEvent: true,
@@ -692,23 +693,26 @@ export async function handleBanishCardFromGraveyard(
   let banishedCount = 0;
 
   for (const card of toBanish) {
-    const idx = player.graveyard.indexOf(card);
+    if (!player.graveyard.includes(card)) continue;
 
-    if (idx !== -1) {
-      queueBanishAnimation(game, player, card, "graveyard");
+    const moveResult = await game.moveCard(card, player, "banished", {
+      fromZone: "graveyard",
+      contextLabel: action.contextLabel || "graveyard_banish_cost",
+      sourceCard: ctx?.source || null,
+      sourcePlayer: ctx?.player || null,
+      effectId: ctx?.effect?.id || action.effectId || null,
+      movedByEffect: action.movedByEffect === true,
+      awaitCardMovedEvent: true,
+    });
 
-      player.graveyard.splice(idx, 1);
-
-      player.banished = player.banished || [];
-
-      player.banished.push(card);
-
-      card.location = "banished";
-
-      banishedCount++;
-
-      getUI(game)?.log(`${card.name} was banished from the graveyard.`);
+    if (moveResult === false || moveResult?.success === false) {
+      getUI(game)?.log(`${card.name} could not be banished from the graveyard.`);
+      continue;
     }
+
+    banishedCount++;
+
+    getUI(game)?.log(`${card.name} was banished from the graveyard.`);
   }
 
   if (banishedCount > 0) {
@@ -771,8 +775,17 @@ export async function handleBanishAllGraveyardAndBurn(action, ctx, _targets, eng
       const moveResult = await game.moveCard(card, owner, "banished", {
         fromZone: "graveyard",
         contextLabel: "banish_all_graveyard_and_burn",
+        sourceCard: ctx?.source || null,
+        sourcePlayer: ctx?.player || null,
+        effectId: ctx?.effect?.id || action.effectId || null,
+        movedByEffect: true,
+        awaitCardMovedEvent: true,
       });
       moved = moveResult !== false && moveResult?.success !== false;
+      if (!moved) {
+        getUI(game)?.log(`${card.name} could not be banished from the graveyard.`);
+        continue;
+      }
     }
 
     if (!moved) {

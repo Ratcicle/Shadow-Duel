@@ -406,6 +406,16 @@ export function showPositionChoiceModal(cardEl, card, callback, options = {}) {
     content.appendChild(ascendBtn);
   }
 
+  if (
+    options.canDeclareAttack &&
+    typeof options.onDeclareAttack === "function"
+  ) {
+    const attackBtn = document.createElement("button");
+    attackBtn.dataset.choice = "declare_attack";
+    attackBtn.textContent = getUIText("ui.summon.attack");
+    content.appendChild(attackBtn);
+  }
+
   if (options.canFlip) {
     const flipBtn = document.createElement("button");
     flipBtn.dataset.choice = "flip";
@@ -483,6 +493,11 @@ export function showPositionChoiceModal(cardEl, card, callback, options = {}) {
         typeof options.onAscensionSummon === "function"
       ) {
         options.onAscensionSummon();
+      } else if (
+        choice === "declare_attack" &&
+        typeof options.onDeclareAttack === "function"
+      ) {
+        options.onDeclareAttack();
       } else if (choice) {
         callback(choice);
       }

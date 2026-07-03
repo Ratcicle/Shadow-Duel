@@ -336,6 +336,29 @@ function battleProtectionSourceAffectsCard(game, card, sourceCard, sourceOwner) 
   return immunity?.immune !== true;
 }
 
+function passiveConditionsAreMet(game, sourceOwner, sourceCard, passive, context = {}) {
+  const rawConditions = passive?.conditions || passive?.condition || null;
+  const conditions = Array.isArray(rawConditions)
+    ? rawConditions
+    : rawConditions
+      ? [rawConditions]
+      : [];
+  if (conditions.length === 0) return true;
+  if (typeof game?.effectEngine?.evaluateConditions !== "function") return false;
+  const player = sourceOwner || getOwnerByCard(game, sourceCard);
+  const opponent =
+    player && typeof game?.getOpponent === "function"
+      ? game.getOpponent(player)
+      : null;
+  const result = game.effectEngine.evaluateConditions(conditions, {
+    ...context,
+    player,
+    opponent,
+    source: sourceCard,
+  });
+  return result?.ok !== false;
+}
+
 function ownPositionBattleIndestructibleApplies(game, card, context = {}) {
   if (!game || !card || !Array.isArray(card.effects)) return false;
   if (card.isFacedown || card.effectsNegated) return false;
@@ -365,6 +388,34 @@ function ownPositionBattleIndestructibleApplies(game, card, context = {}) {
   return false;
 }
 
+function ownConditionalBattleIndestructibleApplies(game, card, context = {}) {
+  if (!game || !card || !Array.isArray(card.effects)) return false;
+  if (card.isFacedown || card.effectsNegated) return false;
+  const owner =
+    getPlayerFromContext(game, context.owner) ||
+    getOwnerByCard(game, card) ||
+    getPlayerByCardOwner(game, card);
+  const sourceZone = findAttackPassiveSourceZone(game, owner, card);
+  for (const effect of card.effects) {
+    if (!effect || effect.timing !== "passive") continue;
+    const passive = effect.passive || {};
+    if (passive.type !== "conditional_status") continue;
+    const statusName = passive.status || "battleIndestructible";
+    if (statusName !== "battleIndestructible") continue;
+    if (effect.requireZone && sourceZone !== effect.requireZone) continue;
+    if (passive.requireZone && sourceZone !== passive.requireZone) continue;
+    if (
+      (effect.requireFaceup === true || passive.requireFaceup === true) &&
+      card.isFacedown
+    ) {
+      continue;
+    }
+    if (!passiveConditionsAreMet(game, owner, card, passive, context)) continue;
+    return battleProtectionSourceAffectsCard(game, card, card, owner);
+  }
+  return false;
+}
+
 function equipBattleIndestructibleApplies(game, card) {
   const equips = Array.isArray(card?.equips) ? card.equips : [];
   for (const equip of equips) {
@@ -385,7 +436,8 @@ function hasKnownBattleIndestructibleSource(card) {
       const passive = effect?.passive || {};
       return (
         effect?.timing === "passive" &&
-        passive.type === "position_status" &&
+        (passive.type === "position_status" ||
+          passive.type === "conditional_status") &&
         (passive.status || "battleIndestructible") === "battleIndestructible"
       );
     })
@@ -398,6 +450,9 @@ function hasKnownBattleIndestructibleSource(card) {
 function battleIndestructibleFlagApplies(game, card, context = {}) {
   if (!card?.battleIndestructible) return false;
   if (ownPositionBattleIndestructibleApplies(game, card, context)) return true;
+  if (ownConditionalBattleIndestructibleApplies(game, card, context)) {
+    return true;
+  }
   if (equipBattleIndestructibleApplies(game, card)) return true;
   return !hasKnownBattleIndestructibleSource(card);
 }
@@ -690,6 +745,9 @@ export function canDestroyByBattle(card, context = {}) {
     return true;
   }
   if (isBattleIndestructibleByStatMatchPassive(this, card, context)) {
+    return false;
+  }
+  if (ownConditionalBattleIndestructibleApplies(this, card, context)) {
     return false;
   }
   if (battleIndestructibleFlagApplies(this, card, context)) return false;

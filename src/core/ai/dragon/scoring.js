@@ -3,9 +3,14 @@
 // Board evaluation for Dragon deck.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { CARD_KNOWLEDGE, isExtremeDragon } from "./knowledge.js";
+import {
+  CARD_KNOWLEDGE,
+  isExtremeDragon,
+  isOutOfPlanDragonCardName,
+} from "./knowledge.js";
 import { analyzeResourceEconomy } from "../common/resourceEconomy.js";
 import { scoreResourcePressure } from "../common/resourcePolicy.js";
+import { scoreDragonBackrowSet } from "./battleDefensePolicy.js";
 import { analyzeDragonState } from "./stateAnalysis.js";
 
 export const DRAGON_EXTREME_RESOURCE_POLICY = {
@@ -97,7 +102,7 @@ export function evaluateDragonMonster(monster, owner, opponent) {
   if (monster.position === "attack" && !monster.hasAttacked && !monster.cannotAttackThisTurn) {
     value += 0.4;
     const oppField = opponent?.field || [];
-    if (oppField.length === 0) {
+    if (oppField.length === 0 && !monster.cannotAttackDirectly && monster.name !== "Grey Dragon") {
       value += atk / 1500;  // Direct attack potential
     }
   }
@@ -146,10 +151,15 @@ export function evaluateBoardDragon(gameOrState, perspectivePlayer, getOpponentF
   // ── Field presence ────────────────────────────────────────────────────────
   const myField = perspective?.field || [];
   const oppField = opponent?.field || [];
+  const currentListMode =
+    gameOrState?.currentDragonBotList !== false &&
+    gameOrState?.analysis?.currentDragonBotList !== false &&
+    gameOrState?.currentAnalysis?.currentDragonBotList !== false;
 
   for (const monster of myField) {
     if (!monster || monster.cardKind !== "monster") continue;
     score += evaluateDragonMonster(monster, perspective, opponent);
+    if (currentListMode && isOutOfPlanDragonCardName(monster.name)) score -= 4;
   }
 
   for (const monster of oppField) {
@@ -207,6 +217,15 @@ export function evaluateBoardDragon(gameOrState, perspectivePlayer, getOpponentF
   // Reactive traps are worth more than raw backrow count
   for (const card of myBackrow) {
     if (!card?.isFacedown) continue;
+    const dragonBackrow = scoreDragonBackrowSet(card, {
+      player: perspective,
+      bot: perspective,
+      opponent,
+      analysis: gameOrState?.currentAnalysis || gameOrState?.analysis || {},
+    });
+    if (dragonBackrow) {
+      score += Math.max(0, dragonBackrow.priority - 5) * 0.28;
+    }
     if (card.name === "Call of the Haunted") {
       const gyMonsters = myGY.filter((c) => c?.cardKind === "monster");
       if (gyMonsters.length > 0) score += 1.2; // Can revive on opponent's turn

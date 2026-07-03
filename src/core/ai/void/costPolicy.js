@@ -8,7 +8,7 @@
 //     há fusion path acessível, Walker quando há Cosmic Walker possível,
 //     Thousand-Arms quando há Malicious Demon possível;
 //   - quais cartas PODEM ser sacrificadas (preferNames) — ex.: Hollow quando
-//     não há fusion path, tokens de Bone Spider, monstros cujo efeito já foi
+//     não há fusion path, monstros cujo efeito já foi
 //     usado neste turno.
 //
 // As decisões são derivadas do estado atual (campo, mão, GY, extra deck) e
@@ -150,7 +150,7 @@ export function buildVoidCostPreferences(analysis = {}) {
     preserveNames.add("Thousand-Arms of the Void");
   }
 
-  // Tenebris Horn no campo: passive +ATK/DEF para todos os Voids — sustentar.
+  // Tenebris Horn no campo: self-scaling por Voids no campo proprio/GY.
   if (fieldIds.includes(VOID_IDS.TENEBRIS_HORN)) {
     preserveNames.add("Void Tenebris Horn");
   }
@@ -202,9 +202,6 @@ export function buildVoidCostPreferences(analysis = {}) {
   if (!preserveNames.has("Void Hollow") && hollowsField > 0) {
     preferNames.add("Void Hollow");
   }
-
-  // Tokens de Bone Spider (não-Void, atk 500) — descartáveis sempre.
-  preferNames.add("Void Little Spider");
 
   if (field.some((c) => c?.id === VOID_IDS.CONJURER && c.usedEffectThisTurn)) {
     preferNames.add("Void Conjurer");
@@ -276,6 +273,7 @@ function buildVoidTargetPreferences(costPreferences = {}) {
       void_slayer_brute_cost: {
         role: "cost",
         intent: "cost",
+        preferNames: ["Void Hollow"],
       },
       thousand_arms_cost: {
         role: "cost",

@@ -231,9 +231,9 @@ const DEFAULT_LOCALE_TEXTS = {
         },
       },
     },
-    voidSerpent: {
-      costPrompt: "Choose how many Void Hollow to send (1-{max}):",
-      selectCost: "Select the Void Hollow cards to send to the Graveyard.",
+    tieredCost: {
+      costPrompt: "Choose how many cost cards to send (1-{max}):",
+      selectCost: "Select the cost cards to send to the Graveyard.",
     },
     shadowHeartCathedral: {
       title: "Shadow-Heart Cathedral",
@@ -376,23 +376,6 @@ const DEFAULT_LOCALE_TEXTS = {
           label: "Recover Burning West Spell/Trap",
           description:
             'Add 1 "Burning West" Spell/Trap from your Graveyard to your hand.',
-        },
-      },
-    },
-    void_serpent_drake_hand_special: {
-      tiers: {
-        1: {
-          label: "Tier 1",
-          description: "+300 ATK until end of turn",
-        },
-        2: {
-          label: "Tier 2",
-          description: "+300 ATK and cannot be destroyed by battle",
-        },
-        3: {
-          label: "Tier 3",
-          description:
-            "+300 ATK, battle indestructible, destroy 1 opponent card",
         },
       },
     },

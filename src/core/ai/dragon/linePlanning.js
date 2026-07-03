@@ -4,8 +4,13 @@
 // -----------------------------------------------------------------------------
 
 import { getValidBoneflameCostCandidates } from "./boneflamePolicy.js";
+import { scoreDragonBattleAttack } from "./battleDefensePolicy.js";
 import { actionBreaksSoloExtremeProtection } from "./bossPolicy.js";
 import { selectDragonFusionPlan } from "./extraDeckPolicy.js";
+import {
+  CURRENT_AWAKENING_TARGET_NAMES,
+  isOutOfPlanDragonCardName,
+} from "./knowledge.js";
 
 const DEFAULT_PROFILE = {
   enabled: false,
@@ -114,6 +119,28 @@ const DRAGON_BOSS_NAMES = new Set([
   "Majestic Silver Dragon",
 ]);
 
+const ECLIPSE_ENGINE_NAMES = new Set([
+  "Solar Eclipse Dragon",
+  "Lunar Eclipse Dragon",
+]);
+
+const ECLIPSE_STELYA_RESOURCE_NAMES = new Set([
+  "Solar Eclipse Dragon",
+  "Lunar Eclipse Dragon",
+  "Stelya, Dragon Tamer",
+]);
+
+const SOLO_EXTREME_NAMES = new Set([
+  "Fire Extreme Dragon",
+  "Volcanic Extreme Dragon",
+]);
+
+const CURRENT_AWAKENING_TARGET_SET = new Set(CURRENT_AWAKENING_TARGET_NAMES);
+
+function isCurrentDragonListMode(analysis = {}) {
+  return analysis?.currentDragonBotList !== false;
+}
+
 function getPlayer(analysis = {}, context = {}) {
   return context.bot || analysis.bot || analysis.player || context.game?.bot || {};
 }
@@ -141,6 +168,10 @@ function hasName(cards = [], name) {
 
 function countNamed(cards = [], name) {
   return (cards || []).filter((card) => card?.name === name).length;
+}
+
+function countNames(cards = [], names = new Set()) {
+  return (cards || []).filter((card) => names.has(card?.name)).length;
 }
 
 function isDragonMonster(card) {
@@ -200,6 +231,21 @@ function hasHighLevelDragon(cards = []) {
 function hasGoodAwakeningTarget(cards = []) {
   return (cards || []).some(
     (card) => isDragonMonster(card) && (card.level || 0) >= 8,
+  );
+}
+
+function hasLowDragonTarget(cards = []) {
+  return (cards || []).some(
+    (card) => isDragonMonster(card) && (card.level || 0) <= 4,
+  );
+}
+
+function hasCurrentAwakeningTarget(cards = []) {
+  return (cards || []).some(
+    (card) =>
+      isDragonMonster(card) &&
+      (card.level || 0) >= 8 &&
+      CURRENT_AWAKENING_TARGET_SET.has(card.name),
   );
 }
 
@@ -535,11 +581,15 @@ function getRetentionAdjustment(action = {}, context = {}) {
     opponent,
   });
   const fieldHasExtreme = hasExtremeFaceup(field);
+  const currentListMode = isCurrentDragonListMode(analysis);
   const reasons = [];
   let boost = 0;
 
   if (actionMentionsName(action, "Supreme Bahamut Dragon") || actionName === "Supreme Bahamut Dragon") {
     boost -= addRetention(reasons, 100, "bahamut_neutralized");
+  }
+  if (currentListMode && isOutOfPlanDragonCardName(actionName)) {
+    boost -= addRetention(reasons, 12, "out_of_plan_dragon_card");
   }
 
   if (action.type === "handIgnition" && actionName === "Luminous Dragon") {
@@ -562,6 +612,94 @@ function getRetentionAdjustment(action = {}, context = {}) {
     boost += addRetention(reasons, 7, "armored_normal_starter");
   }
 
+  if (action.type === "handIgnition" && actionName === "Solar Eclipse Dragon") {
+    if ((hasName(hand, "Lunar Eclipse Dragon") || hasName(deck, "Lunar Eclipse Dragon")) && field.length < 5) {
+      boost += addRetention(reasons, 11, "solar_eclipse_starter_live");
+      if (hasName(deck, "Lunar Eclipse Dragon")) {
+        boost += addRetention(reasons, 2, "solar_prefers_lunar_from_deck");
+      }
+      if (
+        hand.some(
+          (handCard) =>
+            isDragonMonster(handCard) &&
+            handCard.name !== "Solar Eclipse Dragon" &&
+            (handCard.level || 0) >= 5,
+        )
+      ) {
+        boost += addRetention(reasons, 3, "solar_level_reduction_has_tribute_payoff");
+      }
+      if (hasName(hand, "Stelya, Dragon Tamer") || hasName(graveyard, "Stelya, Dragon Tamer")) {
+        boost += addRetention(reasons, 2, "solar_sets_up_stelya_bridge");
+      }
+    }
+  }
+
+  if (action.type === "summon" && actionName === "Lunar Eclipse Dragon") {
+    if (hasLowDragonTarget(deck) && hasUsefulDiscard(hand)) {
+      boost += addRetention(reasons, 9, "lunar_normal_search_live");
+      if (hasName(hand, "Solar Eclipse Dragon") || hasName(graveyard, "Solar Eclipse Dragon")) {
+        boost += addRetention(reasons, 2, "lunar_followup_can_summon_solar");
+      }
+    }
+  }
+
+  if (action.type === "graveyardMonsterEffect" && actionName === "Solar Eclipse Dragon") {
+    const solarTargets = graveyard.filter(
+      (candidate) =>
+        candidate?.name !== "Solar Eclipse Dragon" &&
+        isDragonMonster(candidate) &&
+        (candidate.level || 0) <= 4,
+    );
+    if (field.length < 5 && solarTargets.length > 0) {
+      boost += addRetention(reasons, 7, "solar_gy_revive_live");
+      if (
+        solarTargets.some((candidate) =>
+          ["Lunar Eclipse Dragon", "Stelya, Dragon Tamer"].includes(candidate.name),
+        ) ||
+        hasName(hand, "Extreme Dragon Awakening")
+      ) {
+        boost += addRetention(reasons, 3, "solar_gy_revive_has_bridge_payoff");
+      }
+    }
+  }
+
+  if (action.type === "graveyardMonsterEffect" && actionName === "Lunar Eclipse Dragon") {
+    if (field.length < 5 && hasLowDragonTarget(deck)) {
+      boost += addRetention(reasons, 6, "lunar_gy_deck_summon_live");
+      if (hasUsefulDiscard(hand) || hasName(deck, "Lunar Eclipse Dragon")) {
+        boost += addRetention(reasons, 3, "lunar_gy_summon_has_followup");
+      }
+    }
+  }
+
+  if (action.type === "handIgnition" && actionName === "Stelya, Dragon Tamer") {
+    if (action.effectId === "stelya_discard_search_dragon") {
+      if (hasUsefulDiscard(hand) && deck.some((card) => isDragonMonster(card) && (card.level || 0) >= 5)) {
+        boost += addRetention(reasons, 7, "stelya_search_bridge_live");
+        if (
+          hasCurrentAwakeningTarget(deck) ||
+          (analysis.canNormalSummon !== false && field.some(isFaceupDragon))
+        ) {
+          boost += addRetention(reasons, 3, "stelya_search_has_boss_route");
+        }
+      }
+    } else if (field.some(isFaceupDragon)) {
+      boost += addRetention(reasons, 6, "stelya_self_summon_bridge_live");
+      if (hasName(hand, "Extreme Dragon Awakening") || hasCurrentAwakeningTarget(hand)) {
+        boost += addRetention(reasons, 3, "stelya_body_enables_payoff");
+      }
+    }
+  }
+
+  if (action.type === "graveyardMonsterEffect" && actionName === "Stelya, Dragon Tamer") {
+    if (field.some(isFaceupDragon)) {
+      boost += addRetention(reasons, 6, "stelya_gy_body_bridge_live");
+      if (hasName(hand, "Extreme Dragon Awakening") || hasCurrentAwakeningTarget(hand)) {
+        boost += addRetention(reasons, 3, "stelya_gy_body_enables_payoff");
+      }
+    }
+  }
+
   if (actionName === "Extreme Dragon Awakening") {
     if (action.type === "spellTrapEffect" && countFaceupDragons(field) >= 2 && hasGoodAwakeningTarget(hand)) {
       boost += addRetention(reasons, 9, "awakening_faceup_payoff");
@@ -581,7 +719,7 @@ function getRetentionAdjustment(action = {}, context = {}) {
     }
   }
 
-  if (actionName === "Converging Stars") {
+  if (!currentListMode && actionName === "Converging Stars") {
     const heavyDragonHand = hand.filter(
       (handCard) => isDragonMonster(handCard) && (handCard.level || 0) >= 5,
     );
@@ -639,6 +777,7 @@ function getRetentionAdjustment(action = {}, context = {}) {
   }
 
   if (
+    !currentListMode &&
     action.type === "graveyardMonsterEffect" &&
     actionName === "Boneflame Dragon" &&
     countDragonMonsters(graveyard) >= 3 &&
@@ -831,54 +970,7 @@ export function applyDragonSimulatedBattleRewards(context = {}) {
 }
 
 export function scoreDragonBattleAttackCandidate(context = {}) {
-  const attacker = context.attacker || {};
-  const target = context.target || null;
-  const bot = context.bot || {};
-  const opponent = context.opponent || {};
-  if (!isDragonMonster(attacker)) return 0;
-
-  const targetDestroyed = Boolean(target) && context.targetSurvived === false;
-  const attackerSurvived = context.attackerSurvived !== false;
-  const lethalNow = context.lethalNow === true;
-  const targetThreat = Math.max(
-    0,
-    Number(target?.atk || 0),
-    Number(target?.def || 0),
-  );
-  let score = 0;
-
-  if (lethalNow) score += 8;
-  if (targetDestroyed) score += 2.5 + Math.min(2.5, targetThreat / 1200);
-  if (attackerSurvived && target) score += 0.8;
-  if (target && !attackerSurvived && !lethalNow) {
-    score -= DRAGON_BOSS_NAMES.has(attacker.name) ? 4 : 2.5;
-  }
-
-  if (attacker.name === "Black Bull Dragon") {
-    if (targetDestroyed) score += context.isSecondAttack ? 2.2 : 1.6;
-    else if (!target && !lethalNow) score -= 1.5;
-  }
-
-  if (targetDestroyed && bot.fieldSpell?.name === "Jagged Peak of the Dragons") {
-    const counters = Number(bot.fieldSpell.counters?.dragon_peak || 0);
-    score += counters >= 4 ? 3.5 : 1.2;
-  }
-
-  if (attacker.name === "Volcanic Extreme Dragon" && target) {
-    score += (opponent.lp || 0) <= 600 ? 4 : 1.5;
-  }
-  if (attacker.name === "Rainbow Cosmic Dragon" && targetDestroyed) {
-    score += (bot.lp || 8000) <= 3500 ? 2.2 : 1.2;
-  }
-  if (attacker.name === "Purified Crystal Dragon" && targetDestroyed) {
-    score += 0.8;
-  }
-  if (attacker.name === "Radiant Cosmic Dragon" && target) {
-    score += attacker.preventsBattleDamageToController ? 1.3 : 0.6;
-  }
-
-  if (!target && !lethalNow) score += 0.4;
-  return score;
+  return scoreDragonBattleAttack(context);
 }
 
 function getPlanningBot(state = {}) {
@@ -923,6 +1015,10 @@ function countOpponentBoardCards(player = {}) {
 
 function getEffectiveAtk(card = {}) {
   return Number(card?.atk || 0) + Number(card?.tempAtkBoost || 0);
+}
+
+function getEffectiveDef(card = {}) {
+  return Number(card?.def || 0) + Number(card?.tempDefBoost || 0);
 }
 
 function getStrongestAtk(cards = []) {
@@ -991,6 +1087,101 @@ function sequenceMentions(sequence = [], name) {
   return sequenceCardNames(sequence).includes(name);
 }
 
+function sequenceMentionsAny(sequence = [], names = new Set()) {
+  return sequenceCardNames(sequence).some((name) => names.has(name));
+}
+
+function finalHasLiveEclipseStelyaFollowUp(player = {}) {
+  return (
+    getCards(player, "hand").some((card) => ECLIPSE_STELYA_RESOURCE_NAMES.has(card?.name)) ||
+    getCards(player, "graveyard").some((card) => ECLIPSE_STELYA_RESOURCE_NAMES.has(card?.name)) ||
+    getCards(player, "field").some((card) => ECLIPSE_STELYA_RESOURCE_NAMES.has(card?.name))
+  );
+}
+
+function isRelevantDefenseDragon(card = {}) {
+  return (
+    isFaceupDragon(card) &&
+    (DRAGON_BOSS_NAMES.has(card.name) ||
+      isExtremeDragon(card) ||
+      ECLIPSE_STELYA_RESOURCE_NAMES.has(card.name) ||
+      card.name === "Luminous Dragon")
+  );
+}
+
+function getFinalSoloExtreme(player = {}) {
+  const monsters = getCards(player, "field").filter(
+    (card) => card?.cardKind === "monster" && !card.isFacedown,
+  );
+  const extreme = monsters.find((card) => SOLO_EXTREME_NAMES.has(card?.name));
+  return {
+    card: extreme || null,
+    monsterCount: monsters.length,
+    preserved: Boolean(extreme && monsters.length === 1),
+    broken: Boolean(extreme && monsters.length > 1),
+  };
+}
+
+function hasMajorSoloBreakPayoff({
+  finalBot,
+  damageDealt = 0,
+  removedOpponentCards = 0,
+  threatReduced = 0,
+} = {}) {
+  const otherBoss = getCards(finalBot, "field").some(
+    (card) =>
+      isFaceupDragon(card) &&
+      !SOLO_EXTREME_NAMES.has(card.name) &&
+      (DRAGON_BOSS_NAMES.has(card.name) ||
+        card.monsterType === "fusion" ||
+        card.monsterType === "ascension" ||
+        getEffectiveAtk(card) >= 2400),
+  );
+  return otherBoss || damageDealt >= 2500 || removedOpponentCards > 0 || threatReduced >= 1000;
+}
+
+function selectCorrectBossPayoff({
+  finalBot,
+  initialOpponent,
+  finalHasProtection = false,
+  damageDealt = 0,
+  removedOpponentCards = 0,
+} = {}) {
+  const finalField = getCards(finalBot, "field");
+  const opponentField = getCards(initialOpponent, "field");
+  const opponentBackrow = getCards(initialOpponent, "spellTrap").length + (initialOpponent?.fieldSpell ? 1 : 0);
+  const opponentGy = getCards(initialOpponent, "graveyard");
+  const opponentEffects = opponentField.filter((card) => (card?.effects || []).length > 0).length;
+  const opponentWide = opponentField.length >= 2;
+  const opponentThreat = getStrongestAtk(opponentField);
+
+  if (
+    hasName(finalField, "Fire Extreme Dragon") &&
+    (opponentBackrow > 0 || opponentEffects > 0 || (initialOpponent?.lp || 8000) <= 2500)
+  ) {
+    return { name: "Fire Extreme Dragon", score: 3.5 };
+  }
+  if (
+    hasName(finalField, "Volcanic Extreme Dragon") &&
+    (opponentWide || opponentThreat >= 2200 || opponentGy.length >= 4)
+  ) {
+    return { name: "Volcanic Extreme Dragon", score: 3.5 };
+  }
+  if (
+    hasName(finalField, "Purified Crystal Dragon") &&
+    (finalHasProtection || opponentThreat >= 2200 || (finalBot?.lp || 8000) <= 3500)
+  ) {
+    return { name: "Purified Crystal Dragon", score: 3 };
+  }
+  if (
+    hasName(finalField, "Black Bull Dragon") &&
+    (opponentWide || damageDealt >= 1500 || removedOpponentCards > 0)
+  ) {
+    return { name: "Black Bull Dragon", score: 3 };
+  }
+  return null;
+}
+
 function finalHandGainedFromInitialGy(initialBot = {}, finalBot = {}, predicate = () => true) {
   const initialNames = new Set(
     getCards(initialBot, "graveyard")
@@ -1035,6 +1226,7 @@ export function scoreDragonLineMilestones(context = {}) {
   const initialOpponent = getPlanningOpponent(initialState);
   const finalOpponent = getPlanningOpponent(finalState);
   const milestones = [];
+  const currentListMode = isCurrentDragonListMode(context.analysis);
 
   const initialFieldDragons = getFieldDragons(initialBot);
   const finalFieldDragons = getFieldDragons(finalBot);
@@ -1095,6 +1287,23 @@ export function scoreDragonLineMilestones(context = {}) {
         "Battle: removed opposing monster",
         Math.min(5, battleRemovedOpponentCards * 2),
       );
+      const removedThreatScore = battleSteps.reduce(
+        (sum, step) =>
+          sum +
+          (step.destroyedCards || [])
+            .filter((card) => card?.owner === "opponent" && card.cardKind === "monster")
+            .reduce(
+              (innerSum, card) =>
+                innerSum + Math.max(getEffectiveAtk(card), getEffectiveDef(card)) / 1000,
+              0,
+            ),
+        0,
+      );
+      addLineMilestone(
+        milestones,
+        "Battle: threat removed",
+        Math.min(4, 1.5 + removedThreatScore),
+      );
     }
     if (battleDamage >= 1000) {
       addLineMilestone(
@@ -1114,6 +1323,11 @@ export function scoreDragonLineMilestones(context = {}) {
           ? "Battle: Jagged Peak reached cashout"
           : "Battle: Jagged Peak gained counter",
         finalCounters >= 5 ? 4 : 1.5,
+      );
+      addLineMilestone(
+        milestones,
+        "Battle: Jagged Peak counter mattered",
+        finalCounters >= 5 ? 2.5 : 1,
       );
     }
     if (
@@ -1194,6 +1408,45 @@ export function scoreDragonLineMilestones(context = {}) {
     addLineMilestone(milestones, "Engine: discard cost converted into value", 2.5);
   }
 
+  if (
+    sequenceMentionsAny(sequence, ECLIPSE_ENGINE_NAMES) &&
+    (
+      finalFieldDragons.some((card) => ECLIPSE_ENGINE_NAMES.has(card?.name)) ||
+      getCards(finalBot, "graveyard").some((card) => ECLIPSE_ENGINE_NAMES.has(card?.name))
+    ) &&
+    (
+      finalDragonFieldCount > initialDragonFieldCount ||
+      finalHand.length >= initialHand.length - 1 ||
+      finalHasLiveEclipseStelyaFollowUp(finalBot)
+    )
+  ) {
+    addLineMilestone(milestones, "Engine: Eclipse online", 5);
+  }
+
+  if (
+    sequenceMentionsAny(sequence, ECLIPSE_STELYA_RESOURCE_NAMES) &&
+    finalHasLiveEclipseStelyaFollowUp(finalBot) &&
+    (
+      finalHasBoss ||
+      finalDragonFieldCount >= 2 ||
+      finalUsefulGy > initialUsefulGy
+    )
+  ) {
+    addLineMilestone(milestones, "Resource: discard became GY follow-up", 3);
+  }
+
+  if (
+    sequenceMentions(sequence, "Stelya, Dragon Tamer") &&
+    finalHasBoss &&
+    (
+      finalDragonFieldCount >= initialDragonFieldCount ||
+      sequenceMentions(sequence, "Extreme Dragon Awakening") ||
+      getCards(finalBot, "hand").some((card) => DRAGON_BOSS_NAMES.has(card?.name))
+    )
+  ) {
+    addLineMilestone(milestones, "Bridge: Stelya converts small field into boss", 5);
+  }
+
   const radiant = findFinalFieldCard(finalBot, "Radiant Cosmic Dragon");
   if (radiant) {
     addLineMilestone(milestones, "Payoff: Radiant Cosmic Dragon reached field", 8);
@@ -1262,13 +1515,14 @@ export function scoreDragonLineMilestones(context = {}) {
   }
 
   if (
+    !currentListMode &&
     hasAction(sequence, "Abyssal Serpent Dragon", "monsterEffect") &&
     (removedOpponentCards > 0 || threatReduced >= 800)
   ) {
     addLineMilestone(milestones, "Control: Abyssal removed a threat", 4);
   }
 
-  if (findFinalFieldCard(finalBot, "Darkness Dragon") && finalThreat > 0) {
+  if (!currentListMode && findFinalFieldCard(finalBot, "Darkness Dragon") && finalThreat > 0) {
     addLineMilestone(milestones, "Control: Darkness Dragon pressure available", 3);
   }
 
@@ -1276,6 +1530,42 @@ export function scoreDragonLineMilestones(context = {}) {
     if (findFinalFieldCard(finalBot, name) && (damageDealt > 0 || finalThreat > 0 || finalHasProtection)) {
       addLineMilestone(milestones, `Control: ${name} reached suitable context`, 3);
     }
+  }
+
+  const correctBoss = selectCorrectBossPayoff({
+    finalBot,
+    initialOpponent,
+    finalHasProtection,
+    damageDealt,
+    removedOpponentCards,
+  });
+  if (correctBoss) {
+    addLineMilestone(
+      milestones,
+      "Payoff: correct boss for matchup",
+      correctBoss.score,
+      correctBoss.name,
+    );
+  }
+
+  const soloExtreme = getFinalSoloExtreme(finalBot);
+  if (soloExtreme.preserved) {
+    addLineMilestone(
+      milestones,
+      `Control: ${soloExtreme.card.name} kept solo protection`,
+      2.5,
+    );
+  } else if (
+    soloExtreme.broken &&
+    !hasMajorSoloBreakPayoff({
+      finalBot,
+      damageDealt,
+      removedOpponentCards,
+      threatReduced,
+    })
+  ) {
+    addLineMilestone(milestones, "Penalty: broke solo Extreme protection", -5);
+    addLineMilestone(milestones, "Penalty: Fire/Volcanic unprotected without payoff", -3);
   }
 
   const initialSanctuarySet = getCards(initialBot, "spellTrap").some(
@@ -1290,6 +1580,40 @@ export function scoreDragonLineMilestones(context = {}) {
     (!initialSanctuarySet || initialDragonFieldCount === 0)
   ) {
     addLineMilestone(milestones, "Control: Dragon Spirit Sanctuary set with target", 2.5);
+  }
+  if (
+    finalSanctuarySet &&
+    getCards(finalBot, "field").some(isRelevantDefenseDragon) &&
+    getCards(finalBot, "hand").some(isDragonMonster)
+  ) {
+    addLineMilestone(milestones, "Defense: Sanctuary protects boss", finalHasBoss ? 3.5 : 2);
+  } else if (
+    finalSanctuarySet &&
+    finalDragonFieldCount > 0 &&
+    !getCards(finalBot, "field").some(isRelevantDefenseDragon) &&
+    !getCards(finalBot, "hand").some((card) => isDragonMonster(card) && !["Armored Dragon", "Grey Dragon"].includes(card.name))
+  ) {
+    addLineMilestone(milestones, "Penalty: Sanctuary spent on weak body", -2.5);
+  }
+
+  const initialCallSet = getCards(initialBot, "spellTrap").some(
+    (card) => card?.name === "Call of the Haunted",
+  );
+  const finalCallSet = getCards(finalBot, "spellTrap").some(
+    (card) => card?.name === "Call of the Haunted",
+  );
+  if (
+    finalCallSet &&
+    (!initialCallSet ||
+      getCards(finalBot, "graveyard").some(isRelevantDefenseDragon))
+  ) {
+    const reviveName = getCards(finalBot, "graveyard").find(isRelevantDefenseDragon)?.name;
+    addLineMilestone(
+      milestones,
+      "Defense: Call revives relevant Dragon",
+      reviveName ? 2.5 : 1.2,
+      reviveName || null,
+    );
   }
 
   if (
@@ -1330,7 +1654,7 @@ export function scoreDragonLineMilestones(context = {}) {
   }
 
   const boneflame = findFinalFieldCard(finalBot, "Boneflame Dragon");
-  if (boneflame && getEffectiveAtk(boneflame) >= 2500) {
+  if (!currentListMode && boneflame && getEffectiveAtk(boneflame) >= 2500) {
     addLineMilestone(milestones, "Resource: Boneflame became meaningful attacker", 3);
   }
 
@@ -1340,6 +1664,21 @@ export function scoreDragonLineMilestones(context = {}) {
 
   if (banishedDragonDelta >= 3 && !finalHasBoss && !finalHasProtection && damageDealt < 1500) {
     addLineMilestone(milestones, "Penalty: banished critical GY resources early", -7);
+  }
+
+  const criticalEclipseBanishDelta = Math.max(
+    0,
+    countNames(getCards(finalBot, "banished"), ECLIPSE_STELYA_RESOURCE_NAMES) -
+      countNames(getCards(initialBot, "banished"), ECLIPSE_STELYA_RESOURCE_NAMES),
+  );
+  if (
+    criticalEclipseBanishDelta > 0 &&
+    !finalHasBoss &&
+    !finalHasProtection &&
+    damageDealt < 1500 &&
+    removedOpponentCards <= 0
+  ) {
+    addLineMilestone(milestones, "Penalty: banished critical Eclipse/Stelya resource", -5);
   }
 
   if (
@@ -1391,6 +1730,12 @@ export function scoreDragonLineMilestones(context = {}) {
 
   if (sequence.length >= 4 && !finalHasBoss && removedOpponentCards <= 0 && damageDealt < 1000) {
     addLineMilestone(milestones, "Penalty: long Dragon line without payoff", -3);
+  }
+  if (
+    currentListMode &&
+    sequenceCardNames(sequence).some((name) => isOutOfPlanDragonCardName(name))
+  ) {
+    addLineMilestone(milestones, "Penalty: legacy Dragon line outside current list", -8);
   }
 
   if (removedOpponentCards > 0) {
@@ -1546,6 +1891,8 @@ function scoreTerminalAdjustments(context = {}) {
   const handCount = getCards(finalBot, "hand").length;
   const usefulGyCount = getUsefulGyResources(finalBot).length;
   const extremeGyCount = getCards(finalBot, "graveyard").filter(isExtremeDragon).length;
+  const soloExtreme = getFinalSoloExtreme(finalBot);
+  const liveEclipseFollowUp = finalHasLiveEclipseStelyaFollowUp(finalBot);
 
   let score = 0;
 
@@ -1562,6 +1909,8 @@ function scoreTerminalAdjustments(context = {}) {
   score += scorePurifiedRainbowSetup(finalBot);
   if (hasHandFollowUp(finalBot)) score += 1.8;
   if (hasGraveyardFollowUp(finalBot)) score += 1.4;
+  if (soloExtreme.preserved) score += 2.2;
+  if (hasBossOnField(finalBot) && liveEclipseFollowUp) score += 1.4;
 
   if (dragonCount === 0 && countOpponentBoardCards(finalOpponent) > 0) score -= 6;
   if (handCount === 0 && dragonCount === 0) score -= 4;
@@ -1570,6 +1919,24 @@ function scoreTerminalAdjustments(context = {}) {
   }
   if (usefulGyCount === 0 && !hasHandFollowUp(finalBot) && !hasBossOnField(finalBot)) {
     score -= 3;
+  }
+  if (
+    soloExtreme.broken &&
+    !hasMajorSoloBreakPayoff({
+      finalBot,
+      damageDealt,
+      removedOpponentCards,
+      threatReduced,
+    })
+  ) {
+    score -= 4.2;
+  }
+  if (
+    countNames(getCards(finalBot, "banished"), ECLIPSE_STELYA_RESOURCE_NAMES) >= 2 &&
+    !hasBossOnField(finalBot) &&
+    usefulGyCount < 2
+  ) {
+    score -= 3.2;
   }
   if (finalThreat >= Math.max(2600, totalAtk) && !hasProtectedDragon(finalBot)) {
     score -= 3.5;
@@ -1672,6 +2039,7 @@ function inferDragonLineHeadline(context = {}) {
   const finalBot = getPlanningBot(context.finalState || {});
   const milestones = (context.milestones || []).map(milestoneLabel).filter(Boolean);
   const usedNames = sequenceCardNames(sequence);
+  const currentListMode = isCurrentDragonListMode(context.analysis);
   const hasUsed = (name, type = null) =>
     sequence.some(
       (action) =>
@@ -1719,6 +2087,14 @@ function inferDragonLineHeadline(context = {}) {
     return "Luminous starter into Voltaic extender";
   }
 
+  if (
+    (usedNames.includes("Solar Eclipse Dragon") || usedNames.includes("Lunar Eclipse Dragon")) &&
+    usedNames.includes("Stelya, Dragon Tamer") &&
+    finalPayoff
+  ) {
+    return `Eclipse engine bridges through Stelya into ${finalPayoff}`;
+  }
+
   if (hasUsed("Extreme Dragon Awakening")) {
     const target =
       findFinalPayoffName(finalBot, [
@@ -1741,7 +2117,7 @@ function inferDragonLineHeadline(context = {}) {
     return "Polymerization line toward Dragon fusion";
   }
 
-  if (hasUsed("Converging Stars", "spell")) {
+  if (!currentListMode && hasUsed("Converging Stars", "spell")) {
     const highLevel = getCards(finalBot, "field").find(
       (card) => isFaceupDragon(card) && (card.level || 0) >= 5,
     );
@@ -1795,6 +2171,9 @@ function inferDragonLineHeadline(context = {}) {
     usedNames.includes("Stelya, Dragon Tamer") ||
     usedNames.includes("Grey Dragon")
   ) {
+    if (usedNames.includes("Solar Eclipse Dragon") || usedNames.includes("Lunar Eclipse Dragon")) {
+      return "Eclipse engine converts discard into follow-up";
+    }
     return "GY resource loop into board presence";
   }
 
@@ -1867,6 +2246,7 @@ export function buildDragonPlanningProfile(analysis = {}, context = {}) {
   const phase = String(analysis.phase || game.phase || "main1").toLowerCase();
   const manual = game?.turnLineSearchEnabled === true;
   const dragonState = analysis.dragonState || {};
+  const currentListMode = isCurrentDragonListMode(analysis);
   const reasons = [];
 
   if (
@@ -1914,7 +2294,7 @@ export function buildDragonPlanningProfile(analysis = {}, context = {}) {
       reasons.push(`Polymerization has ${fusionPlan.fusionName} payoff`);
     }
   }
-  if (hasName(hand, "Converging Stars") && hasHighLevelDragon(hand)) {
+  if (!currentListMode && hasName(hand, "Converging Stars") && hasHighLevelDragon(hand)) {
     reasons.push("Converging Stars can reduce high-level Dragon");
   }
   if (
@@ -1975,9 +2355,17 @@ export function buildDragonPlanningProfile(analysis = {}, context = {}) {
 
   const enabled = manual || reasons.length > 0;
   const longLine = hasLongLuminousPayoff({ hand, field, deck, graveyard });
+  const eclipseStelyaLine =
+    reasons.includes("Eclipse starter live") &&
+    (
+      dragonState.hasStelyaInHand ||
+      dragonState.hasStelyaInGY ||
+      dragonState.hasStelyaInDeck ||
+      deck.some((card) => isDragonMonster(card) && (card.level || 0) >= 5)
+    );
   const requestedTurnMode = game?.turnLineSearchTurnMode;
   const battleStepLimit = blackBullBattlePlan ? 2 : 1;
-  const maxDepth = phase.includes("main2") ? 3 : longLine ? 5 : 4;
+  const maxDepth = phase.includes("main2") ? 3 : (longLine || eclipseStelyaLine) ? 5 : 4;
 
   return {
     ...DEFAULT_PROFILE,
@@ -1993,7 +2381,7 @@ export function buildDragonPlanningProfile(analysis = {}, context = {}) {
       : maxDepth,
     nodeBudget: Number.isFinite(game?.turnLineSearchNodeBudget)
       ? game.turnLineSearchNodeBudget
-      : DEFAULT_PROFILE.nodeBudget + (battleBridge ? 40 : 0),
+      : DEFAULT_PROFILE.nodeBudget + (battleBridge ? 40 : 0) + (eclipseStelyaLine ? 40 : 0),
     candidateLimit: Number.isFinite(game?.turnLineSearchCandidateLimit)
       ? game.turnLineSearchCandidateLimit
       : DEFAULT_PROFILE.candidateLimit,

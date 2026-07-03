@@ -1115,6 +1115,7 @@ export const arcanistCards = [
             targetRef: "opponent_field",
             atkBoost: -100,
             defBoost: -100,
+            allowEmpty: true,
           },
         ],
       },

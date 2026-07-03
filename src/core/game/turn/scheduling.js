@@ -110,11 +110,39 @@ export async function resolveDelayedAction(action) {
       case "delayed_summon":
         await this.resolveDelayedSummon(action.payload);
         break;
-      // Future action types can be added here
+      case "delayed_destroy":
+        await resolveDelayedDestroy.call(this, action.payload);
+        break;
       default:
         console.warn(`Unknown delayed action type: ${action.actionType}`);
     }
   } catch (err) {
     console.error("Error resolving delayed action:", err);
   }
+}
+
+async function resolveDelayedDestroy(payload = {}) {
+  const card = payload.card || null;
+  if (!card) return;
+
+  const expectedOwnerId = payload.owner || payload.ownerId || card.owner || null;
+  const owner =
+    expectedOwnerId === "player"
+      ? this.player
+      : expectedOwnerId === "bot"
+        ? this.bot
+        : card.owner === "player"
+          ? this.player
+          : card.owner === "bot"
+            ? this.bot
+            : null;
+  if (!owner || !Array.isArray(owner.field) || !owner.field.includes(card)) {
+    return;
+  }
+
+  await this.destroyCard(card, {
+    cause: "effect",
+    sourceCard: payload.sourceCard || null,
+    sourcePlayer: payload.sourcePlayer || null,
+  });
 }

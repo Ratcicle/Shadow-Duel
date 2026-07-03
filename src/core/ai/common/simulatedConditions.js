@@ -923,6 +923,44 @@ export function evaluateSimulatedConditions(conditions, ctx = {}) {
       }
       return true;
     }
+    if (condition.type === "source_has_marker") {
+      const sourceCard =
+        ctx.sourceCard ||
+        ctx.source ||
+        options.sourceCard ||
+        options.actionContext?.source;
+      const key = condition.key || condition.stateKey;
+      const marker = key ? sourceCard?.effectMarkers?.[key] : null;
+      if (!marker) return false;
+      if (
+        Number.isFinite(marker.expiresOnTurn) &&
+        Number(state.turnCounter || 0) > marker.expiresOnTurn
+      ) {
+        return false;
+      }
+      if (
+        condition.sourceEffectId &&
+        marker.sourceEffectId !== condition.sourceEffectId
+      ) {
+        return false;
+      }
+      if (
+        Number.isFinite(condition.minMatchingCostCount) &&
+        Number(marker.matchingCostCount || 0) < condition.minMatchingCostCount
+      ) {
+        return false;
+      }
+      if (condition.requireCurrentFieldPresence === true) {
+        if (
+          !sourceCard?.fieldPresenceId ||
+          !marker.fieldPresenceId ||
+          marker.fieldPresenceId !== sourceCard.fieldPresenceId
+        ) {
+          return false;
+        }
+      }
+      return true;
+    }
     return true;
   });
 }

@@ -41,6 +41,65 @@ function localizeTierOptions(options, effectChoiceKey) {
   });
 }
 
+function costCardMatchesMarkerFilters(card, filters = {}, engine = null) {
+  if (!card) return false;
+  if (
+    engine &&
+    typeof engine.cardMatchesFilters === "function" &&
+    filters &&
+    Object.keys(filters).length > 0
+  ) {
+    return engine.cardMatchesFilters(card, filters);
+  }
+  if (filters.cardKind && card.cardKind !== filters.cardKind) return false;
+  const nameFilter = filters.cardName || filters.name;
+  if (nameFilter && card.name !== nameFilter) return false;
+  if (filters.archetype) {
+    const archetypes = Array.isArray(card.archetypes) ? card.archetypes : [];
+    if (card.archetype !== filters.archetype && !archetypes.includes(filters.archetype)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function applyConditionalMarkersOnSummon(action, ctx, source, paidCostCards, engine) {
+  const markerConfigs = Array.isArray(action?.conditionalMarkersOnSummon)
+    ? action.conditionalMarkersOnSummon
+    : action?.conditionalMarkersOnSummon
+      ? [action.conditionalMarkersOnSummon]
+      : [];
+  if (!source || markerConfigs.length === 0) return;
+
+  for (const markerConfig of markerConfigs) {
+    if (!markerConfig?.key) continue;
+    const filters = markerConfig.costFilters || markerConfig.filters || {};
+    const matchingCostCards = (paidCostCards || []).filter((card) =>
+      costCardMatchesMarkerFilters(card, filters, engine),
+    );
+    const min = Number.isFinite(markerConfig.min) ? markerConfig.min : 1;
+    if (matchingCostCards.length < min) continue;
+
+    if (!source.effectMarkers || typeof source.effectMarkers !== "object") {
+      source.effectMarkers = {};
+    }
+
+    const marker = {
+      key: markerConfig.key,
+      sourceEffectId:
+        markerConfig.sourceEffectId || ctx?.effect?.id || action?.sourceEffectId || null,
+      createdOnTurn: Number(engine?.game?.turnCounter || 0),
+      matchingCostCount: matchingCostCards.length,
+    };
+
+    if (markerConfig.bindToFieldPresence === true && source.fieldPresenceId) {
+      marker.fieldPresenceId = source.fieldPresenceId;
+    }
+
+    source.effectMarkers[markerConfig.key] = marker;
+  }
+}
+
 export async function handleSpecialSummonFromHandWithCost(
   action,
   ctx,
@@ -90,6 +149,7 @@ export async function handleSpecialSummonFromHandWithCost(
 
     const costDestination = action.costDestination || "graveyard";
     const costMovedByEffect = action.costMovedByEffect === true;
+    const paidCostCards = [];
     const getCostOwner = (costCard) =>
       (typeof engine.getOwnerByCard === "function"
         ? engine.getOwnerByCard(costCard)
@@ -133,6 +193,7 @@ export async function handleSpecialSummonFromHandWithCost(
           fromZone,
           contextLabel: action.contextLabel || "special_summon_cost",
           sourceCard: source,
+          sourcePlayer: player,
           effectId: ctx?.effect?.id || null,
           movedByEffect: costMovedByEffect,
           awaitCardMovedEvent: true,
@@ -154,6 +215,7 @@ export async function handleSpecialSummonFromHandWithCost(
         }
 
         banishedCount++;
+        paidCostCards.push(costCard);
       }
 
       getUI(game)?.log(
@@ -185,13 +247,14 @@ export async function handleSpecialSummonFromHandWithCost(
         }
 
         returnedCount++;
+        paidCostCards.push(costCard);
       }
 
       getUI(game)?.log(
         `Returned ${returnedCount} card(s) to hand as cost.`,
       );
     } else {
-      await sendCardsToGraveyard(costTargets, player, engine, {
+      const sendResult = await sendCardsToGraveyard(costTargets, player, engine, {
         resolveFromZone: (costCard) =>
           typeof engine.findCardZone === "function"
             ? engine.findCardZone(player, costCard) || fallbackCostZone
@@ -199,6 +262,7 @@ export async function handleSpecialSummonFromHandWithCost(
         fallbackZone: fallbackCostZone,
         useResolvedZoneOnFallback: false,
       });
+      paidCostCards.push(...(sendResult?.movedCards || []));
     }
 
     const success = await performSummon();
@@ -206,6 +270,8 @@ export async function handleSpecialSummonFromHandWithCost(
     if (!success) {
       return false;
     }
+
+    applyConditionalMarkersOnSummon(action, ctx, source, paidCostCards, engine);
 
     getUI(game)?.log(
       `${player.name || player.id} Special Summoned ${source.name} from hand.`,
@@ -250,23 +316,17 @@ export async function handleSpecialSummonFromHandWithCost(
     {
       count: 1,
       label: getUIText("ui.summon.tierFallback", { count: 1 }),
-      description: getUIText(
-        "effectChoices.void_serpent_drake_hand_special.tiers.1.description",
-      ),
+      description: "",
     },
     {
       count: 2,
       label: getUIText("ui.summon.tierFallback", { count: 2 }),
-      description: getUIText(
-        "effectChoices.void_serpent_drake_hand_special.tiers.2.description",
-      ),
+      description: "",
     },
     {
       count: 3,
       label: getUIText("ui.summon.tierFallback", { count: 3 }),
-      description: getUIText(
-        "effectChoices.void_serpent_drake_hand_special.tiers.3.description",
-      ),
+      description: "",
     },
   ];
 
@@ -288,7 +348,7 @@ export async function handleSpecialSummonFromHandWithCost(
     });
   } else if (getUI(game)?.showNumberPrompt) {
     const parsed = getUI(game).showNumberPrompt(
-      getUIText("ui.voidSerpent.costPrompt", { max: allowedMax }),
+      getUIText("ui.tieredCost.costPrompt", { max: allowedMax }),
       String(allowedMax),
     );
 
@@ -333,7 +393,7 @@ export async function handleSpecialSummonFromHandWithCost(
               decorated,
               selectionContract: {
                 kind: "cost",
-                message: getUIText("ui.voidSerpent.selectCost"),
+                message: getUIText("ui.tieredCost.selectCost"),
                 requirements: [
                   {
                     id: requirementId,
@@ -341,7 +401,7 @@ export async function handleSpecialSummonFromHandWithCost(
                     max: chosenCount,
                     zones: ["field"],
                     owner: "player",
-                    filters: { cardKind: "monster", name: "Void Hollow" },
+                    filters,
                     allowSelf: true,
                     distinct: true,
                     candidates: decorated,

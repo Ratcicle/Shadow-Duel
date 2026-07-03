@@ -3,6 +3,7 @@ import {
   registerDefaultHandlers,
 } from "./ActionHandlers.js";
 import { attachEffectModules } from "./effects/attachModules.js";
+import { canUseOncePerDuelEffect } from "./effects/triggers/registration.js";
 
 export default class EffectEngine {
   constructor(game) {
@@ -81,20 +82,7 @@ export default class EffectEngine {
   }
 
   checkOncePerDuel(card, player, effect) {
-    if (!effect || !effect.oncePerDuel || !player) {
-      return { ok: true };
-    }
-
-    const key = effect.oncePerDuelName || effect.id || card?.name;
-    player.oncePerDuelUsageByName =
-      player.oncePerDuelUsageByName || Object.create(null);
-    if (player.oncePerDuelUsageByName[key]) {
-      return {
-        ok: false,
-        reason: "Once per duel effect already used.",
-      };
-    }
-    return { ok: true };
+    return canUseOncePerDuelEffect(card, player, effect);
   }
 
   checkEffectCondition(

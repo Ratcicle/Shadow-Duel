@@ -240,6 +240,7 @@ export async function handleSpecialSummonFromZone(
       fromZone: sourceEntry.name,
       contextLabel: action.contextLabel || "special_summon_banish_cost",
       sourceCard: source,
+      sourcePlayer: player,
       effectId: ctx?.effect?.id || null,
       movedByEffect: false,
       awaitCardMovedEvent: true,
@@ -909,6 +910,23 @@ async function summonCards(
         method: "special",
         fromZone: resolvedFromZone || fromZoneName || "deck",
       });
+    }
+
+    if (action.destroySummonedAtEndPhase === true) {
+      game.scheduleDelayedAction?.(
+        "delayed_destroy",
+        {
+          phase: "end",
+          player: game.turn,
+        },
+        {
+          card,
+          owner: summonPlayer.id,
+          sourceCard: source || null,
+          sourcePlayer: player || null,
+        },
+        0,
+      );
     }
 
     summoned++;

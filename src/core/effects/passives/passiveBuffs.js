@@ -310,6 +310,23 @@ function countPassiveFieldCounters(engine, sourceOwner, passive) {
     return count;
   }
 
+function passiveConditionsAreMet(engine, sourceCard, sourceOwner, passive) {
+    const rawConditions = passive?.conditions || passive?.condition || null;
+    const conditions = normalizePassiveList(rawConditions);
+    if (conditions.length === 0) return true;
+    if (typeof engine?.evaluateConditions !== "function") return false;
+
+    const game = engine?.game || null;
+    const opponent =
+      typeof game?.getOpponent === "function" ? game.getOpponent(sourceOwner) : null;
+    const result = engine.evaluateConditions(conditions, {
+      player: sourceOwner,
+      opponent,
+      source: sourceCard,
+    });
+    return result?.ok !== false;
+  }
+
 export function updatePassiveBuffs() {
     if (!this.game) return false;
 
@@ -365,7 +382,10 @@ export function updatePassiveBuffs() {
         if (!passive) return;
         const sourceEffectsNegated = passiveSourceEffectsAreNegated(this, card);
         if (sourceEffectsNegated) {
-          if (passive.type === "position_status") {
+          if (
+            passive.type === "position_status" ||
+            passive.type === "conditional_status"
+          ) {
             const statusName = passive.status || "battleIndestructible";
             if (card[statusName]) {
               delete card[statusName];
@@ -416,6 +436,26 @@ export function updatePassiveBuffs() {
           const activePos = passive.activePosition || "defense";
           const statusName = passive.status || "battleIndestructible";
           const shouldHave = (card.position || "attack") === activePos;
+          const hasNow = !!card[statusName];
+          if (shouldHave && !hasNow) {
+            card[statusName] = true;
+            updated = true;
+          } else if (!shouldHave && hasNow) {
+            delete card[statusName];
+            updated = true;
+          }
+          return;
+        }
+
+        // Passive: applies a status while a declarative condition is true.
+        if (passive.type === "conditional_status") {
+          const statusName = passive.status || "battleIndestructible";
+          const shouldHave = passiveConditionsAreMet(
+            this,
+            card,
+            sourceOwner,
+            passive,
+          );
           const hasNow = !!card[statusName];
           if (shouldHave && !hasNow) {
             card[statusName] = true;

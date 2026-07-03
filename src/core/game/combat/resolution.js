@@ -460,7 +460,6 @@ export async function resolveCombat(attacker, target, options = {}) {
 
   this.lastAttackNegated = false;
 
-  this.ui.log(`${attacker.name} attacks ${target ? target.name : "directly"}!`);
   this.battleStep = "battle";
   this.damageStepTiming = null;
 
@@ -472,6 +471,132 @@ export async function resolveCombat(attacker, target, options = {}) {
       ? this.bot
       : this.player;
   let targetOwner = defenderOwner;
+
+  const applyAttackRedirect = (redirectPayload) => {
+    const redirectedTarget =
+      redirectPayload?.attackRedirect?.target ||
+      redirectPayload?.redirectedTarget ||
+      null;
+    const redirectedTargetOwner =
+      redirectPayload?.attackRedirect?.targetOwner ||
+      redirectPayload?.redirectedTargetOwner ||
+      null;
+    const redirectIsValid =
+      redirectedTarget &&
+      redirectedTarget.cardKind === "monster" &&
+      redirectedTargetOwner &&
+      Array.isArray(redirectedTargetOwner.field) &&
+      redirectedTargetOwner.field.includes(redirectedTarget) &&
+      redirectedTargetOwner.id !== attackerOwner?.id;
+    if (!redirectIsValid) return false;
+
+    target = redirectedTarget;
+    defenderOwner = redirectedTargetOwner;
+    targetOwner = redirectedTargetOwner;
+    this.applyAttackResolutionIndicators(attacker, target);
+    this.ui?.log?.(`Attack target changed to ${target.name}.`);
+    return true;
+  };
+
+  const validateAttackDeclaration = () => {
+    const attackerStillOnField =
+      attackerOwner && Array.isArray(attackerOwner.field)
+        ? attackerOwner.field.includes(attacker)
+        : false;
+    if (!attackerStillOnField) {
+      return {
+        ok: false,
+        reason: "Attack stopped before declaration because the attacker left the field.",
+      };
+    }
+    if (attacker.position !== "attack" || attacker.isFacedown) {
+      return {
+        ok: false,
+        reason:
+          "Attack stopped before declaration because the attacker is no longer in Attack Position.",
+      };
+    }
+    if (target) {
+      const targetOwnerField =
+        targetOwner?.field ||
+        (target.owner === "player" ? this.player.field : this.bot.field);
+      if (!targetOwnerField.includes(target)) {
+        return {
+          ok: false,
+          reason: "Attack stopped before declaration because the target left the field.",
+        };
+      }
+    } else {
+      if (
+        (attacker.attacksUsedThisTurn || 0) > 0 &&
+        (attacker.extraAttackTargetRestriction ||
+          attacker.passiveExtraAttackTargetRestriction) === "monster"
+      ) {
+        return {
+          ok: false,
+          reason: `${attacker.name}'s extra attack can only target monsters.`,
+        };
+      }
+      if (attacker.cannotAttackDirectly) {
+        return {
+          ok: false,
+          reason: `${attacker.name} cannot attack directly.`,
+        };
+      }
+      if (attacker.canAttackAllOpponentMonstersThisTurn) {
+        return {
+          ok: false,
+          reason: `${attacker.name} can only attack monsters this turn.`,
+        };
+      }
+      if (attackerOwner?.forbidDirectAttacksThisTurn) {
+        return {
+          ok: false,
+          reason: "You cannot attack directly this turn.",
+        };
+      }
+      const opponentField = defenderOwner?.field || [];
+      const hasOpponentMonster = opponentField.some(
+        (card) => card && card.cardKind === "monster",
+      );
+      if (hasOpponentMonster && attacker.canAttackDirectlyThisTurn !== true) {
+        return {
+          ok: false,
+          reason: "Attack stopped before declaration because a direct attack is no longer valid.",
+        };
+      }
+    }
+    return { ok: true };
+  };
+
+  const battleStepOpenContext = {
+    attacker,
+    target: target || null,
+    defender: target || null,
+    attackerOwner,
+    defenderOwner,
+    targetOwner,
+    battleStep: this.battleStep,
+    damageStepTiming: this.damageStepTiming,
+    isOpponentAttack: attackerOwner?.id !== defenderOwner?.id,
+    triggerPlayer: attackerOwner,
+    addTriggerToChain: false,
+  };
+  await this.checkAndOfferTraps("battle_step_open", battleStepOpenContext);
+  applyAttackRedirect(battleStepOpenContext);
+
+  const declarationCheck = validateAttackDeclaration();
+  if (!declarationCheck.ok) {
+    if (usingSecondAttack) {
+      attacker.secondAttackUsedThisTurn = false;
+    }
+    this.ui?.log?.(declarationCheck.reason || "Attack stopped before declaration.");
+    this.clearAttackResolutionIndicators();
+    this.updateBoard();
+    return { ok: true };
+  }
+
+  this.ui.log(`${attacker.name} attacks ${target ? target.name : "directly"}!`);
 
   let battleImpactVisualPlayed = false;
   let battleLpLossPreview = null;
@@ -571,32 +696,6 @@ export async function resolveCombat(attacker, target, options = {}) {
   };
 
   await this.emit("attack_declared", attackDeclaredPayload);
-
-  const applyAttackRedirect = (redirectPayload) => {
-    const redirectedTarget =
-      redirectPayload?.attackRedirect?.target ||
-      redirectPayload?.redirectedTarget ||
-      null;
-    const redirectedTargetOwner =
-      redirectPayload?.attackRedirect?.targetOwner ||
-      redirectPayload?.redirectedTargetOwner ||
-      null;
-    const redirectIsValid =
-      redirectedTarget &&
-      redirectedTarget.cardKind === "monster" &&
-      redirectedTargetOwner &&
-      Array.isArray(redirectedTargetOwner.field) &&
-      redirectedTargetOwner.field.includes(redirectedTarget) &&
-      redirectedTargetOwner.id !== attackerOwner?.id;
-    if (!redirectIsValid) return false;
-
-    target = redirectedTarget;
-    defenderOwner = redirectedTargetOwner;
-    targetOwner = redirectedTargetOwner;
-    this.applyAttackResolutionIndicators(attacker, target);
-    this.ui?.log?.(`Attack target changed to ${target.name}.`);
-    return true;
-  };
 
   if (applyAttackRedirect(attackDeclaredPayload)) {
     const battleStepOpenContext = {

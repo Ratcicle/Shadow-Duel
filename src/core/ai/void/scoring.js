@@ -292,15 +292,11 @@ export function evaluateVoidMonster(monster, context = {}) {
 
     // Bosses
     case VOID_IDS.SLAYER_BRUTE:
-      value += 2.5; // Banish removal + fusion material
+      value += 2.5; // Conditional banish + fusion material
       break;
 
     case VOID_IDS.SERPENT_DRAKE:
-      value += 2.3;
-      // Bônus baseado em Hollows tributados (se tiver efeitos ativos)
-      if (monster.serpentDrakeBonus) {
-        value += monster.serpentDrakeBonus * 0.5;
-      }
+      value += 2.5;
       break;
 
     case VOID_IDS.FORGOTTEN_KNIGHT:
@@ -347,7 +343,7 @@ export function evaluateVoidMonster(monster, context = {}) {
 
     // Outros
     case VOID_IDS.BONE_SPIDER:
-      value += 1.5; // Controle + token na morte
+      value += 1.5; // Controle + revive Hollow na morte
       break;
 
     case VOID_IDS.TENEBRIS_HORN:

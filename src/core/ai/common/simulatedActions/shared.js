@@ -379,12 +379,28 @@ function normalizeNegateEffectsDuration(action = {}) {
     : "until_end_turn";
 }
 
+function assignSimulatedFieldPresenceId(card, state) {
+  if (!card) return;
+  if (state && typeof state === "object") {
+    state._simFieldPresenceSeq = Number(state._simFieldPresenceSeq || 0) + 1;
+    card.fieldPresenceId = `sim_fp_${card.id || "card"}_${state.turnCounter || 0}_${state._simFieldPresenceSeq}`;
+    return;
+  }
+  card.fieldPresenceId = `sim_fp_${card.id || "card"}_0`;
+}
+
 export function applySummonState(card, action, state, player, options = {}) {
+  assignSimulatedFieldPresenceId(card, state);
   card.position = chooseSpecialSummonPosition(card, action, state, player, options);
   card.isFacedown = false;
   card.hasAttacked = false;
   card.attacksUsedThisTurn = 0;
   if (action.cannotAttackThisTurn) card.cannotAttackThisTurn = true;
+  if (action.destroySummonedAtEndPhase) {
+    card.destroyAtEndPhase = true;
+    card.destroyAtEndPhaseTurn = state?.turnCounter ?? null;
+    card.destroyAtEndPhaseSource = options?.sourceCard?.name || null;
+  }
   if (action.negateEffects) {
     card.effectsNegated = true;
     card.effectsNegatedDuration = normalizeNegateEffectsDuration(action);

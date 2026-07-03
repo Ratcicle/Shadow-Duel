@@ -64,6 +64,54 @@ function getSimCardInstanceId(card) {
   return card?.instanceId ?? card?._instanceId ?? card?.uuid ?? card?.simInstanceId ?? null;
 }
 
+function applySimConditionalMarkersOnSummon({
+  action,
+  sourceCard,
+  paidCostCards,
+  state,
+  targetPlayer,
+  options,
+}) {
+  const markerConfigs = Array.isArray(action?.conditionalMarkersOnSummon)
+    ? action.conditionalMarkersOnSummon
+    : action?.conditionalMarkersOnSummon
+      ? [action.conditionalMarkersOnSummon]
+      : [];
+  if (!sourceCard || markerConfigs.length === 0) return;
+
+  for (const markerConfig of markerConfigs) {
+    if (!markerConfig?.key) continue;
+    const filters = markerConfig.costFilters || markerConfig.filters || {};
+    const matchingCostCards = (paidCostCards || []).filter((card) =>
+      matchesTargetFilters(card, filters, sourceCard, "self"),
+    );
+    const min = Number.isFinite(markerConfig.min) ? markerConfig.min : 1;
+    if (matchingCostCards.length < min) continue;
+
+    if (!sourceCard.effectMarkers || typeof sourceCard.effectMarkers !== "object") {
+      sourceCard.effectMarkers = {};
+    }
+
+    const marker = {
+      key: markerConfig.key,
+      sourceEffectId:
+        markerConfig.sourceEffectId || options.effect?.id || action.sourceEffectId || null,
+      createdOnTurn: Number(state?.turnCounter || 0),
+      matchingCostCount: matchingCostCards.length,
+    };
+
+    if (markerConfig.bindToFieldPresence === true && sourceCard.fieldPresenceId) {
+      marker.fieldPresenceId = sourceCard.fieldPresenceId;
+    }
+
+    if (targetPlayer?.id) {
+      marker.controllerId = targetPlayer.id;
+    }
+
+    sourceCard.effectMarkers[markerConfig.key] = marker;
+  }
+}
+
 function canSimSpecialSummon(card, player, summonProcedure = "special") {
   if (!card || !player) return false;
   if (
@@ -438,6 +486,7 @@ export function applySpecialSummonFromHandWithCost(ctx) {
     return owner === targetPlayer && findCardZone(owner, card) === "field";
   });
   if (!hasOpenMonsterZone(targetPlayer) && !costFreesMonsterZone) return;
+  const paidCostCards = [];
   costTargets.forEach((card) => {
     if (!card) return;
     const owner = findCardOwner(state, card) || targetPlayer;
@@ -455,12 +504,21 @@ export function applySpecialSummonFromHandWithCost(ctx) {
         effectId: options.effect?.id || null,
         actionContext: options.actionContext,
       });
+      paidCostCards.push(card);
     }
   });
   if (!hasOpenMonsterZone(targetPlayer)) return;
   removeCardFromZones(targetPlayer, sourceCard);
   applySummonState(sourceCard, action, state, targetPlayer, options);
   targetPlayer.field.push(sourceCard);
+  applySimConditionalMarkersOnSummon({
+    action,
+    sourceCard,
+    paidCostCards,
+    state,
+    targetPlayer,
+    options,
+  });
   options.onAfterSpecialSummon?.({
     state,
     player: targetPlayer,

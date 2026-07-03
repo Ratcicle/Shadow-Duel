@@ -604,19 +604,28 @@ export default class Game {
       activationZone,
       owner: owner.id || null,
     });
+    const baseActivationContext = options.activationContext || {};
     const activationContext = {
+      ...baseActivationContext,
       fromHand: activationZone === "hand",
       activationZone,
       sourceZone: activationZone,
-      effectId: options.effectId || options.activationContext?.effectId || null,
+      effectId: options.effectId || baseActivationContext.effectId || null,
       committed: false,
-      actionContext: options.actionContext || null,
+      actionContext: options.actionContext || baseActivationContext.actionContext || null,
     };
     const activationEffect = this.effectEngine?.getMonsterIgnitionEffect?.(
       card,
       activationZone,
       { effectId: activationContext.effectId },
     );
+    const manualFieldQuickEffect =
+      activationZone === "field" &&
+      (activationEffect?.isQuickEffect === true ||
+        Number(activationEffect?.speed) === 2);
+    const phaseReq = manualFieldQuickEffect
+      ? ["main1", "battle", "main2"]
+      : ["main1", "main2"];
 
     const pipelineResult = await this.runActivationPipeline({
       card,
@@ -627,7 +636,7 @@ export default class Game {
       selectionKind: "monsterEffect",
       selectionMessage: "Select target(s) for the monster effect.",
       guardKind: "monster_effect",
-      phaseReq: ["main1", "main2"],
+      phaseReq,
       oncePerTurn: {
         card,
         player: owner,

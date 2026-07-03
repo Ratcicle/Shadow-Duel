@@ -224,14 +224,14 @@ export const CARD_KNOWLEDGE = {
     level: 7,
     summonCondition: "standard",
     effect: "Main Phase: select opp monster, send both to GY; opp standby phase both return. +800 ATK if target is fusion/ascension.",
-    synergies: ["Converging Stars"],
+    synergies: ["legacy Converging Stars"],
     playPatterns: [
-      "Normal Summon with 2 tributes, or use Converging Stars to reduce tribute pressure",
-      "Priority target for Converging Stars: saves 1 tribute",
+      "Legacy support: can be Normal Summoned with 2 tributes, or reduced by Converging Stars in old lists",
+      "Not part of the current Dragon bot plan",
       "Use effect to stall big threats for a turn",
       "Especially effective against Fusion/Ascension monsters (+800 ATK bonus)",
     ],
-    convergingStarsPriority: true,
+    legacyConvergingStarsTarget: true,
     value: 9,
     legacyOnly: true,
     outOfPlan: true,
@@ -264,10 +264,10 @@ export const CARD_KNOWLEDGE = {
     synergies: ["Stelya, Dragon Tamer", "Black Bull Dragon", "Dragon tribute fodder"],
     playPatterns: [
       "Alt tribute: use 1 Dragon on field instead of 2 normal tributes",
-      "Converging Stars makes it level 5 → 1 normal tribute (any monster)",
       "Position switch is useful to expose defense monsters or flip attackers to def",
+      "Converging Stars support is legacy-only; do not build the current preset around it",
     ],
-    convergingStarsPriority: true,
+    legacyConvergingStarsTarget: true,
     value: 10,
   },
   "Darkness Dragon": {
@@ -278,11 +278,11 @@ export const CARD_KNOWLEDGE = {
     level: 5,
     summonCondition: "normal_1_tribute_or_converging_0",
     effect: "On summon: destroy all other own Dragons, gain +300 ATK per destroyed. Negate opp monster effect (discard 1).",
-    synergies: ["Converging Stars"],
+    synergies: ["legacy Converging Stars"],
     playPatterns: [
       "DANGER: Destroys all other Dragons on summon — heavy cost",
       "Only summon when it's the only way to surpass opponent's ATK with the buff",
-      "Converging Stars → level 3 → summon with 0 tributes",
+      "Legacy support: Converging Stars can reduce it, but the current preset should not plan around this",
       "Negate effect is useful tool after summon to disable key monster",
     ],
     situationalOnly: true,  // Only summon when necessary to beat opponent's ATK
@@ -349,9 +349,9 @@ export const CARD_KNOWLEDGE = {
     effect: "Cannot be Normal Summoned. GY ignition: send 1 field Dragon to GY → SS self. +300 ATK per Dragon in GY.",
     synergies: ["GY buildup", "Hellkite Dragon", "Luminescent Dragon"],
     playPatterns: [
-      "Use as GY extender when field Dragon is not needed",
-      "High GY count → very high ATK (e.g., 5 Dragons in GY = 1500 ATK base)",
-      "Sending a used-up Dragon to GY via cost improves GY resource density",
+      "Legacy GY extender for older Dragon lists",
+      "Do not prioritize over Eclipse/Stelya lines in the current preset",
+      "If used in a legacy list, spend only expendable field Dragons",
     ],
     value: 6,
     legacyOnly: true,
@@ -402,12 +402,11 @@ export const CARD_KNOWLEDGE = {
     priority: 2,
     playCondition: "has_high_level_target_in_hand",
     effect: "Discard 1 card; reduce all hand monster levels by 2 until end of turn.",
-    synergies: ["Abyssal Serpent Dragon", "Majestic Silver Dragon", "Darkness Dragon"],
+    synergies: ["legacy high-level Dragon hands"],
     playPatterns: [
-      "Priority: Darkness Dragon in hand → level 5→3, free summon",
-      "Priority: Abyssal Serpent in hand → level 7→5, saves 1 tribute",
-      "Priority: Majestic Silver in hand with 1 tribute available → level 7→5, 1 regular tribute instead of 1 Dragon tribute",
-      "DO NOT play if only dragons that self-summon are in hand (Black Bull, Hellkite, Purified Crystal)",
+      "Legacy-only level reduction spell for older Dragon lists",
+      "Current Dragon preset gets level reduction from Solar Eclipse Dragon instead",
+      "Do not use as a current-list priority signal",
     ],
     value: 9,
     legacyOnly: true,
@@ -598,7 +597,19 @@ export const OUT_OF_PLAN_DRAGON_CARD_NAMES = [
   "Mist Extreme Dragon",
   "Galaxy Extreme Dragon",
   "Forest Extreme Dragon",
+  "Supreme Bahamut Dragon",
 ];
+
+const CURRENT_DRAGON_BOT_CARD_NAME_SET = new Set(CURRENT_DRAGON_BOT_CARD_NAMES);
+const OUT_OF_PLAN_DRAGON_CARD_NAME_SET = new Set(OUT_OF_PLAN_DRAGON_CARD_NAMES);
+
+export function isCurrentDragonBotCardName(name) {
+  return CURRENT_DRAGON_BOT_CARD_NAME_SET.has(name);
+}
+
+export function isOutOfPlanDragonCardName(name) {
+  return OUT_OF_PLAN_DRAGON_CARD_NAME_SET.has(name);
+}
 
 export const ECLIPSE_ENGINE_NAMES = [
   "Solar Eclipse Dragon",
@@ -632,22 +643,28 @@ export const CURRENT_AWAKENING_TARGET_NAMES = [
   "Black Bull Dragon",
 ];
 
-// ===== SELF-SUMMONING MONSTER NAMES (don't need Converging Stars) =====
+// ===== CURRENT SELF-SUMMONERS (legacy cards stay out of current planning) =====
 export const SELF_SUMMON_MONSTERS = [
   "Black Bull Dragon",
   "Hellkite Dragon",
   "Purified Crystal Dragon",
   "Voltaic Dragon",
   "Stelya, Dragon Tamer",
-  "Boneflame Dragon",
   "Luminous Dragon",
 ];
 
-// ===== CONVERGING STARS PRIORITY TARGETS =====
+export const LEGACY_SELF_SUMMON_MONSTERS = [
+  "Boneflame Dragon",
+];
+
+// ===== CONVERGING STARS TARGETS (legacy plan; current list does not run it) =====
 export const CONVERGING_STARS_TARGETS = [
-  "Darkness Dragon",        // lv5 -> lv3 = 0 tributes (highest benefit)
-  "Abyssal Serpent Dragon", // lv7 -> lv5 = 1 tribute (saves 1 tribute)
-  "Majestic Silver Dragon", // lv7 -> lv5 = 1 regular tribute (any monster)
+  "Majestic Silver Dragon",
+];
+
+export const LEGACY_CONVERGING_STARS_TARGETS = [
+  "Darkness Dragon",
+  "Abyssal Serpent Dragon",
 ];
 
 /**
@@ -711,6 +728,9 @@ export function selectBestExtremeDragon(extremesInHand, analysis) {
 
   const scores = extremesInHand.map((card) => {
     let score = CARD_KNOWLEDGE[card.name]?.priority || 5;
+    if (analysis?.currentDragonBotList !== false && isOutOfPlanDragonCardName(card.name)) {
+      score -= 100;
+    }
 
     if (card.name === "Fire Extreme Dragon") {
       // Best when aggressive — opponent has many effects or low LP

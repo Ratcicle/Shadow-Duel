@@ -4,8 +4,8 @@
 //
 // DRAGON DECK PHILOSOPHY:
 // - Mid-range Dragon beatdown with powerful singletons
-// - Early game: Armored Dragon search, Luminescent revive, field presence
-// - Mid game: Jagged Peak counters, Hellkite recursion, Boneflame GY pump
+// - Early game: Eclipse engine, Armored search, Luminescent revive
+// - Mid game: Stelya bridge, Jagged Peak counters, Hellkite recursion
 // - Late game: Radiant/Tech fusion, Awakening bosses, and GY resource loops
 // - Key constraint: Only 1 face-up Extreme Dragon on field at a time
 // - Key constraint: Extreme Dragons in GY are useful resources, not an automatic win plan
@@ -46,7 +46,9 @@ import {
 
 import {
   CARD_KNOWLEDGE,
+  CURRENT_AWAKENING_TARGET_NAMES,
   isExtremeDragon,
+  isOutOfPlanDragonCardName,
 } from "./dragon/knowledge.js";
 import { COMBO_DATABASE, detectAvailableCombos } from "./dragon/combos.js";
 import {
@@ -90,6 +92,13 @@ import {
   selectDragonAscensionChoice,
   selectDragonFusionPlan,
 } from "./dragon/extraDeckPolicy.js";
+import {
+  buildDragonDefenseTargetPreferences,
+  getLuminescentBattleDebuffPlan,
+  getMajesticBattlePositionPlan,
+  scoreDragonBackrowSet,
+  shouldRecheckBossBeforeBattle,
+} from "./dragon/battleDefensePolicy.js";
 import { getEffectiveAtk } from "./common/cardStats.js";
 import {
   getProjectedBoneflameAtk,
@@ -131,12 +140,16 @@ const DRAGON_COST_PRESERVE_NAMES = [
   "Call of the Haunted",
 ];
 
-const AWAKENING_TARGET_ORDER = [...DRAGON_BOSS_POLICY_NAMES];
+const AWAKENING_TARGET_ORDER = [...CURRENT_AWAKENING_TARGET_NAMES];
 
 const EXTREME_GY_SEND_ORDER = [
   "Volcanic Extreme Dragon",
   "Fire Extreme Dragon",
 ];
+
+function isCurrentDragonListMode(analysis = {}) {
+  return analysis?.currentDragonBotList !== false;
+}
 
 function uniqueNames(names = []) {
   return [...new Set((names || []).filter(Boolean))];
@@ -296,11 +309,17 @@ function buildDragonActionContext(extra = {}) {
   );
   const baseTargetPreferences = mergeTargetPreferenceMaps(
     mergeTargetPreferenceMaps(
-      buildDragonTargetCostPreferences({
-        ...extra,
-        costPreferences,
-      }),
-      buildDragonBanishTargetPreferences({
+      mergeTargetPreferenceMaps(
+        buildDragonTargetCostPreferences({
+          ...extra,
+          costPreferences,
+        }),
+        buildDragonBanishTargetPreferences({
+          ...extra,
+          costPreferences,
+        }),
+      ),
+      buildDragonDefenseTargetPreferences({
         ...extra,
         costPreferences,
       }),
@@ -831,7 +850,17 @@ export default class DragonStrategy extends BaseStrategy {
         card.name === "Polymerization" && extraDeckPlan?.ok
           ? {
               yes: true,
-              priority: extraDeckPlan.priority,
+              priority:
+                extraDeckPlan.priority +
+                (shouldRecheckBossBeforeBattle({
+                  analysis,
+                  player: bot,
+                  bot,
+                  opponent,
+                  game: actualGame,
+                })
+                  ? 2
+                  : 0),
               reason: extraDeckPlan.reason,
             }
           : shouldPlaySpell(card, analysis);
@@ -887,29 +916,14 @@ export default class DragonStrategy extends BaseStrategy {
       policy: {
         acceptsCard: (card) => card?.cardKind === "trap",
         getPriority: (card) => {
-          let priority = 6;
-
-          if (card.name === "Call of the Haunted") {
-            const gyMonsters = (bot.graveyard || []).filter(
-              (c) => c && c.cardKind === "monster",
-            );
-            if (gyMonsters.length > 0) {
-              priority = 9;
-              if ((opponent?.field || []).length >= 2 || analysis.lpRatio < 0.6) {
-                priority = 11;
-              }
-            } else {
-              priority = 4;
-            }
-          } else if (card.name === "Dragon Spirit Sanctuary") {
-            const fieldDragons = (bot.field || []).filter(
-              (c) => c && c.cardKind === "monster",
-            );
-            const handDragons = (bot.hand || []).filter(isDragonMonster);
-            priority = fieldDragons.length > 0 && handDragons.length > 0 ? 8 : 4;
-          }
-
-          return priority;
+          const dragonBackrow = scoreDragonBackrowSet(card, {
+            analysis,
+            player: bot,
+            bot,
+            opponent,
+            game: actualGame,
+          });
+          return dragonBackrow?.priority ?? 6;
         },
       },
     });
@@ -1250,6 +1264,7 @@ export default class DragonStrategy extends BaseStrategy {
     // === FIELD MONSTER IGNITION ACTIONS ===
     (bot.field || []).forEach((card, fieldIndex) => {
       if (!card || card.cardKind !== "monster" || card.isFacedown) return;
+      if (isCurrentDragonListMode(analysis) && isOutOfPlanDragonCardName(card.name)) return;
       const ignition = findIgnitionEffect(card, "field");
       if (!ignition) return;
 
@@ -1280,16 +1295,18 @@ export default class DragonStrategy extends BaseStrategy {
           preferredNames: oppTargets.slice(0, 3).map((target) => target.name),
         };
       } else if (card.name === "Majestic Silver Dragon") {
-        const usefulTargets = oppTargets.filter((target) => {
-          if (target.position === "attack" && (target.atk || 0) >= (card.atk || 0)) return true;
-          if (target.position === "defense" && (target.def || 0) < (card.atk || 0)) return true;
-          return target.monsterType === "fusion" || target.monsterType === "ascension";
+        const majesticPlan = getMajesticBattlePositionPlan({
+          source: card,
+          opponentField: oppTargets,
+          bot,
+          opponent,
+          analysis,
         });
-        if (usefulTargets.length === 0) return;
-        priority = 6 + (usefulTargets[0].monsterType ? 2 : 0);
+        if (!majesticPlan?.ok) return;
+        priority = 7 + majesticPlan.priorityBonus;
         targetPreferences.majestic_position_target = {
           role: "removal",
-          preferredNames: usefulTargets.slice(0, 3).map((target) => target.name),
+          preferredNames: majesticPlan.preferredNames,
         };
       } else if (card.name === "Hellkite Dragon") {
         const gyTargets = (bot.graveyard || [])
@@ -1417,6 +1434,7 @@ export default class DragonStrategy extends BaseStrategy {
     // === GRAVEYARD MONSTER IGNITION ACTIONS ===
     (bot.graveyard || []).forEach((card, graveyardIndex) => {
       if (!card || card.cardKind !== "monster") return;
+      if (isCurrentDragonListMode(analysis) && isOutOfPlanDragonCardName(card.name)) return;
       const graveyardIgnitionEffect = findIgnitionEffect(card, "graveyard");
       if (!graveyardIgnitionEffect) return;
 
@@ -1442,6 +1460,26 @@ export default class DragonStrategy extends BaseStrategy {
         targetPreferences = {
           ...targetPreferences,
           ...(policyDecision.targetPreferences || {}),
+        };
+      } else if (card.name === "Luminescent Dragon") {
+        const debuffPlan = getLuminescentBattleDebuffPlan({
+          bot,
+          player: bot,
+          opponent,
+          analysis,
+        });
+        if (!debuffPlan?.ok) {
+          log(`  Skipping Graveyard ignition: Luminescent Dragon - debuff does not change battle`);
+          return;
+        }
+        priority = 7 + debuffPlan.priorityBonus;
+        targetPreferences.luminescent_debuff_target = {
+          role: "temporary_stat_debuff",
+          purpose: "combat",
+          atkReduction: 600,
+          defReduction: 600,
+          preferredNames: debuffPlan.preferredNames,
+          attackers: [debuffPlan.attacker],
         };
       } else if (card.name === "Grey Dragon") {
         const discardableDragons = (bot.hand || []).filter(isDragonMonster);
@@ -1674,6 +1712,17 @@ export default class DragonStrategy extends BaseStrategy {
         if (bestDragon.name === "Volcanic Extreme Dragon" && (opponent?.graveyard || []).length >= 4) priority += 1;
         if (bossRank) priority += Math.min(3, Math.max(0, bossRank.score) / 45);
         if (fieldDragons.length === 2 && isExtremeDragon(bestDragon)) priority += 2;
+        if (
+          shouldRecheckBossBeforeBattle({
+            analysis,
+            player: bot,
+            bot,
+            opponent,
+            game: actualGame,
+          })
+        ) {
+          priority += 2;
+        }
 
         if (
           analysis.canNormalSummon &&

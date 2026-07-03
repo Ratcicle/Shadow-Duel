@@ -11,10 +11,14 @@ export {
   DRAGON_SMALL_SEARCH_NAMES,
   ECLIPSE_ENGINE_NAMES,
   EXTREME_DRAGON_NAMES,
+  LEGACY_CONVERGING_STARS_TARGETS,
+  LEGACY_SELF_SUMMON_MONSTERS,
   OUT_OF_PLAN_DRAGON_CARD_NAMES,
   SELF_SUMMON_MONSTERS,
   CONVERGING_STARS_TARGETS,
   isExtremeDragon,
+  isCurrentDragonBotCardName,
+  isOutOfPlanDragonCardName,
   countExtremeInGY,
   countSafeBanishTargets,
   getCardKnowledge,
@@ -106,6 +110,15 @@ export {
   evaluateDragonHandIgnition,
   evaluateDragonRecruitCandidate,
 } from "./actionPolicy.js";
+
+export {
+  buildDragonDefenseTargetPreferences,
+  getLuminescentBattleDebuffPlan,
+  getMajesticBattlePositionPlan,
+  scoreDragonBackrowSet,
+  scoreDragonBattleAttack,
+  shouldRecheckBossBeforeBattle,
+} from "./battleDefensePolicy.js";
 
 export { simulateMainPhaseAction } from "./simulation.js";
 

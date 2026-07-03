@@ -11,6 +11,10 @@
  *  - resolveDestructionWithReplacement
  */
 
+import {
+  canUseOncePerDuelEffect,
+  markOncePerDuelEffectUsed,
+} from "../../effects/triggers/registration.js";
 import { getCardDisplayName, getUIText } from "../../i18n.js";
 
 function getCostKindLabel(cardKind = "card", count = 1) {
@@ -551,15 +555,10 @@ async function tryReplacement(game, sourceCard, sourceOwner, effect, ctx) {
     return { replaced: false };
   }
 
-  // Once-per-Duel gating for replacement effects (e.g. Galaxy Extreme Dragon's
-  // self-banish). The flag persists across turns — it is reset only at game start.
-  if (effect.oncePerDuel) {
-    const duelKey = effect.oncePerDuelName || effect.id || sourceCard?.name;
-    sourceOwner.oncePerDuelUsageByName =
-      sourceOwner.oncePerDuelUsageByName || Object.create(null);
-    if (sourceOwner.oncePerDuelUsageByName[duelKey]) {
-      return { replaced: false };
-    }
+  // Once-per-Duel usage persists across turns and can allow a fixed number of uses.
+  const duelCheck = canUseOncePerDuelEffect(sourceCard, sourceOwner, effect);
+  if (!duelCheck.ok) {
+    return { replaced: false };
   }
 
   if (
@@ -591,11 +590,7 @@ async function tryReplacement(game, sourceCard, sourceOwner, effect, ctx) {
   }
 
   const markOncePerDuelUsedIfNeeded = () => {
-    if (!effect.oncePerDuel) return;
-    const duelKey = effect.oncePerDuelName || effect.id || sourceCard?.name;
-    sourceOwner.oncePerDuelUsageByName =
-      sourceOwner.oncePerDuelUsageByName || Object.create(null);
-    sourceOwner.oncePerDuelUsageByName[duelKey] = true;
+    markOncePerDuelEffectUsed(sourceCard, sourceOwner, effect);
   };
 
   const buildActionCostCtx = (extra = {}) => {

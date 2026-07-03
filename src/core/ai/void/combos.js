@@ -237,25 +237,25 @@ export const COMBO_DATABASE = [
     ],
   },
   {
-    name: "Serpent Drake Power Up",
-    description: "Tributa 1-3 Hollows → Summon Serpent Drake com bônus",
+    name: "Serpent Drake Guard",
+    description: "Envia 1 Hollow → Summon Serpent Drake com proteção",
     requires: ["Void Serpent Drake na mão", "1+ Void Hollow no campo"],
-    result: "Serpent Drake 2300+ ATK (até indestrutível + destruição)",
+    result: "Serpent Drake 2300 ATK com proteção de batalha/banimento",
     priority: 8.5,
     sequence: [
       {
         action: "handIgnition",
         cardId: 214,
-        note: "Tributa Hollows para Serpent Drake",
+        note: "Envia Hollow para Serpent Drake",
       },
     ],
   },
   {
     name: "Slayer Brute Rush",
     description:
-      "Tributa 2 Voids → Summon Slayer Brute 2500 ATK (banish removal)",
+      "Tributa 2 Voids → Summon Slayer Brute 2500 ATK; banish se usar Hollow",
     requires: ["Void Slayer Brute na mão", "2 Voids no campo"],
-    result: "Boss 2500 ATK que bane monstros destruídos",
+    result: "Boss 2500 ATK; bane monstros destruídos se Hollow foi custo",
     priority: 8,
     sequence: [
       {
@@ -313,15 +313,15 @@ export const COMBO_DATABASE = [
   {
     name: "Thousand-Arms Bounce-Revive",
     description:
-      "Thousand-Arms no campo → bounce → revive até 2 Hollows do GY com +700 ATK/DEF",
+      "Thousand-Arms no campo → bounce → revive até 2 Hollows do GY",
     requires: ["Void Thousand-Arms no campo", "1+ Void Hollow no GY"],
-    result: "Thousand-Arms na mão (reusável) + 2 Hollows fortalecidos no campo",
+    result: "Thousand-Arms na mão (reusável) + até 2 Hollows no campo",
     priority: 9.5,
     sequence: [
       {
         action: "ignition",
         cardId: 221,
-        note: "Bounce + revive 2 Hollows com +700",
+        note: "Bounce + revive até 2 Hollows",
       },
     ],
   },
@@ -386,13 +386,18 @@ export const COMBO_DATABASE = [
   },
   {
     name: "Beast Search Hollow",
-    description: "Void Beast busca Void Hollow como starter secundario",
-    requires: ["Void Beast na mao", "Normal Summon disponivel", "Void Hollow no deck"],
-    result: "Acesso a Hollow para uma ponte de Special Summon futura",
+    description:
+      "Void Beast busca monstro Void que mencione Void Hollow como starter secundario",
+    requires: [
+      "Void Beast na mao",
+      "Normal Summon disponivel",
+      "Monstro Void que mencione Void Hollow no deck",
+    ],
+    result: "Acesso a um extensor Void para uma ponte de Special Summon futura",
     priority: 7.8,
     sequence: [
       { action: "summon", cardId: 203, note: "Normal Summon Void Beast" },
-      { action: "trigger", cardId: 203, note: "Beast busca Void Hollow" },
+      { action: "trigger", cardId: 203, note: "Beast busca extensor Void" },
     ],
   },
   {
@@ -405,8 +410,8 @@ export const COMBO_DATABASE = [
   },
   {
     name: "Cosmic Walker Hollow Reclaimer",
-    description: "Cosmic Walker revive Void Hollow do GY",
-    requires: ["Void Cosmic Walker no campo", "Void Hollow no GY"],
+    description: "Cosmic Walker invoca Void Hollow da mao ou GY",
+    requires: ["Void Cosmic Walker no campo", "Void Hollow na mao ou GY"],
     result: "Hollow volta como corpo de custo/material/pressao",
     priority: 9,
   },
@@ -564,18 +569,19 @@ export function detectAvailableCombos(analysis) {
   // ═══════════════════════════════════════════════════════════════════════════
   // Hollow Chain (Hollow na mão + forma de special summon que não seja Conjurer)
   // IMPORTANTE: Conjurer recruta do DECK, então Hollow vindo do Conjurer NÃO ativa
-  // Walker é a forma principal de descer Hollow da mão
+  // Walker e Cosmic Walker sao as formas principais de descer Hollow da mao
   // ═══════════════════════════════════════════════════════════════════════════
   if (hasInHand(VOID_IDS.HOLLOW)) {
-    // Walker no campo pode descer Hollow da mão
-    const canSpecialHollowFromHand = hasOnField(VOID_IDS.WALKER);
+    // Walker e Cosmic Walker no campo podem descer Hollow da mao
+    const canSpecialHollowFromHand =
+      hasOnField(VOID_IDS.WALKER) || hasOnField(VOID_IDS.COSMIC_WALKER);
     // Haunter no GY pode reviver Hollow, MAS isso não é "da mão"
-    // Então só Walker conta aqui
+    // Entao Walker e Cosmic Walker contam aqui
     addCombo("Hollow Chain (da mão)", {
       ready: canSpecialHollowFromHand,
       missing: canSpecialHollowFromHand
         ? []
-        : ["Walker no campo para descer Hollow da mão"],
+        : ["Walker ou Cosmic Walker no campo para descer Hollow da mao"],
       priority: canSpecialHollowFromHand ? 9 : 3,
     });
   }
@@ -650,20 +656,20 @@ export function detectAvailableCombos(analysis) {
 
   // Serpent Drake
   if (hasInHand(VOID_IDS.SERPENT_DRAKE) && countOnField(VOID_IDS.HOLLOW) >= 1) {
-    const hollowCount = countOnField(VOID_IDS.HOLLOW);
-    addCombo("Serpent Drake Power Up", {
+    addCombo("Serpent Drake Guard", {
       ready: true,
       missing: [],
-      priority: 8.5 + hollowCount * 0.5, // Mais Hollows = mais bônus
+      priority: 8.8,
     });
   }
 
   // Slayer Brute
   if (hasInHand(VOID_IDS.SLAYER_BRUTE) && countVoidsOnField() >= 2) {
+    const hollowCostAvailable = countOnField(VOID_IDS.HOLLOW) >= 1;
     addCombo("Slayer Brute Rush", {
       ready: true,
       missing: [],
-      priority: 8,
+      priority: hollowCostAvailable ? 8.5 : 7.8,
     });
   }
 
@@ -723,10 +729,15 @@ export function detectAvailableCombos(analysis) {
 
   if (hasOnField(VOID_IDS.COSMIC_WALKER)) {
     const hollowsInGY = countInGY(VOID_IDS.HOLLOW);
+    const hollowsInHand = countInHand(VOID_IDS.HOLLOW);
+    const hollowsAccessible = hollowsInHand + hollowsInGY;
     addCombo("Cosmic Walker Hollow Reclaimer", {
-      ready: hollowsInGY >= 1,
-      missing: hollowsInGY >= 1 ? [] : ["Void Hollow no GY"],
-      priority: hollowsInGY >= 1 ? 8.0 + Math.min(hollowsInGY, 2) * 0.5 : 6.0,
+      ready: hollowsAccessible >= 1,
+      missing: hollowsAccessible >= 1 ? [] : ["Void Hollow na mao ou GY"],
+      priority:
+        hollowsAccessible >= 1
+          ? 8.0 + Math.min(hollowsAccessible, 2) * 0.5
+          : 6.0,
     });
   }
 
@@ -909,7 +920,7 @@ export function calculateFusionValue(fusionId, analysis) {
   const ravenInHand = handIds.includes(VOID_IDS.RAVEN);
   const projectedHydraDraws = countOpponentSpellTrapCardsFromAnalysis(analysis);
 
-  // Tenebris Horn passive: +100 ATK/DEF por Void no campo (incluindo a fusão)
+  // Tenebris Horn passive: +100 ATK/DEF por Void no campo proprio/GY
   const tenebrisBonus = tenebrisOnField ? 0.6 : 0;
   // Raven discard pós-fusão: imunidade por 1 turno (S-tier para fusões grandes)
   const ravenBonus = ravenInHand ? 0.8 : 0;

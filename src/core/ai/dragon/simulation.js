@@ -18,6 +18,8 @@ import {
   shouldUsePurifiedBanishSummon,
   shouldUseStelyaBanishSummon,
 } from "./banishPolicy.js";
+import { getLuminescentBattleDebuffPlan } from "./battleDefensePolicy.js";
+import { selectBestDragonBoss } from "./bossPolicy.js";
 import { evaluateDragonRecruitCandidate } from "./actionPolicy.js";
 import { selectDragonFusionPlan } from "./extraDeckPolicy.js";
 import { getEffectiveAtk } from "../common/cardStats.js";
@@ -50,9 +52,9 @@ const CONVERGING_SUMMON_ORDER = [
 
 const EXTREME_GY_SEND_ORDER = [
   "Volcanic Extreme Dragon",
+  "Fire Extreme Dragon",
   "Forest Extreme Dragon",
   "Galaxy Extreme Dragon",
-  "Fire Extreme Dragon",
   "Mist Extreme Dragon",
 ];
 
@@ -1430,15 +1432,30 @@ function simulateDragonSpellTrapIgnition(state, card, action, zoneIndex) {
   if (fieldDragonEntries.length < 2) return;
 
   const hasExtremeFaceup = (player.field || []).some(isExtremeDragon);
-  const handTargetEntry = (player.hand || [])
+  const targetEntries = (player.hand || [])
     .map((candidate, index) => ({ candidate, index }))
     .filter(
       ({ candidate }) =>
         isDragonMonster(candidate) &&
         (candidate.level || 0) >= 8 &&
+        AWAKENING_TARGET_ORDER.includes(candidate.name) &&
         (!hasExtremeFaceup || !isExtremeDragon(candidate)),
-    )
-    .sort((a, b) => {
+    );
+  const bossTarget = selectBestDragonBoss(
+    targetEntries.map(({ candidate }) => candidate),
+    {
+      player,
+      bot: player,
+      opponent: state.player,
+      game: state,
+      routeKind: "awakening",
+      fieldCostCount: 2,
+      isSimulatedState: true,
+    },
+  );
+  const handTargetEntry = bossTarget
+    ? targetEntries.find(({ candidate }) => candidate === bossTarget)
+    : targetEntries.sort((a, b) => {
       const score = (entry) =>
         orderBonus(entry.candidate, AWAKENING_TARGET_ORDER) +
         cardStrategicSimValue(entry.candidate);
@@ -1626,6 +1643,13 @@ function simulateDragonGraveyardMonsterEffect(state, card, action) {
     );
     if (!stelyaDecision.ok) return;
   }
+  const luminescentDebuffPlan =
+    effect.id === "luminescent_dragon_banish_debuff"
+      ? getLuminescentBattleDebuffPlan({ bot: player, player, opponent })
+      : null;
+  if (effect.id === "luminescent_dragon_banish_debuff" && !luminescentDebuffPlan?.ok) {
+    return;
+  }
 
   const targetSelections = {};
   let resolvedAnyAction = false;
@@ -1651,6 +1675,15 @@ function simulateDragonGraveyardMonsterEffect(state, card, action) {
       candidates = candidates.filter(({ candidate, owner }) =>
         isValidBoneflameCost(card, candidate, owner),
       );
+    }
+    if (target.id === "luminescent_debuff_target" && luminescentDebuffPlan?.target) {
+      candidates = candidates.filter(({ candidate }) => {
+        const preferred = luminescentDebuffPlan.preferredNames || [];
+        return (
+          candidate === luminescentDebuffPlan.target ||
+          preferred.includes(candidate?.name)
+        );
+      });
     }
     if (candidates.length < (target.count?.min ?? 1)) return;
 
@@ -1685,6 +1718,21 @@ function simulateDragonGraveyardMonsterEffect(state, card, action) {
       candidates = rankDiscardEntriesForSimulation(candidates, state, card, effect);
     } else {
       candidates.sort((a, b) => {
+        if (target.id === "luminescent_debuff_target") {
+          const preferred = luminescentDebuffPlan?.preferredNames || [];
+          const score = (entry) => {
+            const order = preferred.indexOf(entry.candidate?.name);
+            return (
+              (entry.candidate === luminescentDebuffPlan?.target ? 10000 : 0) +
+              (order >= 0 ? 1000 - order * 20 : 0) +
+              Math.max(
+                Number(entry.candidate?.atk || 0) + Number(entry.candidate?.tempAtkBoost || 0),
+                Number(entry.candidate?.def || 0) + Number(entry.candidate?.tempDefBoost || 0),
+              )
+            );
+          };
+          return score(b) - score(a);
+        }
         if (card.name === "Boneflame Dragon" && target.id === "boneflame_cost_target") {
           return (
             getEffectiveAtk(a.candidate) - getEffectiveAtk(b.candidate) ||

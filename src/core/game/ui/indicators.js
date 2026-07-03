@@ -169,14 +169,34 @@ export function buildActivationIndicatorsForPlayer(player) {
 
   (player.field || []).forEach((card, index) => {
     if (!card || card.cardKind !== "monster") return;
-    const guard = canStart("monster_effect", ["main1", "main2"]);
+    const fieldActivationContext = {
+      ...activationContext,
+      activationZone: "field",
+      legalWindow: this.phase === "battle",
+      context:
+        this.phase === "battle"
+          ? { type: "battle_step_open", legalWindow: true }
+          : null,
+    };
     const firstActivatable =
       this.effectEngine?.getFirstActivatableMonsterIgnitionEffect?.(
         card,
         player,
         "field",
-        { activationContext },
+        { activationContext: fieldActivationContext },
       );
+    const previewEffect =
+      firstActivatable?.effect ||
+      this.effectEngine?.getMonsterIgnitionEffect?.(card, "field", {
+        activationContext: fieldActivationContext,
+      }) ||
+      null;
+    const isQuickFieldEffect =
+      previewEffect?.isQuickEffect === true || Number(previewEffect?.speed) === 2;
+    const guard = canStart(
+      "monster_effect",
+      isQuickFieldEffect ? ["main1", "battle", "main2"] : ["main1", "main2"],
+    );
     const preview =
       firstActivatable?.preview ||
       this.effectEngine?.canActivateMonsterEffectPreview?.(
@@ -184,7 +204,7 @@ export function buildActivationIndicatorsForPlayer(player) {
         player,
         "field",
         null,
-        { activationContext },
+        { activationContext: fieldActivationContext },
       ) ||
       { ok: false };
     const hint = buildHint(guard, preview, "ignition disponivel");

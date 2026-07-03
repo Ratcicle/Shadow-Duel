@@ -181,7 +181,7 @@ function isSelfGraveyardCostAction(action, effect) {
   if (action.targetRef === "self") return true;
 
   const target = getEffectTarget(effect, action.targetRef);
-  return target?.requireThisCard === true;
+  return target?.requireThisCard === true || target?.intent === "cost";
 }
 
 function isDamageStepContext(context = {}) {

@@ -649,7 +649,7 @@ export async function handleBuffStatsTemp(action, ctx, targets, engine) {
 
     getUI(game)?.log(`No valid targets for ${label}.`);
 
-    return action.targetScope ? true : false;
+    return action.allowEmpty === true || action.targetScope ? true : false;
   }
 
   let anyBuffed = false;
@@ -1746,6 +1746,7 @@ export async function handleBanishAndBuff(action, ctx, targets, engine) {
       fromZone: entry.fromZone,
       awaitEvents: true,
       sourceCard: source,
+      sourcePlayer: player,
       effectId: ctx?.effect?.id || null,
       contextLabel: "banish_and_buff",
     });

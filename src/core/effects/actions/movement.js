@@ -171,6 +171,7 @@ export async function applyMove(action, ctx, targets) {
           resetAttackFlags: action.resetAttackFlags,
           contextLabel,
           sourceCard: ctx?.source || null,
+          sourcePlayer: ctx?.player || null,
           effectId: ctx?.effect?.id || null,
           movedByEffect: true,
           skipSendToGraveReplacement: action.skipSendToGraveReplacement,

@@ -1,7 +1,10 @@
 // src/core/ai/dragon/combos.js
 // Combo matrix and lightweight combo detection for the Dragon deck.
 
-import { EXTREME_DRAGON_NAMES } from "./knowledge.js";
+import {
+  EXTREME_DRAGON_NAMES,
+  isOutOfPlanDragonCardName,
+} from "./knowledge.js";
 import { getValidBoneflameCostCandidates } from "./boneflamePolicy.js";
 
 export const DRAGON_COMBO_PRIORITY = Object.freeze({
@@ -19,12 +22,13 @@ export const DRAGON_COMBO_STATUS = Object.freeze({
   REQUIRES_SIMULATION: "requires_simulation",
   DEFENSIVE_PLANNING: "defensive_planning",
   CONDITIONAL_RESOURCE_LINE: "conditional_resource_line",
+  LEGACY_ONLY: "legacy_only",
 });
 
 /**
- * DR-2 combo matrix. This is intentionally broader than the current detector:
- * later rollouts use this list as the implementation guide for action generation,
- * simulation, TurnLineSearch milestones, and battle planning.
+ * DR-2 combo matrix for the current Dragon bot list.
+ * Legacy entries are retained only as reference for future lists and are hidden
+ * from the current preset unless analysis.currentDragonBotList === false.
  */
 export const COMBO_DATABASE = [
   {
@@ -192,40 +196,40 @@ export const COMBO_DATABASE = [
     description: "Discard 1 to reduce hand monster levels by 2 and unlock a heavy summon",
     requires: ["Converging Stars in hand", "high-level Dragon in hand", "discard fodder"],
     result: "Turns a bricked high-level hand into a summonable line",
-    priority: 11,
-    strategicPriority: DRAGON_COMBO_PRIORITY.HIGH,
-    status: DRAGON_COMBO_STATUS.PLANNED_BY_TURN_LINE_SEARCH,
-    needs: ["TurnLineSearch"],
+    priority: 2,
+    strategicPriority: DRAGON_COMBO_PRIORITY.LOW,
+    status: DRAGON_COMBO_STATUS.LEGACY_ONLY,
+    needs: ["legacy list only"],
   },
   {
     name: "Converging + Darkness",
     description: "Converging Stars -> Darkness Dragon level 5->3 -> free Normal Summon",
     requires: ["Converging Stars in hand", "Darkness Dragon in hand", "discard fodder"],
     result: "Darkness Dragon enters as a control or pressure body",
-    priority: 10,
-    strategicPriority: DRAGON_COMBO_PRIORITY.MEDIUM,
-    status: DRAGON_COMBO_STATUS.PLANNED_BY_TURN_LINE_SEARCH,
-    needs: ["TurnLineSearch"],
+    priority: 1,
+    strategicPriority: DRAGON_COMBO_PRIORITY.LOW,
+    status: DRAGON_COMBO_STATUS.LEGACY_ONLY,
+    needs: ["legacy list only"],
   },
   {
     name: "Converging + Abyssal",
     description: "Converging Stars -> Abyssal Serpent Dragon lv7->5 -> Normal Summon with 1 tribute",
     requires: ["Converging Stars in hand", "Abyssal Serpent Dragon in hand", "1 tribute on field"],
     result: "Abyssal Serpent on field to answer a major threat",
-    priority: 9,
-    strategicPriority: DRAGON_COMBO_PRIORITY.MEDIUM,
-    status: DRAGON_COMBO_STATUS.PLANNED_BY_TURN_LINE_SEARCH,
-    needs: ["TurnLineSearch"],
+    priority: 1,
+    strategicPriority: DRAGON_COMBO_PRIORITY.LOW,
+    status: DRAGON_COMBO_STATUS.LEGACY_ONLY,
+    needs: ["legacy list only"],
   },
   {
     name: "Luminous + Converging",
     description: "Luminous turns Converging discard into a recoverable Dragon resource",
     requires: ["Luminous Dragon face-up", "Converging Stars", "Dragon discard"],
     result: "Level reduction plus Dragon recovery instead of a pure discard cost",
-    priority: 9,
-    strategicPriority: DRAGON_COMBO_PRIORITY.MEDIUM,
-    status: DRAGON_COMBO_STATUS.PLANNED_BY_TURN_LINE_SEARCH,
-    needs: ["discard-trigger simulation"],
+    priority: 2,
+    strategicPriority: DRAGON_COMBO_PRIORITY.LOW,
+    status: DRAGON_COMBO_STATUS.LEGACY_ONLY,
+    needs: ["legacy list only"],
   },
   {
     name: "Awakening Setup",
@@ -302,10 +306,10 @@ export const COMBO_DATABASE = [
     description: "Send expendable field Dragon to GY -> SS Boneflame with GY-scaling ATK",
     requires: ["Boneflame Dragon in GY", "Dragon monster on field"],
     result: "Additional attacker with potentially high ATK",
-    priority: 6,
-    strategicPriority: DRAGON_COMBO_PRIORITY.MEDIUM,
-    status: DRAGON_COMBO_STATUS.PLANNED_BY_TURN_LINE_SEARCH,
-    needs: ["TurnLineSearch"],
+    priority: 1,
+    strategicPriority: DRAGON_COMBO_PRIORITY.LOW,
+    status: DRAGON_COMBO_STATUS.LEGACY_ONLY,
+    needs: ["legacy list only"],
   },
   {
     name: "Black Bull GY Search",
@@ -361,7 +365,7 @@ export const COMBO_DATABASE = [
     name: "Rainbow GY Resource Setup",
     description: "Rainbow in GY sends up to 3 Extreme Dragons only when it creates real follow-up",
     requires: ["Rainbow Cosmic Dragon in GY", "Extreme Dragons in deck", "clear follow-up payoff"],
-    result: "Sets up Call of the Haunted, Luminous recovery, Boneflame, or next-turn resource lines",
+    result: "Sets up Call of the Haunted, Luminous recovery, Eclipse recovery, or next-turn resource lines",
     priority: 5,
     strategicPriority: DRAGON_COMBO_PRIORITY.LOW,
     status: DRAGON_COMBO_STATUS.CONDITIONAL_RESOURCE_LINE,
@@ -425,6 +429,7 @@ export function detectAvailableCombos(analysis, logFn = null) {
   const fieldNames = (analysis.field || []).map((c) => c.name);
   const gyCards = analysis.graveyard || [];
   const gyNames = gyCards.map((c) => c.name);
+  const currentListMode = analysis?.currentDragonBotList !== false;
 
   const log = (msg) => typeof logFn === "function" && logFn(msg);
   const hasFieldDragon = (analysis.field || []).some((c) => c.cardKind === "monster");
@@ -508,7 +513,10 @@ export function detectAvailableCombos(analysis, logFn = null) {
   if (
     handNames.includes("Luminous Dragon") &&
     handNames.includes("Grey Dragon") &&
-    handNames.some((name) => ["Black Bull Dragon", "Converging Stars"].includes(name))
+    (
+      handNames.includes("Black Bull Dragon") ||
+      (!currentListMode && handNames.includes("Converging Stars"))
+    )
   ) {
     available.push(availableCombo("Luminous + Grey Loop", { type: "handIgnition", cardName: "Luminous Dragon" }));
     log("Combo: Luminous + Grey value loop");
@@ -537,40 +545,42 @@ export function detectAvailableCombos(analysis, logFn = null) {
     }
   }
 
-  if (
-    handNames.includes("Converging Stars") &&
-    (analysis.hand || []).some((card) => isDragonMonster(card) && (card.level || 0) >= 5)
-  ) {
-    available.push(availableCombo("Converging Stars Hand Unlock", { type: "spell", cardName: "Converging Stars" }));
-    log("Combo: Converging Stars can unlock high-level hand");
-  }
+  if (!currentListMode) {
+    if (
+      handNames.includes("Converging Stars") &&
+      (analysis.hand || []).some((card) => isDragonMonster(card) && (card.level || 0) >= 5)
+    ) {
+      available.push(availableCombo("Converging Stars Hand Unlock", { type: "spell", cardName: "Converging Stars" }));
+      log("Combo: Converging Stars can unlock high-level hand");
+    }
 
-  if (
-    handNames.includes("Converging Stars") &&
-    handNames.includes("Darkness Dragon") &&
-    analysis.canNormalSummon
-  ) {
-    available.push(availableCombo("Converging + Darkness", { type: "spell", cardName: "Converging Stars" }));
-    log("Combo: Converging -> Darkness");
-  }
+    if (
+      handNames.includes("Converging Stars") &&
+      handNames.includes("Darkness Dragon") &&
+      analysis.canNormalSummon
+    ) {
+      available.push(availableCombo("Converging + Darkness", { type: "spell", cardName: "Converging Stars" }));
+      log("Combo: Converging -> Darkness");
+    }
 
-  if (
-    handNames.includes("Converging Stars") &&
-    handNames.includes("Abyssal Serpent Dragon") &&
-    analysis.canNormalSummon &&
-    (analysis.field || []).some((c) => c.cardKind === "monster")
-  ) {
-    available.push(availableCombo("Converging + Abyssal", { type: "spell", cardName: "Converging Stars" }));
-    log("Combo: Converging -> Abyssal");
-  }
+    if (
+      handNames.includes("Converging Stars") &&
+      handNames.includes("Abyssal Serpent Dragon") &&
+      analysis.canNormalSummon &&
+      (analysis.field || []).some((c) => c.cardKind === "monster")
+    ) {
+      available.push(availableCombo("Converging + Abyssal", { type: "spell", cardName: "Converging Stars" }));
+      log("Combo: Converging -> Abyssal");
+    }
 
-  if (
-    fieldNames.includes("Luminous Dragon") &&
-    handNames.includes("Converging Stars") &&
-    (analysis.hand || []).some((card) => isDragonMonster(card))
-  ) {
-    available.push(availableCombo("Luminous + Converging", { type: "spell", cardName: "Converging Stars" }));
-    log("Combo: Luminous + Converging recovery line");
+    if (
+      fieldNames.includes("Luminous Dragon") &&
+      handNames.includes("Converging Stars") &&
+      (analysis.hand || []).some((card) => isDragonMonster(card))
+    ) {
+      available.push(availableCombo("Luminous + Converging", { type: "spell", cardName: "Converging Stars" }));
+      log("Combo: Luminous + Converging recovery line");
+    }
   }
 
   const awakeningInHand = handNames.includes("Extreme Dragon Awakening");
@@ -624,7 +634,7 @@ export function detectAvailableCombos(analysis, logFn = null) {
   }
 
   const boneflame = gyCards.find((card) => card?.name === "Boneflame Dragon");
-  if (boneflame && getValidBoneflameCostCandidates(boneflame, analysis).length > 0) {
+  if (!currentListMode && boneflame && getValidBoneflameCostCandidates(boneflame, analysis).length > 0) {
     available.push(availableCombo("Boneflame GY Extender", { type: "graveyardMonsterEffect", cardName: "Boneflame Dragon" }));
     log("Combo: Boneflame Dragon GY ignition");
   }
@@ -674,7 +684,11 @@ export function detectAvailableCombos(analysis, logFn = null) {
     log("Combo: Dragon Spirit Sanctuary defensive tag-out");
   }
 
-  return available;
+  return available.filter((combo) => {
+    if (!currentListMode) return true;
+    if (combo.status === DRAGON_COMBO_STATUS.LEGACY_ONLY) return false;
+    return !isOutOfPlanDragonCardName(combo.action?.cardName);
+  });
 }
 
 /**

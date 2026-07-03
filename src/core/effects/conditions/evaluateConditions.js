@@ -1286,6 +1286,65 @@ export function evaluateConditions(conditions, ctx) {
           }
           break;
         }
+        case "source_has_marker": {
+          const key = cond.key || cond.stateKey || null;
+          const source = ctx?.source || null;
+          const marker = key ? source?.effectMarkers?.[key] : null;
+
+          if (!marker) {
+            return {
+              ok: false,
+              reason: cond.reason || "Source does not have marker.",
+            };
+          }
+
+          if (
+            Number.isFinite(marker.expiresOnTurn) &&
+            this.game &&
+            this.game.turnCounter > marker.expiresOnTurn
+          ) {
+            delete source.effectMarkers[key];
+            return {
+              ok: false,
+              reason: cond.reason || "Source marker expired.",
+            };
+          }
+
+          if (
+            cond.sourceEffectId &&
+            marker.sourceEffectId !== cond.sourceEffectId
+          ) {
+            return {
+              ok: false,
+              reason: cond.reason || "Marker source effect does not match.",
+            };
+          }
+
+          if (
+            Number.isFinite(cond.minMatchingCostCount) &&
+            Number(marker.matchingCostCount || 0) < cond.minMatchingCostCount
+          ) {
+            return {
+              ok: false,
+              reason: cond.reason || "Marker cost count is too low.",
+            };
+          }
+
+          if (cond.requireCurrentFieldPresence === true) {
+            if (
+              !source?.fieldPresenceId ||
+              !marker.fieldPresenceId ||
+              marker.fieldPresenceId !== source.fieldPresenceId
+            ) {
+              return {
+                ok: false,
+                reason:
+                  cond.reason || "Marker does not match current field presence.",
+              };
+            }
+          }
+          break;
+        }
         case "field_card_count": {
           const zones =
             Array.isArray(cond.zones) && cond.zones.length > 0

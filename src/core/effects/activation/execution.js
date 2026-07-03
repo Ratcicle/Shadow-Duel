@@ -5,6 +5,7 @@
  */
 
 import {
+  canActivateDuringDamageStep,
   canActivateSetQuickSpell,
   isQuickSpell,
 } from "../../game/spellTrap/quickSpellRules.js";
@@ -734,13 +735,6 @@ export async function activateMonsterEffect(
       reason: "Not your turn.",
     };
   }
-  if (this.game.phase !== "main1" && this.game.phase !== "main2") {
-    return {
-      success: false,
-      needsSelection: false,
-      reason: "Effect can only be activated during Main Phase.",
-    };
-  }
 
   // Verify card is in the correct zone
   if (activationZone === "hand") {
@@ -790,6 +784,34 @@ export async function activateMonsterEffect(
       success: false,
       needsSelection: false,
       reason: "No ignition effect defined for this zone.",
+    };
+  }
+
+  const isMainPhase =
+    this.game.phase === "main1" || this.game.phase === "main2";
+  const isManualFieldQuickEffect =
+    activationZone === "field" &&
+    (effect.isQuickEffect === true || Number(effect.speed) === 2);
+  const isBattlePhase = this.game.phase === "battle";
+  if (!isMainPhase && !(isManualFieldQuickEffect && isBattlePhase)) {
+    return {
+      success: false,
+      needsSelection: false,
+      reason: "Effect can only be activated during Main Phase.",
+    };
+  }
+
+  const damageStepCheck = canActivateDuringDamageStep(effect, card, {
+    ...(activationContext?.context || {}),
+    ...(activationContext?.actionContext || {}),
+    activationZone,
+    phase: this.game.phase || null,
+  });
+  if (!damageStepCheck.ok) {
+    return {
+      success: false,
+      needsSelection: false,
+      reason: damageStepCheck.reason,
     };
   }
 

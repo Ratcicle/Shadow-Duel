@@ -161,6 +161,128 @@ export function bindCardInteractions() {
     event?.stopPropagation?.();
     return true;
   };
+  const isManualFieldQuickEffect = (effect) =>
+    !!effect && (effect.isQuickEffect === true || Number(effect.speed) === 2);
+  const getManualFieldQuickEffectEntry = (actor, card) => {
+    if (!actor || !card || card.cardKind !== "monster") return null;
+    const entry =
+      this.effectEngine?.getFirstActivatableMonsterIgnitionEffect?.(
+        card,
+        actor,
+        "field",
+        {
+          activationContext: {
+            activationZone: "field",
+            legalWindow: this.phase === "battle",
+            context:
+              this.phase === "battle"
+                ? { type: "battle_step_open", legalWindow: true }
+                : null,
+          },
+        },
+      ) || null;
+    if (!entry?.preview?.ok || !isManualFieldQuickEffect(entry.effect)) {
+      return null;
+    }
+    return entry;
+  };
+  const getAttackCandidates = (opponent) => {
+    const opponentTargets = (opponent?.field || []).filter(
+      (card) => card && card.cardKind === "monster",
+    );
+    const forcedTargets = opponentTargets.filter((card) =>
+      this.isActiveAttackPriorityTarget
+        ? this.isActiveAttackPriorityTarget(card)
+        : card.mustBeAttacked && !card.isFacedown,
+    );
+    return forcedTargets.length ? forcedTargets : opponentTargets;
+  };
+  const canDeclareAttackFromField = (actor, opponent, attacker) => {
+    if (!actor || !attacker || this.phase !== "battle") return { ok: false };
+    const guard = this.canStartAction?.({
+      actor,
+      kind: "attack",
+      phaseReq: "battle",
+      silent: true,
+    });
+    if (guard && !guard.ok) return guard;
+    const availability = this.getAttackAvailability(attacker);
+    if (!availability.ok) return availability;
+
+    let attackCandidates = getAttackCandidates(opponent);
+    if (attacker.canAttackAllOpponentMonstersThisTurn) {
+      const attackedMonsters = attacker.attackedMonstersThisTurn || new Set();
+      attackCandidates = attackCandidates.filter((card) => {
+        const cardId = card.instanceId || card.id || card.name;
+        return !attackedMonsters.has(cardId);
+      });
+    }
+
+    const usingMonsterOnlyExtraAttack =
+      (attacker.attacksUsedThisTurn || 0) > 0 &&
+      (attacker.extraAttackTargetRestriction ||
+        attacker.passiveExtraAttackTargetRestriction) === "monster";
+    const canDirect =
+      !attacker.cannotAttackDirectly &&
+      !actor?.forbidDirectAttacksThisTurn &&
+      !attacker.canAttackAllOpponentMonstersThisTurn &&
+      !usingMonsterOnlyExtraAttack &&
+      (attacker.canAttackDirectlyThisTurn === true ||
+        attackCandidates.length === 0);
+    if (attackCandidates.length === 0 && !canDirect) {
+      return {
+        ok: false,
+        reason: "No valid attack targets and cannot attack directly!",
+      };
+    }
+    return { ok: true, attackCandidates };
+  };
+  const startAttackFromField = (actor, opponent, attacker) => {
+    const guard = this.guardActionStart({
+      actor,
+      kind: "attack",
+      phaseReq: "battle",
+    });
+    if (!guard.ok) return true;
+    const attackCheck = canDeclareAttackFromField(actor, opponent, attacker);
+    if (!attackCheck.ok) {
+      if (attackCheck.reason) this.ui.log(attackCheck.reason);
+      return true;
+    }
+    this.startAttackTargetSelection(attacker, attackCheck.attackCandidates);
+    return true;
+  };
+  const showBattleMonsterQuickEffectChoice = (
+    cardEl,
+    actor,
+    opponent,
+    card,
+    quickEntry,
+  ) => {
+    const attackCheck = canDeclareAttackFromField(actor, opponent, card);
+    this.ui.showPositionChoiceModal(
+      cardEl,
+      card,
+      async (choice) => {
+        if (choice === "declare_attack") {
+          startAttackFromField(actor, opponent, card);
+        }
+      },
+      {
+        hasIgnitionEffect: true,
+        onActivateEffect: () =>
+          this.tryActivateMonsterEffect(card, null, "field", actor, {
+            effectId: quickEntry.effect.id,
+            activationContext: {
+              context: { type: "battle_step_open", legalWindow: true },
+            },
+          }),
+        canDeclareAttack: attackCheck.ok,
+        onDeclareAttack: () => startAttackFromField(actor, opponent, card),
+      },
+    );
+    return true;
+  };
 
   const setLaboratoryTributeHighlight = (actor, indices, selected = []) => {
     if (actor?.id === "player") {
@@ -498,36 +620,18 @@ export function bindCardInteractions() {
     if (this.phase !== "battle") return true;
     const attacker = actor.field[index];
     if (!attacker) return true;
-    const guard = this.guardActionStart({
-      actor,
-      kind: "attack",
-      phaseReq: "battle",
-    });
-    if (!guard.ok) return true;
-    const availability = this.getAttackAvailability(attacker);
-    if (!availability.ok) {
-      this.ui.log(availability.reason);
+    const quickEntry = getManualFieldQuickEffectEntry(actor, attacker);
+    if (quickEntry) {
+      showBattleMonsterQuickEffectChoice(
+        cardEl,
+        actor,
+        opponent,
+        attacker,
+        quickEntry,
+      );
       return true;
     }
-    const opponentTargets = opponent.field.filter(
-      (card) => card && card.cardKind === "monster"
-    );
-    const forcedTargets = opponentTargets.filter((card) =>
-      this.isActiveAttackPriorityTarget
-        ? this.isActiveAttackPriorityTarget(card)
-        : card.mustBeAttacked && !card.isFacedown,
-    );
-    const attackCandidates = forcedTargets.length ? forcedTargets : opponentTargets;
-    if (
-      attackCandidates.length === 0 &&
-      attacker.cannotAttackDirectly &&
-      attacker.canAttackDirectlyThisTurn !== true
-    ) {
-      this.ui.log("No valid attack targets and cannot attack directly!");
-      return true;
-    }
-    this.startAttackTargetSelection(attacker, attackCandidates);
-    return true;
+    return startAttackFromField(actor, opponent, attacker);
   };
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -974,85 +1078,19 @@ export function bindCardInteractions() {
       if (this.turn !== "player" || this.phase !== "battle") return;
 
       const attacker = this.player.field[index];
-
       if (attacker) {
-        const guard = this.guardActionStart({
-          actor: this.player,
-          kind: "attack",
-          phaseReq: "battle",
-        });
-        if (!guard.ok) return;
-
-        const availability = this.getAttackAvailability(attacker);
-        if (!availability.ok) {
-          this.ui.log(availability.reason);
-          return;
-        }
-
-        const canUseSecondAttack =
-          !this.hasExplicitAttackLimitThisTurn?.(attacker) &&
-          attacker.canMakeSecondAttackThisTurn &&
-          !attacker.secondAttackUsedThisTurn;
-
-        // Multi-attack mode bypasses the hasAttacked check
-        const isMultiAttackMode = attacker.canAttackAllOpponentMonstersThisTurn;
-
-        const maxAttacks = availability.maxAttacks ??
-          (this.getMonsterAttackLimit
-            ? this.getMonsterAttackLimit(attacker)
-            : 1 + Number(attacker.extraAttacks || 0));
-        const attacksUsed = attacker.attacksUsedThisTurn || 0;
-        const hasAttacksRemaining =
-          attacksUsed < maxAttacks || canUseSecondAttack;
-
-        if (!hasAttacksRemaining && !isMultiAttackMode) {
-          this.ui.log(
-            `${attacker.name} has already attacked the maximum number of times this turn!`
+        const quickEntry = getManualFieldQuickEffectEntry(this.player, attacker);
+        if (quickEntry) {
+          showBattleMonsterQuickEffectChoice(
+            cardEl,
+            this.player,
+            this.bot,
+            attacker,
+            quickEntry,
           );
           return;
         }
-
-        const opponentTargets = this.bot.field.filter(
-          (card) => card && card.cardKind === "monster"
-        );
-
-        const forcedTargets = opponentTargets.filter((card) =>
-          this.isActiveAttackPriorityTarget
-            ? this.isActiveAttackPriorityTarget(card)
-            : card && card.mustBeAttacked && !card.isFacedown,
-        );
-        let attackCandidates =
-          forcedTargets.length > 0 ? forcedTargets : opponentTargets;
-
-        // For multi-attack mode, filter out monsters already attacked this turn
-        if (attacker.canAttackAllOpponentMonstersThisTurn) {
-          const attackedMonsters =
-            attacker.attackedMonstersThisTurn || new Set();
-          attackCandidates = attackCandidates.filter((card) => {
-            const cardId = card.instanceId || card.id || card.name;
-            return !attackedMonsters.has(cardId);
-          });
-        }
-
-        const canDirect =
-          !attacker.cannotAttackDirectly &&
-          !this.player?.forbidDirectAttacksThisTurn &&
-          !isMultiAttackMode && // Multi-attack can only target monsters, not direct
-          !(
-            (attacker.attacksUsedThisTurn || 0) > 0 &&
-            (attacker.extraAttackTargetRestriction ||
-              attacker.passiveExtraAttackTargetRestriction) === "monster"
-          ) &&
-          (attacker.canAttackDirectlyThisTurn === true ||
-            attackCandidates.length === 0);
-
-        // Always start selection; "Direct Attack" option added when allowed
-        if (!canDirect && attackCandidates.length === 0) {
-          this.ui.log("No valid attack targets and cannot attack directly!");
-          return;
-        }
-
-        this.startAttackTargetSelection(attacker, attackCandidates);
+        startAttackFromField(this.player, this.bot, attacker);
       }
     });
   }

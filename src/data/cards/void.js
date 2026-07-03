@@ -10,7 +10,7 @@ export const voidCards = [
     attribute: "Dark",
     archetype: "Void",
     description:
-      "Special Summon 1 Level 4 or lower 'Void' monster from your Deck, but it cannot attack this turn. If this card is in your GY: You can send 1 'Void' monster you control to the GY; Special Summon this card. You can only use each effect of 'Void Conjurer' once per turn.",
+      "Special Summon 1 Level 4 or lower 'Void' monster from your Deck, except 'Void Conjurer', but it cannot attack this turn and is destroyed during the End Phase. If this card is in your GY: You can send 1 'Void' monster you control to the GY; Special Summon this card, but negate its effects until the end of this turn. You can only use each effect of 'Void Conjurer' once per turn.",
     image: "assets/Void Conjurer.png",
     effects: [
       {
@@ -27,9 +27,11 @@ export const voidCards = [
               cardKind: "monster",
               level: 4,
               levelOp: "lte",
+              excludeCardName: "Void Conjurer",
             },
             position: "choice",
             cannotAttackThisTurn: true,
+            destroySummonedAtEndPhase: true,
           },
         ],
       },
@@ -63,6 +65,8 @@ export const voidCards = [
             requireSource: true,
             position: "choice",
             cannotAttackThisTurn: false,
+            negateEffects: true,
+            negateEffectsDuration: "until_end_turn",
           },
         ],
       },
@@ -129,7 +133,7 @@ export const voidCards = [
     attribute: "Dark",
     archetype: "Void",
     description:
-      "If this card is Normal Summoned: You can add 1 'Void Hollow' from your Deck to your hand. If this card destroys an opponent's monster by battle: You can Special Summon 1 'Void Hollow' from your hand. You can only use each effect of 'Void Beast' once per turn.",
+      "If this card is Normal Summoned: You can add 1 'Void' monster that mentions 'Void Hollow' from your Deck to your hand, except 'Void Beast'. If this card destroys an opponent's monster by battle: You can Special Summon 1 'Void Hollow' from your hand or Deck. You can only use each effect of 'Void Beast' once per turn.",
     image: "assets/Void Beast.png",
     effects: [
       {
@@ -144,8 +148,13 @@ export const voidCards = [
           {
             type: "search_any",
             player: "self",
-            cardName: "Void Hollow",
-            cardKind: "monster",
+            filters: {
+              cardKind: "monster",
+              archetype: "Void",
+              textIncludes: "Void Hollow",
+              excludeCardName: "Void Beast",
+            },
+            count: { min: 1, max: 1 },
           },
         ],
       },
@@ -153,13 +162,14 @@ export const voidCards = [
         id: "void_beast_battle_destroy_summon",
         timing: "on_event",
         event: "battle_destroy",
-        requireSelfAsAttacker: true,
+        requireSelfAsBattleDestroyer: true,
+        requireDestroyedIsOpponent: true,
         oncePerTurn: true,
         oncePerTurnName: "void_beast_battle_destroy_summon",
         actions: [
           {
             type: "special_summon_from_zone",
-            zone: "hand",
+            zone: ["hand", "deck"],
             filters: {
               name: "Void Hollow",
               cardKind: "monster",
@@ -336,7 +346,7 @@ export const voidCards = [
     attribute: "Dark",
     archetype: "Void",
     description:
-      "3 'Void Hollow' monsters. If this card is destroyed by battle or card effect: You can Special Summon up to 3 'Void Hollow' from your GY. If this card destroys an opponent's monster by battle: You can Special Summon 1 'Void Hollow' from your GY. (Quick Effect) You can send 1 'Void Hollow' you control to the GY; this card gains 1000 ATK until the end of this turn.",
+      "3 'Void Hollow' monsters. If this card is destroyed by battle or card effect: You can Special Summon up to 3 'Void Hollow' from your GY. If this card destroys an opponent's monster by battle: You can Special Summon 1 'Void Hollow' from your GY. (Quick Effect) You can send 1 face-up 'Void Hollow' you control to the GY; this card gains 1000 ATK until the end of this turn.",
     image: "assets/Void Hollow King.png",
     monsterType: "fusion",
     fusionMaterials: [{ name: "Void Hollow", count: 3 }],
@@ -365,7 +375,7 @@ export const voidCards = [
         id: "void_hollow_king_revive_on_battle_destroy",
         timing: "on_event",
         event: "battle_destroy",
-        requireSelfAsAttacker: true,
+        requireSelfAsBattleDestroyer: true,
         requireDestroyedIsOpponent: true,
         actions: [
           {
@@ -380,14 +390,13 @@ export const voidCards = [
         ],
       },
       {
-        id: "void_hollow_king_quick_boost_attack",
-        timing: "on_event",
-        event: "attack_declared",
+        id: "void_hollow_king_quick_boost",
+        timing: "ignition",
+        requireZone: "field",
         speed: 2,
+        isQuickEffect: true,
+        allowDamageStepActivation: true,
         requireFaceup: true,
-        requireSelfAsAttacker: true,
-        promptMessage:
-          "Ativar Void Hollow King para enviar 1 Void Hollow e ganhar +1000 ATK ate o final do turno?",
         targets: [
           {
             id: "void_hollow_king_boost_cost",
@@ -396,6 +405,7 @@ export const voidCards = [
             cardKind: "monster",
             cardName: "Void Hollow",
             requireFaceup: true,
+            intent: "cost",
             count: { min: 1, max: 1 },
             autoSelect: true,
           },
@@ -406,37 +416,7 @@ export const voidCards = [
             targetRef: "void_hollow_king_boost_cost",
             player: "self",
             to: "graveyard",
-          },
-          { type: "buff_stats_temp", atkBoost: 1000, defBoost: 0 },
-        ],
-      },
-      {
-        id: "void_hollow_king_quick_boost_defense",
-        timing: "on_event",
-        event: "attack_declared",
-        speed: 2,
-        requireFaceup: true,
-        requireSelfAsDefender: true,
-        promptMessage:
-          "Ativar Void Hollow King para enviar 1 Void Hollow e ganhar +1000 ATK ate o final do turno?",
-        targets: [
-          {
-            id: "void_hollow_king_boost_cost",
-            owner: "self",
-            zone: "field",
-            cardKind: "monster",
-            cardName: "Void Hollow",
-            requireFaceup: true,
-            count: { min: 1, max: 1 },
-            autoSelect: true,
-          },
-        ],
-        actions: [
-          {
-            type: "move",
-            targetRef: "void_hollow_king_boost_cost",
-            player: "self",
-            to: "graveyard",
+            contextLabel: "cost",
           },
           { type: "buff_stats_temp", atkBoost: 1000, defBoost: 0 },
         ],
@@ -454,14 +434,12 @@ export const voidCards = [
     attribute: "Dark",
     archetype: "Void",
     description:
-      "Once per turn: Target 1 face-up monster your opponent controls; it cannot attack until the end of the next turn. If this card is sent from the field to the Graveyard: Special Summon a 'Void Little Spider' token (Level 1, 500 ATK/DEF).",
+      'Target 1 face-up monster your opponent controls; send 1 "Void Hollow" from your hand or field to the GY, and if you do, that monster cannot declare an attack until the end of the next turn. If this card is sent from the field to the GY: Special Summon 1 "Void Hollow" from your GY.',
     image: "assets/Void Bone Spider.png",
     effects: [
       {
         id: "void_bone_spider_lock",
         timing: "ignition",
-        oncePerTurn: true,
-        oncePerTurnName: "void_bone_spider_lock",
         targets: [
           {
             id: "void_bone_spider_lock_target",
@@ -471,8 +449,22 @@ export const voidCards = [
             count: { min: 1, max: 1 },
             requireFaceup: true,
           },
+          {
+            id: "void_bone_spider_hollow_cost",
+            owner: "self",
+            zones: ["hand", "field"],
+            cardName: "Void Hollow",
+            cardKind: "monster",
+            count: { min: 1, max: 1 },
+          },
         ],
         actions: [
+          {
+            type: "move",
+            targetRef: "void_bone_spider_hollow_cost",
+            to: "graveyard",
+            contextLabel: "cost",
+          },
           {
             type: "forbid_attack_next_turn",
             targetRef: "void_bone_spider_lock_target",
@@ -481,24 +473,20 @@ export const voidCards = [
         ],
       },
       {
-        id: "void_bone_spider_token",
+        id: "void_bone_spider_revive_hollow",
         timing: "on_event",
         event: "card_to_grave",
         fromZone: "field",
         actions: [
           {
-            type: "special_summon_token",
-            player: "self",
-            position: "choice",
-            token: {
-              name: "Void Little Spider",
-              atk: 500,
-              def: 500,
-              level: 1,
-              type: "Insect",
-              image: "assets/Void Little Spider.png",
-              description: "A Void token woven from the spider's bone husk.",
+            type: "special_summon_from_zone",
+            zone: "graveyard",
+            filters: {
+              name: "Void Hollow",
+              cardKind: "monster",
             },
+            count: { min: 1, max: 1 },
+            position: "choice",
           },
         ],
       },
@@ -605,7 +593,7 @@ export const voidCards = [
     attribute: "Dark",
     archetype: "Void",
     description:
-      "Se um monstro de fusÃ£o 'Void' for Invocado por InvocaÃ§Ã£o-FusÃ£o: vocÃª pode descartar esta carta da mÃ£o; esse monstro fica imune aos efeitos de cartas do oponente atÃ© o final do prÃ³ximo turno.",
+      "If a 'Void' Fusion Monster is Fusion Summoned: You can discard this card; that monster becomes immune to your opponent's card effects until the end of the next turn.",
     image: "assets/Void Raven.png",
     effects: [
       {
@@ -615,7 +603,7 @@ export const voidCards = [
         summonMethods: ["fusion"],
         promptUser: true,
         promptMessage:
-          "Descartar Void Raven para proteger o monstro 'Void' recÃ©m-invocado?",
+          "Discard Void Raven to protect the newly Fusion Summoned 'Void' monster?",
         oncePerTurn: true,
         oncePerTurnName: "void_raven_fusion_immunity",
         condition: {
@@ -661,15 +649,31 @@ export const voidCards = [
     attribute: "Dark",
     archetype: "Void",
     description:
-      'Gains 100 ATK/DEF for each "Void" monster on the field. Once per Duel, if this card is in your GY: You can Special Summon it.',
+      'Gains 100 ATK/DEF for each "Void" monster on your field and in your GY. Once per turn, up to three times per Duel, if this card is in your GY and you have 2 or more "Void Hollow" on your field and/or in your GY: You can Special Summon it.',
     image: "assets/Void Tenebris Horn.png",
     effects: [
       {
         id: "void_tenebris_horn_revive",
         timing: "ignition",
         requireZone: "graveyard",
+        oncePerTurn: true,
+        oncePerTurnName: "void_tenebris_horn_revive",
         oncePerDuel: true,
+        oncePerDuelLimit: 3,
         oncePerDuelName: "void_tenebris_horn_revive",
+        conditions: [
+          {
+            type: "field_card_count",
+            owner: "self",
+            zones: ["field", "graveyard"],
+            filters: {
+              cardKind: "monster",
+              cardName: "Void Hollow",
+            },
+            requireFaceup: true,
+            min: 2,
+          },
+        ],
         targets: [
           {
             id: "void_tenebris_horn_self",
@@ -693,15 +697,28 @@ export const voidCards = [
         ],
       },
       {
-        id: "void_tenebris_horn_aura",
+        id: "void_tenebris_horn_field_aura",
         timing: "passive",
+        requireFaceup: true,
         passive: {
           type: "archetype_count_buff",
           archetype: "Void",
           amountPerCard: 100,
-          owners: ["self", "opponent"],
+          countOwners: ["self"],
           cardKinds: ["monster"],
+          requireFaceup: true,
           includeSelf: true,
+          stats: ["atk", "def"],
+        },
+      },
+      {
+        id: "void_tenebris_horn_graveyard_aura",
+        timing: "passive",
+        requireFaceup: true,
+        passive: {
+          type: "graveyard_archetype_count_buff",
+          archetype: "Void",
+          amountPerCard: 100,
           stats: ["atk", "def"],
         },
       },
@@ -718,7 +735,7 @@ export const voidCards = [
     attribute: "Dark",
     archetype: "Void",
     description:
-      'Once per turn: You can Special Summon this card from your hand by sending 2 face-up "Void" monsters you control to the GY. If this card destroys an opponent\'s monster by battle: banish that monster.',
+      'Once per turn: You can Special Summon this card from your hand by sending 2 "Void" monsters you control to the GY. If "Void Hollow" was sent to the GY to activate this effect, this card gains the following effect: If this card destroys an opponent\'s monster by battle: banish that monster.',
     image: "assets/Void Slayer Brute.png",
     effects: [
       {
@@ -734,7 +751,6 @@ export const voidCards = [
             zone: "field",
             cardKind: "monster",
             archetype: "Void",
-            requireFaceup: true,
             count: { min: 2, max: 2 },
           },
         ],
@@ -744,6 +760,17 @@ export const voidCards = [
             costTargetRef: "void_slayer_brute_cost",
             position: "choice",
             cannotAttackThisTurn: false,
+            conditionalMarkersOnSummon: [
+              {
+                key: "void_slayer_brute_hollow_cost",
+                costFilters: {
+                  cardKind: "monster",
+                  cardName: "Void Hollow",
+                },
+                min: 1,
+                bindToFieldPresence: true,
+              },
+            ],
           },
         ],
       },
@@ -751,8 +778,16 @@ export const voidCards = [
         id: "void_slayer_brute_banish_destroyed",
         timing: "on_event",
         event: "battle_destroy",
-        requireSelfAsAttacker: true,
+        requireSelfAsBattleDestroyer: true,
         requireDestroyedIsOpponent: true,
+        conditions: [
+          {
+            type: "source_has_marker",
+            key: "void_slayer_brute_hollow_cost",
+            sourceEffectId: "void_slayer_brute_hand_summon",
+            requireCurrentFieldPresence: true,
+          },
+        ],
         actions: [
           {
             type: "banish_destroyed_monster",
@@ -785,7 +820,7 @@ export const voidCards = [
         id: "void_berserker_bounce_on_destroy",
         timing: "on_event",
         event: "battle_destroy",
-        requireSelfAsAttacker: true,
+        requireSelfAsBattleDestroyer: true,
         requireDestroyedIsOpponent: true,
         oncePerTurn: true,
         oncePerTurnName: "void_berserker_bounce_on_destroy",
@@ -822,7 +857,7 @@ export const voidCards = [
     attribute: "Wind",
     archetype: "Void",
     description:
-      'If this card is in your hand: You can send 1 to 3 "Void Hollow" you control to the GY; Special Summon this card, and if you do, it gains the following effects based on the number sent:\n- 1+: This card gains 300 ATK until the end of the turn.\n- 2+: Also, this card cannot be destroyed by battle.\n- 3: Also, destroy 1 card your opponent controls.\nYou can only use this effect of "Void Serpent Drake" once per turn.',
+      'Once per turn: You can Special Summon this card from your hand by sending 1 "Void Hollow" you control to the GY. This card cannot be destroyed by battle while you control "Void Hollow". "Void" monsters on your field and in your GY cannot be banished by your opponent\'s card effects.',
     image: "assets/Void Serpent Drake.png",
     effects: [
       {
@@ -831,34 +866,65 @@ export const voidCards = [
         requireZone: "hand",
         oncePerTurn: true,
         oncePerTurnName: "void_serpent_drake_hand_special",
-        actions: [
+        targets: [
           {
-            type: "special_summon_from_hand_with_tiered_cost",
-            costFilters: { name: "Void Hollow", cardKind: "monster" },
-            minCost: 1,
-            maxCost: 3,
-            position: "choice",
-            tier1AtkBoost: 300,
-            tierOptions: [
-              {
-                count: 1,
-                label: "Tier 1",
-                description: "+300 ATK until end of turn",
-              },
-              {
-                count: 2,
-                label: "Tier 2",
-                description: "+300 ATK and cannot be destroyed by battle",
-              },
-              {
-                count: 3,
-                label: "Tier 3",
-                description:
-                  "+300 ATK, battle indestructible, destroy 1 opponent card",
-              },
-            ],
+            id: "void_serpent_drake_hollow_cost",
+            owner: "self",
+            zone: "field",
+            cardKind: "monster",
+            cardName: "Void Hollow",
+            intent: "cost",
+            count: { min: 1, max: 1 },
           },
         ],
+        actions: [
+          {
+            type: "special_summon_from_hand_with_cost",
+            costTargetRef: "void_serpent_drake_hollow_cost",
+            position: "choice",
+            cannotAttackThisTurn: false,
+          },
+        ],
+      },
+      {
+        id: "void_serpent_drake_hollow_battle_indestructible",
+        timing: "passive",
+        requireZone: "field",
+        requireFaceup: true,
+        passive: {
+          type: "conditional_status",
+          status: "battleIndestructible",
+          target: "self",
+          condition: {
+            type: "field_card_count",
+            owner: "self",
+            zones: ["field"],
+            filters: {
+              cardKind: "monster",
+              cardName: "Void Hollow",
+              requireFaceup: true,
+            },
+            min: 1,
+          },
+        },
+      },
+      {
+        id: "void_serpent_drake_void_banish_protection",
+        timing: "passive",
+        requireZone: "field",
+        requireFaceup: true,
+        passive: {
+          type: "banish_protection",
+          protectFrom: "opponent_effects",
+          targetScope: {
+            owner: "self",
+            zones: ["field", "graveyard"],
+            filters: {
+              cardKind: "monster",
+              archetype: "Void",
+            },
+          },
+        },
       },
     ],
   },
@@ -867,7 +933,7 @@ export const voidCards = [
     name: "Void Hydra Titan",
     cardKind: "monster",
     monsterType: "fusion",
-    atk: 3500,
+    atk: 4200,
     def: 2900,
     level: 10,
     type: "Dragon",
@@ -1130,7 +1196,7 @@ export const voidCards = [
     attribute: "Dark",
     archetype: "Void",
     description:
-      "You can send 1 'Void' monster you control to the GY; Special Summon this card from your hand. You can return this card from the field to your hand; Special Summon up to 2 'Void Hollow' from your GY, and if you do, they gain 700 ATK/DEF until the end of this turn. You can only use each effect of 'Thousand-Arms of the Void' once per turn.",
+      "Once per turn: You can Special Summon this card from your hand by sending 1 'Void' monster you control to the GY. Once per turn: You can return this face-up card you control to the hand; Special Summon up to 2 'Void Hollow' from your GY.",
     image: "assets/Thousand-Arms of the Void.png",
     effects: [
       {
@@ -1163,6 +1229,7 @@ export const voidCards = [
         id: "thousand_arms_bounce_and_revive",
         timing: "ignition",
         requireZone: "field",
+        requireFaceup: true,
         oncePerTurn: true,
         oncePerTurnName: "thousand_arms_bounce_and_revive",
         actions: [
@@ -1182,8 +1249,6 @@ export const voidCards = [
             count: { min: 0, max: 2 },
             position: "choice",
             cannotAttackThisTurn: false,
-            atkBoostAfterSummon: 700,
-            defBoostAfterSummon: 700,
           },
         ],
       },
@@ -1205,7 +1270,7 @@ export const voidCards = [
       position: "choice",
     },
     description:
-      "Ascension Material: 'Void Walker'. Requirement: The effect of the material being activated twice in this duel. Once per turn: You can Special Summon 1 'Void Hollow' from your Graveyard. If this card is sent from the field to the Graveyard: You can Special Summon up to 3 'Void Hollow' from your hand or Deck.",
+      "Ascension Material: 'Void Walker'. Requirement: The effect of the material being activated twice in this duel. You can Special Summon 1 'Void Hollow' from your hand or Graveyard. If this card is destroyed by battle or by an opponent's card effect: You can Special Summon up to 3 'Void Hollow' from your hand, Deck, or Graveyard. You can only use each effect of 'Void Cosmic Walker' once per turn.",
     image: "assets/Void Cosmic Walker.png",
     effects: [
       {
@@ -1218,7 +1283,7 @@ export const voidCards = [
         actions: [
           {
             type: "special_summon_from_zone",
-            zone: "graveyard",
+            zone: ["hand", "graveyard"],
             filters: {
               name: "Void Hollow",
               cardKind: "monster",
@@ -1235,10 +1300,16 @@ export const voidCards = [
         timing: "on_event",
         event: "card_to_grave",
         fromZone: "field",
+        requireSelfAsDestroyed: true,
+        condition: { type: "destroyed_by_battle_or_effect" },
+        requireDestroyedByOpponent: true,
+        oncePerTurn: true,
+        oncePerTurnName: "void_cosmic_walker_to_grave_summon_hollows",
+        promptUser: true,
         actions: [
           {
             type: "special_summon_from_zone",
-            zone: ["hand", "deck"],
+            zone: ["hand", "deck", "graveyard"],
             filters: { name: "Void Hollow", cardKind: "monster" },
             count: { min: 0, max: 3 },
             position: "choice",
@@ -1282,12 +1353,37 @@ export const voidCards = [
             count: { min: 0, max: 3 },
             position: "choice",
             promptPlayer: true,
+            storeResultAs: "malicious_demon_revived_hollows",
           },
           {
-            type: "search_any",
-            player: "self",
-            cardName: "Polymerization",
-            cardKind: "spell",
+            type: "conditional_actions",
+            conditions: [
+              {
+                type: "any_of",
+                conditions: [
+                  {
+                    type: "context_number_compare",
+                    key: "_actionTargets.malicious_demon_revived_hollows.length",
+                    op: "gt",
+                    value: 0,
+                  },
+                  {
+                    type: "context_number_compare",
+                    key: "actionResults.malicious_demon_revived_hollows.length",
+                    op: "gt",
+                    value: 0,
+                  },
+                ],
+              },
+            ],
+            actions: [
+              {
+                type: "search_any",
+                player: "self",
+                cardName: "Polymerization",
+                cardKind: "spell",
+              },
+            ],
           },
         ],
       },

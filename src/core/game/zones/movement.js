@@ -488,6 +488,75 @@ function findCardLocation(game, card, preferredZone = null) {
   return null;
 }
 
+function samePlayerRef(left, right) {
+  return !!left && !!right && (left === right || left.id === right.id);
+}
+
+function resolvePlayerRef(game, ref) {
+  if (!game || !ref) return null;
+  if (ref === game.player || ref === game.bot) return ref;
+  const id =
+    typeof ref === "string" ? ref : ref.id || ref.controller || ref.owner || null;
+  if (!id) return null;
+  return [game.player, game.bot].find((player) => player?.id === id) || null;
+}
+
+function resolveEffectSourceOwner(game, options = {}) {
+  const explicitOwner = resolvePlayerRef(
+    game,
+    options.sourcePlayer || options.effectPlayer || null,
+  );
+  if (explicitOwner) return explicitOwner;
+
+  const sourceCard = options.sourceCard || options.source || null;
+  if (!sourceCard) return null;
+
+  const sourceLocation = findCardLocation(game, sourceCard, null);
+  if (sourceLocation?.owner) return sourceLocation.owner;
+
+  return (
+    resolvePlayerRef(game, sourceCard.controller) ||
+    resolvePlayerRef(game, sourceCard.owner) ||
+    null
+  );
+}
+
+function banishProtectionSourceMatches(game, passive, protectedOwner, options = {}) {
+  const protectFrom = passive?.protectFrom || null;
+  if (!protectFrom || protectFrom === "any" || protectFrom === "all") {
+    return true;
+  }
+
+  const movedByEffect =
+    options.movedByEffect === true ||
+    Boolean(options.sourceCard || options.source || options.effectId);
+  if (protectFrom === "effects" || protectFrom === "card_effects") {
+    return movedByEffect;
+  }
+
+  const sourceOwner = resolveEffectSourceOwner(game, options);
+  if (!sourceOwner) return false;
+
+  if (
+    protectFrom === "opponent_effects" ||
+    protectFrom === "opponent_card_effects"
+  ) {
+    if (!movedByEffect) return false;
+    const opponent =
+      typeof game?.getOpponent === "function"
+        ? game.getOpponent(protectedOwner)
+        : null;
+    return samePlayerRef(sourceOwner, opponent);
+  }
+
+  if (protectFrom === "self_effects" || protectFrom === "own_effects") {
+    if (!movedByEffect) return false;
+    return samePlayerRef(sourceOwner, protectedOwner);
+  }
+
+  return true;
+}
+
 /**
  * Look for any face-up card on the field whose passive `send_to_grave_replacement`
  * effect matches a card being sent to the graveyard owned by `fromOwner`.
@@ -567,7 +636,7 @@ function buildBanishProtectionFilters(passive = {}) {
     "isToken",
     "isTuner",
   ]) {
-    const value = scope[key] ?? passive[key];
+    const value = key === "type" ? scope[key] : scope[key] ?? passive[key];
     if (value !== undefined && filters[key] === undefined) {
       filters[key] = value;
     }
@@ -575,7 +644,7 @@ function buildBanishProtectionFilters(passive = {}) {
   return filters;
 }
 
-function banishProtectionAppliesToCard(game, card, cardOwner, cardZone) {
+function banishProtectionAppliesToCard(game, card, cardOwner, cardZone, options = {}) {
   if (!game || !card || !cardOwner) return null;
 
   const sourceOwners = [game.player, game.bot].filter(Boolean);
@@ -605,6 +674,11 @@ function banishProtectionAppliesToCard(game, card, cardOwner, cardZone) {
         if (
           (effect.requireFaceup === true || passive.requireFaceup === true) &&
           sourceCard.isFacedown
+        ) {
+          continue;
+        }
+        if (
+          !banishProtectionSourceMatches(game, passive, cardOwner, options)
         ) {
           continue;
         }
@@ -1471,6 +1545,7 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
         card,
         initialLocation.owner,
         initialLocation.zone,
+        options,
       );
       if (protection) {
         this.ui?.log?.(
@@ -1552,6 +1627,20 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
   }
   ensureOriginalOwner(card, fromOwner.id);
 
+  const restoreRemovedCardToSourceZone = () => {
+    if (!fromOwner || !fromZone || !card) return;
+    if (fromZone === "fieldSpell") {
+      if (!fromOwner.fieldSpell) {
+        fromOwner.fieldSpell = card;
+      }
+      return;
+    }
+    const sourceArr = this.getZone(fromOwner, fromZone);
+    if (Array.isArray(sourceArr) && !sourceArr.includes(card)) {
+      sourceArr.push(card);
+    }
+  };
+
   // Send-to-graveyard replacement (e.g. Galaxy Extreme Dragon): if any face-up
   // card on the field has a `passive: { type: "send_to_grave_replacement" }`
   // matching this transfer, redirect the card to its owner's banished zone.
@@ -1597,6 +1686,23 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
       } else {
         this.ui?.log?.(`${card.name} is banished as it leaves the field.`);
       }
+    }
+  }
+
+  if (toZone === "banished") {
+    const protection = banishProtectionAppliesToCard(
+      this,
+      card,
+      fromOwner,
+      fromZone,
+      options,
+    );
+    if (protection) {
+      restoreRemovedCardToSourceZone();
+      this.ui?.log?.(
+        `${card.name} cannot be banished while ${protection.sourceCard.name} is face-up.`,
+      );
+      return { success: false, reason: "banish_protected" };
     }
   }
 

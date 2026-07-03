@@ -380,7 +380,8 @@ function getMaterialEffectActivations(game, player, material) {
 
 function specialistMainValueUsed(bot = {}) {
   const usage = bot?.oncePerDuelUsageByName || {};
-  return usage.burning_west_specialist_take_control === true;
+  const value = usage.burning_west_specialist_take_control;
+  return value === true || Number(value || 0) > 0;
 }
 
 function materialHasProducedMainValue(material, context = {}) {

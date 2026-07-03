@@ -2,6 +2,7 @@ import {
   CARD_KNOWLEDGE,
   CURRENT_AWAKENING_TARGET_NAMES,
   isExtremeDragon,
+  isOutOfPlanDragonCardName,
 } from "./knowledge.js";
 import { analyzeDragonState } from "./stateAnalysis.js";
 import {
@@ -96,6 +97,10 @@ function cardStrategicValue(card, fallbackValue = null) {
   );
 }
 
+function isCurrentDragonListMode(context = {}) {
+  return context.currentDragonBotList !== false && context.analysis?.currentDragonBotList !== false;
+}
+
 function classifySearch(action = {}, context = {}) {
   const sourceName = getSourceName(context);
   const effectId = getEffectId(action, context);
@@ -187,6 +192,7 @@ function makeContext(context = {}) {
       hasName(spellTrap, "Hellkite Roar"),
     botLowLp: botLp > 0 && opponentLp > 0 && botLp < opponentLp * 0.7,
     opponentLowLp: opponentLp > 0 && opponentLp <= 2500,
+    currentListMode: isCurrentDragonListMode(context),
     combatNeed:
       opponentField.length > 0 &&
       (opponentStrongestAtk >= 2200 || field.length === 0),
@@ -200,7 +206,9 @@ function makeContext(context = {}) {
 }
 
 function scoreGeneric(card, ctx) {
-  return cardStrategicValue(card, ctx.fallbackValue);
+  const outOfPlanPenalty =
+    ctx.currentListMode && isOutOfPlanDragonCardName(card?.name) ? 5000 : 0;
+  return cardStrategicValue(card, ctx.fallbackValue) - outOfPlanPenalty;
 }
 
 function scoreArmored(card, ctx) {
