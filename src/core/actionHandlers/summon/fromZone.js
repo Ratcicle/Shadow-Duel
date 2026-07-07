@@ -922,7 +922,7 @@ async function summonCards(
         {
           card,
           owner: summonPlayer.id,
-          sourceCard: source || null,
+          sourceCard: ctx?.source || null,
           sourcePlayer: player || null,
         },
         0,
