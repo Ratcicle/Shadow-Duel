@@ -146,7 +146,15 @@ function scoreSickleSpellTarget(card, { bot, opponent }) {
     case CRESCENT_SHIELD_NAME:
       return hasFaceupLuminarch ? (underPressure ? 10 : 7) : 2;
     case "Luminarch Radiant Wave":
-      return (bot?.field || []).some((entry) => isLuminarchMonster(entry) && (entry.atk || 0) >= 2000)
+      return (
+        (opponent?.field || []).length > 0 ||
+        (opponent?.spellTrap || []).length > 0 ||
+        opponent?.fieldSpell
+      ) &&
+        (
+          (bot?.field || []).some((entry) => isLuminarchMonster(entry) && !entry.isFacedown) ||
+          (bot?.graveyard || []).some((entry) => isLuminarchMonster(entry))
+        )
         ? 10
         : 4;
     case "Luminarch Sacred Judgment":

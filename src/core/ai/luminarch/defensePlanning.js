@@ -25,7 +25,7 @@ function getConvocationCandidates(analysis) {
       card &&
       isLuminarch(card) &&
       card.cardKind === "monster" &&
-      (card.level || 0) >= 7
+      (card.level || 0) >= 5
   );
 }
 
@@ -116,7 +116,7 @@ export function evaluateLuminarchDefensePlan(analysis = {}) {
 export function evaluateKnightsConvocationPlan(analysis = {}) {
   const highLevel = getConvocationCandidates(analysis);
   if (highLevel.length === 0) {
-    return { yes: false, priority: 0, reason: "Sem Lv7+ para discartar" };
+    return { yes: false, priority: 0, reason: "Sem Lv5+ para discartar" };
   }
 
   const defensePlan = evaluateLuminarchDefensePlan(analysis);
@@ -172,7 +172,7 @@ export function evaluateKnightsConvocationPlan(analysis = {}) {
     return {
       yes: true,
       priority: 14,
-      reason: `BRICK ESCAPE: ${highLevel.length}x Lv7+ na mao sem searchers`,
+      reason: `BRICK ESCAPE: ${highLevel.length}x Lv5+ na mao sem searchers`,
       defensePlan,
     };
   }
@@ -181,7 +181,7 @@ export function evaluateKnightsConvocationPlan(analysis = {}) {
     return {
       yes: true,
       priority: 12,
-      reason: "Sem defesa/starter: converter Lv7+ excedente em peca inicial",
+      reason: "Sem defesa/starter: converter Lv5+ excedente em peca inicial",
       defensePlan,
     };
   }

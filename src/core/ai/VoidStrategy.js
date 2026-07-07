@@ -11,6 +11,7 @@ import {
   assessVoidSummonEntry,
   evaluateVoidFinisherPlans,
   evaluateVoidFusionPriority,
+  evaluateVoidFusionRemovalPriority,
   shouldPlayVoidSpell,
   shouldSummonVoidMonster,
 } from "./void/priorities.js";
@@ -1670,7 +1671,7 @@ export default class VoidStrategy extends BaseStrategy {
             const fusionPlan = (analysis.finisherPlans || []).find(
               (plan) => plan.kind === "fusion",
             );
-            const fusionEval = fusionPlan
+            const finisherFusionEval = fusionPlan
               ? {
                   priority: fusionPlan.actionPriority,
                   target: fusionPlan.targetName,
@@ -1679,6 +1680,18 @@ export default class VoidStrategy extends BaseStrategy {
                   plan: fusionPlan,
                 }
               : evaluateVoidFusionPriority(bot);
+            const removalFusionEval = evaluateVoidFusionRemovalPriority(
+              bot,
+              opponent,
+              game,
+              analysis,
+            );
+            const fusionEval =
+              removalFusionEval.priority > 0 &&
+              removalFusionEval.priority >=
+                (finisherFusionEval.priority || 0) - 0.3
+                ? removalFusionEval
+                : finisherFusionEval;
             fusionHint = fusionEval.target;
             if (fusionEval.priority <= 0) return;
             activationContext = withFusionPreferences(
@@ -2344,6 +2357,10 @@ export default class VoidStrategy extends BaseStrategy {
       const hollowsInGY = (bot.graveyard || []).filter(
         (c) => c?.id === VOID_IDS.HOLLOW,
       ).length;
+      const hollowsOnField = (bot.field || []).filter(
+        (c) => c?.id === VOID_IDS.HOLLOW,
+      ).length;
+      const voidsInGY = (bot.graveyard || []).filter(isVoid).length;
       const oppFaceUpST =
         ((opponent?.spellTrap || []).filter(
           (c) => c && !c.isFacedown,
@@ -2740,6 +2757,32 @@ export default class VoidStrategy extends BaseStrategy {
       fusionCard.immuneToOpponentEffectsUntilTurn =
         (state.turnCounter || 0) + 1;
       fusionCard._simProtectedByRaven = true;
+    }
+
+    if (fusionCard.id === VOID_IDS.SHADOW_CRAWLER) {
+      const deck = player.deck || [];
+      const preferredSendIds = [
+        VOID_IDS.HOLLOW,
+        VOID_IDS.CONJURER,
+        VOID_IDS.HAUNTER,
+        VOID_IDS.TENEBRIS_HORN,
+        VOID_IDS.FORGOTTEN_KNIGHT,
+      ];
+      let deckIndex = preferredSendIds
+        .map((id) =>
+          deck.findIndex(
+            (card) => card?.id === id && card.cardKind === "monster",
+          ),
+        )
+        .find((index) => index >= 0);
+      if (deckIndex == null || deckIndex < 0) {
+        deckIndex = deck.findIndex(
+          (card) => isVoid(card) && card?.cardKind === "monster",
+        );
+      }
+      if (deckIndex >= 0) {
+        player.graveyard.push(deck.splice(deckIndex, 1)[0]);
+      }
     }
 
     if (fusionCard.id !== VOID_IDS.HYDRA_TITAN) return;

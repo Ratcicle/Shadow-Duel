@@ -186,10 +186,28 @@ function getSimOptBucket(state, selfId = "bot") {
   if (!state) return null;
   if (!state._simOncePerTurn) state._simOncePerTurn = {};
   const key = selfId || "bot";
-  if (Array.isArray(state._simOncePerTurn[key])) {
-    state._simOncePerTurn[key] = new Set(state._simOncePerTurn[key]);
+  if (state._simOncePerTurn[key] instanceof Set) {
+    const migrated = new Map();
+    for (const entryKey of state._simOncePerTurn[key]) {
+      migrated.set(entryKey, 1);
+    }
+    state._simOncePerTurn[key] = migrated;
   }
-  if (!state._simOncePerTurn[key]) state._simOncePerTurn[key] = new Set();
+  if (Array.isArray(state._simOncePerTurn[key])) {
+    state._simOncePerTurn[key] = new Map(
+      state._simOncePerTurn[key].map((entry) =>
+        Array.isArray(entry) ? [entry[0], Number(entry[1] || 1)] : [entry, 1],
+      ),
+    );
+  }
+  if (
+    state._simOncePerTurn[key] &&
+    typeof state._simOncePerTurn[key] === "object" &&
+    !(state._simOncePerTurn[key] instanceof Map)
+  ) {
+    state._simOncePerTurn[key] = new Map(Object.entries(state._simOncePerTurn[key]));
+  }
+  if (!state._simOncePerTurn[key]) state._simOncePerTurn[key] = new Map();
   return state._simOncePerTurn[key];
 }
 
@@ -198,6 +216,20 @@ function canUseSimulatedEffect(state, effect, sourceCard, selfId = "bot") {
   const key = getSimOncePerTurnKey(effect, sourceCard);
   if (!key) return true;
   const bucket = getSimOptBucket(state, selfId);
+  const limit = Math.max(
+    1,
+    Math.floor(
+      Number(
+        effect.oncePerTurnLimit ??
+          effect.usesPerTurn ??
+          effect.maxUsesPerTurn ??
+          1,
+      ),
+    ) || 1,
+  );
+  if (bucket instanceof Map) {
+    return Number(bucket.get(key) || 0) < limit;
+  }
   return !bucket?.has(key);
 }
 
@@ -206,7 +238,22 @@ function markSimulatedEffectUsed(state, effect, sourceCard, selfId = "bot") {
   const key = getSimOncePerTurnKey(effect, sourceCard);
   if (!key) return;
   const bucket = getSimOptBucket(state, selfId);
-  bucket?.add(key);
+  const limit = Math.max(
+    1,
+    Math.floor(
+      Number(
+        effect.oncePerTurnLimit ??
+          effect.usesPerTurn ??
+          effect.maxUsesPerTurn ??
+          1,
+      ),
+    ) || 1,
+  );
+  if (bucket instanceof Map) {
+    bucket.set(key, Math.min(limit, Number(bucket.get(key) || 0) + 1));
+  } else {
+    bucket?.add(key);
+  }
 }
 
 function effectConditionsPass(state, effect, sourceCard, options = {}) {

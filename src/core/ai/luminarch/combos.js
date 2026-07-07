@@ -152,7 +152,7 @@ export const COMBO_DATABASE = [
       "Convocation -> Moonlit Blessing",
       "Arbiter -> Moonlit Blessing -> Revive",
       "Magic Sickle Spell Recycle",
-      "Radiant Wave Sacrifice Removal",
+      "Radiant Wave LP Removal",
       "Radiant Wave + Moonlit Recovery",
     ],
   },
@@ -347,7 +347,7 @@ function evaluateStarterPackage(state) {
     state.gyLuminarchMonsters.some((card) => (card.level || 0) <= 4);
   const hasConvocationSetup =
     hasName(state.hand, NAMES.knightsConvocation) &&
-    state.hand.some((card) => isLuminarchMonster(card) && (card.level || 0) >= 7);
+    state.hand.some((card) => isLuminarchMonster(card) && (card.level || 0) >= 5);
   if (!hasValiant && !hasArbiter && !hasMoonbladeRevive && !hasConvocationSetup) {
     return null;
   }
@@ -519,7 +519,7 @@ function evaluateGrindPackage(state) {
   const convocationMoonlit =
     hasName(state.hand, NAMES.knightsConvocation) &&
     hasName(state.hand, NAMES.moonlit) &&
-    state.hand.some((card) => isLuminarchMonster(card) && (card.level || 0) >= 7);
+    state.hand.some((card) => isLuminarchMonster(card) && (card.level || 0) >= 5);
   if (!moonlitReady && !fortressRevive && !sickleRecovery && !waveRecovery && !convocationMoonlit) {
     return null;
   }

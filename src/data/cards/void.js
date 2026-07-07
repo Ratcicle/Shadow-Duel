@@ -1523,4 +1523,157 @@ export const voidCards = [
       },
     ],
   },
+  {
+    id: 226,
+    name: "Void Shadow Crawler",
+    cardKind: "monster",
+    monsterType: "fusion",
+    atk: 2000,
+    def: 900,
+    level: 5,
+    type: "Fiend",
+    attribute: "Dark",
+    archetype: "Void",
+    description:
+      "2 'Void' monsters. If this card is Fusion Summoned: You can send 1 'Void' monster from your Deck to the GY. Once per turn: You can target 1 Level 5 or higher monster your opponent controls; send 1 'Void' monster you control to the GY, and if you do, destroy that target.",
+    image: "assets/Void Shadow Crawler.png",
+    fusionMaterials: [{ archetype: "Void", count: 2 }],
+    effects: [
+      {
+        id: "void_shadow_crawler_fusion_send",
+        timing: "on_event",
+        event: "after_summon",
+        summonMethods: ["fusion"],
+        requireSelfAsSummoned: true,
+        promptUser: true,
+        promptMessage:
+          'Activate "Void Shadow Crawler" to send 1 "Void" monster from your Deck to the GY?',
+        targets: [
+          {
+            id: "void_shadow_crawler_deck_send",
+            owner: "self",
+            zone: "deck",
+            cardKind: "monster",
+            archetype: "Void",
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "move",
+            targetRef: "void_shadow_crawler_deck_send",
+            player: "self",
+            fromZone: "deck",
+            to: "graveyard",
+          },
+        ],
+      },
+      {
+        id: "void_shadow_crawler_destroy_high_level",
+        timing: "ignition",
+        requireZone: "field",
+        requireFaceup: true,
+        oncePerTurn: true,
+        oncePerTurnName: "void_shadow_crawler_destroy_high_level",
+        targets: [
+          {
+            id: "void_shadow_crawler_destroy_target",
+            owner: "opponent",
+            zone: "field",
+            cardKind: "monster",
+            minLevel: 5,
+            count: { min: 1, max: 1 },
+          },
+          {
+            id: "void_shadow_crawler_cost",
+            owner: "self",
+            zone: "field",
+            cardKind: "monster",
+            archetype: "Void",
+            intent: "cost",
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "move",
+            targetRef: "void_shadow_crawler_cost",
+            player: "self",
+            to: "graveyard",
+            contextLabel: "cost",
+          },
+          {
+            type: "destroy",
+            targetRef: "void_shadow_crawler_destroy_target",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 227,
+    name: "Void Aberration",
+    cardKind: "monster",
+    monsterType: "fusion",
+    atk: 2400,
+    def: 1900,
+    level: 7,
+    type: "Fiend",
+    attribute: "Dark",
+    archetype: "Void",
+    description:
+      "'Void Tenebris Horn' + 1 'Void' monster. This card gains 100 ATK/DEF until the end of the turn each time a 'Void' monster is sent to the GY. If this card is sent from the field to the GY: You can target 1 face-up card your opponent controls; destroy that target.",
+    image: "assets/Void Aberration.png",
+    fusionMaterials: [
+      { name: "Void Tenebris Horn", count: 1 },
+      { archetype: "Void", cardKind: "monster", count: 1 },
+    ],
+    effects: [
+      {
+        id: "void_aberration_void_to_grave_buff",
+        timing: "on_event",
+        event: "card_to_grave",
+        requireZone: "field",
+        requireFaceup: true,
+        promptUser: false,
+        eventCardFilters: {
+          cardKind: "monster",
+          archetype: "Void",
+          toZone: "graveyard",
+        },
+        actions: [
+          {
+            type: "buff_stats_temp",
+            targetRef: "self",
+            atkBoost: 100,
+            defBoost: 100,
+          },
+        ],
+      },
+      {
+        id: "void_aberration_sent_from_field_destroy",
+        timing: "on_event",
+        event: "card_to_grave",
+        fromZone: "field",
+        promptUser: true,
+        promptMessage:
+          'Activate "Void Aberration" to destroy 1 face-up card your opponent controls?',
+        targets: [
+          {
+            id: "void_aberration_destroy_target",
+            owner: "opponent",
+            zones: ["field", "spellTrap", "fieldSpell"],
+            requireFaceup: true,
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "destroy",
+            targetRef: "void_aberration_destroy_target",
+          },
+        ],
+      },
+    ],
+  },
 ];

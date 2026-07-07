@@ -219,6 +219,7 @@ export function shouldPlaySpell(card, analysis) {
     if (name === "Luminarch Sacred Judgment") {
       const myField = analysis.field.length;
       const oppField = (analysis.oppField || []).length;
+      const openMonsterZones = Math.max(0, 5 - myField);
       const lp = analysis.lp || 8000;
       const oppLp = analysis.oppLp || 8000;
 
@@ -242,22 +243,22 @@ export function shouldPlaySpell(card, analysis) {
         mode: "sacred_judgment",
       });
 
-      // === SITUAÇÃO CRÍTICA: Campo vazio + opp domina ===
-      // Precisa: campo vazio, opp 2+, LP >= 2500 (sobra 500 após custo), GY com recursos
+      // === SITUAÇÃO CRÍTICA: opp domina e GY converte em campo ===
+      // Precisa: opp 2+, LP >= 2500 (sobra 500 após custo), GY com recursos
       if (
-        myField === 0 &&
         oppField >= 2 &&
+        openMonsterZones > 0 &&
         lp >= 2500 &&
         gyLuminarch.length >= 2
       ) {
         // Calcular power swing potencial
-        const potentialSummons = Math.min(gyLuminarch.length, oppField, 5);
+        const potentialSummons = Math.min(gyLuminarch.length, oppField, openMonsterZones, 5);
         const lpGain = potentialSummons * 500; // heal de volta
         const netLpCost = 2000 - lpGain; // custo real após heal
         const finalLp = lp - netLpCost;
 
         // Avaliar se é worth it
-        const isCritical = oppField >= 3 || oppLp > lp + 2000; // opp domina
+        const isCritical = oppField >= 3 || oppLp > lp + 2000 || oppField > myField; // opp domina
         const hasQuality = highValueMonsters >= 1; // pelo menos 1 bom monstro
         const survives = finalLp >= 1000; // sobrevive após custo
 
@@ -284,8 +285,8 @@ export function shouldPlaySpell(card, analysis) {
       }
 
       // Bloquear: não é situação de desperation ou muito arriscado
-      if (myField > 0) {
-        return { yes: false, reason: "Precisa campo vazio (situação crítica)" };
+      if (openMonsterZones <= 0) {
+        return { yes: false, reason: "Sem zona de monstro livre para converter Sacred Judgment" };
       }
       if (oppField < 2) {
         return { yes: false, reason: "Opp precisa ter 2+ monstros" };

@@ -337,6 +337,16 @@ export function evaluateVoidMonster(monster, context = {}) {
       value += 3.5; // 2 ataques é muito forte
       break;
 
+    case VOID_IDS.SHADOW_CRAWLER:
+      value += 2.4; // GY setup + targeted removal
+      if (oppStrongestAtk >= 2000) value += 0.4;
+      break;
+
+    case VOID_IDS.ABERRATION:
+      value += 2.8 + Math.min(voidsInGY, 4) * 0.15;
+      if (atk > oppStrongestAtk && oppStrongestAtk > 0) value += 0.5;
+      break;
+
     case VOID_IDS.COSMIC_WALKER:
       value += 3.2; // Ascension com death trigger
       break;

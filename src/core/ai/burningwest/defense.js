@@ -589,6 +589,87 @@ function selectQuickDrawOwnTarget(player, threat, analysis = {}) {
     .sort((a, b) => scoreProtectedCard(b, analysis) - scoreProtectedCard(a, analysis))[0] || null;
 }
 
+function scoreOpponentMonsterForQuickDraw(card) {
+  if (!card || !isMonster(card)) return 0;
+  let score = Math.max(getEffectiveAtk(card), getEffectiveDef(card), getBattleStat(card)) / 100;
+  const level = numberValue(card?.level, 0);
+  if (level >= 5) score += 8;
+  if (level >= 7) score += 8;
+  if (card?.monsterType) score += 10;
+  if (Array.isArray(card?.effects) && card.effects.length > 0) {
+    score += Math.min(16, card.effects.length * 4);
+  }
+  return score;
+}
+
+function evaluateOffensiveQuickDrawBattlePair({ game, player, analysis = {}, context = {} } = {}) {
+  const opponent = getOpponent(game, player, analysis);
+  const { attacker, defender, directAttack } = inferBattleContext(context, analysis);
+  if (
+    directAttack ||
+    !attacker ||
+    !defender ||
+    !ownsCard(player, attacker) ||
+    !ownsCard(opponent, defender) ||
+    !isFaceUpBurningWestMonster(attacker) ||
+    !isMonster(defender) ||
+    !isFaceUp(defender)
+  ) {
+    return null;
+  }
+  if (crashTownBlocksQuickDraw({ player, opponent, analysis: { ...analysis, game } })) {
+    return {
+      option: null,
+      pass: true,
+      score: 0,
+      reason: "Crash Town blocks Quick Draw effect destruction payoff"
+    };
+  }
+
+  const attackerAtk = getEffectiveAtk(attacker);
+  const defenderAtk = getEffectiveAtk(defender);
+  const defenderBattleStat = getBattleStat(defender);
+  const attackDiff = Math.abs(attackerAtk - defenderAtk);
+  const defenderInAttack = isAttackPosition(defender);
+  const ownWouldLose = defenderInAttack && attackerAtk < defenderAtk;
+  const battleTrade = defenderInAttack && attackerAtk === defenderAtk;
+  const cannotDestroyByBattle = defenderInAttack
+    ? attackerAtk <= defenderAtk
+    : attackerAtk <= getEffectiveDef(defender);
+
+  let score = 26 + scoreOpponentMonsterForQuickDraw(defender);
+  if (ownWouldLose) score += 30 + scoreProtectedCard(attacker, analysis);
+  else if (battleTrade) score += 22 + Math.floor(scoreProtectedCard(attacker, analysis) / 2);
+  if (cannotDestroyByBattle) score += 20;
+  if (defenderBattleStat >= attackerAtk) score += 12;
+  if (attackDiff <= 500) score += 16;
+  if (Math.max(defenderAtk, defenderBattleStat) >= 2200) score += 12;
+  if (analysis.underPressure || analysis.oppPressure) score += 8;
+
+  const pass = score < 58;
+  return {
+    option: null,
+    pass,
+    score,
+    reason: pass
+      ? "Quick Draw offensive battle removal is not valuable enough"
+      : `Quick Draw clears ${getCardName(defender)} for ${getCardName(attacker)}`,
+    threat: {
+      valid: true,
+      reason: "own Burning West attack",
+      attacker,
+      defender,
+      opponent,
+      directAttack: false,
+      losesDefender: ownWouldLose,
+      trade: battleTrade,
+      offensive: true
+    },
+    ownTarget: attacker,
+    opponentTarget: defender
+  };
+}
+
 export function evaluateBurningWestQuickDrawResponse(option, analysis = {}, context = {}) {
   if (optionName(option) !== BW.QUICK_DRAW) return null;
   const player = context.player || analysis.player;
@@ -596,6 +677,10 @@ export function evaluateBurningWestQuickDrawResponse(option, analysis = {}, cont
   const opponent = getOpponent(game, player, analysis);
   const threat = evaluateIncomingBattleThreat({ game, player, analysis, context });
   if (!threat.valid || !threat.attacker) {
+    const offensive = evaluateOffensiveQuickDrawBattlePair({ game, player, analysis, context });
+    if (offensive) {
+      return { ...offensive, option };
+    }
     return { option, pass: true, score: 0, reason: "Quick Draw has no valuable current battle pair" };
   }
   if (crashTownBlocksQuickDraw({ player, opponent, analysis: { ...analysis, game } })) {

@@ -249,7 +249,7 @@ function hasStarterAccess(analysis = {}) {
     gy.some((card) => isLuminarchMonster(card) && (card.level || 0) <= 4);
   const hasConvocationSetup =
     hasName(hand, NAMES.knightsConvocation) &&
-    hand.some((card) => isLuminarchMonster(card) && (card.level || 0) >= 7);
+    hand.some((card) => isLuminarchMonster(card) && (card.level || 0) >= 5);
   return (
     normalAvailable &&
     (hasName(hand, NAMES.valiant) ||

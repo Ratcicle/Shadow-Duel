@@ -260,36 +260,42 @@ export function getLuminarchRemovalTargetScore(card, analysis = {}) {
   return score;
 }
 
-function getRadiantWaveCosts(analysis = {}) {
-  return getFaceupLuminarchMonsters(analysis).filter(
-    (card) => getVisibleAtk(card) >= 2000,
+function hasRadiantWaveAccess(analysis = {}) {
+  return getFaceupLuminarchMonsters(analysis).length > 0 ||
+    cardsIn(analysis, "graveyard").some(
+      (card) => card && card.cardKind === "monster" && isLuminarch(card),
+    );
+}
+
+function getRadiantWaveLpCost(analysis = {}) {
+  const hasPureKnight = getFaceupLuminarchMonsters(analysis).some(
+    (card) => card?.name === "Luminarch Pure Knight",
   );
+  return hasPureKnight ? 1000 : 2000;
 }
 
 function getRadiantWaveTargets(analysis = {}) {
   return [
-    ...getOpponentMonsters(analysis, { requireFaceup: true }),
+    ...getOpponentMonsters(analysis),
     ...cardsIn(analysis, "oppSpellTrap"),
     analysis.oppFieldSpell,
   ].filter(Boolean);
 }
 
 export function evaluateLuminarchRadiantWavePolicy(analysis = {}) {
-  const costs = getRadiantWaveCosts(analysis);
   const targets = getRadiantWaveTargets(analysis);
-  if (costs.length === 0 || targets.length === 0) {
+  const lpCost = getRadiantWaveLpCost(analysis);
+  const lp = analysis.lp || 8000;
+  if (!hasRadiantWaveAccess(analysis) || targets.length === 0) {
     return {
       yes: false,
       priority: 0,
-      bestCost: null,
+      lpCost,
       bestTarget: null,
-      reason: "Sem material 2000+ ATK ou sem alvo relevante para remover",
+      reason: "Sem Luminarch em campo/GY ou sem alvo relevante para remover",
     };
   }
 
-  const bestCost = costs
-    .map((card) => ({ card, score: getLuminarchRemovalCostScore(card, analysis) }))
-    .sort((a, b) => a.score - b.score)[0];
   const bestTarget = targets
     .map((card) => ({ card, score: getLuminarchRemovalTargetScore(card, analysis) }))
     .sort((a, b) => b.score - a.score)[0];
@@ -302,29 +308,39 @@ export function evaluateLuminarchRadiantWavePolicy(analysis = {}) {
   });
   const preventsLethal = oppTotalAtk >= (analysis.lp || 8000) && targetAtk >= 1800;
   const targetName = bestTarget?.card?.name || "opposing threat";
-  const costName = bestCost?.card?.name || "Luminarch monster";
   const removesWinCondition =
     /Extreme Dragon|Bahamut|Galaxy|Malicious|Leviathan|Fire Extreme/i.test(
       targetName,
     ) || bestTarget.score >= 9;
-  const positiveTrade = bestTarget.score >= bestCost.score + 1.5;
+  const lpPressure = lp <= lpCost + 1000;
+  const positiveTrade = bestTarget.score >= (lpCost <= 1000 ? 4.5 : 6.5);
+
+  if (lpPressure && !preventsLethal && !removesWinCondition) {
+    return {
+      yes: false,
+      priority: 0,
+      bestTarget: bestTarget?.card || null,
+      lpCost,
+      reason: `Radiant Wave held: ${lp} LP is too low to pay ${lpCost} for ${targetName}`,
+    };
+  }
 
   if (!positiveTrade && !preventsLethal && !removesWinCondition) {
     return {
       yes: false,
       priority: 0,
-      bestCost: bestCost?.card || null,
       bestTarget: bestTarget?.card || null,
-      reason: `Radiant Wave held: ${targetName} is not worth ${costName}`,
+      lpCost,
+      reason: `Radiant Wave held: ${targetName} is not worth ${lpCost} LP`,
     };
   }
 
   return {
     yes: true,
-    priority: preventsLethal || removesWinCondition ? 15 : 11,
-    bestCost: bestCost?.card || null,
+    priority: (preventsLethal || removesWinCondition ? 15 : 11) + (lpCost <= 1000 ? 2 : 0),
     bestTarget: bestTarget?.card || null,
-    reason: `Destroy ${targetName} with preferred cost ${costName}`,
+    lpCost,
+    reason: `Destroy ${targetName} by paying ${lpCost} LP`,
   };
 }
 
@@ -464,20 +480,6 @@ export function applyLuminarchDefenseActionContext(
         ? [removalPlan.bestTarget.name]
         : [],
     };
-    if (removalPlan.bestCost?.name) {
-      const existing = next.costPreferences || {};
-      next.costPreferences = {
-        ...existing,
-        preferNames: uniqueNames([
-          ...(existing.preferNames || []),
-          removalPlan.bestCost.name,
-        ]),
-        preserveNames: uniqueNames([
-          ...(existing.preserveNames || []),
-          ...PROTECTED_COST_NAMES,
-        ]),
-      };
-    }
   }
 
   if (card?.name === SPEAR) {

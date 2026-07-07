@@ -110,7 +110,7 @@ _Nenhuma trap no arquétipo atualmente._
 > (Quick Effect) Target up to 3 "Luminarch" monsters you control; until the end of this turn, they cannot be destroyed by battle, and any battle damage you would take involving those monsters is gained instead.
 
 **161 - Luminarch Knights Convocation** (Continuous Spell)
-> Once per turn: discard 1 Level 7 or higher Luminarch monster; add 1 Level 4 or lower Luminarch monster from your Deck to your hand.
+> Once per turn: discard 1 Level 5 or higher Luminarch monster; add 1 Level 4 or lower Luminarch monster from your Deck to your hand. The first time each turn a "Luminarch" monster you control would be destroyed by battle or card effect, negate that destruction.
 
 **162 - Sanctum of the Luminarch Citadel** (Field Spell)
 > Whenever an opponent's monster declares an attack: gain 500 LP. Once per turn: You can pay 1000 LP, then target 1 "Luminarch" monster you control; it gains 500 ATK/DEF until the end of this turn.
@@ -119,7 +119,7 @@ _Nenhuma trap no arquétipo atualmente._
 > Pay 1000 LP, then target 1 "Luminarch" monster you control; it gains 800 ATK/DEF until the end of this turn.
 
 **164 - Luminarch Radiant Wave** (Normal Spell)
-> Send 1 "Luminarch" monster with 2000 or more ATK you control to the GY, then target 1 card your opponent controls; destroy it.
+> If you control a "Luminarch" monster, or if there is a "Luminarch" monster in your GY: Pay 2000 LP, then target 1 card your opponent controls; destroy it. You can only activate 1 "Luminarch Radiant Wave" per turn.
 
 **165 - Luminarch Crescent Shield** (Equip Spell)
 > Equip only to a "Luminarch" monster you control. It gains 500 DEF. If the equipped monster would be destroyed by battle, send this card to the GY instead.
@@ -128,13 +128,13 @@ _Nenhuma trap no arquétipo atualmente._
 > Equip only to a "Luminarch" monster you control. Each time you gain LP, place 1 Solar Counter on this card. The equipped monster gains 200 ATK/DEF for each Solar Counter on this card. Once per turn, if the equipped monster would be destroyed by battle: you can pay 1000 LP; it is not destroyed. You can only control 1 "Luminarch Sunforged Blade".
 
 **167 - Luminarch Spear of Dawnfall** (Normal Spell)
-> If you control a "Luminarch" monster: target 1 monster your opponent controls; its ATK and DEF become 0 until the end of this turn.
+> If you control a "Luminarch" monster: target 1 monster your opponent controls; its ATK and DEF become 0 until the end of this turn. You can only activate 1 "Luminarch Spear of Dawnfall" per turn.
 
 **169 - Luminarch Moonlit Blessing** (Normal Spell)
 > Target 1 "Luminarch" monster in your Graveyard; add it to your hand, then if you control "Sanctum of the Luminarch Citadel", you can Special Summon that monster. You can only activate 1 "Luminarch Moonlit Blessing" per turn.
 
 **170 - Luminarch Sacred Judgment** (Normal Spell)
-> If you control no monsters and your opponent controls 2 or more monsters: Pay 2000 LP; Special Summon "Luminarch" monsters from your GY, up to the number of monsters your opponent controls, then gain 500 LP for each monster Special Summoned. You can only activate 1 "Luminarch Sacred Judgment" per turn.
+> If your opponent controls 2 or more monsters: Pay 2000 LP; Special Summon "Luminarch" monsters from your GY, up to the number of monsters your opponent controls, then gain 500 LP for each monster Special Summoned. You can only activate 1 "Luminarch Sacred Judgment" per turn.
 
 ---
 
@@ -147,4 +147,4 @@ _Nenhuma trap no arquétipo atualmente._
 > Ascension Material: 'Luminarch Aegisbearer'. Requirement: The material must have been face-up on the field for 2 turns. Your opponent must prioritize this card as an attack target, if possible. If this card is Ascension Summoned: Gain 500 LP for each 'Luminarch' monster you control. Once per turn: You can pay 1000 LP, then target 1 'Luminarch' monster with 2000 or less DEF in your GY; Special Summon it.
 
 **173 - Luminarch Pure Knight** (L6 Fusion Warrior | ATK 2000 / DEF 2000)
-> 2 'Luminarch' monsters. If this card is Fusion Summoned: You can add 1 'Sanctum of the Luminarch Citadel' from your Deck to your hand. Once per turn, when you activate the effect of a 'Luminarch' Spell/Trap that requires paying LP: reduce that cost by 1000. You can only use each effect of 'Luminarch Pure Knight' once per turn.
+> 2 'Luminarch' monsters. If this card is Fusion Summoned: You can add 1 'Sanctum of the Luminarch Citadel' from your Deck to your hand. Twice per turn, when you activate the effect of a 'Luminarch' Spell/Trap that requires paying LP: reduce that cost by 1000. You can only use the Fusion Summon effect of 'Luminarch Pure Knight' once per turn.

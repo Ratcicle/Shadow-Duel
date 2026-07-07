@@ -4,9 +4,9 @@ Fonte dos textos: `src/data/cards/*.js` via fachada `src/data/cards.js` (1x cada
 
 ## Resumo
 
-- Total: 25
+- Total: 27
 - Monstros (Main Deck): 14
-- Extra Deck: 6 (4 Fusão, 2 Ascension)
+- Extra Deck: 8 (6 Fusão, 2 Ascension)
 - Magias: 4
 - Armadilhas: 1
 
@@ -34,6 +34,8 @@ Fonte dos textos: `src/data/cards/*.js` via fachada `src/data/cards.js` (1x cada
 - 1x Void Hollow King — Fusão (207)
 - 1x Void Berserker — Fusão (213)
 - 1x Void Hydra Titan — Fusão (215)
+- 1x Void Shadow Crawler — Fusão (226)
+- 1x Void Aberration — Fusão (227)
 - 1x Arcturus, the Fallen Lord — Fusão (225)
 - 1x Void Cosmic Walker — Ascension (222)
 - 1x Malicious Demon of the Void — Ascension (223)
@@ -88,6 +90,10 @@ Fonte dos textos: `src/data/cards/*.js` via fachada `src/data/cards.js` (1x cada
 **Void Berserker (213)** — Fusão, Nível 8, Fiend, 2800/2200. Materiais: "Void Slayer Brute" (campo) + 1 monstro "Void". Pode fazer 2 ataques por Fase de Batalha. Uma vez por turno, se destruir monstro do oponente: devolva 1 carta do oponente à mão.
 
 **Void Hydra Titan (215)** — Fusão, Nível 10, Dragon, 4200/2900. Materiais: 6× "Void". Ao ser Invocada por Fusão: destrua todos os cards de Magia/Armadilha que o oponente controla; compre 1 por cada card destruído. 1/turno: se seria destruída, reduza ATK em 700 e negue a destruição.
+
+**Void Shadow Crawler / Rastejador Sombrio do Vazio (226)** — Fusão, Nível 5, Fiend, 2000/900. Materiais: 2× "Void". Ao ser Invocado por Fusão: você pode enviar 1 monstro "Void" do Deck ao Cemitério. OPT: escolha 1 monstro de Nível 5+ que o oponente controla; envie 1 monstro "Void" que você controla ao Cemitério e, se isso acontecer, destrua o alvo.
+
+**Void Aberration / Aberração do Vazio (227)** — Fusão, Nível 7, Fiend, 2400/1900. Materiais: "Void Tenebris Horn" + 1 monstro "Void". Cada vez que um monstro "Void" é enviado ao Cemitério, ganha 100 ATK/DEF até o fim do turno. Se for enviada do campo ao Cemitério: você pode escolher 1 card face-up que o oponente controla; destrua o alvo.
 
 **Arcturus, the Fallen Lord (225)** — Fusão, Nível 10, Warrior, 3000/0. Deve ser Invocado por Invocação-Fusão do Extra Deck ao banir 1 "Arcturus, Lord of the Void" do seu Cemitério. Se for destruído em batalha: destrua o monstro que batalhou com ele. Do Cemitério: bana este card; Invoque por Invocação-Especial de 1 a 3 monstros "Void" com nomes diferentes do seu Cemitério, exceto os dois Arcturus, com efeitos negados. OPT.
 

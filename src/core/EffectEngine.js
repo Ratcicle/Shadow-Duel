@@ -133,7 +133,25 @@ export default class EffectEngine {
       ? card?.oncePerTurnUsageByName || {}
       : player.oncePerTurnUsageByName || {};
     const currentTurn = this.game?.turnCounter || 0;
-    return usage[key] !== currentTurn;
+    const limit = Math.max(
+      1,
+      Math.floor(
+        Number(
+          effect.oncePerTurnLimit ??
+            effect.usesPerTurn ??
+            effect.maxUsesPerTurn ??
+            1,
+        ),
+      ) || 1,
+    );
+    const entry = usage[key];
+    const used =
+      entry === currentTurn
+        ? 1
+        : entry && typeof entry === "object" && Number(entry.turn) === currentTurn
+          ? Math.max(0, Math.floor(Number(entry.count ?? 0)) || 0)
+          : 0;
+    return used < limit;
   }
 
   markOncePerTurn(effect, ctx) {
@@ -150,14 +168,38 @@ export default class EffectEngine {
     const useCardScope =
       effect.oncePerTurnScope === "card" || effect.oncePerTurnPerCard;
     const currentTurn = this.game?.turnCounter || 0;
+    const limit = Math.max(
+      1,
+      Math.floor(
+        Number(
+          effect.oncePerTurnLimit ??
+            effect.usesPerTurn ??
+            effect.maxUsesPerTurn ??
+            1,
+        ),
+      ) || 1,
+    );
+    const mark = (usage) => {
+      const entry = usage[key];
+      const used =
+        entry === currentTurn
+          ? 1
+          : entry && typeof entry === "object" && Number(entry.turn) === currentTurn
+            ? Math.max(0, Math.floor(Number(entry.count ?? 0)) || 0)
+            : 0;
+      usage[key] =
+        limit <= 1
+          ? currentTurn
+          : { turn: currentTurn, count: Math.min(limit, used + 1) };
+    };
     if (useCardScope && card) {
       card.oncePerTurnUsageByName = card.oncePerTurnUsageByName || {};
-      card.oncePerTurnUsageByName[key] = currentTurn;
+      mark(card.oncePerTurnUsageByName);
       return;
     }
 
     player.oncePerTurnUsageByName = player.oncePerTurnUsageByName || {};
-    player.oncePerTurnUsageByName[key] = currentTurn;
+    mark(player.oncePerTurnUsageByName);
   }
 }
 

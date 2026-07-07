@@ -40,7 +40,7 @@ export const LUMINARCH_CARD_ROLES = Object.freeze({
   "Luminarch Aurora Seraph": ["finisher", "lp_payoff", "protection"],
   "Luminarch Enchanted Halberd": ["extender", "fusion_material"],
   "Luminarch Holy Shield": ["protection", "lp_payoff", "battle_trick"],
-  "Luminarch Knights Convocation": ["starter", "searcher", "grind"],
+  "Luminarch Knights Convocation": ["starter", "searcher", "grind", "protection"],
   "Sanctum of the Luminarch Citadel": ["citadel", "wall", "protection", "lp_payoff"],
   "Luminarch Holy Ascension": ["battle_trick", "protection", "lp_payoff"],
   "Luminarch Radiant Wave": ["removal", "grind"],
@@ -314,7 +314,7 @@ export const CARD_KNOWLEDGE = {
   "Luminarch Knights Convocation": {
     role: "continuous_search",
     priority: 5,
-    effect: "1x/turn: discard Lv7+ Luminarch → add Lv4- da deck",
+    effect: "1x/turn: discard Lv5+ Luminarch → add Lv4- da deck; first Luminarch monster destruction each turn is negated",
     synergies: [
       "Luminarch Celestial Marshal",
       "Luminarch Sanctum Protector",
@@ -323,7 +323,7 @@ export const CARD_KNOWLEDGE = {
       "Luminarch Sanctified Arbiter",
     ],
     playPatterns: [
-      "⚠️ BRICK ESCAPE: 2+ Lv7+ na mão sem searchers → ALTA PRIORIDADE",
+      "⚠️ BRICK ESCAPE: 2+ Lv5+ na mão sem searchers → ALTA PRIORIDADE",
       "Discard boss → search Valiant/Arbiter → iniciar combo principal",
       "Bosses na GY = setup para Moonlit Blessing recursão",
       "Continuous searcher para mid-game",
@@ -379,7 +379,7 @@ export const CARD_KNOWLEDGE = {
   "Luminarch Radiant Wave": {
     role: "removal",
     priority: 7,
-    effect: "Envie Luminarch 2000+ ATK do campo → destrua 1 carta do oponente",
+    effect: "Se controlar Luminarch ou tiver Luminarch no GY: pague 2000 LP → destrua 1 carta do oponente",
     synergies: [
       "Luminarch Celestial Marshal",
       "Luminarch Radiant Lancer",
@@ -387,12 +387,11 @@ export const CARD_KNOWLEDGE = {
     ],
     playPatterns: [
       "Removal targeted",
-      "PREFERIR boss que JÁ USOU EFEITO como custo (gerou valor)",
-      "Trade favorável",
-      "Boss menor que ameaça = bom custo",
+      "Usar quando o alvo compensa custo de LP",
+      "Pure Knight reduz custo e melhora a troca",
+      "Remover boss, floodgate ou ameaça letal",
     ],
     value: 12,
-    preferUsedBossesAsCost: true,
   },
 
   "Luminarch Crescent Shield": {
@@ -473,7 +472,7 @@ export const CARD_KNOWLEDGE = {
     role: "comeback_tool",
     priority: 3,
     effect:
-      "Campo vazio + opp 2+ → pague 2000 LP: SS Luminarch da GY (até N monstros opp) + gain 500 LP/cada",
+      "Opp 2+ → pague 2000 LP: SS Luminarch da GY (até N monstros opp) + gain 500 LP/cada",
     synergies: [
       "Luminarch Aegisbearer",
       "Luminarch Aurora Seraph",
@@ -482,7 +481,7 @@ export const CARD_KNOWLEDGE = {
     playPatterns: [
       "Desperation play",
       "Custo MUITO alto (2000 LP)",
-      "Só em board wipe scenarios",
+      "Usar quando a GY converte em campo suficiente",
     ],
     value: 5,
   },
@@ -529,7 +528,7 @@ export const CARD_KNOWLEDGE = {
     ],
     status: LUMINARCH_PACKAGE_STATUS.NEEDS_ACTION_GENERATION,
     effect:
-      "Materiais: 2 Luminarch. Fusion Summon → busca Citadel. 1x/turn: reduz em 1000 LP o custo de efeito de Magia/Armadilha Luminarch",
+      "Materiais: 2 Luminarch. Fusion Summon → busca Citadel. 2x/turn: reduz em 1000 LP o custo de efeito de Magia/Armadilha Luminarch",
     synergies: [
       "Sanctum of the Luminarch Citadel",
       "Luminarch Holy Ascension",

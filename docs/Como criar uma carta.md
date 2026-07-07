@@ -120,6 +120,8 @@ Campos frequentes:
 - `requireFaceup`: exige que a fonte esteja face-up.
 - `requireEmptyField`: exige campo de monstros vazio.
 - `oncePerTurn`, `oncePerTurnName`, `oncePerTurnScope`: controle por turno.
+- `oncePerTurnLimit`: limite numerico opcional para efeitos com mais de 1 uso por
+  turno. Se omitido, `oncePerTurn: true` continua significando 1 uso.
 - `oncePerDuel`, `oncePerDuelName`: controle por duelo.
 - `promptUser`, `promptMessage`, `customPromptMethod`: controle de confirmação
   para triggers opcionais.

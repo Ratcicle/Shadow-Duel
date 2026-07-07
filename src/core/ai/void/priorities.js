@@ -887,6 +887,226 @@ export function evaluateVoidFusionPriority(bot) {
     : { priority: 0, target: null };
 }
 
+function countOpponentFaceupCards(opponent = {}) {
+  return [
+    ...(opponent?.field || []),
+    ...(opponent?.spellTrap || []),
+    ...(opponent?.fieldSpell ? [opponent.fieldSpell] : []),
+  ].filter((card) => card && !card.isFacedown).length;
+}
+
+function hasAberrationGraveyardConversion(bot = {}, game = null) {
+  const handIds = new Set((bot.hand || []).map((card) => card?.id));
+  const gyIds = new Set((bot.graveyard || []).map((card) => card?.id));
+  const fieldVoidCount = (bot.field || []).filter(
+    (card) => card?.cardKind === "monster" && isVoid(card),
+  ).length;
+  const canUseIgnition = (card, effectId) => {
+    if (!card || !effectId || !game?.effectEngine?.checkOncePerTurn) {
+      return true;
+    }
+    const effect = (card.effects || []).find((entry) => entry?.id === effectId);
+    if (!effect?.oncePerTurn) return true;
+    return game.effectEngine.checkOncePerTurn(card, bot, effect)?.ok !== false;
+  };
+
+  const conjurer = (bot.graveyard || []).find(
+    (card) => card?.id === VOID_IDS.CONJURER,
+  );
+  if (
+    gyIds.has(VOID_IDS.CONJURER) &&
+    canUseIgnition(conjurer, "void_conjurer_gy_revive")
+  ) {
+    return {
+      ok: true,
+      reason: "Conjurer no Cemitério pode enviar Aberration como custo",
+    };
+  }
+
+  const handConversion = [
+    {
+      id: VOID_IDS.HAUNTER,
+      effectId: "void_haunter_special_summon_hand",
+      reason: "Haunter na mão pode enviar Aberration como custo",
+    },
+    {
+      id: VOID_IDS.FORGOTTEN_KNIGHT,
+      effectId: "void_forgotten_knight_hand_summon",
+      reason: "Forgotten Knight na mão pode enviar Aberration como custo",
+    },
+    {
+      id: VOID_IDS.THOUSAND_ARMS,
+      effectId: "thousand_arms_summon_from_hand",
+      reason: "Thousand-Arms na mão pode enviar Aberration como custo",
+    },
+  ];
+
+  for (const option of handConversion) {
+    if (!handIds.has(option.id)) continue;
+    const card = (bot.hand || []).find((candidate) => candidate?.id === option.id);
+    if (canUseIgnition(card, option.effectId)) {
+      return { ok: true, reason: option.reason };
+    }
+  }
+
+  if (handIds.has(VOID_IDS.SLAYER_BRUTE) && fieldVoidCount >= 1) {
+    const card = (bot.hand || []).find(
+      (candidate) => candidate?.id === VOID_IDS.SLAYER_BRUTE,
+    );
+    if (canUseIgnition(card, "void_slayer_brute_hand_summon")) {
+      return {
+        ok: true,
+        reason: "Slayer Brute pode usar Aberration mais outro Void como custo",
+      };
+    }
+  }
+
+  return { ok: false, reason: null };
+}
+
+function evaluateVoidPressure(bot = {}, opponent = {}, analysis = {}) {
+  const myLP = bot?.lp || analysis?.myLP || 8000;
+  const oppLP = opponent?.lp || analysis?.oppLP || 8000;
+  const myMonsters = (bot?.field || []).filter(
+    (card) => card?.cardKind === "monster",
+  );
+  const oppMonsters = (opponent?.field || analysis?.oppField || []).filter(
+    (card) => card?.cardKind === "monster",
+  );
+  const myStrongest = getStrongestBattleStat(myMonsters, { facedownValue: 1500 });
+  const oppStrongest = getStrongestBattleStat(oppMonsters, {
+    facedownValue: 1500,
+  });
+  const opponentAtk = oppMonsters.reduce(
+    (sum, card) =>
+      card && card.position !== "defense"
+        ? sum + Math.max(0, getEffectiveAtk(card))
+        : sum,
+    0,
+  );
+  const fieldDeficit = oppMonsters.length - myMonsters.length;
+  const battleDeficit = oppStrongest - myStrongest;
+  const lpDeficit = oppLP - myLP;
+  const lethalThreat = opponentAtk >= myLP;
+  const behind =
+    lethalThreat ||
+    fieldDeficit > 0 ||
+    battleDeficit >= 500 ||
+    lpDeficit >= 1500 ||
+    myLP <= 3000;
+
+  let score = 0;
+  if (lethalThreat) score += 16;
+  if (fieldDeficit > 0) score += Math.min(10, fieldDeficit * 4);
+  if (battleDeficit >= 500) score += Math.min(12, battleDeficit / 150);
+  if (lpDeficit >= 1500) score += Math.min(8, lpDeficit / 500);
+  if (myLP <= 3000) score += 8;
+
+  return {
+    behind,
+    score,
+    myStrongest,
+    oppStrongest,
+    fieldDeficit,
+    battleDeficit,
+    lpDeficit,
+    lethalThreat,
+  };
+}
+
+export function evaluateVoidFusionRemovalPriority(
+  bot,
+  opponent = null,
+  game = null,
+  analysis = {},
+) {
+  const resolvedOpponent =
+    opponent ||
+    (game && typeof game.getOpponent === "function"
+      ? game.getOpponent(bot)
+      : null) ||
+    analysis?.opponent ||
+    {};
+  const hand = bot?.hand || [];
+  const field = bot?.field || [];
+  const extraDeck = bot?.extraDeck || [];
+  const handIds = new Set(hand.map((card) => card?.id));
+  if (!handIds.has(VOID_IDS.POLYMERIZATION)) return { priority: 0, target: null };
+
+  const extraIds = new Set(extraDeck.map((card) => card?.id));
+  const voidMaterials = [...hand, ...field].filter(
+    (card) =>
+      card?.cardKind === "monster" &&
+      isVoid(card) &&
+      !isProtectedVoidFusionMaterial(card, bot),
+  );
+  const pressure = evaluateVoidPressure(bot, resolvedOpponent, analysis);
+  if (!pressure.behind) return { priority: 0, target: null };
+
+  const plans = [];
+  const highLevelTargets = (resolvedOpponent?.field || []).filter(
+    (card) => card?.cardKind === "monster" && (card.level || 0) >= 5,
+  );
+  if (
+    extraIds.has(VOID_IDS.SHADOW_CRAWLER) &&
+    voidMaterials.length >= 2 &&
+    highLevelTargets.length > 0
+  ) {
+    const strongestTarget = Math.max(
+      0,
+      ...highLevelTargets.map((card) => getStrongestBattleStat([card])),
+    );
+    const removesCurrentThreat = strongestTarget >= pressure.myStrongest;
+    let score = 63 + Math.min(18, pressure.score);
+    if (removesCurrentThreat) score += 8;
+    if (pressure.lethalThreat) score += 6;
+    if (highLevelTargets.length >= 2) score += 3;
+    plans.push({
+      kind: "fusion_removal",
+      target: "Void Shadow Crawler",
+      priority: Math.min(8.8, score / 10),
+      reason: removesCurrentThreat
+        ? "Shadow Crawler remove monstro alto que supera o campo Void"
+        : "Shadow Crawler converte Polymerization em remoção de monstro alto",
+      details: {
+        highLevelTargets: highLevelTargets.length,
+        strongestTarget,
+        pressure,
+      },
+    });
+  }
+
+  const tenebrisMaterial = voidMaterials.some(
+    (card) => card?.id === VOID_IDS.TENEBRIS_HORN,
+  );
+  const faceupOpponentCards = countOpponentFaceupCards(resolvedOpponent);
+  const aberrationConversion = hasAberrationGraveyardConversion(bot, game);
+  if (
+    extraIds.has(VOID_IDS.ABERRATION) &&
+    tenebrisMaterial &&
+    voidMaterials.length >= 2 &&
+    faceupOpponentCards > 0 &&
+    aberrationConversion.ok
+  ) {
+    let score = 58 + Math.min(16, pressure.score);
+    if (faceupOpponentCards >= 2) score += 4;
+    if (pressure.lethalThreat) score += 4;
+    plans.push({
+      kind: "fusion_removal",
+      target: "Void Aberration",
+      priority: Math.min(8.2, score / 10),
+      reason: aberrationConversion.reason,
+      details: {
+        faceupOpponentCards,
+        pressure,
+      },
+    });
+  }
+
+  plans.sort((a, b) => (b.priority || 0) - (a.priority || 0));
+  return plans[0] || { priority: 0, target: null };
+}
+
 function getStrongestOpponentBattleStat(field = []) {
   return getStrongestBattleStat(field, { facedownValue: 1500 });
 }

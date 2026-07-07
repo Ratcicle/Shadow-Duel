@@ -516,7 +516,7 @@ export const luminarchCards = [
     subtype: "continuous",
     archetype: "Luminarch",
     description:
-      "Once per turn: discard 1 Level 7 or higher Luminarch monster; add 1 Level 4 or lower Luminarch monster from your Deck to your hand.",
+      'Once per turn: discard 1 Level 5 or higher Luminarch monster; add 1 Level 4 or lower Luminarch monster from your Deck to your hand. The first time each turn a "Luminarch" monster you control would be destroyed by battle or card effect, negate that destruction.',
     image: "assets/Luminarch Knights Convocation.png",
     effects: [
       {
@@ -531,7 +531,7 @@ export const luminarchCards = [
             zone: "hand",
             cardKind: "monster",
             archetype: "Luminarch",
-            minLevel: 7,
+            minLevel: 5,
             count: { min: 1, max: 1 },
           },
         ],
@@ -550,6 +550,27 @@ export const luminarchCards = [
             maxLevel: 4,
           },
         ],
+      },
+      {
+        id: "luminarch_knights_convocation_first_destruction_guard",
+        timing: "passive",
+        requireFaceup: true,
+        oncePerTurn: true,
+        oncePerTurnName: "luminarch_knights_convocation_first_destruction_guard",
+        replacementEffect: {
+          type: "destruction",
+          reason: "any",
+          targetOwner: "self",
+          targetZones: ["field"],
+          targetFilters: {
+            cardKind: "monster",
+            archetype: "Luminarch",
+          },
+          targetRequireFaceup: true,
+          auto: true,
+          logMessage:
+            "{target} avoided destruction due to {source}.",
+        },
       },
     ],
   },
@@ -657,23 +678,36 @@ export const luminarchCards = [
     subtype: "normal",
     archetype: "Luminarch",
     description:
-      'Send 1 "Luminarch" monster with 2000 or more ATK you control to the GY, then target 1 card your opponent controls; destroy it.',
+      'If you control a "Luminarch" monster, or if there is a "Luminarch" monster in your GY: Pay 2000 LP, then target 1 card your opponent controls; destroy it. You can only activate 1 "Luminarch Radiant Wave" per turn.',
     image: "assets/Luminarch Radiant Wave.png",
     effects: [
       {
         id: "luminarch_radiant_wave_effect",
         timing: "on_play",
         speed: 1,
-        targets: [
+        oncePerTurn: true,
+        oncePerTurnName: "luminarch_radiant_wave_activation",
+        conditions: [
           {
-            id: "radiant_wave_cost",
-            owner: "self",
-            zone: "field",
-            cardKind: "monster",
-            archetype: "Luminarch",
-            minAtk: 2000,
-            count: { min: 1, max: 1 },
+            type: "any_of",
+            conditions: [
+              {
+                type: "control_card_filters",
+                owner: "self",
+                zone: "field",
+                filters: { cardKind: "monster", archetype: "Luminarch" },
+                min: 1,
+              },
+              {
+                type: "graveyardHasMatch",
+                owner: "self",
+                zone: "graveyard",
+                filters: { cardKind: "monster", archetype: "Luminarch" },
+              },
+            ],
           },
+        ],
+        targets: [
           {
             id: "radiant_wave_destroy",
             owner: "opponent",
@@ -683,10 +717,9 @@ export const luminarchCards = [
         ],
         actions: [
           {
-            type: "move",
-            targetRef: "radiant_wave_cost",
+            type: "pay_lp",
             player: "self",
-            to: "graveyard",
+            amount: 2000,
           },
           {
             type: "destroy",
@@ -845,13 +878,15 @@ export const luminarchCards = [
     subtype: "normal",
     archetype: "Luminarch",
     description:
-      'If you control a "Luminarch" monster: target 1 monster your opponent controls; its ATK and DEF become 0 until the end of this turn.',
+      'If you control a "Luminarch" monster: target 1 monster your opponent controls; its ATK and DEF become 0 until the end of this turn. You can only activate 1 "Luminarch Spear of Dawnfall" per turn.',
     image: "assets/Luminarch Spear of Dawnfall.png",
     effects: [
       {
         id: "luminarch_spear_dawnfall",
         timing: "on_play",
         speed: 1,
+        oncePerTurn: true,
+        oncePerTurnName: "luminarch_spear_dawnfall_activation",
         targets: [
           {
             id: "spear_luminarch_check",
@@ -978,7 +1013,7 @@ export const luminarchCards = [
     subtype: "normal",
     archetype: "Luminarch",
     description:
-      'If you control no monsters and your opponent controls 2 or more monsters: Pay 2000 LP; Special Summon "Luminarch" monsters from your GY, up to the number of monsters your opponent controls, then gain 500 LP for each monster Special Summoned. You can only activate 1 "Luminarch Sacred Judgment" per turn.',
+      'If your opponent controls 2 or more monsters: Pay 2000 LP; Special Summon "Luminarch" monsters from your GY, up to the number of monsters your opponent controls, then gain 500 LP for each monster Special Summoned. You can only activate 1 "Luminarch Sacred Judgment" per turn.',
     image: "assets/Luminarch Sacred Judgment.png",
     effects: [
       {
@@ -988,7 +1023,6 @@ export const luminarchCards = [
         oncePerTurn: true,
         oncePerTurnName: "luminarch_sacred_judgment",
         conditions: [
-          { type: "playerFieldEmpty" },
           { type: "opponentMonstersMin", min: 2 },
           { type: "playerLpMin", min: 2000 },
           {
@@ -1165,7 +1199,7 @@ export const luminarchCards = [
     archetype: "Luminarch",
     archetypes: ["Luminarch"],
     description:
-      "2 'Luminarch' monsters. If this card is Fusion Summoned: You can add 1 'Sanctum of the Luminarch Citadel' from your Deck to your hand. Once per turn, when you activate the effect of a 'Luminarch' Spell/Trap that requires paying LP: reduce that cost by 1000. You can only use each effect of 'Luminarch Pure Knight' once per turn.",
+      "2 'Luminarch' monsters. If this card is Fusion Summoned: You can add 1 'Sanctum of the Luminarch Citadel' from your Deck to your hand. Twice per turn, when you activate the effect of a 'Luminarch' Spell/Trap that requires paying LP: reduce that cost by 1000. You can only use the Fusion Summon effect of 'Luminarch Pure Knight' once per turn.",
     image: "assets/Luminarch Pure Knight.png",
     fusionMaterials: [{ archetype: "Luminarch", count: 2 }],
     effects: [
@@ -1191,6 +1225,7 @@ export const luminarchCards = [
         id: "luminarch_pure_knight_lp_discount",
         timing: "passive",
         oncePerTurn: true,
+        oncePerTurnLimit: 2,
         oncePerTurnName: "luminarch_pure_knight_lp_discount",
         oncePerTurnScope: "card",
         requireFaceup: true,

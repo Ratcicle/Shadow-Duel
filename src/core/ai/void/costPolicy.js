@@ -64,6 +64,7 @@ export function buildVoidCostPreferences(analysis = {}) {
   const graveyard = analysis.graveyard || [];
   const extraDeck = analysis.extraDeck || [];
   const deck = analysis.deck || [];
+  const opponent = analysis.opponent || analysis.resolvedOpponent || {};
 
   const handIds = hand.map((c) => c?.id).filter(Boolean);
   const fieldIds = field.map((c) => c?.id).filter(Boolean);
@@ -72,9 +73,11 @@ export function buildVoidCostPreferences(analysis = {}) {
 
   const hasPoly = handIds.includes(VOID_IDS.POLYMERIZATION);
   const hasFusionInExtra = extraDeck.some((card) =>
-    [VOID_IDS.HOLLOW_KING, VOID_IDS.BERSERKER, VOID_IDS.HYDRA_TITAN].includes(
-      card?.id,
-    ),
+    [
+      VOID_IDS.HOLLOW_KING,
+      VOID_IDS.BERSERKER,
+      VOID_IDS.HYDRA_TITAN,
+    ].includes(card?.id),
   );
 
   const hollowsHand = handIds.filter((id) => id === VOID_IDS.HOLLOW).length;
@@ -89,6 +92,36 @@ export function buildVoidCostPreferences(analysis = {}) {
 
   const preserveNames = new Set();
   const preferNames = new Set();
+  const opponentFaceupCards = [
+    ...(analysis.oppField || opponent.field || []),
+    ...(analysis.oppSpellTrap || opponent.spellTrap || []),
+    ...(analysis.oppFieldSpell || opponent.fieldSpell
+      ? [analysis.oppFieldSpell || opponent.fieldSpell]
+      : []),
+  ].filter((card) => card && !card.isFacedown).length;
+  const oppMonsters = (analysis.oppField || opponent.field || []).filter(
+    (card) => card?.cardKind === "monster",
+  );
+  const myMonsters = field.filter((card) => card?.cardKind === "monster");
+  const myStrongest = myMonsters.reduce(
+    (max, card) => Math.max(max, card?.atk || 0, card?.def || 0),
+    0,
+  );
+  const oppStrongest = oppMonsters.reduce(
+    (max, card) => Math.max(max, card?.atk || 0, card?.def || 0),
+    0,
+  );
+  const myLP = analysis.myLP || analysis.bot?.lp || 8000;
+  const oppLP = analysis.oppLP || opponent.lp || 8000;
+  const behindForRemoval =
+    oppMonsters.length > myMonsters.length ||
+    oppStrongest >= myStrongest + 500 ||
+    oppLP >= myLP + 1500 ||
+    myLP <= 3000;
+  const aberrationRemovalLive =
+    fieldIds.includes(VOID_IDS.ABERRATION) &&
+    opponentFaceupCards > 0 &&
+    behindForRemoval;
 
   for (const card of [...hand, ...field]) {
     if (card?.name && VOID_PROTECTED_COST_NAMES.includes(card.name)) {
@@ -223,6 +256,9 @@ export function buildVoidCostPreferences(analysis = {}) {
     offensivePayoffNames: VOID_OFFENSIVE_PAYOFFS,
     preserveLastOffensivePayoff: true,
     availableOffensivePayoffs,
+    extra: {
+      aberrationRemovalLive,
+    },
   });
 }
 
@@ -255,33 +291,38 @@ function buildVoidTargetPreferences(costPreferences = {}) {
     "Void Conjurer",
   ].filter((name) => !gravitationalAvoidNames.has(name));
 
+  const genericVoidCostProfile = (extra = {}) => ({
+    role: "cost",
+    intent: "cost",
+    ...(costPreferences?.aberrationRemovalLive
+      ? { forceNames: ["Void Aberration"] }
+      : {}),
+    ...extra,
+  });
+
   return buildTargetPreferences({
     costPreferences,
     targetProfiles: {
-      void_conjurer_cost: {
-        role: "cost",
-        intent: "cost",
-      },
-      void_haunter_cost: {
-        role: "cost",
-        intent: "cost",
-      },
-      void_forgotten_knight_cost: {
-        role: "cost",
-        intent: "cost",
-      },
-      void_slayer_brute_cost: {
-        role: "cost",
-        intent: "cost",
+      void_conjurer_cost: genericVoidCostProfile(),
+      void_haunter_cost: genericVoidCostProfile(),
+      void_forgotten_knight_cost: genericVoidCostProfile(),
+      void_slayer_brute_cost: genericVoidCostProfile({
         preferNames: ["Void Hollow"],
-      },
-      thousand_arms_cost: {
-        role: "cost",
-        intent: "cost",
-      },
+      }),
+      thousand_arms_cost: genericVoidCostProfile(),
       void_hollow_king_boost_cost: {
         role: "cost",
         intent: "cost",
+      },
+      void_shadow_crawler_cost: {
+        role: "cost",
+        intent: "cost",
+      },
+      void_shadow_crawler_destroy_target: {
+        intent: "harm",
+      },
+      void_aberration_destroy_target: {
+        intent: "harm",
       },
       void_raven_discard_cost: {
         role: "cost",

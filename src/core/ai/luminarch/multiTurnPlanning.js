@@ -200,12 +200,12 @@ export function shouldCommitResourcesNow(card, analysis, stance) {
     };
     const hasHighLevel = (hand || []).some(
       (c) =>
-        c && c.cardKind === "monster" && isLuminarch(c) && (c.level || 0) >= 7
+        c && c.cardKind === "monster" && isLuminarch(c) && (c.level || 0) >= 5
     );
     if (hasHighLevel) {
       return {
         shouldPlay: true,
-        reason: "Convocation com Lv7+ na mão = destravar recursos",
+        reason: "Convocation com Lv5+ na mão = destravar recursos",
       };
     }
   }
@@ -229,10 +229,10 @@ export function shouldCommitResourcesNow(card, analysis, stance) {
         (m) =>
           m && m.cardKind === "monster" && !m.isFacedown && (m.atk || 0) >= 2000
       );
-      if (hasHighThreat) {
+      if (hasHighThreat && lp > 2500) {
         return {
           shouldPlay: true,
-          reason: `Defensive stance + ameaça ATK >= 2000 = remover blocker`,
+          reason: `Defensive stance + ameaça ATK >= 2000 = remover pagando LP`,
         };
       }
     }
@@ -333,15 +333,16 @@ export function shouldCommitResourcesNow(card, analysis, stance) {
 
   // Cartas caras (LP): avaliar situação
   if (cardName.includes("Sacred Judgment")) {
-    // Sacred Judgment é carta de DESPERATION: campo vazio + opp domina
+    // Sacred Judgment é carta de DESPERATION: opp domina e GY converte em campo
     const myField = field.length;
+    const openMonsterZones = Math.max(0, 5 - myField);
     const oppField = (analysis.oppField || []).length;
 
-    // Se é situação crítica (campo vazio + opp 3+), permitir com LP >= 2500
-    if (myField === 0 && oppField >= 3 && lp >= 2500) {
+    // Se é situação crítica (opp 3+ e zona livre), permitir com LP >= 2500
+    if (oppField >= 3 && openMonsterZones > 0 && lp >= 2500) {
       return {
         shouldPlay: true,
-        reason: "Situação crítica justifica risco (campo vazio + opp domina)",
+        reason: "Situação crítica justifica risco (opp domina e ha zona livre)",
       };
     }
 

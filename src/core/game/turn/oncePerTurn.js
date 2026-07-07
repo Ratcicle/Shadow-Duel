@@ -70,6 +70,27 @@ export function getOncePerTurnStore(card, player, effect, options = {}) {
   return this.oncePerTurnUsage[playerId];
 }
 
+function getOncePerTurnLimit(effect, options = {}) {
+  const raw =
+    options.oncePerTurnLimit ??
+    options.limit ??
+    effect?.oncePerTurnLimit ??
+    effect?.usesPerTurn ??
+    effect?.maxUsesPerTurn ??
+    1;
+  const limit = Math.floor(Number(raw));
+  return Number.isFinite(limit) && limit > 0 ? limit : 1;
+}
+
+function getOncePerTurnUsageCount(entry, currentTurn) {
+  if (entry === currentTurn) return 1;
+  if (!entry || typeof entry !== "object") return 0;
+  const turn = Number(entry.turn ?? entry.turnCounter);
+  if (turn !== currentTurn) return 0;
+  const count = Math.floor(Number(entry.count ?? entry.uses ?? 0));
+  return Number.isFinite(count) && count > 0 ? count : 0;
+}
+
 export function canUseOncePerTurn(card, player, effect, options = {}) {
   if (!effect || !effect.oncePerTurn) {
     return { ok: true };
@@ -78,15 +99,18 @@ export function canUseOncePerTurn(card, player, effect, options = {}) {
   const lockKey = this.getOncePerTurnLockKey(card, effect, options);
   const store = this.getOncePerTurnStore(card, player, effect, options);
   const currentTurn = this.turnCounter;
-  const lastTurn = store.get(lockKey);
-  if (lastTurn === currentTurn) {
+  const limit = getOncePerTurnLimit(effect, options);
+  const used = getOncePerTurnUsageCount(store.get(lockKey), currentTurn);
+  if (used >= limit) {
     return {
       ok: false,
-      reason: "Efeito 1/turn ja usado neste turno.",
+      reason: `Efeito usado ${limit}x neste turno.`,
       lockKey,
+      used,
+      limit,
     };
   }
-  return { ok: true, lockKey };
+  return { ok: true, lockKey, used, limit, remaining: limit - used };
 }
 
 export function markOncePerTurnUsed(card, player, effect, options = {}) {
@@ -96,11 +120,20 @@ export function markOncePerTurnUsed(card, player, effect, options = {}) {
   this.ensureOncePerTurnUsageFresh();
   const lockKey = this.getOncePerTurnLockKey(card, effect, options);
   const store = this.getOncePerTurnStore(card, player, effect, options);
-  store.set(lockKey, this.turnCounter);
+  const currentTurn = this.turnCounter;
+  const limit = getOncePerTurnLimit(effect, options);
+  const used = getOncePerTurnUsageCount(store.get(lockKey), currentTurn);
+  if (limit <= 1) {
+    store.set(lockKey, currentTurn);
+  } else {
+    store.set(lockKey, { turn: currentTurn, count: Math.min(limit, used + 1) });
+  }
   this.devLog("OPT_MARK_USED", {
     summary: lockKey,
     card: card?.name,
     player: player?.id,
-    turn: this.turnCounter,
+    turn: currentTurn,
+    count: Math.min(limit, used + 1),
+    limit,
   });
 }

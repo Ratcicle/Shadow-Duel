@@ -48,7 +48,7 @@ const MAIN_DECKS = {
 const EXTRA_DECKS = {
   shadowheart: [121, 123, 122, 124],
   luminarch: [171, 172, 173],
-  void: [207, 213, 215, 222, 223, 225],
+  void: [207, 213, 215, 226, 227, 222, 223, 225],
   dragon: [265, 266, 267, 253],
   arcanist: [],
   miragebound: [355, 363],

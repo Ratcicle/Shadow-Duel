@@ -42,6 +42,8 @@ export const VOID_IDS = {
   BERSERKER: 213, // Fusão
   SERPENT_DRAKE: 214,
   HYDRA_TITAN: 215, // Fusão
+  SHADOW_CRAWLER: 226, // Fusion
+  ABERRATION: 227, // Fusion
   SEALING: 216,
   THE_VOID: 217, // Field
   GRAVITATIONAL: 218,

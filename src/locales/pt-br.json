@@ -609,7 +609,7 @@
     },
     "161": {
       "name": "Convocação dos Cavaleiros Luminarca",
-      "description": "Uma vez por turno, você pode descartar 1 monstro 'Luminarca' de nível 7 ou maior; adicione 1 monstro 'Luminarca' de nível 4 ou menor do seu Deck à sua mão."
+      "description": "Uma vez por turno: você pode descartar 1 monstro 'Luminarca' de Nível 5 ou maior; adicione 1 monstro 'Luminarca' de Nível 4 ou menor do seu Deck à sua mão. A primeira vez por turno que um monstro 'Luminarca' que você controla seria destruído em batalha ou por efeito de card: negue essa destruição."
     },
     "162": {
       "name": "Santuário da Cidadela Luminarca",
@@ -621,7 +621,7 @@
     },
     "164": {
       "name": "Onda Radiante Luminarca",
-      "description": "Envie 1 monstro 'Luminarca' com 2000 ou mais de ATK do seu campo para o cemitério, e escolha 1 card no campo do oponente; destrua-o."
+      "description": "Se você controlar um monstro 'Luminarca', ou se houver um monstro 'Luminarca' no seu Cemitério: pague 2000 PV e escolha 1 card que seu oponente controla; destrua-o. Você só pode ativar 1 'Onda Radiante Luminarca' por turno."
     },
     "165": {
       "name": "Escudo Crescente Luminarca",
@@ -633,7 +633,7 @@
     },
     "167": {
       "name": "Lança da Alvorada Luminarca",
-      "description": "Se você controlar 1 monstro 'Luminarca': Escolha 1 monstro que seu oponente controla; o ATK/DEF do alvo se tornam 0 até o final do turno."
+      "description": "Se você controlar 1 monstro 'Luminarca': escolha 1 monstro que seu oponente controla; o ATK/DEF do alvo se tornam 0 até o final do turno. Você só pode ativar 1 'Lança da Alvorada Luminarca' por turno."
     },
     "168": {
       "name": "Alabarda Encantada Luminarca",
@@ -645,7 +645,7 @@
     },
     "170": {
       "name": "Julgamento Sagrado Luminarca",
-      "description": "Se você não controlar monstros e seu oponente controlar 2 ou mais monstros: pague 2000 PV; Invoque por invocação-Especial monstros 'Luminarca' do seu cemitério, até o número de monstros que seu oponente controla, então ganhe 500 PV por monstro invocado. Você só pode ativar 1 'Julgamento Sagrado Luminarca' por turno."
+      "description": "Se seu oponente controlar 2 ou mais monstros: pague 2000 PV; Invoque por Invocação-Especial monstros 'Luminarca' do seu Cemitério, até o número de monstros que seu oponente controla, então ganhe 500 PV por monstro Invocado. Você só pode ativar 1 'Julgamento Sagrado Luminarca' por turno."
     },
     "171": {
       "name": "Megaescudo Barbarias Luminarca",
@@ -657,7 +657,7 @@
     },
     "173": {
       "name": "Cavaleiro Puro Luminarca",
-      "description": "Materiais: 2 monstros 'Luminarca' Se este card for Invocado por Invocação-Fusão: você pode adicionar 1 'Santuário da Cidadela Luminarca' do seu Deck à sua mão. Uma vez por turno, quando você ativar o efeito de uma Magia/Armadilha 'Luminarca' que exija pagar PV: reduza esse custo em 1000. Você só pode usar cada efeito de 'Cavaleiro Puro Luminarca' uma vez por turno."
+      "description": "Materiais: 2 monstros 'Luminarca'. Se este card for Invocado por Invocação-Fusão: você pode adicionar 1 'Santuário da Cidadela Luminarca' do seu Deck à sua mão. Duas vezes por turno, quando você ativar o efeito de uma Magia/Armadilha 'Luminarca' que exija pagar PV: reduza esse custo em 1000. Você só pode usar o efeito de Invocação-Fusão de 'Cavaleiro Puro Luminarca' uma vez por turno."
     },
     "201": {
       "name": "Conjurador do Vazio",
@@ -758,6 +758,14 @@
     "225": {
       "name": "Arcturus, o Lorde Caído",
       "description": "Deve ser Invocado por Invocação-Fusão do seu Deck Adicional ao banir 1 'Arcturus, Senhor do Vazio' do seu Cemitério. Se este card for destruído em batalha: destrua o monstro que batalhou este card. Você pode banir este card do seu Cemitério; Invoque por Invocação-Especial de 1 a 3 monstros 'Vazio' com nomes diferentes do seu Cemitério, exceto 'Arcturus, o Lorde Caído' e 'Arcturus, Senhor do Vazio', mas negue seus efeitos. Você só pode usar este efeito de 'Arcturus, o Lorde Caído' uma vez por turno."
+    },
+    "226": {
+      "name": "Rastejador Sombrio do Vazio",
+      "description": "Materiais: 2 monstros 'Vazio'. Se este card for Invocado por Invocação-Fusão: você pode enviar 1 monstro 'Vazio' do seu Deck para o Cemitério. Uma vez por turno: você pode escolher 1 monstro de Nível 5 ou maior que seu oponente controla; envie 1 monstro 'Vazio' que você controla para o Cemitério e, se isso acontecer, destrua o alvo."
+    },
+    "227": {
+      "name": "Aberração do Vazio",
+      "description": "Materiais: 'Chifre Tenebris do Vazio' + 1 monstro 'Vazio'. Este card ganha 100 de ATK/DEF até o final do turno cada vez que um monstro 'Vazio' é enviado ao Cemitério. Se este card for enviado do campo para o Cemitério: você pode escolher 1 card com a face para cima que seu oponente controla; destrua o alvo."
     },
     "251": {
       "name": "Dragão Luminoso",

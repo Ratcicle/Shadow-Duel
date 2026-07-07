@@ -29,26 +29,60 @@ export function canUseSimulatedPassive(state, player, card, effect) {
   const key = getSimulatedOncePerTurnKey(effect, card);
   if (!key) return true;
   const currentTurn = state?.turnCounter || 0;
+  const limit = Math.max(
+    1,
+    Math.floor(
+      Number(
+        effect.oncePerTurnLimit ??
+          effect.usesPerTurn ??
+          effect.maxUsesPerTurn ??
+          1,
+      ),
+    ) || 1,
+  );
   const usage =
     effect.oncePerTurnScope === "card" || effect.oncePerTurnPerCard
       ? card?.oncePerTurnUsageByName || {}
       : player?.oncePerTurnUsageByName || {};
-  if (usage[key] === currentTurn) return false;
-  if (!state._simPassiveOncePerTurn) state._simPassiveOncePerTurn = new Set();
+  const entry = usage[key];
+  const persistedUsed =
+    entry === currentTurn
+      ? 1
+      : entry && typeof entry === "object" && Number(entry.turn) === currentTurn
+        ? Math.max(0, Math.floor(Number(entry.count ?? 0)) || 0)
+        : 0;
+  if (!state._simPassiveOncePerTurn) state._simPassiveOncePerTurn = new Map();
+  if (state._simPassiveOncePerTurn instanceof Set) {
+    const migrated = new Map();
+    for (const entryKey of state._simPassiveOncePerTurn) {
+      migrated.set(entryKey, 1);
+    }
+    state._simPassiveOncePerTurn = migrated;
+  }
   const ownerKey = player?.id || (player === state?.bot ? "bot" : "player");
   const cardKey = card?.instanceId || card?.id || card?.name || "card";
   const simKey = `${ownerKey}:${cardKey}:${key}`;
-  return !state._simPassiveOncePerTurn.has(simKey);
+  const simulatedUsed = Number(state._simPassiveOncePerTurn.get(simKey) || 0);
+  return persistedUsed + simulatedUsed < limit;
 }
 
 export function markSimulatedPassiveUsed(state, player, card, effect) {
   if (!effect?.oncePerTurn && !effect?.oncePerTurnName) return;
   const key = getSimulatedOncePerTurnKey(effect, card);
   if (!key) return;
-  if (!state._simPassiveOncePerTurn) state._simPassiveOncePerTurn = new Set();
+  if (!state._simPassiveOncePerTurn) state._simPassiveOncePerTurn = new Map();
+  if (state._simPassiveOncePerTurn instanceof Set) {
+    const migrated = new Map();
+    for (const entryKey of state._simPassiveOncePerTurn) {
+      migrated.set(entryKey, 1);
+    }
+    state._simPassiveOncePerTurn = migrated;
+  }
   const ownerKey = player?.id || (player === state?.bot ? "bot" : "player");
   const cardKey = card?.instanceId || card?.id || card?.name || "card";
-  state._simPassiveOncePerTurn.add(`${ownerKey}:${cardKey}:${key}`);
+  const simKey = `${ownerKey}:${cardKey}:${key}`;
+  const current = Number(state._simPassiveOncePerTurn.get(simKey) || 0);
+  state._simPassiveOncePerTurn.set(simKey, current + 1);
 }
 
 export function resolveSimulatedLpCost({

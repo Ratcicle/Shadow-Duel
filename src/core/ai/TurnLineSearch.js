@@ -314,6 +314,12 @@ function summarizeZone(cards = [], { sort = false } = {}) {
 function summarizeSimOpt(value) {
   if (!value) return "";
   const normalize = (entry) => {
+    if (entry instanceof Map) {
+      return [...entry.entries()]
+        .map(([key, nested]) => `${key}:${normalize(nested)}`)
+        .sort()
+        .join(",");
+    }
     if (entry instanceof Set) return [...entry].sort().join(",");
     if (Array.isArray(entry)) return entry.slice().sort().join(",");
     if (entry && typeof entry === "object") {
