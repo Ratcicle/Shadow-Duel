@@ -1,4 +1,8 @@
-import { getEffectiveAtk, getEffectiveDef } from "../common/cardStats.js";
+import {
+  getEffectiveAtk,
+  getEffectiveDef,
+  getPiercingDamage,
+} from "../common/cardStats.js";
 import {
   BLOOMROT_NAMES,
   getFreeMonsterZones,
@@ -144,14 +148,11 @@ export function getIncomingBattleThreat(context = {}, analysis = {}) {
   const defenderStat = defender ? battleStat(defender) : 0;
   const attackIntoAttack = defender && isAttackPosition(defender);
   const attackIntoDefense = defender && !isAttackPosition(defender);
-  const piercing = Boolean(attacker?.piercing || attacker?.status?.piercingDamage);
   const projectedDamage = directAttack
     ? attackerAtk
     : attackIntoAttack
       ? Math.max(0, attackerAtk - defenderStat)
-      : piercing
-        ? Math.max(0, attackerAtk - defenderStat)
-        : 0;
+      : getPiercingDamage(attacker, attackerAtk, defenderStat);
   const losesDefender = Boolean(
     defender &&
       (attackerAtk > defenderStat || (attackIntoAttack && attackerAtk === defenderStat && attackerAtk > 0))

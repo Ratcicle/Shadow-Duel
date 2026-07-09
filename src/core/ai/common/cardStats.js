@@ -49,6 +49,15 @@ export function getBattleStat(card, { facedownValue = 1500 } = {}) {
   return getBattleStatForAttackTarget(card, { facedownValue });
 }
 
+export function getPiercingDamage(attacker, attackStat, targetStat) {
+  if (!attacker?.piercing && !attacker?.status?.piercingDamage) return 0;
+  const multiplier = Number(attacker?.piercingDamageMultiplier ?? 1);
+  const safeMultiplier =
+    Number.isFinite(multiplier) && multiplier > 0 ? multiplier : 1;
+  const excess = Math.max(0, Number(attackStat || 0) - Number(targetStat || 0));
+  return excess > 0 ? Math.floor(excess * safeMultiplier) : 0;
+}
+
 function resolveFacedownValue(card, stat, facedownValue) {
   if (facedownValue === "printed") {
     return Number(card?.[stat] || 0);

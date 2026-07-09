@@ -157,6 +157,14 @@ export function evaluateCardExpendability(card, context) {
     };
   }
 
+  if (name === "Luminarch Ethereal Lancer") {
+    return {
+      expendable: false,
+      reason: "Ascension ofensiva com perfuracao dobrada e ganho de LP - preservar",
+      value: 8,
+    };
+  }
+
   // Barbarias: payoff defensivo e conversor de ganho de LP.
   if (name === "Luminarch Megashield Barbarias") {
     return {

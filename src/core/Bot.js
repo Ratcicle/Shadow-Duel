@@ -29,6 +29,7 @@ import {
   resolveHandIndexForAction as resolveHandIndexForBotAction,
   tributeMatchesAltRequirement as tributeMatchesAltRequirementForBot,
 } from "./bot/actionValidation.js";
+import { getPiercingDamage } from "./ai/common/cardStats.js";
 
 export default class Bot extends Player {
   constructor(archetype = "shadowheart") {
@@ -377,8 +378,12 @@ export default class Bot extends Player {
         defenderOwner.graveyard.push(target);
         defenderOwner.field.splice(defenderOwner.field.indexOf(target), 1);
         // Check for piercing damage (inflict excess damage to LP)
-        if (attacker.piercing) {
-          const piercingDamage = attackStat - targetStat;
+        const piercingDamage = getPiercingDamage(
+          attacker,
+          attackStat,
+          targetStat,
+        );
+        if (piercingDamage > 0) {
           defenderOwner.lp -= piercingDamage;
         }
       } else if (attackStat < targetStat) {

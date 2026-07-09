@@ -34,6 +34,10 @@ export function getPublicState(forPlayerId = "player") {
         atk: hidden ? null : card.atk,
         def: hidden ? null : card.def,
         level: hidden ? null : card.level,
+        piercing: hidden ? null : !!card.piercing,
+        piercingDamageMultiplier: hidden
+          ? null
+          : Number(card.piercingDamageMultiplier || 1),
         isTuner: hidden ? null : card.isTuner === true,
         faceDown: !!card.isFacedown,
         status: {

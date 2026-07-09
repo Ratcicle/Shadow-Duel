@@ -72,6 +72,19 @@ function getActualLpLoss(player, amount) {
   return Math.max(0, Math.min(Number(player.lp || 0), value));
 }
 
+function getPiercingDamageMultiplier(card) {
+  if (!card?.piercing) return 0;
+  const multiplier = Number(card.piercingDamageMultiplier ?? 1);
+  return Number.isFinite(multiplier) && multiplier > 0 ? multiplier : 1;
+}
+
+function calculatePiercingDamage(attacker, attackerAtk, targetDef) {
+  const multiplier = getPiercingDamageMultiplier(attacker);
+  if (multiplier <= 0) return 0;
+  const excess = Math.max(0, Number(attackerAtk || 0) - Number(targetDef || 0));
+  return excess > 0 ? Math.floor(excess * multiplier) : 0;
+}
+
 function canShowBattleDamageLoss(player, cardInvolved, shouldHeal) {
   if (!player || !cardInvolved) return false;
   if (
@@ -324,9 +337,14 @@ function resolveBattleLpLossPreview(game, attacker, target) {
       shouldHeal = !!attacker.battleDamageHealsControllerThisTurn;
     }
   } else if (attackerAtk > targetDef && attacker.piercing) {
+    const piercingDamage = calculatePiercingDamage(
+      attacker,
+      attackerAtk,
+      targetDef,
+    );
     player = defenderOwner;
     cardInvolved = target;
-    amount = attackerAtk - targetDef;
+    amount = piercingDamage;
     shouldHeal = !!target.battleDamageHealsControllerThisTurn;
   } else if (attackerAtk < targetDef) {
     player = attackerOwner;
@@ -1415,7 +1433,7 @@ export async function finishCombat(attacker, target, options = {}) {
     const defender = target.owner === "player" ? this.player : this.bot;
     if (attacker.atk > target.def) {
       if (attacker.piercing) {
-        const damage = attacker.atk - target.def;
+        const damage = calculatePiercingDamage(attacker, attacker.atk, target.def);
         const appliedDamage = await applyBattleDamage(
           defender,
           target,

@@ -9,6 +9,7 @@ import {
 } from "./finisherPlanning.js";
 
 const BARBARIAS_NAME = "Luminarch Megashield Barbarias";
+const ETHEREAL_LANCER_NAME = "Luminarch Ethereal Lancer";
 const FORTRESS_NAME = "Luminarch Fortress Aegis";
 const PURE_KNIGHT_NAME = "Luminarch Pure Knight";
 const CITADEL_NAME = "Sanctum of the Luminarch Citadel";
@@ -21,6 +22,7 @@ const AEGISBEARER_NAME = "Luminarch Aegisbearer";
 
 const LUMINARCH_PAYOFF_MATERIAL_NAMES = [
   BARBARIAS_NAME,
+  ETHEREAL_LANCER_NAME,
   FORTRESS_NAME,
   RADIANT_LANCER_NAME,
   AURORA_SERAPH_NAME,
@@ -98,6 +100,7 @@ function getFieldMaterialValue(card, context = {}) {
   const baseStats = Math.max(card.atk || 0, card.def || 0) / 100;
   const protectedBonus = {
     [BARBARIAS_NAME]: 55,
+    [ETHEREAL_LANCER_NAME]: 42,
     [FORTRESS_NAME]: 50,
     [RADIANT_LANCER_NAME]: 45,
     [AURORA_SERAPH_NAME]: 40,
@@ -132,6 +135,7 @@ function getFusionBoardValue(fusionCard, context = {}) {
   if (!fusionCard) return 0;
   const baseStats = Math.max(fusionCard.atk || 0, fusionCard.def || 0) / 100;
   if (fusionCard.name === BARBARIAS_NAME) return baseStats + 38;
+  if (fusionCard.name === ETHEREAL_LANCER_NAME) return baseStats + 28;
   if (fusionCard.name === FORTRESS_NAME) return baseStats + 34;
   if (fusionCard.name === PURE_KNIGHT_NAME) {
     const bot = context.bot;
@@ -575,6 +579,7 @@ export function detectLuminarchFusionOpportunities(context) {
 
 export function chooseLuminarchAscensionPosition(ascensionCard, bot, opponent) {
   if (!ascensionCard) return "choice";
+  if (ascensionCard.name === ETHEREAL_LANCER_NAME) return "attack";
   if (ascensionCard.name !== "Luminarch Fortress Aegis") {
     return ascensionCard.ascension?.position || "choice";
   }
@@ -636,6 +641,36 @@ export function evaluateLuminarchAscensionPriority(
         (c.def || 0) <= 2000,
     ).length;
     if (gyLuminarch < 2) priority -= 2;
+
+    return priority;
+  }
+
+  if (name === ETHEREAL_LANCER_NAME) {
+    let priority = 10;
+    const otherFaceupLuminarch = (bot?.field || []).some(
+      (card) =>
+        card &&
+        card !== material &&
+        card.cardKind === "monster" &&
+        card.archetype === "Luminarch" &&
+        !card.isFacedown,
+    );
+    if (otherFaceupLuminarch) priority += 2;
+
+    const defenseTargets = (opponent?.field || []).filter(
+      (card) =>
+        card &&
+        card.cardKind === "monster" &&
+        card.position === "defense" &&
+        !card.isFacedown,
+    );
+    if (defenseTargets.length > 0) priority += 2;
+
+    const oppStrongest = getStrongestAttackThreat(opponent?.field || [], {
+      facedownValue: 1500,
+      includeBoosts: false,
+    });
+    if ((ascensionCard.atk || 0) >= oppStrongest + 200) priority += 1;
 
     return priority;
   }

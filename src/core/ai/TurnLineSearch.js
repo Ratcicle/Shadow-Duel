@@ -1,4 +1,8 @@
-import { getBattleStatForAttackTarget, getEffectiveAtk } from "./common/cardStats.js";
+import {
+  getBattleStatForAttackTarget,
+  getEffectiveAtk,
+  getPiercingDamage,
+} from "./common/cardStats.js";
 import { resolvePerspectivePlayers } from "./StrategyUtils.js";
 import {
   fingerprintAction,
@@ -922,8 +926,13 @@ function applySimulatedBattle(state, battlePlan, strategy = null, options = {}) 
       }
     } else if (attackStat > targetStat) {
       destroyIfAllowed(opponent, target, "opponent");
-      if (attacker.piercing) {
-        summary.damage = inflictDamage(opponent, attackStat - targetStat, target);
+      const piercingDamage = getPiercingDamage(
+        attacker,
+        attackStat,
+        targetStat,
+      );
+      if (piercingDamage > 0) {
+        summary.damage = inflictDamage(opponent, piercingDamage, target);
       }
     } else if (attackStat < targetStat) {
       const damageTaken = inflictDamage(bot, targetStat - attackStat, attacker);

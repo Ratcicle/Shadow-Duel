@@ -55,6 +55,7 @@ function summarizePlayer(player = {}, options = {}) {
       tempDef: card?.tempDefBoost || 0,
       cannotAttack: !!card?.cannotAttackThisTurn,
       piercing: !!card?.piercing,
+      piercingDamageMultiplier: Number(card?.piercingDamageMultiplier || 1),
       equips: (card?.equips || []).map((equip) => equip?.name || "?"),
     })),
     spellTrap: (player.spellTrap || []).map((card) => ({

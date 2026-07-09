@@ -3,6 +3,7 @@ import { buildStrategyAnalysis } from "../common/analysis.js";
 import {
   getBattleStatForAttackTarget,
   getEffectiveAtk,
+  getPiercingDamage,
   getStrongestAttackThreat,
 } from "../common/cardStats.js";
 import {
@@ -914,17 +915,25 @@ function analyzeMagicSickleBattleImpact(attacker, target, opponent) {
     target.position === "attack" && boostedAtk <= targetStat;
   const createsRemoval = !destroysBefore && destroysAfter;
   const preventsAttackerLoss = attackerDiesBefore && !attackerDiesAfter;
+  const damageBefore =
+    target.position === "defense"
+      ? getPiercingDamage(attacker, attackStat, targetStat)
+      : Math.max(0, attackStat - targetStat);
+  const damageAfter =
+    target.position === "defense"
+      ? getPiercingDamage(attacker, boostedAtk, targetStat)
+      : Math.max(0, boostedAtk - targetStat);
   const createsPiercingDamage =
     attacker.piercing &&
     target.position === "defense" &&
-    Math.max(0, boostedAtk - targetStat) >= 1000;
+    damageAfter >= 1000;
   return {
     changed: createsRemoval || preventsAttackerLoss || createsPiercingDamage,
     directLethal: false,
     createsRemoval,
     preventsAttackerLoss,
     createsPiercingDamage,
-    damageGain: Math.max(0, boostedAtk - targetStat) - Math.max(0, attackStat - targetStat),
+    damageGain: damageAfter - damageBefore,
     attackStat,
     boostedAtk,
     targetStat,
@@ -1146,7 +1155,7 @@ function estimateRawBattleDamage(attacker, target) {
   const targetStat = getRawBattleStatForAttackTarget(target);
   if (attack <= targetStat) return 0;
   if (target.position !== "defense") return attack - targetStat;
-  return attacker.piercing ? attack - targetStat : 0;
+  return getPiercingDamage(attacker, attack, targetStat);
 }
 
 function sameBattleCardIdentity(a, b) {

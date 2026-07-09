@@ -2,6 +2,7 @@ import {
   getBattleStatForAttackTarget,
   getEffectiveAtk,
   getEffectiveDef,
+  getPiercingDamage,
 } from "./cardStats.js";
 import { cardMatchesFilter } from "./cardFilters.js";
 import {
@@ -381,14 +382,14 @@ export function estimateTemporaryCombatDebuffTargetValue(
     const damageBefore =
       target.position === "attack" && atk > currentStat
         ? atk - currentStat
-        : attacker.piercing && target.position === "defense" && atk > currentStat
-          ? atk - currentStat
+        : target.position === "defense"
+          ? getPiercingDamage(attacker, atk, currentStat)
           : 0;
     const damageAfter =
       target.position === "attack" && atk > debuffedStat
         ? atk - debuffedStat
-        : attacker.piercing && target.position === "defense" && atk > debuffedStat
-          ? atk - debuffedStat
+        : target.position === "defense"
+          ? getPiercingDamage(attacker, atk, debuffedStat)
           : 0;
 
     totalDamageGain += Math.max(0, damageAfter - damageBefore);

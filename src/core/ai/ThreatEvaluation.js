@@ -79,7 +79,12 @@ export function calculateThreatScore(card, context = {}) {
 
   // 5. COMBAT MECHANICS
   if (card.piercing && context.hasDefenses) {
-    score += 0.4; // Ignora minhas defesas
+    const piercingMultiplier = Number(card.piercingDamageMultiplier ?? 1);
+    const safePiercingMultiplier =
+      Number.isFinite(piercingMultiplier) && piercingMultiplier > 0
+        ? piercingMultiplier
+        : 1;
+    score += 0.4 * safePiercingMultiplier; // Ignora minhas defesas
   }
   if (card.mustBeAttacked) {
     score -= 0.5; // Taunt = pode ser contornado (menos perigoso)

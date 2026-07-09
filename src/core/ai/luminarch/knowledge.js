@@ -29,7 +29,12 @@ export const LUMINARCH_PACKAGE_STATUS = Object.freeze({
 });
 
 export const LUMINARCH_CARD_ROLES = Object.freeze({
-  "Luminarch Valiant - Knight of the Dawn": ["starter", "searcher", "finisher"],
+  "Luminarch Valiant - Knight of the Dawn": [
+    "starter",
+    "searcher",
+    "finisher",
+    "ascension_material",
+  ],
   "Luminarch Sanctified Arbiter": ["starter", "searcher"],
   "Luminarch Aegisbearer": ["wall", "protection", "ascension_material"],
   "Luminarch Moonblade Captain": ["starter", "recursion", "battle_conversion"],
@@ -53,6 +58,12 @@ export const LUMINARCH_CARD_ROLES = Object.freeze({
   "Luminarch Pure Knight": ["fusion_payoff", "citadel", "searcher", "lp_payoff"],
   "Luminarch Megashield Barbarias": ["fusion_payoff", "wall", "lp_payoff"],
   "Luminarch Fortress Aegis": ["ascension_payoff", "wall", "recursion"],
+  "Luminarch Ethereal Lancer": [
+    "ascension_payoff",
+    "finisher",
+    "battle_conversion",
+    "lp_payoff",
+  ],
 });
 
 export const CARD_KNOWLEDGE = {
@@ -83,6 +94,7 @@ export const CARD_KNOWLEDGE = {
       "Luminarch Enchanted Halberd",
       "Luminarch Magic Sickle",
     ],
+    ascensionTarget: "Luminarch Ethereal Lancer",
   },
 
   "Luminarch Aegisbearer": {
@@ -561,6 +573,34 @@ export const CARD_KNOWLEDGE = {
       "Taunt mantém proteção",
     ],
     value: 13,
+  },
+
+  "Luminarch Ethereal Lancer": {
+    role: "ascension_offense",
+    priority: 7,
+    summonCondition: "ascension_valiant",
+    linePackages: [
+      LUMINARCH_LINE_PACKAGES.ASCENSION,
+      LUMINARCH_LINE_PACKAGES.BATTLE_CONVERSION,
+      LUMINARCH_LINE_PACKAGES.LP_PAYOFF,
+    ],
+    status: LUMINARCH_PACKAGE_STATUS.SUPPORTED,
+    effect:
+      "Material: Valiant. Ascension SS buffs another face-up monster's DEF and gains ATK. Double piercing damage vs DEF. Battle destroy gains 1000 LP",
+    synergies: [
+      "Luminarch Valiant - Knight of the Dawn",
+      "Luminarch Spear of Dawnfall",
+      "Luminarch Magic Sickle",
+      "Luminarch Sunforged Blade",
+    ],
+    playPatterns: [
+      "Ascend Valiant when the line needs pressure",
+      "Prefer attack position to threaten double piercing damage",
+      "Pair with DEF-zeroing effects for large damage conversion",
+      "Use with another face-up monster when possible to capture the summon buff",
+    ],
+    value: 14,
+    ascensionMaterial: "Luminarch Valiant - Knight of the Dawn",
   },
 
   Polymerization: {

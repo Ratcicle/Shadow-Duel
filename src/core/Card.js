@@ -182,6 +182,11 @@ export default class Card {
         : battleIndestructibleOncePerTurnLastUsedTurn;
     this.mustBeAttacked = !!data.mustBeAttacked;
     this.piercing = !!data.piercing;
+    const piercingDamageMultiplier = Number(data.piercingDamageMultiplier ?? 1);
+    this.piercingDamageMultiplier =
+      Number.isFinite(piercingDamageMultiplier) && piercingDamageMultiplier > 0
+        ? piercingDamageMultiplier
+        : 1;
     this.canMakeSecondAttackThisTurn = false;
     this.secondAttackUsedThisTurn = false;
     this.dynamicBuffs = null;

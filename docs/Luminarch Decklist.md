@@ -14,7 +14,7 @@ O arquétipo **Luminarch** é focado em guerreiros sagrados, defensores celestia
 
 ---
 
-## Decklist (23 cartas)
+## Decklist (24 cartas)
 
 ### Monstros (Main Deck) (10)
 
@@ -52,19 +52,22 @@ _Nenhuma trap no arquétipo atualmente._
 
 ---
 
-## Extra Deck (3)
+## Extra Deck (4)
 
 | ID  | Nome                           | Tipo      | Nível | ATK  | DEF  |
 | --- | ------------------------------ | --------- | ----- | ---- | ---- |
 | 171 | Luminarch Megashield Barbarias | Fusion    | 9     | 2500 | 3000 |
 | 172 | Luminarch Fortress Aegis       | Ascension | 6     | 1500 | 2500 |
 | 173 | Luminarch Pure Knight          | Fusion    | 6     | 2000 | 2000 |
+| 174 | Luminarch Ethereal Lancer      | Ascension | 6     | 2100 | 1600 |
 
 **Materiais de Fusão (171):** "Luminarch Sanctum Protector" + 1 monstro "Luminarch" de Nível 5 ou maior
 
 **Materiais de Fusão (173):** 2 monstros "Luminarch"
 
 **Material de Ascensão (172):** "Luminarch Aegisbearer" (requisito: 2 turnos face-up no campo)
+
+**Material de Ascensão (174):** "Luminarch Valiant - Knight of the Dawn"
 
 ---
 
@@ -148,3 +151,6 @@ _Nenhuma trap no arquétipo atualmente._
 
 **173 - Luminarch Pure Knight** (L6 Fusion Warrior | ATK 2000 / DEF 2000)
 > 2 'Luminarch' monsters. If this card is Fusion Summoned: You can add 1 'Sanctum of the Luminarch Citadel' from your Deck to your hand. Twice per turn, when you activate the effect of a 'Luminarch' Spell/Trap that requires paying LP: reduce that cost by 1000. You can only use the Fusion Summon effect of 'Luminarch Pure Knight' once per turn.
+
+**174 - Luminarch Ethereal Lancer** (L6 Ascension Warrior | ATK 2100 / DEF 1600)
+> Ascension Material: 'Luminarch Valiant - Knight of the Dawn'. If this card is Ascension Summoned: You can target 1 other face-up monster you control; it gains 500 DEF, and if it does, this card gains 500 ATK. If this card attacks a Defense Position monster, inflict double piercing battle damage to your opponent. If this card destroys an opponent's monster by battle: gain 1000 LP.

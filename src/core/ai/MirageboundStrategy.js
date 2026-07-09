@@ -8,6 +8,7 @@ import {
 import { getGenericSetBackrowActions } from "./common/backrowPlanning.js";
 import { sequenceActionsByPriority } from "./common/actionSequencing.js";
 import { findIgnitionEffect } from "./common/effectDiscovery.js";
+import { getPiercingDamage } from "./common/cardStats.js";
 import {
   buildAutoActivationContext,
 } from "./common/preferencePolicy.js";
@@ -294,7 +295,7 @@ function getIncomingBattleThreat(context = {}, player, analysis = {}) {
   } else if (defender.position === "defense") {
     const defenderStat = getEffectiveDef(defender);
     loseMonster = atk > defenderStat;
-    damage = attacker.piercing ? Math.max(0, atk - defenderStat) : 0;
+    damage = getPiercingDamage(attacker, atk, defenderStat);
   } else {
     const defenderStat = getEffectiveAtk(defender);
     loseMonster = atk >= defenderStat;

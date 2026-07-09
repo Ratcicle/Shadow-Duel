@@ -659,6 +659,10 @@
       "name": "Cavaleiro Puro Luminarca",
       "description": "Materiais: 2 monstros 'Luminarca'. Se este card for Invocado por Invocação-Fusão: você pode adicionar 1 'Santuário da Cidadela Luminarca' do seu Deck à sua mão. Duas vezes por turno, quando você ativar o efeito de uma Magia/Armadilha 'Luminarca' que exija pagar PV: reduza esse custo em 1000. Você só pode usar o efeito de Invocação-Fusão de 'Cavaleiro Puro Luminarca' uma vez por turno."
     },
+    "174": {
+      "name": "Lanceiro Etéreo Luminarca",
+      "description": "Material de Ascensão: \"Luminarca Valente - Cavaleiro da Aurora\". Se este card for Invocado por Invocação-Ascensão: você pode escolher 1 outro monstro com a face para cima que você controla; ele ganha 500 DEF e, se isso acontecer, este card ganha 500 ATK. Se este card atacar um monstro em Posição de Defesa, cause o dobro do dano de batalha perfurante ao seu oponente. Se este card destruir um monstro do oponente em batalha: ganhe 1000 PV."
+    },
     "201": {
       "name": "Conjurador do Vazio",
       "description": "Invoque por Invocação-Especial 1 monstro 'Vazio' de Nível 4 ou menor do seu Deck, exceto 'Conjurador do Vazio', mas ele não pode atacar neste turno e é destruído na End Phase. Se este card estiver no seu Cemitério: você pode enviar 1 monstro 'Vazio' que você controla para o Cemitério; Invoque este card por Invocação-Especial, mas negue seus efeitos até o final do turno. Você só pode usar cada efeito de 'Conjurador do Vazio' uma vez por turno."

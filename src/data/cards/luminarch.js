@@ -1243,4 +1243,90 @@ export const luminarchCards = [
       },
     ],
   },
+  {
+    id: 174,
+    name: "Luminarch Ethereal Lancer",
+    cardKind: "monster",
+    monsterType: "ascension",
+    atk: 2100,
+    def: 1600,
+    level: 6,
+    type: "Warrior",
+    attribute: "Light",
+    archetype: "Luminarch",
+    archetypes: ["Luminarch"],
+    piercing: true,
+    piercingDamageMultiplier: 2,
+    ascension: {
+      materialId: 151,
+      position: "choice",
+    },
+    description:
+      'Ascension Material: "Luminarch Valiant - Knight of the Dawn". If this card is Ascension Summoned: You can target 1 other face-up monster you control; it gains 500 DEF, and if it does, this card gains 500 ATK. If this card attacks a Defense Position monster, inflict double piercing battle damage to your opponent. If this card destroys an opponent\'s monster by battle: gain 1000 LP.',
+    image: "",
+    effects: [
+      {
+        id: "luminarch_ethereal_lancer_ascension_buff",
+        timing: "on_event",
+        event: "after_summon",
+        summonMethods: ["ascension"],
+        requireSelfAsSummoned: true,
+        promptUser: true,
+        targets: [
+          {
+            id: "ethereal_lancer_buff_target",
+            owner: "self",
+            zone: "field",
+            cardKind: "monster",
+            requireFaceup: true,
+            excludeSelf: true,
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "permanent_buff_named",
+            targetRef: "ethereal_lancer_buff_target",
+            defBoost: 500,
+            sourceName: "luminarch_ethereal_lancer_ascension_buff",
+          },
+          {
+            type: "permanent_buff_named",
+            targetRef: "self",
+            atkBoost: 500,
+            sourceName: "luminarch_ethereal_lancer_ascension_buff",
+          },
+        ],
+      },
+      {
+        id: "luminarch_ethereal_lancer_buff_cleanup",
+        timing: "on_event",
+        event: "card_to_grave",
+        fromZone: "field",
+        actions: [
+          {
+            type: "remove_permanent_buff_named",
+            targetRef: "self",
+            removeFromAllField: true,
+            sourceName: "luminarch_ethereal_lancer_ascension_buff",
+          },
+        ],
+      },
+      {
+        id: "luminarch_ethereal_lancer_battle_heal",
+        timing: "on_event",
+        event: "battle_destroy",
+        requireSelfAsBattleDestroyer: true,
+        requireDestroyedIsOpponent: true,
+        promptUser: false,
+        actions: [
+          {
+            type: "heal",
+            player: "self",
+            amount: 1000,
+          },
+        ],
+      },
+    ],
+  },
 ];

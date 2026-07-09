@@ -48,7 +48,12 @@ export function estimateMonsterValue(monster, options = {}) {
   if (monster.isFacedown) value *= 0.7;
   if (monster.cannotAttackThisTurn) value -= 0.2;
   if (monster.hasAttacked) value -= 0.1;
-  if (monster.piercing) value += 0.2;
+  if (monster.piercing) {
+    const multiplier = Number(monster.piercingDamageMultiplier ?? 1);
+    const safeMultiplier =
+      Number.isFinite(multiplier) && multiplier > 0 ? multiplier : 1;
+    value += 0.2 * safeMultiplier;
+  }
   const bonusAttacks = getMaxAttacks(monster, options.owner || null) - 1;
   if (bonusAttacks > 0) value += 0.2 * bonusAttacks;
   if (monster.battleIndestructibleOncePerTurn) value += 0.25;
