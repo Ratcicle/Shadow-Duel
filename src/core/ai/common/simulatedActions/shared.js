@@ -263,6 +263,36 @@ export function storeSimActionResult(
   }
 }
 
+function getSimulatedMaterialTypeFromContextLabel(contextLabel) {
+  if (contextLabel === "fusion_material") return "fusion";
+  if (contextLabel === "synchro_material") return "synchro";
+  if (contextLabel === "ascension_material") return "ascension";
+  return null;
+}
+
+export function updateSimulatedSentToGraveMaterialMarker({
+  card,
+  state,
+  player,
+  fromZone = null,
+  contextLabel = null,
+}) {
+  if (!card) return;
+  const materialType = getSimulatedMaterialTypeFromContextLabel(contextLabel);
+  if (!materialType) {
+    delete card.lastSentToGraveAsMaterial;
+    return;
+  }
+  card.lastSentToGraveAsMaterial = {
+    type: materialType,
+    turn: Number(state?.turnCounter || 0),
+    thisTurn: true,
+    ownerId: player?.id || card.owner || null,
+    fromZone,
+    contextLabel,
+  };
+}
+
 function getContextPathValue(ctx, path) {
   if (!ctx || typeof path !== "string" || !path) return undefined;
   if (!path.includes(".")) return ctx[path];

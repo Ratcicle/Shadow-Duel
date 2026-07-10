@@ -1,5 +1,10 @@
 import { cardMatchesKind } from "../../Card.js";
 
+function asArray(value) {
+  if (value === undefined || value === null) return [];
+  return Array.isArray(value) ? value : [value];
+}
+
 function getCardInstanceId(card) {
   return card?.instanceId ?? card?._instanceId ?? card?.uuid ?? card?.simInstanceId ?? null;
 }
@@ -20,6 +25,67 @@ function isExcludedInstance(card, filters = {}) {
       : []),
   ].filter((value) => value !== undefined && value !== null);
   return cardInstanceId !== null && excludedInstanceIds.includes(cardInstanceId);
+}
+
+function getCurrentTurn(filters = {}, game = null) {
+  const turn =
+    filters.currentTurn ??
+    filters.turnCounter ??
+    filters.gameTurn ??
+    game?.turnCounter;
+  const numeric = Number(turn);
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
+function cardMatchesSentToGraveMaterialFilter(card, filters = {}, game = null) {
+  const materialTypeFilter =
+    filters.sentToGraveAsMaterial ??
+    filters.sentAsMaterial ??
+    filters.lastSentToGraveAsMaterial;
+  const turnFilter =
+    filters.sentToGraveAsMaterialTurn ??
+    filters.sentAsMaterialTurn ??
+    null;
+  const requireThisTurn =
+    filters.sentToGraveAsMaterialThisTurn === true ||
+    filters.sentAsMaterialThisTurn === true ||
+    turnFilter === "current";
+
+  if (
+    materialTypeFilter === undefined &&
+    !requireThisTurn &&
+    turnFilter === null
+  ) {
+    return true;
+  }
+
+  const marker = card?.lastSentToGraveAsMaterial || null;
+  if (materialTypeFilter === false) return !marker;
+  if (!marker) return false;
+
+  if (materialTypeFilter !== undefined && materialTypeFilter !== true) {
+    const requiredTypes = asArray(materialTypeFilter).filter(Boolean);
+    if (requiredTypes.length > 0 && !requiredTypes.includes(marker.type)) {
+      return false;
+    }
+  }
+
+  if (requireThisTurn) {
+    const currentTurn = getCurrentTurn(filters, game);
+    if (currentTurn !== null) {
+      return Number(marker.turn) === currentTurn;
+    }
+    return marker.thisTurn === true;
+  }
+
+  if (turnFilter !== null && turnFilter !== undefined) {
+    const exactTurn = Number(turnFilter);
+    if (Number.isFinite(exactTurn) && Number(marker.turn) !== exactTurn) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 export function cardMatchesFilters(card, filters = {}) {
@@ -102,6 +168,11 @@ export function cardMatchesFilters(card, filters = {}) {
       : [filters.monsterType];
     if (!requiredMonsterTypes.includes(card.monsterType)) return false;
   }
+  const excludedMonsterTypes = [
+    filters.excludeMonsterType,
+    ...asArray(filters.excludeMonsterTypes),
+  ].filter(Boolean);
+  if (excludedMonsterTypes.includes(card.monsterType)) return false;
   const summonMethodFilter =
     filters.lastSummonMethods ||
     filters.summonMethods ||
@@ -163,6 +234,9 @@ export function cardMatchesFilters(card, filters = {}) {
     return false;
   }
   if (filters.maxDef !== undefined && (card.def || 0) > filters.maxDef) {
+    return false;
+  }
+  if (!cardMatchesSentToGraveMaterialFilter(card, filters, this?.game)) {
     return false;
   }
   const counterType =

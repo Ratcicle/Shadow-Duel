@@ -290,12 +290,57 @@ export async function handleSpecialSummonFromZone(
       return false;
     }
 
+    const filters = { ...(action.filters || {}) };
+    if (action.cardName) {
+      filters.name = action.cardName;
+    }
+    if (action.archetype) {
+      filters.archetype = action.archetype;
+    }
+    if (action.cardKind) {
+      filters.cardKind = action.cardKind;
+    }
+    if (action.isTuner !== undefined) {
+      filters.isTuner = action.isTuner;
+    }
+    if (Number.isFinite(action.minAtk)) filters.minAtk = action.minAtk;
+    if (Number.isFinite(action.maxAtk)) filters.maxAtk = action.maxAtk;
+    if (Number.isFinite(action.minDef)) filters.minDef = action.minDef;
+    if (Number.isFinite(action.maxDef)) filters.maxDef = action.maxDef;
+    if (action.monsterType) {
+      filters.type = action.monsterType;
+    }
+    if (Number.isFinite(action.minLevel)) filters.minLevel = action.minLevel;
+    if (Number.isFinite(action.maxLevel)) filters.maxLevel = action.maxLevel;
+    applyContextMaxLevelFilter(filters, action, ctx);
+
+    if (action.matchLevelRef) {
+      const levelCard = ctx?.[action.matchLevelRef] || null;
+      const levelValue = levelCard?.level;
+      if (!levelValue) {
+        getUI(game)?.log("Cannot match level: no level on reference card.");
+        return false;
+      }
+      filters.level = levelValue;
+      filters.levelOp = filters.levelOp || action.levelOp || "eq";
+    }
+
+    const filteredValidCards =
+      Object.keys(filters).length > 0
+        ? validCards.filter((card) => engine.cardMatchesFilters(card, filters))
+        : validCards;
+
+    if (filteredValidCards.length === 0) {
+      getUI(game)?.log("Target cards no longer match Special Summon filters.");
+      return false;
+    }
+
     if (!(await payBanishCost())) {
       return false;
     }
 
     return await summonCards(
-      validCards,
+      filteredValidCards,
       zoneEntries,
       player,
       action,

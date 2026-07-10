@@ -122,6 +122,31 @@ function applyStatusesOnSummon(card, statuses) {
   }
 }
 
+function getMaterialTypeFromContextLabel(contextLabel) {
+  if (contextLabel === "fusion_material") return "fusion";
+  if (contextLabel === "synchro_material") return "synchro";
+  if (contextLabel === "ascension_material") return "ascension";
+  return null;
+}
+
+function updateSentToGraveMaterialMarker(game, card, ownerPlayer, fromZone, options = {}) {
+  if (!card || !options) return;
+  const materialType = getMaterialTypeFromContextLabel(options.contextLabel);
+  if (!materialType) {
+    delete card.lastSentToGraveAsMaterial;
+    return;
+  }
+
+  card.lastSentToGraveAsMaterial = {
+    type: materialType,
+    turn: Number(game?.turnCounter || 0),
+    thisTurn: true,
+    ownerId: ownerPlayer?.id || card.owner || null,
+    fromZone: fromZone || options.fromZone || null,
+    contextLabel: options.contextLabel || null,
+  };
+}
+
 const OWNER_RETURN_ZONES = new Set([
   "graveyard",
   "hand",
@@ -2414,6 +2439,7 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
 
     const ownerPlayer = card.owner === "player" ? this.player : this.bot;
     const otherPlayer = ownerPlayer === this.player ? this.bot : this.player;
+    updateSentToGraveMaterialMarker(this, card, ownerPlayer, fromZone, options);
     const deferCardToGraveTriggers =
       options.deferCardToGraveTriggerResolution === true;
 

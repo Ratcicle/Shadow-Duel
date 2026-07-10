@@ -21,6 +21,59 @@ function getCardInstanceId(card) {
   return card?.instanceId ?? card?._instanceId ?? card?.uuid ?? card?.simInstanceId ?? null;
 }
 
+function getCurrentTurn(filter = {}) {
+  const turn = filter.currentTurn ?? filter.turnCounter ?? filter.gameTurn;
+  const numeric = Number(turn);
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
+function matchesSentToGraveMaterial(card, filter = {}) {
+  const materialTypeFilter =
+    filter.sentToGraveAsMaterial ??
+    filter.sentAsMaterial ??
+    filter.lastSentToGraveAsMaterial;
+  const turnFilter =
+    filter.sentToGraveAsMaterialTurn ?? filter.sentAsMaterialTurn ?? null;
+  const requireThisTurn =
+    filter.sentToGraveAsMaterialThisTurn === true ||
+    filter.sentAsMaterialThisTurn === true ||
+    turnFilter === "current";
+
+  if (
+    materialTypeFilter === undefined &&
+    !requireThisTurn &&
+    turnFilter === null
+  ) {
+    return true;
+  }
+
+  const marker = card?.lastSentToGraveAsMaterial || null;
+  if (materialTypeFilter === false) return !marker;
+  if (!marker) return false;
+
+  if (materialTypeFilter !== undefined && materialTypeFilter !== true) {
+    const requiredTypes = asArray(materialTypeFilter).filter(Boolean);
+    if (requiredTypes.length > 0 && !requiredTypes.includes(marker.type)) {
+      return false;
+    }
+  }
+
+  if (requireThisTurn) {
+    const currentTurn = getCurrentTurn(filter);
+    if (currentTurn !== null) return Number(marker.turn) === currentTurn;
+    return marker.thisTurn === true;
+  }
+
+  if (turnFilter !== null && turnFilter !== undefined) {
+    const exactTurn = Number(turnFilter);
+    if (Number.isFinite(exactTurn) && Number(marker.turn) !== exactTurn) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 export function cardMatchesFilter(card, filter = {}) {
   if (!card) return false;
 
@@ -51,6 +104,11 @@ export function cardMatchesFilter(card, filter = {}) {
     ) {
       return false;
     }
+    const excludedMonsterTypes = [
+      current.excludeMonsterType,
+      ...asArray(current.excludeMonsterTypes),
+    ].filter(Boolean);
+    if (excludedMonsterTypes.includes(card.monsterType)) return false;
     if (current.archetype && !cardHasArchetype(card, current.archetype)) {
       return false;
     }
@@ -140,6 +198,7 @@ export function cardMatchesFilter(card, filter = {}) {
       return false;
     }
     if (asArray(current.excludeCards).includes(card)) return false;
+    if (!matchesSentToGraveMaterial(card, current)) return false;
     if (current.equippedWithFilters) {
       const equips = Array.isArray(card.equips) ? card.equips : [];
       if (

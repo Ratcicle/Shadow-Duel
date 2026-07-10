@@ -634,4 +634,125 @@ export const genericCards = [
       },
     ],
   },
+  {
+    id: 20,
+    name: "Fusion Recycle",
+    cardKind: "spell",
+    subtype: "normal",
+    description:
+      "Target 1 monster in your GY that was sent there as Fusion Material this turn; add it to your hand. If that monster is Level 4 or lower, you can Special Summon it in Defense Position, but negate its effects until the end of this turn. You can only activate 1 \"Fusion Recycle\" per turn.",
+    image: "assets/Fusion Recycle.png",
+    effects: [
+      {
+        id: "fusion_recycle_activation",
+        timing: "on_play",
+        speed: 1,
+        oncePerTurn: true,
+        oncePerTurnName: "fusion_recycle_activation",
+        targets: [
+          {
+            id: "fusion_recycle_target",
+            owner: "self",
+            zone: "graveyard",
+            cardKind: "monster",
+            filters: {
+              sentToGraveAsMaterial: "fusion",
+              sentToGraveAsMaterialThisTurn: true,
+              excludeMonsterTypes: ["fusion", "synchro", "ascension"],
+            },
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "move",
+            targetRef: "fusion_recycle_target",
+            player: "self",
+            fromZone: "graveyard",
+            to: "hand",
+            contextLabel: "fusion_recycle_add_to_hand",
+            storeResultAs: "fusion_recycle_added_monster",
+          },
+          {
+            type: "optional_target_actions",
+            targets: [],
+            actions: [
+              {
+                type: "special_summon_from_zone",
+                targetRef: "fusion_recycle_added_monster",
+                zone: "hand",
+                position: "defense",
+                promptPlayer: false,
+                filters: {
+                  cardKind: "monster",
+                  maxLevel: 4,
+                },
+                negateEffects: true,
+                negateEffectsDuration: "until_end_turn",
+              },
+            ],
+            conditions: [
+              {
+                type: "targetRefMatchesFilters",
+                targetRef: "fusion_recycle_added_monster",
+                zones: ["hand"],
+                filters: {
+                  cardKind: "monster",
+                  maxLevel: 4,
+                },
+                reason:
+                  "The added monster is not a Level 4 or lower monster in your hand.",
+              },
+              {
+                type: "playerFieldCount",
+                max: 4,
+                reason: "No open Monster Zone.",
+              },
+            ],
+            optional: true,
+            requireConfirmation: true,
+            promptMessage:
+              "Special Summon the added monster in Defense Position?",
+            confirmLabel: "Special Summon",
+            cancelLabel: "Keep in hand",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 21,
+    name: "Natural Selection",
+    cardKind: "spell",
+    subtype: "quick",
+    speed: 2,
+    description:
+      "Discard 1 card, then target 1 face-up card your opponent controls; destroy that target. You can only activate 1 \"Natural Selection\" per turn.",
+    image: "assets/Natural Selection.png",
+    effects: [
+      {
+        id: "natural_selection_activation",
+        timing: "on_play",
+        speed: 2,
+        oncePerTurn: true,
+        oncePerTurnName: "natural_selection_activation",
+        actions: [
+          {
+            type: "discard_from_hand",
+            player: "self",
+            count: { min: 1, max: 1 },
+            contextLabel: "natural_selection_cost",
+            selectionMessage: "Choose 1 card to discard for Natural Selection.",
+          },
+          {
+            type: "destroy_targeted_cards",
+            zones: ["field", "spellTrap", "fieldSpell"],
+            requireFaceup: true,
+            minTargets: 1,
+            maxTargets: 1,
+          },
+        ],
+      },
+    ],
+  },
 ];

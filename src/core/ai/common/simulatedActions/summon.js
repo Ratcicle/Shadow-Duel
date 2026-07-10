@@ -10,6 +10,7 @@ import {
   getStoredBlueprints,
 } from "../simulatedConditions.js";
 import {
+  buildActionFilter,
   getCardInstanceId,
   getCostPreference,
   getTargetPreference,
@@ -39,6 +40,7 @@ import {
   resolveTargetsForAction,
   STOP_SIMULATION,
   storeSimActionResult,
+  updateSimulatedSentToGraveMaterialMarker,
 } from "./shared.js";
 
 function emitSimulatedAfterSpecialSummon({
@@ -241,6 +243,14 @@ export function applySpecialSummonFromZone(ctx) {
   if (!candidates || candidates.length === 0) {
     if (action.targetRef) return;
     candidates = getActionCandidates(targetPlayer, action, "deck", options);
+  }
+  if (action.targetRef) {
+    const filters = buildActionFilter(action);
+    if (Object.keys(filters).length > 0) {
+      candidates = candidates.filter((card) =>
+        matchesTargetFilters(card, filters, options.sourceCard, "self"),
+      );
+    }
   }
   candidates = candidates.filter((card) => canSimSpecialSummon(card, targetPlayer));
   const max = Math.min(
@@ -809,7 +819,18 @@ export function applyPolymerizationFusionSummon(ctx) {
     return estimateMonsterValue(b.fusionCard) - estimateMonsterValue(a.fusionCard);
   });
   const { fusionCard, materials } = fusionEntries[0];
-  materials.forEach((material) => moveCardToZone(targetPlayer, material, "graveyard"));
+  materials.forEach((material) => {
+    const fromZone = findCardZone(targetPlayer, material) || "field";
+    if (moveCardToZone(targetPlayer, material, "graveyard")) {
+      updateSimulatedSentToGraveMaterialMarker({
+        card: material,
+        state,
+        player: targetPlayer,
+        fromZone,
+        contextLabel: "fusion_material",
+      });
+    }
+  });
   removeCardFromZones(targetPlayer, fusionCard);
   applySummonState(
     fusionCard,

@@ -113,6 +113,7 @@ export function buildActionFilter(action = {}) {
     "cardName",
     "name",
     "cardId",
+    "cardIds",
     "subtype",
     "monsterType",
     "archetype",
@@ -132,7 +133,16 @@ export function buildActionFilter(action = {}) {
     "maxAtk",
     "minDef",
     "maxDef",
+    "position",
     "isTuner",
+    "isToken",
+    "sentToGraveAsMaterial",
+    "sentAsMaterial",
+    "lastSentToGraveAsMaterial",
+    "sentToGraveAsMaterialThisTurn",
+    "sentAsMaterialThisTurn",
+    "sentToGraveAsMaterialTurn",
+    "sentAsMaterialTurn",
   ].forEach((key) => {
     if (action[key] !== undefined && filter[key] === undefined) {
       filter[key] = action[key];

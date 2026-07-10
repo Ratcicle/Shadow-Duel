@@ -241,6 +241,13 @@ function simActionFilterFromConfig(config = {}) {
     "textIncludes",
     "nameOrDescriptionIncludes",
     "textIncludesAny",
+    "sentToGraveAsMaterial",
+    "sentAsMaterial",
+    "lastSentToGraveAsMaterial",
+    "sentToGraveAsMaterialThisTurn",
+    "sentAsMaterialThisTurn",
+    "sentToGraveAsMaterialTurn",
+    "sentAsMaterialTurn",
   ]) {
     if (config[key] !== undefined && filters[key] === undefined) {
       filters[key] = config[key];
@@ -302,11 +309,47 @@ function simCollectScopeCards(scope = {}, self, opponent) {
 }
 
 function simSelectedCards(targetRef, activationContext = {}) {
-  const selections =
-    activationContext.selections ||
-    activationContext.respondingToChainLink?.selections ||
-    {};
-  return asArray(selections?.[targetRef]).filter(Boolean);
+  const cards = [];
+  const selectionSources = [
+    activationContext.selections,
+    activationContext.respondingToChainLink?.selections,
+    activationContext.actionResults,
+    activationContext._actionTargets,
+  ].filter(Boolean);
+  for (const selections of selectionSources) {
+    for (const card of asArray(selections?.[targetRef]).filter(Boolean)) {
+      simAppendUnique(cards, card);
+    }
+  }
+  return cards;
+}
+
+function simCollectTargetRefCards(targetRef, ctx = {}, options = {}) {
+  const cards = [];
+  const directSources = [
+    ctx[targetRef],
+    ctx._actionTargets?.[targetRef],
+    ctx.selections?.[targetRef],
+    options.actionResults?.[targetRef],
+    options.actionContext?.[targetRef],
+    options.actionContext?._actionTargets?.[targetRef],
+    options.actionContext?.selections?.[targetRef],
+    options.activationContext?.selections?.[targetRef],
+    options.activationContext?.actionResults?.[targetRef],
+    options.activationContext?.actionContext?._actionTargets?.[targetRef],
+  ];
+  for (const value of directSources) {
+    for (const card of asArray(value).filter(Boolean)) {
+      simAppendUnique(cards, card);
+    }
+  }
+  for (const card of simSelectedCards(targetRef, options.actionContext || {})) {
+    simAppendUnique(cards, card);
+  }
+  for (const card of simSelectedCards(targetRef, options.activationContext || {})) {
+    simAppendUnique(cards, card);
+  }
+  return cards;
 }
 
 function simNestedActions(action = {}) {
@@ -824,6 +867,27 @@ export function evaluateSimulatedConditions(conditions, ctx = {}) {
         if (!expectedOwner || eventOwnerId !== expectedOwner.id) return false;
       }
       return matchesTargetFilters(card, condition.filters || {}, null);
+    }
+    if (condition.type === "targetRefMatchesFilters") {
+      const targetRef = condition.targetRef || condition.cardRef || "target";
+      const filters = simActionFilterFromConfig({
+        ...condition,
+        type: undefined,
+      });
+      const min = Number.isFinite(Number(condition.min ?? condition.count))
+        ? Number(condition.min ?? condition.count)
+        : 1;
+      const max = Number.isFinite(Number(condition.max))
+        ? Number(condition.max)
+        : null;
+      const matching = simCollectTargetRefCards(targetRef, ctx, options).filter(
+        (card) =>
+          simCardInAllowedZones(card, condition.zones || condition.zone, [
+            self,
+            opponent,
+          ]) && matchesTargetFilters(card, filters, null),
+      );
+      return matching.length >= min && (max === null || matching.length <= max);
     }
     if (
       condition.type === "event_card_matches_declared_value_from_effect_sources"

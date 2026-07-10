@@ -261,6 +261,13 @@ function actionFilterFromConfig(config = {}) {
     "textIncludes",
     "nameOrDescriptionIncludes",
     "textIncludesAny",
+    "sentToGraveAsMaterial",
+    "sentAsMaterial",
+    "lastSentToGraveAsMaterial",
+    "sentToGraveAsMaterialThisTurn",
+    "sentAsMaterialThisTurn",
+    "sentToGraveAsMaterialTurn",
+    "sentAsMaterialTurn",
   ]) {
     if (config[key] !== undefined && filters[key] === undefined) {
       filters[key] = config[key];
@@ -318,6 +325,12 @@ function collectContextTargetCards(targetRef, ctx = {}) {
     if (ctx.source && ctx.source === (ctx.defender || ctx.target)) {
       return [ctx.attacker].filter(Boolean);
     }
+  }
+  if (
+    ctx?._actionTargets &&
+    Object.prototype.hasOwnProperty.call(ctx._actionTargets, targetRef)
+  ) {
+    return asArray(ctx._actionTargets[targetRef]).filter(Boolean);
   }
   return asArray(refs[targetRef]).filter(Boolean);
 }
@@ -1737,6 +1750,30 @@ export function evaluateConditions(conditions, ctx) {
             return {
               ok: false,
               reason: cond.reason || "No valid cards in graveyard.",
+            };
+          }
+          break;
+        }
+        case "targetRefMatchesFilters": {
+          const targetRef = cond.targetRef || cond.cardRef || "target";
+          const filters = actionFilterFromConfig({ ...cond, type: undefined });
+          const zones = cond.zones || cond.zone || [];
+          const min = Number.isFinite(Number(cond.min ?? cond.count))
+            ? Number(cond.min ?? cond.count)
+            : 1;
+          const max = Number.isFinite(Number(cond.max))
+            ? Number(cond.max)
+            : null;
+          const matching = collectContextTargetCards(targetRef, ctx).filter(
+            (card) =>
+              cardIsInAllowedConditionZones(this, card, zones) &&
+              this.cardMatchesFilters(card, filters),
+          );
+          if (matching.length < min || (max !== null && matching.length > max)) {
+            return {
+              ok: false,
+              reason:
+                cond.reason || "Stored target did not match required filters.",
             };
           }
           break;

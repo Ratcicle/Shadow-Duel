@@ -13,6 +13,7 @@ import {
   getCardInstanceId,
   matchesTargetFilters,
 } from "./targetSelection.js";
+import { updateSimulatedSentToGraveMaterialMarker } from "./simulatedActions/shared.js";
 import {
   fieldHasTributeValue,
   getTributeCardsFromIndices,
@@ -1270,6 +1271,13 @@ export function applyGenericSimulatedMainPhaseAction(
         const fromZone = findCardZone(player, material) || "field";
         const wasFaceupBeforeMove = material.isFacedown !== true;
         if (moveCardToZone(player, material, "graveyard")) {
+          updateSimulatedSentToGraveMaterialMarker({
+            card: material,
+            state,
+            player,
+            fromZone,
+            contextLabel: "fusion_material",
+          });
           selectionOptions.emitSimulatedEvent?.("card_moved", {
             card: material,
             player,

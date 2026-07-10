@@ -467,6 +467,14 @@
       "name": "De-Sincro",
       "description": "Escolha 1 Monstro Sincro no campo; devolva o alvo para o Deck Adicional e, depois, se todos os monstros que foram usados para a Invocação-Sincro desse monstro estiverem no seu Cemitério, você pode Invocá-los por Invocação-Especial. Você só pode ativar 1 \"De-Sincro\" por turno."
     },
+    "20": {
+      "name": "Reciclar Fusão",
+      "description": "Escolha 1 monstro no seu Cemitério que foi enviado para lá como Matéria de Fusão neste turno; adicione-o à sua mão. Se o monstro escolhido for de Nível 4 ou menor, você pode Invocá-lo por Invocação-Especial em Posição de Defesa, mas negue seus efeitos até o final deste turno. Você só pode ativar 1 \"Reciclar Fusão\" por turno."
+    },
+    "21": {
+      "name": "Seleção Natural",
+      "description": "Descarte 1 card e, depois, escolha 1 card com a face para cima que seu oponente controla; destrua esse alvo. Você só pode ativar 1 \"Seleção Natural\" por turno."
+    },
     "101": {
       "name": "Enguia Abissal do Coração Sombrio",
       "description": "Se esse card for atacado em posição de defesa: cause 600 de dano ao oponente. Se esse card for destruído em batalha: você pode adicionar 1 Magia/Armadilha 'Coração Sombrio' do seu cemitério à sua mão."

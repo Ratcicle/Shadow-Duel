@@ -35,6 +35,8 @@ import {
   resolveSimulatedLpCost,
   resolveTargetsForAction,
   STOP_SIMULATION,
+  storeSimActionResult,
+  updateSimulatedSentToGraveMaterialMarker,
 } from "./shared.js";
 
 export function applyBanish(ctx) {
@@ -95,6 +97,7 @@ export function applyMove(ctx) {
   const {
     action,
     targets,
+    selections,
     state,
     options,
     self,
@@ -170,6 +173,7 @@ export function applyMove(ctx) {
     return action.allowEmpty === true ? undefined : STOP_SIMULATION;
   }
   let moved = false;
+  const movedCards = [];
   targetCards.forEach((card) => {
     const owner = findCardOwner(state, card);
     if (!owner) return;
@@ -186,6 +190,15 @@ export function applyMove(ctx) {
     const fromZone = findCardZone(owner, card) || action.fromZone || null;
     const wasFaceupBeforeMove = card.isFacedown !== true;
     if (moveCardToZone(destPlayer || owner, card, to)) {
+      if (to === "graveyard") {
+        updateSimulatedSentToGraveMaterialMarker({
+          card,
+          state,
+          player: destPlayer || owner,
+          fromZone,
+          contextLabel: action.contextLabel || null,
+        });
+      }
       if (action.resetAttackFlags) {
         card.hasAttacked = false;
         card.cannotAttackThisTurn = false;
@@ -206,9 +219,13 @@ export function applyMove(ctx) {
         effectId: options.effect?.id || null,
         actionContext: options.actionContext,
       });
+      movedCards.push(card);
       moved = true;
     }
   });
   if (!moved && action.allowEmpty !== true) return STOP_SIMULATION;
+  if (moved) {
+    storeSimActionResult(action, selections, options, movedCards);
+  }
   return;
 }
