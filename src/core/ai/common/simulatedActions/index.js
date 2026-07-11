@@ -11,6 +11,8 @@ import {
   applyDiscardFromHand,
   applyDeclareCardProperty,
   applyGrantAdditionalNormalSummon,
+  applyRestrictEffectActivationsByAttribute,
+  applyRestrictEffectActivationsByNames,
 } from "./resources.js";
 import {
   applySpecialSummonFromZone,
@@ -86,6 +88,8 @@ export const SIMULATED_ACTION_HANDLERS = {
   "discard_from_hand": applyDiscardFromHand,
   "declare_card_property": applyDeclareCardProperty,
   "grant_additional_normal_summon": applyGrantAdditionalNormalSummon,
+  "restrict_effect_activations_by_attribute": applyRestrictEffectActivationsByAttribute,
+  "restrict_effect_activations_by_names": applyRestrictEffectActivationsByNames,
   "restrict_special_summons": applyRestrictSpecialSummons,
   "special_summon_from_zone": applySpecialSummonFromZone,
   "search_then_optional_special_summon_from_hand": applySearchThenOptionalSpecialSummonFromHand,

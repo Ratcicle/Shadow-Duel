@@ -171,6 +171,31 @@ export async function runActivationPipeline(config = {}) {
 
   const oncePerTurnConfig = config.oncePerTurn || null;
   const activationEffect = oncePerTurnConfig?.effect || config.effect || null;
+  const restrictionCheck = this.canActivateCardEffectUnderRestrictions?.(
+    resolvedCard,
+    owner,
+    activationEffect,
+    { silent: true },
+  );
+  if (restrictionCheck?.ok === false) {
+    logPipeline("PIPELINE_RESTRICTION_BLOCKED", {
+      reason: restrictionCheck.reason,
+      code: restrictionCheck.code,
+    });
+    if (restrictionCheck.reason) {
+      this.ui.log(restrictionCheck.reason);
+    }
+    const blockedResult = {
+      success: false,
+      ok: false,
+      needsSelection: false,
+      reason: restrictionCheck.reason,
+      code: restrictionCheck.code,
+      blockedByRestriction: true,
+    };
+    trackActivationAttempt(blockedResult, { blocked: true });
+    return blockedResult;
+  }
   let oncePerTurnInfo = null;
   if (oncePerTurnConfig?.effect && oncePerTurnConfig.effect.oncePerTurn) {
     const optCard = oncePerTurnConfig.card || resolvedCard;

@@ -73,10 +73,15 @@ export function applyDraw(ctx) {
   } = ctx;
   const targetPlayer = resolveActionPlayer(action, self, opponent);
   const amount = action.amount || 1;
+  const drawnCards = [];
   for (let i = 0; i < amount; i += 1) {
     const drawn = targetPlayer.deck?.shift?.();
-    if (drawn) targetPlayer.hand.push(drawn);
+    if (drawn) {
+      targetPlayer.hand.push(drawn);
+      drawnCards.push(drawn);
+    }
   }
+  options.lastDrawnCards = drawnCards;
   return;
 }
 
@@ -151,12 +156,14 @@ export function applyPayLp(ctx) {
     applySimulatedActions,
   } = ctx;
   const targetPlayer = resolveActionPlayer(action, self, opponent);
-  const amount = Number.isFinite(action.amount)
-    ? action.amount
-    : Number.isFinite(action.lp)
-      ? action.lp
-      : 0;
-  if (amount <= 0) return;
+  const amount = Number.isFinite(Number(action.fraction))
+    ? Math.floor((targetPlayer.lp || 0) * Number(action.fraction))
+    : Number.isFinite(action.amount)
+      ? action.amount
+      : Number.isFinite(action.lp)
+        ? action.lp
+        : 0;
+  if (amount <= 0) return STOP_SIMULATION;
   const cost = resolveSimulatedLpCost({
     action,
     targetPlayer,
@@ -179,6 +186,120 @@ export function applyPayLp(ctx) {
     markSimulatedPassiveUsed(state, reducer.board, reducer.card, reducer.effect);
   });
   return;
+}
+
+function normalizeSimNameList(values = []) {
+  const result = [];
+  const seen = new Set();
+  const entries = Array.isArray(values) ? values : [values];
+  for (const entry of entries) {
+    const name =
+      typeof entry === "string" ? entry.trim() : entry?.name?.trim?.() || "";
+    if (!name || seen.has(name)) continue;
+    seen.add(name);
+    result.push(name);
+  }
+  return result;
+}
+
+function readSimNameSource(action, options) {
+  const sourceKey = action.nameSource || action.namesSource || null;
+  if (!sourceKey) return [];
+  if (sourceKey === "lastDrawnCards") return options.lastDrawnCards || [];
+  if (sourceKey === "lastDrawnCard") return options.lastDrawnCard || null;
+  if (sourceKey === "lastAddedToHandCards") {
+    return options.lastAddedToHandCards || [];
+  }
+  if (sourceKey === "lastAddedToHandCard") return options.lastAddedToHandCard || null;
+  return options[sourceKey] || options.actionContext?.[sourceKey] || [];
+}
+
+function normalizeSimAttributeList(values = []) {
+  const result = [];
+  const seen = new Set();
+  const entries = Array.isArray(values) ? values : [values];
+  for (const entry of entries) {
+    const attribute =
+      typeof entry === "string" ? entry.trim() : entry?.attribute?.trim?.() || "";
+    if (!attribute) continue;
+    const key = attribute.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(attribute);
+  }
+  return result;
+}
+
+function flattenSimCards(value) {
+  if (!value) return [];
+  if (Array.isArray(value)) return value.flatMap(flattenSimCards);
+  return [value];
+}
+
+function readSimAttributeSource(action, selections, options) {
+  const sourceKey =
+    action.attributeSourceRef ||
+    action.attributeSource ||
+    action.sourceRef ||
+    action.targetRef ||
+    null;
+  if (!sourceKey) return [];
+  return [
+    selections?.[sourceKey],
+    options?.[sourceKey],
+    options?.actionResults?.[sourceKey],
+    options?.actionContext?.[sourceKey],
+    options?.activationContext?.actionResults?.[sourceKey],
+  ].flatMap(flattenSimCards).filter(Boolean);
+}
+
+export function applyRestrictEffectActivationsByNames(ctx) {
+  const { action, options, self, opponent } = ctx;
+  const targetPlayer = resolveActionPlayer(action, self, opponent);
+  if (!targetPlayer) return;
+
+  const explicitNames =
+    action.names || action.cardNames || action.blockedNames || [];
+  const blockedNames = normalizeSimNameList([
+    ...normalizeSimNameList(explicitNames),
+    ...normalizeSimNameList(readSimNameSource(action, options)),
+  ]);
+  if (blockedNames.length === 0) return;
+
+  targetPlayer.effectActivationRestrictions =
+    targetPlayer.effectActivationRestrictions || [];
+  targetPlayer.effectActivationRestrictions.push({
+    blockedNames,
+    duration: action.duration || "until_end_turn",
+    reason: action.reason || null,
+    sourceName: options?.sourceCard?.name || null,
+    sourceId: options?.sourceCard?.id || null,
+  });
+}
+
+export function applyRestrictEffectActivationsByAttribute(ctx) {
+  const { action, selections, options, self, opponent } = ctx;
+  const targetPlayer = resolveActionPlayer(action, self, opponent);
+  if (!targetPlayer) return;
+
+  const allowedAttributes = normalizeSimAttributeList([
+    ...normalizeSimAttributeList(action.allowedAttributes || action.attributes || []),
+    ...normalizeSimAttributeList(
+      readSimAttributeSource(action, selections, options),
+    ),
+  ]);
+  if (allowedAttributes.length === 0) return;
+
+  targetPlayer.effectActivationRestrictions =
+    targetPlayer.effectActivationRestrictions || [];
+  targetPlayer.effectActivationRestrictions.push({
+    allowedAttributes,
+    restrictedCardFilters: action.restrictedCardFilters || { cardKind: "monster" },
+    duration: action.duration || "until_end_turn",
+    reason: action.reason || null,
+    sourceName: options?.sourceCard?.name || null,
+    sourceId: options?.sourceCard?.id || null,
+  });
 }
 
 export function applySearchAny(ctx) {

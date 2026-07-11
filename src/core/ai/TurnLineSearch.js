@@ -206,6 +206,7 @@ function clonePlayerState(player) {
       safe.additionalNormalSummonPermissions || [],
     normalSummonsThisTurn: safe.normalSummonsThisTurn || [],
     specialSummonRestrictions: safe.specialSummonRestrictions || [],
+    effectActivationRestrictions: safe.effectActivationRestrictions || [],
     controllerType: safe.controllerType,
   };
   return clonePlain(snapshot);

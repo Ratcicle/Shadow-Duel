@@ -17,6 +17,17 @@ function matchesOne(value, expected) {
   return values.includes(value);
 }
 
+function matchesOneText(value, expected) {
+  const values = asArray(expected).filter(
+    (entry) => entry !== undefined && entry !== null,
+  );
+  if (values.length === 0) return true;
+  const normalizedValue = String(value || "").toLowerCase();
+  return values.some(
+    (entry) => String(entry || "").toLowerCase() === normalizedValue,
+  );
+}
+
 function getCardInstanceId(card) {
   return card?.instanceId ?? card?._instanceId ?? card?.uuid ?? card?.simInstanceId ?? null;
 }
@@ -138,6 +149,12 @@ export function cardMatchesFilter(card, filter = {}) {
       if (!asArray(current.type).some((type) => cardTypes.includes(type))) {
         return false;
       }
+    }
+    if (
+      current.attribute &&
+      !matchesOneText(card.attribute, current.attribute)
+    ) {
+      return false;
     }
     const summonMethodFilter =
       current.lastSummonMethods ||

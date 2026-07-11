@@ -69,6 +69,11 @@ export default class EffectEngine {
   }
 
   checkOncePerTurn(card, player, effect) {
+    const restrictionCheck =
+      this.game?.canActivateCardEffectUnderRestrictions?.(card, player, effect, {
+        silent: true,
+      });
+    if (restrictionCheck?.ok === false) return restrictionCheck;
     if (!effect || !effect.oncePerTurn) {
       return { ok: true };
     }

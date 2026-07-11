@@ -74,6 +74,8 @@ import {
   handleHealPerFieldCounter,
   handleHealPerOpponentCardsAndHand,
   handleGrantAdditionalNormalSummon,
+  handleRestrictEffectActivationsByAttribute,
+  handleRestrictEffectActivationsByNames,
   handleUpkeepPayOrSendToGrave,
 } from "./resources.js";
 
@@ -195,6 +197,14 @@ export function registerDefaultHandlers(registry) {
   );
 
   registry.register("pay_lp", handlePayLP);
+  registry.register(
+    "restrict_effect_activations_by_names",
+    handleRestrictEffectActivationsByNames,
+  );
+  registry.register(
+    "restrict_effect_activations_by_attribute",
+    handleRestrictEffectActivationsByAttribute,
+  );
 
   registry.register("add_from_zone_to_hand", handleAddFromZoneToHand);
   registry.register("discard_from_hand", handleDiscardFromHand);

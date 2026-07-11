@@ -246,6 +246,7 @@ export function applySpecialSummonFromZone(ctx) {
   }
   if (action.targetRef) {
     const filters = buildActionFilter(action);
+    delete filters.position;
     if (Object.keys(filters).length > 0) {
       candidates = candidates.filter((card) =>
         matchesTargetFilters(card, filters, options.sourceCard, "self"),

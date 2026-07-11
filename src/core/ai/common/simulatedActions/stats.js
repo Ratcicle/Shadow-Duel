@@ -360,14 +360,32 @@ export function applyGrantProtection(ctx) {
   } = ctx;
   targets.forEach((card) => {
     if (!card) return;
+    const protectionType = action.protectionType || "generic";
+    const sourceOwner = action.sourceOwner || "any";
+    const protection = {
+      type: protectionType,
+      duration: action.duration || "temporary",
+      sourceOwner,
+      removeOnLeave: action.removeOnLeave !== false,
+      sourceName: options?.sourceCard?.name || null,
+    };
+    if (!Array.isArray(card._simProtectionEffects)) {
+      card._simProtectionEffects = [];
+    }
+    card._simProtectionEffects.push(protection);
     if (action.protectionType === "effect_destruction") {
-      card.cannotBeDestroyedByCardEffects = true;
-      card._simEffectDestructionProtected = true;
+      if (sourceOwner === "opponent") {
+        card.cannotBeDestroyedByOpponentCardEffects = true;
+        card._simEffectDestructionProtectedFromOpponent = true;
+      } else if (sourceOwner === "self") {
+        card.cannotBeDestroyedByOwnCardEffects = true;
+        card._simEffectDestructionProtectedFromSelf = true;
+      } else {
+        card.cannotBeDestroyedByCardEffects = true;
+        card._simEffectDestructionProtected = true;
+      }
     } else {
-      card._simProtection = {
-        type: action.protectionType || "generic",
-        duration: action.duration || "temporary",
-      };
+      card._simProtection = protection;
     }
   });
   return;

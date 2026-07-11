@@ -91,6 +91,7 @@ import * as strategicReport from "./game/analytics/strategicReport.js";
 
 // Effects modules (moved from inline methods)
 import * as effectsDestructionReplacement from "./game/effects/destructionReplacement.js";
+import * as effectsActivationRestrictions from "./game/effects/activationRestrictions.js";
 import * as effectsActivationPipeline from "./game/effects/activationPipeline.js";
 
 const STARTING_PLAYER_IDS = new Set(["player", "bot"]);
@@ -847,6 +848,12 @@ Game.prototype.destroyCard = zonesDestruction.destroyCard;
 // Destruction replacement: resolveDestructionWithReplacement
 Game.prototype.resolveDestructionWithReplacement =
   effectsDestructionReplacement.resolveDestructionWithReplacement;
+Game.prototype.registerEffectActivationRestriction =
+  effectsActivationRestrictions.registerEffectActivationRestriction;
+Game.prototype.cleanupExpiredEffectActivationRestrictions =
+  effectsActivationRestrictions.cleanupExpiredEffectActivationRestrictions;
+Game.prototype.canActivateCardEffectUnderRestrictions =
+  effectsActivationRestrictions.canActivateCardEffectUnderRestrictions;
 
 // Activation pipeline: normalizeActivationResult, createActionResult, runActivationPipeline, runActivationPipelineWait
 Game.prototype.normalizeActivationResult =

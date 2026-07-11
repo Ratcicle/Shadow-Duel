@@ -328,6 +328,7 @@ export default class Player {
     this.additionalNormalSummonPermissions = [];
     this.normalSummonsThisTurn = [];
     this.specialSummonRestrictions = [];
+    this.effectActivationRestrictions = [];
     this.forbidDirectAttacksThisTurn = false;
     this.maxDeckSize = 30;
     this.minDeckSize = 20;

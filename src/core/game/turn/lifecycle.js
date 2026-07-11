@@ -104,6 +104,7 @@ export async function startTurn() {
   this.cleanupExpiredTemporaryBattlePairEffects?.();
   this.cleanupExpiredTemporaryEventEffects?.();
   this.cleanupExpiredSpecialSummonRestrictions?.();
+  this.cleanupExpiredEffectActivationRestrictions?.();
 
   // Limpar cache de targeting para novo turno
   if (this.effectEngine?.clearTargetingCache) {

@@ -532,6 +532,146 @@ function collectActionsDestroyCandidates(engine, actions, ctx, effect, activatio
   return cards;
 }
 
+function conditionCardOwnerMatches(
+  engine,
+  card,
+  ownerRule,
+  responsePlayer,
+  responseOpponent,
+) {
+  const owner = findConditionCardOwner(engine?.game || engine, card);
+  if (!owner) return false;
+  const expectedOwners = getConditionOwnersFromRule(ownerRule || "self", {
+    player: responsePlayer,
+    opponent: responseOpponent,
+  });
+  return expectedOwners.some((expectedOwner) => expectedOwner?.id === owner.id);
+}
+
+function actionMovesToBanished(action) {
+  const toZone = normalizeDestinationZone(
+    action?.to || action?.toZone || action?.destination || null,
+  );
+  return toZone === "banished";
+}
+
+function collectGraveyardBanishCandidates(engine, action, ctx) {
+  const filters = { ...(action.filters || {}) };
+  if (action.cardName && filters.name === undefined) {
+    filters.name = action.cardName;
+  }
+  if (action.cardType && filters.type === undefined) {
+    filters.type = action.cardType;
+  }
+  const cards = [];
+  for (const card of ctx.player?.graveyard || []) {
+    if (!engine.cardMatchesFilters(card, filters)) continue;
+    appendUniqueCard(cards, card);
+  }
+  return cards;
+}
+
+function collectActionBanishCandidates(
+  engine,
+  action,
+  ctx,
+  effect,
+  activationContext,
+) {
+  if (!action || typeof action !== "object") return [];
+  const cards = [];
+  const addNested = (actions) => {
+    for (const card of collectActionsBanishCandidates(
+      engine,
+      actions,
+      ctx,
+      effect,
+      activationContext,
+    )) {
+      appendUniqueCard(cards, card);
+    }
+  };
+  const addTargetRefCards = (targetRef) => {
+    for (const card of collectTargetRefCandidateCards(
+      engine,
+      targetRef,
+      effect,
+      ctx,
+      activationContext,
+    )) {
+      appendUniqueCard(cards, card);
+    }
+  };
+
+  if (
+    action.type === "banish" ||
+    action.type === "banish_destroyed_monster" ||
+    action.type === "banish_and_buff"
+  ) {
+    if (action.targetScope) {
+      for (const card of collectCardsFromScope(engine, action.targetScope, ctx)) {
+        appendUniqueCard(cards, card);
+      }
+    }
+    if (action.type === "banish_destroyed_monster" || action.useDestroyed === true) {
+      appendUniqueCard(cards, ctx.destroyed);
+    }
+    addTargetRefCards(action.targetRef || "target");
+  } else if (action.type === "banish_card_from_graveyard") {
+    for (const card of collectGraveyardBanishCandidates(engine, action, ctx)) {
+      appendUniqueCard(cards, card);
+    }
+  } else if (action.type === "banish_all_graveyard_and_burn") {
+    for (const card of collectCardsFromScope(
+      engine,
+      {
+        owner: action.scope || "self",
+        zones: ["graveyard"],
+      },
+      ctx,
+    )) {
+      appendUniqueCard(cards, card);
+    }
+  } else if (action.type === "move" && actionMovesToBanished(action)) {
+    if (action.targetScope) {
+      for (const card of collectCardsFromScope(engine, action.targetScope, ctx)) {
+        appendUniqueCard(cards, card);
+      }
+    }
+    addTargetRefCards(action.targetRef || "target");
+  }
+
+  addNested(action.actions);
+  addNested(action.thenActions);
+  addNested(action.ifActions);
+  addNested(action.elseActions);
+  addNested(action.optionalActions);
+  if (Array.isArray(action.cases)) {
+    for (const entry of action.cases) addNested(entry?.actions);
+  }
+  if (Array.isArray(action.entries)) {
+    for (const entry of action.entries) addNested(entry?.actions);
+  }
+
+  return cards;
+}
+
+function collectActionsBanishCandidates(engine, actions, ctx, effect, activationContext) {
+  const cards = [];
+  for (const action of asArray(actions)) {
+    for (const card of collectActionBanishCandidates(
+      engine,
+      action,
+      ctx,
+      effect,
+      activationContext,
+    )) {
+      appendUniqueCard(cards, card);
+    }
+  }
+  return cards;
+}
+
 function activationWouldDestroyCardsMatchingFilters(engine, cond, ctx) {
   const activationContext =
     ctx?.activationContext?.context || ctx?.actionContext || {};
@@ -614,6 +754,7 @@ function activationWouldDestroyCardsMatchingFilters(engine, cond, ctx) {
 }
 
 const ACTIVE_FIELD_ZONES = ["field", "spellTrap", "fieldSpell"];
+const PROTECTED_BANISH_ZONES = ["field", "spellTrap", "fieldSpell", "graveyard"];
 const NON_FIELD_DESTINATION_ZONES = [
   "graveyard",
   "hand",
@@ -732,6 +873,109 @@ function collectActionsLeaveFieldCandidates(
     }
   }
   return cards;
+}
+
+function activationWouldBanishCardsMatchingFilters(engine, cond, ctx) {
+  const activationContext =
+    ctx?.activationContext?.context || ctx?.actionContext || {};
+  const activationAttempt =
+    activationContext.activationAttempt ||
+    ctx?.activationContext?.activationAttempt ||
+    null;
+  const activatedCard =
+    activationAttempt?.card ||
+    activationContext.card ||
+    ctx?.activatedCard ||
+    null;
+  const activationPlayer =
+    activationAttempt?.player ||
+    activationContext.player ||
+    activationContext.triggerPlayer ||
+    null;
+  const responsePlayer = ctx?.player || null;
+  const responseOpponent =
+    ctx?.opponent || engine.game?.getOpponent?.(responsePlayer);
+
+  if (!activatedCard || !activationPlayer) {
+    return { ok: false, reason: cond.reason || "No activation to inspect." };
+  }
+  if (
+    cond.activationPlayer === "opponent" &&
+    activationPlayer.id !== responseOpponent?.id
+  ) {
+    return {
+      ok: false,
+      reason: cond.reason || "Activation was not controlled by the opponent.",
+    };
+  }
+  if (
+    cond.activationPlayer === "self" &&
+    activationPlayer.id !== responsePlayer?.id
+  ) {
+    return { ok: false, reason: cond.reason || "Activation was not yours." };
+  }
+
+  const effect = activationAttempt?.effect || activationContext.effect || null;
+  const actionCtx = {
+    ...ctx,
+    source: activatedCard,
+    sourceCard: activatedCard,
+    effect,
+    player: activationPlayer,
+    opponent: engine.game?.getOpponent?.(activationPlayer) || responsePlayer,
+    activationContext: {
+      ...(ctx?.activationContext || {}),
+      context: activationContext,
+      selections:
+        activationContext.selections ||
+        activationContext.respondingToChainLink?.selections ||
+        ctx?.activationContext?.selections ||
+        null,
+    },
+    actionContext: activationContext,
+  };
+  const candidates = collectActionsBanishCandidates(
+    engine,
+    effect?.actions || [],
+    actionCtx,
+    effect,
+    activationContext,
+  );
+  const filters = cond.banishedCardFilters || cond.filters || {};
+  const zones =
+    cond.banishedCardZones ||
+    cond.fromZones ||
+    cond.zones ||
+    PROTECTED_BANISH_ZONES;
+  const affectedPlayer =
+    cond.affectedPlayer || cond.cardOwner || cond.owner || "self";
+  const minCount = Math.max(1, Number(cond.minCount ?? cond.count ?? 1));
+  const matching = candidates.filter((card) => {
+    if (!conditionCardOwnerMatches(
+      engine,
+      card,
+      affectedPlayer,
+      responsePlayer,
+      responseOpponent,
+    )) {
+      return false;
+    }
+    if (!cardVisibleToConditionViewer(engine, card, responsePlayer)) {
+      return false;
+    }
+    if (!cardIsInAllowedConditionZones(engine, card, zones)) {
+      return false;
+    }
+    return engine.cardMatchesFilters(card, filters);
+  });
+
+  if (matching.length < minCount) {
+    return {
+      ok: false,
+      reason: cond.reason || "Activation would not banish matching cards.",
+    };
+  }
+  return { ok: true, matches: matching };
 }
 
 function activationWouldMakeCardLeaveField(engine, cond, ctx) {
@@ -1410,6 +1654,15 @@ export function evaluateConditions(conditions, ctx) {
         }
         case "activation_would_destroy_cards_matching_filters": {
           const result = activationWouldDestroyCardsMatchingFilters(
+            this,
+            cond,
+            ctx,
+          );
+          if (!result.ok) return result;
+          break;
+        }
+        case "activation_would_banish_cards_matching_filters": {
+          const result = activationWouldBanishCardsMatchingFilters(
             this,
             cond,
             ctx,

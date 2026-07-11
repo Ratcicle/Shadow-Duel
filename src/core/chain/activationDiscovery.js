@@ -210,6 +210,27 @@ export function getActivatableCardsInChain(player, context) {
     }
   }
 
+  // Check monster quick effects in hand
+  if (Array.isArray(player.hand)) {
+    for (const card of player.hand) {
+      if (!card || card.cardKind !== "monster") continue;
+
+      // Skip cards already in the current chain
+      if (cardsInChain.has(card)) continue;
+
+      const effect = this.findQuickMonsterEffect(card, context, player, "hand");
+      if (effect) {
+        const responseContext =
+          this.getEffectChainResponseContext?.(effect, context) || context;
+        if (!this.canOfferEffectInChainContext(effect, responseContext)) continue;
+        const chainCheck = this.canActivateInChain(effect, card, responseContext);
+        if (chainCheck.ok) {
+          activatable.push({ card, effect, zone: "hand", context: responseContext });
+        }
+      }
+    }
+  }
+
   // Check monster quick effects on field
   if (Array.isArray(player.field)) {
     for (const card of player.field) {
@@ -219,7 +240,7 @@ export function getActivatableCardsInChain(player, context) {
       // Skip cards already in the current chain
       if (cardsInChain.has(card)) continue;
 
-      const effect = this.findQuickMonsterEffect(card, context, player);
+      const effect = this.findQuickMonsterEffect(card, context, player, "field");
       if (effect) {
         const responseContext =
           this.getEffectChainResponseContext?.(effect, context) || context;

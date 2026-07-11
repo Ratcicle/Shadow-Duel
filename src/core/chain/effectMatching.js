@@ -48,6 +48,16 @@ function effectEventMatchesContext(chainSystem, effect, context) {
   );
 }
 
+function effectActivationAllowedByRestrictions(chainSystem, card, player, effect) {
+  const check = chainSystem.game?.canActivateCardEffectUnderRestrictions?.(
+    card,
+    player,
+    effect,
+    { silent: true },
+  );
+  return check?.ok !== false;
+}
+
 export function getCurrentChainActivationContext(context) {
   const lastLink = this.getLastChainLink?.();
   if (!lastLink?.card || !lastLink?.player || !lastLink?.effect) return null;
@@ -141,7 +151,14 @@ function resolveEffectOwner(chainSystem, card, ownerPlayer = null) {
   return null;
 }
 
-function buildChainPreviewContext(chainSystem, card, effect, context, ownerPlayer) {
+function buildChainPreviewContext(
+  chainSystem,
+  card,
+  effect,
+  context,
+  ownerPlayer,
+  activationZone = "spellTrap",
+) {
   const cardOwner = resolveEffectOwner(chainSystem, card, ownerPlayer);
   const opponent =
     cardOwner && typeof chainSystem.getOpponent === "function"
@@ -175,7 +192,7 @@ function buildChainPreviewContext(chainSystem, card, effect, context, ownerPlaye
     defenderOwner: context?.defenderOwner,
     targetOwner: context?.targetOwner,
     actionContext: context || null,
-    activationZone: "spellTrap",
+    activationZone,
     activationContext: {
       autoSelectSingleTarget: true,
       logTargets: true,
@@ -193,6 +210,7 @@ function effectActionsCanResolveInChain(
   effect,
   context,
   ownerPlayer,
+  activationZone = "spellTrap",
 ) {
   const effectEngine = chainSystem.game?.effectEngine;
   if (typeof effectEngine?.checkActionPreviewRequirements !== "function") {
@@ -201,7 +219,14 @@ function effectActionsCanResolveInChain(
 
   const actionPreview = effectEngine.checkActionPreviewRequirements(
     effect.actions || [],
-    buildChainPreviewContext(chainSystem, card, effect, context, ownerPlayer),
+    buildChainPreviewContext(
+      chainSystem,
+      card,
+      effect,
+      context,
+      ownerPlayer,
+      activationZone,
+    ),
   );
 
   if (actionPreview?.ok === false) {
@@ -490,6 +515,16 @@ export function findActivatableEffect(card, context, ownerPlayer = null) {
             }
           }
 
+          if (
+            !effectActivationAllowedByRestrictions(
+              this,
+              card,
+              previewCtx.player || ownerPlayer,
+              effect,
+            )
+          ) {
+            continue;
+          }
           return effect;
         }
         continue;
@@ -589,6 +624,9 @@ export function findActivatableEffect(card, context, ownerPlayer = null) {
         // ignition timing typically for main phase, but traps can chain
         // Allow if we're in a valid chain window
         if (contextDef.requiresChainWindow || this.chainStack.length > 0) {
+          if (!effectActivationAllowedByRestrictions(this, card, ctx.player, effect)) {
+            continue;
+          }
           return effect;
         }
       }
@@ -696,6 +734,9 @@ export function findActivatableEffect(card, context, ownerPlayer = null) {
             continue;
           }
         }
+        if (!effectActivationAllowedByRestrictions(this, card, cardOwner, effect)) {
+          continue;
+        }
         return effect;
       }
     }
@@ -709,9 +750,15 @@ export function findActivatableEffect(card, context, ownerPlayer = null) {
  * @param {Object} card
  * @param {ChainContext} context
  * @param {Object} player
+ * @param {string} activationZone
  * @returns {Object|null}
  */
-export function findQuickMonsterEffect(card, context, player) {
+export function findQuickMonsterEffect(
+  card,
+  context,
+  player,
+  activationZone = "field",
+) {
   if (!card?.effects || !Array.isArray(card.effects)) return null;
 
   const effectEngine = this.game?.effectEngine;
@@ -740,11 +787,16 @@ export function findQuickMonsterEffect(card, context, player) {
       continue;
     }
 
-    if (effect.requireZone && effect.requireZone !== "field") {
+    const requiredZone = effect.requireZone || null;
+    const zoneMatches =
+      activationZone === "field"
+        ? !requiredZone || requiredZone === "field"
+        : requiredZone === activationZone;
+    if (!zoneMatches) {
       continue;
     }
 
-    if (effect.requireFaceup && card.isFacedown) {
+    if (activationZone !== "hand" && effect.requireFaceup && card.isFacedown) {
       continue;
     }
 
@@ -757,7 +809,11 @@ export function findQuickMonsterEffect(card, context, player) {
       }
     }
 
-    if (effectEngine?.isEffectNegated && effectEngine.isEffectNegated(card)) {
+    if (
+      activationZone === "field" &&
+      effectEngine?.isEffectNegated &&
+      effectEngine.isEffectNegated(card)
+    ) {
       continue;
     }
 
@@ -774,7 +830,7 @@ export function findQuickMonsterEffect(card, context, player) {
       source: card,
       player: owner,
       opponent,
-      activationZone: "field",
+      activationZone,
       actionContext: responseContext || null,
       activationContext: {
         isPreview: true,
@@ -826,6 +882,22 @@ export function findQuickMonsterEffect(card, context, player) {
       }
     }
 
+    if (
+      !effectActionsCanResolveInChain(
+        this,
+        card,
+        effect,
+        responseContext,
+        owner,
+        activationZone,
+      )
+    ) {
+      continue;
+    }
+
+    if (!effectActivationAllowedByRestrictions(this, card, owner, effect)) {
+      continue;
+    }
     return effect;
   }
 

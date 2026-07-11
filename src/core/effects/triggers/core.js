@@ -456,6 +456,16 @@ export function buildTriggerEntry(options = {}) {
     },
     effect,
   };
+  const activationRestriction =
+    this.game?.canActivateCardEffectUnderRestrictions?.(
+      sourceCard,
+      owner,
+      effect,
+      { silent: true },
+    );
+  if (activationRestriction?.ok === false) {
+    return null;
+  }
   const actionPreview =
     typeof this.checkActionPreviewRequirements === "function"
       ? this.checkActionPreviewRequirements(effect.actions || [], previewCtx)

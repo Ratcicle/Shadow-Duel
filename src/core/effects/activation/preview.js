@@ -150,6 +150,14 @@ export function canActivateSpellFromHandPreview(card, player, options = {}) {
       : { ok: false, reason: "No on_play effect." };
   }
 
+  const restrictionCheck =
+    this.game?.canActivateCardEffectUnderRestrictions?.(card, player, effect, {
+      silent: true,
+    });
+  if (restrictionCheck?.ok === false) {
+    return { ok: false, reason: restrictionCheck.reason };
+  }
+
   const optCheck = this.checkOncePerTurn(card, player, effect);
   if (!optCheck.ok) return { ok: false, reason: optCheck.reason };
 
@@ -266,6 +274,14 @@ export function canActivateMonsterEffectPreview(
 
   if (!effect) {
     return { ok: false, reason: "No ignition effect defined for this zone." };
+  }
+
+  const restrictionCheck =
+    this.game?.canActivateCardEffectUnderRestrictions?.(card, player, effect, {
+      silent: true,
+    });
+  if (restrictionCheck?.ok === false) {
+    return { ok: false, reason: restrictionCheck.reason };
   }
 
   const isMainPhase =
@@ -493,6 +509,14 @@ export function canActivateSpellTrapEffectPreview(
     return { ok: false, reason: "No ignition effect defined for this card." };
   }
 
+  const restrictionCheck =
+    this.game?.canActivateCardEffectUnderRestrictions?.(card, player, effect, {
+      silent: true,
+    });
+  if (restrictionCheck?.ok === false) {
+    return { ok: false, reason: restrictionCheck.reason };
+  }
+
   const optCheck = this.checkOncePerTurn(card, player, effect);
   if (!optCheck.ok) return { ok: false, reason: optCheck.reason };
 
@@ -594,6 +618,14 @@ export function canActivateFieldSpellEffectPreview(
   const effect = this.getFieldSpellActivationEffect(card);
   if (!effect) {
     return { ok: false, reason: "No field activation effect defined." };
+  }
+
+  const restrictionCheck =
+    this.game?.canActivateCardEffectUnderRestrictions?.(card, player, effect, {
+      silent: true,
+    });
+  if (restrictionCheck?.ok === false) {
+    return { ok: false, reason: restrictionCheck.reason };
   }
 
   const optCheck = this.checkOncePerTurn(card, player, effect);

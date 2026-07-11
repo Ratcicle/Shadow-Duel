@@ -27,6 +27,7 @@ function resetKnownPlayerTurnFlags(player) {
   player.additionalNormalSummonPermissions = [];
   player.normalSummonsThisTurn = [];
   player.specialSummonRestrictions = [];
+  player.effectActivationRestrictions = [];
   player.forbidDirectAttacksThisTurn = false;
 }
 

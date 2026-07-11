@@ -187,6 +187,7 @@ export async function beamSearchTurn(game, strategy, options = {}) {
           safe.additionalNormalSummonPermissions || [],
         normalSummonsThisTurn: safe.normalSummonsThisTurn || [],
         specialSummonRestrictions: safe.specialSummonRestrictions || [],
+        effectActivationRestrictions: safe.effectActivationRestrictions || [],
         controllerType: safe.controllerType,
       };
     };
@@ -430,6 +431,7 @@ export async function greedySearchWithEvalV2(game, strategy, options = {}) {
           safe.additionalNormalSummonPermissions || [],
         normalSummonsThisTurn: safe.normalSummonsThisTurn || [],
         specialSummonRestrictions: safe.specialSummonRestrictions || [],
+        effectActivationRestrictions: safe.effectActivationRestrictions || [],
         controllerType: safe.controllerType,
       };
     };

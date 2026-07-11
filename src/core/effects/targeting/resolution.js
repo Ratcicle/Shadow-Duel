@@ -490,6 +490,9 @@ export function resolveTargets(targetDefs, ctx, selections) {
     if (def.type) {
       filters.type = def.type;
     }
+    if (def.attribute) {
+      filters.attribute = def.attribute;
+    }
     if (def.excludeSelf) {
       filters.excludeSelf = true;
     }

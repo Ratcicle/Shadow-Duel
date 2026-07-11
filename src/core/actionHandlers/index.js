@@ -84,6 +84,8 @@ export {
   handleHealPerFieldCount,
   handleHealPerOpponentCardsAndHand,
   handleGrantAdditionalNormalSummon,
+  handleRestrictEffectActivationsByAttribute,
+  handleRestrictEffectActivationsByNames,
   handleUpkeepPayOrSendToGrave,
 } from "./resources.js";
 

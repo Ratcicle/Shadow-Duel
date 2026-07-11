@@ -755,4 +755,266 @@ export const genericCards = [
       },
     ],
   },
+  {
+    id: 22,
+    name: "Desperate Gamble",
+    cardKind: "spell",
+    subtype: "normal",
+    description:
+      "Pay half your LP; draw 2 cards. For the rest of this turn, you cannot activate effects of cards with the same names as the cards drawn by this effect. You can only activate 1 \"Desperate Gamble\" per turn.",
+    image: "assets/Desperate Gamble.png",
+    effects: [
+      {
+        id: "desperate_gamble_activation",
+        timing: "on_play",
+        speed: 1,
+        oncePerTurn: true,
+        oncePerTurnName: "desperate_gamble_activation",
+        actions: [
+          {
+            type: "pay_lp",
+            player: "self",
+            fraction: 0.5,
+          },
+          {
+            type: "draw",
+            player: "self",
+            amount: 2,
+          },
+          {
+            type: "restrict_effect_activations_by_names",
+            player: "self",
+            nameSource: "lastDrawnCards",
+            duration: "until_end_turn",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 23,
+    name: "Guardian Deity Visas",
+    cardKind: "monster",
+    atk: 1900,
+    def: 1900,
+    level: 5,
+    type: "Fairy",
+    attribute: "Light",
+    description:
+      'When your opponent activates a card or effect that would banish one or more cards from your field and/or GY (Quick Effect): you can Special Summon this card from your hand, and if you do, negate that effect. You can only use this effect of "Guardian Deity Visas" once per turn.',
+    image: "assets/Guardian Deity Visas.png",
+    effects: [
+      {
+        id: "guardian_deity_visas_hand_negate_banish",
+        timing: "manual",
+        speed: 2,
+        isQuickEffect: true,
+        requireZone: "hand",
+        canRespondTo: ["card_activation", "effect_activation"],
+        oncePerTurn: true,
+        oncePerTurnName: "guardian_deity_visas",
+        conditions: [
+          {
+            type: "activation_would_banish_cards_matching_filters",
+            activationPlayer: "opponent",
+            affectedPlayer: "self",
+            zones: ["field", "spellTrap", "fieldSpell", "graveyard"],
+            minCount: 1,
+          },
+        ],
+        actions: [
+          {
+            type: "special_summon_from_zone",
+            zone: "hand",
+            requireSource: true,
+            position: "choice",
+            haltOnFailure: true,
+          },
+          { type: "negate_activation" },
+        ],
+      },
+    ],
+  },
+  {
+    id: 24,
+    name: "Luminous God Hyperion",
+    cardKind: "monster",
+    atk: 3000,
+    def: 3000,
+    level: 9,
+    type: "Warrior",
+    attribute: "Light",
+    description:
+      "You can Special Summon this card from your hand by banishing 5 LIGHT monsters from your field and/or GY. If Summoned this way, this card cannot be destroyed by your opponent's card effects. During damage calculation, if this card battles an opponent's DARK monster: it gains 1000 ATK/DEF during that damage calculation only.",
+    image: "assets/Luminous God Hyperion.png",
+    effects: [
+      {
+        id: "luminous_god_hyperion_special_summon",
+        timing: "ignition",
+        requireZone: "hand",
+        requirePhase: ["main1", "main2"],
+        targets: [
+          {
+            id: "luminous_god_hyperion_light_banish_cost",
+            owner: "self",
+            zones: ["field", "graveyard"],
+            cardKind: "monster",
+            attribute: "Light",
+            intent: "cost",
+            count: { min: 5, max: 5 },
+          },
+        ],
+        actions: [
+          {
+            type: "special_summon_from_hand_with_cost",
+            costTargetRef: "luminous_god_hyperion_light_banish_cost",
+            costDestination: "banish",
+            costMovedByEffect: false,
+            position: "choice",
+            conditionalMarkersOnSummon: [
+              {
+                key: "luminous_god_hyperion_summoned_by_own_procedure",
+                min: 5,
+                costFilters: {
+                  cardKind: "monster",
+                  attribute: "Light",
+                },
+                bindToFieldPresence: true,
+              },
+            ],
+          },
+        ],
+      },
+      {
+        id: "luminous_god_hyperion_grant_opponent_effect_protection",
+        timing: "on_event",
+        event: "after_summon",
+        requireSelfAsSummoned: true,
+        requireFaceup: true,
+        promptUser: false,
+        conditions: [
+          {
+            type: "summoned_card_has_marker",
+            key: "luminous_god_hyperion_summoned_by_own_procedure",
+            sourceEffectId: "luminous_god_hyperion_special_summon",
+            minMatchingCostCount: 5,
+          },
+        ],
+        actions: [
+          {
+            type: "grant_protection",
+            targetRef: "self",
+            protectionType: "effect_destruction",
+            duration: "while_faceup",
+            sourceOwner: "opponent",
+            removeOnLeave: true,
+          },
+        ],
+      },
+      {
+        id: "luminous_god_hyperion_attack_dark_boost",
+        timing: "on_event",
+        event: "battle_damage",
+        requireZone: "field",
+        requireFaceup: true,
+        requireSelfAsAttacker: true,
+        promptUser: false,
+        conditions: [
+          {
+            type: "battle_participant_matches_filters",
+            owner: "opponent",
+            filters: {
+              cardKind: "monster",
+              attribute: "Dark",
+            },
+          },
+        ],
+        actions: [
+          {
+            type: "buff_stats_temp",
+            targetRef: "self",
+            atkBoost: 1000,
+            defBoost: 1000,
+            duration: "damage_calculation",
+          },
+        ],
+      },
+      {
+        id: "luminous_god_hyperion_defense_dark_boost",
+        timing: "on_event",
+        event: "battle_damage",
+        requireZone: "field",
+        requireFaceup: true,
+        requireSelfAsDefender: true,
+        promptUser: false,
+        conditions: [
+          {
+            type: "battle_participant_matches_filters",
+            owner: "opponent",
+            filters: {
+              cardKind: "monster",
+              attribute: "Dark",
+            },
+          },
+        ],
+        actions: [
+          {
+            type: "buff_stats_temp",
+            targetRef: "self",
+            atkBoost: 1000,
+            defBoost: 1000,
+            duration: "damage_calculation",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 25,
+    name: "Battle Between Good and Evil",
+    cardKind: "spell",
+    subtype: "normal",
+    description:
+      "Special Summon 1 Level 4 or lower LIGHT or DARK monster from your Deck, but negate its effects. For the rest of this turn after this effect resolves, you cannot activate monster effects, except monster effects with the same Attribute as the monster Summoned by this effect. You can only activate 1 \"Battle Between Good and Evil\" per turn.",
+    image: "assets/Battle Between Good and Evil.png",
+    effects: [
+      {
+        id: "battle_between_good_and_evil_activation",
+        timing: "on_play",
+        speed: 1,
+        oncePerTurn: true,
+        oncePerTurnName: "battle_between_good_and_evil_activation",
+        targets: [
+          {
+            id: "battle_between_good_and_evil_summon_target",
+            owner: "self",
+            zone: "deck",
+            cardKind: "monster",
+            attribute: ["Light", "Dark"],
+            maxLevel: 4,
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "special_summon_from_zone",
+            targetRef: "battle_between_good_and_evil_summon_target",
+            zone: "deck",
+            position: "choice",
+            negateEffects: true,
+            negateEffectsDuration: "while_faceup",
+            storeResultAs: "battle_between_good_and_evil_summoned",
+            haltOnFailure: true,
+          },
+          {
+            type: "restrict_effect_activations_by_attribute",
+            player: "self",
+            attributeSourceRef: "battle_between_good_and_evil_summoned",
+            restrictedCardFilters: { cardKind: "monster" },
+            duration: "until_end_turn",
+          },
+        ],
+      },
+    ],
+  },
 ];

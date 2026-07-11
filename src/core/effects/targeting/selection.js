@@ -157,6 +157,7 @@ function buildPairedTargetFilters(pairSpec = {}) {
 
   copyIfPresent("cardKind");
   copyIfPresent("type");
+  copyIfPresent("attribute");
   copyIfPresent("archetype");
   copyIfPresent("name");
   copyIfPresent("cardName", "name");
@@ -195,6 +196,7 @@ function buildTargetCardFilters(def = {}) {
   copyIfPresent("subtype");
   copyIfPresent("monsterType");
   copyIfPresent("type");
+  copyIfPresent("attribute");
   copyIfPresent("archetype");
   copyIfPresent("level");
   copyIfPresent("levelOp");

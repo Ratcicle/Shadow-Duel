@@ -102,6 +102,26 @@ export function getPublicState(forPlayerId = "player") {
           sourceId: restriction.sourceId ?? null,
         }))
       : [],
+    effectActivationRestrictions: Array.isArray(owner.effectActivationRestrictions)
+      ? owner.effectActivationRestrictions.map((restriction) => ({
+          blockedNames: isSelf && Array.isArray(restriction.blockedNames)
+            ? restriction.blockedNames.slice()
+            : [],
+          duration: restriction.duration || null,
+          expiresOnTurn: restriction.expiresOnTurn ?? null,
+          allowedAttributes: isSelf && Array.isArray(restriction.allowedAttributes)
+            ? restriction.allowedAttributes.slice()
+            : [],
+          restrictedCardFilters:
+            restriction.restrictedCardFilters &&
+            typeof restriction.restrictedCardFilters === "object"
+              ? { ...restriction.restrictedCardFilters }
+              : {},
+          reason: restriction.reason || null,
+          sourceName: restriction.sourceName || null,
+          sourceId: restriction.sourceId ?? null,
+        }))
+      : [],
     hand: serializeHand(owner, isSelf),
     handCount: (owner.hand || []).length,
     field: serializeField(owner, isSelf),

@@ -212,7 +212,90 @@ function getSimOptBucket(state, selfId = "bot") {
   return state._simOncePerTurn[key];
 }
 
+function getSimPlayerById(state, playerId = "bot") {
+  if (!state) return null;
+  if (playerId === "player") return state.player;
+  if (playerId === "bot") return state.bot;
+  if (state.player?.id === playerId) return state.player;
+  if (state.bot?.id === playerId) return state.bot;
+  return state[playerId] || null;
+}
+
+function simEffectCanBeBlocked(effect) {
+  if (!effect || effect.placementOnly === true) return false;
+  if (effect.timing === "passive") return false;
+  return true;
+}
+
+function normalizeSimRestrictionNames(names = []) {
+  const values = Array.isArray(names) ? names : [names];
+  return values
+    .map((entry) =>
+      typeof entry === "string" ? entry.trim() : entry?.name?.trim?.() || "",
+    )
+    .filter(Boolean);
+}
+
+function normalizeSimRestrictionAttributes(attributes = []) {
+  const values = Array.isArray(attributes) ? attributes : [attributes];
+  const result = [];
+  const seen = new Set();
+  for (const entry of values) {
+    const attribute =
+      typeof entry === "string" ? entry.trim() : entry?.attribute?.trim?.() || "";
+    if (!attribute) continue;
+    const key = attribute.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(attribute);
+  }
+  return result;
+}
+
+function simAttributeMatches(value, allowedAttributes = []) {
+  const actual = String(value || "").toLowerCase();
+  return allowedAttributes.some(
+    (attribute) => String(attribute || "").toLowerCase() === actual,
+  );
+}
+
+function isSimulatedEffectActivationRestricted(
+  state,
+  effect,
+  sourceCard,
+  selfId = "bot",
+) {
+  if (!sourceCard || !simEffectCanBeBlocked(effect)) return false;
+  const player = getSimPlayerById(state, selfId);
+  const restrictions = Array.isArray(player?.effectActivationRestrictions)
+    ? player.effectActivationRestrictions
+    : [];
+  return restrictions.some((restriction) => {
+    const blockedNames = normalizeSimRestrictionNames(
+      restriction?.blockedNames || restriction?.names || [],
+    );
+    if (sourceCard.name && blockedNames.includes(sourceCard.name)) return true;
+
+    const allowedAttributes = normalizeSimRestrictionAttributes(
+      restriction?.allowedAttributes || restriction?.attributes || [],
+    );
+    if (allowedAttributes.length === 0) return false;
+    const restrictedCardFilters =
+      restriction?.restrictedCardFilters &&
+      typeof restriction.restrictedCardFilters === "object"
+        ? restriction.restrictedCardFilters
+        : { cardKind: "monster" };
+    if (!matchesTargetFilters(sourceCard, restrictedCardFilters, null, "self")) {
+      return false;
+    }
+    return !simAttributeMatches(sourceCard.attribute, allowedAttributes);
+  });
+}
+
 function canUseSimulatedEffect(state, effect, sourceCard, selfId = "bot") {
+  if (isSimulatedEffectActivationRestricted(state, effect, sourceCard, selfId)) {
+    return false;
+  }
   if (!effect?.oncePerTurn && !effect?.oncePerTurnName) return true;
   const key = getSimOncePerTurnKey(effect, sourceCard);
   if (!key) return true;

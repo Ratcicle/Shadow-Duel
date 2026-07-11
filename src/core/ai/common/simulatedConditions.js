@@ -450,6 +450,103 @@ function simMoveLeavesField(action) {
   ].includes(toZone);
 }
 
+function simMoveBanishes(action) {
+  const toZone = action?.to || action?.toZone || action?.destination || null;
+  return toZone === "banished" || toZone === "banish";
+}
+
+function simCollectGraveyardBanishCandidates(action, activationPlayer) {
+  const filters = { ...(action.filters || {}) };
+  if (action.cardName && filters.name === undefined) {
+    filters.name = action.cardName;
+  }
+  if (action.cardType && filters.type === undefined) {
+    filters.type = action.cardType;
+  }
+  return getZoneCards(activationPlayer, "graveyard").filter((card) =>
+    matchesTargetFilters(card, filters, null)
+  );
+}
+
+function simCollectBanishCandidates(
+  actions,
+  activationPlayer,
+  activationOpponent,
+  activationContext = {},
+) {
+  const cards = [];
+  for (const action of asArray(actions)) {
+    if (!action) continue;
+    if (
+      action.type === "banish" ||
+      action.type === "banish_destroyed_monster" ||
+      action.type === "banish_and_buff"
+    ) {
+      if (action.targetScope) {
+        for (const card of simCollectScopeCards(
+          action.targetScope,
+          activationPlayer,
+          activationOpponent,
+        )) {
+          simAppendUnique(cards, card);
+        }
+      }
+      if (action.type === "banish_destroyed_monster" || action.useDestroyed === true) {
+        simAppendUnique(cards, activationContext.destroyed);
+      }
+      for (const card of simSelectedCards(
+        action.targetRef || "target",
+        activationContext,
+      )) {
+        simAppendUnique(cards, card);
+      }
+    } else if (action.type === "banish_card_from_graveyard") {
+      for (const card of simCollectGraveyardBanishCandidates(
+        action,
+        activationPlayer,
+      )) {
+        simAppendUnique(cards, card);
+      }
+    } else if (action.type === "banish_all_graveyard_and_burn") {
+      for (const card of simCollectScopeCards(
+        {
+          owner: action.scope || "self",
+          zones: ["graveyard"],
+        },
+        activationPlayer,
+        activationOpponent,
+      )) {
+        simAppendUnique(cards, card);
+      }
+    } else if (action.type === "move" && simMoveBanishes(action)) {
+      if (action.targetScope) {
+        for (const card of simCollectScopeCards(
+          action.targetScope,
+          activationPlayer,
+          activationOpponent,
+        )) {
+          simAppendUnique(cards, card);
+        }
+      }
+      for (const card of simSelectedCards(
+        action.targetRef || "target",
+        activationContext,
+      )) {
+        simAppendUnique(cards, card);
+      }
+    }
+    for (const card of simCollectBanishCandidates(
+      simNestedActions(action),
+      activationPlayer,
+      activationOpponent,
+      activationContext,
+    )) {
+      simAppendUnique(cards, card);
+    }
+  }
+  return cards;
+}
+
 function simCollectLeaveFieldCandidates(
   actions,
   activationPlayer,
@@ -543,6 +640,60 @@ function simActivationWouldDestroyMatchingCards(condition, ctx, options, self, o
         self,
         opponent,
       ]) && matchesTargetFilters(card, filters, null),
+  );
+  return matching.length >= minCount;
+}
+
+function simActivationWouldBanishMatchingCards(condition, ctx, options, self, opponent) {
+  const activationContext =
+    options.actionContext ||
+    ctx.actionContext ||
+    options.activationContext?.context ||
+    {};
+  const activationAttempt = activationContext.activationAttempt || null;
+  const activatedCard =
+    activationAttempt?.card || activationContext.card || options.card || null;
+  const effect =
+    activationAttempt?.effect || activationContext.effect || options.effect || null;
+  const activationPlayer =
+    activationAttempt?.player || activationContext.player || null;
+  const activationPlayerId =
+    activationPlayer?.id || activatedCard?.controller || activatedCard?.owner || null;
+  const activationOwner =
+    activationPlayerId === self?.id ? self : activationPlayerId === opponent?.id ? opponent : null;
+  if (!activationOwner || !effect) return false;
+  if (condition.activationPlayer === "opponent" && activationOwner !== opponent) {
+    return false;
+  }
+  if (condition.activationPlayer === "self" && activationOwner !== self) {
+    return false;
+  }
+  const activationOpponent = activationOwner === self ? opponent : self;
+  const filters = condition.banishedCardFilters || condition.filters || {};
+  const zones =
+    condition.banishedCardZones ||
+    condition.fromZones ||
+    condition.zones || [
+      "field",
+      "spellTrap",
+      "fieldSpell",
+      "graveyard",
+    ];
+  const affectedOwners = simOwnersFromRule(
+    condition.affectedPlayer || condition.cardOwner || condition.owner || "self",
+    self,
+    opponent,
+  );
+  const minCount = Math.max(1, Number(condition.minCount ?? condition.count ?? 1));
+  const matching = simCollectBanishCandidates(
+    effect.actions || [],
+    activationOwner,
+    activationOpponent,
+    activationContext,
+  ).filter(
+    (card) =>
+      simCardInAllowedZones(card, zones, affectedOwners) &&
+      matchesTargetFilters(card, filters, null),
   );
   return matching.length >= minCount;
 }
@@ -838,6 +989,15 @@ export function evaluateSimulatedConditions(conditions, ctx = {}) {
     }
     if (condition.type === "activation_would_destroy_cards_matching_filters") {
       return simActivationWouldDestroyMatchingCards(
+        condition,
+        ctx,
+        options,
+        self,
+        opponent,
+      );
+    }
+    if (condition.type === "activation_would_banish_cards_matching_filters") {
+      return simActivationWouldBanishMatchingCards(
         condition,
         ctx,
         options,

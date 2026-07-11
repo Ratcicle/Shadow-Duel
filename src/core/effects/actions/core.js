@@ -1333,6 +1333,9 @@ export function checkActionPreviewRequirements(actions, ctx) {
       if (action.fraction) {
         amount = Math.floor((player.lp || 0) * action.fraction);
       }
+      if (amount <= 0) {
+        return { ok: false, reason: "LP cost must be greater than 0." };
+      }
       if (amount > 0 && typeof this?.resolveLpCost === "function") {
         const costResult = this.resolveLpCost(action, ctx, amount, {
           consume: false,

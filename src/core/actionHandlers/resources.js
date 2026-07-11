@@ -371,6 +371,148 @@ export async function handlePayLP(action, ctx, targets, engine) {
   return true;
 }
 
+function normalizeCardNameList(values = []) {
+  const result = [];
+  const seen = new Set();
+  const entries = Array.isArray(values) ? values : [values];
+  for (const entry of entries) {
+    const name =
+      typeof entry === "string" ? entry.trim() : entry?.name?.trim?.() || "";
+    if (!name || seen.has(name)) continue;
+    seen.add(name);
+    result.push(name);
+  }
+  return result;
+}
+
+function readNameSource(action, ctx) {
+  const sourceKey = action.nameSource || action.namesSource || null;
+  if (!sourceKey) return [];
+  if (sourceKey === "lastDrawnCards") return ctx?.lastDrawnCards || [];
+  if (sourceKey === "lastDrawnCard") return ctx?.lastDrawnCard || null;
+  if (sourceKey === "lastAddedToHandCards") {
+    return ctx?.lastAddedToHandCards || [];
+  }
+  if (sourceKey === "lastAddedToHandCard") return ctx?.lastAddedToHandCard || null;
+  return (
+    ctx?.[sourceKey] ||
+    ctx?.activationContext?.[sourceKey] ||
+    ctx?.actionContext?.[sourceKey] ||
+    []
+  );
+}
+
+function normalizeAttributeList(values = []) {
+  const result = [];
+  const seen = new Set();
+  const entries = Array.isArray(values) ? values : [values];
+  for (const entry of entries) {
+    const attribute =
+      typeof entry === "string" ? entry.trim() : entry?.attribute?.trim?.() || "";
+    if (!attribute) continue;
+    const key = attribute.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(attribute);
+  }
+  return result;
+}
+
+function flattenCards(value) {
+  if (!value) return [];
+  if (Array.isArray(value)) return value.flatMap(flattenCards);
+  return [value];
+}
+
+function readAttributeSourceCards(action, ctx, targets) {
+  const sourceRef =
+    action.attributeSourceRef ||
+    action.attributeSource ||
+    action.sourceRef ||
+    action.targetRef ||
+    null;
+  if (!sourceRef) return [];
+
+  const targetCards = getCardsFromTargetRefs(sourceRef, targets);
+  if (targetCards.length > 0) return targetCards;
+
+  const actionTargets = ctx?._actionTargets || {};
+  if (actionTargets[sourceRef]) return flattenCards(actionTargets[sourceRef]);
+
+  const contextCandidates = [
+    ctx?.[sourceRef],
+    ctx?.activationContext?.[sourceRef],
+    ctx?.actionContext?.[sourceRef],
+    ctx?.actionContext?.actionResults?.[sourceRef],
+  ];
+  return contextCandidates.flatMap(flattenCards).filter(Boolean);
+}
+
+export async function handleRestrictEffectActivationsByNames(
+  action,
+  ctx,
+  _targets,
+  engine,
+) {
+  const game = engine?.game;
+  const targetPlayer = action.player === "opponent" ? ctx?.opponent : ctx?.player;
+  if (!game || !targetPlayer) return false;
+
+  const explicitNames =
+    action.names || action.cardNames || action.blockedNames || [];
+  const sourceNames = readNameSource(action, ctx);
+  const blockedNames = normalizeCardNameList([
+    ...normalizeCardNameList(explicitNames),
+    ...normalizeCardNameList(sourceNames),
+  ]);
+  if (blockedNames.length === 0) return false;
+
+  const success = game.registerEffectActivationRestriction?.(targetPlayer, {
+    blockedNames,
+    duration: action.duration || "until_end_turn",
+    reason: action.reason || null,
+    sourceCard: ctx?.source || ctx?.card || null,
+    effectId: ctx?.effect?.id || null,
+  });
+
+  if (success && action.logMessage) {
+    getUI(game)?.log(action.logMessage);
+  }
+  return success === true;
+}
+
+export async function handleRestrictEffectActivationsByAttribute(
+  action,
+  ctx,
+  targets,
+  engine,
+) {
+  const game = engine?.game;
+  const targetPlayer = action.player === "opponent" ? ctx?.opponent : ctx?.player;
+  if (!game || !targetPlayer) return false;
+
+  const sourceCards = readAttributeSourceCards(action, ctx, targets);
+  const allowedAttributes = normalizeAttributeList([
+    ...normalizeAttributeList(action.allowedAttributes || action.attributes || []),
+    ...normalizeAttributeList(sourceCards),
+  ]);
+  if (allowedAttributes.length === 0) return false;
+
+  const success = game.registerEffectActivationRestriction?.(targetPlayer, {
+    allowedAttributes,
+    restrictedCardFilters: action.restrictedCardFilters || { cardKind: "monster" },
+    duration: action.duration || "until_end_turn",
+    reason: action.reason || null,
+    sourceCard: ctx?.source || ctx?.card || null,
+    effectId: ctx?.effect?.id || null,
+  });
+
+  if (success && action.logMessage) {
+    getUI(game)?.log(action.logMessage);
+  }
+  return success === true;
+}
+
 /**
  * Generic handler for adding cards from any zone to hand
  * Supports multi-select with filters

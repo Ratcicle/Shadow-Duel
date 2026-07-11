@@ -5,6 +5,17 @@ function asArray(value) {
   return Array.isArray(value) ? value : [value];
 }
 
+function matchesTextValue(value, expected) {
+  const expectedValues = asArray(expected).filter(
+    (entry) => entry !== undefined && entry !== null,
+  );
+  if (expectedValues.length === 0) return true;
+  const normalizedValue = String(value || "").toLowerCase();
+  return expectedValues.some(
+    (entry) => String(entry || "").toLowerCase() === normalizedValue,
+  );
+}
+
 function getCardInstanceId(card) {
   return card?.instanceId ?? card?._instanceId ?? card?.uuid ?? card?.simInstanceId ?? null;
 }
@@ -200,6 +211,9 @@ export function cardMatchesFilters(card, filters = {}) {
         : cardType === filters.type;
       if (!ok) return false;
     }
+  }
+  if (filters.attribute && !matchesTextValue(card.attribute, filters.attribute)) {
+    return false;
   }
   if (filters.archetype) {
     const archetypes = Array.isArray(card.archetypes)
