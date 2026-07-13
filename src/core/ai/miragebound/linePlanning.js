@@ -19,6 +19,7 @@ const MB = Object.freeze({
   VANISHING_STEP: "Miragebound Vanishing Step",
   HEAT_HAZE: "Miragebound Heat Haze",
   DESERT_LEVIATHAN: "Miragebound Desert Leviathan",
+  REBEL: "Miragebound Rebel",
 });
 
 const DEFAULT_PROFILE = Object.freeze({
@@ -316,6 +317,11 @@ function getLineImpact(context = {}) {
   );
   const hasFinalSovereign = hasCard(finalBot, ["field"], MB.GLASS_SOVEREIGN);
   const hasFinalLeviathan = hasCard(finalBot, ["field"], MB.DESERT_LEVIATHAN);
+  const hasInitialRebelInHand = hasCard(initialBot, ["hand"], MB.REBEL);
+  const hasInitialRebelInField = hasCard(initialBot, ["field"], MB.REBEL);
+  const hasFinalRebel = hasCard(finalBot, ["field"], MB.REBEL);
+  const rebelHandExtension =
+    hasInitialRebelInHand && hasFinalRebel && !hasInitialRebelInField;
   const hasInitialScout = hasCard(initialBot, ["field"], MB.SCOUT);
   const hasFinalScout = hasCard(finalBot, ["field"], MB.SCOUT);
   const usedLeviathanProcedure = sequenceUsesExtraDeckProcedure(
@@ -361,6 +367,10 @@ function getLineImpact(context = {}) {
     hasFinalDefense,
     hasFinalSovereign,
     hasFinalLeviathan,
+    hasInitialRebelInHand,
+    hasInitialRebelInField,
+    hasFinalRebel,
+    rebelHandExtension,
     hasInitialScout,
     hasFinalScout,
     unsupportedCount,
@@ -425,6 +435,15 @@ function scoreEngineMilestones(entries, impact) {
     ) {
       addMilestone(entries, "delayed Leviathan against wide board", -8);
     }
+  }
+  if (impact.rebelHandExtension) {
+    addMilestone(
+      entries,
+      "Rebel hand extender converted position change",
+      3 + (impact.positionImpact.toDefense > 0 ? 1 : 0),
+    );
+  } else if (impact.hasFinalRebel) {
+    addMilestone(entries, "Rebel pressure online", 1.2);
   }
   if (
     profile?.scoutReadyForAscension &&
@@ -589,6 +608,8 @@ function scoreBattleMilestones(entries, impact) {
           entries,
           battle.attackerName === MB.GLASS_SOVEREIGN
             ? "Glass Sovereign piercing pressure"
+            : battle.attackerName === MB.REBEL
+              ? "Rebel piercing pressure"
             : "battle pressure",
           clamp(Number(battle.damage || 0) / 600, 1, 6),
         );
@@ -652,6 +673,10 @@ function finalizeImpactPayoff(impact) {
     impact.attackThreatReduction >= 500 ||
     impact.opponentStatReduction >= 600 ||
     impact.mirageboundGyDelta > 0 ||
+    (impact.rebelHandExtension &&
+      (impact.positionImpact.toDefense > 0 ||
+        impact.threatReduction >= 300 ||
+        Number(impact.finalDirectDamage || 0) > 0)) ||
     impact.usedBattle ||
     Number(impact.finalDirectDamage || 0) > 0;
   return impact;
@@ -684,6 +709,12 @@ function collectPlanningReasons(analysis = {}) {
   if (analysis.hasHeatHazeRecoveryLine) {
     reasons.push("Heat Haze recovery line is live");
   }
+  if (analysis.hasRebelPositionTriggerWindow) {
+    reasons.push("Rebel hand extender is live");
+  }
+  if (analysis.hasRebelPiercingPressure) {
+    reasons.push("Rebel piercing pressure is available");
+  }
   if (analysis.oppPressure || analysis.needsBattleProtection) {
     reasons.push("battle pressure needs planning");
   }
@@ -703,13 +734,26 @@ function collectPlanningReasons(analysis = {}) {
 function hasBattleBridgeSignal(analysis = {}) {
   const phase = String(analysis.phase || "").toLowerCase();
   if (phase && phase !== "main" && phase !== "main1") return false;
-  const readyAttack = totalVisibleAttack(analysis.field || []);
+  const rebelPotentialAttack = analysis.hasRebelPositionTriggerWindow ? 2100 : 0;
+  const readyAttack = totalVisibleAttack(analysis.field || []) + rebelPotentialAttack;
   if (readyAttack <= 0) return false;
   const opponent = analysis.opponent || {};
   const opponentField = safeArray(analysis.oppField || opponent.field);
   const opponentLp = Number(opponent.lp || analysis.oppLP || 8000);
   if (readyAttack >= opponentLp) return true;
   if (analysis.hasSovereignInField && opponentField.some((card) => card?.position === "defense")) {
+    return true;
+  }
+  if (
+    (analysis.hasRebelInField || analysis.hasRebelPositionTriggerWindow) &&
+    opponentField.some((card) => card?.position === "defense")
+  ) {
+    return true;
+  }
+  if (
+    analysis.hasRebelPositionTriggerWindow &&
+    opponentField.some((card) => card?.position === "attack")
+  ) {
     return true;
   }
   if ((analysis.hasLeviathanLine || analysis.hasLeviathanMaterials) && opponentField.length >= 2) {
@@ -771,6 +815,8 @@ export function buildMirageboundPlanningProfile(analysis = {}, context = {}) {
     hasHeatHazeRecoveryLine: !!analysis.hasHeatHazeRecoveryLine,
     hasLeviathanLine: !!analysis.hasLeviathanLine,
     hasLeviathanMaterials: !!analysis.hasLeviathanMaterials,
+    hasRebelPositionTriggerWindow: !!analysis.hasRebelPositionTriggerWindow,
+    hasRebelPiercingPressure: !!analysis.hasRebelPiercingPressure,
   };
 }
 
@@ -841,6 +887,12 @@ export function scoreMirageboundLineTerminal(context = {}) {
   if (hasCard(finalBot, ["field"], MB.DESERT_LEVIATHAN)) {
     terminalScore += profile.hasLeviathanLine ? 2.5 : 1.5;
   }
+  if (hasCard(finalBot, ["field"], MB.REBEL)) {
+    const defenseTargets = safeArray(finalOpponent.field).filter(
+      (card) => card?.position === "defense",
+    ).length;
+    terminalScore += 1 + Math.min(1.5, defenseTargets * 0.5);
+  }
 
   return baseScore + milestoneScore + clamp(terminalScore, -10, 8);
 }
@@ -882,6 +934,9 @@ export function scoreMirageboundBattleAttackCandidate({
   if (damage > 0) score += clamp(damage / 600, 1, 5);
   if (attacker?.name === MB.GLASS_SOVEREIGN && target?.position === "defense") {
     score += damage > 0 ? 5 : 2;
+  }
+  if (attacker?.name === MB.REBEL && target?.position === "defense") {
+    score += damage > 0 ? 4 : 1.5;
   }
   if (attacker?.name === MB.DESERT_LEVIATHAN && destroyedOpponent) {
     score += 2.5;

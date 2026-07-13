@@ -242,7 +242,14 @@ export function applySpecialSummonFromZone(ctx) {
       : null;
   if (!candidates || candidates.length === 0) {
     if (action.targetRef) return;
-    candidates = getActionCandidates(targetPlayer, action, "deck", options);
+    const candidateAction = { ...action };
+    delete candidateAction.position;
+    candidates = getActionCandidates(
+      targetPlayer,
+      candidateAction,
+      "deck",
+      options,
+    );
   }
   if (action.targetRef) {
     const filters = buildActionFilter(action);
@@ -267,6 +274,7 @@ export function applySpecialSummonFromZone(ctx) {
     targetPlayer,
     options,
   ).slice(0, max);
+  if (chosen.length === 0) return;
   if (action.banishCost && options.sourceCard) {
     const sourceOwner = findCardOwner(state, options.sourceCard) || targetPlayer;
     moveCardToZone(sourceOwner, options.sourceCard, "banished");

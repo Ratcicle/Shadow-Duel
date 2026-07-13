@@ -45,6 +45,7 @@ const MB = Object.freeze({
   VANISHING_STEP: "Miragebound Vanishing Step",
   HEAT_HAZE: "Miragebound Heat Haze",
   DESERT_LEVIATHAN: "Miragebound Desert Leviathan",
+  REBEL: "Miragebound Rebel",
 });
 
 const OASIS_RETURN_LABEL = 'Return a "Miragebound" monster; weaken an opponent monster';
@@ -99,6 +100,28 @@ function hasMirageboundDefenseResponseInChain(chainSystem, player) {
 
 function hasName(cards = [], name) {
   return (cards || []).some((card) => card?.name === name);
+}
+
+function hasPositionChangeEffectAccess(base = {}, faceUpMiragebounds = []) {
+  const hand = base.hand || [];
+  const spellTrap = base.spellTrap || [];
+  const controlsMiragebound = faceUpMiragebounds.length > 0;
+  return (
+    hasName(faceUpMiragebounds, MB.SCOUT) ||
+    hasName(faceUpMiragebounds, MB.SAND_PRIESTESS) ||
+    hasName(faceUpMiragebounds, MB.FALSE_KING) ||
+    hasName(faceUpMiragebounds, MB.GLASS_SOVEREIGN) ||
+    base.fieldSpell?.name === MB.OASIS ||
+    (controlsMiragebound && hasName(hand, MB.HEAT_HAZE)) ||
+    (controlsMiragebound &&
+      (hasName(hand, MB.VANISHING_STEP) ||
+        hasName(spellTrap, MB.VANISHING_STEP)))
+  );
+}
+
+function getRebelPositionEffectBonus(analysis = {}) {
+  if (!analysis.hasRebelOpenZoneTriggerWindow) return 0;
+  return analysis.hasRebelPiercingPressure ? 2.4 : 1.4;
 }
 
 function getEffectiveAtk(card) {
@@ -422,10 +445,12 @@ function buildBounceTargetBuckets(analysis = {}) {
       MB.FALSE_KING,
       MB.GLASS_SOVEREIGN,
       MB.DESERT_LEVIATHAN,
+      MB.REBEL,
     ]));
   }
 
   addAvoided(getCardsByNames(faceUpMiragebounds, [MB.FALSE_KING]));
+  addAvoided(getCardsByNames(faceUpMiragebounds, [MB.REBEL]));
 
   return {
     preferred,
@@ -445,10 +470,17 @@ function buildBounceNameProfile(analysis = {}) {
   preferred.push(MB.DANCER, MB.JACKAL);
   if (!analysis.preserveScout) preferred.push(MB.SCOUT);
 
+  const preserveNames = analysis.preserveScout ? [MB.SCOUT] : [];
+  const avoidNames = analysis.preserveScout ? [MB.SCOUT] : [];
+  if (analysis.hasRebelInField) {
+    preserveNames.push(MB.REBEL);
+    avoidNames.push(MB.REBEL);
+  }
+
   return {
     preferredNames: [...new Set(preferred)],
-    preserveNames: analysis.preserveScout ? [MB.SCOUT] : [],
-    avoidNames: analysis.preserveScout ? [MB.SCOUT] : [],
+    preserveNames: [...new Set(preserveNames)],
+    avoidNames: [...new Set(avoidNames)],
     preferredInstanceIds: buckets.preferredInstanceIds,
     avoidInstanceIds: buckets.avoidInstanceIds,
   };
@@ -479,6 +511,13 @@ function scorePositionTarget(card, analysis = {}, { preferDefenseOutcome = true 
   }
   if (analysis.hasOasisActive && !card.positionChangedThisTurn) score += 8;
   if (analysis.hasSovereignInField && card.position === "attack") score += 8;
+  if (
+    analysis.hasRebelOpenZoneTriggerWindow &&
+    preferDefenseOutcome &&
+    card.position === "attack"
+  ) {
+    score += 10;
+  }
 
   return score;
 }
@@ -609,10 +648,11 @@ function buildMirageboundTargetPreferences(sourceCard, analysis = {}) {
       MB.DANCER,
       MB.SAND_PRIESTESS,
       MB.FALSE_KING,
+      MB.REBEL,
       MB.JACKAL,
     ],
     defensiveNames: [MB.SAND_PRIESTESS, MB.GLASS_VIPER],
-    offensiveNames: [MB.FALSE_KING, MB.DANCER, MB.JACKAL],
+    offensiveNames: [MB.FALSE_KING, MB.REBEL, MB.DANCER, MB.JACKAL],
   };
 
   const targetPreferences = {
@@ -685,6 +725,7 @@ function buildMirageboundCostPreferences(analysis = {}) {
       MB.DANCER,
       MB.GLASS_SOVEREIGN,
       MB.DESERT_LEVIATHAN,
+      MB.REBEL,
     ],
     preserveLastOffensivePayoff: true,
   };
@@ -706,6 +747,7 @@ function buildSpecialSummonPositions(analysis = {}) {
       [MB.SAND_PRIESTESS]: "defense",
       [MB.GLASS_SOVEREIGN]: "attack",
       [MB.DESERT_LEVIATHAN]: "attack",
+      [MB.REBEL]: "attack",
     },
   };
 }
@@ -746,22 +788,32 @@ function shouldPlayMirageboundSpell(card, analysis = {}) {
     if (analysis.faceUpMiragebounds.length === 0) return { yes: false };
     if (analysis.opponentMonsters.length === 0) return { yes: false };
     const hasRecursion = analysis.mirageboundGraveyard.length > 0;
-    const priority = hasRecursion ? 8.5 : analysis.hasOasisActive ? 6.5 : 5.5;
+    const rebelBonus = getRebelPositionEffectBonus(analysis);
+    const priority =
+      (hasRecursion ? 8.5 : analysis.hasOasisActive ? 6.5 : 5.5) +
+      rebelBonus;
     return {
       yes: true,
       priority,
-      reason: hasRecursion ? "shift threat and recover Miragebound" : "shift threat",
+      reason: analysis.hasRebelOpenZoneTriggerWindow
+        ? "shift threat and trigger Rebel extender"
+        : hasRecursion
+          ? "shift threat and recover Miragebound"
+          : "shift threat",
     };
   }
 
   if (name === MB.VANISHING_STEP) {
     if (analysis.faceUpMiragebounds.length === 0) return { yes: false };
     if (analysis.opponentMonsters.length === 0) return { yes: false };
-    if (!analysis.hasMeaningfulBounce) return { yes: false };
+    const rebelPayoff = analysis.hasRebelVanishingStepWindow;
+    if (!analysis.hasMeaningfulBounce && !rebelPayoff) return { yes: false };
     return {
       yes: true,
-      priority: 9.5,
-      reason: "cash in bounce payoff now",
+      priority: analysis.hasMeaningfulBounce ? 9.5 : 7.4,
+      reason: rebelPayoff
+        ? "bounce to trigger Rebel hand extender"
+        : "cash in bounce payoff now",
     };
   }
 
@@ -798,6 +850,7 @@ function shouldSetMirageboundBackrow(card, analysis = {}) {
 
 function shouldSummonMirageboundMonster(card, analysis = {}, tributeInfo = {}) {
   if (!card || card.cardKind !== "monster") return { yes: false };
+  if (card.name === MB.REBEL) return { yes: false };
   if (card.name === MB.FALSE_KING) return { yes: false };
   if ((tributeInfo.tributesNeeded || 0) > 0) return { yes: false };
 
@@ -879,12 +932,17 @@ function shouldActivateHandIgnition(card, analysis = {}) {
 
   if (card?.name === MB.FALSE_KING) {
     if (analysis.faceUpMiragebounds.length === 0) return { yes: false };
-    if (!analysis.hasMeaningfulBounce) return { yes: false };
+    const rebelPayoff = analysis.hasRebelFalseKingTriggerWindow;
+    if (!analysis.hasMeaningfulBounce && !rebelPayoff) return { yes: false };
     if (!hasOpenMonsterZoneAfterBounce(analysis)) return { yes: false };
     return {
       yes: true,
-      priority: analysis.hasJackalInHand ? 10.5 : 9.5,
-      reason: "special summon False King with bounce payoff",
+      priority:
+        (analysis.hasJackalInHand ? 10.5 : 9.5) +
+        (rebelPayoff ? 1.5 : 0),
+      reason: rebelPayoff
+        ? "special summon False King to trigger Rebel extender"
+        : "special summon False King with bounce payoff",
     };
   }
 
@@ -927,7 +985,8 @@ function shouldActivateMonsterEffect(card, analysis = {}, context = {}) {
       priority:
         7.5 +
         (analysis.hasOasisActive ? 1.5 : 0) +
-        (analysis.scoutEffectActivations < 2 ? 1 : 0),
+        (analysis.scoutEffectActivations < 2 ? 1 : 0) +
+        getRebelPositionEffectBonus(analysis),
       reason: "Scout changes battle position and advances Ascension",
     };
   }
@@ -936,7 +995,9 @@ function shouldActivateMonsterEffect(card, analysis = {}, context = {}) {
     if (!opponentTargets) return { yes: false };
     return {
       yes: true,
-      priority: analysis.mirageboundGraveyard.length > 0 ? 8.8 : 7.8,
+      priority:
+        (analysis.mirageboundGraveyard.length > 0 ? 8.8 : 7.8) +
+        getRebelPositionEffectBonus(analysis),
       reason: "Priestess shifts and weakens threat",
     };
   }
@@ -945,7 +1006,7 @@ function shouldActivateMonsterEffect(card, analysis = {}, context = {}) {
     if (!opponentTargets) return { yes: false };
     return {
       yes: true,
-      priority: 7.6,
+      priority: 7.6 + getRebelPositionEffectBonus(analysis),
       reason: "False King shifts opponent threat",
     };
   }
@@ -958,10 +1019,14 @@ function shouldActivateFieldSpell(card, analysis = {}) {
   if (analysis.opponentMonsters.length === 0) return { yes: false };
   return {
     yes: true,
-    priority: analysis.hasMeaningfulBounce ? 10.2 : 8.4,
+    priority:
+      (analysis.hasMeaningfulBounce ? 10.2 : 8.4) +
+      getRebelPositionEffectBonus(analysis),
     reason: analysis.hasMeaningfulBounce
       ? "Oasis bounce mode has payoff"
-      : "Oasis shift mode controls threat",
+      : analysis.hasRebelOpenZoneTriggerWindow
+        ? "Oasis shift mode triggers Rebel extender"
+        : "Oasis shift mode controls threat",
   };
 }
 
@@ -987,6 +1052,7 @@ function getMirageboundCardValue(card) {
   if (card.name === MB.GLASS_VIPER) return base + 5;
   if (card.name === MB.SAND_PRIESTESS) return base + 4;
   if (card.name === MB.FALSE_KING) return base + 4;
+  if (card.name === MB.REBEL) return base + 4.5;
   if (card.name === MB.DANCER) return base + 3;
   if (card.name === MB.JACKAL) return base + 2;
   if (card.name === MB.GLASS_SOVEREIGN) return base + 10;
@@ -1044,6 +1110,7 @@ function getLeviathanSecondMaterialScore(card, analysis = {}) {
     [MB.JACKAL]: 8,
     [MB.SAND_PRIESTESS]: 7,
     [MB.FALSE_KING]: 6,
+    [MB.REBEL]: 5,
     [MB.GLASS_VIPER]: -8,
     [MB.GLASS_SOVEREIGN]: -12,
     [MB.DESERT_LEVIATHAN]: -12,
@@ -1273,6 +1340,38 @@ export default class MirageboundStrategy extends BaseStrategy {
     const hasVanishingStepAvailable =
       hasName(base.hand || [], MB.VANISHING_STEP) ||
       hasName(base.spellTrap || [], MB.VANISHING_STEP);
+    const hasRebelInHand = hasName(base.hand || [], MB.REBEL);
+    const hasRebelInField = hasName(faceUpMiragebounds, MB.REBEL);
+    const hasPositionChangeAccess = hasPositionChangeEffectAccess(
+      base,
+      faceUpMiragebounds,
+    );
+    const hasRebelOpenZoneTriggerWindow =
+      hasRebelInHand &&
+      fieldCapacity > 0 &&
+      opponentMonsters.length > 0 &&
+      hasPositionChangeAccess;
+    const hasRebelVanishingStepWindow =
+      hasRebelInHand &&
+      hasVanishingStepAvailable &&
+      faceUpMiragebounds.length > 0 &&
+      availableMonsterZonesAfterBounce > 0 &&
+      opponentMonsters.length > 0;
+    const hasRebelFalseKingTriggerWindow =
+      hasRebelInHand &&
+      hasFalseKingInHand &&
+      fieldCapacity > 0 &&
+      faceUpMiragebounds.length > 0 &&
+      opponentMonsters.length > 0;
+    const hasRebelPositionTriggerWindow =
+      hasRebelOpenZoneTriggerWindow ||
+      hasRebelVanishingStepWindow ||
+      hasRebelFalseKingTriggerWindow;
+    const hasRebelPiercingPressure =
+      (hasRebelInHand || hasRebelInField) &&
+      (opponentDefensePositionMonsters.length > 0 ||
+        (hasRebelPositionTriggerWindow &&
+          opponentAttackPositionMonsters.length > 0));
     const canViperPressureAfterSummon =
       hasDesertLeviathan ||
       strongestOpponentStat <= 1500 ||
@@ -1287,7 +1386,8 @@ export default class MirageboundStrategy extends BaseStrategy {
       hasFalseKingInHand ||
       hasJackalBouncePayoff ||
       (hasViperBouncePayoff && canViperPressureAfterSummon) ||
-      hasSovereignInField;
+      hasSovereignInField ||
+      hasRebelPositionTriggerWindow;
     const hasMeaningfulBounce =
       faceUpMiragebounds.length > 0 &&
       (hasViperBouncePayoff || hasPriestessBouncePayoff || hasJackalBouncePayoff);
@@ -1337,6 +1437,13 @@ export default class MirageboundStrategy extends BaseStrategy {
       hasJackalBouncePayoff,
       hasFalseKingInHand,
       hasDancerInHand,
+      hasRebelInHand,
+      hasRebelInField,
+      hasRebelOpenZoneTriggerWindow,
+      hasRebelVanishingStepWindow,
+      hasRebelFalseKingTriggerWindow,
+      hasRebelPositionTriggerWindow,
+      hasRebelPiercingPressure,
       hasViperBouncePayoff,
       hasPriestessBouncePayoff,
       hasMeaningfulBounce,
@@ -1904,6 +2011,7 @@ export default class MirageboundStrategy extends BaseStrategy {
       score += Math.min(2, activations) * 0.5;
     }
     if (hasName(faceUpMiragebounds, MB.GLASS_VIPER)) score += 0.8;
+    if (hasName(faceUpMiragebounds, MB.REBEL)) score += 1.1;
     if (
       hasName(faceUpMiragebounds, MB.SAND_PRIESTESS) &&
       graveyard.some(isMiragebound)
@@ -1915,6 +2023,9 @@ export default class MirageboundStrategy extends BaseStrategy {
     ).length;
     if (hasName(faceUpMiragebounds, MB.GLASS_SOVEREIGN)) {
       score += defenseTargets * 0.35;
+    }
+    if (hasName(faceUpMiragebounds, MB.REBEL)) {
+      score += defenseTargets * 0.25;
     }
     return score;
   }
@@ -1993,13 +2104,22 @@ export default class MirageboundStrategy extends BaseStrategy {
     }
 
     if (action?.filters?.archetype === MIRAGEBOUND) {
-      return this.rankByNameOrder(cards, [
+      const monsterOrder = [
         MB.GLASS_VIPER,
         MB.SCOUT,
         MB.DANCER,
         MB.SAND_PRIESTESS,
         MB.FALSE_KING,
-        MB.JACKAL,
+      ];
+      if (
+        analysis.hasRebelPositionTriggerWindow ||
+        analysis.hasRebelPiercingPressure
+      ) {
+        monsterOrder.push(MB.REBEL);
+      }
+      monsterOrder.push(MB.JACKAL, MB.REBEL);
+      return this.rankByNameOrder(cards, [
+        ...monsterOrder,
       ]);
     }
 
@@ -2026,7 +2146,12 @@ export default class MirageboundStrategy extends BaseStrategy {
     if (card.name === MB.GLASS_SOVEREIGN || card.name === MB.DESERT_LEVIATHAN) {
       return "attack";
     }
-    if (card.name === MB.FALSE_KING || card.name === MB.DANCER || card.name === MB.JACKAL) {
+    if (
+      card.name === MB.FALSE_KING ||
+      card.name === MB.REBEL ||
+      card.name === MB.DANCER ||
+      card.name === MB.JACKAL
+    ) {
       return "attack";
     }
 

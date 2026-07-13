@@ -2,6 +2,7 @@ import {
   cardMatchesEventFilters,
   debugTriggerLog,
   matchesOwnerFilter,
+  matchesZoneFilter,
 } from "./shared.js";
 
 function resolvePlayerForCard(game, card, fallback = null) {
@@ -18,6 +19,26 @@ function collectBoardSources(owner) {
   if (Array.isArray(owner.spellTrap)) sources.push(...owner.spellTrap);
   if (owner.fieldSpell) sources.push(owner.fieldSpell);
   return sources.filter(Boolean);
+}
+
+function hasHandPositionChangeTrigger(card) {
+  return (card?.effects || []).some(
+    (effect) =>
+      effect &&
+      effect.timing === "on_event" &&
+      effect.event === "position_change" &&
+      effect.requireZone &&
+      matchesZoneFilter("hand", effect.requireZone),
+  );
+}
+
+function collectHandPositionChangeSources(owner) {
+  if (!owner || !Array.isArray(owner.hand)) return [];
+  return owner.hand.filter(hasHandPositionChangeTrigger);
+}
+
+function sourceAlreadyListed(sources, card) {
+  return sources.some((entry) => entry.card === card);
 }
 
 function matchesPositionFilter(actual, filterValue) {
@@ -74,7 +95,8 @@ function buildPerEventCardEffect(effect, eventCard) {
  */
 export async function collectPositionChangeTriggers(payload) {
   const entries = [];
-  const orderRule = "changed card owner board observers -> opponent board observers";
+  const orderRule =
+    "changed card owner board observers -> opponent board observers -> hand observers";
 
   const { card, fromPosition, toPosition } = payload || {};
   if (!card || !fromPosition || !toPosition || fromPosition === toPosition) {
@@ -107,13 +129,18 @@ export async function collectPositionChangeTriggers(payload) {
       return;
     }
 
-    if (sourceCard.isFacedown === true) return;
+    const isBoardSource =
+      sourceZone === "field" ||
+      sourceZone === "spellTrap" ||
+      sourceZone === "fieldSpell";
+
+    if (isBoardSource && sourceCard.isFacedown === true) return;
 
     if (effect.requireFaceup === true && sourceCard.isFacedown === true) {
       return;
     }
 
-    if (effect.requireZone && effect.requireZone !== sourceZone) {
+    if (effect.requireZone && !matchesZoneFilter(sourceZone, effect.requireZone)) {
       return;
     }
 
@@ -162,6 +189,12 @@ export async function collectPositionChangeTriggers(payload) {
       effect.positionChangeSourceFilters ||
       effect.positionChangeSourceCardFilters ||
       null;
+    const requiresEffectPositionChange =
+      effect.positionChangedByEffect === true ||
+      effect.requirePositionChangedByEffect === true;
+    if (requiresEffectPositionChange && !positionChangeSourceCard) {
+      return;
+    }
     if (
       sourceFilters &&
       !matchesCardFilters(this, positionChangeSourceCard, sourceFilters)
@@ -181,6 +214,8 @@ export async function collectPositionChangeTriggers(payload) {
       toPosition,
       wasFlipped: payload.wasFlipped === true,
       positionChangeSourceCard,
+      positionChangedByEffect: !!positionChangeSourceCard,
+      effectId: payload.effectId || null,
       actionContext,
     };
 
@@ -228,9 +263,22 @@ export async function collectPositionChangeTriggers(payload) {
   };
 
   for (const { owner, other } of observerSides) {
+    const sourceEntries = [];
     for (const sourceCard of collectBoardSources(owner)) {
+      if (!sourceCard) continue;
+      sourceEntries.push({
+        card: sourceCard,
+        zone: this.findCardZone?.(owner, sourceCard) || "field",
+      });
+    }
+    for (const sourceCard of collectHandPositionChangeSources(owner)) {
+      if (!sourceCard || sourceAlreadyListed(sourceEntries, sourceCard)) {
+        continue;
+      }
+      sourceEntries.push({ card: sourceCard, zone: "hand" });
+    }
+    for (const { card: sourceCard, zone: sourceZone } of sourceEntries) {
       if (!Array.isArray(sourceCard?.effects)) continue;
-      const sourceZone = this.findCardZone?.(owner, sourceCard) || "field";
       for (const effect of sourceCard.effects) {
         collectFromSource(sourceCard, owner, other, sourceZone, effect);
       }

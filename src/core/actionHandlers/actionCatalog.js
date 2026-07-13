@@ -2191,10 +2191,11 @@ export const ACTION_CATALOG = {
     summary: "Returns target cards to hand.",
     handler: "handleReturnToHand",
     required: ["targetRef"],
-    optional: ["fromZone", "haltOnFailure", "stopOnFailure"],
+    optional: ["fromZone", "contextLabel", "haltOnFailure", "stopOnFailure"],
     fields: {
       ...COMMON_TARGET_FIELDS,
       fromZone: field("fromZone"),
+      contextLabel: { type: "string" },
       haltOnFailure: { type: "boolean" },
       stopOnFailure: { type: "boolean" },
     },

@@ -395,6 +395,25 @@ function addPlayerZoneSources(entries, seen, state, player, zones = []) {
   }
 }
 
+function hasHandPositionChangeTrigger(card) {
+  return (card?.effects || []).some(
+    (effect) =>
+      effect &&
+      effect.timing === "on_event" &&
+      effect.event === "position_change" &&
+      effect.requireZone &&
+      matchesZoneFilter("hand", effect.requireZone),
+  );
+}
+
+function addHandPositionChangeSources(entries, seen, state, player) {
+  if (!player || !Array.isArray(player.hand)) return;
+  for (const card of player.hand) {
+    if (!hasHandPositionChangeTrigger(card)) continue;
+    addSimEventSource(entries, seen, player, card, "hand");
+  }
+}
+
 function collectSimulatedEventSources(state, eventName, payload = {}) {
   const entries = [];
   entries._bot = state?.bot || null;
@@ -451,6 +470,7 @@ function collectSimulatedEventSources(state, eventName, payload = {}) {
         "fieldSpell",
         "spellTrap",
       ]);
+      addHandPositionChangeSources(entries, seen, state, player);
     }
   }
 
@@ -565,6 +585,8 @@ function matchesSimulatedEventEffect(
   if (eventName === "position_change") {
     const changedOwner = payload.player || findCardOwner(state, eventCard);
     const changedRole = ownerRoleFor(sourceEntry.player, changedOwner);
+    const positionChangeSourceCard =
+      payload.sourceCard || payload.source || options.sourceCard || null;
     const changedCardOwner = effect.changedCardOwner || effect.eventCardOwner || null;
     if (changedCardOwner && changedRole !== changedCardOwner) return false;
     if (effect.changedCardRequireFaceup === true && eventCard?.isFacedown === true) {
@@ -576,10 +598,16 @@ function matchesSimulatedEventEffect(
     ) {
       return false;
     }
+    const requiresEffectPositionChange =
+      effect.positionChangedByEffect === true ||
+      effect.requirePositionChangedByEffect === true;
+    if (requiresEffectPositionChange && !positionChangeSourceCard) {
+      return false;
+    }
     if (
       effect.positionChangeSourceFilters &&
       !matchesTargetFilters(
-        payload.sourceCard || options.sourceCard,
+        positionChangeSourceCard,
         effect.positionChangeSourceFilters,
         sourceCard,
       )
@@ -630,7 +658,7 @@ function buildSimEventActionContext(eventName, payload = {}, base = {}) {
     wasFaceupBeforeMove: payload.wasFaceupBeforeMove === true,
     wasFaceupBeforeChange: payload.wasFaceupBeforeChange === true,
     movementSourceCard: payload.sourceCard || null,
-    positionChangeSourceCard: payload.sourceCard || null,
+    positionChangeSourceCard: payload.sourceCard || payload.source || null,
   };
 }
 

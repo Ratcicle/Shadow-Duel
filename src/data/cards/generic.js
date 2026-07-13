@@ -1017,4 +1017,74 @@ export const genericCards = [
       },
     ],
   },
+  {
+    id: 26,
+    name: "Misty Katana Ghost Samurai",
+    cardKind: "monster",
+    atk: 1700,
+    def: 0,
+    level: 4,
+    type: "Zombie",
+    attribute: "Water",
+    description:
+      'If this card is Normal Summoned: You can send 1 Tuner monster from your Deck to the Graveyard. You can banish this card from your Graveyard, then target 1 Level 4 or lower Tuner monster in your Graveyard; Special Summon it. You can only use each effect of "Misty Katana Ghost Samurai" once per turn.',
+    image: "assets/Misty Katana Ghost Samurai.png",
+    effects: [
+      {
+        id: "misty_katana_ghost_samurai_send_tuner",
+        timing: "on_event",
+        event: "after_summon",
+        requireSelfAsSummoned: true,
+        summonMethods: ["normal"],
+        promptUser: true,
+        promptMessage:
+          'Activate "Misty Katana Ghost Samurai" to send 1 Tuner from your Deck to the Graveyard?',
+        oncePerTurn: true,
+        oncePerTurnName: "misty_katana_ghost_samurai_send_tuner",
+        targets: [
+          {
+            id: "misty_katana_ghost_samurai_deck_tuner",
+            owner: "self",
+            zone: "deck",
+            cardKind: "monster",
+            isTuner: true,
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "move",
+            targetRef: "misty_katana_ghost_samurai_deck_tuner",
+            player: "self",
+            fromZone: "deck",
+            to: "graveyard",
+            contextLabel: "misty_katana_ghost_samurai_send_tuner",
+          },
+        ],
+      },
+      {
+        id: "misty_katana_ghost_samurai_revive_tuner",
+        timing: "ignition",
+        requireZone: "graveyard",
+        requirePhase: ["main1", "main2"],
+        oncePerTurn: true,
+        oncePerTurnName: "misty_katana_ghost_samurai_revive_tuner",
+        actions: [
+          {
+            type: "special_summon_from_zone",
+            zone: "graveyard",
+            filters: {
+              cardKind: "monster",
+              isTuner: true,
+              maxLevel: 4,
+            },
+            count: { min: 1, max: 1 },
+            banishCost: true,
+            position: "choice",
+            promptPlayer: true,
+          },
+        ],
+      },
+    ],
+  },
 ];

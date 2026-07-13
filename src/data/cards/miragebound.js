@@ -997,4 +997,66 @@ export const mirageboundCards = [
       },
     ],
   },
+  {
+    id: 364,
+    name: "Miragebound Rebel",
+    cardKind: "monster",
+    atk: 2100,
+    def: 1200,
+    level: 7,
+    type: "Spellcaster",
+    attribute: "Earth",
+    archetype: "Miragebound",
+    piercing: true,
+    description:
+      'If a monster\'s battle position is changed by a card effect (Quick Effect): You can Special Summon this card from your hand. If this card attacks a Defense Position monster, inflict piercing battle damage. During the End Phase: return this card from the field to the hand. You can only use each effect of "Miragebound Rebel" once per turn.',
+    image: "assets/Miragebound Rebel.png",
+    effects: [
+      {
+        id: "miragebound_rebel_hand_summon_on_position_change",
+        timing: "on_event",
+        event: "position_change",
+        requireZone: "hand",
+        speed: 2,
+        isQuickEffect: true,
+        promptUser: true,
+        promptMessage:
+          'Activate "Miragebound Rebel" to Special Summon it from your hand?',
+        positionChangedByEffect: true,
+        eventCardFilters: {
+          cardKind: "monster",
+        },
+        oncePerTurn: true,
+        oncePerTurnName: "miragebound_rebel_hand_summon_on_position_change",
+        actions: [
+          {
+            type: "special_summon_from_zone",
+            zone: "hand",
+            requireSource: true,
+            position: "choice",
+            haltOnFailure: true,
+          },
+        ],
+      },
+      {
+        id: "miragebound_rebel_end_phase_return",
+        timing: "on_event",
+        event: "end_phase",
+        requireZone: "field",
+        requireFaceup: true,
+        promptUser: false,
+        endPhasePlayer: "any",
+        oncePerTurn: true,
+        oncePerTurnName: "miragebound_rebel_end_phase_return",
+        actions: [
+          {
+            type: "return_to_hand",
+            targetRef: "self",
+            fromZone: "field",
+            contextLabel: "miragebound_rebel_end_phase_return",
+          },
+        ],
+      },
+    ],
+  },
 ];

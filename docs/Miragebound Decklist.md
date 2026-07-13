@@ -14,9 +14,9 @@ O arquetipo **Miragebound** e focado em controle de posicao de batalha, retorno 
 
 ---
 
-## Decklist (13 cartas)
+## Decklist (14 cartas)
 
-### Monstros (Main Deck) (6)
+### Monstros (Main Deck) (7)
 
 | ID  | Nome                        | Tipo        | Nivel | ATK  | DEF  |
 | --- | --------------------------- | ----------- | ----- | ---- | ---- |
@@ -26,6 +26,7 @@ O arquetipo **Miragebound** e focado em controle de posicao de batalha, retorno 
 | 356 | Miragebound Glass Viper     | Reptile     | 3     | 1000 | 1600 |
 | 357 | Miragebound Sand Priestess  | Spellcaster | 4     | 1300 | 1800 |
 | 358 | Miragebound False King      | Fiend       | 6     | 2200 | 1800 |
+| 364 | Miragebound Rebel           | Spellcaster | 7     | 2100 | 1200 |
 
 ### Magias (Main Deck) (4)
 
@@ -78,6 +79,9 @@ O arquetipo **Miragebound** e focado em controle de posicao de batalha, retorno 
 
 **358 - Miragebound False King** (L6 Fiend | ATK 2200 / DEF 1800)
 > You can Special Summon this card from your hand by returning 1 "Miragebound" monster you control to the hand. You can target 1 monster your opponent controls; change its battle position. You can only use each effect of "Miragebound False King" once per turn.
+
+**364 - Miragebound Rebel** (L7 Spellcaster | ATK 2100 / DEF 1200)
+> If a monster's battle position is changed by a card effect (Quick Effect): You can Special Summon this card from your hand. If this card attacks a Defense Position monster, inflict piercing battle damage. During the End Phase: return this card from the field to the hand. You can only use each effect of "Miragebound Rebel" once per turn.
 
 ### Magias
 
