@@ -1129,7 +1129,14 @@ export async function finishCombat(attacker, target, options = {}) {
           after: player.lp,
         });
       }
+      if (gained > 0) {
+        this.ui?.log?.(
+          `${player.name || player.id} gained ${gained} LP instead of taking battle damage.`,
+        );
+      }
+      return 0;
     } else {
+      const before = Number(player.lp || 0);
       const actualLoss = getActualLpLoss(player, amount);
       this.inflictDamage(player, amount, {
         sourceCard: cardInvolved,
@@ -1140,8 +1147,8 @@ export async function finishCombat(attacker, target, options = {}) {
         suppressVisual:
           consumeBattleLpLossFeedback?.(player, actualLoss) === true,
       });
+      return Math.max(0, before - Number(player.lp || 0));
     }
-    return amount;
   };
 
   const logBattleResult = (message) => {
@@ -1187,8 +1194,8 @@ export async function finishCombat(attacker, target, options = {}) {
       totalDamageDealt = appliedDamage;
       logBattleResult(
         appliedDamage > 0
-          ? `${attacker.name} destroyed ${target.name} and dealt ${appliedDamage} damage.`
-          : `${attacker.name} destroyed ${target.name}, but no battle damage was taken.`,
+          ? `${attacker.name} won the battle against ${target.name} and dealt ${appliedDamage} damage.`
+          : `${attacker.name} won the battle against ${target.name}, but no battle damage was taken.`,
       );
 
       logBattleDestroyCheck("attacker over atk target");
@@ -1250,8 +1257,8 @@ export async function finishCombat(attacker, target, options = {}) {
       totalDamageDealt = appliedDamage;
       logBattleResult(
         appliedDamage > 0
-          ? `${attacker.name} was destroyed by ${target.name} and took ${appliedDamage} damage.`
-          : `${attacker.name} was destroyed by ${target.name}, but no battle damage was taken.`,
+          ? `${attacker.name} lost the battle against ${target.name} and took ${appliedDamage} damage.`
+          : `${attacker.name} lost the battle against ${target.name}, but no battle damage was taken.`,
       );
 
       logBattleDestroyCheck("attacker loses to atk target");

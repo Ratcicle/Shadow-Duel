@@ -143,6 +143,18 @@ export async function resolveEvent(eventName, payload, options = {}) {
         triggerCount: entries.length,
         results: [],
       };
+    } else if (
+      this.chainSystem?.isChainResolving?.() === true ||
+      this.chainSystem?.isPreparingActivation === true ||
+      this.chainSystem?.isChainWindowOpen?.() === true
+    ) {
+      resolutionResult = this.queuePendingChainEvent({
+        eventName,
+        payload,
+        entries,
+        orderRule,
+        onComplete,
+      });
     } else {
       resolutionResult = await this.resolveEventEntries(
         eventName,
@@ -209,6 +221,96 @@ export async function resolveEvent(eventName, payload, options = {}) {
       results: [],
     }
   );
+}
+
+/**
+ * Queues the already-collected trigger package for FIFO processing after the
+ * current Chain. Event listeners and analytics have already observed it.
+ * @this {import('../../Game.js').default}
+ */
+export function queuePendingChainEvent(entry = {}) {
+  if (!entry?.eventName) {
+    return { ok: false, reason: "missing_event", deferred: false };
+  }
+  if (!Array.isArray(this.pendingChainEvents)) {
+    this.pendingChainEvents = [];
+  }
+  this.pendingChainEvents.push({
+    ...entry,
+    payload: entry.payload || {},
+    entries: Array.isArray(entry.entries) ? entry.entries : [],
+    queuedOnTurn: this.turnCounter,
+  });
+  this.devLog?.("CHAIN_EVENT_DEFERRED", {
+    summary: `${entry.eventName} queued until Chain completion`,
+    event: entry.eventName,
+    pendingCount: this.pendingChainEvents.length,
+  });
+  return {
+    ok: true,
+    deferred: true,
+    eventName: entry.eventName,
+    triggerCount: Array.isArray(entry.entries) ? entry.entries.length : 0,
+    results: [],
+  };
+}
+
+/**
+ * Resolves deferred event packages in occurrence order. Each triggered effect
+ * re-enters the canonical activation pipeline and therefore opens its own
+ * response window without nesting inside the previous Chain.
+ * @this {import('../../Game.js').default}
+ */
+export async function flushPendingChainEvents({ reason = null } = {}) {
+  if (this._flushingPendingChainEvents === true) {
+    return { ok: true, flushed: 0, deferred: true };
+  }
+  if (
+    this.chainSystem?.isChainResolving?.() === true ||
+    this.chainSystem?.isChainWindowOpen?.() === true ||
+    this.chainSystem?.isPreparingActivation === true
+  ) {
+    return { ok: true, flushed: 0, deferred: true };
+  }
+  if (!Array.isArray(this.pendingChainEvents) || this.pendingChainEvents.length === 0) {
+    return { ok: true, flushed: 0 };
+  }
+
+  this._flushingPendingChainEvents = true;
+  let flushed = 0;
+  try {
+    while (this.pendingChainEvents.length > 0) {
+      if (
+        this.chainSystem?.isChainResolving?.() === true ||
+        this.chainSystem?.isChainWindowOpen?.() === true
+      ) {
+        break;
+      }
+      const entry = this.pendingChainEvents.shift();
+      if (!entry?.eventName) continue;
+      flushed += 1;
+      this.devLog?.("CHAIN_EVENT_FLUSHED", {
+        summary: `${entry.eventName} resumed after Chain`,
+        event: entry.eventName,
+        reason,
+      });
+      const result = await this.resolveEventEntries(
+        entry.eventName,
+        entry.payload || {},
+        entry.entries || [],
+        {
+          onComplete: entry.onComplete || null,
+          orderRule: entry.orderRule || null,
+        },
+      );
+      if (result?.needsSelection) {
+        return { ...result, flushed };
+      }
+    }
+  } finally {
+    this._flushingPendingChainEvents = false;
+  }
+  return { ok: true, flushed };
 }
 
 /**
@@ -354,17 +456,6 @@ export async function resolveEventEntries(
         payload?.targetOwner ||
         null,
     });
-  } else if (eventName === "effect_activated") {
-    if (payload?.card?.cardKind === "monster" && payload?.player) {
-      await this.checkAndOfferTraps("effect_activation", {
-        ...payload,
-        player: payload.player,
-        triggerPlayer: payload.player,
-        card: payload.card,
-        effect: payload.effect || null,
-        activationZone: payload.activationZone || "field",
-      });
-    }
   }
 
   if (eventName === "battle_damage") {

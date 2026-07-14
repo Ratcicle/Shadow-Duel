@@ -109,6 +109,7 @@ export async function runActivationPipeline(config = {}) {
     allowDuringSelection: config.allowDuringSelection === true,
     allowDuringResolving: config.allowDuringResolving === true,
     allowDuringOpponentTurn: config.allowDuringOpponentTurn === true,
+    allowDuringChainWindow: config.allowDuringChainWindow === true,
   });
   if (!guardResult.ok) {
     logPipeline("PIPELINE_GUARD_BLOCKED", {
@@ -232,34 +233,18 @@ export async function runActivationPipeline(config = {}) {
     };
   }
 
-  let commitInfo = null;
-  if (typeof config.commit === "function") {
-    commitInfo = await config.commit();
-    if (!commitInfo || !commitInfo.cardRef) {
-      return createActionResult({
-        reason: "Activation commit failed.",
-        code: "ACTIVATION_COMMIT_FAILED",
-      });
-    }
-    resolvedCard = commitInfo.cardRef;
-    resolvedZone = commitInfo.activationZone || resolvedZone;
-    logPipeline("PIPELINE_COMMIT", {
-      activationZone: resolvedZone,
-      fromIndex: commitInfo.fromIndex,
-      replacedFieldSpell: commitInfo.replacedFieldSpell?.name || null,
-    });
-    this.updateBoard?.();
-    if (typeof this.waitForAiPresentationStep === "function") {
-      await this.waitForAiPresentationStep(owner);
-    }
-  }
-
-  const committed =
-    config.activationContext?.committed === true || !!commitInfo;
+  let commitInfo = config.activationContext?.commitInfo || null;
+  const committed = config.activationContext?.committed === true;
   const fromHand =
-    config.activationContext?.fromHand === true || !!commitInfo;
-  const resolvedActivationZone =
-    resolvedZone || config.activationContext?.activationZone || null;
+    config.activationContext?.fromHand === true || typeof config.commit === "function";
+  let resolvedActivationZone =
+    resolvedZone ||
+    config.activationContext?.activationZone ||
+    (typeof config.commit === "function"
+      ? resolvedCard?.subtype === "field"
+        ? "fieldSpell"
+        : "spellTrap"
+      : null);
   const explicitAutoSelect =
     typeof config.activationContext?.autoSelectSingleTarget === "boolean"
       ? config.activationContext.autoSelectSingleTarget
@@ -286,7 +271,7 @@ export async function runActivationPipeline(config = {}) {
     try {
       return await config.activate(
         selections,
-        activationContext,
+        { ...activationContext, prepareOnly: true },
         resolvedActivationZone,
         resolvedCard,
         owner,
@@ -305,55 +290,50 @@ export async function runActivationPipeline(config = {}) {
     }
   };
 
-  const opensNegationWindow = (effect) =>
-    Array.isArray(effect?.actions) &&
-    effect.actions.some(
-      (action) =>
-        action?.type === "negate_summon_or_activation_and_destroy" ||
-        action?.type === "negate_activation",
-    );
-
-  const offerActivationNegationWindow = async () => {
-    if (
-      config.openActivationWindow === false ||
-      config.activationContext?.skipActivationWindow === true ||
-      opensNegationWindow(config.effect || oncePerTurnConfig?.effect) ||
-      this.disableChains ||
-      !this.chainSystem ||
-      this.chainSystem.isChainResolving?.() ||
-      this.chainSystem.isChainWindowOpen?.()
-    ) {
-      return { ok: true };
+  const commitPreparedSource = async () => {
+    if (activationContext.committed === true) {
+      return { success: true };
     }
-
-    const activationType =
-      resolvedCard.cardKind === "monster" ? "effect_activation" : "card_activation";
-    const activationAttempt = {
-      card: resolvedCard,
-      player: owner,
-      effect: config.effect || oncePerTurnConfig?.effect || null,
+    if (typeof config.commit !== "function") {
+      if (
+        resolvedActivationZone === "spellTrap" &&
+        resolvedCard?.isFacedown === true &&
+        (resolvedCard.cardKind === "spell" || resolvedCard.cardKind === "trap")
+      ) {
+        resolvedCard.isFacedown = false;
+        await this.presentSpellTrapActivationFlip?.(
+          resolvedCard,
+          owner,
+          resolvedActivationZone,
+        );
+      }
+      activationContext.committed = true;
+      activationContext.activationZone = resolvedActivationZone;
+      return { success: true };
+    }
+    commitInfo = await config.commit();
+    if (!commitInfo || !commitInfo.cardRef) {
+      return createActionResult({
+        reason: "Activation commit failed.",
+        code: "ACTIVATION_COMMIT_FAILED",
+      });
+    }
+    resolvedCard = commitInfo.cardRef;
+    resolvedZone = commitInfo.activationZone || resolvedZone;
+    resolvedActivationZone = commitInfo.activationZone || resolvedActivationZone;
+    activationContext.committed = true;
+    activationContext.commitInfo = commitInfo;
+    activationContext.activationZone = resolvedActivationZone;
+    logPipeline("PIPELINE_COMMIT", {
       activationZone: resolvedActivationZone,
-      negated: false,
-    };
-    const context = {
-      type: activationType,
-      event: activationType,
-      card: resolvedCard,
-      player: owner,
-      triggerPlayer: owner,
-      activationZone: resolvedActivationZone,
-      activationAttempt,
-      addTriggerToChain: false,
-    };
-
-    const chainResult = await this.chainSystem.openChainWindow(context);
-    if (chainResult?.needsSelection) {
-      return chainResult;
+      fromIndex: commitInfo.fromIndex,
+      replacedFieldSpell: commitInfo.replacedFieldSpell?.name || null,
+    });
+    this.updateBoard?.();
+    if (typeof this.waitForAiPresentationStep === "function") {
+      await this.waitForAiPresentationStep(owner);
     }
-    if (activationAttempt.negated || context.negated) {
-      return { ok: false, negated: true, reason: "activation_negated" };
-    }
-    return { ok: true };
+    return { success: true };
   };
 
   const handleResult = async (result, fromSelection = false) => {
@@ -548,8 +528,321 @@ export async function runActivationPipeline(config = {}) {
       return normalized;
     }
 
+    const preparedEffect =
+      normalized.effect || oncePerTurnInfo?.effect || activationEffect || config.effect;
+    const preparedSelections =
+      normalized.targets || normalized.selections || config.selections || {};
+
+    if (fromSelection) {
+      const gateResult =
+        typeof config.gate === "function" ? config.gate() : { ok: true };
+      const previewResult =
+        gateResult?.ok === false
+          ? gateResult
+          : typeof config.preview === "function"
+            ? config.preview()
+            : { ok: true };
+      const restrictionResult =
+        previewResult?.ok === false
+          ? previewResult
+          : this.canActivateCardEffectUnderRestrictions?.(
+              resolvedCard,
+              owner,
+              preparedEffect,
+              { silent: true },
+            ) || { ok: true };
+      if (restrictionResult?.ok === false) {
+        const revalidationFailure = this.createActionResult({
+          reason:
+            restrictionResult.reason ||
+            "Activation is no longer available after target selection.",
+          code: restrictionResult.code || "ACTIVATION_REVALIDATION_FAILED",
+        });
+        if (typeof config.onFailure === "function") {
+          await config.onFailure(revalidationFailure, activationContext);
+        }
+        trackActivationAttempt(revalidationFailure);
+        return revalidationFailure;
+      }
+    }
+
+    const activationCosts =
+      typeof this.chainSystem?.getEffectActivationCosts === "function"
+        ? this.chainSystem.getEffectActivationCosts(preparedEffect)
+        : preparedEffect?.activationCosts || [];
+    if (
+      activationCosts.length > 0 &&
+      typeof this.effectEngine?.checkActionPreviewRequirements === "function"
+    ) {
+      const costPreview = this.effectEngine.checkActionPreviewRequirements(
+        activationCosts,
+        {
+          source: resolvedCard,
+          player: owner,
+          opponent: this.getOpponent?.(owner) || null,
+          effect: preparedEffect,
+          activationZone: resolvedActivationZone,
+          activationContext: {
+            ...activationContext,
+            preview: true,
+            selections: preparedSelections,
+          },
+          _actionTargets: preparedSelections,
+        },
+      );
+      if (costPreview?.ok === false) {
+        const costFailure = this.createActionResult({
+          reason: costPreview.reason || "Activation cost cannot be paid.",
+          code: costPreview.code || "ACTIVATION_COST_UNAVAILABLE",
+        });
+        if (typeof config.onFailure === "function") {
+          await config.onFailure(costFailure, activationContext);
+        }
+        trackActivationAttempt(costFailure);
+        return costFailure;
+      }
+    }
+
+    const commitResult = await commitPreparedSource();
+    if (commitResult?.success === false) {
+      if (typeof config.onFailure === "function") {
+        await config.onFailure(commitResult, activationContext);
+      }
+      trackActivationAttempt(commitResult);
+      return commitResult;
+    }
+
+    let resolutionResult = normalized;
+    const preparingForExistingChain = config.prepareForExistingChain === true;
+    const shouldUseChain =
+      !preparingForExistingChain &&
+      normalized.placementOnly !== true &&
+      !!preparedEffect &&
+      config.openActivationWindow !== false &&
+      config.activationContext?.skipActivationWindow !== true &&
+      this.disableChains !== true &&
+      this.chainSystem?.chainsDisabled !== true &&
+      typeof this.chainSystem?.openActivationChain === "function";
+
+    if (normalized.placementOnly !== true && preparedEffect) {
+      const preparedActivationContext = {
+        ...activationContext,
+        ...(normalized.activationContext || {}),
+        prepareOnly: false,
+        committed: activationContext.committed === true,
+        selections: preparedSelections,
+      };
+      const preparedActivation = this.chainSystem?.createPreparedActivation
+        ? this.chainSystem.createPreparedActivation({
+            card: resolvedCard,
+            player: owner,
+            effect: preparedEffect,
+            zone: resolvedActivationZone,
+            selections: preparedSelections,
+            activationContext: preparedActivationContext,
+            context:
+              normalized.resolutionContext ||
+              activationContext.actionContext ||
+              null,
+            committed: activationContext.committed === true,
+            skipDefaultFinalization: typeof config.finalize === "function",
+            skipUsageRegistration: true,
+            pipelineManaged: true,
+          })
+        : {
+            card: resolvedCard,
+            player: owner,
+            effect: preparedEffect,
+            zone: resolvedActivationZone,
+            selections: preparedSelections,
+            activationContext: preparedActivationContext,
+          };
+
+      let costResult = { success: true };
+      if (
+        (shouldUseChain || preparingForExistingChain) &&
+        typeof this.chainSystem?.payActivationCosts === "function"
+      ) {
+        this.chainSystem.isPreparingActivation = true;
+        try {
+          costResult = await this.chainSystem.payActivationCosts(
+            preparedActivation,
+            activationContext.actionContext || null,
+          );
+        } finally {
+          this.chainSystem.isPreparingActivation = false;
+        }
+      }
+      if (costResult?.success === false) {
+        await finalizeNegatedSpellTrapActivation(
+          this,
+          resolvedCard,
+          owner,
+          resolvedActivationZone,
+          { activationContext },
+        );
+        if (typeof config.onFailure === "function") {
+          await config.onFailure(costResult, activationContext);
+        }
+        trackActivationAttempt(costResult);
+        return this.normalizeActivationResult(costResult);
+      }
+
+      if (preparingForExistingChain) {
+        preparedActivation.pipelineCompletion = async (
+          linkResult = { success: true },
+        ) => {
+          const succeeded =
+            linkResult?.success !== false &&
+            linkResult?.negated !== true &&
+            linkResult?.fizzled !== true;
+          if (!succeeded) {
+            const failedResult = this.normalizeActivationResult({
+              ...linkResult,
+              success: false,
+              needsSelection: false,
+            });
+            if (
+              linkResult?.negated !== true &&
+              typeof config.finalize === "function"
+            ) {
+              await config.finalize(failedResult, {
+                card: resolvedCard,
+                owner,
+                activationZone: resolvedActivationZone,
+                activationContext,
+              });
+            }
+            if (typeof config.onFailure === "function") {
+              await config.onFailure(failedResult, activationContext);
+            }
+            trackActivationAttempt(failedResult, {
+              blocked: linkResult?.negated === true,
+            });
+            return failedResult;
+          }
+
+          const completed = {
+            ...normalized,
+            ...linkResult,
+            success: true,
+            ok: true,
+            needsSelection: false,
+            effect: preparedEffect,
+            targets: preparedSelections,
+          };
+          if (typeof config.finalize === "function") {
+            await config.finalize(completed, {
+              card: resolvedCard,
+              owner,
+              activationZone: resolvedActivationZone,
+              activationContext,
+            });
+          }
+          const shouldCountMaterialActivation =
+            resolvedCard?.cardKind === "monster" &&
+            (selectionKind === "monsterEffect" ||
+              selectionKind === "graveyardEffect");
+          if (shouldCountMaterialActivation) {
+            this.recordMaterialEffectActivation(owner, resolvedCard, {
+              contextLabel: selectionKind,
+            });
+          }
+          if (oncePerTurnInfo) {
+            this.markOncePerTurnUsed(
+              oncePerTurnInfo.card,
+              oncePerTurnInfo.player,
+              oncePerTurnInfo.effect,
+              { lockKey: oncePerTurnInfo.lockKey },
+            );
+          }
+          if (typeof config.onSuccess === "function") {
+            await config.onSuccess(completed, activationContext);
+          }
+          trackActivationAttempt(completed);
+          return completed;
+        };
+        const preparedResult = {
+          ...normalized,
+          success: true,
+          ok: true,
+          needsSelection: false,
+          prepared: true,
+          preparedActivation,
+          effect: preparedEffect,
+          targets: preparedSelections,
+        };
+        if (typeof config.onPreparationComplete === "function") {
+          await config.onPreparationComplete(preparedResult, activationContext);
+        }
+        return preparedResult;
+      }
+
+      if (shouldUseChain) {
+        resolutionResult = await this.chainSystem.openActivationChain(
+          preparedActivation,
+        );
+      } else {
+        resolutionResult = await config.activate(
+          preparedSelections,
+          {
+            ...activationContext,
+            prepareOnly: false,
+            committed: activationContext.committed === true,
+            selections: preparedSelections,
+          },
+          resolvedActivationZone,
+          resolvedCard,
+          owner,
+        );
+      }
+
+      if (resolutionResult?.negated === true) {
+        const negatedResult = {
+          success: false,
+          ok: false,
+          needsSelection: false,
+          reason: "Activation was negated.",
+          code: "ACTIVATION_NEGATED",
+          activationNegated: true,
+        };
+        if (typeof config.onFailure === "function") {
+          await config.onFailure(negatedResult, activationContext);
+        }
+        trackActivationAttempt(negatedResult, { blocked: true });
+        return negatedResult;
+      }
+
+      resolutionResult = this.normalizeActivationResult(resolutionResult);
+      if (!resolutionResult.success) {
+        if (typeof config.finalize === "function") {
+          await config.finalize(resolutionResult, {
+            card: resolvedCard,
+            owner,
+            activationZone: resolvedActivationZone,
+            activationContext,
+          });
+        }
+        if (typeof config.onFailure === "function") {
+          await config.onFailure(resolutionResult, activationContext);
+        }
+        trackActivationAttempt(resolutionResult);
+        return resolutionResult;
+      }
+    }
+
+    const completedResult = {
+      ...normalized,
+      ...resolutionResult,
+      success: true,
+      ok: true,
+      needsSelection: false,
+      effect: preparedEffect,
+      targets: preparedSelections,
+    };
+
     if (typeof config.finalize === "function") {
-      await config.finalize(normalized, {
+      await config.finalize(completedResult, {
         card: resolvedCard,
         owner,
         activationZone: resolvedActivationZone,
@@ -577,59 +870,12 @@ export async function runActivationPipeline(config = {}) {
     logPipeline("PIPELINE_FINALIZE", {
       activationZone: resolvedActivationZone,
     });
-    if (
-      config.emitEffectActivated !== false &&
-      selectionKind !== "triggered" &&
-      typeof this.emitEffectActivated === "function"
-    ) {
-      await this.emitEffectActivated({
-        card: resolvedCard,
-        player: owner,
-        effect: oncePerTurnInfo?.effect || activationEffect,
-        activationZone: resolvedActivationZone,
-        activationContext,
-        effectType: selectionKind,
-        placementOnly: normalized.placementOnly === true,
-      });
-    }
     if (typeof config.onSuccess === "function") {
-      await config.onSuccess(normalized, activationContext);
+      await config.onSuccess(completedResult, activationContext);
     }
-    trackActivationAttempt({ ...normalized, success: true });
-    return normalized;
+    trackActivationAttempt({ ...completedResult, success: true });
+    return completedResult;
   };
-
-  const negationWindowResult = await offerActivationNegationWindow();
-  if (negationWindowResult?.needsSelection) {
-    return negationWindowResult;
-  }
-  if (negationWindowResult?.negated) {
-    const negatedResult = {
-      success: false,
-      ok: false,
-      needsSelection: false,
-      reason: "Activation was negated.",
-      code: "ACTIVATION_NEGATED",
-      activationNegated: true,
-    };
-    const negatedFinalized = await finalizeNegatedSpellTrapActivation(
-      this,
-      resolvedCard,
-      owner,
-      resolvedActivationZone,
-      { activationContext },
-    );
-    if (negatedFinalized) {
-      logPipeline("PIPELINE_NEGATED_FINALIZE", {
-        activationZone: resolvedActivationZone,
-      });
-    }
-    if (typeof config.onFailure === "function") {
-      await config.onFailure(negatedResult, activationContext);
-    }
-    trackActivationAttempt(negatedResult, { blocked: true });
-    return negatedResult;
-  }
 
   const initialResult = await safeActivate(config.selections || null);
   return handleResult(initialResult, false);
@@ -653,6 +899,12 @@ export async function runActivationPipelineWait(config = {}) {
 
   const wrappedConfig = {
     ...config,
+    onPreparationComplete: async (result, ctx) => {
+      if (typeof config.onPreparationComplete === "function") {
+        await config.onPreparationComplete(result, ctx);
+      }
+      finishOnce(result);
+    },
     onSuccess: async (result, ctx) => {
       if (typeof config.onSuccess === "function") {
         await config.onSuccess(result, ctx);

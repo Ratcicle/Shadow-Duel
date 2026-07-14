@@ -68,7 +68,7 @@ export function notify(eventName, payload) {
  * Triggers caused by effect_activated do not emit another effect_activated.
  * @this {import('../../Game.js').default}
  */
-export async function emitEffectActivated(payload = {}) {
+export async function emitEffectActivated(payload = {}, options = {}) {
   const card = payload.card || payload.source || null;
   const player = payload.player || payload.owner || null;
   if (!card || !player) {
@@ -84,19 +84,35 @@ export async function emitEffectActivated(payload = {}) {
     null;
 
   if (sourceEvent === "effect_activated") {
+    this.notify?.("effect_activated", {
+      ...payload,
+      card,
+      player,
+      effect,
+      sourceEvent,
+      activationZone:
+        payload.activationZone ||
+        payload.activationContext?.activationZone ||
+        null,
+      effectType: payload.effectType || effect?.timing || "effect",
+    });
     return { ok: true, skipped: true, reason: "effect_activated_loop_guard" };
   }
 
-  return await this.emit("effect_activated", {
-    ...payload,
-    card,
-    player,
-    effect,
-    sourceEvent,
-    activationZone:
-      payload.activationZone ||
-      payload.activationContext?.activationZone ||
-      null,
-    effectType: payload.effectType || effect?.timing || "effect",
-  });
+  return await this.emit(
+    "effect_activated",
+    {
+      ...payload,
+      card,
+      player,
+      effect,
+      sourceEvent,
+      activationZone:
+        payload.activationZone ||
+        payload.activationContext?.activationZone ||
+        null,
+      effectType: payload.effectType || effect?.timing || "effect",
+    },
+    options,
+  );
 }

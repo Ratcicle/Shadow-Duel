@@ -1,5 +1,6 @@
 export default class NullChainSystem {
   constructor() {
+    this.chainsDisabled = true;
     this.chainWindowOpen = false;
     this.chainStack = [];
     this.chainResolving = false;
@@ -19,10 +20,16 @@ export default class NullChainSystem {
   getCurrentChainLength() {
     return this.chainStack.length;
   }
+  getChainLength() {
+    return this.chainStack.length;
+  }
   getCurrentChainLevel() {
     return this.currentChainLevel;
   }
   getLastLink() {
+    return null;
+  }
+  getLastChainLink() {
     return null;
   }
   getChainSummary() {
@@ -36,6 +43,26 @@ export default class NullChainSystem {
     this.chainResolving = false;
     this.chainStack = [];
     return false;
+  }
+  async openActivationChain(preparedActivation = {}) {
+    return {
+      success: true,
+      needsSelection: false,
+      chainsDisabled: true,
+      preparedActivation,
+    };
+  }
+  async openEventWindow() {
+    return { success: true, needsSelection: false, chainsDisabled: true };
+  }
+  createPreparedActivation(input = {}) {
+    return { ...input, prepared: true };
+  }
+  getEffectActivationCosts(effect) {
+    return Array.isArray(effect?.activationCosts) ? effect.activationCosts : [];
+  }
+  getEffectResolutionActions(effect) {
+    return Array.isArray(effect?.actions) ? effect.actions : [];
   }
   async offerChainResponse() {
     return { success: false, reason: "chains_disabled" };

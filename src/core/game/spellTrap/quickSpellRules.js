@@ -264,6 +264,13 @@ export function canActivateQuickSpellFromHand(
       { activationZone: "hand" },
     );
   }
+  if ((player.spellTrap || []).length >= 5) {
+    return failure(
+      "SPELL_TRAP_ZONE_FULL",
+      "Spell/Trap Zone is full.",
+      { activationZone: "hand" },
+    );
+  }
 
   const speedCheck = checkSpellSpeed(context);
   if (!speedCheck.ok) return { ...speedCheck, activationZone: "hand" };

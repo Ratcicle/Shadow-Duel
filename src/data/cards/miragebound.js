@@ -688,7 +688,7 @@ export const mirageboundCards = [
             count: { min: 1, max: 1 },
           },
         ],
-        actions: [
+        activationCosts: [
           {
             type: "move",
             targetRef: "self",
@@ -697,6 +697,8 @@ export const mirageboundCards = [
             to: "graveyard",
             contextLabel: "miragebound_mirror_path_cost",
           },
+        ],
+        actions: [
           {
             type: "move",
             targetRef: "miragebound_mirror_path_spell_trap_target",

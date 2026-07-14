@@ -213,6 +213,7 @@ export const bloomrotCards = [
             cardKind: "monster",
             archetype: "Bloomrot",
             count: { min: 1, max: 1 },
+            intent: "cost",
           },
           {
             id: "bloomrot_myco_weaver_spore_target",
@@ -222,7 +223,7 @@ export const bloomrotCards = [
             count: { min: 1, max: 1 },
           },
         ],
-        actions: [
+        activationCosts: [
           {
             type: "move",
             targetRef: "bloomrot_myco_weaver_cost",
@@ -231,6 +232,8 @@ export const bloomrotCards = [
             fromZone: "field",
             contextLabel: "bloomrot_myco_weaver_cost",
           },
+        ],
+        actions: [
           {
             type: "add_counter",
             targetRef: "bloomrot_myco_weaver_spore_target",

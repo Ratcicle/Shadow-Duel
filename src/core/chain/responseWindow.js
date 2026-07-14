@@ -7,13 +7,13 @@ import { isAI } from "../Player.js";
  */
 export async function openChainWindow(context) {
   if (!this.game || this.isResolving) {
-    console.log(
+    this.log(
       "[ChainSystem] Cannot open chain window: game missing or chain resolving",
     );
     return;
   }
 
-  console.log(
+  this.log(
     `[ChainSystem] Opening chain window: ${context?.type}`,
     context,
   );
@@ -22,9 +22,18 @@ export async function openChainWindow(context) {
   this.chainWindowContext = context;
   this.chainStack = [];
   this.currentChainLevel = 0;
+  this.chainEventCompletions = [];
+  this.chainTriggerEffectsOffered = new Map();
 
   // If there's a triggering card/effect, add it as Chain Link 1
-  if (
+  if (context?.preparedActivation) {
+    const rootLink = this.addToChain({
+      ...context.preparedActivation,
+      context,
+    });
+    const publication = await this.publishChainLinkActivation?.(rootLink);
+    await this.appendActivationTriggerPackages?.(publication, context);
+  } else if (
     context?.card &&
     context?.effect &&
     context?.player &&
@@ -49,11 +58,11 @@ export async function openChainWindow(context) {
   const respondingPlayer = this.getOpponent(triggerPlayer);
 
   // Offer response to non-trigger player first
-  console.log(
+  this.log(
     `[ChainSystem] Offering chain responses (first: ${respondingPlayer?.id}, second: ${triggerPlayer?.id})`,
   );
   await this.offerChainResponses(respondingPlayer, triggerPlayer, context);
-  console.log(
+  this.log(
     `[ChainSystem] Chain responses complete, resolving chain (${this.chainStack.length} links)`,
   );
 
@@ -65,25 +74,26 @@ export async function openChainWindow(context) {
     if (pendingResolution && typeof pendingResolution.then === "function") {
       return await pendingResolution;
     }
-    console.log(`[ChainSystem] Chain resolution paused for selection`);
+    this.log(`[ChainSystem] Chain resolution paused for selection`);
     return resolutionResult;
   }
-  console.log(`[ChainSystem] Chain resolution complete`);
+  this.log(`[ChainSystem] Chain resolution complete`);
+  await this.completeActivationTriggerPackages?.();
 
   // Clean up
-  console.log(`[ChainSystem] Cleaning up chain window`);
+  this.log(`[ChainSystem] Cleaning up chain window`);
   this.chainWindowOpen = false;
   this.chainWindowContext = null;
   this.chainStack = [];
   this.currentChainLevel = 0;
   this.cardsBeingResolved.clear();
-  console.log(`[ChainSystem] Chain window closed successfully`);
-  if (typeof this.game?.flushPendingTrapWindows === "function") {
-    const flushResult = await this.game.flushPendingTrapWindows({
+  this.log(`[ChainSystem] Chain window closed successfully`);
+  if (typeof this.game?.flushPendingChainEvents === "function") {
+    const eventFlushResult = await this.game.flushPendingChainEvents({
       reason: "chain_window_closed",
     });
-    if (flushResult?.needsSelection) {
-      return flushResult;
+    if (eventFlushResult?.needsSelection) {
+      return eventFlushResult;
     }
   }
   return resolutionResult;
@@ -103,22 +113,32 @@ export async function offerChainResponses(firstPlayer, secondPlayer, context) {
     const response = await this.offerChainResponse(currentResponder, context);
 
     if (response) {
-      // Player activated something, reset pass counter
-      consecutivePasses = 0;
-
-      // Add to chain with the zone from the response
-      this.addToChain(
-        response.card,
+      const preparation = await this.prepareChainResponse(
+        response,
         currentResponder,
-        response.effect,
         response.context || context,
-        response.selections,
-        response.zone,
       );
+      if (!preparation?.success || !preparation.preparedActivation) {
+        this.log(
+          `${currentResponder.id} response preparation failed: ${
+            preparation?.reason || "unknown reason"
+          }`,
+        );
+        consecutivePasses++;
+      } else {
+        // Player activated something, reset pass counter
+        consecutivePasses = 0;
+        const responseLink = this.addToChain(preparation.preparedActivation);
+        const publication = await this.publishChainLinkActivation?.(responseLink);
+        await this.appendActivationTriggerPackages?.(
+          publication,
+          response.context || context,
+        );
 
-      this.log(
-        `${currentResponder.id} added ${response.card.name} to chain (Level ${this.currentChainLevel})`,
-      );
+        this.log(
+          `${currentResponder.id} added ${response.card.name} to chain (Level ${this.currentChainLevel})`,
+        );
+      }
     } else {
       // Player passed
       consecutivePasses++;

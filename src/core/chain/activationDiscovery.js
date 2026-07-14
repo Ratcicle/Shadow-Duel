@@ -4,6 +4,10 @@ import {
   isQuickSpell,
 } from "../game/spellTrap/quickSpellRules.js";
 
+function wasTriggerEffectAlreadyOffered(chainSystem, card, effect) {
+  return chainSystem.chainTriggerEffectsOffered?.get(card)?.has(effect) === true;
+}
+
 function buildQuickSpellChainContext(chainSystem, context, effect, activationZone) {
   const lastLink = chainSystem.getLastChainLink?.();
   return {
@@ -84,13 +88,13 @@ export function getActivatableCardsInChain(player, context) {
       // Support both setTurn and turnSetOn properties
       const setTurn = card.setTurn ?? card.turnSetOn ?? null;
       if (setTurn === null || setTurn >= this.game.turnCounter) {
-        console.log(
+        this.log(
           `[getActivatableCardsInChain] ${card.name}: cannot activate yet (setTurn=${setTurn}, currentTurn=${this.game.turnCounter})`,
         );
         continue;
       }
 
-      console.log(
+      this.log(
         `[getActivatableCardsInChain] Checking trap ${card.name} for context ${context?.type}`,
       );
 
@@ -100,12 +104,13 @@ export function getActivatableCardsInChain(player, context) {
           ? buildTrapPlacementOnlyEffect(card)
           : null);
       if (responseEffect) {
+        if (wasTriggerEffectAlreadyOffered(this, card, responseEffect)) continue;
         const responseContext =
           this.getEffectChainResponseContext?.(responseEffect, context) ||
           context;
         if (!this.canOfferEffectInChainContext(responseEffect, responseContext))
           continue;
-        console.log(
+        this.log(
           `[getActivatableCardsInChain] Found effect for ${card.name}:`,
           responseEffect.id,
         );
@@ -114,14 +119,14 @@ export function getActivatableCardsInChain(player, context) {
           card,
           responseContext,
         );
-        console.log(
+        this.log(
           `[getActivatableCardsInChain] Chain check for ${card.name}:`,
           chainCheck,
         );
         if (chainCheck.ok) {
           // Skip the canActivate check for traps - it's only meant for spells
           // Traps have their own validation in findActivatableEffect
-          console.log(
+          this.log(
             `[getActivatableCardsInChain] ${card.name} is ACTIVATABLE`,
           );
           activatable.push({
@@ -132,7 +137,7 @@ export function getActivatableCardsInChain(player, context) {
           });
         }
       } else {
-        console.log(
+        this.log(
           `[getActivatableCardsInChain] No activatable effect found for ${card.name}`,
         );
       }
@@ -150,6 +155,7 @@ export function getActivatableCardsInChain(player, context) {
 
       const effect = this.findActivatableEffect(card, context, player);
       if (effect) {
+        if (wasTriggerEffectAlreadyOffered(this, card, effect)) continue;
         const responseContext =
           this.getEffectChainResponseContext?.(effect, context) || context;
         if (!this.canOfferEffectInChainContext(effect, responseContext)) continue;
@@ -186,6 +192,7 @@ export function getActivatableCardsInChain(player, context) {
 
       const effect = this.findActivatableEffect(card, context, player);
       if (effect) {
+        if (wasTriggerEffectAlreadyOffered(this, card, effect)) continue;
         const responseContext =
           this.getEffectChainResponseContext?.(effect, context) || context;
         if (!this.canOfferEffectInChainContext(effect, responseContext)) continue;
@@ -220,6 +227,7 @@ export function getActivatableCardsInChain(player, context) {
 
       const effect = this.findQuickMonsterEffect(card, context, player, "hand");
       if (effect) {
+        if (wasTriggerEffectAlreadyOffered(this, card, effect)) continue;
         const responseContext =
           this.getEffectChainResponseContext?.(effect, context) || context;
         if (!this.canOfferEffectInChainContext(effect, responseContext)) continue;
@@ -242,6 +250,7 @@ export function getActivatableCardsInChain(player, context) {
 
       const effect = this.findQuickMonsterEffect(card, context, player, "field");
       if (effect) {
+        if (wasTriggerEffectAlreadyOffered(this, card, effect)) continue;
         const responseContext =
           this.getEffectChainResponseContext?.(effect, context) || context;
         if (!this.canOfferEffectInChainContext(effect, responseContext)) continue;

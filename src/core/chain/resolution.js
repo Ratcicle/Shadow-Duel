@@ -112,14 +112,26 @@ export async function resolveChainLink(link) {
         activationZone,
         { activationContext: link.activationContext || link.context || null },
       );
-      return { success: true, needsSelection: false, negated: true };
+      const negatedResult = {
+        success: true,
+        needsSelection: false,
+        negated: true,
+      };
+      await completePreparedPipeline(link, negatedResult);
+      return negatedResult;
     }
     const shouldPresentSpellTrapFlip =
       activationZone === "spellTrap" &&
       card.isFacedown === true &&
       (card.cardKind === "spell" || card.cardKind === "trap");
-    if (!prepareForResolution(this, link, activationZone)) {
-      return { success: false, needsSelection: false, fizzled: true };
+    if (!(await prepareForResolution(this, link, activationZone))) {
+      const fizzledResult = {
+        success: false,
+        needsSelection: false,
+        fizzled: true,
+      };
+      await completePreparedPipeline(link, fizzledResult);
+      return fizzledResult;
     }
     if (shouldPresentSpellTrapFlip) {
       await this.game?.presentSpellTrapActivationFlip?.(
@@ -137,11 +149,24 @@ export async function resolveChainLink(link) {
         activationZone,
       };
     }
-    cleanupAfterResolution(this, link, {
+    await cleanupAfterResolution(this, link, {
       actionSucceeded: applyResult?.success !== false,
       activationContext: applyResult?.activationContext || link.activationContext,
     });
-    return applyResult || { success: true, needsSelection: false };
+    const completedResult = applyResult || {
+      success: true,
+      needsSelection: false,
+    };
+    await completePreparedPipeline(link, completedResult);
+    return completedResult;
+  } catch (error) {
+    await completePreparedPipeline(link, {
+      success: false,
+      needsSelection: false,
+      reason: error?.message || "Chain link failed.",
+      error,
+    });
+    throw error;
   } finally {
     this.cardsBeingResolved.delete(card);
   }
@@ -198,6 +223,7 @@ export function startPendingChainSelection(result = {}) {
         this.chainStack = [];
         this.currentChainLevel = 0;
         this.cardsBeingResolved.clear();
+        this.chainEventCompletions = [];
         finishOnce({
           success: false,
           needsSelection: false,
@@ -282,18 +308,20 @@ export async function resumePendingChainSelection(selections = {}) {
     return remainingResult;
   }
 
+  await this.completeActivationTriggerPackages?.();
+
   this.chainWindowOpen = false;
   this.chainWindowContext = null;
   this.chainStack = [];
   this.currentChainLevel = 0;
   this.cardsBeingResolved.clear();
   this.log("Chain resolution complete after selection");
-  if (typeof this.game?.flushPendingTrapWindows === "function") {
-    const flushResult = await this.game.flushPendingTrapWindows({
+  if (typeof this.game?.flushPendingChainEvents === "function") {
+    const eventFlushResult = await this.game.flushPendingChainEvents({
       reason: "chain_selection_resolved",
     });
-    if (flushResult?.needsSelection) {
-      return flushResult;
+    if (eventFlushResult?.needsSelection) {
+      return eventFlushResult;
     }
   }
   return remainingResult;
@@ -325,7 +353,7 @@ function resolveChainSelectionCards(cs, selections, contract, player) {
  * relocates Quick Spells from hand to spellTrap zone.
  * Returns false if resolution must abort (fizzle).
  */
-function prepareForResolution(cs, link, activationZone) {
+async function prepareForResolution(cs, link, activationZone) {
   const { card, player } = link;
   const effectEngine = cs.game?.effectEngine;
 
@@ -334,7 +362,14 @@ function prepareForResolution(cs, link, activationZone) {
     return false;
   }
 
-  if (!cs.isCardStillValid(card, player, activationZone)) {
+  const requiresSource =
+    link.prepared === true
+      ? link.requiresSourceAtResolution === true
+      : true;
+  if (
+    requiresSource &&
+    !cs.isCardStillValid(card, player, activationZone)
+  ) {
     cs.log(
       `${card.name} is no longer valid in ${activationZone}, effect fizzles`,
     );
@@ -345,10 +380,11 @@ function prepareForResolution(cs, link, activationZone) {
     return false;
   }
 
-  if (card.cardKind === "trap" && card.isFacedown) {
+  if (link.prepared !== true && card.cardKind === "trap" && card.isFacedown) {
     card.isFacedown = false;
   }
   if (
+    link.prepared !== true &&
     card.cardKind === "spell" &&
     card.isFacedown &&
     activationZone === "spellTrap"
@@ -357,26 +393,19 @@ function prepareForResolution(cs, link, activationZone) {
   }
 
   if (
+    link.prepared !== true &&
     isQuickSpell(card) &&
     activationZone === "hand"
   ) {
-    const handIdx = player.hand?.indexOf(card);
-    if (handIdx !== -1) {
-      player.hand.splice(handIdx, 1);
-      player.spellTrap = player.spellTrap || [];
-      player.spellTrap.push(card);
-      cs.game?._arenaTracker?.recordZoneMove?.(
-        card,
-        player,
-        "spellTrap",
-        {
-          fromZone: "hand",
-          sourceCard: card,
-          effectId: link.effect?.id || null,
-          contextLabel: "chain_activation",
-        },
-        { success: true, fromZone: "hand", toZone: "spellTrap" },
-      );
+    const moveResult = await cs.game?.moveCard?.(card, player, "spellTrap", {
+      fromZone: "hand",
+      sourceCard: card,
+      effectId: link.effect?.id || null,
+      contextLabel: "chain_activation",
+    });
+    if (moveResult?.success === false || !player.spellTrap?.includes(card)) {
+      cs.log(`${card.name} could not enter the Spell/Trap Zone.`);
+      return false;
     }
   }
 
@@ -471,10 +500,14 @@ async function applyChainEffect(cs, link, activationZone) {
 
   notifyChainActivation(cs, link, activationZone, resolvedSelections);
 
-  if (Array.isArray(effect.actions)) {
+  const resolutionActions =
+    typeof cs.getEffectResolutionActions === "function"
+      ? cs.getEffectResolutionActions(effect)
+      : effect.actions || [];
+  if (Array.isArray(resolutionActions)) {
     try {
       const actionsResult = await effectEngine.applyActions(
-        effect.actions,
+        resolutionActions,
         ctx,
         resolvedSelections || {},
       );
@@ -511,8 +544,8 @@ async function applyChainEffect(cs, link, activationZone) {
         chainLevel: link.chainLevel,
         activationZone,
         player: player?.id,
-        actionsCount: effect.actions?.length || 0,
-        actionTypes: effect.actions?.map((a) => a?.type).filter(Boolean),
+        actionsCount: resolutionActions.length,
+        actionTypes: resolutionActions.map((a) => a?.type).filter(Boolean),
       };
       console.error(
         `[ChainSystem] Action error resolving chain link:`,
@@ -541,6 +574,8 @@ async function applyChainEffect(cs, link, activationZone) {
       ctx,
     );
   }
+
+  cs.game?.checkWinCondition?.();
 
   return { success: true, activationContext: ctx.activationContext };
 }
@@ -590,6 +625,7 @@ function compactSelectedTarget(card) {
 }
 
 function notifyChainActivation(cs, link, activationZone, resolvedSelections) {
+  if (link?.activationPublished === true) return;
   const game = cs.game;
   if (typeof game?.notify !== "function") return;
 
@@ -644,7 +680,7 @@ function notifyChainActivation(cs, link, activationZone, resolvedSelections) {
  * Sends non-continuous traps and Quick Spells to graveyard,
  * registers once-per-turn usage, and refreshes the board.
  */
-function cleanupAfterResolution(
+async function cleanupAfterResolution(
   cs,
   link,
   { actionSucceeded = true, activationContext = null } = {},
@@ -652,6 +688,7 @@ function cleanupAfterResolution(
   const { card, player, effect } = link;
   const effectEngine = cs.game.effectEngine;
   const finalizationOverridden =
+    link.skipDefaultFinalization !== true &&
     actionSucceeded &&
     applySpellTrapFinalizationOverride.call(
       cs.game,
@@ -662,60 +699,53 @@ function cleanupAfterResolution(
     );
 
   if (
+    link.skipDefaultFinalization !== true &&
     !finalizationOverridden &&
     card.cardKind === "trap" &&
     card.subtype !== "continuous"
   ) {
-    const idx = player.spellTrap?.indexOf(card);
-    if (idx !== -1) {
-      player.spellTrap.splice(idx, 1);
-      player.graveyard = player.graveyard || [];
-      player.graveyard.push(card);
-      cs.game?._arenaTracker?.recordZoneMove?.(
-        card,
-        player,
-        "graveyard",
-        {
-          fromZone: "spellTrap",
-          sourceCard: card,
-          effectId: effect?.id || null,
-          contextLabel: "chain_resolution_cleanup",
-        },
-        { success: true, fromZone: "spellTrap", toZone: "graveyard" },
-      );
+    if (player.spellTrap?.includes(card)) {
+      await cs.game?.moveCard?.(card, player, "graveyard", {
+        fromZone: "spellTrap",
+        sourceCard: card,
+        effectId: effect?.id || null,
+        contextLabel: "chain_resolution_cleanup",
+      });
       cs.log(`${card.name} sent to graveyard after resolution`);
     }
   }
 
-  if (!finalizationOverridden && isQuickSpell(card)) {
-    const idx = player.spellTrap?.indexOf(card);
-    if (idx !== -1) {
-      player.spellTrap.splice(idx, 1);
-      player.graveyard = player.graveyard || [];
-      player.graveyard.push(card);
-      cs.game?._arenaTracker?.recordZoneMove?.(
-        card,
-        player,
-        "graveyard",
-        {
-          fromZone: "spellTrap",
-          sourceCard: card,
-          effectId: effect?.id || null,
-          contextLabel: "chain_resolution_cleanup",
-        },
-        { success: true, fromZone: "spellTrap", toZone: "graveyard" },
-      );
+  if (
+    link.skipDefaultFinalization !== true &&
+    !finalizationOverridden &&
+    isQuickSpell(card)
+  ) {
+    if (player.spellTrap?.includes(card)) {
+      await cs.game?.moveCard?.(card, player, "graveyard", {
+        fromZone: "spellTrap",
+        sourceCard: card,
+        effectId: effect?.id || null,
+        contextLabel: "chain_resolution_cleanup",
+      });
       cs.log(`${card.name} sent to graveyard after resolution`);
     }
   }
 
-  if (effect.oncePerTurn && actionSucceeded) {
+  if (
+    link.skipUsageRegistration !== true &&
+    effect.oncePerTurn &&
+    actionSucceeded
+  ) {
     if (cs.game?.registerOncePerTurnUsage) {
       cs.game.registerOncePerTurnUsage(card, player, effect);
     } else if (effectEngine?.registerOncePerTurnUsage) {
       effectEngine.registerOncePerTurnUsage(card, player, effect);
     }
-  } else if (effect.oncePerTurn && !actionSucceeded) {
+  } else if (
+    link.skipUsageRegistration !== true &&
+    effect.oncePerTurn &&
+    !actionSucceeded
+  ) {
     cs.log(
       `${card.name}'s once-per-turn use was not registered because resolution failed.`,
     );
@@ -741,8 +771,25 @@ export function isCardStillValid(card, player, zone) {
   if (checkZone === "graveyard") {
     return player.graveyard?.includes(card) === true;
   }
+  if (checkZone === "fieldSpell") {
+    return player.fieldSpell === card;
+  }
+  if (checkZone === "banished" || checkZone === "banish") {
+    return player.banished?.includes(card) === true;
+  }
 
   return true;
+}
+
+async function completePreparedPipeline(link, result) {
+  if (
+    link?.pipelineCompletionDone === true ||
+    typeof link?.pipelineCompletion !== "function"
+  ) {
+    return;
+  }
+  link.pipelineCompletionDone = true;
+  await link.pipelineCompletion(result);
 }
 
 export function determineCardZone(card, player) {
@@ -753,6 +800,7 @@ export function determineCardZone(card, player) {
   if (player.spellTrap?.includes(card)) return "spellTrap";
   if (player.graveyard?.includes(card)) return "graveyard";
   if (player.banished?.includes(card)) return "banished";
+  if (player.fieldSpell === card) return "fieldSpell";
 
   return "unknown";
 }

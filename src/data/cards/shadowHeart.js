@@ -273,12 +273,14 @@ export const shadowHeartCards = [
             reason: "You must control no other cards to activate this effect.",
           },
         ],
-        actions: [
+        activationCosts: [
           {
             type: "pay_lp",
             amount: 800,
             player: "self",
           },
+        ],
+        actions: [
           {
             type: "search_any",
             archetype: "Shadow-Heart",
@@ -1259,7 +1261,7 @@ export const shadowHeartCards = [
             count: { min: 1, max: 1 },
           },
         ],
-        actions: [
+        activationCosts: [
           {
             type: "move",
             targetRef: "self",
@@ -1267,6 +1269,8 @@ export const shadowHeartCards = [
             to: "graveyard",
             contextLabel: "shadow_heart_heartbearer_revive_cost",
           },
+        ],
+        actions: [
           {
             type: "special_summon_from_zone",
             targetRef: "shadow_heart_heartbearer_destroyed_monster",

@@ -121,11 +121,11 @@ export function bindCardInteractions() {
           legalWindow: actor?.id === this.turn,
         }
       : null;
-  const buildSetQuickSpellContext = (card) =>
+  const buildSetQuickSpellContext = (card, actor) =>
     isQuickSpell(card) && card?.isFacedown === true
       ? {
           activationZone: "spellTrap",
-          legalWindow: true,
+          legalWindow: actor?.id === this.turn,
         }
       : null;
   const getSpellHandPreview = (card, actor, quickSpellContext = null) =>
@@ -173,10 +173,14 @@ export function bindCardInteractions() {
         {
           activationContext: {
             activationZone: "field",
-            legalWindow: this.phase === "battle",
+            legalWindow:
+              actor.id === this.turn && this.phase === "battle",
             context:
               this.phase === "battle"
-                ? { type: "battle_step_open", legalWindow: true }
+                ? {
+                    type: "battle_step_open",
+                    legalWindow: actor.id === this.turn,
+                  }
                 : null,
           },
         },
@@ -274,7 +278,10 @@ export function bindCardInteractions() {
           this.tryActivateMonsterEffect(card, null, "field", actor, {
             effectId: quickEntry.effect.id,
             activationContext: {
-              context: { type: "battle_step_open", legalWindow: true },
+              context: {
+                type: "battle_step_open",
+                legalWindow: actor.id === this.turn,
+              },
             },
           }),
         canDeclareAttack: attackCheck.ok,
@@ -1121,6 +1128,10 @@ export function bindCardInteractions() {
       const card = this.player.spellTrap[index];
       if (!card) return;
 
+      // During the opponent's turn, reactive activations are offered only by
+      // ChainSystem. A board click must never manufacture a separate CL1.
+      if (this.turn !== this.player.id) return;
+
       this.devLog?.("SPELL_TRAP_CLICK", {
         summary: `Clicked ${card.name}, facedown=${card.isFacedown}, kind=${card.cardKind}`,
       });
@@ -1131,7 +1142,6 @@ export function bindCardInteractions() {
           actor: this.player,
           kind: "trap_activation",
           phaseReq: ["main1", "battle", "main2"],
-          allowDuringOpponentTurn: true,
         });
         if (!guard.ok) return;
 
@@ -1164,14 +1174,13 @@ export function bindCardInteractions() {
         return;
       }
 
-      const setQuickSpellContext = buildSetQuickSpellContext(card);
+      const setQuickSpellContext = buildSetQuickSpellContext(card, this.player);
       const guard = this.guardActionStart({
         actor: this.player,
         kind: setQuickSpellContext
           ? "quick_spell_activation"
           : "spelltrap_zone",
         phaseReq: setQuickSpellContext ? null : ["main1", "main2"],
-        allowDuringOpponentTurn: !!setQuickSpellContext,
       });
       if (!guard.ok) return;
 
@@ -1242,7 +1251,6 @@ export function bindCardInteractions() {
           actor: this.bot,
           kind: "trap_activation",
           phaseReq: ["main1", "battle", "main2"],
-          allowDuringOpponentTurn: true,
         });
         if (!guard.ok) return;
 
@@ -1271,14 +1279,13 @@ export function bindCardInteractions() {
         await this.tryActivateSpellTrapEffect(card, null, { owner: this.bot });
         return;
       }
-      const setQuickSpellContext = buildSetQuickSpellContext(card);
+      const setQuickSpellContext = buildSetQuickSpellContext(card, this.bot);
       const guard = this.guardActionStart({
         actor: this.bot,
         kind: setQuickSpellContext
           ? "quick_spell_activation"
           : "spelltrap_zone",
         phaseReq: setQuickSpellContext ? null : ["main1", "main2"],
-        allowDuringOpponentTurn: !!setQuickSpellContext,
       });
       if (!guard.ok) return;
       const preview = this.effectEngine?.canActivateSpellTrapEffectPreview?.(
@@ -1331,6 +1338,7 @@ export function bindCardInteractions() {
         this.handleTargetSelectionClick("player", 0, cardEl, "fieldSpell");
         return;
       }
+      if (this.turn !== this.player.id) return;
       const card = this.player.fieldSpell;
       if (card) {
         this.activateFieldSpellEffect(card);

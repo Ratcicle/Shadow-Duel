@@ -172,10 +172,13 @@ export function buildActivationIndicatorsForPlayer(player) {
     const fieldActivationContext = {
       ...activationContext,
       activationZone: "field",
-      legalWindow: this.phase === "battle",
+      legalWindow: player.id === this.turn && this.phase === "battle",
       context:
         this.phase === "battle"
-          ? { type: "battle_step_open", legalWindow: true }
+          ? {
+              type: "battle_step_open",
+              legalWindow: player.id === this.turn,
+            }
           : null,
     };
     const firstActivatable =
@@ -220,7 +223,7 @@ export function buildActivationIndicatorsForPlayer(player) {
       isQuickSpell(card) && card.isFacedown === true
         ? {
             activationZone: "spellTrap",
-            legalWindow: true,
+            legalWindow: player.id === this.turn,
           }
         : null;
     const guard = canStart(
@@ -234,7 +237,6 @@ export function buildActivationIndicatorsForPlayer(player) {
         : setQuickSpellContext
         ? null
         : ["main1", "main2"],
-      setQuickSpellContext ? { allowDuringOpponentTurn: true } : {},
     );
     const preview = this.effectEngine?.canActivateSpellTrapEffectPreview?.(
       card,

@@ -89,7 +89,7 @@ export async function offerSummonAttempt(card, player, options = {}) {
     return { ok: true };
   }
 
-  await this.chainSystem.openChainWindow(context);
+  await this.chainSystem.openEventWindow(context);
   if (attempt.negated || context.negated) {
     return { ok: false, negated: true, reason: "summon_negated" };
   }

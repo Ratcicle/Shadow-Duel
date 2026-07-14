@@ -294,7 +294,7 @@ export function findActivatableEffect(card, context, ownerPlayer = null) {
 
           // Debug log for attack declaration traps
           if (activeContext?.type === "attack_declaration") {
-            console.log(
+            this.log(
               `[findActivatableEffect] trap=${card.name} ctx attackers/defenders`,
               {
                 attacker: activeContext.attacker?.name,
@@ -420,7 +420,7 @@ export function findActivatableEffect(card, context, ownerPlayer = null) {
                   : this.game.bot
                 : null);
             if (ctxDefenderOwner?.id !== inferredOwner?.id) {
-              console.log(
+              this.log(
                 `[findActivatableEffect] requireDefenderIsSelf mismatch for ${card.name}`,
                 {
                   inferredOwner: inferredOwner?.id,
@@ -437,7 +437,7 @@ export function findActivatableEffect(card, context, ownerPlayer = null) {
             activeContext?.type === "attack_declaration" &&
             !(activeContext.defender || activeContext.target)
           ) {
-            console.log(
+            this.log(
               `[findActivatableEffect] requireDefender mismatch for ${card.name}`,
               {
                 defender: activeContext.defender?.name || activeContext.target?.name,
@@ -461,7 +461,7 @@ export function findActivatableEffect(card, context, ownerPlayer = null) {
               String(t).toLowerCase(),
             );
             if (!defender || !requiredTypesNorm.includes(defenderTypeNorm)) {
-              console.log(
+              this.log(
                 `[findActivatableEffect] requireDefenderType mismatch for ${card.name}`,
                 {
                   defender: defender?.name,
@@ -479,7 +479,7 @@ export function findActivatableEffect(card, context, ownerPlayer = null) {
             effect.targets.length > 0 &&
             this.game?.effectEngine
           ) {
-            console.log(
+            this.log(
               `[findActivatableEffect] Checking targets for ${card.name}:`,
               {
                 defender: previewCtx.defender?.name,
@@ -498,7 +498,7 @@ export function findActivatableEffect(card, context, ownerPlayer = null) {
               null,
             );
 
-            console.log(
+            this.log(
               `[findActivatableEffect] Target result for ${card.name}:`,
               {
                 ok: targetResult.ok,

@@ -1213,6 +1213,7 @@ export const ACTION_CATALOG = {
     summary: "Destroys selected cards from one or more zones.",
     handler: "handleDestroyTargetedCards",
     optional: [
+      "targetRef",
       "zones",
       "cardKind",
       "subtype",
@@ -1224,6 +1225,7 @@ export const ACTION_CATALOG = {
       "targetCountFromContext",
     ],
     fields: {
+      targetRef: field("targetRef"),
       zones: { type: "array" },
       cardKind: { type: "stringOrArray" },
       subtype: { type: "stringOrArray" },

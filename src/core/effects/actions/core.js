@@ -210,16 +210,6 @@ export async function applyActions(actions, ctx, targets) {
   }
 
   try {
-    const targetedResult = await emitEffectTargetedBeforeActions(
-      this,
-      ctx,
-      runtimeTargets,
-      logDev,
-    );
-    if (targetedResult?.needsSelection) {
-      return targetedResult;
-    }
-
     for (const action of actions) {
       const actionInfo = {
         type: action?.type || "unknown",

@@ -25,6 +25,7 @@ export default class Renderer {
     this.destroyed = false;
     this.leftMouseHeldForChainSkip = false;
     this.chainSkipInputCleanup = null;
+    this.activeTrapModalCancel = null;
     this.lpDisplayState = {
       player: {
         displayed: 8000,
@@ -149,6 +150,8 @@ export default class Renderer {
     this.destroyed = true;
     this.chainSkipInputCleanup?.();
     this.chainSkipInputCleanup = null;
+    this.activeTrapModalCancel?.();
+    this.activeTrapModalCancel = null;
     this.clearFloatingCounterTooltip?.();
     this.pixiVfx?.destroy?.();
     this.pixiVfx = null;

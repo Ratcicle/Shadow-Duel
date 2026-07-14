@@ -1431,11 +1431,29 @@ export async function handleAddStatus(action, ctx, targets, engine) {
 
   if (!player || !game) return false;
 
-  const targetCards = action.targetScope
+  let targetCards = action.targetScope
     ? resolveFieldScopeCards(action.targetScope, ctx, game, { engine })
     : resolveTargetCards(action, ctx, targets, {
         defaultRef: "self",
       });
+
+  const declaredTarget = Array.isArray(ctx?.effect?.targets)
+    ? ctx.effect.targets.find((target) => target?.id === action.targetRef)
+    : null;
+  if (
+    declaredTarget &&
+    !declaredTarget.targetFromContext &&
+    typeof engine.selectCandidates === "function"
+  ) {
+    const currentCandidates = engine.selectCandidates(
+      declaredTarget,
+      ctx,
+    )?.candidates;
+    if (Array.isArray(currentCandidates)) {
+      const validNow = new Set(currentCandidates);
+      targetCards = targetCards.filter((card) => validNow.has(card));
+    }
+  }
 
   if (targetCards.length === 0) {
     if (action.targetScope) return true;

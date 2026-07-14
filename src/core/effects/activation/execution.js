@@ -128,6 +128,7 @@ export async function activateMonsterFromGraveyard(
     autoSelectSingleTarget: activationContext?.autoSelectSingleTarget,
     autoSelectTargets: activationContext?.autoSelectTargets,
     actionContext: activationContext?.actionContext || null,
+    prepareOnly: activationContext?.prepareOnly === true,
   };
 
   const ctx = {
@@ -168,6 +169,17 @@ export async function activateMonsterFromGraveyard(
       success: false,
       needsSelection: false,
       reason: targetResult.reason,
+    };
+  }
+
+  if (normalizedActivationContext.prepareOnly) {
+    return {
+      success: true,
+      needsSelection: false,
+      prepared: true,
+      effect,
+      targets: targetResult.targets || {},
+      activationContext: ctx.activationContext,
     };
   }
 
@@ -267,6 +279,7 @@ export async function activateFieldSpell(
     autoSelectSingleTarget: activationContext?.autoSelectSingleTarget,
     autoSelectTargets: activationContext?.autoSelectTargets,
     actionContext: activationContext?.actionContext || null,
+    prepareOnly: activationContext?.prepareOnly === true,
   };
 
   const ctx = {
@@ -298,6 +311,18 @@ export async function activateFieldSpell(
       success: false,
       needsSelection: false,
       reason: targetResult.reason,
+    };
+  }
+
+
+  if (normalizedActivationContext.prepareOnly) {
+    return {
+      success: true,
+      needsSelection: false,
+      prepared: true,
+      effect,
+      targets: targetResult.targets || {},
+      activationContext: ctx.activationContext,
     };
   }
 
@@ -409,7 +434,7 @@ export async function activateSpellTrapEffect(
       flipAfterChecks = true;
     }
   }
-  if (this.game.turn !== player.id && !quickSpellFromSet) {
+  if (this.game.turn !== player.id) {
     return fail("Not your turn.");
   }
   const inMainPhase = this.game.phase === "main1" || this.game.phase === "main2";
@@ -442,6 +467,7 @@ export async function activateSpellTrapEffect(
     quickSpellActivationFromSet,
     resolvedTargets: activationContext?.resolvedTargets || null,
     trapActivationFromSet: trapActivationFromSet || isSetTrap || false,
+    prepareOnly: activationContext?.prepareOnly === true,
   };
   let effect = null;
 
@@ -614,6 +640,18 @@ export async function activateSpellTrapEffect(
 
   if (targetResult.ok === false) {
     return fail(targetResult.reason);
+  }
+
+  if (normalizedActivationContext.prepareOnly) {
+    return {
+      success: true,
+      needsSelection: false,
+      prepared: true,
+      placementOnly: false,
+      effect,
+      targets: targetResult.targets || {},
+      activationContext: ctx.activationContext,
+    };
   }
 
   if (flipAfterChecks) {
@@ -828,6 +866,7 @@ export async function activateMonsterEffect(
     autoSelectSingleTarget: activationContext?.autoSelectSingleTarget,
     autoSelectTargets: activationContext?.autoSelectTargets,
     actionContext: activationContext?.actionContext || null,
+    prepareOnly: activationContext?.prepareOnly === true,
   };
 
   const ctx = {
@@ -880,6 +919,18 @@ export async function activateMonsterEffect(
       success: false,
       needsSelection: false,
       reason: targetResult.reason,
+    };
+  }
+
+
+  if (normalizedActivationContext.prepareOnly) {
+    return {
+      success: true,
+      needsSelection: false,
+      prepared: true,
+      effect,
+      targets: targetResult.targets || {},
+      activationContext: ctx.activationContext,
     };
   }
 

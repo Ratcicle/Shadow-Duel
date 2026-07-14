@@ -64,12 +64,14 @@ export const luminarchCards = [
             targetRef: "holy_shield_targets",
             status: "tempBattleIndestructible",
             value: true,
+            untilEndOfTurn: true,
           },
           {
             type: "add_status",
             targetRef: "holy_shield_targets",
             status: "battleDamageHealsControllerThisTurn",
             value: true,
+            untilEndOfTurn: true,
           },
         ],
       },
@@ -198,11 +200,13 @@ export const luminarchCards = [
         timing: "ignition",
         requireZone: "hand",
         requirePhase: ["main1", "main2"],
-        actions: [
+        activationCosts: [
           {
             type: "pay_lp",
             amount: 2000,
           },
+        ],
+        actions: [
           {
             type: "conditional_summon_from_hand",
             targetRef: "self",
@@ -257,6 +261,7 @@ export const luminarchCards = [
             cardKind: "monster",
             cardName: "Luminarch Magic Sickle",
             count: { min: 1, max: 1 },
+            intent: "cost",
             requireThisCard: true,
             autoSelect: true,
           },
@@ -272,13 +277,15 @@ export const luminarchCards = [
             autoSelect: true,
           },
         ],
-        actions: [
+        activationCosts: [
           {
             type: "move",
             targetRef: "magic_sickle_self",
             to: "graveyard",
             contextLabel: "cost",
           },
+        ],
+        actions: [
           {
             type: "buff_stats_temp",
             targetRef: "magic_sickle_battling_luminarch",
@@ -616,11 +623,13 @@ export const luminarchCards = [
             count: { min: 1, max: 1 },
           },
         ],
-        actions: [
+        activationCosts: [
           {
             type: "pay_lp",
             amount: 1000,
           },
+        ],
+        actions: [
           {
             type: "buff_stats_temp",
             targetRef: "sanctum_citadel_target",
@@ -656,11 +665,13 @@ export const luminarchCards = [
             count: { min: 1, max: 1 },
           },
         ],
-        actions: [
+        activationCosts: [
           {
             type: "pay_lp",
             amount: 1000,
           },
+        ],
+        actions: [
           {
             type: "buff_stats_temp",
             targetRef: "holy_ascension_target",
@@ -715,12 +726,14 @@ export const luminarchCards = [
             count: { min: 1, max: 1 },
           },
         ],
-        actions: [
+        activationCosts: [
           {
             type: "pay_lp",
             player: "self",
             amount: 2000,
           },
+        ],
+        actions: [
           {
             type: "destroy",
             targetRef: "radiant_wave_destroy",
@@ -1032,12 +1045,14 @@ export const luminarchCards = [
             filters: { cardKind: "monster", archetype: "Luminarch" },
           },
         ],
-        actions: [
+        activationCosts: [
           {
             type: "pay_lp",
             amount: 2000,
             player: "self",
           },
+        ],
+        actions: [
           {
             type: "special_summon_from_zone",
             zone: "graveyard",
@@ -1171,11 +1186,13 @@ export const luminarchCards = [
             count: { min: 1, max: 1 },
           },
         ],
-        actions: [
+        activationCosts: [
           {
             type: "pay_lp",
             amount: 1000,
           },
+        ],
+        actions: [
           {
             type: "special_summon_from_zone",
             zone: "graveyard",
@@ -1263,7 +1280,7 @@ export const luminarchCards = [
     },
     description:
       'Ascension Material: "Luminarch Valiant - Knight of the Dawn". If this card is Ascension Summoned: You can target 1 other face-up monster you control; it gains 500 DEF, and if it does, this card gains 500 ATK. If this card attacks a Defense Position monster, inflict double piercing battle damage to your opponent. If this card destroys an opponent\'s monster by battle: gain 1000 LP.',
-    image: "",
+    image: "assets/Luminarch Ethereal Lancer.png",
     effects: [
       {
         id: "luminarch_ethereal_lancer_ascension_buff",

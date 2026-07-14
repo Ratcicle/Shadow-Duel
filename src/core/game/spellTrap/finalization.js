@@ -222,19 +222,25 @@ export async function commitCardActivationFromHand(player, handIndex) {
   }
 
   // Ensure face-up when placed
+  const wasFacedown = card.isFacedown === true;
   card.isFacedown = false;
 
   // Move to destination
   if (typeof this.moveCard === "function") {
-    await this.moveCard(card, player, activationZone, { fromZone: "hand" });
-  } else {
-    // Fallback (should not happen)
-    player.hand.splice(handIndex, 1);
-    if (isFieldSpell) {
-      player.fieldSpell = card;
-    } else {
-      player.spellTrap.push(card);
+    const moveResult = await this.moveCard(card, player, activationZone, {
+      fromZone: "hand",
+    });
+    const committed =
+      activationZone === "fieldSpell"
+        ? player.fieldSpell === card
+        : player.spellTrap.includes(card);
+    if (moveResult?.success === false || !committed) {
+      card.isFacedown = wasFacedown;
+      return null;
     }
+  } else {
+    card.isFacedown = wasFacedown;
+    return null;
   }
 
   // Determine zone index if in S/T array

@@ -11,6 +11,7 @@ export * as spellSpeed from "./spellSpeed.js";
 export * as stack from "./stack.js";
 export * as effectMatching from "./effectMatching.js";
 export * as activationDiscovery from "./activationDiscovery.js";
+export * as activation from "./activation.js";
 export * as responseWindow from "./responseWindow.js";
 export * as botResponsePolicy from "./botResponsePolicy.js";
 export * as playerResponse from "./playerResponse.js";

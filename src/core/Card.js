@@ -21,6 +21,23 @@ export function cardMatchesKind(card, requiredKinds) {
   return required.some((kind) => effectiveKinds.includes(kind));
 }
 
+export function restoreTemporaryStatuses(card) {
+  if (!card?.tempStatuses || typeof card.tempStatuses !== "object") {
+    return false;
+  }
+
+  const entries = Object.entries(card.tempStatuses);
+  for (const [status, previousValue] of entries) {
+    if (previousValue === undefined) {
+      delete card[status];
+    } else {
+      card[status] = previousValue;
+    }
+  }
+  card.tempStatuses = {};
+  return entries.length > 0;
+}
+
 export function captureTrapMonsterOriginalState(card) {
   if (!card) return null;
   if (card.trapMonsterOriginalState) return card.trapMonsterOriginalState;

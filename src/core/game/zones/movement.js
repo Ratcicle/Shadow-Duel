@@ -1,4 +1,7 @@
-import { restoreTrapMonsterOriginalState } from "../../Card.js";
+import {
+  restoreTemporaryStatuses,
+  restoreTrapMonsterOriginalState,
+} from "../../Card.js";
 
 /**
  * Zone movement - card movement between zones with side effects.
@@ -911,7 +914,12 @@ async function trySendToGraveActionReplacement(game, card, destPlayer, options =
           activationZone: sourceZone,
         },
       };
-      const actions = Array.isArray(effect.actions) ? effect.actions : [];
+      const actions = [
+        ...(Array.isArray(effect.activationCosts)
+          ? effect.activationCosts
+          : []),
+        ...(Array.isArray(effect.actions) ? effect.actions : []),
+      ];
       if (actions.length === 0) continue;
 
       const preview =
@@ -1866,6 +1874,10 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
     card.immuneToOpponentEffectsUntilTurn = null;
     delete card.attackLimitThisTurn;
     delete card.attackLimitDuration;
+
+    if (toZone !== "field") {
+      restoreTemporaryStatuses(card);
+    }
 
     // Clean up temporary stat modifiers from effects (e.g., Shadow-Heart Coward debuff)
     if (card.tempAtkBoost) {

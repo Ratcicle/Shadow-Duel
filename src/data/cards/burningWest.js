@@ -58,15 +58,26 @@ export const burningWestCards = [
           'Activate "Gunslinger of the Burning West" to discard 1 card and make your opponent discard 1 card?',
         oncePerTurn: true,
         oncePerTurnName: "burning_west_gunslinger_battle_discard",
-        actions: [
+        targets: [
           {
-            type: "discard_from_hand",
-            player: "self",
+            id: "burning_west_gunslinger_cost",
+            owner: "self",
+            zone: "hand",
             count: { min: 1, max: 1 },
-            chooser: "affected",
-            contextLabel: "cost",
-            selectionLabel: "Discard 1 card",
+            intent: "cost",
           },
+        ],
+        activationCosts: [
+          {
+            type: "move",
+            targetRef: "burning_west_gunslinger_cost",
+            player: "self",
+            fromZone: "hand",
+            to: "graveyard",
+            contextLabel: "cost",
+          },
+        ],
+        actions: [
           {
             type: "discard_from_hand",
             player: "opponent",
@@ -248,7 +259,7 @@ export const burningWestCards = [
             count: { min: 1, max: 1 },
           },
         ],
-        actions: [
+        activationCosts: [
           {
             type: "move",
             targetRef: "burning_west_undertaker_cost",
@@ -258,6 +269,8 @@ export const burningWestCards = [
             contextLabel: "cost",
             skipSendToGraveActionReplacement: true,
           },
+        ],
+        actions: [
           {
             type: "special_summon_from_zone",
             targetRef: "burning_west_undertaker_revive_target",
@@ -523,7 +536,7 @@ export const burningWestCards = [
             count: { min: 1, max: 1 },
           },
         ],
-        actions: [
+        activationCosts: [
           {
             type: "move",
             targetRef: "self",
@@ -532,6 +545,8 @@ export const burningWestCards = [
             to: "banished",
             contextLabel: "cost",
           },
+        ],
+        actions: [
           {
             type: "move",
             targetRef: "burning_peacemaker_wanted_target",
@@ -829,7 +844,7 @@ export const burningWestCards = [
           logMessage:
             "{target} was shuffled into the Deck instead due to {source}.",
         },
-        actions: [
+        activationCosts: [
           {
             type: "move",
             targetRef: "self",
@@ -838,6 +853,8 @@ export const burningWestCards = [
             to: "graveyard",
             contextLabel: "cost",
           },
+        ],
+        actions: [
           {
             type: "move",
             targetRef: "movedCard",

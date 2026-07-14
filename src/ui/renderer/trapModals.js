@@ -20,15 +20,26 @@ import {
  * @returns {Promise<{card, effect, activate: boolean}|null>}
  */
 export function showUnifiedTrapModal(options = {}) {
-  const { cards = [], context = null, mode = "single" } = options;
+  const {
+    cards = [],
+    context = null,
+    mode = "single",
+    signal = null,
+  } = options;
 
   return new Promise((resolve) => {
     let resolved = false;
+    let overlay = null;
+    const handleAbort = () => finalize(null);
     const finalize = (result) => {
       if (resolved) return;
       resolved = true;
       document.removeEventListener("keydown", handleKeydown);
-      overlay.remove();
+      signal?.removeEventListener?.("abort", handleAbort);
+      overlay?.remove?.();
+      if (this.activeTrapModalCancel === handleAbort) {
+        this.activeTrapModalCancel = null;
+      }
       resolve(result);
     };
 
@@ -38,7 +49,14 @@ export function showUnifiedTrapModal(options = {}) {
       }
     };
 
-    const overlay = document.createElement("div");
+    if (signal?.aborted) {
+      finalize(null);
+      return;
+    }
+    signal?.addEventListener?.("abort", handleAbort, { once: true });
+    this.activeTrapModalCancel = handleAbort;
+
+    overlay = document.createElement("div");
     overlay.className = "trap-activation-overlay";
     overlay.addEventListener("click", (event) => {
       if (event.target === overlay) {
@@ -185,7 +203,7 @@ export function showUnifiedTrapModal(options = {}) {
       passBtn.focus();
     } else {
       // No cards - just resolve null
-      resolve(null);
+      finalize(null);
     }
   });
 }
@@ -208,11 +226,17 @@ export function showTrapActivationModal(trapCard, event, eventData = {}) {
  * @param {Array} chainStack - Current chain stack for display
  * @returns {Promise<{card, effect, selections}|null>}
  */
-export function showChainResponseModal(activatable, context, chainStack = []) {
+export function showChainResponseModal(
+  activatable,
+  context,
+  chainStack = [],
+  options = {},
+) {
   return this.showUnifiedTrapModal({
     cards: activatable,
     context,
     mode: "chain",
+    signal: options.signal || null,
   }).then((result) => {
     if (result?.activate) {
       return { card: result.card, effect: result.effect, selections: null };

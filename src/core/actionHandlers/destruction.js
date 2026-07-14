@@ -1173,6 +1173,31 @@ export async function handleDestroyTargetedCards(action, ctx, targets, engine) {
     return await destroySelectiveField(action, ctx, targets, engine);
   }
 
+  if (action?.targetRef) {
+    const declaredTargets = resolveTargetCards(action, ctx, targets).filter(Boolean);
+    if (declaredTargets.length === 0) {
+      getUI(game)?.log("No declared destruction target remains available.");
+      return false;
+    }
+    const { allowed } = engine.filterCardsListByImmunity(
+      declaredTargets,
+      player,
+      { actionType: "destroy_targeted_cards", sourceCard: source },
+    );
+    for (const card of allowed) {
+      const result = await game.destroyCard(card, {
+        cause: "effect",
+        sourceCard: source,
+        opponent: player,
+      });
+      if (result?.destroyed) {
+        getUI(game)?.log(`${source.name} destroyed ${card.name}!`);
+      }
+    }
+    game.updateBoard();
+    return allowed.length > 0;
+  }
+
   // Build candidate list based on optional zone and kind filters
 
   const zones = Array.isArray(action.zones)

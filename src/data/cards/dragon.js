@@ -217,13 +217,15 @@ export const dragonCards = [
             intent: "cost",
           },
         ],
-        actions: [
+        activationCosts: [
           {
             type: "move",
             targetRef: "grey_dragon_discard_cost",
             player: "self",
             to: "graveyard",
           },
+        ],
+        actions: [
           {
             type: "add_from_zone_to_hand",
             zone: "graveyard",
@@ -445,13 +447,15 @@ export const dragonCards = [
             count: { min: 1, max: 1 },
           },
         ],
-        actions: [
+        activationCosts: [
           {
             type: "move",
             targetRef: "darkness_dragon_discard_cost",
             player: "self",
             to: "graveyard",
           },
+        ],
+        actions: [
           {
             type: "add_status",
             targetRef: "darkness_dragon_negate_target",
@@ -1783,13 +1787,15 @@ export const dragonCards = [
             intent: "cost",
           },
         ],
-        actions: [
+        activationCosts: [
           {
             type: "move",
             targetRef: "awakening_cost_dragons",
             player: "self",
             to: "graveyard",
           },
+        ],
+        actions: [
           {
             type: "special_summon_from_zone",
             zone: "hand",
@@ -1867,7 +1873,7 @@ export const dragonCards = [
             intent: "cost",
           },
         ],
-        actions: [
+        activationCosts: [
           {
             type: "move",
             targetRef: "stelya_hand_banish_cost",
@@ -1875,6 +1881,8 @@ export const dragonCards = [
             to: "banished",
             contextLabel: "cost",
           },
+        ],
+        actions: [
           {
             type: "special_summon_from_zone",
             zone: "hand",
@@ -1903,7 +1911,7 @@ export const dragonCards = [
             intent: "cost",
           },
         ],
-        actions: [
+        activationCosts: [
           {
             type: "move",
             targetRef: "stelya_graveyard_banish_cost",
@@ -1911,6 +1919,8 @@ export const dragonCards = [
             to: "banished",
             contextLabel: "cost",
           },
+        ],
+        actions: [
           {
             type: "special_summon_from_zone",
             zone: "graveyard",
@@ -1939,7 +1949,7 @@ export const dragonCards = [
             intent: "cost",
           },
         ],
-        actions: [
+        activationCosts: [
           {
             type: "move",
             targetRef: "self",
@@ -1954,6 +1964,8 @@ export const dragonCards = [
             to: "graveyard",
             contextLabel: "cost",
           },
+        ],
+        actions: [
           {
             type: "add_from_zone_to_hand",
             zone: "deck",
@@ -2012,7 +2024,7 @@ export const dragonCards = [
             ],
           },
         ],
-        actions: [
+        activationCosts: [
           {
             type: "move",
             targetRef: "self",
@@ -2020,6 +2032,8 @@ export const dragonCards = [
             to: "graveyard",
             contextLabel: "cost",
           },
+        ],
+        actions: [
           {
             type: "special_summon_from_zone",
             zone: ["hand", "deck"],
@@ -2119,7 +2133,7 @@ export const dragonCards = [
             intent: "cost",
           },
         ],
-        actions: [
+        activationCosts: [
           {
             type: "move",
             targetRef: "lunar_eclipse_discard_cost",
@@ -2128,6 +2142,8 @@ export const dragonCards = [
             to: "graveyard",
             contextLabel: "cost",
           },
+        ],
+        actions: [
           {
             type: "add_from_zone_to_hand",
             zone: "deck",

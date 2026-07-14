@@ -21,10 +21,25 @@ import * as chainResponseWindow from "./chain/responseWindow.js";
 import * as chainBotResponsePolicy from "./chain/botResponsePolicy.js";
 import * as chainPlayerResponse from "./chain/playerResponse.js";
 import * as chainSelection from "./chain/selection.js";
+import * as chainActivation from "./chain/activation.js";
 import { CHAIN_CONTEXTS } from "./chain/contexts.js";
 
 // Re-export for backwards compatibility (CHAIN_CONTEXTS used to live here)
 export { CHAIN_CONTEXTS };
+
+/**
+ * @typedef {Object} PreparedActivation
+ * @property {Object} card
+ * @property {Object} player
+ * @property {Object} effect
+ * @property {string} zone
+ * @property {Object} selections
+ * @property {Object} activationContext
+ * @property {Object} activationAttempt
+ * @property {boolean} committed
+ * @property {boolean} costsPaid
+ * @property {boolean} requiresSourceAtResolution
+ */
 
 /**
  * @typedef {Object} ChainLink
@@ -35,6 +50,9 @@ export { CHAIN_CONTEXTS };
  * @property {string} zone - Zone the card was activated from (hand, field, spellTrap, graveyard)
  * @property {Object|null} selections - Selected targets (if any)
  * @property {number} chainLevel - Position in chain (1, 2, 3...)
+ * @property {boolean} prepared - Whether activation choices/costs were committed
+ * @property {boolean} costsPaid - Whether activationCosts were paid
+ * @property {boolean} requiresSourceAtResolution - Whether the source must remain active
  */
 
 /**
@@ -51,7 +69,7 @@ export { CHAIN_CONTEXTS };
  */
 
 export default class ChainSystem {
-  constructor(game) {
+  constructor(game, options = {}) {
     /** @type {Object} Reference to main Game instance */
     this.game = game;
 
@@ -72,6 +90,23 @@ export default class ChainSystem {
 
     /** @type {Object|null} Paused chain link waiting on a human selection */
     this.pendingChainSelection = null;
+
+    /** @type {boolean} Whether an activation is being committed/paid */
+    this.isPreparingActivation = false;
+
+    /** @type {AbortController|null} Active human response prompt */
+    this.activeResponseAbortController = null;
+
+    /** @type {number} Human response timeout */
+    this.responseTimeoutMs = Number.isFinite(options.responseTimeoutMs)
+      ? Math.max(0, options.responseTimeoutMs)
+      : 30000;
+
+    /** @type {Function[]} Collector completion hooks for activation triggers */
+    this.chainEventCompletions = [];
+
+    /** @type {Map<Object, Set<Object>>} Trigger effects already offered in this window */
+    this.chainTriggerEffectsOffered = new Map();
 
     /** @type {number} Current chain level counter */
     this.currentChainLevel = 0;
@@ -215,6 +250,31 @@ ChainSystem.prototype.findQuickMonsterEffect =
 
 ChainSystem.prototype.getActivatableCardsInChain =
   chainActivationDiscovery.getActivatableCardsInChain;
+
+// -----------------------------------------------------------------------------
+// Activation lifecycle: preparation, costs, and root Chain Link
+// -----------------------------------------------------------------------------
+
+ChainSystem.prototype.createPreparedActivation =
+  chainActivation.createPreparedActivation;
+ChainSystem.prototype.effectRequiresSourceAtResolution =
+  chainActivation.effectRequiresSourceAtResolution;
+ChainSystem.prototype.getEffectActivationCosts =
+  chainActivation.getEffectActivationCosts;
+ChainSystem.prototype.getEffectResolutionActions =
+  chainActivation.getEffectResolutionActions;
+ChainSystem.prototype.payActivationCosts = chainActivation.payActivationCosts;
+ChainSystem.prototype.publishChainLinkActivation =
+  chainActivation.publishChainLinkActivation;
+ChainSystem.prototype.appendActivationTriggerPackages =
+  chainActivation.appendActivationTriggerPackages;
+ChainSystem.prototype.completeActivationTriggerPackages =
+  chainActivation.completeActivationTriggerPackages;
+ChainSystem.prototype.prepareChainResponse =
+  chainActivation.prepareChainResponse;
+ChainSystem.prototype.openActivationChain =
+  chainActivation.openActivationChain;
+ChainSystem.prototype.openEventWindow = chainActivation.openEventWindow;
 
 // -----------------------------------------------------------------------------
 // Response Window: Attach methods from modular chain/responseWindow.js

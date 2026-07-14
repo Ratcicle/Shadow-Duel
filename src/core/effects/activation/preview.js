@@ -394,6 +394,9 @@ export function canActivateSpellTrapEffectPreview(
       reason: "Only Spell/Trap cards can use this effect.",
     };
   }
+  if (this.game?.turn !== player.id) {
+    return { ok: false, reason: "Not your turn." };
+  }
 
   const effect = this.getSpellTrapActivationEffect(card, {
     fromHand: false,

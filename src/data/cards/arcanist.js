@@ -1263,13 +1263,15 @@ export const arcanistCards = [
             count: { min: 1, max: 1 },
           },
         ],
-        actions: [
+        activationCosts: [
           {
             type: "move",
             targetRef: "seismic_impact_equip_cost",
             player: "self",
             to: "graveyard",
           },
+        ],
+        actions: [
           {
             type: "banish",
             targetRef: "seismic_impact_target",

@@ -113,14 +113,12 @@ export async function tryActivateSpellTrapEffect(
         actor: owner,
         kind: "trap_activation",
         phaseReq: ["main1", "battle", "main2"],
-        allowDuringOpponentTurn: true,
       }
     : quickSpellActivationFromSet
     ? {
         actor: owner,
         kind: "quick_spell_activation",
         phaseReq: null,
-        allowDuringOpponentTurn: true,
       }
     : {
         actor: owner,
@@ -237,7 +235,6 @@ export async function tryActivateSpellTrapEffect(
       ? "quick_spell_activation"
       : "spelltrap_effect",
     phaseReq: pipelinePhaseReq,
-    allowDuringOpponentTurn: isTrap || quickSpellActivationFromSet,
     gate: quickSpellActivationFromSet
       ? () =>
           canActivateSetQuickSpell(
@@ -325,24 +322,11 @@ export async function finalizeSpellCardActivation(
     await this.finalizeSpellTrapActivation(card, owner, activationZone, {
       activationContext: info.activationContext,
     });
-    this.ui?.log?.(activationLog || `${card.name} effect activated.`);
-  }
-
-  await this.emit("spell_activated", {
-    card,
-    player: owner,
-    fromHand: options.fromHand ?? info.activationContext?.fromHand ?? false,
-    activationZone,
-    placementOnly,
-    effect: options.effect || null,
-  });
-
-  if (!placementOnly && options.offerChainWindow !== false) {
-    await this.checkAndOfferTraps("card_activation", {
-      card,
-      player: owner,
-      activationType: "spell",
-    });
+    this.ui?.log?.(
+      result?.success === false
+        ? `${card.name} failed to resolve.`
+        : activationLog || `${card.name} effect activated.`,
+    );
   }
 
   this.updateBoard();

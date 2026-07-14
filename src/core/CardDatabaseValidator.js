@@ -29,6 +29,11 @@ const VALID_TIMINGS = new Set([
   "manual",
 ]);
 
+// `on_activate` effects may be scoped to a specific response window. This is
+// distinct from `on_event`: the event limits when the player may activate the
+// card, but the effect is not collected as an automatic event trigger.
+const EVENT_COMPATIBLE_TIMINGS = new Set(["on_event", "on_activate"]);
+
 const VALID_EVENTS = new Set([
   "after_summon",
   "battle_destroy",
@@ -335,26 +340,15 @@ export function validateCardDatabase() {
         );
       }
 
-      if (effect.timing === "on_event") {
-        if (!effect.event) {
-          errors.push(
-            formatIssue(
-              card,
-              "Effects with timing 'on_event' must declare an event.",
-              effectIndex,
-              null,
-            ),
-          );
-        } else if (!VALID_EVENTS.has(effect.event)) {
-          errors.push(
-            formatIssue(
-              card,
-              `Invalid event "${effect.event}".`,
-              effectIndex,
-              null,
-            ),
-          );
-        }
+      if (effect.timing === "on_event" && !effect.event) {
+        errors.push(
+          formatIssue(
+            card,
+            "Effects with timing 'on_event' must declare an event.",
+            effectIndex,
+            null,
+          ),
+        );
       } else if (effect.event) {
         if (!VALID_EVENTS.has(effect.event)) {
           errors.push(
@@ -365,7 +359,7 @@ export function validateCardDatabase() {
               null,
             ),
           );
-        } else {
+        } else if (!EVENT_COMPATIBLE_TIMINGS.has(effect.timing)) {
           warnings.push(
             formatIssue(
               card,
@@ -415,7 +409,37 @@ export function validateCardDatabase() {
         );
       }
 
+      if (
+        effect.activationCosts !== undefined &&
+        !Array.isArray(effect.activationCosts)
+      ) {
+        errors.push(
+          formatIssue(
+            card,
+            'Effect "activationCosts" must be an array.',
+            effectIndex,
+            null,
+          ),
+        );
+      }
+      if (
+        effect.requiresSourceAtResolution !== undefined &&
+        typeof effect.requiresSourceAtResolution !== "boolean"
+      ) {
+        errors.push(
+          formatIssue(
+            card,
+            'Effect "requiresSourceAtResolution" must be boolean.',
+            effectIndex,
+            null,
+          ),
+        );
+      }
+
       const effectActions = Array.isArray(effect.actions) ? effect.actions : [];
+      const activationCosts = Array.isArray(effect.activationCosts)
+        ? effect.activationCosts
+        : [];
       const targetIds = new Set(
         Array.isArray(effect.targets)
           ? effect.targets
@@ -423,9 +447,31 @@ export function validateCardDatabase() {
               .map((target) => target.id)
           : [],
       );
+      const costTargetIds = new Set(
+        Array.isArray(effect.targets)
+          ? effect.targets
+              .filter(
+                (target) =>
+                  target?.intent === "cost" && typeof target.id === "string",
+              )
+              .map((target) => target.id)
+          : [],
+      );
 
       const producedTargetIds = new Set();
-      effectActions.forEach((action, actionIndex) => {
+      const stagedActions = [
+        ...activationCosts.map((action, actionIndex) => ({
+          action,
+          actionIndex,
+          stage: "cost",
+        })),
+        ...effectActions.map((action, actionIndex) => ({
+          action,
+          actionIndex,
+          stage: "resolution",
+        })),
+      ];
+      stagedActions.forEach(({ action, actionIndex, stage }) => {
         if (!action || typeof action !== "object") {
           errors.push(
             formatIssue(
@@ -462,7 +508,8 @@ export function validateCardDatabase() {
           return;
         }
 
-        if (!getActionCatalogEntry(action.type)) {
+        const catalogEntry = getActionCatalogEntry(action.type);
+        if (!catalogEntry) {
           warnings.push(
             formatIssue(
               card,
@@ -472,6 +519,46 @@ export function validateCardDatabase() {
             ),
           );
           return;
+        }
+
+        if (stage === "cost" && catalogEntry.selection === "dynamic") {
+          errors.push(
+            formatIssue(
+              card,
+              `Activation cost "${action.type}" cannot open a dynamic selection; declare its cards in effect.targets.`,
+              effectIndex,
+              actionIndex,
+            ),
+          );
+        }
+        if (
+          stage === "cost" &&
+          typeof action.targetRef === "string" &&
+          targetIds.has(action.targetRef) &&
+          !costTargetIds.has(action.targetRef)
+        ) {
+          errors.push(
+            formatIssue(
+              card,
+              `Activation cost "${action.type}" must reference a target declared with intent: "cost".`,
+              effectIndex,
+              actionIndex,
+            ),
+          );
+        }
+        if (
+          stage === "resolution" &&
+          typeof action.targetRef === "string" &&
+          costTargetIds.has(action.targetRef)
+        ) {
+          errors.push(
+            formatIssue(
+              card,
+              `Resolution action "${action.type}" cannot consume cost target "${action.targetRef}"; move the action to activationCosts or use an effect target.`,
+              effectIndex,
+              actionIndex,
+            ),
+          );
         }
 
         const availableTargetIds = new Set([

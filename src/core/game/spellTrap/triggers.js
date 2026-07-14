@@ -3,74 +3,6 @@
 // Spell/Trap trigger methods for Game class — B.9 extraction
 // ─────────────────────────────────────────────────────────────────────────────
 
-const DEFERABLE_TRAP_WINDOW_EVENTS = new Set(["after_summon"]);
-
-function shouldDeferTrapWindow(event) {
-  return DEFERABLE_TRAP_WINDOW_EVENTS.has(event);
-}
-
-function deferredTrapWindowStillRelevant(entry) {
-  if (!entry || entry.event !== "after_summon") return true;
-  const data = entry.eventData || {};
-  const summonedCard = data.summonedCard || data.card || null;
-  const summoner = data.player || null;
-  if (!summonedCard || !summoner || !Array.isArray(summoner.field)) {
-    return false;
-  }
-  return summoner.field.includes(summonedCard);
-}
-
-export function queuePendingTrapWindow(event, eventData = {}, reason = null) {
-  if (!shouldDeferTrapWindow(event)) return false;
-  if (!Array.isArray(this.pendingTrapWindows)) {
-    this.pendingTrapWindows = [];
-  }
-
-  this.pendingTrapWindows.push({
-    event,
-    eventData: { ...(eventData || {}) },
-    reason,
-    queuedOnTurn: this.turnCounter,
-  });
-  this.devLog?.("CHECK_TRAPS", {
-    summary: `Queued deferred trap window for event: ${event}`,
-    event,
-    reason,
-    pendingCount: this.pendingTrapWindows.length,
-  });
-  return true;
-}
-
-export async function flushPendingTrapWindows({ reason = null } = {}) {
-  if (
-    !Array.isArray(this.pendingTrapWindows) ||
-    this.pendingTrapWindows.length === 0
-  ) {
-    return { ok: true, flushed: 0 };
-  }
-  if (
-    this.chainSystem?.isChainResolving?.() ||
-    this.chainSystem?.isChainWindowOpen?.() ||
-    this.trapPromptInProgress
-  ) {
-    return { ok: true, flushed: 0, deferred: true };
-  }
-
-  const pending = this.pendingTrapWindows.splice(0);
-  let flushed = 0;
-  for (const entry of pending) {
-    if (!entry?.event) continue;
-    if (!deferredTrapWindowStillRelevant(entry)) continue;
-    flushed += 1;
-    await this.checkAndOfferTraps(entry.event, {
-      ...(entry.eventData || {}),
-      deferredTrapWindow: true,
-      deferredTrapWindowReason: reason || entry.reason || null,
-    });
-  }
-  return { ok: true, flushed };
-}
-
 /**
  * Check and offer trap activations in response to an event.
  * Opens a chain window if activatable traps exist.
@@ -97,7 +29,12 @@ export async function checkAndOfferTraps(event, eventData = {}) {
 
   // Se o ChainSystem já está resolvendo, não interromper
   if (this.chainSystem?.isChainResolving()) {
-    this.queuePendingTrapWindow?.(event, eventData, "chain_resolving");
+    this.queuePendingChainEvent?.({
+      eventName: event,
+      payload: { ...(eventData || {}) },
+      entries: [],
+      orderRule: "deferred_response_window",
+    });
     this.devLog?.("CHECK_TRAPS", { summary: "Skipped: chain is resolving" });
     return;
   }
@@ -200,7 +137,7 @@ export async function checkAndOfferTraps(event, eventData = {}) {
     this.devLog?.("CHECK_TRAPS", {
       summary: "Opening chain window via ChainSystem",
     });
-    await this.chainSystem.openChainWindow(context);
+    await this.chainSystem.openEventWindow(context);
     if (context.attackRedirect) {
       eventData.attackRedirect = context.attackRedirect;
     }

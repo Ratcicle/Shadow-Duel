@@ -180,7 +180,8 @@ export default class Game {
     this.eventResolutionDepth = 0;
     this.eventResolutionCounter = 0;
     this.pendingEventSelection = null;
-    this.pendingTrapWindows = [];
+    this.pendingChainEvents = [];
+    this._flushingPendingChainEvents = false;
     this.temporaryReplacementEffects = [];
     this.temporaryBattlePairEffects = [];
     this.temporaryEventEffects = [];
@@ -229,7 +230,9 @@ export default class Game {
     // Initialize ChainSystem for chain windows and spell speed validation
     this.chainSystem = this.disableChains
       ? new NullChainSystem()
-      : new ChainSystem(this);
+      : new ChainSystem(this, {
+          responseTimeoutMs: options.chainResponseTimeoutMs,
+        });
   }
 
   isDisposed() {
@@ -247,7 +250,8 @@ export default class Game {
     this.pendingSpecialSummon = null;
     this.pendingTributeSummonSelection = null;
     this.pendingEventSelection = null;
-    this.pendingTrapWindows = [];
+    this.pendingChainEvents = [];
+    this._flushingPendingChainEvents = false;
     this.isResolvingEffect = false;
     this.eventResolutionDepth = 0;
     this.trapPromptInProgress = false;
@@ -772,6 +776,8 @@ Game.prototype.resolveEvent = eventResolver.resolveEvent;
 Game.prototype.resolveEventEntries = eventResolver.resolveEventEntries;
 Game.prototype.resumePendingEventSelection =
   eventResolver.resumePendingEventSelection;
+Game.prototype.queuePendingChainEvent = eventResolver.queuePendingChainEvent;
+Game.prototype.flushPendingChainEvents = eventResolver.flushPendingChainEvents;
 
 // -----------------------------------------------------------------------------
 // Selection: Attach methods from modular selection/ folder
@@ -1123,8 +1129,6 @@ Game.prototype.checkAndOfferTraps = spellTrapTriggers.checkAndOfferTraps;
 Game.prototype._mapEventToChainContext =
   spellTrapTriggers._mapEventToChainContext;
 Game.prototype.activateTrapFromZone = spellTrapTriggers.activateTrapFromZone;
-Game.prototype.queuePendingTrapWindow = spellTrapTriggers.queuePendingTrapWindow;
-Game.prototype.flushPendingTrapWindows = spellTrapTriggers.flushPendingTrapWindows;
 
 // -----------------------------------------------------------------------------
 // UI: Attach methods from modular ui/ folder

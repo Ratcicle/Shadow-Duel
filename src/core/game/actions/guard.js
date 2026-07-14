@@ -19,6 +19,8 @@ export function canStartAction(options = {}) {
   const allowDuringResolving =
     options.allowDuringResolving === true || kind === "selection_interaction";
   const allowDuringOpponentTurn = options.allowDuringOpponentTurn === true;
+  const allowDuringChainWindow =
+    options.allowDuringChainWindow === true || kind === "selection_interaction";
   const phaseReq = options.phaseReq || null;
   const selectionState = this.selectionState || "idle";
   const tributeSelectionActive =
@@ -72,6 +74,16 @@ export function canStartAction(options = {}) {
     return blocked(
       "BLOCKED_RESOLVING",
       "Finalize o efeito pendente antes de fazer outra acao.",
+    );
+  }
+
+  if (
+    this.chainSystem?.isChainWindowOpen?.() === true &&
+    !allowDuringChainWindow
+  ) {
+    return blocked(
+      "BLOCKED_CHAIN_WINDOW_OPEN",
+      "Responda pela janela de Chain antes de iniciar outra acao.",
     );
   }
 

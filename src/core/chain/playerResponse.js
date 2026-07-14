@@ -31,14 +31,28 @@ export async function playerChooseChainResponse(player, activatable, context) {
     if (autoPassByMouseHold) {
       this.log("Left mouse button held - auto-passing chain response");
     } else if (typeof ui.showChainResponseModal === "function") {
-      const timeoutMs = 30000;
-      const timeoutPromise = new Promise((resolve) => {
-        setTimeout(() => resolve(null), timeoutMs);
-      });
-      chosenOption = await Promise.race([
-        ui.showChainResponseModal(activatable, context, this.chainStack),
-        timeoutPromise,
-      ]);
+      this.activeResponseAbortController?.abort?.("response_replaced");
+      const controller = new AbortController();
+      this.activeResponseAbortController = controller;
+      const timeoutMs = Number.isFinite(this.responseTimeoutMs)
+        ? Math.max(0, this.responseTimeoutMs)
+        : 30000;
+      const timeoutId = setTimeout(() => {
+        controller.abort("response_timeout");
+      }, timeoutMs);
+      try {
+        chosenOption = await ui.showChainResponseModal(
+          activatable,
+          context,
+          this.chainStack,
+          { signal: controller.signal },
+        );
+      } finally {
+        clearTimeout(timeoutId);
+        if (this.activeResponseAbortController === controller) {
+          this.activeResponseAbortController = null;
+        }
+      }
     } else if (typeof ui.offerTrapActivation === "function") {
       const cards = activatable.map((a) => a.card);
       const result = await ui.offerTrapActivation(

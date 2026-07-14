@@ -52,13 +52,15 @@ export const voidCards = [
             count: { min: 1, max: 1 },
           },
         ],
-        actions: [
+        activationCosts: [
           {
             type: "move",
             targetRef: "void_conjurer_cost",
             player: "self",
             to: "graveyard",
           },
+        ],
+        actions: [
           {
             type: "special_summon_from_zone",
             zone: "graveyard",
@@ -410,7 +412,7 @@ export const voidCards = [
             autoSelect: true,
           },
         ],
-        actions: [
+        activationCosts: [
           {
             type: "move",
             targetRef: "void_hollow_king_boost_cost",
@@ -418,6 +420,8 @@ export const voidCards = [
             to: "graveyard",
             contextLabel: "cost",
           },
+        ],
+        actions: [
           { type: "buff_stats_temp", atkBoost: 1000, defBoost: 0 },
         ],
       },
@@ -456,15 +460,18 @@ export const voidCards = [
             cardName: "Void Hollow",
             cardKind: "monster",
             count: { min: 1, max: 1 },
+            intent: "cost",
           },
         ],
-        actions: [
+        activationCosts: [
           {
             type: "move",
             targetRef: "void_bone_spider_hollow_cost",
             to: "graveyard",
             contextLabel: "cost",
           },
+        ],
+        actions: [
           {
             type: "forbid_attack_next_turn",
             targetRef: "void_bone_spider_lock_target",
@@ -1594,7 +1601,7 @@ export const voidCards = [
             count: { min: 1, max: 1 },
           },
         ],
-        actions: [
+        activationCosts: [
           {
             type: "move",
             targetRef: "void_shadow_crawler_cost",
@@ -1602,6 +1609,8 @@ export const voidCards = [
             to: "graveyard",
             contextLabel: "cost",
           },
+        ],
+        actions: [
           {
             type: "destroy",
             targetRef: "void_shadow_crawler_destroy_target",

@@ -550,9 +550,10 @@ export const techZeroCards = [
             isTuner: true,
             excludeSelf: true,
             count: { min: 1, max: 1 },
+            intent: "cost",
           },
         ],
-        actions: [
+        activationCosts: [
           {
             type: "move",
             targetRef: "self",
@@ -569,6 +570,8 @@ export const techZeroCards = [
             to: "graveyard",
             contextLabel: "cost",
           },
+        ],
+        actions: [
           {
             type: "add_from_zone_to_hand",
             zone: "deck",
@@ -1465,7 +1468,7 @@ export const techZeroCards = [
               "You need a Level 7 or lower Synchro Monster in your Graveyard.",
           },
         ],
-        actions: [
+        activationCosts: [
           {
             type: "move",
             targetRef: "self",
@@ -1475,6 +1478,8 @@ export const techZeroCards = [
             contextLabel: "cost",
             skipSendToGraveActionReplacement: true,
           },
+        ],
+        actions: [
           {
             type: "special_summon_from_zone",
             zone: "graveyard",
@@ -1773,6 +1778,7 @@ export const techZeroCards = [
             cardKind: "monster",
             archetype: "Tech-Zero",
             count: { min: 2, max: 2 },
+            intent: "cost",
           },
           {
             id: "tech_zero_assembly_line_summon_target",
@@ -1784,7 +1790,7 @@ export const techZeroCards = [
             count: { min: 1, max: 1 },
           },
         ],
-        actions: [
+        activationCosts: [
           {
             type: "move",
             targetRef: "tech_zero_assembly_line_banish_cost",
@@ -1793,6 +1799,8 @@ export const techZeroCards = [
             to: "banished",
             contextLabel: "cost",
           },
+        ],
+        actions: [
           {
             type: "special_summon_from_zone",
             targetRef: "tech_zero_assembly_line_summon_target",

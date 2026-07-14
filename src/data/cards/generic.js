@@ -736,20 +736,36 @@ export const genericCards = [
         speed: 2,
         oncePerTurn: true,
         oncePerTurnName: "natural_selection_activation",
-        actions: [
+        targets: [
           {
-            type: "discard_from_hand",
-            player: "self",
+            id: "natural_selection_cost",
+            owner: "self",
+            zone: "hand",
             count: { min: 1, max: 1 },
-            contextLabel: "natural_selection_cost",
-            selectionMessage: "Choose 1 card to discard for Natural Selection.",
+            intent: "cost",
           },
           {
-            type: "destroy_targeted_cards",
+            id: "natural_selection_target",
+            owner: "opponent",
             zones: ["field", "spellTrap", "fieldSpell"],
             requireFaceup: true,
-            minTargets: 1,
-            maxTargets: 1,
+            count: { min: 1, max: 1 },
+          },
+        ],
+        activationCosts: [
+          {
+            type: "move",
+            targetRef: "natural_selection_cost",
+            player: "self",
+            fromZone: "hand",
+            to: "graveyard",
+            contextLabel: "natural_selection_cost",
+          },
+        ],
+        actions: [
+          {
+            type: "destroy_targeted_cards",
+            targetRef: "natural_selection_target",
           },
         ],
       },
@@ -770,12 +786,14 @@ export const genericCards = [
         speed: 1,
         oncePerTurn: true,
         oncePerTurnName: "desperate_gamble_activation",
-        actions: [
+        activationCosts: [
           {
             type: "pay_lp",
             player: "self",
             fraction: 0.5,
           },
+        ],
+        actions: [
           {
             type: "draw",
             player: "self",

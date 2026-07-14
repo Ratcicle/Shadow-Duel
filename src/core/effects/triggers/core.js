@@ -234,6 +234,19 @@ export async function handleTriggeredEffect(
     };
   }
 
+
+  if (ctx?.activationContext?.prepareOnly === true) {
+    return {
+      success: true,
+      needsSelection: false,
+      prepared: true,
+      effect,
+      targets: targetResult.targets || {},
+      activationContext: ctx.activationContext,
+      resolutionContext: ctx,
+    };
+  }
+
   if (selections && typeof selections === "object") {
     ctx.selections = selections;
     if (
@@ -565,7 +578,7 @@ export function buildTriggerEntry(options = {}) {
           };
         }
       }
-      if (selections == null) {
+      if (selections == null && activationCtx.confirmed !== true) {
         const wantsToUse = await confirmTriggeredEffect(
           effect,
           sourceCard,
@@ -580,6 +593,7 @@ export function buildTriggerEntry(options = {}) {
             reason: "Effect activation cancelled.",
           };
         }
+        activationCtx.confirmed = true;
       }
       return activateImpl(selections, activationCtx, resolvedCtx);
     },
@@ -588,18 +602,6 @@ export function buildTriggerEntry(options = {}) {
       this.registerOncePerDuelUsage(sourceCard, owner, effect);
       if (typeof options.onSuccess === "function") {
         await options.onSuccess(result, activationCtx);
-      }
-      if (typeof this.game?.emitEffectActivated === "function") {
-        await this.game.emitEffectActivated({
-          card: sourceCard,
-          player: owner,
-          effect,
-          activationZone:
-            activationCtx?.activationZone || activationContext.activationZone,
-          activationContext: activationCtx,
-          effectType: "triggered",
-          sourceEvent: effect.event || null,
-        });
       }
     },
   };

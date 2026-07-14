@@ -12,6 +12,8 @@
  * - cleanupTempBoosts
  */
 
+import { restoreTemporaryStatuses } from "../../Card.js";
+
 /**
  * Applies a turn-based buff (atk/def) to a card with explicit expiration turn.
  * Multiple buffs can stack on the same card.
@@ -280,16 +282,7 @@ export function cleanupTempBoosts(player) {
     delete card.canAttackAllOpponentMonstersThisTurn;
     delete card.attackedMonstersThisTurn;
 
-    if (card.tempStatuses && Object.keys(card.tempStatuses).length > 0) {
-      for (const [status, previousValue] of Object.entries(card.tempStatuses)) {
-        if (previousValue === undefined) {
-          delete card[status];
-        } else {
-          card[status] = previousValue;
-        }
-      }
-      card.tempStatuses = {};
-    }
+    restoreTemporaryStatuses(card);
   });
 
   // Restore temporarily reduced levels for hand monsters

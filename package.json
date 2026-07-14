@@ -10,7 +10,8 @@
     "doc": "docs"
   },
   "scripts": {
-    "dev": "serve ."
+    "dev": "serve .",
+    "test": "node --test"
   },
   "devDependencies": {
     "serve": "^14.2.6"
