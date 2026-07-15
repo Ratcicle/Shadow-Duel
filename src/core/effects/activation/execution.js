@@ -793,15 +793,6 @@ export async function activateMonsterEffect(
     }
   }
 
-  // Check if effects are negated (only for cards on field)
-  if (activationZone === "field" && this.isEffectNegated(card)) {
-    return {
-      success: false,
-      needsSelection: false,
-      reason: "Card's effects are currently negated.",
-    };
-  }
-
   const requestedEffectId = activationContext?.effectId || null;
   const effect = this.getMonsterIgnitionEffect
     ? this.getMonsterIgnitionEffect(card, activationZone, {

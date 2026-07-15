@@ -237,6 +237,10 @@ export async function runActivationPipeline(config = {}) {
   const committed = config.activationContext?.committed === true;
   const fromHand =
     config.activationContext?.fromHand === true || typeof config.commit === "function";
+  const sourceWasFacedown =
+    typeof config.activationContext?.sourceWasFacedown === "boolean"
+      ? config.activationContext.sourceWasFacedown
+      : resolvedCard?.isFacedown === true;
   let resolvedActivationZone =
     resolvedZone ||
     config.activationContext?.activationZone ||
@@ -260,6 +264,8 @@ export async function runActivationPipeline(config = {}) {
     sourceZone:
       config.activationContext?.sourceZone ||
       (fromHand ? "hand" : resolvedActivationZone),
+    sourceWasFacedown,
+    selectionKind,
     committed,
     commitInfo: config.activationContext?.commitInfo || commitInfo || null,
     autoSelectSingleTarget: explicitAutoSelect,
@@ -513,7 +519,11 @@ export async function runActivationPipeline(config = {}) {
       ) {
         this.ui.log(normalized.reason);
       }
-      if (activationContext.committed && activationContext.commitInfo) {
+      if (
+        activationContext.committed &&
+        activationContext.commitInfo &&
+        normalized.noRollback !== true
+      ) {
         await this.rollbackSpellActivation(owner, activationContext.commitInfo);
         logPipeline("PIPELINE_ROLLBACK", {
           activationZone: resolvedActivationZone,
@@ -571,6 +581,7 @@ export async function runActivationPipeline(config = {}) {
         ? this.chainSystem.getEffectActivationCosts(preparedEffect)
         : preparedEffect?.activationCosts || [];
     if (
+      activationContext.costsPaid !== true &&
       activationCosts.length > 0 &&
       typeof this.effectEngine?.checkActionPreviewRequirements === "function"
     ) {
@@ -639,15 +650,58 @@ export async function runActivationPipeline(config = {}) {
             effect: preparedEffect,
             zone: resolvedActivationZone,
             selections: preparedSelections,
+            costSelections: activationContext.costSelections || {},
+            targetSelections:
+              activationContext.targetSelections || preparedSelections,
+            resolutionSelections:
+              activationContext.resolutionSelections || {},
+            costPayment: activationContext.costPayment || null,
+            sourceAtActivation: activationContext.sourceAtActivation || null,
+            sourceMoved: activationContext.sourceMoved === true,
+            latestSourceLocation:
+              activationContext.latestSourceLocation || null,
             activationContext: preparedActivationContext,
+            selectionKind,
             context:
               normalized.resolutionContext ||
               activationContext.actionContext ||
               null,
             committed: activationContext.committed === true,
+            costsPaid: activationContext.costsPaid === true,
             skipDefaultFinalization: typeof config.finalize === "function",
             skipUsageRegistration: true,
             pipelineManaged: true,
+            pipelineFinalization:
+              typeof config.finalize === "function"
+                ? async (linkResult = {}, finalizationContext = {}) => {
+                    activationContext.chainFinalizationHandled = true;
+                    if (
+                      linkResult.activationNegated === true ||
+                      linkResult.negated === true
+                    ) {
+                      return linkResult;
+                    }
+                    const finalResult = this.normalizeActivationResult({
+                      ...normalized,
+                      ...linkResult,
+                      needsSelection: false,
+                    });
+                    await config.finalize(finalResult, {
+                      card: resolvedCard,
+                      owner,
+                      activationZone: resolvedActivationZone,
+                      activationContext: {
+                        ...activationContext,
+                        chainId: finalizationContext.chainId ?? null,
+                        linkId: finalizationContext.linkId ?? null,
+                        effectId: preparedEffect?.id || null,
+                        finalizationId:
+                          finalizationContext.finalizationId ?? null,
+                      },
+                    });
+                    return finalResult;
+                  }
+                : null,
           })
         : {
             card: resolvedCard,
@@ -660,6 +714,7 @@ export async function runActivationPipeline(config = {}) {
 
       let costResult = { success: true };
       if (
+        activationContext.costsPaid !== true &&
         (shouldUseChain || preparingForExistingChain) &&
         typeof this.chainSystem?.payActivationCosts === "function"
       ) {
@@ -687,13 +742,18 @@ export async function runActivationPipeline(config = {}) {
         trackActivationAttempt(costResult);
         return this.normalizeActivationResult(costResult);
       }
+      if (preparedActivation.costsPaid === true) {
+        activationContext.costsPaid = true;
+        activationContext.costPayment = preparedActivation.costPayment || null;
+      }
 
       if (preparingForExistingChain) {
-        preparedActivation.pipelineCompletion = async (
+          preparedActivation.pipelineCompletion = async (
           linkResult = { success: true },
         ) => {
           const succeeded =
             linkResult?.success !== false &&
+            linkResult?.activationNegated !== true &&
             linkResult?.negated !== true &&
             linkResult?.fizzled !== true;
           if (!succeeded) {
@@ -702,22 +762,13 @@ export async function runActivationPipeline(config = {}) {
               success: false,
               needsSelection: false,
             });
-            if (
-              linkResult?.negated !== true &&
-              typeof config.finalize === "function"
-            ) {
-              await config.finalize(failedResult, {
-                card: resolvedCard,
-                owner,
-                activationZone: resolvedActivationZone,
-                activationContext,
-              });
-            }
             if (typeof config.onFailure === "function") {
               await config.onFailure(failedResult, activationContext);
             }
             trackActivationAttempt(failedResult, {
-              blocked: linkResult?.negated === true,
+              blocked:
+                linkResult?.activationNegated === true ||
+                linkResult?.negated === true,
             });
             return failedResult;
           }
@@ -731,14 +782,6 @@ export async function runActivationPipeline(config = {}) {
             effect: preparedEffect,
             targets: preparedSelections,
           };
-          if (typeof config.finalize === "function") {
-            await config.finalize(completed, {
-              card: resolvedCard,
-              owner,
-              activationZone: resolvedActivationZone,
-              activationContext,
-            });
-          }
           const shouldCountMaterialActivation =
             resolvedCard?.cardKind === "monster" &&
             (selectionKind === "monsterEffect" ||
@@ -748,7 +791,11 @@ export async function runActivationPipeline(config = {}) {
               contextLabel: selectionKind,
             });
           }
-          if (oncePerTurnInfo) {
+          if (
+            oncePerTurnInfo &&
+            preparedEffect?.usagePolicy !== "use" &&
+            preparedEffect?.usagePolicy !== "activate"
+          ) {
             this.markOncePerTurnUsed(
               oncePerTurnInfo.card,
               oncePerTurnInfo.player,
@@ -797,7 +844,10 @@ export async function runActivationPipeline(config = {}) {
         );
       }
 
-      if (resolutionResult?.negated === true) {
+      if (
+        resolutionResult?.activationNegated === true ||
+        resolutionResult?.negated === true
+      ) {
         const negatedResult = {
           success: false,
           ok: false,
@@ -815,7 +865,10 @@ export async function runActivationPipeline(config = {}) {
 
       resolutionResult = this.normalizeActivationResult(resolutionResult);
       if (!resolutionResult.success) {
-        if (typeof config.finalize === "function") {
+        if (
+          typeof config.finalize === "function" &&
+          activationContext.chainFinalizationHandled !== true
+        ) {
           await config.finalize(resolutionResult, {
             card: resolvedCard,
             owner,
@@ -841,7 +894,10 @@ export async function runActivationPipeline(config = {}) {
       targets: preparedSelections,
     };
 
-    if (typeof config.finalize === "function") {
+    if (
+      typeof config.finalize === "function" &&
+      activationContext.chainFinalizationHandled !== true
+    ) {
       await config.finalize(completedResult, {
         card: resolvedCard,
         owner,
@@ -859,7 +915,11 @@ export async function runActivationPipeline(config = {}) {
         contextLabel: selectionKind,
       });
     }
-    if (oncePerTurnInfo) {
+    if (
+      oncePerTurnInfo &&
+      preparedEffect?.usagePolicy !== "use" &&
+      preparedEffect?.usagePolicy !== "activate"
+    ) {
       this.markOncePerTurnUsed(
         oncePerTurnInfo.card,
         oncePerTurnInfo.player,
@@ -877,8 +937,217 @@ export async function runActivationPipeline(config = {}) {
     return completedResult;
   };
 
+  const runCanonicalActivationTransaction = async (initialResult) => {
+    const normalizedInitial = this.normalizeActivationResult(initialResult);
+    if (!normalizedInitial.success && !normalizedInitial.needsSelection) {
+      return { result: initialResult, fromSelection: false };
+    }
+    const effect =
+      normalizedInitial.effect || activationEffect || config.effect || null;
+    const chainSystem = this.chainSystem;
+    if (!effect || !chainSystem || chainSystem.chainsDisabled === true) {
+      return { result: initialResult, fromSelection: false };
+    }
+    const usageCheck = chainSystem.checkActivationUsage?.(
+      resolvedCard,
+      owner,
+      effect,
+    );
+    if (usageCheck?.ok === false) {
+      return {
+        result: this.createActionResult({
+          reason: usageCheck.reason || "Effect usage limit reached.",
+          code: usageCheck.code || "ACTIVATION_USAGE_LIMIT",
+        }),
+        fromSelection: false,
+      };
+    }
+
+    const costDefinitions = (
+      chainSystem.getActivationCostTargetDefinitions?.(effect) || []
+    ).map((definition) =>
+      definition.requireThisCard === true || definition.allowSelf === true
+        ? definition
+        : { ...definition, excludeSelf: true },
+    );
+    const targetDefinitions =
+      chainSystem.getDeclaredTargetDefinitions?.(effect) || [];
+    const costs = chainSystem.getEffectActivationCosts?.(effect) || [];
+    const hasCanonicalWork =
+      costDefinitions.length > 0 ||
+      targetDefinitions.length > 0 ||
+      costs.length > 0;
+    if (!hasCanonicalWork) {
+      return { result: initialResult, fromSelection: false };
+    }
+    this.notify?.("activation_transaction", {
+      stage: "preflight",
+      cardInstanceId: resolvedCard?.instanceId ?? null,
+      effectId: effect.id || null,
+      activationZone: resolvedActivationZone,
+    });
+
+    const provided =
+      normalizedInitial.targets ||
+      normalizedInitial.selections ||
+      config.selections ||
+      {};
+    const selectProvided = (definitions) =>
+      Object.fromEntries(
+        definitions
+          .filter((definition) => definition?.id in provided)
+          .map((definition) => [definition.id, provided[definition.id]]),
+      );
+
+    let costSelections = selectProvided(costDefinitions);
+    if (
+      costDefinitions.length > 0 &&
+      Object.keys(costSelections).length === 0
+    ) {
+      costSelections = await chainSystem.getPlayerSelectionsForDefinitions?.(
+        resolvedCard,
+        costDefinitions,
+        owner,
+        activationContext.actionContext || null,
+        {
+          purpose: "cost",
+          allowCancel: true,
+          activationZone: resolvedActivationZone,
+        },
+      );
+      if (costSelections == null) {
+        return {
+          result: this.createActionResult({
+            cancelled: true,
+            reason: "Activation cost selection cancelled.",
+            code: "ACTIVATION_COST_SELECTION_CANCELLED",
+          }),
+          fromSelection: false,
+        };
+      }
+    }
+
+    const commitResult = await commitPreparedSource();
+    if (commitResult?.success === false) {
+      return { result: commitResult, fromSelection: false };
+    }
+
+    const draft = chainSystem.createPreparedActivation({
+      card: resolvedCard,
+      player: owner,
+      effect,
+      zone: resolvedActivationZone,
+      selections: costSelections || {},
+      costSelections: costSelections || {},
+      targetSelections: {},
+      activationContext: {
+        ...activationContext,
+        selections: costSelections || {},
+      },
+      committed: true,
+    });
+    activationContext.sourceAtActivation = draft.sourceAtActivation;
+    activationContext.costSelections = costSelections || {};
+    activationContext.selections = costSelections || {};
+    this.notify?.("activation_transaction", {
+      stage: "source_committed",
+      cardInstanceId: resolvedCard?.instanceId ?? null,
+      effectId: effect.id || null,
+      activationZone: resolvedActivationZone,
+    });
+
+    chainSystem.isPreparingActivation = true;
+    let costResult;
+    try {
+      costResult = await chainSystem.payActivationCosts(
+        draft,
+        activationContext.actionContext || null,
+      );
+    } finally {
+      chainSystem.isPreparingActivation = false;
+    }
+    if (costResult?.success === false) {
+      return {
+        result: this.createActionResult({
+          ...costResult,
+          noRollback: true,
+        }),
+        fromSelection: false,
+      };
+    }
+    activationContext.costsPaid = true;
+    activationContext.costPayment = draft.costPayment || null;
+    if (
+      draft.sourceAtActivation &&
+      Number(resolvedCard?.locationVersion ?? 0) !==
+        Number(draft.sourceAtActivation.locationVersion ?? 0)
+    ) {
+      activationContext.sourceMoved = true;
+      activationContext.latestSourceLocation = {
+        cardInstanceId: resolvedCard?.instanceId ?? null,
+        controllerId: owner?.id || null,
+        zone: chainSystem.determineCardZone?.(resolvedCard, owner) || null,
+        faceUp: resolvedCard?.isFacedown !== true,
+        locationVersion: Number(resolvedCard?.locationVersion ?? 0),
+      };
+    }
+    this.notify?.("activation_transaction", {
+      stage: "cost_paid",
+      cardInstanceId: resolvedCard?.instanceId ?? null,
+      effectId: effect.id || null,
+      costPayment: draft.costPayment || null,
+    });
+
+    let targetSelections = selectProvided(targetDefinitions);
+    if (
+      targetDefinitions.length > 0 &&
+      Object.keys(targetSelections).length === 0
+    ) {
+      targetSelections = await chainSystem.getPlayerSelectionsForDefinitions?.(
+        resolvedCard,
+        targetDefinitions,
+        owner,
+        activationContext.actionContext || null,
+        {
+          purpose: "target",
+          allowCancel: false,
+          activationZone: resolvedActivationZone,
+        },
+      );
+      if (targetSelections == null) {
+        return {
+          result: this.createActionResult({
+            committed: true,
+            costsPaid: true,
+            noRollback: true,
+            reason: "Required activation targets could not be declared.",
+            code: "ACTIVATION_TARGET_SELECTION_FAILED_AFTER_COMMIT",
+          }),
+          fromSelection: false,
+        };
+      }
+    }
+
+    const selections = {
+      ...(costSelections || {}),
+      ...(targetSelections || {}),
+    };
+    activationContext.costSelections = costSelections || {};
+    activationContext.targetSelections = targetSelections || {};
+    activationContext.selections = selections;
+    this.notify?.("activation_transaction", {
+      stage: "targets_declared",
+      cardInstanceId: resolvedCard?.instanceId ?? null,
+      effectId: effect.id || null,
+      targetIds: targetDefinitions.map((definition) => definition.id),
+    });
+    const nextResult = await safeActivate(selections);
+    return { result: nextResult, fromSelection: true };
+  };
+
   const initialResult = await safeActivate(config.selections || null);
-  return handleResult(initialResult, false);
+  const transaction = await runCanonicalActivationTransaction(initialResult);
+  return handleResult(transaction.result, transaction.fromSelection);
 }
 
 export async function runActivationPipelineWait(config = {}) {

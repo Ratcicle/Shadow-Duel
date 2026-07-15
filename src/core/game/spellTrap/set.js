@@ -3,14 +3,16 @@
 // Spell/Trap set methods for Game class — B.9 extraction
 // ─────────────────────────────────────────────────────────────────────────────
 
+import { FAST_EFFECT_ORIGINS } from "../../chain/timing.js";
+
 /**
  * Sets a Spell or Trap card from hand to the spell/trap zone.
  * @param {Card} card - The card to set.
  * @param {number} handIndex - Index of the card in the player's hand.
  * @param {Player} actor - The player performing the action.
- * @returns {Object} Result with ok status.
+ * @returns {Promise<Object>} Result with ok status and timing metadata.
  */
-export function setSpellOrTrap(card, handIndex, actor = this.player) {
+export async function setSpellOrTrap(card, handIndex, actor = this.player) {
   const guard = this.guardActionStart({
     actor,
     kind: "set_spell_trap",
@@ -38,7 +40,7 @@ export function setSpellOrTrap(card, handIndex, actor = this.player) {
   card.setTurn = this.turnCounter;
 
   if (typeof this.moveCard === "function") {
-    this.moveCard(card, actor, "spellTrap", { fromZone: "hand" });
+    await this.moveCard(card, actor, "spellTrap", { fromZone: "hand" });
   } else {
     // Fallback (should not happen)
     if (handIndex >= 0 && handIndex < actor.hand.length) {
@@ -55,5 +57,25 @@ export function setSpellOrTrap(card, handIndex, actor = this.player) {
   });
 
   this.updateBoard();
-  return { ok: true, success: true, card };
+  const timing = await this.chainSystem?.runFastEffectTiming?.({
+    origin: FAST_EFFECT_ORIGINS.ACTION_WITHOUT_CHAIN,
+    actionPlayer: actor,
+    context: {
+      type: "action_without_chain",
+      event: "card_set",
+      card,
+      player: actor,
+      triggerPlayer: actor,
+      phase: this.phase,
+      currentPhase: this.phase,
+      addTriggerToChain: false,
+    },
+  });
+  return {
+    ok: timing?.ok !== false,
+    success: timing?.success !== false,
+    needsSelection: timing?.needsSelection === true,
+    card,
+    timing: timing || null,
+  };
 }

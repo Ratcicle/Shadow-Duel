@@ -73,6 +73,27 @@ function scheduleAiMoveAfterPaint(game, actor) {
   setTimeout(runMove, 0);
 }
 
+async function negotiateAutomaticPhaseEnd(game, eventData) {
+  while (!game.gameOver && !game.isDisposed?.()) {
+    const currentPhase = game.phase;
+    const timingResult = await game.checkAndOfferTraps("phase_end", eventData);
+    if (!timingResult || timingResult.phaseTransitionAllowed === true) {
+      return { ok: true, timingResult: timingResult || null };
+    }
+    if (
+      timingResult.needsSelection === true ||
+      timingResult.deferred === true ||
+      timingResult.phaseTransitionInterrupted !== true ||
+      game.phase !== currentPhase
+    ) {
+      return { ok: false, timingResult };
+    }
+    // Automatic Draw/Standby phases renew their phase-transition intent after
+    // a Chain and the mandatory post-Chain timing round have both completed.
+  }
+  return { ok: false, reason: "duel_stopped" };
+}
+
 /**
  * Starts a new turn for the active player.
  * Handles draw phase, standby phase, and transitions to main1.
@@ -146,6 +167,16 @@ export async function startTurn() {
   activePlayer.normalSummonsThisTurn = [];
 
   this.updateBoard();
+  await this.checkAndOfferTraps("phase_start", {
+    currentPhase: "draw",
+    previousPhase: null,
+    fromPhase: null,
+    toPhase: "draw",
+    player: activePlayer,
+    battleStep: null,
+    damageStepTiming: null,
+  });
+  if (this.gameOver || this.isDisposed?.()) return;
   this._arenaTracker?.recordProgress?.("turn_draw_before", this, {
     actor: activePlayer?.id || this.turn,
     deckSize: activePlayer?.deck?.length || 0,
@@ -168,7 +199,14 @@ export async function startTurn() {
     handSize: activePlayer?.hand?.length || 0,
   });
   this.updateBoard();
-  await this.checkAndOfferTraps("phase_end", {
+  const drawTiming = await this.checkAndOfferTraps("normal_draw", {
+    player: activePlayer,
+    drawn: drawResult?.drawn || [],
+    currentPhase: "draw",
+    phase: "draw",
+  });
+  if (drawTiming?.needsSelection || this.gameOver || this.isDisposed?.()) return;
+  const drawPhaseEnd = await negotiateAutomaticPhaseEnd(this, {
     currentPhase: "draw",
     nextPhase: "standby",
     fromPhase: "draw",
@@ -176,6 +214,7 @@ export async function startTurn() {
     battleStep: null,
     damageStepTiming: null,
   });
+  if (!drawPhaseEnd.ok) return drawPhaseEnd;
   if (this.gameOver || this.isDisposed?.()) return;
   if (this.phase !== "draw") return;
   await this.waitForPhaseDelay();
@@ -185,6 +224,18 @@ export async function startTurn() {
   this.battleStep = null;
   this.damageStepTiming = null;
 
+  this.updateBoard();
+  await this.checkAndOfferTraps("phase_start", {
+    currentPhase: "standby",
+    previousPhase: "draw",
+    fromPhase: "draw",
+    toPhase: "standby",
+    player: activePlayer,
+    battleStep: null,
+    damageStepTiming: null,
+  });
+  if (this.gameOver || this.isDisposed?.()) return;
+
   // Process delayed actions in standby phase BEFORE emitting the event
   await this.processDelayedActions("standby", activePlayer.id || this.turn);
   if (this.gameOver || this.isDisposed?.()) return;
@@ -192,19 +243,10 @@ export async function startTurn() {
   this.updateBoard();
   await this.emit("standby_phase", { player: activePlayer, opponent });
   if (this.gameOver || this.isDisposed?.()) return;
-  await this.checkAndOfferTraps("phase_start", {
-    currentPhase: "standby",
-    previousPhase: "draw",
-    fromPhase: "draw",
-    toPhase: "standby",
-    battleStep: null,
-    damageStepTiming: null,
-  });
-  if (this.gameOver || this.isDisposed?.()) return;
   if (this.phase !== "standby") return;
   await this.waitForPhaseDelay();
   if (this.gameOver || this.isDisposed?.()) return;
-  await this.checkAndOfferTraps("phase_end", {
+  const standbyPhaseEnd = await negotiateAutomaticPhaseEnd(this, {
     currentPhase: "standby",
     nextPhase: "main1",
     fromPhase: "standby",
@@ -212,6 +254,7 @@ export async function startTurn() {
     battleStep: null,
     damageStepTiming: null,
   });
+  if (!standbyPhaseEnd.ok) return standbyPhaseEnd;
   if (this.gameOver || this.isDisposed?.()) return;
   if (this.phase !== "standby") return;
 
@@ -219,6 +262,16 @@ export async function startTurn() {
   this.battleStep = null;
   this.damageStepTiming = null;
   this.updateBoard();
+  await this.checkAndOfferTraps("phase_start", {
+    currentPhase: "main1",
+    previousPhase: "standby",
+    fromPhase: "standby",
+    toPhase: "main1",
+    player: activePlayer,
+    battleStep: null,
+    damageStepTiming: null,
+  });
+  if (this.gameOver || this.isDisposed?.() || this.phase !== "main1") return;
   this._arenaTracker?.recordProgress?.("main1_ready", this, {
     actor: activePlayer?.id || this.turn,
   });

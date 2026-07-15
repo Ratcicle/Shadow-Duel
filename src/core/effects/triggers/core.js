@@ -1,5 +1,6 @@
 import { getCardDisplayName, getUIText } from "../../i18n.js";
 import { isAI } from "../../Player.js";
+import { captureSourceSnapshot } from "../../chain/link.js";
 
 const AUTOMATIC_TRIGGER_ACTION_TYPES = new Set([
   "forbid_attack_this_turn",
@@ -339,10 +340,18 @@ export function buildTriggerActivationContext(
 ) {
   const activationZone =
     zoneOverride || this.findCardZone(player, sourceCard) || "field";
+  const sourceAtTrigger = captureSourceSnapshot(
+    sourceCard,
+    player,
+    activationZone,
+  );
   return {
     fromHand: activationZone === "hand",
     activationZone,
     sourceZone: activationZone,
+    sourceWasFacedown: sourceCard?.isFacedown === true,
+    sourceAtTrigger,
+    selectionKind: "triggered",
     committed: false,
   };
 }
@@ -417,6 +426,21 @@ export function buildTriggerEntry(options = {}) {
       owner,
       options.activationZone
     );
+  activationContext = {
+    ...activationContext,
+    sourceWasFacedown:
+      typeof activationContext.sourceWasFacedown === "boolean"
+        ? activationContext.sourceWasFacedown
+        : sourceCard.isFacedown === true,
+    sourceAtTrigger:
+      activationContext.sourceAtTrigger ||
+      captureSourceSnapshot(
+        sourceCard,
+        owner,
+        activationContext.activationZone || options.activationZone || null,
+      ),
+    selectionKind: "triggered",
+  };
   const strategyContext =
     typeof owner.strategy?.buildActivationContextForEffect === "function"
       ? owner.strategy.buildActivationContextForEffect({
@@ -508,6 +532,7 @@ export function buildTriggerEntry(options = {}) {
 
   const config = {
     card: sourceCard,
+    effect,
     owner,
     activationZone: activationContext.activationZone,
     activationContext,
@@ -598,8 +623,12 @@ export function buildTriggerEntry(options = {}) {
       return activateImpl(selections, activationCtx, resolvedCtx);
     },
     onSuccess: async (result, activationCtx) => {
-      this.registerOncePerTurnUsage(sourceCard, owner, effect);
-      this.registerOncePerDuelUsage(sourceCard, owner, effect);
+      // Explicit Phase 4 policies are settled by the Chain Link reservation.
+      // Phase 9: remove this adapter after every effect declares usagePolicy.
+      if (effect.usagePolicy !== "use" && effect.usagePolicy !== "activate") {
+        this.registerOncePerTurnUsage(sourceCard, owner, effect);
+        this.registerOncePerDuelUsage(sourceCard, owner, effect);
+      }
       if (typeof options.onSuccess === "function") {
         await options.onSuccess(result, activationCtx);
       }
@@ -611,6 +640,9 @@ export function buildTriggerEntry(options = {}) {
     card: sourceCard,
     effect,
     owner,
+    triggerRequirement: effect.triggerRequirement || null,
+    triggerTiming: effect.triggerTiming || null,
+    sourceAtTrigger: activationContext.sourceAtTrigger || null,
     config,
   };
 }

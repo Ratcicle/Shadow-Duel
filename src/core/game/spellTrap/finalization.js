@@ -40,15 +40,35 @@ function storePendingSpellTrapFinalization(card, owner, activationZone, override
   return true;
 }
 
-async function applyDefaultSpellTrapFinalization(game, card, owner, activationZone) {
+async function applyDefaultSpellTrapFinalization(
+  game,
+  card,
+  owner,
+  activationZone,
+  options = {},
+) {
   const subtype = card?.subtype || "";
   const kind = card?.cardKind || "";
   const shouldSendToGY =
     (kind === "spell" && (subtype === "normal" || isQuickSpell(card))) ||
-    (kind === "trap" && subtype === "normal");
+    (kind === "trap" && (subtype === "normal" || subtype === "counter"));
 
   if (!shouldSendToGY) return false;
-  await game.moveCard(card, owner, "graveyard", { fromZone: activationZone });
+  if (!isSpellTrapInActivationZone(owner, card, activationZone)) return false;
+  const activationContext = options.activationContext || {};
+  await game.moveCard(card, owner, "graveyard", {
+    fromZone: activationZone,
+    sourceCard: card,
+    effectId: activationContext.effectId || null,
+    chainId: activationContext.chainId ?? null,
+    linkId: activationContext.linkId ?? null,
+    contextLabel:
+      activationContext.chainId != null
+        ? "post_chain_cleanup"
+        : "spell_trap_activation_cleanup",
+    awaitEvents: true,
+    deferCardToGraveTriggerResolution: activationContext.chainId != null,
+  });
   game.updateBoard?.();
   return true;
 }
@@ -171,6 +191,7 @@ export async function resolvePendingSpellTrapFinalization(
       card,
       owner,
       activationZone || pending.activationZone || "spellTrap",
+      options,
     );
   }
 
@@ -196,7 +217,13 @@ export async function finalizeSpellTrapActivation(
     return;
   }
 
-  await applyDefaultSpellTrapFinalization(this, card, owner, activationZone);
+  await applyDefaultSpellTrapFinalization(
+    this,
+    card,
+    owner,
+    activationZone,
+    options,
+  );
 }
 /**
  * Move a Spell/Trap from hand to the appropriate zone before resolving

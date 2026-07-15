@@ -83,14 +83,6 @@ export async function collectBattleDamageTriggers(payload) {
           continue;
         }
 
-        if (
-          sourceZone !== "hand" &&
-          !card.isFacedown &&
-          this.isEffectNegated(card)
-        ) {
-          continue;
-        }
-
         if (effect.requireFaceup === true && card.isFacedown === true) {
           continue;
         }

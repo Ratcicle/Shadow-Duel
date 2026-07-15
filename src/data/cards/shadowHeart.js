@@ -16,6 +16,8 @@ export const shadowHeartCards = [
       {
         id: "shadow_heart_abyssal_eel_battle_damage",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "attack_declared",
         requireDefenderPosition: true,
         requireSelfAsDefender: true,
@@ -30,6 +32,8 @@ export const shadowHeartCards = [
       {
         id: "shadow_heart_abyssal_eel_recover",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "battle_destroy",
         requireSelfAsDestroyed: true,
         targets: [
@@ -70,6 +74,8 @@ export const shadowHeartCards = [
       {
         id: "shadow_heart_specter_recycle",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "card_to_grave",
         fromZone: "any",
         oncePerTurn: true,
@@ -163,6 +169,8 @@ export const shadowHeartCards = [
       {
         id: "shadow_heart_arctroth_on_summon",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "after_summon",
         summonMethods: ["tribute"],
         requireSelfAsSummoned: true,
@@ -179,6 +187,8 @@ export const shadowHeartCards = [
       {
         id: "shadow_heart_arctroth_attack_remove_stat_increases",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "battle_damage",
         requireZone: "field",
         requireFaceup: true,
@@ -195,6 +205,8 @@ export const shadowHeartCards = [
       {
         id: "shadow_heart_arctroth_defense_remove_stat_increases",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "battle_damage",
         requireZone: "field",
         requireFaceup: true,
@@ -306,6 +318,8 @@ export const shadowHeartCards = [
       {
         id: "shadow_heart_imp_on_summon",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "when",
         event: "after_summon",
         requireSelfAsSummoned: true,
         summonMethods: ["normal"],
@@ -351,6 +365,8 @@ export const shadowHeartCards = [
       {
         id: "shadow_heart_gecko_special_search",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "after_summon",
         summonMethods: ["special"],
         requireSelfAsSummoned: true,
@@ -370,6 +386,8 @@ export const shadowHeartCards = [
       {
         id: "shadow_heart_gecko_battle_draw",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "battle_destroy",
         requireSelfAsDestroyed: true,
         oncePerTurn: true,
@@ -401,6 +419,8 @@ export const shadowHeartCards = [
       {
         id: "shadow_heart_coward_discard",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "card_to_grave",
         fromZone: "hand",
         targets: [
@@ -503,6 +523,8 @@ export const shadowHeartCards = [
       {
         id: "shadow_heart_scale_dragon_recycle",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "battle_destroy",
         requireSelfAsAttacker: true,
         requireDestroyedIsOpponent: true,
@@ -530,6 +552,8 @@ export const shadowHeartCards = [
       {
         id: "shadow_heart_scale_dragon_tribute_destroyed_revive",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "card_to_grave",
         fromZone: "field",
         condition: { type: "destroyed_by_battle_or_effect" },
@@ -630,6 +654,8 @@ export const shadowHeartCards = [
       {
         id: "shadow_heart_shield_upkeep_effect",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "standby_phase",
         promptUser: false,
         actions: [
@@ -685,6 +711,8 @@ export const shadowHeartCards = [
       {
         id: "darkness_valley_battle_punish",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "battle_destroy",
         requireSelfAsDestroyed: true,
         oncePerTurn: true,
@@ -716,6 +744,8 @@ export const shadowHeartCards = [
       {
         id: "shadow_heart_death_wyrm_hand_summon",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "when",
         event: "battle_destroy",
         requireOwnMonsterArchetype: "Shadow-Heart",
         oncePerTurn: true,
@@ -772,6 +802,8 @@ export const shadowHeartCards = [
       {
         id: "shadow_heart_leviathan_burn_attacker",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "battle_destroy",
         requireSelfAsAttacker: true,
         actions: [
@@ -785,6 +817,8 @@ export const shadowHeartCards = [
       {
         id: "shadow_heart_leviathan_burn_destroyed",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "battle_destroy",
         requireSelfAsDestroyed: true,
         actions: [
@@ -814,6 +848,8 @@ export const shadowHeartCards = [
       {
         id: "shadow_heart_void_mage_search",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "after_summon",
         summonMethods: ["normal"],
         requireSelfAsSummoned: true,
@@ -829,6 +865,8 @@ export const shadowHeartCards = [
       {
         id: "shadow_heart_void_mage_draw",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "opponent_damage",
         oncePerTurn: true,
         oncePerTurnName: "shadow_heart_void_mage_draw",
@@ -855,6 +893,8 @@ export const shadowHeartCards = [
       {
         id: "shadow_heart_cathedral_add_counter",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "opponent_damage",
         actions: [
           {
@@ -954,6 +994,8 @@ export const shadowHeartCards = [
       {
         id: "demon_dragon_fusion_destroy",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "after_summon",
         summonMethods: ["fusion"],
         requireSelfAsSummoned: true,
@@ -967,6 +1009,8 @@ export const shadowHeartCards = [
       {
         id: "demon_dragon_revive_scale",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "card_to_grave",
         promptUser: true,
         promptMessage:
@@ -1028,6 +1072,8 @@ export const shadowHeartCards = [
       {
         id: "shadow_heart_warlord_revive",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "battle_destroy",
         requireSelfAsAttacker: true,
         requireDestroyedIsOpponent: true,
@@ -1080,6 +1126,8 @@ export const shadowHeartCards = [
       {
         id: "shadow_heart_arctroth_pursuer_ascension_drain",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "after_summon",
         summonMethods: ["ascension"],
         requireSelfAsSummoned: true,
@@ -1107,6 +1155,8 @@ export const shadowHeartCards = [
       {
         id: "shadow_heart_arctroth_pursuer_battle_revive",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "battle_destroy",
         requireSelfAsAttacker: true,
         requireDestroyedIsOpponent: true,
@@ -1165,6 +1215,8 @@ export const shadowHeartCards = [
       {
         id: "shadow_heart_devastation_dragon_ascension_boost",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "after_summon",
         summonMethods: ["ascension"],
         requireSelfAsSummoned: true,
@@ -1190,6 +1242,8 @@ export const shadowHeartCards = [
       {
         id: "shadow_heart_devastation_dragon_defense_sweep",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "battle_destroy",
         requireZone: "field",
         requireFaceup: true,
@@ -1236,6 +1290,8 @@ export const shadowHeartCards = [
       {
         id: "shadow_heart_heartbearer_revive",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "card_to_grave",
         requireZone: "field",
         requireFaceup: true,

@@ -54,21 +54,6 @@ export async function collectCardToGraveTriggers(payload) {
       return;
     }
 
-    const ownEffectWasNegatedAtFieldExit =
-      sourceCard === card && payload?.effectsNegatedAtFieldExit === true;
-    const allowNegatedFieldExit =
-      ownEffectWasNegatedAtFieldExit &&
-      effect.allowIfEffectsNegatedAtFieldExit === true;
-    if (
-      (ownEffectWasNegatedAtFieldExit && !allowNegatedFieldExit) ||
-      (!allowNegatedFieldExit && this.isEffectNegated(sourceCard))
-    ) {
-      debugLog(
-        `[handleCardToGraveEvent] ${sourceCard.name} effects are negated, skipping effect.`,
-      );
-      return;
-    }
-
     const allowedContextLabels = [
       ...(effect.contextLabel ? [effect.contextLabel] : []),
       ...(Array.isArray(effect.contextLabels) ? effect.contextLabels : []),

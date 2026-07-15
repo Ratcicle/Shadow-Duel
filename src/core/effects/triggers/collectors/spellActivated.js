@@ -69,13 +69,6 @@ export async function collectSpellActivatedTriggers(payload) {
           continue;
         }
 
-        if (this.isEffectNegated(sourceCard)) {
-          debugTriggerLog(this,
-            `${sourceCard.name} effects are negated, skipping effect.`,
-          );
-          continue;
-        }
-
         if (effect.requireFaceup === true && sourceCard.isFacedown === true) {
           continue;
         }

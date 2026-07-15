@@ -51,14 +51,6 @@ export async function collectEndPhaseTriggers(payload) {
         if (effect.event !== "end_phase") continue;
         if (!canTriggerForEndPhasePlayer(owner, effect)) continue;
 
-        if (this.isEffectNegated(card)) {
-          debugTriggerLog(
-            this,
-            `${card.name} effects are negated, skipping effect.`,
-          );
-          continue;
-        }
-
         if (effect.requireFaceup === true && card.isFacedown === true) {
           debugTriggerLog(
             this,

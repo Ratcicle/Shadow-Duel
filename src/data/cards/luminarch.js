@@ -17,6 +17,8 @@ export const luminarchCards = [
       {
         id: "luminarch_valiant_search",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "after_summon",
         requireSelfAsSummoned: true,
         summonMethods: ["normal", "special"],
@@ -95,6 +97,8 @@ export const luminarchCards = [
       {
         id: "luminarch_aegisbearer_def_boost",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "after_summon",
         requireSelfAsSummoned: true,
         summonMethods: ["special"],
@@ -110,6 +114,8 @@ export const luminarchCards = [
       {
         id: "luminarch_aegisbearer_def_reset",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "card_to_grave",
         fromZone: "field",
         actions: [
@@ -139,6 +145,8 @@ export const luminarchCards = [
       {
         id: "moonblade_captain_revive",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "after_summon",
         summonMethods: ["normal", "tribute"],
         requireSelfAsSummoned: true,
@@ -165,6 +173,8 @@ export const luminarchCards = [
       {
         id: "moonblade_captain_second_attack",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "battle_destroy",
         requireSelfAsAttacker: true,
         requireDestroyedIsOpponent: true,
@@ -218,6 +228,8 @@ export const luminarchCards = [
       {
         id: "luminarch_celestial_marshal_battle_destroy_heal",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "battle_destroy",
         requireSelfAsDestroyed: true,
         actions: [
@@ -247,6 +259,8 @@ export const luminarchCards = [
       {
         id: "luminarch_magic_sickle_damage_boost",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "when",
         event: "battle_damage",
         speed: 2,
         isQuickEffect: true,
@@ -361,6 +375,8 @@ export const luminarchCards = [
       {
         id: "luminarch_sanctum_protector_negate",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "when",
         event: "attack_declared",
         speed: 2,
         requireFaceup: true,
@@ -390,6 +406,8 @@ export const luminarchCards = [
       {
         id: "luminarch_radiant_lancer_atk_boost",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "battle_destroy",
         requireSelfAsAttacker: true,
         actions: [
@@ -403,6 +421,8 @@ export const luminarchCards = [
       {
         id: "luminarch_radiant_lancer_destroy_spelltrap",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "battle_destroy",
         requireSelfAsDestroyed: true,
         targets: [
@@ -423,6 +443,8 @@ export const luminarchCards = [
       {
         id: "luminarch_radiant_lancer_reset",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "card_to_grave",
         fromZone: "field",
         actions: [
@@ -451,6 +473,8 @@ export const luminarchCards = [
       {
         id: "luminarch_aurora_seraph_heal",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "battle_destroy",
         requireSelfAsAttacker: true,
         actions: [
@@ -500,6 +524,8 @@ export const luminarchCards = [
       {
         id: "luminarch_sanctified_arbiter_search",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "after_summon",
         summonMethods: ["normal"],
         requireSelfAsSummoned: true,
@@ -594,6 +620,8 @@ export const luminarchCards = [
       {
         id: "sanctum_luminarch_citadel_attack_heal",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "attack_declared",
         requireOpponentAttack: true,
         promptUser: false,
@@ -825,6 +853,8 @@ export const luminarchCards = [
       {
         id: "luminarch_sunforged_blade_solar_counter",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "lp_change",
         requireZone: "spellTrap",
         requireFaceup: true,
@@ -947,6 +977,8 @@ export const luminarchCards = [
       {
         id: "luminarch_enchanted_halberd_conditional_summon",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "after_summon",
         summonMethods: ["special"],
         oncePerTurn: true,
@@ -1150,6 +1182,8 @@ export const luminarchCards = [
       {
         id: "luminarch_fortress_aegis_heal_on_summon",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "after_summon",
         summonMethods: ["ascension"],
         requireSelfAsSummoned: true,
@@ -1223,6 +1257,8 @@ export const luminarchCards = [
       {
         id: "luminarch_pure_knight_fusion_search",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "after_summon",
         summonMethods: ["fusion"],
         requireSelfAsSummoned: true,
@@ -1285,6 +1321,8 @@ export const luminarchCards = [
       {
         id: "luminarch_ethereal_lancer_ascension_buff",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "after_summon",
         summonMethods: ["ascension"],
         requireSelfAsSummoned: true,
@@ -1318,6 +1356,8 @@ export const luminarchCards = [
       {
         id: "luminarch_ethereal_lancer_buff_cleanup",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "card_to_grave",
         fromZone: "field",
         actions: [
@@ -1332,6 +1372,8 @@ export const luminarchCards = [
       {
         id: "luminarch_ethereal_lancer_battle_heal",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "battle_destroy",
         requireSelfAsBattleDestroyer: true,
         requireDestroyedIsOpponent: true,

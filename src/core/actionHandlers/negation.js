@@ -199,17 +199,63 @@ async function removeNegatedCard(game, card, source, sourcePlayer) {
 
 function markChainLinkNegated(game, targetCard, context, effect = null) {
   if (!Array.isArray(game?.chainSystem?.chainStack)) return null;
-  const link = game.chainSystem.chainStack.find((candidate) => {
-    if (candidate?.card !== targetCard) return false;
-    if (effect && candidate?.effect && candidate.effect !== effect) {
-      return false;
-    }
-    return true;
+  const chainSystem = game.chainSystem;
+  const explicitLink =
+    context?.respondingToChainLink ||
+    context?.activationAttempt?.linkId ||
+    null;
+  let link = chainSystem.markChainLinkActivationNegated?.(explicitLink, {
+    negatedBy: context?.negatedBy || null,
   });
+  if (!link) {
+    chainSystem.warnLegacyChainContract?.(
+      "negation lookup by card/effect instead of linkId",
+    );
+    link = chainSystem.chainStack.find((candidate) => {
+      if (candidate?.card !== targetCard) return false;
+      if (effect && candidate?.effect && candidate.effect !== effect) {
+        return false;
+      }
+      return true;
+    });
+    if (link) {
+      chainSystem.markChainLinkActivationNegated?.(link, {
+        negatedBy: context?.negatedBy || null,
+      });
+    }
+  }
   if (link) {
-    link.negated = true;
     context.negatedLink = link;
   }
+  return link;
+}
+
+function markChainLinkEffectNegated(game, targetCard, context, effect = null) {
+  if (!Array.isArray(game?.chainSystem?.chainStack)) return null;
+  const chainSystem = game.chainSystem;
+  const explicitLink =
+    context?.respondingToChainLink ||
+    context?.activationAttempt?.linkId ||
+    null;
+  let link = chainSystem.markChainLinkEffectNegated?.(explicitLink, {
+    negatedBy: context?.negatedBy || null,
+  });
+  if (!link) {
+    chainSystem.warnLegacyChainContract?.(
+      "effect negation lookup by card/effect instead of linkId",
+    );
+    link = chainSystem.chainStack.find(
+      (candidate) =>
+        candidate?.card === targetCard &&
+        (!effect || !candidate?.effect || candidate.effect === effect),
+    );
+    if (link) {
+      chainSystem.markChainLinkEffectNegated?.(link, {
+        negatedBy: context?.negatedBy || null,
+      });
+    }
+  }
+  if (link) context.effectNegatedLink = link;
   return link;
 }
 
@@ -248,7 +294,10 @@ export async function handleNegateActivation(action, ctx, targets, engine) {
     return true;
   }
 
+  activationAttempt.activationNegated = true;
+  // Phase 9 compatibility alias for consumers outside the Chain Link contract.
   activationAttempt.negated = true;
+  context.activationNegated = true;
   context.negated = true;
   context.negatedBy = source;
   markChainLinkNegated(game, targetCard, context, activationAttempt.effect);
@@ -262,6 +311,44 @@ export async function handleNegateActivation(action, ctx, targets, engine) {
   ctx.negatedActivationCard = targetCard;
 
   getUI(game)?.log(`${source.name} negated ${targetCard.name}.`);
+  game.updateBoard?.();
+  return true;
+}
+
+export async function handleNegateEffect(action, ctx, targets, engine) {
+  const game = engine?.game;
+  const source = ctx?.source || null;
+  const context = ctx?.activationContext?.context || ctx?.actionContext || {};
+  const activationAttempt = context.activationAttempt || null;
+  const targetCard =
+    activationAttempt?.card ||
+    context.card ||
+    context.targetCard ||
+    context.sourceCard ||
+    null;
+  if (!game || !source || !activationAttempt || !targetCard) {
+    getUI(game)?.log?.("No effect to negate.");
+    return false;
+  }
+
+  context.effectNegated = true;
+  context.effectNegatedBy = source;
+  const link = markChainLinkEffectNegated(
+    game,
+    targetCard,
+    context,
+    activationAttempt.effect,
+  );
+  if (!link) {
+    getUI(game)?.log?.("No Chain Link found for effect negation.");
+    return false;
+  }
+  if (action.storeNegatedCardAs) {
+    ctx._actionTargets = ctx._actionTargets || {};
+    ctx._actionTargets[action.storeNegatedCardAs] = [targetCard];
+  }
+  ctx.negatedEffectCard = targetCard;
+  getUI(game)?.log?.(`${source.name} negated ${targetCard.name}'s effect.`);
   game.updateBoard?.();
   return true;
 }
@@ -313,8 +400,11 @@ export async function handleNegateSummonOrActivationAndDestroy(
     summonAttempt.negated = true;
   }
   if (activationAttempt) {
+    activationAttempt.activationNegated = true;
+    // Phase 9 compatibility alias.
     activationAttempt.negated = true;
   }
+  context.activationNegated = activationAttempt != null;
   context.negated = true;
   context.negatedBy = source;
 

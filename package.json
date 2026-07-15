@@ -11,7 +11,7 @@
   },
   "scripts": {
     "dev": "serve .",
-    "test": "node --test"
+    "test": "node scripts/run_tests.mjs"
   },
   "devDependencies": {
     "serve": "^14.2.6"

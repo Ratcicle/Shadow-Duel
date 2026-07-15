@@ -1,5 +1,16 @@
 let nextCardInstanceId = 1;
 
+export function getCardLocationVersion(card) {
+  const version = Number(card?.locationVersion ?? 0);
+  return Number.isFinite(version) && version >= 0 ? version : 0;
+}
+
+export function bumpCardLocationVersion(card) {
+  if (!card) return 0;
+  card.locationVersion = getCardLocationVersion(card) + 1;
+  return card.locationVersion;
+}
+
 export function getEffectiveCardKinds(card) {
   if (!card) return [];
   const kinds = new Set();
@@ -97,6 +108,7 @@ export function restoreTrapMonsterOriginalState(card) {
 export default class Card {
   constructor(data, owner) {
     this.instanceId = nextCardInstanceId++;
+    this.locationVersion = 0;
     this.id = data.id;
     this.name = data.name;
     this.cardKind = data.cardKind || "monster"; // monster | spell | trap

@@ -924,7 +924,7 @@ export const ACTION_CATALOG = {
     summary:
       "Registers a temporary virtual event trigger owned by the resolving player.",
     handler: "handleRegisterTemporaryEventEffect",
-    required: ["event", "actions"],
+    required: ["event", "triggerRequirement", "triggerTiming", "actions"],
     optional: [
       "conditions",
       "targets",
@@ -941,6 +941,11 @@ export const ACTION_CATALOG = {
     ],
     fields: {
       event: { type: "string" },
+      triggerRequirement: {
+        type: "string",
+        enum: ["mandatory", "optional"],
+      },
+      triggerTiming: { type: "string", enum: ["if", "when"] },
       conditions: { type: "array" },
       targets: { type: "array" },
       actions: { type: "array" },
@@ -961,6 +966,8 @@ export const ACTION_CATALOG = {
       {
         type: "register_temporary_event_effect",
         event: "battle_destroy",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         duration: "end_of_turn",
         uses: 1,
         actions: [{ type: "draw", amount: 1 }],
@@ -1719,6 +1726,27 @@ export const ACTION_CATALOG = {
     notes: [
       "Respects activation_negation_protection passives.",
       "storeNegatedCardAs exposes the negated card as an internal target for later actions.",
+    ],
+  }),
+  negate_effect: action({
+    category: "combat",
+    summary: "Negates only the effect of the exact current Chain Link without moving its source.",
+    handler: "handleNegateEffect",
+    optional: ["storeNegatedCardAs"],
+    fields: {
+      storeNegatedCardAs: { type: "string" },
+    },
+    mutates: ["chain"],
+    preview: "covered",
+    examples: [
+      {
+        type: "negate_effect",
+        storeNegatedCardAs: "negated_card",
+      },
+    ],
+    notes: [
+      "Does not negate the activation and does not destroy or move the source.",
+      "Use a separate destruction or movement action when the card text requires it.",
     ],
   }),
   pay_lp: action({

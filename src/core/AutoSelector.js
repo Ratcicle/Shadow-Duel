@@ -59,6 +59,22 @@ export default class AutoSelector {
     return { ok: true, selections };
   }
 
+  /**
+   * Legal, deterministic SEGOC policy for AI-controlled players.
+   * All eligible optional Trigger Effects are accepted; strategy scoring is
+   * deliberately outside Phase 3.
+   */
+  orderTriggerCandidates(candidates = []) {
+    return candidates.slice().sort(
+      (a, b) =>
+        Number(a?.collectorOrder || 0) - Number(b?.collectorOrder || 0) ||
+        Number(a?.occurrenceId || 0) - Number(b?.occurrenceId || 0) ||
+        Number(a?.sourceOrder || 0) - Number(b?.sourceOrder || 0) ||
+        Number(a?.effectOrder || 0) - Number(b?.effectOrder || 0) ||
+        Number(a?.candidateId || 0) - Number(b?.candidateId || 0),
+    );
+  }
+
   orderCandidates(requirement, candidates, context) {
     const strategy =
       requirement.filters?.strategy ||

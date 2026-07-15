@@ -386,24 +386,12 @@ export function shouldPrioritizeRottingGroundSet(analysis = {}) {
 
 export function hasBloomrotDefenseResponseInChain(chainSystem, player) {
   const playerKey = playerId(player);
-  const possibleStacks = [
-    chainSystem?.chain,
-    chainSystem?.chainLinks,
-    chainSystem?.stack,
-    typeof chainSystem?.getChainSummary === "function" ? chainSystem.getChainSummary() : null,
-  ];
+  const links = chainSystem?.getChainSummary?.() || [];
 
-  return possibleStacks.some((stack) =>
-    list(stack).some((link) => {
-      const card = link?.card || link?.source || link?.effect?.source || link?.activation?.card || null;
-      const name = card?.name || link?.cardName || link?.sourceName || link?.name;
-      if (name !== BLOOMROT_DEFENSE_NAMES.SUDDEN_GERMINATION) return false;
-      const controller =
-        playerId(link?.player) ||
-        playerId(link?.controller) ||
-        cardControllerId(card) ||
-        playerKey;
-      return !playerKey || controller === playerKey;
-    })
-  );
+  return list(links).some((link) => {
+    const name = link?.cardName;
+    if (name !== BLOOMROT_DEFENSE_NAMES.SUDDEN_GERMINATION) return false;
+    const controller = link?.controllerId || playerKey;
+    return !playerKey || controller === playerKey;
+  });
 }

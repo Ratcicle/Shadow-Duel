@@ -170,6 +170,13 @@ const DEFAULT_LOCALE_TEXTS = {
     },
     triggers: {
       selection: "Select target(s) for the triggered effect.",
+      mandatoryTitle: "Order mandatory Trigger Effects",
+      optionalTitle: "Choose optional Trigger Effects",
+      mandatoryOrder: "Click a card to move its effect to the end of the order.",
+      optionalOrder: "Select the effects to activate in the desired order.",
+      notSelected: "Off",
+      declineAll: "Activate none",
+      confirmOrder: "Confirm order",
     },
     counters: {
       labels: {

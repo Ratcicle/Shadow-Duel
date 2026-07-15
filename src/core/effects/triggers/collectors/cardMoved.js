@@ -133,14 +133,6 @@ export async function collectCardMovedTriggers(payload) {
     if (!effect || effect.timing !== "on_event") return;
     if (effect.event !== "card_moved") return;
 
-    if (this.isEffectNegated(sourceCard)) {
-      debugTriggerLog(
-        this,
-        `[card_moved] ${sourceCard.name} effects are negated, skipping effect.`,
-      );
-      return;
-    }
-
     if (isBoardZone(sourceZone) && sourceCard.isFacedown === true) return;
 
     if (effect.requireFaceup === true && sourceCard.isFacedown === true) {

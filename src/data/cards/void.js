@@ -91,6 +91,8 @@ export const voidCards = [
       {
         id: "void_walker_no_attack_when_summoned",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "after_summon",
         summonMethods: ["special"],
         requireSelfAsSummoned: true,
@@ -141,6 +143,8 @@ export const voidCards = [
       {
         id: "void_beast_normal_summon_search",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "after_summon",
         summonMethods: ["normal"],
         requireSelfAsSummoned: true,
@@ -163,6 +167,8 @@ export const voidCards = [
       {
         id: "void_beast_battle_destroy_summon",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "battle_destroy",
         requireSelfAsBattleDestroyer: true,
         requireDestroyedIsOpponent: true,
@@ -201,6 +207,8 @@ export const voidCards = [
       {
         id: "void_hollow_summon",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "after_summon",
         summonMethods: ["special"],
         requireSelfAsSummoned: true,
@@ -356,6 +364,8 @@ export const voidCards = [
       {
         id: "void_hollow_king_revive",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "card_to_grave",
         requireSelfAsDestroyed: true,
         actions: [
@@ -376,6 +386,8 @@ export const voidCards = [
       {
         id: "void_hollow_king_revive_on_battle_destroy",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "battle_destroy",
         requireSelfAsBattleDestroyer: true,
         requireDestroyedIsOpponent: true,
@@ -482,6 +494,8 @@ export const voidCards = [
       {
         id: "void_bone_spider_revive_hollow",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "card_to_grave",
         fromZone: "field",
         actions: [
@@ -606,6 +620,8 @@ export const voidCards = [
       {
         id: "void_raven_fusion_immunity",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "after_summon",
         summonMethods: ["fusion"],
         promptUser: true,
@@ -784,6 +800,8 @@ export const voidCards = [
       {
         id: "void_slayer_brute_banish_destroyed",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "battle_destroy",
         requireSelfAsBattleDestroyer: true,
         requireDestroyedIsOpponent: true,
@@ -826,6 +844,8 @@ export const voidCards = [
       {
         id: "void_berserker_bounce_on_destroy",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "battle_destroy",
         requireSelfAsBattleDestroyer: true,
         requireDestroyedIsOpponent: true,
@@ -960,6 +980,8 @@ export const voidCards = [
       {
         id: "void_hydra_titan_summon",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "when",
         event: "after_summon",
         summonMethods: ["fusion"],
         description:
@@ -982,6 +1004,8 @@ export const voidCards = [
       {
         id: "void_hydra_titan_negate_destruction",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "before_destroy",
         description:
           "[Once per turn]: You can negate the destruction of this card; reduce its ATK by 700.",
@@ -1174,6 +1198,8 @@ export const voidCards = [
       {
         id: "void_mirror_dimension_effect",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "after_summon",
         requireOpponentSummon: true,
         oncePerTurn: true,
@@ -1305,6 +1331,8 @@ export const voidCards = [
       {
         id: "void_cosmic_walker_to_grave_summon_hollows",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "card_to_grave",
         fromZone: "field",
         requireSelfAsDestroyed: true,
@@ -1350,6 +1378,8 @@ export const voidCards = [
       {
         id: "malicious_demon_to_grave",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "card_to_grave",
         fromZone: "field",
         actions: [
@@ -1490,6 +1520,8 @@ export const voidCards = [
       {
         id: "arcturus_fallen_battle_revenge",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "battle_completed",
         requireSelfBattled: true,
         requireSelfDestroyedByBattle: true,
@@ -1549,6 +1581,8 @@ export const voidCards = [
       {
         id: "void_shadow_crawler_fusion_send",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "after_summon",
         summonMethods: ["fusion"],
         requireSelfAsSummoned: true,
@@ -1641,6 +1675,8 @@ export const voidCards = [
       {
         id: "void_aberration_void_to_grave_buff",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "card_to_grave",
         requireZone: "field",
         requireFaceup: true,
@@ -1662,6 +1698,8 @@ export const voidCards = [
       {
         id: "void_aberration_sent_from_field_destroy",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "card_to_grave",
         fromZone: "field",
         promptUser: true,

@@ -16,6 +16,8 @@ export const bloomrotCards = [
       {
         id: "bloomrot_sporeling_normal_summon_rootling",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "after_summon",
         summonMethods: ["normal", "special"],
         requireSelfAsSummoned: true,
@@ -54,6 +56,8 @@ export const bloomrotCards = [
       {
         id: "bloomrot_sporeling_leave_field_search_spell",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "card_moved",
         fromZone: "field",
         toZone: "any",
@@ -175,6 +179,8 @@ export const bloomrotCards = [
       {
         id: "bloomrot_myco_weaver_summon_token",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "after_summon",
         summonMethods: ["normal", "special"],
         requireSelfAsSummoned: true,
@@ -304,6 +310,8 @@ export const bloomrotCards = [
       {
         id: "bloomrot_rot_stag_special_summon_spore_counter",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "after_summon",
         summonMethods: ["special"],
         requireSelfAsSummoned: true,
@@ -331,6 +339,8 @@ export const bloomrotCards = [
       {
         id: "bloomrot_rot_stag_attack_spore_boost",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "battle_damage",
         requireZone: "field",
         requireFaceup: true,
@@ -362,6 +372,8 @@ export const bloomrotCards = [
       {
         id: "bloomrot_rot_stag_defense_spore_boost",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "battle_damage",
         requireZone: "field",
         requireFaceup: true,
@@ -445,6 +457,8 @@ export const bloomrotCards = [
       {
         id: "bloomrot_carrioncap_battle_destroy_spore_counter",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "battle_destroy",
         requireZone: "field",
         requireFaceup: true,
@@ -495,6 +509,8 @@ export const bloomrotCards = [
       {
         id: "bloomrot_mold_mender_attack_spores",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "battle_damage",
         allowDamageStepActivation: true,
         requireZone: "field",
@@ -525,6 +541,8 @@ export const bloomrotCards = [
       {
         id: "bloomrot_mold_mender_battle_destroy_summon_bloomrot",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "card_to_grave",
         fromZone: "field",
         requireSelfAsDestroyed: true,
@@ -619,6 +637,8 @@ export const bloomrotCards = [
       {
         id: "bloomrot_gravecap_widow_summon_destroy_infected",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "after_summon",
         requireSelfAsSummoned: true,
         oncePerTurn: true,
@@ -646,6 +666,8 @@ export const bloomrotCards = [
       {
         id: "bloomrot_gravecap_widow_destroyed_infected_spore",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "card_to_grave",
         requireZone: "field",
         requireFaceup: true,
@@ -768,6 +790,8 @@ export const bloomrotCards = [
       {
         id: "bloomrot_ancient_husk_destroyed_infected_spore",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "card_to_grave",
         requireZone: "field",
         requireFaceup: true,
@@ -900,6 +924,8 @@ export const bloomrotCards = [
       {
         id: "bloomrot_living_colony_counter_removed_token",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "counter_removed",
         requireZone: "fieldSpell",
         requireFaceup: true,
@@ -928,6 +954,8 @@ export const bloomrotCards = [
       {
         id: "bloomrot_living_colony_token_destroyed_spread_spores",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "card_moved",
         requireZone: "fieldSpell",
         requireFaceup: true,
@@ -1232,6 +1260,8 @@ export const bloomrotCards = [
       {
         id: "bloomrot_fungal_armor_grave_spore_counter",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "card_to_grave",
         fromZone: "spellTrap",
         targets: [
@@ -1364,6 +1394,8 @@ export const bloomrotCards = [
       {
         id: "bloomrot_overgrowth_standby_spore_counter",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "standby_phase",
         requireZone: "spellTrap",
         requireFaceup: true,
@@ -1389,6 +1421,8 @@ export const bloomrotCards = [
       {
         id: "bloomrot_overgrowth_destroyed_host_spread",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "card_to_grave",
         requireZone: "spellTrap",
         requireFaceup: true,
@@ -1428,6 +1462,8 @@ export const bloomrotCards = [
       {
         id: "bloomrot_sudden_germination_attack",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "when",
         event: "attack_declared",
         speed: 2,
         requireOpponentAttack: true,
@@ -1532,6 +1568,8 @@ export const bloomrotCards = [
       {
         id: "bloomrot_rotting_ground_summon_spore_counter",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "after_summon",
         requireZone: "spellTrap",
         requireFaceup: true,
@@ -1633,6 +1671,8 @@ export const bloomrotCards = [
       {
         id: "bloomrot_ancient_mycelium_ascension_spores",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "after_summon",
         summonMethods: ["ascension"],
         requireSelfAsSummoned: true,
@@ -1732,6 +1772,8 @@ export const bloomrotCards = [
       {
         id: "bloomrot_queen_hollow_grove_ascension_debuff",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "after_summon",
         summonMethods: ["ascension"],
         requireSelfAsSummoned: true,
@@ -1818,6 +1860,8 @@ export const bloomrotCards = [
       {
         id: "bloomrot_queen_hollow_grove_leave_spores",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "card_moved",
         requireSelfAsMoved: true,
         requireMovedCardWasFaceup: true,
@@ -1874,6 +1918,8 @@ export const bloomrotCards = [
       {
         id: "bloomrot_devourer_dead_roots_fusion_atk",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "after_summon",
         summonMethods: ["fusion"],
         requireSelfAsSummoned: true,
@@ -1940,6 +1986,8 @@ export const bloomrotCards = [
       {
         id: "bloomrot_devourer_dead_roots_destroyed_revive",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "card_to_grave",
         fromZone: "field",
         requireFaceup: true,

@@ -1165,6 +1165,111 @@ export function showCardGridSelectionModal(options) {
 }
 
 /**
+ * One SEGOC modal owns both optional inclusion and same-player ordering.
+ * Mandatory candidates cannot be omitted; clicking one moves it to the end.
+ * @this {import('../Renderer.js').default}
+ */
+export function showTriggerOrderModal(options = {}) {
+  const candidates = Array.isArray(options.candidates)
+    ? options.candidates
+    : [];
+  const optional = options.optional === true;
+
+  return new Promise((resolve) => {
+    const overlay = document.createElement("div");
+    overlay.className = "card-grid-overlay trigger-order-overlay";
+    const modal = document.createElement("div");
+    modal.className = "card-grid-modal trigger-order-modal";
+
+    const title = document.createElement("h3");
+    title.textContent = getUIText(
+      optional ? "ui.triggers.optionalTitle" : "ui.triggers.mandatoryTitle",
+    );
+    modal.appendChild(title);
+
+    const subtitle = document.createElement("p");
+    subtitle.className = "card-grid-subtitle";
+    subtitle.textContent = getUIText(
+      optional ? "ui.triggers.optionalOrder" : "ui.triggers.mandatoryOrder",
+    );
+    modal.appendChild(subtitle);
+
+    const grid = document.createElement("div");
+    grid.className = "card-grid trigger-order-grid";
+    const ordered = optional ? [] : candidates.slice();
+
+    const render = () => {
+      grid.replaceChildren();
+      for (const candidate of candidates) {
+        const card = candidate.card;
+        const item = document.createElement("button");
+        item.type = "button";
+        item.className = [
+          "card-grid-item",
+          "selection-card-candidate",
+          "trigger-order-item",
+          getSelectionCardTypeClass(card),
+        ].join(" ");
+        const selectedIndex = ordered.indexOf(candidate);
+        if (selectedIndex >= 0) item.classList.add("selected");
+        item.appendChild(renderCompactSelectionCard(card));
+
+        const badge = document.createElement("span");
+        badge.className = "trigger-order-badge";
+        badge.textContent =
+          selectedIndex >= 0
+            ? String(selectedIndex + 1)
+            : getUIText("ui.triggers.notSelected");
+        item.appendChild(badge);
+        item.addEventListener("click", () => {
+          const current = ordered.indexOf(candidate);
+          if (optional && current >= 0) {
+            ordered.splice(current, 1);
+          } else {
+            if (current >= 0) ordered.splice(current, 1);
+            ordered.push(candidate);
+          }
+          render();
+        });
+        this.bindPreviewForElement?.(item, card, true);
+        grid.appendChild(item);
+      }
+    };
+    render();
+    modal.appendChild(grid);
+
+    const actions = document.createElement("div");
+    actions.className = "card-grid-actions";
+    if (optional) {
+      const decline = document.createElement("button");
+      decline.className = "secondary";
+      decline.textContent = getUIText("ui.triggers.declineAll");
+      decline.onclick = () => {
+        overlay.remove();
+        options.onCancel?.();
+        resolve([]);
+      };
+      actions.appendChild(decline);
+    }
+
+    const confirm = document.createElement("button");
+    confirm.className = "primary";
+    confirm.textContent = getUIText("ui.triggers.confirmOrder");
+    confirm.onclick = () => {
+      if (!optional && ordered.length !== candidates.length) return;
+      const result = ordered.map((candidate) => candidate.candidateId);
+      overlay.remove();
+      options.onConfirm?.(result);
+      resolve(result);
+    };
+    actions.appendChild(confirm);
+    modal.appendChild(actions);
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+  });
+}
+
+/**
  * @this {import('../Renderer.js').default}
  */
 export function showIgnitionActivateModal(card, onActivate) {

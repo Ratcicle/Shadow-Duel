@@ -49,6 +49,18 @@ export const CHAIN_CONTEXTS = {
     requiresChainWindow: false,
   },
 
+  action_without_chain: {
+    description: "After an action that did not start a Chain",
+    allowedSpeeds: [2, 3],
+    requiresChainWindow: true,
+  },
+
+  post_chain: {
+    description: "After a Chain resolves with no pending Trigger Chain",
+    allowedSpeeds: [2, 3],
+    requiresChainWindow: true,
+  },
+
   battle_damage: {
     description: "When battle damage is about to be inflicted",
     allowedSpeeds: [2, 3],
@@ -62,7 +74,7 @@ export const CHAIN_CONTEXTS = {
   },
 
   effect_activation: {
-    description: "In response to a monster effect activation",
+    description: "In response to an effect activation",
     allowedSpeeds: [2, 3],
     requiresChainWindow: false,
   },

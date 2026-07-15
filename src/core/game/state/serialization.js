@@ -145,6 +145,16 @@ export function getPublicState(forPlayerId = "player") {
     phase: this.phase,
     turnCounter: this.turnCounter,
     currentPlayer: this.turn === "player" ? this.player.id : this.bot.id,
+    chain: {
+      chainId: this.chainSystem?.activeChainId ?? null,
+      windowOpen: this.chainSystem?.isChainWindowOpen?.() === true,
+      resolving: this.chainSystem?.isChainResolving?.() === true,
+      links: this.chainSystem?.getChainSummary?.() || [],
+      timing: this.chainSystem?.getFastEffectState?.() || null,
+      triggers: this.chainSystem?.getTriggerState?.() || null,
+      finalization:
+        this.chainSystem?.getChainFinalizationState?.() || null,
+    },
     players: {
       self: buildPlayerView(viewPlayer, true),
       opponent: buildPlayerView(opp, false),

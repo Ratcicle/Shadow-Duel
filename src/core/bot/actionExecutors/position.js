@@ -17,6 +17,6 @@ export async function executePositionChangeAction(bot, game, action) {
     return false;
   }
   if (target.position === newPosition) return false;
-  game.changeMonsterPosition(target, newPosition);
-  return true;
+  const result = await game.changeMonsterPosition(target, newPosition);
+  return result?.ok !== false;
 }

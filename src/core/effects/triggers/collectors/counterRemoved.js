@@ -104,14 +104,6 @@ export async function collectCounterRemovedTriggers(payload) {
         if (!effect || effect.timing !== "on_event") continue;
         if (effect.event !== "counter_removed") continue;
 
-        if (this.isEffectNegated(sourceCard)) {
-          debugTriggerLog(
-            this,
-            `[counter_removed] ${sourceCard.name} effects are negated, skipping effect.`,
-          );
-          continue;
-        }
-
         if (effect.requireFaceup === true && sourceCard.isFacedown === true) {
           continue;
         }

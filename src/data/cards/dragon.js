@@ -31,6 +31,8 @@ export const dragonCards = [
       {
         id: "luminous_dragon_discard_recover",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "card_to_grave",
         requireZone: "field",
         requireFaceup: true,
@@ -81,6 +83,8 @@ export const dragonCards = [
       {
         id: "armored_dragon_search_on_normal",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "after_summon",
         summonMethods: ["normal"],
         requireSelfAsSummoned: true,
@@ -98,6 +102,8 @@ export const dragonCards = [
       {
         id: "armored_dragon_battle_destroy_draw_summon",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "battle_destroy",
         requireSelfAsDestroyed: true,
         actions: [
@@ -177,6 +183,8 @@ export const dragonCards = [
       {
         id: "grey_dragon_special_summon_buff",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "after_summon",
         summonMethods: ["special"],
         requireSelfAsSummoned: true,
@@ -255,6 +263,8 @@ export const dragonCards = [
       {
         id: "voltaic_dragon_discard_damage",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "card_to_grave",
         fromZone: "hand",
         oncePerTurn: true,
@@ -306,6 +316,8 @@ export const dragonCards = [
       {
         id: "luminescent_dragon_normal_summon_revive",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "after_summon",
         summonMethods: ["normal"],
         requireSelfAsSummoned: true,
@@ -411,6 +423,8 @@ export const dragonCards = [
       {
         id: "darkness_dragon_self_purge_buff",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "after_summon",
         summonMethods: ["normal", "special", "tribute"],
         requireSelfAsSummoned: true,
@@ -674,6 +688,8 @@ export const dragonCards = [
       {
         id: "dragon_peak_battle_counter",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "battle_destroy",
         requireDestroyedIsOpponent: true,
         conditions: [
@@ -802,6 +818,8 @@ export const dragonCards = [
       {
         id: "purified_crystal_heal_on_destroy",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "battle_destroy",
         requireSelfAsBattleDestroyer: true,
         oncePerTurn: true,
@@ -865,6 +883,8 @@ export const dragonCards = [
       {
         id: "tech_void_fusion_banish_buff",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "after_summon",
         summonMethods: ["fusion"],
         requireSelfAsSummoned: true,
@@ -896,6 +916,8 @@ export const dragonCards = [
       {
         id: "tech_void_revive_voltaic",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "card_to_grave",
         requireSelfAsDestroyed: true,
         condition: {
@@ -936,6 +958,8 @@ export const dragonCards = [
       {
         id: "radiant_cosmic_dragon_fusion_recycle_draw",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "after_summon",
         summonMethods: ["fusion"],
         requireSelfAsSummoned: true,
@@ -973,6 +997,8 @@ export const dragonCards = [
       {
         id: "radiant_cosmic_dragon_destroyed_revive",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "card_to_grave",
         requireSelfAsDestroyed: true,
         condition: {
@@ -1071,6 +1097,8 @@ export const dragonCards = [
       {
         id: "rainbow_cosmic_dragon_battle_heal",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "battle_destroy",
         requireZone: "field",
         requireFaceup: true,
@@ -1131,6 +1159,8 @@ export const dragonCards = [
       {
         id: "dragon_spirit_sanctuary_attack",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "when",
         event: "attack_declared",
         requireDefenderIsSelf: true,
         requireDefenderType: "dragon",
@@ -1175,6 +1205,8 @@ export const dragonCards = [
       {
         id: "dragon_spirit_sanctuary_effect_targeted",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "when",
         event: "effect_targeted",
         oncePerTurn: true,
         oncePerTurnName: "dragon_spirit_sanctuary",
@@ -1322,6 +1354,8 @@ export const dragonCards = [
       {
         id: "fire_extreme_dragon_battle_burn",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "battle_destroy",
         requireZone: "field",
         requireFaceup: true,
@@ -1340,6 +1374,8 @@ export const dragonCards = [
       {
         id: "fire_extreme_dragon_activation_burn",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "effect_activated",
         requireZone: "field",
         requireFaceup: true,
@@ -1402,6 +1438,8 @@ export const dragonCards = [
       {
         id: "volcanic_extreme_dragon_battle_burn_attacker",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "attack_declared",
         requireZone: "field",
         requireFaceup: true,
@@ -1419,6 +1457,8 @@ export const dragonCards = [
       {
         id: "volcanic_extreme_dragon_battle_burn_defender",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "attack_declared",
         requireZone: "field",
         requireFaceup: true,
@@ -1502,6 +1542,8 @@ export const dragonCards = [
       {
         id: "mist_extreme_dragon_battle_destroy_shuffle",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "battle_destroy",
         requireSelfAsDestroyed: true,
         promptUser: false,
@@ -1611,6 +1653,8 @@ export const dragonCards = [
       {
         id: "forest_extreme_dragon_standby_heal",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "standby_phase",
         requireZone: "field",
         requireFaceup: true,
@@ -1627,6 +1671,8 @@ export const dragonCards = [
       {
         id: "forest_extreme_dragon_summon_heal",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "after_summon",
         requireZone: "field",
         requireFaceup: true,
@@ -1637,6 +1683,8 @@ export const dragonCards = [
       {
         id: "forest_extreme_dragon_activation_heal",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "effect_activated",
         requireZone: "field",
         requireFaceup: true,
@@ -2105,6 +2153,8 @@ export const dragonCards = [
       {
         id: "lunar_eclipse_summon_search",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "after_summon",
         summonMethods: ["normal", "special"],
         requireSelfAsSummoned: true,

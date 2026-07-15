@@ -56,18 +56,15 @@ export async function botChooseChainResponse(player, activatable, context) {
     }
     if (strategyResponse?.card && strategyResponse?.effect) {
       const responseContext = buildResponseContext(context, strategyResponse);
-      const selections =
-        strategyResponse.selections ??
-        (await this.getBotSelectionsForEffect(
-          strategyResponse.card,
-          strategyResponse.effect,
-          player,
-          responseContext,
-        ));
+      const {
+        selections: _legacySelections,
+        costSelections: _legacyCostSelections,
+        targetSelections: _legacyTargetSelections,
+        ...chosenEffect
+      } = strategyResponse;
       return {
-        ...strategyResponse,
+        ...chosenEffect,
         context: responseContext,
-        selections,
       };
     }
   }
@@ -157,13 +154,7 @@ export async function botChooseChainResponse(player, activatable, context) {
       luminarchTargets.length > 0 &&
       (directBattleThreat || anyVulnerableTarget)
     ) {
-      const selections = await this.getBotSelectionsForEffect(
-        holyShieldOption.card,
-        holyShieldOption.effect,
-        player,
-        holyShieldOption.context || context,
-      );
-      return { ...holyShieldOption, selections };
+      return holyShieldOption;
     }
   }
 
@@ -300,15 +291,9 @@ export async function botChooseChainResponse(player, activatable, context) {
       `Bot activating ${bestOption.card.name} (priority: ${bestOption.priority})`,
     );
 
-    // Get selections if the effect requires targets
-    const selections = await this.getBotSelectionsForEffect(
-      bestOption.card,
-      bestOption.effect,
-      player,
-      bestOption.context || context,
-    );
-
-    return { ...bestOption, selections };
+    // Phase 4: the activation transaction owns cost and target selection for
+    // both human and AI responders.
+    return bestOption;
   }
 
   this.log(`Bot passing (best option priority: ${bestOption.priority})`);
@@ -324,6 +309,8 @@ export async function botChooseChainResponse(player, activatable, context) {
  * @returns {Promise<Object|null>}
  */
 export async function getBotSelectionsForEffect(card, effect, player, context) {
+  // Phase 9 compatibility adapter for non-response callers. Chain response
+  // policies now choose only an effect; the activation transaction selects.
   if (!effect?.targets || !Array.isArray(effect.targets)) {
     return null;
   }

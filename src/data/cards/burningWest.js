@@ -45,6 +45,8 @@ export const burningWestCards = [
       {
         id: "burning_west_gunslinger_battle_discard",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "battle_destroy",
         requireZone: "field",
         requireFaceup: true,
@@ -124,6 +126,8 @@ export const burningWestCards = [
       {
         id: "burning_west_wanted_reward",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "battle_destroy",
         requireZone: "spellTrap",
         requireFaceup: true,
@@ -283,6 +287,8 @@ export const burningWestCards = [
       {
         id: "burning_west_undertaker_battle_revenge",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "battle_completed",
         requireSelfBattled: true,
         requireSelfDestroyedByBattle: true,
@@ -315,6 +321,8 @@ export const burningWestCards = [
       {
         id: "burning_west_butcher_search_monster",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "after_summon",
         requireZone: "field",
         requireFaceup: true,
@@ -347,6 +355,8 @@ export const burningWestCards = [
       {
         id: "burning_west_butcher_followup_search",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "after_summon",
         requireZone: "field",
         requireFaceup: true,
@@ -492,6 +502,8 @@ export const burningWestCards = [
       {
         id: "burning_peacemaker_battle_destroy_spelltrap",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "battle_destroy",
         requireZone: "spellTrap",
         requireFaceup: true,
@@ -718,6 +730,8 @@ export const burningWestCards = [
           {
             type: "register_temporary_event_effect",
             event: "battle_destroy",
+            triggerRequirement: "mandatory",
+            triggerTiming: "if",
             duration: "end_of_turn",
             uses: 1,
             stateKey: "burning_west_deadeye_type",
@@ -888,6 +902,8 @@ export const burningWestCards = [
       {
         id: "burning_west_sheriff_declare_type",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "after_summon",
         requireSelfAsSummoned: true,
         summonMethods: ["tribute"],
@@ -908,6 +924,8 @@ export const burningWestCards = [
       {
         id: "burning_west_sheriff_damage_step_boost",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "battle_damage",
         requireZone: "field",
         requireFaceup: true,
@@ -940,6 +958,8 @@ export const burningWestCards = [
       {
         id: "burning_west_sheriff_battle_search_peacemaker",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "battle_completed",
         requireSelfBattled: true,
         requireSelfDestroyedByBattle: true,
@@ -1039,6 +1059,8 @@ export const burningWestCards = [
       {
         id: "ambush_in_crash_town",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "when",
         event: "attack_declared",
         requireOpponentAttack: true,
         oncePerTurn: true,
@@ -1168,6 +1190,8 @@ export const burningWestCards = [
       {
         id: "law_in_the_burning_west_activation",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "when",
         event: "card_activation",
         speed: 3,
         canRespondTo: ["card_activation", "effect_activation"],
@@ -1213,6 +1237,8 @@ export const burningWestCards = [
       {
         id: "burning_west_executioner_ascension_recover",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "after_summon",
         requireSelfAsSummoned: true,
         summonMethods: ["ascension"],
@@ -1247,6 +1273,8 @@ export const burningWestCards = [
       {
         id: "burning_west_executioner_revive_material",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "battle_completed",
         requireSelfBattled: true,
         requireSelfDestroyedByBattle: true,

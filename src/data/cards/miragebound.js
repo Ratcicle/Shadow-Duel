@@ -15,6 +15,8 @@ export const mirageboundCards = [
       {
         id: "miragebound_scout_search_spell_trap",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "after_summon",
         requireSelfAsSummoned: true,
         summonMethods: ["normal"],
@@ -150,6 +152,8 @@ export const mirageboundCards = [
       {
         id: "miragebound_jackal_hand_summon_on_return",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "card_moved",
         requireZone: "hand",
         fromZone: "field",
@@ -203,6 +207,8 @@ export const mirageboundCards = [
       {
         id: "miragebound_oasis_position_debuff",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "position_change",
         requireZone: "fieldSpell",
         requireFaceup: true,
@@ -335,6 +341,8 @@ export const mirageboundCards = [
       {
         id: "miragebound_glass_sovereign_ascension_shift",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "after_summon",
         summonMethods: ["ascension"],
         requireSelfAsSummoned: true,
@@ -412,6 +420,8 @@ export const mirageboundCards = [
       {
         id: "miragebound_glass_viper_returned_to_hand",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "card_moved",
         requireSelfAsMoved: true,
         fromZone: "field",
@@ -435,6 +445,8 @@ export const mirageboundCards = [
       {
         id: "miragebound_glass_viper_special_summon_debuff",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "after_summon",
         summonMethods: ["special"],
         requireSelfAsSummoned: true,
@@ -480,6 +492,8 @@ export const mirageboundCards = [
       {
         id: "miragebound_sand_priestess_recover",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "card_moved",
         requireSelfAsMoved: true,
         fromZone: "field",
@@ -724,6 +738,8 @@ export const mirageboundCards = [
       {
         id: "miragebound_false_horizon_attack",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "when",
         event: "attack_declared",
         speed: 2,
         requireOpponentAttack: true,
@@ -923,6 +939,8 @@ export const mirageboundCards = [
       {
         id: "miragebound_desert_leviathan_fusion_shift_all",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "after_summon",
         summonMethods: ["fusion"],
         requireSelfAsSummoned: true,
@@ -941,6 +959,8 @@ export const mirageboundCards = [
       {
         id: "miragebound_desert_leviathan_position_debuff",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "position_change",
         requireZone: "field",
         requireFaceup: true,
@@ -1017,6 +1037,8 @@ export const mirageboundCards = [
       {
         id: "miragebound_rebel_hand_summon_on_position_change",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "position_change",
         requireZone: "hand",
         speed: 2,
@@ -1043,6 +1065,8 @@ export const mirageboundCards = [
       {
         id: "miragebound_rebel_end_phase_return",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "end_phase",
         requireZone: "field",
         requireFaceup: true,

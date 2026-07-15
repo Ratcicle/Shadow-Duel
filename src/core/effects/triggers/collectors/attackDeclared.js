@@ -79,14 +79,6 @@ export async function collectAttackDeclaredTriggers(payload) {
           );
         }
 
-        // For face-down traps, skip negation check
-        if (!card.isFacedown && this.isEffectNegated(card)) {
-          if (devMode) {
-            debugTriggerLog(this, `${card.name} effects are negated, skipping effect.`);
-          }
-          continue;
-        }
-
         // Check requireFaceup condition
         if (effect.requireFaceup === true && card.isFacedown === true) {
           if (devMode) {

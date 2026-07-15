@@ -92,6 +92,8 @@ export const genericCards = [
       {
         id: "midnight_nightmare_steed_battle_damage",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "battle_destroy",
         requireSelfAsBattleDestroyer: true,
         actions: [
@@ -197,6 +199,8 @@ export const genericCards = [
       {
         id: "arcane_scholar_on_normal_summon",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "when",
         event: "after_summon",
         requireSelfAsSummoned: true,
         summonMethods: ["normal"],
@@ -242,6 +246,8 @@ export const genericCards = [
       {
         id: "light_dividing_sword_lifegain",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "battle_destroy",
         requireEquippedAsBattleDestroyer: true,
         actions: [
@@ -255,6 +261,8 @@ export const genericCards = [
       {
         id: "light_dividing_sword_pop_backrow",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "card_to_grave",
         fromZone: "spellTrap",
         actions: [
@@ -308,6 +316,8 @@ export const genericCards = [
       {
         id: "sword_of_two_darks_pop_backrow",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "card_to_grave",
         fromZone: "spellTrap",
         actions: [
@@ -361,6 +371,8 @@ export const genericCards = [
       {
         id: "mirror_force_effect",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "when",
         event: "attack_declared",
         requireOpponentAttack: true,
         actions: [
@@ -384,6 +396,8 @@ export const genericCards = [
       {
         id: "power_force_field_negate_end_battle",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "when",
         event: "attack_declared",
         requireOpponentAttack: true,
         targets: [
@@ -418,6 +432,8 @@ export const genericCards = [
       {
         id: "down_of_the_fool_destroy_summoned_monster",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "when",
         event: "after_summon",
         requireOpponentSummon: true,
         summonMethods: ["normal"],
@@ -472,6 +488,8 @@ export const genericCards = [
       {
         id: "ancient_tree_spirit_battle_destroy_damage",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "battle_destroy",
         requireSelfAsDestroyed: true,
         requireSelfSummonProcedure: "trap_monster",
@@ -499,6 +517,8 @@ export const genericCards = [
       {
         id: "court_of_the_dead_add_funeral_counter",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "card_to_grave",
         requireZone: "spellTrap",
         requireFaceup: true,
@@ -736,6 +756,7 @@ export const genericCards = [
         speed: 2,
         oncePerTurn: true,
         oncePerTurnName: "natural_selection_activation",
+        usagePolicy: "activate",
         targets: [
           {
             id: "natural_selection_cost",
@@ -831,6 +852,7 @@ export const genericCards = [
         canRespondTo: ["card_activation", "effect_activation"],
         oncePerTurn: true,
         oncePerTurnName: "guardian_deity_visas",
+        usagePolicy: "use",
         conditions: [
           {
             type: "activation_would_banish_cards_matching_filters",
@@ -906,6 +928,8 @@ export const genericCards = [
       {
         id: "luminous_god_hyperion_grant_opponent_effect_protection",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "after_summon",
         requireSelfAsSummoned: true,
         requireFaceup: true,
@@ -932,6 +956,8 @@ export const genericCards = [
       {
         id: "luminous_god_hyperion_attack_dark_boost",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "battle_damage",
         requireZone: "field",
         requireFaceup: true,
@@ -960,6 +986,8 @@ export const genericCards = [
       {
         id: "luminous_god_hyperion_defense_dark_boost",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "battle_damage",
         requireZone: "field",
         requireFaceup: true,
@@ -1051,6 +1079,8 @@ export const genericCards = [
       {
         id: "misty_katana_ghost_samurai_send_tuner",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "after_summon",
         requireSelfAsSummoned: true,
         summonMethods: ["normal"],

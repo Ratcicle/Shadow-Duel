@@ -4,31 +4,231 @@ import {
   isQuickSpell,
 } from "../game/spellTrap/quickSpellRules.js";
 
+export const ACTIVATION_ZONES = Object.freeze([
+  "hand",
+  "field",
+  "spellTrap",
+  "fieldSpell",
+  "graveyard",
+  "banished",
+]);
+
+function cardInstanceId(card) {
+  return (
+    card?.instanceId ??
+    card?._instanceId ??
+    card?.uuid ??
+    card?.simInstanceId ??
+    card?.id ??
+    card?.name ??
+    "card"
+  );
+}
+
+function isFastMonsterEffect(effect) {
+  return effect?.isQuickEffect === true || Number(effect?.speed) === 2;
+}
+
+function isExplicitZone(effect, zone) {
+  return (
+    (Array.isArray(effect?.activationZones) &&
+      effect.activationZones.includes(zone)) ||
+    effect?.requireZone === zone
+  );
+}
+
+export function getEffectActivationZones(card, effect) {
+  if (!card || !effect) return [];
+  if (Array.isArray(effect.activationZones)) {
+    return [...new Set(effect.activationZones.filter(Boolean))];
+  }
+  if (effect.requireZone) return [effect.requireZone];
+
+  if (card.cardKind === "trap") return ["spellTrap"];
+  if (card.cardKind === "spell" && isQuickSpell(card)) {
+    return ["hand", "spellTrap"];
+  }
+  if (card.cardKind === "monster" && isFastMonsterEffect(effect)) {
+    return ["field"];
+  }
+  return [];
+}
+
+export function getActivationCandidateKey(card, effect, sourceZone) {
+  return `${cardInstanceId(card)}:${effect?.id || "effect"}:${sourceZone || "unknown"}`;
+}
+
+function pairAlreadyInChain(chainSystem, card, effect) {
+  const effectId = effect?.id || null;
+  const links = [
+    ...(chainSystem.chainStack || []),
+    chainSystem.currentResolvingLink || null,
+  ].filter(Boolean);
+  return links.some(
+    (link) =>
+      cardInstanceId(link.card) === cardInstanceId(card) &&
+      (link.effectId || link.effect?.id || null) === effectId,
+  );
+}
+
 function wasTriggerEffectAlreadyOffered(chainSystem, card, effect) {
   return chainSystem.chainTriggerEffectsOffered?.get(card)?.has(effect) === true;
 }
 
-function buildQuickSpellChainContext(chainSystem, context, effect, activationZone) {
+function buildResponseContext(chainSystem, context, effect, activationZone) {
+  const responseContext =
+    chainSystem.getEffectChainResponseContext?.(effect, context) || context;
   const lastLink = chainSystem.getLastChainLink?.();
   return {
-    ...(context || {}),
+    ...(responseContext || {}),
     activationZone,
+    sourceZone: activationZone,
     effect,
-    chainWindowOpen: chainSystem.isChainWindowOpen?.() === true || !!context,
+    chainWindowOpen:
+      chainSystem.isChainWindowOpen?.() === true || !!responseContext,
     isChainWindow:
-      context?.type !== "main_phase_action" ||
+      responseContext?.type !== "main_phase_action" ||
       chainSystem.isChainWindowOpen?.() === true,
-    requiredSpellSpeed: chainSystem.getRequiredSpellSpeed?.(context),
-    respondingToSpellSpeed: lastLink
-      ? chainSystem.getEffectSpellSpeed?.(lastLink.effect, lastLink.card)
-      : undefined,
-    lastSpellSpeed: lastLink
-      ? chainSystem.getEffectSpellSpeed?.(lastLink.effect, lastLink.card)
-      : undefined,
+    requiredSpellSpeed: chainSystem.getRequiredSpellSpeed?.(responseContext),
+    respondingToSpellSpeed: lastLink?.spellSpeed,
+    lastSpellSpeed: lastLink?.spellSpeed,
   };
 }
 
-function buildTrapPlacementOnlyEffect(card) {
+function buildPreviewContext(chainSystem, card, effect, player, context, zone) {
+  return {
+    source: card,
+    sourceCard: card,
+    effect,
+    player,
+    opponent: chainSystem.getOpponent?.(player) || null,
+    activationZone: zone,
+    actionContext: context || null,
+    defender: context?.defender || context?.target || null,
+    target: context?.target || context?.defender || null,
+    attacker: context?.attacker || null,
+    summonedCard: context?.summonedCard || context?.card || null,
+    activationContext: {
+      preview: true,
+      isPreview: true,
+      sourceZone: zone,
+      activationZone: zone,
+      autoSelectSingleTarget: true,
+      context: context || null,
+    },
+  };
+}
+
+function canonicalRequirementsCanBeMet(
+  chainSystem,
+  card,
+  effect,
+  player,
+  context,
+  zone,
+) {
+  const engine = chainSystem.game?.effectEngine;
+  const preview = buildPreviewContext(
+    chainSystem,
+    card,
+    effect,
+    player,
+    context,
+    zone,
+  );
+  const definitions = (effect.targets || []).map((definition) =>
+    definition?.intent === "cost" &&
+    definition.requireThisCard !== true &&
+    definition.allowSelf !== true
+      ? { ...definition, excludeSelf: true }
+      : definition,
+  );
+  if (definitions.length > 0 && engine?.resolveTargets) {
+    const targetPreview = engine.resolveTargets(definitions, preview, null);
+    if (targetPreview?.ok === false && !targetPreview?.needsSelection) {
+      return false;
+    }
+  }
+
+  const costs = chainSystem.getEffectActivationCosts?.(effect) || [];
+  const costsWithoutDeclaredCards = costs.filter(
+    (action) => typeof action?.targetRef !== "string",
+  );
+  if (
+    costsWithoutDeclaredCards.length > 0 &&
+    engine?.checkActionPreviewRequirements
+  ) {
+    const costPreview = engine.checkActionPreviewRequirements(
+      costsWithoutDeclaredCards,
+      preview,
+    );
+    if (costPreview?.ok === false) return false;
+  }
+  return true;
+}
+
+function genericExplicitEffectCheck(
+  chainSystem,
+  card,
+  effect,
+  player,
+  context,
+  zone,
+) {
+  if (!isExplicitZone(effect, zone)) return false;
+  if (effect.timing === "passive") return false;
+  if (effect.timing === "on_event" && effect.allowManualActivation !== true) {
+    return false;
+  }
+  if (
+    effect.requireFaceup === true &&
+    zone !== "hand" &&
+    zone !== "graveyard" &&
+    zone !== "banished" &&
+    card.isFacedown === true
+  ) {
+    return false;
+  }
+  const phases = Array.isArray(effect.requirePhase)
+    ? effect.requirePhase
+    : effect.requirePhase
+      ? [effect.requirePhase]
+      : [];
+  if (phases.length > 0 && !phases.includes(chainSystem.game?.phase)) {
+    return false;
+  }
+
+  const preview = buildPreviewContext(
+    chainSystem,
+    card,
+    effect,
+    player,
+    context,
+    zone,
+  );
+  const engine = chainSystem.game?.effectEngine;
+  if (Array.isArray(effect.conditions) && engine?.evaluateConditions) {
+    if (engine.evaluateConditions(effect.conditions, preview)?.ok === false) {
+      return false;
+    }
+  }
+  if (Array.isArray(effect.targets) && effect.targets.length > 0) {
+    const targetPreview = engine?.resolveTargets?.(effect.targets, preview, null);
+    if (targetPreview?.ok === false && !targetPreview?.needsSelection) {
+      return false;
+    }
+  }
+  if (engine?.checkActionPreviewRequirements) {
+    const actionPreview = engine.checkActionPreviewRequirements(
+      effect.actions || [],
+      preview,
+    );
+    if (actionPreview?.ok === false) return false;
+  }
+  return true;
+}
+
+function buildPlacementOnlyEffect(card) {
   return {
     id: `${card?.id || "trap"}_placement_only_activation`,
     timing: "on_activate",
@@ -38,236 +238,242 @@ function buildTrapPlacementOnlyEffect(card) {
   };
 }
 
-function canUseTrapPlacementOnlyActivation(card) {
-  if (!card || card.cardKind !== "trap" || card.subtype !== "continuous") {
-    return false;
-  }
-  return !(card.effects || []).some(
-    (effect) => effect && effect.timing === "on_activate",
+function canUsePlacementOnly(card) {
+  return (
+    card?.cardKind === "trap" &&
+    card?.subtype === "continuous" &&
+    !(card.effects || []).some((effect) => effect?.timing === "on_activate")
   );
 }
 
+function zoneEntries(player) {
+  return [
+    ["hand", player.hand || []],
+    ["field", player.field || []],
+    ["spellTrap", player.spellTrap || []],
+    ["fieldSpell", player.fieldSpell ? [player.fieldSpell] : []],
+    ["graveyard", player.graveyard || []],
+    ["banished", player.banished || []],
+  ];
+}
+
+function trapStateAllows(chainSystem, card, effect, zone) {
+  if (zone === "hand") return isExplicitZone(effect, "hand");
+  if (zone !== "spellTrap") return isExplicitZone(effect, zone);
+
+  if (card.isFacedown === true) {
+    const setTurn = card.setTurn ?? card.turnSetOn ?? null;
+    return setTurn != null && Number(setTurn) < Number(chainSystem.game.turnCounter);
+  }
+
+  return (
+    card.subtype === "continuous" &&
+    effect.requireFaceup === true &&
+    (effect.timing !== "on_event" || effect.allowManualActivation === true)
+  );
+}
+
+function candidateForEffect(chainSystem, player, card, effect, zone, context) {
+  if (!getEffectActivationZones(card, effect).includes(zone)) return null;
+  if (pairAlreadyInChain(chainSystem, card, effect)) return null;
+  if (wasTriggerEffectAlreadyOffered(chainSystem, card, effect)) return null;
+
+  const responseContext = buildResponseContext(
+    chainSystem,
+    context,
+    effect,
+    zone,
+  );
+  if (!chainSystem.canOfferEffectInChainContext?.(effect, responseContext)) {
+    return null;
+  }
+
+  let matchedEffect = null;
+  if (card.cardKind === "trap") {
+    if (!trapStateAllows(chainSystem, card, effect, zone)) return null;
+    matchedEffect = chainSystem.findActivatableEffect?.(
+      card,
+      responseContext,
+      player,
+      zone,
+      effect,
+    );
+  } else if (
+    card.cardKind === "spell" &&
+    isQuickSpell(card) &&
+    (zone === "hand" || zone === "spellTrap")
+  ) {
+    matchedEffect = chainSystem.findActivatableEffect?.(
+      card,
+      responseContext,
+      player,
+      zone,
+      effect,
+    );
+    if (!matchedEffect) return null;
+    const quickCheck =
+      zone === "hand"
+        ? canActivateQuickSpellFromHand(
+            chainSystem.game,
+            card,
+            player,
+            responseContext,
+          )
+        : canActivateSetQuickSpell(
+            chainSystem.game,
+            card,
+            player,
+            responseContext,
+          );
+    if (!quickCheck.ok) return null;
+  } else if (card.cardKind === "monster" && isFastMonsterEffect(effect)) {
+    if (zone === "field" && card.isFacedown === true) return null;
+    matchedEffect = chainSystem.findQuickMonsterEffect?.(
+      card,
+      responseContext,
+      player,
+      zone,
+      effect,
+    );
+  } else if (
+    (card.cardKind === "spell" || card.cardKind === "trap") &&
+    (Number(effect.speed) >= 2 || card.cardKind === "trap") &&
+    genericExplicitEffectCheck(
+      chainSystem,
+      card,
+      effect,
+      player,
+      responseContext,
+      zone,
+    )
+  ) {
+    matchedEffect = effect;
+  }
+  if (!matchedEffect) return null;
+  if (
+    !canonicalRequirementsCanBeMet(
+      chainSystem,
+      card,
+      effect,
+      player,
+      responseContext,
+      zone,
+    )
+  ) {
+    return null;
+  }
+
+  const restriction = chainSystem.game?.canActivateCardEffectUnderRestrictions?.(
+    card,
+    player,
+    effect,
+    { silent: true },
+  );
+  if (restriction?.ok === false) return null;
+  const usage = chainSystem.checkActivationUsage?.(card, player, effect);
+  if (usage?.ok === false) return null;
+  const chainCheck = chainSystem.canActivateInChain?.(
+    effect,
+    card,
+    responseContext,
+  );
+  if (chainCheck?.ok === false) return null;
+
+  return {
+    candidateKey: getActivationCandidateKey(card, effect, zone),
+    card,
+    effect,
+    effectId: effect.id || null,
+    player,
+    controller: player,
+    zone,
+    sourceZone: zone,
+    sourceLocationVersion: Number(card.locationVersion ?? 0),
+    spellSpeed: chainSystem.getEffectSpellSpeed?.(effect, card) ?? 1,
+    context: responseContext,
+    effectLabel:
+      effect.activationLabel || effect.promptMessage || effect.id || card.name,
+  };
+}
+
 /**
- * Get all cards a player can activate in current chain context
- * @param {Object} player - The player to check
- * @param {ChainContext} context - Current chain context
- * @returns {Array<{card: Object, effect: Object, zone: string}>}
+ * Canonical response discovery. Candidates are effects, never whole cards.
  */
 export function getActivatableCardsInChain(player, context) {
   if (!player || !this.game) return [];
+  const candidates = [];
 
-  const activatable = [];
-  const effectEngine = this.game.effectEngine;
-
-  // Build a set of cards already in the current chain (to prevent offering them again)
-  const cardsInChain = new Set();
-  if (Array.isArray(this.chainStack)) {
-    for (const link of this.chainStack) {
-      if (link?.card) {
-        cardsInChain.add(link.card);
-      }
-    }
-  }
-  // Also include cards currently being resolved (they've been popped from chainStack)
-  if (this.cardsBeingResolved) {
-    for (const card of this.cardsBeingResolved) {
-      cardsInChain.add(card);
-    }
-  }
-
-  // Check set Trap cards in spellTrap zone
-  if (Array.isArray(player.spellTrap)) {
-    for (const card of player.spellTrap) {
-      if (!card || card.cardKind !== "trap") continue;
-      if (!card.isFacedown) continue; // Must be set
-
-      // Skip cards already in the current chain or being resolved
-      if (cardsInChain.has(card)) continue;
-
-      // Check if trap can be activated (was set before this turn)
-      // Support both setTurn and turnSetOn properties
-      const setTurn = card.setTurn ?? card.turnSetOn ?? null;
-      if (setTurn === null || setTurn >= this.game.turnCounter) {
-        this.log(
-          `[getActivatableCardsInChain] ${card.name}: cannot activate yet (setTurn=${setTurn}, currentTurn=${this.game.turnCounter})`,
-        );
-        continue;
-      }
-
-      this.log(
-        `[getActivatableCardsInChain] Checking trap ${card.name} for context ${context?.type}`,
-      );
-
-      const effect = this.findActivatableEffect(card, context, player);
-      const responseEffect =
-        effect || (canUseTrapPlacementOnlyActivation(card)
-          ? buildTrapPlacementOnlyEffect(card)
-          : null);
-      if (responseEffect) {
-        if (wasTriggerEffectAlreadyOffered(this, card, responseEffect)) continue;
-        const responseContext =
-          this.getEffectChainResponseContext?.(responseEffect, context) ||
-          context;
-        if (!this.canOfferEffectInChainContext(responseEffect, responseContext))
-          continue;
-        this.log(
-          `[getActivatableCardsInChain] Found effect for ${card.name}:`,
-          responseEffect.id,
-        );
-        const chainCheck = this.canActivateInChain(
-          responseEffect,
+  for (const [zone, cards] of zoneEntries(player)) {
+    for (const card of cards) {
+      if (!card) continue;
+      for (const effect of card.effects || []) {
+        const candidate = candidateForEffect(
+          this,
+          player,
           card,
-          responseContext,
+          effect,
+          zone,
+          context,
         );
-        this.log(
-          `[getActivatableCardsInChain] Chain check for ${card.name}:`,
-          chainCheck,
+        if (candidate) candidates.push(candidate);
+      }
+
+      if (
+        zone === "spellTrap" &&
+        card.isFacedown === true &&
+        canUsePlacementOnly(card)
+      ) {
+        const placement = buildPlacementOnlyEffect(card);
+        const candidate = candidateForEffect(
+          this,
+          player,
+          { ...card, effects: [placement] },
+          placement,
+          zone,
+          context,
         );
-        if (chainCheck.ok) {
-          // Skip the canActivate check for traps - it's only meant for spells
-          // Traps have their own validation in findActivatableEffect
-          this.log(
-            `[getActivatableCardsInChain] ${card.name} is ACTIVATABLE`,
-          );
-          activatable.push({
+        if (candidate) {
+          candidate.card = card;
+          candidate.candidateKey = getActivationCandidateKey(
             card,
-            effect: responseEffect,
-            zone: "spellTrap",
-            context: responseContext,
-          });
-        }
-      } else {
-        this.log(
-          `[getActivatableCardsInChain] No activatable effect found for ${card.name}`,
-        );
-      }
-    }
-  }
-
-  // Check set Quick Spells in spellTrap zone
-  if (Array.isArray(player.spellTrap)) {
-    for (const card of player.spellTrap) {
-      if (!card || card.cardKind !== "spell") continue;
-      if (!isQuickSpell(card)) continue;
-      if (!card.isFacedown) continue; // Must be set
-
-      if (cardsInChain.has(card)) continue;
-
-      const effect = this.findActivatableEffect(card, context, player);
-      if (effect) {
-        if (wasTriggerEffectAlreadyOffered(this, card, effect)) continue;
-        const responseContext =
-          this.getEffectChainResponseContext?.(effect, context) || context;
-        if (!this.canOfferEffectInChainContext(effect, responseContext)) continue;
-        const quickSpellContext = buildQuickSpellChainContext(
-          this,
-          responseContext,
-          effect,
-          "spellTrap",
-        );
-        const quickCheck = canActivateSetQuickSpell(
-          this.game,
-          card,
-          player,
-          quickSpellContext,
-        );
-        if (!quickCheck.ok) continue;
-        const chainCheck = this.canActivateInChain(effect, card, responseContext);
-        if (chainCheck.ok) {
-          activatable.push({ card, effect, zone: "spellTrap", context: responseContext });
+            placement,
+            zone,
+          );
+          candidates.push(candidate);
         }
       }
     }
   }
 
-  // Check Quick Spells in hand. They require a legal chain/window context and
-  // can never be activated from hand during the opponent's turn.
-  if (Array.isArray(player.hand)) {
-    for (const card of player.hand) {
-      if (!card || card.cardKind !== "spell") continue;
-      if (!isQuickSpell(card)) continue;
+  candidates.sort((a, b) =>
+    String(a.candidateKey).localeCompare(String(b.candidateKey)),
+  );
+  return candidates;
+}
 
-      // Skip cards already in the current chain
-      if (cardsInChain.has(card)) continue;
-
-      const effect = this.findActivatableEffect(card, context, player);
-      if (effect) {
-        if (wasTriggerEffectAlreadyOffered(this, card, effect)) continue;
-        const responseContext =
-          this.getEffectChainResponseContext?.(effect, context) || context;
-        if (!this.canOfferEffectInChainContext(effect, responseContext)) continue;
-        const quickSpellContext = buildQuickSpellChainContext(
-          this,
-          responseContext,
-          effect,
-          "hand",
-        );
-        const quickCheck = canActivateQuickSpellFromHand(
-          this.game,
-          card,
-          player,
-          quickSpellContext,
-        );
-        if (!quickCheck.ok) continue;
-        const chainCheck = this.canActivateInChain(effect, card, responseContext);
-        if (chainCheck.ok) {
-          activatable.push({ card, effect, zone: "hand", context: responseContext });
-        }
-      }
-    }
+export function revalidateActivationCandidate(candidate, player, context) {
+  if (!candidate?.card || !candidate?.effect || !player) {
+    return { ok: false, reason: "invalid_activation_candidate" };
   }
-
-  // Check monster quick effects in hand
-  if (Array.isArray(player.hand)) {
-    for (const card of player.hand) {
-      if (!card || card.cardKind !== "monster") continue;
-
-      // Skip cards already in the current chain
-      if (cardsInChain.has(card)) continue;
-
-      const effect = this.findQuickMonsterEffect(card, context, player, "hand");
-      if (effect) {
-        if (wasTriggerEffectAlreadyOffered(this, card, effect)) continue;
-        const responseContext =
-          this.getEffectChainResponseContext?.(effect, context) || context;
-        if (!this.canOfferEffectInChainContext(effect, responseContext)) continue;
-        const chainCheck = this.canActivateInChain(effect, card, responseContext);
-        if (chainCheck.ok) {
-          activatable.push({ card, effect, zone: "hand", context: responseContext });
-        }
-      }
-    }
+  const currentZone = this.determineCardZone?.(candidate.card, player);
+  if (currentZone !== candidate.sourceZone) {
+    return { ok: false, reason: "activation_source_moved" };
   }
-
-  // Check monster quick effects on field
-  if (Array.isArray(player.field)) {
-    for (const card of player.field) {
-      if (!card || card.cardKind !== "monster") continue;
-      if (card.isFacedown) continue;
-
-      // Skip cards already in the current chain
-      if (cardsInChain.has(card)) continue;
-
-      const effect = this.findQuickMonsterEffect(card, context, player, "field");
-      if (effect) {
-        if (wasTriggerEffectAlreadyOffered(this, card, effect)) continue;
-        const responseContext =
-          this.getEffectChainResponseContext?.(effect, context) || context;
-        if (!this.canOfferEffectInChainContext(effect, responseContext)) continue;
-        const chainCheck = this.canActivateInChain(effect, card, responseContext);
-        if (chainCheck.ok) {
-          activatable.push({ card, effect, zone: "field", context: responseContext });
-        }
-      }
-    }
+  if (
+    Number(candidate.card.locationVersion ?? 0) !==
+    Number(candidate.sourceLocationVersion ?? 0)
+  ) {
+    return { ok: false, reason: "activation_source_version_changed" };
   }
-
-  // Only log when there are activatable cards (reduce log noise)
-  if (activatable.length > 0) {
-    this.log(
-      `Found ${activatable.length} activatable cards for ${player.id} in ${context?.type} context`,
-    );
-  }
-
-  return activatable;
+  const current = candidateForEffect(
+    this,
+    player,
+    candidate.card,
+    candidate.effect,
+    currentZone,
+    candidate.context || context,
+  );
+  return current
+    ? { ok: true, candidate: current }
+    : { ok: false, reason: "activation_candidate_no_longer_legal" };
 }

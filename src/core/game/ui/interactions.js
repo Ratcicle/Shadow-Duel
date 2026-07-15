@@ -504,11 +504,11 @@ export function bindCardInteractions() {
       }
       this.ui.showSpellChoiceModal(
         index,
-        (choice) => {
+        async (choice) => {
           if (choice === "activate" && canActivateFromHand) {
             activateSpell();
           } else if (choice === "set") {
-            this.setSpellOrTrap(card, index, actor);
+            await this.setSpellOrTrap(card, index, actor);
           }
         },
         { canActivate: canActivateFromHand, canSet: true, ownerId: actor.id }
@@ -517,7 +517,7 @@ export function bindCardInteractions() {
     }
 
     if (card.cardKind === "trap") {
-      this.setSpellOrTrap(card, index, actor);
+      await this.setSpellOrTrap(card, index, actor);
       return true;
     }
     return true;
@@ -602,9 +602,9 @@ export function bindCardInteractions() {
             if (choice === "flip" && canFlip) {
               await this.flipSummon(card);
             } else if (choice === "to_attack" && canPosChange) {
-              this.changeMonsterPosition(card, "attack");
+              await this.changeMonsterPosition(card, "attack");
             } else if (choice === "to_defense" && canPosChange) {
-              this.changeMonsterPosition(card, "defense");
+              await this.changeMonsterPosition(card, "defense");
             }
           },
           {
@@ -882,11 +882,11 @@ export function bindCardInteractions() {
           return;
         }
 
-        const handleSpellChoice = (choice) => {
+        const handleSpellChoice = async (choice) => {
           if (choice === "activate" && canActivateFromHand) {
             activateSpell();
           } else if (choice === "set") {
-            this.setSpellOrTrap(card, index);
+            await this.setSpellOrTrap(card, index);
           }
         };
 
@@ -901,7 +901,7 @@ export function bindCardInteractions() {
               "OK: Activate this Spell. Cancel: Set it face-down in your Spell/Trap Zone.",
               { kind: "spell_choice", cardName: card.name }
             )) ?? false;
-          handleSpellChoice(shouldActivate ? "activate" : "set");
+          await handleSpellChoice(shouldActivate ? "activate" : "set");
         }
         return;
       }
@@ -913,7 +913,7 @@ export function bindCardInteractions() {
           phaseReq: ["main1", "main2"],
         });
         if (!guard.ok) return;
-        this.setSpellOrTrap(card, index);
+        await this.setSpellOrTrap(card, index);
         return;
       }
     });
@@ -1056,13 +1056,13 @@ export function bindCardInteractions() {
                 canPosChange &&
                 card.position !== "attack"
               ) {
-                this.changeMonsterPosition(card, "attack");
+                await this.changeMonsterPosition(card, "attack");
               } else if (
                 choice === "to_defense" &&
                 canPosChange &&
                 card.position !== "defense"
               ) {
-                this.changeMonsterPosition(card, "defense");
+                await this.changeMonsterPosition(card, "defense");
               }
             },
             {
@@ -1319,13 +1319,13 @@ export function bindCardInteractions() {
   // Bot Hand Click (Direct Attack via target selection)
   // ─────────────────────────────────────────────────────────────────────────────
   if (this.ui && typeof this.ui.bindBotHandClick === "function") {
-    this.ui.bindBotHandClick((e, cardEl, index) => {
+    this.ui.bindBotHandClick(async (e, cardEl, index) => {
       if (this.targetSelection) {
         if (handleDirectAttackHandClick("bot", e)) return;
         this.handleTargetSelectionClick("bot", index, cardEl, "hand");
         return;
       }
-      handleLaboratoryHandClick(this.bot, index);
+      await handleLaboratoryHandClick(this.bot, index);
     });
   }
 

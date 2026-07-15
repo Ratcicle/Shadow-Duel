@@ -17,6 +17,8 @@ export const techZeroCards = [
       {
         id: "tech_zero_energy_core_level_mod",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "after_summon",
         requireZone: "field",
         requireFaceup: true,
@@ -85,6 +87,8 @@ export const techZeroCards = [
       {
         id: "tech_zero_energy_core_synchro_draw",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "card_to_grave",
         fromZone: "field",
         contextLabel: "synchro_material",
@@ -112,6 +116,8 @@ export const techZeroCards = [
       {
         id: "tech_zero_electrocatapult_normal_summon",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "after_summon",
         requireZone: "field",
         requireFaceup: true,
@@ -145,6 +151,8 @@ export const techZeroCards = [
       {
         id: "tech_zero_electrocatapult_synchro_revive",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "card_to_grave",
         fromZone: "field",
         contextLabel: "synchro_material",
@@ -313,6 +321,8 @@ export const techZeroCards = [
       {
         id: "tech_zero_multimodal_machine_synchro_draw",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "card_to_grave",
         fromZone: "field",
         contextLabel: "synchro_material",
@@ -379,6 +389,8 @@ export const techZeroCards = [
       {
         id: "tech_zero_glider_wyvern_synchro_destroy_spelltrap",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "card_to_grave",
         fromZone: "field",
         contextLabel: "synchro_material",
@@ -425,6 +437,8 @@ export const techZeroCards = [
       {
         id: "tech_zero_iron_raptor_special_summon",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "after_summon",
         requireZone: "hand",
         summonMethods: ["special"],
@@ -462,6 +476,8 @@ export const techZeroCards = [
       {
         id: "tech_zero_iron_raptor_synchro_tokens",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "card_to_grave",
         fromZone: "field",
         contextLabel: "synchro_material",
@@ -588,6 +604,8 @@ export const techZeroCards = [
       {
         id: "tech_zero_prism_activator_synchro_summon",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "card_to_grave",
         fromZone: "field",
         contextLabel: "synchro_material",
@@ -655,6 +673,8 @@ export const techZeroCards = [
       {
         id: "tech_zero_connector_dragon_synchro_recover_spelltrap",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "card_to_grave",
         fromZone: "field",
         contextLabel: "synchro_material",
@@ -723,6 +743,8 @@ export const techZeroCards = [
       {
         id: "tech_zero_pulse_soldier_synchro_draw_summon",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "after_summon",
         requireZone: "field",
         requireFaceup: true,
@@ -786,6 +808,8 @@ export const techZeroCards = [
       {
         id: "tech_zero_summoning_portal_synchro_revive",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "after_summon",
         requireSelfAsSummoned: true,
         summonMethods: ["synchro"],
@@ -866,6 +890,8 @@ export const techZeroCards = [
       {
         id: "tech_zero_atomic_slasher_synchro_buff",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "after_summon",
         requireSelfAsSummoned: true,
         requireFaceup: true,
@@ -892,6 +918,8 @@ export const techZeroCards = [
       {
         id: "tech_zero_atomic_slasher_synchro_material_protection",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "card_to_grave",
         fromZone: "field",
         contextLabel: "synchro_material",
@@ -943,6 +971,8 @@ export const techZeroCards = [
       {
         id: "tech_zero_ghost_samurai_synchro_recover_tuner",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "after_summon",
         requireSelfAsSummoned: true,
         requireFaceup: true,
@@ -974,6 +1004,8 @@ export const techZeroCards = [
       {
         id: "tech_zero_ghost_samurai_attack_special_summoned_boost",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "battle_damage",
         requireZone: "field",
         requireFaceup: true,
@@ -1003,6 +1035,8 @@ export const techZeroCards = [
       {
         id: "tech_zero_ghost_samurai_defend_special_summoned_boost",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "battle_damage",
         requireZone: "field",
         requireFaceup: true,
@@ -1053,6 +1087,8 @@ export const techZeroCards = [
       {
         id: "tech_zero_battle_mage_synchro_draw",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "after_summon",
         requireZone: "field",
         requireFaceup: true,
@@ -1200,6 +1236,8 @@ export const techZeroCards = [
       {
         id: "tech_zero_turbocharge_kaiser_synchro_recycle_buff",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "after_summon",
         requireSelfAsSummoned: true,
         summonMethods: ["synchro"],
@@ -1245,6 +1283,8 @@ export const techZeroCards = [
       {
         id: "tech_zero_turbocharge_kaiser_battle_revive_tuner",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "battle_destroy",
         requireZone: "field",
         requireFaceup: true,
@@ -1328,6 +1368,8 @@ export const techZeroCards = [
       {
         id: "tech_zero_plasma_phoenix_end_phase_heal",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "end_phase",
         requireZone: "field",
         requireFaceup: true,
@@ -1354,6 +1396,8 @@ export const techZeroCards = [
       {
         id: "tech_zero_plasma_phoenix_destroyed_end_phase_revive",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "card_to_grave",
         fromZone: "field",
         requireSelfAsDestroyed: true,
@@ -1412,6 +1456,8 @@ export const techZeroCards = [
       {
         id: "tech_zero_reactor_dragon_synchro_negate",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "after_summon",
         requireSelfAsSummoned: true,
         requireFaceup: true,
@@ -1523,6 +1569,8 @@ export const techZeroCards = [
       {
         id: "tech_zero_explosive_lancer_synchro_attack_limit",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "after_summon",
         requireSelfAsSummoned: true,
         requireFaceup: true,
@@ -1597,6 +1645,8 @@ export const techZeroCards = [
       {
         id: "tech_zero_final_singularity_synchro_negate_all",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "after_summon",
         requireSelfAsSummoned: true,
         requireFaceup: true,

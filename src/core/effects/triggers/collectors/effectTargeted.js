@@ -71,12 +71,6 @@ export async function collectEffectTargetedTriggers(payload) {
         },
       );
 
-      // For face-down traps, skip negation check (they can activate even if negated before being flipped)
-      if (!card.isFacedown && this.isEffectNegated(card)) {
-        debugLog(`${card.name} effects are negated, skipping effect.`);
-        continue;
-      }
-
       // Check requireFaceup condition
       if (effect.requireFaceup === true && card.isFacedown === true) {
         debugLog(

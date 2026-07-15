@@ -50,14 +50,6 @@ export async function collectStandbyPhaseTriggers(payload) {
         if (effect.event !== "standby_phase") continue;
         if (!canTriggerForStandbyPlayer(owner, effect)) continue;
 
-        if (this.isEffectNegated(card)) {
-          debugTriggerLog(
-            this,
-            `${card.name} effects are negated, skipping effect.`,
-          );
-          continue;
-        }
-
         // Check requireFaceup condition
         if (effect.requireFaceup === true && card.isFacedown === true) {
           debugTriggerLog(

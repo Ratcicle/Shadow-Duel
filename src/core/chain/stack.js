@@ -18,42 +18,62 @@
  * Add a card to the chain stack as a new link.
  */
 export function addToChain(cardOrPrepared, player, effect, context, selections = null, zone = null) {
-  this.currentChainLevel++;
-
   const preparedInput =
     cardOrPrepared?.prepared === true && cardOrPrepared?.card
       ? cardOrPrepared
       : null;
+  if (!preparedInput) {
+    this.warnLegacyChainContract?.("addToChain(card, player, effect, ...)");
+  }
+
   const card = preparedInput?.card || cardOrPrepared;
-  player = preparedInput?.player || player;
-  effect = preparedInput?.effect || effect;
-  context = preparedInput?.context || context;
-  selections = preparedInput?.selections || selections;
-  zone = preparedInput?.zone || zone;
+  const controller = preparedInput?.controller || preparedInput?.player || player;
+  const resolvedEffect = preparedInput?.effect || effect;
+  const resolvedContext = preparedInput?.context || context || null;
+  const resolvedSelections = preparedInput?.selections || selections || {};
+  const activationZone =
+    preparedInput?.activationZone ||
+    preparedInput?.zone ||
+    zone ||
+    this.determineCardZone(card, controller);
+  const normalized = preparedInput ||
+    this.createPreparedActivation?.({
+      card,
+      controller,
+      player: controller,
+      effect: resolvedEffect,
+      context: resolvedContext,
+      selections: resolvedSelections,
+      activationZone,
+      zone: activationZone,
+      activationContext:
+        resolvedContext?.activationContext || {
+          sourceZone: activationZone,
+          activationZone,
+        },
+    }) || {
+      card,
+      controller,
+      player: controller,
+      effect: resolvedEffect,
+      context: resolvedContext,
+      selections: resolvedSelections,
+      activationZone,
+      zone: activationZone,
+    };
 
-  const activationZone = zone || this.determineCardZone(card, player);
-
-  const chainLink = {
-    ...(preparedInput || {}),
-    card,
-    player,
-    effect,
-    context,
-    zone: activationZone,
-    selections,
-    chainLevel: this.currentChainLevel,
-    prepared: preparedInput?.prepared === true,
-    costsPaid: preparedInput?.costsPaid === true,
-    committed: preparedInput?.committed === true,
-    activationAttempt: preparedInput?.activationAttempt || context?.activationAttempt || null,
-    activationContext:
-      preparedInput?.activationContext || context?.activationContext || null,
-  };
+  const chainLink = this.createChainLink(normalized, resolvedContext);
+  const usageReservation = this.reserveUsageForChainLink?.(chainLink);
+  if (usageReservation?.success === false) {
+    return null;
+  }
+  this.currentChainLevel = chainLink.chainLevel;
 
   this.chainStack.push(chainLink);
 
   this.log(
-    `Chain Link ${this.currentChainLevel}: ${card.name} (${player.id})`,
+    "CHAIN_LINK_ADDED",
+    this.serializeChainLink?.(chainLink),
   );
 
   const ui = this.getUI();
@@ -91,16 +111,20 @@ export function cancelChain() {
   this.isResolving = false;
   this.pendingChainSelection = null;
   this.currentChainLevel = 0;
+  this.activeChainId = null;
+  this.currentResolvingLink = null;
   this.cardsBeingResolved.clear();
   this.isPreparingActivation = false;
   this.chainEventCompletions = [];
   this.chainTriggerEffectsOffered = new Map();
+  this.releaseAllUsageReservations?.("chain_cancelled");
+  this.resetChainFinalizationState?.("chain_cancelled");
+  this.resetTriggerState?.({ clearPending: true });
+  this.resetFastEffectTiming?.();
 }
 
 export function getChainSummary() {
-  return this.chainStack.map((link) => ({
-    level: link.chainLevel,
-    cardName: link.card?.name || "Unknown",
-    playerName: link.player?.name || link.player?.id || "Unknown",
-  }));
+  return this.chainStack
+    .map((link) => this.serializeChainLink?.(link))
+    .filter(Boolean);
 }

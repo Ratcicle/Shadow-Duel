@@ -180,6 +180,7 @@ export default class Game {
     this.eventResolutionDepth = 0;
     this.eventResolutionCounter = 0;
     this.pendingEventSelection = null;
+    this.pendingTriggerSelection = null;
     this.pendingChainEvents = [];
     this._flushingPendingChainEvents = false;
     this.temporaryReplacementEffects = [];
@@ -188,7 +189,6 @@ export default class Game {
     this.pendingSynchroMaterialFollowups = [];
     this.pendingSynchroMaterialTriggerContinuation = null;
     this.synchroSummonContextCounter = 0;
-    this.trapPromptInProgress = false; // Avoid multiple trap prompts simultaneously
     this.devModeEnabled = !!options.devMode;
     this.zoneOpDepth = 0;
     this.zoneOpSnapshot = null;
@@ -229,7 +229,7 @@ export default class Game {
 
     // Initialize ChainSystem for chain windows and spell speed validation
     this.chainSystem = this.disableChains
-      ? new NullChainSystem()
+      ? new NullChainSystem(this)
       : new ChainSystem(this, {
           responseTimeoutMs: options.chainResponseTimeoutMs,
         });
@@ -250,11 +250,11 @@ export default class Game {
     this.pendingSpecialSummon = null;
     this.pendingTributeSummonSelection = null;
     this.pendingEventSelection = null;
+    this.pendingTriggerSelection = null;
     this.pendingChainEvents = [];
     this._flushingPendingChainEvents = false;
     this.isResolvingEffect = false;
     this.eventResolutionDepth = 0;
-    this.trapPromptInProgress = false;
     this.delayedActions = [];
     this.temporaryReplacementEffects = [];
     this.temporaryBattlePairEffects = [];
@@ -776,6 +776,9 @@ Game.prototype.resolveEvent = eventResolver.resolveEvent;
 Game.prototype.resolveEventEntries = eventResolver.resolveEventEntries;
 Game.prototype.resumePendingEventSelection =
   eventResolver.resumePendingEventSelection;
+Game.prototype.queueTriggerOccurrence = eventResolver.queueTriggerOccurrence;
+Game.prototype.flushPendingTriggerOccurrences =
+  eventResolver.flushPendingTriggerOccurrences;
 Game.prototype.queuePendingChainEvent = eventResolver.queuePendingChainEvent;
 Game.prototype.flushPendingChainEvents = eventResolver.flushPendingChainEvents;
 

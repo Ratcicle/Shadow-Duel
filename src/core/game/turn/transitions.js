@@ -72,6 +72,8 @@ function setBattleOpenStateForPhase(game, phase) {
 
 async function leaveCurrentPhase(game, options = {}) {
   const currentPhase = game.phase;
+  const previousBattleStep = game.battleStep ?? null;
+  const previousDamageStepTiming = game.damageStepTiming ?? null;
   const nextPhase =
     options.nextPhase ??
     game.getNextPhase?.(currentPhase) ??
@@ -81,7 +83,7 @@ async function leaveCurrentPhase(game, options = {}) {
     game.damageStepTiming = null;
   }
 
-  await game.checkAndOfferTraps("phase_end", {
+  const timingResult = await game.checkAndOfferTraps("phase_end", {
     currentPhase,
     nextPhase,
     fromPhase: currentPhase,
@@ -99,6 +101,25 @@ async function leaveCurrentPhase(game, options = {}) {
       ok: false,
       reason: "phase_changed_during_phase_end",
       currentPhase: game.phase,
+    };
+  }
+
+  if (
+    timingResult &&
+    (timingResult.phaseTransitionAllowed !== true ||
+      timingResult.phaseTransitionInterrupted === true)
+  ) {
+    if (currentPhase === "battle" && timingResult.needsSelection !== true) {
+      game.battleStep = previousBattleStep;
+      game.damageStepTiming = previousDamageStepTiming;
+    }
+    return {
+      ok: false,
+      reason: timingResult.needsSelection
+        ? "phase_window_pending"
+        : "phase_transition_interrupted",
+      timingResult,
+      currentPhase,
     };
   }
 
@@ -182,7 +203,15 @@ export async function nextPhase() {
 
   const next = this.getNextPhase?.(this.phase) ?? null;
   const leaveResult = await leaveCurrentPhase(this, { nextPhase: next });
-  if (!leaveResult.ok) return leaveResult;
+  if (!leaveResult.ok) {
+    if (
+      leaveResult.reason === "phase_transition_interrupted" &&
+      isAI(actor)
+    ) {
+      scheduleAiMoveAfterPaint(this, actor);
+    }
+    return leaveResult;
+  }
 
   if (!next) {
     return await this.endTurn();
@@ -221,7 +250,15 @@ export async function skipToPhase(targetPhase) {
     if (!next) return;
 
     const leaveResult = await leaveCurrentPhase(this, { nextPhase: next });
-    if (!leaveResult.ok) return leaveResult;
+    if (!leaveResult.ok) {
+      if (
+        leaveResult.reason === "phase_transition_interrupted" &&
+        isAI(actor)
+      ) {
+        scheduleAiMoveAfterPaint(this, actor);
+      }
+      return leaveResult;
+    }
 
     const enterResult = await enterPhase(this, next, leaveResult.currentPhase);
     if (!enterResult.ok) return enterResult;

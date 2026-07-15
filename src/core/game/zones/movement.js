@@ -1,4 +1,5 @@
 import {
+  bumpCardLocationVersion,
   restoreTemporaryStatuses,
   restoreTrapMonsterOriginalState,
 } from "../../Card.js";
@@ -222,10 +223,48 @@ export function moveCard(card, destPlayer, toZone, options = {}) {
   return result;
 }
 
+function recordCardLocationChange(
+  game,
+  card,
+  fromOwner,
+  destPlayer,
+  fromZone,
+  toZone,
+  options = {},
+) {
+  if (!game || !card || !fromZone || !toZone || fromZone === toZone) {
+    return Number(card?.locationVersion ?? 0);
+  }
+  const providedVersion = Number(options.locationVersion);
+  if (options.locationVersion != null && Number.isFinite(providedVersion)) {
+    return providedVersion;
+  }
+  const locationVersion = bumpCardLocationVersion(card);
+  game.chainSystem?.recordChainSourceMovement?.(card, {
+    fromPlayer: fromOwner,
+    toPlayer: destPlayer,
+    fromZone,
+    toZone,
+    locationVersion,
+    wasDestroyed: options.wasDestroyed === true,
+  });
+  return locationVersion;
+}
+
 async function emitCardMovedEvent(game, card, fromOwner, destPlayer, fromZone, toZone, options = {}) {
   if (!game || !card || !fromZone || !toZone || fromZone === toZone) {
     return null;
   }
+
+  const locationVersion = recordCardLocationChange(
+    game,
+    card,
+    fromOwner,
+    destPlayer,
+    fromZone,
+    toZone,
+    options,
+  );
 
   game.updateBoard?.();
 
@@ -239,11 +278,17 @@ async function emitCardMovedEvent(game, card, fromOwner, destPlayer, fromZone, t
     typeof options.movedByEffect === "boolean"
       ? options.movedByEffect
       : Boolean(movementSourceCard || options.effectId);
+  const atomicGroupId =
+    options.atomicGroupId ||
+    game.chainSystem?.allocateAtomicEventGroupId?.() ||
+    null;
 
   const eventResult = game.emit?.("card_moved", {
     card,
     fromZone,
     toZone,
+    locationVersion,
+    atomicGroupId,
     player: eventPlayer,
     opponent: eventOpponent,
     fromPlayer: fromOwner,
@@ -251,6 +296,8 @@ async function emitCardMovedEvent(game, card, fromOwner, destPlayer, fromZone, t
     sourceCard: movementSourceCard,
     source: movementSourceCard,
     effectId: options.effectId || null,
+    chainId: options.chainId ?? null,
+    linkId: options.linkId ?? null,
     contextLabel: options.contextLabel || null,
     wasDestroyed: options.wasDestroyed === true,
     destroyCause: options.destroyCause || null,
@@ -2358,6 +2405,15 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
       card.owner = destPlayer.id;
       card.controller = destPlayer.id;
       card.location = "graveyard";
+      recordCardLocationChange(
+        this,
+        card,
+        fromOwner,
+        destPlayer,
+        fromZone,
+        "graveyard",
+        options,
+      );
       this.updateBoard?.();
       return { success: false, negated: true, reason: "summon_negated" };
     }
@@ -2365,6 +2421,19 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
 
   const finalDestArr = destArrRedirected || destArr;
   finalDestArr.push(card);
+  const locationVersion = recordCardLocationChange(
+    this,
+    card,
+    fromOwner,
+    destPlayer,
+    fromZone,
+    toZone,
+    options,
+  );
+  const atomicGroupId =
+    options.atomicGroupId ||
+    this.chainSystem?.allocateAtomicEventGroupId?.() ||
+    null;
   if (toZone === "banished") {
     card.location = "banished";
   }
@@ -2438,6 +2507,7 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
         sourceCard: options.sourceCard || options.source || null,
         source: options.source || options.sourceCard || null,
         effectId: options.effectId || null,
+        atomicGroupId,
       });
     }
   }
@@ -2490,9 +2560,12 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
         destroySource:
           options.destroySource || options.sourceCard || options.source || null,
         contextLabel: options.contextLabel || null,
+        chainId: options.chainId ?? null,
+        linkId: options.linkId ?? null,
         actionContext: options.actionContext || null,
         deferTargetPrecheck: deferCardToGraveTriggers,
         effectsNegatedAtFieldExit,
+        atomicGroupId,
       };
       const cardToGraveEvent = this.emit(
         "card_to_grave",
@@ -2532,7 +2605,9 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
     toZone,
     {
       ...options,
+      locationVersion,
       wasFaceupBeforeMove,
+      atomicGroupId,
     },
   );
 

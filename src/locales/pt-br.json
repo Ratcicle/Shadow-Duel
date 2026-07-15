@@ -161,7 +161,14 @@
       "thisCard": "este card"
     },
     "triggers": {
-      "selection": "Selecione alvo(s) para o efeito disparado."
+      "selection": "Selecione alvo(s) para o efeito disparado.",
+      "mandatoryTitle": "Ordenar Efeitos de Gatilho obrigatÃ³rios",
+      "optionalTitle": "Escolher Efeitos de Gatilho opcionais",
+      "mandatoryOrder": "Clique em uma carta para mover seu efeito ao fim da ordem.",
+      "optionalOrder": "Selecione os efeitos que serÃ£o ativados na ordem desejada.",
+      "notSelected": "Fora",
+      "declineAll": "NÃ£o ativar nenhum",
+      "confirmOrder": "Confirmar ordem"
     },
     "counters": {
       "labels": {

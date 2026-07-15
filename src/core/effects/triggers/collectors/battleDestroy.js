@@ -99,11 +99,6 @@ export async function collectBattleDestroyTriggers(payload) {
         if (!effect || effect.timing !== "on_event") continue;
         if (effect.event !== "battle_destroy") continue;
 
-        if (this.isEffectNegated(card)) {
-          debugTriggerLog(this, `${card.name} effects are negated, skipping effect.`);
-          continue;
-        }
-
         if (effect.requireZone) {
           const sourceZone = this.findCardZone?.(owner, card) || null;
           if (sourceZone !== effect.requireZone) continue;

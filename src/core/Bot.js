@@ -190,7 +190,7 @@ export default class Bot extends Player {
       }
 
       if (phase === "end") {
-        game.endTurn();
+        await game.nextPhase();
       }
     } catch (error) {
       game._arenaTracker?.recordProgress?.("bot_make_move_error", game, {

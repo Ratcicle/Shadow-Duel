@@ -44,7 +44,7 @@ export async function playerChooseChainResponse(player, activatable, context) {
         chosenOption = await ui.showChainResponseModal(
           activatable,
           context,
-          this.chainStack,
+          this.getChainSummary?.() || [],
           { signal: controller.signal },
         );
       } finally {
@@ -70,24 +70,9 @@ export async function playerChooseChainResponse(player, activatable, context) {
     chosenOption = null;
   }
 
-  // If player chose a card, get target selections if needed
+  // Phase 4: choosing a response selects only the effect. Cost and target
+  // selections belong to the canonical activation transaction.
   if (chosenOption) {
-    const selections = await this.getPlayerSelectionsForEffect(
-      chosenOption.card,
-      chosenOption.effect,
-      player,
-      chosenOption.context || context,
-    );
-
-    if (
-      selections === null &&
-      this.effectRequiresTargets(chosenOption.effect)
-    ) {
-      // Player cancelled target selection, treat as pass
-      this.log("Player cancelled target selection");
-      return null;
-    }
-
     // Emitir evento para captura de replay
     this.game?.emit?.("chain_response", {
       player,
@@ -97,7 +82,7 @@ export async function playerChooseChainResponse(player, activatable, context) {
       triggerCard: context?.card || null,
     });
 
-    return { ...chosenOption, selections };
+    return chosenOption;
   }
 
   // Emitir evento para captura de replay (jogador passou)

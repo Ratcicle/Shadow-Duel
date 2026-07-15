@@ -702,6 +702,8 @@ export async function handleRegisterTemporaryEventEffect(
       `${ctx?.effect?.id || action.type}_${action.event}`,
     timing: "on_event",
     event: action.event,
+    triggerRequirement: action.triggerRequirement,
+    triggerTiming: action.triggerTiming,
     promptUser: action.promptUser === true,
     promptMessage: action.promptMessage,
     conditions: Array.isArray(action.conditions) ? action.conditions : [],

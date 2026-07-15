@@ -33,6 +33,17 @@ const VALID_TIMINGS = new Set([
 // distinct from `on_event`: the event limits when the player may activate the
 // card, but the effect is not collected as an automatic event trigger.
 const EVENT_COMPATIBLE_TIMINGS = new Set(["on_event", "on_activate"]);
+const VALID_TRIGGER_REQUIREMENTS = new Set(["mandatory", "optional"]);
+const VALID_TRIGGER_TIMINGS = new Set(["if", "when"]);
+const VALID_ACTIVATION_ZONES = new Set([
+  "hand",
+  "field",
+  "spellTrap",
+  "fieldSpell",
+  "graveyard",
+  "banished",
+]);
+const VALID_USAGE_POLICIES = new Set(["use", "activate"]);
 
 const VALID_EVENTS = new Set([
   "after_summon",
@@ -349,6 +360,37 @@ export function validateCardDatabase() {
             null,
           ),
         );
+      } else if (effect.timing === "on_event") {
+        if (!VALID_EVENTS.has(effect.event)) {
+          errors.push(
+            formatIssue(
+              card,
+              `Invalid event "${effect.event}".`,
+              effectIndex,
+              null,
+            ),
+          );
+        }
+        if (!VALID_TRIGGER_REQUIREMENTS.has(effect.triggerRequirement)) {
+          errors.push(
+            formatIssue(
+              card,
+              "Effects with timing 'on_event' must declare triggerRequirement as 'mandatory' or 'optional'.",
+              effectIndex,
+              null,
+            ),
+          );
+        }
+        if (!VALID_TRIGGER_TIMINGS.has(effect.triggerTiming)) {
+          errors.push(
+            formatIssue(
+              card,
+              "Effects with timing 'on_event' must declare triggerTiming as 'if' or 'when'.",
+              effectIndex,
+              null,
+            ),
+          );
+        }
       } else if (effect.event) {
         if (!VALID_EVENTS.has(effect.event)) {
           errors.push(
@@ -422,6 +464,85 @@ export function validateCardDatabase() {
           ),
         );
       }
+      if (effect.activationZones !== undefined) {
+        if (
+          !Array.isArray(effect.activationZones) ||
+          effect.activationZones.length === 0
+        ) {
+          errors.push(
+            formatIssue(
+              card,
+              'Effect "activationZones" must be a non-empty array.',
+              effectIndex,
+              null,
+            ),
+          );
+        } else {
+          const uniqueZones = new Set(effect.activationZones);
+          if (uniqueZones.size !== effect.activationZones.length) {
+            errors.push(
+              formatIssue(
+                card,
+                'Effect "activationZones" cannot contain duplicates.',
+                effectIndex,
+                null,
+              ),
+            );
+          }
+          for (const zone of uniqueZones) {
+            if (!VALID_ACTIVATION_ZONES.has(zone)) {
+              errors.push(
+                formatIssue(
+                  card,
+                  `Invalid activation zone "${zone}".`,
+                  effectIndex,
+                  null,
+                ),
+              );
+            }
+          }
+          if (
+            effect.requireZone &&
+            !uniqueZones.has(effect.requireZone)
+          ) {
+            errors.push(
+              formatIssue(
+                card,
+                '"requireZone" must be included in "activationZones" when both are declared.',
+                effectIndex,
+                null,
+              ),
+            );
+          }
+        }
+      }
+      if (
+        effect.usagePolicy !== undefined &&
+        !VALID_USAGE_POLICIES.has(effect.usagePolicy)
+      ) {
+        errors.push(
+          formatIssue(
+            card,
+            'Effect "usagePolicy" must be "use" or "activate".',
+            effectIndex,
+            null,
+          ),
+        );
+      }
+      if (
+        effect.usagePolicy !== undefined &&
+        effect.oncePerTurn !== true &&
+        !effect.oncePerDuel
+      ) {
+        errors.push(
+          formatIssue(
+            card,
+            'Effect "usagePolicy" requires oncePerTurn or oncePerDuel.',
+            effectIndex,
+            null,
+          ),
+        );
+      }
       if (
         effect.requiresSourceAtResolution !== undefined &&
         typeof effect.requiresSourceAtResolution !== "boolean"
@@ -447,6 +568,22 @@ export function validateCardDatabase() {
               .map((target) => target.id)
           : [],
       );
+      for (const target of Array.isArray(effect.targets) ? effect.targets : []) {
+        if (
+          target?.intent !== undefined &&
+          target.intent !== "cost" &&
+          target.intent !== "target"
+        ) {
+          errors.push(
+            formatIssue(
+              card,
+              `Invalid target intent "${target.intent}".`,
+              effectIndex,
+              null,
+            ),
+          );
+        }
+      }
       const costTargetIds = new Set(
         Array.isArray(effect.targets)
           ? effect.targets

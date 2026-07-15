@@ -47,10 +47,28 @@ export function canChangePosition(card) {
   return true;
 }
 
-export function changeMonsterPosition(card, newPosition) {
-  if (newPosition !== "attack" && newPosition !== "defense") return;
-  if (!this.canChangePosition(card)) return;
-  if (!card || card.position === newPosition) return;
+export async function changeMonsterPosition(card, newPosition) {
+  const actor =
+    card?.owner === "player"
+      ? this.player
+      : card?.owner === "bot"
+        ? this.bot
+        : null;
+  const guard = this.guardActionStart?.({
+    actor,
+    kind: "change_position",
+    phaseReq: ["main1", "main2"],
+  });
+  if (guard?.ok === false) return guard;
+  if (newPosition !== "attack" && newPosition !== "defense") {
+    return { ok: false, reason: "invalid_position" };
+  }
+  if (!this.canChangePosition(card)) {
+    return { ok: false, reason: "position_change_not_allowed" };
+  }
+  if (!card || card.position === newPosition) {
+    return { ok: false, reason: "position_unchanged" };
+  }
 
   const previousPosition = card.position;
 
@@ -69,13 +87,20 @@ export function changeMonsterPosition(card, newPosition) {
     } Position.`,
   );
 
-  this.emit("position_change", {
+  const eventResult = await this.emit("position_change", {
     card,
-    player: card.owner === "player" ? this.player : this.bot,
+    player: actor,
     fromPosition: previousPosition,
     toPosition: newPosition,
     wasFlipped,
   });
 
   this.updateBoard();
+  return {
+    ok: eventResult?.ok !== false,
+    success: eventResult?.ok !== false,
+    needsSelection: eventResult?.needsSelection === true,
+    card,
+    eventResult,
+  };
 }

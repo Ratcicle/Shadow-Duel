@@ -121,14 +121,6 @@ export async function collectPositionChangeTriggers(payload) {
     if (!effect || effect.timing !== "on_event") return;
     if (effect.event !== "position_change") return;
 
-    if (this.isEffectNegated(sourceCard)) {
-      debugTriggerLog(
-        this,
-        `[position_change] ${sourceCard.name} effects are negated, skipping effect.`,
-      );
-      return;
-    }
-
     const isBoardSource =
       sourceZone === "field" ||
       sourceZone === "spellTrap" ||

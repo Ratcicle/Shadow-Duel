@@ -80,6 +80,8 @@ export const arcanistCards = [
       {
         id: "arcanist_apprentice_search_spell",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "after_summon",
         requireSelfAsSummoned: true,
         summonMethods: ["normal"],
@@ -297,6 +299,8 @@ export const arcanistCards = [
       {
         id: "viridis_arcanist_life_recover",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "card_equipped",
         oncePerTurn: true,
         oncePerTurnName: "viridis_arcanist_life_recover",
@@ -444,6 +448,8 @@ export const arcanistCards = [
       {
         id: "albus_arcanist_ice_recover",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "card_equipped",
         requireZone: "field",
         requireFaceup: true,
@@ -495,6 +501,8 @@ export const arcanistCards = [
       {
         id: "master_mirrors_arcanist_shuffle_draw",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "after_summon",
         summonMethods: ["normal", "tribute"],
         requireSelfAsSummoned: true,
@@ -534,6 +542,8 @@ export const arcanistCards = [
       {
         id: "master_mirrors_arcanist_revive",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "card_equipped",
         oncePerTurn: true,
         oncePerTurnName: "master_mirrors_arcanist_revive",
@@ -799,6 +809,8 @@ export const arcanistCards = [
       {
         id: "arcanist_ink_river_counter_normal_spell",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "effect_activated",
         requireZone: "spellTrap",
         requireFaceup: true,
@@ -827,6 +839,8 @@ export const arcanistCards = [
       {
         id: "arcanist_ink_river_counter_field_spell_effect",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "effect_activated",
         requireZone: "spellTrap",
         requireFaceup: true,
@@ -977,6 +991,8 @@ export const arcanistCards = [
       {
         id: "arcanist_grand_library_battle_draw",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "battle_destroy",
         requireZone: "fieldSpell",
         requireFaceup: true,
@@ -1018,6 +1034,8 @@ export const arcanistCards = [
       {
         id: "elementalist_master_protection",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "after_summon",
         requireSelfAsSummoned: true,
         requireFaceup: true,
@@ -1034,6 +1052,8 @@ export const arcanistCards = [
       {
         id: "elementalist_master_spell_buff",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "spell_activated",
         requireZone: "field",
         requireFaceup: true,
@@ -1053,6 +1073,8 @@ export const arcanistCards = [
       {
         id: "elementalist_master_destroy",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "card_equipped",
         oncePerTurn: true,
         oncePerTurnName: "elementalist_master_destroy",
@@ -1100,6 +1122,8 @@ export const arcanistCards = [
       {
         id: "azrath_spell_debuff",
         timing: "on_event",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "spell_activated",
         requireZone: "field",
         requireFaceup: true,
@@ -1122,6 +1146,8 @@ export const arcanistCards = [
       {
         id: "azrath_equip_halve",
         timing: "on_event",
+        triggerRequirement: "optional",
+        triggerTiming: "if",
         event: "card_equipped",
         oncePerTurn: true,
         oncePerTurnName: "azrath_equip_halve",

@@ -114,8 +114,11 @@ Campos frequentes:
 - `condition`: condição legada usada por alguns triggers específicos.
 - `actions`: lista sequencial de actions. Obrigatória para efeitos ativos; `passive`
   usa `passive: {...}`.
-- `requireZone`: restringe a zona do card fonte (`field`, `hand`, `graveyard`,
-  `spellTrap`, `fieldSpell`).
+- `requireZone`: restringe a zona do card fonte a uma única zona (`field`,
+  `hand`, `graveyard`, `banished`, `spellTrap`, `fieldSpell`).
+- `activationZones`: lista de zonas nas quais um efeito rápido pode ser
+  ativado. Use para efeitos com mais de uma zona legal ou permissões fora do
+  padrão.
 - `requirePhase`: fase ou lista de fases, como `["main1", "main2"]`.
 - `requireFaceup`: exige que a fonte esteja face-up.
 - `requireEmptyField`: exige campo de monstros vazio.
@@ -123,6 +126,8 @@ Campos frequentes:
 - `oncePerTurnLimit`: limite numerico opcional para efeitos com mais de 1 uso por
   turno. Se omitido, `oncePerTurn: true` continua significando 1 uso.
 - `oncePerDuel`, `oncePerDuelName`: controle por duelo.
+- `usagePolicy`: use `"use"` quando negar a ativação ainda consumir o limite e
+  `"activate"` quando negar a própria ativação liberar uma nova tentativa.
 - `promptUser`, `promptMessage`, `customPromptMethod`: controle de confirmação
   para triggers opcionais.
 - `isQuickEffect`: marca efeito rápido de monstro; normalmente combine com
@@ -133,6 +138,30 @@ Campos frequentes:
 Observação: `manualActivationOnly` aparece em cartas antigas, mas não é uma regra
 genérica validada pelo engine. Não dependa dele para nova mecânica sem confirmar
 o fluxo de ativação.
+
+### Zonas e transação de ativação
+
+O Chain System infere somente os casos padrão: Trap setada, Quick-Play Spell da
+mão ou setada e Quick Effect de monstro no campo. Efeitos ativados da mão,
+Cemitério ou banimento devem declarar `requireZone` ou `activationZones`. Trap
+ativada da mão sempre exige declaração explícita.
+
+```js
+{
+  id: "effect_from_grave_or_banished",
+  timing: "manual",
+  speed: 2,
+  activationZones: ["graveyard", "banished"],
+  oncePerTurn: true,
+  usagePolicy: "use"
+}
+```
+
+Uma ativação segue a ordem: validar, selecionar o custo, comprometer a fonte,
+pagar o custo, declarar os alvos e criar o Chain Link. Targets com
+`intent: "cost"` alimentam somente `activationCosts`; os demais são alvos
+declarados. Escolhas não-targeting durante a resolução pertencem ao contrato da
+action, não a `effects[].targets`.
 
 ## Timings suportados
 

@@ -70,6 +70,7 @@ export {
 export { handleChooseActionCase } from "./choice.js";
 export {
   handleNegateActivation,
+  handleNegateEffect,
   handleNegateSummonOrActivationAndDestroy,
 } from "./negation.js";
 

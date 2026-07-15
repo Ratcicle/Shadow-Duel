@@ -10,6 +10,16 @@ import {
   getUIText,
 } from "../../core/i18n.js";
 
+export function getEffectDisplayLabel(effect) {
+  if (!effect) return "";
+  return (
+    effect.activationLabel ||
+    effect.promptMessage ||
+    effect.id ||
+    ""
+  );
+}
+
 /**
  * Unified trap activation modal - handles both manual activation and chain response
  * @this {import('../Renderer.js').default}
@@ -108,6 +118,13 @@ export function showUnifiedTrapModal(options = {}) {
         getCardDisplayDescription(card) || card.description || "";
       cardDesc.innerHTML = descText.replace(/\n/g, "<br>");
       cardInfo.appendChild(cardName);
+      const effectLabel = getEffectDisplayLabel(item.effect);
+      if (effectLabel) {
+        const effectName = document.createElement("div");
+        effectName.className = "trap-effect-name";
+        effectName.textContent = effectLabel;
+        cardInfo.appendChild(effectName);
+      }
       cardInfo.appendChild(cardDesc);
       modal.appendChild(cardInfo);
 
@@ -167,6 +184,13 @@ export function showUnifiedTrapModal(options = {}) {
         name.className = "trap-card-name";
         name.textContent = getCardDisplayName(card) || card.name || "";
         info.appendChild(name);
+        const effectLabel = getEffectDisplayLabel(effect);
+        if (effectLabel) {
+          const effectName = document.createElement("div");
+          effectName.className = "trap-effect-name";
+          effectName.textContent = effectLabel;
+          info.appendChild(effectName);
+        }
 
         // Activate button per card
         const activateBtn = document.createElement("button");

@@ -1,17 +1,58 @@
 import { isAI } from "../Player.js";
+import { FAST_EFFECT_STATES } from "./timing.js";
+
+function cleanupChainWindow(chainSystem) {
+  chainSystem.log("[ChainSystem] Cleaning up chain window");
+  chainSystem.chainWindowOpen = false;
+  chainSystem.chainWindowContext = null;
+  chainSystem.chainStack = [];
+  chainSystem.currentChainLevel = 0;
+  chainSystem.activeChainId = null;
+  chainSystem.currentResolvingLink = null;
+  chainSystem.cardsBeingResolved.clear();
+  chainSystem.log("[ChainSystem] Chain window closed successfully");
+}
 
 /**
  * Open a chain window for responses
  * @param {ChainContext} context - Context that triggered the chain window
- * @returns {Promise<void>}
+ * @param {Object} options - Explicit priority and prepared activation data
+ * @returns {Promise<Object>}
  */
-export async function openChainWindow(context) {
-  if (!this.game || this.isResolving) {
+export async function openChainWindow(context = {}, options = {}) {
+  if (!this.game || this.isResolving || this.chainWindowOpen) {
     this.log(
-      "[ChainSystem] Cannot open chain window: game missing or chain resolving",
+      "[ChainSystem] Cannot open chain window: game missing or timing is busy",
     );
-    return;
+    return {
+      ok: false,
+      success: false,
+      chainBuilt: false,
+      needsSelection: false,
+      reason: "chain_window_busy",
+    };
   }
+
+  const firstPlayer = options.firstPlayer || context.firstPlayer || null;
+  const secondPlayer =
+    options.secondPlayer || this.getOpponent?.(firstPlayer) || null;
+  if (!firstPlayer) {
+    return {
+      ok: false,
+      success: false,
+      chainBuilt: false,
+      needsSelection: false,
+      reason: "missing_initial_priority_player",
+    };
+  }
+
+  const preparedActivations = Array.isArray(options.preparedActivations)
+    ? options.preparedActivations.filter(Boolean)
+    : Array.isArray(context.preparedActivations)
+      ? context.preparedActivations.filter(Boolean)
+      : context.preparedActivation
+        ? [context.preparedActivation]
+        : [];
 
   this.log(
     `[ChainSystem] Opening chain window: ${context?.type}`,
@@ -22,81 +63,99 @@ export async function openChainWindow(context) {
   this.chainWindowContext = context;
   this.chainStack = [];
   this.currentChainLevel = 0;
+  this.activeChainId = null;
   this.chainEventCompletions = [];
   this.chainTriggerEffectsOffered = new Map();
+  this.resetChainFinalizationState?.("new_chain");
 
-  // If there's a triggering card/effect, add it as Chain Link 1
-  if (context?.preparedActivation) {
+  // Phase 3 will own collection/order; Phase 2 only consumes an ordered list.
+  for (const preparedActivation of preparedActivations) {
     const rootLink = this.addToChain({
-      ...context.preparedActivation,
+      ...preparedActivation,
       context,
     });
     const publication = await this.publishChainLinkActivation?.(rootLink);
     await this.appendActivationTriggerPackages?.(publication, context);
-  } else if (
-    context?.card &&
-    context?.effect &&
-    context?.player &&
-    context.addTriggerToChain !== false &&
-    context.skipTriggerLink !== true
-  ) {
-    const triggerZone =
-      context?.zone || this.determineCardZone(context.card, context.player);
-    this.addToChain(
-      context.card,
-      context.player,
-      context.effect,
-      context,
-      null,
-      triggerZone,
-    );
   }
 
-  // Determine priority order
-  // Non-turn player gets first response opportunity
-  const triggerPlayer = context?.triggerPlayer || this.getCurrentTurnPlayer();
-  const respondingPlayer = this.getOpponent(triggerPlayer);
-
-  // Offer response to non-trigger player first
   this.log(
-    `[ChainSystem] Offering chain responses (first: ${respondingPlayer?.id}, second: ${triggerPlayer?.id})`,
+    `[ChainSystem] Offering chain responses (first: ${firstPlayer?.id}, second: ${secondPlayer?.id})`,
   );
-  await this.offerChainResponses(respondingPlayer, triggerPlayer, context);
+  const responseMetadata = await this.offerChainResponses(
+    firstPlayer,
+    secondPlayer,
+    context,
+    { initialPasses: options.initialPasses || 0 },
+  );
+  const chainBuilt = this.chainStack.length > 0;
+  const chainId = this.activeChainId;
+  const lastLink = this.getLastChainLink?.() || null;
+  const lastLinkController = lastLink?.controller || null;
   this.log(
     `[ChainSystem] Chain responses complete, resolving chain (${this.chainStack.length} links)`,
   );
 
-  // Resolve the chain
-  const resolutionResult = await this.resolveChain();
+  if (!chainBuilt) {
+    cleanupChainWindow(this);
+    return {
+      ok: true,
+      success: true,
+      chainBuilt: false,
+      chainId: null,
+      lastLinkController: null,
+      needsSelection: false,
+      responses: responseMetadata,
+    };
+  }
+
+  this.transitionFastEffectState?.(FAST_EFFECT_STATES.RESOLVING_CHAIN, {
+    chainId,
+    lastLinkController,
+    priorityPlayer: null,
+    consecutivePasses: responseMetadata?.consecutivePasses || 0,
+  });
+
+  let resolutionResult;
+  try {
+    resolutionResult = await this.resolveChain();
+  } catch (error) {
+    cleanupChainWindow(this);
+    throw error;
+  }
   if (resolutionResult?.needsSelection) {
     const pendingResolution =
       this.startPendingChainSelection?.(resolutionResult);
     if (pendingResolution && typeof pendingResolution.then === "function") {
-      return await pendingResolution;
+      resolutionResult = await pendingResolution;
+    } else {
+      this.log("[ChainSystem] Chain resolution paused for selection");
+      return {
+        ok: true,
+        success: false,
+        chainBuilt: true,
+        chainId,
+        lastLinkController,
+        needsSelection: true,
+        responses: responseMetadata,
+        resolutionResult,
+      };
     }
-    this.log(`[ChainSystem] Chain resolution paused for selection`);
-    return resolutionResult;
   }
   this.log(`[ChainSystem] Chain resolution complete`);
-  await this.completeActivationTriggerPackages?.();
-
-  // Clean up
-  this.log(`[ChainSystem] Cleaning up chain window`);
-  this.chainWindowOpen = false;
-  this.chainWindowContext = null;
-  this.chainStack = [];
-  this.currentChainLevel = 0;
-  this.cardsBeingResolved.clear();
-  this.log(`[ChainSystem] Chain window closed successfully`);
-  if (typeof this.game?.flushPendingChainEvents === "function") {
-    const eventFlushResult = await this.game.flushPendingChainEvents({
-      reason: "chain_window_closed",
-    });
-    if (eventFlushResult?.needsSelection) {
-      return eventFlushResult;
-    }
+  if (this.chainWindowOpen) {
+    await this.completeActivationTriggerPackages?.();
+    cleanupChainWindow(this);
   }
-  return resolutionResult;
+  return {
+    ok: resolutionResult?.success !== false,
+    success: resolutionResult?.success !== false,
+    chainBuilt: true,
+    chainId,
+    lastLinkController,
+    needsSelection: false,
+    responses: responseMetadata,
+    resolutionResult,
+  };
 }
 
 /**
@@ -104,12 +163,28 @@ export async function openChainWindow(context) {
  * @param {Object} firstPlayer - First player to respond
  * @param {Object} secondPlayer - Second player to respond
  * @param {ChainContext} context
+ * @param {Object} options - Initial pass count for phase-transition intent
+ * @returns {Promise<Object>} Negotiation metadata
  */
-export async function offerChainResponses(firstPlayer, secondPlayer, context) {
-  let consecutivePasses = 0;
+export async function offerChainResponses(
+  firstPlayer,
+  secondPlayer,
+  context,
+  options = {},
+) {
+  let consecutivePasses = Math.max(0, Number(options.initialPasses || 0));
   let currentResponder = firstPlayer;
+  let offers = 0;
+  let activations = 0;
+  let lastActivator = null;
 
-  while (consecutivePasses < 2) {
+  while (consecutivePasses < 2 && currentResponder) {
+    offers += 1;
+    this.recordFastEffectPriority?.(currentResponder, "offered", {
+      consecutivePasses,
+      chainId: this.activeChainId,
+      lastLinkController: this.getLastChainLink?.()?.controller || null,
+    });
     const response = await this.offerChainResponse(currentResponder, context);
 
     if (response) {
@@ -125,32 +200,53 @@ export async function offerChainResponses(firstPlayer, secondPlayer, context) {
           }`,
         );
         consecutivePasses++;
+        this.recordFastEffectPriority?.(currentResponder, "pass", {
+          consecutivePasses,
+          chainId: this.activeChainId,
+        });
       } else {
-        // Player activated something, reset pass counter
         consecutivePasses = 0;
         const responseLink = this.addToChain(preparation.preparedActivation);
+        activations += 1;
+        lastActivator = currentResponder;
         const publication = await this.publishChainLinkActivation?.(responseLink);
         await this.appendActivationTriggerPackages?.(
           publication,
           response.context || context,
         );
+        this.recordFastEffectPriority?.(currentResponder, "activate", {
+          consecutivePasses,
+          chainId: responseLink.chainId,
+          linkId: responseLink.linkId,
+          lastLinkController: currentResponder,
+        });
 
         this.log(
           `${currentResponder.id} added ${response.card.name} to chain (Level ${this.currentChainLevel})`,
         );
       }
     } else {
-      // Player passed
       consecutivePasses++;
+      this.recordFastEffectPriority?.(currentResponder, "pass", {
+        consecutivePasses,
+        chainId: this.activeChainId,
+        lastLinkController: this.getLastChainLink?.()?.controller || null,
+      });
       this.log(`${currentResponder.id} passed`);
     }
 
-    // Switch responder
     currentResponder =
       currentResponder === firstPlayer ? secondPlayer : firstPlayer;
   }
 
   this.log(`Chain building complete with ${this.chainStack.length} links`);
+  return {
+    offers,
+    activations,
+    consecutivePasses,
+    lastActivator,
+    chainBuilt: this.chainStack.length > 0,
+  };
 }
 
 /**

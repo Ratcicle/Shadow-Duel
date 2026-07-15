@@ -73,70 +73,60 @@ export async function resolveEvent(eventName, payload, options = {}) {
     );
   }
 
-  let triggerPackage = null;
-  try {
-    if (
-      this.effectEngine &&
-      typeof this.effectEngine.collectEventTriggers === "function"
-    ) {
-      triggerPackage = await this.effectEngine.collectEventTriggers(
-        eventName,
-        payload,
-      );
-    }
-  } catch (err) {
-    console.error(`[Game] Failed to collect triggers for "${eventName}":`, err);
-  }
-
+  const occurrence = this.chainSystem?.createTriggerOccurrence?.(
+    eventName,
+    payload,
+    {
+      atomicGroupId: options.atomicGroupId ?? payload?.atomicGroupId ?? null,
+      sequence: eventCounter,
+    },
+  );
   let entries = [];
   let orderRule = null;
   let onComplete = null;
-  if (Array.isArray(triggerPackage)) {
-    entries = triggerPackage;
-  } else if (triggerPackage && typeof triggerPackage === "object") {
-    entries = Array.isArray(triggerPackage.entries)
-      ? triggerPackage.entries
-      : [];
-    orderRule =
-      typeof triggerPackage.orderRule === "string"
-        ? triggerPackage.orderRule
-        : null;
-    onComplete =
-      typeof triggerPackage.onComplete === "function"
-        ? triggerPackage.onComplete
-        : null;
-  }
-
-  const order = entries
-    .map((entry) => entry?.summary)
-    .filter((value) => typeof value === "string" && value.trim().length > 0);
-
-  if (eventName === "battle_destroy") {
-    this.devLog("BATTLE_DESTROY_TRIGGERS", {
-      summary: `entries=${entries.length}: ${entries
-        .map((entry) => entry?.summary || entry?.effect?.id)
-        .filter(Boolean)
-        .join(", ")}`,
-    });
-  }
-
-  this.devLog("TRIGGERS_COLLECTED", {
-    summary: `${eventName} (${entries.length})`,
-    event: eventName,
-    count: entries.length,
-    order,
-    orderRule,
-    depth,
-  });
 
   let resolutionResult = null;
   try {
     if (collectTriggersOnly) {
+      let triggerPackage = null;
+      try {
+        triggerPackage = await this.effectEngine?.collectEventTriggers?.(
+          eventName,
+          payload,
+        );
+      } catch (err) {
+        console.error(`[Game] Failed to collect triggers for "${eventName}":`, err);
+      }
+      entries = Array.isArray(triggerPackage)
+        ? triggerPackage
+        : Array.isArray(triggerPackage?.entries)
+          ? triggerPackage.entries
+          : [];
+      orderRule = triggerPackage?.orderRule || null;
+      onComplete =
+        typeof triggerPackage?.onComplete === "function"
+          ? triggerPackage.onComplete
+          : null;
+      if (occurrence) {
+        occurrence.entries = entries;
+        occurrence.entriesProvided = true;
+        occurrence.orderRule = orderRule;
+        occurrence.onComplete = onComplete;
+      }
+      this.devLog("TRIGGERS_COLLECTED", {
+        summary: `${eventName} (${entries.length})`,
+        event: eventName,
+        count: entries.length,
+        order: entries.map((entry) => entry?.summary).filter(Boolean),
+        orderRule,
+        depth,
+      });
       resolutionResult = {
         ok: true,
         collectedOnly: true,
         eventName,
         payload,
+        occurrence,
         entries,
         orderRule,
         onComplete,
@@ -148,21 +138,14 @@ export async function resolveEvent(eventName, payload, options = {}) {
       this.chainSystem?.isPreparingActivation === true ||
       this.chainSystem?.isChainWindowOpen?.() === true
     ) {
-      resolutionResult = this.queuePendingChainEvent({
-        eventName,
-        payload,
-        entries,
-        orderRule,
-        onComplete,
-      });
+      resolutionResult = this.queueTriggerOccurrence(occurrence);
     } else {
       resolutionResult = await this.resolveEventEntries(
         eventName,
         payload,
-        entries,
+        null,
         {
-          onComplete,
-          orderRule,
+          occurrence,
         },
       );
     }
@@ -180,7 +163,9 @@ export async function resolveEvent(eventName, payload, options = {}) {
         cleanupState.selectionActive === true ||
         this.selectionState === "selecting" ||
         this.selectionState === "confirming" ||
-        this.pendingEventSelection != null;
+        this.pendingEventSelection != null ||
+        this.pendingTriggerSelection != null ||
+        this.chainSystem?.pendingTriggerSelection != null;
       if (
         (eventName !== "target_selection_options" &&
           cleanupState.selectionActive) ||
@@ -223,225 +208,136 @@ export async function resolveEvent(eventName, payload, options = {}) {
   );
 }
 
-/**
- * Queues the already-collected trigger package for FIFO processing after the
- * current Chain. Event listeners and analytics have already observed it.
- * @this {import('../../Game.js').default}
- */
-export function queuePendingChainEvent(entry = {}) {
-  if (!entry?.eventName) {
-    return { ok: false, reason: "missing_event", deferred: false };
-  }
-  if (!Array.isArray(this.pendingChainEvents)) {
-    this.pendingChainEvents = [];
-  }
-  this.pendingChainEvents.push({
-    ...entry,
-    payload: entry.payload || {},
-    entries: Array.isArray(entry.entries) ? entry.entries : [],
-    queuedOnTurn: this.turnCounter,
-  });
-  this.devLog?.("CHAIN_EVENT_DEFERRED", {
-    summary: `${entry.eventName} queued until Chain completion`,
-    event: entry.eventName,
-    pendingCount: this.pendingChainEvents.length,
-  });
-  return {
-    ok: true,
-    deferred: true,
-    eventName: entry.eventName,
-    triggerCount: Array.isArray(entry.entries) ? entry.entries.length : 0,
-    results: [],
+/** Queue a canonical event occurrence for the next post-Chain Trigger check. */
+export function queueTriggerOccurrence(occurrence) {
+  const result = this.chainSystem?.queueTriggerOccurrence?.(occurrence) || {
+    ok: false,
+    deferred: false,
+    reason: "trigger_coordinator_unavailable",
   };
+  this.devLog?.("CHAIN_EVENT_DEFERRED", {
+    summary: `${occurrence?.eventName || "event"} queued until Chain completion`,
+    event: occurrence?.eventName || null,
+    pendingCount:
+      this.chainSystem?.pendingTriggerOccurrences?.length || 0,
+  });
+  return result;
 }
 
 /**
- * Resolves deferred event packages in occurrence order. Each triggered effect
- * re-enters the canonical activation pipeline and therefore opens its own
- * response window without nesting inside the previous Chain.
- * @this {import('../../Game.js').default}
+ * Phase 9 compatibility adapter. New callers must create/queue occurrences.
  */
-export async function flushPendingChainEvents({ reason = null } = {}) {
+export function queuePendingChainEvent(entry = {}) {
+  const occurrence =
+    entry?.occurrence ||
+    this.chainSystem?.createTriggerOccurrence?.(
+      entry.eventName,
+      entry.payload || {},
+      {
+        entries: Array.isArray(entry.entries) ? entry.entries : [],
+        entriesProvided: Object.hasOwn(entry, "entries"),
+        orderRule: entry.orderRule || null,
+        onComplete: entry.onComplete || null,
+        atomicGroupId: entry.atomicGroupId || null,
+      },
+    );
+  return this.queueTriggerOccurrence(occurrence);
+}
+
+/** Drain one complete post-Chain occurrence batch into a single SEGOC check. */
+export async function flushPendingTriggerOccurrences({ reason = null } = {}) {
+  const chain = this.chainSystem;
   if (this._flushingPendingChainEvents === true) {
     return { ok: true, flushed: 0, deferred: true };
   }
   if (
-    this.chainSystem?.isChainResolving?.() === true ||
-    this.chainSystem?.isChainWindowOpen?.() === true ||
-    this.chainSystem?.isPreparingActivation === true
+    chain?.isChainResolving?.() === true ||
+    chain?.isChainWindowOpen?.() === true ||
+    chain?.isPreparingActivation === true
   ) {
     return { ok: true, flushed: 0, deferred: true };
   }
-  if (!Array.isArray(this.pendingChainEvents) || this.pendingChainEvents.length === 0) {
+  if (!Array.isArray(chain?.pendingTriggerOccurrences) ||
+      chain.pendingTriggerOccurrences.length === 0) {
     return { ok: true, flushed: 0 };
   }
 
   this._flushingPendingChainEvents = true;
+  chain._flushingPendingTriggerOccurrences = true;
   let flushed = 0;
+  let chainBuilt = false;
   try {
-    while (this.pendingChainEvents.length > 0) {
-      if (
-        this.chainSystem?.isChainResolving?.() === true ||
-        this.chainSystem?.isChainWindowOpen?.() === true
-      ) {
-        break;
-      }
-      const entry = this.pendingChainEvents.shift();
-      if (!entry?.eventName) continue;
-      flushed += 1;
+    while (chain.pendingTriggerOccurrences.length > 0) {
+      const occurrences = chain.pendingTriggerOccurrences.splice(0);
+      flushed += occurrences.length;
       this.devLog?.("CHAIN_EVENT_FLUSHED", {
-        summary: `${entry.eventName} resumed after Chain`,
-        event: entry.eventName,
+        summary: `${occurrences.length} occurrence(s) resumed after Chain`,
         reason,
       });
-      const result = await this.resolveEventEntries(
-        entry.eventName,
-        entry.payload || {},
-        entry.entries || [],
-        {
-          onComplete: entry.onComplete || null,
-          orderRule: entry.orderRule || null,
-        },
-      );
-      if (result?.needsSelection) {
-        return { ...result, flushed };
+      const result = await chain.resolveTriggerOccurrences(occurrences, {
+        context: { type: "post_chain", event: "post_chain", reason },
+        deferPostChainWindow: true,
+      });
+      chainBuilt = chainBuilt || result?.chainBuilt === true;
+      if (result?.needsSelection || result?.ok === false) {
+        return { ...result, chainBuilt, flushed };
       }
     }
+    return { ok: true, success: true, chainBuilt, flushed };
   } finally {
+    chain._flushingPendingTriggerOccurrences = false;
     this._flushingPendingChainEvents = false;
   }
-  return { ok: true, flushed };
 }
 
-/**
- * Resolve event trigger entries sequentially
- * @this {import('../../Game.js').default}
- */
-export async function resolveEventEntries(
-  eventName,
-  payload,
-  entries,
-  {
-    onComplete = null,
-    orderRule = null,
-    startIndex = 0,
-    results = [],
-    selections = null,
-  } = {},
-) {
-  const resolvedResults = Array.isArray(results) ? results : [];
-  const start = Math.max(0, startIndex);
+/** Phase 9 compatibility adapter. */
+export async function flushPendingChainEvents(options = {}) {
+  return await this.flushPendingTriggerOccurrences(options);
+}
 
-  for (let i = start; i < entries.length; i += 1) {
-    const entry = entries[i];
-    const config = entry?.config || entry?.pipeline || entry;
-
-    if (eventName === "battle_destroy") {
-      this.devLog("BATTLE_DESTROY_ENTRY", {
-        summary: `entry[${i}] ${entry?.summary || "(unnamed)"} config=${!!config} activate=${typeof config?.activate}`,
-      });
-    }
-
-    if (!config || typeof config.activate !== "function") {
-      if (eventName === "battle_destroy") {
-        this.devLog("BATTLE_DESTROY_ENTRY", {
-          summary: `Skipping entry[${i}] - no activate function`,
-        });
-      }
-      continue;
-    }
-
-    if (eventName === "battle_destroy") {
-      this.devLog("BATTLE_DESTROY_ENTRY", {
-        summary: `Executing entry[${i}]`,
-      });
-    }
-
-    const result = await this.runActivationPipelineWait({
-      ...config,
-      selections: i === start ? selections : null,
-    });
-    resolvedResults.push({
-      id: entry?.summary || entry?.effect?.id || entry?.card?.name || null,
-      success: result?.success === true,
-      needsSelection: result?.needsSelection === true,
-      selectionContract: result?.selectionContract || null,
-    });
-    if (result?.needsSelection && result?.selectionContract) {
-      this.pendingEventSelection = {
-        eventName,
-        payload,
-        entries,
-        entryIndex: i,
-        results: resolvedResults,
-        orderRule,
-        onComplete,
-      };
-      return {
-        ok: true,
-        triggerCount: entries.length,
-        results: resolvedResults,
-        needsSelection: true,
-        selectionContract: result.selectionContract,
-      };
-    }
-  }
-
-  this.devLog("TRIGGERS_DONE", {
-    summary: `${eventName} (${entries.length})`,
-    event: eventName,
-    count: entries.length,
-    depth: this.eventResolutionDepth,
-  });
-
-  if (typeof onComplete === "function") {
-    try {
-      onComplete();
-    } catch (err) {
-      console.error(`[Game] Error running onComplete for "${eventName}":`, err);
-    }
-  }
-
+async function offerPostEventFastWindow(game, eventName, payload) {
   if (eventName === "after_summon" && payload?.player) {
-    await this.checkAndOfferTraps(eventName, {
-      ...payload,
-    });
-  } else if (eventName === "attack_declared") {
+    return await game.checkAndOfferTraps(eventName, { ...payload });
+  }
+  if (eventName === "position_change" && payload?.player) {
+    return await game.checkAndOfferTraps(eventName, { ...payload });
+  }
+  if (eventName === "attack_declared") {
     const defenderOwner = payload?.defenderOwner || null;
-    if (defenderOwner) {
-      // Determine opponent attack from the defender/card perspective.
-      const attackerOwnerId = payload?.attackerOwner?.id || null;
-      const defenderOwnerId = defenderOwner?.id || null;
-      const trapEventData = {
-        ...payload,
-        isOpponentAttack:
-          !!attackerOwnerId &&
-          !!defenderOwnerId &&
-          attackerOwnerId !== defenderOwnerId,
-      };
-      await this.checkAndOfferTraps(eventName, trapEventData);
-      if (trapEventData.attackRedirect) {
-        payload.attackRedirect = trapEventData.attackRedirect;
-      }
-      if (trapEventData.redirectedTarget) {
-        payload.redirectedTarget = trapEventData.redirectedTarget;
-      }
-      if (trapEventData.redirectedTargetOwner) {
-        payload.redirectedTargetOwner = trapEventData.redirectedTargetOwner;
-      }
+    const attackerOwnerId = payload?.attackerOwner?.id || null;
+    const defenderOwnerId = defenderOwner?.id || null;
+    const trapEventData = {
+      ...payload,
+      isOpponentAttack:
+        !!attackerOwnerId &&
+        !!defenderOwnerId &&
+        attackerOwnerId !== defenderOwnerId,
+    };
+    const timing = await game.checkAndOfferTraps(eventName, trapEventData);
+    if (trapEventData.attackRedirect) {
+      payload.attackRedirect = trapEventData.attackRedirect;
     }
-  } else if (eventName === "battle_damage") {
+    if (trapEventData.redirectedTarget) {
+      payload.redirectedTarget = trapEventData.redirectedTarget;
+    }
+    if (trapEventData.redirectedTargetOwner) {
+      payload.redirectedTargetOwner = trapEventData.redirectedTargetOwner;
+    }
+    return timing;
+  }
+  if (eventName === "battle_damage") {
     const defenderOwner = payload?.defenderOwner || payload?.targetOwner || null;
     if (payload?.attackerOwner && defenderOwner) {
-      await this.checkAndOfferTraps(eventName, {
+      return await game.checkAndOfferTraps(eventName, {
         ...payload,
         defenderOwner,
         targetOwner: payload?.targetOwner || defenderOwner,
         isOpponentAttack: payload.attackerOwner.id !== defenderOwner.id,
       });
     }
-  } else if (eventName === "battle_destroy") {
-    await this.checkAndOfferTraps(eventName, {
+  }
+  if (eventName === "battle_destroy") {
+    return await game.checkAndOfferTraps(eventName, {
       ...payload,
       target: payload?.destroyed || payload?.target || null,
       targetOwner:
@@ -457,15 +353,63 @@ export async function resolveEventEntries(
         null,
     });
   }
+  return null;
+}
+
+/** Resolve one event occurrence through the canonical SEGOC coordinator. */
+export async function resolveEventEntries(
+  eventName,
+  payload,
+  entries,
+  {
+    onComplete = null,
+    orderRule = null,
+    occurrence = null,
+  } = {},
+) {
+  const providedEntries = Array.isArray(entries);
+  const triggerOccurrence =
+    occurrence ||
+    this.chainSystem?.createTriggerOccurrence?.(eventName, payload || {}, {
+      entries: providedEntries ? entries : [],
+      entriesProvided: providedEntries,
+      onComplete,
+      orderRule,
+      atomicGroupId: payload?.atomicGroupId || null,
+    });
+  const result = await this.chainSystem?.resolveTriggerOccurrences?.(
+    triggerOccurrence ? [triggerOccurrence] : [],
+    {
+      actionPlayer:
+        payload?.player ||
+        payload?.attackerOwner ||
+        (this.turn === "player" ? this.player : this.bot),
+      context: {
+        ...(payload || {}),
+        type: eventName,
+        event: eventName,
+      },
+    },
+  ) || {
+    ok: true,
+    success: true,
+    chainBuilt: false,
+    triggerCount: 0,
+  };
+
+  let timing = null;
+  if (!result.needsSelection && result.chainBuilt !== true) {
+    timing = await offerPostEventFastWindow(this, eventName, payload || {});
+  }
 
   if (eventName === "battle_damage") {
     await presentDamageCalculationStatChanges(this);
   }
 
   return {
-    ok: true,
-    triggerCount: entries.length,
-    results: resolvedResults,
+    ...result,
+    results: result.results || [],
+    timing,
   };
 }
 

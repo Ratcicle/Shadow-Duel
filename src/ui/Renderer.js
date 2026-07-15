@@ -298,6 +298,8 @@ Renderer.prototype.showFusionMaterialSelection =
   selectionModals.showFusionMaterialSelection;
 Renderer.prototype.showCardGridSelectionModal =
   selectionModals.showCardGridSelectionModal;
+Renderer.prototype.showTriggerOrderModal =
+  selectionModals.showTriggerOrderModal;
 Renderer.prototype.showIgnitionActivateModal =
   selectionModals.showIgnitionActivateModal;
 Renderer.prototype.showShadowHeartCathedralModal =

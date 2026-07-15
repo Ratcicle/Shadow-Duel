@@ -60,26 +60,40 @@ function effectActivationAllowedByRestrictions(chainSystem, card, player, effect
 
 export function getCurrentChainActivationContext(context) {
   const lastLink = this.getLastChainLink?.();
-  if (!lastLink?.card || !lastLink?.player || !lastLink?.effect) return null;
-  const activationType =
-    lastLink.card.cardKind === "monster" ? "effect_activation" : "card_activation";
+  const controller = lastLink?.controller || null;
+  if (!lastLink?.card || !controller || !lastLink?.effect) return null;
+  const activationType = lastLink.responseContextType;
   return {
     ...(context || {}),
     originalContext: context || null,
     type: activationType,
     event: activationType,
     card: lastLink.card,
-    player: lastLink.player,
-    triggerPlayer: lastLink.player,
+    player: controller,
+    controller,
+    triggerPlayer: controller,
     effect: lastLink.effect,
-    activationZone: lastLink.zone || null,
+    activationZone: lastLink.activationZone || null,
     activationAttempt: {
+      ...(lastLink.activationAttempt || {}),
+      chainId: lastLink.chainId,
+      linkId: lastLink.linkId,
       card: lastLink.card,
-      player: lastLink.player,
+      controller,
+      // Phase 9 compatibility alias.
+      player: controller,
       effect: lastLink.effect,
-      activationZone: lastLink.zone || null,
-      negated: lastLink.negated === true,
+      effectId: lastLink.effectId,
+      activationKind: lastLink.activationKind,
+      activationZone: lastLink.activationZone || null,
+      activationNegated: lastLink.activationNegated === true,
+      // Phase 9 compatibility alias.
+      negated: lastLink.activationNegated === true,
     },
+    activationType,
+    activationKind: lastLink.activationKind,
+    effectKind: lastLink.effectKind,
+    responseContextType: lastLink.responseContextType,
     respondingToChainLink: lastLink,
     addTriggerToChain: false,
   };
@@ -247,7 +261,13 @@ function effectActionsCanResolveInChain(
  * @param {ChainContext} context
  * @returns {Object|null}
  */
-export function findActivatableEffect(card, context, ownerPlayer = null) {
+export function findActivatableEffect(
+  card,
+  context,
+  ownerPlayer = null,
+  activationZoneOverride = null,
+  effectFilter = null,
+) {
   if (!card?.effects || !Array.isArray(card.effects)) return null;
 
   // Map context type back to event name
@@ -266,6 +286,7 @@ export function findActivatableEffect(card, context, ownerPlayer = null) {
 
   for (const effect of card.effects) {
     if (!effect) continue;
+    if (effectFilter && effect !== effectFilter) continue;
 
     // For traps, look for on_activate, on_event, manual, or ignition timing
     if (card.cardKind === "trap") {
@@ -283,7 +304,9 @@ export function findActivatableEffect(card, context, ownerPlayer = null) {
         ) {
           if (effect.requireZone) {
             const sourceZone =
-              this.determineCardZone?.(card, ownerPlayer) || null;
+              activationZoneOverride ||
+              this.determineCardZone?.(card, ownerPlayer) ||
+              null;
             if (sourceZone !== effect.requireZone) {
               continue;
             }
@@ -359,6 +382,7 @@ export function findActivatableEffect(card, context, ownerPlayer = null) {
             effect,
             activeContext,
             ownerPlayer,
+            activationZoneOverride || "spellTrap",
           );
           if (
             Array.isArray(effect.conditions) &&
@@ -577,7 +601,7 @@ export function findActivatableEffect(card, context, ownerPlayer = null) {
           source: card,
           player: cardOwner,
           opponent: cardOwner ? this.game.getOpponent?.(cardOwner) : null,
-          activationZone: "spellTrap",
+          activationZone: activationZoneOverride || "spellTrap",
           defender: context.defender || context.target,
           attacker: context.attacker,
           summonedCard: context.summonedCard || context.card || null,
@@ -653,9 +677,9 @@ export function findActivatableEffect(card, context, ownerPlayer = null) {
             : card.owner === "bot"
               ? this.game.bot
               : null);
-        const activationZone = cardOwner?.hand?.includes?.(card)
-          ? "hand"
-          : "spellTrap";
+        const activationZone =
+          activationZoneOverride ||
+          (cardOwner?.hand?.includes?.(card) ? "hand" : "spellTrap");
         const ctx = {
           source: card,
           player: cardOwner,
@@ -758,6 +782,7 @@ export function findQuickMonsterEffect(
   context,
   player,
   activationZone = "field",
+  effectFilter = null,
 ) {
   if (!card?.effects || !Array.isArray(card.effects)) return null;
 
@@ -768,6 +793,7 @@ export function findQuickMonsterEffect(
 
   for (const effect of card.effects) {
     if (!effect) continue;
+    if (effectFilter && effect !== effectFilter) continue;
 
     if (!(effect.isQuickEffect || effect.speed === 2)) {
       continue;
@@ -787,11 +813,14 @@ export function findQuickMonsterEffect(
       continue;
     }
 
-    const requiredZone = effect.requireZone || null;
-    const zoneMatches =
-      activationZone === "field"
-        ? !requiredZone || requiredZone === "field"
-        : requiredZone === activationZone;
+    const declaredZones = Array.isArray(effect.activationZones)
+      ? effect.activationZones
+      : effect.requireZone
+        ? [effect.requireZone]
+        : null;
+    const zoneMatches = declaredZones
+      ? declaredZones.includes(activationZone)
+      : activationZone === "field";
     if (!zoneMatches) {
       continue;
     }
@@ -807,14 +836,6 @@ export function findQuickMonsterEffect(
       if (!allowedPhases.includes(this.game?.phase)) {
         continue;
       }
-    }
-
-    if (
-      activationZone === "field" &&
-      effectEngine?.isEffectNegated &&
-      effectEngine.isEffectNegated(card)
-    ) {
-      continue;
     }
 
     if (effect.oncePerTurn && effectEngine?.checkOncePerTurn && owner) {

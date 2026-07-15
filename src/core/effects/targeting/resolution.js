@@ -518,7 +518,9 @@ export function resolveTargets(targetDefs, ctx, selections) {
 
   if (needsSelection) {
     const selectionContract = {
-      kind: "target",
+      kind: activationContext.purpose || "target",
+      timing: activationContext.timing || "activation",
+      purpose: activationContext.purpose || "target",
       message: null,
       requirements,
       ui: {},

@@ -120,7 +120,7 @@ export async function executeSetSpellTrapAction(bot, game, action) {
     );
     return false;
   }
-  const result = game.setSpellOrTrap(card, resolvedIndex, bot);
+  const result = await game.setSpellOrTrap(card, resolvedIndex, bot);
   if (result && result.ok === false) {
     console.log(
       `[Bot.executeMainPhaseAction] Set spell/trap failed:`,

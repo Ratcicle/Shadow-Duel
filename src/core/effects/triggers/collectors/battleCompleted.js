@@ -85,11 +85,6 @@ export async function collectBattleCompletedTriggers(payload) {
       if (!effect || effect.timing !== "on_event") continue;
       if (effect.event !== "battle_completed") continue;
 
-      if (sourceZone === "field" && this.isEffectNegated(card)) {
-        debugTriggerLog(this, `${card.name} effects are negated, skipping effect.`);
-        continue;
-      }
-
       if (
         effect.requireFaceup === true &&
         sourceZone === "field" &&

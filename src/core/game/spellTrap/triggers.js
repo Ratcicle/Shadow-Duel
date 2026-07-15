@@ -3,26 +3,20 @@
 // Spell/Trap trigger methods for Game class — B.9 extraction
 // ─────────────────────────────────────────────────────────────────────────────
 
+import { FAST_EFFECT_ORIGINS } from "../../chain/timing.js";
+
 /**
  * Check and offer trap activations in response to an event.
  * Opens a chain window if activatable traps exist.
  * @param {string} event - The event that triggered this check.
  * @param {Object} eventData - Data associated with the event.
- * @returns {Promise<void>}
+ * @returns {Promise<Object|void>} Fast Effect Timing result.
  */
 export async function checkAndOfferTraps(event, eventData = {}) {
   this.devLog?.("CHECK_TRAPS", { summary: `Called for event: ${event}` });
   if (!this.player || this.disableTraps || this.disableChains) {
     this.devLog?.("CHECK_TRAPS", {
       summary: `Early exit: player=${!!this.player}, disableTraps=${this.disableTraps}, disableChains=${this.disableChains}`,
-    });
-    return;
-  }
-
-  // Evitar reentrância: se já existe um modal de trap aberto, não abrir outro
-  if (this.trapPromptInProgress) {
-    this.devLog?.("CHECK_TRAPS", {
-      summary: "Skipped: trapPromptInProgress=true",
     });
     return;
   }
@@ -50,8 +44,6 @@ export async function checkAndOfferTraps(event, eventData = {}) {
   this.devLog?.("CHECK_TRAPS", {
     summary: "Proceeding to open chain window",
   });
-  this.trapPromptInProgress = true;
-
   try {
     // Mapear evento para contexto de chain
     const contextType = this._mapEventToChainContext(event);
@@ -119,25 +111,38 @@ export async function checkAndOfferTraps(event, eventData = {}) {
         (this.turn === "player" ? this.player : this.bot),
     };
 
-    // Verificar se há cartas ativáveis antes de abrir chain window
-    const playerActivatable = this.chainSystem.getActivatableCardsInChain(
-      this.player,
-      context
-    );
-    const botActivatable = this.chainSystem.getActivatableCardsInChain(
-      this.bot,
-      context
-    );
-
-    if (playerActivatable.length === 0 && botActivatable.length === 0) {
-      return; // Nenhuma carta pode responder
-    }
-
-    // Abrir chain window através do ChainSystem
+    // A máquina consulta os candidatos somente na vez de cada jogador.
     this.devLog?.("CHECK_TRAPS", {
       summary: "Opening chain window via ChainSystem",
     });
-    await this.chainSystem.openEventWindow(context);
+    const origin =
+      event === "phase_start"
+        ? FAST_EFFECT_ORIGINS.PHASE_START
+        : event === "phase_end"
+          ? FAST_EFFECT_ORIGINS.PHASE_TRANSITION_INTENT
+          : event === "summon_attempt"
+            ? FAST_EFFECT_ORIGINS.SUMMON_ATTEMPT
+            : FAST_EFFECT_ORIGINS.ACTION_WITHOUT_CHAIN;
+    const actionPlayer =
+      eventData.player ||
+      eventData.attackerOwner ||
+      (this.turn === "player" ? this.player : this.bot);
+    const result = await this.chainSystem.runFastEffectTiming({
+      origin,
+      context,
+      actionPlayer,
+      priorityPlayer:
+        origin === FAST_EFFECT_ORIGINS.SUMMON_ATTEMPT
+          ? this.getOpponent?.(actionPlayer)
+          : null,
+      phaseIntent:
+        origin === FAST_EFFECT_ORIGINS.PHASE_TRANSITION_INTENT
+          ? {
+              fromPhase: context.fromPhase,
+              toPhase: context.toPhase,
+            }
+          : null,
+    });
     if (context.attackRedirect) {
       eventData.attackRedirect = context.attackRedirect;
     }
@@ -147,14 +152,9 @@ export async function checkAndOfferTraps(event, eventData = {}) {
     if (context.redirectedTargetOwner) {
       eventData.redirectedTargetOwner = context.redirectedTargetOwner;
     }
-    this.devLog?.("CHECK_TRAPS", {
-      summary: "Chain window closed, cleaning up",
-    });
+    return result;
   } finally {
-    this.trapPromptInProgress = false;
-    this.devLog?.("CHECK_TRAPS", {
-      summary: "Cleanup complete, trapPromptInProgress=false",
-    });
+    this.devLog?.("CHECK_TRAPS", { summary: "Timing coordinator complete" });
   }
 }
 
@@ -176,8 +176,11 @@ export function _mapEventToChainContext(event) {
     battle_damage: "battle_damage",
     battle_destroy: "battle_destroy",
     effect_targeted: "effect_targeted",
+    card_set: "action_without_chain",
+    normal_draw: "action_without_chain",
+    position_change: "action_without_chain",
   };
-  return eventToContext[event] || "card_activation";
+  return eventToContext[event] || "action_without_chain";
 }
 
 /**

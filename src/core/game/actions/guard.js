@@ -88,6 +88,16 @@ export function canStartAction(options = {}) {
   }
 
   if (
+    this.chainSystem?.isOpenGameState?.() === false &&
+    !allowDuringChainWindow
+  ) {
+    return blocked(
+      "BLOCKED_FAST_EFFECT_TIMING",
+      "Finalize a janela de Fast Effect antes de iniciar outra acao.",
+    );
+  }
+
+  if (
     actor &&
     actor.id &&
     actor.id !== this.turn &&

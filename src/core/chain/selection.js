@@ -13,6 +13,105 @@ export function effectRequiresTargets(effect) {
   );
 }
 
+export function getActivationCostTargetDefinitions(effect) {
+  return (effect?.targets || []).filter((target) => target?.intent === "cost");
+}
+
+export function getDeclaredTargetDefinitions(effect) {
+  return (effect?.targets || []).filter((target) => target?.intent !== "cost");
+}
+
+export async function getPlayerSelectionsForDefinitions(
+  card,
+  definitions,
+  player,
+  context,
+  options = {},
+) {
+  if (!Array.isArray(definitions) || definitions.length === 0) return {};
+  const effectEngine = this.game?.effectEngine;
+  if (!effectEngine) return null;
+  const purpose = options.purpose === "cost" ? "cost" : "target";
+  const allowCancel = options.allowCancel !== false;
+  const ctx = {
+    source: card,
+    sourceCard: card,
+    player,
+    opponent: this.getOpponent(player),
+    defender: context?.defender || context?.target,
+    target: context?.target || context?.defender || null,
+    attacker: context?.attacker,
+    attackerOwner: context?.attackerOwner,
+    defenderOwner: context?.defenderOwner,
+    activationZone: options.activationZone || context?.activationZone || null,
+    activationContext: {
+      ...(context?.activationContext || {}),
+      timing: "activation",
+      purpose,
+      autoSelectSingleTarget: isAI(player),
+      autoSelectTargets: isAI(player),
+    },
+  };
+  const targetResult = effectEngine.resolveTargets(definitions, ctx, null);
+  const baseTargets = targetResult?.targets || {};
+  if (targetResult?.ok === false && !targetResult?.needsSelection) return null;
+  if (!targetResult?.needsSelection) return baseTargets;
+  const contract = targetResult.selectionContract;
+  if (!contract) return null;
+  contract.kind = purpose;
+  contract.timing = "activation";
+  contract.purpose = purpose;
+  contract.ui = {
+    ...(contract.ui || {}),
+    allowCancel,
+    preventCancel: !allowCancel,
+  };
+
+  if (isAI(player) && this.game?.autoSelector) {
+    const autoResult = this.game.autoSelector.select(contract, {
+      owner: player,
+      selectionContract: contract,
+      selectionKind: purpose,
+    });
+    if (!autoResult?.ok) return null;
+    return {
+      ...baseTargets,
+      ...this.resolveSelectionsToCards(
+        autoResult.selections || {},
+        contract.requirements || [],
+        player,
+      ),
+    };
+  }
+
+  if (!this.game?.startTargetSelectionSession) return null;
+  return new Promise((resolve) => {
+    this.game.startTargetSelectionSession({
+      selectionContract: contract,
+      message:
+        contract.message ||
+        (purpose === "cost"
+          ? `Select activation cost for ${card.name}`
+          : `Select target(s) for ${card.name}`),
+      kind: purpose,
+      allowCancel,
+      preventCancel: !allowCancel,
+      execute: (selections) => {
+        resolve({
+          ...baseTargets,
+          ...this.resolveSelectionsToCards(
+            selections,
+            contract.requirements || [],
+            player,
+          ),
+        });
+        return { success: true, needsSelection: false };
+      },
+      onCancel: allowCancel ? () => resolve(null) : null,
+    });
+  });
+}
+
 /**
  * Get player selections for an effect that requires targets
  * @param {Object} card
@@ -22,8 +121,17 @@ export function effectRequiresTargets(effect) {
  * @returns {Promise<Object|null>}
  */
 export async function getPlayerSelectionsForEffect(card, effect, player, context) {
-  if (!this.effectRequiresTargets(effect)) {
-    return {};
+  const definitions = this.getDeclaredTargetDefinitions?.(effect) || [];
+  if (definitions.length === 0) return {};
+
+  if (typeof this.getPlayerSelectionsForDefinitions === "function") {
+    return this.getPlayerSelectionsForDefinitions(
+      card,
+      definitions,
+      player,
+      context,
+      { purpose: "target", allowCancel: true },
+    );
   }
 
   const effectEngine = this.game?.effectEngine;

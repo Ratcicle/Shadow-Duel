@@ -96,6 +96,7 @@ import {
 import { handleChooseActionCase, handleDeclareCardProperty } from "./choice.js";
 import {
   handleNegateActivation,
+  handleNegateEffect,
   handleNegateSummonOrActivationAndDestroy,
 } from "./negation.js";
 
@@ -374,6 +375,7 @@ export function registerDefaultHandlers(registry) {
     handleNegateSummonOrActivationAndDestroy,
   );
   registry.register("negate_activation", handleNegateActivation);
+  registry.register("negate_effect", handleNegateEffect);
 
   registry.register("search_any", handleAddFromZoneToHand);
 

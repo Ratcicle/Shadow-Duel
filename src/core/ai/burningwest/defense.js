@@ -417,17 +417,11 @@ function optionName(option) {
 
 function hasBurningWestDefenseResponseInChain(chainSystem, player) {
   const playerId = getPlayerId(player);
-  const links = [
-    ...asArray(chainSystem?.chainStack),
-    ...asArray(chainSystem?.stack),
-    ...asArray(chainSystem?.chain),
-    ...asArray(chainSystem?.getChainSummary?.())
-  ];
+  const links = asArray(chainSystem?.getChainSummary?.());
 
   return links.some((link) => {
-    const card = link?.card || link?.sourceCard || link?.source || link?.activation?.card;
-    if (!card || !BURNING_WEST_DEFENSE_NAMES.has(getCardName(card))) return false;
-    const ownerId = getOwnerId(link?.player || link?.owner || card.owner || card.controller);
+    if (!BURNING_WEST_DEFENSE_NAMES.has(link?.cardName)) return false;
+    const ownerId = link?.controllerId || null;
     return !playerId || !ownerId || ownerId === playerId;
   });
 }

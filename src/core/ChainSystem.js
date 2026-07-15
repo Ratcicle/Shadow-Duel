@@ -22,17 +22,34 @@ import * as chainBotResponsePolicy from "./chain/botResponsePolicy.js";
 import * as chainPlayerResponse from "./chain/playerResponse.js";
 import * as chainSelection from "./chain/selection.js";
 import * as chainActivation from "./chain/activation.js";
+import * as chainLink from "./chain/link.js";
+import * as chainTiming from "./chain/timing.js";
+import * as chainSegoc from "./chain/segoc.js";
+import * as chainUsage from "./chain/usage.js";
+import * as chainFinalization from "./chain/finalization.js";
 import { CHAIN_CONTEXTS } from "./chain/contexts.js";
 
 // Re-export for backwards compatibility (CHAIN_CONTEXTS used to live here)
 export { CHAIN_CONTEXTS };
+export {
+  CHAIN_ACTIVATION_KINDS,
+  CHAIN_EFFECT_KINDS,
+  CHAIN_RESPONSE_CONTEXTS,
+} from "./chain/link.js";
+export { FAST_EFFECT_ORIGINS, FAST_EFFECT_STATES } from "./chain/timing.js";
+export {
+  SEGOC_GROUPS,
+  TRIGGER_REQUIREMENTS,
+  TRIGGER_TIMINGS,
+} from "./chain/segoc.js";
+export { USAGE_POLICIES } from "./chain/usage.js";
 
 /**
  * @typedef {Object} PreparedActivation
  * @property {Object} card
- * @property {Object} player
+ * @property {Object} controller
  * @property {Object} effect
- * @property {string} zone
+ * @property {string} activationZone
  * @property {Object} selections
  * @property {Object} activationContext
  * @property {Object} activationAttempt
@@ -43,15 +60,25 @@ export { CHAIN_CONTEXTS };
 
 /**
  * @typedef {Object} ChainLink
+ * @property {number} chainId - Deterministic chain identity
+ * @property {number} linkId - Deterministic link identity
+ * @property {Object} controller - Player who controls the activation
+ * @property {Object} opponent - Opponent of the controller
  * @property {Object} card - The card being activated
- * @property {Object} player - The player activating the card
  * @property {Object} effect - The effect being activated
+ * @property {string} effectId
+ * @property {number} spellSpeed
+ * @property {string} activationKind
+ * @property {string} effectKind
+ * @property {string} responseContextType
  * @property {Object} context - Activation context
- * @property {string} zone - Zone the card was activated from (hand, field, spellTrap, graveyard)
+ * @property {string} activationZone - Zone the source occupied at activation
  * @property {Object|null} selections - Selected targets (if any)
  * @property {number} chainLevel - Position in chain (1, 2, 3...)
- * @property {boolean} prepared - Whether activation choices/costs were committed
  * @property {boolean} costsPaid - Whether activationCosts were paid
+ * @property {string} preparationStatus
+ * @property {string} resolutionStatus
+ * @property {string} finalizationStatus
  * @property {boolean} requiresSourceAtResolution - Whether the source must remain active
  */
 
@@ -110,6 +137,92 @@ export default class ChainSystem {
 
     /** @type {number} Current chain level counter */
     this.currentChainLevel = 0;
+
+    /** @type {number} Next deterministic Fast Effect window identity */
+    this.nextTimingWindowId = 1;
+
+    /** @type {number} Next deterministic Trigger occurrence identity */
+    this.nextTriggerOccurrenceId = 1;
+
+    /** @type {number} Next deterministic atomic event-group identity */
+    this.nextAtomicEventGroupId = 1;
+
+    /** @type {number} Next deterministic Trigger opportunity identity */
+    this.nextTriggerOpportunityId = 1;
+
+    /** @type {number} Next deterministic Trigger candidate identity */
+    this.nextTriggerCandidateId = 1;
+
+    /** @type {Object[]} Event occurrences awaiting the next Trigger check */
+    this.pendingTriggerOccurrences = [];
+
+    /** @type {Object|null} Current auditable SEGOC opportunity */
+    this.activeTriggerOpportunity = null;
+
+    /** @type {Object|null} Trigger ordering/selection session */
+    this.pendingTriggerSelection = null;
+
+    /** @type {boolean} Re-entry guard for post-Chain Trigger flushing */
+    this._flushingPendingTriggerOccurrences = false;
+
+    /** @type {number|null} Active Fast Effect window identity */
+    this.activeTimingWindowId = null;
+
+    /** @type {number} Controlled timing-continuation depth */
+    this.timingDepth = 0;
+
+    /** @type {number} Next deterministic chain identity */
+    this.nextChainId = 1;
+
+    /** @type {number} Next deterministic link identity */
+    this.nextLinkId = 1;
+
+    /** @type {number} Next deterministic activation-usage reservation */
+    this.nextUsageReservationId = 1;
+
+    /** @type {Map<number, Object>} Provisional "activate" limit reservations */
+    this.usageReservations = new Map();
+
+    /** @type {number} Next deterministic post-Chain finalization identity */
+    this.nextFinalizationId = 1;
+
+    /** @type {Object[]} Finalizations awaiting the end of CL1 */
+    this.pendingChainFinalizations = [];
+
+    /** @type {boolean} Whether post-Chain cleanup is currently running */
+    this.isFinalizingChain = false;
+
+    /** @type {ChainLink|null} Link whose deferred cleanup is running */
+    this.currentFinalizingLink = null;
+
+    /** @type {number|null} Identity of the chain currently being built/resolved */
+    this.activeChainId = null;
+
+    /** @type {ChainLink|null} Link currently outside the stack during resolution */
+    this.currentResolvingLink = null;
+
+    /** @type {Set<string>} Phase 9 compatibility warnings already emitted */
+    this.legacyContractWarnings = new Set();
+
+    /** @type {boolean} Whether compatibility access should warn */
+    this.testMode =
+      options.testMode === true ||
+      (typeof localStorage !== "undefined" &&
+        localStorage.getItem("shadow_duel_test_mode") === "true");
+
+    /** @type {Object} Serializable Fast Effect Timing state */
+    this.fastEffectState = {
+      state: chainTiming.FAST_EFFECT_STATES.OPEN,
+      origin: chainTiming.FAST_EFFECT_ORIGINS.PHASE_START,
+      timingWindowId: null,
+      turnPlayerId: this.getCurrentTurnPlayer()?.id ?? null,
+      actionPlayerId: this.getCurrentTurnPlayer()?.id ?? null,
+      priorityPlayerId: this.getCurrentTurnPlayer()?.id ?? null,
+      lastLinkControllerId: null,
+      chainId: null,
+      consecutivePasses: 0,
+      phaseIntent: null,
+    };
 
     /** @type {boolean} Dev mode logging */
     this.devMode =
@@ -212,6 +325,80 @@ export default class ChainSystem {
 }
 
 // -----------------------------------------------------------------------------
+// Canonical Chain Link contract
+// -----------------------------------------------------------------------------
+
+ChainSystem.prototype.createChainLink = chainLink.createChainLink;
+ChainSystem.prototype.serializeChainLink = chainLink.serializeChainLink;
+ChainSystem.prototype.warnLegacyChainContract =
+  chainLink.warnLegacyChainContract;
+ChainSystem.prototype.markChainLinkActivationNegated =
+  chainLink.markChainLinkActivationNegated;
+ChainSystem.prototype.markChainLinkEffectNegated =
+  chainLink.markChainLinkEffectNegated;
+ChainSystem.prototype.recordChainSourceMovement =
+  chainLink.recordChainSourceMovement;
+ChainSystem.prototype.setChainLinkResolutionStatus =
+  chainLink.setChainLinkResolutionStatus;
+
+ChainSystem.prototype.getUsagePolicy = chainUsage.getUsagePolicy;
+ChainSystem.prototype.checkActivationUsage = chainUsage.checkActivationUsage;
+ChainSystem.prototype.reserveUsageForChainLink =
+  chainUsage.reserveUsageForChainLink;
+ChainSystem.prototype.settleUsageForChainLink =
+  chainUsage.settleUsageForChainLink;
+ChainSystem.prototype.releaseAllUsageReservations =
+  chainUsage.releaseAllUsageReservations;
+
+ChainSystem.prototype.queueChainFinalization =
+  chainFinalization.queueChainFinalization;
+ChainSystem.prototype.finalizeWholeChain =
+  chainFinalization.finalizeWholeChain;
+ChainSystem.prototype.getChainFinalizationState =
+  chainFinalization.getChainFinalizationState;
+ChainSystem.prototype.resetChainFinalizationState =
+  chainFinalization.resetChainFinalizationState;
+
+// -----------------------------------------------------------------------------
+// Fast Effect Timing
+// -----------------------------------------------------------------------------
+
+ChainSystem.prototype.getFastEffectState = chainTiming.getFastEffectState;
+ChainSystem.prototype.transitionFastEffectState =
+  chainTiming.transitionFastEffectState;
+ChainSystem.prototype.resolveTimingPlayer = chainTiming.resolveTimingPlayer;
+ChainSystem.prototype.isOpenGameState = chainTiming.isOpenGameState;
+ChainSystem.prototype.resetFastEffectTiming = chainTiming.resetFastEffectTiming;
+ChainSystem.prototype.recordFastEffectPriority =
+  chainTiming.recordFastEffectPriority;
+ChainSystem.prototype.runFastEffectTiming = chainTiming.runFastEffectTiming;
+
+// -----------------------------------------------------------------------------
+// Simultaneous Trigger Effects / SEGOC
+// -----------------------------------------------------------------------------
+
+ChainSystem.prototype.allocateAtomicEventGroupId =
+  chainSegoc.allocateAtomicEventGroupId;
+ChainSystem.prototype.createTriggerOccurrence =
+  chainSegoc.createTriggerOccurrence;
+ChainSystem.prototype.queueTriggerOccurrence = chainSegoc.queueTriggerOccurrence;
+ChainSystem.prototype.buildTriggerOpportunity =
+  chainSegoc.buildTriggerOpportunity;
+ChainSystem.prototype.collectTriggerCandidates =
+  chainSegoc.collectTriggerCandidates;
+ChainSystem.prototype.revalidateTriggerCandidate =
+  chainSegoc.revalidateTriggerCandidate;
+ChainSystem.prototype.orderTriggerCandidates =
+  chainSegoc.orderTriggerCandidates;
+ChainSystem.prototype.prepareTriggerOpportunity =
+  chainSegoc.prepareTriggerOpportunity;
+ChainSystem.prototype.prepareTriggerPackages = chainSegoc.prepareTriggerPackages;
+ChainSystem.prototype.resolveTriggerOccurrences =
+  chainSegoc.resolveTriggerOccurrences;
+ChainSystem.prototype.getTriggerState = chainSegoc.getTriggerState;
+ChainSystem.prototype.resetTriggerState = chainSegoc.resetTriggerState;
+
+// -----------------------------------------------------------------------------
 // Spell Speed: Attach methods from modular chain/spellSpeed.js
 // -----------------------------------------------------------------------------
 
@@ -250,6 +437,12 @@ ChainSystem.prototype.findQuickMonsterEffect =
 
 ChainSystem.prototype.getActivatableCardsInChain =
   chainActivationDiscovery.getActivatableCardsInChain;
+ChainSystem.prototype.getEffectActivationZones =
+  chainActivationDiscovery.getEffectActivationZones;
+ChainSystem.prototype.getActivationCandidateKey =
+  chainActivationDiscovery.getActivationCandidateKey;
+ChainSystem.prototype.revalidateActivationCandidate =
+  chainActivationDiscovery.revalidateActivationCandidate;
 
 // -----------------------------------------------------------------------------
 // Activation lifecycle: preparation, costs, and root Chain Link
@@ -307,6 +500,12 @@ ChainSystem.prototype.playerChooseChainResponse =
 // -----------------------------------------------------------------------------
 
 ChainSystem.prototype.effectRequiresTargets = chainSelection.effectRequiresTargets;
+ChainSystem.prototype.getActivationCostTargetDefinitions =
+  chainSelection.getActivationCostTargetDefinitions;
+ChainSystem.prototype.getDeclaredTargetDefinitions =
+  chainSelection.getDeclaredTargetDefinitions;
+ChainSystem.prototype.getPlayerSelectionsForDefinitions =
+  chainSelection.getPlayerSelectionsForDefinitions;
 ChainSystem.prototype.getPlayerSelectionsForEffect =
   chainSelection.getPlayerSelectionsForEffect;
 ChainSystem.prototype.resolveSelectionsToCards =
@@ -334,5 +533,7 @@ ChainSystem.prototype.startPendingChainSelection =
   chainResolution.startPendingChainSelection;
 ChainSystem.prototype.resumePendingChainSelection =
   chainResolution.resumePendingChainSelection;
+ChainSystem.prototype.getChainSourceValidity =
+  chainResolution.getChainSourceValidity;
 ChainSystem.prototype.isCardStillValid = chainResolution.isCardStillValid;
 ChainSystem.prototype.determineCardZone = chainResolution.determineCardZone;

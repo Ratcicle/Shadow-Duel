@@ -76,13 +76,13 @@ export function resetDuelState(reason = "reset", options = {}) {
   this.pendingSpecialSummon = null;
   this.pendingTributeSummonSelection = null;
   this.pendingEventSelection = null;
+  this.pendingTriggerSelection = null;
   this.pendingChainEvents = [];
   this._flushingPendingChainEvents = false;
   this.pendingBattleDestroyAfterSelection = null;
   this.isResolvingEffect = false;
   this.eventResolutionDepth = 0;
   this.eventResolutionCounter = 0;
-  this.trapPromptInProgress = false;
   this.temporaryReplacementEffects = [];
   this.temporaryBattlePairEffects = [];
   this.temporaryEventEffects = [];

@@ -66,7 +66,10 @@ export function getRequiredSpellSpeed(context) {
   }
 
   const lastLink = this.chainStack[this.chainStack.length - 1];
-  const lastSpeed = this.getEffectSpellSpeed(lastLink.effect, lastLink.card);
+  const lastSpeed =
+    Number.isFinite(Number(lastLink.spellSpeed))
+      ? Number(lastLink.spellSpeed)
+      : this.getEffectSpellSpeed(lastLink.effect, lastLink.card);
 
   return Math.max(2, lastSpeed);
 }

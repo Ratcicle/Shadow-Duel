@@ -60,6 +60,31 @@ export function applyNegateActivation(ctx) {
   }
 }
 
+export function applyNegateEffect(ctx) {
+  const { action, selections, options } = ctx;
+  const activationContext =
+    options.actionContext || options.activationContext?.context || {};
+  const activationAttempt = activationContext.activationAttempt || null;
+  const targetCard =
+    activationAttempt?.card ||
+    activationContext.card ||
+    activationContext.targetCard ||
+    null;
+  if (!activationAttempt || !targetCard) return;
+
+  activationContext.effectNegated = true;
+  if (activationContext.respondingToChainLink) {
+    activationContext.respondingToChainLink.effectNegated = true;
+  }
+  if (action.storeNegatedCardAs) {
+    if (selections && typeof selections === "object") {
+      selections[action.storeNegatedCardAs] = [targetCard];
+    }
+    options.actionResults = options.actionResults || {};
+    options.actionResults[action.storeNegatedCardAs] = [targetCard];
+  }
+}
+
 export function applyConditionalTargetActions(ctx) {
   const {
     action,
@@ -246,6 +271,8 @@ export function applyRegisterTemporaryEventEffect(ctx) {
       id: action.effectId || action.id || "temporary_event_effect",
       timing: "on_event",
       event: action.event,
+      triggerRequirement: action.triggerRequirement,
+      triggerTiming: action.triggerTiming,
       conditions: action.conditions || [],
       actions: action.actions || [],
       targets: action.targets || [],

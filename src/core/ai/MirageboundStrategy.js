@@ -88,13 +88,11 @@ function isFaceUpMirageboundMonster(card) {
 }
 
 function hasMirageboundDefenseResponseInChain(chainSystem, player) {
-  const stack = Array.isArray(chainSystem?.chainStack)
-    ? chainSystem.chainStack
-    : [];
+  const stack = chainSystem?.getChainSummary?.() || [];
   return stack.some(
     (link) =>
-      link?.player?.id === player?.id &&
-      DEFENSIVE_CHAIN_RESPONSE_NAMES.has(link?.card?.name),
+      link?.controllerId === player?.id &&
+      DEFENSIVE_CHAIN_RESPONSE_NAMES.has(link?.cardName),
   );
 }
 

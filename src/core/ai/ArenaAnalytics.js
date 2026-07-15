@@ -1,4 +1,6 @@
 // ─────────────────────────────────────────────────────────────────────────────
+import { CHAIN_ACTIVATION_KINDS } from "../chain/link.js";
+
 // src/core/ai/ArenaAnalytics.js
 // Telemetria e analytics para BotArena — foco em métricas, não em policy.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -322,9 +324,17 @@ function causalKey(card, source) {
 function classifyActivationEvent(eventName, payload = {}) {
   const card = payload.card || payload.source || null;
   const kind = card?.cardKind || null;
+  const canonicalKind = payload.activationKind || null;
   const effectType = String(payload.effectType || "");
   const activationZone = String(payload.activationZone || "");
 
+  if (canonicalKind === CHAIN_ACTIVATION_KINDS.MONSTER_EFFECT) return "effect";
+  if (
+    canonicalKind === CHAIN_ACTIVATION_KINDS.SPELL_TRAP_CARD ||
+    canonicalKind === CHAIN_ACTIVATION_KINDS.SPELL_TRAP_EFFECT
+  ) {
+    return kind === "trap" ? "trap" : "spell";
+  }
   if (eventName === "spell_activated") return "spell";
   if (eventName === "trap_activated") return "trap";
   if (kind === "spell") return "spell";
@@ -2302,12 +2312,14 @@ export class DuelTracker {
       name,
       payload.activationZone || payload.fromZone || "",
     ].join("|");
+    const activationKey =
+      payload.linkId != null ? `link:${payload.linkId}` : rawKey;
     if (eventName === "spell_activated" || eventName === "trap_activated") {
-      this.rawSpellTrapActivationKeys.add(rawKey);
+      this.rawSpellTrapActivationKeys.add(activationKey);
     } else if (
       eventName === "effect_activated" &&
       activationKind !== "effect" &&
-      this.rawSpellTrapActivationKeys.has(rawKey)
+      this.rawSpellTrapActivationKeys.has(activationKey)
     ) {
       this.lastActivated[seat] = name;
       return;
@@ -2332,11 +2344,12 @@ export class DuelTracker {
       ctx?.fromHand === true ||
       ctx?.sourceZone === "hand" ||
       payload.fromZone === "hand";
-    const isCardPlay =
-      eventName === "spell_activated" ||
-      eventName === "trap_activated" ||
-      isPlacement ||
-      fromHand;
+    const isCardPlay = payload.activationKind
+      ? payload.activationKind === CHAIN_ACTIVATION_KINDS.SPELL_TRAP_CARD
+      : eventName === "spell_activated" ||
+        eventName === "trap_activated" ||
+        isPlacement ||
+        fromHand;
     if (activationKind === "spell") {
       stats.spellActivations += 1;
       if (isCardPlay) stats.spellCardActivations += 1;
@@ -2372,6 +2385,10 @@ export class DuelTracker {
       card: name,
       sourceCard: name,
       effectId: effectId(payload),
+      chainId: payload.chainId ?? null,
+      linkId: payload.linkId ?? null,
+      activationKind: payload.activationKind || null,
+      effectKind: payload.effectKind || null,
       effectType: payload.effectType || null,
       fromZone: payload.activationZone || payload.fromZone || null,
       target: targets[0] || null,

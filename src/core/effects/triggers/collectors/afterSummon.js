@@ -96,13 +96,6 @@ export async function collectAfterSummonTriggers(payload) {
           continue;
         }
 
-        if (this.isEffectNegated(sourceCard)) {
-          debugTriggerLog(this,
-            `${sourceCard.name} effects are negated, skipping effect.`,
-          );
-          continue;
-        }
-
         // Check requireFaceup condition
         if (effect.requireFaceup === true && sourceCard.isFacedown === true) {
           debugTriggerLog(this,
