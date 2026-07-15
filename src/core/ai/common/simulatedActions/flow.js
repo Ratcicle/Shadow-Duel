@@ -218,7 +218,11 @@ export function applyRegisterTemporaryEventEffect(ctx) {
   }
   const currentTurn = Number(state.turnCounter || 0);
   const expiresOnTurn =
-    action.duration === "end_of_next_turn" ? currentTurn + 1 : currentTurn;
+    action.duration === "duel"
+      ? null
+      : action.duration === "end_of_next_turn"
+        ? currentTurn + 1
+        : currentTurn;
   const declaredValues = sourceCard.declaredValues
     ? JSON.parse(JSON.stringify(sourceCard.declaredValues))
     : {};
@@ -238,9 +242,12 @@ export function applyRegisterTemporaryEventEffect(ctx) {
     sourceEffectId: options.effect?.id || null,
     createdOnTurn: currentTurn,
     expiresOnTurn,
-    usesRemaining: Number.isFinite(Number(action.uses))
-      ? Math.max(0, Number(action.uses))
-      : 1,
+    usesRemaining:
+      action.unlimitedUses === true
+        ? null
+        : Number.isFinite(Number(action.uses))
+          ? Math.max(0, Number(action.uses))
+          : 1,
     declaredValues,
     effect: {
       id: action.effectId || action.id || "temporary_event_effect",

@@ -922,7 +922,7 @@ export const ACTION_CATALOG = {
   register_temporary_event_effect: action({
     category: "conditional",
     summary:
-      "Registers a temporary virtual event trigger owned by the resolving player.",
+      "Registers a virtual event trigger owned by the resolving player, for a temporary duration or the rest of the Duel.",
     handler: "handleRegisterTemporaryEventEffect",
     required: ["event", "actions"],
     optional: [
@@ -930,6 +930,7 @@ export const ACTION_CATALOG = {
       "targets",
       "duration",
       "uses",
+      "unlimitedUses",
       "effectId",
       "sourceName",
       "declaredValueRef",
@@ -946,6 +947,7 @@ export const ACTION_CATALOG = {
       actions: { type: "array" },
       duration: { type: "string" },
       uses: { type: "number" },
+      unlimitedUses: { type: "boolean" },
       effectId: { type: "string" },
       sourceName: { type: "string" },
       declaredValueRef: { type: "string" },

@@ -501,6 +501,30 @@ export async function prepareChainResponse(candidate, player, context = null) {
   prepared.selections = targetResult?.targets || prepared.selections || {};
   prepared.activationContext.selections = prepared.selections;
 
+  if (typeof effectEngine?.checkActionPreviewRequirements === "function") {
+    const actionPreview = effectEngine.checkActionPreviewRequirements(
+      prepared.effect.actions || [],
+      {
+        ...previewCtx,
+        preview: true,
+        isPreview: true,
+        _actionTargets: prepared.selections,
+        activationContext: {
+          ...previewCtx.activationContext,
+          preview: true,
+          selections: prepared.selections,
+        },
+      },
+    );
+    if (actionPreview?.ok === false) {
+      return {
+        success: false,
+        code: actionPreview.code || "CHAIN_RESPONSE_ACTION_UNAVAILABLE",
+        reason: actionPreview.reason || "Chain response cannot resolve.",
+      };
+    }
+  }
+
   const costs = getEffectActivationCosts(prepared.effect);
   if (
     costs.length > 0 &&

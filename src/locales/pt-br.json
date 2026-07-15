@@ -495,6 +495,10 @@
       "name": "Samurai Fantasma da Katana Nebulosa",
       "description": "Se este card for Invocado por Invocação-Normal: você pode enviar 1 monstro Regulador do seu Deck para o Cemitério. Você pode banir este card do seu Cemitério e, depois, escolher 1 monstro Regulador de Nível 4 ou menor no seu Cemitério; Invoque-o por Invocação-Especial. Você só pode usar cada efeito de \"Samurai Fantasma da Katana Nebulosa\" uma vez por turno."
     },
+    "27": {
+      "name": "A Chama Negra",
+      "description": "Pague 1000 PV; pelo resto deste Duelo, cause 300 de dano ao seu oponente durante cada Fase de Espera. Você só pode ativar 1 \"A Chama Negra\" por turno."
+    },
     "101": {
       "name": "Enguia Abissal do Coração Sombrio",
       "description": "Se esse card for atacado em posição de defesa: cause 600 de dano ao oponente. Se esse card for destruído em batalha: você pode adicionar 1 Magia/Armadilha 'Coração Sombrio' do seu cemitério à sua mão."

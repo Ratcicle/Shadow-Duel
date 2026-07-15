@@ -1778,6 +1778,7 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
   );
   const wasFaceupBeforeMove = card.isFacedown !== true;
   let pendingAttachedEquipCleanup = [];
+  let pendingBoundDestructionCleanup = [];
   const flushPendingAttachedEquipCleanup = async () => {
     if (pendingAttachedEquipCleanup.length === 0) return;
     const pending = pendingAttachedEquipCleanup;
@@ -1799,6 +1800,25 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
         if (equip.lastEquippedCardLeftFieldCause !== undefined) {
           delete equip.lastEquippedCardLeftFieldCause;
         }
+      }
+    }
+  };
+  const flushPendingBoundDestructionCleanup = async () => {
+    if (pendingBoundDestructionCleanup.length === 0) return;
+    const pending = pendingBoundDestructionCleanup;
+    pendingBoundDestructionCleanup = [];
+
+    for (const entry of pending) {
+      const { cardToDestroy, owner, sourceCard, message } = entry;
+      if (!cardToDestroy || !owner) continue;
+      const result = await this.destroyCard(cardToDestroy, {
+        cause: "effect",
+        sourceCard,
+        opponent: this.getOpponent(owner),
+      });
+      if (result?.destroyed) {
+        this.ui.log(message);
+        this.updateBoard();
       }
     }
   };
@@ -2186,18 +2206,13 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
       card.boundTrapSource = null;
       card.callOfTheHauntedTrap = null; // Clear reference before destroy
 
-      // Destroy trap - refs already cleared, state is consistent regardless of result
-      this.destroyCard(callTrap, {
-        cause: "effect",
+      const trapOwner =
+        callTrap.owner === "player" ? this.player : this.bot;
+      pendingBoundDestructionCleanup.push({
+        cardToDestroy: callTrap,
+        owner: trapOwner,
         sourceCard: card,
-        opponent: this.getOpponent(fromOwner),
-      }).then((result) => {
-        if (result?.destroyed) {
-          this.ui.log(
-            `${callTrap.name} was destroyed as ${card.name} left the field.`
-          );
-          this.updateBoard();
-        }
+        message: `${callTrap.name} was destroyed as ${card.name} left the field.`,
       });
     }
   }
@@ -2223,18 +2238,11 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
 
     const monsterOwner =
       revivedMonster.owner === "player" ? this.player : this.bot;
-    // Destroy is fire-and-forget but safe - ref already cleared, state is consistent
-    this.destroyCard(revivedMonster, {
-      cause: "effect",
+    pendingBoundDestructionCleanup.push({
+      cardToDestroy: revivedMonster,
+      owner: monsterOwner,
       sourceCard: card,
-      opponent: this.getOpponent(monsterOwner),
-    }).then((result) => {
-      if (result?.destroyed) {
-        this.ui.log(
-          `${revivedMonster.name} was destroyed as ${card.name} left the field.`
-        );
-        this.updateBoard();
-      }
+      message: `${revivedMonster.name} was destroyed as ${card.name} left the field.`,
     });
   }
 
@@ -2257,17 +2265,11 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
 
     const monsterOwner =
       revivedMonster.owner === "player" ? this.player : this.bot;
-    this.destroyCard(revivedMonster, {
-      cause: "effect",
+    pendingBoundDestructionCleanup.push({
+      cardToDestroy: revivedMonster,
+      owner: monsterOwner,
       sourceCard: card,
-      opponent: this.getOpponent(monsterOwner),
-    }).then((result) => {
-      if (result?.destroyed) {
-        this.ui.log(
-          `${revivedMonster.name} was destroyed as ${card.name} left the field.`
-        );
-        this.updateBoard();
-      }
+      message: `${revivedMonster.name} was destroyed as ${card.name} left the field.`,
     });
   }
 
@@ -2535,6 +2537,8 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
       wasFaceupBeforeMove,
     },
   );
+
+  await flushPendingBoundDestructionCleanup();
 
   if (this.effectEngine?.clearTargetingCache) {
     this.effectEngine.clearTargetingCache();

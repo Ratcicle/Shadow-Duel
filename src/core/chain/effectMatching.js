@@ -621,6 +621,18 @@ export function findActivatableEffect(card, context, ownerPlayer = null) {
           }
         }
 
+        if (
+          !effectActionsCanResolveInChain(
+            this,
+            card,
+            effect,
+            context,
+            ownerPlayer,
+          )
+        ) {
+          continue;
+        }
+
         // ignition timing typically for main phase, but traps can chain
         // Allow if we're in a valid chain window
         if (contextDef.requiresChainWindow || this.chainStack.length > 0) {

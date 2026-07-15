@@ -415,12 +415,15 @@ export async function applyDestroyOtherDragonsAndBuff(action, ctx) {
  * @returns {Promise<boolean>} - Whether any cards were destroyed
  */
 export async function applyMirrorForceDestroy(action, ctx) {
-  const { game, player, eventData } = ctx;
+  const game = this?.game || ctx?.game;
+  const { player } = ctx;
 
   // Determinar quem é o oponente
-  const opponent = player.id === "player" ? game.bot : game.player;
+  const opponent =
+    ctx?.opponent ||
+    (player?.id === "player" ? game?.bot : game?.player);
 
-  if (!opponent || !opponent.field) {
+  if (!game || !player || !opponent || !opponent.field) {
     return false;
   }
 
@@ -454,11 +457,11 @@ export async function applyMirrorForceDestroy(action, ctx) {
     });
   }
 
-  // Negar o ataque que disparou a Mirror Force
-  if (ctx.eventData?.attacker) {
-    game.registerAttackNegated(ctx.eventData.attacker);
-  } else {
-    game.lastAttackNegated = true;
+  // Mirror Force does not negate attacks by itself. The battle only ends when
+  // the attacking monster actually left the field as a result of this effect.
+  const attacker = ctx.attacker || ctx.eventData?.attacker || null;
+  if (attacker && !opponent.field.includes(attacker)) {
+    game.registerAttackNegated?.(attacker);
   }
 
   game.updateBoard();

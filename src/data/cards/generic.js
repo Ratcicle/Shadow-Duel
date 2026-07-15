@@ -1105,4 +1105,34 @@ export const genericCards = [
       },
     ],
   },
+  {
+    id: 27,
+    name: "The Black Flame",
+    cardKind: "spell",
+    subtype: "normal",
+    description:
+      'Pay 1000 LP; for the rest of this Duel, inflict 300 damage to your opponent during each Standby Phase. You can only activate 1 "The Black Flame" per turn.',
+    image: "assets/The Black Flame.png",
+    effects: [
+      {
+        id: "the_black_flame_activation",
+        timing: "on_play",
+        speed: 1,
+        oncePerTurn: true,
+        oncePerTurnName: "the_black_flame_activation",
+        activationCosts: [{ type: "pay_lp", player: "self", amount: 1000 }],
+        actions: [
+          {
+            type: "register_temporary_event_effect",
+            event: "standby_phase",
+            duration: "duel",
+            unlimitedUses: true,
+            effectId: "the_black_flame_standby_burn",
+            promptUser: false,
+            actions: [{ type: "damage", player: "opponent", amount: 300 }],
+          },
+        ],
+      },
+    ],
+  },
 ];
