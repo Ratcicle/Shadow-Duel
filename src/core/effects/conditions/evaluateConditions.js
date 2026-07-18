@@ -361,9 +361,9 @@ function cardsFromSelectionValue(value) {
 
 function collectSelectedTargetCards(targetRef, activationContext = {}) {
   const selectionSources = [
-    activationContext.selections,
-    activationContext.context?.selections,
-    activationContext.respondingToChainLink?.selections,
+    mergeCanonicalSelections(activationContext),
+    mergeCanonicalSelections(activationContext.context),
+    mergeCanonicalSelections(activationContext.respondingToChainLink),
   ].filter(Boolean);
   const cards = [];
   for (const selections of selectionSources) {
@@ -683,7 +683,7 @@ function activationWouldDestroyCardsMatchingFilters(engine, cond, ctx) {
     ctx?.activatedCard ||
     null;
   const activationPlayer =
-    activationAttempt?.player ||
+    activationAttempt?.controller ||
     activationContext.player ||
     activationContext.triggerPlayer ||
     null;
@@ -711,11 +711,11 @@ function activationWouldDestroyCardsMatchingFilters(engine, cond, ctx) {
     activationContext: {
       ...(ctx?.activationContext || {}),
       context: activationContext,
-      selections:
-        activationContext.selections ||
-        activationContext.respondingToChainLink?.selections ||
-        ctx?.activationContext?.selections ||
-        null,
+      resolutionSelections: {
+        ...mergeCanonicalSelections(ctx?.activationContext),
+        ...mergeCanonicalSelections(activationContext.respondingToChainLink),
+        ...mergeCanonicalSelections(activationContext),
+      },
     },
     actionContext: activationContext,
   };
@@ -888,7 +888,7 @@ function activationWouldBanishCardsMatchingFilters(engine, cond, ctx) {
     ctx?.activatedCard ||
     null;
   const activationPlayer =
-    activationAttempt?.player ||
+    activationAttempt?.controller ||
     activationContext.player ||
     activationContext.triggerPlayer ||
     null;
@@ -926,11 +926,11 @@ function activationWouldBanishCardsMatchingFilters(engine, cond, ctx) {
     activationContext: {
       ...(ctx?.activationContext || {}),
       context: activationContext,
-      selections:
-        activationContext.selections ||
-        activationContext.respondingToChainLink?.selections ||
-        ctx?.activationContext?.selections ||
-        null,
+      resolutionSelections: {
+        ...mergeCanonicalSelections(ctx?.activationContext),
+        ...mergeCanonicalSelections(activationContext.respondingToChainLink),
+        ...mergeCanonicalSelections(activationContext),
+      },
     },
     actionContext: activationContext,
   };
@@ -991,7 +991,7 @@ function activationWouldMakeCardLeaveField(engine, cond, ctx) {
     ctx?.activatedCard ||
     null;
   const activationPlayer =
-    activationAttempt?.player ||
+    activationAttempt?.controller ||
     activationContext.player ||
     activationContext.triggerPlayer ||
     null;
@@ -1046,11 +1046,11 @@ function activationWouldMakeCardLeaveField(engine, cond, ctx) {
     activationContext: {
       ...(ctx?.activationContext || {}),
       context: activationContext,
-      selections:
-        activationContext.selections ||
-        activationContext.respondingToChainLink?.selections ||
-        ctx?.activationContext?.selections ||
-        null,
+      resolutionSelections: {
+        ...mergeCanonicalSelections(ctx?.activationContext),
+        ...mergeCanonicalSelections(activationContext.respondingToChainLink),
+        ...mergeCanonicalSelections(activationContext),
+      },
     },
     actionContext: activationContext,
   };
@@ -2199,3 +2199,4 @@ export function evaluateConditions(conditions, ctx) {
 
     return { ok: true };
   }
+import { mergeCanonicalSelections } from "../../game/selection/contract.js";

@@ -1,5 +1,6 @@
 import { cardMatchesKind } from "../../Card.js";
 import { hasSynchroSummonPreviewCandidate } from "../../actionHandlers/summon/synchroEffects.js";
+import { mergeCanonicalSelections } from "../../game/selection/contract.js";
 
 /**
  * Actions Core - applyActions dispatcher and preview requirements
@@ -188,11 +189,13 @@ export async function applyActions(actions, ctx, targets) {
     this.game?.devLog && ((tag, detail) => this.game.devLog(tag, detail || {}));
 
   // Propagate selection results (from network resume) into ctx so handlers can consume them.
+  const canonicalSelections = {
+    ...mergeCanonicalSelections(ctx?.actionContext),
+    ...mergeCanonicalSelections(ctx?.activationContext),
+  };
   const selectionMap =
     ctx?.selections ||
-    ctx?.activationContext?.selections ||
-    ctx?.actionContext?.selections ||
-    null;
+    (Object.keys(canonicalSelections).length > 0 ? canonicalSelections : null);
   if (ctx && selectionMap && !ctx.selections) {
     ctx.selections = selectionMap;
   }

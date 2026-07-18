@@ -4,6 +4,8 @@
  * Functions assume `this` = EffectEngine instance
  */
 
+import { getCanonicalEffectActivationZones } from "../../chain/legality.js";
+
 /**
  * Get the on_play activation effect for a card played from hand.
  * For field spells, only check on_play timing - on_field_activate effects
@@ -29,14 +31,11 @@ function isTrapActivationFromSet(card, options = {}) {
 
 function ignitionMatchesActivationZone(effect, activationZone = "spellTrap") {
   if (!effect || effect.timing !== "ignition") return false;
-  const requiredZone = effect.requireZone || null;
-  if (requiredZone) {
-    return (
-      requiredZone === activationZone ||
-      (requiredZone === "field" && activationZone === "spellTrap")
-    );
-  }
-  return activationZone === "spellTrap" || activationZone === "field";
+  const allowedZones = getCanonicalEffectActivationZones(null, effect);
+  return (
+    allowedZones.includes(activationZone) ||
+    (allowedZones.includes("field") && activationZone === "spellTrap")
+  );
 }
 
 /**
@@ -84,13 +83,9 @@ export function getSpellTrapActivationEffect(card, options = {}) {
  */
 function monsterIgnitionMatchesActivationZone(effect, activationZone = "field") {
   if (!effect || effect.timing !== "ignition") return false;
-  if (activationZone === "graveyard") {
-    return effect.requireZone === "graveyard";
-  }
-  if (activationZone === "hand") {
-    return effect.requireZone === "hand";
-  }
-  return !effect.requireZone || effect.requireZone === "field";
+  return getCanonicalEffectActivationZones(null, effect).includes(
+    activationZone,
+  );
 }
 
 export function getMonsterIgnitionEffects(card, activationZone = "field") {
@@ -179,19 +174,19 @@ export function getFirstActivatableMonsterIgnitionEffect(
 
 /**
  * Get the activation effect for a Field Spell.
- * Looks for on_field_activate OR ignition with requireZone: "fieldSpell"
+ * Looks for on_field_activate or an ignition effect declared for Field Zone.
  */
 export function getFieldSpellActivationEffect(card) {
   if (!card || !Array.isArray(card.effects)) {
     return null;
   }
-  // Look for on_field_activate OR ignition with requireZone: "fieldSpell"
   return (
     card.effects.find(
       (e) =>
         e &&
         (e.timing === "on_field_activate" ||
-          (e.timing === "ignition" && e.requireZone === "fieldSpell"))
+          (e.timing === "ignition" &&
+            getCanonicalEffectActivationZones(card, e).includes("fieldSpell")))
     ) || null
   );
 }

@@ -97,7 +97,9 @@ export function forceOpeningHand(cardName, count) {
     if (idx !== -1) {
       ensured.push(this.player.deck.splice(idx, 1)[0]);
     } else {
-      ensured.push(new Card(data, this.player.id));
+      const card = new Card(data, this.player.id);
+      this.ensureDuelCardId?.(card);
+      ensured.push(card);
     }
   }
 

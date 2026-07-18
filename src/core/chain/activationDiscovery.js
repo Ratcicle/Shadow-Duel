@@ -3,6 +3,13 @@ import {
   canActivateSetQuickSpell,
   isQuickSpell,
 } from "../game/spellTrap/quickSpellRules.js";
+import {
+  buildActivationQuery,
+  getCanonicalActivationCandidateKey,
+  getCanonicalEffectActivationZones,
+  listLegalActivationCandidates,
+  revalidateActivationCandidate as revalidateCanonicalCandidate,
+} from "./legality.js";
 
 export const ACTIVATION_ZONES = Object.freeze([
   "hand",
@@ -31,31 +38,17 @@ function isFastMonsterEffect(effect) {
 
 function isExplicitZone(effect, zone) {
   return (
-    (Array.isArray(effect?.activationZones) &&
-      effect.activationZones.includes(zone)) ||
-    effect?.requireZone === zone
+    Array.isArray(effect?.activationZones) &&
+    effect.activationZones.includes(zone)
   );
 }
 
 export function getEffectActivationZones(card, effect) {
-  if (!card || !effect) return [];
-  if (Array.isArray(effect.activationZones)) {
-    return [...new Set(effect.activationZones.filter(Boolean))];
-  }
-  if (effect.requireZone) return [effect.requireZone];
-
-  if (card.cardKind === "trap") return ["spellTrap"];
-  if (card.cardKind === "spell" && isQuickSpell(card)) {
-    return ["hand", "spellTrap"];
-  }
-  if (card.cardKind === "monster" && isFastMonsterEffect(effect)) {
-    return ["field"];
-  }
-  return [];
+  return getCanonicalEffectActivationZones(card, effect);
 }
 
 export function getActivationCandidateKey(card, effect, sourceZone) {
-  return `${cardInstanceId(card)}:${effect?.id || "effect"}:${sourceZone || "unknown"}`;
+  return getCanonicalActivationCandidateKey(card, effect, sourceZone);
 }
 
 function pairAlreadyInChain(chainSystem, card, effect) {
@@ -386,13 +379,13 @@ function candidateForEffect(chainSystem, player, card, effect, zone, context) {
     effectId: effect.id || null,
     player,
     controller: player,
-    zone,
     sourceZone: zone,
     sourceLocationVersion: Number(card.locationVersion ?? 0),
     spellSpeed: chainSystem.getEffectSpellSpeed?.(effect, card) ?? 1,
     context: responseContext,
     effectLabel:
-      effect.activationLabel || effect.promptMessage || effect.id || card.name,
+      effect.activationLabel || effect.promptMessage || effect.id || "effect",
+    activationLabelKey: effect.activationLabelKey || null,
   };
 }
 
@@ -401,6 +394,19 @@ function candidateForEffect(chainSystem, player, card, effect, zone, context) {
  */
 export function getActivatableCardsInChain(player, context) {
   if (!player || !this.game) return [];
+  const query = buildActivationQuery({
+    game: this.game,
+    chainSystem: this,
+    player,
+    opponent: this.getOpponent?.(player),
+    context,
+  });
+  return listLegalActivationCandidates(query, {
+    listCandidates: () => collectActivationCandidates(this, player, context),
+  });
+}
+
+function collectActivationCandidates(chainSystem, player, context) {
   const candidates = [];
 
   for (const [zone, cards] of zoneEntries(player)) {
@@ -408,7 +414,7 @@ export function getActivatableCardsInChain(player, context) {
       if (!card) continue;
       for (const effect of card.effects || []) {
         const candidate = candidateForEffect(
-          this,
+          chainSystem,
           player,
           card,
           effect,
@@ -425,7 +431,7 @@ export function getActivatableCardsInChain(player, context) {
       ) {
         const placement = buildPlacementOnlyEffect(card);
         const candidate = candidateForEffect(
-          this,
+          chainSystem,
           player,
           { ...card, effects: [placement] },
           placement,
@@ -452,10 +458,23 @@ export function getActivatableCardsInChain(player, context) {
 }
 
 export function revalidateActivationCandidate(candidate, player, context) {
+  const query = buildActivationQuery({
+    game: this.game,
+    chainSystem: this,
+    player,
+    opponent: this.getOpponent?.(player),
+    context,
+  });
+  return revalidateCanonicalCandidate(candidate, query, {
+    revalidateCandidate: () => revalidateCandidateInternal(this, candidate, player, context),
+  });
+}
+
+function revalidateCandidateInternal(chainSystem, candidate, player, context) {
   if (!candidate?.card || !candidate?.effect || !player) {
     return { ok: false, reason: "invalid_activation_candidate" };
   }
-  const currentZone = this.determineCardZone?.(candidate.card, player);
+  const currentZone = chainSystem.determineCardZone?.(candidate.card, player);
   if (currentZone !== candidate.sourceZone) {
     return { ok: false, reason: "activation_source_moved" };
   }
@@ -466,7 +485,7 @@ export function revalidateActivationCandidate(candidate, player, context) {
     return { ok: false, reason: "activation_source_version_changed" };
   }
   const current = candidateForEffect(
-    this,
+    chainSystem,
     player,
     candidate.card,
     candidate.effect,

@@ -3,6 +3,69 @@
  * Extracted from Game.js as part of B.3 modularization.
  */
 
+function getSelectionActor(game, selection = {}) {
+  return (
+    selection.owner ||
+    selection.player ||
+    selection.controller ||
+    (game.turn === "bot" ? game.bot : game.player)
+  );
+}
+
+function serializeSelectionCandidate(game, candidate = {}) {
+  const card = candidate.cardRef || candidate.card || null;
+  const duelCardId = card ? game.ensureDuelCardId?.(card) ?? null : null;
+  return {
+    duelCardId,
+    cardId: card?.id ?? null,
+    effectId: candidate.effectId || candidate.effect?.id || null,
+    candidateKey: candidate.candidateKey || null,
+    key: duelCardId == null ? candidate.key ?? candidate.id ?? null : null,
+  };
+}
+
+function serializeSelectionValue(game, selection = {}) {
+  const selections = {};
+  for (const requirement of selection.requirements || []) {
+    const selectedKeys = selection.selections?.[requirement.id] || [];
+    selections[requirement.id] = selectedKeys.map((selectedKey) => {
+      const candidate = (requirement.candidates || []).find(
+        (entry) => String(entry.key ?? entry.id) === String(selectedKey),
+      );
+      return candidate
+        ? serializeSelectionCandidate(game, candidate)
+        : { key: selectedKey };
+    });
+  }
+  return { selections };
+}
+
+function deserializeSelectionValue(game, selection, value = {}) {
+  const output = {};
+  for (const requirement of selection.requirements || []) {
+    const recorded = value.selections?.[requirement.id] || [];
+    output[requirement.id] = recorded
+      .map((identity) => {
+        const match = (requirement.candidates || []).find((candidate) => {
+          const current = serializeSelectionCandidate(game, candidate);
+          if (identity.duelCardId != null) {
+            return (
+              Number(current.duelCardId) === Number(identity.duelCardId) &&
+              (identity.effectId == null || current.effectId === identity.effectId)
+            );
+          }
+          if (identity.candidateKey != null) {
+            return String(current.candidateKey) === String(identity.candidateKey);
+          }
+          return String(candidate.key ?? candidate.id) === String(identity.key);
+        });
+        return match?.key ?? match?.id ?? null;
+      })
+      .filter((key) => key != null);
+  }
+  return output;
+}
+
 /**
  * Set the current selection state.
  * @param {string} state - New state ("idle"|"selecting"|"confirming"|"resolving")
@@ -95,8 +158,43 @@ export function startTargetSelectionSession(session) {
   };
   this.setSelectionState("selecting");
 
-  // v4 REPLAY: Emitir evento de opções de targeting para captura
-  // Apenas para jogador humano e se tem um requirement com candidatos
+  if (this.decisionBroker?.mode === "replay") {
+    const replaySelection = this.targetSelection;
+    const actor = getSelectionActor(this, replaySelection);
+    const decisionKind =
+      replaySelection.selectionContract?.purpose ||
+      replaySelection.kind ||
+      "target_selection";
+    const pending = this.requestDecision({
+      kind: decisionKind,
+      actor,
+      candidates: (replaySelection.requirements || []).flatMap(
+        (requirement) => requirement.candidates || [],
+      ),
+      requireCandidate: false,
+      deserializeReplayValue: (value) =>
+        deserializeSelectionValue(this, replaySelection, value),
+    }).then(async (selections) => {
+      if (this.targetSelection?.sessionId !== replaySelection.sessionId) {
+        throw new Error("Replay selection session changed before its decision was applied.");
+      }
+      this.targetSelection.selections = selections || {};
+      this.targetSelection.currentRequirement =
+        this.targetSelection.requirements.length;
+      this.setSelectionState("confirming");
+      await this.finishTargetSelection();
+    });
+    let trackedPromise = null;
+    trackedPromise = pending.finally(() => {
+      if (this.pendingReplayDecisionPromise === trackedPromise) {
+        this.pendingReplayDecisionPromise = null;
+      }
+    });
+    this.pendingReplayDecisionPromise = trackedPromise;
+    return this.pendingReplayDecisionPromise;
+  }
+
+  // Generic decision observability for the live human provider.
   if (this.turn === "player" && selectionContract.requirements?.length > 0) {
     const firstReq = selectionContract.requirements[0];
     if (firstReq?.candidates?.length > 0) {
@@ -104,7 +202,7 @@ export function startTargetSelectionSession(session) {
       // Na maioria dos casos, o primeiro efeito é o que está sendo ativado
       const effectId = session.card?.effects?.[0]?.id || session.kind;
       
-      this.emit("target_selection_options", {
+      this.notify("decision_requested", {
         player: "player",
         candidates: firstReq.candidates.map(c => ({
           id: c.cardRef?.id,
@@ -227,8 +325,7 @@ export async function finishTargetSelection() {
     selection.closeModal();
   }
 
-  // v4 REPLAY: Emitir evento de seleção concluída para captura
-  // Apenas para jogador humano e se houve seleções
+  // Generic decision observability for the live human provider.
   if (this.turn === "player" && selection.selections) {
     const selectedKeys = Object.values(selection.selections).flat();
     if (selectedKeys.length > 0 && selection.requirements?.length > 0) {
@@ -241,7 +338,7 @@ export async function finishTargetSelection() {
         // Usar primeiro efeito como ID padrão, ou kind da sessão como fallback
         const effectId = selection.card?.effects?.[0]?.id || selection.kind;
         
-        this.emit("target_selected", {
+        this.notify("decision_completed", {
           player: "player",
           sourceCard: selection.card,
           effectId,
@@ -255,11 +352,32 @@ export async function finishTargetSelection() {
     }
   }
 
+  const actor = getSelectionActor(this, selection);
+  this.recordDecision?.(
+    {
+      kind:
+        selection.selectionContract?.purpose ||
+        selection.kind ||
+        "target_selection",
+      actor,
+      candidates: (selection.requirements || []).flatMap(
+        (requirement) => requirement.candidates || [],
+      ),
+      requireCandidate: false,
+      serializeResult: () => serializeSelectionValue(this, selection),
+    },
+    selection.selections || {},
+  );
+
   let normalized = {
     success: false,
     needsSelection: false,
     reason: "Selection failed.",
   };
+  const deferredReplayCommand = selection.replayCommandDescriptor || null;
+  if (deferredReplayCommand) {
+    this._activeDeferredReplayCommandDescriptor = deferredReplayCommand;
+  }
 
   try {
     if (typeof selection.execute !== "function") {
@@ -291,6 +409,17 @@ export async function finishTargetSelection() {
   } catch (err) {
     console.error("[Game] Error resolving selection:", err);
   } finally {
+    if (this._activeDeferredReplayCommandDescriptor === deferredReplayCommand) {
+      this._activeDeferredReplayCommandDescriptor = null;
+    }
+    const replayCommand = deferredReplayCommand;
+    if (replayCommand) {
+      if (normalized.needsSelection && this.targetSelection) {
+        this.targetSelection.replayCommandDescriptor = replayCommand;
+      } else {
+        this.recordReplayCommand?.(replayCommand);
+      }
+    }
     if (!this.targetSelection) {
       this.setSelectionState("idle");
     }

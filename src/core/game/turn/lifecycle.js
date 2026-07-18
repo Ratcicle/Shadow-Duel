@@ -134,7 +134,6 @@ export async function startTurn() {
 
   this.phase = "draw";
   this.battleStep = null;
-  this.damageStepTiming = null;
 
   const activePlayer = this.turn === "player" ? this.player : this.bot;
   const opponent = activePlayer === this.player ? this.bot : this.player;
@@ -222,7 +221,6 @@ export async function startTurn() {
 
   this.phase = "standby";
   this.battleStep = null;
-  this.damageStepTiming = null;
 
   this.updateBoard();
   await this.checkAndOfferTraps("phase_start", {
@@ -260,7 +258,6 @@ export async function startTurn() {
 
   this.phase = "main1";
   this.battleStep = null;
-  this.damageStepTiming = null;
   this.updateBoard();
   await this.checkAndOfferTraps("phase_start", {
     currentPhase: "main1",
@@ -321,7 +318,6 @@ export async function endTurn() {
   this.clearAttackResolutionIndicators();
   this.clearAttackReadyIndicators();
   this.battleStep = null;
-  this.damageStepTiming = null;
 
   this.turn = this.turn === "player" ? "bot" : "player";
   await this.startTurn();

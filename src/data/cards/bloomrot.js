@@ -14,6 +14,8 @@ export const bloomrotCards = [
     image: "assets/Bloomrot Sporeling.png",
     effects: [
       {
+
+        usagePolicy: "use",
         id: "bloomrot_sporeling_normal_summon_rootling",
         timing: "on_event",
         triggerRequirement: "optional",
@@ -54,6 +56,8 @@ export const bloomrotCards = [
         ],
       },
       {
+
+        usagePolicy: "use",
         id: "bloomrot_sporeling_leave_field_search_spell",
         timing: "on_event",
         triggerRequirement: "optional",
@@ -97,9 +101,10 @@ export const bloomrotCards = [
     image: "assets/Bloomrot Rootling.png",
     effects: [
       {
+
+        activationZones: ["hand"],
         id: "bloomrot_rootling_special_summon_hand",
         timing: "ignition",
-        requireZone: "hand",
         requirePhase: ["main1", "main2"],
         conditions: [
           {
@@ -127,9 +132,12 @@ export const bloomrotCards = [
         ],
       },
       {
+
+        activationZones: ["field"],
+
+        usagePolicy: "activate",
         id: "bloomrot_rootling_ignition_spore_counter",
         timing: "ignition",
-        requireZone: "field",
         requireFaceup: true,
         requirePhase: ["main1", "main2"],
         oncePerTurn: true,
@@ -204,9 +212,12 @@ export const bloomrotCards = [
         ],
       },
       {
+
+        activationZones: ["field"],
+
+        usagePolicy: "activate",
         id: "bloomrot_myco_weaver_send_bloomrot_spore_counters",
         timing: "ignition",
-        requireZone: "field",
         requireFaceup: true,
         requirePhase: ["main1", "main2"],
         oncePerTurn: true,
@@ -265,9 +276,12 @@ export const bloomrotCards = [
     image: "assets/Bloomrot Rot-Stag.png",
     effects: [
       {
+
+        activationZones: ["hand"],
+
+        usagePolicy: "use",
         id: "bloomrot_rot_stag_special_summon_hand",
         timing: "ignition",
-        requireZone: "hand",
         requirePhase: ["main1", "main2"],
         oncePerTurn: true,
         oncePerTurnName: "bloomrot_rot_stag_special_summon_hand",
@@ -308,6 +322,8 @@ export const bloomrotCards = [
         ],
       },
       {
+
+        usagePolicy: "use",
         id: "bloomrot_rot_stag_special_summon_spore_counter",
         timing: "on_event",
         triggerRequirement: "mandatory",
@@ -337,6 +353,10 @@ export const bloomrotCards = [
         ],
       },
       {
+
+        usagePolicy: "use",
+
+        activationLabelKey: "effects.rotStag.attackBoost",
         id: "bloomrot_rot_stag_attack_spore_boost",
         timing: "on_event",
         triggerRequirement: "mandatory",
@@ -370,6 +390,10 @@ export const bloomrotCards = [
         ],
       },
       {
+
+        usagePolicy: "use",
+
+        activationLabelKey: "effects.rotStag.defenseBoost",
         id: "bloomrot_rot_stag_defense_spore_boost",
         timing: "on_event",
         triggerRequirement: "mandatory",
@@ -419,9 +443,12 @@ export const bloomrotCards = [
     image: "assets/Bloomrot Carrioncap.png",
     effects: [
       {
+
+        activationZones: ["field"],
+
+        usagePolicy: "use",
         id: "bloomrot_carrioncap_ignition_spore_debuff",
         timing: "ignition",
-        requireZone: "field",
         requireFaceup: true,
         requirePhase: ["main1", "main2"],
         oncePerTurn: true,
@@ -455,6 +482,8 @@ export const bloomrotCards = [
         ],
       },
       {
+
+        usagePolicy: "use",
         id: "bloomrot_carrioncap_battle_destroy_spore_counter",
         timing: "on_event",
         triggerRequirement: "mandatory",
@@ -512,13 +541,11 @@ export const bloomrotCards = [
         triggerRequirement: "mandatory",
         triggerTiming: "if",
         event: "battle_damage",
-        allowDamageStepActivation: true,
+        damageStepTimings: ["before_damage_calculation"],
         requireZone: "field",
         requireFaceup: true,
         requireOpponentAttack: true,
         requireSelfAsDefender: true,
-        oncePerTurn: true,
-        oncePerTurnName: "bloomrot_mold_mender_attack_spores",
         targets: [
           {
             id: "bloomrot_mold_mender_attacker",
@@ -591,9 +618,12 @@ export const bloomrotCards = [
     image: "assets/Bloomrot Gravecap Widow.png",
     effects: [
       {
+
+        activationZones: ["hand"],
+
+        usagePolicy: "use",
         id: "bloomrot_gravecap_widow_special_summon_hand",
         timing: "ignition",
-        requireZone: "hand",
         requirePhase: ["main1", "main2"],
         oncePerTurn: true,
         oncePerTurnName:
@@ -635,6 +665,8 @@ export const bloomrotCards = [
         ],
       },
       {
+
+        usagePolicy: "use",
         id: "bloomrot_gravecap_widow_summon_destroy_infected",
         timing: "on_event",
         triggerRequirement: "mandatory",
@@ -664,6 +696,8 @@ export const bloomrotCards = [
         ],
       },
       {
+
+        usagePolicy: "use",
         id: "bloomrot_gravecap_widow_destroyed_infected_spore",
         timing: "on_event",
         triggerRequirement: "mandatory",
@@ -717,9 +751,12 @@ export const bloomrotCards = [
     image: "assets/Bloomrot Ancient Husk.png",
     effects: [
       {
+
+        activationZones: ["hand"],
+
+        usagePolicy: "use",
         id: "bloomrot_ancient_husk_special_summon_hand",
         timing: "ignition",
-        requireZone: "hand",
         requirePhase: ["main1", "main2"],
         oncePerTurn: true,
         oncePerTurnName: "bloomrot_ancient_husk_special_summon_hand",
@@ -760,9 +797,12 @@ export const bloomrotCards = [
         ],
       },
       {
+
+        activationZones: ["field"],
+
+        usagePolicy: "use",
         id: "bloomrot_ancient_husk_ignition_spore_counters",
         timing: "ignition",
-        requireZone: "field",
         requireFaceup: true,
         requirePhase: ["main1", "main2"],
         oncePerTurn: true,
@@ -788,6 +828,8 @@ export const bloomrotCards = [
         ],
       },
       {
+
+        usagePolicy: "use",
         id: "bloomrot_ancient_husk_destroyed_infected_spore",
         timing: "on_event",
         triggerRequirement: "mandatory",
@@ -837,6 +879,8 @@ export const bloomrotCards = [
     image: "assets/Bloomrot Spore Cloud.png",
     effects: [
       {
+
+        usagePolicy: "activate",
         id: "bloomrot_spore_cloud_activation",
         timing: "on_play",
         oncePerTurn: true,
@@ -880,9 +924,12 @@ export const bloomrotCards = [
     image: "assets/Bloomrot Living Colony.png",
     effects: [
       {
+
+        activationZones: ["fieldSpell"],
+
+        usagePolicy: "activate",
         id: "bloomrot_living_colony_ignition_spore_counter",
         timing: "ignition",
-        requireZone: "fieldSpell",
         requireFaceup: true,
         requirePhase: ["main1", "main2"],
         oncePerTurn: true,
@@ -995,6 +1042,8 @@ export const bloomrotCards = [
     image: "assets/Bloomrot Compost Ritual.png",
     effects: [
       {
+
+        usagePolicy: "activate",
         id: "bloomrot_compost_ritual_activation",
         timing: "on_play",
         oncePerTurn: true,
@@ -1066,9 +1115,12 @@ export const bloomrotCards = [
         },
       },
       {
+
+        activationZones: ["spellTrap"],
+
+        usagePolicy: "activate",
         id: "bloomrot_root_network_recover",
         timing: "ignition",
-        requireZone: "spellTrap",
         requireFaceup: true,
         requirePhase: ["main1", "main2"],
         oncePerTurn: true,
@@ -1221,6 +1273,8 @@ export const bloomrotCards = [
         },
       },
       {
+
+        usagePolicy: "use",
         id: "bloomrot_fungal_armor_equipped_protection",
         timing: "passive",
         requireZone: "spellTrap",
@@ -1296,6 +1350,8 @@ export const bloomrotCards = [
     image: "assets/Bloomrot Harvest.png",
     effects: [
       {
+
+        usagePolicy: "activate",
         id: "bloomrot_harvest_activation",
         timing: "on_play",
         oncePerTurn: true,
@@ -1460,6 +1516,8 @@ export const bloomrotCards = [
     image: "assets/Bloomrot Sudden Germination.png",
     effects: [
       {
+
+        usagePolicy: "activate",
         id: "bloomrot_sudden_germination_attack",
         timing: "on_event",
         triggerRequirement: "optional",
@@ -1614,9 +1672,12 @@ export const bloomrotCards = [
         },
       },
       {
+
+        activationZones: ["spellTrap"],
+
+        usagePolicy: "activate",
         id: "bloomrot_rotting_ground_negate_infected",
         timing: "ignition",
-        requireZone: "spellTrap",
         requireFaceup: true,
         requirePhase: ["main1", "main2"],
         oncePerTurn: true,
@@ -1693,9 +1754,12 @@ export const bloomrotCards = [
         ],
       },
       {
+
+        activationZones: ["field"],
+
+        usagePolicy: "activate",
         id: "bloomrot_ancient_mycelium_destroy_defense",
         timing: "ignition",
-        requireZone: "field",
         requireFaceup: true,
         requirePhase: ["main1", "main2"],
         oncePerTurn: true,
@@ -1770,6 +1834,8 @@ export const bloomrotCards = [
     image: "assets/Bloomrot Queen of the Hollow Grove.png",
     effects: [
       {
+
+        usagePolicy: "use",
         id: "bloomrot_queen_hollow_grove_ascension_debuff",
         timing: "on_event",
         triggerRequirement: "mandatory",
@@ -1812,9 +1878,12 @@ export const bloomrotCards = [
         ],
       },
       {
+
+        activationZones: ["field"],
+
+        usagePolicy: "use",
         id: "bloomrot_queen_hollow_grove_remove_and_heal",
         timing: "ignition",
-        requireZone: "field",
         requireFaceup: true,
         requirePhase: ["main1", "main2"],
         oncePerTurn: true,
@@ -1858,6 +1927,8 @@ export const bloomrotCards = [
         ],
       },
       {
+
+        usagePolicy: "use",
         id: "bloomrot_queen_hollow_grove_leave_spores",
         timing: "on_event",
         triggerRequirement: "mandatory",
@@ -1944,9 +2015,12 @@ export const bloomrotCards = [
         ],
       },
       {
+
+        activationZones: ["field"],
+
+        usagePolicy: "activate",
         id: "bloomrot_devourer_dead_roots_destroy_spored_monsters",
         timing: "ignition",
-        requireZone: "field",
         requireFaceup: true,
         requirePhase: ["main1", "main2"],
         oncePerTurn: true,

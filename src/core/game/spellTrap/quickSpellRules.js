@@ -32,6 +32,40 @@ const DIRECT_ATK_DEF_ACTIONS = new Set([
   "set_original_stats",
 ]);
 
+export const DAMAGE_STEP_TIMINGS = Object.freeze({
+  START: "start_of_damage_step",
+  BEFORE_CALCULATION: "before_damage_calculation",
+  CALCULATION: "damage_calculation",
+  AFTER_CALCULATION: "after_damage_calculation",
+  END: "end_of_damage_step",
+});
+
+export const DAMAGE_STEP_ACTIVATION_CATEGORIES = Object.freeze({
+  COUNTER_TRAP: "counter_trap",
+  ACTIVATION_NEGATION: "activation_negation",
+  DIRECT_ATK_DEF: "direct_atk_def",
+  EXPLICIT_TIMING: "explicit_timing",
+  EVENT_TRIGGER: "event_trigger",
+  GENERIC_FAST_EFFECT: "generic_fast_effect",
+});
+
+const ALL_DAMAGE_STEP_TIMINGS = Object.freeze(
+  Object.values(DAMAGE_STEP_TIMINGS),
+);
+const PRE_CALCULATION_TIMINGS = Object.freeze([
+  DAMAGE_STEP_TIMINGS.START,
+  DAMAGE_STEP_TIMINGS.BEFORE_CALCULATION,
+]);
+const DAMAGE_STEP_EVENT_TIMINGS = Object.freeze({
+  damage_step: null,
+  battle_damage: DAMAGE_STEP_TIMINGS.BEFORE_CALCULATION,
+  battle_damage_inflicted: DAMAGE_STEP_TIMINGS.AFTER_CALCULATION,
+  battle_completed: DAMAGE_STEP_TIMINGS.AFTER_CALCULATION,
+  card_flipped: DAMAGE_STEP_TIMINGS.AFTER_CALCULATION,
+  battle_destroy: DAMAGE_STEP_TIMINGS.END,
+  card_to_grave: DAMAGE_STEP_TIMINGS.END,
+});
+
 function result(ok, detail = {}) {
   return {
     ok,
@@ -207,6 +241,79 @@ function getCardSpellSpeed(card, effect = null) {
 
 function isCounterTrap(card) {
   return card?.cardKind === "trap" && card?.subtype === "counter";
+}
+
+function actionNegatesActivation(action) {
+  if (!action) return false;
+  return (
+    action.type === "negate_activation" ||
+    action.type === "negate_summon_or_activation_and_destroy"
+  );
+}
+
+function effectNegatesActivation(effect) {
+  return (effect?.actions || []).some(actionNegatesActivation);
+}
+
+function normalizeDamageStepTimings(effect) {
+  const declared = Array.isArray(effect?.damageStepTimings)
+    ? effect.damageStepTimings
+    : [];
+  return [...new Set(declared.filter((timing) =>
+    ALL_DAMAGE_STEP_TIMINGS.includes(timing),
+  ))];
+}
+
+function isActivationResponseContext(context = {}) {
+  const type = context.responseContextType || context.type || null;
+  return (
+    type === "card_activation" ||
+    type === "effect_activation" ||
+    context.respondingToChainLink != null ||
+    context.activationAttempt != null
+  );
+}
+
+export function classifyDamageStepActivation(effect, card, context = {}) {
+  const explicitTimings = normalizeDamageStepTimings(effect);
+  if (isCounterTrap(card)) {
+    return {
+      category: DAMAGE_STEP_ACTIVATION_CATEGORIES.COUNTER_TRAP,
+      allowedTimings: [...ALL_DAMAGE_STEP_TIMINGS],
+    };
+  }
+  if (effectNegatesActivation(effect) && isActivationResponseContext(context)) {
+    return {
+      category: DAMAGE_STEP_ACTIVATION_CATEGORIES.ACTIVATION_NEGATION,
+      allowedTimings: [...ALL_DAMAGE_STEP_TIMINGS],
+    };
+  }
+  if (explicitTimings.length > 0) {
+    return {
+      category: DAMAGE_STEP_ACTIVATION_CATEGORIES.EXPLICIT_TIMING,
+      allowedTimings: explicitTimings,
+    };
+  }
+  const eventTiming = DAMAGE_STEP_EVENT_TIMINGS[effect?.event];
+  if (effect?.timing === "on_event" && eventTiming) {
+    return {
+      category: DAMAGE_STEP_ACTIVATION_CATEGORIES.EVENT_TRIGGER,
+      allowedTimings: [eventTiming],
+    };
+  }
+  if (
+    isDamageStepEffectSource(effect, card) &&
+    effectDirectlyChangesAtkDef(effect)
+  ) {
+    return {
+      category: DAMAGE_STEP_ACTIVATION_CATEGORIES.DIRECT_ATK_DEF,
+      allowedTimings: [...PRE_CALCULATION_TIMINGS],
+    };
+  }
+  return {
+    category: DAMAGE_STEP_ACTIVATION_CATEGORIES.GENERIC_FAST_EFFECT,
+    allowedTimings: [],
+  };
 }
 
 function isQuickMonsterEffect(effect, card) {
@@ -400,24 +507,33 @@ export function effectDirectlyChangesAtkDef(effect) {
 export function canActivateDuringDamageStep(effect, card, context = {}) {
   const spellSpeed = getCardSpellSpeed(card, effect);
   if (!isDamageStepContext(context)) {
-    return result(true, { spellSpeed });
+    return result(true, {
+      spellSpeed,
+      category: null,
+      timing: null,
+      allowedTimings: [],
+    });
   }
-  if (isCounterTrap(card)) {
-    return result(true, { spellSpeed: 3 });
+  const timing = context.damageStepTiming || null;
+  const classification = classifyDamageStepActivation(effect, card, context);
+  if (!timing || !ALL_DAMAGE_STEP_TIMINGS.includes(timing)) {
+    return failure(
+      "DAMAGE_STEP_TIMING_MISSING",
+      "Damage Step activation requires an exact substep.",
+      { spellSpeed, timing, ...classification },
+    );
   }
-  if (effect?.allowDamageStepActivation === true) {
-    return result(true, { spellSpeed });
-  }
-  if (
-    isDamageStepEffectSource(effect, card) &&
-    effectDirectlyChangesAtkDef(effect)
-  ) {
-    return result(true, { spellSpeed });
+  if (classification.allowedTimings.includes(timing)) {
+    return result(true, {
+      spellSpeed,
+      timing,
+      ...classification,
+    });
   }
   return failure(
     "DAMAGE_STEP_RESTRICTED",
-    "This effect cannot be activated during the Damage Step.",
-    { spellSpeed },
+    `This effect cannot be activated during ${timing}.`,
+    { spellSpeed, timing, ...classification },
   );
 }
 

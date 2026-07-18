@@ -53,9 +53,12 @@ export const arcanistCards = [
         ],
       },
       {
+
+        activationZones: ["spellTrap"],
+
+        usagePolicy: "activate",
         id: "arcanist_grimoire_activate_stored",
         timing: "ignition",
-        requireZone: "spellTrap",
         oncePerTurn: true,
         oncePerTurnName: "arcanist_grimoire_activate_stored",
         conditions: [{ type: "has_stored_blueprint" }],
@@ -78,6 +81,8 @@ export const arcanistCards = [
     image: "assets/Arcanist Apprentice.png",
     effects: [
       {
+
+        usagePolicy: "activate",
         id: "arcanist_apprentice_search_spell",
         timing: "on_event",
         triggerRequirement: "optional",
@@ -196,6 +201,8 @@ export const arcanistCards = [
     image: "assets/Lightning Magic Lance.png",
     effects: [
       {
+
+        usagePolicy: "activate",
         id: "lightning_magic_lance_effect",
         timing: "on_play",
         speed: 1,
@@ -270,6 +277,10 @@ export const arcanistCards = [
     image: "assets/Viridis, Arcanist of Life.png",
     effects: [
       {
+
+        activationZones: ["field"],
+
+        usagePolicy: "use",
         id: "viridis_arcanist_life_bounce",
         timing: "ignition",
         oncePerTurn: true,
@@ -297,6 +308,8 @@ export const arcanistCards = [
         ],
       },
       {
+
+        usagePolicy: "use",
         id: "viridis_arcanist_life_recover",
         timing: "on_event",
         triggerRequirement: "optional",
@@ -344,6 +357,10 @@ export const arcanistCards = [
     image: "assets/Tera, Arcanist of Earth.png",
     effects: [
       {
+
+        activationZones: ["field"],
+
+        usagePolicy: "use",
         id: "tera_arcanist_earth_ignition",
         timing: "ignition",
         requireFaceup: true,
@@ -366,6 +383,10 @@ export const arcanistCards = [
         ],
       },
       {
+
+        activationZones: ["field"],
+
+        usagePolicy: "use",
         id: "tera_arcanist_earth_quick",
         timing: "manual",
         speed: 2,
@@ -417,9 +438,12 @@ export const arcanistCards = [
     image: "assets/Albus, Arcanist of Ice.png",
     effects: [
       {
+
+        activationZones: ["hand"],
+
+        usagePolicy: "activate",
         id: "albus_arcanist_ice_special_summon",
         timing: "ignition",
-        requireZone: "hand",
         requirePhase: ["main1", "main2"],
         oncePerTurn: true,
         oncePerTurnName: "albus_arcanist_ice_special_summon",
@@ -446,6 +470,8 @@ export const arcanistCards = [
         ],
       },
       {
+
+        usagePolicy: "activate",
         id: "albus_arcanist_ice_recover",
         timing: "on_event",
         triggerRequirement: "optional",
@@ -499,6 +525,8 @@ export const arcanistCards = [
     image: "assets/Master of Mirrors Arcanist.png",
     effects: [
       {
+
+        usagePolicy: "activate",
         id: "master_mirrors_arcanist_shuffle_draw",
         timing: "on_event",
         triggerRequirement: "optional",
@@ -540,6 +568,8 @@ export const arcanistCards = [
         ],
       },
       {
+
+        usagePolicy: "activate",
         id: "master_mirrors_arcanist_revive",
         timing: "on_event",
         triggerRequirement: "optional",
@@ -585,6 +615,8 @@ export const arcanistCards = [
     image: "assets/Meeting of the Arcanists.png",
     effects: [
       {
+
+        usagePolicy: "use",
         id: "meeting_arcanists_spell_guard",
         timing: "passive",
         requireFaceup: true,
@@ -606,6 +638,10 @@ export const arcanistCards = [
         },
       },
       {
+
+        activationZones: ["spellTrap"],
+
+        usagePolicy: "activate",
         id: "meeting_arcanists_choose_effect",
         timing: "ignition",
         oncePerTurn: true,
@@ -714,6 +750,8 @@ export const arcanistCards = [
     image: "assets/Arcanist Ice Barrier.png",
     effects: [
       {
+
+        usagePolicy: "activate",
         id: "arcanist_ice_barrier_guard",
         timing: "on_play",
         speed: 1,
@@ -807,6 +845,8 @@ export const arcanistCards = [
     image: "assets/Arcanist Ink River.png",
     effects: [
       {
+
+        activationLabelKey: "effects.inkRiver.normalSpell",
         id: "arcanist_ink_river_counter_normal_spell",
         timing: "on_event",
         triggerRequirement: "mandatory",
@@ -837,6 +877,8 @@ export const arcanistCards = [
         ],
       },
       {
+
+        activationLabelKey: "effects.inkRiver.fieldSpell",
         id: "arcanist_ink_river_counter_field_spell_effect",
         timing: "on_event",
         triggerRequirement: "mandatory",
@@ -868,9 +910,10 @@ export const arcanistCards = [
         ],
       },
       {
+
+        activationZones: ["spellTrap"],
         id: "arcanist_ink_river_recover",
         timing: "ignition",
-        requireZone: "spellTrap",
         requirePhase: ["main1", "main2"],
         conditions: [
           {
@@ -908,9 +951,12 @@ export const arcanistCards = [
     image: "assets/Arcanist Grand Library.png",
     effects: [
       {
+
+        activationZones: ["fieldSpell"],
+
+        usagePolicy: "activate",
         id: "arcanist_grand_library_ignition",
         timing: "ignition",
-        requireZone: "fieldSpell",
         requirePhase: ["main1", "main2"],
         oncePerTurn: true,
         oncePerTurnName: "arcanist_grand_library_ignition",
@@ -989,6 +1035,8 @@ export const arcanistCards = [
         ],
       },
       {
+
+        usagePolicy: "activate",
         id: "arcanist_grand_library_battle_draw",
         timing: "on_event",
         triggerRequirement: "mandatory",
@@ -1071,6 +1119,8 @@ export const arcanistCards = [
         ],
       },
       {
+
+        usagePolicy: "activate",
         id: "elementalist_master_destroy",
         timing: "on_event",
         triggerRequirement: "optional",
@@ -1144,6 +1194,8 @@ export const arcanistCards = [
         ],
       },
       {
+
+        usagePolicy: "use",
         id: "azrath_equip_halve",
         timing: "on_event",
         triggerRequirement: "optional",
@@ -1246,6 +1298,8 @@ export const arcanistCards = [
     image: "assets/Arcanist Seismic Impact.png",
     effects: [
       {
+
+        usagePolicy: "activate",
         id: "seismic_impact_effect",
         timing: "on_play",
         speed: 1,

@@ -67,6 +67,12 @@ export const CHAIN_CONTEXTS = {
     requiresChainWindow: true,
   },
 
+  damage_step: {
+    description: "During an exact Damage Step substep",
+    allowedSpeeds: [2, 3],
+    requiresChainWindow: true,
+  },
+
   battle_destroy: {
     description: "When a monster is destroyed by battle",
     allowedSpeeds: [2, 3],

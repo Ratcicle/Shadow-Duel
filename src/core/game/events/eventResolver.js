@@ -136,7 +136,9 @@ export async function resolveEvent(eventName, payload, options = {}) {
     } else if (
       this.chainSystem?.isChainResolving?.() === true ||
       this.chainSystem?.isPreparingActivation === true ||
-      this.chainSystem?.isChainWindowOpen?.() === true
+      this.chainSystem?.isChainWindowOpen?.() === true ||
+      Number(this.summonProcedureDepth || 0) > 0 ||
+      Number(this.damageStepProcedureDepth || 0) > 0
     ) {
       resolutionResult = this.queueTriggerOccurrence(occurrence);
     } else {
@@ -167,8 +169,7 @@ export async function resolveEvent(eventName, payload, options = {}) {
         this.pendingTriggerSelection != null ||
         this.chainSystem?.pendingTriggerSelection != null;
       if (
-        (eventName !== "target_selection_options" &&
-          cleanupState.selectionActive) ||
+        cleanupState.selectionActive ||
         cleanupState.controlsVisible ||
         cleanupState.highlightCount > 0
       ) {
@@ -224,30 +225,10 @@ export function queueTriggerOccurrence(occurrence) {
   return result;
 }
 
-/**
- * Phase 9 compatibility adapter. New callers must create/queue occurrences.
- */
-export function queuePendingChainEvent(entry = {}) {
-  const occurrence =
-    entry?.occurrence ||
-    this.chainSystem?.createTriggerOccurrence?.(
-      entry.eventName,
-      entry.payload || {},
-      {
-        entries: Array.isArray(entry.entries) ? entry.entries : [],
-        entriesProvided: Object.hasOwn(entry, "entries"),
-        orderRule: entry.orderRule || null,
-        onComplete: entry.onComplete || null,
-        atomicGroupId: entry.atomicGroupId || null,
-      },
-    );
-  return this.queueTriggerOccurrence(occurrence);
-}
-
 /** Drain one complete post-Chain occurrence batch into a single SEGOC check. */
 export async function flushPendingTriggerOccurrences({ reason = null } = {}) {
   const chain = this.chainSystem;
-  if (this._flushingPendingChainEvents === true) {
+  if (this._flushingPendingTriggerOccurrences === true) {
     return { ok: true, flushed: 0, deferred: true };
   }
   if (
@@ -262,7 +243,7 @@ export async function flushPendingTriggerOccurrences({ reason = null } = {}) {
     return { ok: true, flushed: 0 };
   }
 
-  this._flushingPendingChainEvents = true;
+  this._flushingPendingTriggerOccurrences = true;
   chain._flushingPendingTriggerOccurrences = true;
   let flushed = 0;
   let chainBuilt = false;
@@ -286,13 +267,8 @@ export async function flushPendingTriggerOccurrences({ reason = null } = {}) {
     return { ok: true, success: true, chainBuilt, flushed };
   } finally {
     chain._flushingPendingTriggerOccurrences = false;
-    this._flushingPendingChainEvents = false;
+    this._flushingPendingTriggerOccurrences = false;
   }
-}
-
-/** Phase 9 compatibility adapter. */
-export async function flushPendingChainEvents(options = {}) {
-  return await this.flushPendingTriggerOccurrences(options);
 }
 
 async function offerPostEventFastWindow(game, eventName, payload) {
@@ -472,30 +448,6 @@ export async function resumePendingEventSelection(
     });
   }
 
-  // After resolving card_to_grave selections from battle, continue the
-  // battle_destroy window only after the graveyard trigger has fully resolved.
-  if (
-    this.pendingBattleDestroyAfterSelection &&
-    resolutionResult?.ok &&
-    !resolutionResult?.needsSelection
-  ) {
-    const pendingBattleDestroy = this.pendingBattleDestroyAfterSelection;
-    this.pendingBattleDestroyAfterSelection = null;
-    this.devLog("BATTLE_DESTROY_RESUME", {
-      summary: `Resuming battle_destroy for ${pendingBattleDestroy.destroyed?.name || "(none)"}`,
-    });
-
-    const battleDestroyResult = await this.applyBattleDestroyEffect(
-      pendingBattleDestroy.attacker,
-      pendingBattleDestroy.destroyed,
-      pendingBattleDestroy.extras || {},
-    );
-
-    if (battleDestroyResult?.needsSelection) {
-      return battleDestroyResult;
-    }
-  }
-
   const synchroContinuationResult =
     await this.finishPendingSynchroMaterialTriggerContinuation?.(
       resolutionResult,
@@ -506,33 +458,6 @@ export async function resumePendingEventSelection(
   }
   if (synchroContinuationResult?.ok === false) {
     return synchroContinuationResult;
-  }
-
-  // After resolving the event, check if there's a pending tie destruction to continue
-  if (
-    this.pendingTieDestruction &&
-    resolutionResult?.ok &&
-    !resolutionResult?.needsSelection
-  ) {
-    const tieInfo = this.pendingTieDestruction;
-    this.pendingTieDestruction = null;
-    this.devLog("TIE_DESTRUCTION", {
-      summary: `Resuming pending tie destruction for ${tieInfo.target?.name || "(none)"}`,
-    });
-
-    // Continue the combat by destroying the target
-    const tieResult = await this.finishCombat(
-      tieInfo.attacker,
-      tieInfo.target,
-      {
-        resumeFromTie: true,
-      },
-    );
-
-    // If this also needs selection, return that
-    if (tieResult?.needsSelection) {
-      return tieResult;
-    }
   }
 
   return (

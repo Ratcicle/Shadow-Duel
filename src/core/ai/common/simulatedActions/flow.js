@@ -47,8 +47,8 @@ export function applyNegateActivation(ctx) {
     null;
   if (!activationAttempt || !targetCard) return;
 
-  activationAttempt.negated = true;
-  activationContext.negated = true;
+  activationAttempt.activationNegated = true;
+  activationContext.activationNegated = true;
   if (action.storeNegatedCardAs) {
     if (selections && typeof selections === "object") {
       selections[action.storeNegatedCardAs] = [targetCard];

@@ -13,6 +13,8 @@
  * - tryAscensionSummon
  */
 
+import { SUMMON_MODES, SUMMON_ORIGINS } from "./transaction.js";
+
 /**
  * Gets the turn counter when a material became face-up on the field.
  * Used to check if material has been face-up on field for at least 1 turn.
@@ -456,65 +458,52 @@ export async function performAscensionSummon(
   );
   ascensionCard.ascensionMaterials = [];
 
-  const result = await this.runZoneOp(
-    "ASCENSION_SUMMON",
-    async () => {
-      const sendResult = await this.moveCard(
-        materialCard,
-        player,
-        "graveyard",
-        {
-          fromZone: "field",
-          contextLabel: "ascension_material",
+  const prepared = this.createPreparedSummon({
+    card: ascensionCard,
+    controller: player,
+    sourceZone: "extraDeck",
+    summonOrigin: SUMMON_ORIGINS.PROCEDURE,
+    summonMode: SUMMON_MODES.SUMMON,
+    summonMethod: "ascension",
+    summonProcedure: "ascension",
+    position: resolvedPosition,
+    costPayments: [
+      {
+        card: materialCard,
+        owner: player,
+        fromZone: "field",
+        toZone: "graveyard",
+        kind: "ascension_material",
+        contextLabel: "ascension_material",
+        options: {
           wasDestroyed: false,
-        }
-      );
-      if (sendResult?.success === false) {
-        return {
-          success: false,
-          needsSelection: false,
-          reason: "Failed to pay material.",
-        };
-      }
-
+          awaitCardToGraveEvent: true,
+          awaitCardMovedEvent: true,
+        },
+      },
+    ],
+    perform: async (transaction) => {
       const summonResult = await this.moveCard(ascensionCard, player, "field", {
         fromZone: "extraDeck",
         position: resolvedPosition,
         isFacedown: false,
         resetAttackFlags: true,
         summonMethodOverride: "ascension",
+        summonProcedure: "ascension",
+        summonOrigin: SUMMON_ORIGINS.PROCEDURE,
+        summonTransaction: transaction,
         contextLabel: "ascension_summon",
+        awaitCardMovedEvent: true,
       });
-      if (summonResult?.success === false) {
-        return {
-          success: false,
-          needsSelection: false,
-          reason: summonResult.reason || "Ascension summon failed.",
-        };
+      if (summonResult?.success !== false) {
+        ascensionCard.ascensionMaterials = materialMetadata
+          ? [materialMetadata]
+          : [];
       }
-
-      ascensionCard.ascensionMaterials = materialMetadata
-        ? [materialMetadata]
-        : [];
-
-      // Propagar needsSelection do after_summon
-      if (summonResult.needsSelection) {
-        return {
-          success: true,
-          needsSelection: true,
-          selectionContract: summonResult.selectionContract,
-        };
-      }
-
-      return { success: true, needsSelection: false };
+      return summonResult;
     },
-    {
-      contextLabel: "ascension_summon",
-      card: ascensionCard,
-      fromZone: "extraDeck",
-      toZone: "field",
-    }
-  );
+  });
+  const result = await this.executeSummonTransaction(prepared);
 
   if (result?.success) {
     game.ui.log(

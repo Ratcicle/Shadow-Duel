@@ -252,10 +252,9 @@ export async function handleTriggeredEffect(
     ctx.selections = selections;
     if (
       ctx.activationContext &&
-      typeof ctx.activationContext === "object" &&
-      !ctx.activationContext.selections
+      typeof ctx.activationContext === "object"
     ) {
-      ctx.activationContext.selections = selections;
+      ctx.activationContext.resolutionSelections = selections;
     }
   }
 
@@ -623,12 +622,6 @@ export function buildTriggerEntry(options = {}) {
       return activateImpl(selections, activationCtx, resolvedCtx);
     },
     onSuccess: async (result, activationCtx) => {
-      // Explicit Phase 4 policies are settled by the Chain Link reservation.
-      // Phase 9: remove this adapter after every effect declares usagePolicy.
-      if (effect.usagePolicy !== "use" && effect.usagePolicy !== "activate") {
-        this.registerOncePerTurnUsage(sourceCard, owner, effect);
-        this.registerOncePerDuelUsage(sourceCard, owner, effect);
-      }
       if (typeof options.onSuccess === "function") {
         await options.onSuccess(result, activationCtx);
       }

@@ -346,7 +346,9 @@ export default class Player {
       if (isExtraDeckMonsterData(data)) return;
       copies[data.id] = copies[data.id] || 0;
       if (copies[data.id] >= 3 || this.deck.length >= maxDeckSize) return;
-      this.deck.push(new Card(data, this.id));
+      const card = new Card(data, this.id);
+      this.game?.ensureDuelCardId?.(card);
+      this.deck.push(card);
       copies[data.id]++;
     };
 
@@ -408,7 +410,9 @@ export default class Player {
       }
       if (copies.has(data.id)) return;
       if (this.extraDeck.length >= this.maxExtraDeckSize) return;
-      this.extraDeck.push(new Card(data, this.id));
+      const card = new Card(data, this.id);
+      this.game?.ensureDuelCardId?.(card);
+      this.extraDeck.push(card);
       copies.add(data.id);
     };
 
@@ -421,6 +425,10 @@ export default class Player {
   }
 
   shuffleDeck() {
+    if (typeof this.game?.shuffle === "function") {
+      this.game.shuffle(this.deck);
+      return;
+    }
     for (let i = this.deck.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [this.deck[i], this.deck[j]] = [this.deck[j], this.deck[i]];
@@ -532,24 +540,6 @@ export default class Player {
     }
 
     if (cardIndex >= 0 && cardIndex < this.hand.length) {
-      const sendToGrave = async (sacrificed) => {
-        if (!sacrificed) return { success: false };
-        if (this.game && typeof this.game.moveCard === "function") {
-          return await this.game.moveCard(sacrificed, this, "graveyard", {
-            fromZone: "field",
-            awaitCardToGraveEvent: true,
-            contextLabel: "tribute_summon_cost",
-          });
-        }
-
-        const idx = this.field.indexOf(sacrificed);
-        if (idx > -1) {
-          this.field.splice(idx, 1);
-        }
-        this.graveyard.push(sacrificed);
-        return { success: true };
-      };
-
       const tributeInfo = this.getTributeRequirement(card);
       let { tributesNeeded, usingAlt, alt } = tributeInfo;
 
@@ -639,43 +629,86 @@ export default class Player {
       }
 
       // Track tributed cards for replay/event system
-      const tributedCards = [];
-      for (const sacrificed of tributeCards) {
-        if (sacrificed) tributedCards.push({ ...sacrificed });
-        const tributeResult = await sendToGrave(sacrificed);
-        if (tributeResult?.success === false) {
-          return failSummon(
-            `Could not tribute ${sacrificed?.name || "card"}.`,
-            "TRIBUTE_FAILED",
-          );
-        }
+      if (!this.game?.createPreparedSummon || !this.game?.executeSummonTransaction) {
+        return failSummon(
+          "Summon transaction coordinator is unavailable.",
+          "SUMMON_COORDINATOR_UNAVAILABLE",
+        );
       }
+      const willSet = isFacedown === true || summonPosition === "defense";
+      const summonMethod = tributesNeeded > 0 ? "tribute" : "normal";
+      const tributedCards = tributeCards.map((sacrificed) => ({ ...sacrificed }));
 
-      this.hand.splice(cardIndex, 1);
-      card.position = summonPosition;
-      // REGRA DO JOGO: defense = sempre facedown (set)
-      // facedown = true força defense, e defense força facedown
-      card.isFacedown = isFacedown === true || card.position === "defense";
-      if (card.isFacedown) {
-        card.position = "defense";
-      }
-      card.hasAttacked = false;
-      card.attacksUsedThisTurn = 0;
-      card.cannotAttackThisTurn = false; // Normal Summon pode atacar no mesmo turno
-      card.positionChangedThisTurn = false;
-      card.summonedTurn = this.game?.turnCounter || null;
-      this.field.push(card);
-      this.summonCount++;
-      recordNormalSummonForTurn(this, card);
-
-      // 🔧 FIX: Clear targeting cache after Normal Summon to ensure new monsters
-      // are visible for field spell effects and other targeting
-      if (this.game?.effectEngine?.clearTargetingCache) {
-        this.game.effectEngine.clearTargetingCache();
-      }
-
-      // Return object with card and tributes for replay/event tracking
-      return { card, tributes: tributedCards };
+      const prepared = this.game.createPreparedSummon({
+        card,
+        controller: this,
+        sourceZone: "hand",
+        summonOrigin: "procedure",
+        summonMode: willSet ? "set" : "summon",
+        summonMethod,
+        summonProcedure: summonMethod,
+        position: willSet ? "defense" : summonPosition,
+        consumesNormalSummon: true,
+        costPayments: tributeCards.map((sacrificed) => ({
+          card: sacrificed,
+          owner: this,
+          fromZone: "field",
+          toZone: "graveyard",
+          kind: "tribute",
+          contextLabel: "tribute_summon_cost",
+          options: {
+            awaitCardToGraveEvent: true,
+            awaitCardMovedEvent: true,
+          },
+        })),
+        commit: async (transaction) => {
+          this.summonCount++;
+          recordNormalSummonForTurn(this, card);
+          transaction.normalSummonCommitted = true;
+          return { success: true };
+        },
+        perform: async (transaction) => {
+          const moveResult = await this.game.moveCard(card, this, "field", {
+            fromZone: "hand",
+            position: willSet ? "defense" : summonPosition,
+            isFacedown: willSet,
+            resetAttackFlags: true,
+            summonMethodOverride: summonMethod,
+            summonProcedure: summonMethod,
+            summonOrigin: "procedure",
+            summonMode: willSet ? "set" : "summon",
+            summonTransaction: transaction,
+            tributes: tributedCards,
+            skipSummonAttempt: willSet,
+            awaitCardMovedEvent: true,
+            contextLabel: willSet ? "monster_set" : "normal_summon",
+          });
+          return {
+            ...moveResult,
+            success: moveResult?.success !== false,
+            card,
+            tributes: tributedCards,
+            set: willSet,
+          };
+        },
+        finalContext: {
+          type: willSet ? "monster_set" : "after_summon",
+          event: willSet ? "monster_set" : "after_summon",
+          card,
+          player: this,
+          method: summonMethod,
+          fromZone: "hand",
+          tributes: tributedCards,
+        },
+      });
+      const result = await this.game.executeSummonTransaction(prepared);
+      this.game.effectEngine?.clearTargetingCache?.();
+      return {
+        ...result,
+        card,
+        tributes: tributedCards,
+        set: willSet,
+      };
     }
     return null;
   }
@@ -732,6 +765,7 @@ export default class Player {
     }
 
     const freshCard = new Card(data, this.id);
+    this.game?.ensureDuelCardId?.(freshCard);
     this.deck.push(freshCard);
     return freshCard;
   }

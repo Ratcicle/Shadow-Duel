@@ -532,6 +532,12 @@ function matchesSimulatedEventEffect(
   if (effect.requireFaceup === true && sourceCard.isFacedown === true) {
     return false;
   }
+  if (
+    Array.isArray(effect.activationZones) &&
+    !effect.activationZones.includes(sourceZone)
+  ) {
+    return false;
+  }
   if (effect.requireZone && !matchesZoneFilter(sourceZone, effect.requireZone)) {
     return false;
   }
@@ -999,7 +1005,7 @@ export function applyGenericSimulatedMainPhaseAction(
         (entry) =>
           entry &&
           entry.timing === "ignition" &&
-          (!entry.requireZone || entry.requireZone === "field"),
+          entry.activationZones?.includes("field"),
       );
       if (!effect) break;
       if (!effectConditionsPass(state, effect, card, selectionOptions)) break;
@@ -1052,7 +1058,7 @@ export function applyGenericSimulatedMainPhaseAction(
       const card = player.hand?.[handIndex];
       if (!card || card.cardKind !== "monster") break;
       const effect = resolveEffectForAction(card, action, ["ignition"]);
-      if (!effect || effect.requireZone !== "hand") break;
+      if (!effect || !effect.activationZones?.includes("hand")) break;
       if (!effectConditionsPass(state, effect, card, selectionOptions)) break;
       if (!canUseSimulatedEffect(state, effect, card, options.selfId || "bot")) {
         break;
@@ -1217,7 +1223,7 @@ export function applyGenericSimulatedMainPhaseAction(
           (entry) =>
             entry &&
             entry.timing === "ignition" &&
-            entry.requireZone === "fieldSpell",
+            entry.activationZones?.includes("fieldSpell"),
         );
       if (!effect) break;
       if (!effectConditionsPass(state, effect, fieldSpell, selectionOptions)) {
@@ -1287,7 +1293,7 @@ export function applyGenericSimulatedMainPhaseAction(
       const card = player.graveyard?.[graveyardIndex];
       if (!card || card.cardKind !== "monster") break;
       const effect = resolveEffectForAction(card, action, ["ignition"]);
-      if (!effect || effect.requireZone !== "graveyard") break;
+      if (!effect || !effect.activationZones?.includes("graveyard")) break;
       if (!effectConditionsPass(state, effect, card, selectionOptions)) break;
       if (!canUseSimulatedEffect(state, effect, card, options.selfId || "bot")) {
         break;

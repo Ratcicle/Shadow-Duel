@@ -8,54 +8,6 @@ import {
   hasExplicitAttackLimitThisTurn,
 } from "./availability.js";
 
-function clearDamageCalculationTempBuffs(game) {
-  const buffs = game?.damageCalculationTempBuffs;
-  if (game) {
-    game.damageCalculationStatChangePending = false;
-  }
-  if (!Array.isArray(buffs) || buffs.length === 0) return;
-
-  for (const buff of buffs.splice(0)) {
-    const card = buff?.card;
-    if (!card) continue;
-
-    const atk = Number(buff.atk || 0);
-    const trackedAtk = Number(card.tempAtkBoost || 0);
-    if (atk !== 0 && trackedAtk !== 0) {
-      const removeAtk =
-        Math.abs(trackedAtk) >= Math.abs(atk) ? atk : trackedAtk;
-      card.atk = Math.max(0, Number(card.atk || 0) - removeAtk);
-      card.tempAtkBoost = trackedAtk - removeAtk;
-    }
-
-    const def = Number(buff.def || 0);
-    const trackedDef = Number(card.tempDefBoost || 0);
-    if (def !== 0 && trackedDef !== 0) {
-      const removeDef =
-        Math.abs(trackedDef) >= Math.abs(def) ? def : trackedDef;
-      card.def = Math.max(0, Number(card.def || 0) - removeDef);
-      card.tempDefBoost = trackedDef - removeDef;
-    }
-  }
-}
-
-async function presentBattleDestructionBeforeTriggers(game) {
-  game?.updateBoard?.();
-
-  if (typeof game?.waitForPresentationDelay === "function") {
-    await game.waitForPresentationDelay(250);
-  }
-}
-
-function queuePendingBattleDestroyAfterSelection(game, attacker, destroyed, extras) {
-  if (!game || !attacker || !destroyed) return;
-  game.pendingBattleDestroyAfterSelection = {
-    attacker,
-    destroyed,
-    extras: { ...(extras || {}) },
-  };
-}
-
 function getController(game, card) {
   if (!game || !card) return null;
   return card.owner === "player" ? game.player : game.bot;
@@ -122,23 +74,6 @@ function sameBattleCard(card, expected, expectedInstanceId, expectedFieldPresenc
   );
 }
 
-function getPlayerById(game, playerId) {
-  if (!game || !playerId) return null;
-  if (game.player?.id === playerId) return game.player;
-  if (game.bot?.id === playerId) return game.bot;
-  return null;
-}
-
-function isFieldMonsterControlledBy(player, card) {
-  return (
-    !!player &&
-    !!card &&
-    card.cardKind === "monster" &&
-    Array.isArray(player.field) &&
-    player.field.includes(card)
-  );
-}
-
 function battlePairMatches(entry, attacker, defender) {
   const firstIsAttacker = sameBattleCard(
     attacker,
@@ -165,85 +100,6 @@ function battlePairMatches(entry, attacker, defender) {
     entry.secondFieldPresenceId,
   );
   return (firstIsAttacker && secondIsDefender) || (firstIsDefender && secondIsAttacker);
-}
-
-async function resolveTemporaryBattlePairEffects(game, payload) {
-  const entries = Array.isArray(game?.temporaryBattlePairEffects)
-    ? game.temporaryBattlePairEffects
-    : [];
-  if (entries.length === 0) return null;
-
-  const remaining = [];
-  let selectionResult = null;
-
-  for (let index = 0; index < entries.length; index += 1) {
-    const entry = entries[index];
-    if (
-      entry &&
-      Number.isFinite(entry.expiresOnTurn) &&
-      game.turnCounter > entry.expiresOnTurn
-    ) {
-      continue;
-    }
-    if (!entry || entry.timing !== payload.damageStepTiming) {
-      remaining.push(entry);
-      continue;
-    }
-    if (!battlePairMatches(entry, payload.attacker, payload.defender)) {
-      remaining.push(entry);
-      continue;
-    }
-
-    const controller = getPlayerById(game, entry.controllerId);
-    const opponent = getPlayerById(game, entry.opponentId);
-    const affectedTarget = entry.affectedTarget;
-    if (!isFieldMonsterControlledBy(opponent, affectedTarget)) {
-      continue;
-    }
-
-    const actionCtx = {
-      source: entry.source,
-      player: controller,
-      opponent,
-      effect: { id: entry.sourceEffectId || entry.id },
-      attacker: payload.attacker,
-      defender: payload.defender,
-      target: payload.target,
-      attackerOwner: payload.attackerOwner,
-      defenderOwner: payload.defenderOwner,
-      targetOwner: payload.targetOwner,
-      battleStep: "damage",
-      damageStepTiming: payload.damageStepTiming,
-      isDamageStep: true,
-    };
-    const actionTargets = {
-      [entry.firstTargetRef]: [entry.firstTarget],
-      [entry.secondTargetRef]: [entry.secondTarget],
-      [entry.affectedTargetRef]: [affectedTarget],
-      battle_pair_first: [entry.firstTarget],
-      battle_pair_second: [entry.secondTarget],
-      battle_pair_affected: [affectedTarget],
-    };
-    const result = await game.effectEngine?.applyActions?.(
-      Array.isArray(entry.actions) ? entry.actions : [],
-      actionCtx,
-      actionTargets,
-    );
-    if (result?.needsSelection) {
-      selectionResult = result;
-      remaining.push(...entries.slice(index + 1));
-      break;
-    }
-    await game.resolvePendingSpellTrapFinalization?.(
-      entry.source,
-      controller,
-      "spellTrap",
-      { deferUntil: "battle_pair_effect" },
-    );
-  }
-
-  game.temporaryBattlePairEffects = remaining;
-  return selectionResult;
 }
 
 function hasBattleDamageTimingEffect(card) {
@@ -373,20 +229,6 @@ async function waitForAttackPresentation(game, presentation) {
   }
 }
 
-async function presentDamageCalculationStatChanges(game) {
-  if (!game?.damageCalculationStatChangePending) return;
-
-  game.updateBoard?.({
-    animateCards: false,
-    animateFeedback: true,
-  });
-  await game.waitForBoardPresentation?.();
-  await game.waitForPresentationDelay?.(
-    game.damageCalculationStatPresentationDelayMs ?? 500,
-  );
-  game.damageCalculationStatChangePending = false;
-}
-
 async function waitForAttackContact(game, presentation) {
   const contact =
     presentation?.contact && typeof presentation.contact.then === "function"
@@ -405,36 +247,8 @@ async function waitForAttackContact(game, presentation) {
   }
 }
 
-async function revealBattleTargetBeforeDamage(game, attacker, target) {
-  if (!game || !target?.isFacedown) return false;
-
-  const targetOwner = target.owner === "player" ? "player" : "bot";
-  const targetField =
-    target.owner === "player" ? game.player?.field : game.bot?.field;
-  const targetIndex = Array.isArray(targetField)
-    ? targetField.indexOf(target)
-    : -1;
-
-  game.ui?.applyFlipAnimation?.(targetOwner, targetIndex);
-
-  target.isFacedown = false;
-  target.revealedTurn = game.turnCounter;
-  game.effectEngine?.clearTargetingCache?.();
-  game.ui?.log?.(`${target.name} was flipped!`);
-
-  game.updateBoard?.();
-  game.applyAttackResolutionIndicators?.(attacker, target);
-
-  if (typeof game.waitForPresentationDelay === "function") {
-    await game.waitForPresentationDelay(600);
-  } else {
-    await new Promise((resolve) => setTimeout(resolve, 600));
-  }
-  return true;
-}
-
 /**
- * Resolve a combat attack, handling flip effects and delegating to finishCombat.
+ * Resolve an attack through the Battle Step and canonical Damage Step.
  * @param {Object} attacker - The attacking monster
  * @param {Object|null} target - The target monster (null for direct attack)
  * @param {Object} options - Resolution options
@@ -479,7 +293,6 @@ export async function resolveCombat(attacker, target, options = {}) {
   this.lastAttackNegated = false;
 
   this.battleStep = "battle";
-  this.damageStepTiming = null;
 
   let defenderOwner = target
     ? target.owner === "player"
@@ -595,7 +408,7 @@ export async function resolveCombat(attacker, target, options = {}) {
     defenderOwner,
     targetOwner,
     battleStep: this.battleStep,
-    damageStepTiming: this.damageStepTiming,
+    damageStepTiming: null,
     isOpponentAttack: attackerOwner?.id !== defenderOwner?.id,
     triggerPlayer: attackerOwner,
     addTriggerToChain: false,
@@ -710,7 +523,7 @@ export async function resolveCombat(attacker, target, options = {}) {
     defenderOwner,
     targetOwner,
     battleStep: this.battleStep,
-    damageStepTiming: this.damageStepTiming,
+    damageStepTiming: null,
   };
 
   await this.emit("attack_declared", attackDeclaredPayload);
@@ -724,7 +537,7 @@ export async function resolveCombat(attacker, target, options = {}) {
       defenderOwner,
       targetOwner,
       battleStep: this.battleStep,
-      damageStepTiming: this.damageStepTiming,
+      damageStepTiming: null,
       isOpponentAttack: attackerOwner?.id !== defenderOwner?.id,
       triggerPlayer: attackerOwner,
       addTriggerToChain: false,
@@ -820,20 +633,18 @@ export async function resolveCombat(attacker, target, options = {}) {
         tone: "red",
       });
     }
-    this.inflictDamage(defender, attacker.atk, {
-      sourceCard: attacker,
-      cause: "battle",
-      directAttack: true,
-      suppressVisual: consumeBattleLpLossFeedback(
-        defender,
-        attacker.atk,
-      ),
+    const damageStep = this.createDamageStepTransaction({
+      attacker,
+      defender: null,
+      attackerOwner,
+      defenderOwner: defender,
+      consumeBattleLpLossFeedback,
     });
-    this.markAttackUsed(attacker, null); // Direct attack, no target
+    const combatResult = await this.executeDamageStepTransaction(damageStep);
     this.checkWinCondition();
     this.clearAttackResolutionIndicators();
     this.updateBoard();
-    return { ok: true };
+    return combatResult;
   }
 
   setBattleLpLossPreview(resolveBattleLpLossPreview(this, attacker, target));
@@ -850,10 +661,14 @@ export async function resolveCombat(attacker, target, options = {}) {
     await waitForAttackPresentation(this, attackPresentation);
   }
 
-  const combatResult = await this.finishCombat(attacker, target, {
-    battleImpactVisualPlayed,
+  const damageStep = this.createDamageStepTransaction({
+    attacker,
+    defender: target,
+    attackerOwner,
+    defenderOwner,
     consumeBattleLpLossFeedback,
   });
+  const combatResult = await this.executeDamageStepTransaction(damageStep);
 
   if (resolveDamageOnContact) {
     await waitForAttackPresentation(this, attackPresentation);
@@ -875,747 +690,4 @@ export async function resolveCombat(attacker, target, options = {}) {
     return combatResult;
   }
   return { ok: true };
-}
-
-/**
- * Finish combat resolution - calculate damage, destroy monsters, apply effects.
- * @param {Object} attacker - The attacking monster
- * @param {Object} target - The target monster
- * @param {Object} options - Additional options (resumeFromTie, etc.)
- * @returns {Object} Result with ok status and any pending selections
- */
-export async function finishCombat(attacker, target, options = {}) {
-  const resumeFromTie = options.resumeFromTie === true;
-  const battleImpactVisualPlayed = options.battleImpactVisualPlayed === true;
-  const consumeBattleLpLossFeedback =
-    typeof options.consumeBattleLpLossFeedback === "function"
-      ? options.consumeBattleLpLossFeedback
-      : null;
-
-  const attackerOwner = attacker?.owner === "player" ? this.player : this.bot;
-  const defenderOwner = target?.owner === "player" ? this.player : this.bot;
-
-  if (!resumeFromTie) {
-    const previousBattleStep = this.battleStep;
-    const previousDamageStepTiming = this.damageStepTiming;
-    this.battleStep = "damage";
-    this.damageStepTiming = "start_of_damage_step";
-    const damageStepStartBattlePairResult =
-      await resolveTemporaryBattlePairEffects(this, {
-        attacker,
-        defender: target,
-        target,
-        attackerOwner,
-        defenderOwner,
-        targetOwner: defenderOwner,
-        damageStepTiming: this.damageStepTiming,
-      });
-    this.damageStepTiming = "before_damage_calculation";
-    if (damageStepStartBattlePairResult?.needsSelection) {
-      this.battleStep =
-        previousBattleStep || (this.phase === "battle" ? "battle" : null);
-      this.damageStepTiming = previousDamageStepTiming ?? null;
-      return {
-        ok: true,
-        needsSelection: true,
-        selectionContract: damageStepStartBattlePairResult.selectionContract,
-        damageDealt: 0,
-        targetDestroyed: false,
-        attackerDestroyed: false,
-      };
-    }
-
-    const attackerStillOnFieldAtDamageStart =
-      attackerOwner && Array.isArray(attackerOwner.field)
-        ? attackerOwner.field.includes(attacker)
-        : false;
-    const targetStillOnFieldAtDamageStart =
-      defenderOwner && Array.isArray(defenderOwner.field)
-        ? defenderOwner.field.includes(target)
-        : false;
-
-    if (!attackerStillOnFieldAtDamageStart || !targetStillOnFieldAtDamageStart) {
-      this.battleStep =
-        previousBattleStep || (this.phase === "battle" ? "battle" : null);
-      this.damageStepTiming = previousDamageStepTiming ?? null;
-      this.ui?.log?.("Attack stopped at the start of the Damage Step.");
-      this.markAttackUsed(attacker, target);
-      this.clearAttackResolutionIndicators();
-      clearDamageCalculationTempBuffs(this);
-      this.updateBoard();
-      return {
-        ok: true,
-        damageDealt: 0,
-        targetDestroyed: false,
-        attackerDestroyed: false,
-      };
-    }
-
-    await revealBattleTargetBeforeDamage(this, attacker, target);
-    const battleDamageResult = await this.emit("battle_damage", {
-      attacker,
-      defender: target,
-      target,
-      attackerOwner,
-      defenderOwner,
-      targetOwner: defenderOwner,
-      battleStep: this.battleStep,
-      damageStepTiming: this.damageStepTiming,
-      isDamageStep: true,
-    });
-    const battlePairResult = battleDamageResult?.needsSelection
-      ? null
-      : await resolveTemporaryBattlePairEffects(this, {
-          attacker,
-          defender: target,
-          target,
-          attackerOwner,
-          defenderOwner,
-          targetOwner: defenderOwner,
-          damageStepTiming: this.damageStepTiming,
-        });
-    if (!battleDamageResult?.needsSelection && !battlePairResult?.needsSelection) {
-      await presentDamageCalculationStatChanges(this);
-    }
-    this.battleStep =
-      previousBattleStep || (this.phase === "battle" ? "battle" : null);
-    this.damageStepTiming = previousDamageStepTiming ?? null;
-
-    if (battleDamageResult?.needsSelection || battlePairResult?.needsSelection) {
-      const pendingSelection = battleDamageResult?.needsSelection
-        ? battleDamageResult
-        : battlePairResult;
-      return {
-        ok: true,
-        needsSelection: true,
-        selectionContract: pendingSelection.selectionContract,
-        damageDealt: 0,
-        targetDestroyed: false,
-        attackerDestroyed: false,
-      };
-    }
-
-    if (this.lastAttackNegated) {
-      this.markAttackUsed(attacker, target);
-      this.clearAttackResolutionIndicators();
-      clearDamageCalculationTempBuffs(this);
-      this.updateBoard();
-      return {
-        ok: true,
-        damageDealt: 0,
-        targetDestroyed: false,
-        attackerDestroyed: false,
-      };
-    }
-
-    const attackerStillOnField =
-      attackerOwner && Array.isArray(attackerOwner.field)
-        ? attackerOwner.field.includes(attacker)
-        : false;
-    const targetStillOnField =
-      defenderOwner && Array.isArray(defenderOwner.field)
-        ? defenderOwner.field.includes(target)
-        : false;
-
-    if (!attackerStillOnField || !targetStillOnField) {
-      this.ui?.log?.("Attack stopped before damage calculation.");
-      this.markAttackUsed(attacker, target);
-      this.clearAttackResolutionIndicators();
-      clearDamageCalculationTempBuffs(this);
-      this.updateBoard();
-      return {
-        ok: true,
-        damageDealt: 0,
-        targetDestroyed: false,
-        attackerDestroyed: false,
-      };
-    }
-
-    if (attacker.position !== "attack" || attacker.isFacedown) {
-      this.ui?.log?.(
-        "Attack stopped because the attacker is no longer in Attack Position.",
-      );
-      this.markAttackUsed(attacker, target);
-      this.clearAttackResolutionIndicators();
-      clearDamageCalculationTempBuffs(this);
-      this.updateBoard();
-      return {
-        ok: true,
-        damageDealt: 0,
-        targetDestroyed: false,
-        attackerDestroyed: false,
-      };
-    }
-  }
-
-  const battleImpactVisualTarget = this.ui?.captureCardAnimationSource?.(target, {
-    ownerId: target?.owner,
-    zone: "field",
-  });
-  if (!battleImpactVisualPlayed) {
-    this.queueVisualFeedback?.({
-      kind: "impact",
-      cause: "battle",
-      intensity: "normal",
-      sourceCard: attacker,
-      targetCard: target,
-      targetOwnerId: target?.owner,
-      targetRect: battleImpactVisualTarget?.rect || null,
-      targetZone: "field",
-      tone: "red",
-    });
-  }
-
-  // Capture healing flags at the start of combat resolution to avoid race conditions
-  const attackerHealsOnBattleDamage =
-    attacker?.battleDamageHealsControllerThisTurn || false;
-  const defenderHealsOnBattleDamage =
-    target?.battleDamageHealsControllerThisTurn || false;
-
-  // Check if we're resuming from a pending tie destruction
-  const skipAttackerDestruction = resumeFromTie;
-  const battleDestroyResults = [];
-
-  // Track combat results for replay
-  let totalDamageDealt = 0;
-  let targetWasDestroyed = false;
-  let attackerWasDestroyed = false;
-
-  const emitBattleCompleted = async () => {
-    if (typeof this.emit !== "function" || !attacker || !target) return null;
-    return await this.emit("battle_completed", {
-      attacker,
-      defender: target,
-      target,
-      attackerOwner,
-      defenderOwner,
-      targetOwner: defenderOwner,
-      damageDealt: totalDamageDealt,
-      targetDestroyed: targetWasDestroyed,
-      attackerDestroyed: attackerWasDestroyed,
-    });
-  };
-
-  const applyBattleDamage = async (
-    player,
-    cardInvolved,
-    amount,
-    shouldHeal = false,
-  ) => {
-    if (!player || amount <= 0) return 0;
-    if (
-      cardInvolved?.preventsBattleDamageToController === true &&
-      player.id === cardInvolved?.owner
-    ) {
-      this.ui?.log?.(
-        `${cardInvolved.name} prevents battle damage to its controller.`,
-      );
-      return 0;
-    }
-    if (shouldHeal && player.id === cardInvolved?.owner) {
-      const before = player.lp || 0;
-      player.gainLP(amount, {
-        cause: "effect",
-        sourceCard: cardInvolved,
-        sourceRect: battleImpactVisualTarget?.rect || null,
-      });
-      const gained = Math.max(0, (player.lp || 0) - before);
-      if (gained > 0 && typeof this.emit === "function") {
-        await this.emit("lp_change", {
-          player,
-          sourceCard: cardInvolved,
-          lpGained: gained,
-          before,
-          after: player.lp,
-        });
-      }
-      if (gained > 0) {
-        this.ui?.log?.(
-          `${player.name || player.id} gained ${gained} LP instead of taking battle damage.`,
-        );
-      }
-      return 0;
-    } else {
-      const before = Number(player.lp || 0);
-      const actualLoss = getActualLpLoss(player, amount);
-      this.inflictDamage(player, amount, {
-        sourceCard: cardInvolved,
-        targetCard: target,
-        targetRect: battleImpactVisualTarget?.rect || null,
-        battleImpactRect: battleImpactVisualTarget?.rect || null,
-        cause: "battle",
-        suppressVisual:
-          consumeBattleLpLossFeedback?.(player, actualLoss) === true,
-      });
-      return Math.max(0, before - Number(player.lp || 0));
-    }
-  };
-
-  const logBattleResult = (message) => {
-    if (message) {
-      this.ui.log(message);
-    }
-  };
-
-  const logBattleDestroyCheck = (context) => {
-    if (!this.devModeEnabled) return;
-    const formatCard = (card, label) => {
-      if (!card) return `${label}: (none)`;
-      const lastUsedTurn =
-        card.battleIndestructibleOncePerTurnLastUsedTurn ?? "none";
-      const flags = `bi=${!!card.battleIndestructible}, tempBi=${!!card.tempBattleIndestructible}, once=${!!card.battleIndestructibleOncePerTurn}, onceUsed=${!!card.battleIndestructibleOncePerTurnUsed}, onceLast=${lastUsedTurn}`;
-      return `${label}: ${card.name} ATK:${card.atk} DEF:${card.def} ${flags}`;
-    };
-    this.devLog("BATTLE_DESTROY_CHECK", {
-      summary: `canDestroyByBattle check (${context})`,
-      context,
-      attacker: attacker?.name,
-      target: target?.name,
-    });
-  };
-  const getBattleDestructionContext = (card) => ({
-    attacker,
-    defender: target,
-    target,
-    battleOpponent: card === attacker ? target : attacker,
-    sourceCard: card === attacker ? target : attacker,
-  });
-
-  if (target.position === "attack") {
-    if (attacker.atk > target.atk) {
-      const defender = target.owner === "player" ? this.player : this.bot;
-      const damage = attacker.atk - target.atk;
-      const appliedDamage = await applyBattleDamage(
-        defender,
-        target,
-        damage,
-        defenderHealsOnBattleDamage,
-      );
-      totalDamageDealt = appliedDamage;
-      logBattleResult(
-        appliedDamage > 0
-          ? `${attacker.name} won the battle against ${target.name} and dealt ${appliedDamage} damage.`
-          : `${attacker.name} won the battle against ${target.name}, but no battle damage was taken.`,
-      );
-
-      logBattleDestroyCheck("attacker over atk target");
-      if (this.canDestroyByBattle(target, getBattleDestructionContext(target))) {
-        const preDestroyedOwnerId = target.owner;
-        const preDestroyedOwner =
-          preDestroyedOwnerId === "player" ? this.player : this.bot;
-        const preDestroyedPosition = target.position || null;
-        const result = await this.destroyCard(target, {
-          cause: "battle",
-          sourceCard: attacker,
-        });
-        if (result?.needsSelection) {
-          if (result?.destroyed) {
-            targetWasDestroyed = true;
-            queuePendingBattleDestroyAfterSelection(this, attacker, target, {
-              destroyedOwner: preDestroyedOwner,
-              destroyedOwnerId: preDestroyedOwnerId,
-              destroyedPosition: preDestroyedPosition,
-            });
-          }
-          this.markAttackUsed(attacker, target);
-          this.clearAttackResolutionIndicators();
-          clearDamageCalculationTempBuffs(this);
-          this.updateBoard();
-          await emitBattleCompleted();
-          return {
-            ok: true,
-            needsSelection: true,
-            selectionContract: result.selectionContract,
-            damageDealt: totalDamageDealt,
-            targetDestroyed: targetWasDestroyed,
-            attackerDestroyed: attackerWasDestroyed,
-          };
-        }
-        if (result?.destroyed) {
-          targetWasDestroyed = true;
-          const bdResult = await this.applyBattleDestroyEffect(
-            attacker,
-            target,
-            {
-              destroyedOwner: preDestroyedOwner,
-              destroyedOwnerId: preDestroyedOwnerId,
-              destroyedPosition: preDestroyedPosition,
-            },
-          );
-          if (bdResult) battleDestroyResults.push(bdResult);
-        }
-      }
-    } else if (attacker.atk < target.atk) {
-      const attPlayer = attacker.owner === "player" ? this.player : this.bot;
-      const damage = target.atk - attacker.atk;
-      const appliedDamage = await applyBattleDamage(
-        attPlayer,
-        attacker,
-        damage,
-        attackerHealsOnBattleDamage,
-      );
-      totalDamageDealt = appliedDamage;
-      logBattleResult(
-        appliedDamage > 0
-          ? `${attacker.name} lost the battle against ${target.name} and took ${appliedDamage} damage.`
-          : `${attacker.name} lost the battle against ${target.name}, but no battle damage was taken.`,
-      );
-
-      logBattleDestroyCheck("attacker loses to atk target");
-      if (
-        this.canDestroyByBattle(
-          attacker,
-          getBattleDestructionContext(attacker),
-        )
-      ) {
-        const preDestroyedOwnerId = attacker.owner;
-        const preDestroyedOwner =
-          preDestroyedOwnerId === "player" ? this.player : this.bot;
-        const preDestroyedPosition = attacker.position || null;
-        const result = await this.destroyCard(attacker, {
-          cause: "battle",
-          sourceCard: target,
-        });
-        if (result?.needsSelection) {
-          if (result?.destroyed) {
-            attackerWasDestroyed = true;
-            queuePendingBattleDestroyAfterSelection(this, target, attacker, {
-              destroyedOwner: preDestroyedOwner,
-              destroyedOwnerId: preDestroyedOwnerId,
-              destroyedPosition: preDestroyedPosition,
-            });
-          }
-          this.markAttackUsed(attacker, target);
-          this.clearAttackResolutionIndicators();
-          clearDamageCalculationTempBuffs(this);
-          this.updateBoard();
-          await emitBattleCompleted();
-          return {
-            ok: true,
-            needsSelection: true,
-            selectionContract: result.selectionContract,
-            damageDealt: totalDamageDealt,
-            targetDestroyed: targetWasDestroyed,
-            attackerDestroyed: attackerWasDestroyed,
-          };
-        }
-        if (result?.destroyed) {
-          attackerWasDestroyed = true;
-          const bdResult = await this.applyBattleDestroyEffect(
-            target,
-            attacker,
-            {
-              destroyedOwner: preDestroyedOwner,
-              destroyedOwnerId: preDestroyedOwnerId,
-              destroyedPosition: preDestroyedPosition,
-            },
-          );
-          if (bdResult) battleDestroyResults.push(bdResult);
-        }
-      }
-    } else {
-      // to allow each triggered effect to be resolved before the next
-      logBattleDestroyCheck("tie - attacker destruction check");
-      if (
-        !skipAttackerDestruction &&
-        this.canDestroyByBattle(
-          attacker,
-          getBattleDestructionContext(attacker),
-        )
-      ) {
-        const preDestroyedOwnerId = attacker.owner;
-        const preDestroyedOwner =
-          preDestroyedOwnerId === "player" ? this.player : this.bot;
-        const preDestroyedPosition = attacker.position || null;
-        const result = await this.destroyCard(attacker, {
-          cause: "battle",
-          sourceCard: target,
-        });
-        // we need to pause and let that resolve before destroying target
-        if (result?.needsSelection) {
-          if (result?.destroyed) {
-            attackerWasDestroyed = true;
-            queuePendingBattleDestroyAfterSelection(this, target, attacker, {
-              destroyedOwner: preDestroyedOwner,
-              destroyedOwnerId: preDestroyedOwnerId,
-              destroyedPosition: preDestroyedPosition,
-            });
-          }
-          // Store pending tie info so we can resume after selection
-          this.pendingTieDestruction = {
-            attacker,
-            target,
-            attackerHealsOnBattleDamage,
-            defenderHealsOnBattleDamage,
-          };
-          this.markAttackUsed(attacker, target);
-          this.clearAttackResolutionIndicators();
-          clearDamageCalculationTempBuffs(this);
-          this.updateBoard();
-          await emitBattleCompleted();
-          return {
-            ok: true,
-            needsSelection: true,
-            selectionContract: result.selectionContract,
-            pendingTieDestruction: true,
-          };
-        }
-        if (result?.destroyed) {
-          attackerWasDestroyed = true;
-          const bdResult = await this.applyBattleDestroyEffect(
-            target,
-            attacker,
-            {
-              destroyedOwner: preDestroyedOwner,
-              destroyedOwnerId: preDestroyedOwnerId,
-              destroyedPosition: preDestroyedPosition,
-            },
-          );
-          if (bdResult) battleDestroyResults.push(bdResult);
-        }
-      }
-
-      logBattleDestroyCheck("tie - target destruction check");
-      if (this.canDestroyByBattle(target, getBattleDestructionContext(target))) {
-        const preDestroyedOwnerId = target.owner;
-        const preDestroyedOwner =
-          preDestroyedOwnerId === "player" ? this.player : this.bot;
-        const preDestroyedPosition = target.position || null;
-        const result = await this.destroyCard(target, {
-          cause: "battle",
-          sourceCard: attacker,
-        });
-        // If target destruction also needs selection, return it
-        if (result?.needsSelection) {
-          if (result?.destroyed) {
-            targetWasDestroyed = true;
-            queuePendingBattleDestroyAfterSelection(this, attacker, target, {
-              destroyedOwner: preDestroyedOwner,
-              destroyedOwnerId: preDestroyedOwnerId,
-              destroyedPosition: preDestroyedPosition,
-            });
-          }
-          this.markAttackUsed(attacker, target);
-          this.clearAttackResolutionIndicators();
-          clearDamageCalculationTempBuffs(this);
-          this.updateBoard();
-          await emitBattleCompleted();
-          return {
-            ok: true,
-            needsSelection: true,
-            selectionContract: result.selectionContract,
-          };
-        }
-        if (result?.destroyed) {
-          targetWasDestroyed = true;
-          const bdResult = await this.applyBattleDestroyEffect(
-            attacker,
-            target,
-            {
-              destroyedOwner: preDestroyedOwner,
-              destroyedOwnerId: preDestroyedOwnerId,
-              destroyedPosition: preDestroyedPosition,
-            },
-          );
-          if (bdResult) battleDestroyResults.push(bdResult);
-        }
-      }
-      // Clear pending tie destruction if we completed successfully
-      this.pendingTieDestruction = null;
-      if (attackerWasDestroyed && targetWasDestroyed) {
-        logBattleResult(
-          `${attacker.name} and ${target.name} destroyed each other.`,
-        );
-      } else if (attackerWasDestroyed) {
-        logBattleResult(`${attacker.name} was destroyed by ${target.name}.`);
-      } else if (targetWasDestroyed) {
-        logBattleResult(`${attacker.name} destroyed ${target.name}.`);
-      } else {
-        logBattleResult(
-          `${attacker.name} and ${target.name} survived the battle.`,
-        );
-      }
-    }
-  } else {
-    const defender = target.owner === "player" ? this.player : this.bot;
-    if (attacker.atk > target.def) {
-      if (attacker.piercing) {
-        const damage = calculatePiercingDamage(attacker, attacker.atk, target.def);
-        const appliedDamage = await applyBattleDamage(
-          defender,
-          target,
-          damage,
-          defenderHealsOnBattleDamage,
-        );
-        totalDamageDealt = appliedDamage;
-        logBattleResult(
-          appliedDamage > 0
-            ? `${attacker.name} pierced ${target.name} for ${appliedDamage} damage.`
-            : `${attacker.name} pierced ${target.name}, but no battle damage was taken.`,
-        );
-      }
-      logBattleDestroyCheck("defense target destruction check");
-      if (this.canDestroyByBattle(target, getBattleDestructionContext(target))) {
-        const preDestroyedOwnerId = target.owner;
-        const preDestroyedOwner =
-          preDestroyedOwnerId === "player" ? this.player : this.bot;
-        const preDestroyedPosition = target.position || null;
-        const result = await this.destroyCard(target, {
-          cause: "battle",
-          sourceCard: attacker,
-        });
-        if (result?.needsSelection) {
-          if (result?.destroyed) {
-            targetWasDestroyed = true;
-            queuePendingBattleDestroyAfterSelection(this, attacker, target, {
-              destroyedOwner: preDestroyedOwner,
-              destroyedOwnerId: preDestroyedOwnerId,
-              destroyedPosition: preDestroyedPosition,
-            });
-          }
-          this.markAttackUsed(attacker, target);
-          this.clearAttackResolutionIndicators();
-          clearDamageCalculationTempBuffs(this);
-          this.updateBoard();
-          await emitBattleCompleted();
-          return {
-            ok: true,
-            needsSelection: true,
-            selectionContract: result.selectionContract,
-          };
-        }
-        if (result?.destroyed) {
-          targetWasDestroyed = true;
-          const bdResult = await this.applyBattleDestroyEffect(
-            attacker,
-            target,
-            {
-              destroyedOwner: preDestroyedOwner,
-              destroyedOwnerId: preDestroyedOwnerId,
-              destroyedPosition: preDestroyedPosition,
-            },
-          );
-          if (bdResult) battleDestroyResults.push(bdResult);
-        }
-      }
-      if (!attacker.piercing && targetWasDestroyed) {
-        logBattleResult(`${attacker.name} destroyed ${target.name}.`);
-      } else if (!attacker.piercing) {
-        logBattleResult(`${target.name} was not destroyed by battle.`);
-      }
-    } else if (attacker.atk < target.def) {
-      const attPlayer = attacker.owner === "player" ? this.player : this.bot;
-      const damage = target.def - attacker.atk;
-      const appliedDamage = await applyBattleDamage(
-        attPlayer,
-        attacker,
-        damage,
-        attackerHealsOnBattleDamage,
-      );
-      totalDamageDealt = appliedDamage;
-      logBattleResult(
-        appliedDamage > 0
-          ? `${attacker.name} took ${appliedDamage} damage attacking ${target.name}.`
-          : `${attacker.name} attacked ${target.name}, but no battle damage was taken.`,
-      );
-    } else {
-      logBattleResult(
-        `${attacker.name} could not break ${target.name}'s defense.`,
-      );
-    }
-  }
-
-  this.markAttackUsed(attacker, target);
-  this.checkWinCondition();
-  this.clearAttackResolutionIndicators();
-  clearDamageCalculationTempBuffs(this);
-  this.updateBoard();
-  const battleCompletedResult = await emitBattleCompleted();
-  if (battleCompletedResult?.needsSelection && battleCompletedResult?.selectionContract) {
-    return {
-      ...battleCompletedResult,
-      damageDealt: totalDamageDealt,
-      targetDestroyed: targetWasDestroyed,
-      attackerDestroyed: attackerWasDestroyed,
-    };
-  }
-  const pendingResult = battleDestroyResults.find(
-    (r) => r?.needsSelection && r?.selectionContract,
-  );
-  if (pendingResult) {
-    return {
-      ...pendingResult,
-      damageDealt: totalDamageDealt,
-      targetDestroyed: targetWasDestroyed,
-      attackerDestroyed: attackerWasDestroyed,
-    };
-  }
-
-  return {
-    ok: true,
-    damageDealt: totalDamageDealt,
-    targetDestroyed: targetWasDestroyed,
-    attackerDestroyed: attackerWasDestroyed,
-  };
-}
-
-/**
- * Apply effects that trigger when a monster is destroyed by battle.
- * @param {Object} attacker - The attacking monster
- * @param {Object} destroyed - The destroyed monster
- * @returns {Object} Result with ok status and any pending selections
- */
-export async function applyBattleDestroyEffect(
-  attacker,
-  destroyed,
-  extras = {},
-) {
-  if (!destroyed) {
-    return { ok: true };
-  }
-
-  await presentBattleDestructionBeforeTriggers(this);
-
-  // Legacy: onBattleDestroy direct damage effects tied to the attacker
-  if (attacker && attacker.onBattleDestroy && attacker.onBattleDestroy.damage) {
-    const defender = attacker.owner === "player" ? this.bot : this.player;
-    this.inflictDamage(defender, attacker.onBattleDestroy.damage, {
-      sourceCard: attacker,
-      cause: "effect",
-    });
-    this.ui.log(
-      `${attacker.name} inflicts an extra ${attacker.onBattleDestroy.damage} damage!`,
-    );
-    this.checkWinCondition();
-    this.updateBoard();
-  }
-
-  // New: global battle_destroy event for cards like Shadow-Heart Gecko
-  const destroyedOwner =
-    extras?.destroyedOwner ||
-    (destroyed.owner === "player" ? this.player : this.bot);
-  const attackerOwner = attacker.owner === "player" ? this.player : this.bot;
-  const destroyedPosition =
-    extras?.destroyedPosition || destroyed.position || null;
-  const battleDestroyers = Array.isArray(extras?.battleDestroyers)
-    ? extras.battleDestroyers.filter(Boolean)
-    : attacker
-      ? [attacker]
-      : [];
-
-  const emitResult = await this.emit("battle_destroy", {
-    player: attackerOwner, // o dono do atacante (quem causou a destruição)
-    opponent: destroyedOwner, // o jogador que perdeu o monstro
-    attacker,
-    battleDestroyer: battleDestroyers[0] || attacker || null,
-    battleDestroyers,
-    destroyed,
-    destroyedOwner: destroyedOwner || extras?.destroyedOwner || null,
-    destroyedOwnerId:
-      extras?.destroyedOwnerId || destroyedOwner?.id || destroyed?.owner,
-    attackerOwner,
-    destroyedPosition,
-  });
-
-  return emitResult || { ok: true };
 }

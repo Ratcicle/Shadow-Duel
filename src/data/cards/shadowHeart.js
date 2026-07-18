@@ -72,6 +72,8 @@ export const shadowHeartCards = [
     image: "assets/Shadow-Heart Specter.png",
     effects: [
       {
+
+        usagePolicy: "use",
         id: "shadow_heart_specter_recycle",
         timing: "on_event",
         triggerRequirement: "optional",
@@ -113,6 +115,8 @@ export const shadowHeartCards = [
     image: "assets/Shadow-Heart Purge.png",
     effects: [
       {
+
+        usagePolicy: "activate",
         id: "shadow_heart_purge_debuff",
         timing: "on_play",
         speed: 1,
@@ -185,6 +189,8 @@ export const shadowHeartCards = [
         ],
       },
       {
+
+        activationLabelKey: "effects.arctroth.attackRemoval",
         id: "shadow_heart_arctroth_attack_remove_stat_increases",
         timing: "on_event",
         triggerRequirement: "mandatory",
@@ -203,6 +209,8 @@ export const shadowHeartCards = [
         ],
       },
       {
+
+        activationLabelKey: "effects.arctroth.defenseRemoval",
         id: "shadow_heart_arctroth_defense_remove_stat_increases",
         timing: "on_event",
         triggerRequirement: "mandatory",
@@ -269,6 +277,8 @@ export const shadowHeartCards = [
     image: "assets/Shadow-Heart Covenant.png",
     effects: [
       {
+
+        usagePolicy: "activate",
         id: "shadow_heart_covenant",
         timing: "on_play",
         speed: 1,
@@ -316,6 +326,8 @@ export const shadowHeartCards = [
     image: "assets/Shadow-Heart Imp.png",
     effects: [
       {
+
+        usagePolicy: "use",
         id: "shadow_heart_imp_on_summon",
         timing: "on_event",
         triggerRequirement: "optional",
@@ -363,6 +375,8 @@ export const shadowHeartCards = [
     image: "assets/Shadow-Heart Gecko.png",
     effects: [
       {
+
+        usagePolicy: "use",
         id: "shadow_heart_gecko_special_search",
         timing: "on_event",
         triggerRequirement: "optional",
@@ -384,6 +398,8 @@ export const shadowHeartCards = [
         ],
       },
       {
+
+        usagePolicy: "use",
         id: "shadow_heart_gecko_battle_draw",
         timing: "on_event",
         triggerRequirement: "mandatory",
@@ -455,6 +471,8 @@ export const shadowHeartCards = [
     image: "assets/Shadow-Heart Infusion.png",
     effects: [
       {
+
+        usagePolicy: "activate",
         id: "shadow_heart_infusion",
         timing: "on_play",
         speed: 1,
@@ -521,6 +539,8 @@ export const shadowHeartCards = [
     image: "assets/Shadow-Heart Scale Dragon.png",
     effects: [
       {
+
+        usagePolicy: "use",
         id: "shadow_heart_scale_dragon_recycle",
         timing: "on_event",
         triggerRequirement: "optional",
@@ -550,6 +570,8 @@ export const shadowHeartCards = [
         ],
       },
       {
+
+        usagePolicy: "use",
         id: "shadow_heart_scale_dragon_tribute_destroyed_revive",
         timing: "on_event",
         triggerRequirement: "optional",
@@ -709,6 +731,8 @@ export const shadowHeartCards = [
         },
       },
       {
+
+        usagePolicy: "activate",
         id: "darkness_valley_battle_punish",
         timing: "on_event",
         triggerRequirement: "mandatory",
@@ -742,6 +766,8 @@ export const shadowHeartCards = [
     image: "assets/Shadow-Heart Death Wyrm.png",
     effects: [
       {
+
+        usagePolicy: "activate",
         id: "shadow_heart_death_wyrm_hand_summon",
         timing: "on_event",
         triggerRequirement: "optional",
@@ -777,9 +803,10 @@ export const shadowHeartCards = [
     image: "assets/Shadow-Heart Leviathan.png",
     effects: [
       {
+
+        activationZones: ["hand"],
         id: "shadow_heart_leviathan_special_summon_hand",
         timing: "ignition",
-        requireZone: "hand",
         targets: [
           {
             id: "leviathan_cost",
@@ -800,6 +827,8 @@ export const shadowHeartCards = [
         ],
       },
       {
+
+        activationLabelKey: "effects.leviathan.burnAttacker",
         id: "shadow_heart_leviathan_burn_attacker",
         timing: "on_event",
         triggerRequirement: "mandatory",
@@ -815,6 +844,8 @@ export const shadowHeartCards = [
         ],
       },
       {
+
+        activationLabelKey: "effects.leviathan.burnDestroyed",
         id: "shadow_heart_leviathan_burn_destroyed",
         timing: "on_event",
         triggerRequirement: "mandatory",
@@ -863,6 +894,8 @@ export const shadowHeartCards = [
         ],
       },
       {
+
+        usagePolicy: "use",
         id: "shadow_heart_void_mage_draw",
         timing: "on_event",
         triggerRequirement: "mandatory",
@@ -906,6 +939,10 @@ export const shadowHeartCards = [
         ],
       },
       {
+
+        activationZones: ["spellTrap"],
+
+        usagePolicy: "use",
         id: "shadow_heart_cathedral_summon_effect",
         timing: "ignition",
         oncePerTurn: true,
@@ -935,8 +972,6 @@ export const shadowHeartCards = [
       {
         id: "the_shadow_heart_summon_and_equip",
         timing: "on_play",
-        oncePerTurn: true,
-        oncePerTurnName: "the_shadow_heart_summon_and_equip",
         requireEmptyField: true,
         targets: [
           {
@@ -1049,6 +1084,8 @@ export const shadowHeartCards = [
     fusionMaterials: [{ archetype: "Shadow-Heart", count: 2 }],
     effects: [
       {
+
+        usagePolicy: "use",
         id: "shadow_heart_warlord_protect",
         timing: "passive",
         oncePerTurn: true,
@@ -1070,6 +1107,8 @@ export const shadowHeartCards = [
         },
       },
       {
+
+        usagePolicy: "use",
         id: "shadow_heart_warlord_revive",
         timing: "on_event",
         triggerRequirement: "optional",
@@ -1288,6 +1327,8 @@ export const shadowHeartCards = [
     image: "assets/Shadow-Heart Heartbearer.png",
     effects: [
       {
+
+        usagePolicy: "use",
         id: "shadow_heart_heartbearer_revive",
         timing: "on_event",
         triggerRequirement: "optional",

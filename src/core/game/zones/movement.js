@@ -3,6 +3,10 @@ import {
   restoreTemporaryStatuses,
   restoreTrapMonsterOriginalState,
 } from "../../Card.js";
+import {
+  SUMMON_MODES,
+  SUMMON_ORIGINS,
+} from "../summon/transaction.js";
 
 /**
  * Zone movement - card movement between zones with side effects.
@@ -57,17 +61,13 @@ export function cleanupTokenReferences(token, tokenOwner) {
 
   // If this token was revived by a bound continuous trap, clear that reference
   // and destroy the trap.
-  const boundTrap = token.boundTrapSource || token.callOfTheHauntedTrap;
+  const boundTrap = token.boundTrapSource;
   if (boundTrap) {
     const trap = boundTrap;
     if (trap.boundMonsterTarget === token) {
       trap.boundMonsterTarget = null;
     }
-    if (trap.callOfTheHauntedTarget === token) {
-      trap.callOfTheHauntedTarget = null;
-    }
     token.boundTrapSource = null;
-    token.callOfTheHauntedTrap = null;
 
     // Destroy the Call of the Haunted trap (fire-and-forget, ref already cleared)
     this.destroyCard(trap, {
@@ -197,6 +197,66 @@ function resolveOriginalOwnerDestination(game, card, fromZone, toZone, fromOwner
  * @returns {Object|Promise} Result of the move operation
  */
 export function moveCard(card, destPlayer, toZone, options = {}) {
+  this.ensureDuelCardId?.(card);
+  const sourceLocation =
+    toZone === "field" && card?.cardKind === "monster"
+      ? findCardLocation(this, card, options.fromZone || null) ||
+        (card.isToken === true && options.fromZone === "token"
+          ? { owner: destPlayer, zone: "token" }
+          : null)
+      : null;
+  const shouldCoordinateSummon =
+    sourceLocation != null &&
+    sourceLocation.zone !== "field" &&
+    !options.summonTransaction &&
+    !this.activeSummonTransaction &&
+    typeof this.createPreparedSummon === "function" &&
+    typeof this.executeSummonTransaction === "function";
+  const requiresSummonOrigin =
+    sourceLocation != null && sourceLocation.zone !== "field";
+  if (
+    requiresSummonOrigin &&
+    !Object.values(SUMMON_ORIGINS).includes(options.summonOrigin)
+  ) {
+    return {
+      success: false,
+      code: "SUMMON_ORIGIN_REQUIRED",
+      reason: "Monster movement to the field requires an explicit summonOrigin.",
+    };
+  }
+  const coordinatedSummonOrigin = shouldCoordinateSummon
+    ? options.summonOrigin
+    : null;
+  if (
+    shouldCoordinateSummon &&
+    coordinatedSummonOrigin != null
+  ) {
+    const prepared = this.createPreparedSummon({
+      card,
+      controller: destPlayer,
+      sourceZone: sourceLocation.zone,
+      summonOrigin: coordinatedSummonOrigin,
+      summonMode:
+        options.summonMode === SUMMON_MODES.SET
+          ? SUMMON_MODES.SET
+          : SUMMON_MODES.SUMMON,
+      summonMethod: options.summonMethodOverride || "special",
+      summonProcedure:
+        options.summonProcedure ||
+        (coordinatedSummonOrigin === SUMMON_ORIGINS.EFFECT_RESOLUTION
+          ? "card_effect"
+          : "special"),
+      position: options.position || card.position || null,
+      perform: async (transaction) =>
+        await this.moveCard(card, destPlayer, toZone, {
+          ...options,
+          fromZone: options.fromZone || sourceLocation.zone,
+          summonOrigin: coordinatedSummonOrigin,
+          summonTransaction: transaction,
+        }),
+    });
+    return this.executeSummonTransaction(prepared);
+  }
   const result = this.runZoneOp(
     "MOVE_CARD",
     () => this.moveCardInternal(card, destPlayer, toZone, options),
@@ -298,6 +358,11 @@ async function emitCardMovedEvent(game, card, fromOwner, destPlayer, fromZone, t
     effectId: options.effectId || null,
     chainId: options.chainId ?? null,
     linkId: options.linkId ?? null,
+    summonId: options.summonTransaction?.summonId ?? options.summonId ?? null,
+    summonOrigin: options.summonOrigin || null,
+    summonMethod:
+      options.summonMethodOverride || options.summonMethod || null,
+    summonProcedure: options.summonProcedure || null,
     contextLabel: options.contextLabel || null,
     wasDestroyed: options.wasDestroyed === true,
     destroyCause: options.destroyCause || null,
@@ -1702,6 +1767,16 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
 
   locateAndRemove(options.fromZone || null);
 
+  if (
+    !fromZone &&
+    !fromOwner &&
+    card.isToken === true &&
+    options.fromZone === "token"
+  ) {
+    fromOwner = destPlayer;
+    fromZone = "token";
+  }
+
   if (!fromZone || !fromOwner) {
     return { success: false, reason: "card_not_found" };
   }
@@ -1814,7 +1889,7 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
   const animationToZone = shouldRedirectExtraDeckMonsterToExtraDeck
     ? "extraDeck"
     : toZone;
-  const cardAnimationIntent = buildZoneMoveAnimationIntent(
+  let cardAnimationIntent = buildZoneMoveAnimationIntent(
     this,
     card,
     fromOwner,
@@ -2221,17 +2296,13 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
     }
 
     // Se o monstro foi revivido por Call of the Haunted, destruir a trap também
-    const boundTrap = card.boundTrapSource || card.callOfTheHauntedTrap;
+    const boundTrap = card.boundTrapSource;
     if (boundTrap) {
       const callTrap = boundTrap;
       if (callTrap.boundMonsterTarget === card) {
         callTrap.boundMonsterTarget = null;
       }
-      if (callTrap.callOfTheHauntedTarget === card) {
-        callTrap.callOfTheHauntedTarget = null;
-      }
       card.boundTrapSource = null;
-      card.callOfTheHauntedTrap = null; // Clear reference before destroy
 
       // Destroy trap - refs already cleared, state is consistent regardless of result
       this.destroyCard(callTrap, {
@@ -2264,46 +2335,9 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
     if (revivedMonster.boundTrapSource === card) {
       revivedMonster.boundTrapSource = null;
     }
-    if (revivedMonster.callOfTheHauntedTrap === card) {
-      revivedMonster.callOfTheHauntedTrap = null;
-    }
-
     const monsterOwner =
       revivedMonster.owner === "player" ? this.player : this.bot;
     // Destroy is fire-and-forget but safe - ref already cleared, state is consistent
-    this.destroyCard(revivedMonster, {
-      cause: "effect",
-      sourceCard: card,
-      opponent: this.getOpponent(monsterOwner),
-    }).then((result) => {
-      if (result?.destroyed) {
-        this.ui.log(
-          `${revivedMonster.name} was destroyed as ${card.name} left the field.`
-        );
-        this.updateBoard();
-      }
-    });
-  }
-
-  // Legacy save/replay compatibility: older states used callOfTheHauntedTarget.
-  if (
-    fromZone === "spellTrap" &&
-    toZone !== "spellTrap" &&
-    card.cardKind === "trap" &&
-    card.subtype === "continuous" &&
-    card.callOfTheHauntedTarget
-  ) {
-    const revivedMonster = card.callOfTheHauntedTarget;
-    card.callOfTheHauntedTarget = null;
-    if (revivedMonster.boundTrapSource === card) {
-      revivedMonster.boundTrapSource = null;
-    }
-    if (revivedMonster.callOfTheHauntedTrap === card) {
-      revivedMonster.callOfTheHauntedTrap = null;
-    }
-
-    const monsterOwner =
-      revivedMonster.owner === "player" ? this.player : this.bot;
     this.destroyCard(revivedMonster, {
       cause: "effect",
       sourceCard: card,
@@ -2384,38 +2418,81 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
     return { success: false, reason: "invalid_card_kind_final_check" };
   }
 
+  let summonAttemptResult = null;
+  let summonNegated = false;
+  let summonOrigin = null;
   if (
     toZone === "field" &&
     card.cardKind === "monster" &&
     fromZone !== "field" &&
-    options.skipSummonAttempt !== true &&
-    typeof this.offerSummonAttempt === "function"
+    options.skipSummonAttempt !== true
   ) {
-    const summonMethod = options.summonMethodOverride || "special";
-    const attempt = await this.offerSummonAttempt(card, destPlayer, {
-      method: summonMethod,
-      fromZone,
-      summonProcedure: options.summonProcedure || null,
-    });
-    if (attempt?.negated) {
-      destPlayer.graveyard = destPlayer.graveyard || [];
-      if (!destPlayer.graveyard.includes(card)) {
-        destPlayer.graveyard.push(card);
-      }
-      card.owner = destPlayer.id;
-      card.controller = destPlayer.id;
-      card.location = "graveyard";
-      recordCardLocationChange(
-        this,
-        card,
-        fromOwner,
-        destPlayer,
+    summonOrigin = options.summonOrigin;
+    if (
+      summonOrigin === SUMMON_ORIGINS.PROCEDURE &&
+      options.summonMode !== SUMMON_MODES.SET &&
+      typeof this.offerSummonAttempt === "function"
+    ) {
+      const summonMethod = options.summonMethodOverride || "special";
+      summonAttemptResult = await this.offerSummonAttempt(card, destPlayer, {
+        method: summonMethod,
         fromZone,
-        "graveyard",
-        options,
-      );
-      this.updateBoard?.();
-      return { success: false, negated: true, reason: "summon_negated" };
+        position: options.position || card.position || null,
+        summonProcedure: options.summonProcedure || null,
+        summonOrigin,
+        summonTransaction: options.summonTransaction || null,
+      });
+      if (summonAttemptResult?.needsSelection) {
+        return {
+          success: false,
+          needsSelection: true,
+          selectionContract: summonAttemptResult.selectionContract || null,
+          summonId: summonAttemptResult.transaction?.summonId ?? null,
+        };
+      }
+      if (
+        summonAttemptResult?.ok === false &&
+        !summonAttemptResult?.summonNegated
+      ) {
+        restoreRemovedCardToSourceZone();
+        return {
+          success: false,
+          reason: summonAttemptResult.reason || "summon_attempt_failed",
+          summonId: summonAttemptResult.transaction?.summonId ?? null,
+        };
+      }
+      if (summonAttemptResult?.summonNegated) {
+        const outcome =
+          summonAttemptResult.transaction?.negationOutcome ||
+          options.summonTransaction?.negationOutcome ||
+          {};
+        summonNegated = true;
+        destPlayer = fromOwner;
+        toZone = outcome.destination || "graveyard";
+        destArrRedirected = this.getZone(destPlayer, toZone);
+        if (!Array.isArray(destArrRedirected)) {
+          toZone = "graveyard";
+          destArrRedirected = this.getZone(destPlayer, "graveyard");
+        }
+        options.wasDestroyed = outcome.destroyed === true;
+        options.destroyCause = outcome.destroyed === true ? "effect" : null;
+        options.destroySource = outcome.sourceCard || null;
+        options.contextLabel = "negated_summon";
+        options.awaitCardToGraveEvent = toZone === "graveyard";
+        options.awaitCardMovedEvent = true;
+        card.owner = destPlayer.id;
+        card.controller = destPlayer.id;
+        card.isFacedown = false;
+        cardAnimationIntent = buildZoneMoveAnimationIntent(
+          this,
+          card,
+          fromOwner,
+          fromZone,
+          destPlayer,
+          toZone,
+          options,
+        );
+      }
     }
   }
 
@@ -2451,7 +2528,36 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
   if (
     toZone === "field" &&
     card.cardKind === "monster" &&
-    fromZone !== "field"
+    fromZone !== "field" &&
+    options.summonMode === SUMMON_MODES.SET
+  ) {
+    card.enteredFieldTurn = this.turnCounter;
+    card.summonedTurn = null;
+    card.positionChangedThisTurn = false;
+    card.setTurn = this.turnCounter;
+    card.revealedTurn = null;
+    const setPlayer = card.owner === "player" ? this.player : this.bot;
+    await presentSummonBeforeAfterSummon(this, options);
+    await this.emit("monster_set", {
+      card,
+      player: setPlayer,
+      opponent: this.getOpponent?.(setPlayer) || null,
+      method: options.summonMethodOverride || "normal",
+      fromZone,
+      position: "defense",
+      summonId: options.summonTransaction?.summonId ?? null,
+      tributes: Array.isArray(options.tributes) ? options.tributes : [],
+      summonOrigin:
+        options.summonOrigin || SUMMON_ORIGINS.PROCEDURE,
+      atomicGroupId,
+    });
+  }
+
+  if (
+    toZone === "field" &&
+    card.cardKind === "monster" &&
+    fromZone !== "field" &&
+    options.summonMode !== SUMMON_MODES.SET
   ) {
     card.enteredFieldTurn = this.turnCounter;
     card.summonedTurn = this.turnCounter;
@@ -2507,6 +2613,13 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
         sourceCard: options.sourceCard || options.source || null,
         source: options.source || options.sourceCard || null,
         effectId: options.effectId || null,
+        summonId:
+          options.summonTransaction?.summonId ??
+          summonAttemptResult?.transaction?.summonId ??
+          options.summonId ??
+          null,
+        summonOrigin:
+          summonOrigin || options.summonOrigin || SUMMON_ORIGINS.EFFECT_RESOLUTION,
         atomicGroupId,
       });
     }
@@ -2516,7 +2629,21 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
     // Don't emit card_to_grave if the card is already in graveyard (moving within same zone)
     // This prevents infinite loops where effects like Specter trigger repeatedly
     if (fromZone === "graveyard") {
-      return { success: true, fromZone, toZone };
+      const sameZoneResult = {
+        success: !summonNegated,
+        summonNegated,
+        reason: summonNegated ? "summon_negated" : null,
+        fromZone,
+        toZone,
+        summonId: summonAttemptResult?.transaction?.summonId ?? null,
+      };
+      if (summonAttemptResult?.ownsTransaction) {
+        this.finishSummonTransaction?.(
+          summonAttemptResult.transaction,
+          sameZoneResult,
+        );
+      }
+      return sameZoneResult;
     }
 
     const ownerPlayer = card.owner === "player" ? this.player : this.bot;
@@ -2562,7 +2689,19 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
         contextLabel: options.contextLabel || null,
         chainId: options.chainId ?? null,
         linkId: options.linkId ?? null,
+        summonId:
+          options.summonTransaction?.summonId ??
+          summonAttemptResult?.transaction?.summonId ??
+          null,
+        summonOrigin:
+          summonOrigin || options.summonOrigin || null,
+        summonMethod:
+          options.summonMethodOverride || options.summonMethod || null,
+        summonProcedure: options.summonProcedure || null,
         actionContext: options.actionContext || null,
+        damageStepId: options.actionContext?.damageStepId ?? null,
+        damageStepTiming: options.actionContext?.damageStepTiming ?? null,
+        isDamageStep: options.actionContext?.isDamageStep === true,
         deferTargetPrecheck: deferCardToGraveTriggers,
         effectsNegatedAtFieldExit,
         atomicGroupId,
@@ -2615,7 +2754,18 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
     this.effectEngine.clearTargetingCache();
   }
 
-  const result = { success: true, fromZone, toZone };
+  const result = {
+    success: !summonNegated,
+    summonNegated,
+    reason: summonNegated ? "summon_negated" : null,
+    fromZone,
+    toZone,
+    summonId:
+      options.summonTransaction?.summonId ??
+      summonAttemptResult?.transaction?.summonId ??
+      null,
+    summonOrigin: summonOrigin || options.summonOrigin || null,
+  };
   if (afterSummonResult?.needsSelection && afterSummonResult.selectionContract) {
     result.needsSelection = true;
     result.selectionContract = afterSummonResult.selectionContract;
@@ -2629,6 +2779,9 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
     result.deferredCardToGraveEntries = Array.isArray(cardToGraveResult.entries)
       ? cardToGraveResult.entries
       : [];
+  }
+  if (summonAttemptResult?.ownsTransaction) {
+    this.finishSummonTransaction?.(summonAttemptResult.transaction, result);
   }
   return result;
 }

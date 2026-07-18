@@ -173,3 +173,13 @@ export function canUseFieldTargeting(requirements) {
   const isHandOnly = allCandidates.every((cand) => cand.zone === "hand");
   return isFieldOnly || isHandOnly;
 }
+
+/** Build the read-only aggregate needed by action handlers from split state. */
+export function mergeCanonicalSelections(selectionState = {}) {
+  if (!selectionState || typeof selectionState !== "object") return {};
+  return {
+    ...(selectionState.costSelections || {}),
+    ...(selectionState.targetSelections || {}),
+    ...(selectionState.resolutionSelections || {}),
+  };
+}

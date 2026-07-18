@@ -64,31 +64,26 @@ export function markOncePerDuelEffectUsed(card, player, effect) {
   return nextUsage;
 }
 
-/**
- * Register that a once-per-duel effect has been used
- * @param {Object} card - The card with the effect
- * @param {Object} player - The player using the effect
- * @param {Object} effect - The effect being used
- */
-export function registerOncePerDuelUsage(card, player, effect) {
-  markOncePerDuelEffectUsed(card, player, effect);
-}
-
-/**
- * Register that a once-per-turn effect has been used
- * @param {Object} card - The card with the effect
- * @param {Object} player - The player using the effect
- * @param {Object} effect - The effect being used
- */
-export function registerOncePerTurnUsage(card, player, effect) {
-  if (!effect || !effect.oncePerTurn) {
-    return;
+/** Consume a successful limited effect outside a Chain Link. */
+export function commitEffectUsage(card, player, effect) {
+  if (!effect || !player || (!effect.oncePerTurn && !effect.oncePerDuel)) {
+    return null;
   }
-  if (!this.game || typeof this.game.markOncePerTurnUsed !== "function") {
-    console.error(
-      "[EffectEngine] registerOncePerTurnUsage: Game instance or markOncePerTurnUsed not available"
-    );
-    return;
+  const game = this.game;
+  if (
+    typeof game?.reserveEffectUsage !== "function" ||
+    typeof game?.settleEffectUsage !== "function"
+  ) {
+    return {
+      success: false,
+      ok: false,
+      code: "USAGE_SERVICE_UNAVAILABLE",
+      reason: "Canonical effect usage service is unavailable.",
+    };
   }
-  this.game.markOncePerTurnUsed(card, player, effect);
+  const reservation = game.reserveEffectUsage({ card, player, effect });
+  if (reservation?.success === false || reservation?.status !== "reserved") {
+    return reservation;
+  }
+  return game.settleEffectUsage(reservation, { success: true });
 }

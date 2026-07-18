@@ -114,11 +114,10 @@ Campos frequentes:
 - `condition`: condição legada usada por alguns triggers específicos.
 - `actions`: lista sequencial de actions. Obrigatória para efeitos ativos; `passive`
   usa `passive: {...}`.
-- `requireZone`: restringe a zona do card fonte a uma única zona (`field`,
-  `hand`, `graveyard`, `banished`, `spellTrap`, `fieldSpell`).
-- `activationZones`: lista de zonas nas quais um efeito rápido pode ser
-  ativado. Use para efeitos com mais de uma zona legal ou permissões fora do
-  padrão.
+- `requireZone`: restringe a presença da fonte para efeitos passivos e triggers.
+  Não use em efeitos `ignition` ou `manual`.
+- `activationZones`: lista canônica de zonas nas quais um efeito `ignition` ou
+  `manual` pode ser ativado.
 - `requirePhase`: fase ou lista de fases, como `["main1", "main2"]`.
 - `requireFaceup`: exige que a fonte esteja face-up.
 - `requireEmptyField`: exige campo de monstros vazio.
@@ -135,16 +134,12 @@ Campos frequentes:
 - `allowManualActivation`: permite ativação manual de alguns `on_event` em janela
   de chain. Use com cuidado.
 
-Observação: `manualActivationOnly` aparece em cartas antigas, mas não é uma regra
-genérica validada pelo engine. Não dependa dele para nova mecânica sem confirmar
-o fluxo de ativação.
-
 ### Zonas e transação de ativação
 
 O Chain System infere somente os casos padrão: Trap setada, Quick-Play Spell da
 mão ou setada e Quick Effect de monstro no campo. Efeitos ativados da mão,
-Cemitério ou banimento devem declarar `requireZone` ou `activationZones`. Trap
-ativada da mão sempre exige declaração explícita.
+Cemitério ou banimento devem declarar `activationZones`. Trap ativada da mão
+sempre exige declaração explícita.
 
 ```js
 {
@@ -172,14 +167,14 @@ O validador aceita:
 | `on_play` | Spell/Trap ativada da mão. Field/continuous spells sem `on_play` podem ser apenas colocadas. |
 | `on_activate` | Trap ativada do campo/setada. |
 | `on_field_activate` | Efeito de Field Spell já em `fieldSpell`. |
-| `ignition` | Efeito manual de Main Phase. Usa `requireZone` para mão, campo, cemitério, spell/trap ou field spell. |
+| `ignition` | Efeito manual de Main Phase. Declara `activationZones` para mão, campo, Cemitério, Spell/Trap Zone ou Field Zone. |
 | `on_event` | Trigger disparado por evento do jogo. Requer `event`. |
 | `passive` | Efeito contínuo recalculado pelo engine ou aplicado em custo. |
 | `manual` | Efeito manual/quick em janelas de chain. Usado por quick effects específicos; para efeitos normais prefira `ignition`. |
 
 ### Múltiplos efeitos de monstro na mesma zona
 
-Monstros podem ter mais de um efeito `ignition` com o mesmo `requireZone`.
+Monstros podem ter mais de um efeito `ignition` nas mesmas `activationZones`.
 Quando isso acontece, o engine identifica cada opção por `effect.id`; previews,
 modais, seleções e uso de uma vez por turno devem carregar esse `effectId`.
 
@@ -190,7 +185,7 @@ de um texto específico no modal da mão:
 {
   id: "example_hand_special_summon",
   timing: "ignition",
-  requireZone: "hand",
+  activationZones: ["hand"],
   handModalLabelKey: "ui.summon.specialAction",
   actions: [{ type: "special_summon_from_zone", zone: "hand", requireSource: true }]
 }
@@ -635,15 +630,17 @@ Ignition com target e custo:
 {
   id: "destroy_with_discard",
   timing: "ignition",
-  requireZone: "field",
+  activationZones: ["field"],
   requirePhase: ["main1", "main2"],
   oncePerTurn: true,
   oncePerTurnName: "destroy_with_discard",
+  usagePolicy: "activate",
   targets: [
     {
       id: "discard_cost",
       owner: "self",
       zone: "hand",
+      intent: "cost",
       count: { min: 1, max: 1 }
     },
     {
@@ -652,11 +649,14 @@ Ignition com target e custo:
       zone: "field",
       cardKind: "monster",
       requireFaceup: true,
+      intent: "target",
       count: { min: 1, max: 1 }
     }
   ],
+  activationCosts: [
+    { type: "move", targetRef: "discard_cost", player: "self", to: "graveyard" }
+  ],
   actions: [
-    { type: "move", targetRef: "discard_cost", player: "self", to: "graveyard" },
     { type: "destroy", targetRef: "destroy_target" }
   ]
 }
@@ -683,4 +683,46 @@ Para atualizar os contratos e a documentação de actions:
 ```powershell
 node scripts\validate_action_catalog.mjs
 node scripts\generate_action_catalog_doc.mjs
+```
+
+## Metadados canônicos de ativação e uso
+
+Efeitos `ignition` e `manual` devem declarar `activationZones`. `requireZone`
+não é aceito nesses timings; ele permanece reservado a condições de presença
+de efeitos que não representam uma ativação manual:
+
+```js
+{
+  id: "graveyard_effect",
+  timing: "ignition",
+  activationZones: ["graveyard"],
+  oncePerTurn: true,
+  usagePolicy: "use",
+  actions: [/* ... */]
+}
+```
+
+Todo efeito com `oncePerTurn` ou `oncePerDuel` deve declarar `usagePolicy`:
+
+- `use`: o uso é consumido quando o efeito é comprometido, mesmo se a ativação
+  for negada. Use também para substituições e aplicações passivas limitadas.
+- `activate`: o limite é reservado ao entrar na corrente e a reserva é liberada
+  apenas quando a própria ativação for negada.
+
+Não infira zona, política de uso ou legalidade a partir da descrição da carta.
+Custos de ativação devem estar em `activationCosts`; actions de resolução nunca
+são reinterpretadas como custo pelo runtime.
+Quando dois efeitos da mesma carta puderem aparecer na mesma seleção, ambos
+devem possuir `activationLabelKey` e traduções em inglês e português.
+
+Para o Damage Step, declare somente os momentos oficiais necessários:
+
+```js
+damageStepTimings: ["start_of_damage_step", "before_damage_calculation"]
+```
+
+O campo `allowDamageStepActivation` não é aceito em cartas. Rode também:
+
+```powershell
+npm run audit:chain
 ```

@@ -10,10 +10,7 @@ function asArray(value) {
 function ignitionEffectMatchesZone(effect, zone = null) {
   if (!effect || effect.timing !== "ignition") return false;
   if (!zone) return true;
-  if (zone === "field" || zone === "spellTrap") {
-    return !effect.requireZone || effect.requireZone === zone;
-  }
-  return effect.requireZone === zone;
+  return checkEffectZoneLegality(null, effect, zone).ok;
 }
 
 export function findIgnitionEffects(card, zone = null) {
@@ -61,3 +58,4 @@ export function cardHasActionType(card, actionType) {
     effectHasActionType(effect, actionType)
   );
 }
+import { checkEffectZoneLegality } from "../../chain/legality.js";

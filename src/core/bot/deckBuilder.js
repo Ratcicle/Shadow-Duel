@@ -14,7 +14,9 @@ export function buildBotDeck(bot) {
     if (copies[data.id] >= 3 || bot.deck.length >= bot.maxDeckSize) {
       return false;
     }
-    bot.deck.push(new Card(data, bot.id));
+    const card = new Card(data, bot.id);
+    bot.game?.ensureDuelCardId?.(card);
+    bot.deck.push(card);
     copies[data.id]++;
     return true;
   };

@@ -563,10 +563,11 @@ export async function handleBuffStatsTemp(action, ctx, targets, engine) {
 
   const duration = action.duration || "end_of_turn";
   const isDamageCalculationBuff = duration === "damage_calculation";
+  const isEndOfDamageStepBuff = duration === "end_of_damage_step";
   const durationTurns = Number(action.durationTurns ?? action.turns);
   const explicitExpiresOnTurn = Number(action.expiresOnTurn);
   let turnBasedExpiresOnTurn = null;
-  if (!permanent && !isDamageCalculationBuff) {
+  if (!permanent && !isDamageCalculationBuff && !isEndOfDamageStepBuff) {
     if (duration === "end_of_next_turn") {
       turnBasedExpiresOnTurn = game.turnCounter + 1;
     } else if (Number.isFinite(durationTurns) && durationTurns > 0) {
@@ -582,6 +583,8 @@ export async function handleBuffStatsTemp(action, ctx, targets, engine) {
     ? ""
     : isDamageCalculationBuff
       ? " during damage calculation"
+      : isEndOfDamageStepBuff
+        ? " until the end of the Damage Step"
       : useTurnBasedBuff && duration === "end_of_next_turn"
         ? " until end of next turn"
         : useTurnBasedBuff
@@ -591,7 +594,13 @@ export async function handleBuffStatsTemp(action, ctx, targets, engine) {
   const applyStatChange = (card, stat, boost) => {
     if (!boost) return 0;
 
-    if (boost < 0 && !permanent && !useTurnBasedBuff && !isDamageCalculationBuff) {
+    if (
+      boost < 0 &&
+      !permanent &&
+      !useTurnBasedBuff &&
+      !isDamageCalculationBuff &&
+      !isEndOfDamageStepBuff
+    ) {
       suppressTemporaryDynamicStatIncreasesForDebuff(card, stat, boost);
     }
 
@@ -702,6 +711,18 @@ export async function handleBuffStatsTemp(action, ctx, targets, engine) {
         if (game.battleStep === "damage" || ctx?.isDamageStep === true) {
           game.damageCalculationStatChangePending = true;
         }
+      }
+      if (isEndOfDamageStepBuff) {
+        game.endOfDamageStepTempBuffs = Array.isArray(
+          game.endOfDamageStepTempBuffs,
+        )
+          ? game.endOfDamageStepTempBuffs
+          : [];
+        game.endOfDamageStepTempBuffs.push({
+          card,
+          atk: appliedAtkBoost,
+          def: appliedDefBoost,
+        });
       }
 
       buffedCards.push(card.name);

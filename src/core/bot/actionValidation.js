@@ -5,6 +5,7 @@ import {
 } from "../game/summon/tributeValue.js";
 import { canUseNormalSummonForCard } from "../Player.js";
 import { canSetReactiveBackrowNow } from "../ai/common/phaseTiming.js";
+import { getCanonicalEffectActivationZones } from "../chain/legality.js";
 
 export function resolveHandIndexForAction(bot, action, expectedKind) {
   if (!action) return -1;
@@ -193,7 +194,10 @@ function findEffectForAction(card, action, fallbackZone) {
 
   return effects.find((effect) => {
     if (effect?.timing !== "ignition") return false;
-    if (fallbackZone && effect.requireZone && effect.requireZone !== fallbackZone) {
+    if (
+      fallbackZone &&
+      !getCanonicalEffectActivationZones(card, effect).includes(fallbackZone)
+    ) {
       return false;
     }
     return true;

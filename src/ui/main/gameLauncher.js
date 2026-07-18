@@ -23,6 +23,7 @@ export function createGameLauncher({ Game, Renderer }) {
       botArchetype: botPreset,
       devMode: false,
       normalDuelStrategicReport: true,
+      captureReplay: true,
       playerArchetype,
       renderer,
     });

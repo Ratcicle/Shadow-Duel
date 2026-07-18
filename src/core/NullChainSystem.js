@@ -10,7 +10,7 @@ export default class NullChainSystem {
     this.chainsDisabled = true;
     this.chainWindowOpen = false;
     this.chainStack = [];
-    this.chainResolving = false;
+    this.isResolving = false;
     this.currentChainLevel = 0;
     this.activeChainId = null;
     this.nextTimingWindowId = 1;
@@ -18,8 +18,6 @@ export default class NullChainSystem {
     this.nextTriggerOccurrenceId = 1;
     this.nextAtomicEventGroupId = 1;
     this.nextTriggerOpportunityId = 1;
-    this.nextUsageReservationId = 1;
-    this.usageReservations = new Map();
     this.nextFinalizationId = 1;
     this.pendingChainFinalizations = [];
     this.isFinalizingChain = false;
@@ -41,7 +39,7 @@ export default class NullChainSystem {
 
   log() {}
   isChainResolving() {
-    return this.chainResolving;
+    return this.isResolving;
   }
   isChainWindowOpen() {
     return this.chainWindowOpen;
@@ -52,8 +50,8 @@ export default class NullChainSystem {
   getEffectActivationZones() {
     return [];
   }
-  checkActivationUsage() {
-    return { ok: true, policy: "legacy_resolution_success" };
+  checkActivationUsage(card, player, effect) {
+    return { ok: true, policy: effect?.usagePolicy || null };
   }
   reserveUsageForChainLink() {
     return null;
@@ -62,7 +60,7 @@ export default class NullChainSystem {
     return null;
   }
   releaseAllUsageReservations() {
-    this.usageReservations.clear();
+    this.game?.releaseEffectUsageReservations?.("chain_cancelled");
   }
   queueChainFinalization() {
     return null;
@@ -79,17 +77,8 @@ export default class NullChainSystem {
     this.currentFinalizingLink = null;
     return this.getChainFinalizationState();
   }
-  getCurrentChainLength() {
-    return this.chainStack.length;
-  }
   getChainLength() {
     return this.chainStack.length;
-  }
-  getCurrentChainLevel() {
-    return this.currentChainLevel;
-  }
-  getLastLink() {
-    return null;
   }
   getLastChainLink() {
     return null;
@@ -182,7 +171,7 @@ export default class NullChainSystem {
   }
   async openChainWindow() {
     this.chainWindowOpen = false;
-    this.chainResolving = false;
+    this.isResolving = false;
     this.chainStack = [];
     this.activeChainId = null;
     this.releaseAllUsageReservations();
@@ -227,7 +216,7 @@ export default class NullChainSystem {
     return false;
   }
   async resolveChain() {
-    this.chainResolving = false;
+    this.isResolving = false;
     this.chainWindowOpen = false;
     this.chainStack = [];
     this.currentChainLevel = 0;
@@ -238,7 +227,7 @@ export default class NullChainSystem {
   cancelChain() {
     this.chainStack = [];
     this.chainWindowOpen = false;
-    this.chainResolving = false;
+    this.isResolving = false;
     this.currentChainLevel = 0;
     this.activeChainId = null;
     this.releaseAllUsageReservations();

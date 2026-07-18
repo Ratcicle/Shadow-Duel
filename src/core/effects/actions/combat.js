@@ -59,7 +59,6 @@ export function applyEndBattlePhase() {
   const activePlayer = game.turn === "player" ? game.player : game.bot;
   game.phase = "main2";
   game.battleStep = null;
-  game.damageStepTiming = null;
 
   game.clearAttackResolutionIndicators?.();
   game.clearAttackReadyIndicators?.();

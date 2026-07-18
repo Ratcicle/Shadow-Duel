@@ -350,6 +350,8 @@ export async function handleDeSynchro(action, ctx, targets, engine) {
       isFacedown: false,
       resetAttackFlags: true,
       summonMethodOverride: "special",
+      summonOrigin: "effect_resolution",
+      summonProcedure: "de_synchro_effect",
       contextLabel: action.reviveContextLabel || "de_synchro_material_summon",
       sourceCard: ctx?.source || null,
       effectId: ctx?.effect?.id || null,
@@ -460,6 +462,7 @@ export async function handleSynchroSummonFromExtraDeck(
     {
       checkActionWindow: false,
       position: action.position,
+      summonOrigin: "effect_resolution",
       actionContext: ctx?.actionContext || ctx?.activationContext?.actionContext,
     },
   );

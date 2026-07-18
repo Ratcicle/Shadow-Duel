@@ -3,7 +3,7 @@
  *
  * Spell Speed validation extracted from ChainSystem.js.
  * Pure validation logic — depends only on `this.chainStack` and the
- * `CHAIN_CONTEXTS` lookup re-exported from ChainSystem.
+ * `CHAIN_CONTEXTS` lookup from the canonical context registry.
  *
  * Methods (bound via prototype on ChainSystem):
  *  - getEffectSpellSpeed
@@ -115,7 +115,7 @@ export function canActivateInChain(effect, card, context) {
     }
   }
 
-  const damageStepCheck = canActivateDuringDamageStep(effect, card, context);
+  const damageStepCheck = canActivateDuringDamageStep(effect, card, context || {});
   if (!damageStepCheck.ok) {
     return {
       ok: false,

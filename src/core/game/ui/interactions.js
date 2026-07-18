@@ -134,12 +134,6 @@ export function bindCardInteractions() {
       actor,
       quickSpellContext ? { quickSpellContext } : undefined,
     ) || { ok: true };
-  const emitAfterSummonAfterPresentation = async (payload) => {
-    this.updateBoard();
-    await this.waitForBoardPresentation?.();
-    await this.emit("after_summon", payload);
-    this.updateBoard();
-  };
   const handleDirectAttackHandClick = (ownerId, event) => {
     if (!this.targetSelection || this.targetSelection.kind !== "attack") {
       return false;
@@ -411,30 +405,17 @@ export function bindCardInteractions() {
             return;
           }
 
-          const before = actor.field.length;
           const summonResult = await this.performNormalSummon(
             actor,
             index,
             position,
             isFacedown,
           );
-          if (!summonResult && actor.field.length === before) {
+          if (summonResult?.success !== true) {
             this.updateBoard();
             return;
           }
-          const summonedCard = actor.field[actor.field.length - 1];
-          const tributes = summonResult.tributes || [];
-          summonedCard.summonedTurn = this.turnCounter;
-          summonedCard.positionChangedThisTurn = false;
-          summonedCard.setTurn = summonedCard.isFacedown ? this.turnCounter : null;
-          await emitAfterSummonAfterPresentation({
-            card: summonedCard,
-            player: actor,
-            opponent,
-            method: "normal",
-            fromZone: "hand",
-            tributes,
-          });
+          this.updateBoard();
         },
         {
           canNormalSummon: canNormalSummonFromHand(actor, card, tributeInfo),
@@ -539,7 +520,6 @@ export function bindCardInteractions() {
       this.ui.log(getTributeSelectionMessage(pendingSummon, actor));
       if (hasSelectedRequiredTributeValue(actor, pendingSummon)) {
         clearLaboratoryTributeHighlight(actor);
-        const before = actor.field.length;
         const summonResult = await this.performNormalSummon(
           actor,
           pendingSummon.cardIndex,
@@ -547,25 +527,13 @@ export function bindCardInteractions() {
           pendingSummon.isFacedown,
           selectedTributes
         );
-        if (!summonResult && actor.field.length === before) {
+        if (summonResult?.success !== true) {
           clearTributeSelection();
           this.updateBoard();
           return true;
         }
-        const summonedCard = actor.field[actor.field.length - 1];
-        const tributes = summonResult.tributes || [];
-        summonedCard.summonedTurn = this.turnCounter;
-        summonedCard.positionChangedThisTurn = false;
-        summonedCard.setTurn = summonedCard.isFacedown ? this.turnCounter : null;
         clearTributeSelection();
-        await emitAfterSummonAfterPresentation({
-          card: summonedCard,
-          player: actor,
-          opponent,
-          method: tributes.length > 0 ? "tribute" : "normal",
-          fromZone: "hand",
-          tributes,
-        });
+        this.updateBoard();
       }
       return true;
     }
@@ -772,37 +740,17 @@ export function bindCardInteractions() {
                   getTributeSelectionMessage(pendingSummon, this.player)
                 );
               } else {
-                const before = this.player.field.length;
                 const summonResult = await this.performNormalSummon(
                   this.player,
                   index,
                   position,
                   isFacedown
                 );
-                if (!summonResult && this.player.field.length === before) {
+                if (summonResult?.success !== true) {
                   this.updateBoard();
                   return;
                 }
-                // Handle both old (card) and new ({card, tributes}) return formats
-                const card = summonResult.card || summonResult;
-                const tributes = summonResult.tributes || [];
-
-                const summonedCard =
-                  this.player.field[this.player.field.length - 1];
-                summonedCard.summonedTurn = this.turnCounter;
-                summonedCard.positionChangedThisTurn = false;
-                if (summonedCard.isFacedown) {
-                  summonedCard.setTurn = this.turnCounter;
-                } else {
-                  summonedCard.setTurn = null;
-                }
-                await emitAfterSummonAfterPresentation({
-                  card: summonedCard,
-                  player: this.player,
-                  method: "normal",
-                  fromZone: "hand",
-                  tributes: tributes,
-                });
+                this.updateBoard();
               }
             }
           },
@@ -958,7 +906,6 @@ export function bindCardInteractions() {
             this.ui.clearPlayerFieldTributeable();
           }
 
-          const before = this.player.field.length;
           const summonResult = await this.performNormalSummon(
             this.player,
             pendingSummon.cardIndex,
@@ -967,36 +914,13 @@ export function bindCardInteractions() {
             selectedTributes
           );
 
-          if (!summonResult && this.player.field.length === before) {
+          if (summonResult?.success !== true) {
             clearTributeSelection();
             this.updateBoard();
             return;
           }
-
-          // Handle both old (card) and new ({card, tributes}) return formats
-          const card = summonResult.card || summonResult;
-          const tributes = summonResult.tributes || [];
-
-          const summonedCard = this.player.field[this.player.field.length - 1];
-          summonedCard.summonedTurn = this.turnCounter;
-          summonedCard.positionChangedThisTurn = false;
-          if (summonedCard.isFacedown) {
-            summonedCard.setTurn = this.turnCounter;
-          } else {
-            summonedCard.setTurn = null;
-          }
-
-          const summonMethod =
-            pendingSummon.tributesNeeded > 0 ? "tribute" : "normal";
           clearTributeSelection();
-
-          await emitAfterSummonAfterPresentation({
-            card: summonedCard,
-            player: this.player,
-            method: summonMethod,
-            fromZone: "hand",
-            tributes: tributes,
-          });
+          this.updateBoard();
         }
         return;
       }

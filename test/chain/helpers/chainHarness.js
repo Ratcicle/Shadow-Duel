@@ -2,6 +2,12 @@ import ChainSystem from "../../../src/core/ChainSystem.js";
 import AutoSelector from "../../../src/core/AutoSelector.js";
 import { bumpCardLocationVersion } from "../../../src/core/Card.js";
 import { getPublicState } from "../../../src/core/game/state/serialization.js";
+import {
+  checkEffectUsage,
+  releaseEffectUsageReservations,
+  reserveEffectUsage,
+  settleEffectUsage,
+} from "../../../src/core/game/effects/usage.js";
 
 const ARRAY_ZONES = [
   "hand",
@@ -180,7 +186,13 @@ export function createChainHarness(options = {}) {
     turnCounter: options.turnCounter ?? 3,
     phase: options.phase || "main1",
     disableChains: false,
-    _flushingPendingChainEvents: false,
+    _flushingPendingTriggerOccurrences: false,
+    nextEffectUsageReservationId: 1,
+    effectUsageReservations: new Map(),
+    checkEffectUsage,
+    reserveEffectUsage,
+    settleEffectUsage,
+    releaseEffectUsageReservations,
     ui: {
       log(...args) {
         trace.logs.push(args);
@@ -252,16 +264,9 @@ export function createChainHarness(options = {}) {
           ? { ok: false, reason: "once per duel", used, limit, remaining: 0 }
           : { ok: true, used, limit, remaining: limit - used };
       },
-      registerOncePerDuelUsage(card, owner, effect) {
-        if (!effect?.oncePerDuel || !owner) return;
-        const key = effect.oncePerDuelName || effect.id || card?.name;
-        owner.oncePerDuelUsageByName[key] =
-          Number(owner.oncePerDuelUsageByName[key] || 0) + 1;
-      },
       isEffectNegated(card) {
         return card?.effectsNegated === true;
       },
-      registerOncePerTurnUsage() {},
     },
     async emit(eventName, payload, emitOptions = {}) {
       trace.events.push({
@@ -340,6 +345,11 @@ export function createChainHarness(options = {}) {
           chainId: moveOptions.chainId ?? null,
           linkId: moveOptions.linkId ?? null,
           contextLabel: moveOptions.contextLabel || null,
+          actionContext: moveOptions.actionContext || null,
+          damageStepId: moveOptions.actionContext?.damageStepId ?? null,
+          damageStepTiming:
+            moveOptions.actionContext?.damageStepTiming ?? null,
+          isDamageStep: moveOptions.actionContext?.isDamageStep === true,
           wasDestroyed: moveOptions.wasDestroyed === true,
           movedByEffect: Boolean(
             moveOptions.sourceCard || moveOptions.source || moveOptions.effectId,
@@ -383,14 +393,13 @@ export function createChainHarness(options = {}) {
         activationContext: {
           ...activationContext,
           prepareOnly: false,
-          selections,
+          targetSelections: selections,
         },
         selectionKind: config.selectionKind,
-        selections,
+        targetSelections: selections,
         committed: true,
         costsPaid: true,
         pipelineManaged: true,
-        skipUsageRegistration: true,
       });
       preparedActivation.pipelineCompletion = async (linkResult) => {
         if (linkResult?.success !== false) {
@@ -412,12 +421,12 @@ export function createChainHarness(options = {}) {
         const custom = await options.onFlushPendingTriggers(flushOptions);
         if (custom !== undefined) return custom;
       }
-      if (game._flushingPendingChainEvents) {
+      if (game._flushingPendingTriggerOccurrences) {
         return { ok: true, flushed: 0, deferred: true };
       }
       let flushed = 0;
       let chainBuilt = false;
-      game._flushingPendingChainEvents = true;
+      game._flushingPendingTriggerOccurrences = true;
       try {
         while (game.chainSystem.pendingTriggerOccurrences.length > 0) {
           const occurrences =
@@ -437,11 +446,8 @@ export function createChainHarness(options = {}) {
         }
         return { ok: true, success: true, chainBuilt, flushed };
       } finally {
-        game._flushingPendingChainEvents = false;
+        game._flushingPendingTriggerOccurrences = false;
       }
-    },
-    async flushPendingChainEvents() {
-      return await this.flushPendingTriggerOccurrences();
     },
     updateBoard() {},
     checkWinCondition() {},

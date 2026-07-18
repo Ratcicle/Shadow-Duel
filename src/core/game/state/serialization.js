@@ -28,6 +28,7 @@ export function getPublicState(forPlayerId = "player") {
       if (!card) return null;
       const hidden = card.isFacedown && !isSelf;
       return {
+        duelCardId: card.duelCardId ?? null,
         cardId: card.id,
         name: hidden ? null : card.name,
         position: card.position,
@@ -52,6 +53,7 @@ export function getPublicState(forPlayerId = "player") {
   const serializeHand = (owner, isSelf) =>
     isSelf
       ? (owner.hand || []).map((card) => ({
+          duelCardId: card.duelCardId ?? null,
           cardId: card.id,
           name: card.name,
           atk: card.atk,
@@ -67,6 +69,7 @@ export function getPublicState(forPlayerId = "player") {
       if (!card) return null;
       const hidden = card.isFacedown && !isSelf;
       return {
+        duelCardId: card.duelCardId ?? null,
         cardId: card.id,
         name: hidden ? null : card.name,
         faceDown: !!card.isFacedown,
@@ -77,6 +80,7 @@ export function getPublicState(forPlayerId = "player") {
 
   const serializeGraveyard = (owner) =>
     (owner.graveyard || []).map((card) => ({
+      duelCardId: card.duelCardId ?? null,
       cardId: card.id,
       name: card.name,
       cardKind: card.cardKind,
@@ -141,6 +145,7 @@ export function getPublicState(forPlayerId = "player") {
   });
 
   return {
+    schemaVersion: 1,
     turn: this.turn,
     phase: this.phase,
     turnCounter: this.turnCounter,
@@ -154,6 +159,23 @@ export function getPublicState(forPlayerId = "player") {
       triggers: this.chainSystem?.getTriggerState?.() || null,
       finalization:
         this.chainSystem?.getChainFinalizationState?.() || null,
+    },
+    summon: this.getSummonState?.() || {
+      active: false,
+      transaction: null,
+      last: null,
+    },
+    usage: this.getEffectUsageState?.() || {
+      nextReservationId: null,
+      reservations: [],
+    },
+    combat: {
+      battleStep: this.battleStep || null,
+      damageStep: this.getDamageStepState?.() || {
+        active: false,
+        transaction: null,
+        last: null,
+      },
     },
     players: {
       self: buildPlayerView(viewPlayer, true),

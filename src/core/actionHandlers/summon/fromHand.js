@@ -36,6 +36,9 @@ export async function performSummonFromHand(
           position,
           isFacedown: false,
           resetAttackFlags: true,
+          summonOrigin: "effect_resolution",
+          summonMethodOverride: "special",
+          summonProcedure: "card_effect",
         })
       : null;
 

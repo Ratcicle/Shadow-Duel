@@ -45,7 +45,13 @@ export {
 } from "./preview.js";
 
 // Log and status
-export { log, updateTurn, updatePhaseTrack, updateLP } from "./log.js";
+export {
+  log,
+  updateTurn,
+  updatePriorityIndicator,
+  updatePhaseTrack,
+  updateLP,
+} from "./log.js";
 
 // Animations
 export { showLpChange } from "./animations.js";

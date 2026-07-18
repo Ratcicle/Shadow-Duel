@@ -3,6 +3,11 @@ export { collectAttackDeclaredTriggers } from "./attackDeclared.js";
 export { collectBattleDamageTriggers } from "./battleDamage.js";
 export { collectBattleCompletedTriggers } from "./battleCompleted.js";
 export { collectBattleDestroyTriggers } from "./battleDestroy.js";
+export {
+  collectBattleDamageInflictedTriggers,
+  collectCardFlippedTriggers,
+  collectDamageStepTriggers,
+} from "./damageStep.js";
 export { collectCardEquippedTriggers } from "./cardEquipped.js";
 export { collectCardMovedTriggers } from "./cardMoved.js";
 export { collectCardToGraveTriggers } from "./cardToGrave.js";

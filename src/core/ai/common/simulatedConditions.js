@@ -6,6 +6,7 @@ import {
   getCardInstanceId,
   matchesTargetFilters,
 } from "./targetSelection.js";
+import { mergeCanonicalSelections } from "../../game/selection/contract.js";
 
 export function getStoredBlueprints(card) {
   const storage = card?.state?.blueprintStorage || card?.blueprintStorage;
@@ -311,8 +312,8 @@ function simCollectScopeCards(scope = {}, self, opponent) {
 function simSelectedCards(targetRef, activationContext = {}) {
   const cards = [];
   const selectionSources = [
-    activationContext.selections,
-    activationContext.respondingToChainLink?.selections,
+    mergeCanonicalSelections(activationContext),
+    mergeCanonicalSelections(activationContext.respondingToChainLink),
     activationContext.actionResults,
     activationContext._actionTargets,
   ].filter(Boolean);
@@ -334,7 +335,7 @@ function simCollectTargetRefCards(targetRef, ctx = {}, options = {}) {
     options.actionContext?.[targetRef],
     options.actionContext?._actionTargets?.[targetRef],
     options.actionContext?.selections?.[targetRef],
-    options.activationContext?.selections?.[targetRef],
+    mergeCanonicalSelections(options.activationContext)?.[targetRef],
     options.activationContext?.actionResults?.[targetRef],
     options.activationContext?.actionContext?._actionTargets?.[targetRef],
   ];
@@ -614,7 +615,7 @@ function simActivationWouldDestroyMatchingCards(condition, ctx, options, self, o
   const effect =
     activationAttempt?.effect || activationContext.effect || options.effect || null;
   const activationPlayer =
-    activationAttempt?.player || activationContext.player || null;
+    activationAttempt?.controller || activationContext.player || null;
   const activationPlayerId =
     activationPlayer?.id || activatedCard?.controller || activatedCard?.owner || null;
   const activationOwner =
@@ -656,7 +657,7 @@ function simActivationWouldBanishMatchingCards(condition, ctx, options, self, op
   const effect =
     activationAttempt?.effect || activationContext.effect || options.effect || null;
   const activationPlayer =
-    activationAttempt?.player || activationContext.player || null;
+    activationAttempt?.controller || activationContext.player || null;
   const activationPlayerId =
     activationPlayer?.id || activatedCard?.controller || activatedCard?.owner || null;
   const activationOwner =
@@ -710,7 +711,7 @@ function simActivationWouldMakeCardLeaveField(condition, ctx, options, self, opp
   const effect =
     activationAttempt?.effect || activationContext.effect || options.effect || null;
   const activationPlayer =
-    activationAttempt?.player || activationContext.player || null;
+    activationAttempt?.controller || activationContext.player || null;
   const activationPlayerId =
     activationPlayer?.id || activatedCard?.controller || activatedCard?.owner || null;
   const activationOwner =

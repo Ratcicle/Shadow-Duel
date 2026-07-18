@@ -35,10 +35,12 @@ import * as combatAvailability from "./game/combat/availability.js";
 import * as combatDamage from "./game/combat/damage.js";
 import * as combatTargeting from "./game/combat/targeting.js";
 import * as combatResolution from "./game/combat/resolution.js";
+import * as combatDamageStep from "./game/combat/damageStep.js";
 
 // Summon modules (moved from inline methods)
 import * as summonTracking from "./game/summon/tracking.js";
 import * as summonExecution from "./game/summon/execution.js";
+import * as summonTransaction from "./game/summon/transaction.js";
 import * as summonAscension from "./game/summon/ascension.js";
 import * as summonSynchro from "./game/summon/synchro.js";
 import * as summonPosition from "./game/summon/position.js";
@@ -93,15 +95,19 @@ import * as strategicReport from "./game/analytics/strategicReport.js";
 import * as effectsDestructionReplacement from "./game/effects/destructionReplacement.js";
 import * as effectsActivationRestrictions from "./game/effects/activationRestrictions.js";
 import * as effectsActivationPipeline from "./game/effects/activationPipeline.js";
+import * as effectsUsage from "./game/effects/usage.js";
+import { createDecisionBroker } from "./game/decisions/broker.js";
+import { createDeterministicRandom } from "./game/random.js";
+import * as canonicalReplay from "./game/replay/recorder.js";
 
 const STARTING_PLAYER_IDS = new Set(["player", "bot"]);
 const EXTRA_DECK_MONSTER_TYPES = new Set(["fusion", "ascension", "synchro"]);
 
-function resolveStartingPlayerId(startingPlayer) {
+function resolveStartingPlayerId(startingPlayer, random) {
   if (STARTING_PLAYER_IDS.has(startingPlayer)) {
     return startingPlayer;
   }
-  return Math.random() < 0.5 ? "player" : "bot";
+  return random() < 0.5 ? "player" : "bot";
 }
 
 function getStartingPlayerAnnouncement(turn) {
@@ -125,6 +131,12 @@ export default class Game {
     this.disableChains = !!options.disableChains;
     this.disableTraps = !!options.disableTraps;
     this.disableEffectActivation = !!options.disableEffectActivation;
+    this.randomSeed = options.randomSeed ?? Date.now();
+    this.randomGenerator = createDeterministicRandom(this.randomSeed);
+    this.nextDuelCardId = 1;
+    this.generatedIdCounters = new Map();
+    this.captureReplayEnabled = options.captureReplay === true;
+    this._canonicalReplay = null;
 
     this.laboratoryModeEnabled = !!options.laboratoryMode;
     this.laboratoryRevealBotHand = !!options.laboratoryRevealBotHand;
@@ -139,6 +151,10 @@ export default class Game {
     this.renderer = options.renderer || null;
     this.ui = createUIAdapter(this.renderer);
     this.autoSelector = new AutoSelector(this);
+    this.replayMode = options.replayMode || "live";
+    this.decisionBroker = createDecisionBroker(this, {
+      mode: this.replayMode === "playback" ? "replay" : "live",
+    });
 
     // Ensure controllerType defaults (opponentOverride may not set it)
     if (!this.player.controllerType) {
@@ -167,14 +183,23 @@ export default class Game {
     this.aiSuccessfulActionDelayMs = 1200;
     this.aiPresentationStepDelayMs = 650;
     this.battleStep = null;
-    this.damageStepTiming = null;
     this.damageCalculationStatChangePending = false;
+    this.nextDamageStepId = 1;
+    this.activeDamageStepTransaction = null;
+    this.lastDamageStepTransaction = null;
+    this.damageStepProcedureDepth = 0;
+    this.damageCalculationTempBuffs = [];
+    this.endOfDamageStepTempBuffs = [];
     this.damageCalculationStatPresentationDelayMs =
       Number.isFinite(options.damageCalculationStatPresentationDelayMs)
         ? Math.max(0, options.damageCalculationStatPresentationDelayMs)
         : 500;
     this.lastAttackNegated = false;
     this.pendingSpecialSummon = null; // Track pending special summon (e.g., Leviathan from Eel)
+    this.nextSummonId = 1;
+    this.activeSummonTransaction = null;
+    this.lastSummonTransaction = null;
+    this.summonProcedureDepth = 0;
     this.pendingTributeSummonSelection = null;
     this.isResolvingEffect = false; // Lock player actions while resolving an effect
     this.eventResolutionDepth = 0;
@@ -182,7 +207,7 @@ export default class Game {
     this.pendingEventSelection = null;
     this.pendingTriggerSelection = null;
     this.pendingChainEvents = [];
-    this._flushingPendingChainEvents = false;
+    this._flushingPendingTriggerOccurrences = false;
     this.temporaryReplacementEffects = [];
     this.temporaryBattlePairEffects = [];
     this.temporaryEventEffects = [];
@@ -207,6 +232,8 @@ export default class Game {
       bot: new Map(),
       card: new WeakMap(),
     };
+    this.nextEffectUsageReservationId = 1;
+    this.effectUsageReservations = new Map();
     this.oncePerTurnTurnCounter = this.turnCounter;
     this.resetMaterialDuelStats("init");
 
@@ -233,10 +260,51 @@ export default class Game {
       : new ChainSystem(this, {
           responseTimeoutMs: options.chainResponseTimeoutMs,
         });
+    if (this.captureReplayEnabled) {
+      this.startReplayRecording({ enabled: true });
+    }
   }
 
   isDisposed() {
     return this.disposed === true;
+  }
+
+  requestDecision(input = {}) {
+    return this.decisionBroker.requestDecision(input);
+  }
+
+  recordDecision(input = {}, result = null) {
+    return this.decisionBroker.recordDecision(input, result);
+  }
+
+  random() {
+    return this.randomGenerator.next();
+  }
+
+  shuffle(items) {
+    return this.randomGenerator.shuffle(items);
+  }
+
+  getRandomState() {
+    return this.randomGenerator.snapshot();
+  }
+
+  restoreRandomState(snapshot) {
+    return this.randomGenerator.restore(snapshot);
+  }
+
+  ensureDuelCardId(card) {
+    if (!card) return null;
+    if (!Number.isInteger(card.duelCardId)) {
+      card.duelCardId = this.nextDuelCardId++;
+    }
+    return card.duelCardId;
+  }
+
+  createDeterministicId(scope = "id") {
+    const next = Number(this.generatedIdCounters.get(scope) || 0) + 1;
+    this.generatedIdCounters.set(scope, next);
+    return `${scope}_${next}`;
   }
 
   dispose(reason = "dispose") {
@@ -248,11 +316,13 @@ export default class Game {
     this.selectionState = "idle";
     this.graveyardSelection = null;
     this.pendingSpecialSummon = null;
+    this.cleanupDamageStepTransaction?.(reason);
+    this.cleanupSummonTransaction?.(reason);
     this.pendingTributeSummonSelection = null;
     this.pendingEventSelection = null;
     this.pendingTriggerSelection = null;
     this.pendingChainEvents = [];
-    this._flushingPendingChainEvents = false;
+    this._flushingPendingTriggerOccurrences = false;
     this.isResolvingEffect = false;
     this.eventResolutionDepth = 0;
     this.delayedActions = [];
@@ -266,6 +336,8 @@ export default class Game {
     this.pendingBoardPresentationPromise = Promise.resolve(false);
     this.eventListeners = {};
     this.chainSystem?.cancelChain?.();
+    this.ui?.updatePriorityIndicator?.(null);
+    this.releaseEffectUsageReservations?.(reason);
     this.effectEngine?.clearTargetingCache?.();
     this.renderer?.destroy?.();
     this.ui = createDisposedUIAdapter();
@@ -340,6 +412,9 @@ export default class Game {
       startingPlayer = null,
       firstTurnPlayer = null,
       announceStartingPlayer = true,
+      preserveDeckOrder = false,
+      initializeOnly = false,
+      initialRandomState = null,
     } = options;
 
     this.laboratoryModeEnabled = laboratoryMode === true;
@@ -355,9 +430,9 @@ export default class Game {
       exactDecks,
     });
     if (exactDecks) {
-      this.buildExactDeckForPlayer(this.player, playerDeck);
+      this.buildExactDeckForPlayer(this.player, playerDeck, { preserveDeckOrder });
       this.buildExactExtraDeckForPlayer(this.player, playerExtraDeck);
-      this.buildExactDeckForPlayer(this.bot, botDeck);
+      this.buildExactDeckForPlayer(this.bot, botDeck, { preserveDeckOrder });
       this.buildExactExtraDeckForPlayer(this.bot, botExtraDeck);
     } else {
       this.player.buildDeck(playerDeck);
@@ -375,7 +450,12 @@ export default class Game {
     const requestedStartingPlayer = STARTING_PLAYER_IDS.has(firstTurnPlayer)
       ? firstTurnPlayer
       : startingPlayer;
-    this.turn = resolveStartingPlayerId(requestedStartingPlayer);
+    this.turn = resolveStartingPlayerId(
+      requestedStartingPlayer,
+      () => this.random(),
+    );
+    if (initialRandomState) this.restoreRandomState(initialRandomState);
+    this.captureReplaySetup?.();
     this._arenaTracker?.recordProgress?.("starting_player_selected", this, {
       startingPlayer: this.turn,
     });
@@ -387,6 +467,10 @@ export default class Game {
     this.drawCards(this.player, 4);
     this.drawCards(this.bot, 4);
     if (this.isDisposed()) return;
+    if (initializeOnly) {
+      this.updateBoard();
+      return;
+    }
     this._arenaTracker?.recordProgress?.("opening_draw_after", this, {
       playerHandSize: this.player?.hand?.length || 0,
       botHandSize: this.bot?.hand?.length || 0,
@@ -466,7 +550,7 @@ export default class Game {
     }
   }
 
-  buildExactDeckForPlayer(player, deckList = []) {
+  buildExactDeckForPlayer(player, deckList = [], options = {}) {
     player.deck = [];
     player.hand = [];
     player.field = [];
@@ -484,7 +568,7 @@ export default class Game {
       }
       player.deck.push(card);
     });
-    player.shuffleDeck();
+    if (options.preserveDeckOrder !== true) player.shuffleDeck();
   }
 
   buildExactExtraDeckForPlayer(player, extraDeckList = []) {
@@ -692,7 +776,7 @@ export default class Game {
   // -----------------------------------------------------------------------------
 
   // -----------------------------------------------------------------------------
-  // Combat resolution: resolveCombat, finishCombat
+  // Combat resolution: resolveCombat
   // ? Moved to src/core/game/combat/resolution.js
   // -----------------------------------------------------------------------------
 
@@ -711,7 +795,6 @@ export default class Game {
   // -----------------------------------------------------------------------------
 
   // -----------------------------------------------------------------------------
-  // Combat applyBattleDestroyEffect
   // ? Moved to src/core/game/combat/resolution.js
   // -----------------------------------------------------------------------------
 
@@ -779,8 +862,6 @@ Game.prototype.resumePendingEventSelection =
 Game.prototype.queueTriggerOccurrence = eventResolver.queueTriggerOccurrence;
 Game.prototype.flushPendingTriggerOccurrences =
   eventResolver.flushPendingTriggerOccurrences;
-Game.prototype.queuePendingChainEvent = eventResolver.queuePendingChainEvent;
-Game.prototype.flushPendingChainEvents = eventResolver.flushPendingChainEvents;
 
 // -----------------------------------------------------------------------------
 // Selection: Attach methods from modular selection/ folder
@@ -849,6 +930,8 @@ Game.prototype.runZoneOp = zonesOperations.runZoneOp;
 
 // Destruction: destroyCard (orchestrates protection, negation, replacement, move-to-grave)
 Game.prototype.destroyCard = zonesDestruction.destroyCard;
+Game.prototype.isBattleDestructionProtected =
+  zonesDestruction.isBattleDestructionProtected;
 
 // -----------------------------------------------------------------------------
 // Effects: Attach methods from modular effects/ folder
@@ -920,11 +1003,19 @@ Game.prototype.inflictDamage = combatDamage.inflictDamage;
 Game.prototype.startAttackTargetSelection =
   combatTargeting.startAttackTargetSelection;
 
-// Resolution: resolveCombat, finishCombat, applyBattleDestroyEffect
+// Resolution: resolveCombat
 Game.prototype.resolveCombat = combatResolution.resolveCombat;
-Game.prototype.finishCombat = combatResolution.finishCombat;
-Game.prototype.applyBattleDestroyEffect =
-  combatResolution.applyBattleDestroyEffect;
+Game.prototype.createDamageStepTransaction =
+  combatDamageStep.createDamageStepTransaction;
+Game.prototype.executeDamageStepTransaction =
+  combatDamageStep.executeDamageStepTransaction;
+Game.prototype.getDamageStepState = combatDamageStep.getDamageStepState;
+Game.prototype.cleanupDamageStepTransaction =
+  combatDamageStep.cleanupDamageStepTransaction;
+Game.prototype.clearDamageCalculationBuffs =
+  combatDamageStep.clearDamageCalculationBuffs;
+Game.prototype.clearEndOfDamageStepBuffs =
+  combatDamageStep.clearEndOfDamageStepBuffs;
 
 // -----------------------------------------------------------------------------
 // Summon: Attach methods from modular summon/ folder
@@ -935,6 +1026,21 @@ Game.prototype._trackSpecialSummonType = summonTracking._trackSpecialSummonType;
 Game.prototype.getSpecialSummonedTypeCount =
   summonTracking.getSpecialSummonedTypeCount;
 Game.prototype.resolveDelayedSummon = summonTracking.resolveDelayedSummon;
+
+// Transaction: canonical summon preparation, commitment and observability
+Game.prototype.createPreparedSummon = summonTransaction.createPreparedSummon;
+Game.prototype.beginSummonTransaction = summonTransaction.beginSummonTransaction;
+Game.prototype.markSummonAwaitingNegation =
+  summonTransaction.markSummonAwaitingNegation;
+Game.prototype.markSummonNegated = summonTransaction.markSummonNegated;
+Game.prototype.finishSummonTransaction =
+  summonTransaction.finishSummonTransaction;
+Game.prototype.cleanupSummonTransaction =
+  summonTransaction.cleanupSummonTransaction;
+Game.prototype.getSummonState = summonTransaction.getSummonState;
+Game.prototype.executeSummonTransaction =
+  summonTransaction.executeSummonTransaction;
+Game.prototype.holdSummonTimingState = summonTransaction.holdSummonTimingState;
 
 // Execution: flipSummon, performFusionSummon, performSpecialSummon
 Game.prototype.flipSummon = summonExecution.flipSummon;
@@ -1045,6 +1151,12 @@ Game.prototype.getOncePerTurnLockKey = turnOncePerTurn.getOncePerTurnLockKey;
 Game.prototype.getOncePerTurnStore = turnOncePerTurn.getOncePerTurnStore;
 Game.prototype.canUseOncePerTurn = turnOncePerTurn.canUseOncePerTurn;
 Game.prototype.markOncePerTurnUsed = turnOncePerTurn.markOncePerTurnUsed;
+Game.prototype.checkEffectUsage = effectsUsage.checkEffectUsage;
+Game.prototype.reserveEffectUsage = effectsUsage.reserveEffectUsage;
+Game.prototype.settleEffectUsage = effectsUsage.settleEffectUsage;
+Game.prototype.releaseEffectUsageReservations =
+  effectsUsage.releaseEffectUsageReservations;
+Game.prototype.getEffectUsageState = effectsUsage.getEffectUsageState;
 
 // -----------------------------------------------------------------------------
 // Actions: Attach methods from modular actions/ folder
@@ -1182,3 +1294,201 @@ Game.prototype.buildStrategicReportFilename =
   strategicReport.buildStrategicReportFilename;
 Game.prototype.downloadStrategicReport =
   strategicReport.downloadStrategicReport;
+
+Game.prototype.startReplayRecording = canonicalReplay.startReplayRecording;
+Game.prototype.captureReplaySetup = canonicalReplay.captureReplaySetup;
+Game.prototype.recordReplayCommand = canonicalReplay.recordReplayCommand;
+Game.prototype.recordReplayDecision = canonicalReplay.recordReplayDecision;
+Game.prototype.recordReplayEvent = canonicalReplay.recordReplayEvent;
+Game.prototype.finalizeReplay = canonicalReplay.finalizeReplay;
+Game.prototype.exportReplay = canonicalReplay.exportReplay;
+Game.prototype.hasCanonicalReplay = canonicalReplay.hasCanonicalReplay;
+
+function installReplayCommandCapture(methodName, describe) {
+  const original = Game.prototype[methodName];
+  if (typeof original !== "function" || original._replayCaptureWrapped) return;
+  const wrapped = async function (...args) {
+    const descriptor = describe.call(this, args);
+    const result = await original.apply(this, args);
+    if (
+      descriptor &&
+      this.captureReplayEnabled &&
+      this.replayMode !== "playback" &&
+      !this._activeDeferredReplayCommandDescriptor
+    ) {
+      if (result?.needsSelection && this.targetSelection) {
+        this.targetSelection.replayCommandDescriptor = descriptor;
+      } else {
+        this.recordReplayCommand(descriptor);
+      }
+    }
+    return result;
+  };
+  wrapped._replayCaptureWrapped = true;
+  Game.prototype[methodName] = wrapped;
+}
+
+const cardPayload = (game, card, extra = {}) => ({
+  duelCardId: game.ensureDuelCardId(card),
+  cardId: card?.id ?? null,
+  ...extra,
+});
+
+installReplayCommandCapture("performNormalSummon", function (args) {
+  const [actor, cardIndex, position, facedown, tributeIndices] = args;
+  const player = actor || this.player;
+  const card = player?.hand?.[cardIndex];
+  if (!card) return null;
+  return {
+    type: facedown ? "set_monster" : "summon",
+    actorId: player.id,
+    payload: cardPayload(this, card, { position, facedown, tributeIndices }),
+  };
+});
+installReplayCommandCapture("flipSummon", function (args) {
+  const [card] = args;
+  const actor = card?.owner === "bot" ? this.bot : this.player;
+  return card
+    ? { type: "flip_summon", actorId: actor.id, payload: cardPayload(this, card) }
+    : null;
+});
+installReplayCommandCapture("performSynchroSummonFromExtraDeck", function (args) {
+  const [cardOrIndex, actor = this.player, options = {}] = args;
+  const card = typeof cardOrIndex === "number"
+    ? actor?.extraDeck?.[cardOrIndex]
+    : cardOrIndex;
+  return card
+    ? {
+        type: "extra_deck_summon",
+        actorId: actor.id,
+        payload: cardPayload(this, card, {
+          summonType: "synchro",
+          position: options.position || null,
+          materialIds: (options.materials || []).map((material) =>
+            this.ensureDuelCardId(material),
+          ),
+        }),
+      }
+    : null;
+});
+installReplayCommandCapture("performAscensionSummonFromExtraDeck", function (args) {
+  const [cardOrIndex, actor = this.player, options = {}] = args;
+  const card = typeof cardOrIndex === "number"
+    ? actor?.extraDeck?.[cardOrIndex]
+    : cardOrIndex;
+  return card
+    ? {
+        type: "extra_deck_summon",
+        actorId: actor.id,
+        payload: cardPayload(this, card, {
+          summonType: "ascension",
+          position: options.position || null,
+          materialIds: options.material
+            ? [this.ensureDuelCardId(options.material)]
+            : [],
+        }),
+      }
+    : null;
+});
+installReplayCommandCapture("performExtraDeckSummonProcedure", function (args) {
+  const [cardOrIndex, actor = this.player, options = {}] = args;
+  const card = typeof cardOrIndex === "number"
+    ? actor?.extraDeck?.[cardOrIndex]
+    : cardOrIndex;
+  return card
+    ? {
+        type: "extra_deck_summon",
+        actorId: actor.id,
+        payload: cardPayload(this, card, {
+          summonType: "procedure",
+          position: options.position || null,
+          materialIds: (options.materials || []).map((material) =>
+            this.ensureDuelCardId(material),
+          ),
+        }),
+      }
+    : null;
+});
+installReplayCommandCapture("setSpellOrTrap", function (args) {
+  const [card, , actor = this.player] = args;
+  return card
+    ? { type: "set_spell_trap", actorId: actor.id, payload: cardPayload(this, card) }
+    : null;
+});
+installReplayCommandCapture("tryActivateMonsterEffect", function (args) {
+  const [card, , zone, actor = this.player, options = {}] = args;
+  return card
+    ? {
+        type: "activate_effect",
+        actorId: actor.id,
+        payload: cardPayload(this, card, {
+          sourceZone: zone,
+          effectId: options.effectId || options.activationContext?.effectId || null,
+        }),
+      }
+    : null;
+});
+installReplayCommandCapture("tryActivateSpell", function (args) {
+  const [card, , , options = {}] = args;
+  const actor = options.owner || this.player;
+  return card
+    ? {
+        type: "activate_card",
+        actorId: actor.id,
+        payload: cardPayload(this, card, { sourceZone: "hand" }),
+      }
+    : null;
+});
+installReplayCommandCapture("tryActivateSpellTrapEffect", function (args) {
+  const [card, , options = {}] = args;
+  const actor = options.owner || (card?.owner === "bot" ? this.bot : this.player);
+  return card
+    ? {
+        type: "activate_effect",
+        actorId: actor.id,
+        payload: cardPayload(this, card, {
+          sourceZone: options.activationZone || "spellTrap",
+          effectId: options.effectId || null,
+        }),
+      }
+    : null;
+});
+installReplayCommandCapture("changeMonsterPosition", function (args) {
+  const [card, position] = args;
+  const actor = card?.owner === "bot" ? this.bot : this.player;
+  return card
+    ? {
+        type: "change_position",
+        actorId: actor.id,
+        payload: cardPayload(this, card, { position }),
+      }
+    : null;
+});
+installReplayCommandCapture("resolveCombat", function (args) {
+  const [attacker, target] = args;
+  const actor = attacker?.owner === "bot" ? this.bot : this.player;
+  return attacker
+    ? {
+        type: "attack",
+        actorId: actor.id,
+        payload: {
+          attackerId: this.ensureDuelCardId(attacker),
+          targetId: target ? this.ensureDuelCardId(target) : null,
+        },
+      }
+    : null;
+});
+installReplayCommandCapture("nextPhase", function () {
+  return {
+    type: "phase_intent",
+    actorId: this.turn,
+    payload: { fromPhase: this.phase, toPhase: this.getNextPhase?.(this.phase) || null },
+  };
+});
+installReplayCommandCapture("skipToPhase", function (args) {
+  return {
+    type: "phase_intent",
+    actorId: this.turn,
+    payload: { fromPhase: this.phase, toPhase: args[0] || null },
+  };
+});

@@ -1937,7 +1937,10 @@ export default class VoidStrategy extends BaseStrategy {
         // ─────────────────────────────────────────────────────────────────────
         if (card.cardKind === "monster") {
           const handIgnitionEffect = (card.effects || []).find(
-            (e) => e && e.timing === "ignition" && e.requireZone === "hand",
+            (e) =>
+              e &&
+              e.timing === "ignition" &&
+              e.activationZones?.includes("hand"),
           );
           if (handIgnitionEffect) {
             const validation = validateVoidHandIgnitionCandidate({
@@ -2135,7 +2138,7 @@ export default class VoidStrategy extends BaseStrategy {
         (e) =>
           e &&
           e.timing === "ignition" &&
-          (!e.requireZone || e.requireZone === "field"),
+          e.activationZones?.includes("field"),
       );
       if (!fieldIgnition) return;
 
@@ -2325,7 +2328,9 @@ export default class VoidStrategy extends BaseStrategy {
 
       const gyIgnition = (card.effects || []).find(
         (e) =>
-          e && e.timing === "ignition" && e.requireZone === "graveyard",
+          e &&
+          e.timing === "ignition" &&
+          e.activationZones?.includes("graveyard"),
       );
       if (!gyIgnition) return;
 

@@ -1,3 +1,5 @@
+import { getCanonicalEffectActivationZones } from "../../chain/legality.js";
+
 export async function executeMonsterEffectAction(bot, game, action) {
   const fieldIndex = Number.isInteger(action.fieldIndex)
     ? action.fieldIndex
@@ -32,7 +34,7 @@ export async function executeMonsterEffectAction(bot, game, action) {
       (e) =>
         e &&
         e.timing === "ignition" &&
-        (!e.requireZone || e.requireZone === "field") &&
+        getCanonicalEffectActivationZones(card, e).includes("field") &&
         (!effectId || e.id === effectId),
     );
   activationContext.effectId = activationEffect?.id || effectId || null;
@@ -108,7 +110,7 @@ export async function executeGraveyardMonsterEffectAction(bot, game, action) {
       (e) =>
         e &&
         e.timing === "ignition" &&
-        e.requireZone === "graveyard" &&
+        getCanonicalEffectActivationZones(card, e).includes("graveyard") &&
         (!effectId || e.id === effectId),
     );
   if (!graveyardEffect) {
@@ -190,7 +192,7 @@ export async function executeHandIgnitionAction(bot, game, action) {
       (e) =>
         e &&
         e.timing === "ignition" &&
-        e.requireZone === "hand" &&
+        getCanonicalEffectActivationZones(card, e).includes("hand") &&
         (!effectId || e.id === effectId),
     );
   if (!handIgnitionEffect) {

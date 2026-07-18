@@ -58,6 +58,7 @@ export default class Renderer {
       playerFieldSpell: document.getElementById("player-fieldspell"),
       botFieldSpell: document.getElementById("bot-fieldspell"),
       turnIndicator: document.getElementById("turn-indicator"),
+      priorityIndicator: document.getElementById("priority-indicator"),
       phaseTrack: document.getElementById("phase-track"),
       actionLog: document.getElementById("action-log-list"),
     };
@@ -212,6 +213,7 @@ Renderer.prototype.clearFloatingCounterTooltip =
 // Attach log methods
 Renderer.prototype.log = log.log;
 Renderer.prototype.updateTurn = log.updateTurn;
+Renderer.prototype.updatePriorityIndicator = log.updatePriorityIndicator;
 Renderer.prototype.updatePhaseTrack = log.updatePhaseTrack;
 Renderer.prototype.updateLP = log.updateLP;
 

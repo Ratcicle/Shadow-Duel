@@ -13,6 +13,8 @@ export const mirageboundCards = [
     image: "assets/Miragebound Scout.png",
     effects: [
       {
+
+        usagePolicy: "use",
         id: "miragebound_scout_search_spell_trap",
         timing: "on_event",
         triggerRequirement: "optional",
@@ -35,9 +37,12 @@ export const mirageboundCards = [
         ],
       },
       {
+
+        activationZones: ["field"],
+
+        usagePolicy: "use",
         id: "miragebound_scout_switch_position",
         timing: "ignition",
-        requireZone: "field",
         requireFaceup: true,
         oncePerTurn: true,
         oncePerTurnName: "miragebound_scout_switch_position",
@@ -74,9 +79,12 @@ export const mirageboundCards = [
     image: "assets/Miragebound Dancer.png",
     effects: [
       {
+
+        activationZones: ["hand"],
+
+        usagePolicy: "use",
         id: "miragebound_dancer_special_summon",
         timing: "ignition",
-        requireZone: "hand",
         requirePhase: ["main1", "main2"],
         oncePerTurn: true,
         oncePerTurnName: "miragebound_dancer_special_summon",
@@ -102,9 +110,12 @@ export const mirageboundCards = [
         ],
       },
       {
+
+        activationZones: ["field"],
+
+        usagePolicy: "use",
         id: "miragebound_dancer_bounce_buff",
         timing: "ignition",
-        requireZone: "field",
         requireFaceup: true,
         oncePerTurn: true,
         oncePerTurnName: "miragebound_dancer_bounce_buff",
@@ -150,6 +161,8 @@ export const mirageboundCards = [
     image: "assets/Miragebound Jackal.png",
     effects: [
       {
+
+        usagePolicy: "use",
         id: "miragebound_jackal_hand_summon_on_return",
         timing: "on_event",
         triggerRequirement: "optional",
@@ -205,6 +218,8 @@ export const mirageboundCards = [
     image: "assets/Miragebound Oasis.png",
     effects: [
       {
+
+        usagePolicy: "activate",
         id: "miragebound_oasis_position_debuff",
         timing: "on_event",
         triggerRequirement: "mandatory",
@@ -241,9 +256,12 @@ export const mirageboundCards = [
         ],
       },
       {
+
+        activationZones: ["fieldSpell"],
+
+        usagePolicy: "activate",
         id: "miragebound_oasis_ignition",
         timing: "ignition",
-        requireZone: "fieldSpell",
         requirePhase: ["main1", "main2"],
         oncePerTurn: true,
         oncePerTurnName: "miragebound_oasis_ignition",
@@ -367,9 +385,12 @@ export const mirageboundCards = [
         ],
       },
       {
+
+        activationZones: ["field"],
+
+        usagePolicy: "activate",
         id: "miragebound_glass_sovereign_bounce",
         timing: "ignition",
-        requireZone: "field",
         requireFaceup: true,
         oncePerTurn: true,
         oncePerTurnName: "miragebound_glass_sovereign_bounce",
@@ -418,6 +439,8 @@ export const mirageboundCards = [
     image: "assets/Miragebound Glass Viper.png",
     effects: [
       {
+
+        usagePolicy: "use",
         id: "miragebound_glass_viper_returned_to_hand",
         timing: "on_event",
         triggerRequirement: "optional",
@@ -443,6 +466,8 @@ export const mirageboundCards = [
         ],
       },
       {
+
+        usagePolicy: "use",
         id: "miragebound_glass_viper_special_summon_debuff",
         timing: "on_event",
         triggerRequirement: "optional",
@@ -490,6 +515,8 @@ export const mirageboundCards = [
     image: "assets/Miragebound Sand Priestess.png",
     effects: [
       {
+
+        usagePolicy: "use",
         id: "miragebound_sand_priestess_recover",
         timing: "on_event",
         triggerRequirement: "optional",
@@ -524,9 +551,12 @@ export const mirageboundCards = [
         ],
       },
       {
+
+        activationZones: ["field"],
+
+        usagePolicy: "use",
         id: "miragebound_sand_priestess_shift_debuff",
         timing: "ignition",
-        requireZone: "field",
         requireFaceup: true,
         requirePhase: ["main1", "main2"],
         oncePerTurn: true,
@@ -572,9 +602,12 @@ export const mirageboundCards = [
     image: "assets/Miragebound False King.png",
     effects: [
       {
+
+        activationZones: ["hand"],
+
+        usagePolicy: "use",
         id: "miragebound_false_king_special_summon",
         timing: "ignition",
-        requireZone: "hand",
         requirePhase: ["main1", "main2"],
         oncePerTurn: true,
         oncePerTurnName: "miragebound_false_king_special_summon",
@@ -601,9 +634,12 @@ export const mirageboundCards = [
         ],
       },
       {
+
+        activationZones: ["field"],
+
+        usagePolicy: "use",
         id: "miragebound_false_king_field_shift",
         timing: "ignition",
-        requireZone: "field",
         requireFaceup: true,
         requirePhase: ["main1", "main2"],
         promptUser: true,
@@ -657,6 +693,8 @@ export const mirageboundCards = [
         actions: [],
       },
       {
+
+        usagePolicy: "use",
         id: "miragebound_mirror_path_battle_return",
         timing: "passive",
         requireFaceup: true,
@@ -686,9 +724,12 @@ export const mirageboundCards = [
         },
       },
       {
+
+        activationZones: ["spellTrap"],
+
+        usagePolicy: "activate",
         id: "miragebound_mirror_path_destroy_spell_trap",
         timing: "ignition",
-        requireZone: "spellTrap",
         requireFaceup: true,
         requirePhase: ["main1", "main2"],
         oncePerTurn: true,
@@ -736,6 +777,8 @@ export const mirageboundCards = [
     image: "assets/Miragebound False Horizon.png",
     effects: [
       {
+
+        usagePolicy: "activate",
         id: "miragebound_false_horizon_attack",
         timing: "on_event",
         triggerRequirement: "optional",
@@ -789,6 +832,8 @@ export const mirageboundCards = [
     image: "assets/Miragebound Vanishing Step.png",
     effects: [
       {
+
+        usagePolicy: "activate",
         id: "miragebound_vanishing_step",
         timing: "on_play",
         speed: 2,
@@ -844,6 +889,8 @@ export const mirageboundCards = [
     image: "assets/Miragebound Heat Haze.png",
     effects: [
       {
+
+        usagePolicy: "activate",
         id: "miragebound_heat_haze",
         timing: "on_play",
         oncePerTurn: true,
@@ -1035,6 +1082,8 @@ export const mirageboundCards = [
     image: "assets/Miragebound Rebel.png",
     effects: [
       {
+
+        usagePolicy: "use",
         id: "miragebound_rebel_hand_summon_on_position_change",
         timing: "on_event",
         triggerRequirement: "optional",
@@ -1063,6 +1112,8 @@ export const mirageboundCards = [
         ],
       },
       {
+
+        usagePolicy: "use",
         id: "miragebound_rebel_end_phase_return",
         timing: "on_event",
         triggerRequirement: "mandatory",

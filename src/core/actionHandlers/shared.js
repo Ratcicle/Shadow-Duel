@@ -897,6 +897,9 @@ export async function summonFromHandCore({
           position: resolvedPosition,
           isFacedown: false,
           resetAttackFlags: true,
+          summonOrigin: "effect_resolution",
+          summonMethodOverride: "special",
+          summonProcedure: "card_effect",
         })
       : null;
 

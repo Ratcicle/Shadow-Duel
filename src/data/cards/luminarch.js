@@ -171,6 +171,8 @@ export const luminarchCards = [
         ],
       },
       {
+
+        usagePolicy: "activate",
         id: "moonblade_captain_second_attack",
         timing: "on_event",
         triggerRequirement: "mandatory",
@@ -206,9 +208,10 @@ export const luminarchCards = [
     image: "assets/Luminarch Celestial Marshal.png",
     effects: [
       {
+
+        activationZones: ["hand"],
         id: "luminarch_celestial_marshal_hand_summon",
         timing: "ignition",
-        requireZone: "hand",
         requirePhase: ["main1", "main2"],
         activationCosts: [
           {
@@ -257,6 +260,8 @@ export const luminarchCards = [
     image: "assets/Luminarch Magic Sickle.png",
     effects: [
       {
+
+        usagePolicy: "use",
         id: "luminarch_magic_sickle_damage_boost",
         timing: "on_event",
         triggerRequirement: "optional",
@@ -309,9 +314,12 @@ export const luminarchCards = [
         ],
       },
       {
+
+        activationZones: ["graveyard"],
+
+        usagePolicy: "use",
         id: "luminarch_magic_sickle_gy_spell_recovery",
         timing: "ignition",
-        requireZone: "graveyard",
         oncePerTurn: true,
         oncePerTurnName: "luminarch_magic_sickle_gy_spell_recovery",
         actions: [
@@ -348,9 +356,10 @@ export const luminarchCards = [
     image: "assets/Luminarch Sanctum Protector.png",
     effects: [
       {
+
+        activationZones: ["hand"],
         id: "luminarch_sanctum_protector_special_summon_hand",
         timing: "ignition",
-        requireZone: "hand",
         targets: [
           {
             id: "aegisbearer_cost",
@@ -373,6 +382,8 @@ export const luminarchCards = [
         ],
       },
       {
+
+        usagePolicy: "activate",
         id: "luminarch_sanctum_protector_negate",
         timing: "on_event",
         triggerRequirement: "optional",
@@ -404,6 +415,8 @@ export const luminarchCards = [
     image: "assets/Luminarch Radiant Lancer.png",
     effects: [
       {
+
+        activationLabelKey: "effects.radiantLancer.attackBoost",
         id: "luminarch_radiant_lancer_atk_boost",
         timing: "on_event",
         triggerRequirement: "mandatory",
@@ -419,6 +432,8 @@ export const luminarchCards = [
         ],
       },
       {
+
+        activationLabelKey: "effects.radiantLancer.destroySpellTrap",
         id: "luminarch_radiant_lancer_destroy_spelltrap",
         timing: "on_event",
         triggerRequirement: "mandatory",
@@ -485,6 +500,8 @@ export const luminarchCards = [
         ],
       },
       {
+
+        usagePolicy: "use",
         id: "luminarch_aurora_seraph_protect",
         timing: "passive",
         oncePerTurn: true,
@@ -522,6 +539,8 @@ export const luminarchCards = [
     image: "assets/Luminarch Sanctified Arbiter.png",
     effects: [
       {
+
+        usagePolicy: "use",
         id: "luminarch_sanctified_arbiter_search",
         timing: "on_event",
         triggerRequirement: "optional",
@@ -553,6 +572,10 @@ export const luminarchCards = [
     image: "assets/Luminarch Knights Convocation.png",
     effects: [
       {
+
+        activationZones: ["spellTrap"],
+
+        usagePolicy: "activate",
         id: "luminarch_knights_convocation_effect",
         timing: "ignition",
         oncePerTurn: true,
@@ -585,6 +608,8 @@ export const luminarchCards = [
         ],
       },
       {
+
+        usagePolicy: "use",
         id: "luminarch_knights_convocation_first_destruction_guard",
         timing: "passive",
         requireFaceup: true,
@@ -634,6 +659,8 @@ export const luminarchCards = [
         ],
       },
       {
+
+        usagePolicy: "activate",
         id: "sanctum_luminarch_citadel_buff",
         timing: "on_field_activate",
         speed: 1,
@@ -721,6 +748,8 @@ export const luminarchCards = [
     image: "assets/Luminarch Radiant Wave.png",
     effects: [
       {
+
+        usagePolicy: "activate",
         id: "luminarch_radiant_wave_effect",
         timing: "on_play",
         speed: 1,
@@ -882,6 +911,8 @@ export const luminarchCards = [
         },
       },
       {
+
+        usagePolicy: "use",
         id: "luminarch_sunforged_blade_battle_protection",
         timing: "passive",
         requireZone: "spellTrap",
@@ -925,6 +956,8 @@ export const luminarchCards = [
     image: "assets/Luminarch Spear of Dawnfall.png",
     effects: [
       {
+
+        usagePolicy: "activate",
         id: "luminarch_spear_dawnfall",
         timing: "on_play",
         speed: 1,
@@ -975,6 +1008,8 @@ export const luminarchCards = [
       'Once per turn, if a "Luminarch" monster is Special Summoned to your field: You can Special Summon this card from your hand, but it cannot declare an attack this turn.',
     effects: [
       {
+
+        usagePolicy: "activate",
         id: "luminarch_enchanted_halberd_conditional_summon",
         timing: "on_event",
         triggerRequirement: "optional",
@@ -1010,6 +1045,8 @@ export const luminarchCards = [
     image: "assets/Luminarch Moonlit Blessing.png",
     effects: [
       {
+
+        usagePolicy: "activate",
         id: "luminarch_moonlit_blessing_effect",
         timing: "on_play",
         speed: 1,
@@ -1062,6 +1099,8 @@ export const luminarchCards = [
     image: "assets/Luminarch Sacred Judgment.png",
     effects: [
       {
+
+        usagePolicy: "activate",
         id: "luminarch_sacred_judgment_effect",
         timing: "on_play",
         speed: 1,
@@ -1133,6 +1172,10 @@ export const luminarchCards = [
         actions: [],
       },
       {
+
+        activationZones: ["field"],
+
+        usagePolicy: "activate",
         id: "megashield_barbarias_switch_boost",
         timing: "ignition",
         oncePerTurn: true,
@@ -1202,9 +1245,12 @@ export const luminarchCards = [
         ],
       },
       {
+
+        activationZones: ["field"],
+
+        usagePolicy: "activate",
         id: "luminarch_fortress_aegis_revive",
         timing: "ignition",
-        requireZone: "field",
         requirePhase: ["main1", "main2"],
         oncePerTurn: true,
         oncePerTurnName: "luminarch_fortress_aegis_revive",
@@ -1255,6 +1301,8 @@ export const luminarchCards = [
     fusionMaterials: [{ archetype: "Luminarch", count: 2 }],
     effects: [
       {
+
+        usagePolicy: "use",
         id: "luminarch_pure_knight_fusion_search",
         timing: "on_event",
         triggerRequirement: "optional",
@@ -1275,6 +1323,8 @@ export const luminarchCards = [
         ],
       },
       {
+
+        usagePolicy: "use",
         id: "luminarch_pure_knight_lp_discount",
         timing: "passive",
         oncePerTurn: true,

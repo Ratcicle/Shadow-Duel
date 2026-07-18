@@ -716,7 +716,7 @@ export async function handleRegisterTemporaryEventEffect(
       action.uniqueKey ||
       `${source.instanceId || source.id || source.name}:${
         ctx?.effect?.id || action.type
-      }:${Math.random().toString(36).slice(2, 9)}`,
+      }:${game.createDeterministicId?.("temporary_event") || game.temporaryEventEffects?.length || 0}`,
     event: action.event,
     ownerId: player.id,
     sourceName: action.sourceName || source.name,
@@ -787,7 +787,7 @@ export async function handleRegisterSynchroMaterialFollowup(
       action.uniqueKey ||
       `${source.instanceId || source.id || source.name}:${
         ctx?.effect?.id || action.type
-      }:${Math.random().toString(36).slice(2, 9)}`,
+      }:${game.createDeterministicId?.("synchro_followup") || game.pendingSynchroMaterialFollowups?.length || 0}`,
     type: "synchro_material_followup",
     synchroSummonContextId,
     ownerId: player.id || null,
@@ -840,7 +840,7 @@ export async function handleRegisterBattlePairEffect(action, ctx, targets, engin
       action.uniqueKey ||
       `${ctx?.source?.instanceId || ctx?.source?.id || "source"}:${
         ctx?.effect?.id || action.type
-      }:${Math.random().toString(36).slice(2, 9)}`,
+      }:${game.createDeterministicId?.("battle_pair") || game.temporaryBattlePairEffects?.length || 0}`,
     timing: action.timing || "before_damage_calculation",
     duration: action.duration || "end_of_turn",
     createdOnTurn: Number(game.turnCounter || 0),

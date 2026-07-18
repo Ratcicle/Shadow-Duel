@@ -15,7 +15,6 @@
 
 import { isAI } from "../Player.js";
 import { CHAIN_ACTIVATION_KINDS } from "./link.js";
-import { isQuickSpell } from "../game/spellTrap/quickSpellRules.js";
 
 export async function resolveChain() {
   if (this.chainStack.length === 0) {
@@ -39,6 +38,16 @@ export async function resolveChain() {
       if (!link) continue;
       this.currentResolvingLink = link;
       this.setChainLinkResolutionStatus?.(link, "resolving");
+      this.game?.notify?.("chain_link_resolution", {
+        stage: "resolving",
+        chainId: link.chainId,
+        linkId: link.linkId,
+        chainLevel: link.chainLevel,
+        controllerId: link.controller?.id || null,
+        effectId: link.effectId || link.effect?.id || null,
+        activationKind: link.activationKind,
+        effectKind: link.effectKind,
+      });
 
       this.log(`Resolving Chain Link ${link.chainLevel}: ${link.card.name}`);
 
@@ -70,6 +79,19 @@ export async function resolveChain() {
           linkId: link.linkId,
           ...result,
         });
+        this.game?.notify?.("chain_link_resolution", {
+          stage: "completed",
+          chainId: link.chainId,
+          linkId: link.linkId,
+          chainLevel: link.chainLevel,
+          controllerId: link.controller?.id || null,
+          effectId: link.effectId || link.effect?.id || null,
+          activationKind: link.activationKind,
+          effectKind: link.effectKind,
+          activationNegated: result?.activationNegated === true,
+          effectNegated: result?.effectNegated === true,
+          resolvedWithoutEffect: result?.resolvedWithoutEffect === true,
+        });
       } catch (error) {
         this.setChainLinkResolutionStatus?.(link, "failed", {
           finalizationStatus: "failed",
@@ -89,6 +111,15 @@ export async function resolveChain() {
           chainId: link.chainId,
           linkId: link.linkId,
           ...result,
+        });
+        this.game?.notify?.("chain_link_resolution", {
+          stage: "failed",
+          chainId: link.chainId,
+          linkId: link.linkId,
+          chainLevel: link.chainLevel,
+          controllerId: link.controller?.id || null,
+          effectId: link.effectId || link.effect?.id || null,
+          reason: error?.message || "Chain link failed.",
         });
       } finally {
         if (this.currentResolvingLink === link) {
@@ -143,8 +174,6 @@ export async function resolveChainLink(link) {
         activationNegated: true,
         chainId: link.chainId,
         linkId: link.linkId,
-        // Phase 9 compatibility result alias.
-        negated: true,
         resolvedWithoutEffect: true,
       };
       await completePreparedPipeline(link, negatedResult);
@@ -338,18 +367,7 @@ export async function resumePendingChainSelection(selections = {}) {
   this.isResolving = true;
 
   try {
-    if (pending.selectionSource === "chain_targets") {
-      const resolvedSelections = resolveChainSelectionCards(
-        this,
-        selections,
-        pending.selectionContract,
-        link.controller,
-      );
-      link.selections = {
-        ...(pending.baseTargets || {}),
-        ...resolvedSelections,
-      };
-    } else if (
+    if (
       pending.selectionSource === "effect_targeted" &&
       this.game?.pendingEventSelection &&
       typeof this.game.resumePendingEventSelection === "function"
@@ -382,11 +400,6 @@ export async function resumePendingChainSelection(selections = {}) {
         ...(link.resolutionSelections || {}),
         ...resolvedSelections,
       };
-      link.selections = {
-        ...(link.costSelections || {}),
-        ...(link.targetSelections || {}),
-        ...link.resolutionSelections,
-      };
     }
 
     const linkResult = await this.resolveChainLink(link);
@@ -404,6 +417,20 @@ export async function resumePendingChainSelection(selections = {}) {
         pendingChainSelection: true,
       };
     }
+
+    this.game?.notify?.("chain_link_resolution", {
+      stage: "completed",
+      chainId: link.chainId,
+      linkId: link.linkId,
+      chainLevel: link.chainLevel,
+      controllerId: link.controller?.id || null,
+      effectId: link.effectId || link.effect?.id || null,
+      activationKind: link.activationKind,
+      effectKind: link.effectKind,
+      activationNegated: linkResult?.activationNegated === true,
+      effectNegated: linkResult?.effectNegated === true,
+      resolvedWithoutEffect: linkResult?.resolvedWithoutEffect === true,
+    });
 
     const remainingResult =
       this.chainStack.length > 0
@@ -757,35 +784,6 @@ async function prepareForResolution(cs, link, activationZone) {
     return false;
   }
 
-  if (link.preparationStatus === "legacy" && card.cardKind === "trap" && card.isFacedown) {
-    card.isFacedown = false;
-  }
-  if (
-    link.preparationStatus === "legacy" &&
-    card.cardKind === "spell" &&
-    card.isFacedown &&
-    activationZone === "spellTrap"
-  ) {
-    card.isFacedown = false;
-  }
-
-  if (
-    link.preparationStatus === "legacy" &&
-    isQuickSpell(card) &&
-    activationZone === "hand"
-  ) {
-    const moveResult = await cs.game?.moveCard?.(card, player, "spellTrap", {
-      fromZone: "hand",
-      sourceCard: card,
-      effectId: link.effect?.id || null,
-      contextLabel: "chain_activation",
-    });
-    if (moveResult?.success === false || !player.spellTrap?.includes(card)) {
-      cs.log(`${card.name} could not enter the Spell/Trap Zone.`);
-      return false;
-    }
-  }
-
   return true;
 }
 
@@ -796,7 +794,7 @@ async function prepareForResolution(cs, link, activationZone) {
  * (chain resolution must continue for remaining links).
  */
 async function applyChainEffect(cs, link, activationZone) {
-  const { card, effect, selections } = link;
+  const { card, effect } = link;
   const player = link.controller;
   const effectEngine = cs.game.effectEngine;
   const inheritedActivationContext = link.context?.activationContext || {};
@@ -848,18 +846,9 @@ async function applyChainEffect(cs, link, activationZone) {
   link.activationContext = ctx.activationContext;
 
   const targetRevalidation = revalidateDeclaredTargets(cs, link);
-  const activationSelectionIds = new Set(
-    (effect?.targets || []).map((definition) => definition?.id).filter(Boolean),
-  );
-  const legacyResolutionSelections = Object.fromEntries(
-    Object.entries(selections || {}).filter(
-      ([selectionId]) => !activationSelectionIds.has(selectionId),
-    ),
-  );
   const resolvedSelections = {
     ...(link.costSelections || {}),
     ...(targetRevalidation.selections || {}),
-    ...legacyResolutionSelections,
     ...(link.resolutionSelections || {}),
   };
   if (!targetRevalidation.validation.satisfiesMinimums) {

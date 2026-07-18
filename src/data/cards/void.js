@@ -14,6 +14,10 @@ export const voidCards = [
     image: "assets/Void Conjurer.png",
     effects: [
       {
+
+        activationZones: ["field"],
+
+        usagePolicy: "use",
         id: "void_conjurer_field_summon",
         timing: "ignition",
         oncePerTurn: true,
@@ -36,9 +40,12 @@ export const voidCards = [
         ],
       },
       {
+
+        activationZones: ["graveyard"],
+
+        usagePolicy: "use",
         id: "void_conjurer_gy_revive",
         timing: "ignition",
-        requireZone: "graveyard",
         oncePerTurn: true,
         oncePerTurnName: "void_conjurer_gy_revive",
         targets: [
@@ -103,6 +110,10 @@ export const voidCards = [
         ],
       },
       {
+
+        activationZones: ["field"],
+
+        usagePolicy: "activate",
         id: "void_walker_bounce_summon",
         timing: "ignition",
         oncePerTurn: true,
@@ -141,6 +152,8 @@ export const voidCards = [
     image: "assets/Void Beast.png",
     effects: [
       {
+
+        usagePolicy: "use",
         id: "void_beast_normal_summon_search",
         timing: "on_event",
         triggerRequirement: "optional",
@@ -165,6 +178,8 @@ export const voidCards = [
         ],
       },
       {
+
+        usagePolicy: "use",
         id: "void_beast_battle_destroy_summon",
         timing: "on_event",
         triggerRequirement: "optional",
@@ -205,6 +220,8 @@ export const voidCards = [
     image: "assets/Void Hollow.png",
     effects: [
       {
+
+        usagePolicy: "use",
         id: "void_hollow_summon",
         timing: "on_event",
         triggerRequirement: "optional",
@@ -249,9 +266,12 @@ export const voidCards = [
     image: "assets/Void Haunter.png",
     effects: [
       {
+
+        activationZones: ["hand"],
+
+        usagePolicy: "use",
         id: "void_haunter_special_summon_hand",
         timing: "ignition",
-        requireZone: "hand",
         oncePerTurn: true,
         oncePerTurnName: "void_haunter_special_summon_hand",
         targets: [
@@ -275,9 +295,12 @@ export const voidCards = [
         ],
       },
       {
+
+        activationZones: ["graveyard"],
+
+        usagePolicy: "use",
         id: "void_haunter_gy_effect",
         timing: "ignition",
-        requireZone: "graveyard",
         oncePerTurn: true,
         oncePerTurnName: "void_haunter_gy_effect",
         actions: [
@@ -315,6 +338,10 @@ export const voidCards = [
     image: "assets/Void Ghost Wolf.png",
     effects: [
       {
+
+        activationZones: ["field"],
+
+        usagePolicy: "activate",
         id: "void_ghost_wolf_direct",
         timing: "ignition",
         oncePerTurn: true,
@@ -404,12 +431,16 @@ export const voidCards = [
         ],
       },
       {
+
+        activationZones: ["field"],
         id: "void_hollow_king_quick_boost",
         timing: "ignition",
-        requireZone: "field",
         speed: 2,
         isQuickEffect: true,
-        allowDamageStepActivation: true,
+        damageStepTimings: [
+          "start_of_damage_step",
+          "before_damage_calculation",
+        ],
         requireFaceup: true,
         targets: [
           {
@@ -454,6 +485,8 @@ export const voidCards = [
     image: "assets/Void Bone Spider.png",
     effects: [
       {
+
+        activationZones: ["field"],
         id: "void_bone_spider_lock",
         timing: "ignition",
         targets: [
@@ -539,9 +572,12 @@ export const voidCards = [
         },
       },
       {
+
+        activationZones: ["hand"],
+
+        usagePolicy: "use",
         id: "void_forgotten_knight_hand_summon",
         timing: "ignition",
-        requireZone: "hand",
         oncePerTurn: true,
         oncePerTurnName: "void_forgotten_knight_hand_summon",
         targets: [
@@ -567,9 +603,12 @@ export const voidCards = [
         ],
       },
       {
+
+        activationZones: ["graveyard"],
+
+        usagePolicy: "use",
         id: "void_forgotten_knight_gy_destroy",
         timing: "ignition",
-        requireZone: "graveyard",
         oncePerTurn: true,
         oncePerTurnName: "void_forgotten_knight_gy_destroy",
         targets: [
@@ -627,8 +666,6 @@ export const voidCards = [
         promptUser: true,
         promptMessage:
           "Discard Void Raven to protect the newly Fusion Summoned 'Void' monster?",
-        oncePerTurn: true,
-        oncePerTurnName: "void_raven_fusion_immunity",
         condition: {
           requires: "self_in_hand",
           triggerArchetype: "Void",
@@ -676,9 +713,12 @@ export const voidCards = [
     image: "assets/Void Tenebris Horn.png",
     effects: [
       {
+
+        activationZones: ["graveyard"],
+
+        usagePolicy: "activate",
         id: "void_tenebris_horn_revive",
         timing: "ignition",
-        requireZone: "graveyard",
         oncePerTurn: true,
         oncePerTurnName: "void_tenebris_horn_revive",
         oncePerDuel: true,
@@ -762,9 +802,12 @@ export const voidCards = [
     image: "assets/Void Slayer Brute.png",
     effects: [
       {
+
+        activationZones: ["hand"],
+
+        usagePolicy: "activate",
         id: "void_slayer_brute_hand_summon",
         timing: "ignition",
-        requireZone: "hand",
         oncePerTurn: true,
         oncePerTurnName: "void_slayer_brute_hand_summon",
         targets: [
@@ -842,6 +885,8 @@ export const voidCards = [
     extraAttacks: 1,
     effects: [
       {
+
+        usagePolicy: "activate",
         id: "void_berserker_bounce_on_destroy",
         timing: "on_event",
         triggerRequirement: "optional",
@@ -888,9 +933,12 @@ export const voidCards = [
     image: "assets/Void Serpent Drake.png",
     effects: [
       {
+
+        activationZones: ["hand"],
+
+        usagePolicy: "activate",
         id: "void_serpent_drake_hand_special",
         timing: "ignition",
-        requireZone: "hand",
         oncePerTurn: true,
         oncePerTurnName: "void_serpent_drake_hand_special",
         targets: [
@@ -1002,6 +1050,8 @@ export const voidCards = [
         ],
       },
       {
+
+        usagePolicy: "activate",
         id: "void_hydra_titan_negate_destruction",
         timing: "on_event",
         triggerRequirement: "optional",
@@ -1032,6 +1082,8 @@ export const voidCards = [
     image: "assets/Sealing the Void.png",
     effects: [
       {
+
+        usagePolicy: "activate",
         id: "sealing_the_void_effect",
         timing: "on_play",
         oncePerTurn: true,
@@ -1075,9 +1127,10 @@ export const voidCards = [
     image: "assets/The Void.png",
     effects: [
       {
+
+        usagePolicy: "use",
         id: "the_void_summon",
         timing: "on_field_activate",
-        manualActivationOnly: true,
         oncePerTurn: true,
         oncePerTurnName: "the_void_summon",
         requireEmptyField: true,
@@ -1111,6 +1164,8 @@ export const voidCards = [
     image: "assets/Void Gravitational pull.png",
     effects: [
       {
+
+        usagePolicy: "activate",
         id: "void_gravitational_pull_bounce",
         timing: "on_play",
         speed: 1,
@@ -1162,6 +1217,8 @@ export const voidCards = [
     image: "assets/Void Lost Throne.png",
     effects: [
       {
+
+        usagePolicy: "activate",
         id: "void_lost_throne_effect",
         timing: "on_play",
         speed: 1,
@@ -1196,6 +1253,8 @@ export const voidCards = [
     image: "assets/Void Mirror Dimension.png",
     effects: [
       {
+
+        usagePolicy: "activate",
         id: "void_mirror_dimension_effect",
         timing: "on_event",
         triggerRequirement: "optional",
@@ -1233,9 +1292,12 @@ export const voidCards = [
     image: "assets/Thousand-Arms of the Void.png",
     effects: [
       {
+
+        activationZones: ["hand"],
+
+        usagePolicy: "activate",
         id: "thousand_arms_summon_from_hand",
         timing: "ignition",
-        requireZone: "hand",
         oncePerTurn: true,
         oncePerTurnName: "thousand_arms_summon_from_hand",
         targets: [
@@ -1259,9 +1321,12 @@ export const voidCards = [
         ],
       },
       {
+
+        activationZones: ["field"],
+
+        usagePolicy: "activate",
         id: "thousand_arms_bounce_and_revive",
         timing: "ignition",
-        requireZone: "field",
         requireFaceup: true,
         oncePerTurn: true,
         oncePerTurnName: "thousand_arms_bounce_and_revive",
@@ -1307,9 +1372,12 @@ export const voidCards = [
     image: "assets/Void Cosmic Walker.png",
     effects: [
       {
+
+        activationZones: ["field"],
+
+        usagePolicy: "use",
         id: "void_cosmic_walker_ignition_summon",
         timing: "ignition",
-        requireZone: "field",
         requirePhase: ["main1", "main2"],
         oncePerTurn: true,
         oncePerTurnName: "void_cosmic_walker_summon",
@@ -1329,6 +1397,8 @@ export const voidCards = [
         ],
       },
       {
+
+        usagePolicy: "use",
         id: "void_cosmic_walker_to_grave_summon_hollows",
         timing: "on_event",
         triggerRequirement: "optional",
@@ -1533,11 +1603,10 @@ export const voidCards = [
         ],
       },
       {
+
+        activationZones: ["graveyard"],
         id: "arcturus_fallen_gy_revival",
         timing: "ignition",
-        requireZone: "graveyard",
-        oncePerTurn: true,
-        oncePerTurnName: "arcturus_fallen_gy_revival",
         actions: [
           {
             type: "special_summon_from_zone",
@@ -1610,9 +1679,12 @@ export const voidCards = [
         ],
       },
       {
+
+        activationZones: ["field"],
+
+        usagePolicy: "activate",
         id: "void_shadow_crawler_destroy_high_level",
         timing: "ignition",
-        requireZone: "field",
         requireFaceup: true,
         oncePerTurn: true,
         oncePerTurnName: "void_shadow_crawler_destroy_high_level",
@@ -1673,6 +1745,8 @@ export const voidCards = [
     ],
     effects: [
       {
+
+        activationLabelKey: "effects.voidAberration.graveBuff",
         id: "void_aberration_void_to_grave_buff",
         timing: "on_event",
         triggerRequirement: "mandatory",
@@ -1696,6 +1770,8 @@ export const voidCards = [
         ],
       },
       {
+
+        activationLabelKey: "effects.voidAberration.fieldDestroy",
         id: "void_aberration_sent_from_field_destroy",
         timing: "on_event",
         triggerRequirement: "optional",

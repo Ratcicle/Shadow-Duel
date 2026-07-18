@@ -23,12 +23,16 @@ export async function checkAndOfferTraps(event, eventData = {}) {
 
   // Se o ChainSystem já está resolvendo, não interromper
   if (this.chainSystem?.isChainResolving()) {
-    this.queuePendingChainEvent?.({
-      eventName: event,
-      payload: { ...(eventData || {}) },
-      entries: [],
-      orderRule: "deferred_response_window",
-    });
+    const occurrence = this.chainSystem.createTriggerOccurrence?.(
+      event,
+      { ...(eventData || {}) },
+      {
+        entries: [],
+        entriesProvided: true,
+        orderRule: "deferred_response_window",
+      },
+    );
+    this.queueTriggerOccurrence?.(occurrence);
     this.devLog?.("CHECK_TRAPS", { summary: "Skipped: chain is resolving" });
     return;
   }
@@ -87,12 +91,14 @@ export async function checkAndOfferTraps(event, eventData = {}) {
         null,
       battleStep: eventData.battleStep ?? this.battleStep ?? null,
       damageStepTiming:
-        eventData.damageStepTiming ?? this.damageStepTiming ?? null,
+        eventData.damageStepTiming ??
+        this.activeDamageStepTransaction?.timing ??
+        null,
       isDamageStep:
         eventData.isDamageStep === true ||
         contextType === "battle_damage" ||
         eventData.damageStepTiming != null ||
-        this.damageStepTiming != null,
+        this.activeDamageStepTransaction?.timing != null,
       attacker,
       defender,
       target: defender ?? eventData.target ?? null,
@@ -174,6 +180,9 @@ export function _mapEventToChainContext(event) {
     card_activation: "card_activation",
     effect_activation: "effect_activation",
     battle_damage: "battle_damage",
+    damage_step: "damage_step",
+    battle_damage_inflicted: "damage_step",
+    card_flipped: "damage_step",
     battle_destroy: "battle_destroy",
     effect_targeted: "effect_targeted",
     card_set: "action_without_chain",

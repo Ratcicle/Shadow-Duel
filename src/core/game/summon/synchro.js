@@ -1,4 +1,5 @@
 import { isAI } from "../../Player.js";
+import { SUMMON_MODES, SUMMON_ORIGINS } from "./transaction.js";
 
 function getCardInstanceId(card) {
   return card?.instanceId ?? card?._instanceId ?? card?.uuid ?? null;
@@ -668,113 +669,140 @@ export async function performSynchroSummon(player, materials, synchroCard, optio
     synchroSummonCardName: synchroCard.name || null,
   };
 
-  const result = await this.runZoneOp(
-    "SYNCHRO_SUMMON",
-    async () => {
-      const deferredMaterialTriggerPackages = [];
-      for (const material of materials) {
+  const summonOrigin =
+    options.summonOrigin === SUMMON_ORIGINS.EFFECT_RESOLUTION
+      ? SUMMON_ORIGINS.EFFECT_RESOLUTION
+      : SUMMON_ORIGINS.PROCEDURE;
+  const deferredMaterialTriggerPackages = [];
+  const prepared = this.createPreparedSummon({
+    card: synchroCard,
+    controller: player,
+    sourceZone: "extraDeck",
+    summonOrigin,
+    summonMode: SUMMON_MODES.SUMMON,
+    summonMethod: "synchro",
+    summonProcedure: "synchro",
+    position: resolvedPosition,
+    costPayments: materials.map((material) => ({
+      card: material,
+      owner: player,
+      fromZone: "field",
+      toZone: "graveyard",
+      kind: "synchro_material",
+      pay: async () => {
         const moveResult = await this.moveCard(material, player, "graveyard", {
           fromZone: "field",
           contextLabel: "synchro_material",
           awaitCardToGraveEvent: true,
+          awaitCardMovedEvent: true,
           deferCardToGraveTriggerResolution: true,
           wasDestroyed: false,
           actionContext: synchroActionContext,
         });
-        if (moveResult?.success === false) {
-          takeSynchroMaterialFollowups(this, synchroSummonContextId);
-          return {
-            success: false,
-            reason: `Could not send ${material.name} as Synchro Material.`,
-          };
-        }
         appendDeferredSynchroMaterialTriggerPackage(
           deferredMaterialTriggerPackages,
           moveResult,
         );
-      }
+        if (moveResult?.success === false) {
+          takeSynchroMaterialFollowups(this, synchroSummonContextId);
+        }
+        return moveResult;
+      },
+    })),
+    perform: async (transaction) =>
+      await this.runZoneOp(
+        "SYNCHRO_SUMMON",
+        async () => {
+          const postMaterialLimitCheck = this.canPlaceCardOnField?.(
+            synchroCard,
+            player,
+            {
+              isFacedown: false,
+              summonMethod: "synchro",
+              summonProcedure: "synchro",
+            },
+          );
+          if (postMaterialLimitCheck?.ok === false) {
+            takeSynchroMaterialFollowups(this, synchroSummonContextId);
+            return {
+              success: false,
+              reason:
+                postMaterialLimitCheck.reason ||
+                "Cannot place Synchro monster on the field.",
+            };
+          }
 
-      const postMaterialLimitCheck = this.canPlaceCardOnField?.(
-        synchroCard,
-        player,
-        {
-          isFacedown: false,
-          summonMethod: "synchro",
-          summonProcedure: "synchro",
+          const summonResult = await this.moveCard(
+            synchroCard,
+            player,
+            "field",
+            {
+              fromZone: "extraDeck",
+              position: resolvedPosition,
+              isFacedown: false,
+              resetAttackFlags: true,
+              summonMethodOverride: "synchro",
+              summonProcedure: "synchro",
+              summonOrigin,
+              summonTransaction: transaction,
+              contextLabel: "synchro_summon",
+              actionContext: synchroActionContext,
+              synchroMaterialFollowups: takeSynchroMaterialFollowups(
+                this,
+                synchroSummonContextId,
+              ),
+            },
+          );
+          if (summonResult?.success === false) {
+            return {
+              success: false,
+              reason: summonResult.reason || "Synchro summon failed.",
+            };
+          }
+
+          synchroCard.synchroMaterials = materialMetadata;
+          if (summonResult.needsSelection) {
+            this.pendingSynchroMaterialTriggerContinuation = {
+              stage: "after_summon",
+              synchroSummonContextId,
+              summonedCard: synchroCard,
+              playerId: player?.id || null,
+              actionContext: synchroActionContext,
+              deferredTriggerPackages: deferredMaterialTriggerPackages,
+            };
+            return {
+              success: true,
+              needsSelection: true,
+              selectionContract: summonResult.selectionContract,
+            };
+          }
+          const deferredTriggerResult =
+            await resolveDeferredSynchroMaterialTriggers(
+              this,
+              deferredMaterialTriggerPackages,
+              synchroSummonContextId,
+              synchroCard,
+              player,
+              synchroActionContext,
+            );
+          if (deferredTriggerResult?.needsSelection) {
+            return {
+              success: true,
+              needsSelection: true,
+              selectionContract: deferredTriggerResult.selectionContract,
+            };
+          }
+          return { success: true, needsSelection: false };
         },
-      );
-      if (postMaterialLimitCheck?.ok === false) {
-        takeSynchroMaterialFollowups(this, synchroSummonContextId);
-        return {
-          success: false,
-          reason:
-            postMaterialLimitCheck.reason ||
-            "Cannot place Synchro monster on the field.",
-        };
-      }
-
-      const summonResult = await this.moveCard(synchroCard, player, "field", {
-        fromZone: "extraDeck",
-        position: resolvedPosition,
-        isFacedown: false,
-        resetAttackFlags: true,
-        summonMethodOverride: "synchro",
-        summonProcedure: "synchro",
-        contextLabel: "synchro_summon",
-        actionContext: synchroActionContext,
-        synchroMaterialFollowups: takeSynchroMaterialFollowups(
-          this,
-          synchroSummonContextId,
-        ),
-      });
-      if (summonResult?.success === false) {
-        return {
-          success: false,
-          reason: summonResult.reason || "Synchro summon failed.",
-        };
-      }
-
-      synchroCard.synchroMaterials = materialMetadata;
-      if (summonResult.needsSelection) {
-        this.pendingSynchroMaterialTriggerContinuation = {
-          stage: "after_summon",
-          synchroSummonContextId,
-          summonedCard: synchroCard,
-          playerId: player?.id || null,
-          actionContext: synchroActionContext,
-          deferredTriggerPackages: deferredMaterialTriggerPackages,
-        };
-        return {
-          success: true,
-          needsSelection: true,
-          selectionContract: summonResult.selectionContract,
-        };
-      }
-      const deferredTriggerResult =
-        await resolveDeferredSynchroMaterialTriggers(
-          this,
-          deferredMaterialTriggerPackages,
-          synchroSummonContextId,
-          synchroCard,
-          player,
-          synchroActionContext,
-        );
-      if (deferredTriggerResult?.needsSelection) {
-        return {
-          success: true,
-          needsSelection: true,
-          selectionContract: deferredTriggerResult.selectionContract,
-        };
-      }
-      return { success: true, needsSelection: false };
-    },
-    {
-      contextLabel: "synchro_summon",
-      card: synchroCard,
-      fromZone: "extraDeck",
-      toZone: "field",
-    },
-  );
+        {
+          contextLabel: "synchro_summon",
+          card: synchroCard,
+          fromZone: "extraDeck",
+          toZone: "field",
+        },
+      ),
+  });
+  const result = await this.executeSummonTransaction(prepared);
 
   if (result?.success) {
     this.closeExtraDeckModal?.();

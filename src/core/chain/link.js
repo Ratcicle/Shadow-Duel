@@ -124,7 +124,7 @@ export function getResponseContextType(activationKind) {
 export function buildUsagePolicy(effect = null) {
   if (!effect) {
     return {
-      consumption: "legacy_resolution_success",
+      consumption: null,
       oncePerTurn: false,
       oncePerDuel: false,
       name: null,
@@ -154,7 +154,7 @@ export function buildUsagePolicy(effect = null) {
     consumption:
       effect.usagePolicy === "use" || effect.usagePolicy === "activate"
         ? effect.usagePolicy
-        : "legacy_resolution_success",
+        : null,
     oncePerTurn: effect.oncePerTurn === true,
     oncePerDuel: !!effect.oncePerDuel,
     name:
@@ -246,39 +246,6 @@ function serializeSelectionMap(selections) {
   );
 }
 
-function warnLegacy(chainSystem, alias) {
-  if (!chainSystem?.testMode) return;
-  if (!(chainSystem.legacyContractWarnings instanceof Set)) {
-    chainSystem.legacyContractWarnings = new Set();
-  }
-  if (chainSystem.legacyContractWarnings.has(alias)) return;
-  chainSystem.legacyContractWarnings.add(alias);
-  console.warn(
-    `[ChainSystem] Legacy Chain Link contract used: ${alias}. ` +
-      "This adapter must be removed in Phase 9.",
-  );
-}
-
-export function warnLegacyChainContract(alias) {
-  warnLegacy(this, alias);
-}
-
-function defineLegacyAlias(chainSystem, link, alias, canonical, onSet = null) {
-  Object.defineProperty(link, alias, {
-    configurable: true,
-    enumerable: false,
-    get() {
-      warnLegacy(chainSystem, alias);
-      return link[canonical];
-    },
-    set(value) {
-      warnLegacy(chainSystem, alias);
-      link[canonical] = value;
-      onSet?.(value);
-    },
-  });
-}
-
 function ensureIdentity(chainSystem) {
   if (!Number.isInteger(chainSystem.nextChainId)) chainSystem.nextChainId = 1;
   if (!Number.isInteger(chainSystem.nextLinkId)) chainSystem.nextLinkId = 1;
@@ -293,12 +260,11 @@ function ensureIdentity(chainSystem) {
 
 export function createChainLink(preparedInput = {}, contextOverride = null) {
   const card = preparedInput.card || null;
-  const controller = preparedInput.controller || preparedInput.player || null;
+  const controller = preparedInput.controller || null;
   const opponent =
     preparedInput.opponent || this.getOpponent?.(controller) || null;
   const effect = preparedInput.effect || null;
-  const activationZone =
-    preparedInput.activationZone || preparedInput.zone || null;
+  const activationZone = preparedInput.activationZone || null;
   const activationContext = preparedInput.activationContext || {};
   const activationKind = classifyActivationKind({
     ...preparedInput,
@@ -336,35 +302,22 @@ export function createChainLink(preparedInput = {}, contextOverride = null) {
       Number(currentSourceSnapshot.locationVersion ?? 0);
   const activationNegated =
     preparedInput.activationNegated === true ||
-    preparedInput.negated === true ||
-    preparedInput.activationAttempt?.activationNegated === true ||
-    preparedInput.activationAttempt?.negated === true;
+    preparedInput.activationAttempt?.activationNegated === true;
   const activationAttempt = {
     ...(preparedInput.activationAttempt || {}),
     chainId,
     linkId,
     card,
     controller,
-    // Phase 9 compatibility alias.
-    player: controller,
     effect,
     effectId: effect?.id || null,
     activationKind,
     activationZone,
     activationNegated,
-    // Phase 9 compatibility alias.
-    negated: activationNegated,
   };
   const costSelections = preparedInput.costSelections || {};
   const targetSelections = preparedInput.targetSelections || {};
   const resolutionSelections = preparedInput.resolutionSelections || {};
-  const selections = {
-    ...(preparedInput.selections || {}),
-    ...costSelections,
-    ...targetSelections,
-    ...resolutionSelections,
-  };
-
   const declaredTargets =
     preparedInput.declaredTargets ||
     collectDeclaredTargets(effect, targetSelections);
@@ -385,7 +338,6 @@ export function createChainLink(preparedInput = {}, contextOverride = null) {
     context: contextOverride || preparedInput.context || null,
     activationContext,
     activationAttempt,
-    selections,
     costSelections,
     targetSelections,
     resolutionSelections,
@@ -414,9 +366,7 @@ export function createChainLink(preparedInput = {}, contextOverride = null) {
       preparedInput.preparationStatus ||
       (preparedInput.committed === true && preparedInput.costsPaid === true
         ? "committed"
-        : preparedInput.prepared === true
-          ? "prepared"
-          : "legacy"),
+        : "prepared"),
     resolutionStatus: preparedInput.resolutionStatus || "pending",
     finalizationStatus: preparedInput.finalizationStatus || "pending",
     finalizationQueued: preparedInput.finalizationQueued === true,
@@ -434,26 +384,12 @@ export function createChainLink(preparedInput = {}, contextOverride = null) {
     pipelineFinalization: preparedInput.pipelineFinalization || null,
     pipelineManaged: preparedInput.pipelineManaged === true,
     skipDefaultFinalization: preparedInput.skipDefaultFinalization === true,
-    skipUsageRegistration: preparedInput.skipUsageRegistration === true,
     triggerOpportunityId: preparedInput.triggerOpportunityId ?? null,
     triggerOccurrenceId: preparedInput.triggerOccurrenceId ?? null,
     atomicGroupId: preparedInput.atomicGroupId ?? null,
     segocGroup: preparedInput.segocGroup || null,
     segocOrder: preparedInput.segocOrder ?? null,
   };
-
-  defineLegacyAlias(this, link, "player", "controller");
-  defineLegacyAlias(this, link, "zone", "activationZone");
-  defineLegacyAlias(this, link, "activationType", "responseContextType");
-  defineLegacyAlias(
-    this,
-    link,
-    "negated",
-    "activationNegated",
-    (value) => {
-      link.activationAttempt.activationNegated = value === true;
-    },
-  );
 
   return link;
 }
@@ -480,8 +416,6 @@ export function markChainLinkActivationNegated(linkOrId, details = {}) {
   link.activationNegated = true;
   link.negatedBy = details.negatedBy || link.negatedBy || null;
   link.activationAttempt.activationNegated = true;
-  // Phase 9 compatibility alias.
-  link.activationAttempt.negated = true;
   return link;
 }
 
@@ -610,9 +544,5 @@ export function serializeChainLink(link) {
     atomicGroupId: link.atomicGroupId ?? null,
     segocGroup: link.segocGroup || null,
     segocOrder: link.segocOrder ?? null,
-    // Phase 9: remove these summary aliases after all external consumers migrate.
-    level: link.chainLevel ?? null,
-    playerName:
-      link.controller?.name || link.controller?.id || "Unknown",
   };
 }

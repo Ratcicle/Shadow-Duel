@@ -387,11 +387,15 @@ export function showGameOverModal(options = {}) {
     discardBtn.onclick = null;
   }
 
+  const hasCanonicalReplay =
+    options.replayAvailable === true &&
+    typeof options.onExportReplay === "function";
   const hasStrategicReport =
     options.strategicReportAvailable === true &&
     typeof options.onExportStrategicReport === "function";
+  const hasExport = hasCanonicalReplay || hasStrategicReport;
 
-  if (hasStrategicReport) {
+  if (hasExport) {
     exportBtn.textContent = copy.exportReplay;
     exportBtn.disabled = false;
     exportBtn.classList.remove("exported", "hidden");
@@ -428,8 +432,10 @@ export function showGameOverModal(options = {}) {
   };
 
   exportBtn.onclick = () => {
-    if (!hasStrategicReport) return;
-    const result = options.onExportStrategicReport();
+    if (!hasExport) return;
+    const result = hasCanonicalReplay
+      ? options.onExportReplay()
+      : options.onExportStrategicReport();
     if (result) {
       exportBtn.textContent = copy.exported;
       exportBtn.classList.add("exported");

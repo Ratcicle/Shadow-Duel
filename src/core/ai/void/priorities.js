@@ -86,7 +86,7 @@ function getFieldIgnitions(monster) {
     (effect) =>
       effect &&
       effect.timing === "ignition" &&
-      (!effect.requireZone || effect.requireZone === "field"),
+      effect.activationZones?.includes("field"),
   );
 }
 
@@ -273,7 +273,7 @@ export function shouldPlayVoidSpell(card, game, bot, opponent) {
         (e) =>
           e &&
           e.timing === "ignition" &&
-          (!e.requireZone || e.requireZone === "field"),
+          e.activationZones?.includes("field"),
       );
       if (ignitions.length === 0) {
         noIgnition += 1;

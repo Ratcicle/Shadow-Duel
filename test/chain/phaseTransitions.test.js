@@ -129,7 +129,6 @@ test("nextPhase preserva a fase e o Battle Step quando a intenção foi interrom
   const { game, player } = createChainHarness({ phase: "battle" });
   game.gameOver = false;
   game.battleStep = "battle";
-  game.damageStepTiming = null;
   game.isDisposed = () => false;
   game.guardActionStart = () => ({ ok: true });
   game.getNextPhase = () => "main2";

@@ -1982,6 +1982,25 @@ body {
   }
 }
 
+.priority-indicator {
+  min-height: 1.25rem;
+  color: #8fdcff;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-align: center;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.priority-indicator.visible {
+  opacity: 1;
+}
+
+.priority-indicator.resolving {
+  color: #ffd27a;
+}
+
 @keyframes spell-trap-flip-reveal {
   0% {
     transform: perspective(720px) rotateY(0deg) scale(1);

@@ -42,9 +42,9 @@ test("a ativação original ocupa CL1 e respostas resolvem em LIFO", async () =>
       chain.addToChain(
         chain.createPreparedActivation({
           card: responseCard,
-          player: bot,
+          controller: bot,
           effect: responseEffect,
-          zone: "field",
+          activationZone: "field",
           committed: true,
           costsPaid: true,
         }),
@@ -56,9 +56,9 @@ test("a ativação original ocupa CL1 e respostas resolvem em LIFO", async () =>
   await chain.openActivationChain(
     chain.createPreparedActivation({
       card: rootCard,
-      player,
+      controller: player,
       effect: rootEffect,
-      zone: "field",
+      activationZone: "field",
       committed: true,
       costsPaid: true,
     }),
@@ -79,7 +79,7 @@ test("Spell Speed 2 não responde a Spell Speed 3", () => {
         subtype: "counter",
         isFacedown: true,
       }),
-      player,
+      controller: player,
       effect: counterEffect,
       activationZone: "spellTrap",
       committed: true,
@@ -132,7 +132,11 @@ test("uma resposta reinicia a contagem de passes e mantém a alternância", asyn
     offeredTo.push(responder.id);
     if (!responseUsed) {
       responseUsed = true;
-      return { card: responseCard, effect: responseEffect, zone: "field" };
+      return {
+        card: responseCard,
+        effect: responseEffect,
+        sourceZone: "field",
+      };
     }
     return null;
   };
@@ -140,9 +144,9 @@ test("uma resposta reinicia a contagem de passes e mantém a alternância", asyn
     success: true,
     preparedActivation: chain.createPreparedActivation({
       card: responseCard,
-      player: responder,
+      controller: responder,
       effect: responseEffect,
-      zone: "field",
+      activationZone: "field",
       committed: true,
       costsPaid: true,
     }),

@@ -149,8 +149,7 @@ export async function checkBeforeDestroyNegations(card, ctx) {
       effect.negationCost?.length === 0;
 
     if (costPaid) {
-      // Register OPT usage for negation
-      this.registerOncePerTurnUsage(card, owner, effect);
+      this.commitEffectUsage(card, owner, effect);
 
       if (this.ui?.log) {
         this.ui.log(`${card.name} negated its destruction!`);

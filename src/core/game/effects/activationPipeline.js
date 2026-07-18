@@ -270,7 +270,11 @@ export async function runActivationPipeline(config = {}) {
     commitInfo: config.activationContext?.commitInfo || commitInfo || null,
     autoSelectSingleTarget: explicitAutoSelect,
     autoSelectTargets: explicitAutoSelectTargets,
-    selections: config.selections || null,
+    costSelections: config.activationContext?.costSelections || {},
+    targetSelections:
+      config.activationContext?.targetSelections || config.selections || {},
+    resolutionSelections:
+      config.activationContext?.resolutionSelections || {},
   };
 
   const safeActivate = async (selections) => {
@@ -596,7 +600,7 @@ export async function runActivationPipeline(config = {}) {
           activationContext: {
             ...activationContext,
             preview: true,
-            selections: preparedSelections,
+            costSelections: preparedSelections,
           },
           _actionTargets: preparedSelections,
         },
@@ -641,15 +645,14 @@ export async function runActivationPipeline(config = {}) {
         ...(normalized.activationContext || {}),
         prepareOnly: false,
         committed: activationContext.committed === true,
-        selections: preparedSelections,
+        targetSelections: preparedSelections,
       };
       const preparedActivation = this.chainSystem?.createPreparedActivation
         ? this.chainSystem.createPreparedActivation({
             card: resolvedCard,
-            player: owner,
+            controller: owner,
             effect: preparedEffect,
-            zone: resolvedActivationZone,
-            selections: preparedSelections,
+            activationZone: resolvedActivationZone,
             costSelections: activationContext.costSelections || {},
             targetSelections:
               activationContext.targetSelections || preparedSelections,
@@ -669,15 +672,13 @@ export async function runActivationPipeline(config = {}) {
             committed: activationContext.committed === true,
             costsPaid: activationContext.costsPaid === true,
             skipDefaultFinalization: typeof config.finalize === "function",
-            skipUsageRegistration: true,
             pipelineManaged: true,
             pipelineFinalization:
               typeof config.finalize === "function"
                 ? async (linkResult = {}, finalizationContext = {}) => {
                     activationContext.chainFinalizationHandled = true;
                     if (
-                      linkResult.activationNegated === true ||
-                      linkResult.negated === true
+                      linkResult.activationNegated === true
                     ) {
                       return linkResult;
                     }
@@ -705,10 +706,14 @@ export async function runActivationPipeline(config = {}) {
           })
         : {
             card: resolvedCard,
-            player: owner,
+            controller: owner,
             effect: preparedEffect,
-            zone: resolvedActivationZone,
-            selections: preparedSelections,
+            activationZone: resolvedActivationZone,
+            costSelections: activationContext.costSelections || {},
+            targetSelections:
+              activationContext.targetSelections || preparedSelections,
+            resolutionSelections:
+              activationContext.resolutionSelections || {},
             activationContext: preparedActivationContext,
           };
 
@@ -754,7 +759,6 @@ export async function runActivationPipeline(config = {}) {
           const succeeded =
             linkResult?.success !== false &&
             linkResult?.activationNegated !== true &&
-            linkResult?.negated !== true &&
             linkResult?.fizzled !== true;
           if (!succeeded) {
             const failedResult = this.normalizeActivationResult({
@@ -767,8 +771,7 @@ export async function runActivationPipeline(config = {}) {
             }
             trackActivationAttempt(failedResult, {
               blocked:
-                linkResult?.activationNegated === true ||
-                linkResult?.negated === true,
+                linkResult?.activationNegated === true,
             });
             return failedResult;
           }
@@ -790,18 +793,6 @@ export async function runActivationPipeline(config = {}) {
             this.recordMaterialEffectActivation(owner, resolvedCard, {
               contextLabel: selectionKind,
             });
-          }
-          if (
-            oncePerTurnInfo &&
-            preparedEffect?.usagePolicy !== "use" &&
-            preparedEffect?.usagePolicy !== "activate"
-          ) {
-            this.markOncePerTurnUsed(
-              oncePerTurnInfo.card,
-              oncePerTurnInfo.player,
-              oncePerTurnInfo.effect,
-              { lockKey: oncePerTurnInfo.lockKey },
-            );
           }
           if (typeof config.onSuccess === "function") {
             await config.onSuccess(completed, activationContext);
@@ -836,7 +827,7 @@ export async function runActivationPipeline(config = {}) {
             ...activationContext,
             prepareOnly: false,
             committed: activationContext.committed === true,
-            selections: preparedSelections,
+            targetSelections: preparedSelections,
           },
           resolvedActivationZone,
           resolvedCard,
@@ -845,8 +836,7 @@ export async function runActivationPipeline(config = {}) {
       }
 
       if (
-        resolutionResult?.activationNegated === true ||
-        resolutionResult?.negated === true
+        resolutionResult?.activationNegated === true
       ) {
         const negatedResult = {
           success: false,
@@ -915,18 +905,6 @@ export async function runActivationPipeline(config = {}) {
         contextLabel: selectionKind,
       });
     }
-    if (
-      oncePerTurnInfo &&
-      preparedEffect?.usagePolicy !== "use" &&
-      preparedEffect?.usagePolicy !== "activate"
-    ) {
-      this.markOncePerTurnUsed(
-        oncePerTurnInfo.card,
-        oncePerTurnInfo.player,
-        oncePerTurnInfo.effect,
-        { lockKey: oncePerTurnInfo.lockKey },
-      );
-    }
     logPipeline("PIPELINE_FINALIZE", {
       activationZone: resolvedActivationZone,
     });
@@ -983,6 +961,7 @@ export async function runActivationPipeline(config = {}) {
     this.notify?.("activation_transaction", {
       stage: "preflight",
       cardInstanceId: resolvedCard?.instanceId ?? null,
+      duelCardId: this.ensureDuelCardId?.(resolvedCard) ?? null,
       effectId: effect.id || null,
       activationZone: resolvedActivationZone,
     });
@@ -1034,24 +1013,23 @@ export async function runActivationPipeline(config = {}) {
 
     const draft = chainSystem.createPreparedActivation({
       card: resolvedCard,
-      player: owner,
+      controller: owner,
       effect,
-      zone: resolvedActivationZone,
-      selections: costSelections || {},
+      activationZone: resolvedActivationZone,
       costSelections: costSelections || {},
       targetSelections: {},
       activationContext: {
         ...activationContext,
-        selections: costSelections || {},
+        costSelections: costSelections || {},
       },
       committed: true,
     });
     activationContext.sourceAtActivation = draft.sourceAtActivation;
     activationContext.costSelections = costSelections || {};
-    activationContext.selections = costSelections || {};
     this.notify?.("activation_transaction", {
       stage: "source_committed",
       cardInstanceId: resolvedCard?.instanceId ?? null,
+      duelCardId: this.ensureDuelCardId?.(resolvedCard) ?? null,
       effectId: effect.id || null,
       activationZone: resolvedActivationZone,
     });
@@ -1094,6 +1072,7 @@ export async function runActivationPipeline(config = {}) {
     this.notify?.("activation_transaction", {
       stage: "cost_paid",
       cardInstanceId: resolvedCard?.instanceId ?? null,
+      duelCardId: this.ensureDuelCardId?.(resolvedCard) ?? null,
       effectId: effect.id || null,
       costPayment: draft.costPayment || null,
     });
@@ -1134,10 +1113,10 @@ export async function runActivationPipeline(config = {}) {
     };
     activationContext.costSelections = costSelections || {};
     activationContext.targetSelections = targetSelections || {};
-    activationContext.selections = selections;
     this.notify?.("activation_transaction", {
       stage: "targets_declared",
       cardInstanceId: resolvedCard?.instanceId ?? null,
+      duelCardId: this.ensureDuelCardId?.(resolvedCard) ?? null,
       effectId: effect.id || null,
       targetIds: targetDefinitions.map((definition) => definition.id),
     });

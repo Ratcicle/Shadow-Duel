@@ -1631,7 +1631,7 @@ function simulateDragonGraveyardMonsterEffect(state, card, action) {
     (entry) =>
       entry &&
       entry.timing === "ignition" &&
-      entry.requireZone === "graveyard" &&
+      entry.activationZones?.includes("graveyard") &&
       (!requestedEffectId || entry.id === requestedEffectId),
   );
   if (!effect) return;

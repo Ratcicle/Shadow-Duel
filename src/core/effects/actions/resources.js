@@ -52,13 +52,7 @@ export function applyShuffleDeck(action, ctx) {
   if (typeof targetPlayer.shuffleDeck === "function") {
     targetPlayer.shuffleDeck();
   } else if (Array.isArray(targetPlayer.deck)) {
-    for (let i = targetPlayer.deck.length - 1; i > 0; i -= 1) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [targetPlayer.deck[i], targetPlayer.deck[j]] = [
-        targetPlayer.deck[j],
-        targetPlayer.deck[i],
-      ];
-    }
+    this.game?.shuffle?.(targetPlayer.deck);
   }
 
   if (!action.silent && this.game?.ui?.log) {
@@ -273,7 +267,7 @@ export async function applyDamage(action, ctx) {
           continue;
         }
 
-        this.registerOncePerTurnUsage(card, other, effect);
+        this.commitEffectUsage(card, other, effect);
 
         if (this.game && typeof this.game.updateBoard === "function") {
           this.game.updateBoard();

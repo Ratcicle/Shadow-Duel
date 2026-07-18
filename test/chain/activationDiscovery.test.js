@@ -62,7 +62,7 @@ test("Call of the Haunted é oferecida quando há um alvo válido", () => {
   assert.equal(candidates.length, 1);
   assert.equal(candidates[0].card, call);
   assert.equal(candidates[0].effect.id, "call_of_the_haunted_activate");
-  assert.equal(candidates[0].zone, "spellTrap");
+  assert.equal(candidates[0].sourceZone, "spellTrap");
 });
 
 test("[CS-07] efeito rápido de Continuous Trap face-up é descoberto", () => {
@@ -71,7 +71,7 @@ test("[CS-07] efeito rápido de Continuous Trap face-up é descoberto", () => {
     id: "continuous_faceup_effect",
     timing: "ignition",
     speed: 2,
-    requireZone: "spellTrap",
+    activationZones: ["spellTrap"],
     requireFaceup: true,
   });
   const card = createTestCard({
@@ -172,14 +172,14 @@ test("[CS-07] dois efeitos distintos da mesma carta podem ser oferecidos na mesm
     timing: "manual",
     speed: 2,
     isQuickEffect: true,
-    requireZone: "field",
+    activationZones: ["field"],
   });
   const second = createTestEffect({
     id: "same_card_second",
     timing: "manual",
     speed: 2,
     isQuickEffect: true,
-    requireZone: "field",
+    activationZones: ["field"],
   });
   const card = createTestCard({
     instanceId: 73,
@@ -200,7 +200,7 @@ test("[CS-07] dois efeitos distintos da mesma carta podem ser oferecidos na mesm
   chain.addToChain(
     chain.createPreparedActivation({
       card,
-      player,
+      controller: player,
       effect: first,
       activationZone: "field",
       committed: true,
@@ -354,7 +354,7 @@ test("Guardian Deity Visas real é candidata da mão com política use", () => {
   const link = chain.addToChain(
     chain.createPreparedActivation({
       card: visas,
-      player,
+      controller: player,
       effect: candidates[0].effect,
       activationZone: "hand",
       committed: true,
@@ -402,7 +402,7 @@ test("rótulo do modal distingue efeitos da mesma carta", () => {
     getEffectDisplayLabel({ id: "first", activationLabel: "Primeiro efeito" }),
     "Primeiro efeito",
   );
-  assert.equal(getEffectDisplayLabel({ id: "second" }), "second");
+  assert.equal(getEffectDisplayLabel({ id: "second" }), "effect");
 });
 
 test("locationVersion invalida um candidato descoberto antes do commit", () => {
@@ -412,7 +412,7 @@ test("locationVersion invalida um candidato descoberto antes do commit", () => {
     timing: "manual",
     speed: 2,
     isQuickEffect: true,
-    requireZone: "field",
+    activationZones: ["field"],
   });
   const card = createTestCard({ instanceId: 76, effects: [effect] });
   placeCard(player, "field", card);
@@ -424,6 +424,10 @@ test("locationVersion invalida um candidato descoberto antes do commit", () => {
 
   assert.deepEqual(
     chain.revalidateActivationCandidate(candidate, player, candidate.context),
-    { ok: false, reason: "activation_source_version_changed" },
+    {
+      ok: false,
+      code: "ACTIVATION_SOURCE_VERSION_CHANGED",
+      reason: "activation_source_version_changed",
+    },
   );
 });

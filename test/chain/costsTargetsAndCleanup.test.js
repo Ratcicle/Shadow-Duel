@@ -36,10 +36,10 @@ test("ativação preparada chega à janela com fonte, custos e alvos comprometid
   await chain.openActivationChain(
     chain.createPreparedActivation({
       card: source,
-      player,
+      controller: player,
       effect,
-      zone: "field",
-      selections: { chosen: [target] },
+      activationZone: "field",
+      targetSelections: { chosen: [target] },
       committed: true,
       costsPaid: true,
     }),
@@ -48,7 +48,7 @@ test("ativação preparada chega à janela com fonte, custos e alvos comprometid
   assert.equal(observed.card, source);
   assert.equal(observed.committed, true);
   assert.equal(observed.costsPaid, true);
-  assert.deepEqual(observed.selections, { chosen: [target] });
+  assert.deepEqual(observed.targetSelections, { chosen: [target] });
   assert.deepEqual(observed.declaredTargets, [
     { targetId: "chosen", cards: [target] },
   ]);
@@ -132,7 +132,7 @@ test("cancelar a escolha de custo não compromete fonte nem reserva limite", asy
     timing: "manual",
     speed: 2,
     isQuickEffect: true,
-    requireZone: "field",
+    activationZones: ["field"],
     oncePerTurn: true,
     usagePolicy: "activate",
     targets: [
@@ -150,13 +150,18 @@ test("cancelar a escolha de custo não compromete fonte nem reserva limite", asy
   placeCard(player, "hand", cost);
 
   const result = await chain.prepareChainResponse(
-    { card: source, effect, zone: "field", context: { type: "phase_change" } },
+    {
+      card: source,
+      effect,
+      sourceZone: "field",
+      context: { type: "phase_change" },
+    },
     player,
   );
 
   assert.equal(result.cancelled, true);
   assert.equal(player.field.includes(source), true);
-  assert.equal(chain.usageReservations.size, 0);
+  assert.equal(game.effectUsageReservations.size, 0);
   assert.equal(game.canUseOncePerTurn(source, player, effect).ok, true);
 });
 
@@ -210,7 +215,7 @@ test("[CS-04] cleanup de Spell/Trap ocorre somente depois de CL1", async () => {
   const rootLink = chain.addToChain(
     chain.createPreparedActivation({
       card: rootCard,
-      player,
+      controller: player,
       effect: rootEffect,
       activationZone: "spellTrap",
       activationContext: { sourceZone: "hand", fromHand: true },
@@ -221,7 +226,7 @@ test("[CS-04] cleanup de Spell/Trap ocorre somente depois de CL1", async () => {
   const responseLink = chain.addToChain(
     chain.createPreparedActivation({
       card: responseCard,
-      player: bot,
+      controller: bot,
       effect: responseEffect,
       activationZone: "spellTrap",
       activationContext: {
@@ -279,7 +284,7 @@ test("[CS-04] cada movimento de cleanup emite seu evento individual", async () =
     return chain.addToChain(
       chain.createPreparedActivation({
         card,
-        player: owner,
+        controller: owner,
         effect: createTestEffect({
           id: `cleanup_${index}`,
           speed: index === 0 ? 2 : 3,
@@ -322,7 +327,7 @@ test("[CS-04] cada movimento de cleanup emite seu evento individual", async () =
   );
 });
 
-test("adapter de finalizacao real adia Counter Trap ate depois de CL1", async () => {
+test("finalizacao canônica adia Counter Trap ate depois de CL1", async () => {
   let harness;
   let counterTrap;
   const observedZones = [];
@@ -347,7 +352,7 @@ test("adapter de finalizacao real adia Counter Trap ate depois de CL1", async ()
   chain.addToChain(
     chain.createPreparedActivation({
       card: root,
-      player,
+      controller: player,
       effect: createTestEffect({
         id: "root_before_counter_cleanup",
         actions: [{ type: "root_action" }],
@@ -360,7 +365,7 @@ test("adapter de finalizacao real adia Counter Trap ate depois de CL1", async ()
   const counterLink = chain.addToChain(
     chain.createPreparedActivation({
       card: counterTrap,
-      player: bot,
+      controller: bot,
       effect: createTestEffect({
         id: "counter_cleanup_effect",
         speed: 3,
@@ -454,7 +459,7 @@ test("[CS-08] custo é pago antes da declaração de alvos", async () => {
     timing: "manual",
     speed: 2,
     isQuickEffect: true,
-    requireZone: "field",
+    activationZones: ["field"],
     targets: [
       {
         id: "discard",
@@ -483,7 +488,7 @@ test("[CS-08] custo é pago antes da declaração de alvos", async () => {
     {
       card: source,
       effect,
-      zone: "field",
+      sourceZone: "field",
       context: {
         type: "effect_activation",
         event: "effect_activation",
@@ -587,7 +592,7 @@ test("Natural Selection real compromete fonte, descarta custo e congela alvo", a
   assert.equal(game.canUseOncePerTurn(natural, player, candidate.effect).ok, true);
 });
 
-test("alias selections agrega custo, alvo e escolha de resolução", () => {
+test("seleções canônicas mantêm custo, alvo e resolução separados", () => {
   const { chain, player } = createChainHarness();
   const cost = createTestCard({ instanceId: 85, name: "Cost" });
   const target = createTestCard({ instanceId: 86, name: "Target" });
@@ -601,7 +606,7 @@ test("alias selections agrega custo, alvo e escolha de resolução", () => {
   });
   const prepared = chain.createPreparedActivation({
     card: createTestCard({ instanceId: 88, effects: [effect] }),
-    player,
+    controller: player,
     effect,
     activationZone: "field",
     costSelections: { cost: [cost] },
@@ -611,16 +616,15 @@ test("alias selections agrega custo, alvo e escolha de resolução", () => {
     costsPaid: true,
   });
 
-  assert.deepEqual(prepared.selections, {
-    cost: [cost],
-    target: [target],
-    choice: [choice],
-  });
+  assert.deepEqual(prepared.costSelections, { cost: [cost] });
+  assert.deepEqual(prepared.targetSelections, { target: [target] });
+  assert.deepEqual(prepared.resolutionSelections, { choice: [choice] });
+  assert.equal(prepared.selections, undefined);
   const link = chain.addToChain(prepared);
   assert.deepEqual(link.declaredTargets, [
     { targetId: "target", cards: [target] },
   ]);
-  assert.deepEqual(link.selections, prepared.selections);
+  assert.equal(link.selections, undefined);
 });
 
 test("[CS-08] alvo declarado nunca é escolhido durante resolução", async () => {
@@ -656,12 +660,12 @@ test("[CS-08] alvo declarado nunca é escolhido durante resolução", async () =
   const link = chain.addToChain(
     chain.createPreparedActivation({
       card: source,
-      player,
+      controller: player,
       effect,
       activationZone: "field",
       committed: true,
       costsPaid: true,
-      selections: {},
+      targetSelections: {},
     }),
   );
 
@@ -714,7 +718,7 @@ test("escolha não-targeting durante resolução usa resolutionSelections", asyn
   const link = chain.addToChain(
     chain.createPreparedActivation({
       card: source,
-      player,
+      controller: player,
       effect,
       activationZone: "field",
       committed: true,
@@ -737,7 +741,7 @@ test("escolha não-targeting durante resolução usa resolutionSelections", asyn
   assert.equal(result.success, true);
   assert.equal(applyCount, 2);
   assert.deepEqual(link.resolutionSelections, { choice: [choice] });
-  assert.deepEqual(link.selections, { choice: [choice] });
+  assert.equal(link.selections, undefined);
   const session = trace.responses.find((entry) => entry.type === "selection")
     .session;
   assert.equal(session.preventCancel, true);
@@ -765,7 +769,7 @@ test("fonte movida como custo preserva o snapshot de ativação", async () => {
     timing: "manual",
     speed: 2,
     isQuickEffect: true,
-    requireZone: "field",
+    activationZones: ["field"],
     activationCosts: [
       { type: "move", targetRef: "self", to: "graveyard" },
     ],
@@ -774,7 +778,12 @@ test("fonte movida como custo preserva o snapshot de ativação", async () => {
   placeCard(player, "field", source);
 
   const result = await chain.prepareChainResponse(
-    { card: source, effect, zone: "field", context: { type: "phase_change" } },
+    {
+      card: source,
+      effect,
+      sourceZone: "field",
+      context: { type: "phase_change" },
+    },
     player,
   );
   assert.equal(result.success, true);
@@ -829,7 +838,7 @@ test("alvo invalido nao gera retarget nem reembolso de custo", async () => {
   const link = chain.addToChain(
     chain.createPreparedActivation({
       card: source,
-      player,
+      controller: player,
       effect,
       activationZone: "field",
       costSelections: { paid: [cost] },
@@ -902,7 +911,7 @@ test("alvo congelado e revalidado sem trocar por outro candidato", async () => {
   const link = chain.addToChain(
     chain.createPreparedActivation({
       card: source,
-      player,
+      controller: player,
       effect,
       activationZone: "field",
       targetSelections: { target: [target] },

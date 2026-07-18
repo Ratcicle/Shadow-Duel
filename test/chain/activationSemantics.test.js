@@ -35,7 +35,7 @@ test("[CS-05] ativação de Spell/Trap Card difere da ativação de seu efeito f
 
   const link = await publishPreparedLink(chain, {
     card,
-    player,
+    controller: player,
     effect,
     activationZone: "spellTrap",
     activationContext: {
@@ -66,7 +66,7 @@ test("[CS-05] efeito de Spell/Trap no Cemitério não publica nova ativação da
 
   const link = await publishPreparedLink(chain, {
     card,
-    player,
+    controller: player,
     effect,
     activationZone: "graveyard",
     activationContext: {
@@ -97,7 +97,7 @@ test("[CS-05] resposta a ativação de Spell Card rejeita mera ativação de efe
     chain.addToChain(
       chain.createPreparedActivation({
         card: source,
-        player,
+        controller: player,
         effect: createTestEffect({ id: "source_effect", speed: 2 }),
         activationZone,
         activationContext: {
@@ -138,7 +138,7 @@ test("ativação real de Spell Card publica uma ativação de carta e uma de efe
 
   const link = await publishPreparedLink(chain, {
     card,
-    player,
+    controller: player,
     effect,
     activationZone: "spellTrap",
     activationContext: {

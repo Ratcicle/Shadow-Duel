@@ -12,6 +12,7 @@ import {
   findSourceEntryForCard,
   getSourceOwners,
 } from "./sourceZones.js";
+import { mergeCanonicalSelections } from "../../game/selection/contract.js";
 
 function applyStatusesOnSummon(card, statuses) {
   if (!card || !statuses) return;
@@ -157,11 +158,13 @@ export async function handleSpecialSummonFromZone(
 
   const zoneEntries = buildSourceZoneEntries(zoneNames, sourceOwners);
 
+  const canonicalSelections = {
+    ...mergeCanonicalSelections(ctx?.actionContext),
+    ...mergeCanonicalSelections(ctx?.activationContext),
+  };
   const selectionMap =
     ctx?.selections ||
-    ctx?.activationContext?.selections ||
-    ctx?.actionContext?.selections ||
-    null;
+    (Object.keys(canonicalSelections).length > 0 ? canonicalSelections : null);
 
   const resolveSelectionKeys = (requirementId) => {
     if (!selectionMap) return null;
@@ -870,6 +873,9 @@ async function summonCards(
         position,
         isFacedown: false,
         resetAttackFlags: true,
+        summonOrigin: "effect_resolution",
+        summonMethodOverride: "special",
+        summonProcedure: "card_effect",
         statusesOnSummon,
       });
 

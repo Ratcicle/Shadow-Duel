@@ -86,41 +86,6 @@ async function runPipelineFinalization(entry) {
   return true;
 }
 
-function registerLegacyUsage(chainSystem, entry) {
-  const link = entry.link;
-  const effect = link?.effect;
-  if (
-    !effect ||
-    link.skipUsageRegistration === true ||
-    effect.usagePolicy === "use" ||
-    effect.usagePolicy === "activate"
-  ) {
-    return;
-  }
-  const outcome = entry.outcome;
-  const applied =
-    outcome.success !== false &&
-    outcome.activationNegated !== true &&
-    outcome.effectNegated !== true &&
-    outcome.fizzled !== true &&
-    outcome.resolvedWithoutEffect !== true;
-  if (!applied) return;
-  if (effect.oncePerTurn) {
-    chainSystem.game?.effectEngine?.registerOncePerTurnUsage?.(
-      link.card,
-      link.controller,
-      effect,
-    );
-  }
-  if (effect.oncePerDuel) {
-    chainSystem.game?.effectEngine?.registerOncePerDuelUsage?.(
-      link.card,
-      link.controller,
-      effect,
-    );
-  }
-}
-
 async function moveToGraveyard(chainSystem, entry, contextLabel) {
   const state = currentSourceState(chainSystem, entry);
   if (!state.samePermanence) {
@@ -250,7 +215,6 @@ async function finalizeEntry(chainSystem, entry) {
     if (link.skipDefaultFinalization !== true || activationNegated) {
       await runPipelineFinalization(entry);
     }
-    registerLegacyUsage(chainSystem, entry);
     link.finalizationStatus = entry.status;
     notifyFinalization(chainSystem, "completed", entry);
     return compactEntry(entry);

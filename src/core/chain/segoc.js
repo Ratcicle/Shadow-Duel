@@ -483,13 +483,24 @@ async function requestHumanOrder(chainSystem, candidates, group, optional) {
     onConfirm: (ordered) => finish(ordered),
     onCancel: () => finish(optional ? [] : null),
   };
-  const returned = showModal.call(chainSystem.getUI(), options);
-  if (returned && typeof returned.then === "function") {
-    returned.then(finish, () => finish(optional ? [] : null));
-  } else if (returned !== undefined) {
-    finish(returned);
-  }
-  const decision = await callbackResult;
+  const resolveHuman = async () => {
+    const returned = showModal.call(chainSystem.getUI(), options);
+    if (returned && typeof returned.then === "function") {
+      returned.then(finish, () => finish(optional ? [] : null));
+    } else if (returned !== undefined) {
+      finish(returned);
+    }
+    return callbackResult;
+  };
+  const decision = typeof chainSystem.game?.requestDecision === "function"
+    ? await chainSystem.game.requestDecision({
+        kind: "segoc_order",
+        actor: candidates[0]?.controller || null,
+        candidates,
+        contextSnapshot: { group, optional },
+        resolveHuman,
+      })
+    : await resolveHuman();
   if (decision == null && !optional) {
     return { ok: false, reason: "mandatory_trigger_order_cancelled" };
   }
@@ -506,10 +517,20 @@ export async function orderTriggerCandidates(candidates = [], options = {}) {
   const controller = ordered[0]?.controller || null;
 
   if (!controller || isAI(controller)) {
-    const aiOrdered = this.game?.autoSelector?.orderTriggerCandidates?.(
-      ordered,
-      { group, optional },
-    );
+    const resolveAI = () =>
+      this.game?.autoSelector?.orderTriggerCandidates?.(
+        ordered,
+        { group, optional },
+      ) || ordered;
+    const aiOrdered = controller && typeof this.game?.requestDecision === "function"
+      ? await this.game.requestDecision({
+          kind: "segoc_order",
+          actor: controller,
+          candidates: ordered,
+          contextSnapshot: { group, optional },
+          resolveAI,
+        })
+      : resolveAI();
     return {
       ok: true,
       candidates: Array.isArray(aiOrdered) ? aiOrdered : ordered,

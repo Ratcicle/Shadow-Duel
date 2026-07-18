@@ -702,7 +702,7 @@ export default class BurningWestStrategy extends BaseStrategy {
   } = {}) {
     if (!sourceCard || !player || !game) return null;
     const analysis = this.analyzeGameState(game);
-    const zone = activationZone || effect?.requireZone || "field";
+    const zone = activationZone || effect?.activationZones?.[0] || "field";
     return this.buildBurningWestActivationContext(sourceCard, analysis, {
       zone,
       activationZone: zone,

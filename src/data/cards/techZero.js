@@ -15,6 +15,8 @@ export const techZeroCards = [
     image: "assets/Tech-Zero Energy Core.png",
     effects: [
       {
+
+        usagePolicy: "use",
         id: "tech_zero_energy_core_level_mod",
         timing: "on_event",
         triggerRequirement: "optional",
@@ -85,6 +87,8 @@ export const techZeroCards = [
         ],
       },
       {
+
+        usagePolicy: "use",
         id: "tech_zero_energy_core_synchro_draw",
         timing: "on_event",
         triggerRequirement: "mandatory",
@@ -212,9 +216,12 @@ export const techZeroCards = [
     image: "assets/Tech-Zero Multimodal Machine.png",
     effects: [
       {
+
+        activationZones: ["field"],
+
+        usagePolicy: "use",
         id: "tech_zero_multimodal_machine_level_mod",
         timing: "ignition",
-        requireZone: "field",
         requirePhase: ["main1", "main2"],
         oncePerTurn: true,
         oncePerTurnName: "tech_zero_multimodal_machine_level_mod",
@@ -319,6 +326,8 @@ export const techZeroCards = [
         ],
       },
       {
+
+        usagePolicy: "use",
         id: "tech_zero_multimodal_machine_synchro_draw",
         timing: "on_event",
         triggerRequirement: "mandatory",
@@ -348,9 +357,12 @@ export const techZeroCards = [
     image: "assets/Tech-Zero Glider Wyvern.png",
     effects: [
       {
+
+        activationZones: ["hand"],
+
+        usagePolicy: "use",
         id: "tech_zero_glider_wyvern_special_summon",
         timing: "ignition",
-        requireZone: "hand",
         requirePhase: ["main1", "main2"],
         oncePerTurn: true,
         oncePerTurnName: "tech_zero_glider_wyvern_special_summon",
@@ -387,6 +399,8 @@ export const techZeroCards = [
         ],
       },
       {
+
+        usagePolicy: "use",
         id: "tech_zero_glider_wyvern_synchro_destroy_spelltrap",
         timing: "on_event",
         triggerRequirement: "optional",
@@ -435,6 +449,8 @@ export const techZeroCards = [
     image: "assets/Tech-Zero Iron Raptor.png",
     effects: [
       {
+
+        usagePolicy: "use",
         id: "tech_zero_iron_raptor_special_summon",
         timing: "on_event",
         triggerRequirement: "optional",
@@ -474,6 +490,8 @@ export const techZeroCards = [
         ],
       },
       {
+
+        usagePolicy: "use",
         id: "tech_zero_iron_raptor_synchro_tokens",
         timing: "on_event",
         triggerRequirement: "optional",
@@ -550,9 +568,12 @@ export const techZeroCards = [
     image: "assets/Tech-Zero Prism Activator.png",
     effects: [
       {
+
+        activationZones: ["hand"],
+
+        usagePolicy: "use",
         id: "tech_zero_prism_activator_monster_search",
         timing: "ignition",
-        requireZone: "hand",
         requirePhase: ["main1", "main2"],
         oncePerTurn: true,
         oncePerTurnName: "tech_zero_prism_activator_monster_search",
@@ -602,6 +623,8 @@ export const techZeroCards = [
         ],
       },
       {
+
+        usagePolicy: "use",
         id: "tech_zero_prism_activator_synchro_summon",
         timing: "on_event",
         triggerRequirement: "optional",
@@ -655,6 +678,8 @@ export const techZeroCards = [
     image: "assets/Tech-Zero Connector Dragon.png",
     effects: [
       {
+
+        usagePolicy: "use",
         id: "tech_zero_connector_dragon_additional_normal",
         timing: "passive",
         requireZone: "field",
@@ -671,6 +696,8 @@ export const techZeroCards = [
         },
       },
       {
+
+        usagePolicy: "use",
         id: "tech_zero_connector_dragon_synchro_recover_spelltrap",
         timing: "on_event",
         triggerRequirement: "optional",
@@ -723,9 +750,12 @@ export const techZeroCards = [
     image: "assets/Tech-Zero Pulse Soldier.png",
     effects: [
       {
+
+        activationZones: ["hand"],
+
+        usagePolicy: "use",
         id: "tech_zero_pulse_soldier_empty_field_summon",
         timing: "ignition",
-        requireZone: "hand",
         requirePhase: ["main1", "main2"],
         requireEmptyField: true,
         oncePerTurn: true,
@@ -741,6 +771,8 @@ export const techZeroCards = [
         ],
       },
       {
+
+        usagePolicy: "use",
         id: "tech_zero_pulse_soldier_synchro_draw_summon",
         timing: "on_event",
         triggerRequirement: "mandatory",
@@ -806,6 +838,8 @@ export const techZeroCards = [
     image: "assets/Tech-Zero Summoning Portal.png",
     effects: [
       {
+
+        usagePolicy: "use",
         id: "tech_zero_summoning_portal_synchro_revive",
         timing: "on_event",
         triggerRequirement: "optional",
@@ -1002,6 +1036,8 @@ export const techZeroCards = [
         ],
       },
       {
+
+        activationLabelKey: "effects.ghostSamurai.attackBoost",
         id: "tech_zero_ghost_samurai_attack_special_summoned_boost",
         timing: "on_event",
         triggerRequirement: "mandatory",
@@ -1033,6 +1069,8 @@ export const techZeroCards = [
         ],
       },
       {
+
+        activationLabelKey: "effects.ghostSamurai.defenseBoost",
         id: "tech_zero_ghost_samurai_defend_special_summoned_boost",
         timing: "on_event",
         triggerRequirement: "mandatory",
@@ -1115,9 +1153,12 @@ export const techZeroCards = [
         ],
       },
       {
+
+        activationZones: ["field"],
+
+        usagePolicy: "activate",
         id: "tech_zero_battle_mage_recycle_revive",
         timing: "ignition",
-        requireZone: "field",
         requireFaceup: true,
         requirePhase: ["main1", "main2"],
         oncePerTurn: true,
@@ -1281,6 +1322,8 @@ export const techZeroCards = [
         ],
       },
       {
+
+        usagePolicy: "activate",
         id: "tech_zero_turbocharge_kaiser_battle_revive_tuner",
         timing: "on_event",
         triggerRequirement: "optional",
@@ -1483,9 +1526,12 @@ export const techZeroCards = [
         ],
       },
       {
+
+        activationZones: ["field"],
+
+        usagePolicy: "activate",
         id: "tech_zero_reactor_dragon_recycle_synchros",
         timing: "ignition",
-        requireZone: "field",
         requireFaceup: true,
         requirePhase: ["main1", "main2"],
         oncePerTurn: true,
@@ -1594,11 +1640,14 @@ export const techZeroCards = [
         ],
       },
       {
+
+        activationZones: ["field"],
+
+        usagePolicy: "activate",
         id: "tech_zero_explosive_lancer_negate_destroy",
         timing: "manual",
         speed: 2,
         isQuickEffect: true,
-        requireZone: "field",
         requireFaceup: true,
         oncePerTurn: true,
         oncePerTurnScope: "card",
@@ -1666,11 +1715,14 @@ export const techZeroCards = [
         ],
       },
       {
+
+        activationZones: ["field"],
+
+        usagePolicy: "activate",
         id: "tech_zero_final_singularity_negate_leave_field",
         timing: "manual",
         speed: 2,
         isQuickEffect: true,
-        requireZone: "field",
         requireFaceup: true,
         oncePerTurn: true,
         oncePerTurnScope: "card",
@@ -1685,7 +1737,7 @@ export const techZeroCards = [
         ],
         actions: [
           {
-            type: "negate_activation",
+            type: "negate_effect",
             storeNegatedCardAs: "tech_zero_final_singularity_negated_card",
           },
           {
@@ -1722,9 +1774,12 @@ export const techZeroCards = [
     image: "assets/Tech-Zero Development Lab.png",
     effects: [
       {
+
+        activationZones: ["fieldSpell"],
+
+        usagePolicy: "activate",
         id: "tech_zero_development_lab_recycle",
         timing: "ignition",
-        requireZone: "fieldSpell",
         requireFaceup: true,
         requirePhase: ["main1", "main2"],
         oncePerTurn: true,
@@ -1784,6 +1839,8 @@ export const techZeroCards = [
     image: "assets/Tech-Zero Assembly Line.png",
     effects: [
       {
+
+        usagePolicy: "activate",
         id: "tech_zero_assembly_line_activation",
         timing: "on_play",
         speed: 1,
@@ -1879,6 +1936,8 @@ export const techZeroCards = [
     image: "assets/Tech-Zero Scrapyard.png",
     effects: [
       {
+
+        usagePolicy: "activate",
         id: "tech_zero_scrapyard_activation",
         timing: "on_activate",
         speed: 2,

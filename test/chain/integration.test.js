@@ -18,13 +18,14 @@ import {
 test("dois harnesses consecutivos não compartilham estado", () => {
   const first = createChainHarness();
   const second = createChainHarness();
-  first.chain.addToChain({
-    prepared: true,
-    card: createTestCard({ name: "First-only card" }),
-    player: first.player,
-    effect: createTestEffect({ id: "first_only" }),
-    zone: "field",
-  });
+  first.chain.addToChain(
+    first.chain.createPreparedActivation({
+      card: createTestCard({ name: "First-only card" }),
+      controller: first.player,
+      effect: createTestEffect({ id: "first_only" }),
+      activationZone: "field",
+    }),
+  );
   first.trace.events.push({ eventName: "first-only" });
 
   assert.equal(first.chain.getChainLength(), 1);
@@ -35,13 +36,14 @@ test("dois harnesses consecutivos não compartilham estado", () => {
 
 test("cancelChain limpa stack, janela, seleção e flags mutáveis", () => {
   const { chain, player } = createChainHarness();
-  chain.addToChain({
-    prepared: true,
-    card: createTestCard({ name: "Pending card" }),
-    player,
-    effect: createTestEffect({ id: "pending" }),
-    zone: "field",
-  });
+  chain.addToChain(
+    chain.createPreparedActivation({
+      card: createTestCard({ name: "Pending card" }),
+      controller: player,
+      effect: createTestEffect({ id: "pending" }),
+      activationZone: "field",
+    }),
+  );
   chain.chainWindowOpen = true;
   chain.chainWindowContext = { type: "card_activation" };
   chain.isResolving = true;
@@ -72,7 +74,7 @@ test("IDs de corrente e elo são determinísticos e isolados por harness", () =>
     harness.chain.addToChain(
       harness.chain.createPreparedActivation({
         card: createTestCard({ name: `Card ${suffix}` }),
-        player: harness.player,
+        controller: harness.player,
         effect: createTestEffect({ id: `effect_${suffix}` }),
         activationZone: "field",
         committed: true,
@@ -117,7 +119,7 @@ test("evento ou procedimento não ativável nunca cria CL1", async () => {
       type: "summon_attempt",
       card: createTestCard({ name: "Summon procedure" }),
       effect: createTestEffect({ id: "not_an_activation" }),
-      player,
+      controller: player,
       triggerPlayer: player,
       addTriggerToChain: true,
     },
@@ -139,7 +141,7 @@ test("Trigger Effect preserva snapshots distintos do trigger e da ativação", a
   const link = chain.addToChain(
     chain.createPreparedActivation({
       card: source,
-      player,
+      controller: player,
       effect: createTestEffect({ id: "trigger_effect", timing: "on_event" }),
       activationZone: "graveyard",
       activationContext: {
@@ -167,7 +169,7 @@ test("resumo e estado público expõem somente o contrato serializável", () => 
   const link = chain.addToChain(
     chain.createPreparedActivation({
       card: createTestCard({ id: 99, instanceId: 501, name: "Public source" }),
-      player,
+      controller: player,
       effect: createTestEffect({ id: "public_effect", speed: 2 }),
       activationZone: "field",
       committed: true,
@@ -196,30 +198,18 @@ test("resumo e estado público expõem somente o contrato serializável", () => 
   });
 });
 
-test("adapter legado emite um único warning no modo de teste", () => {
-  const { chain, player } = createChainHarness({ testMode: true });
-  const warnings = [];
-  const originalWarn = console.warn;
-  console.warn = (...args) => warnings.push(args.join(" "));
-  try {
-    for (const suffix of ["first", "second"]) {
+test("addToChain rejeita a assinatura posicional removida", () => {
+  const { chain, player } = createChainHarness();
+  assert.throws(
+    () =>
       chain.addToChain(
-        createTestCard({ name: `Legacy ${suffix}` }),
+        createTestCard({ name: "Legacy source" }),
         player,
-        createTestEffect({ id: `legacy_${suffix}` }),
-        { type: "effect_activation" },
-        {},
-        "field",
-      );
-    }
-  } finally {
-    console.warn = originalWarn;
-  }
-
-  assert.equal(
-    warnings.filter((message) => message.includes("addToChain(card")).length,
-    1,
+        createTestEffect({ id: "legacy_effect" }),
+      ),
+    /canonical PreparedActivation/,
   );
+  assert.equal(chain.getChainLength(), 0);
 });
 
 test(
@@ -306,7 +296,7 @@ test(
     placeCard(player, "spellTrap", responseCard);
     const response = chain.createPreparedActivation({
       card: responseCard,
-      player,
+      controller: player,
       effect: createTestEffect({
         id: "fast_response_effect",
         timing: "on_activate",

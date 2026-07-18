@@ -12,6 +12,7 @@ export function checkWinCondition() {
       if (this.isDisposed?.()) return;
 
       const hasStrategicReport = this.hasStrategicReport?.() === true;
+      const hasReplay = this.hasCanonicalReplay?.() === true;
       if (!hasStrategicReport && this.normalDuelStrategicReportEnabled) {
         console.warn(
           "[StrategicReport] Game over modal opened without exportable analytics.",
@@ -25,6 +26,7 @@ export function checkWinCondition() {
           botLP: this.bot.lp,
           turns: this.turnCounter,
           strategicReportAvailable: hasStrategicReport,
+          replayAvailable: hasReplay,
           strategicReportInfo: hasStrategicReport
             ? {
                 duelCount: 1,
@@ -56,6 +58,7 @@ export function checkWinCondition() {
                 }
               : null;
           },
+          onExportReplay: () => this.exportReplay?.({ download: true }),
         });
       } else {
         this.ui?.showAlert?.(
@@ -86,6 +89,7 @@ export function checkWinCondition() {
       reason: "lp_zero",
     });
     this.finalizeNormalDuelStrategicReport?.("bot", "lp_zero");
+    this.finalizeReplay?.({ winner: "bot", reason: "lp_zero" });
     showGameOver(false);
   } else if (this.bot.lp <= 0) {
     this.gameOver = true;
@@ -98,6 +102,7 @@ export function checkWinCondition() {
       reason: "lp_zero",
     });
     this.finalizeNormalDuelStrategicReport?.("player", "lp_zero");
+    this.finalizeReplay?.({ winner: "player", reason: "lp_zero" });
     showGameOver(true);
   }
 }

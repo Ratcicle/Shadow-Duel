@@ -55,10 +55,9 @@ export function handleSpecialSummonTypeCounters(payload) {
 export function assignFieldPresenceId(card) {
   if (!card) return;
 
-  // Generate unique ID: card.id + timestamp + random component
-  const timestamp = Date.now();
-  const random = Math.floor(Math.random() * 1000000);
-  card.fieldPresenceId = `fp_${card.id}_${timestamp}_${random}`;
+  card.fieldPresenceId =
+    this.game?.createDeterministicId?.(`field_presence_${card.id}`) ||
+    `field_presence_${card.id}_${card.locationVersion || 0}`;
 
   // Initialize presence-specific state for tracking counters
   if (!card.fieldPresenceState) {

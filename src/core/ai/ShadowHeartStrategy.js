@@ -955,9 +955,10 @@ export default class ShadowHeartStrategy extends BaseStrategy {
     (bot.hand || []).forEach((card, index) => {
       if (card.cardKind !== "monster") return;
 
-      // Verificar se o monstro tem efeito ignition com requireZone: "hand"
+      // Verificar se o monstro tem efeito ignition ativável da mão.
       const handIgnitionEffect = (card.effects || []).find(
-        (e) => e && e.timing === "ignition" && e.requireZone === "hand",
+        (e) =>
+          e && e.timing === "ignition" && e.activationZones?.includes("hand"),
       );
       if (!handIgnitionEffect) return;
 

@@ -13,9 +13,12 @@ export const dragonCards = [
     image: "assets/Luminous Dragon.png",
     effects: [
       {
+
+        activationZones: ["hand"],
+
+        usagePolicy: "use",
         id: "luminous_dragon_empty_field_summon",
         timing: "ignition",
-        requireZone: "hand",
         conditions: [{ type: "playerFieldEmpty" }],
         oncePerTurn: true,
         oncePerTurnName: "luminous_dragon_empty_field_summon",
@@ -29,6 +32,8 @@ export const dragonCards = [
         ],
       },
       {
+
+        usagePolicy: "use",
         id: "luminous_dragon_discard_recover",
         timing: "on_event",
         triggerRequirement: "optional",
@@ -210,9 +215,10 @@ export const dragonCards = [
         ],
       },
       {
+
+        activationZones: ["graveyard"],
         id: "grey_dragon_gy_return",
         timing: "ignition",
-        requireZone: "graveyard",
         requirePhase: ["main1", "main2"],
         targets: [
           {
@@ -261,6 +267,8 @@ export const dragonCards = [
     image: "assets/Voltaic Dragon.png",
     effects: [
       {
+
+        usagePolicy: "use",
         id: "voltaic_dragon_discard_damage",
         timing: "on_event",
         triggerRequirement: "mandatory",
@@ -278,9 +286,12 @@ export const dragonCards = [
         ],
       },
       {
+
+        activationZones: ["hand"],
+
+        usagePolicy: "use",
         id: "voltaic_dragon_special_summon",
         timing: "ignition",
-        requireZone: "hand",
         requirePhase: ["main1", "main2"],
         oncePerTurn: true,
         oncePerTurnName: "voltaic_dragon_special_summon",
@@ -337,9 +348,10 @@ export const dragonCards = [
         ],
       },
       {
+
+        activationZones: ["graveyard"],
         id: "luminescent_dragon_banish_debuff",
         timing: "ignition",
-        requireZone: "graveyard",
         requirePhase: ["main1", "main2"],
         targets: [
           {
@@ -382,9 +394,12 @@ export const dragonCards = [
     image: "assets/Majestic Silver Dragon.png",
     effects: [
       {
+
+        activationZones: ["field"],
+
+        usagePolicy: "activate",
         id: "majestic_silver_dragon_position_switch",
         timing: "ignition",
-        requireZone: "field",
         requirePhase: ["main1", "main2"],
         oncePerTurn: true,
         oncePerTurnName: "majestic_silver_dragon_position_switch",
@@ -438,9 +453,12 @@ export const dragonCards = [
         ],
       },
       {
+
+        activationZones: ["field"],
+
+        usagePolicy: "activate",
         id: "darkness_dragon_negate",
         timing: "ignition",
-        requireZone: "field",
         requirePhase: ["main1", "main2"],
         oncePerTurn: true,
         oncePerTurnName: "darkness_dragon_negate",
@@ -496,9 +514,10 @@ export const dragonCards = [
     image: "assets/Black Bull Dragon.png",
     effects: [
       {
+
+        activationZones: ["hand"],
         id: "bbd_special_summon_from_hand",
         timing: "ignition",
-        requireZone: "hand",
         requirePhase: ["main1", "main2"],
         targets: [
           {
@@ -521,9 +540,10 @@ export const dragonCards = [
         ],
       },
       {
+
+        activationZones: ["graveyard"],
         id: "bbd_gy_banish_search",
         timing: "ignition",
-        requireZone: "graveyard",
         requirePhase: ["main1", "main2"],
         actions: [
           {
@@ -558,9 +578,10 @@ export const dragonCards = [
     image: "assets/Hellkite Dragon.png",
     effects: [
       {
+
+        activationZones: ["hand"],
         id: "hellkite_dragon_hand_ss_cost",
         timing: "ignition",
-        requireZone: "hand",
         requirePhase: ["main1", "main2"],
         targets: [
           {
@@ -582,9 +603,12 @@ export const dragonCards = [
         ],
       },
       {
+
+        activationZones: ["field"],
+
+        usagePolicy: "activate",
         id: "hellkite_dragon_field_send_revive",
         timing: "ignition",
-        requireZone: "field",
         requirePhase: ["main1", "main2"],
         oncePerTurn: true,
         oncePerTurnName: "hellkite_dragon_field_revive",
@@ -644,9 +668,10 @@ export const dragonCards = [
         ],
       },
       {
+
+        activationZones: ["graveyard"],
         id: "hellkite_roar_gy_search_peak",
         timing: "ignition",
-        requireZone: "graveyard",
         requirePhase: ["main1", "main2"],
         actions: [
           { type: "banish", targetRef: "self", fromZone: "graveyard" },
@@ -710,9 +735,12 @@ export const dragonCards = [
         ],
       },
       {
+
+        activationZones: ["fieldSpell"],
+
+        usagePolicy: "activate",
         id: "dragon_peak_ignite_summon",
         timing: "ignition",
-        requireZone: "fieldSpell",
         requirePhase: ["main1", "main2"],
         oncePerTurn: true,
         oncePerTurnName: "dragon_peak_ignite_summon",
@@ -751,9 +779,12 @@ export const dragonCards = [
     image: "assets/Abyssal Serpent Dragon.png",
     effects: [
       {
+
+        activationZones: ["field"],
+
+        usagePolicy: "use",
         id: "abyssal_serpent_delayed_summon_effect",
         timing: "ignition",
-        requireZone: "field",
         requirePhase: ["main1", "main2"],
         oncePerTurn: true,
         oncePerTurnName: "abyssal_serpent_delayed_summon",
@@ -790,9 +821,12 @@ export const dragonCards = [
     image: "assets/Purified Crystal Dragon.png",
     effects: [
       {
+
+        activationZones: ["hand"],
+
+        usagePolicy: "use",
         id: "purified_crystal_special_summon",
         timing: "ignition",
-        requireZone: "hand",
         requirePhase: ["main1", "main2"],
         oncePerTurn: true,
         oncePerTurnName: "purified_crystal_special_summon",
@@ -816,6 +850,8 @@ export const dragonCards = [
         ],
       },
       {
+
+        usagePolicy: "use",
         id: "purified_crystal_heal_on_destroy",
         timing: "on_event",
         triggerRequirement: "mandatory",
@@ -833,9 +869,12 @@ export const dragonCards = [
         ],
       },
       {
+
+        activationZones: ["field"],
+
+        usagePolicy: "use",
         id: "purified_crystal_protection",
         timing: "ignition",
-        requireZone: "field",
         requirePhase: ["main1", "main2"],
         oncePerTurn: true,
         oncePerTurnName: "purified_crystal_protection",
@@ -881,6 +920,8 @@ export const dragonCards = [
     ],
     effects: [
       {
+
+        usagePolicy: "use",
         id: "tech_void_fusion_banish_buff",
         timing: "on_event",
         triggerRequirement: "optional",
@@ -914,6 +955,8 @@ export const dragonCards = [
         ],
       },
       {
+
+        usagePolicy: "use",
         id: "tech_void_revive_voltaic",
         timing: "on_event",
         triggerRequirement: "optional",
@@ -956,6 +999,8 @@ export const dragonCards = [
     ],
     effects: [
       {
+
+        usagePolicy: "use",
         id: "radiant_cosmic_dragon_fusion_recycle_draw",
         timing: "on_event",
         triggerRequirement: "optional",
@@ -995,6 +1040,8 @@ export const dragonCards = [
         ],
       },
       {
+
+        usagePolicy: "use",
         id: "radiant_cosmic_dragon_destroyed_revive",
         timing: "on_event",
         triggerRequirement: "optional",
@@ -1052,9 +1099,12 @@ export const dragonCards = [
     image: "assets/Rainbow Cosmic Dragon.png",
     effects: [
       {
+
+        activationZones: ["field"],
+
+        usagePolicy: "activate",
         id: "rainbow_cosmic_dragon_protect_dragon",
         timing: "ignition",
-        requireZone: "field",
         requirePhase: ["main1", "main2"],
         oncePerTurn: true,
         oncePerTurnName: "rainbow_cosmic_dragon_protect_dragon",
@@ -1112,9 +1162,10 @@ export const dragonCards = [
         ],
       },
       {
+
+        activationZones: ["graveyard"],
         id: "rainbow_cosmic_dragon_gy_send_extremes",
         timing: "ignition",
-        requireZone: "graveyard",
         requirePhase: ["main1", "main2"],
         targets: [
           {
@@ -1157,6 +1208,8 @@ export const dragonCards = [
     image: "assets/Dragon Spirit Sanctuary.png",
     effects: [
       {
+
+        usagePolicy: "activate",
         id: "dragon_spirit_sanctuary_attack",
         timing: "on_event",
         triggerRequirement: "optional",
@@ -1203,6 +1256,8 @@ export const dragonCards = [
         ],
       },
       {
+
+        usagePolicy: "activate",
         id: "dragon_spirit_sanctuary_effect_targeted",
         timing: "on_event",
         triggerRequirement: "optional",
@@ -1263,9 +1318,12 @@ export const dragonCards = [
     image: "assets/Boneflame Dragon.png",
     effects: [
       {
+
+        activationZones: ["graveyard"],
+
+        usagePolicy: "activate",
         id: "boneflame_dragon_gy_revive",
         timing: "ignition",
-        requireZone: "graveyard",
         requirePhase: ["main1", "main2"],
         oncePerTurn: true,
         oncePerTurnName: "boneflame_dragon_gy_revive",
@@ -1436,6 +1494,8 @@ export const dragonCards = [
         ],
       },
       {
+
+        activationLabelKey: "effects.volcanicExtreme.burnAttacker",
         id: "volcanic_extreme_dragon_battle_burn_attacker",
         timing: "on_event",
         triggerRequirement: "mandatory",
@@ -1455,6 +1515,8 @@ export const dragonCards = [
         ],
       },
       {
+
+        activationLabelKey: "effects.volcanicExtreme.burnDefender",
         id: "volcanic_extreme_dragon_battle_burn_defender",
         timing: "on_event",
         triggerRequirement: "mandatory",
@@ -1473,9 +1535,12 @@ export const dragonCards = [
         ],
       },
       {
+
+        activationZones: ["field"],
+
+        usagePolicy: "activate",
         id: "volcanic_extreme_dragon_banish_burn",
         timing: "ignition",
-        requireZone: "field",
         requireFaceup: true,
         oncePerDuel: true,
         oncePerDuelName: "volcanic_extreme_dragon_banish_burn",
@@ -1522,9 +1587,12 @@ export const dragonCards = [
         passive: { type: "restrict_opponent_summon_turn_attack" },
       },
       {
+
+        activationZones: ["field"],
+
+        usagePolicy: "activate",
         id: "mist_extreme_dragon_bounce",
         timing: "ignition",
-        requireZone: "field",
         requireFaceup: true,
         oncePerTurn: true,
         oncePerTurnName: "mist_extreme_dragon_bounce",
@@ -1587,6 +1655,8 @@ export const dragonCards = [
         },
       },
       {
+
+        usagePolicy: "use",
         id: "galaxy_extreme_dragon_self_banish",
         oncePerDuel: true,
         oncePerDuelName: "galaxy_extreme_dragon_self_banish",
@@ -1693,11 +1763,14 @@ export const dragonCards = [
         actions: [{ type: "heal", amount: 100, player: "self" }],
       },
       {
+
+        activationZones: ["field"],
+
+        usagePolicy: "activate",
         id: "forest_extreme_dragon_lp_gain_boost",
         timing: "manual",
         speed: 2,
         isQuickEffect: true,
-        requireZone: "field",
         requireFaceup: true,
         oncePerTurn: true,
         oncePerTurnName: "forest_extreme_dragon_lp_gain_boost",
@@ -1739,11 +1812,14 @@ export const dragonCards = [
     image: "assets/Supreme Bahamut Dragon.jpg",
     effects: [
       {
+
+        activationZones: ["field"],
+
+        usagePolicy: "activate",
         id: "supreme_bahamut_dragon_negate",
         timing: "manual",
         speed: 2,
         isQuickEffect: true,
-        requireZone: "field",
         requireFaceup: true,
         oncePerTurn: true,
         oncePerTurnName: "supreme_bahamut_dragon_negate",
@@ -1818,9 +1894,12 @@ export const dragonCards = [
         actions: [],
       },
       {
+
+        activationZones: ["spellTrap"],
+
+        usagePolicy: "use",
         id: "extreme_dragon_awakening_summon",
         timing: "ignition",
-        requireZone: "spellTrap",
         requirePhase: ["main1", "main2"],
         oncePerTurn: true,
         oncePerTurnName: "extreme_dragon_awakening_summon",
@@ -1857,9 +1936,12 @@ export const dragonCards = [
         ],
       },
       {
+
+        activationZones: ["graveyard"],
+
+        usagePolicy: "use",
         id: "extreme_dragon_awakening_gy_search",
         timing: "ignition",
-        requireZone: "graveyard",
         requirePhase: ["main1", "main2"],
         oncePerTurn: true,
         oncePerTurnName: "extreme_dragon_awakening_gy_search",
@@ -1903,9 +1985,14 @@ export const dragonCards = [
     image: "assets/Stelya, Dragon Tamer.png",
     effects: [
       {
+
+        activationZones: ["hand"],
+
+        usagePolicy: "use",
+
+        activationLabelKey: "effects.stelya.summon",
         id: "stelya_hand_banish_dragon_summon",
         timing: "ignition",
-        requireZone: "hand",
         requirePhase: ["main1", "main2"],
         handModalLabelKey: "ui.summon.specialAction",
         oncePerTurn: true,
@@ -1942,9 +2029,12 @@ export const dragonCards = [
         ],
       },
       {
+
+        activationZones: ["graveyard"],
+
+        usagePolicy: "use",
         id: "stelya_graveyard_banish_dragon_summon",
         timing: "ignition",
-        requireZone: "graveyard",
         requirePhase: ["main1", "main2"],
         oncePerTurn: true,
         oncePerTurnName: "stelya_banish_dragon_summon",
@@ -1980,9 +2070,14 @@ export const dragonCards = [
         ],
       },
       {
+
+        activationZones: ["hand"],
+
+        usagePolicy: "use",
+
+        activationLabelKey: "effects.stelya.search",
         id: "stelya_discard_search_dragon",
         timing: "ignition",
-        requireZone: "hand",
         requirePhase: ["main1", "main2"],
         handModalLabelKey: "ui.summon.activateEffect",
         oncePerTurn: true,
@@ -2040,9 +2135,12 @@ export const dragonCards = [
     image: "assets/Solar Eclipse Dragon.png",
     effects: [
       {
+
+        activationZones: ["hand"],
+
+        usagePolicy: "use",
         id: "solar_eclipse_discard_summon_lunar",
         timing: "ignition",
-        requireZone: "hand",
         requirePhase: ["main1", "main2"],
         oncePerTurn: true,
         oncePerTurnName: "solar_eclipse_discard_summon_lunar",
@@ -2098,9 +2196,12 @@ export const dragonCards = [
         ],
       },
       {
+
+        activationZones: ["graveyard"],
+
+        usagePolicy: "use",
         id: "solar_eclipse_gy_revive_dragon",
         timing: "ignition",
-        requireZone: "graveyard",
         requirePhase: ["main1", "main2"],
         oncePerTurn: true,
         oncePerTurnName: "solar_eclipse_gy_revive_dragon",
@@ -2151,6 +2252,8 @@ export const dragonCards = [
     image: "assets/Lunar Eclipse Dragon.png",
     effects: [
       {
+
+        usagePolicy: "use",
         id: "lunar_eclipse_summon_search",
         timing: "on_event",
         triggerRequirement: "optional",
@@ -2264,9 +2367,12 @@ export const dragonCards = [
         ],
       },
       {
+
+        activationZones: ["graveyard"],
+
+        usagePolicy: "use",
         id: "lunar_eclipse_gy_summon_deck_dragon",
         timing: "ignition",
-        requireZone: "graveyard",
         requirePhase: ["main1", "main2"],
         oncePerTurn: true,
         oncePerTurnName: "lunar_eclipse_gy_summon_deck_dragon",

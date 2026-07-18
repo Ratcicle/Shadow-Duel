@@ -181,6 +181,9 @@ async function bounceAndSummonCard(source, target, player, action, engine, ctx =
           position,
           isFacedown: false,
           resetAttackFlags: true,
+          summonOrigin: "effect_resolution",
+          summonMethodOverride: "special",
+          summonProcedure: "card_effect",
         })
       : null;
 
@@ -296,10 +299,8 @@ export async function handleShuffleOpponentFieldToDeck(
 
   // Shuffle the opponent's deck
   if (Array.isArray(opponent.deck)) {
-    for (let i = opponent.deck.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [opponent.deck[i], opponent.deck[j]] = [opponent.deck[j], opponent.deck[i]];
-    }
+    if (typeof game.shuffle === "function") game.shuffle(opponent.deck);
+    else opponent.shuffleDeck?.();
   }
 
   getUI(game)?.log(

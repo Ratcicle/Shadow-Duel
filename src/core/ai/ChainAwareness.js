@@ -4,18 +4,75 @@
 // defensive traps, e cadeias que podem ser negadas.
 // ─────────────────────────────────────────────────────────────────────────────
 
+import { getEffectSpellSpeed } from "../chain/spellSpeed.js";
+import {
+  buildActivationQuery,
+  createSimulationLegalityAdapter,
+  listLegalActivationCandidates,
+} from "../chain/legality.js";
+
+const ACTIVATION_NEGATION_ACTIONS = new Set([
+  "negate_activation",
+  "negate_effect",
+  "negate_summon_or_activation_and_destroy",
+]);
+const ATTACK_BLOCKING_ACTIONS = new Set([
+  "negate_attack",
+  "mirror_force_destroy_all",
+  "negate_opponent_battle_destruction_prevention",
+]);
+const DAMAGE_BLOCKING_ACTIONS = new Set([
+  "prevent_damage",
+  "prevent_battle_damage",
+  "reduce_damage",
+]);
+
+function flattenActions(actions = []) {
+  const result = [];
+  for (const action of Array.isArray(actions) ? actions : []) {
+    if (!action || typeof action !== "object") continue;
+    result.push(action);
+    for (const key of ["actions", "thenActions", "elseActions"]) {
+      result.push(...flattenActions(action[key]));
+    }
+    for (const option of Array.isArray(action.cases) ? action.cases : []) {
+      result.push(...flattenActions(option?.actions));
+    }
+  }
+  return result;
+}
+
+function responseBlockingCategories(effect) {
+  const actionTypes = new Set(
+    flattenActions(effect?.actions).map((action) => action.type),
+  );
+  const contexts = new Set(effect?.canRespondTo || []);
+  const blocking = new Set();
+  if ([...ACTIVATION_NEGATION_ACTIONS].some((type) => actionTypes.has(type))) {
+    blocking.add("activation");
+  }
+  if ([...ATTACK_BLOCKING_ACTIONS].some((type) => actionTypes.has(type))) {
+    blocking.add("attack");
+  }
+  if ([...DAMAGE_BLOCKING_ACTIONS].some((type) => actionTypes.has(type))) {
+    blocking.add("damage");
+  }
+  if (contexts.has("attack_declaration")) blocking.add("attack");
+  if (contexts.has("summon_attempt")) blocking.add("summon");
+  return [...blocking];
+}
+
 /**
  * Analisa spell speed e cadeia de um efeito.
  * @param {Object} effect - Efeito a analisar
  * @returns {Object} - { spellSpeed: number, canChain: boolean, chainType: 'fast_effect'|'spell_speed_2'|'spell_speed_1'|'none' }
  */
-export function analyzeSpellSpeed(effect) {
+export function analyzeSpellSpeed(effect, card = null) {
   if (!effect) {
     return { spellSpeed: 1, canChain: false, chainType: "none" };
   }
 
-  const timing = effect.timing || "";
-  const spellSpeed = effect.spellSpeed || 1;
+  const spellSpeed = getEffectSpellSpeed(effect, card);
 
   let canChain = false;
   let chainType = "spell_speed_1";
@@ -41,35 +98,29 @@ export function analyzeDefensiveTrap(card) {
     return { isDefensiveTrap: false, blocking: [], strength: "weak" };
   }
 
-  const desc = (card.description || "").toLowerCase();
-  const blocking = [];
-  let strength = "weak";
+  const blocking = [
+    ...new Set(
+      (card.effects || []).flatMap((effect) =>
+        responseBlockingCategories(effect),
+      ),
+    ),
+  ];
+  const hasCounterSpeed = (card.effects || []).some(
+    (effect) => getEffectSpellSpeed(effect, card) >= 3,
+  );
+  const hasNegation = (card.effects || []).some((effect) =>
+    flattenActions(effect.actions).some((action) =>
+      ACTIVATION_NEGATION_ACTIONS.has(action.type),
+    ),
+  );
+  const strength =
+    hasCounterSpeed || hasNegation
+      ? "strong"
+      : blocking.length > 0
+        ? "medium"
+        : "weak";
 
   // Detecta padrões em descrição
-  if (
-    desc.includes("negate") ||
-    desc.includes("block") ||
-    desc.includes("prevent")
-  ) {
-    blocking.push("activation");
-    strength = "strong";
-  }
-
-  if (desc.includes("destroy") && desc.includes("attack")) {
-    blocking.push("attack");
-    strength = "medium";
-  }
-
-  if (desc.includes("summon") && desc.includes("block")) {
-    blocking.push("summon");
-    strength = "medium";
-  }
-
-  if (desc.includes("damage") && desc.includes("negate")) {
-    blocking.push("damage");
-    strength = "weak";
-  }
-
   return {
     isDefensiveTrap: blocking.length > 0,
     blocking,
@@ -149,58 +200,54 @@ export function detectChainableOpponentCards(gameState, opponentPlayer) {
     return { canChain: false, chainableCards: [], chainDepth: 0 };
   }
 
-  const chainableCards = [];
-
-  // Field spells e permanents com efeitos rápidos
-  if (opponentPlayer.fieldSpell) {
-    const field = opponentPlayer.fieldSpell;
-    const effects = field.effects || [];
-    for (const effect of effects) {
-      const speed = analyzeSpellSpeed(effect);
-      if (speed.canChain) {
-        chainableCards.push({
-          name: field.name,
-          type: "field_spell",
-          chainType: speed.chainType,
-        });
-      }
-    }
+  const context = gameState?.chainContext || gameState?.context || {
+    type: "effect_activation",
+  };
+  let legalCandidates = [];
+  if (typeof gameState?.chainSystem?.getActivatableCardsInChain === "function") {
+    legalCandidates = gameState.chainSystem.getActivatableCardsInChain(
+      opponentPlayer,
+      context,
+    );
+  } else {
+    const query = buildActivationQuery({
+      state: gameState,
+      player: opponentPlayer,
+      context,
+    });
+    legalCandidates = listLegalActivationCandidates(
+      query,
+      createSimulationLegalityAdapter(gameState, {
+        effectCheck: ({ card, effect }) => {
+          const spellSpeed = getEffectSpellSpeed(effect, card);
+          const responseContexts = Array.isArray(effect.canRespondTo)
+            ? effect.canRespondTo
+            : [];
+          return (
+            spellSpeed >= 2 &&
+            (responseContexts.length === 0 ||
+              responseContexts.includes(context.type))
+          );
+        },
+      }),
+    );
   }
-
-  // Monstros com efeitos rápidos
-  for (const monster of opponentPlayer.field || []) {
-    if (!monster) continue;
-    const effects = monster.effects || [];
-    for (const effect of effects) {
-      const speed = analyzeSpellSpeed(effect);
-      if (speed.canChain && effect.timing === "on_event") {
-        chainableCards.push({
-          name: monster.name,
-          type: "monster",
-          chainType: speed.chainType,
-          event: effect.event,
-        });
-      }
-    }
-  }
-
-  // Spells/Traps set
-  for (const card of opponentPlayer.spellTrap || []) {
-    if (!card) continue;
-    const trap = analyzeDefensiveTrap(card);
-    if (trap.isDefensiveTrap) {
-      chainableCards.push({
-        name: card.name,
-        type: card.cardKind === "spell" ? "quick_play" : "trap",
-        strength: trap.strength,
-      });
-    }
-  }
-
+  const canonicalCards = legalCandidates.map((candidate) => ({
+    candidateKey: candidate.candidateKey,
+    effectId: candidate.effectId,
+    name: candidate.card?.name || null,
+    type:
+      candidate.card?.cardKind === "spell"
+        ? "quick_play"
+        : candidate.card?.cardKind || "effect",
+    chainType: analyzeSpellSpeed(candidate.effect, candidate.card).chainType,
+    spellSpeed: candidate.spellSpeed,
+    blocking: responseBlockingCategories(candidate.effect),
+  }));
   return {
-    canChain: chainableCards.length > 0,
-    chainableCards,
-    chainDepth: Math.min(3, chainableCards.length), // Estimar profundidade máxima
+    canChain: canonicalCards.length > 0,
+    chainableCards: canonicalCards,
+    chainDepth: Math.min(3, canonicalCards.length),
   };
 }
 

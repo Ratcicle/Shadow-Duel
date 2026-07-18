@@ -1488,7 +1488,7 @@ export default class MirageboundStrategy extends BaseStrategy {
   } = {}) {
     if (!sourceCard || !player || !game) return null;
     const analysis = this.analyzeGameState(game);
-    const zone = activationZone || effect?.requireZone || "field";
+    const zone = activationZone || effect?.activationZones?.[0] || "field";
     return buildMirageboundActivationContext(sourceCard, analysis, {
       zone,
       activationZone: zone,

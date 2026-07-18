@@ -54,6 +54,15 @@ export function createCardForOwner(identifier, owner, overrides = {}) {
   if (!data) return null;
 
   const card = new Card(data, player.id);
+  if (Number.isInteger(overrides.duelCardId)) {
+    card.duelCardId = overrides.duelCardId;
+    this.nextDuelCardId = Math.max(
+      Number(this.nextDuelCardId || 1),
+      overrides.duelCardId + 1,
+    );
+  } else {
+    this.ensureDuelCardId?.(card);
+  }
   if (overrides.position) {
     card.position = overrides.position === "defense" ? "defense" : "attack";
   }

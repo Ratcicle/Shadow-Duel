@@ -64,22 +64,33 @@ export function resetDuelState(reason = "reset", options = {}) {
   this.turn = turn;
   this.phase = phase;
   this.turnCounter = turnCounter;
+  this.nextDuelCardId = 1;
+  this.generatedIdCounters?.clear?.();
   this.gameOver = false;
   this.winner = null;
   this.disposeReason = null;
 
   this.targetSelection = null;
   this.selectionState = "idle";
+  this.pendingReplayDecisionPromise = null;
+  this._activeDeferredReplayCommandDescriptor = null;
   this.graveyardSelection = null;
   this.selectionSessionCounter = 0;
   this.lastSelectionSessionId = 0;
   this.pendingSpecialSummon = null;
+  this.cleanupDamageStepTransaction?.(reason);
+  this.cleanupSummonTransaction?.(reason);
+  this.activeDamageStepTransaction = null;
+  this.lastDamageStepTransaction = null;
+  this.damageStepProcedureDepth = 0;
+  this.activeSummonTransaction = null;
+  this.lastSummonTransaction = null;
+  this.summonProcedureDepth = 0;
   this.pendingTributeSummonSelection = null;
   this.pendingEventSelection = null;
   this.pendingTriggerSelection = null;
   this.pendingChainEvents = [];
-  this._flushingPendingChainEvents = false;
-  this.pendingBattleDestroyAfterSelection = null;
+  this._flushingPendingTriggerOccurrences = false;
   this.isResolvingEffect = false;
   this.eventResolutionDepth = 0;
   this.eventResolutionCounter = 0;
@@ -91,6 +102,7 @@ export function resetDuelState(reason = "reset", options = {}) {
   this.synchroSummonContextCounter = 0;
   this.delayedActions = [];
   this.damageCalculationTempBuffs = [];
+  this.endOfDamageStepTempBuffs = [];
   this.damageCalculationStatChangePending = false;
 
   this.lastAttackNegated = false;
@@ -104,6 +116,7 @@ export function resetDuelState(reason = "reset", options = {}) {
 
   this.oncePerTurnUsage = createOncePerTurnUsage();
   this.oncePerTurnTurnCounter = this.turnCounter;
+  this.releaseEffectUsageReservations?.(reason);
   this.specialSummonTypeCounts = createSpecialSummonTypeCounts();
   this._normalDuelStrategic = null;
 

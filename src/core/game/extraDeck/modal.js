@@ -8,6 +8,10 @@
  */
 
 import { isAI } from "../../Player.js";
+import {
+  SUMMON_MODES,
+  SUMMON_ORIGINS,
+} from "../summon/transaction.js";
 
 const SUPPORTED_PROCEDURE_TYPES = new Set([
   "graveyard_banish_fusion",
@@ -550,38 +554,57 @@ export async function performExtraDeckSummonProcedure(cardOrIndex, player, optio
     return { success: false, reason: "invalid_materials" };
   }
 
-  for (const material of materials) {
-    const materialEntry = check.materialEntries?.find(
-      (entry) => entry.card === material,
-    );
-    const materialDestination = getDefaultMaterialDestination(procedure);
-    const moveResult = await this.moveCard(material, player, materialDestination, {
-      fromZone: materialEntry?.zone || getDefaultMaterialSourceZone(procedure),
-      contextLabel: "extra_deck_summon_material",
-      awaitCardToGraveEvent: materialDestination === "graveyard",
-    });
-    if (moveResult?.success === false) {
-      return moveResult;
-    }
-  }
-
   const position = options.position || "attack";
-  const result = await this.moveCard(card, player, "field", {
-    fromZone: "extraDeck",
-    position,
-    isFacedown: false,
-    resetAttackFlags: true,
-    summonMethodOverride: procedure.summonMethod || "fusion",
+  const prepared = this.createPreparedSummon({
+    card,
+    controller: player,
+    sourceZone: "extraDeck",
+    summonOrigin: SUMMON_ORIGINS.PROCEDURE,
+    summonMode: SUMMON_MODES.SUMMON,
+    summonMethod: procedure.summonMethod || "fusion",
     summonProcedure: procedure.type,
-    contextLabel: "extra_deck_summon_procedure",
+    position,
+    costPayments: materials.map((material) => {
+      const materialEntry = check.materialEntries?.find(
+        (entry) => entry.card === material,
+      );
+      const materialDestination = getDefaultMaterialDestination(procedure);
+      return {
+        card: material,
+        owner: player,
+        fromZone:
+          materialEntry?.zone || getDefaultMaterialSourceZone(procedure),
+        toZone: materialDestination,
+        kind: "extra_deck_material",
+        contextLabel: "extra_deck_summon_material",
+        options: {
+          awaitCardToGraveEvent: materialDestination === "graveyard",
+          awaitCardMovedEvent: true,
+        },
+      };
+    }),
+    perform: async (transaction) =>
+      await this.moveCard(card, player, "field", {
+        fromZone: "extraDeck",
+        position,
+        isFacedown: false,
+        resetAttackFlags: true,
+        summonMethodOverride: procedure.summonMethod || "fusion",
+        summonProcedure: procedure.type,
+        summonOrigin: SUMMON_ORIGINS.PROCEDURE,
+        summonTransaction: transaction,
+        contextLabel: "extra_deck_summon_procedure",
+        awaitCardMovedEvent: true,
+      }),
   });
+  const result = await this.executeSummonTransaction(prepared);
   if (result?.success === false) {
     return result;
   }
   this.closeExtraDeckModal?.();
   this.ui?.log?.(`${card.name} was Fusion Summoned.`);
   this.updateBoard?.();
-  return { success: true };
+  return { ...result, success: true };
 }
 
 export async function performAscensionSummonFromExtraDeck(

@@ -20,6 +20,12 @@ const DEFAULT_LOCALE_TEXTS = {
       addToHand: "Add to Hand",
     },
     lp: "{amount} LP",
+    priority: {
+      owner: "Priority: {owner}",
+      you: "You",
+      opponent: "Opponent",
+      resolving: "Resolving Chain",
+    },
     selection: {
       cardFallback: "Card",
       effectLabel: "effect",
@@ -319,6 +325,46 @@ const DEFAULT_LOCALE_TEXTS = {
       extraDeckCopyLimit: "Only 1 copy of each Extra Deck monster per id.",
       deckSizeError: "The deck must have between {min} and {max} cards.",
       botStatus: "Bot: {label}",
+    },
+  },
+  effects: {
+    hyperion: { attackBoost: "ATK boost", defenseBoost: "DEF boost" },
+    arctroth: {
+      attackRemoval: "Remove boosts while attacking",
+      defenseRemoval: "Remove boosts while defending",
+    },
+    leviathan: {
+      burnAttacker: "Damage the attacker",
+      burnDestroyed: "Damage after destruction",
+    },
+    radiantLancer: {
+      attackBoost: "Gain ATK",
+      destroySpellTrap: "Destroy a Spell/Trap",
+    },
+    volcanicExtreme: {
+      burnAttacker: "Battle damage as attacker",
+      burnDefender: "Battle damage as defender",
+    },
+    stelya: { summon: "Special Summon a Dragon", search: "Search a Dragon" },
+    inkRiver: {
+      normalSpell: "Counter a Normal Spell",
+      fieldSpell: "Counter a Field Spell effect",
+    },
+    rotStag: {
+      attackBoost: "Attacking boost",
+      defenseBoost: "Defending boost",
+    },
+    butcher: {
+      searchMonster: "Search a monster",
+      followupSearch: "Follow-up search",
+    },
+    ghostSamurai: {
+      attackBoost: "Boost while attacking",
+      defenseBoost: "Boost while defending",
+    },
+    voidAberration: {
+      graveBuff: "Void sent to the GY",
+      fieldDestroy: "Sent from the field",
     },
   },
   effectChoices: {

@@ -44,11 +44,50 @@ const VALID_ACTIVATION_ZONES = new Set([
   "banished",
 ]);
 const VALID_USAGE_POLICIES = new Set(["use", "activate"]);
+const VALID_DAMAGE_STEP_TIMINGS = new Set([
+  "start_of_damage_step",
+  "before_damage_calculation",
+  "damage_calculation",
+  "after_damage_calculation",
+  "end_of_damage_step",
+]);
+
+function flattenActions(actions = []) {
+  const flattened = [];
+  for (const action of Array.isArray(actions) ? actions : []) {
+    if (!action || typeof action !== "object") continue;
+    flattened.push(action);
+    for (const key of ["actions", "thenActions", "elseActions"]) {
+      flattened.push(...flattenActions(action[key]));
+    }
+    for (const option of Array.isArray(action.cases) ? action.cases : []) {
+      flattened.push(...flattenActions(option?.actions));
+    }
+  }
+  return flattened;
+}
+
+function activationCollisionKey(effect) {
+  if (!effect || effect.timing === "passive") return null;
+  if (effect.timing === "on_event") {
+    return `trigger:${effect.event || "unknown"}`;
+  }
+  if (effect.timing === "ignition" || effect.timing === "manual") {
+    const zones = Array.isArray(effect.activationZones)
+      ? [...effect.activationZones].sort().join(",")
+      : effect.requireZone || "unknown";
+    return `manual:${effect.timing}:${zones}`;
+  }
+  return null;
+}
 
 const VALID_EVENTS = new Set([
   "after_summon",
   "battle_destroy",
   "battle_completed",
+  "damage_step",
+  "card_flipped",
+  "battle_damage_inflicted",
   "card_to_grave",
   "card_moved",
   "counter_removed",
@@ -464,6 +503,67 @@ export function validateCardDatabase() {
           ),
         );
       }
+
+      if (effect.damageStepTimings !== undefined) {
+        const damageStepTimings = effect.damageStepTimings;
+        if (
+          !Array.isArray(damageStepTimings) ||
+          damageStepTimings.length === 0
+        ) {
+          errors.push(
+            formatIssue(
+              card,
+              "damageStepTimings must be a non-empty array when defined.",
+              effectIndex,
+              null,
+            ),
+          );
+        } else {
+          const uniqueTimings = new Set(damageStepTimings);
+          if (uniqueTimings.size !== damageStepTimings.length) {
+            errors.push(
+              formatIssue(
+                card,
+                "damageStepTimings must not contain duplicate values.",
+                effectIndex,
+                null,
+              ),
+            );
+          }
+          for (const timing of uniqueTimings) {
+            if (!VALID_DAMAGE_STEP_TIMINGS.has(timing)) {
+              errors.push(
+                formatIssue(
+                  card,
+                  `Invalid Damage Step timing "${timing}".`,
+                  effectIndex,
+                  null,
+                ),
+              );
+            }
+          }
+        }
+      }
+      if (effect.allowDamageStepActivation !== undefined) {
+        errors.push(
+          formatIssue(
+            card,
+            '"allowDamageStepActivation" is forbidden in card data; declare "damageStepTimings".',
+            effectIndex,
+            null,
+          ),
+        );
+      }
+      if (effect.manualActivationOnly !== undefined) {
+        errors.push(
+          formatIssue(
+            card,
+            '"manualActivationOnly" was removed; declare timing and activationZones explicitly.',
+            effectIndex,
+            null,
+          ),
+        );
+      }
       if (effect.activationZones !== undefined) {
         if (
           !Array.isArray(effect.activationZones) ||
@@ -501,20 +601,34 @@ export function validateCardDatabase() {
               );
             }
           }
-          if (
-            effect.requireZone &&
-            !uniqueZones.has(effect.requireZone)
-          ) {
-            errors.push(
-              formatIssue(
-                card,
-                '"requireZone" must be included in "activationZones" when both are declared.',
-                effectIndex,
-                null,
-              ),
-            );
-          }
         }
+      }
+      if (
+        (effect.timing === "ignition" || effect.timing === "manual") &&
+        effect.requireZone !== undefined
+      ) {
+        errors.push(
+          formatIssue(
+            card,
+            'Ignition/manual effects must use "activationZones" instead of "requireZone".',
+            effectIndex,
+            null,
+          ),
+        );
+      }
+      if (
+        (effect.timing === "ignition" || effect.timing === "manual") &&
+        (!Array.isArray(effect.activationZones) ||
+          effect.activationZones.length === 0)
+      ) {
+        errors.push(
+          formatIssue(
+            card,
+            `Effect with timing "${effect.timing}" must declare activationZones.`,
+            effectIndex,
+            null,
+          ),
+        );
       }
       if (
         effect.usagePolicy !== undefined &&
@@ -524,6 +638,59 @@ export function validateCardDatabase() {
           formatIssue(
             card,
             'Effect "usagePolicy" must be "use" or "activate".',
+            effectIndex,
+            null,
+          ),
+        );
+      }
+      if (
+        (effect.oncePerTurn === true || effect.oncePerDuel) &&
+        !VALID_USAGE_POLICIES.has(effect.usagePolicy)
+      ) {
+        errors.push(
+          formatIssue(
+            card,
+            "Every oncePerTurn/oncePerDuel effect must declare usagePolicy.",
+            effectIndex,
+            null,
+          ),
+        );
+      }
+      if (
+        effect.activationLabelKey !== undefined &&
+        (typeof effect.activationLabelKey !== "string" ||
+          effect.activationLabelKey.trim() === "")
+      ) {
+        errors.push(
+          formatIssue(
+            card,
+            'Effect "activationLabelKey" must be a non-empty i18n key.',
+            effectIndex,
+            null,
+          ),
+        );
+      }
+
+      const actionTypes = new Set(
+        flattenActions(effect.actions).map((action) => action.type),
+      );
+      const responseContexts = new Set(
+        Array.isArray(effect.canRespondTo)
+          ? effect.canRespondTo
+          : effect.canRespondTo
+            ? [effect.canRespondTo]
+            : [],
+      );
+      if (
+        (actionTypes.has("negate_activation") ||
+          actionTypes.has("negate_effect")) &&
+        !responseContexts.has("card_activation") &&
+        !responseContexts.has("effect_activation")
+      ) {
+        errors.push(
+          formatIssue(
+            card,
+            "Activation/effect negation must declare a card_activation or effect_activation response context.",
             effectIndex,
             null,
           ),
@@ -633,6 +800,24 @@ export function validateCardDatabase() {
           return;
         }
 
+        if (
+          stage === "resolution" &&
+          (action.activationStage === "cost" ||
+            action.stage === "cost" ||
+            action.type === "pay_lp" ||
+            costTargetIds.has(action.targetRef) ||
+            /(^|_)cost($|_)/i.test(String(action.contextLabel || "")))
+        ) {
+          errors.push(
+            formatIssue(
+              card,
+              'Activation costs must be declared in "activationCosts", never inferred from resolution actions.',
+              effectIndex,
+              actionIndex,
+            ),
+          );
+        }
+
         if (!allowedActionTypes.has(action.type)) {
           errors.push(
             formatIssue(
@@ -723,6 +908,30 @@ export function validateCardDatabase() {
         }
       });
     });
+
+    const collisions = new Map();
+    for (const effect of effects) {
+      const key = activationCollisionKey(effect);
+      if (!key) continue;
+      const group = collisions.get(key) || [];
+      group.push(effect);
+      collisions.set(key, group);
+    }
+    for (const group of collisions.values()) {
+      if (group.length < 2) continue;
+      for (const effect of group) {
+        if (typeof effect.activationLabelKey === "string") continue;
+        const effectIndex = effects.indexOf(effect);
+        errors.push(
+          formatIssue(
+            card,
+            `Simultaneous candidate "${effect.id || effectIndex}" must declare activationLabelKey.`,
+            effectIndex,
+            null,
+          ),
+        );
+      }
+    }
   }
 
   return { errors, warnings, idGovernance: idGovernance.summary };

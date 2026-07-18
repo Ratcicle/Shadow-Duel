@@ -1,3 +1,5 @@
+import { getUIText } from "../../core/i18n.js";
+
 /**
  * Log and status methods for Renderer
  * Handles: log, updateTurn, updatePhaseTrack, updateLP
@@ -69,6 +71,39 @@ export function updatePhaseTrack(currentPhase, game = null) {
       li.classList.add("done");
     }
   });
+}
+
+/**
+ * Non-blocking Fast Effect priority status. It mirrors canonical timing state
+ * and never opens or closes a response window itself.
+ * @this {import('../Renderer.js').default}
+ */
+export function updatePriorityIndicator(state = null) {
+  const element = this.elements.priorityIndicator;
+  if (!element) return;
+  if (!state) {
+    element.textContent = "";
+    element.classList.remove("visible", "resolving");
+    return;
+  }
+
+  const resolving = state.state === "resolving_chain";
+  const priorityPlayerId =
+    state.priorityPlayerId ||
+    (state.state === "open" ? state.turnPlayerId : null);
+  if (resolving) {
+    element.textContent = getUIText("ui.priority.resolving");
+  } else if (priorityPlayerId) {
+    const owner =
+      priorityPlayerId === "player"
+        ? getUIText("ui.priority.you")
+        : getUIText("ui.priority.opponent");
+    element.textContent = getUIText("ui.priority.owner", { owner });
+  } else {
+    element.textContent = "";
+  }
+  element.classList.toggle("visible", element.textContent.length > 0);
+  element.classList.toggle("resolving", resolving);
 }
 
 /**

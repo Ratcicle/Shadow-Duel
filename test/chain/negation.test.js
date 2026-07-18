@@ -19,7 +19,7 @@ function addMonsterEffectLink(chain, player, name, effectId) {
   return chain.addToChain(
     chain.createPreparedActivation({
       card: createTestCard({ name }),
-      player,
+      controller: player,
       effect: createTestEffect({ id: effectId, speed: 2, isQuickEffect: true }),
       activationZone: "field",
       committed: true,
@@ -88,7 +88,7 @@ test("[CS-06] destruir a fonte não nega implicitamente o elo", async () => {
   const link = chain.addToChain(
     chain.createPreparedActivation({
       card: source,
-      player,
+      controller: player,
       effect: createTestEffect({ id: "source_effect", speed: 2 }),
       activationZone: "field",
       committed: true,
@@ -117,7 +117,7 @@ test("[CS-06] efeito de monstro sob Skill Drain pode ser ativado e resolve negad
     timing: "manual",
     speed: 2,
     isQuickEffect: true,
-    requireZone: "field",
+    activationZones: ["field"],
     actions: [{ type: "must_not_apply" }],
   });
   const source = createTestCard({
@@ -141,7 +141,7 @@ test("[CS-06] efeito de monstro sob Skill Drain pode ser ativado e resolve negad
   const link = chain.addToChain(
     chain.createPreparedActivation({
       card: source,
-      player,
+      controller: player,
       effect,
       activationZone: "field",
       committed: true,
@@ -184,7 +184,7 @@ test("[CS-06] Spell/Trap cuja ativação foi negada recebe o destino correto", a
       const link = chain.addToChain(
         chain.createPreparedActivation({
           card,
-          player,
+          controller: player,
           effect: createTestEffect({
             id: `negated_${cardKind}_${subtype}`,
             speed: subtype === "counter" ? 3 : 2,
@@ -238,7 +238,7 @@ test("[CS-12] limite use e limite activate divergem quando a ativação é negad
   const useLink = chain.addToChain(
     chain.createPreparedActivation({
       card: useCard,
-      player,
+      controller: player,
       effect: useEffect,
       activationZone: "field",
       committed: true,
@@ -248,7 +248,7 @@ test("[CS-12] limite use e limite activate divergem quando a ativação é negad
   const activateLink = chain.addToChain(
     chain.createPreparedActivation({
       card: activateCard,
-      player,
+      controller: player,
       effect: activateEffect,
       activationZone: "field",
       committed: true,
@@ -288,7 +288,7 @@ test("limite activate permanece consumido se apenas o efeito for negado", () => 
   const link = chain.addToChain(
     chain.createPreparedActivation({
       card,
-      player,
+      controller: player,
       effect,
       activationZone: "field",
       committed: true,
@@ -317,7 +317,7 @@ test("resolução registra uma política explícita exatamente uma vez", async (
   const link = chain.addToChain(
     chain.createPreparedActivation({
       card,
-      player,
+      controller: player,
       effect,
       activationZone: "field",
       committed: true,
@@ -357,7 +357,7 @@ test("resolução sem efeito não libera uma reserva activate", async () => {
   const link = chain.addToChain(
     chain.createPreparedActivation({
       card,
-      player,
+      controller: player,
       effect,
       activationZone: "field",
       committed: true,
@@ -389,7 +389,7 @@ test("reserva activate cobre limites maiores e oncePerDuel", () => {
     const link = chain.addToChain(
         chain.createPreparedActivation({
           card,
-          player,
+          controller: player,
           effect,
           activationZone: "field",
           committed: true,
@@ -405,7 +405,7 @@ test("reserva activate cobre limites maiores e oncePerDuel", () => {
     chain.addToChain(
       chain.createPreparedActivation({
         card: thirdCard,
-        player,
+        controller: player,
         effect,
         activationZone: "field",
         committed: true,
@@ -445,7 +445,7 @@ test("fonte nao persistente movida antes da resolucao ainda aplica o efeito", as
   const link = chain.addToChain(
     chain.createPreparedActivation({
       card,
-      player,
+      controller: player,
       effect,
       activationZone: "spellTrap",
       activationContext: { sourceZone: "hand", fromHand: true },
@@ -499,7 +499,7 @@ test("fonte persistente precisa permanecer face-up na mesma localizacao", async 
       const link = chain.addToChain(
         chain.createPreparedActivation({
           card,
-          player,
+          controller: player,
           effect: createTestEffect({
             id: `persistent_${entry.subtype}`,
             actions: [{ type: "must_not_apply" }],
@@ -546,7 +546,7 @@ test("monstro deixa o campo antes da resolucao e escapa da negacao continua", as
     timing: "manual",
     speed: 2,
     isQuickEffect: true,
-    requireZone: "field",
+    activationZones: ["field"],
     actions: [{ type: "draw", amount: 1 }],
   });
   const card = createTestCard({
@@ -559,7 +559,7 @@ test("monstro deixa o campo antes da resolucao e escapa da negacao continua", as
   const link = chain.addToChain(
     chain.createPreparedActivation({
       card,
-      player,
+      controller: player,
       effect,
       activationZone: "field",
       committed: true,
@@ -589,7 +589,7 @@ test("negar somente o efeito mantem a ativacao e executa o cleanup normal", asyn
   const link = chain.addToChain(
     chain.createPreparedActivation({
       card,
-      player,
+      controller: player,
       effect: createTestEffect({
         id: "effect_negated_spell",
         actions: [{ type: "must_not_apply" }],

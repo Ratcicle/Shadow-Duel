@@ -245,7 +245,7 @@ function canUseSpellTrapIgnitionForInkCounter(card, analysis = {}) {
     (effect) =>
       effect &&
       effect.timing === "ignition" &&
-      (!effect.requireZone || effect.requireZone === "spellTrap"),
+      effect.activationZones?.includes("spellTrap"),
   );
   if (!hasIgnition) return false;
 

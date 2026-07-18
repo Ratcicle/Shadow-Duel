@@ -537,9 +537,12 @@ export const genericCards = [
         ],
       },
       {
+
+        activationZones: ["spellTrap"],
+
+        usagePolicy: "activate",
         id: "court_of_the_dead_revive",
         timing: "ignition",
-        requireZone: "spellTrap",
         requireFaceup: true,
         requirePhase: ["main1", "main2"],
         oncePerTurn: true,
@@ -626,6 +629,8 @@ export const genericCards = [
     image: "assets/De-Synchro.png",
     effects: [
       {
+
+        usagePolicy: "activate",
         id: "de_synchro_activation",
         timing: "on_play",
         speed: 1,
@@ -664,6 +669,8 @@ export const genericCards = [
     image: "assets/Fusion Recycle.png",
     effects: [
       {
+
+        usagePolicy: "activate",
         id: "fusion_recycle_activation",
         timing: "on_play",
         speed: 1,
@@ -802,6 +809,8 @@ export const genericCards = [
     image: "assets/Desperate Gamble.png",
     effects: [
       {
+
+        usagePolicy: "activate",
         id: "desperate_gamble_activation",
         timing: "on_play",
         speed: 1,
@@ -844,11 +853,12 @@ export const genericCards = [
     image: "assets/Guardian Deity Visas.png",
     effects: [
       {
+
+        activationZones: ["hand"],
         id: "guardian_deity_visas_hand_negate_banish",
         timing: "manual",
         speed: 2,
         isQuickEffect: true,
-        requireZone: "hand",
         canRespondTo: ["card_activation", "effect_activation"],
         oncePerTurn: true,
         oncePerTurnName: "guardian_deity_visas",
@@ -870,7 +880,7 @@ export const genericCards = [
             position: "choice",
             haltOnFailure: true,
           },
-          { type: "negate_activation" },
+          { type: "negate_effect" },
         ],
       },
     ],
@@ -889,9 +899,10 @@ export const genericCards = [
     image: "assets/Luminous God Hyperion.png",
     effects: [
       {
+
+        activationZones: ["hand"],
         id: "luminous_god_hyperion_special_summon",
         timing: "ignition",
-        requireZone: "hand",
         requirePhase: ["main1", "main2"],
         targets: [
           {
@@ -954,6 +965,8 @@ export const genericCards = [
         ],
       },
       {
+
+        activationLabelKey: "effects.hyperion.attackBoost",
         id: "luminous_god_hyperion_attack_dark_boost",
         timing: "on_event",
         triggerRequirement: "mandatory",
@@ -984,6 +997,8 @@ export const genericCards = [
         ],
       },
       {
+
+        activationLabelKey: "effects.hyperion.defenseBoost",
         id: "luminous_god_hyperion_defense_dark_boost",
         timing: "on_event",
         triggerRequirement: "mandatory",
@@ -1025,6 +1040,8 @@ export const genericCards = [
     image: "assets/Battle Between Good and Evil.png",
     effects: [
       {
+
+        usagePolicy: "activate",
         id: "battle_between_good_and_evil_activation",
         timing: "on_play",
         speed: 1,
@@ -1077,6 +1094,8 @@ export const genericCards = [
     image: "assets/Misty Katana Ghost Samurai.png",
     effects: [
       {
+
+        usagePolicy: "use",
         id: "misty_katana_ghost_samurai_send_tuner",
         timing: "on_event",
         triggerRequirement: "optional",
@@ -1111,9 +1130,12 @@ export const genericCards = [
         ],
       },
       {
+
+        activationZones: ["graveyard"],
+
+        usagePolicy: "use",
         id: "misty_katana_ghost_samurai_revive_tuner",
         timing: "ignition",
-        requireZone: "graveyard",
         requirePhase: ["main1", "main2"],
         oncePerTurn: true,
         oncePerTurnName: "misty_katana_ghost_samurai_revive_tuner",

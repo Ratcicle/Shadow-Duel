@@ -1,3 +1,8 @@
+import {
+  SUMMON_MODES,
+  SUMMON_ORIGINS,
+} from "../../game/summon/transaction.js";
+
 export async function executeSpecialSummonSanctumProtectorAction(bot, game, action) {
   const resolvedIndex = bot.resolveHandIndexForAction(action, "monster");
   if (resolvedIndex < 0) {
@@ -34,41 +39,48 @@ export async function executeSpecialSummonSanctumProtectorAction(bot, game, acti
     return false;
   }
 
-  const sendResult = await game.moveCard(material, bot, "graveyard", {
-    fromZone: "field",
-    contextLabel: "sanctum_protector_cost",
-  });
-  if (sendResult?.success === false) {
-    console.log(
-      `[Bot.executeMainPhaseAction] Sanctum Protector cost failed:`,
-      sendResult?.reason,
-    );
-    return false;
-  }
-
   const position = action.position === "attack" ? "attack" : "defense";
-  const summonResult = await game.moveCard(card, bot, "field", {
-    fromZone: "hand",
+  const prepared = game.createPreparedSummon({
+    card,
+    controller: bot,
+    sourceZone: "hand",
+    summonOrigin: SUMMON_ORIGINS.EFFECT_RESOLUTION,
+    summonMode: SUMMON_MODES.SUMMON,
+    summonMethod: "special",
+    summonProcedure: "card_effect",
     position,
-    isFacedown: false,
-    resetAttackFlags: true,
-    contextLabel: "sanctum_protector_special",
+    costPayments: [
+      {
+        card: material,
+        owner: bot,
+        fromZone: "field",
+        toZone: "graveyard",
+        kind: "effect_cost",
+        contextLabel: "sanctum_protector_cost",
+      },
+    ],
+    perform: async (transaction) =>
+      await game.moveCard(card, bot, "field", {
+        fromZone: "hand",
+        position,
+        isFacedown: false,
+        resetAttackFlags: true,
+        summonOrigin: SUMMON_ORIGINS.EFFECT_RESOLUTION,
+        summonMethodOverride: "special",
+        summonProcedure: "card_effect",
+        summonTransaction: transaction,
+        sourceCard: card,
+        effectId: "luminarch_sanctum_protector_special_summon_hand",
+        contextLabel: "sanctum_protector_special",
+      }),
   });
-  if (summonResult?.success === false) {
+  const summonResult = await game.executeSummonTransaction(prepared);
+  if (summonResult?.success !== true) {
     console.log(
       `[Bot.executeMainPhaseAction] Sanctum Protector summon failed:`,
       summonResult?.reason,
     );
     return false;
-  }
-
-  if (game && typeof game.emit === "function") {
-    await game.emit("after_summon", {
-      card,
-      player: bot,
-      method: "special",
-      fromZone: "hand",
-    });
   }
 
   game.ui?.log(
@@ -132,10 +144,8 @@ export async function executeSummonAction(bot, game, action) {
     action.facedown,
     tributeIndices,
   );
-  if (summonResult) {
-    // Handle both old (card) and new ({card, tributes}) return formats
-    const card = summonResult.card || summonResult;
-    const tributes = summonResult.tributes || [];
+  if (summonResult?.success === true) {
+    const card = summonResult.card;
 
     game.ui?.log(
       `Bot summons ${action.facedown ? "a monster in defense" : card.name}`,
@@ -150,18 +160,6 @@ export async function executeSummonAction(bot, game, action) {
       typeof game?.waitForAiPresentationStep === "function"
     ) {
       await game.waitForAiPresentationStep(bot);
-    }
-
-    // Emit after_summon event for trigger effects (e.g., Void Mage search)
-    // Only trigger if summoned face-up (facedown set doesn't trigger "when Normal Summoned" effects)
-    if (!isFacedownSet && game && typeof game.emit === "function") {
-      await game.emit("after_summon", {
-        card,
-        player: bot,
-        method: tributeInfo.tributesNeeded > 0 ? "tribute" : "normal",
-        fromZone: "hand",
-        tributes: tributes,
-      });
     }
 
     game.updateBoard();

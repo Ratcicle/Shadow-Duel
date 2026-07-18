@@ -1214,6 +1214,19 @@ export function showTriggerOrderModal(options = {}) {
         if (selectedIndex >= 0) item.classList.add("selected");
         item.appendChild(renderCompactSelectionCard(card));
 
+        const effectLabel = document.createElement("div");
+        effectLabel.className = "trigger-order-effect-label";
+        effectLabel.textContent = candidate.effect?.activationLabelKey
+          ? getUIText(
+              candidate.effect.activationLabelKey,
+              {},
+              getUIText("ui.selection.effectLabel"),
+            )
+          : candidate.effect?.activationLabel ||
+            candidate.effect?.promptMessage ||
+            getUIText("ui.selection.effectLabel");
+        item.appendChild(effectLabel);
+
         const badge = document.createElement("span");
         badge.className = "trigger-order-badge";
         badge.textContent =

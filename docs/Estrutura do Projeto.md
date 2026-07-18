@@ -219,10 +219,17 @@ Camada compartilhada entre estratégias. Módulos atuais:
 | [contexts.js](../src/core/chain/contexts.js) | Definição dos contextos/janelas de Chain. |
 | [spellSpeed.js](../src/core/chain/spellSpeed.js) | Regras de Spell Speed e checagem de ativação em Chain. |
 | [stack.js](../src/core/chain/stack.js) | Pilha LIFO, links e consultas de estado da Chain. |
+| [link.js](../src/core/chain/link.js) | Factory, classificação, snapshots, IDs e serialização canônica de Chain Links. |
 | [resolution.js](../src/core/chain/resolution.js) | Preparação, resolução e cleanup de links. |
+| [activation.js](../src/core/chain/activation.js) | Transação de ativação: compromisso da fonte, custos, alvos e publicação. |
 | [activationDiscovery.js](../src/core/chain/activationDiscovery.js) | Descoberta de cartas/effects ativáveis em uma janela. |
+| [legality.js](../src/core/chain/legality.js) | Consulta compartilhada de legalidade para runtime, IA e simulação. |
 | [effectMatching.js](../src/core/chain/effectMatching.js) | Compatibilidade entre efeito, evento e contexto de Chain. |
 | [responseWindow.js](../src/core/chain/responseWindow.js) | Abertura e controle de janelas de resposta. |
+| [timing.js](../src/core/chain/timing.js) | Máquina canônica de Fast Effect Timing e prioridade. |
+| [segoc.js](../src/core/chain/segoc.js) | Coleta, ordenação e publicação de triggers simultâneos. |
+| [usage.js](../src/core/chain/usage.js) | Reservas e consumo das políticas `use` e `activate`. |
+| [finalization.js](../src/core/chain/finalization.js) | Destino e cleanup pós-Chain de Spell/Trap. |
 | [playerResponse.js](../src/core/chain/playerResponse.js) | Respostas humanas e coleta de decisões. |
 | [botResponsePolicy.js](../src/core/chain/botResponsePolicy.js) | Política de resposta para IA. |
 | [selection.js](../src/core/chain/selection.js) | Seleção de alvos/efeitos dentro da Chain. |
@@ -264,19 +271,20 @@ Coletores por evento que alimentam os triggers declarativos:
 |---|---|
 | [actions/](../src/core/game/actions/) | `guard.js` - validação antes de iniciar ações. |
 | [analytics/](../src/core/game/analytics/) | `strategicReport.js` - ciclo de vida do Strategic Report. |
-| [combat/](../src/core/game/combat/) | `availability.js`, `damage.js`, `indicators.js`, `resolution.js`, `targeting.js`. |
+| [combat/](../src/core/game/combat/) | Combate e transação canônica das cinco subetapas em `damageStep.js`. |
+| [decisions/](../src/core/game/decisions/) | `DecisionBroker` compartilhado por humano, IA e replay. |
 | [deck/](../src/core/game/deck/) | `draw.js` - compras e deck-out. |
 | [devTools/](../src/core/game/devTools/) | `commands.js`, `setup.js` - comandos e setups de teste. |
-| [effects/](../src/core/game/effects/) | `activationPipeline.js`, `destructionReplacement.js`. |
+| [effects/](../src/core/game/effects/) | Pipeline de ativação, replacement de destruição e serviço canônico de uso. |
 | [events/](../src/core/game/events/) | `eventBus.js`, `eventResolver.js`. |
 | [extraDeck/](../src/core/game/extraDeck/) | `modal.js` - abertura/seleção do Extra Deck. |
 | [graveyard/](../src/core/game/graveyard/) | `modal.js` - visualização e ativação a partir do Cemitério quando legal. |
 | [helpers/](../src/core/game/helpers/) | `cards.js`, `players.js`. |
-| [replay/](../src/core/game/replay/) | Pasta reservada para integração modular de replay. |
+| [replay/](../src/core/game/replay/) | Replay canônico: formato, captura, hash determinístico e reprodução headless. |
 | [selection/](../src/core/game/selection/) | `contract.js`, `handlers.js`, `highlighting.js`, `session.js`. |
 | [spellTrap/](../src/core/game/spellTrap/) | `activation.js`, `finalization.js`, `index.js`, `quickSpellRules.js`, `set.js`, `triggers.js`, `verification.js`. |
 | [state/](../src/core/game/state/) | `duelReset.js`, `serialization.js`. |
-| [summon/](../src/core/game/summon/) | `ascension.js`, `execution.js`, `materialStats.js`, `position.js`, `tracking.js`, `tributeValue.js`. |
+| [summon/](../src/core/game/summon/) | Procedimentos de Invocação e a transação canônica em `transaction.js`. |
 | [turn/](../src/core/game/turn/) | `cleanup.js`, `lifecycle.js`, `oncePerTurn.js`, `phaseRules.js`, `scheduling.js`, `transitions.js`. |
 | [ui/](../src/core/game/ui/) | `board.js`, `cardAnimations.js`, `index.js`, `indicators.js`, `interactions.js`, `modals.js`, `prompts.js`, `winCondition.js`. |
 | [zones/](../src/core/game/zones/) | `destruction.js`, `invariants.js`, `movement.js`, `operations.js`, `ownership.js`, `snapshot.js`. |

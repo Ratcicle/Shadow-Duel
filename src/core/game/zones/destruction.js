@@ -275,6 +275,60 @@ function findConditionalDestructionProtectionAura(
   return null;
 }
 
+export function isBattleDestructionProtected(card, context = {}) {
+  if (!card) return false;
+  const owner =
+    context.owner ||
+    (card.owner === "player" ? this.player : this.bot) ||
+    null;
+  if (!owner) return false;
+  const opponent = context.opponent || this.getOpponent?.(owner) || null;
+  const sourceCard = context.sourceCard || context.source || null;
+  const sourcePlayer =
+    context.sourcePlayer ||
+    (sourceCard?.owner === "player"
+      ? this.player
+      : sourceCard?.owner === "bot"
+        ? this.bot
+        : sourceCard
+          ? opponent
+          : null);
+  const fromZone = context.fromZone || "field";
+  const preventionNegated =
+    typeof this.isBattleDestructionPreventionNegated === "function" &&
+    this.isBattleDestructionPreventionNegated(card, {
+      owner,
+      preventionSourceOwner: owner,
+      preventionSourceCard: card,
+      fromZone,
+    });
+  if (preventionNegated) return false;
+
+  const grantedProtection = (card.protectionEffects || []).some(
+    (protection) =>
+      protection?.type === "battle_destruction" &&
+      protectionDurationIsActive(this, card, protection) &&
+      protectionSourceOwnerMatches(
+        this,
+        protection,
+        owner,
+        sourcePlayer,
+      ),
+  );
+  if (grantedProtection) return true;
+
+  return Boolean(
+    findConditionalDestructionProtection(
+      this,
+      card,
+      owner,
+      opponent,
+      "battle",
+      fromZone,
+    ),
+  );
+}
+
 export async function destroyCard(card, options = {}) {
   const result = await this.runZoneOp(
     "DESTROY_CARD",
@@ -289,6 +343,8 @@ export async function destroyCard(card, options = {}) {
       }
 
       const cause = options.cause || options.reason || "effect";
+      const battleDestructionDetermined =
+        cause === "battle" && options.battleDestructionDetermined === true;
       const sourceCard = options.sourceCard || options.source || null;
       const opponent = options.opponent || this.getOpponent(owner);
       const sourcePlayer =
@@ -332,6 +388,7 @@ export async function destroyCard(card, options = {}) {
 
       // Check protection effects before destruction
       if (
+        !battleDestructionDetermined &&
         !battleDestructionPreventionNegated &&
         Array.isArray(card.protectionEffects) &&
         card.protectionEffects.length > 0
@@ -362,7 +419,8 @@ export async function destroyCard(card, options = {}) {
         }
       }
 
-      const conditionalProtection = battleDestructionPreventionNegated
+      const conditionalProtection =
+        battleDestructionDetermined || battleDestructionPreventionNegated
         ? null
         : findConditionalDestructionProtection(
             this,
@@ -392,13 +450,15 @@ export async function destroyCard(card, options = {}) {
         };
       }
 
-      const auraProtection = findConditionalDestructionProtectionAura(
-        this,
-        card,
-        owner,
-        cause,
-        fromZone,
-      );
+      const auraProtection = battleDestructionDetermined
+        ? null
+        : findConditionalDestructionProtectionAura(
+            this,
+            card,
+            owner,
+            cause,
+            fromZone,
+          );
       if (auraProtection) {
         this.ui?.log?.(
           `${card.name} is protected from destruction by ${
@@ -420,6 +480,7 @@ export async function destroyCard(card, options = {}) {
       }
 
       if (
+        !battleDestructionDetermined &&
         !battleDestructionPreventionNegated &&
         this.effectEngine?.checkBeforeDestroyNegations
       ) {
@@ -477,6 +538,12 @@ export async function destroyCard(card, options = {}) {
         destroyCause: cause,
         destroySource: sourceCard,
         awaitCardToGraveEvent: options.awaitCardToGraveEvent !== false,
+        awaitCardMovedEvent: options.awaitCardMovedEvent,
+        deferCardToGraveTriggerResolution:
+          options.deferCardToGraveTriggerResolution === true,
+        atomicGroupId: options.atomicGroupId || null,
+        contextLabel: options.contextLabel || "destroyCard",
+        actionContext: options.actionContext || null,
       });
 
       if (!moveResult || moveResult.success === false) {

@@ -32,7 +32,8 @@ export function scheduleDelayedAction(
   }
 
   const action = {
-    id: Math.random().toString(36).substr(2, 9),
+    id: this.createDeterministicId?.("delayed_action") ||
+      `delayed_action_${this.delayedActions.length + 1}`,
     actionType,
     triggerCondition,
     payload,

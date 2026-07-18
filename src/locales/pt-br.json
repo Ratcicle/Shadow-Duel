@@ -14,6 +14,12 @@
       "addToHand": "Adicionar à mão"
     },
     "lp": "{amount} PV",
+    "priority": {
+      "owner": "Prioridade: {owner}",
+      "you": "Você",
+      "opponent": "Oponente",
+      "resolving": "Resolvendo Corrente"
+    },
     "selection": {
       "cardFallback": "Carta",
       "effectLabel": "efeito",
@@ -304,6 +310,19 @@
       "deckSizeError": "O deck precisa ter entre {min} e {max} cartas.",
       "botStatus": "Bot: {label}"
     }
+  },
+  "effects": {
+    "hyperion": { "attackBoost": "Bônus de ATK", "defenseBoost": "Bônus de DEF" },
+    "arctroth": { "attackRemoval": "Remover bônus ao atacar", "defenseRemoval": "Remover bônus ao defender" },
+    "leviathan": { "burnAttacker": "Causar dano ao atacante", "burnDestroyed": "Causar dano após destruição" },
+    "radiantLancer": { "attackBoost": "Ganhar ATK", "destroySpellTrap": "Destruir Magia/Armadilha" },
+    "volcanicExtreme": { "burnAttacker": "Dano em batalha como atacante", "burnDefender": "Dano em batalha como defensor" },
+    "stelya": { "summon": "Invocar um Dragão", "search": "Buscar um Dragão" },
+    "inkRiver": { "normalSpell": "Responder a uma Magia Normal", "fieldSpell": "Responder a uma Magia de Campo" },
+    "rotStag": { "attackBoost": "Bônus ao atacar", "defenseBoost": "Bônus ao defender" },
+    "butcher": { "searchMonster": "Buscar um monstro", "followupSearch": "Busca adicional" },
+    "ghostSamurai": { "attackBoost": "Bônus ao atacar", "defenseBoost": "Bônus ao defender" },
+    "voidAberration": { "graveBuff": "Void enviado ao Cemitério", "fieldDestroy": "Enviado do campo" }
   },
   "effectChoices": {
     "arcanist_grand_library_ignition": {

@@ -12,11 +12,19 @@ import {
 
 export function getEffectDisplayLabel(effect) {
   if (!effect) return "";
+  if (effect.activationLabelKey) {
+    return getUIText(
+      effect.activationLabelKey,
+      {},
+      effect.activationLabel ||
+        effect.promptMessage ||
+        getUIText("ui.selection.effectLabel"),
+    );
+  }
   return (
     effect.activationLabel ||
     effect.promptMessage ||
-    effect.id ||
-    ""
+    getUIText("ui.selection.effectLabel")
   );
 }
 

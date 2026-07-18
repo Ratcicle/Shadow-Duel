@@ -4,7 +4,7 @@
 
 Este catalogo descreve o contrato declarativo de cada `action.type` registrado no Shadow Duel. O runtime continua vindo de `src/core/actionHandlers/wiring.js`; este documento serve para criar cartas, revisar handlers e validar o banco de cartas.
 
-Total de actions catalogadas: 104.
+Total de actions catalogadas: 107.
 
 ## Recursos
 
@@ -517,7 +517,8 @@ Pays LP as a cost.
 
 | Campo | Obrigatorio | Contrato | Descricao |
 | --- | --- | --- | --- |
-| `amount` | sim | number; min: 0 | Numeric amount. |
+| `amount` | nao | number; min: 0 | Numeric amount. |
+| `fraction` | nao | number |  |
 | `player` | nao | enum: self, opponent | Perspective for the action: "self" or "opponent". |
 
 **Exemplos**
@@ -528,10 +529,100 @@ Pays LP as a cost.
   "amount": 1000
 }
 ```
+```json
+{
+  "type": "pay_lp",
+  "fraction": 0.5
+}
+```
 
 **Notas**
 
-_Sem notas._
+- Provide either amount or fraction.
+
+### `restrict_effect_activations_by_attribute`
+
+Restricts future effect activations to cards with configured Attributes.
+
+- Handler: `handleRestrictEffectActivationsByAttribute`
+- Target: `none`
+- Selecao: `none`
+- Mutacoes: player_state
+- Eventos emitidos: nenhum
+- Atualiza board: sim
+- Preview: `covered`
+
+| Campo | Obrigatorio | Contrato | Descricao |
+| --- | --- | --- | --- |
+| `player` | nao | enum: self, opponent | Perspective for the action: "self" or "opponent". |
+| `allowedAttributes` | nao | array |  |
+| `attributes` | nao | array |  |
+| `attributeSourceRef` | nao | string |  |
+| `attributeSource` | nao | string |  |
+| `sourceRef` | nao | string |  |
+| `targetRef` | nao | string | References an effect target id or a context target such as self. |
+| `restrictedCardFilters` | nao | object |  |
+| `duration` | nao | enum: until_end_turn |  |
+| `reason` | nao | string |  |
+| `logMessage` | nao | string |  |
+
+**Exemplos**
+
+```json
+{
+  "type": "restrict_effect_activations_by_attribute",
+  "player": "self",
+  "attributeSourceRef": "summoned_monster",
+  "restrictedCardFilters": {
+    "cardKind": "monster"
+  },
+  "duration": "until_end_turn"
+}
+```
+
+**Notas**
+
+- The default duration is until_end_turn.
+- attributeSourceRef can read cards stored by storeResultAs/resultRef.
+
+### `restrict_effect_activations_by_names`
+
+Restricts future effect activations from cards with configured names.
+
+- Handler: `handleRestrictEffectActivationsByNames`
+- Target: `none`
+- Selecao: `none`
+- Mutacoes: player_state
+- Eventos emitidos: nenhum
+- Atualiza board: sim
+- Preview: `covered`
+
+| Campo | Obrigatorio | Contrato | Descricao |
+| --- | --- | --- | --- |
+| `player` | nao | enum: self, opponent | Perspective for the action: "self" or "opponent". |
+| `names` | nao | array |  |
+| `cardNames` | nao | array |  |
+| `blockedNames` | nao | array |  |
+| `nameSource` | nao | string |  |
+| `duration` | nao | enum: until_end_turn |  |
+| `reason` | nao | string |  |
+| `logMessage` | nao | string |  |
+
+**Exemplos**
+
+```json
+{
+  "type": "restrict_effect_activations_by_names",
+  "player": "self",
+  "nameSource": "lastDrawnCards",
+  "duration": "until_end_turn"
+}
+```
+
+**Notas**
+
+- The default duration is until_end_turn.
+- nameSource can read context arrays such as lastDrawnCards.
 
 ### `search_any`
 
@@ -770,6 +861,7 @@ Returns target cards to hand.
 | --- | --- | --- | --- |
 | `targetRef` | sim | string | References an effect target id or a context target such as self. |
 | `fromZone` | nao | zone; valores: deck, hand, field, graveyard, spellTrap, fieldSpell, extraDeck, banish, banished | Zone to read from or remove from. |
+| `contextLabel` | nao | string |  |
 | `haltOnFailure` | nao | boolean |  |
 | `stopOnFailure` | nao | boolean |  |
 
@@ -1232,6 +1324,7 @@ Special Summons source from hand by paying a target cost.
 | `costMovedByEffect` | nao | boolean |  |
 | `position` | nao | enum: attack, defense, choice | Battle position: "attack", "defense", or "choice". |
 | `cannotAttackThisTurn` | nao | boolean |  |
+| `conditionalMarkersOnSummon` | nao | array |  |
 
 **Exemplos**
 
@@ -1313,12 +1406,14 @@ Special Summons cards from a configured zone.
 | `maxDef` | nao | number |  |
 | `minLevel` | nao | number |  |
 | `maxLevel` | nao | number |  |
+| `maxLevelFromContext` | nao | object |  |
 | `position` | nao | enum: attack, defense, choice | Battle position: "attack", "defense", or "choice". |
 | `promptPlayer` | nao | boolean |  |
 | `requireSource` | nao | boolean |  |
 | `banishCost` | nao | any |  |
 | `distinctNames` | nao | boolean |  |
 | `cannotAttackThisTurn` | nao | boolean |  |
+| `destroySummonedAtEndPhase` | nao | boolean |  |
 | `excludeSummonRestrict` | nao | any |  |
 | `negateEffects` | nao | boolean |  |
 | `negateEffectsDuration` | nao | enum: until_end_turn, while_faceup |  |
@@ -1681,6 +1776,7 @@ Destroys target cards.
 | Campo | Obrigatorio | Contrato | Descricao |
 | --- | --- | --- | --- |
 | `targetRef` | sim | string | References an effect target id or a context target such as self. |
+| `optional` | nao | boolean |  |
 
 **Exemplos**
 
@@ -1872,6 +1968,7 @@ Destroys selected cards from one or more zones.
 
 | Campo | Obrigatorio | Contrato | Descricao |
 | --- | --- | --- | --- |
+| `targetRef` | nao | string | References an effect target id or a context target such as self. |
 | `zones` | nao | array |  |
 | `cardKind` | nao | stringOrArray |  |
 | `subtype` | nao | stringOrArray |  |
@@ -2207,6 +2304,7 @@ Temporarily modifies ATK and/or DEF.
 | `expiresOnTurn` | nao | number |  |
 | `permanent` | nao | boolean |  |
 | `sourceName` | nao | string |  |
+| `allowEmpty` | nao | boolean |  |
 
 **Exemplos**
 
@@ -2555,6 +2653,7 @@ Reduces the Level of all monsters in the player's hand.
 | Campo | Obrigatorio | Contrato | Descricao |
 | --- | --- | --- | --- |
 | `amount` | nao | number; min: 1 | Level reduction amount. Defaults to 1. |
+| `optional` | nao | boolean |  |
 
 **Exemplos**
 
@@ -3034,6 +3133,36 @@ _Sem campos alem de `type`._
 **Notas**
 
 _Sem notas._
+
+### `negate_effect`
+
+Negates only the effect of the exact current Chain Link without moving its source.
+
+- Handler: `handleNegateEffect`
+- Target: `none`
+- Selecao: `none`
+- Mutacoes: chain
+- Eventos emitidos: nenhum
+- Atualiza board: sim
+- Preview: `covered`
+
+| Campo | Obrigatorio | Contrato | Descricao |
+| --- | --- | --- | --- |
+| `storeNegatedCardAs` | nao | string |  |
+
+**Exemplos**
+
+```json
+{
+  "type": "negate_effect",
+  "storeNegatedCardAs": "negated_card"
+}
+```
+
+**Notas**
+
+- Does not negate the activation and does not destroy or move the source.
+- Use a separate destruction or movement action when the card text requires it.
 
 ### `negate_summon_or_activation_and_destroy`
 
@@ -3700,6 +3829,8 @@ Registers a temporary virtual event trigger owned by the resolving player.
 | Campo | Obrigatorio | Contrato | Descricao |
 | --- | --- | --- | --- |
 | `event` | sim | string |  |
+| `triggerRequirement` | sim | enum: mandatory, optional |  |
+| `triggerTiming` | sim | enum: if, when |  |
 | `actions` | sim | array |  |
 | `conditions` | nao | array |  |
 | `targets` | nao | array |  |
@@ -3720,6 +3851,8 @@ Registers a temporary virtual event trigger owned by the resolving player.
 {
   "type": "register_temporary_event_effect",
   "event": "battle_destroy",
+  "triggerRequirement": "mandatory",
+  "triggerTiming": "if",
   "duration": "end_of_turn",
   "uses": 1,
   "actions": [

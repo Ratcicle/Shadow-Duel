@@ -18,7 +18,7 @@ export const END_REASONS = {
   CANCELLED: "cancelled",
 };
 
-const REPORT_VERSION = 4;
+const REPORT_VERSION = 5;
 const SEATS = ["player", "bot"];
 const DIAGNOSTIC_PROGRESS_LIMIT = 80;
 const DIAGNOSTIC_SNAPSHOT_LIMIT = 3;
@@ -30,6 +30,21 @@ const TRACKED_EVENTS = new Set([
   "spell_activated",
   "trap_activated",
   "effect_activated",
+  "effect_usage",
+  "activation_usage",
+  "activation_transaction",
+  "chain_link_resolution",
+  "chain_finalization",
+  "chain_finalization_complete",
+  "summon_transaction",
+  "summon_cost_paid",
+  "summon_negated",
+  "summon_attempt",
+  "trigger_opportunity_opened",
+  "segoc_order_selected",
+  "damage_step_timing",
+  "damage_step_completed",
+  "battle_damage_inflicted",
   "cards_added_to_hand",
   "card_to_grave",
   "effect_targeted",
@@ -40,6 +55,24 @@ const TRACKED_EVENTS = new Set([
   "counter_changed",
   "damage_inflicted",
   "lp_change",
+]);
+
+const CANONICAL_LIFECYCLE_EVENTS = new Set([
+  "effect_usage",
+  "activation_usage",
+  "activation_transaction",
+  "chain_link_resolution",
+  "chain_finalization",
+  "chain_finalization_complete",
+  "summon_transaction",
+  "summon_cost_paid",
+  "summon_negated",
+  "summon_attempt",
+  "trigger_opportunity_opened",
+  "segoc_order_selected",
+  "damage_step_timing",
+  "damage_step_completed",
+  "battle_damage_inflicted",
 ]);
 
 const SHADOWHEART_FINISHERS = new Set([
@@ -2224,7 +2257,34 @@ export class DuelTracker {
       this.recordCounterEvent(payload, meta);
     } else if (eventName === "damage_inflicted" || eventName === "lp_change") {
       this.recordLpEvent(eventName, payload, meta);
+    } else if (CANONICAL_LIFECYCLE_EVENTS.has(eventName)) {
+      this.recordCanonicalLifecycleEvent(eventName, payload, meta);
     }
+  }
+
+  recordCanonicalLifecycleEvent(eventName, payload = {}, meta = {}) {
+    const seat =
+      playerSeat(payload.player || payload.owner) ||
+      payload.controllerId ||
+      payload.playerId ||
+      null;
+    this.pushEvent({
+      t: meta.turn,
+      seat: this.seats[seat] ? seat : null,
+      type: eventName,
+      stage: payload.stage || payload.status || payload.timing || null,
+      chainId: payload.chainId ?? null,
+      linkId: payload.linkId ?? null,
+      effectId: payload.effectId || null,
+      duelCardId: payload.duelCardId ?? null,
+      activationKind: payload.activationKind || null,
+      summonId: payload.summonId ?? null,
+      damageStepId: payload.damageStepId ?? null,
+      activationNegated: payload.activationNegated === true || null,
+      effectNegated: payload.effectNegated === true || null,
+      costPayment: payload.costPayment || null,
+      targetIds: payload.targetIds || null,
+    });
   }
 
   recordSummon(payload = {}, meta = {}) {

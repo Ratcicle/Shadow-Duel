@@ -172,6 +172,12 @@ export async function collectEventTriggers(eventName, payload) {
     triggerPackage = await this.collectAttackDeclaredTriggers(payload);
   } else if (eventName === "battle_damage") {
     triggerPackage = await this.collectBattleDamageTriggers(payload);
+  } else if (eventName === "battle_damage_inflicted") {
+    triggerPackage = await this.collectBattleDamageInflictedTriggers(payload);
+  } else if (eventName === "card_flipped") {
+    triggerPackage = await this.collectCardFlippedTriggers(payload);
+  } else if (eventName === "damage_step") {
+    triggerPackage = await this.collectDamageStepTriggers(payload);
   } else if (eventName === "lp_change") {
     triggerPackage = await this.collectLpChangeTriggers(payload);
   } else if (eventName === "effect_targeted") {
@@ -194,6 +200,9 @@ export {
   collectAfterSummonTriggers,
   collectAttackDeclaredTriggers,
   collectBattleDamageTriggers,
+  collectBattleDamageInflictedTriggers,
+  collectCardFlippedTriggers,
+  collectDamageStepTriggers,
   collectBattleCompletedTriggers,
   collectBattleDestroyTriggers,
   collectCardEquippedTriggers,

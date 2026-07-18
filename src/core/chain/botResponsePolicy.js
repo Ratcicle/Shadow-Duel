@@ -55,15 +55,25 @@ export async function botChooseChainResponse(player, activatable, context) {
       return null;
     }
     if (strategyResponse?.card && strategyResponse?.effect) {
+      const canonicalChoice = activatable.find(
+        (candidate) =>
+          (strategyResponse.candidateKey &&
+            candidate.candidateKey === strategyResponse.candidateKey) ||
+          (candidate.card === strategyResponse.card &&
+            candidate.effect === strategyResponse.effect),
+      );
+      if (!canonicalChoice) {
+        this.game?.notify?.("ai_activation_rejected", {
+          playerId: player?.id || null,
+          candidateKey: strategyResponse.candidateKey || null,
+          effectId: strategyResponse.effect?.id || null,
+          reason: "choice_not_in_canonical_candidate_list",
+        });
+        return null;
+      }
       const responseContext = buildResponseContext(context, strategyResponse);
-      const {
-        selections: _legacySelections,
-        costSelections: _legacyCostSelections,
-        targetSelections: _legacyTargetSelections,
-        ...chosenEffect
-      } = strategyResponse;
       return {
-        ...chosenEffect,
+        ...canonicalChoice,
         context: responseContext,
       };
     }
@@ -286,7 +296,9 @@ export async function botChooseChainResponse(player, activatable, context) {
     activationChance = 0.5;
   }
 
-  if (Math.random() < activationChance) {
+  const randomValue =
+    typeof game?.random === "function" ? game.random() : Math.random();
+  if (randomValue < activationChance) {
     this.log(
       `Bot activating ${bestOption.card.name} (priority: ${bestOption.priority})`,
     );
@@ -298,104 +310,4 @@ export async function botChooseChainResponse(player, activatable, context) {
 
   this.log(`Bot passing (best option priority: ${bestOption.priority})`);
   return null;
-}
-
-/**
- * Get bot selections for an effect that requires targets
- * @param {Object} card
- * @param {Object} effect
- * @param {Object} player
- * @param {ChainContext} context
- * @returns {Promise<Object|null>}
- */
-export async function getBotSelectionsForEffect(card, effect, player, context) {
-  // Phase 9 compatibility adapter for non-response callers. Chain response
-  // policies now choose only an effect; the activation transaction selects.
-  if (!effect?.targets || !Array.isArray(effect.targets)) {
-    return null;
-  }
-
-  const effectEngine = this.game?.effectEngine;
-  if (!effectEngine) return null;
-
-  const ctx = {
-    ...(context || {}),
-    source: card,
-    player,
-    opponent: this.getOpponent(player),
-    defender: context?.defender || context?.target,
-    attacker: context?.attacker,
-    attackerOwner: context?.attackerOwner,
-    defenderOwner: context?.defenderOwner,
-    activationContext: {
-      ...(context?.activationContext || {}),
-      autoSelectSingleTarget:
-        context?.activationContext?.autoSelectSingleTarget !== false,
-      logTargets: context?.activationContext?.logTargets === true,
-    },
-  };
-
-  const targetResult = effectEngine.resolveTargets(effect.targets, ctx, null);
-  if (targetResult?.ok === false) {
-    return null;
-  }
-
-  const baseTargets = targetResult?.targets || {};
-  if (!targetResult?.needsSelection) {
-    return Object.keys(baseTargets).length > 0 ? baseTargets : null;
-  }
-
-  if (
-    !targetResult.selectionContract ||
-    typeof this.game?.autoSelector?.select !== "function"
-  ) {
-    return Object.keys(baseTargets).length > 0 ? baseTargets : null;
-  }
-
-  const autoResult = this.game.autoSelector.select(
-    targetResult.selectionContract,
-    {
-      owner: player,
-      activationContext: ctx.activationContext,
-      selectionKind: "target",
-    },
-  );
-
-  if (!autoResult?.ok) {
-    return Object.keys(baseTargets).length > 0 ? baseTargets : null;
-  }
-
-  const resolvedSelections = this.resolveSelectionsToCards(
-    autoResult.selections || {},
-    targetResult.selectionContract.requirements || [],
-    player,
-  );
-
-  const mergedSelections = {
-    ...baseTargets,
-    ...resolvedSelections,
-  };
-
-  return Object.keys(mergedSelections).length > 0 ? mergedSelections : null;
-}
-
-/**
- * Select best targets from candidates based on strategy
- * @param {Array} candidates
- * @param {number} count
- * @param {Object} targetDef
- * @returns {Array}
- */
-export function selectBestTargets(candidates, count, targetDef) {
-  if (!candidates || candidates.length === 0) return [];
-
-  // Sort candidates by strategic value
-  const sorted = [...candidates].sort((a, b) => {
-    // Prefer higher ATK monsters
-    const aAtk = a.atk || 0;
-    const bAtk = b.atk || 0;
-    return bAtk - aAtk;
-  });
-
-  return sorted.slice(0, Math.min(count, sorted.length));
 }

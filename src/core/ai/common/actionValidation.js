@@ -56,7 +56,7 @@ export function validateHandIgnitionCandidate({
   if (!card || !effect || effect.timing !== "ignition") {
     return { ok: false, reason: "not a hand ignition effect" };
   }
-  if (effect.requireZone !== "hand") {
+  if (!effect.activationZones?.includes("hand")) {
     return { ok: false, reason: "effect is not from hand" };
   }
 

@@ -63,24 +63,20 @@ function hasPendingPhaseInterruption(game) {
 function setBattleOpenStateForPhase(game, phase) {
   if (phase === "battle") {
     game.battleStep = "start";
-    game.damageStepTiming = null;
     return;
   }
   game.battleStep = null;
-  game.damageStepTiming = null;
 }
 
 async function leaveCurrentPhase(game, options = {}) {
   const currentPhase = game.phase;
   const previousBattleStep = game.battleStep ?? null;
-  const previousDamageStepTiming = game.damageStepTiming ?? null;
   const nextPhase =
     options.nextPhase ??
     game.getNextPhase?.(currentPhase) ??
     getNextPhase(currentPhase, game);
   if (currentPhase === "battle") {
     game.battleStep = "end";
-    game.damageStepTiming = null;
   }
 
   const timingResult = await game.checkAndOfferTraps("phase_end", {
@@ -89,7 +85,7 @@ async function leaveCurrentPhase(game, options = {}) {
     fromPhase: currentPhase,
     toPhase: nextPhase,
     battleStep: game.battleStep ?? null,
-    damageStepTiming: game.damageStepTiming ?? null,
+    damageStepTiming: null,
   });
 
   if (game.gameOver || game.isDisposed?.()) {
@@ -111,7 +107,6 @@ async function leaveCurrentPhase(game, options = {}) {
   ) {
     if (currentPhase === "battle" && timingResult.needsSelection !== true) {
       game.battleStep = previousBattleStep;
-      game.damageStepTiming = previousDamageStepTiming;
     }
     return {
       ok: false,
@@ -148,7 +143,7 @@ async function enterPhase(game, nextPhase, previousPhase) {
     fromPhase: previousPhase,
     toPhase: nextPhase,
     battleStep: game.battleStep ?? null,
-    damageStepTiming: game.damageStepTiming ?? null,
+    damageStepTiming: null,
   });
 
   if (game.gameOver || game.isDisposed?.()) {

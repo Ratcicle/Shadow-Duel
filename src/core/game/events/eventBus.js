@@ -23,6 +23,7 @@ export function on(eventName, handler) {
  */
 export async function emit(eventName, payload, options = {}) {
   if (this.isDisposed?.()) return null;
+  this.recordReplayEvent?.(eventName, payload);
   this._arenaTracker?.recordEvent?.(eventName, payload, {
     turn: this.turnCounter,
     phase: this.phase,
@@ -47,6 +48,7 @@ export async function emit(eventName, payload, options = {}) {
  */
 export function notify(eventName, payload) {
   if (this.isDisposed?.()) return;
+  this.recordReplayEvent?.(eventName, payload);
   this._arenaTracker?.recordEvent?.(eventName, payload, {
     turn: this.turnCounter,
     phase: this.phase,

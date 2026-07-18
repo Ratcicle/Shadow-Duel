@@ -17,52 +17,20 @@
 /**
  * Add a card to the chain stack as a new link.
  */
-export function addToChain(cardOrPrepared, player, effect, context, selections = null, zone = null) {
-  const preparedInput =
-    cardOrPrepared?.prepared === true && cardOrPrepared?.card
-      ? cardOrPrepared
-      : null;
-  if (!preparedInput) {
-    this.warnLegacyChainContract?.("addToChain(card, player, effect, ...)");
+export function addToChain(preparedActivation) {
+  if (
+    preparedActivation?.prepared !== true ||
+    !preparedActivation.card ||
+    !preparedActivation.controller ||
+    !preparedActivation.effect
+  ) {
+    throw new TypeError("addToChain requires a canonical PreparedActivation.");
   }
 
-  const card = preparedInput?.card || cardOrPrepared;
-  const controller = preparedInput?.controller || preparedInput?.player || player;
-  const resolvedEffect = preparedInput?.effect || effect;
-  const resolvedContext = preparedInput?.context || context || null;
-  const resolvedSelections = preparedInput?.selections || selections || {};
-  const activationZone =
-    preparedInput?.activationZone ||
-    preparedInput?.zone ||
-    zone ||
-    this.determineCardZone(card, controller);
-  const normalized = preparedInput ||
-    this.createPreparedActivation?.({
-      card,
-      controller,
-      player: controller,
-      effect: resolvedEffect,
-      context: resolvedContext,
-      selections: resolvedSelections,
-      activationZone,
-      zone: activationZone,
-      activationContext:
-        resolvedContext?.activationContext || {
-          sourceZone: activationZone,
-          activationZone,
-        },
-    }) || {
-      card,
-      controller,
-      player: controller,
-      effect: resolvedEffect,
-      context: resolvedContext,
-      selections: resolvedSelections,
-      activationZone,
-      zone: activationZone,
-    };
-
-  const chainLink = this.createChainLink(normalized, resolvedContext);
+  const chainLink = this.createChainLink(
+    preparedActivation,
+    preparedActivation.context || null,
+  );
   const usageReservation = this.reserveUsageForChainLink?.(chainLink);
   if (usageReservation?.success === false) {
     return null;
@@ -78,7 +46,7 @@ export function addToChain(cardOrPrepared, player, effect, context, selections =
 
   const ui = this.getUI();
   if (ui?.log) {
-    ui.log(`Chain Link ${this.currentChainLevel}: ${card.name}`);
+    ui.log(`Chain Link ${this.currentChainLevel}: ${chainLink.card.name}`);
   }
 
   return chainLink;

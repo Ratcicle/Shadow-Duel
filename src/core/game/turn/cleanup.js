@@ -33,7 +33,8 @@ export function applyTurnBasedBuff(card, stat, value, expiresOnTurn, id = null) 
   }
 
   const buffId =
-    id || `buff_${card.id}_${Math.random().toString(36).substr(2, 9)}`;
+    id || this.createDeterministicId?.(`buff_${card.id}`) ||
+    `buff_${card.id}_${card.turnBasedBuffs.length + 1}`;
   const buffEntry = {
     id: buffId,
     stat,

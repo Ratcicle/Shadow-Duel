@@ -3,6 +3,14 @@
  * Extracted from Game.js as part of B.6 modularization.
  */
 
+import { FAST_EFFECT_ORIGINS } from "../../chain/timing.js";
+import { bumpCardLocationVersion } from "../../Card.js";
+import {
+  SUMMON_MODES,
+  SUMMON_ORIGINS,
+  SUMMON_STATUSES,
+} from "./transaction.js";
+
 async function presentSummonBeforeAfterSummon(game) {
   const boardPresentation = game?.updateBoard?.();
   if (typeof game?.waitForBoardPresentation === "function") {
@@ -17,83 +25,223 @@ async function presentSummonBeforeAfterSummon(game) {
  * @param {Object} card - The face-down monster to flip summon
  */
 export async function flipSummon(card) {
-  if (!this.canFlipSummon(card)) return;
+  if (!this.canFlipSummon(card)) {
+    return { success: false, reason: "flip_summon_unavailable" };
+  }
   const ownerId = card.owner === "player" ? "player" : "bot";
   const owner = ownerId === "player" ? this.player : this.bot;
   const fieldIndex = owner?.field?.indexOf(card) ?? -1;
-
-  card.isFacedown = false;
-  card.revealedTurn = this.turnCounter; // Track when monster was revealed for Ascension timing
-  card.position = "attack";
-  card.positionChangedThisTurn = true;
-  card.hasAttacked = false;
-  card.attacksUsedThisTurn = 0;
-  this.effectEngine?.clearTargetingCache?.();
-  this.ui.log(`${card.name} is Flip Summoned!`);
-
-  this.updateBoard();
-  await this.waitForBoardPresentation?.();
-  const flipPresentation = this.ui?.applyFlipAnimation?.(ownerId, fieldIndex, {
-    mode: "flip-summon",
-    deferFrames: 0,
-  });
-  if (flipPresentation && typeof flipPresentation.then === "function") {
-    await flipPresentation.catch(() => {});
-  }
-
-  await this.emit("after_summon", {
+  const prepared = this.createPreparedSummon({
     card,
-    player: card.owner === "player" ? this.player : this.bot,
-    method: "flip",
-  });
+    controller: owner,
+    sourceZone: "field",
+    summonOrigin: SUMMON_ORIGINS.PROCEDURE,
+    summonMode: SUMMON_MODES.SUMMON,
+    summonMethod: "flip",
+    position: "attack",
+    finalContext: {
+      type: "after_summon",
+      event: "after_summon",
+      card,
+      player: owner,
+      method: "flip",
+    },
+    perform: async (transaction) => {
+      const currentIndex = owner.field.indexOf(card);
+      if (currentIndex < 0) {
+        return { success: false, reason: "flip_source_missing" };
+      }
+      owner.field.splice(currentIndex, 1);
+      card.summonPending = true;
+      this.effectEngine?.clearTargetingCache?.();
 
-  this.updateBoard();
+      const attempt = await this.offerSummonAttempt(card, owner, {
+        method: "flip",
+        fromZone: "field",
+        summonOrigin: SUMMON_ORIGINS.PROCEDURE,
+        summonTransaction: transaction,
+      });
+      if (attempt?.needsSelection) return attempt;
+
+      if (
+        attempt?.summonNegated ||
+        transaction.status === SUMMON_STATUSES.NEGATED
+      ) {
+        owner.field.splice(Math.min(fieldIndex, owner.field.length), 0, card);
+        delete card.summonPending;
+        const outcome = transaction.negationOutcome || {};
+        const moveResult = await this.moveCard(card, owner, outcome.destination || "graveyard", {
+          fromZone: "field",
+          contextLabel: "negated_flip_summon",
+          wasDestroyed: outcome.destroyed === true,
+          destroyCause: outcome.destroyed === true ? "effect" : null,
+          destroySource: outcome.sourceCard || null,
+          summonOrigin: SUMMON_ORIGINS.PROCEDURE,
+          summonMethodOverride: "flip",
+          summonProcedure: "flip",
+          summonTransaction: transaction,
+          awaitCardToGraveEvent: true,
+          awaitCardMovedEvent: true,
+        });
+        return {
+          success: false,
+          summonNegated: true,
+          reason: "summon_negated",
+          moveResult,
+        };
+      }
+
+      owner.field.splice(Math.min(fieldIndex, owner.field.length), 0, card);
+      delete card.summonPending;
+      card.isFacedown = false;
+      card.revealedTurn = this.turnCounter;
+      card.position = "attack";
+      card.positionChangedThisTurn = true;
+      card.hasAttacked = false;
+      card.attacksUsedThisTurn = 0;
+      this.effectEngine?.clearTargetingCache?.();
+      const locationVersion = bumpCardLocationVersion(card);
+      const atomicGroupId =
+        this.chainSystem?.allocateAtomicEventGroupId?.() || null;
+      this.chainSystem?.recordChainSourceMovement?.(card, {
+        fromPlayer: owner,
+        toPlayer: owner,
+        fromZone: "field",
+        toZone: "field",
+        locationVersion,
+        wasDestroyed: false,
+      });
+      await this.emit("card_moved", {
+        card,
+        player: owner,
+        opponent: this.getOpponent?.(owner) || null,
+        fromPlayer: owner,
+        toPlayer: owner,
+        fromZone: "field",
+        toZone: "field",
+        locationVersion,
+        atomicGroupId,
+        contextLabel: "flip_summon_success",
+        summonId: transaction.summonId,
+        summonOrigin: SUMMON_ORIGINS.PROCEDURE,
+        wasDestroyed: false,
+        wasFaceupBeforeMove: false,
+      });
+      this.ui.log(`${card.name} is Flip Summoned!`);
+      this.updateBoard();
+      await this.waitForBoardPresentation?.();
+      const flipPresentation = this.ui?.applyFlipAnimation?.(ownerId, fieldIndex, {
+        mode: "flip-summon",
+        deferFrames: 0,
+      });
+      if (flipPresentation && typeof flipPresentation.then === "function") {
+        await flipPresentation.catch(() => {});
+      }
+      await this.emit("after_summon", {
+        card,
+        player: owner,
+        opponent: this.getOpponent?.(owner) || null,
+        method: "flip",
+        fromZone: "field",
+        summonId: transaction.summonId,
+        summonOrigin: SUMMON_ORIGINS.PROCEDURE,
+        atomicGroupId,
+      });
+      this.updateBoard();
+      return { success: true, card };
+    },
+    onFailure: async () => {
+      if (!owner.field.includes(card)) {
+        owner.field.splice(Math.min(fieldIndex, owner.field.length), 0, card);
+      }
+      delete card.summonPending;
+    },
+  });
+  return await this.executeSummonTransaction(prepared);
 }
 
 export async function offerSummonAttempt(card, player, options = {}) {
-  if (!card || !player || !this.chainSystem || this.disableChains) {
+  if (!card || !player) {
     return { ok: true };
   }
-  if (this.chainSystem.isChainResolving?.() || this.chainSystem.isChainWindowOpen?.()) {
-    return { ok: true };
+  let transaction =
+    options.summonTransaction ||
+    (this.activeSummonTransaction?.card === card
+      ? this.activeSummonTransaction
+      : null);
+  let ownsTransaction = false;
+  if (!transaction) {
+    const begun = this.beginSummonTransaction(
+      this.createPreparedSummon({
+        card,
+        controller: player,
+        sourceZone: options.fromZone || null,
+        summonOrigin: options.summonOrigin || SUMMON_ORIGINS.PROCEDURE,
+        summonMode: SUMMON_MODES.SUMMON,
+        summonMethod: options.method || "special",
+        summonProcedure: options.summonProcedure || null,
+        position: options.position || card.position || null,
+      }),
+    );
+    if (!begun.ok) return { ok: false, reason: begun.reason };
+    transaction = begun.transaction;
+    ownsTransaction = true;
   }
-
-  const attempt = {
-    card,
-    player,
-    method: options.method || "special",
-    fromZone: options.fromZone || null,
-    summonProcedure: options.summonProcedure || null,
-    negated: false,
-  };
+  this.markSummonAwaitingNegation?.(transaction.summonId);
+  if (!this.chainSystem || this.disableChains) {
+    return { ok: true, transaction, ownsTransaction };
+  }
+  if (
+    this.chainSystem.isChainResolving?.() ||
+    this.chainSystem.isChainWindowOpen?.()
+  ) {
+    return {
+      ok: false,
+      reason: "summon_attempt_timing_busy",
+      transaction,
+      ownsTransaction,
+    };
+  }
   const context = {
     type: "summon_attempt",
     event: "summon_attempt",
     card,
     player,
     triggerPlayer: player,
-    summonMethod: attempt.method,
-    fromZone: attempt.fromZone,
-    summonProcedure: attempt.summonProcedure,
-    summonAttempt: attempt,
+    summonId: transaction.summonId,
+    summonMethod: transaction.summonMethod,
+    fromZone: transaction.sourceAtStart?.zone || options.fromZone || null,
+    summonProcedure: transaction.summonProcedure,
+    summonTransaction: transaction,
   };
-
-  const opponent = this.getOpponent?.(player) || null;
-  const playerResponses =
-    this.chainSystem.getActivatableCardsInChain?.(player, context) || [];
-  const opponentResponses = opponent
-    ? this.chainSystem.getActivatableCardsInChain?.(opponent, context) || []
-    : [];
-
-  if (playerResponses.length === 0 && opponentResponses.length === 0) {
-    return { ok: true };
+  const timing = await this.chainSystem.runFastEffectTiming({
+    origin: FAST_EFFECT_ORIGINS.SUMMON_ATTEMPT,
+    actionPlayer: player,
+    context: {
+      ...context,
+      addTriggerToChain: false,
+      skipTriggerLink: true,
+    },
+    pauseAfterRootResolution: true,
+  });
+  if (timing?.needsSelection) {
+    return { ...timing, transaction, ownsTransaction };
   }
-
-  await this.chainSystem.openEventWindow(context);
-  if (attempt.negated || context.negated) {
-    return { ok: false, negated: true, reason: "summon_negated" };
+  this.holdSummonTimingState?.(transaction);
+  if (
+    transaction.status === SUMMON_STATUSES.NEGATED ||
+    context.summonNegated === true
+  ) {
+    return {
+      ok: false,
+      summonNegated: true,
+      reason: "summon_negated",
+      transaction,
+      ownsTransaction,
+      timing,
+    };
   }
-  return { ok: true };
+  return { ok: true, transaction, ownsTransaction, timing };
 }
 
 export async function performNormalSummon(
@@ -107,35 +255,12 @@ export async function performNormalSummon(
   const card = player?.hand?.[cardIndex];
   if (!player || !card) return null;
 
-  const tributeInfo =
-    typeof player.getTributeRequirement === "function"
-      ? player.getTributeRequirement(card)
-      : { tributesNeeded: 0 };
-  const method = tributeInfo?.tributesNeeded > 0 ? "tribute" : "normal";
-  const attempt = await this.offerSummonAttempt(card, player, {
-    method,
-    fromZone: "hand",
-  });
-  if (attempt?.negated) {
-    return null;
-  }
   const result = await player.summon(
     cardIndex,
     position,
     isFacedown,
     tributeIndices,
   );
-  const summonedCard = result?.card || result || null;
-  if (summonedCard?.isFacedown) {
-    this.notify?.("monster_set", {
-      card: summonedCard,
-      player,
-      method,
-      fromZone: "hand",
-      position: summonedCard.position || "defense",
-      tributes: result?.tributes || [],
-    });
-  }
   return result;
 }
 
@@ -217,69 +342,6 @@ export async function performFusionSummon(
       Number(hasFieldToGraveTrigger(a)) - Number(hasFieldToGraveTrigger(b)),
   );
 
-  // Send materials to GY in a deterministic order. Fusion materials can have
-  // "sent from field to GY" triggers, so callers that await this summon need
-  // those card_to_grave events to resolve before the summon continues.
-  for (const material of materialSendOrder) {
-    const fromZone =
-      activePlayer.field.includes(material)
-        ? "field"
-        : activePlayer.hand.includes(material)
-          ? "hand"
-          : typeof this.findCardZone === "function"
-            ? this.findCardZone(activePlayer, material)
-            : null;
-    const moveResult = await this.moveCard(material, activePlayer, "graveyard", {
-      fromZone: fromZone || undefined,
-      awaitCardToGraveEvent: true,
-      contextLabel: "fusion_material",
-    });
-    if (moveResult?.success === false) {
-      this.ui.log(`Could not send ${material.name} as Fusion Material.`);
-      return false;
-    }
-  }
-
-  const postMaterialLimitCheck = this.canPlaceCardOnField?.(
-    fusionMonster,
-    activePlayer,
-    {
-      isFacedown: false,
-      summonMethod: "fusion",
-      summonProcedure: "fusion",
-    },
-  );
-  if (postMaterialLimitCheck && postMaterialLimitCheck.ok === false) {
-    return false;
-  }
-
-  const attempt = await this.offerSummonAttempt(fusionMonster, activePlayer, {
-    method: "fusion",
-    fromZone: "extraDeck",
-  });
-  if (attempt?.negated) {
-    if (activePlayer.extraDeck.includes(fusionMonster)) {
-      activePlayer.extraDeck.splice(activePlayer.extraDeck.indexOf(fusionMonster), 1);
-      activePlayer.graveyard.push(fusionMonster);
-      fusionMonster.owner = activePlayer.id;
-      fusionMonster.controller = activePlayer.id;
-    }
-    this.updateBoard();
-    return false;
-  }
-
-  // Remove fusion monster from Extra Deck
-  activePlayer.extraDeck.splice(fusionMonsterIndex, 1);
-
-  // Add to field
-  fusionMonster.position = position;
-  fusionMonster.isFacedown = false;
-  fusionMonster.hasAttacked = false;
-  fusionMonster.cannotAttackThisTurn = false;
-  fusionMonster.owner = activePlayer.id;
-  fusionMonster.summonedTurn = this.turnCounter;
-  activePlayer.field.push(fusionMonster);
-
   const requiredNames = requiredMaterials.map((c) => c.name).join(", ");
   const extraNames = extraMaterials.map((c) => c.name).join(", ");
   const extraNote =
@@ -287,24 +349,74 @@ export async function performFusionSummon(
       ? ` Extra materials also sent to GY: ${extraNames}.`
       : "";
 
-  this.ui.log(
-    `Fusion Summoned ${fusionMonster.name} using ${
-      requiredNames || "selected materials"
-    }.${extraNote}`
-  );
-
-  await presentSummonBeforeAfterSummon(this);
-
-  // Emit after_summon event
-  await this.emit("after_summon", {
+  const prepared = this.createPreparedSummon({
     card: fusionMonster,
-    player: activePlayer,
-    method: "fusion",
-    fromZone: "extraDeck",
+    controller: activePlayer,
+    sourceZone: "extraDeck",
+    summonOrigin: SUMMON_ORIGINS.EFFECT_RESOLUTION,
+    summonMode: SUMMON_MODES.SUMMON,
+    summonMethod: "fusion",
+    summonProcedure: "fusion",
+    position,
+    costPayments: materialSendOrder.map((material) => ({
+      card: material,
+      owner: activePlayer,
+      fromZone: activePlayer.field.includes(material)
+        ? "field"
+        : activePlayer.hand.includes(material)
+          ? "hand"
+          : this.findCardZone?.(activePlayer, material) || null,
+      toZone: "graveyard",
+      kind: "fusion_material",
+      contextLabel: "fusion_material",
+      options: {
+        awaitCardToGraveEvent: true,
+        awaitCardMovedEvent: true,
+      },
+    })),
+    perform: async (transaction) => {
+      const postMaterialLimitCheck = this.canPlaceCardOnField?.(
+        fusionMonster,
+        activePlayer,
+        {
+          isFacedown: false,
+          summonMethod: "fusion",
+          summonProcedure: "fusion",
+        },
+      );
+      if (postMaterialLimitCheck && postMaterialLimitCheck.ok === false) {
+        return { success: false, reason: "field_limit_after_materials" };
+      }
+      const moveResult = await this.moveCard(
+        fusionMonster,
+        activePlayer,
+        "field",
+        {
+          fromZone: "extraDeck",
+          position,
+          isFacedown: false,
+          resetAttackFlags: true,
+          summonMethodOverride: "fusion",
+          summonProcedure: "fusion",
+          summonOrigin: SUMMON_ORIGINS.EFFECT_RESOLUTION,
+          summonTransaction: transaction,
+          contextLabel: "fusion_summon",
+          awaitCardMovedEvent: true,
+        },
+      );
+      if (moveResult?.success !== false) {
+        this.ui.log(
+          `Fusion Summoned ${fusionMonster.name} using ${
+            requiredNames || "selected materials"
+          }.${extraNote}`,
+        );
+      }
+      return moveResult;
+    },
   });
-
+  const result = await this.executeSummonTransaction(prepared);
   this.updateBoard();
-  return true;
+  return result?.success === true;
 }
 
 /**
@@ -314,20 +426,11 @@ export async function performFusionSummon(
  */
 export async function performSpecialSummon(handIndex, position, actor = this.player) {
   const player = actor || this.player;
-  const opponent = this.getOpponent?.(player) || this.bot;
   const card = player.hand[handIndex];
   if (!card) return;
 
   if (Array.isArray(card.specialSummonOnlyBy)) {
     this.ui?.log?.(`${card.name} cannot be Special Summoned this way.`);
-    return;
-  }
-
-  const attempt = await this.offerSummonAttempt(card, player, {
-    method: "special",
-    fromZone: "hand",
-  });
-  if (attempt?.negated) {
     return;
   }
 
@@ -339,18 +442,38 @@ export async function performSpecialSummon(handIndex, position, actor = this.pla
     return;
   }
 
-  // Remove from hand
-  player.hand.splice(handIndex, 1);
-
-  // Add to field
-  card.position = position;
-  card.isFacedown = false;
-  card.hasAttacked = false;
-  card.cannotAttackThisTurn = true; // Cannot attack this turn (from Eel effect)
-  card.owner = player.id;
-  player.field.push(card);
-
-  this.ui.log(`Special Summoned ${card.name} from hand.`);
+  const prepared = this.createPreparedSummon({
+    card,
+    controller: player,
+    sourceZone: "hand",
+    summonOrigin: SUMMON_ORIGINS.EFFECT_RESOLUTION,
+    summonMode: SUMMON_MODES.SUMMON,
+    summonMethod: "special",
+    summonProcedure: "card_effect",
+    position,
+    perform: async (transaction) => {
+      const moveResult = await this.moveCard(card, player, "field", {
+        fromZone: "hand",
+        position,
+        isFacedown: false,
+        resetAttackFlags: true,
+        summonMethodOverride: "special",
+        summonProcedure: "card_effect",
+        summonOrigin: SUMMON_ORIGINS.EFFECT_RESOLUTION,
+        summonTransaction: transaction,
+        sourceCard: this.currentEffectContext?.source || null,
+        effectId: this.currentEffectContext?.effect?.id || null,
+        contextLabel: "effect_special_summon",
+        awaitCardMovedEvent: true,
+      });
+      if (moveResult?.success !== false) {
+        card.cannotAttackThisTurn = true;
+        this.ui.log(`Special Summoned ${card.name} from hand.`);
+      }
+      return moveResult;
+    },
+  });
+  const result = await this.executeSummonTransaction(prepared);
 
   // Clear pending special summon and unlock actions
   this.pendingSpecialSummon = null;
@@ -361,16 +484,6 @@ export async function performSpecialSummon(handIndex, position, actor = this.pla
     this.ui.applyHandTargetableIndices("player", []);
   }
 
-  await presentSummonBeforeAfterSummon(this);
-
-  // Emit after_summon for special summons performed directly from hand
-  await this.emit("after_summon", {
-    card,
-    player,
-    opponent,
-    method: "special",
-    fromZone: "hand",
-  });
-
   this.updateBoard();
+  return result;
 }

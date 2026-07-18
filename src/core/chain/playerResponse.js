@@ -41,12 +41,25 @@ export async function playerChooseChainResponse(player, activatable, context) {
         controller.abort("response_timeout");
       }, timeoutMs);
       try {
-        chosenOption = await ui.showChainResponseModal(
+        const resolveHuman = () => ui.showChainResponseModal(
           activatable,
           context,
           this.getChainSummary?.() || [],
           { signal: controller.signal },
         );
+        chosenOption = typeof this.game?.requestDecision === "function"
+          ? await this.game.requestDecision({
+              kind: "chain_response",
+              actor: player,
+              candidates: activatable,
+              contextSnapshot: {
+                type: context?.type || null,
+                chainId: this.activeChainId ?? null,
+                respondingToLinkId: this.getLastChainLink?.()?.linkId ?? null,
+              },
+              resolveHuman,
+            })
+          : await resolveHuman();
       } finally {
         clearTimeout(timeoutId);
         if (this.activeResponseAbortController === controller) {
@@ -73,26 +86,8 @@ export async function playerChooseChainResponse(player, activatable, context) {
   // Phase 4: choosing a response selects only the effect. Cost and target
   // selections belong to the canonical activation transaction.
   if (chosenOption) {
-    // Emitir evento para captura de replay
-    this.game?.emit?.("chain_response", {
-      player,
-      responded: true,
-      card: chosenOption.card,
-      chainLength: this.chainStack?.length || 0,
-      triggerCard: context?.card || null,
-    });
-
     return chosenOption;
   }
-
-  // Emitir evento para captura de replay (jogador passou)
-  this.game?.emit?.("chain_response", {
-    player,
-    responded: false,
-    card: null,
-    chainLength: this.chainStack?.length || 0,
-    triggerCard: context?.card || null,
-  });
 
   return null;
 }

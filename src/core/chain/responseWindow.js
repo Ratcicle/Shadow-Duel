@@ -267,7 +267,21 @@ export async function offerChainResponse(player, context) {
 
   // AI logic - use controllerType instead of player.id to support online PvP
   if (isAI(player)) {
-    return this.botChooseChainResponse(player, activatable, context);
+    const resolveAI = () =>
+      this.botChooseChainResponse(player, activatable, context);
+    return typeof this.game?.requestDecision === "function"
+      ? this.game.requestDecision({
+          kind: "chain_response",
+          actor: player,
+          candidates: activatable,
+          contextSnapshot: {
+            type: context?.type || null,
+            chainId: this.activeChainId ?? null,
+            respondingToLinkId: this.getLastChainLink?.()?.linkId ?? null,
+          },
+          resolveAI,
+        })
+      : resolveAI();
   }
 
   // Human player - show UI

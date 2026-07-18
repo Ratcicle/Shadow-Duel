@@ -197,64 +197,32 @@ async function removeNegatedCard(game, card, source, sourcePlayer) {
   return false;
 }
 
-function markChainLinkNegated(game, targetCard, context, effect = null) {
+function markChainLinkNegated(game, context) {
   if (!Array.isArray(game?.chainSystem?.chainStack)) return null;
   const chainSystem = game.chainSystem;
-  const explicitLink =
+  const linkReference =
     context?.respondingToChainLink ||
     context?.activationAttempt?.linkId ||
     null;
-  let link = chainSystem.markChainLinkActivationNegated?.(explicitLink, {
+  const link = chainSystem.markChainLinkActivationNegated?.(linkReference, {
     negatedBy: context?.negatedBy || null,
   });
-  if (!link) {
-    chainSystem.warnLegacyChainContract?.(
-      "negation lookup by card/effect instead of linkId",
-    );
-    link = chainSystem.chainStack.find((candidate) => {
-      if (candidate?.card !== targetCard) return false;
-      if (effect && candidate?.effect && candidate.effect !== effect) {
-        return false;
-      }
-      return true;
-    });
-    if (link) {
-      chainSystem.markChainLinkActivationNegated?.(link, {
-        negatedBy: context?.negatedBy || null,
-      });
-    }
-  }
   if (link) {
     context.negatedLink = link;
   }
   return link;
 }
 
-function markChainLinkEffectNegated(game, targetCard, context, effect = null) {
+function markChainLinkEffectNegated(game, context) {
   if (!Array.isArray(game?.chainSystem?.chainStack)) return null;
   const chainSystem = game.chainSystem;
-  const explicitLink =
+  const linkReference =
     context?.respondingToChainLink ||
     context?.activationAttempt?.linkId ||
     null;
-  let link = chainSystem.markChainLinkEffectNegated?.(explicitLink, {
+  const link = chainSystem.markChainLinkEffectNegated?.(linkReference, {
     negatedBy: context?.negatedBy || null,
   });
-  if (!link) {
-    chainSystem.warnLegacyChainContract?.(
-      "effect negation lookup by card/effect instead of linkId",
-    );
-    link = chainSystem.chainStack.find(
-      (candidate) =>
-        candidate?.card === targetCard &&
-        (!effect || !candidate?.effect || candidate.effect === effect),
-    );
-    if (link) {
-      chainSystem.markChainLinkEffectNegated?.(link, {
-        negatedBy: context?.negatedBy || null,
-      });
-    }
-  }
   if (link) context.effectNegatedLink = link;
   return link;
 }
@@ -295,12 +263,9 @@ export async function handleNegateActivation(action, ctx, targets, engine) {
   }
 
   activationAttempt.activationNegated = true;
-  // Phase 9 compatibility alias for consumers outside the Chain Link contract.
-  activationAttempt.negated = true;
   context.activationNegated = true;
-  context.negated = true;
   context.negatedBy = source;
-  markChainLinkNegated(game, targetCard, context, activationAttempt.effect);
+  markChainLinkNegated(game, context);
 
   if (action.storeNegatedCardAs) {
     if (!ctx._actionTargets || typeof ctx._actionTargets !== "object") {
@@ -333,12 +298,7 @@ export async function handleNegateEffect(action, ctx, targets, engine) {
 
   context.effectNegated = true;
   context.effectNegatedBy = source;
-  const link = markChainLinkEffectNegated(
-    game,
-    targetCard,
-    context,
-    activationAttempt.effect,
-  );
+  const link = markChainLinkEffectNegated(game, context);
   if (!link) {
     getUI(game)?.log?.("No Chain Link found for effect negation.");
     return false;
@@ -365,10 +325,10 @@ export async function handleNegateSummonOrActivationAndDestroy(
   const context = ctx?.activationContext?.context || {};
   if (!game || !source || !context) return false;
 
-  const summonAttempt = context.summonAttempt || null;
+  const summonTransaction = context.summonTransaction || null;
   const activationAttempt = context.activationAttempt || null;
   const targetCard =
-    summonAttempt?.card ||
+    summonTransaction?.card ||
     activationAttempt?.card ||
     context.card ||
     context.targetCard ||
@@ -396,19 +356,37 @@ export async function handleNegateSummonOrActivationAndDestroy(
     }
   }
 
-  if (summonAttempt) {
-    summonAttempt.negated = true;
+  if (summonTransaction) {
+    const summonId =
+      context.summonId ??
+      summonTransaction.summonId ??
+      null;
+    const transaction = game.markSummonNegated?.(summonId, {
+      destination: action.negatedSummonDestination || "graveyard",
+      destroyed: true,
+      sourceCard: source,
+      sourcePlayer: player,
+      linkId: context.linkId ?? null,
+    });
+    if (!transaction) {
+      getUI(game)?.log?.("No pending Summon found for negation.");
+      return false;
+    }
+    context.summonTransaction = transaction;
+    context.summonId = transaction.summonId;
+    context.summonNegated = true;
+    context.negatedBy = source;
+    getUI(game)?.log(`${source.name} negated ${targetCard.name}.`);
+    game.updateBoard?.();
+    return true;
   }
   if (activationAttempt) {
     activationAttempt.activationNegated = true;
-    // Phase 9 compatibility alias.
-    activationAttempt.negated = true;
   }
-  context.activationNegated = activationAttempt != null;
-  context.negated = true;
+  context.activationNegated = true;
   context.negatedBy = source;
 
-  markChainLinkNegated(game, targetCard, context, activationAttempt?.effect);
+  markChainLinkNegated(game, context);
 
   await removeNegatedCard(game, targetCard, source, player);
   getUI(game)?.log(`${source.name} negated ${targetCard.name}.`);

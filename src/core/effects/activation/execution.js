@@ -9,6 +9,7 @@ import {
   canActivateSetQuickSpell,
   isQuickSpell,
 } from "../../game/spellTrap/quickSpellRules.js";
+import { getCanonicalEffectActivationZones } from "../../chain/legality.js";
 
 function hasQuickSpellLegalWindowContext(context = {}) {
   return (
@@ -92,7 +93,7 @@ export async function activateMonsterFromGraveyard(
     : card.effects?.find(
         (e) =>
           e.timing === "ignition" &&
-          e.requireZone === "graveyard" &&
+          getCanonicalEffectActivationZones(card, e).includes("graveyard") &&
           (!requestedEffectId || e.id === requestedEffectId)
       );
 
@@ -128,6 +129,9 @@ export async function activateMonsterFromGraveyard(
     autoSelectSingleTarget: activationContext?.autoSelectSingleTarget,
     autoSelectTargets: activationContext?.autoSelectTargets,
     actionContext: activationContext?.actionContext || null,
+    costSelections: activationContext?.costSelections || {},
+    targetSelections: activationContext?.targetSelections || selections || {},
+    resolutionSelections: activationContext?.resolutionSelections || {},
     prepareOnly: activationContext?.prepareOnly === true,
   };
 
@@ -206,8 +210,7 @@ export async function activateMonsterFromGraveyard(
   }
 
   // Only register usage and check win after successful resolution
-  this.registerOncePerTurnUsage(card, player, effect);
-  this.registerOncePerDuelUsage(card, player, effect);
+  this.commitEffectUsage(card, player, effect);
 
   this.game.checkWinCondition();
   return {
@@ -240,12 +243,13 @@ export async function activateFieldSpell(
     return { success: false, needsSelection: false, reason: check.reason };
   }
 
-  // Look for on_field_activate OR ignition with requireZone: "fieldSpell"
+  // Look for on_field_activate or an ignition effect declared for Field Zone.
   const effect = (card.effects || []).find(
     (e) =>
       e &&
       (e.timing === "on_field_activate" ||
-        (e.timing === "ignition" && e.requireZone === "fieldSpell"))
+        (e.timing === "ignition" &&
+          getCanonicalEffectActivationZones(card, e).includes("fieldSpell")))
   );
 
   if (!effect) {
@@ -279,6 +283,9 @@ export async function activateFieldSpell(
     autoSelectSingleTarget: activationContext?.autoSelectSingleTarget,
     autoSelectTargets: activationContext?.autoSelectTargets,
     actionContext: activationContext?.actionContext || null,
+    costSelections: activationContext?.costSelections || {},
+    targetSelections: activationContext?.targetSelections || selections || {},
+    resolutionSelections: activationContext?.resolutionSelections || {},
     prepareOnly: activationContext?.prepareOnly === true,
   };
 
@@ -349,7 +356,7 @@ export async function activateFieldSpell(
   }
 
   // Only register usage and check win after successful resolution
-  this.registerOncePerTurnUsage(card, player, effect);
+  this.commitEffectUsage(card, player, effect);
   this.game.checkWinCondition();
 
   await this.handleBlueprintStorageAfterResolution(card, effect, ctx);
@@ -467,6 +474,9 @@ export async function activateSpellTrapEffect(
     quickSpellActivationFromSet,
     resolvedTargets: activationContext?.resolvedTargets || null,
     trapActivationFromSet: trapActivationFromSet || isSetTrap || false,
+    costSelections: activationContext?.costSelections || {},
+    targetSelections: activationContext?.targetSelections || selections || {},
+    resolutionSelections: activationContext?.resolutionSelections || {},
     prepareOnly: activationContext?.prepareOnly === true,
   };
   let effect = null;
@@ -604,12 +614,8 @@ export async function activateSpellTrapEffect(
     activationZone,
     activationContext: normalizedActivationContext,
     actionContext: normalizedActivationContext.actionContext || null,
-    selections: selections || normalizedActivationContext.selections || null,
+    targetSelections: normalizedActivationContext.targetSelections,
   };
-
-  // Ensure selections propagate through activation context for network resume.
-  normalizedActivationContext.selections =
-    normalizedActivationContext.selections || selections || null;
 
   const condCheck = this.evaluateConditions(effect.conditions, ctx);
   if (!condCheck.ok) {
@@ -711,7 +717,7 @@ export async function activateSpellTrapEffect(
     await this.game.waitForAiPresentationStep(player);
   }
 
-  this.registerOncePerTurnUsage(card, player, effect);
+  this.commitEffectUsage(card, player, effect);
   this.game.checkWinCondition();
 
   await this.handleBlueprintStorageAfterResolution(card, effect, ctx);
@@ -803,8 +809,8 @@ export async function activateMonsterEffect(
           e &&
           e.timing === "ignition" &&
           (activationZone === "hand"
-            ? e.requireZone === "hand"
-            : !e.requireZone || e.requireZone === "field") &&
+            ? getCanonicalEffectActivationZones(card, e).includes("hand")
+            : getCanonicalEffectActivationZones(card, e).includes("field")) &&
           (!requestedEffectId || e.id === requestedEffectId)
       );
 
@@ -857,6 +863,9 @@ export async function activateMonsterEffect(
     autoSelectSingleTarget: activationContext?.autoSelectSingleTarget,
     autoSelectTargets: activationContext?.autoSelectTargets,
     actionContext: activationContext?.actionContext || null,
+    costSelections: activationContext?.costSelections || {},
+    targetSelections: activationContext?.targetSelections || selections || {},
+    resolutionSelections: activationContext?.resolutionSelections || {},
     prepareOnly: activationContext?.prepareOnly === true,
   };
 
@@ -945,8 +954,7 @@ export async function activateMonsterEffect(
   if (actionsResultFailed(actionsResult)) {
     return buildActionsFailure(actionsResult);
   }
-  this.registerOncePerTurnUsage(card, player, effect);
-  this.registerOncePerDuelUsage(card, player, effect);
+  this.commitEffectUsage(card, player, effect);
 
   this.game.checkWinCondition();
   return { success: true, needsSelection: false };

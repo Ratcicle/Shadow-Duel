@@ -32,6 +32,10 @@ export function canStartAction(options = {}) {
     selectionState === "confirming";
   const resolvingActive =
     this.isResolvingEffect ||
+    this.activeDamageStepTransaction != null ||
+    Number(this.damageStepProcedureDepth || 0) > 0 ||
+    this.activeSummonTransaction != null ||
+    Number(this.summonProcedureDepth || 0) > 0 ||
     selectionState === "resolving" ||
     this.eventResolutionDepth > 0;
 

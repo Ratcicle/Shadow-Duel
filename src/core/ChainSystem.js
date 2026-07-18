@@ -27,10 +27,6 @@ import * as chainTiming from "./chain/timing.js";
 import * as chainSegoc from "./chain/segoc.js";
 import * as chainUsage from "./chain/usage.js";
 import * as chainFinalization from "./chain/finalization.js";
-import { CHAIN_CONTEXTS } from "./chain/contexts.js";
-
-// Re-export for backwards compatibility (CHAIN_CONTEXTS used to live here)
-export { CHAIN_CONTEXTS };
 export {
   CHAIN_ACTIVATION_KINDS,
   CHAIN_EFFECT_KINDS,
@@ -50,7 +46,9 @@ export { USAGE_POLICIES } from "./chain/usage.js";
  * @property {Object} controller
  * @property {Object} effect
  * @property {string} activationZone
- * @property {Object} selections
+ * @property {Object} costSelections
+ * @property {Object} targetSelections
+ * @property {Object} resolutionSelections
  * @property {Object} activationContext
  * @property {Object} activationAttempt
  * @property {boolean} committed
@@ -73,7 +71,9 @@ export { USAGE_POLICIES } from "./chain/usage.js";
  * @property {string} responseContextType
  * @property {Object} context - Activation context
  * @property {string} activationZone - Zone the source occupied at activation
- * @property {Object|null} selections - Selected targets (if any)
+ * @property {Object} costSelections - Choices made while paying costs
+ * @property {Object} targetSelections - Targets declared at activation
+ * @property {Object} resolutionSelections - Non-targeting choices made at resolution
  * @property {number} chainLevel - Position in chain (1, 2, 3...)
  * @property {boolean} costsPaid - Whether activationCosts were paid
  * @property {string} preparationStatus
@@ -178,10 +178,8 @@ export default class ChainSystem {
     this.nextLinkId = 1;
 
     /** @type {number} Next deterministic activation-usage reservation */
-    this.nextUsageReservationId = 1;
 
     /** @type {Map<number, Object>} Provisional "activate" limit reservations */
-    this.usageReservations = new Map();
 
     /** @type {number} Next deterministic post-Chain finalization identity */
     this.nextFinalizationId = 1;
@@ -200,15 +198,6 @@ export default class ChainSystem {
 
     /** @type {ChainLink|null} Link currently outside the stack during resolution */
     this.currentResolvingLink = null;
-
-    /** @type {Set<string>} Phase 9 compatibility warnings already emitted */
-    this.legacyContractWarnings = new Set();
-
-    /** @type {boolean} Whether compatibility access should warn */
-    this.testMode =
-      options.testMode === true ||
-      (typeof localStorage !== "undefined" &&
-        localStorage.getItem("shadow_duel_test_mode") === "true");
 
     /** @type {Object} Serializable Fast Effect Timing state */
     this.fastEffectState = {
@@ -299,7 +288,7 @@ export default class ChainSystem {
   // ============================================================
   // CHAIN RESPONSE POLICY AND SELECTION
   // Methods moved to src/core/chain/botResponsePolicy.js:
-  //   botChooseChainResponse, getBotSelectionsForEffect, selectBestTargets
+  //   botChooseChainResponse
   // Methods moved to src/core/chain/playerResponse.js:
   //   playerChooseChainResponse
   // Methods moved to src/core/chain/selection.js:
@@ -330,8 +319,6 @@ export default class ChainSystem {
 
 ChainSystem.prototype.createChainLink = chainLink.createChainLink;
 ChainSystem.prototype.serializeChainLink = chainLink.serializeChainLink;
-ChainSystem.prototype.warnLegacyChainContract =
-  chainLink.warnLegacyChainContract;
 ChainSystem.prototype.markChainLinkActivationNegated =
   chainLink.markChainLinkActivationNegated;
 ChainSystem.prototype.markChainLinkEffectNegated =
@@ -484,9 +471,6 @@ ChainSystem.prototype.offerChainResponse = chainResponseWindow.offerChainRespons
 
 ChainSystem.prototype.botChooseChainResponse =
   chainBotResponsePolicy.botChooseChainResponse;
-ChainSystem.prototype.getBotSelectionsForEffect =
-  chainBotResponsePolicy.getBotSelectionsForEffect;
-ChainSystem.prototype.selectBestTargets = chainBotResponsePolicy.selectBestTargets;
 
 // -----------------------------------------------------------------------------
 // Player Response: Attach methods from modular chain/playerResponse.js

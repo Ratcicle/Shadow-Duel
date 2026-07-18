@@ -14,9 +14,12 @@ export const burningWestCards = [
     image: "assets/Gunslinger of the Burning West.png",
     effects: [
       {
+
+        activationZones: ["hand"],
+
+        usagePolicy: "use",
         id: "burning_west_gunslinger_special_summon",
         timing: "ignition",
-        requireZone: "hand",
         requirePhase: ["main1", "main2"],
         oncePerTurn: true,
         oncePerTurnName: "burning_west_gunslinger_special_summon",
@@ -43,6 +46,8 @@ export const burningWestCards = [
         ],
       },
       {
+
+        usagePolicy: "use",
         id: "burning_west_gunslinger_battle_discard",
         timing: "on_event",
         triggerRequirement: "optional",
@@ -103,9 +108,12 @@ export const burningWestCards = [
     image: "assets/Wanted in the Burning West.png",
     effects: [
       {
+
+        activationZones: ["spellTrap"],
+
+        usagePolicy: "use",
         id: "burning_west_wanted_declare_type",
         timing: "ignition",
-        requireZone: "spellTrap",
         requirePhase: ["main1", "main2"],
         requireFaceup: true,
         oncePerTurn: true,
@@ -124,6 +132,8 @@ export const burningWestCards = [
         ],
       },
       {
+
+        usagePolicy: "use",
         id: "burning_west_wanted_reward",
         timing: "on_event",
         triggerRequirement: "optional",
@@ -236,9 +246,12 @@ export const burningWestCards = [
     image: "assets/Undertaker of the Burning West.png",
     effects: [
       {
+
+        activationZones: ["field"],
+
+        usagePolicy: "use",
         id: "burning_west_undertaker_revive",
         timing: "ignition",
-        requireZone: "field",
         requirePhase: ["main1", "main2"],
         requireFaceup: true,
         oncePerTurn: true,
@@ -285,6 +298,8 @@ export const burningWestCards = [
         ],
       },
       {
+
+        usagePolicy: "use",
         id: "burning_west_undertaker_battle_revenge",
         timing: "on_event",
         triggerRequirement: "mandatory",
@@ -319,6 +334,10 @@ export const burningWestCards = [
     image: "assets/Butcher of the Burning West.png",
     effects: [
       {
+
+        usagePolicy: "use",
+
+        activationLabelKey: "effects.butcher.searchMonster",
         id: "burning_west_butcher_search_monster",
         timing: "on_event",
         triggerRequirement: "optional",
@@ -353,6 +372,10 @@ export const burningWestCards = [
         ],
       },
       {
+
+        usagePolicy: "use",
+
+        activationLabelKey: "effects.butcher.followupSearch",
         id: "burning_west_butcher_followup_search",
         timing: "on_event",
         triggerRequirement: "optional",
@@ -417,9 +440,12 @@ export const burningWestCards = [
         },
       },
       {
+
+        activationZones: ["field"],
+
+        usagePolicy: "activate",
         id: "burning_west_specialist_take_control",
         timing: "ignition",
-        requireZone: "field",
         requirePhase: ["main1", "main2"],
         requireFaceup: true,
         oncePerDuel: true,
@@ -533,9 +559,12 @@ export const burningWestCards = [
         ],
       },
       {
+
+        activationZones: ["graveyard"],
+
+        usagePolicy: "use",
         id: "burning_peacemaker_wanted_search",
         timing: "ignition",
-        requireZone: "graveyard",
         requirePhase: ["main1", "main2"],
         oncePerTurn: true,
         oncePerTurnName: "burning_peacemaker_wanted_search",
@@ -582,6 +611,8 @@ export const burningWestCards = [
     image: "assets/Quick Draw in the Burning West.png",
     effects: [
       {
+
+        usagePolicy: "activate",
         id: "quick_draw_in_the_burning_west",
         timing: "on_play",
         speed: 2,
@@ -644,6 +675,8 @@ export const burningWestCards = [
     image: "assets/Funeral at Sunset.png",
     effects: [
       {
+
+        usagePolicy: "activate",
         id: "funeral_at_sunset",
         timing: "on_play",
         oncePerTurn: true,
@@ -712,6 +745,8 @@ export const burningWestCards = [
     image: "assets/Burning West Deadeye.png",
     effects: [
       {
+
+        usagePolicy: "activate",
         id: "deadeye_of_the_burning_west",
         timing: "on_play",
         oncePerTurn: true,
@@ -806,6 +841,8 @@ export const burningWestCards = [
     image: "assets/Preacher of the Burning West.png",
     effects: [
       {
+
+        usagePolicy: "use",
         id: "burning_west_preacher_hand_protection",
         timing: "passive",
         requireZone: "hand",
@@ -837,6 +874,8 @@ export const burningWestCards = [
         },
       },
       {
+
+        usagePolicy: "use",
         id: "burning_west_preacher_graveyard_replacement",
         timing: "passive",
         requireZone: "field",
@@ -1057,6 +1096,8 @@ export const burningWestCards = [
     image: "assets/Ambush in Crash Town.png",
     effects: [
       {
+
+        usagePolicy: "activate",
         id: "ambush_in_crash_town",
         timing: "on_event",
         triggerRequirement: "optional",
@@ -1106,6 +1147,8 @@ export const burningWestCards = [
     image: "assets/Burning Reward.png",
     effects: [
       {
+
+        usagePolicy: "activate",
         id: "burning_reward",
         timing: "on_activate",
         event: "battle_destroy",
@@ -1188,6 +1231,8 @@ export const burningWestCards = [
     image: "assets/Law in the Burning West.png",
     effects: [
       {
+
+        usagePolicy: "activate",
         id: "law_in_the_burning_west_activation",
         timing: "on_event",
         triggerRequirement: "optional",

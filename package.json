@@ -11,7 +11,9 @@
   },
   "scripts": {
     "dev": "serve .",
-    "test": "node scripts/run_tests.mjs"
+    "test": "node scripts/run_tests.mjs",
+    "audit:chain": "node scripts/audit_chain_metadata.mjs",
+    "replay": "node scripts/replay_duel.mjs"
   },
   "devDependencies": {
     "serve": "^14.2.6"

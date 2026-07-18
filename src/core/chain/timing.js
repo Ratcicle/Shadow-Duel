@@ -23,7 +23,6 @@ export const FAST_EFFECT_ORIGINS = Object.freeze({
   TRIGGER_CHAIN: "trigger_chain",
   POST_CHAIN: "post_chain",
   PHASE_TRANSITION_INTENT: "phase_transition_intent",
-  // Phase 6 removes this procedural compatibility origin.
   SUMMON_ATTEMPT: "summon_attempt",
 });
 
@@ -99,6 +98,7 @@ export function transitionFastEffectState(state, details = {}) {
         : previous.phaseIntent,
   });
   this.fastEffectState = next;
+  this.game?.ui?.updatePriorityIndicator?.(this.getFastEffectState());
   this.game?.notify?.("fast_effect_timing", this.getFastEffectState());
   return this.getFastEffectState();
 }
@@ -131,6 +131,7 @@ export function resetFastEffectTiming({ notify = false } = {}) {
     turnPlayer: this.getCurrentTurnPlayer?.() || null,
     priorityPlayer: this.getCurrentTurnPlayer?.() || null,
   });
+  this.game?.ui?.updatePriorityIndicator?.(this.getFastEffectState());
   if (notify) {
     this.game?.notify?.("fast_effect_timing", this.getFastEffectState());
   }
@@ -178,7 +179,7 @@ function normalizePreparedActivations(input = {}) {
 
 function lastPreparedController(preparedActivations) {
   const last = preparedActivations[preparedActivations.length - 1] || null;
-  return last?.controller || last?.player || null;
+  return last?.controller || null;
 }
 
 function timingResult(chainSystem, overrides = {}) {
@@ -199,11 +200,6 @@ function timingResult(chainSystem, overrides = {}) {
       resolutionResult?.activationNegated === true,
     effectNegated:
       overrides.effectNegated === true || resolutionResult?.effectNegated === true,
-    // Phase 9 compatibility result alias.
-    negated:
-      overrides.activationNegated === true ||
-      resolutionResult?.activationNegated === true ||
-      resolutionResult?.negated === true,
     resolutionResult,
     state: chainSystem.getFastEffectState(),
     ...(overrides.reason ? { reason: overrides.reason } : {}),
@@ -261,7 +257,8 @@ export async function runFastEffectTiming(input = {}) {
   }
 
   const nestedFlushContinuation =
-    this.timingDepth > 0 && this.game?._flushingPendingChainEvents === true;
+    this.timingDepth > 0 &&
+    this.game?._flushingPendingTriggerOccurrences === true;
   if (this.timingDepth > 0 && !nestedFlushContinuation) {
     return timingResult(this, {
       ok: false,
@@ -349,9 +346,7 @@ export async function runFastEffectTiming(input = {}) {
         this.getOpponent?.(lastPreparedController(nextPreparedActivations)) ||
         null;
     } else if (origin === FAST_EFFECT_ORIGINS.SUMMON_ATTEMPT) {
-      // Phase 6 will replace this explicit procedural adapter.
-      firstPlayer =
-        input.priorityPlayer || this.getOpponent?.(actionPlayer) || turnPlayer;
+      firstPlayer = input.priorityPlayer || turnPlayer;
     } else {
       firstPlayer = turnPlayer;
     }
@@ -428,6 +423,26 @@ export async function runFastEffectTiming(input = {}) {
 
       if (windowResult?.chainBuilt !== true) {
         this.activeTimingWindowId = null;
+        if (
+          origin === FAST_EFFECT_ORIGINS.SUMMON_ATTEMPT &&
+          input.pauseAfterRootResolution === true
+        ) {
+          this.transitionFastEffectState(FAST_EFFECT_STATES.TRIGGER_CHECK, {
+            origin,
+            timingWindowId: null,
+            turnPlayer,
+            actionPlayer,
+            priorityPlayer: null,
+            lastLinkController: null,
+            chainId: null,
+            consecutivePasses: 0,
+            phaseIntent: null,
+          });
+          return timingResult(this, {
+            chainBuilt,
+            resolutionResult: rootResolutionResult,
+          });
+        }
         this.transitionFastEffectState(FAST_EFFECT_STATES.OPEN, {
           origin: nextOrigin,
           timingWindowId: null,
@@ -453,6 +468,26 @@ export async function runFastEffectTiming(input = {}) {
       }
       if (isPhaseIntent) phaseTransitionInterrupted = true;
       this.activeTimingWindowId = null;
+      if (
+        origin === FAST_EFFECT_ORIGINS.SUMMON_ATTEMPT &&
+        input.pauseAfterRootResolution === true
+      ) {
+        this.transitionFastEffectState(FAST_EFFECT_STATES.TRIGGER_CHECK, {
+          origin,
+          timingWindowId: null,
+          turnPlayer,
+          actionPlayer,
+          priorityPlayer: null,
+          lastLinkController: windowResult.lastLinkController || null,
+          chainId: windowResult.chainId ?? null,
+          consecutivePasses: 0,
+          phaseIntent: null,
+        });
+        return timingResult(this, {
+          chainBuilt: true,
+          resolutionResult: rootResolutionResult,
+        });
+      }
       this.transitionFastEffectState(FAST_EFFECT_STATES.POST_CHAIN_CHECK, {
         origin: FAST_EFFECT_ORIGINS.POST_CHAIN,
         timingWindowId: null,
@@ -465,10 +500,7 @@ export async function runFastEffectTiming(input = {}) {
         phaseIntent: null,
       });
 
-      const flushPending =
-        this.game?.flushPendingTriggerOccurrences ||
-        // Phase 9: remove after all embedders expose the canonical name.
-        this.game?.flushPendingChainEvents;
+      const flushPending = this.game?.flushPendingTriggerOccurrences;
       const flushResult = await flushPending?.call(this.game, {
         reason: "fast_effect_post_chain",
       });

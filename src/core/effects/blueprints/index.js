@@ -316,8 +316,7 @@ export async function executeEffectBlueprint(blueprint, ctx, selections = null) 
   }
 
   if (respectUsageLimits) {
-    this.registerOncePerTurnUsage(execCtx.source, execCtx.player, effect);
-    this.registerOncePerDuelUsage(execCtx.source, execCtx.player, effect);
+    this.commitEffectUsage(execCtx.source, execCtx.player, effect);
   }
 
   return { success: true, needsSelection: false };

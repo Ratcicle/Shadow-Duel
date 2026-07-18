@@ -62,12 +62,12 @@ export function getCurrentChainActivationContext(context) {
   const lastLink = this.getLastChainLink?.();
   const controller = lastLink?.controller || null;
   if (!lastLink?.card || !controller || !lastLink?.effect) return null;
-  const activationType = lastLink.responseContextType;
+  const responseContextType = lastLink.responseContextType;
   return {
     ...(context || {}),
     originalContext: context || null,
-    type: activationType,
-    event: activationType,
+    type: responseContextType,
+    event: responseContextType,
     card: lastLink.card,
     player: controller,
     controller,
@@ -80,17 +80,12 @@ export function getCurrentChainActivationContext(context) {
       linkId: lastLink.linkId,
       card: lastLink.card,
       controller,
-      // Phase 9 compatibility alias.
-      player: controller,
       effect: lastLink.effect,
       effectId: lastLink.effectId,
       activationKind: lastLink.activationKind,
       activationZone: lastLink.activationZone || null,
       activationNegated: lastLink.activationNegated === true,
-      // Phase 9 compatibility alias.
-      negated: lastLink.activationNegated === true,
     },
-    activationType,
     activationKind: lastLink.activationKind,
     effectKind: lastLink.effectKind,
     responseContextType: lastLink.responseContextType,
@@ -815,9 +810,7 @@ export function findQuickMonsterEffect(
 
     const declaredZones = Array.isArray(effect.activationZones)
       ? effect.activationZones
-      : effect.requireZone
-        ? [effect.requireZone]
-        : null;
+      : null;
     const zoneMatches = declaredZones
       ? declaredZones.includes(activationZone)
       : activationZone === "field";

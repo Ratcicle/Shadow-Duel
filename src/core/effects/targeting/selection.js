@@ -462,6 +462,12 @@ export function selectCandidates(def, ctx) {
   const zoneName = def.zone || "field";
   const zoneList =
     Array.isArray(def.zones) && def.zones.length > 0 ? def.zones : [zoneName];
+  const excludedDamageStepTargets = Array.isArray(
+    ctx?.activationContext?.excludedDamageStepTargets,
+  )
+    ? ctx.activationContext.excludedDamageStepTargets
+    : [];
+  const bypassCache = excludedDamageStepTargets.length > 0;
 
   // ✅ CACHE: Gerar chave única baseada na definição do target
   const cacheKey = buildTargetingCacheKey(def, ctx);
@@ -483,7 +489,7 @@ export function selectCandidates(def, ctx) {
     );
   }
   
-  const cached = this._targetingCache?.get(cacheKey);
+  const cached = bypassCache ? null : this._targetingCache?.get(cacheKey);
   
   if (cached) {
     if (this._targetingCacheHits !== undefined) {
@@ -638,6 +644,12 @@ export function selectCandidates(def, ctx) {
         log(
           `[selectCandidates] Evaluating card: ${card.name} (archetype: ${card.archetype}, owner: ${owner.id})`
         );
+        if (excludedDamageStepTargets.includes(card)) {
+          log(
+            "[selectCandidates] Rejecting: card was determined for battle destruction",
+          );
+          continue;
+        }
         if (def.battleParticipant === true) {
           const battleParticipants = [
             ctx?.attacker,
@@ -1033,7 +1045,7 @@ export function selectCandidates(def, ctx) {
 
   // ✅ CACHE: Salvar resultado no cache
   const result = { zoneName, candidates };
-  if (this._targetingCache) {
+  if (this._targetingCache && !bypassCache) {
     this._targetingCache.set(cacheKey, result);
   }
 

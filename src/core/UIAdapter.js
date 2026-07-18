@@ -18,7 +18,7 @@ export function createUIAdapter(renderer) {
         return target[prop];
       }
       if (!renderer) {
-        return undefined;
+        return () => undefined;
       }
       const value = renderer[prop];
       if (typeof value === "function") {

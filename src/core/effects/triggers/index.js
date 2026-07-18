@@ -5,8 +5,7 @@
 
 // Registration functions
 export {
-  registerOncePerDuelUsage,
-  registerOncePerTurnUsage,
+  commitEffectUsage,
 } from "./registration.js";
 
 // Counter handlers
@@ -34,6 +33,9 @@ export {
   collectBattleCompletedTriggers,
   collectAttackDeclaredTriggers,
   collectBattleDamageTriggers,
+  collectBattleDamageInflictedTriggers,
+  collectCardFlippedTriggers,
+  collectDamageStepTriggers,
   collectEndPhaseTriggers,
   collectLpChangeTriggers,
   collectEffectTargetedTriggers,

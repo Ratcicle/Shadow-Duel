@@ -10,6 +10,7 @@ import {
   canActivateQuickSpellFromHand,
   isQuickSpell,
 } from "../../game/spellTrap/quickSpellRules.js";
+import { getCanonicalEffectActivationZones } from "../../chain/legality.js";
 
 function hasImpossibleSelectionRequirement(targetResult) {
   const requirements = targetResult?.selectionContract?.requirements || [];
@@ -63,7 +64,9 @@ export function hasActivatableGraveyardEffect(card, player = null) {
     return false;
   }
   return card.effects?.some(
-    (e) => e.timing === "ignition" && e.requireZone === "graveyard"
+    (e) =>
+      e.timing === "ignition" &&
+      getCanonicalEffectActivationZones(card, e).includes("graveyard")
   );
 }
 
@@ -266,9 +269,7 @@ export function canActivateMonsterEffectPreview(
         (e) =>
           e &&
           e.timing === "ignition" &&
-          (activationZone === "field"
-            ? !e.requireZone || e.requireZone === "field"
-            : e.requireZone === activationZone) &&
+          getCanonicalEffectActivationZones(card, e).includes(activationZone) &&
           (!requestedEffectId || e.id === requestedEffectId)
       );
 
@@ -425,9 +426,8 @@ export function canActivateSpellTrapEffectPreview(
         (e) =>
           e &&
           e.timing === "ignition" &&
-          (!e.requireZone ||
-            e.requireZone === "spellTrap" ||
-            e.requireZone === "field")
+          (getCanonicalEffectActivationZones(card, e).includes("spellTrap") ||
+            getCanonicalEffectActivationZones(card, e).includes("field"))
       );
       if (!hasFieldIgnition) {
         return {

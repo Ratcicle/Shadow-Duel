@@ -56,6 +56,7 @@ export async function applySpecialSummonToken(action, ctx) {
       silent: false,
     },
   );
+  this.game?.ensureDuelCardId?.(tokenCard);
   if (restrictionCheck?.ok === false) {
     return false;
   }
@@ -78,9 +79,13 @@ export async function applySpecialSummonToken(action, ctx) {
       targetPlayer,
       "field",
       {
+        fromZone: "token",
         position,
         isFacedown: false,
         resetAttackFlags: true,
+        summonOrigin: "effect_resolution",
+        summonMethodOverride: "special",
+        summonProcedure: "token_effect",
       }
     );
     if (
@@ -225,6 +230,7 @@ export async function applySpecialSummonSelfAsTrapMonster(action, ctx) {
     resetAttackFlags: true,
     summonMethodOverride: "special",
     summonProcedure,
+    summonOrigin: "effect_resolution",
     sourceCard: source,
     effectId: ctx?.effectId || ctx?.effect?.id || null,
   });
@@ -303,6 +309,9 @@ export async function applyCallOfTheHauntedSummon(action, ctx, targets) {
       position,
       isFacedown: false,
       resetAttackFlags: true,
+      summonOrigin: "effect_resolution",
+      summonMethodOverride: "special",
+      summonProcedure: "card_effect",
     });
     if (moveResult?.success === false) {
       return false;

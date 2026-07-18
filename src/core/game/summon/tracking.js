@@ -108,6 +108,7 @@ export async function resolveDelayedSummon(payload) {
       statusesOnSummon: summonData.statusesOnSummon,
       summonMethodOverride: summonData.summonMethod || "special",
       summonProcedure: summonData.summonProcedure || null,
+      summonOrigin: "effect_resolution",
     });
     if (moveResult?.success === false) {
       this.ui?.log?.(

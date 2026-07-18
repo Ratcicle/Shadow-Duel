@@ -62,8 +62,7 @@ export function attachEffectModules(EngineClass) {
   ]);
 
   attachMethods(EngineClass, triggers, [
-    "registerOncePerDuelUsage",
-    "registerOncePerTurnUsage",
+    "commitEffectUsage",
     "handleSpecialSummonTypeCounters",
     "handleFieldPresenceTypeSummonCounters",
     "assignFieldPresenceId",
@@ -79,6 +78,9 @@ export function attachEffectModules(EngineClass) {
     "collectBattleCompletedTriggers",
     "collectAttackDeclaredTriggers",
     "collectBattleDamageTriggers",
+    "collectBattleDamageInflictedTriggers",
+    "collectCardFlippedTriggers",
+    "collectDamageStepTriggers",
     "collectLpChangeTriggers",
     "collectEffectTargetedTriggers",
     "collectCardEquippedTriggers",
