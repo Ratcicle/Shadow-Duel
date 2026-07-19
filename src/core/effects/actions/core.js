@@ -1,6 +1,7 @@
 import { cardMatchesKind } from "../../Card.js";
 import { hasSynchroSummonPreviewCandidate } from "../../actionHandlers/summon/synchroEffects.js";
 import { mergeCanonicalSelections } from "../../game/selection/contract.js";
+import { checkSpecialSummonEligibility } from "../../game/summon/eligibility.js";
 
 /**
  * Actions Core - applyActions dispatcher and preview requirements
@@ -488,6 +489,12 @@ function buildTargetPreviewFilters(target = {}) {
   copyIfPresent("requireFaceup");
   copyIfPresent("isToken");
   copyIfPresent("isTuner");
+  copyIfPresent("lastSummonMethods");
+  copyIfPresent("summonMethods");
+  copyIfPresent("lastSummonMethod");
+  copyIfPresent("summonMethod");
+  copyIfPresent("lastSummonedFromZone");
+  copyIfPresent("lastSummonedFromZones");
   copyIfPresent("excludeCardName");
   copyIfPresent("excludeCardNames");
   copyIfPresent("excludeName");
@@ -507,13 +514,13 @@ function buildTargetPreviewFilters(target = {}) {
 function matchesPreviewFilters(engine, card, filters, ctx = {}) {
   if (!card) return false;
   if (filters.excludeCannotBeSpecialSummoned) {
-    if (card.cannotBeSpecialSummoned) return false;
     const summonProcedure =
       filters.summonProcedure || filters.specialSummonProcedure || "special";
-    if (
-      Array.isArray(card.specialSummonOnlyBy) &&
-      !card.specialSummonOnlyBy.includes(summonProcedure)
-    ) {
+    const eligibility = checkSpecialSummonEligibility(card, {
+      summonProcedure,
+      fromZone: filters.zone || null,
+    });
+    if (eligibility.ok === false) {
       return false;
     }
     const destinationPlayer =
@@ -1512,6 +1519,7 @@ export function checkActionPreviewRequirements(actions, ctx) {
       action.type === "special_summon_matching_level" ||
       action.type === "call_of_haunted_summon_and_bind"
     ) {
+      const optionalSummon = isActionOptionalNoop(action);
       const destinationPlayer =
         action.summonToOwner === "opponent" ? ctx?.opponent : player;
       const fieldSlotsFreedBeforeSummon = Math.max(
@@ -1522,10 +1530,11 @@ export function checkActionPreviewRequirements(actions, ctx) {
         0,
         (destinationPlayer?.field || []).length - fieldSlotsFreedBeforeSummon,
       );
-      if (occupiedMonsterZones >= 5) {
+      if (!optionalSummon && occupiedMonsterZones >= 5) {
         return { ok: false, reason: "Field is full." };
       }
       if (
+        !optionalSummon &&
         (action.type === "special_summon_from_zone" ||
           action.type === "special_summon_matching_level") &&
         !hasSpecialSummonCandidate(this, action, previewCtx)

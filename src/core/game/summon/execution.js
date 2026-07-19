@@ -10,6 +10,7 @@ import {
   SUMMON_ORIGINS,
   SUMMON_STATUSES,
 } from "./transaction.js";
+import { checkSpecialSummonEligibility } from "./eligibility.js";
 
 async function presentSummonBeforeAfterSummon(game) {
   const boardPresentation = game?.updateBoard?.();
@@ -429,7 +430,11 @@ export async function performSpecialSummon(handIndex, position, actor = this.pla
   const card = player.hand[handIndex];
   if (!card) return;
 
-  if (Array.isArray(card.specialSummonOnlyBy)) {
+  const eligibility = checkSpecialSummonEligibility(card, {
+    summonProcedure: "card_effect",
+    fromZone: "hand",
+  });
+  if (!eligibility.ok) {
     this.ui?.log?.(`${card.name} cannot be Special Summoned this way.`);
     return;
   }

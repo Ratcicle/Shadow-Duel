@@ -7,6 +7,7 @@
 
 import { botLogger } from "../../BotLogger.js";
 import { cardMatchesKind } from "../../Card.js";
+import { checkSpecialSummonEligibility } from "../../game/summon/eligibility.js";
 
 // Track duplicate selectCandidates calls per turn
 const selectCandidatesCallTracker = {};
@@ -103,13 +104,12 @@ function getSpecialSummonDestinationPlayer(def = {}, ctx = {}) {
 
 function canTargetBeSpecialSummoned(engine, card, def = {}, ctx = {}, zoneKey = null) {
   if (!card) return false;
-  if (card.cannotBeSpecialSummoned) return false;
-
   const summonProcedure = getSpecialSummonProcedureForTarget(def);
-  if (
-    Array.isArray(card.specialSummonOnlyBy) &&
-    !card.specialSummonOnlyBy.includes(summonProcedure)
-  ) {
+  const eligibility = checkSpecialSummonEligibility(card, {
+    summonProcedure,
+    fromZone: zoneKey || def.zone || null,
+  });
+  if (eligibility.ok === false) {
     return false;
   }
 
@@ -215,6 +215,8 @@ function buildTargetCardFilters(def = {}) {
   copyIfPresent("summonMethods");
   copyIfPresent("lastSummonMethod");
   copyIfPresent("summonMethod");
+  copyIfPresent("lastSummonedFromZone");
+  copyIfPresent("lastSummonedFromZones");
   copyIfPresent("counterType");
   copyIfPresent("hasCounter");
   copyIfPresent("minCounters");

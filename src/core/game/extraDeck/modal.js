@@ -12,6 +12,7 @@ import {
   SUMMON_MODES,
   SUMMON_ORIGINS,
 } from "../summon/transaction.js";
+import { checkSpecialSummonEligibility } from "../summon/eligibility.js";
 
 const SUPPORTED_PROCEDURE_TYPES = new Set([
   "graveyard_banish_fusion",
@@ -282,10 +283,12 @@ export function canSummonExtraDeckCardByProcedure(card, player, options = {}) {
       };
     }
   }
-  if (Array.isArray(card.specialSummonOnlyBy)) {
-    if (!card.specialSummonOnlyBy.includes(procedure.type)) {
-      return { ok: false, reason: "Summon procedure is not allowed." };
-    }
+  const eligibility = checkSpecialSummonEligibility(card, {
+    summonProcedure: procedure.type,
+    fromZone: "extraDeck",
+  });
+  if (!eligibility.ok) {
+    return { ok: false, reason: eligibility.reason || "Summon procedure is not allowed." };
   }
   let requiredCount = 0;
   let candidates = [];

@@ -396,19 +396,25 @@ function simCollectDestroyCandidates(
         ...simSelectedCards(action.targetRef || "target", activationContext),
       );
     } else if (action.type === "destroy_targeted_cards") {
-      const { type: _actionType, ...targetAction } = action;
-      cards.push(
-        ...simCollectScopeCards(
-          {
-            owner: "opponent",
-            zones: targetAction.zones || ["field", "spellTrap", "fieldSpell"],
-            ...targetAction,
-            filters: simActionFilterFromConfig(targetAction),
-          },
-          activationPlayer,
-          activationOpponent,
-        ),
-      );
+      if (action.targetRef) {
+        cards.push(
+          ...simSelectedCards(action.targetRef, activationContext),
+        );
+      } else {
+        const { type: _actionType, ...targetAction } = action;
+        cards.push(
+          ...simCollectScopeCards(
+            {
+              owner: "opponent",
+              zones: targetAction.zones || ["field", "spellTrap", "fieldSpell"],
+              ...targetAction,
+              filters: simActionFilterFromConfig(targetAction),
+            },
+            activationPlayer,
+            activationOpponent,
+          ),
+        );
+      }
     } else if (action.type === "destroy_cards_by_scope") {
       cards.push(
         ...simCollectScopeCards(
@@ -629,6 +635,14 @@ function simActivationWouldDestroyMatchingCards(condition, ctx, options, self, o
   }
   const activationOpponent = activationOwner === self ? opponent : self;
   const filters = condition.destroyedCardFilters || condition.filters || {};
+  const affectedOwners = simOwnersFromRule(
+    condition.affectedPlayer ||
+      condition.cardOwner ||
+      condition.owner ||
+      "any",
+    self,
+    opponent,
+  );
   const minCount = Math.max(1, Number(condition.minCount ?? condition.count ?? 1));
   const matching = simCollectDestroyCandidates(
     effect.actions || [],
@@ -637,10 +651,11 @@ function simActivationWouldDestroyMatchingCards(condition, ctx, options, self, o
     activationContext,
   ).filter(
     (card) =>
-      simCardInAllowedZones(card, condition.destroyedCardZones || condition.zones, [
-        self,
-        opponent,
-      ]) && matchesTargetFilters(card, filters, null),
+      simCardInAllowedZones(
+        card,
+        condition.destroyedCardZones || condition.zones,
+        affectedOwners,
+      ) && matchesTargetFilters(card, filters, null),
   );
   return matching.length >= minCount;
 }
@@ -849,12 +864,19 @@ export function evaluateSimulatedConditions(conditions, ctx = {}) {
           ? 0
           : 1;
       const max = Number.isFinite(condition.max) ? condition.max : null;
+      const sourceCard = resolveConditionSource(ctx, options, "self");
       const count = zones.reduce(
         (sum, zone) =>
           sum +
-          getZoneCards(owner, zone).filter((card) =>
-            matchesTargetFilters(card, filters, null)
-          ).length,
+          getZoneCards(owner, zone).filter((card) => {
+            if (
+              condition.excludeSource === true &&
+              simSameCard(card, sourceCard)
+            ) {
+              return false;
+            }
+            return matchesTargetFilters(card, filters, null);
+          }).length,
         0,
       );
       return count >= min && (max === null || count <= max);
@@ -987,6 +1009,60 @@ export function evaluateSimulatedConditions(conditions, ctx = {}) {
       if (condition.min !== undefined && count < condition.min) return false;
       if (condition.max !== undefined && count > condition.max) return false;
       return true;
+    }
+    if (condition.type === "field_card_count_comparison") {
+      const zones = asArray(condition.zones || condition.zone || "field");
+      const ownersFor = (ownerRule) =>
+        ownerRule === "opponent"
+          ? [opponent]
+          : ownerRule === "any" || ownerRule === "both"
+            ? [self, opponent]
+            : [self];
+      const countFor = (ownerRule, filters) =>
+        ownersFor(ownerRule)
+          .filter(Boolean)
+          .reduce(
+            (total, player) =>
+              total +
+              zones.reduce(
+                (zoneTotal, zone) =>
+                  zoneTotal +
+                  getZoneCards(player, zone).filter((card) => {
+                    if (condition.requireFaceup === true && card?.isFacedown) {
+                      return false;
+                    }
+                    if (
+                      condition.excludeSource === true &&
+                      simSameCard(
+                        card,
+                        resolveConditionSource(ctx, options, "self"),
+                      )
+                    ) {
+                      return false;
+                    }
+                    return matchesTargetFilters(card, filters || {}, null);
+                  }).length,
+                0,
+              ),
+            0,
+          );
+      const leftCount = countFor(
+        condition.leftOwner || "opponent",
+        condition.leftFilters || condition.filters || {},
+      );
+      const rightCount = countFor(
+        condition.rightOwner || "self",
+        condition.rightFilters || condition.filters || {},
+      );
+      const operator = condition.operator || "gt";
+      if (operator === "eq" || operator === "===") return leftCount === rightCount;
+      if (operator === "neq" || operator === "!=" || operator === "!==") {
+        return leftCount !== rightCount;
+      }
+      if (operator === "lt" || operator === "<") return leftCount < rightCount;
+      if (operator === "lte" || operator === "<=") return leftCount <= rightCount;
+      if (operator === "gte" || operator === ">=") return leftCount >= rightCount;
+      return leftCount > rightCount;
     }
     if (condition.type === "activation_would_destroy_cards_matching_filters") {
       return simActivationWouldDestroyMatchingCards(

@@ -381,10 +381,11 @@ export const CARD_KNOWLEDGE = {
     def: 1200,
     level: 4,
     summonCondition: "hand_or_gy_ignition_banish_field_dragon",
-    effect: "Counts as 2 tributes for Dragon Tribute Summons. Can Special Summon herself from hand or GY by banishing a Dragon you control. Can discard herself plus another hand card to search a Level 5+ Dragon from Deck.",
+    effect: "Counts as 2 tributes for Dragon Tribute Summons. Once per turn, choose between Special Summoning herself from hand or GY by banishing a Dragon you control, or discarding herself plus another hand card to search a Level 5+ Dragon from Deck.",
     synergies: ["Solar Eclipse Dragon", "Lunar Eclipse Dragon", "Fire Extreme Dragon", "Volcanic Extreme Dragon", "Black Bull Dragon", "Purified Crystal Dragon", "Hellkite Dragon", "Majestic Silver Dragon"],
     playPatterns: [
       "Bridge piece for high-level Dragon Tribute Summons and Level 5+ Dragon searches",
+      "Self-summon and discard-search share one use per turn; choose the line with the stronger immediate payoff",
       "Hand/GY self-summon is strong when the banished field Dragon is expendable or already converted value",
       "Discard-search mode finds bosses but should preserve critical Eclipse or fusion hands when possible",
       "Treat as a Dragon bridge, not as a Synchro plan in the current list",

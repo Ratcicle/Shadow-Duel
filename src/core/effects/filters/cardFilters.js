@@ -212,6 +212,14 @@ export function cardMatchesFilters(card, filters = {}) {
       if (!ok) return false;
     }
   }
+  const summonedFromZoneFilter =
+    filters.lastSummonedFromZones || filters.lastSummonedFromZone;
+  if (summonedFromZoneFilter) {
+    const requiredZones = asArray(summonedFromZoneFilter);
+    if (!requiredZones.includes(card.lastSummonedFromZone || null)) {
+      return false;
+    }
+  }
   if (filters.attribute && !matchesTextValue(card.attribute, filters.attribute)) {
     return false;
   }

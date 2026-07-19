@@ -441,9 +441,13 @@ ChainSystem.prototype.effectRequiresSourceAtResolution =
   chainActivation.effectRequiresSourceAtResolution;
 ChainSystem.prototype.getEffectActivationCosts =
   chainActivation.getEffectActivationCosts;
+ChainSystem.prototype.getEffectActivationCommitActions =
+  chainActivation.getEffectActivationCommitActions;
 ChainSystem.prototype.getEffectResolutionActions =
   chainActivation.getEffectResolutionActions;
 ChainSystem.prototype.payActivationCosts = chainActivation.payActivationCosts;
+ChainSystem.prototype.applyActivationCommitActions =
+  chainActivation.applyActivationCommitActions;
 ChainSystem.prototype.publishChainLinkActivation =
   chainActivation.publishChainLinkActivation;
 ChainSystem.prototype.appendActivationTriggerPackages =

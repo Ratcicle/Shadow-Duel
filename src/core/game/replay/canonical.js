@@ -33,6 +33,7 @@ const REPLAY_EVENT_NAMES = new Set([
   "damage_step_timing",
   "damage_step_completed",
   "battle_damage_inflicted",
+  "control_changed",
   "card_moved",
   "card_to_grave",
   "chain_cleanup",
@@ -94,11 +95,14 @@ export function getCardDatabaseSignature() {
     cardDatabase.map((card) => ({
       id: card.id,
       name: card.name,
+      mustFirstBeSpecialSummonedBy:
+        card.mustFirstBeSpecialSummonedBy || null,
       effects: (card.effects || []).map((effect) => ({
         id: effect.id || null,
         activationZones: effect.activationZones || null,
         usagePolicy: effect.usagePolicy || null,
         damageStepTimings: effect.damageStepTimings || null,
+        activationCommitActions: effect.activationCommitActions || null,
       })),
     })),
   );
@@ -112,7 +116,12 @@ function cardState(game, card) {
     cardId: card.id ?? null,
     owner: card.owner ?? null,
     controller: card.controller ?? card.owner ?? null,
+    originalOwner: card.originalOwner ?? null,
     locationVersion: Number(card.locationVersion ?? 0),
+    lastSummonMethod: card.lastSummonMethod || null,
+    lastSummonedFromZone: card.lastSummonedFromZone || null,
+    properSummonEstablished: card.properSummonEstablished === true,
+    properSummonProcedure: card.properSummonProcedure || null,
     position: card.position || null,
     facedown: card.isFacedown === true,
     atk: Number(card.atk ?? 0),
@@ -124,7 +133,9 @@ function cardState(game, card) {
     equipTargetId: card.equippedTo?.duelCardId ?? null,
     statuses: {
       effectsNegated: card.effectsNegated === true,
+      effectsNegatedDuration: card.effectsNegatedDuration || null,
       cannotAttackThisTurn: card.cannotAttackThisTurn === true,
+      battlePositionLocked: card.battlePositionLocked === true,
       banishWhenLeavesField: card.banishWhenLeavesField === true,
     },
   };
@@ -171,6 +182,10 @@ export function createCanonicalStateSnapshot(game) {
     },
     usage: game.getEffectUsageState?.() || null,
     delayedActions: stableValue(game.delayedActions || []),
+    temporaryEventEffects: stableValue(game.temporaryEventEffects || []),
+    temporaryControlEffects: stableValue(
+      game.getTemporaryControlState?.() || game.temporaryControlEffects || [],
+    ),
     chain: stableValue({
       state: game.chainSystem?.getPublicState?.() || null,
       links: game.chainSystem?.getChainSummary?.() || [],

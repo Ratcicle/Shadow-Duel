@@ -694,19 +694,44 @@ async function runEndOfDamageStep(game, transaction, options = {}) {
     transaction,
     options,
   );
-  if (destructionResult?.needsSelection || destructionResult?.ok === false) {
+  if (destructionResult?.needsSelection) {
     return destructionResult;
   }
+  const destructionFailed = destructionResult?.ok === false;
   if (options.resolveTriggers !== false) {
     const windowResult = await resolveStageWindow(game, transaction, [
       "damage_step",
     ]);
-    if (windowResult?.needsSelection || windowResult?.ok === false) {
+    if (windowResult?.needsSelection) {
       return windowResult;
     }
+    // Destruction Trigger Chains defer their post-Chain Fast Effect window so
+    // the Damage Step can finish atomically. Even when one of those effects
+    // fails, complete this final timing round before propagating the failure;
+    // otherwise the ChainSystem remains stranded in `post_chain_check`.
+    if (destructionFailed) {
+      game.clearEndOfDamageStepBuffs?.();
+      return {
+        ...destructionResult,
+        timingRecovery: windowResult || null,
+      };
+    }
+    if (windowResult?.ok === false) return windowResult;
   }
   game.clearEndOfDamageStepBuffs?.();
-  return { ok: true };
+  return destructionFailed ? destructionResult : { ok: true };
+}
+
+async function requireEndOfDamageStep(game, transaction) {
+  const endResult = await runEndOfDamageStep(game, transaction);
+  if (endResult?.needsSelection || endResult?.ok === false) {
+    throw new Error(
+      endResult?.reason ||
+        endResult?.resolutionResult?.reason ||
+        "damage_step_end_failed",
+    );
+  }
+  return endResult;
 }
 
 export async function executeDamageStepTransaction(transaction) {
@@ -724,7 +749,7 @@ export async function executeDamageStepTransaction(transaction) {
     }
     if (!participantsRemainValid(transaction)) {
       transaction.stoppedBeforeCalculation = true;
-      await runEndOfDamageStep(this, transaction);
+      await requireEndOfDamageStep(this, transaction);
     } else {
       setDamageStepTiming(
         this,
@@ -744,7 +769,7 @@ export async function executeDamageStepTransaction(transaction) {
       }
       if (!participantsRemainValid(transaction)) {
         transaction.stoppedBeforeCalculation = true;
-        await runEndOfDamageStep(this, transaction);
+        await requireEndOfDamageStep(this, transaction);
       } else {
         setDamageStepTiming(
           this,
@@ -761,7 +786,7 @@ export async function executeDamageStepTransaction(transaction) {
         }
         if (!participantsRemainValid(transaction)) {
           transaction.stoppedBeforeCalculation = true;
-          await runEndOfDamageStep(this, transaction);
+          await requireEndOfDamageStep(this, transaction);
         } else {
           await calculateBattleOutcome(this, transaction);
           this.clearDamageCalculationBuffs?.();
@@ -791,7 +816,7 @@ export async function executeDamageStepTransaction(transaction) {
           if (windowResult?.needsSelection || windowResult?.ok === false) {
             throw new Error(windowResult?.reason || "damage_step_after_failed");
           }
-          await runEndOfDamageStep(this, transaction);
+          await requireEndOfDamageStep(this, transaction);
         }
       }
     }

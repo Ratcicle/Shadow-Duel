@@ -235,7 +235,7 @@ export function applyOptionalTargetActions(ctx) {
 }
 
 export function applyRegisterTemporaryEventEffect(ctx) {
-  const { action, state, self, options } = ctx;
+  const { action, state, self, options, selections } = ctx;
   const sourceCard = options.sourceCard || null;
   if (!action?.event || !sourceCard || !self) return;
   if (!Array.isArray(state.temporaryEventEffects)) {
@@ -243,7 +243,15 @@ export function applyRegisterTemporaryEventEffect(ctx) {
   }
   const currentTurn = Number(state.turnCounter || 0);
   const expiresOnTurn =
-    action.duration === "end_of_next_turn" ? currentTurn + 1 : currentTurn;
+    action.duration === "until_consumed"
+      ? null
+      : action.duration === "end_of_next_turn"
+        ? currentTurn + 1
+        : currentTurn;
+  const boundTarget = action.bindEventTargetRef
+    ? (selections?.[action.bindEventTargetRef] || [])[0]
+    : null;
+  if (action.bindEventTargetRef && !boundTarget) return;
   const declaredValues = sourceCard.declaredValues
     ? JSON.parse(JSON.stringify(sourceCard.declaredValues))
     : {};
@@ -261,6 +269,14 @@ export function applyRegisterTemporaryEventEffect(ctx) {
         ? [sourceCard.archetype]
         : [],
     sourceEffectId: options.effect?.id || null,
+    sourceInstanceId:
+      sourceCard.instanceId ?? sourceCard._instanceId ?? sourceCard.uuid ?? null,
+    boundEventTargetInstanceId: boundTarget
+      ? boundTarget.instanceId ?? boundTarget._instanceId ?? boundTarget.uuid ?? null
+      : null,
+    requireBoundTargetLeavesField:
+      action.requireBoundTargetLeavesField === true,
+    duration: action.duration || "end_of_turn",
     createdOnTurn: currentTurn,
     expiresOnTurn,
     usesRemaining: Number.isFinite(Number(action.uses))

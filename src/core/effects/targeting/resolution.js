@@ -6,6 +6,7 @@
  */
 
 import { isAI } from "../../Player.js";
+import { checkSpecialSummonEligibility } from "../../game/summon/eligibility.js";
 
 function buildContextTargetFilters(def = {}) {
   return {
@@ -28,6 +29,12 @@ function buildContextTargetFilters(def = {}) {
       : {}),
     ...(def.summonMethods !== undefined
       ? { summonMethods: def.summonMethods }
+      : {}),
+    ...(def.lastSummonedFromZone !== undefined
+      ? { lastSummonedFromZone: def.lastSummonedFromZone }
+      : {}),
+    ...(def.lastSummonedFromZones !== undefined
+      ? { lastSummonedFromZones: def.lastSummonedFromZones }
       : {}),
   };
 }
@@ -79,13 +86,12 @@ function getSpecialSummonDestinationPlayer(def = {}, ctx = {}) {
 
 function canTargetBeSpecialSummoned(engine, card, def = {}, ctx = {}) {
   if (!card) return false;
-  if (card.cannotBeSpecialSummoned) return false;
-
   const summonProcedure = getSpecialSummonProcedureForTarget(def);
-  if (
-    Array.isArray(card.specialSummonOnlyBy) &&
-    !card.specialSummonOnlyBy.includes(summonProcedure)
-  ) {
+  const eligibility = checkSpecialSummonEligibility(card, {
+    summonProcedure,
+    fromZone: def.zone || null,
+  });
+  if (eligibility.ok === false) {
     return false;
   }
 
@@ -102,6 +108,16 @@ function canTargetBeSpecialSummoned(engine, card, def = {}, ctx = {}) {
       },
     );
   return restrictionCheck?.ok !== false;
+}
+
+function findContextTargetZone(engine, card) {
+  const game = engine?.game;
+  if (!game || !card) return null;
+  for (const owner of [game.player, game.bot]) {
+    const zone = engine?.findCardZone?.(owner, card);
+    if (zone) return zone;
+  }
+  return null;
 }
 
 function contextTargetMatchesDef(engine, card, def = {}, ctx = {}) {
@@ -123,6 +139,18 @@ function contextTargetMatchesDef(engine, card, def = {}, ctx = {}) {
   if (def.excludeSelf && ctx?.source && card === ctx.source) return false;
   if (isExcludedContextCard(def, ctx, card)) return false;
   if (def.requireFaceup && card.isFacedown) return false;
+  const requiredZones = Array.isArray(def.zones)
+    ? def.zones
+    : def.zone
+      ? [def.zone]
+      : [];
+  if (
+    requiredZones.length > 0 &&
+    !requiredZones.includes("any") &&
+    !requiredZones.includes(findContextTargetZone(engine, card))
+  ) {
+    return false;
+  }
   const requiredTypes = def.type
     ? Array.isArray(def.type)
       ? def.type
@@ -390,6 +418,16 @@ export function resolveTargets(targetDefs, ctx, selections) {
                 (!entry.owner ||
                   cand.controller === entry.owner ||
                   cand.owner === entry.owner)
+            );
+          } else {
+            // Canonical human selections are converted from UI keys to live
+            // card references before the activation transaction revalidates
+            // them. Accept that representation by identity/instanceId while
+            // still requiring the card to remain among the current legal
+            // candidates.
+            const selectedCard = entry.cardRef || entry;
+            candidate = decoratedCandidates.find((cand) =>
+              isSameCardReference(cand.cardRef, selectedCard),
             );
           }
         }

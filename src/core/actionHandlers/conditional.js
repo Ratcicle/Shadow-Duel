@@ -46,6 +46,7 @@ function isCardOnField(controller, card) {
 
 function computeExpiresOnTurn(game, duration) {
   const currentTurn = Number(game?.turnCounter || 0);
+  if (duration === "until_consumed") return null;
   if (duration === "end_of_next_turn") return currentTurn + 1;
   return currentTurn;
 }
@@ -710,6 +711,14 @@ export async function handleRegisterTemporaryEventEffect(
     targets: Array.isArray(action.targets) ? action.targets : [],
     actions: Array.isArray(action.actions) ? action.actions : [],
   };
+  const boundTarget = action.bindEventTargetRef
+    ? resolveTargetCards(action, ctx, targets, {
+        targetRef: action.bindEventTargetRef,
+      })[0]
+    : null;
+  if (action.bindEventTargetRef && !boundTarget) {
+    return false;
+  }
 
   const entry = {
     id:
@@ -732,6 +741,11 @@ export async function handleRegisterTemporaryEventEffect(
     sourceImage: source.image || null,
     sourceInstanceId: getCardInstanceId(source),
     sourceEffectId: ctx?.effect?.id || null,
+    boundEventTargetInstanceId: action.bindEventTargetRef
+      ? getCardInstanceId(boundTarget)
+      : null,
+    requireBoundTargetLeavesField:
+      action.requireBoundTargetLeavesField === true,
     effect,
     declaredValues: cloneDeclaredValuesForTemporaryEffect(action, source),
     createdOnTurn: Number(game.turnCounter || 0),

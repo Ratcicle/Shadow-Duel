@@ -3,6 +3,10 @@ import {
   canUseAsSynchroMaterial,
   getSynchroMaterialCombos,
 } from "../../../game/summon/synchro.js";
+import {
+  checkSpecialSummonEligibility,
+  establishProperSummon,
+} from "../../../game/summon/eligibility.js";
 import { getCounterValue, setCounterValue } from "../counters.js";
 import { estimateMonsterValue, hasArchetype } from "../cardValue.js";
 import {
@@ -116,10 +120,20 @@ function applySimConditionalMarkersOnSummon({
 
 function canSimSpecialSummon(card, player, summonProcedure = "special") {
   if (!card || !player) return false;
-  if (
-    Array.isArray(card.specialSummonOnlyBy) &&
-    !card.specialSummonOnlyBy.includes(summonProcedure)
-  ) {
+  const fromZone = [
+    "hand",
+    "field",
+    "spellTrap",
+    "graveyard",
+    "banished",
+    "deck",
+    "extraDeck",
+  ].find((zone) => Array.isArray(player[zone]) && player[zone].includes(card));
+  const eligibility = checkSpecialSummonEligibility(card, {
+    summonProcedure,
+    fromZone: fromZone || null,
+  });
+  if (eligibility.ok === false) {
     return false;
   }
   const restrictions = Array.isArray(player.specialSummonRestrictions)
@@ -398,7 +412,12 @@ export function applySynchroSummonFromExtraDeck(ctx) {
   );
   synchroCard.summonMethod = "synchro";
   synchroCard.lastSummonMethod = "synchro";
+  synchroCard.lastSummonedFromZone = "extraDeck";
   synchroCard.summonProcedure = "synchro";
+  establishProperSummon(synchroCard, {
+    summonProcedure: "synchro",
+    sourceZone: "extraDeck",
+  });
   synchroCard.synchroMaterials = materials.map((material) =>
     captureSimSynchroMaterialMetadata(material, player, state),
   );

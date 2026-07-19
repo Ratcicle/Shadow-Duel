@@ -538,6 +538,26 @@ export async function handleBuffStatsTemp(action, ctx, targets, engine) {
   if (action.atkBoostFromContext) {
     atkBoost += resolveContextNumber(action.atkBoostFromContext, ctx);
   }
+  if (action.atkBoostFromTarget) {
+    const boostSpec = action.atkBoostFromTarget;
+    const stat = ["baseAtk", "baseDef", "atk", "def"].includes(
+      boostSpec?.stat,
+    )
+      ? boostSpec.stat
+      : "atk";
+    const boostTarget = resolveTargetCards(
+      { targetRef: boostSpec?.targetRef },
+      ctx,
+      targets,
+      { game },
+    )[0];
+    const boostValue = Number(boostTarget?.[stat]);
+    if (!boostTarget || !Number.isFinite(boostValue)) {
+      getUI(game)?.log("The referenced target is no longer valid for the stat boost.");
+      return false;
+    }
+    atkBoost += boostValue;
+  }
 
   let defBoost = action.defBoost || 0;
   if (action.defBoostFromContext) {
@@ -1489,7 +1509,8 @@ export async function handleAddStatus(action, ctx, targets, engine) {
   const value = action.value !== undefined ? action.value : true;
 
   const remove = action.remove || false;
-  const untilEndOfTurn = action.untilEndOfTurn === true;
+  const untilEndOfTurn =
+    action.untilEndOfTurn === true || action.duration === "until_end_turn";
 
   if (!status) {
     return false;
@@ -1543,12 +1564,18 @@ export async function handleAddStatus(action, ctx, targets, engine) {
       ) {
         delete card.tempStatuses[status];
       }
+      if (status === "effectsNegated") {
+        card.effectsNegatedDuration = null;
+      }
     } else {
       // For additive status, sum values instead of replacing
       if (ADDITIVE_STATUS.includes(status) && typeof value === "number") {
         card[status] = (card[status] || 0) + value;
       } else {
         card[status] = value;
+      }
+      if (status === "effectsNegated") {
+        card.effectsNegatedDuration = normalizeNegateEffectsDuration(action);
       }
 
       modified = true;
@@ -1889,6 +1916,74 @@ export async function handleBanishAndBuff(action, ctx, targets, engine) {
 }
 
 /**
+ * Changes a face-up monster to face-down Defense Position.
+ *
+ * `battlePositionLocked` is deliberately an instance status: it follows a
+ * monster through control changes but is cleared when it leaves the field.
+ */
+export async function handleSetFacedownDefense(action, ctx, targets, engine) {
+  const { player } = ctx;
+  const game = engine?.game;
+  if (!player || !game) return false;
+
+  const targetCards = resolveTargetCards(action, ctx, targets, {
+    targetRef: action.targetRef,
+    requireArray: true,
+  });
+  if (targetCards.length === 0) {
+    getUI(game)?.log("No valid targets to set face-down.");
+    return false;
+  }
+
+  let changed = false;
+  for (const card of targetCards) {
+    if (!card || card.cardKind !== "monster" || card.isFacedown === true) {
+      continue;
+    }
+    const cardPlayer = findCardOwner(game, player, card);
+    if (!cardPlayer?.field?.includes(card)) continue;
+
+    const previousPosition = card.position;
+    card.position = "defense";
+    card.isFacedown = true;
+    if (
+      card.effectsNegated === true &&
+      card.effectsNegatedDuration === "while_faceup"
+    ) {
+      card.effectsNegated = false;
+      card.effectsNegatedDuration = null;
+    }
+    card.hasChangedPosition = true;
+    card.positionChangedThisTurn = true;
+    if (action.lockBattlePosition === true) {
+      card.battlePositionLocked = true;
+    }
+
+    game.effectEngine?.clearTargetingCache?.();
+    await game.emit?.("position_change", {
+      card,
+      player: cardPlayer,
+      opponent: game.getOpponent?.(cardPlayer) || null,
+      sourceCard: ctx.source || null,
+      fromPosition: previousPosition,
+      toPosition: "defense",
+      wasSetFacedown: true,
+      battlePositionLocked: card.battlePositionLocked === true,
+      actionContext: ctx?.actionContext || null,
+    });
+    getUI(game)?.log(`${card.name} was changed to face-down Defense Position.`);
+    queueCardFeedback(game, "position", card, {
+      sourceCard: ctx.source || null,
+      tone: "gold",
+    });
+    changed = true;
+  }
+
+  if (changed) game.updateBoard?.();
+  return changed;
+}
+
+/**
  * Generic handler for switching monster position (attack <-> defense)
  *
  * Action properties:
@@ -1922,6 +2017,10 @@ export async function handleSwitchPosition(action, ctx, targets, engine) {
 
   for (const card of targetCards) {
     if (!card || card.cardKind !== "monster") continue;
+    if (card.battlePositionLocked === true) {
+      getUI(game)?.log(`${card.name} cannot change its battle position.`);
+      continue;
+    }
 
     const previousPosition = card.position;
     const wasFacedown = card.isFacedown === true;
@@ -2028,6 +2127,10 @@ export async function handleSwitchDefenderPositionOnAttack(
   if (!defender || defender.cardKind !== "monster") {
     getUI(game)?.log("No valid defender to switch position.");
 
+    return false;
+  }
+  if (defender.battlePositionLocked === true) {
+    getUI(game)?.log(`${defender.name} cannot change its battle position.`);
     return false;
   }
 

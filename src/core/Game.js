@@ -27,6 +27,7 @@ import * as zonesSnapshot from "./game/zones/snapshot.js";
 import * as zonesInvariants from "./game/zones/invariants.js";
 import * as zonesOperations from "./game/zones/operations.js";
 import * as zonesMovement from "./game/zones/movement.js";
+import * as zonesControl from "./game/zones/control.js";
 import * as zonesDestruction from "./game/zones/destruction.js";
 
 // Combat modules (moved from inline methods)
@@ -211,6 +212,7 @@ export default class Game {
     this.temporaryReplacementEffects = [];
     this.temporaryBattlePairEffects = [];
     this.temporaryEventEffects = [];
+    this.temporaryControlEffects = [];
     this.pendingSynchroMaterialFollowups = [];
     this.pendingSynchroMaterialTriggerContinuation = null;
     this.synchroSummonContextCounter = 0;
@@ -329,6 +331,7 @@ export default class Game {
     this.temporaryReplacementEffects = [];
     this.temporaryBattlePairEffects = [];
     this.temporaryEventEffects = [];
+    this.temporaryControlEffects = [];
     this.pendingSynchroMaterialFollowups = [];
     this.pendingSynchroMaterialTriggerContinuation = null;
     this.pendingCardAnimations = [];
@@ -969,6 +972,12 @@ Game.prototype.applyPendingSynchroMaterialFollowups =
   zonesMovement.applyPendingSynchroMaterialFollowups;
 Game.prototype.moveCard = zonesMovement.moveCard;
 Game.prototype.moveCardInternal = zonesMovement.moveCardInternal;
+Game.prototype.transferControl = zonesControl.transferControl;
+Game.prototype.takeControl = zonesControl.takeControl;
+Game.prototype.registerTemporaryControl = zonesControl.registerTemporaryControl;
+Game.prototype.processTemporaryControlEffects =
+  zonesControl.processTemporaryControlEffects;
+Game.prototype.getTemporaryControlState = zonesControl.getTemporaryControlState;
 
 // -----------------------------------------------------------------------------
 // Combat: Attach methods from modular combat/ folder

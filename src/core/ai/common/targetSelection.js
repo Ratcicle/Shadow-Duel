@@ -11,7 +11,7 @@ import {
   isBattleReadyAttacker,
 } from "./cardValue.js";
 import { getPerspectivePlayers } from "./perspective.js";
-import { getZoneCards } from "./zones.js";
+import { findCardOwner, findCardZone, getZoneCards } from "./zones.js";
 
 export function asArray(value) {
   if (value === undefined || value === null) return [];
@@ -136,6 +136,12 @@ export function buildActionFilter(action = {}) {
     "position",
     "isTuner",
     "isToken",
+    "lastSummonMethods",
+    "summonMethods",
+    "lastSummonMethod",
+    "summonMethod",
+    "lastSummonedFromZone",
+    "lastSummonedFromZones",
     "sentToGraveAsMaterial",
     "sentAsMaterial",
     "lastSentToGraveAsMaterial",
@@ -443,9 +449,22 @@ export function selectSimulatedTargets({
         options?.actionContext?.[target.targetFromContext] ||
         options?.activationContext?.actionContext?.[target.targetFromContext] ||
         null;
-      const contextCards = asArray(contextValue).filter((card) =>
-        matchesTargetFilters(card, target, sourceCard),
-      );
+      const requiredZones = Array.isArray(target.zones)
+        ? target.zones
+        : target.zone
+          ? [target.zone]
+          : [];
+      const contextCards = asArray(contextValue).filter((card) => {
+        const owner = findCardOwner(state, card);
+        const ownerRole = owner === self ? "self" : owner === opponent ? "opponent" : null;
+        const zone = owner ? findCardZone(owner, card) : null;
+        return (
+          matchesTargetFilters(card, target, sourceCard, ownerRole) &&
+          (requiredZones.length === 0 ||
+            requiredZones.includes("any") ||
+            requiredZones.includes(zone))
+        );
+      });
       const count = normalizeCount(target.count, 1);
       result[target.id] = contextCards.slice(
         0,
@@ -526,7 +545,16 @@ export function selectSimulatedTargets({
       targetPreference,
     });
 
-    const count = normalizeCount(target.count, 1);
+    const referencedSelection =
+      typeof target.countFromSelectionRef === "string"
+        ? result[target.countFromSelectionRef]
+        : null;
+    const count = Array.isArray(referencedSelection)
+      ? {
+          min: referencedSelection.length,
+          max: referencedSelection.length,
+        }
+      : normalizeCount(target.count, 1);
     const min = count.min;
     const max = count.max;
     let pickCount = intent === "cost" ? min : max;

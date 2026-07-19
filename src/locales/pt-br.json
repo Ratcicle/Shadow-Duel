@@ -168,6 +168,9 @@
     },
     "triggers": {
       "selection": "Selecione alvo(s) para o efeito disparado.",
+      "optionalConfirmTitle": "Ativar efeito disparado?",
+      "activateSingle": "Ativar",
+      "declineSingle": "Não ativar",
       "mandatoryTitle": "Ordenar Efeitos de Gatilho obrigatÃ³rios",
       "optionalTitle": "Escolher Efeitos de Gatilho opcionais",
       "mandatoryOrder": "Clique em uma carta para mover seu efeito ao fim da ordem.",
@@ -520,6 +523,30 @@
     "26": {
       "name": "Samurai Fantasma da Katana Nebulosa",
       "description": "Se este card for Invocado por Invocação-Normal: você pode enviar 1 monstro Regulador do seu Deck para o Cemitério. Você pode banir este card do seu Cemitério e, depois, escolher 1 monstro Regulador de Nível 4 ou menor no seu Cemitério; Invoque-o por Invocação-Especial. Você só pode usar cada efeito de \"Samurai Fantasma da Katana Nebulosa\" uma vez por turno."
+    },
+    "27": {
+      "name": "Leviatã de Obsidiana Magmática",
+      "description": "1 Regulador de TERRA + 1+ monstros não Reguladores\nVocê pode descartar 1 card e, depois, escolher 1 monstro com a face para cima que seu oponente controla (Efeito Rápido); coloque-o com a face para baixo em Posição de Defesa. Monstros colocados com a face para baixo por este efeito não podem mudar suas posições de batalha.\nSe este card for destruído em batalha ou por efeito de card: você pode escolher até 2 monstros de TERRA de Nível 3 ou menor no seu Cemitério; Invoque-os por Invocação-Especial.\nVocê só pode usar cada efeito de \"Leviatã de Obsidiana Magmática\" uma vez por turno."
+    },
+    "28": {
+      "name": "Dragão Floral de Pétalas de Rosa",
+      "description": "1 Regulador Planta + 1+ monstros não Reguladores\nSe seu oponente controlar mais cards do que você: você pode banir de 1 a 3 monstros Planta do seu Cemitério; escolha o mesmo número de cards que seu oponente controla; destrua-os.\nSe este card deixar o campo: você pode escolher 1 monstro Planta no seu Cemitério; adicione-o à sua mão.\nVocê só pode usar cada efeito de \"Dragão Floral de Pétalas de Rosa\" uma vez por turno."
+    },
+    "29": {
+      "name": "Behemoth de Rocha Amaldiçoado",
+      "description": "1 Regulador de TERRA + 1+ monstros não Reguladores\nUma vez por turno: você pode escolher 1 monstro que seu oponente controla; este card ganha ATK igual à DEF original desse monstro até o final deste turno.\nSe este card for destruído em batalha: você pode escolher o monstro que o destruiu; tome o controle dele até a Fase Final e, depois, quando esse monstro deixar o campo, Invoque este card por Invocação-Especial do seu Cemitério, mas bana-o quando ele deixar o campo.\nVocê só pode usar cada efeito de \"Behemoth de Rocha Amaldiçoado\" uma vez por turno."
+    },
+    "30": {
+      "name": "Terror Fúria Vermelha",
+      "description": "1 Regulador + 1+ monstros não Reguladores\nUma vez por turno, se seu oponente Invocar um monstro por Invocação-Especial: você pode escolher 1 monstro no Cemitério dele; bana-o e, se isso acontecer, este card ganha 300 ATK."
+    },
+    "31": {
+      "name": "Esmagador de Ferro",
+      "description": "1 Regulador + 1+ monstros não Reguladores\nEnquanto você controlar outro monstro de TERRA, este card não pode ser destruído por efeitos de card. Uma vez por turno, quando seu oponente ativar um card ou efeito que destruiria um ou mais cards que você controla (Efeito Rápido): você pode escolher 1 card com a face para baixo que ele controla; destrua-o."
+    },
+    "32": {
+      "name": "Orathus, o Anjo Caído",
+      "description": "1 Regulador + 1+ Sincros de TERRA não Reguladores\nDeve primeiro ser Invocado por Invocação-Sincro. Se este card for Invocado por Invocação-Sincro: você pode escolher 1 card com a face para cima que seu oponente controla; negue seus efeitos enquanto ele permanecer com a face para cima no campo. Seu oponente deve escolher este card como alvo de ataques, se possível. Uma vez por turno: você pode escolher 1 monstro Invocado do Deck Adicional que seu oponente controla; destrua-o e, se você ativar este efeito, este card não pode atacar neste turno."
     },
     "101": {
       "name": "Enguia Abissal do Coração Sombrio",
@@ -935,7 +962,7 @@
     },
     "278": {
       "name": "Stelya, Domadora de Dragões",
-      "description": "Este card pode ser tratado como 2 Tributos para a Invocação-Tributo de um monstro do Tipo Dragão. Você pode banir 1 monstro Dragão que você controla; Invoque este card por Invocação-Especial da sua mão ou do seu Cemitério. Você pode descartar 2 cards, incluindo este card; adicione 1 monstro Dragão de Nível 5 ou maior do seu Deck à sua mão. Você só pode usar cada efeito de \"Stelya, Domadora de Dragões\" uma vez por turno."
+      "description": "Este card pode ser tratado como 2 Tributos para a Invocação-Tributo de um monstro Dragão. Você só pode usar 1 dos seguintes efeitos de \"Stelya, Domadora de Dragões\" por turno e apenas uma vez por turno.\n● Você pode banir 1 monstro Dragão que você controla; Invoque este card por Invocação-Especial da sua mão ou do seu Cemitério.\n● Você pode descartar 2 cards, incluindo este card; adicione 1 monstro Dragão de Nível 5 ou maior do seu Deck à sua mão."
     },
     "279": {
       "name": "Drag\u00e3o do Eclipse Solar",
@@ -1284,6 +1311,22 @@
     "520": {
       "name": "Ferro-Velho Tech-Zero",
       "description": "Invoque por Invoca\u00e7\u00e3o-Especial 1 Regulador \"Tech-Zero\" do seu Cemit\u00e9rio e, se isso acontecer, imediatamente ap\u00f3s esse efeito resolver, Invoque por Invoca\u00e7\u00e3o-Sincro 1 monstro Sincro do seu Deck Adicional usando materiais no seu campo. Voc\u00ea s\u00f3 pode ativar 1 \"Ferro-Velho Tech-Zero\" por turno."
+    },
+    "551": {
+      "name": "Vulcan\u00f4mato Top\u00f3grafo",
+      "description": "Se este card for Invocado por Invoca\u00e7\u00e3o-Normal: voc\u00ea pode descartar 1 card; adicione 1 card \"Vulcan\u00f4mato\" do seu Deck \u00e0 sua m\u00e3o e, depois, voc\u00ea pode Invocar por Invoca\u00e7\u00e3o-Especial 1 monstro de TERRA de N\u00edvel 4 ou menor da sua m\u00e3o, mas negue seus efeitos. Se este card for enviado para o Cemit\u00e9rio como Mat\u00e9ria Sincro: voc\u00ea pode Invocar por Invoca\u00e7\u00e3o-Especial 1 monstro \"Vulcan\u00f4mato\" da sua m\u00e3o. Voc\u00ea s\u00f3 pode usar cada efeito de \"Vulcan\u00f4mato Top\u00f3grafo\" uma vez por turno."
+    },
+    "552": {
+      "name": "Vulcan\u00f4mato Escavador",
+      "description": "Se este card for Invocado por Invoca\u00e7\u00e3o-Normal ou Especial: voc\u00ea pode escolher 1 monstro de TERRA de N\u00edvel 4 ou menor no seu Cemit\u00e9rio; Invoque-o por Invoca\u00e7\u00e3o-Especial, mas negue seus efeitos e, depois, voc\u00ea pode adicionar 1 card \"Vulcan\u00f4mato\" do seu Cemit\u00e9rio \u00e0 sua m\u00e3o. Se este card for enviado para o Cemit\u00e9rio como Mat\u00e9ria Sincro: compre 1 card. Voc\u00ea s\u00f3 pode usar cada efeito de \"Vulcan\u00f4mato Escavador\" uma vez por turno."
+    },
+    "553": {
+      "name": "Vulcan\u00f4mato Rompe-N\u00facleo",
+      "description": "Voc\u00ea pode Invocar este card por Invoca\u00e7\u00e3o-Especial da sua m\u00e3o ao oferecer como Tributo 1 monstro de TERRA com a face para cima que voc\u00ea controla. Uma vez por turno: voc\u00ea pode escolher 1 outro monstro Regulador com a face para cima que voc\u00ea controla; ele \u00e9 considerado um monstro n\u00e3o Regulador at\u00e9 o final deste turno. Se este card for enviado para o Cemit\u00e9rio como Mat\u00e9ria Sincro: voc\u00ea pode escolher 1 card que seu oponente controla; destrua-o. Voc\u00ea s\u00f3 pode usar cada efeito de \"Vulcan\u00f4mato Rompe-N\u00facleo\" uma vez por turno."
+    },
+    "554": {
+      "name": "Escava\u00e7\u00e3o Vulcan\u00f4mata",
+      "description": "Adicione 1 monstro de TERRA de N\u00edvel 4 ou menor do seu Deck \u00e0 sua m\u00e3o e, depois, se voc\u00ea controlar um Monstro Sincro com a face para cima ou um monstro \"Vulcan\u00f4mato\" com a face para cima, voc\u00ea pode Invocar por Invoca\u00e7\u00e3o-Especial o monstro adicionado. Voc\u00ea s\u00f3 pode ativar 1 \"Escava\u00e7\u00e3o Vulcan\u00f4mata\" por turno."
     },
     "420": {
       "name": "Podriflora Devorador de Raízes Mortas",

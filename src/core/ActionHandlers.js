@@ -20,6 +20,7 @@ export {
   // Movement handlers
   handleReturnToHand,
   handleBounceAndSummon,
+  handleTakeControl,
 
   // Summon handlers
   handleSpecialSummonFromZone,
@@ -49,6 +50,7 @@ export {
   handleGrantProtection,
   handleBanishAndBuff,
   handleBuffAtkByLpGainedThisTurn,
+  handleSetFacedownDefense,
   handleSwitchPosition,
   handleSwitchDefenderPositionOnAttack,
   handlePermanentBuffNamed,

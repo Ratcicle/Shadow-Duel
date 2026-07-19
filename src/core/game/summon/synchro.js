@@ -1,5 +1,6 @@
 import { isAI } from "../../Player.js";
 import { SUMMON_MODES, SUMMON_ORIGINS } from "./transaction.js";
+import { checkSpecialSummonEligibility } from "./eligibility.js";
 
 function getCardInstanceId(card) {
   return card?.instanceId ?? card?._instanceId ?? card?.uuid ?? null;
@@ -112,6 +113,9 @@ function cardMatchesSimpleSynchroFilter(card, filters = {}) {
     if (!archetypes.includes(filters.archetype)) return false;
   }
   if (filters.type && !valueMatchesFilter(card.type, filters.type)) {
+    return false;
+  }
+  if (filters.attribute && !valueMatchesFilter(card.attribute, filters.attribute)) {
     return false;
   }
   if (filters.minLevel !== undefined && getCardLevel(card) < filters.minLevel) {
@@ -560,13 +564,14 @@ export function canSummonSynchroCard(player, synchroCard, options = {}) {
   if (!player || !isSynchroExtraDeckCard(synchroCard)) {
     return { ok: false, reason: "No Synchro summon procedure.", type: "synchro" };
   }
-  if (
-    Array.isArray(synchroCard.specialSummonOnlyBy) &&
-    !synchroCard.specialSummonOnlyBy.includes("synchro")
-  ) {
+  const eligibility = checkSpecialSummonEligibility(synchroCard, {
+    summonProcedure: "synchro",
+    fromZone: "extraDeck",
+  });
+  if (!eligibility.ok) {
     return {
       ok: false,
-      reason: "This card cannot be Synchro Summoned.",
+      reason: eligibility.reason || "This card cannot be Synchro Summoned.",
       type: "synchro",
     };
   }

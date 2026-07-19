@@ -14,6 +14,7 @@
 
 export function canFlipSummon(card) {
   if (!card) return false;
+  if (card.battlePositionLocked) return false;
   const isTurnPlayer = card.owner === this.turn;
   const isMainPhase = this.phase === "main1" || this.phase === "main2";
   if (!isTurnPlayer || !isMainPhase) return false;
@@ -36,6 +37,7 @@ export function canFlipSummon(card) {
 
 export function canChangePosition(card) {
   if (!card) return false;
+  if (card.battlePositionLocked) return false;
   const isTurnPlayer = card.owner === this.turn;
   const isMainPhase = this.phase === "main1" || this.phase === "main2";
   if (!isTurnPlayer || !isMainPhase) return false;
@@ -79,7 +81,8 @@ export async function changeMonsterPosition(card, newPosition) {
     card.revealedTurn = this.turnCounter;
   }
   card.positionChangedThisTurn = true;
-  card.cannotAttackThisTurn = newPosition === "defense";
+  // Defense Position is checked by combat availability. Keep explicit attack
+  // restrictions independent so later effect-based position changes are legal.
   this.effectEngine?.clearTargetingCache?.();
   this.ui.log(
     `${card.name} changes to ${

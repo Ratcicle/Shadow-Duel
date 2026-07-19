@@ -7,6 +7,7 @@
  */
 
 import { isAI } from "../Player.js";
+import { getCardDisplayName, getUIText } from "../i18n.js";
 
 export const TRIGGER_REQUIREMENTS = Object.freeze({
   MANDATORY: "mandatory",
@@ -451,8 +452,12 @@ function normalizeHumanDecision(decision, candidates, optional) {
 }
 
 async function requestHumanOrder(chainSystem, candidates, group, optional) {
-  const showModal = chainSystem.getUI?.()?.showTriggerOrderModal;
-  if (typeof showModal !== "function") {
+  const ui = chainSystem.getUI?.();
+  const showModal = ui?.showTriggerOrderModal;
+  const showConfirm = ui?.showConfirmPrompt;
+  const useSingleOptionalConfirmation =
+    optional && candidates.length === 1 && typeof showConfirm === "function";
+  if (!useSingleOptionalConfirmation && typeof showModal !== "function") {
     return {
       ok: false,
       needsSelection: true,
@@ -484,7 +489,39 @@ async function requestHumanOrder(chainSystem, candidates, group, optional) {
     onCancel: () => finish(optional ? [] : null),
   };
   const resolveHuman = async () => {
-    const returned = showModal.call(chainSystem.getUI(), options);
+    if (useSingleOptionalConfirmation) {
+      const candidate = candidates[0];
+      const cardName =
+        getCardDisplayName(candidate.card) ||
+        candidate.card?.name ||
+        getUIText("ui.prompts.thisCard");
+      const returned = showConfirm.call(
+        ui,
+        getUIText("ui.prompts.triggeredEffect", { cardName }),
+        {
+          kind: "segoc_optional_trigger",
+          cardName,
+          effectId: candidate.effect?.id || null,
+          event: candidate.eventName || null,
+          title: getUIText("ui.triggers.optionalConfirmTitle"),
+          confirmLabel: getUIText("ui.triggers.activateSingle"),
+          cancelLabel: getUIText("ui.triggers.declineSingle"),
+        },
+      );
+      const normalizeConfirmation = (confirmed) =>
+        confirmed ? [candidate.candidateId] : [];
+      if (returned && typeof returned.then === "function") {
+        returned.then(
+          (confirmed) => finish(normalizeConfirmation(confirmed)),
+          () => finish([]),
+        );
+      } else {
+        finish(normalizeConfirmation(returned));
+      }
+      return callbackResult;
+    }
+
+    const returned = showModal.call(ui, options);
     if (returned && typeof returned.then === "function") {
       returned.then(finish, () => finish(optional ? [] : null));
     } else if (returned !== undefined) {
@@ -632,8 +669,10 @@ export async function prepareTriggerOpportunity(opportunity) {
       segocOrder: segocOrder + 1,
     });
     prepared.context = {
-      ...(prepared.context || {}),
       ...(candidate.eventSnapshot || {}),
+      // The compact event snapshot is for observability and replay. Resolution
+      // must retain the original event objects (destroyed card, attacker, etc.).
+      ...(prepared.context || {}),
       type: candidate.eventName,
       event: candidate.eventName,
       player: candidate.controller,

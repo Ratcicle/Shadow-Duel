@@ -5,8 +5,8 @@ export const DRAGON_OPT_NAMES = {
   solarGy: "solar_eclipse_gy_revive_dragon",
   lunarSummon: "lunar_eclipse_summon_search",
   lunarGy: "lunar_eclipse_gy_summon_deck_dragon",
-  stelyaSummon: "stelya_banish_dragon_summon",
-  stelyaSearch: "stelya_discard_search_dragon",
+  stelyaSummon: "stelya_effect_choice",
+  stelyaSearch: "stelya_effect_choice",
 };
 
 const LOW_DRAGON_NAMES = new Set([

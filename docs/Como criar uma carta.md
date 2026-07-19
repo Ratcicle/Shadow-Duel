@@ -127,6 +127,8 @@ Campos frequentes:
 - `oncePerDuel`, `oncePerDuelName`: controle por duelo.
 - `usagePolicy`: use `"use"` quando negar a ativação ainda consumir o limite e
   `"activate"` quando negar a própria ativação liberar uma nova tentativa.
+- `activationCommitActions`: actions irreversíveis aplicadas depois dos custos
+  e antes da declaração final de alvos e da criação do Chain Link.
 - `promptUser`, `promptMessage`, `customPromptMethod`: controle de confirmação
   para triggers opcionais.
 - `isQuickEffect`: marca efeito rápido de monstro; normalmente combine com
@@ -153,7 +155,8 @@ sempre exige declaração explícita.
 ```
 
 Uma ativação segue a ordem: validar, selecionar o custo, comprometer a fonte,
-pagar o custo, declarar os alvos e criar o Chain Link. Targets com
+pagar o custo, executar `activationCommitActions`, declarar os alvos e criar o
+Chain Link. Targets com
 `intent: "cost"` alimentam somente `activationCosts`; os demais são alvos
 declarados. Escolhas não-targeting durante a resolução pertencem ao contrato da
 action, não a `effects[].targets`.
@@ -241,6 +244,7 @@ Targets resolvem seleções antes das actions. Cada target gera uma entrada em
   minAtk: 0,
   maxAtk: 2000,
   isTuner: true,
+  lastSummonedFromZone: "extraDeck", // zona da última Invocação, não o tipo
   requireFaceup: true,
   position: "attack",              // "attack" | "defense" | "any"
   excludeCardName: "X",
@@ -276,6 +280,9 @@ Notas importantes:
   em outra zona. Use para custos que so sao validos se ja houver um alvo
   posterior compativel, como "mesmo Nivel e nome diferente" no Cemiterio.
 - `requireThisCard: true` permite selecionar a própria fonte.
+- `lastSummonedFromZone` ou `lastSummonedFromZones` distingue a origem da última
+  Invocação. Um monstro do Deck Adicional revivido do Cemitério terá origem
+  `graveyard`, não `extraDeck`.
 - Sem `autoSelect`, jogador humano recebe modal quando há escolha.
 - Para bots, `activationContext.autoSelectTargets` pode selecionar automaticamente.
 
@@ -291,7 +298,7 @@ atuais em `EffectEngine.evaluateConditions`:
 | `control_card` | Exige controlar carta por `cardName`, `cardId`, `cardIds` ou `filters`. |
 | `control_card_max` | Limita quantidade de cartas controladas que batem filtros. |
 | `any_of` | Passa se qualquer condição interna passar (`conditions` ou `anyOf`). |
-| `control_card_filters` | Conta cartas por filtros em uma ou mais zonas. |
+| `control_card_filters` | Conta cartas por filtros em uma ou mais zonas; aceita os filtros canônicos, `requireFaceup`, `excludeSource`, `min` e `max`. |
 | `equipped_with_filters` | Exige que a fonte esteja equipada com cards que batem filtros. |
 | `turn_player` | Exige turno de `self`, `opponent` ou id direto. |
 | `has_stored_blueprint` | Exige blueprints armazenados na fonte. |
@@ -303,14 +310,14 @@ atuais em `EffectEngine.evaluateConditions`:
 | `attacker_matches` | Em batalha, exige atacante com owner/kind/type/archetype/level. |
 | `context_number_compare` | Compara um número do contexto, como `player.damageReceivedThisTurn`, usando `op` (`gt`, `gte`, `eq`, `neq`, `lte`, `lt`) e `value` ou `valueFromContext`. |
 | `event_card_matches_filters` | Exige que o card do evento bata `filters`; aceita `cardRef`, `owner` e `excludeSource: true` para ignorar a propria fonte do efeito. |
-| `activation_would_destroy_cards_matching_filters` | Em uma resposta de corrente, exige que a ativação inspecionada destruiria pelo menos `minCount` cards que batem `destroyedCardFilters`; use `destroyedCardZones` para limitar a checagem a zonas como `field`, `spellTrap` e `fieldSpell`. |
+| `activation_would_destroy_cards_matching_filters` | Em uma resposta de corrente, exige que a ativação inspecionada destruiria pelo menos `minCount` cards que batem `destroyedCardFilters`; use `destroyedCardZones` para limitar as zonas e `affectedPlayer` (`self`, `opponent` ou `any`) para limitar o controlador dos cards ameaçados. |
 | `activation_would_make_card_leave_field` | Em uma resposta de corrente, exige que a ativacao inspecionada faria o card em `cardRef`/`targetRef` sair de uma zona ativa (`field`, `spellTrap`, `fieldSpell`). Cobre destruicao, banimento, retorno a mao, movimentos para Cemiterio/Deck/Extra Deck/banido e actions aninhadas. |
 | `field_card_count` | Conta cards em `zones` que batem `filters`; aceita `owner`, `count`/`min`/`max`, `requireFaceup` e `excludeSource: true` para ignorar a fonte do efeito. |
 | `source_counters_at_least` | Exige counters na fonte. |
 
 Filtros usados por conditions e actions geralmente passam por `cardMatchesFilters`:
 `id`, `cardId`, `ids`, `cardIds`, `name`, `cardName`, `cardKind`, `subtype`,
-`monsterType`, `type`, `archetype`, `level`, `levelOp` (`eq`, `lte`, `gte`,
+`monsterType`, `type`, `attribute`, `archetype`, `level`, `levelOp` (`eq`, `lte`, `gte`,
 `lt`, `gt`), `isTuner` e `equippedWithFilters`.
 
 `condition` singular é legado, ainda usado em alguns triggers:
@@ -362,7 +369,9 @@ o catálogo e o handler antes de reutilizar uma action complexa.
 `add_status` aceita `targetRef` para alvos resolvidos ou `targetScope` para
 aplicar um status em massa a cards em zonas ativas. Use `targetScope` para
 efeitos como "negue todos os cards com a face para cima que o oponente
-controla".
+controla". Para negação vinculada à permanência face-up, declare
+`duration: "while_faceup"`; a troca de controle preserva o status, mas virar o
+card para baixo ou fazê-lo deixar sua zona ativa encerra a negação.
 
 `negate_activation` nega apenas a ativacao/efeito atual da corrente. Ela respeita
 passives de `activation_negation_protection` e, com `storeNegatedCardAs`, expoe
@@ -702,6 +711,13 @@ de efeitos que não representam uma ativação manual:
 }
 ```
 
+Para “deve primeiro ser Invocado” sem proibir revivals posteriores, declare
+`mustFirstBeSpecialSummonedBy: ["synchro"]`. A instância só recebe
+`properSummonEstablished` depois do sucesso do procedimento; tentativa negada
+não estabelece a condição, e retornar ao Deck Adicional reinicializa o estado.
+Use `specialSummonOnlyBy` apenas para a restrição permanente “não pode ser
+Invocado por Invocação-Especial de nenhuma outra forma”.
+
 Todo efeito com `oncePerTurn` ou `oncePerDuel` deve declarar `usagePolicy`:
 
 - `use`: o uso é consumido quando o efeito é comprometido, mesmo se a ativação
@@ -712,6 +728,10 @@ Todo efeito com `oncePerTurn` ou `oncePerDuel` deve declarar `usagePolicy`:
 Não infira zona, política de uso ou legalidade a partir da descrição da carta.
 Custos de ativação devem estar em `activationCosts`; actions de resolução nunca
 são reinterpretadas como custo pelo runtime.
+Restrições assumidas ao ativar, como “este card não pode atacar neste turno”,
+devem ficar em `activationCommitActions`. Elas não são custos, não são
+reembolsadas se a ativação for negada e não rodam se o jogador cancelar antes
+do compromisso.
 Quando dois efeitos da mesma carta puderem aparecer na mesma seleção, ambos
 devem possuir `activationLabelKey` e traduções em inglês e português.
 

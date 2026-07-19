@@ -246,6 +246,25 @@ function serializeSelectionMap(selections) {
   );
 }
 
+/**
+ * Records target quantities fixed by an earlier activation-cost selection.
+ * The map belongs to the link, rather than the card definition, so public
+ * state and canonical replay can reproduce the exact declared quantity.
+ */
+function resolveLinkedSelectionCounts(effect, costSelections = {}) {
+  return Object.fromEntries(
+    (effect?.targets || [])
+      .filter(
+        (target) =>
+          target?.id && typeof target.countFromSelectionRef === "string",
+      )
+      .map((target) => [
+        target.id,
+        selectionCards(costSelections[target.countFromSelectionRef], []).length,
+      ]),
+  );
+}
+
 function ensureIdentity(chainSystem) {
   if (!Number.isInteger(chainSystem.nextChainId)) chainSystem.nextChainId = 1;
   if (!Number.isInteger(chainSystem.nextLinkId)) chainSystem.nextLinkId = 1;
@@ -318,6 +337,10 @@ export function createChainLink(preparedInput = {}, contextOverride = null) {
   const costSelections = preparedInput.costSelections || {};
   const targetSelections = preparedInput.targetSelections || {};
   const resolutionSelections = preparedInput.resolutionSelections || {};
+  const resolvedSelectionCounts = {
+    ...resolveLinkedSelectionCounts(effect, costSelections),
+    ...(preparedInput.resolvedSelectionCounts || {}),
+  };
   const declaredTargets =
     preparedInput.declaredTargets ||
     collectDeclaredTargets(effect, targetSelections);
@@ -341,8 +364,17 @@ export function createChainLink(preparedInput = {}, contextOverride = null) {
     costSelections,
     targetSelections,
     resolutionSelections,
+    resolvedSelectionCounts,
     costPayment: preparedInput.costPayment
       ? { ...preparedInput.costPayment }
+      : null,
+    activationCommitment: preparedInput.activationCommitment
+      ? {
+          ...preparedInput.activationCommitment,
+          actions: Array.isArray(preparedInput.activationCommitment.actions)
+            ? preparedInput.activationCommitment.actions.map((entry) => ({ ...entry }))
+            : [],
+        }
       : null,
     declaredTargets,
     declaredTargetSnapshots:
@@ -504,11 +536,20 @@ export function serializeChainLink(link) {
     costSelections: serializeSelectionMap(link.costSelections),
     targetSelections: serializeSelectionMap(link.targetSelections),
     resolutionSelections: serializeSelectionMap(link.resolutionSelections),
+    resolvedSelectionCounts: { ...(link.resolvedSelectionCounts || {}) },
     costPayment: link.costPayment
       ? {
           status: link.costPayment.status || null,
           actions: Array.isArray(link.costPayment.actions)
             ? link.costPayment.actions.map((entry) => ({ ...entry }))
+            : [],
+        }
+      : null,
+    activationCommitment: link.activationCommitment
+      ? {
+          status: link.activationCommitment.status || null,
+          actions: Array.isArray(link.activationCommitment.actions)
+            ? link.activationCommitment.actions.map((entry) => ({ ...entry }))
             : [],
         }
       : null,

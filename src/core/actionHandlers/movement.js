@@ -9,6 +9,34 @@ import { isAI } from "../Player.js";
 import { getUI, resolveTargetCards } from "./shared.js";
 
 /**
+ * Transfers control of targeted monsters without making them leave the field.
+ * `Game.takeControl` owns the zone transfer so that original ownership,
+ * temporary return and replay events stay consistent for every card.
+ */
+export async function handleTakeControl(action, ctx, targets, engine) {
+  const game = engine?.game;
+  if (!game || typeof game.takeControl !== "function") return false;
+
+  const controller =
+    action.player === "opponent" ? ctx?.opponent : ctx?.player;
+  const cards = resolveTargetCards(action, ctx, targets);
+  if (!controller || cards.length === 0) return false;
+
+  let controlled = 0;
+  for (const card of cards) {
+    const result = await game.takeControl(card, controller, {
+      duration: action.duration || "permanent",
+      sourceCard: ctx?.source || null,
+      effectId: ctx?.effect?.id || null,
+      reason: action.contextLabel || "take_control",
+    });
+    if (result?.success) controlled += 1;
+  }
+
+  return controlled > 0;
+}
+
+/**
  * Generic handler for returning cards to hand (bounce effect)
  * UNIFIED HANDLER - Works for any card returning to owner's hand
  *

@@ -151,6 +151,10 @@ export function attachSimulatedEquip(equipCard, target, action = {}) {
 
 export function moveCardToZone(player, card, zone) {
   if (!player || !card) return false;
+  const fromZone = findCardZone(player, card);
+  if (fromZone === "field" && zone !== "field") {
+    card.battlePositionLocked = false;
+  }
   if (
     card.cardKind === "monster" &&
     Array.isArray(card.equips) &&
@@ -168,6 +172,10 @@ export function moveCardToZone(player, card, zone) {
     });
   }
   removeCardFromZones(player, card);
+  if (zone === "extraDeck") {
+    card.properSummonEstablished = false;
+    card.properSummonProcedure = null;
+  }
   if (zone === "fieldSpell") {
     player.fieldSpell = card;
     return true;

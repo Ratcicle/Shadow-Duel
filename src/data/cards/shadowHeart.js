@@ -43,7 +43,7 @@ export const shadowHeartCards = [
             zone: "graveyard",
             cardKind: ["spell", "trap"],
             archetype: "Shadow-Heart",
-            count: { min: 0, max: 1 },
+            count: { min: 1, max: 1 },
           },
         ],
         actions: [

@@ -1,5 +1,103 @@
 import { isAI } from "../Player.js";
 
+function selectionCards(value) {
+  if (Array.isArray(value)) return value.filter(Boolean);
+  return value ? [value] : [];
+}
+
+function selectionCount(definition = {}) {
+  const min = Number(definition?.count?.min ?? definition?.min ?? 1);
+  const max = Number(definition?.count?.max ?? definition?.max ?? min);
+  return {
+    min: Number.isFinite(min) ? min : 1,
+    max: Number.isFinite(max) ? max : min,
+  };
+}
+
+/**
+ * Resolves target quantities which are declared relative to a previous
+ * activation selection. The original card metadata is never mutated.
+ *
+ * `countFromSelectionRef` is intentionally a selection-level contract: the
+ * dependent target is still declared before the Chain Link is created.
+ */
+export function resolveCountFromSelectionDefinitions(definitions, selections = {}) {
+  return (definitions || []).map((definition) => {
+    const sourceRef = definition?.countFromSelectionRef;
+    if (typeof sourceRef !== "string" || sourceRef.length === 0) {
+      return definition;
+    }
+    const count = selectionCards(selections?.[sourceRef]).length;
+    return {
+      ...definition,
+      count: { min: count, max: count },
+      resolvedCountFromSelectionRef: sourceRef,
+      resolvedSelectionCount: count,
+    };
+  });
+}
+
+/**
+ * Caps an activation-cost selection to the number of currently legal targets
+ * which derive their count from that cost. This prevents a player from paying
+ * more than can be targeted after the irreversible cost payment.
+ */
+export function capCostDefinitionsByLinkedTargetCapacity(
+  costDefinitions,
+  targetDefinitions,
+  effectEngine,
+  context,
+) {
+  if (!effectEngine?.resolveTargets) return costDefinitions || [];
+
+  const previewContext = {
+    ...(context || {}),
+    activationContext: {
+      ...(context?.activationContext || {}),
+      preview: true,
+      isPreview: true,
+      autoSelectTargets: false,
+      autoSelectSingleTarget: false,
+    },
+  };
+
+  const targetCapacity = (targetDefinition) => {
+    const preview = effectEngine.resolveTargets(
+      [targetDefinition],
+      previewContext,
+      null,
+    );
+    if (preview?.ok === true) {
+      return selectionCards(preview.targets?.[targetDefinition.id]).length;
+    }
+    const requirement = (preview?.selectionContract?.requirements || []).find(
+      (entry) => entry?.id === targetDefinition?.id,
+    );
+    return Array.isArray(requirement?.candidates)
+      ? requirement.candidates.length
+      : 0;
+  };
+
+  return (costDefinitions || []).map((definition) => {
+    if (!definition?.id) return definition;
+    const linkedTargets = (targetDefinitions || []).filter(
+      (target) => target?.countFromSelectionRef === definition.id,
+    );
+    if (linkedTargets.length === 0) return definition;
+
+    const capacity = Math.min(
+      ...linkedTargets.map((target) => targetCapacity(target)),
+    );
+    const count = selectionCount(definition);
+    const max = Math.min(count.max, capacity);
+    return {
+      ...definition,
+      count: { min: count.min, max },
+      cappedByTargetRefs: linkedTargets.map((target) => target.id),
+    };
+  });
+}
+
 /**
  * Check if an effect requires target selection
  * @param {Object} effect

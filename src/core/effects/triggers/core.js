@@ -204,9 +204,13 @@ export async function handleTriggeredEffect(
 ) {
   ctx.effect = ctx.effect || effect;
   ctx.effectId = ctx.effectId || effect?.id || null;
+  const targetDefinitions =
+    ctx?.activationContext?.costsPaid === true
+      ? (effect.targets || []).filter((target) => target?.intent !== "cost")
+      : effect.targets || [];
 
   const targetResult = this.resolveTargets(
-    effect.targets || [],
+    targetDefinitions,
     ctx,
     selections || null
   );
@@ -579,9 +583,13 @@ export function buildTriggerEntry(options = {}) {
             liveActionPreview.reason || "Effect cannot be resolved right now.",
         };
       }
-      if (Array.isArray(effect.targets) && effect.targets.length > 0) {
+      const liveTargetDefinitions =
+        activationCtx?.costsPaid === true
+          ? (effect.targets || []).filter((target) => target?.intent !== "cost")
+          : effect.targets || [];
+      if (liveTargetDefinitions.length > 0) {
         const livePreview = this.resolveTargets(
-          effect.targets,
+          liveTargetDefinitions,
           livePreviewCtx,
           null,
         );

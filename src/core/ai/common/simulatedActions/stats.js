@@ -37,7 +37,8 @@ import {
 } from "./shared.js";
 
 function normalizeNegateEffectsDuration(action = {}) {
-  return action.negateEffectsDuration === "while_faceup"
+  return action.negateEffectsDuration === "while_faceup" ||
+    action.duration === "while_faceup"
     ? "while_faceup"
     : "until_end_turn";
 }
@@ -96,6 +97,7 @@ export function applySwitchPosition(ctx) {
 
   targetCards.forEach((card) => {
     if (!card || card.cardKind !== "monster") return;
+    if (card.battlePositionLocked === true) return;
     const wasFacedown = card.isFacedown === true;
     const wasFaceupBeforeChange = !wasFacedown;
     const previousPosition = card.position || "attack";
@@ -113,9 +115,7 @@ export function applySwitchPosition(ctx) {
       card.hasChangedPosition = true;
       card.positionChangedThisTurn = true;
     }
-    if (nextPosition === "defense") {
-      card.cannotAttackThisTurn = true;
-    }
+    // Position alone does not create or clear an explicit attack restriction.
     if (Number.isFinite(action.atkBoost)) {
       card.tempAtkBoost = (card.tempAtkBoost || 0) + action.atkBoost;
       card.atk = Math.max(0, (card.atk || 0) + action.atkBoost);
@@ -139,6 +139,49 @@ export function applySwitchPosition(ctx) {
   });
 }
 
+export function applySetFacedownDefense(ctx) {
+  const { action, targets, state, options } = ctx;
+
+  for (const card of targets || []) {
+    const owner = findCardOwner(state, card);
+    if (
+      !card ||
+      card.cardKind !== "monster" ||
+      card.isFacedown === true ||
+      !owner?.field?.includes(card)
+    ) {
+      continue;
+    }
+    const previousPosition = card.position || "attack";
+    card.position = "defense";
+    card.isFacedown = true;
+    if (
+      card.effectsNegated === true &&
+      card.effectsNegatedDuration === "while_faceup"
+    ) {
+      card.effectsNegated = false;
+      card.effectsNegatedDuration = null;
+    }
+    card.hasChangedPosition = true;
+    card.positionChangedThisTurn = true;
+    if (action.lockBattlePosition === true) {
+      card.battlePositionLocked = true;
+    }
+    options.emitSimulatedEvent?.("position_change", {
+      card,
+      player: owner,
+      opponent: owner === state.player ? state.bot : state.player,
+      sourceCard: options.sourceCard || null,
+      effectId: options.effect?.id || null,
+      fromPosition: previousPosition,
+      toPosition: "defense",
+      wasSetFacedown: true,
+      battlePositionLocked: card.battlePositionLocked === true,
+      actionContext: options.actionContext,
+    });
+  }
+}
+
 export function applyBuffStatsTemp(ctx) {
   const {
     action,
@@ -151,11 +194,27 @@ export function applyBuffStatsTemp(ctx) {
     opponent,
     applySimulatedActions,
   } = ctx;
+  let atkBoost = Number.isFinite(action.atkBoost) ? action.atkBoost : 0;
+  if (action.atkBoostFromTarget) {
+    const spec = action.atkBoostFromTarget;
+    const stat = ["baseAtk", "baseDef", "atk", "def"].includes(spec?.stat)
+      ? spec.stat
+      : "atk";
+    const targetRef = spec?.targetRef;
+    const reference = Array.isArray(selections?.[targetRef])
+      ? selections[targetRef][0]
+      : Array.isArray(options?.resolvedTargets?.[targetRef])
+        ? options.resolvedTargets[targetRef][0]
+        : null;
+    const value = Number(reference?.[stat]);
+    if (!reference || !Number.isFinite(value)) return;
+    atkBoost += value;
+  }
   targets.forEach((card) => {
     if (!card) return;
-    if (Number.isFinite(action.atkBoost)) {
-      card.tempAtkBoost = (card.tempAtkBoost || 0) + action.atkBoost;
-      card.atk = Math.max(0, (card.atk || 0) + action.atkBoost);
+    if (atkBoost !== 0) {
+      card.tempAtkBoost = (card.tempAtkBoost || 0) + atkBoost;
+      card.atk = Math.max(0, (card.atk || 0) + atkBoost);
     }
     if (Number.isFinite(action.defBoost)) {
       card.tempDefBoost = (card.tempDefBoost || 0) + action.defBoost;
@@ -344,6 +403,17 @@ export function applyForbidAttackNextTurn(ctx) {
     card._simCannotAttackByEffect = true;
   });
   return;
+}
+
+export function applyForbidAttackThisTurn(ctx) {
+  const cards =
+    Array.isArray(ctx.targets) && ctx.targets.length > 0
+      ? ctx.targets
+      : [ctx.options?.sourceCard].filter(Boolean);
+  for (const card of cards) {
+    card.cannotAttackThisTurn = true;
+    card._simCannotAttackByEffect = true;
+  }
 }
 
 export function applyGrantProtection(ctx) {
@@ -561,7 +631,17 @@ export function applyAddStatus(ctx) {
     if (!card) return;
     const status = action.status;
     if (status) {
-      card[status] = action.value ?? true;
+      if (action.remove === true) {
+        delete card[status];
+        if (status === "effectsNegated") {
+          card.effectsNegatedDuration = null;
+        }
+      } else {
+        card[status] = action.value ?? true;
+        if (status === "effectsNegated") {
+          card.effectsNegatedDuration = normalizeNegateEffectsDuration(action);
+        }
+      }
     }
   });
   return;

@@ -7,6 +7,10 @@ import {
   classifyEffectKind,
   getResponseContextType,
 } from "./link.js";
+import {
+  capCostDefinitionsByLinkedTargetCapacity,
+  resolveCountFromSelectionDefinitions,
+} from "./selection.js";
 import { FAST_EFFECT_ORIGINS } from "./timing.js";
 
 const PERSISTENT_SPELL_TRAP_SUBTYPES = new Set([
@@ -30,6 +34,12 @@ export function effectRequiresSourceAtResolution(card, effect, zone = null) {
 
 export function getEffectActivationCosts(effect) {
   return Array.isArray(effect?.activationCosts) ? effect.activationCosts : [];
+}
+
+export function getEffectActivationCommitActions(effect) {
+  return Array.isArray(effect?.activationCommitActions)
+    ? effect.activationCommitActions
+    : [];
 }
 
 export function getEffectResolutionActions(effect) {
@@ -131,6 +141,10 @@ export function createPreparedActivation(input = {}) {
     targetSelections,
     resolutionSelections,
     costPayment: input.costPayment || null,
+    activationCommitment:
+      input.activationCommitment ||
+      activationContext.activationCommitment ||
+      null,
     activationContext: {
       ...activationContext,
       sourceAtTrigger,
@@ -314,6 +328,8 @@ export async function publishChainLinkActivation(link) {
     preparationStatus: link.preparationStatus,
     resolutionStatus: link.resolutionStatus,
     finalizationStatus: link.finalizationStatus,
+    costPayment: link.costPayment || null,
+    activationCommitment: link.activationCommitment || null,
     chainContext: link.context?.type || null,
     target: selectedCards[0] || null,
     targets: selectedCards,
@@ -419,6 +435,53 @@ export async function payActivationCosts(prepared, context = null) {
   prepared.costPayment = {
     status: "paid",
     actions: costs.map((action, index) => ({
+      index,
+      type: action?.type || null,
+      targetRef: action?.targetRef || null,
+    })),
+  };
+  return { success: true, needsSelection: false };
+}
+
+export async function applyActivationCommitActions(prepared, context = null) {
+  if (prepared?.activationCommitment?.status === "applied") {
+    return { success: true, needsSelection: false, alreadyApplied: true };
+  }
+  const actions = getEffectActivationCommitActions(prepared?.effect);
+  if (actions.length === 0) {
+    prepared.activationCommitment = { status: "not_required", actions: [] };
+    return { success: true, needsSelection: false };
+  }
+  const effectEngine = this.game?.effectEngine;
+  if (!effectEngine?.applyActions) {
+    return {
+      success: false,
+      reason: "No effect engine available for activation commitment.",
+    };
+  }
+
+  const ctx = buildEffectContext(this, prepared, context);
+  ctx.activationContext.applyingActivationCommitActions = true;
+  const selections = {
+    ...(prepared.costSelections || {}),
+    ...(prepared.targetSelections || {}),
+  };
+  const result = await effectEngine.applyActions(actions, ctx, selections);
+  if (result?.needsSelection) {
+    return {
+      ...result,
+      success: false,
+      reason:
+        result.reason ||
+        "Activation commitment actions must be fully determined before targets are declared.",
+    };
+  }
+  if (result && typeof result === "object" && result.success === false) {
+    return result;
+  }
+  prepared.activationCommitment = {
+    status: "applied",
+    actions: actions.map((action, index) => ({
       index,
       type: action?.type || null,
       targetRef: action?.targetRef || null,
@@ -666,6 +729,12 @@ export async function prepareChainResponse(candidate, player, context = null) {
   );
   const targetDefinitions =
     this.getDeclaredTargetDefinitions?.(prepared.effect) || [];
+  const costSelectionDefinitions = capCostDefinitionsByLinkedTargetCapacity(
+    costDefinitions,
+    targetDefinitions,
+    effectEngine,
+    previewCtx,
+  );
   const previewDefinitions = [...costDefinitions, ...targetDefinitions];
   const targetPreview = effectEngine?.resolveTargets?.(
     previewDefinitions,
@@ -690,12 +759,12 @@ export async function prepareChainResponse(candidate, player, context = null) {
 
   let costSelections = candidate.costSelections || {};
   if (
-    costDefinitions.length > 0 &&
+    costSelectionDefinitions.length > 0 &&
     Object.keys(costSelections || {}).length === 0
   ) {
     costSelections = await this.getPlayerSelectionsForDefinitions?.(
       prepared.card,
-      costDefinitions,
+      costSelectionDefinitions,
       player,
       responseContext,
       { purpose: "cost", allowCancel: true, activationZone: sourceZone },
@@ -736,6 +805,37 @@ export async function prepareChainResponse(candidate, player, context = null) {
       };
     }
   }
+  const commitActions = getEffectActivationCommitActions(prepared.effect);
+  if (
+    commitActions.length > 0 &&
+    typeof effectEngine?.checkActionPreviewRequirements === "function"
+  ) {
+    const commitmentPreview = effectEngine.checkActionPreviewRequirements(
+      commitActions,
+      {
+        ...previewCtx,
+        preview: true,
+        isPreview: true,
+        _actionTargets: prepared.costSelections,
+        activationContext: {
+          ...previewCtx.activationContext,
+          preview: true,
+          costSelections: prepared.costSelections,
+          applyingActivationCommitActions: true,
+        },
+      },
+    );
+    if (commitmentPreview?.ok === false) {
+      return {
+        success: false,
+        code:
+          commitmentPreview.code || "ACTIVATION_COMMITMENT_UNAVAILABLE",
+        reason:
+          commitmentPreview.reason ||
+          "Activation commitment cannot be applied.",
+      };
+    }
+  }
 
   // Selection can keep a human prompt open. Revalidate the transaction at the
   // last cancellable boundary so state changes cannot commit a stale offer.
@@ -766,9 +866,9 @@ export async function prepareChainResponse(candidate, player, context = null) {
       reason: finalUsageCheck.reason || "Effect usage limit reached.",
     };
   }
-  const finalCostPreview = costDefinitions.length
+  const finalCostPreview = costSelectionDefinitions.length
     ? effectEngine?.resolveTargets?.(
-        costDefinitions,
+        costSelectionDefinitions,
         previewCtx,
         prepared.costSelections,
       )
@@ -784,6 +884,28 @@ export async function prepareChainResponse(candidate, player, context = null) {
       success: false,
       code: "ACTIVATION_PREFLIGHT_CHANGED",
       reason: "Activation cost or target is no longer legal.",
+    };
+  }
+
+  const resolvedTargetDefinitions = resolveCountFromSelectionDefinitions(
+    targetDefinitions,
+    prepared.costSelections,
+  );
+  const resolvedTargetPreview = resolvedTargetDefinitions.length
+    ? effectEngine?.resolveTargets?.(
+        resolvedTargetDefinitions,
+        previewCtx,
+        null,
+      )
+    : { ok: true };
+  if (
+    resolvedTargetPreview?.ok === false &&
+    !resolvedTargetPreview?.needsSelection
+  ) {
+    return {
+      success: false,
+      code: "ACTIVATION_TARGET_COUNT_UNAVAILABLE",
+      reason: "The selected activation cost cannot be matched by legal targets.",
     };
   }
 
@@ -817,15 +939,43 @@ export async function prepareChainResponse(candidate, player, context = null) {
     costPayment: prepared.costPayment,
   });
 
+  this.isPreparingActivation = true;
+  let commitmentResult;
+  try {
+    commitmentResult = await this.applyActivationCommitActions(
+      prepared,
+      candidate.context || context,
+    );
+  } finally {
+    this.isPreparingActivation = false;
+  }
+  if (!commitmentResult.success) {
+    return {
+      ...commitmentResult,
+      committed: true,
+      costsPaid: prepared.costsPaid === true,
+      noRollback: true,
+    };
+  }
+  if (prepared.activationCommitment?.status === "applied") {
+    this.game?.notify?.("activation_transaction", {
+      stage: "commit_actions_applied",
+      cardInstanceId: prepared.card?.instanceId ?? null,
+      duelCardId: this.game?.ensureDuelCardId?.(prepared.card) ?? null,
+      effectId: prepared.effect?.id || null,
+      activationCommitment: prepared.activationCommitment,
+    });
+  }
+
   let targetSelections =
     candidate.targetSelections || {};
   if (
-    targetDefinitions.length > 0 &&
+    resolvedTargetDefinitions.length > 0 &&
     Object.keys(targetSelections || {}).length === 0
   ) {
     targetSelections = await this.getPlayerSelectionsForDefinitions?.(
       prepared.card,
-      targetDefinitions,
+      resolvedTargetDefinitions,
       player,
       responseContext,
       {
@@ -845,9 +995,39 @@ export async function prepareChainResponse(candidate, player, context = null) {
     }
   }
   prepared.targetSelections = targetSelections || {};
+  const finalDeclaredTargetPreview = resolvedTargetDefinitions.length
+    ? effectEngine?.resolveTargets?.(
+        resolvedTargetDefinitions,
+        previewCtx,
+        prepared.targetSelections,
+      )
+    : { ok: true };
+  if (
+    finalDeclaredTargetPreview?.ok === false ||
+    finalDeclaredTargetPreview?.needsSelection
+  ) {
+    return {
+      success: false,
+      committed: true,
+      costsPaid: true,
+      code: "ACTIVATION_TARGET_COUNT_MISMATCH",
+      reason: "Declared targets do not match the paid activation cost.",
+    };
+  }
   prepared.activationContext.costSelections = { ...prepared.costSelections };
   prepared.activationContext.targetSelections = {
     ...prepared.targetSelections,
+  };
+  prepared.resolvedSelectionCounts = Object.fromEntries(
+    resolvedTargetDefinitions
+      .filter((definition) => definition?.resolvedCountFromSelectionRef)
+      .map((definition) => [
+        definition.id,
+        Number(definition.resolvedSelectionCount ?? 0),
+      ]),
+  );
+  prepared.activationContext.resolvedSelectionCounts = {
+    ...prepared.resolvedSelectionCounts,
   };
   const currentVersion = Number(prepared.card?.locationVersion ?? 0);
   if (
@@ -866,7 +1046,7 @@ export async function prepareChainResponse(candidate, player, context = null) {
     cardInstanceId: prepared.card?.instanceId ?? null,
     duelCardId: this.game?.ensureDuelCardId?.(prepared.card) ?? null,
     effectId: prepared.effect?.id || null,
-    targetIds: targetDefinitions.map((definition) => definition.id),
+    targetIds: resolvedTargetDefinitions.map((definition) => definition.id),
   });
 
   return { success: true, preparedActivation: prepared };

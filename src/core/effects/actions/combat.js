@@ -12,15 +12,40 @@ function scheduleAiMoveAfterPaint(game, actor) {
 
   const expectedTurn = game.turn;
   const expectedPhase = game.phase;
+  const retryableGuardCodes = new Set([
+    "BLOCKED_RESOLVING",
+    "BLOCKED_SELECTION_ACTIVE",
+    "BLOCKED_CHAIN_WINDOW_OPEN",
+    "BLOCKED_FAST_EFFECT_TIMING",
+  ]);
   const runMove = () => {
     if (
       game.gameOver ||
+      game.isDisposed?.() ||
       game.turn !== expectedTurn ||
       game.phase !== expectedPhase
     ) {
       return;
     }
-    actor.makeMove(game);
+
+    const guard = game.canStartAction?.({
+      actor,
+      kind: "bot_turn",
+      silent: true,
+    });
+    if (guard?.ok === false) {
+      if (retryableGuardCodes.has(guard.code)) {
+        const retryDelayMs = Number.isFinite(game.aiActionDelayMs)
+          ? game.aiActionDelayMs
+          : 250;
+        setTimeout(runMove, Math.max(16, retryDelayMs));
+      }
+      return;
+    }
+
+    Promise.resolve(actor.makeMove(game)).catch((error) => {
+      console.error("[EffectPhaseTransition] AI move failed:", error);
+    });
   };
 
   const requestFrame = globalThis.requestAnimationFrame;

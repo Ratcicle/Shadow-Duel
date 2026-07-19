@@ -18,6 +18,10 @@
  */
 
 import { isAI } from "../../Player.js";
+import {
+  capCostDefinitionsByLinkedTargetCapacity,
+  resolveCountFromSelectionDefinitions,
+} from "../../chain/selection.js";
 import { finalizeNegatedSpellTrapActivation } from "../spellTrap/finalization.js";
 
 export function normalizeActivationResult(result) {
@@ -548,12 +552,15 @@ export async function runActivationPipeline(config = {}) {
       normalized.targets || normalized.selections || config.selections || {};
 
     if (fromSelection) {
+      const shouldRunPreCommitChecks = activationContext.committed !== true;
       const gateResult =
-        typeof config.gate === "function" ? config.gate() : { ok: true };
+        shouldRunPreCommitChecks && typeof config.gate === "function"
+          ? config.gate()
+          : { ok: true };
       const previewResult =
         gateResult?.ok === false
           ? gateResult
-          : typeof config.preview === "function"
+          : shouldRunPreCommitChecks && typeof config.preview === "function"
             ? config.preview()
             : { ok: true };
       const restrictionResult =
@@ -584,6 +591,10 @@ export async function runActivationPipeline(config = {}) {
       typeof this.chainSystem?.getEffectActivationCosts === "function"
         ? this.chainSystem.getEffectActivationCosts(preparedEffect)
         : preparedEffect?.activationCosts || [];
+    const activationCommitActions =
+      typeof this.chainSystem?.getEffectActivationCommitActions === "function"
+        ? this.chainSystem.getEffectActivationCommitActions(preparedEffect)
+        : preparedEffect?.activationCommitActions || [];
     if (
       activationContext.costsPaid !== true &&
       activationCosts.length > 0 &&
@@ -615,6 +626,44 @@ export async function runActivationPipeline(config = {}) {
         }
         trackActivationAttempt(costFailure);
         return costFailure;
+      }
+    }
+    if (
+      activationContext.activationCommitment?.status !== "applied" &&
+      activationCommitActions.length > 0 &&
+      typeof this.effectEngine?.checkActionPreviewRequirements === "function"
+    ) {
+      const commitmentPreview =
+        this.effectEngine.checkActionPreviewRequirements(
+          activationCommitActions,
+          {
+            source: resolvedCard,
+            player: owner,
+            opponent: this.getOpponent?.(owner) || null,
+            effect: preparedEffect,
+            activationZone: resolvedActivationZone,
+            activationContext: {
+              ...activationContext,
+              preview: true,
+              applyingActivationCommitActions: true,
+              costSelections: preparedSelections,
+            },
+            _actionTargets: preparedSelections,
+          },
+        );
+      if (commitmentPreview?.ok === false) {
+        const commitmentFailure = this.createActionResult({
+          reason:
+            commitmentPreview.reason ||
+            "Activation commitment cannot be applied.",
+          code:
+            commitmentPreview.code || "ACTIVATION_COMMITMENT_UNAVAILABLE",
+        });
+        if (typeof config.onFailure === "function") {
+          await config.onFailure(commitmentFailure, activationContext);
+        }
+        trackActivationAttempt(commitmentFailure);
+        return commitmentFailure;
       }
     }
 
@@ -659,6 +708,8 @@ export async function runActivationPipeline(config = {}) {
             resolutionSelections:
               activationContext.resolutionSelections || {},
             costPayment: activationContext.costPayment || null,
+            activationCommitment:
+              activationContext.activationCommitment || null,
             sourceAtActivation: activationContext.sourceAtActivation || null,
             sourceMoved: activationContext.sourceMoved === true,
             latestSourceLocation:
@@ -714,6 +765,8 @@ export async function runActivationPipeline(config = {}) {
               activationContext.targetSelections || preparedSelections,
             resolutionSelections:
               activationContext.resolutionSelections || {},
+            activationCommitment:
+              activationContext.activationCommitment || null,
             activationContext: preparedActivationContext,
           };
 
@@ -750,6 +803,41 @@ export async function runActivationPipeline(config = {}) {
       if (preparedActivation.costsPaid === true) {
         activationContext.costsPaid = true;
         activationContext.costPayment = preparedActivation.costPayment || null;
+      }
+      if (
+        typeof this.chainSystem?.applyActivationCommitActions === "function"
+      ) {
+        const commitmentResult =
+          await this.chainSystem.applyActivationCommitActions(
+            preparedActivation,
+            activationContext.actionContext || null,
+          );
+        if (commitmentResult?.success === false) {
+          if (typeof config.onFailure === "function") {
+            await config.onFailure(commitmentResult, activationContext);
+          }
+          trackActivationAttempt(commitmentResult);
+          return this.normalizeActivationResult({
+            ...commitmentResult,
+            committed: true,
+            noRollback: true,
+          });
+        }
+        activationContext.activationCommitment =
+          preparedActivation.activationCommitment || null;
+        if (
+          commitmentResult?.alreadyApplied !== true &&
+          preparedActivation.activationCommitment?.status === "applied"
+        ) {
+          this.notify?.("activation_transaction", {
+            stage: "commit_actions_applied",
+            cardInstanceId: resolvedCard?.instanceId ?? null,
+            duelCardId: this.ensureDuelCardId?.(resolvedCard) ?? null,
+            effectId: preparedEffect?.id || null,
+            activationCommitment:
+              preparedActivation.activationCommitment || null,
+          });
+        }
       }
 
       if (preparingForExistingChain) {
@@ -926,6 +1014,26 @@ export async function runActivationPipeline(config = {}) {
     if (!effect || !chainSystem || chainSystem.chainsDisabled === true) {
       return { result: initialResult, fromSelection: false };
     }
+    const resolutionContext =
+      normalizedInitial.resolutionContext &&
+      typeof normalizedInitial.resolutionContext === "object"
+        ? normalizedInitial.resolutionContext
+        : {};
+    const buildCanonicalContext = (activationOverrides = {}) => ({
+      ...resolutionContext,
+      source: resolvedCard,
+      sourceCard: resolvedCard,
+      player: owner,
+      opponent: this.getOpponent?.(owner) || null,
+      effect,
+      activationZone: resolvedActivationZone,
+      activationContext: {
+        ...(resolutionContext.activationContext || {}),
+        ...activationContext,
+        prepareOnly: false,
+        ...activationOverrides,
+      },
+    });
     const usageCheck = chainSystem.checkActivationUsage?.(
       resolvedCard,
       owner,
@@ -950,6 +1058,12 @@ export async function runActivationPipeline(config = {}) {
     );
     const targetDefinitions =
       chainSystem.getDeclaredTargetDefinitions?.(effect) || [];
+    const costSelectionDefinitions = capCostDefinitionsByLinkedTargetCapacity(
+      costDefinitions,
+      targetDefinitions,
+      this.effectEngine,
+      buildCanonicalContext(),
+    );
     const costs = chainSystem.getEffectActivationCosts?.(effect) || [];
     const hasCanonicalWork =
       costDefinitions.length > 0 ||
@@ -980,14 +1094,14 @@ export async function runActivationPipeline(config = {}) {
 
     let costSelections = selectProvided(costDefinitions);
     if (
-      costDefinitions.length > 0 &&
+      costSelectionDefinitions.length > 0 &&
       Object.keys(costSelections).length === 0
     ) {
       costSelections = await chainSystem.getPlayerSelectionsForDefinitions?.(
         resolvedCard,
-        costDefinitions,
+        costSelectionDefinitions,
         owner,
-        activationContext.actionContext || null,
+        buildCanonicalContext(),
         {
           purpose: "cost",
           allowCancel: true,
@@ -1006,6 +1120,30 @@ export async function runActivationPipeline(config = {}) {
       }
     }
 
+    const finalCostSelectionPreview = costSelectionDefinitions.length
+      ? this.effectEngine?.resolveTargets?.(
+          costSelectionDefinitions,
+          buildCanonicalContext({
+            preview: true,
+            isPreview: true,
+            autoSelectTargets: false,
+          }),
+          costSelections,
+        )
+      : { ok: true };
+    if (
+      finalCostSelectionPreview?.ok === false ||
+      finalCostSelectionPreview?.needsSelection
+    ) {
+      return {
+        result: this.createActionResult({
+          code: "ACTIVATION_COST_SELECTION_INVALID",
+          reason: "The activation cost selection is no longer legal.",
+        }),
+        fromSelection: false,
+      };
+    }
+
     const commitResult = await commitPreparedSource();
     if (commitResult?.success === false) {
       return { result: commitResult, fromSelection: false };
@@ -1018,6 +1156,7 @@ export async function runActivationPipeline(config = {}) {
       activationZone: resolvedActivationZone,
       costSelections: costSelections || {},
       targetSelections: {},
+      context: resolutionContext,
       activationContext: {
         ...activationContext,
         costSelections: costSelections || {},
@@ -1039,7 +1178,7 @@ export async function runActivationPipeline(config = {}) {
     try {
       costResult = await chainSystem.payActivationCosts(
         draft,
-        activationContext.actionContext || null,
+        buildCanonicalContext(),
       );
     } finally {
       chainSystem.isPreparingActivation = false;
@@ -1077,16 +1216,74 @@ export async function runActivationPipeline(config = {}) {
       costPayment: draft.costPayment || null,
     });
 
-    let targetSelections = selectProvided(targetDefinitions);
+    const commitmentResult = await chainSystem.applyActivationCommitActions?.(
+      draft,
+      buildCanonicalContext(),
+    );
+    if (commitmentResult?.success === false) {
+      return {
+        result: this.createActionResult({
+          ...commitmentResult,
+          committed: true,
+          costsPaid: true,
+          noRollback: true,
+        }),
+        fromSelection: false,
+      };
+    }
+    activationContext.activationCommitment =
+      draft.activationCommitment || null;
+    if (draft.activationCommitment?.status === "applied") {
+      this.notify?.("activation_transaction", {
+        stage: "commit_actions_applied",
+        cardInstanceId: resolvedCard?.instanceId ?? null,
+        duelCardId: this.ensureDuelCardId?.(resolvedCard) ?? null,
+        effectId: effect.id || null,
+        activationCommitment: draft.activationCommitment || null,
+      });
+    }
+
+    const resolvedTargetDefinitions = resolveCountFromSelectionDefinitions(
+      targetDefinitions,
+      costSelections,
+    );
+    const resolvedTargetPreview = resolvedTargetDefinitions.length
+      ? this.effectEngine?.resolveTargets?.(
+          resolvedTargetDefinitions,
+          buildCanonicalContext({
+            preview: true,
+            isPreview: true,
+            autoSelectTargets: false,
+          }),
+          null,
+        )
+      : { ok: true };
     if (
-      targetDefinitions.length > 0 &&
+      resolvedTargetPreview?.ok === false &&
+      !resolvedTargetPreview?.needsSelection
+    ) {
+      return {
+        result: this.createActionResult({
+          committed: true,
+          costsPaid: true,
+          noRollback: true,
+          code: "ACTIVATION_TARGET_COUNT_UNAVAILABLE",
+          reason: "The selected activation cost cannot be matched by legal targets.",
+        }),
+        fromSelection: false,
+      };
+    }
+
+    let targetSelections = selectProvided(resolvedTargetDefinitions);
+    if (
+      resolvedTargetDefinitions.length > 0 &&
       Object.keys(targetSelections).length === 0
     ) {
       targetSelections = await chainSystem.getPlayerSelectionsForDefinitions?.(
         resolvedCard,
-        targetDefinitions,
+        resolvedTargetDefinitions,
         owner,
-        activationContext.actionContext || null,
+        buildCanonicalContext(),
         {
           purpose: "target",
           allowCancel: false,
@@ -1113,12 +1310,43 @@ export async function runActivationPipeline(config = {}) {
     };
     activationContext.costSelections = costSelections || {};
     activationContext.targetSelections = targetSelections || {};
+    activationContext.resolvedSelectionCounts = Object.fromEntries(
+      resolvedTargetDefinitions
+        .filter((definition) => definition?.resolvedCountFromSelectionRef)
+        .map((definition) => [
+          definition.id,
+          Number(definition.resolvedSelectionCount ?? 0),
+        ]),
+    );
+    const finalTargetPreview = resolvedTargetDefinitions.length
+      ? this.effectEngine?.resolveTargets?.(
+          resolvedTargetDefinitions,
+          buildCanonicalContext({
+            preview: true,
+            isPreview: true,
+            autoSelectTargets: false,
+          }),
+          targetSelections,
+        )
+      : { ok: true };
+    if (finalTargetPreview?.ok === false || finalTargetPreview?.needsSelection) {
+      return {
+        result: this.createActionResult({
+          committed: true,
+          costsPaid: true,
+          noRollback: true,
+          code: "ACTIVATION_TARGET_COUNT_MISMATCH",
+          reason: "Declared targets do not match the paid activation cost.",
+        }),
+        fromSelection: false,
+      };
+    }
     this.notify?.("activation_transaction", {
       stage: "targets_declared",
       cardInstanceId: resolvedCard?.instanceId ?? null,
       duelCardId: this.ensureDuelCardId?.(resolvedCard) ?? null,
       effectId: effect.id || null,
-      targetIds: targetDefinitions.map((definition) => definition.id),
+      targetIds: resolvedTargetDefinitions.map((definition) => definition.id),
     });
     const nextResult = await safeActivate(selections);
     return { result: nextResult, fromSelection: true };

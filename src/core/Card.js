@@ -136,6 +136,7 @@ export default class Card {
     this.level = data.level ?? 0;
     this.position = "attack";
     this.isFacedown = false;
+    this.battlePositionLocked = false;
     this.hasAttacked = false;
     const baseExtraAttacks = Number(data.extraAttacks ?? 0);
     this.extraAttacks = Number.isFinite(baseExtraAttacks)
@@ -228,11 +229,20 @@ export default class Card {
       : data.specialSummonOnlyBy
         ? [data.specialSummonOnlyBy]
         : null;
+    this.mustFirstBeSpecialSummonedBy = Array.isArray(
+      data.mustFirstBeSpecialSummonedBy,
+    )
+      ? [...data.mustFirstBeSpecialSummonedBy]
+      : data.mustFirstBeSpecialSummonedBy
+        ? [data.mustFirstBeSpecialSummonedBy]
+        : null;
+    this.properSummonEstablished = data.properSummonEstablished === true;
+    this.properSummonProcedure = data.properSummonProcedure || null;
     this.unaffectedByOtherCardEffects = !!data.unaffectedByOtherCardEffects;
-    this.lastSummonMethod = null;
-    this.lastSummonedFromZone = null;
-    this.lastSummonedTurn = null;
-    this.lastSummonProcedure = null;
+    this.lastSummonMethod = data.lastSummonMethod || null;
+    this.lastSummonedFromZone = data.lastSummonedFromZone || null;
+    this.lastSummonedTurn = data.lastSummonedTurn ?? null;
+    this.lastSummonProcedure = data.lastSummonProcedure || null;
 
     // Turn-based temporary buffs (for expirations like "until end of next turn")
     // Structure: Array of {stat, value, expiresOnTurn, id}
@@ -244,7 +254,8 @@ export default class Card {
     this.fieldPresenceState = null;
 
     // Effect negation tracking
-    this.effectsNegated = false;
+    this.effectsNegated = data.effectsNegated === true;
+    this.effectsNegatedDuration = data.effectsNegatedDuration || null;
     this.originalAtk = null; // Store original ATK when set to 0
     this.originalDef = null; // Store original DEF when set to 0
 

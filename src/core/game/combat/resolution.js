@@ -689,5 +689,8 @@ export async function resolveCombat(attacker, target, options = {}) {
   if (combatResult?.needsSelection && combatResult?.selectionContract) {
     return combatResult;
   }
+  if (combatResult?.ok === false || combatResult?.success === false) {
+    return combatResult;
+  }
   return { ok: true };
 }

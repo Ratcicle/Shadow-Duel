@@ -442,15 +442,27 @@ function collectActionDestroyCandidates(engine, action, ctx, effect, activationC
       appendUniqueCard(cards, card);
     }
   } else if (action.type === "destroy_targeted_cards") {
-    const { type: _actionType, ...targetAction } = action;
-    const scope = {
-      owner: "opponent",
-      zones: targetAction.zones || ["field", "spellTrap", "fieldSpell"],
-      ...targetAction,
-      filters: actionFilterFromConfig(targetAction),
-    };
-    for (const card of collectCardsFromScope(engine, scope, ctx)) {
-      appendUniqueCard(cards, card);
+    if (action.targetRef) {
+      for (const card of collectTargetRefCandidateCards(
+        engine,
+        action.targetRef,
+        effect,
+        ctx,
+        activationContext,
+      )) {
+        appendUniqueCard(cards, card);
+      }
+    } else {
+      const { type: _actionType, ...targetAction } = action;
+      const scope = {
+        owner: "opponent",
+        zones: targetAction.zones || ["field", "spellTrap", "fieldSpell"],
+        ...targetAction,
+        filters: actionFilterFromConfig(targetAction),
+      };
+      for (const card of collectCardsFromScope(engine, scope, ctx)) {
+        appendUniqueCard(cards, card);
+      }
     }
   } else if (action.type === "destroy_cards_by_scope") {
     for (const card of collectCardsFromScope(engine, action.targetScope || {}, ctx)) {
@@ -727,8 +739,21 @@ function activationWouldDestroyCardsMatchingFilters(engine, cond, ctx) {
     activationContext,
   );
   const filters = cond.destroyedCardFilters || cond.filters || {};
+  const affectedPlayer =
+    cond.affectedPlayer || cond.cardOwner || cond.owner || "any";
   const minCount = Math.max(1, Number(cond.minCount ?? cond.count ?? 1));
   const matching = candidates.filter((card) => {
+    if (
+      !conditionCardOwnerMatches(
+        engine,
+        card,
+        affectedPlayer,
+        responsePlayer,
+        responseOpponent,
+      )
+    ) {
+      return false;
+    }
     if (!cardVisibleToConditionViewer(engine, card, responsePlayer)) {
       return false;
     }
@@ -1652,6 +1677,53 @@ export function evaluateConditions(conditions, ctx) {
           }
           break;
         }
+        case "field_card_count_comparison": {
+          const zones =
+            Array.isArray(cond.zones) && cond.zones.length > 0
+              ? cond.zones
+              : [cond.zone || "field"];
+          const countFor = (ownerRule, filters = {}) =>
+            getConditionOwners(ownerRule, player, opponent).reduce(
+              (total, owner) =>
+                total +
+                zones.reduce((zoneTotal, zoneKey) => {
+                  const matches = getConditionZoneCards(owner, zoneKey).filter(
+                    (card) => {
+                      if (!card) return false;
+                      if (cond.requireFaceup === true && card.isFacedown) {
+                        return false;
+                      }
+                      if (
+                        cond.excludeSource === true &&
+                        isSameCardReference(card, ctx?.source)
+                      ) {
+                        return false;
+                      }
+                      return this.cardMatchesFilters(card, filters);
+                    },
+                  );
+                  return zoneTotal + matches.length;
+                }, 0),
+              0,
+            );
+          const leftOwner = cond.leftOwner || "opponent";
+          const rightOwner = cond.rightOwner || "self";
+          const leftCount = countFor(leftOwner, cond.leftFilters || cond.filters || {});
+          const rightCount = countFor(
+            rightOwner,
+            cond.rightFilters || cond.filters || {},
+          );
+          const operator = cond.operator || "gt";
+          if (!compareContextNumbers(leftCount, operator, rightCount)) {
+            return {
+              ok: false,
+              reason:
+                cond.reason ||
+                `Expected ${leftOwner} controlled-card count (${leftCount}) to be ${operator} ${rightOwner} (${rightCount}).`,
+            };
+          }
+          break;
+        }
         case "activation_would_destroy_cards_matching_filters": {
           const result = activationWouldDestroyCardsMatchingFilters(
             this,
@@ -1778,14 +1850,26 @@ export function evaluateConditions(conditions, ctx) {
             Array.isArray(cond.zones) && cond.zones.length > 0
               ? cond.zones
               : [cond.zone || "field"];
-          const filters = cond.filters || {};
-          const cardKind = filters.cardKind ?? cond.cardKind;
-          const subtype = filters.subtype ?? cond.subtype;
-          const archetype = filters.archetype ?? cond.archetype;
+          const filters = { ...(cond.filters || {}) };
           const equippedWithFilters =
             filters.equippedWithFilters ?? cond.equippedWithFilters;
-          const cardName =
-            filters.cardName ?? filters.name ?? cond.cardName ?? cond.name;
+          delete filters.equippedWithFilters;
+          const copyFilter = (key, value) => {
+            if (value !== undefined && filters[key] === undefined) {
+              filters[key] = value;
+            }
+          };
+          copyFilter("cardKind", cond.cardKind);
+          copyFilter("subtype", cond.subtype);
+          copyFilter("monsterType", cond.monsterType);
+          copyFilter("type", cond.cardType);
+          copyFilter("attribute", cond.attribute);
+          copyFilter("archetype", cond.archetype);
+          copyFilter("isTuner", cond.isTuner);
+          copyFilter("position", cond.position);
+          copyFilter("cardName", cond.cardName ?? cond.name);
+          delete filters.min;
+          delete filters.max;
           const includeFacedown = cond.includeFacedown === true;
           const requireFaceup =
             cond.requireFaceup !== false && !includeFacedown;
@@ -1797,42 +1881,15 @@ export function evaluateConditions(conditions, ctx) {
 
           const matchesFilters = (card) => {
             if (!card) return false;
-            if (cond.excludeSource === true && source && card === source) {
+            if (
+              cond.excludeSource === true &&
+              source &&
+              isSameCardReference(card, source)
+            ) {
               return false;
             }
             if (requireFaceup && card.isFacedown) return false;
-            if (cardKind) {
-              const requiredKinds = Array.isArray(cardKind)
-                ? cardKind
-                : [cardKind];
-              if (!requiredKinds.includes(card.cardKind)) return false;
-            }
-            if (subtype) {
-              const requiredSubtypes = Array.isArray(subtype)
-                ? subtype
-                : [subtype];
-              if (!requiredSubtypes.includes(card.subtype)) return false;
-            }
-            if (archetype) {
-              const requiredArchetypes = Array.isArray(archetype)
-                ? archetype
-                : [archetype];
-              const cardArchetypes = card.archetypes
-                ? card.archetypes
-                : card.archetype
-                  ? [card.archetype]
-                  : [];
-              const hasMatch = requiredArchetypes.some((arc) =>
-                cardArchetypes.includes(arc),
-              );
-              if (!hasMatch) return false;
-            }
-            if (cardName) {
-              const requiredNames = Array.isArray(cardName)
-                ? cardName
-                : [cardName];
-              if (!requiredNames.includes(card.name)) return false;
-            }
+            if (!this.cardMatchesFilters(card, filters)) return false;
             if (equippedWithFilters) {
               const equipFilters = equippedWithFilters || {};
               const requireEquipFaceup = equipFilters.requireFaceup !== false;

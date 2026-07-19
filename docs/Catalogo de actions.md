@@ -4,7 +4,7 @@
 
 Este catalogo descreve o contrato declarativo de cada `action.type` registrado no Shadow Duel. O runtime continua vindo de `src/core/actionHandlers/wiring.js`; este documento serve para criar cartas, revisar handlers e validar o banco de cartas.
 
-Total de actions catalogadas: 107.
+Total de actions catalogadas: 109.
 
 ## Recursos
 
@@ -897,6 +897,40 @@ _Sem campos alem de `type`._
 ```json
 {
   "type": "shuffle_opponent_field_to_deck"
+}
+```
+
+**Notas**
+
+_Sem notas._
+
+### `take_control`
+
+Transfers control of targeted monsters without making them leave the field.
+
+- Handler: `handleTakeControl`
+- Target: `required`
+- Selecao: `usesTargets`
+- Mutacoes: control
+- Eventos emitidos: nenhum
+- Atualiza board: sim
+- Preview: `notNeeded`
+
+| Campo | Obrigatorio | Contrato | Descricao |
+| --- | --- | --- | --- |
+| `targetRef` | sim | string | References an effect target id or a context target such as self. |
+| `player` | nao | enum: self, opponent |  |
+| `duration` | nao | enum: permanent, until_end_phase |  |
+| `contextLabel` | nao | string |  |
+
+**Exemplos**
+
+```json
+{
+  "type": "take_control",
+  "targetRef": "opponent_monster",
+  "player": "self",
+  "duration": "until_end_phase"
 }
 ```
 
@@ -2113,6 +2147,7 @@ Adds a named status flag to target cards.
 | `value` | nao | any |  |
 | `remove` | nao | boolean |  |
 | `untilEndOfTurn` | nao | boolean |  |
+| `duration` | nao | enum: until_end_turn, while_faceup |  |
 
 **Exemplos**
 
@@ -2298,6 +2333,7 @@ Temporarily modifies ATK and/or DEF.
 | `defBoost` | nao | number |  |
 | `targetScope` | nao | object |  |
 | `atkBoostFromContext` | nao | object |  |
+| `atkBoostFromTarget` | nao | object |  |
 | `defBoostFromContext` | nao | object |  |
 | `duration` | nao | string |  |
 | `durationTurns` | nao | number |  |
@@ -2760,6 +2796,37 @@ Removes visible positive ATK/DEF increases from target monsters.
     "atk",
     "def"
   ]
+}
+```
+
+**Notas**
+
+_Sem notas._
+
+### `set_facedown_defense`
+
+Changes a face-up monster to face-down Defense Position.
+
+- Handler: `handleSetFacedownDefense`
+- Target: `required`
+- Selecao: `usesTargets`
+- Mutacoes: position, faceDown, status
+- Eventos emitidos: position_change
+- Atualiza board: sim
+- Preview: `notNeeded`
+
+| Campo | Obrigatorio | Contrato | Descricao |
+| --- | --- | --- | --- |
+| `targetRef` | sim | string | References an effect target id or a context target such as self. |
+| `lockBattlePosition` | nao | boolean |  |
+
+**Exemplos**
+
+```json
+{
+  "type": "set_facedown_defense",
+  "targetRef": "opponent_monster",
+  "lockBattlePosition": true
 }
 ```
 
@@ -3844,6 +3911,8 @@ Registers a temporary virtual event trigger owned by the resolving player.
 | `promptUser` | nao | boolean |  |
 | `promptMessage` | nao | string |  |
 | `uniqueKey` | nao | string |  |
+| `bindEventTargetRef` | nao | string |  |
+| `requireBoundTargetLeavesField` | nao | boolean |  |
 
 **Exemplos**
 

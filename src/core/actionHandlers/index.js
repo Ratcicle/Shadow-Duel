@@ -13,7 +13,11 @@ export { registerDefaultHandlers } from "./wiring.js";
 
 // Re-export all handlers for direct access if needed
 // Movement
-export { handleReturnToHand, handleBounceAndSummon } from "./movement.js";
+export {
+  handleReturnToHand,
+  handleBounceAndSummon,
+  handleTakeControl,
+} from "./movement.js";
 
 // Summon
 export {
@@ -50,6 +54,7 @@ export {
   handleBanishAndBuff,
   handleBuffAtkByLpGainedThisTurn,
   handleSetAttackLimitFromZoneCount,
+  handleSetFacedownDefense,
   handleSwitchPosition,
   handleSwitchDefenderPositionOnAttack,
   handlePermanentBuffNamed,

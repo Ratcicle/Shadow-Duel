@@ -7,6 +7,10 @@ import {
   SUMMON_MODES,
   SUMMON_ORIGINS,
 } from "../summon/transaction.js";
+import {
+  checkSpecialSummonEligibility,
+  resetProperSummon,
+} from "../summon/eligibility.js";
 
 /**
  * Zone movement - card movement between zones with side effects.
@@ -1606,16 +1610,16 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
   if (toZone === "field") {
     const summonProcedure = options.summonProcedure || null;
     const summonMethod = options.summonMethodOverride || "special";
-    if (
-      Array.isArray(card.specialSummonOnlyBy) &&
-      !card.specialSummonOnlyBy.includes(summonProcedure)
-    ) {
-      const reason = `${card.name} cannot be Special Summoned this way.`;
-      this.ui?.log?.(reason);
+    const summonEligibility = checkSpecialSummonEligibility(card, {
+      summonProcedure,
+      fromZone: options.fromZone || null,
+    });
+    if (summonEligibility.ok === false) {
+      this.ui?.log?.(summonEligibility.reason);
       return {
         success: false,
-        reason,
-        code: "special_summon_restriction",
+        reason: summonEligibility.reason,
+        code: summonEligibility.code,
       };
     }
 
@@ -1781,6 +1785,20 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
     return { success: false, reason: "card_not_found" };
   }
   ensureOriginalOwner(card, fromOwner.id);
+
+  // A control-return record only matters while its bound instance remains on
+  // the field. The card_moved event still observes this departure afterwards,
+  // allowing independent instance-bound triggers to react normally.
+  if (
+    fromZone === "field" &&
+    toZone !== "field" &&
+    Array.isArray(this.temporaryControlEffects)
+  ) {
+    const instanceId = card.instanceId ?? card._instanceId ?? card.uuid ?? null;
+    this.temporaryControlEffects = this.temporaryControlEffects.filter(
+      (entry) => entry?.cardInstanceId !== instanceId,
+    );
+  }
 
   const restoreRemovedCardToSourceZone = () => {
     if (!fromOwner || !fromZone || !card) return;
@@ -1999,6 +2017,7 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
 
     if (toZone !== "field") {
       restoreTemporaryStatuses(card);
+      card.battlePositionLocked = false;
     }
 
     // Clean up temporary stat modifiers from effects (e.g., Shadow-Heart Coward debuff)
@@ -2383,6 +2402,7 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
   if (shouldRedirectExtraDeckMonsterToExtraDeck) {
     const extraDeck = this.getZone(destPlayer, "extraDeck");
     if (extraDeck) {
+      resetProperSummon(card);
       extraDeck.push(card);
       this.ui.log(`${card.name} returned to Extra Deck.`);
       if (this.devModeEnabled && this.devFailAfterZoneMutation) {
@@ -2494,6 +2514,9 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
         );
       }
     }
+  }
+  if (toZone === "extraDeck") {
+    resetProperSummon(card);
   }
 
   const finalDestArr = destArrRedirected || destArr;

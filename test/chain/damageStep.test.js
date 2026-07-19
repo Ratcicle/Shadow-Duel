@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import Card from "../../src/core/Card.js";
+import Game from "../../src/core/Game.js";
+import { cardDatabaseByName } from "../../src/data/cards.js";
 import {
   DAMAGE_STEP_ACTIVATION_CATEGORIES,
   DAMAGE_STEP_TIMINGS,
@@ -253,6 +256,34 @@ test("[CS-10] Flip, dano, destruição e envio ao Cemitério ocorrem nas etapas 
     trace.actions.find((entry) => entry.type === "destroy").timing,
     DAMAGE_STEP_TIMINGS.END,
   );
+});
+
+test("a revelação obrigatória no Damage Step preserva a trava de posição", async () => {
+  const { game, player, bot } = createDamageHarness();
+  const attacker = placeCard(
+    player,
+    "field",
+    monster("Locked reveal attacker", player.id, { atk: 1800 }),
+  );
+  const defender = placeCard(
+    bot,
+    "field",
+    monster("Locked reveal defender", bot.id, {
+      def: 3000,
+      position: "defense",
+      isFacedown: true,
+      battlePositionLocked: true,
+    }),
+  );
+
+  const result = await game.executeDamageStepTransaction(
+    game.createDamageStepTransaction({ attacker, defender }),
+  );
+
+  assert.equal(result.ok, true);
+  assert.equal(defender.isFacedown, false);
+  assert.equal(defender.position, "defense");
+  assert.equal(defender.battlePositionLocked, true);
 });
 
 test("ATK zero contra ATK zero não determina destruição", async () => {
@@ -656,4 +687,80 @@ test("allowDamageStepActivation removido não autoriza Fast Effect genérico", (
   );
   assert.equal(result.ok, false);
   assert.equal(result.code, "DAMAGE_STEP_RESTRICTED");
+});
+
+function createBattleTriggerGame(t) {
+  const game = new Game({
+    captureReplay: false,
+    laboratoryMode: true,
+    phaseDelayMs: 0,
+    animationDelayMs: 0,
+  });
+  game.turn = game.player.id;
+  game.phase = "battle";
+  game.battleStep = "battle";
+  game.turnCounter = 2;
+  game.disablePresentationDelays = true;
+  game.waitForBoardPresentation = async () => {};
+  game.player.controllerType = "ai";
+  game.bot.controllerType = "ai";
+  t.after(() => game.dispose("battle_destroy_context_test_complete"));
+  return game;
+}
+
+function createRuntimeCard(data, owner) {
+  const card = new Card(data, owner.id);
+  card.owner = owner.id;
+  card.controller = owner.id;
+  return card;
+}
+
+async function resolveBattleDestroyTrigger(t, attackerName) {
+  const game = createBattleTriggerGame(t);
+  const attacker = createRuntimeCard(
+    cardDatabaseByName.get(attackerName),
+    game.player,
+  );
+  const defender = createRuntimeCard(
+    {
+      id: 999901,
+      name: "Battle destroy context target",
+      cardKind: "monster",
+      atk: 2000,
+      def: 1000,
+      level: 4,
+      type: "Warrior",
+      attribute: "Dark",
+      effects: [],
+    },
+    game.bot,
+  );
+  attacker.position = "attack";
+  defender.position = "defense";
+  defender.atk = 1600;
+  game.player.field.push(attacker);
+  game.bot.field.push(defender);
+  game.player.lp = 4000;
+  game.bot.lp = 8000;
+
+  const result = await game.resolveCombat(attacker, defender);
+  assert.equal(result.ok, true);
+  assert.equal(game.bot.graveyard.includes(defender), true);
+  assert.equal(game.chainSystem.isOpenGameState(), true);
+  return game;
+}
+
+test("Aurora Seraph preserva a carta destruída no Trigger e cura pelo ATK atual", async (t) => {
+  const game = await resolveBattleDestroyTrigger(t, "Luminarch Aurora Seraph");
+  assert.equal(game.player.lp, 4800);
+});
+
+test("Rainbow Cosmic Dragon cura pelo ATK original da carta destruída", async (t) => {
+  const game = await resolveBattleDestroyTrigger(t, "Rainbow Cosmic Dragon");
+  assert.equal(game.player.lp, 6000);
+});
+
+test("Fire Extreme Dragon causa dano pelo ATK original da carta destruída", async (t) => {
+  const game = await resolveBattleDestroyTrigger(t, "Fire Extreme Dragon");
+  assert.equal(game.bot.lp, 7000);
 });

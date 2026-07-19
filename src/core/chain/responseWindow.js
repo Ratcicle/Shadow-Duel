@@ -72,7 +72,12 @@ export async function openChainWindow(context = {}, options = {}) {
   for (const preparedActivation of preparedActivations) {
     const rootLink = this.addToChain({
       ...preparedActivation,
-      context,
+      context: {
+        ...(context || {}),
+        // Prepared triggers carry occurrence-specific runtime values. Keep
+        // those values while adding the shared response-window context.
+        ...(preparedActivation.context || {}),
+      },
     });
     const publication = await this.publishChainLinkActivation?.(rootLink);
     await this.appendActivationTriggerPackages?.(publication, context);

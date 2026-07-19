@@ -3,6 +3,7 @@ import {
   canUseAsSynchroMaterial,
   getSynchroMaterialCombos,
 } from "../../game/summon/synchro.js";
+import { checkSpecialSummonEligibility } from "../../game/summon/eligibility.js";
 import { getUI, resolveTargetCards, selectCards } from "../shared.js";
 
 function getCardInstanceId(card) {
@@ -228,13 +229,11 @@ async function confirmOptionalRevive(game, player, action, source) {
 
 function canSpecialSummonMaterial(game, player, card, options = {}) {
   if (!game || !player || !card || card.cardKind !== "monster") return false;
-  if (card.cannotBeSpecialSummoned) return false;
-  if (
-    Array.isArray(card.specialSummonOnlyBy) &&
-    !card.specialSummonOnlyBy.includes("special")
-  ) {
-    return false;
-  }
+  const eligibility = checkSpecialSummonEligibility(card, {
+    summonProcedure: "card_effect",
+    fromZone: "graveyard",
+  });
+  if (!eligibility.ok) return false;
   const restrictionCheck = game.canSpecialSummonUnderRestrictions?.(card, player, {
     summonMethod: "special",
     fromZone: "graveyard",

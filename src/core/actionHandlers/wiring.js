@@ -8,7 +8,12 @@
 import { proxyEngineMethod } from "./registry.js";
 
 // Movement handlers
-import { handleReturnToHand, handleBounceAndSummon, handleShuffleOpponentFieldToDeck } from "./movement.js";
+import {
+  handleReturnToHand,
+  handleBounceAndSummon,
+  handleShuffleOpponentFieldToDeck,
+  handleTakeControl,
+} from "./movement.js";
 
 // Summon handlers
 import {
@@ -51,6 +56,7 @@ import {
   handleBanishAndBuff,
   handleBuffAtkByLpGainedThisTurn,
   handleSetAttackLimitFromZoneCount,
+  handleSetFacedownDefense,
   handleSwitchPosition,
   handleSwitchDefenderPositionOnAttack,
   handleRemoveStatIncreases,
@@ -136,6 +142,7 @@ export function registerDefaultHandlers(registry) {
   );
 
   registry.register("return_to_hand", handleReturnToHand);
+  registry.register("take_control", handleTakeControl);
   registry.register("shuffle_opponent_field_to_deck", handleShuffleOpponentFieldToDeck);
 
   registry.register("transmutate", handleTransmutate);
@@ -231,6 +238,8 @@ export function registerDefaultHandlers(registry) {
   registry.register("grant_protection", handleGrantProtection);
 
   registry.register("banish_and_buff", handleBanishAndBuff);
+
+  registry.register("set_facedown_defense", handleSetFacedownDefense);
 
   registry.register("switch_position", handleSwitchPosition);
 

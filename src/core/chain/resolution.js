@@ -706,7 +706,10 @@ function revalidateDeclaredTargets(chainSystem, link) {
       const faceUpValid =
         definition.requireFaceup !== true || current.faceUp === true;
       const kindValid =
-        !definition.cardKind || card?.cardKind === definition.cardKind;
+        !definition.cardKind ||
+        (Array.isArray(definition.cardKind)
+          ? definition.cardKind.includes(card?.cardKind)
+          : card?.cardKind === definition.cardKind);
       const definitionValid = targetStillMatchesDefinition(
         chainSystem,
         link,
@@ -740,7 +743,9 @@ function revalidateDeclaredTargets(chainSystem, link) {
         locationVersion: current.locationVersion,
       };
     });
-    const minimum = Number(definition?.count?.min ?? definition?.min ?? 1);
+    const minimum = Number(
+      definition?.minAtResolution ?? definition?.count?.min ?? definition?.min ?? 1,
+    );
     const minimumMet = validCards.length >= Math.max(0, minimum);
     if (!minimumMet) satisfiesMinimums = false;
     selections[targetId] = validCards;
@@ -1112,6 +1117,8 @@ async function completePreparedPipeline(link, result) {
 export function determineCardZone(card, player) {
   if (!card || !player) return "unknown";
 
+  if (player.deck?.includes(card)) return "deck";
+  if (player.extraDeck?.includes(card)) return "extraDeck";
   if (player.hand?.includes(card)) return "hand";
   if (player.field?.includes(card)) return "field";
   if (player.spellTrap?.includes(card)) return "spellTrap";

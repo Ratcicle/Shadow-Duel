@@ -271,7 +271,13 @@ export function showChainResponseModal(
     signal: options.signal || null,
   }).then((result) => {
     if (result?.activate) {
-      return { card: result.card, effect: result.effect, selections: null };
+      return (
+        activatable.find(
+          (candidate) =>
+            candidate?.card === result.card &&
+            candidate?.effect === result.effect,
+        ) || null
+      );
     }
     return null;
   });

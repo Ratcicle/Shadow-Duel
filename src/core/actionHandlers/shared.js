@@ -41,7 +41,8 @@ export function getUI(game) {
 }
 
 export function normalizeNegateEffectsDuration(action = {}) {
-  return action.negateEffectsDuration === "while_faceup"
+  return action.negateEffectsDuration === "while_faceup" ||
+    action.duration === "while_faceup"
     ? "while_faceup"
     : "until_end_turn";
 }

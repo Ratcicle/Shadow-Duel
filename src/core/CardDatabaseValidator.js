@@ -44,6 +44,27 @@ const VALID_ACTIVATION_ZONES = new Set([
   "banished",
 ]);
 const VALID_USAGE_POLICIES = new Set(["use", "activate"]);
+const VALID_FIELD_COUNT_COMPARISON_OWNERS = new Set([
+  "self",
+  "opponent",
+  "any",
+  "both",
+]);
+const VALID_FIELD_COUNT_COMPARISON_OPERATORS = new Set([
+  "gt",
+  ">",
+  "gte",
+  ">=",
+  "lt",
+  "<",
+  "lte",
+  "<=",
+  "eq",
+  "===",
+  "neq",
+  "!=",
+  "!==",
+]);
 const VALID_DAMAGE_STEP_TIMINGS = new Set([
   "start_of_damage_step",
   "before_damage_calculation",
@@ -234,6 +255,33 @@ export function validateCardDatabase() {
   const seenNames = new Map();
 
   for (const card of cardDatabase) {
+    if (card.mustFirstBeSpecialSummonedBy !== undefined) {
+      const procedures = card.mustFirstBeSpecialSummonedBy;
+      const validProcedures = new Set([
+        "special",
+        "card_effect",
+        "fusion",
+        "synchro",
+        "ascension",
+        "contact_fusion",
+        "graveyard_banish_fusion",
+      ]);
+      if (
+        !Array.isArray(procedures) ||
+        procedures.length === 0 ||
+        procedures.some(
+          (procedure) =>
+            typeof procedure !== "string" || !validProcedures.has(procedure),
+        )
+      ) {
+        errors.push(
+          formatIssue(
+            card,
+            '"mustFirstBeSpecialSummonedBy" must be a non-empty array of supported summon procedures.',
+          ),
+        );
+      }
+    }
     // Basic monster type checks for Extra Deck categories
     if (card.monsterType === "ascension") {
       // Must be a monster and live in Extra Deck during play; validate ascension metadata
@@ -503,6 +551,19 @@ export function validateCardDatabase() {
           ),
         );
       }
+      if (
+        effect.activationCommitActions !== undefined &&
+        !Array.isArray(effect.activationCommitActions)
+      ) {
+        errors.push(
+          formatIssue(
+            card,
+            'Effect "activationCommitActions" must be an array.',
+            effectIndex,
+            null,
+          ),
+        );
+      }
 
       if (effect.damageStepTimings !== undefined) {
         const damageStepTimings = effect.damageStepTimings;
@@ -728,6 +789,11 @@ export function validateCardDatabase() {
       const activationCosts = Array.isArray(effect.activationCosts)
         ? effect.activationCosts
         : [];
+      const activationCommitActions = Array.isArray(
+        effect.activationCommitActions,
+      )
+        ? effect.activationCommitActions
+        : [];
       const targetIds = new Set(
         Array.isArray(effect.targets)
           ? effect.targets
@@ -761,6 +827,68 @@ export function validateCardDatabase() {
               .map((target) => target.id)
           : [],
       );
+      for (const target of Array.isArray(effect.targets) ? effect.targets : []) {
+        if (target?.countFromSelectionRef !== undefined) {
+          if (
+            typeof target.countFromSelectionRef !== "string" ||
+            !costTargetIds.has(target.countFromSelectionRef)
+          ) {
+            errors.push(
+              formatIssue(
+                card,
+                'Target "countFromSelectionRef" must reference a cost target from the same effect.',
+                effectIndex,
+                null,
+              ),
+            );
+          }
+        }
+        if (
+          target?.minAtResolution !== undefined &&
+          (!Number.isFinite(Number(target.minAtResolution)) ||
+            Number(target.minAtResolution) < 0)
+        ) {
+          errors.push(
+            formatIssue(
+              card,
+              'Target "minAtResolution" must be a non-negative number.',
+              effectIndex,
+              null,
+            ),
+          );
+        }
+      }
+      for (const condition of Array.isArray(effect.conditions)
+        ? effect.conditions
+        : []) {
+        if (condition?.type !== "field_card_count_comparison") continue;
+        const leftOwner = condition.leftOwner || "opponent";
+        const rightOwner = condition.rightOwner || "self";
+        const operator = condition.operator || "gt";
+        if (
+          !VALID_FIELD_COUNT_COMPARISON_OWNERS.has(leftOwner) ||
+          !VALID_FIELD_COUNT_COMPARISON_OWNERS.has(rightOwner)
+        ) {
+          errors.push(
+            formatIssue(
+              card,
+              'field_card_count_comparison owners must be self, opponent, any, or both.',
+              effectIndex,
+              null,
+            ),
+          );
+        }
+        if (!VALID_FIELD_COUNT_COMPARISON_OPERATORS.has(operator)) {
+          errors.push(
+            formatIssue(
+              card,
+              'field_card_count_comparison has an invalid operator.',
+              effectIndex,
+              null,
+            ),
+          );
+        }
+      }
 
       const producedTargetIds = new Set();
       const stagedActions = [
@@ -768,6 +896,11 @@ export function validateCardDatabase() {
           action,
           actionIndex,
           stage: "cost",
+        })),
+        ...activationCommitActions.map((action, actionIndex) => ({
+          action,
+          actionIndex,
+          stage: "commit",
         })),
         ...effectActions.map((action, actionIndex) => ({
           action,

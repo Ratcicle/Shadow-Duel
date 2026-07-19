@@ -442,3 +442,57 @@ test("grupos SEGOC tÃªm contrato pÃºblico estÃ¡vel", () => {
     "opponent_optional",
   ]);
 });
+
+test("Trigger opcional unico usa confirmacao simples e ainda cria CL1", async () => {
+  const confirmationCalls = [];
+  const harness = createChainHarness({
+    ui: {
+      showConfirmPrompt(message, options) {
+        confirmationCalls.push({ message, options });
+        return true;
+      },
+      showTriggerOrderModal() {
+        assert.fail("A single optional Trigger must not open the order modal.");
+      },
+    },
+  });
+  const { chain, player, trace } = harness;
+  const entry = createEntry(harness, player, "single_optional", {
+    requirement: TRIGGER_REQUIREMENTS.OPTIONAL,
+  });
+
+  const result = await chain.resolveTriggerOccurrences([
+    occurrence(chain, [entry]),
+  ]);
+
+  assert.equal(confirmationCalls.length, 1);
+  assert.equal(confirmationCalls[0].options.kind, "segoc_optional_trigger");
+  assert.equal(result.chainBuilt, true);
+  assert.equal(result.selectedTriggerCount, 1);
+  assert.deepEqual(activatedEffects(trace), ["single_optional_effect"]);
+});
+
+test("recusar confirmacao de Trigger opcional unico nao cria corrente", async () => {
+  const harness = createChainHarness({
+    ui: {
+      showConfirmPrompt() {
+        return false;
+      },
+      showTriggerOrderModal() {
+        assert.fail("A single optional Trigger must not open the order modal.");
+      },
+    },
+  });
+  const { chain, player, trace } = harness;
+  const entry = createEntry(harness, player, "declined_single", {
+    requirement: TRIGGER_REQUIREMENTS.OPTIONAL,
+  });
+
+  const result = await chain.resolveTriggerOccurrences([
+    occurrence(chain, [entry]),
+  ]);
+
+  assert.equal(result.chainBuilt, false);
+  assert.equal(result.selectedTriggerCount, 0);
+  assert.deepEqual(activatedEffects(trace), []);
+});

@@ -113,6 +113,10 @@ export function applyDestroyAndDamageByTargetAtk(ctx) {
   return;
 }
 
+export function applyDestroyTargetedCards(ctx) {
+  return applyDestroy(ctx);
+}
+
 function resolveScopeOwners(scope, self, opponent) {
   const ownerRule = scope.owner || scope.player || "self";
   if (ownerRule === "opponent") return opponent ? [opponent] : [];

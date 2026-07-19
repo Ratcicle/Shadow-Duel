@@ -28,11 +28,15 @@ function getAttackPassiveSources(player) {
 }
 
 export function isActiveAttackPriorityTarget(card) {
+  const effectsNegated =
+    this?.effectEngine?.isEffectNegated?.(card) ??
+    card?.effectsNegated === true;
   return (
     card &&
     card.cardKind === "monster" &&
     card.mustBeAttacked === true &&
-    card.isFacedown !== true
+    card.isFacedown !== true &&
+    effectsNegated !== true
   );
 }
 

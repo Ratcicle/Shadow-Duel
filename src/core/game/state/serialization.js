@@ -30,6 +30,14 @@ export function getPublicState(forPlayerId = "player") {
       return {
         duelCardId: card.duelCardId ?? null,
         cardId: card.id,
+        owner: card.owner ?? null,
+        controller: card.controller ?? card.owner ?? null,
+        originalOwner: card.originalOwner ?? null,
+        locationVersion: Number(card.locationVersion ?? 0),
+        lastSummonMethod: card.lastSummonMethod || null,
+        lastSummonedFromZone: card.lastSummonedFromZone || null,
+        properSummonEstablished: card.properSummonEstablished === true,
+        properSummonProcedure: card.properSummonProcedure || null,
         name: hidden ? null : card.name,
         position: card.position,
         atk: hidden ? null : card.atk,
@@ -43,6 +51,7 @@ export function getPublicState(forPlayerId = "player") {
         faceDown: !!card.isFacedown,
         status: {
           cannotAttackThisTurn: !!card.cannotAttackThisTurn,
+          battlePositionLocked: !!card.battlePositionLocked,
           effectsNegated: !!card.effectsNegated,
           effectsNegatedDuration: card.effectsNegatedDuration || null,
           canAttackAll: !!card.canAttackAllOpponentMonstersThisTurn,
@@ -61,6 +70,8 @@ export function getPublicState(forPlayerId = "player") {
           level: card.level,
           isTuner: card.isTuner === true,
           cardKind: card.cardKind,
+          properSummonEstablished: card.properSummonEstablished === true,
+          properSummonProcedure: card.properSummonProcedure || null,
         }))
       : { count: (owner.hand || []).length };
 
@@ -75,6 +86,8 @@ export function getPublicState(forPlayerId = "player") {
         faceDown: !!card.isFacedown,
         cardKind: card.cardKind,
         subtype: hidden ? null : card.subtype,
+        effectsNegated: card.effectsNegated === true,
+        effectsNegatedDuration: card.effectsNegatedDuration || null,
       };
     });
 
@@ -89,6 +102,18 @@ export function getPublicState(forPlayerId = "player") {
       def: card.cardKind === "monster" ? (card.def ?? null) : null,
       level: card.cardKind === "monster" ? (card.level ?? null) : null,
       isTuner: card.cardKind === "monster" ? card.isTuner === true : null,
+      lastSummonMethod:
+        card.cardKind === "monster" ? card.lastSummonMethod || null : null,
+      lastSummonedFromZone:
+        card.cardKind === "monster" ? card.lastSummonedFromZone || null : null,
+      properSummonEstablished:
+        card.cardKind === "monster"
+          ? card.properSummonEstablished === true
+          : null,
+      properSummonProcedure:
+        card.cardKind === "monster"
+          ? card.properSummonProcedure || null
+          : null,
     }));
 
   const buildPlayerView = (owner, isSelf) => ({
@@ -138,6 +163,9 @@ export function getPublicState(forPlayerId = "player") {
               ? owner.fieldSpell.name
               : null,
           faceDown: !!owner.fieldSpell.isFacedown,
+          effectsNegated: owner.fieldSpell.effectsNegated === true,
+          effectsNegatedDuration:
+            owner.fieldSpell.effectsNegatedDuration || null,
         }
       : null,
     graveyardCount: (owner.graveyard || []).length,
@@ -176,6 +204,21 @@ export function getPublicState(forPlayerId = "player") {
         transaction: null,
         last: null,
       },
+    },
+    temporaryEffects: {
+      event: (this.temporaryEventEffects || []).map((entry) => ({
+        id: entry.id,
+        event: entry.event,
+        ownerId: entry.ownerId,
+        sourceInstanceId: entry.sourceInstanceId ?? null,
+        boundEventTargetInstanceId: entry.boundEventTargetInstanceId ?? null,
+        requireBoundTargetLeavesField:
+          entry.requireBoundTargetLeavesField === true,
+        duration: entry.duration || null,
+        expiresOnTurn: entry.expiresOnTurn ?? null,
+        usesRemaining: entry.usesRemaining ?? null,
+      })),
+      control: this.getTemporaryControlState?.() || [],
     },
     players: {
       self: buildPlayerView(viewPlayer, true),

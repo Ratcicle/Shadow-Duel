@@ -202,8 +202,17 @@ export async function collectBattleDestroyTriggers(payload) {
             if (!targetDef) continue;
             const min = Number(targetDef.count?.min ?? 1);
             if (min <= 0) continue;
-            const { candidates } = this.selectCandidates(targetDef, precheckCtx);
-            if (!candidates || candidates.length < min) {
+            const contextTargetResult = targetDef.targetFromContext
+              ? this.resolveTargets([targetDef], precheckCtx, null)
+              : null;
+            const candidates = targetDef.targetFromContext
+              ? contextTargetResult?.targets?.[targetDef.id] || []
+              : this.selectCandidates(targetDef, precheckCtx).candidates;
+            if (
+              contextTargetResult?.ok === false ||
+              !candidates ||
+              candidates.length < min
+            ) {
               unmetRequiredTarget = targetDef.id || targetDef.zone || "target";
               break;
             }

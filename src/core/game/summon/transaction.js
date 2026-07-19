@@ -3,6 +3,10 @@ import {
   FAST_EFFECT_STATES,
 } from "../../chain/timing.js";
 import { bumpCardLocationVersion } from "../../Card.js";
+import {
+  checkSpecialSummonEligibility,
+  establishProperSummon,
+} from "./eligibility.js";
 
 export const SUMMON_ORIGINS = Object.freeze({
   PROCEDURE: "procedure",
@@ -160,6 +164,22 @@ export function beginSummonTransaction(preparedInput = {}) {
   ) {
     return { ok: false, reason: "invalid_summon_transaction" };
   }
+  const isSpecialSummon =
+    prepared.summonMode === SUMMON_MODES.SUMMON &&
+    !["normal", "tribute", "flip"].includes(prepared.summonMethod);
+  if (isSpecialSummon) {
+    const eligibility = checkSpecialSummonEligibility(prepared.card, {
+      summonProcedure: prepared.summonProcedure || prepared.summonMethod,
+      fromZone: prepared.sourceAtStart?.zone || null,
+    });
+    if (!eligibility.ok) {
+      return {
+        ok: false,
+        reason: eligibility.reason || "special_summon_restriction",
+        code: eligibility.code || "special_summon_restriction",
+      };
+    }
+  }
   if (this.activeSummonTransaction) {
     return { ok: false, reason: "summon_transaction_busy" };
   }
@@ -282,7 +302,7 @@ async function finishProcedureTiming(game, transaction, result) {
   const flushResult = await game.flushPendingTriggerOccurrences?.({
     reason: "summon_transaction_complete",
   });
-  if (flushResult?.needsSelection || flushResult?.ok === false) {
+  if (flushResult?.needsSelection) {
     return flushResult;
   }
   const failedContext =
@@ -312,7 +332,7 @@ async function finishProcedureTiming(game, transaction, result) {
     player: transaction.controller,
     summonId: transaction.summonId,
   };
-  return await game.chainSystem?.runFastEffectTiming?.({
+  const timingResult = await game.chainSystem?.runFastEffectTiming?.({
     origin:
       flushResult?.chainBuilt === true
         ? FAST_EFFECT_ORIGINS.POST_CHAIN
@@ -320,6 +340,19 @@ async function finishProcedureTiming(game, transaction, result) {
     actionPlayer: transaction.controller,
     context,
   });
+  if (flushResult?.ok === false) {
+    return {
+      ...(timingResult || {}),
+      ok: false,
+      success: false,
+      reason:
+        flushResult.reason ||
+        timingResult?.reason ||
+        "summon_trigger_resolution_failed",
+      triggerResolution: flushResult,
+    };
+  }
+  return timingResult;
 }
 
 async function finalizeFailedCommittedCard(game, transaction) {
@@ -463,6 +496,9 @@ export async function executeSummonTransaction(preparedInput = {}) {
       transaction.status === SUMMON_STATUSES.NEGATED,
     summonId: transaction.summonId,
   };
+  if (finalResult.success === true) {
+    establishProperSummon(transaction.card, transaction);
+  }
   const snapshot = this.finishSummonTransaction(transaction, finalResult);
   finalResult.transaction = snapshot;
   const timing = await finishProcedureTiming(this, transaction, finalResult);

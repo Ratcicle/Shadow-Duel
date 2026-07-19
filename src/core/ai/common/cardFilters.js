@@ -167,6 +167,16 @@ export function cardMatchesFilter(card, filter = {}) {
     ) {
       return false;
     }
+    const summonedFromZoneFilter =
+      current.lastSummonedFromZones || current.lastSummonedFromZone;
+    if (
+      summonedFromZoneFilter &&
+      !asArray(summonedFromZoneFilter).includes(
+        card.lastSummonedFromZone || null,
+      )
+    ) {
+      return false;
+    }
     if (current.requireFaceup && card.isFacedown) return false;
     if (current.facedown === true && card.isFacedown !== true) return false;
     if (

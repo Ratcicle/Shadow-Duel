@@ -26,6 +26,7 @@ function buildTemporarySourceCard(entry, owner) {
     image: entry.sourceImage || null,
     owner: owner?.id || entry.ownerId || null,
     controller: owner?.id || entry.ownerId || null,
+    instanceId: entry.sourceInstanceId ?? null,
     isFacedown: false,
     declaredValues:
       entry.declaredValues && typeof entry.declaredValues === "object"
@@ -38,6 +39,61 @@ function buildTemporarySourceCard(entry, owner) {
         : {},
     __temporaryEventEffect: true,
   };
+}
+
+function findCardByInstanceId(game, instanceId) {
+  if (!game || instanceId == null) return null;
+  const zones = [
+    "deck",
+    "extraDeck",
+    "hand",
+    "field",
+    "spellTrap",
+    "graveyard",
+    "banished",
+  ];
+  for (const player of [game.player, game.bot]) {
+    if (!player) continue;
+    if (
+      player.fieldSpell &&
+      String(player.fieldSpell.instanceId ?? player.fieldSpell._instanceId) ===
+        String(instanceId)
+    ) {
+      return player.fieldSpell;
+    }
+    for (const zone of zones) {
+      const card = (player[zone] || []).find(
+        (candidate) =>
+          String(candidate?.instanceId ?? candidate?._instanceId) ===
+          String(instanceId),
+      );
+      if (card) return card;
+    }
+  }
+  return null;
+}
+
+function findCardLocation(game, card) {
+  if (!game || !card) return null;
+  const zones = [
+    "deck",
+    "extraDeck",
+    "hand",
+    "field",
+    "spellTrap",
+    "graveyard",
+    "banished",
+  ];
+  for (const player of [game.player, game.bot]) {
+    if (!player) continue;
+    if (player.fieldSpell === card) return { player, zone: "fieldSpell" };
+    for (const zone of zones) {
+      if (Array.isArray(player[zone]) && player[zone].includes(card)) {
+        return { player, zone };
+      }
+    }
+  }
+  return null;
 }
 
 function cleanupTemporaryEventEffects(game) {
@@ -73,10 +129,28 @@ function collectTemporaryEventTriggers(engine, eventName, payload) {
       continue;
     }
 
+    const movedCard = payload?.movedCard || payload?.card || null;
+    if (
+      tempEntry.boundEventTargetInstanceId != null &&
+      String(movedCard?.instanceId ?? movedCard?._instanceId) !==
+        String(tempEntry.boundEventTargetInstanceId)
+    ) {
+      continue;
+    }
+    if (
+      tempEntry.requireBoundTargetLeavesField === true &&
+      (payload?.fromZone !== "field" || payload?.toZone === "field")
+    ) {
+      continue;
+    }
+
     const owner = getPlayerById(game, tempEntry.ownerId);
     if (!owner) continue;
     const opponent = game.getOpponent?.(owner) || null;
-    const sourceCard = buildTemporarySourceCard(tempEntry, owner);
+    const sourceCard =
+      findCardByInstanceId(game, tempEntry.sourceInstanceId) ||
+      buildTemporarySourceCard(tempEntry, owner);
+    const sourceLocation = findCardLocation(game, sourceCard);
     const effect = tempEntry.effect || {
       id: tempEntry.id,
       timing: "on_event",
@@ -103,21 +177,28 @@ function collectTemporaryEventTriggers(engine, eventName, payload) {
       if (!conditionResult?.ok) continue;
     }
 
+    const consumeOnMatch =
+      tempEntry.duration === "until_consumed" &&
+      tempEntry.boundEventTargetInstanceId != null;
+    if (consumeOnMatch && Number.isFinite(tempEntry.usesRemaining)) {
+      tempEntry.usesRemaining = 0;
+    }
+
     const triggerEntry = engine.buildTriggerEntry({
       sourceCard,
       owner,
       effect,
       ctx,
       activationContext: {
-        activationZone: "temporary",
-        sourceZone: "temporary",
+        activationZone: sourceLocation?.zone || "temporary",
+        sourceZone: sourceLocation?.zone || "temporary",
         committed: false,
       },
       selectionKind: "triggered",
       selectionMessage: "Select target(s) for the temporary triggered effect.",
       summary: `${owner.id}:${sourceCard.name}:${effect.id || eventName}`,
       onSuccess: async () => {
-        if (Number.isFinite(tempEntry.usesRemaining)) {
+        if (!consumeOnMatch && Number.isFinite(tempEntry.usesRemaining)) {
           tempEntry.usesRemaining -= 1;
         }
         cleanupTemporaryEventEffects(game);
@@ -126,6 +207,8 @@ function collectTemporaryEventTriggers(engine, eventName, payload) {
 
     if (triggerEntry) entries.push(triggerEntry);
   }
+
+  cleanupTemporaryEventEffects(game);
 
   return entries;
 }

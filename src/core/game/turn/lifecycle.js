@@ -306,6 +306,12 @@ export async function endTurn() {
   await this.emit("end_phase", { player: actor, opponent });
   if (this.gameOver || this.isDisposed?.()) return;
 
+  // Control-change effects expire after End Phase triggers finish. This keeps
+  // the returned monster in the same field zone and does not fabricate a
+  // movement or summon event.
+  await this.processTemporaryControlEffects?.();
+  if (this.gameOver || this.isDisposed?.()) return;
+
   await this.processDelayedActions("end", this.turn);
   if (this.gameOver || this.isDisposed?.()) return;
 

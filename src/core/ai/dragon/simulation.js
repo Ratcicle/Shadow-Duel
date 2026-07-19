@@ -124,8 +124,6 @@ export function simulateMainPhaseAction(state, action) {
         position: action.position || "attack",
         isFacedown: action.facedown || false,
         hasAttacked: false,
-        cannotAttackThisTurn:
-          action.facedown === true || (action.position || "attack") === "defense",
       });
       player.summonCount = (player.summonCount || 0) + 1;
       const summoned = player.field[player.field.length - 1];
@@ -259,14 +257,12 @@ export function simulateMainPhaseAction(state, action) {
         target.isFacedown = false;
         target.position = "attack";
         target.positionChangedThisTurn = true;
-        target.cannotAttackThisTurn = false;
         break;
       }
       const newPos = action.toPosition === "defense" ? "defense" : "attack";
       if (target.position === newPos) break;
       target.position = newPos;
       target.positionChangedThisTurn = true;
-      target.cannotAttackThisTurn = newPos === "defense";
       break;
     }
 
@@ -578,14 +574,30 @@ function recordSimulatedMaterialEffectActivation(state, owner, sourceCard) {
   bucket[sourceCard.id] = (bucket[sourceCard.id] || 0) + 1;
 }
 
-function useSimulatedOnce(state, owner, key) {
-  if (!state || !key) return true;
+function getSimulatedOnceBucket(state, owner) {
+  if (!state) return null;
   const playerId = getPlayerId(state, owner);
   if (!state._dragonSimOnce) state._dragonSimOnce = { player: {}, bot: {} };
-  const bucket = state._dragonSimOnce[playerId] || (state._dragonSimOnce[playerId] = {});
+  return state._dragonSimOnce[playerId] || (state._dragonSimOnce[playerId] = {});
+}
+
+function canUseSimulatedOnce(state, owner, key) {
+  if (!state || !key) return true;
+  const bucket = getSimulatedOnceBucket(state, owner);
+  return !bucket?.[key];
+}
+
+function useSimulatedOnce(state, owner, key) {
+  if (!state || !key) return true;
+  const bucket = getSimulatedOnceBucket(state, owner);
   if (bucket[key]) return false;
   bucket[key] = true;
   return true;
+}
+
+function getSimulatedEffectOnceKey(effect) {
+  if (!effect?.oncePerTurn) return null;
+  return effect.oncePerTurnName || effect.id || null;
 }
 
 function putSimulatedCard(owner, card, toZone) {
@@ -878,7 +890,6 @@ function normalSummonFromHandIndex(state, player, handIndex, action = {}) {
     position: action.position || "attack",
     isFacedown: false,
     hasAttacked: false,
-    cannotAttackThisTurn: (action.position || "attack") === "defense",
   };
   player.field.push(summoned);
   player.summonCount = (player.summonCount || 0) + 1;
@@ -1311,6 +1322,7 @@ function simulateDragonHandIgnition(state, card, action) {
     const effect = (card.effects || []).find(
       (entry) => entry?.id === "stelya_discard_search_dragon",
     );
+    if (!effect) return;
     const otherDiscard = rankDiscardEntriesForSimulation(
       (player.hand || [])
         .map((candidate, index) => ({ candidate, index }))
@@ -1322,9 +1334,6 @@ function simulateDragonHandIgnition(state, card, action) {
     if (!otherDiscard) return;
     const selfIndex = player.hand.indexOf(card);
     if (selfIndex < 0) return;
-    discardHandCardToGraveyard(state, player, selfIndex);
-    const otherIndex = player.hand.indexOf(otherDiscard.candidate);
-    if (otherIndex >= 0) discardHandCardToGraveyard(state, player, otherIndex);
 
     const searchAction = {
       type: "add_from_zone_to_hand",
@@ -1342,31 +1351,43 @@ function simulateDragonHandIgnition(state, card, action) {
       card,
       effect,
     )[0];
-    if (selected) {
-      const liveDeckIndex = player.deck.indexOf(selected.candidate);
-      if (liveDeckIndex >= 0) player.hand.push(player.deck.splice(liveDeckIndex, 1)[0]);
-    }
+    if (!selected) return;
+    if (!useSimulatedOnce(state, player, getSimulatedEffectOnceKey(effect))) return;
+
+    discardHandCardToGraveyard(state, player, selfIndex);
+    const otherIndex = player.hand.indexOf(otherDiscard.candidate);
+    if (otherIndex >= 0) discardHandCardToGraveyard(state, player, otherIndex);
+    const liveDeckIndex = player.deck.indexOf(selected.candidate);
+    if (liveDeckIndex >= 0) player.hand.push(player.deck.splice(liveDeckIndex, 1)[0]);
     recordSimulatedMaterialEffectActivation(state, player, card);
     return;
   }
 
   if (card.name === "Stelya, Dragon Tamer") {
+    const effect = (card.effects || []).find(
+      (entry) =>
+        entry?.id === action.effectId ||
+        entry?.id === "stelya_hand_banish_dragon_summon",
+    );
     const cost = selectStelyaFieldBanishCost(state, player, card, action);
-    if (cost) {
+    const liveIndex = player.hand.indexOf(card);
+    if (
+      effect &&
+      cost &&
+      liveIndex >= 0 &&
+      useSimulatedOnce(state, player, getSimulatedEffectOnceKey(effect))
+    ) {
       const liveCostIndex = player.field.indexOf(cost.candidate);
       if (liveCostIndex >= 0) {
         const banished = player.field.splice(liveCostIndex, 1)[0];
         if (!player.banished) player.banished = [];
         if (banished) player.banished.push(banished);
       }
-      const liveIndex = player.hand.indexOf(card);
-      if (liveIndex >= 0) {
-        player.hand.splice(liveIndex, 1);
-        const summoned = specialSummonToField(state, player, card, action, {
-          method: "special",
-        });
-        if (summoned) recordSimulatedMaterialEffectActivation(state, player, summoned);
-      }
+      player.hand.splice(liveIndex, 1);
+      const summoned = specialSummonToField(state, player, card, action, {
+        method: "special",
+      });
+      if (summoned) recordSimulatedMaterialEffectActivation(state, player, summoned);
     }
     return;
   }
@@ -1635,6 +1656,16 @@ function simulateDragonGraveyardMonsterEffect(state, card, action) {
       (!requestedEffectId || entry.id === requestedEffectId),
   );
   if (!effect) return;
+  const stelyaUsageKey =
+    card.name === "Stelya, Dragon Tamer"
+      ? getSimulatedEffectOnceKey(effect)
+      : null;
+  if (
+    stelyaUsageKey &&
+    !canUseSimulatedOnce(state, player, stelyaUsageKey)
+  ) {
+    return;
+  }
   if (card.name === "Stelya, Dragon Tamer") {
     const stelyaDecision = shouldUseStelyaBanishSummon(
       buildSimBanishContext(state, player, card, action, {
@@ -1756,6 +1787,13 @@ function simulateDragonGraveyardMonsterEffect(state, card, action) {
     }
 
     targetSelections[target.id] = candidates.slice(0, target.count?.max || 1);
+  }
+
+  if (
+    stelyaUsageKey &&
+    !useSimulatedOnce(state, player, stelyaUsageKey)
+  ) {
+    return;
   }
 
   for (const effectAction of effect.actions || []) {

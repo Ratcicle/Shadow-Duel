@@ -1981,7 +1981,7 @@ export const dragonCards = [
       summonedCardFilters: { type: "Dragon" },
     },
     description:
-      'This card can be treated as 2 Tributes for the Tribute Summon of a Dragon-Type monster. You can banish 1 Dragon monster you control; Special Summon this card from your hand or GY. You can discard 2 cards, including this card; add 1 Level 5 or higher Dragon monster from your Deck to your hand. You can only use each effect of "Stelya, Dragon Tamer" once per turn.',
+      'This card can be treated as 2 Tributes for the Tribute Summon of a Dragon monster. You can only use 1 of the following effects of "Stelya, Dragon Tamer" per turn, and only once that turn.\n● You can banish 1 Dragon monster you control; Special Summon this card from your hand or GY.\n● You can discard 2 cards, including this card; add 1 Level 5 or higher Dragon monster from your Deck to your hand.',
     image: "assets/Stelya, Dragon Tamer.png",
     effects: [
       {
@@ -1996,7 +1996,7 @@ export const dragonCards = [
         requirePhase: ["main1", "main2"],
         handModalLabelKey: "ui.summon.specialAction",
         oncePerTurn: true,
-        oncePerTurnName: "stelya_banish_dragon_summon",
+        oncePerTurnName: "stelya_effect_choice",
         targets: [
           {
             id: "stelya_hand_banish_cost",
@@ -2037,7 +2037,7 @@ export const dragonCards = [
         timing: "ignition",
         requirePhase: ["main1", "main2"],
         oncePerTurn: true,
-        oncePerTurnName: "stelya_banish_dragon_summon",
+        oncePerTurnName: "stelya_effect_choice",
         targets: [
           {
             id: "stelya_graveyard_banish_cost",
@@ -2081,7 +2081,7 @@ export const dragonCards = [
         requirePhase: ["main1", "main2"],
         handModalLabelKey: "ui.summon.activateEffect",
         oncePerTurn: true,
-        oncePerTurnName: "stelya_discard_search_dragon",
+        oncePerTurnName: "stelya_effect_choice",
         targets: [
           {
             id: "stelya_discard_other_card",

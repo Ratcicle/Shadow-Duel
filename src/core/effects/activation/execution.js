@@ -39,6 +39,12 @@ function buildActionsFailure(actionsResult) {
   };
 }
 
+function getActivationResolutionTargets(effect, activationContext = {}) {
+  const definitions = Array.isArray(effect?.targets) ? effect.targets : [];
+  if (activationContext?.costsPaid !== true) return definitions;
+  return definitions.filter((definition) => definition?.intent !== "cost");
+}
+
 /**
  * Activate a monster's ignition effect from the graveyard.
  * @returns {Promise<Object>} Result with success/needsSelection status
@@ -129,6 +135,7 @@ export async function activateMonsterFromGraveyard(
     autoSelectSingleTarget: activationContext?.autoSelectSingleTarget,
     autoSelectTargets: activationContext?.autoSelectTargets,
     actionContext: activationContext?.actionContext || null,
+    costsPaid: activationContext?.costsPaid === true,
     costSelections: activationContext?.costSelections || {},
     targetSelections: activationContext?.targetSelections || selections || {},
     resolutionSelections: activationContext?.resolutionSelections || {},
@@ -155,7 +162,7 @@ export async function activateMonsterFromGraveyard(
   }
 
   const targetResult = this.resolveTargets(
-    effect.targets || [],
+    getActivationResolutionTargets(effect, normalizedActivationContext),
     ctx,
     selections
   );
@@ -283,6 +290,7 @@ export async function activateFieldSpell(
     autoSelectSingleTarget: activationContext?.autoSelectSingleTarget,
     autoSelectTargets: activationContext?.autoSelectTargets,
     actionContext: activationContext?.actionContext || null,
+    costsPaid: activationContext?.costsPaid === true,
     costSelections: activationContext?.costSelections || {},
     targetSelections: activationContext?.targetSelections || selections || {},
     resolutionSelections: activationContext?.resolutionSelections || {},
@@ -300,7 +308,7 @@ export async function activateFieldSpell(
   };
 
   const targetResult = this.resolveTargets(
-    effect.targets || [],
+    getActivationResolutionTargets(effect, normalizedActivationContext),
     ctx,
     selections
   );
@@ -474,6 +482,7 @@ export async function activateSpellTrapEffect(
     quickSpellActivationFromSet,
     resolvedTargets: activationContext?.resolvedTargets || null,
     trapActivationFromSet: trapActivationFromSet || isSetTrap || false,
+    costsPaid: activationContext?.costsPaid === true,
     costSelections: activationContext?.costSelections || {},
     targetSelections: activationContext?.targetSelections || selections || {},
     resolutionSelections: activationContext?.resolutionSelections || {},
@@ -628,7 +637,7 @@ export async function activateSpellTrapEffect(
   }
 
   const targetResult = this.resolveTargets(
-    effect.targets || [],
+    getActivationResolutionTargets(effect, normalizedActivationContext),
     ctx,
     selections
   );
@@ -863,6 +872,7 @@ export async function activateMonsterEffect(
     autoSelectSingleTarget: activationContext?.autoSelectSingleTarget,
     autoSelectTargets: activationContext?.autoSelectTargets,
     actionContext: activationContext?.actionContext || null,
+    costsPaid: activationContext?.costsPaid === true,
     costSelections: activationContext?.costSelections || {},
     targetSelections: activationContext?.targetSelections || selections || {},
     resolutionSelections: activationContext?.resolutionSelections || {},
@@ -902,7 +912,7 @@ export async function activateMonsterEffect(
   }
 
   const targetResult = this.resolveTargets(
-    effect.targets || [],
+    getActivationResolutionTargets(effect, normalizedActivationContext),
     ctx,
     selections
   );

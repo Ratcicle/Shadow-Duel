@@ -206,11 +206,57 @@ export default class NullChainSystem {
   getEffectActivationCosts(effect) {
     return Array.isArray(effect?.activationCosts) ? effect.activationCosts : [];
   }
+  getEffectActivationCommitActions(effect) {
+    return Array.isArray(effect?.activationCommitActions)
+      ? effect.activationCommitActions
+      : [];
+  }
   getEffectResolutionActions(effect) {
     return Array.isArray(effect?.actions) ? effect.actions : [];
   }
   async offerChainResponse() {
     return { success: false, reason: "chains_disabled" };
+  }
+  async applyActivationCommitActions(prepared) {
+    if (prepared?.activationCommitment?.status === "applied") {
+      return { success: true, needsSelection: false, alreadyApplied: true };
+    }
+    const actions = this.getEffectActivationCommitActions(prepared?.effect);
+    if (actions.length === 0) {
+      prepared.activationCommitment = { status: "not_required", actions: [] };
+      return { success: true, needsSelection: false };
+    }
+    const player = prepared.controller || null;
+    const result = await this.game?.effectEngine?.applyActions?.(
+      actions,
+      {
+        source: prepared.card,
+        sourceCard: prepared.card,
+        effect: prepared.effect,
+        effectId: prepared.effect?.id || null,
+        player,
+        opponent: this.game?.getOpponent?.(player) || null,
+        activationZone: prepared.activationZone || null,
+        activationContext: {
+          ...(prepared.activationContext || {}),
+          applyingActivationCommitActions: true,
+        },
+      },
+      {
+        ...(prepared.costSelections || {}),
+        ...(prepared.targetSelections || {}),
+      },
+    );
+    if (result?.success === false || result?.needsSelection) return result;
+    prepared.activationCommitment = {
+      status: "applied",
+      actions: actions.map((action, index) => ({
+        index,
+        type: action?.type || null,
+        targetRef: action?.targetRef || null,
+      })),
+    };
+    return { success: true, needsSelection: false };
   }
   addToChain() {
     return false;

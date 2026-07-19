@@ -7,6 +7,7 @@ import {
   canUseAsSynchroMaterial,
   getSynchroMaterialCombos,
 } from "../../game/summon/synchro.js";
+import { checkSpecialSummonEligibility } from "../../game/summon/eligibility.js";
 
 function getContextPathValue(ctx, path) {
   if (!ctx || typeof path !== "string" || !path) return undefined;
@@ -136,11 +137,29 @@ export function validateCostCandidateCount({
   return { ok: true };
 }
 
+function findPlayerCardZone(player, card) {
+  if (!player || !card) return null;
+  if (player.fieldSpell === card) return "fieldSpell";
+  for (const zone of [
+    "hand",
+    "field",
+    "spellTrap",
+    "graveyard",
+    "banished",
+    "deck",
+    "extraDeck",
+  ]) {
+    if (Array.isArray(player[zone]) && player[zone].includes(card)) return zone;
+  }
+  return null;
+}
+
 function cardPassesSpecialSummonRestrictions(card, player) {
-  if (
-    Array.isArray(card?.specialSummonOnlyBy) &&
-    !card.specialSummonOnlyBy.includes("special")
-  ) {
+  const eligibility = checkSpecialSummonEligibility(card, {
+    summonProcedure: "special",
+    fromZone: findPlayerCardZone(player, card),
+  });
+  if (eligibility.ok === false) {
     return false;
   }
   const restrictions = Array.isArray(player?.specialSummonRestrictions)
@@ -153,10 +172,11 @@ function cardPassesSpecialSummonRestrictions(card, player) {
 }
 
 function cardPassesSynchroSummonRestrictions(card, player) {
-  if (
-    Array.isArray(card?.specialSummonOnlyBy) &&
-    !card.specialSummonOnlyBy.includes("synchro")
-  ) {
+  const eligibility = checkSpecialSummonEligibility(card, {
+    summonProcedure: "synchro",
+    fromZone: "extraDeck",
+  });
+  if (eligibility.ok === false) {
     return false;
   }
   const restrictions = Array.isArray(player?.specialSummonRestrictions)
