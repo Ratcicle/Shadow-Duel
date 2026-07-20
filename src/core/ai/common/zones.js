@@ -1,3 +1,5 @@
+import { restoreFieldExitStatuses } from "../../Card.js";
+
 export function getZoneCards(player, zone) {
   if (!player) return [];
   switch (zone) {
@@ -154,6 +156,7 @@ export function moveCardToZone(player, card, zone) {
   const fromZone = findCardZone(player, card);
   if (fromZone === "field" && zone !== "field") {
     card.battlePositionLocked = false;
+    restoreFieldExitStatuses(card);
   }
   if (
     card.cardKind === "monster" &&

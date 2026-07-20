@@ -1,4 +1,5 @@
 import { isAI } from "../../Player.js";
+import { applyStatusesOnSummon } from "../../Card.js";
 import { getCardDisplayName, getUIText } from "../../i18n.js";
 import {
   getUI,
@@ -13,27 +14,6 @@ import {
   getSourceOwners,
 } from "./sourceZones.js";
 import { mergeCanonicalSelections } from "../../game/selection/contract.js";
-
-function applyStatusesOnSummon(card, statuses) {
-  if (!card || !statuses) return;
-  const statusEntries = Array.isArray(statuses) ? statuses : [statuses];
-  for (const entry of statusEntries) {
-    if (!entry) continue;
-    const status =
-      typeof entry === "string"
-        ? entry
-        : typeof entry.status === "string"
-          ? entry.status
-          : null;
-    if (!status) continue;
-    const value =
-      typeof entry === "object" &&
-      Object.prototype.hasOwnProperty.call(entry, "value")
-        ? entry.value
-        : true;
-    card[status] = value;
-  }
-}
 
 function getCardDistinctName(card) {
   return card?.name || `id:${card?.id ?? "unknown"}`;

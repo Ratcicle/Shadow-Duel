@@ -405,7 +405,6 @@ function askHumanToSelectReplacementTargets({
         message,
         requirements: [requirement],
         ui: {
-          useFieldTargeting: true,
           allowCancel: false,
           preventCancel: true,
         },

@@ -1,5 +1,7 @@
 import {
+  applyStatusesOnSummon,
   bumpCardLocationVersion,
+  restoreFieldExitStatuses,
   restoreTemporaryStatuses,
   restoreTrapMonsterOriginalState,
 } from "../../Card.js";
@@ -108,26 +110,6 @@ export function cleanupTokenReferences(token, tokenOwner) {
   token.tempAtkBoost = 0;
   token.tempDefBoost = 0;
   delete token.permanentBuffsBySource;
-}
-
-function applyStatusesOnSummon(card, statuses) {
-  if (!card || !statuses) return;
-  const statusEntries = Array.isArray(statuses) ? statuses : [statuses];
-  for (const entry of statusEntries) {
-    if (!entry) continue;
-    const status =
-      typeof entry === "string"
-        ? entry
-        : typeof entry.status === "string"
-          ? entry.status
-          : null;
-    if (!status) continue;
-    const value =
-      typeof entry === "object" && Object.prototype.hasOwnProperty.call(entry, "value")
-        ? entry.value
-        : true;
-    card[status] = value;
-  }
 }
 
 function getMaterialTypeFromContextLabel(contextLabel) {
@@ -2016,6 +1998,7 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
     delete card.attackLimitDuration;
 
     if (toZone !== "field") {
+      restoreFieldExitStatuses(card);
       restoreTemporaryStatuses(card);
       card.battlePositionLocked = false;
     }

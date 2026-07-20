@@ -32,6 +32,43 @@ export function cardMatchesKind(card, requiredKinds) {
   return required.some((kind) => effectiveKinds.includes(kind));
 }
 
+export function applyStatusesOnSummon(card, statuses) {
+  if (!card || !statuses) return false;
+  const statusEntries = Array.isArray(statuses) ? statuses : [statuses];
+  let applied = false;
+  for (const entry of statusEntries) {
+    if (!entry) continue;
+    const status =
+      typeof entry === "string"
+        ? entry
+        : typeof entry.status === "string"
+          ? entry.status
+          : null;
+    if (!status) continue;
+    const value =
+      typeof entry === "object" &&
+      Object.prototype.hasOwnProperty.call(entry, "value")
+        ? entry.value
+        : true;
+    if (typeof entry === "object" && entry.restoreOnFieldExit === true) {
+      if (
+        !card.fieldExitStatuses ||
+        typeof card.fieldExitStatuses !== "object"
+      ) {
+        card.fieldExitStatuses = {};
+      }
+      if (
+        !Object.prototype.hasOwnProperty.call(card.fieldExitStatuses, status)
+      ) {
+        card.fieldExitStatuses[status] = card[status];
+      }
+    }
+    card[status] = value;
+    applied = true;
+  }
+  return applied;
+}
+
 export function restoreTemporaryStatuses(card) {
   if (!card?.tempStatuses || typeof card.tempStatuses !== "object") {
     return false;
@@ -46,6 +83,23 @@ export function restoreTemporaryStatuses(card) {
     }
   }
   card.tempStatuses = {};
+  return entries.length > 0;
+}
+
+export function restoreFieldExitStatuses(card) {
+  if (!card?.fieldExitStatuses || typeof card.fieldExitStatuses !== "object") {
+    return false;
+  }
+
+  const entries = Object.entries(card.fieldExitStatuses);
+  for (const [status, previousValue] of entries) {
+    if (previousValue === undefined) {
+      delete card[status];
+    } else {
+      card[status] = previousValue;
+    }
+  }
+  card.fieldExitStatuses = {};
   return entries.length > 0;
 }
 
@@ -248,6 +302,7 @@ export default class Card {
     // Structure: Array of {stat, value, expiresOnTurn, id}
     this.turnBasedBuffs = [];
     this.tempStatuses = {};
+    this.fieldExitStatuses = {};
 
     // Field presence tracking (for mechanics like "while this card is face-up on field")
     this.fieldPresenceId = null;

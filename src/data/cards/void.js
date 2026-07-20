@@ -285,12 +285,24 @@ export const voidCards = [
             count: { min: 1, max: 1 },
           },
         ],
+        activationCosts: [
+          {
+            type: "move",
+            targetRef: "void_haunter_cost",
+            player: "self",
+            fromZone: "field",
+            to: "graveyard",
+            contextLabel: "cost",
+          },
+        ],
         actions: [
           {
-            type: "special_summon_from_hand_with_cost",
-            costTargetRef: "void_haunter_cost",
+            type: "special_summon_from_zone",
+            zone: "hand",
+            requireSource: true,
             position: "choice",
             cannotAttackThisTurn: false,
+            fieldSlotsFreedBeforeSummon: 1,
           },
         ],
       },
@@ -303,21 +315,41 @@ export const voidCards = [
         timing: "ignition",
         oncePerTurn: true,
         oncePerTurnName: "void_haunter_gy_effect",
+        targets: [
+          {
+            id: "void_haunter_gy_targets",
+            owner: "self",
+            zone: "graveyard",
+            cardKind: "monster",
+            cardName: "Void Hollow",
+            count: { min: 1, max: 3 },
+          },
+        ],
+        activationCosts: [
+          {
+            type: "move",
+            targetRef: "self",
+            player: "self",
+            fromZone: "graveyard",
+            to: "banished",
+            contextLabel: "cost",
+          },
+        ],
         actions: [
           {
             type: "special_summon_from_zone",
             zone: "graveyard",
-            requireSource: false,
-            banishCost: true,
+            targetRef: "void_haunter_gy_targets",
             filters: {
               name: "Void Hollow",
               cardKind: "monster",
             },
-            count: { min: 0, max: 3 },
             position: "choice",
             cannotAttackThisTurn: false,
-            setAtkToZeroAfterSummon: true,
-            setDefToZeroAfterSummon: true,
+            statusesOnSummon: [
+              { status: "atk", value: 0, restoreOnFieldExit: true },
+              { status: "def", value: 0, restoreOnFieldExit: true },
+            ],
           },
         ],
       },
@@ -1687,6 +1719,7 @@ export const voidCards = [
         timing: "ignition",
         requireFaceup: true,
         oncePerTurn: true,
+        oncePerTurnScope: "card",
         oncePerTurnName: "void_shadow_crawler_destroy_high_level",
         targets: [
           {
@@ -1695,6 +1728,7 @@ export const voidCards = [
             zone: "field",
             cardKind: "monster",
             minLevel: 5,
+            requireFaceup: true,
             count: { min: 1, max: 1 },
           },
           {

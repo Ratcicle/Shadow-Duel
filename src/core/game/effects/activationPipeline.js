@@ -1011,7 +1011,7 @@ export async function runActivationPipeline(config = {}) {
     const effect =
       normalizedInitial.effect || activationEffect || config.effect || null;
     const chainSystem = this.chainSystem;
-    if (!effect || !chainSystem || chainSystem.chainsDisabled === true) {
+    if (!effect || !chainSystem) {
       return { result: initialResult, fromSelection: false };
     }
     const resolutionContext =

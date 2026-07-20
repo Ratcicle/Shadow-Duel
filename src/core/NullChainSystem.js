@@ -1,5 +1,10 @@
 import { createPreparedActivation as normalizePreparedActivation } from "./chain/activation.js";
 import {
+  getActivationCostTargetDefinitions as getCostTargetDefinitions,
+  getDeclaredTargetDefinitions as getEffectTargetDefinitions,
+  getPlayerSelectionsForDefinitions as collectSelectionsForDefinitions,
+} from "./chain/selection.js";
+import {
   FAST_EFFECT_ORIGINS,
   FAST_EFFECT_STATES,
 } from "./chain/timing.js";
@@ -49,6 +54,29 @@ export default class NullChainSystem {
   }
   getEffectActivationZones() {
     return [];
+  }
+  getOpponent(player) {
+    return this.game?.getOpponent?.(player) || null;
+  }
+  determineCardZone(card, player = null) {
+    const owners = player
+      ? [player]
+      : [this.game?.player, this.game?.bot].filter(Boolean);
+    for (const owner of owners) {
+      if (owner?.fieldSpell === card) return "fieldSpell";
+      for (const zone of [
+        "hand",
+        "field",
+        "spellTrap",
+        "graveyard",
+        "banished",
+        "deck",
+        "extraDeck",
+      ]) {
+        if (owner?.[zone]?.includes?.(card)) return zone;
+      }
+    }
+    return null;
   }
   checkActivationUsage(card, player, effect) {
     return { ok: true, policy: effect?.usagePolicy || null };
@@ -206,6 +234,28 @@ export default class NullChainSystem {
   getEffectActivationCosts(effect) {
     return Array.isArray(effect?.activationCosts) ? effect.activationCosts : [];
   }
+  getActivationCostTargetDefinitions(effect) {
+    return getCostTargetDefinitions(effect);
+  }
+  getDeclaredTargetDefinitions(effect) {
+    return getEffectTargetDefinitions(effect);
+  }
+  async getPlayerSelectionsForDefinitions(
+    card,
+    definitions,
+    player,
+    context,
+    options = {},
+  ) {
+    return collectSelectionsForDefinitions.call(
+      this,
+      card,
+      definitions,
+      player,
+      context,
+      options,
+    );
+  }
   getEffectActivationCommitActions(effect) {
     return Array.isArray(effect?.activationCommitActions)
       ? effect.activationCommitActions
@@ -213,6 +263,48 @@ export default class NullChainSystem {
   }
   getEffectResolutionActions(effect) {
     return Array.isArray(effect?.actions) ? effect.actions : [];
+  }
+  async payActivationCosts(prepared, context = null) {
+    const actions = this.getEffectActivationCosts(prepared?.effect);
+    if (actions.length === 0) {
+      prepared.costsPaid = true;
+      prepared.costPayment = { status: "not_required", actions: [] };
+      return { success: true, needsSelection: false };
+    }
+    const player = prepared.controller || null;
+    const result = await this.game?.effectEngine?.applyActions?.(
+      actions,
+      {
+        ...(context || {}),
+        source: prepared.card,
+        sourceCard: prepared.card,
+        effect: prepared.effect,
+        effectId: prepared.effect?.id || null,
+        player,
+        opponent: this.game?.getOpponent?.(player) || null,
+        activationZone: prepared.activationZone || null,
+        actionContext: context || prepared.context || null,
+        activationContext: {
+          ...(prepared.activationContext || {}),
+          payingActivationCosts: true,
+          committed: prepared.committed === true,
+          costSelections: prepared.costSelections || {},
+          targetSelections: prepared.targetSelections || {},
+        },
+      },
+      prepared.costSelections || {},
+    );
+    if (result?.success === false || result?.needsSelection) return result;
+    prepared.costsPaid = true;
+    prepared.costPayment = {
+      status: "paid",
+      actions: actions.map((action, index) => ({
+        index,
+        type: action?.type || null,
+        targetRef: action?.targetRef || null,
+      })),
+    };
+    return { success: true, needsSelection: false };
   }
   async offerChainResponse() {
     return { success: false, reason: "chains_disabled" };

@@ -9,6 +9,7 @@ import {
   rankCandidates,
 } from "../targetSelection.js";
 import { getZoneCards } from "../zones.js";
+import { applyStatusesOnSummon } from "../../../Card.js";
 
 export const STOP_SIMULATION = Symbol("STOP_SIMULATION");
 
@@ -479,26 +480,7 @@ export function applySummonState(card, action, state, player, options = {}) {
     card.tempDefBoost =
       (card.tempDefBoost || 0) + action.defBoostAfterSummon;
   }
-  const statusesOnSummon = Array.isArray(action.statusesOnSummon)
-    ? action.statusesOnSummon
-    : action.statusesOnSummon
-      ? [action.statusesOnSummon]
-      : [];
-  for (const entry of statusesOnSummon) {
-    if (!entry) continue;
-    const status =
-      typeof entry === "string"
-        ? entry
-        : typeof entry.status === "string"
-          ? entry.status
-          : null;
-    if (!status) continue;
-    card[status] =
-      typeof entry === "object" &&
-      Object.prototype.hasOwnProperty.call(entry, "value")
-        ? entry.value
-        : true;
-  }
+  applyStatusesOnSummon(card, action.statusesOnSummon);
 }
 
 export function pickCountForAction(action, fallback = 1) {
