@@ -45,10 +45,18 @@ function isCardOnField(controller, card) {
 }
 
 function computeExpiresOnTurn(game, duration) {
+  if (duration === "duel") return null;
   const currentTurn = Number(game?.turnCounter || 0);
   if (duration === "until_consumed") return null;
   if (duration === "end_of_next_turn") return currentTurn + 1;
   return currentTurn;
+}
+
+function getTemporaryEventEffectUses(action) {
+  if (action?.unlimitedUses === true) return null;
+  return Number.isFinite(Number(action?.uses))
+    ? Math.max(0, Number(action.uses))
+    : 1;
 }
 
 function isActiveEquipForCard(equip, card, ctx) {
@@ -750,9 +758,7 @@ export async function handleRegisterTemporaryEventEffect(
     declaredValues: cloneDeclaredValuesForTemporaryEffect(action, source),
     createdOnTurn: Number(game.turnCounter || 0),
     expiresOnTurn: computeExpiresOnTurn(game, action.duration || "end_of_turn"),
-    usesRemaining: Number.isFinite(Number(action.uses))
-      ? Math.max(0, Number(action.uses))
-      : 1,
+    usesRemaining: getTemporaryEventEffectUses(action),
     duration: action.duration || "end_of_turn",
   };
 

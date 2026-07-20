@@ -3883,7 +3883,7 @@ Registers actions from a Synchro Material trigger to apply to the monster summon
 
 ### `register_temporary_event_effect`
 
-Registers a temporary virtual event trigger owned by the resolving player.
+Registers a virtual event trigger owned by the resolving player for a bounded duration or the rest of the Duel.
 
 - Handler: `handleRegisterTemporaryEventEffect`
 - Target: `none`
@@ -3903,6 +3903,7 @@ Registers a temporary virtual event trigger owned by the resolving player.
 | `targets` | nao | array |  |
 | `duration` | nao | string |  |
 | `uses` | nao | number |  |
+| `unlimitedUses` | nao | boolean |  |
 | `effectId` | nao | string |  |
 | `sourceName` | nao | string |  |
 | `declaredValueRef` | nao | string |  |
@@ -3932,10 +3933,27 @@ Registers a temporary virtual event trigger owned by the resolving player.
   ]
 }
 ```
+```json
+{
+  "type": "register_temporary_event_effect",
+  "event": "standby_phase",
+  "triggerRequirement": "mandatory",
+  "triggerTiming": "if",
+  "duration": "duel",
+  "unlimitedUses": true,
+  "actions": [
+    {
+      "type": "damage",
+      "player": "opponent",
+      "amount": 300
+    }
+  ]
+}
+```
 
 **Notas**
 
-_Sem notas._
+- Use duration: "duel" with unlimitedUses: true for effects that trigger repeatedly for the rest of the Duel.
 
 ### `set_source_after_resolution_if`
 

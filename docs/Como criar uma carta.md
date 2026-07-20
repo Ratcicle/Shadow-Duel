@@ -362,6 +362,27 @@ Actions comuns:
 { type: "special_summon_token", position: "choice", cannotAttackThisTurn: false, token: { name: "Token", atk: 500, def: 500 } }
 ```
 
+Efeitos virtuais que continuam disparando pelo restante do Duelo podem ser
+registrados declarativamente. Mantenha `triggerRequirement` e `triggerTiming`
+explícitos para que o efeito participe corretamente do SEGOC:
+
+```js
+{
+  type: "register_temporary_event_effect",
+  event: "standby_phase",
+  triggerRequirement: "mandatory",
+  triggerTiming: "if",
+  duration: "duel",
+  unlimitedUses: true,
+  promptUser: false,
+  actions: [{ type: "damage", player: "opponent", amount: 300 }]
+}
+```
+
+`duration: "duel"` não define turno de expiração e `unlimitedUses: true` não
+consome o registro após resolver. Cada registro permanece independente, salvo
+quando a action declara propositalmente uma `uniqueKey`.
+
 `targetRef` aponta para um target resolvido. Algumas actions também aceitam
 `filters`, `zone`, `count` e `promptPlayer` para fazer seleção própria; confira
 o catálogo e o handler antes de reutilizar uma action complexa.

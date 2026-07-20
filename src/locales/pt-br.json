@@ -548,6 +548,10 @@
       "name": "Orathus, o Anjo Caído",
       "description": "1 Regulador + 1+ Sincros de TERRA não Reguladores\nDeve primeiro ser Invocado por Invocação-Sincro. Se este card for Invocado por Invocação-Sincro: você pode escolher 1 card com a face para cima que seu oponente controla; negue seus efeitos enquanto ele permanecer com a face para cima no campo. Seu oponente deve escolher este card como alvo de ataques, se possível. Uma vez por turno: você pode escolher 1 monstro Invocado do Deck Adicional que seu oponente controla; destrua-o e, se você ativar este efeito, este card não pode atacar neste turno."
     },
+    "33": {
+      "name": "A Chama Negra",
+      "description": "Pague 1000 PV; pelo restante deste Duelo, cause 300 de dano ao seu oponente durante cada Fase de Apoio. Você só pode ativar 1 \"A Chama Negra\" por turno."
+    },
     "101": {
       "name": "Enguia Abissal do Coração Sombrio",
       "description": "Se esse card for atacado em posição de defesa: cause 600 de dano ao oponente. Se esse card for destruído em batalha: você pode adicionar 1 Magia/Armadilha 'Coração Sombrio' do seu cemitério à sua mão."

@@ -960,7 +960,7 @@ export const ACTION_CATALOG = {
   register_temporary_event_effect: action({
     category: "conditional",
     summary:
-      "Registers a temporary virtual event trigger owned by the resolving player.",
+      "Registers a virtual event trigger owned by the resolving player for a bounded duration or the rest of the Duel.",
     handler: "handleRegisterTemporaryEventEffect",
     required: ["event", "triggerRequirement", "triggerTiming", "actions"],
     optional: [
@@ -968,6 +968,7 @@ export const ACTION_CATALOG = {
       "targets",
       "duration",
       "uses",
+      "unlimitedUses",
       "effectId",
       "sourceName",
       "declaredValueRef",
@@ -991,6 +992,7 @@ export const ACTION_CATALOG = {
       actions: { type: "array" },
       duration: { type: "string" },
       uses: { type: "number" },
+      unlimitedUses: { type: "boolean" },
       effectId: { type: "string" },
       sourceName: { type: "string" },
       declaredValueRef: { type: "string" },
@@ -1014,6 +1016,18 @@ export const ACTION_CATALOG = {
         uses: 1,
         actions: [{ type: "draw", amount: 1 }],
       },
+      {
+        type: "register_temporary_event_effect",
+        event: "standby_phase",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
+        duration: "duel",
+        unlimitedUses: true,
+        actions: [{ type: "damage", player: "opponent", amount: 300 }],
+      },
+    ],
+    notes: [
+      'Use duration: "duel" with unlimitedUses: true for effects that trigger repeatedly for the rest of the Duel.',
     ],
   }),
   register_synchro_material_followup: action({
