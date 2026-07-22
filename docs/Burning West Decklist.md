@@ -1,6 +1,6 @@
 # Burning West / Oeste Ardente Decklist
 
-Fonte dos textos: `src/data/cards/burningWest.js` e `src/locales/pt-br.json`.
+Fonte dos textos: `src/data/cards/burningWest.js` e `public/locales/pt-br.json`.
 
 ## Resumo
 

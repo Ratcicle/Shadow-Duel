@@ -10,13 +10,15 @@
     "doc": "docs"
   },
   "scripts": {
-    "dev": "serve .",
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
     "test": "node scripts/run_tests.mjs",
     "audit:chain": "node scripts/audit_chain_metadata.mjs",
     "replay": "node scripts/replay_duel.mjs"
   },
   "devDependencies": {
-    "serve": "^14.2.6"
+    "vite": "^7.0.0"
   },
   "dependencies": {
     "pixi.js": "^8.19.0"

@@ -544,27 +544,35 @@ const CARD_KIND_SUBTYPE_PHRASES = {
 
 const LOCALE_SOURCES = {
   // English text is the canonical card data in cards.js.
-  "pt-br": "../locales/pt-br.json",
+  "pt-br": "/locales/pt-br.json",
 };
 
-async function loadLocalePayload(relativePath) {
+function getLocaleUrl(publicPath) {
+  if (typeof window !== "undefined") {
+    return new URL(publicPath, window.location.origin);
+  }
+  return new URL(`../../public${publicPath}`, import.meta.url);
+}
+
+async function loadLocalePayload(publicPath) {
   try {
-    const url = new URL(relativePath, import.meta.url);
+    const url = getLocaleUrl(publicPath);
     // Browser/runtime with fetch over HTTP(S)
     if (typeof fetch === "function" && url.protocol !== "file:") {
       const response = await fetch(url);
       if (!response.ok) {
-        console.error(`[i18n] Failed to load locale file ${relativePath}`);
+        console.error(`[i18n] Failed to load locale file ${publicPath}`);
         return {};
       }
       return await response.json();
     }
     // Node or file:// fallback
-    const { readFile } = await import("fs/promises");
+    const nodeFsPromises = "node:fs/promises";
+    const { readFile } = await import(nodeFsPromises);
     const fileData = await readFile(url);
     return JSON.parse(fileData.toString());
   } catch (err) {
-    console.error(`[i18n] Error loading locale file ${relativePath}:`, err);
+    console.error(`[i18n] Error loading locale file ${publicPath}:`, err);
     return {};
   }
 }

@@ -8,9 +8,9 @@ Shadow Duel é uma SPA em JavaScript puro usando ES Modules nativos do navegador
 
 - **Core** ([src/core/](../src/core/)) - motor de regras, estado de jogo, IA, sistema de Chain e execução de efeitos.
 - **UI** ([src/ui/](../src/ui/)) - controllers da tela inicial, renderização DOM, animações e modais.
-- **Data / Locales** ([src/data/](../src/data/), [src/locales/](../src/locales/)) - banco modular de cartas e traduções.
+- **Data / Locales** ([src/data/](../src/data/), [public/locales/](../public/locales/)) - banco modular de cartas e traduções carregadas por URL pública estável.
 
-O projeto usa `serve` para desenvolvimento local e mantém `pixi.js` como dependência runtime em [package.json](../package.json).
+O projeto usa Vite para desenvolvimento e build, e mantém `pixi.js` como dependência runtime em [package.json](../package.json).
 
 ---
 
@@ -26,7 +26,9 @@ Shadow-Duel/
 ├── AGENTS.md                   # Instruções para agentes de IA
 ├── DuelLog.log                 # Log de duelos gerado em runtime
 ├── README.md                   # Manual do jogador
-├── assets/                     # Imagens das cartas
+├── public/                     # Arquivos estáticos com URL pública estável
+│   ├── assets/                 # Imagens das cartas
+│   └── locales/                # Traduções carregadas em runtime
 ├── docs/                       # Documentação técnica e decklists
 ├── index.html                  # Shell HTML do jogo
 ├── laboratory-imports/         # Presets JSON importáveis no Laboratório
@@ -78,9 +80,9 @@ Módulos de cartas por grupo e governança de IDs:
 | [ranges.js](../src/data/cards/ranges.js) | Faixas oficiais de IDs e política de validação. |
 | [idMigration.js](../src/data/cards/idMigration.js) | Mapa `oldId -> newId` para migrar decks salvos. |
 
-### `src/locales/`
+### `public/locales/`
 
-Traduções visíveis no jogo. Hoje há [pt-br.json](../src/locales/pt-br.json), com nomes, descrições, textos de UI e labels de escolhas. O inglês canônico vem dos dados das cartas quando não existe tradução explícita.
+Traduções visíveis no jogo. Hoje há [pt-br.json](../public/locales/pt-br.json), com nomes, descrições, textos de UI e labels de escolhas. O inglês canônico vem dos dados das cartas quando não existe tradução explícita.
 
 ---
 
@@ -361,14 +363,15 @@ Fachada de renderização. Constrói o renderer e delega métodos para [src/ui/r
 
 ## Diretórios Auxiliares
 
-- **`assets/`** - imagens das cartas usadas pelo database.
+- **`public/assets/`** - imagens das cartas usadas pelo database, referenciadas como `/assets/...`.
+- **`public/locales/`** - traduções carregadas pelo browser como `/locales/...`.
 - **`replays/`** - replays e Strategic Reports exportados/importados.
 - **`laboratory-imports/`** - presets JSON para importação manual no Laboratório.
 - **`.agents/`** - instruções/configuração local de agentes.
 - **`.claude/`** - configuração local/trackeada de agentes Claude.
 - **`.codex/`** - ambientes auxiliares do Codex.
 - **`.vscode/`** - configuração local do editor.
-- **`node_modules/`** - dependências instaladas, incluindo `serve` e `pixi.js`.
+- **`node_modules/`** - dependências instaladas, incluindo `vite` e `pixi.js`.
 
 ---
 

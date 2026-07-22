@@ -111,7 +111,7 @@ export function renderCompactSelectionCard(card, candidate = {}) {
 
   const image = document.createElement("img");
   image.className = "selection-card-image";
-  image.src = card?.image || candidate.cardRef?.image || "assets/card-back.png";
+  image.src = card?.image || candidate.cardRef?.image || "/assets/card-back.png";
   image.alt = displayName;
   body.appendChild(image);
 
@@ -1370,7 +1370,7 @@ export function showShadowHeartCathedralModal(
         cardItem.classList.add("cathedral-card-item");
 
         const cardImg = document.createElement("img");
-        cardImg.src = monster.image || "assets/card-back.png";
+        cardImg.src = monster.image || "/assets/card-back.png";
         cardImg.alt = monster.name;
         cardImg.classList.add("cathedral-card-img");
 

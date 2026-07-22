@@ -85,7 +85,7 @@ test("A Chama Negra declara dados, localização e contrato persistente", () => 
   const effect = getEffect();
   const validation = validateCardDatabase();
   const locale = JSON.parse(
-    readFileSync(new URL("../src/locales/pt-br.json", import.meta.url), "utf8"),
+    readFileSync(new URL("../public/locales/pt-br.json", import.meta.url), "utf8"),
   );
 
   assert.equal(validation.errors.length, 0);
@@ -94,7 +94,7 @@ test("A Chama Negra declara dados, localização e contrato persistente", () => 
   assert.equal(card.cardKind, "spell");
   assert.equal(card.subtype, "normal");
   assert.equal(
-    existsSync(new URL("../assets/The Black Flame.png", import.meta.url)),
+    existsSync(new URL("../public/assets/The Black Flame.png", import.meta.url)),
     true,
   );
   assert.deepEqual(locale.cards[String(BLACK_FLAME_ID)], {

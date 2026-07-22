@@ -162,7 +162,7 @@ test("Stelya declara o novo texto e um único limite compartilhado", () => {
   assert.equal((card.description.match(/●/g) || []).length, 2);
 
   const locale = JSON.parse(
-    readFileSync(new URL("../src/locales/pt-br.json", import.meta.url), "utf8"),
+    readFileSync(new URL("../public/locales/pt-br.json", import.meta.url), "utf8"),
   );
   assert.equal(locale.cards[STELYA_ID].name, "Stelya, Domadora de Dragões");
   assert.match(

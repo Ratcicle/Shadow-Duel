@@ -70,7 +70,10 @@ test("Cursed Rock Behemoth declara dados, arte, materiais e contratos canônicos
   assert.equal(card.attribute, "Earth");
   assert.equal(card.atk, 2300);
   assert.equal(card.def, 2400);
-  assert.equal(existsSync(new URL("../assets/Cursed Rock Behemoth.png", import.meta.url)), true);
+  assert.equal(
+    existsSync(new URL("../public/assets/Cursed Rock Behemoth.png", import.meta.url)),
+    true,
+  );
   assert.deepEqual(card.synchro, {
     tunerCount: 1,
     nonTunerMin: 1,

@@ -32,7 +32,7 @@ Campos básicos:
   id: 124,                         // ID livre dentro da faixa do modulo
   name: "Card Name",               // nome único
   cardKind: "monster",             // "monster" | "spell" | "trap"
-  image: "assets/Card Name.png",
+  image: "/assets/Card Name.png",
   description: "Texto exibido na UI.",
   effects: []
 }
@@ -619,7 +619,7 @@ Spell simples:
   cardKind: "spell",
   subtype: "normal",
   description: "Draw 2 cards.",
-  image: "assets/Arcane Surge.jpg",
+  image: "/assets/Arcane Surge.jpg",
   effects: [
     {
       id: "arcane_surge_draw",
@@ -695,7 +695,7 @@ Ignition com target e custo:
 ## Checklist antes de commitar
 
 1. ID esta livre e dentro da faixa oficial do modulo.
-2. Imagem existe em `assets/`.
+2. Imagem existe em `public/assets/` e a carta a referencia como `/assets/...`.
 3. `timing`, `event` e `action.type` existem no validador/registry.
 4. A action tem contrato atualizado no catálogo.
 5. `targetRef` bate exatamente com um `targets[].id`, salvo contexto explícito

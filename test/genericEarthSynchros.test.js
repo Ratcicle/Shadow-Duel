@@ -111,16 +111,16 @@ test("Red Fury Horror e Iron Smasher declaram dados, arte, localização e mater
   );
 
   assert.equal(
-    existsSync(new URL("../assets/Red Fury Horror.png", import.meta.url)),
+    existsSync(new URL("../public/assets/Red Fury Horror.png", import.meta.url)),
     true,
   );
   assert.equal(
-    existsSync(new URL("../assets/Iron Smasher.png", import.meta.url)),
+    existsSync(new URL("../public/assets/Iron Smasher.png", import.meta.url)),
     true,
   );
 
   const locale = JSON.parse(
-    readFileSync(new URL("../src/locales/pt-br.json", import.meta.url), "utf8"),
+    readFileSync(new URL("../public/locales/pt-br.json", import.meta.url), "utf8"),
   );
   assert.equal(locale.cards[RED_FURY_HORROR_ID].name, "Terror Fúria Vermelha");
   assert.equal(locale.cards[IRON_SMASHER_ID].name, "Esmagador de Ferro");

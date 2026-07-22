@@ -111,12 +111,12 @@ test("Orathus declara dados, arte, localização e materiais Sincro canônicos",
   );
   assert.equal(
     existsSync(
-      new URL("../assets/Orathus, The Fallen Angel.png", import.meta.url),
+      new URL("../public/assets/Orathus, The Fallen Angel.png", import.meta.url),
     ),
     true,
   );
   const locale = JSON.parse(
-    readFileSync(new URL("../src/locales/pt-br.json", import.meta.url), "utf8"),
+    readFileSync(new URL("../public/locales/pt-br.json", import.meta.url), "utf8"),
   );
   assert.equal(locale.cards[ORATHUS_ID].name, "Orathus, o Anjo Caído");
 

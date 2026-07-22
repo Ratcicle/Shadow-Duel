@@ -26,7 +26,7 @@ const buildBlueprintDisplayCard = (blueprint) => ({
   description: blueprint.shortRulesText || "",
   cardKind: blueprint.sourceCardKind || "spell",
   subtype: blueprint.sourceCardSubtype || "normal",
-  image: blueprint.sourceImage || "assets/card-back.png",
+  image: blueprint.sourceImage || "/assets/card-back.png",
   __blueprintId: blueprint.blueprintId,
 });
 
@@ -35,7 +35,7 @@ const renderBlueprintCard = (card) => {
   wrapper.className = "card-grid-item blueprint-card-item";
 
   const img = document.createElement("img");
-  img.src = card.image || "assets/card-back.png";
+  img.src = card.image || "/assets/card-back.png";
   img.alt = card.name || "Stored effect";
   img.className = "card-grid-image";
 

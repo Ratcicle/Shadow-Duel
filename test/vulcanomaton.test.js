@@ -21,6 +21,10 @@ const EXCAVATOR_ID = 552;
 const COREBREAKER_ID = 553;
 const EXCAVATION_ID = 554;
 
+function publicAssetUrl(assetUrl) {
+  return new URL(`../public${assetUrl}`, import.meta.url);
+}
+
 function getCardDefinition(id) {
   const card = cardDatabaseById.get(id);
   assert.ok(card, `Expected card definition ${id}.`);
@@ -78,7 +82,11 @@ test("Vulcanomaton registra IDs, artes, Reguladores e contratos canônicos", () 
     assert.equal(card.attribute, "Earth");
     assert.equal(card.isTuner, true);
     assert.equal(card.archetype, "Vulcanomaton");
-    assert.equal(existsSync(card.image), true, `${card.name} art must exist.`);
+    assert.equal(
+      existsSync(publicAssetUrl(card.image)),
+      true,
+      `${card.name} art must exist.`,
+    );
   }
   assert.deepEqual(
     [surveyor.level, surveyor.atk, surveyor.def],
@@ -478,8 +486,8 @@ test("Corebreaker and Excavation declare canonical contracts, limits, and art", 
     [corebreaker.level, corebreaker.atk, corebreaker.def],
     [5, 1900, 2100],
   );
-  assert.equal(existsSync(corebreaker.image), true);
-  assert.equal(existsSync(excavation.image), true);
+  assert.equal(existsSync(publicAssetUrl(corebreaker.image)), true);
+  assert.equal(existsSync(publicAssetUrl(excavation.image)), true);
   assert.equal(excavation.cardKind, "spell");
   assert.equal(excavation.subtype, "normal");
 

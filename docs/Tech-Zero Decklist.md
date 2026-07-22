@@ -1,6 +1,6 @@
 # Tech-Zero Decklist
 
-Fonte dos textos: `src/data/cards/techZero.js`, `src/data/cards/genericCards.js` e `src/locales/pt-br.json`.
+Fonte dos textos: `src/data/cards/techZero.js`, `src/data/cards/genericCards.js` e `public/locales/pt-br.json`.
 
 ## Resumo
 
