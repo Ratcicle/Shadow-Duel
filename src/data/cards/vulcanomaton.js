@@ -12,7 +12,7 @@ export const vulcanomatonCards = [
     archetype: "Vulcanomaton",
     description:
       'If this card is Normal Summoned: You can discard 1 card; add 1 "Vulcanomaton" card from your Deck to your hand, then you can Special Summon 1 Level 4 or lower EARTH monster from your hand, but negate its effects. If this card is sent to the GY as Synchro Material: You can Special Summon 1 "Vulcanomaton" monster from your hand. You can only use each effect of "Vulcanomaton Surveyor" once per turn.',
-    image: "/assets/Vulcanomaton Surveyor.png",
+    image: "assets/Vulcanomaton Surveyor.png",
     effects: [
       {
         id: "vulcanomaton_surveyor_normal_search_and_summon",
@@ -115,7 +115,7 @@ export const vulcanomatonCards = [
     archetype: "Vulcanomaton",
     description:
       'If this card is Normal or Special Summoned: You can target 1 Level 4 or lower EARTH monster in your GY; Special Summon it, but negate its effects, then you can add 1 "Vulcanomaton" card from your GY to your hand. If this card is sent to the GY as Synchro Material: Draw 1 card. You can only use each effect of "Vulcanomaton Excavator" once per turn.',
-    image: "/assets/Vulcanomaton Excavator.png",
+    image: "assets/Vulcanomaton Excavator.png",
     effects: [
       {
         id: "vulcanomaton_excavator_summon_revive_and_recover",
@@ -194,7 +194,7 @@ export const vulcanomatonCards = [
     archetype: "Vulcanomaton",
     description:
       'You can Tribute 1 face-up EARTH monster you control; Special Summon this card from your hand. Once per turn: You can target 1 other face-up Tuner monster you control; it is treated as a non-Tuner until the end of this turn. If this card is sent to the GY as Synchro Material: You can target 1 card your opponent controls; destroy it. You can only use each effect of "Vulcanomaton Corebreaker" once per turn.',
-    image: "/assets/Vulcanomaton Corebreaker.png",
+    image: "assets/Vulcanomaton Corebreaker.png",
     effects: [
       {
         id: "vulcanomaton_corebreaker_hand_tribute_summon",
@@ -310,7 +310,7 @@ export const vulcanomatonCards = [
     archetype: "Vulcanomaton",
     description:
       'Add 1 Level 4 or lower EARTH monster from your Deck to your hand, then, if you control a face-up Synchro Monster or a face-up "Vulcanomaton" monster, you can Special Summon the added monster. You can only activate 1 "Vulcanomaton Excavation" per turn.',
-    image: "/assets/Vulcanomaton Excavation.png",
+    image: "assets/Vulcanomaton Excavation.png",
     effects: [
       {
         id: "vulcanomaton_excavation_search_and_summon",

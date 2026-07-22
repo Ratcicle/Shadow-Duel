@@ -10,7 +10,7 @@ export const mirageboundCards = [
     archetype: "Miragebound",
     description:
       'If this card is Normal Summoned: Add 1 "Miragebound" Spell/Trap from your Deck to your hand. Once per turn: You can target 1 face-up monster your opponent controls; change its battle position. You can only use each effect of "Miragebound Scout" once per turn.',
-    image: "/assets/Miragebound Scout.png",
+    image: "assets/Miragebound Scout.png",
     effects: [
       {
 
@@ -76,7 +76,7 @@ export const mirageboundCards = [
     archetype: "Miragebound",
     description:
       'If you control a "Miragebound" monster: You can Special Summon this card from your hand. Once per turn: You can target 1 other "Miragebound" monster you control; return it to the hand, and if you do, this card gains 600 ATK until the end of this turn. You can only use each effect of "Miragebound Dancer" once per turn.',
-    image: "/assets/Miragebound Dancer.png",
+    image: "assets/Miragebound Dancer.png",
     effects: [
       {
 
@@ -158,7 +158,7 @@ export const mirageboundCards = [
     archetype: "Miragebound",
     description:
       'If a monster you control is returned from the field to your hand (Quick Effect): You can Special Summon this card from your hand, and if you do, target 1 monster your opponent controls; change its battle position. You can only use this effect of "Miragebound Jackal" once per turn.',
-    image: "/assets/Miragebound Jackal.png",
+    image: "assets/Miragebound Jackal.png",
     effects: [
       {
 
@@ -215,7 +215,7 @@ export const mirageboundCards = [
     archetype: "Miragebound",
     description:
       'The first time each face-up monster your opponent controls changes its battle position each turn: it loses 400 ATK/DEF until the end of the next turn. Once per turn: You can choose 1 of these effects. - Return 1 "Miragebound" monster you control to the hand, and if you do, target 1 monster your opponent controls; it loses 400 ATK/DEF until the end of this turn. - Target 1 face-up monster your opponent controls; change its battle position.',
-    image: "/assets/Miragebound Oasis.png",
+    image: "assets/Miragebound Oasis.png",
     effects: [
       {
 
@@ -354,7 +354,7 @@ export const mirageboundCards = [
     },
     description:
       'Ascension Material: "Miragebound Scout". Requirement: The material must have activated its effects 2 times this Duel. If this card is Ascension Summoned: Target up to 2 face-up monsters your opponent controls; change their battle positions. Once per turn: Target 1 other "Miragebound" monster you control and 1 card your opponent controls; return those targets to the hand. If this card attacks a Defense Position monster, inflict piercing battle damage.',
-    image: "/assets/Miragebound Glass Sovereign.png",
+    image: "assets/Miragebound Glass Sovereign.png",
     effects: [
       {
         id: "miragebound_glass_sovereign_ascension_shift",
@@ -436,7 +436,7 @@ export const mirageboundCards = [
     archetype: "Miragebound",
     description:
       'If this card is returned from the field to the hand by a card effect: You can Special Summon this card from your hand, but banish it when it leaves the field. If this card is Special Summoned: You can target 1 face-up monster your opponent controls; it loses 500 ATK/DEF until the end of this turn. You can only use each effect of "Miragebound Glass Viper" once per turn.',
-    image: "/assets/Miragebound Glass Viper.png",
+    image: "assets/Miragebound Glass Viper.png",
     effects: [
       {
 
@@ -512,7 +512,7 @@ export const mirageboundCards = [
     archetype: "Miragebound",
     description:
       'If this card is returned from the field to the hand: You can target 1 "Miragebound" monster in your Graveyard; add it to your hand. Once per turn: You can target 1 monster your opponent controls; change its battle position, and if you do, that monster loses 500 ATK/DEF until the end of the next turn. You can only use each effect of "Miragebound Sand Priestess" once per turn.',
-    image: "/assets/Miragebound Sand Priestess.png",
+    image: "assets/Miragebound Sand Priestess.png",
     effects: [
       {
 
@@ -599,7 +599,7 @@ export const mirageboundCards = [
     archetype: "Miragebound",
     description:
       'You can Special Summon this card from your hand by returning 1 "Miragebound" monster you control to the hand. You can target 1 monster your opponent controls; change its battle position. You can only use each effect of "Miragebound False King" once per turn.',
-    image: "/assets/Miragebound False King.png",
+    image: "assets/Miragebound False King.png",
     effects: [
       {
 
@@ -673,7 +673,7 @@ export const mirageboundCards = [
     archetype: "Miragebound",
     description:
       'The first time each turn a "Miragebound" monster you control would be destroyed by battle, you can return it to the hand instead. Once per turn: You can send this face-up card from the field to the GY; target 1 Spell/Trap your opponent controls; destroy it. You can only control 1 "Miragebound Mirror Path".',
-    image: "/assets/Miragebound Mirror Path.png",
+    image: "assets/Miragebound Mirror Path.png",
     effects: [
       {
         id: "miragebound_mirror_path_control_limit",
@@ -774,7 +774,7 @@ export const mirageboundCards = [
     archetype: "Miragebound",
     description:
       'When an opponent\'s monster declares an attack: Target 1 monster your opponent controls; change its battle position. Then, you can return 1 "Miragebound" monster you control to the hand. You can only activate 1 "Miragebound False Horizon" per turn.',
-    image: "/assets/Miragebound False Horizon.png",
+    image: "assets/Miragebound False Horizon.png",
     effects: [
       {
 
@@ -829,7 +829,7 @@ export const mirageboundCards = [
     archetype: "Miragebound",
     description:
       'Target 1 "Miragebound" monster you control; return it to the hand, then target 1 monster your opponent controls; change its battle position, and if you do, it loses 500 ATK/DEF until the end of this turn. You can only activate 1 "Miragebound Vanishing Step" per turn.',
-    image: "/assets/Miragebound Vanishing Step.png",
+    image: "assets/Miragebound Vanishing Step.png",
     effects: [
       {
 
@@ -886,7 +886,7 @@ export const mirageboundCards = [
     archetype: "Miragebound",
     description:
       'If you control a "Miragebound" monster: Target 1 monster your opponent controls; change its battle position. Then, if that monster is in Defense Position, you can target 1 "Miragebound" monster in your Graveyard; add it to your hand. You can only activate 1 "Miragebound Heat Haze" per turn.',
-    image: "/assets/Miragebound Heat Haze.png",
+    image: "assets/Miragebound Heat Haze.png",
     effects: [
       {
 
@@ -981,7 +981,7 @@ export const mirageboundCards = [
     ],
     description:
       '"Miragebound Glass Viper" + 1 "Miragebound" monster. You can Fusion Summon this card from your Extra Deck by sending the above materials you control to the GY. If this card is Fusion Summoned: change the battle positions of all monsters your opponent controls. While this card is face-up on the field, each time a monster your opponent controls changes its battle position by a "Miragebound" card effect, it loses 300 ATK/DEF until the end of this turn. If this card would be destroyed by battle: you can return it to the Extra Deck instead.',
-    image: "/assets/Miragebound Desert Leviathan.png",
+    image: "assets/Miragebound Desert Leviathan.png",
     effects: [
       {
         id: "miragebound_desert_leviathan_fusion_shift_all",
@@ -1079,7 +1079,7 @@ export const mirageboundCards = [
     piercing: true,
     description:
       'If a monster\'s battle position is changed by a card effect (Quick Effect): You can Special Summon this card from your hand. If this card attacks a Defense Position monster, inflict piercing battle damage. During the End Phase: return this card from the field to the hand. You can only use each effect of "Miragebound Rebel" once per turn.',
-    image: "/assets/Miragebound Rebel.png",
+    image: "assets/Miragebound Rebel.png",
     effects: [
       {
 

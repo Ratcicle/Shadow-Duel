@@ -5,6 +5,7 @@
  */
 
 import { getCardDisplayName, getUIText } from "../../core/i18n.js";
+import { publicAssetUrl } from "../../core/publicUrl.js";
 
 function resolveHandCardElement(cardIndex, options = {}) {
   if (options.anchorElement) {
@@ -515,7 +516,7 @@ export function showSpecialSummonPositionModal(card, onChoose) {
   const modal = document.createElement("div");
   modal.className = "special-summon-position-modal";
 
-  const imageUrl = card?.image || "";
+  const imageUrl = publicAssetUrl(card?.image);
   const safeName =
     (card && getCardDisplayName(card)) ||
     (card?.name && card.name.trim()) ||

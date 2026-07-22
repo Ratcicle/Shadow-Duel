@@ -22,7 +22,7 @@ const COREBREAKER_ID = 553;
 const EXCAVATION_ID = 554;
 
 function publicAssetUrl(assetUrl) {
-  return new URL(`../public${assetUrl}`, import.meta.url);
+  return new URL(`../public/${assetUrl.replace(/^\/+/, "")}`, import.meta.url);
 }
 
 function getCardDefinition(id) {

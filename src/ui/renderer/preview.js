@@ -13,6 +13,7 @@ import {
   getCounterDisplayLabel,
   getUIText,
 } from "../../core/i18n.js";
+import { publicAssetUrl } from "../../core/publicUrl.js";
 
 const COUNTER_TOOLTIP_METADATA_CACHE = new Map();
 
@@ -403,7 +404,7 @@ export function renderPreview(card) {
     return;
   }
 
-  previewImage.style.backgroundImage = `url('${card.image}')`;
+  previewImage.style.backgroundImage = `url('${publicAssetUrl(card.image)}')`;
   setPreviewCardFrameClass(previewImage, card);
   previewName.textContent =
     getCardDisplayName(card) || (card?.name && card.name) || "Hover a card";
@@ -511,7 +512,7 @@ export function createCardElement(card, visible) {
       "Effect card.";
 
     const bgStyle = card.image
-      ? `background-image: url('${card.image}'); background-size: cover; background-position: center;`
+      ? `background-image: url('${publicAssetUrl(card.image)}'); background-size: cover; background-position: center;`
       : "background: #1f2937;";
 
     el.innerHTML = `

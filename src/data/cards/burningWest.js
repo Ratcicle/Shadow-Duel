@@ -11,7 +11,7 @@ export const burningWestCards = [
     archetype: "Burning West",
     description:
       'If you control "Wanted in the Burning West": You can Special Summon this card from your hand. If this card destroys an opponent\'s monster by battle: You can discard 1 card; make your opponent discard 1 card. You can only use each effect of "Gunslinger of the Burning West" once per turn.',
-    image: "/assets/Gunslinger of the Burning West.png",
+    image: "assets/Gunslinger of the Burning West.png",
     effects: [
       {
 
@@ -105,7 +105,7 @@ export const burningWestCards = [
     archetype: "Burning West",
     description:
       'Once per turn: Declare 1 monster Type. Until the end of the next turn, if a "Burning West" monster you control destroys an opponent\'s monster with the declared Type by battle: You can apply 1 of these effects.\n- Special Summon 1 Level 5 or lower "Burning West" monster from your hand.\n- Target 1 "Burning West" monster you control; it gains 800 ATK until the end of the next turn.\n- Target 1 "Burning West" Spell/Trap in your GY; add it to your hand.\nYou can only use this effect of "Wanted in the Burning West" once per turn.',
-    image: "/assets/Wanted in the Burning West.png",
+    image: "assets/Wanted in the Burning West.png",
     effects: [
       {
 
@@ -243,7 +243,7 @@ export const burningWestCards = [
     archetype: "Burning West",
     description:
       'Once per turn: You can send 1 "Burning West" monster you control to the Graveyard; Special Summon 1 "Burning West" monster from your Graveyard with a different name from the sent monster. If this card is destroyed by battle: destroy the monster that destroyed this card. You can only use each effect of "Undertaker of the Burning West" once per turn.',
-    image: "/assets/Undertaker of the Burning West.png",
+    image: "assets/Undertaker of the Burning West.png",
     effects: [
       {
 
@@ -331,7 +331,7 @@ export const burningWestCards = [
     archetype: "Burning West",
     description:
       'If this card is Normal Summoned: You can add 1 Level 5 or lower "Burning West" monster from your Deck to your hand. If the monster added by this effect is Special Summoned this turn: You can add 1 "Burning West" Spell/Trap from your Deck to your hand. You can only use each effect of "Butcher of the Burning West" once per turn.',
-    image: "/assets/Butcher of the Burning West.png",
+    image: "assets/Butcher of the Burning West.png",
     effects: [
       {
 
@@ -422,7 +422,7 @@ export const burningWestCards = [
     archetype: "Burning West",
     description:
       'If this card is equipped with a "Burning West" Equip Spell, it can make 1 additional attack on monsters during each Battle Phase. Once per Duel: You can target 1 monster your opponent controls; take control of it, and if you do, send all other "Burning West" monsters you control to the Graveyard.',
-    image: "/assets/Specialist of the Burning West.png",
+    image: "assets/Specialist of the Burning West.png",
     effects: [
       {
         id: "burning_west_specialist_extra_attack",
@@ -500,7 +500,7 @@ export const burningWestCards = [
     archetype: "Burning West",
     description:
       'Equip only to a "Burning West" monster. It gains 500 ATK/DEF. If the equipped monster destroys an opponent\'s monster by battle: You can target 1 Spell/Trap your opponent controls; destroy it. You can banish this card from your Graveyard; add 1 "Wanted in the Burning West" from your Deck or Graveyard to your hand. You can only use this effect of "Peacemaker of the Burning West" once per turn.',
-    image: "/assets/Burning Peacemaker.png",
+    image: "assets/Burning Peacemaker.png",
     effects: [
       {
         id: "burning_peacemaker_equip",
@@ -608,7 +608,7 @@ export const burningWestCards = [
     archetype: "Burning West",
     description:
       'Target 1 face-up "Burning West" monster you control and 1 face-up monster your opponent controls; until the end of this turn, if those targets battle each other, destroy the opponent\'s monster at the start of the Damage Step. After this effect resolves, if the difference between the current ATK of those targets is 500 or less, Set this card to your field instead of sending it to the Graveyard. You can only activate 1 "Quick Draw in the Burning West" per turn.',
-    image: "/assets/Quick Draw in the Burning West.png",
+    image: "assets/Quick Draw in the Burning West.png",
     effects: [
       {
 
@@ -672,7 +672,7 @@ export const burningWestCards = [
     archetype: "Burning West",
     description:
       'Send 1 "Burning West" monster from your Deck to the Graveyard; then, if you control a face-up "Burning West" monster, you can add 1 "Burning West" monster from your Graveyard to your hand, except the monster sent by this effect. You can only activate 1 "Funeral at Sunset" per turn.',
-    image: "/assets/Funeral at Sunset.png",
+    image: "assets/Funeral at Sunset.png",
     effects: [
       {
 
@@ -742,7 +742,7 @@ export const burningWestCards = [
     archetype: "Burning West",
     description:
       'Declare 1 monster Type. The first time this turn a "Burning West" monster you control destroys an opponent\'s monster with the declared Type by battle: draw 1 card, and if the destroyed monster is an Extra Deck monster, inflict 1000 damage to your opponent. You can only activate 1 "Deadeye of the Burning West" per turn.',
-    image: "/assets/Burning West Deadeye.png",
+    image: "assets/Burning West Deadeye.png",
     effects: [
       {
 
@@ -838,7 +838,7 @@ export const burningWestCards = [
     archetype: "Burning West",
     description:
       'If a "Burning West" monster you control would be destroyed by battle or card effect: You can Special Summon this card from your hand, and if you do, negate that destruction. If another "Burning West" monster you control would be sent from the field to the Graveyard: You can send this card to the Graveyard; shuffle that monster into the Deck instead. You can only use each effect of "Preacher of the Burning West" once per turn.',
-    image: "/assets/Preacher of the Burning West.png",
+    image: "assets/Preacher of the Burning West.png",
     effects: [
       {
 
@@ -936,7 +936,7 @@ export const burningWestCards = [
     archetype: "Burning West",
     description:
       'If this card is Tribute Summoned: Declare 1 monster Type. While this card is face-up on the field, "Burning West" monsters you control that battle opponent\'s monsters with the declared Type gain 500 ATK/DEF during the Damage Step. If this card is destroyed by battle: You can add 1 "Peacemaker of the Burning West" from your Deck to your hand.',
-    image: "/assets/Sheriff of the Burning West.png",
+    image: "assets/Sheriff of the Burning West.png",
     effects: [
       {
         id: "burning_west_sheriff_declare_type",
@@ -1023,7 +1023,7 @@ export const burningWestCards = [
     archetype: "Burning West",
     description:
       'While you control exactly 1 monster, and it is a "Burning West" monster, and your opponent controls exactly 1 monster, face-up monsters on the field cannot be destroyed by card effects. Activations of Spells/Traps that mention "Burning West" cards cannot be negated.',
-    image: "/assets/Crash Town, the Burning City.png",
+    image: "assets/Crash Town, the Burning City.png",
     effects: [
       {
         id: "crash_town_effect_destruction_protection",
@@ -1093,7 +1093,7 @@ export const burningWestCards = [
     archetype: "Burning West",
     description:
       'When an opponent\'s monster declares an attack: Special Summon 1 Level 5 or lower "Burning West" monster from your hand or Graveyard, and if you do, change the attack target to it. During that battle, that monster gains 500 ATK/DEF. You can only activate 1 "Ambush in Crash Town" per turn.',
-    image: "/assets/Ambush in Crash Town.png",
+    image: "assets/Ambush in Crash Town.png",
     effects: [
       {
 
@@ -1144,7 +1144,7 @@ export const burningWestCards = [
     archetype: "Burning West",
     description:
       'If a "Burning West" monster you control destroys an opponent\'s monster by battle: Target 1 "Burning West" monster in your Graveyard; add it to your hand. Then, if the destroyed monster had a Type declared by a "Burning West" card effect you control, you can Special Summon the added card from your hand. You can only activate 1 "Burning Reward" per turn.',
-    image: "/assets/Burning Reward.png",
+    image: "assets/Burning Reward.png",
     effects: [
       {
 
@@ -1228,7 +1228,7 @@ export const burningWestCards = [
     archetype: "Burning West",
     description:
       'When your opponent activates a card or effect that would destroy 1 or more cards that mention a "Burning West" card in their text: negate the activation, and if you do, destroy that card. You can only activate 1 "Law in the Burning West" per turn.',
-    image: "/assets/Law in the Burning West.png",
+    image: "assets/Law in the Burning West.png",
     effects: [
       {
 
@@ -1277,7 +1277,7 @@ export const burningWestCards = [
     },
     description:
       'Ascension Material: 1 Level 5 or higher "Burning West" monster. If this card is Ascension Summoned: You can add 1 card from your Graveyard to your hand that mentions a "Burning West" card in its text. If this card battles a monster with the same ATK, this card is not destroyed by that battle. If this card is destroyed by battle: You can Special Summon from your Graveyard the monster used as Ascension Material for this card.',
-    image: "/assets/Executioner of the Burning West.png",
+    image: "assets/Executioner of the Burning West.png",
     effects: [
       {
         id: "burning_west_executioner_ascension_recover",

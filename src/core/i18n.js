@@ -1,4 +1,5 @@
 import { cardDatabase } from "../data/cards.js";
+import { publicUrl } from "./publicUrl.js";
 
 const LOCALE_STORAGE_KEY = "shadowduel_locale";
 const DEFAULT_LOCALE = "en";
@@ -544,14 +545,14 @@ const CARD_KIND_SUBTYPE_PHRASES = {
 
 const LOCALE_SOURCES = {
   // English text is the canonical card data in cards.js.
-  "pt-br": "/locales/pt-br.json",
+  "pt-br": "locales/pt-br.json",
 };
 
-function getLocaleUrl(publicPath) {
+function getLocaleUrl(localePath) {
   if (typeof window !== "undefined") {
-    return new URL(publicPath, window.location.origin);
+    return new URL(publicUrl(localePath), window.location.origin);
   }
-  return new URL(`../../public${publicPath}`, import.meta.url);
+  return new URL(`../../public/${localePath.replace(/^\/+/, "")}`, import.meta.url);
 }
 
 async function loadLocalePayload(publicPath) {

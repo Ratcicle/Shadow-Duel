@@ -9,6 +9,7 @@ import {
   getCardDisplayDescription,
   getUIText,
 } from "../../core/i18n.js";
+import { publicAssetUrl } from "../../core/publicUrl.js";
 
 export function getEffectDisplayLabel(effect) {
   if (!effect) return "";
@@ -108,7 +109,7 @@ export function showUnifiedTrapModal(options = {}) {
       const cardPreview = document.createElement("div");
       cardPreview.className = "trap-card-preview";
       const img = document.createElement("img");
-      img.src = card.image || "/assets/card-back.png";
+      img.src = publicAssetUrl(card.image || "assets/card-back.png");
       img.alt = getCardDisplayName(card) || card.name || "Trap Card";
       img.className = "trap-card-image";
       cardPreview.appendChild(img);
@@ -181,7 +182,7 @@ export function showUnifiedTrapModal(options = {}) {
         const preview = document.createElement("div");
         preview.className = "trap-card-preview-mini";
         const img = document.createElement("img");
-        img.src = card.image || "/assets/card-back.png";
+        img.src = publicAssetUrl(card.image || "assets/card-back.png");
         img.className = "trap-card-image-mini";
         preview.appendChild(img);
 

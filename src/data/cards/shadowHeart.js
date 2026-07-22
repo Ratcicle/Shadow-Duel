@@ -11,7 +11,7 @@ export const shadowHeartCards = [
     archetype: "Shadow-Heart",
     description:
       'If this card is attacked while in Defense Position: inflict 600 damage to your opponent. If this card is destroyed by battle: You can add 1 "Shadow-Heart" Spell/Trap from your Graveyard to your hand.',
-    image: "/assets/Shadow-Heart Abyssal Eel.png",
+    image: "assets/Shadow-Heart Abyssal Eel.png",
     effects: [
       {
         id: "shadow_heart_abyssal_eel_battle_damage",
@@ -69,7 +69,7 @@ export const shadowHeartCards = [
     archetype: "Shadow-Heart",
     description:
       'If this card is sent to the Graveyard: You can target 1 "Shadow-Heart" monster in your Graveyard, except "Shadow-Heart Specter"; add it to your hand. You can only use this effect of "Shadow-Heart Specter" once per turn.',
-    image: "/assets/Shadow-Heart Specter.png",
+    image: "assets/Shadow-Heart Specter.png",
     effects: [
       {
 
@@ -112,7 +112,7 @@ export const shadowHeartCards = [
     archetype: "Shadow-Heart",
     description:
       'Discard 1 "Shadow-Heart" card, then target 1 face-up monster your opponent controls; it loses 1000 ATK until the end of this turn. If that monster\'s ATK becomes 0 by this effect, destroy it. You can only activate 1 "Shadow-Heart Purge" per turn.',
-    image: "/assets/Shadow-Heart Purge.png",
+    image: "assets/Shadow-Heart Purge.png",
     effects: [
       {
 
@@ -168,7 +168,7 @@ export const shadowHeartCards = [
     archetype: "Shadow-Heart",
     description:
       "If this card is Tribute Summoned: You can target 1 card your opponent controls; destroy it. At the start of damage calculation, if this card battles an opponent's monster: remove all ATK/DEF increases applied to that monster.",
-    image: "/assets/Shadow-Heart Demon Arctroth.png",
+    image: "assets/Shadow-Heart Demon Arctroth.png",
     effects: [
       {
         id: "shadow_heart_arctroth_on_summon",
@@ -238,7 +238,7 @@ export const shadowHeartCards = [
     archetype: "Shadow-Heart",
     description:
       'All "Shadow-Heart" monsters you control gain 500 ATK until the end of this turn.',
-    image: "/assets/Shadow-Heart Battle Hymn.png", // cria esse PNG depois
+    image: "assets/Shadow-Heart Battle Hymn.png", // cria esse PNG depois
     effects: [
       {
         id: "shadow_heart_battle_hymn",
@@ -274,7 +274,7 @@ export const shadowHeartCards = [
     archetype: "Shadow-Heart",
     description:
       'Pay 800 LP; add 1 "Shadow-Heart" card from your Deck to your hand. You must control no other cards to activate this effect. You can only activate 1 "Shadow-Heart Covenant" per turn.',
-    image: "/assets/Shadow-Heart Covenant.png",
+    image: "assets/Shadow-Heart Covenant.png",
     effects: [
       {
 
@@ -323,7 +323,7 @@ export const shadowHeartCards = [
     archetype: "Shadow-Heart",
     description:
       'When this card is Normal Summoned: You can Special Summon 1 Level 4 or lower "Shadow-Heart" monster from your hand. You can only use this effect of "Shadow-Heart Imp" once per turn.',
-    image: "/assets/Shadow-Heart Imp.png",
+    image: "assets/Shadow-Heart Imp.png",
     effects: [
       {
 
@@ -372,7 +372,7 @@ export const shadowHeartCards = [
     archetype: "Shadow-Heart",
     description:
       'If this card is Special Summoned: You can add 1 Level 8 "Shadow-Heart" monster from your Deck to your hand. If this card is destroyed by battle: draw 1 card. You can only use each effect of "Shadow-Heart Gecko" once per turn.',
-    image: "/assets/Shadow-Heart Gecko.png",
+    image: "assets/Shadow-Heart Gecko.png",
     effects: [
       {
 
@@ -430,7 +430,7 @@ export const shadowHeartCards = [
     archetype: "Shadow-Heart",
     description:
       "If this card is discarded from your hand to the Graveyard: target 1 monster your opponent controls; its ATK and DEF are halved until the end of this turn.",
-    image: "/assets/Shadow-Heart Coward.png",
+    image: "assets/Shadow-Heart Coward.png",
     effects: [
       {
         id: "shadow_heart_coward_discard",
@@ -468,7 +468,7 @@ export const shadowHeartCards = [
     archetype: "Shadow-Heart",
     description:
       'Discard 2 cards from your hand, then Special Summon 1 "Shadow-Heart" monster from your Graveyard, but it cannot declare an attack this turn. You can only activate 1 "Shadow-Heart Infusion" per turn.',
-    image: "/assets/Shadow-Heart Infusion.png",
+    image: "assets/Shadow-Heart Infusion.png",
     effects: [
       {
 
@@ -536,7 +536,7 @@ export const shadowHeartCards = [
     archetype: "Shadow-Heart",
     description:
       'If this card was Tribute Summoned, it gains the following effects: \n●If this card destroys an opponent\'s monster by battle: You can target 1 "Shadow-Heart" card in your Graveyard; add it to your hand. \n●If this card is destroyed by battle or by an opponent\'s card effect: You can Special Summon up to 3 "Shadow-Heart" monsters with 1600 or less ATK from your Graveyard. You can only use each effect of "Shadow-Heart Scale Dragon" once per turn.',
-    image: "/assets/Shadow-Heart Scale Dragon.png",
+    image: "assets/Shadow-Heart Scale Dragon.png",
     effects: [
       {
 
@@ -607,7 +607,7 @@ export const shadowHeartCards = [
     archetype: "Shadow-Heart",
     description:
       'Choose 1 Dragon "Shadow-Heart" monster you control; it gains 700 ATK/DEF until the end of this turn, and it can make a second attack during this Battle Phase. You cannot attack directly the turn you activate this effect.',
-    image: "/assets/Shadow-Heart Rage.png",
+    image: "assets/Shadow-Heart Rage.png",
     effects: [
       {
         id: "shadow_heart_rage_dragon_buff_effect",
@@ -647,7 +647,7 @@ export const shadowHeartCards = [
     archetype: "Shadow-Heart",
     description:
       "Equip only to a monster you control. It gains 500 ATK/DEF and cannot be destroyed by battle. During each of your Standby Phases: pay 800 LP or send this card to the Graveyard.",
-    image: "/assets/Shadow-Heart Shield.png",
+    image: "assets/Shadow-Heart Shield.png",
     effects: [
       {
         id: "shadow_heart_shield_equip",
@@ -703,7 +703,7 @@ export const shadowHeartCards = [
     altTribute: { type: "no_tribute_if_empty_field" },
     description:
       "If you control no monsters, you can Normal Summon this card without Tributing.",
-    image: "/assets/Shadow-Heart Griffin.png",
+    image: "assets/Shadow-Heart Griffin.png",
     effects: [],
   },
   {
@@ -714,7 +714,7 @@ export const shadowHeartCards = [
     archetype: "Shadow-Heart",
     description:
       'All "Shadow-Heart" monsters you control gain 300 ATK. Once per turn, if a Level 8 or higher "Shadow-Heart" monster you control is destroyed by battle: destroy the attacking monster.',
-    image: "/assets/Darkness Valley.png",
+    image: "assets/Darkness Valley.png",
     effects: [
       {
         id: "darkness_valley_shadow_heart_aura",
@@ -763,7 +763,7 @@ export const shadowHeartCards = [
     archetype: "Shadow-Heart",
     description:
       'Quick Effect: Once per turn, when a "Shadow-Heart" monster you control is destroyed by battle: You can Special Summon this card from your hand.',
-    image: "/assets/Shadow-Heart Death Wyrm.png",
+    image: "assets/Shadow-Heart Death Wyrm.png",
     effects: [
       {
 
@@ -800,7 +800,7 @@ export const shadowHeartCards = [
     archetype: "Shadow-Heart",
     description:
       'You can Special Summon this card from your hand by sending 1 "Shadow-Heart Abyssal Eel" you control to the GY. If this card destroys a monster by battle: inflict 500 damage to your opponent. If this card is destroyed by battle: inflict 800 damage to your opponent.',
-    image: "/assets/Shadow-Heart Leviathan.png",
+    image: "assets/Shadow-Heart Leviathan.png",
     effects: [
       {
 
@@ -874,7 +874,7 @@ export const shadowHeartCards = [
     archetype: "Shadow-Heart",
     description:
       'If this card is Normal Summoned: You can add 1 "Shadow-Heart" Spell/Trap from your Deck to your hand. If your opponent loses LP while this card is on the field: draw 1 card. You can only use this effect of "Shadow-Heart Void Mage" once per turn.',
-    image: "/assets/Shadow-Heart Void Mage.png",
+    image: "assets/Shadow-Heart Void Mage.png",
     effects: [
       {
         id: "shadow_heart_void_mage_search",
@@ -921,7 +921,7 @@ export const shadowHeartCards = [
     archetype: "Shadow-Heart",
     description:
       'Each time your opponent takes 500 or more damage: place 1 Judgment Counter on this card. During your Main Phase: You can send this face-up card to the GY; Special Summon 1 "Shadow-Heart" monster from your Deck with ATK less than or equal to 500 x the number of Judgment Counters on this card. You can only use this effect of "Shadow-Heart Cathedral" once per turn.',
-    image: "/assets/Shadow-Heart Cathedral.png",
+    image: "assets/Shadow-Heart Cathedral.png",
     effects: [
       {
         id: "shadow_heart_cathedral_add_counter",
@@ -967,7 +967,7 @@ export const shadowHeartCards = [
     archetype: "Shadow-Heart",
     description:
       'You must control no monsters to activate this effect. Target 1 "Shadow-Heart" monster in your Graveyard; Special Summon it and equip this card to it. If this card leaves the field, destroy the equipped monster.',
-    image: "/assets/The Shadow Heart.png",
+    image: "assets/The Shadow Heart.png",
     effects: [
       {
         id: "the_shadow_heart_summon_and_equip",
@@ -1020,7 +1020,7 @@ export const shadowHeartCards = [
     archetypes: ["Shadow-Heart"],
     description:
       "Shadow-Heart Scale Dragon + 1 level 8+ 'Shadow-Heart' monster. If this card is Fusion Summoned: target 1 card your opponent controls; destroy it. If this card is destroyed by battle or card effect: You can Special Summon 1 'Shadow-Heart Scale Dragon' from your GY.",
-    image: "/assets/Shadow-Heart Demon Dragon.png",
+    image: "assets/Shadow-Heart Demon Dragon.png",
     fusionMaterials: [
       { name: "Shadow-Heart Scale Dragon", count: 1 },
       { archetype: "Shadow-Heart", minLevel: 8, count: 1 },
@@ -1080,7 +1080,7 @@ export const shadowHeartCards = [
     archetypes: ["Shadow-Heart"],
     description:
       "2 'Shadow-Heart' monsters. The first time per turn this card would be destroyed by battle, you can send 1 'Shadow-Heart' monster you control to the GY instead. If this card destroys an opponent's monster by battle: You can Special Summon 1 'Shadow-Heart' monster of Level 4 or lower from your GY, but it cannot attack this turn. You can only use this effect of 'Shadow-Heart Warlord' once per turn.",
-    image: "/assets/Shadow-Heart Warlord.png",
+    image: "assets/Shadow-Heart Warlord.png",
     fusionMaterials: [{ archetype: "Shadow-Heart", count: 2 }],
     effects: [
       {
@@ -1160,7 +1160,7 @@ export const shadowHeartCards = [
     },
     description:
       "Ascension Material: 'Shadow-Heart Demon Arctroth'. If this card is Ascension Summoned: Target 1 face-up Special Summoned monster your opponent controls; halve its ATK/DEF, and this card gains the ATK/DEF lost by that effect. If this card destroys an opponent's monster by battle: You can target 1 monster in your opponent's Graveyard, except the monster destroyed by this battle; Special Summon it to your opponent's field, and if you do, this card can make 1 additional attack on monsters during this Battle Phase.",
-    image: "/assets/Shadow-Heart Arctroth Pursuer.png",
+    image: "assets/Shadow-Heart Arctroth Pursuer.png",
     effects: [
       {
         id: "shadow_heart_arctroth_pursuer_ascension_drain",
@@ -1249,7 +1249,7 @@ export const shadowHeartCards = [
     },
     description:
       'Ascension Material: "Shadow-Heart Scale Dragon". Requirement: the material must have been face-up on the field for 3 turns. If this card is Ascension Summoned: it gains 700 ATK until the end of this turn. While this card is face-up on the field, negate your opponent\'s card effects that prevent monsters from being destroyed by battle. If this card destroys a Defense Position monster by battle: destroy all Defense Position monsters your opponent controls.',
-    image: "/assets/Shadow-Heart Devastation Dragon.png",
+    image: "assets/Shadow-Heart Devastation Dragon.png",
     effects: [
       {
         id: "shadow_heart_devastation_dragon_ascension_boost",
@@ -1324,7 +1324,7 @@ export const shadowHeartCards = [
     },
     description:
       'This card can be treated as 2 Tributes for the Tribute Summon of a "Shadow-Heart" monster. If another "Shadow-Heart" monster you control is destroyed by battle or card effect: You can send this card to the GY; Special Summon that monster from your GY. You can only use this effect of "Shadow-Heart Heartbearer" once per turn.',
-    image: "/assets/Shadow-Heart Heartbearer.png",
+    image: "assets/Shadow-Heart Heartbearer.png",
     effects: [
       {
 

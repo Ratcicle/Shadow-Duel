@@ -7,6 +7,7 @@ import {
   getMonsterTypeDisplayName,
   getUIText,
 } from "../../core/i18n.js";
+import { publicAssetUrl } from "../../core/publicUrl.js";
 import {
   MAX_DECK_SIZE,
   MAX_EXTRA_DECK_SIZE,
@@ -338,7 +339,7 @@ export function createDeckBuilderController({
   function setPreview(card) {
     if (!card) return;
     if (dom.preview.image) {
-      dom.preview.image.style.backgroundImage = `url('${card.image}')`;
+      dom.preview.image.style.backgroundImage = `url('${publicAssetUrl(card.image)}')`;
       setPreviewCardFrameClass(dom.preview.image, card);
     }
     if (dom.preview.name) {
@@ -1341,7 +1342,7 @@ export function createCardThumb(card, getCardDisplayName) {
   const el = document.createElement("div");
   const typeClass = getDeckBuilderCardTypeClass(card);
   el.className = `card-thumb ${typeClass}`;
-  el.style.backgroundImage = `url('${card.image}')`;
+  el.style.backgroundImage = `url('${publicAssetUrl(card.image)}')`;
   el.title = getCardDisplayName(card) || card.name;
   return el;
 }

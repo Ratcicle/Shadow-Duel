@@ -12,6 +12,7 @@ import {
   getMonsterTypeDisplayName,
   getUIText,
 } from "../../core/i18n.js";
+import { publicAssetUrl } from "../../core/publicUrl.js";
 
 const SELECTION_KIND_LABELS = {
   en: {
@@ -111,7 +112,9 @@ export function renderCompactSelectionCard(card, candidate = {}) {
 
   const image = document.createElement("img");
   image.className = "selection-card-image";
-  image.src = card?.image || candidate.cardRef?.image || "/assets/card-back.png";
+  image.src = publicAssetUrl(
+    card?.image || candidate.cardRef?.image || "assets/card-back.png",
+  );
   image.alt = displayName;
   body.appendChild(image);
 
@@ -1370,7 +1373,7 @@ export function showShadowHeartCathedralModal(
         cardItem.classList.add("cathedral-card-item");
 
         const cardImg = document.createElement("img");
-        cardImg.src = monster.image || "/assets/card-back.png";
+        cardImg.src = publicAssetUrl(monster.image || "assets/card-back.png");
         cardImg.alt = monster.name;
         cardImg.classList.add("cathedral-card-img");
 
@@ -1465,7 +1468,7 @@ export function showTieBreakerSelection(options = {}) {
 
     const imageDiv = document.createElement("div");
     imageDiv.classList.add("tie-breaker-card-image");
-    imageDiv.style.backgroundImage = `url('${card.image}')`;
+    imageDiv.style.backgroundImage = `url('${publicAssetUrl(card.image)}')`;
     cardEl.appendChild(imageDiv);
 
     const infoDiv = document.createElement("div");

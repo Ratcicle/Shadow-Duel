@@ -6,7 +6,7 @@ import {
   getUIText,
 } from "../i18n.js";
 
-const DEFAULT_CHOICE_IMAGE = "/assets/card-back.png";
+const DEFAULT_CHOICE_IMAGE = "assets/card-back.png";
 
 function getEffectChoiceKey(ctx, action) {
   return (

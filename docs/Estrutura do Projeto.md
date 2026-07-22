@@ -363,8 +363,8 @@ Fachada de renderização. Constrói o renderer e delega métodos para [src/ui/r
 
 ## Diretórios Auxiliares
 
-- **`public/assets/`** - imagens das cartas usadas pelo database, referenciadas como `/assets/...`.
-- **`public/locales/`** - traduções carregadas pelo browser como `/locales/...`.
+- **`public/assets/`** - imagens das cartas usadas pelo database, armazenadas como `assets/...` e resolvidas pela base pública do Vite.
+- **`public/locales/`** - traduções carregadas pelo browser pela base pública do Vite.
 - **`replays/`** - replays e Strategic Reports exportados/importados.
 - **`laboratory-imports/`** - presets JSON para importação manual no Laboratório.
 - **`.agents/`** - instruções/configuração local de agentes.
