@@ -339,6 +339,35 @@ body {
   font-weight: bold;
 }
 
+#preview-stats > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.tabler-icon {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  flex: 0 0 auto;
+  background-color: currentColor;
+  -webkit-mask: var(--tabler-icon) center / contain no-repeat;
+  mask: var(--tabler-icon) center / contain no-repeat;
+}
+
+.panel-stat-icon {
+  width: 1.05em;
+  height: 1.05em;
+}
+
+#preview-atk .panel-stat-icon {
+  color: #ff7a7a;
+}
+
+#preview-def .panel-stat-icon {
+  color: #79b8ff;
+}
+
 #preview-stats .preview-stat-buff {
   color: #55aaff;
   text-shadow: 0 0 8px rgba(85, 170, 255, 0.42);
@@ -765,7 +794,7 @@ body {
   line-height: 1.2;
   text-align: center;
   pointer-events: none;
-  white-space: pre-line;
+  white-space: normal;
   box-shadow: none;
 }
 
@@ -791,8 +820,27 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-direction: column;
+  gap: 2px;
   width: 100%;
   height: 100%;
+}
+
+.zone-label-icon {
+  width: 1.4em;
+  height: 1.4em;
+  color: currentColor;
+}
+
+.zone-counter-label {
+  font-size: 0.78em;
+  line-height: 1;
+}
+
+.zone-counter-value {
+  font-size: 1.05em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
 }
 
 .graveyard-zone .gy-preview.graveyard-effect-activating {
@@ -1045,6 +1093,77 @@ body {
   text-shadow: 0 1px 2px #000;
   font-variant-numeric: tabular-nums;
   overflow: hidden;
+}
+
+.card-status-icons {
+  position: absolute;
+  top: clamp(16px, 1.35vw, 22px);
+  right: 4px;
+  z-index: 3;
+  display: flex;
+  gap: 3px;
+}
+
+.card-status-icon {
+  display: grid;
+  width: clamp(16px, 1.45vw, 21px);
+  height: clamp(16px, 1.45vw, 21px);
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.56);
+  border-radius: 50%;
+  background: rgba(12, 10, 20, 0.86);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.55);
+}
+
+.card-status-icon-glyph {
+  width: 72%;
+  height: 72%;
+}
+
+.card-status-icon--negated {
+  color: #ff8b8b;
+}
+
+.card-status-icon--cannot-attack {
+  color: #ffd36b;
+}
+
+.equip-link-icon {
+  position: absolute;
+  box-sizing: border-box;
+  top: clamp(16px, 1.35vw, 22px);
+  left: 4px;
+  z-index: 3;
+  width: clamp(16px, 1.45vw, 21px);
+  height: clamp(16px, 1.45vw, 21px);
+  padding: 2px;
+  border: 1px solid rgba(208, 184, 255, 0.78);
+  border-radius: 50%;
+  background: rgba(12, 10, 20, 0.86);
+  color: #d5b5ff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.55);
+}
+
+.card.equip-link-highlight {
+  box-shadow:
+    0 0 0 2px rgba(213, 181, 255, 0.54),
+    0 0 16px rgba(187, 134, 252, 0.72);
+  z-index: 11;
+}
+
+.equip-link-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.equip-link-line {
+  stroke: rgba(213, 181, 255, 0.92);
+  stroke-width: 2;
+  stroke-dasharray: 5 4;
+  filter: drop-shadow(0 0 3px rgba(187, 134, 252, 0.78));
 }
 
 .stat-atk {

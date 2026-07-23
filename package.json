@@ -21,6 +21,7 @@
     "vite": "^7.0.0"
   },
   "dependencies": {
+    "@tabler/icons": "^3.45.0",
     "pixi.js": "^8.19.0"
   }
 }

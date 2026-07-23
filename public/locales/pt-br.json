@@ -14,6 +14,21 @@
       "addToHand": "Adicionar à mão"
     },
     "lp": "{amount} PV",
+    "icons": {
+      "atk": "ATQ",
+      "def": "DEF",
+      "graveyard": "Cemitério",
+      "extraDeck": "Deck Extra"
+    },
+    "zones": {
+      "graveyard": "GY",
+      "extraDeck": "Extra"
+    },
+    "status": {
+      "effectsNegated": "Efeitos negados",
+      "cannotAttack": "Não pode atacar",
+      "equipped": "Equipado"
+    },
     "priority": {
       "owner": "Prioridade: {owner}",
       "you": "Você",

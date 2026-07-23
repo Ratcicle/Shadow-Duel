@@ -37,6 +37,13 @@ export {
   clearActivationHint,
 } from "./indicators.js";
 
+export {
+  syncEquipLinkIndicators,
+  redrawEquipLinks,
+  clearEquipLinkIndicators,
+  destroyEquipLinkIndicators,
+} from "./equipLinks.js";
+
 // Preview and card creation
 export {
   renderPreview,

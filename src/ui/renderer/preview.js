@@ -14,8 +14,80 @@ import {
   getUIText,
 } from "../../core/i18n.js";
 import { publicAssetUrl } from "../../core/publicUrl.js";
+import {
+  CARD_STATUS_ICONS,
+  PANEL_ICONS,
+  createTablerIcon,
+} from "../icons/tablerIcons.js";
 
 const COUNTER_TOOLTIP_METADATA_CACHE = new Map();
+
+function getStatValue(statText) {
+  return String(statText || "-").replace(/^[^:]+:\s*/, "") || "-";
+}
+
+function renderPreviewStat(element, iconUrl, label, statText) {
+  element.replaceChildren();
+  const value = getStatValue(statText);
+  const icon = createTablerIcon(iconUrl, "panel-stat-icon", { decorative: true });
+  const valueElement = document.createElement("span");
+  valueElement.className = "panel-stat-value";
+  valueElement.textContent = value;
+  element.append(icon, valueElement);
+  element.title = label;
+  element.setAttribute("aria-label", `${label}: ${value}`);
+}
+
+function clearPreviewStat(element) {
+  element.replaceChildren();
+  element.removeAttribute("title");
+  element.removeAttribute("aria-label");
+}
+
+function hasAttackRestriction(card, turnCounter) {
+  if (card?.cannotAttackThisTurn === true) return true;
+  return (
+    Number.isFinite(card?.cannotAttackUntilTurn) &&
+    Number.isFinite(turnCounter) &&
+    card.cannotAttackUntilTurn >= turnCounter
+  );
+}
+
+function createCardStatusIcons(card, turnCounter) {
+  if (card?.cardKind !== "monster" || card.isFacedown) return null;
+
+  const statuses = [];
+  if (card.effectsNegated === true) {
+    statuses.push({
+      className: "card-status-icon--negated",
+      icon: CARD_STATUS_ICONS.effectsNegated,
+      label: getUIText("ui.status.effectsNegated"),
+    });
+  }
+  if (hasAttackRestriction(card, turnCounter)) {
+    statuses.push({
+      className: "card-status-icon--cannot-attack",
+      icon: CARD_STATUS_ICONS.cannotAttack,
+      label: getUIText("ui.status.cannotAttack"),
+    });
+  }
+  if (!statuses.length) return null;
+
+  const container = document.createElement("div");
+  container.className = "card-status-icons";
+  statuses.forEach((status) => {
+    const badge = document.createElement("span");
+    badge.className = `card-status-icon ${status.className}`;
+    badge.setAttribute("role", "img");
+    badge.setAttribute("aria-label", status.label);
+    badge.title = status.label;
+    badge.appendChild(
+      createTablerIcon(status.icon, "card-status-icon-glyph", { decorative: true }),
+    );
+    container.appendChild(badge);
+  });
+  return container;
+}
 
 const COUNTER_LABEL_STOP_WORDS =
   /(\s+(a|ao|aos|e|à|às|neste|nesta|nesse|nessa|nele|nela|neles|nelas|deste|desta|desse|dessa|dele|dela|deles|delas|este|esta|esse|essa|card|carta|conforme|quando|enquanto|para|por|em|no|na|nos|nas|que|se)\b.*)$/iu;
@@ -395,8 +467,8 @@ export function renderPreview(card) {
     previewImage.style.backgroundImage = "";
     setPreviewCardFrameClass(previewImage, null);
     previewName.textContent = "Hover a card";
-    previewAtk.textContent = "ATK: -";
-    previewDef.textContent = "DEF: -";
+    renderPreviewStat(previewAtk, PANEL_ICONS.atk, getUIText("ui.icons.atk"), "-");
+    renderPreviewStat(previewDef, PANEL_ICONS.def, getUIText("ui.icons.def"), "-");
     setPreviewStatModifierClass(previewAtk, null, "atk");
     setPreviewStatModifierClass(previewDef, null, "def");
     previewLevel.textContent = "Level: -";
@@ -413,14 +485,14 @@ export function renderPreview(card) {
   if (isMonster) {
     const stats = formatMonsterStatsLine(card);
     previewLevel.innerHTML = formatMonsterDetailHtml(card);
-    previewAtk.textContent = stats.atk;
-    previewDef.textContent = stats.def;
+    renderPreviewStat(previewAtk, PANEL_ICONS.atk, getUIText("ui.icons.atk"), stats.atk);
+    renderPreviewStat(previewDef, PANEL_ICONS.def, getUIText("ui.icons.def"), stats.def);
     setPreviewStatModifierClass(previewAtk, card, "atk");
     setPreviewStatModifierClass(previewDef, card, "def");
   } else {
     previewLevel.textContent = formatCardKindSubtypeLine(card);
-    previewAtk.textContent = "";
-    previewDef.textContent = "";
+    clearPreviewStat(previewAtk);
+    clearPreviewStat(previewDef);
     setPreviewStatModifierClass(previewAtk, null, "atk");
     setPreviewStatModifierClass(previewDef, null, "def");
   }
@@ -463,7 +535,7 @@ export function bindPreviewForElement(element, card, visible = true) {
 /**
  * @this {import('../Renderer.js').default}
  */
-export function createCardElement(card, visible) {
+export function createCardElement(card, visible, options = {}) {
   // Defensive: skip rendering when card data is missing to avoid UI crashes
   if (!card) {
     const placeholder = document.createElement("div");
@@ -529,6 +601,10 @@ export function createCardElement(card, visible) {
           : `<div class="card-type">${typeLabel}</div>`
       }
     `;
+    const statusIcons = options.showStatusIcons
+      ? createCardStatusIcons(card, options.turnCounter)
+      : null;
+    if (statusIcons) el.appendChild(statusIcons);
   }
 
   const storedBlueprints = card?.state?.blueprintStorage?.storedBlueprints;

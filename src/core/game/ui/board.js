@@ -114,7 +114,7 @@ export function updateBoard(options = {}) {
     const renderBot = createPlayerRenderView(this.bot);
 
     this.ui.renderHand(renderPlayer, handRenderContext);
-    this.ui.renderField(renderPlayer);
+    this.ui.renderField(renderPlayer, { turnCounter: this.turnCounter });
     this.ui.renderFieldSpell(renderPlayer);
 
     if (typeof this.ui.renderSpellTrap === "function") {
@@ -125,7 +125,7 @@ export function updateBoard(options = {}) {
     }
 
     this.ui.renderHand(renderBot, handRenderContext);
-    this.ui.renderField(renderBot);
+    this.ui.renderField(renderBot, { turnCounter: this.turnCounter });
     this.ui.renderFieldSpell(renderBot);
     this.ui.updateLP(renderPlayer);
     this.ui.updateLP(renderBot);
@@ -138,6 +138,8 @@ export function updateBoard(options = {}) {
       this.ui.updateExtraDeckPreview(renderPlayer);
       this.ui.updateExtraDeckPreview(renderBot);
     }
+
+    this.ui.syncEquipLinkIndicators?.();
 
     if (typeof document !== "undefined") {
       document

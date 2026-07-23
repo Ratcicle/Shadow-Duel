@@ -21,6 +21,21 @@ const DEFAULT_LOCALE_TEXTS = {
       addToHand: "Add to Hand",
     },
     lp: "{amount} LP",
+    icons: {
+      atk: "ATK",
+      def: "DEF",
+      graveyard: "Graveyard",
+      extraDeck: "Extra Deck",
+    },
+    zones: {
+      graveyard: "GY",
+      extraDeck: "Extra",
+    },
+    status: {
+      effectsNegated: "Effects negated",
+      cannotAttack: "Cannot attack",
+      equipped: "Equipped",
+    },
     priority: {
       owner: "Priority: {owner}",
       you: "You",

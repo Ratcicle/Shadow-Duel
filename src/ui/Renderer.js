@@ -8,6 +8,7 @@
 // Import all module functions
 import * as board from "./renderer/board.js";
 import * as indicators from "./renderer/indicators.js";
+import * as equipLinks from "./renderer/equipLinks.js";
 import * as preview from "./renderer/preview.js";
 import * as log from "./renderer/log.js";
 import * as animations from "./renderer/animations.js";
@@ -26,6 +27,8 @@ export default class Renderer {
     this.leftMouseHeldForChainSkip = false;
     this.chainSkipInputCleanup = null;
     this.activeTrapModalCancel = null;
+    this.activeEquipLinks = [];
+    this.equipLinkResizeHandler = null;
     this.lpDisplayState = {
       player: {
         displayed: 8000,
@@ -154,6 +157,7 @@ export default class Renderer {
     this.activeTrapModalCancel?.();
     this.activeTrapModalCancel = null;
     this.clearFloatingCounterTooltip?.();
+    this.destroyEquipLinkIndicators?.();
     this.pixiVfx?.destroy?.();
     this.pixiVfx = null;
   }
@@ -200,6 +204,10 @@ Renderer.prototype.applyZoneActivationIndicators =
 Renderer.prototype.decorateActivatableCard = indicators.decorateActivatableCard;
 Renderer.prototype.setActivationHint = indicators.setActivationHint;
 Renderer.prototype.clearActivationHint = indicators.clearActivationHint;
+Renderer.prototype.syncEquipLinkIndicators = equipLinks.syncEquipLinkIndicators;
+Renderer.prototype.redrawEquipLinks = equipLinks.redrawEquipLinks;
+Renderer.prototype.clearEquipLinkIndicators = equipLinks.clearEquipLinkIndicators;
+Renderer.prototype.destroyEquipLinkIndicators = equipLinks.destroyEquipLinkIndicators;
 Renderer.prototype.applySpellTrapFlipAnimation =
   indicators.applySpellTrapFlipAnimation;
 

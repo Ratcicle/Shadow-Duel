@@ -4,6 +4,30 @@
  * updateGYPreview, updateExtraDeckPreview, renderGraveyardModal, renderExtraDeckModal
  */
 
+import { getUIText } from "../../core/i18n.js";
+import { PANEL_ICONS, createTablerIcon } from "../icons/tablerIcons.js";
+
+function renderZoneCounter(counter, iconUrl, label, accessibleLabel, count) {
+  counter.replaceChildren();
+  counter.setAttribute("aria-label", `${accessibleLabel}: ${count}`);
+  counter.append(
+    createTablerIcon(iconUrl, "zone-label-icon", { decorative: true }),
+    Object.assign(document.createElement("span"), {
+      className: "zone-counter-label",
+      textContent: label,
+    }),
+  );
+
+  if (count > 0) {
+    counter.append(
+      Object.assign(document.createElement("span"), {
+        className: "zone-counter-value",
+        textContent: String(count),
+      }),
+    );
+  }
+}
+
 /**
  * @this {import('../Renderer.js').default}
  */
@@ -46,7 +70,7 @@ export function renderHand(player, options = {}) {
 /**
  * @this {import('../Renderer.js').default}
  */
-export function renderField(player) {
+export function renderField(player, options = {}) {
   const container =
     player.id === "player" ? this.elements.playerField : this.elements.botField;
   if (!container) return;
@@ -61,7 +85,10 @@ export function renderField(player) {
     const slotEl = document.createElement("div");
     slotEl.className = "field-card-slot";
 
-    const cardEl = this.createCardElement(card, true);
+    const cardEl = this.createCardElement(card, true, {
+      showStatusIcons: true,
+      turnCounter: options.turnCounter,
+    });
     cardEl.dataset.index = index;
     cardEl.dataset.location = "field";
 
@@ -184,7 +211,13 @@ export function updateGYPreview(player) {
     counter.className = "zone-counter";
     gyZone.appendChild(counter);
   }
-  counter.textContent = count > 0 ? `GY\n${count}` : "GY";
+  renderZoneCounter(
+    counter,
+    PANEL_ICONS.graveyard,
+    getUIText("ui.zones.graveyard"),
+    getUIText("ui.icons.graveyard"),
+    count,
+  );
 
   const existing = gyZone.querySelector(".gy-preview");
   if (existing) existing.remove();
@@ -222,7 +255,13 @@ export function updateExtraDeckPreview(player) {
   const count = player.extraDeck ? player.extraDeck.length : 0;
   const counter = document.createElement("div");
   counter.className = "zone-counter";
-  counter.textContent = count > 0 ? `Extra\n${count}` : "Extra";
+  renderZoneCounter(
+    counter,
+    PANEL_ICONS.extraDeck,
+    getUIText("ui.zones.extraDeck"),
+    getUIText("ui.icons.extraDeck"),
+    count,
+  );
   extraZone.appendChild(counter);
 
   // Extra deck preview intentionally hidden for cleaner UI.
