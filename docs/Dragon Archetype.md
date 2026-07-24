@@ -1,4 +1,4 @@
-# Dragon Decklist
+# Dragon — Catálogo do Arquétipo
 
 Fonte dos textos: `src/data/cards/*.js` via fachada `src/data/cards.js` (1x cada carta do pacote Dragon / Extreme Dragons).
 
@@ -15,7 +15,7 @@ O tema **Dragon** é um conjunto de cartas genéricas de tipo Dragão que funcio
 
 ---
 
-## Decklist (22 cartas)
+## Catálogo (22 cartas)
 
 ### Monstros (15)
 
@@ -26,10 +26,10 @@ O tema **Dragon** é um conjunto de cartas genéricas de tipo Dragão que funcio
 | 254 | Grey Dragon             | Dragon | 4     | 1800 | 800  | Cannot attack directly     |
 | 255 | Voltaic Dragon          | Dragon | 3     | 1200 | 800  |                            |
 | 256 | Luminescent Dragon      | Dragon | 4     | 1500 | 900  |                            |
-| 257 | Majestic Silver Dragon  | Dragon | 7     | 2500 | 2400 | Alt Tribute (1 Dragon)     |
+| 257 | Majestic Silver Dragon  | Dragon | 7     | 2400 | 2300 | Alt Tribute (1 Dragon)     |
 | 258 | Darkness Dragon         | Dragon | 5     | 2000 | 1700 |                            |
 | 259 | Black Bull Dragon       | Dragon | 8     | 2500 | 2000 |                            |
-| 260 | Hellkite Dragon         | Dragon | 7     | 2300 | 1900 |                            |
+| 260 | Hellkite Dragon         | Dragon | 7     | 2200 | 1900 |                            |
 | 263 | Abyssal Serpent Dragon  | Dragon | 7     | 2200 | 1400 | Delayed exchange control |
 | 264 | Purified Crystal Dragon | Dragon | 8     | 2500 | 1700 |                            |
 | 269 | Boneflame Dragon        | Dragon | 3     | 0    | 0    | Cannot be Normal Summoned  |
@@ -90,8 +90,8 @@ O tema **Dragon** é um conjunto de cartas genéricas de tipo Dragão que funcio
 **256 - Luminescent Dragon** (L4 Dragon | ATK 1500 / DEF 900)
 > If this card is Normal Summoned: You can target 1 Level 4 or lower Dragon-type monster in your GY; Special Summon it. You can banish this card from your GY, then target 1 monster your opponent controls; it loses 600 ATK/DEF until the end of this turn.
 
-**257 - Majestic Silver Dragon** (L7 Dragon | ATK 2500 / DEF 2400)
-> Can be Tribute Summoned with 1 Tribute if you Tribute a Dragon-type monster. Once per turn: You can target 1 monster your opponent controls; change its battle position.
+**257 - Majestic Silver Dragon** (L7 Dragon | ATK 2400 / DEF 2300)
+> This card can be Tribute Summoned by Tributing 1 Dragon-type monster. Once per turn: You can target 1 face-up monster your opponent controls; change its battle position.
 
 **258 - Darkness Dragon** (L5 Dragon | ATK 2000 / DEF 1700)
 > If this card is Normal or Special Summoned: Destroy all other Dragon-type monsters you control, and if you do, this card gains 300 ATK for each monster destroyed by this effect. Once per turn: You can discard 1 card, then target 1 monster your opponent controls; negate its effects until the end of this turn.
@@ -99,17 +99,17 @@ O tema **Dragon** é um conjunto de cartas genéricas de tipo Dragão que funcio
 **259 - Black Bull Dragon** (L8 Dragon | ATK 2500 / DEF 2000)
 > You can send 2 Dragon-type monsters from your hand to the GY; Special Summon this card from your hand, but it cannot attack the turn it is Special Summoned by this effect. This card can make up to 2 attacks on opponent's monsters during each Battle Phase. You can banish this card from your GY; add 1 Level 7 or 8 Dragon monster from your Deck to your hand.
 
-**260 - Hellkite Dragon** (L7 Dragon | ATK 2300 / DEF 1900)
-> You can send 1 Dragon you control to the GY; Special Summon this card from your hand. Once per turn: You can send this face-up card to the GY; Special Summon 1 Level 7 or lower Dragon from your GY.
+**260 - Hellkite Dragon** (L7 Dragon | ATK 2200 / DEF 1900)
+> You can send 1 Dragon you control to the GY; Special Summon this card from your hand. Once per turn: You can send this face-up card to the GY; Special Summon 1 Level 7 or lower Dragon from your GY, except "Hellkite Dragon".
 
 **263 - Abyssal Serpent Dragon** (L7 Dragon | ATK 2200 / DEF 1400)
 > During your Main Phase: you can select 1 monster your opponent controls; send this card and the target to the GY, and during your opponent's next Standby Phase, Special Summon them. If you selected a Fusion or Ascension Monster as a target: this card gains 800 ATK until the end of your next turn. You can use each effect of 'Abyssal Serpent Dragon' once per turn.
 
 **264 - Purified Crystal Dragon** (L8 Dragon | ATK 2500 / DEF 1700)
-> You can Special Summon this card from your hand by banishing 3 Dragon monsters from your GY. If this card destroys a monster by battle: Gain LP equal to the destroyed monster's Level x100. Once per turn: You can target 1 other Dragon monster you control; it cannot be destroyed by card effects while it is face-up on the field.
+> You can Special Summon this card from your hand by banishing 3 Dragon monsters from your GY. If this card destroys a monster by battle: Gain LP equal to the destroyed monster's Level x100. Once per turn: You can target 1 other Dragon monster you control; it cannot be destroyed by card effects until the end of the next turn. You can only use each effect of "Purified Crystal Dragon" once per turn.
 
 **269 - Boneflame Dragon** (L3 Dragon | ATK 0 / DEF 0)
-> Cannot be Normal Summoned/Set. Once per turn, if this card is in your Graveyard: You can send 1 Dragon monster you control to the Graveyard; Special Summon this card. Gains 300 ATK for each Dragon monster in your Graveyard.
+> Cannot be Normal Summoned/Set. Once per turn, if this card is in your Graveyard: You can send 1 Dragon monster you control to the Graveyard; Special Summon this card. Gains 400 ATK for each Dragon monster in your Graveyard.
 
 **278 - Stelya, Dragon Tamer** (L4 Dragon | ATK 1700 / DEF 1200)
 > This card can be treated as 2 Tributes for the Tribute Summon of a Dragon monster. You can only use 1 of the following effects of "Stelya, Dragon Tamer" per turn, and only once that turn.
@@ -130,7 +130,7 @@ O tema **Dragon** é um conjunto de cartas genéricas de tipo Dragão que funcio
 > If you control a Level 7 or higher Dragon: Destroy up to 1 Spell/Trap card your opponent controls. You can banish this card from your GY; add 1 'Jagged Peak of the Dragons' from your Deck to your hand.
 
 **262 - Jagged Peak of the Dragons** (Field Spell)
-> When this card is activated: You can add 1 Level 4 or lower Dragon from your GY to your hand. Each time a Dragon-type monster destroys an opponent's monster by battle, place 1 Dragon Peak counter on this card. Once per turn: If this card has 5 or more Dragon Peak counters; you can send it to the GY, and if you do, Special Summon 1 Dragon-type monster from your hand, Deck, or GY.
+> When this card is activated: You can add 1 Level 4 or lower Dragon from your GY to your hand. Each time a Dragon-type monster destroys an opponent's monster by battle, place 1 Dragon Peak counter on this card. Once per turn: If this card has 7 or more Dragon Peak counters; you can send it to the GY, and if you do, Special Summon 1 Dragon-type monster from your hand, Deck, or GY.
 
 ---
 
@@ -147,7 +147,7 @@ O tema **Dragon** é um conjunto de cartas genéricas de tipo Dragão que funcio
 > While in Defense Position, this card cannot be destroyed by battle. This card gains 100 ATK/DEF for each Dragon-type monster Special Summoned while this card is face-up on the field.
 
 **265 - Tech-Void Dragon** (L8 Fusion Dragon | ATK 2500 / DEF 1000)
-> Voltaic Dragon + 1 Level 5+ Dragon monster. If this card is Fusion Summoned: You can target 1 Level 4 or lower Dragon monster in your GY; banish it, and if you do, this card gains ATK equal to the banished monster's ATK until the end of this turn. If this card is destroyed by battle: You can Special Summon 1 'Voltaic Dragon' from your GY. You can only use each effect of 'Tech-Void Dragon' once per turn.
+> Voltaic Dragon + 1 Level 5+ Dragon monster. If this card is Fusion Summoned: You can target 1 Level 4 or lower Dragon monster in your GY; banish it, and if you do, this card gains ATK equal to half the banished monster's ATK until the end of this turn. If this card is destroyed by battle: You can Special Summon 1 'Voltaic Dragon' from your GY. You can only use each effect of 'Tech-Void Dragon' once per turn.
 
 **266 - Radiant Cosmic Dragon** (L9 Fusion Dragon | ATK 3300 / DEF 2700)
 > Luminous Dragon + 2 Dragon-type monsters. If this card is Fusion Summoned: You can target 1 to 5 cards in your GY; shuffle them into the Deck, then draw 1 card. You take no battle damage from battles involving this card. If this card is destroyed by battle or card effect: You can Special Summon 1 Dragon-type monster from your GY, except "Radiant Cosmic Dragon". You can only use each effect of "Radiant Cosmic Dragon" once per turn.
@@ -173,7 +173,7 @@ Os **Extreme Dragons** são monstros de Nível 10 do tipo Dragão com efeitos po
 
 ---
 
-## Decklist Extreme Dragons
+## Catálogo Extreme Dragons
 
 ### Monstros (5)
 
@@ -227,7 +227,7 @@ Os **Extreme Dragons** são monstros de Nível 10 do tipo Dragão com efeitos po
 > Discard 1 card; reduce the Level of all monsters in your hand by 2 until the end of this turn.
 
 **277 - Extreme Dragon Awakening** (Continuous Spell)
-> When this card is activated: add 1 Level 8 or higher Dragon-type monster from your Deck to your hand. Once per turn: You can send 2 Dragon-type monsters you control to the GY; Special Summon 1 Level 8 or higher Dragon-type monster from your hand. You can only activate 1 "Extreme Dragon Awakening" per turn.
+> You can only control 1 "Extreme Dragon Awakening". Once per turn: You can send 2 Dragon-type monsters you control to the GY; Special Summon 1 Level 8 or higher Dragon-type monster from your hand. You can banish this card from your GY; add 1 "Extreme Dragons" monster from your Deck to your hand. You can only use each effect of "Extreme Dragon Awakening" once per turn.
 
 ---
 

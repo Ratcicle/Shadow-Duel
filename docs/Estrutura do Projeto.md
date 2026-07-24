@@ -10,7 +10,9 @@ Shadow Duel é uma SPA em JavaScript puro usando ES Modules nativos do navegador
 - **UI** ([src/ui/](../src/ui/)) - controllers da tela inicial, renderização DOM, animações e modais.
 - **Data / Locales** ([src/data/](../src/data/), [public/locales/](../public/locales/)) - banco modular de cartas e traduções carregadas por URL pública estável.
 
-O projeto usa Vite para desenvolvimento e build, e mantém `pixi.js` como dependência runtime em [package.json](../package.json).
+O projeto usa Vite para desenvolvimento e build. As dependências de runtime em
+[package.json](../package.json) são `pixi.js`, para efeitos visuais, e
+`@tabler/icons`, consumida por importações SVG pontuais na UI.
 
 ---
 
@@ -18,27 +20,27 @@ O projeto usa Vite para desenvolvimento e build, e mantém `pixi.js` como depend
 
 ```text
 Shadow-Duel/
-├── .agents/                    # Configuração/instruções locais para agentes
 ├── .claude/                    # Configuração local/trackeada de agentes Claude
 ├── .codex/                     # Ambientes auxiliares do Codex
+├── .github/                    # Workflows e configuração do GitHub
 ├── .gitignore                  # Ignora dependências, logs e artefatos locais
-├── .vscode/                    # Configuração local do editor
 ├── AGENTS.md                   # Instruções para agentes de IA
 ├── DuelLog.log                 # Log de duelos gerado em runtime
 ├── README.md                   # Manual do jogador
-├── public/                     # Arquivos estáticos com URL pública estável
-│   ├── assets/                 # Imagens das cartas
-│   └── locales/                # Traduções carregadas em runtime
-├── docs/                       # Documentação técnica e decklists
+├── dist/                       # Build gerado pelo Vite
+├── docs/                       # Documentação técnica e catálogos de arquétipo
 ├── index.html                  # Shell HTML do jogo
-├── laboratory-imports/         # Presets JSON importáveis no Laboratório
 ├── node_modules/               # Dependências instaladas
 ├── package-lock.json           # Lockfile npm
 ├── package.json                # Metadados, scripts e dependências
-├── replays/                    # Replays e relatórios exportados
+├── public/                     # Arquivos estáticos com URL pública estável
+│   ├── assets/                 # Imagens das cartas
+│   └── locales/                # Traduções carregadas em runtime
 ├── scripts/                    # Utilitários Node.js
 ├── src/                        # Código-fonte da aplicação
-└── style.css                   # Estilos globais
+├── test/                       # Testes automatizados
+├── style.css                   # Estilos globais
+└── vite.config.js              # Base e opções de build/development server
 ```
 
 ---
@@ -77,6 +79,8 @@ Módulos de cartas por grupo e governança de IDs:
 | [miragebound.js](../src/data/cards/miragebound.js) | Arquétipo Miragebound. |
 | [bloomrot.js](../src/data/cards/bloomrot.js) | Arquétipo Bloomrot. |
 | [burningWest.js](../src/data/cards/burningWest.js) | Arquétipo Burning West. |
+| [techZero.js](../src/data/cards/techZero.js) | Arquétipo Tech-Zero. |
+| [vulcanomaton.js](../src/data/cards/vulcanomaton.js) | Arquétipo Vulcanomaton. |
 | [ranges.js](../src/data/cards/ranges.js) | Faixas oficiais de IDs e política de validação. |
 | [idMigration.js](../src/data/cards/idMigration.js) | Mapa `oldId -> newId` para migrar decks salvos. |
 
@@ -141,7 +145,8 @@ Handlers genéricos de actions declarativas. Todo `action.type` usado nas cartas
 | [negation.js](../src/core/actionHandlers/negation.js) | Negação de ativação, summon, ataque e efeitos relacionados. |
 | [resources.js](../src/core/actionHandlers/resources.js) | Compra, LP, busca, descarte, mill e outros recursos. |
 | [stats.js](../src/core/actionHandlers/stats.js) | Buffs/debuffs, status e modificadores de combate. |
-| [summon.js](../src/core/actionHandlers/summon.js) | Special Summon, transmutação e invocações condicionais. |
+| [summon.js](../src/core/actionHandlers/summon.js) | Fachada dos handlers modulares de Invocação. |
+| [summon/](../src/core/actionHandlers/summon/) | Implementações por responsabilidade: origem, posição, restrições, custos, Sincro e Invocações adiadas. |
 | [shared.js](../src/core/actionHandlers/shared.js) | Helpers compartilhados pelos handlers. |
 
 ---
@@ -176,10 +181,11 @@ Handlers genéricos de actions declarativas. Todo `action.type` usado nas cartas
 | [ArcanistStrategy.js](../src/core/ai/ArcanistStrategy.js) | Arcanist |
 | [MirageboundStrategy.js](../src/core/ai/MirageboundStrategy.js) | Miragebound |
 | [BloomrotStrategy.js](../src/core/ai/BloomrotStrategy.js) | Bloomrot |
+| [BurningWestStrategy.js](../src/core/ai/BurningWestStrategy.js) | Burning West |
 
 ### Pacotes Por Arquétipo
 
-Os pacotes [shadowheart/](../src/core/ai/shadowheart/), [luminarch/](../src/core/ai/luminarch/), [void/](../src/core/ai/void/), [dragon/](../src/core/ai/dragon/), [arcanist/](../src/core/ai/arcanist/), [miragebound/](../src/core/ai/miragebound/) e [bloomrot/](../src/core/ai/bloomrot/) concentram knowledge bases, prioridades, combos, scoring, simulação e planejamento específicos de cada deck.
+Os pacotes [shadowheart/](../src/core/ai/shadowheart/), [luminarch/](../src/core/ai/luminarch/), [void/](../src/core/ai/void/), [dragon/](../src/core/ai/dragon/), [arcanist/](../src/core/ai/arcanist/), [miragebound/](../src/core/ai/miragebound/), [bloomrot/](../src/core/ai/bloomrot/) e [burningwest/](../src/core/ai/burningwest/) concentram knowledge bases, prioridades, combos, scoring, simulação e planejamento específicos de cada deck.
 
 Padrões comuns:
 
@@ -196,6 +202,7 @@ Pacotes com módulos extras relevantes:
 - [dragon/](../src/core/ai/dragon/) possui política específica para Boneflame, combos, prioridades, simulação e planejamento de linha.
 - [bloomrot/](../src/core/ai/bloomrot/) possui análise, batalha, defesa, extra deck, resource policy, targeting, scoring e planejamento de linha.
 - [miragebound/](../src/core/ai/miragebound/) possui planejamento de linha próprio.
+- [burningwest/](../src/core/ai/burningwest/) possui módulos dedicados de batalha, defesa, Extra Deck, scoring e planejamento de linha.
 
 ### `src/core/ai/common/`
 
@@ -261,7 +268,11 @@ Camada compartilhada entre estratégias. Módulos atuais:
 
 Coletores por evento que alimentam os triggers declarativos:
 
-`afterSummon.js`, `attackDeclared.js`, `battleCompleted.js`, `battleDamage.js`, `battleDestroy.js`, `cardEquipped.js`, `cardMoved.js`, `cardToGrave.js`, `counterRemoved.js`, `effectActivated.js`, `effectTargeted.js`, `lpChange.js`, `positionChange.js`, `spellActivated.js`, `standbyPhase.js` e `shared.js`.
+`afterSummon.js`, `attackDeclared.js`, `battleCompleted.js`, `battleDamage.js`,
+`battleDestroy.js`, `cardEquipped.js`, `cardMoved.js`, `cardToGrave.js`,
+`counterRemoved.js`, `damageStep.js`, `effectActivated.js`, `effectTargeted.js`,
+`endPhase.js`, `lpChange.js`, `positionChange.js`, `spellActivated.js`,
+`standbyPhase.js` e `shared.js`.
 
 ---
 
@@ -325,12 +336,23 @@ Fachada de renderização. Constrói o renderer e delega métodos para [src/ui/r
 | [cardAnimationManager.js](../src/ui/renderer/cardAnimationManager.js) | Fila/coordenação de animações de cartas. |
 | [feedbackFx.js](../src/ui/renderer/feedbackFx.js) | Feedback visual de dano, cura e destaque. |
 | [indicators.js](../src/ui/renderer/indicators.js) | Badges e marcadores de estado. |
+| [equipLinks.js](../src/ui/renderer/equipLinks.js) | Indicadores, hover/foco e linhas SVG dos vínculos de equipamento. |
 | [log.js](../src/ui/renderer/log.js) | Log do duelo. |
 | [modals.js](../src/ui/renderer/modals.js) | Modais genéricos. |
 | [preview.js](../src/ui/renderer/preview.js) | Preview grande de cartas. |
 | [selectionModals.js](../src/ui/renderer/selectionModals.js) | Modais de seleção. |
 | [summonModals.js](../src/ui/renderer/summonModals.js) | Modais de Normal/Special/Fusion/Ascension Summon. |
 | [trapModals.js](../src/ui/renderer/trapModals.js) | Modais de traps e respostas em Chain. |
+
+### `src/ui/icons/`
+
+[tablerIcons.js](../src/ui/icons/tablerIcons.js) centraliza as importações SVG
+pontuais de `@tabler/icons` e a criação acessível dos ícones usados na UI.
+
+### `src/ui/pixi/`
+
+[PixiVfxLayer.js](../src/ui/pixi/PixiVfxLayer.js) implementa a camada Pixi usada
+pelos efeitos visuais do duelo.
 
 ---
 
@@ -340,8 +362,10 @@ Fachada de renderização. Constrói o renderer e delega métodos para [src/ui/r
 |---|---|
 | [generate_action_catalog_doc.mjs](../scripts/generate_action_catalog_doc.mjs) | Gera [docs/Catalogo de actions.md](Catalogo%20de%20actions.md). |
 | [validate_action_catalog.mjs](../scripts/validate_action_catalog.mjs) | Valida handlers registrados, catálogo e exemplos. |
+| [run_tests.mjs](../scripts/run_tests.mjs) | Descobre e executa a suíte de testes Node. |
 | [run_bot_arena_smoke.mjs](../scripts/run_bot_arena_smoke.mjs) | Smoke test curto da Bot Arena por CLI. |
-| [run_bloomrot_bot_smokes.mjs](../scripts/run_bloomrot_bot_smokes.mjs) | Smokes específicos do bot Bloomrot. |
+| [audit_chain_metadata.mjs](../scripts/audit_chain_metadata.mjs) | Audita metadados canônicos de ativação, uso e Chain. |
+| [replay_duel.mjs](../scripts/replay_duel.mjs) | Executa e valida replays canônicos por CLI. |
 
 ---
 
@@ -351,13 +375,9 @@ Fachada de renderização. Constrói o renderer e delega métodos para [src/ui/r
 - [Como criar um handler.md](Como%20criar%20um%20handler.md)
 - [Catalogo de actions.md](Catalogo%20de%20actions.md)
 - [Estrutura do Projeto.md](Estrutura%20do%20Projeto.md)
-- [Modularizacao de cards.md](Modularizacao%20de%20cards.md)
 - [Regras para Invocação-Ascensão.md](Regras%20para%20Invoca%C3%A7%C3%A3o-Ascens%C3%A3o.md)
-- [StrategyUtils - Mapa de consumidores.md](StrategyUtils%20-%20Mapa%20de%20consumidores.md)
-- [Bloomrot Bot Implementation Plan.md](Bloomrot%20Bot%20Implementation%20Plan.md)
-- [Bloomrot Bot Technical Audit.md](Bloomrot%20Bot%20Technical%20Audit.md)
-- [bloomrot_bot_strategy.md](bloomrot_bot_strategy.md)
-- Decklists: [Arcanist](Arcanist%20Decklist.md), [Bloomrot](Bloomrot%20Decklist.md), [Burning West](Burning%20West%20Decklist.md), [Dragon](Dragon%20Decklist.md), [Luminarch](Luminarch%20Decklist.md), [Miragebound](Miragebound%20Decklist.md), [Shadow-Heart](Shadow-Heart%20Decklist.md), [Tech-Zero](Tech-Zero%20Decklist.md), [Void](Void%20Decklist.md).
+- [Replay canônico.md](Replay%20can%C3%B4nico.md)
+- Catálogos de arquétipo: [Arcanist](Arcanist%20Archetype.md), [Bloomrot](Bloomrot%20Archetype.md), [Burning West](Burning%20West%20Archetype.md), [Dragon](Dragon%20Archetype.md), [Luminarch](Luminarch%20Archetype.md), [Miragebound](Miragebound%20Archetype.md), [Shadow-Heart](Shadow-Heart%20Archetype.md), [Tech-Zero](Tech-Zero%20Archetype.md), [Void](Void%20Archetype.md).
 
 ---
 
@@ -365,12 +385,12 @@ Fachada de renderização. Constrói o renderer e delega métodos para [src/ui/r
 
 - **`public/assets/`** - imagens das cartas usadas pelo database, armazenadas como `assets/...` e resolvidas pela base pública do Vite.
 - **`public/locales/`** - traduções carregadas pelo browser pela base pública do Vite.
-- **`replays/`** - replays e Strategic Reports exportados/importados.
-- **`laboratory-imports/`** - presets JSON para importação manual no Laboratório.
-- **`.agents/`** - instruções/configuração local de agentes.
+- **`test/`** - suíte automatizada de regras, Chain, cartas, replay e integrações.
+- **`dist/`** - artefato local produzido por `npm run build`; não é fonte canônica.
+- Replays e Strategic Reports são arquivos exportados/importados pelo usuário e
+  não exigem um diretório versionado fixo.
 - **`.claude/`** - configuração local/trackeada de agentes Claude.
 - **`.codex/`** - ambientes auxiliares do Codex.
-- **`.vscode/`** - configuração local do editor.
 - **`node_modules/`** - dependências instaladas, incluindo `vite` e `pixi.js`.
 
 ---

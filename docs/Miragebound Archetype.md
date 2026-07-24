@@ -1,4 +1,4 @@
-# Miragebound Decklist
+# Miragebound — Catálogo do Arquétipo
 
 Fonte dos textos: `src/data/cards/*.js` via fachada `src/data/cards.js` (1x cada carta do arquetipo).
 
@@ -14,7 +14,7 @@ O arquetipo **Miragebound** e focado em controle de posicao de batalha, retorno 
 
 ---
 
-## Decklist (14 cartas)
+## Catálogo (14 cartas)
 
 ### Monstros (Main Deck) (7)
 

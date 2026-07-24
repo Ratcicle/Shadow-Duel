@@ -1,4 +1,4 @@
-# Void — Decklist (Completa) & Efeitos
+# Void — Catálogo do Arquétipo & Efeitos
 
 Fonte dos textos: `src/data/cards/*.js` via fachada `src/data/cards.js` (1x cada carta).
 
@@ -10,7 +10,7 @@ Fonte dos textos: `src/data/cards/*.js` via fachada `src/data/cards.js` (1x cada
 - Magias: 4
 - Armadilhas: 1
 
-## Decklist Completa (1x cada carta do arquétipo)
+## Catálogo Completo (1x cada carta do arquétipo)
 
 ### Monstros (Main Deck)
 

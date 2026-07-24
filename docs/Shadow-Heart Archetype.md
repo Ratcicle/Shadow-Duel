@@ -1,4 +1,4 @@
-# Shadow-Heart — Decklist (Completa) & Efeitos
+# Shadow-Heart — Catálogo do Arquétipo & Efeitos
 
 Fonte dos textos: `src/data/cards/*.js` via fachada `src/data/cards.js` (1x cada carta).
 
@@ -10,7 +10,7 @@ Fonte dos textos: `src/data/cards/*.js` via fachada `src/data/cards.js` (1x cada
 - Magias: 9
 - Armadilhas: 0
 
-## Decklist Completa (1x cada)
+## Catálogo Completo (1x cada)
 
 ### Monstros (Main Deck)
 

@@ -352,4 +352,5 @@ Em [docs/](docs/):
 - [Regras para Invocação-Ascensão.md](docs/Regras%20para%20Invocação-Ascensão.md) — Mecânica de Ascensão
 - [Como adicionar um arquetipo.md](docs/Como%20adicionar%20um%20arquetipo.md) — Criando arquétipos
 - [Análise do Sistema de Replays.md](docs/Análise%20do%20Sistema%20de%20Replays.md) e [Sistema de Análise de Replays.md](docs/Sistema%20de%20Análise%20de%20Replays.md) — Sistema de replays
-- Decklists por arquétipo: `Arcanist`, `Dragon`, `Luminarch`, `Shadow-Heart`, `Void`
+- Catálogos por arquétipo: `Arcanist`, `Bloomrot`, `Burning West`, `Dragon`,
+  `Luminarch`, `Miragebound`, `Shadow-Heart`, `Tech-Zero`, `Void`

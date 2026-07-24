@@ -83,6 +83,7 @@ tributeValue: {
 | `401-450` | `src/data/cards/bloomrot.js` | Bloomrot |
 | `451-500` | `src/data/cards/burningWest.js` | Burning West |
 | `501-550` | `src/data/cards/techZero.js` | Tech-Zero |
+| `551-600` | `src/data/cards/vulcanomaton.js` | Vulcanomaton |
 
 `Polymerization` e staples compartilhadas ficam em `001-100`. Dragon e
 `Extreme Dragons` compartilham o mesmo modulo e a mesma faixa; `Extreme Dragons`
@@ -108,6 +109,10 @@ Campos frequentes:
 - `id`: identificador único e estável do efeito.
 - `timing`: quando o efeito pode rodar.
 - `event`: obrigatório para `timing: "on_event"`.
+- `triggerRequirement`: obrigatório em `on_event`; use `"mandatory"` ou
+  `"optional"`.
+- `triggerTiming`: obrigatório em `on_event`; use `"if"` ou `"when"` conforme a
+  regra de perda de timing.
 - `speed`: Spell Speed explícita. Se omitida, o `ChainSystem` infere por tipo/subtipo.
 - `targets`: seleções resolvidas antes das actions.
 - `conditions`: lista genérica avaliada por `EffectEngine.evaluateConditions`.
@@ -202,15 +207,27 @@ Eventos aceitos pelo validador:
 | --- | --- | --- |
 | `after_summon` | Depois de uma invocação. | `summonMethods`, `summonFrom`, `requireSelfAsSummoned`, `requireOpponentSummon`, `condition.requires: "self_in_hand"`, `condition.triggerArchetype`. |
 | `battle_destroy` | Monstro destruído em batalha. | `requireSelfAsAttacker`, `requireSelfAsDestroyed`, `requireDestroyedIsOpponent`, `conditions: [{ type: "attacker_matches" }]`. |
+| `battle_completed` | Depois que a batalha conclui todas as etapas aplicáveis. | Atacante, defensor, resultado e contexto da batalha. |
+| `damage_step` | Em uma subetapa canônica do Damage Step. | Combine com `damageStepTimings` para limitar os momentos permitidos. |
+| `card_flipped` | Quando um card com a face para baixo é revelado. | Card revelado, controlador e contexto de batalha/efeito. |
+| `battle_damage_inflicted` | Quando dano de batalha é efetivamente infligido. | Jogador que recebeu o dano, valor, atacante e defensor. |
 | `card_to_grave` | Carta enviada ao Cemitério. | `fromZone`, `contextLabel`, `contextLabels`, `requireSelfAsDestroyed`, `conditions`, `condition.type: "destroyed_by_battle"`, `"destroyed_by_effect"` ou `"destroyed_by_battle_or_effect"`. |
+| `card_moved` | Depois de um movimento canônico entre zonas. | `fromZone`, `toZone`, card movido, dono/controlador e `contextLabel`. |
+| `counter_removed` | Depois que counters são removidos. | Fonte dos counters, tipo, quantidade e jogador responsável. |
 | `standby_phase` | Standby Phase do jogador ativo. | Fonte precisa estar em campo/spellTrap/fieldSpell. |
 | `end_phase` | End Phase do jogador ativo. | Fonte precisa estar em campo/spellTrap/fieldSpell; use `endPhasePlayer: "any"` para disparar em ambas End Phases. |
 | `attack_declared` | Ataque declarado. | `requireOpponentAttack`, `requireDefenderIsSelf`, `requireSelfAsDefender`, `requireSelfAsAttacker`, `requireDefenderPosition`, `requireDefenderType`. |
+| `battle_damage` | Evento de dano publicado pelo pipeline de batalha. | Valor, jogador afetado, atacante, defensor e contexto do Damage Step. |
 | `opponent_damage` | Oponente recebe dano. | Evite targets manuais; esse fluxo espera efeitos automáticos. |
 | `before_destroy` | Antes de destruição. | Usado para substituições/negações de destruição. |
 | `effect_targeted` | Uma carta vira alvo de efeito. | `requireTargetType`, `targetFromContext`. |
+| `card_activation` | Ativação de um Spell/Trap Card como card. | Fonte ativada, jogador, zona e Chain Link. Não confundir com ativação de efeito já face-up. |
+| `effect_activation` | Janela associada à ativação de um efeito. | Fonte, efeito, jogador e contexto da corrente. |
 | `card_equipped` | Uma carta é equipada. | `requireEquipCardFilters`, `requireEquippedCardFilters`. |
+| `lp_change` | Depois de uma alteração observável de LP. | Jogador, valores anterior/atual e quantidade ganha, perdida ou paga. |
 | `spell_activated` | Uma spell é ativada. | `triggerPlayer`, `activatedCardFilters`. |
+| `effect_activated` | Depois que uma ativação de efeito é publicada. | Fonte, efeito, jogador e Chain Link ativado. |
+| `position_change` | Depois que a posição de batalha muda. | Card, posição anterior/atual, jogador e origem da mudança. |
 
 Se um efeito declara `event` com timing diferente de `on_event`, o validador pode
 aceitar o evento, mas registra warning. Use `event` apenas em `on_event`.
@@ -310,10 +327,21 @@ atuais em `EffectEngine.evaluateConditions`:
 | `attacker_matches` | Em batalha, exige atacante com owner/kind/type/archetype/level. |
 | `context_number_compare` | Compara um número do contexto, como `player.damageReceivedThisTurn`, usando `op` (`gt`, `gte`, `eq`, `neq`, `lte`, `lt`) e `value` ou `valueFromContext`. |
 | `event_card_matches_filters` | Exige que o card do evento bata `filters`; aceita `cardRef`, `owner` e `excludeSource: true` para ignorar a propria fonte do efeito. |
+| `destroyed_card_matches_declared_value` | Compara uma propriedade do card destruído com um valor previamente declarado no contexto. |
+| `battle_destroyer_matches_filters` | Exige que o monstro que destruiu em batalha bata `filters`. |
+| `event_card_matches_declared_value_from_effect_sources` | Compara o card do evento com valores declarados armazenados nas fontes de efeitos indicadas. |
+| `battle_participant_matches_filters` | Exige que atacante ou defensor selecionado bata `filters`. |
+| `battle_opponent_matches_declared_value` | Compara o oponente de batalha da fonte com um valor declarado. |
+| `summoned_card_has_marker` | Exige um marcador runtime na carta recém-Invocada. |
+| `source_has_marker` | Exige um marcador runtime na fonte do efeito. |
 | `activation_would_destroy_cards_matching_filters` | Em uma resposta de corrente, exige que a ativação inspecionada destruiria pelo menos `minCount` cards que batem `destroyedCardFilters`; use `destroyedCardZones` para limitar as zonas e `affectedPlayer` (`self`, `opponent` ou `any`) para limitar o controlador dos cards ameaçados. |
+| `activation_would_banish_cards_matching_filters` | Em uma resposta de corrente, exige que a ativação inspecionada baniria cards que batem os filtros declarados. |
 | `activation_would_make_card_leave_field` | Em uma resposta de corrente, exige que a ativacao inspecionada faria o card em `cardRef`/`targetRef` sair de uma zona ativa (`field`, `spellTrap`, `fieldSpell`). Cobre destruicao, banimento, retorno a mao, movimentos para Cemiterio/Deck/Extra Deck/banido e actions aninhadas. |
 | `field_card_count` | Conta cards em `zones` que batem `filters`; aceita `owner`, `count`/`min`/`max`, `requireFaceup` e `excludeSource: true` para ignorar a fonte do efeito. |
+| `field_card_count_comparison` | Compara duas contagens de campo usando owners e operadores canônicos. |
+| `targetRefMatchesFilters` | Exige que ao menos um card já resolvido em `targetRef` bata `filters`. |
 | `source_counters_at_least` | Exige counters na fonte. |
+| `field_counters_at_least` | Exige uma quantidade mínima de counters somados no escopo de campo declarado. |
 
 Filtros usados por conditions e actions geralmente passam por `cardMatchesFilters`:
 `id`, `cardId`, `ids`, `cardIds`, `name`, `cardName`, `cardKind`, `subtype`,
@@ -456,7 +484,12 @@ Tipos suportados atualmente:
   `appliesTo`/`affects`/`owner`, `actionType`/`actionTypes`, `sourceFilter(s)`,
   `stackMode` (`max` ou `sum`) e `minFinalAmount`.
 - `position_status`: aplica status enquanto a carta está em uma posição.
+- `conditional_status`: aplica status enquanto as condições declaradas passam.
+- `conditional_extra_attacks`: concede ataques adicionais enquanto as condições
+  declaradas passam.
 - `graveyard_type_count_buff`: buff por quantidade de um tipo no Cemitério.
+- `graveyard_card_count_buff`: buff pela quantidade de cards no Cemitério que
+  batem os filtros.
 - `graveyard_archetype_count_buff`: buff por quantidade de um arquétipo no Cemitério.
 - `type_special_summoned_count_buff`: buff por quantidade de invocações especiais
   de um tipo.
@@ -467,12 +500,36 @@ Tipos suportados atualmente:
   `targetPlayer` (`self`, `opponent`, `both`). Se o efeito tiver
   `oncePerTurnName`, multiplas fontes com o mesmo nome so criam uma permissao.
 - `archetype_count_buff`: buff por quantidade de cartas de arquétipo no campo.
+- `equipped_counter_buff`: buff baseado nos counters dos equipamentos vinculados
+  à fonte.
+- `equipped_field_counter_buff`: buff do monstro equipado baseado em counters
+  presentes no campo.
+- `field_counter_stat_aura`: aura de stats calculada pela quantidade de counters
+  no campo.
+- `field_archetype_aura_buff`: aura de stats para cards de um arquétipo no campo.
 - `conditional_protection`: protege a própria fonte contra tipos como
   `effect_destruction` enquanto suas conditions passarem; a proteção não
   funciona se os efeitos da fonte estiverem negados.
+- `conditional_destruction_protection_aura`: protege cards no escopo declarado
+  contra destruição enquanto as condições da fonte passarem.
+- `conditional_unaffected_by_effects`: torna a fonte não afetada pelo escopo de
+  efeitos declarado enquanto as condições passarem.
+- `battle_indestructible_if_stat_match`: impede destruição em batalha quando a
+  comparação de stats declarada for satisfeita.
+- `activation_negation_protection`: impede que ativações cobertas pelo escopo
+  sejam negadas.
 - `banish_protection`: impede que cards em `targetScope` sejam movidos para
   `banished`; use `excludeSelf: true` quando a própria fonte não deve ser
   protegida.
+- `send_to_grave_replacement`: substitui um envio ao Cemitério pelo destino
+  declarativo configurado.
+- `counter_attack_lock`: restringe ataques conforme counters e escopo declarados.
+- `battle_phase_activation_lock`: restringe ativações durante a Battle Phase.
+- `restrict_opponent_summon_turn_attack`: impede ataques de monstros Invocados
+  pelo oponente no turno coberto.
+- `negate_opponent_battle_destruction_prevention`: neutraliza proteções do
+  oponente contra destruição em batalha.
+- `lp_gain_multiplier`: multiplica ganhos de LP do jogador afetado.
 
 Campos comuns de buff: `amountPerCard`, `perCard`, `buffPerCard`, `stats`,
 `owners`/`countOwners`, `cardKinds`, `includeSelf`, `requireFaceup`.
@@ -550,8 +607,11 @@ terminam:
 
 ```js
 {
+  id: "synchro_material_followup",
   timing: "on_event",
   event: "card_to_grave",
+  triggerRequirement: "mandatory",
+  triggerTiming: "if",
   fromZone: "field",
   contextLabel: "synchro_material",
   allowIfEffectsNegatedAtFieldExit: true,
@@ -638,10 +698,13 @@ Trigger com filtro de summon:
   id: "search_on_normal_summon",
   timing: "on_event",
   event: "after_summon",
+  triggerRequirement: "optional",
+  triggerTiming: "if",
   summonMethods: ["normal"],
   requireSelfAsSummoned: true,
   oncePerTurn: true,
   oncePerTurnName: "search_on_normal_summon",
+  usagePolicy: "use",
   actions: [
     {
       type: "add_from_zone_to_hand",

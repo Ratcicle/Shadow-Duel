@@ -22,11 +22,13 @@ src/core/actionHandlers/
   actionCatalog.js # contratos declarativos das actions
   destruction.js   # destroy/banish/replacement helpers
   movement.js      # return_to_hand, bounce_and_summon
+  negation.js      # negação de ativação, efeito, Invocação e fluxos relacionados
   registry.js      # ActionHandlerRegistry + proxyEngineMethod
   resources.js     # LP, search, heal, draw-like resource helpers
   shared.js        # helpers comuns
   stats.js         # buffs, status, protection, position
-  summon.js        # special summon, transmutate, conditional summon
+  summon.js        # fachada dos handlers de summon
+  summon/          # módulos por origem, custo, posição, restrição e Sincro
   wiring.js        # registerDefaultHandlers
   index.js         # barrel export preferido
 ```
@@ -104,6 +106,7 @@ Não crie handler quando:
    - `destruction.js` para destruição, banish, replacement.
    - `stats.js` para buffs, status, proteção, posição.
    - `movement.js` para retorno/bounce.
+   - `negation.js` para negação de ativação, efeito ou Invocação.
    - `conditional.js`, `choice.js` ou `blueprints.js` para fluxos avançados.
 
 2. Implemente o handler:
@@ -239,6 +242,7 @@ export async function handlePayLP(action, ctx, targets, engine) {
   if (action.fraction) {
     amount = Math.floor(player.lp * action.fraction);
   }
+  if (amount <= 0) return false;
 
   if (engine.resolveLpCost) {
     const costResult = engine.resolveLpCost(action, ctx, amount);
@@ -250,7 +254,15 @@ export async function handlePayLP(action, ctx, targets, engine) {
   if (amount <= 0) return true;
   if (player.lp < amount) return false;
 
+  const before = player.lp;
   player.lp -= amount;
+  game.notify?.("lp_change", {
+    player,
+    sourceCard: ctx.source,
+    lpPaid: amount,
+    before,
+    after: player.lp
+  });
   game.updateBoard();
   return true;
 }

@@ -1,4 +1,4 @@
-# Burning West / Oeste Ardente Decklist
+# Burning West / Oeste Ardente — Catálogo do Arquétipo
 
 Fonte dos textos: `src/data/cards/burningWest.js` e `public/locales/pt-br.json`.
 
@@ -14,7 +14,7 @@ O arquetipo **Burning West / Oeste Ardente** e focado em duelos de batalha, decl
 
 ---
 
-## Decklist Completa (1x cada carta)
+## Catálogo Completo (1x cada carta)
 
 ### Main Deck (15)
 

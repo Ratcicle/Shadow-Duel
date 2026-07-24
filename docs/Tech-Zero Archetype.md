@@ -1,4 +1,4 @@
-# Tech-Zero Decklist
+# Tech-Zero — Catálogo do Arquétipo
 
 Fonte dos textos: `src/data/cards/techZero.js`, `src/data/cards/genericCards.js` e `public/locales/pt-br.json`.
 
@@ -14,7 +14,7 @@ O arquetipo **Tech-Zero** e focado em Invocacao-Sincro, Reguladores, ajuste de N
 
 ---
 
-## Decklist Completa (1x cada carta Tech-Zero)
+## Catálogo Completo (1x cada carta Tech-Zero)
 
 ### Main Deck (10)
 

@@ -77,7 +77,7 @@ Shadow Duel usa arquétipos próprios, cada um com um plano de jogo claro:
 - **Burning West**: recompensas de batalha, declarações de Tipo e duelos de combate.
 - **Tech-Zero**: Invocação-Sincro, Reguladores, ajuste de Nível e escalada pelo Extra Deck.
 
-Decklists e referências detalhadas de cartas estão disponíveis em [`docs/`](docs/).
+Catálogos de arquétipo e referências detalhadas de cartas estão disponíveis em [`docs/`](docs/).
 
 ## Como Jogar
 
@@ -175,7 +175,7 @@ Shadow Duel uses custom archetypes with clear game plans:
 - **Burning West**: battle rewards, declared monster Types, and duel-like combat payoffs.
 - **Tech-Zero**: Synchro Summoning, Tuners, Level modulation, and Extra Deck climbing.
 
-Decklists and detailed card references are available in [`docs/`](docs/).
+Archetype catalogs and detailed card references are available in [`docs/`](docs/).
 
 ## How To Play
 

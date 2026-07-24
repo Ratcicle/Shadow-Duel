@@ -1,4 +1,4 @@
-# Luminarch Decklist
+# Luminarch — Catálogo do Arquétipo
 
 Fonte dos textos: `src/data/cards/*.js` via fachada `src/data/cards.js` (1x cada carta do arquétipo).
 
@@ -14,7 +14,7 @@ O arquétipo **Luminarch** é focado em guerreiros sagrados, defensores celestia
 
 ---
 
-## Decklist (24 cartas)
+## Catálogo (24 cartas)
 
 ### Monstros (Main Deck) (10)
 

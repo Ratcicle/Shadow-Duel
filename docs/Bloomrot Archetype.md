@@ -1,4 +1,4 @@
-# Bloomrot Decklist
+# Bloomrot — Catálogo do Arquétipo
 
 Fonte dos textos: `src/data/cards/bloomrot.js` via fachada `src/data/cards.js` (1x cada carta do arquetipo).
 
@@ -14,7 +14,7 @@ O arquetipo **Bloomrot** e focado em Marcadores de Esporo, fichas Planta e contr
 
 ---
 
-## Decklist (20 cartas)
+## Catálogo (20 cartas)
 
 ### Main Deck (17)
 
@@ -91,7 +91,7 @@ O arquetipo **Bloomrot** e focado em Marcadores de Esporo, fichas Planta e contr
 > Before damage calculation, if this card is being attacked by an opponent's monster: place 2 Spore Counters on the attacking monster. If this card is destroyed by battle: You can Special Summon 1 "Bloomrot" monster from your hand or Deck with Level less than or equal to the total number of Spore Counters on the field.
 
 **407 - Bloomrot Gravecap Widow** (L6 Earth Plant | ATK 2100 / DEF 2100)
-> You can Special Summon this card from your hand by removing 2 Spore Counters from the field. If this card is Summoned: target 1 monster with a Spore Counter your opponent controls; destroy it. Once per turn, if a monster with a Spore Counter your opponent controls is destroyed: place 1 Spore Counter on 1 face-up card on the field. You can only use each effect of "Bloomrot Gravecap Widow" once per turn.
+> You can Special Summon this card from your hand by removing 3 Spore Counters from the field. If this card is Summoned: target 1 monster with a Spore Counter your opponent controls; destroy it. Once per turn, if a monster with a Spore Counter your opponent controls is destroyed: place 1 Spore Counter on 1 face-up card your opponent controls. You can only use each effect of "Bloomrot Gravecap Widow" once per turn.
 
 **408 - Bloomrot Ancient Husk** (L7 Earth Plant | ATK 2200 / DEF 2600)
 > You can Special Summon this card from your hand by removing 4 Spore Counters from the field. Once per turn: place 1 Spore Counter on up to 2 face-up monsters your opponent controls. If a monster with a Spore Counter is destroyed: place 1 Spore Counter on up to 2 face-up monsters your opponent controls. You can only use each effect of "Bloomrot Ancient Husk" once per turn.
@@ -102,7 +102,7 @@ O arquetipo **Bloomrot** e focado em Marcadores de Esporo, fichas Planta e contr
 > Target up to 2 face-up monsters your opponent controls; place 2 Spore Counters on each of them. Then, those monsters lose 500 ATK/DEF until the end of this turn. You can only activate 1 "Bloomrot Spore Cloud" per turn.
 
 **410 - Bloomrot Living Colony** (Field Spell)
-> Once per turn: target 1 face-up card on the field; place 1 Spore Counter on it. Monsters your opponent controls lose 100 ATK/DEF for each Spore Counter on them. Each time one or more Spore Counters are removed from the field: Special Summon 1 "Bloomrot Token" (Plant/EARTH/Level 1/ATK 0/DEF 0) in Defense Position. If a "Bloomrot Token" you control is destroyed: place 1 Spore Counter on each face-up card your opponent controls.
+> Once per turn: target 1 face-up card your opponent controls; place 1 Spore Counter on it. Monsters your opponent controls lose 100 ATK/DEF for each Spore Counter on them. Each time one or more Spore Counters are removed from the field: Special Summon 1 "Bloomrot Token" (Plant/EARTH/Level 1/ATK 0/DEF 0) in Defense Position. If a "Bloomrot Token" you control is destroyed: place 1 Spore Counter on each face-up card your opponent controls.
 
 **411 - Bloomrot Compost Ritual** (Normal Spell)
 > Target 1 face-up card your opponent controls; place 1 Spore Counter on it, then place 1 additional Spore Counter on it for each "Bloomrot" monster you control. Then, gain 300 LP for each Spore Counter placed by this effect. You can only activate 1 "Bloomrot Compost Ritual" per turn.
