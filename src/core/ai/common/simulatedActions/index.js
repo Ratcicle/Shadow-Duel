@@ -66,6 +66,7 @@ import {
 } from "./stats.js";
 import {
   applyAllowDirectAttackThisTurn,
+  applyForbidDirectAttackThisTurn,
   applyRegisterBattlePairEffect,
   applyRedirectCurrentAttackToTarget,
   applySetSourceAfterResolutionIf,
@@ -134,6 +135,7 @@ export const SIMULATED_ACTION_HANDLERS = {
   "set_facedown_defense": applySetFacedownDefense,
   "switch_position": applySwitchPosition,
   "allow_direct_attack_this_turn": applyAllowDirectAttackThisTurn,
+  "forbid_direct_attack_this_turn": applyForbidDirectAttackThisTurn,
   "register_battle_pair_effect": applyRegisterBattlePairEffect,
   "redirect_current_attack_to_target": applyRedirectCurrentAttackToTarget,
   "set_source_after_resolution_if": applySetSourceAfterResolutionIf,

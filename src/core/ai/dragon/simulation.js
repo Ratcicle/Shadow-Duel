@@ -1258,6 +1258,9 @@ function simulateDragonHandIgnition(state, card, action) {
 
     const solarIndex = player.hand.indexOf(card);
     if (solarIndex < 0) return;
+    if (!useSimulatedOnce(state, player, getSimulatedEffectOnceKey(effect))) {
+      return;
+    }
     discardHandCardToGraveyard(state, player, solarIndex);
 
     const sourceZone = player[selected.zoneName] || [];
@@ -1656,13 +1659,10 @@ function simulateDragonGraveyardMonsterEffect(state, card, action) {
       (!requestedEffectId || entry.id === requestedEffectId),
   );
   if (!effect) return;
-  const stelyaUsageKey =
-    card.name === "Stelya, Dragon Tamer"
-      ? getSimulatedEffectOnceKey(effect)
-      : null;
+  const effectUsageKey = getSimulatedEffectOnceKey(effect);
   if (
-    stelyaUsageKey &&
-    !canUseSimulatedOnce(state, player, stelyaUsageKey)
+    effectUsageKey &&
+    !canUseSimulatedOnce(state, player, effectUsageKey)
   ) {
     return;
   }
@@ -1789,11 +1789,75 @@ function simulateDragonGraveyardMonsterEffect(state, card, action) {
     targetSelections[target.id] = candidates.slice(0, target.count?.max || 1);
   }
 
+  const movesSourceAsCost = (effect.activationCosts || []).some(
+    (costAction) =>
+      costAction?.targetRef === "self" &&
+      (costAction.type === "move" || costAction.type === "banish"),
+  );
+  const dynamicSummonPlans = new Map();
+  for (const effectAction of effect.actions || []) {
+    if (
+      effectAction?.type !== "special_summon_from_zone" ||
+      effectAction.targetRef ||
+      effectAction.requireSource === true
+    ) {
+      continue;
+    }
+    const candidates = collectSimulatedActionZoneEntries(
+      player,
+      effectAction,
+    ).filter(
+      ({ candidate }) =>
+        candidate !== (movesSourceAsCost ? card : null) &&
+        matchesActionFilters(candidate, effectAction),
+    );
+    const minRequired = Number(effectAction.count?.min ?? 1);
+    if (candidates.length < Math.max(1, minRequired)) return;
+    const ranked = rankRecruitEntriesForSimulation(
+      candidates,
+      state,
+      {
+        ...effectAction,
+        effectId: effect.id,
+      },
+      card,
+      effect,
+    );
+    if (ranked.length < Math.max(1, minRequired)) return;
+    dynamicSummonPlans.set(effectAction, ranked);
+  }
+
   if (
-    stelyaUsageKey &&
-    !useSimulatedOnce(state, player, stelyaUsageKey)
+    effectUsageKey &&
+    !useSimulatedOnce(state, player, effectUsageKey)
   ) {
     return;
+  }
+
+  for (const costAction of effect.activationCosts || []) {
+    if (costAction?.type !== "move" && costAction?.type !== "banish") {
+      continue;
+    }
+    if (costAction.targetRef === "self") {
+      const fromZone = costAction.fromZone || "graveyard";
+      const toZone =
+        costAction.type === "banish"
+          ? "banished"
+          : costAction.to || "graveyard";
+      moveSimulatedCard(player, card, fromZone, toZone, state);
+      continue;
+    }
+    for (const selection of targetSelections[costAction.targetRef] || []) {
+      moveSimulatedCard(
+        selection.owner || player,
+        selection.candidate,
+        selection.zoneName || costAction.fromZone || "graveyard",
+        costAction.type === "banish"
+          ? "banished"
+          : costAction.to || "graveyard",
+        state,
+      );
+    }
   }
 
   for (const effectAction of effect.actions || []) {
@@ -1860,6 +1924,37 @@ function simulateDragonGraveyardMonsterEffect(state, card, action) {
         const owner = selection.owner || player;
         const zoneName = selection.zoneName || effectAction.zone || "graveyard";
         const sourceZone = owner[zoneName] || [];
+        const liveIndex = sourceZone.indexOf(selection.candidate);
+        if (liveIndex < 0) continue;
+        const summonedCard = sourceZone.splice(liveIndex, 1)[0];
+        const summoned = specialSummonToField(
+          state,
+          player,
+          summonedCard,
+          {
+            ...effectAction,
+            effectId: effect.id,
+          },
+          { method: "special" },
+        );
+        if (summoned) resolvedAnyAction = true;
+      }
+      continue;
+    }
+
+    if (
+      effectAction.type === "special_summon_from_zone" &&
+      !effectAction.targetRef &&
+      effectAction.requireSource !== true
+    ) {
+      if ((player.field || []).length >= 5) continue;
+      const ranked = dynamicSummonPlans.get(effectAction) || [];
+      const maxSummons = Math.min(
+        Number(effectAction.count?.max ?? 1),
+        5 - (player.field?.length || 0),
+      );
+      for (const selection of ranked.slice(0, maxSummons)) {
+        const sourceZone = player[selection.zoneName] || [];
         const liveIndex = sourceZone.indexOf(selection.candidate);
         if (liveIndex < 0) continue;
         const summonedCard = sourceZone.splice(liveIndex, 1)[0];
@@ -1996,6 +2091,19 @@ function matchesActionFilters(card, action) {
   if (Number.isFinite(filters.minLevel) && (card.level || 0) < filters.minLevel) return false;
   if (Number.isFinite(filters.maxLevel) && (card.level || 0) > filters.maxLevel) return false;
   return true;
+}
+
+function collectSimulatedActionZoneEntries(player, action) {
+  const zoneSpec = action?.zone || action?.sourceZone || "deck";
+  const zoneNames = Array.isArray(zoneSpec) ? zoneSpec : [zoneSpec];
+  return zoneNames.flatMap((zoneName) =>
+    (player?.[zoneName] || []).map((candidate, index) => ({
+      candidate,
+      index,
+      owner: player,
+      zoneName,
+    })),
+  );
 }
 
 function moveSimulatedCard(owner, card, fromZone, toZone, state = null) {

@@ -98,7 +98,19 @@ function getOptStatus(game, player, optName, { isSimulatedState = false } = {}) 
   const prefixed = `once_per_turn:${optName}`;
   const currentTurn = game?.turnCounter;
 
-  if (isSimulatedState || !game || currentTurn === undefined || currentTurn === null) {
+  if (isSimulatedState) {
+    const playerId = player?.id || "bot";
+    const used = game?._dragonSimOnce?.[playerId]?.[optName] === true;
+    return {
+      name: optName,
+      used,
+      canUse: !used,
+      assumed: false,
+      source: "simulation._dragonSimOnce",
+    };
+  }
+
+  if (!game || currentTurn === undefined || currentTurn === null) {
     return {
       name: optName,
       used: false,

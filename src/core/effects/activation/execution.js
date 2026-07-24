@@ -39,6 +39,70 @@ function buildActionsFailure(actionsResult) {
   };
 }
 
+function getCardInstanceId(card) {
+  return (
+    card?.instanceId ??
+    card?._instanceId ??
+    card?.uuid ??
+    card?.simInstanceId ??
+    null
+  );
+}
+
+function canContinueWithCommittedMovedSource(
+  card,
+  activationZone,
+  activationContext = {},
+) {
+  const snapshot = activationContext?.sourceAtActivation || null;
+  if (
+    activationContext?.committed !== true ||
+    activationContext?.costsPaid !== true ||
+    activationContext?.sourceMoved !== true ||
+    !snapshot ||
+    snapshot.zone !== activationZone
+  ) {
+    return false;
+  }
+
+  const snapshotInstanceId = snapshot.cardInstanceId ?? null;
+  const currentInstanceId = getCardInstanceId(card);
+  if (
+    snapshotInstanceId !== null &&
+    currentInstanceId !== null &&
+    snapshotInstanceId !== currentInstanceId
+  ) {
+    return false;
+  }
+
+  const snapshotVersion = Number(snapshot.locationVersion ?? 0);
+  const currentVersion = Number(card?.locationVersion ?? 0);
+  if (
+    !Number.isFinite(snapshotVersion) ||
+    !Number.isFinite(currentVersion) ||
+    currentVersion <= snapshotVersion
+  ) {
+    return false;
+  }
+
+  const latest = activationContext?.latestSourceLocation || null;
+  if (latest) {
+    const latestInstanceId = latest.cardInstanceId ?? null;
+    if (
+      latestInstanceId !== null &&
+      currentInstanceId !== null &&
+      latestInstanceId !== currentInstanceId
+    ) {
+      return false;
+    }
+    if (Number(latest.locationVersion ?? currentVersion) !== currentVersion) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 function getActivationResolutionTargets(effect, activationContext = {}) {
   const definitions = Array.isArray(effect?.targets) ? effect.targets : [];
   if (activationContext?.costsPaid !== true) return definitions;
@@ -83,7 +147,14 @@ export async function activateMonsterFromGraveyard(
       reason: "Only monsters can activate from graveyard.",
     };
   }
-  if (!player.graveyard || !player.graveyard.includes(card)) {
+  if (
+    (!player.graveyard || !player.graveyard.includes(card)) &&
+    !canContinueWithCommittedMovedSource(
+      card,
+      "graveyard",
+      activationContext,
+    )
+  ) {
     return {
       success: false,
       needsSelection: false,
@@ -139,6 +210,10 @@ export async function activateMonsterFromGraveyard(
     costSelections: activationContext?.costSelections || {},
     targetSelections: activationContext?.targetSelections || selections || {},
     resolutionSelections: activationContext?.resolutionSelections || {},
+    sourceAtActivation: activationContext?.sourceAtActivation || null,
+    sourceMoved: activationContext?.sourceMoved === true,
+    latestSourceLocation: activationContext?.latestSourceLocation || null,
+    costPayment: activationContext?.costPayment || null,
     prepareOnly: activationContext?.prepareOnly === true,
   };
 
@@ -791,7 +866,14 @@ export async function activateMonsterEffect(
 
   // Verify card is in the correct zone
   if (activationZone === "hand") {
-    if (!player.hand || !player.hand.includes(card)) {
+    if (
+      (!player.hand || !player.hand.includes(card)) &&
+      !canContinueWithCommittedMovedSource(
+        card,
+        activationZone,
+        activationContext,
+      )
+    ) {
       return {
         success: false,
         needsSelection: false,
@@ -799,7 +881,14 @@ export async function activateMonsterEffect(
       };
     }
   } else if (activationZone === "field") {
-    if (!player.field || !player.field.includes(card)) {
+    if (
+      (!player.field || !player.field.includes(card)) &&
+      !canContinueWithCommittedMovedSource(
+        card,
+        activationZone,
+        activationContext,
+      )
+    ) {
       return {
         success: false,
         needsSelection: false,
@@ -876,6 +965,10 @@ export async function activateMonsterEffect(
     costSelections: activationContext?.costSelections || {},
     targetSelections: activationContext?.targetSelections || selections || {},
     resolutionSelections: activationContext?.resolutionSelections || {},
+    sourceAtActivation: activationContext?.sourceAtActivation || null,
+    sourceMoved: activationContext?.sourceMoved === true,
+    latestSourceLocation: activationContext?.latestSourceLocation || null,
+    costPayment: activationContext?.costPayment || null,
     prepareOnly: activationContext?.prepareOnly === true,
   };
 

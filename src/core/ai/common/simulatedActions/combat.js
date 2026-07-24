@@ -54,6 +54,13 @@ export function applyAllowDirectAttackThisTurn(ctx) {
   return;
 }
 
+export function applyForbidDirectAttackThisTurn(ctx) {
+  const { action, self, opponent } = ctx;
+  const targetPlayer = resolveActionPlayer(action, self, opponent);
+  if (!targetPlayer) return;
+  targetPlayer.forbidDirectAttacksThisTurn = true;
+}
+
 function firstSelection(selections, ref) {
   if (!ref) return null;
   const value = selections?.[ref];

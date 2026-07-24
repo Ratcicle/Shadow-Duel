@@ -1850,18 +1850,6 @@ export const techZeroCards = [
           {
             type: "field_card_count",
             owner: "self",
-            zone: "graveyard",
-            filters: {
-              cardKind: "monster",
-              archetype: "Tech-Zero",
-            },
-            min: 2,
-            reason:
-              'You need 2 "Tech-Zero" monsters in your Graveyard to activate this card.',
-          },
-          {
-            type: "field_card_count",
-            owner: "self",
             zone: "deck",
             filters: {
               cardKind: "monster",
@@ -1887,15 +1875,6 @@ export const techZeroCards = [
             count: { min: 2, max: 2 },
             intent: "cost",
           },
-          {
-            id: "tech_zero_assembly_line_summon_target",
-            owner: "self",
-            zone: "deck",
-            cardKind: "monster",
-            archetype: "Tech-Zero",
-            excludeCannotBeSpecialSummoned: true,
-            count: { min: 1, max: 1 },
-          },
         ],
         activationCosts: [
           {
@@ -1907,18 +1886,22 @@ export const techZeroCards = [
             contextLabel: "cost",
           },
         ],
-        actions: [
-          {
-            type: "special_summon_from_zone",
-            targetRef: "tech_zero_assembly_line_summon_target",
-            zone: "deck",
-            position: "choice",
-            promptPlayer: true,
-            statusesOnSummon: [{ status: "banishWhenLeavesField" }],
-          },
+        activationCommitActions: [
           {
             type: "forbid_direct_attack_this_turn",
             player: "self",
+          },
+        ],
+        actions: [
+          {
+            type: "special_summon_from_zone",
+            zone: "deck",
+            cardKind: "monster",
+            archetype: "Tech-Zero",
+            count: { min: 1, max: 1 },
+            position: "choice",
+            promptPlayer: true,
+            statusesOnSummon: [{ status: "banishWhenLeavesField" }],
           },
         ],
       },
