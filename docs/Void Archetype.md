@@ -59,7 +59,7 @@ Fonte dos textos: `src/data/cards/*.js` via fachada `src/data/cards.js` (1x cada
 
 **Void Conjurer (201)** — Nível 4, Spellcaster, 1700/800. Ignition OPT: Invoque do Deck 1 monstro "Void" de Nível 4 ou menos, exceto "Void Conjurer" (pos. escolha); ele não pode atacar neste turno e é destruído na End Phase. No Cemitério: envie 1 monstro "Void" que você controla para o Cemitério; Invoque esta carta (pos. escolha), mas negue seus efeitos até o fim do turno.
 
-**Void Walker (202)** — Nível 4, Fiend, 1800/200. Não pode atacar no turno em que é Invocada. OPT: devolva esta carta à mão; Invoque da mão 1 monstro "Void" de Nível 4 ou menos (pos. escolha), exceto "Void Walker".
+**Void Walker (202)** — Nível 4, Fiend, 1800/200. Não pode atacar no turno em que é Invocada por Invocação-Especial. OPT: devolva esta carta à mão; Invoque da mão 1 monstro "Void" de Nível 4 ou menos (pos. escolha), exceto "Void Walker".
 
 **Void Beast (203)** — Nível 4, Beast, 1600/1300. Se for Invocado Normalmente: adicione 1 monstro "Void" que mencione "Void Hollow" em seu texto, exceto "Void Beast", do Deck à mão. Se destruir um monstro do oponente em batalha: Invoque por Invocação-Especial 1 "Void Hollow" da mão ou Deck. Ambos OPT.
 
@@ -73,7 +73,7 @@ Fonte dos textos: `src/data/cards/*.js` via fachada `src/data/cards.js` (1x cada
 
 **Void Forgotten Knight (209)** — Nível 5, Fiend, 2000/1000. Da mão: envie 1 monstro "Void" que você controla (face-up); Invoque esta carta (OPT). Ganha 100 ATK para cada "Void Hollow" no seu Cemitério. No Cemitério: bana esta carta; destrua 1 Spell/Trap face-up do oponente (OPT).
 
-**Void Raven (210)** — Nível 2, Winged Beast, 300/300. Se um Monstro de Fusão "Void" for Invocado por Invocação-Fusão: você pode descartar esta carta; esse monstro fica imune aos efeitos de cards do oponente até o fim do próximo turno. OPT.
+**Void Raven (210)** — Nível 2, Winged Beast, 300/300. Se um Monstro de Fusão "Void" for Invocado por Invocação-Fusão: você pode descartar esta carta; esse monstro fica imune aos efeitos de cards do oponente até o fim do próximo turno.
 
 **Void Tenebris Horn (211)** — Nível 4, Fiend, 1500/800. Ganha 100 ATK/DEF para cada monstro "Void" no seu campo e no seu Cemitério. Uma vez por turno e até 3 vezes por Duelo: se estiver no Cemitério e houver 2+ "Void Hollow" no seu campo e/ou Cemitério, Invoque esta carta por Invocação-Especial (pos. escolha).
 
@@ -95,7 +95,7 @@ Fonte dos textos: `src/data/cards/*.js` via fachada `src/data/cards.js` (1x cada
 
 **Void Aberration / Aberração do Vazio (227)** — Fusão, Nível 7, Fiend, 2400/1900. Materiais: "Void Tenebris Horn" + 1 monstro "Void". Cada vez que um monstro "Void" é enviado ao Cemitério, ganha 100 ATK/DEF até o fim do turno. Se for enviada do campo ao Cemitério: você pode escolher 1 card face-up que o oponente controla; destrua o alvo.
 
-**Arcturus, the Fallen Lord (225)** — Fusão, Nível 10, Warrior, 3000/0. Deve ser Invocado por Invocação-Fusão do Extra Deck ao banir 1 "Arcturus, Lord of the Void" do seu Cemitério. Se for destruído em batalha: destrua o monstro que batalhou com ele. Do Cemitério: bana este card; Invoque por Invocação-Especial de 1 a 3 monstros "Void" com nomes diferentes do seu Cemitério, exceto os dois Arcturus, com efeitos negados. OPT.
+**Arcturus, the Fallen Lord (225)** — Fusão, Nível 10, Warrior, 3000/0. Deve ser Invocado por Invocação-Fusão do Extra Deck ao banir 1 "Arcturus, Lord of the Void" do seu Cemitério. Se for destruído em batalha: destrua o monstro que batalhou com ele. Do Cemitério: bana este card; Invoque por Invocação-Especial de 1 a 3 monstros "Void" com nomes diferentes do seu Cemitério, exceto os dois Arcturus, com efeitos negados.
 
 **Void Cosmic Walker (222)** — Ascension, Nível 6, 2100/1600. Matéria: "Void Walker" com 2 ativações de efeito no duelo. Invoque por Invocação-Especial 1 "Void Hollow" da mão ou Cemitério (pos. escolha). Se for destruído em batalha ou por efeito de card do oponente: Invoque até 3 "Void Hollow" da mão, Deck ou Cemitério (pos. escolha). Cada efeito é uma vez por turno.
 

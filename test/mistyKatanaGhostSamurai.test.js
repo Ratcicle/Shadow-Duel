@@ -1,9 +1,15 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import Card from "../src/core/Card.js";
 import Game from "../src/core/Game.js";
 import { cardDatabaseByName } from "../src/data/cards.js";
+
+const EXPECTED_EN =
+  'If this card is Normal Summoned: You can send 1 Tuner monster from your Deck to the Graveyard.\n\nYou can banish this card from your Graveyard, then target 1 Level 4 or lower Tuner monster in your Graveyard; Special Summon it.\n\nYou can only use each effect of "Misty Katana Ghost Samurai" once per turn.';
+const EXPECTED_PT_BR =
+  "Se este card for Invocado por Invocação-Normal: você pode enviar 1 monstro Regulador do seu Deck para o Cemitério.\n\nVocê pode banir este card do seu Cemitério e, depois, escolher 1 monstro Regulador de Nível 4 ou menor no seu Cemitério; Invoque-o por Invocação-Especial.\n\nVocê só pode usar cada efeito de “Samurai Fantasma da Katana Nebulosa” uma vez por turno.";
 
 function createGame(t) {
   const game = new Game({
@@ -48,6 +54,32 @@ async function resolveFirstSelectionCandidate(game) {
   await game.finishTargetSelection();
 }
 
+test("Samurai declara três blocos compactos e limites independentes", async () => {
+  const card = cardDatabaseByName.get("Misty Katana Ghost Samurai");
+  assert.ok(card);
+  assert.equal(card.description, EXPECTED_EN);
+
+  const locale = JSON.parse(
+    await readFile(new URL("../public/locales/pt-br.json", import.meta.url), "utf8"),
+  );
+  assert.equal(locale.cards["26"].description, EXPECTED_PT_BR);
+
+  const sendEffect = card.effects.find(
+    ({ id }) => id === "misty_katana_ghost_samurai_send_tuner",
+  );
+  const reviveEffect = card.effects.find(
+    ({ id }) => id === "misty_katana_ghost_samurai_revive_tuner",
+  );
+  assert.equal(sendEffect.summonMethods[0], "normal");
+  assert.equal(sendEffect.usagePolicy, "use");
+  assert.equal(reviveEffect.usagePolicy, "use");
+  assert.notEqual(sendEffect.oncePerTurnName, reviveEffect.oncePerTurnName);
+  assert.deepEqual(reviveEffect.activationZones, ["graveyard"]);
+  assert.equal(reviveEffect.actions[0].banishCost, true);
+  assert.equal(reviveEffect.actions[0].filters.isTuner, true);
+  assert.equal(reviveEffect.actions[0].filters.maxLevel, 4);
+});
+
 test("Samurai envia o Regulador do Deck e devolve o timing ao estado aberto", async (t) => {
   const game = createGame(t);
   const samurai = createCard(
@@ -78,6 +110,42 @@ test("Samurai envia o Regulador do Deck e devolve o timing ao estado aberto", as
   assert.equal(game.targetSelection, null);
   assert.equal(game.chainSystem.pendingChainSelection, null);
   assert.equal(game.chainSystem.pendingTriggerSelection, null);
+  assert.deepEqual(
+    game.canStartAction({
+      actor: game.player,
+      kind: "phase_transition",
+      silent: true,
+    }),
+    { ok: true },
+  );
+});
+
+test("Samurai se bane, revive o Regulador e encerra a janela do Cemitério", async (t) => {
+  const game = createGame(t);
+  game.player.controllerType = "ai";
+  const samurai = createCard(
+    cardDatabaseByName.get("Misty Katana Ghost Samurai"),
+    game.player,
+  );
+  const tuner = createCard(
+    cardDatabaseByName.get("Tech-Zero Energy Core"),
+    game.player,
+  );
+  game.player.graveyard.push(samurai, tuner);
+
+  const result = await game.tryActivateMonsterEffect(
+    samurai,
+    null,
+    "graveyard",
+    game.player,
+    { effectId: "misty_katana_ghost_samurai_revive_tuner" },
+  );
+
+  assert.equal(result.success, true);
+  assert.equal(game.player.banished.includes(samurai), true);
+  assert.equal(game.player.field.includes(tuner), true);
+  assert.equal(game.chainSystem.getFastEffectState().state, "open");
+  assert.equal(game.targetSelection, null);
   assert.deepEqual(
     game.canStartAction({
       actor: game.player,

@@ -1243,6 +1243,13 @@ export async function runActivationPipeline(config = {}) {
       });
     }
 
+    const buildTargetCanonicalContext = (activationOverrides = {}) => ({
+      ...buildCanonicalContext(activationOverrides),
+      _actionTargets: {
+        ...(resolutionContext._actionTargets || {}),
+        ...(costSelections || {}),
+      },
+    });
     const resolvedTargetDefinitions = resolveCountFromSelectionDefinitions(
       targetDefinitions,
       costSelections,
@@ -1250,7 +1257,7 @@ export async function runActivationPipeline(config = {}) {
     const resolvedTargetPreview = resolvedTargetDefinitions.length
       ? this.effectEngine?.resolveTargets?.(
           resolvedTargetDefinitions,
-          buildCanonicalContext({
+          buildTargetCanonicalContext({
             preview: true,
             isPreview: true,
             autoSelectTargets: false,
@@ -1283,7 +1290,7 @@ export async function runActivationPipeline(config = {}) {
         resolvedCard,
         resolvedTargetDefinitions,
         owner,
-        buildCanonicalContext(),
+        buildTargetCanonicalContext(),
         {
           purpose: "target",
           allowCancel: false,
@@ -1321,7 +1328,7 @@ export async function runActivationPipeline(config = {}) {
     const finalTargetPreview = resolvedTargetDefinitions.length
       ? this.effectEngine?.resolveTargets?.(
           resolvedTargetDefinitions,
-          buildCanonicalContext({
+          buildTargetCanonicalContext({
             preview: true,
             isPreview: true,
             autoSelectTargets: false,

@@ -296,6 +296,8 @@ Notas importantes:
 - `pairedTarget` exige que cada candidato tenha ao menos uma carta pareada
   em outra zona. Use para custos que so sao validos se ja houver um alvo
   posterior compativel, como "mesmo Nivel e nome diferente" no Cemiterio.
+- Em `compareAttribute`, use `attr: "originalLevel"` para comparar o Nível
+  impresso da instância, ignorando alterações temporárias de Nível.
 - `requireThisCard: true` permite selecionar a própria fonte.
 - `lastSummonedFromZone` ou `lastSummonedFromZones` distingue a origem da última
   Invocação. Um monstro do Deck Adicional revivido do Cemitério terá origem
@@ -674,15 +676,15 @@ Spell simples:
 
 ```js
 {
-  id: 2,
-  name: "Arcane Surge",
+  id: 99,
+  name: "Example Draw Spell",
   cardKind: "spell",
   subtype: "normal",
   description: "Draw 2 cards.",
-  image: "assets/Arcane Surge.jpg",
+  image: "assets/Example Draw Spell.png",
   effects: [
     {
-      id: "arcane_surge_draw",
+      id: "example_draw_spell",
       timing: "on_play",
       speed: 1,
       actions: [{ type: "draw", amount: 2, player: "self" }]

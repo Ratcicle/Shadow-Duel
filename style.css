@@ -400,6 +400,16 @@ body {
   flex: 1 1 auto;
 }
 
+.card-description-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3em;
+}
+
+.card-effect-paragraph {
+  display: block;
+}
+
 #preview-info {
   width: 100%;
   min-height: 0;
@@ -3513,6 +3523,16 @@ body {
   background: var(--accent-color);
 }
 
+.deck-list-copy-badge.banlist-restricted {
+  border-color: #ff3b4f;
+}
+
+.deck-list-copy-badge.banlist-restricted.limit-reached {
+  color: #fff;
+  background: rgba(180, 20, 40, 0.9);
+  border-color: #ff3b4f;
+}
+
 .deck-list-name {
   min-width: 0;
   border: none;
@@ -3658,6 +3678,16 @@ body {
   color: #000;
   border-color: #fff;
   font-weight: 900;
+}
+
+.pool-count.banlist-restricted {
+  border-color: #ff3b4f;
+}
+
+.pool-count.banlist-restricted.limit-reached {
+  background: rgba(180, 20, 40, 0.9);
+  color: #fff;
+  border-color: #ff3b4f;
 }
 
 .fusion-count {

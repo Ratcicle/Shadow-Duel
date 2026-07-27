@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import Card from "../src/core/Card.js";
@@ -22,6 +23,10 @@ import {
 } from "./chain/helpers/chainHarness.js";
 
 const ROSE_PETAL_FLORAL_DRAGON_ID = 28;
+const EXPECTED_EN =
+  '1 Plant Tuner + 1+ non-Tuner monsters\n\nIf your opponent controls more cards than you do: You can banish 1 to 3 Plant monsters from your GY, then target the same number of cards your opponent controls; destroy them.\n\nIf this card leaves the field: You can target 1 Plant monster in your GY; add it to your hand.\n\nYou can only use each effect of "Rose Petal Floral Dragon" once per turn.';
+const EXPECTED_PT_BR =
+  "1 Regulador Planta + 1+ monstros não-Reguladores\n\nSe seu oponente controlar mais cards que você: você pode banir de 1 a 3 monstros Planta do seu Cemitério e, depois, escolher o mesmo número de cards que seu oponente controla; destrua-os.\n\nSe este card deixar o campo: você pode escolher 1 monstro Planta no seu Cemitério; adicione-o à sua mão.\n\nVocê só pode usar cada efeito de “Dragão Floral de Pétalas de Rosa” uma vez por turno.";
 
 function getRosePetalFloralDragon() {
   const card = cardDatabaseById.get(ROSE_PETAL_FLORAL_DRAGON_ID);
@@ -44,13 +49,21 @@ function makeRuntimeCard(definition, ownerId) {
   return card;
 }
 
-test("Rose Petal Floral Dragon declara Sincro, custo acoplado e Trigger canônicos", () => {
+test("Rose Petal Floral Dragon declara Sincro, custo acoplado e Trigger canônicos", async () => {
   const card = getRosePetalFloralDragon();
   const validation = validateCardDatabase();
   assert.equal(validation.errors.length, 0);
   assert.equal(validation.warnings.length, 0);
 
   assert.equal(card.name, "Rose Petal Floral Dragon");
+  assert.equal(card.description, EXPECTED_EN);
+  const locale = JSON.parse(
+    await readFile(new URL("../public/locales/pt-br.json", import.meta.url), "utf8"),
+  );
+  assert.equal(
+    locale.cards[String(ROSE_PETAL_FLORAL_DRAGON_ID)].description,
+    EXPECTED_PT_BR,
+  );
   assert.equal(card.monsterType, "synchro");
   assert.equal(card.level, 7);
   assert.equal(card.atk, 2500);
@@ -344,7 +357,13 @@ test("o Trigger de deixar o campo exige face-up, cobre todos os destinos e ignor
   game.player.field.push(rose);
   game.player.graveyard.push(plant);
 
-  for (const toZone of ["graveyard", "hand", "deck", "banished"]) {
+  for (const toZone of [
+    "graveyard",
+    "hand",
+    "deck",
+    "banished",
+    "extraDeck",
+  ]) {
     const leaving = await game.effectEngine.collectCardMovedTriggers({
       card: rose,
       player: game.player,
@@ -382,6 +401,51 @@ test("o Trigger de deixar o campo exige face-up, cobre todos os destinos e ignor
   });
   assert.equal(facedown.entries.length, 0);
   assert.equal(controlChange.entries.length, 0);
+});
+
+test("o Trigger de deixar o campo recupera a Planta e encerra o timing", async (t) => {
+  const game = new Game({
+    captureReplay: false,
+    laboratoryMode: true,
+    phaseDelayMs: 0,
+    animationDelayMs: 0,
+  });
+  game.disablePresentationDelays = true;
+  game.waitForBoardPresentation = async () => {};
+  game.turn = game.player.id;
+  game.phase = "main1";
+  game.player.controllerType = "ai";
+  game.bot.controllerType = "ai";
+  t.after(() => game.dispose());
+
+  const rose = makeRuntimeCard(
+    getRosePetalFloralDragon(),
+    game.player.id,
+  );
+  const plant = makeRuntimeCard(
+    {
+      id: 9821,
+      name: "Recovered Plant",
+      cardKind: "monster",
+      type: "Plant",
+      attribute: "Earth",
+      level: 3,
+    },
+    game.player.id,
+  );
+  game.player.field.push(rose);
+  game.player.graveyard.push(plant);
+
+  const moved = await game.moveCard(rose, game.player, "banished", {
+    fromZone: "field",
+    awaitEvents: true,
+  });
+
+  assert.equal(moved.success, true);
+  assert.equal(game.player.banished.includes(rose), true);
+  assert.equal(game.player.hand.includes(plant), true);
+  assert.equal(game.chainSystem.getFastEffectState().state, "open");
+  assert.equal(game.targetSelection, null);
 });
 
 test("a simulação preserva a quantidade vinculada e aplica custo antes da destruição", () => {

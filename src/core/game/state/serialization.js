@@ -43,6 +43,7 @@ export function getPublicState(forPlayerId = "player") {
         atk: hidden ? null : card.atk,
         def: hidden ? null : card.def,
         level: hidden ? null : card.level,
+        baseLevel: hidden ? null : card.baseLevel,
         piercing: hidden ? null : !!card.piercing,
         piercingDamageMultiplier: hidden
           ? null
@@ -68,6 +69,7 @@ export function getPublicState(forPlayerId = "player") {
           atk: card.atk,
           def: card.def,
           level: card.level,
+          baseLevel: card.baseLevel,
           isTuner: card.isTuner === true,
           cardKind: card.cardKind,
           properSummonEstablished: card.properSummonEstablished === true,
@@ -101,6 +103,8 @@ export function getPublicState(forPlayerId = "player") {
       atk: card.cardKind === "monster" ? (card.atk ?? null) : null,
       def: card.cardKind === "monster" ? (card.def ?? null) : null,
       level: card.cardKind === "monster" ? (card.level ?? null) : null,
+      baseLevel:
+        card.cardKind === "monster" ? (card.baseLevel ?? card.level ?? null) : null,
       isTuner: card.cardKind === "monster" ? card.isTuner === true : null,
       lastSummonMethod:
         card.cardKind === "monster" ? card.lastSummonMethod || null : null,

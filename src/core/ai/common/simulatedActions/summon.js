@@ -740,14 +740,24 @@ export function applySpecialSummonToken(ctx) {
     isToken: true,
   };
   if (!canSimSpecialSummon(tokenCard, targetPlayer)) return;
-  targetPlayer.field.push({
+  const summonedToken = {
     ...tokenCard,
     cardKind: "monster",
-    position: action.position || "attack",
-    isFacedown: false,
-    hasAttacked: false,
-    attacksUsedThisTurn: 0,
     isToken: true,
+    cannotAttackThisTurn: action.cannotAttackThisTurn === true,
+    owner: targetPlayer.id,
+    controller: targetPlayer.id,
+  };
+  applySummonState(summonedToken, action, state, targetPlayer, options);
+  targetPlayer.field.push(summonedToken);
+  emitSimulatedAfterSpecialSummon({
+    options,
+    state,
+    player: targetPlayer,
+    card: summonedToken,
+    action,
+    fromZone: "token",
+    sourceCard: options.sourceCard,
   });
   return;
 }

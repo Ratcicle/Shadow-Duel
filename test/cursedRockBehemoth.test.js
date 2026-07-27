@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
 
 import { applySimulatedActions } from "../src/core/ai/common/simulatedActions/index.js";
@@ -16,6 +16,10 @@ import {
 import { cardDatabaseById } from "../src/data/cards.js";
 
 const CURSED_ROCK_BEHEMOTH_ID = 29;
+const EXPECTED_EN_DESCRIPTION =
+  '1 EARTH Tuner + 1+ non-Tuner monsters\n\nYou can target 1 face-up monster your opponent controls; this card gains ATK equal to its original DEF until the end of this turn.\n\nIf this card is destroyed by battle: You can target the monster that destroyed it; take control of it until the End Phase of this turn, then, when that monster leaves the field, Special Summon this card from your GY, but banish it when it leaves the field.\n\nYou can only use each effect of "Cursed Rock Behemoth" once per turn.';
+const EXPECTED_PT_BR_DESCRIPTION =
+  '1 Regulador de TERRA + 1+ monstros não-Reguladores\n\nVocê pode escolher 1 monstro com a face para cima que seu oponente controla; este card ganha ATK igual à DEF original dele até o final deste turno.\n\nSe este card for destruído em batalha: você pode escolher o monstro que o destruiu; tome o controle dele até a Fase Final deste turno e, depois, quando esse monstro deixar o campo, Invoque este card por Invocação-Especial do seu Cemitério, mas bana-o quando ele deixar o campo.\n\nVocê só pode usar cada efeito de "Behemoth de Rocha Amaldiçoado" uma vez por turno.';
 
 function getBehemoth() {
   const card = cardDatabaseById.get(CURSED_ROCK_BEHEMOTH_ID);
@@ -70,6 +74,17 @@ test("Cursed Rock Behemoth declara dados, arte, materiais e contratos canônicos
   assert.equal(card.attribute, "Earth");
   assert.equal(card.atk, 2300);
   assert.equal(card.def, 2400);
+  assert.equal(card.description, EXPECTED_EN_DESCRIPTION);
+  const locale = JSON.parse(
+    readFileSync(
+      new URL("../public/locales/pt-br.json", import.meta.url),
+      "utf8",
+    ),
+  );
+  assert.equal(
+    locale.cards[String(CURSED_ROCK_BEHEMOTH_ID)].description,
+    EXPECTED_PT_BR_DESCRIPTION,
+  );
   assert.equal(
     existsSync(new URL("../public/assets/Cursed Rock Behemoth.png", import.meta.url)),
     true,
@@ -85,6 +100,7 @@ test("Cursed Rock Behemoth declara dados, arte, materiais e contratos canônicos
   assert.equal(gain.speed, 1);
   assert.deepEqual(gain.activationZones, ["field"]);
   assert.equal(gain.requireFaceup, true);
+  assert.equal(gain.targets[0].requireFaceup, true);
   assert.equal(gain.usagePolicy, "use");
   assert.deepEqual(gain.actions[0].atkBoostFromTarget, {
     targetRef: "cursed_rock_behemoth_atk_target",
@@ -136,7 +152,7 @@ test("materiais exigem Regulador TERRA e aceitam não-Reguladores livres", () =>
   ]);
 });
 
-test("o ganho usa DEF original inclusive contra alvo com a face para baixo e expira no fim do turno", async (t) => {
+test("o ganho exige alvo face-up, usa a DEF original e expira no fim do turno", async (t) => {
   const game = createGame(t);
   const behemoth = createRuntimeCard(getBehemoth(), game.player.id);
   const target = createRuntimeCard(
@@ -150,11 +166,41 @@ test("o ganho usa DEF original inclusive contra alvo com a face para baixo e exp
     game.bot.id,
   );
   target.def = 400;
-  target.isFacedown = true;
+  const facedownTarget = createRuntimeCard(
+    {
+      id: 9907,
+      name: "Facedown defender",
+      cardKind: "monster",
+      atk: 800,
+      def: 1200,
+    },
+    game.bot.id,
+  );
+  facedownTarget.isFacedown = true;
+  facedownTarget.position = "defense";
   game.player.field.push(behemoth);
-  game.bot.field.push(target);
+  game.bot.field.push(target, facedownTarget);
 
   const effect = getEffect("cursed_rock_behemoth_gain_original_def");
+  const preview = game.effectEngine.resolveTargets(
+    effect.targets,
+    {
+      source: behemoth,
+      player: game.player,
+      opponent: game.bot,
+      activationZone: "field",
+      activationContext: { preview: true },
+    },
+    null,
+  );
+  const requirement = preview.selectionContract.requirements.find(
+    (entry) => entry.id === "cursed_rock_behemoth_atk_target",
+  );
+  assert.deepEqual(
+    requirement.candidates.map((candidate) => candidate.cardRef),
+    [target],
+  );
+
   const result = await game.effectEngine.applyActions(
     effect.actions,
     { source: behemoth, player: game.player, opponent: game.bot, effect },

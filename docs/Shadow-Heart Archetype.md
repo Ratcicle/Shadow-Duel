@@ -66,7 +66,10 @@ Fonte dos textos: `src/data/cards/*.js` via fachada `src/data/cards.js` (1x cada
 
 **Shadow-Heart Coward (109)** — Nível 3, Fiend, 800/1000. Se descartada da mão para o Cemitério: escolha 1 monstro do oponente; ATK/DEF são reduzidos pela metade até o fim do turno.
 
-**Shadow-Heart Scale Dragon (111)** — Nível 8, Dragon, 3000/2500. Requer 3 tributos. Uma vez por turno, se destruir um monstro em batalha: recupere 1 carta "Shadow-Heart" do Cemitério.
+**Shadow-Heart Scale Dragon (111)** — Nível 8, Dragon, 3000/2500. Requer 2 Tributos. Se este card foi Invocado por Invocação-Tributo, ele ganha os seguintes efeitos:
+
+- Uma vez por turno, se destruir um monstro do oponente em batalha: escolha 1 card "Shadow-Heart" no seu Cemitério; adicione-o à sua mão.
+- Uma vez por turno, se for destruído em batalha ou por um efeito de card do oponente: você pode Invocar por Invocação-Especial até 3 monstros "Shadow-Heart" com 1600 ou menos de ATK do seu Cemitério.
 
 **Shadow-Heart Griffin (114)** — Nível 5, Winged Beast, 2000/1500. Se você não controla monstros, pode Invocá-lo sem Tributo.
 

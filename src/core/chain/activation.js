@@ -780,6 +780,13 @@ export async function prepareChainResponse(candidate, player, context = null) {
   }
   prepared.costSelections = costSelections || {};
   prepared.activationContext.costSelections = { ...prepared.costSelections };
+  const withCostSelectionContext = (baseContext = {}) => ({
+    ...(baseContext || {}),
+    _actionTargets: {
+      ...(baseContext?._actionTargets || {}),
+      ...(prepared.costSelections || {}),
+    },
+  });
 
   const costs = getEffectActivationCosts(prepared.effect);
   if (
@@ -874,7 +881,11 @@ export async function prepareChainResponse(candidate, player, context = null) {
       )
     : { ok: true };
   const finalTargetPreview = targetDefinitions.length
-    ? effectEngine?.resolveTargets?.(targetDefinitions, previewCtx, null)
+    ? effectEngine?.resolveTargets?.(
+        targetDefinitions,
+        withCostSelectionContext(previewCtx),
+        null,
+      )
     : { ok: true };
   if (
     (finalCostPreview?.ok === false && !finalCostPreview?.needsSelection) ||
@@ -894,7 +905,7 @@ export async function prepareChainResponse(candidate, player, context = null) {
   const resolvedTargetPreview = resolvedTargetDefinitions.length
     ? effectEngine?.resolveTargets?.(
         resolvedTargetDefinitions,
-        previewCtx,
+        withCostSelectionContext(previewCtx),
         null,
       )
     : { ok: true };
@@ -977,7 +988,7 @@ export async function prepareChainResponse(candidate, player, context = null) {
       prepared.card,
       resolvedTargetDefinitions,
       player,
-      responseContext,
+      withCostSelectionContext(responseContext),
       {
         purpose: "target",
         allowCancel: false,
@@ -998,7 +1009,7 @@ export async function prepareChainResponse(candidate, player, context = null) {
   const finalDeclaredTargetPreview = resolvedTargetDefinitions.length
     ? effectEngine?.resolveTargets?.(
         resolvedTargetDefinitions,
-        previewCtx,
+        withCostSelectionContext(previewCtx),
         prepared.targetSelections,
       )
     : { ok: true };

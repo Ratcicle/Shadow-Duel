@@ -1,4 +1,7 @@
-import { cardMatchesKind } from "../../Card.js";
+import {
+  cardMatchesKind,
+  getCardComparableAttribute,
+} from "../../Card.js";
 import { hasSynchroSummonPreviewCandidate } from "../../actionHandlers/summon/synchroEffects.js";
 import { mergeCanonicalSelections } from "../../game/selection/contract.js";
 import { checkSpecialSummonEligibility } from "../../game/summon/eligibility.js";
@@ -724,9 +727,9 @@ function pairedPreviewComparisonsPass(sourceCard, pairedCard, pairSpec = {}) {
     const sourceAttr = comparison.sourceAttr || comparison.refAttr || attr;
     if (!pairedAttr || !sourceAttr) return false;
     return comparePairedPreviewValues(
-      pairedCard?.[pairedAttr],
+      getCardComparableAttribute(pairedCard, pairedAttr),
       comparison.op || "eq",
-      sourceCard?.[sourceAttr],
+      getCardComparableAttribute(sourceCard, sourceAttr),
     );
   });
 }
@@ -1383,6 +1386,37 @@ export function checkActionPreviewRequirements(actions, ctx) {
         return {
           ok: false,
           reason: `Need at least ${amount} ${action.counterType || "default"} counter(s) on the field.`,
+        };
+      }
+    }
+
+    if (action.type === "remove_counter") {
+      const counterType = action.counterType || "default";
+      const requestedAmount = Number(action.amount ?? 1);
+      const amount = Number.isFinite(requestedAmount)
+        ? Math.max(1, Math.floor(requestedAmount))
+        : 1;
+      const targetRef = action.targetRef || "self";
+      const referencedTargets =
+        targetRef === "self"
+          ? [previewCtx.source]
+          : previewCtx._actionTargets?.[targetRef] ||
+            previewCtx.activationContext?.costSelections?.[targetRef] ||
+            [];
+      const targetCards = Array.isArray(referencedTargets)
+        ? referencedTargets
+        : [referencedTargets];
+      const canRemove = targetCards.some((card) => {
+        const current =
+          typeof card?.getCounter === "function"
+            ? Number(card.getCounter(counterType) || 0)
+            : Number(card?.counters?.get?.(counterType) || 0);
+        return action.allowBelow === true ? current > 0 : current >= amount;
+      });
+      if (!canRemove) {
+        return {
+          ok: false,
+          reason: `Need at least ${amount} ${counterType} counter(s).`,
         };
       }
     }

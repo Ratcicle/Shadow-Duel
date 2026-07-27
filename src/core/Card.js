@@ -32,6 +32,17 @@ export function cardMatchesKind(card, requiredKinds) {
   return required.some((kind) => effectiveKinds.includes(kind));
 }
 
+export function getCardComparableAttribute(card, attribute) {
+  if (!card || !attribute) return undefined;
+  if (attribute === "originalLevel") {
+    const level = Number(
+      card.baseLevel ?? card.originalLevel ?? card.level ?? 0,
+    );
+    return Number.isFinite(level) ? level : 0;
+  }
+  return card[attribute];
+}
+
 export function applyStatusesOnSummon(card, statuses) {
   if (!card || !statuses) return false;
   const statusEntries = Array.isArray(statuses) ? statuses : [statuses];
@@ -119,6 +130,7 @@ export function captureTrapMonsterOriginalState(card) {
     types: Array.isArray(card.types) ? [...card.types] : null,
     attribute: card.attribute || null,
     level: card.level ?? 0,
+    baseLevel: card.baseLevel ?? card.level ?? 0,
     baseAtk: card.baseAtk ?? 0,
     baseDef: card.baseDef ?? 0,
     atk: card.atk ?? 0,
@@ -146,6 +158,7 @@ export function restoreTrapMonsterOriginalState(card) {
   }
   card.attribute = original.attribute || null;
   card.level = original.level ?? 0;
+  card.baseLevel = original.baseLevel ?? original.level ?? 0;
   card.baseAtk = original.baseAtk ?? 0;
   card.baseDef = original.baseDef ?? 0;
   card.atk = original.atk ?? 0;
@@ -188,6 +201,7 @@ export default class Card {
     this.type = data.type; // monster race/attribute description
     this.attribute = data.attribute || null;
     this.level = data.level ?? 0;
+    this.baseLevel = data.level ?? 0;
     this.position = "attack";
     this.isFacedown = false;
     this.battlePositionLocked = false;

@@ -342,6 +342,22 @@ export function canActivateMonsterEffectPreview(
     return { ok: false, reason: "You must control no monsters." };
   }
 
+  const activationCostCheck = this.checkActionPreviewRequirements(
+    effect.activationCosts || [],
+    {
+      ...ctx,
+      effect,
+      _actionTargets: selections || {},
+      activationContext: {
+        ...activationContext,
+        costSelections: selections || {},
+      },
+    },
+  );
+  if (!activationCostCheck.ok) {
+    return { ok: false, reason: activationCostCheck.reason };
+  }
+
   const actionCheck = this.checkActionPreviewRequirements(
     effect.actions || [],
     { ...ctx, effect }

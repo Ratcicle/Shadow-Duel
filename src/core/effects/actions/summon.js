@@ -214,6 +214,7 @@ export async function applySpecialSummonSelfAsTrapMonster(action, ctx) {
   source.type = monster.type || action.monsterTypeName || action.typeName || source.type;
   source.attribute = monster.attribute || action.attribute || source.attribute || null;
   source.level = resolveTrapMonsterStat(monster, action, "level", 0);
+  source.baseLevel = source.level;
   source.baseAtk = resolveTrapMonsterStat(monster, action, "atk", 0);
   source.baseDef = resolveTrapMonsterStat(monster, action, "def", 0);
   source.atk = source.baseAtk;

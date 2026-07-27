@@ -1,17 +1,27 @@
 import { cardDatabaseById } from "../../data/cards.js";
 import Card from "../Card.js";
 import Player from "../Player.js";
+import {
+  DECK_TYPES,
+  assertDeckBanlistLegal,
+  getCardCopyLimit,
+} from "../game/deck/banlist.js";
 import { getBotDeckList, getBotExtraDeckList } from "./presets.js";
 
 export function buildBotDeck(bot) {
   if (!bot) return;
 
+  const deckList = getBotDeckList(bot.archetype);
+  assertDeckBanlistLegal({ deck: deckList });
   bot.deck = [];
   const copies = {};
 
   const addCard = (data) => {
     copies[data.id] = copies[data.id] || 0;
-    if (copies[data.id] >= 3 || bot.deck.length >= bot.maxDeckSize) {
+    const copyLimit = getCardCopyLimit(data.id, {
+      deckType: DECK_TYPES.MAIN,
+    });
+    if (copies[data.id] >= copyLimit || bot.deck.length >= bot.maxDeckSize) {
       return false;
     }
     const card = new Card(data, bot.id);
@@ -21,7 +31,7 @@ export function buildBotDeck(bot) {
     return true;
   };
 
-  for (const cardId of getBotDeckList(bot.archetype)) {
+  for (const cardId of deckList) {
     const data = cardDatabaseById.get(cardId);
     if (data) {
       addCard(data);

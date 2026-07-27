@@ -3,6 +3,10 @@ import {
   CARD_ID_MIGRATION_VERSION,
   migrateCardId,
 } from "../../data/cards/idMigration.js";
+import {
+  DECK_TYPES,
+  getCardCopyLimit,
+} from "../../core/game/deck/banlist.js";
 
 export const BOT_PRESET_KEY = "shadow_duel_bot_preset";
 export const LEGACY_DECK_KEY = "shadow_duel_deck";
@@ -161,15 +165,24 @@ export function topUpDeck(deck) {
     Math.min(MAX_DECK_SIZE, filled.length),
   );
   while (filled.length < targetSize) {
+    const sizeBeforePass = filled.length;
     for (const card of cardDatabase) {
       counts[card.id] = counts[card.id] || 0;
       if (isExtraDeckMonster(card)) {
         continue;
       }
-      if (counts[card.id] < 3 && filled.length < targetSize) {
+      const copyLimit = getCardCopyLimit(card.id, {
+        deckType: DECK_TYPES.MAIN,
+      });
+      if (counts[card.id] < copyLimit && filled.length < targetSize) {
         filled.push(card.id);
         counts[card.id]++;
       }
+    }
+    if (filled.length === sizeBeforePass) {
+      throw new Error(
+        "Unable to build a legal Main Deck with the current banlist.",
+      );
     }
   }
   return filled;

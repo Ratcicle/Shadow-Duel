@@ -6,7 +6,10 @@
  */
 
 import { botLogger } from "../../BotLogger.js";
-import { cardMatchesKind } from "../../Card.js";
+import {
+  cardMatchesKind,
+  getCardComparableAttribute,
+} from "../../Card.js";
 import { checkSpecialSummonEligibility } from "../../game/summon/eligibility.js";
 
 // Track duplicate selectCandidates calls per turn
@@ -267,9 +270,9 @@ function pairedTargetComparisonsPass(sourceCard, pairedCard, pairSpec = {}) {
     const sourceAttr = comparison.sourceAttr || comparison.refAttr || attr;
     if (!pairedAttr || !sourceAttr) return false;
     return comparePairedValues(
-      pairedCard?.[pairedAttr],
+      getCardComparableAttribute(pairedCard, pairedAttr),
       comparison.op || "eq",
-      sourceCard?.[sourceAttr],
+      getCardComparableAttribute(sourceCard, sourceAttr),
     );
   });
 }
@@ -988,7 +991,7 @@ export function selectCandidates(def, ctx) {
     const refCards = targetMap[ref];
 
     if (refCards && refCards.length > 0) {
-      const refValue = refCards[0]?.[attr];
+      const refValue = getCardComparableAttribute(refCards[0], attr);
 
       if (refValue !== undefined) {
         log(
@@ -996,7 +999,7 @@ export function selectCandidates(def, ctx) {
         );
 
         candidates = candidates.filter((card) => {
-          const cardValue = card[attr];
+          const cardValue = getCardComparableAttribute(card, attr);
           if (cardValue === undefined) {
             log(
               `[selectCandidates] Rejecting ${card.name}: no ${attr} attribute`

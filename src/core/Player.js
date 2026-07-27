@@ -5,6 +5,11 @@ import {
 } from "../data/cards.js";
 import Card, { cardMatchesKind } from "./Card.js";
 import {
+  DECK_TYPES,
+  assertDeckBanlistLegal,
+  getCardCopyLimit,
+} from "./game/deck/banlist.js";
+import {
   fieldHasTributeValue,
   getTributeCardsFromIndices,
   getTributeValueTotal,
@@ -337,6 +342,9 @@ export default class Player {
   }
 
   buildDeck(deckList = null) {
+    if (Array.isArray(deckList) && deckList.length > 0) {
+      assertDeckBanlistLegal({ deck: deckList });
+    }
     this.deck = [];
     const maxDeckSize = this.maxDeckSize;
     const minDeckSize = this.minDeckSize || maxDeckSize;
@@ -345,7 +353,10 @@ export default class Player {
     const addCard = (data) => {
       if (isExtraDeckMonsterData(data)) return;
       copies[data.id] = copies[data.id] || 0;
-      if (copies[data.id] >= 3 || this.deck.length >= maxDeckSize) return;
+      const copyLimit = getCardCopyLimit(data.id, {
+        deckType: DECK_TYPES.MAIN,
+      });
+      if (copies[data.id] >= copyLimit || this.deck.length >= maxDeckSize) return;
       const card = new Card(data, this.id);
       this.game?.ensureDuelCardId?.(card);
       this.deck.push(card);
@@ -373,11 +384,17 @@ export default class Player {
       }
 
       while (this.deck.length < targetSize) {
+        const sizeBeforePass = this.deck.length;
         for (const data of cardDatabase) {
           // Avoid pulling Extra Deck monsters into the main deck when topping up
           if (isExtraDeckMonsterData(data)) continue;
           addCard(data);
           if (this.deck.length >= targetSize) break;
+        }
+        if (this.deck.length === sizeBeforePass) {
+          throw new Error(
+            "Unable to build a legal Main Deck with the current banlist.",
+          );
         }
       }
     };
@@ -401,19 +418,26 @@ export default class Player {
   }
 
   buildExtraDeck(extraDeckList = null) {
+    if (Array.isArray(extraDeckList) && extraDeckList.length > 0) {
+      assertDeckBanlistLegal({ extraDeck: extraDeckList });
+    }
     this.extraDeck = [];
 
-    const copies = new Set();
+    const copies = {};
     const pushExtraDeckMonster = (data) => {
       if (!isExtraDeckMonsterData(data)) {
         return;
       }
-      if (copies.has(data.id)) return;
+      copies[data.id] = copies[data.id] || 0;
+      const copyLimit = getCardCopyLimit(data.id, {
+        deckType: DECK_TYPES.EXTRA,
+      });
+      if (copies[data.id] >= copyLimit) return;
       if (this.extraDeck.length >= this.maxExtraDeckSize) return;
       const card = new Card(data, this.id);
       this.game?.ensureDuelCardId?.(card);
       this.extraDeck.push(card);
-      copies.add(data.id);
+      copies[data.id]++;
     };
 
     if (extraDeckList && Array.isArray(extraDeckList)) {

@@ -325,7 +325,10 @@
       "mainDeckLimit": "Limite de {max} cartas atingido.",
       "extraDeckFull": "Extra Deck est\u00e1 cheio (max {max}).",
       "extraDeckCopyLimit": "Apenas 1 c\u00f3pia de cada monstro do Extra Deck por id.",
+      "copyLimitReached": "O limite de cópias de “{card}” é {max}.",
       "deckSizeError": "O deck precisa ter entre {min} e {max} cartas.",
+      "banlistDeckError": "O deck viola a Lista de Proibidas e Limitadas:\n{violations}",
+      "banlistViolation": "• {card}: {count}/{limit}",
       "botStatus": "Bot: {label}"
     }
   },
@@ -439,33 +442,25 @@
       "name": "Corcel Pesadelo",
       "description": "Um cavalo demoníaco com a juba flamejante."
     },
-    "2": {
-      "name": "Surto Arcano",
-      "description": "Compre 2 cards."
-    },
     "3": {
       "name": "Mosquito Chupa-Sangue",
       "description": "Restaure 1000 PV."
     },
     "4": {
       "name": "Necromancia Barata",
-      "description": "Invoque por invocação-Especial 1 Token de Esqueleto (ATK/DEF 500)."
+      "description": "Invoque por Invocação-Especial 1 “Ficha de Esqueleto Invocado” (Zumbi/TREVAS/Nível 1/ATK 500/DEF 500)."
     },
     "5": {
       "name": "Corcel Pesadelo da Meia-Noite",
-      "description": "Pode ser invocado por Invocação-Tributo usando apenas 1 tributo ao tributar 'Corcel Pesadelo'. Se esse card destruir um monstro do oponente em batalha: cause 300 de dano."
-    },
-    "6": {
-      "name": "Buscador Infinito",
-      "description": "Adicione um card do seu Deck à sua mão."
+      "description": "Você pode Invocar este card por Invocação-Especial da sua mão ao oferecer como Tributo 1 “Corcel Pesadelo”. Se este card destruir um monstro do oponente em batalha: cause 300 de dano ao seu oponente."
     },
     "7": {
       "name": "Transmutar",
-      "description": "Envie um monstro que você controla para o cemitério, então invoque por invocação-Especial 1 monstro do seu cemitério do mesmo nível do monstro enviado."
+      "description": "Envie 1 monstro com a face para cima que você controla para o Cemitério e, depois, escolha 1 monstro no seu Cemitério com o mesmo Nível original que ele, mas com um nome diferente; Invoque o alvo por Invocação-Especial. Você só pode ativar 1 “Transmutar” por turno."
     },
     "8": {
       "name": "O Monstro que Renasce",
-      "description": "Escolha um monstro em qualquer cemitério, invoque-o por invocação-Especial no seu lado do campo."
+      "description": "Escolha 1 monstro em qualquer Cemitério; Invoque-o por Invocação-Especial no seu campo."
     },
     "9": {
       "name": "Estudioso Arcano",
@@ -473,11 +468,11 @@
     },
     "10": {
       "name": "Espada Divisora de Luz",
-      "description": "Se o monstro equipado destruir um monstro do oponente em batalha: Ganhe 500 PV. Se este card for enviado para o Cemitério: escolha 1 Magia/Armadilha que seu oponente controla; destrua-a."
+      "description": "Se o monstro equipado destruir um monstro do oponente em batalha: ganhe 500 PV. Se este card for enviado para o Cemitério: escolha 1 Magia/Armadilha que seu oponente controla; destrua-a."
     },
     "11": {
       "name": "Espada das Duas Trevas",
-      "description": "O monstro equipado pode atacar 1 vez adicional durante cada Fase de Batalha. Se este card for enviado para o Cemitério: escolha 1 Magia/Armadilha que seu oponente controla; destrua-a."
+      "description": "O monstro equipado pode realizar 1 ataque adicional durante cada Fase de Batalha.\n\nSe este card for enviado para o Cemitério: escolha 1 Magia/Armadilha que seu oponente controla; destrua-a.\n\nVocê só pode controlar 1 “Espada das Duas Trevas”."
     },
     "12": {
       "name": "Polimerização",
@@ -493,63 +488,63 @@
     },
     "15": {
       "name": "Queda do Tolo",
-      "description": "Quando seu oponente Invocar por Invocação-Normal um monstro com 1600 ou mais de ATK: escolha o monstro; destrua o alvo."
+      "description": "Quando seu oponente Invocar por Invocação-Normal um monstro com 1600 ou mais de ATK: escolha esse monstro; destrua-o."
     },
     "16": {
       "name": "Espírito da Árvore Ancestral",
-      "description": "Invoque este card por Invocação-Especial em Posição de Defesa como um Monstro de Efeito (Espírito/TREVAS/Nível 4/ATK 1700/DEF 1900). Este card ainda é considerado uma Armadilha. Se este card Invocado desta forma for destruído em batalha: cause 500 de dano ao seu oponente."
+      "description": "Invoque este card por Invocação-Especial em Posição de Defesa como um Monstro de Efeito (Espírito/TREVAS/Nível 4/ATK 1700/DEF 1900). Este card ainda é considerado uma Armadilha.\n\nSe este card Invocado desta forma for destruído em batalha: cause 500 de dano ao seu oponente."
     },
     "17": {
       "name": "Corte dos Mortos",
-      "description": "Sempre que um monstro for enviado a qualquer Cemitério: coloque 1 Marcador Fúnebre neste card. Uma vez por turno: você pode remover 8 Marcadores Fúnebres deste card e escolher 1 monstro em qualquer Cemitério; Invoque-o por Invocação-Especial no seu campo."
+      "description": "Cada vez que um monstro for enviado para qualquer Cemitério: coloque 1 Marcador Fúnebre neste card.\n\nUma vez por turno: você pode remover 8 Marcadores Fúnebres deste card e, depois, escolher 1 monstro em qualquer Cemitério; Invoque-o por Invocação-Especial no seu campo."
     },
     "18": {
       "name": "Chamado dos Assombrados",
-      "description": "Ative este card ao escolher 1 monstro no seu Cemitério; Invoque o alvo por Invocação-Especial em Posição de Ataque. Quando este card deixar o campo, destrua esse monstro. Quando esse alvo deixar o campo, destrua este card."
+      "description": "Ative este card ao escolher 1 monstro no seu Cemitério; Invoque-o por Invocação-Especial em Posição de Ataque.\n\nQuando este card deixar o campo, destrua esse monstro. Quando esse monstro deixar o campo, destrua este card."
     },
     "19": {
       "name": "De-Sincro",
-      "description": "Escolha 1 Monstro Sincro no campo; devolva o alvo para o Deck Adicional e, depois, se todos os monstros que foram usados para a Invocação-Sincro desse monstro estiverem no seu Cemitério, você pode Invocá-los por Invocação-Especial. Você só pode ativar 1 \"De-Sincro\" por turno."
+      "description": "Escolha 1 Monstro Sincro no campo; devolva-o ao Deck Adicional e, depois, se todos os Monstros de Matéria Sincro usados para sua Invocação-Sincro estiverem no seu Cemitério, você pode Invocá-los por Invocação-Especial.\n\nVocê só pode ativar 1 “De-Sincro” por turno."
     },
     "20": {
       "name": "Reciclar Fusão",
-      "description": "Escolha 1 monstro no seu Cemitério que foi enviado para lá como Matéria de Fusão neste turno; adicione-o à sua mão. Se o monstro escolhido for de Nível 4 ou menor, você pode Invocá-lo por Invocação-Especial em Posição de Defesa, mas negue seus efeitos até o final deste turno. Você só pode ativar 1 \"Reciclar Fusão\" por turno."
+      "description": "Escolha 1 monstro no seu Cemitério que foi enviado para lá como Matéria de Fusão neste turno; adicione-o à sua mão. Se o monstro adicionado for de Nível 4 ou menor, você pode Invocá-lo por Invocação-Especial em Posição de Defesa, mas negue seus efeitos até o final deste turno.\n\nVocê só pode ativar 1 “Reciclar Fusão” por turno."
     },
     "21": {
       "name": "Seleção Natural",
-      "description": "Descarte 1 card e, depois, escolha 1 card com a face para cima que seu oponente controla; destrua esse alvo. Você só pode ativar 1 \"Seleção Natural\" por turno."
+      "description": "Descarte 1 card e, depois, escolha 1 card com a face para cima que seu oponente controla; destrua-o.\n\nVocê só pode ativar 1 “Seleção Natural” por turno."
     },
     "22": {
       "name": "Aposta Desesperada",
-      "description": "Pague metade dos seus PV; compre 2 cards. Pelo resto deste turno, você não pode ativar efeitos de cards com o mesmo nome dos cards comprados por este efeito. Você só pode ativar 1 \"Aposta Desesperada\" por turno."
+      "description": "Pague metade dos seus PV; compre 2 cards.\n\nPelo resto deste turno, você não pode ativar efeitos de cards com o mesmo nome dos cards comprados por este efeito.\n\nVocê só pode ativar 1 “Aposta Desesperada” por turno."
     },
     "23": {
       "name": "Divindade Guardiã Visas",
-      "description": "Quando seu oponente ativar um card ou efeito que baniria um ou mais cards do seu campo e/ou Cemitério (Efeito Rápido): você pode Invocar este card por Invocação-Especial da sua mão e, se isso acontecer, negue esse efeito. Você só pode usar este efeito de \"Divindade Guardiã Visas\" uma vez por turno."
+      "description": "Quando seu oponente ativar um card ou efeito que baniria um ou mais cards do seu campo e/ou Cemitério (Efeito Rápido): você pode Invocar este card por Invocação-Especial da sua mão e, se isso acontecer, negue esse efeito.\n\nVocê só pode usar este efeito de “Divindade Guardiã Visas” uma vez por turno."
     },
     "24": {
       "name": "Deus Luminoso Hiperion",
-      "description": "Você pode Invocar este card por Invocação-Especial da sua mão ao banir 5 monstros de LUZ do seu campo e/ou Cemitério. Se Invocado dessa forma, este card não pode ser destruído por efeitos de cards do oponente. Durante o cálculo de dano, se este card batalhar um monstro de TREVAS do oponente: ele ganha 1000 ATK/DEF apenas durante esse cálculo de dano."
+      "description": "Você pode Invocar este card por Invocação-Especial da sua mão ao banir 5 monstros de LUZ do seu campo e/ou Cemitério. Se Invocado desta forma, este card não pode ser destruído por efeitos de cards do oponente.\n\nDurante o cálculo de dano, se este card batalhar um monstro de TREVAS do oponente: ele ganha 1000 ATK/DEF apenas durante esse cálculo de dano."
     },
     "25": {
       "name": "Batalha Entre o Bem e o Mal",
-      "description": "Invoque por Invocação-Especial 1 monstro de LUZ ou TREVAS de Nível 4 ou menor do seu Deck, mas negue seus efeitos. Pelo resto deste turno, depois que este efeito resolver, você não pode ativar efeitos de monstros, exceto efeitos de monstros com o mesmo Atributo do monstro Invocado por este efeito. Você só pode ativar 1 \"Batalha Entre o Bem e o Mal\" por turno."
+      "description": "Invoque por Invocação-Especial 1 monstro de LUZ ou de TREVAS de Nível 4 ou menor do seu Deck, mas negue seus efeitos. Pelo resto deste turno depois que este efeito resolver, você não pode ativar efeitos de monstros, exceto efeitos de monstros com o mesmo Atributo que o monstro Invocado por este efeito.\n\nVocê só pode ativar 1 “Batalha Entre o Bem e o Mal” por turno."
     },
     "26": {
       "name": "Samurai Fantasma da Katana Nebulosa",
-      "description": "Se este card for Invocado por Invocação-Normal: você pode enviar 1 monstro Regulador do seu Deck para o Cemitério. Você pode banir este card do seu Cemitério e, depois, escolher 1 monstro Regulador de Nível 4 ou menor no seu Cemitério; Invoque-o por Invocação-Especial. Você só pode usar cada efeito de \"Samurai Fantasma da Katana Nebulosa\" uma vez por turno."
+      "description": "Se este card for Invocado por Invocação-Normal: você pode enviar 1 monstro Regulador do seu Deck para o Cemitério.\n\nVocê pode banir este card do seu Cemitério e, depois, escolher 1 monstro Regulador de Nível 4 ou menor no seu Cemitério; Invoque-o por Invocação-Especial.\n\nVocê só pode usar cada efeito de “Samurai Fantasma da Katana Nebulosa” uma vez por turno."
     },
     "27": {
       "name": "Leviatã de Obsidiana Magmática",
-      "description": "1 Regulador de TERRA + 1+ monstros não Reguladores\nVocê pode descartar 1 card e, depois, escolher 1 monstro com a face para cima que seu oponente controla (Efeito Rápido); coloque-o com a face para baixo em Posição de Defesa. Monstros colocados com a face para baixo por este efeito não podem mudar suas posições de batalha.\nSe este card for destruído em batalha ou por efeito de card: você pode escolher até 2 monstros de TERRA de Nível 3 ou menor no seu Cemitério; Invoque-os por Invocação-Especial.\nVocê só pode usar cada efeito de \"Leviatã de Obsidiana Magmática\" uma vez por turno."
+      "description": "1 Regulador de TERRA + 1+ monstros não-Reguladores\n\nVocê pode descartar 1 card e, depois, escolher 1 monstro com a face para cima que seu oponente controla (Efeito Rápido); coloque-o com a face para baixo em Posição de Defesa. Monstros colocados com a face para baixo por este efeito não podem mudar suas posições de batalha.\n\nSe este card for destruído em batalha ou por efeito de card: você pode escolher até 2 monstros de TERRA de Nível 3 ou menor no seu Cemitério; Invoque-os por Invocação-Especial.\n\nVocê só pode usar cada efeito de “Leviatã de Obsidiana Magmática” uma vez por turno."
     },
     "28": {
       "name": "Dragão Floral de Pétalas de Rosa",
-      "description": "1 Regulador Planta + 1+ monstros não Reguladores\nSe seu oponente controlar mais cards do que você: você pode banir de 1 a 3 monstros Planta do seu Cemitério; escolha o mesmo número de cards que seu oponente controla; destrua-os.\nSe este card deixar o campo: você pode escolher 1 monstro Planta no seu Cemitério; adicione-o à sua mão.\nVocê só pode usar cada efeito de \"Dragão Floral de Pétalas de Rosa\" uma vez por turno."
+      "description": "1 Regulador Planta + 1+ monstros não-Reguladores\n\nSe seu oponente controlar mais cards que você: você pode banir de 1 a 3 monstros Planta do seu Cemitério e, depois, escolher o mesmo número de cards que seu oponente controla; destrua-os.\n\nSe este card deixar o campo: você pode escolher 1 monstro Planta no seu Cemitério; adicione-o à sua mão.\n\nVocê só pode usar cada efeito de “Dragão Floral de Pétalas de Rosa” uma vez por turno."
     },
     "29": {
       "name": "Behemoth de Rocha Amaldiçoado",
-      "description": "1 Regulador de TERRA + 1+ monstros não Reguladores\nUma vez por turno: você pode escolher 1 monstro que seu oponente controla; este card ganha ATK igual à DEF original desse monstro até o final deste turno.\nSe este card for destruído em batalha: você pode escolher o monstro que o destruiu; tome o controle dele até a Fase Final e, depois, quando esse monstro deixar o campo, Invoque este card por Invocação-Especial do seu Cemitério, mas bana-o quando ele deixar o campo.\nVocê só pode usar cada efeito de \"Behemoth de Rocha Amaldiçoado\" uma vez por turno."
+      "description": "1 Regulador de TERRA + 1+ monstros não-Reguladores\n\nVocê pode escolher 1 monstro com a face para cima que seu oponente controla; este card ganha ATK igual à DEF original dele até o final deste turno.\n\nSe este card for destruído em batalha: você pode escolher o monstro que o destruiu; tome o controle dele até a Fase Final deste turno e, depois, quando esse monstro deixar o campo, Invoque este card por Invocação-Especial do seu Cemitério, mas bana-o quando ele deixar o campo.\n\nVocê só pode usar cada efeito de \"Behemoth de Rocha Amaldiçoado\" uma vez por turno."
     },
     "30": {
       "name": "Terror Fúria Vermelha",
@@ -881,7 +876,7 @@
     },
     "253": {
       "name": "Dragão Blindado Metálico",
-      "description": "Material de Ascensão: 'Dragão Blindado' Requisito: Nenhum. Enquanto estiver em Posição de Defesa, este card não pode ser destruído em batalha. Este card ganha 100 de ATK/DEF para cada monstro Dragão Invocado por Invocação-Especial enquanto este card estiver com a face para cima no campo."
+      "description": "Material de Ascensão: “Dragão Blindado”. Requisito: nenhum.\n\nEnquanto estiver em Posição de Defesa, este card não pode ser destruído em batalha. Este card ganha 100 de ATK/DEF para cada monstro Dragão Invocado por Invocação-Especial enquanto este card estiver com a face para cima no campo."
     },
     "254": {
       "name": "Dragão Cinzento",

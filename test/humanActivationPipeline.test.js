@@ -189,7 +189,7 @@ test("Behemoth destroi Abyssal Eel sem prender a transicao para Main Phase 2", a
     game.bot,
   );
   eel.position = "defense";
-  eel.isFacedown = true;
+  eel.isFacedown = false;
   const darknessValley = createCard(
     cardDatabaseByName.get("Darkness Valley"),
     game.bot,

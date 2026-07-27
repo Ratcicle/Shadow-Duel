@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import Card from "../src/core/Card.js";
@@ -27,6 +28,10 @@ import {
 } from "./chain/helpers/chainHarness.js";
 
 const LEVIATHAN_ID = 27;
+const EXPECTED_EN =
+  '1 EARTH Tuner + 1+ non-Tuner monsters\n\nYou can discard 1 card, then target 1 face-up monster your opponent controls (Quick Effect); change it to face-down Defense Position. Monsters changed to face-down Defense Position by this effect cannot change their battle positions.\n\nIf this card is destroyed by battle or card effect: You can target up to 2 Level 3 or lower EARTH monsters in your Graveyard; Special Summon them.\n\nYou can only use each effect of "Magmatic Obsidian Leviathan" once per turn.';
+const EXPECTED_PT_BR =
+  "1 Regulador de TERRA + 1+ monstros não-Reguladores\n\nVocê pode descartar 1 card e, depois, escolher 1 monstro com a face para cima que seu oponente controla (Efeito Rápido); coloque-o com a face para baixo em Posição de Defesa. Monstros colocados com a face para baixo por este efeito não podem mudar suas posições de batalha.\n\nSe este card for destruído em batalha ou por efeito de card: você pode escolher até 2 monstros de TERRA de Nível 3 ou menor no seu Cemitério; Invoque-os por Invocação-Especial.\n\nVocê só pode usar cada efeito de “Leviatã de Obsidiana Magmática” uma vez por turno.";
 
 function getLeviathan() {
   const card = cardDatabaseById.get(LEVIATHAN_ID);
@@ -34,13 +39,18 @@ function getLeviathan() {
   return card;
 }
 
-test("Magmatic Obsidian Leviathan declara materiais, efeitos e limites canônicos", () => {
+test("Magmatic Obsidian Leviathan declara materiais, efeitos e limites canônicos", async () => {
   const card = getLeviathan();
   const validation = validateCardDatabase();
   assert.equal(validation.errors.length, 0);
   assert.equal(validation.warnings.length, 0);
 
   assert.equal(card.name, "Magmatic Obsidian Leviathan");
+  assert.equal(card.description, EXPECTED_EN);
+  const locale = JSON.parse(
+    await readFile(new URL("../public/locales/pt-br.json", import.meta.url), "utf8"),
+  );
+  assert.equal(locale.cards[String(LEVIATHAN_ID)].description, EXPECTED_PT_BR);
   assert.equal(card.monsterType, "synchro");
   assert.deepEqual(
     card.synchro,
@@ -275,6 +285,64 @@ test("ativação rápida usa a transação canônica: custo antes de alvo e elo"
     },
   ]);
   assert.equal(link.costSelections.magmatic_obsidian_leviathan_discard_cost[0], discard);
+});
+
+test("o Trigger de destruição Invoca até dois monstros sequencialmente", async (t) => {
+  const game = new Game({
+    captureReplay: false,
+    disableChains: true,
+    laboratoryMode: true,
+    phaseDelayMs: 0,
+    animationDelayMs: 0,
+  });
+  game.disablePresentationDelays = true;
+  game.player.controllerType = "ai";
+  t.after(() => game.dispose());
+
+  const leviathan = new Card(structuredClone(getLeviathan()), game.player.id);
+  leviathan.owner = game.player.id;
+  leviathan.controller = game.player.id;
+  const revived = [1, 2].map((level, index) => {
+    const card = new Card(
+      {
+        id: 99600 + index,
+        name: `Sequential EARTH ${index + 1}`,
+        cardKind: "monster",
+        attribute: "Earth",
+        level,
+        atk: 500,
+        def: 500,
+      },
+      game.player.id,
+    );
+    card.owner = game.player.id;
+    card.controller = game.player.id;
+    return card;
+  });
+  game.player.graveyard.push(leviathan, ...revived);
+  const summonOrder = [];
+  game.on("after_summon", ({ card }) => {
+    if (revived.includes(card)) summonOrder.push(card);
+  });
+
+  const effect = leviathan.effects.find(
+    ({ id }) => id === "magmatic_obsidian_leviathan_destroyed_revive",
+  );
+  const action = { ...effect.actions[0], position: "attack" };
+  const result = await game.effectEngine.applyActions(
+    [action],
+    {
+      source: leviathan,
+      player: game.player,
+      opponent: game.bot,
+      effect,
+    },
+    { magmatic_obsidian_leviathan_revive_targets: revived },
+  );
+
+  assert.equal(result.success, true);
+  assert.deepEqual(game.player.field, revived);
+  assert.deepEqual(summonOrder, revived);
 });
 
 test("o status de posição é serializado e removido quando o monstro sai do campo", async (t) => {

@@ -342,7 +342,11 @@ const DEFAULT_LOCALE_TEXTS = {
       mainDeckLimit: "Limit of {max} cards reached.",
       extraDeckFull: "Extra Deck is full (max {max}).",
       extraDeckCopyLimit: "Only 1 copy of each Extra Deck monster per id.",
+      copyLimitReached: 'The copy limit for "{card}" is {max}.',
       deckSizeError: "The deck must have between {min} and {max} cards.",
+      banlistDeckError:
+        "The deck violates the Forbidden & Limited List:\n{violations}",
+      banlistViolation: "• {card}: {count}/{limit}",
       botStatus: "Bot: {label}",
     },
   },
@@ -785,6 +789,10 @@ function startsWithMaterialLine(card, text) {
     /^(?:Fusion Materials?|Materials?|Materiais(?:\s+de\s+Fus[aã]o)?|Material\s+de\s+Ascens[aã]o|Ascension Material|Ascens[aã]o|Synchro Materials?|Materiais(?:\s+de)?\s+Sincro):/iu;
   if (labeledMaterialPattern.test(normalized)) return true;
 
+  if (card?.extraDeckSummonProcedure) {
+    return true;
+  }
+
   if (monsterType === "synchro") {
     return /\b(Tuner|Regulador|non-?Tuner|n[aã]o-Regulador(?:es)?)\b/iu.test(
       normalized,
@@ -815,7 +823,27 @@ function formatDescriptionMaterialLineBreak(card, description) {
     .replace(/\.\s*$/u, "")
     .trimEnd();
   const effectText = trimmed.slice(breakIndex).replace(/^\s+/u, "");
-  return `${materialLine}\n${effectText}`;
+  return `${materialLine}\n\n${effectText}`;
+}
+
+function formatDescriptionParagraphsHtml(description) {
+  const normalized = String(description || "").replace(/\r\n?/g, "\n");
+  const paragraphs = normalized.split(/\n[ \t]*\n+/u);
+
+  if (paragraphs.length <= 1) {
+    return escapeHtml(normalized).replace(/\n/g, "<br>");
+  }
+
+  const content = paragraphs
+    .map(
+      (paragraph) =>
+        `<span class="card-effect-paragraph">${escapeHtml(
+          paragraph.trim(),
+        ).replace(/\n/g, "<br>")}</span>`,
+    )
+    .join("");
+
+  return `<span class="card-description-text">${content}</span>`;
 }
 
 export function formatCardPreviewDescriptionHtml(card, fallback = "") {
@@ -824,9 +852,8 @@ export function formatCardPreviewDescriptionHtml(card, fallback = "") {
     card?.description ||
     fallback ||
     "";
-  return escapeHtml(formatDescriptionMaterialLineBreak(card, description)).replace(
-    /\n/g,
-    "<br>",
+  return formatDescriptionParagraphsHtml(
+    formatDescriptionMaterialLineBreak(card, description),
   );
 }
 

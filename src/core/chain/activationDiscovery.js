@@ -145,7 +145,8 @@ function canonicalRequirementsCanBeMet(
 
   const costs = chainSystem.getEffectActivationCosts?.(effect) || [];
   const costsWithoutDeclaredCards = costs.filter(
-    (action) => typeof action?.targetRef !== "string",
+    (action) =>
+      typeof action?.targetRef !== "string" || action.targetRef === "self",
   );
   if (
     costsWithoutDeclaredCards.length > 0 &&

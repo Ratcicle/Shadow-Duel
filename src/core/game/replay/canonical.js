@@ -129,6 +129,7 @@ function cardState(game, card) {
     baseAtk: Number(card.baseAtk ?? 0),
     baseDef: Number(card.baseDef ?? 0),
     level: Number(card.level ?? 0),
+    baseLevel: Number(card.baseLevel ?? card.level ?? 0),
     counters: stableValue(card.counters || {}),
     equipTargetId: card.equippedTo?.duelCardId ?? null,
     statuses: {

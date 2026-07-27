@@ -18,6 +18,7 @@ import {
   getActionCatalogEntry,
   validateActionShape,
 } from "./actionHandlers/actionCatalog.js";
+import { validateBanlistDefinition } from "./game/deck/banlist.js";
 
 const VALID_TIMINGS = new Set([
   "on_play",
@@ -241,6 +242,11 @@ export function validateCardDatabase() {
   const idGovernance = validateCardIdGovernance();
   errors.push(...idGovernance.errors);
   warnings.push(...idGovernance.warnings);
+  const banlistValidation = validateBanlistDefinition(cardDatabase);
+  for (const issue of banlistValidation.errors) {
+    const card = cardDatabaseById.get(Number(issue.cardId)) || null;
+    errors.push(formatIssue(card, issue.message));
+  }
 
   const registry = new ActionHandlerRegistry();
   registerDefaultHandlers(registry);

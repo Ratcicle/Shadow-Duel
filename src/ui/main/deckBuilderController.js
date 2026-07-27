@@ -9,6 +9,12 @@ import {
 } from "../../core/i18n.js";
 import { publicAssetUrl } from "../../core/publicUrl.js";
 import {
+  DECK_TYPES,
+  getCardCopyLimit,
+  getDeckCopyLimitState,
+  validateDeckAgainstBanlist,
+} from "../../core/game/deck/banlist.js";
+import {
   MAX_DECK_SIZE,
   MAX_EXTRA_DECK_SIZE,
   MIN_DECK_SIZE,
@@ -905,7 +911,18 @@ export function createDeckBuilderController({
       alert(deckText("mainDeckLimit", { max: MAX_DECK_SIZE }));
       return false;
     }
-    if ((counts[card.id] || 0) >= 3) return false;
+    const copyLimit = getCardCopyLimit(card.id, {
+      deckType: DECK_TYPES.MAIN,
+    });
+    if ((counts[card.id] || 0) >= copyLimit) {
+      alert(
+        deckText("copyLimitReached", {
+          card: getCardDisplayName(card) || card.name,
+          max: copyLimit,
+        }),
+      );
+      return false;
+    }
     currentDeck.push(card.id);
     applySortMode();
     render();
@@ -938,8 +955,16 @@ export function createDeckBuilderController({
       alert(deckText("extraDeckFull", { max: MAX_EXTRA_DECK_SIZE }));
       return false;
     }
-    if ((counts[card.id] || 0) >= 1) {
-      alert(deckText("extraDeckCopyLimit"));
+    const copyLimit = getCardCopyLimit(card.id, {
+      deckType: DECK_TYPES.EXTRA,
+    });
+    if ((counts[card.id] || 0) >= copyLimit) {
+      alert(
+        deckText("copyLimitReached", {
+          card: getCardDisplayName(card) || card.name,
+          max: copyLimit,
+        }),
+      );
       return false;
     }
     currentExtraDeck.push(card.id);
@@ -967,11 +992,12 @@ export function createDeckBuilderController({
     return true;
   }
 
-  function createCountBadge(count, max, extraClass = "") {
+  function createCountBadge(copyState, extraClass = "") {
     const badge = document.createElement("div");
     badge.className = `pool-count${extraClass ? ` ${extraClass}` : ""}`;
-    badge.classList.toggle("limit-reached", count >= max);
-    badge.textContent = `${count}/${max}`;
+    badge.classList.toggle("limit-reached", copyState.atLimit);
+    badge.classList.toggle("banlist-restricted", copyState.restricted);
+    badge.textContent = copyState.label;
     return badge;
   }
 
@@ -1016,9 +1042,13 @@ export function createDeckBuilderController({
   }
 
   function createDeckListRow(entry, config) {
+    const copyState = getDeckCopyLimitState(entry.id, entry.count, {
+      deckType: config.deckType,
+    });
     const row = document.createElement("div");
     row.className = "deck-list-row";
-    row.classList.toggle("limit-reached", entry.count >= config.maxCopies);
+    row.classList.toggle("limit-reached", copyState.atLimit);
+    row.classList.toggle("banlist-restricted", copyState.restricted);
 
     const count = document.createElement("span");
     count.className = "deck-list-count";
@@ -1032,8 +1062,9 @@ export function createDeckBuilderController({
 
     const badge = document.createElement("span");
     badge.className = "deck-list-copy-badge";
-    badge.classList.toggle("limit-reached", entry.count >= config.maxCopies);
-    badge.textContent = `${entry.count}/${config.maxCopies}`;
+    badge.classList.toggle("limit-reached", copyState.atLimit);
+    badge.classList.toggle("banlist-restricted", copyState.restricted);
+    badge.textContent = copyState.label;
 
     const controls = document.createElement("div");
     controls.className = "deck-list-controls";
@@ -1049,7 +1080,7 @@ export function createDeckBuilderController({
     addButton.textContent = "+";
     addButton.title = deckText("addCopy", {}, "Add copy");
     addButton.disabled =
-      entry.count >= config.maxCopies || config.zoneCount >= config.zoneMax;
+      copyState.atLimit || config.zoneCount >= config.zoneMax;
     addButton.addEventListener("click", () => config.add(entry.card));
 
     controls.append(removeButton, addButton);
@@ -1091,14 +1122,14 @@ export function createDeckBuilderController({
       renderDeckListSection("Main Deck", orderedDeckEntries(currentDeck), {
         add: addMainCard,
         remove: removeMainCardById,
-        maxCopies: 3,
+        deckType: DECK_TYPES.MAIN,
         zoneCount: currentDeck.length,
         zoneMax: MAX_DECK_SIZE,
       }),
       renderDeckListSection("Extra Deck", orderedDeckEntries(currentExtraDeck), {
         add: addExtraCard,
         remove: removeExtraCardById,
-        maxCopies: 1,
+        deckType: DECK_TYPES.EXTRA,
         zoneCount: currentExtraDeck.length,
         zoneMax: MAX_EXTRA_DECK_SIZE,
       }),
@@ -1124,14 +1155,17 @@ export function createDeckBuilderController({
       const count = isExtra
         ? extraCounts[card.id] || 0
         : counts[card.id] || 0;
-      const maxCopies = isExtra ? 1 : 3;
+      const copyState = getDeckCopyLimitState(card.id, count, {
+        deckType: isExtra ? DECK_TYPES.EXTRA : DECK_TYPES.MAIN,
+      });
       const cardEl = createCardThumb(card, getCardDisplayName);
       if (isExtra) cardEl.classList.add("extra-deck-thumb");
-      cardEl.classList.toggle("at-limit", count >= maxCopies);
+      cardEl.classList.toggle("at-limit", copyState.atLimit);
+      cardEl.classList.toggle("banlist-restricted", copyState.restricted);
+      cardEl.setAttribute("aria-disabled", String(copyState.atLimit));
       cardEl.appendChild(
         createCountBadge(
-          count,
-          maxCopies,
+          copyState,
           card.monsterType === "ascension"
             ? "ascension-count"
             : card.monsterType === "synchro"
@@ -1258,6 +1292,24 @@ export function createDeckBuilderController({
           max: MAX_DECK_SIZE,
         }),
       );
+      return null;
+    }
+    const banlistValidation = validateDeckAgainstBanlist({
+      deck: currentDeck,
+      extraDeck: currentExtraDeck,
+    });
+    if (!banlistValidation.ok) {
+      const violations = banlistValidation.violations
+        .map(({ cardId, count, limit }) => {
+          const card = cardDatabaseById.get(cardId);
+          return deckText("banlistViolation", {
+            card: getCardDisplayName(card) || card?.name || `ID ${cardId}`,
+            count,
+            limit,
+          });
+        })
+        .join("\n");
+      alert(deckText("banlistDeckError", { violations }));
       return null;
     }
     deckState.saveDeck(currentDeck);

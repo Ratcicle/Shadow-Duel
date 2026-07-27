@@ -4,6 +4,7 @@ import {
   getEffectiveDef,
   getPiercingDamage,
 } from "./cardStats.js";
+import { getCardComparableAttribute } from "../../Card.js";
 import { cardMatchesFilter } from "./cardFilters.js";
 import {
   estimateCardValue,
@@ -159,6 +160,12 @@ export function buildActionFilter(action = {}) {
 
 export function matchesTargetFilters(card, target = {}, sourceCard, ownerRole = null) {
   if (!card) return false;
+  if (
+    target.excludeCannotBeSpecialSummoned === true &&
+    card.cannotBeSpecialSummoned === true
+  ) {
+    return false;
+  }
   if (Array.isArray(target.anyOf) && target.anyOf.length > 0) {
     return target.anyOf.some((entry) =>
       matchesTargetFilters(
@@ -440,6 +447,73 @@ export function selectSimulatedTargets({
   if (!Array.isArray(targets) || targets.length === 0) return result;
   const { self, opponent } = getPerspectivePlayers(state, selfId);
   const intents = buildTargetIntents(actions || []);
+  const comparisonPasses = (candidate, reference, comparison = {}) => {
+    if (!candidate || !reference) return false;
+    const attr = comparison.attr || comparison.attribute;
+    const candidateAttr =
+      comparison.targetAttr || comparison.pairedAttr || attr;
+    const referenceAttr =
+      comparison.refAttr || comparison.sourceAttr || attr;
+    if (!candidateAttr || !referenceAttr) return false;
+    const left = getCardComparableAttribute(candidate, candidateAttr);
+    const right = getCardComparableAttribute(reference, referenceAttr);
+    const op = comparison.op || "eq";
+    if (op === "eq" || op === "==" || op === "===") return left === right;
+    if (op === "neq" || op === "!=" || op === "!==") return left !== right;
+    const leftNumber = Number(left);
+    const rightNumber = Number(right);
+    if (!Number.isFinite(leftNumber) || !Number.isFinite(rightNumber)) {
+      return false;
+    }
+    if (op === "lte" || op === "<=") return leftNumber <= rightNumber;
+    if (op === "lt" || op === "<") return leftNumber < rightNumber;
+    if (op === "gte" || op === ">=") return leftNumber >= rightNumber;
+    if (op === "gt" || op === ">") return leftNumber > rightNumber;
+    return false;
+  };
+  const hasPairedCandidate = (sourceCandidate, pairSpec) => {
+    if (!pairSpec) return true;
+    const ownerEntries =
+      pairSpec.owner === "opponent"
+        ? [{ player: opponent, role: "opponent" }]
+        : pairSpec.owner === "any"
+          ? [
+              { player: self, role: "self" },
+              { player: opponent, role: "opponent" },
+            ]
+          : [{ player: self, role: "self" }];
+    const zones = asArray(pairSpec.zones || pairSpec.zone || "field");
+    const comparisons = [
+      ...asArray(pairSpec.compareAttribute),
+      ...asArray(pairSpec.compareAttributes),
+    ];
+    return ownerEntries.some(({ player: owner, role }) =>
+      zones.some((zone) =>
+        getZoneCards(owner, zone).some((candidate) => {
+          if (!candidate || candidate === sourceCandidate) return false;
+          if (
+            pairSpec.excludeSameName === true &&
+            candidate.name === sourceCandidate.name
+          ) {
+            return false;
+          }
+          if (
+            !matchesTargetFilters(
+              candidate,
+              pairSpec,
+              sourceCandidate,
+              role,
+            )
+          ) {
+            return false;
+          }
+          return comparisons.every((comparison) =>
+            comparisonPasses(candidate, sourceCandidate, comparison),
+          );
+        }),
+      ),
+    );
+  };
 
   targets.forEach((target) => {
     if (!target || !target.id) return;
@@ -486,7 +560,7 @@ export function selectSimulatedTargets({
     const excludedInstanceIds = excludedCards
       .map(getCardInstanceId)
       .filter((value) => value !== undefined && value !== null);
-    const effectiveTarget =
+    let effectiveTarget =
       excludedCards.length > 0
         ? {
             ...target,
@@ -500,6 +574,19 @@ export function selectSimulatedTargets({
             ],
           }
         : target;
+    const excludedNameCards = asArray(result[target.excludeNameRef]);
+    const excludedNames = excludedNameCards
+      .map((card) => card?.name)
+      .filter(Boolean);
+    if (excludedNames.length > 0) {
+      effectiveTarget = {
+        ...effectiveTarget,
+        excludeCardNames: [
+          ...asArray(effectiveTarget.excludeCardNames),
+          ...excludedNames,
+        ],
+      };
+    }
     const ownerEntries =
       effectiveTarget.owner === "opponent"
         ? [{ player: opponent, role: "opponent" }]
@@ -521,9 +608,26 @@ export function selectSimulatedTargets({
       });
     });
     const filtered = candidates
-      .filter(({ card, role }) =>
-        matchesTargetFilters(card, effectiveTarget, sourceCard, role)
-      )
+      .filter(({ card, role }) => {
+        if (!matchesTargetFilters(card, effectiveTarget, sourceCard, role)) {
+          return false;
+        }
+        if (
+          !hasPairedCandidate(
+            card,
+            effectiveTarget.pairedTarget ||
+              effectiveTarget.requiresPairedTarget,
+          )
+        ) {
+          return false;
+        }
+        const comparison = effectiveTarget.compareAttribute;
+        if (comparison?.ref) {
+          const reference = asArray(result[comparison.ref])[0];
+          if (!comparisonPasses(card, reference, comparison)) return false;
+        }
+        return true;
+      })
       .map(({ card }) => card);
 
     const explicitTargetPreference = getTargetPreference(options, target.id);

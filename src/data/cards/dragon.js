@@ -145,7 +145,7 @@ export const dragonCards = [
       position: "choice",
     },
     description:
-      "While in Defense Position, this card cannot be destroyed by battle. This card gains 100 ATK/DEF for each Dragon-type monster Special Summoned while this card is face-up on the field.",
+      'Ascension Material: "Armored Dragon". Requirement: None.\n\nWhile in Defense Position, this card cannot be destroyed by battle. This card gains 100 ATK/DEF for each Dragon-type monster Special Summoned while this card is face-up on the field.',
     image: "assets/Metal Armored Dragon.png",
     effects: [
       {
