@@ -67,6 +67,10 @@ export function getTributeValueForSummon(
 
   const summonMethod = options.summonMethod || "tribute";
   let value = 1;
+  // Negation disables the card's special Tribute modifier, but the monster
+  // remains a valid physical Tribute with its base value.
+  if (tributeCard.effectsNegated === true) return value;
+
   const entries = asArray(tributeCard.tributeValue);
 
   for (const entry of entries) {
