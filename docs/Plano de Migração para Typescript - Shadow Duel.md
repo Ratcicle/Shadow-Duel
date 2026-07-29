@@ -1,9 +1,9 @@
 # Plano Multi-etapas de Migração do Shadow Duel para TypeScript
 
 **Repositório:** `Ratcicle/Shadow-Duel`  
-**Base analisada:** `main` no commit `38ec09d651671ad107d3213820a5d7bf20f33e7b`  
+**Baseline funcional da migração:** `main` no commit `cd41114621b2e9d0c4cb1a58f7e067d114c83519` (`cd41114`)<br>
 **Objetivo:** migrar o código JavaScript atual para TypeScript com ganho real de confiabilidade e manutenção, preservando integralmente o comportamento do jogo.  
-**Contexto:** a migração acontecerá após a grande refatoração do Chain System e antes da continuação da revisão manual completa das cartas.
+**Contexto:** a baseline já inclui a grande refatoração do Chain System e o ajuste com testes de negação de `tributeValue.js`. Os testes manuais de cartas serão retomados somente depois que a migração completa estiver encerrada.
 
 ---
 
@@ -47,9 +47,11 @@ O projeto deve aceitar `.js` e `.ts` durante a maior parte da migração.
 - `allowJs: true` no início.
 - TypeScript estrito nos arquivos `.ts`.
 - Arquivos JavaScript ainda não migrados continuam funcionando.
-- Imports existentes com sufixo `.js` devem ser preservados inicialmente para evitar um diff massivo. A resolução deve ser configurada para mapear esses imports para os arquivos TypeScript correspondentes.
+- Imports relativos existentes com sufixo `.js` devem ser preservados durante a migração, inclusive em arquivos `.ts`, testes, scripts, JSDoc e imports de tipo. TypeScript, Vite e `tsx` devem resolver `./arquivo.js` para o arquivo físico `arquivo.ts` por substituição de extensão.
+- Não habilitar `allowImportingTsExtensions` e não introduzir specifiers `.ts`.
 - Não introduzir aliases de caminho durante a migração.
 - Não alterar a estrutura de pastas sem necessidade.
+- O compilador inicial deve ser TypeScript 6 fixado em versão exata. A avaliação do TypeScript 7 será um trabalho posterior e isolado.
 
 ### 2.3. Tipos sem emissão desnecessária de runtime
 
@@ -88,7 +90,7 @@ Regras:
 - dados externos ou desconhecidos entram como `unknown`;
 - devem ser refinados por validators, type guards ou normalizadores;
 - `@ts-ignore` é proibido;
-- `@ts-expect-error` só pode ser usado com justificativa explícita e temporária;
+- `@ts-expect-error` só pode ser usado com justificativa explícita; suppressions de migração são temporárias, enquanto testes negativos de contrato podem mantê-lo de forma permanente e documentada;
 - casts duplos como `value as unknown as Type` devem ser considerados dívida de migração;
 - toda dívida temporária deve ser registrada em `docs/migrations/typescript-debt.md`;
 - interfaces globais não devem receber `[key: string]: any`.
@@ -98,7 +100,7 @@ Regras:
 Usar `import type` sempre que o import não for necessário em runtime:
 
 ```ts
-import type { CardDefinition } from "../contracts/cards.js";
+import type { RawCardDefinition } from "../contracts/cards.js";
 ```
 
 Isso reduz:
@@ -114,10 +116,11 @@ Não criar listas independentes que possam divergir.
 
 Exemplos:
 
-- `ActionType` deve ser derivado do mapa canônico de actions ou verificado contra ele;
-- `Zone`, `Timing`, `EventName`, `UsagePolicy` e outros unions devem ser derivados de constantes `as const`;
+- `ActionType` e `CardAction` devem ser derivados exclusivamente de `ActionByType`;
+- `CanonicalZone`, `LegacyZoneAlias`, `Timing`, `EventName`, `UsagePolicy` e outros unions devem ser derivados de constantes `as const`;
+- `ACTION_CATALOG`, bindings, wiring e registry devem ter o keyset exato de `ActionByType`;
 - o catálogo runtime e os tipos compile-time devem verificar um ao outro;
-- handler registry, action catalog e banco de cartas precisam compartilhar o mesmo conjunto canônico de `action.type`.
+- o walker recursivo do banco deve ser a única fonte para descobrir e validar actions declaradas em qualquer profundidade.
 
 ---
 
@@ -125,26 +128,42 @@ Exemplos:
 
 Cada etapa deve executar os gates que já se aplicam à área alterada.
 
-### Gate mínimo
+### Gate anterior à toolchain — somente Etapa 0
 
 ```bash
-npm run typecheck
+npm ci
 npm test
-npm run build
 npm run audit:chain
 node scripts/validate_action_catalog.mjs
+npm run build
 ```
 
-### Gate completo
+`npm run typecheck` e `npm run validate:actions` ainda não existem na Etapa 0. Eles passam a ser obrigatórios assim que a Etapa 1 for concluída.
 
-Além do gate mínimo:
+### Gate a partir da Etapa 1
+
+```bash
+npm ci
+npm run check
+```
+
+O script `check` deve executar, no mínimo:
+
+- typecheck da aplicação e das ferramentas Node;
+- suíte completa de testes;
+- auditoria de Chain;
+- auditoria de escape hatches TypeScript;
+- validação do catálogo de actions;
+- verificação de que a documentação gerada do catálogo está atualizada;
+- verificação do digest semântico da migração;
+- build de produção.
+
+Além desse gate:
 
 - validar o banco completo de cartas;
 - executar os testes canônicos de replay;
-- comparar hashes de replays dourados;
-- verificar a assinatura do banco de cartas;
+- verificar a assinatura legada do banco e o digest SHA-256 da migração;
 - executar os testes de Chain;
-- executar testes das cartas afetadas;
 - executar testes de Bot/IA quando o estado simulado for alterado;
 - garantir que o catálogo gerado não sofreu mudança inesperada;
 - inspecionar o diff para detectar alterações funcionais não relacionadas.
@@ -165,92 +184,191 @@ Se um teste falhar:
 
 ## Objetivo
 
-Criar uma referência confiável do comportamento atual antes da primeira alteração de TypeScript.
+Registrar uma referência documental, pequena e reproduzível do commit funcional que antecede a toolchain TypeScript.
 
 ## Escopo
 
-- `package.json`
-- `scripts/`
-- `test/`
-- `src/core/game/replay/`
-- Chain System
-- cartas 1–29 já revisadas manualmente
-- documentação da migração
+- `docs/migrations/typescript-baseline.md`.
+
+Esta revisão do plano é documentação prévia e deve ser commitada separadamente. O commit da Etapa 0 não deve absorver novamente o grande diff editorial deste arquivo.
 
 ## Ações
 
 ### 0.1. Registrar a base exata
 
-Criar:
+Criar `docs/migrations/typescript-baseline.md` e registrar:
 
-```text
-docs/migrations/typescript-baseline.md
-```
-
-Registrar:
-
-- commit base;
+- commit base `cd41114621b2e9d0c4cb1a58f7e067d114c83519`;
+- branch `main` e ausência de mudanças funcionais depois desse SHA;
+- confirmação de que a baseline já contém o commit de `tributeValue.js`;
 - versão do Node;
 - versão do npm;
+- versão efetiva do Vite;
 - resultado de `npm ci`;
 - resultado de `npm test`;
 - resultado de `npm run build`;
 - resultado de `npm run audit:chain`;
 - resultado de `validate_action_catalog.mjs`;
-- quantidade de testes;
-- assinatura atual do banco de cartas;
-- lista de replays dourados usados;
+- quantidade de arquivos e casos de teste;
+- assinatura legada do banco;
+- digest SHA-256 completo da migração;
 - falhas ou warnings já existentes.
 
-### 0.2. Proteger o que já foi validado
+Resultados observados em `cd41114` em 29/07/2026, antes da execução formal da Etapa 0:
 
-Para as cartas 1–29:
+| Verificação | Resultado observado |
+| --- | --- |
+| Ambiente local | Node `v24.12.0`, npm `11.12.1`, Vite `7.3.6` |
+| Arquivos de teste | 50 arquivos `*.test.js` |
+| `npm test` | 321 testes; 321 passaram; 0 falhas, skips, cancelamentos ou casos `todo`; `61,664 s` |
+| `npm run audit:chain` | 227 cartas; 423 efeitos; 0 ambiguidades, erros ou warnings |
+| catálogo de actions | 109 entradas e 109 actions registradas |
+| `npm run build` | passou; 1.093 módulos; `30,85 s` |
+| warning conhecido | chunks principais acima de 500 kB (`854,96 kB` e `2.761,34 kB`) |
+| assinatura legada | `1cc622e3` |
+| digest da migração | `428e28a85f361880302a65745236cec6d153111d0d08fa6bf37cca45bf2b43dd` |
 
-- confirmar que correções já feitas possuem testes quando viável;
-- adicionar somente os testes de regressão essenciais que ainda estejam ausentes;
-- não tentar criar uma suíte exaustiva antes da migração;
-- registrar quais efeitos foram testados apenas manualmente.
+O ambiente canônico da baseline e do CI será Node `>=22.12.0 <23`. Os comandos devem ser repetidos nesse ambiente ao implementar a Etapa 0; o documento final deve registrar o resultado autoritativo, sem substituir silenciosamente os resultados observados acima.
 
-### 0.3. Criar um conjunto curto de replays dourados
+### 0.2. Registrar as duas assinaturas sem alterar replay
 
-Cobrir pelo menos:
+A assinatura `1cc622e3`, produzida por `getCardDatabaseSignature()`, é parte da compatibilidade dos replays existentes e não pode ser recalculada com um payload mais amplo nesta migração.
 
-- ativação de Spell/Trap Card;
-- ativação de efeito face-up;
-- resposta de Chain;
-- negação;
-- SEGOC;
-- Invocação;
-- movimento entre zonas;
-- seleção humana gravada;
-- Damage Step;
-- encerramento do duelo.
+O digest `428e28a85f361880302a65745236cec6d153111d0d08fa6bf37cca45bf2b43dd` é exclusivo da migração. Ele usa:
 
-Cada replay dourado deve registrar:
+- SHA-256 sobre UTF-8;
+- objetos com chaves ordenadas recursivamente;
+- arrays com ordem preservada;
+- serialização JSON canônica;
+- payload com `format: "shadow-duel-typescript-migration-digest"` e `version: 1`;
+- as chaves `cardDatabaseGroups`, `cardIdRanges`, `cardIdMigration`, `banlist`, `actionCatalog` e `locales`;
+- grupos e todas as definições completas de cartas, política e ranges de IDs, mapa de migração de IDs, banlist, categorias/fields/entries do catálogo e o JSON de `public/locales/pt-br.json`.
 
-- seed;
-- comandos;
-- decisões;
-- eventos canônicos;
-- hash final;
-- assinatura do banco.
+Payload exato:
 
-### 0.4. Criar a branch da migração
-
-Sugestão:
-
-```text
-migration/typescript
+```js
+{
+  format: "shadow-duel-typescript-migration-digest",
+  version: 1,
+  cardDatabaseGroups: cardDatabaseGroups.map(({ rangeKey, cards }) => ({
+    rangeKey,
+    cards,
+  })),
+  cardIdRanges: {
+    policy: CARD_ID_RANGE_POLICY,
+    ranges: CARD_ID_RANGES,
+  },
+  cardIdMigration: {
+    version: CARD_ID_MIGRATION_VERSION,
+    map: CARD_ID_MIGRATION_MAP,
+  },
+  banlist: {
+    statuses: BANLIST_STATUS,
+    current: CURRENT_BANLIST,
+  },
+  actionCatalog: {
+    categories: ACTION_CATEGORIES,
+    fieldDefinitions: ACTION_FIELD_DEFS,
+    entries: ACTION_CATALOG,
+  },
+  locales: {
+    "pt-br": JSON.parse(ptBrLocaleSource),
+  },
+}
 ```
 
-A baseline deve ser um commit isolado antes da instalação do TypeScript.
+Canonicalizador exato:
+
+```js
+function canonicalize(value, path = "$", seen = new WeakSet()) {
+  if (
+    value === null ||
+    typeof value === "string" ||
+    typeof value === "boolean"
+  ) {
+    return value;
+  }
+
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) {
+      throw new TypeError(`Non-finite number at ${path}`);
+    }
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    if (seen.has(value)) throw new TypeError(`Cycle at ${path}`);
+    const expectedIndexes = Array.from(
+      { length: value.length },
+      (_, index) => String(index),
+    );
+    const ownKeys = Reflect.ownKeys(value);
+    if (
+      ownKeys.some((key) => typeof key === "symbol") ||
+      ownKeys.some(
+        (key) => key !== "length" && !expectedIndexes.includes(key),
+      ) ||
+      expectedIndexes.some(
+        (key) => !Object.prototype.hasOwnProperty.call(value, key),
+      )
+    ) {
+      throw new TypeError(`Sparse or extended array at ${path}`);
+    }
+    seen.add(value);
+    const output = value.map((entry, index) =>
+      canonicalize(entry, `${path}[${index}]`, seen),
+    );
+    seen.delete(value);
+    return output;
+  }
+
+  if (typeof value === "object") {
+    const prototype = Object.getPrototypeOf(value);
+    if (prototype !== Object.prototype && prototype !== null) {
+      throw new TypeError(`Non-plain object at ${path}`);
+    }
+    if (Reflect.ownKeys(value).length !== Object.keys(value).length) {
+      throw new TypeError(`Symbol or non-enumerable key at ${path}`);
+    }
+    if (seen.has(value)) throw new TypeError(`Cycle at ${path}`);
+    seen.add(value);
+    const output = {};
+    for (const key of Object.keys(value).sort()) {
+      if (value[key] === undefined) {
+        throw new TypeError(`Undefined value at ${path}.${key}`);
+      }
+      output[key] = canonicalize(value[key], `${path}.${key}`, seen);
+    }
+    seen.delete(value);
+    return output;
+  }
+
+  throw new TypeError(`Unsupported ${typeof value} at ${path}`);
+}
+
+const canonicalJson = JSON.stringify(canonicalize(payload));
+const digest = sha256Utf8(canonicalJson);
+```
+
+Esse contrato rejeita `undefined`, funções, símbolos, `BigInt`, números não finitos, ciclos, arrays esparsos/estendidos, propriedades symbol/non-enumerable, `Map`, `Set`, `Date` e qualquer outro objeto não plain. O verificador nunca pode omitir silenciosamente um valor desconhecido.
+
+Nenhuma propriedade de carta — inclusive stats, timings, targets, actions aninhadas, valores, descrições e imagens — pode ser omitida do payload. O algoritmo e a lista de entradas devem ser registrados junto do valor para permitir reprodução independente.
+
+Na Etapa 1, um verificador executado por `tsx` deve comparar esse digest semântico com o último valor aprovado e também emitir digests por componente para diagnóstico. Ele é um gate da migração, mas não integra nem substitui a assinatura legada dos replays.
+
+Qualquer delta bloqueia por padrão. Uma alteração estritamente estrutural de metadata exigida pela própria migração — por exemplo, declarar no catálogo um campo que o dado e o handler já usam — só pode atualizar o valor aprovado se o mesmo PR registrar valor anterior, valor novo, componente alterado, justificativa e gates. O componente completo das cartas não pode mudar nessa atualização.
+
+### 0.3. Encerrar a baseline e seguir imediatamente
+
+A Etapa 0 deve ser um commit documental isolado. Ela não cria ou altera código em `src/`, testes, scripts, fixtures ou replays. Assim que seus gates forem registrados, iniciar imediatamente a Etapa 1, sem mudança funcional intermediária.
 
 ## Critérios de aceitação
 
-- todos os gates atuais passam ou suas falhas conhecidas estão documentadas;
-- a assinatura do banco foi registrada;
-- há replays canônicos suficientes para detectar divergência;
-- as cartas 1–29 possuem um registro claro de cobertura;
+- a baseline funcional continua sendo `cd41114`, sem mudança de código posterior incorporada à Etapa 0;
+- `npm ci`, testes, build, auditoria e catálogo passam em Node 22; um impedimento transitório de ambiente deve ser documentado, mas não conclui a etapa até o rerun passar;
+- assinatura legada e digest completo estão registrados com escopos distintos;
+- os resultados e warnings atuais estão documentados;
+- somente documentação da baseline foi alterada;
 - nenhuma regra foi alterada.
 
 ---
@@ -263,13 +381,22 @@ Adicionar TypeScript sem converter a engine e sem alterar o bundle do jogo.
 
 ## Dependências de desenvolvimento recomendadas
 
-```text
-typescript
-@types/node
-tsx
+```json
+{
+  "devDependencies": {
+    "@types/node": "22.20.1",
+    "tsx": "4.23.1",
+    "typescript": "6.0.2"
+  },
+  "engines": {
+    "node": ">=22.12.0 <23"
+  }
+}
 ```
 
-`tsx` deve ser usado para executar scripts e testes TypeScript durante a transição, evitando depender de suporte incompleto ou específico de uma versão do Node para executar `.ts`.
+As versões devem ser exatas no `package.json` e no lockfile. Fixar também a linha 22 em `.nvmrc` e no CI. Não atualizar Vite, Pixi ou Tabler oportunisticamente. TypeScript 7 será avaliado em PR próprio depois da migração.
+
+`tsx` deve executar todos os testes e scripts Node que importam `src/`, mesmo quando o entrypoint ainda for `.js` ou `.mjs`. Isso evita que a execução quebre quando um import `./modulo.js` passar a apontar para o arquivo físico `modulo.ts`. `tsx` transpila, mas não substitui o typecheck.
 
 ## Configuração recomendada
 
@@ -290,15 +417,17 @@ Diretrizes iniciais:
 {
   "compilerOptions": {
     "target": "ES2022",
-    "module": "ESNext",
-    "moduleResolution": "Bundler",
     "strict": true,
     "noEmit": true,
     "allowJs": true,
     "checkJs": false,
     "isolatedModules": true,
     "verbatimModuleSyntax": true,
+    "erasableSyntaxOnly": true,
+    "moduleDetection": "force",
     "useDefineForClassFields": true,
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true
   }
@@ -307,20 +436,50 @@ Diretrizes iniciais:
 
 ### `tsconfig.app.json`
 
-- incluir `src/`;
-- usar `lib: ["ES2022", "DOM", "DOM.Iterable"]`;
-- não carregar tipos globais de Node desnecessariamente.
+```json
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["vite/client"]
+  },
+  "include": ["src"]
+}
+```
 
 ### `tsconfig.node.json`
 
-- incluir `scripts/` e `test/`;
-- usar `types: ["node"]`;
-- permitir execução pelo runner escolhido;
-- preservar ESM porque o projeto usa `"type": "module"`.
+```json
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["node", "vite/client"]
+  },
+  "include": [
+    "scripts",
+    "test",
+    "vite.config.js",
+    "vite.config.ts"
+  ]
+}
+```
+
+DOM e `vite/client` permanecem no projeto Node durante o modo misto porque testes e scripts importam módulos de `src/` que usam DOM e `import.meta.env`.
 
 ### `tsconfig.json`
 
-Usar referências para os projetos app e Node, ou servir como agregador para o comando de typecheck.
+```json
+{
+  "extends": "./tsconfig.app.json"
+}
+```
+
+Não usar project references ou `tsc -b` no início. Os testes e scripts importam diretamente `src/`; dois `tsc -p` explícitos são mais simples até que existam limites de projetos realmente compostos.
 
 ## Scripts recomendados
 
@@ -329,14 +488,60 @@ Adicionar ao `package.json`:
 ```json
 {
   "scripts": {
-    "typecheck": "tsc -b",
-    "typecheck:watch": "tsc -b --watch",
-    "check": "npm run typecheck && npm test && npm run audit:chain && node scripts/validate_action_catalog.mjs && npm run build"
+    "typecheck:app": "tsc -p tsconfig.app.json",
+    "typecheck:node": "tsc -p tsconfig.node.json",
+    "typecheck": "npm run typecheck:app && npm run typecheck:node",
+    "typecheck:watch:app": "tsc -p tsconfig.app.json --watch",
+    "typecheck:watch:node": "tsc -p tsconfig.node.json --watch",
+    "test": "tsx scripts/run_tests.mjs",
+    "audit:chain": "tsx scripts/audit_chain_metadata.mjs",
+    "validate:actions": "tsx scripts/validate_action_catalog.mjs",
+    "generate:actions": "tsx scripts/generate_action_catalog_doc.mjs",
+    "check:actions-doc": "tsx scripts/generate_action_catalog_doc.mjs --check",
+    "audit:typescript-escapes": "tsx scripts/audit_typescript_escapes.ts",
+    "replay": "tsx scripts/replay_duel.mjs",
+    "test:bot-smoke": "tsx scripts/run_bot_arena_smoke.mjs",
+    "verify:migration-digest": "tsx scripts/verify_migration_digest.ts",
+    "check": "npm run typecheck && npm run audit:typescript-escapes && npm test && npm run audit:chain && npm run validate:actions && npm run check:actions-doc && npm run verify:migration-digest && npm run build"
   }
 }
 ```
 
-A sintaxe final pode ser ajustada pelo Codex de acordo com a configuração escolhida, mas o resultado deve ser equivalente.
+Todo script Node que importe módulos migráveis de `src/` deve usar `tsx` desde esta etapa, não apenas os exemplos acima. A conversão física dos próprios scripts para `.ts` continua posterior.
+
+O modo `--check` do gerador deve comparar conteúdo sem sobrescrever o Markdown. A auditoria TypeScript deve bloquear `@ts-ignore`, `any` explícito não registrado e casts duplos, respeitando apenas testes negativos documentados e a dívida temporária aprovada.
+
+`verify_migration_digest.ts` e `audit_typescript_escapes.ts` já nascem em TypeScript para participar do typecheck. O primeiro lê o histórico ordenado de `docs/migrations/typescript-digests.json`, criado nesta etapa a partir da baseline documental. A última entrada é a única fonte machine-readable do “último valor aprovado”; atualizações são manuais, revisadas e nunca feitas automaticamente pelo gate.
+
+Estrutura mínima do registry:
+
+```json
+{
+  "format": "shadow-duel-typescript-digest-registry",
+  "version": 1,
+  "legacyReplaySignature": "1cc622e3",
+  "approvals": [
+    {
+      "functionalCommit": "cd41114621b2e9d0c4cb1a58f7e067d114c83519",
+      "aggregate": "428e28a85f361880302a65745236cec6d153111d0d08fa6bf37cca45bf2b43dd",
+      "components": {
+        "cardDatabaseGroups": "<sha256>",
+        "cardIdRanges": "<sha256>",
+        "cardIdMigration": "<sha256>",
+        "banlist": "<sha256>",
+        "actionCatalog": "<sha256>",
+        "locales": "<sha256>"
+      },
+      "reason": "Baseline inicial da migração TypeScript",
+      "approvedAt": "<ISO-8601 timestamp>"
+    }
+  ]
+}
+```
+
+O verificador deve rejeitar registry vazio, entries duplicadas, ordem/timestamps inválidos, componentes ausentes, hashes malformados e qualquer divergência entre o payload calculado e a última aprovação.
+
+`audit_typescript_escapes.ts` deve usar a AST do compilador TypeScript, não regex sobre texto bruto. Ele percorre arquivos autorais `.ts`, `.tsx`, `.mts`, `.cts` e `.d.ts` em `src/`, `scripts/`, `test/` e configs, excluindo `node_modules/`, `dist/` e artefatos gerados. O scanner detecta `AnyKeyword`, casts duplos e directives nos comments trivia sem confundir strings/comentários comuns; exceções exigem entrada na dívida ou teste negativo com justificativa.
 
 ## Runner de testes
 
@@ -351,12 +556,37 @@ Durante a transição:
 
 - testes JavaScript existentes continuam executando;
 - testes convertidos podem ser TypeScript;
+- o coletor usa uma expressão equivalente a `/\.test\.(?:js|ts)$/`;
 - a ordem sequencial atual deve ser preservada;
-- o comportamento de `--test-concurrency=1` deve continuar igual.
+- o comportamento de `--test-concurrency=1` deve continuar igual;
+- o processo filho do runner usa `node --import=tsx --test --test-concurrency=1 ...`, inclusive quando todos os testes encontrados ainda forem `.js`.
+
+Não usar o type stripping nativo do Node. O runner deve preservar recursão, ordenação lexical e a mensagem de erro para ausência de testes.
+
+Adicionar um smoke de infraestrutura mínimo, sem domínio de cartas:
+
+- um `*.test.ts` descoberto pelo runner;
+- um módulo físico `.ts` importado pelo specifier `.js`;
+- um teste `.js` que também importe esse módulo físico `.ts`.
+- um build programático Vite com `write: false` sobre fixture equivalente, sem alterar `dist/` nem o bundle da aplicação.
+
+Isso prova a resolução mista no Node/`tsx` e no Vite antes da primeira conversão de produção.
+
+Atualizar explicitamente a mensagem antiga `No .test.js files found` para informar a ausência de `*.test.js` e `*.test.ts`.
+
+## Política de imports e entrypoints
+
+- ao renomear `foo.js` para `foo.ts`, manter `import "./foo.js"`;
+- aplicar a mesma regra a testes, scripts, imports de tipos e JSDoc;
+- não habilitar `allowImportingTsExtensions`;
+- não introduzir imports `.ts`;
+- usar `NodeNext` para validar os specifiers executados por Node e `Bundler` somente no app Vite;
+- quando `src/main.js` virar `src/main.ts`, atualizar explicitamente o entrypoint em `index.html`;
+- converter `.mjs` para `.mts` somente quando o specifier `.mjs` precisar ser preservado; entrypoints podem virar `.ts` com ajuste do script npm.
 
 ## CI
 
-Atualizar o workflow de Pages ou adicionar um workflow de verificação separado para executar:
+Adicionar workflow de verificação em `pull_request` e `push`, e fazer o workflow de Pages executar o mesmo gate antes do upload:
 
 ```bash
 npm ci
@@ -365,12 +595,20 @@ npm run check
 
 O deploy não pode ocorrer quando o typecheck falhar.
 
+Configurar a proteção da branch para exigir o status do workflow de verificação.
+
+Atualizar também o comando exibido no cabeçalho gerado de `docs/Catalogo de actions.md` e a mensagem de help de `replay_duel` para apontarem aos scripts npm/`tsx`, sem instruções remanescentes de execução direta por `node`.
+
 ## Critérios de aceitação
 
 - nenhum arquivo principal precisa ter sido convertido;
 - `npm run typecheck` executa com sucesso;
 - arquivos `.js` e `.ts` podem coexistir;
 - testes `.js` e `.ts` podem coexistir;
+- o smoke misto prova `.test.ts` e imports `.js` apontando para arquivos físicos `.ts`;
+- todos os scripts que importam `src/` executam por `tsx`;
+- imports `.js` continuam válidos quando o arquivo físico é `.ts`;
+- o digest da migração é verificado sem mudar `getCardDatabaseSignature()`;
 - build e deploy continuam gerando a mesma aplicação;
 - nenhum import do projeto foi reescrito em massa.
 
@@ -384,7 +622,7 @@ Definir os tipos compartilhados antes de converter os módulos que dependem dele
 
 ## Organização recomendada
 
-Criar contratos compartilhados em:
+Criar contratos somente quando houver um consumer real na etapa corrente. A organização inicial pode começar com:
 
 ```text
 src/core/contracts/
@@ -392,20 +630,10 @@ src/core/contracts/
 ├── cards.ts
 ├── effects.ts
 ├── actions.ts
-├── filters.ts
-├── events.ts
-├── selection.ts
-├── decisions.ts
-├── chain.ts
-├── summon.ts
-├── combat.ts
-├── replay.ts
-├── game.ts
-├── ai.ts
-└── ui.ts
+└── zones.ts
 ```
 
-Tipos usados por um único domínio devem permanecer próximos daquele domínio em um `types.ts`. A pasta `contracts/` deve conter apenas fronteiras realmente compartilhadas.
+Novos arquivos compartilhados são adicionados just-in-time nas etapas seguintes. Não criar antecipadamente um arquivo vazio para cada domínio. Tipos usados por um único domínio devem permanecer próximos daquele domínio em um `types.ts`; `contracts/` contém apenas fronteiras compartilhadas.
 
 ## Contratos primitivos
 
@@ -413,6 +641,7 @@ Definir unions e IDs nominais para impedir mistura acidental:
 
 ```ts
 type PlayerId = "player" | "bot";
+type RawCardDefinitionId = number;
 type CardDefinitionId = number & { readonly __brand: "CardDefinitionId" };
 type DuelCardId = number & { readonly __brand: "DuelCardId" };
 type ChainId = number & { readonly __brand: "ChainId" };
@@ -425,13 +654,23 @@ type SelectionCandidateKey = string & {
 };
 ```
 
-Os brands são somente compile-time. O formato runtime permanece número ou string.
+Os literais autorais usam IDs crus:
+
+```ts
+interface RawCardDefinition {
+  id: RawCardDefinitionId;
+}
+```
+
+Brands são produzidos somente por validators, normalizadores ou factories centrais, como `ensureCardDefinitionId` e `ensureDuelCardId`. Não aplicar casts em cada literal do banco. O formato runtime permanece número ou string, e nenhuma factory pode alterar seu valor.
 
 ## Literais canônicos
 
 Criar ou derivar:
 
-- `Zone`;
+- `CanonicalZone`, cuja zona de banimento é `"banished"`;
+- `LegacyZoneAlias`, inicialmente `"banish"`;
+- `ZoneInput = CanonicalZone | LegacyZoneAlias`, aceito somente nas fronteiras que ainda recebem dados legados;
 - `CardKind`;
 - `MonsterType`;
 - `BattlePosition`;
@@ -448,16 +687,21 @@ Criar ou derivar:
 - `ChainEffectKind`;
 - `ChainResponseContextType`.
 
+APIs internas normalizadas, como leitura de zona e movimento canônico, recebem `CanonicalZone`. O alias `"banish"` deve ser normalizado em uma fronteira explícita e não pode escapar para o estado do duelo.
+
 ## Separar definição e instância
 
 Criar contratos distintos:
 
 ```text
-CardDefinition
+RawCardDefinition
+ValidatedCardDefinition
 CardInstance
 ```
 
-`CardDefinition` é o dado declarativo do banco.
+`RawCardDefinition` é o dado declarativo autoral do banco, compatível com os shapes existentes.
+
+`ValidatedCardDefinition` é o dado que já passou pelo validator/indexador e pode carregar IDs branded ou invariantes refinados.
 
 `CardInstance` é o estado mutável dentro de um duelo.
 
@@ -480,6 +724,9 @@ devem entrar como `unknown` e passar por validação.
 ## Critérios de aceitação
 
 - contratos compilam sem alterar runtime;
+- literais do banco continuam usando IDs numéricos sem casts individuais;
+- IDs branded só surgem após validação ou normalização;
+- `"banished"` é a zona interna canônica e `"banish"` permanece apenas como alias legado de entrada;
 - não existem ciclos runtime introduzidos por imports de tipos;
 - não há um tipo monolítico `GameObject`;
 - não há index signature global com `any`;
@@ -491,28 +738,51 @@ devem entrar como `unknown` e passar por validação.
 
 ## Objetivo
 
-Capturar cedo os erros estruturais nas cartas restantes antes da continuação dos testes manuais.
+Capturar erros estruturais em todo o banco sem alterar dados ou antecipar testes manuais de cartas.
 
-## 3.1. Action union discriminada
+## 3.0. Inventário e walker recursivo único
 
-Criar:
+Antes de fechar o schema TypeScript, criar um walker recursivo único para todas as actions declarativas. Ele deve ser reutilizado por:
 
-```ts
-type CardAction =
-  | DrawAction
-  | DamageAction
-  | MoveAction
-  | DestroyAction
-  | SpecialSummonFromZoneAction
-  | ModifyLevelAction
-  | ConditionalActionsAction
-  | ChooseActionCaseAction
-  | /* todas as demais actions */;
-```
+- `CardDatabaseValidator`;
+- inventário de actions usadas pelo banco;
+- validação de catálogo/registry;
+- testes de completude;
+- diagnósticos de referências.
 
-Cada action deve ser discriminada por `type`.
+Substituir `flattenActions` e os loops de validação apenas no primeiro nível por esse walker. Nenhum segundo traversal parcial deve permanecer.
 
-Exemplo:
+As raízes incluem `activationCosts`, `activationCommitActions` e `actions`. O walker deve percorrer, conforme o contrato da variante:
+
+- `actions`;
+- `defaultActions`;
+- `cases[].actions`;
+- `cases[].targets`;
+- `thenActions`;
+- `ifActions`;
+- `elseActions`;
+- `optionalActions`;
+- `entries[].actions`, enquanto esse suporte existir.
+
+Os campos legados devem ser classificados como suportados, traversal defensivo ou dívida para remoção posterior. Eles não devem ser adicionados indiscriminadamente a um `BaseAction` permissivo.
+
+Cada visita preserva:
+
+- stage (`cost`, `commit` ou `resolution`);
+- caminho completo para diagnóstico;
+- target IDs do efeito e do case;
+- refs produzidas por actions anteriores, como `resultRef` e `storeResultAs`;
+- ordem sequencial das actions.
+
+O caso já conhecido de `search_any.zone` deve ser tratado como inconsistência estrutural do catálogo: o handler lê `zone` e há dado declarativo que o fornece, mas o catálogo atual não o declara. A correção deve ser somente de schema/catalogação, sem mudar a execução.
+
+Como o catálogo participa do digest agregado, essa correção deve seguir o protocolo de atualização aprovada do digest. O digest do componente de cartas deve permanecer idêntico.
+
+Testes estruturais do walker devem provar que action type, campos obrigatórios/desconhecidos e target refs são validados em qualquer profundidade, inclusive em `defaultActions` e `cases[].actions`. Esses testes são do contrato genérico, não de cartas específicas.
+
+## 3.1. Actions discriminadas por `type`
+
+Cada action deve ser discriminada por `type`. Exemplo:
 
 ```ts
 interface DrawAction {
@@ -528,40 +798,57 @@ interface ModifyLevelAction {
 }
 ```
 
-Actions recursivas precisam suportar:
+Tipos recursivos devem seguir exatamente os campos suportados por cada variante e pelo walker. Não usar `Record<string, unknown>` como contrato final de cases, targets ou actions aninhadas.
 
-- `actions`;
-- `thenActions`;
-- `elseActions`;
-- `cases[].actions`;
-- `cases[].targets`.
+## 3.2. `ActionByType` como fonte compile-time
 
-A recursão deve ser controlada e legível, sem cair em um tipo genérico permissivo.
-
-## 3.2. Mapa por action type
-
-Criar uma forma equivalente a:
+Definir mapas por domínio e compô-los em uma única interface:
 
 ```ts
-interface ActionByType {
+interface ResourceActionMap {
   draw: DrawAction;
+}
+
+interface MovementActionMap {
   move: MoveAction;
+}
+
+interface StatsActionMap {
   modify_level: ModifyLevelAction;
 }
+
+interface ActionByType
+  extends ResourceActionMap,
+    MovementActionMap,
+    StatsActionMap,
+    SummonActionMap,
+    DestructionActionMap,
+    CombatActionMap,
+    CounterActionMap,
+    ConditionalActionMap,
+    BlueprintActionMap,
+    LegacyProxyActionMap {}
 ```
 
-Derivar:
+O mapa deve conter todas as 109 actions do catálogo, inclusive as que não aparecem no banco atual. Não derivar o universo de actions somente das cartas presentes.
+
+Derivar exclusivamente desse mapa:
 
 ```ts
 type ActionType = keyof ActionByType;
-type ActionOf<T extends ActionType> = ActionByType[T];
+type ActionOf<K extends ActionType> = ActionByType[K];
+type CardAction = ActionByType[ActionType];
 ```
 
 ## 3.3. Catálogo tipado
 
-Transformar `ACTION_CATALOG` em uma estrutura verificada:
+Preservar a correlação por chave:
 
 ```ts
+type ActionCatalog = {
+  [K in ActionType]: ActionCatalogEntry<ActionOf<K>>;
+};
+
 export const ACTION_CATALOG = {
   // ...
 } satisfies ActionCatalog;
@@ -571,36 +858,39 @@ O compilador deve garantir:
 
 - toda action possui entrada no catálogo;
 - não há entrada com nome inexistente;
-- campos obrigatórios e opcionais citados pelo catálogo existem no tipo da action;
-- categoria e metadados seguem enums conhecidos;
-- exemplos do catálogo são actions válidas.
+- `required`, `optional` e `fields` só citam keys da variante correspondente;
+- categorias e metadados seguem unions/conjuntos de literais conhecidos;
+- exemplos são válidos para a variante da própria chave;
+- o keyset é exato, sem action ausente ou extra.
 
-## 3.4. Effect union discriminada
+Os descriptors runtime atuais não são ricos o bastante para inferir targets, filters, conditions e recursão. `ActionByType` é a fonte compile-time; o catálogo continua sendo a fonte de validação/documentação runtime e deve satisfazer o mapped type.
 
-Separar ao menos:
+## 3.4. Effects compostos por capabilities reais
 
-```text
-PassiveEffectDefinition
-OnEventEffectDefinition
-IgnitionEffectDefinition
-ManualEffectDefinition
-OnPlayEffectDefinition
-OnActivateEffectDefinition
-OnFieldActivateEffectDefinition
+Não modelar `EffectDefinition` como união exclusiva baseada somente em `timing`. O banco real contém:
+
+- replacement effect sem `timing`;
+- passive apenas documental;
+- passive com `replacementEffect`, custos e actions;
+- effects ativos com combinações diferentes de requirements, targets e actions.
+
+Usar composição de capabilities e variantes estreitas:
+
+```ts
+type EffectDefinition =
+  | TimedActiveEffect
+  | PassiveRuleEffect
+  | ReplacementEffectDefinition
+  | LegacyDocumentedPassiveEffect;
 ```
 
-Invariantes estáticos:
+Targets, costs, actions, usage, source requirements e replacement behavior devem ser capabilities combináveis. Refinamentos como `on_event`, activation zones, usage policy e Damage Step só podem ser exigidos onde os dados atuais comprovam a invariante.
 
-- `on_event` exige `event`, `triggerRequirement` e `triggerTiming`;
-- `ignition` e `manual` exigem `activationZones`;
-- `passive` exige contrato passivo e não exige actions ativas;
-- `oncePerTurn` e `oncePerDuel` devem exigir `usagePolicy` quando aplicável;
-- `damageStepTimings` aceita apenas valores canônicos;
-- `activationCommitActions` contém actions válidas.
+Exceções existentes devem ser representadas por variantes legadas estreitas ou dívida documentada. Não “corrigir” definição de carta para fazê-la caber no tipo e não proibir actions/costs em passives quando o runtime atual os aceita.
 
 O `CardDatabaseValidator` deve continuar validando essas regras em runtime.
 
-## 3.5. CardDefinition union
+## 3.5. `RawCardDefinition` union
 
 Separar:
 
@@ -618,30 +908,30 @@ Regras estáticas importantes:
 - Synchro exige `level`;
 - Ascension exige metadata própria;
 - Spell/Trap usa subtypes compatíveis;
-- monstros podem declarar ATK, DEF, Level, Type e Attribute;
+- monstros podem declarar ATK, DEF, Level, Type e Attribute conforme as variantes existentes;
 - `effects` é um array de `EffectDefinition`.
+
+`RawCardDefinition.id` continua sendo `number`. O ID branded só aparece no resultado validado/indexado.
 
 ## 3.6. Verificação antecipada dos módulos de cartas
 
-Antes de converter todos os arquivos para `.ts`, aplicar uma das abordagens:
-
-- `// @ts-check` + JSDoc `@satisfies`; ou
-- converter os módulos de cartas gradualmente para `.ts`.
+Antes da conversão física integral para `.ts`, aplicar `// @ts-check` + JSDoc `@satisfies` aos 11 módulos declarativos atuais, em sub-PRs se necessário. A Etapa 3 deve typecheckar o banco inteiro, não apenas um arquétipo piloto.
 
 Exemplo desejado ao final:
 
 ```ts
-export const techZeroCards = [
+export const cards = [
   // ...
-] satisfies readonly CardDefinition[];
+] satisfies readonly RawCardDefinition[];
 ```
 
 ## Critérios de aceitação
 
 - todos os `action.type` conhecidos pertencem ao union;
+- o walker único alcança e valida `defaultActions` e todas as demais actions aninhadas suportadas;
 - catálogo e tipos não podem divergir silenciosamente;
 - exemplos do catálogo são typechecked;
-- pelo menos um módulo de cartas complexo, como Tech-Zero, compila sob o schema;
+- os 11 módulos declarativos compilam sob o schema, ainda que permaneçam fisicamente `.js`;
 - o banco completo continua passando pelo validador runtime;
 - nenhuma definição de carta é alterada para “agradar” o tipo sem análise.
 
@@ -663,7 +953,7 @@ type ActionHandler<T extends ActionType> = (
   ctx: EffectContext,
   targets: ResolvedTargetMap,
   engine: EffectEngine,
-) => Promise<ActionHandlerResult>;
+) => MaybePromise<LegacyActionHandlerResult>;
 
 class ActionHandlerRegistry {
   register<T extends ActionType>(
@@ -679,58 +969,65 @@ class ActionHandlerRegistry {
 
 ## Verificação do wiring
 
+Criar um manifest exato:
+
+```ts
+type ActionBindingByType = {
+  [K in ActionType]:
+    | { kind: "direct"; handler: DirectHandlerIdFor<K> }
+    | { kind: "proxy"; method: CompatibleEffectEngineMethodFor<K> };
+};
+```
+
+Um mapa de handlers diretos deve usar os nomes/referências reais das funções. Um `ProxyMethodByAction` deve ligar cada action proxy a um método compatível do `EffectEngine`. O campo humano `handler` do catálogo deve ser derivado do binding ou verificado contra ele.
+
 O wiring deve comprovar:
 
-- toda action usada no banco tem handler;
-- toda action do catálogo tem handler ou proxy declarado;
+- `ActionByType`, catálogo e bindings têm o mesmo keyset exato;
+- toda action usada pelo walker do banco tem handler;
+- toda action do catálogo tem binding direct ou proxy;
 - o handler recebe a variante correta;
-- aliases que compartilham handler são explícitos;
+- aliases que compartilham handler usam unions explícitas;
 - `proxyEngineMethod` aceita apenas nomes válidos de métodos do `EffectEngine`.
+
+O guard runtime de `proxyEngineMethod` permanece. Como o registry usa um `Map` heterogêneo, uma única fronteira de type erasure/cast no dispatcher pode ser necessária; ela deve ser localizada, documentada e coberta por teste, nunca espalhada pelos handlers.
 
 ## Resultado de handlers
 
-Durante a migração, aceitar temporariamente:
+Tipar exatamente os retornos atuais:
 
 ```ts
 type LegacyActionHandlerResult =
   | boolean
+  | null
   | undefined
-  | ActionResultObject;
+  | LegacyActionResultObject
+  | NeedsSelectionResult;
 ```
 
-Criar um normalizador único na fronteira.
+Os objetos devem refletir os campos já existentes, como `success`, `executed` e `needsSelection`. O resultado normalizado atual de `applyActions` deve ter tipo próprio.
 
-O destino final deve ser uma união discriminada:
-
-```ts
-type ActionHandlerResult =
-  | { status: "success"; executed: boolean }
-  | { status: "failure"; reason: string; code?: string }
-  | {
-      status: "needs_selection";
-      selectionContract: SelectionContract;
-    };
-```
-
-Não obrigar todos os handlers a mudar de retorno no mesmo commit. A convergência deve ser gradual, com teste de paridade.
+Os type guards e o normalizador na fronteira devem preservar exatamente a semântica atual de `true`, `false`, objeto, `null` e `undefined`. Não introduzir `{ status: ... }`, novos campos ou uma convergência de retorno nesta migração. Um redesign desse shape é projeto funcional posterior.
 
 ## Converter por categoria
 
 Ordem recomendada:
 
-1. `registry`;
-2. `shared`;
-3. handlers de resources;
-4. movement;
-5. stats;
-6. destruction;
-7. summon;
-8. conditional;
-9. choice;
-10. negation;
-11. blueprints;
+1. contratos do dispatcher e `registry`;
+2. port de actions e attachments do `EffectEngine`;
+3. `shared`;
+4. `blueprints`;
+5. `movement`;
+6. `negation`;
+7. `choice` e `conditional`;
+8. `destruction` e `resources`;
+9. `stats`;
+10. folhas de `summon`;
+11. barrel de `summon`;
 12. wiring;
-13. barrels.
+13. barrels públicos.
+
+`resources` e `stats` não devem ser pilotos: estão entre os módulos de handlers mais extensos.
 
 ## EffectEngine
 
@@ -738,9 +1035,11 @@ Tipar a API necessária aos handlers.
 
 Para os métodos anexados dinamicamente ao prototype:
 
-- usar declaration merging ou uma interface de métodos;
-- declarar `this: EffectEngine` nas funções dos módulos;
-- criar um helper de attach tipado;
+- criar um host contract mínimo antes de converter as folhas;
+- substituir listas de nomes em string por manifests com referências diretas;
+- usar declaration merging sem emitir class fields;
+- declarar `this` como o host mínimo exigido pela função;
+- criar um helper de attach tipado com uma fronteira interna auditada;
 - manter o mecanismo runtime atual nesta etapa;
 - não substituir mixins por uma arquitetura nova durante a migração.
 
@@ -748,9 +1047,11 @@ Para os métodos anexados dinamicamente ao prototype:
 
 - registrar um handler com action incompatível causa erro de compilação;
 - `proxyEngineMethod` não aceita método inexistente;
-- toda action do banco tem handler e catálogo;
+- `ActionByType`, catálogo, binding, wiring e registry têm keysets compatíveis e completos;
+- toda action encontrada pelo walker do banco tem handler e catálogo;
 - nenhum handler usa `any` para action, context ou targets;
-- testes de actions e cartas afetadas passam;
+- a suíte automatizada existente passa;
+- nenhum retorno de handler ganhou shape runtime novo;
 - `applyActions` preserva exatamente a semântica atual.
 
 ---
@@ -932,18 +1233,20 @@ Nesta etapa:
 
 - `CANONICAL_REPLAY_SCHEMA_VERSION` permanece igual;
 - o nome do formato permanece igual;
-- a assinatura do banco deve permanecer igual;
-- hashes dos replays dourados devem permanecer iguais;
+- `getCardDatabaseSignature()` e seu valor legado `1cc622e3` permanecem iguais;
+- o digest SHA-256 da migração permanece separado do formato de replay;
 - nenhuma chave canônica pode ser renomeada.
 
-Se um hash mudar, a etapa falha até que a causa seja explicada e corrigida.
+Falha nos testes canônicos existentes, na assinatura legada ou no digest da migração bloqueia a etapa até que a causa seja explicada e corrigida.
 
 ## Critérios de aceitação
 
-- replays dourados produzem o mesmo hash final;
+- o teste canônico existente reproduz o mesmo hash final;
 - replay adulterado continua falhando na mesma divergência;
 - banco incompatível continua sendo rejeitado;
 - decisões continuam remapeando por `duelCardId`;
+- a assinatura legada não foi ampliada nem recalculada;
+- o digest completo permanece em seu gate exclusivo da migração;
 - não há `any` na API pública de replay;
 - schema runtime continua validado.
 
@@ -957,24 +1260,26 @@ Tipar integralmente o sistema mais sensível do jogo sem alterar suas regras.
 
 ## Ordem recomendada
 
-Converter primeiro módulos de folha e depois a fachada:
+Preparar o host antes das folhas e converter o runtime da fachada por último:
 
-1. constantes e contextos;
-2. `link`;
-3. `usage`;
-4. `spellSpeed`;
-5. `timing`;
-6. `selection`;
-7. `activationDiscovery`;
-8. `activation`;
-9. `stack`;
-10. `segoc`;
-11. `responseWindow`;
-12. políticas de resposta humana e bot;
-13. `resolution`;
-14. `finalization`;
-15. `ChainSystem`;
-16. `NullChainSystem`.
+1. `ChainRuntimePort`, `FullChainHost` e hosts menores sem emissão runtime;
+2. constantes e contextos;
+3. `link`;
+4. `usage`;
+5. `spellSpeed`;
+6. `timing`;
+7. `selection`;
+8. `activationDiscovery`;
+9. `activation`;
+10. `stack`;
+11. `segoc`;
+12. `responseWindow`;
+13. políticas de resposta humana e bot;
+14. `resolution`;
+15. `finalization`;
+16. manifest tipado de attachments;
+17. `ChainSystem`;
+18. `NullChainSystem`.
 
 ## Contratos obrigatórios
 
@@ -1033,25 +1338,24 @@ type ChainContext =
 
 Os estados devem ser unions literais, não strings abertas.
 
-## Interface comum
+## Ports e hosts distintos
 
-Criar `IChainSystem` ou contrato equivalente para que:
+Não forçar `ChainSystem` e `NullChainSystem` a expor toda a mesma API interna. Criar:
 
-```text
-ChainSystem
-NullChainSystem
-```
+- `ChainRuntimePort`: menor superfície externa realmente consumida por `Game`, `EffectEngine` e demais consumers;
+- `FullChainHost`: estado e métodos internos necessários somente aos módulos anexados do Chain real;
+- hosts menores por capability, como `ChainSelectionHost`, para funções reutilizadas pelos dois modos.
 
-exponham a mesma API.
+`ChainSystem` e `NullChainSystem` satisfazem `ChainRuntimePort`; somente o Chain real satisfaz `FullChainHost`. A superfície normal de `Game.chainSystem` é `ChainRuntimePort`. Consumers excepcionais que precisem do concrete Chain devem usar um type guard/capability explícito, nunca assumir métodos internos por duck typing.
 
-O modo sem Chain não pode depender de duck typing.
+O Null atualmente reutiliza ao menos uma função de seleção via `.call(this)`, portanto essa função deve receber um host comum menor, não `this: ChainSystem`. Se um novo no-op for realmente necessário no Null, adicioná-lo em PR isolado de compatibilidade com teste de paridade; não preencher dezenas de métodos internos apenas para satisfazer um tipo artificial.
 
 ## Métodos anexados ao prototype
 
 Manter a composição atual, mas tipá-la:
 
-- cada módulo declara `this: ChainSystem`;
-- o mapa de attachments usa `satisfies`;
+- cada módulo declara `this: FullChainHost` ou o host mínimo de sua capability;
+- o manifest usa referências diretas e `satisfies`;
 - nomes ausentes ou assinaturas divergentes falham no typecheck.
 
 ## Gates específicos
@@ -1078,7 +1382,7 @@ Incluindo:
 - compatibility removal;
 - consumer migration.
 
-Executar também os replays dourados que atravessam Chain.
+Executar também a suíte canônica de replay existente.
 
 ## Critérios de aceitação
 
@@ -1087,7 +1391,10 @@ Executar também os replays dourados que atravessam Chain.
 - mesmos hashes;
 - mesmas razões de rejeição;
 - mesmos status de Chain Link;
-- `NullChainSystem` satisfaz a mesma interface;
+- `ChainSystem` e `NullChainSystem` satisfazem `ChainRuntimePort`;
+- somente o Chain real precisa satisfazer `FullChainHost`;
+- consumers externos não acessam APIs internas sem narrowing;
+- attachments do Chain real possuem keyset exato;
 - nenhum `Object` genérico permanece nos contratos públicos principais;
 - nenhum branch crítico depende de cast inseguro.
 
@@ -1103,7 +1410,7 @@ Tipar o estado central e todas as funções anexadas ao `Game`, preservando a mo
 
 Separar claramente:
 
-- dados imutáveis vindos de `CardDefinition`;
+- dados imutáveis vindos de `RawCardDefinition`/`ValidatedCardDefinition`;
 - estado de instância;
 - stats base;
 - stats atuais;
@@ -1167,16 +1474,16 @@ Não manter `options = {}` sem tipo em APIs públicas.
 
 ## 8.4. Módulos anexados ao Game
 
-Cada função modular deve declarar:
+Criar primeiro um host por domínio e fazer cada função modular declarar somente as capabilities que usa:
 
 ```ts
 export function moveCard(
-  this: Game,
+  this: GameZonesHost,
   // ...
 ): MoveCardResult | Promise<MoveCardResult>
 ```
 
-Criar uma interface de métodos anexados e verificar o attachment com `satisfies`.
+Depois criar um manifest de métodos anexados com referências diretas, verificá-lo com `satisfies` e fazer interface merging na fachada. Não declarar métodos anexados como class fields com `!`: com `useDefineForClassFields: true`, isso emitiria propriedades `undefined` nas instâncias e sombrearia o prototype.
 
 Não substituir todos os módulos por métodos de classe nesta etapa.
 
@@ -1184,43 +1491,53 @@ Não substituir todos os módulos por métodos de classe nesta etapa.
 
 Ordem recomendada:
 
-1. helpers;
-2. state;
-3. deck;
-4. turn;
-5. zones;
-6. summon;
-7. combat;
-8. spellTrap;
-9. actions guard;
-10. effects pipeline;
-11. graveyard e Extra Deck;
-12. devTools;
-13. UI bridge dentro de `game/ui`;
-14. fachada `Game`.
+1. hosts e contratos de estado, sem alterar runtime;
+2. helpers;
+3. state;
+4. deck;
+5. turn;
+6. zones;
+7. summon;
+8. combat;
+9. spellTrap;
+10. actions guard;
+11. effects pipeline;
+12. graveyard e Extra Deck;
+13. devTools;
+14. UI bridge dentro de `game/ui`;
+15. manifest tipado;
+16. fachada `Game` e verificação final do attachment.
 
 ## 8.6. MoveCard
 
-Criar contratos discriminados para movimentos.
+Inventariar primeiro todas as chamadas existentes e tipar a assinatura runtime atual, sem trocar parâmetros por um novo objeto. Os tipos precisam distinguir:
 
-Exemplo conceitual:
+- movimento entre zonas que não entra no campo;
+- entrada no campo por Summon/procedimento;
+- transferência ou reposicionamento `field -> field` que não é uma nova Summon;
+- fronteiras dinâmicas/legadas que ainda precisem de overload estreito e documentado.
+
+Exemplo conceitual para as opções, mantendo a chamada `moveCard(card, player, toZone, options)`:
 
 ```ts
 type RegularZoneMoveOptions = {
-  toZone: Exclude<Zone, "field">;
-  fromZone?: Zone;
+  fromZone?: CanonicalZone;
 };
 
-type SummonMoveOptions = {
-  toZone: "field";
-  fromZone: Zone;
+type EnterFieldBySummonOptions = {
+  fromZone: Exclude<CanonicalZone, "field">;
   summonOrigin: SummonOrigin;
   summonMethod?: SummonMethod;
   summonProcedure?: SummonProcedure;
 };
+
+type FieldTransferOptions = {
+  fromZone: "field";
+  controlTransfer?: boolean;
+};
 ```
 
-O compilador deve impedir uma movimentação ao campo sem origem de Invocação quando a regra atual exige isso.
+O compilador deve impedir combinações realmente ilegais, mas não inventar uma regra mais rígida que o runtime atual. Toda entrada por Summon que hoje exige `summonOrigin` continua exigindo; transferências dentro do campo não devem ser classificadas como Summon. `ZoneInput` legado é normalizado antes de chegar aos overloads canônicos.
 
 ## 8.7. Transações
 
@@ -1238,11 +1555,11 @@ Tipar:
 
 - todos os métodos anexados a `Game` são verificados;
 - `GameOptions` não é aberto;
-- movimentos ilegais não compilam;
+- movimentos observados possuem overload compatível e combinações comprovadamente ilegais não compilam;
 - estado de seleção, Chain, Summon e Damage Step não é confundido;
 - dispose limpa os mesmos estados;
-- testes de zonas, Invocação, combate, turnos e cartas passam;
-- replays continuam iguais.
+- a suíte automatizada existente de zonas, Invocação, combate, turnos e cartas passa;
+- a suíte canônica de replay existente continua passando.
 
 ---
 
@@ -1431,11 +1748,11 @@ Não tentar gerar um sistema completo de chaves tipadas para todos os textos ant
 
 ---
 
-# Etapa 11 — Converter integralmente o banco de cartas
+# Etapa 11 — Converter fisicamente o banco de cartas
 
 ## Objetivo
 
-Fazer todas as definições declarativas serem verificadas pelo schema TypeScript.
+Renomear mecanicamente os módulos declarativos de `.js` para `.ts`. A verificação estrutural de todos eles já deve ter sido concluída na Etapa 3.
 
 ## Ordem recomendada
 
@@ -1454,7 +1771,7 @@ Converter um módulo por vez:
 11. Vulcanomaton;
 12. demais módulos existentes.
 
-A ordem pode ser ajustada para coincidir com a revisão manual das cartas.
+A ordem serve apenas para manter os diffs revisáveis. Não há rodada manual de teste de cartas nesta etapa.
 
 ## Regras
 
@@ -1463,13 +1780,13 @@ Cada módulo deve usar:
 ```ts
 export const cards = [
   // ...
-] satisfies readonly CardDefinition[];
+] satisfies readonly RawCardDefinition[];
 ```
 
 Não usar:
 
 ```ts
-export const cards: CardDefinition[] = [
+export const cards: RawCardDefinition[] = [
   // ...
 ];
 ```
@@ -1491,35 +1808,20 @@ A conversão não pode alterar:
 - action types;
 - valores numéricos;
 - ranges;
-- assinatura do banco.
+- assinatura legada do banco;
+- digest SHA-256 da migração.
 
 Mudanças de formatação devem ser minimizadas para permitir revisão do diff.
 
 ## Erros encontrados
 
-Classificar cada erro:
+Nenhum erro estrutural novo deveria surgir aqui: o schema já foi aplicado ao banco inteiro na Etapa 3. Se aparecer:
 
-### Erro estrutural óbvio
-
-Exemplos:
-
-- typo em enum;
-- campo numérico como string;
-- propriedade inexistente;
-- action sem campo obrigatório.
-
-Pode ser corrigido na migração somente quando o comportamento pretendido for inequívoco e houver teste.
-
-### Ambiguidade funcional
-
-Exemplos:
-
-- campo legado com dois significados;
-- union incompatível com o comportamento atual;
-- effect que depende de propriedade não documentada;
-- action com retorno inconsistente.
-
-Não corrigir silenciosamente. Registrar e interromper aquele módulo até revisão.
+- não alterar a carta silenciosamente;
+- confirmar se a diferença vem da resolução `.js` → `.ts`, do `satisfies` ou de um gap anterior;
+- registrar a dívida;
+- corrigir o contrato quando ele não representar o runtime;
+- separar qualquer correção funcional em trabalho próprio.
 
 ## Critérios de aceitação
 
@@ -1527,9 +1829,9 @@ Não corrigir silenciosamente. Registrar e interromper aquele módulo até revis
 - todos usam o schema canônico;
 - validator runtime passa;
 - catálogo passa;
-- assinatura do banco permanece igual;
-- nenhum efeito foi alterado sem teste e revisão;
-- as cartas já revisadas continuam passando.
+- assinatura legada e digest do componente de cartas permanecem iguais; o agregado coincide com o último valor aprovado;
+- nenhum efeito ou dado declarativo foi alterado;
+- a suíte automatizada existente continua passando.
 
 ---
 
@@ -1553,16 +1855,19 @@ Ao final:
 
 ## Scripts
 
-Converter:
+Os scripts abaixo já executam por `tsx` desde a Etapa 1. Agora converter seus próprios arquivos para `.ts` ou `.mts`:
 
 - `run_tests`;
 - `audit_chain_metadata`;
 - `validate_action_catalog`;
 - `generate_action_catalog_doc`;
 - `replay_duel`;
+- `run_bot_arena_smoke`;
 - outros scripts encontrados.
 
-Usar `.ts` ou `.mts` de forma consistente com ESM.
+Usar `.ts` ou `.mts` de forma consistente com ESM e preservar os specifiers `.js`/`.mjs` exigidos pela resolução NodeNext.
+
+`verify_migration_digest.ts` e `audit_typescript_escapes.ts` já foram criados em TypeScript na Etapa 1 e apenas permanecem sob manutenção.
 
 ## Geração do catálogo
 
@@ -1627,10 +1932,10 @@ Ativar uma opção por vez.
 - remover shims `.d.ts` temporários;
 - remover interfaces de compatibilidade já desnecessárias;
 - remover casts temporários;
-- remover `LegacyActionHandlerResult` quando todos os handlers estiverem normalizados;
+- manter `LegacyActionHandlerResult` enquanto ele representar o contrato runtime real; não redesenhar retornos nesta etapa;
 - remover aliases de campos legados somente em uma etapa separada e testada;
 - revisar `typescript-debt.md`;
-- eliminar `@ts-expect-error` temporários;
+- eliminar `@ts-expect-error` temporários e manter somente casos negativos intencionais, explicados e auditados;
 - eliminar arquivos JavaScript restantes dentro das áreas migradas.
 
 ## Desligar modo misto
@@ -1649,7 +1954,7 @@ Quando `src/`, `scripts/` e `test/` estiverem convertidos:
 
 ## Critérios de aceitação
 
-- `tsc --noEmit` produz zero erros;
+- `npm run typecheck` produz zero erros nos projetos app e Node;
 - `allowJs` está desligado para o código migrado;
 - não há `@ts-ignore`;
 - não há `any` não justificado;
@@ -1678,7 +1983,7 @@ Além disso:
 
 - todos os testes de Chain;
 - todos os testes de replay;
-- todos os testes de cartas;
+- todos os testes automatizados de cartas já existentes;
 - testes do Laboratório;
 - testes de Bot Arena/IA;
 - validação completa do banco;
@@ -1694,42 +1999,34 @@ Comparar com a baseline:
 - IDs;
 - nomes;
 - ordem do banco;
-- assinatura do banco;
+- assinatura legada do banco;
+- digest SHA-256 completo da migração;
 - schema do replay;
-- hashes dos replays dourados;
-- ordem dos eventos;
-- resultados de Chain;
-- decisões gravadas;
-- resultados das cartas 1–29;
+- resultados dos testes canônicos existentes de replay;
+- resultados da suíte de Chain;
 - build funcional;
 - telas e modais;
 - resultados básicos da IA com seeds fixas.
 
-## Revisão manual
-
-Repetir rapidamente as cartas 1–29.
-
-Essa passagem não precisa ter a mesma profundidade da primeira, porque o objetivo é detectar regressão da migração.
-
-Depois:
+## Encerramento da migração
 
 - registrar a migração como concluída;
 - atualizar `AGENTS.md`;
 - atualizar `docs/Estrutura do Projeto.md`;
 - atualizar `Como criar uma carta.md`;
-- atualizar `Como criar um handler.md`;
-- continuar a revisão manual a partir da carta 30.
+- atualizar `Como criar um handler.md`.
+
+Não executar uma campanha manual de cartas durante as etapas da migração. Somente depois de todos os critérios abaixo serem atendidos e a migração ser registrada como concluída, iniciar a validação manual das cartas sobre a nova base. Esse trabalho posterior não usa recorte privilegiado nem exigência de reteste por etapa.
 
 ## Critérios de aceitação
 
 - nenhuma divergência comportamental não explicada;
-- cartas 1–29 continuam corretas;
 - Chain continua canônico;
 - replay continua determinístico;
-- banco mantém assinatura;
+- banco mantém a assinatura legada, o digest das cartas e um histórico sem deltas não explicados no digest agregado;
 - build e deploy funcionam;
 - documentação de agentes já descreve TypeScript;
-- a revisão das cartas pode continuar sobre a nova base.
+- a migração está encerrada antes do início dos testes manuais de cartas.
 
 ---
 
@@ -1742,17 +2039,17 @@ O repositório usa attachments ao prototype em:
 - `ChainSystem`;
 - `Renderer`.
 
-Isso não deve ser reescrito durante a migração inicial.
+O inventário da baseline tem aproximadamente 219 attachments diretos no `Game`, 121 no `EffectEngine`, 89 no `ChainSystem` e 111 no `Renderer`, além dos wrappers dinâmicos de replay instalados no `Game`. Isso não deve ser reescrito como uma arquitetura nova durante a migração.
 
-## Abordagem recomendada
+## Abordagem obrigatória
 
-### 4.1. Tipar `this`
+### 4.1. Host contract antes das folhas
 
-Cada função modular declara seu host:
+Cada domínio declara o menor host necessário antes de converter suas funções:
 
 ```ts
 export function resolveCombat(
-  this: Game,
+  this: GameCombatHost,
   attacker: CardInstance,
   defender: CardInstance | null,
 ): Promise<CombatResult> {
@@ -1760,41 +2057,74 @@ export function resolveCombat(
 }
 ```
 
-### 4.2. Interface de métodos
+Usar a fachada inteira como `this` somente quando a função realmente depender de toda a superfície e depois que o contrato merged existir. Para Chain, usar `FullChainHost` ou um host menor; funções compartilhadas com `NullChainSystem` usam o host comum correspondente.
 
-Criar uma interface por fachada:
+### 4.2. Manifest com referências diretas
 
-```ts
-interface GameAttachedMethods {
-  resolveCombat: typeof resolveCombat;
-  moveCard: typeof moveCard;
-  // ...
-}
-```
-
-### 4.3. Mapa de attachment verificado
+Cada fachada possui um manifest canônico com referências de função, não listas soltas de strings:
 
 ```ts
 const gameMethods = {
   resolveCombat,
   moveCard,
-} satisfies GameAttachedMethods;
+} satisfies GameAttachmentManifest;
 
-Object.assign(Game.prototype, gameMethods);
+type GameAttachedMethods = typeof gameMethods;
 ```
 
-Ou usar atribuições atuais verificadas por um helper genérico.
+O helper de attach pode conter uma única fronteira interna auditada de cast/type erasure. Antes de aplicar o manifest, ele deve rejeitar:
 
-### 4.4. Declaration merging
+- colisões entre maps de domínios;
+- colisões inesperadas com métodos próprios da classe;
+- funções `undefined`;
+- divergência entre o keyset esperado e o recebido.
 
-A classe precisa declarar que implementa os métodos anexados, sem duplicar implementação.
+No `EffectEngine`, substituir as listas atuais de nomes por esses maps de referências diretas. `Renderer` e `ChainSystem` seguem o mesmo padrão.
 
-A forma final deve ser revisada pelo Codex para escolher entre:
+### 4.3. Declaration merging sem emissão
 
-- declaration merging;
-- interface que estende o mapa de métodos;
-- helper genérico de mixin;
-- `Object.assign` tipado.
+A classe declara a superfície anexada por interface merging, sem duplicar implementação:
+
+```ts
+interface Game extends GameAttachedMethods {}
+```
+
+É proibido declarar attached methods como class fields:
+
+```ts
+// Proibido
+moveCard!: typeof moveCard;
+```
+
+Com `useDefineForClassFields: true`, esse campo emitiria uma propriedade `undefined` na instância e sombrearia o método do prototype.
+
+### 4.4. Preservar semântica runtime
+
+O helper deve preservar:
+
+- ordem atual dos attachments;
+- descriptors e enumerabilidade observáveis;
+- mutabilidade/monkeypatching usados pelos testes;
+- identidade e retorno das funções;
+- ordem “attachments primeiro, wrappers de replay depois”.
+
+O wrapper de replay do `Game` exige tratamento específico:
+
+- união fechada dos nomes capturáveis;
+- `Parameters<Game[K]>` para os argumentos;
+- retorno síncrono/assíncrono preservado;
+- marker `_replayCaptureWrapped` tipado;
+- instalação idempotente, depois de todos os attachments.
+
+### 4.5. Verificação
+
+Adicionar testes estruturais para provar:
+
+- nenhum item do manifest é `undefined`;
+- keysets são iguais aos inventariados na baseline;
+- colisões inesperadas falham;
+- métodos continuam substituíveis nos testes;
+- wrappers de replay são instalados exatamente uma vez e na ordem atual.
 
 ## Não fazer nesta migração
 
@@ -1802,6 +2132,7 @@ A forma final deve ser revisada pelo Codex para escolher entre:
 - substituir as fachadas por serviços novos;
 - introduzir dependency injection;
 - alterar o padrão modular;
+- emitir attached methods como class fields;
 - eliminar os prototypes em um único grande refactor.
 
 Essas mudanças podem ser avaliadas depois da migração.
@@ -1824,6 +2155,18 @@ TypeScript não substitui os validators atuais.
 - validação de setup do Laboratório;
 - validação de decks;
 - regras semânticas entre targets e actions.
+
+## Walker compartilhado
+
+O `CardDatabaseValidator` não pode manter uma segunda lógica parcial de recursão. O walker definido na Etapa 3 deve alimentar:
+
+- validação estrutural de cada action;
+- verificação de campos desconhecidos;
+- resolução sequencial de refs;
+- inventário usado pelo catálogo/registry;
+- mensagens com o caminho completo da action.
+
+Adicionar um novo container recursivo exige primeiro atualizar esse contrato único e seus testes. `defaultActions` é obrigatório desde a primeira versão.
 
 ## Nova divisão de responsabilidade
 
@@ -1863,7 +2206,7 @@ Detecta:
 
 - PRs pequenos;
 - baseline;
-- replays dourados;
+- assinatura legada, digest completo e suíte automatizada existente;
 - proibição explícita de mudanças de regra;
 - commits separados para bugs funcionais.
 
@@ -1885,6 +2228,8 @@ Detecta:
 - `satisfies`;
 - teste de completude;
 - um único mapa `ActionByType`;
+- binding/wiring com keyset exato;
+- walker único para inventariar o banco;
 - geração de documentação a partir da fonte canônica.
 
 ## Risco 4 — Ciclos de import
@@ -1903,9 +2248,9 @@ Detecta:
 
 - converter módulo por módulo;
 - preservar formatação;
-- assinatura do banco;
+- assinatura legada e digest completo;
 - validator e catálogo após cada módulo;
-- testes das cartas daquele módulo.
+- suíte automatizada existente.
 
 ## Risco 6 — Divergência da IA
 
@@ -1922,8 +2267,9 @@ Detecta:
 **Mitigação:**
 
 - schema congelado;
-- hashes dourados;
-- assinatura congelada;
+- testes canônicos existentes;
+- assinatura legada congelada;
+- digest da migração mantido fora do formato de replay;
 - tipos separados de runtime e serialização;
 - validação de importação.
 
@@ -1933,18 +2279,22 @@ Detecta:
 
 - manter runtime atual;
 - usar declaration merging;
-- tipar attachments;
+- host contract antes das folhas;
+- manifests com referências diretas;
+- proibir class fields para métodos anexados;
+- preservar wrappers pós-attachment;
 - não reescrever a arquitetura;
-- migrar fachada por último dentro de cada domínio.
+- converter o runtime da fachada por último dentro de cada domínio.
 
 ## Risco 9 — Configuração browser/Node conflitar
 
 **Mitigação:**
 
 - tsconfigs separados;
-- types de Node apenas em scripts/testes;
-- DOM apenas na app;
-- runner explícito para TypeScript;
+- `Bundler` apenas no app e `NodeNext` nas ferramentas;
+- DOM e `vite/client` disponíveis no projeto Node enquanto ele importar `src/`;
+- TypeScript 6 e Node 22 fixados;
+- `tsx` em todos os testes/scripts que importam `src/`;
 - ESM preservado.
 
 ## Risco 10 — Flags strict ativadas cedo demais
@@ -1954,7 +2304,51 @@ Detecta:
 - `strict` nos novos `.ts`;
 - flags mais agressivas somente na Etapa 13;
 - uma flag por commit;
-- zero suppressions permanentes.
+- suppressions de migração temporárias;
+- `@ts-expect-error` permanente apenas em teste negativo documentado.
+
+## Risco 11 — Actions aninhadas escaparem da validação
+
+**Mitigação:**
+
+- walker recursivo único;
+- suporte obrigatório a `defaultActions`;
+- contexto sequencial e caminho completo;
+- testes sintéticos em múltiplas profundidades.
+
+## Risco 12 — Brands quebrarem os literais autorais
+
+**Mitigação:**
+
+- `RawCardDefinition.id` continua `number`;
+- brands somente depois de validator/factory;
+- proibição de casts distribuídos pelo banco.
+
+## Risco 13 — Tipagem alterar shapes de runtime
+
+**Mitigação:**
+
+- contracts derivados dos retornos e overloads atuais;
+- nenhum `{ status: ... }` novo nos handlers;
+- nenhum redesenho de `moveCard`, Card ou snapshots durante a migração;
+- comparação do digest e suíte completa.
+
+## Risco 14 — Falsa equivalência entre Chain real e Null
+
+**Mitigação:**
+
+- `ChainRuntimePort` mínimo compartilhado;
+- `FullChainHost` exclusivo do Chain real;
+- hosts menores para módulos reutilizados;
+- narrowing explícito de capabilities.
+
+## Risco 15 — Alias de zona contaminar o estado canônico
+
+**Mitigação:**
+
+- `CanonicalZone` separado de `LegacyZoneAlias`;
+- `"banish"` normalizado para `"banished"` na fronteira;
+- APIs internas aceitam somente zona canônica.
 
 ---
 
@@ -1962,10 +2356,10 @@ Detecta:
 
 Cada item abaixo deve ser um PR ou uma sequência curta de commits revisáveis:
 
-1. baseline e documentação;
-2. toolchain e CI em modo misto;
+1. baseline estritamente documental e pequena;
+2. imediatamente depois, toolchain TypeScript 6, digest verificável e CI em modo misto;
 3. contratos primitivos;
-4. schema de actions e cartas;
+4. walker recursivo, schema de actions/effects/cartas e typecheck dos 11 módulos;
 5. registry, wiring e handlers;
 6. eventos, decisões e seleção;
 7. replay canônico;
@@ -1977,6 +2371,8 @@ Cada item abaixo deve ser um PR ou uma sequência curta de commits revisáveis:
 13. testes e scripts restantes;
 14. strict hardening;
 15. paridade final e documentação.
+
+Os itens 1 e 2 são consecutivos: concluir e registrar os gates da baseline, então iniciar a toolchain sem criar fixtures, artefatos de cobertura por carta, novos replays ou mudanças funcionais no intervalo.
 
 O Codex deve parar ao final de cada PR e apresentar:
 
@@ -2004,36 +2400,41 @@ A migração só está concluída quando:
 - deploy passa;
 - todos os testes passam;
 - todos os testes de Chain passam;
-- replays dourados mantêm hashes;
+- os testes canônicos existentes de replay passam;
 - schema do replay permanece compatível;
-- assinatura do banco permanece igual;
-- todas as actions possuem tipos, catálogo e handler;
+- assinatura legada do banco permanece igual;
+- digest das cartas permanece igual e o digest agregado coincide com o último valor aprovado;
+- o walker único valida actions aninhadas, inclusive `defaultActions`;
+- `ActionByType`, catálogo, bindings, wiring e registry possuem keyset exato;
+- todas as actions possuem tipo, catálogo e binding/handler compatível;
 - event bus está tipado por payload;
 - decisões e seleções possuem contratos explícitos;
 - Game, EffectEngine, ChainSystem e Renderer têm attachments verificados;
+- nenhum attached method é emitido como class field;
+- wrappers instalados depois dos attachments também são typechecked;
+- `ChainSystem` e `NullChainSystem` satisfazem o `ChainRuntimePort` mínimo;
+- retornos de handlers preservam os shapes runtime anteriores à migração;
+- IDs autorais permanecem crus e brands só surgem após validação;
 - estado real, simulado e de replay são tipos distintos;
 - não há `@ts-ignore`;
 - não há `any` não justificado;
 - dívidas temporárias foram resolvidas ou explicitamente aprovadas;
-- cartas 1–29 foram retestadas;
 - documentação de agentes foi atualizada;
-- a revisão manual pode continuar a partir da carta 30.
+- a campanha manual de cartas ainda não foi iniciada durante a migração.
 
 ---
 
 # 9. Instrução inicial para o Codex
 
-Antes de implementar a Etapa 0 ou a Etapa 1, o Codex deve revisar este plano contra o repositório atual e responder com:
+A revisão técnica do plano está concluída sobre `cd41114621b2e9d0c4cb1a58f7e067d114c83519`.
 
-1. arquivos e áreas que exigem ajuste no plano;
-2. dependências técnicas que não foram consideradas;
-3. pontos onde os prototypes dinâmicos exigem tratamento especial;
-4. proposta final de `tsconfig`;
-5. proposta final do runner de testes TypeScript;
-6. estratégia para manter imports `.js` durante a transição;
-7. estratégia para unir `ActionByType`, `ACTION_CATALOG` e `wiring`;
-8. riscos de mudança da assinatura do banco ou dos hashes de replay;
-9. divisão exata do primeiro PR;
-10. confirmação explícita de que o primeiro PR não alterará comportamento.
+Quando houver autorização para implementar:
 
-Somente depois dessa revisão o Codex deve iniciar a implementação, começando pela baseline e pela toolchain em modo misto.
+1. confirmar que a base funcional ainda é `cd41114`, que não há diff funcional desde esse SHA e que o worktree não contém mudanças alheias;
+2. executar a Etapa 0 somente como registro documental, repetindo os gates em Node 22;
+3. não alterar `src/`, testes, scripts, fixtures, replays ou regras na Etapa 0;
+4. concluir o commit isolado da baseline;
+5. iniciar imediatamente a Etapa 1 com TypeScript 6.0.2, `tsx` e modo misto;
+6. confirmar explicitamente ao final de cada etapa que nenhum shape runtime ou comportamento foi alterado.
+
+Atualizar este plano não autoriza o início da implementação.
