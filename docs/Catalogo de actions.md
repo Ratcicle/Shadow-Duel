@@ -1,6 +1,6 @@
 # Catalogo de actions
 
-> Gerado por `node scripts/generate_action_catalog_doc.mjs`. Atualize `src/core/actionHandlers/actionCatalog.js` e regenere este arquivo.
+> Gerado por `npm run generate:actions`. Atualize `src/core/actionHandlers/actionCatalog.js`, regenere este arquivo e valide com `npm run check:actions-doc`.
 
 Este catalogo descreve o contrato declarativo de cada `action.type` registrado no Shadow Duel. O runtime continua vindo de `src/core/actionHandlers/wiring.js`; este documento serve para criar cartas, revisar handlers e validar o banco de cartas.
 

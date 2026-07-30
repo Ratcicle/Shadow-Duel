@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -22,6 +22,7 @@ const CATEGORY_LABELS = {
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(__dirname, "..");
 const outputPath = join(repoRoot, "docs", "Catalogo de actions.md");
+const checkOnly = process.argv.slice(2).includes("--check");
 
 function escapeCell(value) {
   return String(value ?? "")
@@ -103,7 +104,7 @@ function buildMarkdown() {
   for (const category of ACTION_CATEGORIES) entriesByCategory.set(category, []);
 
   for (const [type, entry] of Object.entries(ACTION_CATALOG).sort(([a], [b]) =>
-    a.localeCompare(b),
+    a < b ? -1 : a > b ? 1 : 0,
   )) {
     if (!entriesByCategory.has(entry.category)) entriesByCategory.set(entry.category, []);
     entriesByCategory.get(entry.category).push([type, entry]);
@@ -112,7 +113,7 @@ function buildMarkdown() {
   const lines = [
     "# Catalogo de actions",
     "",
-    "> Gerado por `node scripts/generate_action_catalog_doc.mjs`. Atualize `src/core/actionHandlers/actionCatalog.js` e regenere este arquivo.",
+    "> Gerado por `npm run generate:actions`. Atualize `src/core/actionHandlers/actionCatalog.js`, regenere este arquivo e valide com `npm run check:actions-doc`.",
     "",
     "Este catalogo descreve o contrato declarativo de cada `action.type` registrado no Shadow Duel. O runtime continua vindo de `src/core/actionHandlers/wiring.js`; este documento serve para criar cartas, revisar handlers e validar o banco de cartas.",
     "",
@@ -134,6 +135,33 @@ function buildMarkdown() {
   return `${lines.join("\n").trimEnd()}\n`;
 }
 
-await mkdir(dirname(outputPath), { recursive: true });
-await writeFile(outputPath, buildMarkdown(), "utf8");
-console.log(`Generated ${outputPath}`);
+function normalizeLineEndings(value) {
+  return value.replaceAll("\r\n", "\n");
+}
+
+const generatedMarkdown = buildMarkdown();
+
+if (checkOnly) {
+  let currentMarkdown = "";
+  try {
+    currentMarkdown = await readFile(outputPath, "utf8");
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+  }
+
+  if (
+    normalizeLineEndings(currentMarkdown) !==
+    normalizeLineEndings(generatedMarkdown)
+  ) {
+    console.error(
+      "Action catalog documentation is out of date. Run `npm run generate:actions`.",
+    );
+    process.exitCode = 1;
+  } else {
+    console.log(`Action catalog documentation is up to date: ${outputPath}`);
+  }
+} else {
+  await mkdir(dirname(outputPath), { recursive: true });
+  await writeFile(outputPath, generatedMarkdown, "utf8");
+  console.log(`Generated ${outputPath}`);
+}

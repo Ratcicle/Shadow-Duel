@@ -32,7 +32,7 @@ O `Game` expõe as APIs `startReplayRecording`, `recordReplayCommand`,
 Use:
 
 ```powershell
-node scripts\replay_duel.mjs caminho\duelo.json
+npm run replay -- caminho\duelo.json
 ```
 
 A reprodução não usa UI, IA, animações ou relógio real. Ela consome as decisões

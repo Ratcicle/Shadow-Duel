@@ -1,0 +1,21 @@
+{
+  "format": "shadow-duel-typescript-digest-registry",
+  "version": 1,
+  "legacyReplaySignature": "1cc622e3",
+  "approvals": [
+    {
+      "functionalCommit": "cd41114621b2e9d0c4cb1a58f7e067d114c83519",
+      "aggregate": "428e28a85f361880302a65745236cec6d153111d0d08fa6bf37cca45bf2b43dd",
+      "components": {
+        "cardDatabaseGroups": "25e36c9393d54218a4ccbabc264bf0623a4860fe2ae5e4f6c3a7d6d928a6a275",
+        "cardIdRanges": "ebab3971d3ae7d7bc39412842af19152290eff4cfc4b607c5328adcce7433022",
+        "cardIdMigration": "767cedfcc510631425c924d697210454a773b3d58c8021458fdfcd498ae5da89",
+        "banlist": "d41709efebdfa620f0b6d78eb70c4c188fe1ceba37bbbb7da808363cc3ba1ae7",
+        "actionCatalog": "b72dc32aaa0cb2d0e8608f8c92af607de9d358e9e97e7edb9810d12a04b07af7",
+        "locales": "39c0e0346c31c4c92dcfec488350295692be931d735ebc5fa2d85d8d300f60de"
+      },
+      "reason": "Baseline inicial da migração TypeScript",
+      "approvedAt": "2026-07-30T10:35:24-03:00"
+    }
+  ]
+}

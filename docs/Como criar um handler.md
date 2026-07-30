@@ -305,8 +305,9 @@ O catálogo completo fica em
 Use estes comandos depois de adicionar ou alterar action:
 
 ```powershell
-node scripts\validate_action_catalog.mjs
-node scripts\generate_action_catalog_doc.mjs
+npm run validate:actions
+npm run generate:actions
+npm run check:actions-doc
 ```
 
 ## Boas práticas
@@ -336,5 +337,5 @@ node scripts\generate_action_catalog_doc.mjs
 8. UI não é chamada diretamente quando `targets` resolve o caso.
 9. `needsSelection` segue o formato esperado.
 10. Preview foi atualizado se a action pode falhar antes da ativação.
-11. `node scripts\validate_action_catalog.mjs` passa.
+11. `npm run validate:actions` passa.
 12. O jogo abre sem erros do `CardDatabaseValidator`.

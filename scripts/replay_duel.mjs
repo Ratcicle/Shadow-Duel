@@ -4,7 +4,7 @@ import { replayCanonicalDuel } from "../src/core/game/replay/driver.js";
 
 const file = process.argv[2];
 if (!file) {
-  console.error("Usage: node scripts/replay_duel.mjs <replay.json>");
+  console.error("Usage: npm run replay -- <replay.json>");
   process.exitCode = 2;
 } else {
   try {
