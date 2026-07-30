@@ -20,7 +20,7 @@ async function collectTestFiles(directory) {
       files.push(...(await collectTestFiles(entryPath)));
       continue;
     }
-    if (entry.isFile() && entry.name.endsWith(".test.js")) {
+    if (entry.isFile() && /\.test\.(?:js|ts)$/.test(entry.name)) {
       files.push(entryPath);
     }
   }
@@ -33,14 +33,16 @@ const testFiles = (await collectTestFiles(TEST_ROOT)).sort((left, right) =>
 
 if (testFiles.length === 0) {
   console.error(
-    `[test-runner] No .test.js files found under ${path.relative(process.cwd(), TEST_ROOT) || "test"}.`,
+    `[test-runner] No .test.js or .test.ts files found under ${
+      path.relative(process.cwd(), TEST_ROOT) || "test"
+    }.`,
   );
   process.exitCode = 1;
 } else {
   const exitCode = await new Promise((resolveExitCode, reject) => {
     const child = spawn(
       process.execPath,
-      ["--test", "--test-concurrency=1", ...testFiles],
+      ["--import=tsx", "--test", "--test-concurrency=1", ...testFiles],
       {
         stdio: "inherit",
         windowsHide: true,

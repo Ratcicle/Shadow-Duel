@@ -776,8 +776,9 @@ Ignition com target e custo:
 Para atualizar os contratos e a documentação de actions:
 
 ```powershell
-node scripts\validate_action_catalog.mjs
-node scripts\generate_action_catalog_doc.mjs
+npm run validate:actions
+npm run generate:actions
+npm run check:actions-doc
 ```
 
 ## Metadados canônicos de ativação e uso

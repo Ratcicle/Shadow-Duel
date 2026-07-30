@@ -5,6 +5,9 @@
   "license": "MIT",
   "author": "Ratcicle",
   "type": "module",
+  "engines": {
+    "node": ">=22.12.0 <23"
+  },
   "main": "index.js",
   "directories": {
     "doc": "docs"
@@ -13,11 +16,26 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node scripts/run_tests.mjs",
-    "audit:chain": "node scripts/audit_chain_metadata.mjs",
-    "replay": "node scripts/replay_duel.mjs"
+    "typecheck:app": "tsc -p tsconfig.app.json",
+    "typecheck:node": "tsc -p tsconfig.node.json",
+    "typecheck": "npm run typecheck:app && npm run typecheck:node",
+    "typecheck:watch:app": "tsc -p tsconfig.app.json --watch",
+    "typecheck:watch:node": "tsc -p tsconfig.node.json --watch",
+    "test": "tsx scripts/run_tests.mjs",
+    "audit:chain": "tsx scripts/audit_chain_metadata.mjs",
+    "validate:actions": "tsx scripts/validate_action_catalog.mjs",
+    "generate:actions": "tsx scripts/generate_action_catalog_doc.mjs",
+    "check:actions-doc": "tsx scripts/generate_action_catalog_doc.mjs --check",
+    "audit:typescript-escapes": "tsx scripts/audit_typescript_escapes.ts",
+    "replay": "tsx scripts/replay_duel.mjs",
+    "test:bot-smoke": "node --import=tsx --import=./scripts/register_node_asset_loader.mjs scripts/run_bot_arena_smoke.mjs",
+    "verify:migration-digest": "tsx scripts/verify_migration_digest.ts",
+    "check": "npm run typecheck && npm run audit:typescript-escapes && npm test && npm run audit:chain && npm run validate:actions && npm run check:actions-doc && npm run verify:migration-digest && npm run build"
   },
   "devDependencies": {
+    "@types/node": "22.20.1",
+    "tsx": "4.23.1",
+    "typescript": "6.0.2",
     "vite": "^7.0.0"
   },
   "dependencies": {
