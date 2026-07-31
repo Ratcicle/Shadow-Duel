@@ -1,3 +1,6 @@
+// @ts-check
+
+/** @satisfies {readonly import("../../core/contracts/cards.js").RawCardDefinition[]} */
 export const bloomrotCards = [
   {
     id: 401,

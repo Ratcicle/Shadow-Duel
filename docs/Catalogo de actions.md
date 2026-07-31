@@ -647,6 +647,7 @@ Searches the deck and adds a card to hand.
 | `minLevel` | nao | number |  |
 | `player` | nao | enum: self, opponent | Perspective for the action: "self" or "opponent". |
 | `promptPlayer` | nao | boolean |  |
+| `zone` | nao | zone; valores: deck, hand, field, graveyard, spellTrap, fieldSpell, extraDeck, banish, banished | Source zone used by the action. |
 
 **Exemplos**
 
@@ -2721,6 +2722,7 @@ Alias for temporary self ATK reduction through buff handler.
 | `targetRef` | nao | string | References an effect target id or a context target such as self. |
 | `atkBoost` | nao | number |  |
 | `defBoost` | nao | number |  |
+| `amount` | nao | number |  |
 
 **Exemplos**
 
@@ -2728,13 +2730,13 @@ Alias for temporary self ATK reduction through buff handler.
 {
   "type": "reduce_self_atk",
   "targetRef": "self",
-  "atkBoost": -700
+  "amount": 700
 }
 ```
 
 **Notas**
 
-- Registered but not currently used by card data.
+_Sem notas._
 
 ### `remove_permanent_buff_named`
 
