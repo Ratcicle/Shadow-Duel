@@ -15,7 +15,7 @@ import {
   type DigestRegistry,
 } from "../../scripts/verify_migration_digest.js";
 
-const EXPECTED_COMPONENTS = {
+const BASELINE_COMPONENTS = {
   cardDatabaseGroups:
     "25e36c9393d54218a4ccbabc264bf0623a4860fe2ae5e4f6c3a7d6d928a6a275",
   cardIdRanges:
@@ -29,8 +29,27 @@ const EXPECTED_COMPONENTS = {
   locales:
     "39c0e0346c31c4c92dcfec488350295692be931d735ebc5fa2d85d8d300f60de",
 };
-const EXPECTED_AGGREGATE =
+const BASELINE_AGGREGATE =
   "428e28a85f361880302a65745236cec6d153111d0d08fa6bf37cca45bf2b43dd";
+const ACTIVE_COMPONENTS = {
+  cardDatabaseGroups:
+    "a5cc88535be7907d2b9595f97060b3fbd34ee35c7a0e050a50f0fdcca80a1938",
+  cardIdRanges:
+    "ebab3971d3ae7d7bc39412842af19152290eff4cfc4b607c5328adcce7433022",
+  cardIdMigration:
+    "767cedfcc510631425c924d697210454a773b3d58c8021458fdfcd498ae5da89",
+  banlist:
+    "d41709efebdfa620f0b6d78eb70c4c188fe1ceba37bbbb7da808363cc3ba1ae7",
+  actionCatalog:
+    "3bfb38478c5f0a5f145c6ee3f20cb5e1ee8f58507bd8bf08bcf0c46bf29995c7",
+  locales:
+    "39c0e0346c31c4c92dcfec488350295692be931d735ebc5fa2d85d8d300f60de",
+};
+const ACTIVE_AGGREGATE =
+  "13ff527c3deb5b8b5e5f09551fcabcb3ec7ca48f922f1f167c6d22c67d12caea";
+const ACTIVE_FUNCTIONAL_COMMIT =
+  "dc9bb45c83ef2a0417c61a151bcee24e93dc3628";
+const ACTIVE_APPROVED_AT = "2026-07-31T10:23:33-03:00";
 const REGISTRY_URL = new URL(
   "../../docs/migrations/typescript-digests.json",
   import.meta.url,
@@ -143,20 +162,20 @@ test("canonicalizer rejects symbol and non-enumerable object keys", () => {
   );
 });
 
-test("baseline payload reproduces every approved component and aggregate", async () => {
+test("current payload reproduces the active approved components and aggregate", async () => {
   const payload = await loadMigrationPayload();
   const digests = calculateMigrationDigests(payload);
 
-  assert.deepEqual(digests.components, EXPECTED_COMPONENTS);
-  assert.equal(digests.aggregate, EXPECTED_AGGREGATE);
+  assert.deepEqual(digests.components, ACTIVE_COMPONENTS);
+  assert.equal(digests.aggregate, ACTIVE_AGGREGATE);
 });
 
-test("registry records the functional baseline and legacy replay signature", async () => {
+test("registry preserves the baseline and records the active approval", async () => {
   const registrySource = await readFile(REGISTRY_URL, "utf8");
   const registry = parseDigestRegistry(registrySource);
 
   assert.equal(registry.legacyReplaySignature, "1cc622e3");
-  assert.equal(registry.approvals.length, 1);
+  assert.equal(registry.approvals.length, 2);
   assert.equal(
     registry.approvals[0].functionalCommit,
     "cd41114621b2e9d0c4cb1a58f7e067d114c83519",
@@ -165,8 +184,15 @@ test("registry records the functional baseline and legacy replay signature", asy
     registry.approvals[0].approvedAt,
     "2026-07-30T10:35:24-03:00",
   );
-  assert.deepEqual(registry.approvals[0].components, EXPECTED_COMPONENTS);
-  assert.equal(registry.approvals[0].aggregate, EXPECTED_AGGREGATE);
+  assert.deepEqual(registry.approvals[0].components, BASELINE_COMPONENTS);
+  assert.equal(registry.approvals[0].aggregate, BASELINE_AGGREGATE);
+
+  const activeApproval = registry.approvals.at(-1);
+  assert.ok(activeApproval);
+  assert.equal(activeApproval.functionalCommit, ACTIVE_FUNCTIONAL_COMMIT);
+  assert.equal(activeApproval.approvedAt, ACTIVE_APPROVED_AT);
+  assert.deepEqual(activeApproval.components, ACTIVE_COMPONENTS);
+  assert.equal(activeApproval.aggregate, ACTIVE_AGGREGATE);
 });
 
 test("registry rejects invalid format, version, empty history, and legacy signature", async () => {
@@ -257,18 +283,20 @@ test("registry rejects malformed approvals and component keysets", async () => {
 test("registry requires strictly increasing timestamps and unique aggregates", async () => {
   await assertRegistryRejects(
     (registry) => {
-      const second = structuredClone(registry.approvals[0]);
-      second.aggregate = "a".repeat(64);
-      second.approvedAt = "2026-07-30T10:35:23-03:00";
-      registry.approvals.push(second);
+      const next = structuredClone(registry.approvals.at(-1));
+      assert.ok(next);
+      next.aggregate = "a".repeat(64);
+      next.approvedAt = "2026-07-31T10:23:32-03:00";
+      registry.approvals.push(next);
     },
     /strictly later/,
   );
   await assertRegistryRejects(
     (registry) => {
-      const second = structuredClone(registry.approvals[0]);
-      second.approvedAt = "2026-07-30T10:35:25-03:00";
-      registry.approvals.push(second);
+      const next = structuredClone(registry.approvals.at(-1));
+      assert.ok(next);
+      next.approvedAt = "2026-07-31T10:23:34-03:00";
+      registry.approvals.push(next);
     },
     /aggregate duplicates/,
   );
@@ -278,18 +306,14 @@ test("verification checks the runtime legacy signature and latest approval", asy
   const result = await verifyMigrationDigest();
 
   assert.equal(result.legacyReplaySignature, "1cc622e3");
-  assert.equal(result.aggregate, EXPECTED_AGGREGATE);
-  assert.deepEqual(result.components, EXPECTED_COMPONENTS);
-  assert.equal(
-    result.approval.functionalCommit,
-    "cd41114621b2e9d0c4cb1a58f7e067d114c83519",
-  );
+  assert.equal(result.aggregate, ACTIVE_AGGREGATE);
+  assert.deepEqual(result.components, ACTIVE_COMPONENTS);
+  assert.equal(result.approval.functionalCommit, ACTIVE_FUNCTIONAL_COMMIT);
 });
 
 test("verification treats only the final ordered approval as active", async () => {
   const payload = await loadMigrationPayload();
   const registry = await registryFixture();
-  const latestApproval = structuredClone(registry.approvals[0]);
   registry.approvals[0].aggregate = "a".repeat(64);
   registry.approvals[0].components = {
     cardDatabaseGroups: "a".repeat(64),
@@ -299,8 +323,6 @@ test("verification treats only the final ordered approval as active", async () =
     actionCatalog: "a".repeat(64),
     locales: "a".repeat(64),
   };
-  latestApproval.approvedAt = "2026-07-30T10:35:25-03:00";
-  registry.approvals.push(latestApproval);
 
   const result = verifyMigrationDigestValues({
     payload,
@@ -308,8 +330,8 @@ test("verification treats only the final ordered approval as active", async () =
     legacyReplaySignature: "1cc622e3",
   });
 
-  assert.equal(result.approval.approvedAt, latestApproval.approvedAt);
-  assert.equal(result.aggregate, EXPECTED_AGGREGATE);
+  assert.equal(result.approval.approvedAt, ACTIVE_APPROVED_AT);
+  assert.equal(result.aggregate, ACTIVE_AGGREGATE);
 });
 
 test("verification reports legacy, component, and aggregate divergences", async () => {
@@ -327,7 +349,9 @@ test("verification reports legacy, component, and aggregate divergences", async 
   );
 
   const componentMismatch = structuredClone(registry);
-  componentMismatch.approvals[0].components.locales = "a".repeat(64);
+  const componentApproval = componentMismatch.approvals.at(-1);
+  assert.ok(componentApproval);
+  componentApproval.components.locales = "a".repeat(64);
   assert.throws(
     () =>
       verifyMigrationDigestValues({
@@ -339,7 +363,9 @@ test("verification reports legacy, component, and aggregate divergences", async 
   );
 
   const aggregateMismatch = structuredClone(registry);
-  aggregateMismatch.approvals[0].aggregate = "a".repeat(64);
+  const aggregateApproval = aggregateMismatch.approvals.at(-1);
+  assert.ok(aggregateApproval);
+  aggregateApproval.aggregate = "a".repeat(64);
   assert.throws(
     () =>
       verifyMigrationDigestValues({

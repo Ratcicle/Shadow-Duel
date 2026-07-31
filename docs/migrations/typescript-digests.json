@@ -16,6 +16,20 @@
       },
       "reason": "Baseline inicial da migração TypeScript",
       "approvedAt": "2026-07-30T10:35:24-03:00"
+    },
+    {
+      "functionalCommit": "dc9bb45c83ef2a0417c61a151bcee24e93dc3628",
+      "aggregate": "13ff527c3deb5b8b5e5f09551fcabcb3ec7ca48f922f1f167c6d22c67d12caea",
+      "components": {
+        "cardDatabaseGroups": "a5cc88535be7907d2b9595f97060b3fbd34ee35c7a0e050a50f0fdcca80a1938",
+        "cardIdRanges": "ebab3971d3ae7d7bc39412842af19152290eff4cfc4b607c5328adcce7433022",
+        "cardIdMigration": "767cedfcc510631425c924d697210454a773b3d58c8021458fdfcd498ae5da89",
+        "banlist": "d41709efebdfa620f0b6d78eb70c4c188fe1ceba37bbbb7da808363cc3ba1ae7",
+        "actionCatalog": "3bfb38478c5f0a5f145c6ee3f20cb5e1ee8f58507bd8bf08bcf0c46bf29995c7",
+        "locales": "39c0e0346c31c4c92dcfec488350295692be931d735ebc5fa2d85d8d300f60de"
+      },
+      "reason": "Etapa 3: schema canônico de cartas/actions, correções de catálogo e condição attacker_matches da carta 262",
+      "approvedAt": "2026-07-31T10:23:33-03:00"
     }
   ]
 }
