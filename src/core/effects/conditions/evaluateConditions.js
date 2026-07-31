@@ -1,3 +1,5 @@
+import { walkActionList } from "../../actionHandlers/actionWalker.js";
+
 function getCardInstanceId(card) {
   return card?.instanceId ?? card?._instanceId ?? card?.uuid ?? null;
 }
@@ -411,26 +413,12 @@ function collectTargetRefCandidateCards(engine, targetRef, effect, ctx, activati
 function collectActionDestroyCandidates(engine, action, ctx, effect, activationContext) {
   if (!action || typeof action !== "object") return [];
   const cards = [];
-  const addNested = (actions) => {
-    for (const card of collectActionsDestroyCandidates(
-      engine,
-      actions,
-      ctx,
-      effect,
-      activationContext,
-    )) {
-      appendUniqueCard(cards, card);
-    }
-  };
 
   if (action.type === "destroy") {
     if (action.targetScope) {
-      addNested([
-        {
-          type: "destroy_cards_by_scope",
-          targetScope: action.targetScope,
-        },
-      ]);
+      for (const card of collectCardsFromScope(engine, action.targetScope, ctx)) {
+        appendUniqueCard(cards, card);
+      }
     }
     for (const card of collectTargetRefCandidateCards(
       engine,
@@ -513,24 +501,14 @@ function collectActionDestroyCandidates(engine, action, ctx, effect, activationC
     }
   }
 
-  addNested(action.actions);
-  addNested(action.thenActions);
-  addNested(action.ifActions);
-  addNested(action.elseActions);
-  addNested(action.optionalActions);
-  if (Array.isArray(action.cases)) {
-    for (const entry of action.cases) addNested(entry?.actions);
-  }
-  if (Array.isArray(action.entries)) {
-    for (const entry of action.entries) addNested(entry?.actions);
-  }
-
   return cards;
 }
 
 function collectActionsDestroyCandidates(engine, actions, ctx, effect, activationContext) {
   const cards = [];
-  for (const action of asArray(actions)) {
+  for (const action of walkActionList(actions).visits.map(
+    (visit) => visit.action,
+  )) {
     for (const card of collectActionDestroyCandidates(
       engine,
       action,
@@ -592,17 +570,6 @@ function collectActionBanishCandidates(
 ) {
   if (!action || typeof action !== "object") return [];
   const cards = [];
-  const addNested = (actions) => {
-    for (const card of collectActionsBanishCandidates(
-      engine,
-      actions,
-      ctx,
-      effect,
-      activationContext,
-    )) {
-      appendUniqueCard(cards, card);
-    }
-  };
   const addTargetRefCards = (targetRef) => {
     for (const card of collectTargetRefCandidateCards(
       engine,
@@ -653,24 +620,14 @@ function collectActionBanishCandidates(
     addTargetRefCards(action.targetRef || "target");
   }
 
-  addNested(action.actions);
-  addNested(action.thenActions);
-  addNested(action.ifActions);
-  addNested(action.elseActions);
-  addNested(action.optionalActions);
-  if (Array.isArray(action.cases)) {
-    for (const entry of action.cases) addNested(entry?.actions);
-  }
-  if (Array.isArray(action.entries)) {
-    for (const entry of action.entries) addNested(entry?.actions);
-  }
-
   return cards;
 }
 
 function collectActionsBanishCandidates(engine, actions, ctx, effect, activationContext) {
   const cards = [];
-  for (const action of asArray(actions)) {
+  for (const action of walkActionList(actions).visits.map(
+    (visit) => visit.action,
+  )) {
     for (const card of collectActionBanishCandidates(
       engine,
       action,
@@ -810,17 +767,6 @@ function collectActionLeaveFieldCandidates(
 ) {
   if (!action || typeof action !== "object") return [];
   const cards = [];
-  const addNested = (actions) => {
-    for (const card of collectActionsLeaveFieldCandidates(
-      engine,
-      actions,
-      ctx,
-      effect,
-      activationContext,
-    )) {
-      appendUniqueCard(cards, card);
-    }
-  };
   const addTargetRefCards = (targetRef) => {
     for (const card of collectTargetRefCandidateCards(
       engine,
@@ -863,18 +809,6 @@ function collectActionLeaveFieldCandidates(
     for (const card of ctx.opponent?.field || []) appendUniqueCard(cards, card);
   }
 
-  addNested(action.actions);
-  addNested(action.thenActions);
-  addNested(action.ifActions);
-  addNested(action.elseActions);
-  addNested(action.optionalActions);
-  if (Array.isArray(action.cases)) {
-    for (const entry of action.cases) addNested(entry?.actions);
-  }
-  if (Array.isArray(action.entries)) {
-    for (const entry of action.entries) addNested(entry?.actions);
-  }
-
   return cards;
 }
 
@@ -886,7 +820,9 @@ function collectActionsLeaveFieldCandidates(
   activationContext,
 ) {
   const cards = [];
-  for (const action of asArray(actions)) {
+  for (const action of walkActionList(actions).visits.map(
+    (visit) => visit.action,
+  )) {
     for (const card of collectActionLeaveFieldCandidates(
       engine,
       action,

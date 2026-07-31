@@ -16,8 +16,10 @@ import {
 } from "./ActionHandlers.js";
 import {
   getActionCatalogEntry,
+  listCatalogActionTypes,
   validateActionShape,
 } from "./actionHandlers/actionCatalog.js";
+import { walkEffectActions } from "./actionHandlers/actionWalker.js";
 import {
   DAMAGE_STEP_TIMINGS,
   DUEL_EVENT_NAMES,
@@ -70,21 +72,6 @@ const VALID_FIELD_COUNT_COMPARISON_OPERATORS = new Set([
 ]);
 const VALID_DAMAGE_STEP_TIMINGS = new Set(Object.values(DAMAGE_STEP_TIMINGS));
 
-function flattenActions(actions = []) {
-  const flattened = [];
-  for (const action of Array.isArray(actions) ? actions : []) {
-    if (!action || typeof action !== "object") continue;
-    flattened.push(action);
-    for (const key of ["actions", "thenActions", "elseActions"]) {
-      flattened.push(...flattenActions(action[key]));
-    }
-    for (const option of Array.isArray(action.cases) ? action.cases : []) {
-      flattened.push(...flattenActions(option?.actions));
-    }
-  }
-  return flattened;
-}
-
 function activationCollisionKey(effect) {
   if (!effect || effect.timing === "passive") return null;
   if (effect.timing === "on_event") {
@@ -109,6 +96,179 @@ function formatIssue(card, message, effectIndex = null, actionIndex = null) {
     actionIndex,
     message,
   };
+}
+
+function rootActionIndexForPath(path) {
+  for (let index = 0; index < path.length - 1; index += 1) {
+    if (
+      [
+        "activationCosts",
+        "activationCommitActions",
+        "actions",
+        "negationCost",
+        "costActions",
+      ].includes(path[index]) &&
+      typeof path[index + 1] === "number"
+    ) {
+      return path[index + 1];
+    }
+  }
+  return null;
+}
+
+/**
+ * Pure validation seam for declarative action trees. Card-level formatting is
+ * intentionally kept by validateCardDatabase so its public issue shape stays
+ * unchanged.
+ */
+export function validateEffectActionTree(
+  effect,
+  {
+    allowedActionTypes = new Set(listCatalogActionTypes()),
+    actionWalk = walkEffectActions(effect),
+  } = {},
+) {
+  const errors = [];
+  const warnings = [];
+  const effectTargets = Array.isArray(effect?.targets) ? effect.targets : [];
+  const targetIds = new Set(
+    effectTargets
+      .filter((target) => target && typeof target.id === "string")
+      .map((target) => target.id),
+  );
+  const costTargetIds = new Set(
+    effectTargets
+      .filter(
+        (target) => target?.intent === "cost" && typeof target.id === "string",
+      )
+      .map((target) => target.id),
+  );
+  const push = (collection, message, actionIndex, pathText) => {
+    collection.push({
+      message: pathText ? `[${pathText}] ${message}` : message,
+      actionIndex,
+    });
+  };
+
+  for (const diagnostic of actionWalk.diagnostics) {
+    if (diagnostic.code === "invalid-action") continue;
+    push(
+      errors,
+      diagnostic.message,
+      rootActionIndexForPath(diagnostic.path),
+      diagnostic.pathText,
+    );
+  }
+
+  for (const visit of actionWalk.visits) {
+    const { action, actionIndex, stage, flow, pathText } = visit;
+    if (!action || typeof action !== "object") {
+      push(errors, "Action must be an object.", actionIndex, pathText);
+      continue;
+    }
+
+    if (!action.type || typeof action.type !== "string") {
+      push(
+        errors,
+        "Action type must be a non-empty string.",
+        actionIndex,
+        pathText,
+      );
+      continue;
+    }
+
+    if (
+      flow === "activation" &&
+      stage === "resolution" &&
+      visit.depth === 0 &&
+      (action.activationStage === "cost" ||
+        action.stage === "cost" ||
+        action.type === "pay_lp" ||
+        costTargetIds.has(action.targetRef) ||
+        /(^|_)cost($|_)/i.test(String(action.contextLabel || "")))
+    ) {
+      push(
+        errors,
+        'Activation costs must be declared in "activationCosts", never inferred from resolution actions.',
+        actionIndex,
+        pathText,
+      );
+    }
+
+    if (!allowedActionTypes.has(action.type)) {
+      push(
+        errors,
+        `Action type "${action.type}" is not registered.`,
+        actionIndex,
+        pathText,
+      );
+      continue;
+    }
+
+    const catalogEntry = getActionCatalogEntry(action.type);
+    if (!catalogEntry) {
+      push(
+        warnings,
+        `Action type "${action.type}" is registered but missing from ACTION_CATALOG.`,
+        actionIndex,
+        pathText,
+      );
+      continue;
+    }
+
+    if (
+      flow === "activation" &&
+      stage === "cost" &&
+      catalogEntry.selection === "dynamic"
+    ) {
+      push(
+        errors,
+        `Activation cost "${action.type}" cannot open a dynamic selection; declare its cards in effect.targets.`,
+        actionIndex,
+        pathText,
+      );
+    }
+    if (
+      flow === "activation" &&
+      stage === "cost" &&
+      typeof action.targetRef === "string" &&
+      targetIds.has(action.targetRef) &&
+      !costTargetIds.has(action.targetRef)
+    ) {
+      push(
+        errors,
+        `Activation cost "${action.type}" must reference a target declared with intent: "cost".`,
+        actionIndex,
+        pathText,
+      );
+    }
+    if (
+      flow === "activation" &&
+      stage === "resolution" &&
+      visit.depth === 0 &&
+      typeof action.targetRef === "string" &&
+      costTargetIds.has(action.targetRef)
+    ) {
+      push(
+        errors,
+        `Resolution action "${action.type}" cannot consume cost target "${action.targetRef}"; move the action to activationCosts or use an effect target.`,
+        actionIndex,
+        pathText,
+      );
+    }
+
+    const shapeResult = validateActionShape(action, {
+      targetIds: new Set([...visit.targetIds, ...visit.availableRefs]),
+    });
+    for (const message of shapeResult.errors) {
+      push(errors, message, actionIndex, pathText);
+    }
+    for (const message of shapeResult.warnings) {
+      push(warnings, message, actionIndex, pathText);
+    }
+  }
+
+  return { errors, warnings, actionWalk };
 }
 
 function validateCardIdGovernance() {
@@ -710,8 +870,13 @@ export function validateCardDatabase() {
         );
       }
 
+      const actionWalk = walkEffectActions(effect, {
+        path: ["effects", effectIndex],
+      });
       const actionTypes = new Set(
-        flattenActions(effect.actions).map((action) => action.type),
+        actionWalk.visits
+          .map((visit) => visit.action?.type)
+          .filter((type) => typeof type === "string"),
       );
       const responseContexts = new Set(
         Array.isArray(effect.canRespondTo)
@@ -763,15 +928,6 @@ export function validateCardDatabase() {
         );
       }
 
-      const effectActions = Array.isArray(effect.actions) ? effect.actions : [];
-      const activationCosts = Array.isArray(effect.activationCosts)
-        ? effect.activationCosts
-        : [];
-      const activationCommitActions = Array.isArray(
-        effect.activationCommitActions,
-      )
-        ? effect.activationCommitActions
-        : [];
       const targetIds = new Set(
         Array.isArray(effect.targets)
           ? effect.targets
@@ -868,156 +1024,20 @@ export function validateCardDatabase() {
         }
       }
 
-      const producedTargetIds = new Set();
-      const stagedActions = [
-        ...activationCosts.map((action, actionIndex) => ({
-          action,
-          actionIndex,
-          stage: "cost",
-        })),
-        ...activationCommitActions.map((action, actionIndex) => ({
-          action,
-          actionIndex,
-          stage: "commit",
-        })),
-        ...effectActions.map((action, actionIndex) => ({
-          action,
-          actionIndex,
-          stage: "resolution",
-        })),
-      ];
-      stagedActions.forEach(({ action, actionIndex, stage }) => {
-        if (!action || typeof action !== "object") {
-          errors.push(
-            formatIssue(
-              card,
-              "Action must be an object.",
-              effectIndex,
-              actionIndex,
-            ),
-          );
-          return;
-        }
-
-        if (!action.type || typeof action.type !== "string") {
-          errors.push(
-            formatIssue(
-              card,
-              "Action type must be a non-empty string.",
-              effectIndex,
-              actionIndex,
-            ),
-          );
-          return;
-        }
-
-        if (
-          stage === "resolution" &&
-          (action.activationStage === "cost" ||
-            action.stage === "cost" ||
-            action.type === "pay_lp" ||
-            costTargetIds.has(action.targetRef) ||
-            /(^|_)cost($|_)/i.test(String(action.contextLabel || "")))
-        ) {
-          errors.push(
-            formatIssue(
-              card,
-              'Activation costs must be declared in "activationCosts", never inferred from resolution actions.',
-              effectIndex,
-              actionIndex,
-            ),
-          );
-        }
-
-        if (!allowedActionTypes.has(action.type)) {
-          errors.push(
-            formatIssue(
-              card,
-              `Action type "${action.type}" is not registered.`,
-              effectIndex,
-              actionIndex,
-            ),
-          );
-          return;
-        }
-
-        const catalogEntry = getActionCatalogEntry(action.type);
-        if (!catalogEntry) {
-          warnings.push(
-            formatIssue(
-              card,
-              `Action type "${action.type}" is registered but missing from ACTION_CATALOG.`,
-              effectIndex,
-              actionIndex,
-            ),
-          );
-          return;
-        }
-
-        if (stage === "cost" && catalogEntry.selection === "dynamic") {
-          errors.push(
-            formatIssue(
-              card,
-              `Activation cost "${action.type}" cannot open a dynamic selection; declare its cards in effect.targets.`,
-              effectIndex,
-              actionIndex,
-            ),
-          );
-        }
-        if (
-          stage === "cost" &&
-          typeof action.targetRef === "string" &&
-          targetIds.has(action.targetRef) &&
-          !costTargetIds.has(action.targetRef)
-        ) {
-          errors.push(
-            formatIssue(
-              card,
-              `Activation cost "${action.type}" must reference a target declared with intent: "cost".`,
-              effectIndex,
-              actionIndex,
-            ),
-          );
-        }
-        if (
-          stage === "resolution" &&
-          typeof action.targetRef === "string" &&
-          costTargetIds.has(action.targetRef)
-        ) {
-          errors.push(
-            formatIssue(
-              card,
-              `Resolution action "${action.type}" cannot consume cost target "${action.targetRef}"; move the action to activationCosts or use an effect target.`,
-              effectIndex,
-              actionIndex,
-            ),
-          );
-        }
-
-        const availableTargetIds = new Set([
-          ...targetIds,
-          ...producedTargetIds,
-        ]);
-        const shapeResult = validateActionShape(action, {
-          targetIds: availableTargetIds,
-        });
-        for (const message of shapeResult.errors) {
-          errors.push(formatIssue(card, message, effectIndex, actionIndex));
-        }
-        for (const message of shapeResult.warnings) {
-          warnings.push(formatIssue(card, message, effectIndex, actionIndex));
-        }
-
-        for (const ref of [
-          action.resultRef,
-          action.storeResultAs,
-          action.storeNegatedCardAs,
-        ]) {
-          if (typeof ref === "string" && ref.length > 0) {
-            producedTargetIds.add(ref);
-          }
-        }
+      const actionValidation = validateEffectActionTree(effect, {
+        allowedActionTypes,
+        actionWalk,
       });
+      for (const issue of actionValidation.errors) {
+        errors.push(
+          formatIssue(card, issue.message, effectIndex, issue.actionIndex),
+        );
+      }
+      for (const issue of actionValidation.warnings) {
+        warnings.push(
+          formatIssue(card, issue.message, effectIndex, issue.actionIndex),
+        );
+      }
     });
 
     const collisions = new Map();

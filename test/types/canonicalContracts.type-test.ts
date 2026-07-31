@@ -194,9 +194,11 @@ const unknownResponseContext: ChainResponseContextType = "summon";
 const rawDefinition: RawCardDefinition = {
   id: rawCardDefinitionId,
   name: "Raw",
-  cardKind: "monster",
+  cardKind: "spell",
+  subtype: "normal",
   image: "assets/raw.png",
   description: "Unvalidated definition",
+  effects: [],
 };
 
 const validatedDefinition: ValidatedCardDefinition = {
