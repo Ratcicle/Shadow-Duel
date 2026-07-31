@@ -7,17 +7,13 @@
  */
 
 import { isAI } from "../Player.js";
+import {
+  TRIGGER_REQUIREMENTS,
+  TRIGGER_TIMINGS,
+} from "../contracts/effects.js";
 import { getCardDisplayName, getUIText } from "../i18n.js";
 
-export const TRIGGER_REQUIREMENTS = Object.freeze({
-  MANDATORY: "mandatory",
-  OPTIONAL: "optional",
-});
-
-export const TRIGGER_TIMINGS = Object.freeze({
-  IF: "if",
-  WHEN: "when",
-});
+export { TRIGGER_REQUIREMENTS, TRIGGER_TIMINGS };
 
 export const SEGOC_GROUPS = Object.freeze({
   TURN_MANDATORY: "turn_player_mandatory",

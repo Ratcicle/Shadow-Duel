@@ -1,7 +1,8 @@
-export const EFFECT_USAGE_POLICIES = Object.freeze({
-  USE: "use",
-  ACTIVATE: "activate",
-});
+import {
+  USAGE_POLICIES as EFFECT_USAGE_POLICIES,
+} from "../../contracts/effects.js";
+
+export { EFFECT_USAGE_POLICIES };
 
 function usagePolicy(effect) {
   return effect?.usagePolicy === EFFECT_USAGE_POLICIES.USE ||

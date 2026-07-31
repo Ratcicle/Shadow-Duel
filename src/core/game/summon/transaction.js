@@ -3,15 +3,13 @@ import {
   FAST_EFFECT_STATES,
 } from "../../chain/timing.js";
 import { bumpCardLocationVersion } from "../../Card.js";
+import { SUMMON_ORIGINS } from "../../contracts/summon.js";
 import {
   checkSpecialSummonEligibility,
   establishProperSummon,
 } from "./eligibility.js";
 
-export const SUMMON_ORIGINS = Object.freeze({
-  PROCEDURE: "procedure",
-  EFFECT_RESOLUTION: "effect_resolution",
-});
+export { SUMMON_ORIGINS };
 
 export const SUMMON_MODES = Object.freeze({
   SUMMON: "summon",
