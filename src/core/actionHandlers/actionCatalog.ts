@@ -1,3 +1,11 @@
+import type {
+  ActionCatalog,
+  ActionCatalogEntry,
+  ActionCategory,
+  ActionFieldDefinition,
+  ActionType,
+} from "../contracts/actions.js";
+
 const ZONES = [
   "deck",
   "hand",
@@ -25,7 +33,7 @@ export const ACTION_CATEGORIES = [
   "conditional",
   "blueprint",
   "legacyProxy",
-];
+] satisfies readonly ActionCategory[];
 
 export const ACTION_FIELD_DEFS = {
   targetRef: {
@@ -77,52 +85,94 @@ export const ACTION_FIELD_DEFS = {
     min: 0,
     description: "Numeric amount.",
   },
-};
+} satisfies Readonly<Record<string, ActionFieldDefinition>>;
 
-function field(name, overrides = {}) {
+function field(
+  name: string,
+  overrides: ActionFieldDefinition = {},
+): ActionFieldDefinition {
+  const base = Reflect.get(ACTION_FIELD_DEFS, name) as
+    | ActionFieldDefinition
+    | undefined;
   return {
-    ...(ACTION_FIELD_DEFS[name] || {}),
+    ...(base ?? {}),
     ...overrides,
   };
 }
 
-function action({
-  category,
-  summary,
-  handler,
-  required = [],
-  optional = [],
-  fields = {},
-  targetRef = "none",
-  selection = "none",
-  mutates = [],
-  emits = [],
-  updatesBoard = true,
-  preview = "notNeeded",
-  examples = [],
-  notes = [],
-}) {
+interface ActionEntryInput {
+  readonly category: ActionCategory;
+  readonly summary: string;
+  readonly handler: string;
+  readonly required?: readonly string[];
+  readonly optional?: readonly string[];
+  readonly fields?: Readonly<Record<string, ActionFieldDefinition>>;
+  readonly targetRef?: "none" | "optional" | "required";
+  readonly selection?: "none" | "usesTargets" | "dynamic";
+  readonly mutates?: readonly string[];
+  readonly emits?: readonly string[];
+  readonly updatesBoard?: boolean;
+  readonly preview?: "notNeeded" | "covered" | "missing";
+  readonly examples: readonly [
+    Readonly<Record<string, unknown>>,
+    ...Readonly<Record<string, unknown>>[],
+  ];
+  readonly notes?: readonly string[];
+}
+
+type InputOrDefault<
+  Definition,
+  Key extends PropertyKey,
+  Default,
+> = Definition extends Readonly<Record<Key, infer Value>> ? Value : Default;
+
+type CompleteActionEntry<Definition extends ActionEntryInput> = {
+  readonly category: Definition["category"];
+  readonly summary: Definition["summary"];
+  readonly handler: Definition["handler"];
+  readonly required: InputOrDefault<Definition, "required", readonly []>;
+  readonly optional: InputOrDefault<Definition, "optional", readonly []>;
+  readonly fields: InputOrDefault<Definition, "fields", Readonly<object>>;
+  readonly targetRef: InputOrDefault<Definition, "targetRef", "none">;
+  readonly selection: InputOrDefault<Definition, "selection", "none">;
+  readonly mutates: InputOrDefault<Definition, "mutates", readonly []>;
+  readonly emits: InputOrDefault<Definition, "emits", readonly []>;
+  readonly updatesBoard: InputOrDefault<Definition, "updatesBoard", true>;
+  readonly preview: InputOrDefault<Definition, "preview", "notNeeded">;
+  readonly examples: Definition["examples"];
+  readonly notes: InputOrDefault<Definition, "notes", readonly []>;
+};
+
+function action<const Definition extends ActionEntryInput>(
+  definition: Definition,
+): CompleteActionEntry<Definition> {
   return {
-    category,
-    summary,
-    handler,
-    required,
-    optional,
-    fields,
-    targetRef,
-    selection,
-    mutates,
-    emits,
-    updatesBoard,
-    preview,
-    examples,
-    notes,
-  };
+    category: definition.category,
+    summary: definition.summary,
+    handler: definition.handler,
+    required: definition.required ?? [],
+    optional: definition.optional ?? [],
+    fields: definition.fields ?? {},
+    targetRef: definition.targetRef ?? "none",
+    selection: definition.selection ?? "none",
+    mutates: definition.mutates ?? [],
+    emits: definition.emits ?? [],
+    updatesBoard: definition.updatesBoard ?? true,
+    preview: definition.preview ?? "notNeeded",
+    examples: definition.examples,
+    notes: definition.notes ?? [],
+  } as CompleteActionEntry<Definition>;
+}
+
+function objectKeys<const Value extends object>(
+  value: Value,
+): Array<Extract<keyof Value, string>> {
+  return Object.keys(value) as Array<Extract<keyof Value, string>>;
 }
 
 const COMMON_TARGET_FIELDS = {
   targetRef: field("targetRef"),
-};
+} satisfies Readonly<Record<string, ActionFieldDefinition>>;
 
 const COMMON_FILTER_FIELDS = {
   zone: field("zone"),
@@ -143,7 +193,7 @@ const COMMON_FILTER_FIELDS = {
   minLevel: { type: "number" },
   maxLevel: { type: "number" },
   requireSource: { type: "boolean" },
-};
+} satisfies Readonly<Record<string, ActionFieldDefinition>>;
 
 export const ACTION_CATALOG = {
   abyssal_serpent_delayed_summon: action({
@@ -217,7 +267,7 @@ export const ACTION_CATALOG = {
     summary: "Adds selected cards from a zone to hand.",
     handler: "handleAddFromZoneToHand",
     optional: [
-      ...Object.keys(COMMON_FILTER_FIELDS),
+      ...objectKeys(COMMON_FILTER_FIELDS),
       "cardId",
       "cardIds",
       "excludeName",
@@ -1949,17 +1999,17 @@ export const ACTION_CATALOG = {
     category: "stats",
     summary: "Alias for temporary self ATK reduction through buff handler.",
     handler: "handleBuffStatsTemp",
-    optional: ["targetRef", "atkBoost", "defBoost"],
+    optional: ["targetRef", "atkBoost", "defBoost", "amount"],
     fields: {
       ...COMMON_TARGET_FIELDS,
       atkBoost: { type: "number" },
       defBoost: { type: "number" },
+      amount: { type: "number" },
     },
     targetRef: "optional",
     selection: "usesTargets",
     mutates: ["stats"],
-    examples: [{ type: "reduce_self_atk", targetRef: "self", atkBoost: -700 }],
-    notes: ["Registered but not currently used by card data."],
+    examples: [{ type: "reduce_self_atk", targetRef: "self", amount: 700 }],
   }),
   register_replacement_effect: action({
     category: "destruction",
@@ -2338,6 +2388,7 @@ export const ACTION_CATALOG = {
       "minLevel",
       "player",
       "promptPlayer",
+      "zone",
     ],
     fields: {
       archetype: { type: "string" },
@@ -2349,6 +2400,7 @@ export const ACTION_CATALOG = {
       minLevel: { type: "number" },
       player: field("player"),
       promptPlayer: { type: "boolean" },
+      zone: field("zone"),
     },
     selection: "dynamic",
     mutates: ["deck", "hand"],
@@ -2361,7 +2413,7 @@ export const ACTION_CATALOG = {
       "Searches a card to hand, then optionally Special Summons that same card from hand if a condition is met.",
     handler: "handleSearchThenOptionalSpecialSummonFromHand",
     optional: [
-      ...Object.keys(COMMON_FILTER_FIELDS),
+      ...objectKeys(COMMON_FILTER_FIELDS),
       "cardId",
       "condition",
       "summonCondition",
@@ -2824,7 +2876,7 @@ export const ACTION_CATALOG = {
     emits: ["card_to_grave"],
     examples: [{ type: "upkeep_pay_or_send_to_grave", lpCost: 500, failureZone: "graveyard" }],
   }),
-};
+} satisfies ActionCatalog;
 
 const CONTEXT_TARGET_REFS = new Set([
   "self",
@@ -2847,25 +2899,35 @@ const CONTEXT_TARGET_REFS = new Set([
   "opponent_field",
 ]);
 
-export function listCatalogActionTypes() {
-  return Object.keys(ACTION_CATALOG).sort();
+function isActionType(type: string): type is ActionType {
+  return Object.hasOwn(ACTION_CATALOG, type);
 }
 
-export function getActionCatalogEntry(type) {
-  return ACTION_CATALOG[type] || null;
+export function listCatalogActionTypes(): ActionType[] {
+  return Object.keys(ACTION_CATALOG).filter(isActionType).sort();
 }
 
-function describeField(fieldDef = {}) {
+type CatalogEntry = ActionCatalog[ActionType];
+
+export function getActionCatalogEntry(type: string): CatalogEntry | null {
+  return isActionType(type) ? (ACTION_CATALOG[type] as CatalogEntry) : null;
+}
+
+function describeField(fieldDef: ActionFieldDefinition = {}) {
   if (fieldDef.enum) return `one of ${fieldDef.enum.join(", ")}`;
   if (fieldDef.type) return fieldDef.type;
   return "value";
 }
 
-function validateFieldValue(fieldName, fieldDef, value) {
-  const errors = [];
+function validateFieldValue(
+  fieldName: string,
+  fieldDef: ActionFieldDefinition | undefined,
+  value: unknown,
+): string[] {
+  const errors: string[] = [];
   if (!fieldDef || value === undefined || value === null) return errors;
 
-  if (fieldDef.enum && !fieldDef.enum.includes(value)) {
+  if (fieldDef.enum && !fieldDef.enum.some((candidate) => candidate === value)) {
     errors.push(
       `Field "${fieldName}" must be ${describeField(fieldDef)}; got "${value}".`,
     );
@@ -2878,6 +2940,7 @@ function validateFieldValue(fieldName, fieldDef, value) {
   }
   if (
     fieldDef.type === "number" &&
+    typeof value === "number" &&
     typeof fieldDef.min === "number" &&
     value < fieldDef.min
   ) {
@@ -2907,7 +2970,9 @@ function validateFieldValue(fieldName, fieldDef, value) {
   }
   if (fieldDef.type === "zone") {
     const values = Array.isArray(value) ? value : [value];
-    const invalid = values.filter((zone) => !ZONES.includes(zone));
+    const invalid = values.filter(
+      (zone) => typeof zone !== "string" || !ZONES.includes(zone),
+    );
     if (invalid.length > 0) {
       errors.push(
         `Field "${fieldName}" has invalid zone value(s): ${invalid.join(", ")}.`,
@@ -2918,24 +2983,42 @@ function validateFieldValue(fieldName, fieldDef, value) {
   return errors;
 }
 
-export function validateActionShape(actionDef, context = {}) {
-  const errors = [];
-  const warnings = [];
+interface ActionValidationContext {
+  readonly targetIds?: ReadonlySet<string>;
+}
 
-  if (!actionDef || typeof actionDef !== "object") {
+interface ActionShapeValidation {
+  readonly errors: string[];
+  readonly warnings: string[];
+}
+
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+export function validateActionShape(
+  actionDef: unknown,
+  context: ActionValidationContext = {},
+): ActionShapeValidation {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+
+  if (!isObjectRecord(actionDef)) {
     return { errors: ["Action must be an object."], warnings };
   }
 
   const type = actionDef.type;
-  const entry = getActionCatalogEntry(type);
+  const entry = typeof type === "string" ? getActionCatalogEntry(type) : null;
   if (!entry) {
-    warnings.push(`Action type "${type}" is registered but missing from ACTION_CATALOG.`);
+    warnings.push(
+      `Action type "${String(type)}" is registered but missing from ACTION_CATALOG.`,
+    );
     return { errors, warnings };
   }
 
-  const fields = entry.fields || {};
+  const fields: object = entry.fields;
   const allowedFields = new Set(["type", ...Object.keys(fields)]);
-  for (const requiredField of entry.required || []) {
+  for (const requiredField of entry.required) {
     if (actionDef[requiredField] === undefined) {
       errors.push(
         `Action "${type}" is missing required field "${requiredField}".`,
@@ -2948,10 +3031,13 @@ export function validateActionShape(actionDef, context = {}) {
       warnings.push(`Action "${type}" has unknown field "${key}".`);
       continue;
     }
-    errors.push(...validateFieldValue(key, fields[key], actionDef[key]));
+    const fieldDefinition = Reflect.get(fields, key) as
+      | ActionFieldDefinition
+      | undefined;
+    errors.push(...validateFieldValue(key, fieldDefinition, actionDef[key]));
   }
 
-  const targetRefMode = entry.targetRef || "none";
+  const targetRefMode = entry.targetRef;
   const targetRef = actionDef.targetRef;
   if (targetRefMode === "required" && !targetRef) {
     errors.push(`Action "${type}" requires targetRef.`);
@@ -2960,7 +3046,7 @@ export function validateActionShape(actionDef, context = {}) {
     errors.push(`Action "${type}" targetRef must be a string.`);
   }
   if (targetRef && typeof targetRef === "string") {
-    const targetIds = context.targetIds || new Set();
+    const targetIds = context.targetIds ?? new Set<string>();
     if (!targetIds.has(targetRef) && !CONTEXT_TARGET_REFS.has(targetRef)) {
       errors.push(
         `Action "${type}" targetRef "${targetRef}" does not match any effect target id.`,

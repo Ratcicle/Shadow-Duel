@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import { cardDatabaseByName } from "../../src/data/cards.js";
 import { validateCardDatabase } from "../../src/core/CardDatabaseValidator.js";
+import { walkActionList } from "../../src/core/actionHandlers/actionWalker.js";
 import Game from "../../src/core/Game.js";
 import {
   buildActivationQuery,
@@ -17,15 +18,6 @@ function effect(cardName, effectId) {
   return cardDatabaseByName
     .get(cardName)
     ?.effects?.find((entry) => entry.id === effectId);
-}
-
-function flattenActions(actions = []) {
-  return actions.flatMap((action) => [
-    action,
-    ...flattenActions(action?.actions),
-    ...flattenActions(action?.thenActions),
-    ...flattenActions(action?.elseActions),
-  ]);
 }
 
 test("Fase 8 migra zonas, políticas, labels e Damage Step sem adapters nas cartas", () => {
@@ -87,7 +79,9 @@ test("Fase 8 migra zonas, políticas, labels e Damage Step sem adapters nas cart
 
 test("cinco cartas representativas preservam a semântica canônica de negação", () => {
   const actionTypes = (cardName, effectId) =>
-    flattenActions(effect(cardName, effectId)?.actions).map((action) => action.type);
+    walkActionList(effect(cardName, effectId)?.actions).visits.map(
+      (visit) => visit.action?.type,
+    );
 
   assert.ok(
     actionTypes("Guardian Deity Visas", "guardian_deity_visas_hand_negate_banish")

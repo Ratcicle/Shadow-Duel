@@ -7,6 +7,7 @@ import {
   matchesTargetFilters,
 } from "./targetSelection.js";
 import { mergeCanonicalSelections } from "../../game/selection/contract.js";
+import { walkActionList } from "../../actionHandlers/actionWalker.js";
 
 export function getStoredBlueprints(card) {
   const storage = card?.state?.blueprintStorage || card?.blueprintStorage;
@@ -353,34 +354,18 @@ function simCollectTargetRefCards(targetRef, ctx = {}, options = {}) {
   return cards;
 }
 
-function simNestedActions(action = {}) {
-  const nested = [];
-  for (const key of [
-    "actions",
-    "thenActions",
-    "ifActions",
-    "elseActions",
-    "optionalActions",
-  ]) {
-    nested.push(...asArray(action[key]));
-  }
-  for (const entry of asArray(action.cases)) {
-    nested.push(...asArray(entry?.actions));
-  }
-  for (const entry of asArray(action.entries)) {
-    nested.push(...asArray(entry?.actions));
-  }
-  return nested;
-}
-
 function simCollectDestroyCandidates(
   actions,
   activationPlayer,
   activationOpponent,
   activationContext = {},
+  includeNested = true,
 ) {
   const cards = [];
-  for (const action of asArray(actions)) {
+  const walkedActions = includeNested
+    ? walkActionList(actions).visits.map((visit) => visit.action)
+    : asArray(actions);
+  for (const action of walkedActions) {
     if (!action) continue;
     if (action.type === "destroy") {
       if (action.targetScope) {
@@ -433,14 +418,6 @@ function simCollectDestroyCandidates(
         ),
       );
     }
-    cards.push(
-      ...simCollectDestroyCandidates(
-        simNestedActions(action),
-        activationPlayer,
-        activationOpponent,
-        activationContext,
-      ),
-    );
   }
   return cards;
 }
@@ -482,7 +459,9 @@ function simCollectBanishCandidates(
   activationContext = {},
 ) {
   const cards = [];
-  for (const action of asArray(actions)) {
+  for (const action of walkActionList(actions).visits.map(
+    (visit) => visit.action,
+  )) {
     if (!action) continue;
     if (
       action.type === "banish" ||
@@ -542,14 +521,6 @@ function simCollectBanishCandidates(
         simAppendUnique(cards, card);
       }
     }
-    for (const card of simCollectBanishCandidates(
-      simNestedActions(action),
-      activationPlayer,
-      activationOpponent,
-      activationContext,
-    )) {
-      simAppendUnique(cards, card);
-    }
   }
   return cards;
 }
@@ -561,13 +532,16 @@ function simCollectLeaveFieldCandidates(
   activationContext = {},
 ) {
   const cards = [];
-  for (const action of asArray(actions)) {
+  for (const action of walkActionList(actions).visits.map(
+    (visit) => visit.action,
+  )) {
     if (!action) continue;
     for (const card of simCollectDestroyCandidates(
       [action],
       activationPlayer,
       activationOpponent,
       activationContext,
+      false,
     )) {
       simAppendUnique(cards, card);
     }
@@ -596,14 +570,6 @@ function simCollectLeaveFieldCandidates(
       for (const card of getZoneCards(activationOpponent, "field")) {
         simAppendUnique(cards, card);
       }
-    }
-    for (const card of simCollectLeaveFieldCandidates(
-      simNestedActions(action),
-      activationPlayer,
-      activationOpponent,
-      activationContext,
-    )) {
-      simAppendUnique(cards, card);
     }
   }
   return cards;

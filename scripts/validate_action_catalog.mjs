@@ -8,6 +8,8 @@ import {
   listCatalogActionTypes,
   validateActionShape,
 } from "../src/core/actionHandlers/actionCatalog.js";
+import { walkEffectActions } from "../src/core/actionHandlers/actionWalker.js";
+import { cardDatabase } from "../src/data/cards.js";
 
 const TARGET_REF_MODES = new Set(["none", "optional", "required"]);
 const SELECTION_MODES = new Set(["none", "usesTargets", "dynamic"]);
@@ -136,12 +138,39 @@ function validateExamples(type, entry) {
 const registeredTypes = getRegisteredTypes().sort();
 const catalogTypes = listCatalogActionTypes();
 const errors = [];
+const usedTypes = new Set();
+
+for (const card of cardDatabase) {
+  for (const [effectIndex, effect] of (card.effects || []).entries()) {
+    const actionWalk = walkEffectActions(effect, {
+      path: ["cards", card.id, "effects", effectIndex],
+    });
+    for (const diagnostic of actionWalk.diagnostics) {
+      errors.push(
+        `Card ${card.id} ${diagnostic.pathText}: ${diagnostic.message}`,
+      );
+    }
+    for (const visit of actionWalk.visits) {
+      const action = visit.action;
+      if (!action || typeof action !== "object") continue;
+      if (typeof action.type === "string" && action.type.length > 0) {
+        usedTypes.add(action.type);
+      }
+    }
+  }
+}
 
 for (const type of asSortedSetDifference(registeredTypes, catalogTypes)) {
   errors.push(`Registered action "${type}" is missing from ACTION_CATALOG.`);
 }
 for (const type of asSortedSetDifference(catalogTypes, registeredTypes)) {
   errors.push(`ACTION_CATALOG contains "${type}", but it is not registered in wiring.js.`);
+}
+for (const type of asSortedSetDifference([...usedTypes], catalogTypes)) {
+  errors.push(`Card database uses action "${type}", but it is missing from ACTION_CATALOG.`);
+}
+for (const type of asSortedSetDifference([...usedTypes], registeredTypes)) {
+  errors.push(`Card database uses action "${type}", but it is not registered in wiring.js.`);
 }
 
 for (const type of catalogTypes) {
@@ -157,5 +186,5 @@ if (errors.length > 0) {
 }
 
 console.log(
-  `Action catalog OK: ${catalogTypes.length} catalog entries match ${registeredTypes.length} registered actions.`,
+  `Action catalog OK: ${catalogTypes.length} catalog entries match ${registeredTypes.length} registered actions; ${usedTypes.size} action types are used by the card database.`,
 );

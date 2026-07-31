@@ -1,6 +1,7 @@
 import { getCardDisplayName, getUIText } from "../../i18n.js";
 import { isAI } from "../../Player.js";
 import { captureSourceSnapshot } from "../../chain/link.js";
+import { walkActionList } from "../../actionHandlers/actionWalker.js";
 
 const AUTOMATIC_TRIGGER_ACTION_TYPES = new Set([
   "forbid_attack_this_turn",
@@ -44,32 +45,14 @@ function isPromptOwnedTriggeredEffect(effect) {
 
 function getActionTargetRefs(action) {
   const refs = new Set();
-  if (!action || typeof action !== "object") return refs;
-
-  if (typeof action.targetRef === "string") refs.add(action.targetRef);
-  if (typeof action.costTargetRef === "string") refs.add(action.costTargetRef);
-
-  const nestedActionLists = [
-    action.actions,
-    action.thenActions,
-    action.elseActions,
-    action.onSuccessActions,
-  ];
-  for (const list of nestedActionLists) {
-    if (!Array.isArray(list)) continue;
-    for (const nested of list) {
-      for (const ref of getActionTargetRefs(nested)) refs.add(ref);
+  for (const visit of walkActionList([action]).visits) {
+    const visitedAction = visit.action;
+    if (!visitedAction || typeof visitedAction !== "object") continue;
+    if (typeof visitedAction.targetRef === "string") {
+      refs.add(visitedAction.targetRef);
     }
-  }
-
-  if (Array.isArray(action.cases)) {
-    for (const caseEntry of action.cases) {
-      const caseActions = Array.isArray(caseEntry?.actions)
-        ? caseEntry.actions
-        : [];
-      for (const nested of caseActions) {
-        for (const ref of getActionTargetRefs(nested)) refs.add(ref);
-      }
+    if (typeof visitedAction.costTargetRef === "string") {
+      refs.add(visitedAction.costTargetRef);
     }
   }
 

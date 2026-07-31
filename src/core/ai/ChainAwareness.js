@@ -10,6 +10,7 @@ import {
   createSimulationLegalityAdapter,
   listLegalActivationCandidates,
 } from "../chain/legality.js";
+import { walkActionList } from "../actionHandlers/actionWalker.js";
 
 const ACTIVATION_NEGATION_ACTIONS = new Set([
   "negate_activation",
@@ -27,24 +28,15 @@ const DAMAGE_BLOCKING_ACTIONS = new Set([
   "reduce_damage",
 ]);
 
-function flattenActions(actions = []) {
-  const result = [];
-  for (const action of Array.isArray(actions) ? actions : []) {
-    if (!action || typeof action !== "object") continue;
-    result.push(action);
-    for (const key of ["actions", "thenActions", "elseActions"]) {
-      result.push(...flattenActions(action[key]));
-    }
-    for (const option of Array.isArray(action.cases) ? action.cases : []) {
-      result.push(...flattenActions(option?.actions));
-    }
-  }
-  return result;
+function walkedActions(actions) {
+  return walkActionList(actions).visits
+    .map((visit) => visit.action)
+    .filter((action) => action && typeof action === "object");
 }
 
 function responseBlockingCategories(effect) {
   const actionTypes = new Set(
-    flattenActions(effect?.actions).map((action) => action.type),
+    walkedActions(effect?.actions).map((action) => action.type),
   );
   const contexts = new Set(effect?.canRespondTo || []);
   const blocking = new Set();
@@ -109,7 +101,7 @@ export function analyzeDefensiveTrap(card) {
     (effect) => getEffectSpellSpeed(effect, card) >= 3,
   );
   const hasNegation = (card.effects || []).some((effect) =>
-    flattenActions(effect.actions).some((action) =>
+    walkedActions(effect.actions).some((action) =>
       ACTIVATION_NEGATION_ACTIONS.has(action.type),
     ),
   );
