@@ -18,24 +18,26 @@ import {
   getActionCatalogEntry,
   validateActionShape,
 } from "./actionHandlers/actionCatalog.js";
+import {
+  DAMAGE_STEP_TIMINGS,
+  DUEL_EVENT_NAMES,
+  EFFECT_TIMINGS,
+  TRIGGER_REQUIREMENTS,
+  TRIGGER_TIMINGS,
+  USAGE_POLICIES,
+} from "./contracts/effects.js";
 import { validateBanlistDefinition } from "./game/deck/banlist.js";
 
-const VALID_TIMINGS = new Set([
-  "on_play",
-  "on_event",
-  "on_activate",
-  "ignition",
-  "on_field_activate",
-  "passive",
-  "manual",
-]);
+const VALID_TIMINGS = new Set(EFFECT_TIMINGS);
 
 // `on_activate` effects may be scoped to a specific response window. This is
 // distinct from `on_event`: the event limits when the player may activate the
 // card, but the effect is not collected as an automatic event trigger.
 const EVENT_COMPATIBLE_TIMINGS = new Set(["on_event", "on_activate"]);
-const VALID_TRIGGER_REQUIREMENTS = new Set(["mandatory", "optional"]);
-const VALID_TRIGGER_TIMINGS = new Set(["if", "when"]);
+const VALID_TRIGGER_REQUIREMENTS = new Set(
+  Object.values(TRIGGER_REQUIREMENTS),
+);
+const VALID_TRIGGER_TIMINGS = new Set(Object.values(TRIGGER_TIMINGS));
 const VALID_ACTIVATION_ZONES = new Set([
   "hand",
   "field",
@@ -44,7 +46,7 @@ const VALID_ACTIVATION_ZONES = new Set([
   "graveyard",
   "banished",
 ]);
-const VALID_USAGE_POLICIES = new Set(["use", "activate"]);
+const VALID_USAGE_POLICIES = new Set(Object.values(USAGE_POLICIES));
 const VALID_FIELD_COUNT_COMPARISON_OWNERS = new Set([
   "self",
   "opponent",
@@ -66,13 +68,7 @@ const VALID_FIELD_COUNT_COMPARISON_OPERATORS = new Set([
   "!=",
   "!==",
 ]);
-const VALID_DAMAGE_STEP_TIMINGS = new Set([
-  "start_of_damage_step",
-  "before_damage_calculation",
-  "damage_calculation",
-  "after_damage_calculation",
-  "end_of_damage_step",
-]);
+const VALID_DAMAGE_STEP_TIMINGS = new Set(Object.values(DAMAGE_STEP_TIMINGS));
 
 function flattenActions(actions = []) {
   const flattened = [];
@@ -103,31 +99,7 @@ function activationCollisionKey(effect) {
   return null;
 }
 
-const VALID_EVENTS = new Set([
-  "after_summon",
-  "battle_destroy",
-  "battle_completed",
-  "damage_step",
-  "card_flipped",
-  "battle_damage_inflicted",
-  "card_to_grave",
-  "card_moved",
-  "counter_removed",
-  "standby_phase",
-  "end_phase",
-  "attack_declared",
-  "battle_damage",
-  "opponent_damage",
-  "before_destroy",
-  "effect_targeted",
-  "card_activation",
-  "effect_activation",
-  "card_equipped",
-  "lp_change",
-  "spell_activated",
-  "effect_activated",
-  "position_change",
-]);
+const VALID_EVENTS = new Set(DUEL_EVENT_NAMES);
 
 function formatIssue(card, message, effectIndex = null, actionIndex = null) {
   return {

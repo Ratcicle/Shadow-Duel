@@ -5,24 +5,17 @@
  * Timing, SEGOC and full resolution semantics remain in their dedicated phases.
  */
 
-export const CHAIN_ACTIVATION_KINDS = Object.freeze({
-  SPELL_TRAP_CARD: "spell_trap_card_activation",
-  SPELL_TRAP_EFFECT: "spell_trap_effect_activation",
-  MONSTER_EFFECT: "monster_effect_activation",
-});
+import {
+  CHAIN_ACTIVATION_KINDS,
+  CHAIN_EFFECT_KINDS,
+  CHAIN_RESPONSE_CONTEXTS,
+} from "../contracts/chain.js";
 
-export const CHAIN_EFFECT_KINDS = Object.freeze({
-  TRIGGER: "trigger_effect",
-  QUICK: "quick_effect",
-  IGNITION: "ignition_effect",
-  SPELL_TRAP: "spell_trap_effect",
-  OTHER: "other_effect",
-});
-
-export const CHAIN_RESPONSE_CONTEXTS = Object.freeze({
-  CARD_ACTIVATION: "card_activation",
-  EFFECT_ACTIVATION: "effect_activation",
-});
+export {
+  CHAIN_ACTIVATION_KINDS,
+  CHAIN_EFFECT_KINDS,
+  CHAIN_RESPONSE_CONTEXTS,
+};
 
 const VALID_ACTIVATION_KINDS = new Set(Object.values(CHAIN_ACTIVATION_KINDS));
 const VALID_EFFECT_KINDS = new Set(Object.values(CHAIN_EFFECT_KINDS));

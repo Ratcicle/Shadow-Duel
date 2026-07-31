@@ -6,6 +6,10 @@
  * UI, and chain discovery.
  */
 
+import { DAMAGE_STEP_TIMINGS } from "../../contracts/effects.js";
+
+export { DAMAGE_STEP_TIMINGS };
+
 const QUICK_SPELL_SUBTYPES = new Set(["quick", "quick-play", "quickplay"]);
 
 const CHAIN_WINDOW_CONTEXT_TYPES = new Set([
@@ -31,14 +35,6 @@ const DIRECT_ATK_DEF_ACTIONS = new Set([
   "remove_stat_increases",
   "set_original_stats",
 ]);
-
-export const DAMAGE_STEP_TIMINGS = Object.freeze({
-  START: "start_of_damage_step",
-  BEFORE_CALCULATION: "before_damage_calculation",
-  CALCULATION: "damage_calculation",
-  AFTER_CALCULATION: "after_damage_calculation",
-  END: "end_of_damage_step",
-});
 
 export const DAMAGE_STEP_ACTIVATION_CATEGORIES = Object.freeze({
   COUNTER_TRAP: "counter_trap",
