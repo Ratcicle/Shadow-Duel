@@ -166,6 +166,9 @@ test("walker diagnoses malformed containers and cycles while allowing shared obj
     { type: "bad", cases: {} },
     { type: "bad-list", actions: "not-an-array" },
     { type: "bad-entries", entries: "not-an-array" },
+    { type: "bad-entry-members", entries: [null, 42] },
+    { type: "bad-replacement", replacementEffect: 42 },
+    { type: "bad-targets", targets: [null, "target"] },
     cyclic,
     shared,
     shared,
@@ -178,11 +181,41 @@ test("walker diagnoses malformed containers and cycles while allowing shared obj
       ({ pathText }) => pathText === "actions[3].entries",
     ),
   );
+  assert.ok(
+    result.diagnostics.some(
+      ({ pathText }) => pathText === "actions[4].entries[0]",
+    ),
+  );
+  assert.ok(
+    result.diagnostics.some(
+      ({ pathText }) => pathText === "actions[5].replacementEffect",
+    ),
+  );
+  assert.ok(
+    result.diagnostics.some(
+      ({ pathText }) => pathText === "actions[6].targets[1]",
+    ),
+  );
   assert.ok(result.diagnostics.some(({ code }) => code === "invalid-action-list"));
   assert.ok(result.diagnostics.some(({ code }) => code === "cycle"));
   assert.equal(
     result.visits.filter((visit) => visit.action === shared).length,
     2,
+  );
+});
+
+test("effect walker diagnoses malformed targets and replacement containers", () => {
+  const result = walkEffectActions({
+    targets: "not-an-array",
+    replacementEffect: 42,
+  });
+
+  assert.deepEqual(
+    result.diagnostics.map(({ code, pathText }) => ({ code, pathText })),
+    [
+      { code: "invalid-container", pathText: "targets" },
+      { code: "invalid-container", pathText: "replacementEffect" },
+    ],
   );
 });
 

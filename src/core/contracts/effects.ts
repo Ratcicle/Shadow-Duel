@@ -275,8 +275,6 @@ export type EffectConditionType =
   | "control_card_max"
   | "control_card_type"
   | "control_type_min_level"
-  | "destroyed_by_battle"
-  | "destroyed_by_battle_or_effect"
   | "destroyed_card_matches_declared_value"
   | "equipped_with_filters"
   | "event_card_matches_declared_value_from_effect_sources"

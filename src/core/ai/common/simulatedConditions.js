@@ -1154,11 +1154,31 @@ export function evaluateSimulatedConditions(conditions, ctx = {}) {
       if (!attacker) return false;
       const {
         type: _conditionType,
-        owner: _owner,
+        owner: ownerRule = "any",
         reason: _reason,
+        attackerType,
+        monsterType,
+        cardType,
+        race,
         ...filters
       } = condition;
-      return matchesTargetFilters(attacker, filters, null);
+      const attackerOwner = [self, opponent].find(
+        (candidate) =>
+          !!candidate &&
+          ((Array.isArray(candidate.field) &&
+            candidate.field.includes(attacker)) ||
+            attacker.controller === candidate.id ||
+            attacker.owner === candidate.id),
+      );
+      if (ownerRule === "self" && attackerOwner !== self) return false;
+      if (ownerRule === "opponent" && attackerOwner === self) return false;
+
+      const requiredType = attackerType || monsterType || cardType || race;
+      return matchesTargetFilters(
+        attacker,
+        requiredType === undefined ? filters : { ...filters, type: requiredType },
+        null,
+      );
     }
     if (condition.type === "summoned_card_has_marker") {
       const summonedCard =
