@@ -1,3 +1,6 @@
+// @ts-check
+
+/** @satisfies {readonly import("../../core/contracts/cards.js").RawCardDefinition[]} */
 export const dragonCards = [
   {
     id: 251,
@@ -722,7 +725,7 @@ export const dragonCards = [
             type: "attacker_matches",
             owner: "self",
             cardKind: "monster",
-            type: "Dragon",
+            attackerType: "Dragon",
           },
         ],
         actions: [
