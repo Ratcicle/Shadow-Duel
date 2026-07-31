@@ -121,6 +121,15 @@ const attackerCondition: EffectCondition = {
   attackerType: "Dragon",
 };
 
+const effectlessSpell: SpellCardDefinition = {
+  id: 9006,
+  name: "Effectless Spell",
+  cardKind: "spell",
+  subtype: "normal",
+  image: "assets/effectless-spell.png",
+  description: "A valid Spell without declared effects.",
+};
+
 const contextualTarget: EffectTarget = {
   id: "source",
   targetFromContext: "source",
@@ -211,6 +220,13 @@ const targetWithUnknownField: EffectTarget = {
 // @ts-expect-error
 const duplicatedTypeCondition: EffectCondition = { type: "Dragon" };
 
+const legacyGateWithStructuredCapability: EffectCondition = {
+  type: "destroyed_by_battle",
+  // contract-negative: legacy trigger gates reject structured condition fields
+  // @ts-expect-error
+  attackerType: "Dragon",
+};
+
 const effectWithUnknownField: EffectDefinition = {
   id: "invalid_effect",
   timing: "on_play",
@@ -221,6 +237,7 @@ const effectWithUnknownField: EffectDefinition = {
 
 void rawCards;
 void attackerCondition;
+void effectlessSpell;
 void contextualTarget;
 void spellWithoutSubtype;
 void spellWithTrapSubtype;
@@ -230,4 +247,5 @@ void ascensionWithoutMaterial;
 void incompleteEventEffect;
 void targetWithUnknownField;
 void duplicatedTypeCondition;
+void legacyGateWithStructuredCapability;
 void effectWithUnknownField;

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { evaluateSimulatedConditions } from "../src/core/ai/common/simulatedConditions.js";
 import { evaluateConditions } from "../src/core/effects/conditions/evaluateConditions.js";
 import { dragonCards } from "../src/data/cards/dragon.js";
 
@@ -39,6 +40,27 @@ function matchesAttacker(attacker: {
   }).ok;
 }
 
+function matchesSimulatedAttacker(attacker: {
+  cardKind: string;
+  type: string;
+  controller: string;
+}) {
+  return evaluateSimulatedConditions(attackerCondition, {
+    state: {
+      player: {
+        ...player,
+        field: attacker.controller === player.id ? [attacker] : [],
+      },
+      bot: {
+        ...opponent,
+        field: attacker.controller === opponent.id ? [attacker] : [],
+      },
+    },
+    selfId: player.id,
+    attacker,
+  });
+}
+
 test("Jagged Peak uses the attacker_matches discriminator with a Dragon filter", () => {
   assert.ok(jaggedPeak);
   assert.ok(counterEffect);
@@ -67,6 +89,31 @@ test("Jagged Peak uses the attacker_matches discriminator with a Dragon filter",
   );
   assert.equal(
     matchesAttacker({
+      cardKind: "monster",
+      type: "Dragon",
+      controller: "bot",
+    }),
+    false,
+  );
+
+  assert.equal(
+    matchesSimulatedAttacker({
+      cardKind: "monster",
+      type: "Dragon",
+      controller: "player",
+    }),
+    true,
+  );
+  assert.equal(
+    matchesSimulatedAttacker({
+      cardKind: "monster",
+      type: "Warrior",
+      controller: "player",
+    }),
+    false,
+  );
+  assert.equal(
+    matchesSimulatedAttacker({
       cardKind: "monster",
       type: "Dragon",
       controller: "bot",

@@ -1,4 +1,5 @@
 import { debugTriggerLog } from "./shared.js";
+import { walkActionList } from "../../../actionHandlers/actionWalker.js";
 
 function getParticipantZone(engine, owner, card) {
   if (!owner || !card) return null;
@@ -24,7 +25,9 @@ function isFieldFaceupMonster(owner, card) {
 }
 
 function actionUsesBattleOpponent(actions = []) {
-  return actions.some((action) => action?.targetRef === "battle_opponent");
+  return walkActionList(actions).visits.some(
+    ({ action }) => action?.targetRef === "battle_opponent",
+  );
 }
 
 /**

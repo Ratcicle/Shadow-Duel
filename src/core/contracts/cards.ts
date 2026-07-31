@@ -287,7 +287,6 @@ interface SpellTrapDefinitionCore<Subtype extends CardSubtype>
   extends CardDefinitionBase {
   readonly subtype: Subtype;
   readonly speed?: 1 | 2 | 3;
-  readonly effects: readonly EffectDefinition[];
 }
 
 export interface SpellCardDefinition

@@ -1,4 +1,5 @@
 import { debugTriggerLog } from "./shared.js";
+import { walkActionList } from "../../../actionHandlers/actionWalker.js";
 
 /**
  * Collects trigger entries for after_summon event.
@@ -107,8 +108,11 @@ export async function collectAfterSummonTriggers(payload) {
         if (sourceZone === "hand") {
           const requiresSelfInHand =
             effect?.condition?.requires === "self_in_hand";
-          const isConditionalSummonFromHand = (effect.actions || []).some(
-            (a) => a?.type === "conditional_summon_from_hand",
+          const isConditionalSummonFromHand = walkActionList(
+            effect.actions,
+          ).visits.some(
+            ({ action }) =>
+              action?.type === "conditional_summon_from_hand",
           );
           if (!requiresSelfInHand && !isConditionalSummonFromHand) {
             continue;

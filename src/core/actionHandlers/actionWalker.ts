@@ -163,12 +163,34 @@ function addDiagnostic(
   });
 }
 
-function collectTargetIds(value: unknown, inherited: ReadonlySet<string>): Set<string> {
+function collectTargetIds(
+  value: unknown,
+  inherited: ReadonlySet<string>,
+  context: WalkContext,
+  path: readonly ActionPathSegment[],
+): Set<string> {
   const targetIds = cloneSet(inherited);
-  if (!Array.isArray(value)) return targetIds;
+  if (value === undefined) return targetIds;
+  if (!Array.isArray(value)) {
+    addDiagnostic(
+      context,
+      "invalid-container",
+      path,
+      "Targets container must be an array.",
+    );
+    return targetIds;
+  }
 
-  for (const target of value) {
-    if (!isRecord(target)) continue;
+  for (const [targetIndex, target] of value.entries()) {
+    if (!isRecord(target)) {
+      addDiagnostic(
+        context,
+        "invalid-container",
+        [...path, targetIndex],
+        "Target definition must be an object.",
+      );
+      continue;
+    }
     const id = target.id;
     if (typeof id === "string" && id.length > 0) targetIds.add(id);
   }
@@ -231,7 +253,12 @@ function walkCases(
       continue;
     }
 
-    const caseTargetIds = collectTargetIds(caseValue.targets, childTargetIds);
+    const caseTargetIds = collectTargetIds(
+      caseValue.targets,
+      childTargetIds,
+      context,
+      [...casePath, "targets"],
+    );
     if (caseValue.actions !== undefined) {
       walkChildList(caseValue.actions, context, {
         ...options,
@@ -273,10 +300,20 @@ function walkEntries(
 
   context.stack.add(entries);
   for (const [entryIndex, entryValue] of entries.entries()) {
-    if (!isRecord(entryValue) || entryValue.actions === undefined) continue;
+    const entryPath = [...entriesPath, entryIndex];
+    if (!isRecord(entryValue)) {
+      addDiagnostic(
+        context,
+        "invalid-container",
+        entryPath,
+        "Action entry must be an object.",
+      );
+      continue;
+    }
+    if (entryValue.actions === undefined) continue;
     walkChildList(entryValue.actions, context, {
       ...options,
-      path: [...entriesPath, entryIndex, "actions"],
+      path: [...entryPath, "actions"],
       targetIds: childTargetIds,
       availableRefs: cloneSet(childAvailableRefs),
       depth: options.depth + 1,
@@ -292,17 +329,32 @@ function walkStoredReplacement(
   options: InternalListOptions,
 ): void {
   const replacementEffect = action.replacementEffect;
-  if (!isRecord(replacementEffect) || replacementEffect.costActions === undefined) {
+  const replacementPath = [...options.path, "replacementEffect"];
+  if (replacementEffect === undefined) return;
+  if (!isRecord(replacementEffect)) {
+    addDiagnostic(
+      context,
+      "invalid-container",
+      replacementPath,
+      "Replacement effect must be an object.",
+    );
     return;
   }
+  const replacementTargetIds = collectTargetIds(
+    replacementEffect.targets,
+    options.targetIds,
+    context,
+    [...replacementPath, "targets"],
+  );
+  if (replacementEffect.costActions === undefined) return;
 
   walkChildList(replacementEffect.costActions, context, {
     ...options,
     stage: "cost",
     flow: "replacement",
     root: "replacementEffect.costActions",
-    path: [...options.path, "replacementEffect", "costActions"],
-    targetIds: collectTargetIds(replacementEffect.targets, new Set<string>()),
+    path: [...replacementPath, "costActions"],
+    targetIds: replacementTargetIds,
     availableRefs: new Set<string>(),
     depth: options.depth + 1,
     container: "replacementEffect.costActions",
@@ -347,7 +399,12 @@ function walkAction(
     return;
   }
 
-  const actionTargetIds = collectTargetIds(action.targets, options.targetIds);
+  const actionTargetIds = collectTargetIds(
+    action.targets,
+    options.targetIds,
+    context,
+    [...actionPath, "targets"],
+  );
   const producedRefs = collectProducedRefs(action);
   const supportedNestingFields = contractNestingFields(action);
   const visit: ActionVisit = {
@@ -413,7 +470,12 @@ function walkAction(
   walkStoredReplacement(
     action,
     context,
-    { ...options, path: actionPath, rootActionIndex },
+    {
+      ...options,
+      path: actionPath,
+      targetIds: actionTargetIds,
+      rootActionIndex,
+    },
   );
   context.stack.delete(action);
 
@@ -514,7 +576,12 @@ export function walkEffectActions(
     return resultFromContext(context, new Set<string>());
   }
 
-  const effectTargetIds = collectTargetIds(effect.targets, new Set<string>());
+  const effectTargetIds = collectTargetIds(
+    effect.targets,
+    new Set<string>(),
+    context,
+    [...basePath, "targets"],
+  );
   let activationRefs = new Set<string>();
   const activationRoots = [
     ["activationCosts", "cost"],
@@ -538,17 +605,33 @@ export function walkEffectActions(
   }
 
   const replacementEffect = effect.replacementEffect;
-  if (isRecord(replacementEffect) && replacementEffect.costActions !== undefined) {
-    walkList(replacementEffect.costActions, context, {
-      stage: "cost",
-      flow: "replacement",
-      root: "replacementEffect.costActions",
-      path: [...basePath, "replacementEffect", "costActions"],
-      targetIds: collectTargetIds(replacementEffect.targets, effectTargetIds),
-      availableRefs: new Set<string>(),
-      depth: 0,
-      container: "replacementEffect.costActions",
-    });
+  const replacementPath = [...basePath, "replacementEffect"];
+  if (replacementEffect !== undefined && !isRecord(replacementEffect)) {
+    addDiagnostic(
+      context,
+      "invalid-container",
+      replacementPath,
+      "Replacement effect must be an object.",
+    );
+  } else if (isRecord(replacementEffect)) {
+    const replacementTargetIds = collectTargetIds(
+      replacementEffect.targets,
+      effectTargetIds,
+      context,
+      [...replacementPath, "targets"],
+    );
+    if (replacementEffect.costActions !== undefined) {
+      walkList(replacementEffect.costActions, context, {
+        stage: "cost",
+        flow: "replacement",
+        root: "replacementEffect.costActions",
+        path: [...replacementPath, "costActions"],
+        targetIds: replacementTargetIds,
+        availableRefs: new Set<string>(),
+        depth: 0,
+        container: "replacementEffect.costActions",
+      });
+    }
   }
 
   if (effect.negationCost !== undefined) {
