@@ -1,3 +1,13 @@
+import type { CollectedTriggerEventMap } from "../../../contracts/events.js";
+import type {
+  TriggerCollectorHost,
+  TriggerEffect,
+  TriggerEntry,
+  TriggerPackage,
+  TriggerRuntimeCard,
+  TriggerRuntimePlayer,
+  TriggerZone,
+} from "../runtime.js";
 import {
   cardMatchesEventFilters,
   debugTriggerLog,
@@ -11,8 +21,11 @@ import {
  * @param {Object} payload - Card to grave event payload
  * @returns {Promise<Object>} Collected entries and order rule
  */
-export async function collectCardToGraveTriggers(payload) {
-  const entries = [];
+export async function collectCardToGraveTriggers(
+  this: TriggerCollectorHost,
+  payload: CollectedTriggerEventMap["card_to_grave"],
+): Promise<TriggerPackage> {
+  const entries: TriggerEntry[] = [];
   const orderRule =
     "card owner self-source -> card owner field/spell observers -> opponent field/spell observers";
 
@@ -25,7 +38,7 @@ export async function collectCardToGraveTriggers(payload) {
   const resolvedOpponent = opponent || this.game?.getOpponent?.(player);
 
   const devMode = this.game?.devModeEnabled || false;
-  const debugLog = (...args) => {
+  const debugLog = (...args: unknown[]): void => {
     if (devMode) debugTriggerLog(this, ...args);
   };
 
@@ -38,7 +51,13 @@ export async function collectCardToGraveTriggers(payload) {
     } effects.`,
   );
 
-  const collectFromSource = (sourceCard, owner, other, sourceZone, effect) => {
+  const collectFromSource = (
+    sourceCard: TriggerRuntimeCard,
+    owner: TriggerRuntimePlayer,
+    other: TriggerRuntimePlayer | null | undefined,
+    sourceZone: TriggerZone,
+    effect: TriggerEffect,
+  ): void => {
     if (!effect || effect.timing !== "on_event") {
       if (devMode) {
           debugLog(`[handleCardToGraveEvent] Skipping effect: not on_event`);
@@ -170,7 +189,7 @@ export async function collectCardToGraveTriggers(payload) {
 
     // ✅ Check condition for destruction type (battle vs effect)
     if (effect.condition) {
-      const condType = effect.condition.type;
+      const condType = Reflect.get(effect.condition, "type");
       const destroyCause = payload?.destroyCause;
 
       if (condType === "destroyed_by_battle") {
@@ -329,10 +348,15 @@ export async function collectCardToGraveTriggers(payload) {
   const observerSides = [
     { owner: player, other: resolvedOpponent },
     { owner: resolvedOpponent, other: player },
-  ].filter((side) => side.owner);
+  ].filter(
+    (side): side is {
+      owner: TriggerRuntimePlayer;
+      other: TriggerRuntimePlayer | null | undefined;
+    } => side.owner != null,
+  );
 
   for (const { owner, other } of observerSides) {
-    const observerZones = ["field", "spellTrap", "fieldSpell"];
+    const observerZones = ["field", "spellTrap", "fieldSpell"] as const;
     for (const observerZone of observerZones) {
       const zoneCards =
         observerZone === "fieldSpell"

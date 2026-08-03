@@ -1,3 +1,5 @@
+import type { CollectedTriggerEventMap } from "../../../contracts/events.js";
+import type { TriggerCollectorHost, TriggerEntry, TriggerPackage } from "../runtime.js";
 import { debugTriggerLog } from "./shared.js";
 
 /**
@@ -5,8 +7,11 @@ import { debugTriggerLog } from "./shared.js";
  * @param {Object} payload - Effect targeted event payload
  * @returns {Promise<Object>} Collected entries and order rule
  */
-export async function collectEffectTargetedTriggers(payload) {
-  const entries = [];
+export async function collectEffectTargetedTriggers(
+  this: TriggerCollectorHost,
+  payload: CollectedTriggerEventMap["effect_targeted"],
+): Promise<TriggerPackage> {
+  const entries: TriggerEntry[] = [];
   const orderRule =
     "target owner only; sources: field -> spellTrap -> fieldSpell";
 
@@ -46,7 +51,7 @@ export async function collectEffectTargetedTriggers(payload) {
   }
 
   const devMode = this.game?.devModeEnabled || false;
-  const debugLog = (...args) => {
+  const debugLog = (...args: unknown[]): void => {
     if (devMode) debugTriggerLog(this, ...args);
   };
 

@@ -1,14 +1,19 @@
+import type { CollectedTriggerEventMap } from "../../../contracts/events.js";
+import type { TriggerCollectorHost, TriggerEntry, TriggerPackage } from "../runtime.js";
 import { debugTriggerLog } from "./shared.js";
 
 /**
- * Collects trigger entries for effect_activated event.
- * @param {Object} payload - Effect/card activation payload
+ * Collects trigger entries for spell_activated event.
+ * @param {Object} payload - Spell activated payload
  * @returns {Promise<Object>} Collected entries and order rule
  */
-export async function collectEffectActivatedTriggers(payload) {
-  const entries = [];
+export async function collectSpellActivatedTriggers(
+  this: TriggerCollectorHost,
+  payload: CollectedTriggerEventMap["spell_activated"],
+): Promise<TriggerPackage> {
+  const entries: TriggerEntry[] = [];
   const orderRule =
-    "effect controller -> opponent; sources: field -> fieldSpell -> spellTrap";
+    "spell controller -> opponent; sources: field -> fieldSpell -> spellTrap";
 
   if (!payload || !payload.card || !payload.player) {
     return { entries, orderRule };
@@ -51,22 +56,21 @@ export async function collectEffectActivatedTriggers(payload) {
       const sourceZone = this.findCardZone(owner, sourceCard);
       const isFaceDownOnBoard =
         sourceCard?.isFacedown === true &&
-        ["field", "spellTrap", "fieldSpell"].includes(sourceZone);
+        ["field", "spellTrap", "fieldSpell"].some(
+          (zone) => zone === sourceZone,
+        );
       const ctx = {
         source: sourceCard,
         player: owner,
         opponent: other,
         activatedCard,
-        activatedEffect,
         activatedPlayer: activator,
-        activationZone: payload.activationZone || null,
-        effectType: payload.effectType || null,
         currentPhase,
       };
 
       for (const effect of sourceCard.effects) {
         if (!effect || effect.timing !== "on_event") continue;
-        if (effect.event !== "effect_activated") continue;
+        if (effect.event !== "spell_activated") continue;
 
         if (isFaceDownOnBoard) {
           continue;
@@ -137,10 +141,11 @@ export async function collectEffectActivatedTriggers(payload) {
           }
         }
 
-        const activationContext = {
-          ...this.buildTriggerActivationContext(sourceCard, owner, sourceZone),
-          triggeredByEvent: "effect_activated",
-        };
+        const activationContext = this.buildTriggerActivationContext(
+          sourceCard,
+          owner,
+          sourceZone,
+        );
 
         const entry = this.buildTriggerEntry({
           sourceCard,

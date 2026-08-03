@@ -1062,7 +1062,7 @@ Para os métodos anexados dinamicamente ao prototype:
 
 Formalizar as fronteiras que conectam Game, Chain, EffectEngine, UI, replay e IA.
 
-## 5.1. Event map
+## 5.1. Event maps
 
 Criar:
 
@@ -1077,6 +1077,17 @@ interface DuelEventMap {
   // ...
 }
 ```
+
+Manter separados os quatro vocabulários reais:
+
+- os 23 eventos declarativos aceitos pelo validator de cartas;
+- os 28 eventos resolvíveis enviados por `Game.emit`;
+- as 35 notificações informacionais enviadas por `Game.notify`;
+- os 19 eventos com collector especializado de Trigger.
+
+Eventos compartilhados entre `emit` e `notify`, como `effect_activated`,
+`lp_change`, `spell_activated` e `trap_activated`, devem reutilizar exatamente o
+mesmo tipo de payload.
 
 Tipar:
 
@@ -1142,14 +1153,17 @@ type SelectionNormalizationResult =
 Criar mapa de decisões:
 
 ```ts
-interface DecisionMap {
-  target: TargetSelectionDecision;
-  position: BattlePositionDecision;
-  effect_choice: EffectChoiceDecision;
-  trigger_order: TriggerOrderDecision;
+interface DecisionByKind {
+  choice: SelectionDecision;
+  target: SelectionDecision;
+  segoc_order: SegocOrderDecision;
   chain_response: ChainResponseDecision;
 }
 ```
+
+Preservar os discriminantes que já existem no runtime e nos replays. A escolha
+de posição continua sendo um fluxo direto da UI e não ganha um novo registro no
+`DecisionBroker`. Também não adicionar um campo runtime `decisionType`.
 
 Cada tipo deve ligar:
 
@@ -1167,7 +1181,8 @@ Converter:
 - `game/decisions/`;
 - `game/events/`;
 - collectors de triggers;
-- módulos que emitem os eventos principais.
+- targeting, `AutoSelector` e o helper de posição ligados à seleção;
+- ports TypeScript que emitem os eventos principais.
 
 ## Critérios de aceitação
 

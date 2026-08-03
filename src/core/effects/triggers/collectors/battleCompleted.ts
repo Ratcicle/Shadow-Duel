@@ -1,20 +1,41 @@
+import type { CollectedTriggerEventMap } from "../../../contracts/events.js";
+import type { CardAction } from "../../../contracts/actions.js";
+import type {
+  TriggerCollectorHost,
+  TriggerContext,
+  TriggerEntry,
+  TriggerPackage,
+  TriggerRuntimeCard,
+  TriggerRuntimePlayer,
+  TriggerZone,
+} from "../runtime.js";
 import { debugTriggerLog } from "./shared.js";
 import { walkActionList } from "../../../actionHandlers/actionWalker.js";
 
-function getParticipantZone(engine, owner, card) {
+function getParticipantZone(
+  engine: TriggerCollectorHost,
+  owner: TriggerRuntimePlayer | null | undefined,
+  card: TriggerRuntimeCard | null | undefined,
+): TriggerZone {
   if (!owner || !card) return null;
   return engine.findCardZone?.(owner, card) || null;
 }
 
-function getBattleOpponent(ctx, sourceCard) {
+function getBattleOpponent(
+  ctx: TriggerContext | null | undefined,
+  sourceCard: TriggerRuntimeCard | null | undefined,
+): TriggerRuntimeCard | null {
   if (!ctx || !sourceCard) return null;
   if (sourceCard === ctx.attacker) return ctx.defender || ctx.target || null;
   if (sourceCard === (ctx.defender || ctx.target)) return ctx.attacker || null;
   return null;
 }
 
-function isFieldFaceupMonster(owner, card) {
-  return (
+function isFieldFaceupMonster(
+  owner: TriggerRuntimePlayer | null | undefined,
+  card: TriggerRuntimeCard | null | undefined,
+): boolean {
+  return Boolean(
     owner &&
     card &&
     Array.isArray(owner.field) &&
@@ -24,9 +45,14 @@ function isFieldFaceupMonster(owner, card) {
   );
 }
 
-function actionUsesBattleOpponent(actions = []) {
+function actionUsesBattleOpponent(
+  actions: readonly CardAction[] = [],
+): boolean {
   return walkActionList(actions).visits.some(
-    ({ action }) => action?.targetRef === "battle_opponent",
+    ({ action }) =>
+      action != null &&
+      typeof action === "object" &&
+      Reflect.get(action, "targetRef") === "battle_opponent",
   );
 }
 
@@ -34,8 +60,11 @@ function actionUsesBattleOpponent(actions = []) {
  * Collects trigger entries for the end of a completed monster battle.
  * Sources are the original battle participants, even if one has left the field.
  */
-export async function collectBattleCompletedTriggers(payload) {
-  const entries = [];
+export async function collectBattleCompletedTriggers(
+  this: TriggerCollectorHost,
+  payload: CollectedTriggerEventMap["battle_completed"],
+): Promise<TriggerPackage> {
+  const entries: TriggerEntry[] = [];
   const orderRule =
     "attacker owner -> defender owner; sources: original battle participants";
 
@@ -58,7 +87,7 @@ export async function collectBattleCompletedTriggers(payload) {
     { card: attacker, owner: attackerOwner, other: defenderOwner },
     { card: defender, owner: defenderOwner, other: attackerOwner },
   ];
-  const processed = new Set();
+  const processed = new Set<TriggerRuntimeCard>();
 
   for (const participant of participants) {
     const card = participant.card;
@@ -68,7 +97,7 @@ export async function collectBattleCompletedTriggers(payload) {
     if (!Array.isArray(card.effects)) continue;
 
     const sourceZone = getParticipantZone(this, owner, card);
-    const ctx = {
+    const ctx: TriggerContext = {
       source: card,
       player: owner,
       opponent: participant.other,

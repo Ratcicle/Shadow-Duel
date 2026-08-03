@@ -26,6 +26,7 @@ export {
 // Trigger collectors
 export {
   collectEventTriggers,
+  TRIGGER_COLLECTOR_MANIFEST,
   collectAfterSummonTriggers,
   collectSpellActivatedTriggers,
   collectEffectActivatedTriggers,

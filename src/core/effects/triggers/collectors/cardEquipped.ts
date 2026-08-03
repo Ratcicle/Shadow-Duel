@@ -1,3 +1,5 @@
+import type { CollectedTriggerEventMap } from "../../../contracts/events.js";
+import type { TriggerCollectorHost, TriggerEntry, TriggerPackage } from "../runtime.js";
 import { debugTriggerLog } from "./shared.js";
 
 /**
@@ -5,8 +7,11 @@ import { debugTriggerLog } from "./shared.js";
  * @param {Object} payload - Equip event payload
  * @returns {Promise<Object>} Collected entries and order rule
  */
-export async function collectCardEquippedTriggers(payload) {
-  const entries = [];
+export async function collectCardEquippedTriggers(
+  this: TriggerCollectorHost,
+  payload: CollectedTriggerEventMap["card_equipped"],
+): Promise<TriggerPackage> {
+  const entries: TriggerEntry[] = [];
   const orderRule =
     "equip owner -> equipped owner; sources: equipped card -> equip spell";
 

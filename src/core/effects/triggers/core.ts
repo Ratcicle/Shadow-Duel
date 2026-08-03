@@ -2,8 +2,26 @@ import { getCardDisplayName, getUIText } from "../../i18n.js";
 import { isAI } from "../../Player.js";
 import { captureSourceSnapshot } from "../../chain/link.js";
 import { walkActionList } from "../../actionHandlers/actionWalker.js";
+import type { CardAction } from "../../contracts/actions.js";
+import type { RawSelectionRequirement } from "../../contracts/selection.js";
+import type {
+  BuildTriggerEntryOptions,
+  TriggerActivationContext,
+  TriggerCollectorHost,
+  TriggerContext,
+  TriggerEffectLike,
+  TriggerEntry,
+  TriggerEntryConfig,
+  TriggerResolutionResult,
+  TriggerActionRegistryPort,
+  TriggerRuntimeCard,
+  TriggerRuntimePlayer,
+  TriggerTargetResolution,
+  TriggerUiPort,
+  TriggerZone,
+} from "./runtime.js";
 
-const AUTOMATIC_TRIGGER_ACTION_TYPES = new Set([
+const AUTOMATIC_TRIGGER_ACTION_TYPES = new Set<string>([
   "forbid_attack_this_turn",
   "forbid_direct_attack_this_turn",
   "permanent_buff_named",
@@ -12,7 +30,10 @@ const AUTOMATIC_TRIGGER_ACTION_TYPES = new Set([
   "remove_counter",
 ]);
 
-function hasRegisteredTriggerActions(effect, actionHandlers) {
+function hasRegisteredTriggerActions(
+  effect: TriggerEffectLike | null | undefined,
+  actionHandlers: TriggerActionRegistryPort | null | undefined,
+): boolean {
   const actions = Array.isArray(effect?.actions) ? effect.actions : [];
   if (actions.length === 0) return false;
 
@@ -24,7 +45,9 @@ function hasRegisteredTriggerActions(effect, actionHandlers) {
   });
 }
 
-function isAutomaticTriggeredEffect(effect) {
+function isAutomaticTriggeredEffect(
+  effect: TriggerEffectLike | null | undefined,
+): boolean {
   const actions = Array.isArray(effect?.actions) ? effect.actions : [];
   if (actions.length === 0) return false;
 
@@ -33,33 +56,40 @@ function isAutomaticTriggeredEffect(effect) {
   );
 }
 
-function isPromptOwnedTriggeredEffect(effect) {
+function isPromptOwnedTriggeredEffect(
+  effect: TriggerEffectLike | null | undefined,
+): boolean {
   const actions = Array.isArray(effect?.actions) ? effect.actions : [];
   if (actions.length === 0) return false;
 
   return actions.every((action) => {
-    if (!action || action.optional === false) return false;
+    if (!action || Reflect.get(action, "optional") === false) return false;
     return action.type === "conditional_summon_from_hand";
   });
 }
 
-function getActionTargetRefs(action) {
-  const refs = new Set();
+function getActionTargetRefs(action: CardAction): Set<string> {
+  const refs = new Set<string>();
   for (const visit of walkActionList([action]).visits) {
     const visitedAction = visit.action;
     if (!visitedAction || typeof visitedAction !== "object") continue;
-    if (typeof visitedAction.targetRef === "string") {
-      refs.add(visitedAction.targetRef);
+    const targetRef = Reflect.get(visitedAction, "targetRef");
+    if (typeof targetRef === "string") {
+      refs.add(targetRef);
     }
-    if (typeof visitedAction.costTargetRef === "string") {
-      refs.add(visitedAction.costTargetRef);
+    const costTargetRef = Reflect.get(visitedAction, "costTargetRef");
+    if (typeof costTargetRef === "string") {
+      refs.add(costTargetRef);
     }
   }
 
   return refs;
 }
 
-function actionCanResolveWithSelectionRequirements(action, requirementById) {
+function actionCanResolveWithSelectionRequirements(
+  action: CardAction,
+  requirementById: ReadonlyMap<string, RawSelectionRequirement>,
+): boolean {
   const targetRefs = getActionTargetRefs(action);
   if (targetRefs.size === 0) return true;
 
@@ -76,18 +106,22 @@ function actionCanResolveWithSelectionRequirements(action, requirementById) {
   return true;
 }
 
-function hasResolvableSelectionTargetActions(effect, targetPreview) {
+function hasResolvableSelectionTargetActions(
+  effect: TriggerEffectLike,
+  targetPreview: TriggerTargetResolution,
+): boolean {
   if (!targetPreview?.needsSelection) return true;
 
   const requirements =
     targetPreview?.selectionContract?.requirements || [];
   if (requirements.length === 0) return false;
 
-  const requirementById = new Map(
-    requirements
-      .filter((req) => req?.id)
-      .map((req) => [req.id, req]),
-  );
+  const requirementById = new Map<string, RawSelectionRequirement>();
+  for (const requirement of requirements) {
+    if (requirement?.id) {
+      requirementById.set(requirement.id, requirement);
+    }
+  }
   const actions = Array.isArray(effect?.actions) ? effect.actions : [];
   if (actions.length === 0) return true;
 
@@ -96,7 +130,11 @@ function hasResolvableSelectionTargetActions(effect, targetPreview) {
   );
 }
 
-function shouldPromptTriggeredEffect(effect, owner, ctx) {
+function shouldPromptTriggeredEffect(
+  effect: TriggerEffectLike | null | undefined,
+  owner: TriggerRuntimePlayer | null | undefined,
+  ctx: TriggerContext | null | undefined,
+): boolean {
   if (!effect || effect.timing !== "on_event") return false;
   if (!owner || isAI(owner)) return false;
   if (ctx?.activationContext?.skipPrompt === true) return false;
@@ -118,7 +156,13 @@ function shouldPromptTriggeredEffect(effect, owner, ctx) {
   return true;
 }
 
-async function confirmTriggeredEffect(effect, sourceCard, owner, ui, ctx) {
+async function confirmTriggeredEffect(
+  effect: TriggerEffectLike,
+  sourceCard: TriggerRuntimeCard,
+  owner: TriggerRuntimePlayer,
+  ui: TriggerUiPort | null | undefined,
+  ctx: TriggerContext,
+): Promise<boolean> {
   if (!shouldPromptTriggeredEffect(effect, owner, ctx)) return true;
 
   let wantsToUse = true;
@@ -127,8 +171,11 @@ async function confirmTriggeredEffect(effect, sourceCard, owner, ui, ctx) {
     sourceCard?.name ||
     getUIText("ui.prompts.thisCard");
 
-  if (effect.customPromptMethod && ui?.[effect.customPromptMethod]) {
-    wantsToUse = await ui[effect.customPromptMethod]();
+  const customPrompt = effect.customPromptMethod
+    ? Reflect.get(ui || {}, effect.customPromptMethod)
+    : null;
+  if (typeof customPrompt === "function") {
+    wantsToUse = Boolean(await Reflect.apply(customPrompt, ui, []));
   } else if (ui?.showConfirmPrompt) {
     let promptMessage = effect.promptMessage;
     if (!promptMessage) {
@@ -157,10 +204,17 @@ async function confirmTriggeredEffect(effect, sourceCard, owner, ui, ctx) {
       effectId: effect.id,
       event: effect.event,
     });
+    const thenMethod =
+      confirmResult !== null &&
+      confirmResult !== undefined &&
+      (typeof confirmResult === "object" ||
+        typeof confirmResult === "function")
+        ? Reflect.get(confirmResult, "then")
+        : null;
     wantsToUse =
-      confirmResult && typeof confirmResult.then === "function"
-        ? await confirmResult
-        : !!confirmResult;
+      typeof thenMethod === "function"
+        ? Boolean(await confirmResult)
+        : Boolean(confirmResult);
   }
 
   return !!wantsToUse;
@@ -180,11 +234,12 @@ async function confirmTriggeredEffect(effect, sourceCard, owner, ui, ctx) {
  * @returns {Promise<Object>} Result with success/needsSelection status
  */
 export async function handleTriggeredEffect(
-  sourceCard,
-  effect,
-  ctx,
-  selections = null
-) {
+  this: TriggerCollectorHost,
+  sourceCard: TriggerRuntimeCard,
+  effect: TriggerEffectLike,
+  ctx: TriggerContext,
+  selections: object | null = null,
+): Promise<TriggerResolutionResult> {
   ctx.effect = ctx.effect || effect;
   ctx.effectId = ctx.effectId || effect?.id || null;
   const targetDefinitions =
@@ -257,10 +312,11 @@ export async function handleTriggeredEffect(
     fromZone: activationZone,
     tone: sourceCard?.cardKind === "monster" ? "violet" : "gold",
   });
-  if (queuedActivationFeedback && isAI(ctx?.player)) {
+  const presentationPlayer = ctx.player;
+  if (queuedActivationFeedback && presentationPlayer && isAI(presentationPlayer)) {
     this.game?.updateBoard?.();
     if (typeof this.game?.waitForAiPresentationStep === "function") {
-      await this.game.waitForAiPresentationStep(ctx.player);
+      await this.game.waitForAiPresentationStep(presentationPlayer);
     }
   }
 
@@ -274,12 +330,14 @@ export async function handleTriggeredEffect(
     typeof actionsResult === "object" &&
     actionsResult.needsSelection
   ) {
-    return {
-      success: false,
-      needsSelection: true,
-      selectionContract: actionsResult.selectionContract,
-      ...actionsResult,
-    };
+    return Object.assign(
+      {
+        success: false,
+        needsSelection: true,
+        selectionContract: actionsResult.selectionContract,
+      },
+      actionsResult,
+    );
   }
   if (
     actionsResult &&
@@ -320,16 +378,17 @@ export async function handleTriggeredEffect(
  * @returns {Object} The activation context
  */
 export function buildTriggerActivationContext(
-  sourceCard,
-  player,
-  zoneOverride = null
-) {
+  this: TriggerCollectorHost,
+  sourceCard: TriggerRuntimeCard,
+  player: TriggerRuntimePlayer,
+  zoneOverride: TriggerZone = null,
+): TriggerActivationContext {
   const activationZone =
     zoneOverride || this.findCardZone(player, sourceCard) || "field";
-  const sourceAtTrigger = captureSourceSnapshot(
-    sourceCard,
-    player,
-    activationZone,
+  const sourceAtTrigger: object | null = Reflect.apply(
+    captureSourceSnapshot,
+    undefined,
+    [sourceCard, player, activationZone],
   );
   return {
     fromHand: activationZone === "hand",
@@ -342,7 +401,10 @@ export function buildTriggerActivationContext(
   };
 }
 
-function mergeStrategyActivationContext(baseContext, extraContext) {
+function mergeStrategyActivationContext(
+  baseContext: TriggerActivationContext,
+  extraContext: TriggerActivationContext | null | undefined,
+): TriggerActivationContext {
   if (!extraContext || typeof extraContext !== "object") return baseContext;
   const baseActionContext = baseContext?.actionContext || {};
   const extraActionContext = extraContext.actionContext || {};
@@ -389,7 +451,10 @@ function mergeStrategyActivationContext(baseContext, extraContext) {
  * @param {Function} [options.onSuccess] - Callback on successful activation
  * @returns {Object|null} The trigger entry or null if invalid
  */
-export function buildTriggerEntry(options = {}) {
+export function buildTriggerEntry(
+  this: TriggerCollectorHost,
+  options: BuildTriggerEntryOptions = {},
+): TriggerEntry | null {
   const sourceCard = options.sourceCard;
   const owner = options.owner;
   const effect = options.effect;
@@ -420,11 +485,11 @@ export function buildTriggerEntry(options = {}) {
         : sourceCard.isFacedown === true,
     sourceAtTrigger:
       activationContext.sourceAtTrigger ||
-      captureSourceSnapshot(
+      Reflect.apply(captureSourceSnapshot, undefined, [
         sourceCard,
         owner,
         activationContext.activationZone || options.activationZone || null,
-      ),
+      ]),
     selectionKind: "triggered",
   };
   const strategyContext =
@@ -516,7 +581,7 @@ export function buildTriggerEntry(options = {}) {
     ((selections, activationCtx, resolvedCtx) =>
       this.handleTriggeredEffect(sourceCard, effect, resolvedCtx, selections));
 
-  const config = {
+  const config: TriggerEntryConfig = {
     card: sourceCard,
     effect,
     owner,

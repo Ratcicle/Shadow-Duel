@@ -5,11 +5,33 @@
  * All functions assume `this` = EffectEngine instance
  */
 
-export function getOncePerDuelKey(card, effect) {
+import type {
+  TriggerCollectorHost,
+  TriggerEffectLike,
+  TriggerRuntimeCard,
+  TriggerRuntimePlayer,
+} from "./runtime.js";
+
+interface OncePerDuelCardProjection {
+  name?: string | null;
+}
+
+interface OncePerDuelPlayerProjection {
+  id?: string;
+  name?: string;
+  oncePerDuelUsageByName?: { [effectKey: string]: number | boolean };
+}
+
+export function getOncePerDuelKey(
+  card: OncePerDuelCardProjection | null | undefined,
+  effect: TriggerEffectLike | null | undefined,
+): string | null | undefined {
   return effect?.oncePerDuelName || effect?.id || card?.name;
 }
 
-export function getOncePerDuelLimit(effect) {
+export function getOncePerDuelLimit(
+  effect: TriggerEffectLike | null | undefined,
+): number {
   if (!effect?.oncePerDuel) return Infinity;
   const rawLimit =
     effect.oncePerDuelLimit ??
@@ -19,7 +41,10 @@ export function getOncePerDuelLimit(effect) {
   return Number.isFinite(limit) && limit > 0 ? limit : 1;
 }
 
-export function getOncePerDuelUsage(player, key) {
+export function getOncePerDuelUsage(
+  player: OncePerDuelPlayerProjection | null | undefined,
+  key: string | null | undefined,
+): number {
   if (!player || !key) return 0;
   const rawUsage = player.oncePerDuelUsageByName?.[key];
   if (rawUsage === true) return 1;
@@ -30,7 +55,11 @@ export function getOncePerDuelUsage(player, key) {
   return Number.isFinite(usage) && usage > 0 ? usage : 0;
 }
 
-export function canUseOncePerDuelEffect(card, player, effect) {
+export function canUseOncePerDuelEffect(
+  card: OncePerDuelCardProjection | null | undefined,
+  player: OncePerDuelPlayerProjection | null | undefined,
+  effect: TriggerEffectLike | null | undefined,
+) {
   if (!effect || !effect.oncePerDuel || !player) {
     return { ok: true };
   }
@@ -50,22 +79,32 @@ export function canUseOncePerDuelEffect(card, player, effect) {
   return { ok: true, used, limit, remaining: limit - used };
 }
 
-export function markOncePerDuelEffectUsed(card, player, effect) {
+export function markOncePerDuelEffectUsed(
+  card: OncePerDuelCardProjection | null | undefined,
+  player: OncePerDuelPlayerProjection | null | undefined,
+  effect: TriggerEffectLike | null | undefined,
+): number {
   if (!effect || !effect.oncePerDuel || !player) {
     return 0;
   }
 
   const key = getOncePerDuelKey(card, effect);
   if (!key) return 0;
-  player.oncePerDuelUsageByName =
-    player.oncePerDuelUsageByName || Object.create(null);
+  const usageByName =
+    player.oncePerDuelUsageByName ||
+    (player.oncePerDuelUsageByName = Object.create(null));
   const nextUsage = getOncePerDuelUsage(player, key) + 1;
-  player.oncePerDuelUsageByName[key] = nextUsage;
+  usageByName[key] = nextUsage;
   return nextUsage;
 }
 
 /** Consume a successful limited effect outside a Chain Link. */
-export function commitEffectUsage(card, player, effect) {
+export function commitEffectUsage(
+  this: Pick<TriggerCollectorHost, "game">,
+  card: TriggerRuntimeCard | null | undefined,
+  player: TriggerRuntimePlayer | null | undefined,
+  effect: TriggerEffectLike | null | undefined,
+) {
   if (!effect || !player || (!effect.oncePerTurn && !effect.oncePerDuel)) {
     return null;
   }

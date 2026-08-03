@@ -1,33 +1,38 @@
+import type { CollectedTriggerEventMap } from "../../../contracts/events.js";
+import type { TriggerCollectorHost, TriggerEntry, TriggerPackage } from "../runtime.js";
 import { debugTriggerLog } from "./shared.js";
 
 /**
- * Collects trigger entries for lp_change events.
- * @param {Object} payload - LP change payload
+ * Collects trigger entries for effect_activated event.
+ * @param {Object} payload - Effect/card activation payload
  * @returns {Promise<Object>} Collected entries and order rule
  */
-export async function collectLpChangeTriggers(payload) {
-  const entries = [];
+export async function collectEffectActivatedTriggers(
+  this: TriggerCollectorHost,
+  payload: CollectedTriggerEventMap["effect_activated"],
+): Promise<TriggerPackage> {
+  const entries: TriggerEntry[] = [];
   const orderRule =
-    "LP gainer -> opponent; sources: fieldSpell -> field -> spellTrap";
+    "effect controller -> opponent; sources: field -> fieldSpell -> spellTrap";
 
-  if (!payload || !payload.player || (payload.lpGained || 0) <= 0) {
+  if (!payload || !payload.card || !payload.player) {
     return { entries, orderRule };
   }
 
-  const lpPlayer = payload.player;
-  const opponent = this.game?.getOpponent?.(lpPlayer);
+  const activatedCard = payload.card;
+  const activatedEffect = payload.effect || null;
+  const activator = payload.player;
+  const opponent = this.game?.getOpponent?.(activator);
   const participants = [];
 
-  participants.push({ owner: lpPlayer, opponent });
+  if (activator) {
+    participants.push({ owner: activator, opponent });
+  }
   if (opponent) {
-    participants.push({ owner: opponent, opponent: lpPlayer });
+    participants.push({ owner: opponent, opponent: activator });
   }
 
   const currentPhase = this.game?.phase;
-  const lpGained = payload.lpGained || 0;
-  const before = payload.before ?? null;
-  const after = payload.after ?? null;
-  const lpChangeSourceCard = payload.sourceCard || null;
 
   for (const side of participants) {
     const owner = side.owner;
@@ -51,24 +56,24 @@ export async function collectLpChangeTriggers(payload) {
       const sourceZone = this.findCardZone(owner, sourceCard);
       const isFaceDownOnBoard =
         sourceCard?.isFacedown === true &&
-        ["field", "spellTrap", "fieldSpell"].includes(sourceZone);
-
+        ["field", "spellTrap", "fieldSpell"].some(
+          (zone) => zone === sourceZone,
+        );
       const ctx = {
         source: sourceCard,
         player: owner,
         opponent: other,
-        lpChangePlayer: lpPlayer,
-        lpGained,
-        before,
-        after,
-        sourceCard: lpChangeSourceCard,
-        lpChangeSourceCard,
+        activatedCard,
+        activatedEffect,
+        activatedPlayer: activator,
+        activationZone: payload.activationZone || null,
+        effectType: payload.effectType || null,
         currentPhase,
       };
 
       for (const effect of sourceCard.effects) {
         if (!effect || effect.timing !== "on_event") continue;
-        if (effect.event !== "lp_change") continue;
+        if (effect.event !== "effect_activated") continue;
 
         if (isFaceDownOnBoard) {
           continue;
@@ -83,21 +88,37 @@ export async function collectLpChangeTriggers(payload) {
         }
 
         const triggerPlayer = effect.triggerPlayer || "any";
-        if (triggerPlayer === "self" && owner !== lpPlayer) continue;
-        if (triggerPlayer === "opponent" && owner === lpPlayer) continue;
+        if (triggerPlayer === "self" && owner !== activator) continue;
+        if (triggerPlayer === "opponent" && owner === activator) continue;
 
+        const activatedFilters =
+          effect.activatedCardFilters || effect.requireActivatedCardFilters;
         if (
-          effect.minLpGained !== undefined &&
-          lpGained < Number(effect.minLpGained)
+          activatedFilters &&
+          !this.cardMatchesFilters(activatedCard, activatedFilters)
         ) {
           continue;
         }
 
-        const sourceFilters =
-          effect.lpChangeSourceFilters || effect.sourceCardFilters || null;
+        const sameActivatedSource =
+          sourceCard === activatedCard ||
+          (sourceCard?.instanceId != null &&
+            activatedCard?.instanceId != null &&
+            sourceCard.instanceId === activatedCard.instanceId);
+        if (effect.excludeActivatedSelf === true && sameActivatedSource) {
+          continue;
+        }
+
+        const activatedEffectFilters =
+          effect.activatedEffectFilters || effect.requireActivatedEffectFilters;
         if (
-          sourceFilters &&
-          !this.cardMatchesFilters(lpChangeSourceCard, sourceFilters)
+          activatedEffectFilters &&
+          !this.effectMatchesFilters?.(activatedEffect, activatedEffectFilters, {
+            activationZone: payload.activationZone || null,
+            activationContext: payload.activationContext || null,
+            effectType: payload.effectType || null,
+            placementOnly: payload.placementOnly === true,
+          })
         ) {
           continue;
         }
@@ -125,7 +146,7 @@ export async function collectLpChangeTriggers(payload) {
 
         const activationContext = {
           ...this.buildTriggerActivationContext(sourceCard, owner, sourceZone),
-          triggeredByEvent: "lp_change",
+          triggeredByEvent: "effect_activated",
         };
 
         const entry = this.buildTriggerEntry({

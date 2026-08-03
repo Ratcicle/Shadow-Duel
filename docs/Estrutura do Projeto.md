@@ -115,7 +115,7 @@ Traduções visíveis no jogo. Hoje há [pt-br.json](../public/locales/pt-br.jso
 | [NullChainSystem.js](../src/core/NullChainSystem.js) | Implementação no-op compatível para simulações ou fluxos sem chain real. |
 | [EffectEngine.ts](../src/core/EffectEngine.ts) | Fachada de execução de efeitos declarativos; consumidores preservam o specifier `.js`. |
 | [ActionHandlers.ts](../src/core/ActionHandlers.ts) | Re-export de compatibilidade; consumidores preservam o specifier `.js`. |
-| [AutoSelector.js](../src/core/AutoSelector.js) | Resolve contratos de seleção para IA/bot. Não deve substituir decisões humanas. |
+| [AutoSelector.ts](../src/core/AutoSelector.ts) | Resolve contratos de seleção para IA/bot. Não deve substituir decisões humanas. |
 | [UIAdapter.js](../src/core/UIAdapter.js) | Ponte entre `Game` e `Renderer` para prompts e atualização visual. |
 | [i18n.js](../src/core/i18n.js) | Carregamento de locale e helpers como `getCardDisplayName` e `getCardDisplayDescription`. |
 
@@ -295,16 +295,16 @@ Coletores por evento que alimentam os triggers declarativos:
 | [actions/](../src/core/game/actions/) | `guard.js` - validação antes de iniciar ações. |
 | [analytics/](../src/core/game/analytics/) | `strategicReport.js` - ciclo de vida do Strategic Report. |
 | [combat/](../src/core/game/combat/) | Combate e transação canônica das cinco subetapas em `damageStep.js`. |
-| [decisions/](../src/core/game/decisions/) | `DecisionBroker` compartilhado por humano, IA e replay. |
+| [decisions/](../src/core/game/decisions/) | `broker.ts` - `DecisionBroker` compartilhado por humano, IA e replay. |
 | [deck/](../src/core/game/deck/) | `draw.js` - compras e deck-out. |
 | [devTools/](../src/core/game/devTools/) | `commands.js`, `setup.js` - comandos e setups de teste. |
 | [effects/](../src/core/game/effects/) | Pipeline de ativação, replacement de destruição e serviço canônico de uso. |
-| [events/](../src/core/game/events/) | `eventBus.js`, `eventResolver.js`. |
+| [events/](../src/core/game/events/) | `eventBus.ts`, `eventResolver.ts`. |
 | [extraDeck/](../src/core/game/extraDeck/) | `modal.js` - abertura/seleção do Extra Deck. |
 | [graveyard/](../src/core/game/graveyard/) | `modal.js` - visualização e ativação a partir do Cemitério quando legal. |
 | [helpers/](../src/core/game/helpers/) | `cards.js`, `players.js`. |
 | [replay/](../src/core/game/replay/) | Replay canônico: formato, captura, hash determinístico e reprodução headless. |
-| [selection/](../src/core/game/selection/) | `contract.js`, `handlers.js`, `highlighting.js`, `session.js`. |
+| [selection/](../src/core/game/selection/) | `contract.ts`, `handlers.ts`, `highlighting.ts`, `session.ts`. |
 | [spellTrap/](../src/core/game/spellTrap/) | `activation.js`, `finalization.js`, `index.js`, `quickSpellRules.js`, `set.js`, `triggers.js`, `verification.js`. |
 | [state/](../src/core/game/state/) | `duelReset.js`, `serialization.js`. |
 | [summon/](../src/core/game/summon/) | Procedimentos de Invocação e a transação canônica em `transaction.js`. |
