@@ -5,13 +5,368 @@ import {
 import { hasSynchroSummonPreviewCandidate } from "../../actionHandlers/summon/synchroEffects.js";
 import { mergeCanonicalSelections } from "../../game/selection/contract.js";
 import { checkSpecialSummonEligibility } from "../../game/summon/eligibility.js";
+import type { ActionHandlerRegistry } from "../../actionHandlers/registry.js";
+import type Game from "../../Game.js";
+import type {
+  ActionHandlerEnginePort,
+  ActionRuntimeCard,
+  ActionRuntimeGamePort,
+  ActionRuntimePlayer,
+  EffectContext,
+  LegacyActionHandlerResult,
+  NeedsSelectionResult,
+  NormalizedActionExecutionResult,
+  ResolvedTargetMap,
+} from "../../contracts/actionRuntime.js";
+import { readContextValue, writeContextValue } from "../../contracts/actionRuntime.js";
+import type {
+  ActionCase,
+  ActionOf,
+  ActionOwner,
+  ActionPlayerScope,
+  ActionType,
+  CardAction,
+  ContextNumberSource,
+  SelectionCount,
+} from "../../contracts/actions.js";
+import type {
+  CardFilter,
+  EffectCondition,
+  EffectTarget,
+  PairedEffectTarget,
+} from "../../contracts/effects.js";
+import type { ZoneInput } from "../../contracts/zones.js";
+
+type PreviewZone =
+  | "deck"
+  | "hand"
+  | "field"
+  | "graveyard"
+  | "spellTrap"
+  | "fieldSpell"
+  | "extraDeck"
+  | "banished";
+
+interface PreviewCard extends ActionRuntimeCard {
+  cannotBeSpecialSummoned?: boolean;
+  lastSummonMethod?: string;
+  lastSummonMethods?: readonly string[];
+  lastSummonedFromZone?: string;
+  lastSummonedFromZones?: readonly string[];
+}
+
+interface PreviewContext extends EffectContext {
+  fieldCounterCounts?: Record<string, number>;
+  activationContext?: (NonNullable<EffectContext["activationContext"]> & {
+    costSelections?: ResolvedTargetMap;
+    sourceRect?: unknown;
+  }) | null;
+}
+
+interface PreviewFilter {
+  archetype?: string;
+  attribute?: string;
+  cardId?: number;
+  cardIds?: readonly number[];
+  cardKind?: string | readonly string[];
+  cardName?: string;
+  destinationOwner?: "self" | "opponent";
+  excludeCannotBeSpecialSummoned?: boolean;
+  excludeCardId?: number;
+  excludeCardIds?: readonly number[];
+  excludeCardName?: string;
+  excludeCardNames?: readonly string[];
+  excludeId?: number;
+  excludeIds?: readonly number[];
+  excludeName?: string;
+  excludeNames?: readonly string[];
+  excludeSelf?: boolean;
+  facedown?: boolean;
+  filters?: CardFilter;
+  isToken?: boolean;
+  isTuner?: boolean;
+  lastSummonMethod?: string;
+  lastSummonMethods?: readonly string[];
+  lastSummonedFromZone?: string;
+  lastSummonedFromZones?: readonly string[];
+  level?: number;
+  levelOp?: "eq" | "lte" | "gte" | "lt" | "gt";
+  maxAtk?: number;
+  maxDef?: number;
+  maxLevel?: number;
+  minAtk?: number;
+  minDef?: number;
+  minLevel?: number;
+  monsterType?: string | readonly string[];
+  name?: string;
+  position?: string;
+  requireFaceup?: boolean;
+  specialSummonProcedure?: string;
+  subtype?: string | readonly string[];
+  summonMethod?: string;
+  summonProcedure?: string;
+  summonToOwner?: "self" | "opponent";
+  type?: string | readonly string[];
+  zone?: ZoneInput | null;
+}
+
+interface LegacyPairComparison {
+  readonly attr?: string;
+  readonly attribute?: string;
+  readonly pairedAttr?: string;
+  readonly targetAttr?: string;
+  readonly sourceAttr?: string;
+  readonly refAttr?: string;
+  readonly op?: string;
+}
+
+type LegacyPairedTarget = Omit<PairedEffectTarget, "compareAttribute"> & {
+  readonly compareAttribute?:
+    | LegacyPairComparison
+    | readonly LegacyPairComparison[];
+  readonly compareAttributes?: readonly LegacyPairComparison[];
+  readonly excludeSameCard?: boolean;
+  readonly zones?: readonly PreviewZone[];
+};
+
+interface PreviewTarget extends Omit<EffectTarget, "filters" | "pairedTarget" | "zone" | "zones"> {
+  allowSelf?: boolean;
+  cardIds?: readonly number[];
+  excludeCardIds?: readonly number[];
+  excludeCardId?: number;
+  excludeCardNames?: readonly string[];
+  excludeId?: number;
+  excludeIds?: readonly number[];
+  excludeName?: string;
+  excludeNames?: readonly string[];
+  facedown?: boolean;
+  filters?: PreviewFilter;
+  includeSelf?: boolean;
+  isToken?: boolean;
+  lastSummonMethod?: string;
+  lastSummonMethods?: readonly string[];
+  lastSummonedFromZones?: readonly string[];
+  level?: number;
+  levelOp?: PreviewFilter["levelOp"];
+  max?: number;
+  maxAtk?: number;
+  min?: number;
+  minDef?: number;
+  pairedTarget?: LegacyPairedTarget;
+  player?: ActionPlayerScope;
+  position?: string;
+  requiresPairedTarget?: LegacyPairedTarget;
+  summonMethod?: string;
+  zone?: PreviewZone;
+  zones?: readonly PreviewZone[];
+}
+
+interface FieldCountSpec {
+  readonly zones?: readonly PreviewZone[];
+  readonly zone?: PreviewZone;
+  readonly filters?: PreviewFilter;
+  readonly owner?: ActionOwner;
+  readonly player?: ActionPlayerScope;
+  readonly multiplier?: number;
+  readonly baseAmount?: number;
+  readonly base?: number;
+  readonly min?: number;
+  readonly max?: number;
+}
+
+interface PreviewAction {
+  readonly type: ActionType | string;
+  readonly allowBelow?: boolean;
+  readonly allowCancel?: boolean;
+  readonly amount?: number;
+  readonly amountFromFieldCount?: FieldCountSpec;
+  readonly archetype?: string;
+  readonly cardId?: number;
+  readonly cardKind?: string | readonly string[];
+  readonly cardName?: string;
+  readonly cases?: readonly ActionCase[];
+  readonly condition?: EffectCondition | { readonly type?: string; readonly zone?: PreviewZone; readonly cardName?: string; readonly typeName?: string; readonly cardType?: string };
+  readonly contextKey?: string;
+  readonly costFilters?: PreviewFilter;
+  readonly costTargetRef?: string;
+  readonly count?: number | SelectionCount;
+  readonly counterMultiplier?: number;
+  readonly counterType?: string;
+  readonly damagePerCounter?: number;
+  readonly distinctNames?: boolean;
+  readonly fieldSlotsFreedBeforeSummon?: number;
+  readonly filters?: PreviewFilter;
+  readonly fraction?: number;
+  readonly isTuner?: boolean;
+  readonly level?: number;
+  readonly levelOp?: PreviewFilter["levelOp"];
+  readonly matchLevelRef?: string;
+  readonly maxAmount?: number;
+  readonly maxAtk?: number;
+  readonly maxLevel?: number;
+  readonly maxLevelFromContext?: ContextNumberSource | string;
+  readonly maxTargets?: number;
+  readonly minAmount?: number;
+  readonly minAtk?: number;
+  readonly minCost?: number;
+  readonly minLevel?: number;
+  readonly minTargets?: number;
+  readonly mode?: string;
+  readonly monsterType?: string | readonly string[];
+  readonly optional?: boolean;
+  readonly owner?: ActionOwner;
+  readonly player?: ActionPlayerScope;
+  readonly position?: string;
+  readonly property?: string;
+  readonly required?: boolean;
+  readonly requireFaceup?: boolean;
+  readonly requireSource?: boolean;
+  readonly resultKey?: string;
+  readonly scope?: string;
+  readonly sourceOwner?: string;
+  readonly sourceScope?: string;
+  readonly sourceZone?: PreviewZone | readonly PreviewZone[];
+  readonly stateKey?: string;
+  readonly storeAs?: string;
+  readonly subtype?: string | readonly string[];
+  readonly summonToOwner?: "self" | "opponent";
+  readonly targetCountFromContext?: ContextNumberSource | string;
+  readonly targetRef?: string;
+  readonly targets?: readonly PreviewTarget[];
+  readonly to?: PreviewZone;
+  readonly token?: {
+    readonly name: string;
+    readonly atk: number;
+    readonly def: number;
+    readonly level?: number;
+    readonly type?: string;
+    readonly attribute?: string;
+    readonly archetype?: string;
+    readonly archetypes?: readonly string[];
+  };
+  readonly toZone?: PreviewZone;
+  readonly variableAmount?: boolean;
+  readonly zone?: PreviewZone | readonly PreviewZone[];
+  readonly zones?: readonly PreviewZone[];
+}
+
+interface PreviewMove {
+  owner: ActionRuntimePlayer;
+  zone: PreviewZone;
+  cards: PreviewCard[];
+  maxCount: number | null;
+}
+
+interface PreviewResult {
+  readonly ok: boolean;
+  readonly reason?: string;
+}
+
+interface ActionCoreHost {
+  game: Game;
+  actionHandlers: ActionHandlerRegistry;
+  filterTargetsByImmunity(
+    action: CardAction,
+    context: EffectContext,
+    targets: ResolvedTargetMap,
+  ): {
+    readonly skipAction: boolean;
+    readonly skippedCount: number;
+    readonly allowedCount: number;
+    readonly filteredTargets: ResolvedTargetMap;
+  };
+  cardMatchesFilters(card: ActionRuntimeCard, filters: object): boolean;
+  findCardZone(
+    player: ActionRuntimePlayer,
+    card: ActionRuntimeCard,
+  ): string | null;
+  resolveLpCost(
+    action: CardAction,
+    context: EffectContext,
+    baseAmount: number,
+    options: { readonly consume: boolean },
+  ): { readonly finalAmount?: number } | null;
+  evaluateConditions(
+    conditions: readonly EffectCondition[],
+    context: EffectContext,
+  ): { readonly ok: boolean };
+  resolveTargets(
+    targets: readonly EffectTarget[],
+    context: EffectContext,
+    options: object | null,
+  ): unknown;
+  checkActionPreviewRequirements(
+    actions: readonly CardAction[],
+    context: EffectContext,
+  ): PreviewResult;
+}
+
+type EffectEngine = ActionCoreHost;
+
+interface ActionResultOptions {
+  readonly success?: boolean;
+  readonly executed?: boolean;
+  readonly failedAction?: ActionType | string | null;
+  readonly reason?: string | null;
+  readonly error?: unknown;
+  readonly action?: CardAction | null;
+  readonly skippedCount?: number;
+}
+
+interface LegacyNumberReference {
+  readonly key?: string;
+  readonly contextKey?: string;
+  readonly path?: string;
+  readonly resultKey?: string;
+  readonly defaultValue?: unknown;
+  readonly default?: unknown;
+  readonly fallback?: unknown;
+  readonly multiplier?: number;
+  readonly divideBy?: number;
+  readonly round?: "floor" | "ceil" | "round";
+}
+
+type DevLogger = (tag: string, detail?: object) => void;
+
+function errorMessage(error: unknown, fallback: string): string {
+  if (
+    error !== null &&
+    (typeof error === "object" || typeof error === "function")
+  ) {
+    const message = Reflect.get(error, "message");
+    if (typeof message === "string" && message) return message;
+  }
+  return fallback;
+}
+
+function isRuntimePlayer(
+  value: ActionRuntimePlayer | null | undefined,
+): value is ActionRuntimePlayer {
+  return value !== null && value !== undefined;
+}
+
+function getRuntimeCounter(
+  card: ActionRuntimeCard | null | undefined,
+  counterType: string,
+): number {
+  if (!card) return 0;
+  if (typeof card.getCounter === "function") {
+    return Math.max(0, Number(card.getCounter(counterType) || 0));
+  }
+  if (card.counters instanceof Map) {
+    return Math.max(0, Number(card.counters.get(counterType) || 0));
+  }
+  return Math.max(0, Number(card.counters?.[counterType] || 0));
+}
 
 /**
  * Actions Core - applyActions dispatcher and preview requirements
  * Extracted from EffectEngine.js – preserving original logic and signatures.
  */
 
-export function actionResultSucceeded(result) {
+export function actionResultSucceeded(
+  result: LegacyActionHandlerResult,
+): boolean | null | undefined {
   if (result === true) return true;
   return (
     result &&
@@ -21,7 +376,9 @@ export function actionResultSucceeded(result) {
   );
 }
 
-function isActionResultFailure(result) {
+function isActionResultFailure(
+  result: LegacyActionHandlerResult,
+): boolean | null | undefined {
   return (
     result === false ||
     (result &&
@@ -31,10 +388,12 @@ function isActionResultFailure(result) {
   );
 }
 
-function isActionOptionalNoop(action) {
+function isActionOptionalNoop(action: PreviewAction | null | undefined): boolean {
   if (!action) return false;
   if (action.optional === true) return true;
-  const min = Number(action.count?.min);
+  const min = Number(
+    typeof action.count === "object" ? action.count?.min : undefined,
+  );
   return Number.isFinite(min) && min <= 0;
 }
 
@@ -46,8 +405,8 @@ function createActionResult({
   error = null,
   action = null,
   skippedCount = 0,
-} = {}) {
-  const result = {
+}: ActionResultOptions = {}): NormalizedActionExecutionResult {
+  const result: NormalizedActionExecutionResult = {
     success: success !== false,
     executed: executed === true,
     needsSelection: false,
@@ -60,20 +419,20 @@ function createActionResult({
   return result;
 }
 
-function getTargetCards(targets) {
-  const cards = [];
-  const visit = (value) => {
+function getTargetCards(targets: ResolvedTargetMap | null | undefined): ActionRuntimeCard[] {
+  const cards: ActionRuntimeCard[] = [];
+  const visit = (value: unknown): void => {
     if (!value) return;
     if (Array.isArray(value)) {
       for (const entry of value) visit(entry);
       return;
     }
-    if (typeof value === "object" && value.card) {
-      visit(value.card);
+    if (typeof value === "object" && Reflect.has(value, "card")) {
+      visit(Reflect.get(value, "card"));
       return;
     }
     if (typeof value === "object") {
-      cards.push(value);
+      cards.push(value as ActionRuntimeCard);
     }
   };
 
@@ -83,7 +442,11 @@ function getTargetCards(targets) {
   return cards;
 }
 
-function findOwnerForTarget(game, fallbackOwner, card) {
+function findOwnerForTarget(
+  game: Game | null | undefined,
+  fallbackOwner: ActionRuntimePlayer | null,
+  card: ActionRuntimeCard,
+): ActionRuntimePlayer | null {
   if (!game || !card) return fallbackOwner || null;
   const owners = [game.player, game.bot].filter(Boolean);
   const zones = [
@@ -99,7 +462,8 @@ function findOwnerForTarget(game, fallbackOwner, card) {
   for (const owner of owners) {
     if (owner.fieldSpell === card) return owner;
     for (const zone of zones) {
-      if (Array.isArray(owner[zone]) && owner[zone].includes(card)) {
+      const zoneCards = Reflect.get(owner, zone);
+      if (Array.isArray(zoneCards) && zoneCards.includes(card)) {
         return owner;
       }
     }
@@ -111,7 +475,12 @@ function findOwnerForTarget(game, fallbackOwner, card) {
   return explicitOwner || fallbackOwner || null;
 }
 
-async function emitEffectTargetedBeforeActions(engine, ctx, targets, logDev) {
+async function emitEffectTargetedBeforeActions(
+  engine: EffectEngine,
+  ctx: PreviewContext,
+  targets: ResolvedTargetMap,
+  logDev: DevLogger | null,
+): Promise<NeedsSelectionResult | null> {
   const game = engine?.game;
   const source = ctx?.source;
   const sourcePlayer = ctx?.player;
@@ -182,7 +551,12 @@ async function emitEffectTargetedBeforeActions(engine, ctx, targets, logDev) {
  * @param {Object} targets - Resolved targets
  * @returns {Promise<Object>} Normalized execution result or selection request
  */
-export async function applyActions(actions, ctx, targets) {
+export async function applyActions(
+  this: EffectEngine,
+  actions: readonly CardAction[],
+  ctx: PreviewContext,
+  targets: ResolvedTargetMap,
+): Promise<NormalizedActionExecutionResult | NeedsSelectionResult> {
   let executed = false;
   let skippedCount = 0;
   if (!Array.isArray(actions)) {
@@ -190,12 +564,13 @@ export async function applyActions(actions, ctx, targets) {
   }
 
   const logDev =
-    this.game?.devLog && ((tag, detail) => this.game.devLog(tag, detail || {}));
+    this.game?.devLog &&
+    ((tag: string, detail?: object) => this.game.devLog(tag, detail || {}));
 
   // Propagate selection results (from network resume) into ctx so handlers can consume them.
   const canonicalSelections = {
-    ...mergeCanonicalSelections(ctx?.actionContext),
-    ...mergeCanonicalSelections(ctx?.activationContext),
+    ...mergeCanonicalSelections(ctx?.actionContext || undefined),
+    ...mergeCanonicalSelections(ctx?.activationContext || undefined),
   };
   const selectionMap =
     ctx?.selections ||
@@ -203,8 +578,8 @@ export async function applyActions(actions, ctx, targets) {
   if (ctx && selectionMap && !ctx.selections) {
     ctx.selections = selectionMap;
   }
-  const isTargetMap = (value) =>
-    value && typeof value === "object" && !Array.isArray(value);
+  const isTargetMap = (value: unknown): value is ResolvedTargetMap =>
+    value !== null && typeof value === "object" && !Array.isArray(value);
   let runtimeTargets = targets || {};
   if (ctx && isTargetMap(targets)) {
     const existingTargets = isTargetMap(ctx._actionTargets)
@@ -244,7 +619,7 @@ export async function applyActions(actions, ctx, targets) {
       }
 
       // Use filtered targets for the handler
-      const filteredTargets = immunityResult.filteredTargets;
+      const filteredTargets = immunityResult.filteredTargets as ResolvedTargetMap;
 
       // Log if any targets were skipped
       if (immunityResult.skippedCount > 0) {
@@ -274,13 +649,22 @@ export async function applyActions(actions, ctx, targets) {
 
       try {
         // Pass filtered targets to handler instead of original targets
-        const result = await handler(action, ctx, filteredTargets, this);
+        const result: LegacyActionHandlerResult = await Reflect.apply(
+          handler,
+          undefined,
+          [action, ctx, filteredTargets, this],
+        );
 
         // INVARIANTE B1: Se handler retornou needsSelection, propagar para cima
         if (result && typeof result === "object" && result.needsSelection) {
           logDev?.("ACTION_NEEDS_SELECTION", {
             ...actionInfo,
-            selectionKind: result.selectionContract?.kind || "unknown",
+            selectionKind:
+              result.selectionContract &&
+              typeof result.selectionContract === "object" &&
+              typeof Reflect.get(result.selectionContract, "kind") === "string"
+                ? Reflect.get(result.selectionContract, "kind")
+                : "unknown",
           });
           // Retornar imediatamente com o selectionContract
           return {
@@ -333,7 +717,7 @@ export async function applyActions(actions, ctx, targets) {
       } catch (error) {
         logDev?.("ACTION_HANDLER_ERROR", {
           ...actionInfo,
-          error: error.message,
+          error: errorMessage(error, `Action "${action.type}" threw.`),
         });
         console.error(
           `Error executing registered handler for action type "${action.type}":`,
@@ -348,7 +732,7 @@ export async function applyActions(actions, ctx, targets) {
           success: false,
           executed,
           failedAction: action.type,
-          reason: error.message || `Action "${action.type}" threw.`,
+          reason: errorMessage(error, `Action "${action.type}" threw.`),
           error,
           action,
           skippedCount,
@@ -360,7 +744,7 @@ export async function applyActions(actions, ctx, targets) {
     return createActionResult({
       success: false,
       executed,
-      reason: err.message || "Error while applying actions.",
+      reason: errorMessage(err, "Error while applying actions."),
       error: err,
       skippedCount,
     });
@@ -369,22 +753,41 @@ export async function applyActions(actions, ctx, targets) {
   return createActionResult({ success: true, executed, skippedCount });
 }
 
-function getContextPathValue(ctx, path) {
+function getContextPathValue(
+  ctx: PreviewContext | null | undefined,
+  path: string | null | undefined,
+): unknown {
   if (!ctx || typeof path !== "string" || !path) return undefined;
-  if (!path.includes(".")) return ctx[path];
+  if (!path.includes(".")) return readContextValue(ctx, path);
   return path
     .split(".")
     .filter(Boolean)
-    .reduce((value, key) => (value == null ? undefined : value[key]), ctx);
+    .reduce<unknown>(
+      (value, key) =>
+        value === null || value === undefined || typeof value !== "object"
+          ? undefined
+          : Reflect.get(value, key),
+      ctx,
+    );
 }
 
-function resolveNumberFromContext(ref, ctx) {
+function resolveNumberFromContext(
+  ref:
+    | string
+    | number
+    | LegacyNumberReference
+    | null
+    | undefined,
+  ctx: PreviewContext,
+): number | null {
   if (ref === undefined || ref === null) return null;
   if (Number.isFinite(Number(ref))) return Number(ref);
   const key =
     typeof ref === "string"
       ? ref
-      : ref.key || ref.contextKey || ref.path || ref.resultKey || null;
+      : typeof ref === "object"
+        ? ref.key || ref.contextKey || ref.path || ref.resultKey || null
+        : null;
   const fallback =
     typeof ref === "object" && ref !== null
       ? ref.defaultValue ?? ref.default ?? ref.fallback
@@ -395,15 +798,22 @@ function resolveNumberFromContext(ref, ctx) {
   return Number.isFinite(numeric) ? Math.floor(numeric) : null;
 }
 
-function applyContextMaxLevelFilter(filters, action, ctx) {
+function applyContextMaxLevelFilter(
+  filters: PreviewFilter,
+  action: PreviewAction,
+  ctx: PreviewContext,
+): void {
   const maxLevel = resolveNumberFromContext(action?.maxLevelFromContext, ctx);
-  if (!Number.isFinite(maxLevel)) return;
+  if (maxLevel === null || !Number.isFinite(maxLevel)) return;
   filters.maxLevel = Number.isFinite(filters.maxLevel)
-    ? Math.min(filters.maxLevel, maxLevel)
+    ? Math.min(filters.maxLevel ?? maxLevel, maxLevel)
     : maxLevel;
 }
 
-function getFieldCounterContextKey(action, counterType) {
+function getFieldCounterContextKey(
+  action: PreviewAction,
+  counterType: string,
+): string {
   return (
     action?.contextKey ||
     action?.storeAs ||
@@ -412,12 +822,17 @@ function getFieldCounterContextKey(action, counterType) {
   );
 }
 
-function writePreviewFieldCounterCount(engine, action, ctx, player) {
+function writePreviewFieldCounterCount(
+  engine: EffectEngine,
+  action: PreviewAction,
+  ctx: PreviewContext,
+  player: ActionRuntimePlayer,
+): void {
   if (!ctx || typeof ctx !== "object") return;
   const counterType = action?.counterType || "default";
   const total = countPreviewFieldCounters(engine, action, ctx, player);
   const contextKey = getFieldCounterContextKey(action, counterType);
-  if (contextKey) ctx[contextKey] = total;
+  if (contextKey) writeContextValue(ctx, contextKey, total);
   ctx.lastFieldCounterCount = total;
   ctx.fieldCounterCounts = {
     ...(ctx.fieldCounterCounts || {}),
@@ -425,7 +840,10 @@ function writePreviewFieldCounterCount(engine, action, ctx, player) {
   };
 }
 
-function buildPreviewFilters(action, ctx = {}) {
+function buildPreviewFilters(
+  action: PreviewAction,
+  ctx: PreviewContext = {},
+): PreviewFilter {
   const filters = { ...(action?.filters || {}) };
   if (action?.archetype && !filters.archetype) {
     filters.archetype = action.archetype;
@@ -464,11 +882,21 @@ function buildPreviewFilters(action, ctx = {}) {
   return filters;
 }
 
-function buildTargetPreviewFilters(target = {}) {
-  const filters = { ...(target.filters || {}) };
-  const copyIfPresent = (sourceKey, filterKey = sourceKey) => {
-    if (target[sourceKey] !== undefined && filters[filterKey] === undefined) {
-      filters[filterKey] = target[sourceKey];
+function buildTargetPreviewFilters(
+  target: PreviewTarget | LegacyPairedTarget,
+): PreviewFilter {
+  const targetFilters = Reflect.get(target, "filters");
+  const filters: PreviewFilter =
+    targetFilters && typeof targetFilters === "object"
+      ? { ...targetFilters }
+      : {};
+  const copyIfPresent = (
+    sourceKey: string,
+    filterKey: keyof PreviewFilter = sourceKey as keyof PreviewFilter,
+  ): void => {
+    const sourceValue = Reflect.get(target, sourceKey);
+    if (sourceValue !== undefined && filters[filterKey] === undefined) {
+      Reflect.set(filters, filterKey, sourceValue);
     }
   };
 
@@ -514,7 +942,12 @@ function buildTargetPreviewFilters(target = {}) {
   return filters;
 }
 
-function matchesPreviewFilters(engine, card, filters, ctx = {}) {
+function matchesPreviewFilters(
+  engine: EffectEngine,
+  card: PreviewCard | null | undefined,
+  filters: PreviewFilter,
+  ctx: PreviewContext = {},
+): boolean {
   if (!card) return false;
   if (filters.excludeCannotBeSpecialSummoned) {
     const summonProcedure =
@@ -597,12 +1030,13 @@ function matchesPreviewFilters(engine, card, filters, ctx = {}) {
   }
   if (Number.isFinite(filters.level)) {
     const cardLevel = Number(card.level || 0);
+    const requiredLevel = filters.level ?? 0;
     const levelOp = filters.levelOp || "eq";
-    if (levelOp === "eq" && cardLevel !== filters.level) return false;
-    if (levelOp === "lte" && cardLevel > filters.level) return false;
-    if (levelOp === "gte" && cardLevel < filters.level) return false;
-    if (levelOp === "lt" && cardLevel >= filters.level) return false;
-    if (levelOp === "gt" && cardLevel <= filters.level) return false;
+    if (levelOp === "eq" && cardLevel !== requiredLevel) return false;
+    if (levelOp === "lte" && cardLevel > requiredLevel) return false;
+    if (levelOp === "gte" && cardLevel < requiredLevel) return false;
+    if (levelOp === "lt" && cardLevel >= requiredLevel) return false;
+    if (levelOp === "gt" && cardLevel <= requiredLevel) return false;
   }
   if (
     typeof filters.minLevel === "number" &&
@@ -619,29 +1053,40 @@ function matchesPreviewFilters(engine, card, filters, ctx = {}) {
   return true;
 }
 
-function getPreviewTargetOwners(target, ctx, player) {
+function getPreviewTargetOwners(
+  target: PreviewTarget,
+  ctx: PreviewContext,
+  player: ActionRuntimePlayer,
+): ActionRuntimePlayer[] {
   const ownerRule = target?.owner || target?.player || "self";
   const opponent = ctx?.opponent;
   if (ownerRule === "opponent") return opponent ? [opponent] : [];
   if (ownerRule === "both" || ownerRule === "any") {
-    return [player, opponent].filter(Boolean);
+    return [player, opponent].filter(isRuntimePlayer);
   }
   return player ? [player] : [];
 }
 
-function getPreviewCounterOwners(action, ctx, player) {
+function getPreviewCounterOwners(
+  action: Pick<PreviewAction, "owner" | "player">,
+  ctx: PreviewContext,
+  player: ActionRuntimePlayer,
+): ActionRuntimePlayer[] {
   const ownerRule = action?.owner || action?.player || "self";
   const opponent = ctx?.opponent;
   if (ownerRule === "opponent") {
     return opponent ? [opponent] : [];
   }
   if (ownerRule === "any" || ownerRule === "both" || ownerRule === "either") {
-    return [player, opponent].filter(Boolean);
+    return [player, opponent].filter(isRuntimePlayer);
   }
   return player ? [player] : [];
 }
 
-function getPreviewZoneCards(owner, zone) {
+function getPreviewZoneCards(
+  owner: ActionRuntimePlayer | null | undefined,
+  zone: PreviewZone,
+): PreviewCard[] {
   if (!owner || !zone) return [];
   if (zone === "fieldSpell") {
     return owner.fieldSpell ? [owner.fieldSpell] : [];
@@ -650,32 +1095,50 @@ function getPreviewZoneCards(owner, zone) {
   return Array.isArray(cards) ? cards.filter(Boolean) : [];
 }
 
-function getPreviewTargetZones(target, fallbackZone = "field") {
+function getPreviewTargetZones(
+  target: PreviewTarget,
+  fallbackZone: PreviewZone = "field",
+): readonly PreviewZone[] {
   const zoneSpec = target?.zones ?? target?.zone ?? fallbackZone;
   return (Array.isArray(zoneSpec) ? zoneSpec : [zoneSpec]).filter(Boolean);
 }
 
-function getPreviewTargetMinCount(target, fallback = 1) {
+function getPreviewTargetMinCount(target: PreviewTarget, fallback = 1): number {
   const raw = target?.count?.min ?? target?.min ?? fallback;
   const value = Number(raw);
   return Number.isFinite(value) ? Math.max(0, value) : Math.max(0, fallback);
 }
 
-function getPreviewTargetMaxCount(target, fallback = null) {
+function getPreviewTargetMaxCount(
+  target: PreviewTarget,
+  fallback: number | null = null,
+): number | null {
   const raw = target?.count?.max ?? target?.max ?? fallback;
   const value = Number(raw);
   return Number.isFinite(value) ? Math.max(0, value) : null;
 }
 
-function getEffectTargetDefinition(ctx, targetRef) {
+function getEffectTargetDefinition(
+  ctx: PreviewContext,
+  targetRef: string,
+): PreviewTarget | null {
   if (!targetRef) return null;
   const targetDefs = Array.isArray(ctx?.effect?.targets)
     ? ctx.effect.targets
     : [];
-  return targetDefs.find((target) => target?.id === targetRef) || null;
+  return (
+    (targetDefs.find((target) => target?.id === targetRef) as
+      | PreviewTarget
+      | undefined) || null
+  );
 }
 
-function shouldExcludePreviewTargetCard(card, target, ctx, zone) {
+function shouldExcludePreviewTargetCard(
+  card: PreviewCard,
+  target: PreviewTarget,
+  ctx: PreviewContext,
+  zone: PreviewZone,
+): boolean {
   if (!card || card !== ctx?.source) return false;
   if (target?.includeSelf === true || target?.allowSelf === true) return false;
   if (target?.excludeSelf === true) return true;
@@ -688,17 +1151,26 @@ function shouldExcludePreviewTargetCard(card, target, ctx, zone) {
   );
 }
 
-function normalizePreviewList(value, fallback = []) {
+function normalizePreviewList<Value>(
+  value: Value | readonly Value[] | null | undefined,
+  fallback: readonly Value[] = [],
+): readonly Value[] {
   if (Array.isArray(value)) return value.filter(Boolean);
   if (value === undefined || value === null) return fallback;
-  return [value];
+  return [value as Value];
 }
 
-function getPairedPreviewTargetSpec(target = {}) {
+function getPairedPreviewTargetSpec(
+  target: PreviewTarget,
+): LegacyPairedTarget | null {
   return target.pairedTarget || target.requiresPairedTarget || null;
 }
 
-function comparePairedPreviewValues(left, op = "eq", right) {
+function comparePairedPreviewValues(
+  left: unknown,
+  op: string = "eq",
+  right: unknown,
+): boolean {
   if (op === "eq" || op === "==" || op === "===") return left === right;
   if (op === "neq" || op === "!=" || op === "!==") return left !== right;
 
@@ -714,7 +1186,11 @@ function comparePairedPreviewValues(left, op = "eq", right) {
   return false;
 }
 
-function pairedPreviewComparisonsPass(sourceCard, pairedCard, pairSpec = {}) {
+function pairedPreviewComparisonsPass(
+  sourceCard: PreviewCard,
+  pairedCard: PreviewCard,
+  pairSpec: LegacyPairedTarget,
+): boolean {
   const comparisons = [
     ...normalizePreviewList(pairSpec.compareAttribute),
     ...normalizePreviewList(pairSpec.compareAttributes),
@@ -734,13 +1210,19 @@ function pairedPreviewComparisonsPass(sourceCard, pairedCard, pairSpec = {}) {
   });
 }
 
-function previewTargetHasPairedCandidate(engine, sourceCard, pairSpec, ctx, player) {
+function previewTargetHasPairedCandidate(
+  engine: EffectEngine,
+  sourceCard: PreviewCard,
+  pairSpec: LegacyPairedTarget | null,
+  ctx: PreviewContext,
+  player: ActionRuntimePlayer,
+): boolean {
   if (!pairSpec) return true;
   const zones = normalizePreviewList(pairSpec.zones ?? pairSpec.zone, ["field"]);
   const filters = buildTargetPreviewFilters(pairSpec);
-  for (const owner of getPreviewTargetOwners(pairSpec, ctx, player)) {
+  for (const owner of getPreviewTargetOwners(pairSpec as PreviewTarget, ctx, player)) {
     for (const zone of zones) {
-      for (const pairedCard of getPreviewZoneCards(owner, zone)) {
+      for (const pairedCard of getPreviewZoneCards(owner, zone as PreviewZone)) {
         if (!pairedCard) continue;
         if (
           pairSpec.excludeSameCard !== false &&
@@ -765,18 +1247,35 @@ function previewTargetHasPairedCandidate(engine, sourceCard, pairSpec, ctx, play
   return false;
 }
 
-function previewTargetCandidateMatches(engine, card, target, ctx, player) {
+function previewTargetCandidateMatches(
+  engine: EffectEngine,
+  card: PreviewCard,
+  target: PreviewTarget,
+  ctx: PreviewContext,
+  player: ActionRuntimePlayer,
+): boolean {
   if (!card) return false;
   const pairSpec = getPairedPreviewTargetSpec(target);
   return previewTargetHasPairedCandidate(engine, card, pairSpec, ctx, player);
 }
 
-function collectPreviewTargetEntries(engine, target, ctx, player) {
+interface PreviewTargetEntry {
+  readonly owner: ActionRuntimePlayer;
+  readonly zone: PreviewZone;
+  readonly card: PreviewCard;
+}
+
+function collectPreviewTargetEntries(
+  engine: EffectEngine,
+  target: PreviewTarget,
+  ctx: PreviewContext,
+  player: ActionRuntimePlayer,
+): PreviewTargetEntry[] {
   const owners = getPreviewTargetOwners(target, ctx, player);
   const zones = getPreviewTargetZones(target);
   const filters = buildTargetPreviewFilters(target);
-  const entries = [];
-  const seen = new Set();
+  const entries: PreviewTargetEntry[] = [];
+  const seen = new Set<PreviewCard>();
 
   for (const owner of owners) {
     for (const zone of zones) {
@@ -796,13 +1295,24 @@ function collectPreviewTargetEntries(engine, target, ctx, player) {
   return entries;
 }
 
-function getPreviewMoveDestinationOwner(action, ctx, sourceOwner, player) {
+function getPreviewMoveDestinationOwner(
+  action: PreviewAction,
+  ctx: PreviewContext,
+  sourceOwner: ActionRuntimePlayer,
+  player: ActionRuntimePlayer,
+): ActionRuntimePlayer | null {
   if (action?.player === "self") return player || ctx?.player || sourceOwner;
   if (action?.player === "opponent") return ctx?.opponent || sourceOwner;
   return sourceOwner || player || ctx?.player || null;
 }
 
-function recordPreviewMoveCandidates(engine, action, ctx, player, previewMoves) {
+function recordPreviewMoveCandidates(
+  engine: EffectEngine,
+  action: PreviewAction,
+  ctx: PreviewContext,
+  player: ActionRuntimePlayer,
+  previewMoves: PreviewMove[],
+): void {
   if (action?.type !== "move" || !Array.isArray(previewMoves)) return;
   const toZone = action.to || action.toZone;
   if (!toZone || !action.targetRef) return;
@@ -846,16 +1356,16 @@ function recordPreviewMoveCandidates(engine, action, ctx, player, previewMoves) 
 }
 
 function countPreviewTargetCandidates(
-  engine,
-  target,
-  ctx,
-  player,
-  previewMoves = [],
-) {
+  engine: EffectEngine,
+  target: PreviewTarget,
+  ctx: PreviewContext,
+  player: ActionRuntimePlayer,
+  previewMoves: readonly PreviewMove[] = [],
+): number {
   const owners = getPreviewTargetOwners(target, ctx, player);
   const zones = getPreviewTargetZones(target);
   const filters = buildTargetPreviewFilters(target);
-  const seen = new Set();
+  const seen = new Set<PreviewCard>();
   let count = 0;
 
   for (const owner of owners) {
@@ -898,12 +1408,12 @@ function countPreviewTargetCandidates(
 }
 
 function checkPreviewMoveTargetAvailability(
-  engine,
-  action,
-  ctx,
-  player,
-  previewMoves,
-) {
+  engine: EffectEngine,
+  action: PreviewAction,
+  ctx: PreviewContext,
+  player: ActionRuntimePlayer,
+  previewMoves: readonly PreviewMove[],
+): PreviewResult {
   if (action?.type !== "move") return { ok: true };
   const toZone = action.to || action.toZone;
   if (toZone === "field") {
@@ -937,12 +1447,12 @@ function checkPreviewMoveTargetAvailability(
 }
 
 function checkRequiredOptionalTargetsPreview(
-  engine,
-  action,
-  ctx,
-  player,
-  previewMoves,
-) {
+  engine: EffectEngine,
+  action: PreviewAction,
+  ctx: PreviewContext,
+  player: ActionRuntimePlayer,
+  previewMoves: readonly PreviewMove[],
+): PreviewResult {
   if (action?.optional === true) return { ok: true };
   const mustResolve =
     action?.allowCancel === false || action?.required === true;
@@ -972,7 +1482,11 @@ function checkRequiredOptionalTargetsPreview(
   return { ok: true };
 }
 
-function matchesCounterPreviewFilters(engine, card, filters = {}) {
+function matchesCounterPreviewFilters(
+  engine: EffectEngine,
+  card: PreviewCard | null | undefined,
+  filters: PreviewFilter = {},
+): boolean {
   if (!card) return false;
   if (filters.requireFaceup === true && card.isFacedown) return false;
   if (filters.cardKind && !cardMatchesKind(card, filters.cardKind)) {
@@ -988,7 +1502,7 @@ function matchesCounterPreviewFilters(engine, card, filters = {}) {
   }
   if (filters.type) {
     const types = Array.isArray(card.types) ? card.types : [card.type];
-    if (!types.includes(filters.type)) return false;
+    if (!types.includes(filters.type as string | null | undefined)) return false;
   }
   if (filters.attribute && card.attribute !== filters.attribute) return false;
   if (filters.name && card.name !== filters.name) return false;
@@ -1009,7 +1523,12 @@ function matchesCounterPreviewFilters(engine, card, filters = {}) {
   return true;
 }
 
-function countPreviewFieldCounters(engine, action, ctx, player) {
+function countPreviewFieldCounters(
+  engine: EffectEngine,
+  action: PreviewAction,
+  ctx: PreviewContext,
+  player: ActionRuntimePlayer,
+): number {
   const counterType = action?.counterType || "default";
   const zones = Array.isArray(action?.zones)
     ? action.zones
@@ -1034,7 +1553,12 @@ function countPreviewFieldCounters(engine, action, ctx, player) {
   return total;
 }
 
-function countPreviewFieldCardsForSpec(engine, spec = {}, ctx, player) {
+function countPreviewFieldCardsForSpec(
+  engine: EffectEngine,
+  spec: FieldCountSpec,
+  ctx: PreviewContext,
+  player: ActionRuntimePlayer,
+): number {
   const zones = Array.isArray(spec?.zones)
     ? spec.zones
     : [spec?.zone || "field"];
@@ -1056,7 +1580,12 @@ function countPreviewFieldCardsForSpec(engine, spec = {}, ctx, player) {
   return count;
 }
 
-function resolvePreviewAddCounterAmount(engine, action, ctx, player) {
+function resolvePreviewAddCounterAmount(
+  engine: EffectEngine,
+  action: PreviewAction,
+  ctx: PreviewContext,
+  player: ActionRuntimePlayer,
+): number {
   if (action?.amountFromFieldCount) {
     const spec = action.amountFromFieldCount;
     const count = countPreviewFieldCardsForSpec(engine, spec, ctx, player);
@@ -1083,7 +1612,11 @@ function resolvePreviewAddCounterAmount(engine, action, ctx, player) {
   return Math.max(0, Math.floor(Number(action?.amount || 1)));
 }
 
-function countPreviewOpponentDestroyTargets(engine, action, ctx) {
+function countPreviewOpponentDestroyTargets(
+  engine: EffectEngine,
+  action: PreviewAction,
+  ctx: PreviewContext,
+): number | null {
   if (action?.targetCountFromContext) return null;
 
   const opponent = ctx?.opponent;
@@ -1124,49 +1657,66 @@ function countPreviewOpponentDestroyTargets(engine, action, ctx) {
   return count;
 }
 
-function getSourceOwnersForPreview(action, ctx, player) {
+function getSourceOwnersForPreview(
+  action: PreviewAction,
+  ctx: PreviewContext,
+  player: ActionRuntimePlayer,
+): ActionRuntimePlayer[] {
   const scope = action?.sourceOwner || action?.sourceScope || action?.scope || "self";
   const opponent = ctx?.opponent;
   if (scope === "opponent") {
     return opponent ? [opponent] : [];
   }
   if (scope === "both" || scope === "any") {
-    return [player, opponent].filter(Boolean);
+    return [player, opponent].filter(isRuntimePlayer);
   }
   return player ? [player] : [];
 }
 
-function countDistinctPreviewNames(cards = []) {
-  const names = new Set();
+function countDistinctPreviewNames(cards: readonly PreviewCard[] = []): number {
+  const names = new Set<string>();
   for (const card of cards) {
     names.add(card?.name || `id:${card?.id ?? "unknown"}`);
   }
   return names.size;
 }
 
-function getPreviewCardInstanceId(card) {
+function getPreviewCardInstanceId(
+  card: PreviewCard | null | undefined,
+): number | string | null {
   return card?.instanceId ?? card?._instanceId ?? card?.uuid ?? card?.simInstanceId ?? null;
 }
 
-function hasAscensionMaterialPreviewCandidate(action, ctx, zoneCards = []) {
+function hasAscensionMaterialPreviewCandidate(
+  action: PreviewAction,
+  ctx: PreviewContext,
+  zoneCards: readonly PreviewCard[] = [],
+): boolean | null {
   if (action?.targetRef !== "ascension_material") return null;
-  const materials = Array.isArray(ctx?.source?.ascensionMaterials)
-    ? ctx.source.ascensionMaterials
+  const source = ctx?.source as PreviewCard | null | undefined;
+  const materials = Array.isArray(source?.ascensionMaterials)
+    ? source.ascensionMaterials
     : [];
-  const materialInstanceIds = new Set(
+  const materialInstanceIds = new Set<number | string>(
     materials
       .map((entry) => entry?.instanceId)
       .filter((value) => value !== undefined && value !== null),
   );
   if (materialInstanceIds.size === 0) return false;
-  return zoneCards.some((card) =>
-    materialInstanceIds.has(getPreviewCardInstanceId(card)),
-  );
+  return zoneCards.some((card) => {
+    const instanceId = getPreviewCardInstanceId(card);
+    return instanceId !== null && materialInstanceIds.has(instanceId);
+  });
 }
 
-function hasSpecialSummonCandidate(engine, action, ctx) {
+function hasSpecialSummonCandidate(
+  engine: EffectEngine,
+  action: PreviewAction,
+  ctx: PreviewContext,
+): boolean {
   const player = ctx?.player;
   if (!player) return false;
+  const source = ctx.source as PreviewCard | null | undefined;
   const destinationPlayer =
     action.summonToOwner === "opponent" ? ctx?.opponent : player;
 
@@ -1179,7 +1729,7 @@ function hasSpecialSummonCandidate(engine, action, ctx) {
   if (zoneCards.length === 0) return false;
 
   if (action.requireSource) {
-    return zoneCards.includes(ctx?.source);
+    return source ? zoneCards.includes(source) : false;
   }
   const ascensionMaterialPreview = hasAscensionMaterialPreviewCandidate(
     action,
@@ -1191,8 +1741,12 @@ function hasSpecialSummonCandidate(engine, action, ctx) {
 
   const filters = buildPreviewFilters(action, ctx);
   if (action.matchLevelRef) {
-    const levelCard = ctx?.[action.matchLevelRef] || null;
-    const levelValue = Number(levelCard?.level);
+    const levelCard = readContextValue(ctx, action.matchLevelRef);
+    const levelValue = Number(
+      levelCard && typeof levelCard === "object"
+        ? Reflect.get(levelCard, "level")
+        : undefined,
+    );
     if (!Number.isFinite(levelValue) || levelValue <= 0) return false;
     filters.level = levelValue;
     filters.levelOp = filters.levelOp || action.levelOp || "eq";
@@ -1213,7 +1767,9 @@ function hasSpecialSummonCandidate(engine, action, ctx) {
     if (restrictionCheck?.ok === false) return false;
     return matchesPreviewFilters(engine, card, filters);
   });
-  const min = Number(action.count?.min ?? 1);
+  const min = Number(
+    typeof action.count === "object" ? action.count.min ?? 1 : 1,
+  );
   const requiredCount = Number.isFinite(min) && min > 0 ? min : 1;
   const availableCount =
     action.distinctNames === true
@@ -1223,12 +1779,15 @@ function hasSpecialSummonCandidate(engine, action, ctx) {
   return availableCount >= requiredCount;
 }
 
-function getGraveyardOwnersForActionScope(action, ctx) {
+function getGraveyardOwnersForActionScope(
+  action: PreviewAction,
+  ctx: PreviewContext,
+): ActionRuntimePlayer[] {
   const player = ctx?.player;
   const opponent = ctx?.opponent;
   const scope = action?.scope || "self";
   if (scope === "both") {
-    return [player, opponent].filter(Boolean);
+    return [player, opponent].filter(isRuntimePlayer);
   }
   if (scope === "opponent") {
     return opponent ? [opponent] : [];
@@ -1236,19 +1795,38 @@ function getGraveyardOwnersForActionScope(action, ctx) {
   return player ? [player] : [];
 }
 
-function isChoiceCaseAllowedInPreview(engine, caseEntry, ctx) {
+function isChoiceCaseAllowedInPreview(
+  engine: EffectEngine,
+  caseEntry: ActionCase,
+  ctx: PreviewContext,
+): boolean {
   const conditions = Array.isArray(caseEntry?.conditions)
     ? caseEntry.conditions
     : [];
   if (conditions.length > 0) {
     const conditionResult = engine?.evaluateConditions?.(conditions, ctx);
-    if (!conditionResult?.ok) return false;
+    if (
+      !conditionResult ||
+      typeof conditionResult !== "object" ||
+      Reflect.get(conditionResult, "ok") !== true
+    ) {
+      return false;
+    }
   }
 
   const targets = Array.isArray(caseEntry?.targets) ? caseEntry.targets : [];
   if (targets.length > 0) {
-    const targetResult = engine?.resolveTargets?.(targets, ctx, null);
-    if (targetResult?.ok === false) return false;
+    const targetResult =
+      typeof engine?.resolveTargets === "function"
+        ? Reflect.apply(engine.resolveTargets, engine, [targets, ctx, null])
+        : null;
+    if (
+      targetResult &&
+      typeof targetResult === "object" &&
+      Reflect.get(targetResult, "ok") === false
+    ) {
+      return false;
+    }
   }
 
   const caseActions = Array.isArray(caseEntry?.actions)
@@ -1269,7 +1847,11 @@ function isChoiceCaseAllowedInPreview(engine, caseEntry, ctx) {
  * @param {Object} ctx - Context object
  * @returns {Object} Result with ok status and optional reason
  */
-export function checkActionPreviewRequirements(actions, ctx) {
+export function checkActionPreviewRequirements(
+  this: EffectEngine,
+  actions: readonly CardAction[],
+  ctx: PreviewContext,
+): PreviewResult {
   if (!Array.isArray(actions) || actions.length === 0) {
     return { ok: true };
   }
@@ -1283,9 +1865,9 @@ export function checkActionPreviewRequirements(actions, ctx) {
     fieldCounterCounts: { ...(ctx?.fieldCounterCounts || {}) },
   };
 
-  const hasOtherActions = (action) =>
+  const hasOtherActions = (action: CardAction): boolean =>
     actions.some((candidate) => candidate && candidate !== action);
-  const previewMoves = [];
+  const previewMoves: PreviewMove[] = [];
 
   for (const action of actions) {
     if (!action || !action.type) continue;
@@ -1295,7 +1877,9 @@ export function checkActionPreviewRequirements(actions, ctx) {
     }
 
     if (action.type === "choose_action_case") {
-      const cases = Array.isArray(action.cases) ? action.cases : [];
+      const cases: readonly ActionCase[] = Array.isArray(action.cases)
+        ? action.cases
+        : [];
       const hasAllowedCase = cases.some((caseEntry) =>
         isChoiceCaseAllowedInPreview(this, caseEntry, ctx),
       );
@@ -1398,19 +1982,16 @@ export function checkActionPreviewRequirements(actions, ctx) {
         : 1;
       const targetRef = action.targetRef || "self";
       const referencedTargets =
+        previewCtx._actionTargets?.[targetRef] ||
+        previewCtx.activationContext?.costSelections?.[targetRef];
+      const targetCards =
         targetRef === "self"
-          ? [previewCtx.source]
-          : previewCtx._actionTargets?.[targetRef] ||
-            previewCtx.activationContext?.costSelections?.[targetRef] ||
-            [];
-      const targetCards = Array.isArray(referencedTargets)
-        ? referencedTargets
-        : [referencedTargets];
+          ? previewCtx.source
+            ? [previewCtx.source]
+            : []
+          : getTargetCards({ referencedTargets });
       const canRemove = targetCards.some((card) => {
-        const current =
-          typeof card?.getCounter === "function"
-            ? Number(card.getCounter(counterType) || 0)
-            : Number(card?.counters?.get?.(counterType) || 0);
+        const current = getRuntimeCounter(card, counterType);
         return action.allowBelow === true ? current > 0 : current >= amount;
       });
       if (!canRemove) {
@@ -1462,7 +2043,8 @@ export function checkActionPreviewRequirements(actions, ctx) {
         action.type === "search_then_optional_special_summon_from_hand" ||
         action.mode === "search_any";
       const sourceZone = action.zone || (inferredSearch ? "deck" : "graveyard");
-      const zone = player[sourceZone] || [];
+      const zoneValue = Reflect.get(player, String(sourceZone));
+      const zone: ActionRuntimeCard[] = Array.isArray(zoneValue) ? zoneValue : [];
       const baseFilters = action.filters || {};
       const filters = { ...baseFilters };
       if (inferredSearch) {
@@ -1483,7 +2065,10 @@ export function checkActionPreviewRequirements(actions, ctx) {
         }
       }
       const count = action.count || { min: 1, max: 1 };
-      const min = Math.max(count.min || 0, 0);
+      const min = Math.max(
+        typeof count === "object" ? count.min || 0 : Number(count || 0),
+        0,
+      );
       if (min > 0) {
         const hasCandidate = zone.some((card) => {
           if (!card) return false;
@@ -1581,7 +2166,13 @@ export function checkActionPreviewRequirements(actions, ctx) {
     }
 
     if (action.type === "synchro_summon_from_extra_deck") {
-      if (!hasSynchroSummonPreviewCandidate(this, action, ctx)) {
+      if (
+        !Reflect.apply(hasSynchroSummonPreviewCandidate, undefined, [
+          this,
+          action,
+          ctx,
+        ])
+      ) {
         return {
           ok: false,
           reason: "No legal Synchro Summon is available.",
@@ -1598,11 +2189,7 @@ export function checkActionPreviewRequirements(actions, ctx) {
       const counterType = action.counterType || "judgment_marker";
       const counterMultiplier = action.counterMultiplier || 500;
       const counterCount =
-        typeof source?.getCounter === "function"
-          ? source.getCounter(counterType)
-          : source?.counters?.get
-            ? source.counters.get(counterType)
-            : 0;
+        getRuntimeCounter(source, counterType);
       const maxAtk = counterCount * counterMultiplier;
       if (maxAtk <= 0) {
         return {
@@ -1700,7 +2287,7 @@ export function checkActionPreviewRequirements(actions, ctx) {
         name: "Void Hollow",
         cardKind: "monster",
       };
-      const matchesFilters = (card) => {
+      const matchesFilters = (card: ActionRuntimeCard | null): boolean => {
         if (!card) return false;
         if (filters.cardKind && !cardMatchesKind(card, filters.cardKind)) {
           return false;
@@ -1745,8 +2332,11 @@ export function checkActionPreviewRequirements(actions, ctx) {
         if (zoneName === "fieldSpell") {
           conditionMet = player.fieldSpell?.name === cardName;
         } else {
-          const zone = player[zoneName] || [];
-          conditionMet = zone.some((c) => c && c.name === cardName);
+          const zoneValue = Reflect.get(player, String(zoneName));
+          const zone: ActionRuntimeCard[] = Array.isArray(zoneValue)
+            ? zoneValue
+            : [];
+          conditionMet = zone.some((c: ActionRuntimeCard) => c && c.name === cardName);
         }
 
         if (!conditionMet) {
@@ -1763,8 +2353,11 @@ export function checkActionPreviewRequirements(actions, ctx) {
           return { ok: false, reason: "Invalid condition configuration." };
         }
 
-        const zone = player[zoneName] || [];
-        const conditionMet = zone.some((c) => {
+        const zoneValue = Reflect.get(player, String(zoneName));
+        const zone: ActionRuntimeCard[] = Array.isArray(zoneValue)
+          ? zoneValue
+          : [];
+        const conditionMet = zone.some((c: ActionRuntimeCard) => {
           if (!c || c.isFacedown) return false;
           if (Array.isArray(c.types)) {
             return c.types.includes(typeName);
@@ -1810,7 +2403,8 @@ export function checkActionPreviewRequirements(actions, ctx) {
       const zones = Array.isArray(costTarget.zones)
         ? costTarget.zones
         : [costTarget.zone || "hand"];
-      const owners = getPreviewTargetOwners(costTarget, ctx, player);
+      const previewCostTarget = costTarget as PreviewTarget;
+      const owners = getPreviewTargetOwners(previewCostTarget, ctx, player);
       if (owners.length === 0 || zones.length === 0) {
         return { ok: false, reason: "Cost zone not found." };
       }
@@ -1818,7 +2412,7 @@ export function checkActionPreviewRequirements(actions, ctx) {
         zones.flatMap((zoneName) => getPreviewZoneCards(owner, zoneName)),
       );
 
-      const filters = buildTargetPreviewFilters(costTarget);
+      const filters = buildTargetPreviewFilters(previewCostTarget);
       const validCosts = zoneCards.filter((card) =>
         matchesPreviewFilters(this, card, filters, ctx),
       );

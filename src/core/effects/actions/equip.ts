@@ -1,3 +1,44 @@
+import type Game from "../../Game.js";
+import type {
+  ActionRuntimeCard,
+  ActionRuntimePlayer,
+  EffectContext,
+  LegacyActionHandlerResult,
+  ResolvedTargetMap,
+} from "../../contracts/actionRuntime.js";
+import type { ActionOf } from "../../contracts/actions.js";
+import type { CanonicalZone } from "../../contracts/zones.js";
+
+interface EquipRuntimeCard extends ActionRuntimeCard {
+  equipAtkBonus?: number;
+  equipDefBonus?: number;
+  equipExtraAttacks?: number;
+  grantsBattleIndestructible?: boolean;
+  grantsCrescentShieldGuard?: boolean;
+  extraAttacks?: number;
+  attacksUsedThisTurn?: number;
+  battleIndestructible?: boolean;
+}
+
+interface EquipActionHost {
+  game: Game;
+  readonly ui: {
+    showSickleSelectionModal?(
+      candidates: readonly ActionRuntimeCard[],
+      maxSelect: number,
+      onConfirm: (cards: ActionRuntimeCard[]) => void,
+      onCancel: () => void,
+    ): void;
+  } | null;
+  findCardZone(
+    player: ActionRuntimePlayer,
+    card: ActionRuntimeCard,
+  ): CanonicalZone | null;
+  updatePassiveBuffs(): void;
+}
+
+type EquipAction = ActionOf<"equip"> & { readonly contextLabel?: string };
+
 /**
  * Equip Actions - equipment handling
  * Extracted from EffectEngine.js – preserving original logic and signatures.
@@ -10,14 +51,22 @@
  * @param {Object} targets - Resolved targets
  * @returns {Promise<boolean>} Whether equip was successful
  */
-export async function applyEquip(action, ctx, targets) {
-  const equipCard = ctx.source;
-  const player = ctx.player;
+export async function applyEquip(
+  this: EquipActionHost,
+  action: EquipAction,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+): Promise<LegacyActionHandlerResult> {
+  const equipCard = ctx.source as EquipRuntimeCard;
+  const player = ctx.player as ActionRuntimePlayer;
 
-  let targetCards = targets[action.targetRef] || [];
-  if (!Array.isArray(targetCards)) {
-    targetCards = targetCards ? [targetCards] : [];
-  }
+  const resolvedTarget = targets[action.targetRef || ""];
+  const targetCards: Array<ActionRuntimeCard | { card: ActionRuntimeCard }> =
+    Array.isArray(resolvedTarget)
+      ? resolvedTarget
+      : resolvedTarget
+        ? [resolvedTarget]
+        : [];
   if (!targetCards.length) {
     const sourceZone =
       typeof this.findCardZone === "function"
@@ -39,9 +88,9 @@ export async function applyEquip(action, ctx, targets) {
     return false;
   }
 
-  const target = targetCards[0];
-  const detachFromPreviousHost = () => {
-    const previousHost = equipCard.equippedTo;
+  const target = targetCards[0] as EquipRuntimeCard;
+  const detachFromPreviousHost = (): void => {
+    const previousHost = equipCard.equippedTo as EquipRuntimeCard | null;
     if (!previousHost || previousHost === target) return;
 
     if (Array.isArray(previousHost.equips)) {
@@ -127,11 +176,11 @@ export async function applyEquip(action, ctx, targets) {
 
   if (typeof action.atkBonus === "number") {
     equipCard.equipAtkBonus = action.atkBonus;
-    target.atk += action.atkBonus;
+    target.atk = (target.atk ?? 0) + action.atkBonus;
   }
   if (typeof action.defBonus === "number") {
     equipCard.equipDefBonus = action.defBonus;
-    target.def += action.defBonus;
+    target.def = (target.def ?? 0) + action.defBonus;
   }
   if (typeof action.extraAttacks === "number" && action.extraAttacks !== 0) {
     equipCard.equipExtraAttacks = action.extraAttacks;
@@ -151,7 +200,7 @@ export async function applyEquip(action, ctx, targets) {
     equipCard.grantsCrescentShieldGuard = false;
   }
 
-  const refreshEquippedTargetAttackState = () => {
+  const refreshEquippedTargetAttackState = (): void => {
     if (typeof this.updatePassiveBuffs === "function") {
       this.updatePassiveBuffs();
     }
@@ -184,11 +233,12 @@ export async function applyEquip(action, ctx, targets) {
  * @param {Function} onCancel - Cancel callback
  */
 export function showSickleSelectionModal(
-  candidates,
-  maxSelect,
-  onConfirm,
-  onCancel
-) {
+  this: EquipActionHost,
+  candidates: ActionRuntimeCard[],
+  maxSelect: number,
+  onConfirm: (cards: ActionRuntimeCard[]) => void,
+  onCancel: () => void,
+): void {
   if (this.ui && typeof this.ui.showSickleSelectionModal === "function") {
     this.ui.showSickleSelectionModal(
       candidates,
