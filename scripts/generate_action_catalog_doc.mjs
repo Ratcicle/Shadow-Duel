@@ -113,9 +113,9 @@ function buildMarkdown() {
   const lines = [
     "# Catalogo de actions",
     "",
-    "> Gerado por `npm run generate:actions`. Atualize `src/core/actionHandlers/actionCatalog.js`, regenere este arquivo e valide com `npm run check:actions-doc`.",
+    "> Gerado por `npm run generate:actions`. Atualize `src/core/actionHandlers/actionCatalog.ts` e `ACTION_BINDINGS`, regenere este arquivo e valide com `npm run check:actions-doc`.",
     "",
-    "Este catalogo descreve o contrato declarativo de cada `action.type` registrado no Shadow Duel. O runtime continua vindo de `src/core/actionHandlers/wiring.js`; este documento serve para criar cartas, revisar handlers e validar o banco de cartas.",
+    "Este catalogo descreve o contrato declarativo de cada `action.type` registrado no Shadow Duel. O runtime vem de `src/core/actionHandlers/actionBindings.ts`, aplicado por `wiring.ts`; este documento serve para criar cartas, revisar handlers e validar o banco de cartas.",
     "",
     `Total de actions catalogadas: ${Object.keys(ACTION_CATALOG).length}.`,
     "",

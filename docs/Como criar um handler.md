@@ -1,48 +1,61 @@
 # Como criar um handler
 
 Handlers executam as `actions` declaradas nas cartas. Eles ficam em
-`src/core/actionHandlers/` e são registrados em `src/core/actionHandlers/wiring.js`.
+`src/core/actionHandlers/` e são ligados ao runtime pelo manifest tipado
+`src/core/actionHandlers/actionBindings.ts`.
 
 Este documento descreve o fluxo atual. Fontes de verdade:
 
-- `src/core/actionHandlers/registry.js`: `ActionHandlerRegistry` e `proxyEngineMethod`.
-- `src/core/actionHandlers/wiring.js`: registro dos `action.type`.
-- `src/core/actionHandlers/actionCatalog.js`: contrato declarativo dos campos.
-- `src/core/effects/actions/core.js`: dispatcher `applyActions`.
-- `src/core/EffectEngine.js`: contexto, conditions, passives e métodos legados.
-- `src/core/actionHandlers/shared.js`: helpers para seleção, custo, summon e zonas.
+- `src/core/contracts/actionRuntime.ts`: contratos de handler, contexto, targets e resultados.
+- `src/core/contracts/actions.ts` e `src/core/contracts/actions/`: `ActionByType` e mapas fechados por domínio.
+- `src/core/actionHandlers/registry.ts`: `ActionHandlerRegistry` e `proxyEngineMethod`.
+- `src/core/actionHandlers/actionBindings.ts`: binding exato de cada `action.type`.
+- `src/core/actionHandlers/actionCatalog.ts`: contrato declarativo dos campos.
+- `src/core/effects/actions/core.ts`: dispatcher `applyActions`.
+- `src/core/EffectEngine.ts`: contexto, conditions, passives e métodos legados.
+- `src/core/actionHandlers/shared.ts`: helpers para seleção, custo, summon e zonas.
 
 ## Estrutura atual
 
 ```txt
 src/core/actionHandlers/
-  blueprints.js    # blueprint/storage actions
-  choice.js        # choose_action_case
-  conditional.js   # conditional_target_actions
-  actionCatalog.js # contratos declarativos das actions
-  destruction.js   # destroy/banish/replacement helpers
-  movement.js      # return_to_hand, bounce_and_summon
-  negation.js      # negação de ativação, efeito, Invocação e fluxos relacionados
-  registry.js      # ActionHandlerRegistry + proxyEngineMethod
-  resources.js     # LP, search, heal, draw-like resource helpers
-  shared.js        # helpers comuns
-  stats.js         # buffs, status, protection, position
-  summon.js        # fachada dos handlers de summon
+  blueprints.ts    # blueprint/storage actions
+  choice.ts        # choose_action_case
+  conditional.ts   # conditional_target_actions
+  actionCatalog.ts # contratos declarativos das actions
+  actionBindings.ts # handlers/proxies ligados a ActionByType
+  destruction.ts   # destroy/banish/replacement helpers
+  movement.ts      # return_to_hand, bounce_and_summon
+  negation.ts      # negação de ativação, efeito, Invocação e fluxos relacionados
+  registry.ts      # ActionHandlerRegistry + proxyEngineMethod
+  resources.ts     # LP, search, heal, draw-like resource helpers
+  shared.ts        # helpers comuns
+  stats.ts         # buffs, status, protection, position
+  summon.ts        # fachada dos handlers de summon
   summon/          # módulos por origem, custo, posição, restrição e Sincro
-  wiring.js        # registerDefaultHandlers
-  index.js         # barrel export preferido
+  wiring.ts        # aplica ACTION_BINDINGS ao registry
+  index.ts         # barrel export preferido
 ```
 
-`src/core/ActionHandlers.js` é uma fachada de compatibilidade. Para código novo,
-importe diretamente de `src/core/actionHandlers/index.js` ou do arquivo de
-categoria. A fachada pode não expor todos os handlers novos.
+`src/core/ActionHandlers.ts` é uma fachada de compatibilidade. Os arquivos
+físicos desta camada são `.ts`, mas imports relativos continuam usando
+specifiers `.js`. Para código novo, importe pelo specifier
+`./actionHandlers/index.js` ou pelo arquivo de categoria correspondente. A
+fachada pode não expor todos os handlers novos.
 
 ## Assinatura
 
-```js
-export async function handleMinhaAction(action, ctx, targets, engine) {
+```ts
+import type { ActionHandler } from "../contracts/actionRuntime.js";
+
+export const handleMinhaAction: ActionHandler<"minha_action"> = async (
+  action,
+  ctx,
+  targets,
+  engine,
+) => {
   return true;
-}
+};
 ```
 
 Parâmetros:
@@ -59,6 +72,8 @@ Retornos aceitos:
 
 - `true`: action executou algo.
 - `false`: action não executou ou não tinha alvo/custo válido.
+- `null`/`undefined`: preservam o resultado legado sem marcar execução.
+- objeto legado com `success`/`executed`: mantém a semântica atual do dispatcher.
 - objeto `{ needsSelection: true, selectionContract, ... }`: pede seleção ao
   fluxo de UI/rede e pausa a resolução.
 
@@ -101,61 +116,82 @@ Não crie handler quando:
 ## Passo a passo
 
 1. Escolha a categoria:
-   - `summon.js` para invocação.
-   - `resources.js` para LP, busca, compra, recuperação.
-   - `destruction.js` para destruição, banish, replacement.
-   - `stats.js` para buffs, status, proteção, posição.
-   - `movement.js` para retorno/bounce.
-   - `negation.js` para negação de ativação, efeito ou Invocação.
-   - `conditional.js`, `choice.js` ou `blueprints.js` para fluxos avançados.
+   - `summon.ts` para invocação.
+   - `resources.ts` para LP, busca, compra, recuperação.
+   - `destruction.ts` para destruição, banish, replacement.
+   - `stats.ts` para buffs, status, proteção, posição.
+   - `movement.ts` para retorno/bounce.
+   - `negation.ts` para negação de ativação, efeito ou Invocação.
+   - `conditional.ts`, `choice.ts` ou `blueprints.ts` para fluxos avançados.
 
-2. Implemente o handler:
+2. Adicione a variante à interface de domínio apropriada em
+   `src/core/contracts/actions/`. `ActionByType`, em
+   `src/core/contracts/actions.ts`, já compõe esses mapas:
 
-```js
-export async function handleMinhaAction(action, ctx, targets, engine) {
-  const game = engine?.game;
-  const { player, opponent, source } = ctx || {};
-  if (!game || !player || !source) return false;
+```ts
+import type { DefineAction } from "./shared.js";
 
-  const cards = targets?.[action.targetRef] || [];
+export interface ResourcesActionMap {
+  minha_action: DefineAction<"minha_action", "targetRef", "player">;
+}
+```
+
+3. Implemente o handler. Mesmo em arquivos físicos `.ts`, preserve `.js` nos
+   imports relativos:
+
+```ts
+import type { ActionHandler } from "../contracts/actionRuntime.js";
+import { resolveTargetCards } from "./shared.js";
+
+export const handleMinhaAction: ActionHandler<"minha_action"> = async (
+  action,
+  ctx,
+  targets,
+  engine,
+) => {
+  const game = engine.game;
+  const { player, source } = ctx;
+  if (!player || !source) return false;
+
+  const cards = resolveTargetCards(action, ctx, targets);
   if (cards.length === 0) return false;
 
   // aplique a regra
   game.updateBoard();
   return true;
-}
+};
 ```
 
-3. Exporte em `src/core/actionHandlers/index.js` se alguém precisar importar
+4. Exporte em `src/core/actionHandlers/index.ts` se alguém precisar importar
    diretamente.
 
-4. Registre em `src/core/actionHandlers/wiring.js`:
+5. Adicione o binding em `src/core/actionHandlers/actionBindings.ts`:
 
-```js
+```ts
 import { handleMinhaAction } from "./stats.js";
 
-export function registerDefaultHandlers(registry) {
-  registry.register("minha_action", handleMinhaAction);
-}
+minha_action: direct("handleMinhaAction", handleMinhaAction),
 ```
 
-5. Adicione o contrato em `src/core/actionHandlers/actionCatalog.js`.
+6. Adicione o contrato em `src/core/actionHandlers/actionCatalog.ts`.
    Declare categoria, resumo, handler, campos obrigatórios/opcionais,
-   `targetRef`, seleção, mutações, preview, exemplos e notas.
+   `targetRef`, seleção, mutações, preview, exemplos e notas. O campo `handler`
+   deve ser exatamente o `handlerId` do binding direto ou `proxy:<method>` para
+   um proxy.
 
-6. Use no modulo de cartas adequado em `src/data/cards/`:
+7. Use no modulo de cartas adequado em `src/data/cards/`:
 
 ```js
 actions: [{ type: "minha_action", targetRef: "my_target" }]
 ```
 
-O validador só reconhece actions registradas em `registerDefaultHandlers` e
-usa o catálogo para validar campos obrigatórios, enums básicos e `targetRef`.
+O typecheck exige keysets idênticos entre `ActionByType`, `ACTION_BINDINGS` e o
+catálogo. O validador também confirma registry, labels, campos e `targetRef`.
 
 ## Trabalhando com targets
 
 Se a carta já declarou `effects[].targets`, consuma via `targets[action.targetRef]`.
-Use os helpers de `shared.js` quando precisar normalizar:
+Use os helpers de `shared.ts` quando precisar normalizar:
 
 - `resolveTargetCards(action, ctx, targets, options)`: pega alvos por `targetRef`
   e aceita fallback controlado.
@@ -169,7 +205,7 @@ Use os helpers de `shared.js` quando precisar normalizar:
 Regra de UI: handler não deve abrir modal próprio se o target pode ser expresso
 em `targets`. Para seleção dinâmica, retorne:
 
-```js
+```ts
 return {
   needsSelection: true,
   selectionContract: {
@@ -190,8 +226,8 @@ return {
 };
 ```
 
-Antes de criar esse fluxo, procure exemplos reais em `resources.js`, `summon.js`
-e `shared.js`, porque os contratos de seleção também alimentam replay/rede.
+Antes de criar esse fluxo, procure exemplos reais em `resources.ts`, `summon.ts`
+e `shared.ts`, porque os contratos de seleção também alimentam replay/rede.
 
 ## Estado, zonas e eventos
 
@@ -232,8 +268,13 @@ complexos, prefira `payCostAndThen` ou um helper existente.
 
 Exemplo atual simplificado de `pay_lp`:
 
-```js
-export async function handlePayLP(action, ctx, targets, engine) {
+```ts
+export const handlePayLP: ActionHandler<"pay_lp"> = async (
+  action,
+  ctx,
+  targets,
+  engine,
+) => {
   const { player } = ctx;
   const game = engine.game;
   if (!player || !game) return false;
@@ -265,7 +306,7 @@ export async function handlePayLP(action, ctx, targets, engine) {
   });
   game.updateBoard();
   return true;
-}
+};
 ```
 
 ## Preview e ativação
@@ -286,12 +327,13 @@ campo cheio, custo de tributo insuficiente, falta de alvo/custo para summon.
 
 Actions antigas podem apontar para métodos do `EffectEngine` com:
 
-```js
-registry.register("draw", proxyEngineMethod("applyDraw"));
+```ts
+draw: proxy("applyDraw"),
 ```
 
-Use `proxyEngineMethod` apenas quando o comportamento já existe como método do
-engine e a assinatura é compatível: `(action, ctx, targets)`.
+Use um binding `proxy` apenas quando o comportamento já existe como método do
+engine e a assinatura é compatível: `(action, ctx, targets)`. O typecheck rejeita
+métodos ausentes ou ligados à variante errada.
 
 Para action nova, prefira handler modular em `actionHandlers/`.
 
@@ -299,15 +341,17 @@ Para action nova, prefira handler modular em `actionHandlers/`.
 
 O catálogo completo fica em
 [Catalogo de actions](./Catalogo%20de%20actions.md). Ele é gerado a partir de
-`src/core/actionHandlers/actionCatalog.js` e precisa cobrir exatamente os
-`action.type` registrados em `src/core/actionHandlers/wiring.js`.
+`src/core/actionHandlers/actionCatalog.ts` e precisa cobrir exatamente os
+`action.type` de `ActionByType` e `ACTION_BINDINGS`.
 
 Use estes comandos depois de adicionar ou alterar action:
 
 ```powershell
+npm run typecheck
 npm run validate:actions
 npm run generate:actions
 npm run check:actions-doc
+npm run check
 ```
 
 ## Boas práticas
@@ -328,14 +372,14 @@ npm run check:actions-doc
 ## Checklist
 
 1. Handler está no arquivo de categoria correto.
-2. Action está registrada em `wiring.js`.
-3. Action está documentada em `ACTION_CATALOG`, com exemplo válido.
-4. Se precisar de import direto, está exportada em `actionHandlers/index.js`.
-5. A carta usa exatamente o mesmo `type` registrado.
-6. Targets/custos são validados antes de mutar.
-7. Movimento usa helper/API que emite eventos necessários.
-8. UI não é chamada diretamente quando `targets` resolve o caso.
-9. `needsSelection` segue o formato esperado.
-10. Preview foi atualizado se a action pode falhar antes da ativação.
-11. `npm run validate:actions` passa.
-12. O jogo abre sem erros do `CardDatabaseValidator`.
+2. Variante está no mapa de domínio que compõe `ActionByType`.
+3. Action possui binding exato em `actionBindings.ts`.
+4. Action está documentada em `ACTION_CATALOG`, com label e exemplo válidos.
+5. Se precisar de import direto, está exportada em `actionHandlers/index.ts`.
+6. A carta usa exatamente o mesmo `type` declarado.
+7. Targets/custos são validados antes de mutar.
+8. Movimento usa helper/API que emite eventos necessários.
+9. UI não é chamada diretamente quando `targets` resolve o caso.
+10. `needsSelection` segue o formato esperado.
+11. Preview foi atualizado se a action pode falhar antes da ativação.
+12. `npm run check` passa e o jogo abre sem erros do `CardDatabaseValidator`.

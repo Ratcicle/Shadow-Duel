@@ -1,10 +1,16 @@
 # Estrutura do Projeto - Shadow Duel
 
-Documento atualizado a partir da árvore atual do repositório. Ele descreve as pastas principais e a responsabilidade dos módulos JavaScript que formam o jogo.
+Documento atualizado a partir da árvore atual do repositório. Ele descreve as
+pastas principais e a responsabilidade dos módulos JavaScript e TypeScript que
+formam o jogo.
 
 ## Visão Geral
 
-Shadow Duel é uma SPA em JavaScript puro usando ES Modules nativos do navegador. O ponto de entrada HTML é [index.html](../index.html), que carrega [src/main.js](../src/main.js). A aplicação se organiza em três camadas principais:
+Shadow Duel é uma SPA em migração mista JavaScript/TypeScript, usando ES Modules
+nativos do navegador. Arquivos físicos `.ts` continuam sendo importados por
+specifiers relativos terminados em `.js`; não use specifiers `.ts`. O ponto de
+entrada HTML é [index.html](../index.html), que carrega [src/main.js](../src/main.js).
+A aplicação se organiza em três camadas principais:
 
 - **Core** ([src/core/](../src/core/)) - motor de regras, estado de jogo, IA, sistema de Chain e execução de efeitos.
 - **UI** ([src/ui/](../src/ui/)) - controllers da tela inicial, renderização DOM, animações e modais.
@@ -103,10 +109,12 @@ Traduções visíveis no jogo. Hoje há [pt-br.json](../public/locales/pt-br.jso
 | [BotLogger.js](../src/core/BotLogger.js) | Logger configurável por `localStorage`, com categorias para decisões, estado e fases. |
 | [Card.js](../src/core/Card.js) | Modelo de instância de carta: dados do database, estado mutável, equipamentos, buffs, counters e `instanceId`. |
 | [CardDatabaseValidator.js](../src/core/CardDatabaseValidator.js) | Validação do banco de cartas, incluindo shapes de actions e faixas de IDs. |
+| [contracts/actions.ts](../src/core/contracts/actions.ts) | Compõe `ActionByType` a partir dos mapas fechados por domínio. |
+| [contracts/actionRuntime.ts](../src/core/contracts/actionRuntime.ts) | Contratos mínimos de handlers, contexto, targets, ports e resultados legados. |
 | [ChainSystem.js](../src/core/ChainSystem.js) | Fachada do sistema de Chain/Spell Speed, delegando para [src/core/chain/](../src/core/chain/). |
 | [NullChainSystem.js](../src/core/NullChainSystem.js) | Implementação no-op compatível para simulações ou fluxos sem chain real. |
-| [EffectEngine.js](../src/core/EffectEngine.js) | Fachada de execução de efeitos declarativos, delegando para [src/core/effects/](../src/core/effects/) e [src/core/actionHandlers/](../src/core/actionHandlers/). |
-| [ActionHandlers.js](../src/core/ActionHandlers.js) | Re-export de compatibilidade para o sistema modular de action handlers. |
+| [EffectEngine.ts](../src/core/EffectEngine.ts) | Fachada de execução de efeitos declarativos; consumidores preservam o specifier `.js`. |
+| [ActionHandlers.ts](../src/core/ActionHandlers.ts) | Re-export de compatibilidade; consumidores preservam o specifier `.js`. |
 | [AutoSelector.js](../src/core/AutoSelector.js) | Resolve contratos de seleção para IA/bot. Não deve substituir decisões humanas. |
 | [UIAdapter.js](../src/core/UIAdapter.js) | Ponte entre `Game` e `Renderer` para prompts e atualização visual. |
 | [i18n.js](../src/core/i18n.js) | Carregamento de locale e helpers como `getCardDisplayName` e `getCardDisplayDescription`. |
@@ -129,25 +137,27 @@ Camada operacional do bot, separada da estratégia. Ela valida ações, executa 
 
 ### `src/core/actionHandlers/`
 
-Handlers genéricos de actions declarativas. Todo `action.type` usado nas cartas deve estar registrado e declarado no catálogo.
+Handlers genéricos de actions declarativas. Todo `action.type` usado nas cartas
+deve existir em `ActionByType`, `ACTION_BINDINGS`, catálogo e registry.
 
 | Arquivo | Responsabilidade |
 |---|---|
-| [index.js](../src/core/actionHandlers/index.js) | Barrel dos handlers. |
-| [registry.js](../src/core/actionHandlers/registry.js) | `ActionHandlerRegistry` e `proxyEngineMethod`. |
-| [wiring.js](../src/core/actionHandlers/wiring.js) | Registro central dos handlers padrão. |
-| [actionCatalog.js](../src/core/actionHandlers/actionCatalog.js) | Schema central validado por scripts e pelo database validator. |
-| [blueprints.js](../src/core/actionHandlers/blueprints.js) | Handlers ligados a blueprints e efeitos armazenados. |
-| [choice.js](../src/core/actionHandlers/choice.js) | Escolhas declarativas de efeito. |
-| [conditional.js](../src/core/actionHandlers/conditional.js) | Condições e ações condicionais. |
-| [destruction.js](../src/core/actionHandlers/destruction.js) | Destruição, banimento e replacements ligados a destruição. |
-| [movement.js](../src/core/actionHandlers/movement.js) | Movimento entre zonas, bounce e retorno à mão. |
-| [negation.js](../src/core/actionHandlers/negation.js) | Negação de ativação, summon, ataque e efeitos relacionados. |
-| [resources.js](../src/core/actionHandlers/resources.js) | Compra, LP, busca, descarte, mill e outros recursos. |
-| [stats.js](../src/core/actionHandlers/stats.js) | Buffs/debuffs, status e modificadores de combate. |
-| [summon.js](../src/core/actionHandlers/summon.js) | Fachada dos handlers modulares de Invocação. |
+| [index.ts](../src/core/actionHandlers/index.ts) | Barrel dos handlers. |
+| [registry.ts](../src/core/actionHandlers/registry.ts) | `ActionHandlerRegistry` e `proxyEngineMethod`. |
+| [actionBindings.ts](../src/core/actionHandlers/actionBindings.ts) | Manifest exato que liga `ActionByType` aos handlers e proxies. |
+| [wiring.ts](../src/core/actionHandlers/wiring.ts) | Aplica o manifest ao registry na ordem canônica. |
+| [actionCatalog.ts](../src/core/actionHandlers/actionCatalog.ts) | Schema central validado por scripts e pelo database validator. |
+| [blueprints.ts](../src/core/actionHandlers/blueprints.ts) | Handlers ligados a blueprints e efeitos armazenados. |
+| [choice.ts](../src/core/actionHandlers/choice.ts) | Escolhas declarativas de efeito. |
+| [conditional.ts](../src/core/actionHandlers/conditional.ts) | Condições e ações condicionais. |
+| [destruction.ts](../src/core/actionHandlers/destruction.ts) | Destruição, banimento e replacements ligados a destruição. |
+| [movement.ts](../src/core/actionHandlers/movement.ts) | Movimento entre zonas, bounce e retorno à mão. |
+| [negation.ts](../src/core/actionHandlers/negation.ts) | Negação de ativação, summon, ataque e efeitos relacionados. |
+| [resources.ts](../src/core/actionHandlers/resources.ts) | Compra, LP, busca, descarte, mill e outros recursos. |
+| [stats.ts](../src/core/actionHandlers/stats.ts) | Buffs/debuffs, status e modificadores de combate. |
+| [summon.ts](../src/core/actionHandlers/summon.ts) | Fachada dos handlers modulares de Invocação. |
 | [summon/](../src/core/actionHandlers/summon/) | Implementações por responsabilidade: origem, posição, restrições, custos, Sincro e Invocações adiadas. |
-| [shared.js](../src/core/actionHandlers/shared.js) | Helpers compartilhados pelos handlers. |
+| [shared.ts](../src/core/actionHandlers/shared.ts) | Helpers compartilhados pelos handlers. |
 
 ---
 
@@ -247,19 +257,19 @@ Camada compartilhada entre estratégias. Módulos atuais:
 
 ## `src/core/effects/` - Sistema de Efeitos
 
-`EffectEngine.js` é a fachada. A implementação real fica nestes módulos:
+`EffectEngine.ts` é a fachada. A implementação real fica nestes módulos; imports relativos preservam o specifier `.js`:
 
 | Caminho | Responsabilidade |
 |---|---|
-| [attachModules.js](../src/core/effects/attachModules.js) | Anexa módulos ao prototype/fachada do `EffectEngine`. |
+| [attachModules.ts](../src/core/effects/attachModules.ts) | Anexa os dez manifests de referências diretas ao prototype/fachada do `EffectEngine`. |
 | [index.js](../src/core/effects/index.js) | Barrel dos módulos de efeitos. |
-| [actions/](../src/core/effects/actions/) | Primitivas de runtime: combate, core, counters, destroy, equip, immunity, movement, resources, stats e summon. |
+| [actions/](../src/core/effects/actions/) | Primitivas TypeScript de runtime: combate, core, counters, destroy, equip, immunity, movement, resources, stats e summon. |
 | [activation/](../src/core/effects/activation/) | Getters, preview, execução e escolha de posição em ativações. |
 | [blueprints/](../src/core/effects/blueprints/) | Blueprints/efeitos armazenados reutilizáveis. |
 | [conditions/](../src/core/effects/conditions/) | Avaliação genérica de condições declarativas. |
 | [costs/](../src/core/effects/costs/) | Custos declarativos, incluindo LP. |
 | [filters/](../src/core/effects/filters/) | Predicados de cartas e efeitos. |
-| [fusion/](../src/core/effects/fusion/) | Requisitos, avaliação e execução de Fusion Summon. |
+| [fusion/](../src/core/effects/fusion/) | Requisitos e avaliação em JavaScript; execução e barrel físico em TypeScript, sempre consumidos por specifiers `.js`. |
 | [passives/](../src/core/effects/passives/) | Buffs e auras passivas. |
 | [targeting/](../src/core/effects/targeting/) | Filtros, zonas, seleção e resolução de alvos. |
 | [triggers/](../src/core/effects/triggers/) | Registro, coleta e disparo de gatilhos. |
@@ -361,7 +371,7 @@ pelos efeitos visuais do duelo.
 | Arquivo | Responsabilidade |
 |---|---|
 | [generate_action_catalog_doc.mjs](../scripts/generate_action_catalog_doc.mjs) | Gera [docs/Catalogo de actions.md](Catalogo%20de%20actions.md). |
-| [validate_action_catalog.mjs](../scripts/validate_action_catalog.mjs) | Valida handlers registrados, catálogo e exemplos. |
+| [validate_action_catalog.mjs](../scripts/validate_action_catalog.mjs) | Compara `ActionByType`, catálogo, `ACTION_BINDINGS`, registry, labels, exemplos e tipos usados pelas cartas. |
 | [run_tests.mjs](../scripts/run_tests.mjs) | Descobre e executa a suíte de testes Node. |
 | [run_bot_arena_smoke.mjs](../scripts/run_bot_arena_smoke.mjs) | Smoke test curto da Bot Arena por CLI. |
 | [audit_chain_metadata.mjs](../scripts/audit_chain_metadata.mjs) | Audita metadados canônicos de ativação, uso e Chain. |

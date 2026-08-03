@@ -141,6 +141,8 @@ interface CounterSelectionCandidate {
   readonly cardRef: ActionRuntimeCard;
 }
 
+type LegacyCounterOwner = ActionRuntimePlayer | "player" | "bot";
+
 function getUI(game: CounterGame | null | undefined): CounterUi | null {
   return Reflect.apply(getSharedUI, undefined, [game]);
 }
@@ -199,13 +201,13 @@ function resolveCounterOwner(
   game: CounterGame | null | undefined,
   card: ActionRuntimeCard | null | undefined,
   fallbackPlayer: ActionRuntimePlayer | null | undefined,
-): ActionRuntimePlayer | null {
+): LegacyCounterOwner | null {
   if (fallbackPlayer?.id === "player" || fallbackPlayer?.id === "bot") {
     return fallbackPlayer;
   }
   const owner = card?.controller || card?.owner;
-  if (owner === "player") return game?.player || fallbackPlayer || null;
-  if (owner === "bot") return game?.bot || fallbackPlayer || null;
+  if (owner === "player") return game?.player || "player";
+  if (owner === "bot") return game?.bot || "bot";
   return fallbackPlayer || null;
 }
 
@@ -422,8 +424,11 @@ function findCounterCardZone(
   const game = engine?.game;
   const owner = resolveCounterOwner(game, card, fallbackPlayer);
   if (owner && typeof engine?.findCardZone === "function") {
-    const ownerZone = engine.findCardZone(owner, card);
-    if (ownerZone) return ownerZone;
+    const ownerZone: unknown = Reflect.apply(engine.findCardZone, engine, [
+      owner,
+      card,
+    ]);
+    if (ownerZone) return ownerZone as ZoneInput;
   }
   if (typeof engine?.findCardZone !== "function") return null;
   return (
@@ -466,7 +471,9 @@ async function emitCounterRemovedEvent(
   const eventOpponent =
     data.opponent ||
     data.ctx?.opponent ||
-    game.getOpponent?.(eventPlayer) ||
+    (typeof game.getOpponent === "function"
+      ? Reflect.apply(game.getOpponent, game, [eventPlayer])
+      : null) ||
     null;
 
   await game.emit("counter_removed", {

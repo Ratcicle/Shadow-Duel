@@ -7,6 +7,21 @@
 
 // Registry
 export { ActionHandlerRegistry, proxyEngineMethod } from "./registry.js";
+export type { ActionHandlerUnion, ProxyMethodName } from "./registry.js";
+
+// Canonical compile-time/runtime binding manifest
+export {
+  ACTION_BINDINGS,
+  getActionBindingLabel,
+  listActionBindingTypes,
+} from "./actionBindings.js";
+export type {
+  ActionBindingByType,
+  ActionBindingLabelByType,
+  CompatibleEffectEngineMethodFor,
+  DirectActionBinding,
+  ProxyActionBinding,
+} from "./actionBindings.js";
 
 // Wiring function
 export { registerDefaultHandlers } from "./wiring.js";

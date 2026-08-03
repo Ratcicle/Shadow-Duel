@@ -380,7 +380,11 @@ export async function applyDestroyAllOthersAndDraw(
     drawnCount = drawResult?.drawn?.length || 0;
   } else {
     for (let i = 0; i < destroyedCount; i++) {
-      player.draw?.();
+      const draw = player.draw;
+      if (typeof draw !== "function") {
+        throw new TypeError("player.draw is not a function");
+      }
+      Reflect.apply(draw, player, []);
       drawnCount += 1;
     }
   }

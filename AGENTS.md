@@ -15,7 +15,7 @@
 - Para novas cartas, verifique também descrição, i18n e compatibilidade com os handlers existentes.
 - Modularize por domínio de jogo/responsabilidade, não por microfunções arbitrárias.
 - Evite criar arquivos novos quando a lógica pertence claramente a um módulo existente.
-- Fachadas como `Game.js`, `EffectEngine.js` e `ChainSystem.js` devem orquestrar e delegar; evite concentrar nova lógica complexa nelas.
+- Fachadas como `Game.js`, `EffectEngine.ts` e `ChainSystem.js` devem orquestrar e delegar; evite concentrar nova lógica complexa nelas.
 
 ---
 
@@ -38,7 +38,7 @@ Evite "batch mutations" silenciosas. Loops são permitidos, mas cada iteração 
 ```
 src/main.js                   # UI do deck builder e inicialização
 src/core/Game.js              # Fachada de turnos/fases/event bus (~880 linhas)
-src/core/EffectEngine.js      # Fachada da resolução de efeitos (~1545 linhas)
+src/core/EffectEngine.ts      # Fachada da resolução de efeitos
 src/core/ChainSystem.js       # Fachada de chain windows + Spell Speed (~1500 linhas)
 src/core/chain/               # Implementação modular do ChainSystem (ver tabela abaixo)
 src/core/effects/             # Implementação modular dos efeitos (ver tabela abaixo)
@@ -103,7 +103,7 @@ Módulos expõem funções puras; `Game.js` importa e chama com `this` context.
 
 **Estrutura modular de [src/core/effects/](src/core/effects/):**
 
-`EffectEngine.js` é a fachada — a lógica real fica nas subpastas, agregadas via [src/core/effects/index.js](src/core/effects/index.js).
+`EffectEngine.ts` é a fachada — a lógica real fica nas subpastas, agregadas via [src/core/effects/index.js](src/core/effects/index.js). Consumidores preservam o specifier `.js`.
 
 | Pasta          | Responsabilidade                                                                                |
 | -------------- | ----------------------------------------------------------------------------------------------- |
@@ -153,7 +153,7 @@ O projeto usa ES modules nativos do navegador. O [package.json](package.json) de
 
 **Scripts utilitários** ([scripts/](scripts/)):
 
-- `validate_action_catalog.mjs` — valida `cards.js` contra `actionCatalog.js`
+- `validate_action_catalog.mjs` — valida `cards.js` contra `ActionByType`, `ACTION_BINDINGS` e `actionCatalog.ts`
 - `generate_action_catalog_doc.mjs` — gera doc do catálogo de actions
 
 ---
@@ -198,38 +198,51 @@ O projeto usa ES modules nativos do navegador. O [package.json](package.json) de
 
 ### Action Handlers
 
-Registrados em [src/core/actionHandlers/wiring.js](src/core/actionHandlers/wiring.js). O catálogo central de tipos válidos vive em [actionCatalog.js](src/core/actionHandlers/actionCatalog.js) e é validado por scripts em [scripts/](scripts/).
+Declarados no manifest exato [src/core/actionHandlers/actionBindings.ts](src/core/actionHandlers/actionBindings.ts) e aplicados por [wiring.ts](src/core/actionHandlers/wiring.ts). O catálogo central de tipos válidos vive em [actionCatalog.ts](src/core/actionHandlers/actionCatalog.ts) e é validado por scripts em [scripts/](scripts/).
 
-**Categorias declaradas em `actionCatalog.js`:** `resources`, `movement`, `summon`, `destruction`, `stats`, `combat`, `counters`, `conditional`, `blueprint`, `legacyProxy`.
+Os contratos compile-time vivem em [src/core/contracts/actions.ts](src/core/contracts/actions.ts) e nos mapas por domínio de [src/core/contracts/actions/](src/core/contracts/actions/). Os arquivos físicos convertidos são `.ts`, mas imports relativos continuam usando specifiers terminados em `.js`.
+
+**Categorias declaradas em `actionCatalog.ts`:** `resources`, `movement`, `summon`, `destruction`, `stats`, `combat`, `counters`, `conditional`, `blueprint`, `legacyProxy`.
 
 | Arquivo            | Responsabilidade / handlers principais                                                                    |
 | ------------------ | --------------------------------------------------------------------------------------------------------- |
-| `summon.js`        | `special_summon_from_zone`, `transmutate`, `draw_and_summon`, summons condicionais e tier-cost            |
-| `destruction.js`   | `destroy_targeted_cards`, `banish`, `banish_card_from_graveyard`, replacement effects                     |
-| `movement.js`      | `return_to_hand`, `bounce_and_summon`                                                                     |
-| `stats.js`         | `buff_stats_temp`, `add_status`, `switch_position`, `permanent_buff_named`, proteções                     |
-| `resources.js`     | `pay_lp`, `add_from_zone_to_hand`, `heal_*`, `grant_additional_normal_summon`, upkeep                     |
-| `blueprints.js`    | `activate_stored_blueprint` (efeitos diferidos)                                                           |
-| `conditional.js`   | `conditional_target_actions`                                                                              |
-| `choice.js`        | `choose_action_case`                                                                                      |
-| `actionCatalog.js` | Schema/contratos de **todos** os action types (consumido pela validação)                                  |
-| `registry.js`      | Implementação do registry + `proxyEngineMethod`                                                           |
-| `shared.js`        | Utilitários compartilhados entre handlers                                                                 |
-| `index.js`         | Barrel de exportação                                                                                      |
-| `wiring.js`        | Único ponto onde os handlers são amarrados ao registry                                                    |
+| `summon.ts`        | `special_summon_from_zone`, `transmutate`, `draw_and_summon`, summons condicionais e tier-cost            |
+| `destruction.ts`   | `destroy_targeted_cards`, `banish`, `banish_card_from_graveyard`, replacement effects                     |
+| `movement.ts`      | `return_to_hand`, `bounce_and_summon`                                                                     |
+| `stats.ts`         | `buff_stats_temp`, `add_status`, `switch_position`, `permanent_buff_named`, proteções                     |
+| `resources.ts`     | `pay_lp`, `add_from_zone_to_hand`, `heal_*`, `grant_additional_normal_summon`, upkeep                     |
+| `blueprints.ts`    | `activate_stored_blueprint` (efeitos diferidos)                                                           |
+| `conditional.ts`   | `conditional_target_actions`                                                                              |
+| `choice.ts`        | `choose_action_case`                                                                                      |
+| `actionCatalog.ts` | Schema/contratos de **todos** os action types (consumido pela validação)                                  |
+| `actionBindings.ts` | Manifest compile-time e runtime exato para todos os handlers e proxies                                   |
+| `registry.ts`      | Implementação do registry + `proxyEngineMethod`                                                           |
+| `shared.ts`        | Utilitários compartilhados entre handlers                                                                 |
+| `index.ts`         | Barrel de exportação                                                                                      |
+| `wiring.ts`        | Aplica `ACTION_BINDINGS` ao registry na ordem canônica                                                    |
 
 Além dos handlers customizados, várias actions usam `proxyEngineMethod(...)` para delegar diretamente ao `EffectEngine` (ex.: `draw`, `damage`, `destroy`, `move`, `equip`, `negate_attack`, `add_counter`, `polymerization_fusion_summon`, `mirror_force_destroy_all`).
 
-**⚠️ Criar novo `action.type`?** Registre em `wiring.js` **e** declare seu schema em `actionCatalog.js`. `CardDatabaseValidator` e os scripts de validação bloqueiam tipos não declarados. Antes disso, confirme que nenhum handler existente já cobre o caso (ver guardrails acima).
+**⚠️ Criar novo `action.type`?** Adicione a variante em `ActionByType`, o binding em `actionBindings.ts` e seu schema em `actionCatalog.ts`. `CardDatabaseValidator`, o typecheck e os scripts de validação bloqueiam keysets ou assinaturas incompatíveis. Antes disso, confirme que nenhum handler existente já cobre o caso (ver guardrails acima).
 
 ---
 
 ### Criar Novo Handler
 
-**Arquivo:** `src/core/actionHandlers/<categoria>.js`
+**Arquivo:** `src/core/actionHandlers/<categoria>.ts`
 
-```js
-export async function handleMyAction(action, ctx, targets, engine) {
+Antes do handler, declare a variante no mapa de domínio apropriado em
+`src/core/contracts/actions/`; `ActionByType` é composto desses mapas.
+
+```ts
+import type { ActionHandler } from "../contracts/actionRuntime.js";
+
+export const handleMyAction: ActionHandler<"my_action_type"> = async (
+  action,
+  ctx,
+  targets,
+  engine,
+) => {
   const { player, opponent, source } = ctx;
   const game = engine.game;
 
@@ -237,17 +250,21 @@ export async function handleMyAction(action, ctx, targets, engine) {
   game.moveCard(card, player, "graveyard", { fromZone: "field" });
   game.updateBoard();
   return true; // sucesso
-}
+};
 ```
 
-**Registrar em `wiring.js`:**
+**Declarar em `actionBindings.ts`:**
 
-```js
+```ts
 import { handleMyAction } from "./stats.js";
-registry.register("my_action_type", handleMyAction);
+
+my_action_type: direct("handleMyAction", handleMyAction),
 ```
 
-**E declarar em `actionCatalog.js`** com a categoria correta e os campos esperados.
+**E declarar em `actionCatalog.ts`** com a categoria correta e os campos esperados.
+
+Depois, execute `npm run validate:actions`, `npm run generate:actions`,
+`npm run check:actions-doc` e, como gate final, `npm run check`.
 
 ---
 
