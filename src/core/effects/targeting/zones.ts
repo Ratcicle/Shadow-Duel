@@ -1,3 +1,17 @@
+import type {
+  ActionRuntimeCard,
+  ActionRuntimePlayer,
+} from "../../contracts/actionRuntime.js";
+import type { EffectZone } from "../../contracts/effects.js";
+import type { CanonicalZone } from "../../contracts/zones.js";
+
+interface TargetingZoneHost {
+  readonly game: {
+    player: ActionRuntimePlayer;
+    bot: ActionRuntimePlayer;
+  };
+}
+
 /**
  * Targeting Zones Module
  * Extracted from EffectEngine.js - zone access and card location utilities
@@ -11,7 +25,10 @@
  * @param {string} zone - Zone name: "field", "hand", "graveyard", "deck", "extraDeck", "spellTrap", "fieldSpell", "banished"
  * @returns {Array} The zone array
  */
-export function getZone(player, zone) {
+export function getZone(
+  player: ActionRuntimePlayer,
+  zone: EffectZone,
+): ActionRuntimeCard[] {
   switch (zone) {
     case "hand":
       return player.hand;
@@ -40,7 +57,10 @@ export function getZone(player, zone) {
  * @param {Object} card - The card to find
  * @returns {string|null} The zone name or null if not found
  */
-export function findCardZone(player, card) {
+export function findCardZone(
+  player: ActionRuntimePlayer | null | undefined,
+  card: ActionRuntimeCard | null | undefined,
+): CanonicalZone | null {
   if (!player || !card) return null;
   if (player.field && player.field.includes(card)) return "field";
   if (player.spellTrap && player.spellTrap.includes(card)) return "spellTrap";
@@ -58,7 +78,10 @@ export function findCardZone(player, card) {
  * @param {Object} card - The card to check
  * @returns {Object|null} The owner player or null
  */
-export function getOwnerByCard(card) {
+export function getOwnerByCard(
+  this: TargetingZoneHost,
+  card: ActionRuntimeCard | null | undefined,
+): ActionRuntimePlayer | null {
   if (!card || !this.game) return null;
   return card.owner === "player" ? this.game.player : this.game.bot;
 }
