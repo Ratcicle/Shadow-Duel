@@ -4,8 +4,50 @@
  */
 
 import { resolveFieldScopeCards } from "../../actionHandlers/shared.js";
+import type Game from "../../Game.js";
+import type {
+  ActionRuntimeCard,
+  ActionRuntimePlayer,
+  EffectContext,
+  LegacyActionHandlerResult,
+  MaybePromise,
+  ResolvedTargetMap,
+} from "../../contracts/actionRuntime.js";
+import { writeContextValue } from "../../contracts/actionRuntime.js";
+import type { ActionOf } from "../../contracts/actions.js";
+import type { EffectCondition } from "../../contracts/effects.js";
+import type { BattlePosition } from "../../contracts/cards.js";
+import type { ZoneInput } from "../../contracts/zones.js";
 
-function checkControlCardCondition(condition, ctx) {
+type MoveAction = ActionOf<"move"> & {
+  readonly toZone?: ZoneInput;
+  readonly reason?: string;
+  readonly position?: "attack" | "defense" | "choice";
+};
+
+interface MovementRuntimeCard extends ActionRuntimeCard {
+  attacksUsedThisTurn?: number;
+}
+
+interface MovementActionHost {
+  game: Game;
+  readonly ui: { log?(message: string): void } | null;
+  getZone(
+    player: ActionRuntimePlayer,
+    zone: ZoneInput,
+  ): ActionRuntimeCard[] | null;
+}
+
+interface ControlCardCondition {
+  readonly type?: string;
+  readonly cardName?: string;
+  readonly zone?: ZoneInput;
+}
+
+function checkControlCardCondition(
+  condition: ControlCardCondition | null | undefined,
+  ctx: EffectContext,
+): boolean {
   if (!condition || condition.type !== "control_card") return false;
 
   const player = ctx?.player;
@@ -17,19 +59,28 @@ function checkControlCardCondition(condition, ctx) {
     return player.fieldSpell?.name === cardName;
   }
 
-  const zone = player[zoneName] || [];
+  const zone = Reflect.get(player, zoneName) || [];
   return Array.isArray(zone) && zone.some((card) => card?.name === cardName);
 }
 
-function shouldAllowExtraDeckMonsterToHand(action, ctx) {
+function shouldAllowExtraDeckMonsterToHand(
+  action: MoveAction,
+  ctx: EffectContext,
+): boolean {
   if (action.allowExtraDeckMonsterToHand === true) return true;
   if (action.allowExtraDeckMonsterToHandIf) {
-    return checkControlCardCondition(action.allowExtraDeckMonsterToHandIf, ctx);
+    return checkControlCardCondition(
+      action.allowExtraDeckMonsterToHandIf as ControlCardCondition,
+      ctx,
+    );
   }
   return false;
 }
 
-function getContextTargetCards(targetRef, ctx) {
+function getContextTargetCards(
+  targetRef: string | null | undefined,
+  ctx: EffectContext | null | undefined,
+): ActionRuntimeCard[] {
   if (!targetRef || !ctx) return [];
   const contextTargets = {
     self: ctx.source,
@@ -45,17 +96,23 @@ function getContextTargetCards(targetRef, ctx) {
     targetedCard: ctx.targetedCard,
     host: ctx.host,
   };
-  const target = contextTargets[targetRef];
+  const target = Reflect.get(contextTargets, targetRef);
   if (Array.isArray(target)) return target.filter(Boolean);
-  return target ? [target] : [];
+  return target ? [target as ActionRuntimeCard] : [];
 }
 
-function getCardLevelForStorage(card) {
+function getCardLevelForStorage(card: ActionRuntimeCard): number {
   const level = Number(card?.level ?? 0);
   return Number.isFinite(level) ? level : 0;
 }
 
-function storeMoveActionResults(action, ctx, targets, movedCards, levelSum) {
+function storeMoveActionResults(
+  action: MoveAction,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+  movedCards: ActionRuntimeCard[],
+  levelSum: number,
+): void {
   if (!ctx || typeof ctx !== "object") return;
 
   if (action.storeResultAs) {
@@ -70,7 +127,7 @@ function storeMoveActionResults(action, ctx, targets, movedCards, levelSum) {
   }
 
   if (action.storeLevelSumAs) {
-    ctx[action.storeLevelSumAs] = levelSum;
+    writeContextValue(ctx, action.storeLevelSumAs, levelSum);
   }
 }
 
@@ -81,14 +138,24 @@ function storeMoveActionResults(action, ctx, targets, movedCards, levelSum) {
  * @param {Object} targets - Resolved targets
  * @returns {Promise<boolean>} Whether any cards were moved
  */
-export async function applyMove(action, ctx, targets) {
+export async function applyMove(
+  this: MovementActionHost,
+  action: MoveAction,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+): Promise<LegacyActionHandlerResult> {
   // Resolve targetRef to get the actual cards
-  let targetCards = targets?.[action.targetRef] || [];
+  let targetCards =
+    (targets?.[action.targetRef || ""] as MovementRuntimeCard[] | undefined) ||
+    [];
 
   if ((!targetCards || targetCards.length === 0) && action.targetScope) {
-    targetCards = resolveFieldScopeCards(action.targetScope, ctx, this.game, {
-      engine: this,
-    });
+    targetCards = Reflect.apply(resolveFieldScopeCards, undefined, [
+      action.targetScope,
+      ctx,
+      this.game,
+      { engine: this },
+    ]);
   }
 
   if (!targetCards || targetCards.length === 0) {
@@ -106,7 +173,7 @@ export async function applyMove(action, ctx, targets) {
   }
 
   let moved = false;
-  const movedCards = [];
+  const movedCards: MovementRuntimeCard[] = [];
   let movedLevelSum = 0;
 
   for (const card of targetCards) {
@@ -126,11 +193,11 @@ export async function applyMove(action, ctx, targets) {
         contextLabel: "applyMove",
       });
     }
-    let destPlayer;
+    let destPlayer: ActionRuntimePlayer;
     if (action.player === "self") {
-      destPlayer = ctx.player;
+      destPlayer = ctx.player as ActionRuntimePlayer;
     } else if (action.player === "opponent") {
-      destPlayer = ctx.opponent;
+      destPlayer = ctx.opponent as ActionRuntimePlayer;
     } else {
       destPlayer = card.owner === "player" ? this.game.player : this.game.bot;
     }
@@ -150,7 +217,9 @@ export async function applyMove(action, ctx, targets) {
         ? "attack"
         : null;
 
-    const applyMoveWithPosition = async (chosenPosition) => {
+    const applyMoveWithPosition = async (
+      chosenPosition: string | null | undefined,
+    ): Promise<LegacyActionHandlerResult> => {
       const levelBeforeMove = getCardLevelForStorage(card);
       const finalPosition = shouldPromptForPosition
         ? chosenPosition || action.position || defaultFieldPosition || "attack"
@@ -202,11 +271,11 @@ export async function applyMove(action, ctx, targets) {
           "spellTrap",
           "extraDeck",
           "banished",
-        ].filter(Boolean);
+        ].filter((zoneName): zoneName is ZoneInput => Boolean(zoneName));
         for (const zoneName of zones) {
           const arr = this.getZone(fromOwner, zoneName);
           const idx = arr ? arr.indexOf(card) : -1;
-          if (idx > -1) {
+          if (arr && idx > -1) {
             arr.splice(idx, 1);
             break;
           }
@@ -219,7 +288,7 @@ export async function applyMove(action, ctx, targets) {
         }
 
         if (finalPosition) {
-          card.position = finalPosition;
+          card.position = finalPosition as BattlePosition;
         }
         if (typeof action.isFacedown === "boolean") {
           card.isFacedown = action.isFacedown;
@@ -253,17 +322,35 @@ export async function applyMove(action, ctx, targets) {
       const positionChoice = this.game.chooseSpecialSummonPosition(
         destPlayer,
         card
-      );
-      if (positionChoice && typeof positionChoice.then === "function") {
+      ) as MaybePromise<string | null | undefined>;
+      if (
+        positionChoice &&
+        typeof (positionChoice as PromiseLike<string | null | undefined>)
+          .then === "function"
+      ) {
         const moveResult = await applyMoveWithPosition(await positionChoice);
-        if (moveResult?.needsSelection) return moveResult;
+        if (
+          moveResult &&
+          typeof moveResult === "object" &&
+          moveResult.needsSelection
+        ) return moveResult;
       } else {
-        const moveResult = await applyMoveWithPosition(positionChoice);
-        if (moveResult?.needsSelection) return moveResult;
+        const moveResult = await applyMoveWithPosition(
+          positionChoice as string | null | undefined,
+        );
+        if (
+          moveResult &&
+          typeof moveResult === "object" &&
+          moveResult.needsSelection
+        ) return moveResult;
       }
     } else {
       const moveResult = await applyMoveWithPosition(action.position);
-      if (moveResult?.needsSelection) return moveResult;
+      if (
+        moveResult &&
+        typeof moveResult === "object" &&
+        moveResult.needsSelection
+      ) return moveResult;
     }
   }
   if (moved) {

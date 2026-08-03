@@ -1,3 +1,20 @@
+import type Game from "../../Game.js";
+import type {
+  ActionRuntimeCard,
+  EffectContext,
+  ResolvedTargetMap,
+} from "../../contracts/actionRuntime.js";
+import type { ActionOf } from "../../contracts/actions.js";
+
+interface StatsRuntimeCard extends ActionRuntimeCard {
+  tempAtkBoost?: number;
+  tempDefBoost?: number;
+}
+
+interface StatsActionHost {
+  game: Game;
+}
+
 /**
  * Stats Actions - ATK/DEF temporary modifications
  * Extracted from EffectEngine.js – preserving original logic and signatures.
@@ -6,7 +23,13 @@
 /**
  * Queues renderer-only stat feedback for legacy EffectEngine stat actions.
  */
-function queueStatFeedback(engine, card, kind, tone, ctx) {
+function queueStatFeedback(
+  engine: StatsActionHost,
+  card: StatsRuntimeCard,
+  kind: string,
+  tone: string,
+  ctx: EffectContext,
+): void {
   if (typeof engine?.game?.queueVisualFeedback !== "function") return;
   if (!card) return;
 
@@ -27,19 +50,25 @@ function queueStatFeedback(engine, card, kind, tone, ctx) {
  * @param {Object} targets - Resolved targets
  * @returns {boolean} Whether any cards were affected
  */
-export function applyBuffAtkTemp(action, ctx, targets) {
+export function applyBuffAtkTemp(
+  this: StatsActionHost,
+  action: ActionOf<"buff_atk_temp">,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+): boolean {
   let targetCards = targets?.[action.targetRef] || [];
   if (!Array.isArray(targetCards)) {
-    targetCards = targetCards ? [targetCards] : [];
+    targetCards = targetCards ? [targetCards as StatsRuntimeCard] : [];
   }
-  if (targetCards.length === 0) return true;
+  const runtimeCards = targetCards as StatsRuntimeCard[];
+  if (runtimeCards.length === 0) return true;
   const amount = action.amount ?? 0;
   let hadValidTarget = false;
-  targetCards.forEach((card) => {
+  runtimeCards.forEach((card) => {
     if (card.isFacedown) return;
     if (card.cardKind !== "monster") return;
     hadValidTarget = true;
-    card.atk = Math.max(0, card.atk + amount);
+    card.atk = Math.max(0, (card.atk ?? 0) + amount);
     card.tempAtkBoost = (card.tempAtkBoost || 0) + amount;
     if (amount !== 0) {
       queueStatFeedback(
@@ -61,30 +90,38 @@ export function applyBuffAtkTemp(action, ctx, targets) {
  * @param {Object} targets - Resolved targets
  * @returns {boolean} Whether any cards were affected
  */
-export function applyModifyStatsTemp(action, ctx, targets) {
+export function applyModifyStatsTemp(
+  this: StatsActionHost,
+  action: ActionOf<"modify_stats_temp">,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+): boolean {
   let targetCards = targets?.[action.targetRef] || [];
   if (!Array.isArray(targetCards)) {
-    targetCards = targetCards ? [targetCards] : [];
+    targetCards = targetCards ? [targetCards as StatsRuntimeCard] : [];
   }
+  const runtimeCards = targetCards as StatsRuntimeCard[];
   const atkFactor = action.atkFactor ?? 1;
   const defFactor = action.defFactor ?? 1;
   let hadValidTarget = false;
 
-  targetCards.forEach((card) => {
+  runtimeCards.forEach((card) => {
     if (card.isFacedown) return;
     if (card.cardKind !== "monster") return;
     hadValidTarget = true;
     let deltaTotal = 0;
     if (atkFactor !== 1) {
-      const newAtk = Math.floor((card.atk || 0) * atkFactor);
-      const deltaAtk = newAtk - card.atk;
+      const currentAtk = card.atk ?? 0;
+      const newAtk = Math.floor(currentAtk * atkFactor);
+      const deltaAtk = newAtk - currentAtk;
       card.atk = newAtk;
       card.tempAtkBoost = (card.tempAtkBoost || 0) + deltaAtk;
       deltaTotal += deltaAtk;
     }
     if (defFactor !== 1) {
-      const newDef = Math.floor((card.def || 0) * defFactor);
-      const deltaDef = newDef - card.def;
+      const currentDef = card.def ?? 0;
+      const newDef = Math.floor(currentDef * defFactor);
+      const deltaDef = newDef - currentDef;
       card.def = newDef;
       card.tempDefBoost = (card.tempDefBoost || 0) + deltaDef;
       deltaTotal += deltaDef;

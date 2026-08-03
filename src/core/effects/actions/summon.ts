@@ -7,6 +7,63 @@ import Card, {
   captureTrapMonsterOriginalState,
   restoreTrapMonsterOriginalState,
 } from "../../Card.js";
+import type Game from "../../Game.js";
+import type {
+  ActionRuntimeCard,
+  ActionRuntimePlayer,
+  EffectContext,
+  ResolvedTargetMap,
+} from "../../contracts/actionRuntime.js";
+import type { ActionOf } from "../../contracts/actions.js";
+import type { BattlePosition, BattlePositionInput, CardKind, MonsterType } from "../../contracts/cards.js";
+import type { CanonicalZone } from "../../contracts/zones.js";
+
+interface SummonRuntimeCard extends ActionRuntimeCard {
+  tokenSourceCard?: string | null;
+  summonedTurn?: number;
+  attacksUsedThisTurn?: number;
+  isTrapMonster?: boolean;
+  trapMonsterSummonProcedure?: string;
+  boundMonsterTarget?: SummonRuntimeCard | null;
+  boundTrapSource?: SummonRuntimeCard | null;
+  cannotBeSpecialSummoned?: boolean;
+}
+
+interface SummonActionHost {
+  game: Game;
+  findCardZone(
+    player: ActionRuntimePlayer,
+    card: ActionRuntimeCard,
+  ): CanonicalZone | null;
+  chooseSpecialSummonPosition(
+    card: ActionRuntimeCard,
+    player: ActionRuntimePlayer,
+    options: { position?: BattlePositionInput | "any" },
+  ): Promise<BattlePosition>;
+}
+
+type TokenAction = ActionOf<"special_summon_token"> & {
+  readonly token?: NonNullable<ActionOf<"special_summon_token">["token"]> & {
+    readonly archetypes?: readonly string[];
+  };
+};
+
+type TrapMonsterAction = ActionOf<"special_summon_self_as_trap_monster"> & {
+  readonly monster?: {
+    readonly position?: BattlePositionInput;
+    readonly monsterType?: MonsterType;
+    readonly type?: string;
+    readonly attribute?: string;
+    readonly level?: number;
+    readonly atk?: number;
+    readonly def?: number;
+  };
+  readonly monsterTypeName?: string;
+  readonly monsterType?: MonsterType;
+  readonly typeName?: string;
+  readonly attribute?: string;
+  readonly treatedAsCardKinds?: CardKind | readonly CardKind[];
+};
 
 /**
  * Apply special summon token action
@@ -14,8 +71,14 @@ import Card, {
  * @param {Object} ctx - Context object
  * @returns {Promise<boolean>} Whether token was summoned
  */
-export async function applySpecialSummonToken(action, ctx) {
-  const targetPlayer = action.player === "opponent" ? ctx.opponent : ctx.player;
+export async function applySpecialSummonToken(
+  this: SummonActionHost,
+  action: TokenAction,
+  ctx: EffectContext,
+): Promise<boolean> {
+  const targetPlayer = (action.player === "opponent"
+    ? ctx.opponent
+    : ctx.player) as ActionRuntimePlayer;
   if (!action.token) return false;
   if (targetPlayer.field.length >= 5) {
     console.log("No space to special summon token.");
@@ -39,7 +102,7 @@ export async function applySpecialSummonToken(action, ctx) {
       description: action.token.description || "Special Summoned by effect.",
     },
     targetPlayer.id
-  );
+  ) as Card & SummonRuntimeCard;
 
   // Mark as token - this is the canonical flag for token identification
   // Tokens that leave the field are removed from the game entirely (handled in Game.moveCardInternal)
@@ -143,8 +206,11 @@ export async function applySpecialSummonToken(action, ctx) {
   return true;
 }
 
-function normalizeTrapMonsterKinds(card, action) {
-  const kinds = new Set(["monster"]);
+function normalizeTrapMonsterKinds(
+  card: SummonRuntimeCard,
+  action: TrapMonsterAction,
+): CardKind[] {
+  const kinds = new Set<CardKind>(["monster"]);
   const originalKind = card?.originalCardKind || card?.cardKind || "trap";
   if (originalKind) kinds.add(originalKind);
   const configuredKinds = Array.isArray(action?.treatedAsCardKinds)
@@ -158,8 +224,13 @@ function normalizeTrapMonsterKinds(card, action) {
   return Array.from(kinds);
 }
 
-function resolveTrapMonsterStat(monster, action, key, fallback) {
-  const value = monster?.[key] ?? action?.[key] ?? fallback;
+function resolveTrapMonsterStat(
+  monster: NonNullable<TrapMonsterAction["monster"]>,
+  action: TrapMonsterAction,
+  key: "level" | "atk" | "def",
+  fallback: number,
+): number {
+  const value = monster?.[key] ?? Reflect.get(action, key) ?? fallback;
   const numeric = Number(value);
   return Number.isFinite(numeric) ? numeric : fallback;
 }
@@ -171,10 +242,17 @@ function resolveTrapMonsterStat(monster, action, key, fallback) {
  * @param {Object} ctx - Context object
  * @returns {Promise<boolean>} Whether the source was summoned
  */
-export async function applySpecialSummonSelfAsTrapMonster(action, ctx) {
+export async function applySpecialSummonSelfAsTrapMonster(
+  this: SummonActionHost,
+  action: TrapMonsterAction,
+  ctx: EffectContext,
+): Promise<boolean> {
   const game = this.game;
   const player = ctx?.player;
-  const source = ctx?.source || ctx?.card;
+  const source = (ctx?.source || ctx?.card) as
+    | SummonRuntimeCard
+    | null
+    | undefined;
   if (!game || !player || !source) return false;
 
   const sourceZone =
@@ -253,9 +331,14 @@ export async function applySpecialSummonSelfAsTrapMonster(action, ctx) {
  * @param {Object} targets - Resolved targets
  * @returns {Promise<boolean>} Whether monster was summoned
  */
-export async function applyCallOfTheHauntedSummon(action, ctx, targets) {
-  const player = ctx.player;
-  const card = ctx.source;
+export async function applyCallOfTheHauntedSummon(
+  this: SummonActionHost,
+  action: ActionOf<"call_of_haunted_summon_and_bind">,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+): Promise<boolean> {
+  const player = ctx.player as ActionRuntimePlayer;
+  const card = ctx.source as SummonRuntimeCard;
   const game = this.game;
 
   game?.devLog?.("CALL_OF_THE_HAUNTED", {
@@ -277,7 +360,7 @@ export async function applyCallOfTheHauntedSummon(action, ctx, targets) {
     ? targets.haunted_target
     : [targets.haunted_target];
 
-  const targetMonster = targetArray[0];
+  const targetMonster = targetArray[0] as SummonRuntimeCard;
   game?.devLog?.("CALL_OF_THE_HAUNTED", {
     summary: `Target monster: ${targetMonster?.name || "(none)"}`,
   });

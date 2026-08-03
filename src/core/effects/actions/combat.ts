@@ -1,11 +1,39 @@
 import { isAI } from "../../Player.js";
+import type Game from "../../Game.js";
+import type {
+  ActionRuntimeCard,
+  ActionRuntimePlayer,
+  EffectContext,
+  ResolvedTargetMap,
+} from "../../contracts/actionRuntime.js";
+import type { ActionOf } from "../../contracts/actions.js";
+
+interface CombatRuntimeCard extends ActionRuntimeCard {
+  cannotAttackUntilTurn?: number;
+  canAttackDirectlyThisTurn?: boolean;
+}
+
+type CombatGame = Game & { aiActionDelayMs?: number };
+type ForbidAttackThisTurnAction = ActionOf<"forbid_attack_this_turn"> & {
+  readonly targetRef?: string;
+};
+type CombatPlayer = ActionRuntimePlayer & {
+  forbidDirectAttacksThisTurn?: boolean;
+};
+interface CombatActionHost {
+  game: CombatGame;
+}
+
+type AiActor = ActionRuntimePlayer & {
+  makeMove?(game: Game): unknown;
+};
 
 /**
  * Combat Actions - attack negation, battle phase control, forbid attack, direct attack
  * Extracted from EffectEngine.js – preserving original logic and signatures.
  */
 
-function scheduleAiMoveAfterPaint(game, actor) {
+function scheduleAiMoveAfterPaint(game: CombatGame, actor: AiActor): void {
   if (!isAI(actor) || game.gameOver || typeof actor?.makeMove !== "function") {
     return;
   }
@@ -34,8 +62,11 @@ function scheduleAiMoveAfterPaint(game, actor) {
       silent: true,
     });
     if (guard?.ok === false) {
-      if (retryableGuardCodes.has(guard.code)) {
-        const retryDelayMs = Number.isFinite(game.aiActionDelayMs)
+      const guardCode = "code" in guard ? guard.code : undefined;
+      if (typeof guardCode === "string" && retryableGuardCodes.has(guardCode)) {
+        const retryDelayMs =
+          typeof game.aiActionDelayMs === "number" &&
+          Number.isFinite(game.aiActionDelayMs)
           ? game.aiActionDelayMs
           : 250;
         setTimeout(runMove, Math.max(16, retryDelayMs));
@@ -43,7 +74,7 @@ function scheduleAiMoveAfterPaint(game, actor) {
       return;
     }
 
-    Promise.resolve(actor.makeMove(game)).catch((error) => {
+    Promise.resolve(actor.makeMove?.(game)).catch((error: unknown) => {
       console.error("[EffectPhaseTransition] AI move failed:", error);
     });
   };
@@ -63,7 +94,11 @@ function scheduleAiMoveAfterPaint(game, actor) {
  * @param {Object} ctx - Context object
  * @returns {boolean} Whether attack was negated
  */
-export function applyNegateAttack(action, ctx) {
+export function applyNegateAttack(
+  this: CombatActionHost,
+  _action: ActionOf<"negate_attack">,
+  ctx: EffectContext,
+): boolean {
   if (!this.game || !ctx?.attacker) return false;
   if (typeof this.game.registerAttackNegated === "function") {
     this.game.registerAttackNegated(ctx.attacker);
@@ -76,7 +111,7 @@ export function applyNegateAttack(action, ctx) {
  * Apply end battle phase action
  * @returns {boolean} Whether the Battle Phase was ended
  */
-export function applyEndBattlePhase() {
+export function applyEndBattlePhase(this: CombatActionHost): boolean {
   const game = this.game;
   if (!game || game.phase !== "battle") return false;
 
@@ -96,7 +131,7 @@ export function applyEndBattlePhase() {
   });
   game.updateBoard?.();
 
-  scheduleAiMoveAfterPaint(game, activePlayer);
+  scheduleAiMoveAfterPaint(game as CombatGame, activePlayer as AiActor);
   return true;
 }
 
@@ -107,12 +142,17 @@ export function applyEndBattlePhase() {
  * @param {Object} targets - Resolved targets
  * @returns {boolean} Whether any cards were affected
  */
-export function applyForbidAttackThisTurn(action, ctx, targets) {
+export function applyForbidAttackThisTurn(
+  this: CombatActionHost,
+  action: ForbidAttackThisTurnAction,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+): boolean {
   // Se targetRef está definido, usa os alvos selecionados
   // Caso contrário, aplica à carta fonte (self)
-  let targetCards = [];
+  let targetCards: CombatRuntimeCard[] = [];
   if (action.targetRef && targets?.[action.targetRef]) {
-    targetCards = targets[action.targetRef];
+    targetCards = targets[action.targetRef] as CombatRuntimeCard[];
   } else if (ctx && ctx.source) {
     targetCards = [ctx.source];
   }
@@ -130,10 +170,15 @@ export function applyForbidAttackThisTurn(action, ctx, targets) {
  * @param {Object} targets - Resolved targets
  * @returns {boolean} Whether any cards were affected
  */
-export function applyForbidAttackNextTurn(action, ctx, targets) {
-  let targetCards = [];
+export function applyForbidAttackNextTurn(
+  this: CombatActionHost,
+  action: ActionOf<"forbid_attack_next_turn">,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+): boolean {
+  let targetCards: CombatRuntimeCard[] = [];
   if (action.targetRef && targets?.[action.targetRef]) {
-    targetCards = targets[action.targetRef];
+    targetCards = targets[action.targetRef] as CombatRuntimeCard[];
   } else if (ctx && ctx.source) {
     targetCards = [ctx.source];
   }
@@ -166,8 +211,15 @@ export function applyForbidAttackNextTurn(action, ctx, targets) {
  * @param {Object} targets - Resolved targets
  * @returns {boolean} Whether any cards were affected
  */
-export function applyAllowDirectAttackThisTurn(action, ctx, targets) {
-  const targetCards = targets[action.targetRef] || [ctx.source].filter(Boolean);
+export function applyAllowDirectAttackThisTurn(
+  this: CombatActionHost,
+  action: ActionOf<"allow_direct_attack_this_turn">,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+): boolean {
+  const targetCards =
+    (targets[action.targetRef] as CombatRuntimeCard[] | undefined) ||
+    ([ctx.source].filter(Boolean) as CombatRuntimeCard[]);
   if (!targetCards.length) return false;
 
   targetCards.forEach((card) => {
@@ -183,9 +235,15 @@ export function applyAllowDirectAttackThisTurn(action, ctx, targets) {
  * @param {Object} ctx - Context object
  * @returns {boolean} Whether restriction was applied
  */
-export function applyForbidDirectAttackThisTurn(action, ctx) {
+export function applyForbidDirectAttackThisTurn(
+  this: CombatActionHost,
+  action: ActionOf<"forbid_direct_attack_this_turn">,
+  ctx: EffectContext,
+): boolean {
   if (!this.game || !ctx?.player) return false;
-  const targetPlayer = action.player === "opponent" ? ctx.opponent : ctx.player;
+  const targetPlayer = (action.player === "opponent"
+    ? ctx.opponent
+    : ctx.player) as CombatPlayer | null | undefined;
   if (!targetPlayer) return false;
   targetPlayer.forbidDirectAttacksThisTurn = true;
   return true;

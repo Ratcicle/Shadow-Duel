@@ -1,4 +1,67 @@
 import { resolveContextNumber } from "../../actionHandlers/shared.js";
+import type Game from "../../Game.js";
+import type {
+  ActionRuntimeCard,
+  ActionRuntimeGamePort,
+  ActionRuntimePlayer,
+  EffectContext,
+} from "../../contracts/actionRuntime.js";
+import { writeContextValue } from "../../contracts/actionRuntime.js";
+import type { ActionOf } from "../../contracts/actions.js";
+import type { CardAction } from "../../contracts/actions.js";
+import type { EffectDefinition } from "../../contracts/effects.js";
+import type {
+  NeedsSelectionResult,
+  NormalizedActionExecutionResult,
+  ResolvedTargetMap,
+} from "../../contracts/actionRuntime.js";
+
+type ShuffleDeckAction = ActionOf<"shuffle_deck"> & {
+  readonly silent?: boolean;
+};
+
+type HealAction = ActionOf<"heal"> & {
+  readonly cause?: string;
+  readonly sourceRect?: unknown;
+};
+
+type HealPerArchetypeMonsterAction =
+  ActionOf<"heal_per_archetype_monster"> & {
+    readonly cause?: string;
+    readonly sourceRect?: unknown;
+  };
+
+type DamageAction = ActionOf<"damage"> & {
+  readonly triggerOnly?: boolean;
+  readonly cause?: string;
+  readonly sourceRect?: unknown;
+  readonly screenShake?: boolean;
+};
+
+type ResourcePlayer = ActionRuntimePlayer & {
+  draw(count?: number): ActionRuntimeCard | null;
+  gainLP(amount: number, options?: object): unknown;
+  takeDamage(amount: number, options?: object): unknown;
+};
+
+interface ResourceActionHost {
+  game: Game;
+  applyActions(
+    actions: readonly CardAction[],
+    context: EffectContext,
+    targets: ResolvedTargetMap,
+  ): Promise<NormalizedActionExecutionResult | NeedsSelectionResult>;
+  checkOncePerTurn(
+    card: ActionRuntimeCard,
+    player: ActionRuntimePlayer,
+    effect: EffectDefinition,
+  ): { ok: boolean; reason?: string };
+  commitEffectUsage(
+    card: ActionRuntimeCard,
+    player: ActionRuntimePlayer,
+    effect: EffectDefinition,
+  ): void;
+}
 
 /**
  * Resource Actions - draw, heal, damage
@@ -11,13 +74,19 @@ import { resolveContextNumber } from "../../actionHandlers/shared.js";
  * @param {Object} ctx - Context object
  * @returns {boolean} Whether cards were drawn
  */
-export function applyDraw(action, ctx) {
-  const targetPlayer = action.player === "opponent" ? ctx.opponent : ctx.player;
+export function applyDraw(
+  this: ResourceActionHost,
+  action: ActionOf<"draw">,
+  ctx: EffectContext,
+): boolean {
+  const targetPlayer = (action.player === "opponent"
+    ? ctx.opponent
+    : ctx.player) as ResourcePlayer;
   const amount = action.amount ?? 1;
   if (this.game && typeof this.game.drawCards === "function") {
-    const result = this.game.drawCards(targetPlayer, amount);
+    const result = this.game.drawCards(targetPlayer as object, amount);
     if (ctx && result && Array.isArray(result.drawn)) {
-      ctx.lastDrawnCards = result.drawn.slice();
+      writeContextValue(ctx, "lastDrawnCards", result.drawn.slice());
 
       // v3: Emit event for replay capture - track drawn cards from effects
       if (typeof this.game.emit === "function" && result.drawn.length > 0) {
@@ -45,7 +114,11 @@ export function applyDraw(action, ctx) {
  * @param {Object} ctx - Context object
  * @returns {boolean} Whether the deck was shuffled
  */
-export function applyShuffleDeck(action, ctx) {
+export function applyShuffleDeck(
+  this: ResourceActionHost,
+  action: ShuffleDeckAction,
+  ctx: EffectContext,
+): boolean {
   const targetPlayer = action.player === "opponent" ? ctx.opponent : ctx.player;
   if (!targetPlayer) return false;
 
@@ -64,7 +137,12 @@ export function applyShuffleDeck(action, ctx) {
   return true;
 }
 
-async function emitLpGainEvent(game, player, sourceCard, before) {
+async function emitLpGainEvent(
+  game: Game,
+  player: ActionRuntimePlayer,
+  sourceCard: ActionRuntimeCard | null | undefined,
+  before: number,
+): Promise<boolean> {
   const gained = Math.max(0, (player?.lp || 0) - before);
   if (gained <= 0) return false;
 
@@ -91,8 +169,14 @@ async function emitLpGainEvent(game, player, sourceCard, before) {
  * @param {Object} ctx - Context object
  * @returns {boolean} Whether LP was gained
  */
-export async function applyHeal(action, ctx) {
-  const targetPlayer = action.player === "opponent" ? ctx.opponent : ctx.player;
+export async function applyHeal(
+  this: ResourceActionHost,
+  action: HealAction,
+  ctx: EffectContext,
+): Promise<boolean> {
+  const targetPlayer = (action.player === "opponent"
+    ? ctx.opponent
+    : ctx.player) as ResourcePlayer;
   let amount = action.amount ?? 0;
   if (action.amountFromContext) {
     amount += resolveContextNumber(action.amountFromContext, ctx);
@@ -117,8 +201,14 @@ export async function applyHeal(action, ctx) {
  * @param {Object} ctx - Context object
  * @returns {boolean} Whether LP was gained
  */
-export async function applyHealPerArchetypeMonster(action, ctx) {
-  const targetPlayer = action.player === "opponent" ? ctx.opponent : ctx.player;
+export async function applyHealPerArchetypeMonster(
+  this: ResourceActionHost,
+  action: HealPerArchetypeMonsterAction,
+  ctx: EffectContext,
+): Promise<boolean> {
+  const targetPlayer = (action.player === "opponent"
+    ? ctx.opponent
+    : ctx.player) as ResourcePlayer;
   const archetype = action.archetype;
   const amountPerMonster = action.amountPerMonster ?? 0;
 
@@ -158,15 +248,21 @@ export async function applyHealPerArchetypeMonster(action, ctx) {
  * @param {Object} ctx - Context object
  * @returns {Promise<boolean>} Whether damage was dealt
  */
-export async function applyDamage(action, ctx) {
-  const targetPlayer = action.player === "self" ? ctx.player : ctx.opponent;
+export async function applyDamage(
+  this: ResourceActionHost,
+  action: DamageAction,
+  ctx: EffectContext,
+): Promise<boolean> {
+  const targetPlayer = (action.player === "self"
+    ? ctx.player
+    : ctx.opponent) as ResourcePlayer;
   const amount = action.amount ?? 0;
 
   // Apply damage to LP only if not in trigger-only mode
   // (inflictDamage from Game already applied the damage)
   if (!action.triggerOnly) {
     if (this.game && typeof this.game.inflictDamage === "function") {
-      this.game.inflictDamage(targetPlayer, amount, {
+      this.game.inflictDamage(targetPlayer as object, amount, {
         cause: action.cause || "effect",
         sourceCard: ctx.source || null,
         sourceRect: action.sourceRect || ctx?.activationContext?.sourceRect || null,
@@ -201,7 +297,9 @@ export async function applyDamage(action, ctx) {
     // Check field cards (including spellTrap zone for continuous spells)
     const fieldCards = [
       ...(other.field || []),
-      ...(other.spellTrap || []).filter((c) => c && c.subtype === "continuous"),
+      ...(other.spellTrap || []).filter(
+        (c: ActionRuntimeCard | null) => c && c.subtype === "continuous",
+      ),
     ].filter(Boolean);
 
     for (const card of fieldCards) {

@@ -7,27 +7,144 @@
 
 import { isAI } from "../../Player.js";
 import { getCardDisplayName, getUIText } from "../../i18n.js";
+import type {
+  ActionRuntimeCard,
+  ActionRuntimePlayer,
+  EffectContext,
+  MaybePromise,
+} from "../../contracts/actionRuntime.js";
+import type { ActionOf } from "../../contracts/actions.js";
+import type { BattlePosition } from "../../contracts/cards.js";
 
-function getActionContext(ctx) {
+interface FusionRuntimeCard extends ActionRuntimeCard {
+  extraDeckSummonProcedure?: object | string | null;
+  fusionPosition?: BattlePosition;
+}
+
+interface FusionRuntimePlayer extends ActionRuntimePlayer {
+  deck: FusionRuntimeCard[];
+  extraDeck: FusionRuntimeCard[];
+  hand: FusionRuntimeCard[];
+  field: FusionRuntimeCard[];
+  spellTrap: FusionRuntimeCard[];
+  graveyard: FusionRuntimeCard[];
+  banished: FusionRuntimeCard[];
+  fieldSpell: FusionRuntimeCard | null;
+}
+
+interface FusionOption {
+  readonly fusion: FusionRuntimeCard;
+  readonly materialCombos: FusionRuntimeCard[][];
+}
+
+interface FusionMaterialGroups {
+  readonly field: FusionRuntimeCard[];
+  readonly hand: FusionRuntimeCard[];
+}
+
+interface FusionSelectionValues {
+  readonly fusion_choice?: readonly string[];
+  readonly materials?: readonly string[];
+}
+
+interface FusionSelectionSession {
+  readonly kind: "fusion_select" | "fusion_materials";
+  readonly selectionContract: object;
+  readonly onCancel: () => void;
+  readonly execute: (selections?: FusionSelectionValues | null) => {
+    readonly success: true;
+    readonly needsSelection: false;
+  };
+}
+
+interface FusionExecutionHost {
+  readonly game: {
+    startTargetSelectionSession(session: FusionSelectionSession): void;
+    performFusionSummon(
+      materials: FusionRuntimeCard[],
+      fusionMonsterIndex: number,
+      position: BattlePosition,
+      requiredSubset: FusionRuntimeCard[],
+      player: FusionRuntimePlayer,
+    ): MaybePromise<boolean>;
+  };
+  readonly ui: {
+    showMessage?(message: string): void;
+  } | null;
+  getAvailableFusions(
+    extraDeck: FusionRuntimeCard[],
+    materials: FusionRuntimeCard[],
+    player: FusionRuntimePlayer,
+    options: {
+      readonly materialInfo: readonly { readonly zone: "field" | "hand" }[];
+    },
+  ): FusionOption[];
+  getRequiredMaterialCount(fusion: FusionRuntimeCard): number;
+  evaluateFusionSelection(
+    fusion: FusionRuntimeCard,
+    materials: FusionRuntimeCard[],
+  ): { readonly valid: boolean; readonly reason?: string };
+  chooseSpecialSummonPosition(
+    card: FusionRuntimeCard,
+    player: FusionRuntimePlayer,
+  ): MaybePromise<BattlePosition>;
+  performBotFusion(
+    context: EffectContext,
+    summonableFusions: FusionOption[],
+    availableMaterials: FusionMaterialGroups,
+  ): Promise<boolean>;
+}
+
+function readObject(value: object | null | undefined, key: string): object | null {
+  if (!value) return null;
+  const nested = Reflect.get(value, key);
+  return nested !== null && typeof nested === "object" ? nested : null;
+}
+
+function readArray(value: object | null, key: string): readonly unknown[] {
+  if (!value) return [];
+  const candidate = Reflect.get(value, key);
+  return Array.isArray(candidate) ? candidate : [];
+}
+
+function readFiniteNumber(
+  value: object | null,
+  key: string | number | undefined,
+): number | null {
+  if (!value || key === undefined) return null;
+  const candidate = Reflect.get(value, key);
+  return typeof candidate === "number" && Number.isFinite(candidate)
+    ? candidate
+    : null;
+}
+
+function getActionContext(ctx: EffectContext): object {
+  const nestedActionContext = readObject(
+    ctx.activationContext,
+    "actionContext",
+  );
   return (
     ctx?.actionContext ||
-    ctx?.activationContext?.actionContext ||
+    nestedActionContext ||
     ctx?.activationContext ||
     {}
   );
 }
 
-function getFusionPreferenceScore(fusion, ctx) {
-  const prefs = getActionContext(ctx).fusionPreferences || {};
-  const scoresById = prefs.scoresById || {};
-  const scoresByName = prefs.scoresByName || {};
-  const preferredIds = prefs.preferredIds || [];
-  const preferredNames = prefs.preferredNames || [];
+function getFusionPreferenceScore(
+  fusion: FusionRuntimeCard,
+  ctx: EffectContext,
+): number {
+  const prefs = readObject(getActionContext(ctx), "fusionPreferences");
+  const scoresById = readObject(prefs, "scoresById");
+  const scoresByName = readObject(prefs, "scoresByName");
+  const preferredIds = readArray(prefs, "preferredIds");
+  const preferredNames = readArray(prefs, "preferredNames");
   let score = 0;
-  if (Number.isFinite(scoresById[fusion?.id])) score += scoresById[fusion.id];
-  if (Number.isFinite(scoresByName[fusion?.name])) {
-    score += scoresByName[fusion.name];
-  }
+  const idScore = readFiniteNumber(scoresById, fusion.id);
+  const nameScore = readFiniteNumber(scoresByName, fusion.name);
+  if (idScore !== null) score += idScore;
+  if (nameScore !== null) score += nameScore;
   if (preferredIds.includes(fusion?.id)) score += 100;
   if (preferredNames.includes(fusion?.name)) score += 100;
   return score;
@@ -36,7 +153,10 @@ function getFusionPreferenceScore(fusion, ctx) {
 /**
  * Select the best material combo for fusion (prioritize sacrificing weak monsters)
  */
-function selectBestMaterialCombo(materialCombos, ctx = {}) {
+function selectBestMaterialCombo(
+  materialCombos: FusionRuntimeCard[][],
+  ctx: EffectContext,
+): FusionRuntimeCard[] | null {
   if (!materialCombos || materialCombos.length === 0) {
     return null;
   }
@@ -48,12 +168,12 @@ function selectBestMaterialCombo(materialCombos, ctx = {}) {
 
   // Define material value priorities
   // Higher value = more important to preserve, lower value = better tribute candidate
-  const getMaterialValue = (monster) => {
+  const getMaterialValue = (monster: FusionRuntimeCard): number => {
     const name = monster.name || "";
-    const costPreferences = getActionContext(ctx).costPreferences || {};
-    const preserveNames = costPreferences.preserveNames || [];
-    const preferNames = costPreferences.preferNames || [];
-    const payoffNames = costPreferences.offensivePayoffNames || [];
+    const costPreferences = readObject(getActionContext(ctx), "costPreferences");
+    const preserveNames = readArray(costPreferences, "preserveNames");
+    const preferNames = readArray(costPreferences, "preferNames");
+    const payoffNames = readArray(costPreferences, "offensivePayoffNames");
 
     if (preserveNames.includes(name)) return 120;
     if (payoffNames.includes(name)) return 80;
@@ -97,16 +217,23 @@ function selectBestMaterialCombo(materialCombos, ctx = {}) {
   return evaluatedCombos[0].combo;
 }
 
-function resolveBotFusionPosition(fusion, ctx) {
+function resolveBotFusionPosition(
+  fusion: FusionRuntimeCard,
+  ctx: EffectContext,
+): BattlePosition {
+  const directPositions = readObject(ctx.actionContext, "fusionPositions");
+  const activationActionContext = readObject(
+    ctx.activationContext,
+    "actionContext",
+  );
   const fusionPositions =
-    ctx?.actionContext?.fusionPositions ||
-    ctx?.activationContext?.actionContext?.fusionPositions ||
-    null;
-  const byName = fusionPositions?.byName || {};
-  const preferred = byName[fusion?.name];
+    directPositions || readObject(activationActionContext, "fusionPositions");
+  const byName = readObject(fusionPositions, "byName");
+  const preferred = byName ? Reflect.get(byName, fusion.name) : undefined;
   if (preferred === "attack" || preferred === "defense") return preferred;
-  const byId = fusionPositions?.byId || {};
-  const preferredById = byId[fusion?.id];
+  const byId = readObject(fusionPositions, "byId");
+  const preferredById =
+    byId && fusion.id !== undefined ? Reflect.get(byId, fusion.id) : undefined;
   if (preferredById === "attack" || preferredById === "defense") {
     return preferredById;
   }
@@ -117,10 +244,12 @@ function resolveBotFusionPosition(fusion, ctx) {
  * Perform bot fusion summon
  */
 export async function performBotFusion(
-  ctx,
-  summonableFusions,
-  availableMaterials
-) {
+  this: FusionExecutionHost,
+  ctx: EffectContext,
+  summonableFusions: FusionOption[],
+  availableMaterials: FusionMaterialGroups,
+): Promise<boolean> {
+  const player = ctx.player as FusionRuntimePlayer;
   // Bot AI: choose best fusion
   // Prefer strategy-provided generic fusion preferences, then fall back to ATK.
   const sorted = [...summonableFusions].sort((a, b) => {
@@ -138,7 +267,10 @@ export async function performBotFusion(
   const { fusion, materialCombos } = chosen;
 
   // Select the best material combo (prioritize sacrificing weak monsters)
-  const materials = selectBestMaterialCombo(materialCombos, ctx);
+  const materials = selectBestMaterialCombo(
+    materialCombos,
+    ctx,
+  ) as FusionRuntimeCard[];
 
   // Log bot fusion decision
   console.log(
@@ -147,7 +279,7 @@ export async function performBotFusion(
   );
 
   // Get fusion monster index in extra deck
-  const fusionIndex = ctx.player.extraDeck.indexOf(fusion);
+  const fusionIndex = player.extraDeck.indexOf(fusion);
   if (fusionIndex === -1) {
     console.log("[Bot] Fusion monster not found in Extra Deck");
     return false;
@@ -159,7 +291,7 @@ export async function performBotFusion(
     fusionIndex,
     resolveBotFusionPosition(fusion, ctx),
     materials,
-    ctx.player
+    player
   );
 
   return success;
@@ -168,8 +300,12 @@ export async function performBotFusion(
 /**
  * Apply polymerization fusion effect
  */
-export async function applyPolymerizationFusion(action, ctx) {
-  const player = ctx.player;
+export async function applyPolymerizationFusion(
+  this: FusionExecutionHost,
+  action: ActionOf<"polymerization_fusion_summon">,
+  ctx: EffectContext,
+): Promise<boolean> {
+  const player = ctx.player as FusionRuntimePlayer;
 
   // Get materials from field and hand
   const fieldMonsters = player.field.filter(
@@ -192,9 +328,9 @@ export async function applyPolymerizationFusion(action, ctx) {
   );
 
   // Build materialInfo array with zone information for each material
-  const materialInfo = [
-    ...fieldMonsters.map(() => ({ zone: "field" })),
-    ...handMonsters.map(() => ({ zone: "hand" })),
+  const materialInfo: Array<{ zone: "field" | "hand" }> = [
+    ...fieldMonsters.map((): { zone: "field" } => ({ zone: "field" })),
+    ...handMonsters.map((): { zone: "hand" } => ({ zone: "hand" })),
   ];
 
   console.log("[Polymerization] Material info:", materialInfo);
@@ -235,7 +371,9 @@ export async function applyPolymerizationFusion(action, ctx) {
   console.log("[Polymerization] Showing fusion selection for human player");
 
   // Use game's card selection system
-  const fusionSelection = await new Promise((resolve) => {
+  const fusionSelection = await new Promise<
+    FusionRuntimeCard | null | undefined
+  >((resolve) => {
     // Build a selection contract for choosing the fusion
     // Include all necessary card properties for the selection modal to display correctly
     const selectionContract = {
@@ -267,7 +405,7 @@ export async function applyPolymerizationFusion(action, ctx) {
       kind: "fusion_select",
       selectionContract,
       onCancel: () => resolve(null),
-      execute: (selections) => {
+      execute: (selections?: FusionSelectionValues | null) => {
         const choice = selections?.fusion_choice?.[0];
         resolve(
           choice ? fusionCards.find((f) => `extra_${f.id}` === choice) : null
@@ -296,7 +434,7 @@ export async function applyPolymerizationFusion(action, ctx) {
   }
 
   // If only one combo, use it directly
-  let selectedMaterials;
+  let selectedMaterials: FusionRuntimeCard[];
   if (materialCombos.length === 1) {
     selectedMaterials = materialCombos[0];
   } else {
@@ -313,7 +451,7 @@ export async function applyPolymerizationFusion(action, ctx) {
       owner: "player",
     }));
 
-    const materialSelection = await new Promise((resolve) => {
+    const materialSelection = await new Promise<FusionRuntimeCard[] | null>((resolve) => {
       const selectionContract = {
         requirements: [
           {
@@ -339,11 +477,11 @@ export async function applyPolymerizationFusion(action, ctx) {
         kind: "fusion_materials",
         selectionContract,
         onCancel: () => resolve(null),
-        execute: (selections) => {
+        execute: (selections?: FusionSelectionValues | null) => {
           const keys = selections?.materials || [];
           const mats = keys
             .map((k) => materialCandidates.find((c) => c.key === k)?.cardRef)
-            .filter(Boolean);
+            .filter(Boolean) as FusionRuntimeCard[];
           resolve(mats);
           return { success: true, needsSelection: false };
         },

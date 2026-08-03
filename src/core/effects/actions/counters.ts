@@ -1,12 +1,187 @@
 import {
-  buildFieldSelectionCandidates,
-  getUI,
-  resolveFieldScopeCards,
-  selectCards,
+  buildFieldSelectionCandidates as buildSharedFieldSelectionCandidates,
+  getUI as getSharedUI,
+  resolveFieldScopeCards as resolveSharedFieldScopeCards,
+  selectCards as selectSharedCards,
 } from "../../actionHandlers/shared.js";
 import { cardMatchesKind } from "../../Card.js";
 import { isAI } from "../../Player.js";
 import { getCounterDisplayLabel, getUIText } from "../../i18n.js";
+import type Game from "../../Game.js";
+import type {
+  ActionRuntimeCard,
+  ActionRuntimePlayer,
+  EffectContext,
+  ResolvedTargetMap,
+} from "../../contracts/actionRuntime.js";
+import { writeContextValue } from "../../contracts/actionRuntime.js";
+import type { ActionOf, ActionOwner, ActionPlayerScope, SelectionCount } from "../../contracts/actions.js";
+import type { ZoneInput } from "../../contracts/zones.js";
+
+type CounterZone = "field" | "spellTrap" | "fieldSpell";
+
+interface CounterFilter {
+  readonly requireFaceup?: boolean;
+  readonly cardKind?: string | readonly string[];
+  readonly archetype?: string;
+  readonly type?: string;
+  readonly attribute?: string;
+  readonly name?: string;
+  readonly subtype?: string;
+  readonly counterType?: string;
+  readonly minCounters?: number;
+}
+
+interface CounterFieldSpec {
+  readonly zones?: readonly CounterZone[];
+  readonly zone?: CounterZone;
+  readonly filters?: CounterFilter;
+  readonly owner?: ActionOwner;
+  readonly multiplier?: number;
+  readonly baseAmount?: number;
+  readonly base?: number;
+  readonly min?: number;
+  readonly max?: number;
+}
+
+interface CounterAction {
+  readonly type: string;
+  readonly allowBelow?: boolean;
+  readonly amount?: number;
+  readonly amountFromFieldCount?: CounterFieldSpec;
+  readonly amountPrompt?: string;
+  readonly contextKey?: string;
+  readonly count?: number | SelectionCount;
+  readonly counterType?: string;
+  readonly damagePerCounter?: number;
+  readonly defaultAmount?: number;
+  readonly effectType?: string;
+  readonly filters?: CounterFilter;
+  readonly log?: boolean;
+  readonly maxAmount?: number;
+  readonly minAmount?: number;
+  readonly owner?: ActionOwner;
+  readonly player?: ActionPlayerScope;
+  readonly requireFaceup?: boolean;
+  readonly requirementId?: string;
+  readonly resultKey?: string;
+  readonly selectionMessage?: string;
+  readonly stepDelayMs?: number;
+  readonly storeAs?: string;
+  readonly targetRef?: string;
+  readonly targetScope?: object;
+  readonly variableAmount?: boolean;
+  readonly zone?: CounterZone;
+  readonly zones?: readonly CounterZone[];
+}
+
+interface CounterContext extends EffectContext {
+  removedCounterCounts?: Record<string, number>;
+  addedCounterCounts?: Record<string, number>;
+  fieldCounterCounts?: Record<string, number>;
+}
+
+interface CounterEntry {
+  readonly owner: ActionRuntimePlayer;
+  readonly card: ActionRuntimeCard;
+  readonly zone: CounterZone;
+  readonly counterCount: number;
+}
+
+interface CounterEventData {
+  readonly action?: string;
+  readonly actionContext?: object | null;
+  readonly amount?: number;
+  readonly card?: ActionRuntimeCard | null;
+  readonly cards?: readonly ActionRuntimeCard[];
+  readonly counterType?: string;
+  readonly ctx?: CounterContext;
+  readonly effectId?: string | null;
+  readonly fromField?: boolean;
+  readonly opponent?: ActionRuntimePlayer | null;
+  readonly player?: ActionRuntimePlayer | null;
+  readonly result?: unknown;
+  readonly source?: ActionRuntimeCard | null;
+  readonly sourceCard?: ActionRuntimeCard | null;
+  readonly zones?: readonly (ZoneInput | null)[];
+}
+
+type CounterGame = Game & {
+  _arenaTracker?: {
+    recordEvent(event: string, payload: object, metadata: object): void;
+  };
+};
+
+interface CounterActionHost {
+  game: CounterGame;
+  readonly ui: { log?(message: string): void } | null;
+  findCardZone(
+    player: ActionRuntimePlayer,
+    card: ActionRuntimeCard,
+  ): ZoneInput | null;
+  filterCardsListByImmunity(
+    cards: ActionRuntimeCard[],
+    player: ActionRuntimePlayer | null | undefined,
+    options: object,
+  ): { allowed: ActionRuntimeCard[] };
+  inferEffectType?(actionType: string): string;
+  cardMatchesFilters(card: ActionRuntimeCard, filters: object): boolean;
+}
+
+interface CounterUi {
+  log(message: string): void;
+  showNumberPrompt?(
+    prompt: string,
+    defaultValue: number,
+  ): number | null | PromiseLike<number | null>;
+}
+
+interface CounterSelectionCandidate {
+  readonly key: string;
+  readonly cardRef: ActionRuntimeCard;
+}
+
+function getUI(game: CounterGame | null | undefined): CounterUi | null {
+  return Reflect.apply(getSharedUI, undefined, [game]);
+}
+
+function resolveFieldScopeCards(
+  scope: object,
+  context: CounterContext,
+  game: CounterGame,
+  options: object,
+): ActionRuntimeCard[] {
+  return Reflect.apply(resolveSharedFieldScopeCards, undefined, [
+    scope,
+    context,
+    game,
+    options,
+  ]);
+}
+
+function buildFieldSelectionCandidates(
+  owner: ActionRuntimePlayer,
+  game: CounterGame,
+  cards: ActionRuntimeCard[],
+  options: object,
+): CounterSelectionCandidate[] {
+  return Reflect.apply(buildSharedFieldSelectionCandidates, undefined, [
+    owner,
+    game,
+    cards,
+    options,
+  ]);
+}
+
+async function selectCards(options: object): Promise<readonly string[] | null> {
+  return await Reflect.apply(selectSharedCards, undefined, [options]);
+}
+
+function isRuntimePlayer(
+  player: ActionRuntimePlayer | null | undefined,
+): player is ActionRuntimePlayer {
+  return player !== null && player !== undefined;
+}
 
 /**
  * Counter Actions - add/remove counters
@@ -20,17 +195,24 @@ import { getCounterDisplayLabel, getUIText } from "../../i18n.js";
  * @param {Object} targets - Resolved targets
  * @returns {boolean} Whether counters were added
  */
-function resolveCounterOwner(game, card, fallbackPlayer) {
+function resolveCounterOwner(
+  game: CounterGame | null | undefined,
+  card: ActionRuntimeCard | null | undefined,
+  fallbackPlayer: ActionRuntimePlayer | null | undefined,
+): ActionRuntimePlayer | null {
   if (fallbackPlayer?.id === "player" || fallbackPlayer?.id === "bot") {
     return fallbackPlayer;
   }
   const owner = card?.controller || card?.owner;
-  if (owner === "player") return game?.player || "player";
-  if (owner === "bot") return game?.bot || "bot";
+  if (owner === "player") return game?.player || fallbackPlayer || null;
+  if (owner === "bot") return game?.bot || fallbackPlayer || null;
   return fallbackPlayer || null;
 }
 
-function emitCounterEvent(engine, data = {}) {
+function emitCounterEvent(
+  engine: CounterActionHost,
+  data: CounterEventData = {},
+): void {
   const game = engine?.game;
   const tracker = game?._arenaTracker;
   if (!tracker || typeof tracker.recordEvent !== "function") return;
@@ -51,7 +233,11 @@ function emitCounterEvent(engine, data = {}) {
   );
 }
 
-function getCounterTextParams(counterType, amount, extra = {}) {
+function getCounterTextParams(
+  counterType: string,
+  amount: number,
+  extra: Record<string, string | number> = {},
+): Record<string, string | number> {
   const value = Number.isFinite(Number(amount)) ? Number(amount) : 0;
   const counterLabel = getCounterDisplayLabel(counterType, value);
   return {
@@ -62,14 +248,23 @@ function getCounterTextParams(counterType, amount, extra = {}) {
   };
 }
 
-function getCounterLogMessage(key, counterType, amount, params = {}) {
+function getCounterLogMessage(
+  key: string,
+  counterType: string,
+  amount: number,
+  params: Record<string, string | number> = {},
+): string {
   return getUIText(
     `ui.counters.${key}`,
     getCounterTextParams(counterType, amount, params),
   );
 }
 
-async function waitForCounterStep(engine, action, ctx) {
+async function waitForCounterStep(
+  engine: CounterActionHost,
+  action: CounterAction,
+  ctx: CounterContext,
+): Promise<void> {
   const game = engine?.game;
   if (!game) return;
 
@@ -91,28 +286,37 @@ async function waitForCounterStep(engine, action, ctx) {
   await new Promise((resolve) => setTimeout(resolve, 0));
 }
 
-function isCounterFieldZone(zone) {
+function isCounterFieldZone(zone: unknown): zone is CounterZone {
   return zone === "field" || zone === "spellTrap" || zone === "fieldSpell";
 }
 
-function getCounterQueryPlayers(ctx, owner = "self") {
-  if (owner === "opponent") return [ctx?.opponent].filter(Boolean);
+function getCounterQueryPlayers(
+  ctx: CounterContext,
+  owner: ActionOwner = "self",
+): ActionRuntimePlayer[] {
+  if (owner === "opponent") return [ctx?.opponent].filter(isRuntimePlayer);
   if (owner === "any" || owner === "both" || owner === "either") {
-    return [ctx?.player, ctx?.opponent].filter(Boolean);
+    return [ctx?.player, ctx?.opponent].filter(isRuntimePlayer);
   }
-  return [ctx?.player].filter(Boolean);
+  return [ctx?.player].filter(isRuntimePlayer);
 }
 
-function getCounterQueryZoneCards(player, zone) {
+function getCounterQueryZoneCards(
+  player: ActionRuntimePlayer | null | undefined,
+  zone: CounterZone,
+): ActionRuntimeCard[] {
   if (!player || !zone) return [];
   if (zone === "fieldSpell") {
     return player.fieldSpell ? [player.fieldSpell] : [];
   }
-  const cards = player[zone];
+  const cards = Reflect.get(player, zone);
   return Array.isArray(cards) ? cards.filter(Boolean) : [];
 }
 
-function cardMatchesCounterQueryFilters(card, filters = {}) {
+function cardMatchesCounterQueryFilters(
+  card: ActionRuntimeCard | null | undefined,
+  filters: CounterFilter = {},
+): boolean {
   if (!card) return false;
   if (filters.requireFaceup === true && card.isFacedown) return false;
   if (filters.cardKind && !cardMatchesKind(card, filters.cardKind)) return false;
@@ -138,7 +342,10 @@ function cardMatchesCounterQueryFilters(card, filters = {}) {
   return true;
 }
 
-function countCounterQueryFieldCards(ctx, spec = {}) {
+function countCounterQueryFieldCards(
+  ctx: CounterContext,
+  spec: CounterFieldSpec,
+): number {
   const zones = Array.isArray(spec.zones)
     ? spec.zones
     : [spec.zone || "field"];
@@ -158,7 +365,10 @@ function countCounterQueryFieldCards(ctx, spec = {}) {
   return count;
 }
 
-function resolveAddCounterAmount(action, ctx) {
+function resolveAddCounterAmount(
+  action: CounterAction,
+  ctx: CounterContext,
+): number {
   if (action.amountFromFieldCount) {
     const spec = action.amountFromFieldCount;
     const count = countCounterQueryFieldCards(ctx, spec);
@@ -185,9 +395,12 @@ function resolveAddCounterAmount(action, ctx) {
   return Math.max(0, Math.floor(Number(action.amount || 1)));
 }
 
-function uniqueCounterEntries(cards, zones = []) {
-  const seen = new Set();
-  const entries = [];
+function uniqueCounterEntries(
+  cards: readonly ActionRuntimeCard[],
+  zones: readonly (ZoneInput | null)[] = [],
+): Array<{ card: ActionRuntimeCard; zone: ZoneInput | null }> {
+  const seen = new Set<number | ActionRuntimeCard>();
+  const entries: Array<{ card: ActionRuntimeCard; zone: ZoneInput | null }> = [];
   for (const [index, card] of (cards || []).entries()) {
     if (!card) continue;
     const key = card.instanceId || card;
@@ -201,7 +414,11 @@ function uniqueCounterEntries(cards, zones = []) {
   return entries;
 }
 
-function findCounterCardZone(engine, card, fallbackPlayer) {
+function findCounterCardZone(
+  engine: CounterActionHost,
+  card: ActionRuntimeCard,
+  fallbackPlayer: ActionRuntimePlayer | null | undefined,
+): ZoneInput | null {
   const game = engine?.game;
   const owner = resolveCounterOwner(game, card, fallbackPlayer);
   if (owner && typeof engine?.findCardZone === "function") {
@@ -216,7 +433,10 @@ function findCounterCardZone(engine, card, fallbackPlayer) {
   );
 }
 
-async function emitCounterRemovedEvent(engine, data = {}) {
+async function emitCounterRemovedEvent(
+  engine: CounterActionHost,
+  data: CounterEventData = {},
+): Promise<void> {
   const game = engine?.game;
   if (!game || typeof game.emit !== "function") return;
 
@@ -266,7 +486,12 @@ async function emitCounterRemovedEvent(engine, data = {}) {
   });
 }
 
-export async function applyAddCounter(action, ctx, targets) {
+export async function applyAddCounter(
+  this: CounterActionHost,
+  action: ActionOf<"add_counter"> & CounterAction,
+  ctx: CounterContext,
+  targets: ResolvedTargetMap,
+): Promise<boolean> {
   const counterType = action.counterType || "default";
   const amount = resolveAddCounterAmount(action, ctx);
   const targetRef = action.targetRef || "self";
@@ -277,19 +502,20 @@ export async function applyAddCounter(action, ctx, targets) {
   }
   if (amount <= 0) return false;
 
-  let targetCards = [];
+  let targetCards: ActionRuntimeCard[] = [];
   if (action.targetScope) {
     targetCards = resolveFieldScopeCards(action.targetScope, ctx, this.game, {
       engine: this,
     });
   } else if (targetRef === "self") {
-    targetCards = [ctx.source];
+    targetCards = ctx.source ? [ctx.source] : [];
   } else if (targets[targetRef]) {
-    targetCards = targets[targetRef];
-  }
-
-  if (!Array.isArray(targetCards)) {
-    targetCards = [targetCards];
+    const targetValue = targets[targetRef];
+    targetCards = Array.isArray(targetValue)
+      ? targetValue
+      : targetValue
+        ? [targetValue as ActionRuntimeCard]
+        : [];
   }
   if (
     action.targetScope &&
@@ -347,7 +573,7 @@ export async function applyAddCounter(action, ctx, targets) {
   return added;
 }
 
-function toContextCounterKey(counterType) {
+function toContextCounterKey(counterType: string): string {
   const raw = String(counterType || "default");
   const pascal = raw
     .split(/[^a-zA-Z0-9]+/)
@@ -357,32 +583,51 @@ function toContextCounterKey(counterType) {
   return `removed${pascal || "Default"}CounterCount`;
 }
 
-function getCounterContextKey(action, counterType, fallback = undefined) {
+function getCounterContextKey(
+  action: CounterAction,
+  counterType: string,
+  fallback: string | null | undefined = undefined,
+): string | null | undefined {
   const configured = action.contextKey || action.storeAs || action.resultKey;
   if (configured) return configured;
   if (fallback !== undefined) return fallback;
   return toContextCounterKey(counterType);
 }
 
-function writeCounterContext(ctx, counterType, contextKey, amount) {
+function writeCounterContext(
+  ctx: CounterContext,
+  counterType: string,
+  contextKey: string | null | undefined,
+  amount: number,
+): void {
   if (!ctx || !contextKey) return;
   const safeAmount = Math.max(0, Number(amount || 0));
-  ctx[contextKey] = safeAmount;
+  writeContextValue(ctx, contextKey, safeAmount);
   ctx.lastRemovedCounterCount = safeAmount;
   ctx.removedCounterCounts = ctx.removedCounterCounts || {};
   ctx.removedCounterCounts[counterType] = safeAmount;
 }
 
-function writeAddedCounterContext(ctx, counterType, contextKey, amount) {
+function writeAddedCounterContext(
+  ctx: CounterContext,
+  counterType: string,
+  contextKey: string | null | undefined,
+  amount: number,
+): void {
   if (!ctx || !contextKey) return;
   const safeAmount = Math.max(0, Number(amount || 0));
-  ctx[contextKey] = safeAmount;
+  writeContextValue(ctx, contextKey, safeAmount);
   ctx.lastAddedCounterCount = safeAmount;
   ctx.addedCounterCounts = ctx.addedCounterCounts || {};
   ctx.addedCounterCounts[counterType] = safeAmount;
 }
 
-async function resolveCounterRemovalAmount(engine, action, ctx, totalAvailable) {
+async function resolveCounterRemovalAmount(
+  engine: CounterActionHost,
+  action: CounterAction,
+  ctx: CounterContext,
+  totalAvailable: number,
+): Promise<number | null> {
   const game = engine?.game;
   const player = ctx?.player;
   const hasRange =
@@ -419,7 +664,10 @@ async function resolveCounterRemovalAmount(engine, action, ctx, totalAvailable) 
       max: maxAmount,
     });
   const raw = ui.showNumberPrompt(prompt, defaultAmount);
-  const resolved = raw && typeof raw.then === "function" ? await raw : raw;
+  const resolved =
+    raw && typeof raw === "object" && typeof raw.then === "function"
+      ? await raw
+      : raw;
   if (resolved === null || resolved === undefined) return null;
 
   const parsed = Math.floor(Number(resolved));
@@ -434,27 +682,36 @@ async function resolveCounterRemovalAmount(engine, action, ctx, totalAvailable) 
  * @param {Object} targets - Resolved targets
  * @returns {boolean} Whether counters were removed
  */
-export async function applyRemoveCounter(action, ctx, targets) {
+export async function applyRemoveCounter(
+  this: CounterActionHost,
+  action: ActionOf<"remove_counter"> & CounterAction,
+  ctx: CounterContext,
+  targets: ResolvedTargetMap,
+): Promise<boolean> {
   const counterType = action.counterType || "default";
-  const amount = Number.isFinite(action.amount) ? action.amount : 1;
+  const amount =
+    typeof action.amount === "number" && Number.isFinite(action.amount)
+      ? action.amount
+      : 1;
   const targetRef = action.targetRef || "self";
   const allowBelow = action.allowBelow === true;
 
-  let targetCards = [];
+  let targetCards: ActionRuntimeCard[] = [];
   if (targetRef === "self") {
-    targetCards = [ctx.source];
+    targetCards = ctx.source ? [ctx.source] : [];
   } else if (targets[targetRef]) {
-    targetCards = targets[targetRef];
-  }
-
-  if (!Array.isArray(targetCards)) {
-    targetCards = [targetCards];
+    const targetValue = targets[targetRef];
+    targetCards = Array.isArray(targetValue)
+      ? targetValue
+      : targetValue
+        ? [targetValue as ActionRuntimeCard]
+        : [];
   }
 
   let removed = false;
   let removedAmount = 0;
-  const removedCards = [];
-  const removedZones = [];
+  const removedCards: ActionRuntimeCard[] = [];
+  const removedZones: CounterZone[] = [];
   for (const card of targetCards) {
     if (!card || typeof card.getCounter !== "function") continue;
     const current = card.getCounter(counterType);
@@ -510,31 +767,46 @@ export async function applyRemoveCounter(action, ctx, targets) {
   return removed;
 }
 
-function getCounterValue(card, counterType) {
+function getCounterValue(
+  card: ActionRuntimeCard | null | undefined,
+  counterType: string,
+): number {
   if (!card || typeof card.getCounter !== "function") return 0;
   return Math.max(0, Number(card.getCounter(counterType) || 0));
 }
 
-function getCounterFieldOwners(game, ctx, ownerRule = "self") {
+function getCounterFieldOwners(
+  game: CounterGame,
+  ctx: CounterContext,
+  ownerRule: ActionOwner = "self",
+): ActionRuntimePlayer[] {
   const player = ctx?.player || null;
   const opponent = ctx?.opponent || game?.getOpponent?.(player) || null;
 
   if (ownerRule === "opponent") return opponent ? [opponent] : [];
   if (ownerRule === "any" || ownerRule === "both") {
-    return [player, opponent].filter(Boolean);
+    return [player, opponent].filter(isRuntimePlayer);
   }
   return player ? [player] : [];
 }
 
-function getZoneCards(owner, zoneKey) {
+function getZoneCards(
+  owner: ActionRuntimePlayer | null | undefined,
+  zoneKey: CounterZone,
+): ActionRuntimeCard[] {
   if (!owner || !zoneKey) return [];
   if (zoneKey === "fieldSpell") {
     return owner.fieldSpell ? [owner.fieldSpell] : [];
   }
-  return Array.isArray(owner[zoneKey]) ? owner[zoneKey] : [];
+  const cards = Reflect.get(owner, zoneKey);
+  return Array.isArray(cards) ? cards : [];
 }
 
-function collectCounterFieldEntries(engine, action, ctx) {
+function collectCounterFieldEntries(
+  engine: CounterActionHost,
+  action: CounterAction,
+  ctx: CounterContext,
+): CounterEntry[] {
   const game = engine?.game;
   const counterType = action.counterType || "default";
   const ownerRule = action.owner || action.player || "self";
@@ -545,7 +817,7 @@ function collectCounterFieldEntries(engine, action, ctx) {
   const filters = action.filters || {};
   const hasFilters = Object.keys(filters).length > 0;
   const requireFaceup = action.requireFaceup === true;
-  const entries = [];
+  const entries: CounterEntry[] = [];
 
   for (const owner of getCounterFieldOwners(game, ctx, ownerRule)) {
     for (const zoneKey of zones) {
@@ -569,16 +841,20 @@ function collectCounterFieldEntries(engine, action, ctx) {
   return entries;
 }
 
-function decorateCounterEntries(game, entries) {
-  const groups = new Map();
+function decorateCounterEntries(
+  game: CounterGame,
+  entries: readonly CounterEntry[],
+) {
+  const groups = new Map<ActionRuntimePlayer, ActionRuntimeCard[]>();
 
   for (const entry of entries) {
     if (!entry?.owner || !entry.card) continue;
-    if (!groups.has(entry.owner)) groups.set(entry.owner, []);
-    groups.get(entry.owner).push(entry.card);
+    const cards = groups.get(entry.owner) || [];
+    if (!groups.has(entry.owner)) groups.set(entry.owner, cards);
+    cards.push(entry.card);
   }
 
-  const candidates = [];
+  const candidates: CounterSelectionCandidate[] = [];
   for (const [owner, cards] of groups.entries()) {
     candidates.push(
       ...buildFieldSelectionCandidates(owner, game, cards, {
@@ -590,8 +866,11 @@ function decorateCounterEntries(game, entries) {
   return candidates;
 }
 
-function chooseGreedyCounterEntries(entries, amount) {
-  const selected = [];
+function chooseGreedyCounterEntries(
+  entries: readonly CounterEntry[],
+  amount: number,
+): ActionRuntimeCard[] {
+  const selected: ActionRuntimeCard[] = [];
   let remaining = amount;
 
   for (const entry of entries) {
@@ -603,7 +882,13 @@ function chooseGreedyCounterEntries(entries, amount) {
   return remaining <= 0 ? selected : [];
 }
 
-async function selectCounterPaymentCards(engine, action, ctx, entries, amount) {
+async function selectCounterPaymentCards(
+  engine: CounterActionHost,
+  action: CounterAction,
+  ctx: CounterContext,
+  entries: readonly CounterEntry[],
+  amount: number,
+): Promise<ActionRuntimeCard[]> {
   const game = engine?.game;
   const player = ctx?.player;
   if (!game || !player) return [];
@@ -657,7 +942,7 @@ async function selectCounterPaymentCards(engine, action, ctx, entries, amount) {
     autoSelectKeys: () =>
       chooseGreedyCounterEntries(entries, amount)
         .map((card) => candidates.find((candidate) => candidate.cardRef === card)?.key)
-        .filter(Boolean),
+        .filter((key): key is string => typeof key === "string"),
   });
 
   if (selectedKeys === null) {
@@ -667,7 +952,7 @@ async function selectCounterPaymentCards(engine, action, ctx, entries, amount) {
 
   return selectedKeys
     .map((key) => candidates.find((candidate) => candidate.key === key)?.cardRef)
-    .filter(Boolean);
+    .filter((card): card is ActionRuntimeCard => card !== undefined);
 }
 
 /**
@@ -676,7 +961,11 @@ async function selectCounterPaymentCards(engine, action, ctx, entries, amount) {
  * This generic cost-style action can remove counters across one or more cards,
  * using field targeting when a human player needs to choose the payment source.
  */
-export async function applyRemoveCountersFromField(action, ctx) {
+export async function applyRemoveCountersFromField(
+  this: CounterActionHost,
+  action: ActionOf<"remove_counters_from_field"> & CounterAction,
+  ctx: CounterContext,
+): Promise<boolean> {
   const game = this?.game;
   const counterType = action.counterType || "default";
   const entries = collectCounterFieldEntries(this, action, ctx);
@@ -722,7 +1011,7 @@ export async function applyRemoveCountersFromField(action, ctx) {
   );
   const selectedEntries = selectedCards
     .map((card) => entries.find((entry) => entry.card === card))
-    .filter(Boolean);
+    .filter((entry): entry is CounterEntry => entry !== undefined);
   const selectedTotal = selectedEntries.reduce(
     (sum, entry) => sum + entry.counterCount,
     0,
@@ -741,8 +1030,8 @@ export async function applyRemoveCountersFromField(action, ctx) {
   let remaining = amount;
   let removed = false;
   let removedAmount = 0;
-  const removedCards = [];
-  const removedZones = [];
+  const removedCards: ActionRuntimeCard[] = [];
+  const removedZones: CounterZone[] = [];
 
   while (remaining > 0) {
     let progressed = false;
@@ -803,7 +1092,11 @@ export async function applyRemoveCountersFromField(action, ctx) {
  * Remove every matching counter from the field and expose the removed count
  * on the action context for subsequent actions.
  */
-export async function applyRemoveAllCountersFromField(action, ctx) {
+export async function applyRemoveAllCountersFromField(
+  this: CounterActionHost,
+  action: ActionOf<"remove_all_counters_from_field"> & CounterAction,
+  ctx: CounterContext,
+): Promise<boolean> {
   const game = this?.game;
   const counterType = action.counterType || "default";
   const entries = collectCounterFieldEntries(this, action, ctx);
@@ -815,7 +1108,7 @@ export async function applyRemoveAllCountersFromField(action, ctx) {
   const contextKey = getCounterContextKey(action, counterType);
 
   if (ctx && contextKey) {
-    ctx[contextKey] = 0;
+    writeContextValue(ctx, contextKey, 0);
     ctx.lastRemovedCounterCount = 0;
     ctx.removedCounterCounts = ctx.removedCounterCounts || {};
     ctx.removedCounterCounts[counterType] = 0;
@@ -829,8 +1122,8 @@ export async function applyRemoveAllCountersFromField(action, ctx) {
   }
 
   let removedAmount = 0;
-  const removedCards = [];
-  const removedZones = [];
+  const removedCards: ActionRuntimeCard[] = [];
+  const removedZones: CounterZone[] = [];
 
   for (const entry of entries) {
     const card = entry.card;
@@ -859,7 +1152,7 @@ export async function applyRemoveAllCountersFromField(action, ctx) {
   }
 
   if (ctx && contextKey) {
-    ctx[contextKey] = removedAmount;
+    writeContextValue(ctx, contextKey, removedAmount);
     ctx.lastRemovedCounterCount = removedAmount;
     ctx.removedCounterCounts = ctx.removedCounterCounts || {};
     ctx.removedCounterCounts[counterType] = removedAmount;
@@ -882,7 +1175,11 @@ export async function applyRemoveAllCountersFromField(action, ctx) {
 /**
  * Count matching field counters and expose the total on the action context.
  */
-export async function applyCountFieldCounters(action, ctx) {
+export async function applyCountFieldCounters(
+  this: CounterActionHost,
+  action: ActionOf<"count_field_counters"> & CounterAction,
+  ctx: CounterContext,
+): Promise<boolean> {
   const game = this?.game;
   const counterType = action.counterType || "default";
   const entries = collectCounterFieldEntries(this, action, ctx);
@@ -894,7 +1191,7 @@ export async function applyCountFieldCounters(action, ctx) {
     `field${counterType.charAt(0).toUpperCase()}${counterType.slice(1)}CounterCount`;
 
   if (ctx && contextKey) {
-    ctx[contextKey] = total;
+    writeContextValue(ctx, contextKey, total);
     ctx.lastFieldCounterCount = total;
     ctx.fieldCounterCounts = ctx.fieldCounterCounts || {};
     ctx.fieldCounterCounts[counterType] = total;

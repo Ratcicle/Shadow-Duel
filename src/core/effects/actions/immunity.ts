@@ -1,3 +1,16 @@
+import type Game from "../../Game.js";
+import type { ActionRuntimeCard, EffectContext } from "../../contracts/actionRuntime.js";
+import type { ActionOf } from "../../contracts/actions.js";
+
+interface ImmuneRuntimeCard extends ActionRuntimeCard {
+  immuneToOpponentEffectsUntilTurn?: number;
+}
+
+interface ImmunityActionHost {
+  game: Game;
+  readonly ui: { log?(message: string): void } | null;
+}
+
 /**
  * Immunity Actions - effect immunity granting
  * Extracted from EffectEngine.js – preserving original logic and signatures.
@@ -16,8 +29,12 @@
  * @param {Object} ctx - Context object with summonedCard and player
  * @returns {boolean} Whether immunity was granted
  */
-export function applyGrantVoidFusionImmunity(action, ctx) {
-  const card = ctx?.summonedCard;
+export function applyGrantVoidFusionImmunity(
+  this: ImmunityActionHost,
+  action: ActionOf<"grant_void_fusion_immunity">,
+  ctx: EffectContext,
+): boolean {
+  const card = ctx?.summonedCard as ImmuneRuntimeCard | null | undefined;
   const player = ctx?.player;
   if (
     !card ||

@@ -4,9 +4,45 @@ import {
 } from "./ActionHandlers.js";
 import { attachEffectModules } from "./effects/attachModules.js";
 import { canUseOncePerDuelEffect } from "./effects/triggers/registration.js";
+import type Game from "./Game.js";
+import type {
+  ActionRuntimeCard,
+  ActionRuntimePlayer,
+  EffectContext,
+} from "./contracts/actionRuntime.js";
+import type { EffectDefinition } from "./contracts/effects.js";
+import type { ZoneInput } from "./contracts/zones.js";
+import type { EffectModuleMethods } from "./effects/attachModules.js";
 
-export default class EffectEngine {
-  constructor(game) {
+type UsageEntry = number | { turn?: number; count?: number };
+type UsageMap = Record<string, UsageEntry>;
+
+type RuntimeUsageCard = ActionRuntimeCard & {
+  oncePerTurnUsageByName?: UsageMap;
+};
+
+type RuntimeUsagePlayer = ActionRuntimePlayer & {
+  oncePerTurnUsageByName?: UsageMap;
+};
+
+type RuntimeUsageEffect = EffectDefinition & {
+  readonly usesPerTurn?: number;
+  readonly maxUsesPerTurn?: number;
+};
+
+interface LegacyEffectCondition {
+  readonly requires?: string;
+  readonly triggerArchetype?: string;
+}
+
+class EffectEngine {
+  declare game: Game;
+  declare actionHandlers: ActionHandlerRegistry;
+  declare _targetingCache: Map<string, unknown>;
+  declare _targetingCacheHits: number;
+  declare _targetingCacheMisses: number;
+
+  constructor(game: Game) {
     this.game = game;
 
     // Initialize action handler registry
@@ -15,14 +51,14 @@ export default class EffectEngine {
 
     // Cache de targeting para evitar buscas redundantes
     // Formato: { "cacheKey": { zoneName, candidates, timestamp } }
-    this._targetingCache = new Map();
+    this._targetingCache = new Map<string, unknown>();
     this._targetingCacheHits = 0;
     this._targetingCacheMisses = 0;
 
     // Track per-card counters for special summon by type (used by passives like Metal Armored Dragon)
     // Defer listener registration until game is fully initialized
     if (game && typeof game.on === "function") {
-      game.on("after_summon", (payload) => {
+      game.on("after_summon", (payload: object) => {
         this.handleSpecialSummonTypeCounters(payload);
         this.handleFieldPresenceTypeSummonCounters(payload);
       });
@@ -64,11 +100,17 @@ export default class EffectEngine {
    * @param {Object} card - The card to check
    * @returns {boolean} - True if effects are negated
    */
-  isEffectNegated(card) {
+  isEffectNegated(
+    card: ActionRuntimeCard | null | undefined,
+  ): boolean | null | undefined {
     return card && card.effectsNegated === true;
   }
 
-  checkOncePerTurn(card, player, effect) {
+  checkOncePerTurn(
+    card: ActionRuntimeCard,
+    player: ActionRuntimePlayer,
+    effect: EffectDefinition | null | undefined,
+  ) {
     const restrictionCheck =
       this.game?.canActivateCardEffectUnderRestrictions?.(card, player, effect, {
         silent: true,
@@ -86,18 +128,22 @@ export default class EffectEngine {
     return this.game.canUseOncePerTurn(card, player, effect);
   }
 
-  checkOncePerDuel(card, player, effect) {
+  checkOncePerDuel(
+    card: ActionRuntimeCard,
+    player: ActionRuntimePlayer,
+    effect: EffectDefinition,
+  ) {
     return canUseOncePerDuelEffect(card, player, effect);
   }
 
   checkEffectCondition(
-    condition,
-    sourceCard,
-    player,
-    summonedCard,
-    sourceZone,
-    summonFromZone,
-  ) {
+    condition: LegacyEffectCondition | null | undefined,
+    sourceCard: ActionRuntimeCard,
+    player: ActionRuntimePlayer,
+    summonedCard: ActionRuntimeCard,
+    sourceZone: ZoneInput | null | undefined,
+    summonFromZone: ZoneInput | null | undefined,
+  ): boolean {
     if (!condition) return true;
 
     if (condition.requires === "self_in_hand") {
@@ -122,10 +168,13 @@ export default class EffectEngine {
     return true;
   }
 
-  canUseOncePerTurn(effect, ctx) {
+  canUseOncePerTurn(
+    effect: RuntimeUsageEffect | null | undefined,
+    ctx: EffectContext,
+  ): boolean {
     if (!effect || !effect.oncePerTurn) return true;
-    const player = ctx?.player;
-    const card = ctx?.source;
+    const player = ctx?.player as RuntimeUsagePlayer | null | undefined;
+    const card = ctx?.source as RuntimeUsageCard | null | undefined;
     if (!player) return true;
     if (this.game && typeof this.game.canUseOncePerTurn === "function") {
       return this.game.canUseOncePerTurn(card, player, effect).ok === true;
@@ -159,10 +208,13 @@ export default class EffectEngine {
     return used < limit;
   }
 
-  markOncePerTurn(effect, ctx) {
+  markOncePerTurn(
+    effect: RuntimeUsageEffect | null | undefined,
+    ctx: EffectContext,
+  ): void {
     if (!effect || !effect.oncePerTurn) return;
-    const player = ctx?.player;
-    const card = ctx?.source;
+    const player = ctx?.player as RuntimeUsagePlayer | null | undefined;
+    const card = ctx?.source as RuntimeUsageCard | null | undefined;
     if (!player) return;
     if (this.game && typeof this.game.markOncePerTurnUsed === "function") {
       this.game.markOncePerTurnUsed(card, player, effect);
@@ -184,7 +236,7 @@ export default class EffectEngine {
         ),
       ) || 1,
     );
-    const mark = (usage) => {
+    const mark = (usage: UsageMap): void => {
       const entry = usage[key];
       const used =
         entry === currentTurn
@@ -208,4 +260,10 @@ export default class EffectEngine {
   }
 }
 
+// Type-only declaration merge for methods installed by attachEffectModules().
+// No class fields are emitted for the dynamically attached methods.
+interface EffectEngine extends EffectModuleMethods {}
+
 attachEffectModules(EffectEngine);
+
+export default EffectEngine;

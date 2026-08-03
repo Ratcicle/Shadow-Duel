@@ -1,9 +1,79 @@
+import type Game from "../../Game.js";
+import type {
+  ActionRuntimeCard,
+  ActionRuntimePlayer,
+  EffectContext,
+  LegacyActionHandlerResult,
+  NeedsSelectionResult,
+  NormalizedActionExecutionResult,
+  ResolvedTargetMap,
+} from "../../contracts/actionRuntime.js";
+import type { ActionOf, CardAction } from "../../contracts/actions.js";
+import type { EffectDefinition } from "../../contracts/effects.js";
+
+interface DestroyRuntimeCard extends ActionRuntimeCard {
+  permanentBuffsBySource?: Record<string, { atk?: number }>;
+}
+
+interface NegationCheckResult {
+  readonly negated: boolean;
+  readonly costPaid?: boolean;
+}
+
+interface DestroyActionHost {
+  game: Game;
+  readonly ui: {
+    log?(message: string): void;
+    showDestructionNegationPrompt?(
+      cardName: string,
+      costDescription: string,
+      resolve: (accepted: boolean) => void,
+    ): void;
+    showConfirmPrompt?(
+      message: string,
+      options?: object,
+    ): boolean | PromiseLike<boolean>;
+  } | null;
+  checkOncePerTurn(
+    card: ActionRuntimeCard,
+    player: ActionRuntimePlayer,
+    effect: EffectDefinition,
+  ): { ok: boolean; reason?: string };
+  promptForDestructionNegation(
+    card: ActionRuntimeCard,
+    effect: EffectDefinition,
+  ): Promise<boolean>;
+  getDestructionNegationCostDescription(effect: EffectDefinition): string;
+  applyActions(
+    actions: readonly CardAction[],
+    context: EffectContext,
+    targets: ResolvedTargetMap,
+  ): Promise<
+    boolean | NormalizedActionExecutionResult | NeedsSelectionResult
+  >;
+  commitEffectUsage(
+    card: ActionRuntimeCard,
+    player: ActionRuntimePlayer,
+    effect: EffectDefinition,
+  ): void;
+}
+
+type DestroyOtherDragonsAction = ActionOf<"destroy_other_dragons_and_buff"> & {
+  readonly typeName?: string;
+  readonly atkPerDestroyed?: number;
+  readonly buffSourceName?: string;
+};
+
 /**
  * Destroy Actions - destruction and negation handling
  * Extracted from EffectEngine.js – preserving original logic and signatures.
  */
 
-function resolveContextTargetCards(action, ctx, targets) {
+function resolveContextTargetCards(
+  action: ActionOf<"destroy">,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+): ActionRuntimeCard[] {
   const targetRef = action?.targetRef;
   const targetCards = targets?.[targetRef] || [];
   if (Array.isArray(targetCards) && targetCards.length > 0) {
@@ -41,7 +111,7 @@ function resolveContextTargetCards(action, ctx, targets) {
     target: ctx?.target,
     targetedCard: ctx?.targetedCard,
   };
-  const contextTarget = contextTargets[targetRef];
+  const contextTarget = Reflect.get(contextTargets, targetRef || "");
   if (Array.isArray(contextTarget)) return contextTarget.filter(Boolean);
   return contextTarget ? [contextTarget] : [];
 }
@@ -53,7 +123,12 @@ function resolveContextTargetCards(action, ctx, targets) {
  * @param {Object} targets - Resolved targets
  * @returns {Promise<boolean>} Whether any cards were destroyed
  */
-export async function applyDestroy(action, ctx, targets) {
+export async function applyDestroy(
+  this: DestroyActionHost,
+  action: ActionOf<"destroy">,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+): Promise<boolean> {
   const targetCards = resolveContextTargetCards(action, ctx, targets);
   let destroyedAny = false;
 
@@ -87,7 +162,11 @@ export async function applyDestroy(action, ctx, targets) {
  * @param {Object} ctx - Context with source, player, opponent info
  * @returns {Promise<Object>} - { negated: boolean, costPaid: boolean }
  */
-export async function checkBeforeDestroyNegations(card, ctx) {
+export async function checkBeforeDestroyNegations(
+  this: DestroyActionHost,
+  card: ActionRuntimeCard | null | undefined,
+  ctx: EffectContext,
+): Promise<NegationCheckResult> {
   if (!card || !card.effects) {
     return { negated: false };
   }
@@ -168,27 +247,36 @@ export async function checkBeforeDestroyNegations(card, ctx) {
  * @param {Object} effect - Effect definition with negationCost
  * @returns {Promise<boolean>} - Whether player wants to activate negation
  */
-export async function promptForDestructionNegation(card, effect) {
-  if (!this.ui) {
+export async function promptForDestructionNegation(
+  this: DestroyActionHost,
+  card: ActionRuntimeCard,
+  effect: EffectDefinition,
+): Promise<boolean> {
+  const ui = this.ui;
+  if (!ui) {
     return false;
   }
 
   const costDescription = this.getDestructionNegationCostDescription(effect);
   const message = `${card.name} would be destroyed. Negate destruction? Cost: ${costDescription}`;
 
-  return new Promise((resolve) => {
-    if (this.ui.showDestructionNegationPrompt) {
-      this.ui.showDestructionNegationPrompt(
+  return new Promise<boolean>((resolve) => {
+    if (ui.showDestructionNegationPrompt) {
+      ui.showDestructionNegationPrompt(
         card.name,
         costDescription,
         resolve
       );
-    } else if (this.ui.showConfirmPrompt) {
-      const confirmResult = this.ui.showConfirmPrompt(message, {
+    } else if (ui.showConfirmPrompt) {
+      const confirmResult = ui.showConfirmPrompt(message, {
         kind: "destruction_negation",
         cardName: card.name,
       });
-      if (confirmResult && typeof confirmResult.then === "function") {
+      if (
+        confirmResult &&
+        typeof confirmResult === "object" &&
+        typeof confirmResult.then === "function"
+      ) {
         confirmResult.then(resolve);
       } else {
         resolve(!!confirmResult);
@@ -204,12 +292,15 @@ export async function promptForDestructionNegation(card, effect) {
  * @param {Object} effect - Effect with negationCost array
  * @returns {string} - Cost description
  */
-export function getDestructionNegationCostDescription(effect) {
+export function getDestructionNegationCostDescription(
+  this: DestroyActionHost,
+  effect: EffectDefinition,
+): string {
   if (!effect?.negationCost || !Array.isArray(effect.negationCost)) {
     return "Unknown cost";
   }
 
-  const descriptions = [];
+  const descriptions: string[] = [];
   for (const action of effect.negationCost) {
     if (action.type === "modify_stats_temp") {
       const baseAtk = action.baseAtk ?? 3500;
@@ -222,7 +313,11 @@ export function getDestructionNegationCostDescription(effect) {
     } else if (action.type === "damage") {
       descriptions.push(`sofrer ${action.amount} de dano`);
     } else if (action.type === "banish_card_from_graveyard") {
-      const cardDesc = action.cardName || action.cardType || "carta";
+      const cardDesc =
+        action.cardName ||
+        (typeof Reflect.get(action, "cardType") === "string"
+          ? Reflect.get(action, "cardType")
+          : "carta");
       const count = action.count || 1;
       descriptions.push(`banir ${count} '${cardDesc}' do Cemitério`);
     } else {
@@ -240,7 +335,11 @@ export function getDestructionNegationCostDescription(effect) {
  * @param {Object} ctx - Context with source, player, opponent
  * @returns {Promise<boolean>} - Whether any cards were destroyed
  */
-export async function applyDestroyAllOthersAndDraw(action, ctx) {
+export async function applyDestroyAllOthersAndDraw(
+  this: DestroyActionHost,
+  _action: ActionOf<"destroy_self_monsters_and_draw">,
+  ctx: EffectContext,
+): Promise<boolean> {
   const player = ctx?.player;
   const sourceCard = ctx?.source;
 
@@ -281,7 +380,7 @@ export async function applyDestroyAllOthersAndDraw(action, ctx) {
     drawnCount = drawResult?.drawn?.length || 0;
   } else {
     for (let i = 0; i < destroyedCount; i++) {
-      player.draw();
+      player.draw?.();
       drawnCount += 1;
     }
   }
@@ -305,9 +404,13 @@ export async function applyDestroyAllOthersAndDraw(action, ctx) {
  * @param {Object} ctx - Context with source, player, opponent
  * @returns {Promise<boolean>} - Whether any cards were destroyed
  */
-export async function applyDestroyOtherDragonsAndBuff(action, ctx) {
+export async function applyDestroyOtherDragonsAndBuff(
+  this: DestroyActionHost,
+  action: DestroyOtherDragonsAction,
+  ctx: EffectContext,
+): Promise<boolean> {
   const player = ctx?.player;
-  const sourceCard = ctx?.source;
+  const sourceCard = ctx?.source as DestroyRuntimeCard | null | undefined;
 
   if (!player || !sourceCard) {
     console.log("[applyDestroyOtherDragonsAndBuff] missing player/source", {
@@ -322,11 +425,13 @@ export async function applyDestroyOtherDragonsAndBuff(action, ctx) {
     console.warn("[applyDestroyOtherDragonsAndBuff] typeName is required in action");
     return false;
   }
-  const atkPerDestroyed = Number.isFinite(action?.atkPerDestroyed)
+  const atkPerDestroyed =
+    typeof action?.atkPerDestroyed === "number" &&
+    Number.isFinite(action.atkPerDestroyed)
     ? action.atkPerDestroyed
     : 200;
 
-  const hasType = (card) => {
+  const hasType = (card: ActionRuntimeCard | null | undefined): boolean => {
     if (!card) return false;
     if (Array.isArray(card.types)) return card.types.includes(typeName);
     return card.type === typeName;
@@ -413,8 +518,12 @@ export async function applyDestroyOtherDragonsAndBuff(action, ctx) {
  * @param {Object} ctx - Context with game, player, eventData
  * @returns {Promise<boolean>} - Whether any cards were destroyed
  */
-export async function applyMirrorForceDestroy(action, ctx) {
-  const game = ctx?.game || this.game;
+export async function applyMirrorForceDestroy(
+  this: DestroyActionHost,
+  _action: ActionOf<"mirror_force_destroy_all">,
+  ctx: EffectContext,
+): Promise<boolean> {
+  const game = (ctx?.game as Game | undefined) || this.game;
   const player = ctx?.player || null;
   const eventData =
     ctx?.eventData ||
@@ -438,7 +547,7 @@ export async function applyMirrorForceDestroy(action, ctx) {
 
   // Encontrar todos os monstros em Attack Position do oponente
   const attackPositionMonsters = opponent.field.filter(
-    (card) =>
+    (card: ActionRuntimeCard | null) =>
       card &&
       card.cardKind === "monster" &&
       card.position === "attack" &&
@@ -467,8 +576,12 @@ export async function applyMirrorForceDestroy(action, ctx) {
   }
 
   // Negar o ataque que disparou a Mirror Force
-  if (eventData?.attacker) {
-    game.registerAttackNegated(eventData.attacker);
+  const eventAttacker =
+    eventData && typeof eventData === "object"
+      ? Reflect.get(eventData, "attacker")
+      : undefined;
+  if (eventAttacker) {
+    game.registerAttackNegated(eventAttacker);
   } else {
     game.lastAttackNegated = true;
   }
