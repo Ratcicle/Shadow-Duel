@@ -1197,13 +1197,26 @@ Converter:
 
 # Etapa 6 — Tipar o replay canônico e a serialização determinística
 
-## Objetivo
+## Objetivo e escopo
 
-Formalizar a fronteira entre estado interno e formato canônico serializável sem mudar schema ou hashes.
+Formalizar a fronteira entre estado interno e replay serializável, preservando
+integralmente o formato `shadow-duel-canonical-replay`, schema `1`,
+`engineVersion: "phase-9"`, as chaves runtime, o FNV-1a legado e o comando npm
+existente.
 
-## Tipos principais
+A etapa cria `src/core/contracts/replay.ts`, converte os quatro módulos de
+`src/core/game/replay/` para `canonical.ts`, `recorder.ts`, `driver.ts` e
+`index.ts`, e adiciona `validation.ts` como folha da validação profunda,
+reexportada por `canonical.ts`. Imports relativos continuam terminados em `.js`; `Game.js`,
+`game/state/serialization.js`, snapshots de rollback e
+`scripts/replay_duel.mjs` permanecem fora da conversão.
+
+## Contratos canônicos
+
+Os contratos separam estado runtime de snapshots e valores serializados:
 
 ```text
+SerializableValue
 CanonicalReplay
 CanonicalReplaySetup
 CanonicalReplayCommand
@@ -1216,54 +1229,99 @@ CanonicalPlayerState
 CanonicalChainState
 CanonicalSummonState
 CanonicalCombatState
-SerializableValue
+ReplayRandomState
+ReplayDeckEntry
 ```
 
-## SerializableValue
+`CanonicalReplayCommand` é uma união discriminada derivada de um mapa exato
+para os 15 comandos suportados:
 
-Definir um tipo recursivo controlado:
-
-```ts
-type SerializablePrimitive = string | number | boolean | null;
-
-type SerializableValue =
-  | SerializablePrimitive
-  | SerializableValue[]
-  | { [key: string]: SerializableValue };
+```text
+noop, draw, shuffle, set_phase, set_lp, phase_intent,
+summon, set_monster, set_spell_trap, flip_summon,
+extra_deck_summon, activate_effect, activate_card,
+change_position, attack
 ```
 
-A função de estabilização pode aceitar `unknown`, mas deve produzir `SerializableValue | undefined`.
+`CanonicalReplayDecision` deriva dos contratos da Etapa 5 e preserva a
+correlação entre `kind`, valor serializado e contexto. Os 34 nomes de evento
+são centralizados: 27 ligados ao mapa de eventos runtime e sete históricos
+aceitos somente para compatibilidade — `trigger_opportunity`,
+`trigger_ordered`, `activation_usage`, `chain_link_resolved`,
+`chain_finalized`, `summon_attempt` e `chain_cleanup`.
 
-## Fronteiras
+## Normalização determinística
 
-- estado runtime não deve ser confundido com snapshot canônico;
-- evento runtime não deve ser automaticamente tratado como evento serializado;
-- `Map`, `Set`, objetos cíclicos e instâncias devem passar pelo normalizador;
-- importação de replay começa como `unknown`;
-- `validateCanonicalReplay` retorna `CanonicalReplay` somente após validação.
+A normalização recebe `unknown` e produz `SerializableValue | undefined`:
+
+- objetos e chaves são ordenados por code units;
+- arrays preservam ordem e posição, convertendo slots esparsos e valores não
+  serializáveis em `null`;
+- `NaN` e infinitos viram `null`; `bigint` continua convertido em string;
+- propriedades `undefined`, functions e symbols continuam omitidas;
+- `Map` usa chaves string ordenadas por code units;
+- `Set` ordena pelo JSON canônico e usa a posição original como desempate;
+- ciclos de objetos, arrays, Maps e Sets usam a identidade mínima disponível ou
+  `null`;
+- instâncias usam somente propriedades próprias enumeráveis;
+- projeções especiais de `Card` e `Player` no payload de evento permanecem
+  anteriores à normalização geral.
+
+O normalizador permissivo e o FNV-1a do replay permanecem separados do
+canonicalizador estrito e do SHA-256 usados pelo registry da migração.
+
+## Validação e reprodução
+
+`validateCanonicalReplay(input: unknown): CanonicalReplay` não muta a entrada e
+retorna a mesma referência somente depois do sucesso. A ordem e as mensagens
+dos checks legados de formato, versão, assinatura e campos mínimos devem ser
+preservadas.
+
+`setup`, `commands` e `decisions` são obrigatórios. `engineVersion`, `events`,
+`result` e `finalized` permanecem opcionais na importação por compatibilidade;
+quando presentes, são validados profundamente. Propriedades extras são aceitas
+somente quando toda a árvore adicional é serializável.
+
+A validação cobre setup, RNG, quatro listas de Deck, sequências positivas e
+crescentes, os 15 payloads discriminados, hashes opcionais lowercase de oito
+caracteres, decisões compatíveis com seus kinds, 34 eventos, payloads
+serializados, snapshots, resultado e coerência entre `finalized: true` e
+resultado presente.
+
+Comandos desconhecidos são rejeitados antes da execução, preservando a mensagem
+pública de comando não suportado. Recorder e driver mantêm aridades, ordem das
+chaves, gates de captura, defaults permissivos, download, drenagem de decisões,
+busca por `duelCardId` com fallback por `cardId` e metadata dos erros de
+divergência.
 
 ## Compatibilidade obrigatória
 
-Nesta etapa:
-
-- `CANONICAL_REPLAY_SCHEMA_VERSION` permanece igual;
-- o nome do formato permanece igual;
-- `getCardDatabaseSignature()` e seu valor legado `1cc622e3` permanecem iguais;
-- o digest SHA-256 da migração permanece separado do formato de replay;
-- nenhuma chave canônica pode ser renomeada.
-
-Falha nos testes canônicos existentes, na assinatura legada ou no digest da migração bloqueia a etapa até que a causa seja explicada e corrigida.
+- `CANONICAL_REPLAY_SCHEMA_VERSION` permanece `1`;
+- `CANONICAL_REPLAY_FORMAT` permanece `shadow-duel-canonical-replay`;
+- `CANONICAL_REPLAY_ENGINE_VERSION` permanece `phase-9`;
+- `getCardDatabaseSignature()` permanece com o payload legado e valor
+  `1cc622e3`;
+- o digest SHA-256 da migração permanece
+  `13ff527c3deb5b8b5e5f09551fcabcb3ec7ca48f922f1f167c6d22c67d12caea`;
+- nenhuma chave runtime ou schema de replay é renomeado;
+- o comando operacional continua `npm run replay -- <arquivo>`.
 
 ## Critérios de aceitação
 
-- o teste canônico existente reproduz o mesmo hash final;
-- replay adulterado continua falhando na mesma divergência;
-- banco incompatível continua sendo rejeitado;
+- os goldens existentes de normalização, comandos, estado final e replay
+  permanecem congelados;
+- ciclos de todos os containers, Sets de objetos, sparse arrays, referências
+  repetidas e valores não serializáveis são cobertos;
+- o validator aceita campos opcionais ausentes e extras serializáveis, mas
+  rejeita payloads, decisões, sequências, hashes, eventos e snapshots inválidos;
+- replay adulterado continua falhando na mesma divergência do comando 1, com
+  `sequence`, `command`, `expectedHash` e `observedHash`;
+- banco incompatível, decisões restantes e final hash divergente continuam
+  sendo rejeitados;
 - decisões continuam remapeando por `duelCardId`;
-- a assinatura legada não foi ampliada nem recalculada;
-- o digest completo permanece em seu gate exclusivo da migração;
-- não há `any` na API pública de replay;
-- schema runtime continua validado.
+- não há `any`, casts duplos, suppressions ou dívida TypeScript nova;
+- `npm run check` e um smoke de `npm run replay` com arquivo temporário passam;
+- assinatura legada e digest completo permanecem em seus gates exclusivos.
 
 ---
 
