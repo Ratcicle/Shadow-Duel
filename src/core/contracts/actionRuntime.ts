@@ -5,7 +5,32 @@ import type {
   CardKind,
   MonsterType,
 } from "./cards.js";
-import type { EffectCondition, EffectDefinition } from "./effects.js";
+import type {
+  EffectCondition,
+  EffectDefinition,
+  EffectTarget,
+} from "./effects.js";
+import type {
+  DuelEventMap,
+  EmitOptions,
+  EventPayloadBase,
+  EventResolutionResult,
+  InformationalEventMap,
+  InformationalEventName,
+  ResolvableEventName,
+} from "./events.js";
+import type { SelectionCandidateKey } from "./primitives.js";
+import type {
+  CanonicalSelectionMap,
+  CostSelections,
+  NormalizedSelectionContract,
+  RawSelectionCandidate,
+  RawSelectionContract,
+  ResolutionSelections,
+  SelectionResult,
+  SelectionSessionInput,
+  TargetSelections,
+} from "./selection.js";
 import type { CanonicalZone, ZoneInput } from "./zones.js";
 
 /** A value that may be returned immediately or after asynchronous resolution. */
@@ -193,9 +218,11 @@ export interface ActionRuntimeStrategyPort {
 
 export interface ActionRuntimeAutoSelectorPort {
   select?(
-    selectionContract: unknown,
+    selectionContract: RawSelectionContract | NormalizedSelectionContract,
     options?: object,
-  ): { ok?: boolean; selections?: object | null };
+  ):
+    | { ok: false; reason: string }
+    | { ok: true; selections: SelectionResult };
 }
 
 export interface ActionRuntimeUiPort {
@@ -361,14 +388,24 @@ export interface ActionRuntimeGamePort {
     count?: number,
     options?: object,
   ): ActionDrawResult;
-  emit?(eventName: string, payload?: object): MaybePromise<unknown>;
-  notify?(eventName: string, payload?: object): void;
+  emit?<Name extends ResolvableEventName>(
+    eventName: Name,
+    payload: DuelEventMap[Name],
+    options?: EmitOptions,
+  ): MaybePromise<EventResolutionResult>;
+  notify?<Name extends InformationalEventName>(
+    eventName: Name,
+    payload: InformationalEventMap[Name],
+  ): void;
   devLog?(tag: string, detail?: object): void;
   updateBoard(): void;
   checkWinCondition?(): MaybePromise<boolean | void>;
   shuffle?(cards: ActionRuntimeCard[]): void;
-  buildSelectionCandidateKey?(candidate: object, fallbackIndex?: number): string;
-  startTargetSelectionSession?(session: object): void;
+  buildSelectionCandidateKey?(
+    candidate: RawSelectionCandidate,
+    fallbackIndex?: number,
+  ): SelectionCandidateKey;
+  startTargetSelectionSession?(session: SelectionSessionInput): void;
   finishSelection?(): void;
   canSpecialSummonUnderRestrictions?(
     card: ActionRuntimeCard,
@@ -458,11 +495,13 @@ export interface ActionRuntimeGamePort {
 interface ActionContextState extends ActionNegationContext {
   effectId?: string | null;
   actionContext?: object | null;
-  selections?: object | null;
+  selections?: CanonicalSelectionMap | null;
   context?: ActionNegationContext | null;
   sourceRect?: object | null;
   synchroSummonContextId?: string | null;
-  costSelections?: object | null;
+  costSelections?: CostSelections | null;
+  targetSelections?: TargetSelections | null;
+  resolutionSelections?: ResolutionSelections | null;
   preview?: boolean;
   isPreview?: boolean;
   skipEffectTargetedEvent?: boolean;
@@ -501,10 +540,10 @@ export interface EffectContext {
   isDamageStep?: boolean;
   isPreview?: boolean;
   previewOnly?: boolean;
-  eventData?: object | null;
+  eventData?: EventPayloadBase | null;
   actionContext?: ActionContextState | null;
   activationContext?: ActionContextState | null;
-  selections?: object | null;
+  selections?: CanonicalSelectionMap | null;
   _actionTargets?: ResolvedTargetMap;
   game?: ActionRuntimeGamePort;
   host?: object | null;
@@ -548,7 +587,7 @@ export interface LegacyActionResultObject {
 
 export interface NeedsSelectionResult {
   needsSelection: true;
-  selectionContract: unknown;
+  selectionContract: RawSelectionContract | NormalizedSelectionContract;
   success?: boolean;
   executed?: boolean;
   selectionSource?: string;
@@ -700,9 +739,9 @@ export interface ActionHandlerEnginePort {
     options?: object,
   ): LpCostResolution;
   resolveTargets?(
-    targetDefinitions: readonly unknown[],
+    targetDefinitions: readonly EffectTarget[],
     context: EffectContext,
-    selections?: object | null,
+    selections?: CanonicalSelectionMap | null,
   ): ActionTargetResolution;
   selectCandidates(
     definition: object,

@@ -13,6 +13,12 @@ import type {
   ResolvedTargetMap,
 } from "../contracts/actionRuntime.js";
 import type { CardFilter } from "../contracts/effects.js";
+import type { SelectionCandidateKey } from "../contracts/primitives.js";
+import type {
+  RawSelectionContract,
+  RawSelectionRequirement,
+  SelectionResult,
+} from "../contracts/selection.js";
 import { getUI, resolveTargetCards } from "./shared.js";
 import { isAI } from "../Player.js";
 
@@ -21,7 +27,6 @@ type TemporaryEventAction = ActionOf<"register_temporary_event_effect"> & {
   readonly id?: string;
 };
 type RuntimeCardReference = ActionRuntimeCard | string | number | null | undefined;
-type SelectionMap = Record<string, readonly string[] | undefined>;
 
 interface LegacyCardFilter extends Omit<CardFilter, "position" | "type"> {
   readonly faceUp?: boolean;
@@ -37,48 +42,6 @@ interface LegacyCardFilter extends Omit<CardFilter, "position" | "type"> {
   readonly excludeInstanceIds?: readonly (string | number)[];
   readonly excludeCardInstanceIds?: readonly (string | number)[];
   readonly excludeCards?: readonly RuntimeCardReference[];
-}
-
-interface SelectionCandidate {
-  readonly key?: string;
-  readonly id?: string;
-  readonly name?: string;
-  readonly label?: string;
-  readonly zone?: string;
-  readonly cardKind?: string;
-}
-
-interface SelectionRequirement {
-  readonly id: string;
-  readonly label?: string;
-  readonly min?: number;
-  readonly max?: number;
-  readonly zone?: string;
-  readonly zones?: readonly string[];
-  readonly owner?: string;
-  readonly candidates?: readonly SelectionCandidate[];
-}
-
-interface OptionalSelectionContract {
-  readonly kind?: string;
-  message?: string;
-  readonly requirements?: readonly SelectionRequirement[];
-  readonly ui?: {
-    readonly useFieldTargeting?: boolean;
-    readonly allowCancel?: boolean;
-  };
-  readonly metadata?: {
-    readonly context?: string;
-    readonly intent?: string;
-    readonly sourceCard?: ActionRuntimeCard | null;
-    readonly sourceCardName?: string | null;
-    readonly effectId?: string | null;
-  };
-}
-
-interface AutoSelectionResult {
-  readonly ok?: boolean;
-  readonly selections?: SelectionMap | null;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -97,12 +60,14 @@ function isRuntimePlayer(value: unknown): value is ActionRuntimePlayer {
   );
 }
 
-function isAutoSelectionResult(value: unknown): value is AutoSelectionResult {
+function isSelectionContract(value: unknown): value is RawSelectionContract {
   return isRecord(value);
 }
 
-function isSelectionContract(value: unknown): value is OptionalSelectionContract {
-  return isRecord(value);
+function isSelectionCandidateKey(
+  value: unknown,
+): value is SelectionCandidateKey {
+  return typeof value === "string" && value.length > 0;
 }
 
 function readRecordValue(value: unknown, key: string): unknown {
@@ -361,9 +326,9 @@ function matchesCardFilters(
 
 function resolveOptionalAutoSelection(
   game: ActionRuntimeGamePort,
-  selectionContract: OptionalSelectionContract,
+  selectionContract: RawSelectionContract,
   ctx: EffectContext,
-): SelectionMap | null {
+): SelectionResult | null {
   const player = ctx?.player || null;
   if (!isAI(player)) return null;
 
@@ -376,34 +341,37 @@ function resolveOptionalAutoSelection(
     game,
   });
 
-  const normalizedAutoResult = isAutoSelectionResult(autoResult)
-    ? autoResult
-    : null;
-  if (normalizedAutoResult?.ok && normalizedAutoResult.selections) {
-    return normalizedAutoResult.selections;
+  if (autoResult?.ok) {
+    return autoResult.selections;
   }
 
-  const fallback: Record<string, string[]> = {};
-  for (const req of selectionContract?.requirements || []) {
+  const fallback: SelectionResult = {};
+  const requirements = Array.isArray(selectionContract.requirements)
+    ? selectionContract.requirements
+    : selectionContract.requirements
+      ? [selectionContract.requirements]
+      : [];
+  for (const req of requirements) {
     const min = Number(req?.min ?? 0);
     const max = Number(req?.max ?? min);
     const candidates = Array.isArray(req?.candidates)
       ? req.candidates
       : [];
+    if (!req.id) continue;
     fallback[req.id] = candidates
       .slice(0, Math.min(Math.max(min, 0), max, candidates.length))
       .map((candidate) => candidate.key)
-      .filter(Boolean);
+      .filter(isSelectionCandidateKey);
   }
   return fallback;
 }
 
 function runOptionalTargetSelection(
   game: ActionRuntimeGamePort,
-  selectionContract: OptionalSelectionContract,
+  selectionContract: RawSelectionContract,
   ctx: EffectContext,
   action: OptionalTargetAction,
-): Promise<SelectionMap | null> {
+): Promise<SelectionResult | null> {
   const autoSelection = resolveOptionalAutoSelection(
     game,
     selectionContract,
@@ -411,9 +379,9 @@ function runOptionalTargetSelection(
   );
   if (autoSelection) return Promise.resolve(autoSelection);
 
-  return new Promise<SelectionMap | null>((resolve) => {
+  return new Promise<SelectionResult | null>((resolve) => {
     let resolved = false;
-    const finalize = (value: SelectionMap | null) => {
+    const finalize = (value: SelectionResult | null) => {
       if (resolved) return;
       resolved = true;
       resolve(value);
@@ -428,9 +396,9 @@ function runOptionalTargetSelection(
       card: ctx?.source || null,
       message: action?.selectionMessage || selectionContract?.message || null,
       allowCancel: action?.allowCancel !== false,
-      resolve: finalize,
-      execute: (selections: SelectionMap | null) => {
-        finalize(selections || {});
+      resolve: (value) => finalize(Array.isArray(value) ? null : value),
+      execute: (selections) => {
+        finalize(selections);
         return { success: true, needsSelection: false };
       },
       onCancel: () => finalize(null),
@@ -441,7 +409,7 @@ function runOptionalTargetSelection(
 function buildOptionalConfirmationContract(
   action: OptionalTargetAction,
   ctx: EffectContext,
-): OptionalSelectionContract {
+): RawSelectionContract & { requirements: RawSelectionRequirement[] } {
   const requirementId =
     action?.confirmationId ||
     action?.selectionId ||
@@ -561,7 +529,7 @@ async function confirmOptionalAction(
   const selected = Array.isArray(selections?.[requirementId])
     ? selections[requirementId]
     : [];
-  return selected.includes("yes");
+  return selected.some((key) => key === "yes");
 }
 
 type OptionalTargetResolution = ActionTargetResolution & {

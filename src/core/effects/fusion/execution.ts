@@ -15,6 +15,10 @@ import type {
 } from "../../contracts/actionRuntime.js";
 import type { ActionOf } from "../../contracts/actions.js";
 import type { BattlePosition } from "../../contracts/cards.js";
+import type {
+  RawSelectionContract,
+  SelectionSessionInput,
+} from "../../contracts/selection.js";
 
 interface FusionRuntimeCard extends ActionRuntimeCard {
   extraDeckSummonProcedure?: object | string | null;
@@ -42,24 +46,9 @@ interface FusionMaterialGroups {
   readonly hand: FusionRuntimeCard[];
 }
 
-interface FusionSelectionValues {
-  readonly fusion_choice?: readonly string[];
-  readonly materials?: readonly string[];
-}
-
-interface FusionSelectionSession {
-  readonly kind: "fusion_select" | "fusion_materials";
-  readonly selectionContract: object;
-  readonly onCancel: () => void;
-  readonly execute: (selections?: FusionSelectionValues | null) => {
-    readonly success: true;
-    readonly needsSelection: false;
-  };
-}
-
 interface FusionExecutionHost {
   readonly game: {
-    startTargetSelectionSession(session: FusionSelectionSession): void;
+    startTargetSelectionSession(session: SelectionSessionInput): void;
     performFusionSummon(
       materials: FusionRuntimeCard[],
       fusionMonsterIndex: number,
@@ -376,7 +365,7 @@ export async function applyPolymerizationFusion(
   >((resolve) => {
     // Build a selection contract for choosing the fusion
     // Include all necessary card properties for the selection modal to display correctly
-    const selectionContract = {
+    const selectionContract: RawSelectionContract = {
       requirements: [
         {
           id: "fusion_choice",
@@ -405,8 +394,8 @@ export async function applyPolymerizationFusion(
       kind: "fusion_select",
       selectionContract,
       onCancel: () => resolve(null),
-      execute: (selections?: FusionSelectionValues | null) => {
-        const choice = selections?.fusion_choice?.[0];
+      execute: (selections) => {
+        const choice = selections.fusion_choice?.[0];
         resolve(
           choice ? fusionCards.find((f) => `extra_${f.id}` === choice) : null
         );
@@ -452,7 +441,7 @@ export async function applyPolymerizationFusion(
     }));
 
     const materialSelection = await new Promise<FusionRuntimeCard[] | null>((resolve) => {
-      const selectionContract = {
+      const selectionContract: RawSelectionContract = {
         requirements: [
           {
             id: "materials",
@@ -477,11 +466,13 @@ export async function applyPolymerizationFusion(
         kind: "fusion_materials",
         selectionContract,
         onCancel: () => resolve(null),
-        execute: (selections?: FusionSelectionValues | null) => {
-          const keys = selections?.materials || [];
+        execute: (selections) => {
+          const keys = selections.materials || [];
           const mats = keys
             .map((k) => materialCandidates.find((c) => c.key === k)?.cardRef)
-            .filter(Boolean) as FusionRuntimeCard[];
+            .filter(
+              (material): material is FusionRuntimeCard => Boolean(material),
+            );
           resolve(mats);
           return { success: true, needsSelection: false };
         },

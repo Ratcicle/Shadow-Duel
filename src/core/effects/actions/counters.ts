@@ -482,7 +482,7 @@ async function emitCounterRemovedEvent(
     sourceCard: data.ctx?.source || data.sourceCard || null,
     source: data.ctx?.source || data.source || null,
     effectId: data.ctx?.effect?.id || data.ctx?.effectId || data.effectId || null,
-    counterType: data.counterType,
+    counterType: data.counterType!,
     amount,
     card: cards[0] || null,
     cards,
