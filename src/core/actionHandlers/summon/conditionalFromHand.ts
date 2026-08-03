@@ -1,14 +1,46 @@
 import { isAI } from "../../Player.js";
+import type { ActionOf } from "../../contracts/actions.js";
+import type {
+  ActionHandlerEnginePort,
+  ActionRuntimeCard,
+  ActionRuntimePlayer,
+  EffectContext,
+  ResolvedTargetMap,
+} from "../../contracts/actionRuntime.js";
 import { getCardDisplayName, getUIText } from "../../i18n.js";
 import { getUI } from "../shared.js";
 import { performSummonFromHand } from "./fromHand.js";
 import { resolveContextualSummonPosition } from "./position.js";
 
+type ConditionalSummonAction = ActionOf<"conditional_summon_from_hand"> & {
+  readonly cardName?: string;
+};
+
+interface ConditionalSummonCondition {
+  readonly type?: string;
+  readonly zone?: string;
+  readonly cardName?: string;
+  readonly typeName?: string;
+  readonly cardType?: string;
+  readonly typeFilter?: string;
+  readonly minLevel?: number;
+  readonly maxLevel?: number;
+  readonly cardKind?: string;
+}
+
+function readPlayerZone(
+  player: ActionRuntimePlayer,
+  zoneName: string,
+): ActionRuntimeCard[] {
+  const value: unknown = Reflect.get(player, zoneName);
+  return Array.isArray(value) ? value : [];
+}
+
 export async function handleConditionalSummonFromHand(
-  action,
-  ctx,
-  targets,
-  engine,
+  action: ConditionalSummonAction,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+  engine: ActionHandlerEnginePort,
 ) {
   const { player, source } = ctx;
   const game = engine.game;
@@ -16,7 +48,7 @@ export async function handleConditionalSummonFromHand(
   if (!player || !game) return false;
 
   const targetRef = action.targetRef;
-  let targetCards = [];
+  let targetCards: unknown = [];
 
   if (targetRef === "self" && source) {
     if (source.cardKind !== "monster") {
@@ -35,7 +67,10 @@ export async function handleConditionalSummonFromHand(
     }
   }
 
-  if (!targetCards || targetCards.length === 0) {
+  const hasTargetCards = Array.isArray(targetCards)
+    ? targetCards.length > 0
+    : Boolean(targetCards);
+  if (!hasTargetCards) {
     if (game.devMode) {
       console.log(
         `[handleConditionalSummonFromHand] No target cards found for targetRef="${targetRef}"`,
@@ -44,7 +79,10 @@ export async function handleConditionalSummonFromHand(
     return false;
   }
 
-  const card = Array.isArray(targetCards) ? targetCards[0] : targetCards;
+  const card = (Array.isArray(targetCards) ? targetCards[0] : targetCards) as
+    | ActionRuntimeCard
+    | null
+    | undefined;
 
   if (!card || card.cardKind !== "monster") {
     console.error(
@@ -58,7 +96,7 @@ export async function handleConditionalSummonFromHand(
     return false;
   }
 
-  const condition = action.condition || {};
+  const condition = (action.condition || {}) as ConditionalSummonCondition;
   let conditionMet = false;
 
   if (condition.type === "control_card") {
@@ -68,7 +106,7 @@ export async function handleConditionalSummonFromHand(
     if (zoneName === "fieldSpell") {
       conditionMet = player.fieldSpell?.name === cardName;
     } else {
-      const zone = player[zoneName] || [];
+      const zone = readPlayerZone(player, zoneName);
       conditionMet = zone.some((candidate) => candidate && candidate.name === cardName);
     }
   } else if (condition.type === "control_card_type") {
@@ -78,7 +116,7 @@ export async function handleConditionalSummonFromHand(
     if (!typeName) {
       conditionMet = false;
     } else {
-      const zone = player[zoneName] || [];
+      const zone = readPlayerZone(player, zoneName);
       conditionMet = zone.some((candidate) => {
         if (!candidate || candidate.isFacedown) return false;
         if (Array.isArray(candidate.types)) {
@@ -90,10 +128,12 @@ export async function handleConditionalSummonFromHand(
   } else if (condition.type === "match_card_props") {
     const typeName =
       condition.typeName || condition.typeFilter || condition.type || null;
-    const minLevel = Number.isFinite(condition.minLevel)
+    const minLevel =
+      typeof condition.minLevel === "number" && Number.isFinite(condition.minLevel)
       ? condition.minLevel
       : null;
-    const maxLevel = Number.isFinite(condition.maxLevel)
+    const maxLevel =
+      typeof condition.maxLevel === "number" && Number.isFinite(condition.maxLevel)
       ? condition.maxLevel
       : null;
     const requireKind = condition.cardKind || null;

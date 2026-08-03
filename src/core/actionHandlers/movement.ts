@@ -6,14 +6,40 @@
  */
 
 import { isAI } from "../Player.js";
+import type { ActionOf } from "../contracts/actions.js";
+import type {
+  ActionHandlerEnginePort,
+  ActionRuntimeCard,
+  ActionRuntimePlayer,
+  EffectContext,
+  LegacyActionHandlerResult,
+  ResolvedTargetMap,
+} from "../contracts/actionRuntime.js";
 import { getUI, resolveTargetCards } from "./shared.js";
+
+type ReturnToHandAction = ActionOf<"return_to_hand"> & {
+  readonly player?: "self" | "opponent";
+};
+
+type ShuffleFieldAction = ActionOf<"shuffle_opponent_field_to_deck"> & {
+  readonly contextLabel?: string;
+};
+
+type BounceAndSummonAction = ActionOf<"bounce_and_summon"> & {
+  readonly contextLabel?: string;
+};
 
 /**
  * Transfers control of targeted monsters without making them leave the field.
  * `Game.takeControl` owns the zone transfer so that original ownership,
  * temporary return and replay events stay consistent for every card.
  */
-export async function handleTakeControl(action, ctx, targets, engine) {
+export async function handleTakeControl(
+  action: ActionOf<"take_control">,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+  engine: ActionHandlerEnginePort,
+) {
   const game = engine?.game;
   if (!game || typeof game.takeControl !== "function") return false;
 
@@ -30,7 +56,7 @@ export async function handleTakeControl(action, ctx, targets, engine) {
       effectId: ctx?.effect?.id || null,
       reason: action.contextLabel || "take_control",
     });
-    if (result?.success) controlled += 1;
+    if (typeof result === "object" && result?.success) controlled += 1;
   }
 
   return controlled > 0;
@@ -45,7 +71,12 @@ export async function handleTakeControl(action, ctx, targets, engine) {
  * - fromZone: zone to return from (optional, auto-detected if not specified)
  * - player: "self" | "opponent" (default: "self")
  */
-export async function handleReturnToHand(action, ctx, targets, engine) {
+export async function handleReturnToHand(
+  action: ReturnToHandAction,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+  engine: ActionHandlerEnginePort,
+) {
   const game = engine?.game;
   if (!game) return false;
 
@@ -78,7 +109,7 @@ export async function handleReturnToHand(action, ctx, targets, engine) {
       "field";
 
     // Use game.moveCard for proper event handling
-    const moveResult = await game.moveCard(card, cardOwner, "hand", {
+    const moveResult = await game.moveCard!(card, cardOwner, "hand", {
       fromZone,
       contextLabel: action.contextLabel || "return_to_hand",
       sourceCard: ctx?.source || null,
@@ -87,7 +118,10 @@ export async function handleReturnToHand(action, ctx, targets, engine) {
       awaitCardMovedEvent: true,
     });
 
-    if (moveResult && moveResult.success !== false) {
+    if (
+      moveResult &&
+      (typeof moveResult !== "object" || moveResult.success !== false)
+    ) {
       returnedCount++;
       getUI(game)?.log(`${card.name} returned to hand.`);
 
@@ -101,7 +135,7 @@ export async function handleReturnToHand(action, ctx, targets, engine) {
       }
     } else {
       // Fallback for older moveCard implementations
-      const sourceZone = cardOwner[fromZone];
+      const sourceZone: unknown = Reflect.get(cardOwner, fromZone);
       if (Array.isArray(sourceZone)) {
         const idx = sourceZone.indexOf(card);
         if (idx !== -1) {
@@ -125,7 +159,14 @@ export async function handleReturnToHand(action, ctx, targets, engine) {
 /**
  * Helper function to bounce source and summon target
  */
-async function bounceAndSummonCard(source, target, player, action, engine, ctx = {}) {
+async function bounceAndSummonCard(
+  source: ActionRuntimeCard,
+  target: ActionRuntimeCard,
+  player: ActionRuntimePlayer,
+  action: BounceAndSummonAction,
+  engine: ActionHandlerEnginePort,
+  ctx: EffectContext = {},
+): Promise<boolean> {
   const game = engine.game;
 
   if (!target) return false;
@@ -158,7 +199,10 @@ async function bounceAndSummonCard(source, target, player, action, engine, ctx =
         movedByEffect: true,
         awaitCardMovedEvent: true,
       });
-      if (moveResult === false || moveResult?.success === false) {
+      if (
+        moveResult === false ||
+        (typeof moveResult === "object" && moveResult?.success === false)
+      ) {
         return false;
       }
     } else {
@@ -187,19 +231,33 @@ async function bounceAndSummonCard(source, target, player, action, engine, ctx =
 
   // Determine position
   let position = action.position || "choice";
+  const directPreferences =
+    ctx.actionContext && typeof ctx.actionContext === "object"
+      ? Reflect.get(ctx.actionContext, "specialSummonPositions")
+      : null;
+  const nestedActionContext = ctx.activationContext?.actionContext;
+  const nestedPreferences =
+    nestedActionContext && typeof nestedActionContext === "object"
+      ? Reflect.get(nestedActionContext, "specialSummonPositions")
+      : null;
   const positionPreferences =
-    ctx?.actionContext?.specialSummonPositions ||
-    ctx?.activationContext?.actionContext?.specialSummonPositions ||
-    null;
+    directPreferences && typeof directPreferences === "object"
+      ? directPreferences
+      : nestedPreferences && typeof nestedPreferences === "object"
+        ? nestedPreferences
+        : null;
+  const byNamePreferences = positionPreferences
+    ? Reflect.get(positionPreferences, "byName")
+    : null;
   const byName =
-    target?.name && positionPreferences?.byName
-      ? positionPreferences.byName[target.name]
+    target?.name && byNamePreferences && typeof byNamePreferences === "object"
+      ? Reflect.get(byNamePreferences, target.name)
       : null;
   if (byName === "attack" || byName === "defense") {
     position = byName;
   }
   if (position === "choice") {
-    position = await engine.chooseSpecialSummonPosition(target, player);
+    position = await engine.chooseSpecialSummonPosition!(target, player);
   }
 
   const moveResult =
@@ -215,7 +273,11 @@ async function bounceAndSummonCard(source, target, player, action, engine, ctx =
         })
       : null;
 
-  if (moveResult && moveResult.success === false) {
+  if (
+    moveResult &&
+    typeof moveResult === "object" &&
+    moveResult.success === false
+  ) {
     return false;
   }
 
@@ -225,7 +287,7 @@ async function bounceAndSummonCard(source, target, player, action, engine, ctx =
       player.hand.splice(handIndex, 1);
     }
 
-    target.position = position;
+    Reflect.set(target, "position", position);
     target.isFacedown = false;
     target.hasAttacked = false;
     target.owner = player.id;
@@ -244,12 +306,15 @@ async function bounceAndSummonCard(source, target, player, action, engine, ctx =
     `${bounceText}Special Summoned ${target.name} in ${positionText} Position.`
   );
 
-  game.updateBoard();
+  game.updateBoard!();
 
   return true;
 }
 
-function findControlledCardZone(owner, card) {
+function findControlledCardZone(
+  owner: ActionRuntimePlayer,
+  card: ActionRuntimeCard,
+) {
   if (!owner || !card) return null;
   if (owner.fieldSpell === card) return "fieldSpell";
   if (Array.isArray(owner.field) && owner.field.includes(card)) return "field";
@@ -264,17 +329,19 @@ function findControlledCardZone(owner, card) {
  * Used by battle_destroy effects that punish the opponent for destroying this card.
  */
 export async function handleShuffleOpponentFieldToDeck(
-  action,
-  ctx,
-  targets,
-  engine,
+  action: ShuffleFieldAction,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+  engine: ActionHandlerEnginePort,
 ) {
   const game = engine?.game;
   if (!game) return false;
 
   const opponent =
     typeof game.getOpponent === "function"
-      ? game.getOpponent(ctx.player)
+      ? ctx.player
+        ? game.getOpponent(ctx.player)
+        : null
       : ctx.player?.id === "player"
       ? game.bot
       : game.player;
@@ -287,7 +354,7 @@ export async function handleShuffleOpponentFieldToDeck(
     ...(opponent.fieldSpell ? [opponent.fieldSpell] : []),
   ].filter(Boolean);
   const toMove = engine?.filterCardsListByImmunity
-    ? engine.filterCardsListByImmunity(controlledCards, ctx.player, {
+    ? engine.filterCardsListByImmunity(controlledCards, ctx.player!, {
         actionType: "shuffle_opponent_field_to_deck",
         sourceCard: ctx.source || null,
       }).allowed
@@ -303,7 +370,7 @@ export async function handleShuffleOpponentFieldToDeck(
     const fromZone = findControlledCardZone(opponent, card);
     if (!fromZone) continue;
 
-    const moveResult = await game.moveCard(card, opponent, "deck", {
+    const moveResult = await game.moveCard!(card, opponent, "deck", {
       fromZone,
       contextLabel: action.contextLabel || "shuffle_opponent_field_to_deck",
       sourceCard: ctx.source || null,
@@ -312,7 +379,10 @@ export async function handleShuffleOpponentFieldToDeck(
       awaitCardMovedEvent: true,
     });
 
-    if (moveResult === false || moveResult?.success === false) {
+    if (
+      moveResult === false ||
+      (typeof moveResult === "object" && moveResult?.success === false)
+    ) {
       getUI(game)?.log(`${card.name} could not be shuffled into the Deck.`);
       continue;
     }
@@ -348,7 +418,12 @@ export async function handleShuffleOpponentFieldToDeck(
  * - filters: { archetype, name, excludeCardName, excludeCardNames, level, levelOp, excludeSelf }
  * - position: "attack" | "defense" | "choice"
  */
-export async function handleBounceAndSummon(action, ctx, targets, engine) {
+export async function handleBounceAndSummon(
+  action: BounceAndSummonAction,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+  engine: ActionHandlerEnginePort,
+): Promise<LegacyActionHandlerResult> {
   const { player, source } = ctx;
   const game = engine.game;
 
@@ -443,14 +518,14 @@ export async function handleBounceAndSummon(action, ctx, targets, engine) {
   const defaultCardName = validTargets[0]?.name || "";
 
   if (searchModal) {
-    return new Promise((resolve) => {
+    return new Promise<boolean>((resolve) => {
       game.isResolvingEffect = true;
 
-      renderer.showSearchModalVisual(
+      renderer.showSearchModalVisual!(
         searchModal,
         validTargets,
         defaultCardName,
-        async (selectedName) => {
+        async (selectedName: string) => {
           const target =
             validTargets.find((c) => c && c.name === selectedName) ||
             validTargets[0];

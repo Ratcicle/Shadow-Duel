@@ -3,9 +3,48 @@ import {
   resolveTargetCards,
   sendCardsToGraveyard,
 } from "../shared.js";
+import type { ActionOf } from "../../contracts/actions.js";
+import type { SelectionCount } from "../../contracts/actions.js";
+import type {
+  ActionHandlerEnginePort,
+  EffectContext,
+  ResolvedTargetMap,
+} from "../../contracts/actionRuntime.js";
+import type { BattlePositionInput } from "../../contracts/cards.js";
+import type { CardFilter } from "../../contracts/effects.js";
+import type { ZoneInput } from "../../contracts/zones.js";
 import { handleSpecialSummonFromZone } from "./fromZone.js";
+import type { SpecialSummonFromZoneInput } from "./fromZone.js";
 
-export async function handleTransmutate(action, ctx, targets, engine) {
+type TransmutateAction = ActionOf<"transmutate"> & {
+  readonly costTargetRef?: string;
+  readonly costFromZone?: ZoneInput;
+  readonly summonFilters?: CardFilter;
+  readonly filters?: CardFilter;
+  readonly levelOp?: "eq" | "lte" | "gte" | "lt" | "gt";
+  readonly summonZone?: ZoneInput;
+  readonly zone?: ZoneInput;
+  readonly count?: number | SelectionCount;
+  readonly position?: BattlePositionInput;
+  readonly cannotAttackThisTurn?: boolean;
+  readonly negateEffects?: boolean;
+  readonly promptPlayer?: boolean;
+  readonly excludeSummonRestrict?: readonly string[];
+};
+
+type SummonFromZoneCallback = (
+  action: SpecialSummonFromZoneInput,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+  engine: ActionHandlerEnginePort,
+) => ReturnType<typeof handleSpecialSummonFromZone>;
+
+export async function handleTransmutate(
+  action: TransmutateAction,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+  engine: ActionHandlerEnginePort,
+) {
   return await resolveTransmutate(
     action,
     ctx,
@@ -16,11 +55,11 @@ export async function handleTransmutate(action, ctx, targets, engine) {
 }
 
 export async function resolveTransmutate(
-  action,
-  ctx,
-  targets,
-  engine,
-  summonFromZone,
+  action: TransmutateAction,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+  engine: ActionHandlerEnginePort,
+  summonFromZone: SummonFromZoneCallback,
 ) {
   const { player } = ctx;
   const game = engine.game;

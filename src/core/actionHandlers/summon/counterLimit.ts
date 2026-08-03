@@ -1,12 +1,32 @@
 import { isAI } from "../../Player.js";
+import type { ActionOf } from "../../contracts/actions.js";
+import type {
+  ActionHandlerEnginePort,
+  ActionRuntimeCard,
+  ActionRuntimePlayer,
+  EffectContext,
+  LegacyActionHandlerResult,
+  ResolvedTargetMap,
+} from "../../contracts/actionRuntime.js";
+import type { BattlePositionInput } from "../../contracts/cards.js";
+import type { CardFilter } from "../../contracts/effects.js";
 import { getUI } from "../shared.js";
 
+type CounterLimitAction = ActionOf<
+  "special_summon_from_deck_with_counter_limit"
+> & {
+  readonly effectId?: string;
+  readonly filters?: CardFilter;
+  readonly position?: BattlePositionInput;
+  readonly cannotAttackThisTurn?: boolean;
+};
+
 export async function handleSpecialSummonFromDeckWithCounterLimit(
-  action,
-  ctx,
-  targets,
-  engine,
-) {
+  action: CounterLimitAction,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+  engine: ActionHandlerEnginePort,
+): Promise<LegacyActionHandlerResult> {
   const { player, source } = ctx;
   const game = engine.game;
 
@@ -21,12 +41,13 @@ export async function handleSpecialSummonFromDeckWithCounterLimit(
   }
   const position = action.position || "choice";
 
-  const counterCount =
+  const rawCounterCount =
     typeof source.getCounter === "function"
       ? source.getCounter(counterType)
-      : source?.counters?.get
+      : source.counters instanceof Map
         ? source.counters.get(counterType)
         : 0;
+  const counterCount = Number(rawCounterCount ?? 0);
   const maxAtk = counterCount * counterMultiplier;
 
   if (maxAtk === 0) {
@@ -40,7 +61,7 @@ export async function handleSpecialSummonFromDeckWithCounterLimit(
 
   const candidates = deck.filter((card) => {
     if (!card || card.cardKind !== "monster") return false;
-    if (card.atk > maxAtk) return false;
+    if ((card.atk ?? 0) > maxAtk) return false;
 
     if (filters.archetype) {
       const hasArchetype =
@@ -75,7 +96,9 @@ export async function handleSpecialSummonFromDeckWithCounterLimit(
         : null;
     const chosen =
       strategicChoice ||
-      candidates.reduce((best, card) => (card.atk > best.atk ? card : best));
+      candidates.reduce((best, card) =>
+        (card.atk ?? 0) > (best.atk ?? 0) ? card : best,
+      );
 
     return await performSummonFromDeck(
       chosen,
@@ -88,8 +111,10 @@ export async function handleSpecialSummonFromDeckWithCounterLimit(
     );
   }
 
-  return new Promise((resolve) => {
-    const onSelected = async (selected) => {
+  return new Promise<LegacyActionHandlerResult>((resolve) => {
+    const onSelected = async (
+      selected: ActionRuntimeCard | readonly ActionRuntimeCard[] | null,
+    ) => {
       const chosen = Array.isArray(selected) ? selected[0] : selected;
       if (!chosen) {
         resolve(false);
@@ -125,7 +150,7 @@ export async function handleSpecialSummonFromDeckWithCounterLimit(
       infoText: `You have ${counterCount} ${counterType} counters. After summoning, this card will be sent to the Graveyard.`,
     };
 
-    getUI(game)?.showCardSelectionModal(
+    getUI(game)?.showCardSelectionModal!(
       candidates,
       modalConfig.title,
       1,
@@ -135,13 +160,13 @@ export async function handleSpecialSummonFromDeckWithCounterLimit(
 }
 
 async function performSummonFromDeck(
-  card,
-  deck,
-  player,
-  action,
-  engine,
-  source,
-  effectId = null,
+  card: ActionRuntimeCard,
+  deck: ActionRuntimeCard[],
+  player: ActionRuntimePlayer,
+  action: CounterLimitAction,
+  engine: ActionHandlerEnginePort,
+  source: ActionRuntimeCard,
+  effectId: string | null = null,
 ) {
   const game = engine.game;
 
@@ -168,7 +193,7 @@ async function performSummonFromDeck(
     return false;
   }
 
-  const summonPosition = await engine.chooseSpecialSummonPosition(
+  const summonPosition = await engine.chooseSpecialSummonPosition!(
     card,
     player,
     { position: action.position },
@@ -189,7 +214,10 @@ async function performSummonFromDeck(
       effectId: effectId || action.effectId || null,
     });
 
-    if (moveResult?.success === false) {
+    if (
+      typeof moveResult === "object" &&
+      moveResult?.success === false
+    ) {
       return false;
     }
 
@@ -203,7 +231,7 @@ async function performSummonFromDeck(
     card.position = summonPosition;
     card.isFacedown = false;
     card.hasAttacked = false;
-    card.attacksUsedThisTurn = 0;
+    Reflect.set(card, "attacksUsedThisTurn", 0);
     card.owner = player.id;
     card.controller = player.id;
 
@@ -221,7 +249,7 @@ async function performSummonFromDeck(
   if (!usedMoveCard) {
     game.updateBoard?.();
     await game.waitForBoardPresentation?.();
-    await game.emit("after_summon", {
+    await game.emit!("after_summon", {
       card: card,
       player: player,
       method: "special",
@@ -248,13 +276,15 @@ async function performSummonFromDeck(
           reason: "effect_resolution",
         });
       } else {
-        const sourceIdx = sourceZone.indexOf(source);
-        if (sourceIdx !== -1) {
-          sourceZone.splice(sourceIdx, 1);
+        const legacySourceZone: unknown = sourceZone;
+        if (Array.isArray(legacySourceZone)) {
+          const sourceIdx = legacySourceZone.indexOf(source);
+          if (sourceIdx === -1) return false;
+          legacySourceZone.splice(sourceIdx, 1);
           player.graveyard = player.graveyard || [];
           player.graveyard.push(source);
 
-          await game.emit("card_to_grave", {
+          await game.emit!("card_to_grave", {
             card: source,
             fromZone: sourceZone,
             player: player,
@@ -269,7 +299,7 @@ async function performSummonFromDeck(
     }
   }
 
-  game.updateBoard();
+  game.updateBoard!();
 
   return true;
 }

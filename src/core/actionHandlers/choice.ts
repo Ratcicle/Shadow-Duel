@@ -1,5 +1,16 @@
 import { getUI } from "./shared.js";
 import { cardDatabase } from "../../data/cards.js";
+import type { ActionCase, ActionOf, CardAction } from "../contracts/actions.js";
+import type {
+  ActionRuntimeCard,
+  ActionRuntimeGamePort,
+  ActionRuntimePlayer,
+  ActionHandlerEnginePort,
+  EffectContext,
+  NormalizedActionExecutionResult,
+  ResolvedTargetMap,
+} from "../contracts/actionRuntime.js";
+import type { EffectCondition, EffectTarget } from "../contracts/effects.js";
 import {
   getCardDisplayName,
   getMonsterTypeLabel,
@@ -8,7 +19,113 @@ import {
 
 const DEFAULT_CHOICE_IMAGE = "assets/card-back.png";
 
-function getEffectChoiceKey(ctx, action) {
+type ChooseActionCaseAction = ActionOf<"choose_action_case">;
+type DeclareCardPropertyAction = ActionOf<"declare_card_property"> & {
+  readonly requirementId?: string;
+  readonly choiceImage?: string;
+};
+type ChoiceValue = string | number | boolean;
+type ChoiceSelectionMap = Record<string, string | readonly string[] | undefined>;
+
+interface ChoiceCardReference {
+  id: string;
+  name: string;
+  label: string;
+  description: string;
+  cardKind: string;
+  image: string;
+}
+
+interface ChoiceCandidate {
+  key: string;
+  name: string;
+  owner: string;
+  controller: string;
+  zone: "choice";
+  zoneIndex: number;
+  position: string;
+  atk: null;
+  def: null;
+  cardKind: string;
+  cardRef: ChoiceCardReference;
+}
+
+interface SelectionRequirement {
+  id: string;
+  label: string;
+  min: number;
+  max: number;
+  candidates: readonly ChoiceCandidate[];
+}
+
+interface ChoiceSelectionContract {
+  kind: string;
+  message: string;
+  requirements: readonly SelectionRequirement[];
+  ui: { allowCancel: boolean; useFieldTargeting: boolean };
+  metadata: object;
+}
+
+interface SelectionRunOptions {
+  kind?: string;
+  card?: ActionRuntimeCard | null;
+  message?: string | null;
+  allowCancel?: boolean;
+  context?: EffectContext;
+  player?: ActionRuntimePlayer | null;
+  activationContext?: object;
+}
+
+interface AutoSelectionResult {
+  ok?: boolean;
+  selections?: ChoiceSelectionMap | null;
+}
+
+interface CompletedTargetResolution {
+  ok?: boolean;
+  needsSelection?: false;
+  targets?: ResolvedTargetMap;
+  reason?: string;
+}
+
+interface PendingTargetResolution {
+  ok?: boolean;
+  needsSelection: true;
+  selectionContract: ChoiceSelectionContract;
+  targets?: ResolvedTargetMap;
+  reason?: string;
+  success?: boolean;
+  executed?: boolean;
+}
+
+type TargetResolution =
+  | CompletedTargetResolution
+  | PendingTargetResolution;
+
+const translate = getUIText as (
+  key: string,
+  params?: object,
+  fallback?: string | null,
+) => string;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isAutoSelectionResult(value: unknown): value is AutoSelectionResult {
+  return isRecord(value);
+}
+
+function isTargetResolution(value: unknown): value is TargetResolution {
+  if (!isRecord(value)) return false;
+  if (Reflect.get(value, "needsSelection") !== true) return true;
+  return isRecord(Reflect.get(value, "selectionContract"));
+}
+
+function getEffectChoiceKey(
+  ctx: EffectContext,
+  action: ChooseActionCaseAction,
+): string | null {
   return (
     action?.effectChoiceKey ||
     action?.choiceTextKey ||
@@ -18,7 +135,7 @@ function getEffectChoiceKey(ctx, action) {
   );
 }
 
-function getChoiceFallbackLabel(caseEntry, index) {
+function getChoiceFallbackLabel(caseEntry: ActionCase, index: number): string {
   return (
     caseEntry.label ||
     caseEntry.name ||
@@ -28,43 +145,52 @@ function getChoiceFallbackLabel(caseEntry, index) {
   );
 }
 
-function getChoiceCaseText(effectChoiceKey, caseId, field, fallback) {
+function getChoiceCaseText(
+  effectChoiceKey: string | null,
+  caseId: string,
+  field: "label" | "description",
+  fallback: string,
+): string {
   if (!effectChoiceKey || !caseId) return fallback;
-  return getUIText(
+  return translate(
     `effectChoices.${effectChoiceKey}.cases.${caseId}.${field}`,
     {},
     fallback,
   );
 }
 
-function getChoiceSelectionMessage(effectChoiceKey, action, ctx) {
+function getChoiceSelectionMessage(
+  effectChoiceKey: string | null,
+  action: ChooseActionCaseAction,
+  ctx: EffectContext,
+): string {
   const source = ctx?.source || null;
   const cardName = source
     ? getCardDisplayName(source) || source.name || ""
     : "";
   const fallback =
-    action.selectionMessage || getUIText("ui.selection.chooseEffect");
+    action.selectionMessage || translate("ui.selection.chooseEffect");
   if (!effectChoiceKey) return fallback;
-  return getUIText(
+  return translate(
     `effectChoices.${effectChoiceKey}.message`,
     { cardName },
     fallback,
   );
 }
 
-function getPropertyLabel(property) {
+function getPropertyLabel(property: string): string {
   if (property === "type") {
-    return getUIText("ui.declaration.typeLabel", {}, "monster Type");
+    return translate("ui.declaration.typeLabel", {}, "monster Type");
   }
   return String(property || "value");
 }
 
-function getPropertyValueLabel(property, value) {
+function getPropertyValueLabel(property: string, value: ChoiceValue): string {
   if (property === "type") return getMonsterTypeLabel(value);
   return String(value || "");
 }
 
-function getMonsterTypesInDatabase() {
+function getMonsterTypesInDatabase(): string[] {
   return Array.from(
     new Set(
       cardDatabase
@@ -80,7 +206,7 @@ function getMonsterTypesInDatabase() {
   );
 }
 
-function resolveDeclareChoices(action) {
+function resolveDeclareChoices(action: DeclareCardPropertyAction): ChoiceValue[] {
   if (Array.isArray(action?.choices)) return action.choices.filter(Boolean);
   if (action?.choices === "monster_types_in_database") {
     return getMonsterTypesInDatabase();
@@ -91,17 +217,25 @@ function resolveDeclareChoices(action) {
   return Array.from(
     new Set(
       cardDatabase
-        .map((card) => card?.[property])
+        .map((card) => Reflect.get(card, property) as unknown)
         .flatMap((value) => (Array.isArray(value) ? value : [value]))
         .filter(Boolean),
     ),
   ).sort((a, b) => String(a).localeCompare(String(b)));
 }
 
-function getDeclarationExpirationTurn(game, action) {
+function getDeclarationExpirationTurn(
+  game: ActionRuntimeGamePort,
+  action: DeclareCardPropertyAction,
+): number | null {
   const currentTurn = Number(game?.turnCounter || 0);
-  if (Number.isFinite(action?.expiresOnTurn)) return action.expiresOnTurn;
-  if (Number.isFinite(action?.durationTurns)) {
+  if (typeof action.expiresOnTurn === "number" && Number.isFinite(action.expiresOnTurn)) {
+    return action.expiresOnTurn;
+  }
+  if (
+    typeof action.durationTurns === "number" &&
+    Number.isFinite(action.durationTurns)
+  ) {
     return currentTurn + Math.max(0, action.durationTurns);
   }
   if (action?.duration === "while_faceup" || action?.duration === "permanent") {
@@ -114,11 +248,17 @@ function getDeclarationExpirationTurn(game, action) {
   return currentTurn;
 }
 
-function isAIPlayer(player) {
+function isAIPlayer(
+  player: ActionRuntimePlayer | null | undefined,
+): player is ActionRuntimePlayer {
   return player?.controllerType === "ai";
 }
 
-function resolveAutoSelection(game, selectionContract, options = {}) {
+function resolveAutoSelection(
+  game: ActionRuntimeGamePort,
+  selectionContract: ChoiceSelectionContract,
+  options: SelectionRunOptions = {},
+): { attempted: boolean; selections: ChoiceSelectionMap | null } {
   const player = options.player || options.context?.player || null;
   if (!isAIPlayer(player)) return { attempted: false, selections: null };
 
@@ -132,19 +272,25 @@ function resolveAutoSelection(game, selectionContract, options = {}) {
     game,
   });
 
+  const normalized = isAutoSelectionResult(autoResult) ? autoResult : null;
   return {
     attempted: true,
-    selections: autoResult?.ok ? autoResult.selections : null,
+    selections: normalized?.ok ? normalized.selections || null : null,
   };
 }
 
-function buildChoiceCandidates(cases, ctx, action, engine) {
+function buildChoiceCandidates(
+  cases: readonly ActionCase[],
+  ctx: EffectContext,
+  action: ChooseActionCaseAction,
+  engine: ActionHandlerEnginePort,
+) {
   const game = engine?.game;
   const requirementId = action.requirementId || "action_case_choice";
   const choiceImage = action.choiceImage || DEFAULT_CHOICE_IMAGE;
   const effectChoiceKey = getEffectChoiceKey(ctx, action);
-  const candidates = [];
-  const caseByKey = new Map();
+  const candidates: ChoiceCandidate[] = [];
+  const caseByKey = new Map<string, ActionCase>();
 
   cases.forEach((caseEntry, index) => {
     const baseKey = caseEntry.key || caseEntry.id || `case_${index + 1}`;
@@ -171,7 +317,7 @@ function buildChoiceCandidates(cases, ctx, action, engine) {
       image: caseEntry.image || choiceImage,
     };
 
-    const candidate = {
+    const candidate: ChoiceCandidate = {
       key,
       name: label,
       owner: "player",
@@ -196,14 +342,19 @@ function buildChoiceCandidates(cases, ctx, action, engine) {
   return { requirementId, candidates, caseByKey };
 }
 
-function buildDeclareChoiceCandidates(values, action, ctx, engine) {
+function buildDeclareChoiceCandidates(
+  values: readonly ChoiceValue[],
+  action: DeclareCardPropertyAction,
+  ctx: EffectContext,
+  engine: ActionHandlerEnginePort,
+) {
   const game = engine?.game;
   const requirementId =
     action.requirementId ||
     action.selectionId ||
     `${ctx?.effect?.id || action.type || "declare_card_property"}_choice`;
-  const candidates = [];
-  const valueByKey = new Map();
+  const candidates: ChoiceCandidate[] = [];
+  const valueByKey = new Map<string, ChoiceValue>();
   const property = action.property;
 
   values.forEach((value, index) => {
@@ -216,7 +367,7 @@ function buildDeclareChoiceCandidates(values, action, ctx, engine) {
       cardKind: "spell",
       image: action.choiceImage || DEFAULT_CHOICE_IMAGE,
     };
-    const candidate = {
+    const candidate: ChoiceCandidate = {
       key: `${requirementId}:${String(value)}`,
       name: label,
       owner: "player",
@@ -241,7 +392,11 @@ function buildDeclareChoiceCandidates(values, action, ctx, engine) {
   return { requirementId, candidates, valueByKey };
 }
 
-function shouldAllowCase(caseEntry, ctx, engine) {
+function shouldAllowCase(
+  caseEntry: ActionCase,
+  ctx: EffectContext,
+  engine: ActionHandlerEnginePort,
+): boolean {
   const conditions = Array.isArray(caseEntry?.conditions)
     ? caseEntry.conditions
     : [];
@@ -260,7 +415,10 @@ function shouldAllowCase(caseEntry, ctx, engine) {
   };
 
   if (targets.length > 0) {
-    const targetResult = engine.resolveTargets(targets, previewCtx, null);
+    const rawTargetResult = engine.resolveTargets?.(targets, previewCtx, null);
+    const targetResult = isTargetResolution(rawTargetResult)
+      ? rawTargetResult
+      : {};
     if (targetResult.ok === false) return false;
   }
 
@@ -276,10 +434,14 @@ function shouldAllowCase(caseEntry, ctx, engine) {
   return true;
 }
 
-function runSelectionContract(game, selectionContract, options = {}) {
-  return new Promise((resolve) => {
+function runSelectionContract(
+  game: ActionRuntimeGamePort,
+  selectionContract: ChoiceSelectionContract,
+  options: SelectionRunOptions = {},
+): Promise<ChoiceSelectionMap | null> {
+  return new Promise<ChoiceSelectionMap | null>((resolve) => {
     let resolved = false;
-    const finalize = (value) => {
+    const finalize = (value: ChoiceSelectionMap | null) => {
       if (resolved) return;
       resolved = true;
       resolve(value);
@@ -295,6 +457,9 @@ function runSelectionContract(game, selectionContract, options = {}) {
       return;
     }
 
+    if (!game.startTargetSelectionSession) {
+      throw new TypeError("game.startTargetSelectionSession is not a function");
+    }
     game.startTargetSelectionSession({
       kind: options.kind || selectionContract?.kind || "choice",
       selectionContract,
@@ -302,7 +467,7 @@ function runSelectionContract(game, selectionContract, options = {}) {
       message: options.message || null,
       allowCancel: options.allowCancel !== false,
       resolve: finalize,
-      execute: (selections) => {
+      execute: (selections: ChoiceSelectionMap | null) => {
         finalize(selections || {});
         return { success: true, needsSelection: false };
       },
@@ -311,9 +476,16 @@ function runSelectionContract(game, selectionContract, options = {}) {
   });
 }
 
-async function resolveTargetsWithPrompt(engine, ctx, targetDefs) {
-  let targetResult = engine.resolveTargets(targetDefs, ctx, null);
-  if (!targetResult.needsSelection) {
+async function resolveTargetsWithPrompt(
+  engine: ActionHandlerEnginePort,
+  ctx: EffectContext,
+  targetDefs: readonly EffectTarget[],
+): Promise<TargetResolution> {
+  const firstResult: unknown = engine.resolveTargets?.(targetDefs, ctx, null);
+  let targetResult: TargetResolution = isTargetResolution(firstResult)
+    ? firstResult
+    : {};
+  if (targetResult.needsSelection !== true) {
     return targetResult;
   }
 
@@ -337,11 +509,21 @@ async function resolveTargetsWithPrompt(engine, ctx, targetDefs) {
     return { ok: false, reason: "Selection cancelled." };
   }
 
-  targetResult = engine.resolveTargets(targetDefs, ctx, selections);
+  const resumedResult: unknown = engine.resolveTargets?.(
+    targetDefs,
+    ctx,
+    selections,
+  );
+  targetResult = isTargetResolution(resumedResult) ? resumedResult : {};
   return targetResult;
 }
 
-export async function handleChooseActionCase(action, ctx, targets, engine) {
+export async function handleChooseActionCase(
+  action: ActionOf<"choose_action_case">,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+  engine: ActionHandlerEnginePort,
+) {
   const game = engine?.game;
   const player = ctx?.player;
   if (!game || !player) return false;
@@ -448,7 +630,12 @@ export async function handleChooseActionCase(action, ctx, targets, engine) {
   return result;
 }
 
-export async function handleDeclareCardProperty(action, ctx, targets, engine) {
+export async function handleDeclareCardProperty(
+  action: DeclareCardPropertyAction,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+  engine: ActionHandlerEnginePort,
+) {
   const game = engine?.game;
   const player = ctx?.player;
   const source = ctx?.source;
@@ -472,7 +659,7 @@ export async function handleDeclareCardProperty(action, ctx, targets, engine) {
       kind: "choice",
       message:
         action.selectionMessage ||
-        getUIText(
+        translate(
           "ui.declaration.chooseValue",
           { propertyLabel },
           `Declare 1 ${propertyLabel}.`,
@@ -524,17 +711,17 @@ export async function handleDeclareCardProperty(action, ctx, targets, engine) {
   }
 
   const valueLabel = getPropertyValueLabel(action.property, declaredValue);
-  source.declaredValues[action.stateKey] = {
+  Reflect.set(source.declaredValues, action.stateKey, {
     property: action.property,
     value: declaredValue,
     valueLabel,
     declaredOnTurn: game.turnCounter || 0,
     expiresOnTurn: getDeclarationExpirationTurn(game, action),
     duration: action.duration || null,
-  };
+  });
 
   getUI(game)?.log(
-    getUIText(
+    translate(
       "ui.declaration.declaredValue",
       {
         cardName: getCardDisplayName(source),

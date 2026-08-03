@@ -6,6 +6,22 @@
  */
 
 import { isAI } from "../Player.js";
+import type {
+  ActionOf,
+  DestroyDamageEntry,
+  ReplacementRegistrationEntry,
+} from "../contracts/actions.js";
+import type {
+  ActionRuntimeCard,
+  ActionRuntimeGamePort,
+  ActionRuntimePlayer,
+  ActionRuntimeRegistration,
+  ActionHandlerEnginePort,
+  EffectContext,
+  NeedsSelectionResult,
+  ResolvedTargetMap,
+} from "../contracts/actionRuntime.js";
+import type { ZoneInput } from "../contracts/zones.js";
 import {
   getUI,
   resolveContextNumber,
@@ -15,44 +31,150 @@ import {
   selectCards,
 } from "./shared.js";
 
-function findCardZoneInOwner(owner, card) {
-  if (!owner || !card) return null;
-  if (owner.fieldSpell === card) return "fieldSpell";
-  const zones = [
-    "hand",
-    "field",
-    "graveyard",
-    "deck",
-    "spellTrap",
-    "extraDeck",
-    "banished",
-  ];
+const PLAYER_ARRAY_ZONES = [
+  "hand",
+  "field",
+  "graveyard",
+  "deck",
+  "spellTrap",
+  "extraDeck",
+  "banished",
+] as const;
+
+type PlayerArrayZone = (typeof PLAYER_ARRAY_ZONES)[number];
+type DamagePlayerKey = "self" | "opponent";
+type DestroyDamageAction = ActionOf<"destroy_and_damage_by_target_atk"> & {
+  readonly targetRef?: string;
+  readonly player?: "self" | "opponent";
+};
+type ReplacementRegistrationAction = ActionOf<"register_replacement_effect"> & {
+  readonly entries?: readonly ReplacementRegistrationEntry[];
+};
+type BanishAction = ActionOf<"banish" | "banish_destroyed_monster"> & {
+  readonly targetRef?: string;
+  readonly fromZone?: ZoneInput;
+  readonly useDestroyed?: boolean;
+  readonly contextLabel?: string;
+  readonly effectId?: string;
+  readonly haltOnFailure?: boolean;
+  readonly stopOnFailure?: boolean;
+};
+type GraveyardBanishAction = ActionOf<"banish_card_from_graveyard"> & {
+  readonly cardName?: string;
+  readonly cardType?: string;
+  readonly promptPlayer?: boolean;
+  readonly contextLabel?: string;
+  readonly effectId?: string;
+  readonly movedByEffect?: boolean;
+};
+type BanishAllGraveyardAction = ActionOf<"banish_all_graveyard_and_burn"> & {
+  readonly effectId?: string;
+};
+type SelectiveDestroyAction = ActionOf<
+  "selective_field_destruction" | "destroy_targeted_cards"
+> & {
+  readonly mode?: string;
+  readonly keepPerSide?: number;
+  readonly allowTieBreak?: boolean;
+  readonly modalTitle?: string;
+  readonly modalSubtitle?: string;
+  readonly modalInfoText?: string;
+};
+
+interface AnimationSource {
+  rect?: object | null;
+  hadCardElement?: boolean;
+  visual?: object | null;
+}
+
+interface SelectiveModalConfig {
+  title?: string;
+  subtitle?: string | null;
+  infoText?: string;
+}
+
+interface TieBreakerSelectionResult extends NeedsSelectionResult {
+  actionType?: string;
+  activationContext?: object | null;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isAnimationSource(value: unknown): value is AnimationSource {
+  return isRecord(value);
+}
+
+function isDestroyDamageEntry(
+  value: DestroyDamageEntry | ReplacementRegistrationEntry,
+): value is DestroyDamageEntry {
+  return "targetRef" in value && !("replacementEffect" in value);
+}
+
+function isReplacementEntry(
+  value: DestroyDamageEntry | ReplacementRegistrationEntry,
+): value is ReplacementRegistrationEntry {
+  return "replacementEffect" in value;
+}
+
+function isRuntimeCard(value: unknown): value is ActionRuntimeCard {
+  return isRecord(value) && typeof value.name === "string";
+}
+
+function isRuntimePlayer(value: unknown): value is ActionRuntimePlayer {
   return (
-    zones.find(
-      (zone) => Array.isArray(owner[zone]) && owner[zone].includes(card),
-    ) || null
+    isRecord(value) &&
+    typeof value.id === "string" &&
+    Array.isArray(value.field)
   );
 }
 
-function ownerZoneContainsCard(owner, zoneName, card) {
-  if (!owner || !zoneName || !card) return false;
-  if (zoneName === "fieldSpell") return owner.fieldSpell === card;
-  return Array.isArray(owner[zoneName]) && owner[zoneName].includes(card);
+function isMoveSuccess(value: unknown): boolean {
+  return value !== false && (!isRecord(value) || value.success !== false);
 }
 
-function findCardOwnerInGame(game, card) {
+function isNeedsSelectionResult(value: unknown): value is NeedsSelectionResult {
+  return isRecord(value) && value.needsSelection === true;
+}
+
+function readRecordValue(value: unknown, key: string): unknown {
+  return isRecord(value) ? Reflect.get(value, key) : undefined;
+}
+
+function findCardZoneInOwner(
+  owner: ActionRuntimePlayer | null | undefined,
+  card: ActionRuntimeCard | null | undefined,
+): ZoneInput | null {
+  if (!owner || !card) return null;
+  if (owner.fieldSpell === card) return "fieldSpell";
+  return (
+    PLAYER_ARRAY_ZONES.find((zone) => {
+      const cards = Reflect.get(owner, zone);
+      return Array.isArray(cards) && cards.includes(card);
+    }) || null
+  );
+}
+
+function ownerZoneContainsCard(
+  owner: ActionRuntimePlayer | null | undefined,
+  zoneName: ZoneInput | null | undefined,
+  card: ActionRuntimeCard | null | undefined,
+): boolean {
+  if (!owner || !zoneName || !card) return false;
+  if (zoneName === "fieldSpell") return owner.fieldSpell === card;
+  if (!PLAYER_ARRAY_ZONES.includes(zoneName as PlayerArrayZone)) return false;
+  const cards = Reflect.get(owner, zoneName);
+  return Array.isArray(cards) && cards.includes(card);
+}
+
+function findCardOwnerInGame(
+  game: ActionRuntimeGamePort,
+  card: ActionRuntimeCard,
+): ActionRuntimePlayer | null {
   if (!game || !card) return null;
 
-  const zones = [
-    "hand",
-    "field",
-    "graveyard",
-    "deck",
-    "spellTrap",
-    "fieldSpell",
-    "extraDeck",
-    "banished",
-  ];
+  const zones: readonly ZoneInput[] = [...PLAYER_ARRAY_ZONES, "fieldSpell"];
   const players = [game.player, game.bot].filter(Boolean);
 
   for (const candidate of players) {
@@ -66,18 +188,24 @@ function findCardOwnerInGame(game, card) {
   return null;
 }
 
-function queueBanishAnimation(game, owner, card, fromZone = null) {
+function queueBanishAnimation(
+  game: ActionRuntimeGamePort,
+  owner: ActionRuntimePlayer,
+  card: ActionRuntimeCard,
+  fromZone: ZoneInput | null = null,
+): void {
   if (!game?.cardAnimationsReady || typeof game.queueCardAnimation !== "function") {
     return;
   }
   if (!owner || !card || card.instanceId == null) return;
 
   const resolvedFromZone = fromZone || findCardZoneInOwner(owner, card);
-  const source = game.ui?.captureCardAnimationSource?.(card, {
+  const rawSource = game.ui?.captureCardAnimationSource?.(card, {
     ownerId: owner.id,
     zone: resolvedFromZone,
   });
 
+  const source = isAnimationSource(rawSource) ? rawSource : null;
   game.queueCardAnimation({
     kind: "banish",
     card,
@@ -91,7 +219,12 @@ function queueBanishAnimation(game, owner, card, fromZone = null) {
   });
 }
 
-function resolveDamagePlayerKey(entry, card, player, opponent) {
+function resolveDamagePlayerKey(
+  entry: DestroyDamageEntry,
+  card: ActionRuntimeCard,
+  player: ActionRuntimePlayer,
+  opponent: ActionRuntimePlayer,
+): DamagePlayerKey {
   const damagePlayer = entry?.damagePlayer || entry?.player || "opponent";
   if (damagePlayer === "self" || damagePlayer === "opponent") {
     return damagePlayer;
@@ -103,11 +236,17 @@ function resolveDamagePlayerKey(entry, card, player, opponent) {
   return "opponent";
 }
 
-function resolveDamageAmount(entry, card) {
-  if (Number.isFinite(entry?.amount)) {
+function resolveDamageAmount(
+  entry: DestroyDamageEntry,
+  card: ActionRuntimeCard,
+): number {
+  if (typeof entry.amount === "number" && Number.isFinite(entry.amount)) {
     return Math.max(0, Math.floor(entry.amount));
   }
-  const multiplier = Number.isFinite(entry?.multiplier) ? entry.multiplier : 1;
+  const multiplier =
+    typeof entry.multiplier === "number" && Number.isFinite(entry.multiplier)
+      ? entry.multiplier
+      : 1;
   const damageFrom = entry?.damageFrom || "target_atk";
   let base = 0;
   if (damageFrom === "target_def") {
@@ -120,7 +259,12 @@ function resolveDamageAmount(entry, card) {
   return Math.max(0, Math.floor(base * multiplier));
 }
 
-function shouldSkipDamage(action, ctx, engine, playerKey) {
+function shouldSkipDamage(
+  action: DestroyDamageAction,
+  ctx: EffectContext,
+  engine: ActionHandlerEnginePort,
+  playerKey: DamagePlayerKey,
+): boolean {
   const conditions = action?.skipDamageIf?.[playerKey];
   if (!Array.isArray(conditions) || conditions.length === 0) {
     return false;
@@ -132,26 +276,34 @@ function shouldSkipDamage(action, ctx, engine, playerKey) {
     player: targetPlayer,
     opponent: targetOpponent,
   };
+  if (!engine.evaluateConditions) {
+    throw new TypeError("engine.evaluateConditions is not a function");
+  }
   const result = engine.evaluateConditions(conditions, condCtx);
   return result.ok;
 }
 
 export async function handleDestroyAndDamageByTargetAtk(
-  action,
-  ctx,
-  targets,
-  engine,
+  action: DestroyDamageAction,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+  engine: ActionHandlerEnginePort,
 ) {
   const { player, opponent, source } = ctx;
   const game = engine.game;
 
   if (!player || !opponent || !game) return false;
 
-  const entries =
+  const entries: readonly DestroyDamageEntry[] =
     Array.isArray(action?.entries) && action.entries.length > 0
-      ? action.entries
+      ? action.entries.filter(isDestroyDamageEntry)
       : action?.targetRef
-        ? [{ targetRef: action.targetRef, damagePlayer: action.player }]
+        ? [
+            {
+              targetRef: action.targetRef,
+              damagePlayer: action.player === "self" ? "self" : "opponent",
+            },
+          ]
         : [];
 
   if (entries.length === 0) return false;
@@ -190,7 +342,7 @@ export async function handleDestroyAndDamageByTargetAtk(
   }
 
   let dealtDamage = false;
-  for (const playerKey of ["self", "opponent"]) {
+  for (const playerKey of ["self", "opponent"] as const) {
     const amount = damageTotals[playerKey] || 0;
     if (amount <= 0) continue;
     if (shouldSkipDamage(action, ctx, engine, playerKey)) {
@@ -209,10 +361,10 @@ export async function handleDestroyAndDamageByTargetAtk(
 }
 
 export async function handleRegisterReplacementEffect(
-  action,
-  ctx,
-  targets,
-  engine,
+  action: ReplacementRegistrationAction,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+  engine: ActionHandlerEnginePort,
 ) {
   const { player, opponent, source } = ctx;
   const game = engine.game;
@@ -220,35 +372,46 @@ export async function handleRegisterReplacementEffect(
   if (!player || !game) return false;
 
   const sourceName = action?.sourceName || source?.name || "Effect";
-  const rawEntries =
-    Array.isArray(action?.entries) && action.entries.length > 0
-      ? action.entries
-      : action?.replacementEffect
+  const configuredEntries = Array.isArray(action.entries)
+    ? action.entries.filter(isReplacementEntry)
+    : [];
+  const rawEntries: readonly ReplacementRegistrationEntry[] =
+    configuredEntries.length > 0
+      ? configuredEntries
+      : action.replacementEffect
         ? [{ ...action }]
         : [];
 
   if (rawEntries.length === 0) return false;
 
-  const resolveOwnerId = (ownerKey) => {
+  const resolveOwnerId = (
+    ownerKey: ReplacementRegistrationEntry["owner"] | undefined,
+  ): string | null => {
     if (ownerKey === "opponent") return opponent?.id || null;
     return player?.id || null;
   };
 
-  const resolveExpiresOnTurn = (entry) => {
-    if (Number.isFinite(entry?.expiresOnTurn)) {
+  const resolveExpiresOnTurn = (
+    entry: ReplacementRegistrationEntry,
+  ): number | null => {
+    if (
+      typeof entry.expiresOnTurn === "number" &&
+      Number.isFinite(entry.expiresOnTurn)
+    ) {
       return entry.expiresOnTurn;
     }
     const duration = entry?.duration || null;
     const durationTurnsRaw = entry?.durationTurns ?? entry?.turns ?? null;
-    if (duration === "end_of_turn") return game.turnCounter;
-    if (duration === "end_of_next_turn") return game.turnCounter + 1;
+    const currentTurn = Number(game.turnCounter || 0);
+    if (duration === "end_of_turn") return currentTurn;
+    if (duration === "end_of_next_turn") return currentTurn + 1;
     if (Number.isFinite(Number(durationTurnsRaw))) {
-      return game.turnCounter + Number(durationTurnsRaw);
+      return currentTurn + Number(durationTurnsRaw);
     }
     return null;
   };
 
-  const normalizeUses = (entry) => {
+  const normalizeUses = (entry: ReplacementRegistrationEntry): number => {
     if (entry?.uses === undefined && entry?.usesRemaining === undefined) {
       return Infinity;
     }
@@ -258,13 +421,16 @@ export async function handleRegisterReplacementEffect(
       : Infinity;
   };
 
-  const getReplacementTargetKey = (card) => {
+  const getReplacementTargetKey = (
+    card: ActionRuntimeCard | null | undefined,
+  ): string | null => {
     if (!card) return null;
     if (card.instanceId !== undefined && card.instanceId !== null) {
       return `instance:${card.instanceId}`;
     }
-    if (card.fieldPresenceId !== undefined && card.fieldPresenceId !== null) {
-      return `presence:${card.fieldPresenceId}`;
+    const fieldPresenceId = readRecordValue(card, "fieldPresenceId");
+    if (fieldPresenceId !== undefined && fieldPresenceId !== null) {
+      return `presence:${String(fieldPresenceId)}`;
     }
     return null;
   };
@@ -314,7 +480,7 @@ export async function handleRegisterReplacementEffect(
           game.temporaryReplacementEffects.filter(
             (existing) =>
               !existing ||
-              existing.uniqueKey !== uniqueKey ||
+              readRecordValue(existing, "uniqueKey") !== uniqueKey ||
               existing.ownerId !== ownerId,
           );
       }
@@ -362,7 +528,12 @@ export async function handleRegisterReplacementEffect(
 /**
  * Generic handler for banishing cards
  */
-export async function handleBanish(action, ctx, targets, engine) {
+export async function handleBanish(
+  action: BanishAction,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+  engine: ActionHandlerEnginePort,
+) {
   const { player } = ctx;
 
   const game = engine.game;
@@ -371,7 +542,10 @@ export async function handleBanish(action, ctx, targets, engine) {
 
   const targetRef = action.targetRef;
 
-  let resolved = targetRef ? targets?.[targetRef] : [];
+  const initialTargets = targetRef ? targets?.[targetRef] : [];
+  let resolved: ActionRuntimeCard[] = Array.isArray(initialTargets)
+    ? initialTargets.filter(isRuntimeCard)
+    : [];
 
   const useDestroyed =
     action.useDestroyed === true || action.type === "banish_destroyed_monster";
@@ -408,8 +582,9 @@ export async function handleBanish(action, ctx, targets, engine) {
   for (const tgt of resolved) {
     if (!tgt) continue;
 
+    const ownerPlayerValue = readRecordValue(tgt, "ownerPlayer");
     const fallbackOwner =
-      tgt.ownerPlayer ||
+      (isRuntimePlayer(ownerPlayerValue) ? ownerPlayerValue : null) ||
       (opponent &&
       (tgt.owner === opponent.id ||
         tgt.controller === opponent.id ||
@@ -441,7 +616,7 @@ export async function handleBanish(action, ctx, targets, engine) {
     }
 
     if (!resolvedOwner) {
-      const allZones = [
+      const allZones: readonly ZoneInput[] = [
         "hand",
         "field",
         "graveyard",
@@ -460,7 +635,10 @@ export async function handleBanish(action, ctx, targets, engine) {
             }
             continue;
           }
-          const zoneArr = candidate?.[zoneName];
+          if (!PLAYER_ARRAY_ZONES.includes(zoneName as PlayerArrayZone)) {
+            continue;
+          }
+          const zoneArr = candidate[zoneName as PlayerArrayZone];
           if (Array.isArray(zoneArr) && zoneArr.includes(tgt)) {
             resolvedOwner = candidate;
             break;
@@ -498,7 +676,7 @@ export async function handleBanish(action, ctx, targets, engine) {
       awaitCardMovedEvent: true,
     });
 
-    if (moveResult === false || moveResult?.success === false) {
+    if (!isMoveSuccess(moveResult)) {
       getUI(game)?.log(`${tgt.name} could not be banished.`);
       continue;
     }
@@ -531,21 +709,22 @@ export async function handleBanish(action, ctx, targets, engine) {
  *   timing rules.
  */
 export async function handleScheduleReturnFromBanished(
-  action,
-  ctx,
-  targets,
-  engine,
+  action: ActionOf<"schedule_return_from_banished">,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+  engine: ActionHandlerEnginePort,
 ) {
   const game = engine?.game;
   const { player, source } = ctx || {};
   if (!game || !player) return false;
 
   const cardRef = action?.cardRef || "self";
-  let cardToReturn = null;
+  let cardToReturn: ActionRuntimeCard | null = null;
   if (cardRef === "self") {
     cardToReturn = source || null;
   } else if (Array.isArray(targets?.[cardRef]) && targets[cardRef].length > 0) {
-    cardToReturn = targets[cardRef][0];
+    const candidate = targets[cardRef][0];
+    cardToReturn = isRuntimeCard(candidate) ? candidate : null;
   }
 
   if (!cardToReturn) {
@@ -554,7 +733,10 @@ export async function handleScheduleReturnFromBanished(
   }
 
   const returnPhase = action?.returnPhase || "end";
-  const delayTurns = Number.isFinite(action?.delayTurns) ? action.delayTurns : 1;
+  const delayTurns =
+    typeof action.delayTurns === "number" && Number.isFinite(action.delayTurns)
+      ? action.delayTurns
+      : 1;
 
   // "End of the next turn" means the end-phase of the turn that follows the
   // current one. `game.turn` is the active player at the moment of scheduling,
@@ -602,13 +784,13 @@ export async function handleScheduleReturnFromBanished(
  * - promptPlayer: whether to let player choose (default: true for multiple matches)
  */
 export async function handleBanishCardFromGraveyard(
-  action,
+  action: GraveyardBanishAction,
 
-  ctx,
+  ctx: EffectContext,
 
-  targets,
+  targets: ResolvedTargetMap,
 
-  engine,
+  engine: ActionHandlerEnginePort,
 ) {
   const { player } = ctx;
 
@@ -620,7 +802,7 @@ export async function handleBanishCardFromGraveyard(
 
   const cardType = action.cardType || action.type;
 
-  const count = action.count || 1;
+  const count = typeof action.count === "number" ? action.count : 1;
 
   // Find matching cards in the graveyard
 
@@ -648,7 +830,7 @@ export async function handleBanishCardFromGraveyard(
 
   // Select cards to banish
 
-  let toBanish = [];
+  let toBanish: ActionRuntimeCard[] = [];
 
   if (candidates.length === count) {
     // Exactly enough cards, no choice needed
@@ -672,7 +854,9 @@ export async function handleBanishCardFromGraveyard(
         zone: "graveyard",
       });
 
-      toBanish = selected || [];
+      toBanish = Array.isArray(selected)
+        ? selected.filter(isRuntimeCard)
+        : [];
     } else {
       toBanish = candidates.slice(0, count);
     }
@@ -705,7 +889,7 @@ export async function handleBanishCardFromGraveyard(
       awaitCardMovedEvent: true,
     });
 
-    if (moveResult === false || moveResult?.success === false) {
+    if (!isMoveSuccess(moveResult)) {
       getUI(game)?.log(`${card.name} could not be banished from the graveyard.`);
       continue;
     }
@@ -724,9 +908,15 @@ export async function handleBanishCardFromGraveyard(
   return false;
 }
 
-function resolveGraveyardBanishOwners(scope, player, opponent) {
+function resolveGraveyardBanishOwners(
+  scope: "self" | "opponent" | "both",
+  player: ActionRuntimePlayer,
+  opponent: ActionRuntimePlayer | null | undefined,
+): ActionRuntimePlayer[] {
   if (scope === "both") {
-    return [player, opponent].filter(Boolean);
+    return [player, opponent].filter(
+      (owner): owner is ActionRuntimePlayer => owner !== null && owner !== undefined,
+    );
   }
   if (scope === "opponent") {
     return opponent ? [opponent] : [];
@@ -743,7 +933,12 @@ function resolveGraveyardBanishOwners(scope, player, opponent) {
  * - damagePerCard: LP damage per card banished (default: 0)
  * - player: "self" | "opponent" - who takes the damage (default: "opponent")
  */
-export async function handleBanishAllGraveyardAndBurn(action, ctx, _targets, engine) {
+export async function handleBanishAllGraveyardAndBurn(
+  action: BanishAllGraveyardAction,
+  ctx: EffectContext,
+  _targets: ResolvedTargetMap,
+  engine: ActionHandlerEnginePort,
+) {
   const { player, opponent } = ctx;
   const game = engine.game;
 
@@ -781,7 +976,7 @@ export async function handleBanishAllGraveyardAndBurn(action, ctx, _targets, eng
         movedByEffect: true,
         awaitCardMovedEvent: true,
       });
-      moved = moveResult !== false && moveResult?.success !== false;
+      moved = isMoveSuccess(moveResult);
       if (!moved) {
         getUI(game)?.log(`${card.name} could not be banished from the graveyard.`);
         continue;
@@ -799,8 +994,8 @@ export async function handleBanishAllGraveyardAndBurn(action, ctx, _targets, eng
       owner.banished.push(card);
       card.location = "banished";
       card.isFacedown = false;
-      card.setTurn = null;
-      card.turnSetOn = null;
+      Reflect.set(card, "setTurn", null);
+      Reflect.set(card, "turnSetOn", null);
       moved = true;
     }
 
@@ -823,6 +1018,9 @@ export async function handleBanishAllGraveyardAndBurn(action, ctx, _targets, eng
         sourceCard: ctx.source || null,
       });
     } else {
+      if (!targetPlayer.takeDamage) {
+        throw new TypeError("targetPlayer.takeDamage is not a function");
+      }
       targetPlayer.takeDamage(totalDamage, {
         cause: "effect",
       });
@@ -850,20 +1048,31 @@ export async function handleBanishAllGraveyardAndBurn(action, ctx, _targets, eng
  * Effect: Destroys all monsters on field except keepPerSide highest ATK monsters per side.
  * If there's a tie for highest ATK, the card's controller chooses which to keep.
  */
-async function destroySelectiveField(action, ctx, targets, engine) {
+async function destroySelectiveField(
+  action: SelectiveDestroyAction,
+  ctx: EffectContext,
+  _targets: ResolvedTargetMap,
+  engine: ActionHandlerEnginePort,
+) {
   const { player, source } = ctx;
 
   const game = engine.game;
 
   if (!player || !game) return false;
 
-  const opponent = game.getOpponent(player);
+  if (!game.getOpponent) {
+    throw new TypeError("game.getOpponent is not a function");
+  }
+  const getOpponent = game.getOpponent.bind(game);
+  const opponent = getOpponent(player);
 
   if (!opponent) return false;
 
-  const keepPerSide = Number.isFinite(action.keepPerSide)
-    ? action.keepPerSide
-    : 1;
+  const keepPerSide =
+    typeof action.keepPerSide === "number" &&
+    Number.isFinite(action.keepPerSide)
+      ? action.keepPerSide
+      : 1;
 
   const allowTieBreak = action.allowTieBreak !== false;
 
@@ -885,7 +1094,9 @@ async function destroySelectiveField(action, ctx, targets, engine) {
 
   // Helper function to find highest ATK monsters
 
-  const findHighestAtkMonsters = (monsters) => {
+  const findHighestAtkMonsters = (
+    monsters: readonly ActionRuntimeCard[],
+  ): ActionRuntimeCard[] => {
     if (monsters.length === 0) return [];
 
     const maxAtk = Math.max(...monsters.map((m) => m.atk || 0));
@@ -901,13 +1112,13 @@ async function destroySelectiveField(action, ctx, targets, engine) {
 
   // Determine which monsters to keep
 
-  let playerToKeep = [];
+  let playerToKeep: ActionRuntimeCard[] = [];
 
-  let opponentToKeep = [];
+  let opponentToKeep: ActionRuntimeCard[] = [];
 
   // Custom modal text from action properties
 
-  const modalConfig = {
+  const modalConfig: SelectiveModalConfig = {
     title: action.modalTitle || "Choose Survivor",
 
     subtitle: action.modalSubtitle || null, // null means auto-generate
@@ -936,7 +1147,7 @@ async function destroySelectiveField(action, ctx, targets, engine) {
           modalConfig,
         );
         // Check if this is a needsSelection result (network mode)
-        if (tieBreakerResult?.needsSelection) {
+        if (isNeedsSelectionResult(tieBreakerResult)) {
           return {
             ...tieBreakerResult,
             actionType: action.type,
@@ -969,7 +1180,7 @@ async function destroySelectiveField(action, ctx, targets, engine) {
           modalConfig,
         );
         // Check if this is a needsSelection result (network mode)
-        if (opponentTieBreakerResult?.needsSelection) {
+        if (isNeedsSelectionResult(opponentTieBreakerResult)) {
           return {
             ...opponentTieBreakerResult,
             actionType: action.type,
@@ -985,7 +1196,10 @@ async function destroySelectiveField(action, ctx, targets, engine) {
 
   // Determine which monsters to destroy
 
-  const toDestroy = [];
+  const toDestroy: Array<{
+    card: ActionRuntimeCard;
+    owner: ActionRuntimePlayer;
+  }> = [];
 
   for (const monster of playerMonsters) {
     if (!playerToKeep.includes(monster)) {
@@ -1045,7 +1259,7 @@ async function destroySelectiveField(action, ctx, targets, engine) {
 
       sourceCard: source,
 
-      opponent: game.getOpponent(owner),
+      opponent: getOpponent(owner),
     });
   }
 
@@ -1071,23 +1285,20 @@ async function destroySelectiveField(action, ctx, targets, engine) {
  * @param {Object} modalConfig - Configuration for modal text (title, subtitle, infoText)
  */
 async function promptTieBreaker(
-  game,
-
-  candidates,
-
-  keepCount,
-
-  sideDescription,
-
-  modalConfig = {},
-) {
-  if (!getUI(game)?.showCardGridSelectionModal) {
+  game: ActionRuntimeGamePort,
+  candidates: readonly ActionRuntimeCard[],
+  keepCount: number,
+  sideDescription: string,
+  modalConfig: SelectiveModalConfig = {},
+): Promise<ActionRuntimeCard[] | TieBreakerSelectionResult> {
+  const ui = getUI(game);
+  if (!ui.showCardGridSelectionModal) {
     // Fallback: auto-select first N
 
     return candidates.slice(0, keepCount);
   }
 
-  return new Promise((resolve) => {
+  return new Promise<ActionRuntimeCard[] | TieBreakerSelectionResult>((resolve) => {
     const maxAtk = candidates[0]?.atk || 0;
 
     // Use custom subtitle or generate default one
@@ -1107,8 +1318,16 @@ async function promptTieBreaker(
 
       infoText: modalConfig.infoText || "All other monsters will be destroyed.",
 
-      onConfirm: (selected) => {
-        resolve(selected || candidates.slice(0, keepCount));
+      onConfirm: (selected: unknown) => {
+        if (isNeedsSelectionResult(selected)) {
+          resolve(selected);
+          return;
+        }
+        resolve(
+          Array.isArray(selected)
+            ? selected.filter(isRuntimeCard)
+            : candidates.slice(0, keepCount),
+        );
       },
 
       onCancel: () => {
@@ -1116,13 +1335,14 @@ async function promptTieBreaker(
       },
     };
 
-    if (typeof getUI(game).showTieBreakerSelection === "function") {
-      getUI(game).showTieBreakerSelection(baseOptions);
+    const showTieBreakerSelection = Reflect.get(ui, "showTieBreakerSelection");
+    if (typeof showTieBreakerSelection === "function") {
+      Reflect.apply(showTieBreakerSelection, ui, [baseOptions]);
 
       return;
     }
 
-    getUI(game).showCardGridSelectionModal({
+    ui.showCardGridSelectionModal!({
       title: baseOptions.title,
 
       subtitle: baseOptions.subtitle,
@@ -1157,7 +1377,12 @@ async function promptTieBreaker(
 /**
  * Generic handler for destroying targeted cards with optional selective field mode
  */
-export async function handleDestroyTargetedCards(action, ctx, targets, engine) {
+export async function handleDestroyTargetedCards(
+  action: SelectiveDestroyAction,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+  engine: ActionHandlerEnginePort,
+) {
   const { player, opponent, source } = ctx;
 
   const game = engine.game;
@@ -1204,7 +1429,7 @@ export async function handleDestroyTargetedCards(action, ctx, targets, engine) {
     ? action.zones
     : ["field", "spellTrap", "fieldSpell"];
 
-  let opponentCards = [];
+  let opponentCards: ActionRuntimeCard[] = [];
 
   for (const z of zones) {
     if (z === "field") {
@@ -1286,7 +1511,8 @@ export async function handleDestroyTargetedCards(action, ctx, targets, engine) {
   const requestedMinTargets =
     contextTargetCount !== null
       ? requestedMaxTargets
-      : Number.isFinite(action.minTargets)
+      : typeof action.minTargets === "number" &&
+          Number.isFinite(action.minTargets)
         ? action.minTargets
         : Math.min(requestedMaxTargets, opponentCards.length);
 
@@ -1366,7 +1592,10 @@ export async function handleDestroyTargetedCards(action, ctx, targets, engine) {
     },
 
     autoSelectKeys: () =>
-      candidates.slice(0, maxTargets).map((cand) => cand.key),
+      candidates
+        .slice(0, maxTargets)
+        .map((cand) => cand.key)
+        .filter((key): key is string => typeof key === "string"),
   });
 
   if (selectedKeys === null) {
@@ -1375,11 +1604,11 @@ export async function handleDestroyTargetedCards(action, ctx, targets, engine) {
     return false;
   }
 
-  const targetCards = selectedKeys
+  const targetCards: ActionRuntimeCard[] = selectedKeys
 
     .map((key) => candidates.find((cand) => cand.key === key)?.cardRef)
 
-    .filter(Boolean);
+    .filter(isRuntimeCard);
 
   if (targetCards.length === 0) {
     getUI(game)?.log("No cards selected.");
@@ -1422,7 +1651,12 @@ export async function handleDestroyTargetedCards(action, ctx, targets, engine) {
   return true;
 }
 
-export async function handleDestroyCardsByScope(action, ctx, targets, engine) {
+export async function handleDestroyCardsByScope(
+  action: ActionOf<"destroy_cards_by_scope">,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+  engine: ActionHandlerEnginePort,
+) {
   const game = engine?.game;
   const { player, source } = ctx || {};
 
@@ -1513,19 +1747,19 @@ export async function handleDestroyCardsByScope(action, ctx, targets, engine) {
  * Handler for destroying the attacker when an archetype monster is destroyed in battle
  */
 export async function handleDestroyAttackerOnArchetypeDestruction(
-  action,
+  action: ActionOf<"destroy_attacker_on_archetype_destruction">,
 
-  ctx,
+  ctx: EffectContext,
 
-  targets,
+  targets: ResolvedTargetMap,
 
-  engine,
+  engine: ActionHandlerEnginePort,
 ) {
   const { destroyed, attacker } = ctx;
 
   const game = engine.game;
 
-  if (!destroyed || !attacker || !game) return false;
+  if (!destroyed || !attacker || !game || !ctx.player) return false;
 
   const archetype = action.archetype;
   if (!archetype) {

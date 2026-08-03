@@ -1,22 +1,148 @@
 import { cardMatchesKind } from "../Card.js";
 import { getUIText } from "../i18n.js";
+import type { ActionCase, ActionOf } from "../contracts/actions.js";
+import type {
+  ActionRuntimeCard,
+  ActionRuntimeGamePort,
+  ActionRuntimePlayer,
+  ActionRuntimeRegistration,
+  ActionTargetResolution,
+  ActionHandlerEnginePort,
+  EffectContext,
+  LegacyActionHandlerResult,
+  ResolvedTargetMap,
+} from "../contracts/actionRuntime.js";
+import type { CardFilter } from "../contracts/effects.js";
 import { getUI, resolveTargetCards } from "./shared.js";
 import { isAI } from "../Player.js";
 
-function sameCardRef(ref, card) {
+type OptionalTargetAction = ActionOf<"optional_target_actions">;
+type TemporaryEventAction = ActionOf<"register_temporary_event_effect"> & {
+  readonly id?: string;
+};
+type RuntimeCardReference = ActionRuntimeCard | string | number | null | undefined;
+type SelectionMap = Record<string, readonly string[] | undefined>;
+
+interface LegacyCardFilter extends Omit<CardFilter, "position" | "type"> {
+  readonly faceUp?: boolean;
+  readonly position?: "attack" | "defense" | "any";
+  readonly type?: string | readonly string[];
+  readonly excludeName?: string;
+  readonly excludeNames?: readonly string[];
+  readonly excludeId?: number;
+  readonly excludeCardId?: number;
+  readonly excludeIds?: readonly number[];
+  readonly excludeCardIds?: readonly number[];
+  readonly excludeInstanceId?: string | number;
+  readonly excludeInstanceIds?: readonly (string | number)[];
+  readonly excludeCardInstanceIds?: readonly (string | number)[];
+  readonly excludeCards?: readonly RuntimeCardReference[];
+}
+
+interface SelectionCandidate {
+  readonly key?: string;
+  readonly id?: string;
+  readonly name?: string;
+  readonly label?: string;
+  readonly zone?: string;
+  readonly cardKind?: string;
+}
+
+interface SelectionRequirement {
+  readonly id: string;
+  readonly label?: string;
+  readonly min?: number;
+  readonly max?: number;
+  readonly zone?: string;
+  readonly zones?: readonly string[];
+  readonly owner?: string;
+  readonly candidates?: readonly SelectionCandidate[];
+}
+
+interface OptionalSelectionContract {
+  readonly kind?: string;
+  message?: string;
+  readonly requirements?: readonly SelectionRequirement[];
+  readonly ui?: {
+    readonly useFieldTargeting?: boolean;
+    readonly allowCancel?: boolean;
+  };
+  readonly metadata?: {
+    readonly context?: string;
+    readonly intent?: string;
+    readonly sourceCard?: ActionRuntimeCard | null;
+    readonly sourceCardName?: string | null;
+    readonly effectId?: string | null;
+  };
+}
+
+interface AutoSelectionResult {
+  readonly ok?: boolean;
+  readonly selections?: SelectionMap | null;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isRuntimeCard(value: unknown): value is ActionRuntimeCard {
+  return isRecord(value) && typeof value.name === "string";
+}
+
+function isRuntimePlayer(value: unknown): value is ActionRuntimePlayer {
+  return (
+    isRecord(value) &&
+    typeof value.id === "string" &&
+    Array.isArray(value.field)
+  );
+}
+
+function isAutoSelectionResult(value: unknown): value is AutoSelectionResult {
+  return isRecord(value);
+}
+
+function isSelectionContract(value: unknown): value is OptionalSelectionContract {
+  return isRecord(value);
+}
+
+function readRecordValue(value: unknown, key: string): unknown {
+  return isRecord(value) ? Reflect.get(value, key) : undefined;
+}
+
+function readStringValue(value: unknown, key: string): string | null {
+  const result = readRecordValue(value, key);
+  return typeof result === "string" ? result : null;
+}
+
+const translate = getUIText as (
+  key: string,
+  params?: object,
+  fallback?: string | null,
+) => string;
+
+function sameCardRef(
+  ref: RuntimeCardReference,
+  card: ActionRuntimeCard | null | undefined,
+): boolean {
   if (!ref || !card) return false;
   if (ref === card) return true;
-  if (typeof ref === "object") {
+  if (typeof ref === "object" && ref !== null) {
     return ref.instanceId != null && ref.instanceId === card.instanceId;
   }
   return card.instanceId != null && String(ref) === String(card.instanceId);
 }
 
-function getCardInstanceId(card) {
+function getCardInstanceId(
+  card: ActionRuntimeCard | null | undefined,
+): string | number | null {
   return card?.instanceId ?? card?._instanceId ?? card?.uuid ?? null;
 }
 
-function getFirstTargetByRef(ref, ctx, targets) {
+function getFirstTargetByRef(
+  ref: string | undefined,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+): ActionRuntimeCard | null {
   if (!ref) return null;
   return (
     resolveTargetCards({ targetRef: ref }, ctx, targets, {
@@ -25,7 +151,10 @@ function getFirstTargetByRef(ref, ctx, targets) {
   );
 }
 
-function getCardController(game, card) {
+function getCardController(
+  game: ActionRuntimeGamePort | null | undefined,
+  card: ActionRuntimeCard | null | undefined,
+): ActionRuntimePlayer | null {
   if (!game || !card) return null;
   if (game.player?.field?.includes?.(card)) return game.player;
   if (game.bot?.field?.includes?.(card)) return game.bot;
@@ -40,11 +169,17 @@ function getCardController(game, card) {
   return card.owner === "player" ? game.player : card.owner === "bot" ? game.bot : null;
 }
 
-function isCardOnField(controller, card) {
+function isCardOnField(
+  controller: ActionRuntimePlayer | null,
+  card: ActionRuntimeCard,
+): boolean {
   return !!controller && Array.isArray(controller.field) && controller.field.includes(card);
 }
 
-function computeExpiresOnTurn(game, duration) {
+function computeExpiresOnTurn(
+  game: ActionRuntimeGamePort,
+  duration: string,
+): number | null {
   if (duration === "duel") return null;
   const currentTurn = Number(game?.turnCounter || 0);
   if (duration === "until_consumed") return null;
@@ -52,18 +187,25 @@ function computeExpiresOnTurn(game, duration) {
   return currentTurn;
 }
 
-function getTemporaryEventEffectUses(action) {
+function getTemporaryEventEffectUses(
+  action: TemporaryEventAction,
+): number | null {
   if (action?.unlimitedUses === true) return null;
   return Number.isFinite(Number(action?.uses))
     ? Math.max(0, Number(action.uses))
     : 1;
 }
 
-function isActiveEquipForCard(equip, card, ctx) {
+function isActiveEquipForCard(
+  equip: ActionRuntimeCard,
+  card: ActionRuntimeCard,
+  ctx: EffectContext,
+): boolean {
   if (!equip || !card) return false;
   if (equip.cardKind !== "spell" || equip.subtype !== "equip") return false;
   const isAttached =
-    sameCardRef(equip.equippedTo, card) || sameCardRef(equip.equipTarget, card);
+    sameCardRef(equip.equippedTo, card) ||
+    sameCardRef(readRecordValue(equip, "equipTarget") as RuntimeCardReference, card);
   if (!isAttached) return false;
 
   const owner =
@@ -75,7 +217,11 @@ function isActiveEquipForCard(equip, card, ctx) {
   return Array.isArray(owner?.spellTrap) && owner.spellTrap.includes(equip);
 }
 
-function matchesCardFilters(card, filters, ctx) {
+function matchesCardFilters(
+  card: ActionRuntimeCard,
+  filters: LegacyCardFilter,
+  ctx: EffectContext,
+): boolean {
   if (!card || !filters) return false;
 
   const ownerFilter = filters.owner;
@@ -213,7 +359,11 @@ function matchesCardFilters(card, filters, ctx) {
   return true;
 }
 
-function resolveOptionalAutoSelection(game, selectionContract, ctx) {
+function resolveOptionalAutoSelection(
+  game: ActionRuntimeGamePort,
+  selectionContract: OptionalSelectionContract,
+  ctx: EffectContext,
+): SelectionMap | null {
   const player = ctx?.player || null;
   if (!isAI(player)) return null;
 
@@ -226,11 +376,14 @@ function resolveOptionalAutoSelection(game, selectionContract, ctx) {
     game,
   });
 
-  if (autoResult?.ok && autoResult.selections) {
-    return autoResult.selections;
+  const normalizedAutoResult = isAutoSelectionResult(autoResult)
+    ? autoResult
+    : null;
+  if (normalizedAutoResult?.ok && normalizedAutoResult.selections) {
+    return normalizedAutoResult.selections;
   }
 
-  const fallback = {};
+  const fallback: Record<string, string[]> = {};
   for (const req of selectionContract?.requirements || []) {
     const min = Number(req?.min ?? 0);
     const max = Number(req?.max ?? min);
@@ -245,7 +398,12 @@ function resolveOptionalAutoSelection(game, selectionContract, ctx) {
   return fallback;
 }
 
-function runOptionalTargetSelection(game, selectionContract, ctx, action) {
+function runOptionalTargetSelection(
+  game: ActionRuntimeGamePort,
+  selectionContract: OptionalSelectionContract,
+  ctx: EffectContext,
+  action: OptionalTargetAction,
+): Promise<SelectionMap | null> {
   const autoSelection = resolveOptionalAutoSelection(
     game,
     selectionContract,
@@ -253,14 +411,17 @@ function runOptionalTargetSelection(game, selectionContract, ctx, action) {
   );
   if (autoSelection) return Promise.resolve(autoSelection);
 
-  return new Promise((resolve) => {
+  return new Promise<SelectionMap | null>((resolve) => {
     let resolved = false;
-    const finalize = (value) => {
+    const finalize = (value: SelectionMap | null) => {
       if (resolved) return;
       resolved = true;
       resolve(value);
     };
 
+    if (!game.startTargetSelectionSession) {
+      throw new TypeError("game.startTargetSelectionSession is not a function");
+    }
     game.startTargetSelectionSession({
       kind: selectionContract?.kind || "target",
       selectionContract,
@@ -268,7 +429,7 @@ function runOptionalTargetSelection(game, selectionContract, ctx, action) {
       message: action?.selectionMessage || selectionContract?.message || null,
       allowCancel: action?.allowCancel !== false,
       resolve: finalize,
-      execute: (selections) => {
+      execute: (selections: SelectionMap | null) => {
         finalize(selections || {});
         return { success: true, needsSelection: false };
       },
@@ -277,7 +438,10 @@ function runOptionalTargetSelection(game, selectionContract, ctx, action) {
   });
 }
 
-function buildOptionalConfirmationContract(action, ctx) {
+function buildOptionalConfirmationContract(
+  action: OptionalTargetAction,
+  ctx: EffectContext,
+): OptionalSelectionContract {
   const requirementId =
     action?.confirmationId ||
     action?.selectionId ||
@@ -328,15 +492,18 @@ function buildOptionalConfirmationContract(action, ctx) {
   };
 }
 
-function getOptionalConfirmationText(action, ctx) {
+function getOptionalConfirmationText(
+  action: OptionalTargetAction,
+  ctx: EffectContext,
+): string {
   const fallback =
     action?.promptMessage ||
     action?.selectionMessage ||
-    getUIText("ui.selection.chooseOneOption");
+    translate("ui.selection.chooseOneOption");
   const key = action?.promptMessageKey || action?.selectionMessageKey || null;
   if (!key) return fallback;
 
-  return getUIText(
+  return translate(
     key,
     {
       sourceCardName: ctx?.source?.name || "",
@@ -346,15 +513,19 @@ function getOptionalConfirmationText(action, ctx) {
   );
 }
 
-function getOptionalConfirmationTitle(action) {
+function getOptionalConfirmationTitle(action: OptionalTargetAction): string {
   const fallback =
-    action?.promptTitle || getUIText("ui.prompts.confirmTitle");
+    action?.promptTitle || translate("ui.prompts.confirmTitle");
   return action?.promptTitleKey
-    ? getUIText(action.promptTitleKey, {}, fallback)
+    ? translate(action.promptTitleKey, {}, fallback)
     : fallback;
 }
 
-async function confirmOptionalAction(action, ctx, engine) {
+async function confirmOptionalAction(
+  action: OptionalTargetAction,
+  ctx: EffectContext,
+  engine: ActionHandlerEnginePort,
+): Promise<boolean> {
   const game = engine?.game;
   if (!game) return false;
 
@@ -374,9 +545,7 @@ async function confirmOptionalAction(action, ctx, engine) {
         title: getOptionalConfirmationTitle(action),
       },
     );
-    return result && typeof result.then === "function"
-      ? !!(await result)
-      : !!result;
+    return !!(await result);
   }
 
   const selections = await runOptionalTargetSelection(
@@ -388,13 +557,23 @@ async function confirmOptionalAction(action, ctx, engine) {
   if (!selections) return false;
 
   const requirementId = selectionContract.requirements?.[0]?.id;
+  if (!requirementId) return false;
   const selected = Array.isArray(selections?.[requirementId])
     ? selections[requirementId]
     : [];
   return selected.includes("yes");
 }
 
-async function resolveOptionalTargets(action, ctx, engine) {
+type OptionalTargetResolution = ActionTargetResolution & {
+  cancelled?: boolean;
+  optionalDeclined?: boolean;
+};
+
+async function resolveOptionalTargets(
+  action: OptionalTargetAction,
+  ctx: EffectContext,
+  engine: ActionHandlerEnginePort,
+): Promise<OptionalTargetResolution> {
   const targetDefs = Array.isArray(action?.targets) ? action.targets : [];
   if (targetDefs.length === 0) {
     if (
@@ -421,6 +600,9 @@ async function resolveOptionalTargets(action, ctx, engine) {
     },
   };
 
+  if (!engine.resolveTargets) {
+    throw new TypeError("engine.resolveTargets is not a function");
+  }
   let targetResult = engine.resolveTargets(targetDefs, targetCtx, null);
   if (targetResult?.ok === false && !targetResult?.needsSelection) {
     return targetResult;
@@ -431,7 +613,7 @@ async function resolveOptionalTargets(action, ctx, engine) {
   }
 
   const selectionContract = targetResult.selectionContract;
-  if (!selectionContract) {
+  if (!isSelectionContract(selectionContract)) {
     return { ok: false, reason: "Selection contract not available." };
   }
 
@@ -455,10 +637,10 @@ async function resolveOptionalTargets(action, ctx, engine) {
 }
 
 export async function handleConditionalTargetActions(
-  action,
-  ctx,
-  targets,
-  engine
+  action: ActionOf<"conditional_target_actions">,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+  engine: ActionHandlerEnginePort,
 ) {
   const game = engine?.game;
   if (!game) return false;
@@ -477,7 +659,7 @@ export async function handleConditionalTargetActions(
   const matchMode = action.matchMode === "all" ? "all" : "any";
   const applyMode = action.applyMode === "all" ? "all" : "first";
 
-  const matchesCase = (caseEntry) => {
+  const matchesCase = (caseEntry: ActionCase) => {
     const conditions = Array.isArray(caseEntry?.conditions)
       ? caseEntry.conditions
       : [];
@@ -494,7 +676,7 @@ export async function handleConditionalTargetActions(
     return targetCards.some((card) => matchesCardFilters(card, filters, ctx));
   };
 
-  let executed = false;
+  let executed: LegacyActionHandlerResult = false;
 
   for (const caseEntry of cases) {
     if (!matchesCase(caseEntry)) continue;
@@ -531,7 +713,12 @@ export async function handleConditionalTargetActions(
   return executed;
 }
 
-export async function handleOptionalTargetActions(action, ctx, targets, engine) {
+export async function handleOptionalTargetActions(
+  action: ActionOf<"optional_target_actions">,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+  engine: ActionHandlerEnginePort,
+) {
   const game = engine?.game;
   if (!game) return false;
 
@@ -581,10 +768,10 @@ export async function handleOptionalTargetActions(action, ctx, targets, engine) 
 }
 
 export async function handleRedirectCurrentAttackToTarget(
-  action,
-  ctx,
-  targets,
-  engine,
+  action: ActionOf<"redirect_current_attack_to_target">,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+  engine: ActionHandlerEnginePort,
 ) {
   const game = engine?.game;
   const targetCards = resolveTargetCards(action, ctx, targets, {
@@ -593,16 +780,24 @@ export async function handleRedirectCurrentAttackToTarget(
   const target = targetCards[0] || null;
   if (!game || !target || target.cardKind !== "monster") return false;
 
-  const attackContext =
+  const attackContext: unknown =
     ctx?.actionContext ||
     ctx?.activationContext?.actionContext ||
     ctx?.activationContext?.context ||
     null;
   if (!attackContext) return false;
 
-  const attacker = attackContext.attacker || ctx?.attacker || null;
+  const attackerValue = readRecordValue(attackContext, "attacker");
+  const attacker = isRuntimeCard(attackerValue)
+    ? attackerValue
+    : ctx?.attacker || null;
+  const attackerOwnerValue = readRecordValue(attackContext, "attackerOwner");
   const attackerOwner =
-    attackContext.attackerOwner || ctx?.attackerOwner || getCardController(game, attacker);
+    (isRuntimePlayer(attackerOwnerValue)
+      ? attackerOwnerValue
+      : null) ||
+    ctx?.attackerOwner ||
+    getCardController(game, attacker);
   const targetOwner = getCardController(game, target);
   if (!attacker || !attackerOwner || !targetOwner) return false;
   if (!isCardOnField(targetOwner, target)) return false;
@@ -616,20 +811,25 @@ export async function handleRedirectCurrentAttackToTarget(
     source: ctx?.source || null,
     reason: action?.contextLabel || "redirect_attack",
   };
-  const applyRedirect = (context) => {
+  const applyRedirect = (context: unknown) => {
     if (!context || typeof context !== "object") return;
-    context.attackRedirect = redirect;
-    context.redirectedTarget = target;
-    context.redirectedTargetOwner = targetOwner;
+    Reflect.set(context, "attackRedirect", redirect);
+    Reflect.set(context, "redirectedTarget", target);
+    Reflect.set(context, "redirectedTargetOwner", targetOwner);
   };
 
   applyRedirect(attackContext);
-  applyRedirect(attackContext._chainRootContext);
+  applyRedirect(readRecordValue(attackContext, "_chainRootContext"));
   game.updateBoard?.();
   return true;
 }
 
-export async function handleConditionalActions(action, ctx, targets, engine) {
+export async function handleConditionalActions(
+  action: ActionOf<"conditional_actions">,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+  engine: ActionHandlerEnginePort,
+) {
   const game = engine?.game;
   if (!game) return false;
 
@@ -662,24 +862,32 @@ export async function handleConditionalActions(action, ctx, targets, engine) {
   return result;
 }
 
-function cloneDeclaredValuesForTemporaryEffect(action, source) {
+function cloneDeclaredValuesForTemporaryEffect(
+  action: TemporaryEventAction,
+  source: ActionRuntimeCard,
+): Record<string, unknown> {
   const sourceDeclaredValues =
     source?.declaredValues && typeof source.declaredValues === "object"
       ? source.declaredValues
       : {};
   const refs = [
-    action.declaredValueRef,
-    action.declaredValueStateKey,
-    action.stateKey,
+    readRecordValue(action, "declaredValueRef"),
+    readRecordValue(action, "declaredValueStateKey"),
+    readRecordValue(action, "stateKey"),
   ].filter(Boolean);
 
-  const declaredValues = {};
+  const declaredValues: Record<string, unknown> = {};
   if (refs.length > 0) {
     for (const ref of refs) {
       const stateKey =
-        typeof ref === "string" ? ref : ref?.stateKey || ref?.key || null;
+        typeof ref === "string"
+          ? ref
+          : readStringValue(ref, "stateKey") || readStringValue(ref, "key");
       if (!stateKey || !sourceDeclaredValues[stateKey]) continue;
-      declaredValues[stateKey] = { ...sourceDeclaredValues[stateKey] };
+      declaredValues[stateKey] = Object.assign(
+        {},
+        sourceDeclaredValues[stateKey],
+      );
     }
     return declaredValues;
   }
@@ -694,10 +902,10 @@ function cloneDeclaredValuesForTemporaryEffect(action, source) {
 }
 
 export async function handleRegisterTemporaryEventEffect(
-  action,
-  ctx,
-  targets,
-  engine,
+  action: TemporaryEventAction,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+  engine: ActionHandlerEnginePort,
 ) {
   const game = engine?.game;
   const source = ctx?.source || null;
@@ -778,10 +986,10 @@ export async function handleRegisterTemporaryEventEffect(
 }
 
 export async function handleRegisterSynchroMaterialFollowup(
-  action,
-  ctx,
-  targets,
-  engine,
+  action: ActionOf<"register_synchro_material_followup">,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+  engine: ActionHandlerEnginePort,
 ) {
   const game = engine?.game;
   const player = ctx?.player || null;
@@ -793,7 +1001,7 @@ export async function handleRegisterSynchroMaterialFollowup(
     {};
   const synchroSummonContextId =
     action.synchroSummonContextId ||
-    actionContext.synchroSummonContextId ||
+    readStringValue(actionContext, "synchroSummonContextId") ||
     null;
   const actions = Array.isArray(action?.actions) ? action.actions : [];
 
@@ -810,7 +1018,7 @@ export async function handleRegisterSynchroMaterialFollowup(
       }:${game.createDeterministicId?.("synchro_followup") || game.pendingSynchroMaterialFollowups?.length || 0}`,
     type: "synchro_material_followup",
     synchroSummonContextId,
-    ownerId: player.id || null,
+    ownerId: player.id,
     source,
     sourceName: action.sourceName || source.name,
     sourceCardId: source.id ?? null,
@@ -826,7 +1034,12 @@ export async function handleRegisterSynchroMaterialFollowup(
   return true;
 }
 
-export async function handleRegisterBattlePairEffect(action, ctx, targets, engine) {
+export async function handleRegisterBattlePairEffect(
+  action: ActionOf<"register_battle_pair_effect">,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+  engine: ActionHandlerEnginePort,
+) {
   const game = engine?.game;
   if (!game) return false;
 
@@ -880,9 +1093,10 @@ export async function handleRegisterBattlePairEffect(action, ctx, targets, engin
     firstInstanceId: getCardInstanceId(firstTarget),
     secondInstanceId: getCardInstanceId(secondTarget),
     affectedInstanceId: getCardInstanceId(affectedTarget),
-    firstFieldPresenceId: firstTarget.fieldPresenceId || null,
-    secondFieldPresenceId: secondTarget.fieldPresenceId || null,
-    affectedFieldPresenceId: affectedTarget.fieldPresenceId || null,
+    firstFieldPresenceId: readRecordValue(firstTarget, "fieldPresenceId") || null,
+    secondFieldPresenceId: readRecordValue(secondTarget, "fieldPresenceId") || null,
+    affectedFieldPresenceId:
+      readRecordValue(affectedTarget, "fieldPresenceId") || null,
     actions: Array.isArray(action.actions)
       ? action.actions
       : [{ type: "destroy", targetRef: affectedTargetRef }],
@@ -896,10 +1110,10 @@ export async function handleRegisterBattlePairEffect(action, ctx, targets, engin
 }
 
 export async function handleSetSourceAfterResolutionIf(
-  action,
-  ctx,
-  targets,
-  engine,
+  action: ActionOf<"set_source_after_resolution_if">,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+  engine: ActionHandlerEnginePort,
 ) {
   const game = engine?.game;
   const source = ctx?.source || null;
@@ -910,10 +1124,16 @@ export async function handleSetSourceAfterResolutionIf(
   const secondTarget = getFirstTargetByRef(action.secondTargetRef, ctx, targets);
   if (!firstTarget || !secondTarget) return true;
 
-  const conditionType = action.condition?.type || action.conditionType || "atk_difference_lte";
+  const condition = action.condition;
+  const conditionType =
+    (condition && "type" in condition ? condition.type : undefined) ||
+    action.conditionType ||
+    "atk_difference_lte";
   const maxDifference = Number(
-    action.condition?.value ??
-      action.condition?.maxDifference ??
+    (condition && "value" in condition ? condition.value : undefined) ??
+      (condition && "maxDifference" in condition
+        ? condition.maxDifference
+        : undefined) ??
       action.atkDifferenceMax ??
       action.maxDifference ??
       0,
@@ -935,7 +1155,7 @@ export async function handleSetSourceAfterResolutionIf(
     action.deferFinalizationUntil || action.deferUntil || null;
   const activationContext = ctx.activationContext || {};
   ctx.activationContext = activationContext;
-  activationContext.spellTrapFinalization = {
+  Reflect.set(activationContext, "spellTrapFinalization", {
     type: conditionPassed ? "set_source" : "default",
     sourceInstanceId: getCardInstanceId(source),
     sourceCardId: source.id ?? null,
@@ -943,6 +1163,6 @@ export async function handleSetSourceAfterResolutionIf(
     setTurn: Number(game.turnCounter || 0),
     ...(deferUntil ? { deferUntil } : {}),
     reason: action.contextLabel || "set_after_resolution",
-  };
+  });
   return true;
 }

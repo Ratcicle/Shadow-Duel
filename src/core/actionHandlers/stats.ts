@@ -1,11 +1,24 @@
 /**
- * stats.js
+ * stats.ts
  *
  * Handlers for stat modifications, status effects, and buffs.
  * Moved from ActionHandlers.js with identical behavior.
  */
 
 import { isAI } from "../Player.js";
+import type { ActionOf } from "../contracts/actions.js";
+import type {
+  ActionHandlerEnginePort,
+  ActionMoveResult,
+  ActionRuntimeCard,
+  ActionRuntimeDynamicBuff,
+  ActionRuntimeGamePort,
+  ActionRuntimePlayer,
+  EffectContext,
+  NeedsSelectionResult,
+  ResolvedTargetMap,
+} from "../contracts/actionRuntime.js";
+import type { ZoneInput } from "../contracts/zones.js";
 import {
   getUI,
   normalizeNegateEffectsDuration,
@@ -15,7 +28,112 @@ import {
   STATUS_DISPLAY_NAMES,
 } from "./shared.js";
 
-function queueBanishAnimation(game, owner, card, fromZone = null) {
+type StatName = "atk" | "def";
+
+interface CardFeedbackOptions {
+  sourceCard?: ActionRuntimeCard | null;
+  ownerId?: string | null;
+  targetZone?: ZoneInput;
+  tone?: string;
+}
+
+interface DynamicBuffSuppressionOptions {
+  temporary?: boolean;
+}
+
+interface PlayerScopeAction {
+  readonly owner?: string;
+  readonly player?: string;
+}
+
+interface DurationAction {
+  readonly duration?: string;
+  readonly expiresOnTurn?: number;
+  readonly durationTurns?: number;
+  readonly turns?: number;
+}
+
+interface BuffStatsActionView {
+  readonly type:
+    | "buff_stats_temp"
+    | "reduce_self_atk"
+    | "grant_second_attack"
+    | "buff_stats_temp_with_second_attack";
+  readonly targetRef?: string;
+  readonly targetScope?: ActionOf<"buff_stats_temp">["targetScope"];
+  readonly targetRestriction?: string;
+  readonly amount?: number;
+  readonly atkBoost?: number;
+  readonly defBoost?: number;
+  readonly atkBoostFromContext?: ActionOf<"buff_stats_temp">["atkBoostFromContext"];
+  readonly defBoostFromContext?: ActionOf<"buff_stats_temp">["defBoostFromContext"];
+  readonly atkBoostFromTarget?: ActionOf<"buff_stats_temp">["atkBoostFromTarget"];
+  readonly permanent?: boolean;
+  readonly grantSecondAttack?: boolean;
+  readonly duration?: string;
+  readonly durationTurns?: number;
+  readonly turns?: number;
+  readonly expiresOnTurn?: number;
+  readonly sourceName?: string;
+  readonly effectType?: string;
+  readonly allowEmpty?: boolean;
+}
+
+interface GrantAttackAllActionView {
+  readonly type: "grant_attack_all_monsters";
+  readonly targetRef: string;
+  readonly requireOpponentMonsters?: boolean;
+  readonly attackCount?: number | "all";
+}
+
+interface SwitchPositionActionView {
+  readonly atkBoost?: number;
+  readonly defBoost?: number;
+}
+
+function isReadonlyArray<Value>(
+  value: Value | readonly Value[],
+): value is readonly Value[] {
+  return Array.isArray(value);
+}
+
+function isActionMoveResult(value: unknown): value is ActionMoveResult {
+  return typeof value === "object" && value !== null;
+}
+
+function isStatSourceProperty(
+  value: unknown,
+): value is "baseAtk" | "baseDef" | "atk" | "def" {
+  return (
+    value === "baseAtk" ||
+    value === "baseDef" ||
+    value === "atk" ||
+    value === "def"
+  );
+}
+
+function readCardProperty(card: ActionRuntimeCard, property: string): unknown {
+  return Reflect.get(card, property);
+}
+
+function writeCardProperty(
+  card: ActionRuntimeCard,
+  property: string,
+  value: unknown,
+): boolean {
+  return Reflect.set(card, property, value);
+}
+
+function deleteCardProperty(card: ActionRuntimeCard, property: string): boolean {
+  return Reflect.deleteProperty(card, property);
+}
+
+function queueBanishAnimation(
+  game: ActionRuntimeGamePort,
+  owner: ActionRuntimePlayer | null | undefined,
+  card: ActionRuntimeCard | null | undefined,
+  fromZone: ZoneInput | null = null,
+) {
   if (!game?.cardAnimationsReady || typeof game.queueCardAnimation !== "function") {
     return;
   }
@@ -39,7 +157,12 @@ function queueBanishAnimation(game, owner, card, fromZone = null) {
   });
 }
 
-function queueCardFeedback(game, kind, card, options = {}) {
+function queueCardFeedback(
+  game: ActionRuntimeGamePort | null | undefined,
+  kind: string,
+  card: ActionRuntimeCard | null | undefined,
+  options: CardFeedbackOptions = {},
+) {
   if (typeof game?.queueVisualFeedback !== "function") return;
   if (!card) return;
 
@@ -53,10 +176,16 @@ function queueCardFeedback(game, kind, card, options = {}) {
   });
 }
 
-function findCardOwner(game, fallbackOwner, card) {
+function findCardOwner(
+  game: ActionRuntimeGamePort | null | undefined,
+  fallbackOwner: ActionRuntimePlayer | null | undefined,
+  card: ActionRuntimeCard | null | undefined,
+): ActionRuntimePlayer | null {
   if (!game || !card) return fallbackOwner || null;
-  const owners = [game.player, game.bot].filter(Boolean);
-  const zones = [
+  const owners: ActionRuntimePlayer[] = [game.player, game.bot].filter(
+    (owner): owner is ActionRuntimePlayer => Boolean(owner),
+  );
+  const zones: readonly ZoneInput[] = [
     "hand",
     "field",
     "graveyard",
@@ -69,7 +198,8 @@ function findCardOwner(game, fallbackOwner, card) {
   for (const owner of owners) {
     if (owner.fieldSpell === card) return owner;
     for (const zone of zones) {
-      if (Array.isArray(owner[zone]) && owner[zone].includes(card)) {
+      const cards = Reflect.get(owner, zone);
+      if (Array.isArray(cards) && cards.includes(card)) {
         return owner;
       }
     }
@@ -78,35 +208,53 @@ function findCardOwner(game, fallbackOwner, card) {
   return fallbackOwner || null;
 }
 
-function asArray(value) {
+function asArray<Value>(
+  value: Value | readonly Value[] | null | undefined,
+): readonly Value[] {
   if (value === undefined || value === null) return [];
-  return Array.isArray(value) ? value : [value];
+  return isReadonlyArray(value) ? value : [value];
 }
 
-function getZoneCards(owner, zoneName) {
+function getZoneCards(
+  owner: ActionRuntimePlayer | null | undefined,
+  zoneName: ZoneInput | null | undefined,
+): ActionRuntimeCard[] {
   if (!owner || !zoneName) return [];
   if (zoneName === "fieldSpell") {
     return owner.fieldSpell ? [owner.fieldSpell] : [];
   }
-  const zone = owner[zoneName] || [];
+  const zone = Reflect.get(owner, zoneName) || [];
   return Array.isArray(zone) ? zone.filter(Boolean) : [];
 }
 
-function resolvePlayerScope(action, ctx) {
+function resolvePlayerScope(
+  action: PlayerScopeAction,
+  ctx: EffectContext,
+): ActionRuntimePlayer[] {
   const rule = action.owner || action.player || "self";
-  if (rule === "opponent") return [ctx.opponent].filter(Boolean);
-  if (rule === "both" || rule === "any") {
-    return [ctx.player, ctx.opponent].filter(Boolean);
+  if (rule === "opponent") {
+    return [ctx.opponent].filter(
+      (owner): owner is ActionRuntimePlayer => Boolean(owner),
+    );
   }
-  return [ctx.player].filter(Boolean);
+  if (rule === "both" || rule === "any") {
+    return [ctx.player, ctx.opponent].filter(
+      (owner): owner is ActionRuntimePlayer => Boolean(owner),
+    );
+  }
+  return [ctx.player].filter(
+    (owner): owner is ActionRuntimePlayer => Boolean(owner),
+  );
 }
 
-function normalizeStatsList(value) {
+function normalizeStatsList(
+  value: string | readonly string[] | null | undefined,
+): StatName[] {
   const list = Array.isArray(value) ? value : value ? [value] : ["atk", "def"];
-  return list.filter((stat) => stat === "atk" || stat === "def");
+  return list.filter((stat): stat is StatName => stat === "atk" || stat === "def");
 }
 
-function getBaseStat(card, stat) {
+function getBaseStat(card: ActionRuntimeCard, stat: StatName) {
   const baseKey = stat === "def" ? "baseDef" : "baseAtk";
   const base = Number(card?.[baseKey]);
   if (Number.isFinite(base)) return base;
@@ -114,15 +262,19 @@ function getBaseStat(card, stat) {
   return Number.isFinite(current) ? current : 0;
 }
 
-function getTempBoostKey(stat) {
+function getTempBoostKey(stat: StatName): "tempAtkBoost" | "tempDefBoost" {
   return stat === "def" ? "tempDefBoost" : "tempAtkBoost";
 }
 
-function getEquipBonusKey(stat) {
+function getEquipBonusKey(stat: StatName): "equipAtkBonus" | "equipDefBonus" {
   return stat === "def" ? "equipDefBonus" : "equipAtkBonus";
 }
 
-function subtractVisibleStat(card, stat, amount) {
+function subtractVisibleStat(
+  card: ActionRuntimeCard | null | undefined,
+  stat: StatName,
+  amount: number,
+) {
   if (!card || !Number.isFinite(amount) || amount <= 0) return 0;
   const current = Number(card[stat] || 0);
   const remove = Math.min(amount, Math.max(0, current));
@@ -131,19 +283,28 @@ function subtractVisibleStat(card, stat, amount) {
   return current - card[stat];
 }
 
-function sameCardReference(ref, card) {
+function sameCardReference(
+  ref: unknown,
+  card: ActionRuntimeCard | null | undefined,
+) {
   if (!ref || !card) return false;
   if (ref === card) return true;
   if (typeof ref === "object") {
-    return ref.instanceId != null && ref.instanceId === card.instanceId;
+    const instanceId = Reflect.get(ref, "instanceId");
+    return instanceId != null && instanceId === card.instanceId;
   }
   return card.instanceId != null && String(ref) === String(card.instanceId);
 }
 
-function findActiveEquipCards(game, card) {
+function findActiveEquipCards(
+  game: ActionRuntimeGamePort | null | undefined,
+  card: ActionRuntimeCard | null | undefined,
+): ActionRuntimeCard[] {
   if (!game || !card) return [];
-  const owners = [game.player, game.bot].filter(Boolean);
-  const equips = [];
+  const owners: ActionRuntimePlayer[] = [game.player, game.bot].filter(
+    (owner): owner is ActionRuntimePlayer => Boolean(owner),
+  );
+  const equips: ActionRuntimeCard[] = [];
   for (const owner of owners) {
     for (const equip of owner.spellTrap || []) {
       if (
@@ -165,7 +326,12 @@ function findActiveEquipCards(game, card) {
   return equips;
 }
 
-function suppressDynamicBuffStat(card, key, stat, options = {}) {
+function suppressDynamicBuffStat(
+  card: ActionRuntimeCard | null | undefined,
+  key: string,
+  stat: StatName,
+  options: DynamicBuffSuppressionOptions = {},
+) {
   if (!card || !key || !stat) return;
   const mapKey =
     options.temporary === true
@@ -183,7 +349,10 @@ function suppressDynamicBuffStat(card, key, stat, options = {}) {
   card[mapKey][key] = next;
 }
 
-function getDynamicBuffAppliedValue(entry, stat) {
+function getDynamicBuffAppliedValue(
+  entry: ActionRuntimeDynamicBuff,
+  stat: StatName,
+) {
   const stats = Array.isArray(entry?.stats) ? entry.stats : ["atk", "def"];
   if (!stats.includes(stat)) return 0;
   const appliedValues =
@@ -196,7 +365,10 @@ function getDynamicBuffAppliedValue(entry, stat) {
   return Number.isFinite(applied) ? applied : 0;
 }
 
-function getPositiveDynamicStatEntries(card, stat) {
+function getPositiveDynamicStatEntries(
+  card: ActionRuntimeCard | null | undefined,
+  stat: StatName,
+) {
   if (!card?.dynamicBuffs || typeof card.dynamicBuffs !== "object") return [];
   return Object.entries(card.dynamicBuffs)
     .map(([key, entry]) => ({
@@ -207,7 +379,11 @@ function getPositiveDynamicStatEntries(card, stat) {
     .filter(({ applied }) => applied > 0);
 }
 
-function suppressTemporaryDynamicStatIncreasesForDebuff(card, stat, boost) {
+function suppressTemporaryDynamicStatIncreasesForDebuff(
+  card: ActionRuntimeCard | null | undefined,
+  stat: StatName,
+  boost: number,
+) {
   if (!card || !stat || !Number.isFinite(Number(boost)) || boost >= 0) return 0;
 
   const entries = getPositiveDynamicStatEntries(card, stat);
@@ -234,9 +410,14 @@ function suppressTemporaryDynamicStatIncreasesForDebuff(card, stat, boost) {
   return suppressed;
 }
 
-function consumeTrackedStatIncrease(card, stat, remaining, game) {
+function consumeTrackedStatIncrease(
+  card: ActionRuntimeCard,
+  stat: StatName,
+  remaining: number,
+  game: ActionRuntimeGamePort,
+) {
   let removed = 0;
-  const consume = (amount) => {
+  const consume = (amount: number) => {
     const targetAmount = Math.min(Math.max(0, amount || 0), remaining - removed);
     if (targetAmount <= 0) return 0;
     const actual = subtractVisibleStat(card, stat, targetAmount);
@@ -316,12 +497,18 @@ function consumeTrackedStatIncrease(card, stat, remaining, game) {
   return removed;
 }
 
-function getLinkedSourceName(source, actionType = "linked_stat_change") {
+function getLinkedSourceName(
+  source: ActionRuntimeCard | null | undefined,
+  actionType = "linked_stat_change",
+) {
   const sourceId = source?.instanceId ?? source?.id ?? source?.name ?? "source";
   return `${actionType}_${sourceId}`;
 }
 
-function rememberLinkedBuffSource(source, sourceName) {
+function rememberLinkedBuffSource(
+  source: ActionRuntimeCard | null | undefined,
+  sourceName: string,
+) {
   if (!source || !sourceName) return;
   if (!Array.isArray(source.linkedPermanentBuffSourceNames)) {
     source.linkedPermanentBuffSourceNames = [];
@@ -331,7 +518,12 @@ function rememberLinkedBuffSource(source, sourceName) {
   }
 }
 
-function applyNamedStatChange(card, sourceName, atkChange = 0, defChange = 0) {
+function applyNamedStatChange(
+  card: ActionRuntimeCard | null | undefined,
+  sourceName: string,
+  atkChange = 0,
+  defChange = 0,
+) {
   if (!card || !sourceName) return { atk: 0, def: 0 };
   if (!card.permanentBuffsBySource) {
     card.permanentBuffsBySource = {};
@@ -374,13 +566,18 @@ function applyNamedStatChange(card, sourceName, atkChange = 0, defChange = 0) {
   return { atk: appliedAtk, def: appliedDef };
 }
 
-function ownerHasCardInZone(owner, zone, card) {
+function ownerHasCardInZone(
+  owner: ActionRuntimePlayer | null | undefined,
+  zone: ZoneInput | null | undefined,
+  card: ActionRuntimeCard | null | undefined,
+) {
   if (!owner || !zone || !card) return false;
   if (zone === "fieldSpell") return owner.fieldSpell === card;
-  return Array.isArray(owner[zone]) && owner[zone].includes(card);
+  const cards = Reflect.get(owner, zone);
+  return Array.isArray(cards) && cards.includes(card);
 }
 
-function isProtectiveStatus(status) {
+function isProtectiveStatus(status: string) {
   return /protect|indestructible|immune|prevent|cannotBeDestroyed/i.test(
     String(status || ""),
   );
@@ -398,13 +595,13 @@ function isProtectiveStatus(status) {
  * - negateEffectsDuration: "until_end_turn" | "while_faceup"
  */
 export async function handleSetStatsToZeroAndNegate(
-  action,
+  action: ActionOf<"set_stats_to_zero_and_negate">,
 
-  ctx,
+  ctx: EffectContext,
 
-  targets,
+  targets: ResolvedTargetMap,
 
-  engine,
+  engine: ActionHandlerEnginePort,
 ) {
   const { player } = ctx;
 
@@ -527,22 +724,32 @@ export async function handleSetStatsToZeroAndNegate(
  * - untilEndOfTurn: boolean (default: true)
  * - permanent: boolean (default: false) - if true, boost is not tracked for cleanup
  */
-export async function handleBuffStatsTemp(action, ctx, targets, engine) {
+export async function handleBuffStatsTemp(
+  action: ActionOf<
+    | "buff_stats_temp"
+    | "reduce_self_atk"
+    | "grant_second_attack"
+    | "buff_stats_temp_with_second_attack"
+  >,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+  engine: ActionHandlerEnginePort,
+) {
   const { player } = ctx;
 
   const game = engine.game;
 
   if (!player || !game) return false;
 
-  let atkBoost = action.atkBoost || 0;
-  if (action.atkBoostFromContext) {
-    atkBoost += resolveContextNumber(action.atkBoostFromContext, ctx);
+  const statsAction: BuffStatsActionView = action;
+
+  let atkBoost = statsAction.atkBoost || 0;
+  if (statsAction.atkBoostFromContext) {
+    atkBoost += resolveContextNumber(statsAction.atkBoostFromContext, ctx);
   }
-  if (action.atkBoostFromTarget) {
-    const boostSpec = action.atkBoostFromTarget;
-    const stat = ["baseAtk", "baseDef", "atk", "def"].includes(
-      boostSpec?.stat,
-    )
+  if (statsAction.atkBoostFromTarget) {
+    const boostSpec = statsAction.atkBoostFromTarget;
+    const stat = isStatSourceProperty(boostSpec?.stat)
       ? boostSpec.stat
       : "atk";
     const boostTarget = resolveTargetCards(
@@ -559,20 +766,20 @@ export async function handleBuffStatsTemp(action, ctx, targets, engine) {
     atkBoost += boostValue;
   }
 
-  let defBoost = action.defBoost || 0;
-  if (action.defBoostFromContext) {
-    defBoost += resolveContextNumber(action.defBoostFromContext, ctx);
+  let defBoost = statsAction.defBoost || 0;
+  if (statsAction.defBoostFromContext) {
+    defBoost += resolveContextNumber(statsAction.defBoostFromContext, ctx);
   }
 
-  let permanent = action.permanent || false;
+  let permanent = statsAction.permanent || false;
 
   const grantSecondAttack =
-    action.grantSecondAttack === true ||
+    statsAction.grantSecondAttack === true ||
     action.type === "grant_second_attack" ||
     action.type === "buff_stats_temp_with_second_attack";
 
   if (action.type === "reduce_self_atk" && atkBoost === 0) {
-    const amount = Math.max(0, action.amount ?? 0);
+    const amount = Math.max(0, statsAction.amount ?? 0);
 
     if (amount > 0) {
       atkBoost = -amount;
@@ -581,17 +788,17 @@ export async function handleBuffStatsTemp(action, ctx, targets, engine) {
     }
   }
 
-  const duration = action.duration || "end_of_turn";
+  const duration = statsAction.duration || "end_of_turn";
   const isDamageCalculationBuff = duration === "damage_calculation";
   const isEndOfDamageStepBuff = duration === "end_of_damage_step";
-  const durationTurns = Number(action.durationTurns ?? action.turns);
-  const explicitExpiresOnTurn = Number(action.expiresOnTurn);
-  let turnBasedExpiresOnTurn = null;
+  const durationTurns = Number(statsAction.durationTurns ?? statsAction.turns);
+  const explicitExpiresOnTurn = Number(statsAction.expiresOnTurn);
+  let turnBasedExpiresOnTurn: number | null = null;
   if (!permanent && !isDamageCalculationBuff && !isEndOfDamageStepBuff) {
     if (duration === "end_of_next_turn") {
-      turnBasedExpiresOnTurn = game.turnCounter + 1;
+      turnBasedExpiresOnTurn = game.turnCounter! + 1;
     } else if (Number.isFinite(durationTurns) && durationTurns > 0) {
-      turnBasedExpiresOnTurn = game.turnCounter + durationTurns;
+      turnBasedExpiresOnTurn = game.turnCounter! + durationTurns;
     } else if (Number.isFinite(explicitExpiresOnTurn)) {
       turnBasedExpiresOnTurn = explicitExpiresOnTurn;
     }
@@ -611,7 +818,11 @@ export async function handleBuffStatsTemp(action, ctx, targets, engine) {
           ? ` until turn ${turnBasedExpiresOnTurn}`
           : " until end of turn";
 
-  const applyStatChange = (card, stat, boost) => {
+  const applyStatChange = (
+    card: ActionRuntimeCard,
+    stat: StatName,
+    boost: number,
+  ) => {
     if (!boost) return 0;
 
     if (
@@ -631,13 +842,19 @@ export async function handleBuffStatsTemp(action, ctx, targets, engine) {
 
     if (useTurnBasedBuff) {
       const buffId = [
-        action.sourceName || ctx.source?.name || action.type || "stat_buff",
+        statsAction.sourceName || ctx.source?.name || action.type || "stat_buff",
         card.instanceId || card.id || "card",
         stat,
         game.turnCounter,
         Array.isArray(card.turnBasedBuffs) ? card.turnBasedBuffs.length : 0,
       ].join("_");
-      game.applyTurnBasedBuff(card, stat, applied, turnBasedExpiresOnTurn, buffId);
+      game.applyTurnBasedBuff!(
+        card,
+        stat,
+        applied,
+        turnBasedExpiresOnTurn!,
+        buffId,
+      );
       return applied;
     }
 
@@ -653,19 +870,19 @@ export async function handleBuffStatsTemp(action, ctx, targets, engine) {
     return applied;
   };
 
-  let targetCards = action.targetScope
-    ? resolveFieldScopeCards(action.targetScope, ctx, game, { engine })
+  let targetCards = statsAction.targetScope
+    ? resolveFieldScopeCards(statsAction.targetScope, ctx, game, { engine })
     : resolveTargetCards(action, ctx, targets, {
         defaultRef: "self",
         game,
       });
   if (
-    action.targetScope &&
+    statsAction.targetScope &&
     typeof engine.filterCardsListByImmunity === "function"
   ) {
     targetCards = engine.filterCardsListByImmunity(targetCards, ctx.player, {
       actionType: action.type,
-      effectType: action.effectType || engine.inferEffectType?.(action.type),
+      effectType: statsAction.effectType || engine.inferEffectType?.(action.type),
       sourceCard: ctx?.source || null,
     }).allowed;
   }
@@ -678,7 +895,9 @@ export async function handleBuffStatsTemp(action, ctx, targets, engine) {
 
     getUI(game)?.log(`No valid targets for ${label}.`);
 
-    return action.allowEmpty === true || action.targetScope ? true : false;
+    return statsAction.allowEmpty === true || statsAction.targetScope
+      ? true
+      : false;
   }
 
   let anyBuffed = false;
@@ -776,7 +995,7 @@ export async function handleBuffStatsTemp(action, ctx, targets, engine) {
 
       card.secondAttackUsedThisTurn = false;
 
-      if (action.targetRestriction === "monster") {
+      if (statsAction.targetRestriction === "monster") {
         card.extraAttackTargetRestriction = "monster";
       }
 
@@ -837,7 +1056,12 @@ export async function handleBuffStatsTemp(action, ctx, targets, engine) {
   return anyBuffed || anySecondAttack || hadValidMonsterTarget;
 }
 
-export async function handleSetOriginalStats(action, ctx, targets, engine) {
+export async function handleSetOriginalStats(
+  action: ActionOf<"set_original_stats">,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+  engine: ActionHandlerEnginePort,
+) {
   const game = engine?.game;
   const targetCards = resolveTargetCards(action, ctx, targets, {
     defaultRef: "self",
@@ -932,7 +1156,12 @@ export async function handleSetOriginalStats(action, ctx, targets, engine) {
   return changed;
 }
 
-export async function handleBuffStatsByCounter(action, ctx, targets, engine) {
+export async function handleBuffStatsByCounter(
+  action: ActionOf<"buff_stats_by_counter">,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+  engine: ActionHandlerEnginePort,
+) {
   const game = engine?.game;
   if (!game) return false;
 
@@ -1030,10 +1259,10 @@ export async function handleBuffStatsByCounter(action, ctx, targets, engine) {
  * - permanent: if true, stat changes are not tracked for end-turn cleanup
  */
 export async function handleModifyStatsTempThenDestroyIfZeroed(
-  action,
-  ctx,
-  targets,
-  engine,
+  action: ActionOf<"modify_stats_temp_then_destroy_if_zeroed">,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+  engine: ActionHandlerEnginePort,
 ) {
   const { player } = ctx;
   const game = engine.game;
@@ -1154,10 +1383,10 @@ export async function handleModifyStatsTempThenDestroyIfZeroed(
 }
 
 export async function handleHalveTargetStatsAndGainRemoved(
-  action,
-  ctx,
-  targets,
-  engine,
+  action: ActionOf<"halve_target_stats_and_gain_removed">,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+  engine: ActionHandlerEnginePort,
 ) {
   const { player, source } = ctx;
   const game = engine?.game;
@@ -1249,10 +1478,10 @@ export async function handleHalveTargetStatsAndGainRemoved(
  * Temporarily boosts ATK by the amount of LP the player gained this turn.
  */
 export async function handleBuffAtkByLpGainedThisTurn(
-  action,
-  ctx,
-  targets,
-  engine,
+  action: ActionOf<"buff_atk_by_lp_gained_this_turn">,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+  engine: ActionHandlerEnginePort,
 ) {
   const { player } = ctx;
   const game = engine.game;
@@ -1280,10 +1509,10 @@ export async function handleBuffAtkByLpGainedThisTurn(
 }
 
 export async function handleSetAttackLimitFromZoneCount(
-  action,
-  ctx,
-  targets,
-  engine,
+  action: ActionOf<"set_attack_limit_from_zone_count">,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+  engine: ActionHandlerEnginePort,
 ) {
   const game = engine?.game;
   if (!game) return false;
@@ -1357,19 +1586,21 @@ export async function handleSetAttackLimitFromZoneCount(
  * Used by future multi-attack effects.
  */
 export async function handleGrantAttackAllMonsters(
-  action,
+  action: ActionOf<"grant_attack_all_monsters">,
 
-  ctx,
+  ctx: EffectContext,
 
-  targets,
+  targets: ResolvedTargetMap,
 
-  engine,
+  engine: ActionHandlerEnginePort,
 ) {
   const { player } = ctx;
 
   const game = engine.game;
 
   if (!player || !game) return false;
+
+  const attackAction: GrantAttackAllActionView = action;
 
   const targetCards = resolveTargetCards(action, ctx, targets, {
     defaultRef: "self",
@@ -1389,7 +1620,7 @@ export async function handleGrantAttackAllMonsters(
 
   // Check if opponent has monsters when required
 
-  if (action.requireOpponentMonsters && opponentMonsterCount === 0) {
+  if (attackAction.requireOpponentMonsters && opponentMonsterCount === 0) {
     getUI(game)?.log("No opponent monsters to attack.");
 
     return false;
@@ -1419,10 +1650,10 @@ export async function handleGrantAttackAllMonsters(
     // This is recalculated dynamically in getAttackAvailability
 
     const attackLimit =
-      action.attackCount === "all"
+      attackAction.attackCount === "all"
         ? Math.max(1, opponentMonsterCount)
-        : typeof action.attackCount === "number"
-          ? action.attackCount
+        : typeof attackAction.attackCount === "number"
+          ? attackAction.attackCount
           : opponentMonsterCount;
 
     card.multiAttackLimit = attackLimit;
@@ -1465,7 +1696,12 @@ export async function handleGrantAttackAllMonsters(
  * - remove: if true, removes the status instead (default: false)
  * - untilEndOfTurn: if true, status is cleared at end of turn (handled by Game.cleanupTempBoosts)
  */
-export async function handleAddStatus(action, ctx, targets, engine) {
+export async function handleAddStatus(
+  action: ActionOf<"add_status">,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+  engine: ActionHandlerEnginePort,
+) {
   const { player } = ctx;
 
   const game = engine.game;
@@ -1531,23 +1767,28 @@ export async function handleAddStatus(action, ctx, targets, engine) {
         card.tempStatuses = {};
       }
       if (!Object.prototype.hasOwnProperty.call(card.tempStatuses, status)) {
-        card.tempStatuses[status] = card[status];
+        card.tempStatuses[status] = readCardProperty(card, status);
       }
     }
 
     if (remove) {
-      if (card[status] !== undefined) {
+      if (readCardProperty(card, status) !== undefined) {
         // For additive status, subtract instead of delete
         if (
           ADDITIVE_STATUS.includes(status) &&
-          typeof card[status] === "number"
+          typeof readCardProperty(card, status) === "number"
         ) {
-          card[status] = Math.max(
+          writeCardProperty(
+            card,
+            status,
+            Math.max(
             0,
-            card[status] - (typeof value === "number" ? value : 1),
+              Number(readCardProperty(card, status)) -
+                (typeof value === "number" ? value : 1),
+            ),
           );
         } else {
-          delete card[status];
+          deleteCardProperty(card, status);
         }
 
         modified = true;
@@ -1570,9 +1811,13 @@ export async function handleAddStatus(action, ctx, targets, engine) {
     } else {
       // For additive status, sum values instead of replacing
       if (ADDITIVE_STATUS.includes(status) && typeof value === "number") {
-        card[status] = (card[status] || 0) + value;
+        writeCardProperty(
+          card,
+          status,
+          Number(readCardProperty(card, status) || 0) + value,
+        );
       } else {
-        card[status] = value;
+        writeCardProperty(card, status, value);
       }
       if (status === "effectsNegated") {
         card.effectsNegatedDuration = normalizeNegateEffectsDuration(action);
@@ -1596,7 +1841,9 @@ export async function handleAddStatus(action, ctx, targets, engine) {
   }
 
   if (modified && affectedCards.length > 0) {
-    const displayStatus = STATUS_DISPLAY_NAMES[status] || status;
+    const knownDisplayStatus = Reflect.get(STATUS_DISPLAY_NAMES, status);
+    const displayStatus =
+      typeof knownDisplayStatus === "string" ? knownDisplayStatus : status;
 
     const cardList = affectedCards.join(", ");
 
@@ -1612,7 +1859,11 @@ export async function handleAddStatus(action, ctx, targets, engine) {
   return modified;
 }
 
-function computeProtectionExpiresOnTurn(game, duration, action = {}) {
+function computeProtectionExpiresOnTurn(
+  game: ActionRuntimeGamePort | null | undefined,
+  duration: string | number,
+  action: DurationAction = {},
+) {
   const explicit = Number(action.expiresOnTurn);
   if (Number.isFinite(explicit)) return explicit;
 
@@ -1642,7 +1893,12 @@ function computeProtectionExpiresOnTurn(game, duration, action = {}) {
  * - duration: "while_faceup", "end_of_turn", "end_of_next_turn", or turn number
  * - sourceOwner: optional "self", "opponent", or "any" relative to the protected card
  */
-export async function handleGrantProtection(action, ctx, targets, engine) {
+export async function handleGrantProtection(
+  action: ActionOf<"grant_protection">,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+  engine: ActionHandlerEnginePort,
+) {
   const { player, source } = ctx;
 
   const game = engine.game;
@@ -1735,7 +1991,12 @@ export async function handleGrantProtection(action, ctx, targets, engine) {
  * - duration: "end_of_turn" or "permanent" (default: "end_of_turn")
  * - optional: if true, player can cancel selection (default: false)
  */
-export async function handleBanishAndBuff(action, ctx, targets, engine) {
+export async function handleBanishAndBuff(
+  action: ActionOf<"banish_and_buff">,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+  engine: ActionHandlerEnginePort,
+) {
   const { player, source } = ctx;
 
   const game = engine.game;
@@ -1776,7 +2037,7 @@ export async function handleBanishAndBuff(action, ctx, targets, engine) {
     } else if (buffSource === "level") {
       cardValue = (banishCard.level || 0) * 100; // Convert level to points
     } else {
-      cardValue = banishCard[buffSource] || 0;
+      cardValue = Number(readCardProperty(banishCard, buffSource) || 0);
     }
 
     const banishOwner = findCardOwner(game, player, banishCard);
@@ -1817,10 +2078,17 @@ export async function handleBanishAndBuff(action, ctx, targets, engine) {
       contextLabel: "banish_and_buff",
     });
 
-    if (moveResult?.needsSelection) {
-      return { ...moveResult, success: false };
+    if (isActionMoveResult(moveResult) && moveResult.needsSelection) {
+      return {
+        ...moveResult,
+        needsSelection: true,
+        success: false,
+      } satisfies NeedsSelectionResult;
     }
-    if (moveResult === false || moveResult?.success === false) {
+    if (
+      moveResult === false ||
+      (isActionMoveResult(moveResult) && moveResult.success === false)
+    ) {
       getUI(game)?.log(`${entry.card.name} could not be banished.`);
       return false;
     }
@@ -1850,7 +2118,7 @@ export async function handleBanishAndBuff(action, ctx, targets, engine) {
 
   const buffTargetRef = action.buffTarget || "self";
 
-  let buffRecipients = [];
+  let buffRecipients: ActionRuntimeCard[] = [];
 
   if (buffTargetRef === "self") {
     if (source) buffRecipients = [source];
@@ -1921,7 +2189,12 @@ export async function handleBanishAndBuff(action, ctx, targets, engine) {
  * `battlePositionLocked` is deliberately an instance status: it follows a
  * monster through control changes but is cleared when it leaves the field.
  */
-export async function handleSetFacedownDefense(action, ctx, targets, engine) {
+export async function handleSetFacedownDefense(
+  action: ActionOf<"set_facedown_defense">,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+  engine: ActionHandlerEnginePort,
+) {
   const { player } = ctx;
   const game = engine?.game;
   if (!player || !game) return false;
@@ -1992,12 +2265,19 @@ export async function handleSetFacedownDefense(action, ctx, targets, engine) {
  * - defBoost: optional DEF boost after position change
  * - markChanged: if true, sets hasChangedPosition (default: true)
  */
-export async function handleSwitchPosition(action, ctx, targets, engine) {
+export async function handleSwitchPosition(
+  action: ActionOf<"switch_position">,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+  engine: ActionHandlerEnginePort,
+) {
   const { player } = ctx;
 
   const game = engine.game;
 
   if (!player || !game) return false;
+
+  const switchAction: SwitchPositionActionView = action;
 
   const targetCards = action.targetScope
     ? resolveFieldScopeCards(action.targetScope, ctx, game, { engine })
@@ -2052,10 +2332,10 @@ export async function handleSwitchPosition(action, ctx, targets, engine) {
       card.atk = (card.atk || 0) + action.atkBoost;
     }
 
-    if (action.defBoost) {
-      card.tempDefBoost = (card.tempDefBoost || 0) + action.defBoost;
+    if (switchAction.defBoost) {
+      card.tempDefBoost = (card.tempDefBoost || 0) + switchAction.defBoost;
 
-      card.def = (card.def || 0) + action.defBoost;
+      card.def = (card.def || 0) + switchAction.defBoost;
     }
 
     const cardPlayer = card.owner === "player" ? game.player : game.bot;
@@ -2112,13 +2392,13 @@ export async function handleSwitchPosition(action, ctx, targets, engine) {
  * If defender is face-down, flip it first, then switch to attack position.
  */
 export async function handleSwitchDefenderPositionOnAttack(
-  action,
+  action: ActionOf<"switch_defender_position_on_attack">,
 
-  ctx,
+  ctx: EffectContext,
 
-  targets,
+  targets: ResolvedTargetMap,
 
-  engine,
+  engine: ActionHandlerEnginePort,
 ) {
   const { player, defender } = ctx;
 
@@ -2185,7 +2465,12 @@ export async function handleSwitchDefenderPositionOnAttack(
  * passive dynamic buff keys so continuous buffs do not immediately reapply
  * while the affected card remains on the field.
  */
-export async function handleRemoveStatIncreases(action, ctx, targets, engine) {
+export async function handleRemoveStatIncreases(
+  action: ActionOf<"remove_stat_increases">,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+  engine: ActionHandlerEnginePort,
+) {
   const game = engine?.game;
   if (!game) return false;
 
@@ -2201,7 +2486,7 @@ export async function handleRemoveStatIncreases(action, ctx, targets, engine) {
   for (const card of targetCards) {
     if (!card || card.cardKind !== "monster") continue;
 
-    const removedByStat = {};
+    const removedByStat: Partial<{ [Key in StatName]: number }> = {};
     for (const stat of stats) {
       const current = Number(card[stat] || 0);
       const base = getBaseStat(card, stat);
@@ -2258,7 +2543,12 @@ export async function handleRemoveStatIncreases(action, ctx, targets, engine) {
  * - archetype: if specified, only buff monsters of this archetype
  * - summonedCard: special targetRef that refers to ctx.summonedCard
  */
-export async function handlePermanentBuffNamed(action, ctx, targets, engine) {
+export async function handlePermanentBuffNamed(
+  action: ActionOf<"permanent_buff_named">,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+  engine: ActionHandlerEnginePort,
+) {
   const { player, source } = ctx;
 
   const game = engine.game;
@@ -2268,7 +2558,7 @@ export async function handlePermanentBuffNamed(action, ctx, targets, engine) {
   const targetRef = action.targetRef || "self";
   const fieldWideAura = targetRef === "self" && action.applyToAllField;
 
-  let targetCards = [];
+  let targetCards: ActionRuntimeCard[] = [];
 
   // Special handling for summonedCard
 
@@ -2442,13 +2732,13 @@ export async function handlePermanentBuffNamed(action, ctx, targets, engine) {
  * - archetype: if specified, only remove buffs from monsters of this archetype
  */
 export async function handleRemovePermanentBuffNamed(
-  action,
+  action: ActionOf<"remove_permanent_buff_named">,
 
-  ctx,
+  ctx: EffectContext,
 
-  targets,
+  targets: ResolvedTargetMap,
 
-  engine,
+  engine: ActionHandlerEnginePort,
 ) {
   const { player, source } = ctx;
 
@@ -2460,7 +2750,7 @@ export async function handleRemovePermanentBuffNamed(
   const fieldWideAuraRemoval =
     targetRef === "self" && action.removeFromAllField;
 
-  let targetCards = [];
+  let targetCards: ActionRuntimeCard[] = [];
 
   if (fieldWideAuraRemoval) {
     // Remove from all monsters on field matching archetype
@@ -2533,7 +2823,12 @@ export async function handleRemovePermanentBuffNamed(
   return anyRemoved || fieldWideAuraRemoval;
 }
 
-export async function handleModifyLevel(action, ctx, targets, engine) {
+export async function handleModifyLevel(
+  action: ActionOf<"modify_level">,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+  engine: ActionHandlerEnginePort,
+) {
   const game = engine?.game;
   if (!game) return false;
 
@@ -2596,7 +2891,12 @@ export async function handleModifyLevel(action, ctx, targets, engine) {
   return modified;
 }
 
-export async function handleReduceHandMonsterLevels(action, ctx, targets, engine) {
+export async function handleReduceHandMonsterLevels(
+  action: ActionOf<"reduce_hand_monster_levels">,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+  engine: ActionHandlerEnginePort,
+) {
   const { player } = ctx;
   const game = engine.game;
   if (!player || !game) return false;
@@ -2607,9 +2907,9 @@ export async function handleReduceHandMonsterLevels(action, ctx, targets, engine
 
   let modified = false;
   for (const card of handMonsters) {
-    if (card.level <= 1) continue;
+    if (card.level! <= 1) continue;
     if (card.originalLevel == null) card.originalLevel = card.level;
-    card.level = Math.max(1, card.level - amount);
+    card.level = Math.max(1, card.level! - amount);
     modified = true;
   }
 

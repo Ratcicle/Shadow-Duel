@@ -1,6 +1,107 @@
 import { getUI } from "./shared.js";
+import type { ActionOf } from "../contracts/actions.js";
+import type {
+  ActionHandlerEnginePort,
+  ActionRuntimeCard,
+  ActionRuntimeGamePort,
+  ActionRuntimePlayer,
+  EffectContext,
+  ResolvedTargetMap,
+} from "../contracts/actionRuntime.js";
+import type {
+  EffectCondition,
+  EffectDefinition,
+  PassiveRuleDefinition,
+} from "../contracts/effects.js";
+import type { ZoneInput } from "../contracts/zones.js";
 
-function resolveOwner(game, card, fallbackPlayer = null) {
+interface ActivationAttempt {
+  card?: ActionRuntimeCard | null;
+  linkId?: string | null;
+  activationNegated?: boolean;
+}
+
+interface SummonTransaction {
+  card?: ActionRuntimeCard | null;
+  summonId?: string | null;
+}
+
+interface NegationContext {
+  activationAttempt?: ActivationAttempt | null;
+  summonTransaction?: SummonTransaction | null;
+  card?: ActionRuntimeCard | null;
+  targetCard?: ActionRuntimeCard | null;
+  sourceCard?: ActionRuntimeCard | null;
+  respondingToChainLink?: string | null;
+  linkId?: string | null;
+  summonId?: string | null;
+  negatedBy?: ActionRuntimeCard | null;
+  negationProtected?: boolean;
+  negationProtectionSource?: ActionRuntimeCard;
+  activationNegated?: boolean;
+  effectNegated?: boolean;
+  effectNegatedBy?: ActionRuntimeCard;
+  summonNegated?: boolean;
+  negatedLink?: unknown;
+  effectNegatedLink?: unknown;
+}
+
+type ActivationProtectionPassive = PassiveRuleDefinition & {
+  readonly targetCardKind?: string;
+  readonly cardKind?: string;
+  readonly nameOrDescriptionIncludes?: string | readonly string[];
+  readonly textIncludesAny?: string | readonly string[];
+  readonly textIncludes?: string | readonly string[];
+  readonly requireZone?: ZoneInput;
+};
+
+interface ProtectionSource {
+  card: ActionRuntimeCard;
+  owner: ActionRuntimePlayer;
+  zone: "field" | "fieldSpell" | "spellTrap";
+}
+
+interface ActivationProtectionResult {
+  sourceCard: ActionRuntimeCard;
+  sourceOwner: ActionRuntimePlayer;
+  effect: EffectDefinition;
+  passive: ActivationProtectionPassive;
+}
+
+interface ActionChainSystemPort {
+  readonly chainStack?: readonly unknown[];
+  markChainLinkActivationNegated?(
+    linkReference: string | null,
+    options: object,
+  ): unknown;
+  markChainLinkEffectNegated?(
+    linkReference: string | null,
+    options: object,
+  ): unknown;
+}
+
+type NegateSummonAction = ActionOf<
+  "negate_summon_or_activation_and_destroy"
+> & {
+  readonly negatedSummonDestination?: ZoneInput;
+};
+
+function readNegationContext(value: unknown): NegationContext {
+  return value && typeof value === "object" ? (value as NegationContext) : {};
+}
+
+function getChainSystem(game: ActionRuntimeGamePort): ActionChainSystemPort | null {
+  const value: unknown = Reflect.get(game, "chainSystem");
+  return value && typeof value === "object"
+    ? (value as ActionChainSystemPort)
+    : null;
+}
+
+function resolveOwner(
+  game: ActionRuntimeGamePort,
+  card: ActionRuntimeCard,
+  fallbackPlayer: ActionRuntimePlayer | null = null,
+) {
   if (!game || !card) return fallbackPlayer;
   if (game.player && card.owner === game.player.id) return game.player;
   if (game.bot && card.owner === game.bot.id) return game.bot;
@@ -22,7 +123,11 @@ function resolveOwner(game, card, fallbackPlayer = null) {
   return fallbackPlayer;
 }
 
-function resolveZone(game, owner, card) {
+function resolveZone(
+  game: ActionRuntimeGamePort,
+  owner: ActionRuntimePlayer | null,
+  card: ActionRuntimeCard,
+): ZoneInput | null {
   if (!game || !owner || !card) return null;
   if (typeof game.effectEngine?.findCardZone === "function") {
     const zone = game.effectEngine.findCardZone(owner, card);
@@ -38,13 +143,15 @@ function resolveZone(game, owner, card) {
   return null;
 }
 
-function asArray(value) {
+function asArray<Value>(value: Value | readonly Value[] | null | undefined) {
   if (value === undefined || value === null) return [];
-  return Array.isArray(value) ? value : [value];
+  return Array.isArray(value) ? value : [value as Value];
 }
 
-function getActivationProtectionSources(game) {
-  const sources = [];
+function getActivationProtectionSources(
+  game: ActionRuntimeGamePort,
+): ProtectionSource[] {
+  const sources: ProtectionSource[] = [];
   for (const owner of [game?.player, game?.bot]) {
     if (!owner) continue;
     for (const card of owner.field || []) {
@@ -60,7 +167,12 @@ function getActivationProtectionSources(game) {
   return sources;
 }
 
-function isPassiveSourceActive(card, effect, passive, sourceZone) {
+function isPassiveSourceActive(
+  card: ActionRuntimeCard,
+  effect: EffectDefinition,
+  passive: ActivationProtectionPassive,
+  sourceZone: ProtectionSource["zone"],
+) {
   if (!card || !effect || effect.timing !== "passive") return false;
   if (effect.requireZone && effect.requireZone !== sourceZone) return false;
   if (passive.requireZone && passive.requireZone !== sourceZone) return false;
@@ -70,14 +182,21 @@ function isPassiveSourceActive(card, effect, passive, sourceZone) {
   return true;
 }
 
-function cardMentionsAny(card, values) {
+function cardMentionsAny(
+  card: ActionRuntimeCard,
+  values: string | readonly string[],
+) {
   const haystack = `${card?.name || ""}\n${card?.description || ""}`;
   return asArray(values)
     .filter(Boolean)
     .some((value) => haystack.includes(String(value)));
 }
 
-function passiveMatchesActivationCard(game, passive, targetCard) {
+function passiveMatchesActivationCard(
+  game: ActionRuntimeGamePort,
+  passive: ActivationProtectionPassive,
+  targetCard: ActionRuntimeCard,
+) {
   if (!targetCard) return false;
 
   const targetCardKinds = asArray(
@@ -111,10 +230,10 @@ function passiveMatchesActivationCard(game, passive, targetCard) {
 }
 
 export function isActivationNegationProtected(
-  game,
-  targetCard,
-  activationAttempt,
-) {
+  game: ActionRuntimeGamePort,
+  targetCard: ActionRuntimeCard,
+  activationAttempt: ActivationAttempt,
+): ActivationProtectionResult | null {
   if (!game || !targetCard || !activationAttempt) return null;
 
   for (const source of getActivationProtectionSources(game)) {
@@ -122,7 +241,8 @@ export function isActivationNegationProtected(
     if (!sourceCard || !Array.isArray(sourceCard.effects)) continue;
 
     for (const effect of sourceCard.effects) {
-      const passive = effect?.passive || {};
+      if (!("passive" in effect)) continue;
+      const passive = effect.passive as ActivationProtectionPassive;
       if (passive.type !== "activation_negation_protection") continue;
       if (!isPassiveSourceActive(sourceCard, effect, passive, source.zone)) {
         continue;
@@ -141,17 +261,21 @@ export function isActivationNegationProtected(
             ? [passive.condition]
             : [];
       if (conditions.length > 0) {
+        const conditionContext: EffectContext & {
+          protectedCard: ActionRuntimeCard;
+          activationAttempt: ActivationAttempt;
+        } = {
+          source: sourceCard,
+          player: sourceOwner,
+          opponent,
+          protectedCard: targetCard,
+          activationAttempt,
+          activationZone: source.zone,
+          sourceZone: source.zone,
+        };
         const conditionResult = game.effectEngine?.evaluateConditions?.(
           conditions,
-          {
-            source: sourceCard,
-            player: sourceOwner,
-            opponent,
-            protectedCard: targetCard,
-            activationAttempt,
-            activationZone: source.zone,
-            sourceZone: source.zone,
-          },
+          conditionContext,
         );
         if (conditionResult && conditionResult.ok === false) {
           continue;
@@ -165,14 +289,19 @@ export function isActivationNegationProtected(
   return null;
 }
 
-async function removeNegatedCard(game, card, source, sourcePlayer) {
+async function removeNegatedCard(
+  game: ActionRuntimeGamePort,
+  card: ActionRuntimeCard,
+  source: ActionRuntimeCard,
+  sourcePlayer: ActionRuntimePlayer | null,
+) {
   if (!game || !card) return false;
   const owner = resolveOwner(game, card, sourcePlayer);
   const zone = resolveZone(game, owner, card);
   if (!owner || !zone) return false;
 
   if (zone === "field" || zone === "spellTrap" || zone === "fieldSpell") {
-    const result = await game.destroyCard(card, {
+    const result = await game.destroyCard!(card, {
       cause: "effect",
       sourceCard: source,
       sourcePlayer,
@@ -180,26 +309,37 @@ async function removeNegatedCard(game, card, source, sourcePlayer) {
       fromZone: zone,
       contextLabel: "negated_activation_destroy",
     });
-    return result?.destroyed === true;
+    return (
+      result !== null &&
+      typeof result === "object" &&
+      Reflect.get(result, "destroyed") === true
+    );
   }
 
   if (zone !== "graveyard" && zone !== "banished") {
-    const result = await game.moveCard(card, owner, "graveyard", {
+    const result = await game.moveCard!(card, owner, "graveyard", {
       fromZone: zone,
       contextLabel: "negated_card_to_graveyard",
       wasDestroyed: true,
       destroyCause: "effect",
       destroySource: source,
     });
-    return result?.success !== false;
+    return !(
+      result !== null &&
+      typeof result === "object" &&
+      result.success === false
+    );
   }
 
   return false;
 }
 
-function markChainLinkNegated(game, context) {
-  if (!Array.isArray(game?.chainSystem?.chainStack)) return null;
-  const chainSystem = game.chainSystem;
+function markChainLinkNegated(
+  game: ActionRuntimeGamePort,
+  context: NegationContext,
+) {
+  const chainSystem = getChainSystem(game);
+  if (!Array.isArray(chainSystem?.chainStack)) return null;
   const linkReference =
     context?.respondingToChainLink ||
     context?.activationAttempt?.linkId ||
@@ -213,9 +353,12 @@ function markChainLinkNegated(game, context) {
   return link;
 }
 
-function markChainLinkEffectNegated(game, context) {
-  if (!Array.isArray(game?.chainSystem?.chainStack)) return null;
-  const chainSystem = game.chainSystem;
+function markChainLinkEffectNegated(
+  game: ActionRuntimeGamePort,
+  context: NegationContext,
+) {
+  const chainSystem = getChainSystem(game);
+  if (!Array.isArray(chainSystem?.chainStack)) return null;
   const linkReference =
     context?.respondingToChainLink ||
     context?.activationAttempt?.linkId ||
@@ -227,11 +370,18 @@ function markChainLinkEffectNegated(game, context) {
   return link;
 }
 
-export async function handleNegateActivation(action, ctx, targets, engine) {
+export async function handleNegateActivation(
+  action: ActionOf<"negate_activation">,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+  engine: ActionHandlerEnginePort,
+) {
   const game = engine?.game;
   const source = ctx?.source || null;
   const player = ctx?.player || null;
-  const context = ctx?.activationContext?.context || ctx?.actionContext || {};
+  const context = readNegationContext(
+    ctx.activationContext?.context || ctx.actionContext,
+  );
   if (!game || !source || !context) return false;
 
   const activationAttempt = context.activationAttempt || null;
@@ -280,10 +430,17 @@ export async function handleNegateActivation(action, ctx, targets, engine) {
   return true;
 }
 
-export async function handleNegateEffect(action, ctx, targets, engine) {
+export async function handleNegateEffect(
+  action: ActionOf<"negate_effect">,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+  engine: ActionHandlerEnginePort,
+) {
   const game = engine?.game;
   const source = ctx?.source || null;
-  const context = ctx?.activationContext?.context || ctx?.actionContext || {};
+  const context = readNegationContext(
+    ctx.activationContext?.context || ctx.actionContext,
+  );
   const activationAttempt = context.activationAttempt || null;
   const targetCard =
     activationAttempt?.card ||
@@ -314,15 +471,15 @@ export async function handleNegateEffect(action, ctx, targets, engine) {
 }
 
 export async function handleNegateSummonOrActivationAndDestroy(
-  action,
-  ctx,
-  targets,
-  engine,
+  action: NegateSummonAction,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+  engine: ActionHandlerEnginePort,
 ) {
   const game = engine?.game;
   const source = ctx?.source || null;
   const player = ctx?.player || null;
-  const context = ctx?.activationContext?.context || {};
+  const context = readNegationContext(ctx.activationContext?.context);
   if (!game || !source || !context) return false;
 
   const summonTransaction = context.summonTransaction || null;
@@ -361,17 +518,18 @@ export async function handleNegateSummonOrActivationAndDestroy(
       context.summonId ??
       summonTransaction.summonId ??
       null;
-    const transaction = game.markSummonNegated?.(summonId, {
+    const rawTransaction = game.markSummonNegated?.(summonId, {
       destination: action.negatedSummonDestination || "graveyard",
       destroyed: true,
       sourceCard: source,
       sourcePlayer: player,
       linkId: context.linkId ?? null,
     });
-    if (!transaction) {
+    if (!rawTransaction) {
       getUI(game)?.log?.("No pending Summon found for negation.");
       return false;
     }
+    const transaction = rawTransaction as SummonTransaction;
     context.summonTransaction = transaction;
     context.summonId = transaction.summonId;
     context.summonNegated = true;

@@ -1,5 +1,18 @@
 import { isAI } from "../../Player.js";
 import { applyStatusesOnSummon } from "../../Card.js";
+import type { ActionOf } from "../../contracts/actions.js";
+import type {
+  ActionHandlerEnginePort,
+  ActionRuntimeCard,
+  ActionRuntimePlayer,
+  EffectContext,
+  LegacyActionHandlerResult,
+  MaybePromise,
+  ResolvedTargetMap,
+} from "../../contracts/actionRuntime.js";
+import type { BattlePosition } from "../../contracts/cards.js";
+import type { CardFilter } from "../../contracts/effects.js";
+import type { ZoneInput } from "../../contracts/zones.js";
 import { getCardDisplayName, getUIText } from "../../i18n.js";
 import {
   getUI,
@@ -12,16 +25,73 @@ import {
   buildSourceZoneEntries,
   findSourceEntryForCard,
   getSourceOwners,
+  type SourceZoneEntry,
 } from "./sourceZones.js";
 import { mergeCanonicalSelections } from "../../game/selection/contract.js";
 
-function getCardDistinctName(card) {
+interface LegacySelectionCount {
+  readonly min?: number;
+  readonly max?: number;
+  readonly cap?: number;
+  readonly maxCap?: number;
+  readonly maxFrom?: unknown;
+}
+
+type MutableLegacyCardFilter = {
+  -readonly [Key in keyof Omit<CardFilter, "type">]: Omit<
+    CardFilter,
+    "type"
+  >[Key];
+} & {
+  type?: string | readonly string[];
+};
+
+export type SpecialSummonFromZoneInput = Partial<
+  Omit<
+    ActionOf<"special_summon_from_zone">,
+    "type" | "count" | "filters" | "monsterType" | "zone" | "sourceZone"
+  >
+> &
+  Partial<
+    Omit<
+      ActionOf<"special_summon_matching_level">,
+      "type" | "count" | "filters" | "monsterType" | "zone"
+    >
+  > & {
+  readonly type?:
+    | "special_summon_from_zone"
+    | "special_summon_matching_level";
+  readonly oncePerTurnScope?: string;
+  readonly contextLabel?: string;
+  readonly count?: number | LegacySelectionCount;
+  readonly filters?: CardFilter;
+  readonly monsterType?: string | readonly string[];
+  readonly zone?: ZoneInput | readonly ZoneInput[];
+  readonly sourceZone?: ZoneInput | readonly ZoneInput[];
+  readonly fromZone?: ZoneInput;
+  readonly levelOp?: CardFilter["levelOp"];
+  readonly summonZone?: ZoneInput | readonly ZoneInput[];
+  readonly activationContext?: object | null;
+  readonly actionContext?: object | null;
+};
+
+function isRuntimeCard(value: unknown): value is ActionRuntimeCard {
+  return Boolean(
+    value &&
+      typeof value === "object" &&
+      typeof Reflect.get(value, "name") === "string",
+  );
+}
+
+function getCardDistinctName(card: ActionRuntimeCard): string {
   return card?.name || `id:${card?.id ?? "unknown"}`;
 }
 
-function keepOneCardPerName(cards = []) {
-  const seenNames = new Set();
-  const unique = [];
+function keepOneCardPerName(
+  cards: readonly ActionRuntimeCard[] = [],
+): ActionRuntimeCard[] {
+  const seenNames = new Set<string>();
+  const unique: ActionRuntimeCard[] = [];
   for (const card of cards) {
     const name = getCardDistinctName(card);
     if (seenNames.has(name)) continue;
@@ -31,7 +101,13 @@ function keepOneCardPerName(cards = []) {
   return unique;
 }
 
-function storeActionResultCards(action, ctx, targets, cards, fallbackKey = null) {
+function storeActionResultCards(
+  action: SpecialSummonFromZoneInput,
+  ctx: EffectContext | null,
+  targets: ResolvedTargetMap | null,
+  cards: readonly ActionRuntimeCard[],
+  fallbackKey: string | null = null,
+) {
   const resultKey = action?.resultRef || action?.storeResultAs || fallbackKey;
   if (!resultKey) return;
   const storedCards = Array.isArray(cards) ? cards.filter(Boolean) : [];
@@ -45,25 +121,39 @@ function storeActionResultCards(action, ctx, targets, cards, fallbackKey = null)
   }
 }
 
-function getContextPathValue(ctx, path) {
+function getContextPathValue(ctx: object | null | undefined, path: string) {
   if (!ctx || typeof path !== "string" || !path) return undefined;
-  if (!path.includes(".")) return ctx[path];
+  if (!path.includes(".")) return Reflect.get(ctx, path);
   return path
     .split(".")
     .filter(Boolean)
-    .reduce((value, key) => (value == null ? undefined : value[key]), ctx);
+    .reduce<unknown>(
+      (value, key) =>
+        value == null || typeof value !== "object"
+          ? undefined
+          : Reflect.get(value, key),
+      ctx,
+    );
 }
 
-function resolveNumberFromContext(ref, ctx) {
+function resolveNumberFromContext(ref: unknown, ctx: EffectContext) {
   if (ref === undefined || ref === null) return null;
   if (Number.isFinite(Number(ref))) return Number(ref);
   const key =
     typeof ref === "string"
       ? ref
-      : ref.key || ref.contextKey || ref.path || ref.resultKey || null;
+      : typeof ref === "object" && ref !== null
+        ? Reflect.get(ref, "key") ||
+          Reflect.get(ref, "contextKey") ||
+          Reflect.get(ref, "path") ||
+          Reflect.get(ref, "resultKey") ||
+          null
+        : null;
   const fallback =
     typeof ref === "object" && ref !== null
-      ? ref.defaultValue ?? ref.default ?? ref.fallback
+      ? Reflect.get(ref, "defaultValue") ??
+        Reflect.get(ref, "default") ??
+        Reflect.get(ref, "fallback")
       : undefined;
   const rawValue = getContextPathValue(ctx, key);
   const value = rawValue === undefined ? fallback : rawValue;
@@ -71,12 +161,31 @@ function resolveNumberFromContext(ref, ctx) {
   return Number.isFinite(numeric) ? Math.floor(numeric) : null;
 }
 
-function applyContextMaxLevelFilter(filters, action, ctx) {
+function applyContextMaxLevelFilter(
+  filters: MutableLegacyCardFilter,
+  action: SpecialSummonFromZoneInput,
+  ctx: EffectContext,
+) {
   const maxLevel = resolveNumberFromContext(action?.maxLevelFromContext, ctx);
-  if (!Number.isFinite(maxLevel)) return;
-  filters.maxLevel = Number.isFinite(filters.maxLevel)
+  if (typeof maxLevel !== "number" || !Number.isFinite(maxLevel)) return;
+  filters.maxLevel =
+    typeof filters.maxLevel === "number" && Number.isFinite(filters.maxLevel)
     ? Math.min(filters.maxLevel, maxLevel)
     : maxLevel;
+}
+
+function toZoneList(
+  value: ZoneInput | readonly ZoneInput[],
+): ZoneInput[] {
+  return Array.isArray(value) ? [...value] : [value as ZoneInput];
+}
+
+function toSelectionCount(
+  value: number | LegacySelectionCount | undefined,
+): LegacySelectionCount {
+  return value !== null && typeof value === "object"
+    ? value
+    : { min: 1, max: 1 };
 }
 
 /**
@@ -96,14 +205,13 @@ function applyContextMaxLevelFilter(filters, action, ctx) {
  * - distinctNames: boolean (default: false) - if true, selectable cards must have different names
  */
 export async function handleSpecialSummonFromZone(
-  action,
-  ctx,
-  targets,
-  engine,
+  action: SpecialSummonFromZoneInput,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+  engine: ActionHandlerEnginePort,
 ) {
   const { player, source, destroyed } = ctx;
   const game = engine.game;
-  const promptPlayer = action.promptPlayer !== false && !isAI(player);
   const optName = action.oncePerTurnName;
   const optEffect = optName
     ? {
@@ -116,7 +224,11 @@ export async function handleSpecialSummonFromZone(
   if (!player || !game) return false;
 
   if (optEffect && typeof game.canUseOncePerTurn === "function") {
-    const optCheck = game.canUseOncePerTurn(source, player, optEffect);
+    const optCheck = Reflect.apply(game.canUseOncePerTurn, game, [
+      source,
+      player,
+      optEffect,
+    ]);
     if (!optCheck.ok) {
       getUI(game)?.log(optCheck.reason || "Effect already used this turn.");
       return false;
@@ -124,14 +236,14 @@ export async function handleSpecialSummonFromZone(
   }
 
   const zoneSpec = action.zone || action.sourceZone || "deck";
-  const zoneNames = Array.isArray(zoneSpec) ? zoneSpec : [zoneSpec];
+  const zoneNames = toZoneList(zoneSpec);
   const sourceOwners = getSourceOwners(action, ctx, player);
   const summonPlayer =
     action.summonToOwner === "opponent"
       ? game?.getOpponent?.(player) ||
         (player?.id === "player" ? game?.bot : game?.player)
       : player;
-  const count = action.count || { min: 1, max: 1 };
+  const count = toSelectionCount(action.count);
   const minRequired = Number(count.min ?? 1);
   const isOptionalSelection = Number.isFinite(minRequired) && minRequired <= 0;
   const requireDistinctNames = action.distinctNames === true;
@@ -139,19 +251,20 @@ export async function handleSpecialSummonFromZone(
   const zoneEntries = buildSourceZoneEntries(zoneNames, sourceOwners);
 
   const canonicalSelections = {
-    ...mergeCanonicalSelections(ctx?.actionContext),
-    ...mergeCanonicalSelections(ctx?.activationContext),
+    ...mergeCanonicalSelections(ctx.actionContext ?? undefined),
+    ...mergeCanonicalSelections(ctx.activationContext ?? undefined),
   };
-  const selectionMap =
+  const selectionMap: unknown =
     ctx?.selections ||
     (Object.keys(canonicalSelections).length > 0 ? canonicalSelections : null);
 
-  const resolveSelectionKeys = (requirementId) => {
+  const resolveSelectionKeys = (requirementId: string): unknown => {
     if (!selectionMap) return null;
     if (Array.isArray(selectionMap)) return selectionMap;
     if (typeof selectionMap !== "object") return null;
-    if (requirementId && Array.isArray(selectionMap[requirementId])) {
-      return selectionMap[requirementId];
+    const selected: unknown = Reflect.get(selectionMap, requirementId);
+    if (requirementId && Array.isArray(selected)) {
+      return selected;
     }
     return null;
   };
@@ -167,7 +280,7 @@ export async function handleSpecialSummonFromZone(
     return null;
   };
 
-  const buildPositionSelectionContract = (cardRef) => ({
+  const buildPositionSelectionContract = (cardRef: ActionRuntimeCard) => ({
     kind: "position_select",
     message: getUIText("ui.summon.choosePositionTitle"),
     requirements: [
@@ -219,7 +332,7 @@ export async function handleSpecialSummonFromZone(
       return false;
     }
 
-    const moveResult = await game.moveCard(source, sourceEntry.owner, "banished", {
+    const moveResult = await game.moveCard!(source, sourceEntry.owner, "banished", {
       fromZone: sourceEntry.name,
       contextLabel: action.contextLabel || "special_summon_banish_cost",
       sourceCard: source,
@@ -229,7 +342,12 @@ export async function handleSpecialSummonFromZone(
       awaitCardMovedEvent: true,
     });
 
-    if (moveResult === false || moveResult?.success === false) {
+    if (
+      moveResult === false ||
+      (moveResult !== null &&
+        typeof moveResult === "object" &&
+        moveResult.success === false)
+    ) {
       getUI(game)?.log(`${source.name} could not be banished as cost.`);
       return false;
     }
@@ -246,7 +364,9 @@ export async function handleSpecialSummonFromZone(
         game,
         targetRef: action.targetRef,
       });
-    const cardsToSummon = Array.isArray(resolved) ? resolved : [resolved];
+    const cardsToSummon = (Array.isArray(resolved) ? resolved : [resolved]).filter(
+      isRuntimeCard,
+    );
 
     if (cardsToSummon.length === 0) {
       getUI(game)?.log("No valid targets for Special Summon.");
@@ -273,7 +393,7 @@ export async function handleSpecialSummonFromZone(
       return false;
     }
 
-    const filters = { ...(action.filters || {}) };
+    const filters: MutableLegacyCardFilter = { ...(action.filters || {}) };
     if (action.cardName) {
       filters.name = action.cardName;
     }
@@ -286,19 +406,38 @@ export async function handleSpecialSummonFromZone(
     if (action.isTuner !== undefined) {
       filters.isTuner = action.isTuner;
     }
-    if (Number.isFinite(action.minAtk)) filters.minAtk = action.minAtk;
-    if (Number.isFinite(action.maxAtk)) filters.maxAtk = action.maxAtk;
-    if (Number.isFinite(action.minDef)) filters.minDef = action.minDef;
-    if (Number.isFinite(action.maxDef)) filters.maxDef = action.maxDef;
+    if (typeof action.minAtk === "number" && Number.isFinite(action.minAtk)) {
+      filters.minAtk = action.minAtk;
+    }
+    if (typeof action.maxAtk === "number" && Number.isFinite(action.maxAtk)) {
+      filters.maxAtk = action.maxAtk;
+    }
+    if (typeof action.minDef === "number" && Number.isFinite(action.minDef)) {
+      filters.minDef = action.minDef;
+    }
+    if (typeof action.maxDef === "number" && Number.isFinite(action.maxDef)) {
+      filters.maxDef = action.maxDef;
+    }
     if (action.monsterType) {
       filters.type = action.monsterType;
     }
-    if (Number.isFinite(action.minLevel)) filters.minLevel = action.minLevel;
-    if (Number.isFinite(action.maxLevel)) filters.maxLevel = action.maxLevel;
+    if (
+      typeof action.minLevel === "number" &&
+      Number.isFinite(action.minLevel)
+    ) {
+      filters.minLevel = action.minLevel;
+    }
+    if (
+      typeof action.maxLevel === "number" &&
+      Number.isFinite(action.maxLevel)
+    ) {
+      filters.maxLevel = action.maxLevel;
+    }
     applyContextMaxLevelFilter(filters, action, ctx);
 
     if (action.matchLevelRef) {
-      const levelCard = ctx?.[action.matchLevelRef] || null;
+      const levelCandidate = getContextPathValue(ctx, action.matchLevelRef);
+      const levelCard = isRuntimeCard(levelCandidate) ? levelCandidate : null;
       const levelValue = levelCard?.level;
       if (!levelValue) {
         getUI(game)?.log("Cannot match level: no level on reference card.");
@@ -310,7 +449,7 @@ export async function handleSpecialSummonFromZone(
 
     const filteredValidCards =
       Object.keys(filters).length > 0
-        ? validCards.filter((card) => engine.cardMatchesFilters(card, filters))
+        ? validCards.filter((card) => engine.cardMatchesFilters!(card, filters))
         : validCards;
 
     if (filteredValidCards.length === 0) {
@@ -339,7 +478,7 @@ export async function handleSpecialSummonFromZone(
     if (isOptionalSelection) {
       getUI(game)?.log("No optional Special Summon targets available.");
       if (optEffect && typeof game.markOncePerTurnUsed === "function") {
-        game.markOncePerTurnUsed(source, player, optEffect);
+        Reflect.apply(game.markOncePerTurnUsed, game, [source, player, optEffect]);
       }
       return true;
     }
@@ -350,12 +489,14 @@ export async function handleSpecialSummonFromZone(
   }
 
   // Determine candidates
-  let candidates = [];
+  let candidates: ActionRuntimeCard[] = [];
 
   if (action.requireSource) {
     // Summon the source/destroyed card itself
     const card = source || destroyed;
-    const inAnyZone = zoneEntries.some((entry) => entry.list.includes(card));
+    const inAnyZone = Boolean(
+      card && zoneEntries.some((entry) => entry.list.includes(card)),
+    );
 
     if (!card || !inAnyZone) {
       getUI(game)?.log("Card not in specified zone.");
@@ -365,7 +506,7 @@ export async function handleSpecialSummonFromZone(
     candidates = [card];
   } else {
     // Apply filters to find candidates
-    const filters = { ...(action.filters || {}) };
+    const filters: MutableLegacyCardFilter = { ...(action.filters || {}) };
     const excludeSummonRestrict = action.excludeSummonRestrict || [];
 
     // Map action-level properties to filters
@@ -385,19 +526,19 @@ export async function handleSpecialSummonFromZone(
       filters.isTuner = action.isTuner;
     }
 
-    if (Number.isFinite(action.minAtk)) {
+    if (typeof action.minAtk === "number" && Number.isFinite(action.minAtk)) {
       filters.minAtk = action.minAtk;
     }
 
-    if (Number.isFinite(action.maxAtk)) {
+    if (typeof action.maxAtk === "number" && Number.isFinite(action.maxAtk)) {
       filters.maxAtk = action.maxAtk;
     }
 
-    if (Number.isFinite(action.minDef)) {
+    if (typeof action.minDef === "number" && Number.isFinite(action.minDef)) {
       filters.minDef = action.minDef;
     }
 
-    if (Number.isFinite(action.maxDef)) {
+    if (typeof action.maxDef === "number" && Number.isFinite(action.maxDef)) {
       filters.maxDef = action.maxDef;
     }
 
@@ -407,17 +548,24 @@ export async function handleSpecialSummonFromZone(
       filters.type = action.monsterType;
     }
 
-    if (Number.isFinite(action.minLevel)) {
+    if (
+      typeof action.minLevel === "number" &&
+      Number.isFinite(action.minLevel)
+    ) {
       filters.minLevel = action.minLevel;
     }
 
-    if (Number.isFinite(action.maxLevel)) {
+    if (
+      typeof action.maxLevel === "number" &&
+      Number.isFinite(action.maxLevel)
+    ) {
       filters.maxLevel = action.maxLevel;
     }
     applyContextMaxLevelFilter(filters, action, ctx);
 
     if (action.matchLevelRef) {
-      const levelCard = ctx?.[action.matchLevelRef] || null;
+      const levelCandidate = getContextPathValue(ctx, action.matchLevelRef);
+      const levelCard = isRuntimeCard(levelCandidate) ? levelCandidate : null;
       const levelValue = levelCard?.level;
 
       if (!levelValue) {
@@ -440,7 +588,7 @@ export async function handleSpecialSummonFromZone(
 
   // ? FASE 1: Filtrar cartas que não podem ser special summoned
   candidates = candidates.filter((card) => {
-    if (card.cannotBeSpecialSummoned) {
+    if (Reflect.get(card, "cannotBeSpecialSummoned") === true) {
       const ui = getUI(game);
       if (ui && ui.log) {
         ui.log(`${card.name} cannot be Special Summoned.`);
@@ -470,7 +618,7 @@ export async function handleSpecialSummonFromZone(
     if (isOptionalSelection) {
       getUI(game)?.log("No optional Special Summon targets available.");
       if (optEffect && typeof game.markOncePerTurnUsed === "function") {
-        game.markOncePerTurnUsed(source, player, optEffect);
+        Reflect.apply(game.markOncePerTurnUsed, game, [source, player, optEffect]);
       }
       return true;
     }
@@ -491,13 +639,17 @@ export async function handleSpecialSummonFromZone(
     dynamicMax = opponent?.field ? opponent.field.length : 0;
   }
 
-  const dynamicCap = Number.isFinite(count.cap)
+  const dynamicCap =
+    typeof count.cap === "number" && Number.isFinite(count.cap)
     ? count.cap
-    : Number.isFinite(count.maxCap)
+    : typeof count.maxCap === "number" && Number.isFinite(count.maxCap)
       ? count.maxCap
       : 5;
 
-  const baseMax = Number.isFinite(count.max) ? count.max : 1;
+  const baseMax =
+    typeof count.max === "number" && Number.isFinite(count.max)
+      ? count.max
+      : 1;
 
   const resolvedMax =
     dynamicMax !== null ? Math.min(dynamicMax, dynamicCap, baseMax) : baseMax;
@@ -540,12 +692,14 @@ export async function handleSpecialSummonFromZone(
       optEffect &&
       typeof game.markOncePerTurnUsed === "function"
     ) {
-      game.markOncePerTurnUsed(source, player, optEffect);
+      Reflect.apply(game.markOncePerTurnUsed, game, [source, player, optEffect]);
     }
     return success;
   }
 
-  const smartBotSelect = (cards) => {
+  const smartBotSelect = (
+    cards: readonly ActionRuntimeCard[],
+  ): readonly ActionRuntimeCard[] => {
     // Tentar usar estratégia específica do bot se existir
     const strategy = player?.strategy;
 
@@ -553,7 +707,7 @@ export async function handleSpecialSummonFromZone(
       strategy &&
       typeof strategy.evaluateRecruitCandidate === "function"
     ) {
-      const evaluation = strategy.evaluateRecruitCandidate(cards, {
+      const evaluation = strategy.evaluateRecruitCandidate([...cards], {
         game,
         player,
         summonPlayer,
@@ -608,13 +762,16 @@ export async function handleSpecialSummonFromZone(
         return new Promise((resolve) => {
           game.isResolvingEffect = true;
 
-          renderer.showSearchModalVisual(
+          renderer.showSearchModalVisual!(
             searchModal,
-            cards,
+            [...cards],
             defaultCardName,
-            (selectedName) => {
+            (selectedName: unknown) => {
               const chosen =
-                cards.find((c) => c && c.name === selectedName) || cards[0];
+                cards.find(
+                  (candidate) =>
+                    candidate && candidate.name === selectedName,
+                ) || cards[0];
               game.isResolvingEffect = false;
               resolve(chosen);
             },
@@ -641,7 +798,7 @@ export async function handleSpecialSummonFromZone(
       optEffect &&
       typeof game.markOncePerTurnUsed === "function"
     ) {
-      game.markOncePerTurnUsed(source, player, optEffect);
+      Reflect.apply(game.markOncePerTurnUsed, game, [source, player, optEffect]);
     }
     return success;
   }
@@ -656,14 +813,17 @@ export async function handleSpecialSummonFromZone(
       : maxSelect;
 
   // Helper para multi-select inteligente
-  const smartBotSelectMulti = (cards, max) => {
+  const smartBotSelectMulti = (
+    cards: readonly ActionRuntimeCard[],
+    max: number,
+  ): readonly ActionRuntimeCard[] => {
     const strategy = player?.strategy;
 
     if (
       strategy &&
       typeof strategy.evaluateRecruitCandidate === "function"
     ) {
-      const evaluation = strategy.evaluateRecruitCandidate(cards, {
+      const evaluation = strategy.evaluateRecruitCandidate([...cards], {
         game,
         player,
         summonPlayer,
@@ -683,10 +843,26 @@ export async function handleSpecialSummonFromZone(
         return [];
       }
       // Ordenar pelos scores e pegar os melhores
-      const sorted = evaluation.scores
-        .sort((a, b) => b.score - a.score)
-        .map((s) => s.card);
-      return sorted.slice(0, max);
+      const rawScores: unknown = Reflect.get(evaluation, "scores");
+      if (Array.isArray(rawScores)) {
+        return rawScores
+          .filter(
+            (score): score is object =>
+              Boolean(score && typeof score === "object"),
+          )
+          .slice()
+          .sort(
+            (left, right) =>
+              Number(Reflect.get(right, "score") || 0) -
+              Number(Reflect.get(left, "score") || 0),
+          )
+          .map((score) => Reflect.get(score, "card"))
+          .filter(isRuntimeCard)
+          .slice(0, max);
+      }
+      if (typeof evaluation.asBotSelect === "function") {
+        return evaluation.asBotSelect().slice(0, max);
+      }
     }
 
     // Fallback: maior ATK
@@ -712,11 +888,11 @@ export async function handleSpecialSummonFromZone(
       }
 
       return new Promise((resolve) => {
-        getUI(game).showMultiSelectModal(
+        getUI(game).showMultiSelectModal!(
           cards,
           { min: range.min, max: range.max },
-          (selected) => {
-            resolve(selected || []);
+          (selected: unknown) => {
+            resolve(Array.isArray(selected) ? selected.filter(isRuntimeCard) : []);
           },
         );
       });
@@ -748,7 +924,7 @@ export async function handleSpecialSummonFromZone(
     targets,
   );
   if (success && optEffect && typeof game.markOncePerTurnUsed === "function") {
-    game.markOncePerTurnUsed(source, player, optEffect);
+    Reflect.apply(game.markOncePerTurnUsed, game, [source, player, optEffect]);
   }
   return success;
 }
@@ -758,14 +934,14 @@ export async function handleSpecialSummonFromZone(
  * Unified to handle both single and multi-card summons
  */
 async function summonCards(
-  cards,
-  sourceZoneEntries,
-  player,
-  action,
-  engine,
-  ctx = null,
-  targets = null,
-) {
+  cards: readonly ActionRuntimeCard[],
+  sourceZoneEntries: readonly SourceZoneEntry[],
+  player: ActionRuntimePlayer,
+  action: SpecialSummonFromZoneInput,
+  engine: ActionHandlerEnginePort,
+  ctx: EffectContext | null = null,
+  targets: ResolvedTargetMap | null = null,
+): Promise<boolean> {
   const game = engine.game;
   let summoned = 0;
   const summonPlayer =
@@ -776,12 +952,20 @@ async function summonCards(
 
   const setAtkToZero = action.setAtkToZeroAfterSummon === true;
   const setDefToZero = action.setDefToZeroAfterSummon === true;
-  const atkBoostAfterSummon = Number.isFinite(action.atkBoostAfterSummon) ? action.atkBoostAfterSummon : 0;
-  const defBoostAfterSummon = Number.isFinite(action.defBoostAfterSummon) ? action.defBoostAfterSummon : 0;
+  const atkBoostAfterSummon =
+    typeof action.atkBoostAfterSummon === "number" &&
+    Number.isFinite(action.atkBoostAfterSummon)
+      ? action.atkBoostAfterSummon
+      : 0;
+  const defBoostAfterSummon =
+    typeof action.defBoostAfterSummon === "number" &&
+    Number.isFinite(action.defBoostAfterSummon)
+      ? action.defBoostAfterSummon
+      : 0;
   const statusesOnSummon = action.statusesOnSummon || null;
 
   const canUseMoveCard = game && typeof game.moveCard === "function";
-  const summonedCards = [];
+  const summonedCards: ActionRuntimeCard[] = [];
 
   const fromZoneSpec =
     action.fromZone ||
@@ -807,7 +991,7 @@ async function summonCards(
       continue; // Skip this card, continue with others
     }
 
-    if (card.cannotBeSpecialSummoned) {
+    if (Reflect.get(card, "cannotBeSpecialSummoned") === true) {
       getUI(game)?.log(`${card.name} cannot be Special Summoned.`);
       continue;
     }
@@ -834,9 +1018,11 @@ async function summonCards(
 
     // The effect controller chooses the position even when the summon lands on
     // another player's field.
-    const position = await engine.chooseSpecialSummonPosition(card, player, {
-      position: action.position,
-    });
+    const position = await Reflect.apply(
+      engine.chooseSpecialSummonPosition!,
+      engine,
+      [card, player, { position: action.position }],
+    );
 
     let usedMoveCard = false;
     const previousEffectsNegated = card.effectsNegated;
@@ -859,7 +1045,11 @@ async function summonCards(
         statusesOnSummon,
       });
 
-      if (moveResult?.success === false) {
+      if (
+        moveResult !== null &&
+        typeof moveResult === "object" &&
+        moveResult.success === false
+      ) {
         card.effectsNegated = previousEffectsNegated;
         card.effectsNegatedDuration = previousEffectsNegatedDuration;
         continue;
@@ -874,9 +1064,11 @@ async function summonCards(
           ? sourceZoneEntries[0].name
           : null);
 
-      const fallbackArr =
-        sourceEntry?.list ||
-        (fallbackZoneName && player[fallbackZoneName]) ||
+      const fallbackValue: unknown = fallbackZoneName
+        ? Reflect.get(player, fallbackZoneName)
+        : null;
+      const fallbackArr = sourceEntry?.list ||
+        (Array.isArray(fallbackValue) ? fallbackValue : null) ||
         player.deck ||
         [];
 
@@ -888,7 +1080,7 @@ async function summonCards(
       card.position = position;
       card.isFacedown = false;
       card.hasAttacked = false;
-      card.attacksUsedThisTurn = 0;
+      Reflect.set(card, "attacksUsedThisTurn", 0);
       card.owner = summonPlayer.id;
       card.controller = summonPlayer.id;
 
@@ -923,19 +1115,27 @@ async function summonCards(
     }
 
     if (atkBoostAfterSummon !== 0) {
-      card.tempAtkBoost = (card.tempAtkBoost || 0) + atkBoostAfterSummon;
+      Reflect.set(
+        card,
+        "tempAtkBoost",
+        Number(Reflect.get(card, "tempAtkBoost") || 0) + atkBoostAfterSummon,
+      );
       card.atk = (card.atk || 0) + atkBoostAfterSummon;
     }
 
     if (defBoostAfterSummon !== 0) {
-      card.tempDefBoost = (card.tempDefBoost || 0) + defBoostAfterSummon;
+      Reflect.set(
+        card,
+        "tempDefBoost",
+        Number(Reflect.get(card, "tempDefBoost") || 0) + defBoostAfterSummon,
+      );
       card.def = (card.def || 0) + defBoostAfterSummon;
     }
 
     if (!usedMoveCard) {
       game.updateBoard?.();
       await game.waitForBoardPresentation?.();
-      await game.emit("after_summon", {
+      await game.emit!("after_summon", {
         card: card,
         player: summonPlayer,
         method: "special",

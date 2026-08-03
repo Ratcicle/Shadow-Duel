@@ -1,4 +1,14 @@
 import { isAI } from "../../Player.js";
+import type { ActionOf } from "../../contracts/actions.js";
+import type {
+  ActionHandlerEnginePort,
+  ActionRuntimeCard,
+  ActionRuntimePlayer,
+  EffectContext,
+  LegacyActionHandlerResult,
+  ResolvedTargetMap,
+} from "../../contracts/actionRuntime.js";
+import type { CardFilter } from "../../contracts/effects.js";
 import { getCardDisplayName, getUIText } from "../../i18n.js";
 import {
   buildFieldSelectionCandidates,
@@ -11,7 +21,77 @@ import {
   summonFromHandCore,
 } from "../shared.js";
 
-function getTierEffectChoiceKey(action, ctx) {
+type HandCostActionType =
+  | "special_summon_from_hand_with_cost"
+  | "special_summon_from_hand_with_tiered_cost";
+
+interface LegacyCostFilter extends CardFilter {
+  readonly name?: string;
+}
+
+interface LegacyTierOption {
+  readonly count?: number;
+  readonly label?: string;
+  readonly description?: string;
+  readonly minCost?: number;
+  readonly maxCost?: number;
+  readonly atkBoost?: number;
+  readonly costFilters?: CardFilter;
+}
+
+interface LegacyConditionalMarker {
+  readonly key?: string;
+  readonly min?: number;
+  readonly bindToFieldPresence?: boolean;
+  readonly costFilters?: LegacyCostFilter;
+  readonly filters?: LegacyCostFilter;
+  readonly sourceEffectId?: string;
+}
+
+type HandWithCostAction = Partial<
+  Omit<
+    ActionOf<"special_summon_from_hand_with_cost">,
+    "type" | "conditionalMarkersOnSummon"
+  >
+> &
+  Partial<
+    Omit<
+      ActionOf<"special_summon_from_hand_with_tiered_cost">,
+      "type" | "costFilters" | "tierOptions"
+    >
+  > & {
+    readonly type: HandCostActionType;
+    readonly conditionalMarkersOnSummon?:
+      | LegacyConditionalMarker
+      | readonly LegacyConditionalMarker[];
+    readonly costFilters?: LegacyCostFilter;
+    readonly tierOptions?: readonly LegacyTierOption[];
+    readonly effectChoiceKey?: string;
+    readonly tierTextKey?: string;
+    readonly tierTitle?: string;
+    readonly useTieredCost?: boolean;
+    readonly contextLabel?: string;
+    readonly cannotAttackThisTurn?: boolean;
+    readonly sourceEffectId?: string;
+  };
+
+function getUITextWithFallback(
+  key: string,
+  params: object,
+  fallback: string,
+): string {
+  const localized: unknown = Reflect.apply(getUIText, undefined, [
+    key,
+    params,
+    fallback,
+  ]);
+  return typeof localized === "string" ? localized : fallback;
+}
+
+function getTierEffectChoiceKey(
+  action: HandWithCostAction,
+  ctx: EffectContext,
+): string | null {
   return (
     action?.effectChoiceKey ||
     action?.tierTextKey ||
@@ -21,18 +101,21 @@ function getTierEffectChoiceKey(action, ctx) {
   );
 }
 
-function localizeTierOptions(options, effectChoiceKey) {
+function localizeTierOptions(
+  options: readonly LegacyTierOption[],
+  effectChoiceKey: string | null,
+) {
   return options.map((opt) => {
     const count = opt.count;
     if (!Number.isFinite(count)) return opt;
     return {
       ...opt,
-      label: getUIText(
+      label: getUITextWithFallback(
         `effectChoices.${effectChoiceKey}.tiers.${count}.label`,
         {},
         opt.label || getUIText("ui.summon.tierFallback", { count }),
       ),
-      description: getUIText(
+      description: getUITextWithFallback(
         `effectChoices.${effectChoiceKey}.tiers.${count}.description`,
         {},
         opt.description || "",
@@ -41,7 +124,11 @@ function localizeTierOptions(options, effectChoiceKey) {
   });
 }
 
-function costCardMatchesMarkerFilters(card, filters = {}, engine = null) {
+function costCardMatchesMarkerFilters(
+  card: ActionRuntimeCard | null | undefined,
+  filters: LegacyCostFilter = {},
+  engine: ActionHandlerEnginePort | null = null,
+) {
   if (!card) return false;
   if (
     engine &&
@@ -63,7 +150,13 @@ function costCardMatchesMarkerFilters(card, filters = {}, engine = null) {
   return true;
 }
 
-function applyConditionalMarkersOnSummon(action, ctx, source, paidCostCards, engine) {
+function applyConditionalMarkersOnSummon(
+  action: HandWithCostAction,
+  ctx: EffectContext,
+  source: ActionRuntimeCard,
+  paidCostCards: readonly ActionRuntimeCard[],
+  engine: ActionHandlerEnginePort,
+) {
   const markerConfigs = Array.isArray(action?.conditionalMarkersOnSummon)
     ? action.conditionalMarkersOnSummon
     : action?.conditionalMarkersOnSummon
@@ -80,8 +173,10 @@ function applyConditionalMarkersOnSummon(action, ctx, source, paidCostCards, eng
     const min = Number.isFinite(markerConfig.min) ? markerConfig.min : 1;
     if (matchingCostCards.length < min) continue;
 
-    if (!source.effectMarkers || typeof source.effectMarkers !== "object") {
-      source.effectMarkers = {};
+    let effectMarkers: unknown = Reflect.get(source, "effectMarkers");
+    if (!effectMarkers || typeof effectMarkers !== "object") {
+      effectMarkers = {};
+      Reflect.set(source, "effectMarkers", effectMarkers);
     }
 
     const marker = {
@@ -92,20 +187,23 @@ function applyConditionalMarkersOnSummon(action, ctx, source, paidCostCards, eng
       matchingCostCount: matchingCostCards.length,
     };
 
-    if (markerConfig.bindToFieldPresence === true && source.fieldPresenceId) {
-      marker.fieldPresenceId = source.fieldPresenceId;
+    const fieldPresenceId: unknown = Reflect.get(source, "fieldPresenceId");
+    if (markerConfig.bindToFieldPresence === true && fieldPresenceId) {
+      Reflect.set(marker, "fieldPresenceId", fieldPresenceId);
     }
 
-    source.effectMarkers[markerConfig.key] = marker;
+    if (effectMarkers && typeof effectMarkers === "object") {
+      Reflect.set(effectMarkers, markerConfig.key, marker);
+    }
   }
 }
 
 export async function handleSpecialSummonFromHandWithCost(
-  action,
-  ctx,
-  targets,
-  engine,
-) {
+  action: HandWithCostAction,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+  engine: ActionHandlerEnginePort,
+): Promise<LegacyActionHandlerResult> {
   const { player, source } = ctx;
   const game = engine.game;
 
@@ -149,15 +247,18 @@ export async function handleSpecialSummonFromHandWithCost(
 
     const costDestination = action.costDestination || "graveyard";
     const costMovedByEffect = action.costMovedByEffect === true;
-    const paidCostCards = [];
-    const getCostOwner = (costCard) =>
+    const paidCostCards: ActionRuntimeCard[] = [];
+    const getCostOwner = (costCard: ActionRuntimeCard): ActionRuntimePlayer =>
       (typeof engine.getOwnerByCard === "function"
         ? engine.getOwnerByCard(costCard)
         : null) ||
       (costCard?.owner === "bot" ? game.bot : game.player) ||
       player;
 
-    const findCostZone = (costCard, owner) =>
+    const findCostZone = (
+      costCard: ActionRuntimeCard,
+      owner: ActionRuntimePlayer,
+    ) =>
       (typeof engine.findCardZone === "function"
         ? engine.findCardZone(owner, costCard)
         : null) || null;
@@ -189,7 +290,7 @@ export async function handleSpecialSummonFromHandWithCost(
 
         const costOwner = getCostOwner(costCard);
         const fromZone = findCostZone(costCard, costOwner) || fallbackCostZone;
-        const moveResult = await game.moveCard(costCard, costOwner, "banished", {
+        const moveResult = await game.moveCard!(costCard, costOwner, "banished", {
           fromZone,
           contextLabel: action.contextLabel || "special_summon_cost",
           sourceCard: source,
@@ -199,7 +300,12 @@ export async function handleSpecialSummonFromHandWithCost(
           awaitCardMovedEvent: true,
         });
 
-        if (moveResult === false || moveResult?.success === false) {
+        if (
+          moveResult === false ||
+          (moveResult !== null &&
+            typeof moveResult === "object" &&
+            moveResult.success === false)
+        ) {
           getUI(game)?.log(`${costCard.name} could not be banished as cost.`);
           return false;
         }
@@ -208,7 +314,9 @@ export async function handleSpecialSummonFromHandWithCost(
           game.banishedCards = [];
         }
         if (
-          !moveResult?.tokenRemoved &&
+          !(moveResult &&
+            typeof moveResult === "object" &&
+            Reflect.get(moveResult, "tokenRemoved") === true) &&
           !game.banishedCards.includes(costCard)
         ) {
           game.banishedCards.push(costCard);
@@ -229,7 +337,7 @@ export async function handleSpecialSummonFromHandWithCost(
 
         const costOwner = getCostOwner(costCard);
         const fromZone = findCostZone(costCard, costOwner) || "field";
-        const moveResult = await game.moveCard(costCard, costOwner, "hand", {
+        const moveResult = await game.moveCard!(costCard, costOwner, "hand", {
           fromZone,
           contextLabel: action.contextLabel || "special_summon_cost",
           sourceCard: source,
@@ -239,7 +347,10 @@ export async function handleSpecialSummonFromHandWithCost(
         });
 
         const moveFailed =
-          moveResult === false || moveResult?.success === false;
+          moveResult === false ||
+          (moveResult !== null &&
+            typeof moveResult === "object" &&
+            moveResult.success === false);
 
         if (moveFailed) {
           getUI(game)?.log(`Could not return ${costCard.name} to hand.`);
@@ -277,7 +388,7 @@ export async function handleSpecialSummonFromHandWithCost(
       `${player.name || player.id} Special Summoned ${source.name} from hand.`,
     );
 
-    game.updateBoard();
+    game.updateBoard!();
     return true;
   }
 
@@ -286,7 +397,7 @@ export async function handleSpecialSummonFromHandWithCost(
     cardKind: "monster",
   };
 
-  const matchesFilters = (card) => {
+  const matchesFilters = (card: ActionRuntimeCard) => {
     if (!card) return false;
     if (filters.cardKind && card.cardKind !== filters.cardKind) return false;
     if (filters.name && card.name !== filters.name) return false;
@@ -332,27 +443,35 @@ export async function handleSpecialSummonFromHandWithCost(
 
   const tierOptions = localizeTierOptions(
     (action.tierOptions || defaultTierOptions).filter(
-      (opt) => opt.count >= minCost && opt.count <= allowedMax,
+      (opt) =>
+        typeof opt.count === "number" &&
+        opt.count >= minCost &&
+        opt.count <= allowedMax,
     ),
     getTierEffectChoiceKey(action, ctx),
   );
 
-  let chosenCount = null;
+  let chosenCount: number | null = null;
 
   if (isAI(player)) {
     chosenCount = allowedMax;
   } else if (getUI(game)?.showTierChoiceModal) {
-    chosenCount = await getUI(game).showTierChoiceModal({
+    const tierChoice: unknown = await getUI(game).showTierChoiceModal!({
       title: action.tierTitle || getCardDisplayName(source) || source.name,
       options: tierOptions,
     });
+    chosenCount = typeof tierChoice === "number" ? tierChoice : null;
   } else if (getUI(game)?.showNumberPrompt) {
-    const parsed = getUI(game).showNumberPrompt(
+    const parsed: unknown = getUI(game).showNumberPrompt!(
       getUIText("ui.tieredCost.costPrompt", { max: allowedMax }),
       String(allowedMax),
     );
 
-    if (parsed !== null && parsed >= minCost && parsed <= allowedMax) {
+    if (
+      typeof parsed === "number" &&
+      parsed >= minCost &&
+      parsed <= allowedMax
+    ) {
       chosenCount = parsed;
     }
   }
@@ -436,25 +555,29 @@ export async function handleSpecialSummonFromHandWithCost(
 
       const buffAmount = action.tier1AtkBoost ?? 300;
       if (chosenCount >= 1 && buffAmount !== 0) {
-        engine.applyBuffAtkTemp(
+        Reflect.apply(engine.applyBuffAtkTemp, engine, [
           { targetRef: "tier_self", amount: buffAmount },
           { player, source },
           { tier_self: [source] },
-        );
+        ]);
       }
 
       if (chosenCount >= 2) {
-        source.battleIndestructible = true;
+        Reflect.set(source, "battleIndestructible", true);
       }
 
       if (chosenCount >= 3) {
-        const opponent = game.getOpponent(player);
+        const opponent = game.getOpponent!(player);
+
+        if (!opponent) return false;
 
         const opponentCards = [
           ...(opponent.field || []),
           ...(opponent.spellTrap || []),
           opponent.fieldSpell,
-        ].filter(Boolean);
+        ].filter(
+          (card): card is ActionRuntimeCard => Boolean(card),
+        );
 
         if (opponentCards.length > 0) {
           const requirementId = "tier_destroy";
@@ -496,7 +619,8 @@ export async function handleSpecialSummonFromHandWithCost(
                 .slice()
                 .sort((a, b) => (b.atk || 0) - (a.atk || 0))
                 .slice(0, 1)
-                .map((cand) => cand.key),
+                .map((cand) => cand.key)
+                .filter((key): key is string => typeof key === "string"),
           });
 
           const chosenKey = selectedKeys?.[0];
@@ -509,7 +633,7 @@ export async function handleSpecialSummonFromHandWithCost(
                 `${targetToDestroy.name} is immune to opponent's effects.`,
               );
             } else {
-              const result = await game.destroyCard(targetToDestroy, {
+              const result = await game.destroyCard!(targetToDestroy, {
                 cause: "effect",
                 sourceCard: source,
                 opponent: player,
@@ -525,7 +649,7 @@ export async function handleSpecialSummonFromHandWithCost(
         }
       }
 
-      game.updateBoard();
+      game.updateBoard!();
       return true;
     },
   );

@@ -7,12 +7,207 @@
 
 import { isAI } from "../Player.js";
 import { cardMatchesKind } from "../Card.js";
+import type { CardFilter } from "../contracts/effects.js";
+import type {
+  ContextNumberSource,
+} from "../contracts/actions.js";
+import type {
+  ActionHandlerEnginePort,
+  ActionRuntimeCard,
+  ActionRuntimeGamePort,
+  ActionRuntimePlayer,
+  ActionRuntimeUiPort,
+  EffectContext,
+  MaybePromise,
+  ResolvedTargetMap,
+} from "../contracts/actionRuntime.js";
+import type { BattlePositionInput } from "../contracts/cards.js";
+import type { ZoneInput } from "../contracts/zones.js";
 
-function getCardInstanceId(card) {
+type RuntimeCardId = number | string | null;
+
+interface ExclusionFilters {
+  readonly excludeCards?: readonly ActionRuntimeCard[];
+  readonly excludeInstanceId?: RuntimeCardId;
+  readonly excludeInstanceIds?: readonly RuntimeCardId[];
+  readonly excludeCardInstanceIds?: readonly RuntimeCardId[];
+}
+
+type LegacyCardFilter = Omit<CardFilter, "position" | "type"> &
+  ExclusionFilters & {
+    readonly type?: string | readonly string[];
+    readonly position?: "attack" | "defense" | "any";
+    readonly excludeName?: string;
+    readonly excludeNames?: readonly string[];
+    readonly excludeId?: number;
+    readonly excludeCardId?: number;
+    readonly excludeIds?: readonly number[];
+    readonly excludeCardIds?: readonly number[];
+    readonly cardIds?: readonly number[];
+    readonly maxCounters?: number;
+  };
+
+interface TargetAction {
+  readonly type?: string;
+  readonly targetRef?: string | ActionRuntimeCard[];
+}
+
+interface ResolveTargetCardsOptions {
+  readonly targetRef?: string | ActionRuntimeCard[];
+  readonly defaultRef?: string;
+  readonly game?: ActionRuntimeGamePort | null;
+  readonly fallbackList?: readonly ActionRuntimeCard[];
+  readonly requireArray?: boolean;
+  readonly filter?: (card: ActionRuntimeCard) => boolean;
+}
+
+type RuntimeContextNumberSource = ContextNumberSource & {
+  readonly defaultValue?: number;
+  readonly divisor?: number;
+  readonly amountPer?: number;
+  readonly min?: number;
+  readonly max?: number;
+};
+
+interface ResolveContextNumberOptions {
+  readonly defaultValue?: number;
+  readonly round?: "floor" | "ceil" | "round";
+}
+
+type FieldScopeConfig = Omit<
+  LegacyCardFilter,
+  "owner" | "position" | "zone" | "zones"
+> & {
+  readonly owner?: "self" | "opponent" | "any" | "both" | "either";
+  readonly player?: "self" | "opponent" | "both";
+  readonly zone?: ZoneInput;
+  readonly zones?: readonly ZoneInput[];
+  readonly filters?: LegacyCardFilter;
+  readonly position?: "attack" | "defense" | "any";
+  readonly excludeSelf?: boolean;
+};
+
+interface FieldScopeOptions {
+  readonly engine?: ActionHandlerEnginePort | null;
+}
+
+interface SendCardsToGraveyardOptions {
+  readonly game?: ActionRuntimeGamePort | null;
+  readonly resolveFromZone?: (card: ActionRuntimeCard) => ZoneInput | null;
+  readonly fromZone?: ZoneInput;
+  readonly fallbackZone?: ZoneInput;
+  readonly allowFallback?: boolean;
+  readonly useResolvedZoneOnFallback?: boolean;
+  readonly pushIfMissing?: boolean;
+}
+
+interface CollectZoneCandidatesOptions {
+  readonly source?: ActionRuntimeCard | null;
+  readonly engine?: ActionHandlerEnginePort | null;
+  readonly defaultLevelOp?: "eq" | "lte" | "gte" | "lt" | "gt";
+  readonly excludeSummonRestrict?: readonly string[];
+  readonly extraFilter?: (card: ActionRuntimeCard) => boolean;
+}
+
+interface SelectionCandidate {
+  idx: number;
+  name: string;
+  owner: string;
+  controller: string;
+  zone: string;
+  zoneIndex: number;
+  position: string;
+  atk?: number;
+  def?: number;
+  level?: number;
+  cardKind?: ActionRuntimeCard["cardKind"];
+  cardRef: ActionRuntimeCard;
+  key?: string;
+}
+
+interface FieldSelectionOptions {
+  readonly ownerLabel?: string;
+}
+
+interface SelectionRange {
+  readonly min: number;
+  readonly max: number;
+}
+
+interface SelectionContractData {
+  readonly selectionContract: unknown;
+  readonly requirementId: string;
+  readonly kind?: string;
+  readonly autoSelectorOptions?: object;
+  readonly decorated?: readonly SelectionCandidate[];
+}
+
+interface SelectCardsFromZoneOptions {
+  readonly game: ActionRuntimeGamePort;
+  readonly player: ActionRuntimePlayer;
+  readonly zone?: readonly ActionRuntimeCard[];
+  readonly filters?: LegacyCardFilter;
+  readonly source?: ActionRuntimeCard | null;
+  readonly excludeSummonRestrict?: readonly string[];
+  readonly defaultLevelOp?: "eq" | "lte" | "gte" | "lt" | "gt";
+  readonly extraFilter?: (card: ActionRuntimeCard) => boolean;
+  readonly candidates?: readonly ActionRuntimeCard[];
+  readonly maxSelect?: number;
+  readonly minSelect?: number;
+  readonly promptPlayer?: boolean;
+  readonly botSelect?: (
+    cards: readonly ActionRuntimeCard[],
+    max: number,
+    min: number,
+  ) => readonly ActionRuntimeCard[];
+  readonly selectSingle?: (
+    cards: readonly ActionRuntimeCard[],
+  ) => MaybePromise<ActionRuntimeCard | null | undefined>;
+  readonly selectMulti?: (
+    cards: readonly ActionRuntimeCard[],
+    range: SelectionRange,
+  ) => MaybePromise<readonly ActionRuntimeCard[] | null | undefined>;
+  readonly selectionContractBuilder?: (
+    cards: readonly ActionRuntimeCard[],
+    range: SelectionRange,
+  ) => SelectionContractData | null;
+  readonly engine?: ActionHandlerEnginePort | null;
+}
+
+interface PayCostAndThenOptions {
+  readonly selectCost: () => MaybePromise<readonly ActionRuntimeCard[] | null>;
+  readonly player: ActionRuntimePlayer;
+  readonly engine: ActionHandlerEnginePort;
+  readonly sendOptions?: SendCardsToGraveyardOptions;
+}
+
+interface SelectCardsOptions {
+  readonly game: ActionRuntimeGamePort;
+  readonly player: ActionRuntimePlayer;
+  readonly selectionContract: unknown;
+  readonly requirementId: string;
+  readonly kind?: string;
+  readonly autoSelectorOptions?: object;
+  readonly autoSelectKeys?: () => readonly string[];
+}
+
+interface SummonFromHandCoreOptions {
+  readonly card: ActionRuntimeCard;
+  readonly player: ActionRuntimePlayer;
+  readonly engine: ActionHandlerEnginePort;
+  readonly game: ActionRuntimeGamePort;
+  readonly position?: BattlePositionInput | "any";
+  readonly cannotAttackThisTurn?: boolean;
+}
+
+function getCardInstanceId(card: ActionRuntimeCard | null | undefined) {
   return card?.instanceId ?? card?._instanceId ?? card?.uuid ?? card?.simInstanceId ?? null;
 }
 
-function isExcludedInstance(card, filters = {}) {
+function isExcludedInstance(
+  card: ActionRuntimeCard | null | undefined,
+  filters: ExclusionFilters = {},
+) {
   if (!card || !filters) return false;
   const excludedCards = Array.isArray(filters.excludeCards)
     ? filters.excludeCards
@@ -36,11 +231,20 @@ export const NULL_UI = {
   log: () => {},
 };
 
-export function getUI(game) {
-  return game?.ui || game?.renderer || NULL_UI;
+export type ActionHandlerUi = ActionRuntimeUiPort & {
+  log(message: string): void;
+};
+
+export function getUI(
+  game: ActionRuntimeGamePort | null | undefined,
+): ActionHandlerUi {
+  return (game?.ui || game?.renderer || NULL_UI) as ActionHandlerUi;
 }
 
-export function normalizeNegateEffectsDuration(action = {}) {
+export function normalizeNegateEffectsDuration(action: {
+  readonly negateEffectsDuration?: string;
+  readonly duration?: string;
+} = {}) {
   return action.negateEffectsDuration === "while_faceup" ||
     action.duration === "while_faceup"
     ? "while_faceup"
@@ -57,7 +261,12 @@ export const STATUS_DISPLAY_NAMES = {
   effectsNegated: "effect negation",
 };
 
-export function resolveTargetCards(action, ctx, targets, options = {}) {
+export function resolveTargetCards(
+  action: TargetAction | null | undefined,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+  options: ResolveTargetCardsOptions = {},
+): ActionRuntimeCard[] {
   const hasExplicitRef = Object.prototype.hasOwnProperty.call(
     options,
     "targetRef"
@@ -69,13 +278,16 @@ export function resolveTargetCards(action, ctx, targets, options = {}) {
     targetRef = options.defaultRef;
   }
 
-  let resolved = [];
-  const getBattleParticipantByOwner = (ownerRule) => {
+  let resolved: unknown = [];
+  const getBattleParticipantByOwner = (ownerRule: "self" | "opponent") => {
     const player = ctx?.player || null;
     const opponent = ctx?.opponent || null;
     const expectedOwner = ownerRule === "opponent" ? opponent : player;
     if (!expectedOwner) return null;
-    const controlsCard = (card, explicitOwner) =>
+    const controlsCard = (
+      card: ActionRuntimeCard | null | undefined,
+      explicitOwner: ActionRuntimePlayer | null | undefined,
+    ) =>
       !!card &&
       (explicitOwner === expectedOwner ||
         explicitOwner?.id === expectedOwner.id ||
@@ -105,7 +317,7 @@ export function resolveTargetCards(action, ctx, targets, options = {}) {
     const materials = Array.isArray(source?.ascensionMaterials)
       ? source.ascensionMaterials
       : [];
-    const materialInstanceIds = new Set(
+    const materialInstanceIds = new Set<RuntimeCardId>(
       materials
         .map((entry) => entry?.instanceId)
         .filter((value) => value !== undefined && value !== null),
@@ -199,31 +411,33 @@ export function resolveTargetCards(action, ctx, targets, options = {}) {
     return [];
   }
 
-  if (!Array.isArray(resolved)) {
-    resolved = [resolved];
-  }
-
-  const filtered = resolved.filter(Boolean);
+  const normalized = Array.isArray(resolved) ? resolved : [resolved];
+  // ResolvedTargetMap is the intentional dynamic target boundary. Runtime
+  // validation guarantees card values before direct handlers execute.
+  const filtered = normalized.filter(Boolean) as ActionRuntimeCard[];
 
   return typeof options.filter === "function"
     ? filtered.filter(options.filter)
     : filtered;
 }
 
-function normalizeList(value, fallback = []) {
+function normalizeList<Value>(
+  value: Value | readonly Value[] | null | undefined,
+  fallback: readonly Value[] = [],
+): readonly Value[] {
   if (Array.isArray(value)) return value;
   if (value === undefined || value === null) return fallback;
-  return [value];
+  return [value as Value];
 }
 
-function getContextNumberSource(ctx, key) {
+function getContextNumberSource(ctx: EffectContext, key: string) {
   if (!ctx || !key) return undefined;
   const parts = String(key).split(".").filter(Boolean);
-  const readPath = (root) => {
-    let value = root;
+  const readPath = (root: unknown) => {
+    let value: unknown = root;
     for (const part of parts) {
       if (value == null || typeof value !== "object") return undefined;
-      value = value[part];
+      value = Reflect.get(value, part);
     }
     return value;
   };
@@ -236,7 +450,11 @@ function getContextNumberSource(ctx, key) {
   );
 }
 
-export function resolveContextNumber(spec, ctx, options = {}) {
+export function resolveContextNumber(
+  spec: number | string | RuntimeContextNumberSource | null | undefined,
+  ctx: EffectContext,
+  options: ResolveContextNumberOptions = {},
+) {
   if (typeof spec === "number") return spec;
   if (!spec) return Number(options.defaultValue || 0);
 
@@ -270,25 +488,40 @@ export function resolveContextNumber(spec, ctx, options = {}) {
   return value;
 }
 
-function getScopeOwners(game, ctx, ownerRule = "self") {
+function getScopeOwners(
+  game: ActionRuntimeGamePort | null,
+  ctx: EffectContext,
+  ownerRule: "self" | "opponent" | "any" | "both" | "either" = "self",
+): ActionRuntimePlayer[] {
   const player = ctx?.player || null;
-  const opponent = ctx?.opponent || game?.getOpponent?.(player) || null;
+  const opponent =
+    ctx?.opponent || (player ? game?.getOpponent?.(player) : null) || null;
   if (ownerRule === "opponent") return opponent ? [opponent] : [];
   if (ownerRule === "any" || ownerRule === "both" || ownerRule === "either") {
-    return [player, opponent].filter(Boolean);
+    return [player, opponent].filter(
+      (owner): owner is ActionRuntimePlayer => owner !== null,
+    );
   }
   return player ? [player] : [];
 }
 
-function getScopeZoneCards(owner, zone) {
+function getScopeZoneCards(
+  owner: ActionRuntimePlayer | null | undefined,
+  zone: ZoneInput,
+): ActionRuntimeCard[] {
   if (!owner || !zone) return [];
   if (zone === "fieldSpell") {
     return owner.fieldSpell ? [owner.fieldSpell] : [];
   }
-  return Array.isArray(owner[zone]) ? owner[zone].filter(Boolean) : [];
+  const value: unknown = Reflect.get(owner, zone);
+  return Array.isArray(value) ? value.filter(Boolean) : [];
 }
 
-function cardMatchesScopeFilters(card, filters, engine) {
+function cardMatchesScopeFilters(
+  card: ActionRuntimeCard,
+  filters: LegacyCardFilter,
+  engine: ActionHandlerEnginePort | null | undefined,
+) {
   if (!card) return false;
   if (filters.requireFaceup === true && card.isFacedown) return false;
   if (filters.cardKind && !cardMatchesKind(card, filters.cardKind)) {
@@ -339,13 +572,18 @@ function cardMatchesScopeFilters(card, filters, engine) {
   return true;
 }
 
-export function resolveFieldScopeCards(scope = {}, ctx = {}, game = null, options = {}) {
+export function resolveFieldScopeCards(
+  scope: FieldScopeConfig = {},
+  ctx: EffectContext = {},
+  game: ActionRuntimeGamePort | null = null,
+  options: FieldScopeOptions = {},
+) {
   const config = scope || {};
   const zones = normalizeList(
     config.zones,
     normalizeList(config.zone, ["field"]),
   );
-  const filters = {
+  const filters: LegacyCardFilter = {
     ...(config.filters || {}),
   };
   for (const key of [
@@ -372,13 +610,14 @@ export function resolveFieldScopeCards(scope = {}, ctx = {}, game = null, option
     "isToken",
     "isTuner",
   ]) {
-    if (config[key] !== undefined && filters[key] === undefined) {
-      filters[key] = config[key];
+    const configValue: unknown = Reflect.get(config, key);
+    if (configValue !== undefined && Reflect.get(filters, key) === undefined) {
+      Reflect.set(filters, key, configValue);
     }
   }
 
-  const cards = [];
-  const seen = new Set();
+  const cards: ActionRuntimeCard[] = [];
+  const seen = new Set<ActionRuntimeCard | RuntimeCardId>();
   for (const owner of getScopeOwners(game, ctx, config.owner || config.player || "self")) {
     for (const zone of zones) {
       for (const card of getScopeZoneCards(owner, zone)) {
@@ -397,10 +636,10 @@ export function resolveFieldScopeCards(scope = {}, ctx = {}, game = null, option
 }
 
 export async function sendCardsToGraveyard(
-  cards,
-  player,
-  engine,
-  options = {}
+  cards: readonly ActionRuntimeCard[],
+  player: ActionRuntimePlayer,
+  engine: ActionHandlerEnginePort,
+  options: SendCardsToGraveyardOptions = {},
 ) {
   const game = options.game || engine?.game;
 
@@ -414,7 +653,7 @@ export async function sendCardsToGraveyard(
   const useResolvedZoneOnFallback = options.useResolvedZoneOnFallback !== false;
   const pushIfMissing = options.pushIfMissing === true;
 
-  const movedCards = [];
+  const movedCards: ActionRuntimeCard[] = [];
 
   for (const card of cards) {
     if (!card) continue;
@@ -427,7 +666,9 @@ export async function sendCardsToGraveyard(
         fromZone,
       });
 
-      const moveFailed = moveResult === false || moveResult?.success === false;
+      const moveFailed =
+        moveResult === false ||
+        (typeof moveResult === "object" && moveResult?.success === false);
 
       if (!moveFailed) {
         movedCards.push(card);
@@ -440,7 +681,13 @@ export async function sendCardsToGraveyard(
     }
 
     const fallbackSource = useResolvedZoneOnFallback ? fromZone : fallbackZone;
-    const zoneArr = player[fallbackSource] || player[fallbackZone] || [];
+    const fallbackValue: unknown = Reflect.get(player, fallbackSource);
+    const defaultFallbackValue: unknown = Reflect.get(player, fallbackZone);
+    const zoneArr = Array.isArray(fallbackValue)
+      ? fallbackValue
+      : Array.isArray(defaultFallbackValue)
+        ? defaultFallbackValue
+        : [];
     const idx = zoneArr.indexOf(card);
 
     if (idx !== -1) {
@@ -457,7 +704,11 @@ export async function sendCardsToGraveyard(
   return { movedCount: movedCards.length, movedCards };
 }
 
-export function collectZoneCandidates(zone, filters = {}, options = {}) {
+export function collectZoneCandidates(
+  zone: readonly ActionRuntimeCard[] | null | undefined,
+  filters: LegacyCardFilter = {},
+  options: CollectZoneCandidatesOptions = {},
+) {
   if (!Array.isArray(zone)) return [];
 
   const source = options.source;
@@ -607,10 +858,10 @@ export function collectZoneCandidates(zone, filters = {}, options = {}) {
 }
 
 export function buildFieldSelectionCandidates(
-  owner,
-  game,
-  cards,
-  options = {}
+  owner: ActionRuntimePlayer,
+  game: ActionRuntimeGamePort,
+  cards: readonly ActionRuntimeCard[],
+  options: FieldSelectionOptions = {},
 ) {
   if (!owner || !Array.isArray(cards)) return [];
 
@@ -627,7 +878,7 @@ export function buildFieldSelectionCandidates(
     const zone =
       inField !== -1 ? "field" : inSpell !== -1 ? "spellTrap" : "fieldSpell";
 
-    const candidate = {
+    const candidate: SelectionCandidate = {
       idx: index,
       name: card.name,
       owner: ownerLabel,
@@ -641,7 +892,7 @@ export function buildFieldSelectionCandidates(
       cardRef: card,
     };
 
-    candidate.key = game.buildSelectionCandidateKey(candidate, index);
+    candidate.key = game.buildSelectionCandidateKey!(candidate, index);
 
     return candidate;
   });
@@ -665,7 +916,7 @@ export async function selectCardsFromZone({
   selectMulti,
   selectionContractBuilder,
   engine,
-}) {
+}: SelectCardsFromZoneOptions) {
   if (!game || !player) {
     return { candidates: [], selected: [], cancelled: false };
   }
@@ -685,7 +936,9 @@ export async function selectCardsFromZone({
   }
 
   const resolvedMax = Math.min(
-    Number.isFinite(maxSelect) ? maxSelect : resolvedCandidates.length,
+    typeof maxSelect === "number" && Number.isFinite(maxSelect)
+      ? maxSelect
+      : resolvedCandidates.length,
     resolvedCandidates.length
   );
 
@@ -720,7 +973,12 @@ export async function selectCardsFromZone({
       player,
       selectionContract: selectionData.selectionContract,
       requirementId: selectionData.requirementId,
-      kind: selectionData.kind || selectionData.selectionContract?.kind,
+      kind:
+        selectionData.kind ||
+        (selectionData.selectionContract &&
+        typeof selectionData.selectionContract === "object"
+          ? Reflect.get(selectionData.selectionContract, "kind")
+          : undefined),
       autoSelectorOptions: selectionData.autoSelectorOptions,
     });
 
@@ -786,10 +1044,10 @@ export async function selectCardsFromZone({
   };
 }
 
-export async function payCostAndThen(
-  { selectCost, player, engine, sendOptions },
-  next
-) {
+export async function payCostAndThen<Result>(
+  { selectCost, player, engine, sendOptions }: PayCostAndThenOptions,
+  next: ((cards: readonly ActionRuntimeCard[]) => MaybePromise<Result>) | null,
+): Promise<false | true | Result> {
   if (!player || !engine || typeof selectCost !== "function") {
     return false;
   }
@@ -817,7 +1075,7 @@ export async function selectCards({
   kind,
   autoSelectorOptions,
   autoSelectKeys,
-}) {
+}: SelectCardsOptions): Promise<readonly string[] | null> {
   if (!game || !player || !selectionContract || !requirementId) {
     return null;
   }
@@ -830,8 +1088,17 @@ export async function selectCards({
         ? game.autoSelector.select(selectionContract, autoSelectorOptions)
         : null;
 
-    if (autoResult?.ok) {
-      return autoResult.selections?.[requirementId] || [];
+    if (
+      autoResult &&
+      typeof autoResult === "object" &&
+      Reflect.get(autoResult, "ok") === true
+    ) {
+      const selections: unknown = Reflect.get(autoResult, "selections");
+      const selected: unknown =
+        selections && typeof selections === "object"
+          ? Reflect.get(selections, requirementId)
+          : undefined;
+      return Array.isArray(selected) ? selected : [];
     }
 
     if (typeof autoSelectKeys === "function") {
@@ -843,12 +1110,16 @@ export async function selectCards({
 
   // Use client-side target selection
   return new Promise((resolve) => {
-    game.startTargetSelectionSession({
+    game.startTargetSelectionSession!({
       kind,
       selectionContract,
       onCancel: () => resolve(null),
-      execute: (selections) => {
-        resolve(selections?.[requirementId] || []);
+      execute: (selections: unknown) => {
+        const selected =
+          selections && typeof selections === "object"
+            ? Reflect.get(selections, requirementId)
+            : undefined;
+        resolve(Array.isArray(selected) ? selected : []);
         return { success: true, needsSelection: false };
       },
     });
@@ -862,7 +1133,7 @@ export async function summonFromHandCore({
   game,
   position,
   cannotAttackThisTurn,
-}) {
+}: SummonFromHandCoreOptions) {
   if (!card || !player || !engine || !game) {
     return { success: false, position };
   }
@@ -885,10 +1156,10 @@ export async function summonFromHandCore({
   }
 
   // Unified semantics: undefined ? choice, use EffectEngine resolver
-  const resolvedPosition = await engine.chooseSpecialSummonPosition(
-    card,
-    player,
-    { position }
+  const resolvedPosition = await Reflect.apply(
+    engine.chooseSpecialSummonPosition!,
+    engine,
+    [card, player, { position }],
   );
 
   const moveResult =
@@ -904,11 +1175,15 @@ export async function summonFromHandCore({
         })
       : null;
 
-  if (moveResult && moveResult.success === false) {
+  if (
+    moveResult &&
+    typeof moveResult === "object" &&
+    moveResult.success === false
+  ) {
     return { success: false, position: resolvedPosition };
   }
 
-  if (moveResult && moveResult.negated) {
+  if (moveResult && typeof moveResult === "object" && moveResult.negated) {
     return { success: false, position: resolvedPosition };
   }
 

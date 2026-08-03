@@ -1,12 +1,26 @@
 import { getUI } from "../shared.js";
+import type { ActionOf } from "../../contracts/actions.js";
+import type {
+  ActionHandlerEnginePort,
+  ActionRuntimeCard,
+  ActionRuntimePlayer,
+  LegacyActionHandlerResult,
+} from "../../contracts/actionRuntime.js";
+
+type SummonFromHandAction = ActionOf<
+  "conditional_summon_from_hand" | "draw_and_summon"
+> & {
+  readonly restrictAttackThisTurn?: boolean;
+  readonly cannotAttackThisTurn?: boolean;
+};
 
 export async function performSummonFromHand(
-  card,
-  handIndex,
-  player,
-  action,
-  engine,
-) {
+  card: ActionRuntimeCard,
+  handIndex: number,
+  player: ActionRuntimePlayer,
+  action: SummonFromHandAction,
+  engine: ActionHandlerEnginePort,
+): Promise<LegacyActionHandlerResult> {
   const game = engine.game;
 
   if (!card || card.cardKind !== "monster") {
@@ -25,9 +39,11 @@ export async function performSummonFromHand(
     return false;
   }
 
-  const position = await engine.chooseSpecialSummonPosition(card, player, {
-    position: action.position,
-  });
+  const position = await Reflect.apply(
+    engine.chooseSpecialSummonPosition!,
+    engine,
+    [card, player, { position: action.position }],
+  );
 
   const moveResult =
     typeof game.moveCard === "function"
@@ -42,11 +58,15 @@ export async function performSummonFromHand(
         })
       : null;
 
-  if (moveResult && moveResult.success === false) {
+  if (
+    moveResult &&
+    typeof moveResult === "object" &&
+    moveResult.success === false
+  ) {
     return false;
   }
 
-  if (moveResult && moveResult.negated) {
+  if (moveResult && typeof moveResult === "object" && moveResult.negated) {
     return false;
   }
 
@@ -69,7 +89,7 @@ export async function performSummonFromHand(
     `${player.name || player.id} Special Summoned ${card.name} from hand.`,
   );
 
-  game.updateBoard();
+  game.updateBoard!();
 
   if (game.finishSelection && typeof game.finishSelection === "function") {
     game.finishSelection();
