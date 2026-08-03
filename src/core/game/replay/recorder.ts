@@ -1,3 +1,19 @@
+import type {
+  ReplayCommandRecordingInput,
+  ReplayDecisionRecordingInput,
+  ReplayDeckEntry,
+  ReplayExportOptions,
+  ReplayFinalizeInput,
+  ReplayRecordedCommandEntry,
+  ReplayRecordedDecisionEntry,
+  ReplayRecordedEventEntry,
+  ReplayRecorderGamePort,
+  ReplayRecordingBuffer,
+  ReplayRecordingOptions,
+  ReplayRuntimeCard,
+} from "../../contracts/replay.js";
+import type { PlayerId } from "../../contracts/primitives.js";
+import { CANONICAL_REPLAY_ENGINE_VERSION } from "../../contracts/replay.js";
 import {
   CANONICAL_REPLAY_FORMAT,
   CANONICAL_REPLAY_SCHEMA_VERSION,
@@ -8,23 +24,39 @@ import {
   serializeReplayEventPayload,
 } from "./canonical.js";
 
-function deckEntries(game, cards = []) {
+function replayPlayerId(value: string | null | undefined): PlayerId | null {
+  return value === "player" || value === "bot" ? value : null;
+}
+
+function isReplayRuntimeCard(
+  card: ReplayRuntimeCard | null | undefined,
+): card is ReplayRuntimeCard {
+  return Boolean(card);
+}
+
+function deckEntries(
+  game: ReplayRecorderGamePort,
+  cards: Array<ReplayRuntimeCard | null | undefined> = [],
+): ReplayDeckEntry[] {
   return cards
-    .filter(Boolean)
+    .filter(isReplayRuntimeCard)
     .map((card) => ({
-      id: card.id,
+      id: card.id!,
       duelCardId: game.ensureDuelCardId(card),
     }));
 }
 
-export function startReplayRecording(options = {}) {
+export function startReplayRecording(
+  this: ReplayRecorderGamePort,
+  options: ReplayRecordingOptions = {},
+): ReplayRecordingBuffer {
   this._canonicalReplay = {
     format: CANONICAL_REPLAY_FORMAT,
     schemaVersion: CANONICAL_REPLAY_SCHEMA_VERSION,
-    engineVersion: "phase-9",
+    engineVersion: CANONICAL_REPLAY_ENGINE_VERSION,
     cardDatabaseSignature: getCardDatabaseSignature(),
     setup: {
-      seed: this.randomSeed,
+      seed: this.randomSeed!,
       randomState: this.getRandomState?.() || null,
       startingPlayer: null,
       playerDeck: [],
@@ -42,12 +74,14 @@ export function startReplayRecording(options = {}) {
   return this._canonicalReplay;
 }
 
-export function captureReplaySetup() {
+export function captureReplaySetup(
+  this: ReplayRecorderGamePort,
+) {
   if (!this.captureReplayEnabled || !this._canonicalReplay) return null;
   this._canonicalReplay.setup = {
-    seed: this.randomSeed,
+    seed: this.randomSeed!,
     randomState: this.getRandomState?.() || null,
-    startingPlayer: this.turn,
+    startingPlayer: replayPlayerId(this.turn),
     playerDeck: deckEntries(this, this.player?.deck),
     playerExtraDeck: deckEntries(this, this.player?.extraDeck),
     botDeck: deckEntries(this, this.bot?.deck),
@@ -56,9 +90,12 @@ export function captureReplaySetup() {
   return this._canonicalReplay.setup;
 }
 
-export function recordReplayCommand(command = {}) {
+export function recordReplayCommand(
+  this: ReplayRecorderGamePort,
+  command: ReplayCommandRecordingInput = {},
+): ReplayRecordedCommandEntry | null {
   if (!this.captureReplayEnabled || !this._canonicalReplay?.setup) return null;
-  const entry = {
+  const entry: ReplayRecordedCommandEntry = {
     sequence: this._canonicalReplay.commands.length + 1,
     type: command.type || "unknown",
     actorId: command.actorId || command.playerId || null,
@@ -69,29 +106,46 @@ export function recordReplayCommand(command = {}) {
   return entry;
 }
 
-export function recordReplayDecision(decision = {}) {
+export function recordReplayDecision(
+  this: ReplayRecorderGamePort,
+  decision: ReplayDecisionRecordingInput = {},
+): ReplayRecordedDecisionEntry | null {
   if (!this.captureReplayEnabled || !this._canonicalReplay) return null;
-  const entry = { ...decision, sequence: this._canonicalReplay.decisions.length + 1 };
+  const entry: ReplayRecordedDecisionEntry = {
+    ...decision,
+    sequence: this._canonicalReplay.decisions.length + 1,
+  };
   this._canonicalReplay.decisions.push(entry);
   return entry;
 }
 
-export function recordReplayEvent(eventName, payload) {
-  if (!this.captureReplayEnabled || !this._canonicalReplay || !isReplayEvent(eventName)) {
+export function recordReplayEvent(
+  this: ReplayRecorderGamePort,
+  eventName: string,
+  payload: unknown,
+): ReplayRecordedEventEntry | null {
+  if (
+    !this.captureReplayEnabled ||
+    !this._canonicalReplay ||
+    !isReplayEvent(eventName)
+  ) {
     return null;
   }
-  const entry = {
+  const entry: ReplayRecordedEventEntry = {
     sequence: this._canonicalReplay.events.length + 1,
     event: eventName,
-    turn: this.turnCounter,
-    phase: this.phase,
-    payload: serializeReplayEventPayload(this, payload),
+    turn: this.turnCounter!,
+    phase: this.phase!,
+    payload: serializeReplayEventPayload(this, payload) ?? null,
   };
   this._canonicalReplay.events.push(entry);
   return entry;
 }
 
-export function finalizeReplay(result = {}) {
+export function finalizeReplay(
+  this: ReplayRecorderGamePort,
+  result: ReplayFinalizeInput = {},
+): ReplayRecordingBuffer | null {
   if (!this._canonicalReplay) return null;
   this._canonicalReplay.result = {
     winner: result.winner || this.winner || null,
@@ -103,7 +157,10 @@ export function finalizeReplay(result = {}) {
   return this._canonicalReplay;
 }
 
-export function exportReplay(options = {}) {
+export function exportReplay(
+  this: ReplayRecorderGamePort,
+  options: ReplayExportOptions = {},
+): ReplayRecordingBuffer | null {
   const replay = this._canonicalReplay?.finalized
     ? this._canonicalReplay
     : this.finalizeReplay({ winner: this.winner });
@@ -121,6 +178,6 @@ export function exportReplay(options = {}) {
   return replay;
 }
 
-export function hasCanonicalReplay() {
+export function hasCanonicalReplay(this: ReplayRecorderGamePort): boolean {
   return !!this._canonicalReplay;
 }
