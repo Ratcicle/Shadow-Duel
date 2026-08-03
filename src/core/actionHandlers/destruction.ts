@@ -21,6 +21,7 @@ import type {
   NeedsSelectionResult,
   ResolvedTargetMap,
 } from "../contracts/actionRuntime.js";
+import type { RawSelectionContract } from "../contracts/selection.js";
 import type { ZoneInput } from "../contracts/zones.js";
 import {
   getUI,
@@ -1540,7 +1541,7 @@ export async function handleDestroyTargetedCards(
     opponentCards,
   );
 
-  const selectionContract = {
+  const selectionContract: RawSelectionContract = {
     kind: "target",
 
     message: `Select ${maxTargets} opponent card(s) to destroy.`,

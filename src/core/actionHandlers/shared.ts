@@ -22,6 +22,12 @@ import type {
   ResolvedTargetMap,
 } from "../contracts/actionRuntime.js";
 import type { BattlePositionInput } from "../contracts/cards.js";
+import type {
+  RawSelectionCandidate,
+  RawSelectionContract,
+  SelectionKind,
+  SelectionZone,
+} from "../contracts/selection.js";
 import type { ZoneInput } from "../contracts/zones.js";
 
 type RuntimeCardId = number | string | null;
@@ -109,12 +115,12 @@ interface CollectZoneCandidatesOptions {
   readonly extraFilter?: (card: ActionRuntimeCard) => boolean;
 }
 
-interface SelectionCandidate {
+interface SelectionCandidate extends RawSelectionCandidate {
   idx: number;
   name: string;
   owner: string;
   controller: string;
-  zone: string;
+  zone: SelectionZone;
   zoneIndex: number;
   position: string;
   atk?: number;
@@ -135,9 +141,9 @@ interface SelectionRange {
 }
 
 interface SelectionContractData {
-  readonly selectionContract: unknown;
+  readonly selectionContract: RawSelectionContract;
   readonly requirementId: string;
-  readonly kind?: string;
+  readonly kind?: SelectionKind;
   readonly autoSelectorOptions?: object;
   readonly decorated?: readonly SelectionCandidate[];
 }
@@ -184,9 +190,9 @@ interface PayCostAndThenOptions {
 interface SelectCardsOptions {
   readonly game: ActionRuntimeGamePort;
   readonly player: ActionRuntimePlayer;
-  readonly selectionContract: unknown;
+  readonly selectionContract: RawSelectionContract;
   readonly requirementId: string;
-  readonly kind?: string;
+  readonly kind?: SelectionKind;
   readonly autoSelectorOptions?: object;
   readonly autoSelectKeys?: () => readonly string[];
 }
@@ -973,12 +979,7 @@ export async function selectCardsFromZone({
       player,
       selectionContract: selectionData.selectionContract,
       requirementId: selectionData.requirementId,
-      kind:
-        selectionData.kind ||
-        (selectionData.selectionContract &&
-        typeof selectionData.selectionContract === "object"
-          ? Reflect.get(selectionData.selectionContract, "kind")
-          : undefined),
+      kind: selectionData.kind || selectionData.selectionContract.kind,
       autoSelectorOptions: selectionData.autoSelectorOptions,
     });
 
@@ -1088,17 +1089,8 @@ export async function selectCards({
         ? game.autoSelector.select(selectionContract, autoSelectorOptions)
         : null;
 
-    if (
-      autoResult &&
-      typeof autoResult === "object" &&
-      Reflect.get(autoResult, "ok") === true
-    ) {
-      const selections: unknown = Reflect.get(autoResult, "selections");
-      const selected: unknown =
-        selections && typeof selections === "object"
-          ? Reflect.get(selections, requirementId)
-          : undefined;
-      return Array.isArray(selected) ? selected : [];
+    if (autoResult?.ok) {
+      return autoResult.selections[requirementId] || [];
     }
 
     if (typeof autoSelectKeys === "function") {
@@ -1114,11 +1106,8 @@ export async function selectCards({
       kind,
       selectionContract,
       onCancel: () => resolve(null),
-      execute: (selections: unknown) => {
-        const selected =
-          selections && typeof selections === "object"
-            ? Reflect.get(selections, requirementId)
-            : undefined;
+      execute: (selections) => {
+        const selected = selections[requirementId];
         resolve(Array.isArray(selected) ? selected : []);
         return { success: true, needsSelection: false };
       },

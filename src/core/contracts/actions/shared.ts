@@ -5,6 +5,7 @@ import type {
   EffectTarget,
 } from "../effects.js";
 import type { CardAction } from "../actions.js";
+import type { SelectionKind } from "../selection.js";
 import type { ZoneInput } from "../zones.js";
 
 export type ActionPlayer = "self" | "opponent";
@@ -230,7 +231,6 @@ type StringActionProperty =
   | "reviveContextLabel"
   | "secondTargetRef"
   | "selectionId"
-  | "selectionKind"
   | "selectionLabel"
   | "selectionMessage"
   | "selectionMessageKey"
@@ -484,6 +484,7 @@ export interface ComplexActionProperties {
   readonly duration: string;
   readonly negateEffectsDuration: string;
   readonly effectChoiceKey: string;
+  readonly selectionKind: SelectionKind;
   readonly triggerRequirement: "mandatory" | "optional";
   readonly triggerTiming: "if" | "when";
 }

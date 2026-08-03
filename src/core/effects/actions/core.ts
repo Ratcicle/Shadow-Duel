@@ -35,6 +35,11 @@ import type {
   EffectTarget,
   PairedEffectTarget,
 } from "../../contracts/effects.js";
+import type {
+  EventResolutionOutcome,
+  EventResolutionResult,
+} from "../../contracts/events.js";
+import type { RawSelectionContract } from "../../contracts/selection.js";
 import type { ZoneInput } from "../../contracts/zones.js";
 
 type PreviewZone =
@@ -108,6 +113,17 @@ interface PreviewFilter {
   summonToOwner?: "self" | "opponent";
   type?: string | readonly string[];
   zone?: ZoneInput | null;
+}
+
+type PendingEventSelectionResult = EventResolutionOutcome & {
+  needsSelection: true;
+  selectionContract: RawSelectionContract;
+};
+
+function hasPendingEventSelection(
+  result: EventResolutionResult,
+): result is PendingEventSelectionResult {
+  return result?.needsSelection === true && !!result.selectionContract;
 }
 
 interface LegacyPairComparison {
@@ -530,9 +546,10 @@ async function emitEffectTargetedBeforeActions(
         ctx?.actionContext || activationContext?.actionContext || null,
     });
 
-    if (result?.needsSelection) {
+    if (hasPendingEventSelection(result)) {
       return {
         ...result,
+        needsSelection: true,
         success: false,
         executed: false,
         selectionSource: "effect_targeted",

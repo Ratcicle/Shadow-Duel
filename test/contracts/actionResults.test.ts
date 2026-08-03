@@ -7,6 +7,7 @@ import type {
   ResolvedTargetMap,
 } from "../../src/core/contracts/actionRuntime.js";
 import type { ActionOf, CardAction } from "../../src/core/contracts/actions.js";
+import type { RawSelectionContract } from "../../src/core/contracts/selection.js";
 import {
   actionResultSucceeded,
   applyActions,
@@ -139,7 +140,18 @@ test("applyActions normalizes every legacy handler result", async (t) => {
 });
 
 test("applyActions stops for selection after preserving prior execution", async () => {
-  const selectionContract = { kind: "cards", min: 1, max: 1 };
+  const selectionContract = {
+    kind: "choice",
+    requirements: [
+      {
+        id: "cards",
+        min: 1,
+        max: 1,
+        zones: ["choice"],
+        candidates: [],
+      },
+    ],
+  } satisfies RawSelectionContract;
   const actionHandlers = new ActionHandlerRegistry();
   let invocation = 0;
   actionHandlers.register("draw", () => {

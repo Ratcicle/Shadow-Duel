@@ -27,6 +27,12 @@ import {
   writeContextValue,
 } from "../contracts/actionRuntime.js";
 import type { CardFilter } from "../contracts/effects.js";
+import type {
+  RawSelectionCandidate,
+  RawSelectionContract,
+  SelectionKind,
+  SelectionZone,
+} from "../contracts/selection.js";
 import type { ZoneInput } from "../contracts/zones.js";
 import { getCardDisplayName, getCounterDisplayLabel, getUIText } from "../i18n.js";
 import {
@@ -68,13 +74,13 @@ interface SelectionRange {
   readonly max: number;
 }
 
-interface ZoneSelectionCandidate {
+interface ZoneSelectionCandidate extends RawSelectionCandidate {
   idx: number;
   key: string;
   name: string;
   owner: string;
   controller: string;
-  zone: string;
+  zone: SelectionZone;
   zoneIndex: number;
   position: string;
   atk?: number;
@@ -85,16 +91,16 @@ interface ZoneSelectionCandidate {
 }
 
 interface SelectionContractData {
-  readonly kind: string;
+  readonly kind: SelectionKind;
   readonly requirementId: string;
   readonly decorated: readonly ZoneSelectionCandidate[];
-  readonly selectionContract: object;
+  readonly selectionContract: RawSelectionContract;
 }
 
 interface AddToHandContractContext {
   readonly player: ActionRuntimePlayer;
   readonly game: ActionRuntimeGamePort;
-  readonly sourceZone: string;
+  readonly sourceZone: ZoneInput;
 }
 
 interface DiscardContractContext {
@@ -109,11 +115,6 @@ interface MarkerConfig {
   readonly expiresOnTurn?: number;
   readonly bindToSource?: boolean;
   readonly sourceEffectId?: string;
-}
-
-interface AutoSelectionResult {
-  readonly ok?: boolean;
-  readonly selections?: Record<string, readonly string[] | undefined>;
 }
 
 interface LegacyBotPreferenceRule {
@@ -136,10 +137,6 @@ function isRuntimeCard(value: unknown): value is ActionRuntimeCard {
 
 function isMoveSuccess(value: unknown): boolean {
   return !isRecord(value) || value.success !== false;
-}
-
-function isAutoSelectionResult(value: unknown): value is AutoSelectionResult {
-  return isRecord(value);
 }
 
 function isPromiseLikeBoolean(
@@ -346,7 +343,7 @@ function buildZoneSelectionCandidates(
   player: ActionRuntimePlayer,
   game: ActionRuntimeGamePort,
   cards: readonly ActionRuntimeCard[],
-  zoneName: string,
+  zoneName: SelectionZone,
 ): ZoneSelectionCandidate[] {
   const zoneValue = Reflect.get(player, zoneName);
   const zone = Array.isArray(zoneValue) ? zoneValue : [];
@@ -1251,12 +1248,9 @@ export async function handleDiscardFromHand(
         activationContext: ctx?.activationContext || {},
       },
     );
-    const normalizedAutoResult = isAutoSelectionResult(autoResult)
-      ? autoResult
-      : null;
     const selectedKeys =
-      normalizedAutoResult?.ok && normalizedAutoResult.selections
-        ? normalizedAutoResult.selections[selectionData.requirementId] || []
+      autoResult?.ok
+        ? autoResult.selections[selectionData.requirementId] || []
         : [];
     const decorated = selectionData.decorated || [];
     selected = selectedKeys

@@ -5,12 +5,21 @@ import type {
   ActionRuntimeCard,
   ActionRuntimeGamePort,
   ActionRuntimePlayer,
+  ActionTargetResolution,
   ActionHandlerEnginePort,
   EffectContext,
   NormalizedActionExecutionResult,
   ResolvedTargetMap,
 } from "../contracts/actionRuntime.js";
 import type { EffectCondition, EffectTarget } from "../contracts/effects.js";
+import type {
+  RawSelectionCandidate,
+  RawSelectionContract,
+  RawSelectionRequirement,
+  SelectionKind,
+  SelectionMetadata,
+  SelectionResult,
+} from "../contracts/selection.js";
 import {
   getCardDisplayName,
   getMonsterTypeLabel,
@@ -25,7 +34,6 @@ type DeclareCardPropertyAction = ActionOf<"declare_card_property"> & {
   readonly choiceImage?: string;
 };
 type ChoiceValue = string | number | boolean;
-type ChoiceSelectionMap = Record<string, string | readonly string[] | undefined>;
 
 interface ChoiceCardReference {
   id: string;
@@ -36,7 +44,7 @@ interface ChoiceCardReference {
   image: string;
 }
 
-interface ChoiceCandidate {
+interface ChoiceCandidate extends RawSelectionCandidate {
   key: string;
   name: string;
   owner: string;
@@ -50,35 +58,30 @@ interface ChoiceCandidate {
   cardRef: ChoiceCardReference;
 }
 
-interface SelectionRequirement {
+interface ChoiceSelectionRequirement extends RawSelectionRequirement {
   id: string;
   label: string;
   min: number;
   max: number;
-  candidates: readonly ChoiceCandidate[];
+  candidates: ChoiceCandidate[];
 }
 
-interface ChoiceSelectionContract {
-  kind: string;
+interface ChoiceSelectionContract extends RawSelectionContract {
+  kind: "choice";
   message: string;
-  requirements: readonly SelectionRequirement[];
+  requirements: ChoiceSelectionRequirement[];
   ui: { allowCancel: boolean; useFieldTargeting: boolean };
-  metadata: object;
+  metadata: SelectionMetadata;
 }
 
 interface SelectionRunOptions {
-  kind?: string;
+  kind?: SelectionKind;
   card?: ActionRuntimeCard | null;
   message?: string | null;
   allowCancel?: boolean;
   context?: EffectContext;
   player?: ActionRuntimePlayer | null;
-  activationContext?: object;
-}
-
-interface AutoSelectionResult {
-  ok?: boolean;
-  selections?: ChoiceSelectionMap | null;
+  activationContext?: EffectContext["activationContext"];
 }
 
 interface CompletedTargetResolution {
@@ -88,19 +91,7 @@ interface CompletedTargetResolution {
   reason?: string;
 }
 
-interface PendingTargetResolution {
-  ok?: boolean;
-  needsSelection: true;
-  selectionContract: ChoiceSelectionContract;
-  targets?: ResolvedTargetMap;
-  reason?: string;
-  success?: boolean;
-  executed?: boolean;
-}
-
-type TargetResolution =
-  | CompletedTargetResolution
-  | PendingTargetResolution;
+type TargetResolution = ActionTargetResolution | CompletedTargetResolution;
 
 const translate = getUIText as (
   key: string,
@@ -110,10 +101,6 @@ const translate = getUIText as (
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
-}
-
-function isAutoSelectionResult(value: unknown): value is AutoSelectionResult {
-  return isRecord(value);
 }
 
 function isTargetResolution(value: unknown): value is TargetResolution {
@@ -256,9 +243,9 @@ function isAIPlayer(
 
 function resolveAutoSelection(
   game: ActionRuntimeGamePort,
-  selectionContract: ChoiceSelectionContract,
+  selectionContract: RawSelectionContract,
   options: SelectionRunOptions = {},
-): { attempted: boolean; selections: ChoiceSelectionMap | null } {
+): { attempted: boolean; selections: SelectionResult | null } {
   const player = options.player || options.context?.player || null;
   if (!isAIPlayer(player)) return { attempted: false, selections: null };
 
@@ -272,10 +259,9 @@ function resolveAutoSelection(
     game,
   });
 
-  const normalized = isAutoSelectionResult(autoResult) ? autoResult : null;
   return {
     attempted: true,
-    selections: normalized?.ok ? normalized.selections || null : null,
+    selections: autoResult?.ok ? autoResult.selections : null,
   };
 }
 
@@ -436,12 +422,12 @@ function shouldAllowCase(
 
 function runSelectionContract(
   game: ActionRuntimeGamePort,
-  selectionContract: ChoiceSelectionContract,
+  selectionContract: RawSelectionContract,
   options: SelectionRunOptions = {},
-): Promise<ChoiceSelectionMap | null> {
-  return new Promise<ChoiceSelectionMap | null>((resolve) => {
+): Promise<SelectionResult | null> {
+  return new Promise<SelectionResult | null>((resolve) => {
     let resolved = false;
-    const finalize = (value: ChoiceSelectionMap | null) => {
+    const finalize = (value: SelectionResult | null) => {
       if (resolved) return;
       resolved = true;
       resolve(value);
@@ -466,9 +452,9 @@ function runSelectionContract(
       card: options.card || null,
       message: options.message || null,
       allowCancel: options.allowCancel !== false,
-      resolve: finalize,
-      execute: (selections: ChoiceSelectionMap | null) => {
-        finalize(selections || {});
+      resolve: (value) => finalize(Array.isArray(value) ? null : value),
+      execute: (selections) => {
+        finalize(selections);
         return { success: true, needsSelection: false };
       },
       onCancel: () => finalize(null),
@@ -570,7 +556,7 @@ export async function handleChooseActionCase(
     metadata: {
       intent: "benefit",
     },
-  };
+  } satisfies ChoiceSelectionContract;
 
   const selections = await runSelectionContract(game, selectionContract, {
     kind: action.selectionKind || "choice",
@@ -682,7 +668,7 @@ export async function handleDeclareCardProperty(
         sourceCard: source,
         effectId: ctx?.effect?.id || null,
       },
-    };
+    } satisfies ChoiceSelectionContract;
 
     const selections = await runSelectionContract(game, selectionContract, {
       kind: "choice",

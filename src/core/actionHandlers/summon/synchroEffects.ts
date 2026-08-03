@@ -10,6 +10,11 @@ import type {
   ResolvedTargetMap,
 } from "../../contracts/actionRuntime.js";
 import type { CardFilter } from "../../contracts/effects.js";
+import type {
+  RawSelectionCandidate,
+  RawSelectionContract,
+  RawSelectionRequirement,
+} from "../../contracts/selection.js";
 import type { CanonicalZone } from "../../contracts/zones.js";
 import {
   canUseAsSynchroMaterial,
@@ -26,7 +31,7 @@ interface CardLocation {
   readonly zone: CanonicalZone;
 }
 
-interface SynchroSelectionCandidate {
+interface SynchroSelectionCandidate extends RawSelectionCandidate {
   key: string;
   readonly name: string;
   readonly image?: string;
@@ -40,6 +45,14 @@ interface SynchroSelectionCandidate {
   readonly cardKind: ActionRuntimeCard["cardKind"];
   readonly monsterType: ActionRuntimeCard["monsterType"];
   readonly cardRef: ActionRuntimeCard;
+}
+
+interface SynchroSelectionContract extends RawSelectionContract {
+  requirements: Array<
+    RawSelectionRequirement & {
+      candidates: SynchroSelectionCandidate[];
+    }
+  >;
 }
 
 interface LegalSynchroEntry {
@@ -180,7 +193,7 @@ function buildCardChoiceContract(
   player: ActionRuntimePlayer,
   cards: readonly ActionRuntimeCard[],
   action: SynchroSummonAction,
-) {
+): SynchroSelectionContract {
   const owner = player?.id === "player" ? "player" : "opponent";
   const candidates: SynchroSelectionCandidate[] = cards.map((card, index) => ({
     key:
@@ -235,7 +248,7 @@ function buildMaterialSelectionContract(
   card: ActionRuntimeCard,
   player: ActionRuntimePlayer,
   candidates: readonly ActionRuntimeCard[],
-) {
+): SynchroSelectionContract {
   const owner = player?.id === "player" ? "player" : "opponent";
   const decorated = candidates.map((material, index) => {
     const zoneIndex = (player?.field || []).indexOf(material);

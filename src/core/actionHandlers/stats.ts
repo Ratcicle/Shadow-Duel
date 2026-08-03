@@ -914,8 +914,8 @@ export async function handleBuffStatsTemp(
     let cardBuffed = false;
 
     // Track original stats for replay
-    const originalAtk = card.atk;
-    const originalDef = card.def;
+    const originalAtk = card.atk!;
+    const originalDef = card.def!;
     let appliedAtkBoost = 0;
     let appliedDefBoost = 0;
 
@@ -975,9 +975,9 @@ export async function handleBuffStatsTemp(
       game.emit?.("stat_buff_applied", {
         card,
         previousAtk: originalAtk,
-        newAtk: card.atk,
+        newAtk: card.atk!,
         previousDef: originalDef,
-        newDef: card.def,
+        newDef: card.def!,
         atkChange: appliedAtkBoost,
         defChange: appliedDefBoost,
         permanent,
@@ -1140,10 +1140,10 @@ export async function handleSetOriginalStats(
       previousDef,
       previousBaseAtk,
       previousBaseDef,
-      newAtk: card.atk,
-      newDef: card.def,
-      newBaseAtk: card.baseAtk,
-      newBaseDef: card.baseDef,
+      newAtk: card.atk!,
+      newDef: card.def!,
+      newBaseAtk: card.baseAtk!,
+      newBaseDef: card.baseDef!,
       sourceCard: ctx.source,
       player: ctx.player,
     });
@@ -1327,9 +1327,9 @@ export async function handleModifyStatsTempThenDestroyIfZeroed(
       game.emit?.("stat_buff_applied", {
         card,
         previousAtk,
-        newAtk: card.atk,
+        newAtk: card.atk!,
         previousDef,
-        newDef: card.def,
+        newDef: card.def!,
         atkChange: appliedAtkChange,
         defChange: appliedDefChange,
         permanent,
@@ -1455,9 +1455,9 @@ export async function handleHalveTargetStatsAndGainRemoved(
     await game.emit?.("stat_buff_applied", {
       card: target,
       previousAtk: previousTargetAtk,
-      newAtk: target.atk,
+      newAtk: target.atk!,
       previousDef: previousTargetDef,
-      newDef: target.def,
+      newDef: target.def!,
       atkChange: targetChange.atk,
       defChange: targetChange.def,
       permanent: true,
@@ -2238,7 +2238,7 @@ export async function handleSetFacedownDefense(
       player: cardPlayer,
       opponent: game.getOpponent?.(cardPlayer) || null,
       sourceCard: ctx.source || null,
-      fromPosition: previousPosition,
+      fromPosition: previousPosition!,
       toPosition: "defense",
       wasSetFacedown: true,
       battlePositionLocked: card.battlePositionLocked === true,
@@ -2347,8 +2347,8 @@ export async function handleSwitchPosition(
           ? game.getOpponent(cardPlayer || player)
           : null,
       sourceCard: ctx.source,
-      fromPosition: previousPosition,
-      toPosition: newPosition,
+      fromPosition: previousPosition!,
+      toPosition: newPosition!,
       wasFlipped: wasFacedown,
       actionContext: ctx?.actionContext || null,
     });

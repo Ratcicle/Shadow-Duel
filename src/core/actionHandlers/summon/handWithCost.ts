@@ -8,6 +8,7 @@ import type {
   LegacyActionHandlerResult,
   ResolvedTargetMap,
 } from "../../contracts/actionRuntime.js";
+import type { RawSelectionContract } from "../../contracts/selection.js";
 import type { CardFilter } from "../../contracts/effects.js";
 import { getCardDisplayName, getUIText } from "../../i18n.js";
 import {
@@ -588,7 +589,7 @@ export async function handleSpecialSummonFromHandWithCost(
             { ownerLabel: opponent.id },
           );
 
-          const selectionContract = {
+          const selectionContract: RawSelectionContract = {
             kind: "target",
             message: getUIText("ui.selection.selectCardToDestroy"),
             requirements: [
