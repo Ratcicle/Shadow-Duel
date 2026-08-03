@@ -1,3 +1,11 @@
+import type { CollectedTriggerEventMap } from "../../../contracts/events.js";
+import type {
+  TriggerCollectorHost,
+  TriggerContext,
+  TriggerEntry,
+  TriggerPackage,
+  TriggerRuntimeCard,
+} from "../runtime.js";
 import {
   cardMatchesEventFilters,
   debugTriggerLog,
@@ -10,8 +18,11 @@ import {
  * @param {Object} payload - Battle destroy event payload
  * @returns {Promise<Object>} Collected entries and order rule
  */
-export async function collectBattleDestroyTriggers(payload) {
-  const entries = [];
+export async function collectBattleDestroyTriggers(
+  this: TriggerCollectorHost,
+  payload: CollectedTriggerEventMap["battle_destroy"],
+): Promise<TriggerPackage> {
+  const entries: TriggerEntry[] = [];
   const orderRule =
     "attacker owner -> destroyed owner; sources: field/fieldSpell/active spellTrap/equips -> hand -> destroyed card";
 
@@ -39,7 +50,7 @@ export async function collectBattleDestroyTriggers(payload) {
     { owner: destroyedOwner, other: attackerOwner },
   ];
 
-  const processedDestroyedCard = new Set();
+  const processedDestroyedCard = new Set<TriggerRuntimeCard>();
 
   for (const side of participants) {
     const owner = side.owner;
@@ -61,7 +72,10 @@ export async function collectBattleDestroyTriggers(payload) {
       owner.fieldSpell,
       ...activeSpellTraps,
       ...equipSpells,
-    ].filter((card, index, cards) => card && cards.indexOf(card) === index);
+    ].filter(
+      (card, index, cards): card is TriggerRuntimeCard =>
+        card != null && cards.indexOf(card) === index,
+    );
 
     const handCards = owner.hand || [];
     const triggerSources = [...fieldCards, ...handCards];
@@ -80,7 +94,7 @@ export async function collectBattleDestroyTriggers(payload) {
     for (const card of triggerSources) {
       if (!card || !card.effects || !Array.isArray(card.effects)) continue;
 
-      const ctx = {
+      const ctx: TriggerContext = {
         source: card,
         player: owner,
         opponent: side.other,
@@ -208,10 +222,13 @@ export async function collectBattleDestroyTriggers(payload) {
             const candidates = targetDef.targetFromContext
               ? contextTargetResult?.targets?.[targetDef.id] || []
               : this.selectCandidates(targetDef, precheckCtx).candidates;
+            const candidateLength = Array.isArray(candidates)
+              ? candidates.length
+              : Number.NaN;
             if (
               contextTargetResult?.ok === false ||
               !candidates ||
-              candidates.length < min
+              candidateLength < min
             ) {
               unmetRequiredTarget = targetDef.id || targetDef.zone || "target";
               break;
@@ -245,21 +262,25 @@ export async function collectBattleDestroyTriggers(payload) {
           if (ctx.attacker !== card.equippedTo) continue;
         }
         if (effect.requireSelfAsBattleDestroyer) {
-          const battleDestroyers = Array.isArray(ctx.battleDestroyers)
+          const resolvedBattleDestroyers: TriggerRuntimeCard[] = Array.isArray(
+            ctx.battleDestroyers,
+          )
             ? ctx.battleDestroyers
             : ctx.attacker
               ? [ctx.attacker]
               : [];
-          if (!battleDestroyers.includes(card)) continue;
+          if (!resolvedBattleDestroyers.includes(card)) continue;
         }
         if (effect.requireEquippedAsBattleDestroyer) {
           if (!card.equippedTo) continue;
-          const battleDestroyers = Array.isArray(ctx.battleDestroyers)
+          const resolvedBattleDestroyers: TriggerRuntimeCard[] = Array.isArray(
+            ctx.battleDestroyers,
+          )
             ? ctx.battleDestroyers
             : ctx.attacker
               ? [ctx.attacker]
               : [];
-          if (!battleDestroyers.includes(card.equippedTo)) continue;
+          if (!resolvedBattleDestroyers.includes(card.equippedTo)) continue;
         }
 
         if (Array.isArray(effect.conditions) && effect.conditions.length > 0) {

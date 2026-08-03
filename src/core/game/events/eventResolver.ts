@@ -3,11 +3,27 @@
  * Handles: resolveEvent, resolveEventEntries, resumePendingEventSelection
  */
 
+import type {
+  DuelEventMap,
+  EmitOptions,
+  EventActionContext,
+  EventPayloadBase,
+  EventResolutionOutcome,
+  EventResolverHost,
+  EventTriggerCompletion,
+  EventTriggerEntry,
+  EventTriggerOccurrence,
+  EventTriggerPackage,
+  ResolvableEventName,
+} from "../../contracts/events.js";
+
 /**
  * Resolve an event by collecting and executing triggers
  * @this {import('../../Game.js').default}
  */
-async function presentDamageCalculationStatChanges(game) {
+async function presentDamageCalculationStatChanges(
+  game: EventResolverHost,
+): Promise<void> {
   if (!game?.damageCalculationStatChangePending) return;
 
   game.updateBoard?.({
@@ -21,7 +37,42 @@ async function presentDamageCalculationStatChanges(game) {
   game.damageCalculationStatChangePending = false;
 }
 
-export async function resolveEvent(eventName, payload, options = {}) {
+function getEventLabel(labels: object, value: string): string {
+  const label: unknown = Reflect.get(labels, value);
+  return typeof label === "string" ? label : value;
+}
+
+function isEventTriggerCompletion(
+  value: unknown,
+): value is EventTriggerCompletion {
+  return typeof value === "function";
+}
+
+function getTriggerPackageMetadata(
+  triggerPackage: EventTriggerPackage | EventTriggerEntry[] | null,
+): {
+  orderRule: string | null;
+  onComplete: EventTriggerCompletion | null;
+} {
+  if (triggerPackage === null) {
+    return { orderRule: null, onComplete: null };
+  }
+  const rawOrderRule: unknown = Reflect.get(triggerPackage, "orderRule");
+  const rawOnComplete: unknown = Reflect.get(triggerPackage, "onComplete");
+  return {
+    orderRule: typeof rawOrderRule === "string" ? rawOrderRule : null,
+    onComplete: isEventTriggerCompletion(rawOnComplete)
+      ? rawOnComplete
+      : null,
+  };
+}
+
+export async function resolveEvent<Name extends ResolvableEventName>(
+  this: EventResolverHost,
+  eventName: Name,
+  payload: DuelEventMap[Name] & EventPayloadBase,
+  options: EmitOptions = {},
+): Promise<EventResolutionOutcome> {
   if (!eventName) {
     return { ok: false, reason: "missing_event" };
   }
@@ -61,10 +112,10 @@ export async function resolveEvent(eventName, payload, options = {}) {
       token: "Token",
     };
     const methodRaw = payload.method || "unknown";
-    const methodLabel = methodMap[methodRaw] || methodRaw;
+    const methodLabel = getEventLabel(methodMap, methodRaw);
     const fromZoneRaw = payload.fromZone || null;
     const fromZoneLabel = fromZoneRaw
-      ? zoneMap[fromZoneRaw] || fromZoneRaw
+      ? getEventLabel(zoneMap, fromZoneRaw)
       : null;
     const ownerLabel = payload.player.name || payload.player.id || "Unknown";
     const fromZoneText = fromZoneLabel ? ` | From: ${fromZoneLabel}` : "";
@@ -81,32 +132,33 @@ export async function resolveEvent(eventName, payload, options = {}) {
       sequence: eventCounter,
     },
   );
-  let entries = [];
-  let orderRule = null;
-  let onComplete = null;
+  let entries: EventTriggerEntry[] = [];
+  let orderRule: string | null = null;
+  let onComplete: EventTriggerCompletion | null = null;
 
-  let resolutionResult = null;
+  let resolutionResult: EventResolutionOutcome | null = null;
   try {
     if (collectTriggersOnly) {
-      let triggerPackage = null;
+      let triggerPackage: EventTriggerPackage | EventTriggerEntry[] | null = null;
       try {
-        triggerPackage = await this.effectEngine?.collectEventTriggers?.(
-          eventName,
-          payload,
-        );
+        triggerPackage =
+          (await this.effectEngine?.collectEventTriggers?.(
+            eventName,
+            payload,
+          )) ?? null;
       } catch (err) {
         console.error(`[Game] Failed to collect triggers for "${eventName}":`, err);
       }
-      entries = Array.isArray(triggerPackage)
-        ? triggerPackage
-        : Array.isArray(triggerPackage?.entries)
+      const metadata = getTriggerPackageMetadata(triggerPackage);
+      if (Array.isArray(triggerPackage)) {
+        entries = triggerPackage;
+      } else {
+        entries = Array.isArray(triggerPackage?.entries)
           ? triggerPackage.entries
           : [];
-      orderRule = triggerPackage?.orderRule || null;
-      onComplete =
-        typeof triggerPackage?.onComplete === "function"
-          ? triggerPackage.onComplete
-          : null;
+      }
+      orderRule = metadata.orderRule;
+      onComplete = metadata.onComplete;
       if (occurrence) {
         occurrence.entries = entries;
         occurrence.entriesProvided = true;
@@ -171,7 +223,7 @@ export async function resolveEvent(eventName, payload, options = {}) {
       if (
         cleanupState.selectionActive ||
         cleanupState.controlsVisible ||
-        cleanupState.highlightCount > 0
+        (cleanupState.highlightCount ?? 0) > 0
       ) {
         if (selectionActive) {
           this.devLog("EVENT_CLEANUP_SKIPPED", {
@@ -210,12 +262,16 @@ export async function resolveEvent(eventName, payload, options = {}) {
 }
 
 /** Queue a canonical event occurrence for the next post-Chain Trigger check. */
-export function queueTriggerOccurrence(occurrence) {
-  const result = this.chainSystem?.queueTriggerOccurrence?.(occurrence) || {
-    ok: false,
-    deferred: false,
-    reason: "trigger_coordinator_unavailable",
-  };
+export function queueTriggerOccurrence(
+  this: EventResolverHost,
+  occurrence: EventTriggerOccurrence | null | undefined,
+): EventResolutionOutcome {
+  const result =
+    this.chainSystem?.queueTriggerOccurrence?.(occurrence) || {
+      ok: false,
+      deferred: false,
+      reason: "trigger_coordinator_unavailable",
+    };
   this.devLog?.("CHAIN_EVENT_DEFERRED", {
     summary: `${occurrence?.eventName || "event"} queued until Chain completion`,
     event: occurrence?.eventName || null,
@@ -226,7 +282,10 @@ export function queueTriggerOccurrence(occurrence) {
 }
 
 /** Drain one complete post-Chain occurrence batch into a single SEGOC check. */
-export async function flushPendingTriggerOccurrences({ reason = null } = {}) {
+export async function flushPendingTriggerOccurrences(
+  this: EventResolverHost,
+  { reason = null }: { reason?: string | null } = {},
+): Promise<EventResolutionOutcome> {
   const chain = this.chainSystem;
   if (this._flushingPendingTriggerOccurrences === true) {
     return { ok: true, flushed: 0, deferred: true };
@@ -271,7 +330,11 @@ export async function flushPendingTriggerOccurrences({ reason = null } = {}) {
   }
 }
 
-async function offerPostEventFastWindow(game, eventName, payload) {
+async function offerPostEventFastWindow(
+  game: EventResolverHost,
+  eventName: ResolvableEventName,
+  payload: EventPayloadBase,
+): Promise<EventResolutionOutcome | null> {
   if (eventName === "after_summon" && payload?.player) {
     return await game.checkAndOfferTraps(eventName, { ...payload });
   }
@@ -334,15 +397,23 @@ async function offerPostEventFastWindow(game, eventName, payload) {
 
 /** Resolve one event occurrence through the canonical SEGOC coordinator. */
 export async function resolveEventEntries(
-  eventName,
-  payload,
-  entries,
+  this: EventResolverHost,
+  eventName: ResolvableEventName,
+  payload: EventPayloadBase,
+  entries: EventTriggerEntry[] | null | undefined,
   {
     onComplete = null,
     orderRule = null,
     occurrence = null,
+  }: {
+    onComplete?: EventTriggerCompletion | null;
+    orderRule?: string | null;
+    occurrence?: EventTriggerOccurrence | null;
+    startIndex?: number;
+    results?: unknown[];
+    selections?: object | null;
   } = {},
-) {
+): Promise<EventResolutionOutcome> {
   const providedEntries = Array.isArray(entries);
   const triggerOccurrence =
     occurrence ||
@@ -373,7 +444,7 @@ export async function resolveEventEntries(
     triggerCount: 0,
   };
 
-  let timing = null;
+  let timing: EventResolutionOutcome | null = null;
   if (!result.needsSelection && result.chainBuilt !== true) {
     timing = await offerPostEventFastWindow(this, eventName, payload || {});
   }
@@ -394,9 +465,10 @@ export async function resolveEventEntries(
  * @this {import('../../Game.js').default}
  */
 export async function resumePendingEventSelection(
-  selections,
-  { actionContext } = {},
-) {
+  this: EventResolverHost,
+  selections: object | null | undefined,
+  { actionContext }: { actionContext?: EventActionContext | null } = {},
+): Promise<EventResolutionOutcome> {
   const pending = this.pendingEventSelection;
   this.devLog("EVENT_RESUME_SELECTION", {
     summary: `hasPending=${!!pending}, selections=${selections ? Object.keys(selections).join(",") : "(none)"}, entryCount=${pending?.entries?.length || 0}, event=${pending?.eventName || "(none)"}`,
@@ -418,7 +490,7 @@ export async function resumePendingEventSelection(
     id: eventId,
   });
 
-  let resolutionResult = null;
+  let resolutionResult: EventResolutionOutcome | null = null;
   try {
     const payload = {
       ...(pending.payload || {}),

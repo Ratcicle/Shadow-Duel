@@ -5,12 +5,28 @@
  * All functions assume `this` = EffectEngine instance
  */
 
+import type { SummonMethod } from "../../contracts/summon.js";
+import type {
+  TriggerCollectorHost,
+  TriggerRuntimeCard,
+  TriggerRuntimePlayer,
+} from "./runtime.js";
+
+interface SummonCounterPayload {
+  readonly card?: TriggerRuntimeCard | null;
+  readonly player?: TriggerRuntimePlayer | null;
+  readonly method?: SummonMethod | null;
+}
+
 /**
  * Handle special summon type counters for passive effects
  * Tracks how many monsters of each type have been special summoned
  * @param {Object} payload - The after_summon event payload
  */
-export function handleSpecialSummonTypeCounters(payload) {
+export function handleSpecialSummonTypeCounters(
+  this: Pick<TriggerCollectorHost, "updatePassiveBuffs">,
+  payload: SummonCounterPayload | null | undefined,
+): void {
   const { card: summonedCard, player, method } = payload || {};
   if (!summonedCard || method !== "special" || !player) return;
 
@@ -52,7 +68,10 @@ export function handleSpecialSummonTypeCounters(payload) {
  * This ID is used to track counters that should reset when the card leaves and returns.
  * @param {Object} card - The card entering the field
  */
-export function assignFieldPresenceId(card) {
+export function assignFieldPresenceId(
+  this: Pick<TriggerCollectorHost, "game">,
+  card: TriggerRuntimeCard | null | undefined,
+): void {
   if (!card) return;
 
   card.fieldPresenceId =
@@ -70,7 +89,9 @@ export function assignFieldPresenceId(card) {
  * This ensures counters reset when the card returns to the field later.
  * @param {Object} card - The card leaving the field
  */
-export function clearFieldPresenceId(card) {
+export function clearFieldPresenceId(
+  card: TriggerRuntimeCard | null | undefined,
+): void {
   if (!card) return;
 
   // Clear presence-specific counters
@@ -88,7 +109,10 @@ export function clearFieldPresenceId(card) {
  * WHILE a specific card is face-up on the field.
  * @param {Object} payload - Event payload from after_summon
  */
-export function handleFieldPresenceTypeSummonCounters(payload) {
+export function handleFieldPresenceTypeSummonCounters(
+  this: Pick<TriggerCollectorHost, "updatePassiveBuffs">,
+  payload: SummonCounterPayload | null | undefined,
+): void {
   const { card: summonedCard, player, method } = payload || {};
 
   // Validate payload
@@ -128,7 +152,10 @@ export function handleFieldPresenceTypeSummonCounters(payload) {
         method === "fusion" ||
         method === "synchro";
       if (summonMethods.includes("special") && !isSpecialSummon) continue;
-      if (!summonMethods.includes("special") && !summonMethods.includes(method))
+      if (
+        !summonMethods.includes("special") &&
+        !summonMethods.some((summonMethod) => summonMethod === method)
+      )
         continue;
 
       // Check owner filter
@@ -149,7 +176,8 @@ export function handleFieldPresenceTypeSummonCounters(payload) {
       }
 
       // Increment counter
-      fieldCard.fieldPresenceState[counterKey]++;
+      fieldCard.fieldPresenceState[counterKey] =
+        (fieldCard.fieldPresenceState[counterKey] || 0) + 1;
     }
   }
 

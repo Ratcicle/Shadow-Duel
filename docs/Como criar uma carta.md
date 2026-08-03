@@ -17,8 +17,8 @@ no código são:
 - `src/core/actionHandlers/actionCatalog.ts`: documenta campos aceitos por action.
 - `src/data/cards/ranges.js`: registra as faixas oficiais de IDs por grupo.
 - `src/core/EffectEngine.ts`: avalia conditions, passives, custos e filtros.
-- `src/core/effects/targeting/selection.js`: resolve targets.
-- `src/core/effects/triggers/collectors.js`: define quais eventos disparam quais efeitos.
+- `src/core/effects/targeting/selection.ts`: resolve targets.
+- `src/core/effects/triggers/collectors.ts`: define quais eventos disparam quais efeitos.
 
 Regra de arquitetura: cartas devem ser quase sempre declarativas. Evite criar
 lógica exclusiva de uma carta no engine; prefira `effects`, `targets`,

@@ -2,28 +2,59 @@ import {
   DAMAGE_STEP_TIMINGS,
   canActivateDuringDamageStep,
 } from "../../../game/spellTrap/quickSpellRules.js";
+import type { CollectedTriggerEventMap } from "../../../contracts/events.js";
+import type { DamageStepTiming } from "../../../contracts/effects.js";
+import type { CanonicalZone } from "../../../contracts/zones.js";
+import type {
+  TriggerCollectorHost,
+  TriggerEffect,
+  TriggerEntry,
+  TriggerPackage,
+  TriggerRuntimeCard,
+  TriggerRuntimePlayer,
+} from "../runtime.js";
 
 const BOARD_ZONES = new Set(["field", "spellTrap", "fieldSpell"]);
 
-function asArray(value) {
+function asArray(
+  value: DamageStepTiming | readonly DamageStepTiming[] | null | undefined,
+): readonly DamageStepTiming[] {
   if (value === undefined || value === null) return [];
-  return Array.isArray(value) ? value : [value];
+  if (typeof value === "string") return [value];
+  return value;
 }
 
-function collectSources(owner) {
-  return [
-    ...(owner?.field || []).map((card) => ({ card, zone: "field" })),
-    ...(owner?.fieldSpell
-      ? [{ card: owner.fieldSpell, zone: "fieldSpell" }]
-      : []),
-    ...(owner?.spellTrap || []).map((card) => ({ card, zone: "spellTrap" })),
-    ...(owner?.hand || []).map((card) => ({ card, zone: "hand" })),
-    ...(owner?.graveyard || []).map((card) => ({ card, zone: "graveyard" })),
-    ...(owner?.banished || []).map((card) => ({ card, zone: "banished" })),
-  ];
+function collectSources(
+  owner: TriggerRuntimePlayer | null | undefined,
+): readonly { card: TriggerRuntimeCard; zone: CanonicalZone }[] {
+  const sources: { card: TriggerRuntimeCard; zone: CanonicalZone }[] = [];
+  for (const card of owner?.field || []) sources.push({ card, zone: "field" });
+  if (owner?.fieldSpell) {
+    sources.push({ card: owner.fieldSpell, zone: "fieldSpell" });
+  }
+  for (const card of owner?.spellTrap || []) {
+    sources.push({ card, zone: "spellTrap" });
+  }
+  for (const card of owner?.hand || []) sources.push({ card, zone: "hand" });
+  for (const card of owner?.graveyard || []) {
+    sources.push({ card, zone: "graveyard" });
+  }
+  for (const card of owner?.banished || []) {
+    sources.push({ card, zone: "banished" });
+  }
+  return sources;
 }
 
-function effectMatchesDamageStepEvent(effect, eventName, timing) {
+type DamageCollectorEventName =
+  | "damage_step"
+  | "card_flipped"
+  | "battle_damage_inflicted";
+
+function effectMatchesDamageStepEvent(
+  effect: TriggerEffect | null | undefined,
+  eventName: DamageCollectorEventName,
+  timing: DamageStepTiming | null,
+): boolean {
   if (!effect || effect.timing !== "on_event") return false;
   if (eventName === "battle_damage_inflicted") {
     return (
@@ -36,10 +67,14 @@ function effectMatchesDamageStepEvent(effect, eventName, timing) {
   const timings = asArray(
     effect.damageStepTimings,
   );
-  return timings.includes(timing);
+  return timings.some((allowedTiming) => allowedTiming === timing);
 }
 
-function effectSourceIsLegal(effect, card, zone) {
+function effectSourceIsLegal(
+  effect: TriggerEffect,
+  card: TriggerRuntimeCard,
+  zone: CanonicalZone,
+): boolean {
   if (effect.requireZone && effect.requireZone !== zone) return false;
   if (
     Array.isArray(effect.activationZones) &&
@@ -57,7 +92,12 @@ function effectSourceIsLegal(effect, card, zone) {
   return true;
 }
 
-function eventOwnershipMatches(effect, eventName, owner, payload) {
+function eventOwnershipMatches(
+  effect: TriggerEffect,
+  eventName: DamageCollectorEventName,
+  owner: TriggerRuntimePlayer,
+  payload: CollectedTriggerEventMap[DamageCollectorEventName],
+): boolean {
   if (
     eventName === "battle_damage_inflicted" &&
     effect.event === "opponent_damage"
@@ -74,8 +114,12 @@ function eventOwnershipMatches(effect, eventName, owner, payload) {
   return true;
 }
 
-async function collectDamageStepEvent(engine, eventName, payload = {}) {
-  const entries = [];
+async function collectDamageStepEvent<Name extends DamageCollectorEventName>(
+  engine: TriggerCollectorHost,
+  eventName: Name,
+  payload: CollectedTriggerEventMap[Name],
+): Promise<TriggerPackage> {
+  const entries: TriggerEntry[] = [];
   const turnPlayer =
     engine.game?.turn === engine.game?.player?.id
       ? engine.game.player
@@ -83,7 +127,9 @@ async function collectDamageStepEvent(engine, eventName, payload = {}) {
   const otherPlayer = turnPlayer
     ? engine.game?.getOpponent?.(turnPlayer) || null
     : null;
-  const participants = [turnPlayer, otherPlayer].filter(Boolean);
+  const participants = [turnPlayer, otherPlayer].filter(
+    (player): player is TriggerRuntimePlayer => player != null,
+  );
   const timing = payload.damageStepTiming || null;
 
   for (const owner of participants) {
@@ -151,7 +197,7 @@ async function collectDamageStepEvent(engine, eventName, payload = {}) {
               ? payload.pendingBattleDestructionCards || []
               : [],
         };
-        const ctx = {
+        const ctx: import("../runtime.js").TriggerContext = {
           ...payload,
           source: card,
           player: owner,
@@ -209,15 +255,24 @@ async function collectDamageStepEvent(engine, eventName, payload = {}) {
   };
 }
 
-export async function collectDamageStepTriggers(payload) {
+export async function collectDamageStepTriggers(
+  this: TriggerCollectorHost,
+  payload: CollectedTriggerEventMap["damage_step"],
+): Promise<TriggerPackage> {
   return await collectDamageStepEvent(this, "damage_step", payload);
 }
 
-export async function collectCardFlippedTriggers(payload) {
+export async function collectCardFlippedTriggers(
+  this: TriggerCollectorHost,
+  payload: CollectedTriggerEventMap["card_flipped"],
+): Promise<TriggerPackage> {
   return await collectDamageStepEvent(this, "card_flipped", payload);
 }
 
-export async function collectBattleDamageInflictedTriggers(payload) {
+export async function collectBattleDamageInflictedTriggers(
+  this: TriggerCollectorHost,
+  payload: CollectedTriggerEventMap["battle_damage_inflicted"],
+): Promise<TriggerPackage> {
   if (!payload || Number(payload.amount || 0) <= 0) {
     return { entries: [], orderRule: "no battle damage" };
   }
@@ -228,6 +283,10 @@ export async function collectBattleDamageInflictedTriggers(payload) {
   );
 }
 
-export function isCanonicalDamageStepTiming(timing) {
-  return Object.values(DAMAGE_STEP_TIMINGS).includes(timing);
+export function isCanonicalDamageStepTiming(
+  timing: unknown,
+): timing is DamageStepTiming {
+  return Object.values(DAMAGE_STEP_TIMINGS).some(
+    (canonicalTiming) => canonicalTiming === timing,
+  );
 }

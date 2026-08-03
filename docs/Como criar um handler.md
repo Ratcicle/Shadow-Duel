@@ -95,7 +95,7 @@ Imunidade:
 - Use `immunityMode: "skip_action"` quando qualquer alvo imune deve cancelar a
   action inteira.
 - Se criar uma action de alvo nova, revise `inferEffectType` em
-  `src/core/effects/targeting/filters.js` para classificar como `destruction`,
+  `src/core/effects/targeting/filters.ts` para classificar como `destruction`,
   `banish`, `target`, `negate`, etc.
 
 ## Quando criar um handler novo

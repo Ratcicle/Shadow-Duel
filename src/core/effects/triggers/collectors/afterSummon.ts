@@ -1,3 +1,12 @@
+import type { CollectedTriggerEventMap } from "../../../contracts/events.js";
+import type {
+  TriggerCollectorHost,
+  TriggerContext,
+  TriggerEntry,
+  TriggerPackage,
+  TriggerRuntimeCard,
+  TriggerRuntimePlayer,
+} from "../runtime.js";
 import { debugTriggerLog } from "./shared.js";
 import { walkActionList } from "../../../actionHandlers/actionWalker.js";
 
@@ -6,8 +15,11 @@ import { walkActionList } from "../../../actionHandlers/actionWalker.js";
  * @param {Object} payload - Summon event payload
  * @returns {Promise<Object>} Collected entries and order rule
  */
-export async function collectAfterSummonTriggers(payload) {
-  const entries = [];
+export async function collectAfterSummonTriggers(
+  this: TriggerCollectorHost,
+  payload: CollectedTriggerEventMap["after_summon"],
+): Promise<TriggerPackage> {
+  const entries: TriggerEntry[] = [];
   const orderRule =
     "summoner -> opponent; sources: summoned card -> field -> fieldSpell -> spellTrap -> hand";
 
@@ -18,7 +30,11 @@ export async function collectAfterSummonTriggers(payload) {
   const { card, player: summoner, method, fromZone: summonFromZone } = payload;
   const actionContext = payload?.actionContext || null;
   const opponent = this.game?.getOpponent?.(summoner);
-  const participants = [];
+  const participants: {
+    owner: TriggerRuntimePlayer;
+    opponent: TriggerRuntimePlayer | null | undefined;
+    includeSummonedCard: boolean;
+  }[] = [];
 
   if (summoner) {
     participants.push({
@@ -42,8 +58,10 @@ export async function collectAfterSummonTriggers(payload) {
     const other = side.opponent;
     if (!owner) continue;
 
-    const sources = [];
-    const addSource = (candidate) => {
+    const sources: TriggerRuntimeCard[] = [];
+    const addSource = (
+      candidate: TriggerRuntimeCard | null | undefined,
+    ): void => {
       if (candidate && !sources.includes(candidate)) {
         sources.push(candidate);
       }
@@ -76,8 +94,10 @@ export async function collectAfterSummonTriggers(payload) {
       const sourceZone = this.findCardZone(owner, sourceCard);
       const isFaceDownOnBoard =
         sourceCard?.isFacedown === true &&
-        ["field", "spellTrap", "fieldSpell"].includes(sourceZone);
-      const ctx = {
+        ["field", "spellTrap", "fieldSpell"].some(
+          (zone) => zone === sourceZone,
+        );
+      const ctx: TriggerContext = {
         source: sourceCard,
         player: owner,
         opponent: other,
@@ -107,12 +127,16 @@ export async function collectAfterSummonTriggers(payload) {
 
         if (sourceZone === "hand") {
           const requiresSelfInHand =
-            effect?.condition?.requires === "self_in_hand";
+            effect.condition != null &&
+            "requires" in effect.condition &&
+            effect.condition.requires === "self_in_hand";
           const isConditionalSummonFromHand = walkActionList(
             effect.actions,
           ).visits.some(
             ({ action }) =>
-              action?.type === "conditional_summon_from_hand",
+              action != null &&
+              typeof action === "object" &&
+              Reflect.get(action, "type") === "conditional_summon_from_hand",
           );
           if (!requiresSelfInHand && !isConditionalSummonFromHand) {
             continue;
@@ -142,7 +166,7 @@ export async function collectAfterSummonTriggers(payload) {
           const methods = Array.isArray(summonMethods)
             ? summonMethods
             : [summonMethods];
-          if (!methods.includes(method)) {
+          if (!methods.some((summonMethod) => summonMethod === method)) {
             continue;
           }
         }
@@ -159,7 +183,7 @@ export async function collectAfterSummonTriggers(payload) {
           const allowedPhases = Array.isArray(effect.requirePhase)
             ? effect.requirePhase
             : [effect.requirePhase];
-          if (!allowedPhases.includes(currentPhase)) {
+          if (!allowedPhases.some((phase: string) => phase === currentPhase)) {
             continue;
           }
         }

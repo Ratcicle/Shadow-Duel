@@ -58,7 +58,7 @@ src/data/cards.js             # Banco de cartas 100% declarativo (~5700 linhas)
 
 - **UI:** [src/ui/Renderer.js](src/ui/Renderer.js), [src/core/UIAdapter.js](src/core/UIAdapter.js)
 - **Bot/AI:** [Bot.js](src/core/Bot.js), [BotArena.js](src/core/BotArena.js), [BotLogger.js](src/core/BotLogger.js), [src/core/ai/](src/core/ai/) (estratégias por arquétipo)
-- **Auto-resolução:** [AutoSelector.js](src/core/AutoSelector.js) — escolhas automáticas para IA durante targeting (uso restrito a bot/IA)
+- **Auto-resolução:** [AutoSelector.ts](src/core/AutoSelector.ts) — escolhas automáticas para IA durante targeting (uso restrito a bot/IA)
 - **Validação:** [CardDatabaseValidator.js](src/core/CardDatabaseValidator.js) — bloqueia duelo se cartas tiverem erros
 - **Chain (mock):** [NullChainSystem.js](src/core/NullChainSystem.js) — implementação no-op para fluxos sem chain
 - **Captura:** [ReplayCapture.js](src/core/ReplayCapture.js) — captura decisões para replays
@@ -336,7 +336,7 @@ registerStrategy("my_archetype", MyStrategy);
 - Strategies retornam scores para ações: `{ action, score, reasoning }`
 - `BeamSearch` / `GameTreeSearch` exploram árvore de jogadas
 - Knowledge bases em subpastas definem prioridades e combos (ex.: `luminarch/fusionPriority.js`)
-- AI usa `game.autoSelector` ([AutoSelector.js](src/core/AutoSelector.js)) para escolhas automáticas em targeting — **nunca** para automatizar decisões de jogadores humanos
+- AI usa `game.autoSelector` ([AutoSelector.ts](src/core/AutoSelector.ts)) para escolhas automáticas em targeting — **nunca** para automatizar decisões de jogadores humanos
 
 ---
 

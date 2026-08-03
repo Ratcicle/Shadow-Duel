@@ -1,3 +1,5 @@
+import type { CollectedTriggerEventMap } from "../../../contracts/events.js";
+import type { TriggerCollectorHost, TriggerEntry, TriggerPackage } from "../runtime.js";
 import { debugTriggerLog } from "./shared.js";
 
 /**
@@ -5,8 +7,11 @@ import { debugTriggerLog } from "./shared.js";
  * @param {Object} payload - Attack declared event payload
  * @returns {Promise<Object>} Collected entries and order rule
  */
-export async function collectAttackDeclaredTriggers(payload) {
-  const entries = [];
+export async function collectAttackDeclaredTriggers(
+  this: TriggerCollectorHost,
+  payload: CollectedTriggerEventMap["attack_declared"],
+): Promise<TriggerPackage> {
+  const entries: TriggerEntry[] = [];
   const orderRule =
     "attacker owner -> defender owner; sources: field -> fieldSpell";
 

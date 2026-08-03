@@ -1,3 +1,12 @@
+import type { CollectedTriggerEventMap } from "../../../contracts/events.js";
+import type {
+  TriggerCollectorHost,
+  TriggerEffect,
+  TriggerEntry,
+  TriggerPackage,
+  TriggerRuntimeCard,
+  TriggerRuntimePlayer,
+} from "../runtime.js";
 import { debugTriggerLog } from "./shared.js";
 
 /**
@@ -5,8 +14,11 @@ import { debugTriggerLog } from "./shared.js";
  * @param {Object} payload - End phase payload
  * @returns {Promise<Object>} Collected entries and order rule
  */
-export async function collectEndPhaseTriggers(payload) {
-  const entries = [];
+export async function collectEndPhaseTriggers(
+  this: TriggerCollectorHost,
+  payload: CollectedTriggerEventMap["end_phase"],
+): Promise<TriggerPackage> {
+  const entries: TriggerEntry[] = [];
   const orderRule =
     "active player default; endPhasePlayer:any may use either side; sources: field -> spellTrap -> fieldSpell";
 
@@ -16,9 +28,14 @@ export async function collectEndPhaseTriggers(payload) {
   const activePlayer = payload.player;
   const activeOpponent =
     payload.opponent || this.game?.getOpponent?.(activePlayer);
-  const sourceOwners = [activePlayer, activeOpponent].filter(Boolean);
+  const sourceOwners = [activePlayer, activeOpponent].filter(
+    (owner): owner is TriggerRuntimePlayer => owner != null,
+  );
 
-  const canTriggerForEndPhasePlayer = (sourceOwner, effect) => {
+  const canTriggerForEndPhasePlayer = (
+    sourceOwner: TriggerRuntimePlayer,
+    effect: TriggerEffect,
+  ): boolean => {
     const rule = effect.endPhasePlayer || effect.phasePlayer || "self";
     if (rule === "any" || rule === "both") return true;
     if (rule === "opponent") return sourceOwner !== activePlayer;
@@ -31,7 +48,7 @@ export async function collectEndPhaseTriggers(payload) {
       ...(owner.field || []),
       ...(owner.spellTrap || []),
       owner.fieldSpell,
-    ].filter(Boolean);
+    ].filter((card): card is TriggerRuntimeCard => card != null);
 
     for (const card of cards) {
       if (!card.effects || !Array.isArray(card.effects)) continue;

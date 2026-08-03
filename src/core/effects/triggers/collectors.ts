@@ -10,16 +10,62 @@
  * @param {Object} payload - Event payload data
  * @returns {Promise<Object>} Collected entries and order rule
  */
-function getPlayerById(game, playerId) {
+import {
+  COLLECTED_TRIGGER_EVENT_NAMES,
+  type CollectedTriggerEventName,
+  type DuelEventMap,
+  type ResolvableEventName,
+  type TriggerCollector,
+} from "../../contracts/events.js";
+import {
+  collectAfterSummonTriggers,
+  collectAttackDeclaredTriggers,
+  collectBattleCompletedTriggers,
+  collectBattleDamageInflictedTriggers,
+  collectBattleDamageTriggers,
+  collectBattleDestroyTriggers,
+  collectCardEquippedTriggers,
+  collectCardFlippedTriggers,
+  collectCardMovedTriggers,
+  collectCardToGraveTriggers,
+  collectCounterRemovedTriggers,
+  collectDamageStepTriggers,
+  collectEffectActivatedTriggers,
+  collectEffectTargetedTriggers,
+  collectEndPhaseTriggers,
+  collectLpChangeTriggers,
+  collectPositionChangeTriggers,
+  collectSpellActivatedTriggers,
+  collectStandbyPhaseTriggers,
+} from "./collectors/index.js";
+import type {
+  TemporaryEventEffect,
+  TriggerCollectorHost,
+  TriggerContext,
+  TriggerEntry,
+  TriggerGamePort,
+  TriggerPackage,
+  TriggerRuntimeCard,
+  TriggerRuntimePlayer,
+  TriggerZone,
+} from "./runtime.js";
+
+function getPlayerById(
+  game: TriggerGamePort | null | undefined,
+  playerId: string | null | undefined,
+): TriggerRuntimePlayer | null {
   if (!game || !playerId) return null;
   if (game.player?.id === playerId) return game.player;
   if (game.bot?.id === playerId) return game.bot;
   return null;
 }
 
-function buildTemporarySourceCard(entry, owner) {
-  return {
-    id: entry.sourceCardId ?? entry.id,
+function buildTemporarySourceCard(
+  entry: TemporaryEventEffect,
+  owner: TriggerRuntimePlayer,
+): TriggerRuntimeCard {
+  const sourceCard: TriggerRuntimeCard = {
+    id: undefined,
     name: entry.sourceName || "Temporary Effect",
     cardKind: entry.sourceCardKind || "spell",
     subtype: entry.sourceCardSubtype || null,
@@ -39,9 +85,16 @@ function buildTemporarySourceCard(entry, owner) {
         : {},
     __temporaryEventEffect: true,
   };
+  // Temporary legacy registrations may use a string id. Keep the runtime
+  // shape while containing that legacy value outside canonical EventCard ids.
+  Reflect.set(sourceCard, "id", entry.sourceCardId ?? entry.id);
+  return sourceCard;
 }
 
-function findCardByInstanceId(game, instanceId) {
+function findCardByInstanceId(
+  game: TriggerGamePort | null | undefined,
+  instanceId: number | string | null | undefined,
+): TriggerRuntimeCard | null {
   if (!game || instanceId == null) return null;
   const zones = [
     "deck",
@@ -51,7 +104,7 @@ function findCardByInstanceId(game, instanceId) {
     "spellTrap",
     "graveyard",
     "banished",
-  ];
+  ] as const;
   for (const player of [game.player, game.bot]) {
     if (!player) continue;
     if (
@@ -73,7 +126,10 @@ function findCardByInstanceId(game, instanceId) {
   return null;
 }
 
-function findCardLocation(game, card) {
+function findCardLocation(
+  game: TriggerGamePort | null | undefined,
+  card: TriggerRuntimeCard | null | undefined,
+): { player: TriggerRuntimePlayer; zone: TriggerZone } | null {
   if (!game || !card) return null;
   const zones = [
     "deck",
@@ -83,7 +139,7 @@ function findCardLocation(game, card) {
     "spellTrap",
     "graveyard",
     "banished",
-  ];
+  ] as const;
   for (const player of [game.player, game.bot]) {
     if (!player) continue;
     if (player.fieldSpell === card) return { player, zone: "fieldSpell" };
@@ -96,33 +152,44 @@ function findCardLocation(game, card) {
   return null;
 }
 
-function cleanupTemporaryEventEffects(game) {
+function cleanupTemporaryEventEffects(
+  game: TriggerGamePort | null | undefined,
+): void {
   if (!Array.isArray(game?.temporaryEventEffects)) return;
   const currentTurn = Number(game.turnCounter || 0);
   game.temporaryEventEffects = game.temporaryEventEffects.filter(
     (entry) =>
       entry &&
-      (!Number.isFinite(entry.expiresOnTurn) ||
+      (typeof entry.expiresOnTurn !== "number" ||
+        !Number.isFinite(entry.expiresOnTurn) ||
         currentTurn <= entry.expiresOnTurn) &&
-      (!Number.isFinite(entry.usesRemaining) || entry.usesRemaining > 0),
+      (typeof entry.usesRemaining !== "number" ||
+        !Number.isFinite(entry.usesRemaining) ||
+        entry.usesRemaining > 0),
   );
 }
 
-function collectTemporaryEventTriggers(engine, eventName, payload) {
+function collectTemporaryEventTriggers(
+  engine: TriggerCollectorHost | null | undefined,
+  eventName: ResolvableEventName,
+  payload: DuelEventMap[ResolvableEventName],
+): TriggerEntry[] {
   const game = engine?.game;
   if (!game || !Array.isArray(game.temporaryEventEffects)) return [];
 
   cleanupTemporaryEventEffects(game);
-  const entries = [];
+  const entries: TriggerEntry[] = [];
   for (const tempEntry of game.temporaryEventEffects) {
     if (!tempEntry || tempEntry.event !== eventName) continue;
     if (
+      typeof tempEntry.expiresOnTurn === "number" &&
       Number.isFinite(tempEntry.expiresOnTurn) &&
       Number(game.turnCounter || 0) > tempEntry.expiresOnTurn
     ) {
       continue;
     }
     if (
+      typeof tempEntry.usesRemaining === "number" &&
       Number.isFinite(tempEntry.usesRemaining) &&
       tempEntry.usesRemaining <= 0
     ) {
@@ -170,7 +237,7 @@ function collectTemporaryEventTriggers(engine, eventName, payload) {
         null,
       movedCard: payload?.movedCard || payload?.card || null,
       actionContext: payload?.actionContext || null,
-    };
+    } as TriggerContext;
 
     if (Array.isArray(effect.conditions) && effect.conditions.length > 0) {
       const conditionResult = engine.evaluateConditions(effect.conditions, ctx);
@@ -180,7 +247,11 @@ function collectTemporaryEventTriggers(engine, eventName, payload) {
     const consumeOnMatch =
       tempEntry.duration === "until_consumed" &&
       tempEntry.boundEventTargetInstanceId != null;
-    if (consumeOnMatch && Number.isFinite(tempEntry.usesRemaining)) {
+    if (
+      consumeOnMatch &&
+      typeof tempEntry.usesRemaining === "number" &&
+      Number.isFinite(tempEntry.usesRemaining)
+    ) {
       tempEntry.usesRemaining = 0;
     }
 
@@ -198,7 +269,11 @@ function collectTemporaryEventTriggers(engine, eventName, payload) {
       selectionMessage: "Select target(s) for the temporary triggered effect.",
       summary: `${owner.id}:${sourceCard.name}:${effect.id || eventName}`,
       onSuccess: async () => {
-        if (!consumeOnMatch && Number.isFinite(tempEntry.usesRemaining)) {
+        if (
+          !consumeOnMatch &&
+          typeof tempEntry.usesRemaining === "number" &&
+          Number.isFinite(tempEntry.usesRemaining)
+        ) {
           tempEntry.usesRemaining -= 1;
         }
         cleanupTemporaryEventEffects(game);
@@ -213,7 +288,12 @@ function collectTemporaryEventTriggers(engine, eventName, payload) {
   return entries;
 }
 
-function appendTemporaryEventTriggers(engine, eventName, triggerPackage, payload) {
+function appendTemporaryEventTriggers(
+  engine: TriggerCollectorHost,
+  eventName: ResolvableEventName,
+  triggerPackage: TriggerPackage,
+  payload: DuelEventMap[ResolvableEventName],
+): TriggerPackage {
   const temporaryEntries = collectTemporaryEventTriggers(
     engine,
     eventName,
@@ -233,49 +313,121 @@ function appendTemporaryEventTriggers(engine, eventName, triggerPackage, payload
   };
 }
 
-export async function collectEventTriggers(eventName, payload) {
-  let triggerPackage = null;
-  if (eventName === "after_summon") {
-    triggerPackage = await this.collectAfterSummonTriggers(payload);
-  } else if (eventName === "spell_activated") {
-    triggerPackage = await this.collectSpellActivatedTriggers(payload);
-  } else if (eventName === "effect_activated") {
-    triggerPackage = await this.collectEffectActivatedTriggers(payload);
-  } else if (eventName === "battle_destroy") {
-    triggerPackage = await this.collectBattleDestroyTriggers(payload);
-  } else if (eventName === "battle_completed") {
-    triggerPackage = await this.collectBattleCompletedTriggers(payload);
-  } else if (eventName === "card_to_grave") {
-    triggerPackage = await this.collectCardToGraveTriggers(payload);
-  } else if (eventName === "card_moved") {
-    triggerPackage = await this.collectCardMovedTriggers(payload);
-  } else if (eventName === "counter_removed") {
-    triggerPackage = await this.collectCounterRemovedTriggers(payload);
-  } else if (eventName === "attack_declared") {
-    triggerPackage = await this.collectAttackDeclaredTriggers(payload);
-  } else if (eventName === "battle_damage") {
-    triggerPackage = await this.collectBattleDamageTriggers(payload);
-  } else if (eventName === "battle_damage_inflicted") {
-    triggerPackage = await this.collectBattleDamageInflictedTriggers(payload);
-  } else if (eventName === "card_flipped") {
-    triggerPackage = await this.collectCardFlippedTriggers(payload);
-  } else if (eventName === "damage_step") {
-    triggerPackage = await this.collectDamageStepTriggers(payload);
-  } else if (eventName === "lp_change") {
-    triggerPackage = await this.collectLpChangeTriggers(payload);
-  } else if (eventName === "effect_targeted") {
-    triggerPackage = await this.collectEffectTargetedTriggers(payload);
-  } else if (eventName === "position_change") {
-    triggerPackage = await this.collectPositionChangeTriggers(payload);
-  } else if (eventName === "card_equipped") {
-    triggerPackage = await this.collectCardEquippedTriggers(payload);
-  } else if (eventName === "standby_phase") {
-    triggerPackage = await this.collectStandbyPhaseTriggers(payload);
-  } else if (eventName === "end_phase") {
-    triggerPackage = await this.collectEndPhaseTriggers(payload);
-  } else {
-    triggerPackage = { entries: [], orderRule: "no_triggers" };
-  }
+type TriggerCollectorDescriptor<Name extends CollectedTriggerEventName> = {
+  readonly method: keyof TriggerCollectorHost;
+  readonly collector: TriggerCollector<Name, TriggerCollectorHost>;
+};
+
+type TriggerCollectorManifest = {
+  readonly [Name in CollectedTriggerEventName]: TriggerCollectorDescriptor<Name>;
+};
+
+export const TRIGGER_COLLECTOR_MANIFEST = Object.freeze({
+  after_summon: {
+    method: "collectAfterSummonTriggers",
+    collector: collectAfterSummonTriggers,
+  },
+  spell_activated: {
+    method: "collectSpellActivatedTriggers",
+    collector: collectSpellActivatedTriggers,
+  },
+  effect_activated: {
+    method: "collectEffectActivatedTriggers",
+    collector: collectEffectActivatedTriggers,
+  },
+  battle_destroy: {
+    method: "collectBattleDestroyTriggers",
+    collector: collectBattleDestroyTriggers,
+  },
+  battle_completed: {
+    method: "collectBattleCompletedTriggers",
+    collector: collectBattleCompletedTriggers,
+  },
+  card_to_grave: {
+    method: "collectCardToGraveTriggers",
+    collector: collectCardToGraveTriggers,
+  },
+  card_moved: {
+    method: "collectCardMovedTriggers",
+    collector: collectCardMovedTriggers,
+  },
+  counter_removed: {
+    method: "collectCounterRemovedTriggers",
+    collector: collectCounterRemovedTriggers,
+  },
+  attack_declared: {
+    method: "collectAttackDeclaredTriggers",
+    collector: collectAttackDeclaredTriggers,
+  },
+  battle_damage: {
+    method: "collectBattleDamageTriggers",
+    collector: collectBattleDamageTriggers,
+  },
+  battle_damage_inflicted: {
+    method: "collectBattleDamageInflictedTriggers",
+    collector: collectBattleDamageInflictedTriggers,
+  },
+  card_flipped: {
+    method: "collectCardFlippedTriggers",
+    collector: collectCardFlippedTriggers,
+  },
+  damage_step: {
+    method: "collectDamageStepTriggers",
+    collector: collectDamageStepTriggers,
+  },
+  lp_change: {
+    method: "collectLpChangeTriggers",
+    collector: collectLpChangeTriggers,
+  },
+  effect_targeted: {
+    method: "collectEffectTargetedTriggers",
+    collector: collectEffectTargetedTriggers,
+  },
+  position_change: {
+    method: "collectPositionChangeTriggers",
+    collector: collectPositionChangeTriggers,
+  },
+  card_equipped: {
+    method: "collectCardEquippedTriggers",
+    collector: collectCardEquippedTriggers,
+  },
+  standby_phase: {
+    method: "collectStandbyPhaseTriggers",
+    collector: collectStandbyPhaseTriggers,
+  },
+  end_phase: {
+    method: "collectEndPhaseTriggers",
+    collector: collectEndPhaseTriggers,
+  },
+} satisfies TriggerCollectorManifest);
+
+function isCollectedTriggerEvent(
+  eventName: ResolvableEventName,
+): eventName is CollectedTriggerEventName {
+  return COLLECTED_TRIGGER_EVENT_NAMES.some(
+    (collectedName) => collectedName === eventName,
+  );
+}
+
+async function dispatchCollectedTrigger(
+  engine: TriggerCollectorHost,
+  eventName: CollectedTriggerEventName,
+  payload: DuelEventMap[ResolvableEventName],
+): Promise<TriggerPackage> {
+  const descriptor = TRIGGER_COLLECTOR_MANIFEST[eventName];
+  // Resolve through the host to preserve instance monkeypatching semantics.
+  const collector = Reflect.get(engine, descriptor.method);
+  return await Reflect.apply(collector, engine, [payload]);
+}
+
+export async function collectEventTriggers<Name extends ResolvableEventName>(
+  this: TriggerCollectorHost,
+  eventName: Name,
+  payload: DuelEventMap[Name],
+): Promise<TriggerPackage> {
+  const triggerPackage: TriggerPackage = isCollectedTriggerEvent(eventName)
+    ? await dispatchCollectedTrigger(this, eventName, payload)
+    : { entries: [], orderRule: "no_triggers" };
   return appendTemporaryEventTriggers(this, eventName, triggerPackage, payload);
 }
 

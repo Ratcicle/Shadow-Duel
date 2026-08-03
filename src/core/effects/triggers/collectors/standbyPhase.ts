@@ -1,12 +1,28 @@
+import type { CollectedTriggerEventMap } from "../../../contracts/events.js";
+import type {
+  TriggerCollectorHost,
+  TriggerEffect,
+  TriggerEntry,
+  TriggerPackage,
+  TriggerRuntimeCard,
+  TriggerRuntimePlayer,
+} from "../runtime.js";
 import { debugTriggerLog } from "./shared.js";
+
+function getStandbyPlayerRule(effect: TriggerEffect): string {
+  return effect.standbyPlayer || "self";
+}
 
 /**
  * Collects trigger entries for standby_phase event.
  * @param {Object} payload - Standby phase event payload
  * @returns {Promise<Object>} Collected entries and order rule
  */
-export async function collectStandbyPhaseTriggers(payload) {
-  const entries = [];
+export async function collectStandbyPhaseTriggers(
+  this: TriggerCollectorHost,
+  payload: CollectedTriggerEventMap["standby_phase"],
+): Promise<TriggerPackage> {
+  const entries: TriggerEntry[] = [];
   const orderRule =
     "active player default; standbyPlayer:any may use either side; sources: field -> spellTrap -> fieldSpell";
 
@@ -16,10 +32,15 @@ export async function collectStandbyPhaseTriggers(payload) {
   const activePlayer = payload.player;
   const activeOpponent =
     payload.opponent || this.game?.getOpponent?.(activePlayer);
-  const sourceOwners = [activePlayer, activeOpponent].filter(Boolean);
+  const sourceOwners = [activePlayer, activeOpponent].filter(
+    (owner): owner is TriggerRuntimePlayer => owner != null,
+  );
 
-  const canTriggerForStandbyPlayer = (sourceOwner, effect) => {
-    const rule = effect.standbyPlayer || "self";
+  const canTriggerForStandbyPlayer = (
+    sourceOwner: TriggerRuntimePlayer,
+    effect: TriggerEffect,
+  ): boolean => {
+    const rule = getStandbyPlayerRule(effect);
     if (rule === "any" || rule === "both") return true;
     if (rule === "opponent") return sourceOwner !== activePlayer;
     return sourceOwner === activePlayer;
@@ -31,7 +52,7 @@ export async function collectStandbyPhaseTriggers(payload) {
       ...(owner.field || []),
       ...(owner.spellTrap || []),
       owner.fieldSpell,
-    ].filter(Boolean);
+    ].filter((card): card is TriggerRuntimeCard => card != null);
 
     for (const card of cards) {
       if (!card.effects || !Array.isArray(card.effects)) continue;

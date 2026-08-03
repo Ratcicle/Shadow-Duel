@@ -1,30 +1,50 @@
+import type { CollectedTriggerEventMap } from "../../../contracts/events.js";
+import type {
+  TriggerCollectorHost,
+  TriggerEffect,
+  TriggerEntry,
+  TriggerGamePort,
+  TriggerPackage,
+  TriggerRuntimeCard,
+  TriggerRuntimePlayer,
+  TriggerUsageCheck,
+  TriggerZone,
+} from "../runtime.js";
 import {
   cardMatchesEventFilters,
   debugTriggerLog,
   matchesZoneFilter,
 } from "./shared.js";
 
-function resolvePlayerForCard(game, card, fallback = null) {
+function resolvePlayerForCard(
+  game: TriggerGamePort | null | undefined,
+  card: TriggerRuntimeCard | null | undefined,
+  fallback: TriggerRuntimePlayer | null = null,
+): TriggerRuntimePlayer | null {
   if (!game || !card) return fallback;
   if (card.owner === "player") return game.player || fallback;
   if (card.owner === "bot") return game.bot || fallback;
   return fallback;
 }
 
-function isBoardZone(zone) {
+function isBoardZone(zone: string | null | undefined): boolean {
   return zone === "field" || zone === "spellTrap" || zone === "fieldSpell";
 }
 
-function collectBoardSources(owner) {
+function collectBoardSources(
+  owner: TriggerRuntimePlayer | null | undefined,
+): TriggerRuntimeCard[] {
   if (!owner) return [];
-  const sources = [];
+  const sources: TriggerRuntimeCard[] = [];
   if (Array.isArray(owner.field)) sources.push(...owner.field);
   if (Array.isArray(owner.spellTrap)) sources.push(...owner.spellTrap);
   if (owner.fieldSpell) sources.push(owner.fieldSpell);
   return sources.filter(Boolean);
 }
 
-function hasHandCardMovedTrigger(card) {
+function hasHandCardMovedTrigger(
+  card: TriggerRuntimeCard | null | undefined,
+): boolean {
   return (card?.effects || []).some(
     (effect) =>
       effect &&
@@ -35,16 +55,30 @@ function hasHandCardMovedTrigger(card) {
   );
 }
 
-function collectHandCardMovedSources(owner) {
+function collectHandCardMovedSources(
+  owner: TriggerRuntimePlayer | null | undefined,
+): TriggerRuntimeCard[] {
   if (!owner || !Array.isArray(owner.hand)) return [];
   return owner.hand.filter(hasHandCardMovedTrigger);
 }
 
-function sourceAlreadyListed(sources, card) {
+interface CardMovedSource {
+  readonly card: TriggerRuntimeCard;
+  readonly owner: TriggerRuntimePlayer;
+  readonly other: TriggerRuntimePlayer | null;
+  readonly zone: TriggerZone;
+}
+
+function sourceAlreadyListed(
+  sources: readonly CardMovedSource[],
+  card: TriggerRuntimeCard,
+): boolean {
   return sources.some((entry) => entry.card === card);
 }
 
-function getCardKey(card) {
+function getCardKey(
+  card: TriggerRuntimeCard | null | undefined,
+): string | number {
   return (
     card?.instanceId ??
     card?._instanceId ??
@@ -56,7 +90,12 @@ function getCardKey(card) {
   );
 }
 
-function getTriggerReservationKey(owner, sourceCard, effect, optCheck) {
+function getTriggerReservationKey(
+  owner: TriggerRuntimePlayer,
+  sourceCard: TriggerRuntimeCard,
+  effect: TriggerEffect,
+  optCheck: TriggerUsageCheck,
+): string | null {
   if (!effect?.oncePerTurn || !optCheck?.lockKey) return null;
   const ownerKey = owner?.id || "player";
   const scope =
@@ -71,9 +110,12 @@ function getTriggerReservationKey(owner, sourceCard, effect, optCheck) {
  * Supports effects that trigger from the moved card itself (including hand/GY)
  * plus face-up board observers and explicit hand observers.
  */
-export async function collectCardMovedTriggers(payload) {
-  const entries = [];
-  const reservedOncePerTurnLocks = new Set();
+export async function collectCardMovedTriggers(
+  this: TriggerCollectorHost,
+  payload: CollectedTriggerEventMap["card_moved"],
+): Promise<TriggerPackage> {
+  const entries: TriggerEntry[] = [];
+  const reservedOncePerTurnLocks = new Set<string>();
   const orderRule =
     "moved card -> moved card owner board observers -> opponent board observers -> hand observers";
 
@@ -92,7 +134,7 @@ export async function collectCardMovedTriggers(payload) {
     payload.opponent || this.game?.getOpponent?.(movedOwner) || null;
   const actionContext = payload?.actionContext || null;
 
-  const sourceEntries = [
+  const sourceEntries: CardMovedSource[] = [
     {
       card,
       owner: movedOwner,
@@ -104,7 +146,12 @@ export async function collectCardMovedTriggers(payload) {
   const observerSides = [
     { owner: movedOwner, other: movedOpponent },
     { owner: movedOpponent, other: movedOwner },
-  ].filter((side) => side.owner);
+  ].filter(
+    (side): side is {
+      owner: TriggerRuntimePlayer;
+      other: TriggerRuntimePlayer | null;
+    } => side.owner != null,
+  );
 
   for (const { owner, other } of observerSides) {
     for (const sourceCard of collectBoardSources(owner)) {
@@ -129,7 +176,13 @@ export async function collectCardMovedTriggers(payload) {
     }
   }
 
-  const collectFromSource = (sourceCard, owner, other, sourceZone, effect) => {
+  const collectFromSource = (
+    sourceCard: TriggerRuntimeCard,
+    owner: TriggerRuntimePlayer,
+    other: TriggerRuntimePlayer | null,
+    sourceZone: TriggerZone,
+    effect: TriggerEffect,
+  ): void => {
     if (!effect || effect.timing !== "on_event") return;
     if (effect.event !== "card_moved") return;
 
@@ -184,7 +237,7 @@ export async function collectCardMovedTriggers(payload) {
     }
 
     if (effect.condition) {
-      const condType = effect.condition.type;
+      const condType = Reflect.get(effect.condition, "type");
       const destroyCause = payload?.destroyCause;
       const wasDestroyed = payload?.wasDestroyed === true;
 

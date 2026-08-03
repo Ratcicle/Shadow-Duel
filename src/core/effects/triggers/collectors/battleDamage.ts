@@ -1,3 +1,11 @@
+import type { CollectedTriggerEventMap } from "../../../contracts/events.js";
+import type {
+  TriggerCollectorHost,
+  TriggerContext,
+  TriggerEntry,
+  TriggerPackage,
+  TriggerRuntimeCard,
+} from "../runtime.js";
 import { canActivateDuringDamageStep } from "../../../game/spellTrap/quickSpellRules.js";
 
 /**
@@ -8,8 +16,11 @@ import { canActivateDuringDamageStep } from "../../../game/spellTrap/quickSpellR
  * @param {Object} payload - Battle damage preview payload
  * @returns {Promise<Object>} Collected entries and order rule
  */
-export async function collectBattleDamageTriggers(payload) {
-  const entries = [];
+export async function collectBattleDamageTriggers(
+  this: TriggerCollectorHost,
+  payload: CollectedTriggerEventMap["battle_damage"],
+): Promise<TriggerPackage> {
+  const entries: TriggerEntry[] = [];
   const orderRule =
     "attacker owner -> defender owner; sources: field -> fieldSpell -> hand quick";
 
@@ -37,7 +48,10 @@ export async function collectBattleDamageTriggers(payload) {
     const opponent = side.other;
     if (!player) continue;
 
-    const sources = [];
+    const sources: {
+      card: TriggerRuntimeCard;
+      zone: "field" | "fieldSpell" | "hand";
+    }[] = [];
     for (const card of player.field || []) {
       sources.push({ card, zone: "field" });
     }
@@ -141,7 +155,7 @@ export async function collectBattleDamageTriggers(payload) {
           }
         }
 
-        const ctx = {
+        const ctx: TriggerContext = {
           source: card,
           player,
           opponent,

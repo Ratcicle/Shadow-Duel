@@ -1,3 +1,16 @@
+import type { CollectedTriggerEventMap } from "../../../contracts/events.js";
+import type { BattlePosition } from "../../../contracts/cards.js";
+import type {
+  TriggerCardFilter,
+  TriggerCollectorHost,
+  TriggerEffect,
+  TriggerEntry,
+  TriggerGamePort,
+  TriggerPackage,
+  TriggerRuntimeCard,
+  TriggerRuntimePlayer,
+  TriggerZone,
+} from "../runtime.js";
 import {
   cardMatchesEventFilters,
   debugTriggerLog,
@@ -5,23 +18,31 @@ import {
   matchesZoneFilter,
 } from "./shared.js";
 
-function resolvePlayerForCard(game, card, fallback = null) {
+function resolvePlayerForCard(
+  game: TriggerGamePort | null | undefined,
+  card: TriggerRuntimeCard | null | undefined,
+  fallback: TriggerRuntimePlayer | null = null,
+): TriggerRuntimePlayer | null {
   if (!game || !card) return fallback;
   if (card.owner === "player") return game.player || fallback;
   if (card.owner === "bot") return game.bot || fallback;
   return fallback;
 }
 
-function collectBoardSources(owner) {
+function collectBoardSources(
+  owner: TriggerRuntimePlayer | null | undefined,
+): TriggerRuntimeCard[] {
   if (!owner) return [];
-  const sources = [];
+  const sources: TriggerRuntimeCard[] = [];
   if (Array.isArray(owner.field)) sources.push(...owner.field);
   if (Array.isArray(owner.spellTrap)) sources.push(...owner.spellTrap);
   if (owner.fieldSpell) sources.push(owner.fieldSpell);
   return sources.filter(Boolean);
 }
 
-function hasHandPositionChangeTrigger(card) {
+function hasHandPositionChangeTrigger(
+  card: TriggerRuntimeCard | null | undefined,
+): boolean {
   return (card?.effects || []).some(
     (effect) =>
       effect &&
@@ -32,22 +53,44 @@ function hasHandPositionChangeTrigger(card) {
   );
 }
 
-function collectHandPositionChangeSources(owner) {
+function collectHandPositionChangeSources(
+  owner: TriggerRuntimePlayer | null | undefined,
+): TriggerRuntimeCard[] {
   if (!owner || !Array.isArray(owner.hand)) return [];
   return owner.hand.filter(hasHandPositionChangeTrigger);
 }
 
-function sourceAlreadyListed(sources, card) {
+interface PositionChangeSource {
+  readonly card: TriggerRuntimeCard;
+  readonly zone: TriggerZone;
+}
+
+function sourceAlreadyListed(
+  sources: readonly PositionChangeSource[],
+  card: TriggerRuntimeCard,
+): boolean {
   return sources.some((entry) => entry.card === card);
 }
 
-function matchesPositionFilter(actual, filterValue) {
+function matchesPositionFilter(
+  actual: BattlePosition,
+  filterValue:
+    | BattlePosition
+    | readonly BattlePosition[]
+    | "any"
+    | null
+    | undefined,
+): boolean {
   if (!filterValue || filterValue === "any") return true;
   const allowed = Array.isArray(filterValue) ? filterValue : [filterValue];
   return allowed.includes(actual);
 }
 
-function matchesCardFilters(engine, card, filters) {
+function matchesCardFilters(
+  engine: TriggerCollectorHost,
+  card: TriggerRuntimeCard | null | undefined,
+  filters: TriggerCardFilter | null | undefined,
+): boolean {
   if (!filters || Object.keys(filters).length === 0) return true;
   if (!card) return false;
   if (typeof engine.cardMatchesFilters === "function") {
@@ -67,7 +110,9 @@ function matchesCardFilters(engine, card, filters) {
   return true;
 }
 
-function getCardLockIdentity(card) {
+function getCardLockIdentity(
+  card: TriggerRuntimeCard | null | undefined,
+): string | number {
   return (
     card?.instanceId ??
     card?._instanceId ??
@@ -79,7 +124,10 @@ function getCardLockIdentity(card) {
   );
 }
 
-function buildPerEventCardEffect(effect, eventCard) {
+function buildPerEventCardEffect(
+  effect: TriggerEffect,
+  eventCard: TriggerRuntimeCard,
+): TriggerEffect {
   if (!effect?.oncePerTurnPerEventCard) return effect;
   const baseName = effect.oncePerTurnName || effect.id || "position_change";
   const eventCardKey = getCardLockIdentity(eventCard);
@@ -93,8 +141,11 @@ function buildPerEventCardEffect(effect, eventCard) {
 /**
  * Collects trigger entries for battle position changes.
  */
-export async function collectPositionChangeTriggers(payload) {
-  const entries = [];
+export async function collectPositionChangeTriggers(
+  this: TriggerCollectorHost,
+  payload: CollectedTriggerEventMap["position_change"],
+): Promise<TriggerPackage> {
+  const entries: TriggerEntry[] = [];
   const orderRule =
     "changed card owner board observers -> opponent board observers -> hand observers";
 
@@ -115,9 +166,20 @@ export async function collectPositionChangeTriggers(payload) {
   const observerSides = [
     { owner: changedOwner, other: changedOpponent },
     { owner: changedOpponent, other: changedOwner },
-  ].filter((side) => side.owner);
+  ].filter(
+    (side): side is {
+      owner: TriggerRuntimePlayer;
+      other: TriggerRuntimePlayer | null;
+    } => side.owner != null,
+  );
 
-  const collectFromSource = (sourceCard, owner, other, sourceZone, effect) => {
+  const collectFromSource = (
+    sourceCard: TriggerRuntimeCard,
+    owner: TriggerRuntimePlayer,
+    other: TriggerRuntimePlayer | null,
+    sourceZone: TriggerZone,
+    effect: TriggerEffect,
+  ): void => {
     if (!effect || effect.timing !== "on_event") return;
     if (effect.event !== "position_change") return;
 
@@ -255,7 +317,7 @@ export async function collectPositionChangeTriggers(payload) {
   };
 
   for (const { owner, other } of observerSides) {
-    const sourceEntries = [];
+    const sourceEntries: PositionChangeSource[] = [];
     for (const sourceCard of collectBoardSources(owner)) {
       if (!sourceCard) continue;
       sourceEntries.push({

@@ -1,33 +1,38 @@
+import type { CollectedTriggerEventMap } from "../../../contracts/events.js";
+import type { TriggerCollectorHost, TriggerEntry, TriggerPackage } from "../runtime.js";
 import { debugTriggerLog } from "./shared.js";
 
 /**
- * Collects trigger entries for spell_activated event.
- * @param {Object} payload - Spell activated payload
+ * Collects trigger entries for lp_change events.
+ * @param {Object} payload - LP change payload
  * @returns {Promise<Object>} Collected entries and order rule
  */
-export async function collectSpellActivatedTriggers(payload) {
-  const entries = [];
+export async function collectLpChangeTriggers(
+  this: TriggerCollectorHost,
+  payload: CollectedTriggerEventMap["lp_change"],
+): Promise<TriggerPackage> {
+  const entries: TriggerEntry[] = [];
   const orderRule =
-    "spell controller -> opponent; sources: field -> fieldSpell -> spellTrap";
+    "LP gainer -> opponent; sources: fieldSpell -> field -> spellTrap";
 
-  if (!payload || !payload.card || !payload.player) {
+  if (!payload || !payload.player || (payload.lpGained || 0) <= 0) {
     return { entries, orderRule };
   }
 
-  const activatedCard = payload.card;
-  const activatedEffect = payload.effect || null;
-  const activator = payload.player;
-  const opponent = this.game?.getOpponent?.(activator);
+  const lpPlayer = payload.player;
+  const opponent = this.game?.getOpponent?.(lpPlayer);
   const participants = [];
 
-  if (activator) {
-    participants.push({ owner: activator, opponent });
-  }
+  participants.push({ owner: lpPlayer, opponent });
   if (opponent) {
-    participants.push({ owner: opponent, opponent: activator });
+    participants.push({ owner: opponent, opponent: lpPlayer });
   }
 
   const currentPhase = this.game?.phase;
+  const lpGained = payload.lpGained || 0;
+  const before = payload.before ?? null;
+  const after = payload.after ?? null;
+  const lpChangeSourceCard = payload.sourceCard || null;
 
   for (const side of participants) {
     const owner = side.owner;
@@ -51,19 +56,26 @@ export async function collectSpellActivatedTriggers(payload) {
       const sourceZone = this.findCardZone(owner, sourceCard);
       const isFaceDownOnBoard =
         sourceCard?.isFacedown === true &&
-        ["field", "spellTrap", "fieldSpell"].includes(sourceZone);
+        ["field", "spellTrap", "fieldSpell"].some(
+          (zone) => zone === sourceZone,
+        );
+
       const ctx = {
         source: sourceCard,
         player: owner,
         opponent: other,
-        activatedCard,
-        activatedPlayer: activator,
+        lpChangePlayer: lpPlayer,
+        lpGained,
+        before,
+        after,
+        sourceCard: lpChangeSourceCard,
+        lpChangeSourceCard,
         currentPhase,
       };
 
       for (const effect of sourceCard.effects) {
         if (!effect || effect.timing !== "on_event") continue;
-        if (effect.event !== "spell_activated") continue;
+        if (effect.event !== "lp_change") continue;
 
         if (isFaceDownOnBoard) {
           continue;
@@ -78,37 +90,21 @@ export async function collectSpellActivatedTriggers(payload) {
         }
 
         const triggerPlayer = effect.triggerPlayer || "any";
-        if (triggerPlayer === "self" && owner !== activator) continue;
-        if (triggerPlayer === "opponent" && owner === activator) continue;
+        if (triggerPlayer === "self" && owner !== lpPlayer) continue;
+        if (triggerPlayer === "opponent" && owner === lpPlayer) continue;
 
-        const activatedFilters =
-          effect.activatedCardFilters || effect.requireActivatedCardFilters;
         if (
-          activatedFilters &&
-          !this.cardMatchesFilters(activatedCard, activatedFilters)
+          effect.minLpGained !== undefined &&
+          lpGained < Number(effect.minLpGained)
         ) {
           continue;
         }
 
-        const sameActivatedSource =
-          sourceCard === activatedCard ||
-          (sourceCard?.instanceId != null &&
-            activatedCard?.instanceId != null &&
-            sourceCard.instanceId === activatedCard.instanceId);
-        if (effect.excludeActivatedSelf === true && sameActivatedSource) {
-          continue;
-        }
-
-        const activatedEffectFilters =
-          effect.activatedEffectFilters || effect.requireActivatedEffectFilters;
+        const sourceFilters =
+          effect.lpChangeSourceFilters || effect.sourceCardFilters || null;
         if (
-          activatedEffectFilters &&
-          !this.effectMatchesFilters?.(activatedEffect, activatedEffectFilters, {
-            activationZone: payload.activationZone || null,
-            activationContext: payload.activationContext || null,
-            effectType: payload.effectType || null,
-            placementOnly: payload.placementOnly === true,
-          })
+          sourceFilters &&
+          !this.cardMatchesFilters(lpChangeSourceCard, sourceFilters)
         ) {
           continue;
         }
@@ -134,11 +130,10 @@ export async function collectSpellActivatedTriggers(payload) {
           }
         }
 
-        const activationContext = this.buildTriggerActivationContext(
-          sourceCard,
-          owner,
-          sourceZone,
-        );
+        const activationContext = {
+          ...this.buildTriggerActivationContext(sourceCard, owner, sourceZone),
+          triggeredByEvent: "lp_change",
+        };
 
         const entry = this.buildTriggerEntry({
           sourceCard,
