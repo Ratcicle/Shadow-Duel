@@ -8,6 +8,11 @@ import {
   listCatalogActionTypes,
   validateActionShape,
 } from "../src/core/actionHandlers/actionCatalog.js";
+import {
+  ACTION_BINDINGS,
+  getActionBindingLabel,
+  listActionBindingTypes,
+} from "../src/core/actionHandlers/actionBindings.js";
 import { walkEffectActions } from "../src/core/actionHandlers/actionWalker.js";
 import { cardDatabase } from "../src/data/cards.js";
 
@@ -135,7 +140,10 @@ function validateExamples(type, entry) {
   return errors;
 }
 
-const registeredTypes = getRegisteredTypes().sort();
+const registeredTypeOrder = getRegisteredTypes();
+const bindingTypeOrder = listActionBindingTypes();
+const registeredTypes = [...registeredTypeOrder].sort();
+const bindingTypes = [...bindingTypeOrder].sort();
 const catalogTypes = listCatalogActionTypes();
 const errors = [];
 const usedTypes = new Set();
@@ -164,19 +172,57 @@ for (const type of asSortedSetDifference(registeredTypes, catalogTypes)) {
   errors.push(`Registered action "${type}" is missing from ACTION_CATALOG.`);
 }
 for (const type of asSortedSetDifference(catalogTypes, registeredTypes)) {
-  errors.push(`ACTION_CATALOG contains "${type}", but it is not registered in wiring.js.`);
+  errors.push(`ACTION_CATALOG contains "${type}", but it is absent from the populated registry.`);
+}
+for (const type of asSortedSetDifference(bindingTypes, catalogTypes)) {
+  errors.push(`ACTION_BINDINGS contains "${type}", but it is missing from ACTION_CATALOG.`);
+}
+for (const type of asSortedSetDifference(catalogTypes, bindingTypes)) {
+  errors.push(`ACTION_CATALOG contains "${type}", but it is missing from ACTION_BINDINGS.`);
 }
 for (const type of asSortedSetDifference([...usedTypes], catalogTypes)) {
   errors.push(`Card database uses action "${type}", but it is missing from ACTION_CATALOG.`);
 }
 for (const type of asSortedSetDifference([...usedTypes], registeredTypes)) {
-  errors.push(`Card database uses action "${type}", but it is not registered in wiring.js.`);
+  errors.push(`Card database uses action "${type}", but it is absent from the populated registry.`);
+}
+
+if (registeredTypeOrder.join("\n") !== bindingTypeOrder.join("\n")) {
+  errors.push("Registry order differs from the canonical ACTION_BINDINGS order.");
+}
+
+const directBindings = bindingTypeOrder.filter(
+  (type) => ACTION_BINDINGS[type].kind === "direct",
+);
+const proxyBindings = bindingTypeOrder.filter(
+  (type) => ACTION_BINDINGS[type].kind === "proxy",
+);
+if (directBindings.length !== 80 || proxyBindings.length !== 29) {
+  errors.push(
+    `ACTION_BINDINGS must contain 80 direct and 29 proxy bindings; found ${directBindings.length} direct and ${proxyBindings.length} proxy.`,
+  );
 }
 
 for (const type of catalogTypes) {
   const entry = ACTION_CATALOG[type];
   errors.push(...validateEntryShape(type, entry));
   errors.push(...validateExamples(type, entry));
+  const expectedHandler = getActionBindingLabel(type);
+  if (entry.handler !== expectedHandler) {
+    errors.push(
+      `${type}: catalog handler "${entry.handler}" does not match binding "${expectedHandler}".`,
+    );
+  }
+
+  const binding = ACTION_BINDINGS[type];
+  if (
+    binding.kind === "direct" &&
+    binding.handler.name !== binding.handlerId
+  ) {
+    errors.push(
+      `${type}: direct handler id "${binding.handlerId}" does not match function name "${binding.handler.name}".`,
+    );
+  }
 }
 
 if (errors.length > 0) {
@@ -186,5 +232,5 @@ if (errors.length > 0) {
 }
 
 console.log(
-  `Action catalog OK: ${catalogTypes.length} catalog entries match ${registeredTypes.length} registered actions; ${usedTypes.size} action types are used by the card database.`,
+  `Action catalog OK: ${catalogTypes.length} catalog entries match ${bindingTypes.length} bindings and ${registeredTypes.length} registered actions; ${usedTypes.size} action types are used by the card database.`,
 );

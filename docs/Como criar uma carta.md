@@ -11,10 +11,12 @@ no código são:
 
 - `src/core/CardDatabaseValidator.js`: valida `timing`, `event`, `action.type`
   e contrato declarativo das actions.
-- `src/core/actionHandlers/wiring.js`: registra todos os `action.type`.
-- `src/core/actionHandlers/actionCatalog.js`: documenta campos aceitos por action.
+- `src/core/contracts/actions.ts` e `src/core/contracts/actions/`: definem
+  `ActionByType` e seus mapas fechados por domínio.
+- `src/core/actionHandlers/actionBindings.ts`: liga cada tipo a handler ou proxy.
+- `src/core/actionHandlers/actionCatalog.ts`: documenta campos aceitos por action.
 - `src/data/cards/ranges.js`: registra as faixas oficiais de IDs por grupo.
-- `src/core/EffectEngine.js`: avalia conditions, passives, custos e filtros.
+- `src/core/EffectEngine.ts`: avalia conditions, passives, custos e filtros.
 - `src/core/effects/targeting/selection.js`: resolve targets.
 - `src/core/effects/triggers/collectors.js`: define quais eventos disparam quais efeitos.
 
@@ -51,7 +53,7 @@ Campos comuns por tipo:
 
 IDs devem ser numericos e ficar dentro da faixa oficial do modulo. O validador
 rejeita IDs fora da faixa, IDs duplicados, nomes duplicados, timings invalidos,
-eventos invalidos e actions sem handler registrado.
+eventos invalidos e actions sem contrato, binding ou handler correspondente.
 
 ### Valor especial de Tributo
 
@@ -363,9 +365,10 @@ já espera explicitamente `condition`.
 
 ## Actions
 
-Toda action precisa ter `type` registrado em `src/core/actionHandlers/wiring.js`.
-Cada action registrada também precisa ter contrato em
-`src/core/actionHandlers/actionCatalog.js`. A lista completa de actions, campos
+Toda action precisa estar no mapa apropriado em `src/core/contracts/actions/`,
+que compõe `ActionByType`, ter binding em
+`src/core/actionHandlers/actionBindings.ts` e contrato em
+`src/core/actionHandlers/actionCatalog.ts`. A lista completa de actions, campos
 aceitos, `targetRef`, exemplos e notas fica em
 [Catalogo de actions](./Catalogo%20de%20actions.md).
 
@@ -761,8 +764,8 @@ Ignition com target e custo:
 
 1. ID esta livre e dentro da faixa oficial do modulo.
 2. Imagem existe em `public/assets/` e a carta a referencia como `assets/...`.
-3. `timing`, `event` e `action.type` existem no validador/registry.
-4. A action tem contrato atualizado no catálogo.
+3. `timing` e `event` existem nos contratos aceitos pelo validador.
+4. Cada `action.type` existe em `ActionByType`, `ACTION_BINDINGS`, catálogo e registry.
 5. `targetRef` bate exatamente com um `targets[].id`, salvo contexto explícito
    aceito pelo catálogo.
 6. Efeitos opcionais usam `promptUser`/`promptMessage` quando fazem sentido.
@@ -776,9 +779,11 @@ Ignition com target e custo:
 Para atualizar os contratos e a documentação de actions:
 
 ```powershell
+npm run typecheck
 npm run validate:actions
 npm run generate:actions
 npm run check:actions-doc
+npm run check
 ```
 
 ## Metadados canônicos de ativação e uso

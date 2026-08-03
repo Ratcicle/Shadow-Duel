@@ -14,6 +14,11 @@ export {
   ActionHandlerRegistry,
   proxyEngineMethod,
 
+  // Canonical binding manifest
+  ACTION_BINDINGS,
+  getActionBindingLabel,
+  listActionBindingTypes,
+
   // Wiring function
   registerDefaultHandlers,
 
@@ -84,4 +89,14 @@ export {
   selectCards,
   summonFromHandCore,
   STATUS_DISPLAY_NAMES,
+} from "./actionHandlers/index.js";
+
+export type {
+  ActionBindingByType,
+  ActionBindingLabelByType,
+  ActionHandlerUnion,
+  CompatibleEffectEngineMethodFor,
+  DirectActionBinding,
+  ProxyActionBinding,
+  ProxyMethodName,
 } from "./actionHandlers/index.js";

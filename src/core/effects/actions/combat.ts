@@ -74,7 +74,7 @@ function scheduleAiMoveAfterPaint(game: CombatGame, actor: AiActor): void {
       return;
     }
 
-    Promise.resolve(actor.makeMove?.(game)).catch((error: unknown) => {
+    Promise.resolve(actor.makeMove!(game)).catch((error: unknown) => {
       console.error("[EffectPhaseTransition] AI move failed:", error);
     });
   };

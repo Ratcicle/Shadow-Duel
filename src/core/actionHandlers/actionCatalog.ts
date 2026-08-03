@@ -5,6 +5,9 @@ import type {
   ActionFieldDefinition,
   ActionType,
 } from "../contracts/actions.js";
+import type { ActionBindingLabelByType } from "./actionBindings.js";
+
+type BoundActionCatalog = ActionCatalog<ActionBindingLabelByType>;
 
 const ZONES = [
   "deck",
@@ -2876,7 +2879,7 @@ export const ACTION_CATALOG = {
     emits: ["card_to_grave"],
     examples: [{ type: "upkeep_pay_or_send_to_grave", lpCost: 500, failureZone: "graveyard" }],
   }),
-} satisfies ActionCatalog;
+} satisfies BoundActionCatalog;
 
 const CONTEXT_TARGET_REFS = new Set([
   "self",
@@ -2907,7 +2910,7 @@ export function listCatalogActionTypes(): ActionType[] {
   return Object.keys(ACTION_CATALOG).filter(isActionType).sort();
 }
 
-type CatalogEntry = ActionCatalog[ActionType];
+type CatalogEntry = BoundActionCatalog[ActionType];
 
 export function getActionCatalogEntry(type: string): CatalogEntry | null {
   return isActionType(type) ? (ACTION_CATALOG[type] as CatalogEntry) : null;
