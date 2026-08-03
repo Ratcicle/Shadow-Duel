@@ -71,10 +71,13 @@ type OptionalActionFieldKey<Type extends ActionType> = Exclude<
   RequiredActionFieldKey<Type>
 >;
 
-export interface ActionCatalogEntry<Type extends ActionType> {
+export interface ActionCatalogEntry<
+  Type extends ActionType,
+  HandlerLabel extends string = string,
+> {
   readonly category: ActionCategory;
   readonly summary: string;
-  readonly handler: string;
+  readonly handler: HandlerLabel;
   readonly required: readonly RequiredActionFieldKey<Type>[];
   readonly optional: readonly OptionalActionFieldKey<Type>[];
   readonly fields: {
@@ -90,8 +93,15 @@ export interface ActionCatalogEntry<Type extends ActionType> {
   readonly notes: readonly string[];
 }
 
-export type ActionCatalog = {
-  readonly [Type in ActionType]: ActionCatalogEntry<Type>;
+export type ActionCatalog<
+  HandlerLabelByType extends { readonly [Type in ActionType]: string } = {
+    readonly [Type in ActionType]: string;
+  },
+> = {
+  readonly [Type in ActionType]: ActionCatalogEntry<
+    Type,
+    HandlerLabelByType[Type]
+  >;
 };
 
 export type {
@@ -101,9 +111,11 @@ export type {
   ActionPlayerScope,
   ActionProperties,
   ActionReplacementEffect,
+  ReplacementRegistrationEntry,
   ActionTargetScope,
   ContextNumberSource,
   DefineAction,
+  DestroyDamageEntry,
   SelectionCount,
   SummonStatus,
 } from "./actions/shared.js";

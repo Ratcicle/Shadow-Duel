@@ -1,14 +1,35 @@
 import { getUI } from "../shared.js";
+import type { ActionOf } from "../../contracts/actions.js";
+import type {
+  ActionHandlerEnginePort,
+  ActionRuntimeCard,
+  ActionRuntimeGamePort,
+  EffectContext,
+  ResolvedTargetMap,
+} from "../../contracts/actionRuntime.js";
+import { readContextValue } from "../../contracts/actionRuntime.js";
 
-function resolveScheduledCard(action, ctx, targets) {
+type ScheduledSummonAction = ActionOf<"schedule_special_summon">;
+
+function resolveScheduledCard(
+  action: ScheduledSummonAction,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+): ActionRuntimeCard | null {
   const cardRef = action.cardRef || action.targetRef || "self";
   if (cardRef === "self" || cardRef === "source") return ctx?.source || null;
   const target = targets?.[cardRef];
   if (Array.isArray(target)) return target[0] || null;
-  return target || ctx?.[cardRef] || null;
+  return (target || readContextValue(ctx, cardRef) || null) as
+    | ActionRuntimeCard
+    | null;
 }
 
-function resolvePlayerId(rule, ctx, game) {
+function resolvePlayerId(
+  rule: string | undefined,
+  ctx: EffectContext,
+  game: ActionRuntimeGamePort,
+) {
   const value = rule || "current";
   if (value === "current" || value === "turn") return game?.turn || null;
   if (value === "self") return ctx?.player?.id || null;
@@ -16,7 +37,12 @@ function resolvePlayerId(rule, ctx, game) {
   return value;
 }
 
-export async function handleScheduleSpecialSummon(action, ctx, targets, engine) {
+export async function handleScheduleSpecialSummon(
+  action: ActionOf<"schedule_special_summon">,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+  engine: ActionHandlerEnginePort,
+) {
   const game = engine?.game;
   const player = ctx?.player;
   const card = resolveScheduledCard(action, ctx, targets);
@@ -41,7 +67,7 @@ export async function handleScheduleSpecialSummon(action, ctx, targets, engine) 
   );
   if (!triggerPlayerId) return false;
 
-  game.scheduleDelayedAction(
+  game.scheduleDelayedAction!(
     "delayed_summon",
     {
       phase,
@@ -68,10 +94,10 @@ export async function handleScheduleSpecialSummon(action, ctx, targets, engine) 
 }
 
 export async function handleAbyssalSerpentDelayedSummon(
-  action,
-  ctx,
-  targets,
-  engine,
+  action: ActionOf<"abyssal_serpent_delayed_summon">,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+  engine: ActionHandlerEnginePort,
 ) {
   const { player, source } = ctx;
   const game = engine?.game;
@@ -110,8 +136,8 @@ export async function handleAbyssalSerpentDelayedSummon(
   const isFusionOrAscension =
     target.monsterType === "fusion" || target.monsterType === "ascension";
 
-  await game.moveCard(source, player, "graveyard");
-  await game.moveCard(target, opponent, "graveyard");
+  await game.moveCard!(source, player, "graveyard");
+  await game.moveCard!(target, opponent, "graveyard");
 
   ui?.log?.(
     `${source.name} and ${target.name} are sent to the GY. They will be special summoned during the opponent's next Standby Phase.`,
@@ -137,7 +163,7 @@ export async function handleAbyssalSerpentDelayedSummon(
   const opponentPlayerId =
     opponent.id || (player.id === "player" ? "bot" : "player");
 
-  game.scheduleDelayedAction(
+  game.scheduleDelayedAction!(
     "delayed_summon",
     {
       phase: "standby",

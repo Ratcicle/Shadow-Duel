@@ -1,4 +1,16 @@
 import { isAI } from "../../Player.js";
+import type { ActionOf } from "../../contracts/actions.js";
+import type {
+  ActionHandlerEnginePort,
+  ActionRuntimeCard,
+  ActionRuntimeCheckResult,
+  ActionRuntimeGamePort,
+  ActionRuntimePlayer,
+  EffectContext,
+  ResolvedTargetMap,
+} from "../../contracts/actionRuntime.js";
+import type { CardFilter } from "../../contracts/effects.js";
+import type { CanonicalZone } from "../../contracts/zones.js";
 import {
   canUseAsSynchroMaterial,
   getSynchroMaterialCombos,
@@ -6,25 +18,67 @@ import {
 import { checkSpecialSummonEligibility } from "../../game/summon/eligibility.js";
 import { getUI, resolveTargetCards, selectCards } from "../shared.js";
 
-function getCardInstanceId(card) {
+type CardInstanceId = string | number | null;
+type SynchroSummonAction = ActionOf<"synchro_summon_from_extra_deck">;
+
+interface CardLocation {
+  readonly owner: ActionRuntimePlayer;
+  readonly zone: CanonicalZone;
+}
+
+interface SynchroSelectionCandidate {
+  key: string;
+  readonly name: string;
+  readonly image?: string;
+  readonly owner: string;
+  readonly controller: string;
+  readonly zone: "field" | "extraDeck";
+  readonly zoneIndex: number;
+  readonly atk?: number;
+  readonly def?: number;
+  readonly level?: number;
+  readonly cardKind: ActionRuntimeCard["cardKind"];
+  readonly monsterType: ActionRuntimeCard["monsterType"];
+  readonly cardRef: ActionRuntimeCard;
+}
+
+interface LegalSynchroEntry {
+  readonly card: ActionRuntimeCard;
+  readonly check: ActionRuntimeCheckResult | undefined;
+}
+
+type DeSynchroMaterialResult =
+  | { readonly ok: false; readonly reason: string }
+  | { readonly ok: true; readonly materials: ActionRuntimeCard[] };
+
+function getCardInstanceId(
+  card: ActionRuntimeCard | null | undefined,
+): CardInstanceId {
   return card?.instanceId ?? card?._instanceId ?? card?.uuid ?? null;
 }
 
-function getCardLevel(card) {
+function getCardLevel(card: ActionRuntimeCard): number {
   const level = Number(card?.level || 0);
   return Number.isFinite(level) ? level : 0;
 }
 
-function getOwnerById(game, ownerId, fallback = null) {
+function getOwnerById(
+  game: ActionRuntimeGamePort,
+  ownerId: string | null | undefined,
+  fallback: ActionRuntimePlayer | null = null,
+): ActionRuntimePlayer | null {
   if (!game || !ownerId) return fallback;
   if (game.player?.id === ownerId) return game.player;
   if (game.bot?.id === ownerId) return game.bot;
   return fallback;
 }
 
-function findCardLocation(game, card) {
+function findCardLocation(
+  game: ActionRuntimeGamePort,
+  card: ActionRuntimeCard,
+): CardLocation | null {
   if (!game || !card) return null;
-  const zones = [
+  const zones: readonly CanonicalZone[] = [
     "field",
     "spellTrap",
     "hand",
@@ -33,12 +87,13 @@ function findCardLocation(game, card) {
     "extraDeck",
     "banished",
   ];
-  for (const owner of [game.player, game.bot].filter(Boolean)) {
+  for (const owner of [game.player, game.bot]) {
     if (owner.fieldSpell === card) {
       return { owner, zone: "fieldSpell" };
     }
     for (const zone of zones) {
-      if (Array.isArray(owner[zone]) && owner[zone].includes(card)) {
+      const zoneCards: unknown = Reflect.get(owner, zone);
+      if (Array.isArray(zoneCards) && zoneCards.includes(card)) {
         return { owner, zone };
       }
     }
@@ -46,30 +101,37 @@ function findCardLocation(game, card) {
   return null;
 }
 
-function findCardInPlayerGraveyardByInstance(player, instanceId) {
+function findCardInPlayerGraveyardByInstance(
+  player: ActionRuntimePlayer,
+  instanceId: CardInstanceId,
+) {
   if (instanceId === undefined || instanceId === null) return null;
   return (player?.graveyard || []).find(
     (card) => getCardInstanceId(card) === instanceId,
   );
 }
 
-function matchesActionFilters(engine, card, filters = {}) {
+function matchesActionFilters(
+  engine: ActionHandlerEnginePort,
+  card: ActionRuntimeCard,
+  filters: CardFilter = {},
+) {
   if (!card) return false;
   if (!filters || Object.keys(filters).length === 0) return true;
-  if (typeof engine?.cardMatchesFilters === "function") {
+  if (typeof engine.cardMatchesFilters === "function") {
     return engine.cardMatchesFilters(card, filters);
   }
   if (filters.cardKind) {
     const expected = Array.isArray(filters.cardKind)
       ? filters.cardKind
       : [filters.cardKind];
-    if (!expected.includes(card.cardKind)) return false;
+    if (!card.cardKind || !expected.includes(card.cardKind)) return false;
   }
   if (filters.monsterType) {
     const expected = Array.isArray(filters.monsterType)
       ? filters.monsterType
       : [filters.monsterType];
-    if (!expected.includes(card.monsterType)) return false;
+    if (!card.monsterType || !expected.includes(card.monsterType)) return false;
   }
   if (filters.archetype) {
     const archetypes = Array.isArray(card.archetypes)
@@ -85,7 +147,7 @@ function matchesActionFilters(engine, card, filters = {}) {
   return true;
 }
 
-function getSynchroCandidateFilters(action = {}) {
+function getSynchroCandidateFilters(action: SynchroSummonAction): CardFilter {
   return {
     cardKind: "monster",
     monsterType: "synchro",
@@ -93,7 +155,12 @@ function getSynchroCandidateFilters(action = {}) {
   };
 }
 
-function getLegalSynchroEntries(game, player, action, engine) {
+function getLegalSynchroEntries(
+  game: ActionRuntimeGamePort,
+  player: ActionRuntimePlayer,
+  action: SynchroSummonAction,
+  engine: ActionHandlerEnginePort,
+): LegalSynchroEntry[] {
   if (!game || !player) return [];
   const filters = getSynchroCandidateFilters(action);
   return (player.extraDeck || [])
@@ -108,9 +175,14 @@ function getLegalSynchroEntries(game, player, action, engine) {
     .filter((entry) => entry.check?.ok === true);
 }
 
-function buildCardChoiceContract(game, player, cards, action) {
+function buildCardChoiceContract(
+  game: ActionRuntimeGamePort,
+  player: ActionRuntimePlayer,
+  cards: readonly ActionRuntimeCard[],
+  action: SynchroSummonAction,
+) {
   const owner = player?.id === "player" ? "player" : "opponent";
-  const candidates = cards.map((card, index) => ({
+  const candidates: SynchroSelectionCandidate[] = cards.map((card, index) => ({
     key:
       game.buildSelectionCandidateKey?.(
         {
@@ -153,16 +225,22 @@ function buildCardChoiceContract(game, player, cards, action) {
     ui: { useFieldTargeting: false, allowCancel: action.allowCancel !== false },
     metadata: {
       context: "effect_synchro_summon_extra_deck",
-      sourceCard: action.sourceCard || null,
+      sourceCard: Reflect.get(action, "sourceCard") || null,
     },
   };
 }
 
-function buildMaterialSelectionContract(game, card, player, candidates) {
+function buildMaterialSelectionContract(
+  game: ActionRuntimeGamePort,
+  card: ActionRuntimeCard,
+  player: ActionRuntimePlayer,
+  candidates: readonly ActionRuntimeCard[],
+) {
   const owner = player?.id === "player" ? "player" : "opponent";
   const decorated = candidates.map((material, index) => {
     const zoneIndex = (player?.field || []).indexOf(material);
-    const candidate = {
+    const candidate: SynchroSelectionCandidate = {
+      key: "",
       name: material.name,
       image: material.image,
       owner,
@@ -209,7 +287,12 @@ function buildMaterialSelectionContract(game, card, player, candidates) {
   };
 }
 
-async function confirmOptionalRevive(game, player, action, source) {
+async function confirmOptionalRevive(
+  game: ActionRuntimeGamePort,
+  player: ActionRuntimePlayer,
+  action: ActionOf<"de_synchro">,
+  source: ActionRuntimeCard,
+) {
   if (isAI(player)) return true;
   const ui = getUI(game);
   if (typeof ui?.showConfirmPrompt !== "function") return true;
@@ -222,12 +305,15 @@ async function confirmOptionalRevive(game, player, action, source) {
       cancelLabel: action.cancelLabel || "Cancel",
     },
   );
-  return result && typeof result.then === "function"
-    ? !!(await result)
-    : !!result;
+  return Boolean(await result);
 }
 
-function canSpecialSummonMaterial(game, player, card, options = {}) {
+function canSpecialSummonMaterial(
+  game: ActionRuntimeGamePort,
+  player: ActionRuntimePlayer,
+  card: ActionRuntimeCard,
+  options: { readonly excludeCards?: readonly ActionRuntimeCard[] } = {},
+) {
   if (!game || !player || !card || card.cardKind !== "monster") return false;
   const eligibility = checkSpecialSummonEligibility(card, {
     summonProcedure: "card_effect",
@@ -250,16 +336,33 @@ function canSpecialSummonMaterial(game, player, card, options = {}) {
   return placementCheck?.ok !== false;
 }
 
-function resolveDeSynchroMaterials(game, player, synchroCard) {
-  const materialMetadata = Array.isArray(synchroCard?.synchroMaterials)
-    ? synchroCard.synchroMaterials
+function resolveDeSynchroMaterials(
+  game: ActionRuntimeGamePort,
+  player: ActionRuntimePlayer,
+  synchroCard: ActionRuntimeCard,
+): DeSynchroMaterialResult {
+  const rawMaterialMetadata: unknown = Reflect.get(
+    synchroCard,
+    "synchroMaterials",
+  );
+  const materialMetadata = Array.isArray(rawMaterialMetadata)
+    ? rawMaterialMetadata
     : [];
   if (materialMetadata.length === 0) {
     return { ok: false, reason: "No recorded Synchro Materials." };
   }
-  const materials = [];
+  const materials: ActionRuntimeCard[] = [];
   for (const entry of materialMetadata) {
-    const card = findCardInPlayerGraveyardByInstance(player, entry?.instanceId);
+    const instanceId: unknown =
+      entry && typeof entry === "object"
+        ? Reflect.get(entry, "instanceId")
+        : null;
+    const card = findCardInPlayerGraveyardByInstance(
+      player,
+      typeof instanceId === "string" || typeof instanceId === "number"
+        ? instanceId
+        : null,
+    );
     if (!card) {
       return { ok: false, reason: "Not all Synchro Materials are in your Graveyard." };
     }
@@ -283,7 +386,12 @@ function resolveDeSynchroMaterials(game, player, synchroCard) {
   return { ok: true, materials };
 }
 
-export async function handleDeSynchro(action, ctx, targets, engine) {
+export async function handleDeSynchro(
+  action: ActionOf<"de_synchro">,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+  engine: ActionHandlerEnginePort,
+) {
   const game = engine?.game;
   const player = ctx?.player;
   if (!game || !player) return false;
@@ -319,8 +427,14 @@ export async function handleDeSynchro(action, ctx, targets, engine) {
     sourceCard: ctx?.source || null,
     effectId: ctx?.effect?.id || null,
   });
-  if (moveResult?.success === false) {
-    getUI(game)?.log(moveResult.reason || "Could not return the Synchro Monster.");
+  if (
+    moveResult !== null &&
+    typeof moveResult === "object" &&
+    moveResult.success === false
+  ) {
+    getUI(game)?.log(
+      moveResult.reason || "Could not return the Synchro Monster.",
+    );
     return false;
   }
 
@@ -340,9 +454,11 @@ export async function handleDeSynchro(action, ctx, targets, engine) {
   for (const material of reviveCheck.materials) {
     if (!player.graveyard?.includes(material)) continue;
     if ((player.field || []).length >= 5) break;
-    const position = await engine.chooseSpecialSummonPosition(material, player, {
-      position: action.position || "choice",
-    });
+    const position = await Reflect.apply(
+      engine.chooseSpecialSummonPosition!,
+      engine,
+      [material, player, { position: action.position || "choice" }],
+    );
     const result = await game.moveCard(material, player, "field", {
       fromZone: "graveyard",
       position,
@@ -355,8 +471,14 @@ export async function handleDeSynchro(action, ctx, targets, engine) {
       sourceCard: ctx?.source || null,
       effectId: ctx?.effect?.id || null,
     });
-    if (result?.success === false) {
-      getUI(game)?.log(result.reason || `${material.name} could not be Summoned.`);
+    if (
+      result !== null &&
+      typeof result === "object" &&
+      result.success === false
+    ) {
+      getUI(game)?.log(
+        result.reason || `${material.name} could not be Summoned.`,
+      );
       break;
     }
   }
@@ -365,10 +487,10 @@ export async function handleDeSynchro(action, ctx, targets, engine) {
 }
 
 export async function handleSynchroSummonFromExtraDeck(
-  action,
-  ctx,
-  targets,
-  engine,
+  action: ActionOf<"synchro_summon_from_extra_deck">,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+  engine: ActionHandlerEnginePort,
 ) {
   const game = engine?.game;
   const player =
@@ -381,7 +503,7 @@ export async function handleSynchroSummonFromExtraDeck(
     return false;
   }
 
-  let selectedEntry = null;
+  let selectedEntry: LegalSynchroEntry | null | undefined = null;
   if (isAI(player)) {
     selectedEntry = legalEntries
       .slice()
@@ -415,8 +537,8 @@ export async function handleSynchroSummonFromExtraDeck(
     selectedEntry = legalEntries.find((entry) => entry.card === candidate);
   }
 
-  const synchroCard = selectedEntry?.card;
-  if (!synchroCard) return false;
+  if (!selectedEntry) return false;
+  const synchroCard = selectedEntry.card;
   const check =
     game.canSummonSynchroCard?.(player, synchroCard, {
       checkActionWindow: false,
@@ -427,15 +549,37 @@ export async function handleSynchroSummonFromExtraDeck(
     return false;
   }
 
-  let materials = null;
+  let materials: ActionRuntimeCard[] = [];
   if (isAI(player)) {
-    materials = check.materialCombos?.[0] || [];
+    const materialCombos: unknown = Reflect.get(check, "materialCombos");
+    const firstCombo = Array.isArray(materialCombos) ? materialCombos[0] : null;
+    materials = Array.isArray(firstCombo)
+      ? firstCombo.filter(
+          (material): material is ActionRuntimeCard =>
+            Boolean(
+              material &&
+                typeof material === "object" &&
+                typeof Reflect.get(material, "name") === "string",
+            ),
+        )
+      : [];
   } else {
+    const rawCandidates: unknown = Reflect.get(check, "candidates");
+    const materialCandidates = Array.isArray(rawCandidates)
+      ? rawCandidates.filter(
+          (candidate): candidate is ActionRuntimeCard =>
+            Boolean(
+              candidate &&
+                typeof candidate === "object" &&
+                typeof Reflect.get(candidate, "name") === "string",
+            ),
+        )
+      : [];
     const materialContract = buildMaterialSelectionContract(
       game,
       synchroCard,
       player,
-      check.candidates || [],
+      materialCandidates,
     );
     const keys = await selectCards({
       game,
@@ -451,7 +595,9 @@ export async function handleSynchroSummonFromExtraDeck(
           (candidate) => candidate.key === key,
         )?.cardRef,
       )
-      .filter(Boolean);
+      .filter(
+        (material): material is ActionRuntimeCard => Boolean(material),
+      );
   }
 
   const result = await game.performSynchroSummon?.(
@@ -465,10 +611,18 @@ export async function handleSynchroSummonFromExtraDeck(
       actionContext: ctx?.actionContext || ctx?.activationContext?.actionContext,
     },
   );
-  return result?.success === true;
+  return Boolean(
+    result &&
+      typeof result === "object" &&
+      Reflect.get(result, "success") === true,
+  );
 }
 
-export function hasSynchroSummonPreviewCandidate(engine, action, ctx) {
+export function hasSynchroSummonPreviewCandidate(
+  engine: ActionHandlerEnginePort,
+  action: ActionOf<"synchro_summon_from_extra_deck">,
+  ctx: EffectContext,
+) {
   const game = engine?.game;
   const player = action?.player === "opponent" ? ctx?.opponent : ctx?.player;
   if (!game || !player) return false;
@@ -480,17 +634,31 @@ export function hasSynchroSummonPreviewCandidate(engine, action, ctx) {
   if (extraDeckCandidates.length === 0) return false;
 
   const pending = action.previewPendingSummon || null;
-  const pendingCards = pending
-    ? (player[pending.zone || "graveyard"] || []).filter((card) =>
-        matchesActionFilters(engine, card, pending.filters || {}),
-      )
+  const pendingZone: unknown = pending
+    ? Reflect.get(player, pending.zone || "graveyard")
+    : null;
+  const pendingCards: readonly (ActionRuntimeCard | null)[] = pending
+    ? Array.isArray(pendingZone)
+      ? pendingZone
+          .filter(
+            (card): card is ActionRuntimeCard =>
+              Boolean(
+                card &&
+                  typeof card === "object" &&
+                  typeof Reflect.get(card, "name") === "string",
+              ),
+          )
+          .filter((card) =>
+            matchesActionFilters(engine, card, pending.filters || {}),
+          )
+      : []
     : [null];
   if (pendingCards.length === 0) return false;
 
   const gameLike = {
     effectEngine: {
       cardMatchesFilters: engine?.cardMatchesFilters?.bind(engine),
-      isEffectNegated: (card) => card?.effectsNegated === true,
+      isEffectNegated: (card: ActionRuntimeCard) => card?.effectsNegated === true,
     },
     canUseAsSynchroMaterial,
   };
@@ -504,10 +672,17 @@ export function hasSynchroSummonPreviewCandidate(engine, action, ctx) {
       : [...(player.field || [])];
     const previewPlayer = { ...player, field };
     return extraDeckCandidates.some((card) => {
-      const combos =
-        getSynchroMaterialCombos.call(gameLike, previewPlayer, card) || [];
-      return combos.some(
-        (combo) => (field.length - combo.length + 1) <= 5,
+      const rawCombos: unknown = Reflect.apply(
+        getSynchroMaterialCombos,
+        gameLike,
+        [previewPlayer, card],
+      );
+      return (
+        Array.isArray(rawCombos) &&
+        rawCombos.some(
+          (combo) =>
+            Array.isArray(combo) && field.length - combo.length + 1 <= 5,
+        )
       );
     });
   });

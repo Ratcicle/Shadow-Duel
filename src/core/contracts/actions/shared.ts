@@ -37,9 +37,15 @@ export interface ActionTargetScope {
 
 export interface ActionCase {
   readonly id?: string;
+  readonly key?: string;
   readonly label?: string;
+  readonly name?: string;
+  readonly title?: string;
   readonly description?: string;
+  readonly cardKind?: CardKind;
+  readonly image?: string;
   readonly filters?: CardFilter;
+  readonly filter?: CardFilter;
   readonly conditions?: readonly EffectCondition[];
   readonly targets?: readonly EffectTarget[];
   readonly actions: readonly CardAction[];
@@ -89,9 +95,31 @@ export interface ActionReplacementEffect {
 
 export interface DestroyDamageEntry {
   readonly targetRef: string;
+  readonly player?: ActionPlayer;
+  readonly amount?: number;
   readonly multiplier?: number;
-  readonly damagePlayer?: ActionPlayer | "owner";
+  readonly damagePlayer?: ActionPlayer | "owner" | "target_owner";
+  readonly damageFrom?: "target_atk" | "target_def" | "target_level";
+  readonly effectType?: string;
   readonly actions?: readonly CardAction[];
+}
+
+export interface ReplacementRegistrationEntry {
+  readonly replacementEffect: ActionReplacementEffect;
+  readonly targetRef?: string;
+  readonly owner?: ActionOwner;
+  readonly targetOwner?: ActionOwner;
+  readonly uniqueKey?: string;
+  readonly key?: string;
+  readonly id?: string;
+  readonly sourceName?: string;
+  readonly duration?: string;
+  readonly durationTurns?: number;
+  readonly turns?: number;
+  readonly expiresOnTurn?: number;
+  readonly uses?: number;
+  readonly usesRemaining?: number;
+  readonly usesPerTarget?: boolean;
 }
 
 export interface EmbeddedMonsterDefinition {
@@ -121,6 +149,17 @@ export interface TieredCostOption {
   readonly costFilters?: CardFilter;
 }
 
+export interface BotPreferenceRule {
+  readonly ifHandHas?: string;
+  readonly prefer: string;
+}
+
+export interface ActionComparisonCondition {
+  readonly type: "atk_difference_lte";
+  readonly value?: number;
+  readonly maxDifference?: number;
+}
+
 type StringActionProperty =
   | "affectedTargetRef"
   | "amountPrompt"
@@ -136,6 +175,7 @@ type StringActionProperty =
   | "cancelLabel"
   | "cardName"
   | "cardRef"
+  | "cardType"
   | "cause"
   | "choiceImage"
   | "choiceTextKey"
@@ -155,6 +195,7 @@ type StringActionProperty =
   | "destroyTargetRef"
   | "effectChoiceKey"
   | "effectId"
+  | "id"
   | "effectType"
   | "equippedCard"
   | "event"
@@ -168,7 +209,9 @@ type StringActionProperty =
   | "matchLevelRef"
   | "matchMode"
   | "modalInfoText"
+  | "modalSubtitle"
   | "modalTitle"
+  | "mode"
   | "nameSource"
   | "oncePerTurnName"
   | "opponentTargetRef"
@@ -193,6 +236,7 @@ type StringActionProperty =
   | "selectionMessageKey"
   | "sourceName"
   | "sourceRef"
+  | "sourceEffectId"
   | "stateKey"
   | "status"
   | "storeAs"
@@ -270,6 +314,8 @@ type NumberActionProperty =
   | "minTargets"
   | "multiplier"
   | "priority"
+  | "aiMaxLpFraction"
+  | "aiMinLpAfterPay"
   | "tier1AtkBoost"
   | "turns"
   | "uses";
@@ -279,6 +325,7 @@ type BooleanActionProperty =
   | "allowEmpty"
   | "allowExtraDeckMonsterToHand"
   | "allowTieBreak"
+  | "aiPay"
   | "applyToAllField"
   | "banishCost"
   | "battleIndestructible"
@@ -301,6 +348,7 @@ type BooleanActionProperty =
   | "log"
   | "logIfSkipped"
   | "markChanged"
+  | "movedByEffect"
   | "negateEffects"
   | "optional"
   | "permanent"
@@ -329,6 +377,7 @@ type BooleanActionProperty =
   | "updateCurrentStats"
   | "useBaseAtk"
   | "usesPerTarget"
+  | "useDestroyed"
   | "variableAmount";
 
 type StringActionProperties = {
@@ -348,7 +397,7 @@ export interface ComplexActionProperties {
   readonly defaultActions: readonly CardAction[];
   readonly targets: readonly EffectTarget[];
   readonly conditions: readonly EffectCondition[];
-  readonly condition: EffectCondition;
+  readonly condition: EffectCondition | ActionComparisonCondition;
   readonly summonCondition: EffectCondition | { readonly type: "empty_field" };
   readonly cases: readonly ActionCase[];
   readonly filters: CardFilter;
@@ -386,7 +435,7 @@ export interface ComplexActionProperties {
   readonly to: ZoneInput;
   readonly costDestination: ZoneInput;
   readonly failureZone: ZoneInput;
-  readonly position: BattlePositionInput;
+  readonly position: BattlePositionInput | "any";
   readonly player: ActionPlayerScope;
   readonly owner: ActionOwner;
   readonly sourceOwner: ActionOwner;
@@ -414,9 +463,13 @@ export interface ComplexActionProperties {
   readonly statusesOnSummon: readonly SummonStatus[];
   readonly markAddedCards: AddedCardMarker;
   readonly replacementEffect: ActionReplacementEffect;
-  readonly entries: readonly DestroyDamageEntry[];
+  readonly entries: readonly (
+    | DestroyDamageEntry
+    | ReplacementRegistrationEntry
+  )[];
   readonly skipDamageIf: {
     readonly self?: boolean | readonly EffectCondition[];
+    readonly opponent?: boolean | readonly EffectCondition[];
   };
   readonly allowExtraDeckMonsterToHandIf: EffectCondition;
   readonly previewPendingSummon: {
@@ -426,6 +479,8 @@ export interface ComplexActionProperties {
   readonly monster: EmbeddedMonsterDefinition;
   readonly token: TokenDefinition;
   readonly tierOptions: readonly TieredCostOption[];
+  readonly botPrefer: readonly BotPreferenceRule[];
+  readonly sourceRect: object;
   readonly duration: string;
   readonly negateEffectsDuration: string;
   readonly effectChoiceKey: string;

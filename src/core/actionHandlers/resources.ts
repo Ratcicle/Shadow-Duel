@@ -7,6 +7,27 @@
 
 import { isAI } from "../Player.js";
 import { cardMatchesKind } from "../Card.js";
+import type {
+  ActionOf,
+  ActionOwner,
+  SelectionCount,
+} from "../contracts/actions.js";
+import type {
+  ActionRuntimeCard,
+  ActionRuntimeGamePort,
+  ActionRuntimePlayer,
+  ActionHandlerEnginePort,
+  EffectContext,
+  MaybePromise,
+  NeedsSelectionResult,
+  ResolvedTargetMap,
+} from "../contracts/actionRuntime.js";
+import {
+  readContextValue,
+  writeContextValue,
+} from "../contracts/actionRuntime.js";
+import type { CardFilter } from "../contracts/effects.js";
+import type { ZoneInput } from "../contracts/zones.js";
 import { getCardDisplayName, getCounterDisplayLabel, getUIText } from "../i18n.js";
 import {
   getUI,
@@ -15,7 +36,176 @@ import {
   summonFromHandCore,
 } from "./shared.js";
 
-async function emitLpGainEvent(game, player, sourceCard, before) {
+type SearchAction = ActionOf<"add_from_zone_to_hand" | "search_any">;
+type DiscardAction = ActionOf<"discard_from_hand">;
+type FollowupSearchAction = ActionOf<
+  "search_then_optional_special_summon_from_hand"
+>;
+type UpkeepAction = ActionOf<"upkeep_pay_or_send_to_grave">;
+
+interface LegacyFieldCounterFilter {
+  readonly requireFaceup?: boolean;
+  readonly cardKind?: CardFilter["cardKind"];
+  readonly archetype?: string;
+  readonly type?: string;
+  readonly attribute?: string;
+  readonly name?: string;
+  readonly subtype?: string;
+}
+
+interface RuntimeSearchFilter extends CardFilter {
+  readonly excludeCards?: readonly ActionRuntimeCard[];
+  readonly excludeInstanceId?: string | number;
+  readonly excludeInstanceIds?: readonly (string | number)[];
+}
+
+type MutableRuntimeSearchFilter = {
+  -readonly [Key in keyof RuntimeSearchFilter]: RuntimeSearchFilter[Key];
+};
+
+interface SelectionRange {
+  readonly min: number;
+  readonly max: number;
+}
+
+interface ZoneSelectionCandidate {
+  idx: number;
+  key: string;
+  name: string;
+  owner: string;
+  controller: string;
+  zone: string;
+  zoneIndex: number;
+  position: string;
+  atk?: number;
+  def?: number;
+  level?: number;
+  cardKind?: ActionRuntimeCard["cardKind"];
+  cardRef: ActionRuntimeCard;
+}
+
+interface SelectionContractData {
+  readonly kind: string;
+  readonly requirementId: string;
+  readonly decorated: readonly ZoneSelectionCandidate[];
+  readonly selectionContract: object;
+}
+
+interface AddToHandContractContext {
+  readonly player: ActionRuntimePlayer;
+  readonly game: ActionRuntimeGamePort;
+  readonly sourceZone: string;
+}
+
+interface DiscardContractContext {
+  readonly affectedPlayer: ActionRuntimePlayer;
+  readonly game: ActionRuntimeGamePort;
+}
+
+interface MarkerConfig {
+  readonly key?: string;
+  readonly duration?: string;
+  readonly durationTurns?: number;
+  readonly expiresOnTurn?: number;
+  readonly bindToSource?: boolean;
+  readonly sourceEffectId?: string;
+}
+
+interface AutoSelectionResult {
+  readonly ok?: boolean;
+  readonly selections?: Record<string, readonly string[] | undefined>;
+}
+
+interface LegacyBotPreferenceRule {
+  readonly ifHandHas?: string;
+  readonly prefer: string;
+}
+
+interface UpkeepMoveOptions {
+  readonly sourceCard?: ActionRuntimeCard | null;
+  readonly effectId?: string | null;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isRuntimeCard(value: unknown): value is ActionRuntimeCard {
+  return isRecord(value) && typeof value.name === "string";
+}
+
+function isMoveSuccess(value: unknown): boolean {
+  return !isRecord(value) || value.success !== false;
+}
+
+function isAutoSelectionResult(value: unknown): value is AutoSelectionResult {
+  return isRecord(value);
+}
+
+function isPromiseLikeBoolean(
+  value: MaybePromise<boolean>,
+): value is PromiseLike<boolean> {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof Reflect.get(value, "then") === "function"
+  );
+}
+
+function readString(value: unknown, key: string): string | undefined {
+  if (!isRecord(value)) return undefined;
+  const result = Reflect.get(value, key);
+  return typeof result === "string" ? result : undefined;
+}
+
+function readNumber(value: unknown, key: string): number | undefined {
+  if (!isRecord(value)) return undefined;
+  const result = Reflect.get(value, key);
+  return typeof result === "number" ? result : undefined;
+}
+
+function readStringArray(value: unknown, key: string): string[] {
+  if (!isRecord(value)) return [];
+  const result = Reflect.get(value, key);
+  return Array.isArray(result)
+    ? result.filter((entry): entry is string => typeof entry === "string")
+    : [];
+}
+
+function readMarkerConfig(value: unknown): MarkerConfig | null {
+  if (!isRecord(value)) return null;
+  const marker = Reflect.get(value, "markAddedCards");
+  return isRecord(marker) ? marker : null;
+}
+
+function readBotPreferenceRules(value: unknown): LegacyBotPreferenceRule[] {
+  if (!isRecord(value)) return [];
+  const rules = Reflect.get(value, "botPrefer");
+  if (!Array.isArray(rules)) return [];
+  return rules.filter(
+    (rule): rule is LegacyBotPreferenceRule =>
+      isRecord(rule) && typeof rule.prefer === "string",
+  );
+}
+
+function getPlayerZoneCards(
+  player: ActionRuntimePlayer,
+  zone: ZoneInput,
+): ActionRuntimeCard[] {
+  const normalizedZone = zone === "banish" ? "banished" : zone;
+  if (normalizedZone === "fieldSpell") {
+    return player.fieldSpell ? [player.fieldSpell] : [];
+  }
+  const value = Reflect.get(player, normalizedZone);
+  return Array.isArray(value) ? value.filter(isRuntimeCard) : [];
+}
+
+async function emitLpGainEvent(
+  game: ActionRuntimeGamePort,
+  player: ActionRuntimePlayer,
+  sourceCard: ActionRuntimeCard | null | undefined,
+  before: number,
+): Promise<boolean> {
   const gained = Math.max(0, (player?.lp || 0) - before);
   if (gained <= 0) return false;
 
@@ -36,43 +226,69 @@ async function emitLpGainEvent(game, player, sourceCard, before) {
   return true;
 }
 
-function getScopedPlayers(ctx, owner = "self") {
-  if (owner === "opponent") return [ctx?.opponent].filter(Boolean);
-  if (owner === "any" || owner === "both" || owner === "either") {
-    return [ctx?.player, ctx?.opponent].filter(Boolean);
+function getScopedPlayers(
+  ctx: EffectContext,
+  owner: ActionOwner = "self",
+): ActionRuntimePlayer[] {
+  if (owner === "opponent") {
+    return ctx.opponent ? [ctx.opponent] : [];
   }
-  return [ctx?.player].filter(Boolean);
+  if (owner === "any" || owner === "both" || owner === "either") {
+    return [ctx.player, ctx.opponent].filter(
+      (entry): entry is ActionRuntimePlayer => entry != null,
+    );
+  }
+  return ctx.player ? [ctx.player] : [];
 }
 
-function getFieldCounterZoneCards(player, zone) {
+function getFieldCounterZoneCards(
+  player: ActionRuntimePlayer,
+  zone: ZoneInput,
+): ActionRuntimeCard[] {
   if (!player || !zone) return [];
   if (zone === "fieldSpell") {
     return player.fieldSpell ? [player.fieldSpell] : [];
   }
-  const cards = player[zone];
-  return Array.isArray(cards) ? cards.filter(Boolean) : [];
+  return getPlayerZoneCards(player, zone);
 }
 
-function getCardInstanceId(card) {
+function getCardInstanceId(
+  card: ActionRuntimeCard | null | undefined,
+): string | number | null {
   return card?.instanceId ?? card?._instanceId ?? card?.uuid ?? card?.simInstanceId ?? null;
 }
 
-function getCardsFromTargetRefs(refs, targets) {
-  const targetRefs = Array.isArray(refs) ? refs : [refs];
+function getCardsFromTargetRefs(
+  refs: string | readonly (string | null | undefined)[],
+  targets: ResolvedTargetMap,
+): ActionRuntimeCard[] {
+  const targetRefs = (Array.isArray(refs) ? refs : [refs]).filter(
+    (ref): ref is string => typeof ref === "string" && ref.length > 0,
+  );
   return targetRefs
     .filter(Boolean)
-    .flatMap((ref) =>
-      Array.isArray(targets?.[ref])
-        ? targets[ref]
-        : targets?.[ref]
-          ? [targets[ref]]
-          : [],
-    )
-    .filter(Boolean);
+    .flatMap((ref) => {
+      const value = targets[ref];
+      const entries = Array.isArray(value) ? value : value ? [value] : [];
+      return entries.flatMap((entry) => {
+        if (isRuntimeCard(entry)) return [entry];
+        if (isRecord(entry) && isRuntimeCard(entry.card)) return [entry.card];
+        return [];
+      });
+    });
 }
 
-function storeActionResultCards(action, ctx, targets, cards, fallbackKey = null) {
-  const resultKey = action?.resultRef || action?.storeResultAs || fallbackKey;
+function storeActionResultCards(
+  action: SearchAction,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+  cards: readonly ActionRuntimeCard[],
+  fallbackKey: string | null = null,
+): void {
+  const resultKey =
+    readString(action, "resultRef") ||
+    readString(action, "storeResultAs") ||
+    fallbackKey;
   if (!resultKey) return;
   const storedCards = Array.isArray(cards) ? cards.filter(Boolean) : [];
   if (!ctx || typeof ctx !== "object") return;
@@ -85,7 +301,10 @@ function storeActionResultCards(action, ctx, targets, cards, fallbackKey = null)
   }
 }
 
-function cardMatchesFieldCounterFilters(card, filters = {}) {
+function cardMatchesFieldCounterFilters(
+  card: ActionRuntimeCard,
+  filters: LegacyFieldCounterFilter = {},
+): boolean {
   if (!card) return false;
   if (filters.requireFaceup === true && card.isFacedown) return false;
   if (filters.cardKind && !cardMatchesKind(card, filters.cardKind)) return false;
@@ -104,7 +323,9 @@ function cardMatchesFieldCounterFilters(card, filters = {}) {
   return true;
 }
 
-function getSelectionMessageForSource(source) {
+function getSelectionMessageForSource(
+  source: ActionRuntimeCard | null | undefined,
+): string {
   if (!source) return "Select target(s).";
   if (source.cardKind === "monster") {
     return "Select target(s) for the monster effect.";
@@ -121,13 +342,20 @@ function getSelectionMessageForSource(source) {
   return "Select target(s) for the spell/trap effect.";
 }
 
-function buildZoneSelectionCandidates(player, game, cards, zoneName) {
-  const zone = Array.isArray(player?.[zoneName]) ? player[zoneName] : [];
+function buildZoneSelectionCandidates(
+  player: ActionRuntimePlayer,
+  game: ActionRuntimeGamePort,
+  cards: readonly ActionRuntimeCard[],
+  zoneName: string,
+): ZoneSelectionCandidate[] {
+  const zoneValue = Reflect.get(player, zoneName);
+  const zone = Array.isArray(zoneValue) ? zoneValue : [];
   const controller = player?.id || "player";
 
   return cards.map((card, idx) => {
-    const candidate = {
+    const candidate: ZoneSelectionCandidate = {
       idx,
+      key: "",
       name: card?.name || "Card",
       owner: "player",
       controller,
@@ -153,13 +381,16 @@ function buildZoneSelectionCandidates(player, game, cards, zoneName) {
 }
 
 function buildAddToHandSelectionContract(
-  action,
-  ctx,
-  { player, game, sourceZone },
-) {
-  return (cards, range) => {
+  action: SearchAction,
+  ctx: EffectContext,
+  { player, game, sourceZone }: AddToHandContractContext,
+): (
+  cards: readonly ActionRuntimeCard[],
+  range: SelectionRange,
+) => SelectionContractData {
+  return (cards: readonly ActionRuntimeCard[], range: SelectionRange) => {
     const requirementId =
-      action.selectionId ||
+      readString(action, "selectionId") ||
       `${ctx?.effect?.id || action.type || "add_from_zone_to_hand"}_selection`;
     const decorated = buildZoneSelectionCandidates(
       player,
@@ -175,12 +406,12 @@ function buildAddToHandSelectionContract(
       selectionContract: {
         kind: "target",
         message:
-          action.selectionMessage ||
+          readString(action, "selectionMessage") ||
           getSelectionMessageForSource(ctx?.source || null),
         requirements: [
           {
             id: requirementId,
-            label: action.selectionLabel || requirementId,
+            label: readString(action, "selectionLabel") || requirementId,
             min: range.min,
             max: range.max,
             zones: [sourceZone],
@@ -207,28 +438,46 @@ function buildAddToHandSelectionContract(
   };
 }
 
-function normalizeSelectionCount(count, fallback = 1) {
-  if (Number.isFinite(count)) {
+function normalizeSelectionCount(
+  count: number | SelectionCount | null | undefined,
+  fallback = 1,
+): SelectionRange {
+  if (typeof count === "number" && Number.isFinite(count)) {
     return { min: count, max: count };
   }
-  const min = Number.isFinite(count?.min) ? count.min : fallback;
-  const max = Number.isFinite(count?.max) ? count.max : min;
+  const structuredCount = typeof count === "object" ? count : null;
+  const min =
+    typeof structuredCount?.min === "number" &&
+    Number.isFinite(structuredCount.min)
+      ? structuredCount.min
+      : fallback;
+  const max =
+    typeof structuredCount?.max === "number" &&
+    Number.isFinite(structuredCount.max)
+      ? structuredCount.max
+      : min;
   return {
     min: Math.max(0, min),
     max: Math.max(0, max),
   };
 }
 
-function resolveActionPlayer(action, ctx) {
+function resolveActionPlayer(
+  action: { readonly player?: string },
+  ctx: EffectContext,
+): ActionRuntimePlayer | null | undefined {
   return action?.player === "opponent" ? ctx?.opponent : ctx?.player;
 }
 
 function buildDiscardSelectionContract(
-  action,
-  ctx,
-  { affectedPlayer, game },
-) {
-  return (cards, range) => {
+  action: DiscardAction,
+  ctx: EffectContext,
+  { affectedPlayer, game }: DiscardContractContext,
+): (
+  cards: readonly ActionRuntimeCard[],
+  range: SelectionRange,
+) => SelectionContractData {
+  return (cards: readonly ActionRuntimeCard[], range: SelectionRange) => {
     const requirementId =
       action.selectionId ||
       `${ctx?.effect?.id || action.type || "discard_from_hand"}_selection`;
@@ -282,7 +531,10 @@ function buildDiscardSelectionContract(
   };
 }
 
-function rankDiscardCandidates(cards, max) {
+function rankDiscardCandidates(
+  cards: readonly ActionRuntimeCard[],
+  max: number,
+): ActionRuntimeCard[] {
   return cards
     .slice()
     .sort((a, b) => {
@@ -306,7 +558,12 @@ function rankDiscardCandidates(cards, max) {
  * - amount: LP to pay
  * - fraction: alternative, pay a fraction of current LP (0.5 = half)
  */
-export async function handlePayLP(action, ctx, targets, engine) {
+export async function handlePayLP(
+  action: ActionOf<"pay_lp">,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+  engine: ActionHandlerEnginePort,
+) {
   const { player } = ctx;
 
   const game = engine.game;
@@ -371,13 +628,17 @@ export async function handlePayLP(action, ctx, targets, engine) {
   return true;
 }
 
-function normalizeCardNameList(values = []) {
-  const result = [];
-  const seen = new Set();
+function normalizeCardNameList(values: unknown = []): string[] {
+  const result: string[] = [];
+  const seen = new Set<string>();
   const entries = Array.isArray(values) ? values : [values];
   for (const entry of entries) {
     const name =
-      typeof entry === "string" ? entry.trim() : entry?.name?.trim?.() || "";
+      typeof entry === "string"
+        ? entry.trim()
+        : isRecord(entry) && typeof entry.name === "string"
+          ? entry.name.trim()
+          : "";
     if (!name || seen.has(name)) continue;
     seen.add(name);
     result.push(name);
@@ -385,8 +646,11 @@ function normalizeCardNameList(values = []) {
   return result;
 }
 
-function readNameSource(action, ctx) {
-  const sourceKey = action.nameSource || action.namesSource || null;
+function readNameSource(
+  action: ActionOf<"restrict_effect_activations_by_names">,
+  ctx: EffectContext,
+): unknown {
+  const sourceKey = action.nameSource || readString(action, "namesSource") || null;
   if (!sourceKey) return [];
   if (sourceKey === "lastDrawnCards") return ctx?.lastDrawnCards || [];
   if (sourceKey === "lastDrawnCard") return ctx?.lastDrawnCard || null;
@@ -395,20 +659,24 @@ function readNameSource(action, ctx) {
   }
   if (sourceKey === "lastAddedToHandCard") return ctx?.lastAddedToHandCard || null;
   return (
-    ctx?.[sourceKey] ||
-    ctx?.activationContext?.[sourceKey] ||
-    ctx?.actionContext?.[sourceKey] ||
+    readContextValue(ctx, sourceKey) ||
+    (ctx.activationContext ? Reflect.get(ctx.activationContext, sourceKey) : undefined) ||
+    (ctx.actionContext ? Reflect.get(ctx.actionContext, sourceKey) : undefined) ||
     []
   );
 }
 
-function normalizeAttributeList(values = []) {
-  const result = [];
-  const seen = new Set();
+function normalizeAttributeList(values: unknown = []): string[] {
+  const result: string[] = [];
+  const seen = new Set<string>();
   const entries = Array.isArray(values) ? values : [values];
   for (const entry of entries) {
     const attribute =
-      typeof entry === "string" ? entry.trim() : entry?.attribute?.trim?.() || "";
+      typeof entry === "string"
+        ? entry.trim()
+        : isRecord(entry) && typeof entry.attribute === "string"
+          ? entry.attribute.trim()
+          : "";
     if (!attribute) continue;
     const key = attribute.toLowerCase();
     if (seen.has(key)) continue;
@@ -418,13 +686,17 @@ function normalizeAttributeList(values = []) {
   return result;
 }
 
-function flattenCards(value) {
+function flattenCards(value: unknown): ActionRuntimeCard[] {
   if (!value) return [];
   if (Array.isArray(value)) return value.flatMap(flattenCards);
-  return [value];
+  return isRuntimeCard(value) ? [value] : [];
 }
 
-function readAttributeSourceCards(action, ctx, targets) {
+function readAttributeSourceCards(
+  action: ActionOf<"restrict_effect_activations_by_attribute">,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+): ActionRuntimeCard[] {
   const sourceRef =
     action.attributeSourceRef ||
     action.attributeSource ||
@@ -439,20 +711,25 @@ function readAttributeSourceCards(action, ctx, targets) {
   const actionTargets = ctx?._actionTargets || {};
   if (actionTargets[sourceRef]) return flattenCards(actionTargets[sourceRef]);
 
-  const contextCandidates = [
-    ctx?.[sourceRef],
-    ctx?.activationContext?.[sourceRef],
-    ctx?.actionContext?.[sourceRef],
-    ctx?.actionContext?.actionResults?.[sourceRef],
+  const actionResults = ctx.actionContext
+    ? Reflect.get(ctx.actionContext, "actionResults")
+    : undefined;
+  const contextCandidates: unknown[] = [
+    readContextValue(ctx, sourceRef),
+    ctx.activationContext
+      ? Reflect.get(ctx.activationContext, sourceRef)
+      : undefined,
+    ctx.actionContext ? Reflect.get(ctx.actionContext, sourceRef) : undefined,
+    isRecord(actionResults) ? Reflect.get(actionResults, sourceRef) : undefined,
   ];
-  return contextCandidates.flatMap(flattenCards).filter(Boolean);
+  return contextCandidates.flatMap(flattenCards);
 }
 
 export async function handleRestrictEffectActivationsByNames(
-  action,
-  ctx,
-  _targets,
-  engine,
+  action: ActionOf<"restrict_effect_activations_by_names">,
+  ctx: EffectContext,
+  _targets: ResolvedTargetMap,
+  engine: ActionHandlerEnginePort,
 ) {
   const game = engine?.game;
   const targetPlayer = action.player === "opponent" ? ctx?.opponent : ctx?.player;
@@ -482,10 +759,10 @@ export async function handleRestrictEffectActivationsByNames(
 }
 
 export async function handleRestrictEffectActivationsByAttribute(
-  action,
-  ctx,
-  targets,
-  engine,
+  action: ActionOf<"restrict_effect_activations_by_attribute">,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+  engine: ActionHandlerEnginePort,
 ) {
   const game = engine?.game;
   const targetPlayer = action.player === "opponent" ? ctx?.opponent : ctx?.player;
@@ -523,12 +800,21 @@ export async function handleRestrictEffectActivationsByAttribute(
  * - count: { min, max } for selection count
  * - promptPlayer: boolean (default: true for human player)
  */
-function resolveMarkerExpirationTurn(game, markerConfig = {}) {
+function resolveMarkerExpirationTurn(
+  game: ActionRuntimeGamePort,
+  markerConfig: MarkerConfig = {},
+): number {
   const currentTurn = Number(game?.turnCounter || 0);
-  if (Number.isFinite(markerConfig.expiresOnTurn)) {
+  if (
+    typeof markerConfig.expiresOnTurn === "number" &&
+    Number.isFinite(markerConfig.expiresOnTurn)
+  ) {
     return markerConfig.expiresOnTurn;
   }
-  if (Number.isFinite(markerConfig.durationTurns)) {
+  if (
+    typeof markerConfig.durationTurns === "number" &&
+    Number.isFinite(markerConfig.durationTurns)
+  ) {
     return currentTurn + Math.max(0, markerConfig.durationTurns);
   }
   if (markerConfig.duration === "end_of_next_turn") {
@@ -537,8 +823,14 @@ function resolveMarkerExpirationTurn(game, markerConfig = {}) {
   return currentTurn;
 }
 
-function markAddedCards(selectedCards, action, ctx, game, player) {
-  const markerConfig = action?.markAddedCards;
+function markAddedCards(
+  selectedCards: readonly ActionRuntimeCard[],
+  action: SearchAction,
+  ctx: EffectContext,
+  game: ActionRuntimeGamePort,
+  player: ActionRuntimePlayer,
+): void {
+  const markerConfig = readMarkerConfig(action);
   if (!markerConfig || typeof markerConfig !== "object" || !markerConfig.key) {
     return;
   }
@@ -551,7 +843,10 @@ function markAddedCards(selectedCards, action, ctx, game, player) {
     sourceCardId:
       markerConfig.bindToSource === false ? null : source?.id ?? null,
     sourceEffectId:
-      markerConfig.sourceEffectId || ctx?.effect?.id || action?.sourceEffectId || null,
+      markerConfig.sourceEffectId ||
+      ctx?.effect?.id ||
+      readString(action, "sourceEffectId") ||
+      null,
     controllerId: player?.id || null,
     markedOnTurn: Number(game?.turnCounter || 0),
     expiresOnTurn: resolveMarkerExpirationTurn(game, markerConfig),
@@ -559,14 +854,21 @@ function markAddedCards(selectedCards, action, ctx, game, player) {
 
   for (const card of selectedCards || []) {
     if (!card) continue;
-    if (!card.effectMarkers || typeof card.effectMarkers !== "object") {
-      card.effectMarkers = {};
+    const currentMarkers = Reflect.get(card, "effectMarkers");
+    const effectMarkers = isRecord(currentMarkers) ? currentMarkers : {};
+    if (!isRecord(currentMarkers)) {
+      Reflect.set(card, "effectMarkers", effectMarkers);
     }
-    card.effectMarkers[markerConfig.key] = { ...marker };
+    Reflect.set(effectMarkers, markerConfig.key, { ...marker });
   }
 }
 
-export async function handleAddFromZoneToHand(action, ctx, targets, engine) {
+export async function handleAddFromZoneToHand(
+  action: ActionOf<"add_from_zone_to_hand" | "search_any">,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+  engine: ActionHandlerEnginePort,
+) {
   const { player, source } = ctx;
   const game = engine.game;
   // Online sempre deve pedir seleção para o seat humano, mesmo se o id legado for "bot".
@@ -576,9 +878,10 @@ export async function handleAddFromZoneToHand(action, ctx, targets, engine) {
   if (!player || !game) return false;
 
   const inferredSearch =
-    action?.type === "search_any" || action?.mode === "search_any";
-  const sourceZone = action.zone || (inferredSearch ? "deck" : "graveyard");
-  const zone = player[sourceZone];
+    action?.type === "search_any" || readString(action, "mode") === "search_any";
+  const sourceZone: ZoneInput =
+    action.zone || (inferredSearch ? "deck" : "graveyard");
+  const zone = getPlayerZoneCards(player, sourceZone);
   const count = action.count || { min: 1, max: 1 };
   const minSelect = Math.max(count.min || 0, 0);
 
@@ -594,8 +897,8 @@ export async function handleAddFromZoneToHand(action, ctx, targets, engine) {
 
   // Apply filters
   const baseFilters = action.filters || {};
-  const filters = { ...baseFilters };
-  const addExcludedNames = (names) => {
+  const filters: MutableRuntimeSearchFilter = { ...baseFilters };
+  const addExcludedNames = (names: unknown): void => {
     const list = Array.isArray(names) ? names : [names];
     const existing = Array.isArray(filters.excludeCardNames)
       ? filters.excludeCardNames
@@ -613,21 +916,20 @@ export async function handleAddFromZoneToHand(action, ctx, targets, engine) {
     }
   };
 
-  addExcludedNames(action.excludeName);
-  addExcludedNames(action.excludeCardName);
-  addExcludedNames(action.excludeCardNames);
-  if (action.excludeNameRef && targets?.[action.excludeNameRef]) {
-    const refCards = Array.isArray(targets[action.excludeNameRef])
-      ? targets[action.excludeNameRef]
-      : [targets[action.excludeNameRef]];
+  addExcludedNames(Reflect.get(action, "excludeName"));
+  addExcludedNames(Reflect.get(action, "excludeCardName"));
+  addExcludedNames(Reflect.get(action, "excludeCardNames"));
+  const excludeNameRef = readString(action, "excludeNameRef");
+  if (excludeNameRef && targets?.[excludeNameRef]) {
+    const refCards = getCardsFromTargetRefs(excludeNameRef, targets);
     addExcludedNames(refCards.map((card) => card?.name).filter(Boolean));
   }
+  const excludeTargetRef = readString(action, "excludeTargetRef");
+  const excludeTargetRefs = readStringArray(action, "excludeTargetRefs");
   const excludedTargetCards = getCardsFromTargetRefs(
     [
-      action.excludeTargetRef,
-      ...(Array.isArray(action.excludeTargetRefs)
-        ? action.excludeTargetRefs
-        : []),
+      excludeTargetRef,
+      ...excludeTargetRefs,
     ],
     targets,
   );
@@ -664,7 +966,7 @@ export async function handleAddFromZoneToHand(action, ctx, targets, engine) {
     }
   }
 
-  const extraFilter = (card) => {
+  const extraFilter = (card: ActionRuntimeCard): boolean => {
     if (!card) return false;
     if (Array.isArray(filters.cardKind)) {
       if (!cardMatchesKind(card, filters.cardKind)) return false;
@@ -676,7 +978,8 @@ export async function handleAddFromZoneToHand(action, ctx, targets, engine) {
       const match = action.cardName.toLowerCase();
       if ((card.name || "").toLowerCase() !== match) return false;
     }
-    if (typeof action.cardId === "number" && card.id !== action.cardId) {
+    const cardId = readNumber(action, "cardId");
+    if (typeof cardId === "number" && card.id !== cardId) {
       return false;
     }
     if (
@@ -710,7 +1013,7 @@ export async function handleAddFromZoneToHand(action, ctx, targets, engine) {
     return false;
   }
 
-  const maxSelect = Math.min(count.max, candidates.length);
+  const maxSelect = Math.min(count.max!, candidates.length);
   const canUseTargetSelection =
     promptPlayer !== false &&
     typeof game.startTargetSelectionSession === "function";
@@ -720,7 +1023,9 @@ export async function handleAddFromZoneToHand(action, ctx, targets, engine) {
     return false;
   }
 
-  const finalizeSelection = async (selectedCards) => {
+  const finalizeSelection = async (
+    selectedCards: readonly ActionRuntimeCard[],
+  ): Promise<boolean> => {
     const selected = Array.isArray(selectedCards) ? selectedCards : [];
     if (selected.length === 0) {
       if (minSelect === 0) {
@@ -732,7 +1037,7 @@ export async function handleAddFromZoneToHand(action, ctx, targets, engine) {
       return false;
     }
 
-    const movedCards = [];
+    const movedCards: ActionRuntimeCard[] = [];
     for (const card of selected) {
       if (typeof game.moveCard === "function") {
         const moveResult = await game.moveCard(card, player, "hand", {
@@ -741,7 +1046,7 @@ export async function handleAddFromZoneToHand(action, ctx, targets, engine) {
           effectId: ctx.effect?.id || null,
           awaitEvents: true,
         });
-        if (moveResult && moveResult.success === false) {
+        if (!isMoveSuccess(moveResult)) {
           return false;
         }
         movedCards.push(card);
@@ -809,9 +1114,10 @@ export async function handleAddFromZoneToHand(action, ctx, targets, engine) {
       }
 
       // Apply botPrefer rules: if hand contains a trigger card, prefer a specific search target
-      if (Array.isArray(action.botPrefer) && action.botPrefer.length > 0) {
+      const botPreferences = readBotPreferenceRules(action);
+      if (botPreferences.length > 0) {
         const hand = player.hand || [];
-        for (const rule of action.botPrefer) {
+        for (const rule of botPreferences) {
           const triggerInHand =
             !rule.ifHandHas ||
             hand.some((c) => c.name === rule.ifHandHas);
@@ -842,11 +1148,15 @@ export async function handleAddFromZoneToHand(action, ctx, targets, engine) {
 
       return new Promise((resolve) => {
         game.isResolvingEffect = true;
+        if (!renderer.showSearchModalVisual) {
+          resolve(cards[0]);
+          return;
+        }
         renderer.showSearchModalVisual(
           searchModal,
-          cards,
+          [...cards],
           defaultCardName,
-          (selectedName) => {
+          (selectedName: string) => {
             const chosen =
               cards.find((c) => c && c.name === selectedName) || cards[0];
             game.isResolvingEffect = false;
@@ -863,15 +1173,16 @@ export async function handleAddFromZoneToHand(action, ctx, targets, engine) {
         })
       : undefined,
     selectMulti: (cards, range) => {
-      if (!getUI(game)?.showMultiSelectModal) {
+      const ui = getUI(game);
+      if (!ui.showMultiSelectModal) {
         return cards.slice(0, range.max);
       }
       return new Promise((resolve) => {
-        getUI(game).showMultiSelectModal(
-          cards,
+        ui.showMultiSelectModal!(
+          [...cards],
           { min: range.min, max: range.max },
-          (selected) => {
-            resolve(selected || []);
+          (selected: unknown) => {
+            resolve(Array.isArray(selected) ? selected.filter(isRuntimeCard) : []);
           }
         );
       });
@@ -882,7 +1193,12 @@ export async function handleAddFromZoneToHand(action, ctx, targets, engine) {
   return result;
 }
 
-export async function handleDiscardFromHand(action, ctx, targets, engine) {
+export async function handleDiscardFromHand(
+  action: ActionOf<"discard_from_hand">,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+  engine: ActionHandlerEnginePort,
+) {
   const game = engine?.game;
   const affectedPlayer = resolveActionPlayer(action, ctx);
   const source = ctx?.source || null;
@@ -916,9 +1232,9 @@ export async function handleDiscardFromHand(action, ctx, targets, engine) {
         affectedPlayer,
         game,
       })
-    : null;
+    : undefined;
 
-  let selected = [];
+  let selected: ActionRuntimeCard[] = [];
   if (isAI(affectedPlayer) && typeof selectionContractBuilder === "function") {
     const selectionData = selectionContractBuilder(candidates, {
       min: minSelect,
@@ -935,14 +1251,17 @@ export async function handleDiscardFromHand(action, ctx, targets, engine) {
         activationContext: ctx?.activationContext || {},
       },
     );
+    const normalizedAutoResult = isAutoSelectionResult(autoResult)
+      ? autoResult
+      : null;
     const selectedKeys =
-      autoResult?.ok && autoResult.selections
-        ? autoResult.selections[selectionData.requirementId] || []
+      normalizedAutoResult?.ok && normalizedAutoResult.selections
+        ? normalizedAutoResult.selections[selectionData.requirementId] || []
         : [];
     const decorated = selectionData.decorated || [];
     selected = selectedKeys
       .map((key) => decorated.find((candidate) => candidate.key === key)?.cardRef)
-      .filter(Boolean);
+      .filter(isRuntimeCard);
     if (selected.length < minSelect) {
       selected = rankDiscardCandidates(candidates, maxSelect);
     }
@@ -963,7 +1282,9 @@ export async function handleDiscardFromHand(action, ctx, targets, engine) {
       selectionContractBuilder,
     });
 
-    selected = selection.selected || [];
+    selected = Array.isArray(selection.selected)
+      ? selection.selected.filter(isRuntimeCard)
+      : [];
   }
 
   if (selected.length < minSelect) {
@@ -980,7 +1301,7 @@ export async function handleDiscardFromHand(action, ctx, targets, engine) {
       movedByEffect: true,
       awaitEvents: true,
     });
-    if (moveResult && moveResult.success === false) {
+    if (!isMoveSuccess(moveResult)) {
       return false;
     }
   }
@@ -1011,10 +1332,10 @@ export async function handleDiscardFromHand(action, ctx, targets, engine) {
  * - position: "attack" | "defense" | "choice"
  */
 export async function handleSearchThenOptionalSpecialSummonFromHand(
-  action,
-  ctx,
-  targets,
-  engine,
+  action: ActionOf<"search_then_optional_special_summon_from_hand">,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+  engine: ActionHandlerEnginePort,
 ) {
   const { player, source } = ctx;
   const game = engine.game;
@@ -1023,7 +1344,8 @@ export async function handleSearchThenOptionalSpecialSummonFromHand(
   if (!player || !game) return false;
 
   const sourceZone = action.zone || "deck";
-  const zone = player[sourceZone];
+  const zoneValue = Reflect.get(player, sourceZone);
+  const zone = Array.isArray(zoneValue) ? zoneValue : [];
 
   if (!Array.isArray(zone) || zone.length === 0) {
     getUI(game)?.log(`No cards in ${sourceZone}.`);
@@ -1043,7 +1365,7 @@ export async function handleSearchThenOptionalSpecialSummonFromHand(
   }
 
   const count = action.count || { min: 1, max: 1 };
-  const requestedMax = Number.isFinite(count.max) ? count.max : 1;
+  const requestedMax = Number.isFinite(count.max) ? count.max! : 1;
   const maxSelect = Math.min(requestedMax, 1, candidates.length);
   const minSelect = Math.max(count.min ?? 1, 0);
 
@@ -1100,7 +1422,7 @@ export async function handleSearchThenOptionalSpecialSummonFromHand(
         })
       : null;
 
-  if (moveResult && moveResult.success === false) {
+  if (isRecord(moveResult) && moveResult.success === false) {
     return false;
   }
 
@@ -1178,8 +1500,8 @@ export async function handleSearchThenOptionalSpecialSummonFromHand(
   return true;
 }
 
-function buildSearchFilters(action) {
-  const filters = { ...(action.filters || {}) };
+function buildSearchFilters(action: FollowupSearchAction): MutableRuntimeSearchFilter {
+  const filters: MutableRuntimeSearchFilter = { ...(action.filters || {}) };
   if (action.archetype && !filters.archetype) filters.archetype = action.archetype;
   if (action.cardKind && !filters.cardKind) filters.cardKind = action.cardKind;
   if (action.cardName && !filters.name) filters.name = action.cardName;
@@ -1198,7 +1520,10 @@ function buildSearchFilters(action) {
   return filters;
 }
 
-function cardMatchesSearchAction(card, action) {
+function cardMatchesSearchAction(
+  card: ActionRuntimeCard,
+  action: FollowupSearchAction,
+): boolean {
   if (!card) return false;
   if (action.cardName) {
     const match = action.cardName.toLowerCase();
@@ -1210,7 +1535,10 @@ function cardMatchesSearchAction(card, action) {
   return true;
 }
 
-function selectSingleSearchCard(game, cards) {
+function selectSingleSearchCard(
+  game: ActionRuntimeGamePort,
+  cards: readonly ActionRuntimeCard[],
+): ActionRuntimeCard | undefined | Promise<ActionRuntimeCard | undefined> {
   const renderer = getUI(game);
   const searchModal = renderer?.getSearchModalElements?.();
   const defaultCardName = cards[0]?.name || "";
@@ -1219,13 +1547,13 @@ function selectSingleSearchCard(game, cards) {
     return cards[0];
   }
 
-  return new Promise((resolve) => {
+  return new Promise<ActionRuntimeCard | undefined>((resolve) => {
     game.isResolvingEffect = true;
-    renderer.showSearchModalVisual(
+    renderer.showSearchModalVisual!(
       searchModal,
       cards,
       defaultCardName,
-      (selectedName) => {
+      (selectedName: string) => {
         const chosen =
           cards.find((card) => card && card.name === selectedName) || cards[0];
         game.isResolvingEffect = false;
@@ -1235,18 +1563,29 @@ function selectSingleSearchCard(game, cards) {
   });
 }
 
-function canResolveFollowupSummon(action, player) {
-  const condition = action.summonCondition || action.condition || {};
-  if (!condition.type) return true;
+function canResolveFollowupSummon(
+  action: FollowupSearchAction,
+  player: ActionRuntimePlayer,
+): boolean {
+  const condition = action.summonCondition || action.condition;
+  const conditionType = isRecord(condition)
+    ? Reflect.get(condition, "type")
+    : undefined;
+  if (!conditionType) return true;
 
-  if (condition.type === "empty_field") {
+  if (conditionType === "empty_field") {
     return (player.field || []).length === 0;
   }
 
   return false;
 }
 
-async function shouldPerformOptionalSummon(action, game, player, card) {
+async function shouldPerformOptionalSummon(
+  action: FollowupSearchAction,
+  game: ActionRuntimeGamePort,
+  player: ActionRuntimePlayer,
+  card: ActionRuntimeCard,
+): Promise<boolean> {
   if (action.optional === false || isAI(player)) {
     return true;
   }
@@ -1268,7 +1607,7 @@ async function shouldPerformOptionalSummon(action, game, player, card) {
         title: action.promptTitle || getUIText("ui.optionalSummon.title"),
       },
     );
-    return result && typeof result.then === "function"
+    return isPromiseLikeBoolean(result)
       ? !!(await result)
       : !!result;
   }
@@ -1284,7 +1623,12 @@ async function shouldPerformOptionalSummon(action, game, player, card) {
  * - multiplier: alternative name for fraction
  * - useBaseAtk: when true, use printed ATK with fallback to current ATK
  */
-export async function handleHealFromDestroyedAtk(action, ctx, targets, engine) {
+export async function handleHealFromDestroyedAtk(
+  action: ActionOf<"heal_from_destroyed_atk">,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+  engine: ActionHandlerEnginePort,
+) {
   const { player, destroyed } = ctx;
 
   const game = engine.game;
@@ -1305,9 +1649,12 @@ export async function handleHealFromDestroyedAtk(action, ctx, targets, engine) {
 
   const before = player.lp || 0;
   player.gainLP(healAmount, {
-    cause: action.cause || "effect",
+    cause: readString(action, "cause") || "effect",
     sourceCard: ctx.source || null,
-    sourceRect: action.sourceRect || ctx?.activationContext?.sourceRect || null,
+    sourceRect:
+      Reflect.get(action, "sourceRect") ||
+      ctx?.activationContext?.sourceRect ||
+      null,
   });
   await emitLpGainEvent(game, player, ctx.source, before);
 
@@ -1332,10 +1679,10 @@ export async function handleHealFromDestroyedAtk(action, ctx, targets, engine) {
  * - useBaseAtk: when true, use printed ATK with fallback to current ATK
  */
 export async function handleDamageFromDestroyedAtk(
-  action,
-  ctx,
-  targets,
-  engine,
+  action: ActionOf<"damage_from_destroyed_atk">,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+  engine: ActionHandlerEnginePort,
 ) {
   const { player, opponent, destroyed } = ctx;
   const game = engine.game;
@@ -1388,13 +1735,13 @@ export async function handleDamageFromDestroyedAtk(
  * - player: who gains LP ("self" default)
  */
 export async function handleHealFromDestroyedLevel(
-  action,
+  action: ActionOf<"heal_from_destroyed_level">,
 
-  ctx,
+  ctx: EffectContext,
 
-  targets,
+  targets: ResolvedTargetMap,
 
-  engine
+  engine: ActionHandlerEnginePort,
 ) {
   const { player, destroyed } = ctx;
 
@@ -1416,9 +1763,12 @@ export async function handleHealFromDestroyedLevel(
 
   const before = player.lp || 0;
   player.gainLP(healAmount, {
-    cause: action.cause || "effect",
+    cause: readString(action, "cause") || "effect",
     sourceCard: ctx.source || null,
-    sourceRect: action.sourceRect || ctx?.activationContext?.sourceRect || null,
+    sourceRect:
+      Reflect.get(action, "sourceRect") ||
+      ctx?.activationContext?.sourceRect ||
+      null,
   });
   await emitLpGainEvent(game, player, ctx.source, before);
 
@@ -1441,7 +1791,12 @@ export async function handleHealFromDestroyedLevel(
  * - filters: { owner, zone, cardKind, archetype, type, etc. }
  * - player: who gains LP ("self" default)
  */
-export async function handleHealPerFieldCount(action, ctx, targets, engine) {
+export async function handleHealPerFieldCount(
+  action: ActionOf<"heal_per_field_count">,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+  engine: ActionHandlerEnginePort,
+) {
   const { player, opponent } = ctx;
   const game = engine.game;
 
@@ -1458,7 +1813,7 @@ export async function handleHealPerFieldCount(action, ctx, targets, engine) {
   const targetPlayer = ownerFilter === "opponent" ? opponent : player;
   if (!targetPlayer) return false;
 
-  const zone = targetPlayer[zoneFilter];
+  const zone = Reflect.get(targetPlayer, zoneFilter);
   if (!Array.isArray(zone)) return false;
 
   // Count matching cards
@@ -1481,9 +1836,12 @@ export async function handleHealPerFieldCount(action, ctx, targets, engine) {
   const healAmount = count * amountPerCard;
   const before = player.lp || 0;
   player.gainLP(healAmount, {
-    cause: action.cause || "effect",
+    cause: readString(action, "cause") || "effect",
     sourceCard: ctx.source || null,
-    sourceRect: action.sourceRect || ctx?.activationContext?.sourceRect || null,
+    sourceRect:
+      Reflect.get(action, "sourceRect") ||
+      ctx?.activationContext?.sourceRect ||
+      null,
   });
   await emitLpGainEvent(game, player, ctx.source, before);
 
@@ -1508,7 +1866,12 @@ export async function handleHealPerFieldCount(action, ctx, targets, engine) {
  * - filters: optional card filters
  * - player: who gains LP ("self" default)
  */
-export async function handleHealPerFieldCounter(action, ctx, targets, engine) {
+export async function handleHealPerFieldCounter(
+  action: ActionOf<"heal_per_field_counter">,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+  engine: ActionHandlerEnginePort,
+) {
   const game = engine.game;
   if (!game) return false;
 
@@ -1550,9 +1913,12 @@ export async function handleHealPerFieldCounter(action, ctx, targets, engine) {
   const healAmount = counterCount * amountPerCounter;
   const before = targetPlayer.lp || 0;
   targetPlayer.gainLP(healAmount, {
-    cause: action.cause || "effect",
+    cause: readString(action, "cause") || "effect",
     sourceCard: ctx.source || null,
-    sourceRect: action.sourceRect || ctx?.activationContext?.sourceRect || null,
+    sourceRect:
+      Reflect.get(action, "sourceRect") ||
+      ctx?.activationContext?.sourceRect ||
+      null,
   });
   await emitLpGainEvent(game, targetPlayer, ctx.source, before);
 
@@ -1578,10 +1944,10 @@ export async function handleHealPerFieldCounter(action, ctx, targets, engine) {
  * - player: who gains LP ("self" default)
  */
 export async function handleHealPerOpponentCardsAndHand(
-  action,
-  ctx,
-  targets,
-  engine,
+  action: ActionOf<"heal_per_opponent_cards_and_hand">,
+  ctx: EffectContext,
+  targets: ResolvedTargetMap,
+  engine: ActionHandlerEnginePort,
 ) {
   const { player, opponent } = ctx;
   const game = engine.game;
@@ -1610,9 +1976,12 @@ export async function handleHealPerOpponentCardsAndHand(
   const healAmount = count * amountPerCard;
   const before = targetPlayer.lp || 0;
   targetPlayer.gainLP(healAmount, {
-    cause: action.cause || "effect",
+    cause: readString(action, "cause") || "effect",
     sourceCard: ctx.source || null,
-    sourceRect: action.sourceRect || ctx?.activationContext?.sourceRect || null,
+    sourceRect:
+      Reflect.get(action, "sourceRect") ||
+      ctx?.activationContext?.sourceRect ||
+      null,
   });
   await emitLpGainEvent(game, targetPlayer, ctx.source, before);
 
@@ -1632,13 +2001,13 @@ export async function handleHealPerOpponentCardsAndHand(
  * - filters/archetype/cardKind: optional restriction for the extra summon
  */
 export async function handleGrantAdditionalNormalSummon(
-  action,
+  action: ActionOf<"grant_additional_normal_summon">,
 
-  ctx,
+  ctx: EffectContext,
 
-  targets,
+  targets: ResolvedTargetMap,
 
-  engine
+  engine: ActionHandlerEnginePort,
 ) {
   const { player } = ctx;
 
@@ -1662,7 +2031,7 @@ export async function handleGrantAdditionalNormalSummon(
       effectId: ctx?.effect?.id || null,
     });
   } else {
-    player.additionalNormalSummons += count;
+    player.additionalNormalSummons! += count;
   }
 
   const summonText = count === 1 ? "Normal Summon" : "Normal Summons";
@@ -1678,18 +2047,23 @@ export async function handleGrantAdditionalNormalSummon(
   return true;
 }
 
-function findSourceZone(engine, player, source) {
+function findSourceZone(
+  engine: ActionHandlerEnginePort,
+  player: ActionRuntimePlayer,
+  source: ActionRuntimeCard,
+): ZoneInput | null {
   if (!player || !source) return null;
   if (engine && typeof engine.findCardZone === "function") {
     const zone = engine.findCardZone(player, source);
     if (zone) return zone;
   }
 
-  for (const zone of ["spellTrap", "fieldSpell", "field", "hand"]) {
-    if (Array.isArray(player[zone]) && player[zone].includes(source)) {
+  for (const zone of ["spellTrap", "fieldSpell", "field", "hand"] as const) {
+    const zoneValue = Reflect.get(player, zone);
+    if (Array.isArray(zoneValue) && zoneValue.includes(source)) {
       return zone;
     }
-    if (player[zone] === source) {
+    if (zoneValue === source) {
       return zone;
     }
   }
@@ -1698,13 +2072,13 @@ function findSourceZone(engine, player, source) {
 }
 
 async function moveUpkeepSourceToFailureZone(
-  game,
-  player,
-  source,
-  failureZone,
-  sourceZone,
-  options = {},
-) {
+  game: ActionRuntimeGamePort,
+  player: ActionRuntimePlayer,
+  source: ActionRuntimeCard,
+  failureZone: ZoneInput,
+  sourceZone: ZoneInput | null,
+  options: UpkeepMoveOptions = {},
+): Promise<boolean | NeedsSelectionResult> {
   if (!game || !player || !source || !sourceZone) return false;
 
   if (typeof game.moveCard === "function") {
@@ -1715,40 +2089,73 @@ async function moveUpkeepSourceToFailureZone(
       effectId: options.effectId || null,
       contextLabel: "upkeep_failure",
     });
-    if (moveResult?.needsSelection) {
-      return { ...moveResult, success: false };
+    if (
+      typeof moveResult === "object" &&
+      moveResult !== null &&
+      moveResult.needsSelection
+    ) {
+      return {
+        ...moveResult,
+        needsSelection: true,
+        success: false,
+      } satisfies NeedsSelectionResult;
     }
-    return moveResult !== false && moveResult?.success !== false;
+    return (
+      moveResult !== false &&
+      (typeof moveResult !== "object" ||
+        moveResult === null ||
+        moveResult.success !== false)
+    );
   }
 
-  const zoneArr = Array.isArray(player[sourceZone]) ? player[sourceZone] : null;
+  const sourceZoneValue = Reflect.get(player, sourceZone);
+  const zoneArr = Array.isArray(sourceZoneValue) ? sourceZoneValue : null;
   if (!zoneArr) return false;
 
   const idx = zoneArr.indexOf(source);
   if (idx === -1) return false;
 
   zoneArr.splice(idx, 1);
-  player[failureZone] = player[failureZone] || [];
-  player[failureZone].push(source);
+  const failureZoneValue = Reflect.get(player, failureZone);
+  const failureZoneCards = Array.isArray(failureZoneValue)
+    ? failureZoneValue
+    : [];
+  if (!Array.isArray(failureZoneValue)) {
+    Reflect.set(player, failureZone, failureZoneCards);
+  }
+  failureZoneCards.push(source);
   return true;
 }
 
-function shouldAiPayUpkeep(action, player, source, lpCost) {
-  if (action.aiPay === false) return false;
-  if (typeof action.aiMinLpAfterPay === "number") {
-    return player.lp - lpCost >= action.aiMinLpAfterPay;
+function shouldAiPayUpkeep(
+  action: UpkeepAction,
+  player: ActionRuntimePlayer,
+  source: ActionRuntimeCard,
+  lpCost: number,
+): boolean {
+  if (Reflect.get(action, "aiPay") === false) return false;
+  const aiMinLpAfterPay = readNumber(action, "aiMinLpAfterPay");
+  if (typeof aiMinLpAfterPay === "number") {
+    return player.lp - lpCost >= aiMinLpAfterPay;
   }
-  if (typeof action.aiMaxLpFraction === "number" && player.lp > 0) {
-    return lpCost / player.lp <= action.aiMaxLpFraction;
+  const aiMaxLpFraction = readNumber(action, "aiMaxLpFraction");
+  if (typeof aiMaxLpFraction === "number" && player.lp > 0) {
+    return lpCost / player.lp <= aiMaxLpFraction;
   }
-  if (source?.upkeepValue === "low" && player.lp - lpCost < 2000) {
+  if (Reflect.get(source, "upkeepValue") === "low" && player.lp - lpCost < 2000) {
     return false;
   }
   return true;
 }
 
-async function confirmHumanUpkeepPayment(action, game, player, source, lpCost) {
-  if (action.promptPlayer === false) return true;
+async function confirmHumanUpkeepPayment(
+  action: UpkeepAction,
+  game: ActionRuntimeGamePort,
+  player: ActionRuntimePlayer,
+  source: ActionRuntimeCard,
+  lpCost: number,
+): Promise<boolean> {
+  if (Reflect.get(action, "promptPlayer") === false) return true;
 
   const ui = getUI(game);
   if (ui && typeof ui.showConfirmPrompt === "function") {
@@ -1757,7 +2164,7 @@ async function confirmHumanUpkeepPayment(action, game, player, source, lpCost) {
       source.name ||
       getUIText("ui.upkeep.thisCard");
     const message =
-      action.promptMessage ||
+      readString(action, "promptMessage") ||
       getUIText("ui.upkeep.prompt", { amount: lpCost, cardName });
     const result = ui.showConfirmPrompt(message, {
       kind: "upkeep_cost",
@@ -1765,11 +2172,13 @@ async function confirmHumanUpkeepPayment(action, game, player, source, lpCost) {
       lpCost,
       playerId: player.id,
       confirmLabel:
-        action.confirmLabel || getUIText("ui.upkeep.confirm", { amount: lpCost }),
-      cancelLabel: action.cancelLabel || getUIText("ui.upkeep.cancel"),
-      title: action.promptTitle || getUIText("ui.upkeep.title"),
+        readString(action, "confirmLabel") ||
+        getUIText("ui.upkeep.confirm", { amount: lpCost }),
+      cancelLabel:
+        readString(action, "cancelLabel") || getUIText("ui.upkeep.cancel"),
+      title: readString(action, "promptTitle") || getUIText("ui.upkeep.title"),
     });
-    return result && typeof result.then === "function"
+    return isPromiseLikeBoolean(result)
       ? !!(await result)
       : !!result;
   }
@@ -1780,7 +2189,7 @@ async function confirmHumanUpkeepPayment(action, game, player, source, lpCost) {
       source.name ||
       getUIText("ui.upkeep.thisCard");
     return window.confirm(
-      action.promptMessage ||
+      readString(action, "promptMessage") ||
         getUIText("ui.upkeep.prompt", { amount: lpCost, cardName }),
     );
   }
@@ -1797,13 +2206,13 @@ async function confirmHumanUpkeepPayment(action, game, player, source, lpCost) {
  * - failureZone: zone to send if LP insufficient or player chooses not to pay (default: "graveyard")
  */
 export async function handleUpkeepPayOrSendToGrave(
-  action,
+  action: ActionOf<"upkeep_pay_or_send_to_grave">,
 
-  ctx,
+  ctx: EffectContext,
 
-  targets,
+  targets: ResolvedTargetMap,
 
-  engine
+  engine: ActionHandlerEnginePort,
 ) {
   const { player, source } = ctx;
 
@@ -1816,7 +2225,7 @@ export async function handleUpkeepPayOrSendToGrave(
   const failureZone = action.failureZone || "graveyard";
 
   const sourceZone = findSourceZone(engine, player, source);
-  const sendToFailureZone = async (reason) => {
+  const sendToFailureZone = async (reason: string) => {
     const moved = await moveUpkeepSourceToFailureZone(
       game,
       player,
@@ -1828,7 +2237,7 @@ export async function handleUpkeepPayOrSendToGrave(
         effectId: ctx?.effect?.id || null,
       },
     );
-    if (moved?.needsSelection) {
+    if (typeof moved === "object" && moved.needsSelection) {
       return moved;
     }
     if (!moved) {
