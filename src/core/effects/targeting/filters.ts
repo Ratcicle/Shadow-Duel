@@ -1,3 +1,126 @@
+import type {
+  ActionRuntimeCard,
+  ActionRuntimePlayer,
+  EffectContext,
+  ResolvedTargetMap,
+} from "../../contracts/actionRuntime.js";
+import type { ActionType } from "../../contracts/actions.js";
+import type {
+  CardFilter,
+  EffectDefinition,
+  EffectOwner,
+  PassiveRuleDefinition,
+} from "../../contracts/effects.js";
+import type { CanonicalZone } from "../../contracts/zones.js";
+
+type TargetingEffectType = "destruction" | "banish" | "target" | "negate";
+
+interface TargetingCard extends ActionRuntimeCard {
+  immuneToOpponentEffectsUntilTurn?: number;
+  immuneToOpponentEffects?: boolean;
+  unaffectedByOpponentCardEffects?: boolean;
+  unaffectedByOtherCardEffects?: boolean;
+  cannotBeTargeted?: boolean;
+  immuneTo?: TargetingEffectType | TargetingEffectType[];
+  effects?: readonly EffectDefinition[];
+}
+
+interface TargetingPlayer extends Omit<
+  ActionRuntimePlayer,
+  "field" | "spellTrap" | "fieldSpell"
+> {
+  field: TargetingCard[];
+  spellTrap: TargetingCard[];
+  fieldSpell: TargetingCard | null;
+}
+
+interface ConditionalUnaffectedPassive extends PassiveRuleDefinition {
+  readonly allowedSourceArchetypes?: readonly string[];
+  readonly sourceArchetypeExceptions?: readonly string[];
+  readonly exceptSourceNames?: readonly string[];
+  readonly allowedSourceNames?: readonly string[];
+  readonly sourceNameExceptions?: readonly string[];
+  readonly owners?: readonly EffectOwner[];
+  readonly zones?: readonly CanonicalZone[];
+  readonly requireZone?: CanonicalZone;
+  readonly requireSourceFaceup?: boolean;
+}
+
+export interface ImmunityCheckOptions {
+  effectType?: TargetingEffectType | null;
+  sourceCard?: TargetingCard | null;
+  source?: TargetingCard | null;
+}
+
+export interface ImmunityResult {
+  immune: boolean;
+  reason: string | null;
+}
+
+interface ImmunityFilterOptions extends ImmunityCheckOptions {
+  actionType?: string;
+  logSkipped?: boolean;
+  customImmunityCheck?(
+    card: TargetingCard,
+    sourcePlayer: TargetingPlayer,
+    options: ImmunityFilterOptions,
+  ): ImmunityResult;
+}
+
+interface ImmunityAction {
+  type: ActionType | string;
+  targetRef?: string;
+  effectType?: TargetingEffectType;
+  immunityMode?: "skip_targets" | "skip_action";
+  customImmunityCheck?: ImmunityFilterOptions["customImmunityCheck"];
+}
+
+interface TargetingFilterHost {
+  readonly game?: {
+    player?: TargetingPlayer | null;
+    bot?: TargetingPlayer | null;
+    turnCounter?: number;
+    devModeEnabled?: boolean;
+  } | null;
+  readonly ui?: { log?(message: string): void } | null;
+  findCardZone?(
+    owner: TargetingPlayer,
+    card: TargetingCard,
+  ): CanonicalZone | null;
+  cardMatchesFilters?(card: TargetingCard, filters: CardFilter): boolean;
+  isEffectNegated?(card: TargetingCard): boolean;
+  checkImmunity(
+    card: TargetingCard,
+    sourcePlayer: TargetingPlayer,
+    options?: ImmunityCheckOptions,
+  ): ImmunityResult;
+  filterCardsListByImmunity(
+    cards: TargetingCard[],
+    sourcePlayer: TargetingPlayer,
+    options?: ImmunityFilterOptions,
+  ): ImmunityFilterResult<TargetingCard>;
+  filterTargetsByImmunity(
+    action: ImmunityAction,
+    context: EffectContext,
+    targets: ResolvedTargetMap,
+  ): TargetImmunityFilterResult;
+  inferEffectType(actionType: ActionType | string): TargetingEffectType | null;
+}
+
+export interface ImmunityFilterResult<Card extends TargetingCard> {
+  allowed: Card[];
+  skipped: Card[];
+  skippedReasons: Map<Card, string | null>;
+}
+
+export interface TargetImmunityFilterResult {
+  filteredTargets: ResolvedTargetMap;
+  skippedCount: number;
+  allowedCount: number;
+  skipAction: boolean;
+  skippedReasons: Map<TargetingCard, string | null>;
+}
+
 /**
  * Targeting Filters Module
  * Extracted from EffectEngine.js - immunity and filtering utilities
@@ -13,13 +136,38 @@
  * @param {string} options.effectType - Type of effect (e.g., "destruction", "banish", "target")
  * @returns {{immune: boolean, reason: string|null}} Immunity status and reason
  */
-function asArray(value, fallback = []) {
+function asArray<Value>(
+  value: Value | readonly Value[] | null | undefined,
+  fallback?: readonly Value[],
+): readonly Value[];
+function asArray(
+  value: unknown,
+  fallback: readonly unknown[] = [],
+): readonly unknown[] {
   if (Array.isArray(value)) return value;
   if (value === undefined || value === null) return fallback;
   return [value];
 }
 
-function cardHasAnyArchetype(card, archetypes = []) {
+function isTargetingPlayer(
+  value: TargetingPlayer | null | undefined,
+): value is TargetingPlayer {
+  return value != null;
+}
+
+function isTargetingEffectType(value: unknown): value is TargetingEffectType {
+  return (
+    value === "destruction" ||
+    value === "banish" ||
+    value === "target" ||
+    value === "negate"
+  );
+}
+
+function cardHasAnyArchetype(
+  card: TargetingCard | null | undefined,
+  archetypes: readonly string[] = [],
+): boolean {
   if (!card || archetypes.length === 0) return false;
   const cardArchetypes = Array.isArray(card.archetypes)
     ? card.archetypes
@@ -29,7 +177,10 @@ function cardHasAnyArchetype(card, archetypes = []) {
   return archetypes.some((archetype) => cardArchetypes.includes(archetype));
 }
 
-function getPlayerByCardOwner(game, card) {
+function getPlayerByCardOwner(
+  game: TargetingFilterHost["game"],
+  card: TargetingCard | null | undefined,
+): TargetingPlayer | null {
   if (!game || !card) return null;
   if (card.owner === "player" || card.controller === "player") {
     return game.player || null;
@@ -40,7 +191,9 @@ function getPlayerByCardOwner(game, card) {
   return null;
 }
 
-function getPassiveSourceCards(owner) {
+function getPassiveSourceCards(
+  owner: TargetingPlayer | null | undefined,
+): TargetingCard[] {
   if (!owner) return [];
   const field = Array.isArray(owner.field) ? owner.field : [];
   const spellTrap = Array.isArray(owner.spellTrap) ? owner.spellTrap : [];
@@ -48,7 +201,11 @@ function getPassiveSourceCards(owner) {
   return [...field, ...spellTrap, ...fieldSpell].filter(Boolean);
 }
 
-function findCardZone(engine, owner, card) {
+function findCardZone(
+  engine: TargetingFilterHost | null | undefined,
+  owner: TargetingPlayer | null | undefined,
+  card: TargetingCard | null | undefined,
+): CanonicalZone | null {
   if (!owner || !card) return null;
   if (typeof engine?.findCardZone === "function") {
     const zone = engine.findCardZone(owner, card);
@@ -62,7 +219,10 @@ function findCardZone(engine, owner, card) {
   return null;
 }
 
-function sourceIsAllowedByPassive(sourceCard, passive) {
+function sourceIsAllowedByPassive(
+  sourceCard: TargetingCard | null | undefined,
+  passive: ConditionalUnaffectedPassive,
+): boolean {
   if (!sourceCard) return false;
   const allowedArchetypes = asArray(
     passive.exceptSourceArchetypes ||
@@ -80,12 +240,12 @@ function sourceIsAllowedByPassive(sourceCard, passive) {
 }
 
 function targetMatchesConditionalUnaffectedPassive(
-  engine,
-  card,
-  targetOwner,
-  sourceOwner,
-  passive,
-) {
+  engine: TargetingFilterHost,
+  card: TargetingCard,
+  targetOwner: TargetingPlayer,
+  sourceOwner: TargetingPlayer,
+  passive: ConditionalUnaffectedPassive,
+): boolean {
   if (!card || !targetOwner || !sourceOwner || !passive) return false;
 
   const ownerRelation =
@@ -107,7 +267,7 @@ function targetMatchesConditionalUnaffectedPassive(
   const filters = passive.targetFilters || {};
   if (
     (filters.requireFaceup === true ||
-      filters.faceUp === true ||
+      Reflect.get(filters, "faceUp") === true ||
       passive.targetRequireFaceup === true) &&
     card.isFacedown
   ) {
@@ -125,11 +285,11 @@ function targetMatchesConditionalUnaffectedPassive(
 }
 
 function findConditionalUnaffectedPassiveReason(
-  engine,
-  card,
-  sourcePlayer,
-  options,
-) {
+  engine: TargetingFilterHost,
+  card: TargetingCard,
+  sourcePlayer: TargetingPlayer,
+  options: ImmunityCheckOptions,
+): string | null {
   const game = engine?.game;
   const sourceCard = options.sourceCard || options.source || null;
   if (!game || !card || !sourcePlayer) return null;
@@ -138,7 +298,7 @@ function findConditionalUnaffectedPassiveReason(
   const targetOwner = getPlayerByCardOwner(game, card);
   if (!targetOwner) return null;
 
-  for (const sourceOwner of [game.player, game.bot].filter(Boolean)) {
+  for (const sourceOwner of [game.player, game.bot].filter(isTargetingPlayer)) {
     for (const passiveSource of getPassiveSourceCards(sourceOwner)) {
       if (!passiveSource || passiveSource.isFacedown) continue;
       if (
@@ -151,7 +311,8 @@ function findConditionalUnaffectedPassiveReason(
       const sourceZone = findCardZone(engine, sourceOwner, passiveSource);
       for (const effect of passiveSource.effects || []) {
         if (effect?.timing !== "passive") continue;
-        const passive = effect.passive;
+        if (!("passive" in effect)) continue;
+        const passive: ConditionalUnaffectedPassive = effect.passive;
         if (!passive || passive.type !== "conditional_unaffected_by_effects") {
           continue;
         }
@@ -187,7 +348,12 @@ function findConditionalUnaffectedPassiveReason(
   return null;
 }
 
-export function checkImmunity(card, sourcePlayer, options = {}) {
+export function checkImmunity(
+  this: TargetingFilterHost,
+  card: TargetingCard | null | undefined,
+  sourcePlayer: TargetingPlayer | null | undefined,
+  options: ImmunityCheckOptions = {},
+): ImmunityResult {
   if (!card || !sourcePlayer) {
     return { immune: false, reason: null };
   }
@@ -264,7 +430,11 @@ export function checkImmunity(card, sourcePlayer, options = {}) {
  * Simple boolean check for backward compatibility.
  * Use checkImmunity() for detailed immunity information.
  */
-export function isImmuneToOpponentEffects(card, sourcePlayer) {
+export function isImmuneToOpponentEffects(
+  this: TargetingFilterHost,
+  card: TargetingCard,
+  sourcePlayer: TargetingPlayer,
+): boolean {
   return this.checkImmunity(card, sourcePlayer).immune;
 }
 
@@ -281,14 +451,15 @@ export function isImmuneToOpponentEffects(card, sourcePlayer) {
  * @param {Function} options.customImmunityCheck - Optional custom immunity check function
  * @returns {{allowed: Array, skipped: Array, skippedReasons: Map}} Filtered results with reasons
  */
-export function filterCardsListByImmunity(
-  cardsList,
-  sourcePlayer,
-  options = {}
-) {
-  const allowed = [];
-  const skipped = [];
-  const skippedReasons = new Map();
+export function filterCardsListByImmunity<Card extends TargetingCard>(
+  this: TargetingFilterHost,
+  cardsList: Card[] | null | undefined,
+  sourcePlayer: TargetingPlayer,
+  options: ImmunityFilterOptions = {},
+): ImmunityFilterResult<Card> {
+  const allowed: Card[] = [];
+  const skipped: Card[] = [];
+  const skippedReasons = new Map<Card, string | null>();
 
   if (!Array.isArray(cardsList) || cardsList.length === 0) {
     return { allowed, skipped, skippedReasons };
@@ -340,13 +511,18 @@ export function filterCardsListByImmunity(
  * @param {Object} targets - The targets object with targetRef keys
  * @returns {{filteredTargets: Object, skippedCount: number, allowedCount: number, skipAction: boolean, skippedReasons: Map}}
  */
-export function filterTargetsByImmunity(action, ctx, targets) {
-  const result = {
+export function filterTargetsByImmunity(
+  this: TargetingFilterHost,
+  action: ImmunityAction | null | undefined,
+  ctx: EffectContext | null | undefined,
+  targets: ResolvedTargetMap | null | undefined,
+): TargetImmunityFilterResult {
+  const result: TargetImmunityFilterResult = {
     filteredTargets: { ...targets },
     skippedCount: 0,
     allowedCount: 0,
     skipAction: false,
-    skippedReasons: new Map(),
+    skippedReasons: new Map<TargetingCard, string | null>(),
   };
 
   if (!action?.targetRef || !ctx?.player || !targets) {
@@ -412,7 +588,9 @@ export function filterTargetsByImmunity(action, ctx, targets) {
  * @param {string} actionType - The action type string
  * @returns {string|null} The inferred effect type
  */
-export function inferEffectType(actionType) {
+export function inferEffectType(
+  actionType: ActionType | string | null | undefined,
+): TargetingEffectType | null {
   if (!actionType) return null;
 
   const typeMap = {
@@ -431,7 +609,8 @@ export function inferEffectType(actionType) {
     negate_effects: "negate",
   };
 
-  return typeMap[actionType] || "target";
+  const inferred: unknown = Reflect.get(typeMap, actionType);
+  return isTargetingEffectType(inferred) ? inferred : "target";
 }
 
 /**
@@ -439,7 +618,12 @@ export function inferEffectType(actionType) {
  * This method is kept for backward compatibility but now only returns true
  * when immunityMode is "skip_action" and any target is immune.
  */
-export function shouldSkipActionDueToImmunity(action, targets, ctx) {
+export function shouldSkipActionDueToImmunity(
+  this: TargetingFilterHost,
+  action: ImmunityAction | null | undefined,
+  targets: ResolvedTargetMap,
+  ctx: EffectContext | null | undefined,
+): boolean {
   if (!action || !action.targetRef || !ctx?.player) return false;
 
   // Use new filtering system

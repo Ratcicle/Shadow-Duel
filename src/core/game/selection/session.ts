@@ -3,7 +3,144 @@
  * Extracted from Game.js as part of B.3 modularization.
  */
 
-function getSelectionActor(game, selection = {}) {
+import type {
+  DecisionBrokerMode,
+  DecisionKind,
+  DecisionRequest,
+  DecisionResult,
+  RecordedDecision,
+  SelectionDecisionKind,
+} from "../../contracts/decisions.js";
+import type { DuelCardId, SelectionCandidateKey } from "../../contracts/primitives.js";
+import type {
+  ActiveSelectionSession,
+  NormalizedSelectionContract,
+  NormalizedSelectionExecutionResult,
+  RawSelectionContract,
+  SelectionCandidate,
+  SelectionCardReference,
+  SelectionExecutionReturn,
+  SelectionNormalizationOverrides,
+  SelectionNormalizationResult,
+  SelectionPlayerReference,
+  SelectionRequirement,
+  SelectionResult,
+  SelectionSessionInput,
+  SelectionSessionState,
+  SerializedSelectionCandidateIdentity,
+  SerializedSelectionValue,
+} from "../../contracts/selection.js";
+
+type UnknownObject = { [property: string]: unknown };
+
+interface SelectionModalHandle {
+  close(): void;
+}
+
+interface SelectionSessionUiPort {
+  showFieldTargetingControls?(
+    onConfirm: () => void,
+    onCancel: (() => void) | null,
+    config: {
+      allowCancel: boolean;
+      message: string | null;
+      selectionContract: NormalizedSelectionContract;
+      sourceCard: SelectionCardReference | string | null;
+      sourceCardName: string | null;
+    },
+  ): { updateState?(state: object): void } | null | undefined;
+  hideFieldTargetingControls?(): void;
+  showTargetSelection?(
+    contract: NormalizedSelectionContract,
+    onConfirm: (selections: SelectionResult) => void,
+    onCancel: (() => void) | null,
+    config: { allowCancel: boolean; allowEmpty: boolean },
+  ): SelectionModalHandle | null | undefined;
+  log(message: string): void;
+}
+
+interface SelectionDecisionBrokerState {
+  mode: DecisionBrokerMode;
+}
+
+interface SelectionSessionHost {
+  player: SelectionPlayerReference;
+  bot: SelectionPlayerReference;
+  turn: string;
+  targetSelection: ActiveSelectionSession | null;
+  graveyardSelection: object | null;
+  selectionState: SelectionSessionState;
+  selectionSessionCounter: number;
+  lastSelectionSessionId: number;
+  decisionBroker?: SelectionDecisionBrokerState | null;
+  pendingReplayDecisionPromise?: Promise<void> | null;
+  _activeDeferredReplayCommandDescriptor?: object | null;
+  ui: SelectionSessionUiPort;
+  normalizeSelectionContract(
+    contract: unknown,
+    overrides?: SelectionNormalizationOverrides,
+  ): SelectionNormalizationResult;
+  canUseFieldTargeting(
+    requirements: SelectionRequirement[] | NormalizedSelectionContract,
+  ): boolean;
+  cancelTargetSelection(): void;
+  setSelectionState(state: SelectionSessionState): void;
+  clearTargetHighlights(): void;
+  setSelectionDimming(active: boolean): void;
+  advanceTargetSelection(): void;
+  finishTargetSelection(): Promise<void>;
+  highlightTargetCandidates(): void;
+  updateFieldTargetingProgress(): void;
+  devLog(tag: string, detail?: object): void;
+  ensureDuelCardId?(card: SelectionCardReference): DuelCardId | number | null;
+  requestDecision<Kind extends DecisionKind>(
+    input: DecisionRequest<Kind>,
+  ): Promise<DecisionResult<Kind>>;
+  recordDecision?<Kind extends DecisionKind>(
+    input: DecisionRequest<Kind>,
+    result?: DecisionResult<Kind>,
+  ): RecordedDecision<Kind>;
+  notify(eventName: string, payload: object): void;
+  normalizeActivationResult(
+    result: SelectionExecutionReturn,
+  ): NormalizedSelectionExecutionResult;
+  recordReplayCommand?(descriptor: object): void;
+}
+
+function isObject(value: unknown): value is UnknownObject {
+  return typeof value === "object" && value !== null;
+}
+
+function readValue(value: UnknownObject, key: string): unknown {
+  return Reflect.get(value, key);
+}
+
+function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
+  return (
+    (typeof value === "object" && value !== null) ||
+    typeof value === "function"
+  ) && typeof Reflect.get(value, "then") === "function";
+}
+
+function getSelectionDecisionKind(
+  selection: ActiveSelectionSession,
+): SelectionDecisionKind {
+  const legacyPurpose = Reflect.get(selection.selectionContract, "purpose");
+  return (
+    legacyPurpose || selection.kind || "target_selection"
+  ) as SelectionDecisionKind;
+}
+
+function getCurrentTargetSelection(
+  game: SelectionSessionHost,
+): ActiveSelectionSession | null {
+  return Reflect.get(game, "targetSelection") as ActiveSelectionSession | null;
+}
+
+function getSelectionActor(
+  game: SelectionSessionHost,
+  selection: Partial<SelectionSessionInput> | ActiveSelectionSession = {},
+): SelectionPlayerReference {
   return (
     selection.owner ||
     selection.player ||
@@ -12,7 +149,10 @@ function getSelectionActor(game, selection = {}) {
   );
 }
 
-function serializeSelectionCandidate(game, candidate = {}) {
+function serializeSelectionCandidate(
+  game: SelectionSessionHost,
+  candidate: SelectionCandidate,
+): SerializedSelectionCandidateIdentity {
   const card = candidate.cardRef || candidate.card || null;
   const duelCardId = card ? game.ensureDuelCardId?.(card) ?? null : null;
   return {
@@ -24,8 +164,11 @@ function serializeSelectionCandidate(game, candidate = {}) {
   };
 }
 
-function serializeSelectionValue(game, selection = {}) {
-  const selections = {};
+function serializeSelectionValue(
+  game: SelectionSessionHost,
+  selection: ActiveSelectionSession,
+): SerializedSelectionValue {
+  const selections: SerializedSelectionValue["selections"] = {};
   for (const requirement of selection.requirements || []) {
     const selectedKeys = selection.selections?.[requirement.id] || [];
     selections[requirement.id] = selectedKeys.map((selectedKey) => {
@@ -40,37 +183,57 @@ function serializeSelectionValue(game, selection = {}) {
   return { selections };
 }
 
-function deserializeSelectionValue(game, selection, value = {}) {
-  const output = {};
+function deserializeSelectionValue(
+  game: SelectionSessionHost,
+  selection: ActiveSelectionSession,
+  value: unknown = {},
+): SelectionResult {
+  const output: SelectionResult = {};
+  const valueObject = isObject(value) ? value : {};
+  const recordedSelections = readValue(valueObject, "selections");
   for (const requirement of selection.requirements || []) {
-    const recorded = value.selections?.[requirement.id] || [];
-    output[requirement.id] = recorded
-      .map((identity) => {
+    const recorded = isObject(recordedSelections)
+      ? readValue(recordedSelections, requirement.id)
+      : undefined;
+    const recordedEntries = Array.isArray(recorded) ? recorded : [];
+    output[requirement.id] = recordedEntries
+      .map((identity: SerializedSelectionCandidateIdentity) => {
         const match = (requirement.candidates || []).find((candidate) => {
           const current = serializeSelectionCandidate(game, candidate);
-          if (identity.duelCardId != null) {
+          const identityDuelCardId = Reflect.get(identity, "duelCardId");
+          const identityEffectId = Reflect.get(identity, "effectId");
+          const identityCandidateKey = Reflect.get(identity, "candidateKey");
+          const identityKey = Reflect.get(identity, "key");
+          if (identityDuelCardId != null) {
             return (
-              Number(current.duelCardId) === Number(identity.duelCardId) &&
-              (identity.effectId == null || current.effectId === identity.effectId)
+              Number(Reflect.get(current, "duelCardId")) ===
+                Number(identityDuelCardId) &&
+              (identityEffectId == null ||
+                Reflect.get(current, "effectId") === identityEffectId)
             );
           }
-          if (identity.candidateKey != null) {
-            return String(current.candidateKey) === String(identity.candidateKey);
+          if (identityCandidateKey != null) {
+            return (
+              String(Reflect.get(current, "candidateKey")) ===
+              String(identityCandidateKey)
+            );
           }
-          return String(candidate.key ?? candidate.id) === String(identity.key);
+          return String(candidate.key ?? candidate.id) === String(identityKey);
         });
         return match?.key ?? match?.id ?? null;
       })
-      .filter((key) => key != null);
+      .filter((key) => key != null) as SelectionCandidateKey[];
   }
   return output;
 }
 
 /**
  * Set the current selection state.
- * @param {string} state - New state ("idle"|"selecting"|"confirming"|"resolving")
  */
-export function setSelectionState(state) {
+export function setSelectionState(
+  this: SelectionSessionHost,
+  state: SelectionSessionState,
+): void {
   this.selectionState = state;
   if (this.targetSelection) {
     this.targetSelection.state = state;
@@ -79,9 +242,11 @@ export function setSelectionState(state) {
 
 /**
  * Force clear target selection (invariant cleanup).
- * @param {string} reason - Reason for clearing
  */
-export function forceClearTargetSelection(reason = "invariant_cleanup") {
+export function forceClearTargetSelection(
+  this: SelectionSessionHost,
+  reason = "invariant_cleanup",
+): void {
   if (!this.targetSelection) return;
   this.devLog("SELECTION_FORCE_CLEAR", {
     summary: `Selection cleared (${reason})`,
@@ -100,9 +265,11 @@ export function forceClearTargetSelection(reason = "invariant_cleanup") {
 
 /**
  * Start a new target selection session.
- * @param {Object} session - Session configuration with selectionContract
  */
-export function startTargetSelectionSession(session) {
+export function startTargetSelectionSession(
+  this: SelectionSessionHost,
+  session: SelectionSessionInput | null | undefined,
+): void | Promise<void> {
   if (!session || !session.selectionContract) return;
 
   const normalizedContract = this.normalizeSelectionContract(
@@ -161,10 +328,7 @@ export function startTargetSelectionSession(session) {
   if (this.decisionBroker?.mode === "replay") {
     const replaySelection = this.targetSelection;
     const actor = getSelectionActor(this, replaySelection);
-    const decisionKind =
-      replaySelection.selectionContract?.purpose ||
-      replaySelection.kind ||
-      "target_selection";
+    const decisionKind = getSelectionDecisionKind(replaySelection);
     const pending = this.requestDecision({
       kind: decisionKind,
       actor,
@@ -184,7 +348,7 @@ export function startTargetSelectionSession(session) {
       this.setSelectionState("confirming");
       await this.finishTargetSelection();
     });
-    let trackedPromise = null;
+    let trackedPromise: Promise<void> | null = null;
     trackedPromise = pending.finally(() => {
       if (this.pendingReplayDecisionPromise === trackedPromise) {
         this.pendingReplayDecisionPromise = null;
@@ -204,11 +368,11 @@ export function startTargetSelectionSession(session) {
       
       this.notify("decision_requested", {
         player: "player",
-        candidates: firstReq.candidates.map(c => ({
-          id: c.cardRef?.id,
-          name: c.cardRef?.name,
-          zone: c.zone || "field",
-          key: c.key,
+        candidates: firstReq.candidates.map((candidate) => ({
+          id: candidate.cardRef?.id,
+          name: candidate.cardRef?.name,
+          zone: candidate.zone || "field",
+          key: candidate.key,
         })),
         effectId,
         sourceCard: session.card,
@@ -246,7 +410,7 @@ export function startTargetSelectionSession(session) {
       !this.targetSelection.preventCancel;
     const modalHandle = this.ui.showTargetSelection(
       selectionContract,
-      (chosenMap) => {
+      (chosenMap: SelectionResult) => {
         if (!this.targetSelection) return;
         this.setSelectionState("confirming");
         this.targetSelection.selections = chosenMap || {};
@@ -277,7 +441,7 @@ export function startTargetSelectionSession(session) {
 /**
  * Advance to the next requirement in the selection session.
  */
-export function advanceTargetSelection() {
+export function advanceTargetSelection(this: SelectionSessionHost): void {
   if (!this.targetSelection) return;
   if (
     this.targetSelection.state &&
@@ -310,7 +474,9 @@ export function advanceTargetSelection() {
 /**
  * Finish the current target selection session and execute callback.
  */
-export async function finishTargetSelection() {
+export async function finishTargetSelection(
+  this: SelectionSessionHost,
+): Promise<void> {
   if (!this.targetSelection) return;
   const selection = this.targetSelection;
   this.setSelectionState("resolving");
@@ -331,8 +497,14 @@ export async function finishTargetSelection() {
     if (selectedKeys.length > 0 && selection.requirements?.length > 0) {
       const firstReq = selection.requirements[0];
       const selectedCards = selectedKeys
-        .map(key => firstReq?.candidates?.find(c => c.key === key)?.cardRef)
-        .filter(Boolean);
+        .map(
+          (key) =>
+            firstReq?.candidates?.find((candidate) => candidate.key === key)
+              ?.cardRef,
+        )
+        .filter(
+          (card): card is SelectionCardReference => card != null,
+        );
       
       if (selectedCards.length > 0) {
         // Usar primeiro efeito como ID padrão, ou kind da sessão como fallback
@@ -342,9 +514,9 @@ export async function finishTargetSelection() {
           player: "player",
           sourceCard: selection.card,
           effectId,
-          selectedTargets: selectedCards.map(c => ({
-            id: c.id,
-            name: c.name,
+          selectedTargets: selectedCards.map((card) => ({
+            id: card.id,
+            name: card.name,
           })),
           selectedCount: selectedCards.length,
         });
@@ -356,9 +528,7 @@ export async function finishTargetSelection() {
   this.recordDecision?.(
     {
       kind:
-        selection.selectionContract?.purpose ||
-        selection.kind ||
-        "target_selection",
+        getSelectionDecisionKind(selection),
       actor,
       candidates: (selection.requirements || []).flatMap(
         (requirement) => requirement.candidates || [],
@@ -369,7 +539,7 @@ export async function finishTargetSelection() {
     selection.selections || {},
   );
 
-  let normalized = {
+  let normalized: NormalizedSelectionExecutionResult = {
     success: false,
     needsSelection: false,
     reason: "Selection failed.",
@@ -402,7 +572,7 @@ export async function finishTargetSelection() {
 
     if (typeof selection.onResult === "function") {
       const result = selection.onResult(normalized);
-      if (result && typeof result.then === "function") {
+      if (isPromiseLike(result)) {
         await result;
       }
     }
@@ -414,13 +584,14 @@ export async function finishTargetSelection() {
     }
     const replayCommand = deferredReplayCommand;
     if (replayCommand) {
-      if (normalized.needsSelection && this.targetSelection) {
-        this.targetSelection.replayCommandDescriptor = replayCommand;
+      const nextSelection = getCurrentTargetSelection(this);
+      if (normalized.needsSelection && nextSelection) {
+        nextSelection.replayCommandDescriptor = replayCommand;
       } else {
         this.recordReplayCommand?.(replayCommand);
       }
     }
-    if (!this.targetSelection) {
+    if (!getCurrentTargetSelection(this)) {
       this.setSelectionState("idle");
     }
   }
@@ -429,7 +600,7 @@ export async function finishTargetSelection() {
 /**
  * Cancel the current target selection session.
  */
-export function cancelTargetSelection() {
+export function cancelTargetSelection(this: SelectionSessionHost): void {
   if (!this.targetSelection) return;
   if (this.targetSelection.preventCancel) {
     return;

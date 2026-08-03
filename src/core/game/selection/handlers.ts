@@ -3,20 +3,79 @@
  * Extracted from Game.js as part of B.3 modularization.
  */
 
+import type { CardFilter } from "../../contracts/effects.js";
+import type {
+  ActiveSelectionSession,
+  RawSelectionCandidate,
+  RawSelectionContract,
+  RawSelectionRequirement,
+  SelectionCandidate,
+  SelectionCardReference,
+  SelectionPlayerReference,
+  SelectionRequirement,
+  SelectionResult,
+  SelectionSessionInput,
+  SelectionSessionResolver,
+  SelectionZone,
+} from "../../contracts/selection.js";
+import type { ZoneInput } from "../../contracts/zones.js";
+
+interface TargetSelectionHandlerHost {
+  targetSelection: ActiveSelectionSession | null;
+  player: SelectionPlayerReference;
+  bot: SelectionPlayerReference;
+  advanceTargetSelection(): void;
+  highlightTargetCandidates(): void;
+  updateFieldTargetingProgress(): void;
+}
+
+interface AskPlayerSelectionConfig {
+  owner?: "player";
+  zone?: ZoneInput;
+  filter?:
+    | CardFilter
+    | ((card: SelectionCardReference) => boolean);
+  min?: number;
+  max?: number;
+  useFieldTargeting?: boolean;
+  message?: string | null;
+}
+
+interface SelectionHandlerHost {
+  player: SelectionPlayerReference;
+  bot: SelectionPlayerReference;
+  getZone(
+    player: SelectionPlayerReference,
+    zone: ZoneInput,
+  ): SelectionCardReference[] | null;
+  buildSelectionCandidateKey(
+    candidate: RawSelectionCandidate,
+    fallbackIndex?: number,
+  ): SelectionCandidate["key"];
+  canUseFieldTargeting(
+    requirements: RawSelectionRequirement[],
+  ): boolean;
+  startTargetSelectionSession(
+    session: SelectionSessionInput,
+  ): void | Promise<void>;
+}
+
+interface CustomSelectionRequirement extends RawSelectionRequirement {
+  id: string;
+  candidates: SelectionCandidate[];
+}
+
 /**
  * Handle a click on a target during field targeting selection.
- * @param {string} ownerId - "player" or "bot"
- * @param {number} cardIndex - Index of the card in the zone
- * @param {HTMLElement} cardEl - Card element (unused but kept for signature)
- * @param {string|null} location - Zone hint ("field", "spellTrap", "fieldSpell")
- * @returns {boolean} Whether the click was handled
+ * The card element stays in the signature for compatibility with Renderer.
  */
 export function handleTargetSelectionClick(
-  ownerId,
-  cardIndex,
-  cardEl,
-  location = null
-) {
+  this: TargetSelectionHandlerHost,
+  ownerId: string,
+  cardIndex: number,
+  _cardEl: HTMLElement,
+  location: SelectionZone | null = null,
+): boolean {
   if (!this.targetSelection) return false;
   if (!this.targetSelection.usingFieldTargeting) return false;
   if (
@@ -41,7 +100,7 @@ export function handleTargetSelectionClick(
   }
 
   const ownerPlayer = ownerId === "player" ? this.player : this.bot;
-  let card = null;
+  let card: SelectionCardReference | null | undefined = null;
   const zoneHint = location || requirement.zones?.[0] || "field";
 
   if (zoneHint === "fieldSpell") {
@@ -64,7 +123,7 @@ export function handleTargetSelectionClick(
     cardIndex: cardIndex,
     candidatesCount: requirement.candidates.length,
     candidateNames: requirement.candidates.map(
-      (c) => `${c.name} [idx:${c.zoneIndex}]`
+    (candidate) => `${candidate.name} [idx:${candidate.zoneIndex}]`,
     ),
   });
 
@@ -73,17 +132,17 @@ export function handleTargetSelectionClick(
   // zoneIndex can become stale if the board is re-rendered between
   // when decoratedCandidates were created and when the click occurs
   const candidate = requirement.candidates.find(
-    (cand) => cand.cardRef === card
+    (candidate) => candidate.cardRef === card,
   );
 
   if (!candidate) {
     console.log("[Game] Candidate not found. Checking references:");
-    requirement.candidates.forEach((cand, i) => {
-      console.log(`  Candidate ${i}:`, {
-        name: cand.name,
-        zoneIndex: cand.zoneIndex,
+    requirement.candidates.forEach((candidate, index) => {
+      console.log(`  Candidate ${index}:`, {
+        name: candidate.name,
+        zoneIndex: candidate.zoneIndex,
         cardIndex: cardIndex,
-        refMatch: cand.cardRef === card,
+        refMatch: candidate.cardRef === card,
       });
     });
     return true;
@@ -147,7 +206,10 @@ export function handleTargetSelectionClick(
  * @param {Object} config - Selection configuration
  * @returns {Promise<Array>} Promise resolving to selected cards
  */
-export function askPlayerToSelectCards(config = {}) {
+export function askPlayerToSelectCards(
+  this: SelectionHandlerHost,
+  config: AskPlayerSelectionConfig = {},
+): Promise<SelectionCardReference[]> {
   const owner = config.owner === "player" ? this.player : null;
   if (!owner) return Promise.resolve([]);
 
@@ -162,10 +224,11 @@ export function askPlayerToSelectCards(config = {}) {
       candidates = candidates.filter((card) => {
         return Object.entries(filter).every(([key, value]) => {
           if (!card) return false;
+          const cardValue = Reflect.get(card, key);
           if (Array.isArray(value)) {
-            return value.includes(card[key]);
+            return value.includes(cardValue);
           }
-          return card[key] === value;
+          return cardValue === value;
         });
       });
     }
@@ -178,7 +241,7 @@ export function askPlayerToSelectCards(config = {}) {
     return Promise.resolve([]);
   }
 
-  const decorated = candidates.map((card, idx) => {
+  const decorated = candidates.map((card, idx): RawSelectionCandidate => {
     const ownerLabel = card.owner === "player" ? "player" : "opponent";
     const ownerPlayer = card.owner === "player" ? this.player : this.bot;
     const zoneArr = this.getZone(ownerPlayer, zoneName) || [];
@@ -198,14 +261,14 @@ export function askPlayerToSelectCards(config = {}) {
     };
   });
 
-  return new Promise((resolve) => {
-    const candidatesWithKeys = decorated.map((cand, idx) => {
+  return new Promise<SelectionCardReference[]>((resolve) => {
+    const candidatesWithKeys = decorated.map((cand, idx): SelectionCandidate => {
       if (!cand.key) {
         cand.key = this.buildSelectionCandidateKey(cand, idx);
       }
-      return cand;
+      return cand as SelectionCandidate;
     });
-    const requirement = {
+    const requirement: CustomSelectionRequirement = {
       id: "custom_select",
       min,
       max,
@@ -225,7 +288,7 @@ export function askPlayerToSelectCards(config = {}) {
         ? config.useFieldTargeting && canUseFieldTargeting
         : canUseFieldTargeting;
 
-    const selectionContract = {
+    const selectionContract: RawSelectionContract = {
       kind: "choice",
       message:
         config.message || "Select card(s) by clicking the highlighted targets.",
@@ -237,13 +300,15 @@ export function askPlayerToSelectCards(config = {}) {
     this.startTargetSelectionSession({
       kind: "custom",
       selectionContract,
-      resolve,
-      execute: (selections) => {
+      resolve: resolve as SelectionSessionResolver,
+      execute: (selections: SelectionResult) => {
         const chosenKeys = selections[requirement.id] || [];
         const chosen = chosenKeys
           .map((key) => requirement.candidates.find((cand) => cand.key === key))
           .map((cand) => cand?.cardRef)
-          .filter(Boolean);
+          .filter(
+            (card): card is SelectionCardReference => card != null,
+          );
         resolve(chosen);
         return { success: true, needsSelection: false };
       },

@@ -7,8 +7,233 @@
 
 import { isAI } from "../../Player.js";
 import { checkSpecialSummonEligibility } from "../../game/summon/eligibility.js";
+import type {
+  ActionRuntimeCard,
+  ActionRuntimeGamePort,
+  ActionRuntimePlayer,
+  ActionTargetValue,
+  EffectContext,
+  ResolvedTargetMap,
+} from "../../contracts/actionRuntime.js";
+import type {
+  CardFilter,
+  EffectTarget,
+  EffectZone,
+  NumericComparisonOperator,
+} from "../../contracts/effects.js";
+import type { BattlePosition } from "../../contracts/cards.js";
+import type { SelectionCandidateKey } from "../../contracts/primitives.js";
+import type {
+  CanonicalSelectionMap,
+  RawSelectionCandidate,
+  RawSelectionContract,
+  RawSelectionRequirement,
+  SelectionFilter,
+  SelectionPurpose,
+  SelectionResult,
+  SelectionStrategy,
+} from "../../contracts/selection.js";
 
-function buildContextTargetFilters(def = {}) {
+type RuntimeCard = ActionRuntimeCard;
+type RuntimePlayer = ActionRuntimePlayer & { debug?: boolean };
+
+interface TargetActivationContext {
+  preview?: boolean;
+  isPreview?: boolean;
+  autoSelectTargets?: boolean;
+  logTargets?: boolean;
+  resolvedTargets?: ResolvedTargetMap | null;
+  purpose?: SelectionPurpose;
+  timing?: string;
+  effectId?: string | null;
+  _autoSelectAttempted?: boolean;
+}
+
+type TargetResolutionContext = Omit<
+  EffectContext,
+  "activationContext" | "player" | "opponent"
+> & {
+  player?: RuntimePlayer | null;
+  opponent?: RuntimePlayer | null;
+  activationContext?: TargetActivationContext | null;
+  _selectCandidatesTargetMap?: ResolvedTargetMap;
+};
+
+interface RuntimeTargetExtensions {
+  readonly cardIds?: readonly number[];
+  readonly level?: number;
+  readonly levelOp?: NumericComparisonOperator;
+  readonly maxAtk?: number;
+  readonly minDef?: number;
+  readonly excludeContextCards?: string | readonly string[];
+  readonly excludeCardNames?: readonly string[];
+  readonly excludeTargetRefs?: readonly string[];
+  readonly excludeCards?: readonly RuntimeCard[];
+  readonly excludeInstanceId?: string | number;
+  readonly excludeInstanceIds?: readonly (string | number)[];
+  readonly lastSummonMethods?: readonly string[];
+  readonly lastSummonedFromZones?: readonly EffectZone[];
+  readonly specialSummonProcedure?: string;
+  readonly summonProcedure?: string;
+  readonly summonMethod?: string;
+  readonly summonToOwner?: "self" | "opponent";
+  readonly destinationOwner?: "self" | "opponent";
+  readonly position?: BattlePosition | "any";
+  readonly strategy?: SelectionStrategy;
+  readonly tags?: readonly string[];
+  readonly allowSelf?: boolean;
+  readonly distinct?: boolean;
+}
+
+type RuntimeTargetDefinition = Omit<
+  EffectTarget,
+  "type" | "zone" | "zones"
+> &
+  RuntimeTargetExtensions & {
+    readonly type?: string | readonly string[];
+    readonly zone?: EffectZone;
+    readonly zones?: readonly EffectZone[];
+  };
+
+type MutableSelectionFilter = {
+  -readonly [Key in keyof SelectionFilter]: SelectionFilter[Key];
+};
+
+interface TargetCandidateSelection {
+  zoneName: EffectZone;
+  candidates: RuntimeCard[];
+}
+
+interface TargetAutoSelectorPort {
+  select(
+    selectionContract: RawSelectionContract,
+    context?: {
+      owner?: RuntimePlayer | null;
+      activationContext?: TargetActivationContext | null;
+      selectionKind?: "target";
+    },
+  ): { ok: false; reason?: string } | { ok: true; selections: SelectionResult };
+}
+
+type TargetResolutionGamePort = Omit<
+  ActionRuntimeGamePort,
+  "autoSelector" | "player" | "bot" | "canSpecialSummonUnderRestrictions"
+> & {
+  player: RuntimePlayer;
+  bot: RuntimePlayer;
+  autoSelector?: TargetAutoSelectorPort | null;
+  devModeEnabled?: boolean;
+  canSpecialSummonUnderRestrictions?(
+    card: RuntimeCard,
+    player: RuntimePlayer | null,
+    options?: object,
+  ): { ok: boolean; reason?: string };
+};
+
+interface TargetResolutionHost {
+  game: TargetResolutionGamePort;
+  selectCandidates(
+    definition: RuntimeTargetDefinition,
+    context: TargetResolutionContext,
+  ): TargetCandidateSelection;
+  cardMatchesFilters?(card: RuntimeCard, filters: CardFilter): boolean;
+  findCardZone(player: RuntimePlayer, card: RuntimeCard): EffectZone | null;
+  getZone(player: RuntimePlayer, zone: EffectZone): RuntimeCard[] | null;
+  buildSelectionCandidateKey(
+    candidate?: RawSelectionCandidate,
+    fallbackIndex?: number,
+  ): SelectionCandidateKey;
+  resolveTargets(
+    targetDefinitions: readonly unknown[],
+    context: EffectContext,
+    selections?: object | null,
+  ): TargetResolutionResult;
+}
+
+type TargetResolutionResult =
+  | { ok: false; needsSelection?: false; reason: string }
+  | { ok: true; needsSelection?: false; targets: ResolvedTargetMap }
+  | {
+      ok?: undefined;
+      needsSelection: true;
+      selectionContract: TargetSelectionContract;
+      targets: ResolvedTargetMap;
+    };
+
+interface EffectiveTargetUpdates {
+  excludeCardNames?: string[];
+  excludeCards?: RuntimeCard[];
+  excludeInstanceIds?: (string | number)[];
+}
+
+type DecoratedTargetCandidate = RawSelectionCandidate & {
+  idx: number;
+  key: SelectionCandidateKey;
+  cardRef: RuntimeCard;
+  zone: EffectZone;
+  zoneIndex: number;
+};
+
+interface TargetSelectionRequirement
+  extends Omit<RawSelectionRequirement, "id" | "candidates" | "filters"> {
+  id: string;
+  filters: SelectionFilter;
+  candidates: DecoratedTargetCandidate[];
+}
+
+interface TargetSelectionContract
+  extends Omit<RawSelectionContract, "requirements"> {
+  requirements: TargetSelectionRequirement[];
+}
+
+function isObject(value: unknown): value is object {
+  return typeof value === "object" && value !== null;
+}
+
+function asRuntimeTargetDefinition(value: unknown): RuntimeTargetDefinition {
+  return value as RuntimeTargetDefinition;
+}
+
+function readProperty(value: object, property: string): unknown {
+  return Reflect.get(value, property);
+}
+
+function asRuntimeCard(
+  value: Exclude<ActionTargetValue, null | undefined>,
+): RuntimeCard {
+  return value as RuntimeCard;
+}
+
+function normalizeResolvedCards(value: ActionTargetValue): RuntimeCard[] {
+  if (Array.isArray(value)) return value.filter(Boolean);
+  if (value === undefined || value === null) return [];
+  return [asRuntimeCard(value)];
+}
+
+function getResolvedCards(
+  targets: ResolvedTargetMap,
+  reference: string,
+): RuntimeCard[] {
+  return normalizeResolvedCards(targets[reference]);
+}
+
+function normalizeUnknownCards(value: unknown): RuntimeCard[] {
+  const values = Array.isArray(value)
+    ? value.filter(Boolean)
+    : value
+      ? [value]
+      : [];
+  return values.filter(isObject).map((entry) => entry as RuntimeCard);
+}
+
+function buildContextTargetFilters(
+  def: RuntimeTargetDefinition,
+): CardFilter & {
+  readonly cardIds?: readonly number[];
+  readonly lastSummonMethods?: readonly string[];
+  readonly lastSummonedFromZone?: EffectZone;
+  readonly lastSummonedFromZones?: readonly EffectZone[];
+} {
   return {
     ...(def.filters || {}),
     ...(def.cardKind ? { cardKind: def.cardKind } : {}),
@@ -39,20 +264,26 @@ function buildContextTargetFilters(def = {}) {
   };
 }
 
-function normalizeContextCardKeys(value) {
-  if (Array.isArray(value)) return value.filter(Boolean);
+function normalizeContextCardKeys(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.filter((entry): entry is string => typeof entry === "string");
+  }
   if (value === undefined || value === null) return [];
-  return [value];
+  return typeof value === "string" ? [value] : [];
 }
 
-function getContextCards(ctx, key) {
+function getContextCards(
+  ctx: TargetResolutionContext | null | undefined,
+  key: string,
+): RuntimeCard[] {
   if (!ctx || !key) return [];
-  const value = ctx[key];
-  if (Array.isArray(value)) return value.filter(Boolean);
-  return value ? [value] : [];
+  return normalizeUnknownCards(readProperty(ctx, key));
 }
 
-function isSameCardReference(left, right) {
+function isSameCardReference(
+  left: RuntimeCard | null | undefined,
+  right: RuntimeCard | null | undefined,
+): boolean {
   if (!left || !right) return false;
   if (left === right) return true;
   const leftInstance = left.instanceId ?? left._instanceId ?? null;
@@ -60,7 +291,11 @@ function isSameCardReference(left, right) {
   return leftInstance != null && leftInstance === rightInstance;
 }
 
-function isExcludedContextCard(def, ctx, card) {
+function isExcludedContextCard(
+  def: RuntimeTargetDefinition,
+  ctx: TargetResolutionContext,
+  card: RuntimeCard,
+): boolean {
   const keys = [
     ...normalizeContextCardKeys(def.excludeContextCard),
     ...normalizeContextCardKeys(def.excludeContextCards),
@@ -73,18 +308,28 @@ function isExcludedContextCard(def, ctx, card) {
   );
 }
 
-function getSpecialSummonProcedureForTarget(def = {}) {
+function getSpecialSummonProcedureForTarget(
+  def: RuntimeTargetDefinition,
+): string {
   return def.summonProcedure || def.specialSummonProcedure || "special";
 }
 
-function getSpecialSummonDestinationPlayer(def = {}, ctx = {}) {
+function getSpecialSummonDestinationPlayer(
+  def: RuntimeTargetDefinition,
+  ctx: TargetResolutionContext,
+): RuntimePlayer | null {
   if (def.summonToOwner === "opponent" || def.destinationOwner === "opponent") {
     return ctx.opponent || null;
   }
   return ctx.player || null;
 }
 
-function canTargetBeSpecialSummoned(engine, card, def = {}, ctx = {}) {
+function canTargetBeSpecialSummoned(
+  engine: TargetResolutionHost,
+  card: RuntimeCard | null | undefined,
+  def: RuntimeTargetDefinition,
+  ctx: TargetResolutionContext,
+): boolean {
   if (!card) return false;
   const summonProcedure = getSpecialSummonProcedureForTarget(def);
   const eligibility = checkSpecialSummonEligibility(card, {
@@ -110,7 +355,10 @@ function canTargetBeSpecialSummoned(engine, card, def = {}, ctx = {}) {
   return restrictionCheck?.ok !== false;
 }
 
-function findContextTargetZone(engine, card) {
+function findContextTargetZone(
+  engine: TargetResolutionHost,
+  card: RuntimeCard | null | undefined,
+): EffectZone | null {
   const game = engine?.game;
   if (!game || !card) return null;
   for (const owner of [game.player, game.bot]) {
@@ -120,7 +368,12 @@ function findContextTargetZone(engine, card) {
   return null;
 }
 
-function contextTargetMatchesDef(engine, card, def = {}, ctx = {}) {
+function contextTargetMatchesDef(
+  engine: TargetResolutionHost,
+  card: RuntimeCard | null | undefined,
+  def: RuntimeTargetDefinition,
+  ctx: TargetResolutionContext,
+): boolean {
   if (!card) return false;
   if (
     def.excludeCannotBeSpecialSummoned &&
@@ -183,22 +436,26 @@ function contextTargetMatchesDef(engine, card, def = {}, ctx = {}) {
  * @param {Object} selections - Pre-selected targets (optional)
  * @returns {Object} Result with ok/targets or needsSelection/selectionContract
  */
-export function resolveTargets(targetDefs, ctx, selections) {
+export function resolveTargets(
+  this: TargetResolutionHost,
+  targetDefs: readonly unknown[],
+  ctx: TargetResolutionContext,
+  selections: SelectionResult | CanonicalSelectionMap | object | null,
+): TargetResolutionResult {
   const existingActionTargets =
     ctx?._actionTargets &&
     typeof ctx._actionTargets === "object" &&
     !Array.isArray(ctx._actionTargets)
       ? ctx._actionTargets
       : {};
-  const targetMap = Object.fromEntries(
-    Object.entries(existingActionTargets).map(([id, value]) => [
-      id,
-      Array.isArray(value) ? value.filter(Boolean) : value ? [value] : [],
-    ]),
-  );
-  const requirements = [];
+  const targetMap: ResolvedTargetMap = {};
+  for (const [id, value] of Object.entries(existingActionTargets)) {
+    targetMap[id] = normalizeResolvedCards(value);
+  }
+  const requirements: TargetSelectionRequirement[] = [];
   let needsSelection = false;
-  const activationContext = ctx?.activationContext || {};
+  const activationContext: TargetActivationContext =
+    ctx?.activationContext || {};
   const isAIPlayer = isAI(ctx?.player);
   const isPreview =
     activationContext.preview === true || activationContext.isPreview === true;
@@ -216,15 +473,14 @@ export function resolveTargets(targetDefs, ctx, selections) {
     _selectCandidatesTargetMap: targetMap,
   };
 
-  for (const def of targetDefs) {
+  for (const rawDefinition of targetDefs) {
+    const def = asRuntimeTargetDefinition(rawDefinition);
     // Support for targetFromContext: get target directly from event context
     if (def.targetFromContext) {
       const contextKey = def.targetFromContext;
-      const contextTarget = ctx?.[contextKey];
+      const contextTarget: unknown = readProperty(ctx, contextKey);
       if (contextTarget) {
-        const contextTargets = Array.isArray(contextTarget)
-          ? contextTarget
-          : [contextTarget];
+        const contextTargets = normalizeUnknownCards(contextTarget);
         const validTargets = contextTargets.filter((card) =>
           contextTargetMatchesDef(this, card, def, ctx),
         );
@@ -264,9 +520,9 @@ export function resolveTargets(targetDefs, ctx, selections) {
 
     // Support reference-based exclusions from previously resolved targets.
     let effectiveDef = def;
-    const effectiveUpdates = {};
+    const effectiveUpdates: EffectiveTargetUpdates = {};
     if (def.excludeNameRef && targetMap[def.excludeNameRef]) {
-      const refTargets = targetMap[def.excludeNameRef];
+      const refTargets = getResolvedCards(targetMap, def.excludeNameRef);
       const namesToExclude = refTargets.map((c) => c.name).filter(Boolean);
       if (namesToExclude.length > 0) {
         effectiveUpdates.excludeCardNames = namesToExclude;
@@ -282,13 +538,9 @@ export function resolveTargets(targetDefs, ctx, selections) {
     const excludeTargetRefs = [
       def.excludeTargetRef,
       ...(Array.isArray(def.excludeTargetRefs) ? def.excludeTargetRefs : []),
-    ].filter(Boolean);
+    ].filter((reference): reference is string => typeof reference === "string");
     const excludedCards = excludeTargetRefs.flatMap((ref) =>
-      Array.isArray(targetMap[ref])
-        ? targetMap[ref]
-        : targetMap[ref]
-          ? [targetMap[ref]]
-          : [],
+      getResolvedCards(targetMap, ref),
     );
     if (excludedCards.length > 0) {
       const excludedInstanceIds = excludedCards
@@ -329,11 +581,7 @@ export function resolveTargets(targetDefs, ctx, selections) {
       Object.prototype.hasOwnProperty.call(resolvedTargets, def.id);
     if (hasResolved) {
       const resolved = resolvedTargets[def.id];
-      targetMap[def.id] = Array.isArray(resolved)
-        ? resolved
-        : resolved
-        ? [resolved]
-        : [];
+      targetMap[def.id] = normalizeResolvedCards(resolved);
       continue;
     }
 
@@ -350,7 +598,8 @@ export function resolveTargets(targetDefs, ctx, selections) {
 
     const decoratedCandidates = candidates.map((card, idx) => {
       const controller = card.owner;
-      const ownerLabel = controller === ctx.player.id ? "player" : "opponent";
+      const ownerLabel =
+        controller === ctx.player?.id ? "player" : "opponent";
       const ownerPlayer =
         controller === "player" ? this.game.player : this.game.bot;
       let zoneForDisplay = zoneName;
@@ -364,7 +613,12 @@ export function resolveTargets(targetDefs, ctx, selections) {
           zoneIndex = zoneArr.indexOf(card);
         }
       }
-      const candidate = {
+      const candidateWithoutKey: RawSelectionCandidate & {
+        idx: number;
+        cardRef: RuntimeCard;
+        zone: EffectZone;
+        zoneIndex: number;
+      } = {
         idx,
         name: card.name,
         owner: ownerLabel,
@@ -377,7 +631,10 @@ export function resolveTargets(targetDefs, ctx, selections) {
         cardKind: card.cardKind,
         cardRef: card,
       };
-      candidate.key = this.buildSelectionCandidateKey(candidate, idx);
+      const candidate: DecoratedTargetCandidate = {
+        ...candidateWithoutKey,
+        key: this.buildSelectionCandidateKey(candidateWithoutKey, idx),
+      };
       return candidate;
     });
 
@@ -387,37 +644,42 @@ export function resolveTargets(targetDefs, ctx, selections) {
       !Array.isArray(selections);
     const hasSelectionForDef =
       hasSelections && Object.prototype.hasOwnProperty.call(selections, def.id);
-    const provided = hasSelectionForDef ? selections[def.id] : null;
+    const provided: unknown =
+      hasSelectionForDef && selections ? readProperty(selections, def.id) : null;
     if (hasSelectionForDef) {
       const providedList = Array.isArray(provided)
         ? provided
         : provided != null
         ? [provided]
         : [];
-      const chosen = [];
-      const seen = new Set();
+      const chosen: RuntimeCard[] = [];
+      const seen = new Set<SelectionCandidateKey>();
       for (const entry of providedList) {
-        let candidate = null;
+        let candidate: (typeof decoratedCandidates)[number] | undefined;
         if (typeof entry === "number") {
           candidate = decoratedCandidates[entry];
         } else if (typeof entry === "string") {
           candidate = decoratedCandidates.find((cand) => cand.key === entry);
-        } else if (entry && typeof entry === "object") {
-          if (typeof entry.key === "string") {
+        } else if (isObject(entry)) {
+          const entryKey = readProperty(entry, "key");
+          const entryZone = readProperty(entry, "zone");
+          const entryIndex = readProperty(entry, "index");
+          const entryOwner = readProperty(entry, "owner");
+          if (typeof entryKey === "string") {
             candidate = decoratedCandidates.find(
-              (cand) => cand.key === entry.key
+              (cand) => cand.key === entryKey,
             );
           } else if (
-            typeof entry.zone === "string" &&
-            typeof entry.index === "number"
+            typeof entryZone === "string" &&
+            typeof entryIndex === "number"
           ) {
             candidate = decoratedCandidates.find(
               (cand) =>
-                cand.zone === entry.zone &&
-                cand.zoneIndex === entry.index &&
-                (!entry.owner ||
-                  cand.controller === entry.owner ||
-                  cand.owner === entry.owner)
+                cand.zone === entryZone &&
+                cand.zoneIndex === entryIndex &&
+                (!entryOwner ||
+                  cand.controller === entryOwner ||
+                  cand.owner === entryOwner),
             );
           } else {
             // Canonical human selections are converted from UI keys to live
@@ -425,7 +687,10 @@ export function resolveTargets(targetDefs, ctx, selections) {
             // them. Accept that representation by identity/instanceId while
             // still requiring the card to remain among the current legal
             // candidates.
-            const selectedCard = entry.cardRef || entry;
+            const selectedCardValue = readProperty(entry, "cardRef");
+            const selectedCard = isObject(selectedCardValue)
+              ? (selectedCardValue as RuntimeCard)
+              : (entry as RuntimeCard);
             candidate = decoratedCandidates.find((cand) =>
               isSameCardReference(cand.cardRef, selectedCard),
             );
@@ -482,7 +747,7 @@ export function resolveTargets(targetDefs, ctx, selections) {
         : def.owner === "any"
         ? "either"
         : "player";
-    const filters = {};
+    const filters: MutableSelectionFilter & { faceUp?: boolean } = {};
     if (def.cardKind) filters.cardKind = def.cardKind;
     if (def.archetype) filters.archetype = def.archetype;
     if (def.cardName) filters.name = def.cardName;
@@ -526,7 +791,7 @@ export function resolveTargets(targetDefs, ctx, selections) {
       filters.tags = def.tags;
     }
     if (def.type) {
-      filters.type = def.type;
+      filters.type = def.type as SelectionFilter["type"];
     }
     if (def.attribute) {
       filters.attribute = def.attribute;
@@ -555,8 +820,9 @@ export function resolveTargets(targetDefs, ctx, selections) {
   }
 
   if (needsSelection) {
-    const selectionContract = {
-      kind: activationContext.purpose || "target",
+    const selectionContract: TargetSelectionContract = {
+      kind: (activationContext.purpose ||
+        "target") as RawSelectionContract["kind"],
       timing: activationContext.timing || "activation",
       purpose: activationContext.purpose || "target",
       message: null,
@@ -593,7 +859,7 @@ export function resolveTargets(targetDefs, ctx, selections) {
           }
         }
 
-        const fallbackSelections = {};
+        const fallbackSelections: SelectionResult = {};
         for (const req of selectionContract.requirements || []) {
           const min = Number(req.min ?? 0);
           const max = Number(req.max ?? min);

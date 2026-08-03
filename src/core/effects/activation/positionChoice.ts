@@ -1,4 +1,59 @@
 import { isAI } from "../../Player.js";
+import type {
+  ActionRuntimeCard,
+  ActionRuntimePlayer,
+} from "../../contracts/actionRuntime.js";
+import type {
+  BattlePosition,
+  BattlePositionInput,
+} from "../../contracts/cards.js";
+
+interface PositionChoiceStrategy {
+  chooseSpecialSummonPosition?(
+    card: ActionRuntimeCard,
+    context: {
+      game: PositionChoiceGamePort;
+      player: PositionChoicePlayer;
+      actionPosition: BattlePositionInput | null | undefined;
+    },
+  ): BattlePosition;
+}
+
+type PositionChoicePlayer = Omit<ActionRuntimePlayer, "strategy"> & {
+  strategy?: PositionChoiceStrategy | null;
+};
+
+interface PositionChosenPayload {
+  card: ActionRuntimeCard;
+  player: PositionChoicePlayer;
+  position: BattlePosition;
+  context: "special_summon";
+  turn: number | undefined;
+  phase: string | undefined;
+}
+
+interface PositionChoiceGamePort {
+  turnCounter?: number;
+  phase?: string;
+  devLog?(event: "SS_POSITION", payload: object): void;
+  notify?(event: "position_chosen", payload: PositionChosenPayload): void;
+}
+
+interface PositionChoiceUiPort {
+  showSpecialSummonPositionModal(
+    card: ActionRuntimeCard,
+    onChoice: (choice: BattlePositionInput) => void,
+  ): void;
+}
+
+interface PositionChoiceHost {
+  readonly game: PositionChoiceGamePort;
+  readonly ui?: PositionChoiceUiPort | null;
+}
+
+export interface SpecialSummonPositionOptions {
+  position?: BattlePositionInput | null;
+}
 
 /**
  * UNIFIED SPECIAL SUMMON POSITION RESOLVER
@@ -15,7 +70,12 @@ import { isAI } from "../../Player.js";
  * @param {string} options.position - Explicit position from action: undefined/"choice"/"attack"/"defense"
  * @returns {Promise<string>} - Resolved position ('attack' or 'defense')
  */
-export async function chooseSpecialSummonPosition(card, player, options = {}) {
+export async function chooseSpecialSummonPosition(
+  this: PositionChoiceHost,
+  card: ActionRuntimeCard,
+  player: PositionChoicePlayer,
+  options: SpecialSummonPositionOptions = {},
+): Promise<BattlePosition> {
   const actionPosition = options.position;
 
   // Determine if position is forced or allows choice
@@ -49,7 +109,7 @@ export async function chooseSpecialSummonPosition(card, player, options = {}) {
   // policy; this method must not impose a global heuristic.
   if (isAI(player)) {
     const strategy = player?.strategy;
-    let chosen = "attack";
+    let chosen: BattlePosition = "attack";
     if (strategy && typeof strategy.chooseSpecialSummonPosition === "function") {
       const fromStrategy = strategy.chooseSpecialSummonPosition(card, {
         game: this.game,
@@ -81,8 +141,9 @@ export async function chooseSpecialSummonPosition(card, player, options = {}) {
 
   // Player gets modal for position choice
   if (this.ui && typeof this.ui.showSpecialSummonPositionModal === "function") {
-    return new Promise((resolve) => {
-      this.ui.showSpecialSummonPositionModal(card, (choice) => {
+    const ui = this.ui;
+    return new Promise<BattlePosition>((resolve) => {
+      ui.showSpecialSummonPositionModal(card, (choice) => {
         const resolved = choice === "defense" ? "defense" : "attack";
         this.game?.devLog?.("SS_POSITION", {
           summary: `Player chose ${resolved} for ${card?.name || "unknown"}`,

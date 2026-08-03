@@ -11,11 +11,245 @@ import {
   getCardComparableAttribute,
 } from "../../Card.js";
 import { checkSpecialSummonEligibility } from "../../game/summon/eligibility.js";
+import type {
+  ActionRuntimeCard,
+  ActionRuntimePlayer,
+  EffectContext,
+} from "../../contracts/actionRuntime.js";
+import type {
+  BattlePosition,
+  CardKind,
+  CardSubtype,
+  MonsterType,
+} from "../../contracts/cards.js";
+import type {
+  CardFilter,
+  EffectCountRange,
+  EffectOwner,
+  EffectZone,
+  NumericComparisonOperator,
+  TargetAttributeComparison,
+} from "../../contracts/effects.js";
+import type {
+  RawCardDefinitionId,
+  SelectionCandidateKey,
+} from "../../contracts/primitives.js";
+import type {
+  RawSelectionCandidate,
+  SelectionStrategy,
+} from "../../contracts/selection.js";
+import type { SummonMethod } from "../../contracts/summon.js";
+import { buildSelectionCandidateKey as buildGameSelectionCandidateKey } from "../../game/selection/contract.js";
+
+type TargetingInstanceId = string | number;
+type TargetingOwnerRule = EffectOwner | "either";
+type TargetingPosition = BattlePosition | "any";
+type TargetingCardKind = CardKind | readonly CardKind[];
+type TargetingMonsterType = MonsterType | readonly MonsterType[];
+type TargetingSubtype = CardSubtype | readonly CardSubtype[];
+type TargetingStringFilter = string | readonly string[];
+
+interface TargetingCard extends ActionRuntimeCard {
+  id?: RawCardDefinitionId | number;
+  fieldPresenceId?: TargetingInstanceId;
+  game?: { devModeEnabled?: boolean };
+  lastSummonMethod?: SummonMethod | null;
+  lastSummonedFromZone?: EffectZone | null;
+  cannotBeSpecialSummoned?: boolean;
+  sentToGraveAsMaterial?: SummonMethod | null;
+  sentAsMaterial?: SummonMethod | null;
+  lastSentToGraveAsMaterial?: SummonMethod | null;
+  sentToGraveAsMaterialThisTurn?: boolean;
+  sentAsMaterialThisTurn?: boolean;
+  sentToGraveAsMaterialTurn?: number;
+  sentAsMaterialTurn?: number;
+}
+
+interface TargetingPlayer extends Omit<
+  ActionRuntimePlayer,
+  | "deck"
+  | "extraDeck"
+  | "hand"
+  | "field"
+  | "spellTrap"
+  | "graveyard"
+  | "banished"
+  | "fieldSpell"
+> {
+  deck: TargetingCard[];
+  extraDeck: TargetingCard[];
+  hand: TargetingCard[];
+  field: TargetingCard[];
+  spellTrap: TargetingCard[];
+  graveyard: TargetingCard[];
+  banished: TargetingCard[];
+  fieldSpell: TargetingCard | null;
+  game?: { devModeEnabled?: boolean };
+}
+
+interface TargetingCardFilter extends Omit<
+  CardFilter,
+  | "archetype"
+  | "cardId"
+  | "cardKind"
+  | "monsterType"
+  | "owner"
+  | "position"
+  | "subtype"
+  | "type"
+  | "zone"
+  | "zones"
+  | "attribute"
+  | "cardName"
+  | "name"
+> {
+  archetype?: TargetingStringFilter;
+  cardId?: RawCardDefinitionId | number;
+  cardIds?: readonly (RawCardDefinitionId | number)[];
+  cardKind?: TargetingCardKind;
+  monsterType?: TargetingMonsterType;
+  owner?: TargetingOwnerRule;
+  position?: TargetingPosition;
+  subtype?: TargetingSubtype;
+  type?: TargetingStringFilter;
+  zone?: EffectZone;
+  zones?: readonly EffectZone[];
+  faceUp?: boolean;
+  hasCounter?: boolean | string;
+  maxCounters?: number;
+  maxAtkByCounters?: boolean;
+  counterMultiplier?: number;
+  lastSummonMethod?: SummonMethod;
+  lastSummonMethods?: readonly SummonMethod[];
+  summonMethod?: SummonMethod;
+  summonMethods?: readonly SummonMethod[];
+  lastSummonedFromZone?: EffectZone;
+  lastSummonedFromZones?: readonly EffectZone[];
+  sentAsMaterial?: SummonMethod;
+  lastSentToGraveAsMaterial?: SummonMethod;
+  sentAsMaterialThisTurn?: boolean;
+  sentToGraveAsMaterialTurn?: number;
+  sentAsMaterialTurn?: number;
+  excludeCannotBeSpecialSummoned?: boolean;
+  excludeEventCardName?: boolean;
+  excludeCards?: readonly TargetingCard[];
+  excludeInstanceId?: TargetingInstanceId;
+  excludeInstanceIds?: readonly TargetingInstanceId[];
+  excludeCardInstanceIds?: readonly TargetingInstanceId[];
+  excludeContextCard?: string | readonly string[];
+  excludeContextCards?: string | readonly string[];
+  cardName?: string | readonly string[];
+  name?: string | readonly string[];
+}
+
+interface PairedValueComparison {
+  attr?: string;
+  attribute?: string;
+  pairedAttr?: string;
+  targetAttr?: string;
+  sourceAttr?: string;
+  refAttr?: string;
+  op?: NumericComparisonOperator | "==" | "===" | "!=" | "!==" | "<=" | "<" | ">=" | ">";
+}
+
+interface PairedTargetSpec extends TargetingCardFilter {
+  player?: TargetingOwnerRule;
+  filters?: TargetingCardFilter;
+  compareAttribute?: PairedValueComparison | readonly PairedValueComparison[];
+  compareAttributes?: readonly PairedValueComparison[];
+  excludeSameCard?: boolean;
+  excludeSameName?: boolean;
+}
+
+interface RuntimeTargetAttributeComparison
+  extends Omit<TargetAttributeComparison, "op"> {
+  op: NumericComparisonOperator | "==" | "<=" | "<" | ">=" | ">";
+}
+
+interface RuntimeEffectTarget extends TargetingCardFilter {
+  id?: string;
+  archetype?: string;
+  cardName?: string;
+  name?: string;
+  anyOf?: readonly TargetingCardFilter[];
+  battleParticipant?: boolean;
+  compareAttribute?: RuntimeTargetAttributeComparison;
+  count?: EffectCountRange;
+  destinationOwner?: "self" | "opponent";
+  excludeCardName?: string;
+  excludeCardNames?: readonly string[];
+  excludeSelf?: boolean;
+  filters?: TargetingCardFilter;
+  intent?: "cost" | "target" | "benefit" | "harm";
+  pairedTarget?: PairedTargetSpec;
+  requiresPairedTarget?: PairedTargetSpec;
+  requireThisCard?: boolean;
+  specialSummonProcedure?: string;
+  strategy?: SelectionStrategy;
+  summonProcedure?: string;
+  summonToOwner?: "self" | "opponent";
+}
+
+interface TargetingActivationContext {
+  logTargets?: boolean;
+  excludedDamageStepTargets?: TargetingCard[];
+}
+
+interface TargetingContext extends Omit<
+  EffectContext,
+  | "player"
+  | "opponent"
+  | "source"
+  | "eventCard"
+  | "attacker"
+  | "defender"
+  | "target"
+  | "activationContext"
+  | "game"
+> {
+  player?: TargetingPlayer | null;
+  opponent?: TargetingPlayer | null;
+  source?: TargetingCard | null;
+  eventCard?: TargetingCard | null;
+  attacker?: TargetingCard | null;
+  defender?: TargetingCard | null;
+  target?: TargetingCard | null;
+  activationContext?: TargetingActivationContext | null;
+  game?: { devModeEnabled?: boolean } | null;
+  _selectCandidatesTargetMap?: {
+    [targetReference: string]: TargetingCard[] | undefined;
+  };
+}
+
+export interface TargetingCandidateSelection {
+  zoneName: EffectZone;
+  candidates: TargetingCard[];
+}
+
+interface TargetingSelectionHost {
+  readonly game?: {
+    canSpecialSummonUnderRestrictions?(
+      card: TargetingCard,
+      player: TargetingPlayer | null,
+      options: object,
+    ): { ok?: boolean } | null;
+  } | null;
+  _targetingCache?: Map<string, TargetingCandidateSelection>;
+  _targetingCacheHits?: number;
+  _targetingCacheMisses?: number;
+  getZone(player: TargetingPlayer, zone: EffectZone): TargetingCard[] | null;
+  cardMatchesFilters?(card: TargetingCard, filters: TargetingCardFilter): boolean;
+}
 
 // Track duplicate selectCandidates calls per turn
-const selectCandidatesCallTracker = {};
+const selectCandidatesCallTracker: {
+  [turnKey: string]: { [callKey: string]: number | undefined } | undefined;
+} = {};
 
-function cardCacheIdentity(card, fallbackIndex = 0) {
+function cardCacheIdentity(
+  card: TargetingCard | null | undefined,
+  fallbackIndex: string | number = 0,
+): string {
   if (!card) return `empty:${fallbackIndex}`;
   const instanceId =
     card.instanceId || card._instanceId || card.uuid || card.simInstanceId || null;
@@ -28,11 +262,16 @@ function cardCacheIdentity(card, fallbackIndex = 0) {
   ].join(":");
 }
 
-function getCardInstanceId(card) {
+function getCardInstanceId(
+  card: TargetingCard | null | undefined,
+): TargetingInstanceId | null {
   return card?.instanceId ?? card?._instanceId ?? card?.uuid ?? card?.simInstanceId ?? null;
 }
 
-function isExcludedInstance(card, filter = {}) {
+function isExcludedInstance(
+  card: TargetingCard | null | undefined,
+  filter: TargetingCardFilter = {},
+): boolean {
   if (!card || !filter) return false;
   const excludedCards = Array.isArray(filter.excludeCards)
     ? filter.excludeCards
@@ -53,27 +292,45 @@ function isExcludedInstance(card, filter = {}) {
   return cardInstanceId !== null && excludedInstanceIds.includes(cardInstanceId);
 }
 
-function getZoneSnapshot(player, zoneKey) {
+function getZoneSnapshot(
+  player: TargetingPlayer | null | undefined,
+  zoneKey: EffectZone,
+): TargetingCard[] {
   if (!player) return [];
   if (zoneKey === "fieldSpell") return player.fieldSpell ? [player.fieldSpell] : [];
-  const zone = player[zoneKey];
-  return Array.isArray(zone) ? zone : [];
+  const zone: unknown = Reflect.get(player, zoneKey);
+  return Array.isArray(zone) ? zone.filter(isTargetingCard) : [];
 }
 
-function normalizeContextCardKeys(value) {
+function normalizeContextCardKeys(value: unknown): unknown[] {
   if (Array.isArray(value)) return value.filter(Boolean);
   if (value === undefined || value === null) return [];
   return [value];
 }
 
-function getContextCards(ctx, key) {
-  if (!ctx || !key) return [];
-  const value = ctx[key];
-  if (Array.isArray(value)) return value.filter(Boolean);
-  return value ? [value] : [];
+function isTargetingCard(value: unknown): value is TargetingCard {
+  return typeof value === "object" && value !== null;
 }
 
-function isSameCardReference(left, right) {
+function isTargetingPlayer(value: unknown): value is TargetingPlayer {
+  return typeof value === "object" && value !== null;
+}
+
+function getContextCards(
+  ctx: TargetingContext | null | undefined,
+  key: unknown,
+): TargetingCard[] {
+  if (!ctx || !key) return [];
+  const propertyKey = typeof key === "symbol" ? key : String(key);
+  const value: unknown = Reflect.get(ctx, propertyKey);
+  if (Array.isArray(value)) return value.filter(isTargetingCard);
+  return isTargetingCard(value) ? [value] : [];
+}
+
+function isSameCardReference(
+  left: TargetingCard | null | undefined,
+  right: TargetingCard | null | undefined,
+): boolean {
   if (!left || !right) return false;
   if (left === right) return true;
   const leftInstance = left.instanceId ?? left._instanceId ?? null;
@@ -81,7 +338,11 @@ function isSameCardReference(left, right) {
   return leftInstance != null && leftInstance === rightInstance;
 }
 
-function isExcludedContextCard(def, ctx, card) {
+function isExcludedContextCard(
+  def: TargetingCardFilter,
+  ctx: TargetingContext,
+  card: TargetingCard,
+): boolean {
   const keys = [
     ...normalizeContextCardKeys(def.excludeContextCard),
     ...normalizeContextCardKeys(def.excludeContextCards),
@@ -94,18 +355,41 @@ function isExcludedContextCard(def, ctx, card) {
   );
 }
 
-function getSpecialSummonProcedureForTarget(def = {}) {
-  return def.summonProcedure || def.specialSummonProcedure || "special";
+function getSpecialSummonProcedureForTarget(
+  def: RuntimeEffectTarget | TargetingCardFilter = {},
+): string {
+  const summonProcedure: unknown = Reflect.get(def, "summonProcedure");
+  const specialSummonProcedure: unknown = Reflect.get(
+    def,
+    "specialSummonProcedure",
+  );
+  return typeof summonProcedure === "string"
+    ? summonProcedure
+    : typeof specialSummonProcedure === "string"
+      ? specialSummonProcedure
+      : "special";
 }
 
-function getSpecialSummonDestinationPlayer(def = {}, ctx = {}) {
-  if (def.summonToOwner === "opponent" || def.destinationOwner === "opponent") {
+function getSpecialSummonDestinationPlayer(
+  def: RuntimeEffectTarget | TargetingCardFilter = {},
+  ctx: TargetingContext = {},
+): TargetingPlayer | null {
+  if (
+    Reflect.get(def, "summonToOwner") === "opponent" ||
+    Reflect.get(def, "destinationOwner") === "opponent"
+  ) {
     return ctx.opponent || null;
   }
   return ctx.player || null;
 }
 
-function canTargetBeSpecialSummoned(engine, card, def = {}, ctx = {}, zoneKey = null) {
+function canTargetBeSpecialSummoned(
+  engine: TargetingSelectionHost | null | undefined,
+  card: TargetingCard | null | undefined,
+  def: RuntimeEffectTarget | TargetingCardFilter = {},
+  ctx: TargetingContext = {},
+  zoneKey: EffectZone | null = null,
+): boolean {
   if (!card) return false;
   const summonProcedure = getSpecialSummonProcedureForTarget(def);
   const eligibility = checkSpecialSummonEligibility(card, {
@@ -131,31 +415,63 @@ function canTargetBeSpecialSummoned(engine, card, def = {}, ctx = {}, zoneKey = 
   return restrictionCheck?.ok !== false;
 }
 
-function normalizeList(value, fallback = []) {
-  if (Array.isArray(value)) return value.filter(Boolean);
-  if (value === undefined || value === null) return fallback;
+function normalizeList<Value>(
+  value: Value | readonly Value[] | null | undefined,
+  fallback: readonly Value[] = [],
+): Value[] {
+  if (value === undefined || value === null) return [...fallback];
+  if (isReadonlyArray(value)) {
+    return value.filter((entry): entry is Value => Boolean(entry));
+  }
   return [value];
 }
 
-function getPairedTargetSpec(def = {}) {
+function isReadonlyArray<Value>(
+  value: Value | readonly Value[],
+): value is readonly Value[] {
+  return Array.isArray(value);
+}
+
+function isTargetingCardFilter(value: unknown): value is TargetingCardFilter {
+  return typeof value === "object" && value !== null;
+}
+
+function getPairedTargetSpec(
+  def: RuntimeEffectTarget = {},
+): PairedTargetSpec | null {
   return def.pairedTarget || def.requiresPairedTarget || null;
 }
 
-function getPairedTargetOwners(pairSpec = {}, ctx = {}) {
+function getPairedTargetOwners(
+  pairSpec: PairedTargetSpec = {},
+  ctx: TargetingContext = {},
+): TargetingPlayer[] {
   const ownerRule = pairSpec.owner || pairSpec.player || "self";
-  if (ownerRule === "opponent") return [ctx.opponent].filter(Boolean);
+  if (ownerRule === "opponent") return [ctx.opponent].filter(isTargetingPlayer);
   if (ownerRule === "any" || ownerRule === "both" || ownerRule === "either") {
-    return [ctx.player, ctx.opponent].filter(Boolean);
+    return [ctx.player, ctx.opponent].filter(isTargetingPlayer);
   }
-  return [ctx.player].filter(Boolean);
+  return [ctx.player].filter(isTargetingPlayer);
 }
 
-function buildPairedTargetFilters(pairSpec = {}) {
+function copyFilterProperty(
+  source: object,
+  target: TargetingCardFilter,
+  sourceKey: string,
+  filterKey = sourceKey,
+): void {
+  const sourceValue: unknown = Reflect.get(source, sourceKey);
+  if (sourceValue !== undefined && Reflect.get(target, filterKey) === undefined) {
+    Reflect.set(target, filterKey, sourceValue);
+  }
+}
+
+function buildPairedTargetFilters(
+  pairSpec: PairedTargetSpec = {},
+): TargetingCardFilter {
   const filters = { ...(pairSpec.filters || {}) };
-  const copyIfPresent = (sourceKey, filterKey = sourceKey) => {
-    if (pairSpec[sourceKey] !== undefined && filters[filterKey] === undefined) {
-      filters[filterKey] = pairSpec[sourceKey];
-    }
+  const copyIfPresent = (sourceKey: string, filterKey = sourceKey): void => {
+    copyFilterProperty(pairSpec, filters, sourceKey, filterKey);
   };
 
   copyIfPresent("cardKind");
@@ -183,12 +499,13 @@ function buildPairedTargetFilters(pairSpec = {}) {
   return filters;
 }
 
-function buildTargetCardFilters(def = {}) {
-  const filters = { ...(def.filters || {}) };
-  const copyIfPresent = (sourceKey, filterKey = sourceKey) => {
-    if (def[sourceKey] !== undefined && filters[filterKey] === undefined) {
-      filters[filterKey] = def[sourceKey];
-    }
+function buildTargetCardFilters(
+  def: RuntimeEffectTarget | TargetingCardFilter = {},
+): TargetingCardFilter {
+  const rawFilters: unknown = Reflect.get(def, "filters");
+  const filters = isTargetingCardFilter(rawFilters) ? { ...rawFilters } : {};
+  const copyIfPresent = (sourceKey: string, filterKey = sourceKey): void => {
+    copyFilterProperty(def, filters, sourceKey, filterKey);
   };
 
   copyIfPresent("cardKind");
@@ -234,14 +551,22 @@ function buildTargetCardFilters(def = {}) {
   return filters;
 }
 
-function targetCardMatchesFilters(engine, card, def = {}) {
+function targetCardMatchesFilters(
+  engine: TargetingSelectionHost | null | undefined,
+  card: TargetingCard,
+  def: RuntimeEffectTarget | TargetingCardFilter = {},
+): boolean {
   const filters = buildTargetCardFilters(def);
   if (Object.keys(filters).length === 0) return true;
   if (typeof engine?.cardMatchesFilters !== "function") return true;
   return engine.cardMatchesFilters(card, filters);
 }
 
-function comparePairedValues(left, op = "eq", right) {
+function comparePairedValues(
+  left: unknown,
+  op: PairedValueComparison["op"] = "eq",
+  right: unknown,
+): boolean {
   if (op === "eq" || op === "==" || op === "===") return left === right;
   if (op === "neq" || op === "!=" || op === "!==") return left !== right;
 
@@ -257,7 +582,11 @@ function comparePairedValues(left, op = "eq", right) {
   return false;
 }
 
-function pairedTargetComparisonsPass(sourceCard, pairedCard, pairSpec = {}) {
+function pairedTargetComparisonsPass(
+  sourceCard: TargetingCard,
+  pairedCard: TargetingCard,
+  pairSpec: PairedTargetSpec = {},
+): boolean {
   const comparisons = [
     ...normalizeList(pairSpec.compareAttribute),
     ...normalizeList(pairSpec.compareAttributes),
@@ -277,7 +606,13 @@ function pairedTargetComparisonsPass(sourceCard, pairedCard, pairSpec = {}) {
   });
 }
 
-function pairedTargetMatchesSource(engine, sourceCard, pairedCard, pairSpec, ctx) {
+function pairedTargetMatchesSource(
+  engine: TargetingSelectionHost | null | undefined,
+  sourceCard: TargetingCard | null | undefined,
+  pairedCard: TargetingCard | null | undefined,
+  pairSpec: PairedTargetSpec | null | undefined,
+  ctx: TargetingContext,
+): boolean {
   if (!sourceCard || !pairedCard || !pairSpec) return false;
   if (pairSpec.excludeSameCard !== false && isSameCardReference(sourceCard, pairedCard)) {
     return false;
@@ -309,9 +644,17 @@ function pairedTargetMatchesSource(engine, sourceCard, pairedCard, pairSpec, ctx
   return true;
 }
 
-function hasPairedTargetCandidate(engine, sourceCard, pairSpec, ctx) {
+function hasPairedTargetCandidate(
+  engine: TargetingSelectionHost | null | undefined,
+  sourceCard: TargetingCard,
+  pairSpec: PairedTargetSpec | null,
+  ctx: TargetingContext,
+): boolean {
   if (!pairSpec) return true;
-  const zones = normalizeList(pairSpec.zones ?? pairSpec.zone, ["field"]);
+  const zones = normalizeList<EffectZone>(
+    pairSpec.zones ?? pairSpec.zone,
+    ["field"],
+  );
   for (const owner of getPairedTargetOwners(pairSpec, ctx)) {
     for (const zoneKey of zones) {
       for (const pairedCard of getZoneSnapshot(owner, zoneKey)) {
@@ -324,7 +667,10 @@ function hasPairedTargetCandidate(engine, sourceCard, pairSpec, ctx) {
   return false;
 }
 
-function buildZoneSignature(def, ctx) {
+function buildZoneSignature(
+  def: RuntimeEffectTarget | PairedTargetSpec,
+  ctx: TargetingContext,
+): string {
   const zoneName = def.zone || "field";
   const zoneList =
     Array.isArray(def.zones) && def.zones.length > 0 ? def.zones : [zoneName];
@@ -336,7 +682,7 @@ function buildZoneSignature(def, ctx) {
         : [ctx?.player];
 
   return owners
-    .filter(Boolean)
+    .filter(isTargetingPlayer)
     .map((owner) => {
       const ownerId = owner.id || "unknown";
       const zones = zoneList.map((zoneKey) => {
@@ -355,7 +701,10 @@ function buildZoneSignature(def, ctx) {
  * @param {Object} ctx - Context with player, opponent, source
  * @returns {string} Cache key
  */
-function buildTargetingCacheKey(def, ctx) {
+function buildTargetingCacheKey(
+  def: RuntimeEffectTarget,
+  ctx: TargetingContext,
+): string {
   const anyOfKey = Array.isArray(def.anyOf) ? JSON.stringify(def.anyOf) : "";
   const pairedTarget = getPairedTargetSpec(def);
   const parts = [
@@ -412,7 +761,7 @@ function buildTargetingCacheKey(def, ctx) {
     def.battleParticipant ? "battleParticipant" : "",
     def.battleParticipant
       ? [ctx?.attacker, ctx?.defender || ctx?.target]
-          .filter(Boolean)
+          .filter(isTargetingCard)
           .map((card, idx) => cardCacheIdentity(card, `battle${idx}`))
           .join(",")
       : "",
@@ -433,17 +782,11 @@ function buildTargetingCacheKey(def, ctx) {
  * @param {number} fallbackIndex - Fallback index if no other identifier available
  * @returns {string} Unique key string
  */
-export function buildSelectionCandidateKey(candidate = {}, fallbackIndex = 0) {
-  const zone = candidate.zone || "field";
-  const zoneIndex =
-    typeof candidate.zoneIndex === "number" ? candidate.zoneIndex : -1;
-  const controller = candidate.controller || candidate.owner || "unknown";
-  const baseId =
-    candidate.cardRef?.id ||
-    candidate.cardRef?.name ||
-    candidate.name ||
-    String(fallbackIndex);
-  return `${controller}:${zone}:${zoneIndex}:${baseId}`;
+export function buildSelectionCandidateKey(
+  candidate: RawSelectionCandidate = {},
+  fallbackIndex = 0,
+): SelectionCandidateKey {
+  return buildGameSelectionCandidateKey(candidate, fallbackIndex);
 }
 
 /**
@@ -452,14 +795,18 @@ export function buildSelectionCandidateKey(candidate = {}, fallbackIndex = 0) {
  * @param {Object} ctx - Context with player, opponent, source, etc.
  * @returns {{zoneName: string, candidates: Array}} Zone name and matching candidates
  */
-export function selectCandidates(def, ctx) {
+export function selectCandidates(
+  this: TargetingSelectionHost,
+  def: RuntimeEffectTarget,
+  ctx: TargetingContext,
+): TargetingCandidateSelection {
   const devMode =
     ctx?.game?.devModeEnabled === true ||
     ctx?.player?.game?.devModeEnabled === true;
   const logTargets =
     ctx?.activationContext?.logTargets === true ||
     (ctx?.activationContext?.logTargets !== false && devMode);
-  const log = (...args) => {
+  const log = (...args: unknown[]): void => {
     if (logTargets) {
       console.log(...args);
     }
@@ -511,17 +858,21 @@ export function selectCandidates(def, ctx) {
     `[selectCandidates] Starting search for target "${def.id}": owner="${def.owner}", zone="${zoneName}", archetype="${def.archetype}", subtype="${def.subtype}", excludeCardName="${def.excludeCardName}"`
   );
 
-  const owners = [];
+  const owners: TargetingPlayer[] = [];
   if (def.owner === "opponent") {
-    owners.push(ctx.opponent);
+    if (ctx.opponent) owners.push(ctx.opponent);
   } else if (def.owner === "any") {
-    owners.push(ctx.player, ctx.opponent);
+    if (ctx.player) owners.push(ctx.player);
+    if (ctx.opponent) owners.push(ctx.opponent);
   } else {
-    owners.push(ctx.player);
+    if (ctx.player) owners.push(ctx.player);
   }
 
   const anyOf = Array.isArray(def.anyOf) ? def.anyOf : null;
-  const matchesFilter = (card, filter) => {
+  const matchesFilter = (
+    card: TargetingCard | null | undefined,
+    filter: TargetingCardFilter | null | undefined,
+  ): boolean => {
     if (!card || !filter) return false;
     if (
       filter.excludeCannotBeSpecialSummoned &&
@@ -597,7 +948,8 @@ export function selectCandidates(def, ctx) {
       const requiredTypes = Array.isArray(filter.type) ? filter.type : [filter.type];
       const cardTypeRaw = card.type || null;
       const cardTypesRaw = Array.isArray(card.types) ? card.types : null;
-      const norm = (v) => (v ? String(v).toLowerCase() : v);
+      const norm = (value: unknown): string | null | undefined =>
+        value ? String(value).toLowerCase() : value === null ? null : undefined;
       const requiredTypesNorm = requiredTypes.map(norm);
       const hasType = cardTypesRaw
         ? requiredTypesNorm.some((t) =>
@@ -626,10 +978,11 @@ export function selectCandidates(def, ctx) {
   };
   const matchesAnyOf =
     !anyOf || anyOf.length === 0
-      ? () => true
-      : (card) => anyOf.some((filter) => matchesFilter(card, filter));
+      ? (_card: TargetingCard): boolean => true
+      : (card: TargetingCard): boolean =>
+          anyOf.some((filter) => matchesFilter(card, filter));
 
-  let candidates = [];
+  let candidates: TargetingCard[] = [];
   log(
     `[selectCandidates] Using ${owners.length} owners: ${owners
       .map((o) => o.id)
@@ -947,7 +1300,8 @@ export function selectCandidates(def, ctx) {
           const cardTypeRaw = card.type || null;
           const cardTypesRaw = Array.isArray(card.types) ? card.types : null;
           const requiredTypes = Array.isArray(def.type) ? def.type : [def.type];
-          const norm = (v) => (v ? String(v).toLowerCase() : v);
+          const norm = (value: unknown): string | null | undefined =>
+            value ? String(value).toLowerCase() : value === null ? null : undefined;
           const requiredTypesNorm = requiredTypes.map(norm);
           const hasType = cardTypesRaw
             ? requiredTypesNorm.some((t) =>

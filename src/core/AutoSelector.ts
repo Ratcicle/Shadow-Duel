@@ -5,23 +5,254 @@ import {
   estimateOffensiveTemporaryBuffValue,
 } from "./ai/StrategyUtils.js";
 import { getEffectiveAtk, getEffectiveDef } from "./ai/common/cardStats.js";
+import type {
+  ActionRuntimeCard,
+  ActionRuntimePlayer,
+} from "./contracts/actionRuntime.js";
+import type {
+  NormalizedSelectionContract,
+  RawSelectionCandidate,
+  RawSelectionContract,
+  RawSelectionRequirement,
+  SelectionCandidate,
+  SelectionIntent,
+  SelectionRequirement,
+  SelectionResult,
+  SelectionStrategy,
+} from "./contracts/selection.js";
+import type { SelectionCandidateKey } from "./contracts/primitives.js";
+
+interface AutoSelectorCard extends ActionRuntimeCard {
+  fieldPresenceId?: string | number;
+  goodDiscard?: boolean;
+  cannotBeNormalSummonedOrSet?: boolean;
+  usedEffectThisTurn?: boolean;
+  mustBeAttacked?: boolean;
+  piercing?: boolean;
+}
+
+interface AutoSelectorScorableCard {
+  id?: string | number;
+  instanceId?: string | number;
+  fieldPresenceId?: string | number;
+  name?: string;
+  cardKind?: string;
+  atk?: number | null;
+  def?: number | null;
+  level?: number | null;
+  position?: string | null;
+  archetype?: string | null;
+  archetypes?: string[];
+  goodDiscard?: boolean;
+  cannotBeNormalSummonedOrSet?: boolean;
+  usedEffectThisTurn?: boolean;
+  hasAttacked?: boolean;
+  mustBeAttacked?: boolean;
+  cannotAttackThisTurn?: boolean;
+  tempAtkBoost?: number;
+  equipAtkBonus?: number;
+  tempDefBoost?: number;
+  equipDefBonus?: number;
+  piercing?: boolean;
+  isFacedown?: boolean;
+}
+
+interface AutoSelectorPlayer extends ActionRuntimePlayer {
+  field: AutoSelectorCard[];
+  hand: AutoSelectorCard[];
+  deck: AutoSelectorCard[];
+}
+
+interface AutoSelectorGamePort {
+  player?: AutoSelectorPlayer | null;
+  bot?: AutoSelectorPlayer | null;
+  getOpponent?(player: AutoSelectorPlayer): AutoSelectorPlayer | null;
+}
+
+type AutoSelectionCandidate = (RawSelectionCandidate | SelectionCandidate) & {
+  cardRef?: AutoSelectorCard | null;
+  card?: AutoSelectorCard | null;
+  instanceId?: string | number;
+  fieldPresenceId?: string | number;
+  archetype?: string | null;
+  archetypes?: string[];
+  goodDiscard?: boolean;
+  cannotBeNormalSummonedOrSet?: boolean;
+  usedEffectThisTurn?: boolean;
+  hasAttacked?: boolean;
+  mustBeAttacked?: boolean;
+  tempAtkBoost?: number;
+  equipAtkBonus?: number;
+  tempDefBoost?: number;
+  equipDefBonus?: number;
+};
+
+interface AutoSelectionFilters {
+  strategy?: SelectionStrategy;
+  intent?: SelectionIntent;
+}
+
+type AutoSelectionRequirement = (
+  | RawSelectionRequirement
+  | SelectionRequirement
+) & {
+  filters?: (RawSelectionRequirement["filters"] & AutoSelectionFilters) | null;
+  strategy?: SelectionStrategy;
+  intent?: SelectionIntent;
+  candidates?: AutoSelectionCandidate[];
+};
+
+type AutoSelectionContract = (
+  | RawSelectionContract
+  | NormalizedSelectionContract
+) & {
+  requirements?: AutoSelectionRequirement | AutoSelectionRequirement[];
+};
+
+type AutoSelectorRole =
+  | "cost"
+  | "removal"
+  | "named_preference"
+  | "temporary_stat_debuff"
+  | "recursion"
+  | "temporary_stat_buff"
+  | "stance_dance_buff";
+
+interface AutoSelectorPreference {
+  intent?: SelectionIntent;
+  role?: AutoSelectorRole;
+  purpose?: string;
+  preferredNames?: string[];
+  avoidNames?: string[];
+  defensiveNames?: string[];
+  offensiveNames?: string[];
+  preferredInstanceIds?: Array<string | number>;
+  avoidInstanceIds?: Array<string | number>;
+  preferNames?: string[];
+  forceNames?: string[];
+  preserveNames?: string[];
+  attackers?: AutoSelectorCard[];
+  opponentLp?: number;
+  atkReduction?: number;
+  defReduction?: number;
+  destroyIfAtkZeroedByThisEffect?: boolean;
+  destroyIfDefZeroedByThisEffect?: boolean;
+  atkBoost?: number;
+  sourceCardId?: string | number | null;
+  preferredName?: string;
+  archetype?: string;
+  availableOffensivePayoffs?: number;
+  preserveLastOffensivePayoff?: boolean;
+  offensivePayoffNames?: string[];
+  stableDefense?: boolean;
+}
+
+interface AutoSelectorActionContext {
+  targetPreferences?: {
+    [requirementId: string]: AutoSelectorPreference | undefined;
+  };
+  targetPreference?: AutoSelectorPreference | null;
+  costPreferences?: AutoSelectorPreference | null;
+}
+
+interface AutoSelectorActivationContext {
+  actionContext?: AutoSelectorActionContext | null;
+  costPreferences?: AutoSelectorPreference | null;
+}
+
+interface AutoSelectorContext {
+  selectionContract?: AutoSelectionContract | null;
+  requirement?: AutoSelectionRequirement | null;
+  owner?: AutoSelectorPlayer | null;
+  player?: AutoSelectorPlayer | null;
+  activationContext?: AutoSelectorActivationContext | null;
+}
+
+interface AutoSelectorLimits {
+  min: number;
+  max: number;
+}
+
+interface TriggerOrderCandidate {
+  collectorOrder?: number;
+  occurrenceId?: number;
+  sourceOrder?: number;
+  effectOrder?: number;
+  candidateId?: number;
+}
+
+export type AutoSelectionResult =
+  | { ok: false; reason: string }
+  | { ok: true; selections: SelectionResult };
+
+function hasCanonicalCandidateKey(
+  candidate: AutoSelectionCandidate,
+): candidate is AutoSelectionCandidate & { key: SelectionCandidateKey } {
+  return typeof candidate.key === "string" && candidate.key.length > 0;
+}
+
+function isAutoSelectionRequirementArray(
+  value: AutoSelectionContract["requirements"],
+): value is AutoSelectionRequirement[] {
+  return Array.isArray(value);
+}
+
+function scoreTemporaryCombatDebuff(
+  card: AutoSelectorScorableCard,
+  options: {
+    attackers: AutoSelectorCard[];
+    opponentLp: number;
+    atkReduction?: number;
+    defReduction?: number;
+    destroyIfAtkZeroedByThisEffect?: boolean;
+    destroyIfDefZeroedByThisEffect?: boolean;
+  },
+): number {
+  const result: unknown = Reflect.apply(
+    estimateTemporaryCombatDebuffTargetValue,
+    undefined,
+    [card, options],
+  );
+  return typeof result === "number" ? result : 0;
+}
+
+function scoreOffensiveTemporaryBuff(
+  card: AutoSelectorScorableCard,
+  options: {
+    atkBoost: number;
+    opponentField: AutoSelectorCard[];
+    opponentLp: number;
+  },
+): number {
+  const result: unknown = Reflect.apply(
+    estimateOffensiveTemporaryBuffValue,
+    undefined,
+    [card, options],
+  );
+  return typeof result === "number" ? result : 0;
+}
 
 export default class AutoSelector {
-  constructor(game) {
+  readonly game: AutoSelectorGamePort;
+
+  constructor(game: AutoSelectorGamePort) {
     this.game = game;
   }
 
-  select(selectionContract, context = {}) {
+  select(
+    selectionContract: AutoSelectionContract | null | undefined,
+    context: AutoSelectorContext = {},
+  ): AutoSelectionResult {
     if (
       !selectionContract ||
-      !Array.isArray(selectionContract.requirements) ||
+      !isAutoSelectionRequirementArray(selectionContract.requirements) ||
       selectionContract.requirements.length === 0
     ) {
       return { ok: false, reason: "Selection contract is missing requirements." };
     }
 
-    const selections = {};
-    const contextWithContract = {
+    const selections: SelectionResult = {};
+    const contextWithContract: AutoSelectorContext = {
       ...context,
       selectionContract,
     };
@@ -51,9 +282,9 @@ export default class AutoSelector {
         contextWithContract
       );
       const chosen = ordered.slice(0, desiredCount);
-      selections[requirement.id] = chosen
-        .map((cand) => cand.key)
-        .filter(Boolean);
+      selections[requirement.id ?? "undefined"] = chosen
+        .filter(hasCanonicalCandidateKey)
+        .map((candidate) => candidate.key);
     }
 
     return { ok: true, selections };
@@ -64,7 +295,9 @@ export default class AutoSelector {
    * All eligible optional Trigger Effects are accepted; strategy scoring is
    * deliberately outside Phase 3.
    */
-  orderTriggerCandidates(candidates = []) {
+  orderTriggerCandidates<Candidate extends TriggerOrderCandidate>(
+    candidates: Candidate[] = [],
+  ): Candidate[] {
     return candidates.slice().sort(
       (a, b) =>
         Number(a?.collectorOrder || 0) - Number(b?.collectorOrder || 0) ||
@@ -75,7 +308,11 @@ export default class AutoSelector {
     );
   }
 
-  orderCandidates(requirement, candidates, context) {
+  orderCandidates(
+    requirement: AutoSelectionRequirement,
+    candidates: AutoSelectionCandidate[],
+    context: AutoSelectorContext,
+  ): AutoSelectionCandidate[] {
     const strategy =
       requirement.filters?.strategy ||
       requirement.strategy ||
@@ -120,7 +357,12 @@ export default class AutoSelector {
     return scored.map((entry) => entry.candidate);
   }
 
-  getDesiredCount(requirement, candidates, limits, context) {
+  getDesiredCount(
+    requirement: AutoSelectionRequirement,
+    candidates: AutoSelectionCandidate[],
+    limits: AutoSelectorLimits,
+    context: AutoSelectorContext,
+  ): number {
     const min = Number(limits.min ?? 0);
     const max = Number(limits.max ?? min);
     const available = Array.isArray(candidates) ? candidates.length : 0;
@@ -142,7 +384,11 @@ export default class AutoSelector {
     return Math.min(1, max, available);
   }
 
-  shouldSelectOptional(requirement, candidates, context) {
+  shouldSelectOptional(
+    requirement: AutoSelectionRequirement,
+    candidates: AutoSelectionCandidate[],
+    context: AutoSelectorContext,
+  ): boolean {
     const strategy =
       requirement.filters?.strategy ||
       requirement.strategy ||
@@ -172,7 +418,11 @@ export default class AutoSelector {
     return score >= threshold;
   }
 
-  getRequirementIntent(requirement, context, candidates) {
+  getRequirementIntent(
+    requirement: AutoSelectionRequirement,
+    context: AutoSelectorContext,
+    candidates: AutoSelectionCandidate[],
+  ): SelectionIntent | null {
     const targetPreference = getTargetPreference({
       ...context,
       requirement,
@@ -209,7 +459,10 @@ export default class AutoSelector {
     return "benefit";
   }
 
-  resolveCandidateOwner(candidate, context) {
+  resolveCandidateOwner(
+    candidate: AutoSelectionCandidate | null | undefined,
+    context: AutoSelectorContext,
+  ): AutoSelectorPlayer | null {
     if (!candidate) return null;
     if (candidate.controller === "player") return this.game?.player || null;
     if (candidate.controller === "bot") return this.game?.bot || null;
@@ -225,7 +478,11 @@ export default class AutoSelector {
     return null;
   }
 
-  getCandidateScore(candidate, intent, context) {
+  getCandidateScore(
+    candidate: AutoSelectionCandidate,
+    intent: SelectionIntent,
+    context: AutoSelectorContext,
+  ): number {
     const ownerPlayer = this.resolveCandidateOwner(candidate, context);
     const baseCard =
       candidate?.cardRef ||
@@ -277,7 +534,7 @@ export default class AutoSelector {
         targetPreference?.purpose === "combat"
       ) {
         return (
-          estimateTemporaryCombatDebuffTargetValue(baseCard, {
+          scoreTemporaryCombatDebuff(baseCard, {
             attackers: targetPreference.attackers || [],
             opponentLp:
               targetPreference.opponentLp ??
@@ -361,9 +618,9 @@ export default class AutoSelector {
         const preferNames = costPreferences.preferNames || [];
         const forceNames = costPreferences.forceNames || [];
         const preserveNames = costPreferences.preserveNames || [];
-        if (forceNames.includes(baseCard?.name)) costScore -= 30;
-        if (preferNames.includes(baseCard?.name)) costScore -= 2.5;
-        if (preserveNames.includes(baseCard?.name)) costScore += 18;
+        if (baseCard.name && forceNames.includes(baseCard.name)) costScore -= 30;
+        if (baseCard.name && preferNames.includes(baseCard.name)) costScore -= 2.5;
+        if (baseCard.name && preserveNames.includes(baseCard.name)) costScore += 18;
         const candidateIds = getCandidateInstanceIds(baseCard, candidate);
         if (
           listIncludesInstance(
@@ -378,7 +635,10 @@ export default class AutoSelector {
         ) {
           costScore += 60;
         }
-        if ((costPreferences.avoidNames || []).includes(baseCard?.name)) {
+        if (
+          baseCard.name &&
+          (costPreferences.avoidNames || []).includes(baseCard.name)
+        ) {
           costScore += 20;
         }
         if (
@@ -388,10 +648,11 @@ export default class AutoSelector {
             costPreferences.offensivePayoffNames || [],
           )
         ) {
-          const availablePayoffs = Number.isFinite(
-            costPreferences.availableOffensivePayoffs,
-          )
-            ? costPreferences.availableOffensivePayoffs
+          const configuredPayoffs = costPreferences.availableOffensivePayoffs;
+          const availablePayoffs =
+            typeof configuredPayoffs === "number" &&
+            Number.isFinite(configuredPayoffs)
+            ? configuredPayoffs
             : countAvailableOffensivePayoffs(
                 ownerPlayer,
                 costPreferences.offensivePayoffNames || [],
@@ -407,10 +668,11 @@ export default class AutoSelector {
           costPreferences.preserveLastOffensivePayoff &&
           isOffensivePayoffCost(baseCard, offensivePayoffNames)
         ) {
-          const availablePayoffs = Number.isFinite(
-            costPreferences.availableOffensivePayoffs
-          )
-            ? costPreferences.availableOffensivePayoffs
+          const configuredPayoffs = costPreferences.availableOffensivePayoffs;
+          const availablePayoffs =
+            typeof configuredPayoffs === "number" &&
+            Number.isFinite(configuredPayoffs)
+            ? configuredPayoffs
             : countAvailableOffensivePayoffs(ownerPlayer, offensivePayoffNames);
           if (availablePayoffs <= 1) costScore += 80;
           else if (costPreferences.stableDefense) costScore += 8;
@@ -438,10 +700,17 @@ export default class AutoSelector {
     return baseValue;
   }
 
-  getOffensiveTemporaryBuffScore(card, context, preference) {
+  getOffensiveTemporaryBuffScore(
+    card: AutoSelectorScorableCard | null | undefined,
+    context: AutoSelectorContext,
+    preference: AutoSelectorPreference,
+  ): number {
     if (!card || card.cardKind !== "monster") return -100;
-    const atkBoost = Number.isFinite(preference?.atkBoost)
-      ? preference.atkBoost
+    const configuredAtkBoost = preference.atkBoost;
+    const atkBoost =
+      typeof configuredAtkBoost === "number" &&
+      Number.isFinite(configuredAtkBoost)
+      ? configuredAtkBoost
       : 0;
     if (atkBoost <= 0) return -100;
     if (card.position !== "attack") return -80 + getEffectiveAtk(card) / 10000;
@@ -457,17 +726,25 @@ export default class AutoSelector {
     const opponentMonsters = (opponent?.field || []).filter(
       (monster) => monster && monster.cardKind === "monster",
     );
-    return estimateOffensiveTemporaryBuffValue(card, {
+    return scoreOffensiveTemporaryBuff(card, {
       atkBoost,
       opponentField: opponentMonsters,
       opponentLp: opponent?.lp || 0,
     });
   }
 
-  getStanceDanceBuffScore(card, candidate, context, preference) {
+  getStanceDanceBuffScore(
+    card: AutoSelectorScorableCard | null | undefined,
+    candidate: AutoSelectionCandidate,
+    context: AutoSelectorContext,
+    preference: AutoSelectorPreference,
+  ): number {
     if (!card || card.cardKind !== "monster") return -100;
-    const atkBoost = Number.isFinite(preference?.atkBoost)
-      ? preference.atkBoost
+    const configuredAtkBoost = preference.atkBoost;
+    const atkBoost =
+      typeof configuredAtkBoost === "number" &&
+      Number.isFinite(configuredAtkBoost)
+      ? configuredAtkBoost
       : 0;
     const sourceCardId =
       preference?.sourceCardId ??
@@ -512,12 +789,16 @@ export default class AutoSelector {
   }
 }
 
-function selectionContractIntent(context) {
+function selectionContractIntent(
+  context: AutoSelectorContext,
+): SelectionIntent | null {
   const intent = context?.selectionContract?.metadata?.intent;
   return typeof intent === "string" ? intent : null;
 }
 
-function getTargetPreference(context) {
+function getTargetPreference(
+  context: AutoSelectorContext,
+): AutoSelectorPreference | null {
   const requirementId = context?.requirement?.id || null;
   const actionContext = context?.activationContext?.actionContext || {};
   const byTarget = actionContext.targetPreferences || {};
@@ -525,7 +806,10 @@ function getTargetPreference(context) {
   return actionContext.targetPreference || null;
 }
 
-function mergeCostPreference(targetPreference, costPreference) {
+function mergeCostPreference(
+  targetPreference: AutoSelectorPreference | null | undefined,
+  costPreference: AutoSelectorPreference | null | undefined,
+): AutoSelectorPreference | null {
   if (!costPreference && !targetPreference) return null;
   if (!costPreference) return targetPreference || null;
   if (!targetPreference) return costPreference || null;
@@ -559,20 +843,29 @@ function mergeCostPreference(targetPreference, costPreference) {
   };
 }
 
-function isOffensivePayoffCost(card, payoffNames = []) {
+function isOffensivePayoffCost(
+  card: AutoSelectorScorableCard | null | undefined,
+  payoffNames: string[] = [],
+): boolean {
   if (!card || card.cardKind !== "monster") return false;
-  if ((payoffNames || []).includes(card.name)) return true;
+  if (card.name && (payoffNames || []).includes(card.name)) return true;
   return (card.level || 0) >= 7 && getEffectiveAtk(card) >= 2400;
 }
 
-function countAvailableOffensivePayoffs(player, payoffNames = []) {
+function countAvailableOffensivePayoffs(
+  player: AutoSelectorPlayer | null | undefined,
+  payoffNames: string[] = [],
+): number {
   if (!player) return 0;
   return [...(player.hand || []), ...(player.deck || [])].filter((card) =>
     isOffensivePayoffCost(card, payoffNames)
   ).length;
 }
 
-function getCandidateInstanceIds(card, candidate) {
+function getCandidateInstanceIds(
+  card: AutoSelectorScorableCard | null | undefined,
+  candidate: AutoSelectionCandidate | null | undefined,
+): Array<string | number> {
   return [
     candidate?.instanceId,
     candidate?.fieldPresenceId,
@@ -583,20 +876,27 @@ function getCandidateInstanceIds(card, candidate) {
   ].filter((id) => id !== null && id !== undefined);
 }
 
-function listIncludesInstance(ids = [], candidateIds = []) {
+function listIncludesInstance(
+  ids: Array<string | number> = [],
+  candidateIds: Array<string | number> = [],
+): boolean {
   if (!Array.isArray(ids) || ids.length === 0) return false;
   const normalized = new Set(ids.map((id) => String(id)));
   return candidateIds.some((id) => normalized.has(String(id)));
 }
 
-function getNamedPreferenceTargetScore(card, preference = {}, candidate = null) {
+function getNamedPreferenceTargetScore(
+  card: AutoSelectorScorableCard | null | undefined,
+  preference: AutoSelectorPreference = {},
+  candidate: AutoSelectionCandidate | null = null,
+): number {
   if (!card) return -100;
   const preferredNames = preference.preferredNames || [];
   const avoidNames = preference.avoidNames || [];
   const candidateIds = getCandidateInstanceIds(card, candidate);
   let score = estimateCardValue(card);
-  if (preferredNames.includes(card.name)) score += 40;
-  if (avoidNames.includes(card.name)) score -= 30;
+  if (card.name && preferredNames.includes(card.name)) score += 40;
+  if (card.name && avoidNames.includes(card.name)) score -= 30;
   if (listIncludesInstance(preference.preferredInstanceIds, candidateIds)) {
     score += 55;
   }
@@ -606,7 +906,10 @@ function getNamedPreferenceTargetScore(card, preference = {}, candidate = null) 
   return score;
 }
 
-function getRecursionTargetScore(card, preference = {}) {
+function getRecursionTargetScore(
+  card: AutoSelectorScorableCard | null | undefined,
+  preference: AutoSelectorPreference = {},
+): number {
   if (!card || card.cardKind !== "monster") return -100;
   const atk = getEffectiveAtk(card);
   const def = getEffectiveDef(card);
@@ -615,21 +918,21 @@ function getRecursionTargetScore(card, preference = {}) {
   const offensiveNames = preference.offensiveNames || [];
   const preferredNames = preference.preferredNames || [];
   let score = (card.level || 0) * 0.2 + Math.max(atk, def) / 1000;
-  if (preferredNames.includes(card.name)) score += 6;
+  if (card.name && preferredNames.includes(card.name)) score += 6;
 
   if (purpose === "stabilize" || purpose === "defense") {
     score += def / 450;
     if (def >= atk + 500 || card.mustBeAttacked) score += 2;
-    if (defensiveNames.includes(card.name)) score += 3;
-    if (offensiveNames.includes(card.name) && def < 2000) score -= 1;
+    if (card.name && defensiveNames.includes(card.name)) score += 3;
+    if (card.name && offensiveNames.includes(card.name) && def < 2000) score -= 1;
   } else if (purpose === "pressure" || purpose === "offense") {
     score += atk / 450;
     if (atk >= 2000 || card.piercing) score += 2;
-    if (offensiveNames.includes(card.name)) score += 2;
-    if (defensiveNames.includes(card.name) && atk < 1800) score -= 3;
+    if (card.name && offensiveNames.includes(card.name)) score += 2;
+    if (card.name && defensiveNames.includes(card.name) && atk < 1800) score -= 3;
   } else {
-    if (defensiveNames.includes(card.name)) score += 0.8;
-    if (offensiveNames.includes(card.name)) score += 0.8;
+    if (card.name && defensiveNames.includes(card.name)) score += 0.8;
+    if (card.name && offensiveNames.includes(card.name)) score += 0.8;
   }
 
   return score;
