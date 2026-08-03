@@ -303,7 +303,7 @@ Coletores por evento que alimentam os triggers declarativos:
 | [extraDeck/](../src/core/game/extraDeck/) | `modal.js` - abertura/seleção do Extra Deck. |
 | [graveyard/](../src/core/game/graveyard/) | `modal.js` - visualização e ativação a partir do Cemitério quando legal. |
 | [helpers/](../src/core/game/helpers/) | `cards.js`, `players.js`. |
-| [replay/](../src/core/game/replay/) | Replay canônico: formato, captura, hash determinístico e reprodução headless. |
+| [replay/](../src/core/game/replay/) | `canonical.ts`, `validation.ts`, `recorder.ts`, `driver.ts`, `index.ts` - replay canônico, normalização/FNV, validação profunda, captura e reprodução headless; imports consumidores usam specifiers `.js`. |
 | [selection/](../src/core/game/selection/) | `contract.ts`, `handlers.ts`, `highlighting.ts`, `session.ts`. |
 | [spellTrap/](../src/core/game/spellTrap/) | `activation.js`, `finalization.js`, `index.js`, `quickSpellRules.js`, `set.js`, `triggers.js`, `verification.js`. |
 | [state/](../src/core/game/state/) | `duelReset.js`, `serialization.js`. |

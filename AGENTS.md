@@ -61,7 +61,7 @@ src/data/cards.js             # Banco de cartas 100% declarativo (~5700 linhas)
 - **Auto-resolução:** [AutoSelector.ts](src/core/AutoSelector.ts) — escolhas automáticas para IA durante targeting (uso restrito a bot/IA)
 - **Validação:** [CardDatabaseValidator.js](src/core/CardDatabaseValidator.js) — bloqueia duelo se cartas tiverem erros
 - **Chain (mock):** [NullChainSystem.js](src/core/NullChainSystem.js) — implementação no-op para fluxos sem chain
-- **Captura:** [ReplayCapture.js](src/core/ReplayCapture.js) — captura decisões para replays
+- **Replay canônico:** [src/core/game/replay/](src/core/game/replay/) (`canonical.ts`, `validation.ts`, `recorder.ts`, `driver.ts`, `index.ts`) — contratos serializáveis, validação profunda, captura, hash determinístico e reprodução headless; consumidores preservam specifiers `.js`
 - **Modelos:** [Card.js](src/core/Card.js), [Player.js](src/core/Player.js)
 - **i18n:** [i18n.js](src/core/i18n.js)
 
@@ -82,7 +82,7 @@ src/data/cards.js             # Banco de cartas 100% declarativo (~5700 linhas)
 | `graveyard/` | Modal logic                                                                 |
 | `extraDeck/` | Modal logic                                                                 |
 | `devTools/`  | Commands, sanity checks, setup                                              |
-| `replay/`    | Integration with ReplayCapture                                              |
+| `replay/`    | Replay canônico: normalização/FNV, captura, validação e reprodução headless |
 | `actions/`   | Action guard (validation antes de iniciar uma ação)                         |
 | `state/`     | Serialization (snapshot público para replays e IA)                          |
 | `helpers/`   | Helpers de player/card resolution                                           |
@@ -142,14 +142,16 @@ O projeto usa ES modules nativos do navegador. O [package.json](package.json) de
 | `shadow_duel_bot_preset`   | Define arquétipo: `shadowheart`/`luminarch`/`void` |
 | `shadow_duel_capture_mode` | Ativa captura de replays                           |
 
-**Sistema de Replays** — Captura e análise de partidas:
+**Sistema de Replays** — Captura canônica e análise de partidas:
 
 - Ativar: botão `🎬 Replay` no menu principal
 - Captura todas as decisões de ambos jogadores + availableActions
 - Ao fim do duelo: modal para salvar/descartar replay `.json`
 - Dashboard: botão `📊 Replay Analytics` — importa replays, gera training digests
 - Storage: IndexedDB com stores `replays`, `digests`, `aggregates`
-- Arquivos: [ReplayCapture.js](src/core/ReplayCapture.js) e [src/core/ai/replay/](src/core/ai/replay/) (`ReplayAnalyzer`, `ReplayDatabase`, `ReplayImporter`, `ReplayInsights`, `PatternMatcher`)
+- Execução canônica: [src/core/contracts/replay.ts](src/core/contracts/replay.ts) e [src/core/game/replay/](src/core/game/replay/) (`canonical.ts`, `validation.ts`, `recorder.ts`, `driver.ts`, `index.ts`)
+- Análise estratégica: [src/core/ai/replay/](src/core/ai/replay/) (`ReplayAnalyzer`, `ReplayDatabase`, `ReplayImporter`, `ReplayInsights`, `PatternMatcher`)
+- Reprodução headless: `npm run replay -- caminho/duelo.json`
 
 **Scripts utilitários** ([scripts/](scripts/)):
 
