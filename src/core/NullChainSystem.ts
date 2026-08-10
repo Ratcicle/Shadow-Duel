@@ -1,3 +1,32 @@
+import type { CardAction } from "./contracts/actions.js";
+import type {
+  ChainActivationCandidate,
+  ChainCard,
+  ChainRuntimeTriggerOccurrence,
+  ChainRuntimeTriggerState,
+  DisabledChainTriggerOccurrence,
+  DisabledChainTriggerState,
+  ChainEffect,
+  ChainEffectTarget,
+  ChainEventPayload,
+  ChainFinalizationEntry,
+  ChainFinalizationState,
+  ChainGamePort,
+  ChainLink,
+  ChainOperationResult,
+  ChainPlayer,
+  ChainRuntimePort,
+  ChainSelectionMap,
+  ChainTriggerOccurrenceOptions,
+  ChainUsageCheck,
+  FastEffectContextInput,
+  FastEffectState,
+  FastEffectTimingInput,
+  PreparedActivation,
+  PreparedActivationInput,
+} from "./contracts/chainRuntime.js";
+import type { ChainId } from "./contracts/primitives.js";
+import type { CanonicalZone } from "./contracts/zones.js";
 import { createPreparedActivation as normalizePreparedActivation } from "./chain/activation.js";
 import {
   getActivationCostTargetDefinitions as getCostTargetDefinitions,
@@ -9,25 +38,56 @@ import {
   FAST_EFFECT_STATES,
 } from "./chain/timing.js";
 
-export default class NullChainSystem {
-  constructor(game = null) {
+const CARD_LIST_ZONES = Object.freeze([
+  "hand",
+  "field",
+  "spellTrap",
+  "graveyard",
+  "banished",
+  "deck",
+  "extraDeck",
+] as const satisfies readonly CanonicalZone[]);
+
+function isChainPlayer(value: ChainPlayer | null | undefined): value is ChainPlayer {
+  return value != null;
+}
+
+function playerZoneContains(
+  player: ChainPlayer,
+  zone: (typeof CARD_LIST_ZONES)[number],
+  card: ChainCard | null,
+): boolean {
+  const cards = Reflect.get(player, zone);
+  return (
+    Array.isArray(cards) &&
+    Reflect.apply(Array.prototype.includes, cards, [card]) === true
+  );
+}
+
+function actionTargetRef(action: CardAction): string | null {
+  const targetRef = Reflect.get(action, "targetRef");
+  return typeof targetRef === "string" ? targetRef : null;
+}
+
+class NullChainSystem implements ChainRuntimePort {
+  constructor(game: ChainGamePort | null = null) {
     this.game = game;
     this.chainsDisabled = true;
     this.chainWindowOpen = false;
-    this.chainStack = [];
+    this.chainStack = [] as ChainLink[];
     this.isResolving = false;
     this.currentChainLevel = 0;
-    this.activeChainId = null;
+    this.activeChainId = null as ChainId | null;
     this.nextTimingWindowId = 1;
-    this.activeTimingWindowId = null;
+    this.activeTimingWindowId = null as number | null;
     this.nextTriggerOccurrenceId = 1;
     this.nextAtomicEventGroupId = 1;
     this.nextTriggerOpportunityId = 1;
     this.nextFinalizationId = 1;
-    this.pendingChainFinalizations = [];
+    this.pendingChainFinalizations = [] as ChainFinalizationEntry[];
     this.isFinalizingChain = false;
-    this.currentFinalizingLink = null;
-    this.pendingTriggerOccurrences = [];
+    this.currentFinalizingLink = null as ChainLink | null;
+    this.pendingTriggerOccurrences = [] as ChainRuntimeTriggerOccurrence[];
     this.fastEffectState = {
       state: FAST_EFFECT_STATES.OPEN,
       origin: FAST_EFFECT_ORIGINS.PHASE_START,
@@ -39,82 +99,100 @@ export default class NullChainSystem {
       chainId: null,
       consecutivePasses: 0,
       phaseIntent: null,
-    };
+    } satisfies FastEffectState;
   }
 
-  log() {}
-  isChainResolving() {
+  log(): void {}
+
+  isChainResolving(): boolean {
     return this.isResolving;
   }
-  isChainWindowOpen() {
+
+  isChainWindowOpen(): boolean {
     return this.chainWindowOpen;
   }
-  getActivatableCardsInChain() {
+
+  getActivatableCardsInChain(): ChainActivationCandidate[] {
     return [];
   }
-  getEffectActivationZones() {
+
+  getEffectActivationZones(): CanonicalZone[] {
     return [];
   }
-  getOpponent(player) {
+
+  getOpponent(player: ChainPlayer | null): ChainPlayer | null {
     return this.game?.getOpponent?.(player) || null;
   }
-  determineCardZone(card, player = null) {
-    const owners = player
+
+  determineCardZone(
+    card: ChainCard | null,
+    player: ChainPlayer | null = null,
+  ): CanonicalZone | null {
+    const owners = (player
       ? [player]
-      : [this.game?.player, this.game?.bot].filter(Boolean);
+      : [this.game?.player, this.game?.bot]
+    ).filter(isChainPlayer);
     for (const owner of owners) {
-      if (owner?.fieldSpell === card) return "fieldSpell";
-      for (const zone of [
-        "hand",
-        "field",
-        "spellTrap",
-        "graveyard",
-        "banished",
-        "deck",
-        "extraDeck",
-      ]) {
-        if (owner?.[zone]?.includes?.(card)) return zone;
+      if (owner.fieldSpell === card) return "fieldSpell";
+      for (const zone of CARD_LIST_ZONES) {
+        if (playerZoneContains(owner, zone, card)) return zone;
       }
     }
     return null;
   }
-  checkActivationUsage(card, player, effect) {
+
+  checkActivationUsage(
+    _card: ChainCard,
+    _player: ChainPlayer,
+    effect: ChainEffect,
+  ): ChainUsageCheck {
     return { ok: true, policy: effect?.usagePolicy || null };
   }
-  reserveUsageForChainLink() {
+
+  reserveUsageForChainLink(): null {
     return null;
   }
-  settleUsageForChainLink() {
+
+  settleUsageForChainLink(): null {
     return null;
   }
-  releaseAllUsageReservations() {
+
+  releaseAllUsageReservations(): void {
     this.game?.releaseEffectUsageReservations?.("chain_cancelled");
   }
-  queueChainFinalization() {
+
+  queueChainFinalization(): null {
     return null;
   }
-  async finalizeWholeChain() {
+
+  async finalizeWholeChain(): Promise<ChainOperationResult> {
     return { ok: true, success: true, entries: [] };
   }
-  getChainFinalizationState() {
+
+  getChainFinalizationState(): ChainFinalizationState {
     return { finalizing: false, pendingCount: 0, entries: [] };
   }
-  resetChainFinalizationState() {
+
+  resetChainFinalizationState(): ChainFinalizationState {
     this.pendingChainFinalizations = [];
     this.isFinalizingChain = false;
     this.currentFinalizingLink = null;
     return this.getChainFinalizationState();
   }
-  getChainLength() {
+
+  getChainLength(): number {
     return this.chainStack.length;
   }
-  getLastChainLink() {
+
+  getLastChainLink(): null {
     return null;
   }
-  getChainSummary() {
+
+  getChainSummary(): [] {
     return [];
   }
-  getFastEffectState() {
+
+  getFastEffectState(): FastEffectState {
     return {
       ...this.fastEffectState,
       phaseIntent: this.fastEffectState.phaseIntent
@@ -122,15 +200,27 @@ export default class NullChainSystem {
         : null,
     };
   }
-  allocateAtomicEventGroupId(providedId = null) {
-    if (Number.isInteger(providedId) && providedId > 0) return providedId;
+
+  allocateAtomicEventGroupId(providedId: number | null = null): number {
+    if (
+      typeof providedId === "number" &&
+      Number.isInteger(providedId) &&
+      providedId > 0
+    ) {
+      return providedId;
+    }
     return this.nextAtomicEventGroupId++;
   }
-  createTriggerOccurrence(eventName, payload = {}, options = {}) {
+
+  createTriggerOccurrence(
+    eventName: string,
+    payload: ChainEventPayload = {},
+    options: ChainTriggerOccurrenceOptions = {},
+  ): DisabledChainTriggerOccurrence {
     return {
       occurrenceId: this.nextTriggerOccurrenceId++,
       atomicGroupId: this.allocateAtomicEventGroupId(
-        options.atomicGroupId ?? payload?.atomicGroupId ?? null,
+        options.atomicGroupId ?? payload.atomicGroupId ?? null,
       ),
       eventName,
       payload,
@@ -140,11 +230,17 @@ export default class NullChainSystem {
       orderRule: options.orderRule || null,
     };
   }
-  queueTriggerOccurrence(occurrence) {
+
+  queueTriggerOccurrence(
+    occurrence: ChainRuntimeTriggerOccurrence | null | undefined,
+  ): ChainOperationResult {
     if (occurrence) this.pendingTriggerOccurrences.push(occurrence);
     return { ok: true, deferred: true, triggerCount: 0, results: [] };
   }
-  async resolveTriggerOccurrences(occurrences = []) {
+
+  async resolveTriggerOccurrences(
+    occurrences: ChainRuntimeTriggerOccurrence[] = [],
+  ): Promise<ChainOperationResult> {
     for (const occurrence of occurrences) {
       await occurrence?.onComplete?.();
     }
@@ -156,7 +252,8 @@ export default class NullChainSystem {
       triggerCount: 0,
     };
   }
-  getTriggerState() {
+
+  getTriggerState(): DisabledChainTriggerState {
     return {
       opportunityId: null,
       pendingOccurrenceCount: this.pendingTriggerOccurrences.length,
@@ -165,14 +262,17 @@ export default class NullChainSystem {
       groups: {},
     };
   }
-  resetTriggerState() {
+
+  resetTriggerState(): ChainRuntimeTriggerState {
     this.pendingTriggerOccurrences = [];
     return this.getTriggerState();
   }
-  isOpenGameState() {
+
+  isOpenGameState(): true {
     return true;
   }
-  resetFastEffectTiming() {
+
+  resetFastEffectTiming(): FastEffectState {
     this.fastEffectState.state = FAST_EFFECT_STATES.OPEN;
     this.fastEffectState.origin = FAST_EFFECT_ORIGINS.PHASE_START;
     this.fastEffectState.timingWindowId = null;
@@ -180,7 +280,10 @@ export default class NullChainSystem {
     this.fastEffectState.phaseIntent = null;
     return this.getFastEffectState();
   }
-  async runFastEffectTiming(input = {}) {
+
+  async runFastEffectTiming(
+    input: FastEffectTimingInput = {},
+  ): Promise<ChainOperationResult> {
     this.resetFastEffectTiming();
     const isPhaseIntent =
       input.origin === FAST_EFFECT_ORIGINS.PHASE_TRANSITION_INTENT;
@@ -194,10 +297,12 @@ export default class NullChainSystem {
       state: this.getFastEffectState(),
     };
   }
-  canActivateInChain() {
+
+  canActivateInChain(): { ok: false; reason: "chains_disabled" } {
     return { ok: false, reason: "chains_disabled" };
   }
-  async openChainWindow() {
+
+  async openChainWindow(): Promise<false> {
     this.chainWindowOpen = false;
     this.isResolving = false;
     this.chainStack = [];
@@ -206,7 +311,10 @@ export default class NullChainSystem {
     this.resetChainFinalizationState();
     return false;
   }
-  async openActivationChain(preparedActivation = {}) {
+
+  async openActivationChain(
+    preparedActivation: PreparedActivationInput = {},
+  ): Promise<ChainOperationResult> {
     return {
       success: true,
       needsSelection: false,
@@ -215,7 +323,10 @@ export default class NullChainSystem {
       preparedActivation: this.createPreparedActivation(preparedActivation),
     };
   }
-  async openEventWindow(context = {}) {
+
+  async openEventWindow(
+    context: Partial<FastEffectContextInput> = {},
+  ): Promise<ChainOperationResult> {
     return {
       ...(await this.runFastEffectTiming({
         origin:
@@ -228,25 +339,42 @@ export default class NullChainSystem {
       chainsDisabled: true,
     };
   }
-  createPreparedActivation(input = {}) {
+
+  createPreparedActivation(
+    input: PreparedActivationInput = {},
+  ): PreparedActivation {
     return normalizePreparedActivation(input);
   }
-  getEffectActivationCosts(effect) {
+
+  getEffectActivationCosts(
+    effect?: ChainEffect | null,
+  ): readonly CardAction[] {
     return Array.isArray(effect?.activationCosts) ? effect.activationCosts : [];
   }
-  getActivationCostTargetDefinitions(effect) {
+
+  getActivationCostTargetDefinitions(
+    effect?: ChainEffect | null,
+  ): ChainEffectTarget[] {
     return getCostTargetDefinitions(effect);
   }
-  getDeclaredTargetDefinitions(effect) {
+
+  getDeclaredTargetDefinitions(
+    effect?: ChainEffect | null,
+  ): ChainEffectTarget[] {
     return getEffectTargetDefinitions(effect);
   }
+
   async getPlayerSelectionsForDefinitions(
-    card,
-    definitions,
-    player,
-    context,
-    options = {},
-  ) {
+    card: ChainCard,
+    definitions: readonly ChainEffectTarget[],
+    player: ChainPlayer,
+    context: FastEffectContextInput | null,
+    options: {
+      purpose?: "cost" | "target";
+      allowCancel?: boolean;
+      activationZone?: CanonicalZone | null;
+    } = {},
+  ): Promise<ChainSelectionMap | null> {
     return collectSelectionsForDefinitions.call(
       this,
       card,
@@ -256,15 +384,25 @@ export default class NullChainSystem {
       options,
     );
   }
-  getEffectActivationCommitActions(effect) {
+
+  getEffectActivationCommitActions(
+    effect?: ChainEffect | null,
+  ): readonly CardAction[] {
     return Array.isArray(effect?.activationCommitActions)
       ? effect.activationCommitActions
       : [];
   }
-  getEffectResolutionActions(effect) {
+
+  getEffectResolutionActions(
+    effect?: ChainEffect | null,
+  ): readonly CardAction[] {
     return Array.isArray(effect?.actions) ? effect.actions : [];
   }
-  async payActivationCosts(prepared, context = null) {
+
+  async payActivationCosts(
+    prepared: PreparedActivation,
+    context: FastEffectContextInput | null = null,
+  ): Promise<ChainOperationResult> {
     const actions = this.getEffectActivationCosts(prepared?.effect);
     if (actions.length === 0) {
       prepared.costsPaid = true;
@@ -300,16 +438,20 @@ export default class NullChainSystem {
       status: "paid",
       actions: actions.map((action, index) => ({
         index,
-        type: action?.type || null,
-        targetRef: action?.targetRef || null,
+        type: action.type || null,
+        targetRef: actionTargetRef(action),
       })),
     };
     return { success: true, needsSelection: false };
   }
-  async offerChainResponse() {
+
+  async offerChainResponse(): Promise<ChainOperationResult> {
     return { success: false, reason: "chains_disabled" };
   }
-  async applyActivationCommitActions(prepared) {
+
+  async applyActivationCommitActions(
+    prepared: PreparedActivation,
+  ): Promise<ChainOperationResult> {
     if (prepared?.activationCommitment?.status === "applied") {
       return { success: true, needsSelection: false, alreadyApplied: true };
     }
@@ -344,16 +486,18 @@ export default class NullChainSystem {
       status: "applied",
       actions: actions.map((action, index) => ({
         index,
-        type: action?.type || null,
-        targetRef: action?.targetRef || null,
+        type: action.type || null,
+        targetRef: actionTargetRef(action),
       })),
     };
     return { success: true, needsSelection: false };
   }
-  addToChain() {
+
+  addToChain(): false {
     return false;
   }
-  async resolveChain() {
+
+  async resolveChain(): Promise<false> {
     this.isResolving = false;
     this.chainWindowOpen = false;
     this.chainStack = [];
@@ -362,7 +506,8 @@ export default class NullChainSystem {
     this.resetFastEffectTiming();
     return false;
   }
-  cancelChain() {
+
+  cancelChain(): void {
     this.chainStack = [];
     this.chainWindowOpen = false;
     this.isResolving = false;
@@ -373,7 +518,35 @@ export default class NullChainSystem {
     this.resetTriggerState();
     this.resetFastEffectTiming();
   }
-  reset() {
+
+  reset(): void {
     this.cancelChain();
   }
 }
+
+/**
+ * Type-only instance fields keep the runtime facade at its legacy 18 own keys;
+ * no class fields are emitted.
+ */
+interface NullChainSystem {
+  game: ChainGamePort | null;
+  chainsDisabled: true;
+  chainWindowOpen: boolean;
+  chainStack: ChainLink[];
+  isResolving: boolean;
+  currentChainLevel: number;
+  activeChainId: ChainId | null;
+  nextTimingWindowId: number;
+  activeTimingWindowId: number | null;
+  nextTriggerOccurrenceId: number;
+  nextAtomicEventGroupId: number;
+  nextTriggerOpportunityId: number;
+  nextFinalizationId: number;
+  pendingChainFinalizations: ChainFinalizationEntry[];
+  isFinalizingChain: boolean;
+  currentFinalizingLink: ChainLink | null;
+  pendingTriggerOccurrences: ChainRuntimeTriggerOccurrence[];
+  fastEffectState: FastEffectState;
+}
+
+export default NullChainSystem;

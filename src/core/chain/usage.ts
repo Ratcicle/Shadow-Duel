@@ -1,19 +1,37 @@
 import { USAGE_POLICIES } from "../contracts/effects.js";
+import type { UsagePolicy } from "../contracts/effects.js";
+import type {
+  ChainCard,
+  ChainEffect,
+  ChainLink,
+  ChainPlayer,
+  ChainUsageCheck,
+  ChainUsageReservation,
+  FullChainHost,
+} from "../contracts/chainRuntime.js";
 
 export { USAGE_POLICIES };
 
-function getPolicy(effect) {
+function getPolicy(effect?: ChainEffect | null): UsagePolicy | null {
   return effect?.usagePolicy === USAGE_POLICIES.USE ||
     effect?.usagePolicy === USAGE_POLICIES.ACTIVATE
     ? effect.usagePolicy
     : null;
 }
 
-export function getUsagePolicy(effect) {
+export function getUsagePolicy(
+  this: FullChainHost,
+  effect?: ChainEffect | null,
+): UsagePolicy | null {
   return getPolicy(effect);
 }
 
-export function checkActivationUsage(card, player, effect) {
+export function checkActivationUsage(
+  this: FullChainHost,
+  card: ChainCard,
+  player: ChainPlayer,
+  effect: ChainEffect,
+): ChainUsageCheck {
   if (!effect || !player) return { ok: true };
   if ((effect.oncePerTurn || effect.oncePerDuel) && !getPolicy(effect)) {
     return {
@@ -34,7 +52,10 @@ export function checkActivationUsage(card, player, effect) {
     : { ok: true, policy: getPolicy(effect) };
 }
 
-export function reserveUsageForChainLink(link) {
+export function reserveUsageForChainLink(
+  this: FullChainHost,
+  link: ChainLink,
+): ChainUsageReservation | null {
   if (!link?.effect || !link?.controller) return null;
   const effect = link.effect;
   if (
@@ -61,7 +82,10 @@ export function reserveUsageForChainLink(link) {
   return link.usageReservation;
 }
 
-export function settleUsageForChainLink(link) {
+export function settleUsageForChainLink(
+  this: FullChainHost,
+  link: ChainLink,
+): ChainUsageReservation | null {
   const snapshot = link?.usageReservation;
   if (!snapshot || snapshot.status !== "reserved") return snapshot || null;
   if (typeof this.game?.settleEffectUsage !== "function") return snapshot;
@@ -72,6 +96,9 @@ export function settleUsageForChainLink(link) {
   return link.usageReservation;
 }
 
-export function releaseAllUsageReservations(reason = "chain_cancelled") {
+export function releaseAllUsageReservations(
+  this: FullChainHost,
+  reason = "chain_cancelled",
+): void {
   this.game?.releaseEffectUsageReservations?.(reason);
 }
