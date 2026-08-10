@@ -16,6 +16,21 @@ import {
   canActivateDuringDamageStep,
   isQuickSpell,
 } from "../game/spellTrap/quickSpellRules.js";
+import { isChainContextType } from "../contracts/chain.js";
+import type { SpellSpeed } from "../contracts/chain.js";
+import type {
+  ChainCard,
+  ChainEffect,
+  FastEffectContextInput,
+  FullChainHost,
+} from "../contracts/chainRuntime.js";
+
+function includesSpellSpeed(
+  speeds: readonly SpellSpeed[],
+  speed: SpellSpeed,
+): boolean {
+  return speeds.includes(speed);
+}
 
 /**
  * Get the spell speed of an effect.
@@ -23,7 +38,10 @@ import {
  * @param {Object} card
  * @returns {number} 1, 2, or 3
  */
-export function getEffectSpellSpeed(effect, card) {
+export function getEffectSpellSpeed(
+  effect?: ChainEffect,
+  card?: ChainCard,
+): SpellSpeed {
   if (effect?.speed !== undefined) {
     return effect.speed;
   }
@@ -57,7 +75,10 @@ export function getEffectSpellSpeed(effect, card) {
  * @param {Object} context
  * @returns {number}
  */
-export function getRequiredSpellSpeed(context) {
+export function getRequiredSpellSpeed(
+  this: FullChainHost,
+  context?: FastEffectContextInput,
+): SpellSpeed {
   if (this.chainStack.length === 0) {
     if (context?.type === "main_phase_action") {
       return 1;
@@ -71,7 +92,7 @@ export function getRequiredSpellSpeed(context) {
       ? Number(lastLink.spellSpeed)
       : this.getEffectSpellSpeed(lastLink.effect, lastLink.card);
 
-  return Math.max(2, lastSpeed);
+  return Math.max(2, lastSpeed) as SpellSpeed;
 }
 
 /**
@@ -81,7 +102,12 @@ export function getRequiredSpellSpeed(context) {
  * @param {Object} context
  * @returns {{ok: boolean, reason?: string}}
  */
-export function canActivateInChain(effect, card, context) {
+export function canActivateInChain(
+  this: FullChainHost,
+  effect?: ChainEffect,
+  card?: ChainCard,
+  context?: FastEffectContextInput,
+): { ok: boolean; code?: string; reason?: string } {
   if (!effect || !card) {
     return { ok: false, reason: "Missing effect or card." };
   }
@@ -96,8 +122,10 @@ export function canActivateInChain(effect, card, context) {
     };
   }
 
-  const contextDef = CHAIN_CONTEXTS[context?.type];
-  if (contextDef && !contextDef.allowedSpeeds.includes(effectSpeed)) {
+  const contextDef = isChainContextType(context?.type)
+    ? CHAIN_CONTEXTS[context.type]
+    : undefined;
+  if (contextDef && !includesSpellSpeed(contextDef.allowedSpeeds, effectSpeed)) {
     return {
       ok: false,
       reason: `Spell Speed ${effectSpeed} not allowed in ${context?.type} context.`,
@@ -115,7 +143,11 @@ export function canActivateInChain(effect, card, context) {
     }
   }
 
-  const damageStepCheck = canActivateDuringDamageStep(effect, card, context || {});
+  const damageStepCheck: {
+    ok: boolean;
+    code?: string;
+    reason?: string;
+  } = canActivateDuringDamageStep(effect, card, context || {});
   if (!damageStepCheck.ok) {
     return {
       ok: false,

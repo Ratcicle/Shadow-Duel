@@ -1,11 +1,30 @@
 import { isAI } from "../Player.js";
+import type {
+  ChainActionContext,
+  ChainCard,
+  ChainEffect,
+  ChainEffectEnginePort,
+  ChainEffectTarget,
+  ChainPlayer,
+  PreparedActivationContext,
+  ChainSelectionHost,
+  ChainSelectionKeyMap,
+  ChainSelectionMap,
+  ChainSelectionRequirement,
+  FastEffectContextInput,
+  FullChainHost,
+} from "../contracts/chainRuntime.js";
+import type { CanonicalZone } from "../contracts/zones.js";
+import type { SelectionCandidateKey } from "../contracts/primitives.js";
 
-function selectionCards(value) {
-  if (Array.isArray(value)) return value.filter(Boolean);
+function selectionCards(value: unknown): unknown[] {
+  if (Array.isArray(value)) {
+    return value.filter((entry: unknown) => Boolean(entry));
+  }
   return value ? [value] : [];
 }
 
-function selectionCount(definition = {}) {
+function selectionCount(definition: ChainEffectTarget) {
   const min = Number(definition?.count?.min ?? definition?.min ?? 1);
   const max = Number(definition?.count?.max ?? definition?.max ?? min);
   return {
@@ -21,13 +40,16 @@ function selectionCount(definition = {}) {
  * `countFromSelectionRef` is intentionally a selection-level contract: the
  * dependent target is still declared before the Chain Link is created.
  */
-export function resolveCountFromSelectionDefinitions(definitions, selections = {}) {
+export function resolveCountFromSelectionDefinitions(
+  definitions: readonly ChainEffectTarget[],
+  selections: ChainSelectionMap = {},
+): ChainEffectTarget[] {
   return (definitions || []).map((definition) => {
     const sourceRef = definition?.countFromSelectionRef;
     if (typeof sourceRef !== "string" || sourceRef.length === 0) {
       return definition;
     }
-    const count = selectionCards(selections?.[sourceRef]).length;
+    const count = selectionCards(Reflect.get(selections, sourceRef)).length;
     return {
       ...definition,
       count: { min: count, max: count },
@@ -43,12 +65,14 @@ export function resolveCountFromSelectionDefinitions(definitions, selections = {
  * more than can be targeted after the irreversible cost payment.
  */
 export function capCostDefinitionsByLinkedTargetCapacity(
-  costDefinitions,
-  targetDefinitions,
-  effectEngine,
-  context,
-) {
-  if (!effectEngine?.resolveTargets) return costDefinitions || [];
+  costDefinitions: readonly ChainEffectTarget[],
+  targetDefinitions: readonly ChainEffectTarget[],
+  effectEngine: ChainEffectEnginePort | null | undefined,
+  context: { activationContext?: PreparedActivationContext | null } | null,
+): readonly ChainEffectTarget[] {
+  if (typeof effectEngine?.resolveTargets !== "function") {
+    return costDefinitions || [];
+  }
 
   const previewContext = {
     ...(context || {}),
@@ -61,14 +85,18 @@ export function capCostDefinitionsByLinkedTargetCapacity(
     },
   };
 
-  const targetCapacity = (targetDefinition) => {
+  const targetCapacity = (targetDefinition: ChainEffectTarget): number => {
     const preview = effectEngine.resolveTargets(
       [targetDefinition],
       previewContext,
       null,
     );
     if (preview?.ok === true) {
-      return selectionCards(preview.targets?.[targetDefinition.id]).length;
+      return selectionCards(
+        preview.targets
+          ? Reflect.get(preview.targets, targetDefinition.id)
+          : undefined,
+      ).length;
     }
     const requirement = (preview?.selectionContract?.requirements || []).find(
       (entry) => entry?.id === targetDefinition?.id,
@@ -103,35 +131,40 @@ export function capCostDefinitionsByLinkedTargetCapacity(
  * @param {Object} effect
  * @returns {boolean}
  */
-export function effectRequiresTargets(effect) {
-  return (
-    effect?.targets &&
-    Array.isArray(effect.targets) &&
-    effect.targets.length > 0
-  );
+export function effectRequiresTargets(effect?: ChainEffect | null): boolean {
+  return Array.isArray(effect?.targets) && effect.targets.length > 0;
 }
 
-export function getActivationCostTargetDefinitions(effect) {
+export function getActivationCostTargetDefinitions(
+  effect?: ChainEffect | null,
+): ChainEffectTarget[] {
   return (effect?.targets || []).filter((target) => target?.intent === "cost");
 }
 
-export function getDeclaredTargetDefinitions(effect) {
+export function getDeclaredTargetDefinitions(
+  effect?: ChainEffect | null,
+): ChainEffectTarget[] {
   return (effect?.targets || []).filter((target) => target?.intent !== "cost");
 }
 
 export async function getPlayerSelectionsForDefinitions(
-  card,
-  definitions,
-  player,
-  context,
-  options = {},
-) {
+  this: ChainSelectionHost,
+  card: ChainCard,
+  definitions: readonly ChainEffectTarget[],
+  player: ChainPlayer,
+  context: FastEffectContextInput | null,
+  options: {
+    purpose?: "cost" | "target";
+    allowCancel?: boolean;
+    activationZone?: CanonicalZone | null;
+  } = {},
+): Promise<ChainSelectionMap | null> {
   if (!Array.isArray(definitions) || definitions.length === 0) return {};
   const effectEngine = this.game?.effectEngine;
   if (!effectEngine) return null;
   const purpose = options.purpose === "cost" ? "cost" : "target";
   const allowCancel = options.allowCancel !== false;
-  const ctx = {
+  const ctx: ChainActionContext = {
     source: card,
     sourceCard: card,
     player,
@@ -174,7 +207,8 @@ export async function getPlayerSelectionsForDefinitions(
     if (!autoResult?.ok) return null;
     return {
       ...baseTargets,
-      ...this.resolveSelectionsToCards(
+      ...resolveSelectionCards(
+        this,
         autoResult.selections || {},
         contract.requirements || [],
         player,
@@ -182,9 +216,11 @@ export async function getPlayerSelectionsForDefinitions(
     };
   }
 
-  if (!this.game?.startTargetSelectionSession) return null;
-  return new Promise((resolve) => {
-    this.game.startTargetSelectionSession({
+  const startTargetSelectionSession =
+    this.game?.startTargetSelectionSession?.bind(this.game);
+  if (!startTargetSelectionSession) return null;
+  return new Promise<ChainSelectionMap | null>((resolve) => {
+    startTargetSelectionSession({
       selectionContract: contract,
       message:
         contract.message ||
@@ -197,7 +233,8 @@ export async function getPlayerSelectionsForDefinitions(
       execute: (selections) => {
         resolve({
           ...baseTargets,
-          ...this.resolveSelectionsToCards(
+          ...resolveSelectionCards(
+            this,
             selections,
             contract.requirements || [],
             player,
@@ -218,7 +255,13 @@ export async function getPlayerSelectionsForDefinitions(
  * @param {ChainContext} context
  * @returns {Promise<Object|null>}
  */
-export async function getPlayerSelectionsForEffect(card, effect, player, context) {
+export async function getPlayerSelectionsForEffect(
+  this: FullChainHost,
+  card: ChainCard,
+  effect: ChainEffect,
+  player: ChainPlayer,
+  context: FastEffectContextInput | null,
+): Promise<ChainSelectionMap | null> {
   const definitions = this.getDeclaredTargetDefinitions?.(effect) || [];
   if (definitions.length === 0) return {};
 
@@ -252,7 +295,7 @@ export async function getPlayerSelectionsForEffect(card, effect, player, context
   };
 
   // Use resolveTargets to check what selections are needed
-  const targetResult = effectEngine.resolveTargets(effect.targets, ctx, null);
+  const targetResult = effectEngine.resolveTargets(effect.targets || [], ctx, null);
   const baseTargets = targetResult.targets || {};
 
   if (targetResult.ok === false) {
@@ -276,7 +319,7 @@ export async function getPlayerSelectionsForEffect(card, effect, player, context
         selectionContract: contract,
         selectionKind: "target",
       });
-      const fallbackSelections = {};
+      const fallbackSelections: ChainSelectionKeyMap = {};
       for (const req of contract.requirements || []) {
         const candidates = Array.isArray(req.candidates) ? req.candidates : [];
         const min = Number(req.min ?? 0);
@@ -290,10 +333,17 @@ export async function getPlayerSelectionsForEffect(card, effect, player, context
         const keys =
           autoResult?.ok && autoResult.selections?.[req.id]
             ? autoResult.selections[req.id]
-            : candidates.slice(0, pickCount).map((c) => c.key).filter(Boolean);
-        fallbackSelections[req.id] = keys;
+            : candidates
+                .slice(0, pickCount)
+                .map((candidate) => candidate.key)
+                .filter(
+                  (key): key is SelectionCandidateKey =>
+                    typeof key === "string",
+                );
+        Reflect.set(fallbackSelections, req.id, keys);
       }
-      const resolvedFallback = this.resolveSelectionsToCards(
+      const resolvedFallback = resolveSelectionCards(
+        this,
         fallbackSelections,
         contract.requirements,
         player,
@@ -302,16 +352,19 @@ export async function getPlayerSelectionsForEffect(card, effect, player, context
     }
 
     // Use the game's target selection system
-    if (this.game?.startTargetSelectionSession) {
-      return new Promise((resolve) => {
-        this.game.startTargetSelectionSession({
+    const startTargetSelectionSession =
+      this.game?.startTargetSelectionSession?.bind(this.game);
+    if (startTargetSelectionSession) {
+      return new Promise<ChainSelectionMap | null>((resolve) => {
+        startTargetSelectionSession({
           selectionContract: contract,
           message: contract.message || `Select target(s) for ${card.name}`,
           kind: "target",
           allowCancel: true,
           execute: (selections) => {
             // Convert selection keys to actual card references
-            const resolvedSelections = this.resolveSelectionsToCards(
+            const resolvedSelections = resolveSelectionCards(
+              this,
               selections,
               contract.requirements,
               player,
@@ -344,11 +397,16 @@ export async function getPlayerSelectionsForEffect(card, effect, player, context
  * @param {Object} player
  * @returns {Object} Map of requirement id to card arrays
  */
-export function resolveSelectionsToCards(selections, requirements, player) {
-  const resolved = {};
+export function resolveSelectionsToCards(
+  selections: ChainSelectionKeyMap,
+  requirements: readonly ChainSelectionRequirement[],
+  _player: ChainPlayer,
+): ChainSelectionMap {
+  const resolved: ChainSelectionMap = {};
 
   for (const req of requirements || []) {
-    const selectedKeys = selections[req.id] || [];
+    const selectedValue = Reflect.get(selections, req.id);
+    const selectedKeys = Array.isArray(selectedValue) ? selectedValue : [];
     const cards = [];
 
     for (const key of selectedKeys) {
@@ -359,8 +417,19 @@ export function resolveSelectionsToCards(selections, requirements, player) {
       }
     }
 
-    resolved[req.id] = cards;
+    Reflect.set(resolved, req.id, cards);
   }
 
   return resolved;
+}
+
+function resolveSelectionCards(
+  host: ChainSelectionHost,
+  selections: ChainSelectionKeyMap,
+  requirements: readonly ChainSelectionRequirement[],
+  player: ChainPlayer,
+): ChainSelectionMap {
+  return typeof host.resolveSelectionsToCards === "function"
+    ? host.resolveSelectionsToCards(selections, requirements, player)
+    : resolveSelectionsToCards(selections, requirements, player);
 }

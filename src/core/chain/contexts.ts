@@ -1,10 +1,21 @@
 /**
- * contexts.js
+ * contexts.ts
  *
  * Chain window context definitions extracted from ChainSystem.js.
  * Tells the spell-speed validator which speeds are allowed inside each
  * type of chain window, and whether the window must be explicitly opened.
  */
+
+import type {
+  ChainContextType,
+  SpellSpeed,
+} from "../contracts/chain.js";
+
+export interface ChainContextDefinition {
+  readonly description: string;
+  readonly allowedSpeeds: readonly SpellSpeed[];
+  readonly requiresChainWindow: boolean;
+}
 
 export const CHAIN_CONTEXTS = {
   card_activation: {
@@ -90,4 +101,6 @@ export const CHAIN_CONTEXTS = {
     allowedSpeeds: [2, 3],
     requiresChainWindow: true,
   },
-};
+} as const satisfies Readonly<
+  Record<ChainContextType, ChainContextDefinition>
+>;

@@ -10,6 +10,33 @@ import {
   CHAIN_EFFECT_KINDS,
   CHAIN_RESPONSE_CONTEXTS,
 } from "../contracts/chain.js";
+import type {
+  ChainActivationKind,
+  ChainEffectKind,
+  ChainFinalizationStatus,
+  ChainResolutionStatus,
+  ChainResponseContextType,
+} from "../contracts/chain.js";
+import type {
+  ChainCard,
+  ChainCardInstanceId,
+  ChainDeclaredTarget,
+  ChainDeclaredTargetSnapshot,
+  ChainEffect,
+  ChainLink,
+  ChainPlayer,
+  ChainResolvedSelectionCounts,
+  ChainSelectionMap,
+  ChainSourceSnapshot,
+  ChainSourceZone,
+  ChainUsagePolicy,
+  FastEffectContextInput,
+  FullChainHost,
+  PreparedActivationInput,
+  SerializedChainCard,
+  SerializedChainLink,
+} from "../contracts/chainRuntime.js";
+import type { ChainId, ChainLinkId } from "../contracts/primitives.js";
 
 export {
   CHAIN_ACTIVATION_KINDS,
@@ -20,11 +47,11 @@ export {
 const VALID_ACTIVATION_KINDS = new Set(Object.values(CHAIN_ACTIVATION_KINDS));
 const VALID_EFFECT_KINDS = new Set(Object.values(CHAIN_EFFECT_KINDS));
 
-function isSpellTrap(card) {
+function isSpellTrap(card?: ChainCard | null): boolean {
   return card?.cardKind === "spell" || card?.cardKind === "trap";
 }
 
-function cardInstanceId(card) {
+function cardInstanceId(card?: ChainCard | null): ChainCardInstanceId {
   return (
     card?.instanceId ??
     card?._instanceId ??
@@ -34,12 +61,16 @@ function cardInstanceId(card) {
   );
 }
 
-function normalizedLocationVersion(card) {
+function normalizedLocationVersion(card?: ChainCard | null): number {
   const version = Number(card?.locationVersion ?? 0);
   return Number.isFinite(version) && version >= 0 ? version : 0;
 }
 
-export function captureSourceSnapshot(card, controller, zone = null) {
+export function captureSourceSnapshot(
+  card: ChainCard | null | undefined,
+  controller: ChainPlayer | null | undefined,
+  zone: ChainSourceZone | null = null,
+): ChainSourceSnapshot | null {
   if (!card) return null;
   return {
     cardInstanceId: cardInstanceId(card),
@@ -50,8 +81,13 @@ export function captureSourceSnapshot(card, controller, zone = null) {
   };
 }
 
-export function classifyActivationKind(input = {}) {
-  if (VALID_ACTIVATION_KINDS.has(input.activationKind)) {
+export function classifyActivationKind(
+  input: PreparedActivationInput = {},
+): ChainActivationKind {
+  if (
+    input.activationKind &&
+    VALID_ACTIVATION_KINDS.has(input.activationKind)
+  ) {
     return input.activationKind;
   }
 
@@ -88,8 +124,12 @@ export function classifyActivationKind(input = {}) {
   return CHAIN_ACTIVATION_KINDS.MONSTER_EFFECT;
 }
 
-export function classifyEffectKind(input = {}) {
-  if (VALID_EFFECT_KINDS.has(input.effectKind)) return input.effectKind;
+export function classifyEffectKind(
+  input: PreparedActivationInput = {},
+): ChainEffectKind {
+  if (input.effectKind && VALID_EFFECT_KINDS.has(input.effectKind)) {
+    return input.effectKind;
+  }
 
   const card = input.card || null;
   const effect = input.effect || null;
@@ -108,13 +148,17 @@ export function classifyEffectKind(input = {}) {
   return CHAIN_EFFECT_KINDS.OTHER;
 }
 
-export function getResponseContextType(activationKind) {
+export function getResponseContextType(
+  activationKind: ChainActivationKind,
+): ChainResponseContextType {
   return activationKind === CHAIN_ACTIVATION_KINDS.SPELL_TRAP_CARD
     ? CHAIN_RESPONSE_CONTEXTS.CARD_ACTIVATION
     : CHAIN_RESPONSE_CONTEXTS.EFFECT_ACTIVATION;
 }
 
-export function buildUsagePolicy(effect = null) {
+export function buildUsagePolicy(
+  effect: ChainEffect | null = null,
+): ChainUsagePolicy {
   if (!effect) {
     return {
       consumption: null,
@@ -165,28 +209,40 @@ export function buildUsagePolicy(effect = null) {
   };
 }
 
-function selectionCards(value, output = []) {
+function selectionCards(
+  value: unknown,
+  output: ChainCard[] = [],
+): ChainCard[] {
   if (!value) return output;
   if (Array.isArray(value)) {
     for (const entry of value) selectionCards(entry, output);
     return output;
   }
-  if (value?.card) return selectionCards(value.card, output);
-  if (typeof value === "object") output.push(value);
+  if (typeof value === "object") {
+    const enclosedCard: unknown = Reflect.get(value, "card");
+    if (enclosedCard) return selectionCards(enclosedCard, output);
+    output.push(value as ChainCard);
+  }
   return output;
 }
 
-export function collectDeclaredTargets(effect, selections = {}) {
-  const declared = [];
+export function collectDeclaredTargets(
+  effect?: ChainEffect | null,
+  selections: ChainSelectionMap = {},
+): ChainDeclaredTarget[] {
+  const declared: ChainDeclaredTarget[] = [];
   for (const target of effect?.targets || []) {
     if (!target?.id || target.intent === "cost") continue;
-    const cards = selectionCards(selections?.[target.id], []);
+    const cards = selectionCards(Reflect.get(selections, target.id), []);
     declared.push({ targetId: target.id, cards });
   }
   return declared;
 }
 
-function resolveTargetController(chainSystem, card) {
+function resolveTargetController(
+  chainSystem: FullChainHost,
+  card: ChainCard,
+): { player: ChainPlayer | null; zone: ChainSourceZone | null } {
   for (const player of [chainSystem.game?.player, chainSystem.game?.bot]) {
     if (!player) continue;
     const zone = chainSystem.determineCardZone?.(card, player);
@@ -195,7 +251,10 @@ function resolveTargetController(chainSystem, card) {
   return { player: null, zone: null };
 }
 
-function captureDeclaredTargetSnapshots(chainSystem, declaredTargets) {
+function captureDeclaredTargetSnapshots(
+  chainSystem: FullChainHost,
+  declaredTargets: readonly ChainDeclaredTarget[],
+): ChainDeclaredTargetSnapshot[] {
   return (declaredTargets || []).map((entry) => ({
     targetId: entry.targetId || null,
     cards: (entry.cards || []).map((card) => {
@@ -212,7 +271,7 @@ function captureDeclaredTargetSnapshots(chainSystem, declaredTargets) {
   }));
 }
 
-function compactCard(card) {
+function compactCard(card?: ChainCard | null): SerializedChainCard | null {
   if (!card) return null;
   return {
     id: card.id ?? null,
@@ -222,14 +281,19 @@ function compactCard(card) {
   };
 }
 
-function serializeSelectionValue(value) {
+function serializeSelectionValue(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(serializeSelectionValue);
-  if (value?.card) return serializeSelectionValue(value.card);
-  if (value && typeof value === "object") return compactCard(value);
+  if (value && typeof value === "object") {
+    const enclosedCard: unknown = Reflect.get(value, "card");
+    if (enclosedCard) return serializeSelectionValue(enclosedCard);
+    return compactCard(value as ChainCard);
+  }
   return value ?? null;
 }
 
-function serializeSelectionMap(selections) {
+function serializeSelectionMap(
+  selections?: ChainSelectionMap | null,
+): ChainSelectionMap {
   if (!selections || typeof selections !== "object") return {};
   return Object.fromEntries(
     Object.entries(selections).map(([key, value]) => [
@@ -244,33 +308,56 @@ function serializeSelectionMap(selections) {
  * The map belongs to the link, rather than the card definition, so public
  * state and canonical replay can reproduce the exact declared quantity.
  */
-function resolveLinkedSelectionCounts(effect, costSelections = {}) {
-  return Object.fromEntries(
-    (effect?.targets || [])
-      .filter(
-        (target) =>
-          target?.id && typeof target.countFromSelectionRef === "string",
-      )
-      .map((target) => [
-        target.id,
-        selectionCards(costSelections[target.countFromSelectionRef], []).length,
-      ]),
-  );
+function resolveLinkedSelectionCounts(
+  effect?: ChainEffect | null,
+  costSelections: ChainSelectionMap = {},
+): ChainResolvedSelectionCounts {
+  const counts: ChainResolvedSelectionCounts = {};
+  for (const target of effect?.targets || []) {
+    const sourceReference = target.countFromSelectionRef;
+    if (!target.id || typeof sourceReference !== "string") continue;
+    Reflect.set(
+      counts,
+      target.id,
+      selectionCards(Reflect.get(costSelections, sourceReference), []).length,
+    );
+  }
+  return counts;
 }
 
-function ensureIdentity(chainSystem) {
+function checkedChainId(value: number): ChainId {
+  if (!Number.isInteger(value)) {
+    throw new TypeError("Chain identity must be an integer.");
+  }
+  return value as ChainId;
+}
+
+function checkedChainLinkId(value: number): ChainLinkId {
+  if (!Number.isInteger(value)) {
+    throw new TypeError("Chain Link identity must be an integer.");
+  }
+  return value as ChainLinkId;
+}
+
+function ensureIdentity(
+  chainSystem: FullChainHost,
+): { chainId: ChainId; linkId: ChainLinkId } {
   if (!Number.isInteger(chainSystem.nextChainId)) chainSystem.nextChainId = 1;
   if (!Number.isInteger(chainSystem.nextLinkId)) chainSystem.nextLinkId = 1;
   if (chainSystem.activeChainId == null) {
-    chainSystem.activeChainId = chainSystem.nextChainId++;
+    chainSystem.activeChainId = checkedChainId(chainSystem.nextChainId++);
   }
   return {
     chainId: chainSystem.activeChainId,
-    linkId: chainSystem.nextLinkId++,
+    linkId: checkedChainLinkId(chainSystem.nextLinkId++),
   };
 }
 
-export function createChainLink(preparedInput = {}, contextOverride = null) {
+export function createChainLink(
+  this: FullChainHost,
+  preparedInput: PreparedActivationInput = {},
+  contextOverride: FastEffectContextInput | null = null,
+): ChainLink {
   const card = preparedInput.card || null;
   const controller = preparedInput.controller || null;
   const opponent =
@@ -416,10 +503,17 @@ export function createChainLink(preparedInput = {}, contextOverride = null) {
     segocOrder: preparedInput.segocOrder ?? null,
   };
 
-  return link;
+  // The runtime builder is deliberately defensive for legacy direct callers;
+  // stack admission validates the required card/controller/effect correlation.
+  return link as ChainLink;
 }
 
-function resolveLink(chainSystem, linkOrId) {
+type ChainLinkReference = ChainLink | ChainLinkId | number | null | undefined;
+
+function resolveLink(
+  chainSystem: FullChainHost,
+  linkOrId: ChainLinkReference,
+): ChainLink | null {
   if (linkOrId && typeof linkOrId === "object" && linkOrId.linkId != null) {
     return linkOrId;
   }
@@ -435,7 +529,11 @@ function resolveLink(chainSystem, linkOrId) {
   );
 }
 
-export function markChainLinkActivationNegated(linkOrId, details = {}) {
+export function markChainLinkActivationNegated(
+  this: FullChainHost,
+  linkOrId: ChainLinkReference,
+  details: { negatedBy?: ChainCard | null } = {},
+): ChainLink | null {
   const link = resolveLink(this, linkOrId);
   if (!link) return null;
   link.activationNegated = true;
@@ -444,7 +542,11 @@ export function markChainLinkActivationNegated(linkOrId, details = {}) {
   return link;
 }
 
-export function markChainLinkEffectNegated(linkOrId, details = {}) {
+export function markChainLinkEffectNegated(
+  this: FullChainHost,
+  linkOrId: ChainLinkReference,
+  details: { negatedBy?: ChainCard | null } = {},
+): ChainLink | null {
   const link = resolveLink(this, linkOrId);
   if (!link) return null;
   link.effectNegated = true;
@@ -452,14 +554,28 @@ export function markChainLinkEffectNegated(linkOrId, details = {}) {
   return link;
 }
 
-export function recordChainSourceMovement(card, movement = {}) {
+function isChainLink(
+  value: ChainLink | null | undefined,
+): value is ChainLink {
+  return value != null;
+}
+
+export function recordChainSourceMovement(
+  this: FullChainHost,
+  card: ChainCard | null | undefined,
+  movement: {
+    wasDestroyed?: boolean;
+    toPlayer?: ChainPlayer | null;
+    toZone?: ChainSourceZone | null;
+  } = {},
+): number {
   if (!card) return 0;
   const candidates = [
     ...(this.chainStack || []),
     ...(this.pendingChainFinalizations || []).map((entry) => entry?.link),
     this.currentResolvingLink || null,
     this.currentFinalizingLink || null,
-  ].filter(Boolean);
+  ].filter(isChainLink);
   let updated = 0;
   for (const link of new Set(candidates)) {
     if (link.card !== card) continue;
@@ -475,7 +591,15 @@ export function recordChainSourceMovement(card, movement = {}) {
   return updated;
 }
 
-export function setChainLinkResolutionStatus(linkOrId, status, details = {}) {
+export function setChainLinkResolutionStatus(
+  this: FullChainHost,
+  linkOrId: ChainLinkReference,
+  status: ChainResolutionStatus,
+  details: {
+    resolvedWithoutEffect?: boolean;
+    finalizationStatus?: ChainFinalizationStatus;
+  } = {},
+): ChainLink | null {
   const link = resolveLink(this, linkOrId);
   if (!link) return null;
   link.resolutionStatus = status;
@@ -488,7 +612,15 @@ export function setChainLinkResolutionStatus(linkOrId, status, details = {}) {
   return link;
 }
 
-export function serializeChainLink(link) {
+function isSerializedChainCard(
+  value: SerializedChainCard | null,
+): value is SerializedChainCard {
+  return value != null;
+}
+
+export function serializeChainLink(
+  link?: ChainLink | null,
+): SerializedChainLink | null {
   if (!link) return null;
   return {
     chainId: link.chainId ?? null,
@@ -509,7 +641,9 @@ export function serializeChainLink(link) {
     committed: link.committed === true,
     declaredTargets: (link.declaredTargets || []).map((entry) => ({
       targetId: entry.targetId || null,
-      cards: (entry.cards || []).map(compactCard).filter(Boolean),
+      cards: (entry.cards || [])
+        .map(compactCard)
+        .filter(isSerializedChainCard),
     })),
     declaredTargetSnapshots: (link.declaredTargetSnapshots || []).map(
       (entry) => ({
