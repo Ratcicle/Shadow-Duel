@@ -2,9 +2,8 @@
  * Chain Module - Main barrel file
  * Aggregates all chain sub-modules for ChainSystem.
  *
- * Mirrors the convention of src/core/effects/index.js:
- * ChainSystem.js becomes a thin facade that imports these modules
- * and binds their functions via prototype.
+ * Mirrors the convention of src/core/effects/index.js: ChainSystem.ts remains
+ * a thin facade while consumers preserve `.js` module specifiers.
  */
 
 export * as spellSpeed from "./spellSpeed.js";

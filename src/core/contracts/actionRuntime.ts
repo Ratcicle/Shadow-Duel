@@ -6,6 +6,10 @@ import type {
   MonsterType,
 } from "./cards.js";
 import type {
+  ChainLink,
+  ChainRuntimePort,
+} from "./chainRuntime.js";
+import type {
   EffectCondition,
   EffectDefinition,
   EffectTarget,
@@ -289,23 +293,11 @@ export interface ActionDrawResult {
   drawn: ActionRuntimeCard[];
 }
 
-export interface ActionRuntimeChainLink {
-  id?: string | number;
-  linkId?: string | number;
-  chainLinkId?: string | number;
-}
+export type ActionRuntimeChainLink = Pick<ChainLink, "chainId" | "linkId">;
 
-export interface ActionRuntimeChainPort {
-  chainStack: ActionRuntimeChainLink[];
-  markChainLinkActivationNegated?(
-    linkReference: unknown,
-    options?: object,
-  ): ActionRuntimeChainLink | null;
-  markChainLinkEffectNegated?(
-    linkReference: unknown,
-    options?: object,
-  ): ActionRuntimeChainLink | null;
-}
+export type ActionRuntimeChainPort = Partial<
+  Pick<ChainRuntimePort, "isChainResolving" | "isChainWindowOpen">
+>;
 
 export interface ActionRuntimeActivationAttempt {
   card?: ActionRuntimeCard | null;

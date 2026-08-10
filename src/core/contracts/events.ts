@@ -8,6 +8,7 @@ import type {
   ChainEffectKind,
   ChainResponseContextType,
 } from "./chain.js";
+import type { ChainRuntimePort } from "./chainRuntime.js";
 import type {
   DamageStepTiming,
   EffectDefinition,
@@ -1114,13 +1115,14 @@ export interface EventEffectEnginePort {
   ): MaybeEventPromise<EventTriggerPackage | EventTriggerEntry[]>;
 }
 
-export interface EventChainPort {
+export interface EventChainPort
+  extends Partial<
+    Pick<ChainRuntimePort, "isChainResolving" | "isChainWindowOpen">
+  > {
   isPreparingActivation?: boolean;
   pendingTriggerSelection?: unknown;
   pendingTriggerOccurrences?: EventTriggerOccurrence[];
   _flushingPendingTriggerOccurrences?: boolean;
-  isChainResolving?(): boolean;
-  isChainWindowOpen?(): boolean;
   createTriggerOccurrence?(
     eventName: ResolvableEventName,
     payload: EventPayloadBase,

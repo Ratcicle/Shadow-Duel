@@ -13,6 +13,7 @@ import {
   checkSpecialSummonEligibility,
   resetProperSummon,
 } from "../summon/eligibility.js";
+import { hasChainSourceMovementCapability } from "../../contracts/chainRuntime.js";
 
 /**
  * Zone movement - card movement between zones with side effects.
@@ -286,14 +287,17 @@ function recordCardLocationChange(
     return providedVersion;
   }
   const locationVersion = bumpCardLocationVersion(card);
-  game.chainSystem?.recordChainSourceMovement?.(card, {
-    fromPlayer: fromOwner,
-    toPlayer: destPlayer,
-    fromZone,
-    toZone,
-    locationVersion,
-    wasDestroyed: options.wasDestroyed === true,
-  });
+  const chainSystem = game.chainSystem;
+  if (hasChainSourceMovementCapability(chainSystem)) {
+    chainSystem.recordChainSourceMovement(card, {
+      fromPlayer: fromOwner,
+      toPlayer: destPlayer,
+      fromZone,
+      toZone,
+      locationVersion,
+      wasDestroyed: options.wasDestroyed === true,
+    });
+  }
   return locationVersion;
 }
 

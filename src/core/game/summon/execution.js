@@ -5,6 +5,7 @@
 
 import { FAST_EFFECT_ORIGINS } from "../../chain/timing.js";
 import { bumpCardLocationVersion } from "../../Card.js";
+import { hasChainSourceMovementCapability } from "../../contracts/chainRuntime.js";
 import {
   SUMMON_MODES,
   SUMMON_ORIGINS,
@@ -102,16 +103,19 @@ export async function flipSummon(card) {
       card.attacksUsedThisTurn = 0;
       this.effectEngine?.clearTargetingCache?.();
       const locationVersion = bumpCardLocationVersion(card);
+      const chainSystem = this.chainSystem;
       const atomicGroupId =
-        this.chainSystem?.allocateAtomicEventGroupId?.() || null;
-      this.chainSystem?.recordChainSourceMovement?.(card, {
-        fromPlayer: owner,
-        toPlayer: owner,
-        fromZone: "field",
-        toZone: "field",
-        locationVersion,
-        wasDestroyed: false,
-      });
+        chainSystem?.allocateAtomicEventGroupId?.() || null;
+      if (hasChainSourceMovementCapability(chainSystem)) {
+        chainSystem.recordChainSourceMovement(card, {
+          fromPlayer: owner,
+          toPlayer: owner,
+          fromZone: "field",
+          toZone: "field",
+          locationVersion,
+          wasDestroyed: false,
+        });
+      }
       await this.emit("card_moved", {
         card,
         player: owner,
