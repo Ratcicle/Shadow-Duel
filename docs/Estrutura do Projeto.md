@@ -111,8 +111,10 @@ Traduções visíveis no jogo. Hoje há [pt-br.json](../public/locales/pt-br.jso
 | [CardDatabaseValidator.js](../src/core/CardDatabaseValidator.js) | Validação do banco de cartas, incluindo shapes de actions e faixas de IDs. |
 | [contracts/actions.ts](../src/core/contracts/actions.ts) | Compõe `ActionByType` a partir dos mapas fechados por domínio. |
 | [contracts/actionRuntime.ts](../src/core/contracts/actionRuntime.ts) | Contratos mínimos de handlers, contexto, targets, ports e resultados legados. |
-| [ChainSystem.js](../src/core/ChainSystem.js) | Fachada do sistema de Chain/Spell Speed, delegando para [src/core/chain/](../src/core/chain/). |
-| [NullChainSystem.js](../src/core/NullChainSystem.js) | Implementação no-op compatível para simulações ou fluxos sem chain real. |
+| [contracts/chain.ts](../src/core/contracts/chain.ts) | Constantes e unions fechadas fundamentais de Chain, Fast Effect, SEGOC e uso. |
+| [contracts/chainRuntime.ts](../src/core/contracts/chainRuntime.ts) | Projeções runtime, links, ativações preparadas, contexts, ports, hosts e capability guards. |
+| [ChainSystem.ts](../src/core/ChainSystem.ts) | Fachada do sistema de Chain/Spell Speed, composta pelo manifest de [src/core/chain/](../src/core/chain/); consumidores preservam o specifier `.js`. |
+| [NullChainSystem.ts](../src/core/NullChainSystem.ts) | Implementação no-op que satisfaz o `ChainRuntimePort` mínimo sem fingir conformidade com o host interno completo. |
 | [EffectEngine.ts](../src/core/EffectEngine.ts) | Fachada de execução de efeitos declarativos; consumidores preservam o specifier `.js`. |
 | [ActionHandlers.ts](../src/core/ActionHandlers.ts) | Re-export de compatibilidade; consumidores preservam o specifier `.js`. |
 | [AutoSelector.ts](../src/core/AutoSelector.ts) | Resolve contratos de seleção para IA/bot. Não deve substituir decisões humanas. |
@@ -230,28 +232,33 @@ Camada compartilhada entre estratégias. Módulos atuais:
 
 ## `src/core/chain/` - Sistema de Chain
 
-`ChainSystem.js` é a fachada. A lógica modular vive aqui:
+`ChainSystem.ts` é a fachada. Todos os módulos físicos desta pasta são TypeScript, mas seus consumidores preservam specifiers relativos terminados em `.js`. `ChainRuntimePort` descreve somente a superfície compartilhada pelo Chain real e pelo Null; `FullChainHost` e hosts menores por capability descrevem o estado interno exigido pelas folhas.
 
 | Arquivo | Responsabilidade |
 |---|---|
-| [index.js](../src/core/chain/index.js) | Barrel dos módulos de Chain. |
-| [contexts.js](../src/core/chain/contexts.js) | Definição dos contextos/janelas de Chain. |
-| [spellSpeed.js](../src/core/chain/spellSpeed.js) | Regras de Spell Speed e checagem de ativação em Chain. |
-| [stack.js](../src/core/chain/stack.js) | Pilha LIFO, links e consultas de estado da Chain. |
-| [link.js](../src/core/chain/link.js) | Factory, classificação, snapshots, IDs e serialização canônica de Chain Links. |
-| [resolution.js](../src/core/chain/resolution.js) | Preparação, resolução e cleanup de links. |
-| [activation.js](../src/core/chain/activation.js) | Transação de ativação: compromisso da fonte, custos, alvos e publicação. |
-| [activationDiscovery.js](../src/core/chain/activationDiscovery.js) | Descoberta de cartas/effects ativáveis em uma janela. |
-| [legality.js](../src/core/chain/legality.js) | Consulta compartilhada de legalidade para runtime, IA e simulação. |
-| [effectMatching.js](../src/core/chain/effectMatching.js) | Compatibilidade entre efeito, evento e contexto de Chain. |
-| [responseWindow.js](../src/core/chain/responseWindow.js) | Abertura e controle de janelas de resposta. |
-| [timing.js](../src/core/chain/timing.js) | Máquina canônica de Fast Effect Timing e prioridade. |
-| [segoc.js](../src/core/chain/segoc.js) | Coleta, ordenação e publicação de triggers simultâneos. |
-| [usage.js](../src/core/chain/usage.js) | Reservas e consumo das políticas `use` e `activate`. |
-| [finalization.js](../src/core/chain/finalization.js) | Destino e cleanup pós-Chain de Spell/Trap. |
-| [playerResponse.js](../src/core/chain/playerResponse.js) | Respostas humanas e coleta de decisões. |
-| [botResponsePolicy.js](../src/core/chain/botResponsePolicy.js) | Política de resposta para IA. |
-| [selection.js](../src/core/chain/selection.js) | Seleção de alvos/efeitos dentro da Chain. |
+| [index.ts](../src/core/chain/index.ts) | Barrel de compatibilidade; preserva o keyset público legado sem ampliar exports incidentalmente. |
+| [attachments.ts](../src/core/chain/attachments.ts) | Manifest canônico de referências diretas e instalação validada dos 89 métodos do prototype. |
+| [contexts.ts](../src/core/chain/contexts.ts) | Definição dos contextos/janelas de Chain. |
+| [spellSpeed.ts](../src/core/chain/spellSpeed.ts) | Regras de Spell Speed e checagem de ativação em Chain. |
+| [stack.ts](../src/core/chain/stack.ts) | Pilha LIFO, links e consultas de estado da Chain. |
+| [link.ts](../src/core/chain/link.ts) | Factory, classificação, snapshots, IDs e serialização canônica de Chain Links. |
+| [resolution.ts](../src/core/chain/resolution.ts) | Preparação, resolução e cleanup de links. |
+| [activation.ts](../src/core/chain/activation.ts) | Transação de ativação: compromisso da fonte, custos, alvos e publicação. |
+| [activationDiscovery.ts](../src/core/chain/activationDiscovery.ts) | Descoberta de cartas/effects ativáveis em uma janela. |
+| [legality.ts](../src/core/chain/legality.ts) | Consulta compartilhada de legalidade para runtime, IA e simulação. |
+| [effectMatching.ts](../src/core/chain/effectMatching.ts) | Compatibilidade entre efeito, evento e contexto de Chain. |
+| [responseWindow.ts](../src/core/chain/responseWindow.ts) | Abertura e controle de janelas de resposta. |
+| [timing.ts](../src/core/chain/timing.ts) | Máquina canônica de Fast Effect Timing e prioridade. |
+| [segoc.ts](../src/core/chain/segoc.ts) | Coleta, ordenação e publicação de triggers simultâneos. |
+| [usage.ts](../src/core/chain/usage.ts) | Reservas e consumo das políticas `use` e `activate`. |
+| [finalization.ts](../src/core/chain/finalization.ts) | Destino e cleanup pós-Chain de Spell/Trap. |
+| [playerResponse.ts](../src/core/chain/playerResponse.ts) | Respostas humanas e coleta de decisões. |
+| [botResponsePolicy.ts](../src/core/chain/botResponsePolicy.ts) | Política de resposta para IA. |
+| [selection.ts](../src/core/chain/selection.ts) | Seleção de alvos/effects dentro da Chain. |
+
+O manifest mantém a ordem dos 15 grupos e as referências originais dos 89 attachments. O preflight rejeita referências ausentes, duplicatas e colisões incompatíveis; reaplicar a mesma referência é idempotente. A fachada usa declaration merging, sem emitir class fields, e preserva propriedades enumeráveis, graváveis e configuráveis no prototype.
+
+O gate operacional para mudanças nesta área é `npm run check`, que inclui as suítes de Chain e replay canônico, auditorias, assinatura/digest e build. Como a política do bot participa das janelas de resposta, execute também `npm run test:bot-smoke -- --duels 1 --matchup arcanist:shadowheart`.
 
 ---
 

@@ -7,6 +7,7 @@ import {
   runActivationPipeline,
 } from "../../src/core/game/effects/activationPipeline.js";
 import { finalizeSpellTrapActivation } from "../../src/core/game/spellTrap/finalization.js";
+import { capCostDefinitionsByLinkedTargetCapacity } from "../../src/core/chain/selection.js";
 import { cardDatabaseByName } from "../../src/data/cards.js";
 import {
   createChainHarness,
@@ -931,4 +932,52 @@ test("alvo congelado e revalidado sem trocar por outro candidato", async () => {
     link.targetValidation.groups[0].cards[0].reason,
     "target_no_longer_matches",
   );
+});
+
+test("linked-cost capacity remains defensive without a target resolver", () => {
+  const costs = [{ id: "cost", count: { min: 1, max: 2 } }];
+  const targets = [{ id: "target", countFromSelectionRef: "cost" }];
+
+  const result = capCostDefinitionsByLinkedTargetCapacity(
+    costs,
+    targets,
+    {},
+    null,
+  );
+
+  assert.equal(result, costs);
+});
+
+test("trigger-order selections keep the legacy resolution session path", async () => {
+  const { chain, game, player } = createChainHarness();
+  const source = createTestCard({ instanceId: 950, name: "SEGOC source" });
+  const effect = createTestEffect({ id: "segoc_resolution", actions: [] });
+  const link = chain.createChainLink({
+    card: source,
+    controller: player,
+    effect,
+    activationZone: "field",
+  });
+  const selectionContract = {
+    kind: "trigger_order",
+    group: null,
+    optional: false,
+    candidates: [],
+  };
+  chain.pendingChainSelection = {
+    link,
+    selectionContract,
+    selectionSource: "actions",
+    baseTargets: null,
+  };
+  let opened = false;
+  game.startTargetSelectionSession = (session) => {
+    opened = true;
+    session.onResult({ success: true, needsSelection: false });
+  };
+
+  const result = await chain.startPendingChainSelection({ selectionContract });
+
+  assert.equal(opened, true);
+  assert.equal(result.success, true);
 });

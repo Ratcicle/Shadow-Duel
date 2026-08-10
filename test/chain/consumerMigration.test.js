@@ -230,3 +230,42 @@ test("indicador de prioridade acompanha jogador e resolução sem abrir modal", 
   updatePriorityIndicator.call(renderer, null);
   assert.equal(element.textContent, "");
 });
+
+test("canonical activation candidates preserve observable property order", () => {
+  const player = { id: "player" };
+  const card = { id: 77, cardKind: "monster" };
+  const effect = { id: "ordered_effect", speed: 2 };
+  const input = {
+    candidateKey: "77:ordered_effect:field",
+    card,
+    effect,
+    effectId: "ordered_effect",
+    player,
+    opponent: null,
+    sourceZone: "field",
+    spellSpeed: 2,
+    category: "monster_effect",
+    activationLabelKey: null,
+    marker: "preserved",
+  };
+
+  const [candidate] = listLegalActivationCandidates(
+    { player },
+    { listCandidates: () => [input] },
+  );
+
+  assert.deepEqual(Object.keys(candidate), [
+    "candidateKey",
+    "card",
+    "effect",
+    "effectId",
+    "player",
+    "opponent",
+    "sourceZone",
+    "spellSpeed",
+    "category",
+    "activationLabelKey",
+    "marker",
+    "legality",
+  ]);
+});

@@ -15,7 +15,7 @@
 - Para novas cartas, verifique também descrição, i18n e compatibilidade com os handlers existentes.
 - Modularize por domínio de jogo/responsabilidade, não por microfunções arbitrárias.
 - Evite criar arquivos novos quando a lógica pertence claramente a um módulo existente.
-- Fachadas como `Game.js`, `EffectEngine.ts` e `ChainSystem.js` devem orquestrar e delegar; evite concentrar nova lógica complexa nelas.
+- Fachadas como `Game.js`, `EffectEngine.ts` e `ChainSystem.ts` devem orquestrar e delegar; evite concentrar nova lógica complexa nelas.
 
 ---
 
@@ -39,7 +39,7 @@ Evite "batch mutations" silenciosas. Loops são permitidos, mas cada iteração 
 src/main.js                   # UI do deck builder e inicialização
 src/core/Game.js              # Fachada de turnos/fases/event bus (~880 linhas)
 src/core/EffectEngine.ts      # Fachada da resolução de efeitos
-src/core/ChainSystem.js       # Fachada de chain windows + Spell Speed (~1500 linhas)
+src/core/ChainSystem.ts       # Fachada de chain windows + Spell Speed
 src/core/chain/               # Implementação modular do ChainSystem (ver tabela abaixo)
 src/core/effects/             # Implementação modular dos efeitos (ver tabela abaixo)
 src/core/actionHandlers/      # Handlers genéricos por categoria + catálogo
@@ -60,7 +60,7 @@ src/data/cards.js             # Banco de cartas 100% declarativo (~5700 linhas)
 - **Bot/AI:** [Bot.js](src/core/Bot.js), [BotArena.js](src/core/BotArena.js), [BotLogger.js](src/core/BotLogger.js), [src/core/ai/](src/core/ai/) (estratégias por arquétipo)
 - **Auto-resolução:** [AutoSelector.ts](src/core/AutoSelector.ts) — escolhas automáticas para IA durante targeting (uso restrito a bot/IA)
 - **Validação:** [CardDatabaseValidator.js](src/core/CardDatabaseValidator.js) — bloqueia duelo se cartas tiverem erros
-- **Chain (mock):** [NullChainSystem.js](src/core/NullChainSystem.js) — implementação no-op para fluxos sem chain
+- **Chain (mock):** [NullChainSystem.ts](src/core/NullChainSystem.ts) — implementação no-op para fluxos sem chain, compatível com o `ChainRuntimePort` mínimo
 - **Replay canônico:** [src/core/game/replay/](src/core/game/replay/) (`canonical.ts`, `validation.ts`, `recorder.ts`, `driver.ts`, `index.ts`) — contratos serializáveis, validação profunda, captura, hash determinístico e reprodução headless; consumidores preservam specifiers `.js`
 - **Modelos:** [Card.js](src/core/Card.js), [Player.js](src/core/Player.js)
 - **i18n:** [i18n.js](src/core/i18n.js)
@@ -91,15 +91,33 @@ Módulos expõem funções puras; `Game.js` importa e chama com `this` context.
 
 **Estrutura modular de [src/core/chain/](src/core/chain/):**
 
-`ChainSystem.js` é a fachada — a lógica vai sendo extraída para esta pasta seguindo o padrão de `src/core/effects/`.
+`ChainSystem.ts` é a fachada. A lógica modular e o manifest de attachments vivem nesta pasta; consumidores continuam usando specifiers relativos terminados em `.js`.
 
-| Arquivo          | Responsabilidade                                                          |
-| ---------------- | ------------------------------------------------------------------------- |
-| `index.js`       | Barrel; agrega submódulos                                                 |
-| `contexts.js`    | `CHAIN_CONTEXTS` (definições de chain windows e spell speeds)             |
-| `spellSpeed.js`  | `getEffectSpellSpeed`, `getRequiredSpellSpeed`, `canActivateInChain`      |
-| `stack.js`       | `addToChain`, `getChainLength`, `getLastChainLink`, `getChainSummary`, `cancelChain`, queries |
-| `resolution.js`  | `resolveChain`, `resolveChainLink` (dividido em prepare/apply/cleanup), `isCardStillValid`, `determineCardZone` |
+Os contratos fundamentais ficam em [src/core/contracts/chain.ts](src/core/contracts/chain.ts). As projeções runtime, `ChainRuntimePort`, `FullChainHost`, hosts menores por capability e seus guards ficam em [src/core/contracts/chainRuntime.ts](src/core/contracts/chainRuntime.ts). O port compartilhado deve permanecer menor que o host interno: `ChainSystem` e `NullChainSystem` satisfazem o primeiro, mas somente o Chain real satisfaz o segundo.
+
+| Arquivo | Responsabilidade |
+| --- | --- |
+| `index.ts` | Barrel de compatibilidade; preserva o keyset público legado |
+| `attachments.ts` | Manifest canônico com referências diretas dos 89 métodos anexados e preflight de colisões |
+| `contexts.ts` | `CHAIN_CONTEXTS` e definições de janelas de Chain |
+| `link.ts` | Factory, classificação, snapshots, IDs e serialização de Chain Links |
+| `usage.ts` | Reservas e consumo das políticas `use` e `activate` |
+| `spellSpeed.ts` | `getEffectSpellSpeed`, `getRequiredSpellSpeed` e `canActivateInChain` |
+| `timing.ts` | Máquina de Fast Effect Timing e prioridade |
+| `selection.ts` | Seleção de alvos e effects dentro da Chain |
+| `legality.ts` | Consulta compartilhada de legalidade para runtime, IA e simulação |
+| `effectMatching.ts` | Compatibilidade entre effect, evento e contexto de Chain |
+| `activationDiscovery.ts` | Descoberta de cartas/effects ativáveis em uma janela |
+| `activation.ts` | Transação de ativação: fonte, custos, alvos e publicação |
+| `stack.ts` | Pilha LIFO, links e consultas de estado da Chain |
+| `segoc.ts` | Coleta, ordenação e publicação de triggers simultâneos |
+| `responseWindow.ts` | Abertura e controle de janelas de resposta |
+| `playerResponse.ts` | Respostas humanas e coleta de decisões |
+| `botResponsePolicy.ts` | Política de resposta para IA |
+| `resolution.ts` | Preparação, resolução e cleanup dos links |
+| `finalization.ts` | Destino e cleanup pós-Chain de Spell/Trap |
+
+Os métodos anexados são expostos no tipo da fachada por declaration merging, sem class fields emitidos. Ao alterar o Chain, execute `npm run check` e o Bot smoke (`npm run test:bot-smoke -- --duels 1 --matchup arcanist:shadowheart`); o gate completo já inclui as suítes de Chain e replay canônico, auditorias, digest e build.
 
 **Estrutura modular de [src/core/effects/](src/core/effects/):**
 
