@@ -1,5 +1,5 @@
 /**
- * stack.js
+ * stack.ts
  *
  * Chain stack manipulation and queries extracted from ChainSystem.js.
  * Pure operations on `this.chainStack` plus a few status flags.
@@ -14,10 +14,20 @@
  *  - getChainSummary
  */
 
+import type {
+  ChainLink,
+  FullChainHost,
+  PreparedActivation,
+  SerializedChainLink,
+} from "../contracts/chainRuntime.js";
+
 /**
  * Add a card to the chain stack as a new link.
  */
-export function addToChain(preparedActivation) {
+export function addToChain(
+  this: FullChainHost,
+  preparedActivation: PreparedActivation,
+): ChainLink | null {
   if (
     preparedActivation?.prepared !== true ||
     !preparedActivation.card ||
@@ -52,24 +62,24 @@ export function addToChain(preparedActivation) {
   return chainLink;
 }
 
-export function isChainWindowOpen() {
+export function isChainWindowOpen(this: FullChainHost): boolean {
   return this.chainWindowOpen;
 }
 
-export function getChainLength() {
+export function getChainLength(this: FullChainHost): number {
   return this.chainStack.length;
 }
 
-export function getLastChainLink() {
+export function getLastChainLink(this: FullChainHost): ChainLink | null {
   if (this.chainStack.length === 0) return null;
   return this.chainStack[this.chainStack.length - 1];
 }
 
-export function isChainResolving() {
+export function isChainResolving(this: FullChainHost): boolean {
   return this.isResolving;
 }
 
-export function cancelChain() {
+export function cancelChain(this: FullChainHost): void {
   this.log("Chain cancelled");
   this.activeResponseAbortController?.abort?.("chain_cancelled");
   this.activeResponseAbortController = null;
@@ -91,8 +101,10 @@ export function cancelChain() {
   this.resetFastEffectTiming?.();
 }
 
-export function getChainSummary() {
+export function getChainSummary(
+  this: FullChainHost,
+): SerializedChainLink[] {
   return this.chainStack
     .map((link) => this.serializeChainLink?.(link))
-    .filter(Boolean);
+    .filter((link): link is SerializedChainLink => Boolean(link));
 }

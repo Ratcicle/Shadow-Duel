@@ -1,6 +1,19 @@
 import { isQuickSpell } from "../game/spellTrap/quickSpellRules.js";
+import type {
+  ChainActivationCandidate,
+  ChainCard,
+  ChainGamePort,
+  ChainPlayer,
+  ChainRuntimePort,
+  ChainStrategyPort,
+  ChainStrategyResponse,
+  FastEffectContextInput,
+} from "../contracts/chainRuntime.js";
 
-function getStrategyForPlayer(game, player) {
+function getStrategyForPlayer(
+  game: ChainGamePort | null,
+  player: ChainPlayer,
+): ChainStrategyPort | null {
   if (player?.strategy) return player.strategy;
   if (game?.bot?.id && game.bot.id === player?.id) return game.bot.strategy || null;
   if (game?.player?.id && game.player.id === player?.id) {
@@ -9,7 +22,10 @@ function getStrategyForPlayer(game, player) {
   return null;
 }
 
-function buildResponseContext(baseContext, response) {
+function buildResponseContext(
+  baseContext: FastEffectContextInput,
+  response: ChainStrategyResponse,
+): FastEffectContextInput {
   const activationContext =
     response?.activationContext ||
     response?.context?.activationContext ||
@@ -31,7 +47,12 @@ function buildResponseContext(baseContext, response) {
  * @param {ChainContext} context
  * @returns {Promise<Object|null>}
  */
-export async function botChooseChainResponse(player, activatable, context) {
+export async function botChooseChainResponse(
+  this: ChainRuntimePort,
+  player: ChainPlayer,
+  activatable: ChainActivationCandidate[],
+  context: FastEffectContextInput,
+): Promise<ChainActivationCandidate | null> {
   if (!activatable || activatable.length === 0) return null;
 
   const game = this.game;
@@ -97,7 +118,10 @@ export async function botChooseChainResponse(player, activatable, context) {
         card.position === "attack",
     );
 
-    const wouldLoseOrTakeDamage = (attacker, defender) => {
+    const wouldLoseOrTakeDamage = (
+      attacker: ChainCard | null | undefined,
+      defender: ChainCard | null | undefined,
+    ) => {
       if (!attacker || !defender)
         return { loseMonster: false, takeDamage: false };
       const atk = attacker.atk || 0;
@@ -275,7 +299,7 @@ export async function botChooseChainResponse(player, activatable, context) {
   evaluatedOptions.sort((a, b) => b.priority - a.priority);
 
   // Get best option
-  const bestOption = evaluatedOptions[0];
+  const bestOption = evaluatedOptions[0]!;
 
   // Se a melhor opção tem priority <= 0, passar automaticamente
   if (bestOption.priority <= 0) {

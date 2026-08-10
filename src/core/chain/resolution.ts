@@ -1,5 +1,5 @@
 /**
- * resolution.js
+ * resolution.ts
  *
  * Chain resolution extracted from ChainSystem.js.
  * Resolves the chain stack in LIFO order. Link preparation and application
@@ -15,8 +15,86 @@
 
 import { isAI } from "../Player.js";
 import { CHAIN_ACTIVATION_KINDS } from "./link.js";
+import type { CanonicalZone } from "../contracts/zones.js";
+import type {
+  ChainActivationZone,
+  ChainCard,
+  ChainEffectTarget,
+  ChainFinalizationSnapshot,
+  ChainLink,
+  ChainOperationResult,
+  ChainPlayer,
+  ChainSelectionContract,
+  ChainSelectionKeyMap,
+  ChainSelectionRequirement,
+  ChainSelectionMap,
+  ChainSourceValidity,
+  ChainSourceZone,
+  ChainTargetSnapshot,
+  ChainTargetValidation,
+  ChainTargetValidationCard,
+  FastEffectContextInput,
+  FullChainHost,
+} from "../contracts/chainRuntime.js";
 
-export async function resolveChain() {
+function caughtErrorMessage(error: unknown): string | null {
+  if (error instanceof Error) return error.message;
+  if (typeof error !== "object" || error === null) return null;
+  const message = Reflect.get(error, "message");
+  return typeof message === "string" ? message : null;
+}
+
+function contractField(
+  contract: ChainSelectionContract | null | undefined,
+  key: string,
+): unknown {
+  return contract && typeof contract === "object"
+    ? Reflect.get(contract, key)
+    : undefined;
+}
+
+function contractRequirements(
+  contract: ChainSelectionContract | null | undefined,
+): ChainSelectionRequirement[] {
+  const requirements = contractField(contract, "requirements");
+  if (!Array.isArray(requirements)) return [];
+  return requirements.filter(
+    (requirement): requirement is ChainSelectionRequirement =>
+      typeof requirement === "object" &&
+      requirement !== null &&
+      typeof Reflect.get(requirement, "id") === "string",
+  );
+}
+
+function contractPurpose(
+  contract: ChainSelectionContract | null | undefined,
+): "target" | "cost" | "resolution" | "choice" | undefined {
+  const purpose = contractField(contract, "purpose");
+  return purpose === "target" ||
+    purpose === "cost" ||
+    purpose === "resolution" ||
+    purpose === "choice"
+    ? purpose
+    : undefined;
+}
+
+function contractTiming(
+  contract: ChainSelectionContract | null | undefined,
+): string | undefined {
+  const timing = contractField(contract, "timing");
+  return typeof timing === "string" ? timing : undefined;
+}
+
+function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
+  return (
+    (typeof value === "object" && value !== null) ||
+    typeof value === "function"
+  ) && typeof Reflect.get(value, "then") === "function";
+}
+
+export async function resolveChain(
+  this: FullChainHost,
+): Promise<ChainOperationResult | false> {
   if (this.chainStack.length === 0) {
     this.log("No chain to resolve");
     return { success: true, needsSelection: false };
@@ -26,10 +104,13 @@ export async function resolveChain() {
   this.log(`Resolving chain with ${this.chainStack.length} links`);
 
   const ui = this.getUI();
-  let result = { success: true, needsSelection: false };
-  const linkResults = [];
+  let result: ChainOperationResult | undefined = {
+    success: true,
+    needsSelection: false,
+  };
+  const linkResults: ChainOperationResult[] = [];
   const chainId = this.activeChainId;
-  let finalizationResult = null;
+  let finalizationResult: ChainOperationResult | null = null;
 
   try {
     while (this.chainStack.length > 0) {
@@ -103,7 +184,7 @@ export async function resolveChain() {
         result = {
           success: false,
           needsSelection: false,
-          reason: error.message || "Chain link failed.",
+          reason: caughtErrorMessage(error) || "Chain link failed.",
           error,
         };
         this.queueChainFinalization?.(link, result);
@@ -119,7 +200,7 @@ export async function resolveChain() {
           chainLevel: link.chainLevel,
           controllerId: link.controller?.id || null,
           effectId: link.effectId || link.effect?.id || null,
-          reason: error?.message || "Chain link failed.",
+          reason: caughtErrorMessage(error) || "Chain link failed.",
         });
       } finally {
         if (this.currentResolvingLink === link) {
@@ -143,7 +224,10 @@ export async function resolveChain() {
   };
 }
 
-export async function resolveChainLink(link) {
+export async function resolveChainLink(
+  this: FullChainHost,
+  link: ChainLink,
+): Promise<ChainOperationResult | undefined> {
   const { card, effect } = link;
   const player = link.controller;
 
@@ -216,7 +300,7 @@ export async function resolveChainLink(link) {
       link,
       activationZone,
     );
-    let applyResult;
+    let applyResult: ChainOperationResult;
     if (negationState.negated) {
       this.markChainLinkEffectNegated?.(link, {
         negatedBy: negationState.source || null,
@@ -254,7 +338,7 @@ export async function resolveChainLink(link) {
       ...completedResult,
       chainId: link.chainId,
       linkId: link.linkId,
-      activationNegated: link.activationNegated === true,
+      activationNegated: Reflect.get(link, "activationNegated") === true,
       effectNegated: link.effectNegated === true,
     };
     this.queueChainFinalization?.(link, result);
@@ -263,7 +347,7 @@ export async function resolveChainLink(link) {
     await completePreparedPipeline(link, {
       success: false,
       needsSelection: false,
-      reason: error?.message || "Chain link failed.",
+      reason: caughtErrorMessage(error) || "Chain link failed.",
       error,
     });
     this.setChainLinkResolutionStatus?.(link, "failed", {
@@ -272,7 +356,7 @@ export async function resolveChainLink(link) {
     this.queueChainFinalization?.(link, {
       success: false,
       needsSelection: false,
-      reason: error?.message || "Chain link failed.",
+      reason: caughtErrorMessage(error) || "Chain link failed.",
       error,
     });
     throw error;
@@ -283,12 +367,18 @@ export async function resolveChainLink(link) {
   }
 }
 
-export function startPendingChainSelection(result = {}) {
+export function startPendingChainSelection(
+  this: FullChainHost,
+  result: ChainOperationResult = {},
+): Promise<unknown> | false {
   const pending = this.pendingChainSelection;
   const contract = result.selectionContract || pending?.selectionContract;
+  const game = this.game;
+  const selectedTiming = contractTiming(contract);
+  const selectedPurpose = contractPurpose(contract);
   if (
-    contract?.timing === "activation" ||
-    contract?.purpose === "target" ||
+    selectedTiming === "activation" ||
+    selectedPurpose === "target" ||
     contract?.kind === "target"
   ) {
     this.log(
@@ -296,42 +386,51 @@ export function startPendingChainSelection(result = {}) {
     );
     return false;
   }
-  if (!pending || !contract || !this.game?.startTargetSelectionSession) {
+  if (
+    !pending ||
+    !contract ||
+    !game?.startTargetSelectionSession
+  ) {
     return false;
   }
 
   const link = pending.link;
+  const contractUi = contractField(contract, "ui");
+  const contractMessage = contractField(contract, "message");
+  const resolutionPurpose = selectedPurpose || "choice";
   const resolutionContract = {
     ...contract,
     timing: "resolution",
-    purpose: contract.purpose || "choice",
+    purpose: resolutionPurpose,
     ui: {
-      ...(contract.ui || {}),
+      ...(typeof contractUi === "object" && contractUi !== null
+        ? contractUi
+        : {}),
       allowCancel: false,
       preventCancel: true,
     },
   };
   return new Promise((resolve) => {
     let finished = false;
-    const finishOnce = (value) => {
+    const finishOnce = (value: unknown): void => {
       if (finished) return;
       finished = true;
       resolve(value);
     };
 
-    this.game.startTargetSelectionSession({
+    game.startTargetSelectionSession?.({
       kind: contract.kind || "chain",
       card: link.card,
       owner: link.controller,
       selectionContract: resolutionContract,
       message:
-        resolutionContract.message ||
+        (typeof contractMessage === "string" && contractMessage) ||
         `Select target(s) for ${link.card?.name || "chain"}`,
       preventCancel: true,
       allowCancel: false,
       execute: async (selections) => {
         const nextResult = await this.resumePendingChainSelection(selections);
-        if (!nextResult?.needsSelection) {
+        if (!nextResult || !nextResult.needsSelection) {
           finishOnce(nextResult);
         }
         return nextResult;
@@ -339,8 +438,8 @@ export function startPendingChainSelection(result = {}) {
       onResult: (nextResult) => {
         if (nextResult?.needsSelection) {
           const nested = this.startPendingChainSelection(nextResult);
-          if (nested && typeof nested.then === "function") {
-            nested.then(finishOnce);
+          if (isPromiseLike(nested)) {
+            Promise.resolve(nested).then(finishOnce);
           }
           return;
         }
@@ -351,7 +450,10 @@ export function startPendingChainSelection(result = {}) {
   });
 }
 
-export async function resumePendingChainSelection(selections = {}) {
+export async function resumePendingChainSelection(
+  this: FullChainHost,
+  selections: ChainSelectionMap = {},
+): Promise<ChainOperationResult | false> {
   const pending = this.pendingChainSelection;
   if (!pending?.link) {
     return {
@@ -442,7 +544,7 @@ export async function resumePendingChainSelection(selections = {}) {
               chainId: link.chainId,
             }),
           };
-    if (remainingResult?.needsSelection) {
+    if (remainingResult && remainingResult.needsSelection) {
       return remainingResult;
     }
 
@@ -462,7 +564,12 @@ export async function resumePendingChainSelection(selections = {}) {
   }
 }
 
-function resolveChainSelectionCards(cs, selections, contract, player) {
+function resolveChainSelectionCards(
+  cs: FullChainHost,
+  selections: ChainSelectionMap,
+  contract: ChainSelectionContract | null | undefined,
+  player: ChainPlayer,
+): ChainSelectionMap {
   const hasCardArrays = Object.values(selections || {}).some(
     (value) =>
       Array.isArray(value) &&
@@ -473,16 +580,28 @@ function resolveChainSelectionCards(cs, selections, contract, player) {
   }
 
   if (typeof cs.resolveSelectionsToCards === "function") {
+    const keySelections: ChainSelectionKeyMap = {};
+    for (const [reference, value] of Object.entries(selections || {})) {
+      if (
+        Array.isArray(value) &&
+        value.every((entry) => typeof entry === "string")
+      ) {
+        Reflect.set(keySelections, reference, value);
+      }
+    }
     return cs.resolveSelectionsToCards(
-      selections || {},
-      contract?.requirements || [],
+      keySelections,
+      contractRequirements(contract),
       player,
     );
   }
   return selections || {};
 }
 
-export function getChainSourceValidity(link) {
+export function getChainSourceValidity(
+  this: FullChainHost,
+  link: ChainLink,
+): ChainSourceValidity {
   if (!link?.card || !link?.controller) {
     return {
       valid: false,
@@ -506,7 +625,7 @@ export function getChainSourceValidity(link) {
   const faceUpValid =
     link.requiresSourceFaceUpAtResolution !== true || faceUp;
   const valid = !required || (sameLocation && faceUpValid);
-  let reason = null;
+  let reason: ChainSourceValidity["reason"] = null;
   if (!valid) {
     if (!sameZone) reason = "source_wrong_zone";
     else if (!sameLocation) reason = "source_location_changed";
@@ -527,7 +646,17 @@ export function getChainSourceValidity(link) {
   };
 }
 
-function getChainLinkEffectNegation(chainSystem, link, activationZone) {
+interface ChainEffectNegationState {
+  negated: boolean;
+  reason: string | null;
+  source: ChainCard | null;
+}
+
+function getChainLinkEffectNegation(
+  chainSystem: FullChainHost,
+  link: ChainLink,
+  activationZone: ChainActivationZone,
+): ChainEffectNegationState {
   if (link.effectNegated === true) {
     return {
       negated: true,
@@ -552,7 +681,17 @@ function getChainLinkEffectNegation(chainSystem, link, activationZone) {
   return { negated: false, reason: null, source: null };
 }
 
-function findCardState(chainSystem, card) {
+interface CurrentChainCardState {
+  player: ChainPlayer | null;
+  zone: ChainSourceZone;
+  locationVersion: number;
+  faceUp: boolean;
+}
+
+function findCardState(
+  chainSystem: FullChainHost,
+  card: ChainCard,
+): CurrentChainCardState {
   for (const player of [chainSystem.game?.player, chainSystem.game?.bot]) {
     if (!player) continue;
     const zone = chainSystem.determineCardZone?.(card, player);
@@ -574,12 +713,12 @@ function findCardState(chainSystem, card) {
 }
 
 function targetStillMatchesDefinition(
-  chainSystem,
-  link,
-  definition,
-  card,
-  current,
-) {
+  chainSystem: FullChainHost,
+  link: ChainLink,
+  definition: ChainEffectTarget,
+  card: ChainCard,
+  current: CurrentChainCardState,
+): boolean {
   if (definition.excludeSelf === true && card === link.card) return false;
   if (
     definition.owner === "self" &&
@@ -607,15 +746,17 @@ function targetStillMatchesDefinition(
   }
   if (
     Array.isArray(definition.cardIds) &&
-    !definition.cardIds.includes(card?.id)
+    (card.id == null || !definition.cardIds.includes(card.id))
   ) {
     return false;
   }
   if (definition.subtype && card?.subtype !== definition.subtype) return false;
   if (definition.archetype) {
-    const archetypes = Array.isArray(card?.archetypes)
+    const archetypes: string[] = Array.isArray(card.archetypes)
       ? card.archetypes
-      : [card?.archetype].filter(Boolean);
+      : card.archetype
+        ? [card.archetype]
+        : [];
     if (!archetypes.includes(definition.archetype)) return false;
   }
   if (
@@ -638,10 +779,11 @@ function targetStillMatchesDefinition(
     return false;
   }
 
-  const filters = { ...(definition.filters || {}) };
-  const copyFilter = (sourceKey, filterKey = sourceKey) => {
-    if (definition[sourceKey] !== undefined) {
-      filters[filterKey] = definition[sourceKey];
+  const filters: object = { ...(definition.filters || {}) };
+  const copyFilter = (sourceKey: string, filterKey = sourceKey): void => {
+    const value = Reflect.get(definition, sourceKey);
+    if (value !== undefined) {
+      Reflect.set(filters, filterKey, value);
     }
   };
   copyFilter("cardKind");
@@ -658,7 +800,7 @@ function targetStillMatchesDefinition(
   copyFilter("maxDef");
   copyFilter("position");
   copyFilter("isTuner");
-  if (definition.requireFaceup === true) filters.faceUp = true;
+  if (definition.requireFaceup === true) Reflect.set(filters, "faceUp", true);
   if (
     Object.keys(filters).length > 0 &&
     typeof chainSystem.game?.effectEngine?.cardMatchesFilters === "function" &&
@@ -669,7 +811,10 @@ function targetStillMatchesDefinition(
   return true;
 }
 
-function revalidateDeclaredTargets(chainSystem, link) {
+function revalidateDeclaredTargets(
+  chainSystem: FullChainHost,
+  link: ChainLink,
+): { selections: ChainSelectionMap; validation: ChainTargetValidation } {
   const definitions = new Map(
     (link.effect?.targets || [])
       .filter((definition) => definition?.intent !== "cost")
@@ -681,14 +826,18 @@ function revalidateDeclaredTargets(chainSystem, link) {
       entry,
     ]),
   );
-  const selections = {};
-  const groups = [];
+  const selections: ChainSelectionMap = {};
+  const groups: ChainTargetValidation["groups"] = [];
   let satisfiesMinimums = true;
 
   for (const [targetId, definition] of definitions) {
-    const declaredCards = link.targetSelections?.[targetId] || [];
-    const snapshotCards = snapshots.get(targetId)?.cards || [];
-    const validCards = [];
+    const declaredValue = Reflect.get(link.targetSelections, targetId);
+    const declaredCards: ChainCard[] = Array.isArray(declaredValue)
+      ? declaredValue.filter(isChainCardValue)
+      : [];
+    const snapshotCards: ChainTargetSnapshot[] =
+      snapshots.get(targetId)?.cards || [];
+    const validCards: ChainCard[] = [];
     const cards = declaredCards.map((card, index) => {
       const snapshot = snapshotCards[index] || null;
       const current = findCardState(chainSystem, card);
@@ -702,7 +851,8 @@ function revalidateDeclaredTargets(chainSystem, link) {
         current.zone === snapshot.zone &&
         current.locationVersion === Number(snapshot.locationVersion ?? 0);
       const zoneValid =
-        allowedZones.length === 0 || allowedZones.includes(current.zone);
+        allowedZones.length === 0 ||
+        (current.zone !== "unknown" && allowedZones.includes(current.zone));
       const faceUpValid =
         definition.requireFaceup !== true || current.faceUp === true;
       const kindValid =
@@ -724,21 +874,22 @@ function revalidateDeclaredTargets(chainSystem, link) {
         kindValid &&
         definitionValid;
       if (valid) validCards.push(card);
+      const reason: ChainTargetValidationCard["reason"] = valid
+        ? null
+        : !sameLocation
+          ? "target_location_changed"
+          : !zoneValid
+            ? "target_wrong_zone"
+            : !faceUpValid
+              ? "target_not_face_up"
+              : !kindValid || !definitionValid
+                ? "target_no_longer_matches"
+                : "target_invalid";
       return {
         cardInstanceId:
           card?.instanceId ?? card?._instanceId ?? card?.id ?? null,
         valid,
-        reason: valid
-          ? null
-          : !sameLocation
-            ? "target_location_changed"
-            : !zoneValid
-              ? "target_wrong_zone"
-                : !faceUpValid
-                  ? "target_not_face_up"
-                  : !kindValid || !definitionValid
-                    ? "target_no_longer_matches"
-                    : "target_invalid",
+        reason,
         zone: current.zone,
         locationVersion: current.locationVersion,
       };
@@ -748,7 +899,7 @@ function revalidateDeclaredTargets(chainSystem, link) {
     );
     const minimumMet = validCards.length >= Math.max(0, minimum);
     if (!minimumMet) satisfiesMinimums = false;
-    selections[targetId] = validCards;
+    Reflect.set(selections, targetId, validCards);
     groups.push({ targetId, minimum, minimumMet, cards });
   }
 
@@ -763,7 +914,11 @@ function revalidateDeclaredTargets(chainSystem, link) {
  * relocates Quick Spells from hand to spellTrap zone.
  * Returns false if resolution must abort (fizzle).
  */
-async function prepareForResolution(cs, link, activationZone) {
+async function prepareForResolution(
+  cs: FullChainHost,
+  link: ChainLink,
+  activationZone: ChainActivationZone,
+): Promise<boolean> {
   const { card } = link;
   const player = link.controller;
   const effectEngine = cs.game?.effectEngine;
@@ -798,10 +953,21 @@ async function prepareForResolution(cs, link, activationZone) {
  * and runs the action list. Errors are logged but do not propagate
  * (chain resolution must continue for remaining links).
  */
-async function applyChainEffect(cs, link, activationZone) {
+async function applyChainEffect(
+  cs: FullChainHost,
+  link: ChainLink,
+  activationZone: ChainActivationZone,
+): Promise<ChainOperationResult> {
   const { card, effect } = link;
   const player = link.controller;
-  const effectEngine = cs.game.effectEngine;
+  const effectEngine = cs.game?.effectEngine;
+  if (!effectEngine) {
+    return {
+      success: false,
+      needsSelection: false,
+      reason: "No effect engine available",
+    };
+  }
   const inheritedActivationContext = link.context?.activationContext || {};
 
   const ctx = {
@@ -884,8 +1050,8 @@ async function applyChainEffect(cs, link, activationZone) {
         const contract = actionsResult.selectionContract
           ? {
               ...actionsResult.selectionContract,
-              timing: actionsResult.selectionContract.timing || "resolution",
-              purpose: actionsResult.selectionContract.purpose || "choice",
+              timing: contractTiming(actionsResult.selectionContract) || "resolution",
+              purpose: contractPurpose(actionsResult.selectionContract) || "choice",
             }
           : null;
         return {
@@ -931,11 +1097,11 @@ async function applyChainEffect(cs, link, activationZone) {
       );
       cs.log(
         `Chain resolution failed for ${linkContext.cardName} (CL${linkContext.chainLevel}):`,
-        error.message,
+        caughtErrorMessage(error),
       );
       return {
         success: false,
-        reason: error.message || "Chain link actions failed.",
+        reason: caughtErrorMessage(error) || "Chain link actions failed.",
         error,
       };
     }
@@ -961,7 +1127,9 @@ async function applyChainEffect(cs, link, activationZone) {
  * Chain activation telemetry.
  * Emits compact strategic events for chain-resolved activations.
  */
-function getChainActivationEventName(link) {
+function getChainActivationEventName(
+  link: ChainLink,
+): "spell_activated" | "trap_activated" | "effect_activated" {
   if (
     link?.activationKind === CHAIN_ACTIVATION_KINDS.SPELL_TRAP_CARD &&
     link.card?.cardKind === "spell"
@@ -977,20 +1145,32 @@ function getChainActivationEventName(link) {
   return "effect_activated";
 }
 
-function flattenSelectionCards(selections) {
-  const cards = [];
-  const visit = (value) => {
+function isChainCardValue(value: unknown): value is ChainCard {
+  if (typeof value !== "object" || value === null) return false;
+  return (
+    typeof Reflect.get(value, "name") === "string" ||
+    typeof Reflect.get(value, "cardName") === "string"
+  );
+}
+
+function flattenSelectionCards(selections: ChainSelectionMap): ChainCard[] {
+  const cards: ChainCard[] = [];
+  const visit = (value: unknown): void => {
     if (!value) return;
     if (Array.isArray(value)) {
       for (const item of value) visit(item);
       return;
     }
-    if (typeof value === "object" && value.card) {
-      visit(value.card);
-      return;
+    if (typeof value === "object" && value !== null) {
+      const card = Reflect.get(value, "card");
+      if (card) {
+        visit(card);
+        return;
+      }
     }
-    if (typeof value === "object" && (value.name || value.cardName)) {
+    if (isChainCardValue(value)) {
       cards.push(value);
+      return;
     }
   };
 
@@ -1000,7 +1180,17 @@ function flattenSelectionCards(selections) {
   return cards;
 }
 
-function compactSelectedTarget(card) {
+interface CompactSelectedTarget {
+  id: number | null;
+  name: string | null;
+  owner: string | null;
+  zone: CanonicalZone | null;
+  position: string | null;
+}
+
+function compactSelectedTarget(
+  card: ChainCard | null | undefined,
+): CompactSelectedTarget | null {
   if (!card) return null;
   return {
     id: card.id ?? null,
@@ -1011,7 +1201,12 @@ function compactSelectedTarget(card) {
   };
 }
 
-function notifyChainActivation(cs, link, activationZone, resolvedSelections) {
+function notifyChainActivation(
+  cs: FullChainHost,
+  link: ChainLink,
+  activationZone: ChainActivationZone,
+  resolvedSelections: ChainSelectionMap,
+): void {
   if (link?.activationPublished === true) return;
   const game = cs.game;
   if (typeof game?.notify !== "function") return;
@@ -1076,7 +1271,12 @@ function notifyChainActivation(cs, link, activationZone, resolvedSelections) {
   }
 }
 
-export function isCardStillValid(card, player, zone) {
+export function isCardStillValid(
+  this: FullChainHost,
+  card: ChainCard,
+  player: ChainPlayer,
+  zone?: CanonicalZone | "banish" | null,
+): boolean {
   if (!card || !player) return false;
 
   const checkZone = zone || "spellTrap";
@@ -1103,7 +1303,10 @@ export function isCardStillValid(card, player, zone) {
   return true;
 }
 
-async function completePreparedPipeline(link, result) {
+async function completePreparedPipeline(
+  link: ChainLink,
+  result: ChainOperationResult,
+): Promise<void> {
   if (
     link?.pipelineCompletionDone === true ||
     typeof link?.pipelineCompletion !== "function"
@@ -1114,7 +1317,11 @@ async function completePreparedPipeline(link, result) {
   await link.pipelineCompletion(result);
 }
 
-export function determineCardZone(card, player) {
+export function determineCardZone(
+  this: FullChainHost,
+  card: ChainCard,
+  player?: ChainPlayer | null,
+): CanonicalZone | "unknown" {
   if (!card || !player) return "unknown";
 
   if (player.deck?.includes(card)) return "deck";

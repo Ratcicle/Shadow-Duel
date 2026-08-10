@@ -1,4 +1,23 @@
 import { isAI } from "../Player.js";
+import type {
+  ChainActivationCandidate,
+  ChainMaybePromise,
+  ChainPlayer,
+  FastEffectContextInput,
+  FullChainHost,
+} from "../contracts/chainRuntime.js";
+
+type PlayerResponseHost = Pick<
+  FullChainHost,
+  | "activeChainId"
+  | "activeResponseAbortController"
+  | "game"
+  | "getChainSummary"
+  | "getLastChainLink"
+  | "getUI"
+  | "log"
+  | "responseTimeoutMs"
+>;
 
 /**
  * Human player choosing chain response via UI
@@ -7,7 +26,12 @@ import { isAI } from "../Player.js";
  * @param {ChainContext} context
  * @returns {Promise<Object|null>}
  */
-export async function playerChooseChainResponse(player, activatable, context) {
+export async function playerChooseChainResponse(
+  this: PlayerResponseHost,
+  player: ChainPlayer,
+  activatable: ChainActivationCandidate[],
+  context: FastEffectContextInput,
+): Promise<ChainActivationCandidate | null> {
   // 🔧 CRITICAL FIX: Don't show prompts to AI/bots - they should auto-pass
   if (isAI(player)) {
     this.log(`Player ${player.id} is AI - auto-passing chain response`);
@@ -21,7 +45,7 @@ export async function playerChooseChainResponse(player, activatable, context) {
     return null;
   }
 
-  let chosenOption = null;
+  let chosenOption: ChainActivationCandidate | null = null;
   const autoPassByMouseHold =
     typeof ui.isLeftMouseHeldForChainSkip === "function" &&
     ui.isLeftMouseHeldForChainSkip() === true;
@@ -41,14 +65,14 @@ export async function playerChooseChainResponse(player, activatable, context) {
         controller.abort("response_timeout");
       }, timeoutMs);
       try {
-        const resolveHuman = () => ui.showChainResponseModal(
+        const resolveHuman = () => ui.showChainResponseModal!(
           activatable,
           context,
           this.getChainSummary?.() || [],
           { signal: controller.signal },
         );
         chosenOption = typeof this.game?.requestDecision === "function"
-          ? await this.game.requestDecision({
+          ? await (this.game.requestDecision({
               kind: "chain_response",
               actor: player,
               candidates: activatable,
@@ -58,7 +82,7 @@ export async function playerChooseChainResponse(player, activatable, context) {
                 respondingToLinkId: this.getLastChainLink?.()?.linkId ?? null,
               },
               resolveHuman,
-            })
+            }) as ChainMaybePromise<ChainActivationCandidate | null>)
           : await resolveHuman();
       } finally {
         clearTimeout(timeoutId);

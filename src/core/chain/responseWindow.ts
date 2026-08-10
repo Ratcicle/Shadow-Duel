@@ -1,7 +1,28 @@
 import { isAI } from "../Player.js";
+import type {
+  ChainActivationCandidate,
+  ChainLink,
+  ChainMaybePromise,
+  ChainOperationResult,
+  ChainPlayer,
+  ChainResponseNegotiation,
+  ChainWindowOptions,
+  FastEffectContextInput,
+  FullChainHost,
+} from "../contracts/chainRuntime.js";
 import { FAST_EFFECT_STATES } from "./timing.js";
 
-function cleanupChainWindow(chainSystem) {
+function isChainOperationPromise(
+  value: unknown,
+): value is PromiseLike<ChainOperationResult> {
+  return (
+    (typeof value === "object" || typeof value === "function") &&
+    value !== null &&
+    typeof Reflect.get(value, "then") === "function"
+  );
+}
+
+function cleanupChainWindow(chainSystem: FullChainHost): void {
   chainSystem.log("[ChainSystem] Cleaning up chain window");
   chainSystem.chainWindowOpen = false;
   chainSystem.chainWindowContext = null;
@@ -19,7 +40,11 @@ function cleanupChainWindow(chainSystem) {
  * @param {Object} options - Explicit priority and prepared activation data
  * @returns {Promise<Object>}
  */
-export async function openChainWindow(context = {}, options = {}) {
+export async function openChainWindow(
+  this: FullChainHost,
+  context: FastEffectContextInput = {},
+  options: ChainWindowOptions = {},
+): Promise<ChainOperationResult> {
   if (!this.game || this.isResolving || this.chainWindowOpen) {
     this.log(
       "[ChainSystem] Cannot open chain window: game missing or timing is busy",
@@ -78,7 +103,7 @@ export async function openChainWindow(context = {}, options = {}) {
         // those values while adding the shared response-window context.
         ...(preparedActivation.context || {}),
       },
-    });
+    }) as ChainLink;
     const publication = await this.publishChainLinkActivation?.(rootLink);
     await this.appendActivationTriggerPackages?.(publication, context);
   }
@@ -120,9 +145,9 @@ export async function openChainWindow(context = {}, options = {}) {
     consecutivePasses: responseMetadata?.consecutivePasses || 0,
   });
 
-  let resolutionResult;
+  let resolutionResult: ChainOperationResult;
   try {
-    resolutionResult = await this.resolveChain();
+    resolutionResult = (await this.resolveChain()) as ChainOperationResult;
   } catch (error) {
     cleanupChainWindow(this);
     throw error;
@@ -130,8 +155,8 @@ export async function openChainWindow(context = {}, options = {}) {
   if (resolutionResult?.needsSelection) {
     const pendingResolution =
       this.startPendingChainSelection?.(resolutionResult);
-    if (pendingResolution && typeof pendingResolution.then === "function") {
-      resolutionResult = await pendingResolution;
+    if (isChainOperationPromise(pendingResolution)) {
+      resolutionResult = (await pendingResolution) as ChainOperationResult;
     } else {
       this.log("[ChainSystem] Chain resolution paused for selection");
       return {
@@ -172,13 +197,14 @@ export async function openChainWindow(context = {}, options = {}) {
  * @returns {Promise<Object>} Negotiation metadata
  */
 export async function offerChainResponses(
-  firstPlayer,
-  secondPlayer,
-  context,
-  options = {},
-) {
+  this: FullChainHost,
+  firstPlayer: ChainPlayer,
+  secondPlayer: ChainPlayer | null,
+  context: FastEffectContextInput,
+  options: { initialPasses?: number } = {},
+): Promise<ChainResponseNegotiation> {
   let consecutivePasses = Math.max(0, Number(options.initialPasses || 0));
-  let currentResponder = firstPlayer;
+  let currentResponder: ChainPlayer | null = firstPlayer;
   let offers = 0;
   let activations = 0;
   let lastActivator = null;
@@ -211,7 +237,9 @@ export async function offerChainResponses(
         });
       } else {
         consecutivePasses = 0;
-        const responseLink = this.addToChain(preparation.preparedActivation);
+        const responseLink = this.addToChain(
+          preparation.preparedActivation,
+        ) as ChainLink;
         activations += 1;
         lastActivator = currentResponder;
         const publication = await this.publishChainLinkActivation?.(responseLink);
@@ -260,7 +288,11 @@ export async function offerChainResponses(
  * @param {ChainContext} context
  * @returns {Promise<{card: Object, effect: Object, selections: Object}|null>}
  */
-export async function offerChainResponse(player, context) {
+export async function offerChainResponse(
+  this: FullChainHost,
+  player: ChainPlayer | null | undefined,
+  context: FastEffectContextInput,
+): Promise<ChainActivationCandidate | null> {
   if (!player) return null;
 
   const activatable = this.getActivatableCardsInChain(player, context);
@@ -275,7 +307,7 @@ export async function offerChainResponse(player, context) {
     const resolveAI = () =>
       this.botChooseChainResponse(player, activatable, context);
     return typeof this.game?.requestDecision === "function"
-      ? this.game.requestDecision({
+      ? (this.game.requestDecision({
           kind: "chain_response",
           actor: player,
           candidates: activatable,
@@ -285,7 +317,7 @@ export async function offerChainResponse(player, context) {
             respondingToLinkId: this.getLastChainLink?.()?.linkId ?? null,
           },
           resolveAI,
-        })
+        }) as ChainMaybePromise<ChainActivationCandidate | null>)
       : resolveAI();
   }
 

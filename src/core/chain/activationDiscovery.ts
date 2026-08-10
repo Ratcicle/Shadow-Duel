@@ -3,6 +3,17 @@ import {
   canActivateSetQuickSpell,
   isQuickSpell,
 } from "../game/spellTrap/quickSpellRules.js";
+import type { SpellSpeed } from "../contracts/chain.js";
+import type {
+  ChainActivationCandidate,
+  ChainCard,
+  ChainEffect,
+  ChainLink,
+  ChainPlayer,
+  FastEffectContextInput,
+  FullChainHost,
+} from "../contracts/chainRuntime.js";
+import type { CanonicalZone } from "../contracts/zones.js";
 import {
   buildActivationQuery,
   getCanonicalActivationCandidateKey,
@@ -11,7 +22,7 @@ import {
   revalidateActivationCandidate as revalidateCanonicalCandidate,
 } from "./legality.js";
 
-export const ACTIVATION_ZONES = Object.freeze([
+export const ACTIVATION_ZONES: readonly CanonicalZone[] = Object.freeze([
   "hand",
   "field",
   "spellTrap",
@@ -20,7 +31,24 @@ export const ACTIVATION_ZONES = Object.freeze([
   "banished",
 ]);
 
-function cardInstanceId(card) {
+interface ChainResponsePreviewContext extends FastEffectContextInput {
+  activationZone: CanonicalZone;
+  chainWindowOpen: boolean;
+  isChainWindow: boolean;
+  lastSpellSpeed?: SpellSpeed;
+  requiredSpellSpeed: SpellSpeed;
+  respondingToSpellSpeed?: SpellSpeed;
+  sourceZone: CanonicalZone;
+}
+
+interface ActivationCandidateRevalidation {
+  ok: boolean;
+  code?: string;
+  reason?: string | null;
+  candidate?: ChainActivationCandidate;
+}
+
+function cardInstanceId(card: ChainCard | null | undefined) {
   return (
     card?.instanceId ??
     card?._instanceId ??
@@ -32,31 +60,50 @@ function cardInstanceId(card) {
   );
 }
 
-function isFastMonsterEffect(effect) {
+function isFastMonsterEffect(effect: ChainEffect): boolean {
   return effect?.isQuickEffect === true || Number(effect?.speed) === 2;
 }
 
-function isExplicitZone(effect, zone) {
+function isSpellOrTrapCard(card: ChainCard): boolean {
+  return card.cardKind === "spell" || card.cardKind === "trap";
+}
+
+function isTrapCard(card: ChainCard): boolean {
+  return card.cardKind === "trap";
+}
+
+function isExplicitZone(effect: ChainEffect, zone: CanonicalZone): boolean {
   return (
     Array.isArray(effect?.activationZones) &&
     effect.activationZones.includes(zone)
   );
 }
 
-export function getEffectActivationZones(card, effect) {
-  return getCanonicalEffectActivationZones(card, effect);
+export function getEffectActivationZones(
+  card: ChainCard,
+  effect: ChainEffect,
+): CanonicalZone[] {
+  return getCanonicalEffectActivationZones(card, effect) as CanonicalZone[];
 }
 
-export function getActivationCandidateKey(card, effect, sourceZone) {
+export function getActivationCandidateKey(
+  card: ChainCard,
+  effect: ChainEffect,
+  sourceZone: CanonicalZone,
+): string {
   return getCanonicalActivationCandidateKey(card, effect, sourceZone);
 }
 
-function pairAlreadyInChain(chainSystem, card, effect) {
+function pairAlreadyInChain(
+  chainSystem: FullChainHost,
+  card: ChainCard,
+  effect: ChainEffect,
+): boolean {
   const effectId = effect?.id || null;
   const links = [
     ...(chainSystem.chainStack || []),
     chainSystem.currentResolvingLink || null,
-  ].filter(Boolean);
+  ].filter((link): link is ChainLink => Boolean(link));
   return links.some(
     (link) =>
       cardInstanceId(link.card) === cardInstanceId(card) &&
@@ -64,11 +111,20 @@ function pairAlreadyInChain(chainSystem, card, effect) {
   );
 }
 
-function wasTriggerEffectAlreadyOffered(chainSystem, card, effect) {
+function wasTriggerEffectAlreadyOffered(
+  chainSystem: FullChainHost,
+  card: ChainCard,
+  effect: ChainEffect,
+): boolean {
   return chainSystem.chainTriggerEffectsOffered?.get(card)?.has(effect) === true;
 }
 
-function buildResponseContext(chainSystem, context, effect, activationZone) {
+function buildResponseContext(
+  chainSystem: FullChainHost,
+  context: FastEffectContextInput,
+  effect: ChainEffect,
+  activationZone: CanonicalZone,
+): ChainResponsePreviewContext {
   const responseContext =
     chainSystem.getEffectChainResponseContext?.(effect, context) || context;
   const lastLink = chainSystem.getLastChainLink?.();
@@ -88,7 +144,14 @@ function buildResponseContext(chainSystem, context, effect, activationZone) {
   };
 }
 
-function buildPreviewContext(chainSystem, card, effect, player, context, zone) {
+function buildPreviewContext(
+  chainSystem: FullChainHost,
+  card: ChainCard,
+  effect: ChainEffect,
+  player: ChainPlayer,
+  context: FastEffectContextInput,
+  zone: CanonicalZone,
+) {
   return {
     source: card,
     sourceCard: card,
@@ -113,13 +176,13 @@ function buildPreviewContext(chainSystem, card, effect, player, context, zone) {
 }
 
 function canonicalRequirementsCanBeMet(
-  chainSystem,
-  card,
-  effect,
-  player,
-  context,
-  zone,
-) {
+  chainSystem: FullChainHost,
+  card: ChainCard,
+  effect: ChainEffect,
+  player: ChainPlayer,
+  context: FastEffectContextInput,
+  zone: CanonicalZone,
+): boolean {
   const engine = chainSystem.game?.effectEngine;
   const preview = buildPreviewContext(
     chainSystem,
@@ -132,7 +195,7 @@ function canonicalRequirementsCanBeMet(
   const definitions = (effect.targets || []).map((definition) =>
     definition?.intent === "cost" &&
     definition.requireThisCard !== true &&
-    definition.allowSelf !== true
+    Reflect.get(definition, "allowSelf") !== true
       ? { ...definition, excludeSelf: true }
       : definition,
   );
@@ -144,10 +207,10 @@ function canonicalRequirementsCanBeMet(
   }
 
   const costs = chainSystem.getEffectActivationCosts?.(effect) || [];
-  const costsWithoutDeclaredCards = costs.filter(
-    (action) =>
-      typeof action?.targetRef !== "string" || action.targetRef === "self",
-  );
+  const costsWithoutDeclaredCards = costs.filter((action) => {
+    const targetRef = Reflect.get(action, "targetRef");
+    return typeof targetRef !== "string" || targetRef === "self";
+  });
   if (
     costsWithoutDeclaredCards.length > 0 &&
     engine?.checkActionPreviewRequirements
@@ -162,13 +225,13 @@ function canonicalRequirementsCanBeMet(
 }
 
 function genericExplicitEffectCheck(
-  chainSystem,
-  card,
-  effect,
-  player,
-  context,
-  zone,
-) {
+  chainSystem: FullChainHost,
+  card: ChainCard,
+  effect: ChainEffect,
+  player: ChainPlayer,
+  context: FastEffectContextInput,
+  zone: CanonicalZone,
+): boolean {
   if (!isExplicitZone(effect, zone)) return false;
   if (effect.timing === "passive") return false;
   if (effect.timing === "on_event" && effect.allowManualActivation !== true) {
@@ -222,7 +285,7 @@ function genericExplicitEffectCheck(
   return true;
 }
 
-function buildPlacementOnlyEffect(card) {
+function buildPlacementOnlyEffect(card: ChainCard): ChainEffect {
   return {
     id: `${card?.id || "trap"}_placement_only_activation`,
     timing: "on_activate",
@@ -232,7 +295,7 @@ function buildPlacementOnlyEffect(card) {
   };
 }
 
-function canUsePlacementOnly(card) {
+function canUsePlacementOnly(card: ChainCard): boolean {
   return (
     card?.cardKind === "trap" &&
     card?.subtype === "continuous" &&
@@ -240,7 +303,7 @@ function canUsePlacementOnly(card) {
   );
 }
 
-function zoneEntries(player) {
+function zoneEntries(player: ChainPlayer): [CanonicalZone, ChainCard[]][] {
   return [
     ["hand", player.hand || []],
     ["field", player.field || []],
@@ -251,13 +314,21 @@ function zoneEntries(player) {
   ];
 }
 
-function trapStateAllows(chainSystem, card, effect, zone) {
+function trapStateAllows(
+  chainSystem: FullChainHost,
+  card: ChainCard,
+  effect: ChainEffect,
+  zone: CanonicalZone,
+): boolean {
   if (zone === "hand") return isExplicitZone(effect, "hand");
   if (zone !== "spellTrap") return isExplicitZone(effect, zone);
 
   if (card.isFacedown === true) {
     const setTurn = card.setTurn ?? card.turnSetOn ?? null;
-    return setTurn != null && Number(setTurn) < Number(chainSystem.game.turnCounter);
+    return (
+      setTurn != null &&
+      Number(setTurn) < Number(chainSystem.game!.turnCounter)
+    );
   }
 
   return (
@@ -267,7 +338,14 @@ function trapStateAllows(chainSystem, card, effect, zone) {
   );
 }
 
-function candidateForEffect(chainSystem, player, card, effect, zone, context) {
+function candidateForEffect(
+  chainSystem: FullChainHost,
+  player: ChainPlayer,
+  card: ChainCard,
+  effect: ChainEffect,
+  zone: CanonicalZone,
+  context: FastEffectContextInput,
+): ChainActivationCandidate | null {
   if (!getEffectActivationZones(card, effect).includes(zone)) return null;
   if (pairAlreadyInChain(chainSystem, card, effect)) return null;
   if (wasTriggerEffectAlreadyOffered(chainSystem, card, effect)) return null;
@@ -330,8 +408,8 @@ function candidateForEffect(chainSystem, player, card, effect, zone, context) {
       effect,
     );
   } else if (
-    (card.cardKind === "spell" || card.cardKind === "trap") &&
-    (Number(effect.speed) >= 2 || card.cardKind === "trap") &&
+    isSpellOrTrapCard(card) &&
+    (Number(effect.speed) >= 2 || isTrapCard(card)) &&
     genericExplicitEffectCheck(
       chainSystem,
       card,
@@ -393,7 +471,11 @@ function candidateForEffect(chainSystem, player, card, effect, zone, context) {
 /**
  * Canonical response discovery. Candidates are effects, never whole cards.
  */
-export function getActivatableCardsInChain(player, context) {
+export function getActivatableCardsInChain(
+  this: FullChainHost,
+  player: ChainPlayer,
+  context: FastEffectContextInput,
+): ChainActivationCandidate[] {
   if (!player || !this.game) return [];
   const query = buildActivationQuery({
     game: this.game,
@@ -407,8 +489,12 @@ export function getActivatableCardsInChain(player, context) {
   });
 }
 
-function collectActivationCandidates(chainSystem, player, context) {
-  const candidates = [];
+function collectActivationCandidates(
+  chainSystem: FullChainHost,
+  player: ChainPlayer,
+  context: FastEffectContextInput,
+): ChainActivationCandidate[] {
+  const candidates: ChainActivationCandidate[] = [];
 
   for (const [zone, cards] of zoneEntries(player)) {
     for (const card of cards) {
@@ -458,7 +544,12 @@ function collectActivationCandidates(chainSystem, player, context) {
   return candidates;
 }
 
-export function revalidateActivationCandidate(candidate, player, context) {
+export function revalidateActivationCandidate(
+  this: FullChainHost,
+  candidate: ChainActivationCandidate,
+  player: ChainPlayer,
+  context: FastEffectContextInput,
+): ActivationCandidateRevalidation {
   const query = buildActivationQuery({
     game: this.game,
     chainSystem: this,
@@ -471,7 +562,12 @@ export function revalidateActivationCandidate(candidate, player, context) {
   });
 }
 
-function revalidateCandidateInternal(chainSystem, candidate, player, context) {
+function revalidateCandidateInternal(
+  chainSystem: FullChainHost,
+  candidate: ChainActivationCandidate,
+  player: ChainPlayer,
+  context: FastEffectContextInput,
+): ActivationCandidateRevalidation {
   if (!candidate?.card || !candidate?.effect || !player) {
     return { ok: false, reason: "invalid_activation_candidate" };
   }
