@@ -1,4 +1,29 @@
 import { isQuickSpell } from "../game/spellTrap/quickSpellRules.js";
+import type { CardAction } from "../contracts/actions.js";
+import type {
+  ChainActionContext,
+  ChainActivationCandidate,
+  ChainCard,
+  ChainEffect,
+  ChainEffectTarget,
+  ChainEventPayload,
+  ChainLink,
+  ChainOperationResult,
+  ChainPlayer,
+  ChainSelectionMap,
+  ChainSourceSnapshot,
+  ChainTriggerCompletion,
+  ChainTriggerEntry,
+  ChainTriggerInputPackage,
+  ChainTriggerOccurrence,
+  ChainUsagePolicy,
+  FastEffectContextInput,
+  FullChainHost,
+  PreparedActivation,
+  PreparedActivationContext,
+  PreparedActivationInput,
+} from "../contracts/chainRuntime.js";
+import type { CanonicalZone } from "../contracts/zones.js";
 import {
   CHAIN_ACTIVATION_KINDS,
   buildUsagePolicy,
@@ -19,7 +44,65 @@ const PERSISTENT_SPELL_TRAP_SUBTYPES = new Set([
   "field",
 ]);
 
-export function effectRequiresSourceAtResolution(card, effect, zone = null) {
+interface ActivationEffectContext {
+  _actionTargets?: ChainSelectionMap;
+  actionContext: FastEffectContextInput | null;
+  activationContext: PreparedActivationContext;
+  activationZone: CanonicalZone | null;
+  effect: ChainEffect | null;
+  effectId: string | null;
+  opponent: ChainPlayer | null;
+  player: ChainPlayer | null;
+  source: ChainCard | null;
+  sourceCard: ChainCard | null;
+}
+
+interface ActivationPublicationResult extends ChainOperationResult {
+  triggerPackages?: ChainTriggerInputPackage[];
+}
+
+type ActivationAppendResult = Omit<ChainOperationResult, "added"> & {
+  added: number;
+};
+
+interface ActivationTriggerPreparation extends ChainOperationResult {
+  occurrences?: ChainTriggerOccurrence[];
+}
+
+interface ActivationTriggerCollection {
+  entries?: ChainTriggerEntry[];
+  occurrence?: ChainTriggerOccurrence | null;
+  onComplete?: ChainTriggerCompletion | null;
+  orderRule?: string | null;
+  payload?: ChainEventPayload;
+}
+
+function captureRuntimeSourceSnapshot(
+  card: ChainCard | null,
+  controller: ChainPlayer | null,
+  zone: CanonicalZone | "unknown" | null,
+): ChainSourceSnapshot | null {
+  return Reflect.apply(captureSourceSnapshot, null, [
+    card,
+    controller,
+    zone,
+  ]) as ChainSourceSnapshot | null;
+}
+
+function buildRuntimeUsagePolicy(effect: ChainEffect | null): ChainUsagePolicy {
+  return Reflect.apply(buildUsagePolicy, null, [effect]) as ChainUsagePolicy;
+}
+
+function actionTargetRef(action: CardAction): string | null {
+  const targetRef = Reflect.get(action, "targetRef");
+  return typeof targetRef === "string" ? targetRef : null;
+}
+
+export function effectRequiresSourceAtResolution(
+  card: ChainCard | null,
+  effect: ChainEffect | null,
+  zone: CanonicalZone | null = null,
+): boolean {
   if (typeof effect?.requiresSourceAtResolution === "boolean") {
     return effect.requiresSourceAtResolution;
   }
@@ -32,21 +115,29 @@ export function effectRequiresSourceAtResolution(card, effect, zone = null) {
   );
 }
 
-export function getEffectActivationCosts(effect) {
+export function getEffectActivationCosts(
+  effect?: ChainEffect | null,
+): readonly CardAction[] {
   return Array.isArray(effect?.activationCosts) ? effect.activationCosts : [];
 }
 
-export function getEffectActivationCommitActions(effect) {
+export function getEffectActivationCommitActions(
+  effect?: ChainEffect | null,
+): readonly CardAction[] {
   return Array.isArray(effect?.activationCommitActions)
     ? effect.activationCommitActions
     : [];
 }
 
-export function getEffectResolutionActions(effect) {
+export function getEffectResolutionActions(
+  effect?: ChainEffect | null,
+): readonly CardAction[] {
   return Array.isArray(effect?.actions) ? effect.actions : [];
 }
 
-export function createPreparedActivation(input = {}) {
+export function createPreparedActivation(
+  input: PreparedActivationInput = {},
+): PreparedActivation {
   const removedFields = [
     "player",
     "zone",
@@ -99,7 +190,7 @@ export function createPreparedActivation(input = {}) {
   const sourceAtActivation =
     input.sourceAtActivation ||
     activationContext.sourceAtActivation ||
-    captureSourceSnapshot(card, controller, activationZone);
+    captureRuntimeSourceSnapshot(card, controller, activationZone);
   const activationKind = classifyActivationKind({
     ...input,
     card,
@@ -131,7 +222,7 @@ export function createPreparedActivation(input = {}) {
   const targetSelections = input.targetSelections || {};
   const resolutionSelections = input.resolutionSelections || {};
 
-  const prepared = {
+  const prepared: PreparedActivation = {
     ...input,
     card,
     controller,
@@ -156,7 +247,7 @@ export function createPreparedActivation(input = {}) {
     responseContextType,
     sourceAtTrigger,
     sourceAtActivation,
-    usagePolicy: input.usagePolicy || buildUsagePolicy(effect),
+    usagePolicy: input.usagePolicy || buildRuntimeUsagePolicy(effect),
     committed: input.committed === true,
     costsPaid: input.costsPaid === true,
     prepared: true,
@@ -174,11 +265,13 @@ export function createPreparedActivation(input = {}) {
   return prepared;
 }
 
-export function refreshPreparedActivationSourceSnapshot(prepared) {
+export function refreshPreparedActivationSourceSnapshot(
+  prepared: PreparedActivation,
+): PreparedActivation {
   if (!prepared?.card) return prepared;
   const controller = prepared.controller || null;
   const activationZone = prepared.activationZone || null;
-  prepared.sourceAtActivation = captureSourceSnapshot(
+  prepared.sourceAtActivation = captureRuntimeSourceSnapshot(
     prepared.card,
     controller,
     activationZone,
@@ -200,7 +293,11 @@ export function refreshPreparedActivationSourceSnapshot(prepared) {
   return prepared;
 }
 
-function buildEffectContext(chainSystem, prepared, context = null) {
+function buildEffectContext(
+  chainSystem: FullChainHost,
+  prepared: PreparedActivation,
+  context: FastEffectContextInput | null = null,
+): ActivationEffectContext {
   const player = prepared.controller;
   const activationContext = {
     ...(prepared.activationContext || {}),
@@ -229,23 +326,29 @@ function buildEffectContext(chainSystem, prepared, context = null) {
   };
 }
 
-function flattenSelectionCards(selections) {
-  const cards = [];
-  const seen = new Set();
-  const visit = (value) => {
+function flattenSelectionCards(
+  selections: ChainSelectionMap | null | undefined,
+): ChainCard[] {
+  const cards: ChainCard[] = [];
+  const seen = new Set<object>();
+  const visit = (value: unknown): void => {
     if (!value) return;
     if (Array.isArray(value)) {
       for (const item of value) visit(item);
       return;
     }
-    if (typeof value === "object" && value.card) {
-      visit(value.card);
-      return;
-    }
-    if (typeof value === "object" && (value.name || value.cardName)) {
+    if (typeof value === "object") {
+      const enclosedCard = Reflect.get(value, "card");
+      if (enclosedCard) {
+        visit(enclosedCard);
+        return;
+      }
+      const name = Reflect.get(value, "name");
+      const cardName = Reflect.get(value, "cardName");
+      if (!name && !cardName) return;
       if (!seen.has(value)) {
         seen.add(value);
-        cards.push(value);
+        cards.push(value as ChainCard);
       }
     }
   };
@@ -253,7 +356,10 @@ function flattenSelectionCards(selections) {
   return cards;
 }
 
-function flattenDeclaredEffectTargets(effect, selections) {
+function flattenDeclaredEffectTargets(
+  effect: ChainEffect | null,
+  selections: ChainSelectionMap,
+): ChainCard[] {
   const costIds = new Set(
     (effect?.targets || [])
       .filter((target) => target?.intent === "cost")
@@ -266,7 +372,10 @@ function flattenDeclaredEffectTargets(effect, selections) {
   );
 }
 
-function resolveCardOwner(chainSystem, card) {
+function resolveCardOwner(
+  chainSystem: FullChainHost,
+  card: ChainCard | null,
+): ChainPlayer | null {
   if (!card) return null;
   for (const player of [chainSystem.game?.player, chainSystem.game?.bot]) {
     if (!player) continue;
@@ -284,7 +393,10 @@ function resolveCardOwner(chainSystem, card) {
   return null;
 }
 
-export async function publishChainLinkActivation(link) {
+export async function publishChainLinkActivation(
+  this: FullChainHost,
+  link: ChainLink,
+): Promise<ActivationPublicationResult> {
   if (!link || link.activationPublished === true) return { ok: true, skipped: true };
   const game = this.game;
   if (!game) return { ok: false, reason: "missing_game" };
@@ -339,8 +451,11 @@ export async function publishChainLinkActivation(link) {
       link.activationContext?.triggeredByEvent || link.effect?.event || null,
   };
 
-  const triggerPackages = [];
-  const collectPackage = (eventName, result) => {
+  const triggerPackages: ChainTriggerInputPackage[] = [];
+  const collectPackage = (
+    eventName: string,
+    result: ActivationTriggerCollection | null | undefined,
+  ): void => {
     if (!result || !Array.isArray(result.entries) || result.entries.length === 0) {
       return;
     }
@@ -400,7 +515,11 @@ export async function publishChainLinkActivation(link) {
   return { ok: true, triggerPackages };
 }
 
-export async function payActivationCosts(prepared, context = null) {
+export async function payActivationCosts(
+  this: FullChainHost,
+  prepared: PreparedActivation,
+  context: FastEffectContextInput | null = null,
+): Promise<ChainOperationResult> {
   const costs = getEffectActivationCosts(prepared?.effect);
   if (!Array.isArray(costs) || costs.length === 0) {
     prepared.costsPaid = true;
@@ -437,13 +556,17 @@ export async function payActivationCosts(prepared, context = null) {
     actions: costs.map((action, index) => ({
       index,
       type: action?.type || null,
-      targetRef: action?.targetRef || null,
+      targetRef: actionTargetRef(action),
     })),
   };
   return { success: true, needsSelection: false };
 }
 
-export async function applyActivationCommitActions(prepared, context = null) {
+export async function applyActivationCommitActions(
+  this: FullChainHost,
+  prepared: PreparedActivation,
+  context: FastEffectContextInput | null = null,
+): Promise<ChainOperationResult> {
   if (prepared?.activationCommitment?.status === "applied") {
     return { success: true, needsSelection: false, alreadyApplied: true };
   }
@@ -484,16 +607,17 @@ export async function applyActivationCommitActions(prepared, context = null) {
     actions: actions.map((action, index) => ({
       index,
       type: action?.type || null,
-      targetRef: action?.targetRef || null,
+      targetRef: actionTargetRef(action),
     })),
   };
   return { success: true, needsSelection: false };
 }
 
 export async function appendActivationTriggerPackages(
-  publicationResult,
-  parentContext = null,
-) {
+  this: FullChainHost,
+  publicationResult: ActivationPublicationResult,
+  parentContext: FastEffectContextInput | null = null,
+): Promise<ActivationAppendResult> {
   let pending = Array.isArray(publicationResult?.triggerPackages)
     ? [...publicationResult.triggerPackages]
     : [];
@@ -502,9 +626,14 @@ export async function appendActivationTriggerPackages(
   while (pending.length > 0) {
     const batch = pending;
     pending = [];
-    const preparation = await this.prepareTriggerPackages?.(batch, {
-      parentContext,
-    });
+    const preparePackages = this.prepareTriggerPackages;
+    const preparation =
+      typeof preparePackages === "function"
+        ? (await Reflect.apply(preparePackages, this, [
+            batch,
+            { parentContext },
+          ])) as ActivationTriggerPreparation
+        : null;
     if (!preparation?.ok || preparation?.needsSelection) {
       this.activeTriggerOpportunity = null;
       this.pendingTriggerSelection = null;
@@ -527,10 +656,16 @@ export async function appendActivationTriggerPackages(
         triggerPlayer: prepared.controller,
         addTriggerToChain: false,
         activationContext: prepared.activationContext || null,
-      };
+      } as FastEffectContextInput;
       const link = this.addToChain(prepared);
       added += 1;
-      const nestedPublication = await this.publishChainLinkActivation?.(link);
+      const publishActivation = this.publishChainLinkActivation;
+      const nestedPublication =
+        typeof publishActivation === "function"
+          ? (await Reflect.apply(publishActivation, this, [
+              link,
+            ])) as ActivationPublicationResult
+          : null;
       if (Array.isArray(nestedPublication?.triggerPackages)) {
         pending.push(...nestedPublication.triggerPackages);
       }
@@ -542,7 +677,9 @@ export async function appendActivationTriggerPackages(
   return { success: true, added };
 }
 
-export async function completeActivationTriggerPackages() {
+export async function completeActivationTriggerPackages(
+  this: FullChainHost,
+): Promise<void> {
   const callbacks = Array.isArray(this.chainEventCompletions)
     ? this.chainEventCompletions.splice(0)
     : [];
@@ -555,7 +692,10 @@ export async function completeActivationTriggerPackages() {
   }
 }
 
-async function commitResponseSource(chainSystem, prepared) {
+async function commitResponseSource(
+  chainSystem: FullChainHost,
+  prepared: PreparedActivation,
+): Promise<ChainOperationResult> {
   const card = prepared.card;
   const player = prepared.controller;
   const zone = prepared.activationZone;
@@ -587,11 +727,19 @@ async function commitResponseSource(chainSystem, prepared) {
         contextLabel: "chain_activation_commit",
       },
     );
-    if (moveResult?.success === false || !player.spellTrap?.includes(card)) {
+    const moveFailed =
+      typeof moveResult === "object" &&
+      moveResult !== null &&
+      moveResult.success === false;
+    if (moveFailed || !player.spellTrap?.includes(card)) {
       card.isFacedown = wasFacedown;
       return {
         success: false,
-        code: moveResult?.reason || "ACTIVATION_COMMIT_FAILED",
+        code:
+          (typeof moveResult === "object" &&
+          moveResult !== null &&
+          moveResult.reason) ||
+          "ACTIVATION_COMMIT_FAILED",
         reason: "Spell/Trap could not be committed to the Spell/Trap Zone.",
       };
     }
@@ -627,7 +775,12 @@ async function commitResponseSource(chainSystem, prepared) {
   return { success: true };
 }
 
-export async function prepareChainResponse(candidate, player, context = null) {
+export async function prepareChainResponse(
+  this: FullChainHost,
+  candidate: ChainActivationCandidate,
+  player: ChainPlayer,
+  context: FastEffectContextInput | null = null,
+): Promise<ChainOperationResult> {
   if (!candidate?.card || !candidate?.effect || !player) {
     return { success: false, reason: "Invalid chain response." };
   }
@@ -655,6 +808,11 @@ export async function prepareChainResponse(candidate, player, context = null) {
     },
     selectionKind: candidate.selectionKind || null,
   });
+  const preparedCard = prepared.card;
+  const preparedEffect = prepared.effect;
+  if (!preparedCard || !preparedEffect) {
+    return { success: false, reason: "Invalid chain response." };
+  }
 
   const responseContext = candidate.context || context || null;
   const candidateCheck = this.revalidateActivationCandidate?.(
@@ -675,8 +833,8 @@ export async function prepareChainResponse(candidate, player, context = null) {
     };
   }
   const chainCheck = this.canActivateInChain?.(
-    prepared.effect,
-    prepared.card,
+    preparedEffect,
+    preparedCard,
     responseContext,
   );
   if (chainCheck?.ok === false) {
@@ -688,9 +846,9 @@ export async function prepareChainResponse(candidate, player, context = null) {
   }
   const restrictionCheck =
     this.game?.canActivateCardEffectUnderRestrictions?.(
-      prepared.card,
+      preparedCard,
       player,
-      prepared.effect,
+      preparedEffect,
       { silent: true },
     );
   if (restrictionCheck?.ok === false) {
@@ -702,9 +860,9 @@ export async function prepareChainResponse(candidate, player, context = null) {
   }
 
   const usageCheck = this.checkActivationUsage?.(
-    prepared.card,
+    preparedCard,
     player,
-    prepared.effect,
+    preparedEffect,
   );
   if (usageCheck?.ok === false) {
     return {
@@ -721,14 +879,14 @@ export async function prepareChainResponse(candidate, player, context = null) {
     candidate.context || context,
   );
   const costDefinitions = (
-    this.getActivationCostTargetDefinitions?.(prepared.effect) || []
+    this.getActivationCostTargetDefinitions?.(preparedEffect) || []
   ).map((definition) =>
     definition.requireThisCard === true || definition.allowSelf === true
       ? definition
       : { ...definition, excludeSelf: true },
   );
   const targetDefinitions =
-    this.getDeclaredTargetDefinitions?.(prepared.effect) || [];
+    this.getDeclaredTargetDefinitions?.(preparedEffect) || [];
   const costSelectionDefinitions = capCostDefinitionsByLinkedTargetCapacity(
     costDefinitions,
     targetDefinitions,
@@ -751,19 +909,19 @@ export async function prepareChainResponse(candidate, player, context = null) {
   }
   this.game?.notify?.("activation_transaction", {
     stage: "preflight",
-    cardInstanceId: prepared.card?.instanceId ?? null,
-    duelCardId: this.game?.ensureDuelCardId?.(prepared.card) ?? null,
-    effectId: prepared.effect?.id || null,
+    cardInstanceId: preparedCard.instanceId ?? null,
+    duelCardId: this.game?.ensureDuelCardId?.(preparedCard) ?? null,
+    effectId: preparedEffect.id || null,
     sourceZone,
   });
 
-  let costSelections = candidate.costSelections || {};
+  let costSelections: ChainSelectionMap | null = candidate.costSelections || {};
   if (
     costSelectionDefinitions.length > 0 &&
     Object.keys(costSelections || {}).length === 0
   ) {
     costSelections = await this.getPlayerSelectionsForDefinitions?.(
-      prepared.card,
+      preparedCard,
       costSelectionDefinitions,
       player,
       responseContext,
@@ -780,15 +938,24 @@ export async function prepareChainResponse(candidate, player, context = null) {
   }
   prepared.costSelections = costSelections || {};
   prepared.activationContext.costSelections = { ...prepared.costSelections };
-  const withCostSelectionContext = (baseContext = {}) => ({
+  const withCostSelectionContext = (
+    baseContext: ChainActionContext | null = {},
+  ): ChainActionContext => {
+    const priorTargets = baseContext
+      ? Reflect.get(baseContext, "_actionTargets")
+      : null;
+    return {
     ...(baseContext || {}),
     _actionTargets: {
-      ...(baseContext?._actionTargets || {}),
+      ...(typeof priorTargets === "object" && priorTargets !== null
+        ? priorTargets
+        : {}),
       ...(prepared.costSelections || {}),
     },
-  });
+    };
+  };
 
-  const costs = getEffectActivationCosts(prepared.effect);
+  const costs = getEffectActivationCosts(preparedEffect);
   if (
     costs.length > 0 &&
     typeof effectEngine?.checkActionPreviewRequirements === "function"
@@ -812,7 +979,7 @@ export async function prepareChainResponse(candidate, player, context = null) {
       };
     }
   }
-  const commitActions = getEffectActivationCommitActions(prepared.effect);
+  const commitActions = getEffectActivationCommitActions(preparedEffect);
   if (
     commitActions.length > 0 &&
     typeof effectEngine?.checkActionPreviewRequirements === "function"
@@ -847,12 +1014,12 @@ export async function prepareChainResponse(candidate, player, context = null) {
   // Selection can keep a human prompt open. Revalidate the transaction at the
   // last cancellable boundary so state changes cannot commit a stale offer.
   const sourceZoneBeforeCommit = this.determineCardZone?.(
-    prepared.card,
+    preparedCard,
     player,
   );
   if (
     sourceZoneBeforeCommit !== sourceZone ||
-    Number(prepared.card.locationVersion ?? 0) !==
+    Number(preparedCard.locationVersion ?? 0) !==
       Number(candidate.sourceLocationVersion ?? prepared.sourceAtActivation?.locationVersion ?? 0)
   ) {
     return {
@@ -862,9 +1029,9 @@ export async function prepareChainResponse(candidate, player, context = null) {
     };
   }
   const finalUsageCheck = this.checkActivationUsage?.(
-    prepared.card,
+    preparedCard,
     player,
-    prepared.effect,
+    preparedEffect,
   );
   if (finalUsageCheck?.ok === false) {
     return {
@@ -901,7 +1068,7 @@ export async function prepareChainResponse(candidate, player, context = null) {
   const resolvedTargetDefinitions = resolveCountFromSelectionDefinitions(
     targetDefinitions,
     prepared.costSelections,
-  );
+  ) as ChainEffectTarget[];
   const resolvedTargetPreview = resolvedTargetDefinitions.length
     ? effectEngine?.resolveTargets?.(
         resolvedTargetDefinitions,
@@ -924,9 +1091,9 @@ export async function prepareChainResponse(candidate, player, context = null) {
   if (!commitResult.success) return commitResult;
   this.game?.notify?.("activation_transaction", {
     stage: "source_committed",
-    cardInstanceId: prepared.card?.instanceId ?? null,
-    duelCardId: this.game?.ensureDuelCardId?.(prepared.card) ?? null,
-    effectId: prepared.effect?.id || null,
+    cardInstanceId: preparedCard.instanceId ?? null,
+    duelCardId: this.game?.ensureDuelCardId?.(preparedCard) ?? null,
+    effectId: preparedEffect.id || null,
     sourceZone,
     activationZone: prepared.activationZone,
   });
@@ -944,9 +1111,9 @@ export async function prepareChainResponse(candidate, player, context = null) {
 
   this.game?.notify?.("activation_transaction", {
     stage: "cost_paid",
-    cardInstanceId: prepared.card?.instanceId ?? null,
-    duelCardId: this.game?.ensureDuelCardId?.(prepared.card) ?? null,
-    effectId: prepared.effect?.id || null,
+    cardInstanceId: preparedCard.instanceId ?? null,
+    duelCardId: this.game?.ensureDuelCardId?.(preparedCard) ?? null,
+    effectId: preparedEffect.id || null,
     costPayment: prepared.costPayment,
   });
 
@@ -971,24 +1138,24 @@ export async function prepareChainResponse(candidate, player, context = null) {
   if (prepared.activationCommitment?.status === "applied") {
     this.game?.notify?.("activation_transaction", {
       stage: "commit_actions_applied",
-      cardInstanceId: prepared.card?.instanceId ?? null,
-      duelCardId: this.game?.ensureDuelCardId?.(prepared.card) ?? null,
-      effectId: prepared.effect?.id || null,
+      cardInstanceId: preparedCard.instanceId ?? null,
+      duelCardId: this.game?.ensureDuelCardId?.(preparedCard) ?? null,
+      effectId: preparedEffect.id || null,
       activationCommitment: prepared.activationCommitment,
     });
   }
 
-  let targetSelections =
+  let targetSelections: ChainSelectionMap | null =
     candidate.targetSelections || {};
   if (
     resolvedTargetDefinitions.length > 0 &&
     Object.keys(targetSelections || {}).length === 0
   ) {
     targetSelections = await this.getPlayerSelectionsForDefinitions?.(
-      prepared.card,
+      preparedCard,
       resolvedTargetDefinitions,
       player,
-      withCostSelectionContext(responseContext),
+        withCostSelectionContext(responseContext) as FastEffectContextInput,
       {
         purpose: "target",
         allowCancel: false,
@@ -1040,30 +1207,33 @@ export async function prepareChainResponse(candidate, player, context = null) {
   prepared.activationContext.resolvedSelectionCounts = {
     ...prepared.resolvedSelectionCounts,
   };
-  const currentVersion = Number(prepared.card?.locationVersion ?? 0);
+  const currentVersion = Number(preparedCard.locationVersion ?? 0);
   if (
     prepared.sourceAtActivation &&
     currentVersion !== Number(prepared.sourceAtActivation.locationVersion ?? 0)
   ) {
     prepared.sourceMoved = true;
-    prepared.latestSourceLocation = captureSourceSnapshot(
-      prepared.card,
+    prepared.latestSourceLocation = captureRuntimeSourceSnapshot(
+      preparedCard,
       player,
-      this.determineCardZone?.(prepared.card, player),
+      this.determineCardZone?.(preparedCard, player),
     );
   }
   this.game?.notify?.("activation_transaction", {
     stage: "targets_declared",
-    cardInstanceId: prepared.card?.instanceId ?? null,
-    duelCardId: this.game?.ensureDuelCardId?.(prepared.card) ?? null,
-    effectId: prepared.effect?.id || null,
+    cardInstanceId: preparedCard.instanceId ?? null,
+    duelCardId: this.game?.ensureDuelCardId?.(preparedCard) ?? null,
+    effectId: preparedEffect.id || null,
     targetIds: resolvedTargetDefinitions.map((definition) => definition.id),
   });
 
   return { success: true, preparedActivation: prepared };
 }
 
-export async function openActivationChain(preparedInput) {
+export async function openActivationChain(
+  this: FullChainHost,
+  preparedInput?: PreparedActivationInput,
+): Promise<ChainOperationResult> {
   const prepared = createPreparedActivation(preparedInput);
   const controller = prepared.controller;
   if (!prepared.card || !controller || !prepared.effect) {
@@ -1101,7 +1271,7 @@ export async function openActivationChain(preparedInput) {
     responseContextType: prepared.responseContextType,
     preparedActivation: prepared,
     addTriggerToChain: true,
-  };
+  } as FastEffectContextInput;
   return await this.runFastEffectTiming({
     origin: FAST_EFFECT_ORIGINS.ACTIVATION,
     context,
@@ -1112,7 +1282,10 @@ export async function openActivationChain(preparedInput) {
   });
 }
 
-export async function openEventWindow(context = {}) {
+export async function openEventWindow(
+  this: FullChainHost,
+  context: FastEffectContextInput = {},
+): Promise<ChainOperationResult> {
   const origin =
     context.timingOrigin ||
     (context.type === "summon_attempt"
@@ -1127,7 +1300,7 @@ export async function openEventWindow(context = {}) {
     actionPlayer: context.player || context.triggerPlayer || null,
     priorityPlayer:
       origin === FAST_EFFECT_ORIGINS.SUMMON_ATTEMPT
-        ? this.getOpponent?.(context.player || context.triggerPlayer)
+        ? this.getOpponent?.((context.player || context.triggerPlayer)!)
         : null,
     phaseIntent:
       origin === FAST_EFFECT_ORIGINS.PHASE_TRANSITION_INTENT
@@ -1140,6 +1313,6 @@ export async function openEventWindow(context = {}) {
       ...context,
       addTriggerToChain: false,
       skipTriggerLink: true,
-    },
+    } as FastEffectContextInput,
   });
 }

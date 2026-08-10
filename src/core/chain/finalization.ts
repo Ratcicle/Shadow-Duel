@@ -1,7 +1,19 @@
 import { isQuickSpell } from "../game/spellTrap/quickSpellRules.js";
 import { CHAIN_ACTIVATION_KINDS } from "./link.js";
+import type { ChainId } from "../contracts/primitives.js";
+import type {
+  ChainCard,
+  ChainCardInstanceId,
+  ChainFinalizationEntry,
+  ChainFinalizationOutcome,
+  ChainFinalizationSnapshot,
+  ChainFinalizationState,
+  ChainOperationResult,
+  ChainSourceZone,
+  FullChainHost,
+} from "../contracts/chainRuntime.js";
 
-function cardInstanceId(card) {
+function cardInstanceId(card?: ChainCard | null): ChainCardInstanceId {
   return (
     card?.instanceId ??
     card?._instanceId ??
@@ -11,11 +23,11 @@ function cardInstanceId(card) {
   );
 }
 
-function isSpellTrap(card) {
+function isSpellTrap(card?: ChainCard | null): boolean {
   return card?.cardKind === "spell" || card?.cardKind === "trap";
 }
 
-function isSingleUseSpellTrap(card) {
+function isSingleUseSpellTrap(card?: ChainCard | null): boolean {
   if (card?.cardKind === "spell") {
     return card.subtype === "normal" || isQuickSpell(card);
   }
@@ -25,7 +37,9 @@ function isSingleUseSpellTrap(card) {
   );
 }
 
-function compactOutcome(outcome = {}) {
+function compactOutcome(
+  outcome: ChainOperationResult = {},
+): ChainFinalizationOutcome {
   return {
     success: outcome.success !== false,
     activationNegated: outcome.activationNegated === true,
@@ -36,7 +50,11 @@ function compactOutcome(outcome = {}) {
   };
 }
 
-function compactEntry(entry) {
+function compactEntry(entry: ChainFinalizationEntry): ChainFinalizationSnapshot;
+function compactEntry(entry: null | undefined): null;
+function compactEntry(
+  entry: ChainFinalizationEntry | null | undefined,
+): ChainFinalizationSnapshot | null {
   if (!entry) return null;
   return {
     finalizationId: entry.finalizationId,
@@ -57,14 +75,25 @@ function compactEntry(entry) {
   };
 }
 
-function notifyFinalization(chainSystem, stage, entry) {
+function notifyFinalization(
+  chainSystem: FullChainHost,
+  stage: string,
+  entry: ChainFinalizationEntry,
+): void {
   chainSystem.game?.notify?.("chain_finalization", {
     stage,
     ...compactEntry(entry),
   });
 }
 
-function currentSourceState(chainSystem, entry) {
+function currentSourceState(
+  chainSystem: FullChainHost,
+  entry: ChainFinalizationEntry,
+): {
+  zone: ChainSourceZone | null;
+  locationVersion: number;
+  samePermanence: boolean;
+} {
   const zone = chainSystem.determineCardZone?.(entry.card, entry.controller);
   const locationVersion = Number(entry.card?.locationVersion ?? 0);
   return {
@@ -76,7 +105,9 @@ function currentSourceState(chainSystem, entry) {
   };
 }
 
-async function runPipelineFinalization(entry) {
+async function runPipelineFinalization(
+  entry: ChainFinalizationEntry,
+): Promise<boolean> {
   if (typeof entry.link?.pipelineFinalization !== "function") return false;
   await entry.link.pipelineFinalization(entry.rawOutcome, {
     chainId: entry.chainId,
@@ -86,7 +117,11 @@ async function runPipelineFinalization(entry) {
   return true;
 }
 
-async function moveToGraveyard(chainSystem, entry, contextLabel) {
+async function moveToGraveyard(
+  chainSystem: FullChainHost,
+  entry: ChainFinalizationEntry,
+  contextLabel: string,
+): Promise<boolean> {
   const state = currentSourceState(chainSystem, entry);
   if (!state.samePermanence) {
     entry.status = "already_moved";
@@ -108,7 +143,11 @@ async function moveToGraveyard(chainSystem, entry, contextLabel) {
       deferCardToGraveTriggerResolution: true,
     },
   );
-  if (result?.success === false) {
+  if (
+    typeof result === "object" &&
+    result !== null &&
+    Reflect.get(result, "success") === false
+  ) {
     entry.status = "failed";
     entry.disposition = state.zone || "unknown";
     return false;
@@ -118,13 +157,17 @@ async function moveToGraveyard(chainSystem, entry, contextLabel) {
   return true;
 }
 
-export function queueChainFinalization(link, outcome = {}) {
+export function queueChainFinalization(
+  this: FullChainHost,
+  link: ChainFinalizationEntry["link"],
+  outcome: ChainOperationResult = {},
+): ChainFinalizationSnapshot | null {
   if (!link || link.finalizationQueued === true) return null;
   if (!Number.isInteger(this.nextFinalizationId)) this.nextFinalizationId = 1;
   if (!Array.isArray(this.pendingChainFinalizations)) {
     this.pendingChainFinalizations = [];
   }
-  const entry = {
+  const entry: ChainFinalizationEntry = {
     finalizationId: this.nextFinalizationId++,
     chainId: link.chainId,
     linkId: link.linkId,
@@ -154,15 +197,22 @@ export function queueChainFinalization(link, outcome = {}) {
   return compactEntry(entry);
 }
 
-export function getChainFinalizationState() {
+export function getChainFinalizationState(
+  this: FullChainHost,
+): ChainFinalizationState {
   return {
     finalizing: this.isFinalizingChain === true,
     pendingCount: this.pendingChainFinalizations?.length || 0,
-    entries: (this.pendingChainFinalizations || []).map(compactEntry),
+    entries: (this.pendingChainFinalizations || []).map((entry) =>
+      compactEntry(entry),
+    ),
   };
 }
 
-export function resetChainFinalizationState(reason = "reset") {
+export function resetChainFinalizationState(
+  this: FullChainHost,
+  reason = "reset",
+): ChainFinalizationState {
   for (const entry of this.pendingChainFinalizations || []) {
     if (entry.status === "queued") {
       entry.status = "cancelled";
@@ -177,7 +227,18 @@ export function resetChainFinalizationState(reason = "reset") {
   return this.getChainFinalizationState();
 }
 
-async function finalizeEntry(chainSystem, entry) {
+function caughtErrorMessage(error: unknown): unknown {
+  if (typeof error === "object" && error !== null) {
+    const message = Reflect.get(error, "message");
+    if (message) return message;
+  }
+  return error;
+}
+
+async function finalizeEntry(
+  chainSystem: FullChainHost,
+  entry: ChainFinalizationEntry,
+): Promise<ChainFinalizationSnapshot> {
   const link = entry.link;
   const outcome = entry.outcome;
   const cardActivation =
@@ -225,7 +286,7 @@ async function finalizeEntry(chainSystem, entry) {
     link.finalizationStatus = "failed";
     notifyFinalization(chainSystem, "failed", entry);
     chainSystem.log?.(
-      `[ChainSystem] Finalization failed for ${entry.cardName}: ${error?.message || error}`,
+      `[ChainSystem] Finalization failed for ${entry.cardName}: ${String(caughtErrorMessage(error))}`,
     );
     return compactEntry(entry);
   } finally {
@@ -235,7 +296,10 @@ async function finalizeEntry(chainSystem, entry) {
   }
 }
 
-export async function finalizeWholeChain(options = {}) {
+export async function finalizeWholeChain(
+  this: FullChainHost,
+  options: { chainId?: ChainId | null } = {},
+): Promise<ChainOperationResult> {
   if (this.isFinalizingChain === true) {
     return {
       ok: false,
@@ -252,7 +316,7 @@ export async function finalizeWholeChain(options = {}) {
   }
 
   this.isFinalizingChain = true;
-  const completed = [];
+  const completed: ChainFinalizationSnapshot[] = [];
   try {
     for (const entry of pending) {
       completed.push(await finalizeEntry(this, entry));

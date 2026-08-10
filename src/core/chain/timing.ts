@@ -1,3 +1,24 @@
+import {
+  FAST_EFFECT_ORIGINS,
+  FAST_EFFECT_STATES,
+} from "../contracts/chain.js";
+import type { FastEffectStateName } from "../contracts/chain.js";
+import type {
+  ChainOperationResult,
+  ChainPhaseIntent,
+  ChainPlayer,
+  FastEffectContextInput,
+  FastEffectPriorityDecision,
+  FastEffectPriorityDetails,
+  FastEffectState,
+  FastEffectTimingInput,
+  FastEffectTransitionDetails,
+  FullChainHost,
+  PreparedActivation,
+} from "../contracts/chainRuntime.js";
+
+export { FAST_EFFECT_ORIGINS, FAST_EFFECT_STATES };
+
 /**
  * Canonical Fast Effect Timing coordinator.
  *
@@ -5,32 +26,30 @@
  * Trigger collection/SEGOC remains owned by Phase 3.
  */
 
-export const FAST_EFFECT_STATES = Object.freeze({
-  OPEN: "open",
-  ACTION_WITHOUT_CHAIN: "action_without_chain",
-  TRIGGER_CHECK: "trigger_check",
-  TRIGGER_CHAIN: "trigger_chain",
-  FAST_EFFECT_WINDOW: "fast_effect_window",
-  RESOLVING_CHAIN: "resolving_chain",
-  POST_CHAIN_CHECK: "post_chain_check",
-  PHASE_TRANSITION_INTENT: "phase_transition_intent",
-});
+type TimingContextDraft = Partial<FastEffectContextInput> & {
+  actionPlayer?: ChainPlayer | null;
+  legalWindow?: boolean;
+  openState?: boolean;
+  turnPlayer?: ChainPlayer | null;
+};
 
-export const FAST_EFFECT_ORIGINS = Object.freeze({
-  PHASE_START: "phase_start",
-  ACTION_WITHOUT_CHAIN: "action_without_chain",
-  ACTIVATION: "activation",
-  TRIGGER_CHAIN: "trigger_chain",
-  POST_CHAIN: "post_chain",
-  PHASE_TRANSITION_INTENT: "phase_transition_intent",
-  SUMMON_ATTEMPT: "summon_attempt",
-});
+interface FastEffectStateOverrides extends FastEffectTransitionDetails {
+  state?: FastEffectStateName;
+}
 
-function playerId(player) {
+function thrownMessage(error: unknown, fallback: string): string {
+  if (typeof error !== "object" || error === null) return fallback;
+  const message = Reflect.get(error, "message");
+  return typeof message === "string" && message ? message : fallback;
+}
+
+function playerId(player: ChainPlayer | null | undefined) {
   return player?.id ?? null;
 }
 
-function clonePhaseIntent(intent) {
+function clonePhaseIntent(
+  intent: ChainPhaseIntent | null | undefined,
+): ChainPhaseIntent | null {
   if (!intent) return null;
   return {
     fromPhase: intent.fromPhase ?? null,
@@ -38,7 +57,10 @@ function clonePhaseIntent(intent) {
   };
 }
 
-function createState(chainSystem, overrides = {}) {
+function createState(
+  chainSystem: FullChainHost,
+  overrides: FastEffectStateOverrides = {},
+): FastEffectState {
   const turnPlayer =
     overrides.turnPlayer || chainSystem.getCurrentTurnPlayer?.() || null;
   return {
@@ -55,7 +77,7 @@ function createState(chainSystem, overrides = {}) {
   };
 }
 
-export function getFastEffectState() {
+export function getFastEffectState(this: FullChainHost): FastEffectState {
   const state = this.fastEffectState || createState(this);
   return {
     ...state,
@@ -63,7 +85,11 @@ export function getFastEffectState() {
   };
 }
 
-export function transitionFastEffectState(state, details = {}) {
+export function transitionFastEffectState(
+  this: FullChainHost,
+  state: FastEffectStateName,
+  details: FastEffectTransitionDetails = {},
+): FastEffectState {
   const previous = this.fastEffectState || createState(this);
   const turnPlayer = details.turnPlayer || this.getCurrentTurnPlayer?.() || null;
   const next = createState(this, {
@@ -103,14 +129,17 @@ export function transitionFastEffectState(state, details = {}) {
   return this.getFastEffectState();
 }
 
-export function resolveTimingPlayer(id) {
+export function resolveTimingPlayer(
+  this: FullChainHost,
+  id: ChainPlayer["id"] | null,
+): ChainPlayer | null {
   if (id == null) return null;
   if (this.game?.player?.id === id) return this.game.player;
   if (this.game?.bot?.id === id) return this.game.bot;
   return null;
 }
 
-export function isOpenGameState() {
+export function isOpenGameState(this: FullChainHost): boolean {
   return (
     (this.fastEffectState?.state || FAST_EFFECT_STATES.OPEN) ===
       FAST_EFFECT_STATES.OPEN &&
@@ -122,7 +151,10 @@ export function isOpenGameState() {
   );
 }
 
-export function resetFastEffectTiming({ notify = false } = {}) {
+export function resetFastEffectTiming(
+  this: FullChainHost,
+  { notify = false }: { notify?: boolean } = {},
+): FastEffectState {
   this.activeTimingWindowId = null;
   this.timingDepth = 0;
   this.fastEffectState = createState(this, {
@@ -139,10 +171,11 @@ export function resetFastEffectTiming({ notify = false } = {}) {
 }
 
 export function recordFastEffectPriority(
-  player,
-  decision,
-  details = {},
-) {
+  this: FullChainHost,
+  player: ChainPlayer,
+  decision: FastEffectPriorityDecision,
+  details: FastEffectPriorityDetails = {},
+): void {
   const consecutivePasses = Number(details.consecutivePasses || 0);
   this.transitionFastEffectState(FAST_EFFECT_STATES.FAST_EFFECT_WINDOW, {
     priorityPlayer: player,
@@ -161,7 +194,7 @@ export function recordFastEffectPriority(
   });
 }
 
-function nextTimingWindow(chainSystem) {
+function nextTimingWindow(chainSystem: FullChainHost): number {
   if (!Number.isInteger(chainSystem.nextTimingWindowId)) {
     chainSystem.nextTimingWindowId = 1;
   }
@@ -170,19 +203,26 @@ function nextTimingWindow(chainSystem) {
   return id;
 }
 
-function normalizePreparedActivations(input = {}) {
+function normalizePreparedActivations(
+  input: FastEffectTimingInput = {},
+): PreparedActivation[] {
   if (Array.isArray(input.preparedActivations)) {
     return input.preparedActivations.filter(Boolean);
   }
   return input.preparedActivation ? [input.preparedActivation] : [];
 }
 
-function lastPreparedController(preparedActivations) {
+function lastPreparedController(
+  preparedActivations: readonly PreparedActivation[],
+): ChainPlayer | null {
   const last = preparedActivations[preparedActivations.length - 1] || null;
   return last?.controller || null;
 }
 
-function timingResult(chainSystem, overrides = {}) {
+function timingResult(
+  chainSystem: FullChainHost,
+  overrides: ChainOperationResult = {},
+): ChainOperationResult {
   const resolutionResult = overrides.resolutionResult || null;
   const ok =
     overrides.ok !== false && resolutionResult?.success !== false;
@@ -213,11 +253,14 @@ function timingResult(chainSystem, overrides = {}) {
  * events are flushed and a new post-Chain Fast Effect window starts with the
  * turn player. A manual phase intent is invalidated by any activation.
  */
-export async function runFastEffectTiming(input = {}) {
+export async function runFastEffectTiming(
+  this: FullChainHost,
+  input: FastEffectTimingInput = {},
+): Promise<ChainOperationResult> {
   const origin = input.origin || FAST_EFFECT_ORIGINS.ACTION_WITHOUT_CHAIN;
   const turnPlayer = input.turnPlayer || this.getCurrentTurnPlayer?.() || null;
   const actionPlayer = input.actionPlayer || input.context?.player || turnPlayer;
-  const context = {
+  const context: TimingContextDraft = {
     ...(input.context || {}),
     timingOrigin: origin,
     turnPlayer,
@@ -269,7 +312,7 @@ export async function runFastEffectTiming(input = {}) {
 
   this.timingDepth += 1;
   let chainBuilt = false;
-  let rootResolutionResult = null;
+  let rootResolutionResult: ChainOperationResult | null = null;
   let phaseTransitionInterrupted = false;
   const isPhaseIntent =
     origin === FAST_EFFECT_ORIGINS.PHASE_TRANSITION_INTENT;
@@ -336,7 +379,7 @@ export async function runFastEffectTiming(input = {}) {
 
     let nextPreparedActivations = preparedActivations;
     let nextOrigin = origin;
-    let firstPlayer = null;
+    let firstPlayer: ChainPlayer | null = null;
     let initialPasses = isPhaseIntent ? 1 : 0;
 
     if (isPhaseIntent) {
@@ -365,7 +408,7 @@ export async function runFastEffectTiming(input = {}) {
         phaseIntent,
       });
 
-      const windowContext = {
+      const windowContext: FastEffectContextInput = {
         ...context,
         type:
           nextOrigin === FAST_EFFECT_ORIGINS.POST_CHAIN
@@ -379,12 +422,13 @@ export async function runFastEffectTiming(input = {}) {
         timingWindowId,
         preparedActivations: nextPreparedActivations,
       };
-      const windowResult = await this.openChainWindow(windowContext, {
+      const windowOutcome = await this.openChainWindow(windowContext, {
         firstPlayer,
         secondPlayer: this.getOpponent?.(firstPlayer) || null,
         initialPasses,
         preparedActivations: nextPreparedActivations,
       });
+      const windowResult = windowOutcome === false ? null : windowOutcome;
 
       if (windowResult?.needsSelection) {
         return timingResult(this, {
@@ -560,7 +604,7 @@ export async function runFastEffectTiming(input = {}) {
       ok: false,
       chainBuilt,
       phaseTransitionInterrupted,
-      reason: error?.message || "fast_effect_timing_failed",
+      reason: thrownMessage(error, "fast_effect_timing_failed"),
     });
   } finally {
     this.timingDepth = Math.max(0, this.timingDepth - 1);

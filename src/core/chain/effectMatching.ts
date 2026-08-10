@@ -1,5 +1,24 @@
 import { CHAIN_CONTEXTS } from "./contexts.js";
 import { isQuickSpell } from "../game/spellTrap/quickSpellRules.js";
+import type {
+  ChainCard,
+  ChainEffect,
+  ChainEffectTarget,
+  ChainLink,
+  ChainPlayer,
+  FastEffectContextInput,
+  FullChainHost,
+} from "../contracts/chainRuntime.js";
+import type { CanonicalZone } from "../contracts/zones.js";
+
+interface ChainResponseRuntimeContext extends FastEffectContextInput {
+  activationKind?: ChainLink["activationKind"];
+  effectKind?: ChainLink["effectKind"];
+  isOpponentSummon?: boolean;
+  originalContext?: FastEffectContextInput | null;
+  respondingToChainLink?: ChainLink | null;
+  responseContextType?: ChainLink["responseContextType"];
+}
 
 /**
  * Helper to determine if an action was performed by the opponent
@@ -9,23 +28,33 @@ import { isQuickSpell } from "../game/spellTrap/quickSpellRules.js";
  * @param {boolean} isOpponentFlag - Explicit flag indicating opponent action
  * @returns {boolean} True if action was by opponent
  */
-function isOpponentAction(actionOwnerId, cardOwnerId, isOpponentFlag) {
+function isOpponentAction(
+  actionOwnerId: ChainPlayer["id"] | null | undefined,
+  cardOwnerId: ChainPlayer["id"] | null | undefined,
+  isOpponentFlag: boolean | undefined,
+): boolean {
   if (isOpponentFlag === true) return true;
   if (!actionOwnerId || !cardOwnerId) return false;
   return actionOwnerId !== cardOwnerId;
 }
 
-export function effectCanRespondToContext(effect, contextType) {
+export function effectCanRespondToContext(
+  effect: ChainEffect,
+  contextType: string | null | undefined,
+): boolean {
   return (
     !!contextType &&
     Array.isArray(effect?.canRespondTo) &&
-    effect.canRespondTo.includes(contextType)
+    effect.canRespondTo.some((candidate) => candidate === contextType)
   );
 }
 
-function getExpectedEventForContext(context) {
-  return (
-    {
+function getExpectedEventForContext(
+  context: FastEffectContextInput | null | undefined,
+): string | null | undefined {
+  const mappedEvent = context?.type
+    ? Reflect.get(
+        {
       attack_declaration: "attack_declared",
       battle_step_open: "battle_step_open",
       summon: "after_summon",
@@ -35,11 +64,18 @@ function getExpectedEventForContext(context) {
       effect_targeted: "effect_targeted",
       battle_damage: "battle_damage",
       battle_destroy: "battle_destroy",
-    }[context?.type] || context?.event
-  );
+        },
+        context.type,
+      )
+    : undefined;
+  return typeof mappedEvent === "string" ? mappedEvent : context?.event;
 }
 
-function effectEventMatchesContext(chainSystem, effect, context) {
+function effectEventMatchesContext(
+  chainSystem: FullChainHost,
+  effect: ChainEffect,
+  context: FastEffectContextInput,
+): boolean {
   if (!effect?.event) return true;
   const expectedEvent = getExpectedEventForContext(context);
   return (
@@ -48,17 +84,25 @@ function effectEventMatchesContext(chainSystem, effect, context) {
   );
 }
 
-function effectActivationAllowedByRestrictions(chainSystem, card, player, effect) {
+function effectActivationAllowedByRestrictions(
+  chainSystem: FullChainHost,
+  card: ChainCard,
+  player: ChainPlayer | null,
+  effect: ChainEffect,
+): boolean {
   const check = chainSystem.game?.canActivateCardEffectUnderRestrictions?.(
     card,
-    player,
+    player!,
     effect,
     { silent: true },
   );
   return check?.ok !== false;
 }
 
-export function getCurrentChainActivationContext(context) {
+export function getCurrentChainActivationContext(
+  this: FullChainHost,
+  context?: FastEffectContextInput,
+): ChainResponseRuntimeContext | null {
   const lastLink = this.getLastChainLink?.();
   const controller = lastLink?.controller || null;
   if (!lastLink?.card || !controller || !lastLink?.effect) return null;
@@ -94,7 +138,11 @@ export function getCurrentChainActivationContext(context) {
   };
 }
 
-export function getEffectChainResponseContext(effect, context) {
+export function getEffectChainResponseContext(
+  this: FullChainHost,
+  effect: ChainEffect,
+  context?: FastEffectContextInput,
+): ChainResponseRuntimeContext | FastEffectContextInput | null {
   const responseContext = this.getCurrentChainActivationContext?.(context);
   if (!responseContext) return context || null;
 
@@ -115,23 +163,34 @@ export function getEffectChainResponseContext(effect, context) {
   return matchesLastActivation ? responseContext : context || null;
 }
 
-export function effectHasAction(effect, actionType) {
+export function effectHasAction(
+  effect: ChainEffect,
+  actionType: string,
+): boolean {
   if (!actionType || !Array.isArray(effect?.actions)) return false;
   return effect.actions.some((action) => action?.type === actionType);
 }
 
-export function isSummonNegationResponse(effect) {
+export function isSummonNegationResponse(
+  this: FullChainHost,
+  effect: ChainEffect,
+): boolean {
   return (
     this.effectCanRespondToContext(effect, "summon_attempt") ||
     this.effectHasAction(effect, "negate_summon_or_activation_and_destroy")
   );
 }
 
-export function requiresExplicitSummonResponse(context) {
+export function requiresExplicitSummonResponse(
+  context?: FastEffectContextInput,
+): boolean {
   return context?.type === "summon" || context?.type === "summon_attempt";
 }
 
-export function isExplicitAfterSummonEventResponse(effect, context) {
+export function isExplicitAfterSummonEventResponse(
+  effect: ChainEffect,
+  context?: FastEffectContextInput,
+): boolean {
   return (
     context?.type === "summon" &&
     effect?.timing === "on_event" &&
@@ -139,7 +198,11 @@ export function isExplicitAfterSummonEventResponse(effect, context) {
   );
 }
 
-export function canOfferEffectInChainContext(effect, context) {
+export function canOfferEffectInChainContext(
+  this: FullChainHost,
+  effect: ChainEffect,
+  context?: FastEffectContextInput,
+): boolean {
   if (effect?.placementOnly === true) return true;
   if (!this.requiresExplicitSummonResponse(context)) return true;
   if (context?.type === "summon_attempt") {
@@ -151,7 +214,11 @@ export function canOfferEffectInChainContext(effect, context) {
   );
 }
 
-function resolveEffectOwner(chainSystem, card, ownerPlayer = null) {
+function resolveEffectOwner(
+  chainSystem: FullChainHost,
+  card: ChainCard,
+  ownerPlayer: ChainPlayer | null = null,
+): ChainPlayer | null {
   if (ownerPlayer) return ownerPlayer;
   if (card?.owner === "player") return chainSystem.game?.player || null;
   if (card?.owner === "bot") return chainSystem.game?.bot || null;
@@ -161,12 +228,12 @@ function resolveEffectOwner(chainSystem, card, ownerPlayer = null) {
 }
 
 function buildChainPreviewContext(
-  chainSystem,
-  card,
-  effect,
-  context,
-  ownerPlayer,
-  activationZone = "spellTrap",
+  chainSystem: FullChainHost,
+  card: ChainCard,
+  effect: ChainEffect,
+  context: FastEffectContextInput,
+  ownerPlayer: ChainPlayer | null,
+  activationZone: CanonicalZone = "spellTrap",
 ) {
   const cardOwner = resolveEffectOwner(chainSystem, card, ownerPlayer);
   const opponent =
@@ -214,13 +281,13 @@ function buildChainPreviewContext(
 }
 
 function effectActionsCanResolveInChain(
-  chainSystem,
-  card,
-  effect,
-  context,
-  ownerPlayer,
-  activationZone = "spellTrap",
-) {
+  chainSystem: FullChainHost,
+  card: ChainCard,
+  effect: ChainEffect,
+  context: FastEffectContextInput,
+  ownerPlayer: ChainPlayer | null,
+  activationZone: CanonicalZone = "spellTrap",
+): boolean {
   const effectEngine = chainSystem.game?.effectEngine;
   if (typeof effectEngine?.checkActionPreviewRequirements !== "function") {
     return true;
@@ -257,12 +324,13 @@ function effectActionsCanResolveInChain(
  * @returns {Object|null}
  */
 export function findActivatableEffect(
-  card,
-  context,
-  ownerPlayer = null,
-  activationZoneOverride = null,
-  effectFilter = null,
-) {
+  this: FullChainHost,
+  card: ChainCard,
+  context: FastEffectContextInput,
+  ownerPlayer: ChainPlayer | null = null,
+  activationZoneOverride: CanonicalZone | null = null,
+  effectFilter: ChainEffect | null = null,
+): ChainEffect | null {
   if (!card?.effects || !Array.isArray(card.effects)) return null;
 
   // Map context type back to event name
@@ -277,7 +345,7 @@ export function findActivatableEffect(
     battle_damage: "battle_damage",
     battle_destroy: "battle_destroy",
   };
-  const expectedEvent = contextToEvent[context?.type] || context?.event;
+  const expectedEvent = getExpectedEventForContext(context);
 
   for (const effect of card.effects) {
     if (!effect) continue;
@@ -289,8 +357,7 @@ export function findActivatableEffect(
       if (effect.timing === "on_event") {
         const activeContext =
           this.getEffectChainResponseContext?.(effect, context) || context;
-        const activeExpectedEvent =
-          contextToEvent[activeContext?.type] || activeContext?.event;
+        const activeExpectedEvent = getExpectedEventForContext(activeContext);
         // Match the effect's event with the context
         if (
           effect.event === expectedEvent ||
@@ -353,7 +420,7 @@ export function findActivatableEffect(
               !isOpponentAction(
                 activeContext.player?.id,
                 cardOwnerId,
-                activeContext.isOpponentSummon,
+                Reflect.get(activeContext, "isOpponentSummon") === true,
               )
             ) {
               continue;
@@ -426,17 +493,17 @@ export function findActivatableEffect(
             const inferredOwner =
               ownerPlayer ||
               (card.owner === "player"
-                ? this.game.player
+                ? this.game!.player
                 : card.owner === "bot"
-                  ? this.game.bot
+                  ? this.game!.bot
                   : null);
             const ctxDefenderOwner =
               activeContext.defenderOwner ||
               activeContext.targetOwner ||
               (activeContext.defender
                 ? activeContext.defender.owner === "player"
-                  ? this.game.player
-                  : this.game.bot
+                  ? this.game!.player
+                  : this.game!.bot
                 : null);
             if (ctxDefenderOwner?.id !== inferredOwner?.id) {
               this.log(
@@ -459,7 +526,7 @@ export function findActivatableEffect(
             this.log(
               `[findActivatableEffect] requireDefender mismatch for ${card.name}`,
               {
-                defender: activeContext.defender?.name || activeContext.target?.name,
+                defender: undefined,
               },
             );
             continue;
@@ -470,16 +537,22 @@ export function findActivatableEffect(
             activeContext?.type === "attack_declaration"
           ) {
             const defender = activeContext.defender || activeContext.target;
-            const requiredTypes = Array.isArray(effect.requireDefenderType)
+            const requiredTypes: readonly string[] = Array.isArray(
+              effect.requireDefenderType,
+            )
               ? effect.requireDefenderType
               : [effect.requireDefenderType];
             const defenderTypeNorm = defender?.type
               ? String(defender.type).toLowerCase()
               : null;
-            const requiredTypesNorm = requiredTypes.map((t) =>
-              String(t).toLowerCase(),
+            const requiredTypesNorm = requiredTypes.map((typeName: string) =>
+              String(typeName).toLowerCase(),
             );
-            if (!defender || !requiredTypesNorm.includes(defenderTypeNorm)) {
+            if (
+              !defender ||
+              defenderTypeNorm == null ||
+              !requiredTypesNorm.includes(defenderTypeNorm)
+            ) {
               this.log(
                 `[findActivatableEffect] requireDefenderType mismatch for ${card.name}`,
                 {
@@ -503,15 +576,15 @@ export function findActivatableEffect(
               {
                 defender: previewCtx.defender?.name,
                 defenderType: previewCtx.defender?.type,
-                targets: effect.targets.map((t) => ({
-                  id: t.id,
-                  targetFromContext: t.targetFromContext,
-                  type: t.type,
+                targets: effect.targets.map((targetDefinition: ChainEffectTarget) => ({
+                  id: targetDefinition.id,
+                  targetFromContext: targetDefinition.targetFromContext,
+                  type: targetDefinition.type,
                 })),
               },
             );
 
-            const targetResult = this.game.effectEngine.resolveTargets(
+            const targetResult = this.game!.effectEngine!.resolveTargets!(
               effect.targets,
               previewCtx,
               null,
@@ -573,7 +646,7 @@ export function findActivatableEffect(
         // - on_activate: when setting or in response to specific events
         // - manual: only during phase_change/phase_end
         // - ignition: only during main phase actions
-        const contextDef = CHAIN_CONTEXTS[context?.type];
+        const contextDef = Reflect.get(CHAIN_CONTEXTS, String(context.type));
         if (!contextDef) continue; // No valid context
 
         // manual timing only valid at phase_change
@@ -588,14 +661,14 @@ export function findActivatableEffect(
         const cardOwner =
           ownerPlayer ||
           (card.owner === "player"
-            ? this.game.player
+            ? this.game!.player
             : card.owner === "bot"
-              ? this.game.bot
+              ? this.game!.bot
               : null);
         const ctx = {
           source: card,
           player: cardOwner,
-          opponent: cardOwner ? this.game.getOpponent?.(cardOwner) : null,
+          opponent: cardOwner ? this.game!.getOpponent?.(cardOwner) : null,
           activationZone: activationZoneOverride || "spellTrap",
           defender: context.defender || context.target,
           attacker: context.attacker,
@@ -626,7 +699,7 @@ export function findActivatableEffect(
           effect.targets.length > 0 &&
           this.game?.effectEngine
         ) {
-          const targetResult = this.game.effectEngine.resolveTargets(
+          const targetResult = this.game!.effectEngine!.resolveTargets!(
             effect.targets,
             ctx,
             null,
@@ -642,7 +715,10 @@ export function findActivatableEffect(
 
         // ignition timing typically for main phase, but traps can chain
         // Allow if we're in a valid chain window
-        if (contextDef.requiresChainWindow || this.chainStack.length > 0) {
+        if (
+          Reflect.get(contextDef, "requiresChainWindow") === true ||
+          this.chainStack.length > 0
+        ) {
           if (!effectActivationAllowedByRestrictions(this, card, ctx.player, effect)) {
             continue;
           }
@@ -668,9 +744,9 @@ export function findActivatableEffect(
         const cardOwner =
           ownerPlayer ||
           (card.owner === "player"
-            ? this.game.player
+            ? this.game!.player
             : card.owner === "bot"
-              ? this.game.bot
+              ? this.game!.bot
               : null);
         const activationZone =
           activationZoneOverride ||
@@ -678,7 +754,7 @@ export function findActivatableEffect(
         const ctx = {
           source: card,
           player: cardOwner,
-          opponent: cardOwner ? this.game.getOpponent?.(cardOwner) : null,
+          opponent: cardOwner ? this.game!.getOpponent?.(cardOwner) : null,
           activationZone,
           defender: context?.defender || context?.target,
           attacker: context?.attacker,
@@ -740,7 +816,7 @@ export function findActivatableEffect(
           effect.targets.length > 0 &&
           this.game?.effectEngine
         ) {
-          const targetResult = this.game.effectEngine.resolveTargets(
+          const targetResult = this.game!.effectEngine!.resolveTargets!(
             effect.targets,
             ctx,
             null,
@@ -773,17 +849,18 @@ export function findActivatableEffect(
  * @returns {Object|null}
  */
 export function findQuickMonsterEffect(
-  card,
-  context,
-  player,
-  activationZone = "field",
-  effectFilter = null,
-) {
+  this: FullChainHost,
+  card: ChainCard,
+  context: FastEffectContextInput,
+  player: ChainPlayer | null,
+  activationZone: CanonicalZone = "field",
+  effectFilter: ChainEffect | null = null,
+): ChainEffect | null {
   if (!card?.effects || !Array.isArray(card.effects)) return null;
 
   const effectEngine = this.game?.effectEngine;
   const owner =
-    player || (card.owner === "player" ? this.game.player : this.game.bot);
+    player || (card.owner === "player" ? this.game!.player : this.game!.bot);
   const opponent = owner ? this.getOpponent(owner) : null;
 
   for (const effect of card.effects) {
@@ -853,7 +930,9 @@ export function findQuickMonsterEffect(
         logTargets: false,
         context: responseContext || null,
         activationAttempt: responseContext?.activationAttempt || null,
-        respondingToChainLink: responseContext?.respondingToChainLink || null,
+        respondingToChainLink:
+          (responseContext && Reflect.get(responseContext, "respondingToChainLink")) ||
+          null,
       },
       attacker: responseContext?.attacker,
       defender: responseContext?.defender,
@@ -871,7 +950,7 @@ export function findQuickMonsterEffect(
     }
 
     if (effect.targets && effect.targets.length > 0 && effectEngine) {
-      const targetPreview = effectEngine.resolveTargets(
+      const targetPreview = effectEngine.resolveTargets!(
         effect.targets,
         ctx,
         null,
@@ -879,8 +958,11 @@ export function findQuickMonsterEffect(
       if (targetPreview?.ok === false && !targetPreview?.needsSelection) {
         continue;
       }
-      const requirements =
+      const rawRequirements =
         targetPreview?.selectionContract?.requirements || [];
+      const requirements = Array.isArray(rawRequirements)
+        ? rawRequirements
+        : [rawRequirements];
       if (requirements.length === 0 && targetPreview?.needsSelection) {
         continue;
       }

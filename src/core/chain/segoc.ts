@@ -7,20 +7,35 @@
  */
 
 import { isAI } from "../Player.js";
+import { SEGOC_GROUPS } from "../contracts/chain.js";
 import {
   TRIGGER_REQUIREMENTS,
   TRIGGER_TIMINGS,
 } from "../contracts/effects.js";
+import type {
+  ChainCard,
+  ChainEventPayload,
+  ChainOperationResult,
+  ChainPlayer,
+  ChainTriggerCandidate,
+  ChainTriggerEntry,
+  ChainTriggerGroups,
+  ChainTriggerInputPackage,
+  ChainTriggerOccurrence,
+  ChainTriggerOccurrenceOptions,
+  ChainTriggerOpportunity,
+  ChainTriggerPackage,
+  ChainTriggerState,
+  FastEffectContextInput,
+  FullChainHost,
+  PreparedActivation,
+  PreparedActivationContext,
+  SerializedTriggerCandidate,
+} from "../contracts/chainRuntime.js";
+import type { SegocGroup } from "../contracts/chain.js";
 import { getCardDisplayName, getUIText } from "../i18n.js";
 
-export { TRIGGER_REQUIREMENTS, TRIGGER_TIMINGS };
-
-export const SEGOC_GROUPS = Object.freeze({
-  TURN_MANDATORY: "turn_player_mandatory",
-  OPPONENT_MANDATORY: "opponent_mandatory",
-  TURN_OPTIONAL: "turn_player_optional",
-  OPPONENT_OPTIONAL: "opponent_optional",
-});
+export { SEGOC_GROUPS, TRIGGER_REQUIREMENTS, TRIGGER_TIMINGS };
 
 const SEGOC_GROUP_ORDER = Object.freeze([
   SEGOC_GROUPS.TURN_MANDATORY,
@@ -32,23 +47,88 @@ const SEGOC_GROUP_ORDER = Object.freeze([
 const VALID_REQUIREMENTS = new Set(Object.values(TRIGGER_REQUIREMENTS));
 const VALID_TIMINGS = new Set(Object.values(TRIGGER_TIMINGS));
 
-function numericId(value) {
+type CounterField =
+  | "nextAtomicEventGroupId"
+  | "nextTriggerOccurrenceId"
+  | "nextTriggerOpportunityId"
+  | "nextTriggerCandidateId";
+
+type CompactSerializable =
+  | string
+  | number
+  | boolean
+  | null
+  | CompactSerializable[]
+  | CompactSerializableObject;
+
+interface CompactSerializableObject {
+  [key: string]: CompactSerializable;
+}
+
+interface SerializedTriggerOccurrence {
+  occurrenceId: number | null;
+  atomicGroupId: number | null;
+  eventName: string | null;
+  sequence: number | null;
+  turnCounter: number | null;
+  phase: string | null;
+  chainId: number | string | null;
+  resolvingLinkId: number | string | null;
+  snapshot: CompactSerializable | null | undefined;
+}
+
+type TriggerOrderResult = ChainOperationResult & {
+  candidates?: ChainTriggerCandidate[];
+};
+
+type TriggerPreparationResult = ChainOperationResult & {
+  preparedActivations?: PreparedActivation[];
+  selectedCandidates?: ChainTriggerCandidate[];
+};
+
+type QueueTriggerResult = ChainOperationResult & {
+  eventName?: string;
+};
+
+interface ResolveTriggerOptions {
+  actionPlayer?: ChainPlayer | null;
+  context?: FastEffectContextInput;
+  deferPostChainWindow?: boolean;
+}
+
+function thrownMessage(error: unknown, fallback: string): string {
+  if (typeof error !== "object" || error === null) return fallback;
+  const message = Reflect.get(error, "message");
+  return typeof message === "string" && message ? message : fallback;
+}
+
+function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
+  return (
+    (typeof value === "object" || typeof value === "function") &&
+    value !== null &&
+    typeof Reflect.get(value, "then") === "function"
+  );
+}
+
+function numericId(value: unknown): number | null {
   const id = Number(value);
   return Number.isInteger(id) && id > 0 ? id : null;
 }
 
-function nextId(chainSystem, field) {
+function nextId(chainSystem: FullChainHost, field: CounterField): number {
   if (!Number.isInteger(chainSystem[field]) || chainSystem[field] < 1) {
     chainSystem[field] = 1;
   }
   return chainSystem[field]++;
 }
 
-function playerId(player) {
+function playerId(player: ChainPlayer | null | undefined): string | null {
   return player?.id ?? null;
 }
 
-function cardInstanceId(card) {
+function cardInstanceId(
+  card: ChainCard | null | undefined,
+): number | string | null {
   return (
     card?.instanceId ??
     card?._instanceId ??
@@ -60,7 +140,11 @@ function cardInstanceId(card) {
   );
 }
 
-function compactSerializable(value, seen = new WeakSet(), depth = 0) {
+function compactSerializable(
+  value: unknown,
+  seen: WeakSet<object> = new WeakSet(),
+  depth = 0,
+): CompactSerializable | undefined {
   if (value == null || typeof value === "string" || typeof value === "boolean") {
     return value;
   }
@@ -77,29 +161,43 @@ function compactSerializable(value, seen = new WeakSet(), depth = 0) {
   if (typeof value !== "object") return String(value);
   if (seen.has(value)) return undefined;
 
+  const id = Reflect.get(value, "id");
+  const controllerType = Reflect.get(value, "controllerType");
+  const lp = Reflect.get(value, "lp");
+  const hand = Reflect.get(value, "hand");
   const looksLikePlayer =
-    typeof value.id === "string" &&
-    (value.controllerType != null || value.lp != null || Array.isArray(value.hand));
+    typeof id === "string" &&
+    (controllerType != null || lp != null || Array.isArray(hand));
   if (looksLikePlayer) {
-    return { id: value.id, name: value.name || null };
+    const name = Reflect.get(value, "name");
+    return { id, name: typeof name === "string" ? name : null };
   }
+  const cardKind = Reflect.get(value, "cardKind");
+  const instanceId = Reflect.get(value, "instanceId");
+  const name = Reflect.get(value, "name");
+  const owner = Reflect.get(value, "owner");
   const looksLikeCard =
-    value.cardKind != null ||
-    value.instanceId != null ||
-    (value.name != null && value.owner != null);
+    cardKind != null || instanceId != null || (name != null && owner != null);
   if (looksLikeCard) {
+    const controller = Reflect.get(value, "controller");
+    const locationVersion = Reflect.get(value, "locationVersion");
     return {
-      id: value.id ?? null,
-      instanceId: cardInstanceId(value),
-      name: value.name || null,
-      owner: value.owner ?? null,
-      controller: value.controller ?? value.owner ?? null,
-      locationVersion: Number(value.locationVersion || 0),
+      id: typeof id === "number" ? id : null,
+      instanceId: cardInstanceId(value as ChainCard),
+      name: typeof name === "string" ? name : null,
+      owner: typeof owner === "string" ? owner : null,
+      controller:
+        typeof controller === "string"
+          ? controller
+          : typeof owner === "string"
+            ? owner
+            : null,
+      locationVersion: Number(locationVersion || 0),
     };
   }
 
   seen.add(value);
-  const output = {};
+  const output: CompactSerializableObject = {};
   for (const [key, entry] of Object.entries(value)) {
     const compact = compactSerializable(entry, seen, depth + 1);
     if (compact !== undefined) output[key] = compact;
@@ -108,7 +206,9 @@ function compactSerializable(value, seen = new WeakSet(), depth = 0) {
   return output;
 }
 
-function serializeOccurrence(occurrence) {
+function serializeOccurrence(
+  occurrence: ChainTriggerOccurrence | null | undefined,
+): SerializedTriggerOccurrence | null {
   if (!occurrence) return null;
   return {
     occurrenceId: occurrence.occurrenceId ?? null,
@@ -119,11 +219,15 @@ function serializeOccurrence(occurrence) {
     phase: occurrence.phase || null,
     chainId: occurrence.chainId ?? null,
     resolvingLinkId: occurrence.resolvingLinkId ?? null,
-    snapshot: occurrence.snapshot ? compactSerializable(occurrence.snapshot) : null,
+    snapshot: occurrence.snapshot
+      ? compactSerializable(occurrence.snapshot)
+      : null,
   };
 }
 
-function serializeCandidate(candidate) {
+function serializeCandidate(
+  candidate: ChainTriggerCandidate | null | undefined,
+): SerializedTriggerCandidate | null {
   if (!candidate) return null;
   return {
     candidateId: candidate.candidateId ?? null,
@@ -143,16 +247,29 @@ function serializeCandidate(candidate) {
   };
 }
 
-function serializeGroups(groups = {}) {
-  return Object.fromEntries(
-    SEGOC_GROUP_ORDER.map((group) => [
-      group,
-      (groups[group] || []).map(serializeCandidate).filter(Boolean),
-    ]),
-  );
+function serializeGroups(
+  groups: Partial<ChainTriggerGroups> = {},
+): ChainTriggerState["groups"] {
+  return {
+    turn_player_mandatory: (groups.turn_player_mandatory || [])
+      .map(serializeCandidate)
+      .filter(Boolean),
+    opponent_mandatory: (groups.opponent_mandatory || [])
+      .map(serializeCandidate)
+      .filter(Boolean),
+    turn_player_optional: (groups.turn_player_optional || [])
+      .map(serializeCandidate)
+      .filter(Boolean),
+    opponent_optional: (groups.opponent_optional || [])
+      .map(serializeCandidate)
+      .filter(Boolean),
+  };
 }
 
-export function allocateAtomicEventGroupId(providedId = null) {
+export function allocateAtomicEventGroupId(
+  this: FullChainHost,
+  providedId: unknown = null,
+): number {
   const provided = numericId(providedId);
   if (provided != null) {
     if (!Number.isInteger(this.nextAtomicEventGroupId)) {
@@ -167,7 +284,12 @@ export function allocateAtomicEventGroupId(providedId = null) {
   return nextId(this, "nextAtomicEventGroupId");
 }
 
-export function createTriggerOccurrence(eventName, payload = {}, options = {}) {
+export function createTriggerOccurrence(
+  this: FullChainHost,
+  eventName: string | null | undefined,
+  payload: ChainEventPayload = {},
+  options: ChainTriggerOccurrenceOptions = {},
+): ChainTriggerOccurrence | null {
   if (!eventName) return null;
   const atomicGroupId = this.allocateAtomicEventGroupId(
     options.atomicGroupId ?? payload?.atomicGroupId ?? null,
@@ -182,7 +304,7 @@ export function createTriggerOccurrence(eventName, payload = {}, options = {}) {
     chainId: this.activeChainId ?? null,
     resolvingLinkId: this.currentResolvingLink?.linkId ?? null,
     payload: payload || {},
-    snapshot: compactSerializable(payload || {}),
+    snapshot: compactSerializable(payload || {}) as object,
     entries: Array.isArray(options.entries) ? options.entries : null,
     entriesProvided: options.entriesProvided === true,
     orderRule: options.orderRule || null,
@@ -193,7 +315,10 @@ export function createTriggerOccurrence(eventName, payload = {}, options = {}) {
   return occurrence;
 }
 
-export function queueTriggerOccurrence(occurrence) {
+export function queueTriggerOccurrence(
+  this: FullChainHost,
+  occurrence: ChainTriggerOccurrence | null | undefined,
+): QueueTriggerResult {
   if (!occurrence?.eventName) {
     return { ok: false, deferred: false, reason: "missing_event" };
   }
@@ -214,20 +339,28 @@ export function queueTriggerOccurrence(occurrence) {
   };
 }
 
-export function buildTriggerOpportunity(occurrences = []) {
+export function buildTriggerOpportunity(
+  this: FullChainHost,
+  occurrences: ChainTriggerOccurrence[] = [],
+): ChainTriggerOpportunity | null {
   const orderedOccurrences = (occurrences || [])
     .filter((entry) => entry?.eventName)
     .slice()
     .sort((a, b) => a.occurrenceId - b.occurrenceId);
   if (orderedOccurrences.length === 0) return null;
-  const opportunity = {
+  const opportunity: ChainTriggerOpportunity = {
     opportunityId: nextId(this, "nextTriggerOpportunityId"),
     occurrences: orderedOccurrences,
     occurrenceIds: orderedOccurrences.map((entry) => entry.occurrenceId),
     lastRelevantAtomicGroupId:
       orderedOccurrences[orderedOccurrences.length - 1]?.atomicGroupId ?? null,
     turnPlayer: this.getCurrentTurnPlayer?.() || null,
-    groups: Object.fromEntries(SEGOC_GROUP_ORDER.map((group) => [group, []])),
+    groups: {
+      turn_player_mandatory: [],
+      opponent_mandatory: [],
+      turn_player_optional: [],
+      opponent_optional: [],
+    },
     candidates: [],
     selectedCandidates: [],
     declinedCandidates: [],
@@ -244,7 +377,10 @@ export function buildTriggerOpportunity(occurrences = []) {
   return opportunity;
 }
 
-function candidateGroup(candidate, turnPlayer) {
+function candidateGroup(
+  candidate: ChainTriggerCandidate,
+  turnPlayer: ChainPlayer | null,
+): SegocGroup {
   const isTurnPlayer = candidate.controller === turnPlayer;
   const mandatory =
     candidate.triggerRequirement === TRIGGER_REQUIREMENTS.MANDATORY;
@@ -254,7 +390,7 @@ function candidateGroup(candidate, turnPlayer) {
   return SEGOC_GROUPS.OPPONENT_OPTIONAL;
 }
 
-function sourceSnapshot(entry) {
+function sourceSnapshot(entry: ChainTriggerEntry) {
   return (
     entry?.sourceAtTrigger ||
     entry?.config?.activationContext?.sourceAtTrigger ||
@@ -263,15 +399,22 @@ function sourceSnapshot(entry) {
   );
 }
 
-function stableCardKey(card) {
+function stableCardKey(card: ChainCard): string {
   return [cardInstanceId(card), card?.owner ?? null, card?.name ?? null].join(":");
 }
 
-function currentSourceZone(chainSystem, candidate) {
+function currentSourceZone(
+  chainSystem: FullChainHost,
+  candidate: ChainTriggerCandidate,
+) {
   return chainSystem.determineCardZone?.(candidate.card, candidate.controller) || null;
 }
 
-export function revalidateTriggerCandidate(candidate, opportunity) {
+export function revalidateTriggerCandidate(
+  this: FullChainHost,
+  candidate: ChainTriggerCandidate,
+  opportunity: ChainTriggerOpportunity,
+): { ok: boolean; reason?: string } {
   if (!candidate?.card || !candidate?.effect || !candidate?.controller) {
     return { ok: false, reason: "invalid_trigger_candidate" };
   }
@@ -325,7 +468,10 @@ export function revalidateTriggerCandidate(candidate, opportunity) {
   return { ok: true };
 }
 
-export async function collectTriggerCandidates(opportunity) {
+export async function collectTriggerCandidates(
+  this: FullChainHost,
+  opportunity: ChainTriggerOpportunity,
+): Promise<ChainTriggerCandidate[]> {
   if (!opportunity) return [];
   const candidates = [];
   const dedupe = new Set();
@@ -350,10 +496,16 @@ export async function collectTriggerCandidates(opportunity) {
       : Array.isArray(triggerPackage?.entries)
         ? triggerPackage.entries
         : [];
-    occurrence.orderRule = triggerPackage?.orderRule || occurrence.orderRule || null;
+    const triggerMetadata: ChainTriggerPackage | null = Array.isArray(
+      triggerPackage,
+    )
+      ? null
+      : triggerPackage;
+    occurrence.orderRule =
+      triggerMetadata?.orderRule || occurrence.orderRule || null;
     occurrence.onComplete =
-      typeof triggerPackage?.onComplete === "function"
-        ? triggerPackage.onComplete
+      typeof triggerMetadata?.onComplete === "function"
+        ? triggerMetadata.onComplete
         : occurrence.onComplete;
 
     for (const [effectOrder, entry] of entries.entries()) {
@@ -391,11 +543,11 @@ export async function collectTriggerCandidates(opportunity) {
         summary: entry?.summary || `${controller.id}:${card.name}:${effect.id}`,
         eligibilityStatus: "pending",
         rejectionReason: null,
-      };
+      } as ChainTriggerCandidate;
       const eligibility = this.revalidateTriggerCandidate(candidate, opportunity);
       if (!eligibility.ok) {
         candidate.eligibilityStatus = "rejected";
-        candidate.rejectionReason = eligibility.reason;
+        candidate.rejectionReason = eligibility.reason!;
         opportunity.rejectedCandidates.push(candidate);
         this.game?.notify?.("trigger_candidate_rejected", {
           opportunityId: opportunity.opportunityId,
@@ -404,16 +556,19 @@ export async function collectTriggerCandidates(opportunity) {
         continue;
       }
       candidate.eligibilityStatus = "eligible";
-      candidate.segocGroup = candidateGroup(candidate, opportunity.turnPlayer);
+      const segocGroup = candidateGroup(candidate, opportunity.turnPlayer);
+      candidate.segocGroup = segocGroup;
       candidates.push(candidate);
-      opportunity.groups[candidate.segocGroup].push(candidate);
+      opportunity.groups[segocGroup].push(candidate);
     }
   }
   opportunity.candidates = candidates;
   return candidates;
 }
 
-function stableCandidateOrder(candidates) {
+function stableCandidateOrder(
+  candidates: ChainTriggerCandidate[],
+): ChainTriggerCandidate[] {
   return candidates.slice().sort((a, b) =>
     a.collectorOrder - b.collectorOrder ||
     a.occurrenceId - b.occurrenceId ||
@@ -423,19 +578,34 @@ function stableCandidateOrder(candidates) {
   );
 }
 
-function normalizeHumanDecision(decision, candidates, optional) {
-  const raw = Array.isArray(decision)
+function normalizeHumanDecision(
+  decision: unknown,
+  candidates: ChainTriggerCandidate[],
+  optional: boolean,
+): ChainOperationResult & { candidates?: ChainTriggerCandidate[] } {
+  const orderedCandidateIds =
+    typeof decision === "object" && decision !== null
+      ? Reflect.get(decision, "orderedCandidateIds")
+      : undefined;
+  const decisionCandidates =
+    typeof decision === "object" && decision !== null
+      ? Reflect.get(decision, "candidates")
+      : undefined;
+  const raw: unknown[] = Array.isArray(decision)
     ? decision
-    : Array.isArray(decision?.orderedCandidateIds)
-      ? decision.orderedCandidateIds
-      : Array.isArray(decision?.candidates)
-        ? decision.candidates
+    : Array.isArray(orderedCandidateIds)
+      ? orderedCandidateIds
+      : Array.isArray(decisionCandidates)
+        ? decisionCandidates
         : [];
   const byId = new Map(candidates.map((candidate) => [candidate.candidateId, candidate]));
-  const selected = [];
-  const used = new Set();
+  const selected: ChainTriggerCandidate[] = [];
+  const used = new Set<number>();
   for (const entry of raw) {
-    const id = typeof entry === "object" ? entry?.candidateId : entry;
+    const id =
+      typeof entry === "object" && entry !== null
+        ? Reflect.get(entry, "candidateId")
+        : entry;
     const candidate = byId.get(Number(id));
     if (!candidate || used.has(candidate.candidateId)) continue;
     used.add(candidate.candidateId);
@@ -447,7 +617,12 @@ function normalizeHumanDecision(decision, candidates, optional) {
   return { ok: true, candidates: selected };
 }
 
-async function requestHumanOrder(chainSystem, candidates, group, optional) {
+async function requestHumanOrder(
+  chainSystem: FullChainHost,
+  candidates: ChainTriggerCandidate[],
+  group: SegocGroup | null,
+  optional: boolean,
+): Promise<TriggerOrderResult> {
   const ui = chainSystem.getUI?.();
   const showModal = ui?.showTriggerOrderModal;
   const showConfirm = ui?.showConfirmPrompt;
@@ -468,11 +643,11 @@ async function requestHumanOrder(chainSystem, candidates, group, optional) {
   }
 
   let callbackResolved = false;
-  let resolveCallback;
-  const callbackResult = new Promise((resolve) => {
+  let resolveCallback: (value: unknown) => void = () => {};
+  const callbackResult = new Promise<unknown>((resolve) => {
     resolveCallback = resolve;
   });
-  const finish = (value) => {
+  const finish = (value: unknown): void => {
     if (callbackResolved) return;
     callbackResolved = true;
     resolveCallback(value);
@@ -481,17 +656,17 @@ async function requestHumanOrder(chainSystem, candidates, group, optional) {
     group,
     optional,
     candidates,
-    onConfirm: (ordered) => finish(ordered),
+    onConfirm: (ordered: unknown) => finish(ordered),
     onCancel: () => finish(optional ? [] : null),
   };
   const resolveHuman = async () => {
     if (useSingleOptionalConfirmation) {
-      const candidate = candidates[0];
+      const candidate = candidates[0]!;
       const cardName =
         getCardDisplayName(candidate.card) ||
         candidate.card?.name ||
         getUIText("ui.prompts.thisCard");
-      const returned = showConfirm.call(
+      const returned = showConfirm!.call(
         ui,
         getUIText("ui.prompts.triggeredEffect", { cardName }),
         {
@@ -504,9 +679,9 @@ async function requestHumanOrder(chainSystem, candidates, group, optional) {
           cancelLabel: getUIText("ui.triggers.declineSingle"),
         },
       );
-      const normalizeConfirmation = (confirmed) =>
+      const normalizeConfirmation = (confirmed: unknown) =>
         confirmed ? [candidate.candidateId] : [];
-      if (returned && typeof returned.then === "function") {
+      if (isPromiseLike(returned)) {
         returned.then(
           (confirmed) => finish(normalizeConfirmation(confirmed)),
           () => finish([]),
@@ -517,8 +692,8 @@ async function requestHumanOrder(chainSystem, candidates, group, optional) {
       return callbackResult;
     }
 
-    const returned = showModal.call(ui, options);
-    if (returned && typeof returned.then === "function") {
+    const returned = showModal!.call(ui, options);
+    if (isPromiseLike(returned)) {
       returned.then(finish, () => finish(optional ? [] : null));
     } else if (returned !== undefined) {
       finish(returned);
@@ -540,7 +715,11 @@ async function requestHumanOrder(chainSystem, candidates, group, optional) {
   return normalizeHumanDecision(decision, candidates, optional);
 }
 
-export async function orderTriggerCandidates(candidates = [], options = {}) {
+export async function orderTriggerCandidates(
+  this: FullChainHost,
+  candidates: ChainTriggerCandidate[] = [],
+  options: { group?: SegocGroup | null; optional?: boolean } = {},
+): Promise<TriggerOrderResult> {
   const ordered = stableCandidateOrder(candidates);
   if (ordered.length === 0) return { ok: true, candidates: [] };
   const group = options.group || ordered[0]?.segocGroup || null;
@@ -566,13 +745,15 @@ export async function orderTriggerCandidates(candidates = [], options = {}) {
       : resolveAI();
     return {
       ok: true,
-      candidates: Array.isArray(aiOrdered) ? aiOrdered : ordered,
+      candidates: Array.isArray(aiOrdered)
+        ? (aiOrdered as ChainTriggerCandidate[])
+        : ordered,
     };
   }
   if (!optional && ordered.length === 1) {
     return { ok: true, candidates: ordered };
   }
-  this.activeTriggerOpportunity.selecting = true;
+  this.activeTriggerOpportunity!.selecting = true;
   try {
     return await requestHumanOrder(this, ordered, group, optional);
   } finally {
@@ -582,11 +763,14 @@ export async function orderTriggerCandidates(candidates = [], options = {}) {
   }
 }
 
-export async function prepareTriggerOpportunity(opportunity) {
+export async function prepareTriggerOpportunity(
+  this: FullChainHost,
+  opportunity: ChainTriggerOpportunity | null,
+): Promise<TriggerPreparationResult> {
   if (!opportunity) {
     return { ok: true, preparedActivations: [], selectedCandidates: [] };
   }
-  const selected = [];
+  const selected: ChainTriggerCandidate[] = [];
   for (const group of SEGOC_GROUP_ORDER) {
     const groupCandidates = opportunity.groups[group] || [];
     const optional = group.endsWith("_optional");
@@ -614,13 +798,13 @@ export async function prepareTriggerOpportunity(opportunity) {
     });
   }
 
-  const preparedActivations = [];
-  const preparedCandidates = [];
+  const preparedActivations: PreparedActivation[] = [];
+  const preparedCandidates: ChainTriggerCandidate[] = [];
   for (const [segocOrder, candidate] of selected.entries()) {
     const liveEligibility = this.revalidateTriggerCandidate(candidate, opportunity);
     if (!liveEligibility.ok) {
       candidate.eligibilityStatus = "rejected";
-      candidate.rejectionReason = liveEligibility.reason;
+      candidate.rejectionReason = liveEligibility.reason!;
       opportunity.rejectedCandidates.push(candidate);
       this.game?.notify?.("trigger_candidate_rejected", {
         opportunityId: opportunity.opportunityId,
@@ -639,7 +823,7 @@ export async function prepareTriggerOpportunity(opportunity) {
         triggerOpportunityId: opportunity.opportunityId,
         triggerOccurrenceId: candidate.occurrenceId,
         atomicGroupId: candidate.atomicGroupId,
-      },
+      } as PreparedActivationContext,
       prepareForExistingChain: true,
       allowDuringChainWindow: true,
       allowDuringResolving: true,
@@ -679,7 +863,7 @@ export async function prepareTriggerOpportunity(opportunity) {
       atomicGroupId: candidate.atomicGroupId,
       segocGroup: candidate.segocGroup,
       segocOrder: segocOrder + 1,
-    };
+    } as FastEffectContextInput;
     preparedActivations.push(prepared);
     preparedCandidates.push(candidate);
   }
@@ -687,7 +871,9 @@ export async function prepareTriggerOpportunity(opportunity) {
   return { ok: true, preparedActivations, selectedCandidates: preparedCandidates };
 }
 
-async function completeOccurrences(occurrences) {
+async function completeOccurrences(
+  occurrences: ChainTriggerOccurrence[],
+): Promise<void> {
   for (const occurrence of occurrences || []) {
     if (typeof occurrence?.onComplete !== "function") continue;
     try {
@@ -698,8 +884,11 @@ async function completeOccurrences(occurrences) {
   }
 }
 
-export async function prepareTriggerPackages(packages = []) {
-  const occurrences = [];
+export async function prepareTriggerPackages(
+  this: FullChainHost,
+  packages: ChainTriggerInputPackage[] = [],
+) {
+  const occurrences: ChainTriggerOccurrence[] = [];
   for (const entryPackage of packages || []) {
     if (!entryPackage?.eventName) continue;
     const occurrence =
@@ -724,7 +913,11 @@ export async function prepareTriggerPackages(packages = []) {
   return { ...preparation, opportunity, occurrences };
 }
 
-export async function resolveTriggerOccurrences(occurrences = [], options = {}) {
+export async function resolveTriggerOccurrences(
+  this: FullChainHost,
+  occurrences: ChainTriggerOccurrence[] = [],
+  options: ResolveTriggerOptions = {},
+): Promise<ChainOperationResult> {
   const opportunity = this.buildTriggerOpportunity(occurrences);
   if (!opportunity) {
     return { ok: true, success: true, chainBuilt: false, triggerCount: 0 };
@@ -751,14 +944,15 @@ export async function resolveTriggerOccurrences(occurrences = [], options = {}) 
     }
     this.pendingTriggerSelection = null;
     const preparedActivations = preparation.preparedActivations || [];
+    const selectedCandidates = preparation.selectedCandidates || [];
     this.game?.notify?.("trigger_chain_prepared", {
       opportunityId: opportunity.opportunityId,
       occurrenceIds: opportunity.occurrenceIds.slice(),
       preparedCount: preparedActivations.length,
-      candidates: preparation.selectedCandidates.map(serializeCandidate),
+      candidates: selectedCandidates.map(serializeCandidate),
     });
 
-    let timingResult = {
+    let timingResult: ChainOperationResult = {
       ok: true,
       success: true,
       chainBuilt: false,
@@ -767,7 +961,7 @@ export async function resolveTriggerOccurrences(occurrences = [], options = {}) 
     if (preparedActivations.length > 0) {
       const actionPlayer =
         options.actionPlayer ||
-        preparation.selectedCandidates[0]?.controller ||
+        selectedCandidates[0]?.controller ||
         opportunity.turnPlayer;
       timingResult = await this.runFastEffectTiming({
         origin: "trigger_chain",
@@ -800,12 +994,12 @@ export async function resolveTriggerOccurrences(occurrences = [], options = {}) 
       needsSelection: false,
       triggerCount: opportunity.candidates.length,
       opportunityId: opportunity.opportunityId,
-      reason: error?.message || "trigger_opportunity_failed",
+      reason: thrownMessage(error, "trigger_opportunity_failed"),
     };
   }
 }
 
-export function getTriggerState() {
+export function getTriggerState(this: FullChainHost): ChainTriggerState {
   const opportunity = this.activeTriggerOpportunity || null;
   return {
     opportunityId: opportunity?.opportunityId ?? null,
@@ -819,7 +1013,10 @@ export function getTriggerState() {
   };
 }
 
-export function resetTriggerState({ clearPending = true } = {}) {
+export function resetTriggerState(
+  this: FullChainHost,
+  { clearPending = true }: { clearPending?: boolean } = {},
+): ChainTriggerState {
   this.activeTriggerOpportunity = null;
   this.pendingTriggerSelection = null;
   if (clearPending) this.pendingTriggerOccurrences = [];
