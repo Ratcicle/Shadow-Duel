@@ -74,6 +74,23 @@ function createEntry(
   };
 }
 
+test("SEGOC preserves a message from non-Error throwables", async () => {
+  const { chain } = createChainHarness();
+  const occurrence = chain.createTriggerOccurrence(
+    "after_summon",
+    {},
+    { entries: [], entriesProvided: true },
+  );
+  chain.collectTriggerCandidates = async () => {
+    throw { message: "custom trigger failure" };
+  };
+
+  const result = await chain.resolveTriggerOccurrences([occurrence]);
+
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, "custom trigger failure");
+});
+
 function occurrence(chain, entries, options = {}) {
   return chain.createTriggerOccurrence(
     options.eventName || "test_event",

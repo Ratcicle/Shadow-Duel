@@ -1329,147 +1329,165 @@ divergência.
 
 ## Objetivo
 
-Tipar integralmente o sistema mais sensível do jogo sem alterar suas regras.
+Converter integralmente o Chain System para TypeScript sem alterar regras,
+timings, SEGOC, Damage Step, shapes runtime ou superfícies públicas. Imports
+relativos continuam terminados em `.js`; `Game.js`, cartas, replays e o
+entrypoint permanecem fora desta etapa.
 
-## Ordem recomendada
+O resultado físico inclui `src/core/ChainSystem.ts`,
+`src/core/NullChainSystem.ts`, `src/core/contracts/chainRuntime.ts` e todos os
+módulos de `src/core/chain/` em `.ts`: `activation`,
+`activationDiscovery`, `botResponsePolicy`, `contexts`, `effectMatching`,
+`finalization`, `index`, `legality`, `link`, `playerResponse`, `resolution`,
+`responseWindow`, `segoc`, `selection`, `spellSpeed`, `stack`, `timing` e
+`usage`. `attachments.ts` concentra a composição da fachada.
 
-Preparar o host antes das folhas e converter o runtime da fachada por último:
+## Ordem de implementação
 
-1. `ChainRuntimePort`, `FullChainHost` e hosts menores sem emissão runtime;
-2. constantes e contextos;
-3. `link`;
-4. `usage`;
-5. `spellSpeed`;
-6. `timing`;
-7. `selection`;
-8. `activationDiscovery`;
-9. `activation`;
-10. `stack`;
-11. `segoc`;
-12. `responseWindow`;
-13. políticas de resposta humana e bot;
-14. `resolution`;
-15. `finalization`;
-16. manifest tipado de attachments;
-17. `ChainSystem`;
-18. `NullChainSystem`.
+Preparar contratos antes das folhas e converter as fachadas por último:
 
-## Contratos obrigatórios
+1. constantes, unions e contratos runtime;
+2. `NullChainSystem` e compatibilidade da seleção compartilhada;
+3. `contexts`, `link`, `usage`, `spellSpeed`, `timing`, `legality` e
+   `effectMatching`;
+4. `selection`, `activationDiscovery`, `activation` e `stack`;
+5. `segoc`, janelas e políticas de resposta;
+6. `resolution` e `finalization`;
+7. manifest tipado, barrel, `ChainSystem` e declaration merging;
+8. testes runtime, testes de tipos, documentação e gates.
 
-### PreparedActivation
+## Contratos canônicos
 
-Deve expressar:
+`src/core/contracts/chain.ts` centraliza as constantes congeladas e deriva
+unions literais para classificação da ativação e do efeito, contexto de
+resposta, Fast Effect, SEGOC, políticas de uso, Spell Speed e estados de links.
+Não usar enums ou strings abertas. `CHAIN_CONTEXTS` conserva seu objeto runtime
+atual: `as const` não autoriza adicionar `Object.freeze` onde ele não existia.
 
-- card;
-- controller;
-- opponent;
-- effect;
-- activation zone;
-- activation context;
-- source snapshots;
-- cost selections;
-- target selections;
-- resolution selections;
-- status de commit;
-- custos pagos;
-- tentativa de ativação;
-- política de permanência da fonte.
+`src/core/contracts/chainRuntime.ts` define projeções mínimas para cards,
+players e game, além de `PreparedActivationInput`, `PreparedActivation`,
+`ChainLink`, `ChainContext`, ports, hosts e capability guards. Esses contratos
+seguem os dados reais e não adicionam propriedades ao runtime.
 
-### ChainLink
+`PreparedActivation` expressa card, controller, effect, zona, contexto,
+snapshots, seleções, commit, custos, tentativa e política da fonte.
+`opponent` permanece opcional ou nulo porque os callers atuais podem omiti-lo;
+o tipo não pode forçar a factory a criar uma chave nova.
 
-Deve possuir tipos explícitos para:
+`ChainLink` tipa identidade branded, classificação, Spell Speed, contextos,
+snapshots, targets, uso, negação, cleanup e os estados literais de
+elegibilidade, preparação, resolução e finalização. `ChainContext` é uma
+união discriminada fechada pelos contextos realmente produzidos: janelas do
+registry, `trigger_chain`, eventos usados por SEGOC e os campos específicos de
+combate, fase e summon.
 
-- identidade;
-- classificação;
-- Spell Speed;
-- contextos;
-- snapshots;
-- targets declarados;
-- status de preparação;
-- status de resolução;
-- status de finalização;
-- uso;
-- negação;
-- cleanup.
+## Ports, hosts e Null Chain
 
-### ChainContext
+Não forçar `ChainSystem` e `NullChainSystem` a expor a mesma API interna:
 
-Usar união discriminada por `type`.
+- `ChainRuntimePort` contém somente a superfície externa comum realmente
+  consumida por `Game`, `EffectEngine` e demais consumers;
+- `FullChainHost` descreve o estado e os métodos internos exigidos apenas pelos
+  módulos anexados do Chain real;
+- hosts menores, como `ChainSelectionHost`, limitam o `this` de cada
+  capability;
+- interfaces e guards explícitos representam capabilities exclusivas do Chain
+  real; acesso externo não pode depender de duck typing.
 
-Exemplo:
+As duas fachadas satisfazem `ChainRuntimePort`; somente `ChainSystem` satisfaz
+`FullChainHost`. Enquanto `Game.js` permanecer JavaScript com `checkJs: false`,
+a anotação nominal de `Game.chainSystem` fica para a Etapa 8, mas a Etapa 7
+prova a conformidade das duas implementações e alinha os ports TypeScript já
+existentes.
 
-```ts
-type ChainContext =
-  | CardActivationContext
-  | EffectActivationContext
-  | SummonContext
-  | AttackDeclarationContext
-  | PhaseChangeContext;
-```
+A função de seleção reutilizada pelo Null recebe o host comum mínimo. O
+caminho real continua respeitando monkeypatch de instância; quando o método
+anexado não existe no Null, ele usa a função pura exportada. Não adicionar ao
+Null dezenas de no-ops ou um novo método de prototype apenas para satisfazer um
+tipo artificial.
 
-### Fast Effect e SEGOC
+## Manifest e compatibilidade runtime
 
-Os estados devem ser unions literais, não strings abertas.
-
-## Ports e hosts distintos
-
-Não forçar `ChainSystem` e `NullChainSystem` a expor toda a mesma API interna. Criar:
-
-- `ChainRuntimePort`: menor superfície externa realmente consumida por `Game`, `EffectEngine` e demais consumers;
-- `FullChainHost`: estado e métodos internos necessários somente aos módulos anexados do Chain real;
-- hosts menores por capability, como `ChainSelectionHost`, para funções reutilizadas pelos dois modos.
-
-`ChainSystem` e `NullChainSystem` satisfazem `ChainRuntimePort`; somente o Chain real satisfaz `FullChainHost`. A superfície normal de `Game.chainSystem` é `ChainRuntimePort`. Consumers excepcionais que precisem do concrete Chain devem usar um type guard/capability explícito, nunca assumir métodos internos por duck typing.
-
-O Null atualmente reutiliza ao menos uma função de seleção via `.call(this)`, portanto essa função deve receber um host comum menor, não `this: ChainSystem`. Se um novo no-op for realmente necessário no Null, adicioná-lo em PR isolado de compatibilidade com teste de paridade; não preencher dezenas de métodos internos apenas para satisfazer um tipo artificial.
-
-## Métodos anexados ao prototype
-
-Manter a composição atual, mas tipá-la:
-
-- cada módulo declara `this: FullChainHost` ou o host mínimo de sua capability;
-- o manifest usa referências diretas e `satisfies`;
-- nomes ausentes ou assinaturas divergentes falham no typecheck.
-
-## Gates específicos
-
-Executar todos os testes em:
+`src/core/chain/attachments.ts` declara, com referências diretas e `satisfies`,
+os 89 métodos em 15 grupos e preserva a ordem observável atual:
 
 ```text
-test/chain/
+link → usage → finalization → timing → segoc → spellSpeed →
+effectMatching → activationDiscovery → activation → responseWindow →
+botResponsePolicy → playerResponse → selection → stack → resolution
 ```
 
-Incluindo:
+O preflight rejeita referências ausentes, duplicatas e colisões incompatíveis;
+reaplicar exatamente a mesma referência é idempotente. A instalação por
+atribuição preserva descriptors enumeráveis, graváveis e configuráveis. A
+fachada usa declaration merging para expor os métodos no tipo, sem class fields
+emitidos que mudem o shape das instâncias ou sombreiem o prototype.
 
-- activation discovery;
-- activation semantics;
-- costs, targets e cleanup;
-- Damage Step;
-- fast effect timing;
-- integration;
-- negation;
-- phase transitions;
-- SEGOC;
-- Spell Speed e stack;
-- summon windows;
-- compatibility removal;
-- consumer migration.
+Preservar também:
 
-Executar também a suíte canônica de replay existente.
+- aridade e identidade das funções anexadas;
+- possibilidade de monkeypatch por instância;
+- ordem de avaliação dos módulos e dos attachments;
+- keysets e ordem das propriedades próprias de `ChainSystem` e
+  `NullChainSystem`;
+- os dez exports runtime da fachada e a ausência intencional de
+  `CHAIN_CONTEXTS` nessa superfície;
+- o keyset legado do barrel, sem exportar novos namespaces apenas porque os
+  módulos agora são TypeScript.
+
+## Testes e gates
+
+Adicionar testes runtime para constantes, contexts, links, ports, paridade do
+Null e para os 89 attachments: keyset, ordem, referência, aridade, descriptors,
+idempotência, colisão e monkeypatch. Adicionar testes compile-time para:
+
+- conformidade das duas fachadas com `ChainRuntimePort`;
+- conformidade exclusiva do Chain real com `FullChainHost`;
+- narrowing das capabilities exclusivas;
+- contexts, status, brands e assinaturas fechadas.
+
+Executar os 14 arquivos existentes em `test/chain/`, cobrindo activation
+discovery e semantics, costs/targets/cleanup, Damage Step, Fast Effect Timing,
+integration, negation, phase transitions, SEGOC, Spell Speed/stack, summon
+windows, compatibility removal e consumer migration. Executar também toda a
+suíte canônica de replay e o smoke do bot, porque a política de resposta da IA
+foi convertida.
+
+Em Node `22.23.2`:
+
+```bash
+npm ci
+npm run check
+npm run test:bot-smoke -- --duels 1 --matchup arcanist:shadowheart
+```
+
+O gate deve manter `getCardDatabaseSignature()` em `1cc622e3` e o digest
+SHA-256 agregado em
+`13ff527c3deb5b8b5e5f09551fcabcb3ec7ca48f922f1f167c6d22c67d12caea`.
+Comparar o bundle com a baseline da etapa e explicar todo delta; CSS e chunks
+independentes devem permanecer byte-idênticos.
+
+A busca final deve confirmar ausência de arquivos `.js` físicos em
+`src/core/chain/`, `ChainSystem.js` e `NullChainSystem.js`; specifiers `.ts`;
+imports relativos sem extensão; `any`; casts duplos; suppressions; dívida nova;
+listas de attachments por strings; e atribuições diretas ao prototype fora do
+helper canônico.
 
 ## Critérios de aceitação
 
-- zero alteração no trace canônico esperado;
-- mesmos eventos e ordem;
-- mesmos hashes;
-- mesmas razões de rejeição;
-- mesmos status de Chain Link;
-- `ChainSystem` e `NullChainSystem` satisfazem `ChainRuntimePort`;
-- somente o Chain real precisa satisfazer `FullChainHost`;
-- consumers externos não acessam APIs internas sem narrowing;
-- attachments do Chain real possuem keyset exato;
-- nenhum `Object` genérico permanece nos contratos públicos principais;
-- nenhum branch crítico depende de cast inseguro.
+- zero alteração em regras, trace canônico, eventos, ordem, hashes, razões de
+  rejeição ou status de Chain Link;
+- `ChainSystem` e `NullChainSystem` satisfazem o port externo mínimo, sem
+  ampliar artificialmente o Null;
+- somente o Chain real satisfaz o host completo;
+- consumers concretos usam narrowing por capability;
+- os 89 attachments preservam keyset, ordem, referências e descriptors;
+- nenhum `Object` genérico, `any`, cast inseguro ou class field emitido aparece
+  nos contratos e branches críticos;
+- os 457 testes preexistentes e todos os testes novos passam;
+- assinatura legada, digest, replay e bundle permanecem compatíveis;
+- nenhuma aprovação nova do digest é criada, pois os componentes protegidos
+  não mudam.
 
 ---
 

@@ -308,7 +308,7 @@ test("erro limpa a sessão sem reutilizar o timingWindowId", async () => {
   const originalOfferChainResponses = chain.offerChainResponses.bind(chain);
   const root = createPreparedQuickEffect(chain, player, "Failing window");
   chain.offerChainResponses = async () => {
-    throw new Error("forced timing failure");
+    throw { message: "forced timing failure" };
   };
 
   const failed = await chain.runFastEffectTiming({
@@ -325,6 +325,7 @@ test("erro limpa a sessão sem reutilizar o timingWindowId", async () => {
   });
 
   assert.equal(failed.ok, false);
+  assert.equal(failed.reason, "forced timing failure");
   assert.equal(failed.state.state, FAST_EFFECT_STATES.OPEN);
   assert.equal(chain.isChainWindowOpen(), false);
   assert.equal(recovered.ok, true);
