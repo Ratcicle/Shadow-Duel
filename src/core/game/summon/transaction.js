@@ -3,6 +3,11 @@ import {
   FAST_EFFECT_STATES,
 } from "../../chain/timing.js";
 import { bumpCardLocationVersion } from "../../Card.js";
+import {
+  hasChainFastEffectTransitionCapability,
+  hasChainSourceMovementCapability,
+  hasChainTurnPlayerCapability,
+} from "../../contracts/chainRuntime.js";
 import { SUMMON_ORIGINS } from "../../contracts/summon.js";
 import {
   checkSpecialSummonEligibility,
@@ -403,7 +408,9 @@ async function finalizeFailedCommittedCard(game, transaction) {
         summonId: transaction.summonId,
         wasDestroyed: false,
       };
-      game.chainSystem?.recordChainSourceMovement?.(card, payload);
+      if (hasChainSourceMovementCapability(game.chainSystem)) {
+        game.chainSystem.recordChainSourceMovement(card, payload);
+      }
       await game.emit?.("card_to_grave", payload);
       await game.emit?.("card_moved", payload);
     }
@@ -508,11 +515,20 @@ export async function executeSummonTransaction(preparedInput = {}) {
 }
 
 export function holdSummonTimingState(transaction) {
-  if (!transaction || !this.chainSystem?.transitionFastEffectState) return;
-  this.chainSystem.transitionFastEffectState(FAST_EFFECT_STATES.TRIGGER_CHECK, {
+  const chainSystem = this.chainSystem;
+  if (
+    !transaction ||
+    !hasChainFastEffectTransitionCapability(chainSystem)
+  ) {
+    return;
+  }
+  const turnPlayer = hasChainTurnPlayerCapability(chainSystem)
+    ? chainSystem.getCurrentTurnPlayer()
+    : null;
+  chainSystem.transitionFastEffectState(FAST_EFFECT_STATES.TRIGGER_CHECK, {
     origin: FAST_EFFECT_ORIGINS.SUMMON_ATTEMPT,
     timingWindowId: null,
-    turnPlayer: this.chainSystem.getCurrentTurnPlayer?.() || null,
+    turnPlayer: turnPlayer || null,
     actionPlayer: transaction.controller,
     priorityPlayer: null,
     chainId: null,

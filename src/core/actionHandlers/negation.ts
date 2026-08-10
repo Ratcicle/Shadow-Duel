@@ -1,4 +1,5 @@
 import { getUI } from "./shared.js";
+import { hasChainLinkMutationCapability } from "../contracts/chainRuntime.js";
 import type { ActionOf } from "../contracts/actions.js";
 import type {
   ActionHandlerEnginePort,
@@ -9,6 +10,11 @@ import type {
   ResolvedTargetMap,
 } from "../contracts/actionRuntime.js";
 import type {
+  ChainLink,
+  ChainCard,
+} from "../contracts/chainRuntime.js";
+import type { ChainLinkId } from "../contracts/primitives.js";
+import type {
   EffectCondition,
   EffectDefinition,
   PassiveRuleDefinition,
@@ -17,7 +23,7 @@ import type { ZoneInput } from "../contracts/zones.js";
 
 interface ActivationAttempt {
   card?: ActionRuntimeCard | null;
-  linkId?: string | null;
+  linkId?: ChainLinkId | number | null;
   activationNegated?: boolean;
 }
 
@@ -32,10 +38,10 @@ interface NegationContext {
   card?: ActionRuntimeCard | null;
   targetCard?: ActionRuntimeCard | null;
   sourceCard?: ActionRuntimeCard | null;
-  respondingToChainLink?: string | null;
-  linkId?: string | null;
+  respondingToChainLink?: ChainLink | ChainLinkId | number | null;
+  linkId?: ChainLinkId | number | null;
   summonId?: string | null;
-  negatedBy?: ActionRuntimeCard | null;
+  negatedBy?: ChainCard | null;
   negationProtected?: boolean;
   negationProtectionSource?: ActionRuntimeCard;
   activationNegated?: boolean;
@@ -68,18 +74,6 @@ interface ActivationProtectionResult {
   passive: ActivationProtectionPassive;
 }
 
-interface ActionChainSystemPort {
-  readonly chainStack?: readonly unknown[];
-  markChainLinkActivationNegated?(
-    linkReference: string | null,
-    options: object,
-  ): unknown;
-  markChainLinkEffectNegated?(
-    linkReference: string | null,
-    options: object,
-  ): unknown;
-}
-
 type NegateSummonAction = ActionOf<
   "negate_summon_or_activation_and_destroy"
 > & {
@@ -88,13 +82,6 @@ type NegateSummonAction = ActionOf<
 
 function readNegationContext(value: unknown): NegationContext {
   return value && typeof value === "object" ? (value as NegationContext) : {};
-}
-
-function getChainSystem(game: ActionRuntimeGamePort): ActionChainSystemPort | null {
-  const value: unknown = Reflect.get(game, "chainSystem");
-  return value && typeof value === "object"
-    ? (value as ActionChainSystemPort)
-    : null;
 }
 
 function resolveOwner(
@@ -338,13 +325,14 @@ function markChainLinkNegated(
   game: ActionRuntimeGamePort,
   context: NegationContext,
 ) {
-  const chainSystem = getChainSystem(game);
-  if (!Array.isArray(chainSystem?.chainStack)) return null;
+  const chainSystem = game.chainSystem;
+  if (!hasChainLinkMutationCapability(chainSystem)) return null;
   const linkReference =
     context?.respondingToChainLink ||
     context?.activationAttempt?.linkId ||
     null;
-  const link = chainSystem.markChainLinkActivationNegated?.(linkReference, {
+  if (linkReference == null) return null;
+  const link = chainSystem.markChainLinkActivationNegated(linkReference, {
     negatedBy: context?.negatedBy || null,
   });
   if (link) {
@@ -357,13 +345,14 @@ function markChainLinkEffectNegated(
   game: ActionRuntimeGamePort,
   context: NegationContext,
 ) {
-  const chainSystem = getChainSystem(game);
-  if (!Array.isArray(chainSystem?.chainStack)) return null;
+  const chainSystem = game.chainSystem;
+  if (!hasChainLinkMutationCapability(chainSystem)) return null;
   const linkReference =
     context?.respondingToChainLink ||
     context?.activationAttempt?.linkId ||
     null;
-  const link = chainSystem.markChainLinkEffectNegated?.(linkReference, {
+  if (linkReference == null) return null;
+  const link = chainSystem.markChainLinkEffectNegated(linkReference, {
     negatedBy: context?.negatedBy || null,
   });
   if (link) context.effectNegatedLink = link;

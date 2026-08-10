@@ -1,4 +1,5 @@
 import type { BattlePosition } from "./cards.js";
+import type { ChainRuntimePort } from "./chainRuntime.js";
 import type {
   ChainResponseDecisionContext,
   DecisionCandidateIdentity,
@@ -499,12 +500,14 @@ export interface ReplayRuntimePlayer {
   forbidDirectAttacksThisTurn?: boolean;
 }
 
-export interface CanonicalReplayChainPort {
+export type CanonicalReplayChainPort = Partial<
+  Pick<
+    ChainRuntimePort,
+    "getChainSummary" | "getFastEffectState" | "getTriggerState"
+  >
+> & {
   getPublicState?(): unknown;
-  getChainSummary?(): unknown;
-  getFastEffectState?(): unknown;
-  getTriggerState?(): unknown;
-}
+};
 
 export interface CanonicalReplayGamePort {
   turn?: PlayerId | string | null;
