@@ -4,9 +4,10 @@
  */
 
 import { resolveFieldScopeCards } from "../../actionHandlers/shared.js";
-import type Game from "../../Game.js";
 import type {
+  ActionMoveResult,
   ActionRuntimeCard,
+  ActionRuntimeGamePort,
   ActionRuntimePlayer,
   EffectContext,
   LegacyActionHandlerResult,
@@ -29,8 +30,31 @@ interface MovementRuntimeCard extends ActionRuntimeCard {
   attacksUsedThisTurn?: number;
 }
 
+interface MovementGamePort
+  extends Pick<
+    ActionRuntimeGamePort,
+    "player" | "bot" | "updateBoard" | "checkWinCondition"
+  > {
+  normalizeCardOwnership?(
+    card: ActionRuntimeCard,
+    context: EffectContext,
+    options?: object,
+  ): void;
+  chooseSpecialSummonPosition(
+    player: ActionRuntimePlayer,
+    card: ActionRuntimeCard,
+    options?: object,
+  ): MaybePromise<string | null | undefined>;
+  moveCard(
+    card: ActionRuntimeCard,
+    player: ActionRuntimePlayer,
+    destination: ZoneInput,
+    options?: object,
+  ): MaybePromise<ActionMoveResult | boolean | null | undefined>;
+}
+
 interface MovementActionHost {
-  game: Game;
+  game: MovementGamePort;
   readonly ui: { log?(message: string): void } | null;
   getZone(
     player: ActionRuntimePlayer,
@@ -253,10 +277,19 @@ export async function applyMove(
             ctx
           ),
         });
-        if (moveResult?.success === false) {
+        if (
+          typeof moveResult === "object" &&
+          moveResult !== null &&
+          moveResult.success === false
+        ) {
           return;
         }
-        if (moveResult?.needsSelection && moveResult?.selectionContract) {
+        if (
+          typeof moveResult === "object" &&
+          moveResult !== null &&
+          moveResult.needsSelection &&
+          moveResult.selectionContract
+        ) {
           return moveResult;
         }
       } else {

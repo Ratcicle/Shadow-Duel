@@ -7,15 +7,17 @@ import Card, {
   captureTrapMonsterOriginalState,
   restoreTrapMonsterOriginalState,
 } from "../../Card.js";
-import type Game from "../../Game.js";
 import type {
+  ActionMoveResult,
   ActionRuntimeCard,
+  ActionRuntimeGamePort,
   ActionRuntimePlayer,
   EffectContext,
+  MaybePromise,
   ResolvedTargetMap,
 } from "../../contracts/actionRuntime.js";
 import type { ActionOf } from "../../contracts/actions.js";
-import type { BattlePosition, BattlePositionInput, CardKind, MonsterType } from "../../contracts/cards.js";
+import type { BattlePosition, BattlePositionInput, CardAttribute, CardKind, MonsterType } from "../../contracts/cards.js";
 import type { CanonicalZone } from "../../contracts/zones.js";
 
 interface SummonRuntimeCard extends ActionRuntimeCard {
@@ -29,8 +31,19 @@ interface SummonRuntimeCard extends ActionRuntimeCard {
   cannotBeSpecialSummoned?: boolean;
 }
 
+type SummonGamePort = Omit<ActionRuntimeGamePort, "moveCard" | "ui"> & {
+  ui: { log(message: string): void };
+  ensureDuelCardId?(card: ActionRuntimeCard): number | string;
+  moveCard(
+    card: ActionRuntimeCard,
+    player: ActionRuntimePlayer,
+    destination: CanonicalZone,
+    options?: object,
+  ): MaybePromise<ActionMoveResult>;
+};
+
 interface SummonActionHost {
-  game: Game;
+  game: SummonGamePort;
   findCardZone(
     player: ActionRuntimePlayer,
     card: ActionRuntimeCard,
@@ -93,7 +106,7 @@ export async function applySpecialSummonToken(
       def: action.token.def ?? 0,
       level: action.token.level ?? 1,
       type: action.token.type || "Fiend",
-      attribute: action.token.attribute || null,
+      attribute: (action.token.attribute || null) as CardAttribute | null,
       archetype: action.token.archetype || null,
       archetypes: Array.isArray(action.token.archetypes)
         ? [...action.token.archetypes]
@@ -274,7 +287,7 @@ export async function applySpecialSummonSelfAsTrapMonster(
   }
 
   const monster = action.monster || {};
-  const original = captureTrapMonsterOriginalState(source);
+  const original = captureTrapMonsterOriginalState(source)!;
   const summonProcedure = action.summonProcedure || "trap_monster";
   let position = action.position || monster.position || "defense";
   if (position !== "attack" && position !== "defense") {

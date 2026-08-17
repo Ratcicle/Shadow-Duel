@@ -1,6 +1,7 @@
-import type Game from "../../Game.js";
 import type {
+  ActionMoveResult,
   ActionRuntimeCard,
+  ActionRuntimeGamePort,
   ActionRuntimePlayer,
   EffectContext,
   LegacyActionHandlerResult,
@@ -20,8 +21,15 @@ interface EquipRuntimeCard extends ActionRuntimeCard {
   battleIndestructible?: boolean;
 }
 
+type EquipGamePort = Omit<ActionRuntimeGamePort, "getZone"> & {
+  getZone(
+    player: ActionRuntimePlayer,
+    zone: CanonicalZone,
+  ): ActionRuntimeCard[] | null;
+};
+
 interface EquipActionHost {
-  game: Game;
+  game: EquipGamePort;
   readonly ui: {
     showSickleSelectionModal?(
       candidates: readonly ActionRuntimeCard[],
@@ -155,10 +163,19 @@ export async function applyEquip(
         isFacedown: false,
         resetAttackFlags: false,
       });
-      if (moveResult?.needsSelection) {
-        return { ...moveResult, success: false };
+      if (
+        typeof moveResult === "object" &&
+        moveResult !== null &&
+        moveResult.needsSelection
+      ) {
+        return { ...(moveResult as ActionMoveResult), success: false };
       }
-      if (moveResult === false || moveResult?.success === false) {
+      if (
+        moveResult === false ||
+        (typeof moveResult === "object" &&
+          moveResult !== null &&
+          moveResult.success === false)
+      ) {
         return false;
       }
     }

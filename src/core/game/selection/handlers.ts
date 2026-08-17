@@ -203,7 +203,7 @@ export function handleTargetSelectionClick(
 
 /**
  * High-level API to ask the player to select cards from a zone.
- * @param {Object} config - Selection configuration
+ * @param config - Selection configuration
  * @returns {Promise<Array>} Promise resolving to selected cards
  */
 export function askPlayerToSelectCards(

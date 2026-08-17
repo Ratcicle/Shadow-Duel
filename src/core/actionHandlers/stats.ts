@@ -1767,7 +1767,7 @@ export async function handleAddStatus(
         card.tempStatuses = {};
       }
       if (!Object.prototype.hasOwnProperty.call(card.tempStatuses, status)) {
-        card.tempStatuses[status] = readCardProperty(card, status);
+        Reflect.set(card.tempStatuses, status, readCardProperty(card, status));
       }
     }
 
@@ -1803,7 +1803,7 @@ export async function handleAddStatus(
         card.tempStatuses &&
         Object.prototype.hasOwnProperty.call(card.tempStatuses, status)
       ) {
-        delete card.tempStatuses[status];
+        Reflect.deleteProperty(card.tempStatuses, status);
       }
       if (status === "effectsNegated") {
         card.effectsNegatedDuration = null;

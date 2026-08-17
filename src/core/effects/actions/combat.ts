@@ -1,7 +1,7 @@
 import { isAI } from "../../Player.js";
-import type Game from "../../Game.js";
 import type {
   ActionRuntimeCard,
+  ActionRuntimeGamePort,
   ActionRuntimePlayer,
   EffectContext,
   ResolvedTargetMap,
@@ -13,7 +13,19 @@ interface CombatRuntimeCard extends ActionRuntimeCard {
   canAttackDirectlyThisTurn?: boolean;
 }
 
-type CombatGame = Game & { aiActionDelayMs?: number };
+interface CombatGame extends ActionRuntimeGamePort {
+  turn: "player" | "bot";
+  phase: string;
+  aiActionDelayMs?: number;
+  isDisposed?(): boolean;
+  canStartAction?(options: {
+    actor: AiActor;
+    kind: string;
+    silent?: boolean;
+  }): { ok: boolean; code?: string };
+  clearAttackReadyIndicators?(): void;
+  clearAttackResolutionIndicators?(): void;
+}
 type ForbidAttackThisTurnAction = ActionOf<"forbid_attack_this_turn"> & {
   readonly targetRef?: string;
 };
@@ -25,7 +37,7 @@ interface CombatActionHost {
 }
 
 type AiActor = ActionRuntimePlayer & {
-  makeMove?(game: Game): unknown;
+  makeMove?(game: CombatGame): unknown;
 };
 
 /**
@@ -131,7 +143,7 @@ export function applyEndBattlePhase(this: CombatActionHost): boolean {
   });
   game.updateBoard?.();
 
-  scheduleAiMoveAfterPaint(game as CombatGame, activePlayer as AiActor);
+  scheduleAiMoveAfterPaint(game, activePlayer as AiActor);
   return true;
 }
 

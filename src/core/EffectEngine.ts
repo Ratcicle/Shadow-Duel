@@ -35,6 +35,29 @@ interface LegacyEffectCondition {
   readonly triggerArchetype?: string;
 }
 
+interface RuntimeUsageGamePort {
+  canActivateCardEffectUnderRestrictions?(
+    card: ActionRuntimeCard | null | undefined,
+    player: ActionRuntimePlayer | null | undefined,
+    effect: EffectDefinition | null | undefined,
+    options?: { readonly silent?: boolean },
+  ): { readonly ok: boolean; readonly reason?: string };
+  canUseOncePerTurn?(
+    card: RuntimeUsageCard | null | undefined,
+    player: RuntimeUsagePlayer | null | undefined,
+    effect: RuntimeUsageEffect | null | undefined,
+  ): { readonly ok: boolean; readonly reason?: string };
+  markOncePerTurnUsed?(
+    card: RuntimeUsageCard | null | undefined,
+    player: RuntimeUsagePlayer | null | undefined,
+    effect: RuntimeUsageEffect | null | undefined,
+  ): void;
+}
+
+function getRuntimeUsageGamePort(game: object): RuntimeUsageGamePort {
+  return game as RuntimeUsageGamePort;
+}
+
 class EffectEngine {
   declare game: Game;
   declare actionHandlers: ActionHandlerRegistry;
@@ -111,8 +134,9 @@ class EffectEngine {
     player: ActionRuntimePlayer,
     effect: EffectDefinition | null | undefined,
   ) {
+    const usageGame = getRuntimeUsageGamePort(this.game);
     const restrictionCheck =
-      this.game?.canActivateCardEffectUnderRestrictions?.(card, player, effect, {
+      usageGame.canActivateCardEffectUnderRestrictions?.(card, player, effect, {
         silent: true,
       });
     if (restrictionCheck?.ok === false) return restrictionCheck;
@@ -125,7 +149,7 @@ class EffectEngine {
       );
       return { ok: false, reason: "Game not initialized" };
     }
-    return this.game.canUseOncePerTurn(card, player, effect);
+    return usageGame.canUseOncePerTurn!(card, player, effect);
   }
 
   checkOncePerDuel(
@@ -177,7 +201,11 @@ class EffectEngine {
     const card = ctx?.source as RuntimeUsageCard | null | undefined;
     if (!player) return true;
     if (this.game && typeof this.game.canUseOncePerTurn === "function") {
-      return this.game.canUseOncePerTurn(card, player, effect).ok === true;
+      return getRuntimeUsageGamePort(this.game).canUseOncePerTurn!(
+        card,
+        player,
+        effect,
+      ).ok === true;
     }
     const key = effect.oncePerTurnName || effect.id || ctx?.source?.name;
     if (!key) return true;
@@ -217,7 +245,11 @@ class EffectEngine {
     const card = ctx?.source as RuntimeUsageCard | null | undefined;
     if (!player) return;
     if (this.game && typeof this.game.markOncePerTurnUsed === "function") {
-      this.game.markOncePerTurnUsed(card, player, effect);
+      getRuntimeUsageGamePort(this.game).markOncePerTurnUsed!(
+        card,
+        player,
+        effect,
+      );
       return;
     }
     const key = effect.oncePerTurnName || effect.id || ctx?.source?.name;

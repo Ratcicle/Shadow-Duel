@@ -1361,11 +1361,16 @@ export function selectCandidates(
             return false;
           }
 
+          // The legacy declarative boundary also accepts null and other values
+          // that JavaScript compares through its normal relational coercion.
+          // These assertions are erased and intentionally preserve that behavior.
+          const comparableCardValue = cardValue as number;
+          const comparableRefValue = refValue as number;
           let passes = false;
-          if (op === "lte" || op === "<=") passes = cardValue <= refValue;
-          else if (op === "gte" || op === ">=") passes = cardValue >= refValue;
-          else if (op === "lt" || op === "<") passes = cardValue < refValue;
-          else if (op === "gt" || op === ">") passes = cardValue > refValue;
+          if (op === "lte" || op === "<=") passes = comparableCardValue <= comparableRefValue;
+          else if (op === "gte" || op === ">=") passes = comparableCardValue >= comparableRefValue;
+          else if (op === "lt" || op === "<") passes = comparableCardValue < comparableRefValue;
+          else if (op === "gt" || op === ">") passes = comparableCardValue > comparableRefValue;
           else if (op === "eq" || op === "==") passes = cardValue === refValue;
           else passes = true;
 

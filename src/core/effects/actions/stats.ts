@@ -1,6 +1,6 @@
-import type Game from "../../Game.js";
 import type {
   ActionRuntimeCard,
+  ActionRuntimeGamePort,
   EffectContext,
   ResolvedTargetMap,
 } from "../../contracts/actionRuntime.js";
@@ -12,7 +12,7 @@ interface StatsRuntimeCard extends ActionRuntimeCard {
 }
 
 interface StatsActionHost {
-  game: Game;
+  game: ActionRuntimeGamePort;
 }
 
 /**
