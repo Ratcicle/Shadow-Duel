@@ -23,25 +23,304 @@ import {
   resolveCountFromSelectionDefinitions,
 } from "../../chain/selection.js";
 import { finalizeNegatedSpellTrapActivation } from "../spellTrap/finalization.js";
+import type { CardAction } from "../../contracts/actions.js";
+import type { GameCard } from "../../contracts/cards.js";
+import type {
+  ChainEffectTarget,
+  ChainActivationCommitment,
+  ChainActionContext,
+  ChainCostPayment,
+  ChainEffectEnginePort,
+  ChainOperationResult,
+  ChainContextInput,
+  ChainPipelineFinalization,
+  ChainSelectionMap,
+  ChainSourceSnapshot,
+  ChainRuntimePort,
+  FastEffectContextInput,
+  PreparedActivation,
+  PreparedActivationInput,
+  PreparedActivationContext,
+} from "../../contracts/chainRuntime.js";
+import type { MaybePromise } from "../../contracts/decisions.js";
+import type { EffectDefinition } from "../../contracts/effects.js";
+import type { GamePhase } from "../../contracts/game.js";
+import type { GamePlayer } from "../../contracts/player.js";
+import type { DuelCardId } from "../../contracts/primitives.js";
+import type {
+  CanonicalSelectionMap,
+  NormalizedSelectionContract,
+  RawSelectionContract,
+  SelectionNormalizationOverrides,
+  SelectionNormalizationResult,
+  SelectionResult,
+  SelectionKind,
+  SelectionSessionState,
+} from "../../contracts/selection.js";
+import type { CanonicalZone } from "../../contracts/zones.js";
+import type { ActionGuardResult } from "../actions/guard.js";
+import type {
+  ActivationCommitInfo,
+  ActivationPipelineConfig,
+  ActivationPipelineConfigInput,
+  ActivationPipelineContext,
+  ActivationPipelineFinalizeInfo,
+  ActivationPipelineResult,
+  ActivationResolutionContext,
+  ActivationOncePerTurnConfig,
+  ActivationZone,
+} from "../../contracts/activation.js";
+import type {
+  MaybePromise as GameMaybePromise,
+  MoveCardOptions,
+  MoveCardResult,
+} from "../../contracts/gameRuntime.js";
 
-export function normalizeActivationResult(result) {
+export type {
+  ActivationCommitInfo,
+  ActivationPipelineConfig,
+  ActivationPipelineConfigInput,
+  ActivationPipelineContext,
+  ActivationPipelineResult,
+} from "../../contracts/activation.js";
+
+interface ActivationPipelineLogDetail {
+  summary?: string;
+  reason?: string | null;
+  code?: string | null;
+  lockKey?: string | null;
+  activationZone?: ActivationZone;
+  fromIndex?: number | null;
+  replacedFieldSpell?: string | null;
+  success?: boolean;
+  needsSelection?: boolean;
+  mode?: "field" | "modal";
+  committed?: boolean;
+  requirementCount?: number;
+  chainId?: number | null;
+  linkId?: number | null;
+  finalizationId?: string | number | null;
+}
+
+interface ActivationAttemptResult {
+  success?: boolean;
+  blockedByGuard?: boolean;
+  blockedOncePerTurn?: boolean;
+  reason?: string | null;
+  code?: string | null;
+}
+
+interface ActivationAttemptTracker {
+  recordActivationAttempt?(input: {
+    player: GamePlayer;
+    card: GameCard;
+    type: string;
+    success: boolean;
+    blocked: boolean;
+    reason: string | null;
+    code: string | null;
+    turn: number;
+  }): void;
+}
+
+type ActivationEffectEnginePort = ChainEffectEnginePort & {
+  checkActionPreviewRequirements?(
+    actions: readonly CardAction[],
+    context: ActivationResolutionContext,
+  ): { ok?: boolean; reason?: string | null; code?: string | null } | null;
+};
+
+interface ActivationAutoSelectorPort {
+  select(
+    contract: NormalizedSelectionContract,
+    context: {
+      owner: GamePlayer;
+      activationContext: ActivationPipelineContext;
+      selectionKind: string;
+    },
+  ): { ok: boolean; selections?: CanonicalSelectionMap; reason?: string | null };
+}
+
+interface ActivationSelectionSessionInput {
+  kind: SelectionKind;
+  card: GameCard;
+  owner: GamePlayer;
+  selectionContract: NormalizedSelectionContract;
+  activationZone: ActivationZone;
+  activationContext: ActivationPipelineContext;
+  preventCancel: boolean;
+  allowCancel: boolean;
+  message: string | null;
+  execute(selections: SelectionResult): MaybePromise<unknown>;
+  onResult(result: unknown): MaybePromise<unknown>;
+  onCancel?: (() => void) | null;
+}
+
+interface ActivationPipelineHost {
+  player: GamePlayer;
+  turnCounter: number;
+  disableChains: boolean;
+  targetSelection: { closeModal?: () => void } | null;
+  chainSystem: ChainRuntimePort;
+  effectEngine: ActivationEffectEnginePort;
+  autoSelector?: ActivationAutoSelectorPort | null;
+  _arenaTracker?: ActivationAttemptTracker | null;
+  ui: {
+    log(message: string): void;
+    hideFieldTargetingControls?(): void;
+    showTargetSelection?: unknown;
+    showFieldTargetingControls?: unknown;
+  };
+  canStartAction(input: {
+    actor: GamePlayer;
+    kind: string;
+    phaseReq: GamePhase | readonly GamePhase[] | null;
+    allowDuringSelection: boolean;
+    allowDuringResolving: boolean;
+    allowDuringOpponentTurn: boolean;
+    allowDuringChainWindow: boolean;
+  }): ActionGuardResult;
+  canActivateCardEffectUnderRestrictions?(
+    card: GameCard,
+    player: GamePlayer,
+    effect: EffectDefinition | null | undefined,
+    options: { silent: boolean },
+  ): { ok: boolean; reason?: string | null; code?: string | null };
+  canUseOncePerTurn(
+    card: GameCard,
+    player: GamePlayer,
+    effect: EffectDefinition,
+    options: ActivationOncePerTurnConfig,
+  ): { ok: boolean; reason?: string | null; lockKey?: string | null };
+  canUseFieldTargeting(
+    requirements: NormalizedSelectionContract["requirements"],
+  ): boolean;
+  normalizeSelectionContract(
+    contract: RawSelectionContract | NormalizedSelectionContract,
+    overrides?: SelectionNormalizationOverrides,
+  ): SelectionNormalizationResult;
+  startTargetSelectionSession(input: ActivationSelectionSessionInput): unknown;
+  clearTargetHighlights(): void;
+  setSelectionState(state: SelectionSessionState): void;
+  createActionResult(result?: unknown): ActivationPipelineResult;
+  normalizeActivationResult(result: unknown): ActivationPipelineResult;
+  runActivationPipeline(
+    config?: ActivationPipelineConfigInput,
+  ): Promise<ActivationPipelineResult>;
+  rollbackSpellActivation(
+    owner: GamePlayer,
+    commitInfo: ActivationCommitInfo,
+  ): MaybePromise<unknown>;
+  presentSpellTrapActivationFlip?(
+    card: GameCard,
+    owner: GamePlayer,
+    zone: CanonicalZone,
+  ): MaybePromise<unknown>;
+  waitForAiPresentationStep?(player: GamePlayer): MaybePromise<unknown>;
+  updateBoard(): unknown;
+  getOpponent?(player: GamePlayer): GamePlayer | null;
+  recordMaterialEffectActivation(
+    player: GamePlayer,
+    card: GameCard,
+    options: { contextLabel: string },
+  ): void;
+  ensureDuelCardId?(card: GameCard): DuelCardId;
+  notify?(eventName: string, payload: object): unknown;
+  devLog?(tag: string, detail?: object): void;
+  moveCard(
+    card: GameCard,
+    player: GamePlayer,
+    zone: "graveyard" | "hand" | "spellTrap" | "fieldSpell",
+    options: MoveCardOptions,
+  ): GameMaybePromise<MoveCardResult>;
+  assertStateInvariants(
+    scope: string,
+    options: { failFast: false },
+  ): void;
+}
+
+function isObjectValue(value: unknown): value is object {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function toPreparedActivationContext(
+  context: ActivationPipelineContext,
+): PreparedActivationContext {
+  return context as PreparedActivationContext;
+}
+
+function toChainSelectionMap(
+  selections: CanonicalSelectionMap,
+): ChainSelectionMap {
+  return selections as ChainSelectionMap;
+}
+
+function fromChainSelectionMap(
+  selections: ChainSelectionMap,
+): CanonicalSelectionMap {
+  return selections as CanonicalSelectionMap;
+}
+
+function toFastEffectContext(
+  context: ActivationResolutionContext,
+): FastEffectContextInput {
+  return context as FastEffectContextInput;
+}
+
+function toChainActionContext(
+  context: ActivationResolutionContext,
+): ChainActionContext {
+  return context as ChainActionContext;
+}
+
+function toChainContextInput(value: unknown): ChainContextInput | null {
+  return isObjectValue(value) ? (value as ChainContextInput) : null;
+}
+
+function asActivationPipelineResult(
+  result: unknown,
+): ActivationPipelineResult {
+  return result as ActivationPipelineResult;
+}
+
+function preservePreparedActivation(
+  value: PreparedActivationInput,
+): PreparedActivation;
+function preservePreparedActivation(
+  value: PreparedActivationInput,
+): PreparedActivationInput {
+  return value;
+}
+
+export function normalizeActivationResult(
+  result: unknown,
+): ActivationPipelineResult {
   const base =
     result && typeof result === "object" && !Array.isArray(result)
       ? result
       : {};
-  const needsSelection = base.needsSelection === true;
+  const needsSelection = Reflect.get(base, "needsSelection") === true;
   const success = needsSelection
     ? false
-    : typeof base.success === "boolean"
-      ? base.success
-      : base.ok === true;
-  const ok = typeof base.ok === "boolean" ? base.ok : success;
-  const selectionContract = base.selectionContract;
+    : typeof Reflect.get(base, "success") === "boolean"
+      ? Reflect.get(base, "success") === true
+      : Reflect.get(base, "ok") === true;
+  const ok =
+    typeof Reflect.get(base, "ok") === "boolean"
+      ? Reflect.get(base, "ok") === true
+      : success;
+  const selectionContract = Reflect.get(base, "selectionContract");
 
-  return { ...base, success, ok, needsSelection, selectionContract };
+  return {
+    ...base,
+    success,
+    ok,
+    needsSelection,
+    selectionContract,
+  } as ActivationPipelineResult;
 }
 
-export function createActionResult(result = {}) {
+export function createActionResult(result: unknown = {}): ActivationPipelineResult {
   const base =
     typeof result === "string"
       ? { success: false, reason: result }
@@ -55,7 +334,10 @@ export function createActionResult(result = {}) {
   });
 }
 
-export async function runActivationPipeline(config = {}) {
+export async function runActivationPipeline(
+  this: ActivationPipelineHost,
+  config: ActivationPipelineConfigInput = {},
+): Promise<ActivationPipelineResult> {
   if (!config || typeof config.activate !== "function") {
     return createActionResult({
       reason: "Invalid activation configuration.",
@@ -64,19 +346,23 @@ export async function runActivationPipeline(config = {}) {
   }
 
   const owner = config.owner || this.player;
-  let resolvedCard = config.card;
-  if (!owner || !resolvedCard) {
+  const requestedCard = config.card;
+  if (!owner || !requestedCard) {
     return createActionResult({
       reason: "Invalid activation target.",
       code: "INVALID_ACTIVATION_TARGET",
     });
   }
+  let resolvedCard: GameCard = requestedCard;
 
   const selectionKind = config.selectionKind || "activation";
   let resolvedZone =
     config.activationZone || config.activationContext?.activationZone || null;
 
-  const logPipeline = (tag, detail = {}) => {
+  const logPipeline = (
+    tag: string,
+    detail: ActivationPipelineLogDetail = {},
+  ): void => {
     if (typeof this.devLog !== "function") return;
     const summaryBase = [
       resolvedCard?.name,
@@ -90,7 +376,10 @@ export async function runActivationPipeline(config = {}) {
     this.devLog(tag, { summary, ...detail });
   };
 
-  const trackActivationAttempt = (result = {}, extra = {}) => {
+  const trackActivationAttempt = (
+    result: ActivationAttemptResult = {},
+    extra: { blocked?: boolean; reason?: string | null; code?: string | null } = {},
+  ): void => {
     this._arenaTracker?.recordActivationAttempt?.({
       player: owner,
       card: resolvedCard,
@@ -281,9 +570,11 @@ export async function runActivationPipeline(config = {}) {
       config.activationContext?.resolutionSelections || {},
   };
 
-  const safeActivate = async (selections) => {
+  const safeActivate = async (
+    selections: CanonicalSelectionMap | null,
+  ): Promise<unknown> => {
     try {
-      return await config.activate(
+      return await config.activate!(
         selections,
         { ...activationContext, prepareOnly: true },
         resolvedActivationZone,
@@ -304,7 +595,9 @@ export async function runActivationPipeline(config = {}) {
     }
   };
 
-  const commitPreparedSource = async () => {
+  const commitPreparedSource = async (): Promise<
+    ActivationPipelineResult | { success: true }
+  > => {
     if (activationContext.committed === true) {
       return { success: true };
     }
@@ -325,7 +618,7 @@ export async function runActivationPipeline(config = {}) {
       activationContext.activationZone = resolvedActivationZone;
       return { success: true };
     }
-    commitInfo = await config.commit();
+    commitInfo = (await config.commit()) ?? null;
     if (!commitInfo || !commitInfo.cardRef) {
       return createActionResult({
         reason: "Activation commit failed.",
@@ -350,7 +643,10 @@ export async function runActivationPipeline(config = {}) {
     return { success: true };
   };
 
-  const handleResult = async (result, fromSelection = false) => {
+  const handleResult = async (
+    result: unknown,
+    fromSelection = false,
+  ): Promise<ActivationPipelineResult> => {
     const normalized = this.normalizeActivationResult(result);
     normalized.commitInfo =
       normalized.commitInfo || activationContext.commitInfo || commitInfo;
@@ -547,7 +843,10 @@ export async function runActivationPipeline(config = {}) {
     }
 
     const preparedEffect =
-      normalized.effect || oncePerTurnInfo?.effect || activationEffect || config.effect;
+      normalized.effect ||
+      oncePerTurnInfo?.effect ||
+      activationEffect ||
+      config.effect;
     const preparedSelections =
       normalized.targets || normalized.selections || config.selections || {};
 
@@ -676,7 +975,7 @@ export async function runActivationPipeline(config = {}) {
       return commitResult;
     }
 
-    let resolutionResult = normalized;
+    let resolutionResult: ActivationPipelineResult = normalized;
     const preparingForExistingChain = config.prepareForExistingChain === true;
     const shouldUseChain =
       !preparingForExistingChain &&
@@ -689,24 +988,30 @@ export async function runActivationPipeline(config = {}) {
       typeof this.chainSystem?.openActivationChain === "function";
 
     if (normalized.placementOnly !== true && preparedEffect) {
-      const preparedActivationContext = {
+      const preparedActivationContext: ActivationPipelineContext = {
         ...activationContext,
         ...(normalized.activationContext || {}),
         prepareOnly: false,
         committed: activationContext.committed === true,
         targetSelections: preparedSelections,
       };
-      const preparedActivation = this.chainSystem?.createPreparedActivation
+      const preparedActivation: PreparedActivation = this.chainSystem?.createPreparedActivation
         ? this.chainSystem.createPreparedActivation({
             card: resolvedCard,
             controller: owner,
             effect: preparedEffect,
             activationZone: resolvedActivationZone,
-            costSelections: activationContext.costSelections || {},
+            costSelections: toChainSelectionMap(
+              activationContext.costSelections || {},
+            ),
             targetSelections:
-              activationContext.targetSelections || preparedSelections,
+              toChainSelectionMap(
+                activationContext.targetSelections || preparedSelections,
+              ),
             resolutionSelections:
-              activationContext.resolutionSelections || {},
+              toChainSelectionMap(
+                activationContext.resolutionSelections || {},
+              ),
             costPayment: activationContext.costPayment || null,
             activationCommitment:
               activationContext.activationCommitment || null,
@@ -714,19 +1019,28 @@ export async function runActivationPipeline(config = {}) {
             sourceMoved: activationContext.sourceMoved === true,
             latestSourceLocation:
               activationContext.latestSourceLocation || null,
-            activationContext: preparedActivationContext,
+            activationContext: toPreparedActivationContext(
+              preparedActivationContext,
+            ),
             selectionKind,
             context:
-              normalized.resolutionContext ||
-              activationContext.actionContext ||
-              null,
+              toChainContextInput(
+                normalized.resolutionContext ||
+                  activationContext.actionContext ||
+                  null,
+              ),
             committed: activationContext.committed === true,
             costsPaid: activationContext.costsPaid === true,
             skipDefaultFinalization: typeof config.finalize === "function",
             pipelineManaged: true,
             pipelineFinalization:
               typeof config.finalize === "function"
-                ? async (linkResult = {}, finalizationContext = {}) => {
+                ? async (
+                    linkResult: ChainOperationResult = {},
+                    finalizationContext: Partial<
+                      Parameters<ChainPipelineFinalization>[1]
+                    > = {},
+                  ) => {
                     activationContext.chainFinalizationHandled = true;
                     if (
                       linkResult.activationNegated === true
@@ -738,7 +1052,7 @@ export async function runActivationPipeline(config = {}) {
                       ...linkResult,
                       needsSelection: false,
                     });
-                    await config.finalize(finalResult, {
+                     await config.finalize!(finalResult, {
                       card: resolvedCard,
                       owner,
                       activationZone: resolvedActivationZone,
@@ -755,22 +1069,30 @@ export async function runActivationPipeline(config = {}) {
                   }
                 : null,
           })
-        : {
+        : preservePreparedActivation({
             card: resolvedCard,
             controller: owner,
             effect: preparedEffect,
             activationZone: resolvedActivationZone,
-            costSelections: activationContext.costSelections || {},
+            costSelections: toChainSelectionMap(
+              activationContext.costSelections || {},
+            ),
             targetSelections:
-              activationContext.targetSelections || preparedSelections,
+              toChainSelectionMap(
+                activationContext.targetSelections || preparedSelections,
+              ),
             resolutionSelections:
-              activationContext.resolutionSelections || {},
+              toChainSelectionMap(
+                activationContext.resolutionSelections || {},
+              ),
             activationCommitment:
               activationContext.activationCommitment || null,
-            activationContext: preparedActivationContext,
-          };
+            activationContext: toPreparedActivationContext(
+              preparedActivationContext,
+            ),
+          });
 
-      let costResult = { success: true };
+      let costResult: ChainOperationResult = { success: true };
       if (
         activationContext.costsPaid !== true &&
         (shouldUseChain || preparingForExistingChain) &&
@@ -795,7 +1117,10 @@ export async function runActivationPipeline(config = {}) {
           { activationContext },
         );
         if (typeof config.onFailure === "function") {
-          await config.onFailure(costResult, activationContext);
+          await config.onFailure(
+            asActivationPipelineResult(costResult),
+            activationContext,
+          );
         }
         trackActivationAttempt(costResult);
         return this.normalizeActivationResult(costResult);
@@ -814,7 +1139,10 @@ export async function runActivationPipeline(config = {}) {
           );
         if (commitmentResult?.success === false) {
           if (typeof config.onFailure === "function") {
-            await config.onFailure(commitmentResult, activationContext);
+            await config.onFailure(
+              asActivationPipelineResult(commitmentResult),
+              activationContext,
+            );
           }
           trackActivationAttempt(commitmentResult);
           return this.normalizeActivationResult({
@@ -864,7 +1192,7 @@ export async function runActivationPipeline(config = {}) {
             return failedResult;
           }
 
-          const completed = {
+          const completed = asActivationPipelineResult({
             ...normalized,
             ...linkResult,
             success: true,
@@ -872,7 +1200,7 @@ export async function runActivationPipeline(config = {}) {
             needsSelection: false,
             effect: preparedEffect,
             targets: preparedSelections,
-          };
+          });
           const shouldCountMaterialActivation =
             resolvedCard?.cardKind === "monster" &&
             (selectionKind === "monsterEffect" ||
@@ -888,7 +1216,7 @@ export async function runActivationPipeline(config = {}) {
           trackActivationAttempt(completed);
           return completed;
         };
-        const preparedResult = {
+        const preparedResult: ActivationPipelineResult = {
           ...normalized,
           success: true,
           ok: true,
@@ -905,11 +1233,12 @@ export async function runActivationPipeline(config = {}) {
       }
 
       if (shouldUseChain) {
-        resolutionResult = await this.chainSystem.openActivationChain(
+        const rawResolutionResult = await this.chainSystem.openActivationChain(
           preparedActivation,
         );
+        resolutionResult = this.normalizeActivationResult(rawResolutionResult);
       } else {
-        resolutionResult = await config.activate(
+        const rawResolutionResult = await config.activate!(
           preparedSelections,
           {
             ...activationContext,
@@ -921,6 +1250,7 @@ export async function runActivationPipeline(config = {}) {
           resolvedCard,
           owner,
         );
+        resolutionResult = this.normalizeActivationResult(rawResolutionResult);
       }
 
       if (
@@ -1003,7 +1333,9 @@ export async function runActivationPipeline(config = {}) {
     return completedResult;
   };
 
-  const runCanonicalActivationTransaction = async (initialResult) => {
+  const runCanonicalActivationTransaction = async (
+    initialResult: unknown,
+  ): Promise<{ result: unknown; fromSelection: boolean }> => {
     const normalizedInitial = this.normalizeActivationResult(initialResult);
     if (!normalizedInitial.success && !normalizedInitial.needsSelection) {
       return { result: initialResult, fromSelection: false };
@@ -1019,7 +1351,9 @@ export async function runActivationPipeline(config = {}) {
       typeof normalizedInitial.resolutionContext === "object"
         ? normalizedInitial.resolutionContext
         : {};
-    const buildCanonicalContext = (activationOverrides = {}) => ({
+    const buildCanonicalContext = (
+      activationOverrides: Partial<ActivationPipelineContext> = {},
+    ): ActivationResolutionContext => ({
       ...resolutionContext,
       source: resolvedCard,
       sourceCard: resolvedCard,
@@ -1062,7 +1396,7 @@ export async function runActivationPipeline(config = {}) {
       costDefinitions,
       targetDefinitions,
       this.effectEngine,
-      buildCanonicalContext(),
+      toFastEffectContext(buildCanonicalContext()),
     );
     const costs = chainSystem.getEffectActivationCosts?.(effect) || [];
     const hasCanonicalWork =
@@ -1085,7 +1419,9 @@ export async function runActivationPipeline(config = {}) {
       normalizedInitial.selections ||
       config.selections ||
       {};
-    const selectProvided = (definitions) =>
+    const selectProvided = (
+      definitions: readonly ChainEffectTarget[],
+    ): CanonicalSelectionMap =>
       Object.fromEntries(
         definitions
           .filter((definition) => definition?.id in provided)
@@ -1097,18 +1433,19 @@ export async function runActivationPipeline(config = {}) {
       costSelectionDefinitions.length > 0 &&
       Object.keys(costSelections).length === 0
     ) {
-      costSelections = await chainSystem.getPlayerSelectionsForDefinitions?.(
+      const requestedCostSelections =
+        await chainSystem.getPlayerSelectionsForDefinitions?.(
         resolvedCard,
         costSelectionDefinitions,
         owner,
-        buildCanonicalContext(),
+        toFastEffectContext(buildCanonicalContext()),
         {
           purpose: "cost",
           allowCancel: true,
           activationZone: resolvedActivationZone,
         },
       );
-      if (costSelections == null) {
+      if (requestedCostSelections == null) {
         return {
           result: this.createActionResult({
             cancelled: true,
@@ -1118,17 +1455,18 @@ export async function runActivationPipeline(config = {}) {
           fromSelection: false,
         };
       }
+      costSelections = fromChainSelectionMap(requestedCostSelections);
     }
 
     const finalCostSelectionPreview = costSelectionDefinitions.length
       ? this.effectEngine?.resolveTargets?.(
           costSelectionDefinitions,
-          buildCanonicalContext({
+          toChainActionContext(buildCanonicalContext({
             preview: true,
             isPreview: true,
             autoSelectTargets: false,
-          }),
-          costSelections,
+          })),
+          toChainSelectionMap(costSelections),
         )
       : { ok: true };
     if (
@@ -1154,13 +1492,13 @@ export async function runActivationPipeline(config = {}) {
       controller: owner,
       effect,
       activationZone: resolvedActivationZone,
-      costSelections: costSelections || {},
-      targetSelections: {},
-      context: resolutionContext,
-      activationContext: {
+      costSelections: toChainSelectionMap(costSelections || {}),
+      targetSelections: toChainSelectionMap({}),
+      context: toChainContextInput(resolutionContext),
+      activationContext: toPreparedActivationContext({
         ...activationContext,
         costSelections: costSelections || {},
-      },
+      }),
       committed: true,
     });
     activationContext.sourceAtActivation = draft.sourceAtActivation;
@@ -1178,7 +1516,7 @@ export async function runActivationPipeline(config = {}) {
     try {
       costResult = await chainSystem.payActivationCosts(
         draft,
-        buildCanonicalContext(),
+        toFastEffectContext(buildCanonicalContext()),
       );
     } finally {
       chainSystem.isPreparingActivation = false;
@@ -1218,7 +1556,7 @@ export async function runActivationPipeline(config = {}) {
 
     const commitmentResult = await chainSystem.applyActivationCommitActions?.(
       draft,
-      buildCanonicalContext(),
+      toFastEffectContext(buildCanonicalContext()),
     );
     if (commitmentResult?.success === false) {
       return {
@@ -1243,7 +1581,9 @@ export async function runActivationPipeline(config = {}) {
       });
     }
 
-    const buildTargetCanonicalContext = (activationOverrides = {}) => ({
+    const buildTargetCanonicalContext = (
+      activationOverrides: Partial<ActivationPipelineContext> = {},
+    ): ActivationResolutionContext => ({
       ...buildCanonicalContext(activationOverrides),
       _actionTargets: {
         ...(resolutionContext._actionTargets || {}),
@@ -1252,16 +1592,16 @@ export async function runActivationPipeline(config = {}) {
     });
     const resolvedTargetDefinitions = resolveCountFromSelectionDefinitions(
       targetDefinitions,
-      costSelections,
+      toChainSelectionMap(costSelections),
     );
     const resolvedTargetPreview = resolvedTargetDefinitions.length
       ? this.effectEngine?.resolveTargets?.(
           resolvedTargetDefinitions,
-          buildTargetCanonicalContext({
+          toChainActionContext(buildTargetCanonicalContext({
             preview: true,
             isPreview: true,
             autoSelectTargets: false,
-          }),
+          })),
           null,
         )
       : { ok: true };
@@ -1286,18 +1626,19 @@ export async function runActivationPipeline(config = {}) {
       resolvedTargetDefinitions.length > 0 &&
       Object.keys(targetSelections).length === 0
     ) {
-      targetSelections = await chainSystem.getPlayerSelectionsForDefinitions?.(
+      const requestedTargetSelections =
+        await chainSystem.getPlayerSelectionsForDefinitions?.(
         resolvedCard,
         resolvedTargetDefinitions,
         owner,
-        buildTargetCanonicalContext(),
+        toFastEffectContext(buildTargetCanonicalContext()),
         {
           purpose: "target",
           allowCancel: false,
           activationZone: resolvedActivationZone,
         },
       );
-      if (targetSelections == null) {
+      if (requestedTargetSelections == null) {
         return {
           result: this.createActionResult({
             committed: true,
@@ -1309,6 +1650,7 @@ export async function runActivationPipeline(config = {}) {
           fromSelection: false,
         };
       }
+      targetSelections = fromChainSelectionMap(requestedTargetSelections);
     }
 
     const selections = {
@@ -1328,12 +1670,12 @@ export async function runActivationPipeline(config = {}) {
     const finalTargetPreview = resolvedTargetDefinitions.length
       ? this.effectEngine?.resolveTargets?.(
           resolvedTargetDefinitions,
-          buildTargetCanonicalContext({
+          toChainActionContext(buildTargetCanonicalContext({
             preview: true,
             isPreview: true,
             autoSelectTargets: false,
-          }),
-          targetSelections,
+          })),
+          toChainSelectionMap(targetSelections),
         )
       : { ok: true };
     if (finalTargetPreview?.ok === false || finalTargetPreview?.needsSelection) {
@@ -1364,15 +1706,18 @@ export async function runActivationPipeline(config = {}) {
   return handleResult(transaction.result, transaction.fromSelection);
 }
 
-export async function runActivationPipelineWait(config = {}) {
+export async function runActivationPipelineWait(
+  this: ActivationPipelineHost,
+  config: ActivationPipelineConfigInput = {},
+): Promise<ActivationPipelineResult> {
   let finished = false;
-  let resolvePromise = null;
+  let resolvePromise: ((result: ActivationPipelineResult) => void) | null = null;
 
-  const waitForFinish = new Promise((resolve) => {
+  const waitForFinish = new Promise<ActivationPipelineResult>((resolve) => {
     resolvePromise = resolve;
   });
 
-  const finishOnce = (result) => {
+  const finishOnce = (result: ActivationPipelineResult): void => {
     if (finished) return;
     finished = true;
     if (typeof resolvePromise === "function") {
@@ -1380,21 +1725,30 @@ export async function runActivationPipelineWait(config = {}) {
     }
   };
 
-  const wrappedConfig = {
+  const wrappedConfig: ActivationPipelineConfigInput = {
     ...config,
-    onPreparationComplete: async (result, ctx) => {
+    onPreparationComplete: async (
+      result: ActivationPipelineResult,
+      ctx: ActivationPipelineContext,
+    ) => {
       if (typeof config.onPreparationComplete === "function") {
         await config.onPreparationComplete(result, ctx);
       }
       finishOnce(result);
     },
-    onSuccess: async (result, ctx) => {
+    onSuccess: async (
+      result: ActivationPipelineResult,
+      ctx: ActivationPipelineContext,
+    ) => {
       if (typeof config.onSuccess === "function") {
         await config.onSuccess(result, ctx);
       }
       finishOnce(result);
     },
-    onFailure: async (result, ctx) => {
+    onFailure: async (
+      result: ActivationPipelineResult,
+      ctx: ActivationPipelineContext,
+    ) => {
       if (typeof config.onFailure === "function") {
         await config.onFailure(result, ctx);
       }

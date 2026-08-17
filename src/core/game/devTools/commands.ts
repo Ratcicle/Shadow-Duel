@@ -4,10 +4,92 @@
  * devGetSelectionCleanupState, devForceTargetCleanup, devAutoConfirmTargetSelection
  */
 
+import type {
+  FullGameHost,
+  GameCard,
+  GameDevToolsHost,
+  GamePlayer,
+} from "../../contracts/gameRuntime.js";
+import type { GamePhase } from "../../contracts/game.js";
+import type { PlayerId } from "../../contracts/primitives.js";
+import type {
+  ActiveSelectionSession,
+  SelectionSessionState,
+} from "../../contracts/selection.js";
+import type { DrawCardsResult } from "../deck/draw.js";
+
+type DevCardZone =
+  | "hand"
+  | "graveyard"
+  | "spelltrap"
+  | "field-attack"
+  | "field-defense"
+  | "fieldspell";
+
+interface DevGiveCardOptions {
+  playerId?: PlayerId;
+  zone?: DevCardZone | string;
+  cardName?: string;
+  name?: string;
+  duelCardId?: number;
+  position?: "attack" | "defense";
+  isFacedown?: boolean;
+  facedown?: boolean;
+  turnSetOn?: number;
+  counters?: { readonly [counterType: string]: number };
+}
+
+interface DevSelectionUiPort {
+  getSelectionCleanupState?(): {
+    controlsVisible?: boolean;
+    highlightCount?: number;
+  };
+  hideFieldTargetingControls?(): void;
+}
+
+type DevCommandHost = GameDevToolsHost &
+  Pick<
+    FullGameHost,
+    "phase" | "turn" | "targetSelection" | "selectionState" | "ui"
+  > & {
+    ui?: DevSelectionUiPort;
+    resolvePlayerById(id: PlayerId): GamePlayer | null;
+    createCardForOwner(
+      identifier: string | undefined,
+      owner: GamePlayer,
+      overrides?: DevGiveCardOptions,
+    ): GameCard | null;
+    drawCards(player: GamePlayer, count?: number): DrawCardsResult;
+    updateBoard(): unknown;
+    forceClearTargetSelection(reason: string): void;
+    clearTargetHighlights(): void;
+    setSelectionState(state: SelectionSessionState): void;
+    finishTargetSelection(): Promise<unknown>;
+    devLog(code: string, detail?: unknown): void;
+    targetSelection: ActiveSelectionSession | null;
+  };
+
+const VALID_PHASES = new Set<GamePhase>([
+  "draw",
+  "standby",
+  "main1",
+  "battle",
+  "main2",
+  "end",
+]);
+
+function isGamePhase(value: string): value is GamePhase {
+  return [...VALID_PHASES].some((phase) => phase === value);
+}
+
 /**
  * @this {import('../../Game.js').default}
  */
-export function devDraw(playerId = "player", count = 1) {
+export function devDraw(
+  this: DevCommandHost,
+  playerId: PlayerId = "player",
+  count = 1,
+) {
   if (!this.devModeEnabled) {
     return { success: false, reason: "Dev Mode is disabled." };
   }
@@ -37,7 +119,10 @@ export function devDraw(playerId = "player", count = 1) {
 /**
  * @this {import('../../Game.js').default}
  */
-export function devGiveCard(options = {}) {
+export function devGiveCard(
+  this: DevCommandHost,
+  options: DevGiveCardOptions = {},
+) {
   if (!this.devModeEnabled) {
     return { success: false, reason: "Dev Mode is disabled." };
   }
@@ -57,7 +142,7 @@ export function devGiveCard(options = {}) {
     return { success: false, reason: "Card not found." };
   }
 
-  const sendOldFieldSpell = (existing) => {
+  const sendOldFieldSpell = (existing: GameCard | null) => {
     if (existing) {
       player.graveyard.push(existing);
     }
@@ -112,20 +197,16 @@ export function devGiveCard(options = {}) {
 /**
  * @this {import('../../Game.js').default}
  */
-export function devForcePhase(targetPhase, options = {}) {
+export function devForcePhase(
+  this: DevCommandHost,
+  targetPhase: string,
+  options: { turn?: PlayerId } = {},
+) {
   if (!this.devModeEnabled) {
     return { success: false, reason: "Dev Mode is disabled." };
   }
 
-  const validPhases = new Set([
-    "draw",
-    "standby",
-    "main1",
-    "battle",
-    "main2",
-    "end",
-  ]);
-  if (!validPhases.has(targetPhase)) {
+  if (!isGamePhase(targetPhase)) {
     return { success: false, reason: "Invalid phase." };
   }
 
@@ -145,7 +226,7 @@ export function devForcePhase(targetPhase, options = {}) {
 /**
  * @this {import('../../Game.js').default}
  */
-export function devGetSelectionCleanupState() {
+export function devGetSelectionCleanupState(this: DevCommandHost) {
   const uiState =
     this.ui && typeof this.ui.getSelectionCleanupState === "function"
       ? this.ui.getSelectionCleanupState()
@@ -161,7 +242,7 @@ export function devGetSelectionCleanupState() {
 /**
  * @this {import('../../Game.js').default}
  */
-export function devForceTargetCleanup() {
+export function devForceTargetCleanup(this: DevCommandHost) {
   if (this.targetSelection) {
     this.forceClearTargetSelection("dev_force_cleanup");
     return;
@@ -176,7 +257,7 @@ export function devForceTargetCleanup() {
 /**
  * @this {import('../../Game.js').default}
  */
-export async function devAutoConfirmTargetSelection() {
+export async function devAutoConfirmTargetSelection(this: DevCommandHost) {
   if (!this.devModeEnabled) {
     return { success: false, reason: "Dev Mode is disabled." };
   }
@@ -185,7 +266,7 @@ export async function devAutoConfirmTargetSelection() {
     return { success: false, reason: "No active target selection." };
   }
 
-  const selections = {};
+  const selections: ActiveSelectionSession["selections"] = {};
   let canSatisfy = true;
 
   for (const requirement of selection.requirements) {

@@ -2,6 +2,32 @@ import {
   DAMAGE_STEP_ACTIVATION_CATEGORIES,
   DAMAGE_STEP_TIMINGS,
 } from "../spellTrap/quickSpellRules.js";
+import type {
+  ChainOperationResult,
+  ChainRuntimePort,
+  ChainRuntimeTriggerOccurrence,
+  FastEffectContextInput,
+} from "../../contracts/chainRuntime.js";
+import type { DamageStepTiming } from "../../contracts/effects.js";
+import type {
+  DamageStepBuff,
+  DamageStepCard,
+  DamageStepCardInstanceId,
+  DamageStepCardSnapshot,
+  DamageStepDestructionCandidate,
+  DamageStepExecutionResult,
+  DamageStepLpChangePayload,
+  DamageStepOutcome,
+  DamageStepOutcomeSnapshot,
+  DamageStepPreparationFailure,
+  DamageStepState,
+  DamageStepTransaction,
+  DamageStepTransactionInput,
+  DamageStepTransactionSnapshot,
+} from "../../contracts/gameRuntime.js";
+import type { GamePlayer } from "../../contracts/player.js";
+import type { DamageStepId } from "../../contracts/primitives.js";
+import type { CanonicalZone } from "../../contracts/zones.js";
 
 export { DAMAGE_STEP_ACTIVATION_CATEGORIES, DAMAGE_STEP_TIMINGS };
 
@@ -13,7 +39,142 @@ const DAMAGE_STEP_SEQUENCE = Object.freeze([
   DAMAGE_STEP_TIMINGS.END,
 ]);
 
-function getCardInstanceId(card) {
+interface DamageStepWindowResult extends ChainOperationResult {
+  occurrence?: ChainRuntimeTriggerOccurrence | null;
+  resolutionResult?: { reason?: string | null } | null;
+  timingRecovery?: DamageStepWindowResult | null;
+  suppressed?: boolean;
+}
+
+interface DamageStepUiPort {
+  log?(message: string): void;
+  applyFlipAnimation?(ownerId: string | undefined, index: number): void;
+}
+
+interface DamageStepDestroyResult {
+  destroyed?: boolean;
+}
+
+interface BattleDestructionContext {
+  attacker: DamageStepCard;
+  defender: DamageStepCard;
+  target: DamageStepCard;
+  battleOpponent: DamageStepCard;
+  sourceCard: DamageStepCard;
+}
+
+interface BattleDamageOptions {
+  sourceCard: DamageStepCard;
+  targetCard: DamageStepCard | null;
+  cause: "battle";
+  directAttack: boolean;
+  triggerOpponentDamage: false;
+  suppressVisual: boolean;
+}
+
+interface DamageStepDestroyOptions {
+  cause: "battle";
+  sourceCard: DamageStepCard;
+  fromZone: "field";
+  battleDestructionDetermined: true;
+  atomicGroupId: number | string;
+  awaitCardToGraveEvent: true;
+  awaitCardMovedEvent: true;
+  contextLabel: "damage_step_battle_destruction";
+  actionContext: {
+    damageStepId: DamageStepId;
+    damageStepTiming: DamageStepTiming;
+    isDamageStep: true;
+  };
+}
+
+type DamageStepEventPayload = ReturnType<typeof buildStagePayload> & {
+  event?: string;
+  addTriggerToChain?: false;
+  battleDestroyer?: DamageStepCard;
+  battleDestroyers?: DamageStepCard[];
+  destroyed?: DamageStepCard;
+  destroyedOwner?: GamePlayer;
+  destroyedOwnerId?: string;
+  destroyedPosition?: string | null;
+};
+
+interface DamageStepHost {
+  player: GamePlayer;
+  bot: GamePlayer;
+  turnCounter: number;
+  phase: string;
+  battleStep: string | null;
+  nextDamageStepId: number;
+  activeDamageStepTransaction: DamageStepTransaction | null;
+  lastDamageStepTransaction: DamageStepTransaction | null;
+  damageStepProcedureDepth: number;
+  damageCalculationTempBuffs: DamageStepBuff[];
+  endOfDamageStepTempBuffs: DamageStepBuff[];
+  damageCalculationStatChangePending: boolean;
+  targetSelection: unknown;
+  selectionState: string;
+  pendingEventSelection: unknown;
+  pendingTriggerSelection: unknown;
+  chainSystem: ChainRuntimePort;
+  effectEngine?: { clearTargetingCache?(): void } | null;
+  ui?: DamageStepUiPort | null;
+  getOpponent?(player: GamePlayer | null): GamePlayer | null;
+  notify?(eventName: string, payload?: unknown): void;
+  emit?(
+    eventName: string,
+    payload: DamageStepEventPayload,
+    options?: { collectTriggersOnly?: boolean },
+  ): Promise<DamageStepWindowResult | null | undefined>;
+  checkAndOfferTraps?(
+    eventName: string,
+    payload: DamageStepEventPayload,
+  ): Promise<DamageStepWindowResult | null | undefined>;
+  updateBoard?(): unknown;
+  waitForPresentationDelay?(delayMs: number): Promise<unknown>;
+  inflictDamage?(
+    player: GamePlayer,
+    amount: number,
+    options: BattleDamageOptions,
+  ): unknown;
+  markAttackUsed?(attacker: DamageStepCard, target: DamageStepCard | null): void;
+  canDestroyByBattle?(
+    card: DamageStepCard,
+    context: BattleDestructionContext,
+  ): boolean;
+  isBattleDestructionProtected?(
+    card: DamageStepCard,
+    context: BattleDestructionContext,
+  ): boolean;
+  destroyCard?(
+    card: DamageStepCard,
+    options: DamageStepDestroyOptions,
+  ): Promise<DamageStepDestroyResult | null | undefined>;
+  clearDamageCalculationBuffs?(): void;
+  clearEndOfDamageStepBuffs?(): void;
+  checkWinCondition?(): unknown;
+  cleanupDamageStepTransaction?(reason?: string): unknown;
+  getDamageStepState?(): DamageStepState;
+}
+
+interface EndDamageStepOptions {
+  resolveTriggers?: boolean;
+}
+
+function errorMessage(error: unknown, fallback: string): string {
+  if (
+    (typeof error === "object" && error !== null) ||
+    typeof error === "function"
+  ) {
+    const message = Reflect.get(error, "message");
+    if (message) return message as string;
+  }
+  return fallback;
+}
+
+function getCardInstanceId(
+  card: DamageStepCard | null | undefined,
+): DamageStepCardInstanceId {
   return (
     card?.instanceId ??
     card?._instanceId ??
@@ -23,7 +184,11 @@ function getCardInstanceId(card) {
   );
 }
 
-function cardSnapshot(card, owner, zone = "field") {
+function cardSnapshot(
+  card: DamageStepCard | null | undefined,
+  owner: GamePlayer | null | undefined,
+  zone: CanonicalZone = "field",
+): DamageStepCardSnapshot | null {
   if (!card) return null;
   return {
     cardId: card.id ?? null,
@@ -37,7 +202,10 @@ function cardSnapshot(card, owner, zone = "field") {
   };
 }
 
-function serializeCardSnapshot(snapshot, hidden = false) {
+function serializeCardSnapshot(
+  snapshot: DamageStepCardSnapshot | null | undefined,
+  hidden = false,
+): DamageStepCardSnapshot | null {
   if (!snapshot) return null;
   return {
     cardId: hidden ? null : snapshot.cardId,
@@ -51,8 +219,10 @@ function serializeCardSnapshot(snapshot, hidden = false) {
   };
 }
 
-function serializeOutcome(transaction) {
-  const outcome = transaction?.outcome || {};
+function serializeOutcome(
+  transaction: DamageStepTransaction | null | undefined,
+): DamageStepOutcomeSnapshot {
+  const outcome: Partial<DamageStepOutcome> = transaction?.outcome || {};
   return {
     committed: outcome.committed === true,
     battled: outcome.battled === true,
@@ -70,7 +240,9 @@ function serializeOutcome(transaction) {
   };
 }
 
-function serializeTransaction(transaction) {
+function serializeTransaction(
+  transaction: DamageStepTransaction | null | undefined,
+): DamageStepTransactionSnapshot | null {
   if (!transaction) return null;
   const defenderHidden =
     transaction.sourceAtStart?.defender?.faceDown === true &&
@@ -79,9 +251,11 @@ function serializeTransaction(transaction) {
     damageStepId: transaction.damageStepId,
     status: transaction.status,
     timing: transaction.timing,
-    sequenceIndex: DAMAGE_STEP_SEQUENCE.indexOf(transaction.timing),
+    sequenceIndex: DAMAGE_STEP_SEQUENCE.indexOf(
+      transaction.timing as DamageStepTiming,
+    ),
     directAttack: transaction.directAttack === true,
-    attacker: serializeCardSnapshot(transaction.sourceAtStart.attacker),
+    attacker: serializeCardSnapshot(transaction.sourceAtStart.attacker)!,
     defender: serializeCardSnapshot(
       transaction.sourceAtStart.defender,
       defenderHidden,
@@ -95,16 +269,20 @@ function serializeTransaction(transaction) {
   };
 }
 
-function nextDamageStepId(game) {
+function nextDamageStepId(game: DamageStepHost): DamageStepId {
   if (!Number.isInteger(game.nextDamageStepId) || game.nextDamageStepId < 1) {
     game.nextDamageStepId = 1;
   }
-  const id = game.nextDamageStepId;
+  const id = game.nextDamageStepId as DamageStepId;
   game.nextDamageStepId += 1;
   return id;
 }
 
-function resolveOwner(game, card, explicitOwner = null) {
+function resolveOwner(
+  game: DamageStepHost,
+  card: DamageStepCard | null | undefined,
+  explicitOwner: GamePlayer | null = null,
+): GamePlayer | null {
   if (explicitOwner) return explicitOwner;
   if (!card) return null;
   return card.owner === game?.player?.id || card.owner === "player"
@@ -112,7 +290,10 @@ function resolveOwner(game, card, explicitOwner = null) {
     : game?.bot || null;
 }
 
-export function createDamageStepTransaction(input = {}) {
+export function createDamageStepTransaction(
+  this: DamageStepHost,
+  input: DamageStepTransactionInput = {},
+): DamageStepTransaction | DamageStepPreparationFailure {
   if (Object.hasOwn(input, "target")) {
     return { ok: false, reason: "removed_damage_step_target_field" };
   }
@@ -124,11 +305,15 @@ export function createDamageStepTransaction(input = {}) {
     return { ok: false, reason: "damage_step_already_active" };
   }
   const defender = input.defender || null;
-  const attackerOwner = resolveOwner(this, attacker, input.attackerOwner);
+  const attackerOwner = resolveOwner(
+    this,
+    attacker,
+    input.attackerOwner,
+  ) as GamePlayer;
   const defenderOwner = defender
     ? resolveOwner(this, defender, input.defenderOwner)
     : input.defenderOwner || this.getOpponent?.(attackerOwner) || null;
-  const transaction = {
+  const transaction: DamageStepTransaction = {
     damageStepId: nextDamageStepId(this),
     status: "active",
     timing: null,
@@ -144,7 +329,7 @@ export function createDamageStepTransaction(input = {}) {
           : null,
     },
     sourceAtStart: {
-      attacker: cardSnapshot(attacker, attackerOwner),
+      attacker: cardSnapshot(attacker, attackerOwner)!,
       defender: cardSnapshot(defender, defenderOwner),
     },
     revealedDefender: false,
@@ -173,7 +358,7 @@ export function createDamageStepTransaction(input = {}) {
   return transaction;
 }
 
-export function getDamageStepState() {
+export function getDamageStepState(this: DamageStepHost): DamageStepState {
   return {
     active: this.activeDamageStepTransaction != null,
     transaction: serializeTransaction(this.activeDamageStepTransaction),
@@ -181,13 +366,21 @@ export function getDamageStepState() {
   };
 }
 
-function setDamageStepTiming(game, transaction, timing) {
+function setDamageStepTiming(
+  game: DamageStepHost,
+  transaction: DamageStepTransaction,
+  timing: DamageStepTiming,
+): void {
   transaction.timing = timing;
   game.battleStep = "damage";
   game.notify?.("damage_step_timing", serializeTransaction(transaction));
 }
 
-function cardStillMatchesSnapshot(owner, card, snapshot) {
+function cardStillMatchesSnapshot(
+  owner: GamePlayer | null | undefined,
+  card: DamageStepCard | null | undefined,
+  snapshot: DamageStepCardSnapshot | null | undefined,
+): boolean {
   return (
     !!owner &&
     !!card &&
@@ -198,7 +391,7 @@ function cardStillMatchesSnapshot(owner, card, snapshot) {
   );
 }
 
-function participantsRemainValid(transaction) {
+function participantsRemainValid(transaction: DamageStepTransaction): boolean {
   const attackerValid = cardStillMatchesSnapshot(
     transaction.attackerOwner,
     transaction.attacker,
@@ -219,7 +412,11 @@ function participantsRemainValid(transaction) {
   );
 }
 
-function buildStagePayload(transaction, timing, atomicGroupId) {
+function buildStagePayload(
+  transaction: DamageStepTransaction,
+  timing: DamageStepTiming,
+  atomicGroupId: number | string | null,
+) {
   const outcome = transaction.outcome;
   return {
     damageStepId: transaction.damageStepId,
@@ -262,8 +459,12 @@ function buildStagePayload(transaction, timing, atomicGroupId) {
   };
 }
 
-async function collectStageOccurrences(game, events, payload) {
-  const occurrences = [];
+async function collectStageOccurrences(
+  game: DamageStepHost,
+  events: readonly string[],
+  payload: ReturnType<typeof buildStagePayload>,
+): Promise<ChainRuntimeTriggerOccurrence[]> {
+  const occurrences: ChainRuntimeTriggerOccurrence[] = [];
   for (const eventName of events) {
     const result = await game.emit?.(
       eventName,
@@ -275,13 +476,17 @@ async function collectStageOccurrences(game, events, payload) {
   return occurrences;
 }
 
-async function resolveStageWindow(game, transaction, events) {
+async function resolveStageWindow(
+  game: DamageStepHost,
+  transaction: DamageStepTransaction,
+  events: readonly string[],
+): Promise<DamageStepWindowResult> {
   const atomicGroupId =
     game.chainSystem?.allocateAtomicEventGroupId?.() ||
     `damage_step:${transaction.damageStepId}:${transaction.timing}`;
   const payload = buildStagePayload(
     transaction,
-    transaction.timing,
+    transaction.timing as DamageStepTiming,
     atomicGroupId,
   );
   const occurrences = await collectStageOccurrences(game, events, payload);
@@ -295,7 +500,7 @@ async function resolveStageWindow(game, transaction, events) {
           ...payload,
           type: "damage_step",
           event: "damage_step",
-        },
+        } as FastEffectContextInput,
       },
     );
     if (triggerResult?.needsSelection || triggerResult?.ok === false) {
@@ -313,7 +518,10 @@ async function resolveStageWindow(game, transaction, events) {
   return triggerResult;
 }
 
-async function revealDefender(game, transaction) {
+async function revealDefender(
+  game: DamageStepHost,
+  transaction: DamageStepTransaction,
+): Promise<void> {
   const card = transaction.defender;
   if (!card?.isFacedown) return;
   const field = transaction.defenderOwner?.field || [];
@@ -328,12 +536,15 @@ async function revealDefender(game, transaction) {
   await game.waitForPresentationDelay?.(600);
 }
 
-function removeTrackedBuffs(game, key) {
-  const buffs = Array.isArray(game?.[key]) ? game[key] : [];
+function removeTrackedBuffs(
+  game: DamageStepHost,
+  key: "damageCalculationTempBuffs" | "endOfDamageStepTempBuffs",
+): void {
+  const buffs = Array.isArray(game[key]) ? game[key] : [];
   for (const buff of buffs.splice(0)) {
     const card = buff?.card;
     if (!card) continue;
-    for (const stat of ["atk", "def"]) {
+    for (const stat of ["atk", "def"] as const) {
       const amount = Number(buff?.[stat] || 0);
       if (amount === 0) continue;
       const tempKey = stat === "atk" ? "tempAtkBoost" : "tempDefBoost";
@@ -350,22 +561,29 @@ function removeTrackedBuffs(game, key) {
   }
 }
 
-export function clearDamageCalculationBuffs() {
+export function clearDamageCalculationBuffs(this: DamageStepHost): void {
   removeTrackedBuffs(this, "damageCalculationTempBuffs");
   this.damageCalculationStatChangePending = false;
 }
 
-export function clearEndOfDamageStepBuffs() {
+export function clearEndOfDamageStepBuffs(this: DamageStepHost): void {
   removeTrackedBuffs(this, "endOfDamageStepTempBuffs");
 }
 
-function getActualLpLoss(player, amount) {
+function getActualLpLoss(
+  player: GamePlayer | null | undefined,
+  amount: number,
+): number {
   const value = Number(amount || 0);
   if (!player || value <= 0) return 0;
   return Math.max(0, Math.min(Number(player.lp || 0), value));
 }
 
-function calculatePiercingDamage(attacker, attackerAtk, targetDef) {
+function calculatePiercingDamage(
+  attacker: DamageStepCard | null | undefined,
+  attackerAtk: number,
+  targetDef: number,
+): number {
   if (!attacker?.piercing) return 0;
   const multiplier = Number(attacker.piercingDamageMultiplier ?? 1);
   const normalized = Number.isFinite(multiplier) && multiplier > 0
@@ -375,12 +593,12 @@ function calculatePiercingDamage(attacker, attackerAtk, targetDef) {
 }
 
 async function applyBattleLpChange(
-  game,
-  transaction,
-  player,
-  cardInvolved,
-  amount,
-) {
+  game: DamageStepHost,
+  transaction: DamageStepTransaction,
+  player: GamePlayer | null,
+  cardInvolved: DamageStepCard | null,
+  amount: number,
+): Promise<number> {
   if (!player || amount <= 0) return 0;
   if (
     cardInvolved?.preventsBattleDamageToController === true &&
@@ -430,12 +648,12 @@ async function applyBattleLpChange(
 }
 
 function addDestructionCandidate(
-  transaction,
-  card,
-  owner,
-  sourceCard,
-  role,
-) {
+  transaction: DamageStepTransaction,
+  card: DamageStepCard | null,
+  owner: GamePlayer,
+  sourceCard: DamageStepCard,
+  role: "attacker" | "defender",
+): void {
   if (!card || transaction.outcome.destructionCandidates.some(
     (entry) => entry.card === card,
   )) {
@@ -453,7 +671,11 @@ function addDestructionCandidate(
   if (role === "defender") transaction.outcome.targetDestroyed = true;
 }
 
-function canBeDestroyedByBattle(game, card, opponent) {
+function canBeDestroyedByBattle(
+  game: DamageStepHost,
+  card: DamageStepCard,
+  opponent: DamageStepCard,
+): boolean {
   const context = {
     attacker: opponent,
     defender: card,
@@ -470,9 +692,12 @@ function canBeDestroyedByBattle(game, card, opponent) {
   return game.isBattleDestructionProtected?.(card, context) !== true;
 }
 
-async function calculateBattleOutcome(game, transaction) {
+async function calculateBattleOutcome(
+  game: DamageStepHost,
+  transaction: DamageStepTransaction,
+): Promise<void> {
   const attacker = transaction.attacker;
-  const defender = transaction.defender;
+  const defender = transaction.defender!;
   const outcome = transaction.outcome;
   outcome.committed = true;
   outcome.battled = true;
@@ -499,7 +724,7 @@ async function calculateBattleOutcome(game, transaction) {
       await applyBattleLpChange(
         game,
         transaction,
-        transaction.defenderOwner,
+        transaction.defenderOwner!,
         defender,
         attackerAtk - defenderAtk,
       );
@@ -507,7 +732,7 @@ async function calculateBattleOutcome(game, transaction) {
         addDestructionCandidate(
           transaction,
           defender,
-          transaction.defenderOwner,
+          transaction.defenderOwner!,
           attacker,
           "defender",
         );
@@ -543,7 +768,7 @@ async function calculateBattleOutcome(game, transaction) {
         addDestructionCandidate(
           transaction,
           defender,
-          transaction.defenderOwner,
+          transaction.defenderOwner!,
           attacker,
           "defender",
         );
@@ -554,7 +779,7 @@ async function calculateBattleOutcome(game, transaction) {
       await applyBattleLpChange(
         game,
         transaction,
-        transaction.defenderOwner,
+        transaction.defenderOwner!,
         defender,
         calculatePiercingDamage(attacker, attackerAtk, defenderDef),
       );
@@ -563,7 +788,7 @@ async function calculateBattleOutcome(game, transaction) {
       addDestructionCandidate(
         transaction,
         defender,
-        transaction.defenderOwner,
+        transaction.defenderOwner!,
         attacker,
         "defender",
       );
@@ -580,7 +805,11 @@ async function calculateBattleOutcome(game, transaction) {
   game.markAttackUsed?.(attacker, defender);
 }
 
-async function resolveQueuedDestructionTriggers(game, transaction, queueStart) {
+async function resolveQueuedDestructionTriggers(
+  game: DamageStepHost,
+  transaction: DamageStepTransaction,
+  queueStart: number,
+): Promise<DamageStepWindowResult | null> {
   const queue = game.chainSystem?.pendingTriggerOccurrences;
   if (!Array.isArray(queue) || queue.length <= queueStart) return null;
   const occurrences = queue.splice(queueStart);
@@ -594,23 +823,23 @@ async function resolveQueuedDestructionTriggers(game, transaction, queueStart) {
       ),
       type: "damage_step",
       event: "battle_destroy",
-    },
+    } as FastEffectContextInput,
     deferPostChainWindow: true,
   });
 }
 
 async function finalizeBattleDestruction(
-  game,
-  transaction,
-  { resolveTriggers = true } = {},
-) {
+  game: DamageStepHost,
+  transaction: DamageStepTransaction,
+  { resolveTriggers = true }: EndDamageStepOptions = {},
+): Promise<DamageStepWindowResult> {
   if (transaction.endFinalized) return { ok: true };
   const queue = game.chainSystem?.pendingTriggerOccurrences;
-  const queueStart = Number.isInteger(transaction.destructionQueueStart)
+  const queueStart = (Number.isInteger(transaction.destructionQueueStart)
     ? transaction.destructionQueueStart
     : Array.isArray(queue)
       ? queue.length
-      : 0;
+      : 0) as number;
   transaction.destructionQueueStart = queueStart;
   const atomicGroupId =
     transaction.destructionAtomicGroupId ||
@@ -687,7 +916,11 @@ async function finalizeBattleDestruction(
   );
 }
 
-async function runEndOfDamageStep(game, transaction, options = {}) {
+async function runEndOfDamageStep(
+  game: DamageStepHost,
+  transaction: DamageStepTransaction,
+  options: EndDamageStepOptions = {},
+): Promise<DamageStepWindowResult> {
   setDamageStepTiming(game, transaction, DAMAGE_STEP_TIMINGS.END);
   const destructionResult = await finalizeBattleDestruction(
     game,
@@ -722,7 +955,10 @@ async function runEndOfDamageStep(game, transaction, options = {}) {
   return destructionFailed ? destructionResult : { ok: true };
 }
 
-async function requireEndOfDamageStep(game, transaction) {
+async function requireEndOfDamageStep(
+  game: DamageStepHost,
+  transaction: DamageStepTransaction,
+): Promise<DamageStepWindowResult> {
   const endResult = await runEndOfDamageStep(game, transaction);
   if (endResult?.needsSelection || endResult?.ok === false) {
     throw new Error(
@@ -734,11 +970,14 @@ async function requireEndOfDamageStep(game, transaction) {
   return endResult;
 }
 
-export async function executeDamageStepTransaction(transaction) {
+export async function executeDamageStepTransaction(
+  this: DamageStepHost,
+  transaction: DamageStepTransaction | null | undefined,
+): Promise<DamageStepExecutionResult> {
   if (!transaction || transaction !== this.activeDamageStepTransaction) {
     return { ok: false, reason: "damage_step_transaction_not_active" };
   }
-  let result = null;
+  let result: DamageStepExecutionResult | null = null;
   try {
     setDamageStepTiming(this, transaction, DAMAGE_STEP_TIMINGS.START);
     let windowResult = await resolveStageWindow(this, transaction, [
@@ -833,17 +1072,17 @@ export async function executeDamageStepTransaction(transaction) {
     };
     this.notify?.("damage_step_completed", serializeTransaction(transaction));
     return result;
-  } catch (error) {
+  } catch (error: unknown) {
     transaction.status = "failed";
-    transaction.failureReason = error?.message || "damage_step_failed";
+    transaction.failureReason = errorMessage(error, "damage_step_failed");
     if (transaction.outcome.committed && !transaction.endFinalized) {
       try {
         await runEndOfDamageStep(this, transaction, {
           resolveTriggers: false,
         });
-      } catch (finalizationError) {
+      } catch (finalizationError: unknown) {
         transaction.failureReason = `${transaction.failureReason}; safe finalization failed: ${
-          finalizationError?.message || "unknown_error"
+          errorMessage(finalizationError, "unknown_error")
         }`;
       }
     }
@@ -863,7 +1102,10 @@ export async function executeDamageStepTransaction(transaction) {
   }
 }
 
-export function cleanupDamageStepTransaction(reason = "cleanup") {
+export function cleanupDamageStepTransaction(
+  this: DamageStepHost,
+  reason = "cleanup",
+): DamageStepState {
   const transaction = this.activeDamageStepTransaction;
   if (transaction) {
     if (transaction.status === "active") {

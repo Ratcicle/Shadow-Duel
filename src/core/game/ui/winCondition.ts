@@ -1,13 +1,67 @@
 // src/core/game/ui/winCondition.js
 // Win condition check and display for Game class.
 
+import type { GamePlayer } from "../../contracts/gameRuntime.js";
+
+type DuelWinner = "player" | "bot";
+
+interface StrategicReportExport {
+  duelCount?: number;
+}
+
+interface GameOverModalOptions {
+  victory: boolean;
+  playerLP: number;
+  botLP: number;
+  turns: number;
+  strategicReportAvailable: boolean;
+  replayAvailable: boolean;
+  strategicReportInfo: {
+    duelCount: 1;
+    winner: string | null;
+    turns: number;
+  } | null;
+  onMenu(): void;
+  onRematch(): void;
+  onExportStrategicReport(): { duelCount: number; filename?: string } | null;
+  onExportReplay(): unknown;
+}
+
+interface WinConditionUiPort {
+  showGameOverModal?(options: GameOverModalOptions): void;
+  showAlert?(message: string): void;
+  waitForLpPresentation?(): Promise<unknown> | void;
+}
+
+interface WinConditionHost {
+  gameOver: boolean;
+  winner: string | null;
+  player: GamePlayer;
+  bot: GamePlayer;
+  turnCounter: number;
+  normalDuelStrategicReportEnabled: boolean;
+  ui?: WinConditionUiPort;
+  isDisposed?(): boolean;
+  hasStrategicReport?(): boolean;
+  hasCanonicalReplay?(): boolean;
+  buildStrategicReportFilename?(outcome: "win" | "loss"): string;
+  downloadStrategicReport?(filename?: string): StrategicReportExport | null;
+  exportReplay?(options: { download: true }): unknown;
+  emit(event: "game_over", payload: unknown): unknown;
+  finalizeNormalDuelStrategicReport?(
+    winner: DuelWinner,
+    reason: "lp_zero",
+  ): unknown;
+  finalizeReplay?(result: { winner: DuelWinner; reason: "lp_zero" }): unknown;
+}
+
 /**
  * Checks if a win condition has been met and displays the result.
  */
-export function checkWinCondition() {
+export function checkWinCondition(this: WinConditionHost) {
   if (this.gameOver) return;
 
-  const showGameOver = (victory) => {
+  const showGameOver = (victory: boolean) => {
     const openModal = () => {
       if (this.isDisposed?.()) return;
 
@@ -69,7 +123,7 @@ export function checkWinCondition() {
 
     const waitForLp = this.ui?.waitForLpPresentation?.();
     if (waitForLp && typeof waitForLp.then === "function") {
-      waitForLp.then(openModal).catch((error) => {
+      waitForLp.then(openModal).catch((error: unknown) => {
         console.warn("[Game] Failed while waiting for LP presentation.", error);
         openModal();
       });

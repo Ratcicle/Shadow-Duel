@@ -1,4 +1,26 @@
 // ─────────────────────────────────────────────────────────────────────────────
+import type Card from "../../Card.js";
+
+interface ModalUiPort {
+  showIgnitionActivateModal?(card: Card, onActivate: () => void): void;
+  showShadowHeartCathedralModal?(
+    validMonsters: Card[],
+    maxAtk: number,
+    counterCount: number,
+    callback: (card: Card | null) => void,
+  ): void;
+  showCardSelectionModal?(
+    cards: Card[],
+    prompt: string,
+    count: number,
+    callback: (card: Card | null) => void,
+  ): void;
+}
+
+interface ModalHost {
+  ui?: ModalUiPort;
+}
+
 // src/core/game/ui/modals.js
 // Modal display methods for Game class — B.10 extraction
 // ─────────────────────────────────────────────────────────────────────────────
@@ -8,7 +30,11 @@
  * @param {Card} card - The card with the ignition effect.
  * @param {Function} onActivate - Callback when user confirms activation.
  */
-export function showIgnitionActivateModal(card, onActivate) {
+export function showIgnitionActivateModal(
+  this: ModalHost,
+  card: Card,
+  onActivate: () => void,
+) {
   if (this.ui && typeof this.ui.showIgnitionActivateModal === "function") {
     this.ui.showIgnitionActivateModal(card, onActivate);
   }
@@ -22,10 +48,11 @@ export function showIgnitionActivateModal(card, onActivate) {
  * @param {Function} callback - Callback with selected monster or null.
  */
 export function showShadowHeartCathedralModal(
-  validMonsters,
-  maxAtk,
-  counterCount,
-  callback
+  this: ModalHost,
+  validMonsters: Card[],
+  maxAtk: number,
+  counterCount: number,
+  callback: (card: Card | null) => void,
 ) {
   console.log(
     `[Cathedral Modal] Opening with ${validMonsters.length} valid monsters, Max ATK: ${maxAtk}, Counters: ${counterCount}`

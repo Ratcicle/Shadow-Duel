@@ -4,11 +4,115 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { isQuickSpell } from "../spellTrap/quickSpellRules.js";
+import type {
+  GameCard,
+  GamePlayer,
+} from "../../contracts/gameRuntime.js";
+import type { GamePhase } from "../../contracts/game.js";
+import type { EffectDefinition } from "../../contracts/effects.js";
+import type { ActionGuardResult } from "../actions/guard.js";
+
+interface ActivationPreview {
+  ok: boolean;
+  reason?: string | null;
+}
+
+interface ActivatableEffectEntry {
+  effect: EffectDefinition;
+  preview: ActivationPreview;
+}
+
+interface IndicatorEffectEnginePort {
+  canActivateSpellFromHandPreview?(
+    card: GameCard,
+    player: GamePlayer,
+    options: unknown,
+  ): ActivationPreview;
+  getFirstActivatableMonsterIgnitionEffect?(
+    card: GameCard,
+    player: GamePlayer,
+    zone: "hand" | "field",
+    options: unknown,
+  ): ActivatableEffectEntry | null;
+  canActivateMonsterEffectPreview?(
+    card: GameCard,
+    player: GamePlayer,
+    zone: "hand" | "field" | "graveyard",
+    selections: null,
+    options: unknown,
+  ): ActivationPreview;
+  getMonsterIgnitionEffect?(
+    card: GameCard,
+    zone: "field",
+    options: unknown,
+  ): EffectDefinition | null;
+  canActivateSpellTrapEffectPreview?(
+    card: GameCard,
+    player: GamePlayer,
+    zone: "spellTrap" | "graveyard",
+    selections: null,
+    options: unknown,
+  ): ActivationPreview;
+  canActivateFieldSpellEffectPreview?(
+    card: GameCard,
+    player: GamePlayer,
+    selections: null,
+    options: unknown,
+  ): ActivationPreview;
+}
+
+interface ActivationHint {
+  canActivate: boolean;
+  label: string;
+}
+
+export interface ActivationIndicators {
+  hand: Record<number, ActivationHint>;
+  field: Record<number, ActivationHint>;
+  spellTrap: Record<number, ActivationHint>;
+  graveyard: Record<number, ActivationHint>;
+  fieldSpell: ActivationHint | null;
+  zones: {
+    graveyard: boolean;
+    extraDeck: boolean;
+  };
+}
+
+interface IndicatorUiPort {
+  applyActivationIndicators(
+    ownerId: "player",
+    indicators: ActivationIndicators,
+  ): void;
+}
+
+interface IndicatorHost {
+  player: GamePlayer;
+  turn: "player" | "bot";
+  phase: GamePhase;
+  ui?: IndicatorUiPort;
+  effectEngine?: IndicatorEffectEnginePort;
+  buildActivationIndicatorsForPlayer(
+    player: GamePlayer,
+  ): ActivationIndicators | null;
+  canStartAction(options: {
+    actor: GamePlayer;
+    kind: string;
+    phaseReq: readonly GamePhase[] | null;
+    silent: true;
+    allowDuringOpponentTurn?: boolean;
+  }): ActionGuardResult;
+  canActivatePolymerization(): boolean;
+  canSummonExtraDeckCard?(
+    card: GameCard,
+    player: GamePlayer,
+    options: { silent: true },
+  ): { ok: boolean } | null;
+}
 
 /**
  * Updates activation indicators for the player's cards.
  */
-export function updateActivationIndicators() {
+export function updateActivationIndicators(this: IndicatorHost) {
   if (!this.ui || typeof this.ui.applyActivationIndicators !== "function") {
     return;
   }
@@ -21,9 +125,12 @@ export function updateActivationIndicators() {
 /**
  * Builds activation indicator data for a player's cards.
  * @param {Player} player - The player to build indicators for.
- * @returns {Object|null} Indicators map by zone and index.
+ * @returns Indicators map by zone and index.
  */
-export function buildActivationIndicatorsForPlayer(player) {
+export function buildActivationIndicatorsForPlayer(
+  this: IndicatorHost,
+  player: GamePlayer | null | undefined,
+): ActivationIndicators | null {
   if (!player || player.id !== "player") return null;
 
   const activationContext = {
@@ -31,7 +138,7 @@ export function buildActivationIndicatorsForPlayer(player) {
     logTargets: false,
   };
 
-  const mapGuardHint = (guard) => {
+  const mapGuardHint = (guard: ActionGuardResult): string | null => {
     if (!guard || guard.ok) return null;
     if (guard.code === "BLOCKED_WRONG_PHASE") {
       return "bloqueado por fase";
@@ -42,7 +149,7 @@ export function buildActivationIndicatorsForPlayer(player) {
     return null;
   };
 
-  const mapReasonHint = (reason) => {
+  const mapReasonHint = (reason: string | null | undefined): string | null => {
     if (!reason) return null;
     const lower = reason.toLowerCase();
     if (lower.includes("1/turn") || lower.includes("once per turn")) {
@@ -60,7 +167,11 @@ export function buildActivationIndicatorsForPlayer(player) {
     return null;
   };
 
-  const canStart = (kind, phaseReq, extra = {}) =>
+  const canStart = (
+    kind: string,
+    phaseReq: readonly GamePhase[] | null,
+    extra: { allowDuringOpponentTurn?: boolean } = {},
+  ) =>
     this.canStartAction({
       actor: player,
       kind,
@@ -69,7 +180,11 @@ export function buildActivationIndicatorsForPlayer(player) {
       ...extra,
     });
 
-  const buildHint = (guard, preview, readyLabel) => {
+  const buildHint = (
+    guard: ActionGuardResult,
+    preview: ActivationPreview | null | undefined,
+    readyLabel: string,
+  ): ActivationHint | null => {
     const guardHint = mapGuardHint(guard);
     if (guardHint) {
       return { canActivate: false, label: guardHint };
@@ -85,7 +200,7 @@ export function buildActivationIndicatorsForPlayer(player) {
     return null;
   };
 
-  const indicators = {
+  const indicators: ActivationIndicators = {
     hand: {},
     field: {},
     spellTrap: {},
@@ -97,7 +212,7 @@ export function buildActivationIndicatorsForPlayer(player) {
     },
   };
 
-  (player.hand || []).forEach((card, index) => {
+  (player.hand || []).forEach((card: GameCard, index: number) => {
     if (!card) return;
     if (card.cardKind === "spell") {
       const quickSpellContext = isQuickSpell(card)
@@ -121,7 +236,7 @@ export function buildActivationIndicatorsForPlayer(player) {
       let ok = !!preview.ok;
       // Check for fusion spell (has polymerization_fusion_summon action) - generic instead of hardcoded name
       const hasFusionAction = (card.effects || []).some(
-        (e) =>
+        (e: EffectDefinition) =>
           e &&
           Array.isArray(e.actions) &&
           e.actions.some((a) => a && a.type === "polymerization_fusion_summon")
@@ -167,7 +282,7 @@ export function buildActivationIndicatorsForPlayer(player) {
     }
   });
 
-  (player.field || []).forEach((card, index) => {
+  (player.field || []).forEach((card: GameCard, index: number) => {
     if (!card || card.cardKind !== "monster") return;
     const fieldActivationContext = {
       ...activationContext,
@@ -216,7 +331,7 @@ export function buildActivationIndicatorsForPlayer(player) {
     }
   });
 
-  (player.spellTrap || []).forEach((card, index) => {
+  (player.spellTrap || []).forEach((card: GameCard, index: number) => {
     if (!card) return;
     const isTrap = card.cardKind === "trap";
     const setQuickSpellContext =
@@ -275,7 +390,7 @@ export function buildActivationIndicatorsForPlayer(player) {
     }
   }
 
-  (player.graveyard || []).forEach((card, index) => {
+  (player.graveyard || []).forEach((card: GameCard, index: number) => {
     if (!card) return;
     const guard = canStart("graveyard_effect", ["main1", "main2"]);
     const preview =
@@ -306,7 +421,7 @@ export function buildActivationIndicatorsForPlayer(player) {
     (hint) => hint?.canActivate,
   );
 
-  indicators.zones.extraDeck = (player.extraDeck || []).some((card) => {
+  indicators.zones.extraDeck = (player.extraDeck || []).some((card: GameCard) => {
     return (
       this.canSummonExtraDeckCard?.(card, player, {
         silent: true,

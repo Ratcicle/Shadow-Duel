@@ -1,28 +1,128 @@
 import {
   USAGE_POLICIES as EFFECT_USAGE_POLICIES,
 } from "../../contracts/effects.js";
+import type { GameCard } from "../../contracts/cards.js";
+import type { EffectDefinition, UsagePolicy } from "../../contracts/effects.js";
+import type { EffectUsageEventPayload } from "../../contracts/events.js";
+import type { GamePlayer } from "../../contracts/player.js";
 
 export { EFFECT_USAGE_POLICIES };
 
-function usagePolicy(effect) {
+interface EffectUsageInput {
+  card?: GameCard | null;
+  player?: EffectUsagePlayer | null;
+  effect?: EffectDefinition | null;
+  chainId?: number | null;
+  linkId?: number | null;
+}
+
+type EffectUsagePlayer = GamePlayer & {
+  oncePerDuelUsageByName?: { [key: string]: number };
+};
+
+interface UsageLimitCheck {
+  ok: boolean;
+  reason?: string;
+  remaining?: number;
+}
+
+interface EffectUsageReservation {
+  reservationId: number;
+  policy: UsagePolicy;
+  status: "reserved" | "consumed" | "released";
+  playerId: string;
+  turnKey: string | null;
+  duelKey: string | null;
+  oncePerTurn: boolean;
+  oncePerDuel: boolean;
+  chainId: number | null;
+  linkId: number | null;
+  effectId: string | null;
+  sourceInstanceId: number | null;
+  card: GameCard | null | undefined;
+  player: EffectUsagePlayer;
+  effect: EffectDefinition;
+}
+
+type EffectUsageSnapshot = Omit<
+  EffectUsageReservation,
+  "card" | "player" | "effect"
+>;
+
+interface EffectUsageHost {
+  nextEffectUsageReservationId: number;
+  effectUsageReservations: Map<number, EffectUsageReservation>;
+  effectEngine?: {
+    checkOncePerDuel?(
+      card: GameCard | null | undefined,
+      player: EffectUsagePlayer,
+      effect: EffectDefinition,
+    ): UsageLimitCheck;
+  } | null;
+  getOncePerTurnLockKey?(
+    card: GameCard | null | undefined,
+    effect: EffectDefinition,
+  ): string | null;
+  canUseOncePerTurn?(
+    card: GameCard | null | undefined,
+    player: EffectUsagePlayer,
+    effect: EffectDefinition,
+  ): UsageLimitCheck;
+  markOncePerTurnUsed?(
+    card: GameCard | null | undefined,
+    player: EffectUsagePlayer,
+    effect: EffectDefinition,
+  ): void;
+  checkEffectUsage(input?: EffectUsageInput): EffectUsageCheck;
+  notify?(eventName: "effect_usage", payload: EffectUsageEventPayload): void;
+}
+
+interface EffectUsageCheck extends UsageLimitCheck {
+  policy?: UsagePolicy | null;
+  code?: string;
+  scope?: "turn" | "duel";
+  turnKey?: string | null;
+  duelKey?: string | null;
+}
+
+type EffectUsageSettlement =
+  | "activation_negated"
+  | "cancelled"
+  | "precommit_failure"
+  | { activationNegated?: boolean; cancelled?: boolean };
+
+function usagePolicy(
+  effect: EffectDefinition | null | undefined,
+): UsagePolicy | null {
   return effect?.usagePolicy === EFFECT_USAGE_POLICIES.USE ||
     effect?.usagePolicy === EFFECT_USAGE_POLICIES.ACTIVATE
     ? effect.usagePolicy
     : null;
 }
 
-function turnKey(game, card, effect) {
+function turnKey(
+  game: EffectUsageHost,
+  card: GameCard | null | undefined,
+  effect: EffectDefinition,
+): string | null {
   if (!effect?.oncePerTurn) return null;
   return game.getOncePerTurnLockKey?.(card, effect) ||
     `once_per_turn:${effect.oncePerTurnName || effect.id || card?.name || "effect"}`;
 }
 
-function duelKey(card, effect) {
+function duelKey(
+  card: GameCard | null | undefined,
+  effect: EffectDefinition,
+): string | null {
   if (!effect?.oncePerDuel) return null;
   return effect.oncePerDuelName || effect.id || card?.name || "effect";
 }
 
-function compact(reservation) {
+function compact(reservation: EffectUsageReservation): EffectUsageSnapshot;
+function compact(reservation: null | undefined): null;
+function compact(
+  reservation: EffectUsageReservation | null | undefined,
+): EffectUsageSnapshot | null {
   if (!reservation) return null;
   return {
     reservationId: reservation.reservationId,
@@ -40,14 +140,24 @@ function compact(reservation) {
   };
 }
 
-function consume(game, card, player, effect) {
+function consume(
+  game: EffectUsageHost,
+  card: GameCard | null | undefined,
+  player: EffectUsagePlayer,
+  effect: EffectDefinition,
+): void {
   if (effect?.oncePerTurn) game.markOncePerTurnUsed?.(card, player, effect);
   if (effect?.oncePerDuel) {
     markOncePerDuelEffectUsed(card, player, effect);
   }
 }
 
-function activeReservationCounts(game, playerId, effectTurnKey, effectDuelKey) {
+function activeReservationCounts(
+  game: EffectUsageHost,
+  playerId: string,
+  effectTurnKey: string | null,
+  effectDuelKey: string | null,
+): { turn: number; duel: number } {
   let turn = 0;
   let duel = 0;
   for (const reservation of game.effectUsageReservations?.values?.() || []) {
@@ -60,7 +170,10 @@ function activeReservationCounts(game, playerId, effectTurnKey, effectDuelKey) {
   return { turn, duel };
 }
 
-export function checkEffectUsage(input = {}) {
+export function checkEffectUsage(
+  this: EffectUsageHost,
+  input: EffectUsageInput = {},
+): EffectUsageCheck {
   const { card, player, effect } = input;
   if (!effect || !player || (!effect.oncePerTurn && !effect.oncePerDuel)) {
     return { ok: true, policy: usagePolicy(effect) };
@@ -116,7 +229,10 @@ export function checkEffectUsage(input = {}) {
   };
 }
 
-export function reserveEffectUsage(input = {}) {
+export function reserveEffectUsage(
+  this: EffectUsageHost,
+  input: EffectUsageInput = {},
+): EffectUsageSnapshot | (EffectUsageCheck & { success: false }) | null {
   const { card, player, effect } = input;
   if (!effect || !player || (!effect.oncePerTurn && !effect.oncePerDuel)) {
     return null;
@@ -124,8 +240,8 @@ export function reserveEffectUsage(input = {}) {
   const check = this.checkEffectUsage(input);
   if (check.ok === false) return { ...check, success: false };
 
-  const policy = usagePolicy(effect);
-  const reservation = {
+  const policy = usagePolicy(effect)!;
+  const reservation: EffectUsageReservation = {
     reservationId: this.nextEffectUsageReservationId++,
     policy,
     status: policy === EFFECT_USAGE_POLICIES.USE ? "consumed" : "reserved",
@@ -151,19 +267,29 @@ export function reserveEffectUsage(input = {}) {
   return snapshot;
 }
 
-export function settleEffectUsage(reservationOrId, outcome = {}) {
+export function settleEffectUsage(
+  this: EffectUsageHost,
+  reservationOrId: number | EffectUsageSnapshot | null | undefined,
+  outcome: EffectUsageSettlement = {},
+): EffectUsageSnapshot | number | null {
   const id =
     typeof reservationOrId === "number"
       ? reservationOrId
       : reservationOrId?.reservationId;
-  if (!Number.isFinite(id)) return reservationOrId || null;
+  if (typeof id !== "number" || !Number.isFinite(id)) {
+    return reservationOrId || null;
+  }
   const reservation = this.effectUsageReservations.get(id);
   if (!reservation) return reservationOrId || null;
 
+  const outcomeObject = typeof outcome === "object" ? outcome : null;
   const activationNegated =
-    outcome === "activation_negated" || outcome?.activationNegated === true;
+    outcome === "activation_negated" ||
+    outcomeObject?.activationNegated === true;
   const cancelled =
-    outcome === "cancelled" || outcome === "precommit_failure" || outcome?.cancelled === true;
+    outcome === "cancelled" ||
+    outcome === "precommit_failure" ||
+    outcomeObject?.cancelled === true;
   if (activationNegated || cancelled) {
     reservation.status = "released";
   } else {
@@ -176,7 +302,10 @@ export function settleEffectUsage(reservationOrId, outcome = {}) {
   return snapshot;
 }
 
-export function releaseEffectUsageReservations(reason = "reset") {
+export function releaseEffectUsageReservations(
+  this: EffectUsageHost,
+  reason = "reset",
+): void {
   for (const reservation of this.effectUsageReservations.values()) {
     reservation.status = "released";
     const snapshot = { ...compact(reservation), reason };
@@ -185,11 +314,11 @@ export function releaseEffectUsageReservations(reason = "reset") {
   this.effectUsageReservations.clear();
 }
 
-export function getEffectUsageState() {
+export function getEffectUsageState(this: EffectUsageHost) {
   return {
     nextReservationId: this.nextEffectUsageReservationId,
     reservations: [...this.effectUsageReservations.values()]
-      .map(compact)
+      .map((reservation) => compact(reservation))
       .sort((a, b) => a.reservationId - b.reservationId),
   };
 }

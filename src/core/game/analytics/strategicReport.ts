@@ -3,21 +3,61 @@ import {
   DuelTracker,
   END_REASONS,
 } from "../../ai/ArenaAnalytics.js";
+import type {
+  GamePlayer,
+} from "../../contracts/gameRuntime.js";
 
-function localDateStamp(date = new Date()) {
+type StrategicWinner = "player" | "bot" | "draw";
+type StrategicOutcome = "win" | "loss" | "draw";
+type StrategicExportOptions = Parameters<
+  InstanceType<typeof ArenaAnalytics>["exportStrategicReport"]
+>[0];
+type StrategicDuelResult = ReturnType<
+  InstanceType<typeof DuelTracker>["finalize"]
+>;
+
+interface NormalDuelStrategicState {
+  analytics: InstanceType<typeof ArenaAnalytics>;
+  tracker: InstanceType<typeof DuelTracker>;
+  finalized: boolean;
+  result: StrategicDuelResult | null;
+}
+
+type StrategicReportHost = {
+    player: GamePlayer;
+    bot: GamePlayer;
+    turnCounter: number;
+    winner: string | null;
+    normalDuelStrategicReportEnabled: boolean;
+    normalDuelPlayerArchetype: string;
+    normalDuelBotArchetype: string;
+    botPreset: string;
+    laboratoryModeEnabled: boolean;
+    _arenaTracker: InstanceType<typeof DuelTracker> | null;
+    arenaBeamWidth?: number;
+    arenaMaxDepth?: number;
+    _normalDuelStrategic: NormalDuelStrategicState | null;
+    hasStrategicReport?(): boolean;
+    exportStrategicReport(
+      options?: StrategicExportOptions,
+    ): ReturnType<InstanceType<typeof ArenaAnalytics>["exportStrategicReport"]> | null;
+    buildStrategicReportFilename?(outcome?: StrategicOutcome | null): string;
+  };
+
+function localDateStamp(date: Date = new Date()) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
 }
 
-function normalizeWinner(winner) {
+function normalizeWinner(winner: string | null | undefined): StrategicWinner {
   return winner === "player" || winner === "bot" || winner === "draw"
     ? winner
     : "draw";
 }
 
-export function startNormalDuelStrategicReport() {
+export function startNormalDuelStrategicReport(this: StrategicReportHost) {
   if (!this.normalDuelStrategicReportEnabled) return null;
   if (this.laboratoryModeEnabled) return null;
   if (this.bot?.controllerType !== "ai") return null;
@@ -43,8 +83,9 @@ export function startNormalDuelStrategicReport() {
 }
 
 export function finalizeNormalDuelStrategicReport(
-  winner,
-  reason = END_REASONS.LP_ZERO,
+  this: StrategicReportHost,
+  winner: string | null | undefined,
+  reason: string = END_REASONS.LP_ZERO,
 ) {
   const state = this._normalDuelStrategic;
   if (!state?.tracker || !state?.analytics) {
@@ -71,18 +112,24 @@ export function finalizeNormalDuelStrategicReport(
   return result;
 }
 
-export function hasStrategicReport() {
+export function hasStrategicReport(this: StrategicReportHost) {
   return (this._normalDuelStrategic?.analytics?.duelRecords?.length || 0) > 0;
 }
 
-export function exportStrategicReport(options = {}) {
+export function exportStrategicReport(
+  this: StrategicReportHost,
+  options: StrategicExportOptions = {},
+) {
   if (!this.hasStrategicReport?.()) {
     return null;
   }
-  return this._normalDuelStrategic.analytics.exportStrategicReport(options);
+  return this._normalDuelStrategic!.analytics.exportStrategicReport(options);
 }
 
-export function buildStrategicReportFilename(outcome = null) {
+export function buildStrategicReportFilename(
+  this: StrategicReportHost,
+  outcome: StrategicOutcome | null = null,
+) {
   const suffix =
     outcome === "win" || outcome === "loss" || outcome === "draw"
       ? outcome
@@ -94,13 +141,17 @@ export function buildStrategicReportFilename(outcome = null) {
   return `normal_duel_strategic_report_${localDateStamp()}_${suffix}.json`;
 }
 
-export function downloadStrategicReport(filename = null, options = {}) {
+export function downloadStrategicReport(
+  this: StrategicReportHost,
+  filename: string | null = null,
+  options: StrategicExportOptions = {},
+) {
   if (!this.hasStrategicReport?.()) {
     console.warn("[StrategicReport] No normal duel analytics available to export.");
     return null;
   }
   const report = this.exportStrategicReport(options);
-  this._normalDuelStrategic.analytics.downloadStrategicReport(
+  this._normalDuelStrategic!.analytics.downloadStrategicReport(
     filename || this.buildStrategicReportFilename?.() || undefined,
     options,
   );

@@ -1,16 +1,138 @@
 import { cardMatchesKind } from "../../Card.js";
+import type {
+  BattlePosition,
+  CardSubtype,
+  GameCard,
+} from "../../contracts/cards.js";
+import type {
+  CardFilter,
+  EffectCondition,
+  EffectDefinition,
+  PassiveRuleDefinition,
+} from "../../contracts/effects.js";
+import type { GamePlayer } from "../../contracts/player.js";
+import type { CanonicalZone } from "../../contracts/zones.js";
 
 /**
  * Combat availability checks - attack validation and usage tracking.
  * Extracted from Game.js as part of B.5 modularization.
  */
 
-function getPlayerByCardOwner(game, card) {
+type AttackOwnerRule = "self" | "opponent" | "any";
+type CombatStatKey = "atk" | "def" | "level" | "baseAtk" | "baseDef";
+
+type AttackPassiveRule = Omit<PassiveRuleDefinition, "type"> & {
+  readonly type:
+    | PassiveRuleDefinition["type"]
+    | "negate_battle_destruction_prevention";
+  readonly owners?: readonly AttackOwnerRule[] | AttackOwnerRule;
+  readonly effectOwners?: readonly AttackOwnerRule[] | AttackOwnerRule;
+  readonly requireZone?: CanonicalZone;
+  readonly sourceStat?: CombatStatKey;
+  readonly opponentStat?: CombatStatKey;
+  readonly compareToStat?: CombatStatKey;
+};
+
+interface AttackCardFilter extends Omit<CardFilter, "position" | "subtype"> {
+  readonly position?: BattlePosition | "any";
+  readonly subtype?: CardSubtype | string | readonly (CardSubtype | string)[];
+}
+
+interface AttackContext {
+  owner?: GamePlayer | GameCard | string | null;
+  preventionSourceOwner?: GamePlayer | GameCard | string | null;
+  effectOwner?: GamePlayer | GameCard | string | null;
+  sourceOwner?: GamePlayer | GameCard | string | null;
+  preventionSourceCard?: GameCard | null;
+  sourceCard?: GameCard | null;
+  battleOpponent?: GameCard | null;
+  opponentCard?: GameCard | null;
+  attacker?: GameCard | null;
+  defender?: GameCard | null;
+  target?: GameCard | null;
+  [attackContextMarker]?: never;
+}
+
+declare const attackContextMarker: unique symbol;
+
+interface AttackConditionResult {
+  ok?: boolean;
+}
+
+interface AttackImmunityResult {
+  immune?: boolean;
+}
+
+interface AttackEffectEnginePort {
+  isEffectNegated?(card: GameCard): boolean | null | undefined;
+  cardMatchesFilters?(card: GameCard, filters: AttackCardFilter): boolean;
+  isActiveEquipForCard?(equip: GameCard, card: GameCard): boolean;
+  checkImmunity?(
+    card: GameCard,
+    sourceOwner: GamePlayer,
+    context: { effectType: string; sourceCard: GameCard },
+  ): AttackImmunityResult | null | undefined;
+  evaluateConditions?(
+    conditions: readonly EffectCondition[],
+    context: AttackContext & {
+      player: GamePlayer | null;
+      opponent: GamePlayer | null;
+      source: GameCard;
+    },
+  ): AttackConditionResult | null | undefined;
+}
+
+interface AttackAvailabilityHost {
+  player: GamePlayer;
+  bot: GamePlayer;
+  turnCounter: number;
+  lastAttackNegated: boolean;
+  ui: { log(message: string): void };
+  effectEngine?: AttackEffectEnginePort | null;
+  getOwnerByCard?(card: GameCard): GamePlayer | null;
+  getOpponent?(player: GamePlayer | null): GamePlayer | null;
+  findCardZone?(owner: GamePlayer, card: GameCard): CanonicalZone | null;
+  isFirstTurnOfDuel?(): boolean;
+  getMonsterAttackLimit?(attacker: GameCard): number;
+}
+
+interface AttackAvailabilityResult {
+  ok: boolean;
+  reason?: string;
+  maxAttacks?: number;
+  attacksUsed?: number;
+  isMultiAttack?: boolean;
+  remainingTargets?: number;
+}
+
+interface AttackAuraMatch {
+  sourceCard: GameCard;
+  sourceOwner: GamePlayer;
+  effect: EffectDefinition;
+  passive: AttackPassiveRule;
+}
+
+function getAttackPassive(effect: EffectDefinition): AttackPassiveRule {
+  const passive = Reflect.get(effect, "passive");
+  return (passive && typeof passive === "object" ? passive : {}) as AttackPassiveRule;
+}
+
+function readCombatStat(card: GameCard, key: CombatStatKey): number {
+  return Number(card[key] ?? 0);
+}
+
+function getPlayerByCardOwner(
+  game: AttackAvailabilityHost | null | undefined,
+  card: GameCard | null | undefined,
+): GamePlayer | null {
   if (!game || !card) return null;
   return card.owner === "player" ? game.player : game.bot;
 }
 
-function getOwnerByCard(game, card) {
+function getOwnerByCard(
+  game: AttackAvailabilityHost | null | undefined,
+  card: GameCard | null | undefined,
+): GamePlayer | null {
   if (!game || !card) return null;
   if (typeof game.getOwnerByCard === "function") {
     const owner = game.getOwnerByCard(card);
@@ -19,7 +141,9 @@ function getOwnerByCard(game, card) {
   return getPlayerByCardOwner(game, card);
 }
 
-function getAttackPassiveSources(player) {
+function getAttackPassiveSources(
+  player: GamePlayer | null | undefined,
+): GameCard[] {
   if (!player) return [];
   const field = Array.isArray(player.field) ? player.field : [];
   const spellTrap = Array.isArray(player.spellTrap) ? player.spellTrap : [];
@@ -27,11 +151,14 @@ function getAttackPassiveSources(player) {
   return [...field, ...spellTrap, ...fieldSpell].filter(Boolean);
 }
 
-export function isActiveAttackPriorityTarget(card) {
+export function isActiveAttackPriorityTarget(
+  this: AttackAvailabilityHost,
+  card: GameCard | null | undefined,
+): boolean {
   const effectsNegated =
-    this?.effectEngine?.isEffectNegated?.(card) ??
+    (card ? this.effectEngine?.isEffectNegated?.(card) : undefined) ??
     card?.effectsNegated === true;
-  return (
+  return !!(
     card &&
     card.cardKind === "monster" &&
     card.mustBeAttacked === true &&
@@ -40,7 +167,9 @@ export function isActiveAttackPriorityTarget(card) {
   );
 }
 
-export function hasExplicitAttackLimitThisTurn(card) {
+export function hasExplicitAttackLimitThisTurn(
+  card: GameCard | null | undefined,
+): boolean {
   return (
     card?.attackLimitThisTurn !== undefined &&
     card?.attackLimitThisTurn !== null &&
@@ -48,7 +177,10 @@ export function hasExplicitAttackLimitThisTurn(card) {
   );
 }
 
-function getDynamicAttackLimit(game, attacker) {
+function getDynamicAttackLimit(
+  game: AttackAvailabilityHost,
+  attacker: GameCard | null | undefined,
+): number | null {
   if (attacker?.dynamicExtraAttacks?.source !== "graveyard_count") {
     return null;
   }
@@ -59,7 +191,10 @@ function getDynamicAttackLimit(game, attacker) {
   ).length;
 }
 
-export function getMonsterAttackLimit(attacker) {
+export function getMonsterAttackLimit(
+  this: AttackAvailabilityHost,
+  attacker: GameCard | null | undefined,
+): number {
   if (!attacker) return 0;
   if (hasExplicitAttackLimitThisTurn(attacker)) {
     return Math.max(0, Math.floor(Number(attacker.attackLimitThisTurn)));
@@ -71,7 +206,11 @@ export function getMonsterAttackLimit(attacker) {
   return Math.max(1, 1 + Number(attacker.extraAttacks || 0));
 }
 
-function findAttackPassiveSourceZone(game, owner, card) {
+function findAttackPassiveSourceZone(
+  game: AttackAvailabilityHost | null | undefined,
+  owner: GamePlayer | null | undefined,
+  card: GameCard | null | undefined,
+): CanonicalZone | null {
   if (!game || !owner || !card) return null;
   if (typeof game.findCardZone === "function") {
     const zone = game.findCardZone(owner, card);
@@ -85,7 +224,10 @@ function findAttackPassiveSourceZone(game, owner, card) {
   return null;
 }
 
-function getCounterValue(card, counterType) {
+function getCounterValue(
+  card: GameCard | null | undefined,
+  counterType: string | null | undefined,
+): number {
   if (!card || !counterType) return 0;
   if (typeof card.getCounter === "function") {
     return Math.max(0, Number(card.getCounter(counterType) || 0));
@@ -96,7 +238,11 @@ function getCounterValue(card, counterType) {
   return 0;
 }
 
-function cardMatchesAttackPassiveFilters(game, card, filters = {}) {
+function cardMatchesAttackPassiveFilters(
+  game: AttackAvailabilityHost | null | undefined,
+  card: GameCard | null | undefined,
+  filters: AttackCardFilter = {},
+): boolean {
   if (!card) return false;
   if (filters.requireFaceup === true && card.isFacedown) return false;
   if (filters.cardKind && !cardMatchesKind(card, filters.cardKind)) return false;
@@ -133,40 +279,58 @@ function cardMatchesAttackPassiveFilters(game, card, filters = {}) {
   return true;
 }
 
-function normalizePassiveList(value, fallback = []) {
+function normalizePassiveList<Value>(
+  value: Value | readonly Value[] | null | undefined,
+  fallback: readonly Value[] = [],
+): readonly Value[] {
   if (value === undefined || value === null) return fallback;
-  return Array.isArray(value) ? value : [value];
+  return Array.isArray(value) ? value : [value as Value];
 }
 
-function samePlayer(left, right) {
+function samePlayer(
+  left: { id?: string | number | null } | null | undefined,
+  right: { id?: string | number | null } | null | undefined,
+): boolean {
   if (!left || !right) return false;
-  return left === right || (left.id && right.id && left.id === right.id);
+  return left === right || Boolean(left.id && right.id && left.id === right.id);
 }
 
-function getPlayerFromContext(game, value) {
+function getPlayerFromContext(
+  game: AttackAvailabilityHost | null | undefined,
+  value: GamePlayer | GameCard | string | null | undefined,
+): GamePlayer | null {
   if (!game || !value) return null;
-  if (samePlayer(value, game.player)) return game.player;
-  if (samePlayer(value, game.bot)) return game.bot;
   if (value === "player") return game.player;
   if (value === "bot") return game.bot;
-  if (value.owner === "player") return game.player;
-  if (value.owner === "bot") return game.bot;
+  if (typeof value === "string") return null;
+  if (samePlayer(value, game.player)) return game.player;
+  if (samePlayer(value, game.bot)) return game.bot;
+  if ("owner" in value && value.owner === "player") return game.player;
+  if ("owner" in value && value.owner === "bot") return game.bot;
   if (value.id === "player") return game.player;
   if (value.id === "bot") return game.bot;
   return null;
 }
 
-function getOwnerTypeForAura(auraOwner, targetOwner) {
+function getOwnerTypeForAura(
+  auraOwner: GamePlayer | null | undefined,
+  targetOwner: GamePlayer | null | undefined,
+): Exclude<AttackOwnerRule, "any"> | null {
   if (!auraOwner || !targetOwner) return null;
   return samePlayer(auraOwner, targetOwner) ? "self" : "opponent";
 }
 
-function ownerRuleMatches(ruleList, ownerType) {
+function ownerRuleMatches(
+  ruleList: readonly string[],
+  ownerType: Exclude<AttackOwnerRule, "any"> | null,
+): boolean {
   if (!ownerType) return false;
   return ruleList.includes("any") || ruleList.includes(ownerType);
 }
 
-function isBattleDestructionPreventionAura(passive) {
+function isBattleDestructionPreventionAura(
+  passive: AttackPassiveRule | null | undefined,
+): boolean {
   return (
     passive?.type === "negate_battle_destruction_prevention" ||
     passive?.type === "negate_opponent_battle_destruction_prevention"
@@ -174,10 +338,10 @@ function isBattleDestructionPreventionAura(passive) {
 }
 
 function findBattleDestructionPreventionNegationAura(
-  game,
-  card,
-  context = {},
-) {
+  game: AttackAvailabilityHost | null | undefined,
+  card: GameCard | null | undefined,
+  context: AttackContext = {},
+): AttackAuraMatch | null {
   if (!game || !card) return null;
 
   const protectedOwner =
@@ -202,7 +366,7 @@ function findBattleDestructionPreventionNegationAura(
 
       for (const effect of sourceCard.effects || []) {
         if (effect?.timing !== "passive") continue;
-        const passive = effect.passive || {};
+        const passive = getAttackPassive(effect);
         if (!isBattleDestructionPreventionAura(passive)) continue;
 
         const sourceZone = findAttackPassiveSourceZone(
@@ -249,7 +413,10 @@ function findBattleDestructionPreventionNegationAura(
   return null;
 }
 
-function getBattleOpponentForCard(card, context = {}) {
+function getBattleOpponentForCard(
+  card: GameCard | null | undefined,
+  context: AttackContext = {},
+): GameCard | null {
   if (!card) return null;
   if (context.battleOpponent) return context.battleOpponent;
   if (context.opponentCard) return context.opponentCard;
@@ -260,7 +427,11 @@ function getBattleOpponentForCard(card, context = {}) {
   return null;
 }
 
-function isBattleIndestructibleByStatMatchPassive(game, card, context = {}) {
+function isBattleIndestructibleByStatMatchPassive(
+  game: AttackAvailabilityHost | null | undefined,
+  card: GameCard | null | undefined,
+  context: AttackContext = {},
+): boolean {
   if (!game || !card || !Array.isArray(card.effects)) return false;
   if (card.isFacedown || card.effectsNegated) return false;
 
@@ -276,7 +447,7 @@ function isBattleIndestructibleByStatMatchPassive(game, card, context = {}) {
 
   for (const effect of card.effects) {
     if (!effect || effect.timing !== "passive") continue;
-    const passive = effect.passive || {};
+    const passive = getAttackPassive(effect);
     if (passive.type !== "battle_indestructible_if_stat_match") continue;
     if (effect.requireZone && sourceZone !== effect.requireZone) continue;
     if (passive.requireZone && sourceZone !== passive.requireZone) continue;
@@ -303,8 +474,8 @@ function isBattleIndestructibleByStatMatchPassive(game, card, context = {}) {
 
     const sourceStat = passive.sourceStat || passive.stat || "atk";
     const opponentStat = passive.opponentStat || passive.compareToStat || sourceStat;
-    const sourceValue = Number(card[sourceStat] ?? 0);
-    const opponentValue = Number(battleOpponent[opponentStat] ?? 0);
+    const sourceValue = readCombatStat(card, sourceStat);
+    const opponentValue = readCombatStat(battleOpponent, opponentStat);
     if (
       Number.isFinite(sourceValue) &&
       Number.isFinite(opponentValue) &&
@@ -317,7 +488,11 @@ function isBattleIndestructibleByStatMatchPassive(game, card, context = {}) {
   return false;
 }
 
-function equipIsActiveForCard(game, equip, card) {
+function equipIsActiveForCard(
+  game: AttackAvailabilityHost | null | undefined,
+  equip: GameCard | null | undefined,
+  card: GameCard | null | undefined,
+): boolean {
   if (!game || !equip || !card) return false;
   if (typeof game.effectEngine?.isActiveEquipForCard === "function") {
     return game.effectEngine.isActiveEquipForCard(equip, card);
@@ -328,7 +503,12 @@ function equipIsActiveForCard(game, equip, card) {
   return Array.isArray(equipOwner?.spellTrap) && equipOwner.spellTrap.includes(equip);
 }
 
-function battleProtectionSourceAffectsCard(game, card, sourceCard, sourceOwner) {
+function battleProtectionSourceAffectsCard(
+  game: AttackAvailabilityHost | null | undefined,
+  card: GameCard | null | undefined,
+  sourceCard: GameCard | null | undefined,
+  sourceOwner: GamePlayer | null | undefined,
+): boolean {
   if (!game || !card || !sourceCard) return true;
   if (sourceCard === card) return true;
   const resolvedSourceOwner = sourceOwner || getOwnerByCard(game, sourceCard);
@@ -340,7 +520,13 @@ function battleProtectionSourceAffectsCard(game, card, sourceCard, sourceOwner) 
   return immunity?.immune !== true;
 }
 
-function passiveConditionsAreMet(game, sourceOwner, sourceCard, passive, context = {}) {
+function passiveConditionsAreMet(
+  game: AttackAvailabilityHost | null | undefined,
+  sourceOwner: GamePlayer | null | undefined,
+  sourceCard: GameCard,
+  passive: AttackPassiveRule,
+  context: AttackContext = {},
+): boolean {
   const rawConditions = passive?.conditions || passive?.condition || null;
   const conditions = Array.isArray(rawConditions)
     ? rawConditions
@@ -363,7 +549,11 @@ function passiveConditionsAreMet(game, sourceOwner, sourceCard, passive, context
   return result?.ok !== false;
 }
 
-function ownPositionBattleIndestructibleApplies(game, card, context = {}) {
+function ownPositionBattleIndestructibleApplies(
+  game: AttackAvailabilityHost | null | undefined,
+  card: GameCard | null | undefined,
+  context: AttackContext = {},
+): boolean {
   if (!game || !card || !Array.isArray(card.effects)) return false;
   if (card.isFacedown || card.effectsNegated) return false;
   const owner =
@@ -373,7 +563,7 @@ function ownPositionBattleIndestructibleApplies(game, card, context = {}) {
   const sourceZone = findAttackPassiveSourceZone(game, owner, card);
   for (const effect of card.effects) {
     if (!effect || effect.timing !== "passive") continue;
-    const passive = effect.passive || {};
+    const passive = getAttackPassive(effect);
     if (passive.type !== "position_status") continue;
     const statusName = passive.status || "battleIndestructible";
     if (statusName !== "battleIndestructible") continue;
@@ -392,7 +582,11 @@ function ownPositionBattleIndestructibleApplies(game, card, context = {}) {
   return false;
 }
 
-function ownConditionalBattleIndestructibleApplies(game, card, context = {}) {
+function ownConditionalBattleIndestructibleApplies(
+  game: AttackAvailabilityHost | null | undefined,
+  card: GameCard | null | undefined,
+  context: AttackContext = {},
+): boolean {
   if (!game || !card || !Array.isArray(card.effects)) return false;
   if (card.isFacedown || card.effectsNegated) return false;
   const owner =
@@ -402,7 +596,7 @@ function ownConditionalBattleIndestructibleApplies(game, card, context = {}) {
   const sourceZone = findAttackPassiveSourceZone(game, owner, card);
   for (const effect of card.effects) {
     if (!effect || effect.timing !== "passive") continue;
-    const passive = effect.passive || {};
+    const passive = getAttackPassive(effect);
     if (passive.type !== "conditional_status") continue;
     const statusName = passive.status || "battleIndestructible";
     if (statusName !== "battleIndestructible") continue;
@@ -420,7 +614,10 @@ function ownConditionalBattleIndestructibleApplies(game, card, context = {}) {
   return false;
 }
 
-function equipBattleIndestructibleApplies(game, card) {
+function equipBattleIndestructibleApplies(
+  game: AttackAvailabilityHost | null | undefined,
+  card: GameCard | null | undefined,
+): boolean {
   const equips = Array.isArray(card?.equips) ? card.equips : [];
   for (const equip of equips) {
     if (!equip?.grantsBattleIndestructible) continue;
@@ -433,16 +630,18 @@ function equipBattleIndestructibleApplies(game, card) {
   return false;
 }
 
-function hasKnownBattleIndestructibleSource(card) {
+function hasKnownBattleIndestructibleSource(
+  card: GameCard | null | undefined,
+): boolean {
   if (!card) return false;
   if (
     (card.effects || []).some((effect) => {
-      const passive = effect?.passive || {};
+      const passive = effect ? getAttackPassive(effect) : null;
       return (
         effect?.timing === "passive" &&
-        (passive.type === "position_status" ||
-          passive.type === "conditional_status") &&
-        (passive.status || "battleIndestructible") === "battleIndestructible"
+        (passive?.type === "position_status" ||
+          passive?.type === "conditional_status") &&
+        (passive?.status || "battleIndestructible") === "battleIndestructible"
       );
     })
   ) {
@@ -451,7 +650,11 @@ function hasKnownBattleIndestructibleSource(card) {
   return (card.equips || []).some((equip) => equip?.grantsBattleIndestructible);
 }
 
-function battleIndestructibleFlagApplies(game, card, context = {}) {
+function battleIndestructibleFlagApplies(
+  game: AttackAvailabilityHost | null | undefined,
+  card: GameCard | null | undefined,
+  context: AttackContext = {},
+): boolean {
   if (!card?.battleIndestructible) return false;
   if (ownPositionBattleIndestructibleApplies(game, card, context)) return true;
   if (ownConditionalBattleIndestructibleApplies(game, card, context)) {
@@ -461,7 +664,11 @@ function battleIndestructibleFlagApplies(game, card, context = {}) {
   return !hasKnownBattleIndestructibleSource(card);
 }
 
-function getCounterAttackLockReason(game, attacker) {
+function getCounterAttackLockReason(
+  game: AttackAvailabilityHost | null | undefined,
+  attacker: GameCard | null | undefined,
+): string | null {
+  if (!attacker) return null;
   const attackerOwner = getPlayerByCardOwner(game, attacker);
   const opponentOfAttacker =
     attackerOwner && typeof game?.getOpponent === "function"
@@ -481,7 +688,7 @@ function getCounterAttackLockReason(game, attacker) {
 
       for (const effect of sourceCard.effects || []) {
         if (effect?.timing !== "passive") continue;
-        const passive = effect.passive;
+        const passive = getAttackPassive(effect);
         if (!passive || passive.type !== "counter_attack_lock") continue;
 
         const sourceZone = findAttackPassiveSourceZone(
@@ -528,10 +735,13 @@ function getCounterAttackLockReason(game, attacker) {
 
 /**
  * Check if a monster can attack and how many attacks it has available.
- * @param {Object} attacker - The monster attempting to attack
- * @returns {Object} Availability result with ok, reason, maxAttacks, etc.
+ * @param attacker - The monster attempting to attack
+ * @returns Availability result with ok, reason, maxAttacks, etc.
  */
-export function getAttackAvailability(attacker) {
+export function getAttackAvailability(
+  this: AttackAvailabilityHost,
+  attacker: GameCard | null | undefined,
+): AttackAvailabilityResult {
   if (!attacker) {
     return { ok: false, reason: "No attacker selected." };
   }
@@ -564,7 +774,7 @@ export function getAttackAvailability(attacker) {
       for (const effect of (fieldCard.effects || [])) {
         if (
           effect?.timing === "passive" &&
-          effect?.passive?.type === "restrict_opponent_summon_turn_attack"
+          getAttackPassive(effect).type === "restrict_opponent_summon_turn_attack"
         ) {
           return {
             ok: false,
@@ -664,10 +874,14 @@ export function getAttackAvailability(attacker) {
 
 /**
  * Mark an attack as used, updating attack counters and flags.
- * @param {Object} attacker - The attacking monster
- * @param {Object|null} target - The target monster (null for direct attack)
+ * @param attacker - The attacking monster
+ * @param target - The target monster (null for direct attack)
  */
-export function markAttackUsed(attacker, target = null) {
+export function markAttackUsed(
+  this: AttackAvailabilityHost,
+  attacker: GameCard | null | undefined,
+  target: GameCard | null = null,
+): void {
   if (!attacker) return;
   const maxAttacks = this.getMonsterAttackLimit
     ? this.getMonsterAttackLimit(attacker)
@@ -715,9 +929,12 @@ export function markAttackUsed(attacker, target = null) {
 
 /**
  * Register that an attack was negated (e.g., by a trap).
- * @param {Object} attacker - The monster whose attack was negated
+ * @param attacker - The monster whose attack was negated
  */
-export function registerAttackNegated(attacker) {
+export function registerAttackNegated(
+  this: AttackAvailabilityHost,
+  attacker: GameCard | null | undefined,
+): void {
   this.lastAttackNegated = true;
   if (attacker?.name) {
     this.ui.log(`The attack of ${attacker.name} was negated!`);
@@ -729,21 +946,29 @@ export function registerAttackNegated(attacker) {
 /**
  * Check if an active aura negates effects preventing this card from being
  * destroyed by battle.
- * @param {Object} card - The card protected by a battle-destruction effect
- * @param {Object} context - Optional owner/source context for the prevention
+ * @param card - The card protected by a battle-destruction effect
+ * @param context - Optional owner/source context for the prevention
  * @returns {boolean} True if the prevention effect is negated
  */
-export function isBattleDestructionPreventionNegated(card, context = {}) {
+export function isBattleDestructionPreventionNegated(
+  this: AttackAvailabilityHost,
+  card: GameCard | null | undefined,
+  context: AttackContext = {},
+): boolean {
   return !!findBattleDestructionPreventionNegationAura(this, card, context);
 }
 
 /**
  * Check if a card can be destroyed by battle.
- * @param {Object} card - The card to check
- * @param {Object} context - Optional owner/source context for the prevention
+ * @param card - The card to check
+ * @param context - Optional owner/source context for the prevention
  * @returns {boolean} True if the card can be destroyed by battle
  */
-export function canDestroyByBattle(card, context = {}) {
+export function canDestroyByBattle(
+  this: AttackAvailabilityHost,
+  card: GameCard | null | undefined,
+  context: AttackContext = {},
+): boolean {
   if (!card) return false;
   if (isBattleDestructionPreventionNegated.call(this, card, context)) {
     return true;

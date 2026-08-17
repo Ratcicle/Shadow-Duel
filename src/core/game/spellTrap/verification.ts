@@ -1,12 +1,43 @@
 // src/core/game/spellTrap/verification.js
 // Spell/Trap verification and validation methods for Game.
 
+import type { GameCard } from "../../contracts/cards.js";
+import type { GamePlayer } from "../../contracts/player.js";
+
+interface FusionMaterialLocation {
+  zone: "field" | "hand";
+}
+
+interface SpellTrapVerificationHost {
+  player: GamePlayer;
+  bot: GamePlayer;
+  turn: string;
+  turnCounter: number;
+  effectEngine?: {
+    findFusionMaterialCombos?(
+      fusion: GameCard,
+      materials: GameCard[],
+      options: { materialInfo: FusionMaterialLocation[] },
+    ): GameCard[][];
+    canSummonFusion?(
+      fusion: GameCard,
+      materials: GameCard[],
+      player: GamePlayer,
+      options: { materialInfo: FusionMaterialLocation[] },
+    ): boolean;
+  } | null;
+  devLog?(eventName: string, payload: { summary: string }): void;
+}
+
 /**
  * Checks if a trap can be activated (must be set and not set this turn).
  * @param {Card} card - The trap card to check.
  * @returns {boolean} True if the trap can be activated.
  */
-export function canActivateTrap(card) {
+export function canActivateTrap(
+  this: SpellTrapVerificationHost,
+  card: GameCard | null | undefined,
+): boolean {
   this.devLog?.("CAN_ACTIVATE_TRAP", {
     summary: `Checking ${card?.name}: kind=${card?.cardKind}, facedown=${card?.isFacedown}, turnSetOn=${card?.turnSetOn}, currentTurn=${this.turnCounter}`,
   });
@@ -25,8 +56,11 @@ export function canActivateTrap(card) {
  * Checks if Polymerization can be activated by the player.
  * @returns {boolean} True if Polymerization can be activated.
  */
-export function canActivatePolymerization(playerOverride = null) {
-  const debugPolymerization = (summary) => {
+export function canActivatePolymerization(
+  this: SpellTrapVerificationHost,
+  playerOverride: GamePlayer | null = null,
+): boolean {
+  const debugPolymerization = (summary: string): void => {
     this.devLog?.("CAN_ACTIVATE_POLYMERIZATION", { summary });
   };
 
@@ -49,9 +83,9 @@ export function canActivatePolymerization(playerOverride = null) {
     (card) => card && card.cardKind === "monster",
   );
   const availableMaterials = [...fieldMonsters, ...handMonsters];
-  const materialInfo = [
-    ...fieldMonsters.map(() => ({ zone: "field" })),
-    ...handMonsters.map(() => ({ zone: "hand" })),
+  const materialInfo: FusionMaterialLocation[] = [
+    ...fieldMonsters.map((): FusionMaterialLocation => ({ zone: "field" })),
+    ...handMonsters.map((): FusionMaterialLocation => ({ zone: "hand" })),
   ];
 
   if (availableMaterials.length === 0) {

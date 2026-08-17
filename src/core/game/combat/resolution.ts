@@ -8,36 +8,246 @@ import {
   hasExplicitAttackLimitThisTurn,
 } from "./availability.js";
 
-function getController(game, card) {
+import type { GameCard } from "../../contracts/cards.js";
+import type { GamePlayer } from "../../contracts/player.js";
+
+type CombatCardId = string | number | null;
+type BattleCardMatch = boolean | string | number | null | undefined;
+
+interface CombatCard extends GameCard {
+  simInstanceId?: string | number | null;
+}
+
+interface BattlePairEffect {
+  firstTarget?: CombatCard | null;
+  secondTarget?: CombatCard | null;
+  firstInstanceId?: CombatCardId;
+  secondInstanceId?: CombatCardId;
+  firstFieldPresenceId?: string | number | null;
+  secondFieldPresenceId?: string | number | null;
+  expiresOnTurn?: number | null;
+  timing?: string | null;
+}
+
+interface CombatResult {
+  ok?: boolean;
+  success?: boolean;
+  reason?: string;
+  damageDealt?: number;
+  targetDestroyed?: boolean;
+  attackerDestroyed?: boolean;
+  stoppedBeforeCalculation?: boolean;
+  needsSelection?: boolean;
+  selectionContract?: unknown;
+}
+
+interface CombatGuardInput {
+  actor: GamePlayer;
+  kind: "attack";
+  phaseReq: "battle";
+  allowDuringSelection: boolean;
+  allowDuringResolving: boolean;
+}
+
+interface AttackAvailabilityResult {
+  ok: boolean;
+  reason?: string;
+  attacksUsed?: number;
+  maxAttacks?: number;
+}
+
+interface AttackRedirect {
+  target?: CombatCard | null;
+  targetOwner?: GamePlayer | null;
+}
+
+interface AttackWindowPayload {
+  attacker: CombatCard;
+  target: CombatCard | null;
+  defender: CombatCard | null;
+  attackerOwner: GamePlayer;
+  defenderOwner: GamePlayer;
+  targetOwner: GamePlayer;
+  battleStep: string | null;
+  damageStepTiming: null;
+  isOpponentAttack?: boolean;
+  triggerPlayer?: GamePlayer;
+  addTriggerToChain?: boolean;
+  attackRedirect?: AttackRedirect | null;
+  redirectedTarget?: CombatCard | null;
+  redirectedTargetOwner?: GamePlayer | null;
+}
+
+interface BattleLpLossPreview {
+  player: GamePlayer;
+  amount: number;
+}
+
+interface AttackContact {
+  sourceRect?: unknown;
+  targetRect?: unknown;
+  contactRect?: unknown;
+}
+
+interface AttackPresentation {
+  finished?: PromiseLike<unknown> | null;
+  contact?: PromiseLike<unknown> | null;
+  then?: PromiseLike<unknown>["then"];
+}
+
+interface AttackLungeOptions {
+  kind: "attack-lunge";
+  card: CombatCard;
+  cardKey: string;
+  targetCardKey: string | null;
+  targetOwnerId: string | null;
+  directAttack: boolean;
+  onContact(contact?: AttackContact): void;
+}
+
+interface CombatUiPort {
+  log(message: string): void;
+  showLpDamageSequence?(
+    player: GamePlayer,
+    amount: number,
+    options: {
+      cause: "battle";
+      sourceCard: CombatCard;
+      targetCard: CombatCard | null;
+      sourceRect: unknown;
+      targetRect: unknown;
+      battleImpactRect: unknown;
+      contactRect: unknown;
+      directAttack: boolean;
+      fromLp: number;
+      toLp: number;
+      screenShake: false;
+      holdFinalUntilReal: true;
+    },
+  ): boolean;
+  playBattleImpactImmediate?(options: {
+    sourceCard: CombatCard;
+    targetCard: CombatCard | null;
+    targetOwnerId: string | null;
+    targetRect: unknown;
+    directAttack: boolean;
+    cause: "battle";
+    intensity: "normal";
+    tone: "red";
+  }): boolean;
+  playAttackLunge?(options: AttackLungeOptions): AttackPresentation | null;
+}
+
+interface DamageStepHandle {
+  damageStepId?: number;
+  ok?: boolean;
+  reason?: string;
+}
+
+interface DamageStepInput {
+  attacker: CombatCard;
+  defender: CombatCard | null;
+  attackerOwner: GamePlayer;
+  defenderOwner: GamePlayer;
+  consumeBattleLpLossFeedback(player: GamePlayer, amount: number): boolean;
+}
+
+interface CombatHost {
+  player: GamePlayer;
+  bot: GamePlayer;
+  turnCounter: number;
+  battleStep: string | null;
+  lastAttackNegated: boolean;
+  temporaryBattlePairEffects: BattlePairEffect[];
+  ui: CombatUiPort;
+  guardActionStart(
+    input: CombatGuardInput,
+    humanControlled: boolean,
+  ): CombatResult;
+  getAttackAvailability(attacker: CombatCard): AttackAvailabilityResult;
+  applyAttackResolutionIndicators(
+    attacker: CombatCard,
+    target: CombatCard | null,
+  ): void;
+  getMonsterAttackLimit?(attacker: CombatCard): number;
+  checkAndOfferTraps(
+    eventName: string,
+    payload: AttackWindowPayload,
+  ): Promise<unknown>;
+  clearAttackResolutionIndicators(): void;
+  updateBoard(): unknown;
+  emit(eventName: string, payload: unknown): Promise<unknown>;
+  checkWinCondition(): unknown;
+  markAttackUsed(attacker: CombatCard, target: CombatCard | null): void;
+  queueVisualFeedback?(feedback: {
+    kind: "impact";
+    cause: "battle";
+    directAttack: true;
+    intensity: "normal";
+    sourceCard: CombatCard;
+    targetOwnerId: string;
+    tone: "red";
+  }): unknown;
+  createDamageStepTransaction(input: DamageStepInput): DamageStepHandle;
+  executeDamageStepTransaction(
+    transaction: DamageStepHandle,
+  ): Promise<CombatResult>;
+}
+
+interface ResolveCombatOptions {
+  allowDuringSelection?: boolean;
+  allowDuringResolving?: boolean;
+}
+
+function getController(
+  game: CombatHost | null | undefined,
+  card: CombatCard | null | undefined,
+): GamePlayer | null {
   if (!game || !card) return null;
   return card.owner === "player" ? game.player : game.bot;
 }
 
-function getOpponentPlayer(game, card) {
+function getOpponentPlayer(
+  game: CombatHost | null | undefined,
+  card: CombatCard | null | undefined,
+): GamePlayer | null {
   if (!game || !card) return null;
   return card.owner === "player" ? game.bot : game.player;
 }
 
-function getActualLpLoss(player, amount) {
+function getActualLpLoss(
+  player: GamePlayer | null | undefined,
+  amount: number,
+): number {
   const value = Number(amount);
   if (!player || !Number.isFinite(value) || value <= 0) return 0;
   return Math.max(0, Math.min(Number(player.lp || 0), value));
 }
 
-function getPiercingDamageMultiplier(card) {
+function getPiercingDamageMultiplier(
+  card: CombatCard | null | undefined,
+): number {
   if (!card?.piercing) return 0;
   const multiplier = Number(card.piercingDamageMultiplier ?? 1);
   return Number.isFinite(multiplier) && multiplier > 0 ? multiplier : 1;
 }
 
-function calculatePiercingDamage(attacker, attackerAtk, targetDef) {
+function calculatePiercingDamage(
+  attacker: CombatCard | null | undefined,
+  attackerAtk: number,
+  targetDef: number,
+): number {
   const multiplier = getPiercingDamageMultiplier(attacker);
   if (multiplier <= 0) return 0;
   const excess = Math.max(0, Number(attackerAtk || 0) - Number(targetDef || 0));
   return excess > 0 ? Math.floor(excess * multiplier) : 0;
 }
 
-function canShowBattleDamageLoss(player, cardInvolved, shouldHeal) {
+function canShowBattleDamageLoss(
+  player: GamePlayer | null,
+  cardInvolved: CombatCard | null,
+  shouldHeal: boolean,
+): boolean {
   if (!player || !cardInvolved) return false;
   if (
     cardInvolved?.preventsBattleDamageToController === true &&
@@ -51,11 +261,24 @@ function canShowBattleDamageLoss(player, cardInvolved, shouldHeal) {
   return true;
 }
 
-function getCardInstanceId(card) {
-  return card?.instanceId ?? card?._instanceId ?? card?.uuid ?? card?.simInstanceId ?? null;
+function getCardInstanceId(
+  card: CombatCard | null | undefined,
+): CombatCardId {
+  return (
+    card?.instanceId ??
+    card?._instanceId ??
+    card?.uuid ??
+    card?.simInstanceId ??
+    null
+  );
 }
 
-function sameBattleCard(card, expected, expectedInstanceId, expectedFieldPresenceId) {
+function sameBattleCard(
+  card: CombatCard | null | undefined,
+  expected: CombatCard | null | undefined,
+  expectedInstanceId: CombatCardId | undefined,
+  expectedFieldPresenceId: string | number | null | undefined,
+): BattleCardMatch {
   if (!card || !expected) return false;
   if (card === expected) return true;
   const cardInstanceId = getCardInstanceId(card);
@@ -74,7 +297,11 @@ function sameBattleCard(card, expected, expectedInstanceId, expectedFieldPresenc
   );
 }
 
-function battlePairMatches(entry, attacker, defender) {
+function battlePairMatches(
+  entry: BattlePairEffect,
+  attacker: CombatCard,
+  defender: CombatCard,
+): BattleCardMatch {
   const firstIsAttacker = sameBattleCard(
     attacker,
     entry.firstTarget,
@@ -102,7 +329,9 @@ function battlePairMatches(entry, attacker, defender) {
   return (firstIsAttacker && secondIsDefender) || (firstIsDefender && secondIsAttacker);
 }
 
-function hasBattleDamageTimingEffect(card) {
+function hasBattleDamageTimingEffect(
+  card: CombatCard | null | undefined,
+): boolean {
   return Array.isArray(card?.effects)
     ? card.effects.some(
         (effect) =>
@@ -111,7 +340,11 @@ function hasBattleDamageTimingEffect(card) {
     : false;
 }
 
-function hasMatchingTemporaryBattlePairDamageStepEffect(game, attacker, target) {
+function hasMatchingTemporaryBattlePairDamageStepEffect(
+  game: CombatHost | null | undefined,
+  attacker: CombatCard | null | undefined,
+  target: CombatCard | null | undefined,
+): boolean {
   if (!attacker || !target || !Array.isArray(game?.temporaryBattlePairEffects)) {
     return false;
   }
@@ -120,7 +353,7 @@ function hasMatchingTemporaryBattlePairDamageStepEffect(game, attacker, target) 
     if (!entry) return false;
     if (
       Number.isFinite(entry.expiresOnTurn) &&
-      game.turnCounter > entry.expiresOnTurn
+      game.turnCounter > (entry.expiresOnTurn as number)
     ) {
       return false;
     }
@@ -137,14 +370,18 @@ function hasMatchingTemporaryBattlePairDamageStepEffect(game, attacker, target) 
   });
 }
 
-function hasPotentialBattleDamageTimingEffect(game, attacker, target) {
+function hasPotentialBattleDamageTimingEffect(
+  game: CombatHost,
+  attacker: CombatCard,
+  target: CombatCard | null,
+): boolean {
   if (hasMatchingTemporaryBattlePairDamageStepEffect(game, attacker, target)) {
     return true;
   }
 
   const candidates = [attacker, target];
   for (const player of [game?.player, game?.bot]) {
-    for (const zoneName of ["hand", "spellTrap", "fieldSpell"]) {
+    for (const zoneName of ["hand", "spellTrap", "fieldSpell"] as const) {
       if (Array.isArray(player?.[zoneName])) {
         candidates.push(...player[zoneName]);
       } else if (player?.[zoneName]) {
@@ -155,14 +392,18 @@ function hasPotentialBattleDamageTimingEffect(game, attacker, target) {
   return candidates.some(hasBattleDamageTimingEffect);
 }
 
-function resolveBattleLpLossPreview(game, attacker, target) {
+function resolveBattleLpLossPreview(
+  game: CombatHost | null | undefined,
+  attacker: CombatCard | null | undefined,
+  target: CombatCard | null,
+): BattleLpLossPreview | null {
   if (!game || !attacker) return null;
 
   if (!target) {
     // Direct attacks do not emit the battle_damage window, so the preview is stable.
     const defender = getOpponentPlayer(game, attacker);
     const amount = getActualLpLoss(defender, attacker.atk);
-    return amount > 0 ? { player: defender, amount } : null;
+    return amount > 0 ? { player: defender!, amount } : null;
   }
 
   if (target.isFacedown) return null;
@@ -175,8 +416,8 @@ function resolveBattleLpLossPreview(game, attacker, target) {
   const targetAtk = Number(target.atk || 0);
   const targetDef = Number(target.def || 0);
 
-  let player = null;
-  let cardInvolved = null;
+  let player: GamePlayer | null = null;
+  let cardInvolved: CombatCard | null = null;
   let amount = 0;
   let shouldHeal = false;
 
@@ -211,15 +452,18 @@ function resolveBattleLpLossPreview(game, attacker, target) {
 
   if (!canShowBattleDamageLoss(player, cardInvolved, shouldHeal)) return null;
   const actual = getActualLpLoss(player, amount);
-  return actual > 0 ? { player, amount: actual } : null;
+  return actual > 0 ? { player: player!, amount: actual } : null;
 }
 
-async function waitForAttackPresentation(game, presentation) {
+async function waitForAttackPresentation(
+  game: CombatHost,
+  presentation: AttackPresentation | null | undefined,
+): Promise<void> {
   const finished =
     presentation?.finished && typeof presentation.finished.then === "function"
       ? presentation.finished
       : presentation && typeof presentation.then === "function"
-        ? presentation
+        ? (presentation as PromiseLike<unknown>)
         : null;
   if (!finished) return;
   try {
@@ -229,7 +473,10 @@ async function waitForAttackPresentation(game, presentation) {
   }
 }
 
-async function waitForAttackContact(game, presentation) {
+async function waitForAttackContact(
+  game: CombatHost,
+  presentation: AttackPresentation | null | undefined,
+): Promise<boolean> {
   const contact =
     presentation?.contact && typeof presentation.contact.then === "function"
       ? presentation.contact
@@ -249,12 +496,17 @@ async function waitForAttackContact(game, presentation) {
 
 /**
  * Resolve an attack through the Battle Step and canonical Damage Step.
- * @param {Object} attacker - The attacking monster
- * @param {Object|null} target - The target monster (null for direct attack)
- * @param {Object} options - Resolution options
- * @returns {Object} Result with ok status and any pending selections
+ * @param attacker - The attacking monster
+ * @param target - The target monster (null for direct attack)
+ * @param options - Resolution options
+ * @returns Result with ok status and any pending selections
  */
-export async function resolveCombat(attacker, target, options = {}) {
+export async function resolveCombat(
+  this: CombatHost,
+  attacker: CombatCard | null | undefined,
+  target: CombatCard | null,
+  options: ResolveCombatOptions = {},
+): Promise<CombatResult | undefined> {
   if (!attacker) return;
   const attackerOwner = attacker.owner === "player" ? this.player : this.bot;
   const guard = this.guardActionStart(
@@ -303,7 +555,7 @@ export async function resolveCombat(attacker, target, options = {}) {
       : this.player;
   let targetOwner = defenderOwner;
 
-  const applyAttackRedirect = (redirectPayload) => {
+  const applyAttackRedirect = (redirectPayload: AttackWindowPayload) => {
     const redirectedTarget =
       redirectPayload?.attackRedirect?.target ||
       redirectPayload?.redirectedTarget ||
@@ -400,7 +652,7 @@ export async function resolveCombat(attacker, target, options = {}) {
     return { ok: true };
   };
 
-  const battleStepOpenContext = {
+  const battleStepOpenContext: AttackWindowPayload = {
     attacker,
     target: target || null,
     defender: target || null,
@@ -430,12 +682,14 @@ export async function resolveCombat(attacker, target, options = {}) {
   this.ui.log(`${attacker.name} attacks ${target ? target.name : "directly"}!`);
 
   let battleImpactVisualPlayed = false;
-  let battleLpLossPreview = null;
-  let battleLpLossFeedback = null;
-  const setBattleLpLossPreview = (preview) => {
+  let battleLpLossPreview: BattleLpLossPreview | null = null;
+  let battleLpLossFeedback: BattleLpLossPreview | null = null;
+  const setBattleLpLossPreview = (
+    preview: BattleLpLossPreview | null,
+  ): void => {
     battleLpLossPreview = preview?.player && preview.amount > 0 ? preview : null;
   };
-  const showBattleLpLossOnContact = (contact = {}) => {
+  const showBattleLpLossOnContact = (contact: AttackContact = {}): void => {
     if (battleLpLossFeedback || !battleLpLossPreview) return;
     const amount = getActualLpLoss(
       battleLpLossPreview.player,
@@ -469,7 +723,10 @@ export async function resolveCombat(attacker, target, options = {}) {
       amount,
     };
   };
-  const consumeBattleLpLossFeedback = (player, amount) => {
+  const consumeBattleLpLossFeedback = (
+    player: GamePlayer,
+    amount: number,
+  ): boolean => {
     const actual = getActualLpLoss(player, amount);
     if (
       !battleLpLossFeedback ||
@@ -481,7 +738,7 @@ export async function resolveCombat(attacker, target, options = {}) {
     battleLpLossFeedback = null;
     return true;
   };
-  const playBattleImpactOnContact = (contact = {}) => {
+  const playBattleImpactOnContact = (contact: AttackContact = {}): void => {
     if (!battleImpactVisualPlayed) {
       const played = this.ui?.playBattleImpactImmediate?.({
         sourceCard: attacker,
@@ -515,7 +772,7 @@ export async function resolveCombat(attacker, target, options = {}) {
         })
       : null;
 
-  const attackDeclaredPayload = {
+  const attackDeclaredPayload: AttackWindowPayload = {
     attacker,
     target: target || null,
     defender: target || null,
@@ -529,7 +786,7 @@ export async function resolveCombat(attacker, target, options = {}) {
   await this.emit("attack_declared", attackDeclaredPayload);
 
   if (applyAttackRedirect(attackDeclaredPayload)) {
-    const battleStepOpenContext = {
+    const battleStepOpenContext: AttackWindowPayload = {
       attacker,
       target,
       defender: target,

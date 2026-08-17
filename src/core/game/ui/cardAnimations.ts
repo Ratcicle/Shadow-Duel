@@ -1,11 +1,65 @@
 import { isAI } from "../../Player.js";
+import type {
+  FullGameHost,
+  GameCard,
+  GamePlayer,
+  VisualFeedback,
+} from "../../contracts/gameRuntime.js";
+import type { PlayerId } from "../../contracts/primitives.js";
+import type { CanonicalZone } from "../../contracts/zones.js";
+
+export interface CardAnimationIntent {
+  kind: string;
+  card: GameCard;
+  fromOwnerId?: PlayerId | string | null;
+  toOwnerId?: PlayerId | string | null;
+  fromZone?: CanonicalZone | "token" | null;
+  toZone?: CanonicalZone | null;
+  fromRect?: unknown;
+  fromHadCardElement?: boolean;
+  fromVisual?: unknown;
+  cardKey?: string;
+}
+
+export interface QueuedCardAnimation extends CardAnimationIntent {
+  cardKey: string;
+}
+
+export interface VisualFeedbackIntent extends VisualFeedback {
+  sourceCard?: GameCard | null;
+  targetCard?: GameCard | null;
+  sourceCardKey?: string | null;
+  targetCardKey?: string | null;
+  targetZone?: CanonicalZone;
+}
+
+export interface QueuedVisualFeedback extends VisualFeedbackIntent {
+  sourceCardKey: string | null;
+  targetCardKey: string | null;
+}
+
+type CardAnimationHost = Pick<
+  FullGameHost,
+  | "cardAnimationsReady"
+  | "gameOver"
+  | "pendingBoardPresentationPromise"
+  | "_botArenaMode"
+  | "disablePresentationDelays"
+> & {
+  pendingCardAnimations: QueuedCardAnimation[];
+  pendingVisualFeedback: QueuedVisualFeedback[];
+  aiPresentationStepDelayMs: number;
+};
 
 /**
  * Runtime card animation queue helpers for Game.
  * The renderer owns playback; Game only records visual intents.
  */
 
-export function queueCardAnimation(intent = {}) {
+export function queueCardAnimation(
+  this: CardAnimationHost,
+  intent: CardAnimationIntent = {} as CardAnimationIntent,
+) {
   if (!this.cardAnimationsReady) return false;
   if (!intent || !intent.card || intent.card.instanceId == null) return false;
 
@@ -21,7 +75,10 @@ export function queueCardAnimation(intent = {}) {
   return true;
 }
 
-export function queueVisualFeedback(intent = {}) {
+export function queueVisualFeedback(
+  this: CardAnimationHost,
+  intent: VisualFeedbackIntent = {} as VisualFeedbackIntent,
+) {
   if (!this.cardAnimationsReady) return false;
   if (!intent || !intent.kind) return false;
 
@@ -48,11 +105,15 @@ export function queueVisualFeedback(intent = {}) {
   return true;
 }
 
-export function waitForAiPresentationStep(player, options = {}) {
+export function waitForAiPresentationStep(
+  this: CardAnimationHost,
+  player: GamePlayer,
+  options: { delayMs?: number } = {},
+): Promise<void> {
   if (!isAI(player)) return Promise.resolve();
   if (this.gameOver) return Promise.resolve();
 
-  const delayMs = Number.isFinite(options.delayMs)
+  const delayMs = typeof options.delayMs === "number" && Number.isFinite(options.delayMs)
     ? options.delayMs
     : this.aiPresentationStepDelayMs;
   if (!Number.isFinite(delayMs) || delayMs <= 0) {
@@ -62,7 +123,11 @@ export function waitForAiPresentationStep(player, options = {}) {
   return new Promise((resolve) => setTimeout(resolve, delayMs));
 }
 
-export function waitForPresentationDelay(defaultDelayMs = 0, options = {}) {
+export function waitForPresentationDelay(
+  this: CardAnimationHost,
+  defaultDelayMs = 0,
+  options: { delayMs?: number } = {},
+): Promise<void> {
   if (this.gameOver) return Promise.resolve();
   if (this.disablePresentationDelays === true) return Promise.resolve();
 
@@ -71,7 +136,7 @@ export function waitForPresentationDelay(defaultDelayMs = 0, options = {}) {
     this._botArenaMode === true && Number.isFinite(this.aiPresentationStepDelayMs)
       ? this.aiPresentationStepDelayMs
       : null;
-  const requestedDelay = Number.isFinite(options.delayMs)
+  const requestedDelay = typeof options.delayMs === "number" && Number.isFinite(options.delayMs)
     ? options.delayMs
     : arenaDelay != null
       ? Math.min(defaultDelay, arenaDelay)
@@ -84,7 +149,7 @@ export function waitForPresentationDelay(defaultDelayMs = 0, options = {}) {
   return new Promise((resolve) => setTimeout(resolve, requestedDelay));
 }
 
-export async function waitForBoardPresentation() {
+export async function waitForBoardPresentation(this: CardAnimationHost) {
   if (this.gameOver) return;
   const presentation = this.pendingBoardPresentationPromise;
   if (!presentation || typeof presentation.then !== "function") return;

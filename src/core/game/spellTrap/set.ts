@@ -4,15 +4,71 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { FAST_EFFECT_ORIGINS } from "../../chain/timing.js";
+import type { GameCard } from "../../contracts/cards.js";
+import type { GamePlayer } from "../../contracts/player.js";
+import type { CardSetEventPayload } from "../../contracts/events.js";
+import type { MaybePromise } from "../../contracts/actionRuntime.js";
+
+interface SetActionGuardResult {
+  ok: boolean;
+  reason?: string;
+}
+
+interface SetTimingResult {
+  ok?: boolean;
+  success?: boolean;
+  needsSelection?: boolean;
+}
+
+interface SetSpellTrapHost {
+  player: GamePlayer;
+  turnCounter: number;
+  phase: string;
+  ui: { log(message: string): void };
+  chainSystem?: {
+    runFastEffectTiming?(input: {
+      origin: typeof FAST_EFFECT_ORIGINS.ACTION_WITHOUT_CHAIN;
+      actionPlayer: GamePlayer;
+      context: {
+        type: "action_without_chain";
+        event: "card_set";
+        card: GameCard;
+        player: GamePlayer;
+        triggerPlayer: GamePlayer;
+        phase: string;
+        currentPhase: string;
+        addTriggerToChain: false;
+      };
+    }): MaybePromise<SetTimingResult | null>;
+  } | null;
+  guardActionStart(input: {
+    actor: GamePlayer;
+    kind: "set_spell_trap";
+    phaseReq: readonly ["main1", "main2"];
+  }): SetActionGuardResult;
+  moveCard(
+    card: GameCard,
+    player: GamePlayer,
+    zone: "spellTrap",
+    options: { fromZone: "hand" },
+  ): MaybePromise<unknown>;
+  notify(eventName: "card_set", payload: CardSetEventPayload): void;
+  updateBoard(): void;
+}
 
 /**
  * Sets a Spell or Trap card from hand to the spell/trap zone.
- * @param {Card} card - The card to set.
- * @param {number} handIndex - Index of the card in the player's hand.
- * @param {Player} actor - The player performing the action.
- * @returns {Promise<Object>} Result with ok status and timing metadata.
+ * @param card - The card to set.
+ * @param handIndex - Index of the card in the player's hand.
+ * @param actor - The player performing the action.
+ * @returns Result with ok status and timing metadata.
  */
-export async function setSpellOrTrap(card, handIndex, actor = this.player) {
+export async function setSpellOrTrap(
+  this: SetSpellTrapHost,
+  card: GameCard | null | undefined,
+  handIndex: number,
+  actor: GamePlayer = this.player,
+) {
   const guard = this.guardActionStart({
     actor,
     kind: "set_spell_trap",

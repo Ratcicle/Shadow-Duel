@@ -8,9 +8,235 @@ import {
   canActivateQuickSpellFromHand,
   isQuickSpell,
 } from "./quickSpellRules.js";
+import type { QuickSpellContext } from "./quickSpellRules.js";
 import { getUIText } from "../../i18n.js";
+import type { MaybePromise } from "../../contracts/actionRuntime.js";
+import type { GameCard } from "../../contracts/cards.js";
+import type { EffectDefinition } from "../../contracts/effects.js";
+import type { GamePlayer } from "../../contracts/player.js";
+import type { CanonicalSelectionMap } from "../../contracts/selection.js";
 
-function getSpellTrapSelectionMessage(card) {
+type SpellTrapActivationZone = "hand" | "spellTrap" | "fieldSpell";
+
+interface ActivationResult {
+  ok?: boolean;
+  success?: boolean;
+  needsSelection?: boolean;
+  placementOnly?: boolean;
+  reason?: string | null;
+  code?: string;
+  cancelled?: boolean;
+}
+
+interface ActivationCommitInfo {
+  cardRef: GameCard;
+  activationZone: "spellTrap" | "fieldSpell";
+  fromIndex: number;
+  zoneIndex?: number | null;
+  replacedFieldSpell?: GameCard | null;
+}
+
+interface SpellTrapActivationContext {
+  fromHand?: boolean;
+  activationZone?: SpellTrapActivationZone | null;
+  sourceZone?: SpellTrapActivationZone;
+  committed?: boolean;
+  commitInfo?: ActivationCommitInfo | null;
+  actionContext?: unknown;
+  effectId?: string | null;
+  chainId?: number | null;
+  linkId?: number | null;
+  autoSelectSingleTarget?: boolean;
+  trapActivationFromSet?: boolean;
+  quickSpellActivationFromSet?: boolean;
+  quickSpellContext?: QuickSpellContext | null;
+}
+
+interface ActionGuardConfig {
+  actor: GamePlayer;
+  kind: string;
+  phaseReq: readonly string[] | null;
+}
+
+interface ActivationPipelineInfo {
+  card: GameCard;
+  owner: GamePlayer;
+  activationZone: "spellTrap" | "fieldSpell";
+  activationContext: SpellTrapActivationContext;
+}
+
+interface SpellTrapPipelineConfig {
+  card: GameCard;
+  owner: GamePlayer;
+  activationZone?: "spellTrap" | "fieldSpell";
+  activationContext: SpellTrapActivationContext;
+  selections?: CanonicalSelectionMap | null;
+  selectionKind: "spellTrapEffect" | "fieldSpell";
+  selectionMessage: string;
+  guardKind: string;
+  phaseReq: readonly string[] | null;
+  gate?: (() => MaybePromise<ActivationResult | boolean>) | null;
+  preview?: (() => MaybePromise<ActivationResult | null | undefined>) | null;
+  commit?: (() => MaybePromise<ActivationCommitInfo | null>) | null;
+  oncePerTurn: {
+    card: GameCard;
+    player: GamePlayer;
+    effect: EffectDefinition | null | undefined;
+  };
+  activate(
+    selections: CanonicalSelectionMap | null,
+    context: SpellTrapActivationContext,
+    zone: "spellTrap" | "fieldSpell",
+    resolvedCard: GameCard,
+  ): MaybePromise<ActivationResult | boolean | null | undefined>;
+  finalize?(
+    result: ActivationResult,
+    info: ActivationPipelineInfo,
+  ): MaybePromise<void>;
+  onFailure?(result: ActivationResult): void;
+  onCancel?(): void;
+}
+
+interface FinalizeSpellCardOptions {
+  card?: GameCard | null;
+  owner?: GamePlayer | null;
+  activationZone?: "spellTrap" | "fieldSpell" | null;
+  fromHand?: boolean;
+  effect?: EffectDefinition | null;
+  placementLog?:
+    | string
+    | ((card: GameCard, info: Partial<ActivationPipelineInfo>) => string);
+  activationLog?:
+    | string
+    | ((card: GameCard, info: Partial<ActivationPipelineInfo>) => string);
+}
+
+interface SpellTrapActivationOptions {
+  owner?: GamePlayer | null;
+  activationZone?: SpellTrapActivationZone | null;
+  effectId?: string | null;
+  quickSpellContext?: QuickSpellContext | null;
+  resume?: {
+    commitInfo?: ActivationCommitInfo | null;
+    activationZone?: "spellTrap" | "fieldSpell" | null;
+    activationContext?: SpellTrapActivationContext | null;
+  } | null;
+  actionContext?: unknown;
+}
+
+interface FieldActivationSnapshot {
+  card: GameCard;
+  owner: GamePlayer;
+  zone: "spellTrap";
+  wasFacedown: boolean;
+  previousTurnSetOn: number | null | undefined;
+  previousSetTurn: number | null | undefined;
+}
+
+interface SpellTrapActivationHost {
+  player: GamePlayer;
+  bot: GamePlayer;
+  turn: string;
+  phase: string;
+  turnCounter: number;
+  disableEffectActivation: boolean;
+  disableTraps: boolean;
+  ui: {
+    log(message: string): void;
+    showMessage?(message: string): void;
+    showTrapActivationModal(
+      card: GameCard,
+      context: "manual_activation",
+    ): MaybePromise<boolean>;
+    applySpellTrapFlipAnimation?(
+      ownerId: string,
+      zoneIndex: number,
+      options: { deferFrames: number },
+    ): unknown;
+  };
+  effectEngine: {
+    canActivateSpellTrapEffectPreview?(
+      card: GameCard,
+      owner: GamePlayer,
+      zone: "spellTrap",
+      selections: CanonicalSelectionMap | null,
+      options: unknown,
+    ): ActivationResult | null;
+    getSpellTrapActivationEffect?(
+      card: GameCard,
+      options: unknown,
+    ): EffectDefinition | null;
+    activateSpellTrapEffect(
+      card: GameCard,
+      owner: GamePlayer,
+      selections: CanonicalSelectionMap | null,
+      zone: string,
+      context: SpellTrapActivationContext,
+    ): MaybePromise<ActivationResult | boolean | null | undefined>;
+    canActivateSpellFromHandPreview?(
+      card: GameCard,
+      owner: GamePlayer,
+      options?: unknown,
+    ): ActivationResult | null;
+    getFieldSpellActivationEffect?(card: GameCard): EffectDefinition | null;
+    canActivateFieldSpellEffectPreview?(
+      card: GameCard,
+      owner: GamePlayer,
+    ): ActivationResult | null;
+    activateFieldSpell(
+      card: GameCard,
+      owner: GamePlayer,
+      selections: CanonicalSelectionMap | null,
+      context: SpellTrapActivationContext,
+    ): MaybePromise<ActivationResult | boolean | null | undefined>;
+  };
+  updateBoard(options?: unknown): unknown;
+  devLog?(code: string, detail: unknown): void;
+  createActionResult(input: ActivationResult): ActivationResult;
+  normalizeActivationResult(result: ActivationResult): ActivationResult;
+  guardActionStart(
+    config: ActionGuardConfig,
+    playerAction?: boolean,
+  ): ActivationResult;
+  runActivationPipeline(
+    config: SpellTrapPipelineConfig,
+  ): MaybePromise<ActivationResult>;
+  finalizeSpellTrapActivation(
+    card: GameCard,
+    owner: GamePlayer,
+    zone: "spellTrap" | "fieldSpell" | null,
+    options: { activationContext?: SpellTrapActivationContext },
+  ): Promise<void>;
+  finalizeSpellCardActivation(
+    result: ActivationResult,
+    info: ActivationPipelineInfo,
+    options: FinalizeSpellCardOptions,
+  ): Promise<void>;
+  rollbackFieldSpellTrapActivation?(
+    snapshot: FieldActivationSnapshot,
+    reason: ActivationResult | string,
+  ): boolean;
+  canActivatePolymerization?(owner: GamePlayer): boolean;
+  commitCardActivationFromHand(
+    owner: GamePlayer,
+    handIndex: number,
+  ): Promise<ActivationCommitInfo | null>;
+  queueVisualFeedback?(feedback: unknown): boolean;
+}
+
+function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
+  if (
+    (typeof value !== "object" || value === null) &&
+    typeof value !== "function"
+  ) {
+    return false;
+  }
+  return typeof Reflect.get(value, "then") === "function";
+}
+
+function getSpellTrapSelectionMessage(
+  card: GameCard | null | undefined,
+): string {
   if (card?.cardKind === "spell") {
     if (card.subtype === "continuous") {
       return getUIText("ui.spell.continuousSelection");
@@ -24,11 +250,12 @@ function getSpellTrapSelectionMessage(card) {
 }
 
 export async function presentSpellTrapActivationFlip(
-  card,
-  owner,
-  activationZone = "spellTrap",
-  options = {},
-) {
+  this: SpellTrapActivationHost,
+  card: GameCard | null | undefined,
+  owner: GamePlayer | null | undefined,
+  activationZone: "spellTrap" | "fieldSpell" = "spellTrap",
+  options: { updateOptions?: unknown; deferFrames?: number } = {},
+): Promise<boolean> {
   if (!card || !owner || activationZone !== "spellTrap") return false;
   if (!Array.isArray(owner.spellTrap) || !owner.spellTrap.includes(card)) {
     return false;
@@ -40,16 +267,15 @@ export async function presentSpellTrapActivationFlip(
     owner.id,
     zoneIndex,
     {
-      deferFrames: Number.isFinite(options.deferFrames)
+      deferFrames:
+        typeof options.deferFrames === "number" &&
+        Number.isFinite(options.deferFrames)
         ? options.deferFrames
         : 1,
     },
   );
 
-  const presentations = [boardPresentation, flipPresentation].filter(
-    (presentation) =>
-      presentation && typeof presentation.then === "function",
-  );
+  const presentations = [boardPresentation, flipPresentation].filter(isPromiseLike);
   if (presentations.length === 0) return false;
 
   await Promise.allSettled(presentations);
@@ -58,15 +284,16 @@ export async function presentSpellTrapActivationFlip(
 
 /**
  * Unified activation of spell/trap effects from field.
- * @param {Card} card - The card being activated.
- * @param {Object} selections - Pre-selected targets if any.
- * @returns {Promise<Object>} Activation result with potential async selections.
+ * @param card - The card being activated.
+ * @param selections - Pre-selected targets if any.
+ * @returns Activation result with potential async selections.
  */
 export async function tryActivateSpellTrapEffect(
-  card,
-  selections = null,
-  options = {},
-) {
+  this: SpellTrapActivationHost,
+  card: GameCard | null | undefined,
+  selections: CanonicalSelectionMap | null = null,
+  options: SpellTrapActivationOptions = {},
+): Promise<ActivationResult> {
   if (this.disableEffectActivation || this.disableTraps) {
     this.ui?.log?.("Spell/Trap activations are disabled in network mode.");
     return this.createActionResult({
@@ -157,7 +384,7 @@ export async function tryActivateSpellTrapEffect(
     card.cardKind === "trap" && card.isFacedown === true;
   const fieldActivationFromSet =
     trapActivationFromSet || quickSpellActivationFromSet;
-  const fieldActivationSnapshot = fieldActivationFromSet
+  const fieldActivationSnapshot: FieldActivationSnapshot | null = fieldActivationFromSet
     ? {
         card,
         owner,
@@ -194,7 +421,7 @@ export async function tryActivateSpellTrapEffect(
     }
   }
 
-  const activationContext = {
+  const activationContext: SpellTrapActivationContext = {
     fromHand: false,
     activationZone: "spellTrap",
     sourceZone: "spellTrap",
@@ -208,10 +435,10 @@ export async function tryActivateSpellTrapEffect(
     { fromHand: false, activationZone: "spellTrap", trapActivationFromSet },
   );
 
-  const pipelineQuickSpellContext = quickSpellActivationFromSet
+  const pipelineQuickSpellContext: QuickSpellContext | null = quickSpellActivationFromSet
     ? {
         ...(quickSpellContext || {}),
-        activationZone: "spellTrap",
+        activationZone: "spellTrap" as const,
         effect: activationEffect,
       }
     : null;
@@ -241,7 +468,7 @@ export async function tryActivateSpellTrapEffect(
             this,
             card,
             owner,
-            pipelineQuickSpellContext,
+            pipelineQuickSpellContext ?? undefined,
           )
       : null,
     oncePerTurn: {
@@ -297,10 +524,11 @@ export async function tryActivateSpellTrapEffect(
  * across manual play and AI execution.
  */
 export async function finalizeSpellCardActivation(
-  result = {},
-  info = {},
-  options = {},
-) {
+  this: SpellTrapActivationHost,
+  result: ActivationResult = {},
+  info: Partial<ActivationPipelineInfo> = {},
+  options: FinalizeSpellCardOptions = {},
+): Promise<void> {
   const card = info.card || options.card || null;
   const owner = info.owner || options.owner || null;
   const activationZone = info.activationZone || options.activationZone || null;
@@ -334,18 +562,19 @@ export async function finalizeSpellCardActivation(
 
 /**
  * Attempts to activate a spell card from hand.
- * @param {Card} card - The card to activate.
- * @param {number} handIndex - Index of the card in the player's hand.
- * @param {Object} selections - Pre-selected targets if any.
- * @param {Object} options - Activation options.
- * @returns {Promise<Object>} Activation result.
+ * @param card - The card to activate.
+ * @param handIndex - Index of the card in the player's hand.
+ * @param selections - Pre-selected targets if any.
+ * @param options - Activation options.
+ * @returns Activation result.
  */
 export async function tryActivateSpell(
-  card,
-  handIndex,
-  selections = null,
-  options = {},
-) {
+  this: SpellTrapActivationHost,
+  card: GameCard | null | undefined,
+  handIndex: number,
+  selections: CanonicalSelectionMap | null = null,
+  options: SpellTrapActivationOptions = {},
+): Promise<ActivationResult> {
   if (this.disableEffectActivation) {
     this.ui?.log?.("Effect activations are disabled.");
     return this.createActionResult({
@@ -373,10 +602,10 @@ export async function tryActivateSpell(
     { fromHand: true },
   );
   const quickSpellFromHand = isQuickSpell(card);
-  const quickSpellContext = quickSpellFromHand
+  const quickSpellContext: QuickSpellContext | null = quickSpellFromHand
     ? {
         ...(options.quickSpellContext || {}),
-        activationZone: "hand",
+        activationZone: "hand" as const,
         effect: activationEffect,
       }
     : null;
@@ -434,7 +663,7 @@ export async function tryActivateSpell(
               this,
               card,
               owner,
-              quickSpellContext,
+              quickSpellContext ?? undefined,
             ),
     preview: resume
       ? null
@@ -491,9 +720,12 @@ export async function tryActivateSpell(
 /**
  * Activates a field spell effect (already on field).
  * @param {Card} card - The field spell card.
- * @returns {Object} Activation result.
+ * @returns Activation result.
  */
-export function activateFieldSpellEffect(card) {
+export function activateFieldSpellEffect(
+  this: SpellTrapActivationHost,
+  card: GameCard | null | undefined,
+): MaybePromise<ActivationResult> {
   if (!card) {
     return this.createActionResult({
       reason: "invalid_card",
@@ -516,7 +748,7 @@ export function activateFieldSpellEffect(card) {
     owner === this.player,
   );
   if (!guard.ok) return this.normalizeActivationResult(guard);
-  const activationContext = {
+  const activationContext: SpellTrapActivationContext = {
     fromHand: false,
     activationZone: "fieldSpell",
     sourceZone: "fieldSpell",

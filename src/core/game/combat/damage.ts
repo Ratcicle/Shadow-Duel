@@ -3,16 +3,76 @@
  * Extracted from Game.js as part of B.5 modularization.
  */
 
+import type { ActionOf } from "../../contracts/actions.js";
+import type { GameCard } from "../../contracts/cards.js";
+import type { GamePlayer } from "../../contracts/player.js";
+import type {
+  DamageInflictedEventPayload,
+  InformationalEventName,
+  InformationalEventMap,
+} from "../../contracts/events.js";
+
+interface DamagePresentationOptions {
+  cause?: string;
+  sourceCard?: GameCard | null;
+  targetCard?: GameCard | null;
+  sourceRect?: object | null;
+  targetRect?: object | null;
+  battleImpactRect?: object | null;
+  contactRect?: object | null;
+  directAttack?: boolean;
+  screenShake?: boolean;
+  suppressVisual?: boolean;
+  suppressLpChangeFeedback?: boolean;
+  suppressLpDamageSequence?: boolean;
+  triggerOpponentDamage?: boolean;
+}
+
+interface DamageUiPort {
+  showLpDamageSequence?(
+    player: GamePlayer,
+    amount: number,
+    options: DamagePresentationOptions & { fromLp: number; toLp: number },
+  ): void;
+}
+
+interface DamageEffectEnginePort {
+  applyDamage(
+    action: ActionOf<"damage"> & { triggerOnly: true },
+    context: {
+      player: GamePlayer;
+      opponent: GamePlayer;
+      source: GameCard | null;
+    },
+  ): unknown;
+}
+
+interface DamageHost {
+  player: GamePlayer;
+  bot: GamePlayer;
+  ui?: DamageUiPort | null;
+  effectEngine?: DamageEffectEnginePort | null;
+  notify?<Name extends InformationalEventName>(
+    eventName: Name,
+    payload: InformationalEventMap[Name],
+  ): void;
+}
+
 /**
  * Apply damage to a player through the centralized damage pipeline.
  * Triggers opponent_damage effects via EffectEngine.
  * Should be used instead of direct player.takeDamage() calls.
  *
- * @param {Object} player - Player taking damage
+ * @param player - Player taking damage
  * @param {number} amount - Damage amount
- * @param {Object} options - Additional context (cause, sourceCard, etc.)
+ * @param options - Additional context (cause, sourceCard, etc.)
  */
-export function inflictDamage(player, amount, options = {}) {
+export function inflictDamage(
+  this: DamageHost,
+  player: GamePlayer | null | undefined,
+  amount: number,
+  options: DamagePresentationOptions = {},
+): void {
   if (!player || !amount || amount <= 0) return;
 
   // Apply the damage to player LP
@@ -45,13 +105,14 @@ export function inflictDamage(player, amount, options = {}) {
       });
     }
 
-    this.notify?.("damage_inflicted", {
+    const payload: DamageInflictedEventPayload = {
       target: player,
       sourceCard: options.sourceCard || null,
       amount: actual,
       lpLost: actual,
       newLP: player.lp,
-    });
+    };
+    this.notify?.("damage_inflicted", payload);
   }
 
   // Trigger opponent_damage effects via EffectEngine
@@ -66,7 +127,7 @@ export function inflictDamage(player, amount, options = {}) {
       opponent: player, // The one taking damage
       source: options.sourceCard || null,
     };
-    const action = {
+    const action: ActionOf<"damage"> & { triggerOnly: true } = {
       type: "damage",
       player: "opponent", // From opponent's perspective
       amount: amount,

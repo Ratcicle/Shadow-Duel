@@ -4,15 +4,147 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { FAST_EFFECT_ORIGINS } from "../../chain/timing.js";
+import { isChainContextType } from "../../contracts/chain.js";
+import type { ChainContextType, FastEffectOrigin } from "../../contracts/chain.js";
+import type { MaybePromise } from "../../contracts/actionRuntime.js";
+import type { GameCard } from "../../contracts/cards.js";
+import type { GamePlayer } from "../../contracts/player.js";
+
+interface TrapEventData {
+  addTriggerToChain?: boolean;
+  attacker?: GameCard | null;
+  defender?: GameCard | null;
+  target?: GameCard | null;
+  attackerOwner?: GamePlayer | null;
+  defenderOwner?: GamePlayer | null;
+  targetOwner?: GamePlayer | null;
+  player?: GamePlayer | null;
+  phase?: string | null;
+  currentPhase?: string | null;
+  fromPhase?: string | null;
+  toPhase?: string | null;
+  nextPhase?: string | null;
+  battleStep?: string | null;
+  damageStepTiming?: string | null;
+  isDamageStep?: boolean;
+  isOpponentAttack?: boolean;
+  attackRedirect?: unknown;
+  redirectedTarget?: GameCard | null;
+  redirectedTargetOwner?: GamePlayer | null;
+  trigger?: string | null;
+  eventType?: string | null;
+  chainLink?: object | null;
+}
+
+interface TrapTimingContext extends TrapEventData {
+  type: ChainContextType;
+  event: string;
+  openState: true;
+  legalWindow: true;
+  phase: string | null;
+  currentPhase: string | null;
+  fromPhase: string | null;
+  toPhase: string | null;
+  battleStep: string | null;
+  damageStepTiming: string | null;
+  isDamageStep: boolean;
+  attacker: GameCard | null;
+  defender: GameCard | null;
+  target: GameCard | null;
+  attackerOwner: GamePlayer | null;
+  defenderOwner: GamePlayer | null;
+  targetOwner: GamePlayer | null;
+  isOpponentAttack: boolean;
+  addTriggerToChain: boolean;
+  triggerPlayer: GamePlayer;
+}
+
+interface TrapTimingResult {
+  ok?: boolean;
+  success?: boolean;
+  needsSelection?: boolean;
+  reason?: string | null;
+}
+
+interface TrapChainPort {
+  isChainResolving(): boolean;
+  isChainWindowOpen?(): boolean;
+  createTriggerOccurrence?(
+    event: string,
+    payload: TrapEventData,
+    options: {
+      entries: readonly [];
+      entriesProvided: true;
+      orderRule: "deferred_response_window";
+    },
+  ): unknown;
+  runFastEffectTiming(input: {
+    origin: FastEffectOrigin;
+    context: TrapTimingContext;
+    actionPlayer: GamePlayer;
+    priorityPlayer: GamePlayer | null | undefined;
+    phaseIntent: { fromPhase: string | null; toPhase: string | null } | null;
+  }): MaybePromise<TrapTimingResult>;
+}
+
+interface TrapTriggerHost {
+  player: GamePlayer;
+  bot: GamePlayer;
+  turn: "player" | "bot";
+  phase?: string | null;
+  battleStep?: string | null;
+  activeDamageStepTransaction?: { timing?: string | null } | null;
+  disableTraps: boolean;
+  disableChains: boolean;
+  chainSystem: TrapChainPort;
+  effectEngine: {
+    resolveTrapEffects(
+      card: GameCard,
+      player: GamePlayer,
+      eventData: TrapEventData,
+    ): MaybePromise<unknown>;
+  };
+  ui: { log(message: string): void };
+  devLog?(code: string, detail: { summary: string }): void;
+  queueTriggerOccurrence?(occurrence: unknown): unknown;
+  _mapEventToChainContext(event: string): ChainContextType;
+  getOpponent?(player: GamePlayer): GamePlayer | null;
+  guardActionStart(input: {
+    actor: GamePlayer;
+    kind: "trap_activation";
+    allowDuringOpponentTurn: true;
+    allowDuringResolving: true;
+  }): { ok: boolean; reason?: string };
+  emit(
+    eventName: "trap_activated",
+    payload: {
+      card: GameCard;
+      player: GamePlayer;
+      trigger?: string | null;
+      chainLink?: object | null;
+    },
+  ): MaybePromise<unknown>;
+  moveCard(
+    card: GameCard,
+    player: GamePlayer,
+    zone: "graveyard",
+    options: { fromZone: "spellTrap" },
+  ): MaybePromise<unknown>;
+  updateBoard(): void;
+}
 
 /**
  * Check and offer trap activations in response to an event.
  * Opens a chain window if activatable traps exist.
  * @param {string} event - The event that triggered this check.
- * @param {Object} eventData - Data associated with the event.
- * @returns {Promise<Object|void>} Fast Effect Timing result.
+ * @param eventData - Data associated with the event.
+ * @returns Fast Effect Timing result.
  */
-export async function checkAndOfferTraps(event, eventData = {}) {
+export async function checkAndOfferTraps(
+  this: TrapTriggerHost,
+  event: string,
+  eventData: TrapEventData = {},
+) {
   this.devLog?.("CHECK_TRAPS", { summary: `Called for event: ${event}` });
   if (!this.player || this.disableTraps || this.disableChains) {
     this.devLog?.("CHECK_TRAPS", {
@@ -75,7 +207,7 @@ export async function checkAndOfferTraps(event, eventData = {}) {
           : this.bot
         : null);
 
-    const context = {
+    const context: TrapTimingContext = {
       type: contextType,
       event,
       ...eventData,
@@ -169,7 +301,10 @@ export async function checkAndOfferTraps(event, eventData = {}) {
  * @param {string} event - The event name.
  * @returns {string} Chain context type.
  */
-export function _mapEventToChainContext(event) {
+export function _mapEventToChainContext(
+  this: TrapTriggerHost,
+  event: string,
+): ChainContextType {
   const eventToContext = {
     attack_declared: "attack_declaration",
     battle_step_open: "battle_step_open",
@@ -189,16 +324,23 @@ export function _mapEventToChainContext(event) {
     normal_draw: "action_without_chain",
     position_change: "action_without_chain",
   };
-  return eventToContext[event] || "action_without_chain";
+  const contextType = Reflect.get(eventToContext, event);
+  return isChainContextType(contextType)
+    ? contextType
+    : "action_without_chain";
 }
 
 /**
  * Activates a trap card from the spell/trap zone.
  * @param {Card} card - The trap card to activate.
- * @param {Object} eventData - Context data for the activation.
- * @returns {Promise<Object|void>} Activation result.
+ * @param eventData - Context data for the activation.
+ * @returns Activation result.
  */
-export async function activateTrapFromZone(card, eventData = {}) {
+export async function activateTrapFromZone(
+  this: TrapTriggerHost,
+  card: GameCard | null | undefined,
+  eventData: TrapEventData = {},
+) {
   if (!card || card.cardKind !== "trap") return;
 
   const trapIndex = this.player.spellTrap.indexOf(card);
