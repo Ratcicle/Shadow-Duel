@@ -102,15 +102,19 @@ Traduções visíveis no jogo. Hoje há [pt-br.json](../public/locales/pt-br.jso
 
 | Arquivo | Responsabilidade |
 |---|---|
-| [Game.js](../src/core/Game.js) | Fachada principal do estado de jogo. Orquestra turnos, fases, zonas, invocações, batalha, seleção, efeitos e UI, delegando para [src/core/game/](../src/core/game/). |
-| [Player.js](../src/core/Player.js) | Modelo de jogador: LP, mão, deck, campo, Cemitério, banimento, marcadores e helper `isAI()`. |
+| [Game.ts](../src/core/Game.ts) | Fachada tipada do estado de jogo. Orquestra turnos, fases, zonas, invocações, batalha, seleção, efeitos e UI, delegando para [src/core/game/](../src/core/game/); consumidores preservam o specifier `.js`. |
+| [Player.ts](../src/core/Player.ts) | Modelo tipado de jogador: LP, mão, deck, campo, Cemitério, banimento, marcadores e helper `isAI()`; preserva o shape e a compatibilidade estrutural legados. |
 | [Bot.js](../src/core/Bot.js) | Subclasse de `Player` para IA. Usa presets, `StrategyRegistry`, `BeamSearch`, busca de linhas e módulos de execução em [src/core/bot/](../src/core/bot/). |
 | [BotArena.js](../src/core/BotArena.js) | Modo AI vs AI para testes, métricas, velocidade e relatórios. |
 | [BotLogger.js](../src/core/BotLogger.js) | Logger configurável por `localStorage`, com categorias para decisões, estado e fases. |
-| [Card.js](../src/core/Card.js) | Modelo de instância de carta: dados do database, estado mutável, equipamentos, buffs, counters e `instanceId`. |
+| [Card.ts](../src/core/Card.ts) | Modelo tipado de instância de carta: dados do database, estado mutável, equipamentos, buffs, counters, `instanceId` local e `duelCardId` determinístico. |
 | [CardDatabaseValidator.js](../src/core/CardDatabaseValidator.js) | Validação do banco de cartas, incluindo shapes de actions e faixas de IDs. |
 | [contracts/actions.ts](../src/core/contracts/actions.ts) | Compõe `ActionByType` a partir dos mapas fechados por domínio. |
 | [contracts/actionRuntime.ts](../src/core/contracts/actionRuntime.ts) | Contratos mínimos de handlers, contexto, targets, ports e resultados legados. |
+| [contracts/cards.ts](../src/core/contracts/cards.ts) | Definições declarativas, dados de construção, estado vivo, status conhecidos e projeções de Card. |
+| [contracts/player.ts](../src/core/contracts/player.ts) | Estado, zonas e port mínimo de Game consumido por Player. |
+| [contracts/game.ts](../src/core/contracts/game.ts) | Opções fechadas de Game, inicialização por decks e ports de integração. |
+| [contracts/gameRuntime.ts](../src/core/contracts/gameRuntime.ts) | Estado runtime, hosts mínimos por domínio, transações, resultados e overloads de movimento. |
 | [contracts/chain.ts](../src/core/contracts/chain.ts) | Constantes e unions fechadas fundamentais de Chain, Fast Effect, SEGOC e uso. |
 | [contracts/chainRuntime.ts](../src/core/contracts/chainRuntime.ts) | Projeções runtime, links, ativações preparadas, contexts, ports, hosts e capability guards. |
 | [ChainSystem.ts](../src/core/ChainSystem.ts) | Fachada do sistema de Chain/Spell Speed, composta pelo manifest de [src/core/chain/](../src/core/chain/); consumidores preservam o specifier `.js`. |
@@ -285,39 +289,48 @@ O gate operacional para mudanças nesta área é `npm run check`, que inclui as 
 
 Coletores por evento que alimentam os triggers declarativos:
 
-`afterSummon.js`, `attackDeclared.js`, `battleCompleted.js`, `battleDamage.js`,
-`battleDestroy.js`, `cardEquipped.js`, `cardMoved.js`, `cardToGrave.js`,
-`counterRemoved.js`, `damageStep.js`, `effectActivated.js`, `effectTargeted.js`,
-`endPhase.js`, `lpChange.js`, `positionChange.js`, `spellActivated.js`,
-`standbyPhase.js` e `shared.js`.
+`afterSummon.ts`, `attackDeclared.ts`, `battleCompleted.ts`, `battleDamage.ts`,
+`battleDestroy.ts`, `cardEquipped.ts`, `cardMoved.ts`, `cardToGrave.ts`,
+`counterRemoved.ts`, `damageStep.ts`, `effectActivated.ts`, `effectTargeted.ts`,
+`endPhase.ts`, `lpChange.ts`, `positionChange.ts`, `spellActivated.ts`,
+`standbyPhase.ts` e `shared.ts`. Consumidores continuam importando esses
+módulos por specifiers terminados em `.js`.
 
 ---
 
 ## `src/core/game/` - Módulos do `Game`
 
-`Game.js` orquestra e delega para estes módulos:
+`Game.ts` orquestra e delega para estes módulos TypeScript. Os nomes abaixo
+são arquivos físicos; imports relativos continuam terminados em `.js` para
+preservar a resolução ESM e o output runtime:
 
 | Subpasta | Conteúdo |
 |---|---|
-| [actions/](../src/core/game/actions/) | `guard.js` - validação antes de iniciar ações. |
-| [analytics/](../src/core/game/analytics/) | `strategicReport.js` - ciclo de vida do Strategic Report. |
-| [combat/](../src/core/game/combat/) | Combate e transação canônica das cinco subetapas em `damageStep.js`. |
+| [actions/](../src/core/game/actions/) | `guard.ts` - validação antes de iniciar ações. |
+| [analytics/](../src/core/game/analytics/) | `strategicReport.ts` - ciclo de vida do Strategic Report. |
+| [combat/](../src/core/game/combat/) | `availability.ts`, `damage.ts`, `damageStep.ts`, `indicators.ts`, `resolution.ts` e `targeting.ts`; inclui a transação canônica das cinco subetapas do Damage Step. |
 | [decisions/](../src/core/game/decisions/) | `broker.ts` - `DecisionBroker` compartilhado por humano, IA e replay. |
-| [deck/](../src/core/game/deck/) | `draw.js` - compras e deck-out. |
-| [devTools/](../src/core/game/devTools/) | `commands.js`, `setup.js` - comandos e setups de teste. |
-| [effects/](../src/core/game/effects/) | Pipeline de ativação, replacement de destruição e serviço canônico de uso. |
+| [deck/](../src/core/game/deck/) | `banlist.ts` e `draw.ts` - validação de lista, compras e deck-out. |
+| [devTools/](../src/core/game/devTools/) | `commands.ts`, `setup.ts` - comandos e setups de teste. |
+| [effects/](../src/core/game/effects/) | `activationPipeline.ts`, `activationRestrictions.ts`, `destructionReplacement.ts` e `usage.ts`. |
 | [events/](../src/core/game/events/) | `eventBus.ts`, `eventResolver.ts`. |
-| [extraDeck/](../src/core/game/extraDeck/) | `modal.js` - abertura/seleção do Extra Deck. |
-| [graveyard/](../src/core/game/graveyard/) | `modal.js` - visualização e ativação a partir do Cemitério quando legal. |
-| [helpers/](../src/core/game/helpers/) | `cards.js`, `players.js`. |
-| [replay/](../src/core/game/replay/) | `canonical.ts`, `validation.ts`, `recorder.ts`, `driver.ts`, `index.ts` - replay canônico, normalização/FNV, validação profunda, captura e reprodução headless; imports consumidores usam specifiers `.js`. |
+| [extraDeck/](../src/core/game/extraDeck/) | `modal.ts` - abertura/seleção do Extra Deck. |
+| [graveyard/](../src/core/game/graveyard/) | `modal.ts` - visualização e ativação a partir do Cemitério quando legal. |
+| [helpers/](../src/core/game/helpers/) | `cards.ts`, `players.ts`. |
+| [replay/](../src/core/game/replay/) | `canonical.ts`, `validation.ts`, `recorder.ts`, `driver.ts`, `capture.ts`, `index.ts` - replay canônico, normalização/FNV, validação profunda, captura e reprodução headless. |
 | [selection/](../src/core/game/selection/) | `contract.ts`, `handlers.ts`, `highlighting.ts`, `session.ts`. |
-| [spellTrap/](../src/core/game/spellTrap/) | `activation.js`, `finalization.js`, `index.js`, `quickSpellRules.js`, `set.js`, `triggers.js`, `verification.js`. |
-| [state/](../src/core/game/state/) | `duelReset.js`, `serialization.js`. |
-| [summon/](../src/core/game/summon/) | Procedimentos de Invocação e a transação canônica em `transaction.js`. |
-| [turn/](../src/core/game/turn/) | `cleanup.js`, `lifecycle.js`, `oncePerTurn.js`, `phaseRules.js`, `scheduling.js`, `transitions.js`. |
-| [ui/](../src/core/game/ui/) | `board.js`, `cardAnimations.js`, `index.js`, `indicators.js`, `interactions.js`, `modals.js`, `prompts.js`, `winCondition.js`. |
-| [zones/](../src/core/game/zones/) | `destruction.js`, `invariants.js`, `movement.js`, `operations.js`, `ownership.js`, `snapshot.js`. |
+| [spellTrap/](../src/core/game/spellTrap/) | `activation.ts`, `finalization.ts`, `index.ts`, `quickSpellRules.ts`, `set.ts`, `triggers.ts`, `verification.ts`. |
+| [state/](../src/core/game/state/) | `duelReset.ts`, `serialization.ts`. |
+| [summon/](../src/core/game/summon/) | `ascension.ts`, `eligibility.ts`, `execution.ts`, `materialStats.ts`, `position.ts`, `synchro.ts`, `tracking.ts`, `transaction.ts` e `tributeValue.ts`. |
+| [turn/](../src/core/game/turn/) | `cleanup.ts`, `lifecycle.ts`, `oncePerTurn.ts`, `phaseRules.ts`, `scheduling.ts`, `transitions.ts`. |
+| [ui/](../src/core/game/ui/) | `board.ts`, `cardAnimations.ts`, `index.ts`, `indicators.ts`, `interactions.ts`, `modals.ts`, `prompts.ts`, `winCondition.ts`. |
+| [zones/](../src/core/game/zones/) | `control.ts`, `destruction.ts`, `invariants.ts`, `movement.ts`, `operations.ts`, `ownership.ts`, `snapshot.ts`. |
+
+Na raiz de `src/core/game/`, `random.ts` fornece o RNG determinístico e
+`attachments.ts` mantém o manifest canônico dos 219 métodos em 60 grupos.
+O preflight valida o manifest antes de qualquer escrita no prototype, e os 13
+wrappers de captura de replay são instalados separadamente por
+`replay/capture.ts`, depois dos attachments.
 
 ---
 

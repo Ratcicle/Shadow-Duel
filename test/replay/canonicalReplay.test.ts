@@ -9,12 +9,14 @@ import {
   validateCanonicalReplay,
 } from "../../src/core/game/replay/canonical.js";
 import { replayCanonicalDuel } from "../../src/core/game/replay/driver.js";
+import type { PlayerId, SelectionCandidateKey } from "../../src/core/contracts/primitives.js";
+import type { CanonicalReplayDecisionOf } from "../../src/core/contracts/replay.js";
 
 const deck = [1, 2, 3, 4, 5, 6, 7, 8];
 
 type GameInstance = InstanceType<typeof Game>;
 
-async function initialize(game: GameInstance, startingPlayer: string | null = null) {
+async function initialize(game: GameInstance, startingPlayer: PlayerId | null = null) {
   await game.startWithDecks({
     exactDecks: true,
     initializeOnly: true,
@@ -174,17 +176,26 @@ test("playback remapeia seleções por duelCardId sem reutilizar chaves globais"
       return { success: true, needsSelection: false };
     },
   }]);
-  recording.targetSelection.selections = {
-    target: [recordedCandidates[0].key],
+  const targetSelection = recording.targetSelection;
+  assert.ok(targetSelection);
+  targetSelection.selections = {
+    target: [recordedCandidates[0].key as SelectionCandidateKey],
   };
   await Reflect.apply(recording.finishTargetSelection, recording, []);
   assert.equal(selectionAt(recordedSelection, "target", 0), recordedCandidates[0].key);
-  const decision = structuredClone(recording._canonicalReplay.decisions[0]);
+  const replayBuffer = recording._canonicalReplay;
+  assert.ok(replayBuffer);
+  const decision = structuredClone(
+    replayBuffer.decisions[0],
+  ) as CanonicalReplayDecisionOf<"target">;
+  assert.ok("selections" in decision.value);
+  const serializedTarget = decision.value.selections.target[0];
+  assert.ok(serializedTarget && "duelCardId" in serializedTarget);
   assert.equal(
-    decision.value.selections.target[0].duelCardId,
+    serializedTarget.duelCardId,
     recording.player.hand[0].duelCardId,
   );
-  assert.equal(decision.value.selections.target[0].key, null);
+  assert.equal(serializedTarget.key, null);
 
   const playback = new Game({
     randomSeed: 91,
@@ -251,10 +262,12 @@ test("trilha canônica cobre ativação, SEGOC, uso, resolução, Invocação e 
       stage: event,
     }]);
   }
+  const replayBuffer = game._canonicalReplay;
+  assert.ok(replayBuffer);
   assert.deepEqual(
-    game._canonicalReplay.events.map((entry: { event: string }) => entry.event),
+    replayBuffer.events.map((entry: { event: string }) => entry.event),
     requiredEvents,
   );
-  assert.doesNotThrow(() => JSON.stringify(game._canonicalReplay.events));
+  assert.doesNotThrow(() => JSON.stringify(replayBuffer.events));
   game.dispose();
 });

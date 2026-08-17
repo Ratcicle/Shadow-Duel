@@ -15,7 +15,7 @@
 - Para novas cartas, verifique também descrição, i18n e compatibilidade com os handlers existentes.
 - Modularize por domínio de jogo/responsabilidade, não por microfunções arbitrárias.
 - Evite criar arquivos novos quando a lógica pertence claramente a um módulo existente.
-- Fachadas como `Game.js`, `EffectEngine.ts` e `ChainSystem.ts` devem orquestrar e delegar; evite concentrar nova lógica complexa nelas.
+- Fachadas como `Game.ts`, `EffectEngine.ts` e `ChainSystem.ts` devem orquestrar e delegar; evite concentrar nova lógica complexa nelas.
 
 ---
 
@@ -37,19 +37,19 @@ Evite "batch mutations" silenciosas. Loops são permitidos, mas cada iteração 
 
 ```
 src/main.js                   # UI do deck builder e inicialização
-src/core/Game.js              # Fachada de turnos/fases/event bus (~880 linhas)
+src/core/Game.ts              # Fachada de turnos/fases/event bus (~945 linhas)
 src/core/EffectEngine.ts      # Fachada da resolução de efeitos
 src/core/ChainSystem.ts       # Fachada de chain windows + Spell Speed
 src/core/chain/               # Implementação modular do ChainSystem (ver tabela abaixo)
 src/core/effects/             # Implementação modular dos efeitos (ver tabela abaixo)
 src/core/actionHandlers/      # Handlers genéricos por categoria + catálogo
-src/core/game/                # Lógica modular do Game (17 subpastas por domínio)
+src/core/game/                # Lógica modular do Game (19 subpastas por domínio)
 src/data/cards.js             # Banco de cartas 100% declarativo (~5700 linhas)
 ```
 
-**Fluxo de dados:** `Game.js` emite eventos → `EffectEngine` (delegando para `src/core/effects/`) avalia triggers → handlers registrados em `actionHandlers/` executam actions.
+**Fluxo de dados:** `Game.ts` emite eventos → `EffectEngine` (delegando para `src/core/effects/`) avalia triggers → handlers registrados em `actionHandlers/` executam actions.
 
-**Event Bus:** `Game.js` usa padrão pub/sub centralizado.
+**Event Bus:** `Game.ts` usa padrão pub/sub centralizado.
 
 - Registrar: `game.on(event, handler)`
 - Emitir: `await game.emit(event, payload)`
@@ -61,14 +61,16 @@ src/data/cards.js             # Banco de cartas 100% declarativo (~5700 linhas)
 - **Auto-resolução:** [AutoSelector.ts](src/core/AutoSelector.ts) — escolhas automáticas para IA durante targeting (uso restrito a bot/IA)
 - **Validação:** [CardDatabaseValidator.js](src/core/CardDatabaseValidator.js) — bloqueia duelo se cartas tiverem erros
 - **Chain (mock):** [NullChainSystem.ts](src/core/NullChainSystem.ts) — implementação no-op para fluxos sem chain, compatível com o `ChainRuntimePort` mínimo
-- **Replay canônico:** [src/core/game/replay/](src/core/game/replay/) (`canonical.ts`, `validation.ts`, `recorder.ts`, `driver.ts`, `index.ts`) — contratos serializáveis, validação profunda, captura, hash determinístico e reprodução headless; consumidores preservam specifiers `.js`
-- **Modelos:** [Card.js](src/core/Card.js), [Player.js](src/core/Player.js)
+- **Replay canônico:** [src/core/game/replay/](src/core/game/replay/) (`canonical.ts`, `validation.ts`, `recorder.ts`, `driver.ts`, `capture.ts`, `index.ts`) — contratos serializáveis, validação profunda, captura, hash determinístico e reprodução headless; consumidores preservam specifiers `.js`
+- **Modelos:** [Card.ts](src/core/Card.ts), [Player.ts](src/core/Player.ts)
 - **i18n:** [i18n.js](src/core/i18n.js)
 
 **Estrutura modular de [src/core/game/](src/core/game/):**
 
 | Pasta        | Responsabilidade                                                            |
 | ------------ | --------------------------------------------------------------------------- |
+| `analytics/` | Ciclo de vida do Strategic Report                                           |
+| `decisions/` | Broker canônico compartilhado por humano, IA e replay                      |
 | `zones/`     | Ownership, movement, snapshot, invariants, destruction (orquestração)       |
 | `combat/`    | Damage, targeting, resolution, availability                                 |
 | `summon/`    | Execution, tracking, ascension, position changes, material stats            |
@@ -87,7 +89,7 @@ src/data/cards.js             # Banco de cartas 100% declarativo (~5700 linhas)
 | `state/`     | Serialization (snapshot público para replays e IA)                          |
 | `helpers/`   | Helpers de player/card resolution                                           |
 
-Módulos expõem funções puras; `Game.js` importa e chama com `this` context.
+Módulos expõem funções puras; `Game.ts` importa e chama com `this` context. Os arquivos físicos em `src/core/game/` são TypeScript, mas consumidores preservam specifiers relativos terminados em `.js`. O manifest de [attachments.ts](src/core/game/attachments.ts) instala os 219 métodos anexados; [capture.ts](src/core/game/replay/capture.ts) aplica separadamente os 13 wrappers de replay.
 
 **Estrutura modular de [src/core/chain/](src/core/chain/):**
 

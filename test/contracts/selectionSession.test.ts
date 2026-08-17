@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import Card from "../../src/core/Card.js";
 import Game from "../../src/core/Game.js";
 import type {
   SelectionCardReference,
@@ -8,17 +9,18 @@ import type {
 
 test("selection session normalizes, exposes field state and resolves once", async () => {
   const game = new Game({ captureReplay: false, disableChains: true });
-  const card = {
-    id: 700,
-    name: "Selection Target",
-    cardKind: "monster",
-    owner: "player",
-    controller: "player",
-    position: "attack",
-    atk: 1000,
-    def: 1000,
-    effects: [],
-  };
+  const card = new Card(
+    {
+      id: 700,
+      name: "Selection Target",
+      cardKind: "monster",
+      atk: 1000,
+      def: 1000,
+      level: 4,
+      effects: [],
+    },
+    "player",
+  );
   game.player.field.push(card);
 
   const progressStates: object[] = [];
@@ -65,12 +67,14 @@ test("selection session normalizes, exposes field state and resolves once", asyn
   }]);
 
   assert.equal(game.selectionState, "selecting");
-  assert.equal(game.targetSelection.usingFieldTargeting, true);
-  assert.equal(game.targetSelection.autoAdvanceOnMax, false);
-  assert.equal(game.targetSelection.selectionContract.purpose, undefined);
-  assert.equal(game.targetSelection.selectionContract.timing, undefined);
-  assert.equal(game.targetSelection.selectionContract.ui.message, undefined);
-  const candidate = game.targetSelection.requirements[0].candidates[0];
+  const targetSelection = game.targetSelection;
+  assert.ok(targetSelection);
+  assert.equal(targetSelection.usingFieldTargeting, true);
+  assert.equal(targetSelection.autoAdvanceOnMax, false);
+  assert.equal(Reflect.get(targetSelection.selectionContract, "purpose"), undefined);
+  assert.equal(Reflect.get(targetSelection.selectionContract, "timing"), undefined);
+  assert.equal(Reflect.get(targetSelection.selectionContract.ui, "message"), undefined);
+  const candidate = targetSelection.requirements[0].candidates[0];
   assert.equal(candidate.key, "player:field:0:700");
 
   assert.equal(
@@ -82,7 +86,7 @@ test("selection session normalizes, exposes field state and resolves once", asyn
     ]),
     true,
   );
-  assert.deepEqual(game.targetSelection.selections, {
+  assert.deepEqual(targetSelection.selections, {
     target: [candidate.key],
   });
   await Reflect.apply(game.finishTargetSelection, game, []);
@@ -187,8 +191,10 @@ test("selection completion keeps null card references out of decision telemetry"
     },
   }]);
 
-  const candidateKey = game.targetSelection.requirements[0].candidates[0].key;
-  game.targetSelection.selections = { empty: [candidateKey] };
+  const targetSelection = game.targetSelection;
+  assert.ok(targetSelection);
+  const candidateKey = targetSelection.requirements[0].candidates[0].key;
+  targetSelection.selections = { empty: [candidateKey] };
   await Reflect.apply(game.finishTargetSelection, game, []);
 
   assert.equal(notifications.includes("decision_completed"), false);

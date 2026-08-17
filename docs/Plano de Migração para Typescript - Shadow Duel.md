@@ -1493,164 +1493,153 @@ helper canônico.
 
 # Etapa 8 — Migrar Game, Card, Player e os domínios do duelo
 
-## Objetivo
+## Resultado da etapa
 
-Tipar o estado central e todas as funções anexadas ao `Game`, preservando a modularização atual.
+A Etapa 8 converte `src/core/Game.ts`, `src/core/Card.ts`,
+`src/core/Player.ts` e todos os módulos físicos de `src/core/game/` para
+TypeScript. Os doze módulos já tipados foram preservados e os 60 arquivos
+JavaScript restantes foram migrados sem alterar APIs públicas, mensagens,
+eventos, aridades, ordem de propriedades, replay schema ou comportamento.
 
-## 8.1. Card
+Consumidores continuam usando specifiers relativos terminados em `.js`. O
+entrypoint permanece `/src/main.js`; `index.html`, cartas, locales,
+UIAdapter, Renderer, Bot/IA e scripts externos a esta etapa não são
+convertidos aqui.
 
-Separar claramente:
+## Contratos e modelos
 
-- dados imutáveis vindos de `RawCardDefinition`/`ValidatedCardDefinition`;
-- estado de instância;
-- stats base;
-- stats atuais;
-- identidade;
-- ownership e controller;
-- posição;
-- origem da última Invocação;
-- equipamentos;
-- counters;
-- status temporários;
-- material stats;
-- estado de Trap Monster;
-- propriedades de replay.
+`src/core/contracts/cards.ts`, `player.ts`, `game.ts` e `gameRuntime.ts`
+separam definições declarativas, modelos vivos, opções públicas, estado e
+hosts runtime por domínio. Esses contratos seguem os dados existentes e não
+emitem campos apenas para satisfazer o compilador.
 
-### Status dinâmicos
+### Card
 
-Não adicionar `[key: string]: any` ao `Card`.
+`Card.ts` preserva a diferença entre definição declarativa, dados de
+construção e instância viva. Tokens podem continuar sem ID de definição;
+`instanceId` permanece a identidade numérica local e `DuelCardId` branded
+nasce somente em `ensureDuelCardId`.
 
-Criar:
+Stats, posição, ownership/controller, metadata de summon, equipamentos,
+counters, materiais, Trap Monster e propriedades de replay são tipados sem
+alterar as 93 propriedades iniciais ou a 94ª propriedade `duelCardId`.
+`KnownCardStatusKey` e `CardStatusValueMap` correlacionam os status conhecidos;
+status legados desconhecidos permanecem em uma fronteira estreita com
+`Reflect` e narrowing. Não foi criado um objeto runtime `statuses`, e o
+comportamento legado de `calculateDynamicStat` foi preservado.
 
-- `KnownCardStatusKey`;
-- `CardStatusValueMap`;
-- helpers tipados para aplicar e restaurar status;
-- boundary isolada para status legados ainda não catalogados.
+### Player
 
-Não redesenhar a forma runtime do Card nesta migração. Uma mudança para `card.statuses` deve ser projeto posterior.
+`Player.ts` tipa zonas, Deck/Extra Deck, LP, controller, normal summons,
+usage, restrições, permissões e estado do turno por meio de um
+`PlayerGamePort` mínimo. A classe mantém compatibilidade estrutural com
+`Bot.js`, `instanceof`, overrides e monkeypatching, inclusive as 25
+propriedades iniciais e a criação tardia de `game` e outros campos.
 
-## 8.2. Player
+### Game
 
-Tipar:
+`GameOptions` é fechado sobre as 20 opções runtime existentes, incluindo
+seed numérico ou textual, Laboratory, replay, renderer, timings e arquétipos.
+O contrato de `startWithDecks` é separado e mantém defaults e modos atuais.
 
-- zonas;
-- LP;
-- controller type;
-- usos;
-- restrições;
-- Invocações Normais adicionais;
-- permissões restritas;
-- estado por turno;
-- deck e Extra Deck.
+Os hosts mínimos segmentam lifecycle, helpers/state, deck/turn, zones, summon,
+combat, spell/trap, effects, selection/events, UI, replay e analytics. Eles
+reutilizam `ChainRuntimePort` e os contratos canônicos de replay, decisões,
+eventos e seleção; o port público do Chain continua menor que seu host
+interno. A integração com o Proxy de `UIAdapter.js` fica isolada em um
+`GameUiPort` fechado. Campos lazy ou externos usam `declare` ou declaration
+merging, sem mudar a ordem das propriedades próprias.
 
-## 8.3. Game options e estado
+## Transações, zonas e movimento
 
-Criar `GameOptions` explícito.
+Summon preparada, transação, snapshot e estado possuem contratos distintos;
+o mesmo vale para Damage Step, activation, seleção pendente, operações de
+zona, movement, destruction e ActionGuard. `SummonId` e `DamageStepId` são
+produzidos somente nos allocators reais.
 
-Separar os principais estados opcionais:
+`moveCard` preserva os quatro argumentos e o retorno
+`MaybePromise<MoveCardResult | SummonExecutionResult>`. Seus overloads
+distinguem movimento regular, entrada no field por summon, transferência
+`field -> field`, origem `token` e a fronteira dinâmica legada. O alias
+`banish` é normalizado somente nas fronteiras `ZoneInput`; chamadas JavaScript
+inválidas continuam falhando em runtime com `SUMMON_ORIGIN_REQUIRED`.
 
-- seleção;
-- Chain;
-- Summon Transaction;
-- Damage Step Transaction;
-- Event Resolution;
-- apresentação;
-- replays;
-- uso de efeitos;
-- efeitos temporários;
-- Bot Arena;
-- Laboratory.
+## Composição runtime do Game
 
-Não manter `options = {}` sem tipo em APIs públicas.
+Cada função modular declara no `this` o menor host necessário. Fronteiras
+dinâmicas de zonas, snapshots, stats e UI concentram `Reflect` e narrowing
+localizado.
 
-## 8.4. Módulos anexados ao Game
+`src/core/game/attachments.ts` substitui os assignments diretos ao prototype
+por um manifest de referências diretas com 219 attachments em 60 grupos, de
+`devDraw` a `hasCanonicalReplay`. A ordem de avaliação dos módulos permanece
+separada da ordem de instalação. O preflight é atômico para referências
+ausentes, valores não-função, duplicatas e colisões incompatíveis;
+reaplicar a mesma referência é idempotente. Identidade, aridade e descriptors
+enumeráveis, graváveis e configuráveis são preservados.
 
-Criar primeiro um host por domínio e fazer cada função modular declarar somente as capabilities que usa:
+Declaration merging expõe os métodos anexados sem class fields emitidos. Os
+13 wrappers de captura de replay vivem em `game/replay/capture.ts`, mantêm a
+ordem original e são instalados depois dos attachments, preservando
+`name: "wrapped"`, aridade zero e `_replayCaptureWrapped: true`.
 
-```ts
-export function moveCard(
-  this: GameZonesHost,
-  // ...
-): MoveCardResult | Promise<MoveCardResult>
+As invariantes estruturais da etapa são:
+
+- `Game.prototype`: 239 nomes, com constructor, 19 métodos de classe e 219
+  attachments;
+- instância padrão de `Game`: 85 propriedades próprias na ordem legada;
+- `Card`: 93 propriedades iniciais e 94 depois de `ensureDuelCardId`;
+- `Player`: 25 propriedades iniciais;
+- barrels de spell/trap, UI e replay: 29, 9 e 19 exports.
+
+## Testes e gates
+
+Os testes runtime e compile-time cobrem opções fechadas, hosts, ports,
+brands, status de Card, Player, RNG, transações, a matriz de `moveCard`,
+rollback, manifest, preflight, descriptors, wrappers, `dispose` e campos lazy.
+A projeção integrada do domínio protege início, draw, movimento, summon,
+combate, eventos e dispose sem criar fixture de replay ou campanha manual de
+cartas.
+
+Os hashes estruturais protegidos são:
+
+```text
+attachments              fc6400fba83e32f89f7a234d36cd9fc7b6774032a2978bb50901ebc1d6cbc267
+nomes/aridades wrappers  961f066cace11f1bbd5378655f6c374855f8ec59af166a8f4ce78728fcde8e75
+descriptors              b199dbbf5359b2951631c37126edc06e0a92320f0eb4494d1de36fcae47bf82c
+ordem dos wrappers       b36e191f856be3b4c0b71d8e62615082f51e851b481602f2686a0e8cef1c5010
+Game own keys            15ef93fedac39ca008e27f141661647d9856448f90a69c70b8b4ccafc00c2ad0
+Card 93/94 keys          06bd2484efb06db0a59ce0ed9c254139f6eb4ca466b091931ea18258fc8a9c5d
+                         4fee8781da0ba61f669a9caa72bdedfd39ead6016c8b7befc6e3c91757415d02
+Player own keys          d5d29769977cfe151836b3cab5f9cb4c602e22102f2db9df15906cf86e481a17
 ```
 
-Depois criar um manifest de métodos anexados com referências diretas, verificá-lo com `satisfies` e fazer interface merging na fachada. Não declarar métodos anexados como class fields com `!`: com `useDefineForClassFields: true`, isso emitiria propriedades `undefined` nas instâncias e sombrearia o prototype.
+Em Node `22.23.2`, a entrega executa:
 
-Não substituir todos os módulos por métodos de classe nesta etapa.
-
-## 8.5. Ordem por domínio
-
-Ordem recomendada:
-
-1. hosts e contratos de estado, sem alterar runtime;
-2. helpers;
-3. state;
-4. deck;
-5. turn;
-6. zones;
-7. summon;
-8. combat;
-9. spellTrap;
-10. actions guard;
-11. effects pipeline;
-12. graveyard e Extra Deck;
-13. devTools;
-14. UI bridge dentro de `game/ui`;
-15. manifest tipado;
-16. fachada `Game` e verificação final do attachment.
-
-## 8.6. MoveCard
-
-Inventariar primeiro todas as chamadas existentes e tipar a assinatura runtime atual, sem trocar parâmetros por um novo objeto. Os tipos precisam distinguir:
-
-- movimento entre zonas que não entra no campo;
-- entrada no campo por Summon/procedimento;
-- transferência ou reposicionamento `field -> field` que não é uma nova Summon;
-- fronteiras dinâmicas/legadas que ainda precisem de overload estreito e documentado.
-
-Exemplo conceitual para as opções, mantendo a chamada `moveCard(card, player, toZone, options)`:
-
-```ts
-type RegularZoneMoveOptions = {
-  fromZone?: CanonicalZone;
-};
-
-type EnterFieldBySummonOptions = {
-  fromZone: Exclude<CanonicalZone, "field">;
-  summonOrigin: SummonOrigin;
-  summonMethod?: SummonMethod;
-  summonProcedure?: SummonProcedure;
-};
-
-type FieldTransferOptions = {
-  fromZone: "field";
-  controlTransfer?: boolean;
-};
+```bash
+npm ci
+npm run check
+npm run test:bot-smoke -- --duels 1 --matchup arcanist:shadowheart
 ```
 
-O compilador deve impedir combinações realmente ilegais, mas não inventar uma regra mais rígida que o runtime atual. Toda entrada por Summon que hoje exige `summonOrigin` continua exigindo; transferências dentro do campo não devem ser classificadas como Summon. `ZoneInput` legado é normalizado antes de chegar aos overloads canônicos.
+Também é executado um smoke de `npm run replay` com arquivo temporário fora
+do repositório. O gate preserva os 40 testes de replay, o trace de Chain
+`62394527d27f8df6c89ffecd0bc8b4cd3ea03bf77756ee7ed7fbc54a8b0222b6`,
+a assinatura legada `1cc622e3` e o digest agregado
+`13ff527c3deb5b8b5e5f09551fcabcb3ec7ca48f922f1f167c6d22c67d12caea`.
+Nenhuma aprovação nova do digest é criada.
 
-## 8.7. Transações
+A busca final exige zero arquivos `.js` físicos em `src/core/game/`,
+`Game`, `Card` e `Player`; zero specifiers `.ts`, imports relativos sem
+extensão, `any`, `Object` genérico, casts duplos, suppressions, dívida nova,
+assignments diretos ao prototype, manifests por string ou class fields
+emitidos para attachments. O bundle é comparado com a baseline da etapa;
+somente deltas explicados pelo manifest, preflight, wrappers e guards são
+aceitos.
 
-Tipar:
-
-- summon transaction;
-- activation transaction;
-- damage step transaction;
-- zone operation result;
-- destruction result;
-- movement result;
-- action guard result.
-
-## Critérios de aceitação
-
-- todos os métodos anexados a `Game` são verificados;
-- `GameOptions` não é aberto;
-- movimentos observados possuem overload compatível e combinações comprovadamente ilegais não compilam;
-- estado de seleção, Chain, Summon e Damage Step não é confundido;
-- dispose limpa os mesmos estados;
-- a suíte automatizada existente de zonas, Invocação, combate, turnos e cartas passa;
-- a suíte canônica de replay existente continua passando.
+Não fazem parte da etapa: correções funcionais legadas, conversão de
+Bot/IA/UIAdapter/Renderer, alteração do schema de replay, testes manuais de
+cartas, merge automático ou mudança da proteção da `main`.
 
 ---
 
