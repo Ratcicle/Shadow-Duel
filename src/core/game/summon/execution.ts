@@ -5,7 +5,23 @@
 
 import { FAST_EFFECT_ORIGINS } from "../../chain/timing.js";
 import { bumpCardLocationVersion } from "../../Card.js";
-import { hasChainSourceMovementCapability } from "../../contracts/chainRuntime.js";
+import {
+  hasChainSourceMovementCapability,
+  type ChainOperationResult,
+  type ChainRuntimePort,
+} from "../../contracts/chainRuntime.js";
+import type { BattlePosition, GameCard } from "../../contracts/cards.js";
+import type {
+  MaybePromise,
+  MoveCardOptions,
+  MoveCardResult,
+  PreparedSummon,
+  PreparedSummonInput,
+  SummonExecutionResult,
+  SummonTransaction,
+} from "../../contracts/gameRuntime.js";
+import type { GamePlayer } from "../../contracts/player.js";
+import type { CanonicalZone } from "../../contracts/zones.js";
 import {
   SUMMON_MODES,
   SUMMON_ORIGINS,
@@ -13,20 +29,156 @@ import {
 } from "./transaction.js";
 import { checkSpecialSummonEligibility } from "./eligibility.js";
 
-async function presentSummonBeforeAfterSummon(game) {
+interface ExecutionEffectEnginePort {
+  clearTargetingCache?(): void;
+}
+
+interface ExecutionUiPort {
+  log(message: string): void;
+  applyFlipAnimation?(
+    ownerId: "player" | "bot",
+    fieldIndex: number,
+    options: { mode: "flip-summon"; deferFrames: number },
+  ): MaybePromise<unknown>;
+  applyHandTargetableIndices?(ownerId: "player", indices: number[]): void;
+}
+
+interface SummonAttemptOptions {
+  summonTransaction?: SummonTransaction | null;
+  fromZone?: CanonicalZone | "token" | null;
+  summonOrigin?: PreparedSummonInput["summonOrigin"];
+  method?: PreparedSummonInput["summonMethod"];
+  summonProcedure?: PreparedSummonInput["summonProcedure"];
+  position?: BattlePosition | null;
+}
+
+interface SummonAttemptSharedResult extends Omit<ChainOperationResult, "needsSelection"> {
+  ok?: boolean;
+  summonNegated?: boolean;
+  transaction?: SummonTransaction;
+  ownsTransaction?: boolean;
+  timing?: ChainOperationResult | null;
+}
+
+interface SummonAttemptSelectionResult extends SummonAttemptSharedResult {
+  needsSelection: true;
+  transaction: SummonTransaction;
+  ownsTransaction: boolean;
+}
+
+interface SummonAttemptCompletionResult extends SummonAttemptSharedResult {
+  needsSelection?: false;
+}
+
+type SummonAttemptResult =
+  | SummonAttemptSelectionResult
+  | SummonAttemptCompletionResult;
+
+type SummonPerformResult =
+  | SummonExecutionResult
+  | SummonAttemptSelectionResult
+  | boolean
+  | null
+  | undefined;
+
+interface ExecutionPreparedSummonInput
+  extends Omit<PreparedSummonInput, "perform"> {
+  perform?: (
+    transaction: SummonTransaction,
+  ) => MaybePromise<SummonPerformResult>;
+}
+
+function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
+  if (
+    value === null ||
+    (typeof value !== "object" && typeof value !== "function")
+  ) {
+    return false;
+  }
+  return typeof Reflect.get(value, "then") === "function";
+}
+
+interface SummonAttemptContext {
+  type: "summon_attempt";
+  event: "summon_attempt";
+  card: GameCard;
+  player: GamePlayer;
+  triggerPlayer: GamePlayer;
+  summonId: SummonTransaction["summonId"];
+  summonMethod: SummonTransaction["summonMethod"];
+  fromZone: CanonicalZone | "token" | null;
+  summonProcedure: SummonTransaction["summonProcedure"];
+  summonTransaction: SummonTransaction;
+  summonNegated?: boolean;
+}
+
+interface ExecutionHost {
+  player: GamePlayer;
+  bot: GamePlayer;
+  turnCounter: number;
+  disableChains: boolean;
+  pendingSpecialSummon: unknown;
+  isResolvingEffect: boolean;
+  activeSummonTransaction: SummonTransaction | null;
+  chainSystem: ChainRuntimePort;
+  effectEngine: ExecutionEffectEnginePort;
+  ui: ExecutionUiPort;
+  currentEffectContext?: {
+    source?: GameCard | null;
+    effect?: { id?: string | null } | null;
+  } | null;
+  canFlipSummon(card: GameCard): boolean;
+  createPreparedSummon(
+    input?: PreparedSummonInput | ExecutionPreparedSummonInput,
+  ): PreparedSummon;
+  beginSummonTransaction(input: PreparedSummon):
+    | { ok: false; reason: string }
+    | { ok: true; transaction: SummonTransaction };
+  executeSummonTransaction(
+    input: PreparedSummon,
+  ): Promise<SummonExecutionResult>;
+  markSummonAwaitingNegation?(summonId: SummonTransaction["summonId"]): unknown;
+  holdSummonTimingState?(transaction: SummonTransaction): void;
+  offerSummonAttempt(
+    card: GameCard,
+    player: GamePlayer,
+    options?: SummonAttemptOptions,
+  ): Promise<SummonAttemptResult>;
+  canPlaceCardOnField?(
+    card: GameCard,
+    player: GamePlayer,
+    options: MoveCardOptions,
+  ): { ok?: boolean; reason?: string; code?: string };
+  findCardZone?(player: GamePlayer, card: GameCard): CanonicalZone | null;
+  moveCard(
+    card: GameCard,
+    player: GamePlayer,
+    zone: CanonicalZone,
+    options?: MoveCardOptions,
+  ): MaybePromise<MoveCardResult | SummonExecutionResult>;
+  emit(eventName: string, payload: unknown): Promise<unknown>;
+  getOpponent?(player: GamePlayer): GamePlayer | null;
+  updateBoard(): MaybePromise<unknown>;
+  waitForBoardPresentation?(): Promise<unknown>;
+}
+
+async function presentSummonBeforeAfterSummon(game: ExecutionHost) {
   const boardPresentation = game?.updateBoard?.();
   if (typeof game?.waitForBoardPresentation === "function") {
     await game.waitForBoardPresentation();
-  } else if (boardPresentation && typeof boardPresentation.then === "function") {
-    await boardPresentation.catch(() => {});
+  } else if (isPromiseLike(boardPresentation)) {
+    await (boardPresentation as Promise<unknown>).catch(() => {});
   }
 }
 
 /**
  * Perform a Flip Summon on a face-down monster.
- * @param {Object} card - The face-down monster to flip summon
+ * @param card - The face-down monster to flip summon
  */
-export async function flipSummon(card) {
+export async function flipSummon(
+  this: ExecutionHost,
+  card: GameCard,
+): Promise<SummonExecutionResult> {
   if (!this.canFlipSummon(card)) {
     return { success: false, reason: "flip_summon_unavailable" };
   }
@@ -48,7 +200,7 @@ export async function flipSummon(card) {
       player: owner,
       method: "flip",
     },
-    perform: async (transaction) => {
+    perform: async (transaction: SummonTransaction) => {
       const currentIndex = owner.field.indexOf(card);
       if (currentIndex < 0) {
         return { success: false, reason: "flip_source_missing" };
@@ -107,14 +259,15 @@ export async function flipSummon(card) {
       const atomicGroupId =
         chainSystem?.allocateAtomicEventGroupId?.() || null;
       if (hasChainSourceMovementCapability(chainSystem)) {
-        chainSystem.recordChainSourceMovement(card, {
+        const movement = {
           fromPlayer: owner,
           toPlayer: owner,
           fromZone: "field",
-          toZone: "field",
+          toZone: "field" as const,
           locationVersion,
           wasDestroyed: false,
-        });
+        };
+        chainSystem.recordChainSourceMovement(card, movement);
       }
       await this.emit("card_moved", {
         card,
@@ -139,8 +292,8 @@ export async function flipSummon(card) {
         mode: "flip-summon",
         deferFrames: 0,
       });
-      if (flipPresentation && typeof flipPresentation.then === "function") {
-        await flipPresentation.catch(() => {});
+      if (isPromiseLike(flipPresentation)) {
+        await (flipPresentation as Promise<unknown>).catch(() => {});
       }
       await this.emit("after_summon", {
         card,
@@ -165,7 +318,12 @@ export async function flipSummon(card) {
   return await this.executeSummonTransaction(prepared);
 }
 
-export async function offerSummonAttempt(card, player, options = {}) {
+export async function offerSummonAttempt(
+  this: ExecutionHost,
+  card: GameCard | null | undefined,
+  player: GamePlayer | null | undefined,
+  options: SummonAttemptOptions = {},
+): Promise<SummonAttemptResult> {
   if (!card || !player) {
     return { ok: true };
   }
@@ -207,7 +365,7 @@ export async function offerSummonAttempt(card, player, options = {}) {
       ownsTransaction,
     };
   }
-  const context = {
+  const context: SummonAttemptContext = {
     type: "summon_attempt",
     event: "summon_attempt",
     card,
@@ -230,7 +388,12 @@ export async function offerSummonAttempt(card, player, options = {}) {
     pauseAfterRootResolution: true,
   });
   if (timing?.needsSelection) {
-    return { ...timing, transaction, ownsTransaction };
+    return {
+      ...timing,
+      needsSelection: true,
+      transaction,
+      ownsTransaction,
+    };
   }
   this.holdSummonTimingState?.(transaction);
   if (
@@ -250,11 +413,12 @@ export async function offerSummonAttempt(card, player, options = {}) {
 }
 
 export async function performNormalSummon(
-  actor,
-  cardIndex,
-  position = "attack",
+  this: ExecutionHost,
+  actor: GamePlayer | null,
+  cardIndex: number,
+  position: BattlePosition = "attack",
   isFacedown = false,
-  tributeIndices = null,
+  tributeIndices: readonly number[] | null = null,
 ) {
   const player = actor || this.player;
   const card = player?.hand?.[cardIndex];
@@ -275,15 +439,16 @@ export async function performNormalSummon(
  * @param {number} fusionMonsterIndex - Index in Extra Deck
  * @param {string} position - "attack" or "defense"
  * @param {Array|null} requiredSubset - Subset of required materials
- * @param {Object|null} player - Player performing the summon
+ * @param player - Player performing the summon
  * @returns {boolean} Success status
  */
 export async function performFusionSummon(
-  materials,
-  fusionMonsterIndex,
-  position = "attack",
-  requiredSubset = null,
-  player = null
+  this: ExecutionHost,
+  materials: GameCard[],
+  fusionMonsterIndex: number,
+  position: BattlePosition = "attack",
+  requiredSubset: GameCard[] | null = null,
+  player: GamePlayer | null = null,
 ) {
   // Usa o jogador passado ou default para this.player
   const activePlayer = player || this.player;
@@ -330,7 +495,7 @@ export async function performFusionSummon(
     requiredSubset && requiredSubset.length ? requiredSubset : materials;
   const requiredSet = new Set(requiredMaterials);
   const extraMaterials = materials.filter((mat) => !requiredSet.has(mat));
-  const hasFieldToGraveTrigger = (card) =>
+  const hasFieldToGraveTrigger = (card: GameCard) =>
     activePlayer.field.includes(card) &&
     Array.isArray(card?.effects) &&
     card.effects.some(
@@ -379,7 +544,7 @@ export async function performFusionSummon(
         awaitCardMovedEvent: true,
       },
     })),
-    perform: async (transaction) => {
+    perform: async (transaction: SummonTransaction) => {
       const postMaterialLimitCheck = this.canPlaceCardOnField?.(
         fusionMonster,
         activePlayer,
@@ -429,7 +594,12 @@ export async function performFusionSummon(
  * @param {number} handIndex - Index in player's hand
  * @param {string} position - "attack" or "defense"
  */
-export async function performSpecialSummon(handIndex, position, actor = this.player) {
+export async function performSpecialSummon(
+  this: ExecutionHost,
+  handIndex: number,
+  position: BattlePosition,
+  actor: GamePlayer = this.player,
+) {
   const player = actor || this.player;
   const card = player.hand[handIndex];
   if (!card) return;
@@ -460,7 +630,7 @@ export async function performSpecialSummon(handIndex, position, actor = this.pla
     summonMethod: "special",
     summonProcedure: "card_effect",
     position,
-    perform: async (transaction) => {
+    perform: async (transaction: SummonTransaction) => {
       const moveResult = await this.moveCard(card, player, "field", {
         fromZone: "hand",
         position,

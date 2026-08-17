@@ -3,12 +3,30 @@
  * Extracted from Game.js as part of B.4 modularization.
  */
 
+import type { GameCard } from "../../contracts/cards.js";
+import type {
+  CardStateSnapshot,
+  GameZonesHost,
+  ZonePlayerSnapshot,
+  ZoneSnapshot,
+} from "../../contracts/gameRuntime.js";
+import type { GamePlayer } from "../../contracts/player.js";
+
+interface ZoneSnapshotHost extends GameZonesHost {
+  normalizeZoneCardOwnership(
+    contextLabel?: string,
+    options?: { enforceZoneOwner?: boolean },
+  ): void;
+}
+
 /**
  * Create a snapshot of a single card's state.
- * @param {Object} card - The card to snapshot
- * @returns {Object|null} Snapshot of the card state
+ * @param card - The card to snapshot
+ * @returns Snapshot of the card state
  */
-export function snapshotCardState(card) {
+export function snapshotCardState(
+  card: GameCard | null | undefined,
+): CardStateSnapshot | null {
   if (!card) return null;
   const snapshot = { ...card };
   if (card.counters instanceof Map) {
@@ -24,15 +42,15 @@ export function snapshotCardState(card) {
  * Collect all cards from all zones (player + bot).
  * @returns {Array} Array of all cards
  */
-export function collectAllZoneCards() {
-  const cards = new Set();
-  const addList = (list) => {
+export function collectAllZoneCards(this: GameZonesHost): GameCard[] {
+  const cards = new Set<GameCard>();
+  const addList = (list: GameCard[] | null | undefined) => {
     if (!Array.isArray(list)) return;
     list.forEach((card) => {
       if (card) cards.add(card);
     });
   };
-  const addPlayer = (player) => {
+  const addPlayer = (player: GamePlayer | null | undefined) => {
     if (!player) return;
     addList(player.hand);
     addList(player.field);
@@ -53,10 +71,13 @@ export function collectAllZoneCards() {
 /**
  * Capture a complete snapshot of all zones for rollback.
  * @param {string} contextLabel - Label for logging
- * @returns {Object} Snapshot object
+ * @returns Snapshot object
  */
-export function captureZoneSnapshot(contextLabel = "zone_op") {
-  const snapshot = {
+export function captureZoneSnapshot(
+  this: GameZonesHost,
+  contextLabel = "zone_op",
+): ZoneSnapshot {
+  const snapshot: ZoneSnapshot = {
     contextLabel,
     players: {
       player: {
@@ -80,7 +101,7 @@ export function captureZoneSnapshot(contextLabel = "zone_op") {
         fieldSpell: this.bot?.fieldSpell || null,
       },
     },
-    cardState: new Map(),
+    cardState: new Map<GameCard, CardStateSnapshot>(),
   };
 
   const cards = this.collectAllZoneCards();
@@ -96,11 +117,17 @@ export function captureZoneSnapshot(contextLabel = "zone_op") {
 
 /**
  * Restore zone state from a snapshot.
- * @param {Object} snapshot - Snapshot to restore
+ * @param snapshot - Snapshot to restore
  */
-export function restoreZoneSnapshot(snapshot) {
+export function restoreZoneSnapshot(
+  this: ZoneSnapshotHost,
+  snapshot: ZoneSnapshot | null | undefined,
+) {
   if (!snapshot) return;
-  const restorePlayer = (player, state) => {
+  const restorePlayer = (
+    player: GamePlayer | null | undefined,
+    state: ZonePlayerSnapshot | null | undefined,
+  ) => {
     if (!player || !state) return;
     player.hand = [...(state.hand || [])];
     player.field = [...(state.field || [])];
@@ -127,7 +154,7 @@ export function restoreZoneSnapshot(snapshot) {
           card.equips = [...state.equips];
           return;
         }
-        card[key] = state[key];
+        Reflect.set(card, key, Reflect.get(state, key));
       });
     });
   }
@@ -139,15 +166,22 @@ export function restoreZoneSnapshot(snapshot) {
 
 /**
  * Compare two zone snapshots to check for differences.
- * @param {Object} a - First snapshot
- * @param {Object} b - Second snapshot
+ * @param a - First snapshot
+ * @param b - Second snapshot
  * @param {string} playerKey - Which player to compare ("player" or "bot")
  * @returns {boolean} True if snapshots are equal
  */
-export function compareZoneSnapshot(a, b, playerKey = "player") {
-  const stateA = a?.players?.[playerKey] || {};
-  const stateB = b?.players?.[playerKey] || {};
-  const listEqual = (left, right) => {
+export function compareZoneSnapshot(
+  a: ZoneSnapshot | null | undefined,
+  b: ZoneSnapshot | null | undefined,
+  playerKey: "player" | "bot" = "player",
+): boolean {
+  const stateA: Partial<ZonePlayerSnapshot> = a?.players?.[playerKey] || {};
+  const stateB: Partial<ZonePlayerSnapshot> = b?.players?.[playerKey] || {};
+  const listEqual = (
+    left: readonly GameCard[] | null | undefined,
+    right: readonly GameCard[] | null | undefined,
+  ) => {
     if (!Array.isArray(left) || !Array.isArray(right)) return false;
     if (left.length !== right.length) return false;
     for (let i = 0; i < left.length; i += 1) {
@@ -156,13 +190,13 @@ export function compareZoneSnapshot(a, b, playerKey = "player") {
     return true;
   };
   return (
-    listEqual(stateA.hand || [], stateB.hand || []) &&
-    listEqual(stateA.field || [], stateB.field || []) &&
-    listEqual(stateA.spellTrap || [], stateB.spellTrap || []) &&
-    listEqual(stateA.graveyard || [], stateB.graveyard || []) &&
-    listEqual(stateA.banished || [], stateB.banished || []) &&
-    listEqual(stateA.deck || [], stateB.deck || []) &&
-    listEqual(stateA.extraDeck || [], stateB.extraDeck || []) &&
-    (stateA.fieldSpell || null) === (stateB.fieldSpell || null)
+    listEqual(stateA?.hand || [], stateB?.hand || []) &&
+    listEqual(stateA?.field || [], stateB?.field || []) &&
+    listEqual(stateA?.spellTrap || [], stateB?.spellTrap || []) &&
+    listEqual(stateA?.graveyard || [], stateB?.graveyard || []) &&
+    listEqual(stateA?.banished || [], stateB?.banished || []) &&
+    listEqual(stateA?.deck || [], stateB?.deck || []) &&
+    listEqual(stateA?.extraDeck || [], stateB?.extraDeck || []) &&
+    (stateA?.fieldSpell || null) === (stateB?.fieldSpell || null)
   );
 }

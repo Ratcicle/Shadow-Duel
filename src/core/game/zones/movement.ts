@@ -14,6 +14,313 @@ import {
   resetProperSummon,
 } from "../summon/eligibility.js";
 import { hasChainSourceMovementCapability } from "../../contracts/chainRuntime.js";
+import type {
+  GameCard,
+  SpecialSummonProcedure,
+} from "../../contracts/cards.js";
+import type {
+  FullGameHost,
+  FieldTransferMoveCardOptions,
+  LegacyMoveCardOptions,
+  LegacySourceMoveCardOptions,
+  MaybePromise,
+  MoveCardOptions,
+  MoveCardResult,
+  PreparedSummon,
+  RegularMoveCardOptions,
+  RegularMoveDestinationZone,
+  SummonExecutionResult,
+  SummonEntryMoveCardOptions,
+  SynchroMaterialFollowup,
+  SummonTransaction,
+  TokenEntryMoveCardOptions,
+  ZoneOpOptions,
+  ZoneOpFailure,
+} from "../../contracts/gameRuntime.js";
+import type {
+  GamePlayer,
+  SpecialSummonRestriction,
+} from "../../contracts/player.js";
+import {
+  isCanonicalZone,
+  normalizeZoneInput,
+  type CanonicalZone,
+  type LegacyZoneAlias,
+  type ZoneInput,
+} from "../../contracts/zones.js";
+import type { SummonMethod, SummonOrigin } from "../../contracts/summon.js";
+import type { ChainSourceZone } from "../../contracts/chainRuntime.js";
+import type { CardAction } from "../../contracts/actions.js";
+import type {
+  CardFilter,
+  EffectDefinition,
+  PassiveRuleDefinition,
+  ReplacementEffectBehavior,
+} from "../../contracts/effects.js";
+
+type MovementSourceZone = CanonicalZone | "token";
+type MovementEventZone = MovementSourceZone | "removed";
+
+interface MovementOptions
+  extends Omit<
+    MoveCardOptions,
+    "fromZone" | "destroyCause"
+  > {
+  fromZone?: MovementSourceZone;
+  destroyCause?: string | null;
+  animateCards?: boolean;
+  skipAnimation?: boolean;
+  skipSendToGraveActionReplacement?: boolean;
+  skipSendToGraveReplacement?: boolean;
+}
+
+type MovementInputOptions = Omit<MovementOptions, "fromZone"> & {
+  fromZone?: MovementSourceZone | LegacyZoneAlias;
+};
+
+type MovementZoneOpOptions = Omit<ZoneOpOptions, "fromZone"> & {
+  fromZone?: MovementSourceZone | null;
+};
+
+interface MovementUiPort {
+  log(message: string): void;
+  captureCardAnimationSource?(
+    card: GameCard,
+    options: { ownerId: string; zone: MovementEventZone },
+  ): { rect?: DOMRect | null; hadCardElement?: boolean; visual?: unknown } | null;
+  showConfirmPrompt?(message: string, meta?: unknown): Promise<boolean>;
+}
+
+interface MovementEffectResult extends MovementEventResult {
+  executed?: boolean;
+}
+
+interface MovementEffectEnginePort {
+  applyActions(
+    actions: readonly CardAction[],
+    context: unknown,
+    targets: unknown,
+  ): Promise<MovementEffectResult | boolean | null | undefined>;
+  assignFieldPresenceId?(card: GameCard): void;
+  cardMatchesFilters?(card: GameCard, filters?: CardFilter): boolean;
+  checkActionPreviewRequirements?(
+    actions: readonly CardAction[],
+    context: unknown,
+  ): { ok: boolean; reason?: string };
+  clearBlueprintStorage?(card: GameCard): void;
+  clearFieldPresenceId?(card: GameCard): void;
+  clearPassiveBuffsForCard(card: GameCard): void;
+  clearTargetingCache?(): void;
+  isEffectNegated?(card: GameCard): boolean;
+}
+
+interface ZoneMoveAnimationIntent {
+  kind: "zone-move";
+  card: GameCard;
+  fromOwnerId: string;
+  toOwnerId: string;
+  fromZone: MovementEventZone;
+  toZone: MovementEventZone;
+  fromRect: DOMRect | null;
+  fromHadCardElement: boolean;
+  fromVisual: unknown;
+}
+
+type MovementHost = Omit<
+  FullGameHost,
+  "effectEngine" | "moveCard" | "temporaryControlEffects" | "ui"
+> & {
+  ui: MovementUiPort;
+  effectEngine: MovementEffectEnginePort;
+  devModeEnabled: boolean;
+  devFailAfterZoneMutation: boolean;
+  temporaryControlEffects: Array<{ cardInstanceId?: number | string | null }>;
+  cardAnimationsReady?: boolean;
+  getOpponent(player: GamePlayer | null): GamePlayer | null;
+  getZone(player: GamePlayer, zone: CanonicalZone): GameCard[];
+  moveCard(
+    card: GameCard,
+    player: GamePlayer,
+    zone: ZoneInput,
+    options?: MovementInputOptions,
+  ): MaybePromise<MoveCardResult | SummonExecutionResult>;
+  moveCardInternal(
+    card: GameCard,
+    player: GamePlayer,
+    zone: CanonicalZone,
+    options?: MovementOptions,
+  ): Promise<MoveCardResult>;
+  runZoneOp<Result>(
+    label: string,
+    operation: () => Result | Promise<Result>,
+    options?: MovementZoneOpOptions,
+  ): Result | ZoneOpFailure | Promise<Result | ZoneOpFailure>;
+  destroyCard(card: GameCard, options?: unknown): Promise<{ destroyed?: boolean }>;
+  emit(eventName: string, payload: unknown, options?: unknown): Promise<MovementEventResult>;
+  updateBoard(): MaybePromise<unknown>;
+  waitForBoardPresentation?(): Promise<unknown>;
+  waitForPresentationDelay?(delayMs: number): Promise<unknown>;
+  queueCardAnimation?(intent: ZoneMoveAnimationIntent): void;
+  cleanupTokenReferences(card: GameCard, owner: GamePlayer): void;
+  finishSummonTransaction?(
+    transaction: SummonTransaction,
+    result?: SummonExecutionResult,
+  ): unknown;
+  offerSummonAttempt?(
+    card: GameCard,
+    player: GamePlayer,
+    options?: unknown,
+  ): Promise<SummonAttemptResult>;
+  canUseOncePerTurn?(
+    sourceCard: GameCard,
+    player: GamePlayer,
+    effect: EffectDefinition,
+  ): { ok: boolean; reason?: string };
+  markOncePerTurnUsed?(
+    sourceCard: GameCard,
+    player: GamePlayer,
+    effect: EffectDefinition,
+  ): void;
+  findCardZone?(player: GamePlayer, card: GameCard): CanonicalZone | null;
+  cleanupExpiredSpecialSummonRestrictions(player?: GamePlayer | null): void;
+  canSpecialSummonUnderRestrictions(
+    card: GameCard,
+    player: GamePlayer,
+    options?: MovementOptions,
+  ): { ok: boolean; reason?: string; code?: string };
+  devLog?(code: string, detail?: unknown): void;
+  _arenaTracker?: {
+    recordZoneMove?(
+      card: GameCard,
+      player: GamePlayer,
+      zone: CanonicalZone,
+      options: MovementOptions,
+      result: unknown,
+    ): void;
+  };
+};
+
+interface MovementEventResult {
+  success?: boolean;
+  ok?: boolean;
+  needsSelection?: boolean;
+  selectionContract?: unknown;
+  collectedOnly?: boolean;
+  entries?: unknown[];
+  reason?: string | null;
+}
+
+interface SummonAttemptResult extends MovementEventResult {
+  summonNegated?: boolean;
+  ownsTransaction?: boolean;
+  transaction?: SummonTransaction;
+}
+
+interface CardLocation {
+  owner: GamePlayer;
+  zone: CanonicalZone;
+}
+
+interface RuntimeCardFilter extends CardFilter {
+  id?: number;
+  ids?: readonly number[];
+  cardIds?: readonly number[];
+}
+
+type BanishProtectionScope = Omit<CardFilter, "owner"> & {
+  owner?: "self" | "opponent" | "any" | "both";
+  zone?: CanonicalZone;
+  zones?: readonly CanonicalZone[];
+  excludeSelf?: boolean;
+  filters?: CardFilter;
+};
+
+type BanishProtectionPassive = Omit<
+  PassiveRuleDefinition,
+  "protectFrom" | "targetScope" | "targetOwner"
+> & {
+  protectFrom?:
+    | "any"
+    | "all"
+    | "effects"
+    | "card_effects"
+    | "opponent_effects"
+    | "opponent_card_effects"
+    | "self_effects"
+    | "own_effects";
+  targetScope?: BanishProtectionScope;
+  targetOwner?: "self" | "opponent" | "any" | "both";
+  zones?: readonly CanonicalZone[];
+  zone?: CanonicalZone;
+  excludeSelf?: boolean;
+};
+
+interface RuntimeReplacementEffect extends ReplacementEffectBehavior {
+  targetMustNotBeSource?: boolean;
+  excludeSource?: boolean;
+  appliesTo?: "self" | "opponent" | "any";
+  targetZone?: CanonicalZone;
+  allowFacedown?: boolean;
+  prompt?: string;
+}
+
+interface SendToGraveReplacementContext {
+  card: GameCard;
+  fromOwner: GamePlayer;
+  fromZone: CanonicalZone;
+  sourceOwner: GamePlayer;
+}
+
+interface ReplacementDecisionInput {
+  game: MovementHost;
+  player: GamePlayer;
+  sourceCard: GameCard;
+  effect: EffectDefinition;
+  replacementEffect: RuntimeReplacementEffect;
+  targetCard: GameCard;
+  cause: string;
+  fromZone: CanonicalZone;
+  context: unknown;
+  kind: "send_to_grave";
+}
+
+interface ReplacementStrategy {
+  shouldUseReplacementEffect?(
+    input: ReplacementDecisionInput,
+  ): MaybePromise<boolean | { use?: boolean; shouldUse?: boolean }>;
+}
+
+function isPromiseLike<Value>(
+  value: Value | Promise<Value>,
+): value is Promise<Value> {
+  if (
+    value === null ||
+    (typeof value !== "object" && typeof value !== "function")
+  ) {
+    return false;
+  }
+  return typeof Reflect.get(value, "then") === "function";
+}
+
+function isMovementEventResult(value: unknown): value is MovementEventResult {
+  return typeof value === "object" && value !== null;
+}
+
+function isSummonOrigin(value: unknown): value is SummonOrigin {
+  return Object.values(SUMMON_ORIGINS).some((origin) => origin === value);
+}
+
+function hasNormalizedMovementSource(
+  options: MovementInputOptions,
+): options is MovementOptions {
+  return options.fromZone !== "banish";
+}
+
+function retainLocatedSourceZone(
+  value: MovementSourceZone | null,
+): MovementSourceZone | null {
+  return value;
+}
 
 /**
  * Zone movement - card movement between zones with side effects.
@@ -23,10 +330,14 @@ import { hasChainSourceMovementCapability } from "../../contracts/chainRuntime.j
 /**
  * Clean up token references when a token leaves the field.
  * Tokens cannot exist outside the field.
- * @param {Object} token - The token card
- * @param {Object} tokenOwner - The token's owner player
+ * @param token - The token card
+ * @param tokenOwner - The token's owner player
  */
-export function cleanupTokenReferences(token, tokenOwner) {
+export function cleanupTokenReferences(
+  this: MovementHost,
+  token: GameCard | null | undefined,
+  tokenOwner: GamePlayer,
+) {
   if (!token) return;
 
   // Find and process equip spells attached to this token (same logic as monster cleanup)
@@ -113,14 +424,22 @@ export function cleanupTokenReferences(token, tokenOwner) {
   delete token.permanentBuffsBySource;
 }
 
-function getMaterialTypeFromContextLabel(contextLabel) {
+function getMaterialTypeFromContextLabel(
+  contextLabel: string | null | undefined,
+): "fusion" | "synchro" | "ascension" | null {
   if (contextLabel === "fusion_material") return "fusion";
   if (contextLabel === "synchro_material") return "synchro";
   if (contextLabel === "ascension_material") return "ascension";
   return null;
 }
 
-function updateSentToGraveMaterialMarker(game, card, ownerPlayer, fromZone, options = {}) {
+function updateSentToGraveMaterialMarker(
+  game: MovementHost,
+  card: GameCard,
+  ownerPlayer: GamePlayer,
+  fromZone: MovementSourceZone,
+  options: MovementOptions = {},
+) {
   if (!card || !options) return;
   const materialType = getMaterialTypeFromContextLabel(options.contextLabel);
   if (!materialType) {
@@ -146,14 +465,20 @@ const OWNER_RETURN_ZONES = new Set([
   "banished",
 ]);
 
-function getPlayerById(game, playerId) {
+function getPlayerById(
+  game: MovementHost | null | undefined,
+  playerId: string | null | undefined,
+): GamePlayer | null {
   if (!game || !playerId) return null;
   if (game.player?.id === playerId) return game.player;
   if (game.bot?.id === playerId) return game.bot;
   return null;
 }
 
-function ensureOriginalOwner(card, fallbackOwnerId) {
+function ensureOriginalOwner(
+  card: GameCard | null | undefined,
+  fallbackOwnerId: string | null | undefined,
+): string | null {
   if (!card) return null;
   if (!card.originalOwner && fallbackOwnerId) {
     card.originalOwner = fallbackOwnerId;
@@ -161,7 +486,13 @@ function ensureOriginalOwner(card, fallbackOwnerId) {
   return card.originalOwner || fallbackOwnerId || card.owner || null;
 }
 
-function resolveOriginalOwnerDestination(game, card, fromZone, toZone, fromOwner) {
+function resolveOriginalOwnerDestination(
+  game: MovementHost,
+  card: GameCard,
+  fromZone: MovementSourceZone,
+  toZone: CanonicalZone,
+  fromOwner: GamePlayer,
+): GamePlayer | null {
   if (
     !card ||
     fromZone !== "field" ||
@@ -177,17 +508,84 @@ function resolveOriginalOwnerDestination(game, card, fromZone, toZone, fromOwner
 
 /**
  * Move a card between zones (public API, wrapped in runZoneOp).
- * @param {Object} card - The card to move
- * @param {Object} destPlayer - Destination player
+ * @param card - The card to move
+ * @param destPlayer - Destination player
  * @param {string} toZone - Destination zone name
- * @param {Object} options - Options (fromZone, position, etc.)
- * @returns {Object|Promise} Result of the move operation
+ * @param options - Options (fromZone, position, etc.)
+ * @returns Result of the move operation
  */
-export function moveCard(card, destPlayer, toZone, options = {}) {
+export function moveCard(
+  this: MovementHost,
+  card: GameCard,
+  destPlayer: GamePlayer,
+  toZone: RegularMoveDestinationZone,
+  inputOptions?: RegularMoveCardOptions,
+): MaybePromise<MoveCardResult | ZoneOpFailure>;
+export function moveCard(
+  this: MovementHost,
+  card: GameCard,
+  destPlayer: GamePlayer,
+  toZone: "field",
+  inputOptions: FieldTransferMoveCardOptions,
+): MaybePromise<MoveCardResult | ZoneOpFailure>;
+export function moveCard(
+  this: MovementHost,
+  card: GameCard,
+  destPlayer: GamePlayer,
+  toZone: "field",
+  inputOptions: SummonEntryMoveCardOptions,
+): MaybePromise<MoveCardResult | SummonExecutionResult | ZoneOpFailure>;
+export function moveCard(
+  this: MovementHost,
+  card: GameCard,
+  destPlayer: GamePlayer,
+  toZone: "field",
+  inputOptions: TokenEntryMoveCardOptions,
+): MaybePromise<MoveCardResult | SummonExecutionResult | ZoneOpFailure>;
+export function moveCard(
+  this: MovementHost,
+  card: GameCard,
+  destPlayer: GamePlayer,
+  toZone: LegacyZoneAlias,
+  inputOptions?: LegacyMoveCardOptions,
+): MaybePromise<MoveCardResult | SummonExecutionResult | ZoneOpFailure>;
+export function moveCard(
+  this: MovementHost,
+  card: GameCard,
+  destPlayer: GamePlayer,
+  toZone: RegularMoveDestinationZone,
+  inputOptions: LegacySourceMoveCardOptions,
+): MaybePromise<MoveCardResult | SummonExecutionResult | ZoneOpFailure>;
+export function moveCard(
+  this: MovementHost,
+  card: GameCard,
+  destPlayer: GamePlayer,
+  toZone: ZoneInput,
+  inputOptions?: MovementInputOptions,
+): MaybePromise<MoveCardResult | SummonExecutionResult | ZoneOpFailure>;
+export function moveCard(
+  this: MovementHost,
+  card: GameCard,
+  destPlayer: GamePlayer,
+  toZone: ZoneInput,
+  inputOptions: MovementInputOptions = {},
+): MaybePromise<MoveCardResult | SummonExecutionResult | ZoneOpFailure> {
+  toZone = normalizeZoneInput(toZone);
+  const options: MovementOptions =
+    !hasNormalizedMovementSource(inputOptions)
+      ? {
+          ...inputOptions,
+          fromZone: "banished",
+        }
+      : inputOptions;
   this.ensureDuelCardId?.(card);
   const sourceLocation =
     toZone === "field" && card?.cardKind === "monster"
-      ? findCardLocation(this, card, options.fromZone || null) ||
+      ? findCardLocation(
+          this,
+          card,
+          isCanonicalZone(options.fromZone) ? options.fromZone : null,
+        ) ||
         (card.isToken === true && options.fromZone === "token"
           ? { owner: destPlayer, zone: "token" }
           : null)
@@ -203,7 +601,7 @@ export function moveCard(card, destPlayer, toZone, options = {}) {
     sourceLocation != null && sourceLocation.zone !== "field";
   if (
     requiresSummonOrigin &&
-    !Object.values(SUMMON_ORIGINS).includes(options.summonOrigin)
+    !isSummonOrigin(options.summonOrigin)
   ) {
     return {
       success: false,
@@ -234,7 +632,7 @@ export function moveCard(card, destPlayer, toZone, options = {}) {
           ? "card_effect"
           : "special"),
       position: options.position || card.position || null,
-      perform: async (transaction) =>
+      perform: async (transaction: SummonTransaction) =>
         await this.moveCard(card, destPlayer, toZone, {
           ...options,
           fromZone: options.fromZone || sourceLocation.zone,
@@ -254,8 +652,8 @@ export function moveCard(card, destPlayer, toZone, options = {}) {
       toZone,
     }
   );
-  if (result && typeof result.then === "function") {
-    return result.then((moveResult) => {
+  if (isPromiseLike(result)) {
+    return result.then((moveResult: MoveCardResult | ZoneOpFailure) => {
       this._arenaTracker?.recordZoneMove?.(
         card,
         destPlayer,
@@ -271,13 +669,13 @@ export function moveCard(card, destPlayer, toZone, options = {}) {
 }
 
 function recordCardLocationChange(
-  game,
-  card,
-  fromOwner,
-  destPlayer,
-  fromZone,
-  toZone,
-  options = {},
+  game: MovementHost,
+  card: GameCard,
+  fromOwner: GamePlayer | null,
+  destPlayer: GamePlayer | null,
+  fromZone: MovementEventZone,
+  toZone: MovementEventZone,
+  options: MovementOptions = {},
 ) {
   if (!game || !card || !fromZone || !toZone || fromZone === toZone) {
     return Number(card?.locationVersion ?? 0);
@@ -289,19 +687,28 @@ function recordCardLocationChange(
   const locationVersion = bumpCardLocationVersion(card);
   const chainSystem = game.chainSystem;
   if (hasChainSourceMovementCapability(chainSystem)) {
-    chainSystem.recordChainSourceMovement(card, {
+    const movement = {
       fromPlayer: fromOwner,
       toPlayer: destPlayer,
       fromZone,
-      toZone,
+      toZone: toZone as ChainSourceZone,
       locationVersion,
       wasDestroyed: options.wasDestroyed === true,
-    });
+    };
+    chainSystem.recordChainSourceMovement(card, movement);
   }
   return locationVersion;
 }
 
-async function emitCardMovedEvent(game, card, fromOwner, destPlayer, fromZone, toZone, options = {}) {
+async function emitCardMovedEvent(
+  game: MovementHost,
+  card: GameCard,
+  fromOwner: GamePlayer | null,
+  destPlayer: GamePlayer | null,
+  fromZone: MovementEventZone,
+  toZone: MovementEventZone,
+  options: MovementOptions = {},
+) {
   if (!game || !card || !fromZone || !toZone || fromZone === toZone) {
     return null;
   }
@@ -378,7 +785,15 @@ async function emitCardMovedEvent(game, card, fromOwner, destPlayer, fromZone, t
   return eventResult || null;
 }
 
-function buildZoneMoveAnimationIntent(game, card, fromOwner, fromZone, destPlayer, toZone, options) {
+function buildZoneMoveAnimationIntent(
+  game: MovementHost,
+  card: GameCard,
+  fromOwner: GamePlayer | null,
+  fromZone: MovementEventZone,
+  destPlayer: GamePlayer,
+  toZone: MovementEventZone,
+  options: MovementOptions,
+): ZoneMoveAnimationIntent | null {
   if (!game?.cardAnimationsReady) return null;
   if (!card || card.instanceId == null || !fromOwner || !destPlayer) return null;
   if (options?.animateCards === false || options?.skipAnimation === true) return null;
@@ -402,7 +817,11 @@ function buildZoneMoveAnimationIntent(game, card, fromOwner, fromZone, destPlaye
   };
 }
 
-function queueZoneMoveAnimation(game, intent, toZoneOverride = null) {
+function queueZoneMoveAnimation(
+  game: MovementHost,
+  intent: ZoneMoveAnimationIntent | null,
+  toZoneOverride: MovementEventZone | null = null,
+) {
   if (!intent || typeof game?.queueCardAnimation !== "function") return;
   game.queueCardAnimation({
     ...intent,
@@ -410,14 +829,17 @@ function queueZoneMoveAnimation(game, intent, toZoneOverride = null) {
   });
 }
 
-async function presentSummonBeforeAfterSummon(game, options = {}) {
+async function presentSummonBeforeAfterSummon(
+  game: MovementHost,
+  options: MovementOptions = {},
+) {
   if (options.presentBeforeAfterSummon === false) return;
 
   const boardPresentation = game?.updateBoard?.();
 
   if (typeof game?.waitForBoardPresentation === "function") {
     await game.waitForBoardPresentation();
-  } else if (boardPresentation && typeof boardPresentation.then === "function") {
+  } else if (isPromiseLike(boardPresentation)) {
     await boardPresentation.catch(() => {});
   } else if (typeof game?.waitForPresentationDelay === "function") {
     await game.waitForPresentationDelay(250);
@@ -427,12 +849,16 @@ async function presentSummonBeforeAfterSummon(game, options = {}) {
     Number.isFinite(options.summonPresentationDelayMs) &&
     typeof game?.waitForPresentationDelay === "function"
   ) {
-    const delayMs = options.summonPresentationDelayMs;
+    const delayMs = Number(options.summonPresentationDelayMs);
     await game.waitForPresentationDelay(delayMs);
   }
 }
 
-function getFollowupPlayer(game, entry, fallbackPlayer) {
+function getFollowupPlayer(
+  game: MovementHost,
+  entry: SynchroMaterialFollowup,
+  fallbackPlayer: GamePlayer | null,
+): GamePlayer | null {
   if (!game || !entry?.ownerId) return fallbackPlayer || null;
   if (game.player?.id === entry.ownerId) return game.player;
   if (game.bot?.id === entry.ownerId) return game.bot;
@@ -440,12 +866,12 @@ function getFollowupPlayer(game, entry, fallbackPlayer) {
 }
 
 async function applySynchroMaterialFollowupsBeforeAfterSummon(
-  game,
-  summonedCard,
-  ownerPlayer,
-  otherPlayer,
-  followups = [],
-  options = {},
+  game: MovementHost,
+  summonedCard: GameCard,
+  ownerPlayer: GamePlayer,
+  otherPlayer: GamePlayer,
+  followups: readonly SynchroMaterialFollowup[] = [],
+  options: MovementOptions = {},
 ) {
   if (
     !game?.effectEngine ||
@@ -492,10 +918,10 @@ async function applySynchroMaterialFollowupsBeforeAfterSummon(
       summonedCard: [summonedCard],
     };
     const result = await game.effectEngine.applyActions(actions, ctx, targets);
-    if (result?.needsSelection) {
+    if (isMovementEventResult(result) && result.needsSelection) {
       return result;
     }
-    if (result?.success === false) {
+    if (isMovementEventResult(result) && result.success === false) {
       game.devLog?.("SYNCHRO_MATERIAL_FOLLOWUP_FAILED", {
         source: entry.sourceName || entry.source?.name || null,
         reason: result.reason || null,
@@ -507,10 +933,11 @@ async function applySynchroMaterialFollowupsBeforeAfterSummon(
 }
 
 export async function applyPendingSynchroMaterialFollowups(
-  summonedCard,
-  ownerPlayer = null,
-  followups = [],
-  options = {},
+  this: MovementHost,
+  summonedCard: GameCard,
+  ownerPlayer: GamePlayer | null = null,
+  followups: readonly SynchroMaterialFollowup[] = [],
+  options: MovementOptions = {},
 ) {
   const resolvedOwner =
     ownerPlayer ||
@@ -526,13 +953,17 @@ export async function applyPendingSynchroMaterialFollowups(
     this,
     summonedCard,
     resolvedOwner,
-    otherPlayer,
+    otherPlayer || (resolvedOwner === this.player ? this.bot : this.player),
     followups,
     options,
   );
 }
 
-function hasMatchingDestroyedGraveyardTrigger(card, fromZone, options = {}) {
+function hasMatchingDestroyedGraveyardTrigger(
+  card: GameCard,
+  fromZone: MovementSourceZone,
+  options: MovementOptions = {},
+) {
   if (!card || card.cardKind !== "monster") return false;
   if (fromZone !== "field" || options.wasDestroyed !== true) return false;
 
@@ -551,7 +982,10 @@ function hasMatchingDestroyedGraveyardTrigger(card, fromZone, options = {}) {
       return false;
     }
 
-    const conditionType = effect.condition?.type || null;
+    const conditionType =
+      effect.condition && typeof effect.condition === "object"
+        ? Reflect.get(effect.condition, "type")
+        : null;
     if (conditionType === "destroyed_by_battle") {
       return destroyCause === "battle";
     }
@@ -565,7 +999,11 @@ function hasMatchingDestroyedGraveyardTrigger(card, fromZone, options = {}) {
   });
 }
 
-async function presentDestroyedGraveyardTrigger(game, card, options = {}) {
+async function presentDestroyedGraveyardTrigger(
+  game: MovementHost,
+  card: GameCard,
+  options: MovementOptions = {},
+) {
   if (options.presentBeforeCardToGrave === false) return false;
 
   card.graveyardEffectActivating = true;
@@ -573,7 +1011,7 @@ async function presentDestroyedGraveyardTrigger(game, card, options = {}) {
 
   if (typeof game?.waitForPresentationDelay === "function") {
     const delayMs = Number.isFinite(options.graveyardActivationDelayMs)
-      ? options.graveyardActivationDelayMs
+      ? Number(options.graveyardActivationDelayMs)
       : 350;
     await game.waitForPresentationDelay(delayMs);
   }
@@ -581,8 +1019,12 @@ async function presentDestroyedGraveyardTrigger(game, card, options = {}) {
   return true;
 }
 
-const FIELD_SOURCE_ZONES = new Set(["field", "spellTrap", "fieldSpell"]);
-const MOVE_CARD_SEARCH_ZONES = [
+const FIELD_SOURCE_ZONES = new Set<CanonicalZone>([
+  "field",
+  "spellTrap",
+  "fieldSpell",
+]);
+const MOVE_CARD_SEARCH_ZONES: readonly CanonicalZone[] = [
   "field",
   "hand",
   "deck",
@@ -593,7 +1035,11 @@ const MOVE_CARD_SEARCH_ZONES = [
   "banished",
 ];
 
-function findCardLocation(game, card, preferredZone = null) {
+function findCardLocation(
+  game: MovementHost,
+  card: GameCard,
+  preferredZone: CanonicalZone | null = null,
+): CardLocation | null {
   if (!game || !card) return null;
   const players = [game.player, game.bot].filter(Boolean);
   const zones = preferredZone
@@ -618,11 +1064,17 @@ function findCardLocation(game, card, preferredZone = null) {
   return null;
 }
 
-function samePlayerRef(left, right) {
+function samePlayerRef(
+  left: GamePlayer | null | undefined,
+  right: GamePlayer | null | undefined,
+): boolean {
   return !!left && !!right && (left === right || left.id === right.id);
 }
 
-function resolvePlayerRef(game, ref) {
+function resolvePlayerRef(
+  game: MovementHost,
+  ref: GamePlayer | GameCard | string | null | undefined,
+): GamePlayer | null {
   if (!game || !ref) return null;
   if (ref === game.player || ref === game.bot) return ref;
   const id =
@@ -631,7 +1083,10 @@ function resolvePlayerRef(game, ref) {
   return [game.player, game.bot].find((player) => player?.id === id) || null;
 }
 
-function resolveEffectSourceOwner(game, options = {}) {
+function resolveEffectSourceOwner(
+  game: MovementHost,
+  options: MovementOptions = {},
+): GamePlayer | null {
   const explicitOwner = resolvePlayerRef(
     game,
     options.sourcePlayer || options.effectPlayer || null,
@@ -651,7 +1106,12 @@ function resolveEffectSourceOwner(game, options = {}) {
   );
 }
 
-function banishProtectionSourceMatches(game, passive, protectedOwner, options = {}) {
+function banishProtectionSourceMatches(
+  game: MovementHost,
+  passive: BanishProtectionPassive,
+  protectedOwner: GamePlayer,
+  options: MovementOptions = {},
+): boolean {
   const protectFrom = passive?.protectFrom || null;
   if (!protectFrom || protectFrom === "any" || protectFrom === "all") {
     return true;
@@ -696,11 +1156,15 @@ function banishProtectionSourceMatches(game, passive, protectedOwner, options = 
  * "any card sent to opponent's Graveyard is banished instead").
  *
  * @param {import('../../Game.js').default} game
- * @param {Object} card - card being moved to the graveyard
- * @param {Object} fromOwner - owner of the card before the move
+ * @param card - card being moved to the graveyard
+ * @param fromOwner - owner of the card before the move
  * @returns {string|null}
  */
-function findSendToGraveReplacementTarget(game, card, fromOwner) {
+function findSendToGraveReplacementTarget(
+  game: MovementHost,
+  card: GameCard,
+  fromOwner: GamePlayer,
+): CanonicalZone | null {
   if (!game || !card || !fromOwner) return null;
 
   const players = [game.player, game.bot].filter(Boolean);
@@ -740,15 +1204,22 @@ function findSendToGraveReplacementTarget(game, card, fromOwner) {
   return null;
 }
 
-function asArray(value, fallback = []) {
-  if (value === undefined || value === null) return fallback;
-  return Array.isArray(value) ? value : [value];
+function asArray<Value>(
+  value: Value | readonly Value[] | null | undefined,
+  fallback: readonly Value[] = [],
+): Value[] {
+  if (value === undefined || value === null) return [...fallback];
+  return Array.isArray(value) ? Array.from(value) : [value as Value];
 }
 
-function buildBanishProtectionFilters(passive = {}) {
+function buildBanishProtectionFilters(
+  passive: BanishProtectionPassive = {} as BanishProtectionPassive,
+): RuntimeCardFilter {
   const scope = passive.targetScope || {};
-  const filters = { ...(scope.filters || passive.filters || {}) };
-  for (const key of [
+  const filters: RuntimeCardFilter = {
+    ...(scope.filters || passive.filters || {}),
+  };
+  const keys: readonly (keyof RuntimeCardFilter)[] = [
     "cardKind",
     "cardName",
     "name",
@@ -765,16 +1236,25 @@ function buildBanishProtectionFilters(passive = {}) {
     "requireFaceup",
     "isToken",
     "isTuner",
-  ]) {
-    const value = key === "type" ? scope[key] : scope[key] ?? passive[key];
-    if (value !== undefined && filters[key] === undefined) {
-      filters[key] = value;
+  ];
+  for (const key of keys) {
+    const scopeValue = Reflect.get(scope, key);
+    const value =
+      key === "type" ? scopeValue : scopeValue ?? Reflect.get(passive, key);
+    if (value !== undefined && Reflect.get(filters, key) === undefined) {
+      Reflect.set(filters, key, value);
     }
   }
   return filters;
 }
 
-function banishProtectionAppliesToCard(game, card, cardOwner, cardZone, options = {}) {
+function banishProtectionAppliesToCard(
+  game: MovementHost,
+  card: GameCard,
+  cardOwner: GamePlayer,
+  cardZone: CanonicalZone,
+  options: MovementOptions = {},
+) {
   if (!game || !card || !cardOwner) return null;
 
   const sourceOwners = [game.player, game.bot].filter(Boolean);
@@ -847,11 +1327,15 @@ function banishProtectionAppliesToCard(game, card, cardOwner, cardZone, options 
   return null;
 }
 
-function getSendToGraveReplacementSources(game) {
+function getSendToGraveReplacementSources(game: MovementHost) {
   const players = [game?.player, game?.bot].filter(Boolean);
-  const entries = [];
+  const entries: Array<{
+    sourceCard: GameCard;
+    sourceOwner: GamePlayer;
+    sourceZone: "field" | "spellTrap" | "fieldSpell";
+  }> = [];
   for (const owner of players) {
-    for (const zoneName of ["field", "spellTrap", "fieldSpell"]) {
+    for (const zoneName of ["field", "spellTrap", "fieldSpell"] as const) {
       const zoneCards =
         zoneName === "fieldSpell"
           ? owner.fieldSpell
@@ -869,7 +1353,12 @@ function getSendToGraveReplacementSources(game) {
   return entries;
 }
 
-function relationMatches(game, sourceOwner, targetOwner, rule = "self") {
+function relationMatches(
+  game: MovementHost,
+  sourceOwner: GamePlayer,
+  targetOwner: GamePlayer,
+  rule: "self" | "opponent" | "any" | "both" = "self",
+) {
   if (rule === "any") return true;
   if (!sourceOwner || !targetOwner) return false;
   if (rule === "self") return sourceOwner === targetOwner;
@@ -879,11 +1368,24 @@ function relationMatches(game, sourceOwner, targetOwner, rule = "self") {
   return false;
 }
 
-function getReplacementStrategy(game, player) {
+function isReplacementStrategy(value: unknown): value is ReplacementStrategy {
+  if (!value || typeof value !== "object") return false;
+  const method = Reflect.get(value, "shouldUseReplacementEffect");
+  return method === undefined || typeof method === "function";
+}
+
+function getReplacementStrategy(
+  game: MovementHost,
+  player: GamePlayer | null,
+): ReplacementStrategy | null {
   if (!player) return null;
-  if (player.strategy) return player.strategy;
-  if (game?.bot === player) return game.bot?.strategy || null;
-  if (game?.player === player) return game.player?.strategy || null;
+  if (isReplacementStrategy(player.strategy)) return player.strategy;
+  if (game.bot === player && isReplacementStrategy(game.bot.strategy)) {
+    return game.bot.strategy;
+  }
+  if (game.player === player && isReplacementStrategy(game.player.strategy)) {
+    return game.player.strategy;
+  }
   return null;
 }
 
@@ -898,7 +1400,7 @@ async function shouldUseAiReplacementEffect({
   fromZone,
   context,
   kind,
-}) {
+}: ReplacementDecisionInput): Promise<boolean> {
   if (player?.controllerType === "human") return true;
   const strategy = getReplacementStrategy(game, player);
   if (typeof strategy?.shouldUseReplacementEffect !== "function") return true;
@@ -923,7 +1425,12 @@ async function shouldUseAiReplacementEffect({
   return true;
 }
 
-function matchesSendToGraveReplacement(game, replacement, sourceCard, ctx) {
+function matchesSendToGraveReplacement(
+  game: MovementHost,
+  replacement: RuntimeReplacementEffect,
+  sourceCard: GameCard,
+  ctx: SendToGraveReplacementContext,
+) {
   const { card, fromOwner, fromZone, sourceOwner } = ctx;
   if (!replacement || replacement.type !== "send_to_grave") return false;
   if (!card || !fromOwner || !fromZone || !sourceCard || !sourceOwner) return false;
@@ -967,14 +1474,31 @@ function matchesSendToGraveReplacement(game, replacement, sourceCard, ctx) {
   return true;
 }
 
-async function trySendToGraveActionReplacement(game, card, destPlayer, options = {}) {
+function hasRuntimeReplacementEffect(
+  effect: EffectDefinition,
+): effect is EffectDefinition & {
+  replacementEffect: RuntimeReplacementEffect;
+} {
+  return "replacementEffect" in effect && effect.replacementEffect != null;
+}
+
+async function trySendToGraveActionReplacement(
+  game: MovementHost,
+  card: GameCard,
+  destPlayer: GamePlayer,
+  options: MovementOptions = {},
+) {
   if (!game || !card || card.isToken) return { replaced: false };
   if (options?.skipSendToGraveReplacement === true) return { replaced: false };
   if (options?.skipSendToGraveActionReplacement === true) {
     return { replaced: false };
   }
 
-  const location = findCardLocation(game, card, options.fromZone || null);
+  const location = findCardLocation(
+    game,
+    card,
+    isCanonicalZone(options.fromZone) ? options.fromZone : null,
+  );
   if (!location || location.zone !== "field") return { replaced: false };
 
   for (const { sourceCard, sourceOwner, sourceZone } of getSendToGraveReplacementSources(game)) {
@@ -982,7 +1506,8 @@ async function trySendToGraveActionReplacement(game, card, destPlayer, options =
     if (game.effectEngine?.isEffectNegated?.(sourceCard)) continue;
 
     for (const effect of sourceCard.effects || []) {
-      const replacement = effect?.replacementEffect;
+      if (!hasRuntimeReplacementEffect(effect)) continue;
+      const replacement = effect.replacementEffect;
       if (!replacement || replacement.type !== "send_to_grave") continue;
       if (effect.requireZone && effect.requireZone !== sourceZone) continue;
       if (effect.requireFaceup === true && sourceCard.isFacedown) continue;
@@ -1104,19 +1629,26 @@ async function trySendToGraveActionReplacement(game, card, destPlayer, options =
   return { replaced: false };
 }
 
-function asList(value) {
-  if (value === undefined || value === null) return [];
-  return Array.isArray(value) ? value : [value];
+function asList<Value>(
+  value: Value | readonly Value[] | null | undefined,
+): Value[] {
+  return asArray(value);
 }
 
-function matchesAny(value, required) {
+function matchesAny<Value>(
+  value: Value | readonly Value[],
+  required: Value | readonly Value[],
+): boolean {
   const requiredValues = asList(required);
   if (requiredValues.length === 0) return true;
   const values = Array.isArray(value) ? value : [value];
   return requiredValues.some((req) => values.includes(req));
 }
 
-function cardMatchesFieldLimitFilters(card, filters = {}) {
+function cardMatchesFieldLimitFilters(
+  card: GameCard | null | undefined,
+  filters: RuntimeCardFilter = {},
+): boolean {
   if (!card) return false;
 
   const idFilter = filters.cardId ?? filters.id;
@@ -1195,13 +1727,22 @@ function cardMatchesFieldLimitFilters(card, filters = {}) {
   return true;
 }
 
-const SPECIAL_SUMMON_METHODS = new Set(["special", "fusion", "ascension", "synchro"]);
+const SPECIAL_SUMMON_METHODS = [
+  "special",
+  "fusion",
+  "ascension",
+  "synchro",
+] as const satisfies readonly SummonMethod[];
 
-function isRestrictedSpecialSummonMethod(method) {
-  return SPECIAL_SUMMON_METHODS.has(method);
+function isRestrictedSpecialSummonMethod(
+  method: string | null | undefined,
+): method is (typeof SPECIAL_SUMMON_METHODS)[number] {
+  return SPECIAL_SUMMON_METHODS.some((candidate) => candidate === method);
 }
 
-function getSummonMethodFromOptions(options = {}) {
+function getSummonMethodFromOptions(
+  options: MovementOptions = {},
+): string | null {
   return (
     options.summonMethod ||
     options.summonMethodOverride ||
@@ -1210,7 +1751,11 @@ function getSummonMethodFromOptions(options = {}) {
   );
 }
 
-function cardMatchesRestrictionFilters(game, card, filters = {}) {
+function cardMatchesRestrictionFilters(
+  game: MovementHost,
+  card: GameCard,
+  filters: CardFilter = {},
+) {
   if (!filters || typeof filters !== "object") return true;
   if (typeof game?.effectEngine?.cardMatchesFilters === "function") {
     return game.effectEngine.cardMatchesFilters(card, filters);
@@ -1218,13 +1763,27 @@ function cardMatchesRestrictionFilters(game, card, filters = {}) {
   return cardMatchesFieldLimitFilters(card, filters);
 }
 
-function normalizeSpecialSummonRestriction(game, restriction = {}) {
+interface SpecialSummonRestrictionInput {
+  allowedFilters?: CardFilter;
+  duration?: string;
+  expiresOnTurn?: number | null;
+  reason?: string | null;
+  sourceName?: string | null;
+  sourceId?: number | null;
+  sourceCard?: GameCard | null;
+  effectId?: string | null;
+}
+
+function normalizeSpecialSummonRestriction(
+  game: MovementHost,
+  restriction: SpecialSummonRestrictionInput = {},
+): SpecialSummonRestriction {
   const duration = restriction.duration || "until_end_turn";
   const expiresOnTurn =
     duration === "until_end_turn"
-      ? game?.turnCounter || 0
+      ? game.turnCounter || 0
       : Number.isFinite(restriction.expiresOnTurn)
-        ? restriction.expiresOnTurn
+        ? Number(restriction.expiresOnTurn)
         : null;
   return {
     allowedFilters: { ...(restriction.allowedFilters || {}) },
@@ -1237,7 +1796,11 @@ function normalizeSpecialSummonRestriction(game, restriction = {}) {
   };
 }
 
-export function registerSpecialSummonRestriction(player, restriction = {}) {
+export function registerSpecialSummonRestriction(
+  this: MovementHost,
+  player: GamePlayer,
+  restriction: SpecialSummonRestrictionInput = {},
+): boolean {
   if (!player || !restriction?.allowedFilters) return false;
   if (!player.specialSummonRestrictions) {
     player.specialSummonRestrictions = [];
@@ -1250,7 +1813,10 @@ export function registerSpecialSummonRestriction(player, restriction = {}) {
   return true;
 }
 
-export function cleanupExpiredSpecialSummonRestrictions(player = null) {
+export function cleanupExpiredSpecialSummonRestrictions(
+  this: MovementHost,
+  player: GamePlayer | null = null,
+) {
   const players = player ? [player] : [this?.player, this?.bot].filter(Boolean);
   const currentTurn = Number(this?.turnCounter || 0);
   for (const entryPlayer of players) {
@@ -1260,12 +1826,17 @@ export function cleanupExpiredSpecialSummonRestrictions(player = null) {
     entryPlayer.specialSummonRestrictions = restrictions.filter((restriction) => {
       if (!restriction || restriction.duration !== "until_end_turn") return true;
       if (!Number.isFinite(restriction.expiresOnTurn)) return true;
-      return restriction.expiresOnTurn >= currentTurn;
+      return Number(restriction.expiresOnTurn) >= currentTurn;
     });
   }
 }
 
-export function canSpecialSummonUnderRestrictions(card, player, options = {}) {
+export function canSpecialSummonUnderRestrictions(
+  this: MovementHost,
+  card: GameCard,
+  player: GamePlayer,
+  options: MovementOptions = {},
+) {
   if (!card || !player) {
     return { ok: false, reason: "Invalid Special Summon restriction check." };
   }
@@ -1301,7 +1872,12 @@ export function canSpecialSummonUnderRestrictions(card, player, options = {}) {
  * Generic field-limit check for declarative card rules.
  * @this {import('../../Game.js').default}
  */
-export function canPlaceCardOnField(card, destPlayer, options = {}) {
+export function canPlaceCardOnField(
+  this: MovementHost,
+  card: GameCard,
+  destPlayer: GamePlayer,
+  options: MovementOptions = {},
+) {
   if (!card || !destPlayer) {
     return { ok: false, reason: "Invalid field placement." };
   }
@@ -1329,7 +1905,7 @@ export function canPlaceCardOnField(card, destPlayer, options = {}) {
       ? options.isFacedown
       : card.isFacedown === true;
 
-  const hasOnlyMonsterRestriction = (fieldCard) =>
+  const hasOnlyMonsterRestriction = (fieldCard: GameCard) =>
     fieldCard?.fieldPresenceRestriction?.type ===
       "only_monster_you_control_while_faceup" && !fieldCard.isFacedown;
 
@@ -1427,7 +2003,10 @@ export function canPlaceCardOnField(card, destPlayer, options = {}) {
   };
 }
 
-function cardMatchesArchetype(card, archetype) {
+function cardMatchesArchetype(
+  card: GameCard,
+  archetype: string | null | undefined,
+): boolean {
   if (!archetype) return true;
   const archetypes = Array.isArray(card?.archetypes)
     ? card.archetypes
@@ -1437,7 +2016,10 @@ function cardMatchesArchetype(card, archetype) {
   return archetypes.includes(archetype);
 }
 
-function removeNamedBuffFromCard(card, sourceName) {
+function removeNamedBuffFromCard(
+  card: GameCard,
+  sourceName: string | null | undefined,
+): boolean {
   if (!card?.permanentBuffsBySource || !sourceName) return false;
 
   const buffData = card.permanentBuffsBySource[sourceName];
@@ -1454,9 +2036,14 @@ function removeNamedBuffFromCard(card, sourceName) {
   return true;
 }
 
-function getLeaveFieldBuffCleanupActions(card, fromZone) {
+function getLeaveFieldBuffCleanupActions(
+  card: GameCard,
+  fromZone: CanonicalZone,
+) {
   const effects = Array.isArray(card?.effects) ? card.effects : [];
-  const cleanupActions = [];
+  const cleanupActions: Array<
+    Extract<CardAction, { type: "remove_permanent_buff_named" }>
+  > = [];
 
   for (const effect of effects) {
     // Existing cards model "source left field" cleanup through card_to_grave.
@@ -1483,11 +2070,11 @@ function getLeaveFieldBuffCleanupActions(card, fromZone) {
 }
 
 function cleanupNamedBuffsWhenSourceLeavesField(
-  game,
-  card,
-  owner,
-  fromZone,
-  toZone,
+  game: MovementHost,
+  card: GameCard,
+  owner: GamePlayer,
+  fromZone: CanonicalZone,
+  toZone: CanonicalZone,
 ) {
   if (!FIELD_SOURCE_ZONES.has(fromZone) || fromZone === toZone) return;
   const cleanupActions = getLeaveFieldBuffCleanupActions(card, fromZone);
@@ -1498,7 +2085,7 @@ function cleanupNamedBuffsWhenSourceLeavesField(
   for (const action of cleanupActions) {
     const sourceName = action.sourceName || card.name;
     const targetRef = action.targetRef || "self";
-    let targetCards = [];
+    let targetCards: GameCard[] = [];
 
     if (targetRef === "self" && action.removeFromAllField) {
       targetCards = (owner.field || []).filter(
@@ -1520,7 +2107,12 @@ function cleanupNamedBuffsWhenSourceLeavesField(
   }
 }
 
-function cleanupLinkedPermanentBuffsWhenSourceLeavesField(game, card, fromZone, toZone) {
+function cleanupLinkedPermanentBuffsWhenSourceLeavesField(
+  game: MovementHost,
+  card: GameCard,
+  fromZone: CanonicalZone,
+  toZone: CanonicalZone,
+) {
   if (!FIELD_SOURCE_ZONES.has(fromZone) || fromZone === toZone) return;
   const sourceNames = Array.isArray(card?.linkedPermanentBuffSourceNames)
     ? card.linkedPermanentBuffSourceNames
@@ -1546,7 +2138,11 @@ function cleanupLinkedPermanentBuffsWhenSourceLeavesField(game, card, fromZone, 
   }
 }
 
-function cleanupDeclaredValuesWhenSourceLeavesActiveZone(card, fromZone, toZone) {
+function cleanupDeclaredValuesWhenSourceLeavesActiveZone(
+  card: GameCard,
+  fromZone: CanonicalZone,
+  toZone: CanonicalZone,
+) {
   if (!FIELD_SOURCE_ZONES.has(fromZone) || fromZone === toZone) return;
   if (card?.declaredValues && typeof card.declaredValues === "object") {
     delete card.declaredValues;
@@ -1555,13 +2151,19 @@ function cleanupDeclaredValuesWhenSourceLeavesActiveZone(card, fromZone, toZone)
 
 /**
  * Internal implementation of card movement with all side effects.
- * @param {Object} card - The card to move
- * @param {Object} destPlayer - Destination player
- * @param {string} toZone - Destination zone name
- * @param {Object} options - Options (fromZone, position, isFacedown, etc.)
- * @returns {Promise<Object>} Result of the move
+ * @param card - The card to move
+ * @param destPlayer - Destination player
+ * @param toZone - Destination zone name
+ * @param options - Options (fromZone, position, isFacedown, etc.)
+ * @returns Result of the move
  */
-export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
+export async function moveCardInternal(
+  this: MovementHost,
+  card: GameCard,
+  destPlayer: GamePlayer,
+  toZone: CanonicalZone,
+  options: MovementOptions = {},
+): Promise<MoveCardResult> {
   if (!card || !destPlayer || !toZone) {
     return { success: false, reason: "invalid_args" };
   }
@@ -1649,7 +2251,11 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
     }
   }
 
-  const initialLocation = findCardLocation(this, card, options.fromZone || null);
+  const initialLocation = findCardLocation(
+    this,
+    card,
+    isCanonicalZone(options.fromZone) ? options.fromZone : null,
+  );
   if (initialLocation) {
     let projectedToZone = toZone;
     if (
@@ -1691,7 +2297,7 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
     }
   }
 
-  const zones = [
+  const zones: readonly CanonicalZone[] = [
     "field",
     "hand",
     "deck",
@@ -1701,10 +2307,13 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
     "extraDeck",
     "banished",
   ];
-  let fromOwner = null;
-  let fromZone = null;
+  let fromOwner: GamePlayer | null = null;
+  let fromZone: MovementSourceZone | null = null;
 
-  const removeFromZone = (owner, zoneName) => {
+  const removeFromZone = (
+    owner: GamePlayer | null | undefined,
+    zoneName: CanonicalZone,
+  ) => {
     if (!owner) return false;
     if (zoneName === "fieldSpell") {
       if (owner.fieldSpell === card) {
@@ -1725,16 +2334,16 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
     return removed;
   };
 
-  const locateAndRemove = (preferredZone = null) => {
+  const locateAndRemove = (preferredZone: MovementSourceZone | null = null) => {
     const players = [this.player, this.bot];
-    const markFrom = (owner, zoneName) => {
+    const markFrom = (owner: GamePlayer, zoneName: MovementSourceZone) => {
       if (!fromOwner && !fromZone) {
         fromOwner = owner;
         fromZone = zoneName;
       }
     };
     let removedAny = false;
-    if (preferredZone) {
+    if (preferredZone && preferredZone !== "token") {
       for (const player of players) {
         if (removeFromZone(player, preferredZone)) {
           removedAny = true;
@@ -1756,6 +2365,9 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
   };
 
   locateAndRemove(options.fromZone || null);
+  // Assignments performed by locateAndRemove are intentionally observed after
+  // its exhaustive scan; keep the declared source-zone union at this boundary.
+  fromZone = retainLocatedSourceZone(fromZone);
 
   if (
     !fromZone &&
@@ -1780,7 +2392,11 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
     toZone !== "field" &&
     Array.isArray(this.temporaryControlEffects)
   ) {
-    const instanceId = card.instanceId ?? card._instanceId ?? card.uuid ?? null;
+    const instanceId =
+      card.instanceId ??
+      Reflect.get(card, "_instanceId") ??
+      Reflect.get(card, "uuid") ??
+      null;
     this.temporaryControlEffects = this.temporaryControlEffects.filter(
       (entry) => entry?.cardInstanceId !== instanceId,
     );
@@ -1788,6 +2404,7 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
 
   const restoreRemovedCardToSourceZone = () => {
     if (!fromOwner || !fromZone || !card) return;
+    if (fromZone === "token") return;
     if (fromZone === "fieldSpell") {
       if (!fromOwner.fieldSpell) {
         fromOwner.fieldSpell = card;
@@ -1804,7 +2421,7 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
   // card on the field has a `passive: { type: "send_to_grave_replacement" }`
   // matching this transfer, redirect the card to its owner's banished zone.
   // Tokens never get redirected — they leave play entirely (handled below).
-  let destArrRedirected = null;
+  let destArrRedirected: GameCard[] | null = null;
   if (
     toZone === "graveyard" &&
     !card.isToken &&
@@ -1849,13 +2466,15 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
   }
 
   if (toZone === "banished") {
-    const protection = banishProtectionAppliesToCard(
-      this,
-      card,
-      fromOwner,
-      fromZone,
-      options,
-    );
+    const protection = isCanonicalZone(fromZone)
+      ? banishProtectionAppliesToCard(
+          this,
+          card,
+          fromOwner,
+          fromZone,
+          options,
+        )
+      : null;
     if (protection) {
       restoreRemovedCardToSourceZone();
       this.ui?.log?.(
@@ -1903,7 +2522,10 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
     options,
   );
   const wasFaceupBeforeMove = card.isFacedown !== true;
-  let pendingAttachedEquipCleanup = [];
+  let pendingAttachedEquipCleanup: Array<{
+    equip: GameCard;
+    equipOwner: GamePlayer;
+  }> = [];
   const flushPendingAttachedEquipCleanup = async () => {
     if (pendingAttachedEquipCleanup.length === 0) return;
     const pending = pendingAttachedEquipCleanup;
@@ -1919,11 +2541,11 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
           });
         }
       } finally {
-        if (equip.lastEquippedCardLeftField === card) {
-          delete equip.lastEquippedCardLeftField;
+        if (Reflect.get(equip, "lastEquippedCardLeftField") === card) {
+          Reflect.deleteProperty(equip, "lastEquippedCardLeftField");
         }
-        if (equip.lastEquippedCardLeftFieldCause !== undefined) {
-          delete equip.lastEquippedCardLeftFieldCause;
+        if (Reflect.get(equip, "lastEquippedCardLeftFieldCause") !== undefined) {
+          Reflect.deleteProperty(equip, "lastEquippedCardLeftFieldCause");
         }
       }
     }
@@ -1971,15 +2593,22 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
     card.cardKind === "monster" &&
     card.effectsNegated === true;
 
-  cleanupNamedBuffsWhenSourceLeavesField(
-    this,
-    card,
-    fromOwner,
-    fromZone,
-    toZone,
-  );
-  cleanupLinkedPermanentBuffsWhenSourceLeavesField(this, card, fromZone, toZone);
-  cleanupDeclaredValuesWhenSourceLeavesActiveZone(card, fromZone, toZone);
+  if (isCanonicalZone(fromZone)) {
+    cleanupNamedBuffsWhenSourceLeavesField(
+      this,
+      card,
+      fromOwner,
+      fromZone,
+      toZone,
+    );
+    cleanupLinkedPermanentBuffsWhenSourceLeavesField(
+      this,
+      card,
+      fromZone,
+      toZone,
+    );
+    cleanupDeclaredValuesWhenSourceLeavesActiveZone(card, fromZone, toZone);
+  }
 
   const activeZones = ["field", "spellTrap", "fieldSpell"];
   if (
@@ -2163,7 +2792,11 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
     const hasDestroyOnLeaveEffect = (card.effects || []).some(
       (e) => e && e.timing === "passive" && e.id && e.id.includes("destroy_on_leave")
     );
-    if ((card.destroyEquippedOnLeave || hasDestroyOnLeaveEffect) && host) {
+    if (
+      (Reflect.get(card, "destroyEquippedOnLeave") === true ||
+        hasDestroyOnLeaveEffect) &&
+      host
+    ) {
       const hostOwner = host.owner === "player" ? this.player : this.bot;
       this.destroyCard(host, {
         cause: "effect",
@@ -2183,7 +2816,10 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
   if (
     fromZone === "spellTrap" &&
     toZone !== "spellTrap" &&
-    (card?.state?.blueprintStorage || card?.blueprintStorage)
+    ((typeof Reflect.get(card, "state") === "object" &&
+      Reflect.get(card, "state") !== null &&
+      Reflect.get(Reflect.get(card, "state"), "blueprintStorage")) ||
+      card?.blueprintStorage)
   ) {
     this.effectEngine?.clearBlueprintStorage?.(card);
   }
@@ -2285,9 +2921,12 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
         if (idx > -1) card.equips.splice(idx, 1);
       }
 
-      equip.lastEquippedCardLeftField = card;
-      equip.lastEquippedCardLeftFieldCause =
-        options.destroyCause || options.reason || null;
+      Reflect.set(equip, "lastEquippedCardLeftField", card);
+      Reflect.set(
+        equip,
+        "lastEquippedCardLeftFieldCause",
+        options.destroyCause || options.reason || null,
+      );
 
       // Clear active equip references AFTER removing bonuses. The transient
       // reference above remains available to card_to_grave triggers.
@@ -2425,16 +3064,16 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
     return { success: false, reason: "invalid_card_kind_final_check" };
   }
 
-  let summonAttemptResult = null;
+  let summonAttemptResult: SummonAttemptResult | null = null;
   let summonNegated = false;
-  let summonOrigin = null;
+  let summonOrigin: SummonOrigin | null = null;
   if (
     toZone === "field" &&
     card.cardKind === "monster" &&
     fromZone !== "field" &&
     options.skipSummonAttempt !== true
   ) {
-    summonOrigin = options.summonOrigin;
+    summonOrigin = options.summonOrigin || null;
     if (
       summonOrigin === SUMMON_ORIGINS.PROCEDURE &&
       options.summonMode !== SUMMON_MODES.SET &&
@@ -2532,8 +3171,8 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
 
   queueZoneMoveAnimation(this, cardAnimationIntent, toZone);
 
-  let afterSummonResult = null;
-  let cardToGraveResult = null;
+  let afterSummonResult: MovementEventResult | null = null;
+  let cardToGraveResult: MovementEventResult | null = null;
 
   if (
     toZone === "field" &&
@@ -2608,7 +3247,10 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
           summonProcedure: options.summonProcedure || null,
         },
       );
-    if (followupResult?.needsSelection) {
+    if (
+      isMovementEventResult(followupResult) &&
+      followupResult.needsSelection
+    ) {
       afterSummonResult = followupResult;
     } else {
       await presentSummonBeforeAfterSummon(this, options);
@@ -2647,7 +3289,10 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
         toZone,
         summonId: summonAttemptResult?.transaction?.summonId ?? null,
       };
-      if (summonAttemptResult?.ownsTransaction) {
+      if (
+        summonAttemptResult?.ownsTransaction &&
+        summonAttemptResult.transaction
+      ) {
         this.finishSummonTransaction?.(
           summonAttemptResult.transaction,
           sameZoneResult,
@@ -2678,8 +3323,11 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
           deferCardToGraveTriggers) &&
         typeof this.waitForPresentationDelay === "function"
       ) {
-        const delayMs = Number.isFinite(options.graveyardPresentationDelayMs)
-          ? options.graveyardPresentationDelayMs
+        const configuredDelayMs = options.graveyardPresentationDelayMs;
+        const delayMs =
+          typeof configuredDelayMs === "number" &&
+          Number.isFinite(configuredDelayMs)
+          ? configuredDelayMs
           : 160;
         await this.waitForPresentationDelay(delayMs);
       }
@@ -2764,7 +3412,7 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
     this.effectEngine.clearTargetingCache();
   }
 
-  const result = {
+  const result: MoveCardResult = {
     success: !summonNegated,
     summonNegated,
     reason: summonNegated ? "summon_negated" : null,
@@ -2790,7 +3438,10 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
       ? cardToGraveResult.entries
       : [];
   }
-  if (summonAttemptResult?.ownsTransaction) {
+  if (
+    summonAttemptResult?.ownsTransaction &&
+    summonAttemptResult.transaction
+  ) {
     this.finishSummonTransaction?.(summonAttemptResult.transaction, result);
   }
   return result;

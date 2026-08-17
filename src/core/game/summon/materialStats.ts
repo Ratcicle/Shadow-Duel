@@ -16,7 +16,33 @@
  *  - recordMaterialDestroyedOpponentMonster
  */
 
-export function resetMaterialDuelStats(reason = "reset") {
+import type { GameCard } from "../../contracts/cards.js";
+import type { GameCoreHost } from "../../contracts/gameRuntime.js";
+import type { GamePlayer } from "../../contracts/player.js";
+import type { PlayerId } from "../../contracts/primitives.js";
+
+type MaterialStatMapName =
+  | "destroyedOpponentMonstersByMaterialId"
+  | "effectActivationsByMaterialId";
+
+interface MaterialStatMeta {
+  contextLabel?: string;
+}
+
+type MaterialStatsForPlayer = Record<MaterialStatMapName, Map<number, number>>;
+
+interface MaterialStatsHost extends GameCoreHost {
+  materialDuelStats: Record<PlayerId, MaterialStatsForPlayer>;
+  devLog(code: string, detail?: unknown): void;
+  incrementMaterialStat(
+    playerId: PlayerId,
+    mapName: MaterialStatMapName,
+    materialCardId: number,
+    delta?: number,
+  ): void;
+}
+
+export function resetMaterialDuelStats(this: MaterialStatsHost, reason = "reset") {
   this.materialDuelStats = {
     player: {
       destroyedOpponentMonstersByMaterialId: new Map(),
@@ -30,7 +56,13 @@ export function resetMaterialDuelStats(reason = "reset") {
   this.devLog("MATERIAL_STATS_RESET", { summary: reason });
 }
 
-export function incrementMaterialStat(playerId, mapName, materialCardId, delta = 1) {
+export function incrementMaterialStat(
+  this: MaterialStatsHost,
+  playerId: PlayerId,
+  mapName: MaterialStatMapName,
+  materialCardId: number,
+  delta = 1,
+) {
   const store = this.materialDuelStats?.[playerId]?.[mapName];
   if (!store || !(store instanceof Map) || !Number.isFinite(materialCardId)) {
     return;
@@ -39,8 +71,13 @@ export function incrementMaterialStat(playerId, mapName, materialCardId, delta =
   store.set(materialCardId, next);
 }
 
-export function recordMaterialEffectActivation(player, sourceCard, meta = {}) {
-  const playerId = player?.id || player;
+export function recordMaterialEffectActivation(
+  this: MaterialStatsHost,
+  player: GamePlayer | PlayerId,
+  sourceCard: GameCard | null | undefined,
+  meta: MaterialStatMeta = {},
+) {
+  const playerId = typeof player === "string" ? player : player.id;
   if (playerId !== "player" && playerId !== "bot") return;
   if (!sourceCard || sourceCard.cardKind !== "monster") return;
   if (typeof sourceCard.id !== "number") return;
@@ -59,7 +96,11 @@ export function recordMaterialEffectActivation(player, sourceCard, meta = {}) {
   });
 }
 
-export function recordMaterialDestroyedOpponentMonster(sourceCard, destroyedCard) {
+export function recordMaterialDestroyedOpponentMonster(
+  this: MaterialStatsHost,
+  sourceCard: GameCard | null | undefined,
+  destroyedCard: GameCard | null | undefined,
+) {
   if (!sourceCard || !destroyedCard) return;
   if (sourceCard.cardKind !== "monster") return;
   if (destroyedCard.cardKind !== "monster") return;

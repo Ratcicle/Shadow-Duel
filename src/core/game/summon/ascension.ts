@@ -14,6 +14,147 @@
  */
 
 import { SUMMON_MODES, SUMMON_ORIGINS } from "./transaction.js";
+import type {
+  AscensionDefinition,
+  AscensionMaterialRecord,
+  AscensionRequirement,
+  BattlePosition,
+  BattlePositionInput,
+  GameCard,
+} from "../../contracts/cards.js";
+import type { CardFilter } from "../../contracts/effects.js";
+import type {
+  MaterialDuelStats,
+  MaybePromise,
+  MoveCardOptions,
+  MoveCardResult,
+  PreparedSummon,
+  PreparedSummonInput,
+  SummonExecutionResult,
+  SummonTransaction,
+} from "../../contracts/gameRuntime.js";
+import type { GamePlayer } from "../../contracts/player.js";
+import type {
+  RawSelectionCandidate,
+  RawSelectionContract,
+  RawSelectionRequirement,
+  SelectionCardReference,
+  SelectionCandidate,
+  SelectionResult,
+  SelectionSessionInput,
+} from "../../contracts/selection.js";
+import type { CanonicalZone } from "../../contracts/zones.js";
+
+type RuntimeAscensionDefinition = AscensionDefinition & {
+  readonly material?: CardFilter;
+};
+
+interface AscensionEffectEnginePort {
+  cardMatchesFilters?(card: GameCard, filters: CardFilter): boolean;
+  chooseSpecialSummonPosition?(
+    card: GameCard,
+    player: GamePlayer,
+    options: { position: BattlePositionInput },
+  ): Promise<BattlePosition>;
+}
+
+type AscensionCheckResult =
+  | { ok: true }
+  | { ok: false; reason: string };
+
+interface AscensionGuardResult {
+  ok: boolean;
+  success?: boolean;
+  reason?: string;
+  code?: string;
+}
+
+interface AscensionAttemptResult extends SummonExecutionResult {
+  ok?: boolean;
+}
+
+interface PerformAscensionOptions {
+  position?: BattlePositionInput;
+}
+
+interface TryAscensionOptions {
+  player?: GamePlayer;
+  owner?: GamePlayer;
+}
+
+interface AscensionSelectionSessionInput
+  extends Omit<SelectionSessionInput, "execute"> {
+  execute?: (
+    selections: SelectionResult,
+  ) => MaybePromise<AscensionAttemptResult>;
+}
+
+interface AscensionHost {
+  player: GamePlayer;
+  bot: GamePlayer;
+  turnCounter: number;
+  materialDuelStats: MaterialDuelStats;
+  effectEngine: AscensionEffectEnginePort;
+  ui: { log(message: string): void };
+  devLog(code: string, detail?: unknown): void;
+  getOpponent?(player: GamePlayer): GamePlayer | null;
+  getMaterialFieldAgeTurnCounter(card: GameCard): number;
+  getAscensionCandidatesForMaterial(
+    player: GamePlayer,
+    materialCard: GameCard,
+  ): GameCard[];
+  checkAscensionRequirements(
+    player: GamePlayer,
+    ascensionCard: GameCard,
+    materialCard?: GameCard | null,
+  ): AscensionCheckResult;
+  canUseAsAscensionMaterial(
+    player: GamePlayer,
+    materialCard: GameCard,
+  ): AscensionCheckResult;
+  performAscensionSummon(
+    player: GamePlayer,
+    materialCard: GameCard,
+    ascensionCard: GameCard,
+    options?: PerformAscensionOptions,
+  ): Promise<AscensionAttemptResult>;
+  guardActionStart(input: {
+    actor: GamePlayer;
+    kind: "ascension_summon";
+    phaseReq: readonly ("main1" | "main2")[];
+  }): AscensionGuardResult;
+  createPreparedSummon(input: PreparedSummonInput): PreparedSummon;
+  executeSummonTransaction(input: PreparedSummon): Promise<SummonExecutionResult>;
+  moveCard(
+    card: GameCard,
+    player: GamePlayer,
+    zone: "field",
+    options: MoveCardOptions,
+  ): MaybePromise<MoveCardResult | SummonExecutionResult>;
+  buildSelectionCandidateKey(
+    candidate: RawSelectionCandidate,
+    index: number,
+  ): SelectionCandidate["key"];
+  startTargetSelectionSession(
+    input: SelectionSessionInput | AscensionSelectionSessionInput,
+  ): unknown;
+  updateBoard(): MaybePromise<unknown>;
+}
+
+function runtimeAscensionDefinition(
+  card: GameCard | null | undefined,
+): RuntimeAscensionDefinition | null {
+  return card?.ascension
+    ? (card.ascension as AscensionDefinition & RuntimeAscensionDefinition)
+    : null;
+}
+
+function setAscensionMaterials(
+  card: GameCard,
+  materials: AscensionMaterialRecord[],
+): void {
+  card.ascensionMaterials = materials;
+}
 
 /**
  * Gets the turn counter when a material became face-up on the field.
@@ -22,10 +163,13 @@ import { SUMMON_MODES, SUMMON_ORIGINS } from "./transaction.js";
  * RULE: Facedown (set) monsters do NOT count turns for Ascension.
  * Only face-up monsters count — whether summoned face-up or flipped/revealed.
  *
- * @param {Object} card - The material card
+ * @param card - The material card
  * @returns {number} The turn counter when card became face-up on field
  */
-export function getMaterialFieldAgeTurnCounter(card) {
+export function getMaterialFieldAgeTurnCounter(
+  this: AscensionHost,
+  card: GameCard | null | undefined,
+) {
   if (!card) return this.turnCounter;
 
   // If card is currently facedown, it cannot be used as Ascension material anyway
@@ -42,18 +186,25 @@ export function getMaterialFieldAgeTurnCounter(card) {
   // If monster was set then flipped, use revealedTurn
   // If monster was summoned face-up, use summonedTurn
   // Use the most recent relevant event
-  const values = [revealed, summoned].filter((v) => Number.isFinite(v));
+  const values = [revealed, summoned].filter(
+    (value): value is number =>
+      typeof value === "number" && Number.isFinite(value),
+  );
   if (values.length === 0) return this.turnCounter;
   return Math.max(...values);
 }
 
-function getCardArchetypes(card) {
+function getCardArchetypes(card: GameCard | null | undefined): string[] {
   if (!card) return [];
   if (Array.isArray(card.archetypes)) return card.archetypes;
   return card.archetype ? [card.archetype] : [];
 }
 
-function matchesAscensionMaterialFilters(materialCard, filters = {}, engine = null) {
+function matchesAscensionMaterialFilters(
+  materialCard: GameCard | null | undefined,
+  filters: CardFilter = {},
+  engine: AscensionEffectEnginePort | null = null,
+) {
   if (!materialCard || !filters || typeof filters !== "object") return false;
 
   if (
@@ -75,10 +226,20 @@ function matchesAscensionMaterialFilters(materialCard, filters = {}, engine = nu
   if (filters.attribute && materialCard.attribute !== filters.attribute) {
     return false;
   }
-  if (Number.isFinite(filters.minLevel) && (materialCard.level || 0) < filters.minLevel) {
+  const minLevel = filters.minLevel;
+  if (
+    typeof minLevel === "number" &&
+    Number.isFinite(minLevel) &&
+    (materialCard.level || 0) < minLevel
+  ) {
     return false;
   }
-  if (Number.isFinite(filters.maxLevel) && (materialCard.level || 0) > filters.maxLevel) {
+  const maxLevel = filters.maxLevel;
+  if (
+    typeof maxLevel === "number" &&
+    Number.isFinite(maxLevel) &&
+    (materialCard.level || 0) > maxLevel
+  ) {
     return false;
   }
   if (filters.name && materialCard.name !== filters.name) {
@@ -87,8 +248,12 @@ function matchesAscensionMaterialFilters(materialCard, filters = {}, engine = nu
   return true;
 }
 
-export function ascensionMaterialMatches(ascensionCard, materialCard, engine = null) {
-  const asc = ascensionCard?.ascension;
+export function ascensionMaterialMatches(
+  ascensionCard: GameCard | null | undefined,
+  materialCard: GameCard | null | undefined,
+  engine: AscensionEffectEnginePort | null = null,
+) {
+  const asc = runtimeAscensionDefinition(ascensionCard);
   if (!asc || !materialCard) return false;
 
   if (typeof asc.materialId === "number" && materialCard.id === asc.materialId) {
@@ -100,17 +265,31 @@ export function ascensionMaterialMatches(ascensionCard, materialCard, engine = n
   return matchesAscensionMaterialFilters(materialCard, filters, engine);
 }
 
-function getRequirementMaterialId(asc, materialCard) {
+function getRequirementMaterialId(
+  asc: AscensionDefinition,
+  materialCard: GameCard | null,
+) {
   if (materialCard && typeof materialCard.id === "number") return materialCard.id;
   if (typeof asc?.materialId === "number") return asc.materialId;
   return null;
 }
 
-function getCardInstanceId(card) {
-  return card?.instanceId ?? card?._instanceId ?? card?.uuid ?? card?.simInstanceId ?? null;
+function getCardInstanceId(card: GameCard | null | undefined) {
+  if (!card) return null;
+  return (
+    card.instanceId ??
+    Reflect.get(card, "_instanceId") ??
+    Reflect.get(card, "uuid") ??
+    Reflect.get(card, "simInstanceId") ??
+    null
+  );
 }
 
-function captureAscensionMaterialMetadata(materialCard, player, game) {
+function captureAscensionMaterialMetadata(
+  materialCard: GameCard | null | undefined,
+  player: GamePlayer,
+  game: AscensionHost,
+): AscensionMaterialRecord | null {
   if (!materialCard) return null;
   return {
     instanceId: getCardInstanceId(materialCard),
@@ -124,7 +303,40 @@ function captureAscensionMaterialMetadata(materialCard, player, game) {
   };
 }
 
-function countAscensionFieldCounters(game, player, req = {}) {
+function getAscensionZoneCards(
+  player: GamePlayer,
+  zone: CanonicalZone,
+): GameCard[] {
+  if (zone === "fieldSpell") {
+    return player.fieldSpell ? [player.fieldSpell] : [];
+  }
+  switch (zone) {
+    case "deck":
+      return player.deck;
+    case "hand":
+      return player.hand;
+    case "field":
+      return player.field;
+    case "graveyard":
+      return player.graveyard;
+    case "spellTrap":
+      return player.spellTrap;
+    case "extraDeck":
+      return player.extraDeck;
+    case "banished":
+      return player.banished;
+  }
+}
+
+function isGamePlayer(value: GamePlayer | null): value is GamePlayer {
+  return value !== null;
+}
+
+function countAscensionFieldCounters(
+  game: AscensionHost,
+  player: GamePlayer,
+  req: AscensionRequirement = {} as AscensionRequirement,
+) {
   const counterType = req.counterType || "default";
   const ownerRule = req.owner || "self";
   const opponent = game?.getOpponent?.(player) || null;
@@ -142,14 +354,9 @@ function countAscensionFieldCounters(game, player, req = {}) {
   const requireFaceup = req.requireFaceup === true;
   let count = 0;
 
-  for (const owner of owners.filter(Boolean)) {
+  for (const owner of owners.filter(isGamePlayer)) {
     for (const zoneKey of zones) {
-      const cards =
-        zoneKey === "fieldSpell"
-          ? owner.fieldSpell
-            ? [owner.fieldSpell]
-            : []
-          : owner[zoneKey] || [];
+      const cards = getAscensionZoneCards(owner, zoneKey);
       for (const card of cards) {
         if (!card) continue;
         if (requireFaceup && card.isFacedown) continue;
@@ -173,16 +380,20 @@ function countAscensionFieldCounters(game, player, req = {}) {
 
 /**
  * Gets Ascension monsters that can be summoned using a specific material.
- * @param {Object} player - The player
- * @param {Object} materialCard - The potential material card
- * @returns {Object[]} Array of Ascension monster candidates
+ * @param player - The player
+ * @param materialCard - The potential material card
+ * @returns Array of Ascension monster candidates
  */
-export function getAscensionCandidatesForMaterial(player, materialCard) {
+export function getAscensionCandidatesForMaterial(
+  this: AscensionHost,
+  player: GamePlayer | null | undefined,
+  materialCard: GameCard | null | undefined,
+): GameCard[] {
   if (!player || !materialCard) return [];
   if (!Array.isArray(player.extraDeck)) return [];
 
   const candidates = player.extraDeck.filter((card) => {
-    const asc = card?.ascension;
+    const asc = runtimeAscensionDefinition(card);
     if (!card || card.cardKind !== "monster") return false;
     if (card.monsterType !== "ascension") return false;
     if (!asc || typeof asc !== "object") return false;
@@ -196,8 +407,11 @@ export function getAscensionCandidatesForMaterial(player, materialCard) {
     candidates: candidates.map((c) => ({
       name: c.name,
       id: c.id,
-      requiredMaterial: c.ascension?.materialId,
-      materialFilters: c.ascension?.materialFilters || c.ascension?.material || null,
+      requiredMaterial: runtimeAscensionDefinition(c)?.materialId,
+      materialFilters:
+        runtimeAscensionDefinition(c)?.materialFilters ||
+        runtimeAscensionDefinition(c)?.material ||
+        null,
     })),
   });
 
@@ -206,13 +420,18 @@ export function getAscensionCandidatesForMaterial(player, materialCard) {
 
 /**
  * Checks if Ascension requirements are met for a specific Ascension monster.
- * @param {Object} player - The player attempting the summon
- * @param {Object} ascensionCard - The Ascension monster to check
- * @param {Object|null} materialCard - The selected material, when relevant
+ * @param player - The player attempting the summon
+ * @param ascensionCard - The Ascension monster to check
+ * @param materialCard - The selected material, when relevant
  * @returns {{ ok: boolean, reason?: string }}
  */
-export function checkAscensionRequirements(player, ascensionCard, materialCard = null) {
-  const asc = ascensionCard?.ascension;
+export function checkAscensionRequirements(
+  this: AscensionHost,
+  player: GamePlayer | null | undefined,
+  ascensionCard: GameCard | null | undefined,
+  materialCard: GameCard | null = null,
+): AscensionCheckResult {
+  const asc = runtimeAscensionDefinition(ascensionCard);
   if (!player || !ascensionCard || !asc) {
     return { ok: false, reason: "Invalid ascension card." };
   }
@@ -362,11 +581,15 @@ export function checkAscensionRequirements(player, ascensionCard, materialCard =
 
 /**
  * Checks if a card can be used as Ascension material.
- * @param {Object} player - The player
- * @param {Object} materialCard - The potential material card
+ * @param player - The player
+ * @param materialCard - The potential material card
  * @returns {{ ok: boolean, reason?: string }}
  */
-export function canUseAsAscensionMaterial(player, materialCard) {
+export function canUseAsAscensionMaterial(
+  this: AscensionHost,
+  player: GamePlayer | null | undefined,
+  materialCard: GameCard | null | undefined,
+): AscensionCheckResult {
   if (!player || !materialCard) {
     return { ok: false, reason: "Missing material." };
   }
@@ -393,17 +616,18 @@ export function canUseAsAscensionMaterial(player, materialCard) {
 
 /**
  * Performs the actual Ascension Summon.
- * @param {Object} player - The player performing the summon
- * @param {Object} materialCard - The material being used
- * @param {Object} ascensionCard - The Ascension monster to summon
- * @returns {Promise<{ success: boolean, needsSelection?: boolean, selectionContract?: Object, reason?: string }>}
+ * @param player - The player performing the summon
+ * @param materialCard - The material being used
+ * @param ascensionCard - The Ascension monster to summon
+ * @returns The Ascension Summon result
  */
 export async function performAscensionSummon(
-  player,
-  materialCard,
-  ascensionCard,
-  options = {}
-) {
+  this: AscensionHost,
+  player: GamePlayer | null | undefined,
+  materialCard: GameCard | null | undefined,
+  ascensionCard: GameCard | null | undefined,
+  options: PerformAscensionOptions = {},
+): Promise<AscensionAttemptResult> {
   const game = this;
   if (!player || !materialCard || !ascensionCard) {
     return {
@@ -439,7 +663,8 @@ export async function performAscensionSummon(
     };
   }
 
-  const positionPref = options.position || ascensionCard.ascension?.position || "choice";
+  const positionPref =
+    options.position || runtimeAscensionDefinition(ascensionCard)?.position || "choice";
   const resolvedPosition =
     positionPref === "choice" &&
     typeof this.effectEngine?.chooseSpecialSummonPosition === "function"
@@ -456,7 +681,7 @@ export async function performAscensionSummon(
     player,
     this,
   );
-  ascensionCard.ascensionMaterials = [];
+  setAscensionMaterials(ascensionCard, []);
 
   const prepared = this.createPreparedSummon({
     card: ascensionCard,
@@ -482,7 +707,7 @@ export async function performAscensionSummon(
         },
       },
     ],
-    perform: async (transaction) => {
+    perform: async (transaction: SummonTransaction) => {
       const summonResult = await this.moveCard(ascensionCard, player, "field", {
         fromZone: "extraDeck",
         position: resolvedPosition,
@@ -496,9 +721,10 @@ export async function performAscensionSummon(
         awaitCardMovedEvent: true,
       });
       if (summonResult?.success !== false) {
-        ascensionCard.ascensionMaterials = materialMetadata
-          ? [materialMetadata]
-          : [];
+        setAscensionMaterials(
+          ascensionCard,
+          materialMetadata ? [materialMetadata] : [],
+        );
       }
       return summonResult;
     },
@@ -528,11 +754,15 @@ export async function performAscensionSummon(
 /**
  * Attempts to perform an Ascension Summon with the given material.
  * Handles candidate selection if multiple Ascension monsters are available.
- * @param {Object} materialCard - The material card to use
- * @param {Object} options - Options (reserved for future use)
+ * @param materialCard - The material card to use
+ * @param options - Options (reserved for future use)
  * @returns {Promise<{ success: boolean, reason?: string }>}
  */
-export async function tryAscensionSummon(materialCard, options = {}) {
+export async function tryAscensionSummon(
+  this: AscensionHost,
+  materialCard: GameCard,
+  options: TryAscensionOptions = {},
+): Promise<AscensionAttemptResult | AscensionGuardResult> {
   const player = options.player || options.owner || this.player;
   const guard = this.guardActionStart({
     actor: player,
@@ -584,8 +814,8 @@ export async function tryAscensionSummon(materialCard, options = {}) {
     return { success: false, reason };
   }
 
-  const eligible = [];
-  let lastFailure = null;
+  const eligible: GameCard[] = [];
+  let lastFailure: string | null = null;
   for (const asc of allAscensions) {
     const req = this.checkAscensionRequirements(player, asc, materialCard);
     if (req.ok) {
@@ -605,14 +835,14 @@ export async function tryAscensionSummon(materialCard, options = {}) {
     return await this.performAscensionSummon(player, materialCard, eligible[0]);
   }
 
-  const candidates = eligible
-    .map((card) => {
+  const rawCandidates: Array<RawSelectionCandidate & { cardRef: GameCard }> =
+    eligible.map((card) => {
       const zoneIndex = player.extraDeck.indexOf(card);
       return {
         name: card.name,
-        owner: player.id === "player" ? "player" : "opponent",
+        owner: player.id === "player" ? ("player" as const) : ("opponent" as const),
         controller: player.id,
-        zone: "extraDeck",
+        zone: "extraDeck" as const,
         zoneIndex,
         atk: card.atk || 0,
         def: card.def || 0,
@@ -620,15 +850,16 @@ export async function tryAscensionSummon(materialCard, options = {}) {
         cardKind: card.cardKind,
         cardRef: card,
       };
-    })
-    .map((cand, idx) => ({
+    });
+  const candidates: Array<SelectionCandidate & { cardRef: GameCard }> =
+    rawCandidates.map((cand, idx) => ({
       ...cand,
       key: this.buildSelectionCandidateKey(cand, idx),
     }));
 
-  return new Promise((resolve) => {
+  return new Promise<AscensionAttemptResult>((resolve) => {
     const requirementId = "ascension_choice";
-    const requirement = {
+    const requirement: RawSelectionRequirement = {
       id: requirementId,
       min: 1,
       max: 1,
@@ -639,7 +870,7 @@ export async function tryAscensionSummon(materialCard, options = {}) {
       distinct: true,
       candidates,
     };
-    const selectionContract = {
+    const selectionContract: RawSelectionContract = {
       kind: "choice",
       message: "Select an Ascension Monster to Summon.",
       requirements: [requirement],
@@ -647,7 +878,7 @@ export async function tryAscensionSummon(materialCard, options = {}) {
       metadata: { context: "ascension_choice" },
     };
 
-    this.startTargetSelectionSession({
+    const session: AscensionSelectionSessionInput = {
       kind: "ascension",
       selectionContract,
       onCancel: () =>
@@ -671,6 +902,7 @@ export async function tryAscensionSummon(materialCard, options = {}) {
         resolve(res);
         return res;
       },
-    });
+    };
+    this.startTargetSelectionSession(session);
   });
 }

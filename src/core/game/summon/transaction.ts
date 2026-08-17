@@ -8,7 +8,31 @@ import {
   hasChainSourceMovementCapability,
   hasChainTurnPlayerCapability,
 } from "../../contracts/chainRuntime.js";
+import type {
+  ChainCard,
+  ChainPlayer,
+} from "../../contracts/chainRuntime.js";
 import { SUMMON_ORIGINS } from "../../contracts/summon.js";
+import type { GameCard } from "../../contracts/cards.js";
+import type {
+  GameSummonHost,
+  MoveCardResult,
+  PreparedSummon,
+  PreparedSummonInput,
+  SummonCardIdentitySnapshot,
+  SummonCostSnapshot,
+  SummonCostPayment,
+  SummonExecutionResult,
+  SummonState,
+  SummonStatus,
+  SummonTransaction,
+  SummonTransactionSnapshot,
+} from "../../contracts/gameRuntime.js";
+import type { GamePlayer } from "../../contracts/player.js";
+import type { SummonId } from "../../contracts/primitives.js";
+import type { SummonOrigin } from "../../contracts/summon.js";
+import type { CanonicalZone } from "../../contracts/zones.js";
+import { isCanonicalZone } from "../../contracts/zones.js";
 import {
   checkSpecialSummonEligibility,
   establishProperSummon,
@@ -31,18 +55,116 @@ export const SUMMON_STATUSES = Object.freeze({
   CANCELLED: "cancelled",
 });
 
-const TERMINAL_STATUSES = new Set([
+const TERMINAL_STATUSES = new Set<SummonStatus>([
   SUMMON_STATUSES.SUCCEEDED,
   SUMMON_STATUSES.NEGATED,
   SUMMON_STATUSES.FAILED,
   SUMMON_STATUSES.CANCELLED,
 ]);
 
-function playerId(player) {
+interface SummonTransactionHost extends GameSummonHost {
+  getOpponent?(player: GamePlayer | null): GamePlayer | null;
+  notify?(eventName: string, payload?: unknown): void;
+  emit?(eventName: string, payload: unknown): Promise<unknown>;
+  flushPendingTriggerOccurrences?(options?: {
+    reason?: string;
+  }): Promise<{
+    ok?: boolean;
+    chainBuilt?: boolean;
+    needsSelection?: boolean;
+    selectionContract?: unknown;
+    reason?: string | null;
+  }>;
+  moveCard(
+    card: GameCard,
+    player: GamePlayer,
+    zone: CanonicalZone,
+    options?: Parameters<NonNullable<GameSummonHost["moveCard"]>>[3],
+  ): ReturnType<NonNullable<GameSummonHost["moveCard"]>>;
+  createPreparedSummon(input?: PreparedSummonInput): PreparedSummon;
+  beginSummonTransaction(input?: PreparedSummonInput | PreparedSummon):
+    | { ok: false; reason: string; code?: string }
+    | { ok: true; transaction: SummonTransaction };
+  finishSummonTransaction(
+    transaction: SummonTransaction,
+    result?: SummonExecutionResult,
+  ): SummonTransactionSnapshot | null;
+}
+
+function isPresent<Value>(value: Value | null): value is Value {
+  return value !== null;
+}
+
+function isPreparedSummon(
+  value: PreparedSummonInput | PreparedSummon,
+): value is PreparedSummon {
+  return Reflect.get(value, "status") === SUMMON_STATUSES.PREPARED;
+}
+
+function isSummonTransaction(
+  value: PreparedSummon | SummonTransaction,
+): value is SummonTransaction {
+  return (
+    Reflect.get(value, "status") !== SUMMON_STATUSES.PREPARED &&
+    Number.isInteger(Reflect.get(value, "summonId"))
+  );
+}
+
+function resultFailed(
+  result: SummonExecutionResult | MoveCardResult | boolean | null | undefined,
+): boolean {
+  return (
+    result === false ||
+    (typeof result === "object" &&
+      result !== null &&
+      result.success === false)
+  );
+}
+
+function resultReason(
+  result: SummonExecutionResult | MoveCardResult | boolean | null | undefined,
+): string | null {
+  return typeof result === "object" && result !== null
+    ? result.reason || null
+    : null;
+}
+
+function errorMessage(error: unknown): string {
+  if (
+    (typeof error === "object" && error !== null) ||
+    typeof error === "function"
+  ) {
+    const message = Reflect.get(error, "message");
+    if (message) return message as string;
+  }
+  return "summon_transaction_failed";
+}
+
+function isSummonOrigin(value: unknown): value is SummonOrigin {
+  return Object.values(SUMMON_ORIGINS).some((origin) => origin === value);
+}
+
+function playerId(player: GamePlayer | null | undefined): string | null {
   return player?.id ?? null;
 }
 
-function cardIdentity(card) {
+/** Chain owns a narrower view of the same live Card and Player instances. */
+function toChainCard(card: GameCard): ChainCard {
+  return card as GameCard & ChainCard;
+}
+
+function toChainPlayer(player: GamePlayer | null): ChainPlayer | null {
+  return player as (GamePlayer & ChainPlayer) | null;
+}
+
+function cardIdentity(card: GameCard): SummonCardIdentitySnapshot;
+function cardIdentity(card: null | undefined): null;
+function cardIdentity(
+  card: GameCard | null | undefined,
+): SummonCardIdentitySnapshot | null;
+function cardIdentity(
+  card: GameCard | null | undefined,
+): SummonCardIdentitySnapshot | null {
   if (!card) return null;
   return {
     cardId: card.id ?? null,
@@ -51,7 +173,9 @@ function cardIdentity(card) {
   };
 }
 
-function serializeCost(cost) {
+function serializeCost(
+  cost: SummonCostPayment | null | undefined,
+): SummonCostSnapshot | null {
   if (!cost) return null;
   return {
     ...cardIdentity(cost.card),
@@ -63,7 +187,9 @@ function serializeCost(cost) {
   };
 }
 
-export function serializeSummonTransaction(transaction) {
+export function serializeSummonTransaction(
+  transaction: PreparedSummon | SummonTransaction | null | undefined,
+): SummonTransactionSnapshot | null {
   if (!transaction) return null;
   return {
     summonId: transaction.summonId ?? null,
@@ -81,7 +207,9 @@ export function serializeSummonTransaction(transaction) {
     position: transaction.position || null,
     consumesNormalSummon: transaction.consumesNormalSummon === true,
     normalSummonCommitted: transaction.normalSummonCommitted === true,
-    costs: (transaction.costPayments || []).map(serializeCost).filter(Boolean),
+    costs: (transaction.costPayments || [])
+      .map(serializeCost)
+      .filter(isPresent),
     negationOutcome: transaction.negationOutcome
       ? {
           destination: transaction.negationOutcome.destination || "graveyard",
@@ -97,7 +225,10 @@ export function serializeSummonTransaction(transaction) {
   };
 }
 
-export function createPreparedSummon(input = {}) {
+export function createPreparedSummon(
+  this: SummonTransactionHost,
+  input: PreparedSummonInput = {},
+): PreparedSummon {
   const removedFields = ["player", "fromZone", "method", "negated"].filter(
     (field) => Object.hasOwn(input, field),
   );
@@ -148,22 +279,24 @@ export function createPreparedSummon(input = {}) {
   };
 }
 
-function allocateSummonId(game) {
+function allocateSummonId(game: SummonTransactionHost): SummonId {
   const current = Number(game?.nextSummonId || 1);
   const summonId = Number.isInteger(current) && current > 0 ? current : 1;
   game.nextSummonId = summonId + 1;
-  return summonId;
+  return summonId as SummonId;
 }
 
-export function beginSummonTransaction(preparedInput = {}) {
-  const prepared =
-    preparedInput?.status === SUMMON_STATUSES.PREPARED
-      ? preparedInput
-      : this.createPreparedSummon(preparedInput);
+export function beginSummonTransaction(
+  this: SummonTransactionHost,
+  preparedInput: PreparedSummonInput | PreparedSummon = {},
+) {
+  const prepared = isPreparedSummon(preparedInput)
+    ? preparedInput
+    : this.createPreparedSummon(preparedInput);
   if (
     !prepared.card ||
     !prepared.controller ||
-    !Object.values(SUMMON_ORIGINS).includes(prepared.summonOrigin)
+    !isSummonOrigin(prepared.summonOrigin)
   ) {
     return { ok: false, reason: "invalid_summon_transaction" };
   }
@@ -186,15 +319,21 @@ export function beginSummonTransaction(preparedInput = {}) {
   if (this.activeSummonTransaction) {
     return { ok: false, reason: "summon_transaction_busy" };
   }
-  prepared.summonId = allocateSummonId(this);
-  prepared.status = SUMMON_STATUSES.COMMITTED;
+  Reflect.set(prepared, "summonId", allocateSummonId(this));
+  Reflect.set(prepared, "status", SUMMON_STATUSES.COMMITTED);
   prepared.committedAtTurn = this.turnCounter ?? null;
+  if (!isSummonTransaction(prepared)) {
+    return { ok: false, reason: "invalid_summon_transaction" };
+  }
   this.activeSummonTransaction = prepared;
   this.notify?.("summon_transaction", serializeSummonTransaction(prepared));
   return { ok: true, transaction: prepared };
 }
 
-export function markSummonAwaitingNegation(summonId) {
+export function markSummonAwaitingNegation(
+  this: SummonTransactionHost,
+  summonId: SummonId | number,
+): SummonTransaction | null {
   const transaction = this.activeSummonTransaction;
   if (!transaction || transaction.summonId !== summonId) return null;
   transaction.status = SUMMON_STATUSES.AWAITING_NEGATION;
@@ -202,7 +341,11 @@ export function markSummonAwaitingNegation(summonId) {
   return transaction;
 }
 
-export function markSummonNegated(summonId, outcome = {}) {
+export function markSummonNegated(
+  this: SummonTransactionHost,
+  summonId: SummonId | number,
+  outcome: NonNullable<SummonTransaction["negationOutcome"]> = {},
+): SummonTransaction | null {
   const transaction = this.activeSummonTransaction;
   if (!transaction || transaction.summonId !== summonId) return null;
   transaction.status = SUMMON_STATUSES.NEGATED;
@@ -217,7 +360,11 @@ export function markSummonNegated(summonId, outcome = {}) {
   return transaction;
 }
 
-export function finishSummonTransaction(transaction, result = {}) {
+export function finishSummonTransaction(
+  this: SummonTransactionHost,
+  transaction: SummonTransaction | null | undefined,
+  result: SummonExecutionResult = {},
+): SummonTransactionSnapshot | null {
   if (!transaction) return null;
   if (!TERMINAL_STATUSES.has(transaction.status)) {
     transaction.status =
@@ -241,7 +388,10 @@ export function finishSummonTransaction(transaction, result = {}) {
   return snapshot;
 }
 
-export function cleanupSummonTransaction(reason = "summon_cleanup") {
+export function cleanupSummonTransaction(
+  this: SummonTransactionHost,
+  reason = "summon_cleanup",
+) {
   const transaction = this.activeSummonTransaction;
   if (!transaction) {
     this.summonProcedureDepth = 0;
@@ -257,7 +407,7 @@ export function cleanupSummonTransaction(reason = "summon_cleanup") {
   return snapshot;
 }
 
-export function getSummonState() {
+export function getSummonState(this: SummonTransactionHost): SummonState {
   return {
     active: this.activeSummonTransaction != null,
     transaction: serializeSummonTransaction(this.activeSummonTransaction),
@@ -267,12 +417,19 @@ export function getSummonState() {
   };
 }
 
-async function payCost(game, transaction, cost) {
+async function payCost(
+  game: SummonTransactionHost,
+  transaction: SummonTransaction,
+  cost: SummonCostPayment,
+) {
   let result;
   if (typeof cost.pay === "function") {
     result = await cost.pay(transaction);
   } else {
     const owner = cost.owner || transaction.controller;
+    if (!owner) {
+      return { success: false, reason: "summon_cost_owner_missing" };
+    }
     result = await game.moveCard(cost.card, owner, cost.toZone || "graveyard", {
       ...(cost.options || {}),
       fromZone: cost.fromZone || undefined,
@@ -284,7 +441,7 @@ async function payCost(game, transaction, cost) {
       awaitCardMovedEvent: true,
     });
   }
-  if (result?.success === false || result === false) return result;
+  if (resultFailed(result)) return result;
   cost.paid = true;
   game.notify?.("summon_cost_paid", {
     summonId: transaction.summonId,
@@ -293,7 +450,11 @@ async function payCost(game, transaction, cost) {
   return result || { success: true };
 }
 
-async function finishProcedureTiming(game, transaction, result) {
+async function finishProcedureTiming(
+  game: SummonTransactionHost,
+  transaction: SummonTransaction,
+  result: SummonExecutionResult,
+) {
   if (
     transaction.skipFinalTiming ||
     transaction.summonOrigin !== SUMMON_ORIGINS.PROCEDURE ||
@@ -340,7 +501,7 @@ async function finishProcedureTiming(game, transaction, result) {
       flushResult?.chainBuilt === true
         ? FAST_EFFECT_ORIGINS.POST_CHAIN
         : FAST_EFFECT_ORIGINS.ACTION_WITHOUT_CHAIN,
-    actionPlayer: transaction.controller,
+    actionPlayer: toChainPlayer(transaction.controller),
     context,
   });
   if (flushResult?.ok === false) {
@@ -358,7 +519,10 @@ async function finishProcedureTiming(game, transaction, result) {
   return timingResult;
 }
 
-async function finalizeFailedCommittedCard(game, transaction) {
+async function finalizeFailedCommittedCard(
+  game: SummonTransactionHost,
+  transaction: SummonTransaction,
+) {
   const card = transaction?.card;
   const controller = transaction?.controller;
   if (
@@ -375,10 +539,13 @@ async function finalizeFailedCommittedCard(game, transaction) {
         ? game.bot
         : controller;
   const sourceZone =
-    game.chainSystem?.determineCardZone?.(card, destinationOwner) || null;
+    game.chainSystem?.determineCardZone?.(
+      toChainCard(card),
+      toChainPlayer(destinationOwner),
+    ) || null;
   if (sourceZone === "graveyard") return null;
   try {
-    if (sourceZone) {
+    if (isCanonicalZone(sourceZone)) {
       return await game.moveCard(card, destinationOwner, "graveyard", {
         fromZone: sourceZone,
         contextLabel: "failed_summon_transaction",
@@ -402,14 +569,17 @@ async function finalizeFailedCommittedCard(game, transaction) {
         fromPlayer: destinationOwner,
         toPlayer: destinationOwner,
         fromZone,
-        toZone: "graveyard",
+        toZone: "graveyard" as const,
         locationVersion,
         contextLabel: "failed_summon_transaction",
         summonId: transaction.summonId,
         wasDestroyed: false,
       };
       if (hasChainSourceMovementCapability(game.chainSystem)) {
-        game.chainSystem.recordChainSourceMovement(card, payload);
+        game.chainSystem.recordChainSourceMovement(toChainCard(card), {
+          ...payload,
+          toPlayer: toChainPlayer(destinationOwner),
+        });
       }
       await game.emit?.("card_to_grave", payload);
       await game.emit?.("card_moved", payload);
@@ -420,13 +590,15 @@ async function finalizeFailedCommittedCard(game, transaction) {
   return null;
 }
 
-export async function executeSummonTransaction(preparedInput = {}) {
-  const prepared =
-    preparedInput?.status === SUMMON_STATUSES.PREPARED
-      ? preparedInput
-      : this.createPreparedSummon(preparedInput);
+export async function executeSummonTransaction(
+  this: SummonTransactionHost,
+  preparedInput: PreparedSummonInput | PreparedSummon = {},
+): Promise<SummonExecutionResult> {
+  const prepared = isPreparedSummon(preparedInput)
+    ? preparedInput
+    : this.createPreparedSummon(preparedInput);
   if (prepared.cancelled) {
-    prepared.status = SUMMON_STATUSES.CANCELLED;
+    Reflect.set(prepared, "status", SUMMON_STATUSES.CANCELLED);
     return {
       success: false,
       cancelled: true,
@@ -438,24 +610,24 @@ export async function executeSummonTransaction(preparedInput = {}) {
   if (!begun.ok) return { success: false, reason: begun.reason, summonId: null };
   const transaction = begun.transaction;
   this.summonProcedureDepth = Number(this.summonProcedureDepth || 0) + 1;
-  let result = null;
+  let result: SummonExecutionResult | boolean | null | undefined = null;
   try {
     if (transaction.commit) {
       const commitResult = await transaction.commit(transaction);
-      if (commitResult?.success === false || commitResult === false) {
+      if (resultFailed(commitResult)) {
         result = {
           success: false,
-          reason: commitResult?.reason || "summon_commit_failed",
+          reason: resultReason(commitResult) || "summon_commit_failed",
         };
       }
     }
     if (!result) {
       for (const cost of transaction.costPayments) {
         const costResult = await payCost(this, transaction, cost);
-        if (costResult?.success === false || costResult === false) {
+        if (resultFailed(costResult)) {
           result = {
             success: false,
-            reason: costResult?.reason || "summon_cost_failed",
+            reason: resultReason(costResult) || "summon_cost_failed",
           };
           break;
         }
@@ -470,7 +642,7 @@ export async function executeSummonTransaction(preparedInput = {}) {
   } catch (error) {
     result = {
       success: false,
-      reason: error?.message || "summon_transaction_failed",
+      reason: errorMessage(error),
       error,
     };
     try {
@@ -485,19 +657,25 @@ export async function executeSummonTransaction(preparedInput = {}) {
     );
   }
 
+  const resultObject: SummonExecutionResult =
+    typeof result === "object" && result !== null
+      ? result
+      : { success: !resultFailed(result) };
+
   if (
-    result.success === false &&
+    resultFailed(resultObject) &&
     transaction.status !== SUMMON_STATUSES.NEGATED
   ) {
     await finalizeFailedCommittedCard(this, transaction);
   }
 
   const finalResult = {
-    ...result,
+    ...resultObject,
     success:
-      result.success !== false && transaction.status !== SUMMON_STATUSES.NEGATED,
+      resultObject.success !== false &&
+      transaction.status !== SUMMON_STATUSES.NEGATED,
     summonNegated:
-      result.summonNegated === true ||
+      resultObject.summonNegated === true ||
       transaction.status === SUMMON_STATUSES.NEGATED,
     summonId: transaction.summonId,
   };
@@ -514,7 +692,10 @@ export async function executeSummonTransaction(preparedInput = {}) {
   return finalResult;
 }
 
-export function holdSummonTimingState(transaction) {
+export function holdSummonTimingState(
+  this: SummonTransactionHost,
+  transaction: SummonTransaction | null | undefined,
+) {
   const chainSystem = this.chainSystem;
   if (
     !transaction ||
@@ -529,7 +710,7 @@ export function holdSummonTimingState(transaction) {
     origin: FAST_EFFECT_ORIGINS.SUMMON_ATTEMPT,
     timingWindowId: null,
     turnPlayer: turnPlayer || null,
-    actionPlayer: transaction.controller,
+    actionPlayer: toChainPlayer(transaction.controller),
     priorityPlayer: null,
     chainId: null,
     consecutivePasses: 0,

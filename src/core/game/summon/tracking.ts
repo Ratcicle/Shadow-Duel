@@ -3,11 +3,85 @@
  * Extracted from Game.js as part of B.6 modularization.
  */
 
+import type {
+  BattlePosition,
+  BattlePositionInput,
+  GameCard,
+  KnownCardStatusInput,
+  SpecialSummonProcedure,
+} from "../../contracts/cards.js";
+import type {
+  GameSummonHost,
+  MaybePromise,
+  MoveCardOptions,
+  MoveCardResult,
+} from "../../contracts/gameRuntime.js";
+import type { GamePlayer } from "../../contracts/player.js";
+import type { PlayerId } from "../../contracts/primitives.js";
+import type { SummonMethod } from "../../contracts/summon.js";
+import type { CanonicalZone } from "../../contracts/zones.js";
+import type {
+  EventCard,
+  EventPlayer,
+  EventZone,
+} from "../../contracts/events.js";
+
+type CardArrayZone = Exclude<CanonicalZone, "fieldSpell">;
+
+interface SpecialSummonTrackingPayload {
+  card?: EventCard | null;
+  player?: EventPlayer | null;
+  method?: SummonMethod | null;
+  fromZone?: EventZone | null;
+  summonProcedure?: SpecialSummonProcedure | string | null;
+}
+
+interface DelayedSummonEntry {
+  card?: GameCard | null;
+  owner: PlayerId;
+  fromZone?: CardArrayZone;
+  position?: BattlePositionInput;
+  statusesOnSummon?: readonly KnownCardStatusInput[];
+  summonMethod?: SummonMethod;
+  summonProcedure?: SpecialSummonProcedure | string | null;
+  getsBuffIfTargetWasFusionOrAscension?: boolean;
+}
+
+interface DelayedSummonPayload {
+  summons: DelayedSummonEntry[];
+}
+
+interface SummonTrackingHost extends GameSummonHost {
+  specialSummonTypeCounts: Record<PlayerId, Map<string, number>>;
+  chooseSpecialSummonPosition(
+    player: GamePlayer,
+    card: GameCard,
+    options?: { position?: BattlePositionInput },
+  ): Promise<BattlePosition>;
+  moveCard(
+    card: GameCard,
+    player: GamePlayer,
+    zone: CanonicalZone,
+    options?: MoveCardOptions,
+  ): MaybePromise<MoveCardResult>;
+  applyTurnBasedBuff(
+    card: GameCard,
+    stat: "atk" | "def",
+    amount: number,
+    expiresOnTurn: number,
+  ): unknown;
+  updateBoard(): unknown;
+  devLog?(code: string, detail?: unknown): void;
+}
+
 /**
  * Track special summon by monster type for counting effects.
- * @param {Object} payload - Event payload with card, player, method
+ * @param payload - Event payload with card, player, method
  */
-export function _trackSpecialSummonType(payload) {
+export function _trackSpecialSummonType(
+  this: SummonTrackingHost,
+  payload: SpecialSummonTrackingPayload | null | undefined,
+) {
   try {
     const { card, player, method } = payload || {};
     if (!card || !player) return;
@@ -20,7 +94,8 @@ export function _trackSpecialSummonType(payload) {
     if (method !== "special") return;
     const typeName = card.type || null;
     if (!typeName) return;
-    const playerId = player?.id || player;
+    const playerId = player.id;
+    if (playerId !== "player" && playerId !== "bot") return;
     const store = this.specialSummonTypeCounts?.[playerId];
     if (!store || !(store instanceof Map)) return;
     const next = (store.get(typeName) || 0) + 1;
@@ -38,12 +113,17 @@ export function _trackSpecialSummonType(payload) {
 
 /**
  * Get count of special summoned monsters of a specific type.
- * @param {Object|string} owner - Player or player ID
+ * @param owner - Player or player ID
  * @param {string} typeName - Monster type to count
  * @returns {number} Count of special summoned monsters of that type
  */
-export function getSpecialSummonedTypeCount(owner, typeName) {
-  const playerId = owner?.id || owner;
+export function getSpecialSummonedTypeCount(
+  this: SummonTrackingHost,
+  owner: GamePlayer | PlayerId,
+  typeName: string,
+): number {
+  const playerId = typeof owner === "string" ? owner : owner.id;
+  if (playerId !== "player" && playerId !== "bot") return 0;
   const store = this.specialSummonTypeCounts?.[playerId];
   if (!store || !(store instanceof Map)) return 0;
   return store.get(typeName) || 0;
@@ -52,9 +132,12 @@ export function getSpecialSummonedTypeCount(owner, typeName) {
 /**
  * Resolve a delayed summon action.
  * Executes Special Summons with validity checks.
- * @param {Object} payload - Delayed summon payload with summons array
+ * @param payload - Delayed summon payload with summons array
  */
-export async function resolveDelayedSummon(payload) {
+export async function resolveDelayedSummon(
+  this: SummonTrackingHost,
+  payload: DelayedSummonPayload | null | undefined,
+) {
   if (
     !payload ||
     !Array.isArray(payload.summons) ||

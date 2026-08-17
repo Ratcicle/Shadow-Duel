@@ -12,7 +12,41 @@
  *  - changeMonsterPosition
  */
 
-export function canFlipSummon(card) {
+import type { BattlePosition, GameCard } from "../../contracts/cards.js";
+import type {
+  GameSummonHost,
+  MoveCardOptions,
+  MoveCardResult,
+} from "../../contracts/gameRuntime.js";
+import type { GamePlayer } from "../../contracts/player.js";
+
+interface PositionChangeEventResult {
+  ok?: boolean;
+  needsSelection?: boolean;
+}
+
+type PositionHost = Omit<GameSummonHost, "effectEngine" | "ui"> & {
+  effectEngine?: { clearTargetingCache?(): void };
+  ui: { log(message: string): void };
+  guardActionStart?(input: {
+    actor: GamePlayer | null;
+    kind: "change_position";
+    phaseReq: readonly string[];
+  }): { ok: boolean; reason?: string };
+  canPlaceCardOnField?(
+    card: GameCard,
+    player: GamePlayer,
+    options?: MoveCardOptions,
+  ): MoveCardResult;
+  canChangePosition(card: GameCard | null | undefined): boolean;
+  emit(eventName: string, payload: unknown): Promise<PositionChangeEventResult>;
+  updateBoard(): unknown;
+};
+
+export function canFlipSummon(
+  this: PositionHost,
+  card: GameCard | null | undefined,
+): boolean {
   if (!card) return false;
   if (card.battlePositionLocked) return false;
   const isTurnPlayer = card.owner === this.turn;
@@ -35,7 +69,10 @@ export function canFlipSummon(card) {
   return true;
 }
 
-export function canChangePosition(card) {
+export function canChangePosition(
+  this: PositionHost,
+  card: GameCard | null | undefined,
+): boolean {
   if (!card) return false;
   if (card.battlePositionLocked) return false;
   const isTurnPlayer = card.owner === this.turn;
@@ -49,7 +86,11 @@ export function canChangePosition(card) {
   return true;
 }
 
-export async function changeMonsterPosition(card, newPosition) {
+export async function changeMonsterPosition(
+  this: PositionHost,
+  card: GameCard | null | undefined,
+  newPosition: BattlePosition,
+) {
   const actor =
     card?.owner === "player"
       ? this.player
