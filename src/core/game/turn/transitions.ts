@@ -11,13 +11,82 @@
 
 import { isAI } from "../../Player.js";
 import { PHASE_ORDER, getNextPhase, normalizeTargetPhase } from "./phaseRules.js";
+import type {
+  FullGameHost,
+  GamePlayer,
+} from "../../contracts/gameRuntime.js";
+import type { GamePhase } from "../../contracts/game.js";
+import type { ActionGuardResult } from "../actions/guard.js";
 
-function scheduleAiMoveAfterPaint(game, actor) {
+interface AiMoveCapability {
+  makeMove(game: TransitionHost): unknown;
+}
+
+interface PhaseTimingResult {
+  phaseTransitionAllowed?: boolean;
+  phaseTransitionInterrupted?: boolean;
+  needsSelection?: boolean;
+}
+
+type TransitionHost = Pick<
+  FullGameHost,
+  | "player"
+  | "bot"
+  | "turn"
+  | "phase"
+  | "turnCounter"
+  | "gameOver"
+  | "battleStep"
+  | "selectionState"
+  | "targetSelection"
+  | "isResolvingEffect"
+  | "eventResolutionDepth"
+  | "pendingTributeSummonSelection"
+  | "chainSystem"
+  | "ui"
+  | "aiActionDelayMs"
+> & {
+  pendingTributeSummonSelection: { active?: boolean } | null;
+  isDisposed?(): boolean;
+  getNextPhase?(phase: GamePhase): GamePhase | null;
+  checkAndOfferTraps(event: "phase_end" | "phase_start", context: unknown): Promise<PhaseTimingResult | null>;
+  clearAttackResolutionIndicators(): void;
+  clearAttackReadyIndicators(): void;
+  updateBoard(): unknown;
+  guardActionStart(
+    options: { actor: GamePlayer; kind: "phase_change" },
+    logToRenderer?: boolean,
+  ): ActionGuardResult;
+  nextPhase(): Promise<unknown>;
+  endTurn(): Promise<unknown>;
+  notify(event: "phase_skip", payload: unknown): unknown;
+};
+
+interface PhaseLeaveSuccess {
+  ok: true;
+  currentPhase: GamePhase;
+  nextPhase: GamePhase | null;
+}
+
+interface PhaseLeaveFailure {
+  ok: false;
+  reason: string;
+  currentPhase?: GamePhase;
+  timingResult?: PhaseTimingResult;
+}
+
+type PhaseLeaveResult = PhaseLeaveSuccess | PhaseLeaveFailure;
+
+function hasAiMove(actor: GamePlayer): actor is GamePlayer & AiMoveCapability {
+  return typeof Reflect.get(actor, "makeMove") === "function";
+}
+
+function scheduleAiMoveAfterPaint(game: TransitionHost, actor: GamePlayer) {
   if (
     !isAI(actor) ||
     game.gameOver ||
     game.isDisposed?.() ||
-    typeof actor?.makeMove !== "function"
+    !hasAiMove(actor)
   ) {
     return;
   }
@@ -45,7 +114,7 @@ function scheduleAiMoveAfterPaint(game, actor) {
   setTimeout(runMove, 0);
 }
 
-function hasPendingPhaseInterruption(game) {
+function hasPendingPhaseInterruption(game: TransitionHost) {
   const selectionState = game.selectionState || "idle";
   return (
     !!game.targetSelection ||
@@ -60,7 +129,7 @@ function hasPendingPhaseInterruption(game) {
   );
 }
 
-function setBattleOpenStateForPhase(game, phase) {
+function setBattleOpenStateForPhase(game: TransitionHost, phase: GamePhase) {
   if (phase === "battle") {
     game.battleStep = "start";
     return;
@@ -68,7 +137,10 @@ function setBattleOpenStateForPhase(game, phase) {
   game.battleStep = null;
 }
 
-async function leaveCurrentPhase(game, options = {}) {
+async function leaveCurrentPhase(
+  game: TransitionHost,
+  options: { nextPhase?: GamePhase | null } = {},
+): Promise<PhaseLeaveResult> {
   const currentPhase = game.phase;
   const previousBattleStep = game.battleStep ?? null;
   const nextPhase =
@@ -130,7 +202,11 @@ async function leaveCurrentPhase(game, options = {}) {
   return { ok: true, currentPhase, nextPhase };
 }
 
-async function enterPhase(game, nextPhase, previousPhase) {
+async function enterPhase(
+  game: TransitionHost,
+  nextPhase: GamePhase | null,
+  previousPhase: GamePhase,
+) {
   if (!nextPhase) return { ok: true };
 
   game.phase = nextPhase;
@@ -173,7 +249,7 @@ async function enterPhase(game, nextPhase, previousPhase) {
  * Advances to the next phase in the turn order.
  * Phase order: draw → standby → main1 → battle → main2 → end
  */
-export async function nextPhase() {
+export async function nextPhase(this: TransitionHost) {
   if (this.gameOver || this.isDisposed?.()) return;
   const actor = this.turn === "player" ? this.player : this.bot;
   const guard = this.guardActionStart(
@@ -186,7 +262,7 @@ export async function nextPhase() {
       (guard.code === "BLOCKED_RESOLVING" ||
         guard.code === "BLOCKED_SELECTION_ACTIVE")
     ) {
-      const retryDelayMs = Number.isFinite(this?.aiActionDelayMs)
+      const retryDelayMs = typeof this.aiActionDelayMs === "number" && Number.isFinite(this.aiActionDelayMs)
         ? this.aiActionDelayMs
         : 250;
       setTimeout(() => {
@@ -222,7 +298,10 @@ export async function nextPhase() {
  * Can only skip forward, not backward.
  * @param {string} targetPhase - The phase to skip to
  */
-export async function skipToPhase(targetPhase) {
+export async function skipToPhase(
+  this: TransitionHost,
+  targetPhase: GamePhase | string,
+) {
   if (this.gameOver || this.isDisposed?.()) return;
   const actor = this.turn === "player" ? this.player : this.bot;
   const guard = this.guardActionStart(
@@ -233,7 +312,7 @@ export async function skipToPhase(targetPhase) {
   const normalized = normalizeTargetPhase(targetPhase, this);
   const finalTargetPhase = normalized.phase;
   const currentIdx = PHASE_ORDER.indexOf(this.phase);
-  const targetIdx = PHASE_ORDER.indexOf(finalTargetPhase);
+  const targetIdx = PHASE_ORDER.indexOf(finalTargetPhase as GamePhase);
   if (currentIdx === -1 || targetIdx === -1) return;
   if (targetIdx <= currentIdx) return;
 
@@ -260,7 +339,11 @@ export async function skipToPhase(targetPhase) {
     if (this.gameOver || this.isDisposed?.()) return;
   }
 
-  if (normalized.redirected && actor.controllerType === "human") {
+  if (
+    normalized.redirected &&
+    normalized.reason &&
+    actor.controllerType === "human"
+  ) {
     this.ui?.log?.(normalized.reason);
   }
 

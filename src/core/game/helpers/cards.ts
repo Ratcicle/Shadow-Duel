@@ -11,8 +11,37 @@
 
 import Card from "../../Card.js";
 import { cardDatabaseByName, cardDatabaseById } from "../../../data/cards.js";
+import type { BattlePosition, RawCardDefinition } from "../../contracts/cards.js";
+import type { GamePlayer } from "../../contracts/player.js";
+import type { DuelCardId, PlayerId } from "../../contracts/primitives.js";
 
-export function resolveCardData(identifier) {
+type CardIdentifier =
+  | number
+  | string
+  | { id?: number; name?: string }
+  | null
+  | undefined;
+
+interface CardCreationOverrides {
+  duelCardId?: number;
+  position?: BattlePosition;
+  isFacedown?: boolean;
+  facedown?: boolean;
+  turnSetOn?: number;
+  counters?: { readonly [counterType: string]: number };
+}
+
+interface CardHelperHost {
+  nextDuelCardId: number;
+  resolveCardData(identifier: CardIdentifier): RawCardDefinition | null;
+  resolvePlayerById(id: PlayerId): GamePlayer;
+  ensureDuelCardId?(card: Card): DuelCardId;
+}
+
+export function resolveCardData(
+  this: CardHelperHost,
+  identifier: CardIdentifier,
+): RawCardDefinition | null {
   if (identifier && typeof identifier === "object") {
     if (typeof identifier.id === "number") {
       const found = cardDatabaseById.get(identifier.id);
@@ -46,7 +75,12 @@ export function resolveCardData(identifier) {
   return null;
 }
 
-export function createCardForOwner(identifier, owner, overrides = {}) {
+export function createCardForOwner(
+  this: CardHelperHost,
+  identifier: CardIdentifier,
+  owner: PlayerId | GamePlayer,
+  overrides: CardCreationOverrides = {},
+) {
   const player =
     typeof owner === "string" ? this.resolvePlayerById(owner) : owner;
   if (!player) return null;
@@ -54,11 +88,12 @@ export function createCardForOwner(identifier, owner, overrides = {}) {
   if (!data) return null;
 
   const card = new Card(data, player.id);
-  if (Number.isInteger(overrides.duelCardId)) {
-    card.duelCardId = overrides.duelCardId;
+  const overrideDuelCardId = overrides.duelCardId;
+  if (typeof overrideDuelCardId === "number" && Number.isInteger(overrideDuelCardId)) {
+    Reflect.set(card, "duelCardId", overrideDuelCardId);
     this.nextDuelCardId = Math.max(
       Number(this.nextDuelCardId || 1),
-      overrides.duelCardId + 1,
+      overrideDuelCardId + 1,
     );
   } else {
     this.ensureDuelCardId?.(card);
@@ -84,7 +119,10 @@ export function createCardForOwner(identifier, owner, overrides = {}) {
   return card;
 }
 
-export function setMonsterFacing(card, options = {}) {
+export function setMonsterFacing(
+  card: Card | null | undefined,
+  options: { position?: BattlePosition; facedown?: boolean } = {},
+) {
   if (!card || card.cardKind !== "monster") return;
   if (options.position) {
     card.position = options.position === "defense" ? "defense" : "attack";

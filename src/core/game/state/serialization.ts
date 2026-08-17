@@ -10,21 +10,51 @@
  *  - getPublicState
  */
 
+import type {
+  FullGameHost,
+  GameCard,
+  GamePlayer,
+} from "../../contracts/gameRuntime.js";
+import type { PlayerId } from "../../contracts/primitives.js";
+
+interface SerializedTemporaryEventSource {
+  id: string | number;
+  event: string;
+  ownerId: PlayerId | string;
+  sourceInstanceId?: number | string | null;
+  boundEventTargetInstanceId?: number | string | null;
+  requireBoundTargetLeavesField?: boolean;
+  duration?: string | null;
+  expiresOnTurn?: number | null;
+  usesRemaining?: number | null;
+}
+
+type SerializationHost = Omit<FullGameHost, "temporaryEventEffects"> & {
+  temporaryEventEffects: SerializedTemporaryEventSource[];
+  getSummonState?(): unknown;
+  getEffectUsageState?(): unknown;
+  getDamageStepState?(): unknown;
+  getTemporaryControlState?(): unknown[];
+};
+
 /**
  * Build a serialized, public-safe snapshot of the current game state.
  * Hides opponent hand contents and face-down card details.
  * @param {"player"|"bot"} forPlayerId
- * @returns {Object} snapshot JSON
+ * @returns snapshot JSON
  */
-export function getPublicState(forPlayerId = "player") {
+export function getPublicState(
+  this: SerializationHost,
+  forPlayerId: PlayerId = "player",
+) {
   const viewPlayer =
     forPlayerId === this.bot.id || forPlayerId === "bot"
       ? this.bot
       : this.player;
   const opp = viewPlayer === this.player ? this.bot : this.player;
 
-  const serializeField = (owner, isSelf) =>
-    (owner.field || []).map((card) => {
+  const serializeField = (owner: GamePlayer, isSelf: boolean) =>
+    (owner.field || []).map((card: GameCard) => {
       if (!card) return null;
       const hidden = card.isFacedown && !isSelf;
       return {
@@ -60,9 +90,9 @@ export function getPublicState(forPlayerId = "player") {
       };
     });
 
-  const serializeHand = (owner, isSelf) =>
+  const serializeHand = (owner: GamePlayer, isSelf: boolean) =>
     isSelf
-      ? (owner.hand || []).map((card) => ({
+      ? (owner.hand || []).map((card: GameCard) => ({
           duelCardId: card.duelCardId ?? null,
           cardId: card.id,
           name: card.name,
@@ -77,8 +107,8 @@ export function getPublicState(forPlayerId = "player") {
         }))
       : { count: (owner.hand || []).length };
 
-  const serializeSpells = (owner, isSelf) =>
-    (owner.spellTrap || []).map((card) => {
+  const serializeSpells = (owner: GamePlayer, isSelf: boolean) =>
+    (owner.spellTrap || []).map((card: GameCard) => {
       if (!card) return null;
       const hidden = card.isFacedown && !isSelf;
       return {
@@ -93,8 +123,8 @@ export function getPublicState(forPlayerId = "player") {
       };
     });
 
-  const serializeGraveyard = (owner) =>
-    (owner.graveyard || []).map((card) => ({
+  const serializeGraveyard = (owner: GamePlayer) =>
+    (owner.graveyard || []).map((card: GameCard) => ({
       duelCardId: card.duelCardId ?? null,
       cardId: card.id,
       name: card.name,
@@ -120,7 +150,7 @@ export function getPublicState(forPlayerId = "player") {
           : null,
     }));
 
-  const buildPlayerView = (owner, isSelf) => ({
+  const buildPlayerView = (owner: GamePlayer, isSelf: boolean) => ({
     id: owner.id,
     name: owner.name,
     lp: owner.lp,

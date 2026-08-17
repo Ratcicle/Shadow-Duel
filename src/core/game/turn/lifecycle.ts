@@ -12,13 +12,91 @@
 
 import { isAI } from "../../Player.js";
 import { botLogger } from "../../BotLogger.js";
+import type {
+  FullGameHost,
+  GamePlayer,
+} from "../../contracts/gameRuntime.js";
+import type { DrawCardsResult } from "../deck/draw.js";
+import type { ActionGuardResult } from "../actions/guard.js";
+import type { PlayerId } from "../../contracts/primitives.js";
 
-function scheduleAiMoveAfterPaint(game, actor) {
+interface AiMoveCapability {
+  makeMove(game: LifecycleHost): unknown;
+}
+
+interface PhaseTimingResult {
+  phaseTransitionAllowed?: boolean;
+  phaseTransitionInterrupted?: boolean;
+  needsSelection?: boolean;
+  deferred?: boolean;
+}
+
+interface LifecycleProgressTracker {
+  recordProgress?(label: string, game: LifecycleHost, detail?: unknown): void;
+}
+
+type LifecycleHost = Pick<
+  FullGameHost,
+  | "player"
+  | "bot"
+  | "turn"
+  | "phase"
+  | "turnCounter"
+  | "gameOver"
+  | "battleStep"
+  | "phaseDelayMs"
+  | "effectEngine"
+> & {
+  _arenaTracker?: LifecycleProgressTracker | null;
+  isDisposed?(): boolean;
+  devLog?(code: string, detail?: unknown): void;
+  resetOncePerTurnUsage(reason?: string): void;
+  cleanupExpiredBuffs(): void;
+  cleanupExpiredDeclaredValues?(): void;
+  cleanupExpiredEffectMarkers?(): void;
+  cleanupExpiredTemporaryBattlePairEffects?(): void;
+  cleanupExpiredTemporaryEventEffects?(): void;
+  cleanupExpiredSpecialSummonRestrictions?(): void;
+  cleanupExpiredEffectActivationRestrictions?(): void;
+  updateBoard(): unknown;
+  checkAndOfferTraps(event: string, context: unknown): Promise<PhaseTimingResult | null>;
+  drawCards(player: GamePlayer, count?: number): DrawCardsResult;
+  waitForPhaseDelay(): Promise<void>;
+  processDelayedActions(phase: string, activePlayer: PlayerId): Promise<void>;
+  emit(event: string, payload: unknown): Promise<unknown>;
+  guardActionStart(
+    options: { actor: GamePlayer; kind: "phase_change" },
+    logToRenderer?: boolean,
+  ): ActionGuardResult;
+  getOpponent?(player: GamePlayer): GamePlayer | null;
+  processTemporaryControlEffects?(): Promise<unknown>;
+  cleanupTempBoosts(player: GamePlayer): void;
+  clearAttackResolutionIndicators(): void;
+  clearAttackReadyIndicators(): void;
+  startTurn(): Promise<unknown>;
+};
+
+function hasAiMove(actor: GamePlayer): actor is GamePlayer & AiMoveCapability {
+  return typeof Reflect.get(actor, "makeMove") === "function";
+}
+
+function getErrorMessage(error: unknown): string {
+  if (
+    (typeof error === "object" && error !== null) ||
+    typeof error === "function"
+  ) {
+    const message = Reflect.get(error, "message");
+    if (message) return message as string;
+  }
+  return String(error);
+}
+
+function scheduleAiMoveAfterPaint(game: LifecycleHost, actor: GamePlayer) {
   if (
     !isAI(actor) ||
     game.gameOver ||
     game.isDisposed?.() ||
-    typeof actor?.makeMove !== "function"
+    !hasAiMove(actor)
   ) {
     return;
   }
@@ -48,17 +126,17 @@ function scheduleAiMoveAfterPaint(game, actor) {
             actor: actor?.id || null,
           });
         })
-        .catch((error) => {
+        .catch((error: unknown) => {
           game._arenaTracker?.recordProgress?.("ai_move_makeMove_error", game, {
             actor: actor?.id || null,
-            error: error?.message || String(error),
+            error: getErrorMessage(error),
           });
           console.error("[BotArena:progress] AI makeMove failed:", error);
         });
-    } catch (error) {
+    } catch (error: unknown) {
       game._arenaTracker?.recordProgress?.("ai_move_makeMove_error", game, {
         actor: actor?.id || null,
-        error: error?.message || String(error),
+        error: getErrorMessage(error),
       });
       throw error;
     }
@@ -73,7 +151,10 @@ function scheduleAiMoveAfterPaint(game, actor) {
   setTimeout(runMove, 0);
 }
 
-async function negotiateAutomaticPhaseEnd(game, eventData) {
+async function negotiateAutomaticPhaseEnd(
+  game: LifecycleHost,
+  eventData: unknown,
+) {
   while (!game.gameOver && !game.isDisposed?.()) {
     const currentPhase = game.phase;
     const timingResult = await game.checkAndOfferTraps("phase_end", eventData);
@@ -98,7 +179,7 @@ async function negotiateAutomaticPhaseEnd(game, eventData) {
  * Starts a new turn for the active player.
  * Handles draw phase, standby phase, and transitions to main1.
  */
-export async function startTurn() {
+export async function startTurn(this: LifecycleHost) {
   if (this.gameOver || this.isDisposed?.()) return;
   this.turnCounter += 1;
   this._arenaTracker?.recordProgress?.("turn_start", this);
@@ -148,7 +229,7 @@ export async function startTurn() {
     const shouldRestrictAttack =
       card.cannotAttackUntilTurn &&
       this.turnCounter <= card.cannotAttackUntilTurn;
-    card.cannotAttackThisTurn = shouldRestrictAttack;
+    Reflect.set(card, "cannotAttackThisTurn", shouldRestrictAttack);
 
     if (!shouldRestrictAttack && card.cannotAttackUntilTurn) {
       card.cannotAttackUntilTurn = null;
@@ -291,7 +372,7 @@ export async function startTurn() {
 /**
  * Ends the current turn and starts the opponent's turn.
  */
-export async function endTurn() {
+export async function endTurn(this: LifecycleHost) {
   if (this.gameOver || this.isDisposed?.()) return;
   const actor = this.turn === "player" ? this.player : this.bot;
   const guard = this.guardActionStart(
@@ -333,7 +414,7 @@ export async function endTurn() {
  * Waits for a configurable delay between phases.
  * @returns {Promise<void>}
  */
-export function waitForPhaseDelay() {
+export function waitForPhaseDelay(this: LifecycleHost): Promise<void> {
   if (this.isDisposed?.()) return Promise.resolve();
   return new Promise((resolve) => setTimeout(resolve, this.phaseDelayMs || 0));
 }

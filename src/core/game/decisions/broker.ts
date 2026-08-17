@@ -164,7 +164,7 @@ export class DecisionBroker {
 
   recordDecision<Kind extends DecisionKind>(
     input: DecisionRequest<Kind>,
-    result?: DecisionResult<Kind>,
+    result?: DecisionResult<Kind> | null,
   ): RecordedDecision<Kind>;
   recordDecision(): RecordedDecision<"choice">;
   recordDecision(
