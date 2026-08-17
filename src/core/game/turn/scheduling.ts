@@ -10,20 +10,71 @@
  * - resolveDelayedAction
  */
 
+import type {
+  FullGameHost,
+  GameCard,
+  GamePlayer,
+} from "../../contracts/gameRuntime.js";
+import type { GamePhase } from "../../contracts/game.js";
+import type { PlayerId } from "../../contracts/primitives.js";
+
+interface DelayedTriggerCondition {
+  phase?: GamePhase | string;
+  player?: PlayerId | "opponent" | string;
+}
+
+interface DelayedActionPayload {
+  card?: GameCard | null;
+  owner?: PlayerId | string | null;
+  ownerId?: PlayerId | string | null;
+  sourceCard?: GameCard | null;
+  sourcePlayer?: GamePlayer | null;
+}
+
+interface DelayedAction {
+  id: string;
+  actionType: string;
+  triggerCondition: DelayedTriggerCondition;
+  payload: DelayedActionPayload;
+  scheduledTurn: number;
+  priority: number;
+}
+
+type SchedulingHost = Pick<
+  FullGameHost,
+  "player" | "bot" | "turnCounter"
+> & {
+  delayedActions: DelayedAction[];
+  isDisposed?(): boolean;
+  createDeterministicId?(scope: string): string;
+  devLog?(code: string, detail?: unknown): void;
+  resolveDelayedAction(action: DelayedAction): Promise<void>;
+  resolveDelayedSummon(payload: DelayedActionPayload): Promise<unknown>;
+  destroyCard(
+    card: GameCard,
+    options: {
+      cause: "effect";
+      sourceCard: GameCard | null;
+      sourcePlayer: GamePlayer | null;
+    },
+  ): Promise<unknown>;
+};
+
 /**
  * Schedules a delayed action to be resolved in a future phase.
  * Supports any type of future action: summons, damage, draw, etc.
  * @param {string} actionType - Type of action (e.g., "delayed_summon")
- * @param {Object} triggerCondition - Trigger condition (e.g., {phase: "standby", player: "opponent"})
- * @param {Object} payload - Action data
+ * @param triggerCondition - Trigger condition (e.g., {phase: "standby", player: "opponent"})
+ * @param payload - Action data
  * @param {number} priority - Execution priority (default: 0)
  * @returns {string|null} ID of the scheduled action
  */
 export function scheduleDelayedAction(
-  actionType,
-  triggerCondition,
-  payload,
-  priority = 0
+  this: SchedulingHost,
+  actionType: string,
+  triggerCondition: DelayedTriggerCondition,
+  payload: DelayedActionPayload,
+  priority = 0,
 ) {
   if (this.isDisposed?.()) return null;
   if (!actionType || !triggerCondition || !payload) {
@@ -58,7 +109,11 @@ export function scheduleDelayedAction(
  * @param {string} phase - Current phase (e.g., "standby")
  * @param {string} activePlayer - Active player ("player" or "bot")
  */
-export async function processDelayedActions(phase, activePlayer) {
+export async function processDelayedActions(
+  this: SchedulingHost,
+  phase: GamePhase | string,
+  activePlayer: PlayerId,
+) {
   if (this.isDisposed?.()) return;
   if (!Array.isArray(this.delayedActions) || this.delayedActions.length === 0) {
     return;
@@ -102,9 +157,12 @@ export async function processDelayedActions(phase, activePlayer) {
 /**
  * Resolves an individual scheduled action.
  * Calls the appropriate resolver based on action type.
- * @param {Object} action - Action to resolve
+ * @param action - Action to resolve
  */
-export async function resolveDelayedAction(action) {
+export async function resolveDelayedAction(
+  this: SchedulingHost,
+  action: DelayedAction,
+) {
   if (this.isDisposed?.()) return;
   try {
     switch (action.actionType) {
@@ -122,7 +180,10 @@ export async function resolveDelayedAction(action) {
   }
 }
 
-async function resolveDelayedDestroy(payload = {}) {
+async function resolveDelayedDestroy(
+  this: SchedulingHost,
+  payload: DelayedActionPayload = {},
+) {
   const card = payload.card || null;
   if (!card) return;
 

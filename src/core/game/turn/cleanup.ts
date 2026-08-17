@@ -13,12 +13,47 @@
  */
 
 import { restoreTemporaryStatuses } from "../../Card.js";
+import type {
+  FullGameHost,
+  GameCard,
+  GamePlayer,
+} from "../../contracts/gameRuntime.js";
+
+interface ExpiringBattlePairEffect {
+  expiresOnTurn?: number | null;
+}
+
+interface ExpiringTemporaryEventEffect {
+  expiresOnTurn?: number | null;
+  usesRemaining?: number | null;
+}
+
+function isGameCard(card: GameCard | null): card is GameCard {
+  return card != null;
+}
+
+type CleanupHost = Pick<
+  FullGameHost,
+  "player" | "bot" | "turnCounter"
+> & {
+  temporaryBattlePairEffects: Array<ExpiringBattlePairEffect | null>;
+  temporaryEventEffects: ExpiringTemporaryEventEffect[];
+  createDeterministicId?(scope: string): string;
+  devLog?(code: string, detail?: unknown): void;
+};
 
 /**
  * Applies a turn-based buff (atk/def) to a card with explicit expiration turn.
  * Multiple buffs can stack on the same card.
  */
-export function applyTurnBasedBuff(card, stat, value, expiresOnTurn, id = null) {
+export function applyTurnBasedBuff(
+  this: CleanupHost,
+  card: GameCard | null | undefined,
+  stat: "atk" | "def",
+  value: number,
+  expiresOnTurn: number,
+  id: string | null = null,
+) {
   if (
     !card ||
     !stat ||
@@ -65,7 +100,7 @@ export function applyTurnBasedBuff(card, stat, value, expiresOnTurn, id = null) 
  * Cleans up expired turn-based buffs.
  * Called at the start of startTurn() to remove buffs whose expiration turn has been reached.
  */
-export function cleanupExpiredBuffs() {
+export function cleanupExpiredBuffs(this: CleanupHost) {
   const allMonsters = [
     ...(this.player?.field || []),
     ...(this.bot?.field || []),
@@ -103,23 +138,24 @@ export function cleanupExpiredBuffs() {
       card.protectionEffects = card.protectionEffects.filter(
         (entry) =>
           entry &&
-          (!Number.isFinite(entry.expiresOnTurn) ||
+          (typeof entry.expiresOnTurn !== "number" ||
+            !Number.isFinite(entry.expiresOnTurn) ||
             this.turnCounter <= entry.expiresOnTurn),
       );
     }
   }
 }
 
-function getActiveCards(player) {
+function getActiveCards(player: GamePlayer | null | undefined): GameCard[] {
   if (!player) return [];
   return [
     ...(player.field || []),
     ...(player.spellTrap || []),
     player.fieldSpell,
-  ].filter(Boolean);
+  ].filter(isGameCard);
 }
 
-function getAllPlayerCards(player) {
+function getAllPlayerCards(player: GamePlayer | null | undefined): GameCard[] {
   if (!player) return [];
   return [
     ...(player.deck || []),
@@ -130,10 +166,10 @@ function getAllPlayerCards(player) {
     ...(player.banished || []),
     ...(player.extraDeck || []),
     player.fieldSpell,
-  ].filter(Boolean);
+  ].filter(isGameCard);
 }
 
-export function cleanupExpiredDeclaredValues() {
+export function cleanupExpiredDeclaredValues(this: CleanupHost) {
   const activeCards = [
     ...getActiveCards(this.player),
     ...getActiveCards(this.bot),
@@ -147,6 +183,8 @@ export function cleanupExpiredDeclaredValues() {
     for (const [stateKey, declaration] of Object.entries(card.declaredValues)) {
       if (
         declaration &&
+        typeof declaration === "object" &&
+        typeof declaration.expiresOnTurn === "number" &&
         Number.isFinite(declaration.expiresOnTurn) &&
         this.turnCounter > declaration.expiresOnTurn
       ) {
@@ -165,8 +203,8 @@ export function cleanupExpiredDeclaredValues() {
   }
 }
 
-export function cleanupExpiredEffectMarkers() {
-  const seen = new Set();
+export function cleanupExpiredEffectMarkers(this: CleanupHost) {
+  const seen = new Set<unknown>();
   const allCards = [
     ...getAllPlayerCards(this.player),
     ...getAllPlayerCards(this.bot),
@@ -184,6 +222,7 @@ export function cleanupExpiredEffectMarkers() {
     for (const [markerKey, marker] of Object.entries(card.effectMarkers)) {
       if (
         marker &&
+        typeof marker.expiresOnTurn === "number" &&
         Number.isFinite(marker.expiresOnTurn) &&
         this.turnCounter > marker.expiresOnTurn
       ) {
@@ -202,7 +241,7 @@ export function cleanupExpiredEffectMarkers() {
   }
 }
 
-export function cleanupExpiredTemporaryBattlePairEffects() {
+export function cleanupExpiredTemporaryBattlePairEffects(this: CleanupHost) {
   if (!Array.isArray(this.temporaryBattlePairEffects)) {
     this.temporaryBattlePairEffects = [];
     return;
@@ -211,12 +250,13 @@ export function cleanupExpiredTemporaryBattlePairEffects() {
   this.temporaryBattlePairEffects = this.temporaryBattlePairEffects.filter(
     (entry) =>
       !entry ||
+      typeof entry.expiresOnTurn !== "number" ||
       !Number.isFinite(entry.expiresOnTurn) ||
       this.turnCounter <= entry.expiresOnTurn,
   );
 }
 
-export function cleanupExpiredTemporaryEventEffects() {
+export function cleanupExpiredTemporaryEventEffects(this: CleanupHost) {
   if (!Array.isArray(this.temporaryEventEffects)) {
     this.temporaryEventEffects = [];
     return;
@@ -225,19 +265,24 @@ export function cleanupExpiredTemporaryEventEffects() {
   this.temporaryEventEffects = this.temporaryEventEffects.filter(
     (entry) =>
       entry &&
-      (!Number.isFinite(entry.expiresOnTurn) ||
+      (typeof entry.expiresOnTurn !== "number" ||
+        !Number.isFinite(entry.expiresOnTurn) ||
         this.turnCounter <= entry.expiresOnTurn) &&
-      (!Number.isFinite(entry.usesRemaining) || entry.usesRemaining > 0),
+      (typeof entry.usesRemaining !== "number" ||
+        !Number.isFinite(entry.usesRemaining) ||
+        entry.usesRemaining > 0),
   );
 }
 
 /**
  * Cleans up temporary boosts for a player's monsters.
  * Called at end of turn to reset temporary stat modifications.
- * @param {Object} player - The player whose monsters to clean up
+ * @param player - The player whose monsters to clean up
  */
-export function cleanupTempBoosts(player) {
-  player.field.forEach((card) => {
+export function cleanupTempBoosts(
+  player: GamePlayer,
+) {
+  player.field.forEach((card: GameCard) => {
     if (card.tempAtkBoost) {
       card.atk -= card.tempAtkBoost;
       if (card.atk < 0) card.atk = 0;
@@ -287,7 +332,7 @@ export function cleanupTempBoosts(player) {
   });
 
   // Restore temporarily reduced levels for hand monsters
-  player.hand.forEach((card) => {
+  player.hand.forEach((card: GameCard) => {
     if (!card) return;
     if (card.originalLevel != null) {
       card.level = card.originalLevel;

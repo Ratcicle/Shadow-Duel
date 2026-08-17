@@ -4,7 +4,29 @@
  * Central duel-state reset helpers for reusing a Game instance safely.
  */
 
-function createOncePerTurnUsage() {
+import type {
+  FullGameHost,
+  GamePlayer,
+  OncePerTurnRuntimeState,
+} from "../../contracts/gameRuntime.js";
+import type { GamePhase } from "../../contracts/game.js";
+import type { PlayerId } from "../../contracts/primitives.js";
+
+interface DuelResetOptions {
+  turn?: PlayerId;
+  phase?: GamePhase;
+  turnCounter?: number;
+}
+
+type DuelResetHost = FullGameHost & {
+  resetPlayerDuelState?(player: GamePlayer, options?: DuelResetOptions): void;
+  cleanupDamageStepTransaction?(reason: string): void;
+  cleanupSummonTransaction?(reason: string): void;
+  releaseEffectUsageReservations?(reason: string): void;
+  resetMaterialDuelStats?(reason: string): void;
+};
+
+function createOncePerTurnUsage(): OncePerTurnRuntimeState {
   return {
     player: new Map(),
     bot: new Map(),
@@ -12,14 +34,14 @@ function createOncePerTurnUsage() {
   };
 }
 
-function createSpecialSummonTypeCounts() {
+function createSpecialSummonTypeCounts(): Record<PlayerId, Map<string, number>> {
   return {
     player: new Map(),
     bot: new Map(),
   };
 }
 
-function resetKnownPlayerTurnFlags(player) {
+function resetKnownPlayerTurnFlags(player: GamePlayer) {
   player.lpGainedThisTurn = 0;
   player.damageReceivedThisTurn = 0;
   player.summonCount = 0;
@@ -31,7 +53,10 @@ function resetKnownPlayerTurnFlags(player) {
   player.forbidDirectAttacksThisTurn = false;
 }
 
-export function resetPlayerDuelState(player, _options = {}) {
+export function resetPlayerDuelState(
+  player: GamePlayer | null | undefined,
+  _options: DuelResetOptions = {},
+) {
   if (!player) return;
 
   player.lp = 8000;
@@ -48,10 +73,14 @@ export function resetPlayerDuelState(player, _options = {}) {
   resetKnownPlayerTurnFlags(player);
 }
 
-export function resetDuelState(reason = "reset", options = {}) {
+export function resetDuelState(
+  this: DuelResetHost,
+  reason = "reset",
+  options: DuelResetOptions = {},
+) {
   const turn = options.turn || "player";
   const phase = options.phase || "draw";
-  const turnCounter = Number.isFinite(options.turnCounter)
+  const turnCounter = typeof options.turnCounter === "number" && Number.isFinite(options.turnCounter)
     ? options.turnCounter
     : 0;
 

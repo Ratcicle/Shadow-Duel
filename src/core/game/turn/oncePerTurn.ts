@@ -17,7 +17,58 @@
  *  - markOncePerTurnUsed
  */
 
-export function resetOncePerTurnUsage(reason = "reset") {
+import type {
+  FullGameHost,
+  GameCard,
+  GamePlayer,
+} from "../../contracts/gameRuntime.js";
+import type { EffectDefinition } from "../../contracts/effects.js";
+
+interface OncePerTurnOptions {
+  lockKey?: string;
+  key?: string;
+  actionId?: string;
+  oncePerTurnLimit?: number;
+  limit?: number;
+}
+
+type OncePerTurnEffect = EffectDefinition & {
+  oncePerTurnScope?: "card";
+  oncePerTurnPerCard?: boolean;
+  oncePerTurnLimit?: number;
+  usesPerTurn?: number;
+  maxUsesPerTurn?: number;
+};
+
+type OncePerTurnHost = Pick<
+  FullGameHost,
+  "turnCounter" | "oncePerTurnTurnCounter"
+> & {
+  oncePerTurnUsage: {
+    player: Map<string, unknown>;
+    bot: Map<string, unknown>;
+    card: WeakMap<GameCard, Map<string, unknown>>;
+  };
+  resetOncePerTurnUsage(reason?: string): void;
+  ensureOncePerTurnUsageFresh(): void;
+  getOncePerTurnLockKey(
+    card: GameCard | null,
+    effect: OncePerTurnEffect | null,
+    options?: OncePerTurnOptions,
+  ): string;
+  getOncePerTurnStore(
+    card: GameCard | null,
+    player: GamePlayer | null,
+    effect: OncePerTurnEffect | null,
+    options?: OncePerTurnOptions,
+  ): Map<string, unknown>;
+  devLog(code: string, detail?: unknown): void;
+};
+
+export function resetOncePerTurnUsage(
+  this: OncePerTurnHost,
+  reason = "reset",
+) {
   this.oncePerTurnUsage = {
     player: new Map(),
     bot: new Map(),
@@ -27,13 +78,18 @@ export function resetOncePerTurnUsage(reason = "reset") {
   this.devLog("OPT_RESET", { summary: reason, turn: this.turnCounter });
 }
 
-export function ensureOncePerTurnUsageFresh() {
+export function ensureOncePerTurnUsageFresh(this: OncePerTurnHost) {
   if (this.oncePerTurnTurnCounter !== this.turnCounter) {
     this.resetOncePerTurnUsage("turn_change");
   }
 }
 
-export function getOncePerTurnLockKey(card, effect, options = {}) {
+export function getOncePerTurnLockKey(
+  this: OncePerTurnHost,
+  card: GameCard | null,
+  effect: OncePerTurnEffect | null,
+  options: OncePerTurnOptions = {},
+) {
   const explicit = options.lockKey || options.key || null;
   if (explicit) {
     return explicit.startsWith("once_per_turn:")
@@ -50,7 +106,13 @@ export function getOncePerTurnLockKey(card, effect, options = {}) {
   return `once_per_turn:${base}`;
 }
 
-export function getOncePerTurnStore(card, player, effect, options = {}) {
+export function getOncePerTurnStore(
+  this: OncePerTurnHost,
+  card: GameCard | null,
+  player: GamePlayer | null,
+  effect: OncePerTurnEffect | null,
+  options: OncePerTurnOptions = {},
+): Map<string, unknown> {
   const useCardScope =
     effect?.oncePerTurnScope === "card" ||
     effect?.oncePerTurnPerCard === true;
@@ -70,7 +132,10 @@ export function getOncePerTurnStore(card, player, effect, options = {}) {
   return this.oncePerTurnUsage[playerId];
 }
 
-function getOncePerTurnLimit(effect, options = {}) {
+function getOncePerTurnLimit(
+  effect: OncePerTurnEffect | null,
+  options: OncePerTurnOptions = {},
+) {
   const raw =
     options.oncePerTurnLimit ??
     options.limit ??
@@ -82,16 +147,24 @@ function getOncePerTurnLimit(effect, options = {}) {
   return Number.isFinite(limit) && limit > 0 ? limit : 1;
 }
 
-function getOncePerTurnUsageCount(entry, currentTurn) {
+function getOncePerTurnUsageCount(entry: unknown, currentTurn: number) {
   if (entry === currentTurn) return 1;
   if (!entry || typeof entry !== "object") return 0;
-  const turn = Number(entry.turn ?? entry.turnCounter);
+  const turn = Number(Reflect.get(entry, "turn") ?? Reflect.get(entry, "turnCounter"));
   if (turn !== currentTurn) return 0;
-  const count = Math.floor(Number(entry.count ?? entry.uses ?? 0));
+  const count = Math.floor(
+    Number(Reflect.get(entry, "count") ?? Reflect.get(entry, "uses") ?? 0),
+  );
   return Number.isFinite(count) && count > 0 ? count : 0;
 }
 
-export function canUseOncePerTurn(card, player, effect, options = {}) {
+export function canUseOncePerTurn(
+  this: OncePerTurnHost,
+  card: GameCard | null,
+  player: GamePlayer | null,
+  effect: OncePerTurnEffect | null,
+  options: OncePerTurnOptions = {},
+) {
   if (!effect || !effect.oncePerTurn) {
     return { ok: true };
   }
@@ -113,7 +186,13 @@ export function canUseOncePerTurn(card, player, effect, options = {}) {
   return { ok: true, lockKey, used, limit, remaining: limit - used };
 }
 
-export function markOncePerTurnUsed(card, player, effect, options = {}) {
+export function markOncePerTurnUsed(
+  this: OncePerTurnHost,
+  card: GameCard | null,
+  player: GamePlayer | null,
+  effect: OncePerTurnEffect | null,
+  options: OncePerTurnOptions = {},
+) {
   if (!effect || !effect.oncePerTurn) {
     return;
   }
