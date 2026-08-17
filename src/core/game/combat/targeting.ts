@@ -3,13 +3,76 @@
  * Extracted from Game.js as part of B.5 modularization.
  */
 
+import type { GameCard } from "../../contracts/cards.js";
+import type { GamePlayer } from "../../contracts/player.js";
+import type { SelectionCandidateKey } from "../../contracts/primitives.js";
+import type {
+  RawSelectionCandidate,
+  RawSelectionContract,
+  RawSelectionRequirement,
+  SelectionCardReference,
+  SelectionResult,
+  SelectionSessionInput,
+} from "../../contracts/selection.js";
+
+type AttackCard = GameCard & {
+  canAttackAllOpponentMonstersThisTurn?: boolean;
+  passiveExtraAttackTargetRestriction?: string | null;
+};
+
+type AttackSelectionCard = AttackCard & SelectionCardReference;
+
+function asAttackSelectionCard(card: AttackCard): AttackSelectionCard {
+  return card as AttackSelectionCard;
+}
+
+interface AttackCandidate extends RawSelectionCandidate {
+  idx: number;
+  name: string;
+  owner: "player" | "opponent";
+  controller: string;
+  zone: "field" | "hand";
+  zoneIndex: number;
+  cardRef: AttackSelectionCard | null;
+  key?: SelectionCandidateKey;
+  isDirectAttack?: boolean;
+}
+
+interface AttackRequirement extends RawSelectionRequirement {
+  id: "attack_target";
+  candidates: AttackCandidate[];
+}
+
+interface AttackSelectionHost {
+  player: GamePlayer;
+  bot: GamePlayer;
+  getZone(player: GamePlayer, zone: "field"): GameCard[] | null;
+  buildSelectionCandidateKey(
+    candidate: RawSelectionCandidate,
+    fallbackIndex?: number,
+  ): SelectionCandidateKey;
+  startTargetSelectionSession(session: SelectionSessionInput): void;
+  resolveCombat(
+    attacker: AttackCard,
+    target: AttackCard | null,
+    options: {
+      allowDuringSelection: true;
+      allowDuringResolving: true;
+    },
+  ): Promise<unknown>;
+}
+
 /**
  * Start an attack target selection session for the player.
  * Creates a selection contract with valid attack targets.
- * @param {Object} attacker - The monster that is attacking
+ * @param attacker - The monster that is attacking
  * @param {Array} candidates - Array of valid target monsters
  */
-export function startAttackTargetSelection(attacker, candidates) {
+export function startAttackTargetSelection(
+  this: AttackSelectionHost,
+  attacker: AttackCard | null | undefined,
+  candidates: AttackCard[] | null | undefined,
+): void {
   if (!attacker || !Array.isArray(candidates)) return;
 
   const isMultiAttackMode = attacker.canAttackAllOpponentMonstersThisTurn;
@@ -26,12 +89,12 @@ export function startAttackTargetSelection(attacker, candidates) {
     (attacker.canAttackDirectlyThisTurn === true || candidates.length === 0);
 
   if (candidates.length === 0 && !canDirect) return;
-  const decorated = candidates.map((card, idx) => {
+  const decorated: AttackCandidate[] = candidates.map((card, idx) => {
     const ownerLabel = card.owner === attacker.owner ? "player" : "opponent";
     const ownerPlayer = card.owner === "player" ? this.player : this.bot;
     const zoneArr = this.getZone(ownerPlayer, "field") || [];
     const zoneIndex = zoneArr.indexOf(card);
-    const candidate = {
+    const candidate: AttackCandidate = {
       idx,
       name: card.name,
       owner: ownerLabel,
@@ -42,7 +105,7 @@ export function startAttackTargetSelection(attacker, candidates) {
       atk: card.atk,
       def: card.def,
       cardKind: card.cardKind,
-      cardRef: card,
+      cardRef: asAttackSelectionCard(card),
     };
     candidate.key = this.buildSelectionCandidateKey(candidate, idx);
     return candidate;
@@ -76,7 +139,7 @@ export function startAttackTargetSelection(attacker, candidates) {
     });
   }
 
-  const requirement = {
+  const requirement: AttackRequirement = {
     id: "attack_target",
     min: 1,
     max: 1,
@@ -87,7 +150,7 @@ export function startAttackTargetSelection(attacker, candidates) {
     distinct: true,
     candidates: decorated,
   };
-  const selectionContract = {
+  const selectionContract: RawSelectionContract = {
     kind: "choice",
     message: "Select a monster to attack.",
     requirements: [requirement],
@@ -97,9 +160,9 @@ export function startAttackTargetSelection(attacker, candidates) {
 
   this.startTargetSelectionSession({
     kind: "attack",
-    attacker,
+    attacker: asAttackSelectionCard(attacker),
     selectionContract,
-    execute: (selections) => {
+    execute: (selections: SelectionResult) => {
       const chosenKeys = selections[requirement.id] || [];
       const chosenKey = chosenKeys[0];
       const chosenCandidate = requirement.candidates.find(

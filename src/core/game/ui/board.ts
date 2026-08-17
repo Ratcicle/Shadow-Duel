@@ -4,8 +4,104 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { inspectZoneNullishCards } from "../zones/invariants.js";
+import type {
+  FullGameHost,
+  GameCard,
+  GamePlayer,
+} from "../../contracts/gameRuntime.js";
+import type { GamePhase } from "../../contracts/game.js";
+import type { PlayerId } from "../../contracts/primitives.js";
+import type {
+  QueuedCardAnimation,
+  QueuedVisualFeedback,
+} from "./cardAnimations.js";
 
-const RENDER_ZONE_NAMES = [
+type RenderZoneName =
+  | "hand"
+  | "field"
+  | "spellTrap"
+  | "graveyard"
+  | "extraDeck";
+
+interface BoardUpdateOptions {
+  animateCards?: boolean;
+  animateGhosts?: boolean;
+  animateFeedback?: boolean;
+}
+
+interface BoardUiPort {
+  playQueuedCardAnimations?(
+    animations: QueuedCardAnimation[],
+    options: BoardUpdateOptions,
+  ): Promise<unknown> | void;
+  playVisualFeedback?(
+    feedback: QueuedVisualFeedback[],
+    options: BoardUpdateOptions,
+  ): unknown;
+  captureCardRects?(): unknown;
+  renderHand(player: GamePlayer, context: unknown): void;
+  renderField(player: GamePlayer, context: { turnCounter: number }): void;
+  renderFieldSpell(player: GamePlayer): void;
+  renderSpellTrap?(player: GamePlayer): void;
+  updateLP(player: GamePlayer): void;
+  updatePhaseTrack(phase: GamePhase, game: BoardHost): void;
+  updateTurn(player: GamePlayer): void;
+  updateGYPreview(player: GamePlayer): void;
+  updateExtraDeckPreview?(player: GamePlayer): void;
+  syncEquipLinkIndicators?(): void;
+  setPlayerFieldTributeable?(indices: number[]): void;
+  setPlayerFieldSelected?(index: number, selected: boolean): void;
+  animateCardLayout?(rects: unknown): Promise<unknown> | void;
+  applyHandTargetableIndices?(ownerId: PlayerId, indices: number[]): void;
+}
+
+interface PendingTributeRenderState {
+  active?: boolean;
+  ownerId?: PlayerId;
+  tributeableIndices?: number[];
+  selectedTributes?: number[];
+}
+
+interface ZoneNullishInspection {
+  ok: boolean;
+  context: string;
+  issues: unknown[];
+}
+
+type BoardHost = Omit<
+  FullGameHost,
+  | "ui"
+  | "effectEngine"
+  | "pendingCardAnimations"
+  | "pendingVisualFeedback"
+  | "pendingSpecialSummon"
+  | "pendingTributeSummonSelection"
+> & {
+  ui: FullGameHost["ui"] & BoardUiPort;
+  effectEngine: FullGameHost["effectEngine"] & {
+    updatePassiveBuffs(): unknown;
+  };
+  pendingCardAnimations: QueuedCardAnimation[];
+  pendingVisualFeedback: QueuedVisualFeedback[];
+  pendingSpecialSummon: { cardName?: string } | null;
+  pendingTributeSummonSelection: PendingTributeRenderState | null;
+  devModeEnabled: boolean;
+  lastZoneNullishInspection?: ZoneNullishInspection | null;
+  isDisposed(): boolean;
+  devLog?(code: string, detail?: unknown): void;
+  highlightTargetCandidates(): void;
+  highlightReadySpecialSummon(): void;
+  updateActivationIndicators(): void;
+  updateAttackIndicators(): void;
+  normalizeZoneCardOwnership(
+    contextLabel?: string,
+    options?: { enforceZoneOwner?: boolean },
+  ): void;
+  forceClearTargetSelection(reason: string): void;
+  setSelectionState(state: string): void;
+};
+
+const RENDER_ZONE_NAMES: RenderZoneName[] = [
   "hand",
   "field",
   "spellTrap",
@@ -13,13 +109,16 @@ const RENDER_ZONE_NAMES = [
   "extraDeck",
 ];
 
-function createRenderZoneList(player, zoneName) {
+function createRenderZoneList(
+  player: GamePlayer,
+  zoneName: RenderZoneName,
+): GameCard[] {
   return Array.isArray(player?.[zoneName])
     ? player[zoneName].filter((card) => card != null)
     : [];
 }
 
-function createPlayerRenderView(player) {
+function createPlayerRenderView(player: GamePlayer): GamePlayer {
   if (!player) return player;
   const renderPlayer = Object.assign(
     Object.create(Object.getPrototypeOf(player)),
@@ -31,7 +130,10 @@ function createPlayerRenderView(player) {
   return renderPlayer;
 }
 
-function reportNullishZoneIssues(game, inspection) {
+function reportNullishZoneIssues(
+  game: BoardHost,
+  inspection: ZoneNullishInspection,
+) {
   if (!game) return;
   game.lastZoneNullishInspection = inspection?.ok === false ? inspection : null;
   if (inspection?.ok !== false) return;
@@ -51,7 +153,10 @@ function reportNullishZoneIssues(game, inspection) {
  * Updates the entire board display.
  * Refreshes all zones, LP, phase track, and indicators.
  */
-export function updateBoard(options = {}) {
+export function updateBoard(
+  this: BoardHost,
+  options: BoardUpdateOptions = {},
+) {
   if (this.isDisposed?.()) return Promise.resolve(false);
 
   const shouldAnimateCards = options.animateCards !== false;
@@ -75,7 +180,7 @@ export function updateBoard(options = {}) {
     canPlayFeedback && Array.isArray(this.pendingVisualFeedback)
       ? this.pendingVisualFeedback.splice(0)
       : [];
-  const presentationPromises = [];
+  const presentationPromises: Promise<unknown>[] = [];
 
   if (!canPlayGhosts && Array.isArray(this.pendingCardAnimations)) {
     this.pendingCardAnimations.length = 0;
@@ -90,9 +195,12 @@ export function updateBoard(options = {}) {
       : null;
 
   const renderNow = () => {
-    const nullishInspection = inspectZoneNullishCards(this, "updateBoard", {
-      zones: RENDER_ZONE_NAMES,
-    });
+    const nullishInspection = inspectZoneNullishCards.call(
+      undefined,
+      this,
+      "updateBoard",
+      { zones: RENDER_ZONE_NAMES },
+    );
     reportNullishZoneIssues(this, nullishInspection);
 
     // Update passive effects before rendering
@@ -173,7 +281,9 @@ export function updateBoard(options = {}) {
         this.pendingTributeSummonSelection.selectedTributes || [];
       this.ui.setPlayerFieldTributeable(tributeable);
       if (typeof this.ui.setPlayerFieldSelected === "function") {
-        selected.forEach((index) => this.ui.setPlayerFieldSelected(index, true));
+        selected.forEach((index) =>
+          this.ui.setPlayerFieldSelected!(index, true)
+        );
       }
     }
 
@@ -195,7 +305,7 @@ export function updateBoard(options = {}) {
   }
 
   if (queuedGhostAnimations.length > 0) {
-    const ghostPresentation = this.ui.playQueuedCardAnimations(
+    const ghostPresentation = this.ui.playQueuedCardAnimations!(
       queuedGhostAnimations,
       options,
     );
@@ -205,7 +315,7 @@ export function updateBoard(options = {}) {
   }
 
   if (queuedVisualFeedback.length > 0) {
-    this.ui.playVisualFeedback(queuedVisualFeedback, options);
+    this.ui.playVisualFeedback!(queuedVisualFeedback, options);
   }
 
   this.cardAnimationsReady = true;
@@ -219,12 +329,13 @@ export function updateBoard(options = {}) {
 /**
  * Highlights cards in hand ready for pending special summon.
  */
-export function highlightReadySpecialSummon() {
+export function highlightReadySpecialSummon(this: BoardHost) {
   // Find and highlight the card ready for special summon in hand
   if (!this.pendingSpecialSummon) return;
-  const indices = [];
-  this.player.hand.forEach((card, index) => {
-    if (card && card.name === this.pendingSpecialSummon.cardName) {
+  const cardName = this.pendingSpecialSummon.cardName;
+  const indices: number[] = [];
+  this.player.hand.forEach((card: GameCard, index: number) => {
+    if (card && card.name === cardName) {
       indices.push(index);
     }
   });

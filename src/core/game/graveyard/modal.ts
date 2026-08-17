@@ -8,14 +8,101 @@
  */
 
 import { getUIText } from "../../i18n.js";
+import type {
+  GameCard,
+  GamePlayer,
+} from "../../contracts/gameRuntime.js";
+import type { EffectDefinition } from "../../contracts/effects.js";
+
+interface ActivationPreview {
+  ok: boolean;
+  reason?: string | null;
+}
+
+interface MonsterActivationEntry {
+  effect: EffectDefinition;
+  preview: ActivationPreview;
+}
+
+interface GraveyardEffectEnginePort {
+  hasActivatableGraveyardEffect(card: GameCard, player: GamePlayer): boolean;
+  getFirstActivatableMonsterIgnitionEffect?(
+    card: GameCard,
+    player: GamePlayer,
+    zone: "graveyard",
+  ): MonsterActivationEntry | null;
+  canActivateSpellTrapEffectPreview?(
+    card: GameCard,
+    player: GamePlayer,
+    zone: "graveyard",
+  ): ActivationPreview;
+  canActivateMonsterEffectPreview?(
+    card: GameCard,
+    player: GamePlayer,
+    zone: "graveyard",
+  ): ActivationPreview;
+  getSpellTrapActivationEffect?(
+    card: GameCard,
+    context: { fromHand: false; activationZone: "graveyard" },
+  ): EffectDefinition | null;
+  getMonsterIgnitionEffect?(
+    card: GameCard,
+    zone: "graveyard",
+    options: { effectId: string | null },
+  ): EffectDefinition | null;
+  activateSpellTrapEffect(
+    card: GameCard,
+    player: GamePlayer,
+    selections: unknown,
+    zone: "graveyard",
+    context: unknown,
+  ): unknown;
+  activateMonsterFromGraveyard(
+    card: GameCard,
+    player: GamePlayer,
+    selections: unknown,
+    context: unknown,
+  ): unknown;
+}
+
+interface GraveyardModalOptions {
+  selectable?: boolean;
+  onCancel?: (() => void) | null;
+  showActivatable?: boolean;
+  isActivatable?: (card: GameCard) => boolean;
+  onSelect?: (card: GameCard) => void;
+}
+
+interface GraveyardUiPort {
+  log(message: string): void;
+  renderGraveyardModal(
+    cards: GameCard[],
+    options: GraveyardModalOptions,
+  ): void;
+  toggleModal(open: boolean): void;
+}
+
+interface GraveyardHost {
+  turn: "player" | "bot";
+  graveyardSelection: { onCancel: (() => void) | null } | null;
+  effectEngine: GraveyardEffectEnginePort;
+  ui: GraveyardUiPort;
+  runActivationPipeline(config: unknown): unknown;
+  closeGraveyardModal(triggerCancel?: boolean): void;
+  updateBoard(): unknown;
+}
 
 /**
  * Opens the graveyard modal for a player.
  * Optionally enables effect activation mode.
- * @param {Object} player - The player whose graveyard to show
- * @param {Object} options - Options { selectable, onCancel, showActivatable, isActivatable, onSelect }
+ * @param player - The player whose graveyard to show
+ * @param options - Options { selectable, onCancel, showActivatable, isActivatable, onSelect }
  */
-export function openGraveyardModal(player, options = {}) {
+export function openGraveyardModal(
+  this: GraveyardHost,
+  player: GamePlayer,
+  options: GraveyardModalOptions = {},
+) {
   if (options.selectable) {
     this.graveyardSelection = { onCancel: options.onCancel || null };
   } else {
@@ -25,13 +112,13 @@ export function openGraveyardModal(player, options = {}) {
   // Se não está em modo de seleção, mostrar indicador de efeitos ativáveis
   if (!options.selectable && player.id === "player" && this.turn === "player") {
     options.showActivatable = true;
-    options.isActivatable = (card) => {
+    options.isActivatable = (card: GameCard) => {
       return this.effectEngine.hasActivatableGraveyardEffect(card, player);
     };
 
     // Se não tem onSelect customizado, usar o padrão para ativar efeitos
     if (!options.onSelect) {
-      options.onSelect = (card) => {
+      options.onSelect = (card: GameCard) => {
         const isSpellTrap =
           card?.cardKind === "spell" || card?.cardKind === "trap";
         const monsterEffectEntry = !isSpellTrap
@@ -93,7 +180,7 @@ export function openGraveyardModal(player, options = {}) {
             effect: activationEffect,
           },
           onSelectionStart: () => this.closeGraveyardModal(false),
-          activate: (chosen, ctx) =>
+          activate: (chosen: unknown, ctx: unknown) =>
             isSpellTrap
               ? this.effectEngine.activateSpellTrapEffect(
                   card,
@@ -127,7 +214,10 @@ export function openGraveyardModal(player, options = {}) {
  * Closes the graveyard modal.
  * @param {boolean} triggerCancel - Whether to trigger onCancel callback (default: true)
  */
-export function closeGraveyardModal(triggerCancel = true) {
+export function closeGraveyardModal(
+  this: GraveyardHost,
+  triggerCancel = true,
+) {
   this.ui.toggleModal(false);
   if (triggerCancel && this.graveyardSelection?.onCancel) {
     this.graveyardSelection.onCancel();

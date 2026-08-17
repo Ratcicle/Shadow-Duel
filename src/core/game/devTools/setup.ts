@@ -3,10 +3,106 @@
  * Handles: applyManualSetup
  */
 
+import type {
+  FullGameHost,
+  GameCard,
+  GameDevToolsHost,
+  GamePlayer,
+} from "../../contracts/gameRuntime.js";
+import type { BattlePosition } from "../../contracts/cards.js";
+import type { PlayerId } from "../../contracts/primitives.js";
+
+interface ScenarioCardEntry {
+  id?: number;
+  name?: string;
+  duelCardId?: number;
+  position?: BattlePosition;
+  facedown?: boolean;
+  isFacedown?: boolean;
+  turnSetOn?: number;
+  counters?: { readonly [counterType: string]: number };
+}
+
+type ScenarioEntry = string | ScenarioCardEntry;
+
+interface ScenarioSide {
+  lp?: number;
+  hand?: ScenarioEntry[];
+  field?: ScenarioEntry[];
+  spellTrap?: ScenarioEntry[];
+  graveyard?: ScenarioEntry[];
+  fieldSpell?: ScenarioEntry | ScenarioEntry[] | null;
+  extraDeck?: ScenarioEntry[];
+  deck?: ScenarioEntry[];
+  deckTop?: ScenarioEntry[];
+}
+
+interface ScenarioDefinition {
+  player?: ScenarioSide;
+  bot?: ScenarioSide;
+  turn?: string;
+  phase?: string;
+}
+
+interface ScenarioOptions {
+  immediateActions?: boolean;
+  updateBoard?: boolean;
+  logMessage?: string;
+}
+
+type ScenarioZone =
+  | "hand"
+  | "field"
+  | "spellTrap"
+  | "graveyard"
+  | "fieldSpell"
+  | "extraDeck"
+  | "deck";
+
+type ScenarioHost = GameDevToolsHost &
+  Pick<
+    FullGameHost,
+    | "player"
+    | "bot"
+    | "turn"
+    | "phase"
+    | "turnCounter"
+    | "gameOver"
+    | "isResolvingEffect"
+    | "eventResolutionDepth"
+    | "pendingSpecialSummon"
+    | "effectEngine"
+    | "ui"
+  > & {
+    createCardForOwner(
+      identifier: ScenarioCardEntry,
+      owner: GamePlayer,
+      overrides?: ScenarioCardEntry,
+    ): GameCard | null;
+    setMonsterFacing(
+      card: GameCard,
+      options?: { position?: BattlePosition; facedown?: boolean },
+    ): void;
+    cancelTargetSelection(): void;
+    updateBoard(): unknown;
+    resetOncePerTurnUsage(reason?: string): void;
+    assertStateInvariants(
+      context: string,
+      options?: { failFast?: boolean },
+    ): unknown;
+    devLog(code: string, detail?: unknown): void;
+    effectEngine: FullGameHost["effectEngine"] & {
+      updatePassiveBuffs(): unknown;
+    };
+  };
+
 /**
  * @this {import('../../Game.js').default}
  */
-export function applyManualSetup(definition = {}) {
+export function applyManualSetup(
+  this: ScenarioHost,
+  definition: ScenarioDefinition = {},
+) {
   if (!this.devModeEnabled) {
     return { success: false, reason: "Dev Mode is disabled." };
   }
@@ -20,23 +116,31 @@ export function applyManualSetup(definition = {}) {
  * Used by DevTools and the Laboratory setup flow.
  * @this {import('../../Game.js').default}
  */
-export function applyScenarioSetup(definition = {}, options = {}) {
+export function applyScenarioSetup(
+  this: ScenarioHost,
+  definition: ScenarioDefinition = {},
+  options: ScenarioOptions = {},
+) {
   if (!definition || typeof definition !== "object") {
     return { success: false, reason: "Setup must be an object." };
   }
 
-  const warnings = [];
+  const warnings: string[] = [];
   const setupTurn =
     options.immediateActions === true
       ? Math.max(0, (this.turnCounter || 0) - 1)
       : this.turnCounter;
-  const normalizeEntry = (entry) => {
+  const normalizeEntry = (entry: ScenarioEntry): ScenarioCardEntry | null => {
     if (typeof entry === "string") return { name: entry };
     if (entry && typeof entry === "object") return { ...entry };
     return null;
   };
 
-  const placeInZone = (player, entry, zone) => {
+  const placeInZone = (
+    player: GamePlayer,
+    entry: ScenarioEntry,
+    zone: ScenarioZone,
+  ) => {
     const normalized = normalizeEntry(entry);
     if (!normalized) {
       warnings.push(`Invalid entry for ${zone}.`);
@@ -107,7 +211,7 @@ export function applyScenarioSetup(definition = {}, options = {}) {
     }
   };
 
-  const resetSide = (player) => {
+  const resetSide = (player: GamePlayer) => {
     player.hand = [];
     player.field = [];
     player.spellTrap = [];
@@ -116,7 +220,7 @@ export function applyScenarioSetup(definition = {}, options = {}) {
     player.oncePerTurnUsageByName = {};
   };
 
-  const applySide = (player, payload = {}) => {
+  const applySide = (player: GamePlayer, payload: ScenarioSide = {}) => {
     if (!payload || typeof payload !== "object") return;
 
     resetSide(player);
@@ -184,7 +288,7 @@ export function applyScenarioSetup(definition = {}, options = {}) {
     this.turn = definition.turn === "bot" ? "bot" : "player";
   }
   if (typeof definition.phase === "string") {
-    this.phase = definition.phase;
+    Reflect.set(this, "phase", definition.phase);
   }
 
   this.gameOver = false;

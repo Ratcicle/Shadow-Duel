@@ -10,7 +10,47 @@
  *  - guardActionStart
  */
 
-export function canStartAction(options = {}) {
+import type { GameActionGuardHost, GamePlayer } from "../../contracts/gameRuntime.js";
+import type { GamePhase } from "../../contracts/game.js";
+
+type ActionGuardActor = GamePlayer & {
+  opponentCannotActivateDuringBattle?: boolean;
+};
+
+interface ActionGuardOptions {
+  actor?: ActionGuardActor | null;
+  kind?: string;
+  silent?: boolean;
+  allowDuringSelection?: boolean;
+  allowDuringResolving?: boolean;
+  allowDuringOpponentTurn?: boolean;
+  allowDuringChainWindow?: boolean;
+  phaseReq?: GamePhase | readonly GamePhase[] | null;
+}
+
+interface ActionGuardFailure {
+  ok: false;
+  success: false;
+  needsSelection: false;
+  code: string;
+  reason: string;
+}
+
+interface ActionGuardSuccess {
+  ok: true;
+}
+
+export type ActionGuardResult = ActionGuardSuccess | ActionGuardFailure;
+
+type GuardHost = GameActionGuardHost & {
+  pendingTributeSummonSelection: { active?: boolean } | null;
+  canStartAction(options?: ActionGuardOptions): ActionGuardResult;
+};
+
+export function canStartAction(
+  this: GuardHost,
+  options: ActionGuardOptions = {},
+): ActionGuardResult {
   const actor = options.actor || null;
   const kind = options.kind || "action";
   const silent = options.silent === true;
@@ -39,8 +79,8 @@ export function canStartAction(options = {}) {
     selectionState === "resolving" ||
     this.eventResolutionDepth > 0;
 
-  const blocked = (code, reason) => {
-    const result = {
+  const blocked = (code: string, reason: string): ActionGuardFailure => {
+    const result: ActionGuardFailure = {
       ok: false,
       success: false,
       needsSelection: false,
@@ -139,7 +179,11 @@ export function canStartAction(options = {}) {
   return { ok: true };
 }
 
-export function guardActionStart(options = {}, logToRenderer = true) {
+export function guardActionStart(
+  this: GuardHost,
+  options: ActionGuardOptions = {},
+  logToRenderer = true,
+): ActionGuardResult {
   const result = this.canStartAction(options);
   if (!result.ok) {
     this._arenaTracker?.recordBlockedAction?.({

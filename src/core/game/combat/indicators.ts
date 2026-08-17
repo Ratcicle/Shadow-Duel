@@ -3,11 +3,48 @@
  * Extracted from Game.js as part of B.5 modularization.
  */
 
+import type { GameCard } from "../../contracts/cards.js";
+import type { GamePlayer } from "../../contracts/player.js";
+
+interface AttackAvailabilityResult {
+  ok: boolean;
+}
+
+interface AttackResolutionIndicatorState {
+  attackerOwner: "player" | "bot";
+  attackerIndex: number;
+  targetOwner: "player" | "bot";
+  targetIndex: number;
+  directAttack: boolean;
+}
+
+interface CombatIndicatorUiPort {
+  applyAttackReadyIndicators?(owner: "player", indices: number[]): void;
+  clearAttackReadyIndicators?(): void;
+  applyAttackResolutionIndicators?(
+    state: AttackResolutionIndicatorState,
+  ): void;
+  clearAttackResolutionIndicators?(): void;
+}
+
+interface CombatIndicatorHost {
+  player: GamePlayer;
+  bot: GamePlayer;
+  turn: string;
+  phase: string;
+  selectionState?: string | null;
+  isResolvingEffect?: boolean;
+  eventResolutionDepth: number;
+  ui?: CombatIndicatorUiPort | null;
+  clearAttackReadyIndicators(): void;
+  getAttackAvailability(card: GameCard): AttackAvailabilityResult;
+}
+
 /**
  * Update attack ready indicators for player's monsters.
  * Shows which monsters can attack during battle phase.
  */
-export function updateAttackIndicators() {
+export function updateAttackIndicators(this: CombatIndicatorHost): void {
   this.clearAttackReadyIndicators();
 
   const selectionState = this.selectionState || "idle";
@@ -23,7 +60,7 @@ export function updateAttackIndicators() {
   }
 
   const field = this.player.field || [];
-  const readyIndices = [];
+  const readyIndices: number[] = [];
   field.forEach((card, index) => {
     if (!card || card.cardKind !== "monster") return;
     const availability = this.getAttackAvailability(card);
@@ -39,7 +76,7 @@ export function updateAttackIndicators() {
 /**
  * Clear all attack ready indicators from the UI.
  */
-export function clearAttackReadyIndicators() {
+export function clearAttackReadyIndicators(this: CombatIndicatorHost): void {
   if (this.ui && typeof this.ui.clearAttackReadyIndicators === "function") {
     this.ui.clearAttackReadyIndicators();
   }
@@ -47,10 +84,14 @@ export function clearAttackReadyIndicators() {
 
 /**
  * Apply attack resolution indicators showing attacker and target.
- * @param {Object} attacker - The attacking monster
- * @param {Object|null} target - The target monster (null for direct attack)
+ * @param attacker - The attacking monster
+ * @param target - The target monster (null for direct attack)
  */
-export function applyAttackResolutionIndicators(attacker, target) {
+export function applyAttackResolutionIndicators(
+  this: CombatIndicatorHost,
+  attacker: GameCard,
+  target: GameCard | null,
+): void {
   const attackerOwner = attacker?.owner === "player" ? "player" : "bot";
   const attackerField =
     attackerOwner === "player" ? this.player.field : this.bot.field;
@@ -77,7 +118,9 @@ export function applyAttackResolutionIndicators(attacker, target) {
 /**
  * Clear attack resolution indicators from the UI.
  */
-export function clearAttackResolutionIndicators() {
+export function clearAttackResolutionIndicators(
+  this: CombatIndicatorHost,
+): void {
   if (
     this.ui &&
     typeof this.ui.clearAttackResolutionIndicators === "function"

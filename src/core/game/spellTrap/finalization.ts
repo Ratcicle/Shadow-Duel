@@ -3,6 +3,98 @@
 // Spell/Trap finalization methods for Game class — B.9 extraction
 // ─────────────────────────────────────────────────────────────────────────────
 
+import type { GameCard } from "../../contracts/cards.js";
+import type {
+  MaybePromise,
+  MoveCardOptions,
+  MoveCardResult,
+  SummonExecutionResult,
+} from "../../contracts/gameRuntime.js";
+import type { GamePlayer } from "../../contracts/player.js";
+import type { CanonicalZone } from "../../contracts/zones.js";
+
+type SpellTrapActivationZone = "spellTrap" | "fieldSpell";
+type RuntimeCardInstanceId = string | number | null;
+
+interface SpellTrapFinalizationOverride {
+  type: "set_source" | "default";
+  sourceCardId?: number | null;
+  sourceInstanceId?: string | number | null;
+  deferUntil?: string | null;
+  setTurn?: number | null;
+  reason?: string | null;
+  ownerId?: string | null;
+  activationZone?: SpellTrapActivationZone;
+}
+
+type FinalizableCard = GameCard & {
+  _instanceId?: string | number | null;
+  uuid?: string | null;
+  simInstanceId?: string | number | null;
+  pendingSpellTrapFinalization?: SpellTrapFinalizationOverride;
+};
+
+interface SpellTrapActivationContext {
+  effectId?: string | null;
+  chainId?: number | null;
+  linkId?: number | null;
+  spellTrapFinalization?: SpellTrapFinalizationOverride;
+}
+
+interface SpellTrapFinalizationOptions {
+  activationContext?: SpellTrapActivationContext;
+  forceDeferredFinalization?: boolean;
+  deferUntil?: string | null;
+}
+
+interface SpellTrapFinalizationHost {
+  turnCounter: number;
+  ui: { log(message: string): void };
+  moveCard(
+    card: GameCard,
+    player: GamePlayer,
+    zone: "graveyard" | "hand" | "spellTrap" | "fieldSpell",
+    options: MoveCardOptions,
+  ): MaybePromise<MoveCardResult | SummonExecutionResult>;
+  updateBoard(): unknown;
+  devLog?(
+    code: string,
+    detail: {
+      summary: string;
+      card?: string;
+      reason?: string;
+      zone?: string;
+      owner?: string;
+    },
+  ): void;
+  assertStateInvariants(
+    scope: string,
+    options: { failFast: false },
+  ): void;
+}
+
+interface CardActivationCommitInfo {
+  cardRef: FinalizableCard;
+  activationZone: SpellTrapActivationZone;
+  zoneIndex: number | null;
+  fromIndex: number;
+  replacedFieldSpell: GameCard | null;
+}
+
+interface FieldSpellTrapActivationSnapshot {
+  card: FinalizableCard;
+  owner: GamePlayer;
+  zone?: SpellTrapActivationZone;
+  wasFacedown?: boolean;
+  previousTurnSetOn?: number | null;
+  previousSetTurn?: number | null;
+}
+
+interface FailureReasonResult {
+  reason?: string;
+  code?: string;
+}
+
 /**
  * Finalizes spell/trap activation (post-chain resolution).
  * Moves non-continuous spells/traps to graveyard after activation.
@@ -10,11 +102,16 @@
  * @param {Player} owner - The card owner.
  * @param {string} activationZone - Zone where activation occurred.
  */
-function getCardInstanceId(card) {
+function getCardInstanceId(
+  card: FinalizableCard | null | undefined,
+): RuntimeCardInstanceId {
   return card?.instanceId ?? card?._instanceId ?? card?.uuid ?? card?.simInstanceId ?? null;
 }
 
-function finalizationOverrideMatches(card, override) {
+function finalizationOverrideMatches(
+  card: FinalizableCard | null | undefined,
+  override: SpellTrapFinalizationOverride | null | undefined,
+): boolean {
   if (!card || !override) return false;
   if (override.sourceCardId !== undefined && override.sourceCardId !== null) {
     if (card.id !== override.sourceCardId) return false;
@@ -30,7 +127,12 @@ function finalizationOverrideMatches(card, override) {
   return true;
 }
 
-function storePendingSpellTrapFinalization(card, owner, activationZone, override) {
+function storePendingSpellTrapFinalization(
+  card: FinalizableCard | null | undefined,
+  owner: GamePlayer | null | undefined,
+  activationZone: SpellTrapActivationZone | null,
+  override: SpellTrapFinalizationOverride | null | undefined,
+): boolean {
   if (!card || !owner || !override) return false;
   card.pendingSpellTrapFinalization = {
     ...override,
@@ -41,12 +143,13 @@ function storePendingSpellTrapFinalization(card, owner, activationZone, override
 }
 
 async function applyDefaultSpellTrapFinalization(
-  game,
-  card,
-  owner,
-  activationZone,
-  options = {},
-) {
+  game: SpellTrapFinalizationHost,
+  card: FinalizableCard | null | undefined,
+  owner: GamePlayer | null | undefined,
+  activationZone: SpellTrapActivationZone | null,
+  options: SpellTrapFinalizationOptions = {},
+): Promise<boolean> {
+  if (!card || !owner) return false;
   const subtype = card?.subtype || "";
   const kind = card?.cardKind || "";
   const shouldSendToGY =
@@ -55,6 +158,7 @@ async function applyDefaultSpellTrapFinalization(
 
   if (!shouldSendToGY) return false;
   if (!isSpellTrapInActivationZone(owner, card, activationZone)) return false;
+  if (!activationZone) return false;
   const activationContext = options.activationContext || {};
   await game.moveCard(card, owner, "graveyard", {
     fromZone: activationZone,
@@ -73,24 +177,32 @@ async function applyDefaultSpellTrapFinalization(
   return true;
 }
 
-function isSpellTrapInActivationZone(owner, card, activationZone) {
+function isSpellTrapInActivationZone(
+  owner: GamePlayer | null | undefined,
+  card: FinalizableCard | null | undefined,
+  activationZone: SpellTrapActivationZone | null,
+): boolean {
   if (!owner || !card) return false;
   if (activationZone === "fieldSpell") return owner.fieldSpell === card;
   return owner.spellTrap?.includes?.(card) === true;
 }
 
 export async function finalizeNegatedSpellTrapActivation(
-  game,
-  card,
-  owner,
-  activationZone = null,
-  options = {},
-) {
+  game: SpellTrapFinalizationHost | null | undefined,
+  card: FinalizableCard | null | undefined,
+  owner: GamePlayer | null | undefined,
+  activationZone: CanonicalZone | null = null,
+  options: SpellTrapFinalizationOptions = {},
+): Promise<boolean> {
   if (!game || !card || !owner) return false;
   if (card.cardKind !== "spell" && card.cardKind !== "trap") return false;
   if (
     !activationZone ||
-    !isSpellTrapInActivationZone(owner, card, activationZone)
+    !isSpellTrapInActivationZone(
+      owner,
+      card,
+      activationZone as SpellTrapActivationZone,
+    )
   ) {
     return false;
   }
@@ -99,18 +211,19 @@ export async function finalizeNegatedSpellTrapActivation(
     game,
     card,
     owner,
-    activationZone,
+    activationZone as SpellTrapActivationZone,
     options,
   );
   return true;
 }
 
 export function applySpellTrapFinalizationOverride(
-  card,
-  owner,
-  activationZone = null,
-  options = {},
-) {
+  this: SpellTrapFinalizationHost,
+  card: FinalizableCard | null | undefined,
+  owner: GamePlayer | null | undefined,
+  activationZone: SpellTrapActivationZone | null = null,
+  options: SpellTrapFinalizationOptions = {},
+): boolean {
   if (!card || !owner) return false;
   const override = options?.activationContext?.spellTrapFinalization;
   if (!override || (override.type !== "set_source" && override.type !== "default")) {
@@ -153,11 +266,12 @@ export function applySpellTrapFinalizationOverride(
 }
 
 export async function resolvePendingSpellTrapFinalization(
-  card,
-  owner,
-  activationZone = "spellTrap",
-  options = {},
-) {
+  this: SpellTrapFinalizationHost,
+  card: FinalizableCard | null | undefined,
+  owner: GamePlayer | null | undefined,
+  activationZone: SpellTrapActivationZone = "spellTrap",
+  options: SpellTrapFinalizationOptions = {},
+): Promise<boolean> {
   if (!card || !owner) return false;
   const pending = card.pendingSpellTrapFinalization;
   if (!pending) return false;
@@ -199,11 +313,12 @@ export async function resolvePendingSpellTrapFinalization(
 }
 
 export async function finalizeSpellTrapActivation(
-  card,
-  owner,
-  activationZone = null,
-  options = {},
-) {
+  this: SpellTrapFinalizationHost,
+  card: FinalizableCard | null | undefined,
+  owner: GamePlayer | null | undefined,
+  activationZone: SpellTrapActivationZone | null = null,
+  options: SpellTrapFinalizationOptions = {},
+): Promise<void> {
   if (!card || !owner) return;
   if (
     applySpellTrapFinalizationOverride.call(
@@ -230,9 +345,13 @@ export async function finalizeSpellTrapActivation(
  * activation. Returns the committed card reference and activation zone.
  * @param {Player} player - The player performing activation.
  * @param {number} handIndex - Index of the card in hand.
- * @returns {Object|null} Commit info with cardRef, activationZone, etc.
+ * @returns Commit info with cardRef, activationZone, etc.
  */
-export async function commitCardActivationFromHand(player, handIndex) {
+export async function commitCardActivationFromHand(
+  this: SpellTrapFinalizationHost,
+  player: GamePlayer | null | undefined,
+  handIndex: number | null | undefined,
+): Promise<CardActivationCommitInfo | null> {
   if (!player || handIndex == null) return null;
   const card = player.hand?.[handIndex];
   if (!card) return null;
@@ -288,9 +407,13 @@ export async function commitCardActivationFromHand(player, handIndex) {
 /**
  * Rollback a spell activation if it fails mid-process.
  * @param {Player} player - The player whose activation is being rolled back.
- * @param {Object} commitInfo - Info from commitCardActivationFromHand.
+ * @param commitInfo - Info from commitCardActivationFromHand.
  */
-export async function rollbackSpellActivation(player, commitInfo) {
+export async function rollbackSpellActivation(
+  this: SpellTrapFinalizationHost,
+  player: GamePlayer | null | undefined,
+  commitInfo: CardActivationCommitInfo | null | undefined,
+): Promise<void> {
   if (!player || !commitInfo || !commitInfo.cardRef) return;
   const { cardRef, activationZone, fromIndex, replacedFieldSpell } = commitInfo;
   const sourceZone = activationZone || "spellTrap";
@@ -328,11 +451,15 @@ import { isQuickSpell } from "./quickSpellRules.js";
  * Restore a Set field Spell/Trap activation that failed after being revealed.
  * This intentionally does not move cards between zones; it only rolls back
  * reveal metadata when the card is still in its original Spell/Trap zone.
- * @param {Object} snapshot - Field activation state captured before reveal.
- * @param {Object|string} reasonOrResult - Failure/cancel reason for dev logs.
+ * @param snapshot - Field activation state captured before reveal.
+ * @param reasonOrResult - Failure/cancel reason for dev logs.
  * @returns {boolean} Whether rollback was applied.
  */
-export function rollbackFieldSpellTrapActivation(snapshot, reasonOrResult = null) {
+export function rollbackFieldSpellTrapActivation(
+  this: SpellTrapFinalizationHost,
+  snapshot: FieldSpellTrapActivationSnapshot | null | undefined,
+  reasonOrResult: string | FailureReasonResult | null = null,
+): boolean {
   if (!snapshot || !snapshot.card || !snapshot.owner) return false;
   const {
     card,
