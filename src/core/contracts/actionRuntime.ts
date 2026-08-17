@@ -1,8 +1,13 @@
 import type { ActionOf, ActionType, CardAction } from "./actions.js";
 import type {
+  AscensionMaterialRecord,
   BattlePosition,
   BattlePositionInput,
+  CardDeclaredValueMap,
+  CardDynamicBuffMap,
   CardKind,
+  CardPermanentBuffMap,
+  CardStatusRegistry,
   MonsterType,
 } from "./cards.js";
 import type {
@@ -49,9 +54,9 @@ export interface ActionRuntimeCard {
   id?: number;
   name: string;
   instanceId?: number;
-  _instanceId?: number;
-  uuid?: string;
-  simInstanceId?: number | string;
+  _instanceId?: number | string | null;
+  uuid?: string | null;
+  simInstanceId?: number | string | null;
   cardKind?: CardKind;
   originalCardKind?: CardKind | null;
   treatedAsCardKinds?: CardKind[];
@@ -69,13 +74,13 @@ export interface ActionRuntimeCard {
   controller?: string;
   level?: number;
   baseLevel?: number;
-  originalLevel?: number;
+  originalLevel?: number | null;
   atk?: number;
   def?: number;
   baseAtk?: number;
   baseDef?: number;
-  originalAtk?: number;
-  originalDef?: number;
+  originalAtk?: number | null;
+  originalDef?: number | null;
   position?: BattlePosition;
   isFacedown?: boolean;
   isToken?: boolean;
@@ -83,8 +88,8 @@ export interface ActionRuntimeCard {
   effects?: readonly EffectDefinition[];
   effectsNegated?: boolean;
   effectsNegatedDuration?: string | number | null;
-  ascensionMaterials?: ActionRuntimeCard[];
-  declaredValues?: {
+  ascensionMaterials?: ActionRuntimeCard[] | AscensionMaterialRecord[];
+  declaredValues?: CardDeclaredValueMap | {
     [property: string]:
       | string
       | number
@@ -113,21 +118,24 @@ export interface ActionRuntimeCard {
   equipAtkBonus?: number;
   equipDefBonus?: number;
   attackLimitThisTurn?: number | null;
-  attackLimitDuration?: string | null;
+  attackLimitDuration?: string | number | null;
   canAttackAllOpponentMonstersThisTurn?: boolean;
   attackedMonstersThisTurn?: Set<number | string>;
   multiAttackLimit?: number;
-  tempStatuses?: { [status: string]: unknown };
+  tempStatuses?: CardStatusRegistry | object;
   protectionEffects?: ActionRuntimeProtectionEffect[];
   hasChangedPosition?: boolean;
   positionChangedThisTurn?: boolean;
   battlePositionLocked?: boolean;
   revealedTurn?: number | null;
-  permanentBuffsBySource?: {
+  permanentBuffsBySource?: CardPermanentBuffMap | {
     [sourceName: string]: { atk?: number; def?: number };
   };
   turnBasedBuffs?: ActionRuntimeTurnBasedBuff[];
-  dynamicBuffs?: { [key: string]: ActionRuntimeDynamicBuff };
+  dynamicBuffs?:
+    | CardDynamicBuffMap
+    | { [key: string]: ActionRuntimeDynamicBuff }
+    | null;
   suppressedDynamicBuffStatsByKey?: ActionRuntimeSuppressedStats;
   temporarySuppressedDynamicBuffStatsByKey?: ActionRuntimeSuppressedStats;
   linkedPermanentBuffSourceNames?: string[];
@@ -161,9 +169,9 @@ export interface ActionRuntimeSuppressedStats {
 
 export interface ActionRuntimeProtectionEffect {
   type: string;
-  source: string;
-  duration: string;
-  grantedOnTurn?: number;
+  source?: string;
+  duration: string | number;
+  grantedOnTurn?: number | null;
   expiresOnTurn?: number | null;
   sourceOwner?: string;
   removeOnLeave?: boolean;

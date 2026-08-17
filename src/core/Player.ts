@@ -16,16 +16,94 @@ import {
   selectTributeIndicesByValue,
 } from "./game/summon/tributeValue.js";
 
-function isExtraDeckMonsterData(data) {
-  return ["fusion", "ascension", "synchro"].includes(data?.monsterType);
+import type {
+  BattlePosition,
+  CardConstructorData,
+  EffectUsageMap,
+  GameCard,
+  MonsterType,
+} from "./contracts/cards.js";
+import type { EffectDefinition } from "./contracts/effects.js";
+import type {
+  MoveCardResult,
+  PlayerGamePort,
+  SummonExecutionResult,
+} from "./contracts/gameRuntime.js";
+import type {
+  AdditionalNormalSummonPermission,
+  EffectActivationRestriction,
+  GamePlayer,
+  KnownNormalSummonRecord,
+  NormalSummonCardView,
+  NormalSummonFilter,
+  NormalSummonRecord,
+  PlayerDamageOptions,
+  PlayerGainLpOptions,
+  PlayerStrategyPort,
+  SpecialSummonRestriction,
+  TributeRequirement,
+} from "./contracts/player.js";
+import type {
+  ControllerType,
+  PlayerId,
+  RawCardDefinitionId,
+} from "./contracts/primitives.js";
+
+interface NormalSummonPassiveRule {
+  type?: string;
+  targetPlayer?: "self" | "opponent" | "both" | "all";
+  player?: "self" | "opponent" | "both" | "all";
+  owner?: "self" | "opponent" | "both" | "all";
+  filters?: NormalSummonFilter;
+  archetype?: string;
+  cardKind?: NormalSummonFilter["cardKind"];
+  sourceFilters?: NormalSummonFilter;
+  uniqueKey?: string;
+  oncePerTurnName?: string;
+  count?: number;
+  amount?: number;
+  multiplier?: number;
 }
 
-function asArray(value) {
+interface PassiveEffectView {
+  timing?: string;
+  passive?: NormalSummonPassiveRule;
+  requireZone?: string | readonly string[];
+  requireFaceup?: boolean;
+  oncePerTurnName?: string;
+}
+
+interface NormalSummonPassiveSource {
+  card: GameCard;
+  owner: GamePlayer;
+  zone: "field" | "spellTrap" | "fieldSpell";
+}
+
+type IndexedCardData = CardConstructorData & { id: RawCardDefinitionId };
+
+function isExtraDeckMonsterData(
+  data: CardConstructorData | null | undefined,
+): data is CardConstructorData & { monsterType: MonsterType } {
+  const monsterType = data?.monsterType;
+  return (
+    monsterType === "fusion" ||
+    monsterType === "ascension" ||
+    monsterType === "synchro"
+  );
+}
+
+function asArray<Value>(
+  value: Value | readonly Value[] | null | undefined,
+): readonly Value[] {
   if (value === undefined || value === null) return [];
-  return Array.isArray(value) ? value : [value];
+  if (Array.isArray(value)) return value;
+  return [value as Value];
 }
 
-function cardHasArchetype(card, archetype) {
+function cardHasArchetype(
+  card: NormalSummonCardView | null | undefined,
+  archetype: string | readonly string[] | null | undefined,
+): boolean {
   if (!archetype) return true;
   const required = asArray(archetype).filter(Boolean);
   if (required.length === 0) return true;
@@ -37,7 +115,10 @@ function cardHasArchetype(card, archetype) {
   return required.some((entry) => archetypes.includes(entry));
 }
 
-export function cardMatchesNormalSummonFilters(card, filters = {}) {
+export function cardMatchesNormalSummonFilters(
+  card: NormalSummonCardView | null | undefined,
+  filters: NormalSummonFilter = {},
+): boolean {
   if (!card || !filters) return false;
   if (filters.cardKind && !cardMatchesKind(card, filters.cardKind)) return false;
   if (filters.cardId !== undefined && card.id !== filters.cardId) return false;
@@ -48,21 +129,25 @@ export function cardMatchesNormalSummonFilters(card, filters = {}) {
   ) {
     return false;
   }
-  if (filters.name && !asArray(filters.name).includes(card.name)) return false;
+  if (filters.name && (!card.name || !asArray(filters.name).includes(card.name))) {
+    return false;
+  }
   if (filters.cardName && card.name !== filters.cardName) return false;
   if (filters.archetype && !cardHasArchetype(card, filters.archetype)) {
     return false;
   }
-  if (filters.type && !asArray(filters.type).includes(card.type)) return false;
+  if (filters.type && (!card.type || !asArray(filters.type).includes(card.type))) {
+    return false;
+  }
   if (
     filters.attribute &&
-    !asArray(filters.attribute).includes(card.attribute)
+    (!card.attribute || !asArray(filters.attribute).includes(card.attribute))
   ) {
     return false;
   }
   if (
     filters.monsterType &&
-    !asArray(filters.monsterType).includes(card.monsterType)
+    (!card.monsterType || !asArray(filters.monsterType).includes(card.monsterType))
   ) {
     return false;
   }
@@ -82,7 +167,9 @@ export function cardMatchesNormalSummonFilters(card, filters = {}) {
   return true;
 }
 
-export function createNormalSummonRecord(card) {
+export function createNormalSummonRecord(
+  card: NormalSummonCardView | null | undefined,
+): NormalSummonRecord {
   if (!card) return { unknown: true };
   return {
     id: card.id ?? null,
@@ -102,7 +189,9 @@ export function createNormalSummonRecord(card) {
   };
 }
 
-function getNormalSummonRecords(player) {
+function getNormalSummonRecords(
+  player: GamePlayer | null | undefined,
+): NormalSummonRecord[] {
   const summonCount = Math.max(0, Number(player?.summonCount || 0));
   const records = Array.isArray(player?.normalSummonsThisTurn)
     ? player.normalSummonsThisTurn.slice(0, summonCount)
@@ -113,11 +202,19 @@ function getNormalSummonRecords(player) {
   return records;
 }
 
-function getRestrictedNormalSummonSlots(player) {
+function isUnknownNormalSummonRecord(
+  record: NormalSummonRecord,
+): record is Extract<NormalSummonRecord, { unknown: true }> {
+  return "unknown" in record && record.unknown === true;
+}
+
+function getRestrictedNormalSummonSlots(
+  player: GamePlayer | null | undefined,
+): NormalSummonFilter[] {
   const permissions = Array.isArray(player?.additionalNormalSummonPermissions)
     ? player.additionalNormalSummonPermissions
     : [];
-  const slots = [];
+  const slots: NormalSummonFilter[] = [];
   for (const permission of permissions) {
     const count = Math.max(0, Number(permission?.count || 0));
     if (count <= 0 || !permission?.filters) continue;
@@ -128,18 +225,20 @@ function getRestrictedNormalSummonSlots(player) {
   return slots;
 }
 
-function getActiveNormalSummonPassiveSources(player) {
+function getActiveNormalSummonPassiveSources(
+  player: GamePlayer | null | undefined,
+): NormalSummonPassiveSource[] {
   const game = player?.game || null;
   const owners = game
     ? [game.player, game.bot].filter(Boolean)
     : player
       ? [player]
       : [];
-  const sources = [];
+  const sources: NormalSummonPassiveSource[] = [];
 
   for (const owner of owners) {
     if (!owner) continue;
-    for (const zone of ["field", "spellTrap"]) {
+    for (const zone of ["field", "spellTrap"] as const) {
       const cards = Array.isArray(owner[zone]) ? owner[zone] : [];
       for (const card of cards) {
         if (card) sources.push({ card, owner, zone });
@@ -154,11 +253,11 @@ function getActiveNormalSummonPassiveSources(player) {
 }
 
 function passiveAppliesToNormalSummonPlayer(
-  passive,
-  sourceOwner,
-  targetPlayer,
-  game,
-) {
+  passive: NormalSummonPassiveRule,
+  sourceOwner: GamePlayer,
+  targetPlayer: GamePlayer,
+  game: PlayerGamePort | null,
+): boolean {
   const rules = asArray(
     passive.targetPlayer || passive.player || passive.owner || "self",
   );
@@ -176,7 +275,9 @@ function passiveAppliesToNormalSummonPlayer(
   return false;
 }
 
-function buildNormalSummonPassiveFilters(passive = {}) {
+function buildNormalSummonPassiveFilters(
+  passive: NormalSummonPassiveRule = {},
+): NormalSummonFilter {
   const filters = { ...(passive.filters || {}) };
   if (passive.archetype && !filters.archetype) {
     filters.archetype = passive.archetype;
@@ -187,10 +288,13 @@ function buildNormalSummonPassiveFilters(passive = {}) {
   return filters;
 }
 
-function getPassiveNormalSummonPermissions(player) {
+function getPassiveNormalSummonPermissions(player: GamePlayer): {
+  unrestrictedCount: number;
+  restrictedSlots: NormalSummonFilter[];
+} {
   const result = {
     unrestrictedCount: 0,
-    restrictedSlots: [],
+    restrictedSlots: [] as NormalSummonFilter[],
   };
   const seenUniqueKeys = new Set();
   const game = player?.game || null;
@@ -202,17 +306,18 @@ function getPassiveNormalSummonPermissions(player) {
 
     for (const effect of card.effects) {
       if (!effect || effect.timing !== "passive") continue;
-      const passive = effect.passive || {};
+      const effectView = effect as EffectDefinition & PassiveEffectView;
+      const passive = effectView.passive || {};
       if (
         passive.type !== "additional_normal_summon" &&
         passive.type !== "additional_normal_summon_permission"
       ) {
         continue;
       }
-      if (effect.requireZone && !asArray(effect.requireZone).includes(zone)) {
+      if (effectView.requireZone && !asArray(effectView.requireZone).includes(zone)) {
         continue;
       }
-      if (effect.requireFaceup === true && card.isFacedown === true) continue;
+      if (effectView.requireFaceup === true && Boolean(card.isFacedown)) continue;
       if (!passiveAppliesToNormalSummonPlayer(passive, owner, player, game)) {
         continue;
       }
@@ -226,7 +331,7 @@ function getPassiveNormalSummonPermissions(player) {
       const uniqueKey =
         passive.uniqueKey ||
         passive.oncePerTurnName ||
-        effect.oncePerTurnName ||
+        effectView.oncePerTurnName ||
         null;
       if (uniqueKey) {
         const scopedKey = `${owner?.id || "unknown"}:${uniqueKey}`;
@@ -250,13 +355,18 @@ function getPassiveNormalSummonPermissions(player) {
   return result;
 }
 
-function maxRestrictedAssignments(records, restrictedSlots) {
+function maxRestrictedAssignments(
+  records: readonly NormalSummonRecord[],
+  restrictedSlots: readonly NormalSummonFilter[],
+): number {
   if (!records.length || !restrictedSlots.length) return 0;
   const assignedRecordForSlot = new Array(restrictedSlots.length).fill(-1);
 
-  const tryAssign = (recordIndex, seenSlots) => {
+  const tryAssign = (recordIndex: number, seenSlots: boolean[]): boolean => {
     const record = records[recordIndex];
-    if (!record || record.unknown === true) return false;
+    if (!record || isUnknownNormalSummonRecord(record)) {
+      return false;
+    }
 
     for (let slotIndex = 0; slotIndex < restrictedSlots.length; slotIndex += 1) {
       if (seenSlots[slotIndex]) continue;
@@ -284,7 +394,10 @@ function maxRestrictedAssignments(records, restrictedSlots) {
   return assigned;
 }
 
-export function canUseNormalSummonForCard(player, card) {
+export function canUseNormalSummonForCard(
+  player: GamePlayer | null | undefined,
+  card: NormalSummonCardView | null | undefined,
+): boolean {
   if (!player || !card) return false;
   const records = [
     ...getNormalSummonRecords(player),
@@ -304,7 +417,10 @@ export function canUseNormalSummonForCard(player, card) {
   return maxRestrictedAssignments(records, restrictedSlots) >= restrictedNeeded;
 }
 
-export function recordNormalSummonForTurn(player, card) {
+export function recordNormalSummonForTurn(
+  player: GamePlayer | null | undefined,
+  card: NormalSummonCardView | null | undefined,
+): void {
   if (!player) return;
   if (!Array.isArray(player.normalSummonsThisTurn)) {
     player.normalSummonsThisTurn = [];
@@ -312,8 +428,43 @@ export function recordNormalSummonForTurn(player, card) {
   player.normalSummonsThisTurn.push(createNormalSummonRecord(card));
 }
 
-export default class Player {
-  constructor(id, name, controllerType = "human") {
+export default class Player implements GamePlayer {
+  declare id: PlayerId;
+  declare name: string;
+  declare controllerType: ControllerType;
+  declare lp: number;
+  declare lpGainedThisTurn: number;
+  declare damageReceivedThisTurn: number;
+  declare deck: Card[];
+  declare extraDeck: Card[];
+  declare hand: Card[];
+  declare field: Card[];
+  declare spellTrap: Card[];
+  declare graveyard: Card[];
+  declare banished: Card[];
+  declare fieldSpell: Card | null;
+  declare summonCount: number;
+  declare additionalNormalSummons: number;
+  declare additionalNormalSummonPermissions: AdditionalNormalSummonPermission[];
+  declare normalSummonsThisTurn: NormalSummonRecord[];
+  declare specialSummonRestrictions: SpecialSummonRestriction[];
+  declare effectActivationRestrictions: EffectActivationRestriction[];
+  declare forbidDirectAttacksThisTurn: boolean;
+  declare maxDeckSize: number;
+  declare minDeckSize: number;
+  declare maxExtraDeckSize: number;
+  declare oncePerTurnUsageByName: EffectUsageMap;
+  declare oncePerDuelUsageByName?: Record<string, number | boolean>;
+  declare lpGainMultiplier?: number;
+  declare game?: PlayerGamePort;
+  declare strategy?: PlayerStrategyPort | null;
+  declare archetype?: string;
+
+  constructor(
+    id: PlayerId,
+    name: string,
+    controllerType: ControllerType = "human",
+  ) {
     this.id = id;
     this.name = name;
     this.controllerType = controllerType; // "human" | "ai"
@@ -341,16 +492,16 @@ export default class Player {
     this.oncePerTurnUsageByName = {};
   }
 
-  buildDeck(deckList = null) {
+  buildDeck(deckList: readonly RawCardDefinitionId[] | null = null): void {
     if (Array.isArray(deckList) && deckList.length > 0) {
       assertDeckBanlistLegal({ deck: deckList });
     }
     this.deck = [];
     const maxDeckSize = this.maxDeckSize;
     const minDeckSize = this.minDeckSize || maxDeckSize;
-    const copies = {};
+    const copies: Record<number, number> = {};
 
-    const addCard = (data) => {
+    const addCard = (data: IndexedCardData): void => {
       if (isExtraDeckMonsterData(data)) return;
       copies[data.id] = copies[data.id] || 0;
       const copyLimit = getCardCopyLimit(data.id, {
@@ -363,7 +514,7 @@ export default class Player {
       copies[data.id]++;
     };
 
-    const fillWithDefaults = () => {
+    const fillWithDefaults = (): void => {
       const targetSize = Math.max(
         minDeckSize,
         Math.min(maxDeckSize, this.deck.length)
@@ -417,14 +568,18 @@ export default class Player {
     this.shuffleDeck();
   }
 
-  buildExtraDeck(extraDeckList = null) {
+  buildExtraDeck(
+    extraDeckList: readonly RawCardDefinitionId[] | null = null,
+  ): void {
     if (Array.isArray(extraDeckList) && extraDeckList.length > 0) {
       assertDeckBanlistLegal({ extraDeck: extraDeckList });
     }
     this.extraDeck = [];
 
-    const copies = {};
-    const pushExtraDeckMonster = (data) => {
+    const copies: Record<number, number> = {};
+    const pushExtraDeckMonster = (
+      data: IndexedCardData | null | undefined,
+    ): void => {
       if (!isExtraDeckMonsterData(data)) {
         return;
       }
@@ -448,7 +603,7 @@ export default class Player {
     }
   }
 
-  shuffleDeck() {
+  shuffleDeck(): void {
     if (typeof this.game?.shuffle === "function") {
       this.game.shuffle(this.deck);
       return;
@@ -459,16 +614,16 @@ export default class Player {
     }
   }
 
-  draw() {
+  draw(): Card | null {
     if (this.deck.length > 0) {
-      const card = this.deck.pop();
+      const card = this.deck.pop()!;
       this.hand.push(card);
       return card;
     }
     return null;
   }
 
-  getTributeRequirement(card) {
+  getTributeRequirement(card: GameCard): TributeRequirement {
     let tributesNeeded = 0;
     if (card.level >= 5 && card.level <= 6) tributesNeeded = 1;
     else if (card.level >= 7) tributesNeeded = 2;
@@ -477,7 +632,7 @@ export default class Player {
     const alt = card.altTribute;
 
     if (
-      alt?.type === "no_tribute_if_empty_field" &&
+      alt && "type" in alt && alt.type === "no_tribute_if_empty_field" &&
       this.field.length === 0 &&
       tributesNeeded > 0
     ) {
@@ -487,7 +642,7 @@ export default class Player {
 
     // Check if player has specific card by name
     if (
-      alt?.requiresName &&
+      alt && "requiresName" in alt && alt.requiresName &&
       this.field.some((c) => c && c.name === alt.requiresName)
     ) {
       if (alt.tributes < tributesNeeded) {
@@ -497,7 +652,7 @@ export default class Player {
     }
 
     // Check if player has card of specific type
-    if (alt?.requiresType && !usingAlt) {
+    if (alt && "requiresType" in alt && alt.requiresType && !usingAlt) {
       const hasRequiredType = this.field.some((c) => {
         if (!c || c.isFacedown) return false;
         return Array.isArray(c.types)
@@ -522,13 +677,13 @@ export default class Player {
   }
 
   async summon(
-    cardIndex,
-    position = "attack",
+    cardIndex: number,
+    position: BattlePosition = "attack",
     isFacedown = false,
-    tributeIndices = null
-  ) {
+    tributeIndices: readonly number[] | null = null,
+  ): Promise<SummonExecutionResult | null> {
     const card = this.hand[cardIndex];
-    const failSummon = (reason, code = "SUMMON_BLOCKED") => {
+    const failSummon = (reason: string, code = "SUMMON_BLOCKED"): null => {
       this.game?.devLog?.("SUMMON_BLOCKED", {
         summary: reason,
         code,
@@ -567,17 +722,19 @@ export default class Player {
       const tributeInfo = this.getTributeRequirement(card);
       let { tributesNeeded, usingAlt, alt } = tributeInfo;
 
-      const matchesAltRequirement = (c) => {
+      const matchesAltRequirement = (c: GameCard | null | undefined): boolean => {
         if (!c) return false;
-        if (alt?.requiresName) return c.name === alt.requiresName;
-        if (alt?.requiresType) {
+        if (alt && "requiresName" in alt && alt.requiresName) {
+          return c.name === alt.requiresName;
+        }
+        if (alt && "requiresType" in alt && alt.requiresType) {
           const types = Array.isArray(c.types) ? c.types : [c.type];
           return types.includes(alt.requiresType);
         }
         return true;
       };
 
-      let tributeCards = [];
+      let tributeCards: GameCard[] = [];
       if (tributesNeeded > 0) {
         if (!fieldHasTributeValue(this.field, tributesNeeded, card)) {
           return failSummon(
@@ -601,7 +758,7 @@ export default class Player {
             tributesNeeded,
             card,
             {
-              scoreCard: (candidate, index) => {
+              scoreCard: (candidate: GameCard, index: number) => {
                 if (usingAlt && alt && matchesAltRequirement(candidate)) {
                   return -1000 + index;
                 }
@@ -613,7 +770,10 @@ export default class Player {
         }
 
         if (usingAlt && alt && !tributeCards.some(matchesAltRequirement)) {
-          const requirementLabel = alt.requiresName || alt.requiresType;
+          const requirementLabel =
+            ("requiresName" in alt && alt.requiresName) ||
+            ("requiresType" in alt && alt.requiresType) ||
+            "the required card";
           return failSummon(
             `Must tribute ${requirementLabel} to use reduced tribute.`,
             "TRIBUTE_REQUIREMENT_NOT_MET",
@@ -692,7 +852,7 @@ export default class Player {
           return { success: true };
         },
         perform: async (transaction) => {
-          const moveResult = await this.game.moveCard(card, this, "field", {
+          const moveResult = await this.game!.moveCard(card, this, "field", {
             fromZone: "hand",
             position: willSet ? "defense" : summonPosition,
             isFacedown: willSet,
@@ -725,8 +885,8 @@ export default class Player {
           tributes: tributedCards,
         },
       });
-      const result = await this.game.executeSummonTransaction(prepared);
-      this.game.effectEngine?.clearTargetingCache?.();
+      const result = await this.game!.executeSummonTransaction(prepared);
+      this.game?.effectEngine?.clearTargetingCache?.();
       return {
         ...result,
         card,
@@ -737,7 +897,7 @@ export default class Player {
     return null;
   }
 
-  ensureCardOnTop(cardName, createNew = false) {
+  ensureCardOnTop(cardName: string, createNew = false): Card | null {
     if (!createNew) {
       const idx = this.deck.findIndex((card) => card.name === cardName);
       if (idx > -1) {
@@ -753,7 +913,7 @@ export default class Player {
     }
 
     if (this.deck.length >= this.maxDeckSize) {
-      const targetArchetypes = Array.isArray(data.archetypes)
+      const targetArchetypes: string[] = Array.isArray(data.archetypes)
         ? data.archetypes
         : data.archetype
         ? [data.archetype]
@@ -761,7 +921,7 @@ export default class Player {
 
       let removeIdx = -1;
       // Prefer remover monstros sem arquétipo para não descartar spells/traps importantes (ex: Polymerization)
-      const findRemovable = (preferMonsters) =>
+      const findRemovable = (preferMonsters: boolean): number =>
         this.deck.findIndex((card) => {
           const archetypes = Array.isArray(card.archetypes)
             ? card.archetypes
@@ -794,7 +954,7 @@ export default class Player {
     return freshCard;
   }
 
-  takeDamage(amount, options = {}) {
+  takeDamage(amount: number, options: PlayerDamageOptions = {}): void {
     if (!amount || amount <= 0) return;
     const before = this.lp;
     this.lp -= amount;
@@ -832,7 +992,7 @@ export default class Player {
     }
   }
 
-  gainLP(amount, options = {}) {
+  gainLP(amount: number, options: PlayerGainLpOptions = {}): void {
     // Apply LP gain multiplier (for effects like Megashield Barbarias)
     const multiplier = this.lpGainMultiplier || 1.0;
     const adjustedAmount = Math.floor(amount * multiplier);
@@ -864,7 +1024,7 @@ export default class Player {
    * Calculate and update continuous passive effects from field cards
    * Called by Game.updateBoard()
    */
-  updatePassiveEffects() {
+  updatePassiveEffects(): void {
     // Reset to defaults
     this.lpGainMultiplier = 1.0;
 
@@ -872,12 +1032,13 @@ export default class Player {
     // Generic implementation - no hardcoded card names
     for (const card of this.field || []) {
       if (!card || card.isFacedown || card.cardKind !== "monster") continue;
-      
+
       for (const effect of card.effects || []) {
-        if (!effect || effect.timing !== "passive" || !effect.passive) continue;
-        
-        if (effect.passive.type === "lp_gain_multiplier") {
-          const multiplier = Number(effect.passive.multiplier) || 1.0;
+        const effectView = effect as EffectDefinition & PassiveEffectView;
+        if (!effect || effect.timing !== "passive" || !effectView.passive) continue;
+
+        if (effectView.passive.type === "lp_gain_multiplier") {
+          const multiplier = Number(effectView.passive.multiplier) || 1.0;
           // Apply the highest multiplier (stacking could be added later)
           this.lpGainMultiplier = Math.max(this.lpGainMultiplier, multiplier);
         }
@@ -891,10 +1052,18 @@ export default class Player {
 }
 
 // Helpers to avoid string-based bot checks
-export function isAI(player) {
+export interface PlayerControllerView {
+  controllerType?: string | null;
+}
+
+export function isAI(
+  player: PlayerControllerView | null | undefined,
+): boolean {
   return player?.controllerType === "ai";
 }
 
-export function isHuman(player) {
+export function isHuman(
+  player: PlayerControllerView | null | undefined,
+): boolean {
   return player?.controllerType !== "ai";
 }

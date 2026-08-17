@@ -7,12 +7,115 @@
  */
 
 import { DAMAGE_STEP_TIMINGS } from "../../contracts/effects.js";
+import type { DamageStepTiming } from "../../contracts/effects.js";
 
 export { DAMAGE_STEP_TIMINGS };
 
-const QUICK_SPELL_SUBTYPES = new Set(["quick", "quick-play", "quickplay"]);
+export interface QuickSpellCardView {
+  cardKind?: string | null;
+  subtype?: string | null;
+  isFacedown?: boolean;
+  setTurn?: number | null;
+  turnSetOn?: number | null;
+}
 
-const CHAIN_WINDOW_CONTEXT_TYPES = new Set([
+export interface QuickSpellPlayerView {
+  id: string;
+  hand?: readonly QuickSpellCardView[];
+  spellTrap?: readonly QuickSpellCardView[];
+}
+
+export interface QuickSpellGameView {
+  turn?: string | null;
+  phase?: string | null;
+  turnCounter?: number | null;
+}
+
+export interface QuickSpellTargetView {
+  id?: string;
+  requireThisCard?: boolean;
+  intent?: string;
+}
+
+export interface QuickSpellActionView {
+  type?: string;
+  atkBoost?: number;
+  defBoost?: number;
+  atkBoostFromContext?: unknown;
+  defBoostFromContext?: unknown;
+  atkFactor?: number;
+  defFactor?: number;
+  atkPerCounter?: number;
+  defPerCounter?: number;
+  atkBoostPerCounter?: number;
+  defBoostPerCounter?: number;
+  stats?: readonly string[];
+  atk?: number;
+  def?: number;
+  baseAtk?: number;
+  baseDef?: number;
+  atkFromContext?: unknown;
+  defFromContext?: unknown;
+  contextLabel?: string;
+  to?: string;
+  targetRef?: string;
+}
+
+export interface QuickSpellEffectView {
+  speed?: number;
+  isQuickEffect?: boolean;
+  actions?: readonly QuickSpellActionView[];
+  targets?: readonly QuickSpellTargetView[];
+  damageStepTimings?: readonly string[];
+  event?: string;
+  timing?: string;
+}
+
+export interface QuickSpellContext {
+  requiredSpellSpeed?: number;
+  respondingToSpellSpeed?: number;
+  lastSpellSpeed?: number;
+  legalWindow?: boolean;
+  isChainWindow?: boolean;
+  chainWindowOpen?: boolean;
+  openState?: boolean;
+  type?: string | null;
+  event?: string | null;
+  responseContextType?: string | null;
+  respondingToChainLink?: unknown;
+  activationAttempt?: unknown;
+  isDamageStep?: boolean;
+  damageStepTiming?: DamageStepTiming | string | null;
+  effect?: QuickSpellEffectView | null;
+  activationZone?: string | null;
+  zone?: string | null;
+}
+
+export type QuickSpellActivationZone = "hand" | "spellTrap";
+
+export interface DamageStepActivationClassification {
+  category: string | null;
+  allowedTimings: DamageStepTiming[];
+}
+
+export interface QuickSpellLegalityResult
+  extends Partial<DamageStepActivationClassification> {
+  ok: boolean;
+  spellSpeed: number;
+  code?: string;
+  reason?: string;
+  requiredSpellSpeed?: number;
+  activationZone?: QuickSpellActivationZone | null;
+  timing?: DamageStepTiming | string | null;
+}
+
+type QuickSpellResultDetail = Partial<
+  Omit<QuickSpellLegalityResult, "ok">
+>;
+
+const QUICK_SPELL_SUBTYPES = new Set<string>(["quick", "quick-play", "quickplay"]);
+
+const CHAIN_WINDOW_CONTEXT_TYPES = new Set<string>([
   "attack_declaration",
   "battle_step_open",
   "battle_damage",
@@ -25,7 +128,7 @@ const CHAIN_WINDOW_CONTEXT_TYPES = new Set([
   "summon_attempt",
 ]);
 
-const DIRECT_ATK_DEF_ACTIONS = new Set([
+const DIRECT_ATK_DEF_ACTIONS = new Set<string>([
   "buff_atk_by_lp_gained_this_turn",
   "buff_stats_by_counter",
   "buff_stats_temp",
@@ -46,13 +149,13 @@ export const DAMAGE_STEP_ACTIVATION_CATEGORIES = Object.freeze({
 });
 
 const ALL_DAMAGE_STEP_TIMINGS = Object.freeze(
-  Object.values(DAMAGE_STEP_TIMINGS),
+  Object.values(DAMAGE_STEP_TIMINGS) as DamageStepTiming[],
 );
-const PRE_CALCULATION_TIMINGS = Object.freeze([
+const PRE_CALCULATION_TIMINGS: readonly DamageStepTiming[] = Object.freeze([
   DAMAGE_STEP_TIMINGS.START,
   DAMAGE_STEP_TIMINGS.BEFORE_CALCULATION,
 ]);
-const DAMAGE_STEP_EVENT_TIMINGS = Object.freeze({
+const DAMAGE_STEP_EVENT_TIMINGS: Readonly<Record<string, DamageStepTiming | null>> = Object.freeze({
   damage_step: null,
   battle_damage: DAMAGE_STEP_TIMINGS.BEFORE_CALCULATION,
   battle_damage_inflicted: DAMAGE_STEP_TIMINGS.AFTER_CALCULATION,
@@ -62,7 +165,10 @@ const DAMAGE_STEP_EVENT_TIMINGS = Object.freeze({
   card_to_grave: DAMAGE_STEP_TIMINGS.END,
 });
 
-function result(ok, detail = {}) {
+function result(
+  ok: boolean,
+  detail: QuickSpellResultDetail = {},
+): QuickSpellLegalityResult {
   return {
     ok,
     spellSpeed: detail.spellSpeed ?? 2,
@@ -70,11 +176,15 @@ function result(ok, detail = {}) {
   };
 }
 
-function failure(code, reason, detail = {}) {
+function failure(
+  code: string,
+  reason: string,
+  detail: QuickSpellResultDetail = {},
+): QuickSpellLegalityResult {
   return result(false, { code, reason, ...detail });
 }
 
-function getRequiredSpellSpeed(context = {}) {
+function getRequiredSpellSpeed(context: QuickSpellContext = {}): number {
   const candidates = [
     context.requiredSpellSpeed,
     context.respondingToSpellSpeed,
@@ -90,7 +200,9 @@ function getRequiredSpellSpeed(context = {}) {
   return required;
 }
 
-function checkSpellSpeed(context = {}) {
+function checkSpellSpeed(
+  context: QuickSpellContext = {},
+): QuickSpellLegalityResult {
   const required = getRequiredSpellSpeed(context);
   if (required > 2) {
     return failure(
@@ -102,7 +214,10 @@ function checkSpellSpeed(context = {}) {
   return result(true);
 }
 
-function isOwnMainPhaseOpen(game, player) {
+function isOwnMainPhaseOpen(
+  game: QuickSpellGameView | null | undefined,
+  player: QuickSpellPlayerView | null | undefined,
+): boolean {
   return (
     !!game &&
     !!player &&
@@ -111,7 +226,7 @@ function isOwnMainPhaseOpen(game, player) {
   );
 }
 
-function hasExplicitLegalWindow(context = {}) {
+function hasExplicitLegalWindow(context: QuickSpellContext = {}): boolean {
   if (
     context.legalWindow === true ||
     context.isChainWindow === true ||
@@ -120,31 +235,52 @@ function hasExplicitLegalWindow(context = {}) {
   ) {
     return true;
   }
-  return CHAIN_WINDOW_CONTEXT_TYPES.has(context.type);
+  return (
+    typeof context.type === "string" &&
+    CHAIN_WINDOW_CONTEXT_TYPES.has(context.type)
+  );
 }
 
-function hasLegalQuickSpellWindow(game, player, context = {}) {
+function hasLegalQuickSpellWindow(
+  game: QuickSpellGameView | null | undefined,
+  player: QuickSpellPlayerView | null | undefined,
+  context: QuickSpellContext = {},
+): boolean {
   return hasExplicitLegalWindow(context) || isOwnMainPhaseOpen(game, player);
 }
 
-function getSetTurn(card) {
+function getSetTurn(card: QuickSpellCardView | null | undefined): number | null | undefined {
   return card?.setTurn ?? card?.turnSetOn ?? null;
 }
 
-function hasOwnPropertyValue(action, keys) {
+function hasOwnPropertyValue(
+  action: QuickSpellActionView,
+  keys: readonly (keyof QuickSpellActionView)[],
+): boolean {
   return keys.some((key) => Object.prototype.hasOwnProperty.call(action, key));
 }
 
-function hasNonZeroNumber(action, keys) {
+function hasNonZeroNumber(
+  action: QuickSpellActionView,
+  keys: readonly (keyof QuickSpellActionView)[],
+): boolean {
   return keys.some((key) => {
     if (!Object.prototype.hasOwnProperty.call(action, key)) return false;
-    const value = Number(action[key]);
+    const value = Number(Reflect.get(action, key));
     return Number.isFinite(value) && value !== 0;
   });
 }
 
-function actionDirectlyChangesAtkDef(action) {
-  if (!action || !DIRECT_ATK_DEF_ACTIONS.has(action.type)) return false;
+function actionDirectlyChangesAtkDef(
+  action: QuickSpellActionView | null | undefined,
+): boolean {
+  if (
+    !action ||
+    typeof action.type !== "string" ||
+    !DIRECT_ATK_DEF_ACTIONS.has(action.type)
+  ) {
+    return false;
+  }
 
   switch (action.type) {
     case "buff_stats_temp":
@@ -199,12 +335,18 @@ function actionDirectlyChangesAtkDef(action) {
   }
 }
 
-function getEffectTarget(effect, targetRef) {
+function getEffectTarget(
+  effect: QuickSpellEffectView | null | undefined,
+  targetRef: string | null | undefined,
+): QuickSpellTargetView | null {
   if (!targetRef || !Array.isArray(effect?.targets)) return null;
   return effect.targets.find((target) => target?.id === targetRef) || null;
 }
 
-function isSelfGraveyardCostAction(action, effect) {
+function isSelfGraveyardCostAction(
+  action: QuickSpellActionView | null | undefined,
+  effect: QuickSpellEffectView | null | undefined,
+): boolean {
   if (!action || action.type !== "move") return false;
   if (action.contextLabel !== "cost") return false;
   if (String(action.to || "").toLowerCase() !== "graveyard") return false;
@@ -214,7 +356,7 @@ function isSelfGraveyardCostAction(action, effect) {
   return target?.requireThisCard === true || target?.intent === "cost";
 }
 
-function isDamageStepContext(context = {}) {
+function isDamageStepContext(context: QuickSpellContext = {}): boolean {
   return (
     context.type === "battle_damage" ||
     context.isDamageStep === true ||
@@ -222,9 +364,13 @@ function isDamageStepContext(context = {}) {
   );
 }
 
-function getCardSpellSpeed(card, effect = null) {
-  if (Number.isFinite(Number(effect?.speed))) {
-    return Number(effect.speed);
+function getCardSpellSpeed(
+  card: QuickSpellCardView | null | undefined,
+  effect: QuickSpellEffectView | null = null,
+): number {
+  const effectSpeed = effect?.speed;
+  if (Number.isFinite(Number(effectSpeed))) {
+    return Number(effectSpeed);
   }
   if (card?.cardKind === "trap" && card?.subtype === "counter") return 3;
   if (isQuickSpell(card)) return 2;
@@ -235,11 +381,13 @@ function getCardSpellSpeed(card, effect = null) {
   return 1;
 }
 
-function isCounterTrap(card) {
+function isCounterTrap(card: QuickSpellCardView | null | undefined): boolean {
   return card?.cardKind === "trap" && card?.subtype === "counter";
 }
 
-function actionNegatesActivation(action) {
+function actionNegatesActivation(
+  action: QuickSpellActionView | null | undefined,
+): boolean {
   if (!action) return false;
   return (
     action.type === "negate_activation" ||
@@ -247,20 +395,25 @@ function actionNegatesActivation(action) {
   );
 }
 
-function effectNegatesActivation(effect) {
+function effectNegatesActivation(
+  effect: QuickSpellEffectView | null | undefined,
+): boolean {
   return (effect?.actions || []).some(actionNegatesActivation);
 }
 
-function normalizeDamageStepTimings(effect) {
+function normalizeDamageStepTimings(
+  effect: QuickSpellEffectView | null | undefined,
+): DamageStepTiming[] {
   const declared = Array.isArray(effect?.damageStepTimings)
     ? effect.damageStepTimings
     : [];
-  return [...new Set(declared.filter((timing) =>
-    ALL_DAMAGE_STEP_TIMINGS.includes(timing),
+  return [...new Set(declared.filter(
+    (timing): timing is DamageStepTiming =>
+      ALL_DAMAGE_STEP_TIMINGS.includes(timing as DamageStepTiming),
   ))];
 }
 
-function isActivationResponseContext(context = {}) {
+function isActivationResponseContext(context: QuickSpellContext = {}): boolean {
   const type = context.responseContextType || context.type || null;
   return (
     type === "card_activation" ||
@@ -270,7 +423,11 @@ function isActivationResponseContext(context = {}) {
   );
 }
 
-export function classifyDamageStepActivation(effect, card, context = {}) {
+export function classifyDamageStepActivation(
+  effect: QuickSpellEffectView | null | undefined,
+  card: QuickSpellCardView | null | undefined,
+  context: QuickSpellContext = {},
+): DamageStepActivationClassification {
   const explicitTimings = normalizeDamageStepTimings(effect);
   if (isCounterTrap(card)) {
     return {
@@ -290,7 +447,10 @@ export function classifyDamageStepActivation(effect, card, context = {}) {
       allowedTimings: explicitTimings,
     };
   }
-  const eventTiming = DAMAGE_STEP_EVENT_TIMINGS[effect?.event];
+  const eventName = effect?.event;
+  const eventTiming = eventName
+    ? DAMAGE_STEP_EVENT_TIMINGS[eventName]
+    : undefined;
   if (effect?.timing === "on_event" && eventTiming) {
     return {
       category: DAMAGE_STEP_ACTIVATION_CATEGORIES.EVENT_TRIGGER,
@@ -312,14 +472,20 @@ export function classifyDamageStepActivation(effect, card, context = {}) {
   };
 }
 
-function isQuickMonsterEffect(effect, card) {
+function isQuickMonsterEffect(
+  effect: QuickSpellEffectView | null | undefined,
+  card: QuickSpellCardView | null | undefined,
+): boolean {
   return (
     card?.cardKind === "monster" &&
     (effect?.isQuickEffect === true || Number(effect?.speed) === 2)
   );
 }
 
-function isDamageStepEffectSource(effect, card) {
+function isDamageStepEffectSource(
+  effect: QuickSpellEffectView | null | undefined,
+  card: QuickSpellCardView | null | undefined,
+): boolean {
   return (
     isQuickSpell(card) ||
     card?.cardKind === "trap" ||
@@ -328,14 +494,19 @@ function isDamageStepEffectSource(effect, card) {
   );
 }
 
-export function isQuickSpell(card) {
+export function isQuickSpell(
+  card: QuickSpellCardView | null | undefined,
+): boolean {
   return (
     card?.cardKind === "spell" &&
     QUICK_SPELL_SUBTYPES.has(String(card.subtype || "").toLowerCase())
   );
 }
 
-export function getQuickSpellActivationZone(card, player) {
+export function getQuickSpellActivationZone(
+  card: QuickSpellCardView | null | undefined,
+  player: QuickSpellPlayerView | null | undefined,
+): QuickSpellActivationZone | null {
   if (!card || !player || !isQuickSpell(card)) return null;
   if (Array.isArray(player.hand) && player.hand.includes(card)) return "hand";
   if (Array.isArray(player.spellTrap) && player.spellTrap.includes(card)) {
@@ -345,17 +516,17 @@ export function getQuickSpellActivationZone(card, player) {
 }
 
 export function canActivateQuickSpellFromHand(
-  game,
-  card,
-  player,
-  context = {},
-) {
+  game: QuickSpellGameView | null | undefined,
+  card: QuickSpellCardView | null | undefined,
+  player: QuickSpellPlayerView | null | undefined,
+  context: QuickSpellContext = {},
+): QuickSpellLegalityResult {
   if (!isQuickSpell(card)) {
     return failure("NOT_QUICK_SPELL", "Card is not a Quick Spell.", {
       activationZone: "hand",
     });
   }
-  if (!player?.hand?.includes?.(card)) {
+  if (!card || !player?.hand?.includes?.(card)) {
     return failure("NOT_IN_HAND", "Quick Spell is not in hand.", {
       activationZone: "hand",
     });
@@ -398,13 +569,18 @@ export function canActivateQuickSpellFromHand(
   return result(true, { activationZone: "hand" });
 }
 
-export function canActivateSetQuickSpell(game, card, player, context = {}) {
+export function canActivateSetQuickSpell(
+  game: QuickSpellGameView | null | undefined,
+  card: QuickSpellCardView | null | undefined,
+  player: QuickSpellPlayerView | null | undefined,
+  context: QuickSpellContext = {},
+): QuickSpellLegalityResult {
   if (!isQuickSpell(card)) {
     return failure("NOT_QUICK_SPELL", "Card is not a Quick Spell.", {
       activationZone: "spellTrap",
     });
   }
-  if (!player?.spellTrap?.includes?.(card)) {
+  if (!card || !player?.spellTrap?.includes?.(card)) {
     return failure(
       "NOT_IN_SPELL_TRAP_ZONE",
       "Quick Spell is not in the Spell/Trap Zone.",
@@ -428,7 +604,7 @@ export function canActivateSetQuickSpell(game, card, player, context = {}) {
       activationZone: "spellTrap",
     });
   }
-  if (Number(setTurn) >= Number(game.turnCounter)) {
+  if (Number(setTurn) >= Number(game?.turnCounter)) {
     return failure(
       "SET_THIS_TURN",
       "Quick Spell cannot be activated the turn it was Set.",
@@ -459,7 +635,12 @@ export function canActivateSetQuickSpell(game, card, player, context = {}) {
   return result(true, { activationZone: "spellTrap" });
 }
 
-export function canActivateQuickSpell(game, card, player, context = {}) {
+export function canActivateQuickSpell(
+  game: QuickSpellGameView | null | undefined,
+  card: QuickSpellCardView | null | undefined,
+  player: QuickSpellPlayerView | null | undefined,
+  context: QuickSpellContext = {},
+): QuickSpellLegalityResult {
   const requestedZone = context.activationZone || context.zone || null;
   const zone =
     requestedZone === "hand" || requestedZone === "spellTrap"
@@ -480,7 +661,9 @@ export function canActivateQuickSpell(game, card, player, context = {}) {
   );
 }
 
-export function effectDirectlyChangesAtkDef(effect) {
+export function effectDirectlyChangesAtkDef(
+  effect: QuickSpellEffectView | null | undefined,
+): boolean {
   const actions = Array.isArray(effect?.actions) ? effect.actions : [];
   if (actions.length === 0) return false;
 
@@ -500,7 +683,11 @@ export function effectDirectlyChangesAtkDef(effect) {
   return foundDirectStatChange;
 }
 
-export function canActivateDuringDamageStep(effect, card, context = {}) {
+export function canActivateDuringDamageStep(
+  effect: QuickSpellEffectView | null | undefined,
+  card: QuickSpellCardView | null | undefined,
+  context: QuickSpellContext = {},
+): QuickSpellLegalityResult {
   const spellSpeed = getCardSpellSpeed(card, effect);
   if (!isDamageStepContext(context)) {
     return result(true, {
@@ -512,17 +699,21 @@ export function canActivateDuringDamageStep(effect, card, context = {}) {
   }
   const timing = context.damageStepTiming || null;
   const classification = classifyDamageStepActivation(effect, card, context);
-  if (!timing || !ALL_DAMAGE_STEP_TIMINGS.includes(timing)) {
+  if (
+    !timing ||
+    !ALL_DAMAGE_STEP_TIMINGS.includes(timing as DamageStepTiming)
+  ) {
     return failure(
       "DAMAGE_STEP_TIMING_MISSING",
       "Damage Step activation requires an exact substep.",
       { spellSpeed, timing, ...classification },
     );
   }
-  if (classification.allowedTimings.includes(timing)) {
+  const damageStepTiming = timing as DamageStepTiming;
+  if (classification.allowedTimings.includes(damageStepTiming)) {
     return result(true, {
       spellSpeed,
-      timing,
+      timing: damageStepTiming,
       ...classification,
     });
   }
@@ -533,6 +724,10 @@ export function canActivateDuringDamageStep(effect, card, context = {}) {
   );
 }
 
-export function canActivateInDamageStep(effect, card, context = {}) {
+export function canActivateInDamageStep(
+  effect: QuickSpellEffectView | null | undefined,
+  card: QuickSpellCardView | null | undefined,
+  context: QuickSpellContext = {},
+): QuickSpellLegalityResult {
   return canActivateDuringDamageStep(effect, card, context);
 }

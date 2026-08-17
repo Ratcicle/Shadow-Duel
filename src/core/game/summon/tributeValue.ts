@@ -1,9 +1,60 @@
-function asArray(value) {
-  if (value === undefined || value === null) return [];
-  return Array.isArray(value) ? value : [value];
+import type { TributeValueDefinition } from "../../contracts/cards.js";
+import type { CardFilter } from "../../contracts/effects.js";
+import type { SummonMethod } from "../../contracts/summon.js";
+
+export interface TributeCardFilters extends CardFilter {
+  /** Legacy raw-id alias retained by the runtime matcher. */
+  readonly id?: number;
 }
 
-function matchesAny(value, expected) {
+export interface TributeValueEntry
+  extends Omit<TributeValueDefinition, "countAs" | "summonMethods"> {
+  countAs?: number;
+  value?: number;
+  count?: number;
+  requireFaceup?: boolean;
+  summonMethods?: SummonMethod | readonly SummonMethod[];
+  tributeCardFilters?: TributeCardFilters;
+  summonedCardFilters?: TributeCardFilters;
+}
+
+export interface TributeCardView {
+  id?: number;
+  name?: string | null;
+  cardKind?: string | null;
+  isFacedown?: boolean;
+  archetype?: string | null;
+  archetypes?: readonly string[];
+  type?: string | null;
+  types?: readonly string[];
+  attribute?: string | null;
+  level?: number;
+  atk?: number;
+  def?: number;
+  effectsNegated?: boolean;
+  tributeValue?: TributeValueEntry | readonly TributeValueEntry[] | null;
+}
+
+export interface TributeSelectionOptions<
+  Card extends TributeCardView = TributeCardView,
+> {
+  summonMethod?: string;
+  scoreCard?: (
+    card: Card,
+    index: number,
+    options: TributeSelectionOptions<Card>,
+  ) => number;
+}
+
+function asArray<Value>(
+  value: Value | readonly Value[] | null | undefined,
+): readonly Value[] {
+  if (value === undefined || value === null) return [];
+  if (Array.isArray(value)) return value;
+  return [value as Value];
+}
+
+function matchesAny(value: unknown, expected: unknown): boolean {
   const expectedValues = asArray(expected).map((entry) =>
     String(entry).toLowerCase(),
   );
@@ -12,7 +63,10 @@ function matchesAny(value, expected) {
   return expectedValues.some((entry) => values.includes(entry));
 }
 
-export function cardMatchesTributeFilters(card, filters = {}) {
+export function cardMatchesTributeFilters(
+  card: TributeCardView | null | undefined,
+  filters: TributeCardFilters = {},
+): boolean {
   if (!filters || typeof filters !== "object") return true;
   if (!card) return false;
 
@@ -59,10 +113,10 @@ export function cardMatchesTributeFilters(card, filters = {}) {
 }
 
 export function getTributeValueForSummon(
-  tributeCard,
-  summonedCard,
-  options = {},
-) {
+  tributeCard: TributeCardView | null | undefined,
+  summonedCard: TributeCardView | null | undefined,
+  options: TributeSelectionOptions = {},
+): number {
   if (!tributeCard || tributeCard.cardKind !== "monster") return 0;
 
   const summonMethod = options.summonMethod || "tribute";
@@ -103,17 +157,24 @@ export function getTributeValueForSummon(
   return Math.max(1, value);
 }
 
-export function getTributeValueTotal(tributeCards, summonedCard, options = {}) {
+export function getTributeValueTotal(
+  tributeCards: readonly (TributeCardView | null | undefined)[],
+  summonedCard: TributeCardView | null | undefined,
+  options: TributeSelectionOptions = {},
+): number {
   return (tributeCards || []).reduce(
     (total, card) => total + getTributeValueForSummon(card, summonedCard, options),
     0,
   );
 }
 
-export function normalizeTributeIndices(field = [], tributeIndices = []) {
+export function normalizeTributeIndices(
+  field: readonly (TributeCardView | null | undefined)[] = [],
+  tributeIndices: readonly number[] = [],
+): number[] {
   if (!Array.isArray(field) || !Array.isArray(tributeIndices)) return [];
-  const seen = new Set();
-  const normalized = [];
+  const seen = new Set<number>();
+  const normalized: number[] = [];
   for (const index of tributeIndices) {
     if (!Number.isInteger(index)) continue;
     if (index < 0 || index >= field.length) continue;
@@ -124,50 +185,61 @@ export function normalizeTributeIndices(field = [], tributeIndices = []) {
   return normalized;
 }
 
-export function getTributeCardsFromIndices(field = [], tributeIndices = []) {
+export function getTributeCardsFromIndices<Card extends TributeCardView>(
+  field: readonly (Card | null | undefined)[] = [],
+  tributeIndices: readonly number[] = [],
+): Card[] {
   return normalizeTributeIndices(field, tributeIndices)
     .map((index) => field[index])
-    .filter(Boolean);
+    .filter((card): card is Card => card != null);
 }
 
 export function selectedTributesMeetRequirement(
-  field,
-  tributeIndices,
-  tributesNeeded,
-  summonedCard,
-  options = {},
-) {
+  field: readonly (TributeCardView | null | undefined)[],
+  tributeIndices: readonly number[],
+  tributesNeeded: number,
+  summonedCard: TributeCardView | null | undefined,
+  options: TributeSelectionOptions = {},
+): boolean {
   if (tributesNeeded <= 0) return true;
   const tributeCards = getTributeCardsFromIndices(field, tributeIndices);
   return getTributeValueTotal(tributeCards, summonedCard, options) >= tributesNeeded;
 }
 
 export function fieldHasTributeValue(
-  field,
-  tributesNeeded,
-  summonedCard,
-  options = {},
-) {
+  field: readonly (TributeCardView | null | undefined)[],
+  tributesNeeded: number,
+  summonedCard: TributeCardView | null | undefined,
+  options: TributeSelectionOptions = {},
+): boolean {
   if (tributesNeeded <= 0) return true;
   return getTributeValueTotal(field || [], summonedCard, options) >= tributesNeeded;
 }
 
-export function selectTributeIndicesByValue(
-  field = [],
+export function selectTributeIndicesByValue<Card extends TributeCardView>(
+  field: readonly (Card | null | undefined)[] = [],
   tributesNeeded = 0,
-  summonedCard = null,
-  options = {},
-) {
+  summonedCard: Card | null = null,
+  options: TributeSelectionOptions<Card> = {},
+): number[] {
   if (tributesNeeded <= 0) return [];
   const entries = (field || [])
     .map((card, index) => ({ card, index }))
-    .filter(({ card }) => card && card.cardKind === "monster");
+    .filter(
+      (entry): entry is { card: Card; index: number } =>
+        entry.card != null && entry.card.cardKind === "monster",
+    );
   if (entries.length === 0) return [];
 
-  const scoreCard =
+  const scoreCard: NonNullable<TributeSelectionOptions<Card>["scoreCard"]> =
     typeof options.scoreCard === "function" ? options.scoreCard : () => 0;
   const summonMethod = options.summonMethod || "tribute";
-  let best = null;
+  let best: {
+    indices: number[];
+    score: number;
+    count: number;
+    excessValue: number;
+  } | null = null;
   const subsetCount = 1 << entries.length;
 
   for (let mask = 1; mask < subsetCount; mask += 1) {
@@ -179,7 +251,6 @@ export function selectTributeIndicesByValue(
       const entry = entries[bit];
       selected.push(entry);
       value += getTributeValueForSummon(entry.card, summonedCard, {
-        ...options,
         summonMethod,
       });
       score += Number(scoreCard(entry.card, entry.index, options)) || 0;

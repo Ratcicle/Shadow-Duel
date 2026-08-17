@@ -1,9 +1,42 @@
-function normalizeProcedures(value) {
-  if (Array.isArray(value)) return value.filter(Boolean);
-  return value ? [value] : [];
+import type { SpecialSummonProcedure } from "../../contracts/cards.js";
+import type { CanonicalZone } from "../../contracts/zones.js";
+
+export interface SpecialSummonEligibilityCard {
+  name?: string | null;
+  cannotBeSpecialSummoned?: boolean;
+  specialSummonOnlyBy?: readonly string[] | string | null;
+  mustFirstBeSpecialSummonedBy?: readonly string[] | string | null;
+  properSummonEstablished?: boolean;
+  properSummonProcedure?: string | null;
 }
 
-export function checkSpecialSummonEligibility(card, options = {}) {
+export interface SpecialSummonEligibilityOptions {
+  summonProcedure?: SpecialSummonProcedure | string | null;
+  fromZone?: CanonicalZone | string | null;
+}
+
+export interface ProperSummonTransactionInput {
+  summonProcedure?: SpecialSummonProcedure | string | null;
+  sourceZone?: CanonicalZone | string | null;
+  fromZone?: CanonicalZone | string | null;
+  sourceAtStart?: { zone?: CanonicalZone | string | null } | null;
+}
+
+export type SpecialSummonEligibilityResult =
+  | { ok: true }
+  | { ok: false; code: string; reason: string };
+
+function normalizeProcedures(
+  value: readonly string[] | string | null | undefined,
+): string[] {
+  if (Array.isArray(value)) return value.filter(Boolean);
+  return value ? [value as string] : [];
+}
+
+export function checkSpecialSummonEligibility(
+  card: SpecialSummonEligibilityCard | null | undefined,
+  options: SpecialSummonEligibilityOptions = {},
+): SpecialSummonEligibilityResult {
   if (!card) {
     return { ok: false, code: "missing_card", reason: "No card to summon." };
   }
@@ -51,7 +84,10 @@ export function checkSpecialSummonEligibility(card, options = {}) {
   };
 }
 
-export function establishProperSummon(card, transaction = {}) {
+export function establishProperSummon(
+  card: SpecialSummonEligibilityCard | null | undefined,
+  transaction: ProperSummonTransactionInput = {},
+): boolean {
   if (!card) return false;
   const allowed = normalizeProcedures(card.mustFirstBeSpecialSummonedBy);
   const procedure = transaction.summonProcedure || null;
@@ -62,6 +98,7 @@ export function establishProperSummon(card, transaction = {}) {
     null;
   if (
     allowed.length === 0 ||
+    procedure === null ||
     !allowed.includes(procedure) ||
     sourceZone !== "extraDeck"
   ) {
@@ -72,7 +109,9 @@ export function establishProperSummon(card, transaction = {}) {
   return true;
 }
 
-export function resetProperSummon(card) {
+export function resetProperSummon(
+  card: SpecialSummonEligibilityCard | null | undefined,
+): boolean {
   if (!card) return false;
   card.properSummonEstablished = false;
   card.properSummonProcedure = null;

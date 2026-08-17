@@ -1,4 +1,9 @@
-function hashSeed(value) {
+import type {
+  DeterministicRandomPort,
+  DeterministicRandomSnapshot,
+} from "../contracts/game.js";
+
+function hashSeed(value: unknown): number {
   if (Number.isFinite(Number(value))) return Number(value) >>> 0;
   const text = String(value ?? "shadow-duel");
   let hash = 2166136261;
@@ -9,14 +14,18 @@ function hashSeed(value) {
   return hash >>> 0;
 }
 
-export class DeterministicRandom {
-  constructor(seed) {
+export class DeterministicRandom implements DeterministicRandomPort {
+  declare seed: number;
+  declare state: number;
+  declare calls: number;
+
+  constructor(seed: unknown) {
     this.seed = hashSeed(seed);
     this.state = this.seed;
     this.calls = 0;
   }
 
-  next() {
+  next(): number {
     this.state = (this.state + 0x6d2b79f5) >>> 0;
     let value = this.state;
     value = Math.imul(value ^ (value >>> 15), value | 1);
@@ -25,7 +34,9 @@ export class DeterministicRandom {
     return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
   }
 
-  shuffle(items) {
+  shuffle<Value>(items: Value[]): Value[];
+  shuffle(items: unknown): unknown;
+  shuffle<Value>(items: Value[] | unknown): Value[] | unknown {
     if (!Array.isArray(items)) return items;
     for (let i = items.length - 1; i > 0; i -= 1) {
       const j = Math.floor(this.next() * (i + 1));
@@ -34,11 +45,13 @@ export class DeterministicRandom {
     return items;
   }
 
-  snapshot() {
+  snapshot(): DeterministicRandomSnapshot {
     return { seed: this.seed, state: this.state, calls: this.calls };
   }
 
-  restore(snapshot = {}) {
+  restore(
+    snapshot: Partial<DeterministicRandomSnapshot> = {},
+  ): DeterministicRandomSnapshot {
     if (!Number.isFinite(Number(snapshot.state))) {
       throw new TypeError("Invalid deterministic RNG snapshot.");
     }
@@ -49,7 +62,7 @@ export class DeterministicRandom {
   }
 }
 
-export function createDeterministicRandom(seed) {
+export function createDeterministicRandom(seed: unknown): DeterministicRandom {
   return new DeterministicRandom(seed);
 }
 
