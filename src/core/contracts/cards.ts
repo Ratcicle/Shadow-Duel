@@ -42,6 +42,13 @@ export const BATTLE_POSITION_INPUTS = Object.freeze([
 
 export type BattlePositionInput = (typeof BATTLE_POSITION_INPUTS)[number];
 
+/** Minimal mutable carrier accepted by the duel identity allocator. */
+export interface DuelCardIdentityCarrier {
+  id?: RawCardDefinitionId | number | null;
+  name?: string | null;
+  duelCardId?: DuelCardId | number | null;
+}
+
 export const SPELL_SUBTYPES = Object.freeze([
   "normal",
   "quick",
@@ -119,13 +126,17 @@ export interface FusionMaterialDefinition {
 }
 
 export interface SynchroMaterialFilters {
+  readonly all?: CardFilter;
   readonly tuner?: CardFilter;
   readonly nonTuner?: CardFilter;
+  readonly non_tuner?: CardFilter;
 }
 
 export interface SynchroDefinition {
   readonly tunerCount: number;
   readonly nonTunerMin: number;
+  readonly nonTunerMax?: number;
+  readonly position?: BattlePositionInput;
   readonly materialFilters?: SynchroMaterialFilters;
 }
 
@@ -137,14 +148,43 @@ export interface AscensionRequirement {
   readonly type:
     | "field_counters_at_least"
     | "material_effect_activations"
-    | "material_turns_on_field";
+    | "material_turns_on_field"
+    | "material_destroyed_opponent_monsters"
+    | "player_lp_gte"
+    | "player_lp_lte"
+    | "player_hand_gte"
+    | "player_graveyard_gte";
+  readonly amount?: number;
   readonly count?: number;
   readonly counterType?: string;
+  readonly filters?: CardFilter;
+  readonly max?: number;
   readonly min?: number;
-  readonly owner?: "self" | "opponent" | "any";
+  readonly owner?: "self" | "opponent" | "any" | "both" | "either";
   readonly reason?: string;
   readonly requireFaceup?: boolean;
+  readonly zone?: CanonicalZone;
   readonly zones?: readonly CanonicalZone[];
+}
+
+export interface AscensionMaterialRecord {
+  instanceId: number | string | null;
+  cardId: RawCardDefinitionId | CardDefinitionId | null;
+  name: string | null;
+  ownerId: PlayerId | string | null;
+  controllerId: PlayerId | string | null;
+  usedOnTurn: number | null;
+}
+
+export interface SynchroMaterialRecord {
+  instanceId: number | string | null;
+  cardId: RawCardDefinitionId | CardDefinitionId | null;
+  name: string | null;
+  level: number;
+  isTuner: boolean;
+  ownerId: PlayerId | string | null;
+  controllerId: PlayerId | string | null;
+  usedOnTurn: number | null;
 }
 
 interface AscensionDefinitionBase {
@@ -184,7 +224,8 @@ export interface ExtraDeckSummonProcedure {
 export interface FieldLimitDefinition {
   readonly key: string;
   readonly label: string;
-  readonly scope: "global";
+  readonly scope: "global" | "controller";
+  readonly max?: number;
   readonly requireFaceup?: boolean;
   readonly filters: CardFilter;
 }
@@ -207,6 +248,10 @@ export type AlternateTributeDefinition =
   | {
       readonly requiresType: MonsterRace;
       readonly tributes: number;
+    }
+  | {
+      readonly requiresName: string;
+      readonly tributes: number;
     };
 
 export interface DynamicExtraAttacksDefinition {
@@ -224,6 +269,16 @@ interface CardDefinitionBase {
   readonly archetypes?: readonly string[];
   readonly effects?: readonly EffectDefinition[];
   readonly goodDiscard?: boolean;
+  /** Legacy instance-state inputs still accepted by the Card constructor. */
+  readonly effectsNegated?: boolean;
+  readonly effectsNegatedDuration?: string | number | null;
+  readonly lastSummonMethod?: SummonMethod;
+  readonly lastSummonedFromZone?: CanonicalZone;
+  readonly lastSummonedTurn?: number;
+  readonly lastSummonProcedure?: SpecialSummonProcedure;
+  readonly originalOwner?: PlayerId;
+  readonly properSummonEstablished?: boolean;
+  readonly properSummonProcedure?: SpecialSummonProcedure;
 }
 
 interface MonsterDefinitionCore extends CardDefinitionBase {
@@ -235,8 +290,10 @@ interface MonsterDefinitionCore extends CardDefinitionBase {
   readonly def: number;
   readonly altTribute?: AlternateTributeDefinition;
   readonly battleIndestructibleOncePerTurn?: boolean;
+  readonly battleIndestructibleOncePerTurnLastUsedTurn?: number;
   readonly cannotAttackDirectly?: boolean;
   readonly cannotBeNormalSummonedOrSet?: boolean;
+  readonly cannotBeSpecialSummoned?: boolean;
   readonly dynamicExtraAttacks?: DynamicExtraAttacksDefinition;
   readonly extraAttacks?: number;
   readonly extraAttackTargetRestriction?: "monster";
@@ -249,6 +306,7 @@ interface MonsterDefinitionCore extends CardDefinitionBase {
   readonly piercingDamageMultiplier?: number;
   readonly preventsBattleDamageToController?: boolean;
   readonly specialSummonOnlyBy?: readonly SpecialSummonProcedure[];
+  readonly summonRestrict?: string;
   readonly synchroMaterialRoles?: SynchroMaterialRoles;
   readonly tributeValue?: TributeValueDefinition;
   readonly unaffectedByOtherCardEffects?: boolean;
@@ -340,4 +398,379 @@ export interface CardInstance {
   position: BattlePosition;
   isFacedown: boolean;
   locationVersion: number;
+}
+
+/**
+ * The constructor also accepts generated cards (notably Tokens) that do not
+ * originate in the validated database. Every accepted property is named here
+ * so this compatibility boundary does not become an open property bag.
+ */
+export interface GeneratedCardDefinition {
+  readonly id?: RawCardDefinitionId | CardDefinitionId;
+  readonly name: string;
+  readonly cardKind?: CardKind;
+  readonly subtype?: CardSubtype | string | null;
+  readonly monsterType?: MonsterType | null;
+  readonly isTuner?: boolean;
+  readonly synchroMaterialRoles?: SynchroMaterialRoles | null;
+  readonly archetypes?: readonly string[];
+  readonly archetype?: string | null;
+  readonly atk?: number;
+  readonly def?: number;
+  readonly type?: MonsterRace | string | null;
+  readonly attribute?: CardAttribute | null;
+  readonly level?: number;
+  readonly extraAttacks?: number;
+  readonly extraAttackTargetRestriction?: "monster" | null;
+  readonly dynamicExtraAttacks?: DynamicExtraAttacksDefinition | null;
+  readonly altTribute?: AlternateTributeDefinition | null;
+  readonly tributeValue?: TributeValueDefinition | readonly TributeValueDefinition[] | null;
+  readonly onBattleDestroy?: string | null;
+  readonly cannotAttackDirectly?: boolean;
+  readonly summonRestrict?: string | null;
+  readonly fieldLimit?: FieldLimitDefinition | null;
+  readonly fieldPresenceRestriction?: FieldPresenceRestriction | null;
+  readonly extraDeckSummonProcedure?: ExtraDeckSummonProcedure | null;
+  readonly preventsBattleDamageToController?: boolean;
+  readonly battleIndestructibleOncePerTurn?: boolean;
+  readonly battleIndestructibleOncePerTurnLastUsedTurn?: number | null;
+  readonly mustBeAttacked?: boolean;
+  readonly piercing?: boolean;
+  readonly piercingDamageMultiplier?: number;
+  readonly cannotBeSpecialSummoned?: boolean;
+  readonly cannotBeNormalSummonedOrSet?: boolean;
+  readonly specialSummonOnlyBy?:
+    | SpecialSummonProcedure
+    | readonly SpecialSummonProcedure[]
+    | null;
+  readonly mustFirstBeSpecialSummonedBy?:
+    | SpecialSummonProcedure
+    | readonly SpecialSummonProcedure[]
+    | null;
+  readonly properSummonEstablished?: boolean;
+  readonly properSummonProcedure?: SpecialSummonProcedure | null;
+  readonly unaffectedByOtherCardEffects?: boolean;
+  readonly lastSummonMethod?: SummonMethod | null;
+  readonly lastSummonedFromZone?: CanonicalZone | null;
+  readonly lastSummonedTurn?: number | null;
+  readonly lastSummonProcedure?: SpecialSummonProcedure | string | null;
+  readonly effectsNegated?: boolean;
+  readonly effectsNegatedDuration?: string | number | null;
+  readonly blueprintStorage?: BlueprintStorageDefinition | null;
+  readonly description?: string;
+  readonly effects?: readonly EffectDefinition[];
+  readonly fusionMaterials?: readonly FusionMaterialDefinition[] | null;
+  readonly ascension?: AscensionDefinition | null;
+  readonly synchro?: SynchroDefinition | null;
+  readonly image?: string;
+  readonly originalOwner?: PlayerId | string;
+}
+
+export type CardConstructorData = GeneratedCardDefinition;
+
+export interface CardTurnBasedBuff {
+  id?: string;
+  stat: "atk" | "def";
+  value: number;
+  expiresOnTurn: number;
+}
+
+export interface CardDynamicStatFormula {
+  type: "count_gy_archetype" | "count_field_archetype" | "fixed" | string;
+  archetype?: string;
+  perCard?: number;
+  value?: number;
+}
+
+export interface CardDynamicStatBoost {
+  stat: "atk" | "def";
+  formula: CardDynamicStatFormula;
+}
+
+export interface CardDynamicBuffEntry {
+  stats?: readonly ("atk" | "def")[];
+  value?: number;
+  appliedValues?: { atk?: number; def?: number };
+}
+
+export type CardDynamicBuffMap = Record<string, CardDynamicBuffEntry>;
+
+export type CardSuppressedDynamicBuffStats = Record<
+  string,
+  { atk?: boolean; def?: boolean }
+>;
+
+export interface CardEffectMarker {
+  key?: string;
+  sourceInstanceId?: string | number | null;
+  sourceCardId?: RawCardDefinitionId | CardDefinitionId | null;
+  sourceEffectId?: string | null;
+  controllerId?: PlayerId | string | null;
+  markedOnTurn?: number;
+  createdOnTurn?: number;
+  expiresOnTurn?: number | null;
+  matchingCostCount?: number;
+  fieldPresenceId?: string | number | null;
+}
+
+export type CardEffectMarkerMap = Record<string, CardEffectMarker>;
+
+export interface CardPassiveExtraAttackBonus {
+  amount: number;
+  targetRestriction: string | null;
+}
+
+export interface CardProtectionEffect {
+  type: "battle_destruction" | "effect_destruction";
+  source?: string;
+  duration: string | number;
+  expiresOnTurn?: number | null;
+  grantedOnTurn?: number | null;
+  sourceOwner?: "self" | "opponent" | "any";
+  removeOnLeave?: boolean;
+}
+
+export interface CardPermanentStatBuff {
+  atk?: number;
+  def?: number;
+}
+
+export type CardPermanentBuffMap = Record<string, CardPermanentStatBuff>;
+
+export interface CardDeclaredValueDetail {
+  property: string;
+  value: string | number | boolean;
+  valueLabel?: string;
+  declaredOnTurn?: number;
+  expiresOnTurn?: number;
+  duration?: string;
+}
+
+export type CardDeclaredValue =
+  | string
+  | number
+  | boolean
+  | CardDeclaredValueDetail;
+
+export type CardDeclaredValueMap = Record<string, CardDeclaredValue>;
+
+export interface CardOriginalStatsOverride {
+  baseAtk: number;
+  baseDef: number;
+}
+
+export interface SentToGraveMaterialMarker {
+  type: "fusion" | "synchro" | "ascension";
+  turn: number;
+  thisTurn: boolean;
+  ownerId: PlayerId | string | null;
+  fromZone: CanonicalZone | "token" | null;
+  contextLabel: string | null;
+}
+
+export type EffectUsageEntry =
+  | number
+  | {
+      turn?: number;
+      count?: number;
+    };
+
+export type EffectUsageMap = Record<string, EffectUsageEntry>;
+
+export interface CardStatusValueMap {
+  isTuner: boolean;
+  effectsNegated: boolean;
+  battleIndestructible: boolean;
+  piercing: boolean;
+  tempBattleIndestructible: boolean;
+  battleDamageHealsControllerThisTurn: boolean;
+  banishWhenLeavesField: boolean;
+  extraAttacks: number;
+  atk: number;
+  def: number;
+}
+
+export type KnownCardStatusKey = keyof CardStatusValueMap;
+
+export type KnownCardStatusEntry = {
+  [Key in KnownCardStatusKey]: {
+    readonly status: Key;
+    readonly value?: CardStatusValueMap[Key];
+    readonly restoreOnFieldExit?: boolean;
+  };
+}[KnownCardStatusKey];
+
+export type KnownCardStatusInput = KnownCardStatusKey | KnownCardStatusEntry;
+
+/** Closed known portion of the dynamic runtime status registry. */
+export type CardStatusRegistry = Partial<CardStatusValueMap>;
+
+export interface TrapMonsterOriginalState {
+  cardKind: CardKind | null;
+  subtype: CardSubtype | string | null;
+  monsterType: MonsterType | null;
+  isTuner: boolean;
+  synchroMaterialRoles: SynchroMaterialRoles | null;
+  type: MonsterRace | string | null;
+  types: string[] | null;
+  attribute: CardAttribute | null;
+  level: number;
+  baseLevel: number;
+  baseAtk: number;
+  baseDef: number;
+  atk: number;
+  def: number;
+}
+
+/**
+ * Complete mutable card shape used by the live duel. Feature-owned dynamic
+ * dictionaries remain `unknown` and are accessed through local Reflect
+ * boundaries instead of granting every property name to every consumer.
+ */
+export interface GameCard {
+  instanceId: number;
+  _instanceId?: number | string | null;
+  uuid?: string | null;
+  locationVersion: number;
+  id: RawCardDefinitionId | CardDefinitionId | undefined;
+  duelCardId?: DuelCardId;
+  name: string;
+  cardKind: CardKind;
+  originalCardKind?: CardKind | null;
+  treatedAsCardKinds?: CardKind[];
+  subtype: CardSubtype | string | null;
+  monsterType: MonsterType | null;
+  isTuner: boolean;
+  synchroMaterialRoles: SynchroMaterialRoles | null;
+  archetypes: string[];
+  archetype: string | null;
+  baseAtk: number;
+  baseDef: number;
+  atk: number;
+  def: number;
+  type: MonsterRace | string | null | undefined;
+  types?: string[];
+  attribute: CardAttribute | null;
+  level: number;
+  baseLevel: number;
+  originalLevel?: number | null;
+  position: BattlePosition;
+  previousPosition?: BattlePosition | null;
+  positionChangedThisTurn?: boolean;
+  revealedTurn?: number | null;
+  isFacedown: boolean;
+  battlePositionLocked: boolean;
+  hasAttacked: boolean;
+  extraAttacks: number;
+  baseExtraAttackTargetRestriction: "monster" | null;
+  extraAttackTargetRestriction: string | null;
+  dynamicExtraAttacks: DynamicExtraAttacksDefinition | null;
+  attackLimitThisTurn?: number | null;
+  attackLimitDuration?: string | number | null;
+  attacksUsedThisTurn: number;
+  tempAtkBoost: number;
+  tempDefBoost: number;
+  cannotAttackThisTurn: boolean;
+  cannotAttackUntilTurn: number | null;
+  immuneToOpponentEffectsUntilTurn: number | null;
+  altTribute: AlternateTributeDefinition | null;
+  tributeValue: TributeValueDefinition | readonly TributeValueDefinition[] | null;
+  onBattleDestroy: string | null;
+  canAttackDirectlyThisTurn: boolean;
+  cannotAttackDirectly: boolean;
+  equippedTo: GameCard | null;
+  equips: GameCard[];
+  equipTarget?: GameCard | number | string | null;
+  summonRestrict: string | null;
+  fieldLimit: FieldLimitDefinition | null;
+  fieldPresenceRestriction: FieldPresenceRestriction | null;
+  extraDeckSummonProcedure: ExtraDeckSummonProcedure | null;
+  equipAtkBonus: number;
+  equipDefBonus: number;
+  equipExtraAttacks: number;
+  grantsBattleIndestructible: boolean;
+  battleIndestructible: boolean;
+  tempBattleIndestructible: boolean;
+  battleDamageHealsControllerThisTurn: boolean;
+  preventsBattleDamageToController: boolean;
+  battleIndestructibleOncePerTurn: boolean;
+  battleIndestructibleOncePerTurnUsed: boolean;
+  battleIndestructibleOncePerTurnLastUsedTurn: number | null;
+  mustBeAttacked: boolean;
+  piercing: boolean;
+  piercingDamageMultiplier: number;
+  canMakeSecondAttackThisTurn: boolean;
+  secondAttackUsedThisTurn: boolean;
+  dynamicBuffs: CardDynamicBuffMap | null;
+  suppressedDynamicBuffStatsByKey?: CardSuppressedDynamicBuffStats;
+  temporarySuppressedDynamicBuffStatsByKey?: CardSuppressedDynamicBuffStats;
+  passiveExtraAttackBonuses?: Record<string, CardPassiveExtraAttackBonus>;
+  passiveExtraAttackTargetRestriction?: string | null;
+  cannotBeSpecialSummoned: boolean;
+  cannotBeNormalSummonedOrSet: boolean;
+  specialSummonOnlyBy: SpecialSummonProcedure[] | null;
+  mustFirstBeSpecialSummonedBy: SpecialSummonProcedure[] | null;
+  properSummonEstablished: boolean;
+  properSummonProcedure: SpecialSummonProcedure | null;
+  unaffectedByOtherCardEffects: boolean;
+  lastSummonMethod: SummonMethod | null;
+  lastSummonedFromZone: CanonicalZone | null;
+  lastSummonedTurn: number | null;
+  lastSummonProcedure: SpecialSummonProcedure | string | null;
+  turnBasedBuffs: CardTurnBasedBuff[];
+  tempStatuses: CardStatusRegistry;
+  fieldExitStatuses: CardStatusRegistry;
+  fieldPresenceId: string | number | null;
+  fieldPresenceState: unknown;
+  effectsNegated: boolean;
+  effectsNegatedDuration: string | number | null;
+  originalAtk: number | null;
+  originalDef: number | null;
+  counters: Map<string, number>;
+  blueprintStorage: BlueprintStorageDefinition | null;
+  description: string | undefined;
+  effects: readonly EffectDefinition[];
+  fusionMaterials: readonly FusionMaterialDefinition[] | null;
+  ascension: AscensionDefinition | null;
+  ascensionMaterials?: AscensionMaterialRecord[];
+  synchro: SynchroDefinition | null;
+  synchroMaterials?: SynchroMaterialRecord[];
+  image: string | undefined;
+  owner: PlayerId | string;
+  originalOwner: PlayerId | string;
+  controller?: PlayerId | string;
+  location?: CanonicalZone | null;
+  zone?: CanonicalZone | null;
+  isToken?: boolean;
+  tokenSourceCard?: string | null;
+  isTrapMonster?: boolean;
+  trapMonsterOriginalState?: TrapMonsterOriginalState;
+  trapMonsterSummonProcedure?: string;
+  setTurn?: number | null;
+  turnSetOn?: number | null;
+  enteredFieldTurn?: number | null;
+  summonedTurn?: number | null;
+  summonPending?: boolean;
+  requiredTributes?: number;
+  lpGainMultiplier?: number;
+  declaredValues?: CardDeclaredValueMap;
+  oncePerTurnUsageByName?: EffectUsageMap;
+  effectMarkers?: CardEffectMarkerMap;
+  protectionEffects?: CardProtectionEffect[];
+  permanentBuffsBySource?: CardPermanentBuffMap;
+  linkedPermanentBuffSourceNames?: string[];
+  originalStatsOverride?: CardOriginalStatsOverride;
+  banishWhenLeavesField?: boolean;
+  boundTrapSource?: GameCard | null;
+  boundMonsterTarget?: GameCard | null;
+  grantsCrescentShieldGuard?: boolean;
+  lastSentToGraveAsMaterial?: SentToGraveMaterialMarker;
+  graveyardEffectActivating?: boolean;
+  attackedMonstersThisTurn?: Set<number | string>;
+  canAttackAllOpponentMonstersThisTurn?: boolean;
+  dynamicStatBoosts?: CardDynamicStatBoost[];
+  addCounter(counterType: string, amount?: number): void;
+  removeCounter(counterType: string, amount?: number): void;
+  getCounter(counterType: string): number;
+  hasCounter(counterType: string): boolean;
 }

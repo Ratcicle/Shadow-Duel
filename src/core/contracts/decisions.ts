@@ -180,11 +180,14 @@ export interface DecisionBrokerGamePort {
 
 export interface DecisionBrokerPort {
   mode: DecisionBrokerMode;
+  replayCursor: number;
   loadReplayDecisions(decisions?: ReplayDecisionInput[]): void;
+  recordDecision(): RecordedDecision<"choice">;
   recordDecision<Kind extends DecisionKind>(
     input: DecisionRequest<Kind>,
-    result?: DecisionResult<Kind>,
+    result?: DecisionResult<Kind> | null,
   ): RecordedDecision<Kind>;
+  requestDecision(): Promise<SelectionResult | null>;
   requestDecision<Kind extends DecisionKind>(
     input: DecisionRequest<Kind>,
   ): Promise<DecisionResult<Kind>>;

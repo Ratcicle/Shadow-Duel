@@ -85,7 +85,7 @@ export interface SelectionEffectReference {
 /** Optional capabilities consumed by deterministic selection scoring. */
 export interface SelectionScoringCapabilities {
   instanceId?: number | string;
-  fieldPresenceId?: number | string;
+  fieldPresenceId?: number | string | null;
   archetype?: string | null;
   archetypes?: string[];
   goodDiscard?: boolean;

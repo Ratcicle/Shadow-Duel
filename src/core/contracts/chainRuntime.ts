@@ -57,7 +57,7 @@ export type ChainMaybePromise<Value> = Value | PromiseLike<Value>;
 
 export type ChainEntityId = number | string;
 export type ChainCardInstanceId = ChainEntityId | null;
-export type ChainSourceZone = CanonicalZone | "temporary" | "unknown";
+export type ChainSourceZone = CanonicalZone | "token" | "temporary" | "unknown";
 export type ChainActivationZone = CanonicalZone | null;
 export type ChainPhase =
   | "draw"
@@ -685,9 +685,18 @@ export interface ChainOperationResult {
   lastLinkController?: ChainPlayer | null;
 }
 
+/** Normalized pipeline value returned by Game callbacks without changing its runtime shape. */
+export interface ChainPipelineCallbackResult {
+  success: boolean;
+  ok: boolean;
+  needsSelection: boolean;
+}
+
 export type ChainPipelineCompletion = (
   result: ChainOperationResult,
-) => ChainMaybePromise<void>;
+) => ChainMaybePromise<
+  void | ChainOperationResult | ChainPipelineCallbackResult
+>;
 
 export type ChainPipelineFinalization = (
   result: ChainOperationResult,
@@ -696,7 +705,9 @@ export type ChainPipelineFinalization = (
     linkId: ChainLinkId;
     finalizationId: number;
   },
-) => ChainMaybePromise<void>;
+) => ChainMaybePromise<
+  void | ChainOperationResult | ChainPipelineCallbackResult
+>;
 
 /** Canonical mutable link stored in the LIFO stack. */
 export interface ChainLink {

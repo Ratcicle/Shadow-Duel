@@ -74,6 +74,8 @@ export interface EventCard {
   lastEquippedCardLeftField?: EventCard | null;
   lastSummonMethod?: SummonMethod | null;
   lastSummonFromZone?: EventZone | null;
+  lastSummonedFromZone?: EventZone | null;
+  lastSummonedTurn?: number | null;
   lastSummonProcedure?: string | null;
   effectsNegated?: boolean;
   effectsNegatedDuration?: string | number | null;

@@ -5,6 +5,7 @@ import type {
   DecisionCandidateIdentity,
   DecisionKind,
   DecisionReplayValue,
+  RecordedDecision,
   SegocOrderDecisionContext,
 } from "./decisions.js";
 import type { EventPhase, RuntimeEventName } from "./events.js";
@@ -547,7 +548,9 @@ export interface ReplayCommandRecordingInput {
 }
 
 /** Legacy permissive recording boundary used by direct Game integrations. */
-export type ReplayDecisionRecordingInput = Partial<CanonicalReplayDecision>;
+export type ReplayDecisionRecordingInput =
+  | Partial<CanonicalReplayDecision>
+  | RecordedDecision;
 
 export interface ReplayRecordedCommandEntry extends ReplayCommandRecordingInput {
   sequence: number;
