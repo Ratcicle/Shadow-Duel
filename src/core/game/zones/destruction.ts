@@ -10,27 +10,227 @@
  *  - destroyCard
  */
 
-function asArray(value) {
-  if (value === undefined || value === null) return [];
-  return Array.isArray(value) ? value : [value];
+import type {
+  CardProtectionEffect,
+  GameCard,
+} from "../../contracts/cards.js";
+import type {
+  CardFilter,
+  EffectCondition,
+  EffectDefinition,
+  PassiveRuleDefinition,
+} from "../../contracts/effects.js";
+import type {
+  MaybePromise,
+  MoveCardResult,
+  ZoneOpFailure,
+  ZoneOpOptions,
+} from "../../contracts/gameRuntime.js";
+import type { GamePlayer } from "../../contracts/player.js";
+import type { CanonicalZone } from "../../contracts/zones.js";
+
+type DestructionProtectionType =
+  | "battle_destruction"
+  | "effect_destruction";
+type DestructionOwnerRule = "self" | "opponent" | "any" | "both";
+
+interface RuntimeProtectionPassive extends PassiveRuleDefinition {
+  readonly protectionTypes?: readonly DestructionProtectionType[];
+  readonly targetZone?: CanonicalZone;
+  readonly requireZone?: CanonicalZone;
+  readonly sourceOwner?: DestructionOwnerRule;
+  readonly duration?: string | number;
 }
 
-function getDestructionProtectionType(cause) {
+interface RuntimeProtectionEffect {
+  readonly timing?: string;
+  readonly passive?: RuntimeProtectionPassive;
+  readonly protectionType?: DestructionProtectionType;
+  readonly protectionTypes?: readonly DestructionProtectionType[];
+  readonly requireFaceup?: boolean;
+  readonly requireZone?: CanonicalZone;
+  readonly conditions?: readonly EffectCondition[];
+}
+
+interface ProtectionAuraSource {
+  card: GameCard;
+  owner: GamePlayer;
+  zone: "field" | "fieldSpell" | "spellTrap";
+}
+
+interface DestructionConditionResult {
+  ok?: boolean;
+}
+
+interface DestructionEffectEnginePort {
+  isCardEffectNegated?(card: GameCard): boolean;
+  evaluateConditions?(
+    conditions: readonly EffectCondition[],
+    context: unknown,
+  ): DestructionConditionResult | null | undefined;
+  cardMatchesFilters?(card: GameCard, filters: CardFilter): boolean;
+  findCardZone?(owner: GamePlayer, card: GameCard): CanonicalZone | null;
+  checkImmunity?(
+    card: GameCard,
+    sourcePlayer: GamePlayer,
+    context: { effectType: "destruction"; sourceCard: GameCard },
+  ): { immune?: boolean; reason?: string | null } | null | undefined;
+  checkBeforeDestroyNegations?(
+    card: GameCard,
+    context: unknown,
+  ): Promise<{ negated?: boolean } | null | undefined>;
+}
+
+interface DestructionUiPort {
+  log?(message: string): void;
+  captureCardAnimationSource?(
+    card: GameCard,
+    context: { ownerId: string; zone: CanonicalZone },
+  ): { rect?: DOMRect | null } | null;
+}
+
+interface DestructionVisualFeedback {
+  kind: "destroy" | "negate" | "protect";
+  sourceCard?: GameCard | null;
+  targetCard: GameCard;
+  targetOwnerId: string;
+  targetZone: CanonicalZone;
+  targetRect?: DOMRect | null;
+  tone: string;
+}
+
+interface DestructionOptions {
+  cause?: string;
+  reason?: string;
+  battleDestructionDetermined?: boolean;
+  sourceCard?: GameCard | null;
+  source?: GameCard | null;
+  opponent?: GamePlayer | null;
+  sourcePlayer?: GamePlayer | null;
+  fromZone?: CanonicalZone;
+  awaitCardToGraveEvent?: boolean;
+  awaitCardMovedEvent?: boolean;
+  deferCardToGraveTriggerResolution?: boolean;
+  atomicGroupId?: string | number | null;
+  contextLabel?: string;
+  actionContext?: unknown;
+}
+
+interface BattleProtectionContext {
+  owner?: GamePlayer | null;
+  opponent?: GamePlayer | null;
+  sourceCard?: GameCard | null;
+  source?: GameCard | null;
+  sourcePlayer?: GamePlayer | null;
+  fromZone?: CanonicalZone;
+}
+
+interface DestructionResult extends MoveCardResult {
+  destroyed?: boolean;
+  negated?: boolean;
+  protectionType?: DestructionProtectionType;
+}
+
+interface DestructionHost {
+  player: GamePlayer;
+  bot: GamePlayer;
+  turnCounter: number;
+  effectEngine: DestructionEffectEnginePort;
+  ui: DestructionUiPort;
+  getOpponent(player: GamePlayer): GamePlayer | null;
+  isBattleDestructionPreventionNegated?(
+    card: GameCard,
+    context: {
+      owner: GamePlayer;
+      preventionSourceOwner: GamePlayer;
+      preventionSourceCard: GameCard;
+      fromZone: CanonicalZone;
+    },
+  ): boolean;
+  queueVisualFeedback?(feedback: DestructionVisualFeedback): void;
+  runZoneOp<Result>(
+    label: string,
+    operation: () => MaybePromise<Result>,
+    options?: ZoneOpOptions,
+  ): MaybePromise<Result | ZoneOpFailure>;
+  resolveDestructionWithReplacement(
+    card: GameCard,
+    context: {
+      cause: string;
+      sourceCard: GameCard | null;
+      sourcePlayer: GamePlayer | null;
+      fromZone: CanonicalZone;
+    },
+  ): MaybePromise<{ replaced?: boolean } | null | undefined>;
+  moveCard(
+    card: GameCard,
+    player: GamePlayer,
+    zone: "graveyard",
+    options: {
+      fromZone?: CanonicalZone;
+      wasDestroyed: true;
+      destroyCause: string;
+      destroySource: GameCard | null;
+      awaitCardToGraveEvent: boolean;
+      awaitCardMovedEvent?: boolean;
+      deferCardToGraveTriggerResolution: boolean;
+      atomicGroupId: string | number | null;
+      contextLabel: string;
+      actionContext: unknown;
+    },
+  ): MaybePromise<MoveCardResult>;
+  recordMaterialDestroyedOpponentMonster(
+    sourceCard: GameCard | null,
+    destroyedCard: GameCard,
+  ): void;
+}
+
+function runtimeProtectionEffect(
+  effect: EffectDefinition,
+): RuntimeProtectionEffect {
+  return effect as EffectDefinition & RuntimeProtectionEffect;
+}
+
+function asArray<Value>(
+  value: Value | readonly Value[] | null | undefined,
+): readonly Value[] {
+  if (value === undefined || value === null) return [];
+  if (isReadonlyArray(value)) return value;
+  return [value];
+}
+
+function isReadonlyArray<Value>(
+  value: Value | readonly Value[],
+): value is readonly Value[] {
+  return Array.isArray(value);
+}
+
+function getDestructionProtectionType(
+  cause: string,
+): DestructionProtectionType {
   return cause === "battle" ? "battle_destruction" : "effect_destruction";
 }
 
-function samePlayer(left, right) {
+function samePlayer(
+  left: GamePlayer | null | undefined,
+  right: GamePlayer | null | undefined,
+) {
   if (!left || !right) return false;
   return left === right || (left.id && right.id && left.id === right.id);
 }
 
-function protectionDurationIsActive(game, card, protection) {
+function protectionDurationIsActive(
+  game: DestructionHost,
+  card: GameCard,
+  protection: CardProtectionEffect,
+) {
   if (!protection) return false;
   if (protection.duration === "while_faceup") {
     return !card?.isFacedown;
   }
-  if (Number.isFinite(protection.expiresOnTurn)) {
-    return Number(game?.turnCounter || 0) <= protection.expiresOnTurn;
+  const expiresOnTurn = protection.expiresOnTurn;
+  if (typeof expiresOnTurn === "number" && Number.isFinite(expiresOnTurn)) {
+    return Number(game?.turnCounter || 0) <= expiresOnTurn;
   }
   if (protection.duration === "end_of_turn") {
     return Number(game?.turnCounter || 0) === protection.grantedOnTurn;
@@ -41,7 +241,12 @@ function protectionDurationIsActive(game, card, protection) {
   return true;
 }
 
-function protectionSourceOwnerMatches(game, protection, owner, sourcePlayer) {
+function protectionSourceOwnerMatches(
+  game: DestructionHost,
+  protection: CardProtectionEffect,
+  owner: GamePlayer,
+  sourcePlayer: GamePlayer | null,
+) {
   const rule = protection?.sourceOwner || "any";
   if (rule === "any") return true;
   if (!owner || !sourcePlayer) return false;
@@ -54,20 +259,22 @@ function protectionSourceOwnerMatches(game, protection, owner, sourcePlayer) {
 }
 
 function findConditionalDestructionProtection(
-  game,
-  card,
-  owner,
-  opponent,
-  cause,
-  fromZone,
+  game: DestructionHost,
+  card: GameCard,
+  owner: GamePlayer,
+  opponent: GamePlayer | null,
+  cause: string,
+  fromZone: CanonicalZone,
 ) {
   if (!game || !card || !owner) return null;
   if (!Array.isArray(card.effects)) return null;
 
   const protectionType = getDestructionProtectionType(cause);
   for (const effect of card.effects) {
-    if (!effect || effect.timing !== "passive") continue;
-    const passive = effect.passive || {};
+    const runtimeEffect = runtimeProtectionEffect(effect);
+    if (runtimeEffect.timing !== "passive") continue;
+    const passive = runtimeEffect.passive;
+    if (!passive) continue;
     if (passive.type !== "conditional_protection") continue;
     if (
       game.effectEngine?.isCardEffectNegated?.(card) ||
@@ -79,8 +286,8 @@ function findConditionalDestructionProtection(
     const protectedTypes = asArray(
       passive.protectionType ||
         passive.protectionTypes ||
-        effect.protectionType ||
-        effect.protectionTypes,
+        runtimeEffect.protectionType ||
+        runtimeEffect.protectionTypes,
     );
     if (
       protectedTypes.length > 0 &&
@@ -90,17 +297,17 @@ function findConditionalDestructionProtection(
     }
 
     if (
-      (effect.requireFaceup === true || passive.requireFaceup === true) &&
+      (runtimeEffect.requireFaceup === true || passive.requireFaceup === true) &&
       card.isFacedown
     ) {
       continue;
     }
-    if (effect.requireZone && effect.requireZone !== fromZone) {
+    if (runtimeEffect.requireZone && runtimeEffect.requireZone !== fromZone) {
       continue;
     }
 
-    const conditions = Array.isArray(effect.conditions)
-      ? effect.conditions
+    const conditions = Array.isArray(runtimeEffect.conditions)
+      ? runtimeEffect.conditions
       : Array.isArray(passive.conditions)
         ? passive.conditions
         : passive.condition
@@ -123,14 +330,16 @@ function findConditionalDestructionProtection(
       }
     }
 
-    return { effect, passive, protectionType };
+    return { effect: runtimeEffect, passive, protectionType };
   }
 
   return null;
 }
 
-function getProtectionAuraSources(game) {
-  const sources = [];
+function getProtectionAuraSources(
+  game: DestructionHost,
+): ProtectionAuraSource[] {
+  const sources: ProtectionAuraSource[] = [];
   for (const sourceOwner of [game?.player, game?.bot]) {
     if (!sourceOwner) continue;
     for (const card of sourceOwner.field || []) {
@@ -150,7 +359,12 @@ function getProtectionAuraSources(game) {
   return sources;
 }
 
-function targetOwnerMatchesRule(game, sourceOwner, targetOwner, ownerRule) {
+function targetOwnerMatchesRule(
+  game: DestructionHost,
+  sourceOwner: GamePlayer,
+  targetOwner: GamePlayer,
+  ownerRule: DestructionOwnerRule,
+) {
   if (ownerRule === "any" || ownerRule === "both") return true;
   if (ownerRule === "opponent") {
     return game.getOpponent?.(sourceOwner) === targetOwner;
@@ -158,7 +372,12 @@ function targetOwnerMatchesRule(game, sourceOwner, targetOwner, ownerRule) {
   return sourceOwner === targetOwner;
 }
 
-function targetOwnerMatchesAura(game, sourceOwner, targetOwner, passive) {
+function targetOwnerMatchesAura(
+  game: DestructionHost,
+  sourceOwner: GamePlayer,
+  targetOwner: GamePlayer,
+  passive: RuntimeProtectionPassive,
+) {
   const ownerRules = asArray(
     passive.targetOwners || passive.targetOwner || passive.appliesTo || "self",
   );
@@ -167,7 +386,12 @@ function targetOwnerMatchesAura(game, sourceOwner, targetOwner, passive) {
   );
 }
 
-function effectSourceIsActive(card, effect, passive, sourceZone) {
+function effectSourceIsActive(
+  card: GameCard,
+  effect: RuntimeProtectionEffect,
+  passive: RuntimeProtectionPassive,
+  sourceZone: CanonicalZone,
+) {
   if (!card || !effect || effect.timing !== "passive") return false;
   if (effect.requireZone && effect.requireZone !== sourceZone) return false;
   if (passive.requireZone && passive.requireZone !== sourceZone) return false;
@@ -178,11 +402,11 @@ function effectSourceIsActive(card, effect, passive, sourceZone) {
 }
 
 function findConditionalDestructionProtectionAura(
-  game,
-  card,
-  owner,
-  cause,
-  fromZone,
+  game: DestructionHost,
+  card: GameCard,
+  owner: GamePlayer,
+  cause: string,
+  fromZone: CanonicalZone,
 ) {
   if (!game || !card || !owner || cause === "battle") return null;
   const protectionType = getDestructionProtectionType(cause);
@@ -200,19 +424,21 @@ function findConditionalDestructionProtectionAura(
     }
 
     for (const effect of sourceCard.effects) {
-      const passive = effect?.passive || {};
+      const runtimeEffect = runtimeProtectionEffect(effect);
+      const passive = runtimeEffect.passive;
+      if (!passive) continue;
       if (passive.type !== "conditional_destruction_protection_aura") {
         continue;
       }
-      if (!effectSourceIsActive(sourceCard, effect, passive, source.zone)) {
+      if (!effectSourceIsActive(sourceCard, runtimeEffect, passive, source.zone)) {
         continue;
       }
 
       const protectedTypes = asArray(
-        passive.protectionType ||
+          passive.protectionType ||
           passive.protectionTypes ||
-          effect.protectionType ||
-          effect.protectionTypes ||
+          runtimeEffect.protectionType ||
+          runtimeEffect.protectionTypes ||
           "effect_destruction",
       );
       if (
@@ -243,8 +469,8 @@ function findConditionalDestructionProtectionAura(
       }
 
       const opponent = game.getOpponent?.(sourceOwner) || null;
-      const conditions = Array.isArray(effect.conditions)
-        ? effect.conditions
+      const conditions = Array.isArray(runtimeEffect.conditions)
+        ? runtimeEffect.conditions
         : Array.isArray(passive.conditions)
           ? passive.conditions
           : passive.condition
@@ -268,14 +494,24 @@ function findConditionalDestructionProtectionAura(
         }
       }
 
-      return { sourceCard, sourceOwner, effect, passive, protectionType };
+      return {
+        sourceCard,
+        sourceOwner,
+        effect: runtimeEffect,
+        passive,
+        protectionType,
+      };
     }
   }
 
   return null;
 }
 
-export function isBattleDestructionProtected(card, context = {}) {
+export function isBattleDestructionProtected(
+  this: DestructionHost,
+  card: GameCard | null | undefined,
+  context: BattleProtectionContext = {},
+) {
   if (!card) return false;
   const owner =
     context.owner ||
@@ -329,8 +565,12 @@ export function isBattleDestructionProtected(card, context = {}) {
   );
 }
 
-export async function destroyCard(card, options = {}) {
-  const result = await this.runZoneOp(
+export async function destroyCard(
+  this: DestructionHost,
+  card: GameCard | null | undefined,
+  options: DestructionOptions = {},
+): Promise<DestructionResult | ZoneOpFailure> {
+  const result = await this.runZoneOp<DestructionResult>(
     "DESTROY_CARD",
     async () => {
       if (!card) {
@@ -570,7 +810,7 @@ export async function destroyCard(card, options = {}) {
       toZone: "graveyard",
     },
   );
-  if (result?.destroyed) {
+  if ("destroyed" in result && result.destroyed && card) {
     const sourceCard = options.sourceCard || options.source || null;
     this.recordMaterialDestroyedOpponentMonster(sourceCard, card);
   }

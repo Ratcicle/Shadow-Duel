@@ -7,18 +7,91 @@
  * card_moved, none of which apply to a control change.
  */
 
-function getPlayerById(game, playerId) {
+import type { GameCard } from "../../contracts/cards.js";
+import type {
+  FullGameHost,
+  TemporaryControlEffect,
+} from "../../contracts/gameRuntime.js";
+import type { GamePlayer } from "../../contracts/player.js";
+
+type ControlCard = GameCard;
+
+interface ControlChangeOptions {
+  sourceCard?: ControlCard | null;
+  effectId?: string | null;
+  reason?: string;
+  temporaryControlId?: string | null;
+  duration?: "until_end_phase";
+}
+
+interface TemporaryControlOptions {
+  id?: string;
+  holder?: GamePlayer | null;
+  previousControllerId?: string | null;
+  expiresOnTurn?: number;
+  sourceCard?: ControlCard | null;
+}
+
+type TemporaryControlRecord = TemporaryControlEffect;
+
+interface PublicControlRecord {
+  id: string;
+  cardInstanceId: number | string | null;
+  holderId: string;
+  previousControllerId: string | null;
+  expiresOnTurn: number;
+  sourceInstanceId: number | string | null;
+  createdOnTurn: number;
+}
+
+type ControlChangeResult =
+  | { success: false; reason: string }
+  | {
+      success: true;
+      unchanged?: true;
+      card: ControlCard;
+      fromPlayer: GamePlayer;
+      toPlayer: GamePlayer;
+      temporaryControl?: PublicControlRecord | null;
+    };
+
+type ControlHost = FullGameHost & {
+  temporaryControlEffects: TemporaryControlRecord[];
+  effectEngine?: { clearTargetingCache?(): void };
+  emit?(eventName: string, payload: unknown): Promise<unknown>;
+  updateBoard?(): unknown;
+  createDeterministicId?(scope: string): string;
+  transferControl(
+    card: ControlCard,
+    nextController: GamePlayer,
+    options?: ControlChangeOptions,
+  ): Promise<ControlChangeResult>;
+  registerTemporaryControl(
+    card: ControlCard,
+    options?: TemporaryControlOptions,
+  ): PublicControlRecord | null;
+};
+
+function getPlayerById(
+  game: FullGameHost | null | undefined,
+  playerId: string | null | undefined,
+): GamePlayer | null {
   if (!game || !playerId) return null;
   if (game.player?.id === playerId) return game.player;
   if (game.bot?.id === playerId) return game.bot;
   return null;
 }
 
-function getCardInstanceId(card) {
+function getCardInstanceId(
+  card: ControlCard | null | undefined,
+): number | string | null {
   return card?.instanceId ?? card?._instanceId ?? card?.uuid ?? null;
 }
 
-function findFieldController(game, card) {
+function findFieldController(
+  game: FullGameHost | null | undefined,
+  card: ControlCard | null | undefined,
+): GamePlayer | null {
   if (!game || !card) return null;
   for (const player of [game.player, game.bot]) {
     if (Array.isArray(player?.field) && player.field.includes(card)) {
@@ -28,7 +101,10 @@ function findFieldController(game, card) {
   return null;
 }
 
-function removeFromField(player, card) {
+function removeFromField(
+  player: GamePlayer | null | undefined,
+  card: ControlCard | null | undefined,
+): boolean {
   if (!player || !card || !Array.isArray(player.field)) return false;
   const index = player.field.indexOf(card);
   if (index < 0) return false;
@@ -36,7 +112,10 @@ function removeFromField(player, card) {
   return true;
 }
 
-function publicControlRecord(record) {
+function publicControlRecord(record: TemporaryControlRecord): PublicControlRecord;
+function publicControlRecord(
+  record: TemporaryControlRecord | null | undefined,
+): PublicControlRecord | null {
   if (!record) return null;
   return {
     id: record.id,
@@ -53,7 +132,12 @@ function publicControlRecord(record) {
  * Transfers control of one face-up or face-down monster while it remains in a
  * Monster Zone. `originalOwner` is intentionally never changed.
  */
-export async function transferControl(card, nextController, options = {}) {
+export async function transferControl(
+  this: ControlHost,
+  card: ControlCard | null | undefined,
+  nextController: GamePlayer | null | undefined,
+  options: ControlChangeOptions = {},
+): Promise<ControlChangeResult> {
   if (!card || card.cardKind !== "monster" || !nextController) {
     return { success: false, reason: "invalid_control_target" };
   }
@@ -128,7 +212,11 @@ export async function transferControl(card, nextController, options = {}) {
  * record is bound to the card instance and current holder so a later control
  * change cannot be overwritten at the End Phase.
  */
-export function registerTemporaryControl(card, options = {}) {
+export function registerTemporaryControl(
+  this: ControlHost,
+  card: ControlCard | null | undefined,
+  options: TemporaryControlOptions = {},
+): PublicControlRecord | null {
   if (!card || !options?.holder) return null;
   if (!Array.isArray(this.temporaryControlEffects)) {
     this.temporaryControlEffects = [];
@@ -154,7 +242,12 @@ export function registerTemporaryControl(card, options = {}) {
  * Takes control of a monster and, when requested, tracks its return at the
  * End Phase of the current turn.
  */
-export async function takeControl(card, controller, options = {}) {
+export async function takeControl(
+  this: ControlHost,
+  card: ControlCard,
+  controller: GamePlayer,
+  options: ControlChangeOptions = {},
+): Promise<ControlChangeResult> {
   const previousController = findFieldController(this, card);
   const result = await this.transferControl(card, controller, {
     ...options,
@@ -178,7 +271,7 @@ export async function takeControl(card, controller, options = {}) {
  * discarded if the card left the field or changed controller again; that is
  * what prevents one temporary effect from overwriting a newer one.
  */
-export async function processTemporaryControlEffects() {
+export async function processTemporaryControlEffects(this: ControlHost) {
   if (!Array.isArray(this.temporaryControlEffects)) {
     this.temporaryControlEffects = [];
     return [];
@@ -192,7 +285,9 @@ export async function processTemporaryControlEffects() {
     (entry) => Number(entry?.expiresOnTurn) !== currentTurn,
   );
 
-  const results = [];
+  const results: Array<
+    PublicControlRecord & { returned: boolean; reason: string | null }
+  > = [];
   for (const entry of expiring) {
     const card = [this.player, this.bot]
       .flatMap((player) => player?.field || [])
@@ -209,12 +304,16 @@ export async function processTemporaryControlEffects() {
       reason: "temporary_control_expired",
       temporaryControlId: entry.id,
     });
-    results.push({ ...publicControlRecord(entry), returned: result?.success === true, reason: result?.reason || null });
+    results.push({
+      ...publicControlRecord(entry),
+      returned: result.success === true,
+      reason: "reason" in result ? result.reason : null,
+    });
   }
 
   return results;
 }
 
-export function getTemporaryControlState() {
+export function getTemporaryControlState(this: ControlHost) {
   return (this.temporaryControlEffects || []).map(publicControlRecord);
 }

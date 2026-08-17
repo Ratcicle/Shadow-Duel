@@ -3,7 +3,56 @@
  * Extracted from Game.js as part of B.4 modularization.
  */
 
-const DEFAULT_NULLISH_ZONE_NAMES = [
+import type { GameCard } from "../../contracts/cards.js";
+import type { FullGameHost } from "../../contracts/gameRuntime.js";
+import type { GamePlayer } from "../../contracts/player.js";
+
+type CheckedZoneName =
+  | "hand"
+  | "field"
+  | "spellTrap"
+  | "graveyard"
+  | "banished"
+  | "deck"
+  | "extraDeck";
+
+interface ZoneInvariantOptions {
+  zones?: readonly CheckedZoneName[];
+  failFast?: boolean;
+  normalize?: boolean;
+}
+
+interface ZoneIssue {
+  message?: string;
+  detail?: unknown;
+  playerId?: string | null;
+  zone?: CheckedZoneName;
+  indices?: number[];
+  length?: number;
+  context?: string;
+}
+
+interface ZoneInspectionResult {
+  ok: boolean;
+  context: string;
+  issues: ZoneIssue[];
+}
+
+interface ZoneInvariantHost extends FullGameHost {
+  zoneOpDepth: number;
+  eventResolutionDepth: number;
+  devModeEnabled: boolean;
+  _invariantLogCache?: Record<string, number>;
+  normalizeZoneCardOwnership(
+    contextLabel?: string,
+    options?: { enforceZoneOwner?: boolean },
+  ): void;
+  forceClearTargetSelection(reason: string): void;
+  setSelectionState(state: string): void;
+  devLog?(code: string, detail?: unknown): void;
+}
+
+const DEFAULT_NULLISH_ZONE_NAMES: readonly CheckedZoneName[] = [
   "hand",
   "field",
   "spellTrap",
@@ -13,7 +62,16 @@ const DEFAULT_NULLISH_ZONE_NAMES = [
   "extraDeck",
 ];
 
-function resolveZoneHelperArgs(boundGame, gameOrContext, contextOrOptions, optionsArg) {
+function resolveZoneHelperArgs(
+  boundGame: ZoneInvariantHost | undefined | void,
+  gameOrContext: ZoneInvariantHost | string | null | undefined,
+  contextOrOptions: string | ZoneInvariantOptions,
+  optionsArg: ZoneInvariantOptions,
+): {
+  game: ZoneInvariantHost | undefined;
+  context: string;
+  options: ZoneInvariantOptions;
+} {
   const firstArgIsGame =
     gameOrContext &&
     typeof gameOrContext === "object" &&
@@ -33,10 +91,16 @@ function resolveZoneHelperArgs(boundGame, gameOrContext, contextOrOptions, optio
     : contextOrOptions && typeof contextOrOptions === "object"
       ? contextOrOptions
       : {};
-  return { game, context, options };
+  return {
+    game: typeof game === "object" && game !== null ? game : undefined,
+    context,
+    options,
+  };
 }
 
-function getNullishZoneNames(options = {}) {
+function getNullishZoneNames(
+  options: ZoneInvariantOptions = {},
+): readonly CheckedZoneName[] {
   return Array.isArray(options.zones) && options.zones.length > 0
     ? options.zones
     : DEFAULT_NULLISH_ZONE_NAMES;
@@ -44,33 +108,34 @@ function getNullishZoneNames(options = {}) {
 
 /**
  * Inspect zones for null/undefined slots without mutating state.
- * @param {Object} gameOrContext - Game instance, or context when bound as a method.
+ * @param gameOrContext - Game instance, or context when bound as a method.
  * @param {string|Object} contextOrOptions - Context label or options.
- * @param {Object} optionsArg - Optional helper options.
+ * @param optionsArg - Optional helper options.
  * @returns {{ok: boolean, context: string, issues: Array}}
  */
 export function inspectZoneNullishCards(
-  gameOrContext,
-  contextOrOptions = "zone_check",
-  optionsArg = {},
-) {
+  this: ZoneInvariantHost | undefined | void,
+  gameOrContext?: ZoneInvariantHost | string,
+  contextOrOptions: string | ZoneInvariantOptions = "zone_check",
+  optionsArg: ZoneInvariantOptions = {},
+): ZoneInspectionResult {
   const { game, context, options } = resolveZoneHelperArgs(
     this,
     gameOrContext,
     contextOrOptions,
     optionsArg,
   );
-  const issues = [];
+  const issues: ZoneIssue[] = [];
   if (!game) {
     return { ok: true, context, issues };
   }
 
-  const inspectPlayer = (player) => {
+  const inspectPlayer = (player: GamePlayer | null | undefined) => {
     if (!player) return;
     for (const zone of getNullishZoneNames(options)) {
       const list = player[zone];
       if (!Array.isArray(list)) continue;
-      const invalidIndices = [];
+      const invalidIndices: number[] = [];
       list.forEach((card, index) => {
         if (card == null) invalidIndices.push(index);
       });
@@ -94,15 +159,16 @@ export function inspectZoneNullishCards(
 /**
  * Explicitly recover null/undefined zone slots and report what changed.
  * This helper is intentionally separate from rendering.
- * @param {Object} gameOrContext - Game instance, or context when bound as a method.
+ * @param gameOrContext - Game instance, or context when bound as a method.
  * @param {string|Object} contextOrOptions - Context label or options.
- * @param {Object} optionsArg - Optional helper options.
+ * @param optionsArg - Optional helper options.
  * @returns {{ok: boolean, recovered: boolean, context: string, issues: Array}}
  */
 export function recoverNullishZoneCards(
-  gameOrContext,
-  contextOrOptions = "zone_recovery",
-  optionsArg = {},
+  this: ZoneInvariantHost | undefined | void,
+  gameOrContext?: ZoneInvariantHost | string,
+  contextOrOptions: string | ZoneInvariantOptions = "zone_recovery",
+  optionsArg: ZoneInvariantOptions = {},
 ) {
   const { game, context, options } = resolveZoneHelperArgs(
     this,
@@ -127,9 +193,11 @@ export function recoverNullishZoneCards(
         : game.bot?.id === issue.playerId
           ? game.bot
           : null;
-    const list = player?.[issue.zone];
-    if (Array.isArray(list)) {
-      player[issue.zone] = list.filter((card) => card != null);
+    const zone = issue.zone;
+    if (!zone) continue;
+    const list = player?.[zone];
+    if (player && Array.isArray(list)) {
+      player[zone] = list.filter((card) => card != null);
     }
   }
 
@@ -152,12 +220,13 @@ export function recoverNullishZoneCards(
 /**
  * Assert that the game state is consistent (no invariant violations).
  * @param {string} contextLabel - Label for logging
- * @param {Object} options - Options (failFast, normalize)
+ * @param options - Options (failFast, normalize)
  * @returns {{ok: boolean, issues: Array, hasCritical: boolean, criticalIssues: Array}}
  */
 export function assertStateInvariants(
+  this: ZoneInvariantHost,
   contextLabel = "state_check",
-  options = {}
+  options: ZoneInvariantOptions = {},
 ) {
   // CORREÇÃO: Skip validação durante operações de zona aninhadas (aumentado >2 → >1)
   // Durante efeitos que movem cartas, o estado pode estar temporariamente inconsistente
@@ -188,17 +257,21 @@ export function assertStateInvariants(
   const failFast =
     options.failFast !== undefined ? options.failFast : this.devModeEnabled;
   const normalize = options.normalize !== false;
-  const issues = [];
+  const issues: ZoneIssue[] = [];
 
   if (normalize) {
     this.normalizeZoneCardOwnership(contextLabel, {
       enforceZoneOwner: true,
     });
   }
-  const addIssue = (message, detail) => {
+  const addIssue = (message: string, detail: unknown) => {
     issues.push({ message, detail });
   };
-  const normalizeZone = (player, zoneName, list) => {
+  const normalizeZone = (
+    player: GamePlayer,
+    zoneName: CheckedZoneName,
+    list: GameCard[],
+  ) => {
     if (!Array.isArray(list)) return;
     const hasHoles = list.some((item) => !item);
     if (hasHoles) {
@@ -215,7 +288,11 @@ export function assertStateInvariants(
     }
   };
 
-  const checkZoneLimit = (player, zoneName, max) => {
+  const checkZoneLimit = (
+    player: GamePlayer,
+    zoneName: CheckedZoneName,
+    max: number,
+  ) => {
     const list = player?.[zoneName];
     if (Array.isArray(list) && list.length > max) {
       addIssue("zone_limit_exceeded", {
@@ -227,7 +304,9 @@ export function assertStateInvariants(
     }
   };
 
-  const collectZones = (player) => [
+  const collectZones = (
+    player: GamePlayer,
+  ): Array<{ name: CheckedZoneName; list: GameCard[] }> => [
     { name: "hand", list: player?.hand || [] },
     { name: "field", list: player?.field || [] },
     { name: "spellTrap", list: player?.spellTrap || [] },
@@ -246,13 +325,20 @@ export function assertStateInvariants(
     );
   });
 
-  const locationMap = new Map();
-  const registerCard = (card, playerId, zoneName) => {
+  const locationMap = new Map<
+    GameCard,
+    Array<{ playerId: string; zoneName: CheckedZoneName | "fieldSpell" }>
+  >();
+  const registerCard = (
+    card: GameCard | null | undefined,
+    playerId: string,
+    zoneName: CheckedZoneName | "fieldSpell",
+  ) => {
     if (!card) return;
     if (!locationMap.has(card)) {
       locationMap.set(card, []);
     }
-    locationMap.get(card).push({ playerId, zoneName });
+    locationMap.get(card)!.push({ playerId, zoneName });
   };
 
   [this.player, this.bot].forEach((player) => {
@@ -321,7 +407,7 @@ export function assertStateInvariants(
     }
   }
 
-  const nonCriticalIssues = new Set([
+  const nonCriticalIssues = new Set<string | undefined>([
     "selection_stale",
     "selection_state_mismatch",
     "resolving_state_stale",

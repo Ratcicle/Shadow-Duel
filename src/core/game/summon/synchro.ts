@@ -1,47 +1,319 @@
 import { isAI } from "../../Player.js";
 import { SUMMON_MODES, SUMMON_ORIGINS } from "./transaction.js";
 import { checkSpecialSummonEligibility } from "./eligibility.js";
+import type {
+  BattlePosition,
+  BattlePositionInput,
+  GameCard,
+  SynchroDefinition,
+} from "../../contracts/cards.js";
+import type { CardFilter } from "../../contracts/effects.js";
+import type {
+  DeferredCardToGraveTriggerPackage,
+  MaybePromise,
+  MoveCardOptions,
+  MoveCardResult,
+  PreparedSummon,
+  PreparedSummonInput,
+  SummonExecutionResult,
+  SummonTransaction,
+  ZoneOpFailure,
+  ZoneOpOptions,
+} from "../../contracts/gameRuntime.js";
+import type { GamePlayer } from "../../contracts/player.js";
+import type {
+  RawSelectionCandidate,
+  RawSelectionContract,
+  RawSelectionRequirement,
+  SelectionCardReference,
+  SelectionResult,
+  SelectionSessionInput,
+} from "../../contracts/selection.js";
 
-function getCardInstanceId(card) {
+interface RuntimeSynchroFilter
+  extends Omit<CardFilter, "cardId" | "cardName"> {
+  readonly id?: number | readonly number[];
+  readonly cardId?: number | readonly number[];
+  readonly cardName?: string | readonly string[];
+  readonly faceUp?: boolean;
+}
+
+interface RuntimeSynchroMaterialFilters {
+  readonly all?: RuntimeSynchroFilter;
+  readonly tuner?: RuntimeSynchroFilter;
+  readonly nonTuner?: RuntimeSynchroFilter;
+  readonly non_tuner?: RuntimeSynchroFilter;
+}
+
+interface RuntimeSynchroConfig {
+  tunerCount: number;
+  nonTunerMin: number;
+  nonTunerMax: number;
+  materialFilters: RuntimeSynchroMaterialFilters;
+  position: BattlePositionInput;
+}
+
+interface RuntimeSynchroDefinition
+  extends Omit<SynchroDefinition, "materialFilters"> {
+  readonly materialFilters?: RuntimeSynchroMaterialFilters;
+}
+
+interface SynchroMaterialRoleEntry {
+  card: GameCard;
+  role: "tuner" | "nonTuner";
+}
+
+interface SynchroMaterialMetadata {
+  instanceId: number | string | null;
+  cardId: number | null;
+  name: string | null;
+  level: number;
+  isTuner: boolean;
+  ownerId: string | null;
+  controllerId: string | null;
+  usedOnTurn: number | null;
+}
+
+interface SynchroMaterialFollowup {
+  synchroSummonContextId?: string | null;
+  ownerId?: string | null;
+  source?: GameCard | null;
+  sourceName?: string | null;
+  actions?: readonly unknown[];
+}
+
+interface SynchroDeferredTriggerPackage
+  extends DeferredCardToGraveTriggerPackage {
+  entries?: readonly unknown[];
+  onComplete?: (() => void) | null;
+  orderRule?: string | null;
+}
+
+interface SynchroFlowResult {
+  ok?: boolean;
+  success?: boolean;
+  needsSelection?: boolean;
+  selectionContract?: unknown;
+  reason?: string | null;
+}
+
+interface SynchroContinuationResolution {
+  ok?: boolean;
+  needsSelection?: boolean;
+}
+
+interface SynchroTriggerContinuation {
+  stage: "after_summon" | "material_triggers";
+  synchroSummonContextId: string;
+  summonedCard: GameCard;
+  playerId: string | null;
+  actionContext: unknown;
+  deferredTriggerPackages?: SynchroDeferredTriggerPackage[];
+}
+
+interface SynchroEffectEnginePort {
+  isEffectNegated?(card: GameCard): boolean;
+  cardMatchesFilters?(card: GameCard, filters: CardFilter): boolean;
+  chooseSpecialSummonPosition?(
+    card: GameCard,
+    player: GamePlayer,
+    options: { position: BattlePositionInput },
+  ): Promise<BattlePosition>;
+}
+
+type SynchroMaterialCheck =
+  | { ok: true }
+  | { ok: false; reason: string };
+
+type SynchroSummonCheck =
+  | {
+      ok: false;
+      reason?: string | null;
+      type: "synchro";
+      candidates?: GameCard[];
+      materialCombos?: GameCard[][];
+      code?: string | null;
+    }
+  | {
+      ok: true;
+      type: "synchro";
+      candidates: GameCard[];
+      materialCombos: GameCard[][];
+      requiredCount: null;
+    };
+
+interface SynchroCheckOptions {
+  checkActionWindow?: boolean;
+  silent?: boolean;
+}
+
+interface PerformSynchroOptions extends SynchroCheckOptions {
+  position?: BattlePositionInput;
+  synchroSummonContextId?: string;
+  actionContext?: unknown;
+  summonOrigin?: PreparedSummonInput["summonOrigin"];
+}
+
+interface ExtraDeckSynchroOptions extends SynchroCheckOptions {
+  materials?: GameCard[];
+}
+
+interface SynchroSelectionCandidate extends RawSelectionCandidate {
+  key: string;
+  cardRef: GameCard & SelectionCardReference;
+}
+
+interface SynchroSelectionRequirement extends RawSelectionRequirement {
+  id: "synchro_materials";
+  candidates: SynchroSelectionCandidate[];
+}
+
+interface SynchroSelectionContract extends RawSelectionContract {
+  message: string;
+  requirements: [SynchroSelectionRequirement];
+}
+
+interface SynchroSelectionSessionInput
+  extends Omit<SelectionSessionInput, "execute" | "selectionContract"> {
+  selectionContract: SynchroSelectionContract;
+  execute?: (
+    selections: SelectionResult,
+  ) => MaybePromise<SummonExecutionResult>;
+}
+
+interface SynchroHost {
+  player: GamePlayer;
+  bot: GamePlayer;
+  turnCounter: number;
+  synchroSummonContextCounter: number;
+  pendingSynchroMaterialFollowups: SynchroMaterialFollowup[];
+  pendingSynchroMaterialTriggerContinuation: SynchroTriggerContinuation | null;
+  effectEngine?: SynchroEffectEnginePort;
+  ui: { log?(message: string): void };
+  canUseAsSynchroMaterial(
+    player: GamePlayer,
+    card: GameCard,
+  ): SynchroMaterialCheck;
+  getSynchroMaterialCombos(
+    player: GamePlayer,
+    card: GameCard,
+  ): GameCard[][];
+  canSummonSynchroCard(
+    player: GamePlayer,
+    card: GameCard,
+    options?: SynchroCheckOptions,
+  ): SynchroSummonCheck;
+  performSynchroSummon(
+    player: GamePlayer,
+    materials: GameCard[],
+    card: GameCard,
+    options?: PerformSynchroOptions,
+  ): Promise<SummonExecutionResult>;
+  canStartAction?(input: {
+    actor: GamePlayer;
+    kind: "synchro_summon";
+    phaseReq: readonly ("main1" | "main2")[];
+    silent: boolean;
+  }): { ok: boolean; reason?: string };
+  canPlaceCardOnField?(
+    card: GameCard,
+    player: GamePlayer,
+    options: MoveCardOptions,
+  ): MoveCardResult;
+  createPreparedSummon(input: PreparedSummonInput): PreparedSummon;
+  executeSummonTransaction(input: PreparedSummon): Promise<SummonExecutionResult>;
+  moveCard(
+    card: GameCard,
+    player: GamePlayer,
+    zone: "field" | "graveyard",
+    options: MoveCardOptions,
+  ): MaybePromise<MoveCardResult>;
+  runZoneOp<Result>(
+    label: string,
+    operation: () => MaybePromise<Result>,
+    options: ZoneOpOptions,
+  ): MaybePromise<Result | ZoneOpFailure>;
+  resolveEventEntries?(
+    eventName: "card_to_grave",
+    payload: unknown,
+    entries: readonly unknown[],
+    options: { orderRule: string; onComplete: (() => void) | null },
+  ): MaybePromise<SynchroFlowResult>;
+  applyPendingSynchroMaterialFollowups?(
+    card: GameCard,
+    player: GamePlayer,
+    followups: readonly SynchroMaterialFollowup[],
+    options: { actionContext: unknown; summonMethod: "synchro"; summonProcedure: "synchro" },
+  ): MaybePromise<SynchroFlowResult>;
+  getOpponent?(player: GamePlayer): GamePlayer | null;
+  buildSelectionCandidateKey?(
+    candidate: RawSelectionCandidate,
+    index: number,
+  ): string;
+  startTargetSelectionSession(
+    input: SelectionSessionInput | SynchroSelectionSessionInput,
+  ): unknown;
+  closeExtraDeckModal?(): void;
+  updateBoard?(): MaybePromise<unknown>;
+}
+
+function runtimeSynchroDefinition(
+  card: GameCard | null | undefined,
+): RuntimeSynchroDefinition | null {
+  return card?.synchro ?? null;
+}
+
+function getCardInstanceId(
+  card: GameCard | null | undefined,
+): number | string | null {
   return card?.instanceId ?? card?._instanceId ?? card?.uuid ?? null;
 }
 
-function isSynchroExtraDeckCard(card) {
-  return (
+function isSynchroExtraDeckCard(
+  card: GameCard | null | undefined,
+): card is GameCard & { monsterType: "synchro" } {
+  return Boolean(
     card &&
     card.cardKind === "monster" &&
-    card.monsterType === "synchro"
+    card.monsterType === "synchro",
   );
 }
 
-function isTuner(card) {
+function isTuner(card: GameCard | null | undefined): boolean {
   return card?.isTuner === true;
 }
 
-function normalizeRoleRules(value) {
+function normalizeRoleRules(
+  value: readonly CardFilter[] | CardFilter | null | undefined,
+): CardFilter[] {
   if (!value) return [];
   if (Array.isArray(value)) {
-    return value.filter((entry) => entry && typeof entry === "object");
+    return value.filter(
+      (entry): entry is CardFilter => Boolean(entry && typeof entry === "object"),
+    );
   }
-  return typeof value === "object" ? [value] : [];
+  return typeof value === "object" ? [value as CardFilter] : [];
 }
 
-function materialEffectsAreActive(game, card) {
+function materialEffectsAreActive(
+  game: SynchroHost,
+  card: GameCard | null | undefined,
+): boolean {
   if (!card || card.isFacedown) return false;
-  if (typeof game?.effectEngine?.isEffectNegated === "function") {
+  if (typeof game.effectEngine?.isEffectNegated === "function") {
     return !game.effectEngine.isEffectNegated(card);
   }
   return card.effectsNegated !== true;
 }
 
-function getCardLevel(card) {
+function getCardLevel(card: GameCard | null | undefined): number {
   const level = Number(card?.level || 0);
   return Number.isFinite(level) ? level : 0;
 }
 
-function uniqueCards(cards = []) {
-  const seen = new Set();
-  const result = [];
+function uniqueCards(cards: readonly GameCard[] = []): GameCard[] {
+  const seen = new Set<number | string | GameCard>();
+  const result: GameCard[] = [];
   for (const card of cards) {
     if (!card) continue;
     const key = getCardInstanceId(card) || card;
@@ -52,7 +324,10 @@ function uniqueCards(cards = []) {
   return result;
 }
 
-function sameCardSet(left = [], right = []) {
+function sameCardSet(
+  left: readonly GameCard[] = [],
+  right: readonly GameCard[] = [],
+): boolean {
   if (left.length !== right.length) return false;
   const remaining = [...right];
   for (const card of left) {
@@ -63,36 +338,47 @@ function sameCardSet(left = [], right = []) {
   return remaining.length === 0;
 }
 
-function selectionMatchesCombo(materials = [], combos = []) {
+function selectionMatchesCombo(
+  materials: readonly GameCard[] = [],
+  combos: readonly (readonly GameCard[])[] = [],
+): boolean {
   return combos.some((combo) => sameCardSet(materials, combo));
 }
 
-function getSynchroConfig(card) {
-  const config = card?.synchro && typeof card.synchro === "object"
-    ? card.synchro
-    : {};
+function getSynchroConfig(
+  card: GameCard | null | undefined,
+): RuntimeSynchroConfig {
+  const config = runtimeSynchroDefinition(card);
   return {
-    tunerCount: Number.isFinite(Number(config.tunerCount))
-      ? Math.max(1, Number(config.tunerCount))
+    tunerCount: Number.isFinite(Number(config?.tunerCount))
+      ? Math.max(1, Number(config?.tunerCount))
       : 1,
-    nonTunerMin: Number.isFinite(Number(config.nonTunerMin))
-      ? Math.max(1, Number(config.nonTunerMin))
+    nonTunerMin: Number.isFinite(Number(config?.nonTunerMin))
+      ? Math.max(1, Number(config?.nonTunerMin))
       : 1,
-    nonTunerMax: Number.isFinite(Number(config.nonTunerMax))
-      ? Math.max(1, Number(config.nonTunerMax))
+    nonTunerMax: Number.isFinite(Number(config?.nonTunerMax))
+      ? Math.max(1, Number(config?.nonTunerMax))
       : Infinity,
-    materialFilters: config.materialFilters || {},
-    position: config.position || "choice",
+    materialFilters: config?.materialFilters || {},
+    position: config?.position || "choice",
   };
 }
 
-function valueMatchesFilter(value, filterValue) {
+function valueMatchesFilter<Value>(
+  value: Value,
+  filterValue: Value | readonly Value[] | null | undefined,
+): boolean {
   if (filterValue === undefined || filterValue === null) return true;
-  const requiredValues = Array.isArray(filterValue) ? filterValue : [filterValue];
+  const requiredValues: readonly Value[] = Array.isArray(filterValue)
+    ? filterValue
+    : [filterValue as Value];
   return requiredValues.includes(value);
 }
 
-function cardMatchesSimpleSynchroFilter(card, filters = {}) {
+function cardMatchesSimpleSynchroFilter(
+  card: GameCard | null | undefined,
+  filters: RuntimeSynchroFilter = {},
+): boolean {
   if (!card) return false;
   const idFilter = filters.cardId ?? filters.id;
   if (!valueMatchesFilter(card.id, idFilter)) return false;
@@ -133,15 +419,24 @@ function cardMatchesSimpleSynchroFilter(card, filters = {}) {
   return true;
 }
 
-function cardMatchesSynchroFilter(game, card, filters) {
+function cardMatchesSynchroFilter(
+  game: SynchroHost,
+  card: GameCard,
+  filters: RuntimeSynchroFilter | null | undefined,
+): boolean {
   if (!filters || Object.keys(filters).length === 0) return true;
-  if (game?.effectEngine?.cardMatchesFilters) {
-    return game.effectEngine.cardMatchesFilters(card, filters);
+  if (game.effectEngine?.cardMatchesFilters) {
+    return game.effectEngine.cardMatchesFilters(card, filters as CardFilter);
   }
   return cardMatchesSimpleSynchroFilter(card, filters);
 }
 
-function materialPassesSynchroFilters(game, card, role, materialFilters = {}) {
+function materialPassesSynchroFilters(
+  game: SynchroHost,
+  card: GameCard,
+  role: SynchroMaterialRoleEntry["role"],
+  materialFilters: RuntimeSynchroMaterialFilters = {},
+): boolean {
   if (!cardMatchesSynchroFilter(game, card, materialFilters.all || {})) {
     return false;
   }
@@ -152,7 +447,11 @@ function materialPassesSynchroFilters(game, card, role, materialFilters = {}) {
   return cardMatchesSynchroFilter(game, card, roleFilters);
 }
 
-function canTreatAsSynchroNonTuner(game, card, synchroCard) {
+function canTreatAsSynchroNonTuner(
+  game: SynchroHost,
+  card: GameCard,
+  synchroCard: GameCard,
+): boolean {
   if (!isTuner(card)) return true;
   if (!materialEffectsAreActive(game, card)) return false;
 
@@ -162,8 +461,13 @@ function canTreatAsSynchroNonTuner(game, card, synchroCard) {
   return rules.some((rule) => cardMatchesSynchroFilter(game, synchroCard, rule));
 }
 
-function getSynchroMaterialRoleEntries(game, card, synchroCard, config) {
-  const entries = [];
+function getSynchroMaterialRoleEntries(
+  game: SynchroHost,
+  card: GameCard,
+  synchroCard: GameCard,
+  config: RuntimeSynchroConfig,
+): SynchroMaterialRoleEntry[] {
+  const entries: SynchroMaterialRoleEntry[] = [];
   if (
     isTuner(card) &&
     materialPassesSynchroFilters(
@@ -191,7 +495,10 @@ function getSynchroMaterialRoleEntries(game, card, synchroCard, config) {
   return entries;
 }
 
-function roleGroupsShareCards(left = [], right = []) {
+function roleGroupsShareCards(
+  left: readonly SynchroMaterialRoleEntry[] = [],
+  right: readonly SynchroMaterialRoleEntry[] = [],
+): boolean {
   const used = new Set(
     left.map((entry) => getCardInstanceId(entry.card) || entry.card),
   );
@@ -200,33 +507,41 @@ function roleGroupsShareCards(left = [], right = []) {
   );
 }
 
-function dedupeSynchroCombos(combos = []) {
-  const seen = new Set();
-  const result = [];
+function dedupeSynchroCombos(
+  combos: readonly (readonly GameCard[])[] = [],
+): GameCard[][] {
+  const seen = new Set<string>();
+  const result: GameCard[][] = [];
   for (const combo of combos) {
     const instanceIds = combo.map((card) => getCardInstanceId(card));
     if (instanceIds.some((id) => id === null)) {
-      result.push(combo);
+      result.push([...combo]);
       continue;
     }
     const key = instanceIds.map(String).sort().join("|");
     if (seen.has(key)) continue;
     seen.add(key);
-    result.push(combo);
+    result.push([...combo]);
   }
   return result;
 }
 
-function buildCombinations(cards, minSize, maxSize) {
-  const result = [];
+function buildCombinations<Value>(
+  cards: readonly Value[],
+  minSize: number,
+  maxSize: number,
+): Value[][] {
+  const result: Value[][] = [];
   const limit = Math.min(cards.length, maxSize);
-  const search = (start, picked) => {
+  const search = (start: number, picked: Value[]) => {
     if (picked.length >= minSize) {
       result.push([...picked]);
     }
     if (picked.length >= limit) return;
     for (let index = start; index < cards.length; index += 1) {
-      picked.push(cards[index]);
+      const candidate = cards[index];
+      if (candidate === undefined) continue;
+      picked.push(candidate);
       search(index + 1, picked);
       picked.pop();
     }
@@ -235,7 +550,11 @@ function buildCombinations(cards, minSize, maxSize) {
   return result;
 }
 
-function captureSynchroMaterialMetadata(card, player, game) {
+function captureSynchroMaterialMetadata(
+  card: GameCard,
+  player: GamePlayer,
+  game: SynchroHost,
+): SynchroMaterialMetadata {
   return {
     instanceId: getCardInstanceId(card),
     cardId: card?.id ?? null,
@@ -250,20 +569,23 @@ function captureSynchroMaterialMetadata(card, player, game) {
   };
 }
 
-function nextSynchroSummonContextId(game) {
+function nextSynchroSummonContextId(game: SynchroHost | null): string {
   if (!game) return `synchro_${Math.random().toString(36).slice(2, 9)}`;
   const next = Number(game.synchroSummonContextCounter || 0) + 1;
   game.synchroSummonContextCounter = next;
   return `synchro_${game.turnCounter || 0}_${next}`;
 }
 
-function takeSynchroMaterialFollowups(game, contextId) {
+function takeSynchroMaterialFollowups(
+  game: SynchroHost | null,
+  contextId: string | null | undefined,
+): SynchroMaterialFollowup[] {
   if (!game || !contextId) return [];
   const followups = Array.isArray(game.pendingSynchroMaterialFollowups)
     ? game.pendingSynchroMaterialFollowups
     : [];
-  const matching = [];
-  const remaining = [];
+  const matching: SynchroMaterialFollowup[] = [];
+  const remaining: SynchroMaterialFollowup[] = [];
   for (const entry of followups) {
     if (entry?.synchroSummonContextId === contextId) {
       matching.push(entry);
@@ -275,14 +597,25 @@ function takeSynchroMaterialFollowups(game, contextId) {
   return matching;
 }
 
-function appendDeferredSynchroMaterialTriggerPackage(packages, moveResult) {
+interface SynchroMoveResult extends MoveCardResult {
+  deferredCardToGraveTriggerPackage?: SynchroDeferredTriggerPackage;
+}
+
+function appendDeferredSynchroMaterialTriggerPackage(
+  packages: SynchroDeferredTriggerPackage[],
+  moveResult: SynchroMoveResult | null | undefined,
+): void {
   const triggerPackage = moveResult?.deferredCardToGraveTriggerPackage || null;
   if (!triggerPackage || triggerPackage.collectedOnly !== true) return;
   if (!Array.isArray(triggerPackage.entries)) return;
   packages.push(triggerPackage);
 }
 
-function getPlayerById(game, playerId, fallback = null) {
+function getPlayerById(
+  game: SynchroHost | null,
+  playerId: string | null | undefined,
+  fallback: GamePlayer | null = null,
+): GamePlayer | null {
   if (!game || !playerId) return fallback;
   if (game.player?.id === playerId) return game.player;
   if (game.bot?.id === playerId) return game.bot;
@@ -290,12 +623,12 @@ function getPlayerById(game, playerId, fallback = null) {
 }
 
 async function applySynchroMaterialFollowupsForContext(
-  game,
-  synchroSummonContextId,
-  synchroCard,
-  player,
-  actionContext,
-) {
+  game: SynchroHost,
+  synchroSummonContextId: string,
+  synchroCard: GameCard,
+  player: GamePlayer,
+  actionContext: unknown,
+): Promise<SynchroFlowResult> {
   const followups = takeSynchroMaterialFollowups(
     game,
     synchroSummonContextId,
@@ -329,20 +662,20 @@ async function applySynchroMaterialFollowupsForContext(
 }
 
 async function resolveDeferredSynchroMaterialTriggers(
-  game,
-  packages,
-  synchroSummonContextId,
-  synchroCard,
-  player,
-  actionContext,
-) {
+  game: SynchroHost,
+  packages: readonly SynchroDeferredTriggerPackage[],
+  synchroSummonContextId: string,
+  synchroCard: GameCard,
+  player: GamePlayer,
+  actionContext: unknown,
+): Promise<SynchroFlowResult> {
   const entries = packages.flatMap((entryPackage) =>
     Array.isArray(entryPackage?.entries) ? entryPackage.entries : [],
   );
   if (entries.length > 0) {
     const onCompleteHandlers = packages
       .map((entryPackage) => entryPackage?.onComplete)
-      .filter((handler) => typeof handler === "function");
+      .filter((handler): handler is () => void => typeof handler === "function");
     const orderRules = packages
       .map((entryPackage) => entryPackage?.orderRule)
       .filter(Boolean);
@@ -392,9 +725,10 @@ async function resolveDeferredSynchroMaterialTriggers(
 }
 
 export async function finishPendingSynchroMaterialTriggerContinuation(
-  resolutionResult = null,
-  eventName = null,
-) {
+  this: SynchroHost,
+  resolutionResult: SynchroContinuationResolution | null = null,
+  eventName: "after_summon" | "card_to_grave" | string | null = null,
+): Promise<SynchroFlowResult | null> {
   const pending = this.pendingSynchroMaterialTriggerContinuation;
   if (!pending || resolutionResult?.needsSelection) return null;
   if (resolutionResult && resolutionResult.ok === false) return null;
@@ -434,12 +768,17 @@ export async function finishPendingSynchroMaterialTriggerContinuation(
   );
 }
 
-function buildSynchroMaterialSelectionContract(game, card, player, candidates) {
+function buildSynchroMaterialSelectionContract(
+  game: SynchroHost,
+  card: GameCard,
+  player: GamePlayer,
+  candidates: readonly GameCard[],
+): SynchroSelectionContract {
   const owner = player.id === "player" ? "player" : "opponent";
   const decorated = candidates
     .map((material, index) => {
       const zoneIndex = player.field.indexOf(material);
-      const candidate = {
+      const candidate: Omit<SynchroSelectionCandidate, "key"> = {
         name: material.name,
         owner,
         controller: player.id,
@@ -451,10 +790,12 @@ function buildSynchroMaterialSelectionContract(game, card, player, candidates) {
         cardKind: material.cardKind,
         cardRef: material,
       };
-      candidate.key =
-        game.buildSelectionCandidateKey?.(candidate, index) ||
-        `${player.id}:field:${zoneIndex}:${material.id || index}`;
-      return candidate;
+      return {
+        ...candidate,
+        key:
+          game.buildSelectionCandidateKey?.(candidate, index) ||
+          `${player.id}:field:${zoneIndex}:${material.id || index}`,
+      };
     });
 
   return {
@@ -485,7 +826,11 @@ function buildSynchroMaterialSelectionContract(game, card, player, candidates) {
   };
 }
 
-export function canUseAsSynchroMaterial(player, materialCard) {
+export function canUseAsSynchroMaterial(
+  this: SynchroHost,
+  player: GamePlayer | null | undefined,
+  materialCard: GameCard | null | undefined,
+): SynchroMaterialCheck {
   if (!player || !materialCard) {
     return { ok: false, reason: "Missing material." };
   }
@@ -501,7 +846,11 @@ export function canUseAsSynchroMaterial(player, materialCard) {
   return { ok: true };
 }
 
-export function getSynchroMaterialCombos(player, synchroCard) {
+export function getSynchroMaterialCombos(
+  this: SynchroHost,
+  player: GamePlayer | null | undefined,
+  synchroCard: GameCard | null | undefined,
+): GameCard[][] {
   if (!player || !isSynchroExtraDeckCard(synchroCard)) return [];
   const targetLevel = getCardLevel(synchroCard);
   if (targetLevel <= 0) return [];
@@ -535,7 +884,7 @@ export function getSynchroMaterialCombos(player, synchroCard) {
     config.nonTunerMax,
   );
 
-  const combos = [];
+  const combos: GameCard[][] = [];
   for (const tunerGroup of tunerCombos) {
     if (tunerGroup.length !== config.tunerCount) continue;
     for (const nonTunerGroup of nonTunerCombos) {
@@ -560,7 +909,12 @@ export function getSynchroMaterialCombos(player, synchroCard) {
   return dedupeSynchroCombos(combos);
 }
 
-export function canSummonSynchroCard(player, synchroCard, options = {}) {
+export function canSummonSynchroCard(
+  this: SynchroHost,
+  player: GamePlayer | null | undefined,
+  synchroCard: GameCard | null | undefined,
+  options: SynchroCheckOptions = {},
+): SynchroSummonCheck {
   if (!player || !isSynchroExtraDeckCard(synchroCard)) {
     return { ok: false, reason: "No Synchro summon procedure.", type: "synchro" };
   }
@@ -621,7 +975,7 @@ export function canSummonSynchroCard(player, synchroCard, options = {}) {
       type: "synchro",
       candidates: uniqueCards(materialCombos.flat()),
       materialCombos,
-    };
+    } as SynchroSummonCheck;
   }
 
   return {
@@ -633,7 +987,13 @@ export function canSummonSynchroCard(player, synchroCard, options = {}) {
   };
 }
 
-export async function performSynchroSummon(player, materials, synchroCard, options = {}) {
+export async function performSynchroSummon(
+  this: SynchroHost,
+  player: GamePlayer | null | undefined,
+  materials: GameCard[] | null | undefined,
+  synchroCard: GameCard | null | undefined,
+  options: PerformSynchroOptions = {},
+): Promise<SummonExecutionResult> {
   if (!player || !synchroCard || !Array.isArray(materials)) {
     return { success: false, reason: "invalid_synchro_summon" };
   }
@@ -678,7 +1038,7 @@ export async function performSynchroSummon(player, materials, synchroCard, optio
     options.summonOrigin === SUMMON_ORIGINS.EFFECT_RESOLUTION
       ? SUMMON_ORIGINS.EFFECT_RESOLUTION
       : SUMMON_ORIGINS.PROCEDURE;
-  const deferredMaterialTriggerPackages = [];
+  const deferredMaterialTriggerPackages: SynchroDeferredTriggerPackage[] = [];
   const prepared = this.createPreparedSummon({
     card: synchroCard,
     controller: player,
@@ -829,10 +1189,11 @@ export async function performSynchroSummon(player, materials, synchroCard, optio
 }
 
 export async function performSynchroSummonFromExtraDeck(
-  cardOrIndex,
-  player,
-  options = {},
-) {
+  this: SynchroHost,
+  cardOrIndex: GameCard | number,
+  player: GamePlayer | null | undefined,
+  options: ExtraDeckSynchroOptions = {},
+): Promise<SummonExecutionResult> {
   const extraDeck = player?.extraDeck || [];
   const card =
     typeof cardOrIndex === "number" ? extraDeck[cardOrIndex] : cardOrIndex;
@@ -873,7 +1234,7 @@ export async function performSynchroSummonFromExtraDeck(
                 (candidate) => candidate.key === key,
               )?.cardRef,
             )
-            .filter(Boolean);
+            .filter((candidate): candidate is GameCard => Boolean(candidate));
           return await this.performSynchroSummon(player, selected, card, {
             checkActionWindow: false,
           });

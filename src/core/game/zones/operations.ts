@@ -3,13 +3,59 @@
  * Extracted from Game.js as part of B.4 modularization.
  */
 
+import type { GameCard } from "../../contracts/cards.js";
+import type {
+  GameZonesHost,
+  ZoneOpFailure,
+  ZoneOpOptions,
+} from "../../contracts/gameRuntime.js";
+import type { GamePlayer } from "../../contracts/player.js";
+import type { CanonicalZone } from "../../contracts/zones.js";
+
+interface ZoneOperationHost extends GameZonesHost {
+  devLog(code: string, detail?: unknown): void;
+  normalizeZoneCardOwnership(
+    contextLabel?: string,
+    options?: { enforceZoneOwner?: boolean },
+  ): void;
+  forceClearTargetSelection(reason: string): void;
+  assertStateInvariants(
+    contextLabel?: string,
+    options?: { failFast?: boolean; normalize?: boolean },
+  ): { hasCritical?: boolean };
+  updateBoard(): unknown;
+}
+
+function errorMessage(error: unknown): string | null {
+  if (
+    (typeof error === "object" && error !== null) ||
+    typeof error === "function"
+  ) {
+    const message = Reflect.get(error, "message");
+    if (message) return message as string;
+  }
+  return null;
+}
+
+function isPromiseLike<Result>(
+  value: Result | Promise<Result>,
+): value is Promise<Result> {
+  if (
+    value === null ||
+    (typeof value !== "object" && typeof value !== "function")
+  ) {
+    return false;
+  }
+  return typeof Reflect.get(value, "then") === "function";
+}
+
 /**
  * Get zone array by name.
- * @param {Object} player - Player object
+ * @param player - Player object
  * @param {string} zone - Zone name
  * @returns {Array} Zone array
  */
-export function getZone(player, zone) {
+export function getZone(player: GamePlayer, zone: CanonicalZone): GameCard[] {
   switch (zone) {
     case "hand":
       return player.hand;
@@ -36,10 +82,15 @@ export function getZone(player, zone) {
  * Transactional wrapper for zone operations with rollback support.
  * @param {string} opLabel - Operation label for logging
  * @param {Function} fn - Function to execute
- * @param {Object} options - Options (contextLabel, card, fromZone, toZone)
- * @returns {Object|Promise} Result of the operation
+ * @param options - Options (contextLabel, card, fromZone, toZone)
+ * @returns Result of the operation
  */
-export function runZoneOp(opLabel, fn, options = {}) {
+export function runZoneOp<Result>(
+  this: ZoneOperationHost,
+  opLabel: string,
+  fn: () => Result | Promise<Result>,
+  options: ZoneOpOptions = {},
+): Result | ZoneOpFailure | Promise<Result | ZoneOpFailure> {
   const contextLabel = options.contextLabel || opLabel;
   const root = this.zoneOpDepth === 0;
   if (root) {
@@ -56,7 +107,7 @@ export function runZoneOp(opLabel, fn, options = {}) {
     depth: this.zoneOpDepth,
   });
 
-  const rollback = (error) => {
+  const rollback = (error: unknown) => {
     if (root && this.zoneOpSnapshot) {
       this.restoreZoneSnapshot(this.zoneOpSnapshot);
     }
@@ -74,11 +125,11 @@ export function runZoneOp(opLabel, fn, options = {}) {
       card: options.card?.name,
       fromZone: options.fromZone,
       toZone: options.toZone,
-      reason: error?.message || "unknown",
+      reason: errorMessage(error) || "unknown",
     });
   };
 
-  const finalizeFailure = (error) => {
+  const finalizeFailure = (error: unknown): ZoneOpFailure => {
     this.zoneOpDepth = Math.max(0, this.zoneOpDepth - 1);
     rollback(error);
     if (root && this.zoneOpSnapshot) {
@@ -89,12 +140,12 @@ export function runZoneOp(opLabel, fn, options = {}) {
     }
     return {
       success: false,
-      reason: error?.message || "zone_op_error",
+      reason: errorMessage(error) || "zone_op_error",
       rolledBack: true,
     };
   };
 
-  const finalizeSuccess = (result) => {
+  const finalizeSuccess = (result: Result): Result | ZoneOpFailure => {
     try {
       this.normalizeZoneCardOwnership(contextLabel, {
         enforceZoneOwner: true,
@@ -125,7 +176,7 @@ export function runZoneOp(opLabel, fn, options = {}) {
 
   try {
     const result = fn();
-    if (result && typeof result.then === "function") {
+    if (isPromiseLike(result)) {
       return result.then(finalizeSuccess).catch(finalizeFailure);
     }
     return finalizeSuccess(result);

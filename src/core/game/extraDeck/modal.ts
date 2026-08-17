@@ -13,19 +13,264 @@ import {
   SUMMON_ORIGINS,
 } from "../summon/transaction.js";
 import { checkSpecialSummonEligibility } from "../summon/eligibility.js";
+import type {
+  BattlePosition,
+  BattlePositionInput,
+  ExtraDeckProcedureMaterial,
+  ExtraDeckSummonProcedure,
+  FusionMaterialDefinition,
+  GameCard,
+} from "../../contracts/cards.js";
+import type {
+  MaybePromise,
+  MoveCardOptions,
+  MoveCardResult,
+  PreparedSummon,
+  PreparedSummonInput,
+  SummonExecutionResult,
+} from "../../contracts/gameRuntime.js";
+import type { GamePlayer } from "../../contracts/player.js";
+import type {
+  RawSelectionCandidate,
+  RawSelectionContract,
+  RawSelectionRequirement,
+  SelectionCardReference,
+  SelectionResult,
+  SelectionSessionInput,
+} from "../../contracts/selection.js";
+import type { CanonicalZone } from "../../contracts/zones.js";
 
-const SUPPORTED_PROCEDURE_TYPES = new Set([
+type SupportedProcedureType = ExtraDeckSummonProcedure["type"];
+
+interface RuntimeMaterialRequirement {
+  readonly count?: number;
+  readonly allowedZones?: readonly CanonicalZone[];
+  readonly archetype?: string;
+  readonly cardKind?: GameCard["cardKind"];
+  readonly name?: string;
+  readonly type?: GameCard["type"];
+  readonly attribute?: GameCard["attribute"];
+  readonly minLevel?: number;
+  readonly maxLevel?: number;
+  readonly zone?: CanonicalZone;
+}
+
+interface MaterialEntry {
+  card: GameCard;
+  zone: CanonicalZone;
+}
+
+interface ExtraDeckCheckOptions {
+  checkActionWindow?: boolean;
+  silent?: boolean;
+}
+
+interface ExtraDeckPerformOptions extends ExtraDeckCheckOptions {
+  materials?: GameCard[];
+  position?: BattlePosition;
+}
+
+interface AscensionPerformOptions extends ExtraDeckCheckOptions {
+  material?: GameCard;
+}
+
+interface ProcedureCheckSuccess {
+  ok: true;
+  candidates: GameCard[];
+  requiredCount: number;
+  procedure: ExtraDeckSummonProcedure;
+  materialCombos: GameCard[][] | null;
+  materialEntries: MaterialEntry[];
+}
+
+interface ProcedureCheckFailure {
+  ok: false;
+  reason?: string | null;
+  candidates?: GameCard[];
+  materialCombos?: GameCard[][] | null;
+  materialEntries?: MaterialEntry[];
+}
+
+type ProcedureCheckResult = ProcedureCheckSuccess | ProcedureCheckFailure;
+
+interface AscensionCheckSuccess {
+  ok: true;
+  type: "ascension";
+  candidates: GameCard[];
+  requiredCount: 1;
+}
+
+interface AscensionCheckFailure {
+  ok: false;
+  reason: string;
+  candidates?: GameCard[];
+}
+
+type AscensionCheckResult = AscensionCheckSuccess | AscensionCheckFailure;
+
+interface GenericExtraDeckCheck {
+  ok: boolean;
+  reason?: string | null;
+  type?: "procedure" | "ascension" | "synchro" | "none";
+}
+
+interface MaterialSelectionCandidate extends RawSelectionCandidate {
+  key: string;
+  cardRef: GameCard & SelectionCardReference;
+  zone: CanonicalZone;
+}
+
+interface MaterialSelectionRequirement extends RawSelectionRequirement {
+  id: "extra_deck_materials";
+  candidates: MaterialSelectionCandidate[];
+}
+
+interface MaterialSelectionContract extends RawSelectionContract {
+  requirements: [MaterialSelectionRequirement];
+  ui: { allowCancel: true; message: string };
+}
+
+interface AscensionSelectionCandidate extends RawSelectionCandidate {
+  key: string;
+  cardRef: GameCard & SelectionCardReference;
+}
+
+interface AscensionSelectionRequirement extends RawSelectionRequirement {
+  id: "ascension_material";
+  candidates: AscensionSelectionCandidate[];
+}
+
+interface AscensionSelectionContract extends RawSelectionContract {
+  kind: "choice";
+  message: string;
+  requirements: [AscensionSelectionRequirement];
+}
+
+interface ExtraDeckSelectionSessionInput
+  extends Omit<SelectionSessionInput, "execute"> {
+  execute?: (
+    selections: SelectionResult,
+  ) => MaybePromise<SummonExecutionResult>;
+}
+
+interface ExtraDeckUiPort {
+  log?(message: string): void;
+  renderExtraDeckModal(
+    cards: GameCard[],
+    options: {
+      isSummonable(card: GameCard): boolean;
+      getDisabledReason(card: GameCard): string | null;
+      onCardClick(card: GameCard): Promise<void>;
+    },
+  ): void;
+  toggleExtraDeckModal(open: boolean): void;
+}
+
+interface ExtraDeckHost {
+  turn: string;
+  ui: ExtraDeckUiPort;
+  autoSelector?: {
+    select?(
+      contract: RawSelectionContract,
+      context: { owner: GamePlayer; selectionKind: "extra_deck_materials" },
+    ): { selections?: SelectionResult } | null;
+  };
+  canStartAction?(input: {
+    actor: GamePlayer;
+    kind: "extra_deck_summon" | "ascension_summon";
+    phaseReq: readonly ("main1" | "main2")[];
+    silent: boolean;
+  }): { ok: boolean; reason?: string };
+  canPlaceCardOnField?(
+    card: GameCard,
+    player: GamePlayer,
+    options: MoveCardOptions,
+  ): MoveCardResult;
+  canUseAsAscensionMaterial?(
+    player: GamePlayer,
+    card: GameCard,
+  ): { ok: boolean; reason?: string };
+  checkAscensionRequirements?(
+    player: GamePlayer,
+    ascensionCard: GameCard,
+    material: GameCard,
+  ): { ok: boolean; reason?: string };
+  canSummonExtraDeckCardByProcedure(
+    card: GameCard,
+    player: GamePlayer | null | undefined,
+    options?: ExtraDeckCheckOptions,
+  ): ProcedureCheckResult;
+  canSummonAscensionCardFromExtraDeck(
+    card: GameCard,
+    player: GamePlayer | null | undefined,
+    options?: ExtraDeckCheckOptions,
+  ): AscensionCheckResult;
+  canSummonSynchroCard?(
+    player: GamePlayer | null | undefined,
+    card: GameCard,
+    options?: ExtraDeckCheckOptions,
+  ): GenericExtraDeckCheck;
+  canSummonExtraDeckCard?(
+    card: GameCard,
+    player: GamePlayer,
+    options?: ExtraDeckCheckOptions,
+  ): GenericExtraDeckCheck;
+  performExtraDeckSummonProcedure(
+    card: GameCard,
+    player: GamePlayer,
+    options?: ExtraDeckPerformOptions,
+  ): Promise<SummonExecutionResult>;
+  performAscensionSummonFromExtraDeck(
+    card: GameCard,
+    player: GamePlayer,
+    options?: AscensionPerformOptions,
+  ): Promise<SummonExecutionResult>;
+  performSynchroSummonFromExtraDeck(
+    card: GameCard,
+    player: GamePlayer,
+  ): Promise<SummonExecutionResult>;
+  performAscensionSummon(
+    player: GamePlayer,
+    material: GameCard,
+    card: GameCard,
+  ): Promise<SummonExecutionResult>;
+  createPreparedSummon(input: PreparedSummonInput): PreparedSummon;
+  executeSummonTransaction(prepared: PreparedSummon): Promise<SummonExecutionResult>;
+  moveCard(
+    card: GameCard,
+    player: GamePlayer,
+    zone: "field",
+    options: MoveCardOptions,
+  ): MaybePromise<MoveCardResult | SummonExecutionResult>;
+  buildSelectionCandidateKey?(
+    candidate: RawSelectionCandidate,
+    index: number,
+  ): string;
+  startTargetSelectionSession(
+    input: SelectionSessionInput | ExtraDeckSelectionSessionInput,
+  ): unknown;
+  closeExtraDeckModal?(): void;
+  updateBoard?(): MaybePromise<unknown>;
+}
+
+const SUPPORTED_PROCEDURE_TYPES: ReadonlySet<SupportedProcedureType> = new Set([
   "graveyard_banish_fusion",
   "contact_fusion",
 ]);
 
-function asArray(value, fallback = []) {
+function asArray<Value>(
+  value: Value | readonly Value[] | null | undefined,
+  fallback: readonly Value[] = [],
+): readonly Value[] {
   if (Array.isArray(value)) return value;
   if (value === undefined || value === null) return fallback;
-  return [value];
+  return [value as Value];
 }
 
-function cardHasArchetype(card, archetype) {
+function cardHasArchetype(
+  card: GameCard | null | undefined,
+  archetype: string | null | undefined,
+): boolean {
   if (!archetype) return true;
   const archetypes = Array.isArray(card?.archetypes)
     ? card.archetypes
@@ -35,7 +280,11 @@ function cardHasArchetype(card, archetype) {
   return archetypes.includes(archetype);
 }
 
-function cardMatchesRequirement(card, requirement = {}, materialZone = null) {
+function cardMatchesRequirement(
+  card: GameCard | null | undefined,
+  requirement: RuntimeMaterialRequirement = {},
+  materialZone: CanonicalZone | null = null,
+): boolean {
   if (!card) return false;
   if (requirement.cardKind && card.cardKind !== requirement.cardKind) return false;
   if (requirement.archetype && !cardHasArchetype(card, requirement.archetype)) {
@@ -53,23 +302,43 @@ function cardMatchesRequirement(card, requirement = {}, materialZone = null) {
   if (requirement.maxLevel !== undefined && (card.level || 0) > requirement.maxLevel) {
     return false;
   }
-  const allowedZones = asArray(requirement.allowedZones, null);
+  const allowedZones = requirement.allowedZones
+    ? asArray(requirement.allowedZones)
+    : null;
   if (allowedZones && materialZone && !allowedZones.includes(materialZone)) {
     return false;
   }
   return true;
 }
 
-function getProcedureMaterials(player, procedure) {
+function getPlayerZoneCards(
+  player: GamePlayer | null | undefined,
+  zone: CanonicalZone,
+): GameCard[] {
+  if (!player) return [];
+  const value = Reflect.get(player, zone);
+  return Array.isArray(value)
+    ? value.filter(
+        (card): card is GameCard => Boolean(card && typeof card === "object"),
+      )
+    : [];
+}
+
+function getProcedureMaterials(
+  player: GamePlayer | null | undefined,
+  procedure: ExtraDeckSummonProcedure | null | undefined,
+): GameCard[] {
   const materialReq = procedure?.materials?.[0] || null;
   if (!player || !materialReq) return [];
   const zone = materialReq.zone || "graveyard";
-  const list = Array.isArray(player[zone]) ? player[zone] : [];
+  const list = getPlayerZoneCards(player, zone);
   return list.filter((card) => cardMatchesRequirement(card, materialReq, zone));
 }
 
-function expandMaterialRequirements(requirements = []) {
-  const expanded = [];
+function expandMaterialRequirements(
+  requirements: readonly RuntimeMaterialRequirement[] = [],
+): RuntimeMaterialRequirement[] {
+  const expanded: RuntimeMaterialRequirement[] = [];
   for (const requirement of requirements) {
     const count = Number(requirement?.count || 1);
     for (let index = 0; index < Math.max(1, count); index += 1) {
@@ -79,14 +348,21 @@ function expandMaterialRequirements(requirements = []) {
   return expanded;
 }
 
-function findMaterialCombos(requirements = [], materialEntries = []) {
+function findMaterialCombos(
+  requirements: readonly RuntimeMaterialRequirement[] = [],
+  materialEntries: readonly MaterialEntry[] = [],
+): GameCard[][] {
   const expanded = expandMaterialRequirements(requirements);
   if (expanded.length === 0 || materialEntries.length < expanded.length) {
     return [];
   }
 
-  const combos = [];
-  const search = (reqIndex, picked, remaining) => {
+  const combos: GameCard[][] = [];
+  const search = (
+    reqIndex: number,
+    picked: MaterialEntry[],
+    remaining: readonly MaterialEntry[],
+  ): void => {
     if (reqIndex >= expanded.length) {
       combos.push(picked.map((entry) => entry.card));
       return;
@@ -110,11 +386,17 @@ function findMaterialCombos(requirements = [], materialEntries = []) {
   return combos;
 }
 
-function getContactFusionMaterialEntries(card, player) {
+function getContactFusionMaterialEntries(
+  card: GameCard | null | undefined,
+  player: GamePlayer | null | undefined,
+): MaterialEntry[] {
   const requirements = card?.fusionMaterials || [];
-  const allowedZones = new Set();
+  const allowedZones = new Set<CanonicalZone>();
   for (const requirement of requirements) {
-    for (const zone of asArray(requirement?.allowedZones, ["field"])) {
+    for (const zone of asArray<CanonicalZone>(
+      requirement?.allowedZones,
+      ["field"],
+    )) {
       allowedZones.add(zone);
     }
   }
@@ -122,7 +404,7 @@ function getContactFusionMaterialEntries(card, player) {
 
   const entries = [];
   for (const zone of allowedZones) {
-    const list = Array.isArray(player?.[zone]) ? player[zone] : [];
+    const list = getPlayerZoneCards(player, zone);
     for (const material of list) {
       entries.push({ card: material, zone });
     }
@@ -130,9 +412,9 @@ function getContactFusionMaterialEntries(card, player) {
   return entries;
 }
 
-function uniqueCards(cards = []) {
-  const seen = new Set();
-  const unique = [];
+function uniqueCards(cards: readonly GameCard[] = []): GameCard[] {
+  const seen = new Set<GameCard>();
+  const unique: GameCard[] = [];
   for (const card of cards) {
     if (!card || seen.has(card)) continue;
     seen.add(card);
@@ -141,7 +423,10 @@ function uniqueCards(cards = []) {
   return unique;
 }
 
-function materialSelectionMatchesCombo(materials = [], combos = []) {
+function materialSelectionMatchesCombo(
+  materials: readonly GameCard[] = [],
+  combos: readonly (readonly GameCard[])[] = [],
+): boolean {
   if (!Array.isArray(materials) || !Array.isArray(combos)) return false;
   return combos.some((combo) => {
     if (!Array.isArray(combo) || combo.length !== materials.length) return false;
@@ -155,18 +440,24 @@ function materialSelectionMatchesCombo(materials = [], combos = []) {
   });
 }
 
-function getDefaultMaterialDestination(procedure) {
+function getDefaultMaterialDestination(
+  procedure: ExtraDeckSummonProcedure,
+): CanonicalZone {
   if (procedure?.materialDestination) return procedure.materialDestination;
   return procedure?.type === "contact_fusion" ? "graveyard" : "banished";
 }
 
-function getDefaultMaterialSourceZone(procedure) {
+function getDefaultMaterialSourceZone(
+  procedure: ExtraDeckSummonProcedure,
+): CanonicalZone {
   if (procedure?.type === "contact_fusion") return "field";
   return procedure?.materials?.[0]?.zone || "graveyard";
 }
 
-function isAscensionExtraDeckCard(card) {
-  return (
+function isAscensionExtraDeckCard(
+  card: GameCard | null | undefined,
+): card is GameCard & { monsterType: "ascension" } {
+  return Boolean(
     card &&
     card.cardKind === "monster" &&
     card.monsterType === "ascension" &&
@@ -175,19 +466,25 @@ function isAscensionExtraDeckCard(card) {
   );
 }
 
-function isSynchroExtraDeckCard(card) {
-  return (
+function isSynchroExtraDeckCard(
+  card: GameCard | null | undefined,
+): card is GameCard & { monsterType: "synchro" } {
+  return Boolean(
     card &&
     card.cardKind === "monster" &&
     card.monsterType === "synchro"
   );
 }
 
-function buildAscensionMaterialCandidates(game, ascensionCard, player) {
+function buildAscensionMaterialCandidates(
+  game: ExtraDeckHost | null | undefined,
+  ascensionCard: GameCard | null | undefined,
+  player: GamePlayer | null | undefined,
+): GameCard[] {
   if (!game || !isAscensionExtraDeckCard(ascensionCard) || !player) {
     return [];
   }
-  const materials = [];
+  const materials: GameCard[] = [];
   for (const material of player.field || []) {
     if (!material) continue;
     const materialCheck = game.canUseAsAscensionMaterial?.(player, material);
@@ -205,16 +502,16 @@ function buildAscensionMaterialCandidates(game, ascensionCard, player) {
 }
 
 function buildAscensionMaterialSelectionContract(
-  ascensionCard,
-  player,
-  materials,
-  game,
-) {
+  ascensionCard: GameCard,
+  player: GamePlayer,
+  materials: readonly GameCard[],
+  game: ExtraDeckHost,
+): AscensionSelectionContract {
   const owner = player.id === "player" ? "player" : "opponent";
   const candidates = materials
     .map((material) => {
       const zoneIndex = player.field.indexOf(material);
-      return {
+      const candidate: Omit<AscensionSelectionCandidate, "key"> = {
         name: material.name,
         owner,
         controller: player.id,
@@ -226,6 +523,7 @@ function buildAscensionMaterialSelectionContract(
         cardKind: material.cardKind,
         cardRef: material,
       };
+      return candidate;
     })
     .map((cand, idx) => ({
       ...cand,
@@ -258,7 +556,12 @@ function buildAscensionMaterialSelectionContract(
   };
 }
 
-export function canSummonExtraDeckCardByProcedure(card, player, options = {}) {
+export function canSummonExtraDeckCardByProcedure(
+  this: ExtraDeckHost,
+  card: GameCard | null | undefined,
+  player: GamePlayer | null | undefined,
+  options: ExtraDeckCheckOptions = {},
+): ProcedureCheckResult {
   const procedure = card?.extraDeckSummonProcedure;
   if (!card || !player || !procedure) {
     return { ok: false, reason: "No summon procedure." };
@@ -291,20 +594,22 @@ export function canSummonExtraDeckCardByProcedure(card, player, options = {}) {
     return { ok: false, reason: eligibility.reason || "Summon procedure is not allowed." };
   }
   let requiredCount = 0;
-  let candidates = [];
-  let materialCombos = null;
-  let materialEntries = [];
-  let fieldCheckExclusions = [];
+  let candidates: GameCard[] = [];
+  let materialCombos: GameCard[][] | null = null;
+  let materialEntries: MaterialEntry[] = [];
+  let fieldCheckExclusions: GameCard[] = [];
 
   if (procedure.type === "contact_fusion") {
-    const requirements = card.fusionMaterials || [];
+    const requirements: readonly FusionMaterialDefinition[] =
+      card.fusionMaterials || [];
     materialEntries = getContactFusionMaterialEntries(card, player);
     materialCombos = findMaterialCombos(requirements, materialEntries);
     requiredCount = expandMaterialRequirements(requirements).length;
     candidates = uniqueCards(materialCombos.flat());
     fieldCheckExclusions = materialCombos[0] || [];
   } else {
-    const materialReq = procedure.materials?.[0] || {};
+    const materialReq: ExtraDeckProcedureMaterial =
+      procedure.materials?.[0] || { count: 0 };
     requiredCount = Number(materialReq.count || 0);
     candidates = getProcedureMaterials(player, procedure);
     materialEntries = candidates.map((material) => ({
@@ -330,12 +635,19 @@ export function canSummonExtraDeckCardByProcedure(card, player, options = {}) {
   const fieldCheck = this.canPlaceCardOnField?.(card, player, {
     isFacedown: false,
     excludeCards: fieldCheckExclusions,
-    summonMethod: procedure.type === "contact_fusion" ? "fusion" : procedure.type,
+    summonMethod: (procedure.type === "contact_fusion"
+      ? "fusion"
+      : procedure.type) as MoveCardOptions["summonMethod"],
     summonProcedure: procedure.type,
     silent: options.silent !== false,
   });
   if (fieldCheck?.ok === false) {
-    return { ...fieldCheck, candidates, materialCombos, materialEntries };
+    return {
+      ...fieldCheck,
+      candidates,
+      materialCombos,
+      materialEntries,
+    } as ProcedureCheckFailure;
   }
   return {
     ok: true,
@@ -347,7 +659,12 @@ export function canSummonExtraDeckCardByProcedure(card, player, options = {}) {
   };
 }
 
-export function canSummonAscensionCardFromExtraDeck(card, player, options = {}) {
+export function canSummonAscensionCardFromExtraDeck(
+  this: ExtraDeckHost,
+  card: GameCard | null | undefined,
+  player: GamePlayer | null | undefined,
+  options: ExtraDeckCheckOptions = {},
+): AscensionCheckResult {
   if (!isAscensionExtraDeckCard(card) || !player) {
     return { ok: false, reason: "No Ascension summon procedure." };
   }
@@ -406,7 +723,12 @@ export function canSummonAscensionCardFromExtraDeck(card, player, options = {}) 
   };
 }
 
-export function canSummonExtraDeckCard(card, player, options = {}) {
+export function canSummonExtraDeckCard(
+  this: ExtraDeckHost,
+  card: GameCard | null | undefined,
+  player: GamePlayer | null | undefined,
+  options: ExtraDeckCheckOptions = {},
+): GenericExtraDeckCheck {
   if (card?.extraDeckSummonProcedure) {
     const procedureCheck = this.canSummonExtraDeckCardByProcedure(
       card,
@@ -437,14 +759,14 @@ export function canSummonExtraDeckCard(card, player, options = {}) {
 }
 
 function buildMaterialSelectionContract(
-  card,
-  candidates,
-  count,
-  procedure,
-  materialEntries = [],
-) {
+  card: GameCard,
+  candidates: readonly GameCard[],
+  count: number,
+  procedure: ExtraDeckSummonProcedure,
+  materialEntries: readonly MaterialEntry[] = [],
+): MaterialSelectionContract {
   const defaultZone = getDefaultMaterialSourceZone(procedure);
-  const getMaterialZone = (material) =>
+  const getMaterialZone = (material: GameCard): CanonicalZone =>
     materialEntries.find((entry) => entry.card === material)?.zone || defaultZone;
   return {
     requirements: [
@@ -472,7 +794,12 @@ function buildMaterialSelectionContract(
   };
 }
 
-export async function performExtraDeckSummonProcedure(cardOrIndex, player, options = {}) {
+export async function performExtraDeckSummonProcedure(
+  this: ExtraDeckHost,
+  cardOrIndex: GameCard | number,
+  player: GamePlayer | null | undefined,
+  options: ExtraDeckPerformOptions = {},
+): Promise<SummonExecutionResult> {
   const extraDeck = player?.extraDeck || [];
   const card =
     typeof cardOrIndex === "number" ? extraDeck[cardOrIndex] : cardOrIndex;
@@ -511,7 +838,7 @@ export async function performExtraDeckSummonProcedure(cardOrIndex, player, optio
           contract.requirements[0].candidates.find((cand) => cand.key === key)
             ?.cardRef,
         )
-            .filter(Boolean);
+        .filter((material): material is GameCard => Boolean(material));
       if (
         check.materialCombos &&
         !materialSelectionMatchesCombo(materials, check.materialCombos)
@@ -532,7 +859,7 @@ export async function performExtraDeckSummonProcedure(cardOrIndex, player, optio
               contract.requirements[0].candidates.find((cand) => cand.key === key)
                 ?.cardRef,
             )
-            .filter(Boolean);
+            .filter((material): material is GameCard => Boolean(material));
           void this.performExtraDeckSummonProcedure(card, player, {
             materials: selected,
           });
@@ -611,10 +938,11 @@ export async function performExtraDeckSummonProcedure(cardOrIndex, player, optio
 }
 
 export async function performAscensionSummonFromExtraDeck(
-  cardOrIndex,
-  player,
-  options = {},
-) {
+  this: ExtraDeckHost,
+  cardOrIndex: GameCard | number,
+  player: GamePlayer | null | undefined,
+  options: AscensionPerformOptions = {},
+): Promise<SummonExecutionResult> {
   const extraDeck = player?.extraDeck || [];
   const card =
     typeof cardOrIndex === "number" ? extraDeck[cardOrIndex] : cardOrIndex;
@@ -674,9 +1002,12 @@ export async function performAscensionSummonFromExtraDeck(
 
 /**
  * Opens the Extra Deck modal for a player.
- * @param {Object} player - The player whose Extra Deck to show
+ * @param player - The player whose Extra Deck to show
  */
-export function openExtraDeckModal(player) {
+export function openExtraDeckModal(
+  this: ExtraDeckHost,
+  player: GamePlayer,
+): void {
   const activePlayer = this.turn === player?.id;
   const canUseProcedures = activePlayer && !isAI(player);
   const availability = new Map();
@@ -710,6 +1041,6 @@ export function openExtraDeckModal(player) {
 /**
  * Closes the Extra Deck modal.
  */
-export function closeExtraDeckModal() {
+export function closeExtraDeckModal(this: ExtraDeckHost): void {
   this.ui?.toggleExtraDeckModal?.(false);
 }

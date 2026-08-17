@@ -3,21 +3,79 @@
  * Extracted from Game.js as part of B.4 modularization.
  */
 
+import type { GameCard } from "../../contracts/cards.js";
+import type { GameCoreHost } from "../../contracts/gameRuntime.js";
+import type { GamePlayer } from "../../contracts/player.js";
+import type { CanonicalZone } from "../../contracts/zones.js";
+
+type RelativePlayerId = string | null | undefined;
+
+interface OwnershipHost extends GameCoreHost {
+  devModeEnabled: boolean;
+  devLog(code: string, detail?: unknown): void;
+  getOpponent(player: GamePlayer | null): GamePlayer | null;
+  normalizeRelativePlayerId(
+    value: RelativePlayerId,
+    context: OwnershipContext,
+    meta?: OwnershipMeta,
+  ): RelativePlayerId;
+  normalizeCardOwnership(
+    card: GameCard | null | undefined,
+    context: OwnershipContext,
+    meta?: OwnershipMeta,
+  ): void;
+}
+
+interface OwnershipContext {
+  player?: GamePlayer | null;
+  opponent?: GamePlayer | null;
+}
+
+interface OwnershipActionReference {
+  id?: string;
+  type?: string;
+}
+
+interface OwnershipMeta {
+  selfId?: string | null;
+  opponentId?: string | null;
+  card?: GameCard | null;
+  cardName?: string;
+  action?: OwnershipActionReference | string | null;
+  field?: string;
+  contextLabel?: string;
+  enforceZoneOwner?: boolean;
+  zoneOwnerId?: string | null;
+  zone?: CanonicalZone;
+}
+
+interface NormalizeZoneOwnershipOptions {
+  enforceZoneOwner?: boolean;
+}
+
 /**
  * Normalize relative player IDs ("self"/"opponent") to concrete IDs.
  * @param {string} value - The value to normalize
- * @param {Object} ctx - Context with player/opponent references
- * @param {Object} meta - Metadata for logging
+ * @param ctx - Context with player/opponent references
+ * @param meta - Metadata for logging
  * @returns {string} Normalized player ID
  */
-export function normalizeRelativePlayerId(value, ctx, meta = {}) {
+export function normalizeRelativePlayerId(
+  this: OwnershipHost,
+  value: RelativePlayerId,
+  ctx: OwnershipContext,
+  meta: OwnershipMeta = {},
+): RelativePlayerId {
   if (value !== "self" && value !== "opponent") return value;
   const selfId = ctx?.player?.id ?? meta.selfId ?? null;
   const opponentId = ctx?.opponent?.id ?? meta.opponentId ?? null;
   const mapped = value === "self" ? selfId : opponentId;
   if (this.devModeEnabled) {
     const cardName = meta.card?.name || meta.cardName || "unknown";
-    const actionName = meta.action?.id || meta.action?.type || meta.action;
+    const actionName =
+      typeof meta.action === "object" && meta.action !== null
+        ? meta.action.id || meta.action.type
+        : meta.action;
     const summary = `Normalized ${meta.field || "id"} ${value} -> ${
       mapped || "unknown"
     } for ${cardName}`;
@@ -45,11 +103,16 @@ export function normalizeRelativePlayerId(value, ctx, meta = {}) {
 
 /**
  * Normalize owner/controller of a single card.
- * @param {Object} card - The card to normalize
- * @param {Object} ctx - Context with player/opponent references
- * @param {Object} meta - Metadata for logging and zone enforcement
+ * @param card - The card to normalize
+ * @param ctx - Context with player/opponent references
+ * @param meta - Metadata for logging and zone enforcement
  */
-export function normalizeCardOwnership(card, ctx, meta = {}) {
+export function normalizeCardOwnership(
+  this: OwnershipHost,
+  card: GameCard | null | undefined,
+  ctx: OwnershipContext,
+  meta: OwnershipMeta = {},
+) {
   if (!card) return;
   const owner = this.normalizeRelativePlayerId(card.owner, ctx, {
     ...meta,
@@ -102,15 +165,21 @@ export function normalizeCardOwnership(card, ctx, meta = {}) {
 /**
  * Normalize owner/controller of all cards in all zones.
  * @param {string} contextLabel - Label for logging
- * @param {Object} options - Options (enforceZoneOwner)
+ * @param options - Options (enforceZoneOwner)
  */
 export function normalizeZoneCardOwnership(
+  this: OwnershipHost,
   contextLabel = "zone_state",
-  options = {}
+  options: NormalizeZoneOwnershipOptions = {},
 ) {
-  const seen = new Set();
+  const seen = new Set<GameCard>();
   const enforceZoneOwner = options.enforceZoneOwner === true;
-  const addList = (player, opponent, zoneName, list) => {
+  const addList = (
+    player: GamePlayer,
+    opponent: GamePlayer | null,
+    zoneName: CanonicalZone,
+    list: GameCard[] | null | undefined,
+  ) => {
     if (!Array.isArray(list)) return;
     list.forEach((card) => {
       if (!card || seen.has(card)) return;
@@ -127,7 +196,7 @@ export function normalizeZoneCardOwnership(
       );
     });
   };
-  const applyForPlayer = (player) => {
+  const applyForPlayer = (player: GamePlayer | null | undefined) => {
     if (!player) return;
     const opponent = this.getOpponent(player);
     addList(player, opponent, "hand", player.hand);
