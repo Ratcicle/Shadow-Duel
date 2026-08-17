@@ -23,7 +23,7 @@ import type {
 import type { SelectionCandidateKey } from "./contracts/primitives.js";
 
 interface AutoSelectorCard extends ActionRuntimeCard {
-  fieldPresenceId?: string | number;
+  fieldPresenceId?: string | number | null;
   goodDiscard?: boolean;
   cannotBeNormalSummonedOrSet?: boolean;
   usedEffectThisTurn?: boolean;
@@ -34,7 +34,7 @@ interface AutoSelectorCard extends ActionRuntimeCard {
 interface AutoSelectorScorableCard {
   id?: string | number;
   instanceId?: string | number;
-  fieldPresenceId?: string | number;
+  fieldPresenceId?: string | number | null;
   name?: string;
   cardKind?: string;
   atk?: number | null;
@@ -73,7 +73,7 @@ type AutoSelectionCandidate = (RawSelectionCandidate | SelectionCandidate) & {
   cardRef?: AutoSelectorCard | null;
   card?: AutoSelectorCard | null;
   instanceId?: string | number;
-  fieldPresenceId?: string | number;
+  fieldPresenceId?: string | number | null;
   archetype?: string | null;
   archetypes?: string[];
   goodDiscard?: boolean;

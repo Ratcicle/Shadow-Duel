@@ -1,5 +1,4 @@
 import { resolveContextNumber } from "../../actionHandlers/shared.js";
-import type Game from "../../Game.js";
 import type {
   ActionRuntimeCard,
   ActionRuntimeGamePort,
@@ -45,7 +44,7 @@ type ResourcePlayer = ActionRuntimePlayer & {
 };
 
 interface ResourceActionHost {
-  game: Game;
+  game: ActionRuntimeGamePort;
   applyActions(
     actions: readonly CardAction[],
     context: EffectContext,
@@ -84,7 +83,7 @@ export function applyDraw(
     : ctx.player) as ResourcePlayer;
   const amount = action.amount ?? 1;
   if (this.game && typeof this.game.drawCards === "function") {
-    const result = this.game.drawCards(targetPlayer as object, amount);
+    const result = this.game.drawCards(targetPlayer, amount);
     if (ctx && result && Array.isArray(result.drawn)) {
       writeContextValue(ctx, "lastDrawnCards", result.drawn.slice());
 
@@ -138,7 +137,7 @@ export function applyShuffleDeck(
 }
 
 async function emitLpGainEvent(
-  game: Game,
+  game: ActionRuntimeGamePort,
   player: ActionRuntimePlayer,
   sourceCard: ActionRuntimeCard | null | undefined,
   before: number,
@@ -262,7 +261,7 @@ export async function applyDamage(
   // (inflictDamage from Game already applied the damage)
   if (!action.triggerOnly) {
     if (this.game && typeof this.game.inflictDamage === "function") {
-      this.game.inflictDamage(targetPlayer as object, amount, {
+      this.game.inflictDamage(targetPlayer, amount, {
         cause: action.cause || "effect",
         sourceCard: ctx.source || null,
         sourceRect: action.sourceRect || ctx?.activationContext?.sourceRect || null,

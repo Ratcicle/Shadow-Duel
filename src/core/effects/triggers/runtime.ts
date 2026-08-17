@@ -38,7 +38,6 @@ export type TriggerRuntimeCard = Omit<EventCard, "effects"> & {
   uid?: number | string | null;
   effects?: readonly TriggerEffect[];
   declaredValues?: { [property: string]: unknown };
-  lastSummonedFromZone?: ZoneInput | null;
   fieldPresenceId?: string;
   fieldPresenceState?: { [counter: string]: number } | null;
   state?: {

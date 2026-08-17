@@ -1,6 +1,6 @@
-import type Game from "../../Game.js";
 import type {
   ActionRuntimeCard,
+  ActionRuntimeGamePort,
   ActionRuntimePlayer,
   EffectContext,
   LegacyActionHandlerResult,
@@ -20,8 +20,14 @@ interface NegationCheckResult {
   readonly costPaid?: boolean;
 }
 
+type DestroyGamePort = Omit<ActionRuntimeGamePort, "ui"> & {
+  ui: { log(message: string): void };
+  lastAttackNegated: boolean;
+  registerAttackNegated(card: ActionRuntimeCard): void;
+};
+
 interface DestroyActionHost {
-  game: Game;
+  game: DestroyGamePort;
   readonly ui: {
     log?(message: string): void;
     showDestructionNegationPrompt?(
@@ -527,7 +533,7 @@ export async function applyMirrorForceDestroy(
   _action: ActionOf<"mirror_force_destroy_all">,
   ctx: EffectContext,
 ): Promise<boolean> {
-  const game = (ctx?.game as Game | undefined) || this.game;
+  const game = (ctx?.game as DestroyGamePort | undefined) || this.game;
   const player = ctx?.player || null;
   const eventData =
     ctx?.eventData ||
@@ -585,7 +591,7 @@ export async function applyMirrorForceDestroy(
       ? Reflect.get(eventData, "attacker")
       : undefined;
   if (eventAttacker) {
-    game.registerAttackNegated(eventAttacker);
+    game.registerAttackNegated(eventAttacker as ActionRuntimeCard);
   } else {
     game.lastAttackNegated = true;
   }

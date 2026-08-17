@@ -7,9 +7,9 @@ import {
 import { cardMatchesKind } from "../../Card.js";
 import { isAI } from "../../Player.js";
 import { getCounterDisplayLabel, getUIText } from "../../i18n.js";
-import type Game from "../../Game.js";
 import type {
   ActionRuntimeCard,
+  ActionRuntimeGamePort,
   ActionRuntimePlayer,
   EffectContext,
   ResolvedTargetMap,
@@ -106,10 +106,17 @@ interface CounterEventData {
   readonly zones?: readonly (ZoneInput | null)[];
 }
 
-type CounterGame = Game & {
+type CounterGame = Omit<ActionRuntimeGamePort, "getOpponent"> & {
   _arenaTracker?: {
     recordEvent(event: string, payload: object, metadata: object): void;
   };
+  waitForAiPresentationStep?(
+    player: ActionRuntimePlayer | null | undefined,
+    options?: object,
+  ): Promise<void>;
+  getOpponent?(
+    player: ActionRuntimePlayer | null | undefined,
+  ): ActionRuntimePlayer | null;
 };
 
 interface CounterActionHost {
@@ -144,7 +151,7 @@ interface CounterSelectionCandidate {
 type LegacyCounterOwner = ActionRuntimePlayer | "player" | "bot";
 
 function getUI(game: CounterGame | null | undefined): CounterUi | null {
-  return Reflect.apply(getSharedUI, undefined, [game]);
+  return Reflect.apply(getSharedUI, undefined, [game]) as CounterUi;
 }
 
 function resolveFieldScopeCards(

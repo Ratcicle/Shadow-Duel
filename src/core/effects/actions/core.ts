@@ -6,10 +6,10 @@ import { hasSynchroSummonPreviewCandidate } from "../../actionHandlers/summon/sy
 import { mergeCanonicalSelections } from "../../game/selection/contract.js";
 import { checkSpecialSummonEligibility } from "../../game/summon/eligibility.js";
 import type { ActionHandlerRegistry } from "../../actionHandlers/registry.js";
-import type Game from "../../Game.js";
 import type {
   ActionHandlerEnginePort,
   ActionRuntimeCard,
+  ActionRuntimeCheckResult,
   ActionRuntimeGamePort,
   ActionRuntimePlayer,
   EffectContext,
@@ -278,8 +278,20 @@ interface PreviewResult {
   readonly reason?: string;
 }
 
+type ActionCoreGamePort = Omit<
+  ActionRuntimeGamePort,
+  "canSpecialSummonUnderRestrictions" | "emit"
+> & {
+  emit: NonNullable<ActionRuntimeGamePort["emit"]>;
+  canSpecialSummonUnderRestrictions?(
+    card: ActionRuntimeCard,
+    player: ActionRuntimePlayer | null | undefined,
+    options?: object,
+  ): ActionRuntimeCheckResult;
+};
+
 interface ActionCoreHost {
-  game: Game;
+  game: ActionCoreGamePort;
   actionHandlers: ActionHandlerRegistry;
   filterTargetsByImmunity(
     action: CardAction,
@@ -459,7 +471,7 @@ function getTargetCards(targets: ResolvedTargetMap | null | undefined): ActionRu
 }
 
 function findOwnerForTarget(
-  game: Game | null | undefined,
+  game: ActionCoreGamePort | null | undefined,
   fallbackOwner: ActionRuntimePlayer | null,
   card: ActionRuntimeCard,
 ): ActionRuntimePlayer | null {
@@ -580,9 +592,12 @@ export async function applyActions(
     return createActionResult({ success: true, executed });
   }
 
+  const game = this.game;
+  const devLog = game?.devLog;
   const logDev =
-    this.game?.devLog &&
-    ((tag: string, detail?: object) => this.game.devLog(tag, detail || {}));
+    devLog &&
+    ((tag: string, detail?: object) =>
+      Reflect.apply(devLog, game, [tag, detail || {}]));
 
   // Propagate selection results (from network resume) into ctx so handlers can consume them.
   const canonicalSelections = {
@@ -2247,7 +2262,7 @@ export function checkActionPreviewRequirements(
         return { ok: false, reason: "Field is full." };
       }
       if (action.token) {
-        const tokenPreview = {
+        const tokenPreview: PreviewCard = {
           cardKind: "monster",
           name: action.token.name || "Token",
           atk: action.token.atk ?? 0,
