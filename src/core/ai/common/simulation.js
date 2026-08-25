@@ -27,6 +27,10 @@ import {
   checkSpecialSummonEligibility,
   establishProperSummon,
 } from "../../game/summon/eligibility.js";
+import {
+  canUseSimOncePerTurn,
+  markSimOncePerTurnUsed,
+} from "./simStateUtils.js";
 
 function canSimulatedSpecialSummon(
   card,
@@ -200,35 +204,6 @@ function getSimOncePerTurnKey(effect, sourceCard) {
   );
 }
 
-function getSimOptBucket(state, selfId = "bot") {
-  if (!state) return null;
-  if (!state._simOncePerTurn) state._simOncePerTurn = {};
-  const key = selfId || "bot";
-  if (state._simOncePerTurn[key] instanceof Set) {
-    const migrated = new Map();
-    for (const entryKey of state._simOncePerTurn[key]) {
-      migrated.set(entryKey, 1);
-    }
-    state._simOncePerTurn[key] = migrated;
-  }
-  if (Array.isArray(state._simOncePerTurn[key])) {
-    state._simOncePerTurn[key] = new Map(
-      state._simOncePerTurn[key].map((entry) =>
-        Array.isArray(entry) ? [entry[0], Number(entry[1] || 1)] : [entry, 1],
-      ),
-    );
-  }
-  if (
-    state._simOncePerTurn[key] &&
-    typeof state._simOncePerTurn[key] === "object" &&
-    !(state._simOncePerTurn[key] instanceof Map)
-  ) {
-    state._simOncePerTurn[key] = new Map(Object.entries(state._simOncePerTurn[key]));
-  }
-  if (!state._simOncePerTurn[key]) state._simOncePerTurn[key] = new Map();
-  return state._simOncePerTurn[key];
-}
-
 function getSimPlayerById(state, playerId = "bot") {
   if (!state) return null;
   if (playerId === "player") return state.player;
@@ -316,7 +291,6 @@ function canUseSimulatedEffect(state, effect, sourceCard, selfId = "bot") {
   if (!effect?.oncePerTurn && !effect?.oncePerTurnName) return true;
   const key = getSimOncePerTurnKey(effect, sourceCard);
   if (!key) return true;
-  const bucket = getSimOptBucket(state, selfId);
   const limit = Math.max(
     1,
     Math.floor(
@@ -328,17 +302,13 @@ function canUseSimulatedEffect(state, effect, sourceCard, selfId = "bot") {
       ),
     ) || 1,
   );
-  if (bucket instanceof Map) {
-    return Number(bucket.get(key) || 0) < limit;
-  }
-  return !bucket?.has(key);
+  return canUseSimOncePerTurn(state, key, limit, selfId);
 }
 
 function markSimulatedEffectUsed(state, effect, sourceCard, selfId = "bot") {
   if (!effect?.oncePerTurn && !effect?.oncePerTurnName) return;
   const key = getSimOncePerTurnKey(effect, sourceCard);
   if (!key) return;
-  const bucket = getSimOptBucket(state, selfId);
   const limit = Math.max(
     1,
     Math.floor(
@@ -350,11 +320,7 @@ function markSimulatedEffectUsed(state, effect, sourceCard, selfId = "bot") {
       ),
     ) || 1,
   );
-  if (bucket instanceof Map) {
-    bucket.set(key, Math.min(limit, Number(bucket.get(key) || 0) + 1));
-  } else {
-    bucket?.add(key);
-  }
+  markSimOncePerTurnUsed(state, key, limit, selfId);
 }
 
 function effectConditionsPass(state, effect, sourceCard, options = {}) {
