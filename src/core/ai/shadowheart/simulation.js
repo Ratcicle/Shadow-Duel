@@ -10,6 +10,10 @@ import {
 } from "../common/simulation.js";
 import { cardMatchesFilter } from "../common/cardFilters.js";
 import { getCounterCount } from "../common/counters.js";
+import {
+  canUseSimOncePerTurn,
+  markSimOncePerTurnUsed,
+} from "../common/simStateUtils.js";
 import { isShadowHeart, isShadowHeartByName } from "./knowledge.js";
 import {
   buildShadowHeartTargetPreferences,
@@ -109,25 +113,12 @@ function buildSimAnalysis(state = {}) {
   };
 }
 
-function getSimOptBucket(state, selfId = "bot") {
-  if (!state._simOncePerTurn) state._simOncePerTurn = {};
-  if (Array.isArray(state._simOncePerTurn[selfId])) {
-    state._simOncePerTurn[selfId] = new Set(state._simOncePerTurn[selfId]);
-  }
-  if (!state._simOncePerTurn[selfId]) {
-    state._simOncePerTurn[selfId] = new Set();
-  }
-  return state._simOncePerTurn[selfId];
-}
-
 function canUseSimOpt(state, key, selfId = "bot") {
-  if (!key) return true;
-  return !getSimOptBucket(state, selfId).has(key);
+  return canUseSimOncePerTurn(state, key, 1, selfId);
 }
 
 function markSimOpt(state, key, selfId = "bot") {
-  if (!key) return;
-  getSimOptBucket(state, selfId).add(key);
+  markSimOncePerTurnUsed(state, key, 1, selfId);
 }
 
 function removeFromZone(list, card) {

@@ -113,3 +113,72 @@ export function useSimOpt(state, key, bucketName = "_simOptUsed") {
   used.add(key);
   return true;
 }
+
+/**
+ * Resolve the canonical per-player simulated usage bucket.
+ *
+ * Older planners cloned this metadata as Sets, arrays, or plain objects. Keep
+ * accepting those runtime shapes at the boundary, but immediately normalize
+ * them to the counted Map representation shared by every simulator.
+ */
+export function ensureSimOncePerTurnBucket(state, selfId = "bot") {
+  if (!state) return new Map();
+  if (
+    !state._simOncePerTurn ||
+    typeof state._simOncePerTurn !== "object" ||
+    Array.isArray(state._simOncePerTurn)
+  ) {
+    state._simOncePerTurn = {};
+  }
+
+  const ownerKey = selfId || "bot";
+  const current = state._simOncePerTurn[ownerKey];
+  if (current instanceof Map) return current;
+
+  const normalized = new Map();
+  if (current instanceof Set) {
+    for (const key of current) normalized.set(key, 1);
+  } else if (Array.isArray(current)) {
+    for (const entry of current) {
+      if (Array.isArray(entry)) {
+        normalized.set(entry[0], Number(entry[1] || 1));
+      } else {
+        normalized.set(entry, 1);
+      }
+    }
+  } else if (current && typeof current === "object") {
+    for (const [key, count] of Object.entries(current)) {
+      normalized.set(key, Number(count || 1));
+    }
+  }
+
+  state._simOncePerTurn[ownerKey] = normalized;
+  return normalized;
+}
+
+export function canUseSimOncePerTurn(
+  state,
+  key,
+  limit = 1,
+  selfId = "bot",
+) {
+  if (!key) return true;
+  const bucket = ensureSimOncePerTurnBucket(state, selfId);
+  const normalizedLimit = Math.max(1, Math.floor(Number(limit)) || 1);
+  return Number(bucket.get(key) || 0) < normalizedLimit;
+}
+
+export function markSimOncePerTurnUsed(
+  state,
+  key,
+  limit = 1,
+  selfId = "bot",
+) {
+  if (!key) return;
+  const bucket = ensureSimOncePerTurnBucket(state, selfId);
+  const normalizedLimit = Math.max(1, Math.floor(Number(limit)) || 1);
+  bucket.set(
+    key,
+    Math.min(normalizedLimit, Number(bucket.get(key) || 0) + 1),
+  );
+}
