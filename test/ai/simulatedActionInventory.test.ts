@@ -77,8 +77,8 @@ test("simulated action handlers preserve the complete legacy order", () => {
 
   assert.equal(types.length, 64);
   assert.equal(digest(types), HANDLER_ORDER_SHA256);
-  for (const type of types) {
-    assert.equal(typeof SIMULATED_ACTION_HANDLERS[type], "function", type);
+  for (const [type, handler] of Object.entries(SIMULATED_ACTION_HANDLERS)) {
+    assert.equal(typeof handler, "function", type);
   }
 });
 
@@ -99,7 +99,9 @@ test("simulated action coverage preserves the database inventory", () => {
 });
 
 test("unknown simulated actions are recorded in encounter order and skipped", () => {
-  const state = createState();
+  const state = createState() as ReturnType<typeof createState> & {
+    _simUnsupportedActions?: string[];
+  };
 
   applySimulatedActions({
     actions: [

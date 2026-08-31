@@ -34,8 +34,11 @@ import {
   resolveTargetsForAction,
   STOP_SIMULATION,
 } from "./shared.js";
+import type { SimulatedActionHandlerContext } from "./shared.js";
 
-export function applyEquip(ctx) {
+export function applyEquip(
+  ctx: SimulatedActionHandlerContext<"equip">,
+): void {
   const {
     action,
     targets,

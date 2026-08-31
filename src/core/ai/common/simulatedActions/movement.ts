@@ -23,21 +23,38 @@ import {
   moveCardToZone,
   removeCardFromZones,
 } from "../zones.js";
+import type { ActionTargetScope } from "../../../contracts/actions.js";
+import type {
+  SimulatedCardState,
+  SimulatedPlayerState,
+} from "../../../contracts/aiState.js";
+import type { CardFilter } from "../../../contracts/effects.js";
+import type { SimulatedActionHandlerContext, SimulatedRuntimeState } from "./shared.js";
 
-function getOriginalOwner(state, card, fallback) {
+function getOriginalOwner(
+  state: SimulatedRuntimeState,
+  card: SimulatedCardState,
+  fallback: SimulatedPlayerState,
+): SimulatedPlayerState {
   const originalOwnerId = card?.originalOwner || null;
   if (state?.player?.id === originalOwnerId) return state.player;
   if (state?.bot?.id === originalOwnerId) return state.bot;
   return fallback || null;
 }
 
-function setSimulatedController(card, player) {
+function setSimulatedController(
+  card: SimulatedCardState,
+  player: SimulatedPlayerState,
+): void {
   if (!card || !player) return;
   card.owner = player.id;
   card.controller = player.id;
 }
 
-function clearSimulatedTemporaryControl(state, card) {
+function clearSimulatedTemporaryControl(
+  state: SimulatedRuntimeState,
+  card: SimulatedCardState,
+): void {
   if (!Array.isArray(state?.temporaryControlEffects) || !card) return;
   const instanceId = card.instanceId ?? card._instanceId ?? card.uuid ?? card.id ?? null;
   state.temporaryControlEffects = state.temporaryControlEffects.filter(
@@ -60,7 +77,9 @@ import {
   updateSimulatedSentToGraveMaterialMarker,
 } from "./shared.js";
 
-export function applyBanish(ctx) {
+export function applyBanish(
+  ctx: SimulatedActionHandlerContext<"banish">,
+): void {
   const {
     action,
     targets,
@@ -86,7 +105,9 @@ export function applyBanish(ctx) {
   return;
 }
 
-export function applyReturnToHand(ctx) {
+export function applyReturnToHand(
+  ctx: SimulatedActionHandlerContext<"return_to_hand">,
+): void {
   const {
     action,
     targets,
@@ -126,7 +147,9 @@ export function applyReturnToHand(ctx) {
   return;
 }
 
-export function applyMove(ctx) {
+export function applyMove(
+  ctx: SimulatedActionHandlerContext<"move">,
+): void | typeof STOP_SIMULATION {
   const {
     action,
     targets,
@@ -135,9 +158,11 @@ export function applyMove(ctx) {
     options,
     self,
     opponent,
-    source,
   } = ctx;
-  const resolveScopeOwners = (scope = {}) => {
+  const source = ctx.source || options.sourceCard || null;
+  const resolveScopeOwners = (
+    scope: ActionTargetScope,
+  ): SimulatedPlayerState[] => {
     const ownerRule = scope.owner || scope.player || "self";
     if (ownerRule === "opponent") return opponent ? [opponent] : [];
     if (ownerRule === "any" || ownerRule === "both" || ownerRule === "either") {
@@ -145,13 +170,15 @@ export function applyMove(ctx) {
     }
     return self ? [self] : [];
   };
-  const resolveScopedTargets = (scope = {}) => {
+  const resolveScopedTargets = (
+    scope: ActionTargetScope,
+  ): SimulatedCardState[] => {
     const zones = Array.isArray(scope.zones)
       ? scope.zones
       : scope.zone
         ? [scope.zone]
         : ["field"];
-    const filters = { ...(scope.filters || {}) };
+    const filters: CardFilter = { ...(scope.filters || {}) };
     [
       "cardKind",
       "cardName",
@@ -176,12 +203,13 @@ export function applyMove(ctx) {
       "isToken",
       "isTuner",
     ].forEach((key) => {
-      if (scope[key] !== undefined && filters[key] === undefined) {
-        filters[key] = scope[key];
+      const scopeValue = Reflect.get(scope, key);
+      if (scopeValue !== undefined && Reflect.get(filters, key) === undefined) {
+        Reflect.set(filters, key, scopeValue);
       }
     });
-    const cards = [];
-    const seen = new Set();
+    const cards: SimulatedCardState[] = [];
+    const seen = new Set<string | number | SimulatedCardState>();
     resolveScopeOwners(scope).forEach((owner) => {
       zones.forEach((zone) => {
         getZoneCards(owner, zone).forEach((card) => {
@@ -206,7 +234,7 @@ export function applyMove(ctx) {
     return action.allowEmpty === true ? undefined : STOP_SIMULATION;
   }
   let moved = false;
-  const movedCards = [];
+  const movedCards: SimulatedCardState[] = [];
   targetCards.forEach((card) => {
     const owner = findCardOwner(state, card);
     if (!owner) return;
@@ -271,7 +299,9 @@ export function applyMove(ctx) {
   return;
 }
 
-export function applyTakeControl(ctx) {
+export function applyTakeControl(
+  ctx: SimulatedActionHandlerContext<"take_control">,
+): void {
   const { action, targets, state, self, opponent, options } = ctx;
   const destination = action.player === "opponent" ? opponent : self;
   if (!destination || !Array.isArray(targets)) return;
