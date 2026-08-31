@@ -74,6 +74,8 @@ export interface SimulatedReplacementEffect {
 
 /** Mutable projection used only by planning; no live Card methods are required. */
 export interface SimulatedCardShape extends SimulatedCardCore {
+  _instanceId?: number | string | null;
+  uuid?: string | null;
   equippedTo?: SimulatedCardState | null;
   equips?: SimulatedCardState[];
   equipTarget?: SimulatedCardState | number | string | null;

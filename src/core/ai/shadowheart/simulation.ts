@@ -36,6 +36,157 @@ import {
   canUseNormalSummonForCard,
   recordNormalSummonForTurn,
 } from "../../Player.js";
+import type {
+  AIActivationContext,
+  AIPlannedAction,
+  StrategyRuntimePort,
+} from "../../contracts/ai.js";
+import type {
+  AiStateShape,
+  PerspectiveGameState,
+  SimulatedCardState,
+  SimulatedPlayerState,
+  SimulationGameState,
+} from "../../contracts/aiState.js";
+import type { GameCard } from "../../contracts/cards.js";
+import type { EffectDefinition } from "../../contracts/effects.js";
+import type { AiCardFilter } from "../common/cardFilters.js";
+
+type ShadowSimulationState =
+  | SimulationGameState
+  | PerspectiveGameState;
+type MutableShadowState = ShadowSimulationState & {
+  currentPhase?: string | null;
+};
+type ShadowZone =
+  | "hand"
+  | "field"
+  | "graveyard"
+  | "spellTrap"
+  | "deck"
+  | "extraDeck"
+  | "banished"
+  | "fieldSpell";
+type ShadowListZone = Exclude<ShadowZone, "fieldSpell">;
+
+type ShadowSearchFilters = AiCardFilter;
+
+type ShadowSearchAction = Omit<ShadowSearchFilters, "type"> & {
+  type: "search_any";
+  sourceName?: string;
+  filters?: ShadowSearchFilters;
+};
+
+interface ShadowActionExtras {
+  filters?: ShadowSearchFilters;
+  cardKind?: ShadowSearchFilters["cardKind"];
+  archetype?: string;
+  archetypes?: readonly string[];
+  name?: string;
+  minLevel?: number;
+  maxLevel?: number;
+  minAtk?: number;
+  maxAtk?: number;
+  subtype?: ShadowSearchFilters["subtype"];
+  cannotAttackThisTurn?: boolean;
+  fusionTargetHint?: string;
+  cathedralPlan?: {
+    counterCount?: number;
+    targetName?: string | null;
+  };
+}
+
+interface ShadowMainPhaseAction extends ShadowActionExtras {
+  type: AIPlannedAction["type"];
+  activationContext?: AIActivationContext;
+  sourceCard?: SimulatedCardState | GameCard | null;
+  cardName?: string;
+  index?: number;
+  zoneIndex?: number;
+  fieldIndex?: number;
+  position?: "attack" | "defense" | "choice";
+  facedown?: boolean;
+}
+type ShadowAction = ShadowMainPhaseAction | ShadowSearchAction;
+
+interface ShadowPlaceResult {
+  placed: boolean;
+  zone: "fieldSpell" | "spellTrap" | null;
+}
+
+type PlaceSpellCard = (
+  state: MutableShadowState,
+  card: SimulatedCardState,
+) => ShadowPlaceResult;
+
+interface ShadowStrategyOptions {
+  rankSearchCandidates?: (
+    candidates: SimulatedCardState[],
+    action: ShadowSearchAction,
+    context: {
+      game: MutableShadowState;
+      player: SimulatedPlayerState;
+      opponent: SimulatedPlayerState;
+      source: SimulatedCardState | null;
+    },
+  ) => SimulatedCardState[];
+  buildActivationContextForEffect?: (input: {
+    sourceCard: SimulatedCardState;
+    effect: EffectDefinition | null | undefined;
+    player: SimulatedPlayerState;
+    game: MutableShadowState;
+  }) => AIActivationContext | null | undefined;
+  chooseSpecialSummonPosition?: (
+    card: SimulatedCardState,
+    context: {
+      game: MutableShadowState;
+      player: SimulatedPlayerState;
+      opponent: SimulatedPlayerState;
+      source: SimulatedCardState | null;
+      action: ShadowMainPhaseAction;
+      activationContext?: AIActivationContext;
+    },
+  ) => "attack" | "defense" | null | undefined;
+}
+
+interface ShadowSimulationOptions extends ShadowStrategyOptions {
+  placeSpellCard?: PlaceSpellCard;
+  strategy?: Pick<
+    StrategyRuntimePort,
+    "simulateMainPhaseAction" | "simulateSpellEffect"
+  > & ShadowStrategyOptions;
+  evaluateRecruitCandidate?: (...args: unknown[]) => unknown;
+  activationContext?: AIActivationContext | null;
+}
+
+type ShadowOptionsInput = PlaceSpellCard | ShadowSimulationOptions | null;
+
+interface AfterSummonInput {
+  state: MutableShadowState;
+  player: SimulatedPlayerState;
+  card: SimulatedCardState;
+  method: string;
+  action: ShadowMainPhaseAction;
+  options?: ShadowSimulationOptions;
+}
+
+interface ShadowOverrideInput {
+  state: MutableShadowState;
+  action: ShadowMainPhaseAction;
+  options: ShadowSimulationOptions;
+}
+
+interface ShadowSpecialSummonHookInput {
+  state: MutableShadowState;
+  player: SimulatedPlayerState;
+  card: SimulatedCardState;
+  action: ShadowMainPhaseAction;
+}
+
+interface ShadowFusionHookInput {
+  state: MutableShadowState;
+  fusionCard: SimulatedCardState;
+}
 
 const SH = {
   arctroth: "Shadow-Heart Demon Arctroth",
@@ -54,14 +205,18 @@ const SH = {
   voidMage: "Shadow-Heart Void Mage",
 };
 
-function normalizeOptions(placeSpellCardOrOptions = null) {
+function normalizeOptions(
+  placeSpellCardOrOptions: ShadowOptionsInput = null,
+): ShadowSimulationOptions {
   if (typeof placeSpellCardOrOptions === "function") {
     return { placeSpellCard: placeSpellCardOrOptions };
   }
   return placeSpellCardOrOptions || {};
 }
 
-function ensureZones(player = {}) {
+function ensureZones(
+  player: Partial<SimulatedPlayerState> = {},
+): SimulatedPlayerState {
   player.hand = player.hand || [];
   player.field = player.field || [];
   player.spellTrap = player.spellTrap || [];
@@ -69,10 +224,10 @@ function ensureZones(player = {}) {
   player.deck = player.deck || [];
   player.extraDeck = player.extraDeck || [];
   player.banished = player.banished || [];
-  return player;
+  return player as SimulatedPlayerState;
 }
 
-function isDragonType(card) {
+function isDragonType(card: SimulatedCardState | null | undefined): boolean {
   if (!card) return false;
   if (Array.isArray(card.types)) {
     return card.types.some(
@@ -82,16 +237,18 @@ function isDragonType(card) {
   return String(card.type || "").toLowerCase() === "dragon";
 }
 
-function isShadowHeartDragon(card) {
+function isShadowHeartDragon(
+  card: SimulatedCardState | null | undefined,
+): boolean {
   return (
     card?.cardKind === "monster" &&
     !card.isFacedown &&
     isDragonType(card) &&
-    (isShadowHeart(card) || isShadowHeartByName(card.name))
+    (isShadowHeart(card) || isShadowHeartByName(card.name as string))
   );
 }
 
-function buildSimAnalysis(state = {}) {
+function buildSimAnalysis(state: MutableShadowState) {
   const player = ensureZones(state.bot || {});
   const opponent = ensureZones(state.player || {});
   return {
@@ -113,22 +270,37 @@ function buildSimAnalysis(state = {}) {
   };
 }
 
-function canUseSimOpt(state, key, selfId = "bot") {
+function canUseSimOpt(
+  state: MutableShadowState,
+  key: string,
+  selfId = "bot",
+): boolean {
   return canUseSimOncePerTurn(state, key, 1, selfId);
 }
 
-function markSimOpt(state, key, selfId = "bot") {
+function markSimOpt(
+  state: MutableShadowState,
+  key: string,
+  selfId = "bot",
+): void {
   markSimOncePerTurnUsed(state, key, 1, selfId);
 }
 
-function removeFromZone(list, card) {
+function removeFromZone(
+  list: SimulatedCardState[] | null | undefined,
+  card: SimulatedCardState,
+): boolean {
   const index = list?.indexOf(card) ?? -1;
-  if (index < 0) return false;
+  if (!list || index < 0) return false;
   list.splice(index, 1);
   return true;
 }
 
-function moveToZone(player, card, zone) {
+function moveToZone(
+  player: SimulatedPlayerState | null | undefined,
+  card: SimulatedCardState | null | undefined,
+  zone: ShadowZone,
+): boolean {
   if (!player || !card) return false;
   for (const key of [
     "hand",
@@ -139,7 +311,7 @@ function moveToZone(player, card, zone) {
     "extraDeck",
     "banished",
   ]) {
-    const cards = player[key];
+    const cards = player[key as ShadowListZone];
     if (Array.isArray(cards) && removeFromZone(cards, card)) break;
   }
   if (player.fieldSpell === card) player.fieldSpell = null;
@@ -147,13 +319,17 @@ function moveToZone(player, card, zone) {
     if (player.fieldSpell) player.graveyard.push(player.fieldSpell);
     player.fieldSpell = card;
   } else {
-    player[zone] = player[zone] || [];
-    player[zone].push(card);
+    const listZone = zone as ShadowListZone;
+    player[listZone] = player[listZone] || [];
+    player[listZone].push(card);
   }
   return true;
 }
 
-function applyDarknessValleyBuffToCard(card, player = null) {
+function applyDarknessValleyBuffToCard(
+  card: SimulatedCardState | null | undefined,
+  player: SimulatedPlayerState | null = null,
+): void {
   if (player && player.fieldSpell?.name !== SH.valley) return;
   if (!card || card.cardKind !== "monster" || card.isFacedown) return;
   if (!isShadowHeart(card)) return;
@@ -162,14 +338,19 @@ function applyDarknessValleyBuffToCard(card, player = null) {
   card._simDarknessValleyBuff = true;
 }
 
-function applyDarknessValleyBuffs(player) {
+function applyDarknessValleyBuffs(
+  player: SimulatedPlayerState | null | undefined,
+): void {
   if (player?.fieldSpell?.name !== SH.valley) return;
   (player.field || []).forEach((card) =>
     applyDarknessValleyBuffToCard(card, player)
   );
 }
 
-function defaultPlaceSpellCard(state, card) {
+function defaultPlaceSpellCard(
+  state: MutableShadowState,
+  card: SimulatedCardState,
+): ShadowPlaceResult {
   const player = ensureZones(state.bot || {});
   if (card.subtype === "field") {
     if (player.fieldSpell) player.graveyard.push(player.fieldSpell);
@@ -183,7 +364,11 @@ function defaultPlaceSpellCard(state, card) {
   return { placed: false, zone: null };
 }
 
-function placeShadowHeartSpellCard(state, card, options = {}) {
+function placeShadowHeartSpellCard(
+  state: MutableShadowState,
+  card: SimulatedCardState,
+  options: ShadowSimulationOptions = {},
+): ShadowPlaceResult {
   const placeSpellCard = options.placeSpellCard || defaultPlaceSpellCard;
   const result = placeSpellCard(state, card);
   if (card?.name === SH.valley) {
@@ -192,7 +377,7 @@ function placeShadowHeartSpellCard(state, card, options = {}) {
   return result;
 }
 
-function buildActionFilter(action = {}) {
+function buildActionFilter(action: ShadowSearchAction): ShadowSearchFilters {
   return {
     ...(action.filters || {}),
     cardKind: action.cardKind ?? action.filters?.cardKind,
@@ -208,7 +393,13 @@ function buildActionFilter(action = {}) {
   };
 }
 
-function rankSearchCandidates(candidates, action, state, sourceCard, options = {}) {
+function rankSearchCandidates(
+  candidates: SimulatedCardState[],
+  action: ShadowSearchAction,
+  state: MutableShadowState,
+  sourceCard: SimulatedCardState | null,
+  options: ShadowSimulationOptions = {},
+): SimulatedCardState[] {
   const player = ensureZones(state.bot || {});
   const opponent = ensureZones(state.player || {});
   const ranker =
@@ -224,7 +415,12 @@ function rankSearchCandidates(candidates, action, state, sourceCard, options = {
   return Array.isArray(ranked) && ranked.length > 0 ? ranked : candidates;
 }
 
-function searchDeck(state, action, sourceCard, options = {}) {
+function searchDeck(
+  state: MutableShadowState,
+  action: ShadowSearchAction,
+  sourceCard: SimulatedCardState | null,
+  options: ShadowSimulationOptions = {},
+): SimulatedCardState | null {
   const player = ensureZones(state.bot || {});
   const filter = buildActionFilter(action);
   const candidates = player.deck.filter((card) => cardMatchesFilter(card, filter));
@@ -236,7 +432,10 @@ function searchDeck(state, action, sourceCard, options = {}) {
   return chosen;
 }
 
-function findEffect(card, timings = []) {
+function findEffect(
+  card: SimulatedCardState | null | undefined,
+  timings: string[] = [],
+): EffectDefinition | null | undefined {
   const effects = Array.isArray(card?.effects) ? card.effects : [];
   return effects.find(
     (effect) =>
@@ -245,7 +444,12 @@ function findEffect(card, timings = []) {
   );
 }
 
-function buildActivationContext(state, sourceCard, effect, options = {}) {
+function buildActivationContext(
+  state: MutableShadowState,
+  sourceCard: SimulatedCardState | null,
+  effect: EffectDefinition | null | undefined,
+  options: ShadowSimulationOptions = {},
+): AIActivationContext | null {
   if (!sourceCard) return null;
   if (typeof options.buildActivationContextForEffect === "function") {
     const built = options.buildActivationContextForEffect({
@@ -283,7 +487,10 @@ function buildActivationContext(state, sourceCard, effect, options = {}) {
   };
 }
 
-function getSourceCardForAction(state, action) {
+function getSourceCardForAction(
+  state: MutableShadowState,
+  action: ShadowMainPhaseAction,
+): SimulatedCardState | null {
   const player = ensureZones(state.bot || {});
   if (action.type === "spell") {
     const index = resolveSimulatedHandIndex(player, action, "spell");
@@ -294,17 +501,23 @@ function getSourceCardForAction(state, action) {
     return player.hand[index] || null;
   }
   if (action.type === "spellTrapEffect") {
-    const index = Number.isInteger(action.zoneIndex) ? action.zoneIndex : action.index;
+    const index = (
+      Number.isInteger(action.zoneIndex) ? action.zoneIndex : action.index
+    ) as number;
     return player.spellTrap?.[index] || null;
   }
   if (action.type === "fieldEffect") return player.fieldSpell || null;
   if (action.type === "monsterEffect") {
-    return player.field?.[action.fieldIndex] || null;
+    return player.field?.[action.fieldIndex as number] || null;
   }
   return null;
 }
 
-function prepareAction(state, action, options = {}) {
+function prepareAction(
+  state: MutableShadowState,
+  action: ShadowMainPhaseAction,
+  options: ShadowSimulationOptions = {},
+): ShadowMainPhaseAction {
   const prepared = { ...action };
   const sourceCard = getSourceCardForAction(state, action);
   const effect = sourceCard
@@ -326,7 +539,12 @@ function prepareAction(state, action, options = {}) {
   return prepared;
 }
 
-function chooseSpecialSummonPosition(card, action, state, options = {}) {
+function chooseSpecialSummonPosition(
+  card: SimulatedCardState,
+  action: ShadowMainPhaseAction,
+  state: MutableShadowState,
+  options: ShadowSimulationOptions = {},
+): "attack" | "defense" {
   if (action.position && action.position !== "choice") return action.position;
   const chooser =
     options.chooseSpecialSummonPosition ||
@@ -336,7 +554,7 @@ function chooseSpecialSummonPosition(card, action, state, options = {}) {
       game: state,
       player: state.bot,
       opponent: state.player,
-      source: action.sourceCard || null,
+      source: (action.sourceCard as SimulatedCardState | null | undefined) || null,
       action,
       activationContext: action.activationContext,
     });
@@ -345,7 +563,12 @@ function chooseSpecialSummonPosition(card, action, state, options = {}) {
   return "attack";
 }
 
-function applySummonState(card, action, state, options = {}) {
+function applySummonState(
+  card: SimulatedCardState,
+  action: ShadowMainPhaseAction,
+  state: MutableShadowState,
+  options: ShadowSimulationOptions = {},
+): void {
   card.position = chooseSpecialSummonPosition(card, action, state, options);
   card.isFacedown = action.facedown || false;
   card.hasAttacked = false;
@@ -354,13 +577,17 @@ function applySummonState(card, action, state, options = {}) {
   else card.cannotAttackThisTurn = false;
 }
 
-function destroyBestOpponentCard(state) {
+function destroyBestOpponentCard(
+  state: MutableShadowState,
+): SimulatedCardState | null {
   const opponent = ensureZones(state.player || {});
   const candidates = [
     ...(opponent.field || []),
     opponent.fieldSpell,
     ...(opponent.spellTrap || []),
-  ].filter(Boolean);
+  ].filter(
+    (candidate): candidate is SimulatedCardState => Boolean(candidate),
+  );
   if (candidates.length === 0) return null;
   candidates.sort((a, b) => {
     const aMonster = a.cardKind === "monster" ? 1 : 0;
@@ -373,7 +600,14 @@ function destroyBestOpponentCard(state) {
   return target;
 }
 
-function handleAfterSummon({ state, player, card, method, action, options = {} }) {
+function handleAfterSummon({
+  state,
+  player,
+  card,
+  method,
+  action,
+  options = {},
+}: AfterSummonInput): void {
   if (!card || card.isFacedown) return;
   applyDarknessValleyBuffToCard(card, player);
 
@@ -477,7 +711,11 @@ function handleAfterSummon({ state, player, card, method, action, options = {} }
   }
 }
 
-function simulateNormalSummon(state, action, options = {}) {
+function simulateNormalSummon(
+  state: MutableShadowState,
+  action: ShadowMainPhaseAction,
+  options: ShadowSimulationOptions = {},
+): true {
   const player = ensureZones(state.bot || {});
   const handIndex = resolveSimulatedHandIndex(player, action, "monster");
   const card = player.hand[handIndex];
@@ -517,7 +755,7 @@ function simulateNormalSummon(state, action, options = {}) {
     if (tradeCheck?.ok === false) return true;
   }
 
-  const tributes = [];
+  const tributes: SimulatedCardState[] = [];
   tributeIndices
     .slice()
     .sort((a, b) => b - a)
@@ -531,14 +769,16 @@ function simulateNormalSummon(state, action, options = {}) {
 
   player.hand.splice(handIndex, 1);
   const summoned = { ...card };
-  summoned.position = action.position || "attack";
+  summoned.position = (action.position || "attack") as "attack" | "defense";
   summoned.isFacedown = action.facedown || false;
   summoned.hasAttacked = false;
   summoned.attacksUsedThisTurn = 0;
   summoned.cannotAttackThisTurn = action.cannotAttackThisTurn === true;
   summoned.lastSummonMethod = tributesNeeded > 0 ? "tribute" : "normal";
   summoned.lastSummonedFromZone = "hand";
-  summoned.lastTributeMaterialNames = tributes.map((tribute) => tribute.name);
+  summoned.lastTributeMaterialNames = tributes.map(
+    (tribute) => tribute.name as string,
+  );
   summoned.lastTributeMaterialCount = tributes.length;
   player.field.push(summoned);
   player.summonCount = (player.summonCount || 0) + 1;
@@ -555,9 +795,15 @@ function simulateNormalSummon(state, action, options = {}) {
   return true;
 }
 
-function simulateCathedralEffect(state, action, options = {}) {
+function simulateCathedralEffect(
+  state: MutableShadowState,
+  action: ShadowMainPhaseAction,
+  options: ShadowSimulationOptions = {},
+): boolean {
   const player = ensureZones(state.bot || {});
-  const zoneIndex = Number.isInteger(action.zoneIndex) ? action.zoneIndex : action.index;
+  const zoneIndex = (
+    Number.isInteger(action.zoneIndex) ? action.zoneIndex : action.index
+  ) as number;
   const card = player.spellTrap?.[zoneIndex];
   if (!card || card.name !== SH.cathedral) return false;
   if (card.isFacedown) return true;
@@ -600,7 +846,13 @@ function simulateCathedralEffect(state, action, options = {}) {
   return true;
 }
 
-function handleEffectActivated({ state, card }) {
+function handleEffectActivated({
+  state,
+  card,
+}: {
+  state: MutableShadowState;
+  card: SimulatedCardState | null | undefined;
+}): void {
   const player = ensureZones(state.bot || {});
   if (card?.name === SH.rage) {
     const rageTarget = (player.field || [])
@@ -616,7 +868,11 @@ function handleEffectActivated({ state, card }) {
   }
 }
 
-function buildGenericOptions(state, action, baseOptions = {}) {
+function buildGenericOptions(
+  state: MutableShadowState,
+  action: ShadowMainPhaseAction,
+  baseOptions: ShadowSimulationOptions = {},
+) {
   const options = {
     ...baseOptions,
     guardLabel: "ShadowHeartSimulation",
@@ -627,36 +883,58 @@ function buildGenericOptions(state, action, baseOptions = {}) {
     evaluateRecruitCandidate:
       baseOptions.evaluateRecruitCandidate || evaluateShadowHeartRecruitCandidate,
     chooseSpecialSummonPosition: baseOptions.chooseSpecialSummonPosition,
-    placeSpellCard: (simState, card) =>
+    placeSpellCard: (
+      simState: MutableShadowState,
+      card: SimulatedCardState,
+    ) =>
       placeShadowHeartSpellCard(simState, card, baseOptions),
     actionOverrides: {
-      summon: ({ state: simState, action: simAction, options: simOptions }) =>
+      summon: ({
+        state: simState,
+        action: simAction,
+        options: simOptions,
+      }: ShadowOverrideInput) =>
         simulateNormalSummon(simState, simAction, simOptions),
-      spellTrapEffect: ({ state: simState, action: simAction, options: simOptions }) =>
+      spellTrapEffect: ({
+        state: simState,
+        action: simAction,
+        options: simOptions,
+      }: ShadowOverrideInput) =>
         simulateCathedralEffect(simState, simAction, simOptions),
-      fieldEffect: ({ state: simState }) => {
+      fieldEffect: ({ state: simState }: ShadowOverrideInput) => {
         if (simState.bot?.fieldSpell?.name !== SH.valley) return false;
         applyDarknessValleyBuffs(simState.bot);
         return true;
       },
     },
-    onAfterSpecialSummon: ({ state: simState, player, card, action: simAction }) => {
+    onAfterSpecialSummon: ({
+      state: simState,
+      player,
+      card,
+      action: simAction,
+    }: ShadowSpecialSummonHookInput) => {
       handleAfterSummon({
         state: simState,
         player,
         card,
         method: "special",
         action: simAction,
-        options,
+        options: options as ShadowSimulationOptions,
       });
     },
-    onFusionSummon: ({ state: simState, fusionCard }) => {
+    onFusionSummon: ({
+      state: simState,
+      fusionCard,
+    }: ShadowFusionHookInput) => {
       applyDarknessValleyBuffToCard(fusionCard, simState.bot);
       if (fusionCard?.name === SH.demonDragon) {
         destroyBestOpponentCard(simState);
       }
     },
-    onEffectActivated: (ctx) => handleEffectActivated(ctx),
+    onEffectActivated: (ctx: {
+      state: MutableShadowState;
+      card: SimulatedCardState | null | undefined;
+    }) => handleEffectActivated(ctx),
   };
 
   if (!options.chooseSpecialSummonPosition && options.strategy?.chooseSpecialSummonPosition) {
@@ -667,7 +945,16 @@ function buildGenericOptions(state, action, baseOptions = {}) {
   return options;
 }
 
-export function simulateMainPhaseAction(state, action, placeSpellCardOrOptions = null) {
+export function simulateMainPhaseAction(
+  state: MutableShadowState,
+  action: AIPlannedAction,
+  placeSpellCardOrOptions?: ShadowOptionsInput,
+): MutableShadowState;
+export function simulateMainPhaseAction(
+  state: MutableShadowState,
+  action: ShadowMainPhaseAction,
+  placeSpellCardOrOptions: ShadowOptionsInput = null,
+): MutableShadowState {
   if (!action) return state;
   ensureZones(state.bot || {});
   ensureZones(state.player || {});
@@ -678,7 +965,11 @@ export function simulateMainPhaseAction(state, action, placeSpellCardOrOptions =
   return state;
 }
 
-export function simulateSpellEffect(state, card, placeSpellCardOrOptions = null) {
+export function simulateSpellEffect(
+  state: MutableShadowState,
+  card: SimulatedCardState,
+  placeSpellCardOrOptions: ShadowOptionsInput = null,
+): MutableShadowState {
   if (!card) return state;
   ensureZones(state.bot || {});
   ensureZones(state.player || {});
