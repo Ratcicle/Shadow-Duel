@@ -35,8 +35,29 @@ import {
   resolveTargetsForAction,
   STOP_SIMULATION,
 } from "./shared.js";
+import type {
+  ActionOf,
+  ActionProperties,
+} from "../../../contracts/actions.js";
+import type { SimulatedPlayerState } from "../../../contracts/aiState.js";
+import type { CardFilter } from "../../../contracts/effects.js";
+import type {
+  SimulatedActionHandlerContext,
+  SimulatedActionOptions,
+} from "./shared.js";
 
-function getScopedPlayersForCounterSpec(spec = {}, self, opponent) {
+type CounterFieldSpec = Partial<
+  Pick<
+    ActionProperties,
+    "owner" | "player" | "zone" | "zones" | "filters" | "requireFaceup"
+  >
+>;
+
+function getScopedPlayersForCounterSpec(
+  spec: CounterFieldSpec,
+  self: SimulatedPlayerState,
+  opponent: SimulatedPlayerState,
+): SimulatedPlayerState[] {
   const owner = spec.owner || spec.player || "self";
   if (owner === "opponent") return [opponent].filter(Boolean);
   if (owner === "any" || owner === "both" || owner === "either") {
@@ -45,7 +66,12 @@ function getScopedPlayersForCounterSpec(spec = {}, self, opponent) {
   return [self].filter(Boolean);
 }
 
-function countSimulatedFieldCards(spec = {}, self, opponent, options = {}) {
+function countSimulatedFieldCards(
+  spec: CounterFieldSpec,
+  self: SimulatedPlayerState,
+  opponent: SimulatedPlayerState,
+  options: SimulatedActionOptions,
+): number {
   const zones = Array.isArray(spec.zones)
     ? spec.zones
     : [spec.zone || "field"];
@@ -67,38 +93,57 @@ function countSimulatedFieldCards(spec = {}, self, opponent, options = {}) {
   return count;
 }
 
-function resolveSimulatedAddCounterAmount(action, self, opponent, options) {
+function resolveSimulatedAddCounterAmount(
+  action: ActionOf<"add_counter">,
+  self: SimulatedPlayerState,
+  opponent: SimulatedPlayerState,
+  options: SimulatedActionOptions,
+): number {
   if (action.amountFromFieldCount) {
     const spec = action.amountFromFieldCount;
     const count = countSimulatedFieldCards(spec, self, opponent, options);
-    const multiplier = Number.isFinite(Number(spec.multiplier))
-      ? Number(spec.multiplier)
+    const rawMultiplier = Reflect.get(spec, "multiplier");
+    const rawBase = Reflect.get(spec, "base");
+    const rawMin = Reflect.get(spec, "min");
+    const rawMax = Reflect.get(spec, "max");
+    const multiplier = Number.isFinite(Number(rawMultiplier))
+      ? Number(rawMultiplier)
       : 1;
-    const baseAmount = Number.isFinite(Number(spec.baseAmount ?? spec.base))
-      ? Number(spec.baseAmount ?? spec.base)
+    const baseAmount = Number.isFinite(Number(spec.baseAmount ?? rawBase))
+      ? Number(spec.baseAmount ?? rawBase)
       : 0;
     let amount = baseAmount + count * multiplier;
-    if (Number.isFinite(Number(spec.min))) {
-      amount = Math.max(Number(spec.min), amount);
+    if (Number.isFinite(Number(rawMin))) {
+      amount = Math.max(Number(rawMin), amount);
     }
-    if (Number.isFinite(Number(spec.max))) {
-      amount = Math.min(Number(spec.max), amount);
+    if (Number.isFinite(Number(rawMax))) {
+      amount = Math.min(Number(rawMax), amount);
     }
     return Math.max(0, Math.floor(amount));
   }
 
-  return Number.isFinite(action.amount) ? action.amount : 1;
+  return typeof action.amount === "number" && Number.isFinite(action.amount)
+    ? action.amount
+    : 1;
 }
 
-function countSimulatedFieldCounters(action = {}, self, opponent, options = {}) {
+function countSimulatedFieldCounters(
+  action: ActionOf<"count_field_counters">,
+  self: SimulatedPlayerState,
+  opponent: SimulatedPlayerState,
+  options: SimulatedActionOptions,
+): number {
   const counterType = action.counterType || "default";
   const zones = Array.isArray(action.zones)
     ? action.zones
     : [action.zone || "field"];
-  const filters = { ...(action.filters || {}) };
-  if (action.requireFaceup === true && filters.requireFaceup == null) {
-    filters.requireFaceup = true;
-  }
+  const filters: CardFilter = {
+    ...(action.filters || {}),
+    requireFaceup:
+      action.requireFaceup === true
+        ? true
+        : action.filters?.requireFaceup,
+  };
 
   let total = 0;
   for (const player of getScopedPlayersForCounterSpec(action, self, opponent)) {
@@ -116,7 +161,10 @@ function countSimulatedFieldCounters(action = {}, self, opponent, options = {}) 
   return total;
 }
 
-function getFieldCounterContextKey(action, counterType) {
+function getFieldCounterContextKey(
+  action: ActionOf<"count_field_counters">,
+  counterType: string,
+): string {
   return (
     action.contextKey ||
     action.storeAs ||
@@ -125,7 +173,9 @@ function getFieldCounterContextKey(action, counterType) {
   );
 }
 
-export function applyAddCounter(ctx) {
+export function applyAddCounter(
+  ctx: SimulatedActionHandlerContext<"add_counter">,
+): void {
   const {
     action,
     targets,
@@ -154,17 +204,22 @@ export function applyAddCounter(ctx) {
   });
   const contextKey = action.contextKey || action.storeAs || action.resultKey;
   if (contextKey && options.actionContext) {
-    options.actionContext[contextKey] = addedAmount;
+    Reflect.set(options.actionContext, contextKey, addedAmount);
     options.actionContext.lastAddedCounterCount = addedAmount;
     options.actionContext.addedCounterCounts =
       options.actionContext.addedCounterCounts || {};
-    options.actionContext.addedCounterCounts[action.counterType || "counter"] =
-      addedAmount;
+    Reflect.set(
+      options.actionContext.addedCounterCounts,
+      action.counterType || "counter",
+      addedAmount,
+    );
   }
   return;
 }
 
-export function applyCountFieldCounters(ctx) {
+export function applyCountFieldCounters(
+  ctx: SimulatedActionHandlerContext<"count_field_counters">,
+): void {
   const { action, options, self, opponent } = ctx;
   const counterType = action.counterType || "default";
   const total = countSimulatedFieldCounters(action, self, opponent, options);
@@ -173,15 +228,17 @@ export function applyCountFieldCounters(ctx) {
   }
   const contextKey = getFieldCounterContextKey(action, counterType);
   if (contextKey) {
-    options.actionContext[contextKey] = total;
+    Reflect.set(options.actionContext, contextKey, total);
   }
   options.actionContext.lastFieldCounterCount = total;
   options.actionContext.fieldCounterCounts =
     options.actionContext.fieldCounterCounts || {};
-  options.actionContext.fieldCounterCounts[counterType] = total;
+  Reflect.set(options.actionContext.fieldCounterCounts, counterType, total);
 }
 
-export function applyRemoveCounter(ctx) {
+export function applyRemoveCounter(
+  ctx: SimulatedActionHandlerContext<"remove_counter">,
+): void {
   const {
     action,
     targets,

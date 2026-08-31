@@ -34,8 +34,44 @@ import {
   resolveTargetsForAction,
   STOP_SIMULATION,
 } from "./shared.js";
+import { DUEL_EVENT_NAMES } from "../../../contracts/effects.js";
+import type { ActionCase } from "../../../contracts/actions.js";
+import type { SimulatedCardState } from "../../../contracts/aiState.js";
+import type {
+  DuelEventName,
+  EffectDefinition,
+} from "../../../contracts/effects.js";
+import type {
+  CanonicalSelectionMap,
+  CanonicalSelectionValue,
+} from "../../../contracts/selection.js";
+import type { SimulatedActionHandlerContext } from "./shared.js";
 
-export function applyNegateActivation(ctx) {
+interface SimulatedCaseEntry {
+  choiceCase: ActionCase;
+  caseSelections: CanonicalSelectionMap;
+}
+
+function isSimulatedCard(value: unknown): value is SimulatedCardState {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function firstSelectedCard(
+  value: CanonicalSelectionValue,
+): SimulatedCardState | null {
+  const first = Array.isArray(value) ? value[0] : value;
+  if (!isSimulatedCard(first)) return null;
+  if ("card" in first && isSimulatedCard(first.card)) return first.card;
+  return first;
+}
+
+function isDuelEventName(value: string): value is DuelEventName {
+  return DUEL_EVENT_NAMES.some((event) => event === value);
+}
+
+export function applyNegateActivation(
+  ctx: SimulatedActionHandlerContext<"negate_activation">,
+): void {
   const { action, selections, options } = ctx;
   const activationContext =
     options.actionContext || options.activationContext?.context || {};
@@ -60,7 +96,9 @@ export function applyNegateActivation(ctx) {
   }
 }
 
-export function applyNegateEffect(ctx) {
+export function applyNegateEffect(
+  ctx: SimulatedActionHandlerContext<"negate_effect">,
+): void {
   const { action, selections, options } = ctx;
   const activationContext =
     options.actionContext || options.activationContext?.context || {};
@@ -85,7 +123,9 @@ export function applyNegateEffect(ctx) {
   }
 }
 
-export function applyConditionalTargetActions(ctx) {
+export function applyConditionalTargetActions(
+  ctx: SimulatedActionHandlerContext<"conditional_target_actions">,
+): void {
   const {
     action,
     targets,
@@ -98,8 +138,12 @@ export function applyConditionalTargetActions(ctx) {
     applySimulatedActions,
   } = ctx;
   const sourceCard = options.sourceCard || null;
-  const caseTargets = targets.length > 0 ? targets : [sourceCard].filter(Boolean);
-  const matchesCase = (caseEntry) => {
+  const caseTargets = targets.length > 0
+    ? targets
+    : sourceCard
+      ? [sourceCard]
+      : [];
+  const matchesCase = (caseEntry: ActionCase): boolean => {
     if (!caseEntry) return false;
     if (
       caseEntry.conditions &&
@@ -147,7 +191,9 @@ export function applyConditionalTargetActions(ctx) {
   return;
 }
 
-export function applyConditionalActions(ctx) {
+export function applyConditionalActions(
+  ctx: SimulatedActionHandlerContext<"conditional_actions">,
+): void {
   const {
     action,
     selections,
@@ -180,7 +226,9 @@ export function applyConditionalActions(ctx) {
   return;
 }
 
-export function applyOptionalTargetActions(ctx) {
+export function applyOptionalTargetActions(
+  ctx: SimulatedActionHandlerContext<"optional_target_actions">,
+): void {
   const {
     action,
     selections,
@@ -234,10 +282,12 @@ export function applyOptionalTargetActions(ctx) {
   });
 }
 
-export function applyRegisterTemporaryEventEffect(ctx) {
+export function applyRegisterTemporaryEventEffect(
+  ctx: SimulatedActionHandlerContext<"register_temporary_event_effect">,
+): void {
   const { action, state, self, options, selections } = ctx;
   const sourceCard = options.sourceCard || null;
-  if (!action?.event || !sourceCard || !self) return;
+  if (!action.event || !isDuelEventName(action.event) || !sourceCard) return;
   if (!Array.isArray(state.temporaryEventEffects)) {
     state.temporaryEventEffects = [];
   }
@@ -249,11 +299,11 @@ export function applyRegisterTemporaryEventEffect(ctx) {
         ? currentTurn + 1
         : currentTurn;
   const boundTarget = action.bindEventTargetRef
-    ? (selections?.[action.bindEventTargetRef] || [])[0]
+    ? firstSelectedCard(selections[action.bindEventTargetRef])
     : null;
   if (action.bindEventTargetRef && !boundTarget) return;
   const declaredValues = sourceCard.declaredValues
-    ? JSON.parse(JSON.stringify(sourceCard.declaredValues))
+    ? structuredClone(sourceCard.declaredValues)
     : {};
   state.temporaryEventEffects.push({
     event: action.event,
@@ -287,7 +337,10 @@ export function applyRegisterTemporaryEventEffect(ctx) {
           : 1,
     declaredValues,
     effect: {
-      id: action.effectId || action.id || "temporary_event_effect",
+      id:
+        action.effectId ||
+        action.uniqueKey ||
+        "temporary_event_effect",
       timing: "on_event",
       event: action.event,
       triggerRequirement: action.triggerRequirement,
@@ -300,7 +353,9 @@ export function applyRegisterTemporaryEventEffect(ctx) {
   });
 }
 
-export function applyActivateStoredBlueprint(ctx) {
+export function applyActivateStoredBlueprint(
+  ctx: SimulatedActionHandlerContext<"activate_stored_blueprint">,
+): void {
   const {
     action,
     targets,
@@ -356,7 +411,9 @@ export function applyActivateStoredBlueprint(ctx) {
   return;
 }
 
-export function applyChooseActionCase(ctx) {
+export function applyChooseActionCase(
+  ctx: SimulatedActionHandlerContext<"choose_action_case">,
+): void {
   const {
     action,
     targets,
@@ -394,13 +451,13 @@ export function applyChooseActionCase(ctx) {
       }
       return { choiceCase, caseSelections };
     })
-    .filter(Boolean);
+    .filter((entry): entry is SimulatedCaseEntry => entry !== null);
   if (validCases.length === 0) return;
 
   const chooser =
     options.chooseActionCase ||
     options.strategy?.chooseActionCase?.bind(options.strategy);
-  let chosenEntry = null;
+  let chosenEntry: SimulatedCaseEntry | undefined;
   if (typeof chooser === "function") {
     const chosen = chooser(
       validCases.map((entry) => entry.choiceCase),
@@ -411,12 +468,16 @@ export function applyChooseActionCase(ctx) {
         activationContext: options.activationContext,
       },
     );
+    const chosenId =
+      typeof chosen === "object" && chosen !== null && "id" in chosen
+        ? chosen.id
+        : chosen;
     chosenEntry =
       validCases.find((entry) => entry.choiceCase === chosen) ||
-      validCases.find((entry) => entry.choiceCase.id === chosen?.id) ||
-      validCases.find((entry) => entry.choiceCase.id === chosen);
+      validCases.find((entry) => entry.choiceCase.id === chosenId);
   }
   if (!chosenEntry) chosenEntry = validCases[0];
+  if (!chosenEntry) return;
 
   applySimulatedActions({
     actions: chosenEntry.choiceCase.actions || [],
@@ -428,7 +489,9 @@ export function applyChooseActionCase(ctx) {
   return;
 }
 
-export function applyShuffleDeck(ctx) {
+export function applyShuffleDeck(
+  ctx: SimulatedActionHandlerContext<"shuffle_deck">,
+): void {
   const {
     action,
     targets,

@@ -1,5 +1,12 @@
 import { getPerspectivePlayers } from "../perspective.js";
 import { resolveTargetsForAction, STOP_SIMULATION } from "./shared.js";
+import type { ActionOf, ActionType } from "../../../contracts/actions.js";
+import type {
+  SimulatedActionBatchInput,
+  SimulatedActionHandler,
+  SimulatedActionHandlerContext,
+  SimulatedActionHandlerManifest,
+} from "./shared.js";
 import {
   applyDraw,
   applyHeal,
@@ -148,15 +155,34 @@ export const SIMULATED_ACTION_HANDLERS = {
   "activate_stored_blueprint": applyActivateStoredBlueprint,
   "choose_action_case": applyChooseActionCase,
   "shuffle_deck": applyShuffleDeck,
-};
+} satisfies Partial<SimulatedActionHandlerManifest<ActionType>>;
+
+export type SimulatedActionType = keyof typeof SIMULATED_ACTION_HANDLERS;
+
+function isSimulatedActionType(type: ActionType): type is SimulatedActionType {
+  return Object.hasOwn(SIMULATED_ACTION_HANDLERS, type);
+}
+
+function dispatchSimulatedAction<Type extends SimulatedActionType>(
+  action: ActionOf<Type>,
+  context: Omit<SimulatedActionHandlerContext<Type>, "action">,
+): void | typeof STOP_SIMULATION {
+  // TypeScript cannot preserve the key/value correlation when a heterogeneous
+  // mapped registry is indexed by a generic key. This is the sole internal
+  // boundary; the `satisfies` check above proves every concrete pair.
+  const handler = SIMULATED_ACTION_HANDLERS[
+    action.type
+  ] as SimulatedActionHandler<Type>;
+  return handler({ ...context, action });
+}
 
 export function applySimulatedActions({
   actions,
-  selections,
+  selections = {},
   state,
   selfId = "bot",
   options = {},
-}) {
+}: SimulatedActionBatchInput): void {
   if (!Array.isArray(actions)) return;
   const { self, opponent } = getPerspectivePlayers(state, selfId);
 
@@ -168,9 +194,7 @@ export function applySimulatedActions({
       { ...options, self, selfId },
       opponent,
     );
-    const handler = SIMULATED_ACTION_HANDLERS[action.type];
-
-    if (!handler) {
+    if (!isSimulatedActionType(action.type)) {
       if (!Array.isArray(state._simUnsupportedActions)) {
         state._simUnsupportedActions = [];
       }
@@ -178,8 +202,7 @@ export function applySimulatedActions({
       continue;
     }
 
-    const result = handler({
-      action,
+    const result = dispatchSimulatedAction(action, {
       targets,
       selections,
       state,

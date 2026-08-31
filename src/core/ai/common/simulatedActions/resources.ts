@@ -35,31 +35,71 @@ import {
   STOP_SIMULATION,
   storeSimActionResult,
 } from "./shared.js";
+import type {
+  ActionOf,
+  ContextNumberSource,
+} from "../../../contracts/actions.js";
+import type { AddedCardMarker } from "../../../contracts/actions/shared.js";
+import type {
+  SimulatedCardState,
+  SimulatedPlayerState,
+} from "../../../contracts/aiState.js";
+import type { CardDeclaredValue } from "../../../contracts/cards.js";
+import type { CardFilter } from "../../../contracts/effects.js";
+import type { CanonicalSelectionMap } from "../../../contracts/selection.js";
+import type {
+  SimulatedActionHandlerContext,
+  SimulatedActionOptions,
+  SimulatedRuntimeState,
+} from "./shared.js";
 
-function readSimContextNumber(spec, options = {}) {
+type SimulatedNumberSpec =
+  | number
+  | string
+  | ContextNumberSource
+  | object;
+
+function isObject(value: unknown): value is object {
+  return typeof value === "object" && value !== null;
+}
+
+function readSimContextNumber(
+  spec: SimulatedNumberSpec | null | undefined,
+  options: SimulatedActionOptions,
+): number {
   if (typeof spec === "number") return spec;
   if (!spec) return 0;
 
-  const config = typeof spec === "string" ? { key: spec } : spec;
-  const key = config.key;
+  const config: object = typeof spec === "string" ? { key: spec } : spec;
+  const rawKey = Reflect.get(config, "key");
+  const key = typeof rawKey === "string" ? rawKey : null;
   const source = options.actionContext || {};
-  const raw = key ? source[key] : config.defaultValue;
-  let value = Number(raw ?? config.defaultValue ?? 0);
+  const defaultValue = Reflect.get(config, "defaultValue");
+  const raw = key ? Reflect.get(source, key) : defaultValue;
+  let value = Number(raw ?? defaultValue ?? 0);
   if (!Number.isFinite(value)) value = 0;
 
-  const divideBy = Number(config.divideBy ?? config.divisor ?? 0);
+  const divideBy = Number(
+    Reflect.get(config, "divideBy") ?? Reflect.get(config, "divisor") ?? 0,
+  );
   if (Number.isFinite(divideBy) && divideBy !== 0) value /= divideBy;
 
-  const multiplier = Number(config.multiplier ?? config.amountPer ?? 1);
+  const multiplier = Number(
+    Reflect.get(config, "multiplier") ?? Reflect.get(config, "amountPer") ?? 1,
+  );
   if (Number.isFinite(multiplier)) value *= multiplier;
 
-  if (config.floor !== false) value = Math.floor(value);
-  if (Number.isFinite(Number(config.min))) value = Math.max(Number(config.min), value);
-  if (Number.isFinite(Number(config.max))) value = Math.min(Number(config.max), value);
+  if (Reflect.get(config, "floor") !== false) value = Math.floor(value);
+  const minimum = Reflect.get(config, "min");
+  const maximum = Reflect.get(config, "max");
+  if (Number.isFinite(Number(minimum))) value = Math.max(Number(minimum), value);
+  if (Number.isFinite(Number(maximum))) value = Math.min(Number(maximum), value);
   return value;
 }
 
-export function applyDraw(ctx) {
+export function applyDraw(
+  ctx: SimulatedActionHandlerContext<"draw">,
+): void {
   const {
     action,
     targets,
@@ -73,7 +113,7 @@ export function applyDraw(ctx) {
   } = ctx;
   const targetPlayer = resolveActionPlayer(action, self, opponent);
   const amount = action.amount || 1;
-  const drawnCards = [];
+  const drawnCards: SimulatedCardState[] = [];
   for (let i = 0; i < amount; i += 1) {
     const drawn = targetPlayer.deck?.shift?.();
     if (drawn) {
@@ -85,7 +125,9 @@ export function applyDraw(ctx) {
   return;
 }
 
-export function applyHeal(ctx) {
+export function applyHeal(
+  ctx: SimulatedActionHandlerContext<"heal">,
+): void {
   const {
     action,
     targets,
@@ -105,7 +147,9 @@ export function applyHeal(ctx) {
   return;
 }
 
-export function applyHealPerArchetypeMonster(ctx) {
+export function applyHealPerArchetypeMonster(
+  ctx: SimulatedActionHandlerContext<"heal_per_archetype_monster">,
+): void {
   const {
     action,
     targets,
@@ -126,7 +170,9 @@ export function applyHealPerArchetypeMonster(ctx) {
   return;
 }
 
-export function applyDamage(ctx) {
+export function applyDamage(
+  ctx: SimulatedActionHandlerContext<"damage">,
+): void {
   const {
     action,
     targets,
@@ -143,7 +189,9 @@ export function applyDamage(ctx) {
   return;
 }
 
-export function applyPayLp(ctx) {
+export function applyPayLp(
+  ctx: SimulatedActionHandlerContext<"pay_lp">,
+): void | typeof STOP_SIMULATION {
   const {
     action,
     targets,
@@ -158,10 +206,10 @@ export function applyPayLp(ctx) {
   const targetPlayer = resolveActionPlayer(action, self, opponent);
   const amount = Number.isFinite(Number(action.fraction))
     ? Math.floor((targetPlayer.lp || 0) * Number(action.fraction))
-    : Number.isFinite(action.amount)
+    : typeof action.amount === "number" && Number.isFinite(action.amount)
       ? action.amount
-      : Number.isFinite(action.lp)
-        ? action.lp
+      : Number.isFinite(Reflect.get(action, "lp"))
+        ? Number(Reflect.get(action, "lp"))
         : 0;
   if (amount <= 0) return STOP_SIMULATION;
   const cost = resolveSimulatedLpCost({
@@ -177,7 +225,7 @@ export function applyPayLp(ctx) {
   if (
     finalAmount > 0 &&
     (targetPlayer.lp || 0) <= finalAmount &&
-    action.allowSelfKO !== true
+    Reflect.get(action, "allowSelfKO") !== true
   ) {
     return STOP_SIMULATION;
   }
@@ -188,13 +236,17 @@ export function applyPayLp(ctx) {
   return;
 }
 
-function normalizeSimNameList(values = []) {
-  const result = [];
-  const seen = new Set();
+function normalizeSimNameList(values: unknown = []): string[] {
+  const result: string[] = [];
+  const seen = new Set<string>();
   const entries = Array.isArray(values) ? values : [values];
   for (const entry of entries) {
-    const name =
-      typeof entry === "string" ? entry.trim() : entry?.name?.trim?.() || "";
+    const rawName = isObject(entry) ? Reflect.get(entry, "name") : undefined;
+    const name = typeof entry === "string"
+      ? entry.trim()
+      : typeof rawName === "string"
+        ? rawName.trim()
+        : "";
     if (!name || seen.has(name)) continue;
     seen.add(name);
     result.push(name);
@@ -202,8 +254,14 @@ function normalizeSimNameList(values = []) {
   return result;
 }
 
-function readSimNameSource(action, options) {
-  const sourceKey = action.nameSource || action.namesSource || null;
+function readSimNameSource(
+  action: ActionOf<"restrict_effect_activations_by_names">,
+  options: SimulatedActionOptions,
+): unknown {
+  const legacyNamesSource = Reflect.get(action, "namesSource");
+  const sourceKey =
+    action.nameSource ||
+    (typeof legacyNamesSource === "string" ? legacyNamesSource : null);
   if (!sourceKey) return [];
   if (sourceKey === "lastDrawnCards") return options.lastDrawnCards || [];
   if (sourceKey === "lastDrawnCard") return options.lastDrawnCard || null;
@@ -211,16 +269,28 @@ function readSimNameSource(action, options) {
     return options.lastAddedToHandCards || [];
   }
   if (sourceKey === "lastAddedToHandCard") return options.lastAddedToHandCard || null;
-  return options[sourceKey] || options.actionContext?.[sourceKey] || [];
+  return (
+    Reflect.get(options, sourceKey) ||
+    (options.actionContext
+      ? Reflect.get(options.actionContext, sourceKey)
+      : undefined) ||
+    []
+  );
 }
 
-function normalizeSimAttributeList(values = []) {
-  const result = [];
-  const seen = new Set();
+function normalizeSimAttributeList(values: unknown = []): string[] {
+  const result: string[] = [];
+  const seen = new Set<string>();
   const entries = Array.isArray(values) ? values : [values];
   for (const entry of entries) {
-    const attribute =
-      typeof entry === "string" ? entry.trim() : entry?.attribute?.trim?.() || "";
+    const rawAttribute = isObject(entry)
+      ? Reflect.get(entry, "attribute")
+      : undefined;
+    const attribute = typeof entry === "string"
+      ? entry.trim()
+      : typeof rawAttribute === "string"
+        ? rawAttribute.trim()
+        : "";
     if (!attribute) continue;
     const key = attribute.toLowerCase();
     if (seen.has(key)) continue;
@@ -230,13 +300,17 @@ function normalizeSimAttributeList(values = []) {
   return result;
 }
 
-function flattenSimCards(value) {
+function flattenSimCards(value: unknown): unknown[] {
   if (!value) return [];
   if (Array.isArray(value)) return value.flatMap(flattenSimCards);
   return [value];
 }
 
-function readSimAttributeSource(action, selections, options) {
+function readSimAttributeSource(
+  action: ActionOf<"restrict_effect_activations_by_attribute">,
+  selections: CanonicalSelectionMap,
+  options: SimulatedActionOptions,
+): unknown[] {
   const sourceKey =
     action.attributeSourceRef ||
     action.attributeSource ||
@@ -246,14 +320,18 @@ function readSimAttributeSource(action, selections, options) {
   if (!sourceKey) return [];
   return [
     selections?.[sourceKey],
-    options?.[sourceKey],
-    options?.actionResults?.[sourceKey],
-    options?.actionContext?.[sourceKey],
-    options?.activationContext?.actionResults?.[sourceKey],
+    Reflect.get(options, sourceKey),
+    options.actionResults?.[sourceKey],
+    options.actionContext
+      ? Reflect.get(options.actionContext, sourceKey)
+      : undefined,
+    options.activationContext?.actionResults?.[sourceKey],
   ].flatMap(flattenSimCards).filter(Boolean);
 }
 
-export function applyRestrictEffectActivationsByNames(ctx) {
+export function applyRestrictEffectActivationsByNames(
+  ctx: SimulatedActionHandlerContext<"restrict_effect_activations_by_names">,
+): void {
   const { action, options, self, opponent } = ctx;
   const targetPlayer = resolveActionPlayer(action, self, opponent);
   if (!targetPlayer) return;
@@ -270,14 +348,20 @@ export function applyRestrictEffectActivationsByNames(ctx) {
     targetPlayer.effectActivationRestrictions || [];
   targetPlayer.effectActivationRestrictions.push({
     blockedNames,
+    allowedAttributes: [],
+    restrictedCardFilters: {},
     duration: action.duration || "until_end_turn",
+    expiresOnTurn: null,
     reason: action.reason || null,
     sourceName: options?.sourceCard?.name || null,
     sourceId: options?.sourceCard?.id || null,
+    effectId: options.effect?.id || null,
   });
 }
 
-export function applyRestrictEffectActivationsByAttribute(ctx) {
+export function applyRestrictEffectActivationsByAttribute(
+  ctx: SimulatedActionHandlerContext<"restrict_effect_activations_by_attribute">,
+): void {
   const { action, selections, options, self, opponent } = ctx;
   const targetPlayer = resolveActionPlayer(action, self, opponent);
   if (!targetPlayer) return;
@@ -293,16 +377,21 @@ export function applyRestrictEffectActivationsByAttribute(ctx) {
   targetPlayer.effectActivationRestrictions =
     targetPlayer.effectActivationRestrictions || [];
   targetPlayer.effectActivationRestrictions.push({
+    blockedNames: [],
     allowedAttributes,
     restrictedCardFilters: action.restrictedCardFilters || { cardKind: "monster" },
     duration: action.duration || "until_end_turn",
+    expiresOnTurn: null,
     reason: action.reason || null,
     sourceName: options?.sourceCard?.name || null,
     sourceId: options?.sourceCard?.id || null,
+    effectId: options.effect?.id || null,
   });
 }
 
-export function applySearchAny(ctx) {
+export function applySearchAny(
+  ctx: SimulatedActionHandlerContext<"search_any">,
+): void {
   const {
     action,
     targets,
@@ -330,13 +419,18 @@ export function applySearchAny(ctx) {
   return;
 }
 
-function resolveSimMarkerExpirationTurn(state, markerConfig = {}) {
+function resolveSimMarkerExpirationTurn(
+  state: SimulatedRuntimeState,
+  markerConfig: AddedCardMarker,
+): number {
   const currentTurn = Number(state?.turnCounter || 0);
-  if (Number.isFinite(markerConfig.expiresOnTurn)) {
-    return markerConfig.expiresOnTurn;
+  const expiresOnTurn = Reflect.get(markerConfig, "expiresOnTurn");
+  if (typeof expiresOnTurn === "number" && Number.isFinite(expiresOnTurn)) {
+    return expiresOnTurn;
   }
-  if (Number.isFinite(markerConfig.durationTurns)) {
-    return currentTurn + Math.max(0, markerConfig.durationTurns);
+  const durationTurns = Reflect.get(markerConfig, "durationTurns");
+  if (typeof durationTurns === "number" && Number.isFinite(durationTurns)) {
+    return currentTurn + Math.max(0, durationTurns);
   }
   if (markerConfig.duration === "end_of_next_turn") {
     return currentTurn + 1;
@@ -344,7 +438,13 @@ function resolveSimMarkerExpirationTurn(state, markerConfig = {}) {
   return currentTurn;
 }
 
-function markSimAddedCards(cards, action, state, targetPlayer, options = {}) {
+function markSimAddedCards(
+  cards: readonly SimulatedCardState[],
+  action: ActionOf<"add_from_zone_to_hand">,
+  state: SimulatedRuntimeState,
+  targetPlayer: SimulatedPlayerState,
+  options: SimulatedActionOptions,
+): void {
   const markerConfig = action?.markAddedCards;
   if (!markerConfig || typeof markerConfig !== "object" || !markerConfig.key) {
     return;
@@ -360,7 +460,11 @@ function markSimAddedCards(cards, action, state, targetPlayer, options = {}) {
     sourceCardId:
       markerConfig.bindToSource === false ? null : sourceCard?.id ?? null,
     sourceEffectId:
-      markerConfig.sourceEffectId || options.effect?.id || action.sourceEffectId || null,
+      markerConfig.sourceEffectId ||
+      options.effect?.id ||
+      (typeof Reflect.get(action, "sourceEffectId") === "string"
+        ? Reflect.get(action, "sourceEffectId")
+        : null),
     controllerId: targetPlayer?.id || null,
     markedOnTurn: Number(state?.turnCounter || 0),
     expiresOnTurn: resolveSimMarkerExpirationTurn(state, markerConfig),
@@ -375,7 +479,9 @@ function markSimAddedCards(cards, action, state, targetPlayer, options = {}) {
   }
 }
 
-export function applyAddFromZoneToHand(ctx) {
+export function applyAddFromZoneToHand(
+  ctx: SimulatedActionHandlerContext<"add_from_zone_to_hand">,
+): void {
   const {
     action,
     targets,
@@ -396,12 +502,13 @@ export function applyAddFromZoneToHand(ctx) {
   ].filter(Boolean);
   const excludedInstanceIds = excludeTargetRefs
     .flatMap((ref) =>
-      Array.isArray(targets?.[ref])
-        ? targets[ref]
-        : targets?.[ref]
-          ? [targets[ref]]
+      Array.isArray(selections[ref])
+        ? selections[ref]
+        : selections[ref]
+          ? [selections[ref]]
           : [],
     )
+    .filter(isObject)
     .map(getCardInstanceId)
     .filter((value) => value !== undefined && value !== null);
   const candidates = getActionCandidates(targetPlayer, action, "graveyard").filter(
@@ -435,7 +542,9 @@ export function applyAddFromZoneToHand(ctx) {
   return;
 }
 
-export function applyDiscardFromHand(ctx) {
+export function applyDiscardFromHand(
+  ctx: SimulatedActionHandlerContext<"discard_from_hand">,
+): void | typeof STOP_SIMULATION {
   const { action, state, options, self, opponent } = ctx;
   const targetPlayer = resolveActionPlayer(action, self, opponent);
   const candidates = getActionCandidates(targetPlayer, action, "hand");
@@ -459,7 +568,9 @@ export function applyDiscardFromHand(ctx) {
   return;
 }
 
-export function applyDeclareCardProperty(ctx) {
+export function applyDeclareCardProperty(
+  ctx: SimulatedActionHandlerContext<"declare_card_property">,
+): void {
   const { action, state, options, self, opponent } = ctx;
   const sourceCard = options.sourceCard || null;
   if (!sourceCard || !action?.property || !action?.stateKey) return;
@@ -468,9 +579,14 @@ export function applyDeclareCardProperty(ctx) {
     ...(self?.field || []),
     ...(opponent?.field || []),
   ]
-    .map((card) => card?.[action.property])
+    .map((card) => Reflect.get(card, action.property))
     .flatMap((value) => (Array.isArray(value) ? value : [value]))
-    .filter(Boolean);
+    .filter(
+      (value): value is string | number | boolean =>
+        typeof value === "string" ||
+        typeof value === "number" ||
+        typeof value === "boolean",
+    );
   const actionContext =
     options.actionContext ||
     options.activationContext?.actionContext ||
@@ -485,23 +601,41 @@ export function applyDeclareCardProperty(ctx) {
     actionContext.targetPreference ||
     options.activationContext?.targetPreference ||
     null;
-  const namedPreferences = [
-    directPreference,
-    ...Object.values(targetPreferences || {}),
-  ].filter(Boolean);
-  const preferredValues = namedPreferences.flatMap((preference) => [
-    ...(Array.isArray(preference.preferredNames) ? preference.preferredNames : []),
-    ...(Array.isArray(preference.forceNames) ? preference.forceNames : []),
-  ]);
+  const nestedPreferences = Reflect.ownKeys(targetPreferences).flatMap((key) => {
+    const preference = Reflect.get(targetPreferences, key);
+    return isObject(preference) ? [preference] : [];
+  });
+  const namedPreferences = [directPreference, ...nestedPreferences].filter(
+    isObject,
+  );
+  const preferredValues = namedPreferences.flatMap((preference) => {
+    const preferredNames = Reflect.get(preference, "preferredNames");
+    const forceNames = Reflect.get(preference, "forceNames");
+    return [
+      ...(Array.isArray(preferredNames) ? preferredNames : []),
+      ...(Array.isArray(forceNames) ? forceNames : []),
+    ].filter(
+      (value): value is string | number | boolean =>
+        typeof value === "string" ||
+        typeof value === "number" ||
+        typeof value === "boolean",
+    );
+  });
   const preferredVisibleValue = visibleValues.find((visibleValue) =>
     preferredValues.includes(visibleValue),
   );
-  const value =
+  const declaredValue =
     action.value ||
     preferredVisibleValue ||
     visibleValues[0] ||
     (Array.isArray(action.choices) ? action.choices[0] : null) ||
     "Pyro";
+  const value: Exclude<CardDeclaredValue, object> =
+    typeof declaredValue === "string" ||
+    typeof declaredValue === "number" ||
+    typeof declaredValue === "boolean"
+      ? declaredValue
+      : "Pyro";
 
   if (!sourceCard.declaredValues) sourceCard.declaredValues = {};
   const currentTurn = Number(state?.turnCounter || 0);
@@ -515,13 +649,15 @@ export function applyDeclareCardProperty(ctx) {
     property: action.property,
     value,
     declaredOnTurn: currentTurn,
-    expiresOnTurn,
-    duration: action.duration || null,
+    ...(expiresOnTurn === null ? {} : { expiresOnTurn }),
+    ...(action.duration ? { duration: action.duration } : {}),
   };
   return;
 }
 
-export function applyGrantAdditionalNormalSummon(ctx) {
+export function applyGrantAdditionalNormalSummon(
+  ctx: SimulatedActionHandlerContext<"grant_additional_normal_summon">,
+): void {
   const {
     action,
     targets,
@@ -536,9 +672,11 @@ export function applyGrantAdditionalNormalSummon(ctx) {
   const targetPlayer = resolveActionPlayer(action, self, opponent);
   const rawCount = Number(action.count ?? 1);
   const count = Number.isFinite(rawCount) ? Math.max(1, rawCount) : 1;
-  const filters = { ...(action.filters || {}) };
-  if (action.archetype && !filters.archetype) filters.archetype = action.archetype;
-  if (action.cardKind && !filters.cardKind) filters.cardKind = action.cardKind;
+  const filters: CardFilter = {
+    ...(action.filters || {}),
+    archetype: action.filters?.archetype || action.archetype,
+    cardKind: action.filters?.cardKind || action.cardKind,
+  };
 
   if (Object.keys(filters).length > 0) {
     targetPlayer.additionalNormalSummonPermissions =
@@ -546,8 +684,8 @@ export function applyGrantAdditionalNormalSummon(ctx) {
     targetPlayer.additionalNormalSummonPermissions.push({
       count,
       filters,
-      sourceCardName: ctx?.source?.name || null,
-      effectId: ctx?.effect?.id || null,
+      sourceCardName: ctx.source?.name || options.sourceCard?.name || null,
+      effectId: options.effect?.id || null,
     });
   } else {
     targetPlayer.additionalNormalSummons =

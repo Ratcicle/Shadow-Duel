@@ -34,8 +34,16 @@ import {
   resolveTargetsForAction,
   STOP_SIMULATION,
 } from "./shared.js";
+import type { SimulatedCardState } from "../../../contracts/aiState.js";
+import type {
+  CanonicalSelectionMap,
+  CanonicalSelectionValue,
+} from "../../../contracts/selection.js";
+import type { SimulatedActionHandlerContext } from "./shared.js";
 
-export function applyAllowDirectAttackThisTurn(ctx) {
+export function applyAllowDirectAttackThisTurn(
+  ctx: SimulatedActionHandlerContext<"allow_direct_attack_this_turn">,
+): void {
   const {
     action,
     targets,
@@ -54,20 +62,39 @@ export function applyAllowDirectAttackThisTurn(ctx) {
   return;
 }
 
-export function applyForbidDirectAttackThisTurn(ctx) {
+export function applyForbidDirectAttackThisTurn(
+  ctx: SimulatedActionHandlerContext<"forbid_direct_attack_this_turn">,
+): void {
   const { action, self, opponent } = ctx;
   const targetPlayer = resolveActionPlayer(action, self, opponent);
   if (!targetPlayer) return;
   targetPlayer.forbidDirectAttacksThisTurn = true;
 }
 
-function firstSelection(selections, ref) {
-  if (!ref) return null;
-  const value = selections?.[ref];
-  return Array.isArray(value) ? value[0] || null : value || null;
+function isSimulatedCard(value: unknown): value is SimulatedCardState {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-export function applyRegisterBattlePairEffect(ctx) {
+function selectionCard(
+  value: CanonicalSelectionValue,
+): SimulatedCardState | null {
+  const first = Array.isArray(value) ? value[0] : value;
+  if (!isSimulatedCard(first)) return null;
+  if ("card" in first && isSimulatedCard(first.card)) return first.card;
+  return first;
+}
+
+function firstSelection(
+  selections: CanonicalSelectionMap,
+  ref: string | null | undefined,
+): SimulatedCardState | null {
+  if (!ref) return null;
+  return selectionCard(selections[ref]);
+}
+
+export function applyRegisterBattlePairEffect(
+  ctx: SimulatedActionHandlerContext<"register_battle_pair_effect">,
+): void {
   const { action, selections, state, options, self, opponent } = ctx;
   const firstRef = action.firstTargetRef || action.targetARef || action.targetRef;
   const secondRef =
@@ -111,18 +138,29 @@ export function applyRegisterBattlePairEffect(ctx) {
   });
 }
 
-export function applySetSourceAfterResolutionIf(ctx) {
+export function applySetSourceAfterResolutionIf(
+  ctx: SimulatedActionHandlerContext<"set_source_after_resolution_if">,
+): void {
   const { action, selections, options } = ctx;
   const firstTarget = firstSelection(selections, action.firstTargetRef);
   const secondTarget = firstSelection(selections, action.secondTargetRef);
   const source = options.sourceCard;
   if (!firstTarget || !secondTarget || !source) return;
 
+  const condition = action.condition;
   const conditionType =
-    action.condition?.type || action.conditionType || "atk_difference_lte";
+    condition && "type" in condition
+      ? condition.type
+      : action.conditionType || "atk_difference_lte";
+  const conditionValue =
+    condition && "value" in condition ? condition.value : undefined;
+  const conditionMaxDifference =
+    condition && "maxDifference" in condition
+      ? condition.maxDifference
+      : undefined;
   const maxDifference = Number(
-    action.condition?.value ??
-      action.condition?.maxDifference ??
+    conditionValue ??
+      conditionMaxDifference ??
       action.atkDifferenceMax ??
       action.maxDifference ??
       0,
@@ -137,7 +175,9 @@ export function applySetSourceAfterResolutionIf(ctx) {
   }
 }
 
-export function applyRedirectCurrentAttackToTarget(ctx) {
+export function applyRedirectCurrentAttackToTarget(
+  ctx: SimulatedActionHandlerContext<"redirect_current_attack_to_target">,
+): void {
   const { targets, options } = ctx;
   const target = Array.isArray(targets) ? targets[0] || null : null;
   if (!target) return;
