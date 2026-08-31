@@ -177,4 +177,17 @@ export interface NormalSummonCardView {
   isFacedown?: boolean;
 }
 
+/** Minimal mutable state consumed by the shared normal-summon slot helpers. */
+export interface NormalSummonPlayerView {
+  id?: PlayerId | string;
+  game?: PlayerGamePort;
+  summonCount?: number;
+  additionalNormalSummons?: number;
+  additionalNormalSummonPermissions?: AdditionalNormalSummonPermission[];
+  normalSummonsThisTurn?: NormalSummonRecord[];
+  field?: NormalSummonCardView[];
+  spellTrap?: NormalSummonCardView[];
+  fieldSpell?: NormalSummonCardView | null;
+}
+
 export type PlayerMoveResult = MoveCardResult;

@@ -36,6 +36,7 @@ import type {
   KnownNormalSummonRecord,
   NormalSummonCardView,
   NormalSummonFilter,
+  NormalSummonPlayerView,
   NormalSummonRecord,
   PlayerDamageOptions,
   PlayerGainLpOptions,
@@ -74,10 +75,12 @@ interface PassiveEffectView {
 }
 
 interface NormalSummonPassiveSource {
-  card: GameCard;
-  owner: GamePlayer;
+  card: NormalSummonCardView;
+  owner: NormalSummonPlayerInput;
   zone: "field" | "spellTrap" | "fieldSpell";
 }
+
+type NormalSummonPlayerInput = GamePlayer | NormalSummonPlayerView;
 
 type IndexedCardData = CardConstructorData & { id: RawCardDefinitionId };
 
@@ -190,7 +193,7 @@ export function createNormalSummonRecord(
 }
 
 function getNormalSummonRecords(
-  player: GamePlayer | null | undefined,
+  player: NormalSummonPlayerInput | null | undefined,
 ): NormalSummonRecord[] {
   const summonCount = Math.max(0, Number(player?.summonCount || 0));
   const records = Array.isArray(player?.normalSummonsThisTurn)
@@ -209,7 +212,7 @@ function isUnknownNormalSummonRecord(
 }
 
 function getRestrictedNormalSummonSlots(
-  player: GamePlayer | null | undefined,
+  player: NormalSummonPlayerInput | null | undefined,
 ): NormalSummonFilter[] {
   const permissions = Array.isArray(player?.additionalNormalSummonPermissions)
     ? player.additionalNormalSummonPermissions
@@ -226,7 +229,7 @@ function getRestrictedNormalSummonSlots(
 }
 
 function getActiveNormalSummonPassiveSources(
-  player: GamePlayer | null | undefined,
+  player: NormalSummonPlayerInput | null | undefined,
 ): NormalSummonPassiveSource[] {
   const game = player?.game || null;
   const owners = game
@@ -254,8 +257,8 @@ function getActiveNormalSummonPassiveSources(
 
 function passiveAppliesToNormalSummonPlayer(
   passive: NormalSummonPassiveRule,
-  sourceOwner: GamePlayer,
-  targetPlayer: GamePlayer,
+  sourceOwner: NormalSummonPlayerInput,
+  targetPlayer: NormalSummonPlayerInput,
   game: PlayerGamePort | null,
 ): boolean {
   const rules = asArray(
@@ -267,7 +270,7 @@ function passiveAppliesToNormalSummonPlayer(
     if (rule === "opponent") {
       const opponent =
         game && sourceOwner && typeof game.getOpponent === "function"
-          ? game.getOpponent(sourceOwner)
+          ? game.getOpponent(sourceOwner as GamePlayer)
           : null;
       if (opponent === targetPlayer) return true;
     }
@@ -288,7 +291,7 @@ function buildNormalSummonPassiveFilters(
   return filters;
 }
 
-function getPassiveNormalSummonPermissions(player: GamePlayer): {
+function getPassiveNormalSummonPermissions(player: NormalSummonPlayerInput): {
   unrestrictedCount: number;
   restrictedSlots: NormalSummonFilter[];
 } {
@@ -395,7 +398,7 @@ function maxRestrictedAssignments(
 }
 
 export function canUseNormalSummonForCard(
-  player: GamePlayer | null | undefined,
+  player: NormalSummonPlayerInput | null | undefined,
   card: NormalSummonCardView | null | undefined,
 ): boolean {
   if (!player || !card) return false;
@@ -418,7 +421,7 @@ export function canUseNormalSummonForCard(
 }
 
 export function recordNormalSummonForTurn(
-  player: GamePlayer | null | undefined,
+  player: NormalSummonPlayerInput | null | undefined,
   card: NormalSummonCardView | null | undefined,
 ): void {
   if (!player) return;
