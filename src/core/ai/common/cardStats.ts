@@ -1,4 +1,19 @@
-export function getEffectiveAtk(card) {
+import type { SimulatedCardState } from "../../contracts/aiState.js";
+
+type StatName = "atk" | "def";
+type FacedownValue = number | "printed";
+type StatCard = SimulatedCardState & {
+  status?: { piercingDamage?: boolean };
+};
+
+interface StatOptions {
+  facedownValue?: FacedownValue;
+  includeFacedown?: boolean;
+  includeBoosts?: boolean;
+  includeEquip?: boolean;
+}
+
+export function getEffectiveAtk(card: SimulatedCardState | null | undefined): number {
   return (
     (card?.atk || 0) +
     (card?.tempAtkBoost || 0) +
@@ -6,7 +21,7 @@ export function getEffectiveAtk(card) {
   );
 }
 
-export function getEffectiveDef(card) {
+export function getEffectiveDef(card: SimulatedCardState | null | undefined): number {
   return (
     (card?.def || 0) +
     (card?.tempDefBoost || 0) +
@@ -14,7 +29,11 @@ export function getEffectiveDef(card) {
   );
 }
 
-export function getEffectiveStat(card, stat, { includeEquip = true } = {}) {
+export function getEffectiveStat(
+  card: SimulatedCardState | null | undefined,
+  stat: StatName,
+  { includeEquip = true }: Pick<StatOptions, "includeEquip"> = {},
+): number {
   if (!card) return 0;
   const key = stat === "def" ? "def" : "atk";
   const tempKey = key === "def" ? "tempDefBoost" : "tempAtkBoost";
@@ -26,30 +45,37 @@ export function getEffectiveStat(card, stat, { includeEquip = true } = {}) {
   );
 }
 
-export function getVisibleAtk(card) {
+export function getVisibleAtk(card: SimulatedCardState | null | undefined): number {
   if (!card || card.isFacedown) return 0;
   return getEffectiveAtk(card);
 }
 
-export function getVisibleDef(card) {
+export function getVisibleDef(card: SimulatedCardState | null | undefined): number {
   if (!card || card.isFacedown) return 0;
   return getEffectiveDef(card);
 }
 
 export function getBattleStatForAttackTarget(
-  card,
-  { facedownValue = 1500 } = {},
-) {
+  card: SimulatedCardState | null | undefined,
+  { facedownValue = 1500 }: Pick<StatOptions, "facedownValue"> = {},
+): number {
   if (!card || card.cardKind !== "monster") return 0;
-  if (card.isFacedown) return facedownValue;
+  if (card.isFacedown) return resolveFacedownValue(card, "def", facedownValue);
   return card.position === "defense" ? getEffectiveDef(card) : getEffectiveAtk(card);
 }
 
-export function getBattleStat(card, { facedownValue = 1500 } = {}) {
+export function getBattleStat(
+  card: SimulatedCardState | null | undefined,
+  { facedownValue = 1500 }: Pick<StatOptions, "facedownValue"> = {},
+): number {
   return getBattleStatForAttackTarget(card, { facedownValue });
 }
 
-export function getPiercingDamage(attacker, attackStat, targetStat) {
+export function getPiercingDamage(
+  attacker: StatCard | null | undefined,
+  attackStat: number,
+  targetStat: number,
+): number {
   if (!attacker?.piercing && !attacker?.status?.piercingDamage) return 0;
   const multiplier = Number(attacker?.piercingDamageMultiplier ?? 1);
   const safeMultiplier =
@@ -58,14 +84,21 @@ export function getPiercingDamage(attacker, attackStat, targetStat) {
   return excess > 0 ? Math.floor(excess * safeMultiplier) : 0;
 }
 
-function resolveFacedownValue(card, stat, facedownValue) {
+function resolveFacedownValue(
+  card: SimulatedCardState | null | undefined,
+  stat: StatName,
+  facedownValue: FacedownValue,
+): number {
   if (facedownValue === "printed") {
     return Number(card?.[stat] || 0);
   }
   return Number(facedownValue || 0);
 }
 
-export function getFieldMonsters(field = [], { includeFacedown = true } = {}) {
+export function getFieldMonsters(
+  field: readonly SimulatedCardState[] = [],
+  { includeFacedown = true }: Pick<StatOptions, "includeFacedown"> = {},
+): SimulatedCardState[] {
   return (field || []).filter((card) => {
     if (!card || card.cardKind !== "monster") return false;
     return includeFacedown || !card.isFacedown;
@@ -73,9 +106,13 @@ export function getFieldMonsters(field = [], { includeFacedown = true } = {}) {
 }
 
 export function getAttackThreatStat(
-  card,
-  { facedownValue = 1500, includeFacedown = true, includeBoosts = true } = {},
-) {
+  card: SimulatedCardState | null | undefined,
+  {
+    facedownValue = 1500,
+    includeFacedown = true,
+    includeBoosts = true,
+  }: StatOptions = {},
+): number {
   if (!card || card.cardKind !== "monster") return 0;
   if (card.isFacedown) {
     return includeFacedown ? resolveFacedownValue(card, "atk", facedownValue) : 0;
@@ -84,9 +121,13 @@ export function getAttackThreatStat(
 }
 
 export function getBattleThreatStat(
-  card,
-  { facedownValue = 1500, includeFacedown = true, includeBoosts = true } = {},
-) {
+  card: SimulatedCardState | null | undefined,
+  {
+    facedownValue = 1500,
+    includeFacedown = true,
+    includeBoosts = true,
+  }: StatOptions = {},
+): number {
   if (!card || card.cardKind !== "monster") return 0;
   if (card.isFacedown) {
     return includeFacedown
@@ -99,7 +140,10 @@ export function getBattleThreatStat(
     : Number(card[stat] || 0);
 }
 
-export function getStrongestAttackThreat(field = [], options = {}) {
+export function getStrongestAttackThreat(
+  field: readonly SimulatedCardState[] = [],
+  options: StatOptions = {},
+): number {
   return getFieldMonsters(field, {
     includeFacedown: options.includeFacedown !== false,
   }).reduce(
@@ -108,7 +152,10 @@ export function getStrongestAttackThreat(field = [], options = {}) {
   );
 }
 
-export function getTotalAttackThreat(field = [], options = {}) {
+export function getTotalAttackThreat(
+  field: readonly SimulatedCardState[] = [],
+  options: StatOptions = {},
+): number {
   return getFieldMonsters(field, {
     includeFacedown: options.includeFacedown !== false,
   }).reduce(
@@ -117,7 +164,10 @@ export function getTotalAttackThreat(field = [], options = {}) {
   );
 }
 
-export function getStrongestBattleThreat(field = [], options = {}) {
+export function getStrongestBattleThreat(
+  field: readonly SimulatedCardState[] = [],
+  options: StatOptions = {},
+): number {
   return getFieldMonsters(field, {
     includeFacedown: options.includeFacedown !== false,
   }).reduce(
@@ -126,7 +176,10 @@ export function getStrongestBattleThreat(field = [], options = {}) {
   );
 }
 
-export function getTotalBattleThreat(field = [], options = {}) {
+export function getTotalBattleThreat(
+  field: readonly SimulatedCardState[] = [],
+  options: StatOptions = {},
+): number {
   return getFieldMonsters(field, {
     includeFacedown: options.includeFacedown !== false,
   }).reduce(
@@ -135,7 +188,10 @@ export function getTotalBattleThreat(field = [], options = {}) {
   );
 }
 
-export function analyzeBattleThreats(field = [], options = {}) {
+export function analyzeBattleThreats(
+  field: readonly SimulatedCardState[] = [],
+  options: StatOptions = {},
+) {
   const monsters = getFieldMonsters(field, {
     includeFacedown: options.includeFacedown !== false,
   });
@@ -149,14 +205,21 @@ export function analyzeBattleThreats(field = [], options = {}) {
   };
 }
 
-export function getStrongestBattleStat(field = [], options = {}) {
+export function getStrongestBattleStat(
+  field: readonly SimulatedCardState[] = [],
+  options: StatOptions = {},
+): number {
   return (field || []).reduce((max, card) => {
     if (!card || card.cardKind !== "monster") return max;
     return Math.max(max, getBattleStat(card, options));
   }, 0);
 }
 
-export function countDestroyableByAtk(monsters = [], atk = 0, options = {}) {
+export function countDestroyableByAtk(
+  monsters: readonly SimulatedCardState[] = [],
+  atk = 0,
+  options: StatOptions = {},
+): number {
   const attack = Number(atk || 0);
   return (monsters || []).filter((monster) => {
     if (!monster || monster.cardKind !== "monster") return false;
@@ -164,7 +227,11 @@ export function countDestroyableByAtk(monsters = [], atk = 0, options = {}) {
   }).length;
 }
 
-export function canClearThreat(attacker, opponentField = [], options = {}) {
+export function canClearThreat(
+  attacker: SimulatedCardState | null | undefined,
+  opponentField: readonly SimulatedCardState[] = [],
+  options: StatOptions = {},
+): boolean {
   if (!attacker || attacker.cardKind !== "monster") return false;
   const atk = getEffectiveAtk(attacker);
   if (atk <= 0) return false;

@@ -1,23 +1,71 @@
 import { hasActionZoneCandidates } from "./actionValidation.js";
-import { cardMatchesFilter, getPlayerZoneCards } from "./cardFilters.js";
+import {
+  cardMatchesFilter,
+  getPlayerZoneCards,
+} from "./cardFilters.js";
+import type {
+  AiCardFilter,
+  AiZonePlayer,
+  FilterableCard,
+} from "./cardFilters.js";
+import type {
+  EffectDefinition,
+  EffectOwner,
+  EffectTarget,
+} from "../../contracts/effects.js";
 
-function asArray(value) {
-  if (value === undefined || value === null) return [];
-  return Array.isArray(value) ? value : [value];
+type AvailabilityOwnerRole = "self" | "opponent";
+type AvailabilityTargetSpec = Omit<
+  EffectTarget,
+  "anyOf" | "id" | "owner" | "zone" | "zones"
+> & Omit<AiCardFilter, "id" | "owner" | "zone" | "zones"> & {
+  readonly id?: string;
+  readonly anyOf?: readonly AvailabilityTargetSpec[];
+  readonly owner?: EffectOwner | "either";
+  readonly zone?: AiCardFilter["zone"];
+  readonly zones?: AiCardFilter["zones"];
+};
+
+interface TargetAvailabilityContext {
+  player?: AiZonePlayer | null;
+  opponent?: AiZonePlayer | null;
+  source?: FilterableCard | null;
+  activationContext?: unknown;
+  actionContext?: unknown;
 }
 
-function normalize(value) {
+type MutableAiCardFilter = {
+  -readonly [Key in keyof AiCardFilter]: AiCardFilter[Key];
+};
+
+function asArray<Value>(
+  value: Value | readonly Value[] | null | undefined,
+): readonly Value[] {
+  if (value === undefined || value === null) return [];
+  return Array.isArray(value) ? value : [value as Value];
+}
+
+function normalize(value: unknown): string {
   return value === undefined || value === null ? "" : String(value).toLowerCase();
 }
 
-function valuesMatchInsensitive(actualValues, expectedValues) {
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function valuesMatchInsensitive(
+  actualValues: unknown | readonly unknown[],
+  expectedValues: unknown | readonly unknown[],
+): boolean {
   const actual = asArray(actualValues).map(normalize).filter(Boolean);
   const expected = asArray(expectedValues).map(normalize).filter(Boolean);
   if (expected.length === 0) return true;
   return expected.some((value) => actual.includes(value));
 }
 
-function getTargetZones(targetSpec = {}) {
+function getTargetZones(
+  targetSpec: AvailabilityTargetSpec = { id: "" },
+): readonly string[] {
   if (Array.isArray(targetSpec.zones) && targetSpec.zones.length > 0) {
     return targetSpec.zones.filter(Boolean);
   }
@@ -25,36 +73,52 @@ function getTargetZones(targetSpec = {}) {
   return asArray(zone).filter(Boolean);
 }
 
-function getTargetOwners(ownerRule, context = {}) {
-  if (ownerRule === "opponent") return [context.opponent].filter(Boolean);
-  if (ownerRule === "any" || ownerRule === "either") {
-    return [context.player, context.opponent].filter(Boolean);
+function getTargetOwners(
+  ownerRule: EffectOwner | "either" | undefined,
+  context: TargetAvailabilityContext = {},
+): AiZonePlayer[] {
+  if (ownerRule === "opponent") {
+    return context.opponent ? [context.opponent] : [];
   }
-  return [context.player].filter(Boolean);
+  if (ownerRule === "any" || ownerRule === "either") {
+    return [context.player, context.opponent].filter(
+      (owner): owner is AiZonePlayer => !!owner,
+    );
+  }
+  return context.player ? [context.player] : [];
 }
 
-function getOwnerRole(owner, context = {}) {
+function getOwnerRole(
+  owner: AiZonePlayer | null | undefined,
+  context: TargetAvailabilityContext = {},
+): AvailabilityOwnerRole {
   if (owner && owner === context.opponent) return "opponent";
   return "self";
 }
 
-function getTargetFilter(targetSpec = {}) {
+function getTargetFilter(
+  targetSpec: AvailabilityTargetSpec = { id: "" },
+): AiCardFilter {
   const { id: _id, owner: _owner, zones: _zones, zone: _zone, anyOf: _anyOf, ...filter } =
     targetSpec;
   return filter;
 }
 
-function getTypeFilter(targetSpec = {}) {
+function getTypeFilter(
+  targetSpec: AvailabilityTargetSpec = { id: "" },
+): AvailabilityTargetSpec["type"] {
   return targetSpec.type ?? targetSpec.filters?.type;
 }
 
-function removeManuallyHandledFilters(targetSpec = {}) {
-  const filter = { ...targetSpec };
+function removeManuallyHandledFilters(
+  targetSpec: AiCardFilter = {},
+): AiCardFilter {
+  const filter: MutableAiCardFilter = { ...targetSpec };
   delete filter.type;
   delete filter.level;
   delete filter.levelOp;
   if (filter.filters && typeof filter.filters === "object") {
-    const nested = { ...filter.filters };
+    const nested: MutableAiCardFilter = { ...filter.filters };
     delete nested.type;
     delete nested.level;
     delete nested.levelOp;
@@ -63,9 +127,12 @@ function removeManuallyHandledFilters(targetSpec = {}) {
   return filter;
 }
 
-function matchesLevel(card, targetSpec = {}) {
+function matchesLevel(
+  card: FilterableCard | null | undefined,
+  targetSpec: AvailabilityTargetSpec = { id: "" },
+): boolean {
   const expected = targetSpec.level ?? targetSpec.filters?.level;
-  if (!Number.isFinite(expected)) return true;
+  if (!isFiniteNumber(expected)) return true;
 
   const level = Number(card?.level || 0);
   const op = targetSpec.levelOp || targetSpec.filters?.levelOp || "eq";
@@ -76,7 +143,10 @@ function matchesLevel(card, targetSpec = {}) {
   return level === expected;
 }
 
-function matchesOwnerFilter(ownerRole, filter = {}) {
+function matchesOwnerFilter(
+  ownerRole: AvailabilityOwnerRole,
+  filter: AvailabilityTargetSpec = { id: "" },
+): boolean {
   const owner = filter?.owner ?? filter?.filters?.owner;
   if (!owner || owner === "any" || owner === "either") {
     return true;
@@ -84,7 +154,12 @@ function matchesOwnerFilter(ownerRole, filter = {}) {
   return owner === ownerRole;
 }
 
-function matchesTargetFilter(card, targetSpec = {}, context = {}, ownerRole = "self") {
+function matchesTargetFilter(
+  card: FilterableCard | null | undefined,
+  targetSpec: AvailabilityTargetSpec = { id: "" },
+  context: TargetAvailabilityContext = {},
+  ownerRole: AvailabilityOwnerRole = "self",
+): boolean {
   if (!card) return false;
 
   if (!matchesOwnerFilter(ownerRole, targetSpec)) return false;
@@ -111,7 +186,12 @@ function matchesTargetFilter(card, targetSpec = {}, context = {}, ownerRole = "s
   return true;
 }
 
-function matchesAnyOf(card, targetSpec = {}, context = {}, ownerRole = "self") {
+function matchesAnyOf(
+  card: FilterableCard | null | undefined,
+  targetSpec: AvailabilityTargetSpec = { id: "" },
+  context: TargetAvailabilityContext = {},
+  ownerRole: AvailabilityOwnerRole = "self",
+): boolean {
   if (!Array.isArray(targetSpec.anyOf) || targetSpec.anyOf.length === 0) {
     return true;
   }
@@ -125,7 +205,10 @@ function matchesAnyOf(card, targetSpec = {}, context = {}, ownerRole = "self") {
  * current AI perspective. This mirrors engine targeting availability for
  * simulation-time action generation without resolving actual targets.
  */
-export function targetRequirementAvailable(targetSpec, context = {}) {
+export function targetRequirementAvailable(
+  targetSpec: AvailabilityTargetSpec | null | undefined,
+  context: TargetAvailabilityContext = {},
+): boolean {
   if (!targetSpec) return true;
 
   const minCount = targetSpec.count?.min ?? 1;
@@ -157,7 +240,10 @@ export function targetRequirementAvailable(targetSpec, context = {}) {
  * Return whether an effect has enough simulated candidates for all of its
  * target requirements and action-level zone requirements.
  */
-export function effectTargetsAvailable(effect, context = {}) {
+export function effectTargetsAvailable(
+  effect: EffectDefinition | null | undefined,
+  context: TargetAvailabilityContext = {},
+): boolean {
   if (!effect) return true;
 
   const player = context.player;

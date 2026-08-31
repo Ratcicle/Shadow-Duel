@@ -2,7 +2,21 @@
  * Return a new action array ordered by descending priority, optional type
  * precedence, and original index for stable ties.
  */
-export function sequenceActionsByPriority(actions = [], options = {}) {
+interface SequencedAction {
+  priority?: number;
+  type?: string;
+}
+
+interface SequenceOptions {
+  typeOrder?: Readonly<Partial<Record<string, number>>>;
+  stable?: boolean;
+  defaultTypeOrder?: number;
+}
+
+export function sequenceActionsByPriority<Action extends SequencedAction>(
+  actions: readonly Action[] = [],
+  options: SequenceOptions = {},
+): Action[] {
   const {
     typeOrder = {},
     stable = true,
@@ -16,8 +30,12 @@ export function sequenceActionsByPriority(actions = [], options = {}) {
       const priorityB = b.action?.priority ?? 0;
       if (priorityA !== priorityB) return priorityB - priorityA;
 
-      const typeA = typeOrder[a.action?.type] ?? defaultTypeOrder;
-      const typeB = typeOrder[b.action?.type] ?? defaultTypeOrder;
+      const typeA = a.action.type === undefined
+        ? defaultTypeOrder
+        : typeOrder[a.action.type] ?? defaultTypeOrder;
+      const typeB = b.action.type === undefined
+        ? defaultTypeOrder
+        : typeOrder[b.action.type] ?? defaultTypeOrder;
       if (typeA !== typeB) return typeA - typeB;
 
       return stable ? a.index - b.index : 0;

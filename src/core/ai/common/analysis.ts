@@ -1,4 +1,23 @@
 import { canUseNormalSummonForCard } from "../../Player.js";
+import type {
+  AIState,
+  StrategyRuntimePort,
+} from "../../contracts/ai.js";
+import type {
+  AiStateShape,
+  SimulatedCardState,
+  SimulatedPlayerState,
+} from "../../contracts/aiState.js";
+
+interface StrategyAnalysisInput {
+  bot?: SimulatedPlayerState | null;
+  player?: SimulatedPlayerState | null;
+  opponent?: SimulatedPlayerState | null;
+  game?: (AiStateShape & {
+    getOpponent?(player: SimulatedPlayerState): SimulatedPlayerState | null;
+  }) | null;
+  strategy?: StrategyRuntimePort | null;
+}
 
 export function buildStrategyAnalysis({
   bot,
@@ -6,32 +25,35 @@ export function buildStrategyAnalysis({
   opponent,
   game,
   strategy,
-} = {}) {
+}: StrategyAnalysisInput = {}) {
   const actor = player || bot || strategy?.bot || game?.bot || null;
+  const projectedActor = actor ? actor as SimulatedPlayerState : null;
   const resolvedOpponent =
     opponent ||
-    (game && actor && strategy && typeof strategy.getOpponent === "function"
-      ? strategy.getOpponent(game, actor)
+    (game && projectedActor && strategy && typeof strategy.getOpponent === "function"
+      ? strategy.getOpponent(game, projectedActor)
       : null) ||
-    (game && actor && typeof game.getOpponent === "function"
-      ? game.getOpponent(actor)
+    (game && projectedActor && typeof game.getOpponent === "function"
+      ? game.getOpponent(projectedActor)
       : null) ||
-    (actor && game?.bot && actor === game.bot ? game?.player : game?.bot) ||
+    (projectedActor && game?.bot && projectedActor === game.bot
+      ? game?.player
+      : game?.bot) ||
     null;
-  const hand = actor?.hand || [];
+  const hand = projectedActor?.hand || [];
   const normalSummonCandidates = hand.filter(
     (card) =>
       card &&
       card.cardKind === "monster" &&
       !card.cannotBeNormalSummonedOrSet &&
       card.summonRestrict !== "shadow_heart_invocation_only" &&
-      canUseNormalSummonForCard(actor, card),
+      canUseNormalSummonForCard(projectedActor, card),
   );
   const genericNormalSummonsAvailable = Math.max(
     0,
     1 +
-      Math.max(0, Number(actor?.additionalNormalSummons || 0)) -
-      Math.max(0, Number(actor?.summonCount || 0)),
+      Math.max(0, Number(projectedActor?.additionalNormalSummons || 0)) -
+      Math.max(0, Number(projectedActor?.summonCount || 0)),
   );
   const normalSummonsAvailable = Math.max(
     genericNormalSummonsAvailable,
@@ -40,13 +62,13 @@ export function buildStrategyAnalysis({
 
   return {
     hand,
-    field: actor?.field || [],
-    spellTrap: actor?.spellTrap || [],
-    fieldSpell: actor?.fieldSpell || null,
-    graveyard: actor?.graveyard || [],
-    deck: actor?.deck || [],
-    extraDeck: actor?.extraDeck || [],
-    lp: actor?.lp || 8000,
+    field: projectedActor?.field || [],
+    spellTrap: projectedActor?.spellTrap || [],
+    fieldSpell: projectedActor?.fieldSpell || null,
+    graveyard: projectedActor?.graveyard || [],
+    deck: projectedActor?.deck || [],
+    extraDeck: projectedActor?.extraDeck || [],
+    lp: projectedActor?.lp || 8000,
     oppField: resolvedOpponent?.field || [],
     oppHand: resolvedOpponent?.hand || [],
     oppGraveyard: resolvedOpponent?.graveyard || [],
@@ -56,18 +78,21 @@ export function buildStrategyAnalysis({
     oppLP: resolvedOpponent?.lp || 8000,
     currentTurn: game?.turnCounter || 1,
     phase: game?.phase || "main1",
-    player: actor,
+    player: projectedActor,
     opponent: resolvedOpponent,
-    bot: actor,
+    bot: projectedActor,
     game,
     summonAvailable: normalSummonsAvailable > 0,
     normalSummonsAvailable,
-    additionalNormalSummons: actor?.additionalNormalSummons || 0,
+    additionalNormalSummons: projectedActor?.additionalNormalSummons || 0,
     isSimulatedState: game?._isPerspectiveState === true,
   };
 }
 
-export function cardHasRelevantTriggerForSummonMethod(card, method) {
+export function cardHasRelevantTriggerForSummonMethod(
+  card: SimulatedCardState | null | undefined,
+  method: string | null | undefined,
+): boolean {
   if (!card || !method) return false;
   const normalizedMethod = String(method).toLowerCase();
   const methodAliases =

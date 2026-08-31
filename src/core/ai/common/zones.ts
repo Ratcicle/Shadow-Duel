@@ -1,6 +1,40 @@
 import { restoreFieldExitStatuses } from "../../Card.js";
+import type {
+  AiStateShape,
+  SimulatedCardState,
+  SimulatedPlayerState,
+} from "../../contracts/aiState.js";
 
-export function getZoneCards(player, zone) {
+type SimulatedArrayZone =
+  | "hand"
+  | "field"
+  | "graveyard"
+  | "spellTrap"
+  | "banished"
+  | "deck"
+  | "extraDeck";
+type SimulatedZone = SimulatedArrayZone | "fieldSpell";
+
+interface SimulatedEquipAction {
+  atkBonus?: number;
+  defBonus?: number;
+  extraAttacks?: number;
+  battleIndestructible?: boolean;
+  grantCrescentShieldGuard?: boolean;
+}
+
+function readCardList(
+  player: SimulatedPlayerState,
+  zone: string,
+): SimulatedCardState[] | null {
+  const value = Reflect.get(player, zone);
+  return Array.isArray(value) ? value as SimulatedCardState[] : null;
+}
+
+export function getZoneCards(
+  player: SimulatedPlayerState | null | undefined,
+  zone: string,
+): SimulatedCardState[] {
   if (!player) return [];
   switch (zone) {
     case "field":
@@ -22,7 +56,10 @@ export function getZoneCards(player, zone) {
   }
 }
 
-export function findCardZone(player, card) {
+export function findCardZone(
+  player: SimulatedPlayerState | null | undefined,
+  card: SimulatedCardState | null | undefined,
+): SimulatedZone | null {
   if (!player || !card) return null;
   if (player.fieldSpell === card) return "fieldSpell";
   for (const zone of [
@@ -33,16 +70,20 @@ export function findCardZone(player, card) {
     "banished",
     "deck",
     "extraDeck",
-  ]) {
+  ] as const) {
     const cards = player[zone];
     if (Array.isArray(cards) && cards.includes(card)) return zone;
   }
   return null;
 }
 
-export function detachSimulatedEquip(equipCard) {
+export function detachSimulatedEquip(
+  equipCard: SimulatedCardState | null | undefined,
+): void {
   if (!equipCard) return;
-  const host = equipCard.equippedTo || equipCard.equipTarget || null;
+  const host = (equipCard.equippedTo || equipCard.equipTarget || null) as
+    | SimulatedCardState
+    | null;
   if (!host) return;
 
   if (Array.isArray(host.equips)) {
@@ -83,7 +124,10 @@ export function detachSimulatedEquip(equipCard) {
   equipCard.grantsCrescentShieldGuard = false;
 }
 
-export function removeCardFromZones(player, card) {
+export function removeCardFromZones(
+  player: SimulatedPlayerState | null | undefined,
+  card: SimulatedCardState | null | undefined,
+): boolean {
   if (!player || !card) return false;
   detachSimulatedEquip(card);
   if (Array.isArray(card.equips) && card.equips.length > 0) {
@@ -101,7 +145,7 @@ export function removeCardFromZones(player, card) {
     "banished",
     "deck",
     "extraDeck",
-  ];
+  ] as const;
   for (const zone of zones) {
     const list = player[zone];
     if (!Array.isArray(list)) continue;
@@ -118,7 +162,11 @@ export function removeCardFromZones(player, card) {
   return false;
 }
 
-export function attachSimulatedEquip(equipCard, target, action = {}) {
+export function attachSimulatedEquip(
+  equipCard: SimulatedCardState | null | undefined,
+  target: SimulatedCardState | null | undefined,
+  action: SimulatedEquipAction = {},
+): boolean {
   if (!equipCard || !target || target.cardKind !== "monster" || target.isFacedown) {
     return false;
   }
@@ -129,17 +177,20 @@ export function attachSimulatedEquip(equipCard, target, action = {}) {
   if (!Array.isArray(target.equips)) target.equips = [];
   if (!target.equips.includes(equipCard)) target.equips.push(equipCard);
 
-  if (Number.isFinite(action.atkBonus)) {
-    equipCard.equipAtkBonus = action.atkBonus;
-    target.atk = (target.atk || 0) + action.atkBonus;
+  const atkBonus = action.atkBonus;
+  if (Number.isFinite(atkBonus)) {
+    equipCard.equipAtkBonus = atkBonus as number;
+    target.atk = (target.atk || 0) + (atkBonus as number);
   }
-  if (Number.isFinite(action.defBonus)) {
-    equipCard.equipDefBonus = action.defBonus;
-    target.def = (target.def || 0) + action.defBonus;
+  const defBonus = action.defBonus;
+  if (Number.isFinite(defBonus)) {
+    equipCard.equipDefBonus = defBonus as number;
+    target.def = (target.def || 0) + (defBonus as number);
   }
-  if (Number.isFinite(action.extraAttacks) && action.extraAttacks !== 0) {
-    equipCard.equipExtraAttacks = action.extraAttacks;
-    target.extraAttacks = (target.extraAttacks || 0) + action.extraAttacks;
+  const extraAttacks = action.extraAttacks;
+  if (Number.isFinite(extraAttacks) && extraAttacks !== 0) {
+    equipCard.equipExtraAttacks = extraAttacks as number;
+    target.extraAttacks = (target.extraAttacks || 0) + (extraAttacks as number);
   }
   if (action.battleIndestructible) {
     equipCard.grantsBattleIndestructible = true;
@@ -151,7 +202,11 @@ export function attachSimulatedEquip(equipCard, target, action = {}) {
   return true;
 }
 
-export function moveCardToZone(player, card, zone) {
+export function moveCardToZone(
+  player: SimulatedPlayerState | null | undefined,
+  card: SimulatedCardState | null | undefined,
+  zone: string,
+): boolean {
   if (!player || !card) return false;
   const fromZone = findCardZone(player, card);
   if (fromZone === "field" && zone !== "field") {
@@ -183,17 +238,22 @@ export function moveCardToZone(player, card, zone) {
     player.fieldSpell = card;
     return true;
   }
-  if (!player[zone]) {
-    player[zone] = [];
+  let targetZone = readCardList(player, zone);
+  if (!Reflect.get(player, zone)) {
+    targetZone = [];
+    Reflect.set(player, zone, targetZone);
   }
-  if (Array.isArray(player[zone])) {
-    player[zone].push(card);
+  if (targetZone) {
+    targetZone.push(card);
     return true;
   }
   return false;
 }
 
-export function findCardOwner(state, card) {
+export function findCardOwner(
+  state: Pick<AiStateShape, "bot" | "player"> | null | undefined,
+  card: SimulatedCardState | null | undefined,
+): SimulatedPlayerState | null {
   if (!state || !card) return null;
   const players = [state.bot, state.player];
   for (const player of players) {
