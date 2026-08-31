@@ -14,7 +14,14 @@ import type {
   FullGameHost,
   GameCard,
   GamePlayer,
+  DamageStepState,
+  SummonState,
 } from "../../contracts/gameRuntime.js";
+import type {
+  PublicEffectUsageReservation,
+  PublicGameState,
+  PublicTemporaryControlState,
+} from "../../contracts/aiState.js";
 import type { PlayerId } from "../../contracts/primitives.js";
 
 interface SerializedTemporaryEventSource {
@@ -31,10 +38,13 @@ interface SerializedTemporaryEventSource {
 
 type SerializationHost = Omit<FullGameHost, "temporaryEventEffects"> & {
   temporaryEventEffects: SerializedTemporaryEventSource[];
-  getSummonState?(): unknown;
-  getEffectUsageState?(): unknown;
-  getDamageStepState?(): unknown;
-  getTemporaryControlState?(): unknown[];
+  getSummonState?(): SummonState;
+  getEffectUsageState?(): {
+    nextReservationId: number;
+    reservations: PublicEffectUsageReservation[];
+  };
+  getDamageStepState?(): DamageStepState;
+  getTemporaryControlState?(): PublicTemporaryControlState[];
 };
 
 /**
@@ -46,7 +56,7 @@ type SerializationHost = Omit<FullGameHost, "temporaryEventEffects"> & {
 export function getPublicState(
   this: SerializationHost,
   forPlayerId: PlayerId = "player",
-) {
+): PublicGameState {
   const viewPlayer =
     forPlayerId === this.bot.id || forPlayerId === "bot"
       ? this.bot

@@ -104,7 +104,8 @@ export type EffectZone = CanonicalZone | "any" | "removed";
 export type MainPhase = "main1" | "main2";
 export type EffectResponseContext =
   | ChainResponseContextType
-  | "summon_attempt";
+  | "summon_attempt"
+  | "attack_declaration";
 
 export type NumericComparisonOperator =
   | "eq"
