@@ -6,8 +6,8 @@ type AiTimingRole = "reactive_backrow" | "pre_battle_value" | "post_battle_payof
 interface PhaseTimingCard {
   id?: GameCard["id"] | number;
   name?: string;
-  cardKind?: GameCard["cardKind"];
-  subtype?: GameCard["subtype"];
+  cardKind?: string;
+  subtype?: string | null;
   lastAiActivatedTurn?: number | null;
 }
 type TimingAwareAction = AIPlannedAction & {
@@ -49,7 +49,7 @@ interface PhaseTimingPlayer {
   graveyard?: readonly PhaseTimingCard[];
   deck?: readonly PhaseTimingCard[];
   extraDeck?: readonly PhaseTimingCard[];
-  strategy?: PostBattleHookOwner | null;
+  strategy?: object | null;
 }
 
 interface PhaseTimingContext {
@@ -58,8 +58,22 @@ interface PhaseTimingContext {
   state?: PhaseSource | null;
   game?: PhaseSource | null;
   hand?: readonly PhaseTimingCard[];
-  strategy?: PostBattleHookOwner | null;
+  strategy?: object | null;
   analysis?: PhaseAnalysis | null;
+}
+
+function asPostBattleHookOwner(
+  value: object | null | undefined,
+): PostBattleHookOwner | null {
+  if (!value) return null;
+  const direct = Reflect.get(value, "isPostBattlePayoffAction");
+  if (typeof direct === "function") return value as PostBattleHookOwner;
+  const nested = Reflect.get(value, "strategy");
+  if (nested && typeof nested === "object") {
+    const nestedHook = Reflect.get(nested, "isPostBattlePayoffAction");
+    if (typeof nestedHook === "function") return nested as PostBattleHookOwner;
+  }
+  return null;
 }
 
 function normalizePhase(
@@ -195,14 +209,8 @@ export function isPostBattlePayoffAction(
 ): boolean {
   if (!action) return false;
   if (action.timingRole === "post_battle_payoff") return true;
-  const hookOwner =
-    typeof context.strategy?.isPostBattlePayoffAction === "function"
-      ? context.strategy
-      : typeof context.strategy?.strategy?.isPostBattlePayoffAction === "function"
-        ? context.strategy.strategy
-        : typeof context.bot?.strategy?.isPostBattlePayoffAction === "function"
-          ? context.bot.strategy
-          : null;
+  const hookOwner = asPostBattleHookOwner(context.strategy) ||
+    asPostBattleHookOwner(context.bot?.strategy);
   const hook = hookOwner?.isPostBattlePayoffAction;
   if (typeof hook !== "function") return false;
   try {
@@ -262,10 +270,10 @@ export function isAllowedAiActionForCurrentPhase(
   return true;
 }
 
-export function filterAiActionsForCurrentPhase(
-  actions: readonly TimingAwareAction[] | null | undefined,
+export function filterAiActionsForCurrentPhase<Action extends TimingAwareAction>(
+  actions: readonly Action[] | null | undefined,
   context: PhaseTimingContext = {},
-): TimingAwareAction[] {
+): Action[] {
   if (!Array.isArray(actions)) return [];
   return actions.filter((action) =>
     isAllowedAiActionForCurrentPhase(action, context),

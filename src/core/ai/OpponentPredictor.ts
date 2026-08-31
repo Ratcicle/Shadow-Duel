@@ -17,15 +17,57 @@
  */
 
 import { inferRole } from "./RoleAnalyzer.js";
+import type { StrategicCardView, StrategicRole } from "./RoleAnalyzer.js";
 
-const safeList = (list) => (Array.isArray(list) ? list.filter(Boolean) : []);
-const shouldLogWarnings = (...states) =>
+export interface OpponentPlayerView {
+  debug?: boolean;
+  field?: readonly (StrategicCardView | null | undefined)[];
+  graveyard?: readonly (StrategicCardView | null | undefined)[];
+  hand?: readonly (StrategicCardView | null | undefined)[];
+  lp?: number;
+}
+
+export type OpponentPlaystyle =
+  | "aggressive"
+  | "defensive"
+  | "generator"
+  | "mixed";
+
+export interface PredictedOpponentMove {
+  card: StrategicCardView | null;
+  role: StrategicRole;
+  confidence: number;
+}
+
+export interface OpponentAnalysis {
+  archetype: string;
+  playstyle: OpponentPlaystyle;
+  nextMove: PredictedOpponentMove;
+  threat_level: number;
+  field_power?: number;
+  field_size?: number;
+}
+
+const safeList = <Value>(
+  list: readonly (Value | null | undefined)[] | null | undefined,
+): Value[] => (Array.isArray(list) ? list.filter((value) => value != null) : []);
+const shouldLogWarnings = (
+  ...states: readonly (OpponentPlayerView | null | undefined)[]
+) =>
   !states.some((state) => state && state.debug === false);
+
+interface PredictedCardScore {
+  card: StrategicCardView | null;
+  role: StrategicRole;
+  score: number;
+}
 
 /**
  * Identifica o arquétipo do oponente via field + hand
  */
-function identifyOpponentArchetype(opponentState) {
+function identifyOpponentArchetype(
+  opponentState: OpponentPlayerView | null | undefined,
+): string {
   try {
     if (!opponentState) return "unknown";
 
@@ -36,7 +78,7 @@ function identifyOpponentArchetype(opponentState) {
     // Conta cartas por archetype usando o próprio campo declarado em cards.js.
     // Mais confiável que substring matching (Void deixava de ser detectado
     // porque o nome contém "Void" e a regra de Shadow-Heart casava antes).
-    const counts = {};
+    const counts: { [archetype: string]: number } = {};
     for (const card of [...hand, ...field, ...graveyard]) {
       if (!card) continue;
       const archetypes = Array.isArray(card.archetypes)
@@ -69,7 +111,9 @@ function identifyOpponentArchetype(opponentState) {
  * Avalia o "estilo de jogo" do oponente
  * Retorna: "aggressive" | "defensive" | "generator" | "mixed"
  */
-function assessOpponentPlaystyle(opponentState) {
+function assessOpponentPlaystyle(
+  opponentState: OpponentPlayerView | null | undefined,
+): OpponentPlaystyle {
   try {
     if (!opponentState) return "mixed";
 
@@ -115,7 +159,10 @@ function assessOpponentPlaystyle(opponentState) {
  * Prediz qual card o oponente provavelmente jogaria a seguir
  * Retorna: { card, role, confidence }
  */
-function predictNextOppMove(opponentState, myState) {
+function predictNextOppMove(
+  opponentState: OpponentPlayerView | null | undefined,
+  myState: OpponentPlayerView | null | undefined,
+): PredictedOpponentMove {
   try {
     if (!opponentState || !opponentState.hand) {
       return { card: null, role: "unknown", confidence: 0 };
@@ -125,7 +172,7 @@ function predictNextOppMove(opponentState, myState) {
     const myFieldThreats = safeList(myState?.field);
 
     // Scoring heurístico por prioridade
-    const scoredCards = hand.map((card) => {
+    const scoredCards: PredictedCardScore[] = hand.map((card) => {
       if (!card) {
         return { card: null, role: "unknown", score: -Infinity };
       }
@@ -148,7 +195,8 @@ function predictNextOppMove(opponentState, myState) {
       }
 
       // 4. Defensores (se oponente em LP baixo)
-      if (role === "defender" && (opponentState.lp || 0) <= 4000) {
+      const roleLabel: string = role;
+      if (roleLabel === "defender" && (opponentState.lp || 0) <= 4000) {
         score += 2;
       }
 
@@ -171,7 +219,10 @@ function predictNextOppMove(opponentState, myState) {
 /**
  * API Pública: Análise completa do oponente
  */
-export function analyzeOpponent(opponentState, myState = null) {
+export function analyzeOpponent(
+  opponentState: OpponentPlayerView | null | undefined,
+  myState: OpponentPlayerView | null = null,
+): OpponentAnalysis {
   const logWarnings = shouldLogWarnings(opponentState, myState);
   try {
     if (!opponentState) {
@@ -222,11 +273,13 @@ export function analyzeOpponent(opponentState, myState = null) {
 /**
  * Helper: Estima quanto dano o oponente pode fazer em um turno
  */
-export function estimateOppDamage(opponentState) {
+export function estimateOppDamage(
+  opponentState: OpponentPlayerView | null | undefined,
+): number {
   try {
     if (!opponentState) return 0;
 
-    const field = opponentState.field || [];
+    const field = safeList(opponentState.field);
     const totalATK = field.reduce((sum, m) => sum + (m.atk || 0), 0);
 
     // Assume ataque direto com todos (simplificação)
@@ -239,7 +292,10 @@ export function estimateOppDamage(opponentState) {
 /**
  * Helper: Estima turnosquanto para oponente dar lethal
  */
-export function estimateTurnsToOppLethal(opponentState, myLP = 8000) {
+export function estimateTurnsToOppLethal(
+  opponentState: OpponentPlayerView | null | undefined,
+  myLP = 8000,
+): number {
   try {
     const damage = estimateOppDamage(opponentState);
     if (damage <= 0) return Infinity;

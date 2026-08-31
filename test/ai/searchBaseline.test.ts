@@ -16,6 +16,7 @@ interface SearchAction {
   type: "position_change";
   tag: string;
   priority: number;
+  toPosition: "attack";
 }
 
 interface SearchPlayer {
@@ -43,9 +44,13 @@ interface SearchPlayer {
 interface SearchState {
   bot: SearchPlayer;
   player: SearchPlayer;
-  turn?: SearchPlayer;
+  turn?: "bot" | "player";
   phase: "main1";
   turnCounter: number;
+}
+
+interface MutableScoreState {
+  bot: { lp: number };
 }
 
 function makePlayer(id: "bot" | "player"): SearchPlayer {
@@ -77,16 +82,16 @@ function makeGame(): SearchState {
   return {
     bot,
     player: makePlayer("player"),
-    turn: bot,
+    turn: "bot",
     phase: "main1",
     turnCounter: 1,
   };
 }
 
 const SEARCH_ACTIONS: SearchAction[] = [
-  { type: "position_change", tag: "first", priority: 10 },
-  { type: "position_change", tag: "second", priority: 10 },
-  { type: "position_change", tag: "third", priority: 10 },
+  { type: "position_change", tag: "first", priority: 10, toPosition: "attack" },
+  { type: "position_change", tag: "second", priority: 10, toPosition: "attack" },
+  { type: "position_change", tag: "third", priority: 10, toPosition: "attack" },
 ];
 
 test("beam search freezes default depth, width, discount and result shape", async () => {
@@ -94,12 +99,12 @@ test("beam search freezes default depth, width, discount and result shape", asyn
   const strategy = {
     bot: game.bot,
     generateMainPhaseActions: () => SEARCH_ACTIONS,
-    simulateMainPhaseAction(state: SearchState, action: SearchAction) {
+    simulateMainPhaseAction(state: MutableScoreState, action: SearchAction) {
       const delta = action.tag === "first" ? 1 : action.tag === "second" ? 2 : 3;
       state.bot.lp -= delta;
     },
-    evaluateBoardV2: (state: SearchState) => 8000 - state.bot.lp,
-    evaluateBoard: (state: SearchState) => 8000 - state.bot.lp,
+    evaluateBoardV2: (state: MutableScoreState) => 8000 - state.bot.lp,
+    evaluateBoard: (state: MutableScoreState) => 8000 - state.bot.lp,
   };
 
   const result = await beamSearchTurn(game, strategy);
@@ -117,12 +122,12 @@ test("beam search preserves its legacy node-budget boundary", async () => {
   const strategy = {
     bot: game.bot,
     generateMainPhaseActions: () => SEARCH_ACTIONS,
-    simulateMainPhaseAction(state: SearchState, action: SearchAction) {
+    simulateMainPhaseAction(state: MutableScoreState, action: SearchAction) {
       const delta = action.tag === "first" ? 1 : action.tag === "second" ? 2 : 3;
       state.bot.lp -= delta;
     },
-    evaluateBoardV2: (state: SearchState) => 8000 - state.bot.lp,
-    evaluateBoard: (state: SearchState) => 8000 - state.bot.lp,
+    evaluateBoardV2: (state: MutableScoreState) => 8000 - state.bot.lp,
+    evaluateBoard: (state: MutableScoreState) => 8000 - state.bot.lp,
   };
 
   const result = await beamSearchTurn(game, strategy, {
@@ -143,11 +148,11 @@ test("greedy search keeps the last equally scored candidate", async () => {
   const strategy = {
     bot: game.bot,
     generateMainPhaseActions: () => SEARCH_ACTIONS,
-    simulateMainPhaseAction(state: SearchState) {
+    simulateMainPhaseAction(state: MutableScoreState) {
       state.bot.lp -= 1;
     },
-    evaluateBoardV2: (state: SearchState) => 8000 - state.bot.lp,
-    evaluateBoard: (state: SearchState) => 8000 - state.bot.lp,
+    evaluateBoardV2: (state: MutableScoreState) => 8000 - state.bot.lp,
+    evaluateBoard: (state: MutableScoreState) => 8000 - state.bot.lp,
   };
 
   const result = await greedySearchWithEvalV2(game, strategy, {
@@ -168,6 +173,7 @@ test("game-tree search freezes defaults, three-candidate beam and first-tie beha
     type: "position_change",
     tag: "outside-candidate-beam",
     priority: 10,
+    toPosition: "attack",
   };
   const strategy = {
     bot: game.bot,
@@ -195,10 +201,10 @@ test("game-tree search freezes defaults, three-candidate beam and first-tie beha
 test("turn-line search freezes defaults, stable ties, diagnostics and score shape", async () => {
   const game = makeGame();
   const actions: SearchAction[] = [
-    { type: "position_change", tag: "low", priority: 1 },
-    { type: "position_change", tag: "first-tie", priority: 5 },
-    { type: "position_change", tag: "second-tie", priority: 5 },
-    { type: "position_change", tag: "outside", priority: 0 },
+    { type: "position_change", tag: "low", priority: 1, toPosition: "attack" },
+    { type: "position_change", tag: "first-tie", priority: 5, toPosition: "attack" },
+    { type: "position_change", tag: "second-tie", priority: 5, toPosition: "attack" },
+    { type: "position_change", tag: "outside", priority: 0, toPosition: "attack" },
   ];
   let generationCalls = 0;
   const strategy = {
@@ -207,10 +213,10 @@ test("turn-line search freezes defaults, stable ties, diagnostics and score shap
       generationCalls += 1;
       return actions;
     },
-    simulateMainPhaseAction(state: SearchState, action: SearchAction) {
+    simulateMainPhaseAction(state: MutableScoreState, action: SearchAction) {
       state.bot.lp += action.tag === "low" ? 1 : action.tag === "outside" ? 4 : 2;
     },
-    evaluateBoardV2: (state: SearchState) => state.bot.lp - 8000,
+    evaluateBoardV2: (state: MutableScoreState) => state.bot.lp - 8000,
   };
 
   const result = await turnLineSearch(game, strategy);
@@ -256,10 +262,10 @@ test("turn-line search stops on the legacy node-budget boundary", async () => {
   const strategy = {
     bot: game.bot,
     generateMainPhaseActions: () => SEARCH_ACTIONS,
-    simulateMainPhaseAction(state: SearchState) {
+    simulateMainPhaseAction(state: MutableScoreState) {
       state.bot.lp += 2;
     },
-    evaluateBoardV2: (state: SearchState) => state.bot.lp - 8000,
+    evaluateBoardV2: (state: MutableScoreState) => state.bot.lp - 8000,
   };
 
   const result = await turnLineSearch(game, strategy, {

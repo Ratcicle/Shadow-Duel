@@ -1,4 +1,22 @@
 import { resolvePerspectivePlayers } from "./StrategyUtils.js";
+import type {
+  AIAction,
+  GameTreeSearchResult,
+} from "../contracts/ai.js";
+import type {
+  AiCardInput,
+  AiLiveGamePort,
+  AiPlayerInput,
+  AiStateInput,
+  SimulatedCardState,
+  SimulatedPlayerState,
+} from "../contracts/aiState.js";
+import type {
+  CardDynamicBuffMap,
+  CardSuppressedDynamicBuffStats,
+  CardTurnBasedBuff,
+  GameCard,
+} from "../contracts/cards.js";
 
 /**
  * GameTreeSearch.js — P2: Deep Lookahead com Minimax + Alpha-Beta Pruning
@@ -22,7 +40,96 @@ const ALPHA_INIT = -Infinity;
 const BETA_INIT = Infinity;
 const FUTURE_DISCOUNT = 0.85; // Desconto por ply: score_ply_n = score * (0.85 ^ n)
 
-function cloneDynamicBuffs(dynamicBuffs) {
+interface GameTreeCardExtras {
+  archetypes?: readonly string[];
+  turnBasedBuffs?: readonly CardTurnBasedBuff[];
+  equippedTo?: unknown;
+  equipTarget?: unknown;
+  boundMonsterTarget?: unknown;
+  boundTrapSource?: unknown;
+}
+
+type GameTreeCardInput =
+  (AiCardInput | GameCard | SimulatedCardState) & GameTreeCardExtras;
+type GameTreePlayerInput = (AiPlayerInput | SimulatedPlayerState) & {
+  name?: string;
+  debug?: boolean;
+};
+
+interface GameTreePlayerState {
+  id: string;
+  name?: string;
+  lp: number;
+  hand: SimulatedCardState[];
+  field: SimulatedCardState[];
+  graveyard: SimulatedCardState[];
+  extraDeck: SimulatedCardState[];
+  spellTrap: SimulatedCardState[];
+  fieldSpell: SimulatedCardState | null;
+  summonCount: number;
+  debug?: boolean;
+}
+
+interface GameTreeStateInput extends AiStateInput {
+  currentPlayer?: GameTreePlayerInput | null;
+  opponent?: GameTreePlayerInput | null;
+}
+
+interface GameTreeState {
+  bot: GameTreePlayerState;
+  player: GameTreePlayerState;
+  turn?: string | null;
+  phase?: string | null;
+  turnCounter: number;
+  _isPerspectiveState: true;
+  _gameRef: AiLiveGamePort | GameTreeStateInput | GameTreeState;
+}
+
+interface GameTreeStrategy<State, Action extends AIAction> {
+  bot?: { debug?: boolean };
+  generateMainPhaseActions(state: State): Action[];
+}
+
+interface MinimaxResult<Action extends AIAction> {
+  value: number;
+  action: Action | null;
+}
+
+interface TranspositionEntry<Action extends AIAction> {
+  result: MinimaxResult<Action>;
+  depth: number;
+}
+
+function isGameTreeCard(value: unknown): value is SimulatedCardState {
+  return typeof value === "object" && value !== null;
+}
+
+function getLegacyPlayerSlot(
+  state: GameTreeStateInput | GameTreeState,
+  key: "currentPlayer" | "opponent",
+): GameTreePlayerInput | null {
+  if (!(key in state)) return null;
+  const slot = Reflect.get(state, key);
+  return slot && typeof slot === "object" ? slot as GameTreePlayerInput : null;
+}
+
+function resolveGameTreePlayers(
+  state: GameTreeStateInput | GameTreeState,
+  perspective: GameTreePlayerInput | null | undefined,
+) {
+  return resolvePerspectivePlayers(
+    {
+      player: state.player,
+      bot: state.bot,
+      _isPerspectiveState: state._isPerspectiveState,
+    },
+    perspective,
+  );
+}
+
+function cloneDynamicBuffs(
+  dynamicBuffs: CardDynamicBuffMap | null | undefined,
+): CardDynamicBuffMap | null | undefined {
   if (!dynamicBuffs || typeof dynamicBuffs !== "object") return dynamicBuffs;
   return Object.fromEntries(
     Object.entries(dynamicBuffs).map(([key, entry]) => [
@@ -39,16 +146,14 @@ function cloneDynamicBuffs(dynamicBuffs) {
   );
 }
 
-function cloneSuppressedDynamicBuffStats(suppressed) {
+function cloneSuppressedDynamicBuffStats(
+  suppressed: CardSuppressedDynamicBuffStats | undefined,
+): CardSuppressedDynamicBuffStats | undefined {
   if (!suppressed || typeof suppressed !== "object") return suppressed;
   return Object.fromEntries(
     Object.entries(suppressed).map(([key, entry]) => [
       key,
-      entry && typeof entry === "object" && !Array.isArray(entry)
-        ? { ...entry }
-        : Array.isArray(entry)
-          ? [...entry]
-          : entry,
+      { ...entry },
     ]),
   );
 }
@@ -56,11 +161,11 @@ function cloneSuppressedDynamicBuffStats(suppressed) {
 /**
  * Estado simulado do tabuleiro para cache de transposição
  */
-function hashGameState(gameState) {
+function hashGameState(gameState: GameTreeStateInput | GameTreeState): string {
   try {
     // Hash simplificado: LP, field size, hand size, graveyard size
-    const bot = gameState.bot || gameState.currentPlayer;
-    const player = gameState.player || gameState.opponent;
+    const bot = gameState.bot || getLegacyPlayerSlot(gameState, "currentPlayer");
+    const player = gameState.player || getLegacyPlayerSlot(gameState, "opponent");
 
     const botHash = `B:${bot?.lp || 0}|${bot?.field?.length || 0}|${
       bot?.hand?.length || 0
@@ -78,7 +183,7 @@ function hashGameState(gameState) {
 /**
  * Clona o game state para simulação profunda
  */
-function cloneCardForSim(card) {
+function cloneCardForSim(card: GameTreeCardInput): SimulatedCardState {
   if (!card || typeof card !== "object") return card;
   const clone = { ...card };
   clone.dynamicBuffs = cloneDynamicBuffs(card.dynamicBuffs);
@@ -108,36 +213,43 @@ function cloneCardForSim(card) {
   clone.boundMonsterTarget = null;
   clone.boundTrapSource = null;
 
-  return clone;
+  return clone as SimulatedCardState;
 }
 
-function clonePlayerForSim(player) {
+function clonePlayerForSim(
+  player: GameTreePlayerInput | null | undefined,
+): GameTreePlayerState {
   const safe = player || {};
   return {
     id: safe.id || "unknown",
     name: safe.name,
     lp: safe.lp || 0,
-    hand: (safe.hand || []).map(cloneCardForSim),
-    field: (safe.field || []).map(cloneCardForSim),
-    graveyard: (safe.graveyard || []).map(cloneCardForSim),
-    extraDeck: (safe.extraDeck || []).map(cloneCardForSim),
-    spellTrap: (safe.spellTrap || []).map(cloneCardForSim),
+    hand: (safe.hand || []).map((card) => cloneCardForSim(card)),
+    field: (safe.field || []).map((card) => cloneCardForSim(card)),
+    graveyard: (safe.graveyard || []).map((card) => cloneCardForSim(card)),
+    extraDeck: (safe.extraDeck || []).map((card) => cloneCardForSim(card)),
+    spellTrap: (safe.spellTrap || []).map((card) => cloneCardForSim(card)),
     fieldSpell: safe.fieldSpell ? cloneCardForSim(safe.fieldSpell) : null,
     summonCount: safe.summonCount || 0,
     debug: safe.debug,
   };
 }
 
-function cloneGameStateDeep(gameState, perspective = null) {
+function cloneGameStateDeep(
+  gameState: GameTreeStateInput | GameTreeState,
+  perspective: GameTreePlayerInput | null = null,
+): GameTreeState {
   const safeGame = gameState || {};
-  const resolved = resolvePerspectivePlayers(
+  const currentPlayer = getLegacyPlayerSlot(safeGame, "currentPlayer");
+  const opponent = getLegacyPlayerSlot(safeGame, "opponent");
+  const resolved = resolveGameTreePlayers(
     safeGame,
-    perspective || safeGame.bot || safeGame.currentPlayer || null,
+    perspective || safeGame.bot || currentPlayer,
   );
   const sourceBot =
-    resolved.self || safeGame.bot || safeGame.currentPlayer || safeGame.player;
+    resolved.self || safeGame.bot || currentPlayer || safeGame.player;
   const sourcePlayer =
-    resolved.opponent || safeGame.player || safeGame.opponent || safeGame.bot;
+    resolved.opponent || safeGame.player || opponent || safeGame.bot;
 
   return {
     bot: clonePlayerForSim(sourceBot),
@@ -154,17 +266,24 @@ function cloneGameStateDeep(gameState, perspective = null) {
  * Avalia um estado de jogo (folha do minimax)
  * Retorna score numérico (higher = melhor para maximizer)
  */
-function shouldLogWarnings(gameState, perspective) {
+function shouldLogWarnings(
+  gameState: GameTreeStateInput | GameTreeState,
+  perspective: GameTreePlayerInput | null | undefined,
+): boolean {
   if (perspective && perspective.debug === false) return false;
-  if (gameState?.bot && gameState.bot.debug === false) return false;
-  if (gameState?.player && gameState.player.debug === false) return false;
+  if (gameState?.bot && Reflect.get(gameState.bot, "debug") === false) return false;
+  if (gameState?.player && Reflect.get(gameState.player, "debug") === false) return false;
   return true;
 }
 
-function evaluateLeafState(gameState, perspective, maxScore = 100) {
+function evaluateLeafState(
+  gameState: GameTreeStateInput | GameTreeState,
+  perspective: GameTreePlayerInput | null | undefined,
+  maxScore = 100,
+): number {
   try {
     if (!gameState || typeof gameState !== "object") return 0;
-    const { self: persp, opponent: opp } = resolvePerspectivePlayers(
+    const { self: persp, opponent: opp } = resolveGameTreePlayers(
       gameState,
       perspective || gameState.bot,
     );
@@ -214,7 +333,11 @@ function evaluateLeafState(gameState, perspective, maxScore = 100) {
  * Simula uma ação e retorna novo estado (determinístico para core game state)
  * Nota: Game.js effects/events não são simulados; apenas board state muda
  */
-function simulateAction(gameState, action, perspective) {
+function simulateAction(
+  gameState: GameTreeStateInput | GameTreeState,
+  action: AIAction,
+  perspective: GameTreePlayerInput | null | undefined,
+): GameTreeState {
   const simState = cloneGameStateDeep(gameState, perspective);
   const simPersp = simState?.bot;
   const simOpp = simState?.player;
@@ -224,24 +347,30 @@ function simulateAction(gameState, action, perspective) {
     // Simulação simplificada: apenas atualiza board state
     // (Não simula efeitos de card, apenas movimento de cartas)
 
-    if (action.type === "summon") {
+    const actionType: string = action.type;
+    if (actionType === "summon") {
+      const actionIndex = action.index;
       const card =
         action.card ||
-        (Number.isInteger(action.index) ? simPersp.hand?.[action.index] : null);
+        (typeof actionIndex === "number" && Number.isInteger(actionIndex)
+          ? simPersp.hand?.[actionIndex]
+          : null);
       if (!card) return simState;
       if (!simPersp.field) simPersp.field = [];
-      simPersp.field.push({ ...card });
+      simPersp.field.push({ ...card } as SimulatedCardState);
 
       // Remove da mão
       if (simPersp.hand && Array.isArray(simPersp.hand)) {
-        const idx = Number.isInteger(action.index)
-          ? action.index
-          : simPersp.hand.indexOf(card);
+        const idx = typeof actionIndex === "number" && Number.isInteger(actionIndex)
+          ? actionIndex
+          : simPersp.hand.indexOf(card as SimulatedCardState);
         if (idx >= 0) simPersp.hand.splice(idx, 1);
       }
-    } else if (action.type === "attack") {
-      const attacker = action.attacker;
-      const target = action.target;
+    } else if (actionType === "attack") {
+      const attackerValue = Reflect.get(action, "attacker");
+      const targetValue = Reflect.get(action, "target");
+      const attacker = isGameTreeCard(attackerValue) ? attackerValue : null;
+      const target = isGameTreeCard(targetValue) ? targetValue : null;
       const opp = simOpp;
 
       // Dano direto ou batalha
@@ -267,7 +396,7 @@ function simulateAction(gameState, action, perspective) {
         } else {
           // Attacker é destruído
           if (simPersp.field && Array.isArray(simPersp.field)) {
-            const idx = simPersp.field.indexOf(attacker);
+            const idx = attacker ? simPersp.field.indexOf(attacker) : -1;
             if (idx >= 0) simPersp.field.splice(idx, 1);
           }
         }
@@ -286,14 +415,20 @@ function simulateAction(gameState, action, perspective) {
  * Gera ações candidatas para simulação no minimax
  * Nota: usar estratégia existente generateMainPhaseActions()
  */
-function generateCandidateActions(gameState, strategy, perspective) {
+function generateCandidateActions<State extends GameTreeStateInput, Action extends AIAction>(
+  gameState: GameTreeStateInput | GameTreeState,
+  strategy: GameTreeStrategy<State, Action>,
+  perspective: GameTreePlayerInput | null | undefined,
+): Action[] {
   try {
     if (!gameState || typeof gameState !== "object") {
       return [];
     }
     const stateForActions = cloneGameStateDeep(gameState, perspective);
     // Retorna top 2-3 ações por scoring (beam width)
-    const allActions = strategy.generateMainPhaseActions(stateForActions);
+    const allActions = strategy.generateMainPhaseActions(
+      stateForActions as State & GameTreeState,
+    );
     return allActions.slice(0, 3); // Limita a 3 para reduzir branching
   } catch {
     return [];
@@ -315,16 +450,16 @@ function generateCandidateActions(gameState, strategy, perspective) {
  *
  * Retorno: { value: score, action: bestAction }
  */
-function minimax(
-  gameState,
-  depth,
-  isMaximizing,
-  alpha,
-  beta,
-  strategy,
-  perspective,
-  transpositions = new Map()
-) {
+function minimax<State extends GameTreeStateInput, Action extends AIAction>(
+  gameState: GameTreeStateInput | GameTreeState,
+  depth: number,
+  isMaximizing: boolean,
+  alpha: number,
+  beta: number,
+  strategy: GameTreeStrategy<State, Action>,
+  perspective: GameTreePlayerInput | null | undefined,
+  transpositions: Map<string, TranspositionEntry<Action>> = new Map(),
+): MinimaxResult<Action> {
   // Base case: folha ou limite de profundidade
   if (depth === 0) {
     const leafValue = evaluateLeafState(gameState, perspective);
@@ -333,14 +468,14 @@ function minimax(
 
   // Verificar transposition table
   const stateHash = hashGameState(gameState);
-  if (transpositions.has(stateHash)) {
-    const cached = transpositions.get(stateHash);
+  const cached = transpositions.get(stateHash);
+  if (cached) {
     if (cached.depth >= depth) {
       return cached.result;
     }
   }
 
-  const { self: persp } = resolvePerspectivePlayers(
+  const { self: persp } = resolveGameTreePlayers(
     gameState,
     perspective || gameState.bot,
   );
@@ -409,14 +544,17 @@ function minimax(
  *
  * Uso: const { action, score } = gameTreeSearch(game, strategy, perspective, maxPly);
  */
-export function gameTreeSearch(
-  gameState,
-  strategy,
-  perspective = null,
-  maxPly = DEFAULT_MAX_PLY
-) {
+export function gameTreeSearch<
+  State extends GameTreeStateInput,
+  Action extends AIAction,
+>(
+  gameState: State,
+  strategy: GameTreeStrategy<State, Action>,
+  perspective: GameTreePlayerInput | null = null,
+  maxPly = DEFAULT_MAX_PLY,
+): Omit<GameTreeSearchResult, "action"> & { action: Action | null } {
   try {
-    const transpositions = new Map();
+    const transpositions = new Map<string, TranspositionEntry<Action>>();
     const { self: persp } = resolvePerspectivePlayers(
       gameState,
       perspective || gameState.bot,
@@ -449,7 +587,7 @@ export function gameTreeSearch(
       score: 0,
       depth: maxPly,
       confidence: 0,
-      error: e.message,
+      error: e instanceof Error ? e.message : String(e),
     };
   }
 }
@@ -459,10 +597,10 @@ export function gameTreeSearch(
  * Retorna true se vale a pena rodar minimax pesado
  */
 export function shouldUseGameTreeSearch(
-  gameState,
-  perspective,
-  forceCritical = false
-) {
+  gameState: GameTreeStateInput,
+  perspective: GameTreePlayerInput | null | undefined,
+  forceCritical = false,
+): boolean {
   try {
     // Debug: permitir forçar via flag
     if (forceCritical) return true;
@@ -504,7 +642,7 @@ export function shouldUseGameTreeSearch(
 /**
  * Estimativa de complexidade (para debug/logging)
  */
-export function estimateSearchComplexity(maxPly, beamWidth = 3) {
+export function estimateSearchComplexity(maxPly: number, beamWidth = 3): number {
   let nodes = 1;
   for (let i = 0; i < maxPly; i++) {
     nodes *= beamWidth;
