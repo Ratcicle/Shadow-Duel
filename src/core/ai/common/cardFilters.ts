@@ -1,4 +1,5 @@
 import type { GameCard } from "../../contracts/cards.js";
+import type { SimulatedCardState } from "../../contracts/aiState.js";
 import type {
   CardFilter,
   EffectZone,
@@ -6,13 +7,14 @@ import type {
 } from "../../contracts/effects.js";
 import type { SummonMethod } from "../../contracts/summon.js";
 
-export type FilterableCard = Partial<GameCard> & {
+type LiveFilterableCard = Partial<Omit<GameCard, "equips">> & {
   _instanceId?: number | string | null;
   uuid?: string | null;
   simInstanceId?: number | string | null;
   archetypes?: readonly string[];
   equips?: readonly FilterableCard[];
 };
+export type FilterableCard = LiveFilterableCard | SimulatedCardState;
 
 export type AiCardFilter = Omit<CardFilter, "position"> & {
   readonly filters?: AiCardFilter;

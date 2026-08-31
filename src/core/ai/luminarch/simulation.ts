@@ -12,6 +12,266 @@ import {
 } from "../common/simulation.js";
 import { isLuminarch } from "./knowledge.js";
 import { shouldPlaySpell } from "./priorities.js";
+import type {
+  AIActivationContext,
+  AIPlannedAction,
+} from "../../contracts/ai.js";
+import type {
+  PerspectiveGameState,
+  SimulatedCardState,
+  SimulatedLuminarchState,
+  SimulatedPlayerState,
+  SimulationGameState,
+} from "../../contracts/aiState.js";
+import type { EffectDefinition } from "../../contracts/effects.js";
+import type { GameCard } from "../../contracts/cards.js";
+
+type LuminarchState = SimulationGameState | PerspectiveGameState;
+type LuminarchPositionName =
+  | "Luminarch Megashield Barbarias"
+  | "Sanctum of the Luminarch Citadel"
+  | "Luminarch Celestial Marshal"
+  | "Luminarch Enchanted Halberd"
+  | "Luminarch Fortress Aegis"
+  | "Luminarch Magic Sickle"
+  | "Luminarch Pure Knight"
+  | "Luminarch Aegisbearer"
+  | "Luminarch Sanctified Arbiter"
+  | "Luminarch Crescent Shield"
+  | "Luminarch Holy Shield"
+  | "Luminarch Moonlit Blessing"
+  | "Luminarch Moonblade Captain"
+  | "Luminarch Sunforged Blade"
+  | "Luminarch Valiant - Knight of the Dawn";
+
+interface LuminarchActionContext {
+  preferredSearchNames?: string[];
+  specialSummonPositions?: {
+    byTargetRef?: Partial<Record<"moonblade_revive_target", "attack" | "defense">>;
+    byName?: Partial<Record<LuminarchPositionName, "attack" | "defense">>;
+    default?: "attack" | "defense";
+  };
+  fusionPositions?: {
+    byName?: Partial<Record<LuminarchPositionName, "attack" | "defense">>;
+  };
+}
+
+type LuminarchActivationContext = Omit<
+  AIActivationContext,
+  "actionContext"
+> & {
+  actionContext?: LuminarchActionContext;
+};
+
+interface LuminarchAction {
+  type: AIPlannedAction["type"] | "special_summon_from_zone";
+  cardName?: string;
+  index?: number;
+  fieldIndex?: number;
+  zoneIndex?: number;
+  materialIndex?: number;
+  position?: "attack" | "defense" | "choice";
+  facedown?: boolean;
+  targetRef?: string;
+  zone?: string;
+  activationContext?: LuminarchActivationContext;
+  sourceAction?: LuminarchAction;
+  fusionTargetHint?: string | null;
+  fusionTarget?: string | null;
+}
+
+interface LuminarchStrategyContext {
+  bot?: SimulatedPlayerState;
+}
+
+interface LuminarchSimulationOptions {
+  strategy?: LuminarchStrategyContext;
+  getOpponent?: (
+    state: LuminarchState,
+    player: SimulatedPlayerState,
+  ) => SimulatedPlayerState | null | undefined;
+  barbariasStanceDance?: { atkBoost: number };
+  citadelTempBuff?: unknown;
+  sourceAction?: LuminarchAction;
+  activationContext?: LuminarchActivationContext;
+  actionOverrides?: {
+    handIgnition?: (input: LuminarchActionOverrideInput) => unknown;
+    special_summon_sanctum_protector?: (
+      input: LuminarchActionOverrideInput,
+    ) => unknown;
+  };
+}
+
+interface LuminarchSearchContext {
+  player?: SimulatedPlayerState;
+  opponent?: SimulatedPlayerState;
+  strategy?: LuminarchStrategyContext;
+  getOpponent?: LuminarchSimulationOptions["getOpponent"];
+  game?: LuminarchState & {
+    getOpponent?(
+      player: SimulatedPlayerState,
+    ): SimulatedPlayerState | null | undefined;
+  };
+  state?: LuminarchState;
+  source?: SimulatedCardState;
+  sourceCard?: SimulatedCardState;
+  ctx?: { activationContext?: LuminarchActivationContext };
+  activationContext?: LuminarchActivationContext;
+}
+
+interface LuminarchPositionContext extends LuminarchSearchContext {
+  action?: LuminarchAction;
+  sourceAction?: LuminarchAction;
+  options?: LuminarchSimulationOptions;
+}
+
+interface LuminarchActionOverrideInput {
+  state: LuminarchState;
+  action: LuminarchAction;
+  options: LuminarchSimulationOptions;
+  player?: SimulatedPlayerState;
+  card?: SimulatedCardState;
+  newCard?: SimulatedCardState;
+  resolveSimulatedHandIndex(
+    player: SimulatedPlayerState,
+    action: LuminarchAction,
+    expectedKind?: string | string[] | null,
+  ): number;
+  resolveSimulatedFieldIndex(
+    player: SimulatedPlayerState,
+    action: Partial<LuminarchAction>,
+    predicate?: ((card: SimulatedCardState) => boolean) | null,
+  ): number;
+}
+
+interface LuminarchCounterObject {
+  solar?: number;
+}
+
+type WithoutCounters<Value> = Value extends unknown
+  ? Omit<Value, "counters">
+  : never;
+type LuminarchCounterCard = WithoutCounters<
+  GameCard | SimulatedCardState
+> & {
+  counters?: Map<string, number> | LuminarchCounterObject;
+  getCounter?(counterType: "solar"): number;
+  setCounter?(counterType: "solar", value: number): void;
+};
+
+interface LuminarchBattleEvent {
+  tag?: string;
+  type?: string;
+  cardName?: string;
+  hostName?: string | null;
+  sourceName?: string | null;
+  attackerName?: string | null;
+  targetName?: string | null;
+  counterType?: string;
+  amount?: number;
+  baseAmount?: number;
+  cost?: number;
+  beforeLp?: number;
+  afterLp?: number;
+  destroyedCount?: number;
+  direct?: boolean;
+  barbariasDoubled?: boolean;
+  changed?: boolean;
+  directLethal?: boolean;
+  createsRemoval?: boolean;
+  preventsAttackerLoss?: boolean;
+  createsPiercingDamage?: boolean;
+  damageGain?: number;
+  attackStat?: number;
+  boostedAtk?: number;
+  targetStat?: number;
+  destroysBefore?: boolean;
+  destroysAfter?: boolean;
+  attackerDiesBefore?: boolean;
+  attackerDiesAfter?: boolean;
+}
+
+interface LuminarchLpGain {
+  playerId?: string;
+  amount: number;
+  baseAmount?: number;
+  sourceName?: string | null;
+  reason?: string;
+  barbariasDoubled?: boolean;
+  _luminarchProcessed?: boolean;
+}
+
+interface LuminarchBattleSummary {
+  attackerName?: string;
+  damage?: number;
+  rewardNames?: string[];
+  lpGains?: LuminarchLpGain[];
+  destroyedCards?: Array<{
+    owner?: "self" | "opponent" | string;
+    cardKind?: string;
+    name?: string;
+    baseAtk?: number;
+    atk?: number;
+  }>;
+}
+
+interface LuminarchBattlePlan {
+  attackerCard?: SimulatedCardState;
+}
+
+interface LuminarchSummonExtra {
+  cannotAttackThisTurn?: boolean;
+  _simulatedMoonbladeRevive?: boolean;
+  _simulatedHalberdFollowUp?: boolean;
+  _simulatedHalberdReason?: string;
+  _simulatedMarshalSelfSummon?: boolean;
+}
+
+interface LuminarchLpPaymentInput {
+  cardName: string;
+  cost: number;
+  beforeLp: number;
+  afterLp: number;
+  createsWall?: boolean;
+  createsPayoff?: boolean;
+  opponentThreat?: number;
+  risky?: boolean;
+}
+
+interface PrepareLuminarchBattleInput {
+  state: LuminarchState;
+  attacker: SimulatedCardState;
+  target: SimulatedCardState | null;
+  opponent: Partial<SimulatedPlayerState>;
+}
+
+interface ApplyLuminarchBattleRewardsInput {
+  state: LuminarchState;
+  battlePlan?: LuminarchBattlePlan;
+  summary?: LuminarchBattleSummary;
+  bot?: SimulatedPlayerState;
+}
+
+interface ScoreLuminarchBattleInput {
+  attacker?: SimulatedCardState;
+  target?: SimulatedCardState | null;
+  lethalNow?: boolean;
+  attackerSurvived?: boolean;
+  targetSurvived?: boolean;
+  summary?: LuminarchBattleSummary;
+  simState?: LuminarchState;
+  opponent?: Partial<SimulatedPlayerState>;
+  isSecondAttack?: boolean;
+}
+
+type EnsuredLuminarchMeta = Omit<
+  SimulatedLuminarchState,
+  "lpPayments" | "milestones" | "battleEvents"
+> & {
+  lpPayments: LuminarchLpPaymentInput[];
+  milestones: string[];
+  battleEvents: LuminarchBattleEvent[];
+};
 
 const BARBARIAS_NAME = "Luminarch Megashield Barbarias";
 const CITADEL_NAME = "Sanctum of the Luminarch Citadel";
@@ -29,11 +289,18 @@ const MOONBLADE_CAPTAIN_NAME = "Luminarch Moonblade Captain";
 const SUNFORGED_BLADE_NAME = "Luminarch Sunforged Blade";
 const VALIANT_NAME = "Luminarch Valiant - Knight of the Dawn";
 
-export function rankLuminarchSearchCandidates(cards, action = {}, ctx = {}) {
+export function rankLuminarchSearchCandidates(
+  cards: SimulatedCardState[],
+  action: Partial<LuminarchAction> = {},
+  ctx: LuminarchSearchContext = {},
+): SimulatedCardState[] {
   if (!Array.isArray(cards) || cards.length <= 1) return cards || [];
-  const player = ctx.player || ctx.strategy?.bot || {};
+  const player = (ctx.player ||
+    ctx.strategy?.bot || {}) as SimulatedPlayerState;
   const opponent =
-    ctx.opponent || ctx.getOpponent?.(ctx.game || {}, player) || {};
+    (ctx.opponent ||
+      ctx.getOpponent?.(ctx.game as LuminarchState, player) ||
+      {}) as SimulatedPlayerState;
   const hand = player.hand || [];
   const field = player.field || [];
   const spellTrap = player.spellTrap || [];
@@ -41,7 +308,8 @@ export function rankLuminarchSearchCandidates(cards, action = {}, ctx = {}) {
   const sourceName = ctx.source?.name || ctx.sourceCard?.name || "";
   const isValiantSearch = sourceName === VALIANT_NAME;
   const isArbiterSearch = sourceName === ARBITER_NAME;
-  const isCitadel = (card) => (card?.name || "").includes("Citadel");
+  const isCitadel = (card: SimulatedCardState | null | undefined) =>
+    (card?.name || "").includes("Citadel");
   const hasActiveCitadel = isCitadel(player.fieldSpell);
   const hasCitadelInHand = hand.some(isCitadel);
   const hasCitadelAccess = hasActiveCitadel || hasCitadelInHand;
@@ -76,14 +344,16 @@ export function rankLuminarchSearchCandidates(cards, action = {}, ctx = {}) {
   const analysis = buildStrategyAnalysis({
     bot: player,
     opponent,
-    game: ctx.game,
+    game: ctx.game as NonNullable<
+      Parameters<typeof buildStrategyAnalysis>[0]
+    >["game"],
   });
   const preferredSearchNames =
     ctx.ctx?.activationContext?.actionContext?.preferredSearchNames ||
     ctx.activationContext?.actionContext?.preferredSearchNames ||
     [];
 
-  const scoreCard = (card) => {
+  const scoreCard = (card: SimulatedCardState | null | undefined) => {
     if (!card) return -999;
     let score = estimateCardValue(card, {
       archetype: "Luminarch",
@@ -92,7 +362,7 @@ export function rankLuminarchSearchCandidates(cards, action = {}, ctx = {}) {
     });
     if (!isLuminarch(card)) score -= 20;
     if (namesInHand.has(card.name)) score -= 4;
-    if (preferredSearchNames.includes(card.name)) score += 100;
+    if (preferredSearchNames.includes(card.name as string)) score += 100;
 
     if (card.cardKind === "monster") {
       if (card.name === AEGISBEARER_NAME && !hasTank) score += 60;
@@ -115,7 +385,7 @@ export function rankLuminarchSearchCandidates(cards, action = {}, ctx = {}) {
         }
         if (card.name === MAGIC_SICKLE_NAME) score += underPressure ? 28 : 10;
       }
-      if (underPressure && !hasTank && card.def >= 2000) score += 20;
+      if (underPressure && !hasTank && (card.def as number) >= 2000) score += 20;
       return score;
     }
 
@@ -143,7 +413,7 @@ export function rankLuminarchSearchCandidates(cards, action = {}, ctx = {}) {
     if (card.name === "Luminarch Knights Convocation") {
       const convocationDecision = shouldPlaySpell(card, analysis);
       score += convocationDecision.yes
-        ? convocationDecision.priority * 4
+        ? (convocationDecision.priority as number) * 4
         : -40;
     }
     if (card.name === SUNFORGED_BLADE_NAME) {
@@ -157,12 +427,12 @@ export function rankLuminarchSearchCandidates(cards, action = {}, ctx = {}) {
 }
 
 export function simulateLuminarchSearch(
-  player,
-  sourceCard,
-  action,
-  state,
-  options = {},
-) {
+  player: SimulatedPlayerState,
+  sourceCard: SimulatedCardState,
+  action: Partial<LuminarchAction>,
+  state: LuminarchState,
+  options: LuminarchSimulationOptions = {},
+): SimulatedCardState | null {
   if (!player || !Array.isArray(player.deck) || player.deck.length === 0) {
     return null;
   }
@@ -195,7 +465,21 @@ export function simulateLuminarchSearch(
   return moved;
 }
 
-function handleLuminarchAfterSummon({ state, action, player, card, newCard, options }) {
+function handleLuminarchAfterSummon({
+  state,
+  action,
+  player,
+  card,
+  newCard,
+  options,
+}: {
+  state: LuminarchState;
+  action: LuminarchAction;
+  player: SimulatedPlayerState;
+  card: SimulatedCardState;
+  newCard: SimulatedCardState;
+  options: LuminarchSimulationOptions;
+}): void {
   if (
     card.name === "Luminarch Valiant - Knight of the Dawn" &&
     !action.facedown
@@ -235,7 +519,7 @@ function handleSanctumProtectorShortcut({
   action,
   resolveSimulatedHandIndex,
   resolveSimulatedFieldIndex,
-}) {
+}: LuminarchActionOverrideInput): true {
   const player = state.bot;
   const handIndex = resolveSimulatedHandIndex(
     player,
@@ -262,7 +546,7 @@ function handleSanctumProtectorShortcut({
   const protector = player.hand[handIndex];
   player.hand.splice(handIndex, 1);
   const newCard = { ...protector };
-  newCard.position = action.position || "defense";
+  newCard.position = (action.position || "defense") as "attack" | "defense";
   newCard.isFacedown = false;
   newCard.hasAttacked = false;
   newCard.attacksUsedThisTurn = 0;
@@ -277,7 +561,9 @@ function handleSanctumProtectorShortcut({
   return true;
 }
 
-function ensureLuminarchSimMeta(state) {
+function ensureLuminarchSimMeta(
+  state: LuminarchState,
+): EnsuredLuminarchMeta {
   if (!state._simLuminarch) {
     state._simLuminarch = {
       lpPayments: [],
@@ -294,10 +580,13 @@ function ensureLuminarchSimMeta(state) {
   if (!Array.isArray(state._simLuminarch.battleEvents)) {
     state._simLuminarch.battleEvents = [];
   }
-  return state._simLuminarch;
+  return state._simLuminarch as EnsuredLuminarchMeta;
 }
 
-function recordLuminarchBattleEvent(state, event = {}) {
+function recordLuminarchBattleEvent(
+  state: LuminarchState,
+  event: LuminarchBattleEvent = {},
+): LuminarchBattleEvent | null {
   const tag = event?.tag || event?.type;
   if (!tag) return null;
   const meta = ensureLuminarchSimMeta(state);
@@ -309,18 +598,23 @@ function recordLuminarchBattleEvent(state, event = {}) {
   return entry;
 }
 
-function getOpponentStrongestAttack(state) {
+function getOpponentStrongestAttack(state: LuminarchState): number {
   return getStrongestAttackThreat(state?.player?.field || [], {
     facedownValue: 1500,
     includeBoosts: false,
   });
 }
 
-function isLuminarchMonster(card) {
+function isLuminarchMonster(
+  card: GameCard | SimulatedCardState | null | undefined,
+): boolean {
   return card?.cardKind === "monster" && isLuminarch(card);
 }
 
-function getCounterValue(card, counterType) {
+function getCounterValue(
+  card: LuminarchCounterCard | null | undefined,
+  counterType: "solar",
+): number {
   if (!card || !counterType) return 0;
   if (typeof card.getCounter === "function") {
     return Number(card.getCounter(counterType) || 0);
@@ -329,12 +623,18 @@ function getCounterValue(card, counterType) {
     return Number(card.counters.get(counterType) || 0);
   }
   if (card.counters && typeof card.counters === "object") {
-    return Number(card.counters[counterType] || 0);
+    return Number(
+      (card.counters as LuminarchCounterObject)[counterType] || 0,
+    );
   }
   return 0;
 }
 
-function setCounterValue(card, counterType, value) {
+function setCounterValue(
+  card: LuminarchCounterCard | null | undefined,
+  counterType: "solar",
+  value: number,
+): void {
   if (!card || !counterType) return;
   const next = Math.max(0, Number(value || 0));
   if (typeof card.setCounter === "function") {
@@ -346,22 +646,30 @@ function setCounterValue(card, counterType, value) {
     return;
   }
   if (!card.counters || typeof card.counters !== "object") card.counters = {};
-  card.counters[counterType] = next;
+  (card.counters as LuminarchCounterObject)[counterType] = next;
 }
 
-function addCounterValue(card, counterType, amount = 1) {
+function addCounterValue(
+  card: LuminarchCounterCard | null | undefined,
+  counterType: "solar",
+  amount = 1,
+): number {
   const next = getCounterValue(card, counterType) + Math.max(0, Number(amount || 0));
   setCounterValue(card, counterType, next);
   return next;
 }
 
-function hasFaceupBarbarias(player = {}) {
+function hasFaceupBarbarias(
+  player: Partial<SimulatedPlayerState> = {},
+): boolean {
   return (player.field || []).some(
     (card) => card?.name === BARBARIAS_NAME && !card.isFacedown,
   );
 }
 
-function collectSunforgedBlades(player = {}) {
+function collectSunforgedBlades(
+  player: Partial<SimulatedPlayerState> = {},
+): Array<GameCard | SimulatedCardState> {
   const fromSpellTrap = (player.spellTrap || []).filter(
     (card) => card?.name === SUNFORGED_BLADE_NAME && !card.isFacedown,
   );
@@ -373,11 +681,17 @@ function collectSunforgedBlades(player = {}) {
   return [...new Set([...fromSpellTrap, ...fromHosts])];
 }
 
-function applySunforgedLpGainEvent(state, player = {}, rewards = []) {
+function applySunforgedLpGainEvent(
+  state: LuminarchState,
+  player: Partial<SimulatedPlayerState> = {},
+  rewards: string[] = [],
+): number {
   let counterEvents = 0;
   collectSunforgedBlades(player).forEach((blade) => {
     addCounterValue(blade, "solar", 1);
-    const host = blade.equippedTo || blade.equipTarget || null;
+    const host = (blade.equippedTo ||
+      blade.equipTarget ||
+      null) as GameCard | SimulatedCardState | null;
     if (host && isLuminarchMonster(host)) {
       host.equipAtkBonus = (host.equipAtkBonus || 0) + 200;
       host.equipDefBonus = (host.equipDefBonus || 0) + 200;
@@ -394,7 +708,14 @@ function applySunforgedLpGainEvent(state, player = {}, rewards = []) {
   return counterEvents;
 }
 
-function applyNewLuminarchLpGain(state, player, amount, sourceName, summary, rewards) {
+function applyNewLuminarchLpGain(
+  state: LuminarchState,
+  player: SimulatedPlayerState,
+  amount: number,
+  sourceName: string,
+  summary: LuminarchBattleSummary | null | undefined,
+  rewards: string[],
+): number {
   const base = Math.max(0, Math.floor(Number(amount || 0)));
   if (!player || base <= 0) return 0;
   const doubled = hasFaceupBarbarias(player);
@@ -431,7 +752,12 @@ function applyNewLuminarchLpGain(state, player, amount, sourceName, summary, rew
   return gained;
 }
 
-function finalizeExistingLuminarchLpGains(state, player, summary, rewards) {
+function finalizeExistingLuminarchLpGains(
+  state: LuminarchState,
+  player: SimulatedPlayerState,
+  summary: LuminarchBattleSummary,
+  rewards: string[],
+): void {
   const gains = Array.isArray(summary?.lpGains) ? summary.lpGains : [];
   gains
     .filter((gain) => !gain._luminarchProcessed)
@@ -467,11 +793,15 @@ function finalizeExistingLuminarchLpGains(state, player, summary, rewards) {
     });
 }
 
-function hasOpenMonsterZone(player) {
+function hasOpenMonsterZone(
+  player: Partial<SimulatedPlayerState> | null | undefined,
+): boolean {
   return (player?.field || []).length < 5;
 }
 
-function getContextOpponent(context = {}) {
+function getContextOpponent(
+  context: LuminarchPositionContext = {},
+): Partial<SimulatedPlayerState> {
   if (context.opponent) return context.opponent;
   if (context.state?._isPerspectiveState) return context.state.player || {};
   if (context.game?._isPerspectiveState) return context.game.player || {};
@@ -487,19 +817,26 @@ function getContextOpponent(context = {}) {
     context.options &&
     typeof context.options.getOpponent === "function"
   ) {
-    return context.options.getOpponent(context.game || context.state || {}, context.player) || {};
+    return context.options.getOpponent(
+      (context.game || context.state || {}) as LuminarchState,
+      context.player,
+    ) || {};
   }
   return context.state?.player || context.game?.player || {};
 }
 
-function getOpponentStrongestAttackFromContext(context = {}) {
+function getOpponentStrongestAttackFromContext(
+  context: LuminarchPositionContext = {},
+): number {
   return getStrongestAttackThreat(getContextOpponent(context)?.field || [], {
     facedownValue: 1500,
     includeBoosts: false,
   });
 }
 
-function getActionContext(context = {}) {
+function getActionContext(
+  context: LuminarchPositionContext = {},
+): LuminarchActionContext {
   return (
     context.action?.activationContext?.actionContext ||
     context.sourceAction?.activationContext?.actionContext ||
@@ -508,22 +845,34 @@ function getActionContext(context = {}) {
   );
 }
 
-function getPreferredSpecialSummonPosition(card, context = {}) {
+function getPreferredSpecialSummonPosition(
+  card: SimulatedCardState,
+  context: LuminarchPositionContext = {},
+): "attack" | "defense" | null {
   const actionContext = getActionContext(context);
   const special = actionContext.specialSummonPositions || {};
   const fusion = actionContext.fusionPositions || {};
   const targetRef = context.action?.targetRef || context.sourceAction?.targetRef;
   const byTarget =
-    targetRef && special.byTargetRef ? special.byTargetRef[targetRef] : null;
+    targetRef && special.byTargetRef
+      ? special.byTargetRef[targetRef as "moonblade_revive_target"]
+      : null;
   const byName =
-    card?.name && special.byName ? special.byName[card.name] : null;
+    card?.name && special.byName
+      ? special.byName[card.name as LuminarchPositionName]
+      : null;
   const fusionByName =
-    card?.name && fusion.byName ? fusion.byName[card.name] : null;
+    card?.name && fusion.byName
+      ? fusion.byName[card.name as LuminarchPositionName]
+      : null;
   const preferred = byTarget || byName || special.default || fusionByName;
   return preferred === "attack" || preferred === "defense" ? preferred : null;
 }
 
-export function chooseLuminarchSpecialSummonPosition(card, context = {}) {
+export function chooseLuminarchSpecialSummonPosition(
+  card: SimulatedCardState,
+  context: LuminarchPositionContext = {},
+): "attack" | "defense" {
   const actionPosition = context.action?.position;
   if (actionPosition && actionPosition !== "choice") return actionPosition;
 
@@ -555,7 +904,12 @@ export function chooseLuminarchSpecialSummonPosition(card, context = {}) {
   return "attack";
 }
 
-function pushSimulatedFieldMonster(player, card, position, extra = {}) {
+function pushSimulatedFieldMonster(
+  player: SimulatedPlayerState,
+  card: SimulatedCardState,
+  position: "attack" | "defense",
+  extra: LuminarchSummonExtra = {},
+): SimulatedCardState {
   const newCard = {
     ...card,
     position,
@@ -568,7 +922,13 @@ function pushSimulatedFieldMonster(player, card, position, extra = {}) {
   return newCard;
 }
 
-function simulateMoonbladeCaptainRevive(state, player, sourceCard, action, options) {
+function simulateMoonbladeCaptainRevive(
+  state: LuminarchState,
+  player: SimulatedPlayerState,
+  sourceCard: SimulatedCardState,
+  action: LuminarchAction,
+  options: LuminarchSimulationOptions,
+): SimulatedCardState | null {
   if (!player || !hasOpenMonsterZone(player)) return null;
   const candidates = (player.graveyard || []).filter(
     (card) =>
@@ -629,7 +989,11 @@ function simulateMoonbladeCaptainRevive(state, player, sourceCard, action, optio
   return summoned;
 }
 
-function simulateEnchantedHalberdFollowUp(state, player, reason = "special_summon") {
+function simulateEnchantedHalberdFollowUp(
+  state: LuminarchState,
+  player: SimulatedPlayerState,
+  reason = "special_summon",
+): SimulatedCardState | null {
   const meta = ensureLuminarchSimMeta(state);
   if (meta.halberdSummonedThisTurn) return null;
   if (!hasOpenMonsterZone(player)) return null;
@@ -651,9 +1015,16 @@ function simulateEnchantedHalberdFollowUp(state, player, reason = "special_summo
 }
 
 function recordLuminarchLpPayment(
-  state,
-  { cardName, cost, beforeLp, afterLp, createsWall = false, createsPayoff = false },
-) {
+  state: LuminarchState,
+  {
+    cardName,
+    cost,
+    beforeLp,
+    afterLp,
+    createsWall = false,
+    createsPayoff = false,
+  }: LuminarchLpPaymentInput,
+): void {
   const meta = ensureLuminarchSimMeta(state);
   const opponentThreat = getOpponentStrongestAttack(state);
   const risky =
@@ -681,7 +1052,7 @@ function simulateCelestialMarshalHandIgnition({
   action,
   options,
   resolveSimulatedHandIndex,
-}) {
+}: LuminarchActionOverrideInput): false | { handled: true } {
   const player = state.bot;
   if (!player || !hasOpenMonsterZone(player)) return { handled: true };
 
@@ -730,7 +1101,9 @@ function simulateCelestialMarshalHandIgnition({
   return { handled: true };
 }
 
-function handleLuminarchHandIgnitionOverride(args) {
+function handleLuminarchHandIgnitionOverride(
+  args: LuminarchActionOverrideInput,
+): false | { handled: true } {
   const player = args.state?.bot;
   const handIndex = args.resolveSimulatedHandIndex(player, args.action, "monster");
   const card = player?.hand?.[handIndex];
@@ -740,7 +1113,13 @@ function handleLuminarchHandIgnitionOverride(args) {
   return false;
 }
 
-function handleLuminarchMonsterEffect({ card, options }) {
+function handleLuminarchMonsterEffect({
+  card,
+  options,
+}: {
+  card: SimulatedCardState;
+  options: LuminarchSimulationOptions;
+}): boolean {
   if (card.name !== BARBARIAS_NAME) return false;
   const target = card.position === "defense" ? card : null;
   if (!target) return true;
@@ -753,7 +1132,10 @@ function handleLuminarchMonsterEffect({ card, options }) {
   return true;
 }
 
-function simulatePureKnightSearch(player, pureKnight) {
+function simulatePureKnightSearch(
+  player: SimulatedPlayerState,
+  pureKnight: SimulatedCardState,
+): boolean {
   const citadelIndex = (player.deck || []).findIndex(
     (card) => card?.name === CITADEL_NAME,
   );
@@ -770,7 +1152,13 @@ function handleLuminarchFusionSummon({
   fusionCard,
   materials,
   options,
-}) {
+}: {
+  state: LuminarchState;
+  player: SimulatedPlayerState;
+  fusionCard: SimulatedCardState;
+  materials?: SimulatedCardState[];
+  options?: LuminarchSimulationOptions;
+}): void {
   if (!fusionCard || !player) return;
 
   const meta = ensureLuminarchSimMeta(state);
@@ -790,7 +1178,7 @@ function handleLuminarchFusionSummon({
     fusionCard._simulatedRole = "citadel_access";
     fusionCard._simulatedLpCostReductionAvailable = true;
     fusionCard._simulatedMaterialsUsed = (materials || []).map(
-      (card) => card?.name,
+      (card) => card?.name as string,
     );
     meta.pureKnightDiscountAvailable = true;
     meta.milestones.push("pure_knight_fusion");
@@ -803,7 +1191,7 @@ function handleLuminarchFusionSummon({
     fusionCard._simulatedRole = "defensive_wall";
     fusionCard._simulatedLpPayoff = true;
     fusionCard._simulatedMaterialsUsed = (materials || []).map(
-      (card) => card?.name,
+      (card) => card?.name as string,
     );
     meta.barbariasLpPayoff = true;
     meta.milestones.push("barbarias_fusion_wall");
@@ -811,7 +1199,17 @@ function handleLuminarchFusionSummon({
   }
 }
 
-function handleLuminarchAfterSpecialSummon({ state, player, card, sourceCard }) {
+function handleLuminarchAfterSpecialSummon({
+  state,
+  player,
+  card,
+  sourceCard,
+}: {
+  state: LuminarchState;
+  player: SimulatedPlayerState;
+  card: SimulatedCardState;
+  sourceCard?: SimulatedCardState | null;
+}): void {
   if (!card || !isLuminarch(card)) return;
   if (
     card.name === AEGISBEARER_NAME &&
@@ -828,7 +1226,17 @@ function handleLuminarchAfterSpecialSummon({ state, player, card, sourceCard }) 
   );
 }
 
-function handleLuminarchEffectActivated({ state, player, card, effect }) {
+function handleLuminarchEffectActivated({
+  state,
+  player,
+  card,
+  effect,
+}: {
+  state: LuminarchState;
+  player: SimulatedPlayerState;
+  card: SimulatedCardState;
+  effect: EffectDefinition;
+}): void {
   if (!card || !effect || !player) return;
   if (card.name === MAGIC_SICKLE_NAME) {
     ensureLuminarchSimMeta(state).milestones.push("sickle_spell_recovery");
@@ -836,7 +1244,7 @@ function handleLuminarchEffectActivated({ state, player, card, effect }) {
 
   const lpCost = (effect.actions || []).reduce((sum, action) => {
     if (action?.type !== "pay_lp") return sum;
-    return sum + (Number.isFinite(action.amount) ? action.amount : 0);
+    return sum + (Number.isFinite(action.amount) ? action.amount as number : 0);
   }, 0);
   if (lpCost <= 0) return;
 
@@ -857,7 +1265,7 @@ function handleLuminarchEffectActivated({ state, player, card, effect }) {
     card.name === PURE_KNIGHT_NAME;
 
   recordLuminarchLpPayment(state, {
-    cardName: card.name,
+    cardName: card.name as string,
     cost: lpCost,
     beforeLp,
     afterLp: player.lp || 0,
@@ -869,11 +1277,20 @@ function handleLuminarchEffectActivated({ state, player, card, effect }) {
   }
 }
 
-function getLuminarchFieldEffectTargetPreference({ fieldSpell, options }) {
+function getLuminarchFieldEffectTargetPreference({
+  fieldSpell,
+  options,
+}: {
+  fieldSpell: SimulatedCardState;
+  options: LuminarchSimulationOptions;
+}): unknown {
   return fieldSpell.name?.includes("Citadel") ? options.citadelTempBuff : null;
 }
 
-function wouldAttackerBeDestroyedByBattle(attacker, target) {
+function wouldAttackerBeDestroyedByBattle(
+  attacker: SimulatedCardState | null | undefined,
+  target: SimulatedCardState | null | undefined,
+): boolean {
   if (!attacker || !target || target.cardKind !== "monster") return false;
   if (target.position !== "attack") return false;
   const attackStat = getEffectiveAtk(attacker);
@@ -881,7 +1298,11 @@ function wouldAttackerBeDestroyedByBattle(attacker, target) {
   return attackStat <= targetStat;
 }
 
-function analyzeMagicSickleBattleImpact(attacker, target, opponent) {
+function analyzeMagicSickleBattleImpact(
+  attacker: SimulatedCardState | null | undefined,
+  target: SimulatedCardState | null | undefined,
+  opponent: Partial<SimulatedPlayerState> | null | undefined,
+) {
   const empty = {
     changed: false,
     directLethal: false,
@@ -944,7 +1365,12 @@ function analyzeMagicSickleBattleImpact(attacker, target, opponent) {
   };
 }
 
-function prepareMagicSickleBattleBoost(state, attacker, target, opponent) {
+function prepareMagicSickleBattleBoost(
+  state: LuminarchState,
+  attacker: SimulatedCardState,
+  target: SimulatedCardState | null,
+  opponent: Partial<SimulatedPlayerState>,
+): string | null {
   const player = state?.bot;
   const meta = ensureLuminarchSimMeta(state);
   if (!player || meta.magicSickleBattleUsed) return null;
@@ -971,13 +1397,19 @@ function prepareMagicSickleBattleBoost(state, attacker, target, opponent) {
   return "Magic Sickle changed combat";
 }
 
-function prepareSunforgedBattleProtection(state, attacker, target) {
+function prepareSunforgedBattleProtection(
+  state: LuminarchState,
+  attacker: SimulatedCardState,
+  target: SimulatedCardState | null,
+): string | null {
   const player = state?.bot;
   const meta = ensureLuminarchSimMeta(state);
   if (!player || meta.sunforgedBattleProtectionUsed) return null;
   if (!isLuminarchMonster(attacker)) return null;
   const blade = collectSunforgedBlades(player).find((candidate) => {
-    const host = candidate?.equippedTo || candidate?.equipTarget || null;
+    const host = (candidate?.equippedTo ||
+      candidate?.equipTarget ||
+      null) as GameCard | SimulatedCardState | null;
     return host === attacker;
   });
   if (!blade) return null;
@@ -1014,8 +1446,8 @@ export function prepareLuminarchSimulatedBattle({
   attacker,
   target,
   opponent,
-} = {}) {
-  const rewards = [];
+}: PrepareLuminarchBattleInput = {} as PrepareLuminarchBattleInput): string[] {
+  const rewards: string[] = [];
   const sickle = prepareMagicSickleBattleBoost(state, attacker, target, opponent);
   if (sickle) rewards.push(sickle);
   const sunforged = prepareSunforgedBattleProtection(state, attacker, target);
@@ -1028,9 +1460,9 @@ export function applyLuminarchSimulatedBattleRewards({
   battlePlan,
   summary,
   bot,
-} = {}) {
-  const player = bot || state?.bot || {};
-  const rewards = [];
+}: ApplyLuminarchBattleRewardsInput = {} as ApplyLuminarchBattleRewardsInput): string[] {
+  const player = (bot || state?.bot || {}) as SimulatedPlayerState;
+  const rewards: string[] = [];
   if (!summary) return rewards;
 
   finalizeExistingLuminarchLpGains(state, player, summary, rewards);
@@ -1118,11 +1550,13 @@ const LUMINARCH_WALL_BATTLE_NAMES = new Set([
   "Luminarch Aurora Seraph",
 ]);
 
-function clampBattleScore(value, min, max) {
+function clampBattleScore(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
 
-function getBattleCardValue(card) {
+function getBattleCardValue(
+  card: SimulatedCardState | null | undefined,
+): number {
   if (!card || card.cardKind !== "monster") return 0;
   const battleStat = getBattleStatForAttackTarget(card, { facedownValue: 1500 });
   const printedBest = Math.max(Number(card.atk || 0), Number(card.def || 0));
@@ -1130,7 +1564,10 @@ function getBattleCardValue(card) {
   return Math.max(battleStat, printedBest, levelValue);
 }
 
-function getRawBattleStatForAttackTarget(card, { facedownValue = 1500 } = {}) {
+function getRawBattleStatForAttackTarget(
+  card: SimulatedCardState | null | undefined,
+  { facedownValue = 1500 }: { facedownValue?: number } = {},
+): number {
   if (!card || card.cardKind !== "monster") return 0;
   if (card.isFacedown) return facedownValue;
   return card.position === "defense"
@@ -1138,7 +1575,9 @@ function getRawBattleStatForAttackTarget(card, { facedownValue = 1500 } = {}) {
     : Math.max(0, Number(card.atk || 0));
 }
 
-function isTemporarilyZeroedBattleTarget(card) {
+function isTemporarilyZeroedBattleTarget(
+  card: SimulatedCardState | null | undefined,
+): boolean {
   if (!card || card.cardKind !== "monster" || card.isFacedown) return false;
   const battleStat = getRawBattleStatForAttackTarget(card);
   if (battleStat > 0) return false;
@@ -1149,7 +1588,10 @@ function isTemporarilyZeroedBattleTarget(card) {
   return atkWasReduced;
 }
 
-function estimateRawBattleDamage(attacker, target) {
+function estimateRawBattleDamage(
+  attacker: SimulatedCardState | null | undefined,
+  target: SimulatedCardState | null | undefined,
+): number {
   if (!attacker || !target || target.cardKind !== "monster") return 0;
   const attack = Math.max(0, Number(attacker.atk || 0));
   const targetStat = getRawBattleStatForAttackTarget(target);
@@ -1158,7 +1600,10 @@ function estimateRawBattleDamage(attacker, target) {
   return getPiercingDamage(attacker, attack, targetStat);
 }
 
-function sameBattleCardIdentity(a, b) {
+function sameBattleCardIdentity(
+  a: SimulatedCardState | null | undefined,
+  b: SimulatedCardState | null | undefined,
+): boolean {
   if (!a || !b) return false;
   if (a === b) return true;
   if (a.instanceId != null && b.instanceId != null) {
@@ -1167,7 +1612,10 @@ function sameBattleCardIdentity(a, b) {
   return a.name === b.name;
 }
 
-function hasOtherZeroedAttackTarget(opponent = {}, target) {
+function hasOtherZeroedAttackTarget(
+  opponent: Partial<SimulatedPlayerState> = {},
+  target: SimulatedCardState | null | undefined,
+): boolean {
   return (opponent.field || []).some(
     (card) =>
       card &&
@@ -1177,14 +1625,16 @@ function hasOtherZeroedAttackTarget(opponent = {}, target) {
   );
 }
 
-function getSummaryLpGain(summary = {}) {
+function getSummaryLpGain(summary: LuminarchBattleSummary = {}): number {
   return (summary.lpGains || []).reduce(
     (sum, gain) => sum + Math.max(0, Number(gain?.amount || 0)),
     0,
   );
 }
 
-function getVisibleAttackTotal(player = {}) {
+function getVisibleAttackTotal(
+  player: Partial<SimulatedPlayerState> = {},
+): number {
   return (player.field || []).reduce((sum, card) => {
     if (!card || card.cardKind !== "monster" || card.isFacedown) return sum;
     if (card.position === "defense") return sum;
@@ -1192,7 +1642,7 @@ function getVisibleAttackTotal(player = {}) {
   }, 0);
 }
 
-function rewardMatches(rewards = [], pattern) {
+function rewardMatches(rewards: string[] = [], pattern: RegExp): boolean {
   return rewards.some((name) => pattern.test(String(name || "")));
 }
 
@@ -1206,7 +1656,7 @@ export function scoreLuminarchBattleAttackCandidate({
   simState,
   opponent,
   isSecondAttack = false,
-} = {}) {
+}: ScoreLuminarchBattleInput = {}): number {
   if (!attacker || !isLuminarch(attacker)) return 0;
   const rewards = summary?.rewardNames || [];
   const battleEvents = simState?._simLuminarch?.battleEvents || [];
@@ -1287,7 +1737,7 @@ export function scoreLuminarchBattleAttackCandidate({
   if (!attackerSurvived && !lethalNow) {
     const wallLoss =
       attacker.mustBeAttacked ||
-      LUMINARCH_WALL_BATTLE_NAMES.has(attacker.name);
+      LUMINARCH_WALL_BATTLE_NAMES.has(attacker.name as string);
     if (destroyedTarget && removedThreatValue >= getBattleCardValue(attacker)) {
       delta -= wallLoss ? 0.8 : 0.3;
     } else {
@@ -1298,8 +1748,9 @@ export function scoreLuminarchBattleAttackCandidate({
     delta -= damageTaken > 0 || positiveDamage <= 0 ? 1.3 : 0.6;
   }
 
-  const botAfter = simState?.bot || {};
-  const opponentAfter = opponent || simState?.player || {};
+  const botAfter = (simState?.bot || {}) as Partial<SimulatedPlayerState>;
+  const opponentAfter = (opponent ||
+    simState?.player || {}) as Partial<SimulatedPlayerState>;
   const exposedToLethal =
     Number(botAfter.lp || 0) > 0 &&
     getVisibleAttackTotal(opponentAfter) >= Number(botAfter.lp || 0);
@@ -1310,9 +1761,11 @@ export function scoreLuminarchBattleAttackCandidate({
   return clampBattleScore(delta, -5, 8);
 }
 
-function prepareLuminarchAction(action) {
-  if (!action) return action;
-  const prepared = { ...action };
+function prepareLuminarchAction(
+  action: AIPlannedAction,
+): LuminarchAction {
+  if (!action) return action as LuminarchAction;
+  const prepared = { ...action } as LuminarchAction;
   if (
     prepared.type === "spell" &&
     prepared.cardName === "Polymerization" &&
@@ -1324,10 +1777,10 @@ function prepareLuminarchAction(action) {
 }
 
 export function simulateLuminarchMainPhaseAction(
-  state,
-  action,
-  options = {},
-) {
+  state: LuminarchState,
+  action: AIPlannedAction,
+  options: LuminarchSimulationOptions = {},
+): LuminarchState {
   const preparedAction = prepareLuminarchAction(action);
   return applyGenericSimulatedMainPhaseAction(state, preparedAction, {
     archetype: "Luminarch",
@@ -1341,7 +1794,10 @@ export function simulateLuminarchMainPhaseAction(
     onFusionSummon: handleLuminarchFusionSummon,
     onMonsterEffect: handleLuminarchMonsterEffect,
     getFieldEffectTargetPreference: getLuminarchFieldEffectTargetPreference,
-    chooseSpecialSummonPosition: (card, context) =>
+    chooseSpecialSummonPosition: (
+      card: SimulatedCardState,
+      context: LuminarchPositionContext,
+    ) =>
       chooseLuminarchSpecialSummonPosition(card, {
         state,
         game: context?.game || state,
@@ -1358,7 +1814,11 @@ export function simulateLuminarchMainPhaseAction(
   });
 }
 
-export function simulateLuminarchSpellEffect(state, card, options = {}) {
+export function simulateLuminarchSpellEffect(
+  state: LuminarchState,
+  card: SimulatedCardState,
+  options: LuminarchSimulationOptions = {},
+): void {
   return simulateGenericSpellEffect(state, card, {
     archetype: "Luminarch",
     preferDefense: true,
