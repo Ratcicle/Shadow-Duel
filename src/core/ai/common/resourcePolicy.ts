@@ -1,20 +1,125 @@
-function getCountsByZone(economy = {}) {
+interface ResourceFlags {
+  shouldPreserve?: boolean;
+  bahamutReady?: boolean;
+  critical?: boolean;
+  needsRecovery?: boolean;
+}
+
+interface ResourceThresholds {
+  preserveAt?: number;
+  useful?: number;
+  criticalAt?: number;
+  critical?: number;
+  recoveryStrandedMin?: number;
+}
+
+interface ResourceEconomyView {
+  countsByZone?: object;
+  flags?: ResourceFlags;
+  resourceName?: string;
+  totalAccessibleResources?: number;
+  totalStrandedResources?: number;
+  totalAccessible?: number;
+  totalStranded?: number;
+  resourceEconomy?: ResourceEconomyView;
+}
+
+interface ResourceModePolicy {
+  zone?: string;
+  amount?: number;
+  baseDelta?: number;
+  usePressurePreserve?: boolean;
+  preservePenalty?: number;
+  penaltyPerResource?: number;
+  penalizeWhenRecovering?: boolean;
+  recoveryPenalty?: number;
+  blockWhenPreserving?: boolean;
+  recoveryBonus?: number;
+  bonusWhenPreserving?: boolean;
+  preserveBonus?: number;
+}
+
+interface ResourcePolicy {
+  resourceName?: string;
+  primaryZone?: string;
+  thresholds?: ResourceThresholds;
+  recoveryStrandedMin?: number;
+  minAccessible?: number;
+  defaultPreservePenalty?: number;
+  penaltyPerResource?: number;
+  recoverySpendPenalty?: number;
+  spendModes?: object;
+  defaultRecoveryBonus?: number;
+  recoveryPreserveBonus?: number;
+  recoveryModes?: object;
+}
+
+interface ResourcePressureContext {
+  preserveForPayoff?: boolean;
+  preserve?: boolean;
+}
+
+interface ResourceSpend {
+  mode?: string;
+  zone?: string;
+  amount?: number;
+  baseDelta?: number;
+  preservePenalty?: number;
+  penaltyPerResource?: number;
+  blockWhenCritical?: boolean;
+}
+
+interface ResourceRecovery {
+  mode?: string;
+  baseDelta?: number;
+  recoveryBonus?: number;
+}
+
+interface ResourceSpendInput {
+  economy?: ResourceEconomyView;
+  spend?: ResourceSpend;
+  policy?: ResourcePolicy;
+  context?: ResourcePressureContext;
+}
+
+interface ResourceRecoveryInput {
+  economy?: ResourceEconomyView;
+  recovery?: ResourceRecovery;
+  policy?: ResourcePolicy;
+  context?: ResourcePressureContext;
+}
+
+function getModePolicy(
+  modes: object | null | undefined,
+  mode: string,
+): ResourceModePolicy {
+  const value = modes ? Reflect.get(modes, mode) : undefined;
+  return value && typeof value === "object" ? value as ResourceModePolicy : {};
+}
+
+function getCountsByZone(economy: ResourceEconomyView = {}): object {
   return economy.countsByZone || economy.resourceEconomy?.countsByZone || {};
 }
 
-function getFlags(economy = {}) {
+function getFlags(economy: ResourceEconomyView = {}): ResourceFlags {
   return economy.flags || economy.resourceEconomy?.flags || {};
 }
 
-function getResourceName(economy = {}, policy = {}) {
+function getResourceName(
+  economy: ResourceEconomyView = {},
+  policy: ResourcePolicy = {},
+): string {
   return policy.resourceName || economy.resourceName || economy.resourceEconomy?.resourceName || "resource";
 }
 
-function getZoneCount(economy = {}, zone = "graveyard") {
-  return Number(getCountsByZone(economy)[zone] || 0);
+function getZoneCount(
+  economy: ResourceEconomyView = {},
+  zone = "graveyard",
+): number {
+  return Number(Reflect.get(getCountsByZone(economy), zone) || 0);
 }
 
-function getTotalAccessible(economy = {}) {
+function getTotalAccessible(economy: ResourceEconomyView = {}): number {
   return Number(
     economy.totalAccessibleResources ??
       economy.resourceEconomy?.totalAccessibleResources ??
@@ -23,7 +128,7 @@ function getTotalAccessible(economy = {}) {
   );
 }
 
-function getTotalStranded(economy = {}) {
+function getTotalStranded(economy: ResourceEconomyView = {}): number {
   return Number(
     economy.totalStrandedResources ??
       economy.resourceEconomy?.totalStrandedResources ??
@@ -32,7 +137,11 @@ function getTotalStranded(economy = {}) {
   );
 }
 
-export function scoreResourcePressure(economy = {}, policy = {}, context = {}) {
+export function scoreResourcePressure(
+  economy: ResourceEconomyView = {},
+  policy: ResourcePolicy = {},
+  context: ResourcePressureContext = {},
+) {
   const primaryZone = policy.primaryZone || "graveyard";
   const zoneCount = getZoneCount(economy, primaryZone);
   const totalAccessible = getTotalAccessible(economy);
@@ -57,7 +166,7 @@ export function scoreResourcePressure(economy = {}, policy = {}, context = {}) {
     totalStranded >= recoveryStrandedMin ||
     (policy.minAccessible != null && totalAccessible < policy.minAccessible);
 
-  const reasons = [];
+  const reasons: string[] = [];
   if (preserveForPayoff) reasons.push("payoff");
   if (zoneCount >= criticalAt) reasons.push("critical_threshold");
   else if (zoneCount >= preserveAt) reasons.push("preserve_threshold");
@@ -85,9 +194,9 @@ export function assessResourceSpend({
   spend = {},
   policy = {},
   context = {},
-} = {}) {
+}: ResourceSpendInput = {}) {
   const mode = spend.mode || "cost";
-  const modePolicy = policy.spendModes?.[mode] || {};
+  const modePolicy = getModePolicy(policy.spendModes, mode);
   const zone = spend.zone || modePolicy.zone || policy.primaryZone || "graveyard";
   const amount = Number(spend.amount ?? modePolicy.amount ?? 1);
   const zoneCount = getZoneCount(economy, zone);
@@ -144,10 +253,10 @@ export function assessResourceRecovery({
   recovery = {},
   policy = {},
   context = {},
-} = {}) {
+}: ResourceRecoveryInput = {}) {
   const pressure = scoreResourcePressure(economy, policy, context);
   const mode = recovery.mode || "recovery";
-  const modePolicy = policy.recoveryModes?.[mode] || {};
+  const modePolicy = getModePolicy(policy.recoveryModes, mode);
   let scoreDelta = Number(recovery.baseDelta ?? modePolicy.baseDelta ?? 0);
 
   if (pressure.shouldRecover) {

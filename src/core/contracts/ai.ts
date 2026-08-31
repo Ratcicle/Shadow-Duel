@@ -135,6 +135,7 @@ export interface SpellAIAction extends AIActionCommon {
 
 export interface SetSpellTrapAIAction extends AIActionCommon {
   type: "set_spell_trap";
+  timingRole?: "reactive_backrow" | "pre_battle_value" | "post_battle_payoff";
 }
 
 export interface SpellTrapEffectAIAction extends AIActionCommon {
