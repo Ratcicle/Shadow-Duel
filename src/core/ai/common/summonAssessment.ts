@@ -4,42 +4,214 @@ import {
   getEffectiveDef,
   getStrongestBattleStat,
 } from "./cardStats.js";
+import type { GameCard } from "../../contracts/cards.js";
+import type { SimulatedCardState } from "../../contracts/aiState.js";
 
-function includesCardValue(values, value) {
+type SummonPosition = "attack" | "defense";
+type SummonAssessmentCard = (GameCard | SimulatedCardState) & {
+  faceDown?: boolean;
+};
+type CardValueCollection<Value> =
+  | ReadonlySet<Value>
+  | readonly Value[]
+  | null
+  | undefined;
+type SummonCardGroup = "Boss" | "EnginePiece" | "KeepInHand";
+
+interface ProjectedEntryStats {
+  atk?: number;
+  def?: number;
+  projectedAtk?: number;
+  projectedDef?: number;
+}
+
+interface EntryStatProjection {
+  atk: number;
+  def: number;
+  baseAtk: number;
+  baseDef: number;
+  projected: boolean;
+}
+
+interface SummonAssessmentPlayer {
+  field?: readonly SummonAssessmentCard[];
+}
+
+interface SummonAssessmentGame {
+  phase?: string | null;
+  getOpponent?(player: SummonAssessmentPlayer): SummonAssessmentPlayer | null;
+}
+
+interface SummonAssessmentAnalysis {
+  oppField?: readonly SummonAssessmentCard[];
+  field?: readonly SummonAssessmentCard[];
+}
+
+interface SummonAssessmentAction {
+  cannotAttackThisTurn?: boolean;
+  restrictAttackThisTurn?: boolean;
+}
+
+interface SummonAssessmentProfile {
+  defaultPosition?: SummonPosition;
+  invalidScoreDelta?: number;
+  invalidReason?: string;
+  projectEntryStats?(
+    card: SummonAssessmentCard,
+    context: SummonAssessmentContext,
+    baseStats: Omit<EntryStatProjection, "projected">,
+  ): ProjectedEntryStats | null | undefined;
+  isBoss?(card: SummonAssessmentCard, context: SummonAssessmentContext): boolean;
+  bossIds?: CardValueCollection<number>;
+  bossNames?: CardValueCollection<string>;
+  isEnginePiece?(
+    card: SummonAssessmentCard,
+    context: SummonAssessmentContext,
+  ): boolean;
+  enginePieceIds?: CardValueCollection<number>;
+  enginePieceNames?: CardValueCollection<string>;
+  isKeepInHand?(
+    card: SummonAssessmentCard,
+    context: SummonAssessmentContext,
+  ): boolean;
+  keepInHandIds?: CardValueCollection<number>;
+  keepInHandNames?: CardValueCollection<string>;
+  facedownValue?: number;
+  lowImpactAtk?: number;
+  keepInHandPosition?: SummonPosition;
+  keepInHandScoreDelta?: number;
+  keepInHandReason?: string;
+  clearThreatScoreDelta?: number;
+  clearThreatReason?: string;
+  safeBossScoreDelta?: number;
+  safeBossReason?: string;
+  noImmediateAttackPenalty?: number;
+  noImmediateAttackReason?: string;
+  defenseSurvivalPenalty?: number;
+  defenseSurvivalReason?: string;
+  exposedEmergencyPenalty?: number;
+  exposedPenalty?: number;
+  exposedReason?: string;
+  noThreatReason?: string;
+  postBattlePenalty?: number;
+  postBattleReason?: string;
+  enginePieceScoreDelta?: number;
+  enginePieceReason?: string;
+  lowImpactPenalty?: number;
+  lowImpactReason?: string;
+  defaultReason?: string;
+}
+
+interface SummonAssessmentContext {
+  profile?: SummonAssessmentProfile;
+  game?: SummonAssessmentGame | null;
+  analysis?: SummonAssessmentAnalysis | null;
+  player?: SummonAssessmentPlayer | null;
+  bot?: SummonAssessmentPlayer | null;
+  opponent?: SummonAssessmentPlayer | null;
+  oppField?: readonly SummonAssessmentCard[];
+  myField?: readonly SummonAssessmentCard[];
+  phase?: string | null;
+  action?: SummonAssessmentAction | null;
+  projectEntryStats?: SummonAssessmentProfile["projectEntryStats"];
+  isBoss?: boolean;
+  isEnginePiece?: boolean;
+  isKeepInHand?: boolean;
+}
+
+interface SummonAssessmentResult {
+  shouldSummon: boolean;
+  position: SummonPosition;
+  scoreDelta: number;
+  reason: string;
+  strongestThreat?: number;
+  projectedAtk?: number;
+  projectedDef?: number;
+  baseAtk?: number;
+  baseDef?: number;
+  projectedStats?: boolean;
+}
+
+interface ProjectedAttackLineOptions {
+  facedownValue?: number;
+}
+
+interface ProjectedAttackLine {
+  projectedAtk: number;
+  destroyableCount: number;
+  bestTarget: SummonAssessmentCard | null;
+  bestTargetStat: number;
+  strongestBattleStat: number;
+  strongestFaceUpAtk: number;
+  safeInAttack: boolean;
+  canClearStrongestBattle: boolean;
+  canTradeStrongestAttack: boolean;
+}
+
+function includesCardValue<Value>(
+  values: CardValueCollection<Value>,
+  value: Value | null | undefined,
+): boolean {
   if (!value || !values) return false;
   if (values instanceof Set) return values.has(value);
   return Array.isArray(values) && values.includes(value);
 }
 
-function matchesCardGroup(card, ids, names) {
+function matchesCardGroup(
+  card: SummonAssessmentCard | null | undefined,
+  ids: CardValueCollection<number>,
+  names: CardValueCollection<string>,
+): boolean {
   return (
     includesCardValue(ids, card?.id) || includesCardValue(names, card?.name)
   );
 }
 
-function resolveGroupMatch(card, context, profile, groupName) {
-  const explicitKey = `is${groupName}`;
-  if (typeof context[explicitKey] === "boolean") return context[explicitKey];
+function resolveGroupMatch(
+  card: SummonAssessmentCard,
+  context: SummonAssessmentContext,
+  profile: SummonAssessmentProfile,
+  groupName: SummonCardGroup,
+): boolean {
+  const explicit = groupName === "Boss"
+    ? context.isBoss
+    : groupName === "EnginePiece"
+      ? context.isEnginePiece
+      : context.isKeepInHand;
+  if (typeof explicit === "boolean") return explicit;
 
-  const predicate = profile[`is${groupName}`];
+  const predicate = groupName === "Boss"
+    ? profile.isBoss
+    : groupName === "EnginePiece"
+      ? profile.isEnginePiece
+      : profile.isKeepInHand;
   if (typeof predicate === "function") {
     return !!predicate(card, context);
   }
 
-  const normalized = groupName.charAt(0).toLowerCase() + groupName.slice(1);
-  return matchesCardGroup(
-    card,
-    profile[`${normalized}Ids`],
-    profile[`${normalized}Names`],
-  );
+  if (groupName === "Boss") {
+    return matchesCardGroup(card, profile.bossIds, profile.bossNames);
+  }
+  if (groupName === "EnginePiece") {
+    return matchesCardGroup(
+      card,
+      profile.enginePieceIds,
+      profile.enginePieceNames,
+    );
+  }
+  return matchesCardGroup(card, profile.keepInHandIds, profile.keepInHandNames);
 }
 
-function normalizeProjectedStat(value, fallback) {
+function normalizeProjectedStat(value: unknown, fallback: number): number {
   const numeric = Number(value);
   return Number.isFinite(numeric) ? numeric : fallback;
 }
 
-function resolveEntryStats(card, context, profile) {
+function resolveEntryStats(
+  card: SummonAssessmentCard,
+  context: SummonAssessmentContext,
+  profile: SummonAssessmentProfile,
+): EntryStatProjection {
   const baseStats = {
     atk: getEffectiveAtk(card),
     def: getEffectiveDef(card),
@@ -80,10 +252,10 @@ function resolveEntryStats(card, context, profile) {
 }
 
 export function evaluateProjectedAttackLine(
-  projectedAtk,
-  opponentField = [],
-  options = {},
-) {
+  projectedAtk: number | null | undefined,
+  opponentField: readonly SummonAssessmentCard[] = [],
+  options: ProjectedAttackLineOptions = {},
+): ProjectedAttackLine {
   const attack = Number(projectedAtk || 0);
   const visibleMonsters = (opponentField || []).filter(
     (card) =>
@@ -126,7 +298,10 @@ export function evaluateProjectedAttackLine(
   };
 }
 
-export function assessSummonEntry(card, context = {}) {
+export function assessSummonEntry(
+  card: SummonAssessmentCard | null | undefined,
+  context: SummonAssessmentContext = {},
+): SummonAssessmentResult {
   const profile = context.profile || {};
   if (!card || card.cardKind !== "monster") {
     return {
@@ -186,7 +361,7 @@ export function assessSummonEntry(card, context = {}) {
     };
   }
 
-  const reasons = [];
+  const reasons: string[] = [];
   let position = profile.defaultPosition || "attack";
   let scoreDelta = 0;
   const canClearThreat = oppHasThreat && !cannotAttack && atk > strongestThreat;

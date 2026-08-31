@@ -1,20 +1,95 @@
-function normalizePhase(source, analysis = null) {
+import type { AIPlannedAction } from "../../contracts/ai.js";
+import type { GameCard } from "../../contracts/cards.js";
+import type { SimulatedCardState } from "../../contracts/aiState.js";
+
+type AiTimingRole = "reactive_backrow" | "pre_battle_value" | "post_battle_payoff";
+interface PhaseTimingCard {
+  id?: GameCard["id"] | number;
+  name?: string;
+  cardKind?: GameCard["cardKind"];
+  subtype?: GameCard["subtype"];
+  lastAiActivatedTurn?: number | null;
+}
+type TimingAwareAction = AIPlannedAction & {
+  timingRole?: AiTimingRole;
+  card?: GameCard | SimulatedCardState | null;
+  cardId?: number;
+  cardName?: string;
+  index?: number;
+  cardKind?: GameCard["cardKind"];
+  subtype?: GameCard["subtype"];
+};
+
+interface PhaseSource {
+  phase?: unknown;
+  turnCounter?: unknown;
+  _gameRef?: { turnCounter?: unknown } | null;
+  bot?: PhaseTimingPlayer | null;
+  player?: PhaseTimingPlayer | null;
+}
+
+interface PhaseAnalysis {
+  phase?: unknown;
+  turnCounter?: unknown;
+  game?: PhaseSource | null;
+}
+
+interface PostBattleHookOwner {
+  isPostBattlePayoffAction?(
+    action: TimingAwareAction,
+    context: PhaseTimingContext,
+  ): boolean;
+  strategy?: PostBattleHookOwner | null;
+}
+
+interface PhaseTimingPlayer {
+  hand?: readonly PhaseTimingCard[];
+  field?: readonly PhaseTimingCard[];
+  spellTrap?: readonly PhaseTimingCard[];
+  graveyard?: readonly PhaseTimingCard[];
+  deck?: readonly PhaseTimingCard[];
+  extraDeck?: readonly PhaseTimingCard[];
+  strategy?: PostBattleHookOwner | null;
+}
+
+interface PhaseTimingContext {
+  player?: PhaseTimingPlayer | null;
+  bot?: PhaseTimingPlayer | null;
+  state?: PhaseSource | null;
+  game?: PhaseSource | null;
+  hand?: readonly PhaseTimingCard[];
+  strategy?: PostBattleHookOwner | null;
+  analysis?: PhaseAnalysis | null;
+}
+
+function normalizePhase(
+  source: string | PhaseSource | null | undefined,
+  analysis: PhaseAnalysis | null = null,
+): string {
   if (typeof source === "string") return source.toLowerCase();
   const phase = source?.phase || analysis?.phase || analysis?.game?.phase || "";
   return String(phase || "").toLowerCase();
 }
 
-export function isMain1Phase(source, analysis = null) {
+export function isMain1Phase(
+  source: string | PhaseSource | null | undefined,
+  analysis: PhaseAnalysis | null = null,
+): boolean {
   const phase = normalizePhase(source, analysis);
   return phase === "main1" || phase === "main";
 }
 
-export function isMain2Phase(source, analysis = null) {
+export function isMain2Phase(
+  source: string | PhaseSource | null | undefined,
+  analysis: PhaseAnalysis | null = null,
+): boolean {
   const phase = normalizePhase(source, analysis);
   return phase === "main2" || phase === "main_2";
 }
 
-export function isQuickSpellCard(card) {
+export function isQuickSpellCard(
+  card: PhaseTimingCard | null | undefined,
+): boolean {
   const subtype = String(card?.subtype || "").toLowerCase();
   return (
     card?.cardKind === "spell" &&
@@ -22,11 +97,16 @@ export function isQuickSpellCard(card) {
   );
 }
 
-export function isReactiveBackrowCard(card) {
+export function isReactiveBackrowCard(
+  card: PhaseTimingCard | null | undefined,
+): boolean {
   return card?.cardKind === "trap" || isQuickSpellCard(card);
 }
 
-function getTurnCounter(source, analysis = null) {
+function getTurnCounter(
+  source: PhaseSource | null | undefined,
+  analysis: PhaseAnalysis | null = null,
+): number | null {
   const value =
     source?.turnCounter ??
     analysis?.turnCounter ??
@@ -36,8 +116,12 @@ function getTurnCounter(source, analysis = null) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-export function canSetReactiveBackrowNow(card, gameOrState = null, analysis = null) {
-  if (!isReactiveBackrowCard(card)) return false;
+export function canSetReactiveBackrowNow(
+  card: PhaseTimingCard | null | undefined,
+  gameOrState: PhaseSource | null = null,
+  analysis: PhaseAnalysis | null = null,
+): boolean {
+  if (!card || !isReactiveBackrowCard(card)) return false;
   if (!isMain2Phase(gameOrState, analysis)) return false;
   if (isQuickSpellCard(card)) {
     const turnCounter = getTurnCounter(gameOrState, analysis);
@@ -51,7 +135,10 @@ export function canSetReactiveBackrowNow(card, gameOrState = null, analysis = nu
   return true;
 }
 
-export function getActionCard(action, context = {}) {
+export function getActionCard(
+  action: TimingAwareAction | null | undefined,
+  context: PhaseTimingContext = {},
+): PhaseTimingCard | null {
   if (!action) return null;
   if (action.card) return action.card;
   const player =
@@ -62,8 +149,9 @@ export function getActionCard(action, context = {}) {
     context.game?.player ||
     null;
   const hand = context.hand || player?.hand || [];
-  if (Number.isInteger(action.index) && Array.isArray(hand)) {
-    const handCard = hand[action.index];
+  const actionIndex = action.index;
+  if (Number.isInteger(actionIndex) && Array.isArray(hand)) {
+    const handCard = hand[actionIndex as number];
     if (
       handCard &&
       (!action.cardId || handCard.id === action.cardId) &&
@@ -101,7 +189,10 @@ export function getActionCard(action, context = {}) {
   return null;
 }
 
-export function isPostBattlePayoffAction(action, context = {}) {
+export function isPostBattlePayoffAction(
+  action: TimingAwareAction | null | undefined,
+  context: PhaseTimingContext = {},
+): boolean {
   if (!action) return false;
   if (action.timingRole === "post_battle_payoff") return true;
   const hookOwner =
@@ -121,7 +212,10 @@ export function isPostBattlePayoffAction(action, context = {}) {
   }
 }
 
-export function isPreBattleValueAction(action, context = {}) {
+export function isPreBattleValueAction(
+  action: TimingAwareAction | null | undefined,
+  context: PhaseTimingContext = {},
+): boolean {
   if (!action || action.type === "simulatedBattle") return false;
   if (isPostBattlePayoffAction(action, context)) return false;
   if (action.type === "set_spell_trap") return false;
@@ -145,7 +239,10 @@ export function isPreBattleValueAction(action, context = {}) {
   );
 }
 
-export function isAllowedAiActionForCurrentPhase(action, context = {}) {
+export function isAllowedAiActionForCurrentPhase(
+  action: TimingAwareAction | null | undefined,
+  context: PhaseTimingContext = {},
+): boolean {
   if (!action) return false;
   const gameOrState = context.state || context.game || {};
   const card = getActionCard(action, context);
@@ -165,14 +262,20 @@ export function isAllowedAiActionForCurrentPhase(action, context = {}) {
   return true;
 }
 
-export function filterAiActionsForCurrentPhase(actions, context = {}) {
+export function filterAiActionsForCurrentPhase(
+  actions: readonly TimingAwareAction[] | null | undefined,
+  context: PhaseTimingContext = {},
+): TimingAwareAction[] {
   if (!Array.isArray(actions)) return [];
   return actions.filter((action) =>
     isAllowedAiActionForCurrentPhase(action, context),
   );
 }
 
-export function hasPreBattleValueActions(actions, context = {}) {
+export function hasPreBattleValueActions(
+  actions: readonly TimingAwareAction[] | null | undefined,
+  context: PhaseTimingContext = {},
+): boolean {
   return (actions || []).some((action) =>
     isPreBattleValueAction(action, context),
   );
