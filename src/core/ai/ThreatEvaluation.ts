@@ -9,7 +9,31 @@ import {
   calculateActionImpact,
   isAdvantageEngine,
 } from "./RoleAnalyzer.js";
-import { hasArchetype, getMaxAttacks } from "./StrategyUtils.js";
+import type { StrategicCardView } from "./RoleAnalyzer.js";
+import type { GamePlayer } from "../contracts/player.js";
+import { getMaxAttacks } from "./StrategyUtils.js";
+
+export interface ThreatContext {
+  hasDefenses?: boolean;
+  isDiscardCost?: boolean;
+  myArchetype?: string;
+  myLP?: number;
+  myStrongestAtk?: number;
+  oppLP?: number;
+}
+
+export interface RankedThreat {
+  card: StrategicCardView;
+  threatScore: number;
+}
+
+function cardHasArchetype(
+  card: StrategicCardView,
+  archetype: string,
+): boolean {
+  if (card.archetype === archetype) return true;
+  return Array.isArray(card.archetypes) && card.archetypes.includes(archetype);
+}
 
 /**
  * Calcula o threat score de uma carta no contexto atual do jogo.
@@ -22,7 +46,10 @@ import { hasArchetype, getMaxAttacks } from "./StrategyUtils.js";
  * @param {number} context.oppLP - LP do oponente
  * @returns {number} - Threat score (0.0 a 10.0+)
  */
-export function calculateThreatScore(card, context = {}) {
+export function calculateThreatScore(
+  card: StrategicCardView | null | undefined,
+  context: ThreatContext = {},
+): number {
   if (!card) return 0;
 
   let score = 0;
@@ -104,7 +131,7 @@ export function calculateThreatScore(card, context = {}) {
   }
 
   // 7. SYNERGY WITH OPPONENT STRATEGY
-  if (context.myArchetype && hasArchetype(card, context.myArchetype)) {
+  if (context.myArchetype && cardHasArchetype(card, context.myArchetype)) {
     // Se o oponente joga o mesmo arquétipo, há sinergia
     score += 0.3;
   }
@@ -126,7 +153,10 @@ export function calculateThreatScore(card, context = {}) {
  * @param {Object} context - Contexto do jogo
  * @returns {Object[]} - Array de { card, threatScore }, ordenado por threat DESC
  */
-export function rankOpponentThreats(opponentField, context = {}) {
+export function rankOpponentThreats(
+  opponentField: readonly (StrategicCardView | null | undefined)[] | null,
+  context: ThreatContext = {},
+): RankedThreat[] {
   if (!Array.isArray(opponentField)) return [];
 
   const threats = opponentField
@@ -146,7 +176,10 @@ export function rankOpponentThreats(opponentField, context = {}) {
  * @param {Object} context
  * @returns {Object|null} - { card, threatScore } ou null
  */
-export function getTopThreat(opponentField, context = {}) {
+export function getTopThreat(
+  opponentField: readonly (StrategicCardView | null | undefined)[] | null,
+  context: ThreatContext = {},
+): RankedThreat | null {
   const threats = rankOpponentThreats(opponentField, context);
   return threats.length > 0 ? threats[0] : null;
 }
@@ -158,7 +191,10 @@ export function getTopThreat(opponentField, context = {}) {
  * @param {Object} context
  * @returns {number} - Resource value (menor = mais barato de sacrificar)
  */
-export function calculateResourceValue(card, context = {}) {
+export function calculateResourceValue(
+  card: StrategicCardView | null | undefined,
+  context: ThreatContext = {},
+): number {
   if (!card) return 0;
 
   let value = 0;
@@ -214,7 +250,11 @@ export function calculateResourceValue(card, context = {}) {
  * @param {boolean} ascending - true = menor valor primeiro (descartável), false = maior primeiro
  * @returns {Object[]}
  */
-export function rankByResourceValue(cards, context = {}, ascending = true) {
+export function rankByResourceValue(
+  cards: readonly StrategicCardView[] | null,
+  context: ThreatContext = {},
+  ascending = true,
+): StrategicCardView[] {
   if (!Array.isArray(cards)) return [];
 
   const ranked = cards.map((card) => ({
@@ -237,7 +277,11 @@ export function rankByResourceValue(cards, context = {}, ascending = true) {
  * @param {number} myLP - Meus LP atuais
  * @returns {number} - Turnos até lethal (Infinity se não pode)
  */
-export function estimateTurnsToKill(card, myLP = 8000, owner = null) {
+export function estimateTurnsToKill(
+  card: StrategicCardView | null | undefined,
+  myLP = 8000,
+  owner: Partial<GamePlayer> | null = null,
+): number {
   if (!card || card.cardKind !== "monster") return Infinity;
   if (card.position !== "attack") return Infinity;
 
@@ -256,7 +300,11 @@ export function estimateTurnsToKill(card, myLP = 8000, owner = null) {
  * @param {number} myLP
  * @returns {boolean}
  */
-export function canOpponentLethal(opponentField, myLP = 8000, opponent = null) {
+export function canOpponentLethal(
+  opponentField: readonly (StrategicCardView | null | undefined)[] | null,
+  myLP = 8000,
+  opponent: Partial<GamePlayer> | null = null,
+): boolean {
   if (!Array.isArray(opponentField)) return false;
 
   let totalDamage = 0;

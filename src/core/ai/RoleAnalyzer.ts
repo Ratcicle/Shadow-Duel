@@ -4,6 +4,34 @@
 // SEM HARDCODING de nomes. Genérico para qualquer deck/archetype.
 // ─────────────────────────────────────────────────────────────────────────────
 
+import type { CardAction } from "../contracts/actions.js";
+import type { GameCard } from "../contracts/cards.js";
+import type { DuelEventName, EffectTiming } from "../contracts/effects.js";
+
+export type StrategicRole =
+  | "extender"
+  | "removal"
+  | "searcher"
+  | "draw_engine"
+  | "recursion"
+  | "combat_buff"
+  | "debuff"
+  | "protection"
+  | "payoff"
+  | "disruption"
+  | "beater"
+  | "unknown";
+
+export interface StrategicEffectView {
+  actions?: readonly CardAction[];
+  event?: DuelEventName;
+  timing?: EffectTiming;
+}
+
+export type StrategicCardView = Partial<Omit<GameCard, "effects">> & {
+  effects?: readonly StrategicEffectView[];
+};
+
 /**
  * Infere o papel estratégico de uma carta baseado em seus efeitos.
  * @param {Object} card - A carta a analisar
@@ -11,7 +39,7 @@
  *                     "recursion", "combat_buff", "debuff", "protection",
  *                     "payoff", "disruption", "beater", "unknown"
  */
-export function inferRole(card) {
+export function inferRole(card: StrategicCardView | null | undefined): StrategicRole {
   if (!card) return "unknown";
 
   // Monstros sem efeitos = beaters
@@ -22,7 +50,7 @@ export function inferRole(card) {
     return "beater";
   }
 
-  const roles = [];
+  const roles: StrategicRole[] = [];
   const effects = Array.isArray(card.effects) ? card.effects : [];
 
   for (const effect of effects) {
@@ -136,10 +164,12 @@ export function inferRole(card) {
  * @param {Object} card
  * @returns {string[]}
  */
-export function inferAllRoles(card) {
+export function inferAllRoles(
+  card: StrategicCardView | null | undefined,
+): StrategicRole[] {
   if (!card) return [];
 
-  const roles = new Set();
+  const roles = new Set<StrategicRole>();
   const effects = Array.isArray(card.effects) ? card.effects : [];
 
   if (card.cardKind === "monster" && effects.length === 0) {
@@ -204,7 +234,9 @@ export function inferAllRoles(card) {
  * @param {Object} effect - Um effect da carta
  * @returns {number} - 0.0 (não urgente) a 1.0 (imediato)
  */
-export function calculateEffectUrgency(effect) {
+export function calculateEffectUrgency(
+  effect: StrategicEffectView | null | undefined,
+): number {
   if (!effect) return 0;
 
   const timing = effect.timing;
@@ -233,7 +265,9 @@ export function calculateEffectUrgency(effect) {
  * @param {Object} action - Uma action da carta
  * @returns {number} - Impacto estimado (0.0 a 2.0+)
  */
-export function calculateActionImpact(action) {
+export function calculateActionImpact(
+  action: CardAction | null | undefined,
+): number {
   if (!action || !action.type) return 0;
 
   const type = action.type;
@@ -261,7 +295,9 @@ export function calculateActionImpact(action) {
  * @param {Object} card
  * @returns {boolean}
  */
-export function isAdvantageEngine(card) {
+export function isAdvantageEngine(
+  card: StrategicCardView | null | undefined,
+): boolean {
   const role = inferRole(card);
   return ["searcher", "draw_engine", "extender", "recursion"].includes(role);
 }
@@ -271,7 +307,7 @@ export function isAdvantageEngine(card) {
  * @param {Object} card
  * @returns {boolean}
  */
-export function isProactive(card) {
+export function isProactive(card: StrategicCardView): boolean {
   const effects = Array.isArray(card.effects) ? card.effects : [];
   for (const effect of effects) {
     if (effect.timing === "on_play") return true;
@@ -286,7 +322,7 @@ export function isProactive(card) {
  * @param {Object} card
  * @returns {boolean}
  */
-export function isReactive(card) {
+export function isReactive(card: StrategicCardView): boolean {
   const effects = Array.isArray(card.effects) ? card.effects : [];
   for (const effect of effects) {
     if (effect.timing === "on_event" && effect.event !== "after_summon")

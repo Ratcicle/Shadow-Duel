@@ -1,5 +1,63 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // src/core/ai/MacroPlanning.js
+import type { StrategicCardView } from "./RoleAnalyzer.js";
+
+export interface MacroPlayerView {
+  field?: readonly (StrategicCardView | null | undefined)[];
+  hand?: readonly (StrategicCardView | null | undefined)[];
+  graveyard?: readonly (StrategicCardView | null | undefined)[];
+  lp?: number;
+}
+
+export interface LethalOpportunity {
+  canLethal: boolean;
+  turnsNeeded: number;
+  damage: number;
+  confidence: number;
+}
+
+export type ThreatLevel = "low" | "medium" | "high" | "critical";
+
+export interface DefensiveNeed {
+  needsDefense: boolean;
+  threatLevel: ThreatLevel;
+  turnsToKill: number;
+}
+
+export type ComebackDifficulty = "easy" | "medium" | "hard";
+
+export interface ComebackOpportunity {
+  isVirada: boolean;
+  turnsToWin: number;
+  difficulty: ComebackDifficulty;
+}
+
+export type MacroStrategyKind = "lethal" | "defend" | "setup" | "grind";
+
+export interface MacroStrategyDecision {
+  strategy: MacroStrategyKind;
+  priority: number;
+  detail:
+    | "immediate_kill"
+    | "lethal_next_turn"
+    | "critical_threat"
+    | "comeback_win"
+    | "high_threat"
+    | "setup_lethal"
+    | "medium_threat"
+    | "buildup";
+}
+
+function isStrategicCard(
+  card: StrategicCardView | null | undefined,
+): card is StrategicCardView {
+  return card != null;
+}
+
+function readStringField(value: object, key: string): string | undefined {
+  const field = Reflect.get(value, key);
+  return typeof field === "string" ? field : undefined;
+}
 // Sistema genérico de planejamento macro — lookahead N turnos para detectar
 // win conditions (lethal em 2-3 turnos, defensiva necessária, aproveitamento de oportunidade)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -15,11 +73,11 @@ import { getMaxAttacks } from "./StrategyUtils.js";
  * @returns {Object} - { canLethal: boolean, turnsNeeded: number, damage: number, confidence: 0.0-1.0 }
  */
 export function detectLethalOpportunity(
-  gameState,
-  botPlayer,
-  opponentPlayer,
+  gameState: unknown,
+  botPlayer: MacroPlayerView | null | undefined,
+  opponentPlayer: MacroPlayerView | null | undefined,
   turnsAhead = 2
-) {
+): LethalOpportunity {
   if (!botPlayer || !opponentPlayer) {
     return {
       canLethal: false,
@@ -40,11 +98,13 @@ export function detectLethalOpportunity(
       (m.cardKind === "monster" || m.atk !== undefined) &&
       m.position === "attack" &&
       !m.hasAttacked
-  );
+  ).filter(isStrategicCard);
 
   for (const attacker of directAttackers) {
     const atk = (attacker.atk || 0) + (attacker.tempAtkBoost || 0);
-    totalDamage += atk * getMaxAttacks(attacker, botPlayer);
+    totalDamage += atk * getMaxAttacks(attacker, {
+      graveyard: (botPlayer.graveyard || []).filter(isStrategicCard),
+    });
   }
 
   const oppLP = opponentPlayer.lp || 8000;
@@ -84,7 +144,11 @@ export function detectLethalOpportunity(
  * @param {Object} opponentPlayer - Opponent player state
  * @returns {Object} - { needsDefense: boolean, threatLevel: 'low'|'medium'|'high'|'critical', turnsToKill: number }
  */
-export function detectDefensiveNeed(gameState, botPlayer, opponentPlayer) {
+export function detectDefensiveNeed(
+  gameState: unknown,
+  botPlayer: MacroPlayerView,
+  opponentPlayer: MacroPlayerView | null | undefined,
+): DefensiveNeed {
   if (!opponentPlayer) {
     return { needsDefense: false, threatLevel: "low", turnsToKill: Infinity };
   }
@@ -92,7 +156,7 @@ export function detectDefensiveNeed(gameState, botPlayer, opponentPlayer) {
   const myLP = botPlayer.lp || 8000;
   const oppMonsters = (opponentPlayer.field || []).filter(
     (m) => m && (m.cardKind === "monster" || m.atk !== undefined)
-  );
+  ).filter(isStrategicCard);
 
   let totalOppDamage = 0;
   for (const monster of oppMonsters) {
@@ -103,7 +167,7 @@ export function detectDefensiveNeed(gameState, botPlayer, opponentPlayer) {
   const turnsToKill =
     totalOppDamage > 0 ? Math.ceil(myLP / totalOppDamage) : Infinity;
 
-  let threatLevel = "low";
+  let threatLevel: ThreatLevel = "low";
   let needsDefense = false;
 
   if (turnsToKill === 1) {
@@ -127,7 +191,11 @@ export function detectDefensiveNeed(gameState, botPlayer, opponentPlayer) {
  * @param {Object} opponentPlayer - Opponent player state
  * @returns {Object} - { isVirada: boolean, turnsToWin: number, difficulty: 'easy'|'medium'|'hard' }
  */
-export function detectComeback(gameState, botPlayer, opponentPlayer) {
+export function detectComeback(
+  gameState: unknown,
+  botPlayer: MacroPlayerView | null | undefined,
+  opponentPlayer: MacroPlayerView | null | undefined,
+): ComebackOpportunity {
   if (!opponentPlayer || !botPlayer) {
     return { isVirada: false, turnsToWin: Infinity, difficulty: "hard" };
   }
@@ -149,7 +217,7 @@ export function detectComeback(gameState, botPlayer, opponentPlayer) {
   );
 
   if (lethalOpp.canLethal && lethalOpp.turnsNeeded <= 2) {
-    const difficulty =
+    const difficulty: ComebackDifficulty =
       lethalOpp.confidence >= 0.8
         ? "easy"
         : lethalOpp.confidence >= 0.5
@@ -168,7 +236,11 @@ export function detectComeback(gameState, botPlayer, opponentPlayer) {
  * @param {Object} opponentPlayer - Opponent player state
  * @returns {Object} - { strategy: 'lethal'|'defend'|'setup'|'grind', priority: number }
  */
-export function decideMacroStrategy(gameState, botPlayer, opponentPlayer) {
+export function decideMacroStrategy(
+  gameState: unknown,
+  botPlayer: MacroPlayerView,
+  opponentPlayer: MacroPlayerView,
+): MacroStrategyDecision {
   const lethal = detectLethalOpportunity(
     gameState,
     botPlayer,
@@ -223,7 +295,11 @@ export function decideMacroStrategy(gameState, botPlayer, opponentPlayer) {
  * @param {Object} macroStrategy - Estratégia macro decidida {strategy, priority, detail}
  * @returns {number} - Bônus de prioridade (0 a +20)
  */
-export function calculateMacroPriorityBonus(actionType, card, macroStrategy) {
+export function calculateMacroPriorityBonus(
+  actionType: string,
+  card: StrategicCardView,
+  macroStrategy: MacroStrategyKind | MacroStrategyDecision,
+): number {
   let bonus = 0;
   const strategy =
     typeof macroStrategy === "string" ? macroStrategy : macroStrategy?.strategy;
@@ -234,7 +310,10 @@ export function calculateMacroPriorityBonus(actionType, card, macroStrategy) {
       for (const effect of card.effects) {
         if (effect.actions) {
           for (const action of effect.actions) {
-            if (action.type === "buff_stats_temp" && action.stat === "atk") {
+            if (
+              action.type === "buff_stats_temp" &&
+              readStringField(action, "stat") === "atk"
+            ) {
               bonus += 15;
             }
             if (action.type === "damage") {
@@ -245,7 +324,7 @@ export function calculateMacroPriorityBonus(actionType, card, macroStrategy) {
       }
     }
     // Monstros high ATK como invocações prioritárias
-    if (actionType === "summon" && card.atk >= 2000) {
+    if (actionType === "summon" && (card.atk || 0) >= 2000) {
       bonus += 12;
     }
     // Spells de remoção ajudam a abrir caminho para lethal
@@ -273,7 +352,7 @@ export function calculateMacroPriorityBonus(actionType, card, macroStrategy) {
     }
     // Monstros com DEF alta OU taunt
     if (actionType === "summon") {
-      if (card.def >= 2000) bonus += 10;
+      if ((card.def || 0) >= 2000) bonus += 10;
       if (card.mustBeAttacked) bonus += 8; // Taunt ajuda defesa
     }
   } else if (strategy === "setup") {

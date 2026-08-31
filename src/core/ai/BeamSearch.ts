@@ -2,8 +2,43 @@
 // src/core/ai/BeamSearch.js
 import { resolvePerspectivePlayers } from "./StrategyUtils.js";
 import { filterAiActionsForCurrentPhase } from "./common/phaseTiming.js";
+import type {
+  AIAction,
+  AIState,
+  BeamSearchOptions,
+  BeamSearchResult,
+  GreedySearchResult,
+  AIStrategyBotPort,
+  SearchStrategyPort,
+} from "../contracts/ai.js";
+import type {
+  AiCardInput,
+  AiLiveGamePort,
+  AiPlayerInput,
+  BeamPerspectiveGameState,
+  SimulatedCardState,
+  SimulatedPlayerState,
+} from "../contracts/aiState.js";
+import type {
+  CardDynamicBuffMap,
+  CardKind,
+  CardSuppressedDynamicBuffStats,
+  CardTurnBasedBuff,
+  GameCard,
+} from "../contracts/cards.js";
 
-function actionRequiresHand(actionType) {
+type SearchStrategyInput = SearchStrategyPort & Partial<SimulatedPlayerState>;
+type SearchCardInput = (AiCardInput | GameCard | SimulatedCardState) & {
+  archetypes?: readonly string[];
+  turnBasedBuffs?: readonly CardTurnBasedBuff[];
+};
+type SearchPlayerInput =
+  | AiPlayerInput
+  | AIStrategyBotPort
+  | SimulatedPlayerState
+  | SearchStrategyInput;
+
+function actionRequiresHand(actionType: AIAction["type"]): boolean {
   return (
     actionType === "summon" ||
     actionType === "spell" ||
@@ -13,7 +48,9 @@ function actionRequiresHand(actionType) {
   );
 }
 
-function expectedHandKind(actionType) {
+function expectedHandKind(
+  actionType: AIAction["type"],
+): CardKind | readonly CardKind[] | null {
   if (
     actionType === "summon" ||
     actionType === "handIgnition" ||
@@ -26,25 +63,39 @@ function expectedHandKind(actionType) {
   return null;
 }
 
-function actionIsValidForHand(action, hand) {
+function actionIsValidForHand(
+  action: AIAction | null | undefined,
+  hand: readonly SearchCardInput[] | null | undefined,
+): boolean {
   if (!action) return false;
   if (!actionRequiresHand(action.type)) return true;
   if (!Array.isArray(hand)) return false;
-  if (!Number.isInteger(action.index)) return false;
-  const card = hand[action.index];
+  const actionIndex = action.index;
+  if (typeof actionIndex !== "number" || !Number.isInteger(actionIndex)) {
+    return false;
+  }
+  const card = hand[actionIndex];
   if (!card) return false;
   const requiredKind = expectedHandKind(action.type);
   if (requiredKind) {
     const requiredKinds = Array.isArray(requiredKind)
       ? requiredKind
       : [requiredKind];
-    if (!requiredKinds.includes(card.cardKind)) return false;
+    if (
+      !card.cardKind ||
+      !requiredKinds.some((kind) => kind === card.cardKind)
+    ) {
+      return false;
+    }
   }
   if (action.cardName && card.name !== action.cardName) return false;
   return true;
 }
 
-function filterValidHandActions(actions, hand) {
+function filterValidHandActions(
+  actions: readonly AIAction[] | null | undefined,
+  hand: readonly SearchCardInput[] | null | undefined,
+): AIAction[] {
   if (!Array.isArray(actions)) return [];
   if (!Array.isArray(hand)) return actions.slice();
   return actions.filter((action) => actionIsValidForHand(action, hand));
@@ -54,7 +105,9 @@ function filterValidHandActions(actions, hand) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Simulation clones must detach mutable buff metadata from live cards.
-function cloneDynamicBuffs(dynamicBuffs) {
+function cloneDynamicBuffs(
+  dynamicBuffs: CardDynamicBuffMap | null | undefined,
+): CardDynamicBuffMap | null | undefined {
   if (!dynamicBuffs || typeof dynamicBuffs !== "object") return dynamicBuffs;
   return Object.fromEntries(
     Object.entries(dynamicBuffs).map(([key, entry]) => [
@@ -71,21 +124,22 @@ function cloneDynamicBuffs(dynamicBuffs) {
   );
 }
 
-function cloneSuppressedDynamicBuffStats(suppressed) {
+function cloneSuppressedDynamicBuffStats(
+  suppressed: CardSuppressedDynamicBuffStats | undefined,
+): CardSuppressedDynamicBuffStats | undefined {
   if (!suppressed || typeof suppressed !== "object") return suppressed;
   return Object.fromEntries(
     Object.entries(suppressed).map(([key, entry]) => [
       key,
-      entry && typeof entry === "object" && !Array.isArray(entry)
-        ? { ...entry }
-        : Array.isArray(entry)
-          ? [...entry]
-          : entry,
+      { ...entry },
     ]),
   );
 }
 
-function cloneCardForSim(card) {
+function cloneCardForSim(card: SearchCardInput): SimulatedCardState;
+function cloneCardForSim(
+  card: SearchCardInput | null | undefined,
+): SimulatedCardState | null | undefined {
   if (!card || typeof card !== "object") return card;
   const clone = { ...card };
   clone.dynamicBuffs = cloneDynamicBuffs(card.dynamicBuffs);
@@ -101,7 +155,7 @@ function cloneCardForSim(card) {
   if (Array.isArray(card.turnBasedBuffs)) {
     clone.turnBasedBuffs = card.turnBasedBuffs.map((buff) => ({ ...buff }));
   }
-  return clone;
+  return clone as SimulatedCardState;
 }
 
 /**
@@ -111,7 +165,11 @@ function cloneCardForSim(card) {
  * @param {Object} options - Search options.
  * @returns {Object|null} Best action result, or null.
  */
-export async function beamSearchTurn(game, strategy, options = {}) {
+export async function beamSearchTurn(
+  game: AIState,
+  strategy: SearchStrategyInput,
+  options: BeamSearchOptions = {},
+): Promise<BeamSearchResult | null> {
   const {
     beamWidth = 2,
     maxDepth = 2,
@@ -122,16 +180,16 @@ export async function beamSearchTurn(game, strategy, options = {}) {
 
   let nodesEvaluated = 0;
   const perspectiveBot = strategy?.bot || (strategy?.id ? strategy : null);
-  const resolveOpponent = (state) => {
+  const resolveOpponent = (state: AIState): SimulatedPlayerState | null => {
     return resolvePerspectivePlayers(state, perspectiveBot || state?.bot)
       .opponent;
   };
-  const seenStates = new Set(); // Anti-repetição
+  const seenStates = new Set<string>(); // Anti-repetição
 
   /**
    * Gera hash do estado para detecção de repetição.
    */
-  function getStateHash(state) {
+  function getStateHash(state: AIState): string {
     const bot = state.bot || {};
     const player = state.player || {};
 
@@ -154,7 +212,10 @@ export async function beamSearchTurn(game, strategy, options = {}) {
   /**
    * Avalia um estado usando evaluateBoardV2 ou fallback.
    */
-  function evaluateState(state, perspectivePlayer) {
+  function evaluateState(
+    state: AIState,
+    perspectivePlayer: SimulatedPlayerState,
+  ): number {
     if (useV2Evaluation && typeof strategy.evaluateBoardV2 === "function") {
       return strategy.evaluateBoardV2(state, perspectivePlayer);
     }
@@ -165,29 +226,31 @@ export async function beamSearchTurn(game, strategy, options = {}) {
   /**
    * Clona estado do jogo (shallow, mas funcional para simulação).
    */
-  function cloneGameState(gameState) {
-    const clonePlayer = (p) => {
+  function cloneGameState(gameState: AIState): BeamPerspectiveGameState {
+    const clonePlayer = (
+      p: SearchPlayerInput | null | undefined,
+    ): SimulatedPlayerState => {
       const safe = p || {};
       return {
         id: safe.id || "unknown",
         lp: safe.lp || 0,
-        hand: (safe.hand || []).map(cloneCardForSim),
-        field: (safe.field || []).map(cloneCardForSim),
-        graveyard: (safe.graveyard || []).map(cloneCardForSim),
-        deck: (safe.deck || []).map(cloneCardForSim),
-        extraDeck: (safe.extraDeck || []).map(cloneCardForSim),
-        banished: (safe.banished || []).map(cloneCardForSim),
+        hand: (safe.hand || []).map((card) => cloneCardForSim(card)),
+        field: (safe.field || []).map((card) => cloneCardForSim(card)),
+        graveyard: (safe.graveyard || []).map((card) => cloneCardForSim(card)),
+        deck: (safe.deck || []).map((card) => cloneCardForSim(card)),
+        extraDeck: (safe.extraDeck || []).map((card) => cloneCardForSim(card)),
+        banished: (safe.banished || []).map((card) => cloneCardForSim(card)),
         fieldSpell: safe.fieldSpell ? cloneCardForSim(safe.fieldSpell) : null,
         spellTrap: safe.spellTrap
-          ? safe.spellTrap.map(cloneCardForSim)
+          ? safe.spellTrap.map((card) => cloneCardForSim(card))
           : [],
         summonCount: safe.summonCount || 0,
         additionalNormalSummons: safe.additionalNormalSummons || 0,
         additionalNormalSummonPermissions:
-          safe.additionalNormalSummonPermissions || [],
-        normalSummonsThisTurn: safe.normalSummonsThisTurn || [],
-        specialSummonRestrictions: safe.specialSummonRestrictions || [],
-        effectActivationRestrictions: safe.effectActivationRestrictions || [],
+          (safe.additionalNormalSummonPermissions || []) as SimulatedPlayerState["additionalNormalSummonPermissions"],
+        normalSummonsThisTurn: (safe.normalSummonsThisTurn || []) as SimulatedPlayerState["normalSummonsThisTurn"],
+        specialSummonRestrictions: (safe.specialSummonRestrictions || []) as SimulatedPlayerState["specialSummonRestrictions"],
+        effectActivationRestrictions: (safe.effectActivationRestrictions || []) as SimulatedPlayerState["effectActivationRestrictions"],
         controllerType: safe.controllerType,
       };
     };
@@ -208,13 +271,16 @@ export async function beamSearchTurn(game, strategy, options = {}) {
       turnCounter: gameState.turnCounter || 0,
       _isPerspectiveState: true,
       _gameRef: gameState._gameRef || gameState, // Referência ao game original
-    };
+    } as BeamPerspectiveGameState;
   }
 
   /**
    * Simula uma ação no estado clonado.
    */
-  function simulateAction(state, action) {
+  function simulateAction(
+    state: BeamPerspectiveGameState,
+    action: AIAction,
+  ): BeamPerspectiveGameState {
     if (typeof strategy.simulateMainPhaseAction === "function") {
       strategy.simulateMainPhaseAction(state, action);
     }
@@ -224,7 +290,7 @@ export async function beamSearchTurn(game, strategy, options = {}) {
   /**
    * Verifica se uma ação muda o estado de forma significativa.
    */
-  function actionChangesState(stateBefore, stateAfter) {
+  function actionChangesState(stateBefore: AIState, stateAfter: AIState): boolean {
     const hashBefore = getStateHash(stateBefore);
     const hashAfter = getStateHash(stateAfter);
     return hashBefore !== hashAfter;
@@ -233,7 +299,18 @@ export async function beamSearchTurn(game, strategy, options = {}) {
   /**
    * Recursive beam search.
    */
-  async function search(currentState, depth, currentSequence = []) {
+  interface BeamBranch {
+    action?: AIAction;
+    sequence: AIAction[];
+    score: number;
+    finalState: BeamPerspectiveGameState;
+  }
+
+  async function search(
+    currentState: BeamPerspectiveGameState,
+    depth: number,
+    currentSequence: AIAction[] = [],
+  ): Promise<BeamBranch> {
     // Trava 1: Depth limit
     if (depth >= maxDepth) {
       const score = evaluateState(currentState, currentState.bot);
@@ -279,7 +356,7 @@ export async function beamSearchTurn(game, strategy, options = {}) {
     const effectiveBeamWidth =
       depth === 0 ? Math.min(beamWidth + 1, candidates.length) : beamWidth;
     const topCandidates = candidates.slice(0, effectiveBeamWidth);
-    const branches = [];
+    const branches: BeamBranch[] = [];
 
     for (const action of topCandidates) {
       // Simular ação
@@ -394,44 +471,53 @@ export async function beamSearchTurn(game, strategy, options = {}) {
  * @param {Array} options.preGeneratedActions - Ações pré-geradas como fallback
  * @returns {Object|null}
  */
-export async function greedySearchWithEvalV2(game, strategy, options = {}) {
+export async function greedySearchWithEvalV2(
+  game: AIState,
+  strategy: SearchStrategyInput,
+  options: BeamSearchOptions = {},
+): Promise<GreedySearchResult | null> {
   const { useV2Evaluation = true, preGeneratedActions = null } = options;
   const perspectiveBot = strategy?.bot || (strategy?.id ? strategy : null);
-  const resolveOpponent = (state) => {
+  const resolveOpponent = (state: AIState): SimulatedPlayerState | null => {
     return resolvePerspectivePlayers(state, perspectiveBot || state?.bot)
       .opponent;
   };
 
-  function evaluateState(state, perspectivePlayer) {
+  function evaluateState(
+    state: AIState,
+    perspectivePlayer: SimulatedPlayerState,
+  ): number {
     if (useV2Evaluation && typeof strategy.evaluateBoardV2 === "function") {
       return strategy.evaluateBoardV2(state, perspectivePlayer);
     }
     return strategy.evaluateBoard(state, perspectivePlayer);
   }
 
-  function cloneGameState(gameState) {
-    const clonePlayer = (p) => {
+  function cloneGameState(gameState: AIState): BeamPerspectiveGameState {
+    const clonePlayer = (
+      p: SearchPlayerInput | null | undefined,
+    ): SimulatedPlayerState => {
       const safe = p || {};
       return {
         id: safe.id || "unknown",
         lp: safe.lp || 0,
-        hand: (safe.hand || []).map(cloneCardForSim),
-        field: (safe.field || []).map(cloneCardForSim),
-        graveyard: (safe.graveyard || []).map(cloneCardForSim),
-        deck: (safe.deck || []).map(cloneCardForSim),
-        extraDeck: (safe.extraDeck || []).map(cloneCardForSim),
-        banished: (safe.banished || []).map(cloneCardForSim),
+        hand: (safe.hand || []).map((card) => cloneCardForSim(card)),
+        field: (safe.field || []).map((card) => cloneCardForSim(card)),
+        graveyard: (safe.graveyard || []).map((card) => cloneCardForSim(card)),
+        deck: (safe.deck || []).map((card) => cloneCardForSim(card)),
+        extraDeck: (safe.extraDeck || []).map((card) => cloneCardForSim(card)),
+        banished: (safe.banished || []).map((card) => cloneCardForSim(card)),
         fieldSpell: safe.fieldSpell ? cloneCardForSim(safe.fieldSpell) : null,
         spellTrap: safe.spellTrap
-          ? safe.spellTrap.map(cloneCardForSim)
+          ? safe.spellTrap.map((card) => cloneCardForSim(card))
           : [],
         summonCount: safe.summonCount || 0,
         additionalNormalSummons: safe.additionalNormalSummons || 0,
         additionalNormalSummonPermissions:
-          safe.additionalNormalSummonPermissions || [],
-        normalSummonsThisTurn: safe.normalSummonsThisTurn || [],
-        specialSummonRestrictions: safe.specialSummonRestrictions || [],
-        effectActivationRestrictions: safe.effectActivationRestrictions || [],
+          (safe.additionalNormalSummonPermissions || []) as SimulatedPlayerState["additionalNormalSummonPermissions"],
+        normalSummonsThisTurn: (safe.normalSummonsThisTurn || []) as SimulatedPlayerState["normalSummonsThisTurn"],
+        specialSummonRestrictions: (safe.specialSummonRestrictions || []) as SimulatedPlayerState["specialSummonRestrictions"],
+        effectActivationRestrictions: (safe.effectActivationRestrictions || []) as SimulatedPlayerState["effectActivationRestrictions"],
         controllerType: safe.controllerType,
       };
     };
@@ -452,7 +538,7 @@ export async function greedySearchWithEvalV2(game, strategy, options = {}) {
       turnCounter: gameState.turnCounter || 0,
       _isPerspectiveState: true,
       _gameRef: gameState._gameRef || gameState,
-    };
+    } as BeamPerspectiveGameState;
   }
 
   // BUGFIX: Usar preGeneratedActions primeiro, depois regenerar como fallback
@@ -480,7 +566,8 @@ export async function greedySearchWithEvalV2(game, strategy, options = {}) {
     return null;
   }
 
-  const baseScore = evaluateState(game, perspectiveBot || strategy.bot);
+  const evaluationPerspective = (perspectiveBot || strategy.bot) as SimulatedPlayerState;
+  const baseScore = evaluateState(game, evaluationPerspective);
   let bestAction = candidates[0]; // BUGFIX: Inicializar com primeira ação como fallback
   let bestScore = baseScore;
 
