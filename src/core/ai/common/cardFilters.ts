@@ -1,4 +1,86 @@
-export function cardHasArchetype(card, archetype) {
+import type { GameCard } from "../../contracts/cards.js";
+import type {
+  CardFilter,
+  EffectZone,
+  OneOrMany,
+} from "../../contracts/effects.js";
+import type { SummonMethod } from "../../contracts/summon.js";
+
+export type FilterableCard = Partial<GameCard> & {
+  _instanceId?: number | string | null;
+  uuid?: string | null;
+  simInstanceId?: number | string | null;
+  archetypes?: readonly string[];
+  equips?: readonly FilterableCard[];
+};
+
+export type AiCardFilter = Omit<CardFilter, "position"> & {
+  readonly filters?: AiCardFilter;
+  readonly currentTurn?: number | string;
+  readonly turnCounter?: number | string;
+  readonly gameTurn?: number | string;
+  readonly sentAsMaterial?: SummonMethod | boolean;
+  readonly lastSentToGraveAsMaterial?: SummonMethod | boolean;
+  readonly sentToGraveAsMaterialTurn?: number | string;
+  readonly sentAsMaterialTurn?: number | string;
+  readonly sentAsMaterialThisTurn?: boolean;
+  readonly id?: number | string;
+  readonly cardIds?: readonly number[];
+  readonly ids?: readonly number[];
+  readonly excludeMonsterType?: string;
+  readonly archetypes?: readonly string[];
+  readonly nameOrDescriptionIncludes?: OneOrMany<string>;
+  readonly textIncludesAny?: OneOrMany<string>;
+  readonly lastSummonMethods?: readonly SummonMethod[];
+  readonly summonMethods?: readonly SummonMethod[];
+  readonly lastSummonMethod?: SummonMethod;
+  readonly summonMethod?: SummonMethod;
+  readonly lastSummonedFromZones?: readonly EffectZone[];
+  readonly lastSummonedFromZone?: EffectZone;
+  readonly position?: GameCard["position"] | "any";
+  readonly excludeName?: string;
+  readonly excludeNames?: readonly string[];
+  readonly excludeId?: number;
+  readonly excludeCardId?: number;
+  readonly excludeIds?: readonly number[];
+  readonly excludeCardIds?: readonly number[];
+  readonly excludeInstanceId?: number | string;
+  readonly excludeInstanceIds?: readonly (number | string)[];
+  readonly excludeCardInstanceIds?: readonly (number | string)[];
+  readonly excludeCards?: readonly FilterableCard[];
+};
+
+export interface AiZonePlayer {
+  hand?: readonly FilterableCard[];
+  field?: readonly FilterableCard[];
+  graveyard?: readonly FilterableCard[];
+  deck?: readonly FilterableCard[];
+  extraDeck?: readonly FilterableCard[];
+  banished?: readonly FilterableCard[];
+  spellTrap?: readonly FilterableCard[];
+  fieldSpell?: FilterableCard | null;
+}
+
+interface CostPreferences {
+  preserveNames?: readonly string[];
+  offensivePayoffNames?: readonly string[];
+  availableOffensivePayoffs?: number;
+  preserveLastOffensivePayoff?: boolean;
+}
+
+export interface CostActivationContext {
+  actionContext?: { costPreferences?: CostPreferences | null } | null;
+  costPreferences?: CostPreferences | null;
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+export function cardHasArchetype(
+  card: FilterableCard | null | undefined,
+  archetype: string | null | undefined,
+): boolean {
   if (!card || !archetype) return true;
   return (
     card.archetype === archetype ||
@@ -6,18 +88,26 @@ export function cardHasArchetype(card, archetype) {
   );
 }
 
-function asArray(value) {
+function asArray<Value>(
+  value: Value | readonly Value[] | null | undefined,
+): readonly Value[] {
   if (value === undefined || value === null) return [];
-  return Array.isArray(value) ? value : [value];
+  return Array.isArray(value) ? value : [value as Value];
 }
 
-function matchesOne(value, expected) {
+function matchesOne<Value>(
+  value: Value | null | undefined,
+  expected: Value | readonly Value[] | null | undefined,
+): boolean {
   const values = asArray(expected);
   if (values.length === 0) return true;
-  return values.includes(value);
+  return values.some((candidate) => candidate === value);
 }
 
-function matchesOneText(value, expected) {
+function matchesOneText(
+  value: unknown,
+  expected: unknown | readonly unknown[],
+): boolean {
   const values = asArray(expected).filter(
     (entry) => entry !== undefined && entry !== null,
   );
@@ -28,17 +118,22 @@ function matchesOneText(value, expected) {
   );
 }
 
-function getCardInstanceId(card) {
+function getCardInstanceId(
+  card: FilterableCard | null | undefined,
+): number | string | null {
   return card?.instanceId ?? card?._instanceId ?? card?.uuid ?? card?.simInstanceId ?? null;
 }
 
-function getCurrentTurn(filter = {}) {
+function getCurrentTurn(filter: AiCardFilter = {}): number | null {
   const turn = filter.currentTurn ?? filter.turnCounter ?? filter.gameTurn;
   const numeric = Number(turn);
   return Number.isFinite(numeric) ? numeric : null;
 }
 
-function matchesSentToGraveMaterial(card, filter = {}) {
+function matchesSentToGraveMaterial(
+  card: FilterableCard | null | undefined,
+  filter: AiCardFilter = {},
+): boolean {
   const materialTypeFilter =
     filter.sentToGraveAsMaterial ??
     filter.sentAsMaterial ??
@@ -85,7 +180,10 @@ function matchesSentToGraveMaterial(card, filter = {}) {
   return true;
 }
 
-export function cardMatchesFilter(card, filter = {}) {
+export function cardMatchesFilter(
+  card: FilterableCard | null | undefined,
+  filter: AiCardFilter = {},
+): boolean {
   if (!card) return false;
 
   const nested = filter.filters || {};
@@ -118,8 +216,11 @@ export function cardMatchesFilter(card, filter = {}) {
     const excludedMonsterTypes = [
       current.excludeMonsterType,
       ...asArray(current.excludeMonsterTypes),
-    ].filter(Boolean);
-    if (excludedMonsterTypes.includes(card.monsterType)) return false;
+    ].filter((value): value is string => typeof value === "string" && !!value);
+    if (
+      typeof card.monsterType === "string" &&
+      excludedMonsterTypes.includes(card.monsterType)
+    ) return false;
     if (current.archetype && !cardHasArchetype(card, current.archetype)) {
       return false;
     }
@@ -163,7 +264,9 @@ export function cardMatchesFilter(card, filter = {}) {
       current.summonMethod;
     if (
       summonMethodFilter &&
-      !asArray(summonMethodFilter).includes(card.lastSummonMethod || null)
+      !asArray<SummonMethod | null>(summonMethodFilter).includes(
+        card.lastSummonMethod || null,
+      )
     ) {
       return false;
     }
@@ -171,7 +274,7 @@ export function cardMatchesFilter(card, filter = {}) {
       current.lastSummonedFromZones || current.lastSummonedFromZone;
     if (
       summonedFromZoneFilter &&
-      !asArray(summonedFromZoneFilter).includes(
+      !asArray<EffectZone | null>(summonedFromZoneFilter).includes(
         card.lastSummonedFromZone || null,
       )
     ) {
@@ -203,15 +306,17 @@ export function cardMatchesFilter(card, filter = {}) {
       current.excludeCardName,
       ...asArray(current.excludeNames),
       ...asArray(current.excludeCardNames),
-    ].filter(Boolean);
-    if (excludedNames.includes(card.name)) return false;
+    ].filter((value): value is string => typeof value === "string" && !!value);
+    if (typeof card.name === "string" && excludedNames.includes(card.name)) {
+      return false;
+    }
     const excludedIds = [
       current.excludeId,
       current.excludeCardId,
       ...asArray(current.excludeIds),
       ...asArray(current.excludeCardIds),
     ].filter((value) => value !== undefined && value !== null);
-    if (excludedIds.includes(card.id)) return false;
+    if (card.id !== undefined && excludedIds.includes(card.id)) return false;
     const cardInstanceId = getCardInstanceId(card);
     const excludedInstanceIds = [
       current.excludeInstanceId,
@@ -241,7 +346,7 @@ export function cardMatchesFilter(card, filter = {}) {
   const level = Number(card.level || 0);
   const levelFilter = filter.level ?? nested.level;
   const levelOp = filter.levelOp || nested.levelOp || "lte";
-  if (Number.isFinite(levelFilter)) {
+  if (isFiniteNumber(levelFilter)) {
     if (levelOp === "eq" && level !== levelFilter) return false;
     if (levelOp === "lte" && level > levelFilter) return false;
     if (levelOp === "gte" && level < levelFilter) return false;
@@ -251,34 +356,40 @@ export function cardMatchesFilter(card, filter = {}) {
 
   const minLevel = filter.minLevel ?? nested.minLevel;
   const maxLevel = filter.maxLevel ?? nested.maxLevel;
-  if (Number.isFinite(minLevel) && level < minLevel) return false;
-  if (Number.isFinite(maxLevel) && level > maxLevel) return false;
+  if (isFiniteNumber(minLevel) && level < minLevel) return false;
+  if (isFiniteNumber(maxLevel) && level > maxLevel) return false;
 
   const atk = Number(card.atk || 0);
   const minAtk = filter.minAtk ?? nested.minAtk;
   const maxAtk = filter.maxAtk ?? nested.maxAtk;
-  if (Number.isFinite(minAtk) && atk < minAtk) return false;
-  if (Number.isFinite(maxAtk) && atk > maxAtk) return false;
+  if (isFiniteNumber(minAtk) && atk < minAtk) return false;
+  if (isFiniteNumber(maxAtk) && atk > maxAtk) return false;
 
   const def = Number(card.def || 0);
   const minDef = filter.minDef ?? nested.minDef;
   const maxDef = filter.maxDef ?? nested.maxDef;
-  if (Number.isFinite(minDef) && def < minDef) return false;
-  if (Number.isFinite(maxDef) && def > maxDef) return false;
+  if (isFiniteNumber(minDef) && def < minDef) return false;
+  if (isFiniteNumber(maxDef) && def > maxDef) return false;
 
   return true;
 }
 
-export function getPlayerZoneCards(player, zone) {
+export function getPlayerZoneCards(
+  player: AiZonePlayer | null | undefined,
+  zone: string | null | undefined,
+): FilterableCard[] {
   if (!player || !zone) return [];
   if (zone === "fieldSpell") {
     return player.fieldSpell ? [player.fieldSpell] : [];
   }
-  const cards = player[zone];
-  return Array.isArray(cards) ? cards : [];
+  const cards = Reflect.get(player, zone);
+  return Array.isArray(cards) ? cards as FilterableCard[] : [];
 }
 
-export function countZoneCandidates(player, targetSpec = {}) {
+export function countZoneCandidates(
+  player: AiZonePlayer | null | undefined,
+  targetSpec: AiCardFilter = {},
+): number {
   const zones = Array.isArray(targetSpec.zones)
     ? targetSpec.zones
     : [targetSpec.zone || "field"];
@@ -290,15 +401,18 @@ export function countZoneCandidates(player, targetSpec = {}) {
   }, 0);
 }
 
-export function countValidCostCandidates(player, targetSpec = {}) {
+export function countValidCostCandidates(
+  player: AiZonePlayer | null | undefined,
+  targetSpec: AiCardFilter = {},
+): number {
   return countZoneCandidates(player, targetSpec);
 }
 
 export function countStrategicallyViableCostCandidates(
-  player,
-  targetSpec = {},
-  activationContext = null,
-) {
+  player: AiZonePlayer | null | undefined,
+  targetSpec: AiCardFilter = {},
+  activationContext: CostActivationContext | null = null,
+): number {
   const zones = Array.isArray(targetSpec.zones)
     ? targetSpec.zones
     : [targetSpec.zone || "field"];
@@ -317,17 +431,18 @@ export function countStrategicallyViableCostCandidates(
 
   const preserveNames = new Set(costPreferences.preserveNames || []);
   const payoffNames = new Set(costPreferences.offensivePayoffNames || []);
-  const availablePayoffs = Number.isFinite(
+  const availablePayoffs = isFiniteNumber(
     costPreferences.availableOffensivePayoffs,
   )
     ? costPreferences.availableOffensivePayoffs
     : 0;
 
   return candidates.filter((card) => {
-    if (preserveNames.has(card?.name)) return false;
+    if (typeof card.name === "string" && preserveNames.has(card.name)) return false;
     if (
       costPreferences.preserveLastOffensivePayoff &&
-      payoffNames.has(card?.name) &&
+      typeof card.name === "string" &&
+      payoffNames.has(card.name) &&
       availablePayoffs <= 1
     ) {
       return false;

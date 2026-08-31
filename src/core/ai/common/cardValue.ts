@@ -1,6 +1,34 @@
 import { getEffectiveAtk } from "./cardStats.js";
+import type {
+  SimulatedCardState,
+  SimulatedPlayerState,
+} from "../../contracts/aiState.js";
 
-export function getCardArchetypes(card) {
+interface CardValueOptions {
+  preferDefense?: boolean;
+  archetype?: string | null;
+  fieldSpell?: SimulatedCardState | null;
+  owner?: MultiAttackOwnerView | null;
+}
+
+interface MultiAttackCardView {
+  attackLimitThisTurn?: number | null;
+  extraAttacks?: number;
+  equipExtraAttacks?: number;
+  multiAttackLimit?: number;
+  dynamicExtraAttacks?: {
+    source?: string;
+    name?: string;
+  } | null;
+}
+
+interface MultiAttackOwnerView {
+  graveyard?: ReadonlyArray<{ name?: string | null }>;
+}
+
+export function getCardArchetypes(
+  card: SimulatedCardState | null | undefined,
+): string[] {
   if (!card) return [];
   if (Array.isArray(card.archetypes)) return card.archetypes.slice();
   if (card.archetype) return [card.archetype];
@@ -8,7 +36,10 @@ export function getCardArchetypes(card) {
 }
 
 // Resolves attacks available in a Battle Phase, including dynamic passive count.
-export function getMaxAttacks(card, owner = null) {
+export function getMaxAttacks(
+  card: MultiAttackCardView | null | undefined,
+  owner: MultiAttackOwnerView | null = null,
+): number {
   if (!card) return 1;
   if (
     card.attackLimitThisTurn !== undefined &&
@@ -27,12 +58,18 @@ export function getMaxAttacks(card, owner = null) {
   return 1 + extra;
 }
 
-export function hasArchetype(card, archetype) {
+export function hasArchetype(
+  card: SimulatedCardState | null | undefined,
+  archetype: string | null | undefined,
+): boolean {
   if (!card || !archetype) return false;
   return getCardArchetypes(card).includes(archetype);
 }
 
-export function estimateMonsterValue(monster, options = {}) {
+export function estimateMonsterValue(
+  monster: SimulatedCardState | null | undefined,
+  options: CardValueOptions = {},
+): number {
   if (!monster) return 0;
   const preferDefense = options.preferDefense === true;
   const archetype = options.archetype || null;
@@ -71,7 +108,10 @@ export function estimateMonsterValue(monster, options = {}) {
   return value;
 }
 
-export function estimateCardValue(card, options = {}) {
+export function estimateCardValue(
+  card: SimulatedCardState | null | undefined,
+  options: CardValueOptions = {},
+): number {
   if (!card) return 0;
   if (card.cardKind === "monster") {
     return estimateMonsterValue(card, options);
@@ -87,7 +127,7 @@ export function estimateCardValue(card, options = {}) {
     value += 0.8;
   }
 
-  const effects = Array.isArray(card.effects) ? card.effects : [];
+  const effects = card.effects || [];
   effects.forEach((effect) => {
     const actions = Array.isArray(effect.actions) ? effect.actions : [];
     actions.forEach((action) => {
@@ -116,7 +156,10 @@ export function estimateCardValue(card, options = {}) {
   return value;
 }
 
-export function isBattleReadyAttacker(card, { archetype = null } = {}) {
+export function isBattleReadyAttacker(
+  card: SimulatedCardState | null | undefined,
+  { archetype = null }: Pick<CardValueOptions, "archetype"> = {},
+): boolean {
   if (!card || card.cardKind !== "monster") return false;
   if (card.isFacedown) return false;
   if (card.position !== "attack") return false;

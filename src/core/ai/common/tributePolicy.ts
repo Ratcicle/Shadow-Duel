@@ -2,11 +2,62 @@ import {
   fieldHasTributeValue,
   selectTributeIndicesByValue,
 } from "../../game/summon/tributeValue.js";
+import type { TributeCardView } from "../../game/summon/tributeValue.js";
 
-export function getTributeRequirementFor(card, playerState) {
+interface TributeAlternative {
+  type?: string;
+  requiresName?: string | null;
+  tributes: number;
+}
+
+interface TributeSummonCard extends TributeCardView {
+  altTribute?: TributeAlternative | null;
+}
+
+interface TributePlayerState {
+  field?: readonly TributeSummonCard[];
+}
+
+interface TributeEvaluationContext {
+  evaluationContext?: unknown;
+}
+
+interface TributeSelectionPolicy {
+  evaluateCardValue?(
+    card: TributeSummonCard,
+    evaluationContext: unknown,
+    context: TributeEvaluationContext & {
+      cardToSummon: TributeSummonCard;
+      fieldIndex: number;
+    },
+  ): number;
+}
+
+interface TributePayoff {
+  ok: boolean;
+  reason?: string;
+}
+
+interface TributeCostPolicy {
+  isProtectedTribute?(
+    card: TributeSummonCard,
+    evaluationContext: unknown,
+    context: TributeEvaluationContext,
+  ): boolean;
+  evaluateSummonPayoff?(
+    cardToSummon: TributeSummonCard,
+    tributes: readonly TributeSummonCard[],
+    context: TributeEvaluationContext,
+  ): TributePayoff;
+}
+
+export function getTributeRequirementFor(
+  card: TributeSummonCard,
+  playerState: TributePlayerState,
+) {
   let tributesNeeded = 0;
-  if (card.level >= 5 && card.level <= 6) tributesNeeded = 1;
-  else if (card.level >= 7) tributesNeeded = 2;
+  if ((card.level as number) >= 5 && (card.level as number) <= 6) tributesNeeded = 1;
+  else if ((card.level as number) >= 7) tributesNeeded = 2;
 
   let usingAlt = false;
   const alt = card.altTribute;
@@ -32,12 +83,12 @@ export function getTributeRequirementFor(card, playerState) {
 }
 
 export function selectBestTributes(
-  field,
-  tributesNeeded,
-  cardToSummon,
-  context = {},
-  policy = {},
-) {
+  field: readonly TributeSummonCard[],
+  tributesNeeded: number,
+  cardToSummon: TributeSummonCard,
+  context: TributeEvaluationContext = {},
+  policy: TributeSelectionPolicy = {},
+): number[] {
   if (
     tributesNeeded <= 0 ||
     !fieldHasTributeValue(field || [], tributesNeeded, cardToSummon)
@@ -59,10 +110,10 @@ export function selectBestTributes(
 }
 
 export function evaluateTributeSummonCost(
-  cardToSummon,
-  tributes,
-  context = {},
-  policy = {},
+  cardToSummon: TributeSummonCard,
+  tributes: readonly TributeSummonCard[],
+  context: TributeEvaluationContext = {},
+  policy: TributeCostPolicy = {},
 ) {
   if (!Array.isArray(tributes) || tributes.length === 0) {
     return { ok: true, penalty: 0, reason: "no tribute cost" };
