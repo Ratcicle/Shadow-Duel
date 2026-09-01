@@ -8,24 +8,175 @@ import {
 } from "./targetSelection.js";
 import { mergeCanonicalSelections } from "../../game/selection/contract.js";
 import { walkActionList } from "../../actionHandlers/actionWalker.js";
+import type {
+  AiStateShape,
+  SimulatedCardState,
+  SimulatedPlayerState,
+} from "../../contracts/aiState.js";
+import type { EffectDefinition } from "../../contracts/effects.js";
 
-export function getStoredBlueprints(card) {
-  const storage = card?.state?.blueprintStorage || card?.blueprintStorage;
+interface StoredBlueprint {
+  effectSnapshot?: EffectDefinition | null;
+  effect?: EffectDefinition | null;
+}
+
+interface BlueprintStorageView {
+  storedBlueprints?: StoredBlueprint[] | null;
+}
+
+interface BlueprintCardView {
+  state?: { blueprintStorage?: BlueprintStorageView | null } | null;
+  blueprintStorage?: BlueprintStorageView | null;
+  blueprintStorageState?: BlueprintStorageView | null;
+  storedBlueprints?: StoredBlueprint[] | null;
+  storedEffects?: StoredBlueprint[] | null;
+}
+
+interface SimConditionContext {
+  state?: object | null;
+  game?: object | null;
+  selfId?: string;
+  source?: SimulatedCardState | null;
+  sourceCard?: SimulatedCardState | null;
+  attacker?: SimulatedCardState | null;
+  defender?: SimulatedCardState | null;
+  target?: SimulatedCardState | null;
+  destroyed?: SimulatedCardState | readonly SimulatedCardState[] | null;
+  eventCard?: SimulatedCardState | readonly SimulatedCardState[] | null;
+  movedCard?: SimulatedCardState | readonly SimulatedCardState[] | null;
+  card?: SimulatedCardState | readonly SimulatedCardState[] | null;
+  summonedCard?: SimulatedCardState | null;
+  battleDestroyer?: SimulatedCardState | null;
+  battleDestroyers?: readonly SimulatedCardState[] | null;
+  destroyedOwner?: SimulatedPlayerState | string | null;
+}
+
+interface SimConditionOptions extends SimConditionContext {
+  actionContext?: SimConditionContext | null;
+  activationContext?: SimConditionContext | null;
+  options?: SimConditionOptions | null;
+  strategy?: SimConditionStrategy | null;
+  evaluateSimulatedConditions?: SimConditionEvaluator;
+}
+
+type SimConditionEvaluator = (
+  conditions: unknown,
+  context: SimConditionEvaluationContext,
+) => unknown;
+
+interface SimConditionStrategy {
+  evaluateSimulatedConditions?: SimConditionEvaluator;
+}
+
+interface SimConditionEvaluationContext extends SimActivationEvaluationContext {
+  options?: SimConditionEvaluationOptions | null;
+}
+
+interface PlayerMatchingCondition {
+  type?: string;
+  owner?: string;
+  zone?: string;
+  zones?: readonly string[];
+  min?: number;
+  reason?: string;
+  filters?: object;
+}
+
+interface EventCardCondition {
+  cardRef?: string;
+  eventCardRef?: string;
+}
+
+interface SimEffectMarker {
+  sourceInstanceId?: string | number | null;
+  sourceCardId?: string | number | null;
+}
+
+interface SimDeclaration {
+  expiresOnTurn?: number | null;
+  property?: string | null;
+  value?: unknown;
+}
+
+interface SimTemporarySourceEntry {
+  sourceArchetypes?: readonly string[] | null;
+  sourceArchetype?: string | null;
+  sourceCardId?: string | number | null;
+  sourceName?: string | null;
+  sourceCardKind?: string | null;
+  sourceCardSubtype?: string | null;
+}
+
+interface SimTemporaryEventEffectView extends SimTemporarySourceEntry {
+  ownerId?: string | null;
+  expiresOnTurn?: number | null;
+  declaredValues?: object | null;
+}
+
+interface SimConditionStateView extends Pick<AiStateShape, "player" | "bot"> {
+  turnCounter?: number;
+  temporaryEventEffects?: readonly SimTemporaryEventEffectView[] | null;
+}
+
+type SimNumericOperator =
+  | "eq"
+  | "==="
+  | "neq"
+  | "!="
+  | "!=="
+  | "lt"
+  | "<"
+  | "lte"
+  | "<="
+  | "gte"
+  | ">="
+  | "gt"
+  | ">";
+
+function isObjectValue(value: unknown): value is object {
+  return value !== null && typeof value === "object";
+}
+
+function readProperty(value: object | null | undefined, key: PropertyKey): unknown {
+  return value ? Reflect.get(value, key) : undefined;
+}
+
+function firstSimulatedCard(value: unknown): SimulatedCardState | null {
+  const candidate = Array.isArray(value) ? value[0] : value;
+  return isObjectValue(candidate) ? candidate as SimulatedCardState : null;
+}
+
+function storedBlueprintArray(value: unknown): StoredBlueprint[] | null {
+  return Array.isArray(value) ? value as StoredBlueprint[] : null;
+}
+
+export function getStoredBlueprints(
+  card: BlueprintCardView | SimulatedCardState | null | undefined,
+): StoredBlueprint[] {
+  const cardView = card as BlueprintCardView | null | undefined;
+  const storage = cardView?.state?.blueprintStorage || cardView?.blueprintStorage;
   return (
-    card?.storedBlueprints ||
-    card?.blueprintStorageState?.storedBlueprints ||
-    storage?.storedBlueprints ||
-    card?.storedEffects ||
+    storedBlueprintArray(cardView?.storedBlueprints) ||
+    storedBlueprintArray(cardView?.blueprintStorageState?.storedBlueprints) ||
+    storedBlueprintArray(storage?.storedBlueprints) ||
+    storedBlueprintArray(cardView?.storedEffects) ||
     []
   );
 }
 
-function conditionsArray(conditions) {
+function conditionsArray<Condition>(
+  conditions: Condition | readonly Condition[] | null | undefined,
+): readonly Condition[] {
   if (!conditions) return [];
-  return Array.isArray(conditions) ? conditions : [conditions];
+  return Array.isArray(conditions)
+    ? conditions as readonly Condition[]
+    : [conditions as Condition];
 }
 
-function playerControlsMatching(player, condition = {}) {
+function playerControlsMatching(
+  player: SimulatedPlayerState | null | undefined,
+  condition: PlayerMatchingCondition = {},
+): boolean {
   const zones = asArray(condition.zones || condition.zone || "field");
   const {
     type: _conditionType,
@@ -44,15 +195,23 @@ function playerControlsMatching(player, condition = {}) {
   );
 }
 
-function resolveConditionSource(ctx, options, sourceRef) {
+function resolveConditionSource(
+  ctx: SimConditionContext,
+  options: SimConditionOptions,
+  sourceRef: string | null | undefined,
+): SimulatedCardState | null {
   if (!sourceRef || sourceRef === "self" || sourceRef === "source") {
     return ctx.sourceCard || options.sourceCard || null;
   }
-  const value = ctx[sourceRef] || options[sourceRef] || null;
-  return Array.isArray(value) ? value[0] || null : value;
+  return firstSimulatedCard(
+    readProperty(ctx, sourceRef) || readProperty(options, sourceRef) || null,
+  );
 }
 
-function markerMatchesSource(marker, sourceCard) {
+function markerMatchesSource(
+  marker: SimEffectMarker | null | undefined,
+  sourceCard: SimulatedCardState | null | undefined,
+): boolean {
   if (!sourceCard) return false;
   const sourceInstanceId = getCardInstanceId(sourceCard);
   if (marker?.sourceInstanceId || sourceInstanceId) {
@@ -63,8 +222,15 @@ function markerMatchesSource(marker, sourceCard) {
   );
 }
 
-function battleParticipantForOwner(ctx, options, ownerId) {
-  const state = ctx.state || ctx.game || {};
+function battleParticipantForOwner(
+  ctx: SimConditionContext,
+  options: SimConditionOptions,
+  ownerId: string,
+): SimulatedCardState | null {
+  const state = (ctx.state || ctx.game || {}) as Pick<
+    AiStateShape,
+    "player" | "bot"
+  >;
   const player =
     ownerId === ctx.selfId || ownerId === "bot"
       ? getPerspectivePlayers(state, ctx.selfId || "bot").self
@@ -79,7 +245,7 @@ function battleParticipantForOwner(ctx, options, ownerId) {
     options.actionContext?.defender ||
     options.actionContext?.target ||
     null;
-  const matchesOwner = (card) =>
+  const matchesOwner = (card: SimulatedCardState | null | undefined) =>
     !!card &&
     ((Array.isArray(player?.field) && player.field.includes(card)) ||
       card.controller === ownerId ||
@@ -89,10 +255,17 @@ function battleParticipantForOwner(ctx, options, ownerId) {
   return null;
 }
 
-function resolveEventCardByRef(condition, ctx, options) {
+function resolveEventCardByRef(
+  condition: EventCardCondition,
+  ctx: SimConditionContext,
+  options: SimConditionOptions,
+): SimulatedCardState | null {
   const ref = condition.cardRef || condition.eventCardRef || null;
   const eventCard =
-    (ref && (ctx[ref] || options[ref] || options.actionContext?.[ref])) ||
+    (ref &&
+      (readProperty(ctx, ref) ||
+        readProperty(options, ref) ||
+        readProperty(options.actionContext, ref))) ||
     ctx.destroyed ||
     options.destroyed ||
     options.actionContext?.destroyed ||
@@ -109,10 +282,14 @@ function resolveEventCardByRef(condition, ctx, options) {
     options.target ||
     options.actionContext?.target ||
     null;
-  return Array.isArray(eventCard) ? eventCard[0] || null : eventCard;
+  return firstSimulatedCard(eventCard);
 }
 
-function readSimContextPath(ctx, options, key) {
+function readSimContextPath(
+  ctx: SimConditionContext,
+  options: SimConditionOptions,
+  key: string | null | undefined,
+): unknown {
   if (!key) return undefined;
   const state = ctx.state || ctx.game || {};
   const source = ctx.source || ctx.sourceCard || options.sourceCard || null;
@@ -125,20 +302,24 @@ function readSimContextPath(ctx, options, key) {
   ].filter(Boolean);
   const parts = String(key).split(".").filter(Boolean);
   for (const root of roots) {
-    let value = root;
+    let value: unknown = root;
     for (const part of parts) {
       if (value == null || typeof value !== "object") {
         value = undefined;
         break;
       }
-      value = value[part];
+      value = Reflect.get(value, part);
     }
     if (value !== undefined) return value;
   }
   return undefined;
 }
 
-function compareSimContextNumbers(current, op, expected) {
+function compareSimContextNumbers(
+  current: number,
+  op: SimNumericOperator,
+  expected: number,
+): boolean {
   if (op === "eq" || op === "===") return current === expected;
   if (op === "neq" || op === "!=" || op === "!==") return current !== expected;
   if (op === "lt" || op === "<") return current < expected;
@@ -147,40 +328,81 @@ function compareSimContextNumbers(current, op, expected) {
   return current > expected;
 }
 
-function cardPropertyValues(card, property) {
-  const value = card?.[property];
+function cardPropertyValues(
+  card: SimulatedCardState | null | undefined,
+  property: string,
+): readonly unknown[] {
+  const value = readProperty(card, property);
   if (Array.isArray(value)) return value.filter(Boolean);
   return value !== undefined && value !== null ? [value] : [];
 }
 
-function declarationIsActive(state, declaration) {
+function readSimDeclaration(
+  card: SimulatedCardState | null | undefined,
+  key: string | null | undefined,
+): SimDeclaration | null {
+  const declarations = card?.declaredValues;
+  if (!isObjectValue(declarations)) return null;
+  const value = readProperty(declarations, String(key));
+  if (isObjectValue(value)) return value as SimDeclaration;
+  return value ? {} : null;
+}
+
+function readPlayerId(value: unknown): unknown {
+  return isObjectValue(value) ? readProperty(value, "id") : value;
+}
+
+function declarationIsActive(
+  state: { turnCounter?: number } | null | undefined,
+  declaration: SimDeclaration | null | undefined,
+): boolean {
   if (!declaration || typeof declaration !== "object") return false;
+  const expiresOnTurn = declaration.expiresOnTurn;
   return (
-    !Number.isFinite(declaration.expiresOnTurn) ||
-    Number(state?.turnCounter || 0) <= declaration.expiresOnTurn
+    typeof expiresOnTurn !== "number" ||
+    !Number.isFinite(expiresOnTurn) ||
+    Number(state?.turnCounter || 0) <= expiresOnTurn
   );
 }
 
-function declarationMatchesCard(state, declaration, card, property) {
-  if (!declarationIsActive(state, declaration)) return false;
+function declarationMatchesCard(
+  state: { turnCounter?: number } | null | undefined,
+  declaration: SimDeclaration | null | undefined,
+  card: SimulatedCardState,
+  property: string,
+): boolean {
+  if (!declaration || !declarationIsActive(state, declaration)) return false;
   const declaredProperty = declaration.property || property;
   if (declaredProperty !== property) return false;
   return cardPropertyValues(card, property).includes(declaration.value);
 }
 
-function declaredValuesMatchCard(state, declaredValues, card, property, stateKey) {
+function declaredValuesMatchCard(
+  state: { turnCounter?: number } | null | undefined,
+  declaredValues: object | null | undefined,
+  card: SimulatedCardState,
+  property: string,
+  stateKey: string | null | undefined,
+): boolean {
   if (!declaredValues || typeof declaredValues !== "object") return false;
   const entries = stateKey
-    ? [[stateKey, declaredValues[stateKey]]]
+    ? [[stateKey, Reflect.get(declaredValues, stateKey)]]
     : Object.entries(declaredValues);
   return entries.some(([, declaration]) =>
-    declarationMatchesCard(state, declaration, card, property),
+    declarationMatchesCard(
+      state,
+      isObjectValue(declaration) ? declaration as SimDeclaration : undefined,
+      card,
+      property,
+    ),
   );
 }
 
-function activeDeclarationSources(player) {
+function activeDeclarationSources(
+  player: SimulatedPlayerState | null | undefined,
+): SimulatedCardState[] {
   if (!player) return [];
-  const sources = [];
+  const sources: SimulatedCardState[] = [];
   for (const zone of ["field", "spellTrap"]) {
     for (const card of getZoneCards(player, zone)) {
       if (!card || card.isFacedown) continue;
@@ -202,7 +424,7 @@ function activeDeclarationSources(player) {
   return sources;
 }
 
-function buildSimTemporarySource(entry) {
+function buildSimTemporarySource(entry: SimTemporarySourceEntry | null | undefined) {
   const archetypes = Array.isArray(entry?.sourceArchetypes)
     ? entry.sourceArchetypes
     : entry?.sourceArchetype
@@ -218,8 +440,11 @@ function buildSimTemporarySource(entry) {
   };
 }
 
-function simActionFilterFromConfig(config = {}) {
-  const filters = { ...(config.filters || {}) };
+function simActionFilterFromConfig(config: object = {}): object {
+  const configuredFilters = readProperty(config, "filters");
+  const filters = {
+    ...(isObjectValue(configuredFilters) ? configuredFilters : {}),
+  };
   for (const key of [
     "cardKind",
     "cardName",
@@ -251,25 +476,47 @@ function simActionFilterFromConfig(config = {}) {
     "sentToGraveAsMaterialTurn",
     "sentAsMaterialTurn",
   ]) {
-    if (config[key] !== undefined && filters[key] === undefined) {
-      filters[key] = config[key];
+    const configuredValue = readProperty(config, key);
+    if (
+      configuredValue !== undefined &&
+      readProperty(filters, key) === undefined
+    ) {
+      Reflect.set(filters, key, configuredValue);
     }
   }
   return filters;
 }
 
-function simOwnersFromRule(rule, self, opponent) {
-  if (rule === "opponent") return [opponent].filter(Boolean);
+function simOwnersFromRule(
+  rule: unknown,
+  self: SimulatedPlayerState | null | undefined,
+  opponent: SimulatedPlayerState | null | undefined,
+): SimulatedPlayerState[] {
+  const presentPlayers = (
+    players: readonly (SimulatedPlayerState | null | undefined)[],
+  ): SimulatedPlayerState[] =>
+    players.filter(
+      (player): player is SimulatedPlayerState => player !== null && player !== undefined,
+    );
+  if (rule === "opponent") return presentPlayers([opponent]);
   if (rule === "any" || rule === "both" || rule === "either") {
-    return [self, opponent].filter(Boolean);
+    return presentPlayers([self, opponent]);
   }
-  return [self].filter(Boolean);
+  return presentPlayers([self]);
 }
 
-function simCardInAllowedZones(card, zones, owners) {
-  const allowedZones = asArray(zones).filter(Boolean);
+function simCardInAllowedZones(
+  card: SimulatedCardState,
+  zones: unknown,
+  owners: readonly (SimulatedPlayerState | null | undefined)[],
+): boolean {
+  const allowedZones = asArray(zones).filter(
+    (zone): zone is string => typeof zone === "string" && zone.length > 0,
+  );
   if (allowedZones.length === 0) return true;
-  for (const owner of owners.filter(Boolean)) {
+  for (const owner of owners.filter(
+    (entry): entry is SimulatedPlayerState => entry !== null && entry !== undefined,
+  )) {
     for (const zone of allowedZones) {
       if (getZoneCards(owner, zone).includes(card)) return true;
     }
@@ -277,26 +524,33 @@ function simCardInAllowedZones(card, zones, owners) {
   return false;
 }
 
-function simSameCard(left, right) {
+function simSameCard(left: unknown, right: unknown): boolean {
   if (!left || !right) return false;
   if (left === right) return true;
-  const leftId = getCardInstanceId(left);
-  const rightId = getCardInstanceId(right);
+  const leftId = getCardInstanceId(left as SimulatedCardState);
+  const rightId = getCardInstanceId(right as SimulatedCardState);
   return leftId !== null && rightId !== null && leftId === rightId;
 }
 
-function simAppendUnique(cards, card) {
+function simAppendUnique(cards: SimulatedCardState[], card: unknown): void {
   if (!card) return;
-  if (cards.some((entry) => simSameCard(entry, card))) return;
-  cards.push(card);
+  const simulatedCard = card as SimulatedCardState;
+  if (cards.some((entry) => simSameCard(entry, simulatedCard))) return;
+  cards.push(simulatedCard);
 }
 
-function simCollectScopeCards(scope = {}, self, opponent) {
-  const zones = asArray(scope.zones || scope.zone || "field");
+function simCollectScopeCards(
+  scope: object = {},
+  self: SimulatedPlayerState | null | undefined,
+  opponent: SimulatedPlayerState | null | undefined,
+): SimulatedCardState[] {
+  const zones = asArray(
+    readProperty(scope, "zones") || readProperty(scope, "zone") || "field",
+  ).filter((zone): zone is string => typeof zone === "string");
   const filters = simActionFilterFromConfig(scope);
-  const cards = [];
+  const cards: SimulatedCardState[] = [];
   for (const owner of simOwnersFromRule(
-    scope.owner || scope.player || "self",
+    readProperty(scope, "owner") || readProperty(scope, "player") || "self",
     self,
     opponent,
   )) {
@@ -310,62 +564,158 @@ function simCollectScopeCards(scope = {}, self, opponent) {
   return cards;
 }
 
-function simSelectedCards(targetRef, activationContext = {}) {
-  const cards = [];
+function simMergedSelections(context: object | null | undefined) {
+  if (!context) return mergeCanonicalSelections();
+  const costSelections = readProperty(context, "costSelections");
+  const targetSelections = readProperty(context, "targetSelections");
+  const resolutionSelections = readProperty(context, "resolutionSelections");
+  return mergeCanonicalSelections({
+    costSelections: isObjectValue(costSelections) ? costSelections : null,
+    targetSelections: isObjectValue(targetSelections) ? targetSelections : null,
+    resolutionSelections: isObjectValue(resolutionSelections)
+      ? resolutionSelections
+      : null,
+  });
+}
+
+function simSelectionValue(source: unknown, targetRef: string): unknown {
+  return isObjectValue(source) ? readProperty(source, targetRef) : undefined;
+}
+
+function simSelectedCards(
+  targetRef: string,
+  activationContext: object = {},
+): SimulatedCardState[] {
+  const cards: SimulatedCardState[] = [];
+  const respondingToChainLink = readProperty(
+    activationContext,
+    "respondingToChainLink",
+  );
   const selectionSources = [
-    mergeCanonicalSelections(activationContext),
-    mergeCanonicalSelections(activationContext.respondingToChainLink),
-    activationContext.actionResults,
-    activationContext._actionTargets,
-  ].filter(Boolean);
+    simMergedSelections(activationContext),
+    simMergedSelections(
+      isObjectValue(respondingToChainLink) ? respondingToChainLink : null,
+    ),
+    readProperty(activationContext, "actionResults"),
+    readProperty(activationContext, "_actionTargets"),
+  ].filter(isObjectValue);
   for (const selections of selectionSources) {
-    for (const card of asArray(selections?.[targetRef]).filter(Boolean)) {
+    for (const card of asArray(simSelectionValue(selections, targetRef)).filter(Boolean)) {
       simAppendUnique(cards, card);
     }
   }
   return cards;
 }
 
-function simCollectTargetRefCards(targetRef, ctx = {}, options = {}) {
-  const cards = [];
+function simCollectTargetRefCards(
+  targetRef: string,
+  ctx: object = {},
+  options: object = {},
+): SimulatedCardState[] {
+  const cards: SimulatedCardState[] = [];
+  const ctxActionTargets = readProperty(ctx, "_actionTargets");
+  const ctxSelections = readProperty(ctx, "selections");
+  const actionResults = readProperty(options, "actionResults");
+  const actionContext = readProperty(options, "actionContext");
+  const activationContext = readProperty(options, "activationContext");
+  const actionContextActionTargets = isObjectValue(actionContext)
+    ? readProperty(actionContext, "_actionTargets")
+    : undefined;
+  const actionContextSelections = isObjectValue(actionContext)
+    ? readProperty(actionContext, "selections")
+    : undefined;
+  const activationActionResults = isObjectValue(activationContext)
+    ? readProperty(activationContext, "actionResults")
+    : undefined;
+  const activationActionContext = isObjectValue(activationContext)
+    ? readProperty(activationContext, "actionContext")
+    : undefined;
+  const activationActionTargets = isObjectValue(activationActionContext)
+    ? readProperty(activationActionContext, "_actionTargets")
+    : undefined;
   const directSources = [
-    ctx[targetRef],
-    ctx._actionTargets?.[targetRef],
-    ctx.selections?.[targetRef],
-    options.actionResults?.[targetRef],
-    options.actionContext?.[targetRef],
-    options.actionContext?._actionTargets?.[targetRef],
-    options.actionContext?.selections?.[targetRef],
-    mergeCanonicalSelections(options.activationContext)?.[targetRef],
-    options.activationContext?.actionResults?.[targetRef],
-    options.activationContext?.actionContext?._actionTargets?.[targetRef],
+    simSelectionValue(ctx, targetRef),
+    simSelectionValue(ctxActionTargets, targetRef),
+    simSelectionValue(ctxSelections, targetRef),
+    simSelectionValue(actionResults, targetRef),
+    simSelectionValue(actionContext, targetRef),
+    simSelectionValue(actionContextActionTargets, targetRef),
+    simSelectionValue(actionContextSelections, targetRef),
+    simSelectionValue(
+      simMergedSelections(
+        isObjectValue(activationContext) ? activationContext : null,
+      ),
+      targetRef,
+    ),
+    simSelectionValue(activationActionResults, targetRef),
+    simSelectionValue(activationActionTargets, targetRef),
   ];
   for (const value of directSources) {
     for (const card of asArray(value).filter(Boolean)) {
       simAppendUnique(cards, card);
     }
   }
-  for (const card of simSelectedCards(targetRef, options.actionContext || {})) {
+  for (const card of simSelectedCards(
+    targetRef,
+    isObjectValue(actionContext) ? actionContext : {},
+  )) {
     simAppendUnique(cards, card);
   }
-  for (const card of simSelectedCards(targetRef, options.activationContext || {})) {
+  for (const card of simSelectedCards(
+    targetRef,
+    isObjectValue(activationContext) ? activationContext : {},
+  )) {
     simAppendUnique(cards, card);
   }
   return cards;
 }
 
+interface SimulatedActionView {
+  type?: string;
+  targetScope?: object | null;
+  targetRef?: string | null;
+  zones?: readonly string[];
+  filters?: object | null;
+  cardName?: string | null;
+  cardType?: string | null;
+  to?: string | null;
+  toZone?: string | null;
+  destination?: string | null;
+  useDestroyed?: boolean;
+  scope?: string | null;
+}
+
+interface SimulatedActivationAttemptView {
+  card?: SimulatedCardState | null;
+  effect?: EffectDefinition | null;
+  controller?: SimulatedPlayerState | null;
+}
+
+interface SimulatedActivationContextView extends SimConditionContext {
+  destroyed?: SimulatedCardState | null;
+  activationAttempt?: SimulatedActivationAttemptView | null;
+  effect?: EffectDefinition | null;
+  player?: SimulatedPlayerState | null;
+  context?: SimulatedActivationContextView | null;
+}
+
+function asSimulatedAction(value: unknown): SimulatedActionView | null {
+  return isObjectValue(value) ? value as SimulatedActionView : null;
+}
+
 function simCollectDestroyCandidates(
-  actions,
-  activationPlayer,
-  activationOpponent,
-  activationContext = {},
+  actions: unknown,
+  activationPlayer: SimulatedPlayerState,
+  activationOpponent: SimulatedPlayerState,
+  activationContext: object = {},
   includeNested = true,
-) {
-  const cards = [];
+): SimulatedCardState[] {
+  const cards: SimulatedCardState[] = [];
   const walkedActions = includeNested
     ? walkActionList(actions).visits.map((visit) => visit.action)
     : asArray(actions);
-  for (const action of walkedActions) {
+  for (const actionValue of walkedActions) {
+    const action = asSimulatedAction(actionValue);
     if (!action) continue;
     if (action.type === "destroy") {
       if (action.targetScope) {
@@ -422,30 +772,36 @@ function simCollectDestroyCandidates(
   return cards;
 }
 
-function simMoveLeavesField(action) {
+function simMoveLeavesField(action: SimulatedActionView | null | undefined): boolean {
   const toZone = action?.to || action?.toZone || action?.destination || null;
-  return [
-    "graveyard",
-    "hand",
-    "deck",
-    "extraDeck",
-    "banished",
-    "banish",
-  ].includes(toZone);
+  return (
+    typeof toZone === "string" &&
+    [
+      "graveyard",
+      "hand",
+      "deck",
+      "extraDeck",
+      "banished",
+      "banish",
+    ].includes(toZone)
+  );
 }
 
-function simMoveBanishes(action) {
+function simMoveBanishes(action: SimulatedActionView | null | undefined): boolean {
   const toZone = action?.to || action?.toZone || action?.destination || null;
   return toZone === "banished" || toZone === "banish";
 }
 
-function simCollectGraveyardBanishCandidates(action, activationPlayer) {
+function simCollectGraveyardBanishCandidates(
+  action: SimulatedActionView,
+  activationPlayer: SimulatedPlayerState,
+): SimulatedCardState[] {
   const filters = { ...(action.filters || {}) };
-  if (action.cardName && filters.name === undefined) {
-    filters.name = action.cardName;
+  if (action.cardName && readProperty(filters, "name") === undefined) {
+    Reflect.set(filters, "name", action.cardName);
   }
-  if (action.cardType && filters.type === undefined) {
-    filters.type = action.cardType;
+  if (action.cardType && readProperty(filters, "type") === undefined) {
+    Reflect.set(filters, "type", action.cardType);
   }
   return getZoneCards(activationPlayer, "graveyard").filter((card) =>
     matchesTargetFilters(card, filters, null)
@@ -453,15 +809,16 @@ function simCollectGraveyardBanishCandidates(action, activationPlayer) {
 }
 
 function simCollectBanishCandidates(
-  actions,
-  activationPlayer,
-  activationOpponent,
-  activationContext = {},
-) {
-  const cards = [];
-  for (const action of walkActionList(actions).visits.map(
+  actions: unknown,
+  activationPlayer: SimulatedPlayerState,
+  activationOpponent: SimulatedPlayerState,
+  activationContext: SimulatedActivationContextView = {},
+): SimulatedCardState[] {
+  const cards: SimulatedCardState[] = [];
+  for (const actionValue of walkActionList(actions).visits.map(
     (visit) => visit.action,
   )) {
+    const action = asSimulatedAction(actionValue);
     if (!action) continue;
     if (
       action.type === "banish" ||
@@ -526,15 +883,16 @@ function simCollectBanishCandidates(
 }
 
 function simCollectLeaveFieldCandidates(
-  actions,
-  activationPlayer,
-  activationOpponent,
-  activationContext = {},
-) {
-  const cards = [];
-  for (const action of walkActionList(actions).visits.map(
+  actions: unknown,
+  activationPlayer: SimulatedPlayerState,
+  activationOpponent: SimulatedPlayerState,
+  activationContext: SimulatedActivationContextView = {},
+): SimulatedCardState[] {
+  const cards: SimulatedCardState[] = [];
+  for (const actionValue of walkActionList(actions).visits.map(
     (visit) => visit.action,
   )) {
+    const action = asSimulatedAction(actionValue);
     if (!action) continue;
     for (const card of simCollectDestroyCandidates(
       [action],
@@ -575,15 +933,104 @@ function simCollectLeaveFieldCandidates(
   return cards;
 }
 
-function simActivationWouldDestroyMatchingCards(condition, ctx, options, self, opponent) {
+interface SimActivationConditionView {
+  activationPlayer?: "self" | "opponent" | string;
+  affectedPlayer?: string;
+  cardOwner?: string;
+  owner?: string;
+  destroyedCardFilters?: object;
+  destroyedCardZones?: readonly string[];
+  banishedCardFilters?: object;
+  banishedCardZones?: readonly string[];
+  filters?: object;
+  zones?: readonly string[];
+  fromZones?: readonly string[];
+  minCount?: number;
+  count?: number;
+  cardRef?: string;
+  targetRef?: string;
+}
+
+interface SimActivationEvaluationContext extends SimConditionContext {
+  actionContext?: SimulatedActivationContextView | null;
+}
+
+interface SimActivationEvaluationOptions extends SimConditionOptions {
+  actionContext?: SimulatedActivationContextView | null;
+  activationContext?: SimulatedActivationContextView | null;
+  card?: SimulatedCardState | null;
+  effect?: EffectDefinition | null;
+}
+
+interface SimConditionEvaluationOptions extends SimActivationEvaluationOptions {
+  strategy?: SimConditionStrategy | null;
+  evaluateSimulatedConditions?: SimConditionEvaluator;
+}
+
+interface SimContextValueReference {
+  key?: string | null;
+  path?: string | null;
+}
+
+interface SimConditionView
+  extends PlayerMatchingCondition,
+    EventCardCondition,
+    SimActivationConditionView {
+  any_of?: readonly unknown[];
+  conditions?: readonly unknown[];
+  empty_field?: boolean;
+  control_card?: boolean;
+  control_card_filters?: object;
+  path?: string | null;
+  defaultValue?: unknown;
+  valueFromContext?: string | SimContextValueReference | null;
+  value?: unknown;
+  amount?: unknown;
+  defaultExpectedValue?: unknown;
+  counterType?: string;
+  op?: SimNumericOperator;
+  operator?: SimNumericOperator;
+  max?: number;
+  leftOwner?: string;
+  rightOwner?: string;
+  leftFilters?: object;
+  rightFilters?: object;
+  excludeSource?: boolean;
+  requireFaceup?: boolean;
+  stateKey?: string | null;
+  key?: string | null;
+  property?: string | null;
+  sourceFilters?: object;
+  sourceEffectId?: string | null;
+  sourceRef?: string | null;
+  attackerType?: string | null;
+  monsterType?: string | null;
+  cardType?: string | null;
+  race?: string | null;
+  minMatchingCostCount?: number;
+  requireCurrentFieldPresence?: boolean;
+}
+
+function asSimCondition(value: unknown): SimConditionView | null {
+  return isObjectValue(value) ? value as SimConditionView : null;
+}
+
+function simActivationWouldDestroyMatchingCards(
+  condition: SimActivationConditionView,
+  ctx: SimActivationEvaluationContext,
+  options: SimActivationEvaluationOptions,
+  self: SimulatedPlayerState,
+  opponent: SimulatedPlayerState,
+): boolean {
   const activationContext =
     options.actionContext ||
     ctx.actionContext ||
     options.activationContext?.context ||
     {};
   const activationAttempt = activationContext.activationAttempt || null;
-  const activatedCard =
-    activationAttempt?.card || activationContext.card || options.card || null;
+  const activatedCard = firstSimulatedCard(
+    activationAttempt?.card || activationContext.card || options.card || null,
+  );
   const effect =
     activationAttempt?.effect || activationContext.effect || options.effect || null;
   const activationPlayer =
@@ -626,15 +1073,22 @@ function simActivationWouldDestroyMatchingCards(condition, ctx, options, self, o
   return matching.length >= minCount;
 }
 
-function simActivationWouldBanishMatchingCards(condition, ctx, options, self, opponent) {
+function simActivationWouldBanishMatchingCards(
+  condition: SimActivationConditionView,
+  ctx: SimActivationEvaluationContext,
+  options: SimActivationEvaluationOptions,
+  self: SimulatedPlayerState,
+  opponent: SimulatedPlayerState,
+): boolean {
   const activationContext =
     options.actionContext ||
     ctx.actionContext ||
     options.activationContext?.context ||
     {};
   const activationAttempt = activationContext.activationAttempt || null;
-  const activatedCard =
-    activationAttempt?.card || activationContext.card || options.card || null;
+  const activatedCard = firstSimulatedCard(
+    activationAttempt?.card || activationContext.card || options.card || null,
+  );
   const effect =
     activationAttempt?.effect || activationContext.effect || options.effect || null;
   const activationPlayer =
@@ -680,15 +1134,22 @@ function simActivationWouldBanishMatchingCards(condition, ctx, options, self, op
   return matching.length >= minCount;
 }
 
-function simActivationWouldMakeCardLeaveField(condition, ctx, options, self, opponent) {
+function simActivationWouldMakeCardLeaveField(
+  condition: SimActivationConditionView,
+  ctx: SimActivationEvaluationContext,
+  options: SimActivationEvaluationOptions,
+  self: SimulatedPlayerState,
+  opponent: SimulatedPlayerState,
+): boolean {
   const activationContext =
     options.actionContext ||
     ctx.actionContext ||
     options.activationContext?.context ||
     {};
   const activationAttempt = activationContext.activationAttempt || null;
-  const activatedCard =
-    activationAttempt?.card || activationContext.card || options.card || null;
+  const activatedCard = firstSimulatedCard(
+    activationAttempt?.card || activationContext.card || options.card || null,
+  );
   const effect =
     activationAttempt?.effect || activationContext.effect || options.effect || null;
   const activationPlayer =
@@ -733,10 +1194,17 @@ function simActivationWouldMakeCardLeaveField(condition, ctx, options, self, opp
   return candidates.length > 0;
 }
 
-export function evaluateSimulatedConditions(conditions, ctx = {}) {
+export function evaluateSimulatedConditions(
+  conditions: unknown,
+  ctx?: object,
+): boolean;
+export function evaluateSimulatedConditions(
+  conditions: unknown,
+  ctx: SimConditionEvaluationContext = {},
+): boolean {
   const list = conditionsArray(conditions);
   if (list.length === 0) return true;
-  const state = ctx.state || ctx.game || {};
+  const state = (ctx.state || ctx.game || {}) as SimConditionStateView;
   const { self, opponent } = getPerspectivePlayers(state, ctx.selfId || "bot");
   const options = ctx.options || {};
   const custom =
@@ -747,7 +1215,8 @@ export function evaluateSimulatedConditions(conditions, ctx = {}) {
     if (typeof result === "boolean") return result;
   }
 
-  return list.every((condition) => {
+  return list.every((conditionValue) => {
+    const condition = asSimCondition(conditionValue);
     if (!condition) return true;
     if (condition.type === "any_of" || Array.isArray(condition.any_of)) {
       const optionsList = condition.conditions || condition.any_of || [];
@@ -824,12 +1293,15 @@ export function evaluateSimulatedConditions(conditions, ctx = {}) {
         ...(condition.control_card_filters || condition.filters || {}),
       };
       const zones = asArray(condition.zones || condition.zone || "field");
-      const min = Number.isFinite(condition.min)
+      const min = typeof condition.min === "number" && Number.isFinite(condition.min)
         ? condition.min
-        : Number.isFinite(condition.max)
+        : typeof condition.max === "number" && Number.isFinite(condition.max)
           ? 0
           : 1;
-      const max = Number.isFinite(condition.max) ? condition.max : null;
+      const max =
+        typeof condition.max === "number" && Number.isFinite(condition.max)
+          ? condition.max
+          : null;
       const sourceCard = resolveConditionSource(ctx, options, "self");
       const count = zones.reduce(
         (sum, zone) =>
@@ -849,7 +1321,10 @@ export function evaluateSimulatedConditions(conditions, ctx = {}) {
     }
     if (condition.type === "control_card_max") {
       const zones = asArray(condition.zones || condition.zone || "field");
-      const max = Number.isFinite(condition.max) ? condition.max : 0;
+      const max =
+        typeof condition.max === "number" && Number.isFinite(condition.max)
+          ? condition.max
+          : 0;
       const filters = condition.filters || {};
       const count = zones.reduce(
         (sum, zone) =>
@@ -863,15 +1338,20 @@ export function evaluateSimulatedConditions(conditions, ctx = {}) {
     }
     if (condition.type === "destroyed_card_matches_declared_value") {
       const sourceCard = ctx.sourceCard || options.sourceCard;
-      const declaration =
-        sourceCard?.declaredValues?.[condition.stateKey || condition.key];
+      const declaration = readSimDeclaration(
+        sourceCard,
+        condition.stateKey || condition.key,
+      );
       const destroyedCard =
         ctx.destroyed || options.destroyed || options.actionContext?.destroyed;
       const property = condition.property || "type";
       if (!declaration || !destroyedCard) return false;
-      const values = Array.isArray(destroyedCard[property])
-        ? destroyedCard[property]
-        : [destroyedCard[property]];
+      const destroyedValue = isObjectValue(destroyedCard)
+        ? readProperty(destroyedCard, property)
+        : undefined;
+      const values = Array.isArray(destroyedValue)
+        ? destroyedValue
+        : [destroyedValue];
       return values.includes(declaration.value);
     }
     if (condition.type === "battle_destroyer_matches_filters") {
@@ -928,8 +1408,10 @@ export function evaluateSimulatedConditions(conditions, ctx = {}) {
     }
     if (condition.type === "battle_opponent_matches_declared_value") {
       const sourceCard = ctx.sourceCard || options.sourceCard;
-      const declaration =
-        sourceCard?.declaredValues?.[condition.stateKey || condition.key];
+      const declaration = readSimDeclaration(
+        sourceCard,
+        condition.stateKey || condition.key,
+      );
       const battleOpponent = battleParticipantForOwner(
         ctx,
         options,
@@ -937,7 +1419,7 @@ export function evaluateSimulatedConditions(conditions, ctx = {}) {
       );
       const property = condition.property || "type";
       if (!declaration || !battleOpponent) return false;
-      const values = asArray(battleOpponent[property]);
+      const values = asArray(readProperty(battleOpponent, property));
       return values.includes(declaration.value);
     }
     if (condition.type === "field_card_count") {
@@ -978,13 +1460,13 @@ export function evaluateSimulatedConditions(conditions, ctx = {}) {
     }
     if (condition.type === "field_card_count_comparison") {
       const zones = asArray(condition.zones || condition.zone || "field");
-      const ownersFor = (ownerRule) =>
+      const ownersFor = (ownerRule: string | undefined) =>
         ownerRule === "opponent"
           ? [opponent]
           : ownerRule === "any" || ownerRule === "both"
             ? [self, opponent]
             : [self];
-      const countFor = (ownerRule, filters) =>
+      const countFor = (ownerRule: string | undefined, filters: object) =>
         ownersFor(ownerRule)
           .filter(Boolean)
           .reduce(
@@ -1063,8 +1545,7 @@ export function evaluateSimulatedConditions(conditions, ctx = {}) {
       if (ownerKey !== "any") {
         const expectedOwner = ownerKey === "opponent" ? opponent : self;
         const eventOwnerId =
-          options.actionContext?.destroyedOwner?.id ||
-          options.actionContext?.destroyedOwner ||
+          readPlayerId(options.actionContext?.destroyedOwner) ||
           card?.controller ||
           card?.owner;
         if (!expectedOwner || eventOwnerId !== expectedOwner.id) return false;
@@ -1129,6 +1610,7 @@ export function evaluateSimulatedConditions(conditions, ctx = {}) {
         temporaryEffects.some((entry) => {
           if (!entry || entry.ownerId !== player.id) return false;
           if (
+            typeof entry.expiresOnTurn === "number" &&
             Number.isFinite(entry.expiresOnTurn) &&
             Number(state.turnCounter || 0) > entry.expiresOnTurn
           ) {
@@ -1136,7 +1618,7 @@ export function evaluateSimulatedConditions(conditions, ctx = {}) {
           }
           const source = buildSimTemporarySource(entry);
           return (
-            matchesTargetFilters(source, sourceFilters, null) &&
+            matchesTargetFilters(source as SimulatedCardState, sourceFilters, null) &&
             declaredValuesMatchCard(
               state,
               entry.declaredValues,
@@ -1189,6 +1671,7 @@ export function evaluateSimulatedConditions(conditions, ctx = {}) {
       const marker = key ? summonedCard?.effectMarkers?.[key] : null;
       if (!marker) return false;
       if (
+        typeof marker.expiresOnTurn === "number" &&
         Number.isFinite(marker.expiresOnTurn) &&
         Number(state.turnCounter || 0) > marker.expiresOnTurn
       ) {
@@ -1220,6 +1703,7 @@ export function evaluateSimulatedConditions(conditions, ctx = {}) {
       const marker = key ? sourceCard?.effectMarkers?.[key] : null;
       if (!marker) return false;
       if (
+        typeof marker.expiresOnTurn === "number" &&
         Number.isFinite(marker.expiresOnTurn) &&
         Number(state.turnCounter || 0) > marker.expiresOnTurn
       ) {
@@ -1232,6 +1716,7 @@ export function evaluateSimulatedConditions(conditions, ctx = {}) {
         return false;
       }
       if (
+        typeof condition.minMatchingCostCount === "number" &&
         Number.isFinite(condition.minMatchingCostCount) &&
         Number(marker.matchingCostCount || 0) < condition.minMatchingCostCount
       ) {
