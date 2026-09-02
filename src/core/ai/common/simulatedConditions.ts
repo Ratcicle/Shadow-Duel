@@ -16,6 +16,8 @@ import type {
 import type { EffectDefinition } from "../../contracts/effects.js";
 
 interface StoredBlueprint {
+  blueprintId?: string | null;
+  sourceCardId?: number | null;
   effectSnapshot?: EffectDefinition | null;
   effect?: EffectDefinition | null;
 }
