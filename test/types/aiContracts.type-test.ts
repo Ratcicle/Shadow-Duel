@@ -7,6 +7,7 @@ import type {
   GameTreeSearchResult,
   GreedySearchResult,
   ScoredAIAction,
+  SimulatedBattleAction,
   StrategyConstructor,
   StrategyRegistryPort,
   StrategyRuntimePort,
@@ -32,6 +33,8 @@ import type {
   BotMainPhaseActionExecutors,
   BotRuntimePort,
 } from "../../src/core/contracts/bot.js";
+import { buildPrioritizedAction } from "../../src/core/ai/common/actionGeneration.js";
+import { applyGenericSimulatedMainPhaseAction } from "../../src/core/ai/common/simulation.js";
 
 type Equal<Left, Right> =
   (<Value>() => Value extends Left ? 1 : 2) extends
@@ -121,6 +124,40 @@ const spellAction: AIActionOf<"spell"> = {
   type: "spell",
   index: 1,
 };
+const extraDeckProcedureAction: AIActionOf<"extraDeckProcedure"> = {
+  type: "extraDeckProcedure",
+  extraDeckIndex: 0,
+  summonProcedure: "contact_fusion",
+  requiredMaterialCount: 2,
+};
+const builtExtraDeckProcedureAction = buildPrioritizedAction({
+  type: "extraDeckProcedure",
+  extra: {
+    summonProcedure: "graveyard_banish_fusion",
+    requiredMaterialCount: 3,
+  },
+});
+const plannerBattleAction: SimulatedBattleAction = {
+  type: "simulatedBattle",
+  direct: true,
+};
+const appliedSimulationState = applyGenericSimulatedMainPhaseAction(
+  simulationState,
+  summonAction,
+);
+const appliedPerspectiveState = applyGenericSimulatedMainPhaseAction(
+  perspectiveState,
+  spellAction,
+);
+type BuiltExtraDeckTypeIsCorrelated = Expect<
+  Equal<typeof builtExtraDeckProcedureAction.type, "extraDeckProcedure">
+>;
+type AppliedSimulationKeepsProfile = Expect<
+  Equal<typeof appliedSimulationState, SimulationGameState>
+>;
+type AppliedPerspectiveKeepsProfile = Expect<
+  Equal<typeof appliedPerspectiveState, PerspectiveGameState>
+>;
 const closedAction: AIAction = summonAction;
 const scoredAction: ScoredAIAction = {
   action: summonAction,
@@ -174,6 +211,43 @@ const plannerActionAsRuntimeAction: AIAction = { type: "simulatedBattle" };
 // @ts-expect-error
 const unknownRuntimeAction: AIAction = { type: "phase_advance" };
 
+// contract-negative: planner-only battles never reach the main-phase dispatcher.
+// @ts-expect-error
+applyGenericSimulatedMainPhaseAction(simulationState, plannerBattleAction);
+
+// contract-negative: the main-phase dispatcher rejects unknown action types.
+// @ts-expect-error
+applyGenericSimulatedMainPhaseAction(perspectiveState, { type: "phase_advance" });
+
+// contract-negative: live runtime state must be cloned before simulation.
+// @ts-expect-error
+applyGenericSimulatedMainPhaseAction(liveState, summonAction);
+
+// contract-negative: public replay snapshots are not mutable simulation state.
+// @ts-expect-error
+applyGenericSimulatedMainPhaseAction(publicState, summonAction);
+
+const extraDeckProcedureWithDeadField: AIActionOf<"extraDeckProcedure"> = {
+  type: "extraDeckProcedure",
+  // contract-negative: the removed procedureType field was never consumed by the runtime.
+  // @ts-expect-error
+  procedureType: "contact_fusion",
+};
+
+buildPrioritizedAction({
+  type: "spell",
+  // contract-negative: an action extra is correlated with its inferred discriminant.
+  // @ts-expect-error
+  extra: { requiredMaterialCount: 2 },
+});
+
+buildPrioritizedAction({
+  type: "summon",
+  // contract-negative: extras cannot replace the canonical action discriminant.
+  // @ts-expect-error
+  extra: { type: "spell" },
+});
+
 // contract-negative: position-change actions require their correlated destination.
 // @ts-expect-error
 const incompletePositionChange: AIActionOf<"position_change"> = {
@@ -203,6 +277,11 @@ declare const incompatibleConstructor: new (
 registry.register("invalid", incompatibleConstructor);
 
 void closedAction;
+void extraDeckProcedureAction;
+void builtExtraDeckProcedureAction;
+void plannerBattleAction;
+void appliedSimulationState;
+void appliedPerspectiveState;
 void scoredAction;
 void simulatedCard;
 void simulationState;
@@ -218,6 +297,7 @@ void fullSimulationFromGameTree;
 void unbrandedSimulatedCard;
 void plannerActionAsRuntimeAction;
 void unknownRuntimeAction;
+void extraDeckProcedureWithDeadField;
 void incompletePositionChange;
 void incompleteExecutors;
 void unscoredAction;
@@ -230,6 +310,9 @@ const replayStateKeepsCanonicalSnapshot: ReplayStateKeepsCanonicalSnapshot =
 const publicStateIsExplicitReturn: PublicStateIsExplicitReturn = true;
 const searchScoresAreRequired: SearchScoresAreRequired = true;
 const gameTreePlayerKeysAreExact: GameTreePlayerKeysAreExact = true;
+const builtExtraDeckTypeIsCorrelated: BuiltExtraDeckTypeIsCorrelated = true;
+const appliedSimulationKeepsProfile: AppliedSimulationKeepsProfile = true;
+const appliedPerspectiveKeepsProfile: AppliedPerspectiveKeepsProfile = true;
 
 void actionTypesAreExact;
 void actionMapKeysAreExact;
@@ -238,3 +321,6 @@ void replayStateKeepsCanonicalSnapshot;
 void publicStateIsExplicitReturn;
 void searchScoresAreRequired;
 void gameTreePlayerKeysAreExact;
+void builtExtraDeckTypeIsCorrelated;
+void appliedSimulationKeepsProfile;
+void appliedPerspectiveKeepsProfile;

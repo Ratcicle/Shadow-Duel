@@ -7,7 +7,6 @@
  */
 
 import type {
-  AIAction,
   AIActionOf,
   AIActionType,
   AIActivationContext,
@@ -27,9 +26,13 @@ type ActionIndexKey =
   | "zoneIndex"
   | "graveyardIndex"
   | "materialIndex";
-type AIActionPatch = {
-  [Type in AIActionType]: Partial<AIActionOf<Type>>;
-}[AIActionType];
+type AIActionExtraByType = {
+  [Type in AIActionType]: Partial<Omit<AIActionOf<Type>, "type">>;
+};
+type AIActionExtra<Type extends AIActionType> = AIActionExtraByType[Type];
+type AIActionExtraInput<Type extends AIActionType> =
+  | AIActionExtra<Type>
+  | ((context: unknown) => AIActionExtra<Type> | null);
 
 interface MutablePrioritizedAction {
   type: AIActionType;
@@ -58,7 +61,7 @@ interface BuildPrioritizedActionInput<Type extends AIActionType = AIActionType> 
   reason?: string | null;
   effect?: EffectDefinition | null;
   activationContext?: AIActivationContext | null;
-  extra?: AIActionPatch | null;
+  extra?: AIActionExtra<NoInfer<Type>> | null;
 }
 
 interface ActionDecision {
@@ -113,7 +116,7 @@ interface HandSpellOptions {
     },
   ): boolean | ActionAllowedResult | null | undefined;
   type?: Extract<AIActionType, "spell">;
-  extra?: AIActionPatch | ((context: unknown) => AIActionPatch | null);
+  extra?: AIActionExtraInput<"spell">;
 }
 
 interface TributeInfo {
@@ -138,7 +141,7 @@ interface NormalSummonOptions {
     context: unknown,
   ): ActionDecision;
   type?: Extract<AIActionType, "summon">;
-  extra?: AIActionPatch | ((context: unknown) => AIActionPatch | null);
+  extra?: AIActionExtraInput<"summon">;
 }
 
 interface IgnitionContext {
@@ -150,12 +153,12 @@ interface IgnitionContext {
   sourceZone?: string;
 }
 
-interface IgnitionEffectOptions {
+interface IgnitionEffectOptions<Type extends AIActionType> {
   game?: AiLiveGamePort;
   player: SimulatedPlayerState;
   cards?: PlanningCard[];
   analysis?: unknown;
-  type: AIActionType;
+  type: Type;
   sourceZone?: string;
   indexFields?: ActionIndexKey[];
   findEffect?(
@@ -183,7 +186,7 @@ interface IgnitionEffectOptions {
     context: { player: SimulatedPlayerState; sourceIndex: number },
   ): boolean;
   includeEffectId?: boolean;
-  extra?: AIActionPatch | ((context: unknown) => AIActionPatch | null);
+  extra?: AIActionExtraInput<NoInfer<Type>>;
 }
 
 interface SafetyResult {
@@ -245,10 +248,10 @@ function applyIndex(
   if (hasValue(value)) action[key] = value;
 }
 
-function resolveExtra(
-  extra: AIActionPatch | ((context: unknown) => AIActionPatch | null) | null | undefined,
+function resolveExtra<Type extends AIActionType>(
+  extra: AIActionExtraInput<Type> | null | undefined,
   context: unknown,
-): AIActionPatch {
+): AIActionExtra<Type> {
   if (typeof extra === "function") return extra(context) || {};
   return extra || {};
 }
@@ -320,7 +323,7 @@ export function buildPrioritizedAction<Type extends AIActionType>({
   reason = null,
   effect = null,
   activationContext = null,
-  extra = {},
+  extra,
 }: BuildPrioritizedActionInput<Type> = {} as BuildPrioritizedActionInput<Type>): AIActionOf<Type> {
   const action: MutablePrioritizedAction = {
     type,
@@ -462,7 +465,7 @@ export function getGenericNormalSummonActions({
 /**
  * Build ignition-style effect actions with caller-owned discovery and preview.
  */
-export function getGenericIgnitionEffectActions({
+export function getGenericIgnitionEffectActions<Type extends AIActionType>({
   game,
   player,
   cards = [],
@@ -476,9 +479,9 @@ export function getGenericIgnitionEffectActions({
   canActivate,
   cardFilter = defaultIgnitionCardFilter,
   includeEffectId = false,
-  extra = {},
-}: IgnitionEffectOptions = {} as IgnitionEffectOptions): AIAction[] {
-  const actions: AIAction[] = [];
+  extra,
+}: IgnitionEffectOptions<Type> = {} as IgnitionEffectOptions<Type>): AIActionOf<Type>[] {
+  const actions: AIActionOf<Type>[] = [];
   for (const [sourceIndex, card] of (cards || []).entries()) {
     if (!card || !cardFilter(card, sourceZone, { player, sourceIndex })) {
       continue;

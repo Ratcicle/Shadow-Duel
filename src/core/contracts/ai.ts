@@ -3,6 +3,7 @@ import type {
   BattlePosition,
   BattlePositionInput,
   GameCard,
+  SpecialSummonProcedure,
 } from "./cards.js";
 import type { EffectDefinition } from "./effects.js";
 import type { GamePhase } from "./game.js";
@@ -101,7 +102,8 @@ export interface ExtraDeckProcedureAIAction extends AIActionCommon {
   type: "extraDeckProcedure";
   extraDeckCard?: SimulatedCardState | GameCard;
   extraDeckIndex?: number;
-  procedureType?: string;
+  summonProcedure?: SpecialSummonProcedure;
+  requiredMaterialCount?: number;
   materials?: ExtraDeckMaterialHint[];
   materialIndices?: number[];
   materialIds?: Array<RawCardDefinitionId | number>;
