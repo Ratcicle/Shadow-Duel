@@ -140,16 +140,26 @@ export interface SimulatedActionOptions {
   targetPreference?: object | null;
   targetPreferences?: object;
   costPreferences?: object;
-  rankSearchCandidates?: SimulatedStrategyCapabilities["rankSearchCandidates"];
-  evaluateRecruitCandidate?: SimulatedStrategyCapabilities["evaluateRecruitCandidate"];
-  chooseSpecialSummonPosition?: SimulatedStrategyCapabilities["chooseSpecialSummonPosition"];
+  rankSearchCandidates?(
+    candidates: SimulatedCardState[],
+    action: CardAction,
+    context: object,
+  ): SimulatedCardState[];
+  evaluateRecruitCandidate?(
+    candidates: SimulatedCardState[],
+    context: object,
+  ): SimulatedRecruitResult;
+  chooseSpecialSummonPosition?(
+    card: SimulatedCardState,
+    context: object,
+  ): BattlePosition | "choice" | null | undefined;
   chooseActionCase?: (
     cases: readonly object[],
     context: object,
   ) => object | string | number | null | undefined;
   emitSimulatedEvent?: (event: string, payload: object) => void;
-  onAfterSpecialSummon?: (payload: object) => void;
-  onFusionSummon?: (payload: object) => void;
+  onAfterSpecialSummon?(payload: object): void;
+  onFusionSummon?(payload: object): void;
   evaluateSimulatedConditions?: (
     conditions: readonly object[],
     context: object,

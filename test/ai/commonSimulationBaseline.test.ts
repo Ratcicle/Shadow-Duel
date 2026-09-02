@@ -8,6 +8,8 @@ import {
   markSimOncePerTurnUsed,
   useSimOpt,
 } from "../../src/core/ai/common/simStateUtils.js";
+import { applyGenericSimulatedMainPhaseAction } from "../../src/core/ai/common/simulation.js";
+import { cloneBotGameState } from "../../src/core/bot/simulationBridge.js";
 
 test("legacy one-shot buckets normalize arrays to Sets without reordering", () => {
   const state = { _simOptUsed: ["first", "second", "first"] };
@@ -73,4 +75,67 @@ test("simulated once-per-turn usage is counted and capped", () => {
   assert.equal(canUseSimOncePerTurn(state, "legacy", 2), false);
   markSimOncePerTurnUsed(state, "legacy", 2);
   assert.equal(ensureSimOncePerTurnBucket(state).get("legacy"), 2);
+});
+
+test("generic spell placement preserves hook receiver and truthy results", () => {
+  const spell = {
+    id: 501,
+    name: "Persistent Probe",
+    cardKind: "spell" as const,
+    subtype: "continuous",
+  };
+  const opponent = {
+    id: "player",
+    lp: 8000,
+    hand: [],
+    field: [],
+    graveyard: [],
+    deck: [],
+    extraDeck: [],
+    banished: [],
+    fieldSpell: null,
+    spellTrap: [],
+    controllerType: "ai" as const,
+  };
+  const bot = {
+    ...opponent,
+    id: "bot",
+    hand: [spell],
+    resolveOpponent: () => opponent,
+    strategy: {
+      simulateMainPhaseAction: (state: unknown) => state,
+      simulateSpellEffect: () => undefined,
+    },
+  };
+  const game = {
+    player: opponent,
+    bot,
+    turn: "bot",
+    phase: "main1",
+    turnCounter: 3,
+  };
+  const state = cloneBotGameState(bot, game);
+  let receiver: object | undefined;
+  const options = {
+    placeSpellCard(
+      this: object,
+      currentState: typeof state,
+      placedCard: (typeof state.bot.hand)[number],
+    ) {
+      receiver = this;
+      currentState.bot.spellTrap.push(placedCard);
+      return { placed: 1 };
+    },
+  };
+
+  applyGenericSimulatedMainPhaseAction(
+    state,
+    { type: "spell", index: 0, cardName: spell.name },
+    options,
+  );
+
+  assert.equal(receiver, options);
+  assert.equal(state.bot.hand.length, 0);
+  assert.equal(state.bot.spellTrap[0]?.name, spell.name);
+  assert.equal(state.bot.graveyard.length, 0);
 });
