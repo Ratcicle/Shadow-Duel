@@ -1,9 +1,20 @@
-import type { SimulatedCardState } from "../../contracts/aiState.js";
-import type { GameCard } from "../../contracts/cards.js";
-
 type StatName = "atk" | "def";
 type FacedownValue = number | "printed";
-type StatCardBase = SimulatedCardState | GameCard;
+
+interface StatCardBase {
+  atk?: number | null;
+  def?: number | null;
+  tempAtkBoost?: number;
+  tempDefBoost?: number;
+  equipAtkBonus?: number;
+  equipDefBonus?: number;
+  cardKind?: string | null;
+  position?: string | null;
+  isFacedown?: boolean;
+  piercing?: boolean;
+  piercingDamageMultiplier?: number | null;
+}
+
 type StatCard = StatCardBase & {
   status?: { piercingDamage?: boolean };
 };

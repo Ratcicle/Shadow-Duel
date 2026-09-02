@@ -1,15 +1,5 @@
 import { getEffectiveAtk } from "./cardStats.js";
-import type {
-  SimulatedCardState,
-  SimulatedPlayerState,
-} from "../../contracts/aiState.js";
-
-interface CardValueOptions {
-  preferDefense?: boolean;
-  archetype?: string | null;
-  fieldSpell?: SimulatedCardState | null;
-  owner?: MultiAttackOwnerView | null;
-}
+import type { CardAction } from "../../contracts/actions.js";
 
 interface MultiAttackCardView {
   attackLimitThisTurn?: number | null;
@@ -26,8 +16,40 @@ interface MultiAttackOwnerView {
   graveyard?: ReadonlyArray<{ name?: string | null }>;
 }
 
+interface CardValueEffectView {
+  actions?: readonly CardAction[] | null;
+}
+
+interface CardValueCardView extends MultiAttackCardView {
+  name?: string | null;
+  cardKind?: string | null;
+  atk?: number | null;
+  def?: number | null;
+  level?: number | null;
+  position?: string | null;
+  archetype?: string | null;
+  archetypes?: readonly string[];
+  isFacedown?: boolean;
+  cannotAttackThisTurn?: boolean;
+  hasAttacked?: boolean;
+  piercing?: boolean;
+  piercingDamageMultiplier?: number | null;
+  battleIndestructibleOncePerTurn?: boolean;
+  mustBeAttacked?: boolean;
+  tempAtkBoost?: number;
+  tempDefBoost?: number;
+  effects?: readonly CardValueEffectView[];
+}
+
+interface CardValueOptions {
+  preferDefense?: boolean;
+  archetype?: string | null;
+  fieldSpell?: CardValueCardView | null;
+  owner?: MultiAttackOwnerView | null;
+}
+
 export function getCardArchetypes(
-  card: SimulatedCardState | null | undefined,
+  card: CardValueCardView | null | undefined,
 ): string[] {
   if (!card) return [];
   if (Array.isArray(card.archetypes)) return card.archetypes.slice();
@@ -59,7 +81,7 @@ export function getMaxAttacks(
 }
 
 export function hasArchetype(
-  card: SimulatedCardState | null | undefined,
+  card: CardValueCardView | null | undefined,
   archetype: string | null | undefined,
 ): boolean {
   if (!card || !archetype) return false;
@@ -67,7 +89,7 @@ export function hasArchetype(
 }
 
 export function estimateMonsterValue(
-  monster: SimulatedCardState | null | undefined,
+  monster: CardValueCardView | null | undefined,
   options: CardValueOptions = {},
 ): number {
   if (!monster) return 0;
@@ -109,7 +131,7 @@ export function estimateMonsterValue(
 }
 
 export function estimateCardValue(
-  card: SimulatedCardState | null | undefined,
+  card: CardValueCardView | null | undefined,
   options: CardValueOptions = {},
 ): number {
   if (!card) return 0;
@@ -157,7 +179,7 @@ export function estimateCardValue(
 }
 
 export function isBattleReadyAttacker(
-  card: SimulatedCardState | null | undefined,
+  card: CardValueCardView | null | undefined,
   { archetype = null }: Pick<CardValueOptions, "archetype"> = {},
 ): boolean {
   if (!card || card.cardKind !== "monster") return false;
