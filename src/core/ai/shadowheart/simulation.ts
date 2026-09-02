@@ -37,6 +37,7 @@ import {
   recordNormalSummonForTurn,
 } from "../../Player.js";
 import type {
+  AIAction,
   AIActivationContext,
   AIPlannedAction,
   StrategyRuntimePort,
@@ -960,9 +961,14 @@ export function simulateMainPhaseAction(
   const baseOptions = normalizeOptions(placeSpellCardOrOptions);
   const preparedAction = prepareAction(state, action, baseOptions);
   const options = buildGenericOptions(state, preparedAction, baseOptions);
-  if (preparedAction.type !== "simulatedBattle") {
-    applyGenericSimulatedMainPhaseAction(state, preparedAction, options);
-  }
+  // The legacy planner may probe `simulatedBattle` through this adapter. The
+  // generic dispatcher intentionally exposes only the 13 executable actions,
+  // while the erased cast preserves the former runtime no-op path.
+  applyGenericSimulatedMainPhaseAction(
+    state,
+    preparedAction as AIAction,
+    options,
+  );
   return state;
 }
 
