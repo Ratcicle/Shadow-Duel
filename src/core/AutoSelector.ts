@@ -232,6 +232,48 @@ function scoreOffensiveTemporaryBuff(
   return typeof result === "number" ? result : 0;
 }
 
+function estimateAutoSelectorMonsterValue(
+  card: AutoSelectorScorableCard | null | undefined,
+  options: {
+    fieldSpell?: AutoSelectorScorableCard | null;
+    preferDefense?: boolean;
+  } = {},
+): number {
+  const result: unknown = Reflect.apply(estimateMonsterValue, undefined, [
+    card,
+    options,
+  ]);
+  return typeof result === "number" ? result : 0;
+}
+
+function estimateAutoSelectorCardValue(
+  card: AutoSelectorScorableCard | null | undefined,
+  options: {
+    fieldSpell?: AutoSelectorScorableCard | null;
+    preferDefense?: boolean;
+  } = {},
+): number {
+  const result: unknown = Reflect.apply(estimateCardValue, undefined, [
+    card,
+    options,
+  ]);
+  return typeof result === "number" ? result : 0;
+}
+
+function getAutoSelectorEffectiveAtk(
+  card: AutoSelectorScorableCard | null | undefined,
+): number {
+  const result: unknown = Reflect.apply(getEffectiveAtk, undefined, [card]);
+  return typeof result === "number" ? result : 0;
+}
+
+function getAutoSelectorEffectiveDef(
+  card: AutoSelectorScorableCard | null | undefined,
+): number {
+  const result: unknown = Reflect.apply(getEffectiveDef, undefined, [card]);
+  return typeof result === "number" ? result : 0;
+}
+
 export default class AutoSelector {
   readonly game: AutoSelectorGamePort;
 
@@ -512,8 +554,8 @@ export default class AutoSelector {
 
     const baseValue =
       baseCard?.cardKind === "monster"
-        ? estimateMonsterValue(baseCard, options)
-        : estimateCardValue(baseCard, options);
+        ? estimateAutoSelectorMonsterValue(baseCard, options)
+        : estimateAutoSelectorCardValue(baseCard, options);
 
     const self = context?.owner || context?.player || null;
     const isSelf = self && ownerPlayer === self;
@@ -713,9 +755,11 @@ export default class AutoSelector {
       ? configuredAtkBoost
       : 0;
     if (atkBoost <= 0) return -100;
-    if (card.position !== "attack") return -80 + getEffectiveAtk(card) / 10000;
+    if (card.position !== "attack") {
+      return -80 + getAutoSelectorEffectiveAtk(card) / 10000;
+    }
     if (card.cannotAttackThisTurn || card.hasAttacked) {
-      return -40 + getEffectiveAtk(card) / 10000;
+      return -40 + getAutoSelectorEffectiveAtk(card) / 10000;
     }
 
     const self = context?.owner || context?.player || null;
@@ -752,7 +796,7 @@ export default class AutoSelector {
     const isSource =
       sourceCardId != null &&
       (candidate?.cardRef?.id === sourceCardId || candidate?.id === sourceCardId);
-    const expectedAtk = getEffectiveAtk(card) + atkBoost;
+    const expectedAtk = getAutoSelectorEffectiveAtk(card) + atkBoost;
     let score = -10;
 
     if (isSource) score += 80;
@@ -776,8 +820,8 @@ export default class AutoSelector {
       const stat = monster.isFacedown
         ? 1500
         : monster.position === "defense"
-          ? getEffectiveDef(monster)
-          : getEffectiveAtk(monster);
+          ? getAutoSelectorEffectiveDef(monster)
+          : getAutoSelectorEffectiveAtk(monster);
       return Math.max(max, stat);
     }, 0);
 
@@ -849,7 +893,9 @@ function isOffensivePayoffCost(
 ): boolean {
   if (!card || card.cardKind !== "monster") return false;
   if (card.name && (payoffNames || []).includes(card.name)) return true;
-  return (card.level || 0) >= 7 && getEffectiveAtk(card) >= 2400;
+  return (
+    (card.level || 0) >= 7 && getAutoSelectorEffectiveAtk(card) >= 2400
+  );
 }
 
 function countAvailableOffensivePayoffs(
@@ -894,7 +940,7 @@ function getNamedPreferenceTargetScore(
   const preferredNames = preference.preferredNames || [];
   const avoidNames = preference.avoidNames || [];
   const candidateIds = getCandidateInstanceIds(card, candidate);
-  let score = estimateCardValue(card);
+  let score = estimateAutoSelectorCardValue(card);
   if (card.name && preferredNames.includes(card.name)) score += 40;
   if (card.name && avoidNames.includes(card.name)) score -= 30;
   if (listIncludesInstance(preference.preferredInstanceIds, candidateIds)) {
@@ -911,8 +957,8 @@ function getRecursionTargetScore(
   preference: AutoSelectorPreference = {},
 ): number {
   if (!card || card.cardKind !== "monster") return -100;
-  const atk = getEffectiveAtk(card);
-  const def = getEffectiveDef(card);
+  const atk = getAutoSelectorEffectiveAtk(card);
+  const def = getAutoSelectorEffectiveDef(card);
   const purpose = preference.purpose || "value";
   const defensiveNames = preference.defensiveNames || [];
   const offensiveNames = preference.offensiveNames || [];
