@@ -46,10 +46,13 @@ import type {
 } from "../../contracts/aiState.js";
 import type { CardAction } from "../../contracts/actions.js";
 import type {
-  BattlePositionInput,
   CardKind,
+  GameCard,
 } from "../../contracts/cards.js";
-import type { AIActivationContext } from "../../contracts/ai.js";
+import type {
+  AIAction,
+  AIActivationContext,
+} from "../../contracts/ai.js";
 import type {
   EffectDefinition,
   EffectTiming,
@@ -77,7 +80,7 @@ interface SimulatedExtraDeckMaterialHint {
 
 interface SimulatedExtraDeckAction extends SimulatedHandIndexAction {
   extraDeckIndex?: number;
-  extraDeckCard?: SimulatedPlayerState["extraDeck"][number] | null;
+  extraDeckCard?: SimulatedPlayerState["extraDeck"][number] | GameCard | null;
   materials?: readonly SimulatedExtraDeckMaterialHint[];
   materialIndices?: readonly number[];
   materialIds?: readonly (number | undefined)[];
@@ -322,8 +325,12 @@ function findSimulatedExtraDeckCard(
         card.name === action.cardName ||
         card.name === action.extraDeckCard?.name),
   );
+  const fallbackCard = action.extraDeckCard as
+    | SimulatedCardState
+    | null
+    | undefined;
   return {
-    card: index >= 0 ? extraDeck[index] : action.extraDeckCard || null,
+    card: index >= 0 ? extraDeck[index] : fallbackCard || null,
     index,
   };
 }
@@ -1385,23 +1392,7 @@ interface SimulatedEffectActionView {
   effect?: EffectDefinition | null;
 }
 
-interface SimulatedActionOverrideAction extends SimulatedEffectActionView {
-  type: string;
-  activationContext?: AIActivationContext | null;
-  cardId?: number;
-  cardName?: string;
-  index?: number;
-  fieldIndex?: number;
-  position?: BattlePositionInput | null;
-  facedown?: boolean;
-  toPosition?: string | null;
-  zoneIndex?: number;
-  graveyardIndex?: number;
-  materialIndex?: number;
-  ascensionCard?: SimulatedCardState | null;
-  summonProcedure?: string | null;
-  requiredMaterialCount?: number;
-}
+type SimulatedActionOverrideAction = AIAction;
 
 interface SimulatedActionOverrideOptions extends SimulatedEventDispatchOptions {
   actionOverrides?: object | null;
@@ -2220,8 +2211,9 @@ export function applyGenericSimulatedMainPhaseAction<
             card.name === action.cardName ||
             card.name === action.ascensionCard?.name),
       );
-      const ascensionCard =
-        extraIndex >= 0 ? player.extraDeck[extraIndex] : action.ascensionCard;
+      const ascensionCard = (
+        extraIndex >= 0 ? player.extraDeck[extraIndex] : action.ascensionCard
+      ) as SimulatedCardState | null | undefined;
       if (!ascensionCard) break;
       if (!canSimulatedSpecialSummon(ascensionCard, player, "ascension", "extraDeck")) break;
       player.field.splice(materialIndex, 1);

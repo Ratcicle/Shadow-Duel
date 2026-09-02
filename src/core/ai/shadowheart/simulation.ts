@@ -96,8 +96,7 @@ interface ShadowActionExtras {
   };
 }
 
-interface ShadowMainPhaseAction extends ShadowActionExtras {
-  type: AIPlannedAction["type"];
+type ShadowMainPhaseAction = AIPlannedAction & ShadowActionExtras & {
   activationContext?: AIActivationContext;
   sourceCard?: SimulatedCardState | GameCard | null;
   cardName?: string;
@@ -106,7 +105,7 @@ interface ShadowMainPhaseAction extends ShadowActionExtras {
   fieldIndex?: number;
   position?: "attack" | "defense" | "choice";
   facedown?: boolean;
-}
+};
 type ShadowAction = ShadowMainPhaseAction | ShadowSearchAction;
 
 interface ShadowPlaceResult {
@@ -961,7 +960,9 @@ export function simulateMainPhaseAction(
   const baseOptions = normalizeOptions(placeSpellCardOrOptions);
   const preparedAction = prepareAction(state, action, baseOptions);
   const options = buildGenericOptions(state, preparedAction, baseOptions);
-  applyGenericSimulatedMainPhaseAction(state, preparedAction, options);
+  if (preparedAction.type !== "simulatedBattle") {
+    applyGenericSimulatedMainPhaseAction(state, preparedAction, options);
+  }
   return state;
 }
 
