@@ -11,6 +11,16 @@ import {
 import { applyGenericSimulatedMainPhaseAction } from "../../src/core/ai/common/simulation.js";
 import { cloneBotGameState } from "../../src/core/bot/simulationBridge.js";
 
+type BotCloneCard = Parameters<typeof cloneBotGameState>[0]["hand"][number];
+
+function ensureLegacySimOptSet(input: object): Set<string> {
+  const runtimeEnsure: unknown = ensureSimOptSet;
+  if (typeof runtimeEnsure !== "function") {
+    throw new TypeError("ensureSimOptSet must remain callable");
+  }
+  return Reflect.apply(runtimeEnsure, undefined, [input]) as Set<string>;
+}
+
 test("legacy one-shot buckets normalize arrays to Sets without reordering", () => {
   const state = { _simOptUsed: ["first", "second", "first"] };
 
@@ -24,7 +34,7 @@ test("legacy one-shot buckets normalize arrays to Sets without reordering", () =
 test("legacy one-shot buckets replace unsupported values with an empty Set", () => {
   const state = { _simOptUsed: { stale: true } };
 
-  const bucket = ensureSimOptSet(state);
+  const bucket = ensureLegacySimOptSet(state);
 
   assert.ok(bucket instanceof Set);
   assert.equal(bucket, state._simOptUsed);
@@ -78,7 +88,7 @@ test("simulated once-per-turn usage is counted and capped", () => {
 });
 
 test("generic spell placement preserves hook receiver and truthy results", () => {
-  const spell = {
+  const spell: Partial<BotCloneCard> = {
     id: 501,
     name: "Persistent Probe",
     cardKind: "spell" as const,
@@ -95,15 +105,17 @@ test("generic spell placement preserves hook receiver and truthy results", () =>
     banished: [],
     fieldSpell: null,
     spellTrap: [],
+    summonCount: 0,
+    additionalNormalSummons: 0,
     controllerType: "ai" as const,
   };
   const bot = {
     ...opponent,
     id: "bot",
-    hand: [spell],
+    hand: [spell as BotCloneCard],
     resolveOpponent: () => opponent,
     strategy: {
-      simulateMainPhaseAction: (state: unknown) => state,
+      simulateMainPhaseAction: () => undefined,
       simulateSpellEffect: () => undefined,
     },
   };

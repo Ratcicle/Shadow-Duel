@@ -3,6 +3,7 @@ import test from "node:test";
 
 import { ensureSimOncePerTurnBucket } from "../../src/core/ai/common/simStateUtils.js";
 import { simulateMainPhaseAction } from "../../src/core/ai/shadowheart/simulation.js";
+import { cloneBotGameState } from "../../src/core/bot/simulationBridge.js";
 
 interface TestCard {
   id: number;
@@ -51,29 +52,42 @@ function shadowHeartMonster(id: number, name: string): TestCard {
   };
 }
 
+function cloneLegacyBotFixture(bot: object, game: object) {
+  const runtimeClone: unknown = cloneBotGameState;
+  if (typeof runtimeClone !== "function") {
+    throw new TypeError("cloneBotGameState must remain callable");
+  }
+  return Reflect.apply(runtimeClone, undefined, [bot, game]) as ReturnType<
+    typeof cloneBotGameState
+  >;
+}
+
 test("Shadow-Heart and common simulation share counted OPT buckets", () => {
-  const bot = player("bot");
+  const sourceBot = player("bot");
   const imp = shadowHeartMonster(1, "Shadow-Heart Imp");
-  bot.hand.push(imp, shadowHeartMonster(2, "Shadow-Heart Gecko"));
-  const state: {
-    bot: ReturnType<typeof player>;
-    player: ReturnType<typeof player>;
-    turn: string;
-    phase: string;
-    turnCounter: number;
-    _isPerspectiveState: true;
-    _gameRef: object;
-    _simOncePerTurn: { bot?: Map<string, number> };
-  } = {
+  sourceBot.hand.push(imp, shadowHeartMonster(2, "Shadow-Heart Gecko"));
+  const opponent = player("player");
+  const bot = {
+    ...sourceBot,
+    resolveOpponent: () => opponent,
+    strategy: {
+      simulateMainPhaseAction: () => undefined,
+      simulateSpellEffect: () => undefined,
+    },
+  };
+  const game = {
     bot,
-    player: player("player"),
+    player: opponent,
     turn: "bot",
     phase: "main1",
     turnCounter: 1,
-    _isPerspectiveState: true,
-    _gameRef: {},
-    _simOncePerTurn: {},
   };
+  const state = cloneLegacyBotFixture(bot, game);
+  state._simOncePerTurn = {};
+  state.bot.additionalNormalSummonPermissions = [];
+  state.bot.normalSummonsThisTurn = [];
+  state.bot.specialSummonRestrictions = [];
+  state.bot.effectActivationRestrictions = [];
 
   const commonBucket = ensureSimOncePerTurnBucket(state, "bot");
   commonBucket.set("common_probe", 1);
@@ -92,7 +106,7 @@ test("Shadow-Heart and common simulation share counted OPT buckets", () => {
     ["shadow_heart_imp_on_summon", 1],
   ]);
   assert.deepEqual(
-    bot.field.map((card) => card.name),
+    state.bot.field.map((card) => card.name),
     ["Shadow-Heart Imp", "Shadow-Heart Gecko"],
   );
 });
