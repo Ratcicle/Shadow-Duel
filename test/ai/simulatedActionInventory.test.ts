@@ -52,24 +52,44 @@ function createState() {
   const player = {
     id: "player",
     lp: 8000,
-    deck: [] as object[],
-    hand: [] as object[],
-    field: [] as object[],
-    spellTrap: [] as object[],
-    graveyard: [] as object[],
-    banished: [] as object[],
+    deck: [],
+    hand: [],
+    field: [],
+    spellTrap: [],
+    graveyard: [],
+    extraDeck: [],
+    banished: [],
+    fieldSpell: null,
+    summonCount: 0,
+    additionalNormalSummons: 0,
   };
   const bot = {
     ...player,
     id: "bot",
-    deck: [] as object[],
-    hand: [] as object[],
-    field: [] as object[],
-    spellTrap: [] as object[],
-    graveyard: [] as object[],
-    banished: [] as object[],
+    deck: [],
+    hand: [],
+    field: [],
+    spellTrap: [],
+    graveyard: [],
+    extraDeck: [],
+    banished: [],
+    fieldSpell: null,
   };
-  return { player, bot };
+  return {
+    player,
+    bot,
+    turn: "bot",
+    phase: "main1",
+    turnCounter: 1,
+  };
+}
+
+function applyRuntimeSimulatedActions(input: object): void {
+  const runtimeApply: unknown = applySimulatedActions;
+  if (typeof runtimeApply !== "function") {
+    throw new TypeError("applySimulatedActions must remain callable");
+  }
+  Reflect.apply(runtimeApply, undefined, [input]);
 }
 
 test("simulated action handlers preserve the complete legacy order", () => {
@@ -99,11 +119,9 @@ test("simulated action coverage preserves the database inventory", () => {
 });
 
 test("unknown simulated actions are recorded in encounter order and skipped", () => {
-  const state = createState() as ReturnType<typeof createState> & {
-    _simUnsupportedActions?: string[];
-  };
+  const state = createState();
 
-  applySimulatedActions({
+  applyRuntimeSimulatedActions({
     actions: [
       { type: "unknown_first" },
       { type: "unknown_second" },
@@ -113,7 +131,7 @@ test("unknown simulated actions are recorded in encounter order and skipped", ()
     state,
   });
 
-  assert.deepEqual(state._simUnsupportedActions, [
+  assert.deepEqual(Reflect.get(state, "_simUnsupportedActions"), [
     "unknown_first",
     "unknown_second",
   ]);
@@ -123,7 +141,7 @@ test("unknown simulated actions are recorded in encounter order and skipped", ()
 test("STOP_SIMULATION prevents all later actions from being applied", () => {
   const state = createState();
 
-  applySimulatedActions({
+  applyRuntimeSimulatedActions({
     actions: [
       { type: "pay_lp", amount: 0 },
       { type: "damage", player: "opponent", amount: 500 },
@@ -139,12 +157,12 @@ test("STOP_SIMULATION prevents all later actions from being applied", () => {
 test("malformed action containers retain their permissive no-op behavior", () => {
   const state = createState();
 
-  applySimulatedActions({
+  applyRuntimeSimulatedActions({
     actions: null,
     selections: {},
     state,
   });
-  applySimulatedActions({
+  applyRuntimeSimulatedActions({
     actions: [null, undefined, {}, { type: "" }],
     selections: {},
     state,
