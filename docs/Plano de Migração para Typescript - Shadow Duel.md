@@ -1645,95 +1645,115 @@ cartas, merge automático ou mudança da proteção da `main`.
 
 # Etapa 9 — Migrar a IA, simulação e Bot Arena
 
-## Objetivo
+## Divisão e estado da execução
 
-Eliminar divergências estruturais entre estado real, estado de perspectiva e estado simulado.
+A etapa foi dividida em dois PRs draft sequenciais para manter os diffs
+revisáveis:
 
-## Estados distintos
+1. **PR 9A — Estados, simulação e buscas:** branch
+   `agent/typescript-ai-simulation`, criada de `origin/main` em
+   `380a438b9a132f57192696ac6829efde39b3b9d8`.
+2. **PR 9B — Estratégias, Bot e Arena:** será criado somente depois do merge
+   do PR 9A, a partir do novo `origin/main`.
 
-Criar:
+Em 2 de setembro de 2026, o PR 9A está em implementação. Já foram
+estabelecidos os contratos canônicos de estado e actions de IA, a correção
+isolada do ledger `_simOncePerTurn`, os módulos compartilhados de simulação,
+os simuladores declarativos, a ponte de simulação do Bot e as buscas Beam,
+Greedy, GameTree e TurnLine. Também foram convertidos o planejamento macro,
+avaliação de ameaças, análise de papéis, previsão do oponente e Chain
+Awareness. Os testes de baseline, interoperabilidade do ledger e os quatro
+perfis de clone foram adicionados. Permanecem pendentes o gate integral, os
+smokes, a revisão final do bundle e a publicação do PR draft.
 
-```text
-LiveGameState
-PublicGameState
-SimulationGameState
-PerspectiveGameState
-ReplayGameState
-```
+O PR 9B ainda não foi iniciado. `BaseStrategy`, `StrategyRegistry`, as oito
+classes de estratégia, knowledge bases, políticas, executores, `Bot`,
+`BotLogger`, `ArenaAnalytics` e `BotArena` continuam fisicamente em
+JavaScript até esse segundo PR.
 
-Não usar `Game` como tipo universal para todos.
+## Contratos e comportamento preservado
 
-## Cards simulados
+Os contratos-folha vivem em `contracts/aiState.ts`, `contracts/ai.ts`,
+`contracts/bot.ts` e `contracts/arena.ts`. Eles distinguem `LiveGameState`,
+`PublicGameState`, `ReplayGameState`, `PerspectiveGameState` e
+`SimulationGameState`; `SimulatedCardState` permanece separado da instância
+viva de Card. Os brands são apagáveis e nascem somente nas funções reais de
+clone.
 
-Criar `SimulatedCardState` separado de `CardInstance`.
+Os quatro perfis de clone permanecem deliberadamente separados:
 
-Garantir que as funções de clone declarem explicitamente quais campos são copiados.
+- Bot;
+- Beam/Greedy;
+- GameTree;
+- TurnLine.
 
-## Ações da IA
+Cada perfil conserva seus campos omitidos, referências, Maps/Sets, limpeza de
+equipamentos e fallbacks legados. A etapa não cria um clone universal nem
+completa dados que o perfil atual não copia.
 
-Criar union discriminada:
+`AIActionByType` é a fonte da união discriminada dos 13 tipos executáveis,
+na ordem atual do dispatcher: `ascension`, `extraDeckProcedure`,
+`special_summon_sanctum_protector`, `position_change`, `summon`, `spell`,
+`set_spell_trap`, `spellTrapEffect`, `graveyardSpellEffect`, `fieldEffect`,
+`monsterEffect`, `graveyardMonsterEffect` e `handIgnition`.
+`simulatedBattle`, candidatos de batalha e avanço de fase continuam fora
+dessa união por terem papéis e shapes runtime distintos.
 
-```ts
-type AIAction =
-  | SummonAIAction
-  | SpellAIAction
-  | HandIgnitionAIAction
-  | SetSpellTrapAIAction
-  | AttackAIAction
-  | EndPhaseAIAction
-  | /* demais */;
-```
+Os 64 simuladores são correlacionados ao `ActionByType` declarativo. A única
+mudança funcional autorizada é a normalização de `_simOncePerTurn` para
+`Map<string, number>` em `common/simStateUtils.ts`: Maps preservam identidade;
+Set, array e objeto legado são migrados em ordem para contagens. Isso corrige
+a falha Shadow-Heart `.add is not a function` sem introduzir nova heurística.
 
-Cada action deve declarar seus campos obrigatórios.
+Todos os consumidores continuam usando specifiers relativos terminados em
+`.js`, mesmo quando o arquivo físico já é `.ts`.
 
-## Estratégias
+## PR 9A — Estados, simulação e buscas
 
-Tipar:
+O escopo inclui `common/**`, simulated actions, simulações específicas de
+arquétipo, `simulationBridge`, `StrategyUtils`, BeamSearch, GameTreeSearch,
+TurnLineSearch, MacroPlanning, ThreatEvaluation, RoleAnalyzer,
+OpponentPredictor e ChainAwareness.
 
-- `BaseStrategy`;
-- `StrategyRegistry`;
-- strategies por arquétipo;
-- evaluation result;
-- scored action;
-- combo candidate;
-- threat result;
-- macro plan;
-- chain response;
-- simulation result.
+Devem permanecer idênticos os budgets e desempates atuais: Beam `2/2/100`
+com desconto `0.8`; TurnLine `3/3/200/8`; GameTree com profundidade `4`, três
+candidatos, desconto `0.85` e cache `2000`. Ordem de candidatos, contagem de
+nodes, fingerprints, sort estável e fallback `Math.random()` em erro também
+são invariantes.
 
-## Clone de estado
+O PR termina somente depois de `npm ci`, `npm run check` e do Bot smoke em
+Node `22.23.2`, com digest, assinatura legada, replays e trace de Chain
+inalterados. O único delta funcional de bundle admissível é o ajuste do OPT.
 
-Centralizar o contrato de clone sem obrigatoriamente unificar imediatamente todas as implementações.
+## PR 9B — Estratégias, Bot e Arena
 
-O typecheck deve apontar quando:
+Depois do merge do PR 9A, o segundo PR converterá conhecimentos, políticas,
+prioridades, planners e módulos dos oito arquétipos; depois `BaseStrategy`,
+as oito estratégias, `StrategyRegistry`, `src/core/bot/**`, `Bot`,
+`BotLogger`, `ArenaAnalytics` e `BotArena`.
 
-- um campo obrigatório do estado simulado não é copiado;
-- uma função de IA recebe estado real quando espera perspectiva;
-- um strategy retorna action inválida;
-- um resultado de avaliação omite score.
+Esse PR preservará os oito IDs e presets, os fallbacks assimétricos legados,
+o singleton browser-only do logger, a identidade mutável dos speed presets,
+o NullRenderer Proxy, localStorage, downloads, monkeypatches, receivers,
+delays e execução no main thread. Não serão introduzidos Worker, paralelismo,
+tuning, heurísticas novas ou API pública de seed.
 
-## Paridade
+## Critérios de aceitação da etapa
 
-A migração não deve mudar:
-
-- ordem dos candidatos;
-- scores;
-- seeds;
-- decisões;
-- beam width;
-- node budget;
-- comportamento de fallback;
-- tempos configurados;
-- presets.
-
-## Critérios de aceitação
-
-- estratégias registradas satisfazem a mesma interface;
-- BeamSearch e GameTreeSearch usam tipos de estado explícitos;
-- actions da IA são discriminadas;
-- nenhuma clone function usa `any`;
-- testes e arenas determinísticas preservam os resultados;
-- nenhuma mudança de força ou comportamento do bot é introduzida.
+- nenhuma função de clone usa `any` e os cinco estados permanecem
+  incompatíveis no compile-time;
+- actions executáveis e handlers simulados permanecem fechados e
+  correlacionados;
+- scores, candidatos, decisões, budgets, presets e fallbacks preservam a
+  baseline;
+- assinatura `1cc622e3`, digest
+  `13ff527c3deb5b8b5e5f09551fcabcb3ec7ca48f922f1f167c6d22c67d12caea`
+  e wire format de replay não mudam;
+- ao fim do PR 9B, não restam arquivos `.js` físicos nas 150 áreas previstas;
+- não há nova dívida TypeScript, suppressions, casts duplos, specifiers `.ts`
+  ou imports relativos sem extensão;
+- nenhum dos dois PRs é integrado automaticamente e testes manuais de cartas
+  permanecem fora desta etapa.
 
 ---
 

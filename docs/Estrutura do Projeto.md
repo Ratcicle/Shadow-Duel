@@ -115,6 +115,10 @@ Traduções visíveis no jogo. Hoje há [pt-br.json](../public/locales/pt-br.jso
 | [contracts/player.ts](../src/core/contracts/player.ts) | Estado, zonas e port mínimo de Game consumido por Player. |
 | [contracts/game.ts](../src/core/contracts/game.ts) | Opções fechadas de Game, inicialização por decks e ports de integração. |
 | [contracts/gameRuntime.ts](../src/core/contracts/gameRuntime.ts) | Estado runtime, hosts mínimos por domínio, transações, resultados e overloads de movimento. |
+| [contracts/aiState.ts](../src/core/contracts/aiState.ts) | Estados vivo, público, de replay, perspectiva e simulação, além dos quatro perfis explícitos de clone. |
+| [contracts/ai.ts](../src/core/contracts/ai.ts) | `AIActionByType`, contratos de estratégia, buscas, scoring e planejamento. |
+| [contracts/bot.ts](../src/core/contracts/bot.ts) | Contratos da camada operacional do Bot, preparada para o PR 9B. |
+| [contracts/arena.ts](../src/core/contracts/arena.ts) | Contratos de presets, execução e analytics da Arena, preparada para o PR 9B. |
 | [contracts/chain.ts](../src/core/contracts/chain.ts) | Constantes e unions fechadas fundamentais de Chain, Fast Effect, SEGOC e uso. |
 | [contracts/chainRuntime.ts](../src/core/contracts/chainRuntime.ts) | Projeções runtime, links, ativações preparadas, contexts, ports, hosts e capability guards. |
 | [ChainSystem.ts](../src/core/ChainSystem.ts) | Fachada do sistema de Chain/Spell Speed, composta pelo manifest de [src/core/chain/](../src/core/chain/); consumidores preservam o specifier `.js`. |
@@ -138,7 +142,7 @@ Camada operacional do bot, separada da estratégia. Ela valida ações, executa 
 | [mainPhaseController.js](../src/core/bot/mainPhaseController.js) | Sequência de ações da Main Phase. |
 | [battleController.js](../src/core/bot/battleController.js) | Decisões e execução de batalha. |
 | [ascensionController.js](../src/core/bot/ascensionController.js) | Coordenação de Invocação-Ascensão para IA. |
-| [simulationBridge.js](../src/core/bot/simulationBridge.js) | Ponte entre estado real e simulação. |
+| [simulationBridge.ts](../src/core/bot/simulationBridge.ts) | Ponte tipada entre estado real e o perfil de perspectiva do Bot; consumidores preservam o specifier `.js`. |
 | [actionExecutors/](../src/core/bot/actionExecutors/) | Execução especializada por família de ação: summon, extra deck, ascension, monster effects, spell/trap e posição. |
 
 ### `src/core/actionHandlers/`
@@ -169,21 +173,25 @@ deve existir em `ActionByType`, `ACTION_BINDINGS`, catálogo e registry.
 
 ## `src/core/ai/` - Inteligência Artificial
 
+A Etapa 9 está dividida em dois PRs. O PR 9A tipa estados, simulação e buscas;
+o PR 9B tipará estratégias, executores, Bot e Arena após o merge do primeiro.
+Arquivos físicos TypeScript continuam sendo importados por specifiers `.js`.
+
 ### Núcleo Genérico
 
 | Arquivo | Responsabilidade |
 |---|---|
 | [StrategyRegistry.js](../src/core/ai/StrategyRegistry.js) | Registra `shadowheart`, `luminarch`, `void`, `dragon`, `arcanist`, `miragebound` e `bloomrot`. |
 | [BaseStrategy.js](../src/core/ai/BaseStrategy.js) | Classe-base com avaliação genérica de board e helpers comuns. |
-| [StrategyUtils.js](../src/core/ai/StrategyUtils.js) | Utilitários de valor, arquétipo, filtros e scoring. |
-| [BeamSearch.js](../src/core/ai/BeamSearch.js) | Busca em feixe e avaliação de linhas. |
-| [TurnLineSearch.js](../src/core/ai/TurnLineSearch.js) | Planejador de linha de turno para sequências de ações. |
-| [GameTreeSearch.js](../src/core/ai/GameTreeSearch.js) | Busca em árvore para cenários críticos. |
-| [MacroPlanning.js](../src/core/ai/MacroPlanning.js) | Planejamento de múltiplos turnos. |
-| [OpponentPredictor.js](../src/core/ai/OpponentPredictor.js) | Modelo leve de comportamento do oponente. |
-| [RoleAnalyzer.js](../src/core/ai/RoleAnalyzer.js) | Classificação genérica de papéis de cartas. |
-| [ThreatEvaluation.js](../src/core/ai/ThreatEvaluation.js) | Avaliação de ameaças e letal. |
-| [ChainAwareness.js](../src/core/ai/ChainAwareness.js) | Avaliação de respostas em Chain e interrupções. |
+| [StrategyUtils.ts](../src/core/ai/StrategyUtils.ts) | Utilitários tipados de valor, arquétipo, filtros e scoring. |
+| [BeamSearch.ts](../src/core/ai/BeamSearch.ts) | Busca em feixe e avaliação de linhas, incluindo o perfil Beam/Greedy de clone. |
+| [TurnLineSearch.ts](../src/core/ai/TurnLineSearch.ts) | Planejador tipado de linha de turno e seu perfil próprio de clone. |
+| [GameTreeSearch.ts](../src/core/ai/GameTreeSearch.ts) | Busca em árvore tipada para cenários críticos e seu perfil próprio de clone. |
+| [MacroPlanning.ts](../src/core/ai/MacroPlanning.ts) | Planejamento tipado de múltiplos turnos. |
+| [OpponentPredictor.ts](../src/core/ai/OpponentPredictor.ts) | Modelo tipado de comportamento do oponente. |
+| [RoleAnalyzer.ts](../src/core/ai/RoleAnalyzer.ts) | Classificação genérica tipada de papéis de cartas. |
+| [ThreatEvaluation.ts](../src/core/ai/ThreatEvaluation.ts) | Avaliação tipada de ameaças e letal. |
+| [ChainAwareness.ts](../src/core/ai/ChainAwareness.ts) | Avaliação tipada de respostas em Chain e interrupções. |
 | [ArenaAnalytics.js](../src/core/ai/ArenaAnalytics.js) | Métricas de Bot Arena e relatórios estratégicos. |
 
 ### Strategy Classes
@@ -210,7 +218,7 @@ Padrões comuns:
 - `combos.js` - detecção de linhas e sinergias.
 - `scoring.js` - avaliação específica de board.
 - `linePlanning.js` - ordenação e bônus/penalidades de linhas.
-- `simulation.js` - simulação específica quando o arquétipo precisa espelhar efeitos complexos.
+- `simulation.ts` - simulação específica já tipada para Shadow-Heart, Luminarch e Dragon; os demais módulos do pacote permanecem `.js` até o PR 9B.
 
 Pacotes com módulos extras relevantes:
 
@@ -222,15 +230,17 @@ Pacotes com módulos extras relevantes:
 
 ### `src/core/ai/common/`
 
-Camada compartilhada entre estratégias. Módulos atuais:
+Camada compartilhada entre estratégias. Os módulos físicos abaixo já são
+TypeScript; imports relativos continuam usando `.js`:
 
-- Geração e execução planejada: `actionGeneration.js`, `actionSequencing.js`, `actionValidation.js`, `effectDiscovery.js`.
-- Análise e perspectiva: `analysis.js`, `perspective.js`, `planningDiagnostics.js`.
-- Filtros e stats: `cardFilters.js`, `cardStats.js`, `cardValue.js`, `zones.js`.
-- Combos e counters: `comboDetection.js`, `counters.js`.
-- Planejamento: `ascensionPlanning.js`, `backrowPlanning.js`, `finisherPlans.js`, `fusionPlanning.js`, `summonAssessment.js`.
-- Recursos e preferências: `resourceEconomy.js`, `resourcePolicy.js`, `preferencePolicy.js`, `tributePolicy.js`.
-- Targeting e simulação: `targetAvailability.js`, `targetSelection.js`, `simulation.js`, `simStateUtils.js`, `simulatedConditions.js`, `previewGuards.js`.
+- Geração e execução planejada: `actionGeneration.ts`, `actionSequencing.ts`, `actionValidation.ts`, `effectDiscovery.ts`.
+- Análise e perspectiva: `analysis.ts`, `perspective.ts`, `planningDiagnostics.ts`.
+- Filtros e stats: `cardFilters.ts`, `cardStats.ts`, `cardValue.ts`, `zones.ts`.
+- Combos e counters: `comboDetection.ts`, `counters.ts`.
+- Planejamento: `ascensionPlanning.ts`, `backrowPlanning.ts`, `finisherPlans.ts`, `fusionPlanning.ts`, `summonAssessment.ts`.
+- Recursos e preferências: `resourceEconomy.ts`, `resourcePolicy.ts`, `preferencePolicy.ts`, `tributePolicy.ts`.
+- Targeting e simulação: `targetAvailability.ts`, `targetSelection.ts`, `simulation.ts`, `simStateUtils.ts`, `simulatedConditions.ts`, `previewGuards.ts`.
+- Simuladores declarativos: [simulatedActions/](../src/core/ai/common/simulatedActions/) contém dez módulos físicos `.ts`, ligados aos contratos de actions das cartas.
 
 ---
 
