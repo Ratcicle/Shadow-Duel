@@ -321,25 +321,32 @@ oncePerTurn: true, oncePerTurnName: "Unique Effect Name"
 
 **Estrutura:** [src/core/ai/](src/core/ai/)
 
+A Etapa 9 está dividida em dois PRs. No PR 9A, contratos, simulação,
+utilitários e buscas já migrados são arquivos físicos `.ts`; consumidores
+continuam usando specifiers `.js`. `BaseStrategy`, strategies concretas,
+registry, Bot e Arena permanecem `.js` até o PR 9B.
+
 Núcleo de estratégias e busca:
 
 - `BaseStrategy.js` — Avaliação de board genérica (`evaluateBoardV2`)
 - `ShadowHeartStrategy.js`, `LuminarchStrategy.js`, `VoidStrategy.js` — Heurísticas por arquétipo
 - `StrategyRegistry.js` — Registro de estratégias
-- `StrategyUtils.js` — Helpers compartilhados entre estratégias
-- `BeamSearch.js` — Busca de ações ótimas com beam width
-- `GameTreeSearch.js` — Busca em árvore de jogo
-- `ThreatEvaluation.js` — Score de ameaças do oponente
-- `ChainAwareness.js` — Tomada de decisão durante chain windows
-- `MacroPlanning.js` — Planejamento multi-turno
-- `OpponentPredictor.js` — Modelo do oponente para previsão
-- `RoleAnalyzer.js` — Classificação de papéis das cartas em jogo
+- `StrategyUtils.ts` — Helpers compartilhados entre estratégias
+- `BeamSearch.ts` — Busca de ações ótimas com beam width
+- `TurnLineSearch.ts` — Planejamento tipado de linhas de turno
+- `GameTreeSearch.ts` — Busca em árvore de jogo
+- `ThreatEvaluation.ts` — Score de ameaças do oponente
+- `ChainAwareness.ts` — Tomada de decisão durante chain windows
+- `MacroPlanning.ts` — Planejamento multi-turno
+- `OpponentPredictor.ts` — Modelo do oponente para previsão
+- `RoleAnalyzer.ts` — Classificação de papéis das cartas em jogo
 - `ArenaAnalytics.js` — Métricas para o Bot Arena
 
 Subpastas (knowledge bases por arquétipo + replays):
 
-- `shadowheart/` — `combos`, `knowledge`, `priorities`, `scoring`, `simulation`
-- `luminarch/` — `cardValue`, `combos`, `fusionPriority`, `knowledge`, `multiTurnPlanning`, `priorities`
+- `shadowheart/` — `simulation.ts` tipado; `combos`, `knowledge`, `priorities` e `scoring` ainda no PR 9B
+- `luminarch/` — `simulation.ts` tipado; `cardValue`, `combos`, `fusionPriority`, `knowledge`, `multiTurnPlanning` e `priorities` ainda no PR 9B
+- `dragon/` — `simulation.ts` tipado; knowledge base, políticas, scoring e planejamento ainda no PR 9B
 - `void/` — `combos`, `knowledge`, `priorities`, `scoring`
 - `replay/` — `ReplayAnalyzer`, `ReplayDatabase`, `ReplayImporter`, `ReplayInsights`, `PatternMatcher`
 
@@ -357,6 +364,8 @@ registerStrategy("my_archetype", MyStrategy);
 
 - Strategies retornam scores para ações: `{ action, score, reasoning }`
 - `BeamSearch` / `GameTreeSearch` exploram árvore de jogadas
+- Os quatro perfis de clone — Bot, Beam/Greedy, GameTree e TurnLine — permanecem separados e têm contratos explícitos em `contracts/aiState.ts`
+- `common/` e `common/simulatedActions/` são TypeScript físico; preserve `.js` nos imports relativos
 - Knowledge bases em subpastas definem prioridades e combos (ex.: `luminarch/fusionPriority.js`)
 - AI usa `game.autoSelector` ([AutoSelector.ts](src/core/AutoSelector.ts)) para escolhas automáticas em targeting — **nunca** para automatizar decisões de jogadores humanos
 
