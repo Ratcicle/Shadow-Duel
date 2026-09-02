@@ -80,6 +80,11 @@ interface LuminarchAction {
   fusionTarget?: string | null;
 }
 
+type PreparedLuminarchAction = AIPlannedAction & {
+  fusionTargetHint?: string | null;
+  fusionTarget?: string | null;
+};
+
 interface LuminarchStrategyContext {
   bot?: SimulatedPlayerState;
 }
@@ -1762,10 +1767,10 @@ export function scoreLuminarchBattleAttackCandidate({
 }
 
 function prepareLuminarchAction(
-  action: AIPlannedAction,
-): LuminarchAction {
-  if (!action) return action as LuminarchAction;
-  const prepared = { ...action } as LuminarchAction;
+  action: AIPlannedAction | null | undefined,
+): PreparedLuminarchAction | null | undefined {
+  if (!action) return action;
+  const prepared: PreparedLuminarchAction = { ...action };
   if (
     prepared.type === "spell" &&
     prepared.cardName === "Polymerization" &&
@@ -1782,6 +1787,10 @@ export function simulateLuminarchMainPhaseAction(
   options: LuminarchSimulationOptions = {},
 ): LuminarchState {
   const preparedAction = prepareLuminarchAction(action);
+  if (!preparedAction || preparedAction.type === "simulatedBattle") {
+    return state;
+  }
+  const luminarchPreparedAction = preparedAction as LuminarchAction;
   return applyGenericSimulatedMainPhaseAction(state, preparedAction, {
     archetype: "Luminarch",
     preferDefense: true,
@@ -1802,7 +1811,7 @@ export function simulateLuminarchMainPhaseAction(
         state,
         game: context?.game || state,
         action: context?.action,
-        sourceAction: preparedAction,
+        sourceAction: luminarchPreparedAction,
         options,
         activationContext: context?.activationContext,
       }),
