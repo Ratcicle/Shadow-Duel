@@ -13,6 +13,7 @@ import {
 import { isLuminarch } from "./knowledge.js";
 import { shouldPlaySpell } from "./priorities.js";
 import type {
+  AIAction,
   AIActivationContext,
   AIPlannedAction,
 } from "../../contracts/ai.js";
@@ -1787,40 +1788,42 @@ export function simulateLuminarchMainPhaseAction(
   options: LuminarchSimulationOptions = {},
 ): LuminarchState {
   const preparedAction = prepareLuminarchAction(action);
-  if (!preparedAction || preparedAction.type === "simulatedBattle") {
-    return state;
-  }
-  const luminarchPreparedAction = preparedAction as LuminarchAction;
-  return applyGenericSimulatedMainPhaseAction(state, preparedAction, {
-    archetype: "Luminarch",
-    preferDefense: true,
-    selfId: "bot",
-    guardLabel: "LuminarchStrategy.simulateMainPhaseAction",
-    ...options,
-    onAfterSummon: handleLuminarchAfterSummon,
-    onAfterSpecialSummon: handleLuminarchAfterSpecialSummon,
-    onEffectActivated: handleLuminarchEffectActivated,
-    onFusionSummon: handleLuminarchFusionSummon,
-    onMonsterEffect: handleLuminarchMonsterEffect,
-    getFieldEffectTargetPreference: getLuminarchFieldEffectTargetPreference,
-    chooseSpecialSummonPosition: (
-      card: SimulatedCardState,
-      context: LuminarchPositionContext,
-    ) =>
-      chooseLuminarchSpecialSummonPosition(card, {
-        state,
-        game: context?.game || state,
-        action: context?.action,
-        sourceAction: luminarchPreparedAction,
-        options,
-        activationContext: context?.activationContext,
-      }),
-    actionOverrides: {
-      ...(options.actionOverrides || {}),
-      handIgnition: handleLuminarchHandIgnitionOverride,
-      special_summon_sanctum_protector: handleSanctumProtectorShortcut,
+  // Preserve the legacy planner no-op for `simulatedBattle` without making it
+  // part of the generic dispatcher's public executable union.
+  return applyGenericSimulatedMainPhaseAction(
+    state,
+    preparedAction as AIAction,
+    {
+      archetype: "Luminarch",
+      preferDefense: true,
+      selfId: "bot",
+      guardLabel: "LuminarchStrategy.simulateMainPhaseAction",
+      ...options,
+      onAfterSummon: handleLuminarchAfterSummon,
+      onAfterSpecialSummon: handleLuminarchAfterSpecialSummon,
+      onEffectActivated: handleLuminarchEffectActivated,
+      onFusionSummon: handleLuminarchFusionSummon,
+      onMonsterEffect: handleLuminarchMonsterEffect,
+      getFieldEffectTargetPreference: getLuminarchFieldEffectTargetPreference,
+      chooseSpecialSummonPosition: (
+        card: SimulatedCardState,
+        context: LuminarchPositionContext,
+      ) =>
+        chooseLuminarchSpecialSummonPosition(card, {
+          state,
+          game: context?.game || state,
+          action: context?.action,
+          sourceAction: preparedAction as LuminarchAction,
+          options,
+          activationContext: context?.activationContext,
+        }),
+      actionOverrides: {
+        ...(options.actionOverrides || {}),
+        handIgnition: handleLuminarchHandIgnitionOverride,
+        special_summon_sanctum_protector: handleSanctumProtectorShortcut,
+      },
     },
-  });
+  );
 }
 
 export function simulateLuminarchSpellEffect(
