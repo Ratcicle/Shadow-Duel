@@ -38,7 +38,6 @@ import {
   markSimOncePerTurnUsed,
 } from "./simStateUtils.js";
 import type {
-  AiStateShape,
   PerspectiveGameState,
   SimulatedCardState,
   SimulatedPlayerState,
@@ -110,6 +109,7 @@ interface SimulatedSelectionOptionsInput
   > {
   archetype?: string | null;
   preferDefense?: boolean;
+  changedCard?: SimulatedCardState | null;
   actionContext?: SimulatedSelectionActionContext;
   activationContext?: AIActivationContext | null;
   strategy?: unknown;
@@ -182,6 +182,12 @@ interface SimulatedEventStrategyCapabilities {
   ): NonNullable<SimulatedActionOptions["activationContext"]> | null;
 }
 
+interface BuiltSimulatedSelectionOptions extends SimulatedActionOptions {
+  archetype?: string | null;
+  preferDefense?: boolean;
+  specialSummonPositions?: object;
+}
+
 interface SimulatedEventDispatchOptions
   extends Omit<
     ManagedSimulatedEventOptions,
@@ -247,13 +253,11 @@ export function resolveSimulatedHandIndex(
     return false;
   };
 
-  const actionIndex = action.index;
   if (
-    typeof actionIndex === "number" &&
-    Number.isInteger(actionIndex) &&
-    matches(hand[actionIndex])
+    Number.isInteger(action.index as number) &&
+    matches(hand[action.index!])
   ) {
-    return actionIndex;
+    return action.index!;
   }
   return hand.findIndex(matches);
 }
@@ -276,21 +280,17 @@ export function resolveSimulatedFieldIndex(
     return !action.cardId && !action.cardName;
   };
 
-  const fieldIndex = action.fieldIndex;
   if (
-    typeof fieldIndex === "number" &&
-    Number.isInteger(fieldIndex) &&
-    matches(field[fieldIndex])
+    Number.isInteger(action.fieldIndex as number) &&
+    matches(field[action.fieldIndex!])
   ) {
-    return fieldIndex;
+    return action.fieldIndex!;
   }
-  const materialIndex = action.materialIndex;
   if (
-    typeof materialIndex === "number" &&
-    Number.isInteger(materialIndex) &&
-    matches(field[materialIndex])
+    Number.isInteger(action.materialIndex as number) &&
+    matches(field[action.materialIndex!])
   ) {
-    return materialIndex;
+    return action.materialIndex!;
   }
   return field.findIndex(matches);
 }
@@ -303,19 +303,15 @@ function findSimulatedExtraDeckCard(
   index: number;
 } {
   const extraDeck = player?.extraDeck || [];
-  const extraDeckIndex = action.extraDeckIndex;
-  if (
-    typeof extraDeckIndex === "number" &&
-    Number.isInteger(extraDeckIndex)
-  ) {
-    const direct = extraDeck[extraDeckIndex];
+  if (Number.isInteger(action.extraDeckIndex as number)) {
+    const direct = extraDeck[action.extraDeckIndex!];
     if (
       direct &&
       (direct.id === action.cardId ||
         direct.name === action.cardName ||
         direct.name === action.extraDeckCard?.name)
     ) {
-      return { card: direct, index: extraDeckIndex };
+      return { card: direct, index: action.extraDeckIndex! };
     }
   }
   const index = extraDeck.findIndex(
@@ -325,12 +321,12 @@ function findSimulatedExtraDeckCard(
         card.name === action.cardName ||
         card.name === action.extraDeckCard?.name),
   );
-  const fallbackCard = action.extraDeckCard as
-    | SimulatedCardState
-    | null
-    | undefined;
   return {
-    card: index >= 0 ? extraDeck[index] : fallbackCard || null,
+    card:
+      index >= 0
+        ? extraDeck[index]
+        : (action.extraDeckCard as SimulatedCardState | null | undefined) ||
+          null,
     index,
   };
 }
@@ -350,9 +346,8 @@ function findSimulatedMaterialByHint(
     });
     if (byInstance) return byInstance;
   }
-  const hintIndex = hint.index;
-  if (typeof hintIndex === "number" && Number.isInteger(hintIndex)) {
-    const direct = field[hintIndex];
+  if (Number.isInteger(hint.index as number)) {
+    const direct = field[hint.index!];
     if (
       direct &&
       (hint.id === undefined || direct.id === hint.id) &&
@@ -393,59 +388,26 @@ function resolveSimulatedExtraDeckMaterials(
 
 function buildSelectionOptions(
   options: SimulatedSelectionOptionsInput = {},
-) {
-  const activationContext = options.activationContext as
-    | SimulatedSelectionActivationContext
-    | undefined;
-  const activationActionContext = isObjectValue(
-    options.activationContext?.actionContext,
-  )
-    ? (options.activationContext.actionContext as SimulatedSelectionActionContext)
-    : undefined;
-  const strategy = isObjectValue(options.strategy)
-    ? (options.strategy as SimulatedActionOptions["strategy"])
-    : undefined;
-  const rankSearchCandidates =
-    typeof options.rankSearchCandidates === "function"
-      ? (options.rankSearchCandidates as NonNullable<
-          SimulatedActionOptions["rankSearchCandidates"]
-        >)
-      : undefined;
-  const evaluateRecruitCandidate =
-    typeof options.evaluateRecruitCandidate === "function"
-      ? (options.evaluateRecruitCandidate as NonNullable<
-          SimulatedActionOptions["evaluateRecruitCandidate"]
-        >)
-      : undefined;
-  const chooseSpecialSummonPosition =
-    typeof options.chooseSpecialSummonPosition === "function"
-      ? (options.chooseSpecialSummonPosition as NonNullable<
-          SimulatedActionOptions["chooseSpecialSummonPosition"]
-        >)
-      : undefined;
+): BuiltSimulatedSelectionOptions {
   const actionContext =
     options.actionContext ||
-    activationActionContext ||
+    options.activationContext?.actionContext ||
     {};
   return {
     ...options,
     archetype: options.archetype,
     preferDefense: options.preferDefense,
-    strategy,
-    rankSearchCandidates,
-    evaluateRecruitCandidate,
-    chooseSpecialSummonPosition,
-    actionContext,
-    activationContext,
+    actionContext: actionContext as SimulatedSelectionActionContext,
+    activationContext: options.activationContext as SimulatedActionOptions["activationContext"],
     targetPreferences:
       options.targetPreferences ||
-      actionContext.targetPreferences ||
+      (actionContext as SimulatedSelectionActionContext).targetPreferences ||
       {},
     specialSummonPositions:
       options.specialSummonPositions ||
-      actionContext.specialSummonPositions ||
+      (actionContext as SimulatedSelectionActionContext).specialSummonPositions ||
       {},
-  };
+  } as BuiltSimulatedSelectionOptions;
 }
 
 function getSimOncePerTurnKey(
@@ -463,7 +425,23 @@ function getSimOncePerTurnKey(
 
 interface SimulatedEffectPlayer {
   id?: string | null;
-  effectActivationRestrictions?: readonly unknown[];
+  effectActivationRestrictions?: readonly SimulatedEffectActivationRestriction[];
+}
+
+interface SimulatedEffectActivationRestriction {
+  blockedNames?: unknown;
+  names?: unknown;
+  allowedAttributes?: unknown;
+  attributes?: unknown;
+  restrictedCardFilters?: object | null;
+}
+
+interface SimulatedRestrictionName {
+  name?: { trim?(): string } | null;
+}
+
+interface SimulatedRestrictionAttribute {
+  attribute?: { trim?(): string } | null;
 }
 
 interface SimulatedEffectState {
@@ -483,37 +461,6 @@ interface SimulatedRuntimeEffect extends SimulatedEffectUsageIdentity {
 
 type SimulatedEffectSourceCard = SimulatedPlayerState["field"][number];
 
-function isObjectValue(value: unknown): value is object {
-  return value !== null && typeof value === "object";
-}
-
-function readRestrictionProperty(
-  restriction: unknown,
-  key:
-    | "allowedAttributes"
-    | "attributes"
-    | "blockedNames"
-    | "names"
-    | "restrictedCardFilters",
-): unknown {
-  return isObjectValue(restriction) ? Reflect.get(restriction, key) : undefined;
-}
-
-function readTrimmedRestrictionProperty(
-  value: unknown,
-  key: "attribute" | "name",
-): string {
-  if (!isObjectValue(value)) return "";
-  const property = Reflect.get(value, key);
-  return typeof property === "string" ? property.trim() : "";
-}
-
-function asSimulatedEffectPlayer(
-  value: unknown,
-): SimulatedEffectPlayer | null {
-  return isObjectValue(value) ? value : null;
-}
-
 function getSimPlayerById(
   state: SimulatedEffectState | null | undefined,
   playerId: string = "bot",
@@ -523,7 +470,7 @@ function getSimPlayerById(
   if (playerId === "bot") return state.bot;
   if (state.player?.id === playerId) return state.player;
   if (state.bot?.id === playerId) return state.bot;
-  return asSimulatedEffectPlayer(Reflect.get(state, playerId));
+  return state[playerId as "player" | "bot"] || null;
 }
 
 function simEffectCanBeBlocked(
@@ -535,27 +482,35 @@ function simEffectCanBeBlocked(
 }
 
 function normalizeSimRestrictionNames(names: unknown = []): string[] {
-  const values: readonly unknown[] = Array.isArray(names) ? names : [names];
+  const values = (Array.isArray(names) ? names : [names]) as readonly (
+    | string
+    | SimulatedRestrictionName
+    | null
+    | undefined
+  )[];
   return values
     .map((entry) =>
       typeof entry === "string"
         ? entry.trim()
-        : readTrimmedRestrictionProperty(entry, "name"),
+        : entry?.name?.trim?.() || "",
     )
     .filter(Boolean);
 }
 
 function normalizeSimRestrictionAttributes(attributes: unknown = []): string[] {
-  const values: readonly unknown[] = Array.isArray(attributes)
-    ? attributes
-    : [attributes];
+  const values = (Array.isArray(attributes) ? attributes : [attributes]) as readonly (
+    | string
+    | SimulatedRestrictionAttribute
+    | null
+    | undefined
+  )[];
   const result: string[] = [];
   const seen = new Set<string>();
   for (const entry of values) {
     const attribute =
       typeof entry === "string"
         ? entry.trim()
-        : readTrimmedRestrictionProperty(entry, "attribute");
+        : entry?.attribute?.trim?.() || "";
     if (!attribute) continue;
     const key = attribute.toLowerCase();
     if (seen.has(key)) continue;
@@ -588,25 +543,18 @@ function isSimulatedEffectActivationRestricted(
     : [];
   return restrictions.some((restriction) => {
     const blockedNames = normalizeSimRestrictionNames(
-      readRestrictionProperty(restriction, "blockedNames") ||
-        readRestrictionProperty(restriction, "names") ||
-        [],
+      restriction?.blockedNames || restriction?.names || [],
     );
     if (sourceCard.name && blockedNames.includes(sourceCard.name)) return true;
 
     const allowedAttributes = normalizeSimRestrictionAttributes(
-      readRestrictionProperty(restriction, "allowedAttributes") ||
-        readRestrictionProperty(restriction, "attributes") ||
-        [],
+      restriction?.allowedAttributes || restriction?.attributes || [],
     );
     if (allowedAttributes.length === 0) return false;
-    const declaredFilters = readRestrictionProperty(
-      restriction,
-      "restrictedCardFilters",
-    );
     const restrictedCardFilters =
-      declaredFilters && typeof declaredFilters === "object"
-        ? declaredFilters
+      restriction?.restrictedCardFilters &&
+      typeof restriction.restrictedCardFilters === "object"
+        ? restriction.restrictedCardFilters
         : { cardKind: "monster" };
     if (!matchesTargetFilters(sourceCard, restrictedCardFilters, null, "self")) {
       return false;
@@ -795,8 +743,8 @@ function collectSimulatedEventSources(
   entries._player = state?.player || null;
   const seen = new Set<string | number | SimulatedCardState>();
   const players = [state?.bot, state?.player].filter(
-    (player): player is SimulatedPlayerState => Boolean(player),
-  );
+    Boolean,
+  ) as SimulatedPlayerState[];
   const eventCard = payload.card || payload.eventCard || null;
   const eventOwner =
     payload.player ||
@@ -884,13 +832,10 @@ function findSimulatedCardByInstanceId(
       "spellTrap",
       "graveyard",
       "banished",
-    ]) {
-      const zoneValue = Reflect.get(player, zone);
-      const zoneCards = Array.isArray(zoneValue)
-        ? zoneValue as SimulatedCardState[]
-        : [];
-      const card = zoneCards.find(
-        (candidate) => getCardInstanceId(candidate) === instanceId,
+    ] as const) {
+      const card = (player[zone] || []).find(
+        (candidate: SimulatedCardState) =>
+          getCardInstanceId(candidate) === instanceId,
       );
       if (card) return card;
     }
@@ -910,19 +855,12 @@ function cleanupSimulatedTemporaryEventEffects(
   }
   const currentTurn = Number(state.turnCounter || 0);
   state.temporaryEventEffects = state.temporaryEventEffects.filter(
-    (entry) => {
-      if (!entry) return false;
-      const expiresOnTurn = entry.expiresOnTurn;
-      const usesRemaining = entry.usesRemaining;
-      return (
-        (typeof expiresOnTurn !== "number" ||
-          !Number.isFinite(expiresOnTurn) ||
-          currentTurn <= expiresOnTurn) &&
-        (typeof usesRemaining !== "number" ||
-          !Number.isFinite(usesRemaining) ||
-          usesRemaining > 0)
-      );
-    },
+    (entry: SimulatedTemporaryEventEffect) =>
+      entry &&
+      (!Number.isFinite(entry.expiresOnTurn as number) ||
+        currentTurn <= entry.expiresOnTurn!) &&
+      (!Number.isFinite(entry.usesRemaining as number) ||
+        entry.usesRemaining! > 0),
   );
 }
 
@@ -933,7 +871,8 @@ function getMatchingSimulatedTemporaryEventEffects(
 ): SimulatedTemporaryEventEffect[] {
   cleanupSimulatedTemporaryEventEffects(state);
   const eventCard = payload.card || payload.eventCard || payload.changedCard || null;
-  return (state.temporaryEventEffects || []).filter((entry) => {
+  return (state.temporaryEventEffects || []).filter(
+    (entry: SimulatedTemporaryEventEffect) => {
     if (!entry || entry.event !== eventName) return false;
     if (
       entry.boundEventTargetInstanceId != null &&
@@ -947,8 +886,9 @@ function getMatchingSimulatedTemporaryEventEffects(
     ) {
       return false;
     }
-    return true;
-  });
+      return true;
+    },
+  );
 }
 
 function ownerRoleFor(
@@ -986,9 +926,12 @@ function matchesSimulatedEventEffect(
   eventName: string,
   payload: SimulatedEventPayloadView = {},
   sourceEntry: SimulatedEventSourceView,
-  effect: EffectDefinition | null | undefined,
+  effect:
+    | (EffectDefinition & LegacySimulatedEventEffectFields)
+    | null
+    | undefined,
   options: SimulatedSelectionOptionsInput = {},
-): boolean {
+): effect is EffectDefinition & LegacySimulatedEventEffectFields {
   const sourceCard = sourceEntry.card;
   const sourceZone = sourceEntry.zone;
   const eventCard = payload.card || payload.eventCard || payload.changedCard || null;
@@ -998,8 +941,6 @@ function matchesSimulatedEventEffect(
   if (!effect || effect.timing !== "on_event" || effect.event !== eventName) {
     return false;
   }
-  const effectView = effect as EffectDefinition &
-    LegacySimulatedEventEffectFields;
   if (
     ["field", "fieldSpell", "spellTrap"].includes(sourceZone) &&
     sourceCard.isFacedown === true
@@ -1032,7 +973,7 @@ function matchesSimulatedEventEffect(
       return false;
     }
     const requiresEffectMove =
-      effect.movedByEffect === true || effectView.requireMovedByEffect === true;
+      effect.movedByEffect === true || effect.requireMovedByEffect === true;
     if (requiresEffectMove && payload.movedByEffect !== true) return false;
     if (
       effect.requireMovedCardWasFaceup === true &&
@@ -1041,7 +982,7 @@ function matchesSimulatedEventEffect(
       return false;
     }
     if (
-      effectView.requireFaceupAtFieldExit === true &&
+      effect.requireFaceupAtFieldExit === true &&
       (payload.fromZone !== "field" || payload.wasFaceupBeforeMove !== true)
     ) {
       return false;
@@ -1055,11 +996,11 @@ function matchesSimulatedEventEffect(
     if (effect.requireOpponentSummon === true && eventRole !== "opponent") {
       return false;
     }
-    const summonMethods = effect.summonMethods ?? effectView.summonMethod;
+    const summonMethods = effect.summonMethods ?? effect.summonMethod;
     if (summonMethods && !asArray(summonMethods).includes(payload.method)) {
       return false;
     }
-    const summonFrom = effect.summonFrom ?? effectView.requireSummonedFrom;
+    const summonFrom = effect.summonFrom ?? effect.requireSummonedFrom;
     if (summonFrom && payload.fromZone && !matchesZoneFilter(payload.fromZone, summonFrom)) {
       return false;
     }
@@ -1071,7 +1012,7 @@ function matchesSimulatedEventEffect(
     const positionChangeSourceCard =
       payload.sourceCard || payload.source || options.sourceCard || null;
     const changedCardOwner =
-      effect.changedCardOwner || effectView.eventCardOwner || null;
+      effect.changedCardOwner || effect.eventCardOwner || null;
     if (changedCardOwner && changedRole !== changedCardOwner) return false;
     if (effect.changedCardRequireFaceup === true && eventCard?.isFacedown === true) {
       return false;
@@ -1084,7 +1025,7 @@ function matchesSimulatedEventEffect(
     }
     const requiresEffectPositionChange =
       effect.positionChangedByEffect === true ||
-      effectView.requirePositionChangedByEffect === true;
+      effect.requirePositionChangedByEffect === true;
     if (requiresEffectPositionChange && !positionChangeSourceCard) {
       return false;
     }
@@ -1107,24 +1048,13 @@ function matchesSimulatedEventEffect(
     return false;
   }
 
-  const conditionOptions: SimulatedSelectionOptionsInput & {
-    changedCard?: SimulatedCardState | null;
-  } = {
+  return effectConditionsPass(state, effect, sourceCard, {
     ...options,
     eventCard,
     movedCard: eventName === "card_moved" ? eventCard : null,
     changedCard: eventName === "position_change" ? eventCard : null,
     summonedCard: eventName === "after_summon" ? eventCard : null,
-  };
-  return effectConditionsPass(state, effect, sourceCard, conditionOptions);
-}
-
-function selectionValueLength(value: unknown): number | undefined {
-  if (Array.isArray(value)) return value.length;
-  if (typeof value === "string") return value.length;
-  if (!isObjectValue(value)) return undefined;
-  const length = Reflect.get(value, "length");
-  return typeof length === "number" ? length : undefined;
+  });
 }
 
 function hasRequiredSimSelections(
@@ -1141,8 +1071,9 @@ function hasRequiredSimSelections(
       ? linkedSelections.length
       : Number(target.count?.min ?? target.count ?? 1);
     if (min <= 0) return true;
-    const selectedLength = selectionValueLength(selections[target.id] || []);
-    return selectedLength !== undefined && selectedLength >= min;
+    return (
+      (selections[target.id] || []) as { length: number }
+    ).length >= min;
   });
 }
 
@@ -1173,14 +1104,24 @@ function buildSimEventActionContext(
 
 function attachSimulatedEventEmitter(
   state: SimulatedRuntimeState,
-  options: ManagedSimulatedEventOptions = {},
+  options: SimulatedEventDispatchOptions,
+): ManagedSimulatedEventOptions;
+function attachSimulatedEventEmitter(
+  state: SimulatedRuntimeState,
+  options?: ManagedSimulatedEventOptions,
+): ManagedSimulatedEventOptions;
+function attachSimulatedEventEmitter(
+  state: SimulatedRuntimeState,
+  options: SimulatedEventDispatchOptions | ManagedSimulatedEventOptions = {},
 ): ManagedSimulatedEventOptions {
-  if (options.enableSimulatedEvents !== true) return options;
+  if (options.enableSimulatedEvents !== true) {
+    return options as ManagedSimulatedEventOptions;
+  }
   if (
     typeof options.emitSimulatedEvent === "function" &&
     options._managedSimulatedEventEmitter !== true
   ) {
-    return options;
+    return options as ManagedSimulatedEventOptions;
   }
   options._managedSimulatedEventEmitter = true;
   options.emitSimulatedEvent = (
@@ -1193,7 +1134,7 @@ function attachSimulatedEventEmitter(
       ...extra,
       _simEventDepth: Number(options._simEventDepth || 0),
     });
-  return options;
+  return options as ManagedSimulatedEventOptions;
 }
 
 function dispatchSimulatedEvent(
@@ -1204,24 +1145,16 @@ function dispatchSimulatedEvent(
 ): void {
   if (options.enableSimulatedEvents !== true) return;
   const depth = Number(options._simEventDepth || 0);
-  const configuredMaxDepth = options.maxSimulatedEventDepth;
-  const maxDepth =
-    typeof configuredMaxDepth === "number" &&
-    Number.isFinite(configuredMaxDepth)
-    ? configuredMaxDepth
+  const maxDepth = Number.isFinite(options.maxSimulatedEventDepth as number)
+    ? options.maxSimulatedEventDepth!
     : 8;
   if (depth >= maxDepth) return;
 
-  const actionOptions = buildSelectionOptions(options);
-  const eventStrategy = isObjectValue(options.strategy)
-    ? (options.strategy as SimulatedEventStrategyCapabilities)
-    : null;
   const sourceEntries = collectSimulatedEventSources(state, eventName, payload);
   for (const sourceEntry of sourceEntries) {
     const sourceCard = sourceEntry.card;
     for (const rawEffect of sourceCard?.effects || []) {
       const effect = simEffectForEventCard(rawEffect, payload);
-      if (!effect) continue;
       if (
         !matchesSimulatedEventEffect(
           state,
@@ -1239,8 +1172,10 @@ function dispatchSimulatedEvent(
       }
 
       const strategyContext =
-        typeof eventStrategy?.buildActivationContextForEffect === "function"
-          ? eventStrategy.buildActivationContextForEffect({
+        typeof (options.strategy as SimulatedEventStrategyCapabilities | null)
+          ?.buildActivationContextForEffect === "function"
+          ? (options.strategy as SimulatedEventStrategyCapabilities)
+              .buildActivationContextForEffect!({
               sourceCard,
               effect,
               player: sourceEntry.player,
@@ -1257,8 +1192,8 @@ function dispatchSimulatedEvent(
         ...(options.activationContext || {}),
         actionContext,
       };
-      const triggerOptions = attachSimulatedEventEmitter(state, {
-        ...actionOptions,
+    const triggerOptions = attachSimulatedEventEmitter(state, {
+      ...options,
         sourceCard,
         effect,
         activationContext,
@@ -1341,8 +1276,8 @@ function dispatchSimulatedEvent(
     const actionContext = buildSimEventActionContext(eventName, payload, {
       ...(options.actionContext || {}),
     });
-    const triggerOptions = attachSimulatedEventEmitter(state, {
-      ...actionOptions,
+      const triggerOptions = attachSimulatedEventEmitter(state, {
+        ...options,
       selfId: owner.id,
       sourceCard,
       effect,
@@ -1367,12 +1302,8 @@ function dispatchSimulatedEvent(
       selfId: owner.id,
       options: triggerOptions,
     });
-    if (
-      !consumeOnMatch &&
-      typeof entry.usesRemaining === "number" &&
-      Number.isFinite(entry.usesRemaining)
-    ) {
-      entry.usesRemaining -= 1;
+    if (!consumeOnMatch && Number.isFinite(entry.usesRemaining)) {
+      entry.usesRemaining! -= 1;
     }
     options.onEffectActivated?.({
       state,
@@ -1394,15 +1325,45 @@ interface SimulatedEffectActionView {
 
 type SimulatedActionOverrideAction = AIAction;
 
+type BivariantCallback<
+  Arguments extends readonly unknown[],
+  Result,
+> = {
+  invoke(...args: Arguments): Result;
+}["invoke"];
+
+type SimulatedActionOverride = BivariantCallback<[input: never], unknown>;
+
+type SimulatedActionOverrides = Partial<{
+  [Type in SimulatedActionOverrideAction["type"]]: SimulatedActionOverride;
+}>;
+
 interface SimulatedActionOverrideOptions extends SimulatedEventDispatchOptions {
-  actionOverrides?: object | null;
+  actionOverrides?: SimulatedActionOverrides | null;
   guardLabel?: string;
-  getTributeRequirementFor?: unknown;
-  selectBestTributes?: unknown;
-  onAfterSummon?: unknown;
-  onMonsterEffect?: unknown;
-  placeSpellCard?: unknown;
-  getFieldEffectTargetPreference?: unknown;
+  getTributeRequirementFor?: BivariantCallback<
+    [card: SimulatedCardState, player: SimulatedPlayerState],
+    SimulatedTributeRequirementView | null | undefined
+  >;
+  selectBestTributes?: BivariantCallback<
+    [
+      field: SimulatedCardState[],
+      tributesNeeded: number,
+      card: SimulatedCardState,
+      context: SimulatedTributeSelectionContext,
+    ],
+    readonly number[] | null | undefined
+  >;
+  onAfterSummon?: BivariantCallback<[payload: object], unknown>;
+  onMonsterEffect?: BivariantCallback<[payload: object], unknown>;
+  placeSpellCard?: BivariantCallback<
+    [state: SimulatedMainPhaseState, card: SimulatedCardState],
+    { placed?: boolean } | null | undefined
+  >;
+  getFieldEffectTargetPreference?: BivariantCallback<
+    [payload: object],
+    unknown
+  >;
 }
 
 interface SimulatedTributeRequirementView {
@@ -1417,59 +1378,6 @@ interface SimulatedTributeSelectionContext {
   game: SimulatedMainPhaseState;
 }
 
-function callSimulatedMainPhaseHook(
-  receiver: SimulatedActionOverrideOptions,
-  hook: unknown,
-  payload: object,
-): unknown {
-  return typeof hook === "function"
-    ? Reflect.apply(hook, receiver, [payload])
-    : undefined;
-}
-
-function callSimulatedSpellPlacement(
-  receiver: SimulatedActionOverrideOptions,
-  hook: unknown,
-  state: AiStateShape,
-  card: SimulatedCardState,
-): unknown {
-  return typeof hook === "function"
-    ? Reflect.apply(hook, receiver, [state, card])
-    : undefined;
-}
-
-function resolveSimulatedTributeRequirement(
-  receiver: SimulatedActionOverrideOptions,
-  resolver: unknown,
-  card: SimulatedCardState,
-  player: SimulatedPlayerState,
-): SimulatedTributeRequirementView | null | undefined {
-  return typeof resolver === "function"
-    ? (Reflect.apply(resolver, receiver, [card, player]) as
-        | SimulatedTributeRequirementView
-        | null
-        | undefined)
-    : undefined;
-}
-
-function selectSimulatedTributes(
-  receiver: SimulatedActionOverrideOptions,
-  selector: unknown,
-  field: SimulatedCardState[],
-  tributesNeeded: number,
-  card: SimulatedCardState,
-  context: SimulatedTributeSelectionContext,
-): readonly number[] | null | undefined {
-  return typeof selector === "function"
-    ? (Reflect.apply(selector, receiver, [
-        field,
-        tributesNeeded,
-        card,
-        context,
-      ]) as readonly number[] | null | undefined)
-    : undefined;
-}
-
 interface SimulatedActionOverrideInput {
   state: SimulatedRuntimeState;
   action: SimulatedActionOverrideAction;
@@ -1477,10 +1385,6 @@ interface SimulatedActionOverrideInput {
   resolveSimulatedHandIndex: typeof resolveSimulatedHandIndex;
   resolveSimulatedFieldIndex: typeof resolveSimulatedFieldIndex;
 }
-
-type SimulatedActionOverride = (
-  input: SimulatedActionOverrideInput,
-) => unknown;
 
 function resolveEffectForAction(
   card: SimulatedCardState | null | undefined,
@@ -1505,23 +1409,22 @@ export function simulateGenericSpellEffect<State extends SimulatedMainPhaseState
   card: SimulatedCardState | null | undefined,
   options: SimulatedEventDispatchOptions = {},
 ): void {
-  const runtimeState = state as SimulatedRuntimeState;
   if (!card || !Array.isArray(card.effects)) return;
   const effect = card.effects.find(
     (entry) => entry && entry.timing === "on_play",
   );
   if (!effect) return;
-  if (!effectConditionsPass(runtimeState, effect, card, options)) return;
-  if (!canUseSimulatedEffect(runtimeState, effect, card, options.selfId || "bot")) {
+  if (!effectConditionsPass(state, effect, card, options)) return;
+  if (!canUseSimulatedEffect(state, effect, card, options.selfId || "bot")) {
     return;
   }
 
   const selectionOptions = buildSelectionOptions(options);
-  attachSimulatedEventEmitter(runtimeState, selectionOptions);
+  attachSimulatedEventEmitter(state, selectionOptions);
   const selections = selectSimulatedTargets({
     targets: effect.targets || [],
     actions: effectExecutionActions(effect),
-    state: runtimeState,
+    state,
     sourceCard: card,
     selfId: options.selfId || "bot",
     options: selectionOptions,
@@ -1529,11 +1432,11 @@ export function simulateGenericSpellEffect<State extends SimulatedMainPhaseState
   applySimulatedActions({
     actions: effectExecutionActions(effect),
     selections,
-    state: runtimeState,
+    state,
     selfId: options.selfId || "bot",
     options: { ...selectionOptions, sourceCard: card },
   });
-  markSimulatedEffectUsed(runtimeState, effect, card, options.selfId || "bot");
+  markSimulatedEffectUsed(state, effect, card, options.selfId || "bot");
 }
 
 function resolvesToGraveyardAfterActivation(
@@ -1575,22 +1478,22 @@ function runActionOverride(
   action: SimulatedActionOverrideAction,
   options: SimulatedActionOverrideOptions,
 ): boolean {
-  const override: unknown = options.actionOverrides
-    ? Reflect.get(options.actionOverrides, action.type)
-    : undefined;
+  const override = options.actionOverrides?.[action.type];
   if (typeof override !== "function") return false;
-  const result: unknown = (override as SimulatedActionOverride)({
+  const result = (override as BivariantCallback<
+    [input: SimulatedActionOverrideInput],
+    unknown
+  >)({
     state,
     action,
     options,
     resolveSimulatedHandIndex,
     resolveSimulatedFieldIndex,
   });
-  const handled =
-    result !== null &&
-    (typeof result === "object" || typeof result === "function") &&
-    Reflect.get(result, "handled") === true;
-  return result === true || handled;
+  return (
+    result === true ||
+    (result as { handled?: boolean } | null | undefined)?.handled === true
+  );
 }
 
 export function applyGenericSimulatedMainPhaseAction<
@@ -1601,23 +1504,18 @@ export function applyGenericSimulatedMainPhaseAction<
   options: SimulatedActionOverrideOptions = {},
 ): State {
   if (!action) return state;
-  const runtimeState = state as SimulatedRuntimeState;
 
   if (!state._isPerspectiveState && state.player && state.bot) {
     console.error(
       `[${options.guardLabel || "Simulation"}] CRITICAL: Simulating on REAL game state!`,
       {
         action: action.type,
-        card:
-          action.cardName ||
-          (typeof action.index === "number"
-            ? state.bot?.hand?.[action.index]?.name
-            : undefined),
+        card: action.cardName || state.bot?.hand?.[action.index!]?.name,
       },
     );
   }
 
-  if (runActionOverride(runtimeState, action, options)) {
+  if (runActionOverride(state, action, options)) {
     return state;
   }
 
@@ -1626,7 +1524,7 @@ export function applyGenericSimulatedMainPhaseAction<
     activationContext: action.activationContext || options.activationContext,
     sourceAction: action,
   });
-  attachSimulatedEventEmitter(runtimeState, selectionOptions);
+  attachSimulatedEventEmitter(state, selectionOptions);
 
   switch (action.type) {
     case "summon": {
@@ -1638,29 +1536,18 @@ export function applyGenericSimulatedMainPhaseAction<
       if (card.cannotBeNormalSummonedOrSet) break;
       if (card.summonRestrict === "shadow_heart_invocation_only") break;
       if (!canUseNormalSummonForCard(player, card)) break;
-      const tributeInfo =
-        resolveSimulatedTributeRequirement(
-          options,
-          options.getTributeRequirementFor,
-          card,
-          player,
-        ) || { tributesNeeded: 0 };
+      const tributeInfo = options.getTributeRequirementFor?.(card, player) || {
+        tributesNeeded: 0,
+      };
       const tributesNeeded = Math.max(0, Number(tributeInfo.tributesNeeded) || 0);
       if (!fieldHasTributeValue(player.field || [], tributesNeeded, card)) break;
 
       const tributeIndices =
-        selectSimulatedTributes(
-          options,
-          options.selectBestTributes,
-          player.field,
-          tributesNeeded,
-          card,
-          {
-            botState: player,
-            oppField: state.player?.field || [],
-            game: state,
-          },
-        ) || [];
+        options.selectBestTributes?.(player.field, tributesNeeded, card, {
+          botState: player,
+          oppField: state.player?.field || [],
+          game: state,
+        }) || [];
       const validTributeIndices = [...new Set(tributeIndices)].filter(
         (idx) =>
           Number.isInteger(idx) &&
@@ -1698,7 +1585,7 @@ export function applyGenericSimulatedMainPhaseAction<
         player.graveyard.push(newCard);
       } else {
         player.field.push(newCard);
-        callSimulatedMainPhaseHook(options, options.onAfterSummon, {
+        options.onAfterSummon?.({
           state,
           action,
           player,
@@ -1748,11 +1635,8 @@ export function applyGenericSimulatedMainPhaseAction<
 
     case "monsterEffect": {
       const player = state.bot;
-      const requestedFieldIndex = action.fieldIndex;
-      const fieldIndex =
-        typeof requestedFieldIndex === "number" &&
-        Number.isInteger(requestedFieldIndex)
-        ? requestedFieldIndex
+      const fieldIndex = Number.isInteger(action.fieldIndex as number)
+        ? action.fieldIndex!
         : player.field.findIndex(
             (card) =>
               card &&
@@ -1768,12 +1652,12 @@ export function applyGenericSimulatedMainPhaseAction<
           entry.activationZones?.includes("field"),
       );
       if (!effect) break;
-      if (!effectConditionsPass(runtimeState, effect, card, selectionOptions)) {
+      if (!effectConditionsPass(state, effect, card, selectionOptions)) {
         break;
       }
       if (
         !canUseSimulatedEffect(
-          runtimeState,
+          state,
           effect,
           card,
           options.selfId || "bot",
@@ -1782,25 +1666,21 @@ export function applyGenericSimulatedMainPhaseAction<
         break;
       }
 
-      const handled = callSimulatedMainPhaseHook(
+      const handled = options.onMonsterEffect?.({
+        state,
+        action,
+        player,
+        card,
+        fieldIndex,
+        effect,
         options,
-        options.onMonsterEffect,
-        {
-          state: runtimeState,
-          action,
-          player,
-          card,
-          fieldIndex,
-          effect,
-          options,
-        },
-      );
+      });
       if (handled) break;
 
       const selections = selectSimulatedTargets({
         targets: effect.targets || [],
         actions: effectExecutionActions(effect),
-        state: runtimeState,
+        state,
         sourceCard: card,
         selfId: options.selfId || "bot",
         options: selectionOptions,
@@ -1808,18 +1688,18 @@ export function applyGenericSimulatedMainPhaseAction<
       applySimulatedActions({
         actions: effectExecutionActions(effect),
         selections,
-        state: runtimeState,
+        state,
         selfId: options.selfId || "bot",
         options: { ...selectionOptions, sourceCard: card },
       });
       markSimulatedEffectUsed(
-        runtimeState,
+        state,
         effect,
         card,
         options.selfId || "bot",
       );
-      callSimulatedMainPhaseHook(options, options.onEffectActivated, {
-        state: runtimeState,
+      options.onEffectActivated?.({
+        state,
         action,
         player,
         card,
@@ -1837,12 +1717,12 @@ export function applyGenericSimulatedMainPhaseAction<
       if (!card || card.cardKind !== "monster") break;
       const effect = resolveEffectForAction(card, action, ["ignition"]);
       if (!effect || !effect.activationZones?.includes("hand")) break;
-      if (!effectConditionsPass(runtimeState, effect, card, selectionOptions)) {
+      if (!effectConditionsPass(state, effect, card, selectionOptions)) {
         break;
       }
       if (
         !canUseSimulatedEffect(
-          runtimeState,
+          state,
           effect,
           card,
           options.selfId || "bot",
@@ -1853,7 +1733,7 @@ export function applyGenericSimulatedMainPhaseAction<
       const selections = selectSimulatedTargets({
         targets: effect.targets || [],
         actions: effectExecutionActions(effect),
-        state: runtimeState,
+        state,
         sourceCard: card,
         selfId: options.selfId || "bot",
         options: selectionOptions,
@@ -1861,17 +1741,17 @@ export function applyGenericSimulatedMainPhaseAction<
       applySimulatedActions({
         actions: effectExecutionActions(effect),
         selections,
-        state: runtimeState,
+        state,
         selfId: options.selfId || "bot",
         options: { ...selectionOptions, sourceCard: card },
       });
       markSimulatedEffectUsed(
-        runtimeState,
+        state,
         effect,
         card,
         options.selfId || "bot",
       );
-      callSimulatedMainPhaseHook(options, options.onEffectActivated, {
+      options.onEffectActivated?.({
         state,
         action,
         player,
@@ -1892,13 +1772,13 @@ export function applyGenericSimulatedMainPhaseAction<
       if (
         onPlayEffect &&
         (!effectConditionsPass(
-          runtimeState,
+          state,
           onPlayEffect,
           card,
           selectionOptions,
         ) ||
           !canUseSimulatedEffect(
-            runtimeState,
+            state,
             onPlayEffect,
             card,
             options.selfId || "bot",
@@ -1908,13 +1788,13 @@ export function applyGenericSimulatedMainPhaseAction<
       }
       player.hand.splice(handIndex, 1);
       const placedCard = { ...card };
-      simulateGenericSpellEffect(runtimeState, placedCard, selectionOptions);
+      simulateGenericSpellEffect(state, placedCard, selectionOptions);
       if (placedCard.__simSetAfterResolution) {
         if (
           !setSimulatedSpellTrapAfterResolution(
             player,
             placedCard,
-            runtimeState,
+            state,
           )
         ) {
           delete placedCard.__simSetAfterResolution;
@@ -1926,17 +1806,10 @@ export function applyGenericSimulatedMainPhaseAction<
         player.graveyard.push(placedCard);
         break;
       }
-      const placement =
-        callSimulatedSpellPlacement(
-          options,
-          options.placeSpellCard,
-          state,
-          placedCard,
-        ) ||
-        { placed: false };
-      const placed =
-        isObjectValue(placement) && Boolean(Reflect.get(placement, "placed"));
-      if (!placed) {
+      const placement = options.placeSpellCard?.(state, placedCard) || {
+        placed: false,
+      };
+      if (!placement.placed) {
         player.graveyard.push(placedCard);
       }
       break;
@@ -1967,13 +1840,10 @@ export function applyGenericSimulatedMainPhaseAction<
 
     case "spellTrapEffect": {
       const player = state.bot;
-      const zoneIndex =
-        typeof action.zoneIndex === "number" &&
-        Number.isInteger(action.zoneIndex)
+      const zoneIndex = Number.isInteger(action.zoneIndex as number)
         ? action.zoneIndex
         : action.index;
-      if (typeof zoneIndex !== "number") break;
-      const card = player.spellTrap?.[zoneIndex];
+      const card = player.spellTrap?.[zoneIndex!];
       if (!card) break;
       card.isFacedown = false;
 
@@ -1983,13 +1853,13 @@ export function applyGenericSimulatedMainPhaseAction<
       ]);
       if (effect) {
         if (
-          !effectConditionsPass(runtimeState, effect, card, selectionOptions)
+          !effectConditionsPass(state, effect, card, selectionOptions)
         ) {
           break;
         }
         if (
           !canUseSimulatedEffect(
-            runtimeState,
+            state,
             effect,
             card,
             options.selfId || "bot",
@@ -2000,7 +1870,7 @@ export function applyGenericSimulatedMainPhaseAction<
         const selections = selectSimulatedTargets({
           targets: effect.targets || [],
           actions: effectExecutionActions(effect),
-          state: runtimeState,
+          state,
           sourceCard: card,
           selfId: options.selfId || "bot",
           options: selectionOptions,
@@ -2008,17 +1878,17 @@ export function applyGenericSimulatedMainPhaseAction<
         applySimulatedActions({
           actions: effectExecutionActions(effect),
           selections,
-          state: runtimeState,
+          state,
           selfId: options.selfId || "bot",
           options: { ...selectionOptions, sourceCard: card },
         });
         markSimulatedEffectUsed(
-          runtimeState,
+          state,
           effect,
           card,
           options.selfId || "bot",
         );
-        callSimulatedMainPhaseHook(options, options.onEffectActivated, {
+        options.onEffectActivated?.({
           state,
           action,
           player,
@@ -2031,12 +1901,12 @@ export function applyGenericSimulatedMainPhaseAction<
 
       if (resolvesToGraveyardAfterActivation(card)) {
         if (card.__simSetAfterResolution) {
-          setSimulatedSpellTrapAfterResolution(player, card, runtimeState);
+          setSimulatedSpellTrapAfterResolution(player, card, state);
           break;
         }
         player.graveyard.push(card);
         if (Array.isArray(player.spellTrap)) {
-          player.spellTrap.splice(zoneIndex, 1);
+          player.spellTrap.splice(zoneIndex!, 1);
         }
       }
       break;
@@ -2057,7 +1927,7 @@ export function applyGenericSimulatedMainPhaseAction<
       if (!effect) break;
       if (
         !effectConditionsPass(
-          runtimeState,
+          state,
           effect,
           fieldSpell,
           selectionOptions,
@@ -2067,7 +1937,7 @@ export function applyGenericSimulatedMainPhaseAction<
       }
       if (
         !canUseSimulatedEffect(
-          runtimeState,
+          state,
           effect,
           fieldSpell,
           options.selfId || "bot",
@@ -2076,22 +1946,18 @@ export function applyGenericSimulatedMainPhaseAction<
         break;
       }
       const targetPreference =
-        callSimulatedMainPhaseHook(
+        (options.getFieldEffectTargetPreference?.({
+          state,
+          action,
+          player,
+          fieldSpell,
+          effect,
           options,
-          options.getFieldEffectTargetPreference,
-          {
-            state,
-            action,
-            player,
-            fieldSpell,
-            effect,
-            options,
-          },
-        ) || null;
+        }) as object | null | undefined) || null;
       const selections = selectSimulatedTargets({
         targets: effect.targets || [],
         actions: effectExecutionActions(effect),
-        state: runtimeState,
+        state,
         sourceCard: fieldSpell,
         selfId: options.selfId || "bot",
         options: {
@@ -2105,7 +1971,7 @@ export function applyGenericSimulatedMainPhaseAction<
       applySimulatedActions({
         actions: effectExecutionActions(effect),
         selections,
-        state: runtimeState,
+        state,
         selfId: options.selfId || "bot",
         options: {
           ...selectionOptions,
@@ -2114,12 +1980,12 @@ export function applyGenericSimulatedMainPhaseAction<
         },
       });
       markSimulatedEffectUsed(
-        runtimeState,
+        state,
         effect,
         fieldSpell,
         options.selfId || "bot",
       );
-      callSimulatedMainPhaseHook(options, options.onEffectActivated, {
+      options.onEffectActivated?.({
         state,
         action,
         player,
@@ -2133,9 +1999,7 @@ export function applyGenericSimulatedMainPhaseAction<
 
     case "graveyardMonsterEffect": {
       const player = state.bot;
-      const graveyardIndex =
-        typeof action.graveyardIndex === "number" &&
-        Number.isInteger(action.graveyardIndex)
+      const graveyardIndex = Number.isInteger(action.graveyardIndex as number)
         ? action.graveyardIndex
         : player.graveyard?.findIndex(
             (card) =>
@@ -2144,17 +2008,16 @@ export function applyGenericSimulatedMainPhaseAction<
               (card.id === action.cardId ||
                 (!action.cardId && card.name === action.cardName)),
           );
-      if (typeof graveyardIndex !== "number") break;
-      const card = player.graveyard?.[graveyardIndex];
+      const card = player.graveyard?.[graveyardIndex!];
       if (!card || card.cardKind !== "monster") break;
       const effect = resolveEffectForAction(card, action, ["ignition"]);
       if (!effect || !effect.activationZones?.includes("graveyard")) break;
-      if (!effectConditionsPass(runtimeState, effect, card, selectionOptions)) {
+      if (!effectConditionsPass(state, effect, card, selectionOptions)) {
         break;
       }
       if (
         !canUseSimulatedEffect(
-          runtimeState,
+          state,
           effect,
           card,
           options.selfId || "bot",
@@ -2165,7 +2028,7 @@ export function applyGenericSimulatedMainPhaseAction<
       const selections = selectSimulatedTargets({
         targets: effect.targets || [],
         actions: effectExecutionActions(effect),
-        state: runtimeState,
+        state,
         sourceCard: card,
         selfId: options.selfId || "bot",
         options: selectionOptions,
@@ -2173,17 +2036,17 @@ export function applyGenericSimulatedMainPhaseAction<
       applySimulatedActions({
         actions: effectExecutionActions(effect),
         selections,
-        state: runtimeState,
+        state,
         selfId: options.selfId || "bot",
         options: { ...selectionOptions, sourceCard: card },
       });
       markSimulatedEffectUsed(
-        runtimeState,
+        state,
         effect,
         card,
         options.selfId || "bot",
       );
-      callSimulatedMainPhaseHook(options, options.onEffectActivated, {
+      options.onEffectActivated?.({
         state,
         action,
         player,
@@ -2219,12 +2082,11 @@ export function applyGenericSimulatedMainPhaseAction<
       player.field.splice(materialIndex, 1);
       player.graveyard.push(material);
       if (extraIndex >= 0) player.extraDeck.splice(extraIndex, 1);
-      const ascensionPosition = (
-        action.position || ascensionCard.ascension?.position || "attack"
-      ) as NonNullable<SimulatedCardState["position"]>;
       const summoned = {
         ...ascensionCard,
-        position: ascensionPosition,
+        position:
+          (action.position || ascensionCard.ascension?.position ||
+            "attack") as NonNullable<SimulatedCardState["position"]>,
         isFacedown: false,
         hasAttacked: false,
         attacksUsedThisTurn: 0,
@@ -2280,7 +2142,7 @@ export function applyGenericSimulatedMainPhaseAction<
         if (moveCardToZone(player, material, "graveyard")) {
           updateSimulatedSentToGraveMaterialMarker({
             card: material,
-            state: runtimeState,
+            state,
             player,
             fromZone,
             contextLabel: "fusion_material",
@@ -2301,16 +2163,14 @@ export function applyGenericSimulatedMainPhaseAction<
       if (extraIndex >= 0) {
         player.extraDeck.splice(extraIndex, 1);
       }
-      const fusionPosition = Reflect.get(
-        extraDeckCard,
-        "fusionPosition",
-      ) as SimulatedCardState["position"] | null;
-      const summonedPosition = (
-        action.position || fusionPosition || "attack"
-      ) as NonNullable<SimulatedCardState["position"]>;
       const summoned = {
         ...extraDeckCard,
-        position: summonedPosition,
+        position:
+          (action.position ||
+            (extraDeckCard as SimulatedCardState & {
+              fusionPosition?: SimulatedCardState["position"];
+            }).fusionPosition ||
+            "attack") as NonNullable<SimulatedCardState["position"]>,
         isFacedown: false,
         hasAttacked: false,
         attacksUsedThisTurn: 0,
