@@ -43,6 +43,22 @@ interface PlanningDiagnosticCardInput {
   hasAttacked?: boolean;
   counters?: DiagnosticCounters | null;
   equips?: readonly PlanningDiagnosticCardLike[] | null;
+  state?: { blueprintStorage?: object | null } | null;
+  blueprintStorage?: object | null;
+  storedBlueprints?: readonly unknown[] | null;
+  blueprintStorageState?: object | null;
+  storedEffects?: readonly unknown[] | null;
+}
+
+interface BlueprintEntryInput {
+  id?: string | number;
+  effectId?: string | number;
+  sourceName?: string | number;
+  name?: string | number;
+}
+
+interface BlueprintStorageInput {
+  storedBlueprints?: readonly unknown[] | null;
 }
 
 type PlanningDiagnosticCardLike =
@@ -102,27 +118,22 @@ interface PlannerResultDiagnosticInput {
   diagnostics?: TurnLineDiagnostics | null;
 }
 
+type DiagnosticPlannedAction = AIPlannedAction & {
+  index?: number;
+  fieldIndex?: number;
+  zoneIndex?: number;
+  graveyardIndex?: number;
+  materialIndex?: number;
+  position?: AIActionFingerprint["position"];
+  name?: string;
+};
+
 function safeArray<Value>(
   value: readonly Value[] | null | undefined,
 ): Array<NonFalsy<Value>>;
 function safeArray(value: unknown): unknown[];
 function safeArray(value: unknown): unknown[] {
-  if (!Array.isArray(value)) return [];
-  return value.filter(Boolean);
-}
-
-function readProperty(value: unknown, key: string): unknown {
-  return value !== null && (typeof value === "object" || typeof value === "function")
-    ? Reflect.get(value, key)
-    : undefined;
-}
-
-function readFirstProperty(value: unknown, keys: readonly string[]): unknown {
-  for (const key of keys) {
-    const entry = readProperty(value, key);
-    if (entry) return entry;
-  }
-  return undefined;
+  return Array.isArray(value) ? value.filter(Boolean) : [];
 }
 
 function roundStat(value: unknown): number {
@@ -136,19 +147,16 @@ function cardName(card: PlanningDiagnosticCardLike): string | null {
   return card.name || card.cardName || card.label || null;
 }
 
-function isCounterEntryArray(
-  value: DiagnosticCounters,
-): value is readonly (readonly [string, number])[] {
-  return Array.isArray(value);
-}
-
 function summarizeCounters(card: PlanningDiagnosticCardInput): string[] {
   const counters = card?.counters;
   if (!counters) return [];
-  let entries: readonly (readonly [string, number])[];
-  if (counters instanceof Map) entries = [...counters.entries()];
-  else if (isCounterEntryArray(counters)) entries = counters;
-  else entries = Object.entries(counters);
+  const entries = counters instanceof Map
+    ? [...counters.entries()]
+    : Array.isArray(counters)
+      ? counters
+      : typeof counters === "object"
+        ? Object.entries(counters)
+        : [];
   return entries
     .map(([key, value]) => `${key}:${value}`)
     .sort();
@@ -157,34 +165,20 @@ function summarizeCounters(card: PlanningDiagnosticCardInput): string[] {
 function summarizeStoredBlueprints(
   card: PlanningDiagnosticCardInput,
 ): Array<string | number> {
-  const state = readProperty(card, "state");
-  const storage =
-    readProperty(state, "blueprintStorage") ||
-    readProperty(card, "blueprintStorage");
+  const storage = (card?.state?.blueprintStorage || card?.blueprintStorage) as BlueprintStorageInput | null | undefined;
   const stored =
-    readProperty(card, "storedBlueprints") ||
-    readProperty(readProperty(card, "blueprintStorageState"), "storedBlueprints") ||
-    readProperty(storage, "storedBlueprints") ||
-    readProperty(card, "storedEffects") ||
+    card?.storedBlueprints ||
+    (card?.blueprintStorageState as BlueprintStorageInput | null | undefined)
+      ?.storedBlueprints ||
+    storage?.storedBlueprints ||
+    card?.storedEffects ||
     [];
-  return safeArray(stored)
-    .map((entry) =>
-      readFirstProperty(entry, ["id", "effectId", "sourceName", "name"]),
-    )
-    .filter(
-      (entry): entry is string | number =>
-        Boolean(entry) &&
-        (typeof entry === "string" || typeof entry === "number"),
-    )
-    .sort();
+  return (safeArray(stored).map((entry) => (entry as BlueprintEntryInput | null | undefined)?.id || (entry as BlueprintEntryInput | null | undefined)?.effectId || (entry as BlueprintEntryInput | null | undefined)?.sourceName || (entry as BlueprintEntryInput | null | undefined)?.name).filter(Boolean) as Array<string | number>).sort();
 }
 
 function summarizeEquips(card: PlanningDiagnosticCardInput): string[] {
   return safeArray(card?.equips)
-    .map((equip) => {
-      const id = typeof equip === "string" ? undefined : equip?.id;
-      return cardName(equip) || `id:${id || "unknown"}`;
-    })
+    .map((equip) => cardName(equip) || `id:${(equip as PlanningDiagnosticCardInput | null | undefined)?.id || "unknown"}`)
     .sort();
 }
 
@@ -192,25 +186,28 @@ function summarizeCard(
   card: PlanningDiagnosticCardLike,
 ): PlanningCardSummary | null {
   if (!card) return null;
-  const safe = typeof card === "string" ? {} : card;
   return {
     name: cardName(card) || "unknown",
-    id: safe.id ?? null,
-    instanceId: safe.instanceId || safe._instanceId || safe.uuid || null,
-    kind: safe.cardKind || null,
-    position: safe.position || null,
-    faceDown: !!safe.isFacedown,
-    atk: roundStat(safe.atk),
-    def: roundStat(safe.def),
-    tempAtk: roundStat(safe.tempAtkBoost),
-    tempDef: roundStat(safe.tempDefBoost),
-    equipAtk: roundStat(safe.equipAtkBonus),
-    equipDef: roundStat(safe.equipDefBonus),
-    cannotAttack: !!safe.cannotAttackThisTurn,
-    hasAttacked: !!safe.hasAttacked,
-    counters: summarizeCounters(safe),
-    blueprints: summarizeStoredBlueprints(safe),
-    equips: summarizeEquips(safe),
+    id: (card as PlanningDiagnosticCardInput).id ?? null,
+    instanceId:
+      (card as PlanningDiagnosticCardInput).instanceId ||
+      (card as PlanningDiagnosticCardInput)._instanceId ||
+      (card as PlanningDiagnosticCardInput).uuid ||
+      null,
+    kind: (card as PlanningDiagnosticCardInput).cardKind || null,
+    position: (card as PlanningDiagnosticCardInput).position || null,
+    faceDown: !!(card as PlanningDiagnosticCardInput).isFacedown,
+    atk: roundStat((card as PlanningDiagnosticCardInput).atk),
+    def: roundStat((card as PlanningDiagnosticCardInput).def),
+    tempAtk: roundStat((card as PlanningDiagnosticCardInput).tempAtkBoost),
+    tempDef: roundStat((card as PlanningDiagnosticCardInput).tempDefBoost),
+    equipAtk: roundStat((card as PlanningDiagnosticCardInput).equipAtkBonus),
+    equipDef: roundStat((card as PlanningDiagnosticCardInput).equipDefBonus),
+    cannotAttack: !!(card as PlanningDiagnosticCardInput).cannotAttackThisTurn,
+    hasAttacked: !!(card as PlanningDiagnosticCardInput).hasAttacked,
+    counters: summarizeCounters(card as PlanningDiagnosticCardInput),
+    blueprints: summarizeStoredBlueprints(card as PlanningDiagnosticCardInput),
+    equips: summarizeEquips(card as PlanningDiagnosticCardInput),
   };
 }
 
@@ -220,7 +217,7 @@ function summarizeZone(
 ): PlanningCardSummary[] {
   const list = safeArray(cards)
     .map(summarizeCard)
-    .filter((card): card is PlanningCardSummary => Boolean(card));
+    .filter(Boolean) as PlanningCardSummary[];
   if (sort) {
     list.sort((a, b) => {
       const nameCompare = a.name.localeCompare(b.name);
@@ -295,7 +292,7 @@ function resolvePerspective(
 export function fingerprintAction(action?: null): null;
 export function fingerprintAction(action: AIPlannedAction): AIActionFingerprint;
 export function fingerprintAction(
-  action: AIPlannedAction | null = null,
+  action: DiagnosticPlannedAction | null = null,
 ): AIActionFingerprint | null {
   if (!action) return null;
   if (action.type === "simulatedBattle") {
@@ -305,10 +302,9 @@ export function fingerprintAction(
       targetName: action.targetName || null,
       direct: !!action.direct,
       damage: Number.isFinite(Number(action.damage)) ? Number(action.damage) : 0,
-      destroyedNames: safeArray(action.destroyedNames)
+      destroyedNames: (safeArray(action.destroyedNames)
         .map((entry) => (typeof entry === "string" ? entry : entry?.name))
-        .filter((name): name is string => Boolean(name))
-        .sort(),
+        .filter(Boolean) as string[]).sort(),
       rewardNames: safeArray(action.rewardNames).slice().sort(),
       phaseBridge: action.phaseBridge || null,
       priority: Number.isFinite(Number(action.priority))
@@ -318,21 +314,6 @@ export function fingerprintAction(
   }
   const context = action.activationContext || {};
   const targetPreferences = context.targetPreferences || {};
-  const readInteger = (key: string): number | null => {
-    const value = readProperty(action, key);
-    return typeof value === "number" && Number.isInteger(value) ? value : null;
-  };
-  const position = ((candidate: AIAction): AIActionFingerprint["position"] => {
-    switch (candidate.type) {
-      case "ascension":
-      case "extraDeckProcedure":
-      case "special_summon_sanctum_protector":
-      case "summon":
-        return candidate.position || null;
-      default:
-        return null;
-    }
-  })(action);
   return {
     type: action.type || null,
     cardName:
@@ -342,12 +323,16 @@ export function fingerprintAction(
       action.name ||
       null,
     cardId: action.cardId || action.card?.id || null,
-    index: readInteger("index"),
-    fieldIndex: readInteger("fieldIndex"),
-    zoneIndex: readInteger("zoneIndex"),
-    graveyardIndex: readInteger("graveyardIndex"),
-    materialIndex: readInteger("materialIndex"),
-    position,
+    index: Number.isInteger(action.index) ? action.index! : null,
+    fieldIndex: Number.isInteger(action.fieldIndex) ? action.fieldIndex! : null,
+    zoneIndex: Number.isInteger(action.zoneIndex) ? action.zoneIndex! : null,
+    graveyardIndex: Number.isInteger(action.graveyardIndex)
+      ? action.graveyardIndex!
+      : null,
+    materialIndex: Number.isInteger(action.materialIndex)
+      ? action.materialIndex!
+      : null,
+    position: action.position || null,
     priority: Number.isFinite(Number(action.priority))
       ? Number(action.priority)
       : null,
@@ -499,8 +484,8 @@ function compareField(
 
 function compareCardZone(
   prefix: string,
-  expected: readonly PlanningCardSummary[] = [],
-  actual: readonly PlanningCardSummary[] = [],
+  expected: readonly PlanningCardSummary[] | undefined,
+  actual: readonly PlanningCardSummary[] | undefined,
   diffs: PlanningSummaryDiff[],
 ): void {
   if (stableString(expected) === stableString(actual)) return;
@@ -599,33 +584,27 @@ function compactDiffValue(value: unknown): unknown {
   }
   if (value && typeof value === "object") {
     if ("name" in value || "id" in value || "position" in value) {
-      const name = readProperty(value, "name");
-      const id = readProperty(value, "id");
-      const position = readProperty(value, "position");
-      const faceDown = readProperty(value, "faceDown");
-      const atk = readProperty(value, "atk");
-      const def = readProperty(value, "def");
-      const tempAtk = readProperty(value, "tempAtk");
-      const tempDef = readProperty(value, "tempDef");
-      const counters = readProperty(value, "counters");
-      const equips = readProperty(value, "equips");
       return {
-        name: name || null,
-        id: id ?? null,
-        position: position || null,
-        faceDown: faceDown ?? null,
-        atk: atk ?? null,
-        def: def ?? null,
-        tempAtk: tempAtk ?? null,
-        tempDef: tempDef ?? null,
-        counters: Array.isArray(counters) ? counters.slice(0, 4) : [],
-        equips: Array.isArray(equips) ? equips.slice(0, 4) : [],
+        name: (value as PlanningCardSummary).name || null,
+        id: (value as PlanningCardSummary).id ?? null,
+        position: (value as PlanningCardSummary).position || null,
+        faceDown: (value as PlanningCardSummary).faceDown ?? null,
+        atk: (value as PlanningCardSummary).atk ?? null,
+        def: (value as PlanningCardSummary).def ?? null,
+        tempAtk: (value as PlanningCardSummary).tempAtk ?? null,
+        tempDef: (value as PlanningCardSummary).tempDef ?? null,
+        counters: Array.isArray((value as PlanningCardSummary).counters)
+          ? (value as PlanningCardSummary).counters.slice(0, 4)
+          : [],
+        equips: Array.isArray((value as PlanningCardSummary).equips)
+          ? (value as PlanningCardSummary).equips.slice(0, 4)
+          : [],
       };
     }
     return Object.fromEntries(
-      Object.keys(value)
+      Object.entries(value)
         .slice(0, 8)
-        .map((key) => [key, compactDiffValue(readProperty(value, key))]),
+        .map(([key, nested]) => [key, compactDiffValue(nested)]),
     );
   }
   return value;

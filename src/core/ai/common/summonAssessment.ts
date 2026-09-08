@@ -173,33 +173,20 @@ function resolveGroupMatch(
   profile: SummonAssessmentProfile,
   groupName: SummonCardGroup,
 ): boolean {
-  const explicit = groupName === "Boss"
-    ? context.isBoss
-    : groupName === "EnginePiece"
-      ? context.isEnginePiece
-      : context.isKeepInHand;
-  if (typeof explicit === "boolean") return explicit;
+  const explicitKey = `is${groupName}` as `is${SummonCardGroup}`;
+  if (typeof context[explicitKey] === "boolean") return context[explicitKey];
 
-  const predicate = groupName === "Boss"
-    ? profile.isBoss
-    : groupName === "EnginePiece"
-      ? profile.isEnginePiece
-      : profile.isKeepInHand;
+  const predicate = profile[`is${groupName}` as `is${SummonCardGroup}`];
   if (typeof predicate === "function") {
     return !!predicate(card, context);
   }
 
-  if (groupName === "Boss") {
-    return matchesCardGroup(card, profile.bossIds, profile.bossNames);
-  }
-  if (groupName === "EnginePiece") {
-    return matchesCardGroup(
-      card,
-      profile.enginePieceIds,
-      profile.enginePieceNames,
-    );
-  }
-  return matchesCardGroup(card, profile.keepInHandIds, profile.keepInHandNames);
+  const normalized = groupName.charAt(0).toLowerCase() + groupName.slice(1);
+  return matchesCardGroup(
+    card,
+    profile[`${normalized}Ids` as "bossIds" | "enginePieceIds" | "keepInHandIds"],
+    profile[`${normalized}Names` as "bossNames" | "enginePieceNames" | "keepInHandNames"],
+  );
 }
 
 function normalizeProjectedStat(value: unknown, fallback: number): number {

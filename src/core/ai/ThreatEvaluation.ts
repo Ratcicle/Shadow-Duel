@@ -11,7 +11,7 @@ import {
 } from "./RoleAnalyzer.js";
 import type { StrategicCardView } from "./RoleAnalyzer.js";
 import type { GamePlayer } from "../contracts/player.js";
-import { getMaxAttacks } from "./StrategyUtils.js";
+import { hasArchetype, getMaxAttacks } from "./StrategyUtils.js";
 
 export interface ThreatContext {
   hasDefenses?: boolean;
@@ -27,18 +27,10 @@ export interface RankedThreat {
   threatScore: number;
 }
 
-function cardHasArchetype(
-  card: StrategicCardView,
-  archetype: string,
-): boolean {
-  if (card.archetype === archetype) return true;
-  return Array.isArray(card.archetypes) && card.archetypes.includes(archetype);
-}
-
 /**
  * Calcula o threat score de uma carta no contexto atual do jogo.
- * @param {Object} card - A carta a avaliar
- * @param {Object} context - Contexto do jogo
+ * @param {object} card - A carta a avaliar
+ * @param {object} context - Contexto do jogo
  * @param {number} context.myStrongestAtk - ATK do meu monstro mais forte
  * @param {boolean} context.hasDefenses - Tenho monstros em DEF?
  * @param {string} context.myArchetype - Meu arquétipo principal
@@ -131,7 +123,7 @@ export function calculateThreatScore(
   }
 
   // 7. SYNERGY WITH OPPONENT STRATEGY
-  if (context.myArchetype && cardHasArchetype(card, context.myArchetype)) {
+  if (context.myArchetype && hasArchetype(card, context.myArchetype)) {
     // Se o oponente joga o mesmo arquétipo, há sinergia
     score += 0.3;
   }
@@ -149,9 +141,9 @@ export function calculateThreatScore(
 
 /**
  * Calcula o threat score de todos os monstros oponentes e retorna ordenado.
- * @param {Object[]} opponentField - Campo do oponente
- * @param {Object} context - Contexto do jogo
- * @returns {Object[]} - Array de { card, threatScore }, ordenado por threat DESC
+ * @param {object[]} opponentField - Campo do oponente
+ * @param {object} context - Contexto do jogo
+ * @returns {object[]} - Array de { card, threatScore }, ordenado por threat DESC
  */
 export function rankOpponentThreats(
   opponentField: readonly (StrategicCardView | null | undefined)[] | null,
@@ -172,9 +164,9 @@ export function rankOpponentThreats(
 
 /**
  * Identifica a ameaça #1 no campo oponente.
- * @param {Object[]} opponentField
- * @param {Object} context
- * @returns {Object|null} - { card, threatScore } ou null
+ * @param {object[]} opponentField
+ * @param {object} context
+ * @returns {object|null} - { card, threatScore } ou null
  */
 export function getTopThreat(
   opponentField: readonly (StrategicCardView | null | undefined)[] | null,
@@ -187,8 +179,8 @@ export function getTopThreat(
 /**
  * Calcula o "valor de recurso" de uma carta na mão/campo para AI.
  * Usado para decisões de custo (discard, tribute, etc).
- * @param {Object} card
- * @param {Object} context
+ * @param {object} card
+ * @param {object} context
  * @returns {number} - Resource value (menor = mais barato de sacrificar)
  */
 export function calculateResourceValue(
@@ -245,10 +237,10 @@ export function calculateResourceValue(
 
 /**
  * Ordena cartas por resource value (para escolher qual descartar/tributar).
- * @param {Object[]} cards
- * @param {Object} context
+ * @param {object[]} cards
+ * @param {object} context
  * @param {boolean} ascending - true = menor valor primeiro (descartável), false = maior primeiro
- * @returns {Object[]}
+ * @returns {object[]}
  */
 export function rankByResourceValue(
   cards: readonly StrategicCardView[] | null,
@@ -273,7 +265,7 @@ export function rankByResourceValue(
 
 /**
  * Estima quantos turnos um monstro precisa para me matar.
- * @param {Object} card - Monstro oponente
+ * @param {object} card - Monstro oponente
  * @param {number} myLP - Meus LP atuais
  * @returns {number} - Turnos até lethal (Infinity se não pode)
  */
@@ -296,7 +288,7 @@ export function estimateTurnsToKill(
 
 /**
  * Verifica se um monstro pode matar em 1 turno (lethal check).
- * @param {Object[]} opponentField
+ * @param {object[]} opponentField
  * @param {number} myLP
  * @returns {boolean}
  */
