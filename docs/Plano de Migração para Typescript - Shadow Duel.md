@@ -1656,15 +1656,17 @@ revisáveis:
 2. **PR 9B — Estratégias, Bot e Arena:** será criado somente depois do merge
    do PR 9A, a partir do novo `origin/main`.
 
-Em 2 de setembro de 2026, o PR 9A está em implementação. Já foram
-estabelecidos os contratos canônicos de estado e actions de IA, a correção
-isolada do ledger `_simOncePerTurn`, os módulos compartilhados de simulação,
-os simuladores declarativos, a ponte de simulação do Bot e as buscas Beam,
-Greedy, GameTree e TurnLine. Também foram convertidos o planejamento macro,
-avaliação de ameaças, análise de papéis, previsão do oponente e Chain
-Awareness. Os testes de baseline, interoperabilidade do ledger e os quatro
-perfis de clone foram adicionados. Permanecem pendentes o gate integral, os
-smokes, a revisão final do bundle e a publicação do PR draft.
+Em 8 de setembro de 2026, a implementação e a aceitação local do PR 9A estão
+concluídas. Foram estabelecidos os contratos canônicos de estado e actions de
+IA, a correção isolada do ledger `_simOncePerTurn`, os módulos compartilhados
+de simulação, os simuladores declarativos, a ponte de simulação do Bot e as
+buscas Beam, Greedy, GameTree e TurnLine. Também foram convertidos o
+planejamento macro, a avaliação de ameaças, a análise de papéis, a previsão do
+oponente e Chain Awareness. Os testes de baseline, a interoperabilidade do
+ledger, os quatro perfis de clone e as invariantes explícitas das buscas foram
+adicionados. O gate integral, os smokes e a revisão do bundle foram concluídos
+localmente; resta publicar o PR draft e aguardar `Verify / check` no push e no
+`pull_request`.
 
 O PR 9B ainda não foi iniciado. `BaseStrategy`, `StrategyRegistry`, as oito
 classes de estratégia, knowledge bases, políticas, executores, `Bot`,

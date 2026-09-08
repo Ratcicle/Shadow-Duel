@@ -151,7 +151,7 @@ O projeto usa ES modules nativos do navegador. O [package.json](package.json) de
 - Acesse pelo botão "Bot Arena" na tela inicial
 - Testa AI vs AI com velocidades: 1x, 2x, 4x, instant
 - Gera analytics: win rate, tempo de decisão, opening book (ver [ArenaAnalytics.js](src/core/ai/ArenaAnalytics.js))
-- Presets disponíveis: `shadowheart`, `luminarch`, `void`
+- Presets disponíveis: `shadowheart`, `luminarch`, `void`, `dragon`, `arcanist`, `miragebound`, `bloomrot`, `burningwest`
 
 **Flags de dev** (via `localStorage.setItem(key, "true")`):
 
@@ -159,7 +159,7 @@ O projeto usa ES modules nativos do navegador. O [package.json](package.json) de
 | -------------------------- | -------------------------------------------------- |
 | `shadow_duel_dev_mode`     | Painel dev + logs detalhados                       |
 | `shadow_duel_test_mode`    | Guardas extras de runtime                          |
-| `shadow_duel_bot_preset`   | Define arquétipo: `shadowheart`/`luminarch`/`void` |
+| `shadow_duel_bot_preset`   | Define um dos oito arquétipos disponíveis no registry do Bot |
 | `shadow_duel_capture_mode` | Ativa captura de replays                           |
 
 **Sistema de Replays** — Captura canônica e análise de partidas:
