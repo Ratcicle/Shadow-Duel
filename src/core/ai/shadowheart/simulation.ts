@@ -248,7 +248,9 @@ function isShadowHeartDragon(
   );
 }
 
-function buildSimAnalysis(state: MutableShadowState) {
+function buildSimAnalysis(
+  state: MutableShadowState = {} as MutableShadowState,
+) {
   const player = ensureZones(state.bot || {});
   const opponent = ensureZones(state.player || {});
   return {
@@ -291,8 +293,8 @@ function removeFromZone(
   card: SimulatedCardState,
 ): boolean {
   const index = list?.indexOf(card) ?? -1;
-  if (!list || index < 0) return false;
-  list.splice(index, 1);
+  if (index < 0) return false;
+  list!.splice(index, 1);
   return true;
 }
 
@@ -319,9 +321,8 @@ function moveToZone(
     if (player.fieldSpell) player.graveyard.push(player.fieldSpell);
     player.fieldSpell = card;
   } else {
-    const listZone = zone as ShadowListZone;
-    player[listZone] = player[listZone] || [];
-    player[listZone].push(card);
+    player[zone as ShadowListZone] = player[zone as ShadowListZone] || [];
+    player[zone as ShadowListZone].push(card);
   }
   return true;
 }
@@ -377,7 +378,9 @@ function placeShadowHeartSpellCard(
   return result;
 }
 
-function buildActionFilter(action: ShadowSearchAction): ShadowSearchFilters {
+function buildActionFilter(
+  action: ShadowSearchAction = {} as ShadowSearchAction,
+): ShadowSearchFilters {
   return {
     ...(action.filters || {}),
     cardKind: action.cardKind ?? action.filters?.cardKind,
@@ -581,13 +584,11 @@ function destroyBestOpponentCard(
   state: MutableShadowState,
 ): SimulatedCardState | null {
   const opponent = ensureZones(state.player || {});
-  const candidates = [
+  const candidates = ([
     ...(opponent.field || []),
     opponent.fieldSpell,
     ...(opponent.spellTrap || []),
-  ].filter(
-    (candidate): candidate is SimulatedCardState => Boolean(candidate),
-  );
+  ].filter(Boolean) as SimulatedCardState[]);
   if (candidates.length === 0) return null;
   candidates.sort((a, b) => {
     const aMonster = a.cardKind === "monster" ? 1 : 0;

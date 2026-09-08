@@ -305,7 +305,7 @@ export function rankLuminarchSearchCandidates(
     ctx.strategy?.bot || {}) as SimulatedPlayerState;
   const opponent =
     (ctx.opponent ||
-      ctx.getOpponent?.(ctx.game as LuminarchState, player) ||
+      ctx.getOpponent?.((ctx.game || {}) as LuminarchState, player) ||
       {}) as SimulatedPlayerState;
   const hand = player.hand || [];
   const field = player.field || [];
