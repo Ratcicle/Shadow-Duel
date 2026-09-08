@@ -19,6 +19,12 @@ interface SearchAction {
   toPosition: "attack";
 }
 
+interface SearchCard {
+  name: string;
+  atk: number;
+  def: number;
+}
+
 interface SearchPlayer {
   id: "bot" | "player";
   name: string;
@@ -53,6 +59,28 @@ interface MutableScoreState {
   bot: { lp: number };
 }
 
+interface TreeSearchPlayer {
+  id: "bot" | "player";
+  name: string;
+  lp: number;
+  hand: SearchCard[];
+  field: SearchCard[];
+  graveyard: SearchCard[];
+  extraDeck: SearchCard[];
+  spellTrap: SearchCard[];
+  fieldSpell: null;
+  summonCount: number;
+  debug: false;
+}
+
+interface TreeSearchState {
+  bot: TreeSearchPlayer;
+  player: TreeSearchPlayer;
+  turn: "bot";
+  phase: "main1";
+  turnCounter: number;
+}
+
 function makePlayer(id: "bot" | "player"): SearchPlayer {
   return {
     id,
@@ -82,6 +110,32 @@ function makeGame(): SearchState {
   return {
     bot,
     player: makePlayer("player"),
+    turn: "bot",
+    phase: "main1",
+    turnCounter: 1,
+  };
+}
+
+function makeTreePlayer(id: "bot" | "player"): TreeSearchPlayer {
+  return {
+    id,
+    name: id,
+    lp: 8000,
+    hand: [],
+    field: [],
+    graveyard: [],
+    extraDeck: [],
+    spellTrap: [],
+    fieldSpell: null,
+    summonCount: 0,
+    debug: false,
+  };
+}
+
+function makeTreeGame(): TreeSearchState {
+  return {
+    bot: makeTreePlayer("bot"),
+    player: makeTreePlayer("player"),
     turn: "bot",
     phase: "main1",
     turnCounter: 1,
@@ -198,6 +252,92 @@ test("game-tree search freezes defaults, three-candidate beam and first-tie beha
   assert.equal(shouldUseGameTreeSearch(game, game.bot, true), true);
 });
 
+test("game-tree search applies the legacy 0.85 future discount", () => {
+  const game = makeTreeGame();
+  game.bot.hand.push({ name: "Bot Material", atk: 1000, def: 0 });
+  game.player.hand.push({ name: "Player Material", atk: 1000, def: 0 });
+  const summonAction = { type: "summon", index: 0 } as const;
+  const strategy = {
+    bot: game.bot,
+    generateMainPhaseActions: () => [summonAction],
+  };
+
+  const result = gameTreeSearch(game, strategy, game.bot, 1);
+
+  assert.equal(result.action, summonAction);
+  assert.equal(result.score, -1.5 * Math.pow(0.85, 3));
+});
+
+test("game-tree transposition cache stops at the legacy 2000-entry boundary", () => {
+  const NativeMap = globalThis.Map;
+  let setCalls = 0;
+
+  class NearLimitMap<Key, Value> extends NativeMap<Key, Value> {
+    override get size(): number {
+      return super.size + 1999;
+    }
+
+    override set(key: Key, value: Value): this {
+      setCalls += 1;
+      return super.set(key, value);
+    }
+  }
+
+  globalThis.Map = NearLimitMap;
+  try {
+    const game = makeGame();
+    const strategy = {
+      bot: game.bot,
+      generateMainPhaseActions: () => SEARCH_ACTIONS,
+    };
+
+    const result = gameTreeSearch(game, strategy, game.bot, 2);
+
+    assert.equal(setCalls, 1);
+    assert.equal(result.transpositionHits, 2000);
+  } finally {
+    globalThis.Map = NativeMap;
+  }
+});
+
+test("game-tree hash failures retain the randomized HASH_ERROR fingerprint", () => {
+  const NativeMap = globalThis.Map;
+  const originalRandom = Math.random;
+  const observedHashes: string[] = [];
+
+  class CapturingMap<Key, Value> extends NativeMap<Key, Value> {
+    override has(key: Key): boolean {
+      observedHashes.push(String(key));
+      return super.has(key);
+    }
+  }
+
+  const game = makeGame();
+  Object.defineProperty(game.bot, "lp", {
+    configurable: true,
+    enumerable: true,
+    get() {
+      throw new Error("unhashable state");
+    },
+  });
+
+  globalThis.Map = CapturingMap;
+  Math.random = () => 0.375;
+  try {
+    const strategy = {
+      bot: game.bot,
+      generateMainPhaseActions: () => [],
+    };
+
+    gameTreeSearch(game, strategy, game.bot, 1);
+
+    assert.deepEqual(observedHashes, ["HASH_ERROR_0.375"]);
+  } finally {
+    Math.random = originalRandom;
+    globalThis.Map = NativeMap;
+  }
+});
+
 test("turn-line search freezes defaults, stable ties, diagnostics and score shape", async () => {
   const game = makeGame();
   const actions: SearchAction[] = [
@@ -289,5 +429,77 @@ test("turn-line search stops on the legacy node-budget boundary", async () => {
       nodesEvaluated: 1,
       reason: "node_budget",
     },
+  );
+});
+
+test("turn-line search limits the default candidate set to eight", async () => {
+  const game = makeGame();
+  const actions: SearchAction[] = Array.from({ length: 10 }, (_, index) => ({
+    type: "position_change",
+    tag: `candidate-${index + 1}`,
+    priority: 10 - index,
+    toPosition: "attack",
+  }));
+  const strategy = {
+    bot: game.bot,
+    generateMainPhaseActions: () => actions,
+    simulateMainPhaseAction(state: MutableScoreState, action: SearchAction) {
+      const candidateNumber = Number(action.tag.split("-")[1]);
+      state.bot.lp += candidateNumber;
+    },
+    evaluateBoardV2: (state: MutableScoreState) => state.bot.lp - 8000,
+  };
+
+  const result = await turnLineSearch(game, strategy, {
+    beamWidth: 20,
+    maxDepth: 1,
+    nodeBudget: 100,
+  });
+
+  assert.ok(result);
+  assert.equal(result.nodesEvaluated, 8);
+  assert.equal(result.action, actions[7]);
+});
+
+test("turn-line diagnostics preserve deterministic action fingerprints", async () => {
+  const game = makeGame();
+  const action: SearchAction = {
+    type: "position_change",
+    tag: "fingerprinted",
+    priority: 7,
+    toPosition: "attack",
+  };
+  const strategy = {
+    bot: game.bot,
+    generateMainPhaseActions: () => [action],
+    simulateMainPhaseAction(state: MutableScoreState) {
+      state.bot.lp += 1;
+    },
+    evaluateBoardV2: (state: MutableScoreState) => state.bot.lp - 8000,
+  };
+
+  const first = await turnLineSearch(game, strategy, { maxDepth: 1 });
+  const second = await turnLineSearch(game, strategy, { maxDepth: 1 });
+
+  assert.ok(first);
+  assert.ok(second);
+  assert.deepEqual(first.diagnostics.sequenceFingerprints, [
+    {
+      type: "position_change",
+      cardName: null,
+      cardId: null,
+      index: null,
+      fieldIndex: null,
+      zoneIndex: null,
+      graveyardIndex: null,
+      materialIndex: null,
+      position: null,
+      priority: 7,
+      targetPreferenceKeys: [],
+    },
+  ]);
+  assert.deepEqual(
+    second.diagnostics.sequenceFingerprints,
+    first.diagnostics.sequenceFingerprints,
   );
 });
