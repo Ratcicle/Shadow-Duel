@@ -23,13 +23,9 @@ interface SimulatedEquipAction {
   grantCrescentShieldGuard?: boolean;
 }
 
-function readCardList(
-  player: SimulatedPlayerState,
-  zone: string,
-): SimulatedCardState[] | null {
-  const value = Reflect.get(player, zone);
-  return Array.isArray(value) ? value as SimulatedCardState[] : null;
-}
+type SimulatedZonePlayer = SimulatedPlayerState & {
+  [Zone in SimulatedArrayZone]: SimulatedCardState[];
+};
 
 export function getZoneCards(
   player: SimulatedPlayerState | null | undefined,
@@ -177,20 +173,17 @@ export function attachSimulatedEquip(
   if (!Array.isArray(target.equips)) target.equips = [];
   if (!target.equips.includes(equipCard)) target.equips.push(equipCard);
 
-  const atkBonus = action.atkBonus;
-  if (Number.isFinite(atkBonus)) {
-    equipCard.equipAtkBonus = atkBonus as number;
-    target.atk = (target.atk || 0) + (atkBonus as number);
+  if (Number.isFinite(action.atkBonus as number)) {
+    equipCard.equipAtkBonus = action.atkBonus!;
+    target.atk = (target.atk || 0) + action.atkBonus!;
   }
-  const defBonus = action.defBonus;
-  if (Number.isFinite(defBonus)) {
-    equipCard.equipDefBonus = defBonus as number;
-    target.def = (target.def || 0) + (defBonus as number);
+  if (Number.isFinite(action.defBonus as number)) {
+    equipCard.equipDefBonus = action.defBonus!;
+    target.def = (target.def || 0) + action.defBonus!;
   }
-  const extraAttacks = action.extraAttacks;
-  if (Number.isFinite(extraAttacks) && extraAttacks !== 0) {
-    equipCard.equipExtraAttacks = extraAttacks as number;
-    target.extraAttacks = (target.extraAttacks || 0) + (extraAttacks as number);
+  if (Number.isFinite(action.extraAttacks as number) && action.extraAttacks !== 0) {
+    equipCard.equipExtraAttacks = action.extraAttacks!;
+    target.extraAttacks = (target.extraAttacks || 0) + action.extraAttacks!;
   }
   if (action.battleIndestructible) {
     equipCard.grantsBattleIndestructible = true;
@@ -238,13 +231,14 @@ export function moveCardToZone(
     player.fieldSpell = card;
     return true;
   }
-  let targetZone = readCardList(player, zone);
-  if (!Reflect.get(player, zone)) {
-    targetZone = [];
-    Reflect.set(player, zone, targetZone);
-  }
-  if (targetZone) {
-    targetZone.push(card);
+  (player as SimulatedZonePlayer)[zone as SimulatedArrayZone] ||
+    ((player as SimulatedZonePlayer)[zone as SimulatedArrayZone] = []);
+  if (
+    Array.isArray(
+      (player as SimulatedZonePlayer)[zone as SimulatedArrayZone],
+    )
+  ) {
+    (player as SimulatedZonePlayer)[zone as SimulatedArrayZone].push(card);
     return true;
   }
   return false;

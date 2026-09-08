@@ -58,8 +58,7 @@ export function createFinisherPlan({
 export function rankFinisherPlans(
   plans: readonly (FinisherPlan | null | undefined)[] = [],
 ): FinisherPlan[] {
-  return (plans || [])
-    .filter((plan): plan is FinisherPlan => plan !== null && plan !== undefined)
+  return ((plans || []).filter(Boolean) as FinisherPlan[])
     .slice()
     .sort((a, b) => (b.score100 || 0) - (a.score100 || 0));
 }

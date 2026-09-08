@@ -96,7 +96,7 @@ function hasAscensionEngineChecks(
 function isFaceupMonster(
   card: AscensionPlanningCard | null | undefined,
 ): card is AscensionPlanningCard {
-  return !!card && card.cardKind === "monster" && !card.isFacedown;
+  return (card && card.cardKind === "monster" && !card.isFacedown) as boolean;
 }
 
 function getRealAscensionCandidates(
@@ -135,11 +135,11 @@ export function getGenericAscensionActions(
   if (!canCheckAscension && !isSimulatedState) return [];
 
   const actions: PlannedAscensionAction[] = [];
-  const botField: readonly AscensionPlanningCard[] = bot?.field || [];
-  const materials = botField.filter(isFaceupMonster);
+  const materials = (bot?.field || []).filter(isFaceupMonster);
 
   for (const material of materials) {
-    const materialIndex = botField.indexOf(material);
+    const materialIndex = (bot!.field as readonly AscensionPlanningCard[])
+      .indexOf(material);
     const materialContext = {
       ...context,
       game,

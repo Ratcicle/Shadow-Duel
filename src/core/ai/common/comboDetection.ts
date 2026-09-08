@@ -142,11 +142,6 @@ export function createAvailableCombo({
 export function finalizeDetectedCombos(
   detected: readonly (DetectedCombo | null | undefined)[] = [],
 ): DetectedCombo[] {
-  return (detected || [])
-    .filter(
-      (entry): entry is DetectedCombo => entry !== null &&
-        entry !== undefined &&
-        !!entry.combo,
-    )
+  return ((detected || []).filter((entry) => entry?.combo) as DetectedCombo[])
     .sort((a, b) => (b.priority || 0) - (a.priority || 0));
 }

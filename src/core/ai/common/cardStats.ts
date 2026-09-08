@@ -73,7 +73,7 @@ export function getBattleStatForAttackTarget(
   { facedownValue = 1500 }: Pick<StatOptions, "facedownValue"> = {},
 ): number {
   if (!card || card.cardKind !== "monster") return 0;
-  if (card.isFacedown) return resolveFacedownValue(card, "def", facedownValue);
+  if (card.isFacedown) return facedownValue as number;
   return card.position === "defense" ? getEffectiveDef(card) : getEffectiveAtk(card);
 }
 
