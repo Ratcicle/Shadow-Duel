@@ -1358,7 +1358,7 @@ interface SimulatedActionOverrideOptions extends SimulatedEventDispatchOptions {
   onMonsterEffect?: BivariantCallback<[payload: object], unknown>;
   placeSpellCard?: BivariantCallback<
     [state: SimulatedMainPhaseState, card: SimulatedCardState],
-    { placed?: boolean } | null | undefined
+    { placed?: unknown } | null | undefined
   >;
   getFieldEffectTargetPreference?: BivariantCallback<
     [payload: object],
