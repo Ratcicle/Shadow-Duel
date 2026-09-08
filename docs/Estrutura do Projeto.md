@@ -135,7 +135,7 @@ Camada operacional do bot, separada da estratégia. Ela valida ações, executa 
 
 | Arquivo/Pasta | Responsabilidade |
 |---|---|
-| [presets.js](../src/core/bot/presets.js) | Presets disponíveis: Shadow-Heart, Luminarch, Void, Dragon, Arcanist, Miragebound e Bloomrot. |
+| [presets.js](../src/core/bot/presets.js) | Presets disponíveis: Shadow-Heart, Luminarch, Void, Dragon, Arcanist, Miragebound, Bloomrot e Burning West. |
 | [deckBuilder.js](../src/core/bot/deckBuilder.js) | Montagem de listas do bot a partir dos presets. |
 | [actionValidation.js](../src/core/bot/actionValidation.js) | Valida se uma ação planejada ainda é legal no estado atual. |
 | [actionExecutor.js](../src/core/bot/actionExecutor.js) | Executa ações escolhidas pela IA. |
@@ -181,7 +181,7 @@ Arquivos físicos TypeScript continuam sendo importados por specifiers `.js`.
 
 | Arquivo | Responsabilidade |
 |---|---|
-| [StrategyRegistry.js](../src/core/ai/StrategyRegistry.js) | Registra `shadowheart`, `luminarch`, `void`, `dragon`, `arcanist`, `miragebound` e `bloomrot`. |
+| [StrategyRegistry.js](../src/core/ai/StrategyRegistry.js) | Registra `shadowheart`, `luminarch`, `void`, `dragon`, `arcanist`, `miragebound`, `bloomrot` e `burningwest`. |
 | [BaseStrategy.js](../src/core/ai/BaseStrategy.js) | Classe-base com avaliação genérica de board e helpers comuns. |
 | [StrategyUtils.ts](../src/core/ai/StrategyUtils.ts) | Utilitários tipados de valor, arquétipo, filtros e scoring. |
 | [BeamSearch.ts](../src/core/ai/BeamSearch.ts) | Busca em feixe e avaliação de linhas, incluindo o perfil Beam/Greedy de clone. |
