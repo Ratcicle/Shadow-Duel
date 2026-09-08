@@ -97,7 +97,13 @@ interface SimEffectMarker {
 interface SimDeclaration {
   expiresOnTurn?: number | null;
   property?: string | null;
-  value?: unknown;
+  value?: string;
+}
+
+type SimDeclaredCardProperty = "type";
+
+interface SimDeclaredValueSubject {
+  type?: unknown;
 }
 
 interface SimTemporarySourceEntry {
@@ -135,33 +141,22 @@ type SimNumericOperator =
   | "gt"
   | ">";
 
-function isObjectValue(value: unknown): value is object {
-  return value !== null && typeof value === "object";
-}
-
-function readProperty(value: object | null | undefined, key: PropertyKey): unknown {
-  return value ? Reflect.get(value, key) : undefined;
-}
-
-function firstSimulatedCard(value: unknown): SimulatedCardState | null {
-  const candidate = Array.isArray(value) ? value[0] : value;
-  return isObjectValue(candidate) ? candidate as SimulatedCardState : null;
-}
-
-function storedBlueprintArray(value: unknown): StoredBlueprint[] | null {
-  return Array.isArray(value) ? value as StoredBlueprint[] : null;
-}
+type DynamicObject = { [key: string]: unknown };
+type DynamicSelections = { [key: string]: unknown };
+type SimDeclarationMap = { [key: string]: SimDeclaration | undefined };
 
 export function getStoredBlueprints(
   card: BlueprintCardView | SimulatedCardState | null | undefined,
 ): StoredBlueprint[] {
-  const cardView = card as BlueprintCardView | null | undefined;
-  const storage = cardView?.state?.blueprintStorage || cardView?.blueprintStorage;
+  const storage =
+    (card as BlueprintCardView | null | undefined)?.state?.blueprintStorage ||
+    (card as BlueprintCardView | null | undefined)?.blueprintStorage;
   return (
-    storedBlueprintArray(cardView?.storedBlueprints) ||
-    storedBlueprintArray(cardView?.blueprintStorageState?.storedBlueprints) ||
-    storedBlueprintArray(storage?.storedBlueprints) ||
-    storedBlueprintArray(cardView?.storedEffects) ||
+    (card as BlueprintCardView | null | undefined)?.storedBlueprints ||
+    (card as BlueprintCardView | null | undefined)?.blueprintStorageState
+      ?.storedBlueprints ||
+    storage?.storedBlueprints ||
+    (card as BlueprintCardView | null | undefined)?.storedEffects ||
     []
   );
 }
@@ -205,9 +200,13 @@ function resolveConditionSource(
   if (!sourceRef || sourceRef === "self" || sourceRef === "source") {
     return ctx.sourceCard || options.sourceCard || null;
   }
-  return firstSimulatedCard(
-    readProperty(ctx, sourceRef) || readProperty(options, sourceRef) || null,
-  );
+  const value =
+    (ctx as DynamicObject)[sourceRef] ||
+    (options as DynamicObject)[sourceRef] ||
+    null;
+  return Array.isArray(value)
+    ? (value[0] as SimulatedCardState | undefined) || null
+    : value as SimulatedCardState | null;
 }
 
 function markerMatchesSource(
@@ -265,9 +264,9 @@ function resolveEventCardByRef(
   const ref = condition.cardRef || condition.eventCardRef || null;
   const eventCard =
     (ref &&
-      (readProperty(ctx, ref) ||
-        readProperty(options, ref) ||
-        readProperty(options.actionContext, ref))) ||
+      ((ctx as DynamicObject)[ref] ||
+        (options as DynamicObject)[ref] ||
+        (options.actionContext as DynamicObject | null | undefined)?.[ref])) ||
     ctx.destroyed ||
     options.destroyed ||
     options.actionContext?.destroyed ||
@@ -284,7 +283,9 @@ function resolveEventCardByRef(
     options.target ||
     options.actionContext?.target ||
     null;
-  return firstSimulatedCard(eventCard);
+  return Array.isArray(eventCard)
+    ? eventCard[0] || null
+    : eventCard as SimulatedCardState | null;
 }
 
 function readSimContextPath(
@@ -310,7 +311,7 @@ function readSimContextPath(
         value = undefined;
         break;
       }
-      value = Reflect.get(value, part);
+      value = (value as DynamicObject)[part];
     }
     if (value !== undefined) return value;
   }
@@ -334,36 +335,19 @@ function cardPropertyValues(
   card: SimulatedCardState | null | undefined,
   property: string,
 ): readonly unknown[] {
-  const value = readProperty(card, property);
+  const value = (card as DynamicObject | null | undefined)?.[property];
   if (Array.isArray(value)) return value.filter(Boolean);
   return value !== undefined && value !== null ? [value] : [];
-}
-
-function readSimDeclaration(
-  card: SimulatedCardState | null | undefined,
-  key: string | null | undefined,
-): SimDeclaration | null {
-  const declarations = card?.declaredValues;
-  if (!isObjectValue(declarations)) return null;
-  const value = readProperty(declarations, String(key));
-  if (isObjectValue(value)) return value as SimDeclaration;
-  return value ? {} : null;
-}
-
-function readPlayerId(value: unknown): unknown {
-  return isObjectValue(value) ? readProperty(value, "id") : value;
 }
 
 function declarationIsActive(
   state: { turnCounter?: number } | null | undefined,
   declaration: SimDeclaration | null | undefined,
-): boolean {
+): declaration is SimDeclaration {
   if (!declaration || typeof declaration !== "object") return false;
-  const expiresOnTurn = declaration.expiresOnTurn;
   return (
-    typeof expiresOnTurn !== "number" ||
-    !Number.isFinite(expiresOnTurn) ||
-    Number(state?.turnCounter || 0) <= expiresOnTurn
+    !Number.isFinite(declaration.expiresOnTurn) ||
+    Number(state?.turnCounter || 0) <= (declaration.expiresOnTurn as number)
   );
 }
 
@@ -373,7 +357,7 @@ function declarationMatchesCard(
   card: SimulatedCardState,
   property: string,
 ): boolean {
-  if (!declaration || !declarationIsActive(state, declaration)) return false;
+  if (!declarationIsActive(state, declaration)) return false;
   const declaredProperty = declaration.property || property;
   if (declaredProperty !== property) return false;
   return cardPropertyValues(card, property).includes(declaration.value);
@@ -388,12 +372,12 @@ function declaredValuesMatchCard(
 ): boolean {
   if (!declaredValues || typeof declaredValues !== "object") return false;
   const entries = stateKey
-    ? [[stateKey, Reflect.get(declaredValues, stateKey)]]
+    ? [[stateKey, (declaredValues as SimDeclarationMap)[stateKey]]]
     : Object.entries(declaredValues);
   return entries.some(([, declaration]) =>
     declarationMatchesCard(
       state,
-      isObjectValue(declaration) ? declaration as SimDeclaration : undefined,
+      declaration as SimDeclaration | undefined,
       card,
       property,
     ),
@@ -443,9 +427,8 @@ function buildSimTemporarySource(entry: SimTemporarySourceEntry | null | undefin
 }
 
 function simActionFilterFromConfig(config: object = {}): object {
-  const configuredFilters = readProperty(config, "filters");
   const filters = {
-    ...(isObjectValue(configuredFilters) ? configuredFilters : {}),
+    ...(((config as DynamicObject).filters as object | null | undefined) || {}),
   };
   for (const key of [
     "cardKind",
@@ -478,12 +461,11 @@ function simActionFilterFromConfig(config: object = {}): object {
     "sentToGraveAsMaterialTurn",
     "sentAsMaterialTurn",
   ]) {
-    const configuredValue = readProperty(config, key);
     if (
-      configuredValue !== undefined &&
-      readProperty(filters, key) === undefined
+      (config as DynamicObject)[key] !== undefined &&
+      (filters as DynamicObject)[key] === undefined
     ) {
-      Reflect.set(filters, key, configuredValue);
+      (filters as DynamicObject)[key] = (config as DynamicObject)[key];
     }
   }
   return filters;
@@ -494,17 +476,13 @@ function simOwnersFromRule(
   self: SimulatedPlayerState | null | undefined,
   opponent: SimulatedPlayerState | null | undefined,
 ): SimulatedPlayerState[] {
-  const presentPlayers = (
-    players: readonly (SimulatedPlayerState | null | undefined)[],
-  ): SimulatedPlayerState[] =>
-    players.filter(
-      (player): player is SimulatedPlayerState => player !== null && player !== undefined,
-    );
-  if (rule === "opponent") return presentPlayers([opponent]);
-  if (rule === "any" || rule === "both" || rule === "either") {
-    return presentPlayers([self, opponent]);
+  if (rule === "opponent") {
+    return [opponent].filter(Boolean) as SimulatedPlayerState[];
   }
-  return presentPlayers([self]);
+  if (rule === "any" || rule === "both" || rule === "either") {
+    return [self, opponent].filter(Boolean) as SimulatedPlayerState[];
+  }
+  return [self].filter(Boolean) as SimulatedPlayerState[];
 }
 
 function simCardInAllowedZones(
@@ -512,13 +490,9 @@ function simCardInAllowedZones(
   zones: unknown,
   owners: readonly (SimulatedPlayerState | null | undefined)[],
 ): boolean {
-  const allowedZones = asArray(zones).filter(
-    (zone): zone is string => typeof zone === "string" && zone.length > 0,
-  );
+  const allowedZones = asArray(zones).filter(Boolean) as string[];
   if (allowedZones.length === 0) return true;
-  for (const owner of owners.filter(
-    (entry): entry is SimulatedPlayerState => entry !== null && entry !== undefined,
-  )) {
+  for (const owner of owners.filter(Boolean) as SimulatedPlayerState[]) {
     for (const zone of allowedZones) {
       if (getZoneCards(owner, zone).includes(card)) return true;
     }
@@ -536,9 +510,8 @@ function simSameCard(left: unknown, right: unknown): boolean {
 
 function simAppendUnique(cards: SimulatedCardState[], card: unknown): void {
   if (!card) return;
-  const simulatedCard = card as SimulatedCardState;
-  if (cards.some((entry) => simSameCard(entry, simulatedCard))) return;
-  cards.push(simulatedCard);
+  if (cards.some((entry) => simSameCard(entry, card))) return;
+  cards.push(card as SimulatedCardState);
 }
 
 function simCollectScopeCards(
@@ -547,12 +520,16 @@ function simCollectScopeCards(
   opponent: SimulatedPlayerState | null | undefined,
 ): SimulatedCardState[] {
   const zones = asArray(
-    readProperty(scope, "zones") || readProperty(scope, "zone") || "field",
-  ).filter((zone): zone is string => typeof zone === "string");
+    (scope as DynamicObject).zones ||
+      (scope as DynamicObject).zone ||
+      "field",
+  ) as string[];
   const filters = simActionFilterFromConfig(scope);
   const cards: SimulatedCardState[] = [];
   for (const owner of simOwnersFromRule(
-    readProperty(scope, "owner") || readProperty(scope, "player") || "self",
+    (scope as DynamicObject).owner ||
+      (scope as DynamicObject).player ||
+      "self",
     self,
     opponent,
   )) {
@@ -566,43 +543,24 @@ function simCollectScopeCards(
   return cards;
 }
 
-function simMergedSelections(context: object | null | undefined) {
-  if (!context) return mergeCanonicalSelections();
-  const costSelections = readProperty(context, "costSelections");
-  const targetSelections = readProperty(context, "targetSelections");
-  const resolutionSelections = readProperty(context, "resolutionSelections");
-  return mergeCanonicalSelections({
-    costSelections: isObjectValue(costSelections) ? costSelections : null,
-    targetSelections: isObjectValue(targetSelections) ? targetSelections : null,
-    resolutionSelections: isObjectValue(resolutionSelections)
-      ? resolutionSelections
-      : null,
-  });
-}
-
-function simSelectionValue(source: unknown, targetRef: string): unknown {
-  return isObjectValue(source) ? readProperty(source, targetRef) : undefined;
-}
-
 function simSelectedCards(
   targetRef: string,
   activationContext: object = {},
 ): SimulatedCardState[] {
   const cards: SimulatedCardState[] = [];
-  const respondingToChainLink = readProperty(
-    activationContext,
-    "respondingToChainLink",
-  );
   const selectionSources = [
-    simMergedSelections(activationContext),
-    simMergedSelections(
-      isObjectValue(respondingToChainLink) ? respondingToChainLink : null,
+    mergeCanonicalSelections(
+      activationContext as Parameters<typeof mergeCanonicalSelections>[0],
     ),
-    readProperty(activationContext, "actionResults"),
-    readProperty(activationContext, "_actionTargets"),
-  ].filter(isObjectValue);
+    mergeCanonicalSelections(
+      (activationContext as DynamicObject)
+        .respondingToChainLink as Parameters<typeof mergeCanonicalSelections>[0],
+    ),
+    (activationContext as DynamicObject).actionResults,
+    (activationContext as DynamicObject)._actionTargets,
+  ].filter(Boolean) as DynamicSelections[];
   for (const selections of selectionSources) {
-    for (const card of asArray(simSelectionValue(selections, targetRef)).filter(Boolean)) {
+    for (const card of asArray(selections?.[targetRef]).filter(Boolean)) {
       simAppendUnique(cards, card);
     }
   }
@@ -615,42 +573,35 @@ function simCollectTargetRefCards(
   options: object = {},
 ): SimulatedCardState[] {
   const cards: SimulatedCardState[] = [];
-  const ctxActionTargets = readProperty(ctx, "_actionTargets");
-  const ctxSelections = readProperty(ctx, "selections");
-  const actionResults = readProperty(options, "actionResults");
-  const actionContext = readProperty(options, "actionContext");
-  const activationContext = readProperty(options, "activationContext");
-  const actionContextActionTargets = isObjectValue(actionContext)
-    ? readProperty(actionContext, "_actionTargets")
-    : undefined;
-  const actionContextSelections = isObjectValue(actionContext)
-    ? readProperty(actionContext, "selections")
-    : undefined;
-  const activationActionResults = isObjectValue(activationContext)
-    ? readProperty(activationContext, "actionResults")
-    : undefined;
-  const activationActionContext = isObjectValue(activationContext)
-    ? readProperty(activationContext, "actionContext")
-    : undefined;
-  const activationActionTargets = isObjectValue(activationActionContext)
-    ? readProperty(activationActionContext, "_actionTargets")
-    : undefined;
   const directSources = [
-    simSelectionValue(ctx, targetRef),
-    simSelectionValue(ctxActionTargets, targetRef),
-    simSelectionValue(ctxSelections, targetRef),
-    simSelectionValue(actionResults, targetRef),
-    simSelectionValue(actionContext, targetRef),
-    simSelectionValue(actionContextActionTargets, targetRef),
-    simSelectionValue(actionContextSelections, targetRef),
-    simSelectionValue(
-      simMergedSelections(
-        isObjectValue(activationContext) ? activationContext : null,
-      ),
-      targetRef,
-    ),
-    simSelectionValue(activationActionResults, targetRef),
-    simSelectionValue(activationActionTargets, targetRef),
+    (ctx as DynamicObject)[targetRef],
+    ((ctx as DynamicObject)._actionTargets as DynamicSelections | undefined)?.[
+      targetRef
+    ],
+    ((ctx as DynamicObject).selections as DynamicSelections | undefined)?.[
+      targetRef
+    ],
+    ((options as DynamicObject).actionResults as
+      | DynamicSelections
+      | undefined)?.[targetRef],
+    ((options as DynamicObject).actionContext as DynamicObject | undefined)?.[
+      targetRef
+    ],
+    ((((options as DynamicObject).actionContext as DynamicObject | undefined)
+      ?._actionTargets) as DynamicSelections | undefined)?.[targetRef],
+    ((((options as DynamicObject).actionContext as DynamicObject | undefined)
+      ?.selections) as DynamicSelections | undefined)?.[targetRef],
+    mergeCanonicalSelections(
+      (options as DynamicObject).activationContext as Parameters<
+        typeof mergeCanonicalSelections
+      >[0],
+    )?.[targetRef],
+    ((((options as DynamicObject).activationContext as DynamicObject | undefined)
+      ?.actionResults) as DynamicSelections | undefined)?.[targetRef],
+    ((((((options as DynamicObject).activationContext as
+      | DynamicObject
+      | undefined)?.actionContext) as DynamicObject | undefined)
+      ?._actionTargets) as DynamicSelections | undefined)?.[targetRef],
   ];
   for (const value of directSources) {
     for (const card of asArray(value).filter(Boolean)) {
@@ -659,13 +610,13 @@ function simCollectTargetRefCards(
   }
   for (const card of simSelectedCards(
     targetRef,
-    isObjectValue(actionContext) ? actionContext : {},
+    ((options as DynamicObject).actionContext as object | undefined) || {},
   )) {
     simAppendUnique(cards, card);
   }
   for (const card of simSelectedCards(
     targetRef,
-    isObjectValue(activationContext) ? activationContext : {},
+    ((options as DynamicObject).activationContext as object | undefined) || {},
   )) {
     simAppendUnique(cards, card);
   }
@@ -694,15 +645,12 @@ interface SimulatedActivationAttemptView {
 }
 
 interface SimulatedActivationContextView extends SimConditionContext {
+  card?: SimulatedCardState | null;
   destroyed?: SimulatedCardState | null;
   activationAttempt?: SimulatedActivationAttemptView | null;
   effect?: EffectDefinition | null;
   player?: SimulatedPlayerState | null;
   context?: SimulatedActivationContextView | null;
-}
-
-function asSimulatedAction(value: unknown): SimulatedActionView | null {
-  return isObjectValue(value) ? value as SimulatedActionView : null;
 }
 
 function simCollectDestroyCandidates(
@@ -716,8 +664,7 @@ function simCollectDestroyCandidates(
   const walkedActions = includeNested
     ? walkActionList(actions).visits.map((visit) => visit.action)
     : asArray(actions);
-  for (const actionValue of walkedActions) {
-    const action = asSimulatedAction(actionValue);
+  for (const action of walkedActions as SimulatedActionView[]) {
     if (!action) continue;
     if (action.type === "destroy") {
       if (action.targetScope) {
@@ -777,7 +724,6 @@ function simCollectDestroyCandidates(
 function simMoveLeavesField(action: SimulatedActionView | null | undefined): boolean {
   const toZone = action?.to || action?.toZone || action?.destination || null;
   return (
-    typeof toZone === "string" &&
     [
       "graveyard",
       "hand",
@@ -785,7 +731,7 @@ function simMoveLeavesField(action: SimulatedActionView | null | undefined): boo
       "extraDeck",
       "banished",
       "banish",
-    ].includes(toZone)
+    ].includes(toZone as string)
   );
 }
 
@@ -799,11 +745,11 @@ function simCollectGraveyardBanishCandidates(
   activationPlayer: SimulatedPlayerState,
 ): SimulatedCardState[] {
   const filters = { ...(action.filters || {}) };
-  if (action.cardName && readProperty(filters, "name") === undefined) {
-    Reflect.set(filters, "name", action.cardName);
+  if (action.cardName && (filters as DynamicObject).name === undefined) {
+    (filters as DynamicObject).name = action.cardName;
   }
-  if (action.cardType && readProperty(filters, "type") === undefined) {
-    Reflect.set(filters, "type", action.cardType);
+  if (action.cardType && (filters as DynamicObject).type === undefined) {
+    (filters as DynamicObject).type = action.cardType;
   }
   return getZoneCards(activationPlayer, "graveyard").filter((card) =>
     matchesTargetFilters(card, filters, null)
@@ -817,10 +763,9 @@ function simCollectBanishCandidates(
   activationContext: SimulatedActivationContextView = {},
 ): SimulatedCardState[] {
   const cards: SimulatedCardState[] = [];
-  for (const actionValue of walkActionList(actions).visits.map(
+  for (const action of walkActionList(actions).visits.map(
     (visit) => visit.action,
-  )) {
-    const action = asSimulatedAction(actionValue);
+  ) as SimulatedActionView[]) {
     if (!action) continue;
     if (
       action.type === "banish" ||
@@ -891,10 +836,9 @@ function simCollectLeaveFieldCandidates(
   activationContext: SimulatedActivationContextView = {},
 ): SimulatedCardState[] {
   const cards: SimulatedCardState[] = [];
-  for (const actionValue of walkActionList(actions).visits.map(
+  for (const action of walkActionList(actions).visits.map(
     (visit) => visit.action,
-  )) {
-    const action = asSimulatedAction(actionValue);
+  ) as SimulatedActionView[]) {
     if (!action) continue;
     for (const card of simCollectDestroyCandidates(
       [action],
@@ -1001,7 +945,7 @@ interface SimConditionView
   requireFaceup?: boolean;
   stateKey?: string | null;
   key?: string | null;
-  property?: string | null;
+  property?: SimDeclaredCardProperty | null;
   sourceFilters?: object;
   sourceEffectId?: string | null;
   sourceRef?: string | null;
@@ -1011,10 +955,6 @@ interface SimConditionView
   race?: string | null;
   minMatchingCostCount?: number;
   requireCurrentFieldPresence?: boolean;
-}
-
-function asSimCondition(value: unknown): SimConditionView | null {
-  return isObjectValue(value) ? value as SimConditionView : null;
 }
 
 function simActivationWouldDestroyMatchingCards(
@@ -1030,9 +970,8 @@ function simActivationWouldDestroyMatchingCards(
     options.activationContext?.context ||
     {};
   const activationAttempt = activationContext.activationAttempt || null;
-  const activatedCard = firstSimulatedCard(
-    activationAttempt?.card || activationContext.card || options.card || null,
-  );
+  const activatedCard =
+    activationAttempt?.card || activationContext.card || options.card || null;
   const effect =
     activationAttempt?.effect || activationContext.effect || options.effect || null;
   const activationPlayer =
@@ -1088,9 +1027,8 @@ function simActivationWouldBanishMatchingCards(
     options.activationContext?.context ||
     {};
   const activationAttempt = activationContext.activationAttempt || null;
-  const activatedCard = firstSimulatedCard(
-    activationAttempt?.card || activationContext.card || options.card || null,
-  );
+  const activatedCard =
+    activationAttempt?.card || activationContext.card || options.card || null;
   const effect =
     activationAttempt?.effect || activationContext.effect || options.effect || null;
   const activationPlayer =
@@ -1149,9 +1087,8 @@ function simActivationWouldMakeCardLeaveField(
     options.activationContext?.context ||
     {};
   const activationAttempt = activationContext.activationAttempt || null;
-  const activatedCard = firstSimulatedCard(
-    activationAttempt?.card || activationContext.card || options.card || null,
-  );
+  const activatedCard =
+    activationAttempt?.card || activationContext.card || options.card || null;
   const effect =
     activationAttempt?.effect || activationContext.effect || options.effect || null;
   const activationPlayer =
@@ -1217,8 +1154,7 @@ export function evaluateSimulatedConditions(
     if (typeof result === "boolean") return result;
   }
 
-  return list.every((conditionValue) => {
-    const condition = asSimCondition(conditionValue);
+  return (list as readonly (SimConditionView | null | undefined)[]).every((condition) => {
     if (!condition) return true;
     if (condition.type === "any_of" || Array.isArray(condition.any_of)) {
       const optionsList = condition.conditions || condition.any_of || [];
@@ -1295,15 +1231,14 @@ export function evaluateSimulatedConditions(
         ...(condition.control_card_filters || condition.filters || {}),
       };
       const zones = asArray(condition.zones || condition.zone || "field");
-      const min = typeof condition.min === "number" && Number.isFinite(condition.min)
-        ? condition.min
-        : typeof condition.max === "number" && Number.isFinite(condition.max)
+      const min = Number.isFinite(condition.min)
+        ? condition.min as number
+        : Number.isFinite(condition.max)
           ? 0
           : 1;
-      const max =
-        typeof condition.max === "number" && Number.isFinite(condition.max)
-          ? condition.max
-          : null;
+      const max = Number.isFinite(condition.max)
+        ? condition.max as number
+        : null;
       const sourceCard = resolveConditionSource(ctx, options, "self");
       const count = zones.reduce(
         (sum, zone) =>
@@ -1323,10 +1258,9 @@ export function evaluateSimulatedConditions(
     }
     if (condition.type === "control_card_max") {
       const zones = asArray(condition.zones || condition.zone || "field");
-      const max =
-        typeof condition.max === "number" && Number.isFinite(condition.max)
-          ? condition.max
-          : 0;
+      const max = Number.isFinite(condition.max)
+        ? condition.max as number
+        : 0;
       const filters = condition.filters || {};
       const count = zones.reduce(
         (sum, zone) =>
@@ -1340,20 +1274,19 @@ export function evaluateSimulatedConditions(
     }
     if (condition.type === "destroyed_card_matches_declared_value") {
       const sourceCard = ctx.sourceCard || options.sourceCard;
-      const declaration = readSimDeclaration(
-        sourceCard,
-        condition.stateKey || condition.key,
-      );
+      const declaration = (sourceCard?.declaredValues as
+        | SimDeclarationMap
+        | null
+        | undefined)?.[(condition.stateKey || condition.key) as string];
       const destroyedCard =
         ctx.destroyed || options.destroyed || options.actionContext?.destroyed;
       const property = condition.property || "type";
       if (!declaration || !destroyedCard) return false;
-      const destroyedValue = isObjectValue(destroyedCard)
-        ? readProperty(destroyedCard, property)
-        : undefined;
-      const values = Array.isArray(destroyedValue)
-        ? destroyedValue
-        : [destroyedValue];
+      const values = Array.isArray(
+        (destroyedCard as SimDeclaredValueSubject)[property],
+      )
+        ? (destroyedCard as SimDeclaredValueSubject)[property] as unknown[]
+        : [(destroyedCard as SimDeclaredValueSubject)[property]];
       return values.includes(declaration.value);
     }
     if (condition.type === "battle_destroyer_matches_filters") {
@@ -1410,10 +1343,10 @@ export function evaluateSimulatedConditions(
     }
     if (condition.type === "battle_opponent_matches_declared_value") {
       const sourceCard = ctx.sourceCard || options.sourceCard;
-      const declaration = readSimDeclaration(
-        sourceCard,
-        condition.stateKey || condition.key,
-      );
+      const declaration = (sourceCard?.declaredValues as
+        | SimDeclarationMap
+        | null
+        | undefined)?.[(condition.stateKey || condition.key) as string];
       const battleOpponent = battleParticipantForOwner(
         ctx,
         options,
@@ -1421,7 +1354,7 @@ export function evaluateSimulatedConditions(
       );
       const property = condition.property || "type";
       if (!declaration || !battleOpponent) return false;
-      const values = asArray(readProperty(battleOpponent, property));
+      const values = asArray<unknown>(battleOpponent[property]);
       return values.includes(declaration.value);
     }
     if (condition.type === "field_card_count") {
@@ -1547,7 +1480,9 @@ export function evaluateSimulatedConditions(
       if (ownerKey !== "any") {
         const expectedOwner = ownerKey === "opponent" ? opponent : self;
         const eventOwnerId =
-          readPlayerId(options.actionContext?.destroyedOwner) ||
+          (options.actionContext?.destroyedOwner as SimulatedPlayerState | null)
+            ?.id ||
+          options.actionContext?.destroyedOwner ||
           card?.controller ||
           card?.owner;
         if (!expectedOwner || eventOwnerId !== expectedOwner.id) return false;
@@ -1612,9 +1547,8 @@ export function evaluateSimulatedConditions(
         temporaryEffects.some((entry) => {
           if (!entry || entry.ownerId !== player.id) return false;
           if (
-            typeof entry.expiresOnTurn === "number" &&
             Number.isFinite(entry.expiresOnTurn) &&
-            Number(state.turnCounter || 0) > entry.expiresOnTurn
+            Number(state.turnCounter || 0) > (entry.expiresOnTurn as number)
           ) {
             return false;
           }
@@ -1673,9 +1607,8 @@ export function evaluateSimulatedConditions(
       const marker = key ? summonedCard?.effectMarkers?.[key] : null;
       if (!marker) return false;
       if (
-        typeof marker.expiresOnTurn === "number" &&
         Number.isFinite(marker.expiresOnTurn) &&
-        Number(state.turnCounter || 0) > marker.expiresOnTurn
+        Number(state.turnCounter || 0) > (marker.expiresOnTurn as number)
       ) {
         return false;
       }
@@ -1705,9 +1638,8 @@ export function evaluateSimulatedConditions(
       const marker = key ? sourceCard?.effectMarkers?.[key] : null;
       if (!marker) return false;
       if (
-        typeof marker.expiresOnTurn === "number" &&
         Number.isFinite(marker.expiresOnTurn) &&
-        Number(state.turnCounter || 0) > marker.expiresOnTurn
+        Number(state.turnCounter || 0) > (marker.expiresOnTurn as number)
       ) {
         return false;
       }
@@ -1718,9 +1650,9 @@ export function evaluateSimulatedConditions(
         return false;
       }
       if (
-        typeof condition.minMatchingCostCount === "number" &&
         Number.isFinite(condition.minMatchingCostCount) &&
-        Number(marker.matchingCostCount || 0) < condition.minMatchingCostCount
+        Number(marker.matchingCostCount || 0) <
+          (condition.minMatchingCostCount as number)
       ) {
         return false;
       }
