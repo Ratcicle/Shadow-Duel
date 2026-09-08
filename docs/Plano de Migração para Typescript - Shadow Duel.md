@@ -1664,8 +1664,11 @@ buscas Beam, Greedy, GameTree e TurnLine. Também foram convertidos o
 planejamento macro, a avaliação de ameaças, a análise de papéis, a previsão do
 oponente e Chain Awareness. Os testes de baseline, a interoperabilidade do
 ledger, os quatro perfis de clone e as invariantes explícitas das buscas foram
-adicionados. O gate integral, os smokes e a revisão do bundle foram concluídos
-localmente; resta publicar o PR draft e aguardar `Verify / check` no push e no
+adicionados. O gate integral concluiu 558 testes; o Bot smoke
+`arcanist:shadowheart` e o replay headless com hash final `0339db06` também
+passaram. A revisão do bundle confirmou os 244 artefatos estáticos idênticos e
+isolou no chunk da aplicação apenas a centralização autorizada do ledger OPT.
+O PR 9A deve permanecer em draft até `Verify / check` passar no push e no
 `pull_request`.
 
 O PR 9B ainda não foi iniciado. `BaseStrategy`, `StrategyRegistry`, as oito
