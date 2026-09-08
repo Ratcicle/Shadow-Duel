@@ -70,23 +70,15 @@ function actionIsValidForHand(
   if (!action) return false;
   if (!actionRequiresHand(action.type)) return true;
   if (!Array.isArray(hand)) return false;
-  const actionIndex = action.index;
-  if (typeof actionIndex !== "number" || !Number.isInteger(actionIndex)) {
-    return false;
-  }
-  const card = hand[actionIndex];
+  if (!Number.isInteger(action.index)) return false;
+  const card = hand[action.index!];
   if (!card) return false;
   const requiredKind = expectedHandKind(action.type);
   if (requiredKind) {
     const requiredKinds = Array.isArray(requiredKind)
       ? requiredKind
       : [requiredKind];
-    if (
-      !card.cardKind ||
-      !requiredKinds.some((kind) => kind === card.cardKind)
-    ) {
-      return false;
-    }
+    if (!requiredKinds.includes(card.cardKind as CardKind)) return false;
   }
   if (action.cardName && card.name !== action.cardName) return false;
   return true;
@@ -131,9 +123,13 @@ function cloneSuppressedDynamicBuffStats(
   return Object.fromEntries(
     Object.entries(suppressed).map(([key, entry]) => [
       key,
-      { ...entry },
+      entry && typeof entry === "object" && !Array.isArray(entry)
+        ? { ...entry }
+        : Array.isArray(entry)
+          ? [...entry]
+          : entry,
     ]),
-  );
+  ) as CardSuppressedDynamicBuffStats;
 }
 
 function cloneCardForSim(card: SearchCardInput): SimulatedCardState;
@@ -160,10 +156,10 @@ function cloneCardForSim(
 
 /**
  * Finds the best action sequence with bounded beam search.
- * @param {Object} game - Current game state.
- * @param {Object} strategy - Bot strategy.
- * @param {Object} options - Search options.
- * @returns {Object|null} Best action result, or null.
+ * @param {object} game - Current game state.
+ * @param {object} strategy - Bot strategy.
+ * @param {object} options - Search options.
+ * @returns {object|null} Best action result, or null.
  */
 export async function beamSearchTurn(
   game: AIState,
@@ -234,15 +230,15 @@ export async function beamSearchTurn(
       return {
         id: safe.id || "unknown",
         lp: safe.lp || 0,
-        hand: (safe.hand || []).map((card) => cloneCardForSim(card)),
-        field: (safe.field || []).map((card) => cloneCardForSim(card)),
-        graveyard: (safe.graveyard || []).map((card) => cloneCardForSim(card)),
-        deck: (safe.deck || []).map((card) => cloneCardForSim(card)),
-        extraDeck: (safe.extraDeck || []).map((card) => cloneCardForSim(card)),
-        banished: (safe.banished || []).map((card) => cloneCardForSim(card)),
+        hand: (safe.hand || []).map(cloneCardForSim),
+        field: (safe.field || []).map(cloneCardForSim),
+        graveyard: (safe.graveyard || []).map(cloneCardForSim),
+        deck: (safe.deck || []).map(cloneCardForSim),
+        extraDeck: (safe.extraDeck || []).map(cloneCardForSim),
+        banished: (safe.banished || []).map(cloneCardForSim),
         fieldSpell: safe.fieldSpell ? cloneCardForSim(safe.fieldSpell) : null,
         spellTrap: safe.spellTrap
-          ? safe.spellTrap.map((card) => cloneCardForSim(card))
+          ? safe.spellTrap.map(cloneCardForSim)
           : [],
         summonCount: safe.summonCount || 0,
         additionalNormalSummons: safe.additionalNormalSummons || 0,
@@ -465,11 +461,11 @@ export async function beamSearchTurn(
 
 /**
  * Versão simplificada: beam search de 1 ply apenas (greedy melhorado).
- * @param {Object} game
- * @param {Object} strategy
- * @param {Object} options
+ * @param {object} game
+ * @param {object} strategy
+ * @param {object} options
  * @param {Array} options.preGeneratedActions - Ações pré-geradas como fallback
- * @returns {Object|null}
+ * @returns {object|null}
  */
 export async function greedySearchWithEvalV2(
   game: AIState,
@@ -501,15 +497,15 @@ export async function greedySearchWithEvalV2(
       return {
         id: safe.id || "unknown",
         lp: safe.lp || 0,
-        hand: (safe.hand || []).map((card) => cloneCardForSim(card)),
-        field: (safe.field || []).map((card) => cloneCardForSim(card)),
-        graveyard: (safe.graveyard || []).map((card) => cloneCardForSim(card)),
-        deck: (safe.deck || []).map((card) => cloneCardForSim(card)),
-        extraDeck: (safe.extraDeck || []).map((card) => cloneCardForSim(card)),
-        banished: (safe.banished || []).map((card) => cloneCardForSim(card)),
+        hand: (safe.hand || []).map(cloneCardForSim),
+        field: (safe.field || []).map(cloneCardForSim),
+        graveyard: (safe.graveyard || []).map(cloneCardForSim),
+        deck: (safe.deck || []).map(cloneCardForSim),
+        extraDeck: (safe.extraDeck || []).map(cloneCardForSim),
+        banished: (safe.banished || []).map(cloneCardForSim),
         fieldSpell: safe.fieldSpell ? cloneCardForSim(safe.fieldSpell) : null,
         spellTrap: safe.spellTrap
-          ? safe.spellTrap.map((card) => cloneCardForSim(card))
+          ? safe.spellTrap.map(cloneCardForSim)
           : [],
         summonCount: safe.summonCount || 0,
         additionalNormalSummons: safe.additionalNormalSummons || 0,
@@ -566,8 +562,7 @@ export async function greedySearchWithEvalV2(
     return null;
   }
 
-  const evaluationPerspective = (perspectiveBot || strategy.bot) as SimulatedPlayerState;
-  const baseScore = evaluateState(game, evaluationPerspective);
+  const baseScore = evaluateState(game, (perspectiveBot || strategy.bot) as SimulatedPlayerState);
   let bestAction = candidates[0]; // BUGFIX: Inicializar com primeira ação como fallback
   let bestScore = baseScore;
 

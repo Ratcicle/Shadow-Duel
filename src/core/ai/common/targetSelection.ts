@@ -27,7 +27,9 @@ import type { CanonicalSelectionMap } from "../../contracts/selection.js";
 import type { AiCardFilter, FilterableCard } from "./cardFilters.js";
 
 type CardInstanceKey = number | string;
-type TargetableCard = FilterableCard | SimulatedCardState;
+type TargetableCard = (FilterableCard | SimulatedCardState) & {
+  uid?: CardInstanceKey | null;
+};
 type TargetIntent = "benefit" | "cost" | "harm";
 type TargetOwnerRole = "self" | "opponent";
 type ComparisonOperator =
@@ -51,13 +53,20 @@ interface NormalizedCount {
   max: number;
 }
 
+interface CountInput {
+  min?: number;
+  max?: number;
+}
+
+type TargetPreferenceMap = Partial<Record<string, TargetPreference>>;
+
 interface ActionPreferenceContext {
-  targetPreferences?: object | null;
+  targetPreferences?: TargetPreferenceMap | null;
   costPreferences?: TargetPreference | null;
 }
 
 interface TargetSelectionOptions {
-  targetPreferences?: object | null;
+  targetPreferences?: TargetPreferenceMap | null;
   targetPreference?: TargetPreference | null;
   costPreferences?: TargetPreference | null;
   actionContext?: ActionPreferenceContext | null;
@@ -110,7 +119,7 @@ type AiTargetFilter = Omit<
 > & {
   id?: string;
   owner?: EffectOwner | "either";
-  anyOf?: readonly object[];
+  anyOf?: readonly AiTargetFilter[];
   targetFromContext?: string;
   requireThisCard?: boolean;
   excludeCannotBeSpecialSummoned?: boolean;
@@ -170,86 +179,12 @@ interface RecursionPreference {
 }
 
 interface SelectSimulatedTargetsInput {
-  targets: readonly object[] | null | undefined;
-  actions?: readonly CardAction[] | null;
+  targets: readonly AiTargetFilter[] | null | undefined;
+  actions?: readonly (CardAction & ActionIntentView)[] | null;
   state: Pick<AiStateShape, "bot" | "player">;
   sourceCard?: SimulatedCardState | null;
   selfId?: string;
-  options?: object;
-}
-
-const ACTION_FILTER_KEYS = [
-  "cardKind",
-  "cardName",
-  "name",
-  "cardId",
-  "cardIds",
-  "subtype",
-  "monsterType",
-  "archetype",
-  "archetypes",
-  "requireFaceup",
-  "excludeCardName",
-  "excludeCardNames",
-  "excludeInstanceId",
-  "excludeInstanceIds",
-  "excludeCardInstanceIds",
-  "excludeCards",
-  "minLevel",
-  "maxLevel",
-  "level",
-  "levelOp",
-  "minAtk",
-  "maxAtk",
-  "minDef",
-  "maxDef",
-  "position",
-  "isTuner",
-  "isToken",
-  "lastSummonMethods",
-  "summonMethods",
-  "lastSummonMethod",
-  "summonMethod",
-  "lastSummonedFromZone",
-  "lastSummonedFromZones",
-  "sentToGraveAsMaterial",
-  "sentAsMaterial",
-  "lastSentToGraveAsMaterial",
-  "sentToGraveAsMaterialThisTurn",
-  "sentAsMaterialThisTurn",
-  "sentToGraveAsMaterialTurn",
-  "sentAsMaterialTurn",
-] as const;
-
-function isObjectValue(value: unknown): value is object {
-  return value !== null && typeof value === "object";
-}
-
-function readProperty(value: object | null | undefined, key: PropertyKey): unknown {
-  return value ? Reflect.get(value, key) : undefined;
-}
-
-function readObjectProperty(
-  value: object | null | undefined,
-  key: PropertyKey,
-): object | null {
-  const property = readProperty(value, key);
-  return isObjectValue(property) ? property : null;
-}
-
-function isFiniteNumber(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value);
-}
-
-function readSelectedValue(selections: object, reference: unknown): unknown {
-  return typeof reference === "string"
-    ? Reflect.get(selections, reference)
-    : undefined;
-}
-
-function selectionValueAsCards(value: unknown): SimulatedCardState[] {
-  if (Array.isArray(value)) return value as SimulatedCardState[];
-  return value ? [value as SimulatedCardState] : [];
+  options?: TargetSelectionOptions;
 }
 
 export function asArray<Value>(
@@ -260,13 +195,15 @@ export function asArray<Value>(
 }
 
 export function normalizeCount(count: unknown, fallback = 1): NormalizedCount {
-  if (isFiniteNumber(count)) {
-    return { min: count, max: count };
+  if (Number.isFinite(count as number)) {
+    return { min: count as number, max: count as number };
   }
-  const minValue = isObjectValue(count) ? readProperty(count, "min") : undefined;
-  const maxValue = isObjectValue(count) ? readProperty(count, "max") : undefined;
-  const min = isFiniteNumber(minValue) ? minValue : fallback;
-  const max = isFiniteNumber(maxValue) ? maxValue : min;
+  const min = Number.isFinite((count as CountInput | null | undefined)?.min)
+    ? (count as CountInput).min!
+    : fallback;
+  const max = Number.isFinite((count as CountInput | null | undefined)?.max)
+    ? (count as CountInput).max!
+    : min;
   return { min, max };
 }
 
@@ -276,7 +213,7 @@ export function getCardInstanceId(
   return (
     card?.instanceId ??
     card?._instanceId ??
-    readProperty(card, "uid") ??
+    card?.uid ??
     card?.uuid ??
     card?.simInstanceId ??
     null
@@ -284,29 +221,29 @@ export function getCardInstanceId(
 }
 
 export function getTargetPreference(
-  options: object = {},
+  options: TargetSelectionOptions = {},
   targetId: string | null | undefined = null,
 ): TargetPreference | null {
-  const typedOptions = options as TargetSelectionOptions;
   const byTarget =
-    typedOptions.targetPreferences ||
-    typedOptions.activationContext?.actionContext?.targetPreferences ||
-    typedOptions.actionContext?.targetPreferences ||
+    options.targetPreferences ||
+    options.activationContext?.actionContext?.targetPreferences ||
+    options.actionContext?.targetPreferences ||
     {};
   return (
-    (targetId && readProperty(byTarget, targetId)) ||
-    typedOptions.targetPreference ||
+    (targetId && byTarget?.[targetId]) ||
+    options.targetPreference ||
     null
-  ) as TargetPreference | null;
+  );
 }
 
-export function getCostPreference(options: object = {}): TargetPreference | null {
-  const typedOptions = options as TargetSelectionOptions;
+export function getCostPreference(
+  options: TargetSelectionOptions = {},
+): TargetPreference | null {
   return (
-    typedOptions.costPreferences ||
-    typedOptions.actionContext?.costPreferences ||
-    typedOptions.activationContext?.actionContext?.costPreferences ||
-    typedOptions.activationContext?.costPreferences ||
+    options.costPreferences ||
+    options.actionContext?.costPreferences ||
+    options.activationContext?.actionContext?.costPreferences ||
+    options.activationContext?.costPreferences ||
     null
   );
 }
@@ -364,51 +301,102 @@ function applyNameAndInstancePreference(
   return adjusted;
 }
 
-export function buildActionFilter(action: object = {}): AiCardFilter {
-  const declaredFilters = readObjectProperty(action, "filters") || {};
-  const filter = { ...declaredFilters };
-  ACTION_FILTER_KEYS.forEach((key) => {
-    const actionValue = readProperty(action, key);
-    if (actionValue !== undefined && readProperty(filter, key) === undefined) {
-      Reflect.set(filter, key, actionValue);
+export function buildActionFilter<Action extends object>(
+  action: Action = {} as Action,
+): AiCardFilter {
+  const filter: AiCardFilter = { ...((action as Partial<AiCardFilter> & { filters?: AiCardFilter }).filters || {}) };
+  ([
+    "cardKind",
+    "cardName",
+    "name",
+    "cardId",
+    "cardIds",
+    "subtype",
+    "monsterType",
+    "archetype",
+    "archetypes",
+    "requireFaceup",
+    "excludeCardName",
+    "excludeCardNames",
+    "excludeInstanceId",
+    "excludeInstanceIds",
+    "excludeCardInstanceIds",
+    "excludeCards",
+    "minLevel",
+    "maxLevel",
+    "level",
+    "levelOp",
+    "minAtk",
+    "maxAtk",
+    "minDef",
+    "maxDef",
+    "position",
+    "isTuner",
+    "isToken",
+    "lastSummonMethods",
+    "summonMethods",
+    "lastSummonMethod",
+    "summonMethod",
+    "lastSummonedFromZone",
+    "lastSummonedFromZones",
+    "sentToGraveAsMaterial",
+    "sentAsMaterial",
+    "lastSentToGraveAsMaterial",
+    "sentToGraveAsMaterialThisTurn",
+    "sentAsMaterialThisTurn",
+    "sentToGraveAsMaterialTurn",
+    "sentAsMaterialTurn",
+  ] as const).forEach((key) => {
+    if (
+      (action as Partial<Record<keyof AiCardFilter, unknown>>)[key] !== undefined &&
+      filter[key] === undefined
+    ) {
+      (filter as Partial<Record<keyof AiCardFilter, unknown>>)[key] =
+        (action as Partial<Record<keyof AiCardFilter, unknown>>)[key];
     }
   });
-  return filter as AiCardFilter;
+  return filter;
 }
 
-export function matchesTargetFilters(
+export function matchesTargetFilters<Target extends object>(
   card: TargetableCard | null | undefined,
-  target: object = {},
+  target: Target = {} as Target,
   sourceCard?: TargetableCard | null,
   ownerRole: TargetOwnerRole | null = null,
 ): boolean {
   if (!card) return false;
-  const targetView = target as AiTargetFilter;
   if (
-    targetView.excludeCannotBeSpecialSummoned === true &&
+    (target as AiTargetFilter).excludeCannotBeSpecialSummoned === true &&
     card.cannotBeSpecialSummoned === true
   ) {
     return false;
   }
-  if (Array.isArray(targetView.anyOf) && targetView.anyOf.length > 0) {
-    return targetView.anyOf.some((entry) =>
+  if (
+    Array.isArray((target as AiTargetFilter).anyOf) &&
+    (target as AiTargetFilter).anyOf!.length > 0
+  ) {
+    return (target as AiTargetFilter).anyOf!.some((entry) =>
       matchesTargetFilters(
         card,
-        { ...targetView, ...entry, anyOf: undefined },
+        { ...target, ...entry, anyOf: undefined },
         sourceCard,
         ownerRole,
       )
     );
   }
   if (
-    targetView.owner &&
-    targetView.owner !== "any" &&
+    (target as AiTargetFilter).owner &&
+    (target as AiTargetFilter).owner !== "any" &&
     ownerRole &&
-    targetView.owner !== ownerRole
+    (target as AiTargetFilter).owner !== ownerRole
   ) {
     return false;
   }
-  if (sourceCard && (targetView.requireThisCard || targetView.excludeSelf)) {
+  if (
+    sourceCard &&
+    ((target as AiTargetFilter).requireThisCard ||
+      (target as AiTargetFilter).excludeSelf)
+  ) {
     const sourceInstanceId = getCardInstanceId(sourceCard);
     const cardInstanceId = getCardInstanceId(card);
     const sameCard =
@@ -416,10 +404,10 @@ export function matchesTargetFilters(
       (sourceInstanceId !== null &&
         cardInstanceId !== null &&
         sourceInstanceId === cardInstanceId);
-    if (targetView.requireThisCard && !sameCard) {
+    if ((target as AiTargetFilter).requireThisCard && !sameCard) {
       return false;
     }
-    if (targetView.excludeSelf && sameCard) {
+    if ((target as AiTargetFilter).excludeSelf && sameCard) {
       return false;
     }
   }
@@ -429,33 +417,29 @@ export function matchesTargetFilters(
     id: _targetId,
     targetFromContext: _targetFromContext,
     ...filters
-  } = targetView;
-  return cardMatchesFilter(
-    card as FilterableCard,
-    filters as AiCardFilter,
-  );
+  } = target as AiTargetFilter;
+  return cardMatchesFilter(card as FilterableCard, filters as AiCardFilter);
 }
 
-function inferTargetIntent(action: CardAction | null | undefined): TargetIntent {
-  const actionView = action as ActionIntentView | null | undefined;
-  if (!actionView?.type) return "benefit";
-  const type = actionView.type;
+function inferTargetIntent(action: ActionIntentView | null | undefined): TargetIntent {
+  if (!action || !action.type) return "benefit";
+  const type = action.type;
   if (type === "destroy") return "harm";
   if (type === "banish") return "harm";
-  if (type === "move" && actionView.to === "graveyard") return "cost";
+  if (type === "move" && action.to === "graveyard") return "cost";
   if (type === "discard_from_hand") return "cost";
-  if (type === "damage" && actionView.player === "self") return "cost";
+  if (type === "damage" && action.player === "self") return "cost";
   if (type === "buff_stats_temp") return "benefit";
   if (type === "equip") return "benefit";
   if (type === "add_status") return "benefit";
   if (type === "modify_stats_temp") {
-    const atkFactor = isFiniteNumber(actionView.atkFactor) ? actionView.atkFactor : 1;
-    const defFactor = isFiniteNumber(actionView.defFactor) ? actionView.defFactor : 1;
+    const atkFactor = Number.isFinite(action.atkFactor) ? action.atkFactor! : 1;
+    const defFactor = Number.isFinite(action.defFactor) ? action.defFactor! : 1;
     return atkFactor < 1 || defFactor < 1 ? "harm" : "benefit";
   }
   if (type === "modify_stats_temp_then_destroy_if_zeroed") {
-    const atkChange = isFiniteNumber(actionView.atkChange) ? actionView.atkChange : 0;
-    const defChange = isFiniteNumber(actionView.defChange) ? actionView.defChange : 0;
+    const atkChange = Number.isFinite(action.atkChange) ? action.atkChange! : 0;
+    const defChange = Number.isFinite(action.defChange) ? action.defChange! : 0;
     return atkChange < 0 || defChange < 0 ? "harm" : "benefit";
   }
   if (type.startsWith("special_summon")) return "benefit";
@@ -465,14 +449,13 @@ function inferTargetIntent(action: CardAction | null | undefined): TargetIntent 
 }
 
 function buildTargetIntents(
-  actions: readonly CardAction[] | null | undefined,
+  actions: readonly (CardAction & ActionIntentView)[] | null | undefined,
 ): Map<string, TargetIntent> {
   const intents = new Map<string, TargetIntent>();
   (actions || []).forEach((action) => {
-    const targetRef = readProperty(action, "targetRef");
-    if (typeof targetRef !== "string" || !targetRef) return;
-    if (intents.has(targetRef)) return;
-    intents.set(targetRef, inferTargetIntent(action));
+    if (!action || !action.targetRef) return;
+    if (intents.has(action.targetRef)) return;
+    intents.set(action.targetRef, inferTargetIntent(action));
   });
   return intents;
 }
@@ -480,10 +463,9 @@ function buildTargetIntents(
 export function rankCandidates(
   candidates: readonly SimulatedCardState[],
   intent: TargetIntent,
-  options: object = {},
+  options: RankCandidateOptions = {},
 ): SimulatedCardState[] {
-  const typedOptions = options as RankCandidateOptions;
-  const targetPreference = typedOptions.targetPreference || null;
+  const targetPreference = options.targetPreference || null;
   const scored = candidates.map((card) => ({
     card,
     score: applyNameAndInstancePreference(
@@ -494,15 +476,15 @@ export function rankCandidates(
             targetPreference?.purpose === "offense"
           ? estimateOffensiveTemporaryBuffValue(card, {
               atkBoost: targetPreference.atkBoost,
-              opponentField: typedOptions.opponentField,
-              opponentLp: typedOptions.opponentLp,
+              opponentField: options.opponentField,
+              opponentLp: options.opponentLp,
             })
           : intent === "harm" &&
             targetPreference?.role === "temporary_stat_debuff" &&
             targetPreference?.purpose === "combat"
           ? estimateTemporaryCombatDebuffTargetValue(card, {
               attackers: targetPreference.attackers || [],
-              opponentLp: typedOptions.opponentLp || 0,
+              opponentLp: options.opponentLp || 0,
               atkReduction: targetPreference.atkReduction,
               defReduction: targetPreference.defReduction,
               destroyIfAtkZeroedByThisEffect:
@@ -510,7 +492,7 @@ export function rankCandidates(
               destroyIfDefZeroedByThisEffect:
                 targetPreference.destroyIfDefZeroedByThisEffect,
             })
-        : estimateCardValue(card, typedOptions),
+        : estimateCardValue(card, options),
       card,
       targetPreference,
       intent,
@@ -532,22 +514,21 @@ export function estimateRecursionTargetValue(
   const purpose = preference.purpose || "value";
   const defensiveNames = preference.defensiveNames || [];
   const offensiveNames = preference.offensiveNames || [];
-  const cardName = card.name as string;
   let score = (card.level || 0) * 0.2 + Math.max(atk, def) / 1000;
 
   if (purpose === "stabilize" || purpose === "defense") {
     score += def / 450;
     if (def >= atk + 500 || card.mustBeAttacked) score += 2;
-    if (defensiveNames.includes(cardName)) score += 3;
-    if (offensiveNames.includes(cardName) && def < 2000) score -= 1;
+    if (defensiveNames.includes(card.name as string)) score += 3;
+    if (offensiveNames.includes(card.name as string) && def < 2000) score -= 1;
   } else if (purpose === "pressure" || purpose === "offense") {
     score += atk / 450;
     if (atk >= 2000 || card.piercing) score += 2;
-    if (offensiveNames.includes(cardName)) score += 2;
-    if (defensiveNames.includes(cardName) && atk < 1800) score -= 3;
+    if (offensiveNames.includes(card.name as string)) score += 2;
+    if (defensiveNames.includes(card.name as string) && atk < 1800) score -= 3;
   } else {
-    if (defensiveNames.includes(cardName)) score += 0.8;
-    if (offensiveNames.includes(cardName)) score += 0.8;
+    if (defensiveNames.includes(card.name as string)) score += 0.8;
+    if (offensiveNames.includes(card.name as string)) score += 0.8;
   }
 
   return score;
@@ -555,11 +536,7 @@ export function estimateRecursionTargetValue(
 
 export function estimateOffensiveTemporaryBuffValue(
   card: SimulatedCardState | null | undefined,
-  {
-    atkBoost = 0,
-    opponentField = [],
-    opponentLp = 0,
-  }: OffensiveTemporaryBuffOptions = {},
+  { atkBoost = 0, opponentField = [], opponentLp = 0 }: OffensiveTemporaryBuffOptions = {},
 ): number {
   if (!card || card.cardKind !== "monster") return -100;
   if (atkBoost <= 0) return -100;
@@ -611,14 +588,14 @@ export function estimateTemporaryCombatDebuffTargetValue(
   const targetDef = getEffectiveDef(target);
   const atkDropsToZero =
     destroyIfAtkZeroedByThisEffect === true &&
-    isFiniteNumber(atkReduction) &&
+    Number.isFinite(atkReduction) &&
     targetAtk > 0 &&
-    Math.max(0, targetAtk - atkReduction) === 0;
+    Math.max(0, targetAtk - atkReduction!) === 0;
   const defDropsToZero =
     destroyIfDefZeroedByThisEffect === true &&
-    isFiniteNumber(defReduction) &&
+    Number.isFinite(defReduction) &&
     targetDef > 0 &&
-    Math.max(0, targetDef - defReduction) === 0;
+    Math.max(0, targetDef - defReduction!) === 0;
 
   if (atkDropsToZero || defDropsToZero) {
     return 100 + estimateMonsterValue(target);
@@ -627,14 +604,14 @@ export function estimateTemporaryCombatDebuffTargetValue(
 
   const currentStat = getBattleStatForAttackTarget(target);
   let debuffedStat = 0;
-  if (isFiniteNumber(atkReduction) || isFiniteNumber(defReduction)) {
+  if (Number.isFinite(atkReduction) || Number.isFinite(defReduction)) {
     const reduction =
       target.position === "defense"
-        ? isFiniteNumber(defReduction)
-          ? defReduction
+        ? Number.isFinite(defReduction)
+          ? defReduction!
           : 0
-        : isFiniteNumber(atkReduction)
-          ? atkReduction
+        : Number.isFinite(atkReduction)
+          ? atkReduction!
           : 0;
     debuffedStat = Math.max(0, currentStat - reduction);
   }
@@ -721,35 +698,32 @@ export function selectSimulatedTargets({
   };
   const hasPairedCandidate = (
     sourceCandidate: SimulatedCardState,
-    pairSpec: object | null | undefined,
+    pairSpec: AiPairedTarget | null | undefined,
   ): boolean => {
     if (!pairSpec) return true;
-    const typedPairSpec = pairSpec as AiPairedTarget;
     const ownerEntries: readonly {
       player: SimulatedPlayerState;
       role: TargetOwnerRole;
     }[] =
-      typedPairSpec.owner === "opponent"
+      pairSpec.owner === "opponent"
         ? [{ player: opponent, role: "opponent" }]
-        : typedPairSpec.owner === "any"
+        : pairSpec.owner === "any"
           ? [
               { player: self, role: "self" },
               { player: opponent, role: "opponent" },
             ]
           : [{ player: self, role: "self" }];
-    const zones: readonly EffectZone[] = asArray(
-      typedPairSpec.zones || typedPairSpec.zone || "field",
-    );
+    const zones: readonly EffectZone[] = asArray(pairSpec.zones || pairSpec.zone || "field");
     const comparisons: readonly AttributeComparison[] = [
-      ...asArray(typedPairSpec.compareAttribute),
-      ...asArray(typedPairSpec.compareAttributes),
+      ...asArray(pairSpec.compareAttribute),
+      ...asArray(pairSpec.compareAttributes),
     ];
     return ownerEntries.some(({ player: owner, role }) =>
       zones.some((zone) =>
         getZoneCards(owner, zone).some((candidate) => {
           if (!candidate || candidate === sourceCandidate) return false;
           if (
-            typedPairSpec.excludeSameName === true &&
+            pairSpec.excludeSameName === true &&
             candidate.name === sourceCandidate.name
           ) {
             return false;
@@ -757,7 +731,7 @@ export function selectSimulatedTargets({
           if (
             !matchesTargetFilters(
               candidate,
-              typedPairSpec,
+              pairSpec,
               sourceCandidate,
               role,
             )
@@ -773,24 +747,21 @@ export function selectSimulatedTargets({
   };
 
   targets.forEach((target) => {
-    const targetView = target as AiTargetFilter;
-    if (!targetView.id) return;
-    if (targetView.targetFromContext) {
-      const actionContext = readObjectProperty(options, "actionContext");
-      const activationContext = readObjectProperty(options, "activationContext");
-      const activationActionContext = readObjectProperty(
-        activationContext,
-        "actionContext",
-      );
+    if (!target || !target.id) return;
+    if (target.targetFromContext) {
       const contextValue =
-        readProperty(options, targetView.targetFromContext) ||
-        readProperty(actionContext, targetView.targetFromContext) ||
-        readProperty(activationActionContext, targetView.targetFromContext) ||
+        (options as Partial<Record<string, unknown>> | null)?.[target.targetFromContext] ||
+        (options?.actionContext as Partial<Record<string, unknown>> | null | undefined)?.[
+          target.targetFromContext
+        ] ||
+        (options?.activationContext?.actionContext as Partial<Record<string, unknown>> | null | undefined)?.[
+          target.targetFromContext
+        ] ||
         null;
-      const requiredZones: readonly EffectZone[] = Array.isArray(targetView.zones)
-        ? targetView.zones
-        : targetView.zone
-          ? [targetView.zone]
+      const requiredZones: readonly EffectZone[] = Array.isArray(target.zones)
+        ? target.zones
+        : target.zone
+          ? [target.zone]
           : [];
       const contextCards = (
         asArray(contextValue) as readonly SimulatedCardState[]
@@ -800,26 +771,29 @@ export function selectSimulatedTargets({
           owner === self ? "self" : owner === opponent ? "opponent" : null;
         const zone = owner ? findCardZone(owner, card) : null;
         return (
-          matchesTargetFilters(card, targetView, sourceCard, ownerRole) &&
+          matchesTargetFilters(card, target, sourceCard, ownerRole) &&
           (requiredZones.length === 0 ||
             requiredZones.includes("any") ||
-            (zone !== null && requiredZones.includes(zone)))
+            requiredZones.includes(zone!))
         );
       });
-      const count = normalizeCount(targetView.count, 1);
-      Reflect.set(
-        result,
-        targetView.id,
-        contextCards.slice(0, Math.min(count.max, contextCards.length)),
+      const count = normalizeCount(target.count, 1);
+      result[target.id] = contextCards.slice(
+        0,
+        Math.min(count.max, contextCards.length),
       );
       return;
     }
     const excludeTargetRefs = [
-      targetView.excludeTargetRef,
-      ...asArray(targetView.excludeTargetRefs),
+      target.excludeTargetRef,
+      ...asArray(target.excludeTargetRefs),
     ].filter(Boolean) as string[];
     const excludedCards = excludeTargetRefs.flatMap((ref) =>
-      selectionValueAsCards(readSelectedValue(result, ref)),
+      Array.isArray(result[ref])
+        ? result[ref] as SimulatedCardState[]
+        : result[ref]
+          ? [result[ref] as SimulatedCardState]
+          : [],
     );
     const excludedInstanceIds = excludedCards
       .map(getCardInstanceId)
@@ -827,23 +801,21 @@ export function selectSimulatedTargets({
     let effectiveTarget: AiTargetFilter =
       excludedCards.length > 0
         ? {
-            ...targetView,
+            ...target,
             excludeCards: [
-              ...asArray(targetView.excludeCards),
+              ...asArray(target.excludeCards),
               ...excludedCards,
             ],
             excludeInstanceIds: [
-              ...asArray(targetView.excludeInstanceIds),
+              ...asArray(target.excludeInstanceIds),
               ...excludedInstanceIds,
             ],
           }
-        : targetView;
-    const excludedNameCards = selectionValueAsCards(
-      readSelectedValue(result, targetView.excludeNameRef),
-    );
+        : target;
+    const excludedNameCards = asArray(result[target.excludeNameRef!]) as readonly SimulatedCardState[];
     const excludedNames = excludedNameCards
       .map((card) => card?.name)
-      .filter((name): name is string => typeof name === "string" && !!name);
+      .filter(Boolean) as string[];
     if (excludedNames.length > 0) {
       effectiveTarget = {
         ...effectiveTarget,
@@ -895,20 +867,18 @@ export function selectSimulatedTargets({
         }
         const comparison = effectiveTarget.compareAttribute;
         if (comparison?.ref) {
-          const reference = selectionValueAsCards(
-            readSelectedValue(result, comparison.ref),
-          )[0];
+          const reference = asArray(result[comparison.ref])[0] as SimulatedCardState;
           if (!comparisonPasses(card, reference, comparison)) return false;
         }
         return true;
       })
       .map(({ card }) => card);
 
-    const explicitTargetPreference = getTargetPreference(options, targetView.id);
+    const explicitTargetPreference = getTargetPreference(options, target.id);
     const intent =
       explicitTargetPreference?.intent ||
-      targetView.intent ||
-      intents.get(targetView.id) ||
+      target.intent ||
+      intents.get(target.id) ||
       "benefit";
     const targetPreference =
       intent === "cost"
@@ -924,26 +894,22 @@ export function selectSimulatedTargets({
     });
 
     const referencedSelection =
-      typeof targetView.countFromSelectionRef === "string"
-        ? readSelectedValue(result, targetView.countFromSelectionRef)
+      typeof target.countFromSelectionRef === "string"
+        ? result[target.countFromSelectionRef]
         : null;
     const count = Array.isArray(referencedSelection)
       ? {
           min: referencedSelection.length,
           max: referencedSelection.length,
         }
-      : normalizeCount(targetView.count, 1);
+      : normalizeCount(target.count, 1);
     const min = count.min;
     const max = count.max;
     let pickCount = intent === "cost" ? min : max;
     if (min === 0 && intent !== "cost") {
       pickCount = 0;
     }
-    Reflect.set(
-      result,
-      targetView.id,
-      ordered.slice(0, Math.min(pickCount, ordered.length)),
-    );
+    result[target.id] = ordered.slice(0, Math.min(pickCount, ordered.length));
   });
 
   return result;

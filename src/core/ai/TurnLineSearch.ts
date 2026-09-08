@@ -43,11 +43,18 @@ import type {
 import type { CardAction } from "../contracts/actions.js";
 import type { GameCard } from "../contracts/cards.js";
 
+interface PlannerBlueprintEntry {
+  id?: string | number;
+  effectId?: string | number;
+  sourceName?: string | number;
+  name?: string | number;
+}
+
 type PlannerCard = SimulatedCardState & {
   cannotBeDestroyedByBattle?: boolean;
-  storedBlueprints?: unknown[];
-  blueprintStorageState?: { storedBlueprints?: unknown[] } | null;
-  storedEffects?: unknown[];
+  storedBlueprints?: PlannerBlueprintEntry[];
+  blueprintStorageState?: { storedBlueprints?: PlannerBlueprintEntry[] } | null;
+  storedEffects?: PlannerBlueprintEntry[];
 };
 type PlannerPlayer = SimulatedPlayerState;
 type PlannerCardInput = NonNullable<AiPlayerInput["hand"]>[number];
@@ -149,7 +156,7 @@ interface PlannerBattleSummary extends SimulatedBattleAction {
   destroyedNames: string[];
   destroyedCards: DestroyedCardSummary[];
   rewardNames: unknown[];
-  lpGains: LpGainSummary[];
+  lpGains?: LpGainSummary[];
   battleSteps?: PlannerBattleSummary[];
   phaseBridge: "main1_battle_main2";
   priority?: number;
@@ -321,22 +328,6 @@ function actionIsValidForHand(
   return true;
 }
 
-function readLegacyAltTribute(value: unknown): LegacyAltTributeView | null {
-  if (!value || typeof value !== "object") return null;
-  const type = Reflect.get(value, "type");
-  const requiresName = Reflect.get(value, "requiresName");
-  const requiresType = Reflect.get(value, "requiresType");
-  const tributes = Reflect.get(value, "tributes");
-  return {
-    type: typeof type === "string" ? type : undefined,
-    requiresName:
-      typeof requiresName === "string" ? requiresName : undefined,
-    requiresType:
-      typeof requiresType === "string" ? requiresType : undefined,
-    tributes: typeof tributes === "number" ? tributes : undefined,
-  };
-}
-
 function tributeMatchesAltRequirement(
   card: PlannerCard | null | undefined,
   alt: LegacyAltTributeView | null | undefined,
@@ -355,19 +346,11 @@ function getPlannerTributeRequirement(
 ): PlannerTributeRequirement {
   if (!card) return { tributesNeeded: 0, usingAlt: false, alt: null };
   if (typeof strategy?.getTributeRequirementFor === "function") {
-    const requirement = strategy.getTributeRequirementFor(card, player);
-    if (!requirement) {
-      return {
-        tributesNeeded: 0,
-        usingAlt: false,
-        alt: null,
-      };
-    }
-    return {
-      tributesNeeded: requirement.tributesNeeded,
-      usingAlt: requirement.usingAlt,
-      alt: readLegacyAltTribute(requirement.alt),
-    };
+    return (strategy.getTributeRequirementFor(card, player) || {
+      tributesNeeded: 0,
+      usingAlt: false,
+      alt: null,
+    }) as PlannerTributeRequirement;
   }
 
   let tributesNeeded = 0;
@@ -378,7 +361,7 @@ function getPlannerTributeRequirement(
     tributesNeeded = card.requiredTributes;
   }
 
-  const alt = readLegacyAltTribute(card.altTribute);
+  const alt = (card.altTribute || null) as LegacyAltTributeView | null;
   if (alt?.type === "no_tribute_if_empty_field" && (player?.field || []).length === 0) {
     return { tributesNeeded: 0, usingAlt: true, alt };
   }
@@ -492,37 +475,27 @@ function clonePlayerState(
   player: PlannerPlayerInput | null | undefined,
 ): PlannerPlayer {
   const safe = player || {};
-  const cloneCards = (
-    cards: readonly PlannerCardInput[] | null | undefined,
-  ): PlannerCard[] =>
-    (cards || []).map((card) => clonePlain(card) as PlannerCard);
   const snapshot = {
     id: safe.id || "unknown",
     name: safe.name || safe.id || "unknown",
     lp: safe.lp || 0,
-    hand: cloneCards(safe.hand),
-    field: cloneCards(safe.field),
-    graveyard: cloneCards(safe.graveyard),
-    deck: cloneCards(safe.deck),
-    extraDeck: cloneCards(safe.extraDeck),
-    banished: cloneCards(safe.banished),
-    fieldSpell: safe.fieldSpell
-      ? clonePlain(safe.fieldSpell) as PlannerCard
-      : null,
-    spellTrap: cloneCards(safe.spellTrap),
+    hand: (safe.hand || []) as PlannerCard[],
+    field: (safe.field || []) as PlannerCard[],
+    graveyard: (safe.graveyard || []) as PlannerCard[],
+    deck: (safe.deck || []) as PlannerCard[],
+    extraDeck: (safe.extraDeck || []) as PlannerCard[],
+    banished: (safe.banished || []) as PlannerCard[],
+    fieldSpell: (safe.fieldSpell || null) as PlannerCard | null,
+    spellTrap: (safe.spellTrap || []) as PlannerCard[],
     summonCount: safe.summonCount || 0,
     additionalNormalSummons: safe.additionalNormalSummons || 0,
-    additionalNormalSummonPermissions:
-      clonePlain([...(safe.additionalNormalSummonPermissions || [])]),
-    normalSummonsThisTurn:
-      clonePlain([...(safe.normalSummonsThisTurn || [])]),
-    specialSummonRestrictions:
-      clonePlain([...(safe.specialSummonRestrictions || [])]),
-    effectActivationRestrictions:
-      clonePlain([...(safe.effectActivationRestrictions || [])]),
+    additionalNormalSummonPermissions: (safe.additionalNormalSummonPermissions || []) as PlannerPlayer["additionalNormalSummonPermissions"],
+    normalSummonsThisTurn: (safe.normalSummonsThisTurn || []) as PlannerPlayer["normalSummonsThisTurn"],
+    specialSummonRestrictions: (safe.specialSummonRestrictions || []) as PlannerPlayer["specialSummonRestrictions"],
+    effectActivationRestrictions: (safe.effectActivationRestrictions || []) as PlannerPlayer["effectActivationRestrictions"],
     controllerType: safe.controllerType,
   };
-  return snapshot;
+  return clonePlain(snapshot) as PlannerPlayer;
 }
 
 function resolvePerspectiveBot(
@@ -553,31 +526,23 @@ function clonePlanningState(
     turnCounter: game?.turnCounter || 0,
     _isPerspectiveState: true,
     _gameRef: game?._gameRef || game,
-  };
+  } as PlanningState;
   if (game?._simOncePerTurn) {
-    Reflect.set(state, "_simOncePerTurn", clonePlain(game._simOncePerTurn));
+    state._simOncePerTurn = clonePlain(game._simOncePerTurn) as PlanningState["_simOncePerTurn"];
   }
   if (game?._simLuminarch) {
-    Reflect.set(state, "_simLuminarch", clonePlain(game._simLuminarch));
+    state._simLuminarch = clonePlain(game._simLuminarch) as PlanningState["_simLuminarch"];
   }
   if (game?._simBurningWest) {
-    Reflect.set(state, "_simBurningWest", clonePlain(game._simBurningWest));
+    state._simBurningWest = clonePlain(game._simBurningWest) as PlanningState["_simBurningWest"];
   }
   if (Array.isArray(game?.temporaryBattlePairEffects)) {
-    Reflect.set(
-      state,
-      "temporaryBattlePairEffects",
-      clonePlain(game.temporaryBattlePairEffects),
-    );
+    state.temporaryBattlePairEffects = clonePlain(game.temporaryBattlePairEffects);
   }
   if (Array.isArray(game?.temporaryEventEffects)) {
-    Reflect.set(
-      state,
-      "temporaryEventEffects",
-      clonePlain(game.temporaryEventEffects),
-    );
+    state.temporaryEventEffects = clonePlain(game.temporaryEventEffects);
   }
-  return state as PlanningState;
+  return state;
 }
 
 function normalizeCounterEntries(
@@ -585,19 +550,8 @@ function normalizeCounterEntries(
 ): Array<[string, number]> {
   if (!counters) return [];
   if (counters instanceof Map) return [...counters.entries()];
-  if (Array.isArray(counters)) {
-    return counters.filter(
-      (entry): entry is [string, number] =>
-        Array.isArray(entry) &&
-        typeof entry[0] === "string" &&
-        typeof entry[1] === "number",
-    );
-  }
-  if (typeof counters === "object") {
-    return Object.entries(counters).filter(
-      (entry): entry is [string, number] => typeof entry[1] === "number",
-    );
-  }
+  if (Array.isArray(counters)) return counters as Array<[string, number]>;
+  if (typeof counters === "object") return Object.entries(counters) as Array<[string, number]>;
   return [];
 }
 
@@ -608,15 +562,7 @@ function summarizeBlueprints(card: PlannerCard | null | undefined): string {
     card?.storedEffects ||
     [];
   return (Array.isArray(stored) ? stored : [])
-    .map((entry) => {
-      if (!entry || typeof entry !== "object") return undefined;
-      return (
-        Reflect.get(entry, "id") ||
-        Reflect.get(entry, "effectId") ||
-        Reflect.get(entry, "sourceName") ||
-        Reflect.get(entry, "name")
-      );
-    })
+    .map((entry) => entry?.id || entry?.effectId || entry?.sourceName || entry?.name)
     .filter(Boolean)
     .sort()
     .join(",");
@@ -706,11 +652,7 @@ function summarizeTemporaryEffects(
         entry?.secondInstanceId || entry?.secondFieldPresenceId || "",
         entry?.affectedInstanceId || entry?.affectedFieldPresenceId || "",
         summarizeSimOpt(entry?.declaredValues),
-        summarizeSimOpt(
-          (entry?.actions || []).map(
-            (action: BattlePairActionView) => action?.type || "",
-          ),
-        ),
+        summarizeSimOpt((entry?.actions || []).map((action: BattlePairActionView) => action?.type || "")),
       ].join(":"),
     )
     .sort()
@@ -1154,9 +1096,8 @@ function prepareStrategyBattle(
   const bot = state?.bot;
   const opponent = state?.player;
   const attacker = bot?.field?.[battlePlan?.attackerIndex];
-  const targetIndex = battlePlan.targetIndex;
-  const target = Number.isInteger(targetIndex) && targetIndex !== null
-    ? opponent?.field?.[targetIndex]
+  const target = Number.isInteger(battlePlan?.targetIndex)
+    ? opponent?.field?.[battlePlan.targetIndex!]
     : null;
   const result = strategy.prepareSimulatedBattle({
     state,
@@ -1302,9 +1243,8 @@ function applySimulatedBattle(
   const opponent = state?.player;
   if (!bot || !opponent || !battlePlan) return null;
   const attacker = bot.field?.[battlePlan.attackerIndex];
-  const targetIndex = battlePlan.targetIndex;
-  const target = Number.isInteger(targetIndex) && targetIndex !== null
-    ? opponent.field?.[targetIndex]
+  const target = Number.isInteger(battlePlan.targetIndex)
+    ? opponent.field?.[battlePlan.targetIndex!]
     : null;
   if (!canPlannerAttackerStillAttack(attacker, state)) return null;
   const usedAttacks = Number(attacker.attacksUsedThisTurn || 0);
@@ -1348,7 +1288,7 @@ function applySimulatedBattle(
     ) {
       const before = Number(recipient.lp || 0);
       recipient.lp = before + raw;
-      summary.lpGains.push({
+      summary.lpGains!.push({
         playerId: recipient.id || null,
         amount: raw,
         sourceName: involvedCard.name || null,
@@ -1478,9 +1418,8 @@ function chooseBestSingleSimulatedBattle(
 
   plans.forEach((plan) => {
     const originalAttacker = state.bot?.field?.[plan.attackerIndex] || null;
-    const targetIndex = plan.targetIndex;
-    const originalTarget = Number.isInteger(targetIndex) && targetIndex !== null
-      ? state.player?.field?.[targetIndex] || null
+    const originalTarget = Number.isInteger(plan.targetIndex)
+      ? state.player?.field?.[plan.targetIndex!] || null
       : null;
     const wasSecondAttack =
       Number(originalAttacker?.attacksUsedThisTurn || 0) > 0;
@@ -1558,7 +1497,6 @@ function aggregateBattleSummaries(
   const destroyedCards = validSteps.flatMap((step) => step.destroyedCards || []);
   const destroyedNames = validSteps.flatMap((step) => step.destroyedNames || []);
   const rewardNames = validSteps.flatMap((step) => step.rewardNames || []);
-  const lpGains = validSteps.flatMap((step) => step.lpGains || []);
   const damage = validSteps.reduce((sum, step) => sum + Number(step.damage || 0), 0);
   return {
     type: "simulatedBattle",
@@ -1569,7 +1507,6 @@ function aggregateBattleSummaries(
     destroyedNames,
     destroyedCards,
     rewardNames,
-    lpGains,
     battleSteps: validSteps,
     phaseBridge: "main1_battle_main2",
     priority: totalScore,

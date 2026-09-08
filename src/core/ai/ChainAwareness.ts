@@ -84,10 +84,6 @@ export interface ChainableCardsAnalysis {
   chainDepth: number;
 }
 
-function isActionTypeView(value: unknown): value is ActionTypeView {
-  return typeof value === "object" && value !== null;
-}
-
 const ACTIVATION_NEGATION_ACTIONS = new Set([
   "negate_activation",
   "negate_effect",
@@ -107,14 +103,12 @@ const DAMAGE_BLOCKING_ACTIONS = new Set([
 function walkedActions(actions: readonly CardAction[] | undefined): ActionTypeView[] {
   return walkActionList(actions).visits
     .map((visit) => visit.action)
-    .filter(isActionTypeView);
+    .filter((action) => action && typeof action === "object") as ActionTypeView[];
 }
 
 function responseBlockingCategories(effect: ChainEffect): BlockingCategory[] {
   const actionTypes = new Set(
-    walkedActions(effect.actions)
-      .map((action) => action.type)
-      .filter((type): type is string => typeof type === "string"),
+    walkedActions(effect?.actions).map((action) => action.type) as string[],
   );
   const contexts = new Set(effect?.canRespondTo || []);
   const blocking = new Set<BlockingCategory>();
@@ -134,8 +128,8 @@ function responseBlockingCategories(effect: ChainEffect): BlockingCategory[] {
 
 /**
  * Analisa spell speed e cadeia de um efeito.
- * @param {Object} effect - Efeito a analisar
- * @returns {Object} - { spellSpeed: number, canChain: boolean, chainType: 'fast_effect'|'spell_speed_2'|'spell_speed_1'|'none' }
+ * @param {object} effect - Efeito a analisar
+ * @returns {object} - { spellSpeed: number, canChain: boolean, chainType: 'fast_effect'|'spell_speed_2'|'spell_speed_1'|'none' }
  */
 export function analyzeSpellSpeed(
   effect: ChainEffect | null | undefined,
@@ -149,7 +143,7 @@ export function analyzeSpellSpeed(
     return { spellSpeed: 1, canChain: false, chainType: "none" };
   }
 
-  const spellSpeed = getEffectSpellSpeed(effect, card ?? undefined);
+  const spellSpeed = getEffectSpellSpeed(effect, card as ChainCard | undefined);
 
   let canChain = false;
   let chainType: "fast_effect" | "spell_speed_2" | "spell_speed_1" | "none" =
@@ -168,8 +162,8 @@ export function analyzeSpellSpeed(
 
 /**
  * Detecta se uma carta é uma "defensive trap" — que pode bloquear ações.
- * @param {Object} card - Carta a analisar
- * @returns {Object} - { isDefensiveTrap: boolean, blocking: string[], strength: 'weak'|'medium'|'strong' }
+ * @param {object} card - Carta a analisar
+ * @returns {object} - { isDefensiveTrap: boolean, blocking: string[], strength: 'weak'|'medium'|'strong' }
  */
 export function analyzeDefensiveTrap(
   card: ChainCard | null | undefined,
@@ -189,13 +183,9 @@ export function analyzeDefensiveTrap(
     (effect) => getEffectSpellSpeed(effect, card) >= 3,
   );
   const hasNegation = (card.effects || []).some((effect) =>
-    walkedActions(effect.actions).some((action) => {
-      const actionType = action.type;
-      return (
-        typeof actionType === "string" &&
-        ACTIVATION_NEGATION_ACTIONS.has(actionType)
-      );
-    }),
+    walkedActions(effect.actions).some((action) =>
+      ACTIVATION_NEGATION_ACTIONS.has(action.type as string)
+    ),
   );
   const strength =
     hasCounterSpeed || hasNegation
@@ -214,11 +204,11 @@ export function analyzeDefensiveTrap(
 
 /**
  * Avalia risco de uma ação ser bloqueada por traps do oponente.
- * @param {Object} gameState - Estado do jogo
- * @param {Object} botPlayer - Bot player state
- * @param {Object} opponentPlayer - Opponent player state
+ * @param {object} gameState - Estado do jogo
+ * @param {object} botPlayer - Bot player state
+ * @param {object} opponentPlayer - Opponent player state
  * @param {string} actionType - Tipo de ação que será feita (spell, summon, attack)
- * @returns {Object} - { riskLevel: 'low'|'medium'|'high', blockingCards: [], negationChance: 0.0-1.0 }
+ * @returns {object} - { riskLevel: 'low'|'medium'|'high', blockingCards: [], negationChance: 0.0-1.0 }
  */
 export function evaluateActionBlockingRisk(
   gameState: ChainAwarenessState,
@@ -239,7 +229,7 @@ export function evaluateActionBlockingRisk(
     const trap = analyzeDefensiveTrap(card);
     if (
       trap.isDefensiveTrap &&
-      trap.blocking.some((category) => category === actionType)
+      trap.blocking.includes(actionType as BlockingCategory)
     ) {
       blockingCards.push({
         name: card.name,
@@ -278,9 +268,9 @@ export function evaluateActionBlockingRisk(
 
 /**
  * Detecta se oponente pode entrar em cadeia (chain window aberto).
- * @param {Object} gameState - Estado do jogo
- * @param {Object} opponentPlayer - Opponent player state
- * @returns {Object} - { canChain: boolean, chainableCards: [], chainDepth: number }
+ * @param {object} gameState - Estado do jogo
+ * @param {object} opponentPlayer - Opponent player state
+ * @returns {object} - { canChain: boolean, chainableCards: [], chainDepth: number }
  */
 export function detectChainableOpponentCards(
   gameState: ChainAwarenessState,
@@ -344,7 +334,7 @@ export function detectChainableOpponentCards(
 /**
  * Calcula penalidade de prioridade para uma ação que pode ser bloqueada.
  * @param {string} actionType - Tipo de ação
- * @param {Object} blockingRisk - Resultado de evaluateActionBlockingRisk
+ * @param {object} blockingRisk - Resultado de evaluateActionBlockingRisk
  * @returns {number} - Penalidade de prioridade (negativa, 0 a -30)
  */
 export function calculateBlockingRiskPenalty(
@@ -369,12 +359,12 @@ export function calculateBlockingRiskPenalty(
 
 /**
  * Determina segurança total de executar uma ação considerando cadeia/traps oponente.
- * @param {Object} gameState - Estado do jogo
- * @param {Object} botPlayer - Bot player state
- * @param {Object} opponentPlayer - Opponent player state
+ * @param {object} gameState - Estado do jogo
+ * @param {object} botPlayer - Bot player state
+ * @param {object} opponentPlayer - Opponent player state
  * @param {string} actionType - Tipo de ação
- * @param {Object} card - Carta da ação
- * @returns {Object} - { isSafe: boolean, riskScore: 0.0-1.0, recommendation: string }
+ * @param {object} card - Carta da ação
+ * @returns {object} - { isSafe: boolean, riskScore: 0.0-1.0, recommendation: string }
  */
 export function assessActionSafety(
   gameState: ChainAwarenessState,

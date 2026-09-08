@@ -105,30 +105,13 @@ type BounceAvailabilityAction = ActionOf<"bounce_and_summon"> & {
   readonly count?: number | SelectionCount;
 };
 
-function readReferenceProperty(
-  reference: ContextNumberSource | ContextNumberReference,
-  key: keyof ContextNumberReference,
-): unknown {
-  return Reflect.get(reference, key);
-}
-
 function getContextPathValue(ctx: unknown, path: unknown): unknown {
   if (!ctx || typeof path !== "string" || !path) return undefined;
-  if (!path.includes(".")) {
-    return typeof ctx === "object" || typeof ctx === "function"
-      ? Reflect.get(ctx, path)
-      : undefined;
-  }
+  if (!path.includes(".")) return (ctx as { [Key in typeof path]?: unknown })[path];
   return path
     .split(".")
     .filter(Boolean)
-    .reduce<unknown>((value, key) => {
-      if (value === null || value === undefined) return undefined;
-      if (typeof value !== "object" && typeof value !== "function") {
-        return undefined;
-      }
-      return Reflect.get(value, key);
-    }, ctx);
+    .reduce<unknown>((value, key) => value == null ? undefined : (value as { [Key in typeof key]?: unknown })[key], ctx);
 }
 
 function resolveNumberFromContext(
@@ -137,22 +120,18 @@ function resolveNumberFromContext(
 ): number | null {
   if (ref === undefined || ref === null) return null;
   if (Number.isFinite(Number(ref))) return Number(ref);
-  const reference = typeof ref === "object" ? ref : null;
   const key = typeof ref === "string"
     ? ref
-    : reference
-      ? readReferenceProperty(reference, "key") ||
-        readReferenceProperty(reference, "contextKey") ||
-        readReferenceProperty(reference, "path") ||
-        readReferenceProperty(reference, "resultKey") ||
-        null
-      : null;
-  const fallback =
-    reference
-      ? readReferenceProperty(reference, "defaultValue") ??
-        readReferenceProperty(reference, "default") ??
-        readReferenceProperty(reference, "fallback")
-      : undefined;
+    : (ref as ContextNumberReference).key ||
+      (ref as ContextNumberReference).contextKey ||
+      (ref as ContextNumberReference).path ||
+      (ref as ContextNumberReference).resultKey ||
+      null;
+  const fallback = typeof ref === "object" && ref !== null
+    ? (ref as ContextNumberReference).defaultValue ??
+      (ref as ContextNumberReference).default ??
+      (ref as ContextNumberReference).fallback
+    : undefined;
   const rawValue = getContextPathValue(ctx, key);
   const value = rawValue === undefined ? fallback : rawValue;
   const numeric = Number(value);
@@ -168,12 +147,10 @@ function applyContextMaxLevelFilter(
     action?.maxLevelFromContext,
     activationContext,
   );
-  if (typeof maxLevel !== "number" || !Number.isFinite(maxLevel)) return;
-  const currentMaxLevel = filters.maxLevel;
-  filters.maxLevel = typeof currentMaxLevel === "number" &&
-      Number.isFinite(currentMaxLevel)
-    ? Math.min(currentMaxLevel, maxLevel)
-    : maxLevel;
+  if (!Number.isFinite(maxLevel)) return;
+  filters.maxLevel = Number.isFinite(filters.maxLevel)
+    ? Math.min(filters.maxLevel!, maxLevel!)
+    : maxLevel!;
 }
 
 export function validateHandIgnitionCandidate({
@@ -252,13 +229,11 @@ export function validateCostCandidateCount({
   }
 
   if (action.type === "special_summon_from_hand_with_tiered_cost") {
-    const tieredAction: TieredCostAvailabilityAction = action;
-    const filters = tieredAction.costFilters || {};
-    const min = tieredAction.minCost ?? (
-      typeof tieredAction.count === "number"
-        ? tieredAction.count
-        : tieredAction.count?.min
-    ) ?? 1;
+    const filters = action.costFilters || {};
+    const min = action.minCost ??
+      ((action as TieredCostAvailabilityAction).count as SelectionCount | undefined)
+        ?.min ??
+      1;
     const candidateCount = countStrategicallyViableCostCandidates(
       player,
       { ...filters, zone: "field" },
@@ -372,13 +347,7 @@ function hasSynchroSummonActionCandidate(
       : [...(player.field || [])];
     const previewPlayer = { ...player, field };
     return extraDeckCandidates.some((synchroCard) => {
-      const combos =
-        getSynchroMaterialCombos.call(
-          gameLike as ThisParameterType<typeof getSynchroMaterialCombos>,
-          previewPlayer as GamePlayer,
-          synchroCard as GameCard,
-        ) ||
-        [];
+      const combos = getSynchroMaterialCombos.call(gameLike as ThisParameterType<typeof getSynchroMaterialCombos>, previewPlayer as GamePlayer, synchroCard as GameCard) || [];
       return combos.some((combo) => field.length - combo.length + 1 <= 5);
     });
   });
@@ -393,65 +362,65 @@ export function hasActionZoneCandidates(
   if (!player || !action) return true;
 
   if (action.type === "special_summon_from_zone") {
-    const summonAction: SpecialSummonAvailabilityAction = action;
-    const zoneSpec = summonAction.zone || summonAction.sourceZone || "deck";
+    const zoneSpec = action.zone || action.sourceZone || "deck";
     const zoneNames = Array.isArray(zoneSpec) ? zoneSpec : [zoneSpec];
     const zoneCards = zoneNames.flatMap((zone) => getPlayerZoneCards(player, zone));
 
-    if (summonAction.requireSource) {
+    if (action.requireSource) {
       return !!source && zoneCards.includes(source);
     }
 
     const filters: MutableAiCardFilter = {
-      ...(summonAction.filters || {}),
-      ...(summonAction.cardName ? { name: summonAction.cardName } : {}),
-      ...(summonAction.archetype ? { archetype: summonAction.archetype } : {}),
-      ...(summonAction.cardKind ? { cardKind: summonAction.cardKind } : {}),
-      ...(summonAction.excludeCardName
-        ? { excludeCardName: summonAction.excludeCardName }
+      ...(action.filters || {}),
+      ...(action.cardName ? { name: action.cardName } : {}),
+      ...(action.archetype ? { archetype: action.archetype } : {}),
+      ...(action.cardKind ? { cardKind: action.cardKind } : {}),
+      ...((action as SpecialSummonAvailabilityAction).excludeCardName
+        ? { excludeCardName: (action as SpecialSummonAvailabilityAction).excludeCardName }
         : {}),
-      ...(summonAction.excludeCardNames
-        ? { excludeCardNames: summonAction.excludeCardNames }
+      ...((action as SpecialSummonAvailabilityAction).excludeCardNames
+        ? { excludeCardNames: (action as SpecialSummonAvailabilityAction).excludeCardNames }
         : {}),
-      ...(summonAction.excludeId !== undefined
-        ? { excludeId: summonAction.excludeId }
+      ...((action as SpecialSummonAvailabilityAction).excludeId !== undefined
+        ? { excludeId: (action as SpecialSummonAvailabilityAction).excludeId }
         : {}),
-      ...(summonAction.excludeIds ? { excludeIds: summonAction.excludeIds } : {}),
-      ...(summonAction.excludeCardId !== undefined
-        ? { excludeCardId: summonAction.excludeCardId }
+      ...((action as SpecialSummonAvailabilityAction).excludeIds
+        ? { excludeIds: (action as SpecialSummonAvailabilityAction).excludeIds }
         : {}),
-      ...(summonAction.excludeCardIds
-        ? { excludeCardIds: summonAction.excludeCardIds }
+      ...((action as SpecialSummonAvailabilityAction).excludeCardId !== undefined
+        ? { excludeCardId: (action as SpecialSummonAvailabilityAction).excludeCardId }
         : {}),
-      ...(summonAction.facedown !== undefined
-        ? { facedown: summonAction.facedown }
+      ...((action as SpecialSummonAvailabilityAction).excludeCardIds
+        ? { excludeCardIds: (action as SpecialSummonAvailabilityAction).excludeCardIds }
         : {}),
-      ...(summonAction.excludeSelf !== undefined
-        ? { excludeSelf: summonAction.excludeSelf }
+      ...((action as SpecialSummonAvailabilityAction).facedown !== undefined
+        ? { facedown: (action as SpecialSummonAvailabilityAction).facedown }
         : {}),
-      ...(Number.isFinite(summonAction.minAtk)
-        ? { minAtk: summonAction.minAtk }
+      ...((action as SpecialSummonAvailabilityAction).excludeSelf !== undefined
+        ? { excludeSelf: (action as SpecialSummonAvailabilityAction).excludeSelf }
         : {}),
-      ...(Number.isFinite(summonAction.maxAtk)
-        ? { maxAtk: summonAction.maxAtk }
+      ...(Number.isFinite(action.minAtk)
+        ? { minAtk: action.minAtk }
         : {}),
-      ...(Number.isFinite(summonAction.minLevel)
-        ? { minLevel: summonAction.minLevel }
+      ...(Number.isFinite(action.maxAtk)
+        ? { maxAtk: action.maxAtk }
         : {}),
-      ...(Number.isFinite(summonAction.maxLevel)
-        ? { maxLevel: summonAction.maxLevel }
+      ...(Number.isFinite(action.minLevel)
+        ? { minLevel: action.minLevel }
+        : {}),
+      ...(Number.isFinite(action.maxLevel)
+        ? { maxLevel: action.maxLevel }
         : {}),
     };
-    applyContextMaxLevelFilter(filters, summonAction, activationContext);
-    const min = typeof summonAction.count === "number"
-      ? summonAction.count
-      : summonAction.count?.min ?? 1;
+    applyContextMaxLevelFilter(filters, action, activationContext);
+    const min = ((action as SpecialSummonAvailabilityAction).count as SelectionCount | undefined)
+      ?.min ?? 1;
     const candidates = zoneCards.filter((card) =>
       cardMatchesFilter(card, filters) &&
       !(filters.excludeSelf && card === source) &&
       cardPassesSpecialSummonRestrictions(card, player),
     );
-    if (summonAction.distinctNames === true) {
+    if (action.distinctNames === true) {
       const names = new Set(
         candidates.map((card) => card?.name || `id:${card?.id ?? "unknown"}`),
       );
@@ -461,11 +430,9 @@ export function hasActionZoneCandidates(
   }
 
   if (action.type === "bounce_and_summon") {
-    const bounceAction: BounceAvailabilityAction = action;
-    const filters = bounceAction.filters || {};
-    const min = typeof bounceAction.count === "number"
-      ? bounceAction.count
-      : bounceAction.count?.min ?? 1;
+    const filters = action.filters || {};
+    const min = ((action as BounceAvailabilityAction).count as SelectionCount | undefined)
+      ?.min ?? 1;
     return (
       (player.hand || []).filter(
         (card) =>

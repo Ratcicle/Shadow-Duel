@@ -84,7 +84,7 @@ function hasValue<Value>(
 }
 
 function isFiniteNumber(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value);
+  return Number.isFinite(value as number);
 }
 
 function defaultAcceptsBackrowCard(
@@ -97,9 +97,10 @@ function defaultAcceptsBackrowCard(
 }
 
 function isRejected(result: BackrowPolicyDecision): boolean {
-  if (result === false) return true;
-  if (!result || typeof result !== "object") return false;
-  return result.ok === false || result.shouldSet === false || result.yes === false;
+  return result === false ||
+    (result as BackrowDecision | null | undefined)?.ok === false ||
+    (result as BackrowDecision | null | undefined)?.shouldSet === false ||
+    (result as BackrowDecision | null | undefined)?.yes === false;
 }
 
 function isUsedIndex(
@@ -175,9 +176,7 @@ export function getGenericSetBackrowActions({
     const policyPriority =
       typeof policy.getPriority === "function"
         ? policy.getPriority(card, context)
-        : typeof setDecision === "object" && setDecision
-          ? setDecision.priority
-          : undefined;
+        : (setDecision as BackrowDecision | null | undefined)?.priority;
     const priority = isFiniteNumber(policyPriority)
       ? policyPriority
       : basePriority;
@@ -185,9 +184,7 @@ export function getGenericSetBackrowActions({
     const policyReason =
       typeof policy.getReason === "function"
         ? policy.getReason(card, context)
-        : typeof setDecision === "object" && setDecision
-          ? setDecision.reason
-          : undefined;
+        : (setDecision as BackrowDecision | null | undefined)?.reason;
     const reason = hasValue(policyReason) ? policyReason : defaultReason;
 
     const extra =

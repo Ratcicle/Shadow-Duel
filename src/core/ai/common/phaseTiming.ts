@@ -62,20 +62,6 @@ interface PhaseTimingContext {
   analysis?: PhaseAnalysis | null;
 }
 
-function asPostBattleHookOwner(
-  value: object | null | undefined,
-): PostBattleHookOwner | null {
-  if (!value) return null;
-  const direct = Reflect.get(value, "isPostBattlePayoffAction");
-  if (typeof direct === "function") return value as PostBattleHookOwner;
-  const nested = Reflect.get(value, "strategy");
-  if (nested && typeof nested === "object") {
-    const nestedHook = Reflect.get(nested, "isPostBattlePayoffAction");
-    if (typeof nestedHook === "function") return nested as PostBattleHookOwner;
-  }
-  return null;
-}
-
 function normalizePhase(
   source: string | PhaseSource | null | undefined,
   analysis: PhaseAnalysis | null = null,
@@ -135,13 +121,13 @@ export function canSetReactiveBackrowNow(
   gameOrState: PhaseSource | null = null,
   analysis: PhaseAnalysis | null = null,
 ): boolean {
-  if (!card || !isReactiveBackrowCard(card)) return false;
+  if (!isReactiveBackrowCard(card)) return false;
   if (!isMain2Phase(gameOrState, analysis)) return false;
   if (isQuickSpellCard(card)) {
     const turnCounter = getTurnCounter(gameOrState, analysis);
     if (
       turnCounter !== null &&
-      Number(card.lastAiActivatedTurn) === turnCounter
+      Number(card!.lastAiActivatedTurn) === turnCounter
     ) {
       return false;
     }
@@ -163,9 +149,8 @@ export function getActionCard(
     context.game?.player ||
     null;
   const hand = context.hand || player?.hand || [];
-  const actionIndex = action.index;
-  if (Number.isInteger(actionIndex) && Array.isArray(hand)) {
-    const handCard = hand[actionIndex as number];
+  if (Number.isInteger(action.index) && Array.isArray(hand)) {
+    const handCard = hand[action.index!];
     if (
       handCard &&
       (!action.cardId || handCard.id === action.cardId) &&
@@ -209,8 +194,17 @@ export function isPostBattlePayoffAction(
 ): boolean {
   if (!action) return false;
   if (action.timingRole === "post_battle_payoff") return true;
-  const hookOwner = asPostBattleHookOwner(context.strategy) ||
-    asPostBattleHookOwner(context.bot?.strategy);
+  const hookOwner =
+    typeof (context.strategy as PostBattleHookOwner | null | undefined)
+        ?.isPostBattlePayoffAction === "function"
+      ? context.strategy as PostBattleHookOwner
+      : typeof (context.strategy as PostBattleHookOwner | null | undefined)
+            ?.strategy?.isPostBattlePayoffAction === "function"
+        ? (context.strategy as PostBattleHookOwner).strategy!
+        : typeof (context.bot?.strategy as PostBattleHookOwner | null | undefined)
+              ?.isPostBattlePayoffAction === "function"
+          ? context.bot!.strategy as PostBattleHookOwner
+          : null;
   const hook = hookOwner?.isPostBattlePayoffAction;
   if (typeof hook !== "function") return false;
   try {

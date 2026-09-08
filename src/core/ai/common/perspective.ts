@@ -11,12 +11,6 @@ interface PerspectiveResolverState extends AiStateInput {
   getOpponent?(player: PerspectivePlayerInput): PerspectivePlayerInput | null;
 }
 
-function projectPlayer(
-  player: PerspectivePlayerInput | null | undefined,
-): SimulatedPlayerState | null {
-  return player ? player as SimulatedPlayerState : null;
-}
-
 interface PerspectivePair {
   self: SimulatedPlayerState | null;
   opponent: SimulatedPlayerState | null;
@@ -57,18 +51,15 @@ export function resolvePerspectivePlayers(
   perspectivePlayer: PerspectivePlayerInput | null | undefined,
 ): PerspectivePair {
   const state = gameOrState || {};
-  const playerSlot = projectPlayer(state.player);
-  const botSlot = projectPlayer(state.bot);
-  const projectedPerspective = projectPlayer(perspectivePlayer);
-  const candidates = [playerSlot, botSlot].filter(
-    (candidate): candidate is SimulatedPlayerState => candidate !== null,
-  );
+  const playerSlot = (state.player || null) as SimulatedPlayerState | null;
+  const botSlot = (state.bot || null) as SimulatedPlayerState | null;
+  const candidates = [playerSlot, botSlot].filter(Boolean) as SimulatedPlayerState[];
 
   const finalize = (
     self: SimulatedPlayerState | null | undefined,
     opponent: SimulatedPlayerState | null | undefined,
   ): PerspectivePair => {
-    const resolvedSelf = self || projectedPerspective || botSlot || playerSlot || null;
+    const resolvedSelf = self || perspectivePlayer as SimulatedPlayerState || botSlot || playerSlot || null;
     let resolvedOpponent = opponent || chooseOtherPlayer(resolvedSelf, candidates);
     if (resolvedSelf && resolvedOpponent === resolvedSelf) {
       resolvedOpponent = chooseOtherPlayer(resolvedSelf, candidates);
@@ -77,31 +68,28 @@ export function resolvePerspectivePlayers(
   };
 
   if (state._isPerspectiveState === true) {
-    if (projectedPerspective && projectedPerspective === playerSlot) {
+    if (perspectivePlayer && perspectivePlayer === playerSlot) {
       return finalize(playerSlot, botSlot);
     }
-    return finalize(botSlot || projectedPerspective, playerSlot);
+    return finalize(botSlot || perspectivePlayer as SimulatedPlayerState, playerSlot);
   }
 
   if (typeof state.getOpponent === "function" && perspectivePlayer) {
-    return finalize(
-      projectedPerspective,
-      projectPlayer(state.getOpponent(perspectivePlayer)),
-    );
+    return finalize(perspectivePlayer as SimulatedPlayerState, state.getOpponent(perspectivePlayer) as SimulatedPlayerState | null);
   }
 
-  if (projectedPerspective && projectedPerspective === botSlot) {
+  if (perspectivePlayer && perspectivePlayer === botSlot) {
     return finalize(botSlot, playerSlot);
   }
-  if (projectedPerspective && projectedPerspective === playerSlot) {
+  if (perspectivePlayer && perspectivePlayer === playerSlot) {
     return finalize(playerSlot, botSlot);
   }
-  if (byId(projectedPerspective, botSlot)) {
+  if (byId(perspectivePlayer as SimulatedPlayerState, botSlot)) {
     return finalize(botSlot, playerSlot);
   }
-  if (byId(projectedPerspective, playerSlot)) {
+  if (byId(perspectivePlayer as SimulatedPlayerState, playerSlot)) {
     return finalize(playerSlot, botSlot);
   }
 
-  return finalize(projectedPerspective || botSlot, playerSlot);
+  return finalize(perspectivePlayer as SimulatedPlayerState || botSlot, playerSlot);
 }

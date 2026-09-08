@@ -14,7 +14,7 @@ interface ResourceThresholds {
 }
 
 interface ResourceEconomyView {
-  countsByZone?: object;
+  countsByZone?: Partial<Record<string, number>>;
   flags?: ResourceFlags;
   resourceName?: string;
   totalAccessibleResources?: number;
@@ -48,10 +48,10 @@ interface ResourcePolicy {
   defaultPreservePenalty?: number;
   penaltyPerResource?: number;
   recoverySpendPenalty?: number;
-  spendModes?: object;
+  spendModes?: Partial<Record<string, ResourceModePolicy>>;
   defaultRecoveryBonus?: number;
   recoveryPreserveBonus?: number;
-  recoveryModes?: object;
+  recoveryModes?: Partial<Record<string, ResourceModePolicy>>;
 }
 
 interface ResourcePressureContext {
@@ -89,15 +89,9 @@ interface ResourceRecoveryInput {
   context?: ResourcePressureContext;
 }
 
-function getModePolicy(
-  modes: object | null | undefined,
-  mode: string,
-): ResourceModePolicy {
-  const value = modes ? Reflect.get(modes, mode) : undefined;
-  return value && typeof value === "object" ? value as ResourceModePolicy : {};
-}
-
-function getCountsByZone(economy: ResourceEconomyView = {}): object {
+function getCountsByZone(
+  economy: ResourceEconomyView = {},
+): Partial<Record<string, number>> {
   return economy.countsByZone || economy.resourceEconomy?.countsByZone || {};
 }
 
@@ -116,7 +110,7 @@ function getZoneCount(
   economy: ResourceEconomyView = {},
   zone = "graveyard",
 ): number {
-  return Number(Reflect.get(getCountsByZone(economy), zone) || 0);
+  return Number(getCountsByZone(economy)[zone] || 0);
 }
 
 function getTotalAccessible(economy: ResourceEconomyView = {}): number {
@@ -196,7 +190,7 @@ export function assessResourceSpend({
   context = {},
 }: ResourceSpendInput = {}) {
   const mode = spend.mode || "cost";
-  const modePolicy = getModePolicy(policy.spendModes, mode);
+  const modePolicy = policy.spendModes?.[mode] || {};
   const zone = spend.zone || modePolicy.zone || policy.primaryZone || "graveyard";
   const amount = Number(spend.amount ?? modePolicy.amount ?? 1);
   const zoneCount = getZoneCount(economy, zone);
@@ -256,7 +250,7 @@ export function assessResourceRecovery({
 }: ResourceRecoveryInput = {}) {
   const pressure = scoreResourcePressure(economy, policy, context);
   const mode = recovery.mode || "recovery";
-  const modePolicy = getModePolicy(policy.recoveryModes, mode);
+  const modePolicy = policy.recoveryModes?.[mode] || {};
   let scoreDelta = Number(recovery.baseDelta ?? modePolicy.baseDelta ?? 0);
 
   if (pressure.shouldRecover) {

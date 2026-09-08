@@ -1,8 +1,5 @@
 import { hasActionZoneCandidates } from "./actionValidation.js";
-import {
-  cardMatchesFilter,
-  getPlayerZoneCards,
-} from "./cardFilters.js";
+import { cardMatchesFilter, getPlayerZoneCards } from "./cardFilters.js";
 import type {
   AiCardFilter,
   AiZonePlayer,
@@ -49,10 +46,6 @@ function normalize(value: unknown): string {
   return value === undefined || value === null ? "" : String(value).toLowerCase();
 }
 
-function isFiniteNumber(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value);
-}
-
 function valuesMatchInsensitive(
   actualValues: unknown | readonly unknown[],
   expectedValues: unknown | readonly unknown[],
@@ -64,7 +57,7 @@ function valuesMatchInsensitive(
 }
 
 function getTargetZones(
-  targetSpec: AvailabilityTargetSpec = { id: "" },
+  targetSpec: AvailabilityTargetSpec = {},
 ): readonly string[] {
   if (Array.isArray(targetSpec.zones) && targetSpec.zones.length > 0) {
     return targetSpec.zones.filter(Boolean);
@@ -77,15 +70,11 @@ function getTargetOwners(
   ownerRule: EffectOwner | "either" | undefined,
   context: TargetAvailabilityContext = {},
 ): AiZonePlayer[] {
-  if (ownerRule === "opponent") {
-    return context.opponent ? [context.opponent] : [];
-  }
+  if (ownerRule === "opponent") return [context.opponent].filter(Boolean) as AiZonePlayer[];
   if (ownerRule === "any" || ownerRule === "either") {
-    return [context.player, context.opponent].filter(
-      (owner): owner is AiZonePlayer => !!owner,
-    );
+    return [context.player, context.opponent].filter(Boolean) as AiZonePlayer[];
   }
-  return context.player ? [context.player] : [];
+  return [context.player].filter(Boolean) as AiZonePlayer[];
 }
 
 function getOwnerRole(
@@ -97,7 +86,7 @@ function getOwnerRole(
 }
 
 function getTargetFilter(
-  targetSpec: AvailabilityTargetSpec = { id: "" },
+  targetSpec: AvailabilityTargetSpec = {},
 ): AiCardFilter {
   const { id: _id, owner: _owner, zones: _zones, zone: _zone, anyOf: _anyOf, ...filter } =
     targetSpec;
@@ -105,7 +94,7 @@ function getTargetFilter(
 }
 
 function getTypeFilter(
-  targetSpec: AvailabilityTargetSpec = { id: "" },
+  targetSpec: AvailabilityTargetSpec = {},
 ): AvailabilityTargetSpec["type"] {
   return targetSpec.type ?? targetSpec.filters?.type;
 }
@@ -129,23 +118,23 @@ function removeManuallyHandledFilters(
 
 function matchesLevel(
   card: FilterableCard | null | undefined,
-  targetSpec: AvailabilityTargetSpec = { id: "" },
+  targetSpec: AvailabilityTargetSpec = {},
 ): boolean {
   const expected = targetSpec.level ?? targetSpec.filters?.level;
-  if (!isFiniteNumber(expected)) return true;
+  if (!Number.isFinite(expected)) return true;
 
   const level = Number(card?.level || 0);
   const op = targetSpec.levelOp || targetSpec.filters?.levelOp || "eq";
-  if (op === "lte") return level <= expected;
-  if (op === "gte") return level >= expected;
-  if (op === "lt") return level < expected;
-  if (op === "gt") return level > expected;
-  return level === expected;
+  if (op === "lte") return level <= expected!;
+  if (op === "gte") return level >= expected!;
+  if (op === "lt") return level < expected!;
+  if (op === "gt") return level > expected!;
+  return level === expected!;
 }
 
 function matchesOwnerFilter(
   ownerRole: AvailabilityOwnerRole,
-  filter: AvailabilityTargetSpec = { id: "" },
+  filter: AvailabilityTargetSpec = {},
 ): boolean {
   const owner = filter?.owner ?? filter?.filters?.owner;
   if (!owner || owner === "any" || owner === "either") {
@@ -156,7 +145,7 @@ function matchesOwnerFilter(
 
 function matchesTargetFilter(
   card: FilterableCard | null | undefined,
-  targetSpec: AvailabilityTargetSpec = { id: "" },
+  targetSpec: AvailabilityTargetSpec = {},
   context: TargetAvailabilityContext = {},
   ownerRole: AvailabilityOwnerRole = "self",
 ): boolean {
@@ -188,7 +177,7 @@ function matchesTargetFilter(
 
 function matchesAnyOf(
   card: FilterableCard | null | undefined,
-  targetSpec: AvailabilityTargetSpec = { id: "" },
+  targetSpec: AvailabilityTargetSpec = {},
   context: TargetAvailabilityContext = {},
   ownerRole: AvailabilityOwnerRole = "self",
 ): boolean {

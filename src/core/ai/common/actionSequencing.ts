@@ -30,12 +30,8 @@ export function sequenceActionsByPriority<Action extends SequencedAction>(
       const priorityB = b.action?.priority ?? 0;
       if (priorityA !== priorityB) return priorityB - priorityA;
 
-      const typeA = a.action.type === undefined
-        ? defaultTypeOrder
-        : typeOrder[a.action.type] ?? defaultTypeOrder;
-      const typeB = b.action.type === undefined
-        ? defaultTypeOrder
-        : typeOrder[b.action.type] ?? defaultTypeOrder;
+      const typeA = typeOrder[a.action?.type as string] ?? defaultTypeOrder;
+      const typeB = typeOrder[b.action?.type as string] ?? defaultTypeOrder;
       if (typeA !== typeB) return typeA - typeB;
 
       return stable ? a.index - b.index : 0;
