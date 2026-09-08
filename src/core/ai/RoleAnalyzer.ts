@@ -20,6 +20,7 @@ export type StrategicRole =
   | "payoff"
   | "disruption"
   | "beater"
+  | "defender"
   | "unknown";
 
 export interface StrategicEffectView {
