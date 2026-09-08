@@ -97,8 +97,8 @@ export function getSimStateSignature(
       : {};
 
   return JSON.stringify({
-    bot: summarizePlayer(state?.bot || undefined, options),
-    player: summarizePlayer(state?.player || undefined, options),
+    bot: summarizePlayer(state?.bot as SimPlayerSummaryInput, options),
+    player: summarizePlayer(state?.player as SimPlayerSummaryInput, options),
     ...extraState,
   });
 }

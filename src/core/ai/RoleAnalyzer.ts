@@ -35,7 +35,7 @@ export type StrategicCardView = Partial<Omit<GameCard, "effects">> & {
 
 /**
  * Infere o papel estratégico de uma carta baseado em seus efeitos.
- * @param {Object} card - A carta a analisar
+ * @param {object} card - A carta a analisar
  * @returns {string} - Role: "extender", "removal", "searcher", "draw_engine",
  *                     "recursion", "combat_buff", "debuff", "protection",
  *                     "payoff", "disruption", "beater", "unknown"
@@ -162,7 +162,7 @@ export function inferRole(card: StrategicCardView | null | undefined): Strategic
 
 /**
  * Retorna TODOS os papéis que uma carta pode ter.
- * @param {Object} card
+ * @param {object} card
  * @returns {string[]}
  */
 export function inferAllRoles(
@@ -232,7 +232,7 @@ export function inferAllRoles(
 
 /**
  * Calcula a "urgência" de um efeito (quão rápido ele pode ser ativado).
- * @param {Object} effect - Um effect da carta
+ * @param {object} effect - Um effect da carta
  * @returns {number} - 0.0 (não urgente) a 1.0 (imediato)
  */
 export function calculateEffectUrgency(
@@ -263,7 +263,7 @@ export function calculateEffectUrgency(
 
 /**
  * Calcula o impacto de uma ação no jogo.
- * @param {Object} action - Uma action da carta
+ * @param {object} action - Uma action da carta
  * @returns {number} - Impacto estimado (0.0 a 2.0+)
  */
 export function calculateActionImpact(
@@ -293,7 +293,7 @@ export function calculateActionImpact(
 
 /**
  * Determina se uma carta é um "gerador de vantagem" (card advantage engine).
- * @param {Object} card
+ * @param {object} card
  * @returns {boolean}
  */
 export function isAdvantageEngine(
@@ -305,7 +305,7 @@ export function isAdvantageEngine(
 
 /**
  * Determina se uma carta é "proativa" (faz algo imediatamente).
- * @param {Object} card
+ * @param {object} card
  * @returns {boolean}
  */
 export function isProactive(card: StrategicCardView): boolean {
@@ -320,7 +320,7 @@ export function isProactive(card: StrategicCardView): boolean {
 
 /**
  * Determina se uma carta é "reativa" (responde a eventos).
- * @param {Object} card
+ * @param {object} card
  * @returns {boolean}
  */
 export function isReactive(card: StrategicCardView): boolean {
