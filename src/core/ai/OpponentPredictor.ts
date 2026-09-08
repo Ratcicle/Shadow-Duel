@@ -50,7 +50,8 @@ export interface OpponentAnalysis {
 
 const safeList = <Value>(
   list: readonly (Value | null | undefined)[] | null | undefined,
-): Value[] => (Array.isArray(list) ? list.filter((value) => value != null) : []);
+): Value[] =>
+  (Array.isArray(list) ? list.filter(Boolean) : []) as Value[];
 const shouldLogWarnings = (
   ...states: readonly (OpponentPlayerView | null | undefined)[]
 ) =>
@@ -195,8 +196,7 @@ function predictNextOppMove(
       }
 
       // 4. Defensores (se oponente em LP baixo)
-      const roleLabel: string = role;
-      if (roleLabel === "defender" && (opponentState.lp || 0) <= 4000) {
+      if (role === "defender" && (opponentState.lp || 0) <= 4000) {
         score += 2;
       }
 
@@ -279,7 +279,7 @@ export function estimateOppDamage(
   try {
     if (!opponentState) return 0;
 
-    const field = safeList(opponentState.field);
+    const field = (opponentState.field || []) as readonly StrategicCardView[];
     const totalATK = field.reduce((sum, m) => sum + (m.atk || 0), 0);
 
     // Assume ataque direto com todos (simplificação)

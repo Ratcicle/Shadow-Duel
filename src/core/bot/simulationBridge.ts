@@ -12,10 +12,10 @@ import type {
 } from "../contracts/aiState.js";
 
 interface SimulationBotPort extends SimulatedPlayerState {
-  strategy: Pick<
+  strategy: Required<Pick<
     StrategyRuntimePort,
     "simulateMainPhaseAction" | "simulateSpellEffect"
-  >;
+  >>;
   resolveOpponent(game: AiLiveGamePort): SimulatedPlayerState | null;
 }
 
@@ -24,6 +24,10 @@ type CloneablePlayerInput = AiPlayerInput & {
   field: NonNullable<AiPlayerInput["field"]>;
   graveyard: NonNullable<AiPlayerInput["graveyard"]>;
 };
+
+interface BotCloneGamePort extends Omit<AiLiveGamePort, "player"> {
+  player: CloneablePlayerInput;
+}
 
 export function simulateBotMainPhaseAction(
   bot: SimulationBotPort,
@@ -38,23 +42,20 @@ export function simulateBotSpellEffect(
   state: SimulationGameState | BotPerspectiveGameState,
   card: SimulatedCardState,
 ) {
-  return bot.strategy.simulateSpellEffect?.(state, card);
+  return bot.strategy.simulateSpellEffect(state, card);
 }
 
 export function cloneBotGameState(
   bot: SimulationBotPort,
-  game: AiLiveGamePort,
+  game: BotCloneGamePort,
 ): BotPerspectiveGameState {
-  const clonePlayer = (p: AiPlayerInput): SimulatedPlayerState => {
-    // Live Player instances always own these three core zones. Keep the
-    // permissive input port for legacy fixtures without adding runtime defaults.
-    const cloneablePlayer = p as CloneablePlayerInput;
+  const clonePlayer = (p: CloneablePlayerInput): SimulatedPlayerState => {
     return {
       id: p.id,
       lp: p.lp,
-      hand: cloneablePlayer.hand.map((c) => ({ ...c })),
-      field: cloneablePlayer.field.map((c) => ({ ...c })),
-      graveyard: cloneablePlayer.graveyard.map((c) => ({ ...c })),
+      hand: p.hand.map((c) => ({ ...c })),
+      field: p.field.map((c) => ({ ...c })),
+      graveyard: p.graveyard.map((c) => ({ ...c })),
       deck: p.deck ? p.deck.map((c) => ({ ...c })) : [],
       extraDeck: p.extraDeck ? p.extraDeck.map((c) => ({ ...c })) : [],
       banished: p.banished ? p.banished.map((c) => ({ ...c })) : [],
