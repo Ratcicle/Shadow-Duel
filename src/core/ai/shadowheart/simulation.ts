@@ -90,7 +90,7 @@ interface ShadowActionExtras {
   maxAtk?: number;
   subtype?: ShadowSearchFilters["subtype"];
   cannotAttackThisTurn?: boolean;
-  fusionTargetHint?: string;
+  fusionTargetHint?: string | null;
   cathedralPlan?: {
     counterCount?: number;
     targetName?: string | null;
@@ -155,7 +155,7 @@ interface ShadowSimulationOptions extends ShadowStrategyOptions {
     StrategyRuntimePort,
     "simulateMainPhaseAction" | "simulateSpellEffect"
   > & ShadowStrategyOptions;
-  evaluateRecruitCandidate?: (...args: unknown[]) => unknown;
+  evaluateRecruitCandidate?: (candidates: SimulatedCardState[], context?: Parameters<typeof evaluateShadowHeartRecruitCandidate>[1]) => ReturnType<typeof evaluateShadowHeartRecruitCandidate<SimulatedCardState>>;
   activationContext?: AIActivationContext | null;
 }
 

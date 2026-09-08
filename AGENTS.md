@@ -57,7 +57,7 @@ src/data/cards.js             # Banco de cartas 100% declarativo (~5700 linhas)
 **Módulos auxiliares no topo de [src/core/](src/core/):**
 
 - **UI:** [src/ui/Renderer.js](src/ui/Renderer.js), [src/core/UIAdapter.js](src/core/UIAdapter.js)
-- **Bot/AI:** [Bot.js](src/core/Bot.js), [BotArena.js](src/core/BotArena.js), [BotLogger.js](src/core/BotLogger.js), [src/core/ai/](src/core/ai/) (estratégias por arquétipo)
+- **Bot/AI:** [Bot.ts](src/core/Bot.ts), [BotArena.ts](src/core/BotArena.ts), [BotLogger.ts](src/core/BotLogger.ts), [src/core/ai/](src/core/ai/) (estratégias por arquétipo)
 - **Auto-resolução:** [AutoSelector.ts](src/core/AutoSelector.ts) — escolhas automáticas para IA durante targeting (uso restrito a bot/IA)
 - **Validação:** [CardDatabaseValidator.js](src/core/CardDatabaseValidator.js) — bloqueia duelo se cartas tiverem erros
 - **Chain (mock):** [NullChainSystem.ts](src/core/NullChainSystem.ts) — implementação no-op para fluxos sem chain, compatível com o `ChainRuntimePort` mínimo
@@ -139,18 +139,19 @@ Os métodos anexados são expostos no tipo da fachada por declaration merging, s
 ### Executar / Testar
 
 ```bash
-npm run dev                   # Inicia servidor local (porta 3000) — alias para `serve .`
-# ou
-npx serve                     # Equivalente, sem precisar instalar deps
+npm ci                        # Instala dependências do lockfile
+npm run dev                   # Inicia o servidor Vite
+npm run check                 # Tipos, testes, auditorias, digest e build
+npm run preview               # Serve o build de produção localmente
 ```
 
-O projeto usa ES modules nativos do navegador. O [package.json](package.json) declara apenas `serve` como devDependency e expõe o script `dev`. Qualquer servidor HTTP estático funciona.
+O projeto usa TypeScript e Vite, com Node 22 (`>=22.12.0 <23`). Os imports relativos preservam specifiers `.js`, resolvidos para os arquivos físicos `.ts` pelo toolchain. Para distribuição estática, use `npm run build` e publique `dist/`.
 
-**Bot Arena** — Modo de teste visual ([BotArena.js](src/core/BotArena.js)):
+**Bot Arena** — Modo de teste visual ([BotArena.ts](src/core/BotArena.ts)):
 
 - Acesse pelo botão "Bot Arena" na tela inicial
 - Testa AI vs AI com velocidades: 1x, 2x, 4x, instant
-- Gera analytics: win rate, tempo de decisão, opening book (ver [ArenaAnalytics.js](src/core/ai/ArenaAnalytics.js))
+- Gera analytics: win rate, tempo de decisão, opening book (ver [ArenaAnalytics.ts](src/core/ai/ArenaAnalytics.ts))
 - Presets disponíveis: `shadowheart`, `luminarch`, `void`, `dragon`, `arcanist`, `miragebound`, `bloomrot`, `burningwest`
 
 **Flags de dev** (via `localStorage.setItem(key, "true")`):
@@ -321,16 +322,17 @@ oncePerTurn: true, oncePerTurnName: "Unique Effect Name"
 
 **Estrutura:** [src/core/ai/](src/core/ai/)
 
-A Etapa 9 está dividida em dois PRs. No PR 9A, contratos, simulação,
-utilitários e buscas já migrados são arquivos físicos `.ts`; consumidores
-continuam usando specifiers `.js`. `BaseStrategy`, strategies concretas,
-registry, Bot e Arena permanecem `.js` até o PR 9B.
+A Etapa 9 está dividida em dois PRs. O PR 9A migrou contratos, simulação,
+utilitários e buscas. O PR 9B migra `BaseStrategy`, as oito estratégias,
+suas bases por arquétipo, registry, Bot e Arena para arquivos físicos `.ts`.
+Consumidores continuam usando specifiers `.js`. Os contratos públicos
+verificam tanto o jogo real quanto as projeções de leitura usadas na simulação.
 
 Núcleo de estratégias e busca:
 
-- `BaseStrategy.js` — Avaliação de board genérica (`evaluateBoardV2`)
-- `ShadowHeartStrategy.js`, `LuminarchStrategy.js`, `VoidStrategy.js` — Heurísticas por arquétipo
-- `StrategyRegistry.js` — Registro de estratégias
+- `BaseStrategy.ts` — Avaliação de board genérica (`evaluateBoardV2`)
+- `ShadowHeartStrategy.ts`, `LuminarchStrategy.ts`, `VoidStrategy.ts` — Heurísticas por arquétipo
+- `StrategyRegistry.ts` — Registro de estratégias
 - `StrategyUtils.ts` — Helpers compartilhados entre estratégias
 - `BeamSearch.ts` — Busca de ações ótimas com beam width
 - `TurnLineSearch.ts` — Planejamento tipado de linhas de turno
@@ -340,20 +342,20 @@ Núcleo de estratégias e busca:
 - `MacroPlanning.ts` — Planejamento multi-turno
 - `OpponentPredictor.ts` — Modelo do oponente para previsão
 - `RoleAnalyzer.ts` — Classificação de papéis das cartas em jogo
-- `ArenaAnalytics.js` — Métricas para o Bot Arena
+- `ArenaAnalytics.ts` — Métricas para o Bot Arena
 
 Subpastas (knowledge bases por arquétipo + replays):
 
-- `shadowheart/` — `simulation.ts` tipado; `combos`, `knowledge`, `priorities` e `scoring` ainda no PR 9B
-- `luminarch/` — `simulation.ts` tipado; `cardValue`, `combos`, `fusionPriority`, `knowledge`, `multiTurnPlanning` e `priorities` ainda no PR 9B
-- `dragon/` — `simulation.ts` tipado; knowledge base, políticas, scoring e planejamento ainda no PR 9B
+- `shadowheart/` — Simulação, combos, conhecimento, prioridades, scoring e planejamento em TypeScript
+- `luminarch/` — Simulação, prioridades, políticas de recursos, fusões e planejamento em TypeScript
+- `dragon/` — Simulação, conhecimento, políticas, scoring e planejamento em TypeScript
 - `void/` — `combos`, `knowledge`, `priorities`, `scoring`
 - `replay/` — `ReplayAnalyzer`, `ReplayDatabase`, `ReplayImporter`, `ReplayInsights`, `PatternMatcher`
 
 **Criar nova estratégia:**
 
 1. Crie arquivo em `src/core/ai/` estendendo `BaseStrategy`
-2. Registre em `StrategyRegistry.js`:
+2. Registre em `StrategyRegistry.ts`:
 
 ```js
 import MyStrategy from "./MyStrategy.js";
@@ -366,7 +368,7 @@ registerStrategy("my_archetype", MyStrategy);
 - `BeamSearch` / `GameTreeSearch` exploram árvore de jogadas
 - Os quatro perfis de clone — Bot, Beam/Greedy, GameTree e TurnLine — permanecem separados e têm contratos explícitos em `contracts/aiState.ts`
 - `common/` e `common/simulatedActions/` são TypeScript físico; preserve `.js` nos imports relativos
-- Knowledge bases em subpastas definem prioridades e combos (ex.: `luminarch/fusionPriority.js`)
+- Knowledge bases em subpastas definem prioridades e combos (ex.: `luminarch/fusionPriority.ts`)
 - AI usa `game.autoSelector` ([AutoSelector.ts](src/core/AutoSelector.ts)) para escolhas automáticas em targeting — **nunca** para automatizar decisões de jogadores humanos
 
 ---

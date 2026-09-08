@@ -1,9 +1,18 @@
-import type { SimulatedCardState } from "../../contracts/aiState.js";
-import type { ActionType } from "../../contracts/actions.js";
-import type { EffectDefinition } from "../../contracts/effects.js";
-import type { CanonicalZone } from "../../contracts/zones.js";
+import type {
+  GameCard,
+} from "../../contracts/cards.js";
+type EffectCardView = Pick<Partial<GameCard>, "effects">;
+import type {
+  ActionType,
+} from "../../contracts/actions.js";
+import type {
+  EffectDefinition,
+} from "../../contracts/effects.js";
+import type {
+  CanonicalZone,
+} from "../../contracts/zones.js";
 
-function getEffects(card: SimulatedCardState | null | undefined): readonly EffectDefinition[] {
+function getEffects(card: EffectCardView | null | undefined): readonly EffectDefinition[] {
   return Array.isArray(card?.effects) ? card.effects : [];
 }
 
@@ -23,7 +32,7 @@ function ignitionEffectMatchesZone(
 }
 
 export function findIgnitionEffects(
-  card: SimulatedCardState | null | undefined,
+  card: EffectCardView | null | undefined,
   zone: CanonicalZone | null = null,
 ): EffectDefinition[] {
   return getEffects(card).filter((effect) =>
@@ -32,14 +41,14 @@ export function findIgnitionEffects(
 }
 
 export function findIgnitionEffect(
-  card: SimulatedCardState | null | undefined,
+  card: EffectCardView | null | undefined,
   zone: CanonicalZone | null = null,
 ): EffectDefinition | null {
   return findIgnitionEffects(card, zone)[0] || null;
 }
 
 export function findSpellActivationEffect(
-  card: SimulatedCardState | null | undefined,
+  card: EffectCardView | null | undefined,
   _game: unknown = null,
   options: { timings?: readonly EffectDefinition["timing"][] } = {},
 ): EffectDefinition | null {
@@ -52,7 +61,7 @@ export function findSpellActivationEffect(
 }
 
 export function findFieldSpellEffect(
-  card: SimulatedCardState | null | undefined,
+  card: EffectCardView | null | undefined,
 ): EffectDefinition | null {
   return (
     getEffects(card).find((effect) => effect?.timing === "on_field_activate") ||
@@ -61,7 +70,7 @@ export function findFieldSpellEffect(
 }
 
 export function hasOncePerTurnEffect(
-  card: SimulatedCardState | null | undefined,
+  card: EffectCardView | null | undefined,
 ): boolean {
   return getEffects(card).some(
     (effect) => effect?.oncePerTurn || effect?.oncePerTurnName,
@@ -80,7 +89,7 @@ export function effectHasActionType(
 }
 
 export function cardHasActionType(
-  card: SimulatedCardState | null | undefined,
+  card: EffectCardView | null | undefined,
   actionType: ActionType | readonly ActionType[],
 ): boolean {
   return getEffects(card).some((effect) =>

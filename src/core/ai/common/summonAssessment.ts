@@ -5,10 +5,10 @@ import {
   getStrongestBattleStat,
 } from "./cardStats.js";
 import type { GameCard } from "../../contracts/cards.js";
-import type { SimulatedCardState } from "../../contracts/aiState.js";
+import type { SimulatedCardShape } from "../../contracts/aiState.js";
 
 type SummonPosition = "attack" | "defense";
-type SummonAssessmentCard = (GameCard | SimulatedCardState) & {
+type SummonAssessmentCard = (GameCard | SimulatedCardShape) & {
   faceDown?: boolean;
 };
 type CardValueCollection<Value> =

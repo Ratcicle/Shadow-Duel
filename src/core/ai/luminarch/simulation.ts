@@ -14,16 +14,11 @@ import { isLuminarch } from "./knowledge.js";
 import { shouldPlaySpell } from "./priorities.js";
 import type {
   AIAction,
+  AIStrategyBotPort,
   AIActivationContext,
   AIPlannedAction,
 } from "../../contracts/ai.js";
-import type {
-  PerspectiveGameState,
-  SimulatedCardState,
-  SimulatedLuminarchState,
-  SimulatedPlayerState,
-  SimulationGameState,
-} from "../../contracts/aiState.js";
+import type { PerspectiveGameState, SimulatedCardState, SimulatedLuminarchState, SimulatedPlayerState, SimulationGameState } from "../../contracts/aiState.js";
 import type { EffectDefinition } from "../../contracts/effects.js";
 import type { GameCard } from "../../contracts/cards.js";
 
@@ -46,9 +41,9 @@ type LuminarchPositionName =
   | "Luminarch Valiant - Knight of the Dawn";
 
 interface LuminarchActionContext {
-  preferredSearchNames?: string[];
+  preferredSearchNames?: Array<string | undefined>;
   specialSummonPositions?: {
-    byTargetRef?: Partial<Record<"moonblade_revive_target", "attack" | "defense">>;
+    byTargetRef?: Partial<Record<"moonblade_revive_target", "attack" | "defense" | "choice">>;
     byName?: Partial<Record<LuminarchPositionName, "attack" | "defense">>;
     default?: "attack" | "defense";
   };
@@ -87,10 +82,11 @@ type PreparedLuminarchAction = AIPlannedAction & {
 };
 
 interface LuminarchStrategyContext {
-  bot?: SimulatedPlayerState;
+  bot?: AIStrategyBotPort;
 }
 
-interface LuminarchSimulationOptions {
+interface LuminarchSimulationOptions extends Pick<NonNullable<Parameters<typeof applyGenericSimulatedMainPhaseAction>[2]>, "getTributeRequirementFor" | "selectBestTributes" | "placeSpellCard"> {
+  chooseSummonPosition?(card: SimulatedCardState, game: LuminarchState): "attack" | "defense";
   strategy?: LuminarchStrategyContext;
   getOpponent?: (
     state: LuminarchState,
@@ -259,14 +255,14 @@ interface ApplyLuminarchBattleRewardsInput {
 }
 
 interface ScoreLuminarchBattleInput {
-  attacker?: SimulatedCardState;
-  target?: SimulatedCardState | null;
+  attacker?: LuminarchBattleReadCard | null;
+  target?: LuminarchBattleReadCard | null;
   lethalNow?: boolean;
   attackerSurvived?: boolean;
   targetSurvived?: boolean;
-  summary?: LuminarchBattleSummary;
-  simState?: LuminarchState;
-  opponent?: Partial<SimulatedPlayerState>;
+  summary?: LuminarchBattleReadSummary;
+  simState?: LuminarchBattleReadState;
+  opponent?: LuminarchBattleReadPlayer;
   isSecondAttack?: boolean;
 }
 
@@ -852,7 +848,7 @@ function getActionContext(
 }
 
 function getPreferredSpecialSummonPosition(
-  card: SimulatedCardState,
+  card: LuminarchBattleReadCard,
   context: LuminarchPositionContext = {},
 ): "attack" | "defense" | null {
   const actionContext = getActionContext(context);
@@ -876,7 +872,7 @@ function getPreferredSpecialSummonPosition(
 }
 
 export function chooseLuminarchSpecialSummonPosition(
-  card: SimulatedCardState,
+  card: LuminarchBattleReadCard,
   context: LuminarchPositionContext = {},
 ): "attack" | "defense" {
   const actionPosition = context.action?.position;
@@ -1561,7 +1557,7 @@ function clampBattleScore(value: number, min: number, max: number): number {
 }
 
 function getBattleCardValue(
-  card: SimulatedCardState | null | undefined,
+  card: LuminarchBattleReadCard | null | undefined,
 ): number {
   if (!card || card.cardKind !== "monster") return 0;
   const battleStat = getBattleStatForAttackTarget(card, { facedownValue: 1500 });
@@ -1571,7 +1567,7 @@ function getBattleCardValue(
 }
 
 function getRawBattleStatForAttackTarget(
-  card: SimulatedCardState | null | undefined,
+  card: LuminarchBattleReadCard | null | undefined,
   { facedownValue = 1500 }: { facedownValue?: number } = {},
 ): number {
   if (!card || card.cardKind !== "monster") return 0;
@@ -1582,7 +1578,7 @@ function getRawBattleStatForAttackTarget(
 }
 
 function isTemporarilyZeroedBattleTarget(
-  card: SimulatedCardState | null | undefined,
+  card: LuminarchBattleReadCard | null | undefined,
 ): boolean {
   if (!card || card.cardKind !== "monster" || card.isFacedown) return false;
   const battleStat = getRawBattleStatForAttackTarget(card);
@@ -1595,8 +1591,8 @@ function isTemporarilyZeroedBattleTarget(
 }
 
 function estimateRawBattleDamage(
-  attacker: SimulatedCardState | null | undefined,
-  target: SimulatedCardState | null | undefined,
+  attacker: LuminarchBattleReadCard | null | undefined,
+  target: LuminarchBattleReadCard | null | undefined,
 ): number {
   if (!attacker || !target || target.cardKind !== "monster") return 0;
   const attack = Math.max(0, Number(attacker.atk || 0));
@@ -1607,8 +1603,8 @@ function estimateRawBattleDamage(
 }
 
 function sameBattleCardIdentity(
-  a: SimulatedCardState | null | undefined,
-  b: SimulatedCardState | null | undefined,
+  a: LuminarchBattleReadCard | null | undefined,
+  b: LuminarchBattleReadCard | null | undefined,
 ): boolean {
   if (!a || !b) return false;
   if (a === b) return true;
@@ -1619,8 +1615,8 @@ function sameBattleCardIdentity(
 }
 
 function hasOtherZeroedAttackTarget(
-  opponent: Partial<SimulatedPlayerState> = {},
-  target: SimulatedCardState | null | undefined,
+  opponent: LuminarchBattleReadPlayer = {},
+  target: LuminarchBattleReadCard | null | undefined,
 ): boolean {
   return (opponent.field || []).some(
     (card) =>
@@ -1631,7 +1627,7 @@ function hasOtherZeroedAttackTarget(
   );
 }
 
-function getSummaryLpGain(summary: LuminarchBattleSummary = {}): number {
+function getSummaryLpGain(summary: LuminarchBattleReadSummary = {}): number {
   return (summary.lpGains || []).reduce(
     (sum, gain) => sum + Math.max(0, Number(gain?.amount || 0)),
     0,
@@ -1639,7 +1635,7 @@ function getSummaryLpGain(summary: LuminarchBattleSummary = {}): number {
 }
 
 function getVisibleAttackTotal(
-  player: Partial<SimulatedPlayerState> = {},
+  player: LuminarchBattleReadPlayer = {},
 ): number {
   return (player.field || []).reduce((sum, card) => {
     if (!card || card.cardKind !== "monster" || card.isFacedown) return sum;
@@ -1648,7 +1644,7 @@ function getVisibleAttackTotal(
   }, 0);
 }
 
-function rewardMatches(rewards: string[] = [], pattern: RegExp): boolean {
+function rewardMatches(rewards: unknown[] = [], pattern: RegExp): boolean {
   return rewards.some((name) => pattern.test(String(name || "")));
 }
 
@@ -1838,3 +1834,8 @@ export function simulateLuminarchSpellEffect(
     ...options,
   });
 }
+
+type LuminarchBattleReadCard = Pick<import("../../contracts/aiState.js").SimulatedCardShape,"name"|"archetype"|"archetypes"|"cardKind"|"atk"|"def"|"level"|"position"|"isFacedown"|"tempAtkBoost"|"tempDefBoost"|"equipAtkBonus"|"equipDefBonus"|"piercing"|"piercingDamageMultiplier"|"mustBeAttacked"|"instanceId">;
+interface LuminarchBattleReadPlayer {field?: LuminarchBattleReadCard[];lp?:number}
+interface LuminarchBattleReadState {bot?:LuminarchBattleReadPlayer|null;player?:LuminarchBattleReadPlayer|null;_simLuminarch?:{battleEvents?:Array<{tag?:string}>}}
+interface LuminarchBattleReadSummary {rewardNames?:unknown[];damage?:number;lpGains?:Array<{amount?:number}>}

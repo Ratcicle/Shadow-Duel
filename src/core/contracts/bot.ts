@@ -5,6 +5,9 @@ import type {
   AIStrategyBotPort,
   BattleCandidate,
   StrategyRuntimePort,
+  AITributeRequirement,
+  AITributeTradeResult,
+  AIState,
 } from "./ai.js";
 import type {
   AiLiveGamePort,
@@ -15,6 +18,7 @@ import type {
 } from "./aiState.js";
 import type {
   BattlePosition,
+  BattlePositionInput,
   CardKind,
   GameCard,
 } from "./cards.js";
@@ -22,6 +26,71 @@ import type { MaybePromise } from "./decisions.js";
 import type { GamePhase } from "./game.js";
 import type { GamePlayer } from "./player.js";
 import type { PlayerId, RawCardDefinitionId } from "./primitives.js";
+import type Game from "../Game.js";
+import type { PlayerGamePort, EffectEngineRuntimePort } from "./gameRuntime.js";
+import type { PlayerStrategyPort } from "./player.js";
+import type { EffectDefinition } from "./effects.js";
+import type { AIActivationContext } from "./ai.js";
+import type { CanonicalZone } from "./zones.js";
+import type { ActivationPipelineContext } from "./activation.js";
+import type { BotCloneGamePort } from "../bot/simulationBridge.js";
+import type { BattleCandidateScoreInput } from "../ai/TurnLineSearch.js";
+
+type BotGameMethodName =
+  | "canStartAction" | "nextPhase" | "updateBoard" | "waitForBoardPresentation"
+  | "waitForAiPresentationStep" | "isDisposed" | "getOpponent"
+  | "performAscensionSummon" | "performExtraDeckSummonProcedure" | "performNormalSummon"
+  | "canUseAsAscensionMaterial" | "getAscensionCandidatesForMaterial" | "checkAscensionRequirements"
+  | "canSummonExtraDeckCardByProcedure" | "canChangePosition" | "changeMonsterPosition"
+  | "getAttackAvailability" | "isActiveAttackPriorityTarget" | "resolveCombat"
+  | "commitCardActivationFromHand" | "runActivationPipeline" | "setSpellOrTrap"
+  | "finalizeSpellCardActivation" | "finalizeSpellTrapActivation" | "canPlaceCardOnField";
+
+type BotGameMethods = {
+  [Key in BotGameMethodName]: OmitThisParameter<Game[Key]>;
+};
+
+export interface BotAutomaticAscensionChoice {
+  material: GameCard;
+  ascensionCard: GameCard;
+  position?: BattlePositionInput;
+  skip?: boolean;
+}
+
+export interface BotAscensionContext {
+  material: GameCard;
+  ascensionCard: GameCard;
+  game: BotGamePort;
+  bot: BotRuntimePort;
+  opponent: GamePlayer | null;
+}
+
+export interface BotStrategyPort extends StrategyRuntimePort, PlayerStrategyPort {
+  simulateSpellEffect: NonNullable<StrategyRuntimePort["simulateSpellEffect"]>;
+  evaluateBoardV2(state: AIState, perspective?: SimulatedPlayerState): number;
+  sequenceActions(actions: AIAction[]): AIAction[];
+  getTributeRequirementFor(card: SimulatedCardState, player: SimulatedPlayerState): AITributeRequirement;
+  selectBestTributes(field: SimulatedCardState[], count: number, card: SimulatedCardState, context?: unknown): number[];
+  shouldUseAutomaticAscensionShortcut?(game: BotGamePort, bot: BotRuntimePort): boolean;
+  selectAutomaticAscension?(context: Omit<BotAscensionContext, "material" | "ascensionCard"> & {
+    choices: BotAutomaticAscensionChoice[];
+  }): Partial<BotAutomaticAscensionChoice> | null;
+  chooseAutomaticAscensionPosition?(context: BotAscensionContext): BattlePositionInput | null;
+  scoreBattleAttackCandidate?(context: {
+    attacker: GameCard;
+    target: GameCard | null;
+    baseDelta: number;
+    simState: BotPerspectiveGameState;
+    game: BotGamePort;
+    bot: BotRuntimePort;
+    opponent: GamePlayer;
+    isSecondAttack: boolean;
+    attackerSurvived: boolean;
+    targetSurvived: boolean;
+    lethalNow: boolean;
+    opponentLpAfter: number;
+  } | BattleCandidateScoreInput): number | { scoreDelta: number } | null;
+}
 
 export type BotArchetypeId =
   | "shadowheart"
@@ -45,7 +114,7 @@ export interface BotActionGuardResult {
   code?: string | null;
 }
 
-export interface BotEffectEnginePort {
+export interface BotEffectEnginePort extends EffectEngineRuntimePort {
   usedThisTurn?: ReadonlyMap<string, number>;
   canActivateSpellFromHandPreview?(
     card: GameCard,
@@ -66,9 +135,15 @@ export interface BotEffectEnginePort {
     selections?: unknown,
     options?: unknown,
   ): BotActionGuardResult | null;
+  canActivateFieldSpellEffectPreview?(card: GameCard, player: GamePlayer, selections?: unknown, options?: unknown): BotActionGuardResult | null;
+  getSpellTrapActivationEffect?(card: GameCard, context?: AIActivationContext): EffectDefinition | null;
+  getFieldSpellActivationEffect?(card: GameCard): EffectDefinition | null;
+  activateSpellTrapEffect(card: GameCard, player: GamePlayer, selections: unknown, zone: CanonicalZone | null, context?: ActivationPipelineContext): MaybePromise<unknown>;
+  activateMonsterFromGraveyard(card: GameCard, player: GamePlayer, selections: unknown, context?: ActivationPipelineContext): MaybePromise<unknown>;
+  activateFieldSpell(card: GameCard, player: GamePlayer, selections: unknown, context?: ActivationPipelineContext): MaybePromise<unknown>;
 }
 
-export interface BotGamePort extends AiLiveGamePort {
+export interface BotGamePort extends Omit<PlayerGamePort, keyof BotGameMethods>, BotGameMethods {
   player: GamePlayer;
   bot: GamePlayer;
   phase: GamePhase;
@@ -76,21 +151,33 @@ export interface BotGamePort extends AiLiveGamePort {
   gameOver: boolean;
   winner?: PlayerId | "draw" | null;
   aiActionDelayMs?: number;
-  effectEngine?: BotEffectEnginePort | null;
-  ui?: {
-    log?(message: string): void;
+  effectEngine: BotEffectEnginePort;
+  turn: PlayerId | string | null;
+  phaseDelayMs?: number;
+  aiBattleDelayMs?: number;
+  aiSuccessfulActionDelayMs?: number;
+  turnLineSearchEnabled?: boolean;
+  turnLineSearchMode?: string;
+  arenaPlannerMode?: string;
+  turnLineSearchTurnMode?: "mainOnly" | "mainBattleMain2" | null;
+  arenaPlannerTurnMode?: "mainOnly" | "mainBattleMain2" | null;
+  turnLineSearchBeamWidth?: number | null;
+  arenaPlannerBeamWidth?: number | null;
+  turnLineSearchMaxDepth?: number | null;
+  arenaPlannerMaxDepth?: number | null;
+  turnLineSearchNodeBudget?: number | null;
+  arenaPlannerNodeBudget?: number | null;
+  turnLineSearchCandidateLimit?: number | null;
+  arenaPlannerCandidateLimit?: number | null;
+  turnLineSearchBattleStepLimit?: number;
+  arenaPlannerBattleStepLimit?: number;
+  arenaBeamWidth?: number;
+  arenaMaxDepth?: number;
+  arenaNodeBudget?: number;
+  _arenaTracker?: {
+    recordProgress?(kind: string, game: BotGamePort, details?: object): void;
+    recordPlannerDecision?(details: object): void;
   };
-  isDisposed?(): boolean;
-  getOpponent?(player: GamePlayer): GamePlayer | null;
-  canStartAction(input: {
-    actor: GamePlayer;
-    kind: string;
-    phaseReq?: readonly GamePhase[];
-  }): BotActionGuardResult;
-  nextPhase(): MaybePromise<unknown>;
-  updateBoard(): MaybePromise<unknown>;
-  waitForBoardPresentation?(): MaybePromise<unknown>;
-  waitForAiPresentationStep?(player: GamePlayer): MaybePromise<unknown>;
 }
 
 export type BotRuntimePort = Omit<
@@ -99,12 +186,12 @@ export type BotRuntimePort = Omit<
 > &
   AIStrategyBotPort & {
     archetype: BotArchetypeId;
-    strategy: StrategyRuntimePort;
+    strategy: BotStrategyPort;
     game?: BotGamePort;
     debug?: boolean;
     maxSimulationsPerPhase: number;
     maxChainedActions: number;
-    resolveOpponent(game: AiLiveGamePort): GamePlayer | null;
+    resolveOpponent(game: BotGamePort): GamePlayer | null;
     evaluateBoard(
       game: AiLiveGamePort | SimulationGameState,
       perspective?: GamePlayer | SimulatedPlayerState,
@@ -118,21 +205,30 @@ export type BotRuntimePort = Omit<
     simulateMainPhaseAction(
       state: SimulationGameState,
       action: AIAction,
-    ): SimulationGameState | void;
+    ): ReturnType<StrategyRuntimePort["simulateMainPhaseAction"]>;
     simulateSpellEffect(
       state: SimulationGameState,
       card: SimulatedCardState,
     ): void;
     simulateBattle(
-      state: SimulationGameState,
+      state: SimulationGameState | BotPerspectiveGameState,
       attacker: SimulatedCardState,
-      target: SimulatedCardState | null,
+      target: SimulatedCardState | null | undefined,
     ): void;
     executeMainPhaseAction(
       game: BotGamePort,
       action: AIAction,
     ): Promise<boolean>;
-    cloneGameState(game: AiLiveGamePort): BotPerspectiveGameState;
+    cloneGameState(game: BotCloneGamePort): BotPerspectiveGameState;
+    resolveHandIndexForAction(action: BotHandActionHint, expectedKind?: ExpectedBotHandKind): number;
+    canResolveSummonActionForCurrentState(action: AIAction, game: BotGamePort): boolean;
+    filterValidActionsForCurrentState(actions: AIAction[], game: BotGamePort): AIAction[];
+    getTributeRequirementFor(card: GameCard | SimulatedCardState, player: GamePlayer | SimulatedPlayerState): AITributeRequirement;
+    selectBestTributes(field: Array<GameCard | SimulatedCardState>, count: number, card: GameCard | SimulatedCardState, context?: unknown): number[];
+    evaluateTributeTrade(card: GameCard | SimulatedCardState, field: Array<GameCard | SimulatedCardState>, count: number, context?: unknown): AITributeTradeResult;
+    getAscensionPositionPreference(card: GameCard, material: GameCard, game: BotGamePort): BattlePositionInput;
+    selectBestAscension(eligible: GameCard[], material: GameCard, game: BotGamePort): GameCard;
+    tryAscensionIfAvailable(game: BotGamePort): Promise<boolean>;
   };
 
 export type BotMainPhaseActionExecutor<Type extends AIActionType> = (

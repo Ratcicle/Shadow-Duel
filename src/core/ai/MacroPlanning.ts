@@ -287,7 +287,7 @@ export function decideMacroStrategy(
 export function calculateMacroPriorityBonus(
   actionType: string,
   card: StrategicCardView,
-  macroStrategy: MacroStrategyKind | MacroStrategyDecision,
+  macroStrategy: MacroStrategyKind | Pick<MacroStrategyDecision, "strategy">,
 ): number {
   let bonus = 0;
   const strategy =

@@ -1,0 +1,889 @@
+import type { ArenaSpeed, ArenaSpeedConfig, ArenaPlannerConfig, ArenaSearchOptions, ArenaDeckData, ArenaGamePort, ArenaBotConstructor, ArenaDuelOutcome, ArenaDuelResult, ArenaWinner, ArenaProgressCallback, ArenaCompletionCallback } from "./contracts/arena.js";
+import type { AIPlanningMode, AITurnPlanningMode } from "./contracts/ai.js";
+import type { BotRuntimePort } from "./contracts/bot.js";
+import type { GameOptions, GameRendererPort } from "./contracts/game.js";
+import type { PlayerGamePort, GameUiPort } from "./contracts/gameRuntime.js";
+import type { RawCardDefinitionId } from "./contracts/primitives.js";
+
+type ArenaRuntimeGame = PlayerGamePort & ArenaGamePort & {
+  _botArenaMode?: boolean;
+  _arenaTracker?: DuelTracker;
+  arenaBeamWidth?: number; arenaMaxDepth?: number; arenaNodeBudget?: number;
+  arenaPlannerMode?: AIPlanningMode; arenaPlannerTurnMode?: AITurnPlanningMode | null;
+  arenaPlannerBeamWidth?: number | null; arenaPlannerMaxDepth?: number | null;
+  arenaPlannerNodeBudget?: number | null; arenaPlannerCandidateLimit?: number | null;
+  arenaPlannerConfig?: ArenaPlannerConfig;
+  turnLineSearchMode?: AIPlanningMode; turnLineSearchEnabled?: boolean;
+  turnLineSearchTurnMode?: AITurnPlanningMode | null;
+  turnLineSearchBeamWidth?: number | null; turnLineSearchMaxDepth?: number | null;
+  turnLineSearchNodeBudget?: number | null; turnLineSearchCandidateLimit?: number | null;
+  ui?: GameUiPort & { showAlert?(): void; showGameOverModal?(): void };
+  bindCardInteractions(): void;
+  effectEngine?: { logTargetingCacheStats?(): void } | null;
+};
+type RuntimeGameConstructor = new (options?: GameOptions) => Omit<ArenaRuntimeGame, "_arenaTracker">;
+
+import Player from "./Player.js";
+import Renderer from "../ui/Renderer.js";
+import { cardDatabaseById } from "../data/cards.js";
+import {
+  ArenaAnalytics,
+  DuelTracker,
+  END_REASONS,
+} from "./ai/ArenaAnalytics.js";
+
+const STORAGE_DECK_KEY = "shadow_duel_deck";
+const STORAGE_EXTRA_DECK_KEY = "shadow_duel_extra_deck";
+const DEFAULT_MAX_TURNS = 50;
+
+/**
+ * Speed presets com timeout escalável.
+ * Speeds mais rápidos têm timeout proporcionalmente menor para não enviesar métricas.
+ */
+const SPEED_PRESETS: Record<ArenaSpeed, ArenaSpeedConfig> = {
+  "1x": {
+    phaseDelayMs: 400,
+    actionDelayMs: 500,
+    battleDelayMs: 800,
+    pollIntervalMs: 50,
+    useRenderer: true,
+    timeoutMs: 60000, // 60s para velocidade normal
+    beamWidth: 3, // Aumentado de 2 para melhor exploração
+    maxDepth: 2,
+    nodeBudget: 120, // Aumentado de 100
+    planner: {
+      mode: "critical",
+      turnMode: null,
+      beamWidth: 4,
+      maxDepth: 6,
+      nodeBudget: 600,
+      candidateLimit: 8,
+    },
+  },
+  "2x": {
+    phaseDelayMs: 200,
+    actionDelayMs: 250,
+    battleDelayMs: 400,
+    pollIntervalMs: 25,
+    useRenderer: true,
+    timeoutMs: 50000, // 50s (era 45s)
+    beamWidth: 2,
+    maxDepth: 2,
+    nodeBudget: 100,
+    planner: {
+      mode: "critical",
+      turnMode: null,
+      beamWidth: 3,
+      maxDepth: 5,
+      nodeBudget: 350,
+      candidateLimit: 7,
+    },
+  },
+  "4x": {
+    phaseDelayMs: 100,
+    actionDelayMs: 125,
+    battleDelayMs: 200,
+    pollIntervalMs: 15,
+    useRenderer: true, // Agora renderiza cartas no campo
+    timeoutMs: 40000, // 40s (era 30s)
+    beamWidth: 2,
+    maxDepth: 2,
+    nodeBudget: 80,
+    planner: {
+      mode: "critical",
+      turnMode: null,
+      beamWidth: 3,
+      maxDepth: 4,
+      nodeBudget: 220,
+      candidateLimit: 6,
+    },
+  },
+  instant: {
+    phaseDelayMs: 0,
+    actionDelayMs: 0,
+    battleDelayMs: 0,
+    pollIntervalMs: 5,
+    useRenderer: false,
+    timeoutMs: 120000, // 120s (2min) - Permitir duelos mais longos
+    diagnosticLog: false,
+    quietLogs: true,
+    beamWidth: 2,
+    maxDepth: 2,
+    nodeBudget: 60,
+    planner: {
+      mode: "critical",
+      turnMode: null,
+      beamWidth: 2,
+      maxDepth: 4,
+      nodeBudget: 160,
+      candidateLimit: 6,
+    },
+  },
+};
+
+const PLANNER_MODES = new Set(["off", "critical", "always"]);
+const PLANNER_TURN_MODES = new Set(["mainOnly", "mainBattleMain2"]);
+
+function normalizePlannerMode(value: unknown): AIPlanningMode | null {
+  if (value == null || value === "") return null;
+  const mode = String(value).trim();
+  return PLANNER_MODES.has(mode) ? mode as AIPlanningMode : null;
+}
+
+function normalizePlannerTurnMode(value: unknown): AITurnPlanningMode | null {
+  if (value == null || value === "") return null;
+  const mode = String(value).trim();
+  return PLANNER_TURN_MODES.has(mode) ? mode as AITurnPlanningMode : null;
+}
+
+function positiveInteger(value: unknown) {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? Math.floor(number) : null;
+}
+
+function createNullRenderer(): GameRendererPort {
+  const noop = () => {};
+  return new Proxy(
+    {},
+    {
+      get: () => noop,
+    },
+  ) as GameRendererPort;
+}
+
+function canUseBrowserRenderer(speedConfig: Partial<ArenaSpeedConfig>) {
+  return (
+    speedConfig?.useRenderer === true &&
+    typeof document !== "undefined" &&
+    typeof document.getElementById === "function"
+  );
+}
+
+function resolveRuntimeSpeedConfig(speedConfig: ArenaSpeedConfig): ArenaSpeedConfig {
+  if (!speedConfig?.useRenderer || canUseBrowserRenderer(speedConfig)) {
+    return speedConfig;
+  }
+
+  return {
+    ...speedConfig,
+    phaseDelayMs: 0,
+    actionDelayMs: 0,
+    battleDelayMs: 0,
+    pollIntervalMs: 5,
+    useRenderer: false,
+  };
+}
+
+function readStoredIds(key: string): RawCardDefinitionId[] {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return (parsed as unknown[])
+      .map((value) => Number(value))
+      .filter((id) => Number.isFinite(id) && cardDatabaseById.has(id)) as RawCardDefinitionId[];
+  } catch (err) {
+    return [];
+  }
+}
+
+export default class BotArena {
+  declare GameClass: RuntimeGameConstructor;
+  declare BotClass: ArenaBotConstructor;
+  declare isRunning: boolean;
+  declare stopRequested: boolean;
+  declare activeGame: ArenaRuntimeGame | null;
+  declare renderer: GameRendererPort | null;
+  declare maxTurns: number;
+  declare analytics: ArenaAnalytics;
+  declare customTimeoutMs: number | null;
+  declare customBeamWidth: number | null;
+  declare customMaxDepth: number | null;
+  declare customNodeBudget: number | null;
+  declare customPlannerBeamWidth: number | null;
+  declare customPlannerMaxDepth: number | null;
+  declare customPlannerNodeBudget: number | null;
+  declare customPlannerCandidateLimit: number | null;
+  declare customPlannerMode: AIPlanningMode | null;
+  declare customPlannerTurnMode: AITurnPlanningMode | null;
+  declare customDiagnosticLog: boolean | null;
+  declare customQuietLogs: boolean | null;
+
+  constructor(GameClass: RuntimeGameConstructor, BotClass: ArenaBotConstructor, _shadowHeartStrategy?: unknown, _luminarchStrategy?: unknown) {
+    this.GameClass = GameClass;
+    this.BotClass = BotClass;
+    this.isRunning = false;
+    this.stopRequested = false;
+    this.activeGame = null;
+    this.renderer = null;
+    this.maxTurns = DEFAULT_MAX_TURNS;
+
+    // Analytics integrado
+    this.analytics = new ArenaAnalytics({
+      enabled: true,
+      trackDecisionTime: true,
+      trackNodesVisited: true,
+      trackOpeningBook: true,
+      openingBookDepth: 2,
+    });
+
+    // Configurações customizáveis
+    this.customTimeoutMs = null; // null = usar do speed preset
+    this.customBeamWidth = null;
+    this.customMaxDepth = null;
+    this.customNodeBudget = null;
+    this.customPlannerMode = null;
+    this.customPlannerTurnMode = null;
+    this.customPlannerBeamWidth = null;
+    this.customPlannerMaxDepth = null;
+    this.customPlannerNodeBudget = null;
+    this.customPlannerCandidateLimit = null;
+    this.customDiagnosticLog = null;
+    this.customQuietLogs = null;
+  }
+
+  /**
+   * Configura timeout customizado (sobrescreve o do speed preset).
+   * @param {number|null} ms - Timeout em ms, ou null para usar default do preset
+   */
+  setCustomTimeout(ms: number | null) {
+    this.customTimeoutMs = ms;
+  }
+
+  /**
+   * Configura parâmetros de busca customizados.
+   * @param {Object} options
+   */
+  setSearchParams(options: ArenaSearchOptions = {}) {
+    const beamWidth = positiveInteger(options.beamWidth);
+    const maxDepth = positiveInteger(options.maxDepth);
+    const nodeBudget = positiveInteger(options.nodeBudget);
+    if (beamWidth != null) this.customBeamWidth = beamWidth;
+    if (maxDepth != null) this.customMaxDepth = maxDepth;
+    if (nodeBudget != null) this.customNodeBudget = nodeBudget;
+
+    const plannerMode = normalizePlannerMode(
+      options.plannerMode ?? options.turnLineSearchMode,
+    );
+    const plannerTurnMode = normalizePlannerTurnMode(
+      options.plannerTurnMode ?? options.turnLineSearchTurnMode,
+    );
+    const plannerBeamWidth = positiveInteger(
+      options.plannerBeamWidth ?? options.turnLineSearchBeamWidth,
+    );
+    const plannerMaxDepth = positiveInteger(
+      options.plannerMaxDepth ?? options.turnLineSearchMaxDepth,
+    );
+    const plannerNodeBudget = positiveInteger(
+      options.plannerNodeBudget ?? options.turnLineSearchNodeBudget,
+    );
+    const plannerCandidateLimit = positiveInteger(
+      options.plannerCandidateLimit ?? options.turnLineSearchCandidateLimit,
+    );
+
+    if (plannerMode) this.customPlannerMode = plannerMode;
+    if (plannerTurnMode) this.customPlannerTurnMode = plannerTurnMode;
+    if (plannerBeamWidth != null) this.customPlannerBeamWidth = plannerBeamWidth;
+    if (plannerMaxDepth != null) this.customPlannerMaxDepth = plannerMaxDepth;
+    if (plannerNodeBudget != null) this.customPlannerNodeBudget = plannerNodeBudget;
+    if (plannerCandidateLimit != null) {
+      this.customPlannerCandidateLimit = plannerCandidateLimit;
+    }
+    if (options.diagnosticLog != null) {
+      this.customDiagnosticLog = options.diagnosticLog === true;
+    }
+    if (options.quietLogs != null || options.quiet != null) {
+      this.customQuietLogs = (options.quietLogs ?? options.quiet) === true;
+    }
+  }
+
+  /**
+   * Retorna instância de analytics para acesso externo.
+   * @returns {ArenaAnalytics}
+   */
+  getAnalytics() {
+    return this.analytics;
+  }
+
+  getSpeedConfig(speed: string) {
+    return SPEED_PRESETS[speed as ArenaSpeed] || SPEED_PRESETS["1x"];
+  }
+
+  getPlannerConfig(speedConfig: Partial<ArenaSpeedConfig> = {}): ArenaPlannerConfig {
+    const preset: Partial<ArenaSpeedConfig["planner"]> = speedConfig.planner || {};
+    return {
+      mode:
+        this.customPlannerMode ??
+        normalizePlannerMode(preset.mode) ??
+        "critical",
+      turnMode:
+        this.customPlannerTurnMode ??
+        normalizePlannerTurnMode(preset.turnMode),
+      beamWidth:
+        this.customPlannerBeamWidth ??
+        positiveInteger(preset.beamWidth) ??
+        null,
+      maxDepth:
+        this.customPlannerMaxDepth ??
+        positiveInteger(preset.maxDepth) ??
+        null,
+      nodeBudget:
+        this.customPlannerNodeBudget ??
+        positiveInteger(preset.nodeBudget) ??
+        null,
+      candidateLimit:
+        this.customPlannerCandidateLimit ??
+        positiveInteger(preset.candidateLimit) ??
+        null,
+      hasCustomMode: this.customPlannerMode != null,
+      hasCustomTurnMode: this.customPlannerTurnMode != null,
+      hasCustomBeamWidth: this.customPlannerBeamWidth != null,
+      hasCustomMaxDepth: this.customPlannerMaxDepth != null,
+      hasCustomNodeBudget: this.customPlannerNodeBudget != null,
+      hasCustomCandidateLimit: this.customPlannerCandidateLimit != null,
+    };
+  }
+
+  shouldUseQuietLogs(speedConfig: Partial<ArenaSpeedConfig> = {}) {
+    return this.customQuietLogs ?? speedConfig.quietLogs === true;
+  }
+
+  shouldUseDiagnosticLog(speedConfig: Partial<ArenaSpeedConfig> = {}) {
+    return this.customDiagnosticLog ?? speedConfig.diagnosticLog === true;
+  }
+
+  loadStoredDeckData() {
+    return {
+      main: readStoredIds(STORAGE_DECK_KEY),
+      extra: readStoredIds(STORAGE_EXTRA_DECK_KEY),
+    };
+  }
+
+  applyCustomDeck(bot: BotRuntimePort, deckData: ArenaDeckData) {
+    const main = Array.isArray(deckData?.main) ? deckData.main : [];
+    const extra = Array.isArray(deckData?.extra) ? deckData.extra : [];
+    bot.buildDeck = () => Player.prototype.buildDeck.call(bot, main);
+    bot.buildExtraDeck = () => Player.prototype.buildExtraDeck.call(bot, extra);
+  }
+
+  createBot(preset: string, seatId: "player" | "bot", deckData: ArenaDeckData) {
+    const isDefault = preset === "default";
+    const usePreset = isDefault ? "shadowheart" : preset || "shadowheart";
+    const bot = new this.BotClass(usePreset);
+    bot.id = seatId;
+    bot.name = seatId === "player" ? "Bot 1" : "Bot 2";
+    bot.controllerType = "ai";
+
+    // Ativar debug se devMode ou localStorage flag ativo
+    const devMode =
+      typeof localStorage !== "undefined"
+        ? localStorage.getItem("shadow_duel_dev_mode") === "true"
+        : false;
+    bot.debug = devMode;
+
+    if (isDefault) {
+      this.applyCustomDeck(bot, deckData);
+    }
+    return bot;
+  }
+
+  createGame(preset1: string, preset2: string, speedConfig: ArenaSpeedConfig, deckData: ArenaDeckData) {
+    const useBrowserRenderer = canUseBrowserRenderer(speedConfig);
+    const renderer = useBrowserRenderer
+      ? this.renderer || new Renderer()
+      : createNullRenderer();
+    if (useBrowserRenderer && !this.renderer) {
+      this.renderer = renderer;
+    }
+
+    const game: ArenaRuntimeGame = new this.GameClass({ renderer });
+    game.phaseDelayMs = speedConfig.phaseDelayMs;
+    game.aiActionDelayMs = speedConfig.actionDelayMs;
+    game.aiSuccessfulActionDelayMs = speedConfig.actionDelayMs;
+    game.aiPresentationStepDelayMs = speedConfig.actionDelayMs;
+    game.aiBattleDelayMs = speedConfig.battleDelayMs;
+    game._botArenaMode = true;
+    game.disablePresentationDelays =
+      !useBrowserRenderer || speedConfig.actionDelayMs <= 0;
+
+    // Configurar parâmetros de busca na game (para bots usarem)
+    game.arenaBeamWidth = this.customBeamWidth ?? speedConfig.beamWidth ?? 2;
+    game.arenaMaxDepth = this.customMaxDepth ?? speedConfig.maxDepth ?? 2;
+    game.arenaNodeBudget = this.customNodeBudget ?? speedConfig.nodeBudget ?? 100;
+
+    const plannerConfig = this.getPlannerConfig(speedConfig);
+    game.arenaPlannerMode = plannerConfig.mode;
+    game.arenaPlannerTurnMode = plannerConfig.turnMode;
+    game.arenaPlannerBeamWidth = plannerConfig.beamWidth;
+    game.arenaPlannerMaxDepth = plannerConfig.maxDepth;
+    game.arenaPlannerNodeBudget = plannerConfig.nodeBudget;
+    game.arenaPlannerCandidateLimit = plannerConfig.candidateLimit;
+    game.arenaPlannerConfig = plannerConfig;
+
+    if (plannerConfig.hasCustomMode) {
+      game.turnLineSearchMode = plannerConfig.mode;
+      game.turnLineSearchEnabled = plannerConfig.mode === "always";
+    }
+    if (plannerConfig.hasCustomTurnMode) {
+      game.turnLineSearchTurnMode = plannerConfig.turnMode;
+    }
+    if (plannerConfig.hasCustomBeamWidth) {
+      game.turnLineSearchBeamWidth = plannerConfig.beamWidth;
+    }
+    if (plannerConfig.hasCustomMaxDepth) {
+      game.turnLineSearchMaxDepth = plannerConfig.maxDepth;
+    }
+    if (plannerConfig.hasCustomNodeBudget) {
+      game.turnLineSearchNodeBudget = plannerConfig.nodeBudget;
+    }
+    if (plannerConfig.hasCustomCandidateLimit) {
+      game.turnLineSearchCandidateLimit = plannerConfig.candidateLimit;
+    }
+
+    if (game.ui) {
+      game.ui.showAlert = () => {};
+      game.ui.showGameOverModal = () => {}; // Desabilitar modal de vitória/derrota no BotArena
+    }
+
+    game.bindCardInteractions = () => {};
+    if (game.ui && typeof game.ui.bindPhaseClick === "function") {
+      game.ui.bindPhaseClick = () => {};
+    }
+
+    const bot1 = this.createBot(preset1, "player", deckData);
+    const bot2 = this.createBot(preset2, "bot", deckData);
+
+    game.player = bot1;
+    game.bot = bot2;
+    game.player.game = game;
+    game.bot.game = game;
+
+    return game;
+  }
+
+  /**
+   * Resolve o timeout efetivo (custom ou do speed preset).
+   * @param {Object} speedConfig
+   * @returns {number}
+   */
+  getEffectiveTimeout(speedConfig: Partial<ArenaSpeedConfig>) {
+    if (this.customTimeoutMs != null) {
+      return this.customTimeoutMs;
+    }
+    return speedConfig.timeoutMs ?? 30000;
+  }
+
+  async waitForGameEnd(game: ArenaRuntimeGame, speedConfig: ArenaSpeedConfig, tracker = game?._arenaTracker): Promise<ArenaDuelOutcome> {
+    const pollInterval = Math.max(5, speedConfig.pollIntervalMs || 25);
+    const startTime = Date.now();
+    const timeoutMs = this.getEffectiveTimeout(speedConfig);
+    const zeroEventWatchdogMs = 5000;
+    let zeroEventWatchdogCaptured = false;
+
+    return new Promise<ArenaDuelOutcome>((resolve) => {
+      const tick = () => {
+        const elapsedMs = Date.now() - startTime;
+        const eventCount = tracker?.getStrategicEventCount?.() ?? 0;
+        if (
+          !zeroEventWatchdogCaptured &&
+          elapsedMs >= zeroEventWatchdogMs &&
+          eventCount === 0
+        ) {
+          zeroEventWatchdogCaptured = true;
+          tracker?.recordStallSnapshot?.("zero_event_watchdog", game);
+        }
+
+        if (this.stopRequested) {
+          game.gameOver = true;
+          resolve({ type: "cancelled", reason: END_REASONS.CANCELLED });
+          return;
+        }
+
+        if ((game.player?.lp || 0) <= 0 || (game.bot?.lp || 0) <= 0) {
+          game.gameOver = true;
+          resolve({ type: "completed", reason: END_REASONS.LP_ZERO });
+          return;
+        }
+
+        if (game.gameOver) {
+          resolve({ type: "completed", reason: END_REASONS.LP_ZERO });
+          return;
+        }
+
+        if (game.turnCounter >= this.maxTurns) {
+          game.gameOver = true;
+          resolve({ type: "draw", reason: END_REASONS.MAX_TURNS });
+          return;
+        }
+
+        if (elapsedMs >= timeoutMs) {
+          if (eventCount === 0) {
+            tracker?.recordStallSnapshot?.("zero_event_timeout", game);
+          }
+          game.gameOver = true;
+          resolve({ type: "draw", reason: END_REASONS.TIMEOUT });
+          return;
+        }
+
+        setTimeout(tick, pollInterval);
+      };
+
+      setTimeout(tick, pollInterval);
+    });
+  }
+
+  resolveWinner(game: ArenaRuntimeGame, outcome: ArenaDuelOutcome): ArenaWinner {
+    if (outcome.type === "cancelled") return "draw";
+
+    // Se o jogo já determinou um vencedor
+    if (game.winner === "player" || game.winner === "bot") {
+      return game.winner;
+    }
+
+    // Se alguém ficou sem LP
+    if ((game.player?.lp || 0) <= 0) return "bot";
+    if ((game.bot?.lp || 0) <= 0) return "player";
+
+    // Se terminou por MAX_TURNS ou TIMEOUT, vence quem tem mais LP
+    if (
+      outcome.reason === END_REASONS.MAX_TURNS ||
+      outcome.reason === END_REASONS.TIMEOUT
+    ) {
+      const playerLP = game.player?.lp || 0;
+      const botLP = game.bot?.lp || 0;
+
+      if (playerLP > botLP) return "player";
+      if (botLP > playerLP) return "bot";
+      // Se LP igual, é empate
+      return "draw";
+    }
+
+    return "draw";
+  }
+
+  async runDuel(preset1: string, preset2: string, speedConfig: ArenaSpeedConfig, duelNumber: number, deckData: ArenaDeckData): Promise<ArenaDuelResult> {
+    const game = this.createGame(preset1, preset2, speedConfig, deckData);
+    this.activeGame = game;
+
+    // Determinar arquétipos
+    const arch1 = preset1 === "default" ? "custom" : preset1;
+    const arch2 = preset2 === "default" ? "custom" : preset2;
+
+    // Criar tracker para este duelo
+    const tracker = new DuelTracker(duelNumber, arch1, arch2, {
+      beamWidth: game.arenaBeamWidth,
+      maxDepth: game.arenaMaxDepth,
+      plannerMode: game.turnLineSearchMode ?? game.arenaPlannerMode ?? null,
+      plannerTurnMode:
+        game.turnLineSearchTurnMode ?? game.arenaPlannerTurnMode ?? null,
+      plannerBeamWidth:
+        game.turnLineSearchBeamWidth ?? game.arenaPlannerBeamWidth ?? null,
+      plannerMaxDepth:
+        game.turnLineSearchMaxDepth ?? game.arenaPlannerMaxDepth ?? null,
+      plannerNodeBudget:
+        game.turnLineSearchNodeBudget ?? game.arenaPlannerNodeBudget ?? null,
+      plannerCandidateLimit:
+        game.turnLineSearchCandidateLimit ??
+        game.arenaPlannerCandidateLimit ??
+        null,
+      diagnosticLog: this.shouldUseDiagnosticLog(speedConfig),
+    });
+
+    // Injetar tracker no game para coleta de métricas durante execução
+    game._arenaTracker = tracker;
+    tracker.recordProgress("bot_arena_duel_created", game, { arch1, arch2 });
+
+    if (canUseBrowserRenderer(speedConfig)) {
+      const logEl = document.getElementById("action-log-list");
+      if (logEl) logEl.innerHTML = "";
+    }
+
+    // Log de início do duelo
+    console.log(`\n${"═".repeat(50)}`);
+    console.log(`🎮 DUELO #${duelNumber} INICIADO`);
+    console.log(`   Bot 1: ${arch1} vs Bot 2: ${arch2}`);
+    console.log(`   LP: ${game.player?.lp ?? 8000} vs ${game.bot?.lp ?? 8000}`);
+    console.log(`${"═".repeat(50)}\n`);
+
+    const duelStartTime = Date.now();
+    tracker.recordProgress("bot_arena_before_game_start", game);
+    await game.start();
+    tracker.recordProgress("bot_arena_after_game_start", game);
+
+    tracker.recordProgress("bot_arena_before_wait_for_end", game);
+    const outcome = await this.waitForGameEnd(game, speedConfig, tracker);
+    tracker.recordProgress("bot_arena_after_wait_for_end", game, {
+      outcomeType: outcome.type,
+      reason: outcome.reason,
+    });
+    this.activeGame = null;
+
+    if (outcome.type === "cancelled") {
+      return { type: "cancelled", duelNumber };
+    }
+
+    const winner = this.resolveWinner(game, outcome);
+    const totalTimeMs = Date.now() - duelStartTime;
+
+    // Log de fim do duelo
+    const winnerName =
+      winner === "player" ? "Bot 1" : winner === "bot" ? "Bot 2" : "Empate";
+    const reasonText = outcome.reason || "LP zerou";
+    console.log(`\n${"═".repeat(50)}`);
+    console.log(
+      `🏆 DUELO #${duelNumber} FINALIZADO - ${winnerName}${
+        winner !== "draw" ? " venceu!" : ""
+      }`,
+    );
+    console.log(
+      `   Turnos: ${game.turnCounter || 0} | LP Final: ${
+        game.player?.lp ?? 0
+      } vs ${game.bot?.lp ?? 0}`,
+    );
+    console.log(
+      `   Razão: ${reasonText} | Tempo: ${(totalTimeMs / 1000).toFixed(1)}s`,
+    );
+
+    // Log de estatísticas do cache de targeting
+    if (game.effectEngine?.logTargetingCacheStats) {
+      game.effectEngine.logTargetingCacheStats();
+    }
+
+    console.log(`${"═".repeat(50)}\n`);
+
+    // Finalizar tracker e registrar no analytics
+    tracker.setCurrentTurn?.(game.turnCounter || 0);
+    const duelResult = tracker.finalize(winner, outcome.reason, {
+      player: game.player?.lp ?? 0,
+      bot: game.bot?.lp ?? 0,
+    });
+    duelResult.totalTimeMs = totalTimeMs;
+
+    this.analytics.recordDuel(duelResult);
+
+    return {
+      duelNumber,
+      winner,
+      turns: game.turnCounter || 0,
+      type: outcome.type,
+      reason: outcome.reason || null,
+      totalTimeMs,
+      archetype1: arch1,
+      archetype2: arch2,
+    };
+  }
+
+  stop() {
+    this.stopRequested = true;
+    if (this.activeGame) {
+      this.activeGame.gameOver = true;
+    }
+  }
+
+  async startArena(
+    preset1: string,
+    preset2: string,
+    numDuels: number,
+    speed: string,
+    autoPause: boolean,
+    onProgress?: ArenaProgressCallback,
+    onComplete?: ArenaCompletionCallback,
+  ) {
+    this.isRunning = true;
+    this.stopRequested = false;
+
+    // Iniciar batch de analytics
+    this.analytics.reset();
+    this.analytics.startBatch();
+
+    const speedConfig = resolveRuntimeSpeedConfig(this.getSpeedConfig(speed));
+    const deckData = this.loadStoredDeckData();
+    const stats = {
+      completed: 0,
+      wins1: 0,
+      wins2: 0,
+      draws: 0,
+      drawsByTimeout: 0,
+      drawsByMaxTurns: 0,
+      totalTurns: 0,
+      totalTimeMs: 0,
+    };
+    const quietLogs = this.shouldUseQuietLogs(speedConfig);
+
+    for (let i = 1; i <= numDuels; i += 1) {
+      if (this.stopRequested) break;
+
+      let result: ArenaDuelResult;
+      try {
+        if (quietLogs) {
+          const originalLog: (...data: unknown[]) => void = console.log;
+          console.log = () => {};
+          try {
+            result = await this.runDuel(
+              preset1,
+              preset2,
+              speedConfig,
+              i,
+              deckData,
+            );
+          } finally {
+            console.log = originalLog;
+          }
+        } else {
+          result = await this.runDuel(preset1, preset2, speedConfig, i, deckData);
+        }
+      } catch (err) {
+        result = {
+          duelNumber: i,
+          winner: "draw",
+          turns: 0,
+          type: "error",
+          reason: END_REASONS.ERROR,
+          message: (err as Error)?.message || "Unknown error",
+          totalTimeMs: 0,
+        };
+
+        // Registrar erro no analytics
+        this.analytics.recordDuel({
+          duelNumber: i,
+          archetype1: preset1 === "default" ? "custom" : preset1,
+          archetype2: preset2 === "default" ? "custom" : preset2,
+          winner: "draw",
+          turns: 0,
+          reason: END_REASONS.ERROR,
+          finalLP: { player: 0, bot: 0 },
+          totalTimeMs: 0,
+          errors: [(err as Error)?.message || "Unknown error"],
+        });
+      }
+
+      if (!result || result.type === "cancelled") {
+        break;
+      }
+
+      stats.completed += 1;
+      stats.totalTurns += result.turns || 0;
+      stats.totalTimeMs += result.totalTimeMs || 0;
+
+      if (result.winner === "player") {
+        stats.wins1 += 1;
+      } else if (result.winner === "bot") {
+        stats.wins2 += 1;
+      } else {
+        stats.draws += 1;
+        // Categorizar tipo de draw
+        if (result.reason === END_REASONS.TIMEOUT) {
+          stats.drawsByTimeout += 1;
+        } else if (result.reason === END_REASONS.MAX_TURNS) {
+          stats.drawsByMaxTurns += 1;
+        }
+      }
+
+      const avgTurns =
+        stats.completed > 0
+          ? (stats.totalTurns / stats.completed).toFixed(1)
+          : "-";
+
+      if (typeof onProgress === "function") {
+        onProgress({
+          completed: stats.completed,
+          wins1: stats.wins1,
+          wins2: stats.wins2,
+          draws: stats.draws,
+          drawsByTimeout: stats.drawsByTimeout,
+          drawsByMaxTurns: stats.drawsByMaxTurns,
+          avgTurns,
+          lastResult: result,
+        });
+      }
+
+      if (autoPause && (result.type === "error" || result.winner === "draw")) {
+        this.stopRequested = true;
+        break;
+      }
+    }
+
+    // Finalizar batch
+    this.analytics.endBatch();
+    this.isRunning = false;
+
+    if (typeof onComplete === "function") {
+      const batchStats = this.analytics.getBatchStats();
+      onComplete({
+        completed: stats.completed,
+        wins1: stats.wins1,
+        wins2: stats.wins2,
+        draws: stats.draws,
+        drawsByTimeout: stats.drawsByTimeout,
+        drawsByMaxTurns: stats.drawsByMaxTurns,
+        avgTurns: batchStats.avgTurns?.toFixed(1) ?? "-",
+        avgDecisionTimeMs: batchStats.avgDecisionTimeMs,
+        batchDurationMs: batchStats.batchDurationMs,
+        endReasonBreakdown: batchStats.endReasonBreakdown,
+        // Referência ao analytics para export
+        analytics: this.analytics,
+      });
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Métodos de export para acesso fácil
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Exporta resultados como CSV.
+   */
+  exportCSV() {
+    return this.analytics.exportAsCSV();
+  }
+
+  /**
+   * Exporta resultados como JSONL.
+   */
+  exportJSONL() {
+    return this.analytics.exportAsJSONL();
+  }
+
+  /**
+   * Exporta resumo agregado.
+   */
+  exportSummary() {
+    return this.analytics.exportSummary();
+  }
+
+  /**
+   * Exporta relatorio estrategico compacto.
+   */
+  exportStrategicReport(options: Parameters<ArenaAnalytics["exportStrategicReport"]>[0] = {}) {
+    return this.analytics.exportStrategicReport(options);
+  }
+
+  /**
+   * Faz download do CSV no browser.
+   */
+  downloadCSV(filename = "arena_results.csv") {
+    this.analytics.downloadCSV(filename);
+  }
+
+  /**
+   * Faz download do JSONL no browser.
+   */
+  downloadJSONL(filename = "arena_results.jsonl") {
+    this.analytics.downloadJSONL(filename);
+  }
+
+  /**
+   * Faz download do resumo no browser.
+   */
+  downloadSummary(filename = "arena_summary.json") {
+    this.analytics.downloadSummary(filename);
+  }
+
+  /**
+   * Faz download do relatorio estrategico no browser.
+   */
+  downloadStrategicReport(filename = "arena_strategic_report.json", options: Parameters<ArenaAnalytics["exportStrategicReport"]>[0] = {}) {
+    this.analytics.downloadStrategicReport(filename, options);
+  }
+}

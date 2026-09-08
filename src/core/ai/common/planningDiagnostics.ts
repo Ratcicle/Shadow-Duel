@@ -289,6 +289,7 @@ function resolvePerspective(
   };
 }
 
+export function fingerprintAction(action: AIPlannedAction | null | undefined): AIActionFingerprint | null;
 export function fingerprintAction(action?: null): null;
 export function fingerprintAction(action: AIPlannedAction): AIActionFingerprint;
 export function fingerprintAction(

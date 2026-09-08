@@ -33,8 +33,8 @@ export interface DetectedCombo {
   priority: number;
 }
 
-export function createZoneIndex(
-  analysis: ZoneAnalysis = {},
+export function createZoneIndex<Analysis extends object = ZoneAnalysis>(
+  analysis: Analysis = {} as Analysis,
   zoneNames: readonly string[] = DEFAULT_ZONE_NAMES,
 ): ZoneIndex {
   const zones: Record<string, SimulatedCardState[]> = {};
@@ -42,13 +42,13 @@ export function createZoneIndex(
   const namesByZone: Record<string, string[]> = {};
 
   for (const zone of zoneNames) {
-    const cards = Array.isArray(analysis?.[zone]) ? analysis[zone] : [];
+    const cards = (Array.isArray((analysis as ZoneAnalysis)?.[zone]) ? (analysis as ZoneAnalysis)[zone] : []) as SimulatedCardState[];
     zones[zone] = cards;
     idsByZone[zone] = cards.map((card) => card?.id).filter(Boolean);
-    namesByZone[zone] = cards.map((card) => card?.name).filter(Boolean);
+    namesByZone[zone] = cards.map((card) => card?.name).filter(Boolean) as string[];
   }
 
-  return { analysis, zones, idsByZone, namesByZone };
+  return { analysis: analysis as ZoneAnalysis, zones, idsByZone, namesByZone };
 }
 
 export function getZoneCards(index: ZoneIndex | null | undefined, zone: string): SimulatedCardState[] {
@@ -102,13 +102,13 @@ export function findComboByName<Combo extends ComboDefinition>(comboDatabase: re
   return (comboDatabase || []).find((combo) => combo?.name === name) || null;
 }
 
-export function createDetectedCombo({
+export function createDetectedCombo<Combo extends ComboDefinition, Extra extends object = object>({
   combo,
   ready = false,
   missing = [],
   priority = 0,
   ...extra
-}: (Partial<DetectedCombo> & { combo?: ComboDefinition | null }) = {}): DetectedCombo {
+}: (Partial<Omit<DetectedCombo, "combo">> & { combo?: Combo | null } & Extra) = {} as Partial<Omit<DetectedCombo, "combo">> & { combo?: Combo | null } & Extra) {
   return {
     combo,
     ready,
@@ -118,7 +118,7 @@ export function createDetectedCombo({
   };
 }
 
-export function createAvailableCombo({
+export function createAvailableCombo<Action extends object = object, Extra extends object = object>({
   combo,
   name = null,
   priority = undefined,
@@ -128,8 +128,8 @@ export function createAvailableCombo({
   combo?: ComboDefinition | null;
   name?: string | null;
   priority?: number;
-  action?: object | null;
-} = {}) {
+  action?: Action | null;
+} & Extra = {} as Extra) {
   const comboName = name || combo?.name || null;
   return {
     name: comboName,
@@ -139,9 +139,9 @@ export function createAvailableCombo({
   };
 }
 
-export function finalizeDetectedCombos(
-  detected: readonly (DetectedCombo | null | undefined)[] = [],
-): DetectedCombo[] {
-  return ((detected || []).filter((entry) => entry?.combo) as DetectedCombo[])
+export function finalizeDetectedCombos<Combo extends DetectedCombo>(
+  detected: readonly (Combo | null | undefined)[] = [],
+): Combo[] {
+  return ((detected || []).filter((entry) => entry?.combo) as Combo[])
     .sort((a, b) => (b.priority || 0) - (a.priority || 0));
 }

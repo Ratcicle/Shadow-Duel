@@ -115,3 +115,16 @@ test("simulação separa posição de batalha de restrição de ataque", () => {
   assert.equal(restricted.position, "attack");
   assert.equal(restricted.cannotAttackThisTurn, true);
 });
+
+// Migration parity: retain the existing functional bug for a separate fix.
+test("Sacred Judgment resource planning preserves the legacy unresolved field lookup", async () => {
+  const { shouldCommitResourcesNow } = await import("../src/core/ai/luminarch/multiTurnPlanning.js");
+  assert.throws(
+    () => shouldCommitResourcesNow(
+      { name: "Luminarch Sacred Judgment" },
+      { field: [], lp: 8000, oppField: [] },
+      { stance: "balanced" },
+    ),
+    { name: "ReferenceError", message: "field is not defined" },
+  );
+});

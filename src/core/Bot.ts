@@ -1,0 +1,462 @@
+﻿import Player from "./Player.js";
+import { getStrategyFor } from "./ai/StrategyRegistry.js";
+import { botLogger } from "./BotLogger.js";
+import { buildBotDeck, buildBotExtraDeck } from "./bot/deckBuilder.js";
+import {
+  getAvailableBotPresets,
+  getBotDeckList,
+  getBotExtraDeckList,
+} from "./bot/presets.js";
+import { executeBotMainPhaseAction } from "./bot/actionExecutor.js";
+import { playBotMainPhase } from "./bot/mainPhaseController.js";
+import {
+  isSameBattleCard as isSameBattleCardForBot,
+  playBotBattlePhase,
+} from "./bot/battleController.js";
+import {
+  getAscensionPositionPreference as getAscensionPositionPreferenceForBot,
+  selectBestAscension as selectBestAscensionForBot,
+  tryAscensionIfAvailable as tryAscensionIfAvailableForBot,
+} from "./bot/ascensionController.js";
+import {
+  cloneBotGameState,
+  simulateBotMainPhaseAction,
+  simulateBotSpellEffect,
+} from "./bot/simulationBridge.js";
+import {
+  canResolveSummonActionForCurrentState as canResolveSummonActionForCurrentStateForBot,
+  filterValidActionsForCurrentState as filterValidActionsForCurrentStateForBot,
+  resolveHandIndexForAction as resolveHandIndexForBotAction,
+  tributeMatchesAltRequirement as tributeMatchesAltRequirementForBot,
+} from "./bot/actionValidation.js";
+import { getPiercingDamage } from "./ai/common/cardStats.js";
+import type { BotCloneGamePort } from "./bot/simulationBridge.js";
+import type {
+  BotArchetypeId, BotGamePort, BotStrategyPort, BotHandActionHint, ExpectedBotHandKind,
+} from "./contracts/bot.js";
+import type { AIAction, AIState, AITributeRequirement, AITributeTradeResult } from "./contracts/ai.js";
+import type { AiLiveGamePort, SimulatedCardState, SimulatedPlayerState, SimulationGameState, BotPerspectiveGameState } from "./contracts/aiState.js";
+import type { GameCard, BattlePositionInput } from "./contracts/cards.js";
+import type { GamePlayer } from "./contracts/player.js";
+
+export default class Bot extends Player {
+  declare maxSimulationsPerPhase: number;
+  declare maxChainedActions: number;
+  declare archetype: BotArchetypeId;
+  declare strategy: BotStrategyPort;
+  declare game?: BotGamePort;
+  declare debug?: boolean;
+  constructor(archetype = "shadowheart") {
+    super("bot", "Opponent", "ai");
+    this.maxSimulationsPerPhase = 20;
+    this.maxChainedActions = 6; // Aumentado de 3 para 6 - permite múltiplas ações + efeitos
+    this.setPreset(archetype);
+  }
+  static getAvailablePresets() {
+    return getAvailableBotPresets();
+  }
+
+  setPreset(presetId = "shadowheart") {
+    const validIds: string[] = Bot.getAvailablePresets().map((p) => p.id);
+    this.archetype = validIds.includes(presetId) ? presetId as BotArchetypeId : "shadowheart";
+
+    this.strategy = getStrategyFor(this.archetype, this);
+  }
+
+  // Sobrescreve buildDeck para usar deck do arquétipo selecionado
+  buildDeck() {
+    buildBotDeck(this);
+  }
+
+  // Deck Shadow-Heart otimizado para combos e fusões
+  getShadowHeartDeck() {
+    return getBotDeckList("shadowheart");
+  }
+
+  // Deck Luminarch completo (Tank/Control/Versatility) — 30 cards
+  getLuminarchDeck() {
+    return getBotDeckList("luminarch");
+  }
+
+  getVoidDeck() {
+    return getBotDeckList("void");
+  }
+
+  getDragonDeck() {
+    return getBotDeckList("dragon");
+  }
+
+  getArcanistDeck() {
+    return getBotDeckList("arcanist");
+  }
+
+  getMirageboundDeck() {
+    return getBotDeckList("miragebound");
+  }
+
+  getBloomrotDeck() {
+    return getBotDeckList("bloomrot");
+  }
+
+  getBurningWestDeck() {
+    return getBotDeckList("burningwest");
+  }
+
+  // Sobrescreve buildExtraDeck para usar fusões do arquétipo
+  buildExtraDeck() {
+    buildBotExtraDeck(this);
+  }
+
+  // Extra Deck Shadow-Heart
+  getShadowHeartExtraDeck() {
+    return getBotExtraDeckList("shadowheart");
+  }
+
+  // Extra Deck Luminarch (Fusion + Ascension)
+  getLuminarchExtraDeck() {
+    return getBotExtraDeckList("luminarch");
+  }
+
+  getVoidExtraDeck() {
+    return getBotExtraDeckList("void");
+  }
+
+  getDragonExtraDeck() {
+    return getBotExtraDeckList("dragon");
+  }
+
+  getArcanistExtraDeck() {
+    return getBotExtraDeckList("arcanist");
+  }
+
+  getMirageboundExtraDeck() {
+    return getBotExtraDeckList("miragebound");
+  }
+
+  getBloomrotExtraDeck() {
+    return getBotExtraDeckList("bloomrot");
+  }
+
+  getBurningWestExtraDeck() {
+    return getBotExtraDeckList("burningwest");
+  }
+
+  resolveOpponent(game: BotCloneGamePort): GamePlayer | null {
+    if (!game) return null;
+    if (typeof (game as BotGamePort).getOpponent === "function") {
+      return (game as BotGamePort).getOpponent(this);
+    }
+    return (this.id === "player" ? game.bot : game.player) as GamePlayer;
+  }
+
+  async makeMove(game: BotGamePort) {
+    if (!game || game.gameOver || game.isDisposed?.()) return;
+
+    try {
+      game._arenaTracker?.recordProgress?.("bot_make_move_enter", game, {
+        actor: this.id,
+      });
+      game._arenaTracker?.recordProgress?.("bot_make_move_guard_before", game, {
+        actor: this.id,
+      });
+      const guard = game.canStartAction({ actor: this, kind: "bot_turn" });
+      console.log(`[Bot.makeMove] Guard check:`, guard);
+      game._arenaTracker?.recordProgress?.("bot_make_move_guard_after", game, {
+        actor: this.id,
+        ok: !!guard.ok,
+        reason: (guard as { reason?: string }).reason || null,
+      });
+      if (!guard.ok) {
+        console.log(`[Bot.makeMove] ❌ Guard blocked: ${guard.reason}`);
+        return;
+      }
+
+      const phase = game.phase;
+      console.log(`[Bot.makeMove] Phase: ${phase}`);
+      game._arenaTracker?.recordProgress?.("bot_make_move_phase", game, {
+        actor: this.id,
+        phase,
+      });
+
+      if (phase === "main1" || phase === "main2") {
+        await this.playMainPhase(game);
+        game._arenaTracker?.recordProgress?.("bot_make_move_after_main_phase", game, {
+          actor: this.id,
+          phase,
+        });
+        if (!game.gameOver && !game.isDisposed?.() && game.phase === phase) {
+          const actionDelayMs = Number.isFinite(game?.aiActionDelayMs)
+            ? game.aiActionDelayMs
+            : 500;
+          setTimeout(() => {
+            if (!game.isDisposed?.()) game.nextPhase();
+          }, actionDelayMs);
+        }
+        return;
+      }
+
+      if (phase === "battle") {
+        this.playBattlePhase(game);
+        game._arenaTracker?.recordProgress?.("bot_make_move_after_battle_phase", game, {
+          actor: this.id,
+        });
+        return;
+      }
+
+      if (phase === "end") {
+        await game.nextPhase();
+      }
+    } catch (error) {
+      game._arenaTracker?.recordProgress?.("bot_make_move_error", game, {
+        actor: this.id,
+        error: (error as Error)?.message || String(error),
+      });
+      console.error(
+        `[Bot.makeMove] ❌ FATAL ERROR in ${game.phase} phase:`,
+        error,
+      );
+      console.error("[Bot.makeMove] Stack trace:", (error as Error).stack);
+      // Fallback: forçar nextPhase para não travar o jogo
+      if (
+        !game.gameOver &&
+        !game.isDisposed?.() &&
+        typeof game.nextPhase === "function"
+      ) {
+        console.log("[Bot.makeMove] ⚠️ Forcing nextPhase() after error");
+        game.nextPhase();
+      }
+    }
+  }
+
+  async playMainPhase(game: BotGamePort): Promise<void> {
+    return playBotMainPhase(this, game);
+  }
+
+  isSameBattleCard(candidate: GameCard | SimulatedCardState | null | undefined, original: GameCard | SimulatedCardState | null | undefined): boolean {
+    return isSameBattleCardForBot(candidate, original);
+  }
+
+  playBattlePhase(game: BotGamePort): void {
+    return playBotBattlePhase(this, game);
+  }
+
+  evaluateBoard(gameOrState: AIState, perspectivePlayer?: GamePlayer | SimulatedPlayerState): number {
+    return this.strategy.evaluateBoard(gameOrState, perspectivePlayer as SimulatedPlayerState | undefined);
+  }
+
+  evaluateBoardV2(gameOrState: AIState, perspectivePlayer?: GamePlayer | SimulatedPlayerState): number {
+    return this.strategy.evaluateBoardV2(gameOrState, perspectivePlayer as SimulatedPlayerState | undefined);
+  }
+
+  generateMainPhaseActions(game: AiLiveGamePort): AIAction[] {
+    const actions = this.strategy.generateMainPhaseActions(game);
+
+    // 📊 Log de geração de ações
+    if (botLogger) {
+      const hand = this.hand || [];
+      const field = this.field || [];
+      const summonAvailable = (this.summonCount || 0) < 1;
+      botLogger.logActionGeneration(
+        this.id,
+        game.turnCounter || 0,
+        game.phase || "unknown",
+        hand,
+        field,
+        summonAvailable,
+        actions || [],
+      );
+    }
+
+    return actions;
+  }
+
+  sequenceActions(actions: AIAction[]): AIAction[] {
+    return this.strategy.sequenceActions(actions);
+  }
+
+  getTributeRequirementFor(card: GameCard | SimulatedCardState, playerState: GamePlayer | SimulatedPlayerState): AITributeRequirement {
+    return this.strategy.getTributeRequirementFor(card as SimulatedCardState, playerState as SimulatedPlayerState);
+  }
+
+  // Seleciona os melhores monstros para usar como tributo (os PIORES do campo)
+  selectBestTributes(field: Array<GameCard | SimulatedCardState>, tributesNeeded: number, cardToSummon: GameCard | SimulatedCardState, context?: unknown): number[] {
+    return this.strategy.selectBestTributes(
+      field as SimulatedCardState[],
+      tributesNeeded,
+      cardToSummon as SimulatedCardState,
+      context,
+    );
+  }
+
+  evaluateTributeTrade(cardToSummon: GameCard | SimulatedCardState, field: Array<GameCard | SimulatedCardState>, tributesNeeded: number, context?: unknown): AITributeTradeResult {
+    if (typeof this.strategy?.evaluateTributeTrade === "function") {
+      return this.strategy.evaluateTributeTrade(
+        cardToSummon as SimulatedCardState,
+        field as SimulatedCardState[],
+        tributesNeeded,
+        context,
+      );
+    }
+    return { ok: true };
+  }
+
+  simulateMainPhaseAction(state: SimulationGameState | BotPerspectiveGameState, action: AIAction): ReturnType<typeof simulateBotMainPhaseAction> {
+    return simulateBotMainPhaseAction(this, state, action);
+  }
+
+  simulateSpellEffect(state: SimulationGameState | BotPerspectiveGameState, card: SimulatedCardState): void {
+    return simulateBotSpellEffect(this, state, card);
+  }
+
+  simulateBattle(state: SimulationGameState | BotPerspectiveGameState, attacker: SimulatedCardState | null | undefined, target: SimulatedCardState | null | undefined): void {
+    if (!attacker) return;
+    if (attacker.cannotAttackThisTurn) return;
+    if (attacker.position === "defense") return;
+
+    let maxAttacks: number;
+    const hasAttackLimit =
+      attacker.attackLimitThisTurn !== undefined &&
+      attacker.attackLimitThisTurn !== null &&
+      Number.isFinite(Number(attacker.attackLimitThisTurn));
+    if (hasAttackLimit) {
+      maxAttacks = Math.max(0, Math.floor(Number(attacker.attackLimitThisTurn)));
+    } else {
+      let _extra = attacker.extraAttacks || 0;
+      if (attacker.dynamicExtraAttacks?.source === "graveyard_count") {
+        const dea = attacker.dynamicExtraAttacks;
+        _extra = (state.bot?.graveyard || []).filter(
+          (c) => c && c.name === dea.name,
+        ).length;
+        _extra -= 1;
+      }
+      maxAttacks = 1 + _extra;
+    }
+    const usedAttacks = attacker.attacksUsedThisTurn || 0;
+
+    // Multi-attack mode allows more attacks
+    const isMultiAttackMode = attacker.canAttackAllOpponentMonstersThisTurn;
+    const multiAttackLimit = hasAttackLimit
+      ? Math.min(attacker.multiAttackLimit || 1, maxAttacks)
+      : attacker.multiAttackLimit || 1;
+
+    if (!isMultiAttackMode && usedAttacks >= maxAttacks) return;
+    if (isMultiAttackMode && usedAttacks >= multiAttackLimit) return;
+
+    const attackerOwner = state.bot;
+    const defenderOwner = state.player;
+
+    const attackStat = attacker.atk || 0;
+    if (!target) {
+      if (
+        usedAttacks > 0 &&
+        (attacker.extraAttackTargetRestriction ||
+          attacker.passiveExtraAttackTargetRestriction) === "monster"
+      ) {
+        return;
+      }
+      defenderOwner.lp -= attackStat;
+      attacker.attacksUsedThisTurn = usedAttacks + 1;
+      // Multi-attack mode uses different limit
+      const effectiveMax = isMultiAttackMode ? multiAttackLimit : maxAttacks;
+      attacker.hasAttacked = attacker.attacksUsedThisTurn >= effectiveMax;
+      return;
+    }
+
+    // 🎭 REGRA: Bot não pode ver DEF de monstros facedown
+    // Estimar DEF baseado em média (1500) ao invés de usar valor real
+    const targetStat =
+      target.position === "attack"
+        ? target.atk || 0
+        : target.isFacedown
+          ? 1500 // Estimativa: DEF médio de monstros
+          : target.def || 0;
+    if (target.position === "attack") {
+      if (attackStat > targetStat) {
+        defenderOwner.lp -= attackStat - targetStat;
+        defenderOwner.graveyard.push(target);
+        defenderOwner.field.splice(defenderOwner.field.indexOf(target), 1);
+      } else if (attackStat < targetStat) {
+        attackerOwner.lp -= targetStat - attackStat;
+        attackerOwner.graveyard.push(attacker);
+        attackerOwner.field.splice(attackerOwner.field.indexOf(attacker), 1);
+      } else {
+        attackerOwner.graveyard.push(attacker);
+        defenderOwner.graveyard.push(target);
+        attackerOwner.field.splice(attackerOwner.field.indexOf(attacker), 1);
+        defenderOwner.field.splice(defenderOwner.field.indexOf(target), 1);
+      }
+    } else {
+      // BUG #12 FIX: Target in defense position - consider piercing damage
+      if (attackStat > targetStat) {
+        // Attacker wins - destroy defender
+        defenderOwner.graveyard.push(target);
+        defenderOwner.field.splice(defenderOwner.field.indexOf(target), 1);
+        // Check for piercing damage (inflict excess damage to LP)
+        const piercingDamage = getPiercingDamage(
+          attacker,
+          attackStat,
+          targetStat,
+        );
+        if (piercingDamage > 0) {
+          defenderOwner.lp -= piercingDamage;
+        }
+      } else if (attackStat < targetStat) {
+        // Attacker loses - take reflect damage
+        attackerOwner.lp -= targetStat - attackStat;
+      }
+      // If attackStat === targetStat: tie, no damage, no destruction
+    }
+    attacker.attacksUsedThisTurn = usedAttacks + 1;
+    // Multi-attack mode uses different limit
+    const effectiveMax = isMultiAttackMode ? multiAttackLimit : maxAttacks;
+    attacker.hasAttacked = attacker.attacksUsedThisTurn >= effectiveMax;
+  }
+
+  resolveHandIndexForAction(action: BotHandActionHint, expectedKind?: ExpectedBotHandKind): number {
+    return resolveHandIndexForBotAction(this, action, expectedKind);
+  }
+
+  tributeMatchesAltRequirement(card: GameCard, alt: GameCard["altTribute"]): boolean {
+    return tributeMatchesAltRequirementForBot(card, alt);
+  }
+
+  canResolveSummonActionForCurrentState(action: AIAction, game: BotGamePort): boolean {
+    return canResolveSummonActionForCurrentStateForBot(this, action, game);
+  }
+
+  filterValidActionsForCurrentState(actions: AIAction[], game: BotGamePort): AIAction[] {
+    return filterValidActionsForCurrentStateForBot(this, actions, game);
+  }
+
+  async executeMainPhaseAction(game: BotGamePort, action: AIAction): Promise<boolean> {
+    return executeBotMainPhaseAction(this, game, action);
+  }
+
+  cloneGameState(game: BotCloneGamePort): BotPerspectiveGameState {
+    return cloneBotGameState(this, game);
+  }
+
+  async tryAscensionIfAvailable(game: BotGamePort): Promise<boolean> {
+    return tryAscensionIfAvailableForBot(this, game);
+  }
+
+  /**
+   * Seleciona a melhor Ascensão baseada no contexto do jogo.
+   * @param {Array} eligible - Lista de ascensões elegíveis
+   * @param {Object} material - Monstro material
+   * @param {Object} game - Instância do jogo
+   * @returns {Object} Melhor ascensão
+   */
+  selectBestAscension(eligible: GameCard[], material: GameCard, game: BotGamePort): GameCard {
+    return selectBestAscensionForBot(this, eligible, material, game);
+  }
+
+  getAscensionPositionPreference(ascensionCard: GameCard, material: GameCard, game: BotGamePort): BattlePositionInput {
+    return getAscensionPositionPreferenceForBot(
+      this,
+      ascensionCard,
+      material,
+      game,
+    );
+  }
+}

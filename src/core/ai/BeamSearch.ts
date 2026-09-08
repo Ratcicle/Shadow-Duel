@@ -27,7 +27,7 @@ import type {
   GameCard,
 } from "../contracts/cards.js";
 
-type SearchStrategyInput = SearchStrategyPort & Partial<SimulatedPlayerState>;
+type SearchStrategyInput = SearchStrategyPort & Partial<AIStrategyBotPort>;
 type SearchCardInput = (AiCardInput | GameCard | SimulatedCardState) & {
   archetypes?: readonly string[];
   turnBasedBuffs?: readonly CardTurnBasedBuff[];
