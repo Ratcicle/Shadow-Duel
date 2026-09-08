@@ -42,8 +42,6 @@ import type {
 import type {
   AiLiveGamePort,
   SimulatedCardState,
-  SimulatedDragonOnceLedger,
-  SimulatedMaterialActivationLedger,
   SimulatedPlayerState,
   SimulationGameState,
 } from "../../contracts/aiState.js";
@@ -60,18 +58,43 @@ import type {
   CardFilter,
   EffectDefinition,
   EffectTarget,
+  PassiveRuleDefinition,
 } from "../../contracts/effects.js";
 import type { PlayerId } from "../../contracts/primitives.js";
 import type { CanonicalZone, ZoneInput } from "../../contracts/zones.js";
 
-type DragonPlayer = SimulatedPlayerState;
-type DragonCard = SimulatedCardState;
+type DragonCounterObject = Partial<Record<string, number>>;
+type DragonCard = Omit<SimulatedCardState, "counters"> & {
+  counters?: ReadonlyMap<string, number> | DragonCounterObject;
+};
+type DragonPlayer = Omit<
+  SimulatedPlayerState,
+  | "hand"
+  | "field"
+  | "graveyard"
+  | "deck"
+  | "extraDeck"
+  | "banished"
+  | "fieldSpell"
+  | "spellTrap"
+  | "_simMaterialEffectActivationsByMaterialId"
+> & {
+  hand: DragonCard[];
+  field: DragonCard[];
+  graveyard: DragonCard[];
+  deck: DragonCard[];
+  extraDeck: DragonCard[];
+  banished: DragonCard[];
+  fieldSpell: DragonCard | null;
+  spellTrap: DragonCard[];
+  _simMaterialEffectActivationsByMaterialId?: DragonNumericMapLike;
+};
 type DragonZoneName =
   | CanonicalZone
   | "banish";
 
 interface DragonMaterialStatsPlayer {
-  effectActivationsByMaterialId?: unknown;
+  effectActivationsByMaterialId?: DragonNumericMapLike;
 }
 
 interface DragonMaterialStats {
@@ -83,10 +106,21 @@ interface DragonGameReference extends AiLiveGamePort {
   materialDuelStats?: DragonMaterialStats;
 }
 
-type DragonSimulationState = SimulationGameState & {
+type DragonSimulationState = Omit<
+  SimulationGameState,
+  | "player"
+  | "bot"
+  | "opponent"
+  | "_gameRef"
+  | "_dragonSimOnce"
+  | "_simMaterialEffectActivationsByMaterialId"
+> & {
+  player: DragonPlayer;
+  bot: DragonPlayer;
+  opponent?: DragonPlayer | null;
   _gameRef?: DragonGameReference;
-  _dragonSimOnce?: SimulatedDragonOnceLedger;
-  _simMaterialEffectActivationsByMaterialId?: SimulatedMaterialActivationLedger;
+  _dragonSimOnce?: DragonOnceLedger;
+  _simMaterialEffectActivationsByMaterialId?: DragonMaterialLedger;
   game?: DragonGameReference | null;
   materialDuelStats?: DragonMaterialStats;
 };
@@ -157,6 +191,27 @@ interface DragonCardKnowledge {
   value?: number;
   priority?: number;
 }
+
+type DragonNumericMapLike = Partial<Record<string | number, number>> & {
+  get?: (key: string | number | undefined) => number | undefined;
+};
+
+type DragonZoneStorage = Partial<
+  Record<DragonArrayZoneName | "banish", DragonCard[]>
+>;
+type DragonZoneStorageKey = keyof DragonZoneStorage;
+
+type DragonAlternateTributeView = AlternateTributeDefinition & {
+  readonly requiresName?: string;
+  readonly requiresType?: string;
+};
+
+type DragonTargetSelectionMap = Record<string, DragonTargetSelection[]>;
+
+type DragonOnceBucket = Partial<Record<string, boolean>>;
+type DragonMaterialBucket = Partial<Record<string | number, number>>;
+type DragonOnceLedger = Partial<Record<PlayerId, DragonOnceBucket>>;
+type DragonMaterialLedger = Partial<Record<PlayerId, DragonMaterialBucket>>;
 
 interface DragonCostSelectionOptions {
   preserveNames?: readonly string[];
@@ -250,138 +305,6 @@ interface DragonLuminescentDebuffPlan {
   preferredNames?: string[];
 }
 
-const getDragonTributeRequirement = getTributeRequirementFor as (
-  card: DragonCard,
-  player: DragonPlayer,
-) => AITributeRequirement;
-
-const selectDragonTributes = selectBestTributes as (
-  field: DragonCard[],
-  tributesNeeded: number,
-  cardToSummon?: DragonCard | null,
-) => number[];
-
-const evaluateDragonRecruit = evaluateDragonRecruitCandidate as (
-  candidates: DragonCard[],
-  context: object,
-) => DragonRecruitEvaluation;
-
-const chooseDragonFusionPlan = selectDragonFusionPlan as (
-  context: object,
-) => DragonFusionPlan | null;
-
-const chooseBestDragonBoss = selectBestDragonBoss as (
-  candidates: DragonCard[],
-  context: DragonBossSelectionContext,
-) => DragonCard | null;
-
-const planLuminescentBattleDebuff = getLuminescentBattleDebuffPlan as (
-  context: {
-    bot: DragonPlayer;
-    player: DragonPlayer;
-    opponent: DragonPlayer;
-  },
-) => DragonLuminescentDebuffPlan;
-
-function isObjectValue(value: unknown): value is object {
-  return (typeof value === "object" && value !== null) ||
-    typeof value === "function";
-}
-
-function matchesDragonAscensionMaterial(
-  ascensionCard: GameCard | DragonCard | null | undefined,
-  materialCard: DragonCard,
-): boolean {
-  return Boolean(
-    Reflect.apply(ascensionMaterialMatches, undefined, [
-      ascensionCard,
-      materialCard,
-    ]),
-  );
-}
-
-function isIntegerIndex(value: unknown): value is number {
-  return Number.isInteger(value);
-}
-
-function isFiniteNumber(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value);
-}
-
-function getSelectionCountMinimum(
-  count: number | { readonly min?: number } | null | undefined,
-): number | undefined {
-  return isObjectValue(count) && isFiniteNumber(Reflect.get(count, "min"))
-    ? Number(Reflect.get(count, "min"))
-    : undefined;
-}
-
-function getSelectionCountMaximum(
-  count: number | { readonly max?: number } | null | undefined,
-): number | undefined {
-  return isObjectValue(count) && isFiniteNumber(Reflect.get(count, "max"))
-    ? Number(Reflect.get(count, "max"))
-    : undefined;
-}
-
-function getCardKnowledge(name: string | null | undefined): DragonCardKnowledge {
-  if (!name) return {};
-  const knowledge = Reflect.get(CARD_KNOWLEDGE, name);
-  return isObjectValue(knowledge) ? knowledge as DragonCardKnowledge : {};
-}
-
-function getPlayerZone(
-  player: DragonPlayer,
-  zoneName: DragonZoneName,
-): DragonCard[] {
-  switch (zoneName) {
-    case "hand":
-      return player.hand;
-    case "field":
-      return player.field;
-    case "graveyard":
-      return player.graveyard;
-    case "deck":
-      return player.deck;
-    case "extraDeck":
-      return player.extraDeck;
-    case "banish":
-    case "banished":
-      return player.banished;
-    case "spellTrap":
-      return player.spellTrap;
-    case "fieldSpell":
-      return player.fieldSpell ? [player.fieldSpell] : [];
-  }
-}
-
-function normalizeDragonZone(zone: ZoneInput): DragonZoneName {
-  return zone === "banish" ? "banished" : zone;
-}
-
-function asDragonAction(
-  action: AIPlannedAction | CardAction | DragonSimulationAction,
-): DragonSimulationAction {
-  return action as DragonSimulationAction;
-}
-
-function getTargetSelections(
-  selections: object,
-  targetRef: string | undefined,
-): DragonTargetSelection[] {
-  if (!targetRef) return [];
-  const value = Reflect.get(selections, targetRef);
-  return Array.isArray(value) ? value as DragonTargetSelection[] : [];
-}
-
-function setTargetSelections(
-  selections: object,
-  targetRef: string,
-  entries: DragonTargetSelection[],
-): void {
-  Reflect.set(selections, targetRef, entries);
-}
-
 const AWAKENING_TARGET_ORDER = [...CURRENT_AWAKENING_TARGET_NAMES];
 
 const CONVERGING_SUMMON_ORDER = [
@@ -411,33 +334,40 @@ function tributeMatchesAltRequirement(
 ): boolean {
   if (!card || card.cardKind !== "monster" || !alt) return false;
   if (card.isFacedown) return false;
-  if ("requiresName" in alt && card.name !== alt.requiresName) return false;
-  if ("requiresType" in alt && card.type !== alt.requiresType) return false;
+  if (
+    (alt as DragonAlternateTributeView).requiresName &&
+    card.name !== (alt as DragonAlternateTributeView).requiresName
+  ) return false;
+  if (
+    (alt as DragonAlternateTributeView).requiresType &&
+    card.type !== (alt as DragonAlternateTributeView).requiresType
+  ) return false;
   return true;
 }
 
 /**
  * Simulates a main-phase action on a cloned game state.
- * @param {Object} state - Cloned game state
- * @param {Object} action - Action to simulate
- * @returns {Object} Modified state
+ * @param state Cloned game state.
+ * @param action Action to simulate.
+ * @returns Modified state.
  */
 export function simulateMainPhaseAction(
   state: DragonSimulationState,
-  inputAction: AIPlannedAction,
+  action: AIPlannedAction,
 ): DragonSimulationState {
-  const action = asDragonAction(inputAction);
-  if (!state?.bot) return state;
+  if (!action || !state?.bot) return state;
 
   switch (action.type) {
     case "summon": {
       const player = state.bot;
-      if (!isIntegerIndex(action.index)) break;
-      const card = player.hand[action.index];
+      const card = player.hand[action.index!];
       if (!card) break;
       if (!canUseNormalSummonForCard(player, card)) break;
 
-      const tributeInfo = getDragonTributeRequirement(card, player);
+      const tributeInfo = (getTributeRequirementFor as (
+        card: DragonCard,
+        player: DragonPlayer,
+      ) => AITributeRequirement)(card, player);
 
       if (
         tributeInfo.tributesNeeded > 0 &&
@@ -448,7 +378,11 @@ export function simulateMainPhaseAction(
 
       // Remove tributes
       if (tributeInfo.tributesNeeded > 0) {
-        const tributeIndices = selectDragonTributes(
+        const tributeIndices = (selectBestTributes as (
+          field: DragonCard[],
+          tributesNeeded: number,
+          cardToSummon?: DragonCard | null,
+        ) => number[])(
           player.field,
           tributeInfo.tributesNeeded,
           card,
@@ -477,7 +411,7 @@ export function simulateMainPhaseAction(
       }
 
       // Move card from hand to field
-      player.hand.splice(action.index, 1);
+      player.hand.splice(action.index!, 1);
       player.field.push({
         ...card,
         position: (action.position || "attack") as BattlePosition,
@@ -495,11 +429,10 @@ export function simulateMainPhaseAction(
 
     case "spell": {
       const player = state.bot;
-      if (!isIntegerIndex(action.index)) break;
-      const card = player.hand[action.index];
+      const card = player.hand[action.index!];
       if (!card) break;
 
-      player.hand.splice(action.index, 1);
+      player.hand.splice(action.index!, 1);
 
       simulateDragonSpellEffect(state, card, action);
 
@@ -517,8 +450,7 @@ export function simulateMainPhaseAction(
 
     case "handIgnition": {
       const player = state.bot;
-      if (!isIntegerIndex(action.index)) break;
-      const card = player.hand[action.index];
+      const card = player.hand[action.index!];
       if (!card) break;
 
       simulateDragonHandIgnition(state, card, action);
@@ -527,7 +459,7 @@ export function simulateMainPhaseAction(
 
     case "graveyardMonsterEffect": {
       const player = state.bot;
-      const graveyardIndex = isIntegerIndex(action.graveyardIndex)
+      const graveyardIndex = Number.isInteger(action.graveyardIndex)
         ? action.graveyardIndex
         : (player.graveyard || []).findIndex(
             (card) =>
@@ -535,7 +467,7 @@ export function simulateMainPhaseAction(
               (card.id === action.cardId ||
                 (!action.cardId && card.name === action.cardName)),
           );
-      const card = player.graveyard?.[graveyardIndex];
+      const card = player.graveyard?.[graveyardIndex!];
       if (!card) break;
 
       simulateDragonGraveyardMonsterEffect(state, card, action);
@@ -544,13 +476,12 @@ export function simulateMainPhaseAction(
 
     case "spellTrapEffect": {
       const player = state.bot;
-      const zoneIndex = isIntegerIndex(action.zoneIndex)
+      const zoneIndex = Number.isInteger(action.zoneIndex)
         ? action.zoneIndex
         : action.index;
-      if (!isIntegerIndex(zoneIndex)) break;
-      const card = player.spellTrap?.[zoneIndex];
+      const card = player.spellTrap?.[zoneIndex!];
       if (!card) break;
-      simulateDragonSpellTrapIgnition(state, card, action, zoneIndex);
+      simulateDragonSpellTrapIgnition(state, card, action, zoneIndex!);
       break;
     }
 
@@ -564,7 +495,7 @@ export function simulateMainPhaseAction(
 
     case "monsterEffect": {
       const player = state.bot;
-      const fieldIndex = isIntegerIndex(action.fieldIndex)
+      const fieldIndex = Number.isInteger(action.fieldIndex)
         ? action.fieldIndex
         : (player.field || []).findIndex(
             (card) =>
@@ -572,15 +503,15 @@ export function simulateMainPhaseAction(
               (card.id === action.cardId ||
                 (!action.cardId && card.name === action.cardName)),
           );
-      const card = player.field?.[fieldIndex];
+      const card = player.field?.[fieldIndex!];
       if (!card) break;
-      simulateDragonFieldMonsterEffect(state, card, action, fieldIndex);
+      simulateDragonFieldMonsterEffect(state, card, action, fieldIndex!);
       break;
     }
 
     case "graveyardSpellEffect": {
       const player = state.bot;
-      const graveyardIndex = isIntegerIndex(action.graveyardIndex)
+      const graveyardIndex = Number.isInteger(action.graveyardIndex)
         ? action.graveyardIndex
         : (player.graveyard || []).findIndex(
             (card) =>
@@ -588,19 +519,18 @@ export function simulateMainPhaseAction(
               (card.id === action.cardId ||
                 (!action.cardId && card.name === action.cardName)),
           );
-      const card = player.graveyard?.[graveyardIndex];
+      const card = player.graveyard?.[graveyardIndex!];
       if (!card) break;
-      simulateDragonGraveyardSpellEffect(state, card, action, graveyardIndex);
+      simulateDragonGraveyardSpellEffect(state, card, action, graveyardIndex!);
       break;
     }
 
     case "set_spell_trap": {
       const player = state.bot;
-      if (!isIntegerIndex(action.index)) break;
-      const card = player.hand[action.index];
+      const card = player.hand[action.index!];
       if (!card) break;
       if (card.cardKind === "spell" && card.subtype === "field") break;
-      player.hand.splice(action.index, 1);
+      player.hand.splice(action.index!, 1);
       player.spellTrap = player.spellTrap || [];
       if (player.spellTrap.length < 5) {
         player.spellTrap.push({ ...card, isFacedown: true });
@@ -640,9 +570,9 @@ export function simulateMainPhaseAction(
 
 /**
  * Simulates spell-specific effects on the cloned state.
- * @param {Object} state
- * @param {Object} card
- * @param {Object} action
+ * @param state Cloned game state.
+ * @param card Spell being simulated.
+ * @param action Planned action metadata.
  */
 function simulateDragonSpellEffect(
   state: DragonSimulationState,
@@ -709,7 +639,9 @@ function simulateDragonSpellEffect(
 
     case "Polymerization": {
       const materialEntries = getFusionMaterialEntries(player);
-      const fusionPlan = chooseDragonFusionPlan({
+      const fusionPlan = (selectDragonFusionPlan as (
+        context: object,
+      ) => DragonFusionPlan | null)({
         player,
         bot: player,
         opponent: state.player || {},
@@ -818,7 +750,7 @@ function isDragonMonster(
 function getFusionMaterialEntries(player: DragonPlayer): DragonMaterialEntry[] {
   const entries: DragonMaterialEntry[] = [];
   for (const zone of ["hand", "field"] as const) {
-    const cards = player[zone];
+    const cards = (player as DragonZoneStorage)?.[zone] || [];
     for (let index = 0; index < cards.length; index++) {
       const card = cards[index];
       if (isDragonMonster(card)) {
@@ -830,8 +762,10 @@ function getFusionMaterialEntries(player: DragonPlayer): DragonMaterialEntry[] {
 }
 
 function materialValue(entry: DragonMaterialValueEntry): number {
-  const card = entry.card;
-  const knowledge = getCardKnowledge(card.name);
+  const card = entry?.card || ({} as DragonCard);
+  const knowledge = (CARD_KNOWLEDGE as Partial<
+    Record<string, DragonCardKnowledge>
+  >)[card.name as string] || {};
   return (
     (knowledge.value || 0) +
     (card.level || 0) * 0.2 +
@@ -841,12 +775,16 @@ function materialValue(entry: DragonMaterialValueEntry): number {
 }
 
 function cardStrategicSimValue(card: DragonCard | null | undefined): number {
-  const knowledge = getCardKnowledge(card?.name);
+  const knowledge = (CARD_KNOWLEDGE as Partial<
+    Record<string, DragonCardKnowledge>
+  >)[card?.name as string] || {};
   return (
     (knowledge.value || knowledge.priority || 0) +
     (card?.level || 0) * 0.25 +
     Math.max(card?.atk || 0, card?.def || 0) / 1000 +
-    (card && isExtremeDragon(card) ? 4 : 0) +
+    ((isExtremeDragon as (
+      card: DragonCard | null | undefined,
+    ) => boolean)(card) ? 4 : 0) +
     (card?.monsterType === "fusion" || card?.monsterType === "ascension" ? 5 : 0)
   );
 }
@@ -911,7 +849,7 @@ function orderBonus(
   order: readonly string[] = [],
   step = 12,
 ): number {
-  const index = card?.name ? order.indexOf(card.name) : -1;
+  const index = order.indexOf(card?.name as string);
   return index >= 0 ? (order.length - index) * step : 0;
 }
 
@@ -924,44 +862,12 @@ function getPlayerId(
 }
 
 function readMapLike(
-  value: unknown,
+  value: DragonNumericMapLike | null | undefined,
   key: string | number | undefined,
 ): number {
-  if (!value || key === undefined) return 0;
-  if (value instanceof Map) return Number(value.get(key)) || 0;
-  if (!isObjectValue(value)) return 0;
-  const get = Reflect.get(value, "get");
-  if (typeof get === "function") {
-    return Number(Reflect.apply(get, value, [key])) || 0;
-  }
-  return Number(Reflect.get(value, String(key))) || 0;
-}
-
-function getMaterialStatsForPlayer(
-  stats: DragonMaterialStats | null | undefined,
-  playerId: PlayerId,
-): DragonMaterialStatsPlayer | undefined {
-  return playerId === "player" ? stats?.player : stats?.bot;
-}
-
-function getLedgerSeat(
-  ledger:
-    | SimulatedDragonOnceLedger
-    | SimulatedMaterialActivationLedger
-    | null
-    | undefined,
-  playerId: PlayerId,
-): unknown {
-  return playerId === "player" ? ledger?.player : ledger?.bot;
-}
-
-function setLedgerSeat(
-  ledger: SimulatedDragonOnceLedger | SimulatedMaterialActivationLedger,
-  playerId: PlayerId,
-  bucket: object,
-): void {
-  if (playerId === "player") ledger.player = bucket;
-  else ledger.bot = bucket;
+  if (!value) return 0;
+  if (typeof value.get === "function") return value.get(key) || 0;
+  return value[key as string | number] || value[String(key)] || 0;
 }
 
 function getMaterialEffectActivationCount(
@@ -973,12 +879,12 @@ function getMaterialEffectActivationCount(
   const realGame = state?._gameRef || state;
   return (
     readMapLike(
-      getMaterialStatsForPlayer(realGame.materialDuelStats, playerId)
+      realGame?.materialDuelStats?.[playerId]
         ?.effectActivationsByMaterialId,
       materialId,
     ) +
     readMapLike(
-      getLedgerSeat(state._simMaterialEffectActivationsByMaterialId, playerId),
+      state?._simMaterialEffectActivationsByMaterialId?.[playerId],
       materialId,
     ) +
     readMapLike(owner?._simMaterialEffectActivationsByMaterialId, materialId)
@@ -996,26 +902,20 @@ function recordSimulatedMaterialEffectActivation(
   if (!state._simMaterialEffectActivationsByMaterialId) {
     state._simMaterialEffectActivationsByMaterialId = { player: {}, bot: {} };
   }
-  const ledger = state._simMaterialEffectActivationsByMaterialId;
-  const existingBucket = getLedgerSeat(ledger, playerId);
-  const bucket = isObjectValue(existingBucket) ? existingBucket : {};
-  if (bucket !== existingBucket) setLedgerSeat(ledger, playerId, bucket);
-  const current = Number(Reflect.get(bucket, String(sourceCard.id))) || 0;
-  Reflect.set(bucket, String(sourceCard.id), current + 1);
+  const bucket =
+    state._simMaterialEffectActivationsByMaterialId[playerId] ||
+    (state._simMaterialEffectActivationsByMaterialId[playerId] = {});
+  bucket[sourceCard.id] = (bucket[sourceCard.id] || 0) + 1;
 }
 
 function getSimulatedOnceBucket(
   state: DragonSimulationState,
   owner: DragonPlayer,
-): object | null {
+): DragonOnceBucket | null {
   if (!state) return null;
   const playerId = getPlayerId(state, owner);
   if (!state._dragonSimOnce) state._dragonSimOnce = { player: {}, bot: {} };
-  const existingBucket = getLedgerSeat(state._dragonSimOnce, playerId);
-  if (isObjectValue(existingBucket)) return existingBucket;
-  const bucket = {};
-  setLedgerSeat(state._dragonSimOnce, playerId, bucket);
-  return bucket;
+  return state._dragonSimOnce[playerId] || (state._dragonSimOnce[playerId] = {});
 }
 
 function canUseSimulatedOnce(
@@ -1025,7 +925,7 @@ function canUseSimulatedOnce(
 ): boolean {
   if (!state || !key) return true;
   const bucket = getSimulatedOnceBucket(state, owner);
-  return !bucket || !Reflect.get(bucket, key);
+  return !bucket?.[key];
 }
 
 function useSimulatedOnce(
@@ -1035,9 +935,8 @@ function useSimulatedOnce(
 ): boolean {
   if (!state || !key) return true;
   const bucket = getSimulatedOnceBucket(state, owner);
-  if (!bucket) return true;
-  if (Reflect.get(bucket, key)) return false;
-  Reflect.set(bucket, key, true);
+  if (bucket![key]) return false;
+  bucket![key] = true;
   return true;
 }
 
@@ -1066,7 +965,10 @@ function putSimulatedCard(
     return;
   }
 
-  getPlayerZone(owner, zone).push(card);
+  if (!(owner as DragonZoneStorage)[zone]) {
+    (owner as DragonZoneStorage)[zone] = [];
+  }
+  (owner as DragonZoneStorage)[zone]!.push(card);
 }
 
 function moveFieldIndexToGraveyard(
@@ -1172,7 +1074,10 @@ function rankRecruitEntriesForSimulation<Entry extends DragonCandidateEntry>(
   effect: EffectDefinition | null = null,
 ): Entry[] {
   if (!Array.isArray(entries) || entries.length === 0) return [];
-  const evaluation = evaluateDragonRecruit(
+  const evaluation = (evaluateDragonRecruitCandidate as (
+    candidates: DragonCard[],
+    context: object,
+  ) => DragonRecruitEvaluation)(
     entries.map((entry) => entry.candidate),
     {
       player: state?.bot,
@@ -1247,9 +1152,7 @@ function selectFieldDragonCosts(
         if (entry.candidate.monsterType === "fusion" || entry.candidate.monsterType === "ascension") {
           value += 80;
         }
-        if (entry.candidate.name && preserveNames.has(entry.candidate.name)) {
-          value += 50;
-        }
+        if (preserveNames.has(entry.candidate.name as string)) value += 50;
         if (entry.candidate.hasAttacked) value -= 1;
         return value;
       };
@@ -1269,7 +1172,7 @@ function buildSimBanishContext(
     ...extra,
     player,
     bot: player,
-    opponent: state.player,
+    opponent: state?.player || ({} as DragonPlayer),
     game: state?._gameRef || state?.game || null,
     isSimulatedState: true,
     source: sourceCard,
@@ -1380,14 +1283,21 @@ function normalSummonFromHandIndex(
 ): DragonCard | null {
   const card = player?.hand?.[handIndex];
   if (!card || !canUseNormalSummonForCard(player, card)) return null;
-  const tributeInfo = getDragonTributeRequirement(card, player);
+  const tributeInfo = (getTributeRequirementFor as (
+    card: DragonCard,
+    player: DragonPlayer,
+  ) => AITributeRequirement)(card, player);
   if (!fieldHasTributeValue(player.field || [], tributeInfo.tributesNeeded, card)) {
     return null;
   }
   if (tributeInfo.tributesNeeded === 0 && (player.field || []).length >= 5) return null;
 
   if (tributeInfo.tributesNeeded > 0) {
-    const tributeIndices = selectDragonTributes(
+    const tributeIndices = (selectBestTributes as (
+      field: DragonCard[],
+      tributesNeeded: number,
+      cardToSummon?: DragonCard | null,
+    ) => number[])(
       player.field,
       tributeInfo.tributesNeeded,
       card,
@@ -1616,11 +1526,14 @@ function simulateBestConvergingSummon(
     .filter(({ candidate }) => {
       if (!isDragonMonster(candidate)) return false;
       if (!canUseNormalSummonForCard(player, candidate)) return false;
-      const tributeInfo = getDragonTributeRequirement(candidate, player);
+      const tributeInfo = (getTributeRequirementFor as (
+        card: DragonCard,
+        player: DragonPlayer,
+      ) => AITributeRequirement)(candidate, player);
       if ((player.field || []).length < tributeInfo.tributesNeeded) return false;
       if (tributeInfo.tributesNeeded === 0 && (player.field || []).length >= 5) return false;
       return (
-        (!!candidate.name && CONVERGING_SUMMON_ORDER.includes(candidate.name)) ||
+        CONVERGING_SUMMON_ORDER.includes(candidate.name as string) ||
         (candidate.level || 0) >= 5
       );
     })
@@ -1778,7 +1691,9 @@ function pickWorstDeckRefund(graveyard: readonly DragonCard[]): number {
 
   for (let i = 0; i < graveyard.length; i++) {
     const card = graveyard[i];
-    const knowledge = getCardKnowledge(card.name);
+    const knowledge = (CARD_KNOWLEDGE as Partial<
+      Record<string, DragonCardKnowledge>
+    >)[card.name as string] || {};
     let score = knowledge.value || 0;
 
     if (isDragonMonster(card)) score += 6;
@@ -1844,7 +1759,7 @@ function simulateDragonHandIgnition(
     }
     discardHandCardToGraveyard(state, player, solarIndex);
 
-    const sourceZone = getPlayerZone(player, selected.zoneName);
+    const sourceZone = (player as DragonZoneStorage)[selected.zoneName] || [];
     const liveIndex = sourceZone.indexOf(selected.candidate);
     if (liveIndex < 0) return;
     const lunar = sourceZone.splice(liveIndex, 1)[0];
@@ -1862,8 +1777,7 @@ function simulateDragonHandIgnition(
 
   if (card.name === "Luminous Dragon") {
     if (player.field.length === 0 && player.field.length < 5) {
-      if (!isIntegerIndex(action.index)) return;
-      player.hand.splice(action.index, 1);
+      player.hand.splice(action.index!, 1);
       const summoned = specialSummonToField(state, player, card, action, {
         method: "special",
       });
@@ -1875,8 +1789,7 @@ function simulateDragonHandIgnition(
   if (card.name === "Voltaic Dragon") {
     // SS if control Dragon — just place it on field
     if (player.field.some(isFaceupDragon) && player.field.length < 5) {
-      if (!isIntegerIndex(action.index)) return;
-      player.hand.splice(action.index, 1);
+      player.hand.splice(action.index!, 1);
       const summoned = specialSummonToField(state, player, card, action, {
         method: "special",
       });
@@ -2050,11 +1963,13 @@ function simulateDragonSpellTrapIgnition(
       ({ candidate }) =>
         isDragonMonster(candidate) &&
         (candidate.level || 0) >= 8 &&
-        !!candidate.name &&
-        AWAKENING_TARGET_ORDER.includes(candidate.name) &&
+        AWAKENING_TARGET_ORDER.includes(candidate.name as string) &&
         (!hasExtremeFaceup || !isExtremeDragon(candidate)),
     );
-  const bossTarget = chooseBestDragonBoss(
+  const bossTarget = (selectBestDragonBoss as (
+    candidates: DragonCard[],
+    context: DragonBossSelectionContext,
+  ) => DragonCard | null)(
     targetEntries.map(({ candidate }) => candidate),
     {
       player,
@@ -2097,10 +2012,7 @@ function simulateDragonFieldSpellEffect(
 ): void {
   const player = state.bot;
   if (card.name !== "Jagged Peak of the Dragons") return;
-  const dragonPeakCounters = card.counters
-    ? Number(Reflect.get(card.counters, "dragon_peak")) || 0
-    : 0;
-  if (dragonPeakCounters < 5) return;
+  if (((card.counters as DragonCounterObject)?.dragon_peak || 0) < 5) return;
   if ((player.field || []).length >= 5) return;
 
   player.fieldSpell = null;
@@ -2109,7 +2021,7 @@ function simulateDragonFieldSpellEffect(
   const zones = ["hand", "deck", "graveyard"] as const;
   const candidates: DragonFieldSpellCandidateEntry[] = [];
   for (const zone of zones) {
-    player[zone].forEach((candidate, index) => {
+    ((player as DragonZoneStorage)[zone] || []).forEach((candidate, index) => {
       if (isDragonMonster(candidate)) candidates.push({ candidate, zone, index });
     });
   }
@@ -2230,7 +2142,7 @@ function simulateDragonFieldMonsterEffect(
 function simulateDragonGraveyardSpellEffect(
   state: DragonSimulationState,
   card: DragonCard,
-  _action: DragonSimulationAction,
+  action: DragonSimulationAction,
   graveyardIndex: number,
 ): void {
   const player = state.bot;
@@ -2286,13 +2198,19 @@ function simulateDragonGraveyardMonsterEffect(
   }
   const luminescentDebuffPlan =
     effect.id === "luminescent_dragon_banish_debuff"
-      ? planLuminescentBattleDebuff({ bot: player, player, opponent })
+      ? (getLuminescentBattleDebuffPlan as (
+          context: {
+            bot: DragonPlayer;
+            player: DragonPlayer;
+            opponent: DragonPlayer;
+          },
+        ) => DragonLuminescentDebuffPlan)({ bot: player, player, opponent })
       : null;
   if (effect.id === "luminescent_dragon_banish_debuff" && !luminescentDebuffPlan?.ok) {
     return;
   }
 
-  const targetSelections = {};
+  const targetSelections: DragonTargetSelectionMap = {};
   let resolvedAnyAction = false;
   for (const target of effect.targets || []) {
     const owner = target.owner === "opponent" ? opponent : player;
@@ -2302,8 +2220,8 @@ function simulateDragonGraveyardMonsterEffect(
         ? owner?.fieldSpell
           ? [owner.fieldSpell]
           : []
-        : getPlayerZone(owner, zoneName);
-    let candidates: DragonTargetSelection[] = zone
+        : (owner as DragonZoneStorage)?.[zoneName as DragonZoneStorageKey] || [];
+    let candidates: DragonTargetSelection[] = (zone || [])
       .map((candidate, index) => ({ candidate, index, owner, zoneName }))
       .filter(({ candidate }) => matchesEffectTarget(candidate, target));
     if (target.excludeSelf) {
@@ -2322,7 +2240,7 @@ function simulateDragonGraveyardMonsterEffect(
         const preferred = luminescentDebuffPlan.preferredNames || [];
         return (
           candidate === luminescentDebuffPlan.target ||
-          (!!candidate.name && preferred.includes(candidate.name))
+          preferred.includes(candidate?.name as string)
         );
       });
     }
@@ -2362,9 +2280,7 @@ function simulateDragonGraveyardMonsterEffect(
         if (target.id === "luminescent_debuff_target") {
           const preferred = luminescentDebuffPlan?.preferredNames || [];
           const score = (entry: DragonTargetSelection) => {
-            const order = entry.candidate.name
-              ? preferred.indexOf(entry.candidate.name)
-              : -1;
+            const order = preferred.indexOf(entry.candidate?.name as string);
             return (
               (entry.candidate === luminescentDebuffPlan?.target ? 10000 : 0) +
               (order >= 0 ? 1000 - order * 20 : 0) +
@@ -2398,17 +2314,13 @@ function simulateDragonGraveyardMonsterEffect(
       });
     }
 
-    setTargetSelections(
-      targetSelections,
-      target.id,
-      candidates.slice(0, target.count?.max || 1),
-    );
+    targetSelections[target.id] = candidates.slice(0, target.count?.max || 1);
   }
 
   const movesSourceAsCost = (effect.activationCosts || []).some(
     (costAction) =>
-      (costAction.type === "move" || costAction.type === "banish") &&
-      costAction.targetRef === "self",
+      (costAction as DragonSimulationAction)?.targetRef === "self" &&
+      (costAction.type === "move" || costAction.type === "banish"),
   );
   const dynamicSummonPlans = new Map<CardAction, DragonTargetSelection[]>();
   for (const effectAction of effect.actions || []) {
@@ -2428,7 +2340,7 @@ function simulateDragonGraveyardMonsterEffect(
         matchesActionFilters(candidate, effectAction),
     );
     const minRequired = Number(
-      getSelectionCountMinimum(effectAction.count) ?? 1,
+      (effectAction.count as { readonly min?: number } | undefined)?.min ?? 1,
     );
     if (candidates.length < Math.max(1, minRequired)) return;
     const ranked = rankRecruitEntriesForSimulation(
@@ -2465,10 +2377,7 @@ function simulateDragonGraveyardMonsterEffect(
       moveSimulatedCard(player, card, fromZone, toZone, state);
       continue;
     }
-    for (const selection of getTargetSelections(
-      targetSelections,
-      costAction.targetRef,
-    )) {
+    for (const selection of targetSelections[costAction.targetRef as string] || []) {
       moveSimulatedCard(
         selection.owner || player,
         selection.candidate,
@@ -2483,10 +2392,7 @@ function simulateDragonGraveyardMonsterEffect(
 
   for (const effectAction of effect.actions || []) {
     if (effectAction.type === "move" && effectAction.targetRef) {
-      const selections = getTargetSelections(
-        targetSelections,
-        effectAction.targetRef,
-      );
+      const selections = targetSelections[effectAction.targetRef] || [];
       for (const selection of selections) {
         moveSimulatedCard(
           selection.owner,
@@ -2502,7 +2408,8 @@ function simulateDragonGraveyardMonsterEffect(
 
     if (effectAction.type === "banish" && effectAction.targetRef === "self") {
       const fromZone = effectAction.fromZone || "graveyard";
-      const sourceZone = getPlayerZone(player, normalizeDragonZone(fromZone));
+      const sourceZone =
+        (player as DragonZoneStorage)[fromZone as DragonZoneStorageKey] || [];
       const sourceIndex = sourceZone.indexOf(card);
       if (sourceIndex >= 0) {
         const banished = sourceZone.splice(sourceIndex, 1)[0];
@@ -2514,8 +2421,9 @@ function simulateDragonGraveyardMonsterEffect(
     }
 
     if (effectAction.type === "add_from_zone_to_hand") {
-      const zoneName = (effectAction.zone || "deck") as ZoneInput;
-      const sourceZone = getPlayerZone(player, normalizeDragonZone(zoneName));
+      const zoneName = effectAction.zone || "deck";
+      const sourceZone =
+        (player as DragonZoneStorage)[zoneName as DragonZoneStorageKey] || [];
       const candidates = sourceZone
         .map((candidate, index) => ({ candidate, index }))
         .filter(({ candidate }) => matchesActionFilters(candidate, effectAction));
@@ -2542,18 +2450,13 @@ function simulateDragonGraveyardMonsterEffect(
     }
 
     if (effectAction.type === "special_summon_from_zone" && effectAction.targetRef) {
-      const selections = getTargetSelections(
-        targetSelections,
-        effectAction.targetRef,
-      );
+      const selections = targetSelections[effectAction.targetRef] || [];
       for (const selection of selections) {
         if ((player.field || []).length >= 5) break;
         const owner = selection.owner || player;
         const zoneName = selection.zoneName || effectAction.zone || "graveyard";
-        const sourceZone = getPlayerZone(
-          owner,
-          normalizeDragonZone(zoneName as ZoneInput),
-        );
+        const sourceZone =
+          (owner as DragonZoneStorage)[zoneName as DragonZoneStorageKey] || [];
         const liveIndex = sourceZone.indexOf(selection.candidate);
         if (liveIndex < 0) continue;
         const summonedCard = sourceZone.splice(liveIndex, 1)[0];
@@ -2580,11 +2483,16 @@ function simulateDragonGraveyardMonsterEffect(
       if ((player.field || []).length >= 5) continue;
       const ranked = dynamicSummonPlans.get(effectAction) || [];
       const maxSummons = Math.min(
-        Number(getSelectionCountMaximum(effectAction.count) ?? 1),
+        Number(
+          (effectAction.count as { readonly max?: number } | undefined)?.max ?? 1,
+        ),
         5 - (player.field?.length || 0),
       );
       for (const selection of ranked.slice(0, maxSummons)) {
-        const sourceZone = getPlayerZone(player, selection.zoneName);
+        const sourceZone =
+          (player as DragonZoneStorage)[
+            selection.zoneName as DragonZoneStorageKey
+          ] || [];
         const liveIndex = sourceZone.indexOf(selection.candidate);
         if (liveIndex < 0) continue;
         const summonedCard = sourceZone.splice(liveIndex, 1)[0];
@@ -2637,7 +2545,7 @@ function simulateDragonAscension(
   const player = state.bot;
   if (!player) return;
 
-  const materialIndex = isIntegerIndex(action.materialIndex)
+  const materialIndex = Number.isInteger(action.materialIndex)
     ? action.materialIndex
     : (player.field || []).findIndex(
         (candidate) =>
@@ -2646,10 +2554,13 @@ function simulateDragonAscension(
           !candidate.isFacedown &&
           (
             candidate.id === action.materialId ||
-            matchesDragonAscensionMaterial(action.ascensionCard, candidate)
+            ascensionMaterialMatches(
+              action.ascensionCard as (DragonCard & GameCard) | null | undefined,
+              candidate as DragonCard & GameCard,
+            )
           ),
       );
-  const material = player.field?.[materialIndex];
+  const material = player.field?.[materialIndex!];
   if (!material || material.isFacedown) return;
 
   const extraIndex = (player.extraDeck || []).findIndex(
@@ -2665,7 +2576,12 @@ function simulateDragonAscension(
   const ascensionCard =
     extraIndex >= 0 ? player.extraDeck[extraIndex] : action.ascensionCard;
   if (!ascensionCard || ascensionCard.monsterType !== "ascension") return;
-  if (!matchesDragonAscensionMaterial(ascensionCard, material)) return;
+  if (
+    !ascensionMaterialMatches(
+      ascensionCard as DragonCard & GameCard,
+      material as DragonCard & GameCard,
+    )
+  ) return;
 
   const requirements = ascensionCard.ascension?.requirements || [];
   const requirementsMet = requirements.every((requirement) => {
@@ -2675,7 +2591,7 @@ function simulateDragonAscension(
   });
   if (!requirementsMet) return;
 
-  player.field.splice(materialIndex, 1);
+  player.field.splice(materialIndex!, 1);
   putSimulatedCard(player, material, "graveyard");
   if (extraIndex >= 0) player.extraDeck.splice(extraIndex, 1);
   const summoned = specialSummonToField(
@@ -2705,10 +2621,10 @@ function matchesEffectTarget(
   if (target.filters?.name && card.name !== target.filters.name) return false;
   if (target.filters?.cardKind && card.cardKind !== target.filters.cardKind) return false;
   if (target.cardName && card.name !== target.cardName) return false;
-  if (isFiniteNumber(target.minLevel) && (card.level || 0) < target.minLevel) return false;
-  if (isFiniteNumber(target.maxLevel) && (card.level || 0) > target.maxLevel) return false;
-  if (isFiniteNumber(target.filters?.minLevel) && (card.level || 0) < target.filters.minLevel) return false;
-  if (isFiniteNumber(target.filters?.maxLevel) && (card.level || 0) > target.filters.maxLevel) return false;
+  if (Number.isFinite(target.minLevel) && (card.level || 0) < target.minLevel!) return false;
+  if (Number.isFinite(target.maxLevel) && (card.level || 0) > target.maxLevel!) return false;
+  if (Number.isFinite(target.filters?.minLevel) && (card.level || 0) < target.filters!.minLevel!) return false;
+  if (Number.isFinite(target.filters?.maxLevel) && (card.level || 0) > target.filters!.maxLevel!) return false;
   if (target.requireFaceup && card.isFacedown) return false;
   if (target.archetype) {
     const archetypes = Array.isArray(card.archetypes)
@@ -2726,16 +2642,15 @@ function matchesActionFilters(
   action: DragonSimulationAction | CardAction,
 ): boolean {
   if (!card) return false;
-  const simulationAction = asDragonAction(action);
-  const filters = simulationAction.filters || {};
-  if (simulationAction.cardKind && card.cardKind !== simulationAction.cardKind) return false;
+  const filters = (action as DragonSimulationAction).filters || {};
+  if ((action as DragonSimulationAction).cardKind && card.cardKind !== (action as DragonSimulationAction).cardKind) return false;
   if (filters.cardKind && card.cardKind !== filters.cardKind) return false;
   if (filters.name && card.name !== filters.name) return false;
   if (filters.type && card.type !== filters.type) return false;
-  if (isFiniteNumber(simulationAction.minLevel) && (card.level || 0) < simulationAction.minLevel) return false;
-  if (isFiniteNumber(simulationAction.maxLevel) && (card.level || 0) > simulationAction.maxLevel) return false;
-  if (isFiniteNumber(filters.minLevel) && (card.level || 0) < filters.minLevel) return false;
-  if (isFiniteNumber(filters.maxLevel) && (card.level || 0) > filters.maxLevel) return false;
+  if (Number.isFinite((action as DragonSimulationAction).minLevel) && (card.level || 0) < (action as DragonSimulationAction).minLevel!) return false;
+  if (Number.isFinite((action as DragonSimulationAction).maxLevel) && (card.level || 0) > (action as DragonSimulationAction).maxLevel!) return false;
+  if (Number.isFinite(filters.minLevel) && (card.level || 0) < filters.minLevel!) return false;
+  if (Number.isFinite(filters.maxLevel) && (card.level || 0) > filters.maxLevel!) return false;
   return true;
 }
 
@@ -2743,12 +2658,13 @@ function collectSimulatedActionZoneEntries(
   player: DragonPlayer,
   action: DragonSimulationAction | CardAction,
 ): DragonTargetSelection[] {
-  const simulationAction = asDragonAction(action);
-  const zoneSpec = simulationAction.zone || simulationAction.sourceZone || "deck";
-  const zoneNames: readonly ZoneInput[] =
-    typeof zoneSpec === "string" ? [zoneSpec] : zoneSpec;
+  const zoneSpec =
+    (action as DragonSimulationAction)?.zone ||
+    (action as DragonSimulationAction)?.sourceZone ||
+    "deck";
+  const zoneNames = Array.isArray(zoneSpec) ? zoneSpec : [zoneSpec];
   return zoneNames.flatMap((zoneName) =>
-    getPlayerZone(player, normalizeDragonZone(zoneName)).map((candidate, index) => ({
+    ((player as DragonZoneStorage)?.[zoneName as DragonZoneStorageKey] || []).map((candidate, index) => ({
       candidate,
       index,
       owner: player,
@@ -2770,7 +2686,7 @@ function moveSimulatedCard(
       ? owner.fieldSpell
         ? [owner.fieldSpell]
         : []
-      : getPlayerZone(owner, fromZone);
+      : (owner as DragonZoneStorage)[fromZone] || [];
   const sourceIndex = sourceZone.indexOf(card);
   if (sourceIndex < 0) return;
   if (fromZone === "fieldSpell") {
@@ -2789,7 +2705,9 @@ function applySimulatedPassiveBuffs(
   owner: DragonPlayer,
 ): void {
   for (const effect of card.effects || []) {
-    const passive = effect && "passive" in effect ? effect.passive : undefined;
+    const passive = (effect as EffectDefinition & {
+      passive?: PassiveRuleDefinition;
+    })?.passive;
     if (passive?.type !== "graveyard_type_count_buff") continue;
     const count = (owner.graveyard || []).filter(
       (candidate) =>
