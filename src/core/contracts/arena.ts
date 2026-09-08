@@ -54,6 +54,12 @@ export interface ArenaSearchOptions {
   plannerMaxDepth?: number | null;
   plannerNodeBudget?: number | null;
   plannerCandidateLimit?: number | null;
+  turnLineSearchMode?: AIPlanningMode | null;
+  turnLineSearchTurnMode?: AITurnPlanningMode | null;
+  turnLineSearchBeamWidth?: number | null;
+  turnLineSearchMaxDepth?: number | null;
+  turnLineSearchNodeBudget?: number | null;
+  turnLineSearchCandidateLimit?: number | null;
   diagnosticLog?: boolean;
   quietLogs?: boolean;
   quiet?: boolean;
@@ -78,17 +84,26 @@ export type ArenaDuelOutcome =
   | { type: "draw"; reason: ArenaEndReason }
   | { type: "cancelled"; reason: ArenaEndReason };
 
-export interface ArenaDuelResult {
+export interface ArenaCompletedDuelResult {
   duelNumber: number;
   winner: ArenaWinner;
   turns: number;
-  type: string;
+  type: "completed" | "draw" | "error";
   reason: ArenaEndReason | string | null;
   totalTimeMs: number;
   archetype1?: BotArchetypeId | "custom" | string;
   archetype2?: BotArchetypeId | "custom" | string;
   message?: string;
 }
+
+export interface ArenaCancelledDuelResult {
+  type: "cancelled";
+  duelNumber: number;
+}
+
+export type ArenaDuelResult =
+  | ArenaCompletedDuelResult
+  | ArenaCancelledDuelResult;
 
 export interface ArenaProgressStats {
   completed: number;

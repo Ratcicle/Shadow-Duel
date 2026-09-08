@@ -14,17 +14,26 @@ import type {
   TurnLineSearchResult,
 } from "../../src/core/contracts/ai.js";
 import type {
+  AiStateShape,
   BeamPerspectiveGameState,
   BotPerspectiveGameState,
   GameTreeSimulatedPlayerState,
   GameTreeSimulationGameState,
+  GameTreeStateShape,
   LiveGameState,
   PerspectiveGameState,
   PublicGameState,
   ReplayGameState,
+  SimulationCloneProfile,
   SimulatedCardState,
   SimulationGameState,
 } from "../../src/core/contracts/aiState.js";
+import type {
+  ArenaCancelledDuelResult,
+  ArenaCompletedDuelResult,
+  ArenaDuelResult,
+  ArenaSearchOptions,
+} from "../../src/core/contracts/arena.js";
 import type { CanonicalGameStateSnapshot } from "../../src/core/contracts/replay.js";
 import type { getPublicState } from "../../src/core/game/state/serialization.js";
 import type {
@@ -68,6 +77,9 @@ type ExecutorKeysAreExact = Expect<
 >;
 type ReplayStateKeepsCanonicalSnapshot = Expect<
   Equal<ReplayGameState, CanonicalGameStateSnapshot>
+>;
+type SimulationProfilesMatchRealCloneFactories = Expect<
+  Equal<SimulationCloneProfile, "gameTree" | "turnLine">
 >;
 type PublicStateIsExplicitReturn = Expect<
   Equal<ReturnType<typeof getPublicState>, PublicGameState>
@@ -169,7 +181,48 @@ const summonExecutor: BotMainPhaseActionExecutor<"summon"> = async (
   action,
 ) => action.type === "summon";
 
-registry.register("type-test", strategyConstructor);
+registry.registerStrategy("type-test", strategyConstructor);
+const registeredStrategy = registry.getStrategyFor("type-test", bot);
+const registeredStrategyIds = registry.getRegisteredStrategyIds();
+
+const legacyTurnLineSearchOptions: ArenaSearchOptions = {
+  turnLineSearchMode: "critical",
+  turnLineSearchTurnMode: "mainBattleMain2",
+  turnLineSearchBeamWidth: 3,
+  turnLineSearchMaxDepth: 4,
+  turnLineSearchNodeBudget: 200,
+  turnLineSearchCandidateLimit: 8,
+};
+const cloneBoundaryMayPreserveUndefined: Pick<
+  AiStateShape,
+  "turn" | "phase"
+> = {
+  turn: undefined,
+  phase: undefined,
+};
+const gameTreeBoundaryMayPreserveUndefined: Pick<
+  GameTreeStateShape,
+  "turn" | "phase"
+> = {
+  turn: undefined,
+  phase: undefined,
+};
+const completedArenaDuel: ArenaCompletedDuelResult = {
+  duelNumber: 1,
+  winner: "player",
+  turns: 3,
+  type: "completed",
+  reason: "lp_zero",
+  totalTimeMs: 100,
+};
+const cancelledArenaDuel: ArenaCancelledDuelResult = {
+  type: "cancelled",
+  duelNumber: 2,
+};
+const arenaDuelResults: ArenaDuelResult[] = [
+  completedArenaDuel,
+  cancelledArenaDuel,
+];
 
 // contract-negative: public snapshots cannot be used as mutable live state.
 // @ts-expect-error
@@ -274,7 +327,22 @@ declare const incompatibleConstructor: new (
 
 // contract-negative: strategy constructors receive the canonical bot port.
 // @ts-expect-error
-registry.register("invalid", incompatibleConstructor);
+registry.registerStrategy("invalid", incompatibleConstructor);
+
+const invalidCancelledArenaDuel: ArenaDuelResult = {
+  type: "cancelled",
+  duelNumber: 3,
+  // contract-negative: cancelled duels intentionally carry no completed metrics.
+  // @ts-expect-error
+  winner: "draw",
+};
+
+// contract-negative: completed results require the full metrics projection.
+// @ts-expect-error
+const incompleteCompletedArenaDuel: ArenaDuelResult = {
+  type: "completed",
+  duelNumber: 4,
+};
 
 void closedAction;
 void extraDeckProcedureAction;
@@ -301,11 +369,21 @@ void extraDeckProcedureWithDeadField;
 void incompletePositionChange;
 void incompleteExecutors;
 void unscoredAction;
+void legacyTurnLineSearchOptions;
+void cloneBoundaryMayPreserveUndefined;
+void gameTreeBoundaryMayPreserveUndefined;
+void arenaDuelResults;
+void registeredStrategy;
+void registeredStrategyIds;
+void invalidCancelledArenaDuel;
+void incompleteCompletedArenaDuel;
 
 const actionTypesAreExact: ActionTypesAreExact = true;
 const actionMapKeysAreExact: ActionMapKeysAreExact = true;
 const executorKeysAreExact: ExecutorKeysAreExact = true;
 const replayStateKeepsCanonicalSnapshot: ReplayStateKeepsCanonicalSnapshot =
+  true;
+const simulationProfilesMatchRealCloneFactories: SimulationProfilesMatchRealCloneFactories =
   true;
 const publicStateIsExplicitReturn: PublicStateIsExplicitReturn = true;
 const searchScoresAreRequired: SearchScoresAreRequired = true;
@@ -318,6 +396,7 @@ void actionTypesAreExact;
 void actionMapKeysAreExact;
 void executorKeysAreExact;
 void replayStateKeepsCanonicalSnapshot;
+void simulationProfilesMatchRealCloneFactories;
 void publicStateIsExplicitReturn;
 void searchScoresAreRequired;
 void gameTreePlayerKeysAreExact;
