@@ -39,7 +39,7 @@ export type LiveGameState = GameRuntimeState;
 /** Existing replay snapshot; Stage 9 does not introduce a second wire shape. */
 export type ReplayGameState = CanonicalGameStateSnapshot;
 
-export type SimulationCloneProfile = "beam" | "gameTree" | "turnLine";
+export type SimulationCloneProfile = "gameTree" | "turnLine";
 export type PerspectiveCloneProfile = "bot" | "beamGreedy";
 
 type SimulatedCardCore = Partial<
@@ -352,8 +352,8 @@ export interface AiStateShape extends AiLiveGamePort {
   player: SimulatedPlayerState;
   bot: SimulatedPlayerState;
   opponent?: SimulatedPlayerState | null;
-  turn: PlayerId | string | null;
-  phase: GamePhase | string | null;
+  turn: PlayerId | string | null | undefined;
+  phase: GamePhase | string | null | undefined;
   turnCounter: number;
   usedThisTurn?: Map<string, number>;
   _isPerspectiveState?: true;
@@ -383,8 +383,8 @@ export interface AiStateShape extends AiLiveGamePort {
 export interface GameTreeStateShape extends AiLiveGamePort {
   player: GameTreeSimulatedPlayerState;
   bot: GameTreeSimulatedPlayerState;
-  turn: PlayerId | string | null;
-  phase: GamePhase | string | null;
+  turn: PlayerId | string | null | undefined;
+  phase: GamePhase | string | null | undefined;
   turnCounter: number;
   _isPerspectiveState: true;
   _gameRef?: AiLiveGamePort;
@@ -405,7 +405,6 @@ export type SimulationGameState<
 
 export type BotPerspectiveGameState = PerspectiveGameState<"bot">;
 export type BeamPerspectiveGameState = PerspectiveGameState<"beamGreedy">;
-export type BeamSimulationGameState = SimulationGameState<"beam">;
 export type GameTreeSimulationGameState = GameTreeStateShape & {
   readonly [simulationGameStateBrand]: "gameTree";
 };

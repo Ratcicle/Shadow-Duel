@@ -602,9 +602,9 @@ export type SimulatedActionHandlerManifest<
 };
 
 export interface StrategyRegistryPort {
-  register(id: string, constructor: StrategyConstructor): void;
-  get(id: string, bot: AIStrategyBotPort): StrategyRuntimePort;
-  listIds(): string[];
+  registerStrategy(id: string, constructor: StrategyConstructor): void;
+  getStrategyFor(id: string, bot: AIStrategyBotPort): StrategyRuntimePort;
+  getRegisteredStrategyIds(): string[];
 }
 
 export type RuntimeGamePlayer = GamePlayer;

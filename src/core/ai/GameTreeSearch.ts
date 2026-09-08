@@ -8,6 +8,7 @@ import type {
   AiLiveGamePort,
   AiPlayerInput,
   AiStateInput,
+  GameTreeSimulationGameState,
   SimulatedCardState,
   SimulatedPlayerState,
 } from "../contracts/aiState.js";
@@ -75,7 +76,7 @@ interface GameTreeStateInput extends AiStateInput {
   opponent?: GameTreePlayerInput | null;
 }
 
-interface GameTreeState {
+type GameTreeState = GameTreeSimulationGameState & {
   bot: GameTreePlayerState;
   player: GameTreePlayerState;
   turn?: string | null;
@@ -85,7 +86,7 @@ interface GameTreeState {
   _gameRef: AiLiveGamePort | GameTreeStateInput | GameTreeState;
   currentPlayer?: GameTreePlayerInput | null;
   opponent?: GameTreePlayerInput | null;
-}
+};
 
 interface GameTreeStrategy<State, Action extends AIAction> {
   bot?: { debug?: boolean };
@@ -244,7 +245,7 @@ function cloneGameStateDeep(
     turnCounter: safeGame.turnCounter || 0,
     _isPerspectiveState: true,
     _gameRef: safeGame._gameRef || safeGame,
-  };
+  } as GameTreeState;
 }
 
 /**
