@@ -26,6 +26,7 @@ import type {
 } from "../../../contracts/ai.js";
 import type {
   AiStateShape,
+  PerspectiveGameState,
   SimulatedCardState,
   SimulatedPlayerState,
   SimulationGameState,
@@ -303,7 +304,10 @@ export interface SimulatedRuntimeStateFields {
   temporaryEventEffects?: SimulatedTemporaryEventEffect[];
 }
 
-export type SimulatedRuntimeState = SimulationGameState &
+export type SimulatedRuntimeState = (
+  | SimulationGameState
+  | PerspectiveGameState
+) &
   SimulatedRuntimeStateFields;
 
 export interface SimulatedActionBatchInput {
