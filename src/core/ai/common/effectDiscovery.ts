@@ -2,7 +2,6 @@ import type { SimulatedCardState } from "../../contracts/aiState.js";
 import type { ActionType } from "../../contracts/actions.js";
 import type { EffectDefinition } from "../../contracts/effects.js";
 import type { CanonicalZone } from "../../contracts/zones.js";
-import { checkEffectZoneLegality } from "../../chain/legality.js";
 
 function getEffects(card: SimulatedCardState | null | undefined): readonly EffectDefinition[] {
   return Array.isArray(card?.effects) ? card.effects : [];
@@ -88,3 +87,5 @@ export function cardHasActionType(
     effectHasActionType(effect, actionType)
   );
 }
+
+import { checkEffectZoneLegality } from "../../chain/legality.js";

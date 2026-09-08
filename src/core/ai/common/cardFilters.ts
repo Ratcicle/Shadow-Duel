@@ -211,14 +211,11 @@ export function cardMatchesFilter(
     ) {
       return false;
     }
-    if (
-      [
-        current.excludeMonsterType,
-        ...asArray(current.excludeMonsterTypes),
-      ]
-        .filter(Boolean)
-        .includes(card.monsterType as string)
-    ) return false;
+    const excludedMonsterTypes = [
+      current.excludeMonsterType,
+      ...asArray(current.excludeMonsterTypes),
+    ].filter(Boolean) as string[];
+    if (excludedMonsterTypes.includes(card.monsterType as string)) return false;
     if (current.archetype && !cardHasArchetype(card, current.archetype)) {
       return false;
     }
@@ -299,26 +296,20 @@ export function cardMatchesFilter(
     ) {
       return false;
     }
-    if (
-      [
-        current.excludeName,
-        current.excludeCardName,
-        ...asArray(current.excludeNames),
-        ...asArray(current.excludeCardNames),
-      ]
-        .filter(Boolean)
-        .includes(card.name as string)
-    ) return false;
-    if (
-      [
-        current.excludeId,
-        current.excludeCardId,
-        ...asArray(current.excludeIds),
-        ...asArray(current.excludeCardIds),
-      ]
-        .filter((value) => value !== undefined && value !== null)
-        .includes(card.id as number)
-    ) return false;
+    const excludedNames = [
+      current.excludeName,
+      current.excludeCardName,
+      ...asArray(current.excludeNames),
+      ...asArray(current.excludeCardNames),
+    ].filter(Boolean) as string[];
+    if (excludedNames.includes(card.name as string)) return false;
+    const excludedIds = [
+      current.excludeId,
+      current.excludeCardId,
+      ...asArray(current.excludeIds),
+      ...asArray(current.excludeCardIds),
+    ].filter((value) => value !== undefined && value !== null) as number[];
+    if (excludedIds.includes(card.id as number)) return false;
     const cardInstanceId = getCardInstanceId(card);
     const excludedInstanceIds = [
       current.excludeInstanceId,
