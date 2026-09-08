@@ -23,6 +23,7 @@ import type { GamePlayer } from "./player.js";
 import type { PlayerId, RawCardDefinitionId } from "./primitives.js";
 import type { CanonicalSelectionMap } from "./selection.js";
 import type { CanonicalZone } from "./zones.js";
+import type { FinisherPlan } from "../ai/common/finisherPlans.js";
 
 export type AIState =
   | AiLiveGamePort
@@ -36,12 +37,13 @@ export type AITurnPlanningMode = "mainOnly" | "mainBattleMain2";
 
 export interface AIPlanningProfile {
   enabled: boolean;
-  mode: AIPlanningMode;
+  mode: AIPlanningMode | "manual";
   turnMode: AITurnPlanningMode;
   beamWidth: number;
   maxDepth: number;
   nodeBudget: number;
   candidateLimit: number;
+  battleStepLimit?: number;
 }
 
 export interface AIActivationContext {
@@ -62,6 +64,16 @@ export interface AIActivationContext {
 }
 
 interface AIActionCommon {
+  extraDeck?: boolean;
+  finisherPlanRank?: number;
+  macroBuff?: number;
+  safetyScore?: number | null;
+  finisherPlan?: FinisherPlan | null;
+  tributeCostPenalty?: number;
+  tributeCostReason?: string | null;
+  isExtremeTribute?: boolean;
+  isStalemateBreaker?: boolean;
+  isCriticalFallback?: boolean;
   priority?: number;
   score?: number;
   reason?: string;
@@ -126,12 +138,25 @@ export interface PositionChangeAIAction extends AIActionCommon {
 
 export interface SummonAIAction extends AIActionCommon {
   type: "summon";
+  lancerPlan?: {
+    hasLine: boolean;
+    improvesThreatMatchup: boolean;
+    projectedAtk: number;
+    bestTargetName: string | null;
+    bestTargetStat: number;
+    nextThreatName: string | null;
+    nextThreatStat: number;
+    survivesNextThreat: boolean;
+    tradesNextThreat: boolean;
+  } | null;
   position?: BattlePositionInput;
   facedown?: boolean;
   tributeIndices?: number[];
 }
 
 export interface SpellAIAction extends AIActionCommon {
+  fusionTargetHint?: string | null;
+  fusionTarget?: string;
   type: "spell";
 }
 
@@ -141,6 +166,7 @@ export interface SetSpellTrapAIAction extends AIActionCommon {
 }
 
 export interface SpellTrapEffectAIAction extends AIActionCommon {
+  cathedralPlan?: { counterCount?: number; targetName?: string | null; reason?: string; expectedPlan?: string | null; candidateNames?: Array<string | undefined>; candidateScores?: Array<{ name: string; score: number; plan: string }> };
   type: "spellTrapEffect";
   zoneIndex?: number;
 }
@@ -331,8 +357,8 @@ export interface ScoredAIAction<Action extends AIPlannedAction = AIPlannedAction
 
 export interface AITributeRequirement {
   tributesNeeded: number;
-  usingAlt: boolean;
-  alt: GameCard["altTribute"] | null;
+  usingAlt?: boolean;
+  alt: GameCard["altTribute"] | null | undefined;
 }
 
 export interface AITributeTradeResult {
@@ -356,7 +382,7 @@ export interface AIStrategyBotPort extends AiPlayerInput {
 }
 
 export interface AIPlanningContext {
-  profile?: AIPlanningProfile;
+  profile?: Partial<AIPlanningProfile>;
   phase?: GamePhase | string | null;
   turnCounter?: number;
   sequence?: AIPlannedAction[];
@@ -491,7 +517,7 @@ export interface GameTreeSearchResult {
 export interface TurnLineSearchOptions extends BeamSearchOptions {
   candidateLimit?: number;
   turnMode?: AITurnPlanningMode;
-  profile?: AIPlanningProfile;
+  profile?: Partial<AIPlanningProfile>;
   planningContext?: unknown;
   evaluateState?: (
     state: TurnLineSimulationGameState,
@@ -504,9 +530,9 @@ export interface TurnLineSearchOptions extends BeamSearchOptions {
 }
 
 export interface TurnLineDiagnostics {
-  rootSummary: unknown;
-  firstStepSummary: unknown;
-  terminalSummary: unknown;
+  rootSummary: PlanningStateSummary | null;
+  firstStepSummary: PlanningStateSummary | null;
+  terminalSummary: PlanningStateSummary | null;
   sequenceFingerprints: AIActionFingerprint[];
 }
 

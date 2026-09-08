@@ -104,7 +104,7 @@ export interface PlayerStrategyPort extends ChainStrategyPort {
       player: GamePlayer;
       actionPosition: BattlePositionInput | null | undefined;
     },
-  ): BattlePosition;
+  ): BattlePosition | null | undefined;
 }
 
 export interface TributeRequirement {

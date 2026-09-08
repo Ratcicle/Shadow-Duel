@@ -495,7 +495,7 @@ export default class Player implements GamePlayer {
     this.oncePerTurnUsageByName = {};
   }
 
-  buildDeck(deckList: readonly RawCardDefinitionId[] | null = null): void {
+  buildDeck(this: Pick<GamePlayer, "deck" | "maxDeckSize" | "minDeckSize" | "id" | "game" | "shuffleDeck">, deckList: readonly RawCardDefinitionId[] | null = null): void {
     if (Array.isArray(deckList) && deckList.length > 0) {
       assertDeckBanlistLegal({ deck: deckList });
     }
@@ -572,6 +572,7 @@ export default class Player implements GamePlayer {
   }
 
   buildExtraDeck(
+    this: Pick<GamePlayer, "extraDeck" | "maxExtraDeckSize" | "id" | "game">,
     extraDeckList: readonly RawCardDefinitionId[] | null = null,
   ): void {
     if (Array.isArray(extraDeckList) && extraDeckList.length > 0) {

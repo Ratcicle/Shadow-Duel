@@ -185,7 +185,7 @@ interface PlannerRewardResult {
   rewardNames?: unknown[];
 }
 
-interface BattleCandidateScoreInput {
+export interface BattleCandidateScoreInput {
   attacker: PlannerCard | null;
   target: PlannerCard | null;
   baseDelta: number;
@@ -231,7 +231,7 @@ interface TurnLineStrategy {
   applySimulatedBattleRewards?(
     input: PlannerBattleHookInput,
   ): unknown[] | null;
-  scoreBattleAttackCandidate?(input: BattleCandidateScoreInput): number;
+  scoreBattleAttackCandidate?(input: BattleCandidateScoreInput): number | { scoreDelta: number } | null;
 }
 
 interface BattlePlanningProfile extends AIPlanningProfile {
@@ -246,7 +246,7 @@ type TurnLineRuntimeOptions = Omit<
   TurnLineSearchOptions,
   "profile" | "planningContext"
 > & {
-  profile?: BattlePlanningProfile;
+  profile?: Partial<BattlePlanningProfile>;
   planningContext?: BattlePlanningContext;
 };
 
@@ -268,7 +268,7 @@ interface PlannerLineContext extends Omit<AIPlanningContext, "initialState"> {
   initialState?: PlanningState | null;
   finalState?: PlanningState;
   options?: TurnLineRuntimeOptions;
-  profile?: BattlePlanningProfile;
+  profile?: Partial<BattlePlanningProfile>;
   planningContext?: BattlePlanningContext;
 }
 
@@ -1462,7 +1462,7 @@ function chooseBestSingleSimulatedBattle(
         isSecondAttack: wasSecondAttack,
         summary,
       });
-      if (Number.isFinite(hookDelta)) score += hookDelta;
+      if (Number.isFinite(hookDelta)) score += hookDelta as number;
     }
     if (score <= 0 && destroyedOpponent === 0 && summary.damage <= 0) return;
     if (!best || score > best.score) {

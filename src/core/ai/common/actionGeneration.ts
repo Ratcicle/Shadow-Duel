@@ -10,6 +10,8 @@ import type {
   AIActionOf,
   AIActionType,
   AIActivationContext,
+  AIStrategyBotPort,
+  AIState,
 } from "../../contracts/ai.js";
 import type {
   AiLiveGamePort,
@@ -86,31 +88,31 @@ interface ActionGenerationAnalysis {
   fieldCapacity?: number;
 }
 
-interface HandSpellContext {
-  game?: AiLiveGamePort;
-  player: SimulatedPlayerState;
-  analysis?: unknown;
+interface HandSpellContext<Analysis = unknown, Player extends AIStrategyBotPort = AIStrategyBotPort> {
+  game?: AIState;
+  player: Player;
+  analysis?: Analysis;
   index: number;
-  card: PlanningCard;
+  card: Player["hand"][number];
 }
 
-interface HandSpellOptions {
-  game?: AiLiveGamePort;
-  player: SimulatedPlayerState;
-  hand?: PlanningCard[];
-  analysis?: unknown;
+interface HandSpellOptions<Analysis = unknown, Player extends AIStrategyBotPort = AIStrategyBotPort> {
+  game?: AIState;
+  player: Player;
+  hand?: Player["hand"];
+  analysis?: Analysis;
   shouldPlay?(
-    card: PlanningCard,
-    analysis: unknown,
-    context: HandSpellContext,
+    card: Player["hand"][number],
+    analysis: Analysis | undefined,
+    context: HandSpellContext<Analysis, Player>,
   ): ActionDecision;
   buildActivationContext?(
-    card: PlanningCard,
-    analysis: unknown,
-    context: HandSpellContext & { decision: ActionDecision },
+    card: Player["hand"][number],
+    analysis: Analysis | undefined,
+    context: HandSpellContext<Analysis, Player> & { decision: ActionDecision },
   ): AIActivationContext | null;
   canActivate?(
-    context: HandSpellContext & {
+    context: HandSpellContext<Analysis, Player> & {
       decision: ActionDecision;
       activationContext: AIActivationContext | null;
     },
@@ -125,18 +127,18 @@ interface TributeInfo {
   alt?: unknown;
 }
 
-interface NormalSummonOptions {
-  player: SimulatedPlayerState;
-  hand?: PlanningCard[];
-  analysis?: ActionGenerationAnalysis;
+interface NormalSummonOptions<Analysis extends ActionGenerationAnalysis = ActionGenerationAnalysis, Player extends AIStrategyBotPort = AIStrategyBotPort> {
+  player: Player;
+  hand?: Player["hand"];
+  analysis?: Analysis;
   getTributeRequirement?(
-    card: PlanningCard,
-    player: SimulatedPlayerState,
+    card: Player["hand"][number],
+    player: Player,
     context: unknown,
   ): TributeInfo;
   shouldSummon?(
-    card: PlanningCard,
-    analysis: ActionGenerationAnalysis,
+    card: Player["hand"][number],
+    analysis: Analysis,
     tributeInfo: TributeInfo,
     context: unknown,
   ): ActionDecision;
@@ -144,46 +146,46 @@ interface NormalSummonOptions {
   extra?: AIActionExtraInput<"summon">;
 }
 
-interface IgnitionContext {
-  game?: AiLiveGamePort;
-  player: SimulatedPlayerState;
-  analysis?: unknown;
+interface IgnitionContext<Analysis = unknown, Player extends AIStrategyBotPort = AIStrategyBotPort> {
+  game?: AIState;
+  player: Player;
+  analysis?: Analysis;
   sourceIndex: number;
-  card: PlanningCard;
+  card: Player["hand"][number];
   sourceZone?: string;
 }
 
-interface IgnitionEffectOptions<Type extends AIActionType> {
-  game?: AiLiveGamePort;
-  player: SimulatedPlayerState;
-  cards?: PlanningCard[];
-  analysis?: unknown;
+interface IgnitionEffectOptions<Type extends AIActionType, Analysis = unknown, Player extends AIStrategyBotPort = AIStrategyBotPort> {
+  game?: AIState;
+  player: Player;
+  cards?: Player["hand"];
+  analysis?: Analysis;
   type: Type;
   sourceZone?: string;
   indexFields?: ActionIndexKey[];
   findEffect?(
-    card: PlanningCard,
+    card: Player["hand"][number],
     sourceZone: string | undefined,
-    context: IgnitionContext,
+    context: IgnitionContext<Analysis, Player>,
   ): EffectDefinition | null;
   shouldActivate?(
-    card: PlanningCard,
-    analysis: unknown,
-    context: IgnitionContext & { effect: EffectDefinition },
+    card: Player["hand"][number],
+    analysis: Analysis | undefined,
+    context: IgnitionContext<Analysis, Player> & { effect: EffectDefinition },
   ): ActionDecision;
   buildActivationContext?(
-    card: PlanningCard,
-    analysis: unknown,
-    context: IgnitionContext & {
+    card: Player["hand"][number],
+    analysis: Analysis | undefined,
+    context: IgnitionContext<Analysis, Player> & {
       effect: EffectDefinition;
       decision: ActionDecision;
     },
   ): AIActivationContext | null;
-  canActivate?(context: unknown): boolean | ActionAllowedResult | null | undefined;
+  canActivate?(context: IgnitionContext<Analysis, Player> & { effect: EffectDefinition; decision: ActionDecision; activationContext: AIActivationContext | null }): boolean | ActionAllowedResult | null | undefined;
   cardFilter?(
-    card: PlanningCard,
+    card: Player["hand"][number],
     zone: string | undefined,
-    context: { player: SimulatedPlayerState; sourceIndex: number },
+    context: { player: Player; sourceIndex: number },
   ): boolean;
   includeEffectId?: boolean;
   extra?: AIActionExtraInput<NoInfer<Type>>;
@@ -191,10 +193,12 @@ interface IgnitionEffectOptions<Type extends AIActionType> {
 
 interface SafetyResult {
   riskScore?: number;
-  recommendation?: "safe" | "caution" | "risky" | "blocked";
+  recommendation?: "safe" | "caution" | "risky" | "very_risky" | "blocked";
 }
 
 interface SafetyPolicyMap {
+  very_risky?: number;
+  medium?: number;
   safe?: number;
   caution?: number;
   risky?: number;
@@ -202,31 +206,31 @@ interface SafetyPolicyMap {
   default?: number;
 }
 
-interface MacroSafetyContext {
+interface MacroSafetyContext<Macro = unknown> {
   priority: number;
   basePriority: number;
   actionType?: AIActionType;
   card?: PlanningCard | null;
-  macroStrategy?: unknown;
+  macroStrategy?: Macro;
   safety: SafetyResult | null;
   macroBuff: number;
   safetyScore: number | null;
 }
 
-interface MacroSafetyOptions {
+interface MacroSafetyOptions<Macro = unknown> {
   basePriority?: number;
   actionType?: AIActionType;
   card?: PlanningCard | null;
-  macroStrategy?: unknown;
+  macroStrategy?: Macro;
   safety?: SafetyResult | null;
   safetyPolicy?:
     | SafetyPolicyMap
-    | ((context: MacroSafetyContext) => number | SafetyAdjustmentResult)
+    | ((context: MacroSafetyContext<Macro>) => number | SafetyAdjustmentResult)
     | null;
   macroBonusFn?: ((
-    actionType: AIActionType | undefined,
-    card: PlanningCard | null | undefined,
-    macroStrategy: unknown,
+    actionType: AIActionType,
+    card: PlanningCard,
+    macroStrategy: Macro,
   ) => number) | null;
 }
 
@@ -279,9 +283,9 @@ function defaultIgnitionCardFilter(
   return true;
 }
 
-function resolveSafetyAdjustment(
-  safetyPolicy: MacroSafetyOptions["safetyPolicy"],
-  context: MacroSafetyContext,
+function resolveSafetyAdjustment<Macro>(
+  safetyPolicy: MacroSafetyOptions<Macro>["safetyPolicy"],
+  context: MacroSafetyContext<Macro>,
 ): number {
   if (!safetyPolicy) return 0;
 
@@ -351,7 +355,7 @@ export function buildPrioritizedAction<Type extends AIActionType>({
 /**
  * Build hand spell actions using caller-owned policy, context and preview.
  */
-export function getGenericHandSpellActions({
+export function getGenericHandSpellActions<Analysis = unknown, Player extends AIStrategyBotPort = AIStrategyBotPort>({
   game,
   player,
   hand = player?.hand || [],
@@ -361,7 +365,7 @@ export function getGenericHandSpellActions({
   canActivate,
   type = "spell",
   extra = {},
-}: HandSpellOptions = {} as HandSpellOptions): AIActionOf<"spell">[] {
+}: HandSpellOptions<Analysis, Player> = {} as HandSpellOptions<Analysis, Player>): AIActionOf<"spell">[] {
   const actions: AIActionOf<"spell">[] = [];
   for (const [index, card] of (hand || []).entries()) {
     if (!card || card.cardKind !== "spell") continue;
@@ -405,7 +409,7 @@ export function getGenericHandSpellActions({
 /**
  * Build normal summon actions using caller-owned tribute and summon policy.
  */
-export function getGenericNormalSummonActions({
+export function getGenericNormalSummonActions<Analysis extends ActionGenerationAnalysis = ActionGenerationAnalysis, Player extends AIStrategyBotPort = AIStrategyBotPort>({
   player,
   hand = player?.hand || [],
   analysis,
@@ -413,7 +417,7 @@ export function getGenericNormalSummonActions({
   shouldSummon,
   type = "summon",
   extra = {},
-}: NormalSummonOptions = {} as NormalSummonOptions): AIActionOf<"summon">[] {
+}: NormalSummonOptions<Analysis, Player> = {} as NormalSummonOptions<Analysis, Player>): AIActionOf<"summon">[] {
   const actions: AIActionOf<"summon">[] = [];
   if (!analysis?.canNormalSummon || (analysis.fieldCapacity as number) <= 0) {
     return actions;
@@ -463,7 +467,7 @@ export function getGenericNormalSummonActions({
 /**
  * Build ignition-style effect actions with caller-owned discovery and preview.
  */
-export function getGenericIgnitionEffectActions<Type extends AIActionType>({
+export function getGenericIgnitionEffectActions<Type extends AIActionType, Analysis = unknown, Player extends AIStrategyBotPort = AIStrategyBotPort>({
   game,
   player,
   cards = [],
@@ -478,7 +482,7 @@ export function getGenericIgnitionEffectActions<Type extends AIActionType>({
   cardFilter = defaultIgnitionCardFilter,
   includeEffectId = false,
   extra = {} as AIActionExtra<Type>,
-}: IgnitionEffectOptions<Type> = {} as IgnitionEffectOptions<Type>): AIActionOf<Type>[] {
+}: IgnitionEffectOptions<Type, Analysis, Player> = {} as IgnitionEffectOptions<Type, Analysis, Player>): AIActionOf<Type>[] {
   const actions: AIActionOf<Type>[] = [];
   for (const [sourceIndex, card] of (cards || []).entries()) {
     if (!card || !cardFilter(card, sourceZone, { player, sourceIndex })) {
@@ -556,7 +560,16 @@ export function getGenericIgnitionEffectActions<Type extends AIActionType>({
  * The helper never computes safety itself; callers pass precomputed safety and
  * policy when they want those metadata reflected.
  */
-export function applyMacroAndSafety({
+export function applyMacroAndSafety<Macro>(options: MacroSafetyOptions<Macro> & {
+  actionType: AIActionType;
+  card: PlanningCard;
+  macroStrategy: Macro;
+  macroBonusFn: NonNullable<MacroSafetyOptions<Macro>["macroBonusFn"]>;
+}): { priority: number; macroBuff: number; safetyScore: number | null; safetyAdjustment: number };
+export function applyMacroAndSafety<Macro = unknown>(options?: Omit<MacroSafetyOptions<Macro>, "macroBonusFn"> & {
+  macroBonusFn?: null;
+}): { priority: number; macroBuff: number; safetyScore: number | null; safetyAdjustment: number };
+export function applyMacroAndSafety<Macro = unknown>({
   basePriority = 0,
   actionType,
   card,
@@ -564,13 +577,14 @@ export function applyMacroAndSafety({
   safety = null,
   macroBonusFn = null,
   safetyPolicy = null,
-}: MacroSafetyOptions = {}) {
+}: MacroSafetyOptions<Macro> = {}) {
   const normalizedBasePriority = finiteOr(basePriority, 0);
   let priority = normalizedBasePriority;
   let macroBuff = 0;
 
   if (typeof macroBonusFn === "function") {
-    macroBuff = finiteOr(macroBonusFn(actionType, card, macroStrategy), 0);
+    // The callback overload requires its three inputs together.
+    macroBuff = finiteOr(macroBonusFn(actionType!, card!, macroStrategy!), 0);
     priority += macroBuff;
   }
 
@@ -616,7 +630,7 @@ export function createActionGenerationContext<Extra extends object>({
   log,
   extra = {} as Extra,
 }: {
-  game?: AiLiveGamePort;
+  game?: AIState;
   strategy?: unknown;
   bot?: SimulatedPlayerState;
   opponent?: SimulatedPlayerState;

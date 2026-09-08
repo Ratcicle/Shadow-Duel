@@ -20,6 +20,16 @@ import type {
   FastEffectContextInput,
 } from "../contracts/chainRuntime.js";
 import type { ActivationSimulationState } from "../chain/legality.js";
+import type { AiPlayerInput } from "../contracts/aiState.js";
+interface AwarenessCard {
+  name?: string | null;
+  cardKind?: string | null;
+  subtype?: string | null;
+  effects?: readonly ChainEffect[];
+  spellSpeed?: number;
+}
+type AwarenessPlayer = AiPlayerInput | ChainPlayer;
+type SafetyRecommendation = "safe" | "caution" | "risky" | "very_risky";
 
 type BlockingCategory = "activation" | "attack" | "damage" | "summon";
 type TrapStrength = "weak" | "medium" | "strong";
@@ -36,7 +46,7 @@ export interface DefensiveTrapAnalysis {
 }
 
 export interface BlockingCardSummary {
-  name: string;
+  name: string | null | undefined;
   strength: TrapStrength;
   blocking: BlockingCategory[];
 }
@@ -62,7 +72,9 @@ interface ChainActivationCandidateView {
   spellSpeed: number;
 }
 
-export interface ChainAwarenessState extends ActivationSimulationState {
+export interface ChainAwarenessState extends Omit<ActivationSimulationState, "player" | "bot"> {
+  player?: AwarenessPlayer | null;
+  bot?: AwarenessPlayer | null;
   chainContext?: FastEffectContextInput;
   context?: FastEffectContextInput;
   chainSystem?: AiChainPort;
@@ -133,7 +145,7 @@ function responseBlockingCategories(effect: ChainEffect): BlockingCategory[] {
  */
 export function analyzeSpellSpeed(
   effect: ChainEffect | null | undefined,
-  card: ChainCard | null = null,
+  card: AwarenessCard | null = null,
 ): {
   spellSpeed: number;
   canChain: boolean;
@@ -166,7 +178,7 @@ export function analyzeSpellSpeed(
  * @returns {object} - { isDefensiveTrap: boolean, blocking: string[], strength: 'weak'|'medium'|'strong' }
  */
 export function analyzeDefensiveTrap(
-  card: ChainCard | null | undefined,
+  card: AwarenessCard | null | undefined,
 ): DefensiveTrapAnalysis {
   if (!card || card.cardKind !== "trap") {
     return { isDefensiveTrap: false, blocking: [], strength: "weak" };
@@ -180,7 +192,7 @@ export function analyzeDefensiveTrap(
     ),
   ];
   const hasCounterSpeed = (card.effects || []).some(
-    (effect) => getEffectSpellSpeed(effect, card) >= 3,
+    (effect) => getEffectSpellSpeed(effect, card as ChainCard) >= 3,
   );
   const hasNegation = (card.effects || []).some((effect) =>
     walkedActions(effect.actions).some((action) =>
@@ -212,8 +224,8 @@ export function analyzeDefensiveTrap(
  */
 export function evaluateActionBlockingRisk(
   gameState: ChainAwarenessState,
-  botPlayer: ChainPlayer,
-  opponentPlayer: ChainPlayer | null | undefined,
+  botPlayer: AwarenessPlayer,
+  opponentPlayer: AwarenessPlayer | null | undefined,
   actionType: string,
 ): ActionBlockingRisk {
   if (!opponentPlayer || !opponentPlayer.spellTrap) {
@@ -274,7 +286,7 @@ export function evaluateActionBlockingRisk(
  */
 export function detectChainableOpponentCards(
   gameState: ChainAwarenessState,
-  opponentPlayer: ChainPlayer | null | undefined,
+  opponentPlayer: AwarenessPlayer | null | undefined,
 ): ChainableCardsAnalysis {
   if (!opponentPlayer) {
     return { canChain: false, chainableCards: [], chainDepth: 0 };
@@ -286,18 +298,18 @@ export function detectChainableOpponentCards(
   let legalCandidates: readonly ChainActivationCandidateView[] = [];
   if (typeof gameState?.chainSystem?.getActivatableCardsInChain === "function") {
     legalCandidates = gameState.chainSystem.getActivatableCardsInChain(
-      opponentPlayer,
+      opponentPlayer as ChainPlayer,
       context,
     );
   } else {
     const query = buildActivationQuery({
-      state: gameState,
-      player: opponentPlayer,
+      state: gameState as ActivationSimulationState,
+      player: opponentPlayer as ChainPlayer,
       context,
     });
     legalCandidates = listLegalActivationCandidates(
       query,
-      createSimulationLegalityAdapter(gameState, {
+      createSimulationLegalityAdapter(gameState as ActivationSimulationState, {
         effectCheck: ({ card, effect }) => {
           const spellSpeed = getEffectSpellSpeed(effect, card);
           const responseContexts = Array.isArray(effect.canRespondTo)
@@ -368,11 +380,11 @@ export function calculateBlockingRiskPenalty(
  */
 export function assessActionSafety(
   gameState: ChainAwarenessState,
-  botPlayer: ChainPlayer,
-  opponentPlayer: ChainPlayer | null | undefined,
+  botPlayer: AwarenessPlayer,
+  opponentPlayer: AwarenessPlayer | null | undefined,
   actionType: string,
-  card: ChainCard,
-): { isSafe: boolean; riskScore: number; recommendation: string } {
+  card: AwarenessCard,
+): { isSafe: boolean; riskScore: number; recommendation: SafetyRecommendation } {
   const blockingRisk = evaluateActionBlockingRisk(
     gameState,
     botPlayer,
@@ -392,7 +404,7 @@ export function assessActionSafety(
 
   const isSafe = riskScore < 0.4;
 
-  let recommendation = "safe";
+  let recommendation: SafetyRecommendation = "safe";
   if (riskScore >= 0.7) {
     recommendation = "very_risky";
   } else if (riskScore >= 0.5) {

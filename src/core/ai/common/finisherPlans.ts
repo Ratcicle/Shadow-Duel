@@ -1,14 +1,14 @@
-interface FinisherPlanInput {
+interface FinisherPlanInput<Details> {
   kind: string;
   targetName?: string | null;
   score100: number;
   reason?: string | null;
   preserveHollowsInGY?: boolean;
   preserveResources?: readonly string[] | null;
-  details?: unknown;
+  details?: Details;
 }
 
-export interface FinisherPlan {
+export interface FinisherPlan<Details = unknown> {
   kind: string;
   targetName?: string | null;
   score100: number;
@@ -16,7 +16,7 @@ export interface FinisherPlan {
   reason?: string | null;
   preserveHollowsInGY: boolean;
   preserveResources?: string[];
-  details: unknown;
+  details: Details;
 }
 
 export function clampScore100(value: number): number {
@@ -28,17 +28,17 @@ export function toActionPriority(score100: number): number {
   return clampScore100(score100) / 10;
 }
 
-export function createFinisherPlan({
+export function createFinisherPlan<Details = object>({
   kind,
   targetName,
   score100,
   reason,
   preserveHollowsInGY = false,
   preserveResources = null,
-  details = {},
-}: FinisherPlanInput): FinisherPlan {
+  details = {} as Details,
+}: FinisherPlanInput<Details>): FinisherPlan<Details> {
   const normalizedScore = clampScore100(score100);
-  const plan: FinisherPlan = {
+  const plan: FinisherPlan<Details> = {
     kind,
     targetName,
     score100: normalizedScore,
@@ -55,25 +55,25 @@ export function createFinisherPlan({
   return plan;
 }
 
-export function rankFinisherPlans(
-  plans: readonly (FinisherPlan | null | undefined)[] = [],
-): FinisherPlan[] {
-  return ((plans || []).filter(Boolean) as FinisherPlan[])
+export function rankFinisherPlans<Plan extends FinisherPlan>(
+  plans: readonly (Plan | null | undefined)[] = [],
+): Plan[] {
+  return ((plans || []).filter(Boolean) as Plan[])
     .slice()
     .sort((a, b) => (b.score100 || 0) - (a.score100 || 0));
 }
 
-export function getBestFinisherPlan(
-  plans: readonly (FinisherPlan | null | undefined)[] = [],
-  predicateOrKind: ((plan: FinisherPlan) => boolean) | string | null = null,
-): FinisherPlan | null {
+export function getBestFinisherPlan<Plan extends FinisherPlan>(
+  plans: readonly (Plan | null | undefined)[] = [],
+  predicateOrKind: ((plan: Plan) => boolean) | string | null = null,
+): Plan | null {
   const ranked = rankFinisherPlans(plans);
   if (!predicateOrKind) return ranked[0] || null;
 
   const predicate =
     typeof predicateOrKind === "function"
       ? predicateOrKind
-      : (plan: FinisherPlan) => plan?.kind === predicateOrKind;
+      : (plan: Plan) => plan?.kind === predicateOrKind;
 
   return ranked.find(predicate) || null;
 }

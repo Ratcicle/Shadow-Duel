@@ -10,13 +10,12 @@ import {
   isAdvantageEngine,
 } from "./RoleAnalyzer.js";
 import type { StrategicCardView } from "./RoleAnalyzer.js";
-import type { GamePlayer } from "../contracts/player.js";
 import { hasArchetype, getMaxAttacks } from "./StrategyUtils.js";
 
 export interface ThreatContext {
   hasDefenses?: boolean;
   isDiscardCost?: boolean;
-  myArchetype?: string;
+  myArchetype?: string | null;
   myLP?: number;
   myStrongestAtk?: number;
   oppLP?: number;
@@ -272,7 +271,7 @@ export function rankByResourceValue(
 export function estimateTurnsToKill(
   card: StrategicCardView | null | undefined,
   myLP = 8000,
-  owner: Partial<GamePlayer> | null = null,
+  owner: { graveyard?: ReadonlyArray<{ name?: string | null }> } | null = null,
 ): number {
   if (!card || card.cardKind !== "monster") return Infinity;
   if (card.position !== "attack") return Infinity;
@@ -295,7 +294,7 @@ export function estimateTurnsToKill(
 export function canOpponentLethal(
   opponentField: readonly (StrategicCardView | null | undefined)[] | null,
   myLP = 8000,
-  opponent: Partial<GamePlayer> | null = null,
+  opponent: { graveyard?: ReadonlyArray<{ name?: string | null }> } | null = null,
 ): boolean {
   if (!Array.isArray(opponentField)) return false;
 

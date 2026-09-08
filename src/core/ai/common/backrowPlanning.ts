@@ -21,60 +21,62 @@ interface BackrowDecision {
 
 type BackrowPolicyDecision = boolean | BackrowDecision | null | undefined;
 
-interface BackrowBaseContext {
-  bot: AIStrategyBotPort | null | undefined;
-  player: AIStrategyBotPort | null | undefined;
-  hand: BackrowPlanningCard[];
-  spellTrap: BackrowPlanningCard[];
+type BackrowPlayer<Card extends BackrowPlanningCard> = Omit<AIStrategyBotPort, "hand" | "spellTrap"> & {hand: Card[]; spellTrap: Card[]};
+
+interface BackrowBaseContext<Card extends BackrowPlanningCard> {
+  bot: BackrowPlayer<Card> | null | undefined;
+  player: BackrowPlayer<Card> | null | undefined;
+  hand: Card[];
+  spellTrap: Card[];
   analysis: ReactiveBackrowAnalysis;
   game: ReactiveBackrowGame;
   opponent: AIStrategyBotPort | null | undefined;
   index: number;
-  card: BackrowPlanningCard;
+  card: Card;
   basePriority: number;
 }
 
-interface BackrowDecisionContext extends BackrowBaseContext {
-  setDecision: BackrowPolicyDecision;
+interface BackrowDecisionContext<Card extends BackrowPlanningCard, Decision extends BackrowPolicyDecision> extends BackrowBaseContext<Card> {
+  setDecision: Decision;
 }
 
-interface BackrowPlanningPolicy {
-  acceptsCard?(card: BackrowPlanningCard, context: BackrowBaseContext): boolean;
+interface BackrowPlanningPolicy<Card extends BackrowPlanningCard, Decision extends BackrowPolicyDecision> {
+  acceptsCard?(card: Card, context: BackrowBaseContext<Card>): boolean;
   skipIfAlreadySet?(
-    card: BackrowPlanningCard,
-    context: BackrowBaseContext,
+    card: Card,
+    context: BackrowBaseContext<Card>,
   ): boolean;
   shouldSet?(
-    card: BackrowPlanningCard,
-    context: BackrowBaseContext,
-  ): BackrowPolicyDecision;
+    card: Card,
+    context: BackrowBaseContext<Card>,
+  ): Decision;
   getPriority?(
-    card: BackrowPlanningCard,
-    context: BackrowDecisionContext,
+    card: Card,
+    context: BackrowDecisionContext<Card, Decision>,
   ): number | null | undefined;
   getReason?(
-    card: BackrowPlanningCard,
-    context: BackrowDecisionContext,
+    card: Card,
+    context: BackrowDecisionContext<Card, Decision>,
   ): string | null | undefined;
   getExtra?(
-    card: BackrowPlanningCard,
-    context: BackrowDecisionContext,
+    card: Card,
+    context: BackrowDecisionContext<Card, Decision>,
   ): Partial<SetSpellTrapAIAction> | null | undefined;
 }
 
-interface GenericSetBackrowInput {
-  bot?: AIStrategyBotPort | null;
-  player?: AIStrategyBotPort | null;
-  hand?: BackrowPlanningCard[];
-  spellTrap?: BackrowPlanningCard[];
+interface GenericSetBackrowInput<Card extends BackrowPlanningCard, Decision extends BackrowPolicyDecision> {
+  bot?: BackrowPlayer<Card> | null;
+  player?: BackrowPlayer<Card> | null;
+  hand?: Card[];
+  spellTrap?: Card[];
   analysis?: ReactiveBackrowAnalysis;
   game?: ReactiveBackrowGame;
   opponent?: AIStrategyBotPort | null;
-  alreadyUsedHandIndices?: ReadonlySet<number>;
+  alreadyUsedHandIndices?: ReadonlySet<number | undefined>;
   maxBackrow?: number;
   basePriority?: number;
   defaultReason?: string;
-  policy?: BackrowPlanningPolicy;
+  policy?: BackrowPlanningPolicy<Card, Decision>;
 }
 
 function hasValue<Value>(
@@ -104,7 +106,7 @@ function isRejected(result: BackrowPolicyDecision): boolean {
 }
 
 function isUsedIndex(
-  indices: ReadonlySet<number> | null | undefined,
+  indices: ReadonlySet<number | undefined> | null | undefined,
   index: number,
 ): boolean {
   return typeof indices?.has === "function" && indices.has(index);
@@ -115,7 +117,17 @@ function isUsedIndex(
  * Strategy-specific policy stays in the caller; this helper only handles
  * shared zone capacity, hand-index filtering, and action shape.
  */
-export function getGenericSetBackrowActions({
+export function getGenericSetBackrowActions<Card extends BackrowPlanningCard, Decision extends BackrowPolicyDecision>(
+  input: GenericSetBackrowInput<Card, Decision> & {
+    policy: BackrowPlanningPolicy<Card, Decision> & {shouldSet: NonNullable<BackrowPlanningPolicy<Card, Decision>["shouldSet"]>};
+  },
+): SetSpellTrapAIAction[];
+export function getGenericSetBackrowActions<Card extends BackrowPlanningCard = BackrowPlanningCard>(
+  input?: GenericSetBackrowInput<Card, true> & {
+    policy?: Omit<BackrowPlanningPolicy<Card, true>, "shouldSet"> & {shouldSet?: undefined};
+  },
+): SetSpellTrapAIAction[];
+export function getGenericSetBackrowActions<Card extends BackrowPlanningCard, Decision extends BackrowPolicyDecision>({
   bot,
   player = bot,
   hand = player?.hand || [],
@@ -128,7 +140,7 @@ export function getGenericSetBackrowActions({
   basePriority = -1,
   defaultReason = "prepare reactive backrow",
   policy = {},
-}: GenericSetBackrowInput = {}): SetSpellTrapAIAction[] {
+}: GenericSetBackrowInput<Card, Decision> = {}): SetSpellTrapAIAction[] {
   if ((spellTrap || []).length >= maxBackrow) return [];
 
   const actions: SetSpellTrapAIAction[] = [];
@@ -170,7 +182,7 @@ export function getGenericSetBackrowActions({
 
     const context = {
       ...baseContext,
-      setDecision,
+      setDecision: setDecision as Decision,
     };
 
     const policyPriority =

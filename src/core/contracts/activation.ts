@@ -145,12 +145,12 @@ export interface ActivationPipelineConfig {
   oncePerTurn?: ActivationOncePerTurnConfig | null;
   gate?: (() =>
     | ActivationPipelineResult
-    | { ok: boolean; reason?: string; code?: string }
+    | { ok: boolean; reason?: string | null; code?: string | null }
     | null
     | undefined) | null;
   preview?: (() =>
     | ActivationPipelineResult
-    | { ok: boolean; reason?: string; code?: string }
+    | { ok: boolean; reason?: string | null; code?: string | null }
     | null
     | undefined) | null;
   commit?: (() => MaybePromise<ActivationCommitInfo | null | undefined>) | null;

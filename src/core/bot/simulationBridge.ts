@@ -1,6 +1,7 @@
 import type {
   AIPlannedAction,
   StrategyRuntimePort,
+  AIStrategyBotPort,
 } from "../contracts/ai.js";
 import type {
   AiLiveGamePort,
@@ -11,12 +12,12 @@ import type {
   SimulationGameState,
 } from "../contracts/aiState.js";
 
-interface SimulationBotPort extends SimulatedPlayerState {
+interface SimulationBotPort extends AIStrategyBotPort {
   strategy: Required<Pick<
     StrategyRuntimePort,
     "simulateMainPhaseAction" | "simulateSpellEffect"
   >>;
-  resolveOpponent(game: AiLiveGamePort): SimulatedPlayerState | null;
+  resolveOpponent(game: BotCloneGamePort): CloneablePlayerInput | null;
 }
 
 type CloneablePlayerInput = AiPlayerInput & {
@@ -25,7 +26,7 @@ type CloneablePlayerInput = AiPlayerInput & {
   graveyard: NonNullable<AiPlayerInput["graveyard"]>;
 };
 
-interface BotCloneGamePort extends Omit<AiLiveGamePort, "player"> {
+export interface BotCloneGamePort extends Omit<AiLiveGamePort, "player"> {
   player: CloneablePlayerInput;
 }
 

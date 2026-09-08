@@ -29,7 +29,9 @@ export interface StrategicEffectView {
   timing?: EffectTiming;
 }
 
-export type StrategicCardView = Partial<Omit<GameCard, "effects">> & {
+export type StrategicCardView = Partial<Omit<GameCard,
+  "effects" | "equips" | "equippedTo" | "equipTarget"
+>> & {
   effects?: readonly StrategicEffectView[];
 };
 

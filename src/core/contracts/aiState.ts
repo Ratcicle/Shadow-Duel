@@ -9,7 +9,7 @@ import type {
   FastEffectState,
   SerializedChainLink,
 } from "./chainRuntime.js";
-import type { UsagePolicy } from "./effects.js";
+import type { EffectDefinition, UsagePolicy } from "./effects.js";
 import type { GamePhase } from "./game.js";
 import type {
   DamageStepState,
@@ -74,6 +74,17 @@ export interface SimulatedReplacementEffect {
 
 /** Mutable projection used only by planning; no live Card methods are required. */
 export interface SimulatedCardShape extends SimulatedCardCore {
+  permanentDefBoost?: number;
+  _simPotentialBarbariasPush?: boolean;
+  cannotBeDestroyedByBattle?: boolean;
+  cannotBeDestroyedByCardEffects?: boolean;
+  state?: { blueprintStorage?: { storedBlueprints: Array<{
+    blueprintId: string; sourceCardId?: GameCard["id"]; sourceCardName?: string;
+    sourceCardKind?: CardKind; sourceCardSubtype?: GameCard["subtype"];
+    displayName?: string; shortRulesText: string; effectSnapshot: EffectDefinition;
+    _simStoredByGrimoire: boolean;
+  }> } };
+  fieldAgeTurns?: number;
   _instanceId?: number | string | null;
   uuid?: string | null;
   equippedTo?: SimulatedCardState | null;
@@ -234,6 +245,8 @@ export interface SimulatedBurningWestState {
 }
 
 export interface SimulatedPlayerState {
+  usedEffects?: number[];
+  debug?: boolean;
   id: PlayerId | string;
   lp: number;
   hand: SimulatedCardState[];

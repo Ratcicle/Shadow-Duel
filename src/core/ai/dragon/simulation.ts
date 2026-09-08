@@ -1,3 +1,4 @@
+import type { DragonCard as DragonReadCard, DragonPlayer as DragonReadPlayer } from "./contracts.js";
 // ─────────────────────────────────────────────────────────────────────────────
 // src/core/ai/dragon/simulation.js
 // Lookahead simulation for Dragon deck (BeamSearch / greedy).
@@ -102,7 +103,10 @@ interface DragonMaterialStats {
   bot?: DragonMaterialStatsPlayer;
 }
 
-interface DragonGameReference extends AiLiveGamePort {
+interface DragonGameReference extends Omit<AiLiveGamePort, "player" | "bot" | "_gameRef"> {
+  player: DragonReadPlayer;
+  bot: DragonReadPlayer;
+  _gameRef?: DragonGameReference;
   materialDuelStats?: DragonMaterialStats;
 }
 
@@ -774,7 +778,7 @@ function materialValue(entry: DragonMaterialValueEntry): number {
   );
 }
 
-function cardStrategicSimValue(card: DragonCard | null | undefined): number {
+function cardStrategicSimValue(card: DragonReadCard | null | undefined): number {
   const knowledge = (CARD_KNOWLEDGE as Partial<
     Record<string, DragonCardKnowledge>
   >)[card?.name as string] || {};
@@ -782,9 +786,7 @@ function cardStrategicSimValue(card: DragonCard | null | undefined): number {
     (knowledge.value || knowledge.priority || 0) +
     (card?.level || 0) * 0.25 +
     Math.max(card?.atk || 0, card?.def || 0) / 1000 +
-    ((isExtremeDragon as (
-      card: DragonCard | null | undefined,
-    ) => boolean)(card) ? 4 : 0) +
+    (isExtremeDragon(card) ? 4 : 0) +
     (card?.monsterType === "fusion" || card?.monsterType === "ascension" ? 5 : 0)
   );
 }
@@ -1043,7 +1045,7 @@ function rankSearchEntriesForSimulation<Entry extends DragonCandidateEntry>(
 ): Entry[] {
   if (!Array.isArray(entries) || entries.length === 0) return [];
   const rankedCards = rankDragonSearchCandidates(
-    entries.map((entry) => entry.candidate),
+    (entries as readonly Entry[]).map((entry) => entry.candidate),
     action,
     {
       player: state?.bot,
@@ -1056,7 +1058,7 @@ function rankSearchEntriesForSimulation<Entry extends DragonCandidateEntry>(
     },
   );
   const ranks = new Map(rankedCards.map((card, index) => [card, index]));
-  return entries
+  return (entries as readonly Entry[])
     .slice()
     .sort(
       (a, b) =>
@@ -1078,7 +1080,7 @@ function rankRecruitEntriesForSimulation<Entry extends DragonCandidateEntry>(
     candidates: DragonCard[],
     context: object,
   ) => DragonRecruitEvaluation)(
-    entries.map((entry) => entry.candidate),
+    (entries as readonly Entry[]).map((entry) => entry.candidate),
     {
       player: state?.bot,
       opponent: state?.player,
@@ -1096,7 +1098,7 @@ function rankRecruitEntriesForSimulation<Entry extends DragonCandidateEntry>(
   const ranks = new Map(
     (evaluation?.scores || []).map((entry, index) => [entry.card, index]),
   );
-  return entries
+  return (entries as readonly Entry[])
     .slice()
     .sort(
       (a, b) =>
@@ -1114,7 +1116,7 @@ function rankDiscardEntriesForSimulation<Entry extends DragonCandidateEntry>(
 ): Entry[] {
   if (!Array.isArray(entries) || entries.length === 0) return [];
   const rankedCards = rankDragonDiscardCandidates(
-    entries.map((entry) => entry.candidate),
+    (entries as readonly Entry[]).map((entry) => entry.candidate),
     {
       player: state?.bot,
       opponent: state?.player,
@@ -1126,7 +1128,7 @@ function rankDiscardEntriesForSimulation<Entry extends DragonCandidateEntry>(
     },
   );
   const ranks = new Map(rankedCards.map((card, index) => [card, index]));
-  return entries
+  return (entries as readonly Entry[])
     .slice()
     .sort(
       (a, b) =>
@@ -2662,7 +2664,7 @@ function collectSimulatedActionZoneEntries(
     (action as DragonSimulationAction)?.zone ||
     (action as DragonSimulationAction)?.sourceZone ||
     "deck";
-  const zoneNames = Array.isArray(zoneSpec) ? zoneSpec : [zoneSpec];
+  const zoneNames: readonly ZoneInput[] = Array.isArray(zoneSpec) ? zoneSpec : [zoneSpec as ZoneInput];
   return zoneNames.flatMap((zoneName) =>
     ((player as DragonZoneStorage)?.[zoneName as DragonZoneStorageKey] || []).map((candidate, index) => ({
       candidate,

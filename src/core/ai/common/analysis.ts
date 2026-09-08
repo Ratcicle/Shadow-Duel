@@ -1,24 +1,68 @@
 import { canUseNormalSummonForCard } from "../../Player.js";
+import type { GameCard } from "../../contracts/cards.js";
 import type {
   AIState,
+  AIStrategyBotPort,
   StrategyRuntimePort,
 } from "../../contracts/ai.js";
 import type {
   AiStateShape,
   SimulatedCardState,
+  SimulatedCardShape,
   SimulatedPlayerState,
 } from "../../contracts/aiState.js";
 
 interface StrategyAnalysisInput {
-  bot?: SimulatedPlayerState | null;
-  player?: SimulatedPlayerState | null;
-  opponent?: SimulatedPlayerState | null;
-  game?: (AiStateShape & {
+  bot?: AIStrategyBotPort | null;
+  player?: AIStrategyBotPort | null;
+  opponent?: AIStrategyBotPort | null;
+  game?: (AIState & {
     getOpponent?(player: SimulatedPlayerState): SimulatedPlayerState | null;
   }) | null;
-  strategy?: StrategyRuntimePort | null;
+  strategy?: Pick<StrategyRuntimePort, "bot" | "getOpponent"> | null;
 }
 
+export type StrategyAnalysis<Player extends AIStrategyBotPort> = {
+  hand: Player["hand"];
+  field: Player["field"];
+  spellTrap: Player["spellTrap"];
+  fieldSpell: Player["fieldSpell"];
+  graveyard: Player["graveyard"];
+  deck: Player["deck"];
+  extraDeck: Player["extraDeck"];
+  lp: number;
+  oppField: Player["field"];
+  oppHand: Player["hand"];
+  oppGraveyard: Player["graveyard"];
+  oppSpellTrap: Player["spellTrap"];
+  oppFieldSpell: Player["fieldSpell"];
+  oppLp: number;
+  oppLP: number;
+  currentTurn: number;
+  phase: string;
+  player: Player | null;
+  opponent: Player | null;
+  bot: Player | null;
+  game: StrategyAnalysisInput["game"];
+  summonAvailable: boolean;
+  normalSummonsAvailable: number;
+  additionalNormalSummons: number;
+  isSimulatedState: boolean;
+};
+
+type ExplicitActorAnalysisInput<Player extends AIStrategyBotPort> = Omit<
+  StrategyAnalysisInput, "bot" | "player" | "opponent"
+> & { opponent?: Player | null } & (
+  | { player: Player; bot?: Player | null }
+  | { bot: Player; player?: null }
+);
+
+export function buildStrategyAnalysis<Player extends AIStrategyBotPort>(
+  input: ExplicitActorAnalysisInput<Player>,
+): StrategyAnalysis<Player>;
+export function buildStrategyAnalysis(
+  input?: StrategyAnalysisInput,
+): StrategyAnalysis<AIStrategyBotPort>;
 export function buildStrategyAnalysis({
   bot,
   player,
@@ -26,8 +70,8 @@ export function buildStrategyAnalysis({
   game,
   strategy,
 }: StrategyAnalysisInput = {}) {
-  const actor = player || bot || strategy?.bot || game?.bot || null;
-  const resolvedOpponent =
+  const actor = (player || bot || strategy?.bot || game?.bot || null) as AIStrategyBotPort | null;
+  const resolvedOpponent = (
     opponent ||
     (game && actor && strategy && typeof strategy.getOpponent === "function"
       ? strategy.getOpponent(game, actor as SimulatedPlayerState)
@@ -38,7 +82,7 @@ export function buildStrategyAnalysis({
     (actor && game?.bot && actor === game.bot
       ? game?.player
       : game?.bot) ||
-    null;
+    null) as AIStrategyBotPort | null;
   const hand = actor?.hand || [];
   const normalSummonCandidates = hand.filter(
     (card) =>
@@ -89,7 +133,7 @@ export function buildStrategyAnalysis({
 }
 
 export function cardHasRelevantTriggerForSummonMethod(
-  card: SimulatedCardState | null | undefined,
+  card: GameCard | SimulatedCardShape | null | undefined,
   method: string | null | undefined,
 ): boolean {
   if (!card || !method) return false;

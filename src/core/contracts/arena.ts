@@ -1,6 +1,7 @@
 import type { AIPlanningMode, AITurnPlanningMode } from "./ai.js";
 import type { BotArchetypeId, BotRuntimePort } from "./bot.js";
 import type { GameOptions, GameRendererPort } from "./game.js";
+import type { GamePlayer } from "./player.js";
 import type { RawCardDefinitionId } from "./primitives.js";
 
 export type ArenaSpeed = "1x" | "2x" | "4x" | "instant";
@@ -124,8 +125,8 @@ export interface ArenaCompletionStats {
   drawsByTimeout: number;
   drawsByMaxTurns: number;
   avgTurns: string;
-  avgDecisionTimeMs: number;
-  batchDurationMs: number;
+  avgDecisionTimeMs: number | null;
+  batchDurationMs: number | null;
   endReasonBreakdown: unknown;
   analytics: ArenaAnalyticsPort;
 }
@@ -137,8 +138,8 @@ export interface ArenaAnalyticsPort {
   recordDuel(result: unknown): void;
   getBatchStats(): {
     avgTurns?: number;
-    avgDecisionTimeMs: number;
-    batchDurationMs: number;
+    avgDecisionTimeMs: number | null;
+    batchDurationMs: number | null;
     endReasonBreakdown: unknown;
   };
   exportAsCSV(): string;
@@ -152,18 +153,18 @@ export interface ArenaAnalyticsPort {
 }
 
 export interface ArenaGamePort {
-  player: BotRuntimePort;
-  bot: BotRuntimePort;
+  player: GamePlayer;
+  bot: GamePlayer;
   renderer?: GameRendererPort | null;
   phaseDelayMs: number;
-  aiActionDelayMs: number;
-  aiSuccessfulActionDelayMs: number;
-  aiPresentationStepDelayMs: number;
+  aiActionDelayMs?: number;
+  aiSuccessfulActionDelayMs?: number;
+  aiPresentationStepDelayMs?: number;
   aiBattleDelayMs?: number;
   disablePresentationDelays?: boolean;
   turnCounter: number;
   gameOver: boolean;
-  winner: ArenaWinner | null;
+  winner: string | null;
   start(): Promise<unknown>;
 }
 

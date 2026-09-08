@@ -1,9 +1,7 @@
-import type { SimulatedCardState } from "../../contracts/aiState.js";
-
-type CounterCard = Omit<SimulatedCardState, "counters"> & {
+interface CounterCard {
   counters?: Map<string, number> | object;
   getCounter?(counterType: string): number;
-};
+}
 
 type LegacyCounterMap = { [key: string]: number | undefined };
 

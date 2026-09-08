@@ -1653,8 +1653,9 @@ revisáveis:
 1. **PR 9A — Estados, simulação e buscas:** branch
    `agent/typescript-ai-simulation`, criada de `origin/main` em
    `380a438b9a132f57192696ac6829efde39b3b9d8`.
-2. **PR 9B — Estratégias, Bot e Arena:** será criado somente depois do merge
-   do PR 9A, a partir do novo `origin/main`.
+2. **PR 9B — Estratégias, Bot e Arena:** branch
+   `agent/typescript-strategies-bot-arena`, criada do novo `origin/main`
+   após o merge do PR 9A (#59, commit `c432d64533429205ea965a6e95af868cba3579af`).
 
 Em 8 de setembro de 2026, a implementação e a aceitação local do PR 9A estão
 concluídas. Foram estabelecidos os contratos canônicos de estado e actions de
@@ -1668,13 +1669,14 @@ adicionados. O gate integral concluiu 558 testes; o Bot smoke
 `arcanist:shadowheart` e o replay headless com hash final `0339db06` também
 passaram. A revisão do bundle confirmou os 244 artefatos estáticos idênticos e
 isolou no chunk da aplicação apenas a centralização autorizada do ledger OPT.
-O PR 9A deve permanecer em draft até `Verify / check` passar no push e no
+O PR 9A (#59) foi integrado após `Verify / check` passar no push e no
 `pull_request`.
 
-O PR 9B ainda não foi iniciado. `BaseStrategy`, `StrategyRegistry`, as oito
-classes de estratégia, knowledge bases, políticas, executores, `Bot`,
-`BotLogger`, `ArenaAnalytics` e `BotArena` continuam fisicamente em
-JavaScript até esse segundo PR.
+A implementação e a aceitação local do PR 9B estão concluídas. Foram
+convertidos os 97 módulos JavaScript restantes de estratégias, knowledge
+bases, políticas, executores, `Bot`, `BotLogger`, `ArenaAnalytics` e
+`BotArena`. Não restam arquivos físicos `.js` no escopo da etapa. A
+integração permanece sujeita à revisão do PR draft.
 
 ## Contratos e comportamento preservado
 
@@ -1732,16 +1734,59 @@ inalterados. O único delta funcional de bundle admissível é o ajuste do OPT.
 
 ## PR 9B — Estratégias, Bot e Arena
 
-Depois do merge do PR 9A, o segundo PR converterá conhecimentos, políticas,
-prioridades, planners e módulos dos oito arquétipos; depois `BaseStrategy`,
+Depois do merge do PR 9A, o segundo PR converteu conhecimentos, políticas,
+prioridades, planners e módulos dos oito arquétipos; `BaseStrategy`,
 as oito estratégias, `StrategyRegistry`, `src/core/bot/**`, `Bot`,
 `BotLogger`, `ArenaAnalytics` e `BotArena`.
 
-Esse PR preservará os oito IDs e presets, os fallbacks assimétricos legados,
+Esse PR preserva os oito IDs e presets, os fallbacks assimétricos legados,
 o singleton browser-only do logger, a identidade mutável dos speed presets,
 o NullRenderer Proxy, localStorage, downloads, monkeypatches, receivers,
-delays e execução no main thread. Não serão introduzidos Worker, paralelismo,
+delays e execução no main thread. Não foram introduzidos Worker, paralelismo,
 tuning, heurísticas novas ou API pública de seed.
+
+A verificação contra a baseline identificou duas referências livres legadas:
+`hasUsefulGYTarget`, no fallback de Polymerization em `dragon/priorities`,
+e `field`, no ramo Sacred Judgment de `shouldCommitResourcesNow` em
+`luminarch/multiTurnPlanning`. Esta migração conserva os mesmos
+`ReferenceError` nesses ramos por meio de declarações apagáveis. Corrigir
+essas decisões é trabalho funcional separado; os testes não tratam tais
+referências como variáveis preenchidas pelo runtime.
+
+### Aceitação local do PR 9B
+
+Em Node `22.23.2`, `npm ci`, `npm run check` e
+`npm run test:bot-smoke -- --duels 1 --matchup arcanist:shadowheart`
+concluíram com sucesso. O gate passou 562 testes, verificou 421 arquivos
+TypeScript com zero dívidas registradas e executou as auditorias de Chain,
+actions e documentação gerada. A assinatura `1cc622e3` e o digest agregado
+`13ff527c3deb5b8b5e5f09551fcabcb3ec7ca48f922f1f167c6d22c67d12caea`
+permanecem inalterados. O build conserva apenas o aviso preexistente de
+chunks maiores que 500 kB.
+
+Os contratos de Bot e Arena verificam as capabilities reais de `Game`,
+enquanto os módulos de estratégias usam projeções de leitura por domínio.
+Os hooks públicos são conferidos pelo registry dos oito arquétipos;
+rankings e seleções genéricos preservam os tipos e a identidade das cartas
+recebidas. As assertions de compatibilidade são apagáveis; não há novas
+suppressions, casts duplos ou quarentena TypeScript.
+
+A comparação de AST executável contra o merge da 9A encontrou 123 módulos
+idênticos e três com apenas aliases locais de parâmetros, revisados em
+Dragon, Void e `dragon/banishPolicy`. Os 244 artefatos estáticos continuam
+idênticos. A comparação dos chunks, normalizando identificadores da
+minificação e esses aliases, isolou apenas os caminhos com hash dos chunks;
+o HTML também tem uma diferença de linha em branco. O bundle final mantém
+os chunks `index-DQAHSMWR.js` (854.955 bytes) e `index-07NtAQEV.js`
+(2.797.692 bytes).
+
+Os três testes novos de Bot/Arena passaram também na baseline da 9A:
+fallbacks assimétricos, identidade mutável dos speed presets e criação de
+duelo headless com o NullRenderer Proxy. Comparações diferenciais adicionais
+cobriram Dragon (580), Void (884), ArenaAnalytics (2.189) e o scoring de
+Burning West (1.121). Os smokes complementares `miragebound:luminarch`,
+`burningwest:shadowheart` e `burningwest:miragebound` passaram sem erros ou
+avisos de duelo. Testes manuais de cartas permanecem fora desta etapa.
 
 ## Critérios de aceitação da etapa
 

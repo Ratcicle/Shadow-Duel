@@ -33,53 +33,53 @@ interface AscensionPlanningGame {
   ): AscensionCheckResult;
 }
 
-interface AscensionPlanningContext {
-  game?: AscensionPlanningGame | null;
-  bot?: AscensionPlanningPlayer | null;
-  player?: AscensionPlanningPlayer | null;
-  opponent?: AscensionPlanningPlayer | null;
-  analysis?: unknown;
+interface AscensionPlanningContext<Player extends AscensionPlanningPlayer = AscensionPlanningPlayer, Game extends AscensionPlanningGame = AscensionPlanningGame, Analysis = unknown> {
+  game?: Game | null;
+  bot?: Player | null;
+  player?: Player | null;
+  opponent?: Player | null;
+  analysis?: Analysis;
   isSimulatedState?: boolean;
 }
 
-interface AscensionCandidateContext extends AscensionPlanningContext {
-  material: AscensionPlanningCard;
+interface AscensionCandidateContext<Card extends AscensionPlanningCard = AscensionPlanningCard, Player extends AscensionPlanningPlayer = AscensionPlanningPlayer, Game extends AscensionPlanningGame = AscensionPlanningGame, Analysis = unknown> extends AscensionPlanningContext<Player, Game, Analysis> {
+  material: Card;
   materialIndex: number;
   canCheckAscension: boolean;
-  ascensionCard?: AscensionPlanningCard;
+  ascensionCard?: Card;
 }
 
 interface PlannedAscensionAction extends AscensionAIAction {
   extraDeck: true;
 }
 
-interface AscensionPlanningPolicy {
+interface AscensionPlanningPolicy<Card extends AscensionPlanningCard = AscensionPlanningCard, Player extends AscensionPlanningPlayer = AscensionPlanningPlayer, Game extends AscensionPlanningGame = AscensionPlanningGame, Analysis = unknown> {
   getSimulatedAscensionCandidates?(
-    game: AscensionPlanningGame | null | undefined,
-    bot: AscensionPlanningPlayer,
-    material: AscensionPlanningCard,
-    context: AscensionCandidateContext,
-  ): AscensionPlanningCard[];
+    game: Game | null | undefined,
+    bot: Player,
+    material: Card,
+    context: AscensionCandidateContext<Card, Player, Game, Analysis>,
+  ): Card[];
   shouldSkipAscension?(
-    card: AscensionPlanningCard,
-    material: AscensionPlanningCard,
-    context: AscensionCandidateContext,
+    card: Card,
+    material: Card,
+    context: AscensionCandidateContext<Card, Player, Game, Analysis>,
   ): boolean;
   evaluateAscensionPriority?(
-    card: AscensionPlanningCard,
-    material: AscensionPlanningCard,
-    context: AscensionCandidateContext,
+    card: Card,
+    material: Card,
+    context: AscensionCandidateContext<Card, Player, Game, Analysis>,
   ): number;
   chooseAscensionPosition?(
-    card: AscensionPlanningCard,
-    material: AscensionPlanningCard,
-    context: AscensionCandidateContext,
+    card: Card,
+    material: Card,
+    context: AscensionCandidateContext<Card, Player, Game, Analysis>,
   ): BattlePositionInput | undefined;
   decorateAction?(
     action: PlannedAscensionAction,
-    card: AscensionPlanningCard,
-    material: AscensionPlanningCard,
-    context: AscensionCandidateContext,
+    card: Card,
+    material: Card,
+    context: AscensionCandidateContext<Card, Player, Game, Analysis>,
   ): PlannedAscensionAction | null | undefined;
 }
 
@@ -125,6 +125,10 @@ function resolvePriority(value: number | undefined): number {
  * not import strategy code, card ids, or use buildPrioritizedAction so callers
  * can preserve existing Ascension action contracts exactly.
  */
+export function getGenericAscensionActions<Player extends AscensionPlanningPlayer, Game extends AscensionPlanningGame, Analysis>(
+  context: AscensionPlanningContext<Player, Game, Analysis>,
+  policy?: AscensionPlanningPolicy<Player["field"][number], Player, Game, Analysis>,
+): PlannedAscensionAction[];
 export function getGenericAscensionActions(
   context: AscensionPlanningContext = {},
   policy: AscensionPlanningPolicy = {},
