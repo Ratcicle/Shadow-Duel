@@ -298,12 +298,10 @@ function resolveSafetyAdjustment(
   }
 
   const recommendation = context.safety?.recommendation;
-  if (hasValue(recommendation)) {
-    const adjustment = safetyPolicy[recommendation];
-    if (Number.isFinite(adjustment)) return adjustment as number;
-  }
-
-  return finiteOr(safetyPolicy.default, 0);
+  return hasValue(recommendation) &&
+    Number.isFinite(safetyPolicy[recommendation])
+    ? safetyPolicy[recommendation]!
+    : finiteOr(safetyPolicy.default, 0);
 }
 
 /**
@@ -323,7 +321,7 @@ export function buildPrioritizedAction<Type extends AIActionType>({
   reason = null,
   effect = null,
   activationContext = null,
-  extra,
+  extra = {} as AIActionExtra<Type>,
 }: BuildPrioritizedActionInput<Type> = {} as BuildPrioritizedActionInput<Type>): AIActionOf<Type> {
   const action: MutablePrioritizedAction = {
     type,
@@ -479,7 +477,7 @@ export function getGenericIgnitionEffectActions<Type extends AIActionType>({
   canActivate,
   cardFilter = defaultIgnitionCardFilter,
   includeEffectId = false,
-  extra,
+  extra = {} as AIActionExtra<Type>,
 }: IgnitionEffectOptions<Type> = {} as IgnitionEffectOptions<Type>): AIActionOf<Type>[] {
   const actions: AIActionOf<Type>[] = [];
   for (const [sourceIndex, card] of (cards || []).entries()) {

@@ -149,7 +149,7 @@ export function estimateCardValue(
     value += 0.8;
   }
 
-  const effects = card.effects || [];
+  const effects = (Array.isArray(card.effects) ? card.effects : []) as readonly CardValueEffectView[];
   effects.forEach((effect) => {
     const actions = Array.isArray(effect.actions) ? effect.actions : [];
     actions.forEach((action) => {

@@ -75,10 +75,6 @@ export interface CostActivationContext {
   costPreferences?: CostPreferences | null;
 }
 
-function isFiniteNumber(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value);
-}
-
 export function cardHasArchetype(
   card: FilterableCard | null | undefined,
   archetype: string | null | undefined,
@@ -103,7 +99,7 @@ function matchesOne<Value>(
 ): boolean {
   const values = asArray(expected);
   if (values.length === 0) return true;
-  return values.some((candidate) => candidate === value);
+  return values.includes(value as Value);
 }
 
 function matchesOneText(
@@ -215,13 +211,13 @@ export function cardMatchesFilter(
     ) {
       return false;
     }
-    const excludedMonsterTypes = [
-      current.excludeMonsterType,
-      ...asArray(current.excludeMonsterTypes),
-    ].filter((value): value is string => typeof value === "string" && !!value);
     if (
-      typeof card.monsterType === "string" &&
-      excludedMonsterTypes.includes(card.monsterType)
+      [
+        current.excludeMonsterType,
+        ...asArray(current.excludeMonsterTypes),
+      ]
+        .filter(Boolean)
+        .includes(card.monsterType as string)
     ) return false;
     if (current.archetype && !cardHasArchetype(card, current.archetype)) {
       return false;
@@ -303,22 +299,26 @@ export function cardMatchesFilter(
     ) {
       return false;
     }
-    const excludedNames = [
-      current.excludeName,
-      current.excludeCardName,
-      ...asArray(current.excludeNames),
-      ...asArray(current.excludeCardNames),
-    ].filter((value): value is string => typeof value === "string" && !!value);
-    if (typeof card.name === "string" && excludedNames.includes(card.name)) {
-      return false;
-    }
-    const excludedIds = [
-      current.excludeId,
-      current.excludeCardId,
-      ...asArray(current.excludeIds),
-      ...asArray(current.excludeCardIds),
-    ].filter((value) => value !== undefined && value !== null);
-    if (card.id !== undefined && excludedIds.includes(card.id)) return false;
+    if (
+      [
+        current.excludeName,
+        current.excludeCardName,
+        ...asArray(current.excludeNames),
+        ...asArray(current.excludeCardNames),
+      ]
+        .filter(Boolean)
+        .includes(card.name as string)
+    ) return false;
+    if (
+      [
+        current.excludeId,
+        current.excludeCardId,
+        ...asArray(current.excludeIds),
+        ...asArray(current.excludeCardIds),
+      ]
+        .filter((value) => value !== undefined && value !== null)
+        .includes(card.id as number)
+    ) return false;
     const cardInstanceId = getCardInstanceId(card);
     const excludedInstanceIds = [
       current.excludeInstanceId,
@@ -348,30 +348,30 @@ export function cardMatchesFilter(
   const level = Number(card.level || 0);
   const levelFilter = filter.level ?? nested.level;
   const levelOp = filter.levelOp || nested.levelOp || "lte";
-  if (isFiniteNumber(levelFilter)) {
-    if (levelOp === "eq" && level !== levelFilter) return false;
-    if (levelOp === "lte" && level > levelFilter) return false;
-    if (levelOp === "gte" && level < levelFilter) return false;
-    if (levelOp === "lt" && level >= levelFilter) return false;
-    if (levelOp === "gt" && level <= levelFilter) return false;
+  if (Number.isFinite(levelFilter as number)) {
+    if (levelOp === "eq" && level !== (levelFilter as number)) return false;
+    if (levelOp === "lte" && level > (levelFilter as number)) return false;
+    if (levelOp === "gte" && level < (levelFilter as number)) return false;
+    if (levelOp === "lt" && level >= (levelFilter as number)) return false;
+    if (levelOp === "gt" && level <= (levelFilter as number)) return false;
   }
 
   const minLevel = filter.minLevel ?? nested.minLevel;
   const maxLevel = filter.maxLevel ?? nested.maxLevel;
-  if (isFiniteNumber(minLevel) && level < minLevel) return false;
-  if (isFiniteNumber(maxLevel) && level > maxLevel) return false;
+  if (Number.isFinite(minLevel as number) && level < minLevel!) return false;
+  if (Number.isFinite(maxLevel as number) && level > maxLevel!) return false;
 
   const atk = Number(card.atk || 0);
   const minAtk = filter.minAtk ?? nested.minAtk;
   const maxAtk = filter.maxAtk ?? nested.maxAtk;
-  if (isFiniteNumber(minAtk) && atk < minAtk) return false;
-  if (isFiniteNumber(maxAtk) && atk > maxAtk) return false;
+  if (Number.isFinite(minAtk as number) && atk < minAtk!) return false;
+  if (Number.isFinite(maxAtk as number) && atk > maxAtk!) return false;
 
   const def = Number(card.def || 0);
   const minDef = filter.minDef ?? nested.minDef;
   const maxDef = filter.maxDef ?? nested.maxDef;
-  if (isFiniteNumber(minDef) && def < minDef) return false;
-  if (isFiniteNumber(maxDef) && def > maxDef) return false;
+  if (Number.isFinite(minDef as number) && def < minDef!) return false;
+  if (Number.isFinite(maxDef as number) && def > maxDef!) return false;
 
   return true;
 }
@@ -384,7 +384,7 @@ export function getPlayerZoneCards(
   if (zone === "fieldSpell") {
     return player.fieldSpell ? [player.fieldSpell] : [];
   }
-  const cards = Reflect.get(player, zone);
+  const cards = player[zone as keyof AiZonePlayer];
   return Array.isArray(cards) ? cards as FilterableCard[] : [];
 }
 
@@ -433,18 +433,17 @@ export function countStrategicallyViableCostCandidates(
 
   const preserveNames = new Set(costPreferences.preserveNames || []);
   const payoffNames = new Set(costPreferences.offensivePayoffNames || []);
-  const availablePayoffs = isFiniteNumber(
-    costPreferences.availableOffensivePayoffs,
+  const availablePayoffs = Number.isFinite(
+    costPreferences.availableOffensivePayoffs as number,
   )
-    ? costPreferences.availableOffensivePayoffs
+    ? costPreferences.availableOffensivePayoffs!
     : 0;
 
   return candidates.filter((card) => {
-    if (typeof card.name === "string" && preserveNames.has(card.name)) return false;
+    if (preserveNames.has(card?.name as string)) return false;
     if (
       costPreferences.preserveLastOffensivePayoff &&
-      typeof card.name === "string" &&
-      payoffNames.has(card.name) &&
+      payoffNames.has(card?.name as string) &&
       availablePayoffs <= 1
     ) {
       return false;
