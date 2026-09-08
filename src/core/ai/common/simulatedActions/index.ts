@@ -159,26 +159,9 @@ export const SIMULATED_ACTION_HANDLERS = {
 
 export type SimulatedActionType = keyof typeof SIMULATED_ACTION_HANDLERS;
 
-function isSimulatedActionType(type: ActionType): type is SimulatedActionType {
-  return Object.hasOwn(SIMULATED_ACTION_HANDLERS, type);
-}
-
-function dispatchSimulatedAction<Type extends SimulatedActionType>(
-  action: ActionOf<Type>,
-  context: Omit<SimulatedActionHandlerContext<Type>, "action">,
-): void | typeof STOP_SIMULATION {
-  // TypeScript cannot preserve the key/value correlation when a heterogeneous
-  // mapped registry is indexed by a generic key. This is the sole internal
-  // boundary; the `satisfies` check above proves every concrete pair.
-  const handler = SIMULATED_ACTION_HANDLERS[
-    action.type
-  ] as SimulatedActionHandler<Type>;
-  return handler({ ...context, action });
-}
-
 export function applySimulatedActions({
   actions,
-  selections = {},
+  selections,
   state,
   selfId = "bot",
   options = {},
@@ -194,7 +177,14 @@ export function applySimulatedActions({
       { ...options, self, selfId },
       opponent,
     );
-    if (!isSimulatedActionType(action.type)) {
+    // Indexing the heterogeneous mapped manifest loses its key/value
+    // correlation here. The `satisfies` declaration above proves the pairs;
+    // this is the only erased runtime-dispatch boundary.
+    const handler = SIMULATED_ACTION_HANDLERS[
+      action.type as SimulatedActionType
+    ] as SimulatedActionHandler<ActionType> | undefined;
+
+    if (!handler) {
       if (!Array.isArray(state._simUnsupportedActions)) {
         state._simUnsupportedActions = [];
       }
@@ -202,7 +192,8 @@ export function applySimulatedActions({
       continue;
     }
 
-    const result = dispatchSimulatedAction(action, {
+    const result = handler({
+      action,
       targets,
       selections,
       state,

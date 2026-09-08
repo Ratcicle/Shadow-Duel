@@ -46,9 +46,11 @@ import type {
 } from "../../../contracts/aiState.js";
 import type { CardDeclaredValue } from "../../../contracts/cards.js";
 import type { CardFilter } from "../../../contracts/effects.js";
+import type { EffectActivationRestriction } from "../../../contracts/player.js";
 import type { CanonicalSelectionMap } from "../../../contracts/selection.js";
 import type {
   SimulatedActionHandlerContext,
+  SimulatedActionContextData,
   SimulatedActionOptions,
   SimulatedRuntimeState,
 } from "./shared.js";
@@ -57,43 +59,83 @@ type SimulatedNumberSpec =
   | number
   | string
   | ContextNumberSource
-  | object;
+  | LegacySimNumberConfig;
 
-function isObject(value: unknown): value is object {
-  return typeof value === "object" && value !== null;
+interface LegacySimNumberConfig {
+  readonly key?: string;
+  readonly defaultValue?: number;
+  readonly divideBy?: number;
+  readonly divisor?: number;
+  readonly multiplier?: number;
+  readonly amountPer?: number;
+  readonly floor?: boolean;
+  readonly min?: number;
+  readonly max?: number;
 }
+
+type LegacyPayLpAction = ActionOf<"pay_lp"> & {
+  readonly lp?: number;
+  readonly allowSelfKO?: boolean;
+};
+
+type SimNameEntry = string | { readonly name?: string } | null | undefined;
+type SimAttributeEntry =
+  | string
+  | { readonly attribute?: string }
+  | null
+  | undefined;
+type DynamicSimulationOptions = SimulatedActionOptions & CanonicalSelectionMap;
+type DynamicActionContext = SimulatedActionContextData & CanonicalSelectionMap;
+type DynamicSimulatedCard = SimulatedCardState & CanonicalSelectionMap;
+type LegacyNamesAction = ActionOf<"restrict_effect_activations_by_names"> & {
+  readonly namesSource?: string;
+};
+type LegacyAddedCardMarker = AddedCardMarker & {
+  readonly expiresOnTurn?: number;
+  readonly durationTurns?: number;
+};
+type LegacyAddFromZoneAction = ActionOf<"add_from_zone_to_hand"> & {
+  readonly sourceEffectId?: string;
+};
+type ReferencedTargets = SimulatedCardState[] & CanonicalSelectionMap;
+type DeclaredPrimitive = Exclude<CardDeclaredValue, object>;
+interface NamedPreference {
+  readonly preferredNames?: readonly DeclaredPrimitive[];
+  readonly forceNames?: readonly DeclaredPrimitive[];
+}
+type MutableCardFilter = {
+  -readonly [Key in keyof CardFilter]: CardFilter[Key];
+};
+type LegacyGrantContext = SimulatedActionHandlerContext<
+  "grant_additional_normal_summon"
+> & { readonly effect?: { readonly id?: string } | null };
 
 function readSimContextNumber(
   spec: SimulatedNumberSpec | null | undefined,
-  options: SimulatedActionOptions,
+  options: SimulatedActionOptions = {},
 ): number {
   if (typeof spec === "number") return spec;
   if (!spec) return 0;
 
-  const config: object = typeof spec === "string" ? { key: spec } : spec;
-  const rawKey = Reflect.get(config, "key");
-  const key = typeof rawKey === "string" ? rawKey : null;
+  const config: LegacySimNumberConfig =
+    typeof spec === "string" ? { key: spec } : spec;
+  const key = config.key;
   const source = options.actionContext || {};
-  const defaultValue = Reflect.get(config, "defaultValue");
-  const raw = key ? Reflect.get(source, key) : defaultValue;
-  let value = Number(raw ?? defaultValue ?? 0);
+  const raw = key
+    ? (source as DynamicActionContext)[key]
+    : config.defaultValue;
+  let value = Number(raw ?? config.defaultValue ?? 0);
   if (!Number.isFinite(value)) value = 0;
 
-  const divideBy = Number(
-    Reflect.get(config, "divideBy") ?? Reflect.get(config, "divisor") ?? 0,
-  );
+  const divideBy = Number(config.divideBy ?? config.divisor ?? 0);
   if (Number.isFinite(divideBy) && divideBy !== 0) value /= divideBy;
 
-  const multiplier = Number(
-    Reflect.get(config, "multiplier") ?? Reflect.get(config, "amountPer") ?? 1,
-  );
+  const multiplier = Number(config.multiplier ?? config.amountPer ?? 1);
   if (Number.isFinite(multiplier)) value *= multiplier;
 
-  if (Reflect.get(config, "floor") !== false) value = Math.floor(value);
-  const minimum = Reflect.get(config, "min");
-  const maximum = Reflect.get(config, "max");
-  if (Number.isFinite(Number(minimum))) value = Math.max(Number(minimum), value);
-  if (Number.isFinite(Number(maximum))) value = Math.min(Number(maximum), value);
+  if (config.floor !== false) value = Math.floor(value);
+  if (Number.isFinite(Number(config.min))) value = Math.max(Number(config.min), value);
+  if (Number.isFinite(Number(config.max))) value = Math.min(Number(config.max), value);
   return value;
 }
 
@@ -206,10 +248,10 @@ export function applyPayLp(
   const targetPlayer = resolveActionPlayer(action, self, opponent);
   const amount = Number.isFinite(Number(action.fraction))
     ? Math.floor((targetPlayer.lp || 0) * Number(action.fraction))
-    : typeof action.amount === "number" && Number.isFinite(action.amount)
-      ? action.amount
-      : Number.isFinite(Reflect.get(action, "lp"))
-        ? Number(Reflect.get(action, "lp"))
+    : Number.isFinite(action.amount as number)
+      ? action.amount as number
+      : Number.isFinite((action as LegacyPayLpAction).lp as number)
+        ? (action as LegacyPayLpAction).lp as number
         : 0;
   if (amount <= 0) return STOP_SIMULATION;
   const cost = resolveSimulatedLpCost({
@@ -225,7 +267,7 @@ export function applyPayLp(
   if (
     finalAmount > 0 &&
     (targetPlayer.lp || 0) <= finalAmount &&
-    Reflect.get(action, "allowSelfKO") !== true
+    (action as LegacyPayLpAction).allowSelfKO !== true
   ) {
     return STOP_SIMULATION;
   }
@@ -240,13 +282,10 @@ function normalizeSimNameList(values: unknown = []): string[] {
   const result: string[] = [];
   const seen = new Set<string>();
   const entries = Array.isArray(values) ? values : [values];
-  for (const entry of entries) {
-    const rawName = isObject(entry) ? Reflect.get(entry, "name") : undefined;
+  for (const entry of entries as readonly SimNameEntry[]) {
     const name = typeof entry === "string"
       ? entry.trim()
-      : typeof rawName === "string"
-        ? rawName.trim()
-        : "";
+      : entry?.name?.trim?.() || "";
     if (!name || seen.has(name)) continue;
     seen.add(name);
     result.push(name);
@@ -258,10 +297,10 @@ function readSimNameSource(
   action: ActionOf<"restrict_effect_activations_by_names">,
   options: SimulatedActionOptions,
 ): unknown {
-  const legacyNamesSource = Reflect.get(action, "namesSource");
   const sourceKey =
     action.nameSource ||
-    (typeof legacyNamesSource === "string" ? legacyNamesSource : null);
+    (action as LegacyNamesAction).namesSource ||
+    null;
   if (!sourceKey) return [];
   if (sourceKey === "lastDrawnCards") return options.lastDrawnCards || [];
   if (sourceKey === "lastDrawnCard") return options.lastDrawnCard || null;
@@ -270,10 +309,8 @@ function readSimNameSource(
   }
   if (sourceKey === "lastAddedToHandCard") return options.lastAddedToHandCard || null;
   return (
-    Reflect.get(options, sourceKey) ||
-    (options.actionContext
-      ? Reflect.get(options.actionContext, sourceKey)
-      : undefined) ||
+    (options as DynamicSimulationOptions)[sourceKey] ||
+    (options.actionContext as DynamicActionContext | undefined)?.[sourceKey] ||
     []
   );
 }
@@ -282,15 +319,10 @@ function normalizeSimAttributeList(values: unknown = []): string[] {
   const result: string[] = [];
   const seen = new Set<string>();
   const entries = Array.isArray(values) ? values : [values];
-  for (const entry of entries) {
-    const rawAttribute = isObject(entry)
-      ? Reflect.get(entry, "attribute")
-      : undefined;
+  for (const entry of entries as readonly SimAttributeEntry[]) {
     const attribute = typeof entry === "string"
       ? entry.trim()
-      : typeof rawAttribute === "string"
-        ? rawAttribute.trim()
-        : "";
+      : entry?.attribute?.trim?.() || "";
     if (!attribute) continue;
     const key = attribute.toLowerCase();
     if (seen.has(key)) continue;
@@ -308,7 +340,7 @@ function flattenSimCards(value: unknown): unknown[] {
 
 function readSimAttributeSource(
   action: ActionOf<"restrict_effect_activations_by_attribute">,
-  selections: CanonicalSelectionMap,
+  selections: CanonicalSelectionMap | undefined,
   options: SimulatedActionOptions,
 ): unknown[] {
   const sourceKey =
@@ -320,12 +352,10 @@ function readSimAttributeSource(
   if (!sourceKey) return [];
   return [
     selections?.[sourceKey],
-    Reflect.get(options, sourceKey),
-    options.actionResults?.[sourceKey],
-    options.actionContext
-      ? Reflect.get(options.actionContext, sourceKey)
-      : undefined,
-    options.activationContext?.actionResults?.[sourceKey],
+    (options as DynamicSimulationOptions)?.[sourceKey],
+    options?.actionResults?.[sourceKey],
+    (options?.actionContext as DynamicActionContext | undefined)?.[sourceKey],
+    options?.activationContext?.actionResults?.[sourceKey],
   ].flatMap(flattenSimCards).filter(Boolean);
 }
 
@@ -348,15 +378,11 @@ export function applyRestrictEffectActivationsByNames(
     targetPlayer.effectActivationRestrictions || [];
   targetPlayer.effectActivationRestrictions.push({
     blockedNames,
-    allowedAttributes: [],
-    restrictedCardFilters: {},
     duration: action.duration || "until_end_turn",
-    expiresOnTurn: null,
     reason: action.reason || null,
     sourceName: options?.sourceCard?.name || null,
     sourceId: options?.sourceCard?.id || null,
-    effectId: options.effect?.id || null,
-  });
+  } as EffectActivationRestriction);
 }
 
 export function applyRestrictEffectActivationsByAttribute(
@@ -377,16 +403,13 @@ export function applyRestrictEffectActivationsByAttribute(
   targetPlayer.effectActivationRestrictions =
     targetPlayer.effectActivationRestrictions || [];
   targetPlayer.effectActivationRestrictions.push({
-    blockedNames: [],
     allowedAttributes,
     restrictedCardFilters: action.restrictedCardFilters || { cardKind: "monster" },
     duration: action.duration || "until_end_turn",
-    expiresOnTurn: null,
     reason: action.reason || null,
     sourceName: options?.sourceCard?.name || null,
     sourceId: options?.sourceCard?.id || null,
-    effectId: options.effect?.id || null,
-  });
+  } as EffectActivationRestriction);
 }
 
 export function applySearchAny(
@@ -421,16 +444,14 @@ export function applySearchAny(
 
 function resolveSimMarkerExpirationTurn(
   state: SimulatedRuntimeState,
-  markerConfig: AddedCardMarker,
+  markerConfig: Partial<LegacyAddedCardMarker> = {},
 ): number {
   const currentTurn = Number(state?.turnCounter || 0);
-  const expiresOnTurn = Reflect.get(markerConfig, "expiresOnTurn");
-  if (typeof expiresOnTurn === "number" && Number.isFinite(expiresOnTurn)) {
-    return expiresOnTurn;
+  if (Number.isFinite(markerConfig.expiresOnTurn)) {
+    return markerConfig.expiresOnTurn as number;
   }
-  const durationTurns = Reflect.get(markerConfig, "durationTurns");
-  if (typeof durationTurns === "number" && Number.isFinite(durationTurns)) {
-    return currentTurn + Math.max(0, durationTurns);
+  if (Number.isFinite(markerConfig.durationTurns)) {
+    return currentTurn + Math.max(0, markerConfig.durationTurns as number);
   }
   if (markerConfig.duration === "end_of_next_turn") {
     return currentTurn + 1;
@@ -443,9 +464,11 @@ function markSimAddedCards(
   action: ActionOf<"add_from_zone_to_hand">,
   state: SimulatedRuntimeState,
   targetPlayer: SimulatedPlayerState,
-  options: SimulatedActionOptions,
+  options: SimulatedActionOptions = {},
 ): void {
-  const markerConfig = action?.markAddedCards;
+  const markerConfig = action?.markAddedCards as
+    | LegacyAddedCardMarker
+    | undefined;
   if (!markerConfig || typeof markerConfig !== "object" || !markerConfig.key) {
     return;
   }
@@ -462,9 +485,8 @@ function markSimAddedCards(
     sourceEffectId:
       markerConfig.sourceEffectId ||
       options.effect?.id ||
-      (typeof Reflect.get(action, "sourceEffectId") === "string"
-        ? Reflect.get(action, "sourceEffectId")
-        : null),
+      (action as LegacyAddFromZoneAction).sourceEffectId ||
+      null,
     controllerId: targetPlayer?.id || null,
     markedOnTurn: Number(state?.turnCounter || 0),
     expiresOnTurn: resolveSimMarkerExpirationTurn(state, markerConfig),
@@ -500,15 +522,14 @@ export function applyAddFromZoneToHand(
       ? action.excludeTargetRefs
       : []),
   ].filter(Boolean);
-  const excludedInstanceIds = excludeTargetRefs
+  const excludedInstanceIds = (excludeTargetRefs
     .flatMap((ref) =>
-      Array.isArray(selections[ref])
-        ? selections[ref]
-        : selections[ref]
-          ? [selections[ref]]
+      Array.isArray((targets as ReferencedTargets)?.[ref])
+        ? (targets as ReferencedTargets)[ref]
+        : (targets as ReferencedTargets)?.[ref]
+          ? [(targets as ReferencedTargets)[ref]]
           : [],
-    )
-    .filter(isObject)
+    ) as SimulatedCardState[])
     .map(getCardInstanceId)
     .filter((value) => value !== undefined && value !== null);
   const candidates = getActionCandidates(targetPlayer, action, "graveyard").filter(
@@ -579,14 +600,9 @@ export function applyDeclareCardProperty(
     ...(self?.field || []),
     ...(opponent?.field || []),
   ]
-    .map((card) => Reflect.get(card, action.property))
+    .map((card) => (card as DynamicSimulatedCard)?.[action.property])
     .flatMap((value) => (Array.isArray(value) ? value : [value]))
-    .filter(
-      (value): value is string | number | boolean =>
-        typeof value === "string" ||
-        typeof value === "number" ||
-        typeof value === "boolean",
-    );
+    .filter(Boolean) as DeclaredPrimitive[];
   const actionContext =
     options.actionContext ||
     options.activationContext?.actionContext ||
@@ -601,41 +617,24 @@ export function applyDeclareCardProperty(
     actionContext.targetPreference ||
     options.activationContext?.targetPreference ||
     null;
-  const nestedPreferences = Reflect.ownKeys(targetPreferences).flatMap((key) => {
-    const preference = Reflect.get(targetPreferences, key);
-    return isObject(preference) ? [preference] : [];
-  });
-  const namedPreferences = [directPreference, ...nestedPreferences].filter(
-    isObject,
-  );
-  const preferredValues = namedPreferences.flatMap((preference) => {
-    const preferredNames = Reflect.get(preference, "preferredNames");
-    const forceNames = Reflect.get(preference, "forceNames");
-    return [
-      ...(Array.isArray(preferredNames) ? preferredNames : []),
-      ...(Array.isArray(forceNames) ? forceNames : []),
-    ].filter(
-      (value): value is string | number | boolean =>
-        typeof value === "string" ||
-        typeof value === "number" ||
-        typeof value === "boolean",
-    );
-  });
+  const namedPreferences = [
+    directPreference,
+    ...Object.values(targetPreferences || {}),
+  ].filter(Boolean) as NamedPreference[];
+  const preferredValues = namedPreferences.flatMap((preference) => [
+    ...(Array.isArray(preference.preferredNames) ? preference.preferredNames : []),
+    ...(Array.isArray(preference.forceNames) ? preference.forceNames : []),
+  ]);
   const preferredVisibleValue = visibleValues.find((visibleValue) =>
     preferredValues.includes(visibleValue),
   );
-  const declaredValue =
+  const value = (
     action.value ||
     preferredVisibleValue ||
     visibleValues[0] ||
     (Array.isArray(action.choices) ? action.choices[0] : null) ||
-    "Pyro";
-  const value: Exclude<CardDeclaredValue, object> =
-    typeof declaredValue === "string" ||
-    typeof declaredValue === "number" ||
-    typeof declaredValue === "boolean"
-      ? declaredValue
-      : "Pyro";
+    "Pyro"
+  ) as DeclaredPrimitive;
 
   if (!sourceCard.declaredValues) sourceCard.declaredValues = {};
   const currentTurn = Number(state?.turnCounter || 0);
@@ -649,9 +648,9 @@ export function applyDeclareCardProperty(
     property: action.property,
     value,
     declaredOnTurn: currentTurn,
-    ...(expiresOnTurn === null ? {} : { expiresOnTurn }),
-    ...(action.duration ? { duration: action.duration } : {}),
-  };
+    expiresOnTurn,
+    duration: action.duration || null,
+  } as CardDeclaredValue;
   return;
 }
 
@@ -672,20 +671,18 @@ export function applyGrantAdditionalNormalSummon(
   const targetPlayer = resolveActionPlayer(action, self, opponent);
   const rawCount = Number(action.count ?? 1);
   const count = Number.isFinite(rawCount) ? Math.max(1, rawCount) : 1;
-  const filters: CardFilter = {
-    ...(action.filters || {}),
-    archetype: action.filters?.archetype || action.archetype,
-    cardKind: action.filters?.cardKind || action.cardKind,
-  };
+  const filters: MutableCardFilter = { ...(action.filters || {}) };
+  if (action.archetype && !filters.archetype) filters.archetype = action.archetype;
+  if (action.cardKind && !filters.cardKind) filters.cardKind = action.cardKind;
 
   if (Object.keys(filters).length > 0) {
     targetPlayer.additionalNormalSummonPermissions =
       targetPlayer.additionalNormalSummonPermissions || [];
     targetPlayer.additionalNormalSummonPermissions.push({
       count,
-      filters,
-      sourceCardName: ctx.source?.name || options.sourceCard?.name || null,
-      effectId: options.effect?.id || null,
+      filters: filters as CardFilter,
+      sourceCardName: ctx?.source?.name || null,
+      effectId: (ctx as LegacyGrantContext)?.effect?.id || null,
     });
   } else {
     targetPlayer.additionalNormalSummons =
