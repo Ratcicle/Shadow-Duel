@@ -160,6 +160,16 @@ interface LegacyTieredCostFields {
   costTargetRef?: string;
 }
 
+type LegacyTieredCostAction = ActionOf<
+  "special_summon_from_hand_with_tiered_cost"
+> & LegacyTieredCostFields;
+
+type MutableSummonedCard = SimulatedCardState & {
+  summonMethod?: string;
+  summonProcedure?: string;
+  cannotBeDestroyedByBattle?: boolean;
+};
+
 function emitSimulatedAfterSpecialSummon({
   options,
   state,
@@ -401,7 +411,9 @@ export function applySpecialSummonFromZone(
     );
   }
   if (action.targetRef) {
-    const filters = buildActionFilter(action);
+    const filters = buildActionFilter(
+      action as Parameters<typeof buildActionFilter>[0],
+    );
     delete (filters as MutablePositionFilter).position;
     if (Object.keys(filters).length > 0) {
       candidates = candidates.filter((card) =>
@@ -557,21 +569,20 @@ export function applySynchroSummonFromExtraDeck(
   });
 
   removeCardFromZones(player, synchroCard);
-  const summonStateAction = {
-    ...action,
-    position: action.position || synchroCard.synchro?.position || "attack",
-  } as SimulatedSummonStateAction;
   applySummonState(
     synchroCard,
-    summonStateAction,
+    {
+      ...action,
+      position: action.position || synchroCard.synchro?.position || "attack",
+    } as SimulatedSummonStateAction,
     state,
     player,
     options,
   );
-  Reflect.set(synchroCard, "summonMethod", "synchro");
+  (synchroCard as MutableSummonedCard).summonMethod = "synchro";
   synchroCard.lastSummonMethod = "synchro";
   synchroCard.lastSummonedFromZone = "extraDeck";
-  Reflect.set(synchroCard, "summonProcedure", "synchro");
+  (synchroCard as MutableSummonedCard).summonProcedure = "synchro";
   establishProperSummon(synchroCard, {
     summonProcedure: "synchro",
     sourceZone: "extraDeck",
@@ -765,24 +776,22 @@ export function applySpecialSummonFromHandWithTieredCost(
     opponent,
     applySimulatedActions,
   } = ctx;
-  const tieredAction = action as typeof action & LegacyTieredCostFields;
   const targetPlayer = resolveActionPlayer(action, self, opponent);
   if (!hasOpenMonsterZone(targetPlayer)) return;
   const sourceCard = options.sourceCard;
   if (!sourceCard || !targetPlayer.hand?.includes(sourceCard)) return;
   if (!canSimSpecialSummon(sourceCard, targetPlayer)) return;
-  const minCost =
-    typeof action.minCost === "number" && Number.isFinite(action.minCost)
-      ? action.minCost
-      : normalizeCount(tieredAction.count, 1).min;
-  const maxCost =
-    typeof action.maxCost === "number" && Number.isFinite(action.maxCost)
-      ? action.maxCost
-      : Math.max(
-          minCost,
-          normalizeCount(tieredAction.count, minCost).max,
-        );
-  const costFilter = action.costFilters || tieredAction.filters || {};
+  const minCost = Number.isFinite(action.minCost)
+    ? action.minCost as number
+    : normalizeCount((action as LegacyTieredCostAction).count, 1).min;
+  const maxCost = Number.isFinite(action.maxCost)
+    ? action.maxCost as number
+    : Math.max(
+        minCost,
+        normalizeCount((action as LegacyTieredCostAction).count, minCost).max,
+      );
+  const costFilter =
+    action.costFilters || (action as LegacyTieredCostAction).filters || {};
   const costPool = (targetPlayer.field || []).filter((card) =>
     matchesTargetFilters(card, costFilter, sourceCard, "self"),
   );
@@ -792,7 +801,7 @@ export function applySpecialSummonFromHandWithTieredCost(
     "cost",
     {
       ...action,
-      targetRef: tieredAction.costTargetRef,
+      targetRef: (action as LegacyTieredCostAction).costTargetRef,
     } as SimulatedRankingAction,
     state,
     targetPlayer,
@@ -808,21 +817,19 @@ export function applySpecialSummonFromHandWithTieredCost(
     targetPlayer,
     options,
   );
-  const tier1AtkBoost = action.tier1AtkBoost;
   if (
-    typeof tier1AtkBoost === "number" &&
-    Number.isFinite(tier1AtkBoost) &&
+    Number.isFinite(action.tier1AtkBoost) &&
     chosenCosts.length >= 1
   ) {
     sourceCard.atk = Math.max(
       0,
-      (sourceCard.atk || 0) + tier1AtkBoost,
+      (sourceCard.atk || 0) + (action.tier1AtkBoost as number),
     );
     sourceCard.tempAtkBoost =
-      (sourceCard.tempAtkBoost || 0) + tier1AtkBoost;
+      (sourceCard.tempAtkBoost || 0) + (action.tier1AtkBoost as number);
   }
   if (chosenCosts.length >= 2) {
-    Reflect.set(sourceCard, "cannotBeDestroyedByBattle", true);
+    (sourceCard as MutableSummonedCard).cannotBeDestroyedByBattle = true;
     sourceCard._simBattleDestructionProtected = true;
   }
   targetPlayer.field.push(sourceCard);
@@ -1034,7 +1041,6 @@ export function applyPolymerizationFusionSummon(
   } = ctx;
   const targetPlayer = resolveActionPlayer(action, self, opponent);
   if (!hasOpenMonsterZone(targetPlayer)) return;
-  const legacyAction = action as LegacyPolymerizationAction;
   const materialPool = rankCandidates([
     ...(targetPlayer.field || []),
     ...(targetPlayer.hand || []),
@@ -1042,7 +1048,11 @@ export function applyPolymerizationFusionSummon(
       ...options,
       fieldSpell: targetPlayer.fieldSpell,
       targetPreference: mergeCostPreference(
-        getTargetPreference(options, legacyAction.targetRef || legacyAction.id),
+        getTargetPreference(
+          options,
+          (action as LegacyPolymerizationAction).targetRef ||
+            (action as LegacyPolymerizationAction).id,
+        ),
         getCostPreference(options),
       ),
     });
@@ -1078,8 +1088,8 @@ export function applyPolymerizationFusionSummon(
       } => Array.isArray(entry.materials),
     );
   if (fusionEntries.length === 0) return;
-  const sourceAction = options.sourceAction as LegacyFusionSourceAction | null;
-  const hint = sourceAction?.fusionTargetHint;
+  const hint = (options.sourceAction as LegacyFusionSourceAction | null)
+    ?.fusionTargetHint;
   fusionEntries.sort((a, b) => {
     if (hint) {
       if (a.fusionCard.name === hint) return -1;
@@ -1103,12 +1113,15 @@ export function applyPolymerizationFusionSummon(
   removeCardFromZones(targetPlayer, fusionCard);
   applySummonState(
     fusionCard,
-    { ...action, position: legacyAction.position || "attack" },
+    {
+      ...action,
+      position: (action as LegacyPolymerizationAction).position || "attack",
+    },
     state,
     targetPlayer,
     options,
   );
-  Reflect.set(fusionCard, "summonMethod", "fusion");
+  (fusionCard as MutableSummonedCard).summonMethod = "fusion";
   targetPlayer.field.push(fusionCard);
   options.onFusionSummon?.({
     state,

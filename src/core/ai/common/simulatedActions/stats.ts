@@ -42,49 +42,113 @@ import type {
 } from "../../../contracts/aiState.js";
 import type { BattlePosition } from "../../../contracts/cards.js";
 import type { CardFilter } from "../../../contracts/effects.js";
-import type { CanonicalSelectionValue } from "../../../contracts/selection.js";
+import type { CanonicalSelectionMap } from "../../../contracts/selection.js";
 import type { ZoneInput } from "../../../contracts/zones.js";
-import type { SimulatedActionHandlerContext } from "./shared.js";
+import type {
+  SimulatedActionHandlerContext,
+  SimulatedRuntimeState,
+} from "./shared.js";
 
-function normalizeNegateEffectsDuration(action: object): "while_faceup" | "until_end_turn" {
-  return Reflect.get(action, "negateEffectsDuration") === "while_faceup" ||
-    Reflect.get(action, "duration") === "while_faceup"
+interface NegateDurationShape {
+  readonly negateEffectsDuration?: string;
+  readonly duration?: string;
+}
+
+type ScopeFilterKey =
+  | "cardKind"
+  | "archetype"
+  | "archetypes"
+  | "requireFaceup"
+  | "name"
+  | "cardName"
+  | "cardId"
+  | "position";
+type ScopeFilterValue = CardFilter[keyof CardFilter] | readonly string[];
+type MutableScopeFilters = {
+  -readonly [Key in ScopeFilterKey]?: ScopeFilterValue;
+};
+type LegacyTargetScope = ActionTargetScope & MutableScopeFilters;
+
+type LegacyPositionAction = SimulatedActionHandlerContext<
+  "switch_position"
+>["action"] & { readonly defBoost?: number };
+type LegacyBuffStatsAction = Omit<
+  SimulatedActionHandlerContext<"buff_stats_temp">["action"],
+  "type"
+> & {
+  readonly type: string;
+  readonly grantSecondAttack?: boolean;
+  readonly targetRestriction?: string;
+};
+type LegacyBuffAtkAction = SimulatedActionHandlerContext<
+  "buff_atk_temp"
+>["action"] & { readonly atkBoost?: number };
+type ReferencedResolvedTargets = SimulatedCardState[] & CanonicalSelectionMap;
+type DynamicSimulatedCard = SimulatedCardState & CanonicalSelectionMap;
+type LegacyZoneCollections = SimulatedPlayerState & Partial<{
+  [Zone in ZoneInput]: SimulatedCardState[];
+}>;
+interface LegacyProtection {
+  type: string;
+  duration: string;
+  sourceOwner: string;
+  removeOnLeave: boolean;
+  sourceName: string | null;
+}
+type LegacyProtectedCard = SimulatedCardState & {
+  _simProtectionEffects?: LegacyProtection[];
+  cannotBeDestroyedByOpponentCardEffects?: boolean;
+  cannotBeDestroyedByOwnCardEffects?: boolean;
+  cannotBeDestroyedByCardEffects?: boolean;
+  _simProtection?: LegacyProtection;
+  _simReplacementProtection?: {
+    uniqueKey: string;
+    duration: string;
+    replacementEffect: object | null;
+  };
+  hasChangedPosition?: boolean;
+};
+interface LegacyReplacementEffect {
+  _sim: boolean;
+  uniqueKey: string;
+  playerId: string;
+  sourceName: string | null;
+  duration: string;
+  targetRef: string | null;
+  targetInstanceIds: Array<string | number | null>;
+  uses: number | null;
+  usesPerTarget: boolean | null;
+  replacementEffect: object | null;
+}
+type LegacyReplacementState = Omit<
+  SimulatedRuntimeState,
+  "_simReplacementEffects"
+> & {
+  _simReplacementEffects?: LegacyReplacementEffect[];
+};
+
+function normalizeNegateEffectsDuration(
+  action: NegateDurationShape = {},
+): "while_faceup" | "until_end_turn" {
+  return action.negateEffectsDuration === "while_faceup" ||
+    action.duration === "while_faceup"
     ? "while_faceup"
     : "until_end_turn";
 }
 
-function asZoneArray(
-  value: ZoneInput | readonly ZoneInput[] | null | undefined,
-): ZoneInput[] {
+function asArray<Type>(
+  value: Type | readonly Type[] | null | undefined,
+): readonly Type[] {
   if (value === undefined || value === null) return [];
-  if (Array.isArray(value)) return [...value];
-  return typeof value === "string" ? [value] : [];
-}
-
-function readFiniteNumber(source: object, key: string): number | null {
-  const value = Reflect.get(source, key);
-  return typeof value === "number" && Number.isFinite(value) ? value : null;
-}
-
-function isSimulatedCard(value: unknown): value is SimulatedCardState {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function firstSimulatedCard(
-  value: CanonicalSelectionValue,
-): SimulatedCardState | null {
-  const first = Array.isArray(value) ? value[0] : value;
-  if (!isSimulatedCard(first)) return null;
-  if ("card" in first && isSimulatedCard(first.card)) return first.card;
-  return first;
+  return Array.isArray(value) ? value as readonly Type[] : [value as Type];
 }
 
 function getTargetScopeCards(
-  scope: ActionTargetScope | undefined,
+  scope: LegacyTargetScope = {},
   self: SimulatedPlayerState,
   opponent: SimulatedPlayerState,
 ): SimulatedCardState[] {
-  if (!scope) return [];
+  if (!scope || typeof scope !== "object") return [];
   const ownerEntries: Array<{
     player: SimulatedPlayerState;
     role: "self" | "opponent";
@@ -97,12 +161,12 @@ function getTargetScopeCards(
             { player: opponent, role: "opponent" },
           ]
         : [{ player: self, role: "self" }];
-  const zones = asZoneArray(scope.zones || scope.zone || "field");
-  const filters: CardFilter = {
+  const zones = asArray(scope.zones || scope.zone || "field");
+  const filters: MutableScopeFilters = {
     ...(scope.filters || {}),
   };
 
-  for (const key of [
+  for (const key of ([
     "cardKind",
     "archetype",
     "archetypes",
@@ -111,17 +175,16 @@ function getTargetScopeCards(
     "cardName",
     "cardId",
     "position",
-  ]) {
-    const scopeValue = Reflect.get(scope, key);
-    if (scopeValue !== undefined && Reflect.get(filters, key) === undefined) {
-      Reflect.set(filters, key, scopeValue);
+  ] as readonly ScopeFilterKey[])) {
+    if (scope[key] !== undefined && filters[key] === undefined) {
+      filters[key] = scope[key];
     }
   }
 
   return ownerEntries.flatMap(({ player, role }) =>
     zones.flatMap((zone) =>
       getZoneCards(player, zone).filter((card) =>
-        matchesTargetFilters(card, filters, null, role),
+        matchesTargetFilters(card, filters as CardFilter, null, role),
       ),
     ),
   );
@@ -134,16 +197,14 @@ export function applySwitchPosition(
   const targetCards =
     Array.isArray(targets) && targets.length > 0
       ? targets
-      : getTargetScopeCards(action.targetScope, self, opponent);
+      : getTargetScopeCards(action.targetScope as LegacyTargetScope, self, opponent);
 
   targetCards.forEach((card) => {
     if (!card || card.cardKind !== "monster") return;
     if (card.battlePositionLocked === true) return;
     const wasFacedown = card.isFacedown === true;
     const wasFaceupBeforeChange = !wasFacedown;
-    const previousPosition: BattlePosition = card.position === "defense"
-      ? "defense"
-      : "attack";
+    const previousPosition = (card.position || "attack") as BattlePosition;
     const nextPosition: BattlePosition = wasFacedown
       ? "attack"
       : card.position === "attack"
@@ -155,19 +216,25 @@ export function applySwitchPosition(
       card.isFacedown = false;
     }
     if (action.markChanged !== false) {
-      Reflect.set(card, "hasChangedPosition", true);
+      (card as LegacyProtectedCard).hasChangedPosition = true;
       card.positionChangedThisTurn = true;
     }
     // Position alone does not create or clear an explicit attack restriction.
     if (Number.isFinite(action.atkBoost)) {
-      const atkBoost = action.atkBoost ?? 0;
-      card.tempAtkBoost = (card.tempAtkBoost || 0) + atkBoost;
-      card.atk = Math.max(0, (card.atk || 0) + atkBoost);
+      card.tempAtkBoost =
+        (card.tempAtkBoost || 0) + (action.atkBoost as number);
+      card.atk = Math.max(0, (card.atk || 0) + (action.atkBoost as number));
     }
-    const defBoost = readFiniteNumber(action, "defBoost");
-    if (defBoost !== null) {
-      card.tempDefBoost = (card.tempDefBoost || 0) + defBoost;
-      card.def = Math.max(0, (card.def || 0) + defBoost);
+    if (Number.isFinite((action as LegacyPositionAction).defBoost)) {
+      card.tempDefBoost =
+        (card.tempDefBoost || 0) +
+        ((action as LegacyPositionAction).defBoost as number);
+      card.def =
+        Math.max(
+          0,
+          (card.def || 0) +
+            ((action as LegacyPositionAction).defBoost as number),
+        );
     }
     const owner = findCardOwner(state, card);
     options.emitSimulatedEvent?.("position_change", {
@@ -209,7 +276,7 @@ export function applySetFacedownDefense(
       card.effectsNegated = false;
       card.effectsNegatedDuration = null;
     }
-    Reflect.set(card, "hasChangedPosition", true);
+    (card as LegacyProtectedCard).hasChangedPosition = true;
     card.positionChangedThisTurn = true;
     if (action.lockBattlePosition === true) {
       card.battlePositionLocked = true;
@@ -243,19 +310,24 @@ export function applyBuffStatsTemp(
     opponent,
     applySimulatedActions,
   } = ctx;
-  let atkBoost =
-    typeof action.atkBoost === "number" && Number.isFinite(action.atkBoost)
-      ? action.atkBoost
-      : 0;
+  let atkBoost = Number.isFinite(action.atkBoost)
+    ? action.atkBoost as number
+    : 0;
   if (action.atkBoostFromTarget) {
     const spec = action.atkBoostFromTarget;
     const stat = ["baseAtk", "baseDef", "atk", "def"].includes(spec?.stat)
       ? spec.stat
       : "atk";
     const targetRef = spec?.targetRef;
-    const selected = targetRef ? selections[targetRef] : undefined;
-    const reference = firstSimulatedCard(selected);
-    const value = Number(reference ? Reflect.get(reference, stat) : undefined);
+    const reference = Array.isArray(selections?.[targetRef])
+      ? (selections![targetRef] as SimulatedCardState[])[0]
+      : Array.isArray(
+            (options?.resolvedTargets as ReferencedResolvedTargets)?.[targetRef],
+          )
+        ? ((options.resolvedTargets as ReferencedResolvedTargets)[targetRef] as
+            SimulatedCardState[])[0]
+        : null;
+    const value = Number(reference?.[stat]);
     if (!reference || !Number.isFinite(value)) return;
     atkBoost += value;
   }
@@ -266,18 +338,19 @@ export function applyBuffStatsTemp(
       card.atk = Math.max(0, (card.atk || 0) + atkBoost);
     }
     if (Number.isFinite(action.defBoost)) {
-      const defBoost = action.defBoost ?? 0;
-      card.tempDefBoost = (card.tempDefBoost || 0) + defBoost;
-      card.def = Math.max(0, (card.def || 0) + defBoost);
+      card.tempDefBoost =
+        (card.tempDefBoost || 0) + (action.defBoost as number);
+      card.def = Math.max(0, (card.def || 0) + (action.defBoost as number));
     }
     if (
-      Reflect.get(action, "grantSecondAttack") === true ||
-      String(action.type) === "grant_second_attack" ||
-      String(action.type) === "buff_stats_temp_with_second_attack"
+      (action as LegacyBuffStatsAction).grantSecondAttack === true ||
+      (action as LegacyBuffStatsAction).type === "grant_second_attack" ||
+      (action as LegacyBuffStatsAction).type ===
+        "buff_stats_temp_with_second_attack"
     ) {
       card.canMakeSecondAttackThisTurn = true;
       card.secondAttackUsedThisTurn = false;
-      if (Reflect.get(action, "targetRestriction") === "monster") {
+      if ((action as LegacyBuffStatsAction).targetRestriction === "monster") {
         card.extraAttackTargetRestriction = "monster";
       }
     }
@@ -301,10 +374,11 @@ export function applyBuffAtkTemp(
   } = ctx;
   targets.forEach((card) => {
     if (!card) return;
-    const legacyAtkBoost = readFiniteNumber(action, "atkBoost");
     const amount = Number.isFinite(action.amount)
-      ? action.amount
-      : legacyAtkBoost ?? 0;
+      ? action.amount as number
+      : Number.isFinite((action as LegacyBuffAtkAction).atkBoost)
+        ? (action as LegacyBuffAtkAction).atkBoost as number
+        : 0;
     if (amount !== 0) {
       card.tempAtkBoost = (card.tempAtkBoost || 0) + amount;
       card.atk = Math.max(0, (card.atk || 0) + amount);
@@ -323,13 +397,19 @@ export function applySetAttackLimitFromZoneCount(
       : action.owner === "both" || action.owner === "any"
         ? [self, opponent]
         : [self];
-  const zones = asZoneArray(action.zone || "graveyard");
+  const zones = asArray(action.zone || "graveyard");
   const filters = action.filters || {};
   let count = 0;
 
   for (const owner of owners.filter(Boolean)) {
     for (const zone of zones) {
-      const cards = getZoneCards(owner, zone);
+      const cards = zone === "fieldSpell"
+        ? owner.fieldSpell
+          ? [owner.fieldSpell]
+          : []
+        : Array.isArray((owner as LegacyZoneCollections)[zone])
+          ? (owner as LegacyZoneCollections)[zone] as SimulatedCardState[]
+          : [];
       count += cards.filter((card) =>
         matchesTargetFilters(card, filters, null),
       ).length;
@@ -444,10 +524,7 @@ export function applyForbidAttackNextTurn(
     opponent,
     applySimulatedActions,
   } = ctx;
-  const turns =
-    typeof action.turns === "number" && Number.isFinite(action.turns)
-      ? action.turns
-      : 1;
+  const turns = Number.isFinite(action.turns) ? action.turns as number : 1;
   targets.forEach((card) => {
     if (!card) return;
     card.cannotAttackThisTurn = true;
@@ -466,9 +543,7 @@ export function applyForbidAttackThisTurn(
   const cards =
     Array.isArray(ctx.targets) && ctx.targets.length > 0
       ? ctx.targets
-      : ctx.options.sourceCard
-        ? [ctx.options.sourceCard]
-        : [];
+      : [ctx.options?.sourceCard].filter(Boolean) as SimulatedCardState[];
   for (const card of cards) {
     card.cannotAttackThisTurn = true;
     card._simCannotAttackByEffect = true;
@@ -500,28 +575,23 @@ export function applyGrantProtection(
       removeOnLeave: action.removeOnLeave !== false,
       sourceName: options?.sourceCard?.name || null,
     };
-    const existingProtections = Reflect.get(card, "_simProtectionEffects");
-    const protectionEffects: object[] = Array.isArray(existingProtections)
-      ? existingProtections.filter(
-          (entry): entry is object =>
-            typeof entry === "object" && entry !== null,
-        )
-      : [];
-    protectionEffects.push(protection);
-    Reflect.set(card, "_simProtectionEffects", protectionEffects);
+    if (!Array.isArray((card as LegacyProtectedCard)._simProtectionEffects)) {
+      (card as LegacyProtectedCard)._simProtectionEffects = [];
+    }
+    (card as LegacyProtectedCard)._simProtectionEffects!.push(protection);
     if (action.protectionType === "effect_destruction") {
       if (sourceOwner === "opponent") {
-        Reflect.set(card, "cannotBeDestroyedByOpponentCardEffects", true);
+        (card as LegacyProtectedCard).cannotBeDestroyedByOpponentCardEffects = true;
         card._simEffectDestructionProtectedFromOpponent = true;
       } else if (sourceOwner === "self") {
-        Reflect.set(card, "cannotBeDestroyedByOwnCardEffects", true);
+        (card as LegacyProtectedCard).cannotBeDestroyedByOwnCardEffects = true;
         card._simEffectDestructionProtectedFromSelf = true;
       } else {
-        Reflect.set(card, "cannotBeDestroyedByCardEffects", true);
+        (card as LegacyProtectedCard).cannotBeDestroyedByCardEffects = true;
         card._simEffectDestructionProtected = true;
       }
     } else {
-      Reflect.set(card, "_simProtection", protection);
+      (card as LegacyProtectedCard)._simProtection = protection;
     }
   });
   return;
@@ -541,23 +611,19 @@ export function applyRegisterReplacementEffect(
     opponent,
     applySimulatedActions,
   } = ctx;
-  const existingEffects = Reflect.get(state, "_simReplacementEffects");
-  const replacementEffects: object[] = Array.isArray(existingEffects)
-    ? existingEffects.filter(
-        (entry): entry is object =>
-          typeof entry === "object" && entry !== null,
-      )
-    : [];
+  if (!Array.isArray((state as LegacyReplacementState)._simReplacementEffects)) {
+    (state as LegacyReplacementState)._simReplacementEffects = [];
+  }
   const targetIds = targets.map(getCardInstanceId).filter((id) => id !== null);
   const uniqueKey =
     action.uniqueKey ||
     `${options.sourceCard?.name || "source"}:${action.replacementEffect?.type || "replacement"}`;
-  const retainedEffects = replacementEffects.filter(
+  (state as LegacyReplacementState)._simReplacementEffects =
+    (state as LegacyReplacementState)._simReplacementEffects!.filter(
     (entry) =>
-      Reflect.get(entry, "uniqueKey") !== uniqueKey ||
-      Reflect.get(entry, "playerId") !== self.id,
+      entry.uniqueKey !== uniqueKey || entry.playerId !== self.id,
   );
-  retainedEffects.push({
+  (state as LegacyReplacementState)._simReplacementEffects!.push({
     _sim: true,
     uniqueKey,
     playerId: self.id,
@@ -569,14 +635,13 @@ export function applyRegisterReplacementEffect(
     usesPerTarget: action.usesPerTarget || null,
     replacementEffect: action.replacementEffect || null,
   });
-  Reflect.set(state, "_simReplacementEffects", retainedEffects);
   targets.forEach((card) => {
     if (!card) return;
-    Reflect.set(card, "_simReplacementProtection", {
+    (card as LegacyProtectedCard)._simReplacementProtection = {
       uniqueKey,
       duration: action.duration || "temporary",
       replacementEffect: action.replacementEffect || null,
-    });
+    };
   });
   return;
 }
@@ -598,17 +663,15 @@ export function applyModifyStatsTemp(
   targets.forEach((card) => {
     if (!card) return;
     if (Number.isFinite(action.atkFactor)) {
-      const atkFactor = action.atkFactor ?? 1;
       const previousAtk = card.atk || 0;
-      const newAtk = Math.floor(previousAtk * atkFactor);
+      const newAtk = Math.floor(previousAtk * (action.atkFactor as number));
       card.atk = newAtk;
       card.tempAtkBoost =
         (card.tempAtkBoost || 0) + newAtk - previousAtk;
     }
     if (Number.isFinite(action.defFactor)) {
-      const defFactor = action.defFactor ?? 1;
       const previousDef = card.def || 0;
-      const newDef = Math.floor(previousDef * defFactor);
+      const newDef = Math.floor(previousDef * (action.defFactor as number));
       card.def = newDef;
       card.tempDefBoost =
         (card.tempDefBoost || 0) + newDef - previousDef;
@@ -636,12 +699,12 @@ export function applyModifyStatsTempThenDestroyIfZeroed(
     const previousAtk = card.atk || 0;
     const previousDef = card.def || 0;
     if (Number.isFinite(action.atkChange)) {
-      const newAtk = Math.max(0, previousAtk + (action.atkChange ?? 0));
+      const newAtk = Math.max(0, previousAtk + (action.atkChange as number));
       card.atk = newAtk;
       card.tempAtkBoost = (card.tempAtkBoost || 0) + newAtk - previousAtk;
     }
     if (Number.isFinite(action.defChange)) {
-      const newDef = Math.max(0, previousDef + (action.defChange ?? 0));
+      const newDef = Math.max(0, previousDef + (action.defChange as number));
       card.def = newDef;
       card.tempDefBoost = (card.tempDefBoost || 0) + newDef - previousDef;
     }
@@ -710,19 +773,19 @@ export function applyAddStatus(
   const targetCards =
     Array.isArray(targets) && targets.length > 0
       ? targets
-      : getTargetScopeCards(action.targetScope, self, opponent);
+      : getTargetScopeCards(action.targetScope as LegacyTargetScope, self, opponent);
 
   targetCards.forEach((card) => {
     if (!card) return;
     const status = action.status;
     if (status) {
       if (action.remove === true) {
-        Reflect.deleteProperty(card, status);
+        delete (card as DynamicSimulatedCard)[status];
         if (status === "effectsNegated") {
           card.effectsNegatedDuration = null;
         }
       } else {
-        Reflect.set(card, status, action.value ?? true);
+        (card as DynamicSimulatedCard)[status] = action.value ?? true;
         if (status === "effectsNegated") {
           card.effectsNegatedDuration = normalizeNegateEffectsDuration(action);
         }

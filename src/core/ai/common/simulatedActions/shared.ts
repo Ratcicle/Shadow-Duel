@@ -40,7 +40,6 @@ import type {
 import type { PlayerId } from "../../../contracts/primitives.js";
 import type {
   CanonicalSelectionMap,
-  CanonicalSelectionValue,
 } from "../../../contracts/selection.js";
 import type { CanonicalZone, ZoneInput } from "../../../contracts/zones.js";
 
@@ -206,6 +205,46 @@ interface SimulatedLpCostInput {
   baseAmount: number;
 }
 
+type LegacyEffectDefinition = EffectDefinition & {
+  readonly usesPerTurn?: number;
+  readonly maxUsesPerTurn?: number;
+  readonly allowFacedown?: boolean;
+  readonly passive?: LegacyLpCostPassive;
+};
+
+interface LegacyLpCostPassive {
+  readonly type: string;
+  readonly amount?: number;
+  readonly reduction?: number;
+  readonly value?: number;
+  readonly appliesTo?: string | readonly string[];
+  readonly affects?: string | readonly string[];
+  readonly owner?: string | readonly string[];
+  readonly actionTypes?: string | readonly string[];
+  readonly actionType?: string | readonly string[];
+  readonly sourceFilters?: CardFilter;
+  readonly sourceFilter?: CardFilter;
+  readonly allowFacedown?: boolean;
+  readonly stackMode?: "max" | "sum";
+  readonly minFinalAmount?: number;
+  readonly minAmount?: number;
+}
+
+type MutableAiCardFilter = {
+  -readonly [Key in keyof AiCardFilter]: AiCardFilter[Key];
+};
+
+type RankableCardAction = CardAction & {
+  readonly targetRef?: string;
+  readonly id?: string;
+};
+
+type LegacySummonedCard = SimulatedCardState & {
+  destroyAtEndPhase?: boolean;
+  destroyAtEndPhaseTurn?: number | null;
+  destroyAtEndPhaseSource?: string | null;
+};
+
 export type SimulatedCardIntent = "benefit" | "cost" | "summon";
 
 interface SimulatedSummonActionShape {
@@ -241,6 +280,16 @@ type SimulatedContextNumberReference =
       readonly default?: number;
       readonly fallback?: number;
     };
+
+interface SimulatedContextNumberObject {
+  readonly key?: string;
+  readonly contextKey?: string;
+  readonly path?: string;
+  readonly resultKey?: string;
+  readonly defaultValue?: number;
+  readonly default?: number;
+  readonly fallback?: number;
+}
 
 export interface SimulatedTemporaryBattlePairEffect {
   timing: string;
@@ -321,6 +370,7 @@ export interface SimulatedActionBatchInput {
 export type SimulatedActionHandlerContext<Type extends ActionType> = Omit<
   CanonicalSimulatedActionHandlerContext<Type>,
   | "targets"
+  | "selections"
   | "options"
   | "state"
   | "self"
@@ -328,6 +378,7 @@ export type SimulatedActionHandlerContext<Type extends ActionType> = Omit<
   | "applySimulatedActions"
 > & {
   targets: SimulatedCardState[];
+  selections?: CanonicalSelectionMap;
   options: SimulatedActionOptions;
   state: SimulatedRuntimeState;
   self: SimulatedPlayerState;
@@ -352,12 +403,14 @@ export function hasOpenMonsterZone(
   return (player?.field || []).length < 5;
 }
 
-export function resolveActionPlayer(
-  action: object,
+export function resolveActionPlayer<Action extends object>(
+  action: Action,
   self: SimulatedPlayerState,
   opponent: SimulatedPlayerState,
 ): SimulatedPlayerState {
-  return Reflect.get(action, "player") === "opponent" ? opponent : self;
+  return (action as Action & { readonly player?: string }).player === "opponent"
+    ? opponent
+    : self;
 }
 
 export function getSimulatedOncePerTurnKey(
@@ -377,15 +430,13 @@ export function canUseSimulatedPassive(
   const key = getSimulatedOncePerTurnKey(effect, card);
   if (!key) return true;
   const currentTurn = state?.turnCounter || 0;
-  const legacyUsesPerTurn = Reflect.get(effect, "usesPerTurn");
-  const legacyMaxUsesPerTurn = Reflect.get(effect, "maxUsesPerTurn");
   const limit = Math.max(
     1,
     Math.floor(
       Number(
         effect.oncePerTurnLimit ??
-          legacyUsesPerTurn ??
-          legacyMaxUsesPerTurn ??
+          (effect as LegacyEffectDefinition).usesPerTurn ??
+          (effect as LegacyEffectDefinition).maxUsesPerTurn ??
           1,
       ),
     ) || 1,
@@ -404,8 +455,8 @@ export function canUseSimulatedPassive(
   if (!state._simPassiveOncePerTurn) state._simPassiveOncePerTurn = new Map();
   if (state._simPassiveOncePerTurn instanceof Set) {
     const migrated = new Map<string, number>();
-    for (const entryKey of state._simPassiveOncePerTurn) {
-      if (typeof entryKey === "string") migrated.set(entryKey, 1);
+    for (const entryKey of state._simPassiveOncePerTurn as Set<string>) {
+      migrated.set(entryKey, 1);
     }
     state._simPassiveOncePerTurn = migrated;
   }
@@ -428,8 +479,8 @@ export function markSimulatedPassiveUsed(
   if (!state._simPassiveOncePerTurn) state._simPassiveOncePerTurn = new Map();
   if (state._simPassiveOncePerTurn instanceof Set) {
     const migrated = new Map<string, number>();
-    for (const entryKey of state._simPassiveOncePerTurn) {
-      if (typeof entryKey === "string") migrated.set(entryKey, 1);
+    for (const entryKey of state._simPassiveOncePerTurn as Set<string>) {
+      migrated.set(entryKey, 1);
     }
     state._simPassiveOncePerTurn = migrated;
   }
@@ -456,9 +507,7 @@ export function resolveSimulatedLpCost({
   if (!state || !targetPlayer || baseAmount <= 0) return result;
 
   const source = options.sourceCard || null;
-  const boards = [self, opponent].filter(
-    (board): board is SimulatedPlayerState => board !== null && board !== undefined,
-  );
+  const boards = [self, opponent].filter(Boolean) as SimulatedPlayerState[];
   const reducers: SimulatedLpReducer[] = [];
 
   boards.forEach((board) => {
@@ -466,55 +515,39 @@ export function resolveSimulatedLpCost({
       ...(board.field || []),
       ...(board.spellTrap || []),
       board.fieldSpell,
-    ].filter(
-      (card): card is SimulatedCardState =>
-        card !== null && card !== undefined,
-    );
+    ].filter(Boolean) as SimulatedCardState[];
 
     zoneCards.forEach((card) => {
-      (card.effects || []).forEach((effect: EffectDefinition) => {
-        if (!effect || effect.timing !== "passive" || !("passive" in effect)) {
-          return;
-        }
+      (card.effects || []).forEach((effect: LegacyEffectDefinition) => {
+        if (!effect || effect.timing !== "passive") return;
         const passive = effect.passive;
         if (!passive || passive.type !== "lp_cost_reduction") return;
         if (effect.requireFaceup === true && card.isFacedown) return;
-        const effectAllowsFacedown = Reflect.get(effect, "allowFacedown") === true;
-        const passiveAllowsFacedown = Reflect.get(passive, "allowFacedown") === true;
-        if (card.isFacedown && !effectAllowsFacedown && !passiveAllowsFacedown) {
+        if (
+          card.isFacedown &&
+          effect.allowFacedown !== true &&
+          passive.allowFacedown !== true
+        ) {
           return;
         }
 
         const appliesTo = asArray(
           passive.appliesTo ||
-            Reflect.get(passive, "affects") ||
-            Reflect.get(passive, "owner") ||
+            passive.affects ||
+            passive.owner ||
             "self",
         );
         const relation = board === targetPlayer ? "self" : "opponent";
         if (!appliesTo.includes("any") && !appliesTo.includes(relation)) return;
 
-        const actionTypes =
-          passive.actionTypes || Reflect.get(passive, "actionType");
+        const actionTypes = passive.actionTypes || passive.actionType;
         if (actionTypes && !asArray(actionTypes).includes(action.type)) return;
 
-        const legacySourceFilter = Reflect.get(passive, "sourceFilter");
-        const sourceFilters = passive.sourceFilters ||
-          (typeof legacySourceFilter === "object" && legacySourceFilter !== null
-            ? legacySourceFilter
-            : null);
-        if (sourceFilters) {
-          const filters: CardFilter = {
-            ...sourceFilters,
-            name:
-              "cardName" in sourceFilters &&
-              typeof sourceFilters.cardName === "string" &&
-              !("name" in sourceFilters)
-                ? sourceFilters.cardName
-                : "name" in sourceFilters && typeof sourceFilters.name === "string"
-                  ? sourceFilters.name
-                  : undefined,
+        if (passive.sourceFilters || passive.sourceFilter) {
+          const filters: MutableAiCardFilter = {
+            ...(passive.sourceFilters || passive.sourceFilter),
           };
+          if (filters.cardName && !filters.name) filters.name = filters.cardName;
           if (!source || !matchesTargetFilters(source, filters, source, relation)) {
             return;
           }
@@ -522,23 +555,17 @@ export function resolveSimulatedLpCost({
 
         if (!canUseSimulatedPassive(state, board, card, effect)) return;
         const reduction = Number(
-          passive.amount ??
-            Reflect.get(passive, "reduction") ??
-            Reflect.get(passive, "value") ??
-            0,
+          passive.amount ?? passive.reduction ?? passive.value ?? 0,
         );
         if (reduction <= 0) return;
-        const legacyStackMode: unknown = Reflect.get(passive, "stackMode");
-        const stackMode = legacyStackMode === "sum" ? "sum" : "max";
         reducers.push({
           board,
           card,
           effect,
           reduction,
-          stackMode,
+          stackMode: passive.stackMode || "max",
           minFinalAmount: Number(
-            Reflect.get(passive, "minFinalAmount") ??
-              Reflect.get(passive, "minAmount") ??
+            passive.minFinalAmount ?? passive.minAmount ??
               0,
           ),
         });
@@ -570,28 +597,15 @@ export function resolveSimulatedLpCost({
   return result;
 }
 
-function isSimulatedCard(value: unknown): value is SimulatedCardState {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function simulatedCardsFromSelection(
-  value: CanonicalSelectionValue,
-): SimulatedCardState[] {
-  if (Array.isArray(value)) return value.filter(isSimulatedCard);
-  if (!isSimulatedCard(value)) return [];
-  if ("card" in value && isSimulatedCard(value.card)) return [value.card];
-  return [value];
-}
-
 export function resolveTargetsForAction(
   action: { readonly targetRef?: string },
-  selections: CanonicalSelectionMap,
+  selections: CanonicalSelectionMap | undefined,
   options: SimulatedActionOptions,
   opponent: SimulatedPlayerState | null | undefined,
 ): SimulatedCardState[] {
   if (!action?.targetRef) return [];
   if (action.targetRef === "self") {
-    return options.sourceCard ? [options.sourceCard] : [];
+    return [options.sourceCard].filter(Boolean) as SimulatedCardState[];
   }
   if (action.targetRef === "ascension_material") {
     return resolveSimulatedAscensionMaterials(options);
@@ -633,7 +647,7 @@ export function resolveTargetsForAction(
       (card) => card && card.cardKind === "monster" && !card.isFacedown,
     );
   }
-  return simulatedCardsFromSelection(selections[action.targetRef]);
+  return (selections![action.targetRef] || []) as SimulatedCardState[];
 }
 
 function getSimCardInstanceId(
@@ -643,7 +657,7 @@ function getSimCardInstanceId(
 }
 
 function resolveSimulatedAscensionMaterials(
-  options: SimulatedActionOptions,
+  options: SimulatedActionOptions = {},
 ): SimulatedCardState[] {
   const source = options.sourceCard || options.actionContext?.source || null;
   const self = options.self || null;
@@ -660,10 +674,9 @@ function resolveSimulatedAscensionMaterials(
       ),
   );
   if (materialInstanceIds.size === 0) return [];
-  return graveyard.filter((card) => {
-    const instanceId = getSimCardInstanceId(card);
-    return instanceId !== null && materialInstanceIds.has(instanceId);
-  });
+  return graveyard.filter((card) =>
+    materialInstanceIds.has(getSimCardInstanceId(card) as string | number),
+  );
 }
 
 export function storeSimActionResult(
@@ -671,7 +684,7 @@ export function storeSimActionResult(
     readonly resultRef?: string;
     readonly storeResultAs?: string;
   },
-  selections: CanonicalSelectionMap,
+  selections: CanonicalSelectionMap | undefined,
   options: SimulatedActionOptions,
   cards: readonly SimulatedCardState[] | null | undefined,
   fallbackKey: string | null = null,
@@ -717,68 +730,69 @@ export function updateSimulatedSentToGraveMaterialMarker({
     turn: Number(state?.turnCounter || 0),
     thisTurn: true,
     ownerId: player?.id || card.owner || null,
-    fromZone: fromZone === "banish" ? "banished" : fromZone,
+    fromZone: fromZone as CanonicalZone | null,
     contextLabel,
   };
 }
 
-function getContextPathValue(ctx: object, path: string): unknown {
-  if (!path) return undefined;
-  let value: unknown = ctx;
-  for (const key of path.split(".").filter(Boolean)) {
-    if (typeof value !== "object" || value === null) return undefined;
-    value = Reflect.get(value, key);
-  }
-  return value;
+function getContextPathValue(
+  ctx: object | null | undefined,
+  path: string | null,
+): unknown {
+  if (!ctx || typeof path !== "string" || !path) return undefined;
+  if (!path.includes(".")) return (ctx as CanonicalSelectionMap)[path];
+  return path
+    .split(".")
+    .filter(Boolean)
+    .reduce<unknown>(
+      (value, key) =>
+        value == null
+          ? undefined
+          : (value as CanonicalSelectionMap)[key],
+      ctx,
+    );
 }
 
 function resolveNumberFromContext(
   ref: SimulatedContextNumberReference | null | undefined,
-  options: SimulatedActionOptions,
+  options: SimulatedActionOptions = {},
 ): number | null {
   if (ref === undefined || ref === null) return null;
-  if (typeof ref === "number") {
-    return Number.isFinite(ref) ? ref : null;
-  }
-  if (typeof ref === "string" && Number.isFinite(Number(ref))) {
-    return Number(ref);
-  }
+  if (Number.isFinite(Number(ref))) return Number(ref);
   const key =
     typeof ref === "string"
       ? ref
-      : "key" in ref
-        ? ref.key
-        : ref.contextKey || ref.path || ref.resultKey || null;
-  const fallback =
-    typeof ref === "object" && ref !== null
-      ? Reflect.get(ref, "defaultValue") ??
-        Reflect.get(ref, "default") ??
-        Reflect.get(ref, "fallback")
-      : undefined;
+      : (ref as SimulatedContextNumberObject).key ||
+        (ref as SimulatedContextNumberObject).contextKey ||
+        (ref as SimulatedContextNumberObject).path ||
+        (ref as SimulatedContextNumberObject).resultKey ||
+        null;
+  const fallback = typeof ref === "object" && ref !== null
+    ? (ref as SimulatedContextNumberObject).defaultValue ??
+      (ref as SimulatedContextNumberObject).default ??
+      (ref as SimulatedContextNumberObject).fallback
+    : undefined;
   const context =
     options.actionContext ||
     options.activationContext?.actionContext ||
     options.activationContext ||
     {};
-  const rawValue = key ? getContextPathValue(context, key) : undefined;
+  const rawValue = getContextPathValue(context, key);
   const value = rawValue === undefined ? fallback : rawValue;
   const numeric = Number(value);
   return Number.isFinite(numeric) ? Math.floor(numeric) : null;
 }
 
 function applyContextMaxLevelFilter(
-  filters: AiCardFilter,
+  filters: MutableAiCardFilter,
   action: { readonly maxLevelFromContext?: SimulatedContextNumberReference },
   options: SimulatedActionOptions,
-): AiCardFilter {
-  const maxLevel = resolveNumberFromContext(action.maxLevelFromContext, options);
-  if (maxLevel === null) return filters;
-  return {
-    ...filters,
-    maxLevel: typeof filters.maxLevel === "number" && Number.isFinite(filters.maxLevel)
-      ? Math.min(filters.maxLevel, maxLevel)
-      : maxLevel,
-  };
+): void {
+  const maxLevel = resolveNumberFromContext(action?.maxLevelFromContext, options);
+  if (!Number.isFinite(maxLevel)) return;
+  filters.maxLevel = Number.isFinite(filters.maxLevel)
+    ? Math.min(filters.maxLevel as number, maxLevel as number)
+    : maxLevel as number;
 }
 
 export function getActionCandidates(
@@ -807,11 +821,10 @@ export function getActionCandidates(
   options: SimulatedActionOptions = {},
 ): SimulatedCardState[] {
   const zones = asArray(action.zones || action.zone || zoneFallback);
-  const filters = applyContextMaxLevelFilter(
-    buildActionFilter(action),
-    action,
-    options,
-  );
+  const filters = buildActionFilter(
+    action as Parameters<typeof buildActionFilter>[0],
+  ) as MutableAiCardFilter;
+  applyContextMaxLevelFilter(filters, action, options);
   return zones.flatMap((zone) =>
     getZoneCards(player, zone).filter((card) =>
       matchesTargetFilters(card, filters, null)
@@ -886,15 +899,10 @@ export function chooseRankedCards(
     if (Array.isArray(ranked) && ranked.length > 0) return ranked;
   }
 
-  const targetRef =
-    "targetRef" in action && typeof action.targetRef === "string"
-      ? action.targetRef
-      : undefined;
-  const actionId =
-    "id" in action && typeof action.id === "string" ? action.id : undefined;
   const explicitTargetPreference = getTargetPreference(
     options,
-    targetRef || actionId,
+    (action as RankableCardAction).targetRef ||
+      (action as RankableCardAction).id,
   );
   const targetPreference =
     intent === "cost"
@@ -932,7 +940,7 @@ export function chooseSpecialSummonPosition(
 }
 
 function normalizeNegateEffectsDuration(
-  action: SimulatedSummonActionShape,
+  action: SimulatedSummonActionShape = {},
 ): "while_faceup" | "until_end_turn" {
   return action.negateEffectsDuration === "while_faceup"
     ? "while_faceup"
@@ -966,9 +974,10 @@ export function applySummonState(
   card.attacksUsedThisTurn = 0;
   if (action.cannotAttackThisTurn) card.cannotAttackThisTurn = true;
   if (action.destroySummonedAtEndPhase) {
-    Reflect.set(card, "destroyAtEndPhase", true);
-    Reflect.set(card, "destroyAtEndPhaseTurn", state.turnCounter);
-    Reflect.set(card, "destroyAtEndPhaseSource", options.sourceCard?.name || null);
+    (card as LegacySummonedCard).destroyAtEndPhase = true;
+    (card as LegacySummonedCard).destroyAtEndPhaseTurn = state?.turnCounter ?? null;
+    (card as LegacySummonedCard).destroyAtEndPhaseSource =
+      options?.sourceCard?.name || null;
   }
   if (action.negateEffects) {
     card.effectsNegated = true;
@@ -977,14 +986,12 @@ export function applySummonState(
   if (action.setAtkToZeroAfterSummon) card.atk = 0;
   if (action.setDefToZeroAfterSummon) card.def = 0;
   if (Number.isFinite(action.atkBoostAfterSummon)) {
-    const atkBoost = action.atkBoostAfterSummon ?? 0;
     card.tempAtkBoost =
-      (card.tempAtkBoost || 0) + atkBoost;
+      (card.tempAtkBoost || 0) + (action.atkBoostAfterSummon as number);
   }
   if (Number.isFinite(action.defBoostAfterSummon)) {
-    const defBoost = action.defBoostAfterSummon ?? 0;
     card.tempDefBoost =
-      (card.tempDefBoost || 0) + defBoost;
+      (card.tempDefBoost || 0) + (action.defBoostAfterSummon as number);
   }
   applyStatusesOnSummon(card, action.statusesOnSummon);
 }
@@ -1005,6 +1012,6 @@ export function hasRequiredSelections(
     if (!target?.id) return true;
     const { min } = normalizeCount(target.count, 1);
     if (min <= 0) return true;
-    return simulatedCardsFromSelection(selections[target.id]).length >= min;
+    return ((selections[target.id] || []) as { readonly length: number }).length >= min;
   });
 }

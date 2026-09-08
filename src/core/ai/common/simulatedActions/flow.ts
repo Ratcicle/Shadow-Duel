@@ -34,16 +34,13 @@ import {
   resolveTargetsForAction,
   STOP_SIMULATION,
 } from "./shared.js";
-import { DUEL_EVENT_NAMES } from "../../../contracts/effects.js";
 import type { ActionCase } from "../../../contracts/actions.js";
 import type { SimulatedCardState } from "../../../contracts/aiState.js";
 import type {
   DuelEventName,
-  EffectDefinition,
 } from "../../../contracts/effects.js";
 import type {
   CanonicalSelectionMap,
-  CanonicalSelectionValue,
 } from "../../../contracts/selection.js";
 import type { SimulatedActionHandlerContext } from "./shared.js";
 
@@ -52,22 +49,11 @@ interface SimulatedCaseEntry {
   caseSelections: CanonicalSelectionMap;
 }
 
-function isSimulatedCard(value: unknown): value is SimulatedCardState {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
+type LegacyTemporaryEventAction = SimulatedActionHandlerContext<
+  "register_temporary_event_effect"
+>["action"] & { readonly id?: string };
 
-function firstSelectedCard(
-  value: CanonicalSelectionValue,
-): SimulatedCardState | null {
-  const first = Array.isArray(value) ? value[0] : value;
-  if (!isSimulatedCard(first)) return null;
-  if ("card" in first && isSimulatedCard(first.card)) return first.card;
-  return first;
-}
-
-function isDuelEventName(value: string): value is DuelEventName {
-  return DUEL_EVENT_NAMES.some((event) => event === value);
-}
+type ChosenCase = ActionCase | string | number | null | undefined;
 
 export function applyNegateActivation(
   ctx: SimulatedActionHandlerContext<"negate_activation">,
@@ -138,11 +124,9 @@ export function applyConditionalTargetActions(
     applySimulatedActions,
   } = ctx;
   const sourceCard = options.sourceCard || null;
-  const caseTargets = targets.length > 0
-    ? targets
-    : sourceCard
-      ? [sourceCard]
-      : [];
+  const caseTargets = (
+    targets.length > 0 ? targets : [sourceCard].filter(Boolean)
+  ) as SimulatedCardState[];
   const matchesCase = (caseEntry: ActionCase): boolean => {
     if (!caseEntry) return false;
     if (
@@ -287,7 +271,7 @@ export function applyRegisterTemporaryEventEffect(
 ): void {
   const { action, state, self, options, selections } = ctx;
   const sourceCard = options.sourceCard || null;
-  if (!action.event || !isDuelEventName(action.event) || !sourceCard) return;
+  if (!action?.event || !sourceCard || !self) return;
   if (!Array.isArray(state.temporaryEventEffects)) {
     state.temporaryEventEffects = [];
   }
@@ -299,14 +283,15 @@ export function applyRegisterTemporaryEventEffect(
         ? currentTurn + 1
         : currentTurn;
   const boundTarget = action.bindEventTargetRef
-    ? firstSelectedCard(selections[action.bindEventTargetRef])
+    ? ((selections?.[action.bindEventTargetRef] || []) as
+        readonly SimulatedCardState[])[0]
     : null;
   if (action.bindEventTargetRef && !boundTarget) return;
   const declaredValues = sourceCard.declaredValues
-    ? structuredClone(sourceCard.declaredValues)
+    ? JSON.parse(JSON.stringify(sourceCard.declaredValues))
     : {};
   state.temporaryEventEffects.push({
-    event: action.event,
+    event: action.event as DuelEventName,
     ownerId: self.id,
     sourceCardId: sourceCard.id ?? null,
     sourceName: action.sourceName || sourceCard.name || null,
@@ -339,10 +324,10 @@ export function applyRegisterTemporaryEventEffect(
     effect: {
       id:
         action.effectId ||
-        action.uniqueKey ||
+        (action as LegacyTemporaryEventAction).id ||
         "temporary_event_effect",
       timing: "on_event",
-      event: action.event,
+      event: action.event as DuelEventName,
       triggerRequirement: action.triggerRequirement,
       triggerTiming: action.triggerTiming,
       conditions: action.conditions || [],
@@ -451,13 +436,13 @@ export function applyChooseActionCase(
       }
       return { choiceCase, caseSelections };
     })
-    .filter((entry): entry is SimulatedCaseEntry => entry !== null);
+    .filter(Boolean) as SimulatedCaseEntry[];
   if (validCases.length === 0) return;
 
   const chooser =
     options.chooseActionCase ||
     options.strategy?.chooseActionCase?.bind(options.strategy);
-  let chosenEntry: SimulatedCaseEntry | undefined;
+  let chosenEntry: SimulatedCaseEntry | null | undefined = null;
   if (typeof chooser === "function") {
     const chosen = chooser(
       validCases.map((entry) => entry.choiceCase),
@@ -467,21 +452,21 @@ export function applyChooseActionCase(
         source: options.sourceCard,
         activationContext: options.activationContext,
       },
-    );
-    const chosenId =
-      typeof chosen === "object" && chosen !== null && "id" in chosen
-        ? chosen.id
-        : chosen;
+    ) as ChosenCase;
     chosenEntry =
       validCases.find((entry) => entry.choiceCase === chosen) ||
-      validCases.find((entry) => entry.choiceCase.id === chosenId);
+      validCases.find(
+        (entry) =>
+          entry.choiceCase.id ===
+          (chosen as ActionCase | null | undefined)?.id,
+      ) ||
+      validCases.find((entry) => entry.choiceCase.id === chosen);
   }
   if (!chosenEntry) chosenEntry = validCases[0];
-  if (!chosenEntry) return;
 
   applySimulatedActions({
-    actions: chosenEntry.choiceCase.actions || [],
-    selections: chosenEntry.caseSelections,
+    actions: chosenEntry!.choiceCase.actions || [],
+    selections: chosenEntry!.caseSelections,
     state,
     selfId,
     options,

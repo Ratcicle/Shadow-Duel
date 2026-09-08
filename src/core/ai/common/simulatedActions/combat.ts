@@ -34,10 +34,10 @@ import {
   resolveTargetsForAction,
   STOP_SIMULATION,
 } from "./shared.js";
+import type { ActionComparisonCondition } from "../../../contracts/actions/shared.js";
 import type { SimulatedCardState } from "../../../contracts/aiState.js";
 import type {
   CanonicalSelectionMap,
-  CanonicalSelectionValue,
 } from "../../../contracts/selection.js";
 import type { SimulatedActionHandlerContext } from "./shared.js";
 
@@ -71,25 +71,15 @@ export function applyForbidDirectAttackThisTurn(
   targetPlayer.forbidDirectAttacksThisTurn = true;
 }
 
-function isSimulatedCard(value: unknown): value is SimulatedCardState {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function selectionCard(
-  value: CanonicalSelectionValue,
-): SimulatedCardState | null {
-  const first = Array.isArray(value) ? value[0] : value;
-  if (!isSimulatedCard(first)) return null;
-  if ("card" in first && isSimulatedCard(first.card)) return first.card;
-  return first;
-}
-
 function firstSelection(
-  selections: CanonicalSelectionMap,
+  selections: CanonicalSelectionMap | undefined,
   ref: string | null | undefined,
 ): SimulatedCardState | null {
   if (!ref) return null;
-  return selectionCard(selections[ref]);
+  const value = selections?.[ref];
+  return (Array.isArray(value) ? value[0] || null : value || null) as
+    | SimulatedCardState
+    | null;
 }
 
 export function applyRegisterBattlePairEffect(
@@ -147,20 +137,14 @@ export function applySetSourceAfterResolutionIf(
   const source = options.sourceCard;
   if (!firstTarget || !secondTarget || !source) return;
 
-  const condition = action.condition;
   const conditionType =
-    condition && "type" in condition
-      ? condition.type
-      : action.conditionType || "atk_difference_lte";
-  const conditionValue =
-    condition && "value" in condition ? condition.value : undefined;
-  const conditionMaxDifference =
-    condition && "maxDifference" in condition
-      ? condition.maxDifference
-      : undefined;
+    (action.condition as ActionComparisonCondition | undefined)?.type ||
+    action.conditionType ||
+    "atk_difference_lte";
   const maxDifference = Number(
-    conditionValue ??
-      conditionMaxDifference ??
+    (action.condition as ActionComparisonCondition | undefined)?.value ??
+      (action.condition as ActionComparisonCondition | undefined)
+        ?.maxDifference ??
       action.atkDifferenceMax ??
       action.maxDifference ??
       0,

@@ -51,25 +51,46 @@ interface ScopedCard {
   owner: SimulatedPlayerState;
 }
 
-function destroyTargets(
-  state: SimulatedActionHandlerContext<"destroy">["state"],
-  targets: readonly SimulatedCardState[],
-): void {
-  targets.forEach((card) => {
-    const owner = findCardOwner(state, card);
-    if (!owner) return;
-    moveCardToZone(owner, card, "graveyard");
-  });
-}
-
-function isDestroyDamageEntry(
-  entry: DestroyDamageEntry | object,
-): entry is DestroyDamageEntry {
-  return "targetRef" in entry && typeof entry.targetRef === "string";
-}
+type ScopeFilterKey =
+  | "cardKind"
+  | "cardName"
+  | "name"
+  | "cardId"
+  | "subtype"
+  | "monsterType"
+  | "type"
+  | "archetype"
+  | "archetypes"
+  | "requireFaceup"
+  | "excludeCardName"
+  | "excludeCardNames"
+  | "minLevel"
+  | "maxLevel"
+  | "level"
+  | "levelOp"
+  | "minAtk"
+  | "maxAtk"
+  | "minDef"
+  | "maxDef"
+  | "position"
+  | "isToken"
+  | "isTuner";
+type ScopeFilterValue = CardFilter[keyof CardFilter] | readonly string[];
+type MutableScopeFilters = {
+  -readonly [Key in ScopeFilterKey]?: ScopeFilterValue;
+};
+type LegacyActionTargetScope = ActionTargetScope & MutableScopeFilters;
 
 export function applyDestroy(
   ctx: SimulatedActionHandlerContext<"destroy">,
+): void;
+export function applyDestroy(
+  ctx: SimulatedActionHandlerContext<"destroy_targeted_cards">,
+): void;
+export function applyDestroy(
+  ctx:
+    | SimulatedActionHandlerContext<"destroy">
+    | SimulatedActionHandlerContext<"destroy_targeted_cards">,
 ): void {
   const {
     action,
@@ -82,7 +103,11 @@ export function applyDestroy(
     opponent,
     applySimulatedActions,
   } = ctx;
-  destroyTargets(state, targets);
+  targets.forEach((card) => {
+    const owner = findCardOwner(state, card);
+    if (!owner) return;
+    moveCardToZone(owner, card, "graveyard");
+  });
   return;
 }
 
@@ -100,9 +125,8 @@ export function applyDestroyAndDamageByTargetAtk(
     opponent,
     applySimulatedActions,
   } = ctx;
-  const entries = Array.isArray(action.entries)
-    ? action.entries.filter(isDestroyDamageEntry)
-    : [];
+  const entries = (Array.isArray(action.entries) ? action.entries : []) as
+    readonly DestroyDamageEntry[];
   const destroyed = entries.flatMap((entry) => {
     const entryTargets = resolveTargetsForAction(
       entry,
@@ -114,10 +138,7 @@ export function applyDestroyAndDamageByTargetAtk(
       card,
       owner: findCardOwner(state, card),
       damagePlayer: entry.damagePlayer || "owner",
-      multiplier:
-        typeof entry.multiplier === "number" && Number.isFinite(entry.multiplier)
-          ? entry.multiplier
-          : 1,
+      multiplier: Number.isFinite(entry.multiplier) ? entry.multiplier : 1,
       atk: getEffectiveAtk(card),
     }));
   });
@@ -127,8 +148,7 @@ export function applyDestroyAndDamageByTargetAtk(
   const skipDamage = (playerKey: "self" | "opponent"): boolean => {
     const conditions = action.skipDamageIf?.[playerKey];
     if (!conditions) return false;
-    if (typeof conditions === "boolean") return conditions;
-    return evaluateSimulatedConditions(conditions, {
+    return evaluateSimulatedConditions(conditions as readonly EffectCondition[], {
       state,
       selfId,
       options,
@@ -136,15 +156,17 @@ export function applyDestroyAndDamageByTargetAtk(
   };
   destroyed.forEach(({ owner, damagePlayer, multiplier, atk }) => {
     if (!owner) return;
-    let recipient: SimulatedPlayerState;
+    let recipient: SimulatedPlayerState | null = null;
     if (damagePlayer === "self") recipient = self;
     else if (damagePlayer === "opponent") recipient = opponent;
     else recipient = owner;
+    if (!recipient) return;
     const isSelf = recipient === self;
     if (skipDamage(isSelf ? "self" : "opponent")) return;
     recipient.lp = Math.max(
       0,
-      (recipient.lp || 0) - Math.floor(Math.max(0, atk) * multiplier),
+      (recipient.lp || 0) -
+        Math.floor(Math.max(0, atk) * (multiplier as number)),
     );
   });
   return;
@@ -153,7 +175,7 @@ export function applyDestroyAndDamageByTargetAtk(
 export function applyDestroyTargetedCards(
   ctx: SimulatedActionHandlerContext<"destroy_targeted_cards">,
 ): void {
-  destroyTargets(ctx.state, ctx.targets);
+  return applyDestroy(ctx);
 }
 
 function resolveScopeOwners(
@@ -169,9 +191,9 @@ function resolveScopeOwners(
   return self ? [self] : [];
 }
 
-function buildScopeFilters(scope: ActionTargetScope): CardFilter {
-  const filters: CardFilter = { ...(scope.filters || {}) };
-  [
+function buildScopeFilters(scope: LegacyActionTargetScope = {}): CardFilter {
+  const filters: MutableScopeFilters = { ...(scope.filters || {}) };
+  ([
     "cardKind",
     "cardName",
     "name",
@@ -195,16 +217,15 @@ function buildScopeFilters(scope: ActionTargetScope): CardFilter {
     "position",
     "isToken",
     "isTuner",
-  ].forEach((key) => {
-    const scopeValue = Reflect.get(scope, key);
-    if (scopeValue !== undefined && Reflect.get(filters, key) === undefined) {
-      Reflect.set(filters, key, scopeValue);
+  ] as readonly ScopeFilterKey[]).forEach((key) => {
+    if (scope[key] !== undefined && filters[key] === undefined) {
+      filters[key] = scope[key];
     }
   });
   if (filters.monsterType && filters.type === undefined) {
-    Reflect.set(filters, "type", filters.monsterType);
+    filters.type = filters.monsterType;
   }
-  return filters;
+  return filters as CardFilter;
 }
 
 function resolveScopedCards(
@@ -240,7 +261,7 @@ export function applyDestroyCardsByScope(
   ctx: SimulatedActionHandlerContext<"destroy_cards_by_scope">,
 ): void {
   const { action, self, opponent } = ctx;
-  const scope = action.targetScope || {};
+  const scope = (action.targetScope || {}) as LegacyActionTargetScope;
   const entries = resolveScopedCards(scope, self, opponent);
   let destroyedCount = 0;
 
@@ -258,6 +279,7 @@ export function applyDestroyCardsByScope(
 
   const drawPlayer = action.drawPlayer === "opponent" ? opponent : self;
   if (!drawPlayer) return;
+  if (!Array.isArray(drawPlayer.hand)) drawPlayer.hand = [];
   for (let i = 0; i < drawAmount; i += 1) {
     const drawn = drawPlayer.deck?.shift?.();
     if (drawn) drawPlayer.hand.push(drawn);

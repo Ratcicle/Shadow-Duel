@@ -31,6 +31,39 @@ import type {
 import type { CardFilter } from "../../../contracts/effects.js";
 import type { SimulatedActionHandlerContext, SimulatedRuntimeState } from "./shared.js";
 
+type ScopeFilterKey =
+  | "cardKind"
+  | "cardName"
+  | "name"
+  | "cardId"
+  | "cardIds"
+  | "subtype"
+  | "monsterType"
+  | "type"
+  | "archetype"
+  | "archetypes"
+  | "requireFaceup"
+  | "minLevel"
+  | "maxLevel"
+  | "level"
+  | "levelOp"
+  | "minAtk"
+  | "maxAtk"
+  | "minDef"
+  | "maxDef"
+  | "position"
+  | "isToken"
+  | "isTuner";
+
+type ScopeFilterValue =
+  | CardFilter[keyof CardFilter]
+  | readonly number[]
+  | readonly string[];
+type MutableScopeFilters = {
+  -readonly [Key in ScopeFilterKey]?: ScopeFilterValue;
+};
+type LegacyActionTargetScope = ActionTargetScope & MutableScopeFilters;
+
 function getOriginalOwner(
   state: SimulatedRuntimeState,
   card: SimulatedCardState,
@@ -158,10 +191,10 @@ export function applyMove(
     options,
     self,
     opponent,
+    source,
   } = ctx;
-  const source = ctx.source || options.sourceCard || null;
   const resolveScopeOwners = (
-    scope: ActionTargetScope,
+    scope: LegacyActionTargetScope = {},
   ): SimulatedPlayerState[] => {
     const ownerRule = scope.owner || scope.player || "self";
     if (ownerRule === "opponent") return opponent ? [opponent] : [];
@@ -171,15 +204,15 @@ export function applyMove(
     return self ? [self] : [];
   };
   const resolveScopedTargets = (
-    scope: ActionTargetScope,
+    scope: LegacyActionTargetScope = {},
   ): SimulatedCardState[] => {
     const zones = Array.isArray(scope.zones)
       ? scope.zones
       : scope.zone
         ? [scope.zone]
         : ["field"];
-    const filters: CardFilter = { ...(scope.filters || {}) };
-    [
+    const filters: MutableScopeFilters = { ...(scope.filters || {}) };
+    ([
       "cardKind",
       "cardName",
       "name",
@@ -202,10 +235,9 @@ export function applyMove(
       "position",
       "isToken",
       "isTuner",
-    ].forEach((key) => {
-      const scopeValue = Reflect.get(scope, key);
-      if (scopeValue !== undefined && Reflect.get(filters, key) === undefined) {
-        Reflect.set(filters, key, scopeValue);
+    ] as readonly ScopeFilterKey[]).forEach((key) => {
+      if (scope[key] !== undefined && filters[key] === undefined) {
+        filters[key] = scope[key];
       }
     });
     const cards: SimulatedCardState[] = [];
@@ -216,7 +248,7 @@ export function applyMove(
           const key = getCardInstanceId(card) ?? card;
           if (!card || seen.has(key)) return;
           if (scope.excludeSelf === true && source && card === source) return;
-          if (!matchesTargetFilters(card, filters)) return;
+          if (!matchesTargetFilters(card, filters as CardFilter)) return;
           seen.add(key);
           cards.push(card);
         });
@@ -228,7 +260,7 @@ export function applyMove(
     Array.isArray(targets) && targets.length > 0
       ? targets
       : action.targetScope
-        ? resolveScopedTargets(action.targetScope)
+        ? resolveScopedTargets(action.targetScope as LegacyActionTargetScope)
         : [];
   if (targetCards.length === 0) {
     return action.allowEmpty === true ? undefined : STOP_SIMULATION;
