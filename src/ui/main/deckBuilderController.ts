@@ -1,4 +1,38 @@
-import { cardDatabase, cardDatabaseById } from "../../data/cards.js";
+import type BotRuntime from "../../core/Bot.js";
+import type { DisplayCard } from "../../core/i18n.js";
+import type { MainDom } from "./domRefs.js";
+import type { DeckCard, DeckState } from "./deckState.js";
+import type { UiCard } from "../renderer/types.js";
+import type { NormalDuelConfig } from "./gameLauncher.js";
+interface FilterOption {
+  id: string;
+  label?: string;
+  labelKey?: string;
+}
+interface DeckListEntry {
+  id: number;
+  count: number;
+  card: DeckCard;
+}
+interface DeckListConfig {
+  deckType: "main" | "extra";
+  zoneCount: number;
+  zoneMax: number;
+  add: (card: DeckCard) => boolean;
+  remove: (id: number) => boolean;
+}
+interface DeckBuilderOptions {
+  dom: MainDom["deckBuilder"];
+  deckState: DeckState;
+  Bot: typeof BotRuntime;
+  getCardDisplayName: (card: DisplayCard | null | undefined) => string;
+  getCardDisplayDescription: (card: DisplayCard | null | undefined) => string;
+}
+
+import {
+  cardDatabase as rawCardDatabase,
+  cardDatabaseById as rawCardDatabaseById,
+} from "../../data/cards.js";
 import {
   formatCardKindSubtypeLine,
   formatCardPreviewDescriptionHtml,
@@ -28,6 +62,9 @@ import {
   sortExtraDeck,
 } from "./deckState.js";
 
+const cardDatabase: readonly DeckCard[] = rawCardDatabase;
+const cardDatabaseById: ReadonlyMap<number, DeckCard> = rawCardDatabaseById;
+
 const CATEGORY_FILTERS = [
   { id: "all", labelKey: "categoryAll" },
   { id: "monsters", labelKey: "categoryMonsters" },
@@ -52,21 +89,25 @@ const SORT_MODES = [
   { id: "kind", labelKey: "sortKind" },
 ];
 
-const COLLECTION_KIND_ORDER = { monster: 0, spell: 1, trap: 2 };
-const COLLECTION_MONSTER_GROUP_ORDER = {
+const COLLECTION_KIND_ORDER: Record<string, number> = {
+  monster: 0,
+  spell: 1,
+  trap: 2,
+};
+const COLLECTION_MONSTER_GROUP_ORDER: Record<string, number> = {
   ascension: 0,
   synchro: 1,
   fusion: 2,
   main: 3,
 };
-const COLLECTION_SPELL_SUBTYPE_ORDER = {
+const COLLECTION_SPELL_SUBTYPE_ORDER: Record<string, number> = {
   normal: 0,
   quick: 1,
   equip: 2,
   continuous: 3,
   field: 4,
 };
-const COLLECTION_TRAP_SUBTYPE_ORDER = {
+const COLLECTION_TRAP_SUBTYPE_ORDER: Record<string, number> = {
   normal: 0,
   continuous: 1,
   counter: 2,
@@ -75,7 +116,7 @@ const EXTREME_DRAGONS_ARCHETYPE = "Extreme Dragons";
 const EXTREME_DRAGONS_FILTER_ID = `archetype:${EXTREME_DRAGONS_ARCHETYPE}`;
 const LEGACY_DRAGON_EXTREME_FILTER_ID = "family:dragon_extreme";
 
-const SUBTYPE_DISPLAY_LABELS = {
+const SUBTYPE_DISPLAY_LABELS: Record<string, string> = {
   normal: "subtypeNormal",
   quick: "subtypeQuick",
   equip: "subtypeEquip",
@@ -84,13 +125,17 @@ const SUBTYPE_DISPLAY_LABELS = {
   counter: "subtypeCounter",
 };
 
-function deckText(key, params = {}, fallback = null) {
+function deckText(
+  key: string,
+  params: Readonly<Record<string, unknown>> = {},
+  fallback: string | null = null,
+) {
   return getUIText(`ui.deckBuilder.${key}`, params, fallback);
 }
 
 const isExtraDeckCard = isExtraDeckMonster;
 
-function localizeOption(option) {
+function localizeOption(option: FilterOption) {
   if (!option) return option;
   return {
     ...option,
@@ -100,23 +145,23 @@ function localizeOption(option) {
   };
 }
 
-function localizeOptions(options) {
+function localizeOptions(options: readonly FilterOption[]) {
   return options.map(localizeOption);
 }
 
-function getCardArchetypes(card) {
+function getCardArchetypes(card: DeckCard): string[] {
   if (!card) return [];
   if (Array.isArray(card.archetypes)) return card.archetypes.filter(Boolean);
   return card.archetype ? [card.archetype] : [];
 }
 
-function getCardMonsterTypes(card) {
+function getCardMonsterTypes(card: UiCard | null | undefined): string[] {
   if (!card) return [];
   if (Array.isArray(card.types)) return card.types.filter(Boolean);
   return card.type ? [card.type] : [];
 }
 
-function normalizeSearchText(value) {
+function normalizeSearchText(value: unknown) {
   return String(value || "")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
@@ -124,30 +169,30 @@ function normalizeSearchText(value) {
     .trim();
 }
 
-function countCards(ids = []) {
-  return ids.reduce((counts, id) => {
+function countCards(ids: readonly number[] = []) {
+  return ids.reduce<Record<number, number>>((counts, id) => {
     counts[id] = (counts[id] || 0) + 1;
     return counts;
   }, {});
 }
 
-function orderedDeckEntries(ids = []) {
-  const entries = [];
-  const byId = new Map();
+function orderedDeckEntries(ids: readonly number[] = []): DeckListEntry[] {
+  const entries: Array<{ id: number; count: number }> = [];
+  const byId = new Map<number, { id: number; count: number }>();
   ids.forEach((id) => {
     if (!byId.has(id)) {
       const entry = { id, count: 0 };
       byId.set(id, entry);
       entries.push(entry);
     }
-    byId.get(id).count += 1;
+    byId.get(id)!.count += 1;
   });
   return entries
     .map((entry) => ({ ...entry, card: cardDatabaseById.get(entry.id) }))
-    .filter((entry) => entry.card);
+    .filter((entry): entry is DeckListEntry => Boolean(entry.card));
 }
 
-function formatPoolCount(total) {
+function formatPoolCount(total: number) {
   return `${total} ${
     total === 1
       ? deckText("cardSingular", {}, "card")
@@ -155,15 +200,15 @@ function formatPoolCount(total) {
   }`;
 }
 
-function getOptionLabel(options, id) {
+function getOptionLabel(options: readonly FilterOption[], id: string) {
   return options.find((option) => option.id === id)?.label || "";
 }
 
-function cardName(card) {
+function cardName(card: UiCard | null | undefined) {
   return card?.name || "";
 }
 
-function cardTypeLabel(card) {
+function cardTypeLabel(card: UiCard | null | undefined) {
   if (!card) return "";
   if (card.cardKind === "monster") {
     return card.type || card.monsterType || card.cardKind || "";
@@ -171,25 +216,28 @@ function cardTypeLabel(card) {
   return card.subtype || card.cardKind || "";
 }
 
-function compareText(a, b) {
+function compareText(a: unknown, b: unknown) {
   return String(a || "").localeCompare(String(b || ""));
 }
 
-function compareLevel(a, b) {
-  const levelA = Number.isFinite(a?.level) ? a.level : 99;
-  const levelB = Number.isFinite(b?.level) ? b.level : 99;
+function compareLevel(
+  a: UiCard | null | undefined,
+  b: UiCard | null | undefined,
+) {
+  const levelA = Number.isFinite(a?.level) ? a!.level! : 99;
+  const levelB = Number.isFinite(b?.level) ? b!.level! : 99;
   if (levelA !== levelB) return levelA - levelB;
   return compareText(cardName(a), cardName(b));
 }
 
-function cardKindOrder(card) {
+function cardKindOrder(card: UiCard | null | undefined) {
   const kind = String(card?.cardKind || "").toLowerCase();
   return Object.prototype.hasOwnProperty.call(COLLECTION_KIND_ORDER, kind)
     ? COLLECTION_KIND_ORDER[kind]
     : 99;
 }
 
-function monsterGroupOrder(card) {
+function monsterGroupOrder(card: UiCard | null | undefined) {
   const group =
     card?.monsterType === "ascension"
       ? "ascension"
@@ -201,21 +249,29 @@ function monsterGroupOrder(card) {
   return COLLECTION_MONSTER_GROUP_ORDER[group];
 }
 
-function subtypeOrder(card, orderMap) {
+function subtypeOrder(
+  card: UiCard | null | undefined,
+  orderMap: Record<string, number>,
+) {
   const subtype = String(card?.subtype || "").toLowerCase();
   return Object.prototype.hasOwnProperty.call(orderMap, subtype)
     ? orderMap[subtype]
     : 99;
 }
 
-function numericCardValue(card, prop, fallback = 0) {
-  return Number.isFinite(card?.[prop]) ? card[prop] : fallback;
+function numericCardValue(
+  card: UiCard | null | undefined,
+  prop: "atk" | "def" | "level",
+  fallback = 0,
+): number {
+  return Number.isFinite(card?.[prop]) ? card![prop]! : fallback;
 }
 
-function compareCollectionMonsters(a, b) {
+function compareCollectionMonsters(a: UiCard, b: UiCard) {
   const groupDiff = monsterGroupOrder(a) - monsterGroupOrder(b);
   if (groupDiff !== 0) return groupDiff;
-  const levelDiff = numericCardValue(b, "level", -1) - numericCardValue(a, "level", -1);
+  const levelDiff =
+    numericCardValue(b, "level", -1) - numericCardValue(a, "level", -1);
   if (levelDiff !== 0) return levelDiff;
   const atkDiff = numericCardValue(b, "atk") - numericCardValue(a, "atk");
   if (atkDiff !== 0) return atkDiff;
@@ -224,7 +280,7 @@ function compareCollectionMonsters(a, b) {
   return compareText(cardName(a), cardName(b));
 }
 
-function compareCollectionCards(a, b) {
+function compareCollectionCards(a: UiCard, b: UiCard) {
   const kindDiff = cardKindOrder(a) - cardKindOrder(b);
   if (kindDiff !== 0) return kindDiff;
   if (a?.cardKind === "monster" && b?.cardKind === "monster") {
@@ -251,7 +307,7 @@ export function createDeckBuilderController({
   Bot,
   getCardDisplayDescription,
   getCardDisplayName,
-}) {
+}: DeckBuilderOptions) {
   let categoryFilterMode = "all";
   let typeSubtypeFilterMode = "all";
   let archetypeFilterMode = "all";
@@ -259,12 +315,12 @@ export function createDeckBuilderController({
   let sortMode = "default";
   let searchQuery = "";
   let currentBotPreset = loadBotPreset(Bot.getAvailablePresets());
-  let startDeckDom = null;
-  let editingDeckSlot = null;
+  let startDeckDom: MainDom["startScreen"] | null = null;
+  let editingDeckSlot: number | null = null;
   let deckNameBeforeEdit = "";
-  let deckSaveFeedbackTimeout = null;
+  let deckSaveFeedbackTimeout: ReturnType<typeof setTimeout> | null = null;
 
-  function getBotPresetLabel(presetId) {
+  function getBotPresetLabel(presetId: string) {
     const preset =
       Bot.getAvailablePresets().find((item) => item.id === presetId) || null;
     return preset ? preset.label : "Shadow-Heart";
@@ -310,7 +366,7 @@ export function createDeckBuilderController({
         updateStartDeckDisplay();
         closeStartDeckMenu();
       });
-      startDeckDom.deckMenu.appendChild(item);
+      startDeckDom!.deckMenu!.appendChild(item);
     });
   }
 
@@ -337,27 +393,28 @@ export function createDeckBuilderController({
       const option = document.createElement("option");
       option.value = preset.id;
       option.textContent = preset.label;
-      dom.botPresetSelect.appendChild(option);
+      dom.botPresetSelect!.appendChild(option);
     });
     updateBotPresetStatus();
   }
 
-  function setPreview(card) {
+  function setPreview(card: UiCard | null | undefined) {
     if (!card) return;
     if (dom.preview.image) {
       dom.preview.image.style.backgroundImage = `url('${publicAssetUrl(card.image)}')`;
       setPreviewCardFrameClass(dom.preview.image, card);
     }
     if (dom.preview.name) {
-      dom.preview.name.textContent = getCardDisplayName(card) || card.name;
+      dom.preview.name.textContent =
+        getCardDisplayName(card) || card.name || null;
     }
     const isMonster = card.cardKind !== "spell" && card.cardKind !== "trap";
     const monsterStats = isMonster ? formatMonsterStatsLine(card) : null;
     if (dom.preview.atk) {
-      dom.preview.atk.textContent = isMonster ? monsterStats.atk : "";
+      dom.preview.atk.textContent = isMonster ? monsterStats!.atk : "";
     }
     if (dom.preview.def) {
-      dom.preview.def.textContent = isMonster ? monsterStats.def : "";
+      dom.preview.def.textContent = isMonster ? monsterStats!.def : "";
     }
     if (dom.preview.level) {
       if (isMonster) {
@@ -375,25 +432,29 @@ export function createDeckBuilderController({
   }
 
   function getAvailableArchetypes() {
-    const archetypes = new Set();
+    const archetypes = new Set<string>();
     cardDatabase.forEach((card) => {
       getCardArchetypes(card).forEach((name) => archetypes.add(name));
     });
     return [...archetypes].sort((a, b) => a.localeCompare(b));
   }
 
-  function getSubtypeDisplayLabel(subtype) {
+  function getSubtypeDisplayLabel(subtype: string) {
     const key = SUBTYPE_DISPLAY_LABELS[subtype];
     return key
       ? deckText(key, {}, subtype)
       : subtype || deckText("subtypeNone", {}, "No subtype");
   }
 
-  function getMonsterTypeOptionLabel(type) {
+  function getMonsterTypeOptionLabel(type: string) {
     return getMonsterTypeDisplayName({ type }) || type;
   }
 
-  function createSubtypeOptions(cards, cardKind, labelPrefix = "") {
+  function createSubtypeOptions(
+    cards: readonly DeckCard[],
+    cardKind: string,
+    labelPrefix = "",
+  ) {
     const orderMap =
       cardKind === "spell"
         ? COLLECTION_SPELL_SUBTYPE_ORDER
@@ -403,7 +464,7 @@ export function createDeckBuilderController({
         cards
           .filter((card) => card?.cardKind === cardKind)
           .map((card) => card.subtype)
-          .filter(Boolean),
+          .filter((value): value is string => Boolean(value)),
       ),
     ];
     return subtypes
@@ -442,7 +503,9 @@ export function createDeckBuilderController({
             .filter(Boolean),
         ),
       ].sort((a, b) =>
-        getMonsterTypeOptionLabel(a).localeCompare(getMonsterTypeOptionLabel(b)),
+        getMonsterTypeOptionLabel(a).localeCompare(
+          getMonsterTypeOptionLabel(b),
+        ),
       );
       monsterTypes.forEach((type) => {
         options.push({
@@ -477,20 +540,20 @@ export function createDeckBuilderController({
     return options;
   }
 
-  function ensureTypeSubtypeFilterOption(options) {
+  function ensureTypeSubtypeFilterOption(options: readonly FilterOption[]) {
     if (!options.some((option) => option.id === typeSubtypeFilterMode)) {
       typeSubtypeFilterMode = "all";
     }
   }
 
-  function normalizeArchetypeFilterMode(filterMode) {
+  function normalizeArchetypeFilterMode(filterMode: string) {
     if (filterMode === LEGACY_DRAGON_EXTREME_FILTER_ID) {
       return EXTREME_DRAGONS_FILTER_ID;
     }
     return filterMode || "all";
   }
 
-  function isExtremeDragonsCard(card) {
+  function isExtremeDragonsCard(card: DeckCard) {
     return cardHasArchetypeName(card, EXTREME_DRAGONS_ARCHETYPE);
   }
 
@@ -522,7 +585,11 @@ export function createDeckBuilderController({
     });
   }
 
-  function setSelectOptions(select, options, value) {
+  function setSelectOptions(
+    select: HTMLSelectElement | null,
+    options: readonly FilterOption[],
+    value: string,
+  ) {
     if (!select) return;
     const signature = options
       .map((option) => `${option.id}:${option.label}`)
@@ -532,7 +599,7 @@ export function createDeckBuilderController({
       options.forEach((optionData) => {
         const option = document.createElement("option");
         option.value = optionData.id;
-        option.textContent = optionData.label;
+        option.textContent = optionData.label ?? null;
         select.appendChild(option);
       });
       select.dataset.optionsSignature = signature;
@@ -567,7 +634,7 @@ export function createDeckBuilderController({
     renderActiveFilterChips();
   }
 
-  function createFilterChip(label, onClear) {
+  function createFilterChip(label: string, onClear: () => void) {
     const chip = document.createElement("button");
     chip.type = "button";
     chip.className = "deck-filter-chip";
@@ -687,7 +754,7 @@ export function createDeckBuilderController({
             }
           });
           shell.appendChild(input);
-          dom.slotTabs.appendChild(shell);
+          dom.slotTabs!.appendChild(shell);
           requestAnimationFrame(() => {
             input.focus();
             input.select();
@@ -700,10 +767,7 @@ export function createDeckBuilderController({
         button.className = "deck-slot-tab";
         button.classList.toggle("active", isActive);
         button.title = name;
-        button.setAttribute(
-          "aria-current",
-          isActive ? "true" : "false",
-        );
+        button.setAttribute("aria-current", isActive ? "true" : "false");
 
         const label = document.createElement("span");
         label.className = "deck-slot-tab-text";
@@ -735,7 +799,7 @@ export function createDeckBuilderController({
           shell.appendChild(editButton);
         }
 
-        dom.slotTabs.appendChild(shell);
+        dom.slotTabs!.appendChild(shell);
       });
     }
   }
@@ -749,7 +813,13 @@ export function createDeckBuilderController({
     renderDeckSlotControls();
   }
 
-  function finishDeckNameEditing({ shouldSave, shouldRender }) {
+  function finishDeckNameEditing({
+    shouldSave,
+    shouldRender,
+  }: {
+    shouldSave: boolean;
+    shouldRender: boolean;
+  }) {
     if (editingDeckSlot === null) return;
     if (shouldSave) {
       deckState.saveActiveDeckPreset();
@@ -762,7 +832,7 @@ export function createDeckBuilderController({
     }
   }
 
-  function cardMatchesMode(card) {
+  function cardMatchesMode(card: DeckCard) {
     if (categoryFilterMode === "all") return true;
     if (categoryFilterMode === "monsters") {
       return card.cardKind === "monster" && !isExtraDeckCard(card);
@@ -780,7 +850,7 @@ export function createDeckBuilderController({
     return true;
   }
 
-  function cardMatchesArchetypeFilter(card) {
+  function cardMatchesArchetypeFilter(card: DeckCard) {
     const activeArchetypeFilterMode =
       normalizeArchetypeFilterMode(archetypeFilterMode);
     if (activeArchetypeFilterMode === "all") return true;
@@ -796,7 +866,7 @@ export function createDeckBuilderController({
     return true;
   }
 
-  function cardMatchesTypeSubtypeFilter(card) {
+  function cardMatchesTypeSubtypeFilter(card: DeckCard) {
     if (typeSubtypeFilterMode === "all") return true;
     if (typeSubtypeFilterMode.startsWith("monster-type:")) {
       const type = typeSubtypeFilterMode.slice("monster-type:".length);
@@ -813,7 +883,7 @@ export function createDeckBuilderController({
     return true;
   }
 
-  function getSearchHaystack(card) {
+  function getSearchHaystack(card: DeckCard) {
     const archetypes = getCardArchetypes(card).join(" ");
     const fields = [
       card.name,
@@ -833,7 +903,7 @@ export function createDeckBuilderController({
     return normalizeSearchText(fields.filter(Boolean).join(" "));
   }
 
-  function cardMatchesSearch(card) {
+  function cardMatchesSearch(card: DeckCard) {
     const query = normalizeSearchText(searchQuery);
     if (!query) return true;
     const haystack = getSearchHaystack(card);
@@ -843,7 +913,7 @@ export function createDeckBuilderController({
       .every((term) => haystack.includes(term));
   }
 
-  function cardMatchesPoolFilters(card) {
+  function cardMatchesPoolFilters(card: DeckCard) {
     return (
       cardMatchesMode(card) &&
       cardMatchesTypeSubtypeFilter(card) &&
@@ -852,17 +922,22 @@ export function createDeckBuilderController({
     );
   }
 
-  function sortIdsBy(ids, comparator) {
+  function sortIdsBy(
+    ids: readonly number[],
+    comparator: (a: DeckCard | undefined, b: DeckCard | undefined) => number,
+  ) {
     return [...ids].sort((aId, bId) =>
       comparator(cardDatabaseById.get(aId), cardDatabaseById.get(bId)),
     );
   }
 
-  function sortMainDeckForMode(deckIds, mode) {
+  function sortMainDeckForMode(deckIds: readonly number[], mode: string) {
     if (mode === "default") return [...deckIds];
     if (mode === "kind") return sortDeck(deckIds);
     if (mode === "name") {
-      return sortIdsBy(deckIds, (a, b) => compareText(cardName(a), cardName(b)));
+      return sortIdsBy(deckIds, (a, b) =>
+        compareText(cardName(a), cardName(b)),
+      );
     }
     if (mode === "level") return sortIdsBy(deckIds, compareLevel);
     if (mode === "type") {
@@ -876,19 +951,23 @@ export function createDeckBuilderController({
     return [...deckIds];
   }
 
-  function sortExtraDeckForMode(extraDeckIds, mode) {
+  function sortExtraDeckForMode(extraDeckIds: readonly number[], mode: string) {
     if (mode === "default") return [...extraDeckIds];
     if (mode === "kind") return sortExtraDeck(extraDeckIds);
     if (mode === "name") {
-      return sortIdsBy(extraDeckIds, (a, b) => compareText(cardName(a), cardName(b)));
+      return sortIdsBy(extraDeckIds, (a, b) =>
+        compareText(cardName(a), cardName(b)),
+      );
     }
     if (mode === "level") return sortIdsBy(extraDeckIds, compareLevel);
     if (mode === "type") {
       return sortIdsBy(
         extraDeckIds,
         (a, b) =>
-          compareText(a?.monsterType || cardTypeLabel(a), b?.monsterType || cardTypeLabel(b)) ||
-          compareText(cardName(a), cardName(b)),
+          compareText(
+            a?.monsterType || cardTypeLabel(a),
+            b?.monsterType || cardTypeLabel(b),
+          ) || compareText(cardName(a), cardName(b)),
       );
     }
     return [...extraDeckIds];
@@ -904,7 +983,7 @@ export function createDeckBuilderController({
     );
   }
 
-  function addMainCard(card) {
+  function addMainCard(card: DeckCard) {
     const currentDeck = deckState.getCurrentDeck();
     const counts = countCards(currentDeck);
     if (currentDeck.length >= MAX_DECK_SIZE) {
@@ -930,25 +1009,25 @@ export function createDeckBuilderController({
     return true;
   }
 
-  function removeMainCardByIndex(index, card) {
+  function removeMainCardByIndex(index: number, card: DeckCard) {
     const currentDeck = deckState.getCurrentDeck();
     currentDeck.splice(index, 1);
     render();
     setPreview(card);
   }
 
-  function removeMainCardById(cardId) {
+  function removeMainCardById(cardId: number) {
     const currentDeck = deckState.getCurrentDeck();
     const index = currentDeck.indexOf(cardId);
     if (index < 0) return false;
-    const card = cardDatabaseById.get(cardId);
+    const card = cardDatabaseById.get(cardId as number);
     currentDeck.splice(index, 1);
     render();
     if (card) setPreview(card);
     return true;
   }
 
-  function addExtraCard(card) {
+  function addExtraCard(card: DeckCard) {
     const currentExtraDeck = deckState.getCurrentExtraDeck();
     const counts = countCards(currentExtraDeck);
     if (currentExtraDeck.length >= MAX_EXTRA_DECK_SIZE) {
@@ -974,25 +1053,28 @@ export function createDeckBuilderController({
     return true;
   }
 
-  function removeExtraCardByIndex(index, card) {
+  function removeExtraCardByIndex(index: number, card: DeckCard) {
     const currentExtraDeck = deckState.getCurrentExtraDeck();
     currentExtraDeck.splice(index, 1);
     render();
     setPreview(card);
   }
 
-  function removeExtraCardById(cardId) {
+  function removeExtraCardById(cardId: number) {
     const currentExtraDeck = deckState.getCurrentExtraDeck();
     const index = currentExtraDeck.indexOf(cardId);
     if (index < 0) return false;
-    const card = cardDatabaseById.get(cardId);
+    const card = cardDatabaseById.get(cardId as number);
     currentExtraDeck.splice(index, 1);
     render();
     if (card) setPreview(card);
     return true;
   }
 
-  function createCountBadge(copyState, extraClass = "") {
+  function createCountBadge(
+    copyState: ReturnType<typeof getDeckCopyLimitState>,
+    extraClass = "",
+  ) {
     const badge = document.createElement("div");
     badge.className = `pool-count${extraClass ? ` ${extraClass}` : ""}`;
     badge.classList.toggle("limit-reached", copyState.atLimit);
@@ -1001,7 +1083,10 @@ export function createDeckBuilderController({
     return badge;
   }
 
-  function renderDeckGrid(currentDeck, currentExtraDeck) {
+  function renderDeckGrid(
+    currentDeck: readonly number[],
+    currentExtraDeck: readonly number[],
+  ) {
     if (dom.deckGrid) {
       dom.deckGrid.innerHTML = "";
       for (let i = 0; i < MAX_DECK_SIZE; i++) {
@@ -1009,7 +1094,7 @@ export function createDeckBuilderController({
         slot.className = "deck-slot";
         const cardId = currentDeck[i];
         if (cardId) {
-          const cardData = cardDatabaseById.get(cardId);
+          const cardData = cardDatabaseById.get(cardId as number);
           if (cardData) {
             const cardEl = createCardThumb(cardData, getCardDisplayName);
             cardEl.onmouseenter = () => setPreview(cardData);
@@ -1028,7 +1113,7 @@ export function createDeckBuilderController({
         slot.className = "deck-slot";
         const cardId = currentExtraDeck[i];
         if (cardId) {
-          const cardData = cardDatabaseById.get(cardId);
+          const cardData = cardDatabaseById.get(cardId as number);
           if (cardData) {
             const cardEl = createCardThumb(cardData, getCardDisplayName);
             cardEl.onmouseenter = () => setPreview(cardData);
@@ -1041,7 +1126,7 @@ export function createDeckBuilderController({
     }
   }
 
-  function createDeckListRow(entry, config) {
+  function createDeckListRow(entry: DeckListEntry, config: DeckListConfig) {
     const copyState = getDeckCopyLimitState(entry.id, entry.count, {
       deckType: config.deckType,
     });
@@ -1088,7 +1173,11 @@ export function createDeckBuilderController({
     return row;
   }
 
-  function renderDeckListSection(title, entries, config) {
+  function renderDeckListSection(
+    title: string,
+    entries: readonly DeckListEntry[],
+    config: DeckListConfig,
+  ) {
     const section = document.createElement("section");
     section.className = "deck-list-section";
 
@@ -1115,7 +1204,10 @@ export function createDeckBuilderController({
     return section;
   }
 
-  function renderDeckList(currentDeck, currentExtraDeck) {
+  function renderDeckList(
+    currentDeck: readonly number[],
+    currentExtraDeck: readonly number[],
+  ) {
     if (!dom.deckList) return;
     dom.deckList.innerHTML = "";
     dom.deckList.append(
@@ -1126,13 +1218,17 @@ export function createDeckBuilderController({
         zoneCount: currentDeck.length,
         zoneMax: MAX_DECK_SIZE,
       }),
-      renderDeckListSection("Extra Deck", orderedDeckEntries(currentExtraDeck), {
-        add: addExtraCard,
-        remove: removeExtraCardById,
-        deckType: DECK_TYPES.EXTRA,
-        zoneCount: currentExtraDeck.length,
-        zoneMax: MAX_EXTRA_DECK_SIZE,
-      }),
+      renderDeckListSection(
+        "Extra Deck",
+        orderedDeckEntries(currentExtraDeck),
+        {
+          add: addExtraCard,
+          remove: removeExtraCardById,
+          deckType: DECK_TYPES.EXTRA,
+          zoneCount: currentExtraDeck.length,
+          zoneMax: MAX_EXTRA_DECK_SIZE,
+        },
+      ),
     );
   }
 
@@ -1142,7 +1238,10 @@ export function createDeckBuilderController({
       .sort(compareCollectionCards);
   }
 
-  function renderPool(currentDeck, currentExtraDeck) {
+  function renderPool(
+    currentDeck: readonly number[],
+    currentExtraDeck: readonly number[],
+  ) {
     if (!dom.poolGrid) return { firstAvailable: null, visibleCount: 0 };
     dom.poolGrid.innerHTML = "";
 
@@ -1152,9 +1251,7 @@ export function createDeckBuilderController({
 
     sortedCards.forEach((card) => {
       const isExtra = isExtraDeckCard(card);
-      const count = isExtra
-        ? extraCounts[card.id] || 0
-        : counts[card.id] || 0;
+      const count = isExtra ? extraCounts[card.id] || 0 : counts[card.id] || 0;
       const copyState = getDeckCopyLimitState(card.id, count, {
         deckType: isExtra ? DECK_TYPES.EXTRA : DECK_TYPES.MAIN,
       });
@@ -1177,7 +1274,7 @@ export function createDeckBuilderController({
       );
       cardEl.onmouseenter = () => setPreview(card);
       cardEl.onclick = () => (isExtra ? addExtraCard(card) : addMainCard(card));
-      dom.poolGrid.appendChild(cardEl);
+      dom.poolGrid!.appendChild(cardEl);
     });
 
     return {
@@ -1186,7 +1283,10 @@ export function createDeckBuilderController({
     };
   }
 
-  function updateDeckCounters(currentDeck, currentExtraDeck) {
+  function updateDeckCounters(
+    currentDeck: readonly number[],
+    currentExtraDeck: readonly number[],
+  ) {
     if (dom.deckCount) {
       dom.deckCount.textContent = `${currentDeck.length}/${MAX_DECK_SIZE}`;
       dom.deckCount.classList.toggle(
@@ -1232,7 +1332,7 @@ export function createDeckBuilderController({
     if (firstAvailable) setPreview(firstAvailable);
   }
 
-  function open(startScreenRoot) {
+  function open(startScreenRoot: HTMLElement | null) {
     closeStartDeckMenu();
     hideDeckSaveFeedback();
     startScreenRoot?.classList.add("hidden");
@@ -1240,7 +1340,7 @@ export function createDeckBuilderController({
     render();
   }
 
-  function close(startScreenRoot) {
+  function close(startScreenRoot: HTMLElement | null) {
     hideDeckSaveFeedback();
     finishDeckNameEditing({ shouldSave: true, shouldRender: false });
     deckState.saveActiveDeckPreset();
@@ -1282,10 +1382,13 @@ export function createDeckBuilderController({
     showDeckSaveFeedback();
   }
 
-  function prepareForDuel() {
+  function prepareForDuel(): NormalDuelConfig | null {
     const currentDeck = deckState.getCurrentDeck();
     const currentExtraDeck = deckState.getCurrentExtraDeck();
-    if (currentDeck.length < MIN_DECK_SIZE || currentDeck.length > MAX_DECK_SIZE) {
+    if (
+      currentDeck.length < MIN_DECK_SIZE ||
+      currentDeck.length > MAX_DECK_SIZE
+    ) {
       alert(
         deckText("deckSizeError", {
           min: MIN_DECK_SIZE,
@@ -1301,7 +1404,7 @@ export function createDeckBuilderController({
     if (!banlistValidation.ok) {
       const violations = banlistValidation.violations
         .map(({ cardId, count, limit }) => {
-          const card = cardDatabaseById.get(cardId);
+          const card = cardDatabaseById.get(cardId as number);
           return deckText("banlistViolation", {
             card: getCardDisplayName(card) || card?.name || `ID ${cardId}`,
             count,
@@ -1322,45 +1425,56 @@ export function createDeckBuilderController({
     };
   }
 
-  function bind(startScreenRoot) {
+  function bind(startScreenRoot: HTMLElement | null) {
     populateBotPresetDropdown();
     dom.cancelButton?.addEventListener("click", () => close(startScreenRoot));
     dom.saveButton?.addEventListener("click", saveDeckBuilderChanges);
     dom.searchInput?.addEventListener("input", (event) => {
-      searchQuery = event.target.value || "";
+      searchQuery =
+        (event.target as HTMLInputElement | HTMLSelectElement).value || "";
       render();
     });
     dom.categoryFilterSelect?.addEventListener("change", (event) => {
-      categoryFilterMode = event.target.value || "all";
+      categoryFilterMode =
+        (event.target as HTMLInputElement | HTMLSelectElement).value || "all";
       typeSubtypeFilterMode = "all";
       render();
     });
     dom.typeSubtypeFilterSelect?.addEventListener("change", (event) => {
-      typeSubtypeFilterMode = event.target.value || "all";
+      typeSubtypeFilterMode =
+        (event.target as HTMLInputElement | HTMLSelectElement).value || "all";
       render();
     });
     dom.archetypeFilterSelect?.addEventListener("change", (event) => {
-      archetypeFilterMode = normalizeArchetypeFilterMode(event.target.value);
+      archetypeFilterMode = normalizeArchetypeFilterMode(
+        (event.target as HTMLInputElement | HTMLSelectElement).value,
+      );
       render();
     });
     dom.viewModeSelect?.addEventListener("change", (event) => {
-      deckViewMode = event.target.value === "list" ? "list" : "grid";
+      deckViewMode =
+        (event.target as HTMLInputElement | HTMLSelectElement).value === "list"
+          ? "list"
+          : "grid";
       render();
     });
     dom.sortModeSelect?.addEventListener("change", (event) => {
-      sortMode = event.target.value || "default";
+      sortMode =
+        (event.target as HTMLInputElement | HTMLSelectElement).value ||
+        "default";
       applySortMode();
       render();
     });
     dom.botPresetSelect?.addEventListener("change", (event) => {
-      const value = event.target.value;
+      const value = (event.target as HTMLInputElement | HTMLSelectElement)
+        .value;
       currentBotPreset = value;
       saveBotPreset(value);
       updateBotPresetStatus();
     });
   }
 
-  function bindStartDeckPicker(startDom) {
+  function bindStartDeckPicker(startDom: MainDom["startScreen"] | null) {
     startDeckDom = startDom || null;
     updateStartDeckDisplay();
     startDeckDom?.deckMenuButton?.addEventListener("click", (event) => {
@@ -1370,7 +1484,11 @@ export function createDeckBuilderController({
     document.addEventListener("click", (event) => {
       const menu = startDeckDom?.deckMenu;
       const button = startDeckDom?.deckMenuButton;
-      if (menu?.contains(event.target) || button?.contains(event.target)) return;
+      if (
+        menu?.contains(event.target as Node | null) ||
+        button?.contains(event.target as Node | null)
+      )
+        return;
       closeStartDeckMenu();
     });
     document.addEventListener("keydown", (event) => {
@@ -1390,7 +1508,10 @@ export function createDeckBuilderController({
   };
 }
 
-export function createCardThumb(card, getCardDisplayName) {
+export function createCardThumb(
+  card: DeckCard,
+  getCardDisplayName: (card: DisplayCard) => string,
+) {
   const el = document.createElement("div");
   const typeClass = getDeckBuilderCardTypeClass(card);
   el.className = `card-thumb ${typeClass}`;
@@ -1399,7 +1520,7 @@ export function createCardThumb(card, getCardDisplayName) {
   return el;
 }
 
-function getDeckBuilderCardTypeClass(card) {
+function getDeckBuilderCardTypeClass(card: UiCard | null | undefined) {
   if (card?.monsterType === "fusion") return "card-thumb-fusion";
   if (card?.monsterType === "synchro") return "card-thumb-synchro";
   if (card?.monsterType === "ascension") return "card-thumb-ascension";
@@ -1418,7 +1539,7 @@ const PREVIEW_CARD_FRAME_CLASSES = [
   "preview-card-trap",
 ];
 
-function getPreviewCardFrameClass(card) {
+function getPreviewCardFrameClass(card: UiCard | null | undefined) {
   if (card?.cardKind === "spell") return "preview-card-spell";
   if (card?.cardKind === "trap") return "preview-card-trap";
   if (card?.monsterType === "fusion") return "preview-card-fusion";
@@ -1427,7 +1548,10 @@ function getPreviewCardFrameClass(card) {
   return "preview-card-monster";
 }
 
-function setPreviewCardFrameClass(element, card) {
+function setPreviewCardFrameClass(
+  element: HTMLElement | null,
+  card: UiCard | null,
+) {
   if (!element) return;
   element.classList.remove(...PREVIEW_CARD_FRAME_CLASSES);
   element.classList.add(getPreviewCardFrameClass(card));

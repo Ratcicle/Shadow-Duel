@@ -36,7 +36,7 @@ Evite "batch mutations" silenciosas. Loops são permitidos, mas cada iteração 
 ### Arquitetura
 
 ```
-src/main.js                   # UI do deck builder e inicialização
+src/main.ts                   # UI do deck builder e inicialização
 src/core/Game.ts              # Fachada de turnos/fases/event bus (~945 linhas)
 src/core/EffectEngine.ts      # Fachada da resolução de efeitos
 src/core/ChainSystem.ts       # Fachada de chain windows + Spell Speed
@@ -56,14 +56,22 @@ src/data/cards.js             # Banco de cartas 100% declarativo (~5700 linhas)
 
 **Módulos auxiliares no topo de [src/core/](src/core/):**
 
-- **UI:** [src/ui/Renderer.js](src/ui/Renderer.js), [src/core/UIAdapter.js](src/core/UIAdapter.js)
+- **UI:** [src/ui/Renderer.ts](src/ui/Renderer.ts), [src/core/UIAdapter.ts](src/core/UIAdapter.ts)
 - **Bot/AI:** [Bot.ts](src/core/Bot.ts), [BotArena.ts](src/core/BotArena.ts), [BotLogger.ts](src/core/BotLogger.ts), [src/core/ai/](src/core/ai/) (estratégias por arquétipo)
 - **Auto-resolução:** [AutoSelector.ts](src/core/AutoSelector.ts) — escolhas automáticas para IA durante targeting (uso restrito a bot/IA)
 - **Validação:** [CardDatabaseValidator.js](src/core/CardDatabaseValidator.js) — bloqueia duelo se cartas tiverem erros
 - **Chain (mock):** [NullChainSystem.ts](src/core/NullChainSystem.ts) — implementação no-op para fluxos sem chain, compatível com o `ChainRuntimePort` mínimo
 - **Replay canônico:** [src/core/game/replay/](src/core/game/replay/) (`canonical.ts`, `validation.ts`, `recorder.ts`, `driver.ts`, `capture.ts`, `index.ts`) — contratos serializáveis, validação profunda, captura, hash determinístico e reprodução headless; consumidores preservam specifiers `.js`
 - **Modelos:** [Card.ts](src/core/Card.ts), [Player.ts](src/core/Player.ts)
-- **i18n:** [i18n.js](src/core/i18n.js)
+- **i18n:** [i18n.ts](src/core/i18n.ts)
+
+**Apresentação e contrato da UI:**
+
+- [GameUI](src/core/contracts/ui.ts) define a superfície pública de apresentação. `Renderer`, o adapter normal e o adapter descartado satisfazem o mesmo contrato fechado.
+- [src/ui/renderer/attachments.ts](src/ui/renderer/attachments.ts) instala os 111 métodos anexados, preservando referências e ordem. A fachada usa declaration merging sem emitir class fields para esses métodos.
+- [src/ui/renderer/types.ts](src/ui/renderer/types.ts) concentra projeções de cartas, estado de LP e elementos DOM; tipos internos do Pixi ficam em [PixiVfxLayer.ts](src/ui/pixi/PixiVfxLayer.ts).
+- Os módulos de `src/ui/main/`, `src/ui/renderer/`, ícones, Pixi e i18n são TypeScript físico. Consumidores continuam usando specifiers `.js`.
+- Fallbacks do adapter retornam valores inertes compatíveis e não executam escolhas humanas. Substituições como as do Bot Arena pertencem à instância do adapter.
 
 **Estrutura modular de [src/core/game/](src/core/game/):**
 

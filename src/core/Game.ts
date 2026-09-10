@@ -5,7 +5,7 @@ import ChainSystem from "./ChainSystem.js";
 import NullChainSystem from "./NullChainSystem.js";
 import Card from "./Card.js";
 import AutoSelector from "./AutoSelector.js";
-import { createUIAdapter } from "./UIAdapter.js";
+import { createUIAdapter, createDisposedUIAdapter } from "./UIAdapter.js";
 import {
   installGameAttachments,
   type GameAttachedMethods,
@@ -19,7 +19,6 @@ import type {
   DeterministicRandomSnapshot,
   GamePhase,
   GameOptions,
-  GameRendererPort,
   StartDeckCard,
   StartWithDecksOptions,
   StartingPlayerAnnouncementOptions,
@@ -27,7 +26,6 @@ import type {
 import type {
   EffectEngineRuntimePort,
   GameRuntimeState,
-  GameUiPort,
 } from "./contracts/gameRuntime.js";
 import type { GamePlayer } from "./contracts/player.js";
 import type {
@@ -116,24 +114,6 @@ function getStartingPlayerAnnouncement(turn: PlayerId): string {
     : "O oponente joga primeiro";
 }
 
-function createDisposedUIAdapter(): GameUiPort {
-  return new Proxy<GameUiPort>(
-    {} as GameUiPort,
-    {
-      get: () => () => {},
-    },
-  );
-}
-
-type RuntimeUiAdapter = ReturnType<typeof createUIAdapter>;
-
-function exposeGameUiPort(adapter: RuntimeUiAdapter): GameUiPort;
-function exposeGameUiPort(
-  adapter: RuntimeUiAdapter,
-): RuntimeUiAdapter | GameUiPort {
-  return adapter;
-}
-
 function exposeChainAutoSelector(selector: AutoSelector): ChainAutoSelectorPort;
 function exposeChainAutoSelector(
   selector: AutoSelector,
@@ -158,17 +138,6 @@ function exposeEffectEngineRuntime(engine: EffectEngine): unknown {
 function exposeChainGame(game: Game): ChainGamePort;
 function exposeChainGame(game: Game): unknown {
   return game;
-}
-
-function createGameUIAdapter(
-  renderer: GameRendererPort | null | undefined,
-): GameUiPort {
-  const adapter: RuntimeUiAdapter = Reflect.apply(
-    createUIAdapter,
-    undefined,
-    [renderer],
-  );
-  return exposeGameUiPort(adapter);
 }
 
 function preserveGeneratedDeckEntries(
@@ -215,7 +184,7 @@ class Game {
         : new Bot(this.botPreset));
 
     this.renderer = options.renderer || null;
-    this.ui = createGameUIAdapter(this.renderer);
+    this.ui = createUIAdapter(this.renderer);
     this.autoSelector = exposeChainAutoSelector(
       new AutoSelector(exposeAutoSelectorGame(this)),
     );

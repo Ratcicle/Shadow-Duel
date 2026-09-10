@@ -73,7 +73,7 @@ export function handleTargetSelectionClick(
   this: TargetSelectionHandlerHost,
   ownerId: string,
   cardIndex: number,
-  _cardEl: HTMLElement,
+  _cardEl: HTMLElement | null,
   location: SelectionZone | null = null,
 ): boolean {
   if (!this.targetSelection) return false;

@@ -1,7 +1,25 @@
-export function createValidationPanel({ messagesEl, validateCardDatabase }) {
-  let latestValidationResult = null;
+export interface ValidationIssue {
+  cardId?: string | number;
+  cardName?: string;
+  effectIndex?: number | null;
+  actionIndex?: number | null;
+  message?: string;
+}
+export interface ValidationResult {
+  errors: ValidationIssue[];
+  warnings: ValidationIssue[];
+}
+interface ValidationPanelOptions {
+  messagesEl: HTMLElement | null;
+  validateCardDatabase: () => ValidationResult;
+}
+export function createValidationPanel({
+  messagesEl,
+  validateCardDatabase,
+}: ValidationPanelOptions) {
+  let latestValidationResult: ValidationResult | null = null;
 
-  function run(options = {}) {
+  function run(options: { silent?: boolean } = {}) {
     const { silent = false } = options;
     latestValidationResult = validateCardDatabase();
     show(latestValidationResult);
@@ -26,7 +44,7 @@ export function createValidationPanel({ messagesEl, validateCardDatabase }) {
     return true;
   }
 
-  function show(result) {
+  function show(result: ValidationResult | null) {
     if (!messagesEl || !result) return;
     const shouldShowErrors = Array.isArray(result.errors)
       ? result.errors.length > 0
@@ -64,7 +82,7 @@ export function createValidationPanel({ messagesEl, validateCardDatabase }) {
   };
 }
 
-function renderIssueList(issues, cssClass) {
+function renderIssueList(issues: readonly ValidationIssue[], cssClass: string) {
   const MAX_ITEMS = 5;
   const listItems = issues
     .slice(0, MAX_ITEMS)
@@ -84,7 +102,7 @@ function renderIssueList(issues, cssClass) {
   return `<ul>${listItems.join("")}</ul>`;
 }
 
-function formatIssueForDisplay(issue) {
+function formatIssueForDisplay(issue: ValidationIssue) {
   const parts = [];
   if (typeof issue.cardId === "number") {
     parts.push(`ID ${issue.cardId}`);
@@ -101,3 +119,5 @@ function formatIssueForDisplay(issue) {
   const prefix = parts.length ? `[${parts.join(" | ")}] ` : "";
   return `${prefix}${issue.message || ""}`;
 }
+
+export type ValidationPanel = ReturnType<typeof createValidationPanel>;

@@ -231,7 +231,7 @@ type InteractionHost = Omit<
   canFlipSummon(card: GameCard): boolean;
   changeMonsterPosition(card: GameCard, position?: BattlePosition): Promise<unknown>;
   flipSummon(card: GameCard): Promise<unknown>;
-  handleTargetSelectionClick(owner: PlayerId, index: number, element: HTMLElement, zone: CanonicalZone): unknown;
+  handleTargetSelectionClick(owner: PlayerId, index: number, element: HTMLElement | null, zone: CanonicalZone): unknown;
   tryActivateSpellTrapEffect(card: GameCard, selections?: null, options?: unknown): Promise<unknown>;
   activateFieldSpellEffect(card: GameCard): unknown;
   openGraveyardModal(player: GamePlayer): void;

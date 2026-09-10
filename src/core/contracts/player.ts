@@ -93,7 +93,7 @@ export interface PlayerDamageOptions {
 export interface PlayerGainLpOptions {
   cause?: string;
   sourceCard?: GameCard | null;
-  sourceRect?: unknown;
+  sourceRect?: import("./ui.js").UiRect | null;
 }
 
 export interface PlayerStrategyPort extends ChainStrategyPort {

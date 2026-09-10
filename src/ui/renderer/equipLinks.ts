@@ -1,22 +1,37 @@
+import type Renderer from "../Renderer.js";
+import type { UiCard, UiCardElement, EquipLink } from "./types.js";
+type CardReference = UiCard | string | number | null | undefined;
+interface BoardEntry {
+  element: UiCardElement;
+  card: UiCard;
+}
+
 import { getUIText } from "../../core/i18n.js";
 import { EQUIP_LINK_ICONS, createTablerIcon } from "../icons/tablerIcons.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
-function getCardIdentity(card) {
+function getCardIdentity(card: CardReference) {
   if (!card) return null;
-  return card.instanceId ?? card._instanceId ?? card.duelCardId ?? null;
+  return (
+    (card as UiCard).instanceId ??
+    (card as UiCard)._instanceId ??
+    (card as UiCard).duelCardId ??
+    null
+  );
 }
 
-function isSameCardReference(left, right) {
+function isSameCardReference(left: CardReference, right: CardReference) {
   if (!left || !right) return false;
   if (left === right) return true;
   const leftId = getCardIdentity(left);
   const rightId = getCardIdentity(right);
-  return leftId != null && rightId != null && String(leftId) === String(rightId);
+  return (
+    leftId != null && rightId != null && String(leftId) === String(rightId)
+  );
 }
 
-function isFaceupEquip(card) {
+function isFaceupEquip(card: UiCard | null | undefined): card is UiCard {
   return (
     card?.cardKind === "spell" &&
     card.subtype === "equip" &&
@@ -24,15 +39,22 @@ function isFaceupEquip(card) {
   );
 }
 
-function getBoardCardEntries() {
-  return [...document.querySelectorAll("#game-container .card[data-location]")]
+function getBoardCardEntries(): BoardEntry[] {
+  return [
+    ...document.querySelectorAll<UiCardElement>(
+      "#game-container .card[data-location]",
+    ),
+  ]
     .filter((element) => element.dataset.previewable === "true")
     .map((element) => ({ element, card: element.__cardData }))
-    .filter(({ card }) => card);
+    .filter((entry): entry is BoardEntry => Boolean(entry.card));
 }
 
-function findCardElement(entries, card) {
-  return entries.find((entry) => isSameCardReference(entry.card, card))?.element || null;
+function findCardElement(entries: BoardEntry[], card: CardReference) {
+  return (
+    entries.find((entry) => isSameCardReference(entry.card, card))?.element ||
+    null
+  );
 }
 
 function collectEquipLinks() {
@@ -40,7 +62,9 @@ function collectEquipLinks() {
   return entries.flatMap(({ element: equipElement, card: equip }) => {
     if (!isFaceupEquip(equip)) return [];
 
-    const target = equip.equippedTo || equip.equipTarget || null;
+    const target = (equip.equippedTo ||
+      equip.equipTarget ||
+      null) as UiCard | null;
     const targetElement = findCardElement(entries, target);
     if (
       !targetElement ||
@@ -65,7 +89,7 @@ function collectEquipLinks() {
   });
 }
 
-function ensureEquipLinkLayer(renderer) {
+function ensureEquipLinkLayer(renderer: Renderer) {
   const gameContainer = document.getElementById("game-container");
   if (!gameContainer) return null;
 
@@ -85,12 +109,18 @@ function ensureEquipLinkLayer(renderer) {
   return layer;
 }
 
-function drawEquipLinks(renderer, links = renderer.activeEquipLinks || []) {
+function drawEquipLinks(
+  renderer: Renderer,
+  links: EquipLink[] = renderer.activeEquipLinks || [],
+) {
   const layer = ensureEquipLinkLayer(renderer);
   if (!layer) return;
 
   layer.replaceChildren();
-  layer.setAttribute("viewBox", `0 0 ${window.innerWidth} ${window.innerHeight}`);
+  layer.setAttribute(
+    "viewBox",
+    `0 0 ${window.innerWidth} ${window.innerHeight}`,
+  );
   layer.setAttribute("width", String(window.innerWidth));
   layer.setAttribute("height", String(window.innerHeight));
 
@@ -108,15 +138,15 @@ function drawEquipLinks(renderer, links = renderer.activeEquipLinks || []) {
   });
 }
 
-function clearActiveEquipLinks(renderer) {
+function clearActiveEquipLinks(renderer: Renderer) {
   document
-    .querySelectorAll(".equip-link-highlight")
+    .querySelectorAll<UiCardElement>(".equip-link-highlight")
     .forEach((element) => element.classList.remove("equip-link-highlight"));
   renderer.activeEquipLinks = [];
   renderer.redrawEquipLinks?.();
 }
 
-function activateEquipLinks(renderer, links) {
+function activateEquipLinks(renderer: Renderer, links: EquipLink[]) {
   clearActiveEquipLinks(renderer);
   renderer.activeEquipLinks = links;
   links.forEach(({ equipElement, targetElement }) => {
@@ -126,7 +156,7 @@ function activateEquipLinks(renderer, links) {
   renderer.redrawEquipLinks?.();
 }
 
-function addEquipLinkIcon(element, label) {
+function addEquipLinkIcon(element: HTMLElement, label: string) {
   if (element.querySelector(".equip-link-icon")) return;
   const icon = createTablerIcon(EQUIP_LINK_ICONS.equipped, "equip-link-icon", {
     label,
@@ -139,7 +169,11 @@ function addEquipLinkIcon(element, label) {
   }
 }
 
-function bindEquipLinkInteractions(renderer, element, links) {
+function bindEquipLinkInteractions(
+  renderer: Renderer,
+  element: HTMLElement,
+  links: EquipLink[],
+) {
   const activate = () => activateEquipLinks(renderer, links);
   const clear = () => {
     if (document.activeElement !== element) clearActiveEquipLinks(renderer);
@@ -153,13 +187,13 @@ function bindEquipLinkInteractions(renderer, element, links) {
 /**
  * @this {import('../Renderer.js').default}
  */
-export function syncEquipLinkIndicators() {
+export function syncEquipLinkIndicators(this: Renderer): void {
   this.clearEquipLinkIndicators();
 
   const links = collectEquipLinks();
   if (!links.length) return;
 
-  const linksByElement = new Map();
+  const linksByElement = new Map<HTMLElement, EquipLink[]>();
   links.forEach((link) => {
     for (const element of [link.equipElement, link.targetElement]) {
       const linked = linksByElement.get(element) || [];
@@ -178,26 +212,30 @@ export function syncEquipLinkIndicators() {
 /**
  * @this {import('../Renderer.js').default}
  */
-export function redrawEquipLinks() {
+export function redrawEquipLinks(this: Renderer): void {
   drawEquipLinks(this);
 }
 
 /**
  * @this {import('../Renderer.js').default}
  */
-export function clearEquipLinkIndicators() {
+export function clearEquipLinkIndicators(this: Renderer): void {
   clearActiveEquipLinks(this);
-  document.querySelectorAll(".equip-link-icon").forEach((icon) => icon.remove());
-  document.querySelectorAll('[data-equip-link-tabindex="true"]').forEach((element) => {
-    element.removeAttribute("tabindex");
-    delete element.dataset.equipLinkTabindex;
-  });
+  document
+    .querySelectorAll<UiCardElement>(".equip-link-icon")
+    .forEach((icon) => icon.remove());
+  document
+    .querySelectorAll<UiCardElement>('[data-equip-link-tabindex="true"]')
+    .forEach((element) => {
+      element.removeAttribute("tabindex");
+      delete element.dataset.equipLinkTabindex;
+    });
 }
 
 /**
  * @this {import('../Renderer.js').default}
  */
-export function destroyEquipLinkIndicators() {
+export function destroyEquipLinkIndicators(this: Renderer): void {
   this.clearEquipLinkIndicators();
   if (this.equipLinkResizeHandler) {
     window.removeEventListener("resize", this.equipLinkResizeHandler);

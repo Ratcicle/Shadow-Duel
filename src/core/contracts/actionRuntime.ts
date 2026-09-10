@@ -497,7 +497,7 @@ interface ActionContextState extends ActionNegationContext {
   actionContext?: object | null;
   selections?: CanonicalSelectionMap | null;
   context?: ActionNegationContext | null;
-  sourceRect?: object | null;
+  sourceRect?: import("./ui.js").UiRect | null;
   synchroSummonContextId?: string | null;
   costSelections?: CostSelections | null;
   targetSelections?: TargetSelections | null;

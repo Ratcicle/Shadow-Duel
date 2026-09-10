@@ -1,3 +1,91 @@
+import type Renderer from "../Renderer.js";
+import type { UiCard, UiCardElement } from "./types.js";
+import type { UiRect } from "../../core/contracts/ui.js";
+export interface CardVisual {
+  visible: boolean;
+  facedown: boolean;
+  defense: boolean;
+  transform: string;
+  width: number | null;
+  height: number | null;
+}
+export interface CardAnimationContext {
+  zone?: string | null;
+  ownerId?: string | null;
+}
+export interface CardAnimationSource {
+  rect: UiRect | null;
+  hadCardElement: boolean;
+  visual: CardVisual;
+}
+export interface CardMovementIntent {
+  kind?: string;
+  card?: UiCard | null;
+  cardKey?: string;
+  fromOwnerId?: string | null;
+  toOwnerId?: string | null;
+  fromZone?: string | null;
+  toZone?: string | null;
+  fromRect?: UiRect | null;
+  fromVisual?: CardVisual | null;
+  fromHadCardElement?: boolean;
+}
+export interface GhostPlaybackOptions {
+  ghostDuration?: number;
+  ghostEasing?: string;
+}
+export interface AttackContact {
+  contactRect?: UiRect | null;
+  targetRect?: UiRect | null;
+  directAttack?: boolean;
+}
+export interface AttackCancelOptions {
+  returnToOrigin?: boolean;
+  reason?: string;
+}
+export interface AttackPresentation
+  extends Pick<Promise<boolean>, "then" | "catch" | "finally"> {
+  contact: Promise<boolean>;
+  finished: Promise<boolean>;
+  cancel(options?: AttackCancelOptions): Promise<boolean>;
+}
+export interface AttackLungeIntent {
+  cardKey?: string;
+  card?: UiCard | null;
+  targetCardKey?: string | null;
+  targetOwnerId?: string | null;
+  directAttack?: boolean;
+  contactOffset?: number;
+  onContact?: (contact: AttackContact) => void;
+}
+export interface AttackLungeOptions {
+  directContactProgress?: number;
+  lungeDistance?: number;
+  windupDistance?: number;
+  arcLift?: number;
+  duration?: number;
+  contactOffset?: number;
+  visualContactPadding?: number;
+  arcSide?: number;
+  easing?: string;
+  onContact?: (contact: AttackContact) => void;
+}
+interface AttackPose {
+  x?: number;
+  y?: number;
+  rotateZ?: number;
+  rotateX?: number;
+  rotateY?: number;
+  scale?: number;
+  translateZ?: number;
+}
+interface AttackControllerOptions {
+  duration?: number;
+  contactOffset?: number;
+  onContact?: (details: AttackContact) => void;
+}
+type ContactDetector = () => boolean | AttackContact;
+
 /**
  * Ghost card animations for Renderer.
  * These clones cover cards that do not have both old and new DOM elements.
@@ -8,7 +96,7 @@ const DEFAULT_EASING = "cubic-bezier(0.2, 0.8, 0.2, 1)";
 const MAX_GHOSTS_PER_FLUSH = 12;
 const ATTACK_CONTACT_CUE_OFFSET = 0.72;
 
-const ZONE_IDS = {
+const ZONE_IDS: Record<"player" | "bot", Record<string, string>> = {
   player: {
     hand: "player-hand",
     field: "player-field",
@@ -37,12 +125,12 @@ function prefersReducedMotion() {
   );
 }
 
-function normalizeZone(zone) {
+function normalizeZone(zone: string | null | undefined) {
   if (zone === "banish" || zone === "banished") return "banished";
   return zone || null;
 }
 
-function copyRect(rect) {
+function copyRect(rect: UiRect | null | undefined) {
   if (!rect) return null;
   return {
     left: rect.left,
@@ -52,14 +140,14 @@ function copyRect(rect) {
   };
 }
 
-function getRectCenter(rect) {
+function getRectCenter(rect: UiRect) {
   return {
     x: rect.left + rect.width / 2,
     y: rect.top + rect.height / 2,
   };
 }
 
-function rectsOverlap(a, b, padding = 0) {
+function rectsOverlap(a: UiRect | null, b: UiRect | null, padding = 0) {
   if (!a || !b) return false;
   const aRight = a.left + a.width;
   const aBottom = a.top + a.height;
@@ -73,7 +161,11 @@ function rectsOverlap(a, b, padding = 0) {
   );
 }
 
-function getLeadingContactRect(rect, unitX, unitY) {
+function getLeadingContactRect(
+  rect: UiRect | null,
+  unitX: number,
+  unitY: number,
+) {
   if (!rect) return null;
   const center = getRectCenter(rect);
   const size = Math.max(28, Math.min(rect.width, rect.height) * 0.58);
@@ -90,7 +182,9 @@ function getLeadingContactRect(rect, unitX, unitY) {
 
 function getDefaultCardSize() {
   const sample =
-    document.querySelector("#game-container .card:not(.card-animation-ghost)") ||
+    document.querySelector<HTMLElement>(
+      "#game-container .card:not(.card-animation-ghost)",
+    ) ||
     document.getElementById("player-deck") ||
     document.getElementById("bot-deck");
   const rect = sample?.getBoundingClientRect?.();
@@ -100,7 +194,10 @@ function getDefaultCardSize() {
   };
 }
 
-function zoneRectToCardRect(zoneRect, cardRect = null) {
+function zoneRectToCardRect(
+  zoneRect: UiRect | null,
+  cardRect: UiRect | null = null,
+) {
   if (!zoneRect) return null;
   const size = cardRect || getDefaultCardSize();
   const width = size.width || zoneRect.width;
@@ -113,45 +210,45 @@ function zoneRectToCardRect(zoneRect, cardRect = null) {
   };
 }
 
-function escapeCardKey(cardKey) {
+function escapeCardKey(cardKey: string) {
   if (typeof CSS !== "undefined" && typeof CSS.escape === "function") {
     return CSS.escape(cardKey);
   }
   return String(cardKey).replace(/["\\]/g, "\\$&");
 }
 
-function findBoardCardElement(cardKey) {
+function findBoardCardElement(cardKey: string | null | undefined) {
   if (!cardKey || typeof document === "undefined") return null;
   const root = document.getElementById("game-container");
   if (!root) return null;
-  return root.querySelector(
+  return root.querySelector<HTMLElement>(
     `.card[data-card-key="${escapeCardKey(cardKey)}"]:not(.card-animation-ghost)`,
   );
 }
 
-function findBoardCardElements(cardKey) {
+function findBoardCardElements(cardKey: string | null | undefined) {
   if (!cardKey || typeof document === "undefined") return [];
   const root = document.getElementById("game-container");
   if (!root) return [];
   return Array.from(
-    root.querySelectorAll(
+    root.querySelectorAll<HTMLElement>(
       `.card[data-card-key="${escapeCardKey(cardKey)}"]:not(.card-animation-ghost)`,
     ),
   );
 }
 
-function hideAttackSourceElement(element) {
+function hideAttackSourceElement(element: HTMLElement | null) {
   if (!element || element.dataset.attackLungeHidden === "true") return;
   element.dataset.attackLungeHidden = "true";
   element.dataset.attackLungeVisibility = element.style.visibility || "";
   element.style.visibility = "hidden";
 }
 
-function hideActiveAttackSourceElements(cardKey) {
+function hideActiveAttackSourceElements(cardKey: string | null | undefined) {
   findBoardCardElements(cardKey).forEach(hideAttackSourceElement);
 }
 
-function revealAttackSourceElements(cardKey) {
+function revealAttackSourceElements(cardKey: string | null | undefined) {
   findBoardCardElements(cardKey).forEach((element) => {
     if (element.dataset.attackLungeHidden !== "true") return;
     element.style.visibility = element.dataset.attackLungeVisibility || "";
@@ -160,7 +257,7 @@ function revealAttackSourceElements(cardKey) {
   });
 }
 
-function isElementVisible(element) {
+function isElementVisible(element: HTMLElement | null) {
   if (!element || typeof window === "undefined") return false;
   const rect = element.getBoundingClientRect();
   if (rect.width <= 0 || rect.height <= 0) return false;
@@ -168,7 +265,10 @@ function isElementVisible(element) {
   return style.display !== "none" && style.visibility !== "hidden";
 }
 
-function visualFromElement(element, card) {
+function visualFromElement(
+  element: HTMLElement,
+  card: UiCard | null | undefined,
+): CardVisual {
   const style = window.getComputedStyle(element);
   const transform =
     style.transform && style.transform !== "none" ? style.transform : "none";
@@ -177,14 +277,18 @@ function visualFromElement(element, card) {
       !element.classList.contains("hidden") &&
       !element.classList.contains("facedown"),
     facedown: element.classList.contains("facedown") || !!card?.isFacedown,
-    defense: element.classList.contains("defense") || card?.position === "defense",
+    defense:
+      element.classList.contains("defense") || card?.position === "defense",
     transform,
     width: element.offsetWidth || element.getBoundingClientRect().width,
     height: element.offsetHeight || element.getBoundingClientRect().height,
   };
 }
 
-function fallbackVisual(card, context = {}) {
+function fallbackVisual(
+  card: UiCard | null | undefined,
+  context: CardAnimationContext = {},
+): CardVisual {
   const zone = normalizeZone(context.zone);
   const ownerId = context.ownerId || card?.owner || "player";
   const facedown =
@@ -202,13 +306,13 @@ function fallbackVisual(card, context = {}) {
   };
 }
 
-function getVisualTransform(visual) {
+function getVisualTransform(visual: CardVisual | null) {
   if (visual?.transform && visual.transform !== "none") return visual.transform;
   if (visual?.defense) return "rotate(-90deg)";
   return "";
 }
 
-function transformAt(rect, visual) {
+function transformAt(rect: UiRect, visual: CardVisual | null) {
   const size = {
     width: visual?.width || rect.width,
     height: visual?.height || rect.height,
@@ -221,15 +325,19 @@ function transformAt(rect, visual) {
   return visualTransform ? `${translate} ${visualTransform}` : translate;
 }
 
-function getFacingAngleDegrees(deltaX, deltaY) {
+function getFacingAngleDegrees(deltaX: number, deltaY: number) {
   return (Math.atan2(deltaY, deltaX) * 180) / Math.PI + 90;
 }
 
-function getNaturalFacingAngleDegrees(visual) {
+function getNaturalFacingAngleDegrees(visual: CardVisual | null) {
   return visual?.defense ? -90 : 0;
 }
 
-function transformAtFacing(rect, visual, facingAngle) {
+function transformAtFacing(
+  rect: UiRect,
+  visual: CardVisual | null,
+  facingAngle: number,
+) {
   const size = {
     width: visual?.width || rect.width,
     height: visual?.height || rect.height,
@@ -241,26 +349,26 @@ function transformAtFacing(rect, visual, facingAngle) {
   return `${translate} rotate(${facingAngle}deg)`;
 }
 
-function clamp(value, min, max) {
+function clamp(value: number, min: number, max: number) {
   if (!Number.isFinite(value)) return min;
   return Math.min(max, Math.max(min, value));
 }
 
-function cssNumber(value, fractionDigits = 2) {
+function cssNumber(value: number, fractionDigits = 2) {
   if (!Number.isFinite(value)) return 0;
   return Number(value.toFixed(fractionDigits));
 }
 
 function transformAtAttackPose(
-  rect,
-  visual,
+  rect: UiRect,
+  visual: CardVisual | null,
   {
     rotateZ = 0,
     rotateX = 0,
     rotateY = 0,
     scale = 1,
     translateZ = 0,
-  } = {},
+  }: AttackPose = {},
 ) {
   const size = {
     width: visual?.width || rect.width,
@@ -287,7 +395,7 @@ function relativeAttackPose({
   rotateY = 0,
   scale = 1,
   translateZ = 0,
-} = {}) {
+}: AttackPose = {}) {
   return [
     "perspective(900px)",
     `translate3d(${cssNumber(x)}px, ${cssNumber(y)}px, ${cssNumber(translateZ)}px)`,
@@ -298,7 +406,10 @@ function relativeAttackPose({
   ].join(" ");
 }
 
-function getPlayerAttackTargetRect(ownerId, cardRect = null) {
+function getPlayerAttackTargetRect(
+  ownerId: string | null | undefined,
+  cardRect: UiRect | null = null,
+) {
   if (typeof document === "undefined") return null;
   const id = ownerId === "bot" ? "bot-area" : "player-area";
   const element = document.getElementById(id);
@@ -306,7 +417,11 @@ function getPlayerAttackTargetRect(ownerId, cardRect = null) {
   return zoneRectToCardRect(element.getBoundingClientRect(), cardRect);
 }
 
-function getDirectAttackTargetRect(renderer, ownerId, cardRect = null) {
+function getDirectAttackTargetRect(
+  renderer: Renderer,
+  ownerId: string | null | undefined,
+  cardRect: UiRect | null = null,
+) {
   const handRect =
     typeof renderer?.getCardZoneAnchorRect === "function"
       ? renderer.getCardZoneAnchorRect(ownerId, "hand", cardRect)
@@ -318,7 +433,7 @@ function getLayer() {
   const root = document.getElementById("game-container");
   if (!root) return null;
 
-  let layer = root.querySelector(":scope > .card-animation-layer");
+  let layer = root.querySelector<HTMLElement>(":scope > .card-animation-layer");
   if (!layer) {
     layer = document.createElement("div");
     layer.className = "card-animation-layer";
@@ -327,7 +442,7 @@ function getLayer() {
   return layer;
 }
 
-function applyFacedownVisual(element) {
+function applyFacedownVisual(element: HTMLElement) {
   element.classList.add("facedown");
   element.innerHTML = '<div class="card-back"></div>';
   element.style.backgroundImage = "none";
@@ -335,7 +450,12 @@ function applyFacedownVisual(element) {
   element.style.border = "1px solid #555";
 }
 
-function createGhost(renderer, card, visual, rect) {
+function createGhost(
+  renderer: Renderer,
+  card: UiCard,
+  visual: CardVisual | null,
+  rect: UiRect,
+) {
   const visible = !!visual?.visible && !visual?.facedown;
   const ghost = renderer.createCardElement(card, visible);
   ghost.removeAttribute("data-card-key");
@@ -365,7 +485,11 @@ function createGhost(renderer, card, visual, rect) {
   return ghost;
 }
 
-function finishAnimation(animation, cleanup, duration = DEFAULT_DURATION) {
+function finishAnimation(
+  animation: Animation | null,
+  cleanup: () => void,
+  duration = DEFAULT_DURATION,
+): Promise<void> {
   if (animation?.finished && typeof animation.finished.then === "function") {
     return animation.finished.then(
       () => {
@@ -376,7 +500,7 @@ function finishAnimation(animation, cleanup, duration = DEFAULT_DURATION) {
       },
     );
   }
-  return new Promise((resolve) => {
+  return new Promise<void>((resolve) => {
     setTimeout(() => {
       cleanup();
       resolve();
@@ -384,7 +508,7 @@ function finishAnimation(animation, cleanup, duration = DEFAULT_DURATION) {
   });
 }
 
-function createNoopAttackPresentation() {
+function createNoopAttackPresentation(): AttackPresentation {
   const resolved = Promise.resolve(false);
   return {
     contact: resolved,
@@ -400,20 +524,20 @@ function createAttackPresentationController({
   duration,
   contactOffset,
   onContact,
-} = {}) {
-  let resolveContact;
-  let resolveFinished;
+}: AttackControllerOptions = {}) {
+  let resolveContact!: (value: boolean) => void;
+  let resolveFinished!: (value: boolean) => void;
   let contactSettled = false;
   let finishedSettled = false;
   let canceled = false;
-  let contactTimer = null;
-  let contactRaf = null;
-  let cancelHandler = null;
+  let contactTimer: ReturnType<typeof setTimeout> | null = null;
+  let contactRaf: number | null = null;
+  let cancelHandler: ((options: AttackCancelOptions) => void) | null = null;
 
-  const contact = new Promise((resolve) => {
+  const contact = new Promise<boolean>((resolve) => {
     resolveContact = resolve;
   });
-  const finished = new Promise((resolve) => {
+  const finished = new Promise<boolean>((resolve) => {
     resolveFinished = resolve;
   });
 
@@ -428,7 +552,11 @@ function createAttackPresentationController({
     }
   };
 
-  const settleContact = (value, shouldRunCallback, details = null) => {
+  const settleContact = (
+    value: boolean,
+    shouldRunCallback: boolean,
+    details: AttackContact | null = null,
+  ) => {
     if (contactSettled) return;
     contactSettled = true;
     clearContactCue();
@@ -444,7 +572,7 @@ function createAttackPresentationController({
     resolveContact(value);
   };
 
-  const settleFinished = (value) => {
+  const settleFinished = (value: boolean) => {
     if (finishedSettled) return;
     finishedSettled = true;
     if (!contactSettled) settleContact(false, false);
@@ -452,17 +580,20 @@ function createAttackPresentationController({
     resolveFinished(value);
   };
 
-  const fireContact = (details = null) => {
+  const fireContact = (details: AttackContact | null = null) => {
     if (canceled || finishedSettled) return;
     settleContact(true, true, details);
   };
 
-  const startContactCue = (animation = null, shouldFireContact = null) => {
+  const startContactCue = (
+    animation: Animation | null = null,
+    shouldFireContact: ContactDetector | null = null,
+  ) => {
     if (contactSettled || finishedSettled || canceled) return;
 
-    const safeDuration = Number.isFinite(duration) ? Math.max(0, duration) : 0;
+    const safeDuration = Number.isFinite(duration) ? Math.max(0, duration!) : 0;
     const safeOffset = Number.isFinite(contactOffset)
-      ? Math.min(1, Math.max(0, contactOffset))
+      ? Math.min(1, Math.max(0, contactOffset!))
       : ATTACK_CONTACT_CUE_OFFSET;
     const contactMs = safeDuration * safeOffset;
 
@@ -475,7 +606,8 @@ function createAttackPresentationController({
       let contactDetector =
         typeof shouldFireContact === "function" ? shouldFireContact : null;
       const now = () =>
-        typeof performance !== "undefined" && typeof performance.now === "function"
+        typeof performance !== "undefined" &&
+        typeof performance.now === "function"
           ? performance.now()
           : Date.now();
       const startedAt = now();
@@ -513,7 +645,7 @@ function createAttackPresentationController({
     contactTimer = setTimeout(fireContact, contactMs);
   };
 
-  const cancel = (cancelOptions = {}) => {
+  const cancel = (cancelOptions: AttackCancelOptions = {}) => {
     if (finishedSettled) return finished;
     canceled = true;
     clearContactCue();
@@ -528,7 +660,7 @@ function createAttackPresentationController({
     return finished;
   };
 
-  const presentation = {
+  const presentation: AttackPresentation = {
     contact,
     finished,
     cancel,
@@ -541,17 +673,20 @@ function createAttackPresentationController({
     presentation,
     startContactCue,
     settleFinished,
-    setCancelHandler(handler) {
+    setCancelHandler(handler: (options: AttackCancelOptions) => void) {
       cancelHandler = handler;
     },
   };
 }
 
-function resolveFinalElement(intent) {
+function resolveFinalElement(intent: CardMovementIntent) {
   return intent?.cardKey ? findBoardCardElement(intent.cardKey) : null;
 }
 
-function shouldLetFlipHandle(intent, finalElement) {
+function shouldLetFlipHandle(
+  intent: CardMovementIntent,
+  finalElement: HTMLElement | null,
+) {
   return (
     intent?.kind === "zone-move" &&
     intent.fromHadCardElement === true &&
@@ -562,12 +697,17 @@ function shouldLetFlipHandle(intent, finalElement) {
 /**
  * @this {import('../Renderer.js').default}
  */
-export function getCardZoneAnchorRect(ownerId, zone, cardRect = null) {
+export function getCardZoneAnchorRect(
+  this: Renderer,
+  ownerId: string | null | undefined,
+  zone: string | null | undefined,
+  cardRect: UiRect | null = null,
+): UiRect | null {
   if (typeof document === "undefined") return null;
   const normalizedZone = normalizeZone(zone);
   const ownerKey = ownerId === "bot" ? "bot" : "player";
   const zoneKey = normalizedZone === "banished" ? "graveyard" : normalizedZone;
-  const id = ZONE_IDS[ownerKey]?.[zoneKey];
+  const id = ZONE_IDS[ownerKey]?.[zoneKey!];
   const element = id ? document.getElementById(id) : null;
   if (!element) return null;
 
@@ -585,7 +725,11 @@ export function getCardZoneAnchorRect(ownerId, zone, cardRect = null) {
 /**
  * @this {import('../Renderer.js').default}
  */
-export function captureCardAnimationSource(card, context = {}) {
+export function captureCardAnimationSource(
+  this: Renderer,
+  card: UiCard | null | undefined,
+  context: CardAnimationContext = {},
+): CardAnimationSource | null {
   if (prefersReducedMotion() || typeof document === "undefined" || !card) {
     return null;
   }
@@ -615,7 +759,11 @@ export function captureCardAnimationSource(card, context = {}) {
 /**
  * @this {import('../Renderer.js').default}
  */
-export function playQueuedCardAnimations(intents, options = {}) {
+export function playQueuedCardAnimations(
+  this: Renderer,
+  intents: readonly CardMovementIntent[],
+  options: GhostPlaybackOptions = {},
+): Promise<boolean> {
   if (prefersReducedMotion() || typeof document === "undefined") {
     return Promise.resolve(false);
   }
@@ -630,11 +778,14 @@ export function playQueuedCardAnimations(intents, options = {}) {
   if (!layer) return Promise.resolve(false);
 
   const duration = Number.isFinite(options.ghostDuration)
-    ? options.ghostDuration
+    ? options.ghostDuration!
     : DEFAULT_DURATION;
   const easing = options.ghostEasing || DEFAULT_EASING;
-  const limited = intents.slice(0, MAX_GHOSTS_PER_FLUSH);
-  const animationPromises = [];
+  const limited: readonly CardMovementIntent[] = intents.slice(
+    0,
+    MAX_GHOSTS_PER_FLUSH,
+  );
+  const animationPromises: Promise<void>[] = [];
 
   for (const intent of limited) {
     if (!intent?.card || !intent.cardKey) continue;
@@ -665,8 +816,12 @@ export function playQueuedCardAnimations(intents, options = {}) {
     const finalVisual = finalElement
       ? visualFromElement(finalElement, intent.card)
       : null;
-    const visual = finalVisual || intent.fromVisual || fallbackVisual(intent.card);
-    if (finalVisual && (!intent.fromVisual?.width || !intent.fromVisual?.height)) {
+    const visual =
+      finalVisual || intent.fromVisual || fallbackVisual(intent.card);
+    if (
+      finalVisual &&
+      (!intent.fromVisual?.width || !intent.fromVisual?.height)
+    ) {
       visual.width = finalVisual.width;
       visual.height = finalVisual.height;
     }
@@ -678,17 +833,22 @@ export function playQueuedCardAnimations(intents, options = {}) {
     layer.appendChild(ghost);
 
     const shouldHideFinal =
-      !!finalElement && intent.fromHadCardElement !== true && intent.kind !== "banish";
+      !!finalElement &&
+      intent.fromHadCardElement !== true &&
+      intent.kind !== "banish";
     const previousVisibility = finalElement?.style.visibility || "";
     if (shouldHideFinal) {
-      finalElement.style.visibility = "hidden";
+      finalElement!.style.visibility = "hidden";
     }
 
     const leavesBoard = !finalElement || intent.kind === "banish";
     const keyframes = leavesBoard
       ? [
           { transform: startTransform, opacity: 1 },
-          { transform: endTransform, opacity: intent.kind === "banish" ? 0 : 0.12 },
+          {
+            transform: endTransform,
+            opacity: intent.kind === "banish" ? 0 : 0.12,
+          },
         ]
       : [
           { transform: startTransform, opacity: 1 },
@@ -700,12 +860,16 @@ export function playQueuedCardAnimations(intents, options = {}) {
         ? ghost.animate(keyframes, { duration, easing })
         : null;
 
-    const animationPromise = finishAnimation(animation, () => {
-      if (shouldHideFinal && finalElement) {
-        finalElement.style.visibility = previousVisibility;
-      }
-      ghost.remove();
-    }, duration);
+    const animationPromise = finishAnimation(
+      animation,
+      () => {
+        if (shouldHideFinal && finalElement) {
+          finalElement.style.visibility = previousVisibility;
+        }
+        ghost.remove();
+      },
+      duration,
+    );
     animationPromises.push(animationPromise);
   }
 
@@ -718,7 +882,11 @@ export function playQueuedCardAnimations(intents, options = {}) {
 /**
  * @this {import('../Renderer.js').default}
  */
-export function playAttackLunge(intent, options = {}) {
+export function playAttackLunge(
+  this: Renderer,
+  intent: AttackLungeIntent | null,
+  options: AttackLungeOptions = {},
+): AttackPresentation {
   if (prefersReducedMotion() || typeof document === "undefined") {
     return createNoopAttackPresentation();
   }
@@ -738,7 +906,7 @@ export function playAttackLunge(intent, options = {}) {
     ? getDirectAttackTargetRect(this, intent.targetOwnerId, attackerRect)
     : null;
   const targetRect =
-    targetElement?.getBoundingClientRect?.() ||
+    (targetElement as HTMLElement | null)?.getBoundingClientRect?.() ||
     directTargetRect ||
     this.getCardZoneAnchorRect(intent.targetOwnerId, "field", attackerRect) ||
     this.getCardZoneAnchorRect(intent.targetOwnerId, "hand", attackerRect);
@@ -751,26 +919,26 @@ export function playAttackLunge(intent, options = {}) {
   if (distance < 1) return createNoopAttackPresentation();
 
   const lungeDistance = Number.isFinite(options.lungeDistance)
-    ? options.lungeDistance
+    ? options.lungeDistance!
     : isDirectAttack
       ? distance
       : 150;
   const windupDistance = Number.isFinite(options.windupDistance)
-    ? options.windupDistance
+    ? options.windupDistance!
     : clamp(distance * 0.16, 32, 48);
   const arcLift = Number.isFinite(options.arcLift)
-    ? options.arcLift
+    ? options.arcLift!
     : clamp(distance * 0.09, 18, 32);
-  const duration = Number.isFinite(options.duration) ? options.duration : 1320;
+  const duration = Number.isFinite(options.duration) ? options.duration! : 1320;
   const contactOffset = Number.isFinite(options.contactOffset)
-    ? options.contactOffset
+    ? options.contactOffset!
     : Number.isFinite(intent.contactOffset)
-      ? intent.contactOffset
+      ? intent.contactOffset!
       : isDirectAttack
         ? 0.74
         : ATTACK_CONTACT_CUE_OFFSET;
   const visualContactPadding = Number.isFinite(options.visualContactPadding)
-    ? options.visualContactPadding
+    ? options.visualContactPadding!
     : -2;
   const controller = createAttackPresentationController({
     duration,
@@ -778,12 +946,17 @@ export function playAttackLunge(intent, options = {}) {
     onContact: options.onContact || intent.onContact,
   });
   const getCurrentTargetRect = () =>
-    targetElement?.getBoundingClientRect?.() || targetRect;
+    (targetElement as HTMLElement | null)?.getBoundingClientRect?.() ||
+    targetRect;
 
   const contactGap = Math.max(
     10,
-    Math.min(attackerRect.width, attackerRect.height, targetRect.width, targetRect.height) *
-      0.32,
+    Math.min(
+      attackerRect.width,
+      attackerRect.height,
+      targetRect.width,
+      targetRect.height,
+    ) * 0.32,
   );
   const maxSafeTravel = Math.max(0, distance - contactGap);
   const contactTravelRatio = isDirectAttack ? 0.96 : 0.78;
@@ -803,7 +976,7 @@ export function playAttackLunge(intent, options = {}) {
   const perpX = -unitY;
   const perpY = unitX;
   const arcSide = Number.isFinite(options.arcSide)
-    ? Math.sign(options.arcSide) || 1
+    ? Math.sign(options.arcSide!) || 1
     : intent.card?.owner === "bot"
       ? -1
       : 1;
@@ -828,8 +1001,8 @@ export function playAttackLunge(intent, options = {}) {
   const recoilDistance = clamp(travel * 0.08, 4, 10);
   const recoilX = -unitX * recoilDistance + perpX * arcLift * arcSide * 0.12;
   const recoilY = -unitY * recoilDistance + perpY * arcLift * arcSide * 0.12;
-  const baseRect = copyRect(attackerRect);
-  const movedRect = (x, y) => ({
+  const baseRect = copyRect(attackerRect)!;
+  const movedRect = (x: number, y: number) => ({
     ...baseRect,
     left: attackerRect.left + x,
     top: attackerRect.top + y,
@@ -883,12 +1056,12 @@ export function playAttackLunge(intent, options = {}) {
     translateZ: 4,
   });
   const layer = getLayer();
-  const makeContactDetector = (element) => {
+  const makeContactDetector = (element: HTMLElement) => {
     if (isDirectAttack) {
       const directProgressThreshold = Number.isFinite(
-        options.directContactProgress,
+        options.directContactProgress!,
       )
-        ? options.directContactProgress
+        ? options.directContactProgress!
         : 0.92;
       return () => {
         const rect = element.getBoundingClientRect();
@@ -922,10 +1095,13 @@ export function playAttackLunge(intent, options = {}) {
   };
 
   if (!layer || !intent.card) {
-    const computedTransform = window.getComputedStyle(attackerElement).transform;
+    const computedTransform =
+      window.getComputedStyle(attackerElement).transform;
     const baseTransform =
-      computedTransform && computedTransform !== "none" ? computedTransform : "";
-    const composeTransform = (movement) =>
+      computedTransform && computedTransform !== "none"
+        ? computedTransform
+        : "";
+    const composeTransform = (movement: string) =>
       baseTransform ? `${baseTransform} ${movement}` : movement;
     const animation = attackerElement.animate(
       [
@@ -1028,7 +1204,11 @@ export function playAttackLunge(intent, options = {}) {
           filter: "brightness(1.06)",
           offset: 0.88,
         },
-        { transform: baseTransform || "none", filter: "brightness(1)", offset: 1 },
+        {
+          transform: baseTransform || "none",
+          filter: "brightness(1)",
+          offset: 1,
+        },
       ],
       {
         duration,

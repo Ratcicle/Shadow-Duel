@@ -1676,7 +1676,8 @@ A implementação e a aceitação local do PR 9B estão concluídas. Foram
 convertidos os 97 módulos JavaScript restantes de estratégias, knowledge
 bases, políticas, executores, `Bot`, `BotLogger`, `ArenaAnalytics` e
 `BotArena`. Não restam arquivos físicos `.js` no escopo da etapa. A
-integração permanece sujeita à revisão do PR draft.
+integração foi concluída no PR #60, com rebase em
+`513fb9cdae38535f0abdaa462d47f68d2a8c7c7a`. Esse commit é a baseline da Etapa 10.
 
 ## Contratos e comportamento preservado
 
@@ -1808,6 +1809,88 @@ avisos de duelo. Testes manuais de cartas permanecem fora desta etapa.
 ---
 
 # Etapa 10 — Migrar UI, Renderer, Pixi e i18n
+
+## Entrega da Etapa 10
+
+Branch: `agent/typescript-ui-renderer`, a partir do merge da Etapa 9B.
+Foram convertidos os 28 módulos previstos: `main`, `UIAdapter`, `i18n`,
+`Renderer`, os oito controllers de `ui/main/`, os 13 módulos e o barrel de
+`ui/renderer/`, `PixiVfxLayer` e os ícones Tabler. Imports relativos mantêm
+os specifiers `.js`; o banco declarativo permanece para a Etapa 11.
+
+### Contratos e arquivos de suporte
+
+- `core/contracts/ui.ts`: `GameUI` fechado, geometria e apresentação;
+  métodos genéricos de seleção preservam a identidade do candidato no callback.
+- `ui/renderer/types.ts`: projeções de cartas, elementos DOM, filas de LP,
+  promises de apresentação e cleanup.
+- `ui/renderer/attachments.ts`: 111 referências diretas, na ordem legada;
+  declaration merging verifica a fachada sem criar campos de instância.
+- `Game`, `GameRendererPort` e `GameUiPort` usam o contrato canônico. Os ports
+  de LP e seleção receberam geometria explícita e a nulabilidade real dos
+  elementos de mão. A Arena usa a assinatura pública de `showAlert`.
+- `test/types/ui.type-test.ts` prova atribuição de Renderer/adapters,
+  rejeição de métodos e parâmetros inválidos e preservação de candidatos.
+  `test/contracts/uiAdapter.test.ts` cobre keyset/ordem do prototype,
+  binding de `this`, isolamento de overrides e retornos inertes.
+
+### Diferenças de runtime justificadas pela etapa
+
+O adapter agora fornece fallbacks compatíveis também para renderers parciais
+e após descarte: `false`, `null`, coleções vazias, handles de cleanup ou
+promises resolvidas, conforme o método. Nenhum callback de escolha humana é
+executado. Overrides continuam tendo precedência e pertencem a cada adapter.
+
+As atribuições individuais de prototype foram substituídas pelo manifest.
+O teste fixa as 115 chaves totais do prototype (incluindo constructor e
+métodos próprios), sua ordem e a identidade das funções anexadas.
+Conversões explícitas para texto preservam a coerção nativa de DOM/dataset;
+guards nos controles da Arena e do resultado do duelo tratam DOM incompleto.
+Não houve alteração nas regras, nas cartas, no CSS ou na composição visual.
+
+### Casts, dívida e limites
+
+As assertions restantes são locais: campos JSON após guards de estrutura,
+IDs/presets/zonas escritos pelos próprios controles, elementos encontrados
+por seletores conhecidos, referências de cartas de apresentação e números
+após `Number.isFinite`. Assertions de presença em callbacks ficam sob os
+guards de montagem/listener do respectivo controle. Não foram usados casts
+duplos, suppressions ou permissividade global para representar o Renderer.
+
+`GameUI` deriva assinaturas verificadas dos módulos de apresentação por
+imports somente de tipos; não carrega o Renderer nem Pixi em runtime.
+As chaves textuais de i18n continuam aceitando strings e fallback, enquanto
+locale, payload e projeções de cartas são explícitos. O hardening restante
+do repositório continua nas etapas próprias do plano.
+
+### Verificação
+
+A aceitação final usou Node `22.23.2` e executou `npm ci`, `npm run check`
+e `npm run test:bot-smoke -- --duels 1 --matchup arcanist:shadowheart`.
+Os 566 testes passaram, sem falhas ou skips. A auditoria verificou 454
+arquivos TypeScript com zero dívidas registradas; Chain, catálogo, documentação
+gerada e build passaram. A assinatura legada `1cc622e3` e o digest agregado
+`13ff527c3deb5b8b5e5f09551fcabcb3ec7ca48f922f1f167c6d22c67d12caea`
+permaneceram iguais. O Bot smoke terminou por LP zero em cinco turnos,
+sem erros ou warnings de execução.
+
+Dos 249 artefatos do build, 244 permaneceram byte a byte idênticos, incluindo
+CSS e assets. HTML e chunks auxiliares/Pixi mudaram somente nas referências
+aos nomes dos chunks. O chunk da aplicação incorpora as alterações do adapter,
+do manifest e dos guards de DOM descritas acima. O warning de chunks maiores
+que 500 kB já existia na baseline; não surgiram warnings novos de build.
+
+O playtest do build de produção verificou boot, troca EN/PT-BR, filtros e
+visualização em lista do deck builder, renomeação e persistência após reload,
+montagem e início de cenário no Laboratório, abertura de menu de carta,
+seleção e confirmação manual de alvo com atualização de atributos e vínculos
+de equipamento, início de duelo normal e Arena Arcanist × Shadow-Heart (um duelo concluído
+em nove turnos). As capturas de tela confirmaram tabuleiro, zonas, cartas,
+LP e fases; não houve erros JavaScript nesses fluxos. O navegador integrado
+falhou no bootstrap por ausência de `sandboxPolicy`; a verificação usou
+Chrome headless local com Playwright temporário, sem alterar dependências.
+Esse smoke não substitui testes manuais exaustivos de todas as cartas e
+combinações de modais. A integração desta etapa depende da revisão do PR.
 
 ## Objetivo
 

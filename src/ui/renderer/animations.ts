@@ -1,3 +1,21 @@
+import type Renderer from "../Renderer.js";
+import type { UiPoint, UiRect } from "../../core/contracts/ui.js";
+import type { PlayerId } from "../../core/contracts/primitives.js";
+import type {
+  UiCard,
+  LpPlayer,
+  LpChangeOptions,
+  LpQueueEntry,
+  LpDisplayState,
+  DamageHitElement,
+} from "./types.js";
+
+export interface CardLayoutOptions {
+  duration?: number;
+  easing?: string;
+  minDistance?: number;
+}
+
 /**
  * Animation methods for Renderer
  * Handles: card layout FLIP animations and LP presentation.
@@ -18,7 +36,7 @@ function prefersReducedMotion() {
   );
 }
 
-function isVisibleCardElement(element) {
+function isVisibleCardElement(element: Element | null): element is Element {
   if (!element || typeof window === "undefined") return false;
   const rect = element.getBoundingClientRect();
   if (rect.width <= 0 || rect.height <= 0) return false;
@@ -27,7 +45,7 @@ function isVisibleCardElement(element) {
   return style.display !== "none" && style.visibility !== "hidden";
 }
 
-function getCardRectSnapshot(element) {
+function getCardRectSnapshot(element: Element): UiRect {
   const rect = element.getBoundingClientRect();
   return {
     left: rect.left,
@@ -37,33 +55,39 @@ function getCardRectSnapshot(element) {
   };
 }
 
-function escapeCardKey(cardKey) {
+function escapeCardKey(cardKey: string): string {
   if (typeof CSS !== "undefined" && typeof CSS.escape === "function") {
     return CSS.escape(cardKey);
   }
   return String(cardKey).replace(/["\\]/g, "\\$&");
 }
 
-function getCardKey(card) {
+function getCardKey(card: UiCard | null | undefined): string | null {
   const key = card?.instanceId ?? card?._instanceId ?? null;
   return key != null ? String(key) : null;
 }
 
-function findCardElementByKey(cardKey) {
+function findCardElementByKey(
+  cardKey: string | null | undefined,
+): HTMLElement | null {
   if (!cardKey || typeof document === "undefined") return null;
   const root = document.getElementById("game-container");
   if (!root) return null;
-  return root.querySelector(
+  return root.querySelector<HTMLElement>(
     `.card[data-card-key="${escapeCardKey(cardKey)}"]:not(.card-animation-ghost)`,
   );
 }
 
-function getVisibleCardRectByKey(cardKey) {
+function getVisibleCardRectByKey(
+  cardKey: string | null | undefined,
+): UiRect | null {
   const element = findCardElementByKey(cardKey);
   return isVisibleCardElement(element) ? getCardRectSnapshot(element) : null;
 }
 
-function getVisibleSourceCardRect(options = {}) {
+function getVisibleSourceCardRect(
+  options: LpChangeOptions = {},
+): UiRect | null {
   return (
     copyRect(options.sourceRect) ||
     getVisibleCardRectByKey(options.sourceCardKey) ||
@@ -71,40 +95,48 @@ function getVisibleSourceCardRect(options = {}) {
   );
 }
 
-function clamp(value, min, max) {
+function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
-function easeOutCubic(t) {
+function easeOutCubic(t: number): number {
   return 1 - Math.pow(1 - t, 3);
 }
 
-function waitMs(ms) {
-  return new Promise((resolve) => setTimeout(resolve, Math.max(0, ms)));
+function waitMs(ms: number): Promise<void> {
+  return new Promise<void>((resolve) => setTimeout(resolve, Math.max(0, ms)));
 }
 
-function getPlayerKey(player) {
+function getPlayerKey(player: LpPlayer | null | undefined): PlayerId {
   return player?.id === "bot" ? "bot" : "player";
 }
 
-function readNumber(text) {
+function readNumber(text: unknown): number | null {
   const value = Number(String(text ?? "").replace(/[^\d.-]/g, ""));
   return Number.isFinite(value) ? value : null;
 }
 
-function getLpElement(renderer, player) {
+function getLpElement(
+  renderer: Renderer,
+  player: LpPlayer,
+): HTMLElement | null {
   const key = getPlayerKey(player);
-  return key === "player" ? renderer.elements.playerLP : renderer.elements.botLP;
+  return key === "player"
+    ? renderer.elements.playerLP
+    : renderer.elements.botLP;
 }
 
-function getLpCounter(renderer, player) {
+function getLpCounter(
+  renderer: Renderer,
+  player: LpPlayer,
+): HTMLElement | null {
   return getLpElement(renderer, player)?.closest(".lp-counter") || null;
 }
 
-function getAnimationLayer() {
+function getAnimationLayer(): HTMLElement | null {
   const root = document.getElementById("game-container");
   if (!root) return null;
-  let layer = root.querySelector(":scope > .card-animation-layer");
+  let layer = root.querySelector<HTMLElement>(":scope > .card-animation-layer");
   if (!layer) {
     layer = document.createElement("div");
     layer.className = "card-animation-layer";
@@ -113,7 +145,7 @@ function getAnimationLayer() {
   return layer;
 }
 
-function copyRect(rect) {
+function copyRect(rect: UiRect | null | undefined): UiRect | null {
   if (!rect) return null;
   return {
     left: rect.left,
@@ -123,31 +155,33 @@ function copyRect(rect) {
   };
 }
 
-function getRectCenter(rect) {
+function getRectCenter(rect: UiRect): UiPoint {
   return {
     x: rect.left + rect.width / 2,
     y: rect.top + rect.height / 2,
   };
 }
 
-function getPlayerAreaRect(playerId) {
+function getPlayerAreaRect(playerId: PlayerId): UiRect | null {
   const element = document.getElementById(
     playerId === "bot" ? "bot-area" : "player-area",
   );
   return element ? copyRect(element.getBoundingClientRect()) : null;
 }
 
-function getPlayerAreaElement(player) {
+function getPlayerAreaElement(player: LpPlayer): DamageHitElement | null {
   if (typeof document === "undefined") return null;
   const playerId = getPlayerKey(player);
-  return document.getElementById(playerId === "bot" ? "bot-area" : "player-area");
+  return document.getElementById(
+    playerId === "bot" ? "bot-area" : "player-area",
+  );
 }
 
-function randomBetween(min, max) {
+function randomBetween(min: number, max: number): number {
   return min + Math.random() * (max - min);
 }
 
-function randomPointNearRect(rect) {
+function randomPointNearRect(rect: UiRect): UiPoint {
   const center = getRectCenter(rect);
   return {
     x: center.x + randomBetween(-40, 40),
@@ -155,15 +189,24 @@ function randomPointNearRect(rect) {
   };
 }
 
-function randomPointInsideRect(rect, margin = 36) {
+function randomPointInsideRect(rect: UiRect, margin = 36): UiPoint {
   const safeMargin = Math.min(margin, rect.width / 3, rect.height / 3);
   return {
-    x: randomBetween(rect.left + safeMargin, rect.left + rect.width - safeMargin),
-    y: randomBetween(rect.top + safeMargin, rect.top + rect.height - safeMargin),
+    x: randomBetween(
+      rect.left + safeMargin,
+      rect.left + rect.width - safeMargin,
+    ),
+    y: randomBetween(
+      rect.top + safeMargin,
+      rect.top + rect.height - safeMargin,
+    ),
   };
 }
 
-function getDamageOrigin(player, options = {}) {
+function getDamageOrigin(
+  player: LpPlayer,
+  options: LpChangeOptions = {},
+): UiPoint {
   if (
     options.originPoint &&
     Number.isFinite(options.originPoint.x) &&
@@ -199,28 +242,31 @@ function getDamageOrigin(player, options = {}) {
   return randomPointInsideRect(areaRect, 36);
 }
 
-function getDamageDestination(renderer, player) {
+function getDamageDestination(renderer: Renderer, player: LpPlayer): UiPoint {
   const counter = getLpCounter(renderer, player);
   const rect = counter?.getBoundingClientRect?.();
-  if (rect?.width > 0 && rect.height > 0) return getRectCenter(rect);
+  if (rect?.width! > 0 && rect!.height > 0) return getRectCenter(rect!);
 
   const areaRect = getPlayerAreaRect(getPlayerKey(player));
   return areaRect ? getRectCenter(areaRect) : { x: 0, y: 0 };
 }
 
-function finishAnimation(animation, duration) {
+function finishAnimation(
+  animation: Animation | null,
+  duration: number,
+): Promise<unknown> {
   if (animation?.finished && typeof animation.finished.then === "function") {
-    return animation.finished.catch(() => { });
+    return animation.finished.catch(() => {});
   }
   return waitMs(duration);
 }
 
-function getOdometerDuration(amount) {
+function getOdometerDuration(amount: number): number {
   const value = Math.max(0, Number(amount || 0));
   return clamp(560 + value * 0.24, LP_ODOMETER_MIN_MS, LP_ODOMETER_MAX_MS);
 }
 
-function playCounterFlash(counter, kind) {
+function playCounterFlash(counter: HTMLElement | null, kind: string): void {
   if (!counter) return;
   const flashClass = kind === "heal" ? "lp-flash-heal" : "lp-flash-damage";
   counter.classList.remove("lp-flash-heal", "lp-flash-damage");
@@ -230,7 +276,11 @@ function playCounterFlash(counter, kind) {
   }, 420);
 }
 
-function playEffectDamageShake(renderer, amount, options = {}) {
+function playEffectDamageShake(
+  renderer: Renderer,
+  amount: number,
+  options: LpChangeOptions = {},
+): void {
   if (options.cause !== "effect" || options.screenShake === false) return;
   if (prefersReducedMotion()) return;
   const pixiVfx = renderer?.pixiVfx;
@@ -249,12 +299,16 @@ function playEffectDamageShake(renderer, amount, options = {}) {
 /**
  * @this {import('../Renderer.js').default}
  */
-export function showFieldDamageHit(player, options = {}) {
+export function showFieldDamageHit(
+  this: Renderer,
+  player: LpPlayer,
+  options: LpChangeOptions = {},
+): boolean {
   const area = getPlayerAreaElement(player);
   if (!area) return false;
 
   const duration = Number.isFinite(options.duration)
-    ? Math.max(0, options.duration)
+    ? Math.max(0, options.duration!)
     : prefersReducedMotion()
       ? 180
       : FIELD_DAMAGE_HIT_MS;
@@ -276,11 +330,16 @@ export function showFieldDamageHit(player, options = {}) {
   return true;
 }
 
-async function playTravelingLpChangeNumber(renderer, player, amount, options = {}) {
+async function playTravelingLpChangeNumber(
+  renderer: Renderer,
+  player: LpPlayer,
+  amount: number,
+  options: LpChangeOptions = {},
+): Promise<void> {
   const onArrival =
     typeof options.onArrival === "function" ? options.onArrival : null;
   let arrived = false;
-  let arrivalTimer = null;
+  let arrivalTimer: ReturnType<typeof setTimeout> | null = null;
   const markArrived = () => {
     if (arrived) return;
     arrived = true;
@@ -318,12 +377,14 @@ async function playTravelingLpChangeNumber(renderer, player, amount, options = {
   const dx = destination.x - origin.x;
   const dy = destination.y - origin.y;
   const holdMs = Number.isFinite(options.holdMs)
-    ? options.holdMs
+    ? options.holdMs!
     : LP_DAMAGE_HOLD_MS;
   const travelMs = Number.isFinite(options.travelMs)
-    ? options.travelMs
+    ? options.travelMs!
     : LP_DAMAGE_TRAVEL_MS;
-  const fadeMs = Number.isFinite(options.fadeMs) ? options.fadeMs : LP_DAMAGE_FADE_MS;
+  const fadeMs = Number.isFinite(options.fadeMs)
+    ? options.fadeMs!
+    : LP_DAMAGE_FADE_MS;
   const duration = Math.max(1, holdMs + travelMs + fadeMs);
   const holdOffset = clamp(holdMs / duration, 0.05, 0.7);
   const arrivalOffset = clamp((holdMs + travelMs) / duration, holdOffset, 0.98);
@@ -332,40 +393,40 @@ async function playTravelingLpChangeNumber(renderer, player, amount, options = {
   const animation =
     typeof float.animate === "function"
       ? float.animate(
-        [
+          [
+            {
+              opacity: 0,
+              transform: "translate(0, 0) translate(-50%, -50%) scale(0.82)",
+              offset: 0,
+            },
+            {
+              opacity: 1,
+              transform: "translate(0, 0) translate(-50%, -50%) scale(1.08)",
+              offset: 0.16,
+            },
+            {
+              opacity: 1,
+              transform: "translate(0, 0) translate(-50%, -50%) scale(1)",
+              offset: holdOffset,
+              easing: "cubic-bezier(0.24, 0.68, 0.34, 1)",
+            },
+            {
+              opacity: 0.92,
+              transform: `translate(${dx}px, ${dy}px) translate(-50%, -50%) scale(0.72)`,
+              offset: arrivalOffset,
+              easing: "linear",
+            },
+            {
+              opacity: 0,
+              transform: `translate(${dx}px, ${dy}px) translate(-50%, -50%) scale(0.48)`,
+              offset: 1,
+            },
+          ],
           {
-            opacity: 0,
-            transform: "translate(0, 0) translate(-50%, -50%) scale(0.82)",
-            offset: 0,
-          },
-          {
-            opacity: 1,
-            transform: "translate(0, 0) translate(-50%, -50%) scale(1.08)",
-            offset: 0.16,
-          },
-          {
-            opacity: 1,
-            transform: "translate(0, 0) translate(-50%, -50%) scale(1)",
-            offset: holdOffset,
-            easing: "cubic-bezier(0.24, 0.68, 0.34, 1)",
-          },
-          {
-            opacity: 0.92,
-            transform: `translate(${dx}px, ${dy}px) translate(-50%, -50%) scale(0.72)`,
-            offset: arrivalOffset,
+            duration,
             easing: "linear",
           },
-          {
-            opacity: 0,
-            transform: `translate(${dx}px, ${dy}px) translate(-50%, -50%) scale(0.48)`,
-            offset: 1,
-          },
-        ],
-        {
-          duration,
-          easing: "linear",
-        },
-      )
+        )
       : null;
 
   arrivalTimer = setTimeout(markArrived, arrivalMs);
@@ -378,7 +439,12 @@ async function playTravelingLpChangeNumber(renderer, player, amount, options = {
   }
 }
 
-function trackFloatingLpChangeNumber(renderer, player, state, entry) {
+function trackFloatingLpChangeNumber(
+  renderer: Renderer,
+  player: LpPlayer,
+  state: LpDisplayState | null,
+  entry: LpQueueEntry,
+): Promise<void> | null {
   if (prefersReducedMotion()) return null;
   if (!state) return null;
 
@@ -386,8 +452,8 @@ function trackFloatingLpChangeNumber(renderer, player, state, entry) {
     state.floatingPromises = new Set();
   }
 
-  let resolveArrival;
-  const arrivalPromise = new Promise((resolve) => {
+  let resolveArrival!: (value: boolean) => void;
+  const arrivalPromise = new Promise<boolean>((resolve) => {
     resolveArrival = resolve;
   });
   let arrivalSettled = false;
@@ -398,15 +464,10 @@ function trackFloatingLpChangeNumber(renderer, player, state, entry) {
   };
   entry.floatArrivalPromise = arrivalPromise;
 
-  const promise = playTravelingLpChangeNumber(
-    renderer,
-    player,
-    entry.amount,
-    {
-      ...entry,
-      onArrival: settleArrival,
-    },
-  ).catch((error) => {
+  const promise = playTravelingLpChangeNumber(renderer, player, entry.amount, {
+    ...entry,
+    onArrival: settleArrival,
+  }).catch((error) => {
     console.warn("[Renderer] LP floating number failed.", error);
     settleArrival();
   });
@@ -418,7 +479,11 @@ function trackFloatingLpChangeNumber(renderer, player, state, entry) {
   return promise;
 }
 
-async function runLpDamageQueue(renderer, player, state) {
+async function runLpDamageQueue(
+  renderer: Renderer,
+  player: LpPlayer,
+  state: LpDisplayState,
+): Promise<void> {
   if (state.presentationPromise) return state.presentationPromise;
 
   state.presentationPromise = (async () => {
@@ -427,7 +492,7 @@ async function runLpDamageQueue(renderer, player, state) {
 
     try {
       while (state.queue.length > 0) {
-        const entry = state.queue.shift();
+        const entry = state.queue.shift()!;
         if (entry.holdFinalUntilReal === true) {
           state.holdFinalUntilReal = true;
         }
@@ -452,7 +517,7 @@ async function runLpDamageQueue(renderer, player, state) {
           entry.floatArrivalPromise &&
           typeof entry.floatArrivalPromise.then === "function"
         ) {
-          await entry.floatArrivalPromise.catch(() => { });
+          await entry.floatArrivalPromise.catch(() => {});
         }
 
         await renderer.animateLpOdometer(
@@ -485,7 +550,7 @@ async function runLpDamageQueue(renderer, player, state) {
 /**
  * @this {import('../Renderer.js').default}
  */
-export function captureCardRects() {
+export function captureCardRects(this: Renderer): Map<string, UiRect> {
   if (prefersReducedMotion() || typeof document === "undefined") {
     return new Map();
   }
@@ -493,20 +558,26 @@ export function captureCardRects() {
   const root = document.getElementById("game-container");
   if (!root) return new Map();
 
-  const rects = new Map();
-  root.querySelectorAll(".card[data-card-key]").forEach((element) => {
-    if (!isVisibleCardElement(element)) return;
-    const key = element.dataset.cardKey;
-    if (!key) return;
-    rects.set(key, getCardRectSnapshot(element));
-  });
+  const rects = new Map<string, UiRect>();
+  root
+    .querySelectorAll<HTMLElement>(".card[data-card-key]")
+    .forEach((element) => {
+      if (!isVisibleCardElement(element)) return;
+      const key = element.dataset.cardKey;
+      if (!key) return;
+      rects.set(key, getCardRectSnapshot(element));
+    });
   return rects;
 }
 
 /**
  * @this {import('../Renderer.js').default}
  */
-export function animateCardLayout(previousRects, options = {}) {
+export function animateCardLayout(
+  this: Renderer,
+  previousRects: ReadonlyMap<string, UiRect> | null | undefined,
+  options: CardLayoutOptions = {},
+): Promise<boolean> {
   if (
     prefersReducedMotion() ||
     typeof document === "undefined" ||
@@ -519,48 +590,47 @@ export function animateCardLayout(previousRects, options = {}) {
   const root = document.getElementById("game-container");
   if (!root) return Promise.resolve(false);
 
-  const duration = Number.isFinite(options.duration) ? options.duration : 180;
+  const duration = Number.isFinite(options.duration) ? options.duration! : 180;
   const easing = options.easing || "cubic-bezier(0.2, 0.8, 0.2, 1)";
   const minDistance = Number.isFinite(options.minDistance)
-    ? options.minDistance
+    ? options.minDistance!
     : 2;
-  const animationPromises = [];
+  const animationPromises: Promise<unknown>[] = [];
 
-  root.querySelectorAll(".card[data-card-key]").forEach((element) => {
-    if (!isVisibleCardElement(element)) return;
-    if (typeof element.animate !== "function") return;
+  root
+    .querySelectorAll<HTMLElement>(".card[data-card-key]")
+    .forEach((element) => {
+      if (!isVisibleCardElement(element)) return;
+      if (typeof element.animate !== "function") return;
 
-    const key = element.dataset.cardKey;
-    const previous = previousRects.get(key);
-    if (!previous) return;
+      const key = element.dataset.cardKey;
+      const previous = previousRects.get(key!);
+      if (!previous) return;
 
-    const current = getCardRectSnapshot(element);
-    const deltaX = previous.left - current.left;
-    const deltaY = previous.top - current.top;
-    if (Math.hypot(deltaX, deltaY) < minDistance) return;
+      const current = getCardRectSnapshot(element);
+      const deltaX = previous.left - current.left;
+      const deltaY = previous.top - current.top;
+      if (Math.hypot(deltaX, deltaY) < minDistance) return;
 
-    const computedTransform = window.getComputedStyle(element).transform;
-    const finalTransform =
-      computedTransform && computedTransform !== "none"
-        ? computedTransform
-        : "none";
-    const startTransform =
-      finalTransform === "none"
-        ? `translate(${deltaX}px, ${deltaY}px)`
-        : `translate(${deltaX}px, ${deltaY}px) ${finalTransform}`;
+      const computedTransform = window.getComputedStyle(element).transform;
+      const finalTransform =
+        computedTransform && computedTransform !== "none"
+          ? computedTransform
+          : "none";
+      const startTransform =
+        finalTransform === "none"
+          ? `translate(${deltaX}px, ${deltaY}px)`
+          : `translate(${deltaX}px, ${deltaY}px) ${finalTransform}`;
 
-    const animation = element.animate(
-      [
-        { transform: startTransform },
-        { transform: finalTransform },
-      ],
-      {
-        duration,
-        easing,
-      }
-    );
-    animationPromises.push(finishAnimation(animation, duration));
-  });
+      const animation = element.animate(
+        [{ transform: startTransform }, { transform: finalTransform }],
+        {
+          duration,
+          easing,
+        },
+      );
+      animationPromises.push(finishAnimation(animation, duration));
+    });
 
   if (animationPromises.length === 0) {
     return Promise.resolve(false);
@@ -571,7 +641,10 @@ export function animateCardLayout(previousRects, options = {}) {
 /**
  * @this {import('../Renderer.js').default}
  */
-export function ensureLpDisplayState(player) {
+export function ensureLpDisplayState(
+  this: Renderer,
+  player: LpPlayer | null | undefined,
+): LpDisplayState | null {
   if (!player) return null;
   if (!this.lpDisplayState) {
     this.lpDisplayState = {};
@@ -579,11 +652,11 @@ export function ensureLpDisplayState(player) {
 
   const key = getPlayerKey(player);
   if (!this.lpDisplayState[key]) {
-    const lpEl = getLpElement(this, player);
+    const lpEl = getLpElement(this, player!);
     const textValue = readNumber(lpEl?.textContent);
     const initial = Number.isFinite(Number(player.lp))
       ? Number(player.lp)
-      : textValue ?? 0;
+      : (textValue ?? 0);
     this.lpDisplayState[key] = {
       displayed: Math.max(0, Math.round(initial)),
       animating: false,
@@ -601,21 +674,28 @@ export function ensureLpDisplayState(player) {
 /**
  * @this {import('../Renderer.js').default}
  */
-export function getDisplayedLp(player) {
+export function getDisplayedLp(
+  this: Renderer,
+  player: LpPlayer | null | undefined,
+): number | null {
   return this.ensureLpDisplayState?.(player)?.displayed ?? null;
 }
 
 /**
  * @this {import('../Renderer.js').default}
  */
-export function setDisplayedLp(player, value) {
+export function setDisplayedLp(
+  this: Renderer,
+  player: LpPlayer | null | undefined,
+  value: number,
+): boolean {
   const state = this.ensureLpDisplayState?.(player);
   if (!state) return false;
 
   const lp = Math.max(0, Math.round(Number(value || 0)));
   state.displayed = lp;
 
-  const el = getLpElement(this, player);
+  const el = getLpElement(this, player!);
   if (el) {
     el.textContent = String(lp);
   }
@@ -625,7 +705,10 @@ export function setDisplayedLp(player, value) {
 /**
  * @this {import('../Renderer.js').default}
  */
-export function hasActiveLpPresentation(player) {
+export function hasActiveLpPresentation(
+  this: Renderer,
+  player: LpPlayer | null | undefined,
+): boolean {
   const state = this.ensureLpDisplayState?.(player);
   return (
     !!state &&
@@ -639,13 +722,20 @@ export function hasActiveLpPresentation(player) {
 /**
  * @this {import('../Renderer.js').default}
  */
-export function waitForLpPresentation(player = null) {
-  const states = [];
+export function waitForLpPresentation(
+  this: Renderer,
+  player: LpPlayer | null = null,
+): Promise<boolean> {
+  const states: LpDisplayState[] = [];
   if (player) {
     const state = this.ensureLpDisplayState?.(player);
     if (state) states.push(state);
   } else if (this.lpDisplayState && typeof this.lpDisplayState === "object") {
-    states.push(...Object.values(this.lpDisplayState).filter(Boolean));
+    states.push(
+      ...Object.values(this.lpDisplayState).filter(
+        (state): state is LpDisplayState => Boolean(state),
+      ),
+    );
   }
 
   const pending = states
@@ -662,7 +752,12 @@ export function waitForLpPresentation(player = null) {
 /**
  * @this {import('../Renderer.js').default}
  */
-export function showLpDamageSequence(player, amount, options = {}) {
+export function showLpDamageSequence(
+  this: Renderer,
+  player: LpPlayer | null | undefined,
+  amount: number,
+  options: LpChangeOptions = {},
+): boolean {
   if (!player || !amount) return false;
   const value = Math.max(0, Math.round(Number(amount || 0)));
   if (!Number.isFinite(value) || value <= 0) return false;
@@ -670,16 +765,14 @@ export function showLpDamageSequence(player, amount, options = {}) {
   const state = this.ensureLpDisplayState?.(player);
   if (!state) return false;
   const wasIdle =
-    !state.animating &&
-    state.queue.length === 0 &&
-    !state.presentationPromise;
+    !state.animating && state.queue.length === 0 && !state.presentationPromise;
 
   const fromLp = Number.isFinite(options.fromLp)
-    ? Math.max(0, Math.round(options.fromLp))
+    ? Math.max(0, Math.round(options.fromLp!))
     : state.displayed;
   const kind = options.kind === "heal" ? "heal" : "damage";
   const toLp = Number.isFinite(options.toLp)
-    ? Math.max(0, Math.round(options.toLp))
+    ? Math.max(0, Math.round(options.toLp!))
     : kind === "heal"
       ? fromLp + value
       : Math.max(0, fromLp - value);
@@ -688,7 +781,7 @@ export function showLpDamageSequence(player, amount, options = {}) {
     this.setDisplayedLp?.(player, fromLp);
   }
 
-  const entry = {
+  const entry: LpQueueEntry = {
     ...options,
     amount: value,
     fromLp,
@@ -719,14 +812,20 @@ export function showLpDamageSequence(player, amount, options = {}) {
 /**
  * @this {import('../Renderer.js').default}
  */
-export function animateLpOdometer(player, fromLp, toLp, options = {}) {
+export function animateLpOdometer(
+  this: Renderer,
+  player: LpPlayer | null | undefined,
+  fromLp: number,
+  toLp: number,
+  options: LpChangeOptions = {},
+): Promise<boolean> {
   const state = this.ensureLpDisplayState?.(player);
   if (!state) return Promise.resolve(false);
 
   const from = Math.max(0, Math.round(Number(fromLp || 0)));
   const to = Math.max(0, Math.round(Number(toLp || 0)));
   const amount = Math.abs(from - to);
-  const counter = getLpCounter(this, player);
+  const counter = getLpCounter(this, player!);
   const kind = options.kind === "heal" || to > from ? "heal" : "damage";
 
   if (prefersReducedMotion() || amount <= 0) {
@@ -736,7 +835,7 @@ export function animateLpOdometer(player, fromLp, toLp, options = {}) {
   }
 
   const duration = Number.isFinite(options.duration)
-    ? options.duration
+    ? options.duration!
     : getOdometerDuration(options.amount ?? amount);
   const startedAt =
     typeof performance !== "undefined" && typeof performance.now === "function"
@@ -745,8 +844,8 @@ export function animateLpOdometer(player, fromLp, toLp, options = {}) {
 
   counter?.classList.add("lp-odometer-active", `lp-odometer-${kind}`);
 
-  return new Promise((resolve) => {
-    const step = (nowTime) => {
+  return new Promise<boolean>((resolve) => {
+    const step = (nowTime: number) => {
       const now = Number.isFinite(nowTime) ? nowTime : Date.now();
       const progress = clamp((now - startedAt) / duration, 0, 1);
       const eased = easeOutCubic(progress);
@@ -780,7 +879,12 @@ export function animateLpOdometer(player, fromLp, toLp, options = {}) {
 /**
  * @this {import('../Renderer.js').default}
  */
-export function showLpChange(player, amount, options = {}) {
+export function showLpChange(
+  this: Renderer,
+  player: LpPlayer | null | undefined,
+  amount: number,
+  options: LpChangeOptions = {},
+): boolean | void {
   if (!player || !amount) return;
   const value = Number(amount);
   if (!Number.isFinite(value) || value === 0) return;
@@ -791,7 +895,7 @@ export function showLpChange(player, amount, options = {}) {
       ...options,
       cause: options.cause || "effect",
       fromLp: options.fromLp,
-      toLp: Number.isFinite(options.toLp) ? options.toLp : player.lp,
+      toLp: Number.isFinite(options.toLp) ? options.toLp! : player.lp,
     });
   }
 
@@ -801,13 +905,13 @@ export function showLpChange(player, amount, options = {}) {
       kind: "heal",
       cause: options.cause || "effect",
       fromLp: options.fromLp,
-      toLp: Number.isFinite(options.toLp) ? options.toLp : player.lp,
+      toLp: Number.isFinite(options.toLp) ? options.toLp! : player.lp,
     }) === true;
 
   if (sequencePlayed) return true;
 
   const container = document.getElementById(
-    player.id === "player" ? "player-area" : "bot-area"
+    player.id === "player" ? "player-area" : "bot-area",
   );
   if (!container) return;
 

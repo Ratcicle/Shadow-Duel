@@ -1,11 +1,34 @@
-export function createGameLauncher({ Game, Renderer }) {
-  let game = null;
+import type { ExactStartWithDecksOptions } from "../../core/contracts/game.js";
+import type GameRuntime from "../../core/Game.js";
+import type RendererRuntime from "../Renderer.js";
+export interface NormalDuelConfig {
+  botPreset: string;
+  deck: readonly number[];
+  extraDeck: readonly number[];
+  playerArchetype: string;
+}
+export interface LaboratoryDuelConfig {
+  useBot: boolean;
+  botPreset: string;
+  revealBotHand: boolean;
+  laboratoryMode: string;
+  setup: Parameters<GameRuntime["startLaboratory"]>[0];
+  duelDecks: Omit<ExactStartWithDecksOptions, "exactDecks">;
+}
+export function createGameLauncher({
+  Game,
+  Renderer,
+}: {
+  Game: typeof GameRuntime;
+  Renderer: typeof RendererRuntime;
+}) {
+  let game: GameRuntime | null = null;
 
   function createRenderer() {
     return new Renderer();
   }
 
-  function disposeActiveGame(reason) {
+  function disposeActiveGame(reason: string) {
     game?.dispose?.(reason);
     game = null;
   }
@@ -15,7 +38,7 @@ export function createGameLauncher({ Game, Renderer }) {
     deck,
     extraDeck,
     playerArchetype,
-  }) {
+  }: NormalDuelConfig) {
     disposeActiveGame("start_normal_duel");
     const renderer = createRenderer();
     game = new Game({
@@ -38,7 +61,7 @@ export function createGameLauncher({ Game, Renderer }) {
     laboratoryMode,
     setup,
     duelDecks,
-  }) {
+  }: LaboratoryDuelConfig) {
     disposeActiveGame("start_laboratory_duel");
     const renderer = createRenderer();
     game = new Game({
@@ -53,14 +76,15 @@ export function createGameLauncher({ Game, Renderer }) {
     });
 
     if (laboratoryMode === "duel") {
-      await game.startWithDecks({
+      const startOptions = {
         ...duelDecks,
         useBot,
         revealBotHand,
         laboratoryMode: true,
         exactDecks: true,
         startAtDrawPhase: true,
-      });
+      } satisfies ExactStartWithDecksOptions & { useBot: boolean };
+      await game.startWithDecks(startOptions);
       return game;
     }
 

@@ -1,3 +1,32 @@
+import type BotArenaRuntime from "../../core/BotArena.js";
+import type GameRuntime from "../../core/Game.js";
+import type BotRuntime from "../../core/Bot.js";
+import type ShadowHeartStrategyRuntime from "../../core/ai/ShadowHeartStrategy.js";
+import type LuminarchStrategyRuntime from "../../core/ai/LuminarchStrategy.js";
+import type {
+  ArenaProgressStats,
+  ArenaCompletionStats,
+  ArenaSpeed,
+  ArenaCompletedDuelResult,
+} from "../../core/contracts/arena.js";
+import type { MainDom } from "./domRefs.js";
+import type { ValidationPanel } from "./validationPanel.js";
+interface ArenaControllerOptions {
+  dom: MainDom["botArena"];
+  startScreenRoot: HTMLElement | null;
+  validationPanel: ValidationPanel;
+  BotArena: typeof BotArenaRuntime;
+  Game: typeof GameRuntime;
+  Bot: typeof BotRuntime;
+  ShadowHeartStrategy: typeof ShadowHeartStrategyRuntime;
+  LuminarchStrategy: typeof LuminarchStrategyRuntime;
+}
+declare global {
+  interface Window {
+    botArenaInstance?: BotArenaRuntime | null;
+  }
+}
+
 export function createBotArenaController({
   dom,
   startScreenRoot,
@@ -7,8 +36,8 @@ export function createBotArenaController({
   Bot,
   ShadowHeartStrategy,
   LuminarchStrategy,
-}) {
-  let botArenaInstance = null;
+}: ArenaControllerOptions) {
+  let botArenaInstance: BotArenaRuntime | null = null;
   if (typeof window !== "undefined") {
     window.botArenaInstance = null;
   }
@@ -29,6 +58,7 @@ export function createBotArenaController({
   }
 
   function populateDecks() {
+    if (!dom.deckSeat1Select || !dom.deckSeat2Select) return;
     const options = [
       { id: "default", label: "Deck Padrão" },
       ...Bot.getAvailablePresets().map((preset) => ({
@@ -44,12 +74,12 @@ export function createBotArenaController({
       const opt1 = document.createElement("option");
       opt1.value = opt.id;
       opt1.textContent = opt.label;
-      dom.deckSeat1Select.appendChild(opt1);
+      dom.deckSeat1Select!.appendChild(opt1);
 
       const opt2 = document.createElement("option");
       opt2.value = opt.id;
       opt2.textContent = opt.label;
-      dom.deckSeat2Select.appendChild(opt2);
+      dom.deckSeat2Select!.appendChild(opt2);
     });
 
     dom.deckSeat1Select.value = "shadowheart";
@@ -57,6 +87,16 @@ export function createBotArenaController({
   }
 
   function resetStats() {
+    if (
+      !dom.completed ||
+      !dom.wins1 ||
+      !dom.wins2 ||
+      !dom.draws ||
+      !dom.avgTurns ||
+      !dom.status ||
+      !dom.log
+    )
+      return;
     dom.completed.textContent = "0";
     dom.wins1.textContent = "0";
     dom.wins2.textContent = "0";
@@ -71,6 +111,17 @@ export function createBotArenaController({
   }
 
   async function start() {
+    if (
+      !dom.deckSeat1Select ||
+      !dom.deckSeat2Select ||
+      !dom.numDuelsSelect ||
+      !dom.speedSelect ||
+      !dom.startButton ||
+      !dom.cancelButton ||
+      !dom.status ||
+      !dom.modal
+    )
+      return;
     if (!validationPanel.run()) {
       return;
     }
@@ -78,7 +129,7 @@ export function createBotArenaController({
     const preset1 = dom.deckSeat1Select.value;
     const preset2 = dom.deckSeat2Select.value;
     const numDuels = parseInt(dom.numDuelsSelect.value) || 10;
-    const speed = dom.speedSelect.value || "1x";
+    const speed = (dom.speedSelect.value || "1x") as ArenaSpeed;
     const autoPause = dom.autoPauseCheckbox?.checked || false;
 
     dom.startButton.disabled = true;
@@ -114,7 +165,7 @@ export function createBotArenaController({
       );
     } catch (err) {
       console.error("Bot Arena error:", err);
-      alert(`Erro na arena: ${err.message}`);
+      alert(`Erro na arena: ${(err as Error).message}`);
       dom.status.textContent = "Erro";
       dom.startButton.disabled = false;
       dom.cancelButton.disabled = false;
@@ -124,14 +175,25 @@ export function createBotArenaController({
     }
   }
 
-  function updateProgress(progress) {
+  function updateProgress(progress: ArenaProgressStats) {
+    if (
+      !dom.completed ||
+      !dom.wins1 ||
+      !dom.wins2 ||
+      !dom.draws ||
+      !dom.avgTurns
+    )
+      return;
     dom.completed.textContent = progress.completed.toString();
     dom.wins1.textContent = progress.wins1.toString();
     dom.wins2.textContent = progress.wins2.toString();
     dom.draws.textContent = progress.draws.toString();
     dom.avgTurns.textContent = progress.avgTurns;
 
-    const result = progress.lastResult;
+    // Cancelled results retain the legacy display fallback with absent fields.
+    const result: Pick<ArenaProgressStats["lastResult"], "type" | "duelNumber"> &
+      Partial<Pick<ArenaCompletedDuelResult, "winner" | "turns" | "message">> =
+      progress.lastResult;
     if (result) {
       if (result.type === "error") {
         addLogEntry(`❌ ${result.message}`, "error");
@@ -168,7 +230,7 @@ export function createBotArenaController({
     }
   }
 
-  function addLogEntry(text, className = "") {
+  function addLogEntry(text: string, className = "") {
     if (!dom.log) return;
 
     if (
@@ -185,13 +247,14 @@ export function createBotArenaController({
     dom.log.scrollTop = dom.log.scrollHeight;
   }
 
-  function finish(result) {
+  function finish(result: ArenaCompletionStats) {
+    if (!dom.startButton || !dom.cancelButton || !dom.status || !dom.modal)
+      return;
     dom.startButton.disabled = false;
     dom.cancelButton.disabled = false;
     if (dom.exportStrategicButton) {
-      dom.exportStrategicButton.disabled = !botArenaInstance
-        ?.getAnalytics?.()
-        ?.duelRecords?.length;
+      dom.exportStrategicButton.disabled =
+        !botArenaInstance?.getAnalytics?.()?.duelRecords?.length;
     }
     dom.status.textContent = "Concluído";
     addLogEntry(`✔️ Arena concluída! ${result.completed} duelos.`);
@@ -212,7 +275,10 @@ export function createBotArenaController({
   function bind() {
     dom.startButton?.addEventListener("click", start);
     dom.cancelButton?.addEventListener("click", close);
-    dom.exportStrategicButton?.addEventListener("click", downloadStrategicReport);
+    dom.exportStrategicButton?.addEventListener(
+      "click",
+      downloadStrategicReport,
+    );
     dom.closeButton?.addEventListener("click", close);
   }
 

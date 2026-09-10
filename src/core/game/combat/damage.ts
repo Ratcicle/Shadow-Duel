@@ -16,7 +16,7 @@ interface DamagePresentationOptions {
   cause?: string;
   sourceCard?: GameCard | null;
   targetCard?: GameCard | null;
-  sourceRect?: object | null;
+  sourceRect?: import("../../contracts/ui.js").UiRect | null;
   targetRect?: object | null;
   battleImpactRect?: object | null;
   contactRect?: object | null;
