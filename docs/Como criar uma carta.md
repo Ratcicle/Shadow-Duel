@@ -1,10 +1,21 @@
 # Como criar uma carta
 
-Fachada publica: `src/data/cards.js`.
+Fachada publica: `src/data/cards.ts`.
 
 As cartas ficam em modulos por grupo dentro de `src/data/cards/`. Ao criar uma
-carta, edite o modulo do grupo correto e deixe `src/data/cards.js` apenas como
+carta, edite o modulo do grupo correto e deixe `src/data/cards.ts` apenas como
 fachada de exportacao.
+
+Os arquivos físicos são TypeScript; mantenha `.js` nos imports relativos.
+Cada coleção usa o schema canônico sem apagar os literais específicos:
+
+```ts
+import type { RawCardDefinition } from "../../core/contracts/cards.js";
+
+export const cards = [
+  // Definições declarativas do grupo.
+] satisfies readonly RawCardDefinition[];
+```
 
 Este documento descreve o contrato atual do Shadow Duel. As fontes de verdade
 no código são:
@@ -15,7 +26,7 @@ no código são:
   `ActionByType` e seus mapas fechados por domínio.
 - `src/core/actionHandlers/actionBindings.ts`: liga cada tipo a handler ou proxy.
 - `src/core/actionHandlers/actionCatalog.ts`: documenta campos aceitos por action.
-- `src/data/cards/ranges.js`: registra as faixas oficiais de IDs por grupo.
+- `src/data/cards/ranges.ts`: registra as faixas oficiais de IDs por grupo.
 - `src/core/EffectEngine.ts`: avalia conditions, passives, custos e filtros.
 - `src/core/effects/targeting/selection.ts`: resolve targets.
 - `src/core/effects/triggers/collectors.ts`: define quais eventos disparam quais efeitos.
@@ -75,17 +86,17 @@ tributeValue: {
 
 | Faixa | Modulo | Grupo |
 | --- | --- | --- |
-| `001-100` | `src/data/cards/generic.js` | Genericas/Core |
-| `101-150` | `src/data/cards/shadowHeart.js` | Shadow-Heart |
-| `151-200` | `src/data/cards/luminarch.js` | Luminarch |
-| `201-250` | `src/data/cards/void.js` | Void |
-| `251-300` | `src/data/cards/dragon.js` | Dragon / Extreme Dragons |
-| `301-350` | `src/data/cards/arcanist.js` | Arcanist |
-| `351-400` | `src/data/cards/miragebound.js` | Miragebound |
-| `401-450` | `src/data/cards/bloomrot.js` | Bloomrot |
-| `451-500` | `src/data/cards/burningWest.js` | Burning West |
-| `501-550` | `src/data/cards/techZero.js` | Tech-Zero |
-| `551-600` | `src/data/cards/vulcanomaton.js` | Vulcanomaton |
+| `001-100` | `src/data/cards/generic.ts` | Genericas/Core |
+| `101-150` | `src/data/cards/shadowHeart.ts` | Shadow-Heart |
+| `151-200` | `src/data/cards/luminarch.ts` | Luminarch |
+| `201-250` | `src/data/cards/void.ts` | Void |
+| `251-300` | `src/data/cards/dragon.ts` | Dragon / Extreme Dragons |
+| `301-350` | `src/data/cards/arcanist.ts` | Arcanist |
+| `351-400` | `src/data/cards/miragebound.ts` | Miragebound |
+| `401-450` | `src/data/cards/bloomrot.ts` | Bloomrot |
+| `451-500` | `src/data/cards/burningWest.ts` | Burning West |
+| `501-550` | `src/data/cards/techZero.ts` | Tech-Zero |
+| `551-600` | `src/data/cards/vulcanomaton.ts` | Vulcanomaton |
 
 `Polymerization` e staples compartilhadas ficam em `001-100`. Dragon e
 `Extreme Dragons` compartilham o mesmo modulo e a mesma faixa; `Extreme Dragons`

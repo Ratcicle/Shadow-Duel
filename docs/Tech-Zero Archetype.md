@@ -1,6 +1,6 @@
 # Tech-Zero — Catálogo do Arquétipo
 
-Fonte dos textos: `src/data/cards/techZero.js`, `src/data/cards/genericCards.js` e `public/locales/pt-br.json`.
+Fonte dos textos: `src/data/cards/techZero.ts`, `src/data/cards/generic.ts` e `public/locales/pt-br.json`.
 
 ## Resumo
 

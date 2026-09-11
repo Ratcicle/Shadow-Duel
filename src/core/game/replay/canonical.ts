@@ -1,4 +1,5 @@
 import { cardDatabase } from "../../../data/cards.js";
+import type { CardConstructorData } from "../../contracts/cards.js";
 import type { EffectDefinition } from "../../contracts/effects.js";
 import {
   CANONICAL_REPLAY_EVENT_NAMES,
@@ -160,9 +161,13 @@ export function hashCanonicalValue(value: unknown): string {
   return (hash >>> 0).toString(16).padStart(8, "0");
 }
 
+type SignatureCardDefinition = Pick<CardConstructorData,
+  "id" | "name" | "mustFirstBeSpecialSummonedBy" | "effects"
+>;
+
 export function getCardDatabaseSignature(): string {
   return hashCanonicalValue(
-    cardDatabase.map((card) => ({
+    cardDatabase.map((card: SignatureCardDefinition) => ({
       id: card.id,
       name: card.name,
       mustFirstBeSpecialSummonedBy:

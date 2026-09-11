@@ -1983,6 +1983,81 @@ Não tentar gerar um sistema completo de chaves tipadas para todos os textos ant
 
 # Etapa 11 — Converter fisicamente o banco de cartas
 
+## Entrega da Etapa 11
+
+Branch: `agent/typescript-card-database`. A baseline é a Etapa 10,
+commit `87ffc4f5f8360127cb922a358481ed603dd57a94`, no PR #61. Como esse PR
+continua aberto, a Etapa 11 usa sua branch como base para revisão; a integração
+deve respeitar essa dependência.
+
+### Arquivos e contratos
+
+Os 15 arquivos de `src/data/` são TypeScript físico: as 11 coleções
+(`generic`, `shadowHeart`, `luminarch`, `void`, `dragon`, `arcanist`,
+`miragebound`, `bloomrot`, `burningWest`, `techZero`, `vulcanomaton`),
+o agregador `cards.ts`, `cards/ranges.ts`, `cards/idMigration.ts` e `banlist.ts`.
+Todos os imports existentes continuam usando `.js`.
+
+Cada coleção substitui `@ts-check` e o `@satisfies` JSDoc por import de tipo e
+`satisfies readonly RawCardDefinition[]`. O conteúdo dos arrays foi preservado,
+incluindo formatação, IDs, textos, valores, effects e ordem das propriedades.
+O schema canônico da Etapa 3 não precisou de correções.
+
+O agregador verifica seus grupos e usa a união inferida `DatabaseCard` em
+`flatMap`, preservando os literais das coleções. `CardIdRange` e sua projeção
+de limites tipam o registry; migração de IDs preserva coerção, lookup e retorno
+original de entradas inválidas. A banlist verifica os status permitidos com
+`satisfies`, mantendo o mesmo `Object.freeze`.
+
+Quatro consumidores receberam somente anotações de leitura: `Player`,
+`actionHandlers/choice`, `game/replay/canonical` e
+`ai/common/planningDiagnostics`. O teste existente `gameModelsBehavior`
+também recebeu anotações nos dois callbacks de consulta ao banco. A inferência
+anterior do agregador JavaScript permitia consultas a propriedades opcionais
+ausentes de algumas variantes; os consumidores agora declaram essas projeções
+sem ampliar as definições autorais das cartas.
+
+AGENTS, o guia de criação de cartas, a estrutura do projeto e as fontes dos
+catálogos por arquétipo apontam para os arquivos físicos `.ts`.
+
+### Casts, dívida e diferenças
+
+Não foram adicionadas suppressions nem alteradas opções do compilador.
+As assertions locais preservam operações existentes: acesso numérico após
+`Number.isInteger`, presença do range após `Boolean(range)`, lookup de ID
+migrado após `hasOwnProperty` e consulta nativa ao Map com ID possivelmente
+ausente nos diagnósticos da IA. Esta última mantém a ausência de resultado,
+sem coerção de `null`/`undefined` para um ID numérico.
+
+A comparação do JavaScript emitido, normalizado apenas quanto à formatação,
+confirmou paridade nos 15 módulos de dados e nos quatro consumidores de
+produção. Não houve correções funcionais, mudanças de dados ou atualização
+do registro de digests. A suíte existente cobre a etapa; não foi adicionada
+uma rodada manual de testes de cartas.
+
+### Aceitação
+
+Em Node `22.23.2`, `npm ci` e `npm run check` passaram: 566 testes sem falhas
+ou skips, 469 arquivos TypeScript auditados e zero dívidas registradas.
+Validator/Chain metadata verificaram 227 cartas e 423 effects sem ambiguidades,
+erros ou warnings. Catálogo, documentação gerada e build também passaram.
+
+A assinatura legada é `1cc622e3`; o digest do componente de cartas permanece
+`a5cc88535be7907d2b9595f97060b3fbd34ee35c7a0e050a50f0fdcca80a1938`
+e o agregado permanece
+`13ff527c3deb5b8b5e5f09551fcabcb3ec7ca48f922f1f167c6d22c67d12caea`.
+Os 249 artefatos finais de `dist/` são byte a byte idênticos à baseline,
+incluindo os chunks JavaScript, HTML, CSS e assets. O único warning de build
+continua sendo o tamanho dos chunks já existente.
+
+`npm run test:bot-smoke -- --duels 1 --matchup arcanist:shadowheart` passou:
+um duelo concluído por LP zero em cinco turnos, sem erros ou warnings de
+execução. A comparação textual dos 11 arrays confirmou que não houve
+alteração declarativa além da sintaxe de tipagem externa ao conteúdo.
+
+O risco antes da Etapa 12 é a dependência de revisão/integração da Etapa 10;
+scripts, ferramentas e JavaScript restante continuam nas etapas seguintes.
+
 ## Objetivo
 
 Renomear mecanicamente os módulos declarativos de `.js` para `.ts`. A verificação estrutural de todos eles já deve ter sido concluída na Etapa 3.

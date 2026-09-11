@@ -1,6 +1,6 @@
 # Burning West / Oeste Ardente — Catálogo do Arquétipo
 
-Fonte dos textos: `src/data/cards/burningWest.js` e `public/locales/pt-br.json`.
+Fonte dos textos: `src/data/cards/burningWest.ts` e `public/locales/pt-br.json`.
 
 ## Resumo
 

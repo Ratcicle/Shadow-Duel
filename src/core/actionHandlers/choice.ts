@@ -24,6 +24,7 @@ import {
   getCardDisplayName,
   getMonsterTypeLabel,
   getUIText,
+  type DisplayCard,
 } from "../i18n.js";
 
 const DEFAULT_CHOICE_IMAGE = "assets/card-back.png";
@@ -182,7 +183,7 @@ function getMonsterTypesInDatabase(): string[] {
     new Set(
       cardDatabase
         .filter((card) => card?.cardKind === "monster")
-        .flatMap((card) => {
+        .flatMap((card: Pick<DisplayCard, "type" | "types">) => {
           if (Array.isArray(card.types)) return card.types;
           return card.type ? [card.type] : [];
         })

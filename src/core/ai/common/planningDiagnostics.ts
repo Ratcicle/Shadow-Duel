@@ -363,7 +363,8 @@ function getBaseStat(
   card: PlanningCardSummary | null | undefined,
   stat: "atk" | "def",
 ): number | null {
-  const value = cardDatabaseById.get(card?.id)?.[stat];
+  // Preserve the native Map.get miss for nullish IDs, without coercing them.
+  const value = cardDatabaseById.get(card?.id as number)?.[stat];
   const number = Number(value);
   return Number.isFinite(number) ? Math.round(number) : null;
 }

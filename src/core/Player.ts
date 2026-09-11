@@ -523,7 +523,7 @@ export default class Player implements GamePlayer {
         Math.min(maxDeckSize, this.deck.length)
       );
       const archetype = "Shadow-Heart";
-      const archetypeCards = cardDatabase.filter((c) => {
+      const archetypeCards = cardDatabase.filter((c: IndexedCardData) => {
         const archetypes = Array.isArray(c.archetypes)
           ? c.archetypes
           : c.archetype
@@ -911,7 +911,7 @@ export default class Player implements GamePlayer {
       }
     }
 
-    const data = cardDatabaseByName.get(cardName);
+    const data: IndexedCardData | undefined = cardDatabaseByName.get(cardName);
     if (!data) {
       return null;
     }

@@ -59,7 +59,7 @@ Bootstrap da SPA. Inicializa o locale, coleta referências de DOM, cria os contr
 
 `main.js` deve continuar como composição de módulos. Lógica de deck builder, laboratório, Bot Arena, persistência e renderização pertence aos controllers dedicados.
 
-### `src/data/cards.js`
+### `src/data/cards.ts`
 
 Fachada pública do banco modular de cartas. Importa os grupos de [src/data/cards/](../src/data/cards/) e exporta:
 
@@ -76,19 +76,19 @@ Módulos de cartas por grupo e governança de IDs:
 
 | Arquivo | Responsabilidade |
 |---|---|
-| [generic.js](../src/data/cards/generic.js) | Cartas genéricas/core. |
-| [shadowHeart.js](../src/data/cards/shadowHeart.js) | Arquétipo Shadow-Heart. |
-| [luminarch.js](../src/data/cards/luminarch.js) | Arquétipo Luminarch. |
-| [void.js](../src/data/cards/void.js) | Arquétipo Void. |
-| [dragon.js](../src/data/cards/dragon.js) | Arquétipo Dragon. |
-| [arcanist.js](../src/data/cards/arcanist.js) | Arquétipo Arcanist. |
-| [miragebound.js](../src/data/cards/miragebound.js) | Arquétipo Miragebound. |
-| [bloomrot.js](../src/data/cards/bloomrot.js) | Arquétipo Bloomrot. |
-| [burningWest.js](../src/data/cards/burningWest.js) | Arquétipo Burning West. |
-| [techZero.js](../src/data/cards/techZero.js) | Arquétipo Tech-Zero. |
-| [vulcanomaton.js](../src/data/cards/vulcanomaton.js) | Arquétipo Vulcanomaton. |
-| [ranges.js](../src/data/cards/ranges.js) | Faixas oficiais de IDs e política de validação. |
-| [idMigration.js](../src/data/cards/idMigration.js) | Mapa `oldId -> newId` para migrar decks salvos. |
+| [generic.ts](../src/data/cards/generic.ts) | Cartas genéricas/core. |
+| [shadowHeart.ts](../src/data/cards/shadowHeart.ts) | Arquétipo Shadow-Heart. |
+| [luminarch.ts](../src/data/cards/luminarch.ts) | Arquétipo Luminarch. |
+| [void.ts](../src/data/cards/void.ts) | Arquétipo Void. |
+| [dragon.ts](../src/data/cards/dragon.ts) | Arquétipo Dragon. |
+| [arcanist.ts](../src/data/cards/arcanist.ts) | Arquétipo Arcanist. |
+| [miragebound.ts](../src/data/cards/miragebound.ts) | Arquétipo Miragebound. |
+| [bloomrot.ts](../src/data/cards/bloomrot.ts) | Arquétipo Bloomrot. |
+| [burningWest.ts](../src/data/cards/burningWest.ts) | Arquétipo Burning West. |
+| [techZero.ts](../src/data/cards/techZero.ts) | Arquétipo Tech-Zero. |
+| [vulcanomaton.ts](../src/data/cards/vulcanomaton.ts) | Arquétipo Vulcanomaton. |
+| [ranges.ts](../src/data/cards/ranges.ts) | Faixas oficiais de IDs e política de validação. |
+| [idMigration.ts](../src/data/cards/idMigration.ts) | Mapa `oldId -> newId` para migrar decks salvos. |
 
 ### `public/locales/`
 

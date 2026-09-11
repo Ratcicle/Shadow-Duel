@@ -156,16 +156,18 @@ export const CARD_ID_MIGRATION_MAP = Object.freeze({
   299: 420,
 });
 
-export function migrateCardId(cardId) {
+export function migrateCardId<T>(cardId: T): T | number {
   const numericId = Number(cardId);
   if (!Number.isInteger(numericId)) return cardId;
   if (Object.prototype.hasOwnProperty.call(CARD_ID_MIGRATION_MAP, numericId)) {
-    return CARD_ID_MIGRATION_MAP[numericId];
+    return CARD_ID_MIGRATION_MAP[numericId as keyof typeof CARD_ID_MIGRATION_MAP];
   }
   return numericId;
 }
 
-export function migrateCardIds(cardIds = []) {
+export function migrateCardIds<T>(cardIds: readonly T[]): Array<T | number>;
+export function migrateCardIds(cardIds?: unknown): unknown[];
+export function migrateCardIds(cardIds: unknown = []): unknown[] {
   if (!Array.isArray(cardIds)) return [];
-  return cardIds.map((cardId) => migrateCardId(cardId));
+  return cardIds.map((cardId: unknown) => migrateCardId(cardId));
 }
