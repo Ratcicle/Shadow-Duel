@@ -111,6 +111,7 @@ function getActivationResolutionTargets(effect, activationContext = {}) {
 
 /**
  * Activate a monster's ignition effect from the graveyard.
+ * @param {import("../../contracts/selection.js").CanonicalSelectionMap | null} [selections=null]
  * @returns {Promise<Object>} Result with success/needsSelection status
  */
 export async function activateMonsterFromGraveyard(

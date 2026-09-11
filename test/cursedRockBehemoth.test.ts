@@ -1,0 +1,644 @@
+import assert from "node:assert/strict";
+import { existsSync, readFileSync } from "node:fs";
+import type { TestContext } from "node:test";
+import test from "node:test";
+import Player from "../src/core/Player.js";
+import type { CardConstructorData } from "../src/core/contracts/cards.js";
+import type { RuntimeEventMap } from "../src/core/contracts/events.js";
+import {
+  array,
+  objectResult,
+  required,
+  unsafeFixture,
+} from "./helpers/fixtures.js";
+import {
+  runtimeCard as completeCard,
+  createRuntimeGame,
+} from "./helpers/game.js";
+import { simulationCard, simulationState } from "./helpers/simulation.js";
+
+import Card from "../src/core/Card.js";
+import { validateCardDatabase } from "../src/core/CardDatabaseValidator.js";
+import { applySimulatedActions } from "../src/core/ai/common/simulatedActions/index.js";
+import { simulateGenericSpellEffect } from "../src/core/ai/common/simulation.js";
+import { selectSimulatedTargets } from "../src/core/ai/common/targetSelection.js";
+import { createCanonicalStateSnapshot } from "../src/core/game/replay/canonical.js";
+import { cardDatabaseById } from "./helpers/fixtures.js";
+
+const CURSED_ROCK_BEHEMOTH_ID = 29;
+const EXPECTED_EN_DESCRIPTION =
+  '1 EARTH Tuner + 1+ non-Tuner monsters\n\nYou can target 1 face-up monster your opponent controls; this card gains ATK equal to its original DEF until the end of this turn.\n\nIf this card is destroyed by battle: You can target the monster that destroyed it; take control of it until the End Phase of this turn, then, when that monster leaves the field, Special Summon this card from your GY, but banish it when it leaves the field.\n\nYou can only use each effect of "Cursed Rock Behemoth" once per turn.';
+const EXPECTED_PT_BR_DESCRIPTION =
+  '1 Regulador de TERRA + 1+ monstros não-Reguladores\n\nVocê pode escolher 1 monstro com a face para cima que seu oponente controla; este card ganha ATK igual à DEF original dele até o final deste turno.\n\nSe este card for destruído em batalha: você pode escolher o monstro que o destruiu; tome o controle dele até a Fase Final deste turno e, depois, quando esse monstro deixar o campo, Invoque este card por Invocação-Especial do seu Cemitério, mas bana-o quando ele deixar o campo.\n\nVocê só pode usar cada efeito de "Behemoth de Rocha Amaldiçoado" uma vez por turno.';
+
+function getBehemoth() {
+  const card = cardDatabaseById.get(CURSED_ROCK_BEHEMOTH_ID);
+  assert.ok(card, "Cursed Rock Behemoth must be in the card database");
+  return card;
+}
+
+function getEffect(id: string) {
+  const effect = required(getBehemoth().effects).find(
+    (entry) => entry.id === id,
+  );
+  assert.ok(effect, `Expected ${id}.`);
+  return effect;
+}
+
+function createRuntimeCard(
+  data: CardConstructorData | undefined,
+  ownerId: string,
+) {
+  assert.ok(data, "Card fixture must exist.");
+  const card = new Card(data, ownerId);
+  card.owner = ownerId;
+  card.controller = ownerId;
+  return card;
+}
+
+function createGame(t: TestContext) {
+  const game = createRuntimeGame({
+    captureReplay: false,
+    disableChains: true,
+    laboratoryMode: true,
+  });
+  game.player.controllerType = "ai";
+  game.bot.controllerType = "ai";
+  t.after(() => game.dispose());
+  return game;
+}
+
+function moveBetweenZones<Value>(card: Value, from: Value[], to: Value[]) {
+  const index = from.indexOf(card);
+  assert.ok(index >= 0, "Expected card in source zone.");
+  from.splice(index, 1);
+  to.push(card);
+}
+
+test("Cursed Rock Behemoth declara dados, arte, materiais e contratos canônicos", () => {
+  const card = getBehemoth();
+  const validation = validateCardDatabase();
+  assert.equal(validation.errors.length, 0);
+  assert.equal(validation.warnings.length, 0);
+
+  assert.equal(card.name, "Cursed Rock Behemoth");
+  assert.equal(card.monsterType, "synchro");
+  assert.equal(card.level, 7);
+  assert.equal(card.type, "Rock");
+  assert.equal(card.attribute, "Earth");
+  assert.equal(card.atk, 2300);
+  assert.equal(card.def, 2400);
+  assert.equal(card.description, EXPECTED_EN_DESCRIPTION);
+  const locale = JSON.parse(
+    readFileSync(
+      new URL("../public/locales/pt-br.json", import.meta.url),
+      "utf8",
+    ),
+  );
+  assert.equal(
+    locale.cards[String(CURSED_ROCK_BEHEMOTH_ID)].description,
+    EXPECTED_PT_BR_DESCRIPTION,
+  );
+  assert.equal(
+    existsSync(
+      new URL("../public/assets/Cursed Rock Behemoth.png", import.meta.url),
+    ),
+    true,
+  );
+  assert.deepEqual(card.synchro, {
+    tunerCount: 1,
+    nonTunerMin: 1,
+    materialFilters: { tuner: { attribute: "Earth", isTuner: true } },
+  });
+
+  const gain = getEffect("cursed_rock_behemoth_gain_original_def");
+  assert.equal(gain.timing, "ignition");
+  assert.equal(gain.speed, 1);
+  assert.deepEqual(gain.activationZones, ["field"]);
+  assert.equal(gain.requireFaceup, true);
+  assert.equal(required(gain.targets)[0].requireFaceup, true);
+  assert.equal(gain.usagePolicy, "use");
+  assert.deepEqual(required(gain.actions)[0].atkBoostFromTarget, {
+    targetRef: "cursed_rock_behemoth_atk_target",
+    stat: "baseDef",
+  });
+
+  const control = getEffect("cursed_rock_behemoth_battle_control");
+  assert.equal(control.event, "battle_destroy");
+  assert.equal(control.requireSelfAsDestroyed, true);
+  assert.equal(control.usagePolicy, "use");
+  assert.equal(
+    required(control.targets)[0].targetFromContext,
+    "battleDestroyer",
+  );
+  assert.equal(required(control.targets)[0].zone, "field");
+  assert.equal(required(control.actions)[0].type, "take_control");
+  assert.equal(required(control.actions)[0].duration, "until_end_phase");
+  assert.equal(
+    required(control.actions)[1].bindEventTargetRef,
+    required(control.targets)[0].id,
+  );
+  assert.equal(required(control.actions)[1].duration, "until_consumed");
+});
+
+test("materiais exigem Regulador TERRA e aceitam não-Reguladores livres", () => {
+  const behemoth = completeCard({ ...getBehemoth(), instanceId: "behemoth" });
+  const earthTuner = completeCard({
+    instanceId: "earth-tuner",
+    cardKind: "monster",
+    isTuner: true,
+    attribute: "Earth",
+    level: 3,
+    isFacedown: false,
+  });
+  const waterTuner = completeCard({
+    instanceId: "water-tuner",
+    cardKind: "monster",
+    isTuner: true,
+    attribute: "Water",
+    level: 3,
+    isFacedown: false,
+  });
+  const nonTuner = completeCard({
+    instanceId: "non-tuner",
+    cardKind: "monster",
+    isTuner: false,
+    attribute: "Fire",
+    level: 4,
+    isFacedown: false,
+  });
+  const player = Object.assign(new Player("player", "Material fixture"), {
+    field: [earthTuner, waterTuner, nonTuner],
+  });
+
+  const materialGame = createRuntimeGame({
+    disableChains: true,
+    captureReplay: false,
+    laboratoryMode: true,
+  });
+  try {
+    assert.deepEqual(materialGame.getSynchroMaterialCombos(player, behemoth), [
+      [earthTuner, nonTuner],
+    ]);
+  } finally {
+    materialGame.dispose();
+  }
+});
+
+test("o ganho exige alvo face-up, usa a DEF original e expira no fim do turno", async (t) => {
+  const game = createGame(t);
+  const behemoth = createRuntimeCard(getBehemoth(), game.player.id);
+  const target = createRuntimeCard(
+    {
+      id: 9901,
+      name: "Modified defender",
+      cardKind: "monster",
+      atk: 1000,
+      def: 2600,
+    },
+    game.bot.id,
+  );
+  target.def = 400;
+  const facedownTarget = createRuntimeCard(
+    {
+      id: 9907,
+      name: "Facedown defender",
+      cardKind: "monster",
+      atk: 800,
+      def: 1200,
+    },
+    game.bot.id,
+  );
+  facedownTarget.isFacedown = true;
+  facedownTarget.position = "defense";
+  game.player.field.push(behemoth);
+  game.bot.field.push(target, facedownTarget);
+
+  const effect = getEffect("cursed_rock_behemoth_gain_original_def");
+  const preview = game.effectEngine.resolveTargets(
+    required(effect.targets),
+    {
+      source: behemoth,
+      player: game.player,
+      opponent: game.bot,
+      activationZone: "field",
+      activationContext: { preview: true },
+    },
+    null,
+  );
+  assert.ok(preview.needsSelection);
+  const requirement = required(preview.selectionContract.requirements).find(
+    (entry) => entry.id === "cursed_rock_behemoth_atk_target",
+  );
+  assert.deepEqual(
+    required(required(requirement).candidates).map(
+      (candidate) => candidate.cardRef,
+    ),
+    [target],
+  );
+
+  const result = await game.effectEngine.applyActions(
+    required(effect.actions),
+    { source: behemoth, player: game.player, opponent: game.bot, effect },
+    { cursed_rock_behemoth_atk_target: [target] },
+  );
+
+  assert.ok(result.success === true);
+  assert.equal(behemoth.atk, 2300 + 2600);
+  game.cleanupTempBoosts(game.player);
+  assert.equal(behemoth.atk, 2300);
+});
+
+test("o Trigger usa somente o destruidor em campo e recusa destruição mútua ou alvo que saiu", async (t) => {
+  const game = createGame(t);
+  const behemoth = createRuntimeCard(getBehemoth(), game.player.id);
+  const destroyer = createRuntimeCard(
+    {
+      id: 9902,
+      name: "Battle destroyer",
+      cardKind: "monster",
+      atk: 3000,
+      def: 1000,
+    },
+    game.bot.id,
+  );
+  game.player.graveyard.push(behemoth);
+  game.bot.field.push(destroyer);
+
+  const payload = {
+    attacker: destroyer,
+    destroyed: behemoth,
+    attackerOwner: game.bot,
+    destroyedOwner: game.player,
+    battleDestroyer: destroyer,
+    battleDestroyers: [destroyer],
+  };
+  const available = await game.effectEngine.collectBattleDestroyTriggers(
+    unsafeFixture<
+      Parameters<typeof game.effectEngine.collectBattleDestroyTriggers>[0]
+    >(
+      payload,
+      "Collector fixture isolates battle destroyer identity; complete timing payloads are covered by combat integration tests.",
+    ),
+  );
+  assert.equal(available.entries.length, 1);
+  assert.equal(
+    available.entries[0].effect.id,
+    "cursed_rock_behemoth_battle_control",
+  );
+
+  moveBetweenZones(destroyer, game.bot.field, game.bot.graveyard);
+  const unavailable = await game.effectEngine.collectBattleDestroyTriggers(
+    unsafeFixture<
+      Parameters<typeof game.effectEngine.collectBattleDestroyTriggers>[0]
+    >(
+      payload,
+      "Collector fixture isolates battle destroyer identity; complete timing payloads are covered by combat integration tests.",
+    ),
+  );
+  assert.equal(unavailable.entries.length, 0);
+});
+
+test("destruição em batalha prepara a Chain e toma controle do destruidor", async (t) => {
+  const game = createRuntimeGame({
+    captureReplay: false,
+    laboratoryMode: true,
+  });
+  game.turn = game.bot.id;
+  game.phase = "battle";
+  game.battleStep = "battle";
+  game.turnCounter = 2;
+  game.disablePresentationDelays = true;
+  game.waitForBoardPresentation = async () => {};
+  game.player.controllerType = "human";
+  game.bot.controllerType = "ai";
+  game.ui.showTriggerOrderModal = async (options) =>
+    required(required(options).candidates).map(
+      (candidate) => candidate.candidateId,
+    );
+  game.ui.showConfirmPrompt = () => true;
+  t.after(() => game.dispose("cursed_rock_behemoth_chain_test_complete"));
+
+  const behemoth = createRuntimeCard(getBehemoth(), game.player.id);
+  behemoth.position = "attack";
+  const destroyer = createRuntimeCard(
+    {
+      id: 9910,
+      name: "Live battle destroyer",
+      cardKind: "monster",
+      atk: 3000,
+      def: 1000,
+      level: 7,
+      type: "Warrior",
+      attribute: "Dark",
+      effects: [],
+    },
+    game.bot.id,
+  );
+  destroyer.position = "attack";
+  game.player.field.push(behemoth);
+  game.bot.field.push(destroyer);
+
+  const preparedCounts: number[] = [];
+  game.on("trigger_chain_prepared", ({ preparedCount }) => {
+    preparedCounts.push(preparedCount);
+  });
+
+  const result = required(await game.resolveCombat(destroyer, behemoth));
+
+  assert.ok(result.ok === true);
+  assert.equal(game.player.graveyard.includes(behemoth), true);
+  assert.equal(game.player.field.includes(destroyer), true);
+  assert.equal(game.bot.field.includes(destroyer), false);
+  assert.equal(destroyer.controller, game.player.id);
+  assert.equal(game.getTemporaryControlState().length, 1);
+  assert.equal(game.temporaryEventEffects.length, 1);
+  assert.equal(preparedCounts.includes(1), true);
+  assert.equal(game.chainSystem.isOpenGameState(), true);
+});
+
+test("controle temporário preserva dono original, não cria movimento e não sobrescreve controle posterior", async (t) => {
+  const game = createGame(t);
+  game.turnCounter = 7;
+  const target = createRuntimeCard(
+    {
+      id: 9903,
+      name: "Borrowed monster",
+      cardKind: "monster",
+      atk: 2000,
+      def: 2000,
+    },
+    game.bot.id,
+  );
+  game.bot.field.push(target);
+  const initialVersion = target.locationVersion;
+  const events: Array<RuntimeEventMap["control_changed"]> = [];
+  game.on("control_changed", (payload) => events.push(payload));
+  game.on("card_moved", () =>
+    assert.fail("Control change must not emit card_moved."),
+  );
+
+  const first = await game.takeControl(target, game.player, {
+    duration: "until_end_phase",
+  });
+  assert.ok(first.success === true);
+  assert.equal(game.player.field.includes(target), true);
+  assert.equal(target.owner, game.player.id);
+  assert.equal(target.controller, game.player.id);
+  assert.equal(target.originalOwner, game.bot.id);
+  assert.equal(target.locationVersion, initialVersion);
+  assert.equal(events.length, 1);
+  assert.equal(game.getTemporaryControlState().length, 1);
+
+  await game.transferControl(target, game.bot, {
+    reason: "later_control_effect",
+  });
+  assert.equal(game.bot.field.includes(target), true);
+  assert.equal(game.getTemporaryControlState().length, 0);
+  await game.processTemporaryControlEffects();
+  assert.equal(game.bot.field.includes(target), true);
+
+  const snapshot = game.getPublicState(game.player.id);
+  assert.equal(
+    required(snapshot.players.opponent.field[0]).originalOwner,
+    game.bot.id,
+  );
+  assert.doesNotThrow(() => JSON.stringify(snapshot));
+});
+
+test("vínculo imediato acompanha a instância após a devolução, consome a primeira saída e Invoca o Behemoth banível", async (t) => {
+  const game = createGame(t);
+  const behemoth = createRuntimeCard(getBehemoth(), game.player.id);
+  const destroyer = createRuntimeCard(
+    {
+      id: 9904,
+      name: "Bound destroyer",
+      cardKind: "monster",
+      atk: 3000,
+      def: 1000,
+    },
+    game.bot.id,
+  );
+  game.player.graveyard.push(behemoth);
+  game.bot.field.push(destroyer);
+  const controlEffect = getEffect("cursed_rock_behemoth_battle_control");
+
+  const controlled = await game.effectEngine.applyActions(
+    required(controlEffect.actions),
+    Object.assign(
+      {},
+      {
+        source: behemoth,
+        player: game.player,
+        opponent: game.bot,
+        effect: controlEffect,
+        battleDestroyer: destroyer,
+      },
+    ),
+    { cursed_rock_behemoth_destroyer: [destroyer] },
+  );
+  assert.ok(controlled.success === true);
+  assert.equal(game.player.field.includes(destroyer), true);
+  assert.equal(game.temporaryEventEffects.length, 1);
+
+  // The temporary control returns at End Phase, but the instance-bound
+  // leave-field watcher remains active independently of its controller.
+  await game.processTemporaryControlEffects();
+  assert.equal(game.bot.field.includes(destroyer), true);
+  assert.equal(game.temporaryEventEffects.length, 1);
+
+  moveBetweenZones(destroyer, game.bot.field, game.bot.graveyard);
+  destroyer.owner = game.bot.id;
+  destroyer.controller = game.bot.id;
+  const triggers = await game.effectEngine.collectEventTriggers("card_moved", {
+    card: destroyer,
+    fromZone: "field",
+    toZone: "graveyard",
+    player: game.bot,
+    fromPlayer: game.bot,
+    toPlayer: game.bot,
+    wasFaceupBeforeMove: true,
+  });
+  assert.equal(triggers.entries.length, 1);
+  assert.equal(triggers.entries[0].card, behemoth);
+  assert.equal(game.temporaryEventEffects.length, 0);
+
+  const revived = objectResult(
+    await triggers.entries[0].config.activate(
+      null,
+      triggers.entries[0].config.activationContext,
+    ),
+  );
+  assert.ok(required(revived.success) === true);
+  assert.equal(game.player.field.includes(behemoth), true);
+  assert.equal(behemoth.banishWhenLeavesField, true);
+
+  const leaveResult = await game.moveCard(behemoth, game.player, "graveyard", {
+    fromZone: "field",
+    skipAnimation: true,
+  });
+  assert.ok(leaveResult.success === true);
+  assert.equal(game.player.banished.includes(behemoth), true);
+  assert.equal(game.player.graveyard.includes(behemoth), false);
+});
+
+test("simulação preserva base DEF, controle, vínculo por instância e seleção de contexto por zona", () => {
+  const behemoth = simulationCard({
+    ...structuredClone(getBehemoth()),
+    instanceId: "sim-behemoth",
+    owner: "player",
+    controller: "player",
+    atk: 2300,
+    baseAtk: 2300,
+    def: 2400,
+    baseDef: 2400,
+    cardKind: "monster",
+  });
+  const destroyer = simulationCard({
+    instanceId: "sim-destroyer",
+    id: 9905,
+    name: "Sim destroyer",
+    cardKind: "monster",
+    owner: "bot",
+    controller: "bot",
+    originalOwner: "bot",
+    atk: 2500,
+    def: 100,
+    baseDef: 1800,
+  });
+  const state = simulationState({
+    turnCounter: 3,
+    player: { id: "player", field: [behemoth], graveyard: [] },
+    bot: { id: "bot", field: [destroyer], graveyard: [] },
+  });
+  const gain = getEffect("cursed_rock_behemoth_gain_original_def");
+  applySimulatedActions({
+    actions: gain.actions,
+    selections: { cursed_rock_behemoth_atk_target: [destroyer] },
+    state,
+    selfId: "player",
+    options: { sourceCard: behemoth },
+  });
+  assert.equal(behemoth.atk, 4100);
+
+  const control = getEffect("cursed_rock_behemoth_battle_control");
+  applySimulatedActions({
+    actions: [required(control.actions)[0]],
+    selections: { cursed_rock_behemoth_destroyer: [destroyer] },
+    state,
+    selfId: "player",
+    options: { sourceCard: behemoth },
+  });
+  assert.equal(state.player.field.includes(destroyer), true);
+  assert.equal(destroyer.originalOwner, "bot");
+  assert.equal(required(state.temporaryControlEffects).length, 1);
+
+  const targetDef = required(control.targets)[0];
+  assert.deepEqual(
+    selectSimulatedTargets({
+      targets: [targetDef],
+      actions: control.actions,
+      state,
+      sourceCard: behemoth,
+      selfId: "player",
+      options: unsafeFixture<
+        NonNullable<Parameters<typeof selectSimulatedTargets>[0]["options"]>
+      >(
+        { battleDestroyer: destroyer },
+        "Legacy target options include battleDestroyer, which target selection deliberately ignores after control changes.",
+      ),
+    })[targetDef.id],
+    [],
+    "The former destroyer is no longer an opponent target after control changes.",
+  );
+
+  const canonical = createCanonicalStateSnapshot({
+    ...state,
+    turn: "player",
+    phase: "main1",
+    getRandomState: () => null,
+    getEffectUsageState: () => null,
+    getTemporaryControlState: () => state.temporaryControlEffects,
+  });
+  assert.equal(array(canonical.temporaryControlEffects).length, 1);
+  assert.doesNotThrow(() => JSON.stringify(canonical));
+});
+
+test("simulação consome o vínculo de saída e Invoca a fonte concreta uma vez", () => {
+  const behemoth = simulationCard({
+    ...structuredClone(getBehemoth()),
+    instanceId: "sim-bound-behemoth",
+    owner: "player",
+    controller: "player",
+    cardKind: "monster",
+  });
+  const destroyer = simulationCard({
+    instanceId: "sim-bound-destroyer",
+    id: 9906,
+    name: "Sim bound destroyer",
+    cardKind: "monster",
+    owner: "bot",
+    controller: "bot",
+    originalOwner: "bot",
+    atk: 3000,
+    def: 1000,
+  });
+  const state = simulationState({
+    turnCounter: 4,
+    player: { id: "player", field: [], graveyard: [behemoth] },
+    bot: { id: "bot", field: [destroyer], graveyard: [] },
+  });
+  const temporaryRegistration: import("../src/core/contracts/effects.js").EffectDefinition =
+    {
+      id: "sim_bound_registration",
+      timing: "on_play",
+      targets: [
+        {
+          id: "bound_destroyer",
+          owner: "opponent",
+          zone: "field",
+          cardKind: "monster",
+          count: { min: 1, max: 1 },
+        },
+      ],
+      actions: [
+        {
+          type: "register_temporary_event_effect",
+          event: "card_moved",
+          triggerRequirement: "mandatory",
+          triggerTiming: "if",
+          bindEventTargetRef: "bound_destroyer",
+          requireBoundTargetLeavesField: true,
+          duration: "until_consumed",
+          uses: 1,
+          actions: [
+            {
+              type: "special_summon_from_zone",
+              targetRef: "self",
+              zone: "graveyard",
+              position: "attack",
+              statusesOnSummon: [{ status: "banishWhenLeavesField" }],
+            },
+          ],
+        },
+        {
+          type: "move",
+          targetRef: "bound_destroyer",
+          player: "opponent",
+          fromZone: "field",
+          to: "graveyard",
+        },
+      ],
+    };
+  const registrationCard = { ...behemoth, effects: [temporaryRegistration] };
+
+  simulateGenericSpellEffect(state, registrationCard, {
+    selfId: "player",
+    enableSimulatedEvents: true,
+  });
+
+  assert.equal(state.bot.graveyard.includes(destroyer), true);
+  assert.equal(state.player.field.includes(behemoth), true);
+  assert.equal(behemoth.banishWhenLeavesField, true);
+  assert.deepEqual(state.temporaryEventEffects || [], []);
+});

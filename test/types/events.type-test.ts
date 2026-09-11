@@ -60,6 +60,17 @@ bus.on("lp_change", (payload: DuelEventMap["card_moved"]) => {
   void payload;
 });
 
+declare const game: import("../../src/core/Game.js").default;
+game.on("card_moved", (payload) => {
+  const moved: DuelEventMap["card_moved"] = payload;
+  void moved.card;
+  void moved.fromZone;
+  void moved.toZone;
+});
+// contract-negative: attached Game listeners retain the event/payload relationship
+// @ts-expect-error
+game.on("lp_change", (payload: DuelEventMap["card_moved"]) => void payload);
+
 const declarativeEvent: DuelEventName = "after_summon";
 // contract-negative: runtime-only events do not widen the card schema vocabulary
 // @ts-expect-error
@@ -71,8 +82,9 @@ const collectedEvent: CollectedTriggerEventName = "card_flipped";
 const eventWithoutCollector: CollectedTriggerEventName = "game_over";
 
 type Equal<Left, Right> =
-  (<Value>() => Value extends Left ? 1 : 2) extends
-  (<Value>() => Value extends Right ? 1 : 2)
+  (<Value>() => Value extends Left ? 1 : 2) extends <
+    Value,
+  >() => Value extends Right ? 1 : 2
     ? true
     : false;
 type Expect<Value extends true> = Value;
@@ -87,10 +99,7 @@ type SharedLpPayload = Expect<
   Equal<DuelEventMap["lp_change"], InformationalEventMap["lp_change"]>
 >;
 type RuntimeActivationPayload = Expect<
-  Equal<
-    RuntimeEventMap["effect_activated"],
-    DuelEventMap["effect_activated"]
-  >
+  Equal<RuntimeEventMap["effect_activated"], DuelEventMap["effect_activated"]>
 >;
 
 const sharedActivationPayload: SharedActivationPayload = true;

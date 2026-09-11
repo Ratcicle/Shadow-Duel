@@ -289,7 +289,9 @@ function allocateSummonId(game: SummonTransactionHost): SummonId {
 export function beginSummonTransaction(
   this: SummonTransactionHost,
   preparedInput: PreparedSummonInput | PreparedSummon = {},
-) {
+):
+  | { ok: false; reason: string; code?: string }
+  | { ok: true; transaction: SummonTransaction } {
   const prepared = isPreparedSummon(preparedInput)
     ? preparedInput
     : this.createPreparedSummon(preparedInput);

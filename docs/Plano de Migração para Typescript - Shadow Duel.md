@@ -1812,6 +1812,9 @@ avisos de duelo. Testes manuais de cartas permanecem fora desta etapa.
 
 ## Entrega da Etapa 10
 
+Integrada em `main` pelo [PR #61](https://github.com/Ratcicle/Shadow-Duel/pull/61),
+merge `946c9132797c88f69e5e5af472f3747072d945da`. Verify e deploy passaram.
+
 Branch: `agent/typescript-ui-renderer`, a partir do merge da Etapa 9B.
 Foram convertidos os 28 módulos previstos: `main`, `UIAdapter`, `i18n`,
 `Renderer`, os oito controllers de `ui/main/`, os 13 módulos e o barrel de
@@ -1986,9 +1989,9 @@ Não tentar gerar um sistema completo de chaves tipadas para todos os textos ant
 ## Entrega da Etapa 11
 
 Branch: `agent/typescript-card-database`. A baseline é a Etapa 10,
-commit `87ffc4f5f8360127cb922a358481ed603dd57a94`, no PR #61. Como esse PR
-continua aberto, a Etapa 11 usa sua branch como base para revisão; a integração
-deve respeitar essa dependência.
+commit `87ffc4f5f8360127cb922a358481ed603dd57a94`, no PR #61.
+Integrada após essa dependência pelo [PR #62](https://github.com/Ratcicle/Shadow-Duel/pull/62),
+merge `ab16a76cbd7fccf3f16df5f834a7ba95a2d97329`. Verify e deploy passaram.
 
 ### Arquivos e contratos
 
@@ -2055,8 +2058,9 @@ um duelo concluído por LP zero em cinco turnos, sem erros ou warnings de
 execução. A comparação textual dos 11 arrays confirmou que não houve
 alteração declarativa além da sintaxe de tipagem externa ao conteúdo.
 
-O risco antes da Etapa 12 é a dependência de revisão/integração da Etapa 10;
-scripts, ferramentas e JavaScript restante continuam nas etapas seguintes.
+As dependências de integração das Etapas 10 e 11 foram concluídas antes da
+Etapa 12. Scripts e ferramentas seguem abaixo; o JavaScript restante em
+produção e o endurecimento de flags pertencem à Etapa 13.
 
 ## Objetivo
 
@@ -2144,6 +2148,38 @@ Nenhum erro estrutural novo deveria surgir aqui: o schema já foi aplicado ao ba
 ---
 
 # Etapa 12 — Converter testes, scripts e ferramentas
+
+## Entrega da Etapa 12
+
+Branch: `agent/typescript-tooling-tests`, a partir de `ab16a76` em `main`.
+Os 51 arquivos de testes/helpers ainda escritos em JavaScript, os oito
+scripts `.mjs` e `vite.config.js` foram convertidos fisicamente para `.ts`.
+Imports relativos continuam usando `.js`, com resolução ESM/NodeNext e `tsx`.
+O fixture `test/toolchain/fixtures/jsConsumer.js` preserva deliberadamente
+a cobertura de um consumidor JavaScript importando um módulo TypeScript.
+
+Os helpers compartilhados verificam cartas do banco, modelos runtime,
+estados de simulação, seleções e resultados. O harness de Chain fornece
+factories de cartas, effects, candidatos e preparações, além de mocks
+pareados de descoberta/resposta. Cenários de contratos legados ou hosts
+parciais explicitam a limitação com `unsafeFixture<T>(valor, motivo)`;
+dados positivos continuam derivados dos contratos canônicos.
+
+A tipagem dos consumidores revelou quatro correções de declaração:
+preservação do parâmetro genérico de `Game.on`, retorno `void` real de
+`Card.removeCounter`, união discriminada da transação de Invocação e
+seleções canônicas na ativação do Cemitério. Nenhum desses ajustes muda
+a implementação executável do jogo. Casos compile-time positivos e
+negativos cobrem essas fronteiras.
+
+O runner, os CLIs, os loaders SVG e o gerador do catálogo participam do
+typecheck Node. O loader registra `tsx` também na thread dos hooks
+assíncronos do Node; um teste em subprocesso cobre simultaneamente
+imports SVG e a resolução `.js` para TypeScript. Os workflows Verify
+e Pages continuam executando `npm ci` e `npm run check` antes da
+publicação.
+
+Evidências e limites: [relatório da Etapa 12](migrations/typescript-stage12.md).
 
 ## Objetivo
 

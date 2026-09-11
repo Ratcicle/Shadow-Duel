@@ -9,7 +9,6 @@
   "include": [
     "scripts",
     "test",
-    "vite.config.js",
     "vite.config.ts"
   ]
 }

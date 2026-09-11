@@ -147,7 +147,7 @@ export interface ActionRuntimeCard {
   zone?: CanonicalZone | null;
   addCounter?(counterType: string, amount?: number): number | boolean | void;
   getCounter?(counterType: string): number;
-  removeCounter?(counterType: string, amount?: number): number | boolean;
+  removeCounter?(counterType: string, amount?: number): number | boolean | void;
 }
 
 export interface ActionRuntimeTurnBasedBuff {

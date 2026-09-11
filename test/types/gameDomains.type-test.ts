@@ -1,6 +1,11 @@
 import Game from "../../src/core/Game.js";
-import type { GameAttachedMethods } from "../../src/core/game/attachments.js";
-import { GAME_ATTACHMENT_NAMES } from "../../src/core/game/attachments.js";
+import type {
+  ActivationPipelineConfig,
+  ActivationPipelineConfigInput,
+  ActivationPipelineContext,
+  ActivationPipelineResult,
+  ActivationResolutionContext,
+} from "../../src/core/contracts/activation.js";
 import type {
   CardStatusValueMap,
   GameCard,
@@ -10,13 +15,6 @@ import type {
   GameOptions,
   StartWithDecksOptions,
 } from "../../src/core/contracts/game.js";
-import type {
-  ActivationPipelineConfig,
-  ActivationPipelineConfigInput,
-  ActivationPipelineContext,
-  ActivationPipelineResult,
-  ActivationResolutionContext,
-} from "../../src/core/contracts/activation.js";
 import type {
   DamageStepCardSnapshot,
   DamageStepExecutionResult,
@@ -37,8 +35,8 @@ import type {
   MoveCardResult,
   PreparedSummon,
   RegularMoveCardOptions,
-  SummonExecutionResult,
   SummonEntryMoveCardOptions,
+  SummonExecutionResult,
   SummonState,
   SummonStatus,
   SummonTransaction,
@@ -52,10 +50,13 @@ import type {
   DuelCardId,
   SummonId,
 } from "../../src/core/contracts/primitives.js";
+import type { GameAttachedMethods } from "../../src/core/game/attachments.js";
+import { GAME_ATTACHMENT_NAMES } from "../../src/core/game/attachments.js";
 
 type Equal<Left, Right> =
-  (<Value>() => Value extends Left ? 1 : 2) extends
-  (<Value>() => Value extends Right ? 1 : 2)
+  (<Value>() => Value extends Left ? 1 : 2) extends <
+    Value,
+  >() => Value extends Right ? 1 : 2
     ? true
     : false;
 
@@ -87,10 +88,7 @@ type GameOptionsHaveExactKeyset = Expect<
   Equal<keyof GameOptions, ExpectedGameOptionKey>
 >;
 type AttachmentsHaveExactKeyset = Expect<
-  Equal<
-    keyof GameAttachedMethods,
-    (typeof GAME_ATTACHMENT_NAMES)[number]
-  >
+  Equal<keyof GameAttachedMethods, (typeof GAME_ATTACHMENT_NAMES)[number]>
 >;
 const gameOptionsHaveExactKeyset: GameOptionsHaveExactKeyset = true;
 const attachmentsHaveExactKeyset: AttachmentsHaveExactKeyset = true;
@@ -102,6 +100,11 @@ declare const duelCardId: DuelCardId;
 declare const summonId: SummonId;
 declare const damageStepId: DamageStepId;
 declare const preparedSummon: PreparedSummon;
+const begunSummon = game.beginSummonTransaction(preparedSummon);
+if (begunSummon.ok) {
+  const committedSummon: SummonTransaction = begunSummon.transaction;
+  void committedSummon.summonId;
+}
 declare const summonTransaction: SummonTransaction;
 declare const summonSnapshot: SummonTransactionSnapshot;
 declare const damageStepTransaction: DamageStepTransaction;

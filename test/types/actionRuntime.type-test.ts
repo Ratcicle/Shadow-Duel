@@ -1,3 +1,4 @@
+import type EffectEngine from "../../src/core/EffectEngine.js";
 import {
   ActionHandlerRegistry,
   proxyEngineMethod,
@@ -10,6 +11,19 @@ import type {
   NormalizedActionExecutionResult,
   ResolvedTargetMap,
 } from "../../src/core/contracts/actionRuntime.js";
+import type { CanonicalSelectionMap } from "../../src/core/contracts/selection.js";
+
+declare const graveyardSelections: CanonicalSelectionMap;
+const acceptedGraveyardSelections: Parameters<
+  EffectEngine["activateMonsterFromGraveyard"]
+>[2] = graveyardSelections;
+void acceptedGraveyardSelections;
+// contract-negative: graveyard activation accepts canonical selection maps, not a scalar.
+// @ts-expect-error
+const invalidGraveyardSelections: Parameters<
+  EffectEngine["activateMonsterFromGraveyard"]
+>[2] = 42;
+void invalidGraveyardSelections;
 
 const drawHandler: ActionHandler<"draw"> = (action) =>
   Number(action.amount) > 0;
@@ -28,8 +42,7 @@ registry.register("draw", healHandler);
 // @ts-expect-error
 const invalidHandler: ActionHandler<"draw"> = () => ({ status: "ok" });
 
-const drawProxy: ActionHandler<"draw"> =
-  proxyEngineMethod<"draw">("applyDraw");
+const drawProxy: ActionHandler<"draw"> = proxyEngineMethod<"draw">("applyDraw");
 
 // contract-negative: a proxy action cannot name another action's engine method
 // @ts-expect-error
@@ -41,10 +54,15 @@ proxyEngineMethod<"draw">("missingMethod");
 
 const inferredDrawHandler = registry.get("draw");
 
-type InferredDrawAction = Parameters<NonNullable<typeof inferredDrawHandler>>[0];
+type InferredDrawAction = Parameters<
+  NonNullable<typeof inferredDrawHandler>
+>[0];
 const inferredDrawAction: InferredDrawAction = { type: "draw", amount: 1 };
 
 const context: EffectContext = { isPreview: true };
+declare const liveCard: import("../../src/core/Card.js").default;
+const liveContext: EffectContext = { source: liveCard };
+void liveContext;
 const targets: ResolvedTargetMap = {
   selected: { id: 1, name: "Selected" },
   group: [{ id: 2, name: "Group member" }],

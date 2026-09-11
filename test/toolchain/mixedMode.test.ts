@@ -1,14 +1,13 @@
 import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
 import { access } from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 import type { OutputChunk, RollupOutput, RollupWatcher } from "rollup";
 import { build } from "vite";
-import {
-  getMixedModeValue,
-  MIXED_MODE_VALUE,
-} from "./fixtures/mixedModule.js";
+import { MIXED_MODE_VALUE, getMixedModeValue } from "./fixtures/mixedModule.js";
 
 const fixtureDirectory = fileURLToPath(new URL("./fixtures/", import.meta.url));
 const fixtureDist = path.join(fixtureDirectory, "dist");
@@ -33,6 +32,26 @@ test("tsx resolves a .js specifier to a physical TypeScript module", () => {
   assert.equal(getMixedModeValue(), MIXED_MODE_VALUE);
 });
 
+test("Node asset hooks resolve TypeScript and SVG imports in a fresh process", async () => {
+  const root = fileURLToPath(new URL("../../", import.meta.url));
+  const { stdout } = await promisify(execFile)(
+    process.execPath,
+    [
+      "--import=tsx",
+      "--import=./scripts/register_node_asset_loader.ts",
+      "--input-type=module",
+      "--eval",
+      [
+        'import { MIXED_MODE_VALUE } from "./test/toolchain/fixtures/jsConsumer.js";',
+        'import icon from "@tabler/icons/outline/swords.svg";',
+        'console.log(JSON.stringify({ value: MIXED_MODE_VALUE, svg: icon.endsWith("/swords.svg") }));',
+      ].join("\n"),
+    ],
+    { cwd: root, windowsHide: true, timeout: 30_000 },
+  );
+  assert.deepEqual(JSON.parse(stdout), { value: "mixed-mode-ok", svg: true });
+});
+
 test("Vite resolves mixed-mode imports without writing build artifacts", async () => {
   assert.equal(await pathExists(fixtureDist), false);
 
@@ -51,14 +70,16 @@ test("Vite resolves mixed-mode imports without writing build artifacts", async (
   });
 
   const results = Array.isArray(result) ? result : [result];
-  assert.ok(results.every(isRollupOutput), "Vite returned an unexpected watcher");
+  assert.ok(
+    results.every(isRollupOutput),
+    "Vite returned an unexpected watcher",
+  );
 
   const entryChunk = results
     .filter(isRollupOutput)
     .flatMap((output) => output.output)
     .find(
-      (entry): entry is OutputChunk =>
-        entry.type === "chunk" && entry.isEntry,
+      (entry): entry is OutputChunk => entry.type === "chunk" && entry.isEntry,
     );
 
   assert.ok(entryChunk, "Vite did not produce an entry chunk");
