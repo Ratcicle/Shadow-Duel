@@ -1,14 +1,16 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import test from "node:test";
+import type { CardAction } from "../../src/core/contracts/actions.js";
+import { unsafeFixture } from "../helpers/fixtures.js";
 
 import { captureSourceSnapshot } from "../../src/core/chain/link.js";
-import { stableStringify } from "../../src/core/game/replay/canonical.js";
 import type {
   ChainEffect,
   ChainPlayer,
   ChainTriggerEntry,
 } from "../../src/core/contracts/chainRuntime.js";
+import { stableStringify } from "../../src/core/game/replay/canonical.js";
 import {
   createChainHarness,
   createTestCard,
@@ -58,7 +60,12 @@ test("canonical integrated Chain trace remains byte-stable", async () => {
       triggerRequirement: "mandatory",
       triggerTiming: "if",
       speed: 1,
-      actions: [{ type: "trace_integration", name }],
+      actions: [
+        unsafeFixture<CardAction>(
+          { type: "trace_integration", name },
+          "Synthetic trace action is intercepted by the harness and never enters the registry.",
+        ),
+      ],
     }) as ChainEffect;
     const card = createTestCard({
       instanceId: `${name}_instance`,
@@ -125,7 +132,12 @@ test("canonical integrated Chain trace remains byte-stable", async () => {
       id: "fast_response_effect",
       timing: "on_activate",
       speed: 2,
-      actions: [{ type: "trace_integration", name: "fast_response" }],
+      actions: [
+        unsafeFixture<CardAction>(
+          { type: "trace_integration", name: "fast_response" },
+          "Synthetic trace action is intercepted by the harness and never enters the registry.",
+        ),
+      ],
     }) as ChainEffect,
     activationZone: "spellTrap",
     activationContext: {

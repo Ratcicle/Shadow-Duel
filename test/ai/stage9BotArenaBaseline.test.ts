@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import "../../scripts/register_node_asset_loader.mjs";
+import "../../scripts/register_node_asset_loader.js";
 import Bot from "../../src/core/Bot.js";
 import { botLogger } from "../../src/core/BotLogger.js";
 import Game from "../../src/core/Game.js";

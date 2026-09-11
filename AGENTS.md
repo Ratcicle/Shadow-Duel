@@ -184,8 +184,15 @@ O projeto usa TypeScript e Vite, com Node 22 (`>=22.12.0 <23`). Os imports relat
 
 **Scripts utilitários** ([scripts/](scripts/)):
 
-- `validate_action_catalog.mjs` — valida `cards.js` contra `ActionByType`, `ACTION_BINDINGS` e `actionCatalog.ts`
-- `generate_action_catalog_doc.mjs` — gera doc do catálogo de actions
+- `validate_action_catalog.ts` — valida `cards.ts` contra `ActionByType`, `ACTION_BINDINGS` e `actionCatalog.ts`
+- `generate_action_catalog_doc.ts` — gera doc do catálogo de actions
+
+Os scripts e testes são TypeScript físico, executados por `tsx` e verificados
+por `tsconfig.node.json`. Helpers em `test/helpers/` e o harness de Chain
+derivam fixtures dos contratos canônicos; entradas inválidas ou hosts
+deliberadamente parciais exigem `unsafeFixture<T>(valor, motivo)` explícito.
+O único fixture JavaScript em `test/toolchain/fixtures/jsConsumer.js` cobre
+a interoperabilidade `.js` → `.ts` do toolchain.
 
 ---
 

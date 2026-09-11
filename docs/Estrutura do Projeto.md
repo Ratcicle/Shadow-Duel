@@ -46,7 +46,7 @@ Shadow-Duel/
 ├── src/                        # Código-fonte da aplicação
 ├── test/                       # Testes automatizados
 ├── style.css                   # Estilos globais
-└── vite.config.js              # Base e opções de build/development server
+└── vite.config.ts              # Base e opções de build/development server
 ```
 
 ---
@@ -400,12 +400,12 @@ pelos efeitos visuais do duelo.
 
 | Arquivo | Responsabilidade |
 |---|---|
-| [generate_action_catalog_doc.mjs](../scripts/generate_action_catalog_doc.mjs) | Gera [docs/Catalogo de actions.md](Catalogo%20de%20actions.md). |
-| [validate_action_catalog.mjs](../scripts/validate_action_catalog.mjs) | Compara `ActionByType`, catálogo, `ACTION_BINDINGS`, registry, labels, exemplos e tipos usados pelas cartas. |
-| [run_tests.mjs](../scripts/run_tests.mjs) | Descobre e executa a suíte de testes Node. |
-| [run_bot_arena_smoke.mjs](../scripts/run_bot_arena_smoke.mjs) | Smoke test curto da Bot Arena por CLI. |
-| [audit_chain_metadata.mjs](../scripts/audit_chain_metadata.mjs) | Audita metadados canônicos de ativação, uso e Chain. |
-| [replay_duel.mjs](../scripts/replay_duel.mjs) | Executa e valida replays canônicos por CLI. |
+| [generate_action_catalog_doc.ts](../scripts/generate_action_catalog_doc.ts) | Gera [docs/Catalogo de actions.md](Catalogo%20de%20actions.md). |
+| [validate_action_catalog.ts](../scripts/validate_action_catalog.ts) | Compara `ActionByType`, catálogo, `ACTION_BINDINGS`, registry, labels, exemplos e tipos usados pelas cartas. |
+| [run_tests.ts](../scripts/run_tests.ts) | Descobre e executa a suíte de testes Node. |
+| [run_bot_arena_smoke.ts](../scripts/run_bot_arena_smoke.ts) | Smoke test curto da Bot Arena por CLI. |
+| [audit_chain_metadata.ts](../scripts/audit_chain_metadata.ts) | Audita metadados canônicos de ativação, uso e Chain. |
+| [replay_duel.ts](../scripts/replay_duel.ts) | Executa e valida replays canônicos por CLI. |
 
 ---
 

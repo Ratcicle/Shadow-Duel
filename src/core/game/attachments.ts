@@ -434,10 +434,19 @@ type GameAttachmentMethodFor<Name extends GameAttachmentName> = Extract<
   readonly [Name, GameAttachmentMethod]
 >[1];
 
+type TypedGameEventListener = <
+  Name extends import("../contracts/events.js").RuntimeEventName,
+>(
+  eventName: Name,
+  handler: import("../contracts/events.js").EventListener<Name>,
+) => void;
+
 export type GameAttachedMethods = {
   [Name in GameAttachmentName]: Name extends "moveCard"
     ? MoveCardFunction
-    : OmitThisParameter<GameAttachmentMethodFor<Name>>;
+    : Name extends "on"
+      ? TypedGameEventListener
+      : OmitThisParameter<GameAttachmentMethodFor<Name>>;
 };
 
 export const GAME_ATTACHMENT_NAMES = Object.freeze(
