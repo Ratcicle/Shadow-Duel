@@ -1,6 +1,6 @@
 # Dragon — Catálogo do Arquétipo
 
-Fonte dos textos: `src/data/cards/*.js` via fachada `src/data/cards.js` (1x cada carta do pacote Dragon / Extreme Dragons).
+Fonte dos textos: `src/data/cards/*.ts` via fachada `src/data/cards.ts` (1x cada carta do pacote Dragon / Extreme Dragons).
 
 ## Resumo
 

@@ -6,7 +6,7 @@
 
 ### Guardrails de design e implementação
 
-- Prefira sempre efeitos declarativos em `src/data/cards.js`.
+- Prefira sempre efeitos declarativos em `src/data/cards.ts`.
 - Só crie handler novo quando não houver action genérica equivalente.
 - Handlers devem ser genéricos, reutilizáveis e nunca hardcoded por nome de carta.
 - Evite automatizar escolhas do jogador. A resolução deve permanecer manual e clara sempre que envolver seleção humana.
@@ -44,7 +44,7 @@ src/core/chain/               # Implementação modular do ChainSystem (ver tabe
 src/core/effects/             # Implementação modular dos efeitos (ver tabela abaixo)
 src/core/actionHandlers/      # Handlers genéricos por categoria + catálogo
 src/core/game/                # Lógica modular do Game (19 subpastas por domínio)
-src/data/cards.js             # Banco de cartas 100% declarativo (~5700 linhas)
+src/data/cards.ts             # Banco de cartas 100% declarativo (~5700 linhas)
 ```
 
 **Fluxo de dados:** `Game.ts` emite eventos → `EffectEngine` (delegando para `src/core/effects/`) avalia triggers → handlers registrados em `actionHandlers/` executam actions.
@@ -191,7 +191,12 @@ O projeto usa TypeScript e Vite, com Node 22 (`>=22.12.0 <23`). Os imports relat
 
 ### Cartas: 100% Declarativas
 
-**Arquivo:** [src/data/cards.js](src/data/cards.js)
+**Arquivo:** [src/data/cards.ts](src/data/cards.ts)
+
+As 11 coleções em `src/data/cards/` usam `satisfies readonly RawCardDefinition[]`.
+O agregador, ranges, migração de IDs e banlist também são TypeScript físico;
+os imports relativos continuam terminando em `.js`. Preserve IDs, ordem,
+dados declarativos e digest ao alterar os contratos ou a infraestrutura.
 
 ```js
 {

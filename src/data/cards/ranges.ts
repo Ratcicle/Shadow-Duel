@@ -1,3 +1,12 @@
+export interface CardIdRange {
+  readonly key: string;
+  readonly label: string;
+  readonly start: number;
+  readonly end: number;
+}
+
+type CardIdBounds = Pick<CardIdRange, "start" | "end">;
+
 export const CARD_ID_RANGE_POLICY = Object.freeze({
   enforceAssignedRanges: true,
   mode: "renumbered",
@@ -70,40 +79,43 @@ export const CARD_ID_RANGES = Object.freeze([
     start: 551,
     end: 600,
   }),
-]);
+] satisfies readonly CardIdRange[]);
 
-export const CARD_ID_RANGE_BY_KEY = new Map(
+export const CARD_ID_RANGE_BY_KEY = new Map<string, CardIdRange>(
   CARD_ID_RANGES.map((range) => [range.key, range]),
 );
 
-export function getCardIdRangeByKey(key) {
+export function getCardIdRangeByKey(key: string): CardIdRange | null {
   return CARD_ID_RANGE_BY_KEY.get(key) || null;
 }
 
-export function getCardIdRangeSize(range) {
+export function getCardIdRangeSize(range: CardIdBounds | null | undefined): number {
   if (!range) return 0;
   return range.end - range.start + 1;
 }
 
-export function isCardIdInRange(cardId, range) {
+export function isCardIdInRange(
+  cardId: unknown,
+  range: CardIdBounds | null | undefined,
+): boolean {
   return (
     Number.isInteger(cardId) &&
     Boolean(range) &&
-    cardId >= range.start &&
-    cardId <= range.end
+    (cardId as number) >= range!.start &&
+    (cardId as number) <= range!.end
   );
 }
 
-export function getCardIdRangeForId(cardId) {
+export function getCardIdRangeForId(cardId: unknown): CardIdRange | null {
   return (
     CARD_ID_RANGES.find((range) => isCardIdInRange(cardId, range)) || null
   );
 }
 
-export function validateCardIdRangeRegistry() {
-  const errors = [];
-  const seenKeys = new Set();
-  const claimedIds = new Map();
+export function validateCardIdRangeRegistry(): string[] {
+  const errors: string[] = [];
+  const seenKeys = new Set<string>();
+  const claimedIds = new Map<number, string>();
 
   for (const range of CARD_ID_RANGES) {
     if (!range || typeof range !== "object") {

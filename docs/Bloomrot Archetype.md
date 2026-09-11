@@ -1,6 +1,6 @@
 # Bloomrot — Catálogo do Arquétipo
 
-Fonte dos textos: `src/data/cards/bloomrot.js` via fachada `src/data/cards.js` (1x cada carta do arquetipo).
+Fonte dos textos: `src/data/cards/bloomrot.ts` via fachada `src/data/cards.ts` (1x cada carta do arquetipo).
 
 ## Resumo
 

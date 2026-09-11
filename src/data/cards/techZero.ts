@@ -1,6 +1,5 @@
-// @ts-check
+import type { RawCardDefinition } from "../../core/contracts/cards.js";
 
-/** @satisfies {readonly import("../../core/contracts/cards.js").RawCardDefinition[]} */
 export const techZeroCards = [
   {
     id: 501,
@@ -2000,4 +1999,4 @@ export const techZeroCards = [
       },
     ],
   },
-];
+] satisfies readonly RawCardDefinition[];

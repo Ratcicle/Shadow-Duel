@@ -1,6 +1,6 @@
 # Void — Catálogo do Arquétipo & Efeitos
 
-Fonte dos textos: `src/data/cards/*.js` via fachada `src/data/cards.js` (1x cada carta).
+Fonte dos textos: `src/data/cards/*.ts` via fachada `src/data/cards.ts` (1x cada carta).
 
 ## Resumo
 

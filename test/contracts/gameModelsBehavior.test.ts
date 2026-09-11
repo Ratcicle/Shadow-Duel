@@ -11,6 +11,7 @@ import Card, {
 import Game from "../../src/core/Game.js";
 import Player from "../../src/core/Player.js";
 import { cardDatabase } from "../../src/data/cards.js";
+import type { CardConstructorData } from "../../src/core/contracts/cards.js";
 
 function monster(
   name: string,
@@ -250,13 +251,13 @@ test("Player tribute rules and a normal summon use the existing transaction port
 
 test("Player Extra Deck keeps only eligible database definitions", () => {
   const player = new Player("player", "Player", "human");
-  const extraDefinition = cardDatabase.find((definition) =>
+  const extraDefinition = cardDatabase.find((definition: CardConstructorData) =>
     ["fusion", "synchro", "ascension"].includes(
       definition.monsterType ?? "",
     ),
   );
   const mainDefinition = cardDatabase.find(
-    (definition) =>
+    (definition: CardConstructorData) =>
       definition.cardKind === "monster" && !definition.monsterType,
   );
 

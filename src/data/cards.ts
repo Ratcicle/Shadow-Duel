@@ -9,6 +9,13 @@ import { bloomrotCards } from "./cards/bloomrot.js";
 import { burningWestCards } from "./cards/burningWest.js";
 import { techZeroCards } from "./cards/techZero.js";
 import { vulcanomatonCards } from "./cards/vulcanomaton.js";
+import type { RawCardDefinition } from "../core/contracts/cards.js";
+import type { CARD_ID_RANGES } from "./cards/ranges.js";
+
+interface CardDatabaseGroup {
+  rangeKey: (typeof CARD_ID_RANGES)[number]["key"];
+  cards: readonly RawCardDefinition[];
+}
 
 export const cardDatabaseGroups = [
   { rangeKey: "generic", cards: genericCards },
@@ -22,9 +29,13 @@ export const cardDatabaseGroups = [
   { rangeKey: "burningWest", cards: burningWestCards },
   { rangeKey: "techZero", cards: techZeroCards },
   { rangeKey: "vulcanomaton", cards: vulcanomatonCards },
-];
+] satisfies readonly CardDatabaseGroup[];
 
-export const cardDatabase = cardDatabaseGroups.flatMap((group) => group.cards);
+export type DatabaseCard = (typeof cardDatabaseGroups)[number]["cards"][number];
+
+export const cardDatabase = cardDatabaseGroups.flatMap<DatabaseCard>(
+  (group) => group.cards,
+);
 
 // Performance optimization: Create indexed maps for O(1) lookups
 export const cardDatabaseById = new Map(

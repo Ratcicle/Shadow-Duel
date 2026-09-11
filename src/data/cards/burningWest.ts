@@ -1,6 +1,5 @@
-// @ts-check
+import type { RawCardDefinition } from "../../core/contracts/cards.js";
 
-/** @satisfies {readonly import("../../core/contracts/cards.js").RawCardDefinition[]} */
 export const burningWestCards = [
   {
     id: 451,
@@ -1340,4 +1339,4 @@ export const burningWestCards = [
       },
     ],
   },
-];
+] satisfies readonly RawCardDefinition[];
