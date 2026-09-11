@@ -22,7 +22,11 @@ export const EQUIP_LINK_ICONS = Object.freeze({
   equipped: connectionIconUrl,
 });
 
-export function createTablerIcon(iconUrl, className = "", options = {}) {
+export function createTablerIcon(
+  iconUrl: string,
+  className = "",
+  options: { decorative?: boolean; label?: string } = {},
+) {
   const icon = document.createElement("span");
   icon.className = ["tabler-icon", className].filter(Boolean).join(" ");
   icon.style.setProperty("--tabler-icon", `url("${iconUrl}")`);

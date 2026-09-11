@@ -1,3 +1,90 @@
+import type Renderer from "../Renderer.js";
+import type { UiCard, UiCardElement, EffectDisplay } from "./types.js";
+import type { SupportedLocale } from "../../core/i18n.js";
+import type {
+  SelectionRequirement,
+  SelectionMetadata,
+  RawSelectionUIConfig,
+  RawSelectionCandidate,
+} from "../../core/contracts/selection.js";
+export interface DisplaySelectionContract {
+  kind?: string;
+  message?: string | null;
+  requirements?: readonly SelectionRequirement[];
+  metadata?: SelectionMetadata;
+  ui?: RawSelectionUIConfig;
+}
+export interface FieldTargetingConfig {
+  selectionContract?: DisplaySelectionContract | null;
+  sourceCard?: UiCard | string | null;
+  sourceCardName?: string | null;
+  card?: UiCard | null;
+  message?: string | null;
+  allowCancel?: boolean;
+  allowEmpty?: boolean;
+}
+export interface FieldTargetingState {
+  selected?: number;
+  min?: number;
+  max?: number;
+  allowEmpty?: boolean;
+}
+export interface ModalHandle {
+  close(): void;
+}
+export interface FieldTargetingHandle extends ModalHandle {
+  updateState(state: FieldTargetingState): void;
+}
+interface FieldTargetingBar extends HTMLDivElement {
+  __fieldTargetingCleanup?: () => void;
+}
+export interface CardGridOptions<T extends UiCard = UiCard> {
+  title?: string;
+  subtitle?: string;
+  cards?: readonly T[];
+  minSelect?: number;
+  maxSelect?: number;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  overlayClass?: string;
+  modalClass?: string;
+  gridClass?: string;
+  cardClass?: string;
+  infoText?: string;
+  onConfirm?: (cards: T[]) => void;
+  onCancel?: () => void;
+  renderCard?: (card: T, index: number) => UiCardElement | null;
+}
+export interface MaterialDisplayRequirement {
+  count?: number;
+  name?: string;
+  archetype?: string;
+  type?: string;
+  attribute?: string;
+  allowedZones?: readonly string[];
+  zone?: string;
+}
+export interface TriggerDisplayCandidate {
+  candidateId: string;
+  card: UiCard;
+  effect?: EffectDisplay | null;
+}
+export interface TriggerOrderOptions {
+  candidates?: readonly TriggerDisplayCandidate[];
+  optional?: boolean;
+  onCancel?: () => void;
+  onConfirm?: (ids: string[]) => void;
+}
+export interface TieBreakerOptions<T extends UiCard = UiCard>
+  extends CardGridOptions<T> {
+  keepCount?: number;
+}
+export interface MultiSelectRange<T extends UiCard = UiCard>
+  extends CardGridOptions<T> {
+  min?: number;
+  max?: number;
+}
+
 /**
  * Selection modal methods for Renderer
  * Handles: showTargetSelection, showFieldTargetingControls, hideFieldTargetingControls,
@@ -14,7 +101,7 @@ import {
 } from "../../core/i18n.js";
 import { publicAssetUrl } from "../../core/publicUrl.js";
 
-const SELECTION_KIND_LABELS = {
+const SELECTION_KIND_LABELS: Record<SupportedLocale, Record<string, string>> = {
   en: {
     monster: "Monster",
     spell: "Spell",
@@ -33,7 +120,10 @@ const SELECTION_KIND_LABELS = {
   },
 };
 
-const SELECTION_SUBTYPE_LABELS = {
+const SELECTION_SUBTYPE_LABELS: Record<
+  SupportedLocale,
+  Record<string, string>
+> = {
   en: {
     normal: "Normal",
     continuous: "Continuous",
@@ -50,7 +140,7 @@ const SELECTION_SUBTYPE_LABELS = {
   },
 };
 
-function getSelectionLabel(key) {
+function getSelectionLabel(key: string) {
   const locale = getLocale();
   return (
     SELECTION_KIND_LABELS[locale]?.[key] ||
@@ -61,7 +151,7 @@ function getSelectionLabel(key) {
   );
 }
 
-export function getSelectionCardTypeClass(card) {
+export function getSelectionCardTypeClass(card: UiCard | null | undefined) {
   if (card?.cardKind === "spell") return "selection-card--spell";
   if (card?.cardKind === "trap") return "selection-card--trap";
   const monsterType = String(card?.monsterType || "").toLowerCase();
@@ -71,7 +161,7 @@ export function getSelectionCardTypeClass(card) {
   return "selection-card--monster";
 }
 
-function getSelectionTypeLine(card) {
+function getSelectionTypeLine(card: UiCard | null | undefined) {
   if (card?.cardKind === "monster") {
     const monsterType = String(card?.monsterType || "").toLowerCase();
     const kind =
@@ -89,12 +179,19 @@ function getSelectionTypeLine(card) {
   return [kind, subtype].filter(Boolean).join(" | ");
 }
 
-function getSelectionStat(card, candidate, stat) {
+function getSelectionStat(
+  card: UiCard | null | undefined,
+  candidate: RawSelectionCandidate,
+  stat: "atk" | "def" | "level",
+) {
   const value = candidate?.[stat] ?? card?.[stat];
   return Number.isFinite(value) ? value : "-";
 }
 
-export function renderCompactSelectionCard(card, candidate = {}) {
+export function renderCompactSelectionCard(
+  card: UiCard | null | undefined,
+  candidate: RawSelectionCandidate = {},
+) {
   const displayName =
     getCardDisplayName(card) ||
     (card?.name && card.name) ||
@@ -148,7 +245,7 @@ export function renderCompactSelectionCard(card, candidate = {}) {
   return wrapper;
 }
 
-function getFieldTargetingSourceName(config = {}) {
+function getFieldTargetingSourceName(config: FieldTargetingConfig = {}) {
   const sourceCard = getFieldTargetingSourceCard(config);
   if (sourceCard) {
     return getCardDisplayName(sourceCard) || sourceCard.name || null;
@@ -165,25 +262,26 @@ function getFieldTargetingSourceName(config = {}) {
   return sourceCardName || null;
 }
 
-function getFieldTargetingSourceCard(config = {}) {
+function getFieldTargetingSourceCard(
+  config: FieldTargetingConfig = {},
+): UiCard | null {
   const contract = config.selectionContract || {};
   const metadata =
     contract.metadata && typeof contract.metadata === "object"
       ? contract.metadata
       : {};
   const sourceCard =
-    config.sourceCard ||
-    metadata.sourceCard ||
-    config.card ||
-    null;
+    config.sourceCard || metadata.sourceCard || config.card || null;
   if (sourceCard && typeof sourceCard === "object") {
     return sourceCard;
   }
   return null;
 }
 
-function getFieldTargetingTotals(contract = {}) {
-  const requirements = Array.isArray(contract.requirements)
+function getFieldTargetingTotals(contract: DisplaySelectionContract = {}) {
+  const requirements: readonly SelectionRequirement[] = Array.isArray(
+    contract.requirements,
+  )
     ? contract.requirements
     : [];
   return requirements.reduce(
@@ -194,17 +292,21 @@ function getFieldTargetingTotals(contract = {}) {
       totals.max += Number.isFinite(max) ? max : 0;
       return totals;
     },
-    { min: 0, max: 0 }
+    { min: 0, max: 0 },
   );
 }
 
-function isGenericFieldTargetingMessage(message) {
+function isGenericFieldTargetingMessage(message: string | null | undefined) {
   return Boolean(getGenericFieldTargetingEffectLabel(message));
 }
 
-function getGenericFieldTargetingEffectLabel(message) {
-  const normalized = String(message || "").trim().toLowerCase();
-  const labels = {
+function getGenericFieldTargetingEffectLabel(
+  message: string | null | undefined,
+) {
+  const normalized = String(message || "")
+    .trim()
+    .toLowerCase();
+  const labels: Record<string, { en: string; ptBr: string }> = {
     "select target(s) for the monster effect.": {
       en: "monster effect",
       ptBr: "efeito de monstro",
@@ -241,15 +343,19 @@ function getGenericFieldTargetingEffectLabel(message) {
   return labels[normalized] || null;
 }
 
-function shouldPreserveGenericEffectContext(message) {
-  const normalized = String(message || "").trim().toLowerCase();
+function shouldPreserveGenericEffectContext(
+  message: string | null | undefined,
+) {
+  const normalized = String(message || "")
+    .trim()
+    .toLowerCase();
   return normalized.includes("graveyard") || normalized.includes("triggered");
 }
 
 function getSourceSpecificEffectLabel(
-  config = {},
-  fallbackLabel = null,
-  message = null
+  config: FieldTargetingConfig = {},
+  fallbackLabel: string | null = null,
+  message: string | null = null,
 ) {
   if (shouldPreserveGenericEffectContext(message)) return fallbackLabel;
 
@@ -278,7 +384,7 @@ function getSourceSpecificEffectLabel(
   return fallbackLabel;
 }
 
-function getFieldTargetingPrompt(config = {}) {
+function getFieldTargetingPrompt(config: FieldTargetingConfig = {}) {
   const contract = config.selectionContract || {};
   const explicitMessage =
     config.message || contract.ui?.message || contract.message || null;
@@ -290,22 +396,23 @@ function getFieldTargetingPrompt(config = {}) {
   const { min, max } = getFieldTargetingTotals(contract);
   const locale = getLocale();
   const isPtBr = locale === "pt-br";
-  const genericEffectLabel = getGenericFieldTargetingEffectLabel(explicitMessage);
+  const genericEffectLabel =
+    getGenericFieldTargetingEffectLabel(explicitMessage);
   const genericLabel = isPtBr
     ? genericEffectLabel?.ptBr || "efeito"
     : genericEffectLabel?.en || "effect";
   const effectLabel = getSourceSpecificEffectLabel(
     config,
     genericLabel,
-    explicitMessage
+    explicitMessage,
   );
   const sourceClause = sourceName
     ? isPtBr
       ? ` para o ${effectLabel} de ${sourceName}`
       : ` for ${sourceName}'s ${effectLabel}`
     : isPtBr
-    ? ` para o ${effectLabel}`
-    : ` for the ${effectLabel}`;
+      ? ` para o ${effectLabel}`
+      : ` for the ${effectLabel}`;
 
   if (isPtBr) {
     if (max > 0 && min === 0) {
@@ -339,7 +446,10 @@ function getFieldTargetingActionLabels() {
   };
 }
 
-function getRequirementInstruction(req, isChoiceBlock) {
+function getRequirementInstruction(
+  req: SelectionRequirement,
+  isChoiceBlock: boolean | undefined,
+) {
   const min = Number(req?.min ?? 0);
   const max = Number(req?.max ?? min);
   const label = req?.label || req?.id || getUIText("ui.selection.effectLabel");
@@ -360,7 +470,7 @@ function getRequirementInstruction(req, isChoiceBlock) {
   return getUIText("ui.selection.chooseTargetRange", { min, max, label });
 }
 
-function getSelectionValidationText(req) {
+function getSelectionValidationText(req: SelectionRequirement) {
   const min = Number(req?.min ?? 0);
   const max = Number(req?.max ?? min);
   const label = req?.label || req?.id || getUIText("ui.selection.effectLabel");
@@ -377,7 +487,7 @@ function getFieldTargetingHost() {
   return document.getElementById("game-container") || document.body;
 }
 
-function getHostRect(host) {
+function getHostRect(host: HTMLElement) {
   if (host === document.body) {
     return {
       top: 0,
@@ -389,23 +499,27 @@ function getHostRect(host) {
   return host.getBoundingClientRect();
 }
 
-function clampNumber(value, min, max) {
+function clampNumber(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
 }
 
-function getHandTargetElements(selectionContract = {}) {
-  const requirements = Array.isArray(selectionContract.requirements)
+function getHandTargetElements(
+  selectionContract: DisplaySelectionContract = {},
+) {
+  const requirements: readonly SelectionRequirement[] = Array.isArray(
+    selectionContract.requirements,
+  )
     ? selectionContract.requirements
     : [];
-  const elements = [];
+  const elements: HTMLElement[] = [];
   requirements.forEach((req) => {
     (req.candidates || []).forEach((cand) => {
       if (cand?.zone !== "hand") return;
       const owner = cand.controller === "bot" ? "bot" : "player";
       const container = document.getElementById(`${owner}-hand`);
       if (!container || typeof cand.zoneIndex !== "number") return;
-      const cardEl = container.querySelector(
-        `.card[data-index="${cand.zoneIndex}"]`
+      const cardEl = container.querySelector<HTMLElement>(
+        `.card[data-index="${cand.zoneIndex}"]`,
       );
       if (cardEl) elements.push(cardEl);
     });
@@ -413,7 +527,7 @@ function getHandTargetElements(selectionContract = {}) {
   return elements;
 }
 
-function getTopMostRect(elements = []) {
+function getTopMostRect(elements: readonly Element[] = []) {
   let top = Infinity;
   elements.forEach((el) => {
     const rect = el?.getBoundingClientRect?.();
@@ -423,13 +537,19 @@ function getTopMostRect(elements = []) {
   return Number.isFinite(top) ? top : null;
 }
 
-function positionFieldTargetingControls(bar, host, config = {}) {
+function positionFieldTargetingControls(
+  bar: HTMLElement | null,
+  host: HTMLElement | null,
+  config: FieldTargetingConfig = {},
+) {
   if (!bar || !host) return;
   const hostRect = getHostRect(host);
   bar.style.bottom = "auto";
   const spellTrap = document.getElementById("player-spelltrap");
   const hand = document.getElementById("player-hand");
-  const anchor = spellTrap || document.querySelector("#player-area .board-core");
+  const anchor =
+    spellTrap ||
+    document.querySelector<HTMLElement>("#player-area .board-core");
 
   const anchorRect = anchor?.getBoundingClientRect();
   const anchorCenterX = anchorRect
@@ -439,7 +559,7 @@ function positionFieldTargetingControls(bar, host, config = {}) {
   const minLeft = Math.min(hostRect.width / 2, halfWidth + 8);
   const maxLeft = Math.max(minLeft, hostRect.width - halfWidth - 8);
   bar.style.left = `${Math.round(
-    clampNumber(anchorCenterX, minLeft, maxLeft)
+    clampNumber(anchorCenterX, minLeft, maxLeft),
   )}px`;
 
   let top = hostRect.height - bar.offsetHeight - 24;
@@ -451,11 +571,12 @@ function positionFieldTargetingControls(bar, host, config = {}) {
   }
 
   const handTargetTop = getTopMostRect(
-    getHandTargetElements(config.selectionContract)
+    getHandTargetElements(config.selectionContract!),
   );
   if (handTargetTop !== null) {
     const gap = 10;
-    const maxTopAboveHand = handTargetTop - hostRect.top - bar.offsetHeight - gap;
+    const maxTopAboveHand =
+      handTargetTop - hostRect.top - bar.offsetHeight - gap;
     top = Math.min(top, maxTopAboveHand);
   }
 
@@ -467,16 +588,19 @@ function positionFieldTargetingControls(bar, host, config = {}) {
  * @this {import('../Renderer.js').default}
  */
 export function showTargetSelection(
-  selectionContract,
-  onConfirm,
-  onCancel,
-  config = {}
-) {
+  this: Renderer,
+  selectionContract: DisplaySelectionContract | null,
+  onConfirm: ((selections: Record<string, string[]>) => void) | null,
+  onCancel: (() => void) | null,
+  config: FieldTargetingConfig = {},
+): ModalHandle {
   const contract =
     selectionContract && typeof selectionContract === "object"
       ? selectionContract
       : {};
-  const requirements = Array.isArray(contract.requirements)
+  const requirements: readonly SelectionRequirement[] = Array.isArray(
+    contract.requirements,
+  )
     ? contract.requirements
     : [];
   if (requirements.length === 0) {
@@ -496,7 +620,7 @@ export function showTargetSelection(
   const isChoiceModal =
     contract.kind === "choice" ||
     requirements.some((req) =>
-      req.candidates?.some((c) => c.zone === "choice")
+      req.candidates?.some((c) => c.zone === "choice"),
     );
 
   const content = document.createElement("div");
@@ -518,8 +642,8 @@ export function showTargetSelection(
   title.textContent = titleText;
   content.appendChild(title);
 
-  const selectionState = {};
-  const counterById = new Map();
+  const selectionState: Record<string, string[]> = {};
+  const counterById = new Map<string, HTMLElement>();
 
   const updateConfirmState = () => {
     let ready = true;
@@ -661,7 +785,7 @@ export function showTargetSelection(
     }
   };
 
-  const closeBtn = overlay.querySelector(".close-target");
+  const closeBtn = closeMarker;
   if (allowCancel) {
     closeBtn.addEventListener("click", () => {
       closeModal();
@@ -697,7 +821,12 @@ export function showTargetSelection(
 /**
  * @this {import('../Renderer.js').default}
  */
-export function showFieldTargetingControls(onConfirm, onCancel, config = {}) {
+export function showFieldTargetingControls(
+  this: Renderer,
+  onConfirm: (() => void) | null,
+  onCancel: (() => void) | null,
+  config: FieldTargetingConfig = {},
+): FieldTargetingHandle {
   this.hideFieldTargetingControls();
 
   const allowCancel = config.allowCancel !== false;
@@ -706,7 +835,7 @@ export function showFieldTargetingControls(onConfirm, onCancel, config = {}) {
   const host = getFieldTargetingHost();
   const usesBodyHost = host === document.body;
 
-  const bar = document.createElement("div");
+  const bar: FieldTargetingBar = document.createElement("div");
   bar.className = "field-targeting-controls";
   bar.style.position = usesBodyHost ? "fixed" : "absolute";
   bar.style.left = "50%";
@@ -767,7 +896,7 @@ export function showFieldTargetingControls(onConfirm, onCancel, config = {}) {
     const raf =
       typeof window.requestAnimationFrame === "function"
         ? window.requestAnimationFrame.bind(window)
-        : (callback) => window.setTimeout(callback, 0);
+        : (callback: () => void) => window.setTimeout(callback, 0);
     raf(reposition);
     window.setTimeout(reposition, 220);
   };
@@ -780,7 +909,12 @@ export function showFieldTargetingControls(onConfirm, onCancel, config = {}) {
     document.removeEventListener("pointerout", scheduleReposition, true);
   };
 
-  const updateState = ({ selected = 0, min = 0, max = 0, allowEmpty }) => {
+  const updateState = ({
+    selected = 0,
+    min = 0,
+    max = 0,
+    allowEmpty,
+  }: FieldTargetingState) => {
     const requiredMin = allowEmpty ? 0 : min;
     counter.textContent = `${selected} / ${max || "-"}`;
     confirmBtn.disabled = selected < requiredMin || (max > 0 && selected > max);
@@ -799,8 +933,10 @@ export function showFieldTargetingControls(onConfirm, onCancel, config = {}) {
 /**
  * @this {import('../Renderer.js').default}
  */
-export function hideFieldTargetingControls() {
-  const existing = document.querySelector(".field-targeting-controls");
+export function hideFieldTargetingControls(this: Renderer): void {
+  const existing = document.querySelector<FieldTargetingBar>(
+    ".field-targeting-controls",
+  );
   if (existing) {
     if (typeof existing.__fieldTargetingCleanup === "function") {
       existing.__fieldTargetingCleanup();
@@ -813,11 +949,14 @@ export function hideFieldTargetingControls() {
  * @this {import('../Renderer.js').default}
  */
 export function showDestructionNegationPrompt(
-  cardName,
-  costDescription,
-  onDecision
-) {
-  const existing = document.querySelector(".destruction-negation-modal");
+  this: Renderer,
+  cardName: string,
+  costDescription: string | null,
+  onDecision: (activate: boolean) => void,
+): void {
+  const existing = document.querySelector<HTMLElement>(
+    ".destruction-negation-modal",
+  );
   if (existing) existing.remove();
 
   const overlay = document.createElement("div");
@@ -875,7 +1014,12 @@ export function showDestructionNegationPrompt(
 /**
  * @this {import('../Renderer.js').default}
  */
-export function showFusionTargetModal(availableFusions, onSelect, onCancel) {
+export function showFusionTargetModal(
+  this: Renderer,
+  availableFusions: readonly { fusion: UiCard; index: number }[],
+  onSelect: (index: number) => void,
+  onCancel?: () => void,
+): void {
   const overlay = document.createElement("div");
   overlay.className = "modal fusion-modal";
 
@@ -924,12 +1068,13 @@ export function showFusionTargetModal(availableFusions, onSelect, onCancel) {
 /**
  * @this {import('../Renderer.js').default}
  */
-export function showFusionMaterialSelection(
-  availableMaterials,
-  requirements,
-  onConfirm,
-  onCancel
-) {
+export function showFusionMaterialSelection<T extends UiCard>(
+  this: Renderer,
+  availableMaterials: readonly T[],
+  requirements: readonly MaterialDisplayRequirement[],
+  onConfirm: (materials: T[]) => void,
+  onCancel?: () => void,
+): void {
   const overlay = document.createElement("div");
   overlay.className = "modal fusion-material-modal";
 
@@ -961,7 +1106,7 @@ export function showFusionMaterialSelection(
     hint.innerHTML += `${count}x ${desc}${zoneSuffix}<br>`;
   });
 
-  const selectedMaterials = [];
+  const selectedMaterials: T[] = [];
   const grid = document.createElement("div");
   grid.className = "fusion-material-grid";
 
@@ -1025,7 +1170,10 @@ export function showFusionMaterialSelection(
 /**
  * @this {import('../Renderer.js').default}
  */
-export function showCardGridSelectionModal(options) {
+export function showCardGridSelectionModal<T extends UiCard>(
+  this: Renderer,
+  options: CardGridOptions<T> | null,
+): void {
   const {
     title = getUIText("ui.cardGrid.selectCards"),
     subtitle = "",
@@ -1068,9 +1216,9 @@ export function showCardGridSelectionModal(options) {
 
   const grid = document.createElement("div");
   grid.className = gridClass;
-  const selected = new Set();
+  const selected = new Set<number>();
 
-  const renderDefaultCard = (card) => {
+  const renderDefaultCard = (card: T) => {
     const cardEl = document.createElement("div");
     cardEl.className = [
       cardClass,
@@ -1106,7 +1254,7 @@ export function showCardGridSelectionModal(options) {
       toggle();
     });
 
-    const imgEl = cardEl.querySelector("img");
+    const imgEl = cardEl.querySelector<HTMLElement>("img");
     if (imgEl) {
       imgEl.addEventListener("click", (e) => {
         e.stopPropagation();
@@ -1120,7 +1268,7 @@ export function showCardGridSelectionModal(options) {
   modal.appendChild(grid);
 
   grid.addEventListener("mouseover", (e) => {
-    const item = e.target.closest(`.${cardClass}`);
+    const item = (e.target as Element).closest<HTMLElement>(`.${cardClass}`);
     if (!item) return;
     const idx = Number(item.dataset.index);
     const card = cards[idx];
@@ -1172,13 +1320,16 @@ export function showCardGridSelectionModal(options) {
  * Mandatory candidates cannot be omitted; clicking one moves it to the end.
  * @this {import('../Renderer.js').default}
  */
-export function showTriggerOrderModal(options = {}) {
+export function showTriggerOrderModal(
+  this: Renderer,
+  options: TriggerOrderOptions = {},
+): Promise<string[]> {
   const candidates = Array.isArray(options.candidates)
     ? options.candidates
     : [];
   const optional = options.optional === true;
 
-  return new Promise((resolve) => {
+  return new Promise<string[]>((resolve) => {
     const overlay = document.createElement("div");
     overlay.className = "card-grid-overlay trigger-order-overlay";
     const modal = document.createElement("div");
@@ -1288,7 +1439,11 @@ export function showTriggerOrderModal(options = {}) {
 /**
  * @this {import('../Renderer.js').default}
  */
-export function showIgnitionActivateModal(card, onActivate) {
+export function showIgnitionActivateModal(
+  this: Renderer,
+  card: UiCard | null,
+  onActivate: () => void,
+): void {
   const overlay = document.createElement("div");
   overlay.classList.add("modal", "ignition-overlay");
 
@@ -1338,12 +1493,13 @@ export function showIgnitionActivateModal(card, onActivate) {
 /**
  * @this {import('../Renderer.js').default}
  */
-export function showShadowHeartCathedralModal(
-  validMonsters,
-  maxAtk,
-  counterCount,
-  callback
-) {
+export function showShadowHeartCathedralModal<T extends UiCard>(
+  this: Renderer,
+  validMonsters: readonly T[],
+  maxAtk: number,
+  counterCount: number,
+  callback: (card: T | null) => void,
+): void {
   this.showCardGridSelectionModal({
     title: getUIText("ui.shadowHeartCathedral.title"),
     subtitle: getUIText("ui.shadowHeartCathedral.subtitle", {
@@ -1374,14 +1530,15 @@ export function showShadowHeartCathedralModal(
 
         const cardImg = document.createElement("img");
         cardImg.src = publicAssetUrl(monster.image || "assets/card-back.png");
-        cardImg.alt = monster.name;
+        cardImg.alt = String(monster.name);
         cardImg.classList.add("cathedral-card-img");
 
         const cardInfo = document.createElement("div");
         cardInfo.classList.add("cathedral-card-info");
 
         const cardName = document.createElement("div");
-        cardName.textContent = getCardDisplayName(monster) || monster.name;
+        cardName.textContent =
+          getCardDisplayName(monster) || monster.name || null;
         cardName.classList.add("cathedral-card-name");
         cardName.style.fontSize = "15px";
         cardName.style.fontWeight = "bold";
@@ -1414,12 +1571,13 @@ export function showShadowHeartCathedralModal(
 /**
  * @this {import('../Renderer.js').default}
  */
-export function showSickleSelectionModal(
-  candidates,
-  maxSelect,
-  onConfirm,
-  onCancel
-) {
+export function showSickleSelectionModal<T extends UiCard>(
+  this: Renderer,
+  candidates: readonly T[],
+  maxSelect: number,
+  onConfirm: (cards: T[]) => void,
+  onCancel?: () => void,
+): void {
   this.showCardGridSelectionModal({
     title: getUIText("ui.luminarchSickle.title"),
     subtitle: getUIText("ui.luminarchSickle.subtitle", { maxSelect }),
@@ -1451,7 +1609,10 @@ export function showSickleSelectionModal(
 /**
  * @this {import('../Renderer.js').default}
  */
-export function showTieBreakerSelection(options = {}) {
+export function showTieBreakerSelection<T extends UiCard>(
+  this: Renderer,
+  options: TieBreakerOptions<T> = {},
+): void {
   const {
     title = getUIText("ui.cardGrid.chooseSurvivor"),
     subtitle = "",
@@ -1462,7 +1623,7 @@ export function showTieBreakerSelection(options = {}) {
     onCancel,
   } = options;
 
-  const renderCard = (card) => {
+  const renderCard = (card: T) => {
     const cardEl = document.createElement("div");
     cardEl.classList.add("tie-breaker-card-item");
 
@@ -1514,11 +1675,12 @@ export function showTieBreakerSelection(options = {}) {
 /**
  * @this {import('../Renderer.js').default}
  */
-export function showMultiSelectModal(
-  cards = [],
-  selectionRange = {},
-  onConfirm
-) {
+export function showMultiSelectModal<T extends UiCard>(
+  this: Renderer,
+  cards: readonly T[] = [],
+  selectionRange: MultiSelectRange<T> = {},
+  onConfirm?: (cards: T[]) => void,
+): void {
   const {
     min = 0,
     max = cards.length,

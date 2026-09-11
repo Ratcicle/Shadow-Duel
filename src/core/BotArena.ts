@@ -17,7 +17,7 @@ type ArenaRuntimeGame = PlayerGamePort & ArenaGamePort & {
   turnLineSearchTurnMode?: AITurnPlanningMode | null;
   turnLineSearchBeamWidth?: number | null; turnLineSearchMaxDepth?: number | null;
   turnLineSearchNodeBudget?: number | null; turnLineSearchCandidateLimit?: number | null;
-  ui?: GameUiPort & { showAlert?(): void; showGameOverModal?(): void };
+  ui?: GameUiPort;
   bindCardInteractions(): void;
   effectEngine?: { logTargetingCacheStats?(): void } | null;
 };

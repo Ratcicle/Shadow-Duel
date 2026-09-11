@@ -1,3 +1,14 @@
+import type Renderer from "../Renderer.js";
+import type { GamePlayer } from "../../core/contracts/player.js";
+import type { GamePhase } from "../../core/contracts/game.js";
+import type { PlayerId } from "../../core/contracts/primitives.js";
+
+export interface PriorityDisplayState {
+  state?: string;
+  priorityPlayerId?: PlayerId | null;
+  turnPlayerId?: PlayerId | null;
+}
+
 import { getUIText } from "../../core/i18n.js";
 
 /**
@@ -8,7 +19,7 @@ import { getUIText } from "../../core/i18n.js";
 /**
  * @this {import('../Renderer.js').default}
  */
-export function log(message) {
+export function log(this: Renderer, message: string): void {
   console.log(message);
   const logList = this.elements.actionLog;
   if (!logList) return;
@@ -26,7 +37,7 @@ export function log(message) {
 
   const maxEntries = 80;
   while (logList.children.length > maxEntries) {
-    logList.removeChild(logList.firstChild);
+    logList.removeChild(logList.firstChild!);
   }
 
   logList.scrollTop = logList.scrollHeight;
@@ -35,7 +46,7 @@ export function log(message) {
 /**
  * @this {import('../Renderer.js').default}
  */
-export function updateTurn(player) {
+export function updateTurn(this: Renderer, player: GamePlayer): void {
   if (!this.elements.turnIndicator) return;
   this.elements.turnIndicator.textContent = `Turn: ${player.name}`;
 
@@ -52,7 +63,11 @@ export function updateTurn(player) {
 /**
  * @this {import('../Renderer.js').default}
  */
-export function updatePhaseTrack(currentPhase, game = null) {
+export function updatePhaseTrack(
+  this: Renderer,
+  currentPhase: GamePhase,
+  game: { canEnterBattlePhase?(): boolean } | null = null,
+): void {
   const phases = this.elements.phaseTrack?.querySelectorAll("li");
   if (!phases) return;
   const phaseOrder =
@@ -66,7 +81,7 @@ export function updatePhaseTrack(currentPhase, game = null) {
       li.classList.add("active");
       return;
     }
-    const phaseIdx = phaseOrder.indexOf(li.dataset.phase);
+    const phaseIdx = phaseOrder.indexOf(li.dataset.phase!);
     if (currentIdx >= 0 && phaseIdx >= 0 && phaseIdx < currentIdx) {
       li.classList.add("done");
     }
@@ -78,7 +93,10 @@ export function updatePhaseTrack(currentPhase, game = null) {
  * and never opens or closes a response window itself.
  * @this {import('../Renderer.js').default}
  */
-export function updatePriorityIndicator(state = null) {
+export function updatePriorityIndicator(
+  this: Renderer,
+  state: PriorityDisplayState | null = null,
+): void {
   const element = this.elements.priorityIndicator;
   if (!element) return;
   if (!state) {
@@ -109,7 +127,7 @@ export function updatePriorityIndicator(state = null) {
 /**
  * @this {import('../Renderer.js').default}
  */
-export function updateLP(player) {
+export function updateLP(this: Renderer, player: GamePlayer): void {
   const el =
     player.id === "player" ? this.elements.playerLP : this.elements.botLP;
   if (!el) return;
@@ -120,10 +138,10 @@ export function updateLP(player) {
     typeof this.setDisplayedLp === "function"
   ) {
     const state = this.ensureLpDisplayState(player);
-    if (state?.animating || state?.queue?.length > 0) {
+    if (state?.animating || state?.queue?.length! > 0) {
       const displayed = this.getDisplayedLp(player);
       if (displayed != null) {
-        el.textContent = displayed;
+        el.textContent = String(displayed);
       }
       return;
     }
@@ -135,5 +153,5 @@ export function updateLP(player) {
     return;
   }
 
-  el.textContent = player.lp;
+  el.textContent = String(player.lp);
 }

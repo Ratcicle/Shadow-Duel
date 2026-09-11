@@ -1,9 +1,39 @@
+export type SupportedLocale = "en" | "pt-br";
+export interface DisplayCard {
+  id?: string | number | null;
+  name?: string | null;
+  description?: string | null;
+  monsterType?: string | null;
+  extraDeckSummonProcedure?: unknown;
+  fusionMaterials?: unknown;
+  types?: readonly string[] | null;
+  type?: string | null;
+  level?: number | null;
+  attribute?: string | null;
+  isTuner?: boolean;
+  atk?: number | null;
+  def?: number | null;
+  cardKind?: string | null;
+  subtype?: string | null;
+}
+interface CardTranslation {
+  name?: string;
+  description?: string;
+}
+interface LocalePayload {
+  cards: Record<string, CardTranslation>;
+  ui: Record<string, unknown>;
+  effectChoices: Record<string, unknown>;
+}
+type TextParams = Readonly<Record<string, unknown>>;
+type LocaleLabels = Record<SupportedLocale, Record<string, string>>;
+
 import { cardDatabase } from "../data/cards.js";
 import { publicUrl } from "./publicUrl.js";
 
 const LOCALE_STORAGE_KEY = "shadowduel_locale";
 const DEFAULT_LOCALE = "en";
-const SUPPORTED_LOCALES = ["en", "pt-br"];
+const SUPPORTED_LOCALES = ["en", "pt-br"] as const;
 
 const DEFAULT_LOCALE_TEXTS = {
   ui: {
@@ -99,14 +129,13 @@ const DEFAULT_LOCALE_TEXTS = {
       toDefense: "To Defense",
       attack: "Attack",
       defense: "Defense",
-      choosePosition: "Choose the position for \"{cardName}\".",
+      choosePosition: 'Choose the position for "{cardName}".',
       choosePositionTitle: "Choose Special Summon position",
       conditionMet: "Condition met.",
-      controlsCard: "You control \"{cardName}\".",
+      controlsCard: 'You control "{cardName}".',
       conditionalPrompt:
-        "{conditionText} Special Summon \"{cardName}\" from your hand?",
-      drawnPrompt:
-        "You drew \"{cardName}\". Special Summon it from your hand?",
+        '{conditionText} Special Summon "{cardName}" from your hand?',
+      drawnPrompt: 'You drew "{cardName}". Special Summon it from your hand?',
     },
     spell: {
       activate: "Activate",
@@ -197,7 +226,8 @@ const DEFAULT_LOCALE_TEXTS = {
       optionalConfirmTitle: "Activate Trigger Effect?",
       activateSingle: "Activate",
       declineSingle: "Do not activate",
-      mandatoryOrder: "Click a card to move its effect to the end of the order.",
+      mandatoryOrder:
+        "Click a card to move its effect to the end of the order.",
       optionalOrder: "Select the effects to activate in the desired order.",
       notSelected: "Off",
       declineAll: "Activate none",
@@ -213,15 +243,11 @@ const DEFAULT_LOCALE_TEXTS = {
       counted: "{amount} {counterLabel} counted on the field.",
       healByCount:
         "{playerName} gained {healAmount} LP ({counterCount} {counterLabel} x {amountPerCounter} LP).",
-      removeAmount:
-        "Choose how many {counterLabel} to remove ({min}-{max}).",
-      selectPayment:
-        "Select card(s) to remove {amount} {counterLabel}.",
-      selectEnough:
-        "Select enough cards to remove {amount} {counterLabel}.",
+      removeAmount: "Choose how many {counterLabel} to remove ({min}-{max}).",
+      selectPayment: "Select card(s) to remove {amount} {counterLabel}.",
+      selectEnough: "Select enough cards to remove {amount} {counterLabel}.",
       paymentCancelled: "Counter payment cancelled.",
-      notEnough:
-        "Not enough {counterLabel} on the field to pay the cost.",
+      notEnough: "Not enough {counterLabel} on the field to pay the cost.",
     },
     replacement: {
       cardSingular: "card",
@@ -275,7 +301,7 @@ const DEFAULT_LOCALE_TEXTS = {
       level: "Level",
     },
     luminarchSickle: {
-      title: "Select up to 2 \"Luminarch\" monsters to add to hand",
+      title: 'Select up to 2 "Luminarch" monsters to add to hand',
       subtitle: "Select up to {maxSelect}.",
     },
     start: {
@@ -458,7 +484,7 @@ const DEFAULT_LOCALE_TEXTS = {
   },
 };
 
-const ATTRIBUTE_LABELS = {
+const ATTRIBUTE_LABELS: LocaleLabels = {
   en: {
     Light: "Light",
     Dark: "Dark",
@@ -477,7 +503,7 @@ const ATTRIBUTE_LABELS = {
   },
 };
 
-const MONSTER_TYPE_LABELS = {
+const MONSTER_TYPE_LABELS: LocaleLabels = {
   en: {},
   "pt-br": {
     Beast: "Besta",
@@ -501,7 +527,7 @@ const TUNER_LABELS = {
   "pt-br": "Regulador",
 };
 
-const CARD_KIND_LABELS = {
+const CARD_KIND_LABELS: LocaleLabels = {
   en: {
     spell: "Spell",
     trap: "Trap",
@@ -512,7 +538,7 @@ const CARD_KIND_LABELS = {
   },
 };
 
-const SUBTYPE_LABELS = {
+const SUBTYPE_LABELS: LocaleLabels = {
   en: {
     normal: "Normal",
     continuous: "Continuous",
@@ -531,7 +557,10 @@ const SUBTYPE_LABELS = {
   },
 };
 
-const CARD_KIND_SUBTYPE_PHRASES = {
+const CARD_KIND_SUBTYPE_PHRASES: Record<
+  SupportedLocale,
+  Record<string, Record<string, string>>
+> = {
   en: {
     spell: {
       normal: "Normal Spell",
@@ -567,14 +596,17 @@ const LOCALE_SOURCES = {
   "pt-br": "locales/pt-br.json",
 };
 
-function getLocaleUrl(localePath) {
+function getLocaleUrl(localePath: string) {
   if (typeof window !== "undefined") {
     return new URL(publicUrl(localePath), window.location.origin);
   }
-  return new URL(`../../public/${localePath.replace(/^\/+/, "")}`, import.meta.url);
+  return new URL(
+    `../../public/${localePath.replace(/^\/+/, "")}`,
+    import.meta.url,
+  );
 }
 
-async function loadLocalePayload(publicPath) {
+async function loadLocalePayload(publicPath: string): Promise<unknown> {
   try {
     const url = getLocaleUrl(publicPath);
     // Browser/runtime with fetch over HTTP(S)
@@ -588,7 +620,11 @@ async function loadLocalePayload(publicPath) {
     }
     // Node or file:// fallback
     const nodeFsPromises = "node:fs/promises";
-    const { readFile } = await import(nodeFsPromises);
+    const {
+      readFile,
+    }: { readFile(url: URL): Promise<{ toString(): string }> } = await import(
+      nodeFsPromises
+    );
     const fileData = await readFile(url);
     return JSON.parse(fileData.toString());
   } catch (err) {
@@ -602,32 +638,33 @@ async function loadAllLocales() {
     Object.entries(LOCALE_SOURCES).map(async ([locale, path]) => {
       const payload = await loadLocalePayload(path);
       return [locale, payload];
-    })
+    }),
   );
   return Object.fromEntries(entries);
 }
 
-const rawLocales = await loadAllLocales();
+const rawLocales: Record<string, unknown> = await loadAllLocales();
 
-const normalizedLocales = Object.fromEntries(
-  Object.entries(rawLocales).map(([locale, payload]) => [
-    locale,
-    normalizeLocalePayload(payload),
-  ])
-);
+const normalizedLocales: Partial<Record<SupportedLocale, LocalePayload>> =
+  Object.fromEntries(
+    Object.entries(rawLocales).map(([locale, payload]) => [
+      locale,
+      normalizeLocalePayload(payload),
+    ]),
+  );
 
-let currentLocale = DEFAULT_LOCALE;
-let lastCoverageLogLocale = null;
+let currentLocale: SupportedLocale = DEFAULT_LOCALE;
+let lastCoverageLogLocale: SupportedLocale | null = null;
 
-function normalizeLocalePayload(payload) {
-  const cards = {};
-  const ui = {};
-  const effectChoices = {};
+function normalizeLocalePayload(payload: unknown): LocalePayload {
+  const cards: LocalePayload["cards"] = {};
+  const ui: LocalePayload["ui"] = {};
+  const effectChoices: LocalePayload["effectChoices"] = {};
   if (!isObject(payload)) {
     return { cards, ui, effectChoices };
   }
 
-  const sections = [];
+  const sections: Record<string, unknown>[] = [];
   if (isObject(payload.cards)) {
     sections.push(payload.cards);
   }
@@ -674,7 +711,7 @@ function normalizeLocalePayload(payload) {
   return { cards, ui, effectChoices };
 }
 
-function isObject(value) {
+function isObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
@@ -688,7 +725,7 @@ function readStoredLocale() {
   }
 }
 
-function persistLocale(locale) {
+function persistLocale(locale: SupportedLocale) {
   try {
     if (typeof localStorage === "undefined") return;
     localStorage.setItem(LOCALE_STORAGE_KEY, locale);
@@ -697,15 +734,17 @@ function persistLocale(locale) {
   }
 }
 
-function ensureSupportedLocale(locale) {
-  return SUPPORTED_LOCALES.includes(locale) ? locale : null;
+function ensureSupportedLocale(locale: unknown): SupportedLocale | null {
+  return (SUPPORTED_LOCALES as readonly unknown[]).includes(locale)
+    ? (locale as SupportedLocale)
+    : null;
 }
 
-function logCoverageIfNeeded(locale) {
+function logCoverageIfNeeded(locale: SupportedLocale) {
   if (locale !== "pt-br") return;
   if (lastCoverageLogLocale === locale) return;
   lastCoverageLogLocale = locale;
-  const ptCards = normalizedLocales["pt-br"].cards || {};
+  const ptCards = normalizedLocales["pt-br"]!.cards || {};
   const totalCount = cardDatabase.length;
   let translatedCount = 0;
   let extraCount = 0;
@@ -727,7 +766,7 @@ function logCoverageIfNeeded(locale) {
   console.info(
     `[i18n] pt-br translations: ${translatedCount}/${totalCount} cards (${
       totalCount - translatedCount
-    } missing, ${extraCount} extra).`
+    } missing, ${extraCount} extra).`,
   );
 }
 
@@ -742,7 +781,7 @@ export function getLocale() {
   return currentLocale;
 }
 
-export function setLocale(locale) {
+export function setLocale(locale: unknown) {
   const normalized = ensureSupportedLocale(locale);
   if (!normalized) return currentLocale;
   currentLocale = normalized;
@@ -751,21 +790,23 @@ export function setLocale(locale) {
   return currentLocale;
 }
 
-export function getCardDisplayName(card) {
+export function getCardDisplayName(card: DisplayCard | null | undefined) {
   return getCardDisplayProperty(card, "name");
 }
 
-export function getCardDisplayDescription(card) {
+export function getCardDisplayDescription(
+  card: DisplayCard | null | undefined,
+) {
   return getCardDisplayProperty(card, "description");
 }
 
-function findFirstSentenceBreak(text) {
+function findFirstSentenceBreak(text: unknown) {
   const match = String(text || "").match(/^([\s\S]*?\.)\s+(\S[\s\S]*)$/u);
   if (!match) return -1;
   return match[1].length;
 }
 
-function findMaterialLineBreak(text) {
+function findMaterialLineBreak(text: unknown) {
   const normalized = String(text || "");
   const newlineIndex = normalized.search(/\n+\s*\S/u);
   if (newlineIndex > 0) return newlineIndex;
@@ -773,12 +814,15 @@ function findMaterialLineBreak(text) {
   const effectStartPattern =
     /\s+(Requirement:|Requisito:|If\s+|Se\s+|This card\b|Este card\b|You can\b|Voc[eê]\s+pode\b|Once per turn\b|Uma vez por turno\b|While\s+|Enquanto\s+|Your opponent\b|Seu oponente\b|Todo\s+|Must be\b|Deve ser\b|When\s+|Quando\s+|During\s+|Durante\s+)/iu;
   const effectStartMatch = normalized.match(effectStartPattern);
-  if (effectStartMatch?.index > 0) return effectStartMatch.index;
+  if (effectStartMatch?.index! > 0) return effectStartMatch!.index!;
 
   return findFirstSentenceBreak(normalized);
 }
 
-function startsWithMaterialLine(card, text) {
+function startsWithMaterialLine(
+  card: DisplayCard | null | undefined,
+  text: unknown,
+) {
   const monsterType = String(card?.monsterType || "").toLowerCase();
   if (!["fusion", "ascension", "synchro"].includes(monsterType)) return false;
 
@@ -802,14 +846,19 @@ function startsWithMaterialLine(card, text) {
   if (monsterType === "fusion" && card?.fusionMaterials) {
     const firstSentenceEnd = findFirstSentenceBreak(normalized);
     const firstSentence =
-      firstSentenceEnd >= 0 ? normalized.slice(0, firstSentenceEnd) : normalized;
+      firstSentenceEnd >= 0
+        ? normalized.slice(0, firstSentenceEnd)
+        : normalized;
     return /(?:\+|\b\d+\+?\s+|monsters?|monstros?)\b/iu.test(firstSentence);
   }
 
   return false;
 }
 
-function formatDescriptionMaterialLineBreak(card, description) {
+function formatDescriptionMaterialLineBreak(
+  card: DisplayCard | null | undefined,
+  description: unknown,
+) {
   const text = String(description || "");
   if (!startsWithMaterialLine(card, text)) return text;
 
@@ -826,7 +875,7 @@ function formatDescriptionMaterialLineBreak(card, description) {
   return `${materialLine}\n\n${effectText}`;
 }
 
-function formatDescriptionParagraphsHtml(description) {
+function formatDescriptionParagraphsHtml(description: unknown) {
   const normalized = String(description || "").replace(/\r\n?/g, "\n");
   const paragraphs = normalized.split(/\n[ \t]*\n+/u);
 
@@ -846,18 +895,22 @@ function formatDescriptionParagraphsHtml(description) {
   return `<span class="card-description-text">${content}</span>`;
 }
 
-export function formatCardPreviewDescriptionHtml(card, fallback = "") {
+export function formatCardPreviewDescriptionHtml(
+  card: DisplayCard | null | undefined,
+  fallback = "",
+) {
   const description =
-    getCardDisplayDescription(card) ||
-    card?.description ||
-    fallback ||
-    "";
+    getCardDisplayDescription(card) || card?.description || fallback || "";
   return formatDescriptionParagraphsHtml(
     formatDescriptionMaterialLineBreak(card, description),
   );
 }
 
-export function getUIText(key, params = {}, fallback = null) {
+export function getUIText(
+  key: string | null | undefined,
+  params: TextParams = {},
+  fallback: string | null = null,
+): string {
   const path = String(key || "").trim();
   if (!path) return fallback ?? "";
 
@@ -874,14 +927,14 @@ export function getUIText(key, params = {}, fallback = null) {
   return interpolateText(fallbackValue, params);
 }
 
-function humanizeCounterType(counterType) {
+function humanizeCounterType(counterType: unknown) {
   return String(counterType || "counter")
     .split(/[_\s-]+/)
     .filter(Boolean)
     .join(" ");
 }
 
-function singularizeCounterLabel(label) {
+function singularizeCounterLabel(label: unknown) {
   const normalized = String(label || "").trim();
   if (!normalized) return normalized;
   if (/^Marcadores\b/iu.test(normalized)) {
@@ -895,7 +948,7 @@ function singularizeCounterLabel(label) {
     .replace(/\bcounters$/i, "counter");
 }
 
-function normalizePortugueseCounterLabel(label) {
+function normalizePortugueseCounterLabel(label: unknown) {
   const normalized = String(label || "").trim();
   if (/^Contadores\b/iu.test(normalized)) {
     return normalized.replace(/^Contadores\b/iu, "Marcadores");
@@ -906,23 +959,30 @@ function normalizePortugueseCounterLabel(label) {
   return normalized;
 }
 
-export function getCounterDisplayLabel(counterType, amount = 2) {
+export function getCounterDisplayLabel(
+  counterType: string | null | undefined,
+  amount = 2,
+) {
   const key = String(counterType || "default").trim();
   const localized = key ? getUIText(`ui.counters.labels.${key}`, {}, "") : "";
   const pluralLabel = normalizePortugueseCounterLabel(
     localized || `${humanizeCounterType(key)} counters`,
   );
-  return Number(amount) === 1 ? singularizeCounterLabel(pluralLabel) : pluralLabel;
+  return Number(amount) === 1
+    ? singularizeCounterLabel(pluralLabel)
+    : pluralLabel;
 }
 
-export function getMonsterAttributeDisplayName(attribute) {
+export function getMonsterAttributeDisplayName(attribute: unknown) {
   const rawAttribute = String(attribute || "").trim();
   if (!rawAttribute) return "";
   return ATTRIBUTE_LABELS[currentLocale]?.[rawAttribute] || rawAttribute;
 }
 
-export function getMonsterTypeDisplayName(card) {
-  const rawTypes = Array.isArray(card?.types)
+export function getMonsterTypeDisplayName(
+  card: DisplayCard | null | undefined,
+) {
+  const rawTypes: readonly string[] = Array.isArray(card?.types)
     ? card.types
     : card?.type
       ? [card.type]
@@ -940,45 +1000,51 @@ export function getMonsterTypeDisplayName(card) {
     .join(" / ");
 }
 
-export function getMonsterTypeLabel(type) {
+export function getMonsterTypeLabel(type: unknown) {
   const rawType = String(type || "").trim();
   if (!rawType) return "";
   return MONSTER_TYPE_LABELS[currentLocale]?.[rawType] || rawType;
 }
 
-export function getMonsterDetailParts(card) {
-  const level = Number.isFinite(card?.level) ? card.level : "-";
+export function getMonsterDetailParts(card: DisplayCard | null | undefined) {
+  const level = Number.isFinite(card?.level) ? card!.level : "-";
   const type = getMonsterTypeDisplayName(card);
   const attribute = getMonsterAttributeDisplayName(card?.attribute);
-  const tuner = card?.isTuner === true ? TUNER_LABELS[currentLocale] || "Tuner" : "";
+  const tuner =
+    card?.isTuner === true ? TUNER_LABELS[currentLocale] || "Tuner" : "";
   return { level, type, attribute, tuner };
 }
 
-export function formatMonsterDetailLine(card) {
+export function formatMonsterDetailLine(card: DisplayCard | null | undefined) {
   const { level, type, attribute, tuner } = getMonsterDetailParts(card);
   const parts = [`⭐${level}`, tuner, type];
   if (attribute) parts.push(attribute);
   return parts.filter(Boolean).join(" | ");
 }
 
-export function formatMonsterDetailHtml(card) {
+export function formatMonsterDetailHtml(card: DisplayCard | null | undefined) {
   const { level, type, attribute, tuner } = getMonsterDetailParts(card);
-  const rest = [tuner, type, attribute].filter(Boolean).map(escapeHtml).join(" | ");
+  const rest = [tuner, type, attribute]
+    .filter(Boolean)
+    .map(escapeHtml)
+    .join(" | ");
   return `⭐<span class="monster-level-number">${escapeHtml(level)}</span>${
     rest ? ` | ${rest}` : ""
   }`;
 }
 
-export function formatMonsterStatsLine(card) {
-  const atk = Number.isFinite(card?.atk) ? card.atk : "-";
-  const def = Number.isFinite(card?.def) ? card.def : "-";
+export function formatMonsterStatsLine(card: DisplayCard | null | undefined) {
+  const atk = Number.isFinite(card?.atk) ? card!.atk : "-";
+  const def = Number.isFinite(card?.def) ? card!.def : "-";
   return {
     atk: `ATK: ${atk}`,
     def: `DEF: ${def}`,
   };
 }
 
-export function formatCardKindSubtypeLine(card) {
+export function formatCardKindSubtypeLine(
+  card: DisplayCard | null | undefined,
+) {
   const rawKind = String(card?.cardKind || "card").trim();
   const rawSubtype = String(card?.subtype || "").trim();
   const phrase =
@@ -986,7 +1052,8 @@ export function formatCardKindSubtypeLine(card) {
     CARD_KIND_SUBTYPE_PHRASES.en?.[rawKind]?.[rawSubtype];
   if (phrase) return phrase;
 
-  const kindLabel = CARD_KIND_LABELS[currentLocale]?.[rawKind] || rawKind.toUpperCase();
+  const kindLabel =
+    CARD_KIND_LABELS[currentLocale]?.[rawKind] || rawKind.toUpperCase();
   const subtypeLabel = rawSubtype
     ? SUBTYPE_LABELS[currentLocale]?.[rawSubtype] || rawSubtype.toUpperCase()
     : "";
@@ -996,9 +1063,12 @@ export function formatCardKindSubtypeLine(card) {
     : `${subtypeLabel} ${kindLabel}`;
 }
 
-function getCardDisplayProperty(card, property) {
+function getCardDisplayProperty(
+  card: DisplayCard | null | undefined,
+  property: keyof CardTranslation,
+): string {
   const fallbackText = String(
-    property === "name" ? card?.name || "" : card?.description || ""
+    property === "name" ? card?.name || "" : card?.description || "",
   ).trim();
   const idKey = card && (card.id !== undefined ? String(card.id) : null);
   if (idKey) {
@@ -1014,7 +1084,7 @@ function getCardDisplayProperty(card, property) {
   return fallbackText;
 }
 
-function escapeHtml(value) {
+function escapeHtml(value: unknown) {
   return String(value ?? "")
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
@@ -1023,18 +1093,18 @@ function escapeHtml(value) {
     .replaceAll("'", "&#039;");
 }
 
-function getPathValue(source, path) {
+function getPathValue(source: unknown, path: string): unknown {
   if (!isObject(source) || !path) return undefined;
   return String(path)
     .split(".")
     .filter(Boolean)
-    .reduce((cursor, part) => {
+    .reduce<unknown>((cursor, part) => {
       if (!isObject(cursor)) return undefined;
       return cursor[part];
     }, source);
 }
 
-function interpolateText(text, params = {}) {
+function interpolateText(text: unknown, params: TextParams = {}) {
   return String(text ?? "").replace(/\{([a-zA-Z0-9_]+)\}/g, (match, key) => {
     const value = params?.[key];
     return value === undefined || value === null ? match : String(value);

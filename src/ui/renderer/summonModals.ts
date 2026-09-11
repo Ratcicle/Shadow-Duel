@@ -1,3 +1,46 @@
+import type Renderer from "../Renderer.js";
+import type { UiCard } from "./types.js";
+import type { UiRect } from "../../core/contracts/ui.js";
+import type { PlayerId } from "../../core/contracts/primitives.js";
+import type { BattlePosition } from "../../core/contracts/cards.js";
+export type SummonChoice =
+  | "attack"
+  | "defense"
+  | "special_from_void_forgotten"
+  | "special_from_hand_effect"
+  | { type: "hand_effect"; effectId: string };
+export type PositionChoice = "flip" | "to_attack" | "to_defense";
+export interface HandChoiceOptions {
+  anchorElement?: HTMLElement | null;
+  ownerId?: PlayerId;
+  canNormalSummon?: boolean;
+  canSet?: boolean;
+  canActivate?: boolean;
+  specialSummonFromHand?: boolean;
+  specialSummonFromHandLabel?: string;
+  specialSummonFromHandEffect?: boolean;
+  specialSummonFromHandEffectLabel?: string;
+  handEffectChoices?: Array<{
+    effectId: string;
+    label?: string;
+    handModalLabel?: string;
+  }>;
+}
+export interface TierChoiceOptions {
+  title?: string;
+  options?: Array<{ count: number; label?: string; description?: string }>;
+}
+export interface PositionChoiceOptions {
+  hasIgnitionEffect?: boolean;
+  onActivateEffect?: () => void;
+  hasAscensionSummon?: boolean;
+  onAscensionSummon?: () => void;
+  canDeclareAttack?: boolean;
+  onDeclareAttack?: () => void;
+  canFlip?: boolean;
+  canChangePosition?: boolean;
+}
+
 /**
  * Summon modal methods for Renderer
  * Handles: showSummonModal, showConditionalSummonPrompt, showTierChoiceModal,
@@ -7,17 +50,25 @@
 import { getCardDisplayName, getUIText } from "../../core/i18n.js";
 import { publicAssetUrl } from "../../core/publicUrl.js";
 
-function resolveHandCardElement(cardIndex, options = {}) {
+function resolveHandCardElement(
+  cardIndex: number,
+  options: HandChoiceOptions = {},
+) {
   if (options.anchorElement) {
     return options.anchorElement;
   }
   const ownerId = options.ownerId === "bot" ? "bot" : "player";
-  return document.querySelector(
-    `#${ownerId}-hand .card[data-index="${cardIndex}"]`
+  return document.querySelector<HTMLElement>(
+    `#${ownerId}-hand .card[data-index="${cardIndex}"]`,
   );
 }
 
-function positionHandChoiceModalAboveCard(modal, content, rect, gap = 10) {
+function positionHandChoiceModalAboveCard(
+  modal: HTMLElement,
+  content: HTMLElement,
+  rect: UiRect,
+  gap = 10,
+) {
   const edgePadding = gap;
   const contentRect = content.getBoundingClientRect();
 
@@ -37,8 +88,15 @@ function positionHandChoiceModalAboveCard(modal, content, rect, gap = 10) {
 /**
  * @this {import('../Renderer.js').default}
  */
-export function showSummonModal(cardIndex, callback, options = {}) {
-  const existingModal = document.querySelector(".summon-choice-modal");
+export function showSummonModal(
+  this: Renderer,
+  cardIndex: number,
+  callback: (choice: SummonChoice) => void,
+  options: HandChoiceOptions = {},
+): void {
+  const existingModal = document.querySelector<HTMLElement>(
+    ".summon-choice-modal",
+  );
   if (existingModal) {
     existingModal.remove();
   }
@@ -54,7 +112,7 @@ export function showSummonModal(cardIndex, callback, options = {}) {
   const canNormalSummon =
     options.canNormalSummon === undefined ? true : !!options.canNormalSummon;
   const canSet = options.canSet === undefined ? true : !!options.canSet;
-  const addChoiceButton = (label, choice) => {
+  const addChoiceButton = (label: string, choice: SummonChoice) => {
     const button = document.createElement("button");
     button.textContent = label;
     button.onclick = (e) => {
@@ -84,9 +142,7 @@ export function showSummonModal(cardIndex, callback, options = {}) {
   if (handEffectChoices.length > 0) {
     for (const choice of handEffectChoices) {
       addChoiceButton(
-        choice.label ||
-          choice.handModalLabel ||
-          getUIText("ui.summon.special"),
+        choice.label || choice.handModalLabel || getUIText("ui.summon.special"),
         {
           type: "hand_effect",
           effectId: choice.effectId,
@@ -95,7 +151,8 @@ export function showSummonModal(cardIndex, callback, options = {}) {
     }
   } else if (options.specialSummonFromHandEffect) {
     addChoiceButton(
-      options.specialSummonFromHandEffectLabel || getUIText("ui.summon.special"),
+      options.specialSummonFromHandEffectLabel ||
+        getUIText("ui.summon.special"),
       "special_from_hand_effect",
     );
   }
@@ -127,8 +184,8 @@ export function showSummonModal(cardIndex, callback, options = {}) {
     document.removeEventListener("mousedown", handleOutsideClick);
   };
 
-  const handleOutsideClick = (event) => {
-    if (!modal.contains(event.target)) {
+  const handleOutsideClick = (event: MouseEvent) => {
+    if (!modal.contains(event.target as Node | null)) {
       cleanup();
     }
   };
@@ -137,18 +194,23 @@ export function showSummonModal(cardIndex, callback, options = {}) {
   setTimeout(() => {
     document.addEventListener("mousedown", handleOutsideClick);
   }, 0);
-
 }
 
 /**
  * @this {import('../Renderer.js').default}
  */
-export function showConditionalSummonPrompt(cardName, message) {
+export function showConditionalSummonPrompt(
+  this: Renderer,
+  cardName: string,
+  message: string,
+): Promise<boolean> {
   if (typeof document === "undefined") {
     return Promise.resolve(false);
   }
 
-  const existing = document.querySelector(".conditional-summon-modal");
+  const existing = document.querySelector<HTMLElement>(
+    ".conditional-summon-modal",
+  );
   if (existing) existing.remove();
 
   const modal = document.createElement("div");
@@ -173,14 +235,16 @@ export function showConditionalSummonPrompt(cardName, message) {
     </div>
   `;
 
-  const promise = new Promise((resolve) => {
-    const cleanup = (result) => {
+  const promise = new Promise<boolean>((resolve) => {
+    const cleanup = (result: boolean) => {
       modal.remove();
       resolve(result);
     };
 
     modal.addEventListener("click", (e) => {
-      if (e.target.classList.contains("conditional-summon-backdrop")) {
+      if (
+        (e.target as Element).classList.contains("conditional-summon-backdrop")
+      ) {
         cleanup(false);
       }
     });
@@ -201,10 +265,13 @@ export function showConditionalSummonPrompt(cardName, message) {
 /**
  * @this {import('../Renderer.js').default}
  */
-export function showTierChoiceModal({
-  title = getUIText("ui.summon.chooseTier"),
-  options = [],
-} = {}) {
+export function showTierChoiceModal(
+  this: Renderer,
+  {
+    title = getUIText("ui.summon.chooseTier"),
+    options = [],
+  }: TierChoiceOptions = {},
+): Promise<number | null> {
   if (typeof document === "undefined") {
     const best = options
       .slice()
@@ -213,10 +280,10 @@ export function showTierChoiceModal({
   }
 
   const validOptions = options.filter(
-    (opt) => typeof opt.count === "number" && opt.count > 0
+    (opt) => typeof opt.count === "number" && opt.count > 0,
   );
 
-  return new Promise((resolve) => {
+  return new Promise<number | null>((resolve) => {
     const overlay = document.createElement("div");
     overlay.className = "modal tier-choice-overlay";
 
@@ -235,7 +302,7 @@ export function showTierChoiceModal({
     const grid = document.createElement("div");
     grid.className = "tier-choice-grid";
 
-    let selected = null;
+    let selected: number | null = null;
 
     validOptions.forEach((opt) => {
       const btn = document.createElement("button");
@@ -245,12 +312,11 @@ export function showTierChoiceModal({
       const label = document.createElement("div");
       label.className = "tier-choice-label";
       label.textContent =
-        opt.label ||
-        getUIText("ui.summon.tierFallback", { count: opt.count });
+        opt.label || getUIText("ui.summon.tierFallback", { count: opt.count });
 
       const desc = document.createElement("div");
       desc.className = "tier-choice-desc";
-      desc.innerHTML = (opt.description || "").replace(/\n/g, '<br>');
+      desc.innerHTML = (opt.description || "").replace(/\n/g, "<br>");
 
       btn.appendChild(label);
       btn.appendChild(desc);
@@ -301,8 +367,15 @@ export function showTierChoiceModal({
 /**
  * @this {import('../Renderer.js').default}
  */
-export function showSpellChoiceModal(cardIndex, callback, options = {}) {
-  const existingModal = document.querySelector(".spell-choice-modal");
+export function showSpellChoiceModal(
+  this: Renderer,
+  cardIndex: number,
+  callback: (choice: "set" | "activate") => void,
+  options: HandChoiceOptions = {},
+): void {
+  const existingModal = document.querySelector<HTMLElement>(
+    ".spell-choice-modal",
+  );
   if (existingModal) {
     existingModal.remove();
   }
@@ -341,7 +414,8 @@ export function showSpellChoiceModal(cardIndex, callback, options = {}) {
   document.body.appendChild(modal);
 
   if (rect) {
-    const contentEl = modal.querySelector(".spell-choice-content") || modal;
+    const contentEl =
+      modal.querySelector<HTMLElement>(".spell-choice-content") || modal;
     positionHandChoiceModalAboveCard(modal, contentEl, rect);
   }
 
@@ -352,8 +426,8 @@ export function showSpellChoiceModal(cardIndex, callback, options = {}) {
     document.removeEventListener("mousedown", handleOutsideClick);
   };
 
-  const handleOutsideClick = (event) => {
-    if (!modal.contains(event.target)) {
+  const handleOutsideClick = (event: MouseEvent) => {
+    if (!modal.contains(event.target as Node | null)) {
       cleanup();
     }
   };
@@ -368,7 +442,7 @@ export function showSpellChoiceModal(cardIndex, callback, options = {}) {
       const choice = btn.dataset.choice;
       cleanup();
       if (choice && typeof callback === "function") {
-        callback(choice);
+        callback(choice as "activate" | "set");
       }
     });
   });
@@ -377,8 +451,16 @@ export function showSpellChoiceModal(cardIndex, callback, options = {}) {
 /**
  * @this {import('../Renderer.js').default}
  */
-export function showPositionChoiceModal(cardEl, card, callback, options = {}) {
-  const existing = document.querySelector(".position-choice-modal");
+export function showPositionChoiceModal(
+  this: Renderer,
+  cardEl: HTMLElement | null,
+  card: UiCard | null,
+  callback: (choice: PositionChoice) => void,
+  options: PositionChoiceOptions = {},
+): void {
+  const existing = document.querySelector<HTMLElement>(
+    ".position-choice-modal",
+  );
   if (existing) existing.remove();
 
   const modal = document.createElement("div");
@@ -446,7 +528,8 @@ export function showPositionChoiceModal(cardEl, card, callback, options = {}) {
 
   const rect = cardEl?.getBoundingClientRect();
   if (rect) {
-    const contentEl = modal.querySelector(".position-choice-content") || modal;
+    const contentEl =
+      modal.querySelector<HTMLElement>(".position-choice-content") || modal;
     const contentRect = contentEl.getBoundingClientRect();
 
     let left = rect.left;
@@ -471,8 +554,8 @@ export function showPositionChoiceModal(cardEl, card, callback, options = {}) {
     document.removeEventListener("mousedown", outsideHandler);
   };
 
-  const outsideHandler = (e) => {
-    if (!modal.contains(e.target)) {
+  const outsideHandler = (e: MouseEvent) => {
+    if (!modal.contains(e.target as Node | null)) {
       cleanup();
     }
   };
@@ -500,7 +583,7 @@ export function showPositionChoiceModal(cardEl, card, callback, options = {}) {
       ) {
         options.onDeclareAttack();
       } else if (choice) {
-        callback(choice);
+        callback(choice as PositionChoice);
       }
     });
   });
@@ -509,8 +592,14 @@ export function showPositionChoiceModal(cardEl, card, callback, options = {}) {
 /**
  * @this {import('../Renderer.js').default}
  */
-export function showSpecialSummonPositionModal(card, onChoose) {
-  const existing = document.querySelector(".special-summon-position-modal");
+export function showSpecialSummonPositionModal(
+  this: Renderer,
+  card: UiCard | null,
+  onChoose: (position: BattlePosition) => void,
+): void {
+  const existing = document.querySelector<HTMLElement>(
+    ".special-summon-position-modal",
+  );
   if (existing) existing.remove();
 
   const modal = document.createElement("div");
@@ -541,7 +630,9 @@ export function showSpecialSummonPositionModal(card, onChoose) {
     </div>
   `;
 
-  const subtitle = modal.querySelector(".special-position-subtitle");
+  const subtitle = modal.querySelector<HTMLElement>(
+    ".special-position-subtitle",
+  );
   if (subtitle) {
     subtitle.textContent = getUIText("ui.summon.choosePosition", {
       cardName: safeName,
@@ -555,7 +646,7 @@ export function showSpecialSummonPositionModal(card, onChoose) {
     }
   };
 
-  const keyHandler = (e) => {
+  const keyHandler = (e: KeyboardEvent) => {
     if (e.key === "Escape") {
       e.preventDefault();
       cleanup();
@@ -566,7 +657,7 @@ export function showSpecialSummonPositionModal(card, onChoose) {
   };
 
   modal
-    .querySelector(".special-position-backdrop")
+    .querySelector<HTMLElement>(".special-position-backdrop")
     ?.addEventListener("click", () => {
       cleanup();
       if (typeof onChoose === "function") {
@@ -574,16 +665,18 @@ export function showSpecialSummonPositionModal(card, onChoose) {
       }
     });
 
-  modal.querySelectorAll(".position-option").forEach((btn) => {
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      const choice = btn.dataset.choice;
-      cleanup();
-      if (typeof onChoose === "function") {
-        onChoose(choice);
-      }
+  modal
+    .querySelectorAll<HTMLButtonElement>(".position-option")
+    .forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const choice = btn.dataset.choice;
+        cleanup();
+        if (typeof onChoose === "function") {
+          onChoose(choice as BattlePosition);
+        }
+      });
     });
-  });
 
   document.addEventListener("keydown", keyHandler);
   document.body.appendChild(modal);

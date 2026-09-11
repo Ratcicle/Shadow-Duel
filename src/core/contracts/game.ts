@@ -1,3 +1,4 @@
+import type { GameUI } from "./ui.js";
 import type { GamePlayer } from "./player.js";
 import type {
   DuelCardId,
@@ -50,7 +51,7 @@ export interface GameOptions {
   chainResponseTimeoutMs?: number;
 }
 
-export interface GameRendererPort {
+export interface GameRendererPort extends Partial<GameUI> {
   destroy?(): void;
 }
 

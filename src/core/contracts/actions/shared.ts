@@ -480,7 +480,7 @@ export interface ComplexActionProperties {
   readonly token: TokenDefinition;
   readonly tierOptions: readonly TieredCostOption[];
   readonly botPrefer: readonly BotPreferenceRule[];
-  readonly sourceRect: object;
+  readonly sourceRect: import("../ui.js").UiRect;
   readonly duration: string;
   readonly negateEffectsDuration: string;
   readonly effectChoiceKey: string;

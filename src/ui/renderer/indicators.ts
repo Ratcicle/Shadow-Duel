@@ -1,3 +1,50 @@
+import type Renderer from "../Renderer.js";
+import type { UiCard } from "./types.js";
+import type { PlayerId } from "../../core/contracts/primitives.js";
+import type { RawSelectionCandidate } from "../../core/contracts/selection.js";
+import type { DisplaySelectionContract } from "./selectionModals.js";
+interface TargetingElement extends HTMLElement {
+  __shadowDuelTargetingFxHandlers?: { enter: () => void; leave: () => void };
+}
+export interface ActivationHint {
+  canActivate?: boolean;
+  label?: string | null;
+}
+export type ZoneActivationIndicators = Record<number, ActivationHint>;
+export interface ZoneFrameIndicators {
+  graveyard?: boolean;
+  extraDeck?: boolean;
+}
+export interface ActivationIndicators {
+  hand?: ZoneActivationIndicators;
+  field?: ZoneActivationIndicators;
+  spellTrap?: ZoneActivationIndicators;
+  graveyard?: ZoneActivationIndicators;
+  fieldSpell?: ActivationHint | null;
+  zones?: ZoneFrameIndicators;
+}
+export interface AttackResolutionIndicators {
+  attackerOwner?: PlayerId;
+  attackerIndex?: number;
+  targetOwner?: PlayerId;
+  targetIndex?: number;
+  directAttack?: boolean;
+}
+export interface FlipAnimationOptions {
+  revealFromDefense?: boolean;
+  mode?: string;
+  deferFrames?: number;
+}
+export interface TargetHighlights {
+  targets?: readonly (RawSelectionCandidate & {
+    isSelected?: boolean;
+    isAttackTarget?: boolean;
+  })[];
+  attackerHighlight?: { owner: string; index: number } | null;
+  sourceCard?: UiCard | null;
+  selectionContract?: DisplaySelectionContract | null;
+}
+
 /**
  * Indicator methods for Renderer
  * Handles: applyActivationIndicators, applyAttackReadyIndicators, clearAttackReadyIndicators,
@@ -23,44 +70,48 @@ function prefersReducedMotion() {
   );
 }
 
-function escapeCardKey(cardKey) {
+function escapeCardKey(cardKey: string | number) {
   if (typeof CSS !== "undefined" && typeof CSS.escape === "function") {
     return CSS.escape(String(cardKey));
   }
   return String(cardKey).replace(/["\\]/g, "\\$&");
 }
 
-function getSourceCardKey(sourceCard) {
-  const key = sourceCard?.instanceId ?? sourceCard?._instanceId ?? null;
+function getSourceCardKey(sourceCard: UiCard | string | null | undefined) {
+  const key =
+    (sourceCard as UiCard | null)?.instanceId ??
+    (sourceCard as UiCard | null)?._instanceId ??
+    null;
   return key == null ? null : String(key);
 }
 
-function findCardByKey(cardKey) {
+function findCardByKey(cardKey: string | null) {
   if (!cardKey || typeof document === "undefined") return null;
   const root = document.getElementById("game-container");
   if (!root) return null;
-  return root.querySelector(
-    `.card[data-card-key="${escapeCardKey(cardKey)}"]:not(.card-animation-ghost)`
+  return root.querySelector<HTMLElement>(
+    `.card[data-card-key="${escapeCardKey(cardKey)}"]:not(.card-animation-ghost)`,
   );
 }
 
 function resolveTargetingSourceElement({
   sourceCard = null,
   selectionContract = null,
-} = {}) {
+}: TargetHighlights = {}) {
   const contractSource = selectionContract?.metadata?.sourceCard || null;
-  const cardKey = getSourceCardKey(sourceCard) || getSourceCardKey(contractSource);
+  const cardKey =
+    getSourceCardKey(sourceCard) || getSourceCardKey(contractSource);
   if (cardKey) {
     const sourceEl = findCardByKey(cardKey);
     if (sourceEl) return sourceEl;
   }
   if (typeof document === "undefined") return null;
-  return document.querySelector(
-    "#game-container .card.attack-attacker:not(.card-animation-ghost)"
+  return document.querySelector<HTMLElement>(
+    "#game-container .card.attack-attacker:not(.card-animation-ghost)",
   );
 }
 
-function detachTargetingFxHandlers(element) {
+function detachTargetingFxHandlers(element: TargetingElement | null) {
   if (!element?.[TARGETING_FX_HANDLERS]) return;
   const { enter, leave } = element[TARGETING_FX_HANDLERS];
   element.removeEventListener("mouseenter", enter);
@@ -68,7 +119,11 @@ function detachTargetingFxHandlers(element) {
   delete element[TARGETING_FX_HANDLERS];
 }
 
-function attachTargetingFxHandlers(renderer, targetEl, sourceEl) {
+function attachTargetingFxHandlers(
+  renderer: Renderer,
+  targetEl: TargetingElement | null,
+  sourceEl: HTMLElement | null,
+) {
   if (!targetEl || !sourceEl) return;
   detachTargetingFxHandlers(targetEl);
 
@@ -91,28 +146,32 @@ function attachTargetingFxHandlers(renderer, targetEl, sourceEl) {
 /**
  * @this {import('../Renderer.js').default}
  */
-export function applyActivationIndicators(owner, indicators = {}) {
+export function applyActivationIndicators(
+  this: Renderer,
+  owner: PlayerId,
+  indicators: ActivationIndicators = {},
+): void {
   const prefix = owner === "player" ? "player" : "bot";
   this.applyZoneActivationIndicators(
     this.elements[`${prefix}Hand`],
-    indicators.hand || {}
+    indicators.hand || {},
   );
   this.applyZoneActivationIndicators(
     this.elements[`${prefix}Field`],
-    indicators.field || {}
+    indicators.field || {},
   );
   this.applyZoneActivationIndicators(
     this.elements[`${prefix}SpellTrap`],
-    indicators.spellTrap || {}
+    indicators.spellTrap || {},
   );
   this.applyZoneActivationIndicators(
     this.elements[`${prefix}Graveyard`],
-    indicators.graveyard || {}
+    indicators.graveyard || {},
   );
 
   const fieldSpellContainer = this.elements[`${prefix}FieldSpell`];
   if (fieldSpellContainer) {
-    const cardEl = fieldSpellContainer.querySelector(".card");
+    const cardEl = fieldSpellContainer.querySelector<HTMLElement>(".card");
     if (cardEl) {
       this.clearActivationHint(cardEl);
       const hint = indicators.fieldSpell;
@@ -131,7 +190,11 @@ export function applyActivationIndicators(owner, indicators = {}) {
 /**
  * @this {import('../Renderer.js').default}
  */
-export function applyZoneFrameActivationIndicators(owner, zones = {}) {
+export function applyZoneFrameActivationIndicators(
+  this: Renderer,
+  owner: PlayerId,
+  zones: ZoneFrameIndicators = {},
+): void {
   const isPlayer = owner === "player";
   const graveyardEl = this.elements[`${owner}Graveyard`];
   const extraDeckEl = document.getElementById(
@@ -152,8 +215,7 @@ export function applyZoneFrameActivationIndicators(owner, zones = {}) {
   if (zones.extraDeck) {
     extraDeckEl?.setAttribute("title", "invocacao disponivel no Extra Deck");
   } else if (
-    extraDeckEl?.getAttribute("title") ===
-    "invocacao disponivel no Extra Deck"
+    extraDeckEl?.getAttribute("title") === "invocacao disponivel no Extra Deck"
   ) {
     extraDeckEl.removeAttribute("title");
   }
@@ -162,14 +224,20 @@ export function applyZoneFrameActivationIndicators(owner, zones = {}) {
 /**
  * @this {import('../Renderer.js').default}
  */
-export function applyAttackReadyIndicators(owner, indices = []) {
+export function applyAttackReadyIndicators(
+  this: Renderer,
+  owner: PlayerId,
+  indices: readonly number[] = [],
+): void {
   this.clearAttackReadyIndicators();
   if (!Array.isArray(indices) || indices.length === 0) return;
   const container =
     owner === "player" ? this.elements.playerField : this.elements.botField;
   if (!container) return;
   indices.forEach((index) => {
-    const cardEl = container.querySelector(`.card[data-index=\"${index}\"]`);
+    const cardEl = container.querySelector<HTMLElement>(
+      `.card[data-index=\"${index}\"]`,
+    );
     if (cardEl) {
       cardEl.classList.add("attack-ready");
     }
@@ -179,12 +247,12 @@ export function applyAttackReadyIndicators(owner, indices = []) {
 /**
  * @this {import('../Renderer.js').default}
  */
-export function clearAttackReadyIndicators() {
+export function clearAttackReadyIndicators(this: Renderer): void {
   const containers = [this.elements.playerField, this.elements.botField];
   containers.forEach((container) => {
     if (!container) return;
     container
-      .querySelectorAll(".card.attack-ready")
+      .querySelectorAll<HTMLElement>(".card.attack-ready")
       .forEach((el) => el.classList.remove("attack-ready"));
   });
 }
@@ -192,13 +260,16 @@ export function clearAttackReadyIndicators() {
 /**
  * @this {import('../Renderer.js').default}
  */
-export function applyAttackResolutionIndicators({
-  attackerOwner = "player",
-  attackerIndex = -1,
-  targetOwner = "bot",
-  targetIndex = -1,
-  directAttack = false,
-} = {}) {
+export function applyAttackResolutionIndicators(
+  this: Renderer,
+  {
+    attackerOwner = "player",
+    attackerIndex = -1,
+    targetOwner = "bot",
+    targetIndex = -1,
+    directAttack = false,
+  }: AttackResolutionIndicators = {},
+): void {
   this.clearAttackResolutionIndicators();
 
   const attackerContainer =
@@ -206,8 +277,8 @@ export function applyAttackResolutionIndicators({
       ? this.elements.playerField
       : this.elements.botField;
   if (attackerContainer && attackerIndex >= 0) {
-    const attackerEl = attackerContainer.querySelector(
-      `.card[data-index=\"${attackerIndex}\"]`
+    const attackerEl = attackerContainer.querySelector<HTMLElement>(
+      `.card[data-index=\"${attackerIndex}\"]`,
     );
     if (attackerEl) {
       attackerEl.classList.add("attack-attacker");
@@ -226,8 +297,8 @@ export function applyAttackResolutionIndicators({
       ? this.elements.playerField
       : this.elements.botField;
   if (targetContainer && targetIndex >= 0) {
-    const targetEl = targetContainer.querySelector(
-      `.card[data-index=\"${targetIndex}\"]`
+    const targetEl = targetContainer.querySelector<HTMLElement>(
+      `.card[data-index=\"${targetIndex}\"]`,
     );
     if (targetEl) {
       targetEl.classList.add("attack-target");
@@ -238,15 +309,15 @@ export function applyAttackResolutionIndicators({
 /**
  * @this {import('../Renderer.js').default}
  */
-export function clearAttackResolutionIndicators() {
+export function clearAttackResolutionIndicators(this: Renderer): void {
   const containers = [this.elements.playerField, this.elements.botField];
   containers.forEach((container) => {
     if (!container) return;
     container
-      .querySelectorAll(".card.attack-attacker")
+      .querySelectorAll<HTMLElement>(".card.attack-attacker")
       .forEach((el) => el.classList.remove("attack-attacker"));
     container
-      .querySelectorAll(".card.attack-target")
+      .querySelectorAll<HTMLElement>(".card.attack-target")
       .forEach((el) => el.classList.remove("attack-target"));
   });
   if (this.elements.botHand) {
@@ -254,7 +325,7 @@ export function clearAttackResolutionIndicators() {
   }
 }
 
-function getFlipAnimationClass(options = {}) {
+function getFlipAnimationClass(options: FlipAnimationOptions = {}) {
   return options.revealFromDefense === true ||
     options.mode === "flip-summon" ||
     options.mode === "reveal-to-attack"
@@ -267,7 +338,7 @@ function getAnimationLayer() {
   const root = document.getElementById("game-container");
   if (!root) return null;
 
-  let layer = root.querySelector(":scope > .card-animation-layer");
+  let layer = root.querySelector<HTMLElement>(":scope > .card-animation-layer");
   if (!layer) {
     layer = document.createElement("div");
     layer.className = "card-animation-layer";
@@ -276,7 +347,10 @@ function getAnimationLayer() {
   return layer;
 }
 
-function cleanupFlipRevealGhost(cardEl, ghost) {
+function cleanupFlipRevealGhost(
+  cardEl: HTMLElement | null,
+  ghost: HTMLElement | null,
+) {
   if (ghost?.parentNode) {
     ghost.remove();
   }
@@ -287,7 +361,7 @@ function cleanupFlipRevealGhost(cardEl, ghost) {
   }
 }
 
-function playFlipRevealGhost(cardEl) {
+function playFlipRevealGhost(cardEl: HTMLElement | null) {
   const layer = getAnimationLayer();
   if (!cardEl || !layer) return null;
 
@@ -298,7 +372,7 @@ function playFlipRevealGhost(cardEl) {
   const centerX = slotRect.left + slotRect.width / 2;
   const centerY = slotRect.top + slotRect.height / 2;
 
-  const ghost = cardEl.cloneNode(true);
+  const ghost = cardEl.cloneNode(true) as HTMLElement;
   ghost.removeAttribute("data-card-key");
   delete ghost.dataset.cardKey;
   ghost.dataset.animationGhost = "true";
@@ -321,7 +395,7 @@ function playFlipRevealGhost(cardEl) {
   layer.appendChild(ghost);
 
   const cleanup = () => cleanupFlipRevealGhost(cardEl, ghost);
-  return new Promise((resolve) => {
+  return new Promise<boolean>((resolve) => {
     let settled = false;
     const finish = () => {
       if (settled) return;
@@ -335,19 +409,20 @@ function playFlipRevealGhost(cardEl) {
   });
 }
 
-function playSpellTrapFlipGhost(cardEl) {
+function playSpellTrapFlipGhost(cardEl: HTMLElement | null) {
   const layer = getAnimationLayer();
   if (!cardEl || !layer) return null;
 
   const rect = cardEl.getBoundingClientRect();
   if (rect.width <= 0 || rect.height <= 0) return null;
   const slotRect =
-    cardEl.closest(".spell-trap-zone, .field-card-slot")?.getBoundingClientRect?.() ||
-    rect;
+    cardEl
+      .closest(".spell-trap-zone, .field-card-slot")
+      ?.getBoundingClientRect?.() || rect;
   const centerX = slotRect.left + slotRect.width / 2;
   const centerY = slotRect.top + slotRect.height / 2;
 
-  const ghost = cardEl.cloneNode(true);
+  const ghost = cardEl.cloneNode(true) as HTMLElement;
   ghost.removeAttribute("data-card-key");
   delete ghost.dataset.cardKey;
   ghost.dataset.animationGhost = "true";
@@ -369,7 +444,7 @@ function playSpellTrapFlipGhost(cardEl) {
   layer.appendChild(ghost);
 
   const cleanup = () => cleanupFlipRevealGhost(cardEl, ghost);
-  return new Promise((resolve) => {
+  return new Promise<boolean>((resolve) => {
     let settled = false;
     const finish = () => {
       if (settled) return;
@@ -383,7 +458,10 @@ function playSpellTrapFlipGhost(cardEl) {
   });
 }
 
-function applyFlipAnimationClass(cardEl, animationClass) {
+function applyFlipAnimationClass(
+  cardEl: HTMLElement | null,
+  animationClass: string,
+) {
   if (!cardEl || prefersReducedMotion()) return Promise.resolve(false);
   if (animationClass === "spell-trap-flip-reveal") {
     const ghostPresentation = playSpellTrapFlipGhost(cardEl);
@@ -399,7 +477,7 @@ function applyFlipAnimationClass(cardEl, animationClass) {
   cardEl.classList.add(animationClass);
 
   const duration = animationClass === "flip-summon-reveal" ? 650 : 720;
-  return new Promise((resolve) => {
+  return new Promise<boolean>((resolve) => {
     let settled = false;
     const cleanup = () => {
       if (settled) return;
@@ -424,12 +502,17 @@ function applyFlipAnimationClass(cardEl, animationClass) {
  *
  * @this {import('../Renderer.js').default}
  */
-export function applyFlipAnimation(owner, index, options = {}) {
+export function applyFlipAnimation(
+  this: Renderer,
+  owner: PlayerId,
+  index: number,
+  options: FlipAnimationOptions = {},
+): Promise<boolean> {
   if (index < 0) return Promise.resolve(false);
 
   const animationClass = getFlipAnimationClass(options);
   const deferFrames = Number.isFinite(options.deferFrames)
-    ? Math.max(0, Math.round(options.deferFrames))
+    ? Math.max(0, Math.round(options.deferFrames!))
     : 1;
 
   const apply = () => {
@@ -437,7 +520,9 @@ export function applyFlipAnimation(owner, index, options = {}) {
       owner === "player" ? this.elements.playerField : this.elements.botField;
     if (!container) return Promise.resolve(false);
 
-    const cardEl = container.querySelector(`.card[data-index="${index}"]`);
+    const cardEl = container.querySelector<HTMLElement>(
+      `.card[data-index="${index}"]`,
+    );
     if (cardEl) {
       return applyFlipAnimationClass(cardEl, animationClass);
     }
@@ -448,7 +533,7 @@ export function applyFlipAnimation(owner, index, options = {}) {
     return apply();
   }
 
-  return new Promise((resolve) => {
+  return new Promise<boolean>((resolve) => {
     let framesLeft = deferFrames;
     const tick = () => {
       if (framesLeft > 0) {
@@ -468,11 +553,16 @@ export function applyFlipAnimation(owner, index, options = {}) {
  *
  * @this {import('../Renderer.js').default}
  */
-export function applySpellTrapFlipAnimation(owner, index, options = {}) {
+export function applySpellTrapFlipAnimation(
+  this: Renderer,
+  owner: PlayerId,
+  index: number,
+  options: FlipAnimationOptions = {},
+): Promise<boolean> {
   if (index < 0) return Promise.resolve(false);
 
   const deferFrames = Number.isFinite(options.deferFrames)
-    ? Math.max(0, Math.round(options.deferFrames))
+    ? Math.max(0, Math.round(options.deferFrames!))
     : 1;
 
   const apply = () => {
@@ -482,7 +572,9 @@ export function applySpellTrapFlipAnimation(owner, index, options = {}) {
         : this.elements.botSpellTrap;
     if (!container) return Promise.resolve(false);
 
-    const cardEl = container.querySelector(`.card[data-index="${index}"]`);
+    const cardEl = container.querySelector<HTMLElement>(
+      `.card[data-index="${index}"]`,
+    );
     if (cardEl) {
       return applyFlipAnimationClass(cardEl, "spell-trap-flip-reveal");
     }
@@ -493,7 +585,7 @@ export function applySpellTrapFlipAnimation(owner, index, options = {}) {
     return apply();
   }
 
-  return new Promise((resolve) => {
+  return new Promise<boolean>((resolve) => {
     let framesLeft = deferFrames;
     const tick = () => {
       if (framesLeft > 0) {
@@ -511,11 +603,14 @@ export function applySpellTrapFlipAnimation(owner, index, options = {}) {
 /**
  * @this {import('../Renderer.js').default}
  */
-export function setPlayerFieldTributeable(indices = []) {
+export function setPlayerFieldTributeable(
+  this: Renderer,
+  indices: readonly number[] = [],
+): void {
   if (!this.elements.playerField) return;
   indices.forEach((index) => {
-    const cardEl = this.elements.playerField.querySelector(
-      `.card[data-index="${index}"]`
+    const cardEl = this.elements.playerField!.querySelector<HTMLElement>(
+      `.card[data-index="${index}"]`,
     );
     if (cardEl) {
       cardEl.classList.add("tributeable");
@@ -526,10 +621,14 @@ export function setPlayerFieldTributeable(indices = []) {
 /**
  * @this {import('../Renderer.js').default}
  */
-export function setPlayerFieldSelected(index, selected) {
+export function setPlayerFieldSelected(
+  this: Renderer,
+  index: number,
+  selected: boolean,
+): void {
   if (!this.elements.playerField || index < 0) return;
-  const cardEl = this.elements.playerField.querySelector(
-    `.card[data-index="${index}"]`
+  const cardEl = this.elements.playerField!.querySelector<HTMLElement>(
+    `.card[data-index="${index}"]`,
   );
   if (!cardEl) return;
   if (selected) {
@@ -542,22 +641,25 @@ export function setPlayerFieldSelected(index, selected) {
 /**
  * @this {import('../Renderer.js').default}
  */
-export function clearPlayerFieldTributeable() {
+export function clearPlayerFieldTributeable(this: Renderer): void {
   if (!this.elements.playerField) return;
   this.elements.playerField
-    .querySelectorAll(".tributeable, .selected")
+    .querySelectorAll<HTMLElement>(".tributeable, .selected")
     .forEach((el) => el.classList.remove("tributeable", "selected"));
 }
 
 /**
  * @this {import('../Renderer.js').default}
  */
-export function applyTargetHighlights({
-  targets = [],
-  attackerHighlight = null,
-  sourceCard = null,
-  selectionContract = null,
-} = {}) {
+export function applyTargetHighlights(
+  this: Renderer,
+  {
+    targets = [],
+    attackerHighlight = null,
+    sourceCard = null,
+    selectionContract = null,
+  }: TargetHighlights = {},
+): void {
   this.clearTargetHighlights();
 
   if (attackerHighlight) {
@@ -565,8 +667,8 @@ export function applyTargetHighlights({
     const container =
       owner === "player" ? this.elements.playerField : this.elements.botField;
     if (container && index >= 0) {
-      const attackerEl = container.querySelector(
-        `.card[data-index=\"${index}\"]`
+      const attackerEl = container.querySelector<HTMLElement>(
+        `.card[data-index=\"${index}\"]`,
       );
       if (attackerEl) {
         attackerEl.classList.add("attack-attacker");
@@ -578,10 +680,10 @@ export function applyTargetHighlights({
     sourceCard,
     selectionContract,
   });
-  let selectedTargetEl = null;
+  let selectedTargetEl: HTMLElement | null = null;
 
   targets.forEach((cand) => {
-    let targetEl = null;
+    let targetEl: HTMLElement | null = null;
     if (cand.isDirectAttack) {
       targetEl = this.elements.botHand;
     } else if (cand.zone === "field") {
@@ -590,8 +692,8 @@ export function applyTargetHighlights({
           ? this.elements.playerField
           : this.elements.botField;
       if (container) {
-        targetEl = container.querySelector(
-          `.card[data-index=\"${cand.zoneIndex}\"]`
+        targetEl = container.querySelector<HTMLElement>(
+          `.card[data-index=\"${cand.zoneIndex}\"]`,
         );
       }
     } else if (cand.zone === "spellTrap") {
@@ -600,8 +702,8 @@ export function applyTargetHighlights({
           ? this.elements.playerSpellTrap
           : this.elements.botSpellTrap;
       if (container) {
-        targetEl = container.querySelector(
-          `.card[data-index=\"${cand.zoneIndex}\"]`
+        targetEl = container.querySelector<HTMLElement>(
+          `.card[data-index=\"${cand.zoneIndex}\"]`,
         );
       }
     } else if (cand.zone === "fieldSpell") {
@@ -610,7 +712,7 @@ export function applyTargetHighlights({
           ? this.elements.playerFieldSpell
           : this.elements.botFieldSpell;
       if (container) {
-        targetEl = container.querySelector(".card");
+        targetEl = container.querySelector<HTMLElement>(".card");
       }
     } else if (cand.zone === "hand") {
       const container =
@@ -618,8 +720,8 @@ export function applyTargetHighlights({
           ? this.elements.playerHand
           : this.elements.botHand;
       if (container) {
-        targetEl = container.querySelector(
-          `.card[data-index=\"${cand.zoneIndex}\"]`
+        targetEl = container.querySelector<HTMLElement>(
+          `.card[data-index=\"${cand.zoneIndex}\"]`,
         );
       }
     }
@@ -648,7 +750,7 @@ export function applyTargetHighlights({
   if (sourceEl && selectedTargetEl) {
     this.pixiVfx?.playTargetingLink?.({
       sourceRect: sourceEl.getBoundingClientRect(),
-      targetRect: selectedTargetEl.getBoundingClientRect(),
+      targetRect: (selectedTargetEl as HTMLElement).getBoundingClientRect(),
       mode: "selected",
     });
   }
@@ -657,7 +759,7 @@ export function applyTargetHighlights({
 /**
  * @this {import('../Renderer.js').default}
  */
-export function clearTargetHighlights() {
+export function clearTargetHighlights(this: Renderer): void {
   const containers = [
     this.elements.playerHand,
     this.elements.botHand,
@@ -677,11 +779,11 @@ export function clearTargetHighlights() {
       "selected-target",
       "attack-attacker",
       "attack-target",
-      "direct-attack-target"
+      "direct-attack-target",
     );
     container
-      .querySelectorAll(
-        ".card.targetable, .card.selected-target, .card.attack-attacker, .card.attack-target, .direct-attack-target"
+      .querySelectorAll<HTMLElement>(
+        ".card.targetable, .card.selected-target, .card.attack-attacker, .card.attack-target, .direct-attack-target",
       )
       .forEach((el) => {
         detachTargetingFxHandlers(el);
@@ -690,7 +792,7 @@ export function clearTargetHighlights() {
           "selected-target",
           "attack-attacker",
           "attack-target",
-          "direct-attack-target"
+          "direct-attack-target",
         );
       });
   });
@@ -704,7 +806,7 @@ export function clearTargetHighlights() {
 /**
  * @this {import('../Renderer.js').default}
  */
-export function setSelectionDimming(active) {
+export function setSelectionDimming(this: Renderer, active: boolean): void {
   const container = document.getElementById("game-container");
   if (!container) return;
   container.classList.toggle("selection-dim", !!active);
@@ -716,12 +818,16 @@ export function setSelectionDimming(active) {
 /**
  * @this {import('../Renderer.js').default}
  */
-export function applyHandTargetableIndices(owner, indices = []) {
+export function applyHandTargetableIndices(
+  this: Renderer,
+  owner: PlayerId,
+  indices: readonly number[] = [],
+): void {
   const container =
     owner === "player" ? this.elements.playerHand : this.elements.botHand;
   if (!container) return;
   const indexSet = new Set(indices);
-  const cards = container.querySelectorAll(".card");
+  const cards = container.querySelectorAll<HTMLElement>(".card");
   cards.forEach((cardEl, index) => {
     if (indexSet.has(index)) {
       cardEl.classList.add("targetable");
@@ -734,10 +840,12 @@ export function applyHandTargetableIndices(owner, indices = []) {
 /**
  * @this {import('../Renderer.js').default}
  */
-export function getSelectionCleanupState() {
-  const controlsVisible = !!document.querySelector(".field-targeting-controls");
-  const highlightCount = document.querySelectorAll(
-    ".card.targetable, .card.selected-target"
+export function getSelectionCleanupState(this: Renderer) {
+  const controlsVisible = !!document.querySelector<HTMLElement>(
+    ".field-targeting-controls",
+  );
+  const highlightCount = document.querySelectorAll<HTMLElement>(
+    ".card.targetable, .card.selected-target",
   ).length;
   return { controlsVisible, highlightCount };
 }
@@ -745,9 +853,13 @@ export function getSelectionCleanupState() {
 /**
  * @this {import('../Renderer.js').default}
  */
-export function applyZoneActivationIndicators(container, zoneIndicators) {
+export function applyZoneActivationIndicators(
+  this: Renderer,
+  container: HTMLElement | null,
+  zoneIndicators: ZoneActivationIndicators,
+): void {
   if (!container || !zoneIndicators) return;
-  const cardEls = container.querySelectorAll(".card");
+  const cardEls = container.querySelectorAll<HTMLElement>(".card");
   cardEls.forEach((cardEl) => {
     const index = Number(cardEl.dataset.index);
     if (Number.isNaN(index)) return;
@@ -766,14 +878,21 @@ export function applyZoneActivationIndicators(container, zoneIndicators) {
 /**
  * @this {import('../Renderer.js').default}
  */
-export function decorateActivatableCard(cardEl) {
+export function decorateActivatableCard(
+  this: Renderer,
+  cardEl: HTMLElement,
+): void {
   cardEl.classList.add("card-activatable");
 }
 
 /**
  * @this {import('../Renderer.js').default}
  */
-export function setActivationHint(cardEl, label) {
+export function setActivationHint(
+  this: Renderer,
+  cardEl: HTMLElement,
+  label: string,
+): void {
   if (!label) return;
   cardEl.title = cardEl.dataset.baseTooltip
     ? `${label}\n${cardEl.dataset.baseTooltip}`
@@ -784,7 +903,7 @@ export function setActivationHint(cardEl, label) {
 /**
  * @this {import('../Renderer.js').default}
  */
-export function clearActivationHint(cardEl) {
+export function clearActivationHint(this: Renderer, cardEl: HTMLElement): void {
   cardEl.classList.remove("card-activatable");
   if (cardEl.dataset.activationHint) {
     delete cardEl.dataset.activationHint;

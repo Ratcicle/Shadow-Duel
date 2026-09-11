@@ -1,3 +1,29 @@
+import type Renderer from "../Renderer.js";
+import type { UiCard, EffectDisplay } from "./types.js";
+export interface TrapCandidate extends UiCard {
+  card?: UiCard;
+  effect?: EffectDisplay | null;
+  zone?: string;
+}
+export interface ChainDisplayContext {
+  type?: string;
+  event?: string;
+  attacker?: UiCard | null;
+  target?: UiCard | null;
+  card?: UiCard | null;
+}
+export interface TrapModalOptions {
+  cards?: readonly TrapCandidate[];
+  context?: ChainDisplayContext | null;
+  mode?: "single" | "chain";
+  signal?: AbortSignal | null;
+}
+export interface TrapModalResult {
+  card: UiCard;
+  effect: EffectDisplay | null;
+  activate: boolean;
+}
+
 /**
  * Trap modal methods for Renderer
  * Handles: showUnifiedTrapModal, showTrapActivationModal, showChainResponseModal,
@@ -11,7 +37,9 @@ import {
 } from "../../core/i18n.js";
 import { publicAssetUrl } from "../../core/publicUrl.js";
 
-export function getEffectDisplayLabel(effect) {
+export function getEffectDisplayLabel(
+  effect: EffectDisplay | null | undefined,
+) {
   if (!effect) return "";
   if (effect.activationLabelKey) {
     return getUIText(
@@ -38,7 +66,10 @@ export function getEffectDisplayLabel(effect) {
  * @param {string} options.mode - 'single' for manual, 'chain' for chain response
  * @returns {Promise<{card, effect, activate: boolean}|null>}
  */
-export function showUnifiedTrapModal(options = {}) {
+export function showUnifiedTrapModal(
+  this: Renderer,
+  options: TrapModalOptions = {},
+): Promise<TrapModalResult | null> {
   const {
     cards = [],
     context = null,
@@ -46,11 +77,11 @@ export function showUnifiedTrapModal(options = {}) {
     signal = null,
   } = options;
 
-  return new Promise((resolve) => {
+  return new Promise<TrapModalResult | null>((resolve) => {
     let resolved = false;
-    let overlay = null;
+    let overlay: HTMLElement | null = null;
     const handleAbort = () => finalize(null);
-    const finalize = (result) => {
+    const finalize = (result: TrapModalResult | null) => {
       if (resolved) return;
       resolved = true;
       document.removeEventListener("keydown", handleKeydown);
@@ -62,7 +93,7 @@ export function showUnifiedTrapModal(options = {}) {
       resolve(result);
     };
 
-    const handleKeydown = (event) => {
+    const handleKeydown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         finalize(null);
       }
@@ -244,7 +275,12 @@ export function showUnifiedTrapModal(options = {}) {
 /**
  * @this {import('../Renderer.js').default}
  */
-export function showTrapActivationModal(trapCard, event, eventData = {}) {
+export function showTrapActivationModal(
+  this: Renderer,
+  trapCard: UiCard,
+  event?: string,
+  eventData: unknown = {},
+): Promise<boolean> {
   return this.showUnifiedTrapModal({
     cards: [{ card: trapCard }],
     mode: "single",
@@ -259,12 +295,13 @@ export function showTrapActivationModal(trapCard, event, eventData = {}) {
  * @param {Array} chainStack - Current chain stack for display
  * @returns {Promise<{card, effect, selections}|null>}
  */
-export function showChainResponseModal(
-  activatable,
-  context,
-  chainStack = [],
-  options = {},
-) {
+export function showChainResponseModal<T extends TrapCandidate>(
+  this: Renderer,
+  activatable: readonly T[],
+  context: ChainDisplayContext | null,
+  chainStack: readonly unknown[] = [],
+  options: { signal?: AbortSignal | null } = {},
+): Promise<T | null> {
   return this.showUnifiedTrapModal({
     cards: activatable,
     context,
@@ -290,7 +327,10 @@ export function showChainResponseModal(
  * @param {Object} context
  * @returns {string}
  */
-export function _getContextDescription(context) {
+export function _getContextDescription(
+  this: Renderer,
+  context: ChainDisplayContext | null,
+): string {
   if (!context) return getUIText("ui.trap.responseDefault");
 
   switch (context.type) {
@@ -330,7 +370,10 @@ export function _getContextDescription(context) {
 
     default:
       return getUIText("ui.trap.responseEvent", {
-        event: context.event || context.type || getUIText("ui.selection.effectLabel"),
+        event:
+          context.event ||
+          context.type ||
+          getUIText("ui.selection.effectLabel"),
       });
   }
 }

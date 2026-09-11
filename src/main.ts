@@ -34,21 +34,25 @@ const validationPanel = createValidationPanel({
 });
 const gameLauncher = createGameLauncher({ Game, Renderer });
 
-function uiText(key, params = {}, fallback = null) {
+function uiText(
+  key: string,
+  params: Readonly<Record<string, unknown>> = {},
+  fallback: string | null = null,
+) {
   return getUIText(`ui.${key}`, params, fallback);
 }
 
-function setText(el, value) {
+function setText(el: Element | null | undefined, value: string) {
   if (el && typeof value === "string") {
     el.textContent = value;
   }
 }
 
-function setLabelForControl(control, value) {
+function setLabelForControl(control: HTMLElement | null, value: string) {
   const label = control?.closest?.("label");
   if (!label) return;
   const textNode = Array.from(label.childNodes).find(
-    (node) => node.nodeType === Node.TEXT_NODE && node.textContent.trim(),
+    (node) => node.nodeType === Node.TEXT_NODE && node.textContent!.trim(),
   );
   if (textNode) {
     textNode.textContent = value;
@@ -73,7 +77,10 @@ function applyStaticLocalization() {
   );
 
   const deckRoot = dom.deckBuilder.root;
-  setText(deckRoot?.querySelector(".deck-title-area h2"), uiText("deckBuilder.title"));
+  setText(
+    deckRoot?.querySelector(".deck-title-area h2"),
+    uiText("deckBuilder.title"),
+  );
   deckRoot
     ?.querySelector(".deck-toolbar")
     ?.setAttribute("aria-label", uiText("deckBuilder.toolbarLabel"));
@@ -82,7 +89,10 @@ function applyStaticLocalization() {
       "deckBuilder.searchPlaceholder",
     );
   }
-  setLabelForControl(dom.deckBuilder.categoryFilterSelect, uiText("deckBuilder.category"));
+  setLabelForControl(
+    dom.deckBuilder.categoryFilterSelect,
+    uiText("deckBuilder.category"),
+  );
   setLabelForControl(
     dom.deckBuilder.typeSubtypeFilterSelect,
     uiText("deckBuilder.typeSubtype"),
@@ -91,8 +101,14 @@ function applyStaticLocalization() {
     dom.deckBuilder.archetypeFilterSelect,
     uiText("deckBuilder.archetype"),
   );
-  setLabelForControl(dom.deckBuilder.viewModeSelect, uiText("deckBuilder.view"));
-  setLabelForControl(dom.deckBuilder.sortModeSelect, uiText("deckBuilder.sort"));
+  setLabelForControl(
+    dom.deckBuilder.viewModeSelect,
+    uiText("deckBuilder.view"),
+  );
+  setLabelForControl(
+    dom.deckBuilder.sortModeSelect,
+    uiText("deckBuilder.sort"),
+  );
   dom.deckBuilder.activeFilters?.setAttribute(
     "aria-label",
     uiText("deckBuilder.activeFiltersLabel"),
@@ -204,7 +220,7 @@ function bindMainEvents() {
   window.addEventListener("shadow-duel-rematch", rematch);
 }
 
-function ensureDomReady(fn) {
+function ensureDomReady(fn: () => void) {
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", fn, { once: true });
   } else {

@@ -1,21 +1,59 @@
+import type Renderer from "../Renderer.js";
+import type { UiCard } from "./types.js";
+export interface ConfirmPromptOptions {
+  confirmLabel?: string;
+  cancelLabel?: string;
+  title?: string;
+}
+export interface GameOverOptions {
+  result?: string;
+  outcome?: string;
+  state?: string;
+  winner?: string;
+  draw?: boolean;
+  victory?: boolean;
+  playerLP?: number;
+  botLP?: number;
+  turns?: number;
+  strategicReportInfo?: { winner?: string | null } | null;
+  replayAvailable?: boolean;
+  strategicReportAvailable?: boolean;
+  onMenu?: () => void;
+  onRematch?: () => void;
+  onExportReplay?: () => boolean;
+  onExportStrategicReport?: () => boolean;
+}
+export interface SearchModalElements {
+  modal: HTMLElement;
+  input: HTMLInputElement;
+  select: HTMLSelectElement;
+  confirmBtn: HTMLElement;
+  cancelBtn: HTMLElement;
+  closeBtn: HTMLElement;
+}
+type SearchCard = UiCard & { name: string };
+
 /**
  * Base modal methods for Renderer
  * Handles: toggleModal, toggleExtraDeckModal, showConfirmPrompt, showNumberPrompt, showAlert,
  * getSearchModalElements, showSearchModal, showSearchModalVisual
  */
 
-import {
-  getCardDisplayName,
-  getLocale,
-  getUIText,
-} from "../../core/i18n.js";
+import { getCardDisplayName, getLocale, getUIText } from "../../core/i18n.js";
 import {
   getSelectionCardTypeClass,
   renderCompactSelectionCard,
 } from "./selectionModals.js";
 
-let activeConfirmPrompt = null;
-let activeDuelStartAnnouncement = null;
+let activeConfirmPrompt: {
+  overlay: HTMLElement;
+  resolve: (value: boolean) => void;
+  cleanup: () => void;
+} | null = null;
+let activeDuelStartAnnouncement: {
+  overlay: HTMLElement;
+  cleanup: () => void;
+} | null = null;
 
 const GAME_OVER_COPY = {
   en: {
@@ -60,7 +98,7 @@ function getGameOverCopy() {
   return GAME_OVER_COPY[getLocale()] || GAME_OVER_COPY.en;
 }
 
-function getGameOverResult(options = {}) {
+function getGameOverResult(options: GameOverOptions = {}) {
   const explicitResult = String(
     options.result || options.outcome || options.state || "",
   ).toLowerCase();
@@ -68,7 +106,9 @@ function getGameOverResult(options = {}) {
   if (["defeat", "loss", "bot"].includes(explicitResult)) return "defeat";
   if (["draw", "tie"].includes(explicitResult)) return "draw";
 
-  const winner = String(options.winner || options.strategicReportInfo?.winner || "").toLowerCase();
+  const winner = String(
+    options.winner || options.strategicReportInfo?.winner || "",
+  ).toLowerCase();
   if (winner === "player") return "victory";
   if (winner === "bot") return "defeat";
   if (winner === "draw") return "draw";
@@ -76,7 +116,7 @@ function getGameOverResult(options = {}) {
   return options.victory ? "victory" : "defeat";
 }
 
-function formatLifePoints(value) {
+function formatLifePoints(value: number | null | undefined) {
   const amount = Number(value ?? 0);
   return getUIText("ui.lp", {
     amount: Number.isFinite(amount) ? amount : 0,
@@ -86,7 +126,7 @@ function formatLifePoints(value) {
 /**
  * @this {import('../Renderer.js').default}
  */
-export function toggleModal(show) {
+export function toggleModal(this: Renderer, show: boolean): void {
   const modal = document.getElementById("gy-modal");
   if (!modal) return;
   if (show) modal.classList.remove("hidden");
@@ -96,7 +136,7 @@ export function toggleModal(show) {
 /**
  * @this {import('../Renderer.js').default}
  */
-export function toggleExtraDeckModal(show) {
+export function toggleExtraDeckModal(this: Renderer, show: boolean): void {
   const modal = document.getElementById("extradeck-modal");
   if (modal) {
     if (show) {
@@ -110,7 +150,11 @@ export function toggleExtraDeckModal(show) {
 /**
  * @this {import('../Renderer.js').default}
  */
-export function showConfirmPrompt(message, options = {}) {
+export function showConfirmPrompt(
+  this: Renderer,
+  message: string,
+  options: ConfirmPromptOptions = {},
+): boolean | Promise<boolean> {
   if (!message) return false;
   if (typeof document === "undefined" || !document.body) {
     if (typeof window !== "undefined" && typeof window.confirm === "function") {
@@ -135,7 +179,7 @@ export function showConfirmPrompt(message, options = {}) {
   const title = options.title || getUIText("ui.prompts.confirmTitle");
   const detailText = String(message);
 
-  return new Promise((resolve) => {
+  return new Promise<boolean>((resolve) => {
     const overlay = document.createElement("div");
     overlay.className = "modal confirm-modal";
 
@@ -190,7 +234,7 @@ export function showConfirmPrompt(message, options = {}) {
       }
     };
 
-    const finish = (value) => {
+    const finish = (value: boolean) => {
       if (resolved) return;
       resolved = true;
       document.removeEventListener("keydown", onKeyDown);
@@ -201,7 +245,7 @@ export function showConfirmPrompt(message, options = {}) {
       resolve(value);
     };
 
-    const onKeyDown = (event) => {
+    const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         finish(false);
       }
@@ -233,8 +277,12 @@ export function showConfirmPrompt(message, options = {}) {
 /**
  * @this {import('../Renderer.js').default}
  */
-export function showNumberPrompt(message, defaultValue) {
-  const raw = window.prompt(message, defaultValue ?? "");
+export function showNumberPrompt(
+  this: Renderer,
+  message: string,
+  defaultValue?: string | number | null,
+): number | null {
+  const raw = window.prompt(message, String(defaultValue ?? ""));
   if (raw === null || raw === undefined) return null;
   const parsed = Number.parseInt(String(raw), 10);
   return Number.isNaN(parsed) ? null : parsed;
@@ -243,7 +291,7 @@ export function showNumberPrompt(message, defaultValue) {
 /**
  * @this {import('../Renderer.js').default}
  */
-export function showAlert(message) {
+export function showAlert(this: Renderer, message: string): void {
   if (!message) return;
   window.alert(message);
 }
@@ -252,7 +300,11 @@ export function showAlert(message) {
  * Shows a brief, non-interactive duel start announcement.
  * @this {import('../Renderer.js').default}
  */
-export function showDuelStartAnnouncement(message, options = {}) {
+export function showDuelStartAnnouncement(
+  this: Renderer,
+  message: string,
+  options: { durationMs?: number } = {},
+): Promise<boolean> {
   if (!message) return Promise.resolve(false);
   if (typeof document === "undefined" || !document.body) {
     return Promise.resolve(false);
@@ -263,14 +315,14 @@ export function showDuelStartAnnouncement(message, options = {}) {
   }
 
   const durationMs = Number.isFinite(options.durationMs)
-    ? Math.max(0, options.durationMs)
+    ? Math.max(0, options.durationMs!)
     : 1200;
 
-  return new Promise((resolve) => {
+  return new Promise<boolean>((resolve) => {
     const requestFrame =
       typeof globalThis.requestAnimationFrame === "function"
         ? globalThis.requestAnimationFrame.bind(globalThis)
-        : (callback) => globalThis.setTimeout(callback, 0);
+        : (callback: () => void) => globalThis.setTimeout(callback, 0);
     const overlay = document.createElement("div");
     overlay.className = "duel-start-announcement";
     overlay.setAttribute("role", "status");
@@ -284,12 +336,12 @@ export function showDuelStartAnnouncement(message, options = {}) {
     document.body.appendChild(overlay);
 
     let resolved = false;
-    let hideTimer = null;
-    let cleanupTimer = null;
+    let hideTimer: ReturnType<typeof setTimeout> | null = null;
+    let cleanupTimer: ReturnType<typeof setTimeout> | null = null;
 
     const cleanup = () => {
-      globalThis.clearTimeout(hideTimer);
-      globalThis.clearTimeout(cleanupTimer);
+      globalThis.clearTimeout(hideTimer!);
+      globalThis.clearTimeout(cleanupTimer!);
       if (overlay.parentNode) {
         overlay.parentNode.removeChild(overlay);
       }
@@ -329,7 +381,10 @@ export function showDuelStartAnnouncement(message, options = {}) {
  * @param {Function} options.onRematch - Callback for rematch button
  * @param {Function} options.onExportStrategicReport - Callback for Strategic JSON export
  */
-export function showGameOverModal(options = {}) {
+export function showGameOverModal(
+  this: Renderer,
+  options: GameOverOptions = {},
+): void {
   const modal = document.getElementById("game-over-modal");
   const panel = modal?.querySelector(".game-over-panel");
   const title = document.getElementById("game-over-title");
@@ -342,10 +397,24 @@ export function showGameOverModal(options = {}) {
   const turns = document.getElementById("game-over-turns");
   const menuBtn = document.getElementById("btn-game-over-menu");
   const rematchBtn = document.getElementById("btn-game-over-rematch");
-  const exportBtn = document.getElementById("btn-game-over-export");
+  const exportBtn = document.querySelector<HTMLButtonElement>(
+    "#btn-game-over-export",
+  );
   const replayStatus = document.getElementById("game-over-replay-status");
 
-  if (!modal) return;
+  if (
+    !modal ||
+    !title ||
+    !message ||
+    !playerLP ||
+    !botLP ||
+    !turns ||
+    !menuBtn ||
+    !rematchBtn ||
+    !exportBtn ||
+    !replayStatus
+  )
+    return;
 
   if (options.victory) {
     title.textContent = "Victory";
@@ -357,14 +426,14 @@ export function showGameOverModal(options = {}) {
     message.textContent = "Você perdeu o duelo.";
   }
 
-  playerLP.textContent = options.playerLP ?? 0;
-  botLP.textContent = options.botLP ?? 0;
-  turns.textContent = options.turns ?? 0;
+  playerLP.textContent = String(options.playerLP ?? 0);
+  botLP.textContent = String(options.botLP ?? 0);
+  turns.textContent = String(options.turns ?? 0);
 
   const result = getGameOverResult(options);
   const copy = getGameOverCopy();
-  const titleKey = `${result}Title`;
-  const messageKey = `${result}Message`;
+  const titleKey = `${result}Title` as const;
+  const messageKey = `${result}Message` as const;
 
   panel?.classList.remove("result-victory", "result-defeat", "result-draw");
   panel?.classList.add(`result-${result}`);
@@ -434,8 +503,8 @@ export function showGameOverModal(options = {}) {
   exportBtn.onclick = () => {
     if (!hasExport) return;
     const result = hasCanonicalReplay
-      ? options.onExportReplay()
-      : options.onExportStrategicReport();
+      ? options.onExportReplay!()
+      : options.onExportStrategicReport!();
     if (result) {
       exportBtn.textContent = copy.exported;
       exportBtn.classList.add("exported");
@@ -449,10 +518,12 @@ export function showGameOverModal(options = {}) {
 /**
  * @this {import('../Renderer.js').default}
  */
-export function getSearchModalElements() {
+export function getSearchModalElements(
+  this: Renderer,
+): SearchModalElements | null {
   const modal = document.getElementById("search-modal");
-  const input = document.getElementById("search-input");
-  const select = document.getElementById("search-dropdown");
+  const input = document.querySelector<HTMLInputElement>("#search-input");
+  const select = document.querySelector<HTMLSelectElement>("#search-dropdown");
   const confirmBtn = document.getElementById("search-confirm");
   const cancelBtn = document.getElementById("search-cancel");
   const closeBtn = document.getElementById("search-close");
@@ -468,12 +539,13 @@ export function getSearchModalElements() {
  * @this {import('../Renderer.js').default}
  */
 export function showSearchModal(
-  elements,
-  candidates,
-  defaultCard,
-  onConfirm,
-  allCards
-) {
+  this: Renderer,
+  elements: SearchModalElements,
+  candidates: readonly SearchCard[],
+  defaultCard: string | null | undefined,
+  onConfirm: (name: string) => void,
+  allCards?: readonly SearchCard[],
+): void {
   const { modal, input, select, confirmBtn, cancelBtn, closeBtn } = elements;
 
   select.innerHTML = "";
@@ -527,7 +599,7 @@ export function showSearchModal(
     }
   };
 
-  const keyHandler = (e) => {
+  const keyHandler = (e: KeyboardEvent) => {
     if (e.key === "Enter") {
       e.preventDefault();
       confirmHandler();
@@ -550,11 +622,12 @@ export function showSearchModal(
  * @this {import('../Renderer.js').default}
  */
 export function showSearchModalVisual(
-  elements,
-  candidates,
-  defaultCard,
-  onConfirm
-) {
+  this: Renderer,
+  elements: SearchModalElements | null,
+  candidates: readonly SearchCard[],
+  defaultCard: string | null | undefined,
+  onConfirm: (name: string, card: SearchCard | null) => void,
+): void {
   const overlay = document.createElement("div");
   overlay.className = "search-modal-visual";
 
@@ -619,7 +692,7 @@ export function showSearchModalVisual(
     overlay.remove();
   };
 
-  const findCandidateByName = (name) =>
+  const findCandidateByName = (name: string) =>
     candidates.find((c) => c && c.name === name) || null;
 
   confirmBtn.onclick = () => {

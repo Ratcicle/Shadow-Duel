@@ -1,3 +1,33 @@
+import type Renderer from "../Renderer.js";
+import type { GameCard } from "../../core/contracts/cards.js";
+import type { GamePlayer } from "../../core/contracts/player.js";
+import type { PlayerId } from "../../core/contracts/primitives.js";
+
+export interface HandRenderOptions {
+  laboratoryMode?: boolean;
+  revealBotHand?: boolean;
+  activeTurn?: PlayerId;
+}
+export interface GraveyardRenderOptions {
+  filterMessage?: string;
+  selectable?: boolean;
+  showActivatable?: boolean;
+  isDisabled?: (card: GameCard, index: number) => boolean;
+  isSelected?: (card: GameCard, index: number) => boolean;
+  isActivatable?: (card: GameCard) => boolean;
+  onSelect?: (
+    card: GameCard,
+    index: number,
+    element: HTMLElement,
+    event: MouseEvent,
+  ) => void;
+}
+export interface ExtraDeckRenderOptions {
+  isSummonable?: (card: GameCard, index: number) => boolean;
+  getDisabledReason?: (card: GameCard, index: number) => string | null;
+  onCardClick?: (card: GameCard, index: number, event: MouseEvent) => void;
+}
+
 /**
  * Board rendering methods for Renderer
  * Handles: renderHand, renderField, renderSpellTrap, renderFieldSpell,
@@ -7,7 +37,13 @@
 import { getUIText } from "../../core/i18n.js";
 import { PANEL_ICONS, createTablerIcon } from "../icons/tablerIcons.js";
 
-function renderZoneCounter(counter, iconUrl, label, accessibleLabel, count) {
+function renderZoneCounter(
+  counter: Element,
+  iconUrl: string,
+  label: string,
+  accessibleLabel: string,
+  count: number,
+) {
   counter.replaceChildren();
   counter.setAttribute("aria-label", `${accessibleLabel}: ${count}`);
   counter.append(
@@ -31,7 +67,11 @@ function renderZoneCounter(counter, iconUrl, label, accessibleLabel, count) {
 /**
  * @this {import('../Renderer.js').default}
  */
-export function renderHand(player, options = {}) {
+export function renderHand(
+  this: Renderer,
+  player: GamePlayer,
+  options: HandRenderOptions = {},
+): void {
   const container =
     player.id === "player" ? this.elements.playerHand : this.elements.botHand;
   if (!container) return;
@@ -50,7 +90,7 @@ export function renderHand(player, options = {}) {
       ? player.id === options.activeTurn || isBotRevealed
       : player.controllerType !== "ai" && player.id === "player";
     const cardEl = this.createCardElement(card, isVisible);
-    cardEl.dataset.index = index;
+    cardEl.dataset.index = String(index);
     cardEl.dataset.location = "hand";
 
     if (!isVisible) {
@@ -70,7 +110,11 @@ export function renderHand(player, options = {}) {
 /**
  * @this {import('../Renderer.js').default}
  */
-export function renderField(player, options = {}) {
+export function renderField(
+  this: Renderer,
+  player: GamePlayer,
+  options: { turnCounter?: number } = {},
+): void {
   const container =
     player.id === "player" ? this.elements.playerField : this.elements.botField;
   if (!container) return;
@@ -89,7 +133,7 @@ export function renderField(player, options = {}) {
       showStatusIcons: true,
       turnCounter: options.turnCounter,
     });
-    cardEl.dataset.index = index;
+    cardEl.dataset.index = String(index);
     cardEl.dataset.location = "field";
 
     if (card.position === "defense") {
@@ -115,7 +159,7 @@ export function renderField(player, options = {}) {
 /**
  * @this {import('../Renderer.js').default}
  */
-export function renderSpellTrap(player) {
+export function renderSpellTrap(this: Renderer, player: GamePlayer): void {
   const container =
     player.id === "player"
       ? this.elements.playerSpellTrap
@@ -131,7 +175,7 @@ export function renderSpellTrap(player) {
     if (!card) return; // Defensive: skip empty slots
     const isVisible = player.controllerType !== "ai" || !card.isFacedown;
     const cardEl = this.createCardElement(card, isVisible);
-    cardEl.dataset.index = index;
+    cardEl.dataset.index = String(index);
     cardEl.dataset.location = "spellTrap";
 
     if (card.isFacedown) {
@@ -152,7 +196,7 @@ export function renderSpellTrap(player) {
 /**
  * @this {import('../Renderer.js').default}
  */
-export function renderFieldSpell(player) {
+export function renderFieldSpell(this: Renderer, player: GamePlayer): void {
   const container =
     player.id === "player"
       ? this.elements.playerFieldSpell
@@ -169,7 +213,7 @@ export function renderFieldSpell(player) {
   const isVisible = player.controllerType !== "ai" || !card.isFacedown;
   const cardEl = this.createCardElement(card, isVisible);
   cardEl.dataset.location = "fieldSpell";
-  cardEl.dataset.index = 0;
+  cardEl.dataset.index = "0";
 
   if (card.isFacedown) {
     cardEl.classList.add("facedown");
@@ -185,9 +229,12 @@ export function renderFieldSpell(player) {
 /**
  * @this {import('../Renderer.js').default}
  */
-export function updateGYPreview(player) {
+export function updateGYPreview(
+  this: Renderer,
+  player: GamePlayer & { graveyardCount?: number },
+): void {
   const gyZone = document.getElementById(
-    player.id === "player" ? "player-graveyard" : "bot-graveyard"
+    player.id === "player" ? "player-graveyard" : "bot-graveyard",
   );
 
   if (!gyZone) {
@@ -241,9 +288,12 @@ export function updateGYPreview(player) {
 /**
  * @this {import('../Renderer.js').default}
  */
-export function updateExtraDeckPreview(player) {
+export function updateExtraDeckPreview(
+  this: Renderer,
+  player: GamePlayer,
+): void {
   const extraZone = document.getElementById(
-    player.id === "player" ? "player-extradeck" : "bot-extradeck"
+    player.id === "player" ? "player-extradeck" : "bot-extradeck",
   );
 
   if (!extraZone) return;
@@ -270,7 +320,11 @@ export function updateExtraDeckPreview(player) {
 /**
  * @this {import('../Renderer.js').default}
  */
-export function renderGraveyardModal(cards, options = {}) {
+export function renderGraveyardModal(
+  this: Renderer,
+  cards: readonly GameCard[] | null | undefined,
+  options: GraveyardRenderOptions = {},
+): void {
   const grid = document.getElementById("gy-grid");
   const hintEl = document.getElementById("gy-hint");
 
@@ -312,7 +366,7 @@ export function renderGraveyardModal(cards, options = {}) {
         }
         if (typeof options.onSelect === "function") {
           cardEl.addEventListener("click", (e) =>
-            options.onSelect(card, index, cardEl, e)
+            options.onSelect!(card, index, cardEl, e),
           );
         }
       }
@@ -335,7 +389,11 @@ export function renderGraveyardModal(cards, options = {}) {
 /**
  * @this {import('../Renderer.js').default}
  */
-export function renderExtraDeckModal(cards, options = {}) {
+export function renderExtraDeckModal(
+  this: Renderer,
+  cards: readonly GameCard[] | null | undefined,
+  options: ExtraDeckRenderOptions = {},
+): void {
   const grid = document.getElementById("extradeck-modal-grid");
 
   if (!grid) {

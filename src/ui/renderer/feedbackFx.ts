@@ -1,3 +1,36 @@
+import type Renderer from "../Renderer.js";
+import type { UiCard } from "./types.js";
+import type { UiRect, VisualTone } from "../../core/contracts/ui.js";
+export interface FeedbackIntent {
+  kind?: string;
+  cause?: string;
+  subtype?: string;
+  tone?: string;
+  sourceCard?: UiCard | null;
+  targetCard?: UiCard | null;
+  sourceCardKey?: string | null;
+  targetCardKey?: string | null;
+  ownerId?: string | null;
+  targetOwnerId?: string | null;
+  sourceRect?: UiRect | null;
+  targetRect?: UiRect | null;
+  fromRect?: UiRect | null;
+  targetZone?: string;
+  fromZone?: string;
+  intensity?: number | "heavy" | "normal" | "light";
+  shakeIntensity?: number;
+  shakeDuration?: number;
+}
+export interface FeedbackPlaybackOptions {
+  feedbackDuration?: number;
+  feedbackEasing?: string;
+}
+interface PlaybackTiming {
+  duration: number;
+  easing: string;
+}
+type AnchorOptions = { allowSourceFallback?: boolean };
+
 /**
  * Generic non-blocking feedback FX for board events.
  * The game layer queues visual intents; this module owns playback only.
@@ -23,15 +56,18 @@ function prefersReducedMotion() {
   );
 }
 
-function normalizeTone(tone, fallback = "gold") {
-  return TONES[tone] ? tone : fallback;
+function normalizeTone(
+  tone: string | undefined,
+  fallback: VisualTone = "gold",
+): VisualTone {
+  return TONES[tone as VisualTone] ? (tone as VisualTone) : fallback;
 }
 
-function toneRgb(tone) {
+function toneRgb(tone: string | undefined) {
   return TONES[normalizeTone(tone)];
 }
 
-function copyRect(rect) {
+function copyRect(rect: UiRect | null | undefined) {
   if (!rect) return null;
   return {
     left: rect.left,
@@ -41,7 +77,7 @@ function copyRect(rect) {
   };
 }
 
-function isElementVisible(element) {
+function isElementVisible(element: HTMLElement | null) {
   if (!element || typeof window === "undefined") return false;
   const rect = element.getBoundingClientRect();
   if (rect.width <= 0 || rect.height <= 0) return false;
@@ -49,18 +85,18 @@ function isElementVisible(element) {
   return style.display !== "none" && style.visibility !== "hidden";
 }
 
-function escapeCardKey(cardKey) {
+function escapeCardKey(cardKey: string) {
   if (typeof CSS !== "undefined" && typeof CSS.escape === "function") {
     return CSS.escape(cardKey);
   }
   return String(cardKey).replace(/["\\]/g, "\\$&");
 }
 
-function findBoardCardElement(cardKey) {
+function findBoardCardElement(cardKey: string | null | undefined) {
   if (!cardKey || typeof document === "undefined") return null;
   const root = document.getElementById("game-container");
   if (!root) return null;
-  return root.querySelector(
+  return root.querySelector<HTMLElement>(
     `.card[data-card-key="${escapeCardKey(cardKey)}"]:not(.card-animation-ghost)`,
   );
 }
@@ -69,7 +105,7 @@ function getLayer() {
   const root = document.getElementById("game-container");
   if (!root) return null;
 
-  let layer = root.querySelector(":scope > .card-animation-layer");
+  let layer = root.querySelector<HTMLElement>(":scope > .card-animation-layer");
   if (!layer) {
     layer = document.createElement("div");
     layer.className = "card-animation-layer";
@@ -78,7 +114,11 @@ function getLayer() {
   return layer;
 }
 
-function finishAnimation(animation, cleanup, duration) {
+function finishAnimation(
+  animation: Animation | null,
+  cleanup: () => void,
+  duration: number,
+) {
   if (animation?.finished && typeof animation.finished.then === "function") {
     animation.finished.then(cleanup, cleanup);
     return;
@@ -86,13 +126,13 @@ function finishAnimation(animation, cleanup, duration) {
   setTimeout(cleanup, duration + 80);
 }
 
-function getPlayerAreaRect(ownerId) {
+function getPlayerAreaRect(ownerId: string | null) {
   const id = ownerId === "bot" ? "bot-area" : "player-area";
   const element = document.getElementById(id);
   return element ? copyRect(element.getBoundingClientRect()) : null;
 }
 
-function getPlayerImpactRect(ownerId) {
+function getPlayerImpactRect(ownerId: string | null) {
   const area = getPlayerAreaRect(ownerId);
   if (!area) return null;
   const size = Math.min(
@@ -107,11 +147,16 @@ function getPlayerImpactRect(ownerId) {
   };
 }
 
-function setTone(node, tone) {
+function setTone(node: HTMLElement, tone: string | undefined) {
   node.style.setProperty("--fx-color", toneRgb(tone));
 }
 
-function createAnchoredNode(layer, className, rect, tone) {
+function createAnchoredNode(
+  layer: HTMLElement,
+  className: string,
+  rect: UiRect | null,
+  tone: string | undefined,
+) {
   if (!rect) return null;
   const node = document.createElement("div");
   node.className = className;
@@ -124,7 +169,12 @@ function createAnchoredNode(layer, className, rect, tone) {
   return node;
 }
 
-function createAreaNode(layer, className, rect, tone) {
+function createAreaNode(
+  layer: HTMLElement,
+  className: string,
+  rect: UiRect | null,
+  tone: string | undefined,
+) {
   if (!rect) return null;
   const node = document.createElement("div");
   node.className = className;
@@ -137,7 +187,11 @@ function createAreaNode(layer, className, rect, tone) {
   return node;
 }
 
-function resolveCardElement(intent, preferSource = false, options = {}) {
+function resolveCardElement(
+  intent: FeedbackIntent,
+  preferSource = false,
+  options: AnchorOptions = {},
+) {
   const allowSourceFallback = options.allowSourceFallback !== false;
   const keys = preferSource
     ? [intent.sourceCardKey, intent.targetCardKey]
@@ -151,7 +205,7 @@ function resolveCardElement(intent, preferSource = false, options = {}) {
   return null;
 }
 
-function resolveOwnerId(intent) {
+function resolveOwnerId(intent: FeedbackIntent) {
   return (
     intent.targetOwnerId ||
     intent.ownerId ||
@@ -161,11 +215,11 @@ function resolveOwnerId(intent) {
   );
 }
 
-function getCardKey(card) {
+function getCardKey(card: UiCard | null | undefined) {
   return card?.instanceId != null ? String(card.instanceId) : null;
 }
 
-function normalizeFeedbackIntent(rawIntent) {
+function normalizeFeedbackIntent(rawIntent: FeedbackIntent | null | undefined) {
   if (!rawIntent?.kind) return null;
   return {
     ...rawIntent,
@@ -182,7 +236,12 @@ function normalizeFeedbackIntent(rawIntent) {
   };
 }
 
-function resolveAnchorRect(renderer, intent, preferSource = false, options = {}) {
+function resolveAnchorRect(
+  renderer: Renderer,
+  intent: FeedbackIntent,
+  preferSource = false,
+  options: AnchorOptions = {},
+) {
   const allowSourceFallback = options.allowSourceFallback !== false;
   const element = resolveCardElement(intent, preferSource, {
     allowSourceFallback,
@@ -206,7 +265,11 @@ function resolveAnchorRect(renderer, intent, preferSource = false, options = {})
   return ownerId ? getPlayerImpactRect(ownerId) : null;
 }
 
-function playPulse(element, tone, options) {
+function playPulse(
+  element: HTMLElement | null,
+  tone: string | undefined,
+  options: PlaybackTiming,
+) {
   if (!element || typeof element.animate !== "function") return;
   const rgb = toneRgb(tone);
   element.animate(
@@ -225,7 +288,12 @@ function playPulse(element, tone, options) {
   );
 }
 
-function playRing(layer, rect, tone, options) {
+function playRing(
+  layer: HTMLElement,
+  rect: UiRect | null,
+  tone: string | undefined,
+  options: PlaybackTiming,
+) {
   const ring = createAnchoredNode(layer, "fx-ring", rect, tone);
   if (!ring) return;
   const animation =
@@ -245,7 +313,12 @@ function playRing(layer, rect, tone, options) {
   finishAnimation(animation, () => ring.remove(), options.duration);
 }
 
-function playBurst(layer, rect, tone, options) {
+function playBurst(
+  layer: HTMLElement,
+  rect: UiRect | null,
+  tone: string | undefined,
+  options: PlaybackTiming,
+) {
   const burst = createAnchoredNode(layer, "fx-burst", rect, tone);
   if (!burst) return;
   const animation =
@@ -265,7 +338,12 @@ function playBurst(layer, rect, tone, options) {
   finishAnimation(animation, () => burst.remove(), options.duration);
 }
 
-function playPlayerFlash(layer, rect, tone, options) {
+function playPlayerFlash(
+  layer: HTMLElement,
+  rect: UiRect | null,
+  tone: string | undefined,
+  options: PlaybackTiming,
+) {
   const flash = createAreaNode(layer, "fx-player-flash", rect, tone);
   if (!flash) return;
   const animation =
@@ -285,7 +363,13 @@ function playPlayerFlash(layer, rect, tone, options) {
   finishAnimation(animation, () => flash.remove(), options.duration + 80);
 }
 
-function playCardFeedback(renderer, layer, intent, options, preferSource = false) {
+function playCardFeedback(
+  renderer: Renderer,
+  layer: HTMLElement,
+  intent: FeedbackIntent,
+  options: PlaybackTiming,
+  preferSource = false,
+) {
   const element = resolveCardElement(intent, preferSource);
   const rect =
     (element ? copyRect(element.getBoundingClientRect()) : null) ||
@@ -298,39 +382,48 @@ function playCardFeedback(renderer, layer, intent, options, preferSource = false
   playRing(layer, rect, intent.tone, options);
 }
 
-function playPlayerFeedback(layer, intent, options) {
+function playPlayerFeedback(
+  layer: HTMLElement,
+  intent: FeedbackIntent,
+  options: PlaybackTiming,
+) {
   const rect = getPlayerAreaRect(resolveOwnerId(intent));
   if (!rect) return;
   playPlayerFlash(layer, rect, intent.tone, options);
 }
 
-function resolveImpactIntensity(intent, rect) {
-  if (Number.isFinite(intent.intensity)) return intent.intensity;
+function resolveImpactIntensity(intent: FeedbackIntent, rect: UiRect) {
+  if (Number.isFinite(intent.intensity)) return intent.intensity as number;
   return Math.min(1.35, Math.max(0.8, Math.max(rect.width, rect.height) / 100));
 }
 
-function isBattleImpact(intent) {
-  return intent?.kind === "impact" && (intent.cause === "battle" || intent.subtype === "battle");
+function isBattleImpact(intent: FeedbackIntent) {
+  return (
+    intent?.kind === "impact" &&
+    (intent.cause === "battle" || intent.subtype === "battle")
+  );
 }
 
-function resolveBattleShakeIntensity(intent) {
-  if (Number.isFinite(intent.shakeIntensity)) return intent.shakeIntensity;
+function resolveBattleShakeIntensity(intent: FeedbackIntent) {
+  if (Number.isFinite(intent.shakeIntensity)) return intent.shakeIntensity!;
   if (Number.isFinite(intent.intensity)) {
-    return Math.min(5, Math.max(2, 2 + intent.intensity));
+    return Math.min(5, Math.max(2, 2 + (intent.intensity as number)));
   }
   if (intent.intensity === "heavy") return 5;
   if (intent.intensity === "light") return 2;
   return 3;
 }
 
-function playBattleScreenShake(renderer, intent) {
+function playBattleScreenShake(renderer: Renderer, intent: FeedbackIntent) {
   if (!isBattleImpact(intent)) return false;
   const pixiVfx = renderer?.pixiVfx;
   if (!pixiVfx || typeof pixiVfx.playScreenShake !== "function") return false;
   try {
     return (
       pixiVfx.playScreenShake({
-        duration: Number.isFinite(intent.shakeDuration) ? intent.shakeDuration : 150,
+        duration: Number.isFinite(intent.shakeDuration)
+          ? intent.shakeDuration!
+          : 150,
         intensity: resolveBattleShakeIntensity(intent),
       }) === true
     );
@@ -340,7 +433,11 @@ function playBattleScreenShake(renderer, intent) {
   }
 }
 
-function playPixiImpact(renderer, intent, rect) {
+function playPixiImpact(
+  renderer: Renderer,
+  intent: FeedbackIntent,
+  rect: UiRect,
+) {
   const pixiVfx = renderer?.pixiVfx;
   if (
     !pixiVfx ||
@@ -366,7 +463,12 @@ function playPixiImpact(renderer, intent, rect) {
   }
 }
 
-function playImpactFeedback(renderer, layer, intent, playbackOptions) {
+function playImpactFeedback(
+  renderer: Renderer,
+  layer: HTMLElement,
+  intent: FeedbackIntent,
+  playbackOptions: PlaybackTiming,
+) {
   const allowSourceFallback =
     intent.kind !== "impact" || !!intent.targetCard || !!intent.targetCardKey;
   const rect = resolveAnchorRect(renderer, intent, false, {
@@ -386,7 +488,11 @@ function playImpactFeedback(renderer, layer, intent, playbackOptions) {
 /**
  * @this {import('../Renderer.js').default}
  */
-export function playBattleImpactImmediate(rawIntent = {}, options = {}) {
+export function playBattleImpactImmediate(
+  this: Renderer,
+  rawIntent: FeedbackIntent = {},
+  options: FeedbackPlaybackOptions = {},
+): boolean {
   if (prefersReducedMotion() || typeof document === "undefined") return false;
 
   const layer = getLayer();
@@ -394,7 +500,7 @@ export function playBattleImpactImmediate(rawIntent = {}, options = {}) {
 
   const playbackOptions = {
     duration: Number.isFinite(options.feedbackDuration)
-      ? options.feedbackDuration
+      ? options.feedbackDuration!
       : DEFAULT_DURATION,
     easing: options.feedbackEasing || DEFAULT_EASING,
   };
@@ -413,7 +519,11 @@ export function playBattleImpactImmediate(rawIntent = {}, options = {}) {
 /**
  * @this {import('../Renderer.js').default}
  */
-export function playVisualFeedback(intents, options = {}) {
+export function playVisualFeedback(
+  this: Renderer,
+  intents: readonly FeedbackIntent[],
+  options: FeedbackPlaybackOptions = {},
+): void {
   if (prefersReducedMotion() || typeof document === "undefined") return;
   if (!Array.isArray(intents) || intents.length === 0) return;
 
@@ -422,7 +532,7 @@ export function playVisualFeedback(intents, options = {}) {
 
   const playbackOptions = {
     duration: Number.isFinite(options.feedbackDuration)
-      ? options.feedbackDuration
+      ? options.feedbackDuration!
       : DEFAULT_DURATION,
     easing: options.feedbackEasing || DEFAULT_EASING,
   };

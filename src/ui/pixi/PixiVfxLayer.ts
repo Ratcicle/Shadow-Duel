@@ -1,3 +1,30 @@
+import type { Application, Container, Graphics } from "pixi.js";
+import type {
+  UiPoint,
+  UiRect,
+  VisualTone,
+  TargetingVisualMode,
+  ImpactFeedback,
+} from "../../core/contracts/ui.js";
+
+type PixiModule = typeof import("pixi.js");
+interface TargetingEffect {
+  container: Container;
+  tick: () => void;
+}
+interface ImpactParticle extends Graphics {
+  __startX: number;
+  __startY: number;
+  __endX: number;
+  __endY: number;
+  __radius: number;
+}
+interface TargetingCurve {
+  start: UiPoint;
+  end: UiPoint;
+  control: UiPoint;
+}
+
 const IMPACT_DURATION_MS = 330;
 const TARGETING_LINE_COLORS = {
   hover: 0x64d7ff,
@@ -21,69 +48,82 @@ function prefersReducedMotion() {
   );
 }
 
-function normalizeTone(tone) {
+function normalizeTone(tone: string): VisualTone {
   return Object.prototype.hasOwnProperty.call(TONE_COLORS, tone)
-    ? tone
+    ? (tone as VisualTone)
     : "gold";
 }
 
-function clampIntensity(intensity) {
+function clampIntensity(intensity: number) {
   if (!Number.isFinite(intensity)) return 1;
   return Math.min(1.6, Math.max(0.6, intensity));
 }
 
-function clampScreenShakeIntensity(intensity) {
+function clampScreenShakeIntensity(intensity: unknown) {
   const value = Number(intensity);
   if (!Number.isFinite(value)) return 3;
   return Math.min(5, Math.max(2, value));
 }
 
-function clampScreenShakeDuration(duration) {
+function clampScreenShakeDuration(duration: unknown) {
   const value = Number(duration);
   if (!Number.isFinite(value)) return 150;
   return Math.min(180, Math.max(120, value));
 }
 
-function easeOutCubic(t) {
+function easeOutCubic(t: number) {
   return 1 - Math.pow(1 - t, 3);
 }
 
-function easeInQuad(t) {
+function easeInQuad(t: number) {
   return t * t;
 }
 
-function drawCircle(graphics, x, y, radius, color, alpha) {
+function drawCircle(
+  graphics: Graphics,
+  x: number,
+  y: number,
+  radius: number,
+  color: number,
+  alpha: number,
+) {
   graphics.clear();
   graphics.circle(x, y, radius);
   graphics.fill({ color, alpha });
 }
 
-function drawRing(graphics, x, y, radius, color, alpha, width) {
+function drawRing(
+  graphics: Graphics,
+  x: number,
+  y: number,
+  radius: number,
+  color: number,
+  alpha: number,
+  width: number,
+) {
   graphics.clear();
   graphics.circle(x, y, radius);
   graphics.stroke({ color, alpha, width });
 }
 
-function isUsableRect(rect) {
-  return (
-    rect &&
+function isUsableRect(rect: UiRect | null | undefined): rect is UiRect {
+  return (rect &&
     Number.isFinite(rect.left) &&
     Number.isFinite(rect.top) &&
     Number.isFinite(rect.width) &&
     Number.isFinite(rect.height) &&
     rect.width > 0 &&
-    rect.height > 0
-  );
+    rect.height > 0) as boolean;
 }
 
-function getRectCenter(rect) {
+function getRectCenter(rect: UiRect): UiPoint {
   return {
     x: rect.left + rect.width / 2,
     y: rect.top + rect.height / 2,
   };
 }
 
-function getRectEdgePoint(rect, towardPoint) {
+function getRectEdgePoint(rect: UiRect, towardPoint: UiPoint): UiPoint {
   const center = getRectCenter(rect);
   const dx = towardPoint.x - center.x;
   const dy = towardPoint.y - center.y;
@@ -102,7 +142,12 @@ function getRectEdgePoint(rect, towardPoint) {
   };
 }
 
-function getQuadraticPoint(start, control, end, t) {
+function getQuadraticPoint(
+  start: UiPoint,
+  control: UiPoint,
+  end: UiPoint,
+  t: number,
+): UiPoint {
   const inv = 1 - t;
   return {
     x: inv * inv * start.x + 2 * inv * t * control.x + t * t * end.x,
@@ -110,7 +155,11 @@ function getQuadraticPoint(start, control, end, t) {
   };
 }
 
-function getTargetingCurve(sourceRect, targetRect, mode) {
+function getTargetingCurve(
+  sourceRect: UiRect,
+  targetRect: UiRect,
+  mode: TargetingVisualMode,
+): TargetingCurve {
   const sourceCenter = getRectCenter(sourceRect);
   const targetCenter = getRectCenter(targetRect);
   const start = getRectEdgePoint(sourceRect, targetCenter);
@@ -131,7 +180,13 @@ function getTargetingCurve(sourceRect, targetRect, mode) {
   };
 }
 
-function drawTargetingLink(graphics, curve, sourceRect, targetRect, mode) {
+function drawTargetingLink(
+  graphics: Graphics,
+  curve: TargetingCurve,
+  sourceRect: UiRect,
+  targetRect: UiRect,
+  mode: TargetingVisualMode,
+) {
   const color = TARGETING_LINE_COLORS[mode] || TARGETING_LINE_COLORS.hover;
   const isSelected = mode === "selected";
   const lineWidth = isSelected ? 3 : 1.8;
@@ -142,10 +197,24 @@ function drawTargetingLink(graphics, curve, sourceRect, targetRect, mode) {
 
   graphics.clear();
   graphics.moveTo(curve.start.x, curve.start.y);
-  graphics.quadraticCurveTo(curve.control.x, curve.control.y, curve.end.x, curve.end.y);
-  graphics.stroke({ color, alpha: isSelected ? 0.18 : 0.08, width: outerWidth });
+  graphics.quadraticCurveTo(
+    curve.control.x,
+    curve.control.y,
+    curve.end.x,
+    curve.end.y,
+  );
+  graphics.stroke({
+    color,
+    alpha: isSelected ? 0.18 : 0.08,
+    width: outerWidth,
+  });
   graphics.moveTo(curve.start.x, curve.start.y);
-  graphics.quadraticCurveTo(curve.control.x, curve.control.y, curve.end.x, curve.end.y);
+  graphics.quadraticCurveTo(
+    curve.control.x,
+    curve.control.y,
+    curve.end.x,
+    curve.end.y,
+  );
   graphics.stroke({ color, alpha: isSelected ? 0.72 : 0.34, width: lineWidth });
 
   graphics.roundRect(
@@ -191,7 +260,12 @@ function drawTargetingLink(graphics, curve, sourceRect, targetRect, mode) {
   });
 }
 
-function drawTargetingPulse(graphics, curve, mode, progress) {
+function drawTargetingPulse(
+  graphics: Graphics,
+  curve: TargetingCurve,
+  mode: TargetingVisualMode,
+  progress: number,
+) {
   const isSelected = mode === "selected";
   const alpha = (isSelected ? 0.82 : 0.48) * Math.sin(Math.PI * progress);
   const headRadius = isSelected ? 3.2 : 2.4;
@@ -199,7 +273,7 @@ function drawTargetingPulse(graphics, curve, mode, progress) {
   graphics.clear();
   if (alpha <= 0.01) return;
 
-  const drawCometPoint = (t, radius, pointAlpha) => {
+  const drawCometPoint = (t: number, radius: number, pointAlpha: number) => {
     const point = getQuadraticPoint(curve.start, curve.control, curve.end, t);
     graphics.circle(point.x, point.y, radius);
     graphics.fill({ color: TARGETING_PULSE_COLOR, alpha: pointAlpha });
@@ -215,6 +289,14 @@ function drawTargetingPulse(graphics, curve, mode, progress) {
 }
 
 export default class PixiVfxLayer {
+  declare PIXI: PixiModule | null;
+  declare app: Application | null;
+  declare rootElement: HTMLElement | null;
+  declare canvas: HTMLCanvasElement | null;
+  declare ready: boolean;
+  declare reducedMotion: boolean;
+  declare targetingFx: Record<TargetingVisualMode, TargetingEffect | null>;
+  declare screenShakeTimer: ReturnType<typeof setTimeout> | null;
   constructor() {
     this.PIXI = null;
     this.app = null;
@@ -229,7 +311,7 @@ export default class PixiVfxLayer {
     this.screenShakeTimer = null;
   }
 
-  async init(rootElement) {
+  async init(rootElement: HTMLElement | null | undefined): Promise<boolean> {
     if (this.ready) return true;
     if (!rootElement || typeof window === "undefined") return false;
 
@@ -276,7 +358,7 @@ export default class PixiVfxLayer {
     return this.ready && !!this.app && !this.reducedMotion;
   }
 
-  playFeedback(intent) {
+  playFeedback(intent: ImpactFeedback | null | undefined): boolean {
     if (!this.isReady() || intent?.kind !== "impact") return false;
     return this.playImpact({
       x: intent.x,
@@ -299,8 +381,15 @@ export default class PixiVfxLayer {
     root?.classList?.remove("game-screen-shake");
   }
 
-  playScreenShake({ duration = 150, intensity = 3 } = {}) {
-    if (this.reducedMotion || prefersReducedMotion() || typeof document === "undefined") {
+  playScreenShake({
+    duration = 150,
+    intensity = 3,
+  }: { duration?: number; intensity?: number } = {}): boolean {
+    if (
+      this.reducedMotion ||
+      prefersReducedMotion() ||
+      typeof document === "undefined"
+    ) {
       return false;
     }
 
@@ -322,8 +411,8 @@ export default class PixiVfxLayer {
     return true;
   }
 
-  clearTargetingFx(mode = "all") {
-    const clearOne = (key) => {
+  clearTargetingFx(mode: TargetingVisualMode | "all" = "all") {
+    const clearOne = (key: TargetingVisualMode) => {
       const entry = this.targetingFx[key];
       if (!entry) return;
       if (entry.tick && this.app?.ticker) {
@@ -342,7 +431,15 @@ export default class PixiVfxLayer {
     clearOne("selected");
   }
 
-  playTargetingLink({ sourceRect, targetRect, mode = "hover" } = {}) {
+  playTargetingLink({
+    sourceRect,
+    targetRect,
+    mode = "hover",
+  }: {
+    sourceRect?: UiRect | null;
+    targetRect?: UiRect | null;
+    mode?: string;
+  } = {}): boolean {
     const safeMode = mode === "selected" ? "selected" : "hover";
     if (
       !this.isReady() ||
@@ -352,8 +449,8 @@ export default class PixiVfxLayer {
       return false;
     }
 
-    const PIXI = this.PIXI;
-    const app = this.app;
+    const PIXI = this.PIXI!;
+    const app = this.app!;
     const curve = getTargetingCurve(sourceRect, targetRect, safeMode);
     const container = new PIXI.Container();
     const line = new PIXI.Graphics();
@@ -382,32 +479,37 @@ export default class PixiVfxLayer {
     return true;
   }
 
-  playImpact({ x, y, tone = "gold", intensity = 1 } = {}) {
+  playImpact({
+    x,
+    y,
+    tone = "gold",
+    intensity = 1,
+  }: Omit<ImpactFeedback, "kind"> = {}): boolean {
     if (!this.isReady() || !Number.isFinite(x) || !Number.isFinite(y)) {
       return false;
     }
 
-    const PIXI = this.PIXI;
-    const app = this.app;
+    const PIXI = this.PIXI!;
+    const app = this.app!;
     const color = TONE_COLORS[normalizeTone(tone)];
     const safeIntensity = clampIntensity(intensity);
     const container = new PIXI.Container();
     const flash = new PIXI.Graphics();
     const ring = new PIXI.Graphics();
-    const particles = [];
+    const particles: ImpactParticle[] = [];
     const particleCount = Math.round(5 + safeIntensity * 3);
     const baseRadius = 16 * safeIntensity;
     const maxRadius = 48 * safeIntensity;
 
-    container.x = x;
-    container.y = y;
+    container.x = x!;
+    container.y = y!;
     container.blendMode = "add";
     container.eventMode = "none";
     container.alpha = 1;
     container.addChild(flash, ring);
 
     for (let i = 0; i < particleCount; i += 1) {
-      const particle = new PIXI.Graphics();
+      const particle = new PIXI.Graphics() as ImpactParticle;
       const angle = (Math.PI * 2 * i) / particleCount + Math.PI / particleCount;
       const distance = 22 + 18 * safeIntensity;
       particle.__startX = Math.cos(angle) * 6;
@@ -431,7 +533,14 @@ export default class PixiVfxLayer {
       const out = easeOutCubic(progress);
       const fade = 1 - easeInQuad(progress);
 
-      drawCircle(flash, 0, 0, baseRadius * (1.1 + out * 0.55), color, 0.42 * fade);
+      drawCircle(
+        flash,
+        0,
+        0,
+        baseRadius * (1.1 + out * 0.55),
+        color,
+        0.42 * fade,
+      );
       drawRing(
         ring,
         0,
@@ -443,9 +552,18 @@ export default class PixiVfxLayer {
       );
 
       for (const particle of particles) {
-        particle.x = particle.__startX + (particle.__endX - particle.__startX) * out;
-        particle.y = particle.__startY + (particle.__endY - particle.__startY) * out;
-        drawCircle(particle, 0, 0, particle.__radius * (1 - progress * 0.35), color, 0.86 * fade);
+        particle.x =
+          particle.__startX + (particle.__endX - particle.__startX) * out;
+        particle.y =
+          particle.__startY + (particle.__endY - particle.__startY) * out;
+        drawCircle(
+          particle,
+          0,
+          0,
+          particle.__radius * (1 - progress * 0.35),
+          color,
+          0.86 * fade,
+        );
       }
 
       if (progress >= 1) {

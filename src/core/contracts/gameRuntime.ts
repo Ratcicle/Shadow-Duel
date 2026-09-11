@@ -618,27 +618,7 @@ export interface VisualFeedback {
   tone?: string;
 }
 
-export interface GameUiPort {
-  log(message: string): void;
-  showLpChange?(
-    player: GamePlayer,
-    amount: number,
-    options: {
-      cause: string;
-      sourceCard?: GameCard | null;
-      sourceRect?: unknown;
-      fromLp: number;
-      toLp: number;
-      screenShake?: boolean;
-    },
-  ): boolean | void;
-  bindPhaseClick(handler: (phase: GamePhase) => void): void;
-  showDuelStartAnnouncement?(
-    message: string,
-    options?: { durationMs?: number },
-  ): MaybePromise<unknown>;
-  updatePriorityIndicator(state: GamePlayer | FastEffectState | null): void;
-}
+export type GameUiPort = import("./ui.js").GameUI;
 
 export interface EffectEngineRuntimePort {
   clearTargetingCache?(): void;

@@ -1,3 +1,14 @@
+import type Renderer from "../Renderer.js";
+import type { UiCard, UiCardElement } from "./types.js";
+interface CounterTooltipMetadata {
+  effectCounterTypes: string[];
+  labels: string[];
+}
+export interface CardElementOptions {
+  showStatusIcons?: boolean;
+  turnCounter?: number;
+}
+
 /**
  * Preview methods for Renderer
  * Handles: renderPreview, bindPreviewForElement, createCardElement
@@ -20,16 +31,26 @@ import {
   createTablerIcon,
 } from "../icons/tablerIcons.js";
 
-const COUNTER_TOOLTIP_METADATA_CACHE = new Map();
+const COUNTER_TOOLTIP_METADATA_CACHE = new Map<
+  string,
+  CounterTooltipMetadata
+>();
 
-function getStatValue(statText) {
+function getStatValue(statText: unknown) {
   return String(statText || "-").replace(/^[^:]+:\s*/, "") || "-";
 }
 
-function renderPreviewStat(element, iconUrl, label, statText) {
+function renderPreviewStat(
+  element: HTMLElement,
+  iconUrl: string,
+  label: string,
+  statText: unknown,
+) {
   element.replaceChildren();
   const value = getStatValue(statText);
-  const icon = createTablerIcon(iconUrl, "panel-stat-icon", { decorative: true });
+  const icon = createTablerIcon(iconUrl, "panel-stat-icon", {
+    decorative: true,
+  });
   const valueElement = document.createElement("span");
   valueElement.className = "panel-stat-value";
   valueElement.textContent = value;
@@ -38,22 +59,25 @@ function renderPreviewStat(element, iconUrl, label, statText) {
   element.setAttribute("aria-label", `${label}: ${value}`);
 }
 
-function clearPreviewStat(element) {
+function clearPreviewStat(element: HTMLElement) {
   element.replaceChildren();
   element.removeAttribute("title");
   element.removeAttribute("aria-label");
 }
 
-function hasAttackRestriction(card, turnCounter) {
+function hasAttackRestriction(
+  card: UiCard | null | undefined,
+  turnCounter: number | undefined,
+) {
   if (card?.cannotAttackThisTurn === true) return true;
   return (
     Number.isFinite(card?.cannotAttackUntilTurn) &&
     Number.isFinite(turnCounter) &&
-    card.cannotAttackUntilTurn >= turnCounter
+    card!.cannotAttackUntilTurn! >= turnCounter!
   );
 }
 
-function createCardStatusIcons(card, turnCounter) {
+function createCardStatusIcons(card: UiCard, turnCounter: number | undefined) {
   if (card?.cardKind !== "monster" || card.isFacedown) return null;
 
   const statuses = [];
@@ -82,7 +106,9 @@ function createCardStatusIcons(card, turnCounter) {
     badge.setAttribute("aria-label", status.label);
     badge.title = status.label;
     badge.appendChild(
-      createTablerIcon(status.icon, "card-status-icon-glyph", { decorative: true }),
+      createTablerIcon(status.icon, "card-status-icon-glyph", {
+        decorative: true,
+      }),
     );
     container.appendChild(badge);
   });
@@ -92,7 +118,7 @@ function createCardStatusIcons(card, turnCounter) {
 const COUNTER_LABEL_STOP_WORDS =
   /(\s+(a|ao|aos|e|à|às|neste|nesta|nesse|nessa|nele|nela|neles|nelas|deste|desta|desse|dessa|dele|dela|deles|delas|este|esta|esse|essa|card|carta|conforme|quando|enquanto|para|por|em|no|na|nos|nas|que|se)\b.*)$/iu;
 
-function normalizeCounterLabelKey(value) {
+function normalizeCounterLabelKey(value: unknown) {
   return String(value || "")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
@@ -100,14 +126,18 @@ function normalizeCounterLabelKey(value) {
     .toLowerCase();
 }
 
-function pluralizePortugueseCounterLabel(label) {
+function pluralizePortugueseCounterLabel(label: string) {
   const normalized = String(label || "").trim();
   const match = normalized.match(/^(Marcador|Contador)\s+(.+)$/iu);
   if (!match) return normalized;
 
   const pluralBase = "Marcadores";
   const suffix = match[2].trim();
-  if (/^de\s+/iu.test(suffix) || /^do\s+/iu.test(suffix) || /^da\s+/iu.test(suffix)) {
+  if (
+    /^de\s+/iu.test(suffix) ||
+    /^do\s+/iu.test(suffix) ||
+    /^da\s+/iu.test(suffix)
+  ) {
     return `${pluralBase} ${suffix}`;
   }
 
@@ -127,7 +157,7 @@ function pluralizePortugueseCounterLabel(label) {
   return `${pluralBase} ${pluralSuffix}`;
 }
 
-function pluralizeEnglishCounterLabel(label) {
+function pluralizeEnglishCounterLabel(label: string) {
   return String(label || "")
     .trim()
     .replace(/\bCounters$/i, "Counters")
@@ -136,7 +166,7 @@ function pluralizeEnglishCounterLabel(label) {
     .replace(/\bcounter$/i, "counters");
 }
 
-function uniqueCounterLabels(labels) {
+function uniqueCounterLabels(labels: string[]) {
   const seen = new Set();
   return labels.filter((label) => {
     const key = normalizeCounterLabelKey(label);
@@ -146,7 +176,7 @@ function uniqueCounterLabels(labels) {
   });
 }
 
-function extractPortugueseCounterLabels(description) {
+function extractPortugueseCounterLabels(description: string) {
   const labels = [];
   const pattern = /\b(?:Marcador(?:es)?|Contador(?:es)?)\b/giu;
 
@@ -161,7 +191,7 @@ function extractPortugueseCounterLabels(description) {
   return uniqueCounterLabels(labels);
 }
 
-function extractEnglishCounterLabels(description) {
+function extractEnglishCounterLabels(description: string) {
   const labels = [];
   const pattern =
     /\b([A-Z][A-Za-z'-]*(?:\s+[A-Z][A-Za-z'-]*)*\s+[Cc]ounters?)\b/g;
@@ -173,7 +203,7 @@ function extractEnglishCounterLabels(description) {
   return uniqueCounterLabels(labels);
 }
 
-function extractCounterLabels(description) {
+function extractCounterLabels(description: string) {
   const text = String(description || "");
   if (!text) return [];
   return uniqueCounterLabels([
@@ -182,22 +212,33 @@ function extractCounterLabels(description) {
   ]);
 }
 
-function getCounterAmount(card, counterType) {
+function getCounterAmount(
+  card: UiCard | null | undefined,
+  counterType: string,
+) {
   if (!card || !counterType) return 0;
-  if (typeof card.getCounter === "function") return card.getCounter(counterType) || 0;
+  if (typeof card.getCounter === "function")
+    return card.getCounter(counterType) || 0;
   const counters = card.counters;
   if (counters instanceof Map) return counters.get(counterType) || 0;
-  if (counters && typeof counters === "object") return counters[counterType] || 0;
+  if (counters && typeof counters === "object")
+    return counters[counterType] || 0;
   return 0;
 }
 
-function collectCounterTypesFromValue(value, counterTypes, seen = new WeakSet()) {
+function collectCounterTypesFromValue(
+  value: unknown,
+  counterTypes: Set<string>,
+  seen = new WeakSet<object>(),
+) {
   if (!value || typeof value !== "object") return;
   if (seen.has(value)) return;
   seen.add(value);
 
   if (Array.isArray(value)) {
-    value.forEach((entry) => collectCounterTypesFromValue(entry, counterTypes, seen));
+    value.forEach((entry) =>
+      collectCounterTypesFromValue(entry, counterTypes, seen),
+    );
     return;
   }
 
@@ -210,8 +251,8 @@ function collectCounterTypesFromValue(value, counterTypes, seen = new WeakSet())
   });
 }
 
-function collectLiveCounterTypes(card) {
-  const counterTypes = new Set();
+function collectLiveCounterTypes(card: UiCard | null | undefined) {
+  const counterTypes = new Set<string>();
 
   const counters = card?.counters;
   if (counters instanceof Map) {
@@ -227,7 +268,7 @@ function collectLiveCounterTypes(card) {
   return [...counterTypes];
 }
 
-function humanizeCounterType(counterType) {
+function humanizeCounterType(counterType: string) {
   return String(counterType || "counter")
     .split(/[_\s-]+/)
     .filter(Boolean)
@@ -235,13 +276,16 @@ function humanizeCounterType(counterType) {
     .join(" ");
 }
 
-function getLocalizedCounterTypeLabel(counterType) {
+function getLocalizedCounterTypeLabel(counterType: string) {
   const key = String(counterType || "").trim();
   if (!key) return "";
-  return getCounterDisplayLabel(key, 2) || getUIText(`ui.counters.labels.${key}`, {}, "");
+  return (
+    getCounterDisplayLabel(key, 2) ||
+    getUIText(`ui.counters.labels.${key}`, {}, "")
+  );
 }
 
-function getCounterTooltipMetadata(card) {
+function getCounterTooltipMetadata(card: UiCard | null | undefined) {
   const localizedDescription = getCardDisplayDescription(card) || "";
   const fallbackDescription = card?.description || "";
   const cacheKey = [
@@ -253,7 +297,7 @@ function getCounterTooltipMetadata(card) {
   const cached = COUNTER_TOOLTIP_METADATA_CACHE.get(cacheKey);
   if (cached) return cached;
 
-  const effectCounterTypes = new Set();
+  const effectCounterTypes = new Set<string>();
   collectCounterTypesFromValue(card?.effects, effectCounterTypes);
   const localizedLabels = extractCounterLabels(localizedDescription);
   const fallbackLabels = extractCounterLabels(fallbackDescription);
@@ -266,7 +310,11 @@ function getCounterTooltipMetadata(card) {
   return metadata;
 }
 
-function resolveCounterLabel(metadata, counterType, index) {
+function resolveCounterLabel(
+  metadata: CounterTooltipMetadata,
+  counterType: string,
+  index: number,
+) {
   const localizedCounterTypeLabel = getLocalizedCounterTypeLabel(counterType);
   if (localizedCounterTypeLabel) return localizedCounterTypeLabel;
 
@@ -283,7 +331,7 @@ function resolveCounterLabel(metadata, counterType, index) {
   return labels[index] || `${humanizeCounterType(counterType)} Counters`;
 }
 
-function buildCounterTooltip(card) {
+function buildCounterTooltip(card: UiCard) {
   const metadata = getCounterTooltipMetadata(card);
   const counterTypes = [
     ...new Set([
@@ -302,7 +350,9 @@ function buildCounterTooltip(card) {
 }
 
 function getFloatingCounterTooltip() {
-  let tooltip = document.querySelector(".floating-counter-tooltip");
+  let tooltip = document.querySelector<HTMLElement>(
+    ".floating-counter-tooltip",
+  );
   if (!tooltip) {
     tooltip = document.createElement("div");
     tooltip.className = "floating-counter-tooltip";
@@ -312,7 +362,7 @@ function getFloatingCounterTooltip() {
 }
 
 const FLOATING_COUNTER_TOOLTIP_CLEANUP_MS = 160;
-let floatingCounterTooltipCleanupTimer = null;
+let floatingCounterTooltipCleanupTimer: number | null = null;
 
 function clearFloatingCounterTooltipCleanupTimer() {
   if (!floatingCounterTooltipCleanupTimer) return;
@@ -320,14 +370,17 @@ function clearFloatingCounterTooltipCleanupTimer() {
   floatingCounterTooltipCleanupTimer = null;
 }
 
-function resetFloatingCounterTooltip(tooltip) {
+function resetFloatingCounterTooltip(tooltip: HTMLElement | null) {
   if (!tooltip || tooltip.classList.contains("visible")) return;
   tooltip.textContent = "";
   tooltip.style.left = "";
   tooltip.style.top = "";
 }
 
-function positionFloatingCounterTooltip(tooltip, anchor) {
+function positionFloatingCounterTooltip(
+  tooltip: HTMLElement | null,
+  anchor: HTMLElement | null | undefined,
+) {
   if (!tooltip || !anchor) return;
 
   const rect = anchor.getBoundingClientRect();
@@ -346,7 +399,7 @@ function positionFloatingCounterTooltip(tooltip, anchor) {
   tooltip.style.top = `${top}px`;
 }
 
-function showFloatingCounterTooltip(anchor) {
+function showFloatingCounterTooltip(anchor: HTMLElement | null | undefined) {
   const text = anchor?.dataset?.counterTooltip || "";
   if (!text) {
     clearFloatingCounterTooltip();
@@ -373,12 +426,9 @@ const PREVIEW_CARD_FRAME_CLASSES = [
   "preview-card-trap",
 ];
 
-const PREVIEW_STAT_MOD_CLASSES = [
-  "preview-stat-buff",
-  "preview-stat-debuff",
-];
+const PREVIEW_STAT_MOD_CLASSES = ["preview-stat-buff", "preview-stat-debuff"];
 
-function getPreviewCardFrameClass(card) {
+function getPreviewCardFrameClass(card: UiCard | null | undefined) {
   if (card?.cardKind === "spell") return "preview-card-spell";
   if (card?.cardKind === "trap") return "preview-card-trap";
   if (card?.monsterType === "fusion") return "preview-card-fusion";
@@ -387,15 +437,23 @@ function getPreviewCardFrameClass(card) {
   return "preview-card-monster";
 }
 
-function setPreviewCardFrameClass(element, card) {
+function setPreviewCardFrameClass(
+  element: HTMLElement | null,
+  card: UiCard | null | undefined,
+) {
   if (!element) return;
   element.classList.remove(...PREVIEW_CARD_FRAME_CLASSES);
   element.classList.add(getPreviewCardFrameClass(card));
 }
 
-function getPreviewStatModifierClass(card, stat) {
+function getPreviewStatModifierClass(
+  card: UiCard | null | undefined,
+  stat: "atk" | "def",
+) {
   const current = Number(card?.[stat]);
-  const baseStatKey = `base${stat.charAt(0).toUpperCase()}${stat.slice(1)}`;
+  const baseStatKey = `base${stat.charAt(0).toUpperCase()}${stat.slice(1)}` as
+    | "baseAtk"
+    | "baseDef";
   const base = Number(card?.[baseStatKey]);
   if (!Number.isFinite(current) || !Number.isFinite(base)) return "";
   if (current > base) return "preview-stat-buff";
@@ -403,14 +461,18 @@ function getPreviewStatModifierClass(card, stat) {
   return "";
 }
 
-function getCardStatModifierClass(card, stat) {
+function getCardStatModifierClass(card: UiCard, stat: "atk" | "def") {
   const modifierClass = getPreviewStatModifierClass(card, stat);
   if (modifierClass === "preview-stat-buff") return "stat-buff";
   if (modifierClass === "preview-stat-debuff") return "stat-debuff";
   return "";
 }
 
-function setPreviewStatModifierClass(element, card, stat) {
+function setPreviewStatModifierClass(
+  element: HTMLElement | null,
+  card: UiCard | null,
+  stat: "atk" | "def",
+) {
   if (!element) return;
   element.classList.remove(...PREVIEW_STAT_MOD_CLASSES);
   const modifierClass = getPreviewStatModifierClass(card, stat);
@@ -420,7 +482,9 @@ function setPreviewStatModifierClass(element, card, stat) {
 }
 
 export function clearFloatingCounterTooltip() {
-  const tooltip = document.querySelector(".floating-counter-tooltip");
+  const tooltip = document.querySelector<HTMLElement>(
+    ".floating-counter-tooltip",
+  );
   if (!tooltip) return;
   clearFloatingCounterTooltipCleanupTimer();
   tooltip.classList.remove("visible");
@@ -430,12 +494,16 @@ export function clearFloatingCounterTooltip() {
   }, FLOATING_COUNTER_TOOLTIP_CLEANUP_MS);
 }
 
-function bindCounterTooltipForElement(element) {
+function bindCounterTooltipForElement(element: HTMLElement | null) {
   if (!element || element.dataset.counterTooltipBound === "true") return;
   element.dataset.counterTooltipBound = "true";
-  element.addEventListener("mouseenter", () => showFloatingCounterTooltip(element));
+  element.addEventListener("mouseenter", () =>
+    showFloatingCounterTooltip(element),
+  );
   element.addEventListener("mousemove", () => {
-    const tooltip = document.querySelector(".floating-counter-tooltip.visible");
+    const tooltip = document.querySelector<HTMLElement>(
+      ".floating-counter-tooltip.visible",
+    );
     if (tooltip) positionFloatingCounterTooltip(tooltip, element);
   });
   element.addEventListener("mouseleave", hideFloatingCounterTooltip);
@@ -444,7 +512,10 @@ function bindCounterTooltipForElement(element) {
 /**
  * @this {import('../Renderer.js').default}
  */
-export function renderPreview(card) {
+export function renderPreview(
+  this: Renderer,
+  card: UiCard | null | undefined,
+): void {
   const previewImage = document.getElementById("preview-image");
   const previewName = document.getElementById("preview-name");
   const previewAtk = document.getElementById("preview-atk");
@@ -467,8 +538,18 @@ export function renderPreview(card) {
     previewImage.style.backgroundImage = "";
     setPreviewCardFrameClass(previewImage, null);
     previewName.textContent = "Hover a card";
-    renderPreviewStat(previewAtk, PANEL_ICONS.atk, getUIText("ui.icons.atk"), "-");
-    renderPreviewStat(previewDef, PANEL_ICONS.def, getUIText("ui.icons.def"), "-");
+    renderPreviewStat(
+      previewAtk,
+      PANEL_ICONS.atk,
+      getUIText("ui.icons.atk"),
+      "-",
+    );
+    renderPreviewStat(
+      previewDef,
+      PANEL_ICONS.def,
+      getUIText("ui.icons.def"),
+      "-",
+    );
     setPreviewStatModifierClass(previewAtk, null, "atk");
     setPreviewStatModifierClass(previewDef, null, "def");
     previewLevel.textContent = "Level: -";
@@ -485,8 +566,18 @@ export function renderPreview(card) {
   if (isMonster) {
     const stats = formatMonsterStatsLine(card);
     previewLevel.innerHTML = formatMonsterDetailHtml(card);
-    renderPreviewStat(previewAtk, PANEL_ICONS.atk, getUIText("ui.icons.atk"), stats.atk);
-    renderPreviewStat(previewDef, PANEL_ICONS.def, getUIText("ui.icons.def"), stats.def);
+    renderPreviewStat(
+      previewAtk,
+      PANEL_ICONS.atk,
+      getUIText("ui.icons.atk"),
+      stats.atk,
+    );
+    renderPreviewStat(
+      previewDef,
+      PANEL_ICONS.def,
+      getUIText("ui.icons.def"),
+      stats.def,
+    );
     setPreviewStatModifierClass(previewAtk, card, "atk");
     setPreviewStatModifierClass(previewDef, card, "def");
   } else {
@@ -512,7 +603,12 @@ export function renderPreview(card) {
  *
  * @this {import('../Renderer.js').default}
  */
-export function bindPreviewForElement(element, card, visible = true) {
+export function bindPreviewForElement(
+  this: Renderer,
+  element: UiCardElement | null,
+  card: UiCard,
+  visible = true,
+): void {
   if (!element) return;
   element.dataset.previewable = visible ? "true" : "false";
   element.__cardData = visible ? card : null;
@@ -535,7 +631,12 @@ export function bindPreviewForElement(element, card, visible = true) {
 /**
  * @this {import('../Renderer.js').default}
  */
-export function createCardElement(card, visible, options = {}) {
+export function createCardElement(
+  this: Renderer,
+  card: UiCard | null | undefined,
+  visible: boolean,
+  options: CardElementOptions = {},
+): UiCardElement {
   // Defensive: skip rendering when card data is missing to avoid UI crashes
   if (!card) {
     const placeholder = document.createElement("div");
