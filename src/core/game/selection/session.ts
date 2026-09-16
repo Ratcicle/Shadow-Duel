@@ -11,7 +11,10 @@ import type {
   RecordedDecision,
   SelectionDecisionKind,
 } from "../../contracts/decisions.js";
-import type { DuelCardId, SelectionCandidateKey } from "../../contracts/primitives.js";
+import type {
+  DuelCardId,
+  SelectionCandidateKey,
+} from "../../contracts/primitives.js";
 import type {
   ActiveSelectionSession,
   NormalizedSelectionContract,
@@ -117,18 +120,19 @@ function readValue(value: UnknownObject, key: string): unknown {
 
 function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
   return (
-    (typeof value === "object" && value !== null) ||
-    typeof value === "function"
-  ) && typeof Reflect.get(value, "then") === "function";
+    ((typeof value === "object" && value !== null) ||
+      typeof value === "function") &&
+    typeof Reflect.get(value, "then") === "function"
+  );
 }
 
 function getSelectionDecisionKind(
   selection: ActiveSelectionSession,
 ): SelectionDecisionKind {
   const legacyPurpose = Reflect.get(selection.selectionContract, "purpose");
-  return (
-    legacyPurpose || selection.kind || "target_selection"
-  ) as SelectionDecisionKind;
+  return (legacyPurpose ||
+    selection.kind ||
+    "target_selection") as SelectionDecisionKind;
 }
 
 function getCurrentTargetSelection(
@@ -154,13 +158,13 @@ function serializeSelectionCandidate(
   candidate: SelectionCandidate,
 ): SerializedSelectionCandidateIdentity {
   const card = candidate.cardRef || candidate.card || null;
-  const duelCardId = card ? game.ensureDuelCardId?.(card) ?? null : null;
+  const duelCardId = card ? (game.ensureDuelCardId?.(card) ?? null) : null;
   return {
     duelCardId,
     cardId: card?.id ?? null,
     effectId: candidate.effectId || candidate.effect?.id || null,
     candidateKey: candidate.candidateKey || null,
-    key: duelCardId == null ? candidate.key ?? candidate.id ?? null : null,
+    key: duelCardId == null ? (candidate.key ?? candidate.id ?? null) : null,
   };
 }
 
@@ -283,7 +287,7 @@ export function startTargetSelectionSession(
         useFieldTargeting: session.useFieldTargeting,
         allowEmpty: session.allowEmpty,
       },
-    }
+    },
   );
 
   if (!normalizedContract.ok) {
@@ -340,7 +344,9 @@ export function startTargetSelectionSession(
         deserializeSelectionValue(this, replaySelection, value),
     }).then(async (selections) => {
       if (this.targetSelection?.sessionId !== replaySelection.sessionId) {
-        throw new Error("Replay selection session changed before its decision was applied.");
+        throw new Error(
+          "Replay selection session changed before its decision was applied.",
+        );
       }
       this.targetSelection.selections = selections || {};
       this.targetSelection.currentRequirement =
@@ -361,11 +367,11 @@ export function startTargetSelectionSession(
   // Generic decision observability for the live human provider.
   if (this.turn === "player" && selectionContract.requirements?.length > 0) {
     const firstReq = selectionContract.requirements[0];
-    if (firstReq?.candidates?.length > 0) {
+    if (firstReq?.candidates && firstReq.candidates.length > 0) {
       // Usar primeiro efeito como ID padrão, ou kind da sessão como fallback
       // Na maioria dos casos, o primeiro efeito é o que está sendo ativado
       const effectId = session.card?.effects?.[0]?.id || session.kind;
-      
+
       this.notify("decision_requested", {
         player: "player",
         candidates: firstReq.candidates.map((candidate) => ({
@@ -399,7 +405,7 @@ export function startTargetSelectionSession(
             session.card?.name ||
             selectionContract.metadata?.sourceCardName ||
             null,
-        }
+        },
       );
       this.targetSelection.controlsHandle = controlsHandle || null;
     }
@@ -422,7 +428,7 @@ export function startTargetSelectionSession(
       {
         allowCancel,
         allowEmpty: this.targetSelection.allowEmpty === true,
-      }
+      },
     );
     if (modalHandle && typeof modalHandle.close === "function") {
       this.targetSelection.closeModal = modalHandle.close;
@@ -502,14 +508,12 @@ export async function finishTargetSelection(
             firstReq?.candidates?.find((candidate) => candidate.key === key)
               ?.cardRef,
         )
-        .filter(
-          (card): card is SelectionCardReference => card != null,
-        );
-      
+        .filter((card): card is SelectionCardReference => card != null);
+
       if (selectedCards.length > 0) {
         // Usar primeiro efeito como ID padrão, ou kind da sessão como fallback
         const effectId = selection.card?.effects?.[0]?.id || selection.kind;
-        
+
         this.notify("decision_completed", {
           player: "player",
           sourceCard: selection.card,
@@ -527,8 +531,7 @@ export async function finishTargetSelection(
   const actor = getSelectionActor(this, selection);
   this.recordDecision?.(
     {
-      kind:
-        getSelectionDecisionKind(selection),
+      kind: getSelectionDecisionKind(selection),
       actor,
       candidates: (selection.requirements || []).flatMap(
         (requirement) => requirement.candidates || [],

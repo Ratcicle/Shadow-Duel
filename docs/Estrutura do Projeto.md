@@ -9,7 +9,7 @@ formam o jogo.
 Shadow Duel é uma SPA em migração mista JavaScript/TypeScript, usando ES Modules
 nativos do navegador. Arquivos físicos `.ts` continuam sendo importados por
 specifiers relativos terminados em `.js`; não use specifiers `.ts`. O ponto de
-entrada HTML é [index.html](../index.html), que carrega [src/main.js](../src/main.js).
+entrada HTML é [index.html](../index.html), que carrega [src/main.ts](../src/main.ts).
 A aplicação se organiza em três camadas principais:
 
 - **Core** ([src/core/](../src/core/)) - motor de regras, estado de jogo, IA, sistema de Chain e execução de efeitos.
@@ -53,7 +53,7 @@ Shadow-Duel/
 
 ## `src/` - Código-Fonte
 
-### `src/main.js`
+### `src/main.ts`
 
 Bootstrap da SPA. Inicializa o locale, coleta referências de DOM, cria os controllers em [src/ui/main/](../src/ui/main/) e conecta ações globais como iniciar duelo, abrir telas, alternar idioma, laboratório e Bot Arena.
 
@@ -104,11 +104,11 @@ Traduções visíveis no jogo. Hoje há [pt-br.json](../public/locales/pt-br.jso
 |---|---|
 | [Game.ts](../src/core/Game.ts) | Fachada tipada do estado de jogo. Orquestra turnos, fases, zonas, invocações, batalha, seleção, efeitos e UI, delegando para [src/core/game/](../src/core/game/); consumidores preservam o specifier `.js`. |
 | [Player.ts](../src/core/Player.ts) | Modelo tipado de jogador: LP, mão, deck, campo, Cemitério, banimento, marcadores e helper `isAI()`; preserva o shape e a compatibilidade estrutural legados. |
-| [Bot.js](../src/core/Bot.js) | Subclasse de `Player` para IA. Usa presets, `StrategyRegistry`, `BeamSearch`, busca de linhas e módulos de execução em [src/core/bot/](../src/core/bot/). |
-| [BotArena.js](../src/core/BotArena.js) | Modo AI vs AI para testes, métricas, velocidade e relatórios. |
-| [BotLogger.js](../src/core/BotLogger.js) | Logger configurável por `localStorage`, com categorias para decisões, estado e fases. |
+| [Bot.ts](../src/core/Bot.ts) | Subclasse de `Player` para IA. Usa presets, `StrategyRegistry`, `BeamSearch`, busca de linhas e módulos de execução em [src/core/bot/](../src/core/bot/). |
+| [BotArena.ts](../src/core/BotArena.ts) | Modo AI vs AI para testes, métricas, velocidade e relatórios. |
+| [BotLogger.ts](../src/core/BotLogger.ts) | Logger configurável por `localStorage`, com categorias para decisões, estado e fases. |
 | [Card.ts](../src/core/Card.ts) | Modelo tipado de instância de carta: dados do database, estado mutável, equipamentos, buffs, counters, `instanceId` local e `duelCardId` determinístico. |
-| [CardDatabaseValidator.js](../src/core/CardDatabaseValidator.js) | Validação do banco de cartas, incluindo shapes de actions e faixas de IDs. |
+| [CardDatabaseValidator.ts](../src/core/CardDatabaseValidator.ts) | Validação do banco de cartas, incluindo shapes de actions e faixas de IDs. |
 | [contracts/actions.ts](../src/core/contracts/actions.ts) | Compõe `ActionByType` a partir dos mapas fechados por domínio. |
 | [contracts/actionRuntime.ts](../src/core/contracts/actionRuntime.ts) | Contratos mínimos de handlers, contexto, targets, ports e resultados legados. |
 | [contracts/cards.ts](../src/core/contracts/cards.ts) | Definições declarativas, dados de construção, estado vivo, status conhecidos e projeções de Card. |
@@ -126,8 +126,8 @@ Traduções visíveis no jogo. Hoje há [pt-br.json](../public/locales/pt-br.jso
 | [EffectEngine.ts](../src/core/EffectEngine.ts) | Fachada de execução de efeitos declarativos; consumidores preservam o specifier `.js`. |
 | [ActionHandlers.ts](../src/core/ActionHandlers.ts) | Re-export de compatibilidade; consumidores preservam o specifier `.js`. |
 | [AutoSelector.ts](../src/core/AutoSelector.ts) | Resolve contratos de seleção para IA/bot. Não deve substituir decisões humanas. |
-| [UIAdapter.js](../src/core/UIAdapter.js) | Ponte entre `Game` e `Renderer` para prompts e atualização visual. |
-| [i18n.js](../src/core/i18n.js) | Carregamento de locale e helpers como `getCardDisplayName` e `getCardDisplayDescription`. |
+| [UIAdapter.ts](../src/core/UIAdapter.ts) | Ponte entre `Game` e `Renderer` para prompts e atualização visual. |
+| [i18n.ts](../src/core/i18n.ts) | Carregamento de locale e helpers como `getCardDisplayName` e `getCardDisplayDescription`. |
 
 ### `src/core/bot/`
 
@@ -135,13 +135,13 @@ Camada operacional do bot, separada da estratégia. Ela valida ações, executa 
 
 | Arquivo/Pasta | Responsabilidade |
 |---|---|
-| [presets.js](../src/core/bot/presets.js) | Presets disponíveis: Shadow-Heart, Luminarch, Void, Dragon, Arcanist, Miragebound, Bloomrot e Burning West. |
-| [deckBuilder.js](../src/core/bot/deckBuilder.js) | Montagem de listas do bot a partir dos presets. |
-| [actionValidation.js](../src/core/bot/actionValidation.js) | Valida se uma ação planejada ainda é legal no estado atual. |
-| [actionExecutor.js](../src/core/bot/actionExecutor.js) | Executa ações escolhidas pela IA. |
-| [mainPhaseController.js](../src/core/bot/mainPhaseController.js) | Sequência de ações da Main Phase. |
-| [battleController.js](../src/core/bot/battleController.js) | Decisões e execução de batalha. |
-| [ascensionController.js](../src/core/bot/ascensionController.js) | Coordenação de Invocação-Ascensão para IA. |
+| [presets.ts](../src/core/bot/presets.ts) | Presets disponíveis: Shadow-Heart, Luminarch, Void, Dragon, Arcanist, Miragebound, Bloomrot e Burning West. |
+| [deckBuilder.ts](../src/core/bot/deckBuilder.ts) | Montagem de listas do bot a partir dos presets. |
+| [actionValidation.ts](../src/core/bot/actionValidation.ts) | Valida se uma ação planejada ainda é legal no estado atual. |
+| [actionExecutor.ts](../src/core/bot/actionExecutor.ts) | Executa ações escolhidas pela IA. |
+| [mainPhaseController.ts](../src/core/bot/mainPhaseController.ts) | Sequência de ações da Main Phase. |
+| [battleController.ts](../src/core/bot/battleController.ts) | Decisões e execução de batalha. |
+| [ascensionController.ts](../src/core/bot/ascensionController.ts) | Coordenação de Invocação-Ascensão para IA. |
 | [simulationBridge.ts](../src/core/bot/simulationBridge.ts) | Ponte tipada entre estado real e o perfil de perspectiva do Bot; consumidores preservam o specifier `.js`. |
 | [actionExecutors/](../src/core/bot/actionExecutors/) | Execução especializada por família de ação: summon, extra deck, ascension, monster effects, spell/trap e posição. |
 
@@ -181,8 +181,8 @@ Arquivos físicos TypeScript continuam sendo importados por specifiers `.js`.
 
 | Arquivo | Responsabilidade |
 |---|---|
-| [StrategyRegistry.js](../src/core/ai/StrategyRegistry.js) | Registra `shadowheart`, `luminarch`, `void`, `dragon`, `arcanist`, `miragebound`, `bloomrot` e `burningwest`. |
-| [BaseStrategy.js](../src/core/ai/BaseStrategy.js) | Classe-base com avaliação genérica de board e helpers comuns. |
+| [StrategyRegistry.ts](../src/core/ai/StrategyRegistry.ts) | Registra `shadowheart`, `luminarch`, `void`, `dragon`, `arcanist`, `miragebound`, `bloomrot` e `burningwest`. |
+| [BaseStrategy.ts](../src/core/ai/BaseStrategy.ts) | Classe-base com avaliação genérica de board e helpers comuns. |
 | [StrategyUtils.ts](../src/core/ai/StrategyUtils.ts) | Utilitários tipados de valor, arquétipo, filtros e scoring. |
 | [BeamSearch.ts](../src/core/ai/BeamSearch.ts) | Busca em feixe e avaliação de linhas, incluindo o perfil Beam/Greedy de clone. |
 | [TurnLineSearch.ts](../src/core/ai/TurnLineSearch.ts) | Planejador tipado de linha de turno e seu perfil próprio de clone. |
@@ -192,20 +192,20 @@ Arquivos físicos TypeScript continuam sendo importados por specifiers `.js`.
 | [RoleAnalyzer.ts](../src/core/ai/RoleAnalyzer.ts) | Classificação genérica tipada de papéis de cartas. |
 | [ThreatEvaluation.ts](../src/core/ai/ThreatEvaluation.ts) | Avaliação tipada de ameaças e letal. |
 | [ChainAwareness.ts](../src/core/ai/ChainAwareness.ts) | Avaliação tipada de respostas em Chain e interrupções. |
-| [ArenaAnalytics.js](../src/core/ai/ArenaAnalytics.js) | Métricas de Bot Arena e relatórios estratégicos. |
+| [ArenaAnalytics.ts](../src/core/ai/ArenaAnalytics.ts) | Métricas de Bot Arena e relatórios estratégicos. |
 
 ### Strategy Classes
 
 | Arquivo | Deck |
 |---|---|
-| [ShadowHeartStrategy.js](../src/core/ai/ShadowHeartStrategy.js) | Shadow-Heart |
-| [LuminarchStrategy.js](../src/core/ai/LuminarchStrategy.js) | Luminarch |
-| [VoidStrategy.js](../src/core/ai/VoidStrategy.js) | Void |
-| [DragonStrategy.js](../src/core/ai/DragonStrategy.js) | Dragon |
-| [ArcanistStrategy.js](../src/core/ai/ArcanistStrategy.js) | Arcanist |
-| [MirageboundStrategy.js](../src/core/ai/MirageboundStrategy.js) | Miragebound |
-| [BloomrotStrategy.js](../src/core/ai/BloomrotStrategy.js) | Bloomrot |
-| [BurningWestStrategy.js](../src/core/ai/BurningWestStrategy.js) | Burning West |
+| [ShadowHeartStrategy.ts](../src/core/ai/ShadowHeartStrategy.ts) | Shadow-Heart |
+| [LuminarchStrategy.ts](../src/core/ai/LuminarchStrategy.ts) | Luminarch |
+| [VoidStrategy.ts](../src/core/ai/VoidStrategy.ts) | Void |
+| [DragonStrategy.ts](../src/core/ai/DragonStrategy.ts) | Dragon |
+| [ArcanistStrategy.ts](../src/core/ai/ArcanistStrategy.ts) | Arcanist |
+| [MirageboundStrategy.ts](../src/core/ai/MirageboundStrategy.ts) | Miragebound |
+| [BloomrotStrategy.ts](../src/core/ai/BloomrotStrategy.ts) | Bloomrot |
+| [BurningWestStrategy.ts](../src/core/ai/BurningWestStrategy.ts) | Burning West |
 
 ### Pacotes Por Arquétipo
 
@@ -283,14 +283,14 @@ O gate operacional para mudanças nesta área é `npm run check`, que inclui as 
 | Caminho | Responsabilidade |
 |---|---|
 | [attachModules.ts](../src/core/effects/attachModules.ts) | Anexa os dez manifests de referências diretas ao prototype/fachada do `EffectEngine`. |
-| [index.js](../src/core/effects/index.js) | Barrel dos módulos de efeitos. |
+| [index.ts](../src/core/effects/index.ts) | Barrel dos módulos de efeitos. |
 | [actions/](../src/core/effects/actions/) | Primitivas TypeScript de runtime: combate, core, counters, destroy, equip, immunity, movement, resources, stats e summon. |
 | [activation/](../src/core/effects/activation/) | Getters, preview, execução e escolha de posição em ativações. |
 | [blueprints/](../src/core/effects/blueprints/) | Blueprints/efeitos armazenados reutilizáveis. |
 | [conditions/](../src/core/effects/conditions/) | Avaliação genérica de condições declarativas. |
 | [costs/](../src/core/effects/costs/) | Custos declarativos, incluindo LP. |
 | [filters/](../src/core/effects/filters/) | Predicados de cartas e efeitos. |
-| [fusion/](../src/core/effects/fusion/) | Requisitos e avaliação em JavaScript; execução e barrel físico em TypeScript, sempre consumidos por specifiers `.js`. |
+| [fusion/](../src/core/effects/fusion/) | Requisitos, avaliação e execução de fusões em TypeScript; consumidores preservam specifiers `.js`. |
 | [passives/](../src/core/effects/passives/) | Buffs e auras passivas. |
 | [targeting/](../src/core/effects/targeting/) | Filtros, zonas, seleção e resolução de alvos. |
 | [triggers/](../src/core/effects/triggers/) | Registro, coleta e disparo de gatilhos. |
@@ -352,14 +352,14 @@ Controllers da tela inicial e fluxos fora do duelo:
 
 | Arquivo | Responsabilidade |
 |---|---|
-| [domRefs.js](../src/ui/main/domRefs.js) | Referências DOM agrupadas por área. |
-| [deckState.js](../src/ui/main/deckState.js) | Estado, persistência, migração e sanitização do deck builder. |
-| [validationPanel.js](../src/ui/main/validationPanel.js) | Renderização dos erros do database validator. |
-| [deckBuilderController.js](../src/ui/main/deckBuilderController.js) | UI de deck builder, filtros, slots, preview e presets. |
-| [laboratoryController.js](../src/ui/main/laboratoryController.js) | UI do Laboratório, import/export e setup manual. |
-| [botArenaController.js](../src/ui/main/botArenaController.js) | UI da Bot Arena, velocidade, logs e relatórios. |
-| [gameLauncher.js](../src/ui/main/gameLauncher.js) | Cria `Game` e `Renderer` para duelo comum ou laboratório. |
-| [localeControls.js](../src/ui/main/localeControls.js) | Troca de idioma e reload controlado. |
+| [domRefs.ts](../src/ui/main/domRefs.ts) | Referências DOM agrupadas por área. |
+| [deckState.ts](../src/ui/main/deckState.ts) | Estado, persistência, migração e sanitização do deck builder. |
+| [validationPanel.ts](../src/ui/main/validationPanel.ts) | Renderização dos erros do database validator. |
+| [deckBuilderController.ts](../src/ui/main/deckBuilderController.ts) | UI de deck builder, filtros, slots, preview e presets. |
+| [laboratoryController.ts](../src/ui/main/laboratoryController.ts) | UI do Laboratório, import/export e setup manual. |
+| [botArenaController.ts](../src/ui/main/botArenaController.ts) | UI da Bot Arena, velocidade, logs e relatórios. |
+| [gameLauncher.ts](../src/ui/main/gameLauncher.ts) | Cria `Game` e `Renderer` para duelo comum ou laboratório. |
+| [localeControls.ts](../src/ui/main/localeControls.ts) | Troca de idioma e reload controlado. |
 
 ### `src/ui/Renderer.js`
 
@@ -369,29 +369,29 @@ Fachada de renderização. Constrói o renderer e delega métodos para [src/ui/r
 
 | Arquivo | Responsabilidade |
 |---|---|
-| [index.js](../src/ui/renderer/index.js) | Barrel. |
-| [bindings.js](../src/ui/renderer/bindings.js) | Event listeners DOM. |
-| [board.js](../src/ui/renderer/board.js) | Renderização das zonas. |
-| [animations.js](../src/ui/renderer/animations.js) | Animações visuais. |
-| [cardAnimationManager.js](../src/ui/renderer/cardAnimationManager.js) | Fila/coordenação de animações de cartas. |
-| [feedbackFx.js](../src/ui/renderer/feedbackFx.js) | Feedback visual de dano, cura e destaque. |
-| [indicators.js](../src/ui/renderer/indicators.js) | Badges e marcadores de estado. |
-| [equipLinks.js](../src/ui/renderer/equipLinks.js) | Indicadores, hover/foco e linhas SVG dos vínculos de equipamento. |
-| [log.js](../src/ui/renderer/log.js) | Log do duelo. |
-| [modals.js](../src/ui/renderer/modals.js) | Modais genéricos. |
-| [preview.js](../src/ui/renderer/preview.js) | Preview grande de cartas. |
-| [selectionModals.js](../src/ui/renderer/selectionModals.js) | Modais de seleção. |
-| [summonModals.js](../src/ui/renderer/summonModals.js) | Modais de Normal/Special/Fusion/Ascension Summon. |
-| [trapModals.js](../src/ui/renderer/trapModals.js) | Modais de traps e respostas em Chain. |
+| [index.ts](../src/ui/renderer/index.ts) | Barrel. |
+| [bindings.ts](../src/ui/renderer/bindings.ts) | Event listeners DOM. |
+| [board.ts](../src/ui/renderer/board.ts) | Renderização das zonas. |
+| [animations.ts](../src/ui/renderer/animations.ts) | Animações visuais. |
+| [cardAnimationManager.ts](../src/ui/renderer/cardAnimationManager.ts) | Fila/coordenação de animações de cartas. |
+| [feedbackFx.ts](../src/ui/renderer/feedbackFx.ts) | Feedback visual de dano, cura e destaque. |
+| [indicators.ts](../src/ui/renderer/indicators.ts) | Badges e marcadores de estado. |
+| [equipLinks.ts](../src/ui/renderer/equipLinks.ts) | Indicadores, hover/foco e linhas SVG dos vínculos de equipamento. |
+| [log.ts](../src/ui/renderer/log.ts) | Log do duelo. |
+| [modals.ts](../src/ui/renderer/modals.ts) | Modais genéricos. |
+| [preview.ts](../src/ui/renderer/preview.ts) | Preview grande de cartas. |
+| [selectionModals.ts](../src/ui/renderer/selectionModals.ts) | Modais de seleção. |
+| [summonModals.ts](../src/ui/renderer/summonModals.ts) | Modais de Normal/Special/Fusion/Ascension Summon. |
+| [trapModals.ts](../src/ui/renderer/trapModals.ts) | Modais de traps e respostas em Chain. |
 
 ### `src/ui/icons/`
 
-[tablerIcons.js](../src/ui/icons/tablerIcons.js) centraliza as importações SVG
+[tablerIcons.ts](../src/ui/icons/tablerIcons.ts) centraliza as importações SVG
 pontuais de `@tabler/icons` e a criação acessível dos ícones usados na UI.
 
 ### `src/ui/pixi/`
 
-[PixiVfxLayer.js](../src/ui/pixi/PixiVfxLayer.js) implementa a camada Pixi usada
+[PixiVfxLayer.ts](../src/ui/pixi/PixiVfxLayer.ts) implementa a camada Pixi usada
 pelos efeitos visuais do duelo.
 
 ---

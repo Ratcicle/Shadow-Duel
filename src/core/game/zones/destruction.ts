@@ -10,10 +10,7 @@
  *  - destroyCard
  */
 
-import type {
-  CardProtectionEffect,
-  GameCard,
-} from "../../contracts/cards.js";
+import type { CardProtectionEffect, GameCard } from "../../contracts/cards.js";
 import type {
   CardFilter,
   EffectCondition,
@@ -29,9 +26,7 @@ import type {
 import type { GamePlayer } from "../../contracts/player.js";
 import type { CanonicalZone } from "../../contracts/zones.js";
 
-type DestructionProtectionType =
-  | "battle_destruction"
-  | "effect_destruction";
+type DestructionProtectionType = "battle_destruction" | "effect_destruction";
 type DestructionOwnerRule = "self" | "opponent" | "any" | "both";
 
 interface RuntimeProtectionPassive extends PassiveRuleDefinition {
@@ -109,7 +104,7 @@ interface DestructionOptions {
   sourcePlayer?: GamePlayer | null;
   fromZone?: CanonicalZone;
   awaitCardToGraveEvent?: boolean;
-  awaitCardMovedEvent?: boolean;
+  awaitCardMovedEvent?: boolean | undefined;
   deferCardToGraveTriggerResolution?: boolean;
   atomicGroupId?: string | number | null;
   contextLabel?: string;
@@ -172,7 +167,7 @@ interface DestructionHost {
       destroyCause: string;
       destroySource: GameCard | null;
       awaitCardToGraveEvent: boolean;
-      awaitCardMovedEvent?: boolean;
+      awaitCardMovedEvent?: boolean | undefined;
       deferCardToGraveTriggerResolution: boolean;
       atomicGroupId: string | number | null;
       contextLabel: string;
@@ -289,15 +284,13 @@ function findConditionalDestructionProtection(
         runtimeEffect.protectionType ||
         runtimeEffect.protectionTypes,
     );
-    if (
-      protectedTypes.length > 0 &&
-      !protectedTypes.includes(protectionType)
-    ) {
+    if (protectedTypes.length > 0 && !protectedTypes.includes(protectionType)) {
       continue;
     }
 
     if (
-      (runtimeEffect.requireFaceup === true || passive.requireFaceup === true) &&
+      (runtimeEffect.requireFaceup === true ||
+        passive.requireFaceup === true) &&
       card.isFacedown
     ) {
       continue;
@@ -430,12 +423,14 @@ function findConditionalDestructionProtectionAura(
       if (passive.type !== "conditional_destruction_protection_aura") {
         continue;
       }
-      if (!effectSourceIsActive(sourceCard, runtimeEffect, passive, source.zone)) {
+      if (
+        !effectSourceIsActive(sourceCard, runtimeEffect, passive, source.zone)
+      ) {
         continue;
       }
 
       const protectedTypes = asArray(
-          passive.protectionType ||
+        passive.protectionType ||
           passive.protectionTypes ||
           runtimeEffect.protectionType ||
           runtimeEffect.protectionTypes ||
@@ -514,9 +509,7 @@ export function isBattleDestructionProtected(
 ) {
   if (!card) return false;
   const owner =
-    context.owner ||
-    (card.owner === "player" ? this.player : this.bot) ||
-    null;
+    context.owner || (card.owner === "player" ? this.player : this.bot) || null;
   if (!owner) return false;
   const opponent = context.opponent || this.getOpponent?.(owner) || null;
   const sourceCard = context.sourceCard || context.source || null;
@@ -544,12 +537,7 @@ export function isBattleDestructionProtected(
     (protection) =>
       protection?.type === "battle_destruction" &&
       protectionDurationIsActive(this, card, protection) &&
-      protectionSourceOwnerMatches(
-        this,
-        protection,
-        owner,
-        sourcePlayer,
-      ),
+      protectionSourceOwnerMatches(this, protection, owner, sourcePlayer),
   );
   if (grantedProtection) return true;
 
@@ -616,10 +604,14 @@ export async function destroyCard(
         });
 
       if (cause !== "battle" && sourceCard && sourcePlayer) {
-        const immunity = this.effectEngine?.checkImmunity?.(card, sourcePlayer, {
-          effectType: "destruction",
-          sourceCard,
-        });
+        const immunity = this.effectEngine?.checkImmunity?.(
+          card,
+          sourcePlayer,
+          {
+            effectType: "destruction",
+            sourceCard,
+          },
+        );
         if (immunity?.immune) {
           this.ui?.log?.(`${card.name} is unaffected by that card effect.`);
           return { destroyed: false, reason: immunity.reason || "immune" };
@@ -661,15 +653,15 @@ export async function destroyCard(
 
       const conditionalProtection =
         battleDestructionDetermined || battleDestructionPreventionNegated
-        ? null
-        : findConditionalDestructionProtection(
-            this,
-            card,
-            owner,
-            opponent,
-            cause,
-            fromZone,
-          );
+          ? null
+          : findConditionalDestructionProtection(
+              this,
+              card,
+              owner,
+              opponent,
+              cause,
+              fromZone,
+            );
       if (conditionalProtection) {
         this.ui?.log?.(
           `${card.name} is protected from destruction by ${
@@ -744,15 +736,12 @@ export async function destroyCard(
         }
       }
 
-      const { replaced } = (await this.resolveDestructionWithReplacement(
-        card,
-        {
-          cause,
-          sourceCard,
-          sourcePlayer,
-          fromZone,
-        },
-      )) || { replaced: false };
+      const { replaced } = (await this.resolveDestructionWithReplacement(card, {
+        cause,
+        sourceCard,
+        sourcePlayer,
+        fromZone,
+      })) || { replaced: false };
 
       if (replaced) {
         return { destroyed: false, replaced: true };

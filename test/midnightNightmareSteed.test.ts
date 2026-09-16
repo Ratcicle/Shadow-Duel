@@ -111,14 +111,17 @@ test("Midnight Nightmare Steed declara a nova Invocação-Especial e o dano corr
       intent: "cost",
     },
   ]);
-  assert.equal(required(summonEffect.activationCosts)[0].to, "graveyard");
   assert.equal(
-    required(summonEffect.actions)[0].type,
+    required(required(summonEffect.activationCosts)[0]).to,
+    "graveyard",
+  );
+  assert.equal(
+    required(required(summonEffect.actions)[0]).type,
     "special_summon_from_zone",
   );
-  assert.equal(required(summonEffect.actions)[0].requireSource, true);
+  assert.equal(required(required(summonEffect.actions)[0]).requireSource, true);
   assert.equal(
-    required(summonEffect.actions)[0].fieldSlotsFreedBeforeSummon,
+    required(required(summonEffect.actions)[0]).fieldSlotsFreedBeforeSummon,
     1,
   );
   assert.equal(damageEffect.requireSelfAsBattleDestroyer, true);

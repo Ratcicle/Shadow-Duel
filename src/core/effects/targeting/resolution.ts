@@ -85,10 +85,7 @@ interface RuntimeTargetExtensions {
   readonly distinct?: boolean;
 }
 
-type RuntimeTargetDefinition = Omit<
-  EffectTarget,
-  "type" | "zone" | "zones"
-> &
+type RuntimeTargetDefinition = Omit<EffectTarget, "type" | "zone" | "zones"> &
   RuntimeTargetExtensions & {
     readonly type?: string | readonly string[];
     readonly zone?: EffectZone;
@@ -108,7 +105,7 @@ interface TargetAutoSelectorPort {
   select(
     selectionContract: RawSelectionContract,
     context?: {
-      owner?: RuntimePlayer | null;
+      owner?: RuntimePlayer | null | undefined;
       activationContext?: TargetActivationContext | null;
       selectionKind?: "target";
     },
@@ -226,9 +223,7 @@ function normalizeUnknownCards(value: unknown): RuntimeCard[] {
   return values.filter(isObject).map((entry) => entry as RuntimeCard);
 }
 
-function buildContextTargetFilters(
-  def: RuntimeTargetDefinition,
-): CardFilter & {
+function buildContextTargetFilters(def: RuntimeTargetDefinition): CardFilter & {
   readonly cardIds?: readonly number[];
   readonly lastSummonMethods?: readonly string[];
   readonly lastSummonedFromZone?: EffectZone;
@@ -341,17 +336,16 @@ function canTargetBeSpecialSummoned(
   }
 
   const destinationPlayer = getSpecialSummonDestinationPlayer(def, ctx);
-  const restrictionCheck =
-    engine?.game?.canSpecialSummonUnderRestrictions?.(
-      card,
-      destinationPlayer,
-      {
-        summonMethod: def.summonMethod || "special",
-        summonProcedure,
-        fromZone: def.zone || null,
-        silent: true,
-      },
-    );
+  const restrictionCheck = engine?.game?.canSpecialSummonUnderRestrictions?.(
+    card,
+    destinationPlayer,
+    {
+      summonMethod: def.summonMethod || "special",
+      summonProcedure,
+      fromZone: def.zone || null,
+      silent: true,
+    },
+  );
   return restrictionCheck?.ok !== false;
 }
 
@@ -419,7 +413,11 @@ function contextTargetMatchesDef(
     );
     if (!typeMatches) return false;
   }
-  if (def.position && def.position !== "any" && card.position !== def.position) {
+  if (
+    def.position &&
+    def.position !== "any" &&
+    card.position !== def.position
+  ) {
     return false;
   }
   if (def.owner === "self" && card.owner !== ctx?.player?.id) return false;
@@ -496,7 +494,7 @@ export function resolveTargets(
           console.log(
             `[resolveTargets] Using targetFromContext "${contextKey}" for target "${
               def.id
-            }": ${validTargets.map((card) => card.name || card).join(", ")}`
+            }": ${validTargets.map((card) => card.name || card).join(", ")}`,
           );
         }
         continue;
@@ -505,7 +503,7 @@ export function resolveTargets(
         if (def.optional) {
           if (shouldLogTargets) {
             console.log(
-              `[resolveTargets] Context target "${contextKey}" not found but optional, skipping target "${def.id}"`
+              `[resolveTargets] Context target "${contextKey}" not found but optional, skipping target "${def.id}"`,
             );
           }
           targetMap[def.id] = [];
@@ -530,7 +528,7 @@ export function resolveTargets(
           console.log(
             `[resolveTargets] Excluding card names from ref "${
               def.excludeNameRef
-            }": ${namesToExclude.join(", ")}`
+            }": ${namesToExclude.join(", ")}`,
           );
         }
       }
@@ -544,7 +542,9 @@ export function resolveTargets(
     );
     if (excludedCards.length > 0) {
       const excludedInstanceIds = excludedCards
-        .map((card) => card?.instanceId ?? card?._instanceId ?? card?.uuid ?? null)
+        .map(
+          (card) => card?.instanceId ?? card?._instanceId ?? card?.uuid ?? null,
+        )
         .filter((value) => value !== undefined && value !== null);
       effectiveUpdates.excludeCards = excludedCards;
       if (excludedInstanceIds.length > 0) {
@@ -552,7 +552,7 @@ export function resolveTargets(
       }
       if (shouldLogTargets) {
         console.log(
-          `[resolveTargets] Excluding target instances from refs "${excludeTargetRefs.join(", ")}".`
+          `[resolveTargets] Excluding target instances from refs "${excludeTargetRefs.join(", ")}".`,
         );
       }
     }
@@ -587,7 +587,7 @@ export function resolveTargets(
 
     const { zoneName, candidates } = this.selectCandidates(
       effectiveDef,
-      enhancedCtx
+      enhancedCtx,
     );
     const min = Number(def.count?.min ?? 1);
     const max = Number(def.count?.max ?? min);
@@ -598,8 +598,7 @@ export function resolveTargets(
 
     const decoratedCandidates = candidates.map((card, idx) => {
       const controller = card.owner;
-      const ownerLabel =
-        controller === ctx.player?.id ? "player" : "opponent";
+      const ownerLabel = controller === ctx.player?.id ? "player" : "opponent";
       const ownerPlayer =
         controller === "player" ? this.game.player : this.game.bot;
       let zoneForDisplay = zoneName;
@@ -645,13 +644,15 @@ export function resolveTargets(
     const hasSelectionForDef =
       hasSelections && Object.prototype.hasOwnProperty.call(selections, def.id);
     const provided: unknown =
-      hasSelectionForDef && selections ? readProperty(selections, def.id) : null;
+      hasSelectionForDef && selections
+        ? readProperty(selections, def.id)
+        : null;
     if (hasSelectionForDef) {
       const providedList = Array.isArray(provided)
         ? provided
         : provided != null
-        ? [provided]
-        : [];
+          ? [provided]
+          : [];
       const chosen: RuntimeCard[] = [];
       const seen = new Set<SelectionCandidateKey>();
       for (const entry of providedList) {
@@ -725,9 +726,7 @@ export function resolveTargets(
     const autoSelectExplicit = def.autoSelect === true;
     const allowAutoSelectForPlayer =
       !isPreview && !isAIPlayer && autoSelectExplicit;
-    const allowAutoSelectForBot =
-      allowAutoSelectTargets &&
-      autoSelectExplicit;
+    const allowAutoSelectForBot = allowAutoSelectTargets && autoSelectExplicit;
     const shouldAutoSelect = allowAutoSelectForPlayer || allowAutoSelectForBot;
     if (shouldAutoSelect) {
       const desiredCount = autoSelectExplicit ? max : 1;
@@ -745,8 +744,8 @@ export function resolveTargets(
       def.owner === "opponent"
         ? "opponent"
         : def.owner === "any"
-        ? "either"
-        : "player";
+          ? "either"
+          : "player";
     const filters: MutableSelectionFilter & { faceUp?: boolean } = {};
     if (def.cardKind) filters.cardKind = def.cardKind;
     if (def.archetype) filters.archetype = def.archetype;
@@ -791,7 +790,7 @@ export function resolveTargets(
       filters.tags = def.tags;
     }
     if (def.type) {
-      filters.type = def.type as SelectionFilter["type"];
+      filters.type = def.type as NonNullable<SelectionFilter["type"]>;
     }
     if (def.attribute) {
       filters.attribute = def.attribute;
@@ -852,7 +851,7 @@ export function resolveTargets(
           const resolved = this.resolveTargets(
             targetDefs,
             ctx,
-            autoResult.selections
+            autoResult.selections,
           );
           if (resolved?.ok) {
             return resolved;
@@ -877,7 +876,7 @@ export function resolveTargets(
           const resolvedFallback = this.resolveTargets(
             targetDefs,
             ctx,
-            fallbackSelections
+            fallbackSelections,
           );
           if (resolvedFallback?.ok) {
             return resolvedFallback;
@@ -923,7 +922,6 @@ export function resolveTargets(
         selectedCount: selectedTargets.length,
       });
     }
-
   }
 
   return { ok: true, targets: targetMap };

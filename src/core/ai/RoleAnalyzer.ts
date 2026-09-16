@@ -5,7 +5,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import type { CardAction } from "../contracts/actions.js";
-import type { GameCard } from "../contracts/cards.js";
+import type { SimulatedCardShape } from "../contracts/aiState.js";
 import type { DuelEventName, EffectTiming } from "../contracts/effects.js";
 
 export type StrategicRole =
@@ -29,9 +29,9 @@ export interface StrategicEffectView {
   timing?: EffectTiming;
 }
 
-export type StrategicCardView = Partial<Omit<GameCard,
+export type StrategicCardView = Omit<SimulatedCardShape,
   "effects" | "equips" | "equippedTo" | "equipTarget"
->> & {
+> & {
   effects?: readonly StrategicEffectView[];
 };
 
@@ -159,7 +159,7 @@ export function inferRole(card: StrategicCardView | null | undefined): Strategic
   if (roles.includes("disruption")) return "disruption";
   if (roles.includes("payoff")) return "payoff";
 
-  return roles.length > 0 ? roles[0] : "beater";
+  return roles[0] ?? "beater";
 }
 
 /**

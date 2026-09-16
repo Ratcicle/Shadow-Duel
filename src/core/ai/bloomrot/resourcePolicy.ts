@@ -397,7 +397,7 @@ export function evaluateBloomrotCounterSpend({
   amount = 0,
   analysis = {},
   sourceCard = null,
-}: { purpose?: string; amount?: number; analysis?: BloomrotAnalysis; sourceCard?: BloomrotCard | null } = {}) {
+}: { purpose?: string; amount?: number; analysis?: BloomrotAnalysis; sourceCard?: BloomrotCard | null | undefined } = {}) {
   const resolvedPurpose = purpose || sourceCard?.name || "generic";
 
   switch (resolvedPurpose) {

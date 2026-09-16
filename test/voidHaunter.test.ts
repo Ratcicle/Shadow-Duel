@@ -79,30 +79,54 @@ test("Void Haunter declara custos e alvos no contrato canônico", () => {
     },
   ]);
   assert.equal(
-    required(handEffect.actions)[0].type,
+    required(required(handEffect.actions)[0]).type,
     "special_summon_from_zone",
   );
-  assert.equal(required(handEffect.actions)[0].requireSource, true);
-  assert.equal(required(handEffect.actions)[0].fieldSlotsFreedBeforeSummon, 1);
-  assert.equal("costTargetRef" in required(handEffect.actions)[0], false);
+  assert.equal(required(required(handEffect.actions)[0]).requireSource, true);
+  assert.equal(
+    required(required(handEffect.actions)[0]).fieldSlotsFreedBeforeSummon,
+    1,
+  );
+  assert.equal(
+    "costTargetRef" in required(required(handEffect.actions)[0]),
+    false,
+  );
 
-  assert.deepEqual(required(graveyardEffect.targets)[0].count, {
+  assert.deepEqual(required(required(graveyardEffect.targets)[0]).count, {
     min: 1,
     max: 3,
   });
-  assert.equal(required(graveyardEffect.targets)[0].zone, "graveyard");
-  assert.equal(required(graveyardEffect.targets)[0].cardName, "Void Hollow");
-  assert.equal(required(graveyardEffect.activationCosts)[0].targetRef, "self");
-  assert.equal(required(graveyardEffect.activationCosts)[0].to, "banished");
   assert.equal(
-    required(graveyardEffect.actions)[0].targetRef,
+    required(required(graveyardEffect.targets)[0]).zone,
+    "graveyard",
+  );
+  assert.equal(
+    required(required(graveyardEffect.targets)[0]).cardName,
+    "Void Hollow",
+  );
+  assert.equal(
+    required(required(graveyardEffect.activationCosts)[0]).targetRef,
+    "self",
+  );
+  assert.equal(
+    required(required(graveyardEffect.activationCosts)[0]).to,
+    "banished",
+  );
+  assert.equal(
+    required(required(graveyardEffect.actions)[0]).targetRef,
     "void_haunter_gy_targets",
   );
-  assert.equal("banishCost" in required(graveyardEffect.actions)[0], false);
-  assert.deepEqual(required(graveyardEffect.actions)[0].statusesOnSummon, [
-    { status: "atk", value: 0, restoreOnFieldExit: true },
-    { status: "def", value: 0, restoreOnFieldExit: true },
-  ]);
+  assert.equal(
+    "banishCost" in required(required(graveyardEffect.actions)[0]),
+    false,
+  );
+  assert.deepEqual(
+    required(required(graveyardEffect.actions)[0]).statusesOnSummon,
+    [
+      { status: "atk", value: 0, restoreOnFieldExit: true },
+      { status: "def", value: 0, restoreOnFieldExit: true },
+    ],
+  );
 });
 
 test("efeito da mão paga o custo e Invoca com o campo inicialmente cheio", async (t) => {
@@ -304,11 +328,14 @@ test("Hollows são observados como 0/0 e permanecem assim até saírem do campo"
     ],
   );
 
-  await game.moveCard(hollows[0], game.player, "graveyard", {
+  await game.moveCard(required(hollows[0]), game.player, "graveyard", {
     fromZone: "field",
   });
-  assert.deepEqual([hollows[0].atk, hollows[0].def], [1300, 1200]);
-  assert.equal(Object.keys(hollows[0].fieldExitStatuses).length, 0);
+  assert.deepEqual(
+    [required(hollows[0]).atk, required(hollows[0]).def],
+    [1300, 1200],
+  );
+  assert.equal(Object.keys(required(hollows[0]).fieldExitStatuses).length, 0);
 });
 
 test("simulação da IA paga custos e restaura o 0/0 somente ao sair do campo", () => {

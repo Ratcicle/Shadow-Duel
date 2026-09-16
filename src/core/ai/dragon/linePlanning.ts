@@ -15,24 +15,24 @@ import type {
 export interface DragonPlanningAction {
   type?: AIPlannedAction["type"];
   card?: DragonCard | null;
-  cardName?: string;
+  cardName?: string | undefined;
   name?: string;
   index?: number;
   fieldIndex?: number;
   zoneIndex?: number;
   graveyardIndex?: number;
-  effectId?: string | null;
-  priority?: number;
+  effectId?: string | null | undefined;
+  priority?: number | undefined;
   attackerName?: string;
   targetName?: string | null;
   direct?: boolean;
   battleSteps?: DragonPlanningAction[];
   damage?: number;
-  destroyedCards?: DragonCard[];
+  destroyedCards?: readonly DragonCard[];
   rewardNames?: unknown[];
   destroyedNames?: Array<string | { name?: string | null }>;
   actionContext?: { targetPreferences?: Record<string, DragonPreference | undefined> };
-  activationContext?: { actionContext?: unknown };
+  activationContext?: { actionContext?: unknown } | undefined;
   dragonBasePriority?: number;
   dragonRetentionBoost?: number;
   dragonRetentionReasons?: string[];
@@ -217,15 +217,15 @@ function getAnalysisCards(analysis: DragonAnalysis = {}, player: DragonPlayer = 
   return getCards(player, zone);
 }
 
-function hasName(cards: DragonCard[] = [], name: string) {
+function hasName(cards: readonly DragonCard[] = [], name: string) {
   return (cards || []).some((card) => card?.name === name);
 }
 
-function countNamed(cards: DragonCard[] = [], name: string) {
+function countNamed(cards: readonly DragonCard[] = [], name: string) {
   return (cards || []).filter((card) => card?.name === name).length;
 }
 
-function countNames(cards: DragonCard[] = [], names: Set<string> = new Set()) {
+function countNames(cards: readonly DragonCard[] = [], names: Set<string> = new Set()) {
   return (cards || []).filter((card) => names.has(card?.name!)).length;
 }
 
@@ -243,11 +243,11 @@ function hasArchetype(card: DragonCard | null | undefined, archetype: string) {
   return card.archetype === archetype;
 }
 
-function countFaceupDragons(cards: DragonCard[] = []) {
+function countFaceupDragons(cards: readonly DragonCard[] = []) {
   return (cards || []).filter(isFaceupDragon).length;
 }
 
-function countDragonMonsters(cards: DragonCard[] = []) {
+function countDragonMonsters(cards: readonly DragonCard[] = []) {
   return (cards || []).filter(isDragonMonster).length;
 }
 
@@ -255,11 +255,11 @@ function isExtremeDragon(card: DragonCard | null | undefined) {
   return isDragonMonster(card) && hasArchetype(card, "Extreme Dragons");
 }
 
-function hasExtremeFaceup(cards: DragonCard[] = []) {
+function hasExtremeFaceup(cards: readonly DragonCard[] = []) {
   return (cards || []).some((card) => isFaceupDragon(card) && isExtremeDragon(card));
 }
 
-function hasRadiantCosmicMaterials(cards: DragonCard[] = []) {
+function hasRadiantCosmicMaterials(cards: readonly DragonCard[] = []) {
   const dragons = (cards || []).filter(isDragonMonster);
   if (dragons.length < 3) return false;
   return dragons.some(
@@ -267,7 +267,7 @@ function hasRadiantCosmicMaterials(cards: DragonCard[] = []) {
   );
 }
 
-function hasTechVoidMaterials(cards: DragonCard[] = []) {
+function hasTechVoidMaterials(cards: readonly DragonCard[] = []) {
   const dragons = (cards || []).filter(isDragonMonster);
   return (
     dragons.some((card) => card.name === "Voltaic Dragon") &&
@@ -275,7 +275,7 @@ function hasTechVoidMaterials(cards: DragonCard[] = []) {
   );
 }
 
-function hasHighLevelDragon(cards: DragonCard[] = []) {
+function hasHighLevelDragon(cards: readonly DragonCard[] = []) {
   return (cards || []).some(
     (card) =>
       isDragonMonster(card) &&
@@ -283,19 +283,19 @@ function hasHighLevelDragon(cards: DragonCard[] = []) {
   );
 }
 
-function hasGoodAwakeningTarget(cards: DragonCard[] = []) {
+function hasGoodAwakeningTarget(cards: readonly DragonCard[] = []) {
   return (cards || []).some(
     (card) => isDragonMonster(card) && (card.level || 0) >= 8,
   );
 }
 
-function hasLowDragonTarget(cards: DragonCard[] = []) {
+function hasLowDragonTarget(cards: readonly DragonCard[] = []) {
   return (cards || []).some(
     (card) => isDragonMonster(card) && (card.level || 0) <= 4,
   );
 }
 
-function hasCurrentAwakeningTarget(cards: DragonCard[] = []) {
+function hasCurrentAwakeningTarget(cards: readonly DragonCard[] = []) {
   return (cards || []).some(
     (card) =>
       isDragonMonster(card) &&
@@ -304,11 +304,11 @@ function hasCurrentAwakeningTarget(cards: DragonCard[] = []) {
   );
 }
 
-function hasUsefulDiscard(cards: DragonCard[] = []) {
+function hasUsefulDiscard(cards: readonly DragonCard[] = []) {
   return (cards || []).some((card) => CHEAP_DRAGON_COST_NAMES.has(card?.name!));
 }
 
-function hasRealGreyDiscardValue({ hand = [], field = [], graveyard = [] }: { hand?: DragonCard[]; field?: DragonCard[]; graveyard?: DragonCard[] } = {}) {
+function hasRealGreyDiscardValue({ hand = [], field = [], graveyard = [] }: { hand?: readonly DragonCard[]; field?: readonly DragonCard[]; graveyard?: readonly DragonCard[] } = {}) {
   const discardableDragons = (hand || []).filter(isDragonMonster);
   if (discardableDragons.some((card) => card.name === "Voltaic Dragon")) return true;
   if (
@@ -329,23 +329,23 @@ function hasRealGreyDiscardValue({ hand = [], field = [], graveyard = [] }: { ha
   return false;
 }
 
-function hasCriticalPayoff(cards: DragonCard[] = []) {
+function hasCriticalPayoff(cards: readonly DragonCard[] = []) {
   return (cards || []).some((card) => CRITICAL_PAYOFF_NAMES.has(card?.name!));
 }
 
-function hasLuminousRecovery(field: DragonCard[] = []) {
+function hasLuminousRecovery(field: readonly DragonCard[] = []) {
   return (field || []).some(
     (card) => card?.name === "Luminous Dragon" && !card.isFacedown,
   );
 }
 
-function hasLargeOpponentThreat(opponentField: DragonCard[] = []) {
+function hasLargeOpponentThreat(opponentField: readonly DragonCard[] = []) {
   return (opponentField || []).some(
     (card) => card?.cardKind === "monster" && Math.max(card.atk || 0, card.def || 0) >= 2200,
   );
 }
 
-function hasVolcanicGyRisk({ graveyard, opponent, opponentGraveyard }: { graveyard: DragonCard[]; opponent: DragonPlayer; opponentGraveyard: DragonCard[] }) {
+function hasVolcanicGyRisk({ graveyard, opponent, opponentGraveyard }: { graveyard: readonly DragonCard[]; opponent: DragonPlayer; opponentGraveyard: readonly DragonCard[] }) {
   const ownDragonCount = countDragonMonsters(graveyard);
   const hasFollowUpResource =
     ownDragonCount >= 3 ||
@@ -376,7 +376,7 @@ function hasRainbowRequirement(game: DragonGame, player: DragonPlayer) {
   return ((store as Record<number, number>)[materialId] || (store as Record<string, number>)[String(materialId)] || 0) >= 3;
 }
 
-function hasPurifiedLine({ hand, field, graveyard, extraDeck, game, player }: { hand: DragonCard[]; field: DragonCard[]; graveyard: DragonCard[]; extraDeck: DragonCard[]; game: DragonGame; player: DragonPlayer }) {
+function hasPurifiedLine({ hand, field, graveyard, extraDeck, game, player }: { hand: readonly DragonCard[]; field: readonly DragonCard[]; graveyard: readonly DragonCard[]; extraDeck: readonly DragonCard[]; game: DragonGame; player: DragonPlayer }) {
   if (hasName(hand, "Purified Crystal Dragon")) {
     return graveyard.filter(isDragonMonster).length >= 3;
   }
@@ -398,7 +398,7 @@ function hasJaggedCashout(fieldSpell: DragonCard | null | undefined) {
   );
 }
 
-function hasHellkiteRoarToJagged({ graveyard, deck, fieldSpell }: { graveyard: DragonCard[]; deck: DragonCard[]; fieldSpell: DragonCard | null | undefined }) {
+function hasHellkiteRoarToJagged({ graveyard, deck, fieldSpell }: { graveyard: readonly DragonCard[]; deck: readonly DragonCard[]; fieldSpell: DragonCard | null | undefined }) {
   return (
     hasName(graveyard, "Hellkite Roar") &&
     fieldSpell?.name !== "Jagged Peak of the Dragons" &&
@@ -406,7 +406,7 @@ function hasHellkiteRoarToJagged({ graveyard, deck, fieldSpell }: { graveyard: D
   );
 }
 
-function opponentThreatensLethal(player: DragonPlayer, opponentField: DragonCard[] = []) {
+function opponentThreatensLethal(player: DragonPlayer, opponentField: readonly DragonCard[] = []) {
   const lp = Number(player?.lp || 0);
   if (lp <= 0) return true;
   const attack = (opponentField || []).reduce((sum, card) => {
@@ -417,7 +417,7 @@ function opponentThreatensLethal(player: DragonPlayer, opponentField: DragonCard
   return attack >= lp;
 }
 
-function hasThreatResponse({ hand, field, graveyard, opponentField, opponentBackrow }: { hand: DragonCard[]; field: DragonCard[]; graveyard: DragonCard[]; opponentField: DragonCard[]; opponentBackrow: number }) {
+function hasThreatResponse({ hand, field, graveyard, opponentField, opponentBackrow }: { hand: readonly DragonCard[]; field: readonly DragonCard[]; graveyard: readonly DragonCard[]; opponentField: readonly DragonCard[]; opponentBackrow: number }) {
   const threats = (opponentField || []).filter((card) => card?.cardKind === "monster");
   const hasLargeThreat = threats.some(
     (card) => Math.max(card.atk || 0, card.def || 0) >= 2200,
@@ -434,7 +434,7 @@ function hasThreatResponse({ hand, field, graveyard, opponentField, opponentBack
   );
 }
 
-function hasBlackBullPressure({ hand, graveyard, deck, opponent }: { hand: DragonCard[]; graveyard: DragonCard[]; deck: DragonCard[]; opponent: DragonPlayer }) {
+function hasBlackBullPressure({ hand, graveyard, deck, opponent }: { hand: readonly DragonCard[]; graveyard: readonly DragonCard[]; deck: readonly DragonCard[]; opponent: DragonPlayer }) {
   const opponentLp = opponent?.lp ?? 8000;
   const handDragons = hand.filter(isDragonMonster);
   const liveHandBull =
@@ -478,13 +478,13 @@ function canDestroyByBattle(attacker: DragonCard, target: DragonCard) {
   return getEffectiveAtk(attacker) > getBattleTargetStat(target);
 }
 
-function hasBattleRemoval({ field = [], opponentField = [] }: { field?: DragonCard[]; opponentField?: DragonCard[] } = {}) {
+function hasBattleRemoval({ field = [], opponentField = [] }: { field?: readonly DragonCard[]; opponentField?: readonly DragonCard[] } = {}) {
   return (field || []).some((attacker) =>
     (opponentField || []).some((target) => canDestroyByBattle(attacker, target)),
   );
 }
 
-function hasDirectLethal({ field = [], opponent = {} }: { field?: DragonCard[]; opponent?: DragonPlayer } = {}) {
+function hasDirectLethal({ field = [], opponent = {} }: { field?: readonly DragonCard[]; opponent?: DragonPlayer } = {}) {
   const opponentLp = Number(opponent?.lp || 8000);
   if (opponentLp <= 0) return true;
   const damage = (field || [])
@@ -493,26 +493,26 @@ function hasDirectLethal({ field = [], opponent = {} }: { field?: DragonCard[]; 
   return damage >= opponentLp;
 }
 
-function hasBlackBullBattlePlan({ field = [], opponentField = [] }: { field?: DragonCard[]; opponentField?: DragonCard[] } = {}) {
+function hasBlackBullBattlePlan({ field = [], opponentField = [] }: { field?: readonly DragonCard[]; opponentField?: readonly DragonCard[] } = {}) {
   const bull = (field || []).find((card) => card?.name === "Black Bull Dragon" && canDragonAttack(card));
   if (!bull) return false;
   const removable = (opponentField || []).filter((target) => canDestroyByBattle(bull, target));
   return removable.length >= 1;
 }
 
-function hasJaggedBattleCounterPlan({ field = [], opponentField = [], fieldSpell = null }: { field?: DragonCard[]; opponentField?: DragonCard[]; fieldSpell?: DragonCard | null | undefined } = {}) {
+function hasJaggedBattleCounterPlan({ field = [], opponentField = [], fieldSpell = null }: { field?: readonly DragonCard[]; opponentField?: readonly DragonCard[]; fieldSpell?: DragonCard | null | undefined } = {}) {
   if (fieldSpell?.name !== "Jagged Peak of the Dragons") return false;
   const counters = Number((fieldSpell!.counters as Partial<Record<string, number>> | undefined)?.dragon_peak || 0);
   return counters >= 4 && hasBattleRemoval({ field, opponentField });
 }
 
-function hasNamedBattlePlan({ field = [], opponentField = [] }: { field?: DragonCard[]; opponentField?: DragonCard[] } = {}, name: string) {
+function hasNamedBattlePlan({ field = [], opponentField = [] }: { field?: readonly DragonCard[]; opponentField?: readonly DragonCard[] } = {}, name: string) {
   const attacker = (field || []).find((card) => card?.name === name && canDragonAttack(card));
   if (!attacker) return false;
   return (opponentField || []).some((target) => canDestroyByBattle(attacker, target));
 }
 
-function hasRadiantSafeBattle({ field = [], opponentField = [] }: { field?: DragonCard[]; opponentField?: DragonCard[] } = {}) {
+function hasRadiantSafeBattle({ field = [], opponentField = [] }: { field?: readonly DragonCard[]; opponentField?: readonly DragonCard[] } = {}) {
   const radiant = (field || []).find(
     (card) => card?.name === "Radiant Cosmic Dragon" && canDragonAttack(card),
   );
@@ -523,7 +523,7 @@ function hasRadiantSafeBattle({ field = [], opponentField = [] }: { field?: Drag
   );
 }
 
-function hasBattleMain2Payoff({ fieldSpell = null, spellTrap = [], hand = [], field = [], deck = [] }: { fieldSpell?: DragonCard | null | undefined; spellTrap?: DragonCard[]; hand?: DragonCard[]; field?: DragonCard[]; deck?: DragonCard[] } = {}) {
+function hasBattleMain2Payoff({ fieldSpell = null, spellTrap = [], hand = [], field = [], deck = [] }: { fieldSpell?: DragonCard | null | undefined; spellTrap?: readonly DragonCard[]; hand?: readonly DragonCard[]; field?: readonly DragonCard[]; deck?: readonly DragonCard[] } = {}) {
   if (fieldSpell?.name === "Jagged Peak of the Dragons" && Number((fieldSpell!.counters as Partial<Record<string, number>> | undefined)?.dragon_peak || 0) >= 4) {
     return true;
   }
@@ -543,7 +543,7 @@ function hasBattleMain2Payoff({ fieldSpell = null, spellTrap = [], hand = [], fi
   return false;
 }
 
-function hasLongLuminousPayoff({ hand, field, deck, graveyard }: { hand: DragonCard[]; field: DragonCard[]; deck: DragonCard[]; graveyard: DragonCard[] }) {
+function hasLongLuminousPayoff({ hand, field, deck, graveyard }: { hand: readonly DragonCard[]; field: readonly DragonCard[]; deck: readonly DragonCard[]; graveyard: readonly DragonCard[] }) {
   const hasLuminousStarter = hasName(hand, "Luminous Dragon") && field.length === 0;
   if (!hasLuminousStarter) return false;
   const hasExtender = hand.some((card) => EXTENDER_NAMES.has(card?.name!));
@@ -1036,7 +1036,7 @@ function getPlanningOpponent(state: DragonGame = {}) {
   return state?.player || {};
 }
 
-function countZone(cards: DragonCard[] = [], predicate: (card: DragonCard) => boolean = () => true) {
+function countZone(cards: readonly DragonCard[] = [], predicate: (card: DragonCard) => boolean = () => true) {
   return (cards || []).filter((card) => card && predicate(card)).length;
 }
 
@@ -1076,7 +1076,7 @@ function getEffectiveDef(card: DragonCard | null | undefined = {}) {
   return Number(card?.def || 0) + Number(card?.tempDefBoost || 0);
 }
 
-function getStrongestAtk(cards: DragonCard[] = []) {
+function getStrongestAtk(cards: readonly DragonCard[] = []) {
   return (cards || []).reduce((max, card) => {
     if (!card || card.cardKind !== "monster" || card.isFacedown) return max;
     return Math.max(max, getEffectiveAtk(card), card.def || 0);

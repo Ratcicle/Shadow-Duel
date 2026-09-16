@@ -12,10 +12,7 @@
 
 import { isAI } from "../../Player.js";
 import { botLogger } from "../../BotLogger.js";
-import type {
-  FullGameHost,
-  GamePlayer,
-} from "../../contracts/gameRuntime.js";
+import type { FullGameHost, GamePlayer } from "../../contracts/gameRuntime.js";
 import type { DrawCardsResult } from "../deck/draw.js";
 import type { ActionGuardResult } from "../actions/guard.js";
 import type { PlayerId } from "../../contracts/primitives.js";
@@ -59,7 +56,10 @@ type LifecycleHost = Pick<
   cleanupExpiredSpecialSummonRestrictions?(): void;
   cleanupExpiredEffectActivationRestrictions?(): void;
   updateBoard(): unknown;
-  checkAndOfferTraps(event: string, context: unknown): Promise<PhaseTimingResult | null>;
+  checkAndOfferTraps(
+    event: string,
+    context: unknown,
+  ): Promise<PhaseTimingResult | null>;
   drawCards(player: GamePlayer, count?: number): DrawCardsResult;
   waitForPhaseDelay(): Promise<void>;
   processDelayedActions(phase: string, activePlayer: PlayerId): Promise<void>;
@@ -285,7 +285,8 @@ export async function startTurn(this: LifecycleHost) {
     currentPhase: "draw",
     phase: "draw",
   });
-  if (drawTiming?.needsSelection || this.gameOver || this.isDisposed?.()) return;
+  if (drawTiming?.needsSelection || this.gameOver || this.isDisposed?.())
+    return;
   const drawPhaseEnd = await negotiateAutomaticPhaseEnd(this, {
     currentPhase: "draw",
     nextPhase: "standby",
@@ -362,11 +363,12 @@ export async function startTurn(this: LifecycleHost) {
       "standby",
       "main1",
       0,
-      0
+      0,
     );
   }
 
   scheduleAiMoveAfterPaint(this, activePlayer);
+  return undefined;
 }
 
 /**
@@ -377,7 +379,7 @@ export async function endTurn(this: LifecycleHost) {
   const actor = this.turn === "player" ? this.player : this.bot;
   const guard = this.guardActionStart(
     { actor, kind: "phase_change" },
-    actor === this.player
+    actor === this.player,
   );
   if (!guard.ok) return guard;
 
@@ -408,6 +410,7 @@ export async function endTurn(this: LifecycleHost) {
 
   this.turn = this.turn === "player" ? "bot" : "player";
   await this.startTurn();
+  return undefined;
 }
 
 /**

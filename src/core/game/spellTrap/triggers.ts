@@ -5,7 +5,10 @@
 
 import { FAST_EFFECT_ORIGINS } from "../../chain/timing.js";
 import { isChainContextType } from "../../contracts/chain.js";
-import type { ChainContextType, FastEffectOrigin } from "../../contracts/chain.js";
+import type {
+  ChainContextType,
+  FastEffectOrigin,
+} from "../../contracts/chain.js";
 import type { MaybePromise } from "../../contracts/actionRuntime.js";
 import type { GameCard } from "../../contracts/cards.js";
 import type { GamePlayer } from "../../contracts/player.js";
@@ -31,9 +34,9 @@ interface TrapEventData {
   attackRedirect?: unknown;
   redirectedTarget?: GameCard | null;
   redirectedTargetOwner?: GamePlayer | null;
-  trigger?: string | null;
+  trigger?: string | null | undefined;
   eventType?: string | null;
-  chainLink?: object | null;
+  chainLink?: object | null | undefined;
 }
 
 interface TrapTimingContext extends TrapEventData {
@@ -120,8 +123,8 @@ interface TrapTriggerHost {
     payload: {
       card: GameCard;
       player: GamePlayer;
-      trigger?: string | null;
-      chainLink?: object | null;
+      trigger?: string | null | undefined;
+      chainLink?: object | null | undefined;
     },
   ): MaybePromise<unknown>;
   moveCard(
@@ -325,9 +328,7 @@ export function _mapEventToChainContext(
     position_change: "action_without_chain",
   };
   const contextType = Reflect.get(eventToContext, event);
-  return isChainContextType(contextType)
-    ? contextType
-    : "action_without_chain";
+  return isChainContextType(contextType) ? contextType : "action_without_chain";
 }
 
 /**
@@ -370,7 +371,7 @@ export async function activateTrapFromZone(
   const result = await this.effectEngine.resolveTrapEffects(
     card,
     this.player,
-    eventData
+    eventData,
   );
 
   // Se for trap normal, mover para o cemitério após resolver

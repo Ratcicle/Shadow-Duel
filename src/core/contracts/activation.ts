@@ -29,20 +29,20 @@ export interface ActivationCommitInfo {
 
 export interface ActivationPipelineContext {
   fromHand?: boolean;
-  activationZone?: ActivationZone;
-  sourceZone?: ActivationZone;
+  activationZone?: ActivationZone | undefined;
+  sourceZone?: ActivationZone | undefined;
   sourceWasFacedown?: boolean;
   selectionKind?: string;
   committed?: boolean;
   commitInfo?: ActivationCommitInfo | null;
-  autoSelectSingleTarget?: boolean;
-  autoSelectTargets?: boolean;
+  autoSelectSingleTarget?: boolean | undefined;
+  autoSelectTargets?: boolean | undefined;
   costSelections?: CanonicalSelectionMap;
   targetSelections?: CanonicalSelectionMap;
   resolutionSelections?: CanonicalSelectionMap;
   resolvedSelectionCounts?: Readonly<Record<string, number>>;
   actionContext?: unknown;
-  effectId?: string | null;
+  effectId?: (string | null) | undefined;
   prepareOnly?: boolean;
   preview?: boolean;
   isPreview?: boolean;
@@ -65,7 +65,7 @@ export interface ActivationResolutionContext {
   sourceCard?: GameCard | null;
   player?: GamePlayer | null;
   opponent?: GamePlayer | null;
-  effect?: EffectDefinition | null;
+  effect?: (EffectDefinition | null) | undefined;
   activationZone?: ActivationZone;
   activationContext?: ActivationPipelineContext;
   _actionTargets?: CanonicalSelectionMap;
@@ -76,8 +76,8 @@ export interface ActivationPipelineResult {
   ok: boolean;
   needsSelection: boolean;
   selectionContract?: RawSelectionContract | NormalizedSelectionContract;
-  reason?: string | null;
-  code?: string | null;
+  reason?: string | null | undefined;
+  code?: string | null | undefined;
   cancelled?: boolean;
   blockedByGuard?: boolean;
   blockedByRestriction?: boolean;
@@ -96,7 +96,7 @@ export interface ActivationPipelineResult {
   activationZone?: ActivationZone;
   activationContext?: ActivationPipelineContext;
   cardRef?: GameCard | null;
-  effect?: EffectDefinition | null;
+  effect?: EffectDefinition | null | undefined;
   targets?: CanonicalSelectionMap;
   selections?: CanonicalSelectionMap;
   resolutionContext?: ActivationResolutionContext | null;
@@ -108,7 +108,7 @@ export interface ActivationPipelineResult {
 export interface ActivationOncePerTurnConfig {
   card?: GameCard | null;
   player?: GamePlayer | null;
-  effect?: EffectDefinition | null;
+  effect?: EffectDefinition | null | undefined;
 }
 
 export interface ActivationPipelineFinalizeInfo {
@@ -143,16 +143,20 @@ export interface ActivationPipelineConfig {
   openActivationWindow?: boolean;
   finishOnSelection?: boolean;
   oncePerTurn?: ActivationOncePerTurnConfig | null;
-  gate?: (() =>
-    | ActivationPipelineResult
-    | { ok: boolean; reason?: string | null; code?: string | null }
-    | null
-    | undefined) | null;
-  preview?: (() =>
-    | ActivationPipelineResult
-    | { ok: boolean; reason?: string | null; code?: string | null }
-    | null
-    | undefined) | null;
+  gate?:
+    | (() =>
+        | ActivationPipelineResult
+        | { ok: boolean; reason?: string | null; code?: string | null }
+        | null
+        | undefined)
+    | null;
+  preview?:
+    | (() =>
+        | ActivationPipelineResult
+        | { ok: boolean; reason?: string | null; code?: string | null }
+        | null
+        | undefined)
+    | null;
   commit?: (() => MaybePromise<ActivationCommitInfo | null | undefined>) | null;
   activate(
     selections: CanonicalSelectionMap | null,

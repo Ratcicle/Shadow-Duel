@@ -133,7 +133,7 @@ export function showUnifiedTrapModal(
     // For single card: show full card preview (original style)
     // For multiple cards: show scrollable list with same card styling
     if (cards.length === 1) {
-      const item = cards[0];
+      const item = cards[0]!;
       const card = item.card || item;
 
       // Card image preview

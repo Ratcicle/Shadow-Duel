@@ -249,7 +249,7 @@ test("event resolver encaminha posição e ataque direto ao coordenador", async 
     events.map((entry) => entry.eventName),
     ["position_change", "attack_declared"],
   );
-  assert.equal(record(events[1].payload).defenderOwner, null);
+  assert.equal(record(required(events[1]).payload).defenderOwner, null);
 });
 
 test("correntes sucessivas repetem a verificação pós-corrente", async () => {

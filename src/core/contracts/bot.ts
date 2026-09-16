@@ -53,7 +53,7 @@ type BotGameMethods = {
 export interface BotAutomaticAscensionChoice {
   material: GameCard;
   ascensionCard: GameCard;
-  position?: BattlePositionInput;
+  position?: BattlePositionInput | undefined;
   skip?: boolean;
 }
 
@@ -227,7 +227,7 @@ export type BotRuntimePort = Omit<
     selectBestTributes(field: Array<GameCard | SimulatedCardState>, count: number, card: GameCard | SimulatedCardState, context?: unknown): number[];
     evaluateTributeTrade(card: GameCard | SimulatedCardState, field: Array<GameCard | SimulatedCardState>, count: number, context?: unknown): AITributeTradeResult;
     getAscensionPositionPreference(card: GameCard, material: GameCard, game: BotGamePort): BattlePositionInput;
-    selectBestAscension(eligible: GameCard[], material: GameCard, game: BotGamePort): GameCard;
+    selectBestAscension(eligible: readonly [GameCard, ...GameCard[]], material: GameCard, game: BotGamePort): GameCard;
     tryAscensionIfAvailable(game: BotGamePort): Promise<boolean>;
   };
 
@@ -244,8 +244,8 @@ export type BotMainPhaseActionExecutors = {
 export interface BotHandActionHint {
   index?: number;
   card?: GameCard | SimulatedCardState | null;
-  cardId?: RawCardDefinitionId | number;
-  cardName?: string;
+  cardId?: RawCardDefinitionId | number | undefined;
+  cardName?: string | undefined;
 }
 
 export type ExpectedBotHandKind = CardKind | readonly CardKind[];

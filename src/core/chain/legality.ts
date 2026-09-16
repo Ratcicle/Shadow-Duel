@@ -110,7 +110,7 @@ export type CanonicalActivationCandidate<
 export interface ActivationLegalityResult<
   Candidate extends ActivationCandidateInput = ActivationCandidateInput,
 > extends ChainActivationLegality {
-  allowedZones?: CanonicalZone[];
+  allowedZones?: CanonicalZone[] | undefined;
   candidate?: CanonicalActivationCandidate<Candidate>;
 }
 
@@ -173,7 +173,10 @@ export function getCanonicalActivationCandidateKey(
   return `${sourceIdentity(card)}:${effect?.id || "effect"}:${sourceZone || "unknown"}`;
 }
 
-function readEntityId(value: object | null | undefined, key: string): ChainEntityId | null {
+function readEntityId(
+  value: object | null | undefined,
+  key: string,
+): ChainEntityId | null {
   if (!value) return null;
   const candidate: unknown = Reflect.get(value, key);
   return typeof candidate === "number" || typeof candidate === "string"
@@ -190,8 +193,7 @@ function serializeContext(
     event: context.event || null,
     linkId: context.linkId ?? context.activationAttempt?.linkId ?? null,
     summonId:
-      context.summonId ??
-      readEntityId(context.summonTransaction, "summonId"),
+      context.summonId ?? readEntityId(context.summonTransaction, "summonId"),
     damageStepTiming: context.damageStepTiming || context.timing || null,
   };
 }
@@ -260,14 +262,12 @@ function canonicalCandidate<Candidate extends ActivationCandidateInput>(
   const effect = candidate.effect;
   const card = candidate.card;
   const sourceZone = candidate.sourceZone;
-  const {
-    zone: _removedZone,
-    ...canonicalInput
-  } = candidate;
+  const { zone: _removedZone, ...canonicalInput } = candidate;
   return {
     ...canonicalInput,
     candidateKey:
-      candidate.candidateKey || getCanonicalActivationCandidateKey(card, effect, sourceZone),
+      candidate.candidateKey ||
+      getCanonicalActivationCandidateKey(card, effect, sourceZone),
     effectId: candidate.effectId || effect?.id || null,
     sourceZone,
     spellSpeed: Number(candidate.spellSpeed ?? effect.speed ?? 1) as SpellSpeed,
@@ -298,7 +298,9 @@ export function listLegalActivationCandidates<
   return candidates
     .filter(isCandidate)
     .map((candidate) => canonicalCandidate(candidate))
-    .sort((a, b) => String(a.candidateKey).localeCompare(String(b.candidateKey)));
+    .sort((a, b) =>
+      String(a.candidateKey).localeCompare(String(b.candidateKey)),
+    );
 }
 
 export function revalidateActivationCandidate<
@@ -320,11 +322,18 @@ export function revalidateActivationCandidate<
     if (result?.ok === false) {
       return {
         ok: false,
-        code: result.code || String(result.reason || "CANDIDATE_NO_LONGER_LEGAL").toUpperCase(),
+        code:
+          result.code ||
+          String(result.reason || "CANDIDATE_NO_LONGER_LEGAL").toUpperCase(),
         reason: result.reason || "Activation candidate is no longer legal.",
       };
     }
-    return { ok: true, code: "LEGAL", reason: null, candidate: canonicalCandidate(result?.candidate || candidate) };
+    return {
+      ok: true,
+      code: "LEGAL",
+      reason: null,
+      candidate: canonicalCandidate(result?.candidate || candidate),
+    };
   }
   const zoneCheck = checkEffectZoneLegality(
     candidate.card,
@@ -376,6 +385,7 @@ function cardsInZone(
     case "fieldSpell":
       return player.fieldSpell ? [player.fieldSpell] : [];
   }
+  zone satisfies never;
 }
 
 export function createSimulationLegalityAdapter(
@@ -386,7 +396,9 @@ export function createSimulationLegalityAdapter(
   if (state.player) players.push(state.player);
   if (state.bot) players.push(state.bot);
   const getPlayer = (query: ActivationQuery): ChainPlayer | null =>
-    query.player || players.find((player) => player.id === query.playerId) || null;
+    query.player ||
+    players.find((player) => player.id === query.playerId) ||
+    null;
   return {
     listCandidates(query) {
       const player = getPlayer(query);
@@ -397,10 +409,20 @@ export function createSimulationLegalityAdapter(
         const cards = cardsInZone(player, zone).filter(Boolean);
         for (const card of cards) {
           for (const effect of card.effects || []) {
-            if (checkEffectZoneLegality(card, effect, zone).ok === false) continue;
+            if (checkEffectZoneLegality(card, effect, zone).ok === false)
+              continue;
             if (effect.timing === "passive") continue;
-            if (typeof options.effectCheck === "function" &&
-                options.effectCheck({ state, player, card, effect, zone, query }) === false) {
+            if (
+              typeof options.effectCheck === "function" &&
+              options.effectCheck({
+                state,
+                player,
+                card,
+                effect,
+                zone,
+                query,
+              }) === false
+            ) {
               continue;
             }
             candidates.push({
@@ -420,11 +442,21 @@ export function createSimulationLegalityAdapter(
       const zone = candidate.sourceZone;
       const cards = cardsInZone(player, zone);
       if (!cards.includes(candidate.card)) {
-        return { ok: false, code: "ACTIVATION_SOURCE_MOVED", reason: "activation_source_moved" };
+        return {
+          ok: false,
+          code: "ACTIVATION_SOURCE_MOVED",
+          reason: "activation_source_moved",
+        };
       }
-      if (Number(candidate.card.locationVersion ?? 0) !==
-          Number(candidate.sourceLocationVersion ?? 0)) {
-        return { ok: false, code: "ACTIVATION_SOURCE_VERSION_CHANGED", reason: "activation_source_version_changed" };
+      if (
+        Number(candidate.card.locationVersion ?? 0) !==
+        Number(candidate.sourceLocationVersion ?? 0)
+      ) {
+        return {
+          ok: false,
+          code: "ACTIVATION_SOURCE_VERSION_CHANGED",
+          reason: "activation_source_version_changed",
+        };
       }
       return checkEffectZoneLegality(candidate.card, candidate.effect, zone);
     },

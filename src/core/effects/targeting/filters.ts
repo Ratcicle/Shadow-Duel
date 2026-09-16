@@ -16,7 +16,7 @@ import type { CanonicalZone } from "../../contracts/zones.js";
 type TargetingEffectType = "destruction" | "banish" | "target" | "negate";
 
 interface TargetingCard extends ActionRuntimeCard {
-  immuneToOpponentEffectsUntilTurn?: number;
+  immuneToOpponentEffectsUntilTurn?: number | null;
   immuneToOpponentEffects?: boolean;
   unaffectedByOpponentCardEffects?: boolean;
   unaffectedByOtherCardEffects?: boolean;
@@ -25,10 +25,8 @@ interface TargetingCard extends ActionRuntimeCard {
   effects?: readonly EffectDefinition[];
 }
 
-interface TargetingPlayer extends Omit<
-  ActionRuntimePlayer,
-  "field" | "spellTrap" | "fieldSpell"
-> {
+interface TargetingPlayer
+  extends Omit<ActionRuntimePlayer, "field" | "spellTrap" | "fieldSpell"> {
   field: TargetingCard[];
   spellTrap: TargetingCard[];
   fieldSpell: TargetingCard | null;
@@ -47,7 +45,7 @@ interface ConditionalUnaffectedPassive extends PassiveRuleDefinition {
 }
 
 export interface ImmunityCheckOptions {
-  effectType?: TargetingEffectType | null;
+  effectType?: (TargetingEffectType | null) | undefined;
   sourceCard?: TargetingCard | null;
   source?: TargetingCard | null;
 }
@@ -60,11 +58,13 @@ export interface ImmunityResult {
 interface ImmunityFilterOptions extends ImmunityCheckOptions {
   actionType?: string;
   logSkipped?: boolean;
-  customImmunityCheck?(
-    card: TargetingCard,
-    sourcePlayer: TargetingPlayer,
-    options: ImmunityFilterOptions,
-  ): ImmunityResult;
+  customImmunityCheck?:
+    | ((
+        card: TargetingCard,
+        sourcePlayer: TargetingPlayer,
+        options: ImmunityFilterOptions,
+      ) => ImmunityResult)
+    | undefined;
 }
 
 interface ImmunityAction {
@@ -248,15 +248,11 @@ function targetMatchesConditionalUnaffectedPassive(
 ): boolean {
   if (!card || !targetOwner || !sourceOwner || !passive) return false;
 
-  const ownerRelation =
-    targetOwner.id === sourceOwner.id ? "self" : "opponent";
+  const ownerRelation = targetOwner.id === sourceOwner.id ? "self" : "opponent";
   const targetOwners = asArray(
     passive.targetOwners || passive.owners || ["opponent"],
   );
-  if (
-    !targetOwners.includes("any") &&
-    !targetOwners.includes(ownerRelation)
-  ) {
+  if (!targetOwners.includes("any") && !targetOwners.includes(ownerRelation)) {
     return false;
   }
 
@@ -338,8 +334,7 @@ function findConditionalUnaffectedPassiveReason(
         }
 
         return (
-          passive.reason ||
-          `${card.name} is unaffected by this card effect.`
+          passive.reason || `${card.name} is unaffected by this card effect.`
         );
       }
     }
@@ -491,7 +486,7 @@ export function filterCardsListByImmunity<Card extends TargetingCard>(
       if (shouldLog && this.ui?.log) {
         const actionDesc = options.actionType ? ` (${options.actionType})` : "";
         this.ui.log(
-          `${card.name} is immune to this effect${actionDesc} and was skipped.`
+          `${card.name} is immune to this effect${actionDesc} and was skipped.`,
         );
       }
     } else {
@@ -545,7 +540,7 @@ export function filterTargetsByImmunity(
       effectType,
       sourceCard: ctx.source || null,
       customImmunityCheck: action.customImmunityCheck,
-    }
+    },
   );
 
   result.skippedCount = skipped.length;
@@ -566,7 +561,7 @@ export function filterTargetsByImmunity(
     result.skipAction = true;
     if (this.ui?.log) {
       this.ui.log(
-        `Action ${action.type} was cancelled because some targets are immune.`
+        `Action ${action.type} was cancelled because some targets are immune.`,
       );
     }
   } else if (

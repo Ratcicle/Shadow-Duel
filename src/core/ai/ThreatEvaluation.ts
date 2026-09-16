@@ -172,7 +172,7 @@ export function getTopThreat(
   context: ThreatContext = {},
 ): RankedThreat | null {
   const threats = rankOpponentThreats(opponentField, context);
-  return threats.length > 0 ? threats[0] : null;
+  return threats[0] ?? null;
 }
 
 /**
@@ -271,7 +271,7 @@ export function rankByResourceValue(
 export function estimateTurnsToKill(
   card: StrategicCardView | null | undefined,
   myLP = 8000,
-  owner: { graveyard?: ReadonlyArray<{ name?: string | null }> } | null = null,
+  owner: { graveyard?: ReadonlyArray<{ name?: string | null | undefined }> } | null = null,
 ): number {
   if (!card || card.cardKind !== "monster") return Infinity;
   if (card.position !== "attack") return Infinity;
@@ -294,7 +294,7 @@ export function estimateTurnsToKill(
 export function canOpponentLethal(
   opponentField: readonly (StrategicCardView | null | undefined)[] | null,
   myLP = 8000,
-  opponent: { graveyard?: ReadonlyArray<{ name?: string | null }> } | null = null,
+  opponent: { graveyard?: ReadonlyArray<{ name?: string | null | undefined }> } | null = null,
 ): boolean {
   if (!Array.isArray(opponentField)) return false;
 

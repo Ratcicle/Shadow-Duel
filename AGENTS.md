@@ -59,7 +59,7 @@ src/data/cards.ts             # Banco de cartas 100% declarativo (~5700 linhas)
 - **UI:** [src/ui/Renderer.ts](src/ui/Renderer.ts), [src/core/UIAdapter.ts](src/core/UIAdapter.ts)
 - **Bot/AI:** [Bot.ts](src/core/Bot.ts), [BotArena.ts](src/core/BotArena.ts), [BotLogger.ts](src/core/BotLogger.ts), [src/core/ai/](src/core/ai/) (estratégias por arquétipo)
 - **Auto-resolução:** [AutoSelector.ts](src/core/AutoSelector.ts) — escolhas automáticas para IA durante targeting (uso restrito a bot/IA)
-- **Validação:** [CardDatabaseValidator.js](src/core/CardDatabaseValidator.js) — bloqueia duelo se cartas tiverem erros
+- **Validação:** [CardDatabaseValidator.ts](src/core/CardDatabaseValidator.ts) — bloqueia duelo se cartas tiverem erros
 - **Chain (mock):** [NullChainSystem.ts](src/core/NullChainSystem.ts) — implementação no-op para fluxos sem chain, compatível com o `ChainRuntimePort` mínimo
 - **Replay canônico:** [src/core/game/replay/](src/core/game/replay/) (`canonical.ts`, `validation.ts`, `recorder.ts`, `driver.ts`, `capture.ts`, `index.ts`) — contratos serializáveis, validação profunda, captura, hash determinístico e reprodução headless; consumidores preservam specifiers `.js`
 - **Modelos:** [Card.ts](src/core/Card.ts), [Player.ts](src/core/Player.ts)
@@ -131,7 +131,7 @@ Os métodos anexados são expostos no tipo da fachada por declaration merging, s
 
 **Estrutura modular de [src/core/effects/](src/core/effects/):**
 
-`EffectEngine.ts` é a fachada — a lógica real fica nas subpastas, agregadas via [src/core/effects/index.js](src/core/effects/index.js). Consumidores preservam o specifier `.js`.
+`EffectEngine.ts` é a fachada — a lógica real fica nas subpastas, agregadas via [src/core/effects/index.ts](src/core/effects/index.ts). Consumidores preservam o specifier `.js`.
 
 | Pasta          | Responsabilidade                                                                                |
 | -------------- | ----------------------------------------------------------------------------------------------- |
@@ -141,6 +141,10 @@ Os métodos anexados são expostos no tipo da fachada por declaration merging, s
 | `targeting/`   | Filtros, resolução, seleção e zones                                                             |
 | `fusion/`      | Avaliação, requisitos e execução de fusões                                                      |
 | `blueprints/`  | Blueprints armazenados (efeitos diferidos)                                                      |
+| `conditions/`  | Interpretador de condições declarativas e projeções de leitura do runtime                       |
+| `costs/`       | Cálculo e consumo dos redutores de custo em LP                                                   |
+| `filters/`     | Filtros compartilhados de cartas e efeitos                                                      |
+| `passives/`    | Aplicação e remoção de buffs e auras passivas                                                    |
 
 ---
 
@@ -154,6 +158,16 @@ npm run preview               # Serve o build de produção localmente
 ```
 
 O projeto usa TypeScript e Vite, com Node 22 (`>=22.12.0 <23`). Os imports relativos preservam specifiers `.js`, resolvidos para os arquivos físicos `.ts` pelo toolchain. Para distribuição estática, use `npm run build` e publique `dist/`.
+
+Os projetos app e Node usam `allowJs: false`, `strict` e as seis opções da
+Etapa 13: `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`,
+`useUnknownInCatchVariables`, `noImplicitReturns`,
+`noFallthroughCasesInSwitch` e `noImplicitOverride`. Ao acessar uma lista ou
+dicionário, comprove a presença do valor; asserções exigem uma garantia local.
+Diferencie campo ausente de campo com `undefined`: amplie apenas projeções
+de runtime com produtores reais, preservando os schemas declarativos e de
+replay serializado. Mantenha dispatches de uniões fechadas exhaustivos e o
+registro `docs/migrations/typescript-debt.md` auditável.
 
 **Bot Arena** — Modo de teste visual ([BotArena.ts](src/core/BotArena.ts)):
 

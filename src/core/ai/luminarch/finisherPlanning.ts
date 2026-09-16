@@ -144,6 +144,7 @@ export function evaluateLuminarchFusionPlan(
   );
   if (polyIndex === -1) return null;
   const polyCard = bot.hand[polyIndex];
+  if (!polyCard) return null;
   const fusionCard = (bot?.extraDeck || []).find(
     (card) => card && card.name === BARBARIAS_NAME,
   );
@@ -223,8 +224,10 @@ function findFortressAscensionCandidate(bot: SimulatedPlayerState, game: Luminar
       (card.fieldAgeTurns || 0) >= 2,
   );
   if (fieldIndex === -1) return null;
+  const material = bot.field[fieldIndex];
+  if (!material) return null;
   return {
-    material: bot.field[fieldIndex],
+    material,
     fieldIndex,
     ascensionCard: fortress,
   };

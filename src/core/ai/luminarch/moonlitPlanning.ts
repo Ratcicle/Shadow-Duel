@@ -116,6 +116,7 @@ function chooseBestBuffPackage(options: BuffOption[], lp: number, purpose: strin
     for (let i = 0; i < limit; i += 1) {
       if ((mask & (1 << i)) === 0) continue;
       const option = usable[i];
+      if (!option) continue;
       selected.push(option);
       atkBoost += option.atkBoost || 0;
       defBoost += option.defBoost || 0;
@@ -269,6 +270,9 @@ export function getMoonlitTargetPlan(analysis: LuminarchAnalysis): MoonlitTarget
     evaluateMoonlitReviveCandidate(card, analysis)
   );
   const bestPlan = candidatePlans.sort((a, b) => b.score - a.score)[0];
+  if (!bestPlan) {
+    return { target: null, score: 0, purpose: "none", position: "attack" };
+  }
   return {
     ...bestPlan,
     candidatePlans,

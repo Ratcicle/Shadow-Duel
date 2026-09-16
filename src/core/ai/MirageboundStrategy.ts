@@ -1189,7 +1189,7 @@ function buildLeviathanProcedureAction({
   combo,
   evaluation,
   analysis,
-}: {bot?: MirageboundPlayer;leviathan?:MirageboundCard;combo?:MirageboundCard[];evaluation?:{score?:number;reason?:string};analysis?:MirageboundAnalysis} = {}) {
+}: {bot?: MirageboundPlayer;leviathan?:MirageboundCard | undefined;combo?:MirageboundCard[] | undefined;evaluation?:{score?:number;reason?:string} | undefined;analysis?:MirageboundAnalysis} = {}) {
   if (!bot || !leviathan || !Array.isArray(combo) || combo.length === 0) {
     return null;
   }
@@ -1226,18 +1226,18 @@ export default class MirageboundStrategy extends BaseStrategy {
     this.thoughtProcess = [];
   }
 
-  get archetypeLabel() {
+  override get archetypeLabel() {
     return "Miragebound";
   }
 
-  think(thought: string) {
+  override think(thought: string) {
     this.thoughtProcess.push(thought);
     if (this.bot?.debug) {
       console.log(`[Miragebound AI] ${thought}`);
     }
   }
 
-  getPlanningProfile(game: MirageboundGame, context: AIPlanningContext = {}) {
+  override getPlanningProfile(game: MirageboundGame, context: AIPlanningContext = {}) {
     if (!game) return super.getPlanningProfile(game, context);
     const analysis = (context as MirageboundContext).analysis || this.analyzeGameState(game);
     return buildMirageboundPlanningProfile(analysis, {
@@ -1248,21 +1248,21 @@ export default class MirageboundStrategy extends BaseStrategy {
     });
   }
 
-  shouldUseDeepPlanning(game: MirageboundGame, context: AIPlanningContext = {}) {
+  override shouldUseDeepPlanning(game: MirageboundGame, context: AIPlanningContext = {}) {
     const profile =
       context.profile || this.getPlanningProfile(game, context) || {};
     return game?.turnLineSearchEnabled === true || profile.enabled === true;
   }
 
-  scoreLineMilestones(context: AIPlanningContext = {}) {
+  override scoreLineMilestones(context: AIPlanningContext = {}) {
     return scoreMirageboundLineMilestones(context as MirageboundContext);
   }
 
-  scoreLineTerminal(context: AIPlanningContext = {}) {
+  override scoreLineTerminal(context: AIPlanningContext = {}) {
     return scoreMirageboundLineTerminal(context as MirageboundContext);
   }
 
-  describePlannedLine(context: AIPlanningContext = {}) {
+  override describePlannedLine(context: AIPlanningContext = {}) {
     return describeMirageboundPlannedLine(context as MirageboundContext);
   }
 
@@ -1951,7 +1951,7 @@ export default class MirageboundStrategy extends BaseStrategy {
     return actions;
   }
 
-  generateMainPhaseActions(game: MirageboundGame) {
+  override generateMainPhaseActions(game: MirageboundGame) {
     const analysis = this.analyzeGameState(game);
     const bot = analysis.player;
     if (!bot) return [];
@@ -1974,7 +1974,7 @@ export default class MirageboundStrategy extends BaseStrategy {
     return this.integrateP2IntoActionSelection(game, sequenced, analysis);
   }
 
-  sequenceActions(actions: AIAction[] = []) {
+  override sequenceActions(actions: AIAction[] = []) {
     return sequenceActionsByPriority(actions, {
       typeOrder: {
         spell: 0,
@@ -1991,7 +1991,7 @@ export default class MirageboundStrategy extends BaseStrategy {
     });
   }
 
-  evaluateBoard(gameOrState: MirageboundGame, perspectivePlayer: SimulatedPlayerState) {
+  override evaluateBoard(gameOrState: MirageboundGame, perspectivePlayer: SimulatedPlayerState) {
     const base = super.evaluateBoardV2(gameOrState, perspectivePlayer);
     const perspective =
       (perspectivePlayer?.id ? perspectivePlayer : gameOrState?.bot || this.bot) as MirageboundPlayer;
@@ -2033,11 +2033,11 @@ export default class MirageboundStrategy extends BaseStrategy {
     return score;
   }
 
-  evaluateBoardV2(gameOrState: MirageboundGame, perspectivePlayer: SimulatedPlayerState) {
+  override evaluateBoardV2(gameOrState: MirageboundGame, perspectivePlayer: SimulatedPlayerState) {
     return this.evaluateBoard(gameOrState, perspectivePlayer);
   }
 
-  simulateMainPhaseAction(state: Parameters<BaseStrategy["simulateMainPhaseAction"]>[0], action: import("../contracts/ai.js").AIPlannedAction) {
+  override simulateMainPhaseAction(state: Parameters<BaseStrategy["simulateMainPhaseAction"]>[0], action: import("../contracts/ai.js").AIPlannedAction) {
     return applyGenericSimulatedMainPhaseAction(state as Parameters<typeof applyGenericSimulatedMainPhaseAction>[0], action as AIAction, {
       guardLabel: "MirageboundStrategy",
       selfId: "bot",
@@ -2184,7 +2184,7 @@ export default class MirageboundStrategy extends BaseStrategy {
     return "attack";
   }
 
-  selectAutomaticAscension<Card extends MirageboundCard | import("../contracts/cards.js").GameCard>({ choices = [], game, bot = this.bot, opponent }: {choices?:Array<{ascensionCard:Card;material:Card;position?:import("../contracts/cards.js").BattlePositionInput}>;bot?:AIStrategyBotPort;game?:AIState;opponent?:AIStrategyBotPort|null} = {}) {
+  selectAutomaticAscension<Card extends MirageboundCard | import("../contracts/cards.js").GameCard>({ choices = [], game, bot = this.bot, opponent }: {choices?:Array<{ascensionCard:Card;material:Card;position?:import("../contracts/cards.js").BattlePositionInput|undefined}>;bot?:AIStrategyBotPort;game?:AIState;opponent?:AIStrategyBotPort|null} = {}) {
     const sovereignChoice = choices.find(
       (choice) => choice?.ascensionCard?.name === MB.GLASS_SOVEREIGN,
     );
@@ -2207,7 +2207,7 @@ export default class MirageboundStrategy extends BaseStrategy {
     return false;
   }
 
-  chooseAutomaticAscensionPosition({ ascensionCard, game, bot = this.bot, opponent }: {ascensionCard?:MirageboundCard | import("../contracts/cards.js").GameCard;bot?:AIStrategyBotPort;opponent?:AIStrategyBotPort|null;game?:AIState;material?:MirageboundCard | import("../contracts/cards.js").GameCard} = {}) {
+  chooseAutomaticAscensionPosition({ ascensionCard, game, bot = this.bot, opponent }: {ascensionCard?:MirageboundCard | import("../contracts/cards.js").GameCard;bot?:AIStrategyBotPort;opponent?:AIStrategyBotPort|null | undefined;game?:AIState | undefined;material?:MirageboundCard | import("../contracts/cards.js").GameCard} = {}) {
     if (ascensionCard?.name !== MB.GLASS_SOVEREIGN) {
       return ascensionCard?.ascension?.position || "choice";
     }
@@ -2224,7 +2224,7 @@ export default class MirageboundStrategy extends BaseStrategy {
     return "attack";
   }
 
-  selectBestTributes(field: MirageboundCard[] = [], tributesNeeded = 0, cardToSummon: MirageboundCard | null = null) {
+  override selectBestTributes(field: MirageboundCard[] = [], tributesNeeded = 0, cardToSummon: MirageboundCard | null = null) {
     if (tributesNeeded <= 0) return [];
     return (field || [])
       .map((card, index) => ({

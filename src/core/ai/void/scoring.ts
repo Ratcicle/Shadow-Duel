@@ -3,8 +3,17 @@ import type { SimulatedCardState, SimulatedPlayerState } from "../../contracts/a
 import type { GameCard } from "../../contracts/cards.js";
 import type { buildStrategyAnalysis } from "../common/analysis.js";
 import type { FinisherPlan } from "../common/finisherPlans.js";
-type Analysis = Omit<Partial<ReturnType<typeof buildStrategyAnalysis>>, "phase"> & { phase?: string | null };
+type Analysis = Omit<Partial<ReturnType<typeof buildStrategyAnalysis>>, "phase" | "fieldSpell"> & { fieldSpell?: ReturnType<typeof buildStrategyAnalysis>["fieldSpell"] | undefined; phase?: string | null | undefined };
 type MonsterContext = { oppStrongestAtk?: number; hollowCount?: number; voidCount?: number; hollowsInGY?: number; voidsInGY?: number; phase?: string; hydraProjectedDraws?: number };
+type HollowEnablers = {
+  haunterOnField: boolean;
+  haunterInHand: boolean;
+  theVoidActive: boolean;
+  walkerInHand: boolean;
+  conjurerInHand: boolean;
+};
+type HollowPotential = { canTriggerRecruitment: boolean; swarmPotential: number };
+type HollowFlags = { isHealthy: boolean; needsRecovery: boolean };
 // ─────────────────────────────────────────────────────────────────────────────
 // src/core/ai/void/scoring.js
 // Avaliação de board e monstros específica para Void.
@@ -74,7 +83,7 @@ export function analyzeHollowEconomy(analysis: Analysis) {
   const { hand = [], field = [] } = analysis;
   const fieldSpell = analysis.fieldSpell;
 
-  const economy = analyzeResourceEconomy(analysis, {
+  const economy = analyzeResourceEconomy<Analysis, HollowEnablers, HollowPotential, HollowFlags>(analysis, {
     resourceName: "Void Hollow",
     zones: ["hand", "field", "graveyard"],
     matchResource: (card: GameCard | SimulatedCardState) => card?.id === VOID_IDS.HOLLOW,
@@ -86,40 +95,44 @@ export function analyzeHollowEconomy(analysis: Analysis) {
       conjurerInHand: hand.some((c) => c?.id === VOID_IDS.CONJURER),
     }),
     computeAccessibility: ({ countsByZone, enablers }) => {
+      const graveyardCount = countsByZone.graveyard ?? 0;
       const accessibleFromGY =
         enablers.haunterOnField || enablers.haunterInHand
-          ? countsByZone.graveyard
+          ? graveyardCount
           : enablers.theVoidActive
-            ? Math.min(1, countsByZone.graveyard)
+            ? Math.min(1, graveyardCount)
             : 0;
 
       return {
         accessibleByZone: {
-          hand: countsByZone.hand,
-          field: countsByZone.field,
+          hand: countsByZone.hand ?? 0,
+          field: countsByZone.field ?? 0,
           graveyard: accessibleFromGY,
         },
         strandedByZone: {
-          graveyard: countsByZone.graveyard - accessibleFromGY,
+          graveyard: graveyardCount - accessibleFromGY,
         },
       };
     },
     computePotential: ({ countsByZone, enablers }) => {
-      let swarmPotential = countsByZone.field;
+      const handCount = countsByZone.hand ?? 0;
+      const fieldCount = countsByZone.field ?? 0;
+      const graveyardCount = countsByZone.graveyard ?? 0;
+      let swarmPotential = fieldCount;
 
-      if (countsByZone.hand > 0 && (enablers.walkerInHand || enablers.haunterOnField)) {
-        swarmPotential += countsByZone.hand * 2;
+      if (handCount > 0 && (enablers.walkerInHand || enablers.haunterOnField)) {
+        swarmPotential += handCount * 2;
       } else {
-        swarmPotential += countsByZone.hand;
+        swarmPotential += handCount;
       }
 
       if (enablers.haunterOnField || enablers.haunterInHand) {
-        swarmPotential += countsByZone.graveyard;
+        swarmPotential += graveyardCount;
       }
 
       return {
         canTriggerRecruitment:
-          countsByZone.hand > 0 || (countsByZone.field > 0 && enablers.walkerInHand),
+          handCount > 0 || (fieldCount > 0 && enablers.walkerInHand),
         swarmPotential,
       };
     },
@@ -535,7 +548,10 @@ export function evaluateBoardVoid(gameOrState: AIState, perspectivePlayer?: Simu
   const fusionReady = readyCombos.filter((c) => c.combo?.fusion);
   if (fusionReady.length > 0) {
     const bestFusion = fusionReady[0];
-    score += calculateFusionValue(bestFusion.combo!.fusion!.target, analysis) / 5;
+    const fusion = bestFusion?.combo?.fusion;
+    if (fusion) {
+      score += calculateFusionValue(fusion.target, analysis) / 5;
+    }
   }
 
   // ═══════════════════════════════════════════════════════════════════════════

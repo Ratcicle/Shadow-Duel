@@ -65,9 +65,12 @@ test("Call of the Haunted é oferecida quando há um alvo válido", () => {
   );
 
   assert.equal(candidates.length, 1);
-  assert.equal(candidates[0].card, call);
-  assert.equal(candidates[0].effect.id, "call_of_the_haunted_activate");
-  assert.equal(candidates[0].sourceZone, "spellTrap");
+  assert.equal(required(candidates[0]).card, call);
+  assert.equal(
+    required(candidates[0]).effect.id,
+    "call_of_the_haunted_activate",
+  );
+  assert.equal(required(candidates[0]).sourceZone, "spellTrap");
 });
 
 test("[CS-07] efeito rápido de Continuous Trap face-up é descoberto", () => {
@@ -96,7 +99,7 @@ test("[CS-07] efeito rápido de Continuous Trap face-up é descoberto", () => {
     candidates.map((entry) => entry.effectId),
     [effect.id],
   );
-  assert.equal(candidates[0].sourceZone, "spellTrap");
+  assert.equal(required(candidates[0]).sourceZone, "spellTrap");
 });
 
 test("[CS-07] efeitos no Cemitério e banimento são descobertos somente quando legais", () => {
@@ -173,7 +176,7 @@ test("efeito de Quick-Play Spell no Cemitério usa a zona declarada, não regra 
     candidates.map((entry) => entry.effectId),
     [effect.id],
   );
-  assert.equal(candidates[0].sourceZone, "graveyard");
+  assert.equal(required(candidates[0]).sourceZone, "graveyard");
 });
 
 test("[CS-07] dois efeitos distintos da mesma carta podem ser oferecidos na mesma corrente", () => {
@@ -260,7 +263,7 @@ test("Trap da mão exige permissão declarativa e efeito negado continua descobe
     candidates.map((entry) => entry.card),
     [allowed],
   );
-  assert.equal(candidates[0].sourceZone, "hand");
+  assert.equal(required(candidates[0]).sourceZone, "hand");
 });
 
 test("Quick-Play Spell é descoberta da mão ou setada conforme as regras padrão", () => {
@@ -336,7 +339,10 @@ test("Natural Selection real exige custo e alvo válidos na descoberta", () => {
     createResponseContext(bot),
   );
   assert.equal(candidates.length, 1);
-  assert.equal(candidates[0].effectId, "natural_selection_activation");
+  assert.equal(
+    required(candidates[0]).effectId,
+    "natural_selection_activation",
+  );
 });
 
 test("Guardian Deity Visas real é candidata da mão com política use", () => {
@@ -360,17 +366,17 @@ test("Guardian Deity Visas real é candidata da mão com política use", () => {
 
   assert.equal(candidates.length, 1);
   assert.equal(
-    candidates[0].effectId,
+    required(candidates[0]).effectId,
     "guardian_deity_visas_hand_negate_banish",
   );
-  assert.equal(candidates[0].sourceZone, "hand");
-  assert.equal(candidates[0].effect.usagePolicy, "use");
+  assert.equal(required(candidates[0]).sourceZone, "hand");
+  assert.equal(required(candidates[0]).effect.usagePolicy, "use");
   const link = required(
     chain.addToChain(
       chain.createPreparedActivation({
         card: visas,
         controller: player,
-        effect: candidates[0].effect,
+        effect: required(candidates[0]).effect,
         activationZone: "hand",
         committed: true,
         costsPaid: true,
@@ -379,7 +385,8 @@ test("Guardian Deity Visas real é candidata da mão com política use", () => {
   );
   assert.equal(required(link.usageReservation).status, "consumed");
   assert.ok(
-    game.canUseOncePerTurn(visas, player, candidates[0].effect).ok === false,
+    game.canUseOncePerTurn(visas, player, required(candidates[0]).effect).ok ===
+      false,
   );
 });
 
@@ -446,6 +453,7 @@ test("locationVersion invalida um candidato descoberto antes do commit", () => {
     player,
     createResponseContext(bot),
   );
+  assert.ok(candidate);
   card.locationVersion += 1;
 
   assert.deepEqual(

@@ -2248,6 +2248,31 @@ O workflow deve bloquear merge/deploy quando qualquer gate falhar.
 
 # Etapa 13 — Endurecer o modo strict
 
+## Entrega da Etapa 13
+
+Branch: `agent/typescript-strict`, a partir de `5d8b0b6`, merge do PR #63
+da Etapa 12. Os 19 arquivos JavaScript restantes de produção foram
+convertidos fisicamente para TypeScript, preservando os specifiers `.js`.
+Os projetos app e Node usam `allowJs: false`, sem `checkJs`. O fixture
+JavaScript de interoperabilidade permanece intencional e é validado em runtime.
+
+As seis opções abaixo foram ativadas gradualmente. Os acessos por índice
+têm guardas ou provas locais de presença; propriedades opcionais distinguem
+ausência de `undefined` conforme os produtores reais. Os schemas declarativos
+e o replay serializado continuam fechados, e os quatro perfis de clone da
+IA permanecem separados. Dispatches críticos de actions, zonas, replay,
+fórmulas e ações adiadas verificam a exaustividade de suas uniões.
+
+O registro de dívidas permanece vazio. Não há shims `.d.ts`, supressões
+temporárias ou alterações nos dados das cartas. Retornos e aliases legados
+ainda usados pelo runtime foram preservados. Contratos novos são verificados
+contra as fachadas reais, inclusive o rollback de ativação e a seleção de
+Ascensão com uma lista não vazia.
+
+O relatório [typescript-stage13.md](migrations/typescript-stage13.md)
+registra as decisões, revisões e evidências. Esta entrega não inclui a
+campanha de paridade final da Etapa 14.
+
 ## Objetivo
 
 Remover concessões temporárias e obter uma base TypeScript realmente segura.

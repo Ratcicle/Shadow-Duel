@@ -3,12 +3,12 @@ import type { CardDeclaredValue, CardDeclaredValueDetail, CardDeclaredValueMap }
 import type { GameCard } from "../../contracts/cards.js";
 type ReadCard = GameCard | SimulatedCardShape;
 type Player = Partial<SimulatedPlayerState>;
-type DestroyedCard = Pick<SimulatedCardShape, "id" | "name" | "type" | "archetype" | "archetypes" | "level" | "atk" | "def" | "baseAtk"> & { cardKind?: string; monsterType?: string | null; owner?: string; destroyedBy?: string };
+type DestroyedCard = Pick<SimulatedCardShape, "id" | "name" | "type" | "archetype" | "archetypes" | "level" | "atk" | "def" | "baseAtk"> & { cardKind?: string | undefined; monsterType?: string | null; owner?: string; destroyedBy?: string };
 type Summary = { damage?: number; destroyedNames?: string[]; destroyedCards?: DestroyedCard[]; rewardNames?: unknown[] };
 type TemporaryEntry = { ownerId?: string; expiresOnTurn?: number; sourceArchetypes?: string[]; sourceArchetype?: string; sourceName?: string; sourceEffectId?: string; effect?: { id?: string }; declaredValues?: CardDeclaredValueMap; usesRemaining?: number };
 type State = Partial<AiStateShape> & { temporaryEventEffects?: TemporaryEntry[] };
 type Strategy = { chooseSpecialSummonPosition?(card: SimulatedCardState, context: { game: State }): string | null };
-type RewardContext = { state: State; bot: SimulatedPlayerState; opponent: SimulatedPlayerState; attacker: SimulatedCardState; destroyed: DestroyedCard; summary: Summary; strategy?: Strategy | null };
+type RewardContext = { state: State; bot: SimulatedPlayerState; opponent: SimulatedPlayerState; attacker: SimulatedCardState; destroyed: DestroyedCard; summary: Summary; strategy?: Strategy | null | undefined };
 type BattleContext = { state?: State; attacker?: SimulatedCardState; target?: SimulatedCardState | null; bot?: SimulatedPlayerState };
 type RewardInput = { state?: State; battlePlan?: { attackerCard?: SimulatedCardState }; summary?: Summary; bot?: SimulatedPlayerState; opponent?: SimulatedPlayerState; strategy?: Strategy | null };
 type ScoreContext = { attacker?: ReadCard | null; target?: ReadCard | null; lethalNow?: boolean; attackerSurvived?: boolean; targetSurvived?: boolean; opponent?: { lp?: number }; opponentLpAfter?: number; summary?: Summary };
@@ -487,6 +487,7 @@ export function applyBurningWestSimulatedBattleRewards({
   const destroyedMonsters = battleDestroyedOpponentMonsters(summary);
   if (destroyedMonsters.length === 0) return [];
   const destroyed = destroyedMonsters[0];
+  if (!destroyed) return [];
   const rewards = [];
 
   rewards.push(...applyWantedReward({ state, bot, destroyed, summary, strategy }));

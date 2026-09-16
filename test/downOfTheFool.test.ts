@@ -16,9 +16,12 @@ test("Down of the Fool preserves the requested text and Normal Summon trigger", 
   assert.equal(effect.event, "after_summon");
   assert.equal(effect.requireOpponentSummon, true);
   assert.deepEqual(effect.summonMethods, ["normal"]);
-  assert.equal(required(effect.targets)[0].targetFromContext, "summonedCard");
-  assert.equal(required(effect.targets)[0].minAtk, 1600);
-  assert.equal(required(effect.actions)[0].type, "destroy");
+  assert.equal(
+    required(required(effect.targets)[0]).targetFromContext,
+    "summonedCard",
+  );
+  assert.equal(required(required(effect.targets)[0]).minAtk, 1600);
+  assert.equal(required(required(effect.actions)[0]).type, "destroy");
 
   const locale = JSON.parse(
     readFileSync(

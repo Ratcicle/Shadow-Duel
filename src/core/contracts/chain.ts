@@ -59,25 +59,7 @@ export type ChainContextType = (typeof CHAIN_CONTEXT_TYPES)[number];
 
 export function isChainContextType(value: unknown): value is ChainContextType {
   if (typeof value !== "string") return false;
-  switch (value) {
-    case "card_activation":
-    case "attack_declaration":
-    case "battle_step_open":
-    case "summon":
-    case "summon_attempt":
-    case "phase_change":
-    case "main_phase_action":
-    case "action_without_chain":
-    case "post_chain":
-    case "battle_damage":
-    case "damage_step":
-    case "battle_destroy":
-    case "effect_activation":
-    case "effect_targeted":
-      return true;
-    default:
-      return false;
-  }
+  return (CHAIN_CONTEXT_TYPES as readonly string[]).includes(value);
 }
 
 /**
@@ -94,8 +76,7 @@ export const FAST_EFFECT_CONTEXT_TYPES = Object.freeze([
   "trigger_chain",
 ] as const);
 
-export type FastEffectContextType =
-  (typeof FAST_EFFECT_CONTEXT_TYPES)[number];
+export type FastEffectContextType = (typeof FAST_EFFECT_CONTEXT_TYPES)[number];
 
 /** Runtime values are re-exported by chain/timing and the ChainSystem facade. */
 export const FAST_EFFECT_STATES = Object.freeze({
@@ -133,8 +114,7 @@ export const SEGOC_GROUPS = Object.freeze({
   OPPONENT_OPTIONAL: "opponent_optional",
 } as const);
 
-export type SegocGroup =
-  (typeof SEGOC_GROUPS)[keyof typeof SEGOC_GROUPS];
+export type SegocGroup = (typeof SEGOC_GROUPS)[keyof typeof SEGOC_GROUPS];
 
 export const TRIGGER_ELIGIBILITY_STATUSES = Object.freeze([
   "pending",
@@ -162,8 +142,7 @@ export const CHAIN_RESOLUTION_STATUSES = Object.freeze([
   "failed",
 ] as const);
 
-export type ChainResolutionStatus =
-  (typeof CHAIN_RESOLUTION_STATUSES)[number];
+export type ChainResolutionStatus = (typeof CHAIN_RESOLUTION_STATUSES)[number];
 
 export const CHAIN_FINALIZATION_STATUSES = Object.freeze([
   "pending",

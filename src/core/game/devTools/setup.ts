@@ -81,7 +81,10 @@ type ScenarioHost = GameDevToolsHost &
     ): GameCard | null;
     setMonsterFacing(
       card: GameCard,
-      options?: { position?: BattlePosition; facedown?: boolean },
+      options?: {
+        position?: BattlePosition | undefined;
+        facedown?: boolean | undefined;
+      },
     ): void;
     cancelTargetSelection(): void;
     updateBoard(): unknown;
@@ -207,7 +210,7 @@ export function applyScenarioSetup(
         player.deck.push(card);
         break;
       default:
-        warnings.push(`Unsupported zone "${zone}".`);
+        warnings.push(`Unsupported zone "${zone satisfies never}".`);
     }
   };
 
@@ -239,13 +242,13 @@ export function applyScenarioSetup(
 
     if (Array.isArray(payload.spellTrap)) {
       payload.spellTrap.forEach((entry) =>
-        placeInZone(player, entry, "spellTrap")
+        placeInZone(player, entry, "spellTrap"),
       );
     }
 
     if (Array.isArray(payload.graveyard)) {
       payload.graveyard.forEach((entry) =>
-        placeInZone(player, entry, "graveyard")
+        placeInZone(player, entry, "graveyard"),
       );
     }
 
@@ -261,7 +264,7 @@ export function applyScenarioSetup(
     if (Array.isArray(payload.extraDeck)) {
       player.extraDeck = [];
       payload.extraDeck.forEach((entry) =>
-        placeInZone(player, entry, "extraDeck")
+        placeInZone(player, entry, "extraDeck"),
       );
     }
 
@@ -272,7 +275,7 @@ export function applyScenarioSetup(
 
     if (Array.isArray(payload.deckTop) && payload.deckTop.length > 0) {
       for (let i = payload.deckTop.length - 1; i >= 0; i--) {
-        placeInZone(player, payload.deckTop[i], "deck");
+        placeInZone(player, payload.deckTop[i]!, "deck");
       }
     }
   };

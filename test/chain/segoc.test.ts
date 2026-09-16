@@ -140,7 +140,9 @@ function occurrence(
       {
         entries,
         entriesProvided: true,
-        atomicGroupId: options.atomicGroupId,
+        ...(options.atomicGroupId === undefined
+          ? {}
+          : { atomicGroupId: options.atomicGroupId }),
       },
     ),
   );
@@ -223,7 +225,7 @@ test("[CS-01] jogador escolhe a ordem dos efeitos dentro do prÃ³prio grupo", a
   await chain.resolveTriggerOccurrences([occurrence(chain, entries)]);
 
   assert.equal(modalCalls.length, 1);
-  assert.equal(modalCalls[0].optional, true);
+  assert.equal(required(modalCalls[0]).optional, true);
   assert.deepEqual(activatedEffects(trace), [
     "second_optional_effect",
     "first_optional_effect",
@@ -251,7 +253,7 @@ test("[CS-01] Fast Effects sÃ£o oferecidos somente apÃ³s todos os triggers s
     relevant.slice(0, 3).map((entry) => entry.eventName),
     ["effect_activated", "effect_activated", "fast_effect_priority"],
   );
-  assert.equal(required(relevant[2].payload).playerId, player.id);
+  assert.equal(required(required(relevant[2]).payload).playerId, player.id);
 });
 
 test("[CS-09] trigger pendente revalida a localizaÃ§Ã£o antes de entrar na corrente", async () => {
@@ -320,9 +322,9 @@ test("modal opcional seleciona subconjunto e modal obrigatÃ³rio nÃ£o permite
       async showTriggerOrderModal({ candidates, optional }) {
         if (optional) {
           optionalCall += 1;
-          return [candidates[1].candidateId];
+          return [required(candidates[1]).candidateId];
         }
-        return [candidates[0].candidateId];
+        return [required(candidates[0]).candidateId];
       },
     },
   });
@@ -529,7 +531,7 @@ test("grupos SEGOC tÃªm contrato pÃºblico estÃ¡vel", () => {
 test("Trigger opcional unico usa confirmacao simples e ainda cria CL1", async () => {
   const confirmationCalls: Array<{
     message: string;
-    options?: ChainConfirmPromptOptions;
+    options?: ChainConfirmPromptOptions | undefined;
   }> = [];
   const harness = createChainHarness({
     ui: {
@@ -553,7 +555,7 @@ test("Trigger opcional unico usa confirmacao simples e ainda cria CL1", async ()
 
   assert.equal(confirmationCalls.length, 1);
   assert.equal(
-    required(confirmationCalls[0].options).kind,
+    required(required(confirmationCalls[0]).options).kind,
     "segoc_optional_trigger",
   );
   assert.equal(result.chainBuilt, true);

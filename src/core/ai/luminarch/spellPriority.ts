@@ -200,7 +200,7 @@ export function shouldPlaySpell(card: SimulatedCardState, analysis: LuminarchAna
           reason: "LETHAL: Holy Ascension habilita dano direto suficiente",
         };
       }
-      if (bestBuffLine.score >= 80) {
+      if (bestBuffLine.score >= 80 && bestBuffLine.attacker) {
         return {
           yes: true,
           priority: bestBuffLine.score >= 100 ? 12 : 8,

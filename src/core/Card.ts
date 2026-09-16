@@ -95,7 +95,9 @@ export function cardMatchesKind(
   requiredKinds: string | readonly string[] | null | undefined,
 ): boolean {
   if (!requiredKinds) return true;
-  const required = Array.isArray(requiredKinds) ? requiredKinds : [requiredKinds];
+  const required = Array.isArray(requiredKinds)
+    ? requiredKinds
+    : [requiredKinds];
   if (required.length === 0) return true;
   const effectiveKinds = getEffectiveCardKinds(card);
   return required.some((kind) => effectiveKinds.includes(kind));
@@ -118,7 +120,10 @@ export function getCardComparableAttribute(
   return Reflect.get(card, attribute);
 }
 
-export function applyStatusesOnSummon(card: unknown, statuses: unknown): boolean {
+export function applyStatusesOnSummon(
+  card: unknown,
+  statuses: unknown,
+): boolean {
   if (!isObjectValue(card) || !statuses) return false;
   const statusEntries = Array.isArray(statuses) ? statuses : [statuses];
   let applied = false;
@@ -136,16 +141,17 @@ export function applyStatusesOnSummon(card: unknown, statuses: unknown): boolean
       Object.prototype.hasOwnProperty.call(entry, "value")
         ? readProperty(entry, "value")
         : true;
-    if (isObjectValue(entry) && readProperty(entry, "restoreOnFieldExit") === true) {
+    if (
+      isObjectValue(entry) &&
+      readProperty(entry, "restoreOnFieldExit") === true
+    ) {
       let fieldExitStatuses = readProperty(card, "fieldExitStatuses");
       if (!isObjectValue(fieldExitStatuses)) {
         fieldExitStatuses = {};
         Reflect.set(card, "fieldExitStatuses", fieldExitStatuses);
       }
       if (!isObjectValue(fieldExitStatuses)) continue;
-      if (
-        !Object.prototype.hasOwnProperty.call(fieldExitStatuses, status)
-      ) {
+      if (!Object.prototype.hasOwnProperty.call(fieldExitStatuses, status)) {
         Reflect.set(fieldExitStatuses, status, Reflect.get(card, status));
       }
     }
@@ -191,17 +197,24 @@ export function captureTrapMonsterOriginalState(
   const types = readProperty(card, "types");
   const state: TrapMonsterOriginalState = {
     cardKind: (readProperty(card, "cardKind") || null) as CardKind | null,
-    subtype: (readProperty(card, "subtype") || null) as CardSubtype | string | null,
-    monsterType: (readProperty(card, "monsterType") || null) as MonsterType | null,
+    subtype: (readProperty(card, "subtype") || null) as
+      | CardSubtype
+      | string
+      | null,
+    monsterType: (readProperty(card, "monsterType") ||
+      null) as MonsterType | null,
     isTuner: readProperty(card, "isTuner") === true,
     synchroMaterialRoles: synchroMaterialRoles
-      ? cloneJsonValue(synchroMaterialRoles) as SynchroMaterialRoles
+      ? (cloneJsonValue(synchroMaterialRoles) as SynchroMaterialRoles)
       : null,
     type: (readProperty(card, "type") || null) as MonsterRace | string | null,
-    types: Array.isArray(types) ? [...types] as string[] : null,
-    attribute: (readProperty(card, "attribute") || null) as CardAttribute | null,
+    types: Array.isArray(types) ? ([...types] as string[]) : null,
+    attribute: (readProperty(card, "attribute") ||
+      null) as CardAttribute | null,
     level: (readProperty(card, "level") ?? 0) as number,
-    baseLevel: (readProperty(card, "baseLevel") ?? readProperty(card, "level") ?? 0) as number,
+    baseLevel: (readProperty(card, "baseLevel") ??
+      readProperty(card, "level") ??
+      0) as number,
     baseAtk: (readProperty(card, "baseAtk") ?? 0) as number,
     baseDef: (readProperty(card, "baseDef") ?? 0) as number,
     atk: (readProperty(card, "atk") ?? 0) as number,
@@ -212,7 +225,8 @@ export function captureTrapMonsterOriginalState(
 }
 
 export function restoreTrapMonsterOriginalState(card: unknown): boolean {
-  if (!isObjectValue(card) || !readProperty(card, "isTrapMonster")) return false;
+  if (!isObjectValue(card) || !readProperty(card, "isTrapMonster"))
+    return false;
   const storedOriginal = readProperty(card, "trapMonsterOriginalState");
   const original = isObjectValue(storedOriginal) ? storedOriginal : {};
   const originalSynchroRoles = readProperty(original, "synchroMaterialRoles");
@@ -230,11 +244,16 @@ export function restoreTrapMonsterOriginalState(card: unknown): boolean {
     "subtype",
     readProperty(original, "subtype") || readProperty(card, "subtype") || null,
   );
-  Reflect.set(card, "monsterType", readProperty(original, "monsterType") || null);
+  Reflect.set(
+    card,
+    "monsterType",
+    readProperty(original, "monsterType") || null,
+  );
   Reflect.set(card, "isTuner", readProperty(original, "isTuner") === true);
-  Reflect.set(card, "synchroMaterialRoles", originalSynchroRoles
-    ? cloneJsonValue(originalSynchroRoles)
-    : null,
+  Reflect.set(
+    card,
+    "synchroMaterialRoles",
+    originalSynchroRoles ? cloneJsonValue(originalSynchroRoles) : null,
   );
   Reflect.set(card, "type", readProperty(original, "type") || undefined);
   if (Array.isArray(originalTypes)) {
@@ -362,7 +381,7 @@ export default class Card implements GameCard {
   declare tempStatuses: CardStatusRegistry;
   declare fieldExitStatuses: CardStatusRegistry;
   declare fieldPresenceId: string | number | null;
-  declare fieldPresenceState: unknown;
+  declare fieldPresenceState: Record<string, number> | null;
   declare effectsNegated: boolean;
   declare effectsNegatedDuration: string | number | null;
   declare originalAtk: number | null;
@@ -385,8 +404,8 @@ export default class Card implements GameCard {
   declare isTrapMonster?: boolean;
   declare trapMonsterOriginalState?: TrapMonsterOriginalState;
   declare trapMonsterSummonProcedure?: string;
-  declare setTurn?: number | null;
-  declare turnSetOn?: number | null;
+  declare setTurn?: number | null | undefined;
+  declare turnSetOn?: number | null | undefined;
   declare ascensionMaterials?: AscensionMaterialRecord[];
   declare synchroMaterials?: SynchroMaterialRecord[];
   declare enteredFieldTurn?: number | null;
@@ -474,9 +493,7 @@ export default class Card implements GameCard {
     this.equippedTo = null;
     this.equips = [];
     this.summonRestrict = data.summonRestrict || null;
-    this.fieldLimit = data.fieldLimit
-      ? cloneJsonValue(data.fieldLimit)
-      : null;
+    this.fieldLimit = data.fieldLimit ? cloneJsonValue(data.fieldLimit) : null;
     this.fieldPresenceRestriction = data.fieldPresenceRestriction
       ? cloneJsonValue(data.fieldPresenceRestriction)
       : null;
@@ -580,15 +597,11 @@ export default class Card implements GameCard {
       : null;
     // Ascension metadata (Extra Deck monsters with monsterType "ascension")
     if (this.monsterType === "ascension") {
-      this.ascension = data.ascension
-        ? cloneJsonValue(data.ascension)
-        : null;
+      this.ascension = data.ascension ? cloneJsonValue(data.ascension) : null;
     } else {
       this.ascension = null;
     }
-    this.synchro = data.synchro
-      ? cloneJsonValue(data.synchro)
-      : null;
+    this.synchro = data.synchro ? cloneJsonValue(data.synchro) : null;
     this.image = data.image;
     this.owner = owner;
     this.originalOwner = data.originalOwner || owner;
@@ -614,7 +627,10 @@ export default class Card implements GameCard {
   }
 
   hasCounter(counterType: string): boolean {
-    return this.counters.has(counterType) && (this.counters.get(counterType) ?? 0) > 0;
+    return (
+      this.counters.has(counterType) &&
+      (this.counters.get(counterType) ?? 0) > 0
+    );
   }
 
   /**
@@ -642,12 +658,17 @@ export default class Card implements GameCard {
           if (!Array.isArray(graveyard)) break;
 
           const count = graveyard.filter((card) => {
-            if (!isObjectValue(card) || readProperty(card, "cardKind") !== "monster") return false;
+            if (
+              !isObjectValue(card) ||
+              readProperty(card, "cardKind") !== "monster"
+            )
+              return false;
             if (formula.archetype) {
               const archetypes = readProperty(card, "archetypes");
               return (
                 readProperty(card, "archetype") === formula.archetype ||
-                (Array.isArray(archetypes) && archetypes.includes(formula.archetype))
+                (Array.isArray(archetypes) &&
+                  archetypes.includes(formula.archetype))
               );
             }
             return true;
@@ -663,13 +684,18 @@ export default class Card implements GameCard {
           if (!Array.isArray(field)) break;
 
           const count = field.filter((card) => {
-            if (!isObjectValue(card) || readProperty(card, "cardKind") !== "monster") return false;
+            if (
+              !isObjectValue(card) ||
+              readProperty(card, "cardKind") !== "monster"
+            )
+              return false;
             if (readProperty(card, "id") === this.id) return false; // Excluir a si mesmo
             if (formula.archetype) {
               const archetypes = readProperty(card, "archetypes");
               return (
                 readProperty(card, "archetype") === formula.archetype ||
-                (Array.isArray(archetypes) && archetypes.includes(formula.archetype))
+                (Array.isArray(archetypes) &&
+                  archetypes.includes(formula.archetype))
               );
             }
             return true;
@@ -687,7 +713,7 @@ export default class Card implements GameCard {
 
         default:
           console.warn(
-            `[Card.calculateDynamicStat] Unknown formula type: ${formula.type}`,
+            `[Card.calculateDynamicStat] Unknown formula type: ${formula.type satisfies never}`,
           );
       }
 

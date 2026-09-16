@@ -9,10 +9,7 @@ import type {
 } from "../../contracts/actionRuntime.js";
 import type { CardAction } from "../../contracts/actions.js";
 import type { BattlePosition, CardKind } from "../../contracts/cards.js";
-import type {
-  EventCard,
-  EventPlayer,
-} from "../../contracts/events.js";
+import type { EventCard, EventPlayer } from "../../contracts/events.js";
 import type {
   CardFilter,
   DamageStepTiming,
@@ -34,11 +31,11 @@ import type { ZoneInput } from "../../contracts/zones.js";
 /** Runtime projection used only by trigger collection and resolution. */
 export type TriggerRuntimeCard = Omit<EventCard, "effects"> & {
   name?: string | null;
-  image?: string | null;
+  image?: string | null | undefined;
   uid?: number | string | null;
   effects?: readonly TriggerEffect[];
   declaredValues?: { [property: string]: unknown };
-  fieldPresenceId?: string;
+  fieldPresenceId?: string | number | null;
   fieldPresenceState?: { [counter: string]: number } | null;
   state?: {
     specialSummonTypeCount?: { [typeName: string]: number };
@@ -52,7 +49,7 @@ export interface TriggerStrategyPort {
     effect: TriggerEffectLike;
     player: TriggerRuntimePlayer;
     game: TriggerGamePort;
-    activationZone?: TriggerZone;
+    activationZone?: TriggerZone | undefined;
   }): TriggerActivationContext | null;
 }
 
@@ -105,7 +102,7 @@ export interface TriggerCardFilter extends CardFilter {
  * intentionally confined to the migration boundary.
  */
 export interface TriggerEffectLike {
-  readonly id?: string;
+  readonly id?: string | undefined;
   readonly timing?: EffectTiming;
   readonly event?: DuelEventName | string;
   readonly actions?: readonly CardAction[];
@@ -232,13 +229,13 @@ export type TriggerTargetResolution =
       readonly selectionContract?: RawSelectionContract & {
         readonly requirements: RawSelectionRequirement[];
       };
-      readonly reason?: string;
+      readonly reason?: string | undefined;
       readonly targets?: ResolvedTargetMap;
     };
 
 export interface TriggerActionContext {
   targetPreferences?: object;
-  costPreferences?: object;
+  costPreferences?: object | undefined;
   specialSummonPositions?: {
     byName?: object;
     byTargetRef?: object;
@@ -247,7 +244,7 @@ export interface TriggerActionContext {
 
 export interface TriggerActivationContext {
   fromHand?: boolean;
-  activationZone?: TriggerZone;
+  activationZone?: TriggerZone | undefined;
   sourceZone?: TriggerZone;
   sourceWasFacedown?: boolean;
   sourceAtTrigger?: object | null;
@@ -270,10 +267,10 @@ export interface TriggerActivationContext {
 export interface TriggerContext {
   source?: TriggerRuntimeCard | null;
   player?: TriggerRuntimePlayer | null;
-  opponent?: TriggerRuntimePlayer | null;
-  effect?: TriggerEffectLike | null;
+  opponent?: (TriggerRuntimePlayer | null) | undefined;
+  effect?: (TriggerEffectLike | null) | undefined;
   effectId?: string | null;
-  activationZone?: TriggerZone;
+  activationZone?: TriggerZone | undefined;
   sourceZone?: TriggerZone;
   activationContext?: TriggerActivationContext | null;
   actionContext?: object | null;
@@ -285,7 +282,7 @@ export interface TriggerContext {
   summonedCard?: TriggerRuntimeCard | null;
   summonMethod?: SummonMethod | null;
   summonFromZone?: string | null;
-  currentPhase?: string | null;
+  currentPhase?: (string | null) | undefined;
   attacker?: TriggerRuntimeCard | null;
   attackerOwner?: TriggerRuntimePlayer | null;
   defender?: TriggerRuntimeCard | null;
@@ -305,13 +302,13 @@ export interface TriggerContext {
   attackerDestroyed?: boolean;
   damagedPlayer?: TriggerRuntimePlayer | null;
   fromZone?: string | null;
-  toZone?: string | null;
+  toZone?: (string | null) | undefined;
   cause?: string | null;
 }
 
 export interface TriggerUsageCheck {
   readonly ok: boolean;
-  readonly reason?: string;
+  readonly reason?: string | undefined;
   readonly code?: string;
   readonly reservation?: object;
   readonly lockKey?: string;
@@ -326,7 +323,7 @@ export type TriggerResolutionResult =
       readonly needsSelection: boolean;
       readonly activationSkipped?: boolean;
       readonly prepared?: boolean;
-      readonly reason?: string;
+      readonly reason?: string | undefined;
       readonly selectionContract?: RawSelectionContract;
       readonly effect?: TriggerEffectLike;
       readonly targets?: ResolvedTargetMap;
@@ -339,7 +336,7 @@ export interface TriggerEntryConfig {
   readonly card: TriggerRuntimeCard;
   readonly effect: TriggerEffectLike;
   readonly owner: TriggerRuntimePlayer;
-  readonly activationZone?: TriggerZone;
+  readonly activationZone?: TriggerZone | undefined;
   readonly activationContext: TriggerActivationContext;
   readonly selectionKind: string;
   readonly selectionMessage: string;
@@ -383,7 +380,7 @@ export interface BuildTriggerEntryOptions {
   readonly owner?: TriggerRuntimePlayer | null;
   readonly effect?: TriggerEffectLike | null;
   readonly activationContext?: TriggerActivationContext;
-  readonly activationZone?: TriggerZone;
+  readonly activationZone?: TriggerZone | undefined;
   readonly selectionKind?: string;
   readonly selectionMessage?: string;
   readonly summary?: string;
@@ -447,7 +444,10 @@ export interface TriggerGamePort {
   ): TriggerUsageCheck;
   reserveEffectUsage?(options: {
     card: TriggerRuntimeCard | null | undefined;
-    player: TriggerRuntimePlayer;
+    player: Pick<
+      TriggerRuntimePlayer,
+      "id" | "name" | "oncePerDuelUsageByName"
+    >;
     effect: TriggerEffectLike;
   }): TriggerUsageReservation;
   settleEffectUsage?(
@@ -559,7 +559,9 @@ export interface TriggerCollectorHost {
   collectCounterRemovedTriggers(payload: object): Promise<TriggerPackage>;
   collectAttackDeclaredTriggers(payload: object): Promise<TriggerPackage>;
   collectBattleDamageTriggers(payload: object): Promise<TriggerPackage>;
-  collectBattleDamageInflictedTriggers(payload: object): Promise<TriggerPackage>;
+  collectBattleDamageInflictedTriggers(
+    payload: object,
+  ): Promise<TriggerPackage>;
   collectCardFlippedTriggers(payload: object): Promise<TriggerPackage>;
   collectDamageStepTriggers(payload: object): Promise<TriggerPackage>;
   collectLpChangeTriggers(payload: object): Promise<TriggerPackage>;

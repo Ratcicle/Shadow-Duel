@@ -273,7 +273,7 @@ test("falha de Trigger no fim do Damage Step recupera o Fast Effect Timing", asy
   );
   // Deliberately corrupt the cloned definition to exercise failed-trigger recovery.
   Reflect.set(
-    required(recoverEffect.actions)[0],
+    required(required(recoverEffect.actions)[0]),
     "targetRef",
     "missing_target_ref",
   );

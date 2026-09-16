@@ -85,9 +85,9 @@ export function cardMatchesEventFilters(
   filters: TriggerCardFilter | null | undefined,
   context: {
     readonly sourceOwner?: TriggerRuntimePlayer | null;
-    readonly eventOwner?: TriggerRuntimePlayer | null;
+    readonly eventOwner?: TriggerRuntimePlayer | null | undefined;
     readonly fromZone?: string | null;
-    readonly toZone?: string | null;
+    readonly toZone?: string | null | undefined;
     readonly sourceCard?: TriggerRuntimeCard | null;
     readonly contextLabel?: string | null;
   } = {},
@@ -111,7 +111,10 @@ export function cardMatchesEventFilters(
     !(
       isSameCardReference(context.sourceCard?.equippedTo, eventCard) ||
       isSameCardReference(context.sourceCard?.equipTarget, eventCard) ||
-      isSameCardReference(context.sourceCard?.lastEquippedCardLeftField, eventCard)
+      isSameCardReference(
+        context.sourceCard?.lastEquippedCardLeftField,
+        eventCard,
+      )
     )
   ) {
     return false;

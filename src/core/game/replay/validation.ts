@@ -146,7 +146,11 @@ function assertSerializable(
   path: string,
   stack = new WeakSet<object>(),
 ): void {
-  if (value === null || typeof value === "string" || typeof value === "boolean") {
+  if (
+    value === null ||
+    typeof value === "string" ||
+    typeof value === "boolean"
+  ) {
     return;
   }
   if (typeof value === "number") {
@@ -161,7 +165,7 @@ function assertSerializable(
       invalid(path, "a plain JSON object");
     }
     const symbolKeys = Object.getOwnPropertySymbols(value).filter((key) =>
-      Object.prototype.propertyIsEnumerable.call(value, key)
+      Object.prototype.propertyIsEnumerable.call(value, key),
     );
     if (symbolKeys.length > 0) invalid(path, "an object without symbol keys");
   }
@@ -197,10 +201,7 @@ function validateDeck(value: unknown, path: string): void {
   for (const [index, entryValue] of requireArray(value, path).entries()) {
     const entry = requireObject(entryValue, `${path}[${index}]`);
     requireInteger(read(entry, "id"), `${path}[${index}].id`, 1);
-    requireIdentity(
-      read(entry, "duelCardId"),
-      `${path}[${index}].duelCardId`,
-    );
+    requireIdentity(read(entry, "duelCardId"), `${path}[${index}].duelCardId`);
   }
 }
 
@@ -275,8 +276,14 @@ function validateCommandPayload(
       if (hasOwn(payload, "facedown")) {
         requireBoolean(read(payload, "facedown"), `${path}.facedown`);
       }
-      if (hasOwn(payload, "tributeIndices") && read(payload, "tributeIndices") !== null) {
-        validateNumberArray(read(payload, "tributeIndices"), `${path}.tributeIndices`);
+      if (
+        hasOwn(payload, "tributeIndices") &&
+        read(payload, "tributeIndices") !== null
+      ) {
+        validateNumberArray(
+          read(payload, "tributeIndices"),
+          `${path}.tributeIndices`,
+        );
       }
       return;
     case "set_spell_trap":
@@ -298,7 +305,11 @@ function validateCommandPayload(
         requirePosition(read(payload, "position"), `${path}.position`, true);
       }
       if (hasOwn(payload, "materialIds")) {
-        validateNumberArray(read(payload, "materialIds"), `${path}.materialIds`, 1);
+        validateNumberArray(
+          read(payload, "materialIds"),
+          `${path}.materialIds`,
+          1,
+        );
       }
       return;
     }
@@ -327,6 +338,10 @@ function validateCommandPayload(
       if (hasOwn(payload, "targetId")) {
         requireIdentity(read(payload, "targetId"), `${path}.targetId`, true);
       }
+      return;
+    default:
+      // All canonical commands are covered; keep the defensive runtime no-op.
+      (type) satisfies never;
   }
 }
 
@@ -339,9 +354,16 @@ function validateSequencedEntries(
   for (const [index, entryValue] of entries.entries()) {
     const entryPath = `${path}[${index}]`;
     const entry = requireObject(entryValue, entryPath);
-    const sequence = requireInteger(read(entry, "sequence"), `${entryPath}.sequence`, 1);
+    const sequence = requireInteger(
+      read(entry, "sequence"),
+      `${entryPath}.sequence`,
+      1,
+    );
     if (sequence <= previousSequence) {
-      invalid(`${entryPath}.sequence`, "a strictly increasing positive sequence");
+      invalid(
+        `${entryPath}.sequence`,
+        "a strictly increasing positive sequence",
+      );
     }
     previousSequence = sequence;
     validate(entry, entryPath);
@@ -349,21 +371,25 @@ function validateSequencedEntries(
 }
 
 function validateCommands(value: unknown): void {
-  validateSequencedEntries(requireArray(value, "commands"), "commands", (entry, path) => {
-    const type = requireString(read(entry, "type"), `${path}.type`);
-    if (!COMMAND_TYPES.has(type)) {
-      throw new Error(`Unsupported canonical replay command "${type}".`);
-    }
-    requirePlayerId(read(entry, "actorId"), `${path}.actorId`);
-    validateCommandPayload(
-      type as CanonicalReplayCommandType,
-      read(entry, "payload"),
-      `${path}.payload`,
-    );
-    if (hasOwn(entry, "stateHash") && read(entry, "stateHash") != null) {
-      requireHash(read(entry, "stateHash"), `${path}.stateHash`);
-    }
-  });
+  validateSequencedEntries(
+    requireArray(value, "commands"),
+    "commands",
+    (entry, path) => {
+      const type = requireString(read(entry, "type"), `${path}.type`);
+      if (!COMMAND_TYPES.has(type)) {
+        throw new Error(`Unsupported canonical replay command "${type}".`);
+      }
+      requirePlayerId(read(entry, "actorId"), `${path}.actorId`);
+      validateCommandPayload(
+        type as CanonicalReplayCommandType,
+        read(entry, "payload"),
+        `${path}.payload`,
+      );
+      if (hasOwn(entry, "stateHash") && read(entry, "stateHash") != null) {
+        requireHash(read(entry, "stateHash"), `${path}.stateHash`);
+      }
+    },
+  );
 }
 
 function validateCandidateIdentity(value: unknown, path: string): void {
@@ -379,7 +405,8 @@ function validateCandidateDecisionValue(value: object, path: string): void {
   if (read(value, "pass") === true) return;
   if (read(value, "pass") !== false) invalid(`${path}.pass`, "a boolean");
   const candidateKey = read(value, "candidateKey");
-  if (candidateKey !== null) validateCandidateIdentity(candidateKey, `${path}.candidateKey`);
+  if (candidateKey !== null)
+    validateCandidateIdentity(candidateKey, `${path}.candidateKey`);
   requireNullableString(read(value, "effectId"), `${path}.effectId`);
 }
 
@@ -410,7 +437,10 @@ function validateSelectionIdentity(value: unknown, path: string): void {
 
 function validateSelectionDecisionValue(value: object, path: string): void {
   if (hasOwn(value, "selections")) {
-    const selections = requireObject(read(value, "selections"), `${path}.selections`);
+    const selections = requireObject(
+      read(value, "selections"),
+      `${path}.selections`,
+    );
     for (const requirementId of Object.keys(selections)) {
       const identities = requireArray(
         read(selections, requirementId),
@@ -420,7 +450,7 @@ function validateSelectionDecisionValue(value: object, path: string): void {
         validateSelectionIdentity(
           identity,
           `${path}.selections.${requirementId}[${index}]`,
-        )
+        ),
       );
     }
     return;
@@ -431,21 +461,26 @@ function validateSelectionDecisionValue(value: object, path: string): void {
       `${path}.orderedCandidateKeys`,
     );
     keys.forEach((key, index) =>
-      validateCandidateIdentity(key, `${path}.orderedCandidateKeys[${index}]`)
+      validateCandidateIdentity(key, `${path}.orderedCandidateKeys[${index}]`),
     );
     return;
   }
   validateCandidateDecisionValue(value, path);
 }
 
-function validateDecisionContext(kind: string, value: unknown, path: string): void {
+function validateDecisionContext(
+  kind: string,
+  value: unknown,
+  path: string,
+): void {
   if (value === null) return;
   const context = requireObject(value, path);
   if (kind === "chain_response") {
     requireNullableString(read(context, "type"), `${path}.type`);
     for (const key of ["chainId", "respondingToLinkId"]) {
       const identity = read(context, key);
-      if (identity !== null) validateCandidateIdentity(identity, `${path}.${key}`);
+      if (identity !== null)
+        validateCandidateIdentity(identity, `${path}.${key}`);
     }
     return;
   }
@@ -455,7 +490,11 @@ function validateDecisionContext(kind: string, value: unknown, path: string): vo
   }
 }
 
-function validateDecisionValue(kind: string, value: unknown, path: string): void {
+function validateDecisionValue(
+  kind: string,
+  value: unknown,
+  path: string,
+): void {
   const decisionValue = requireObject(value, path);
   if (kind === "chain_response") {
     validateCandidateDecisionValue(decisionValue, path);
@@ -468,7 +507,7 @@ function validateDecisionValue(kind: string, value: unknown, path: string): void
       `${path}.orderedCandidateKeys`,
     );
     keys.forEach((key, index) =>
-      validateCandidateIdentity(key, `${path}.orderedCandidateKeys[${index}]`)
+      validateCandidateIdentity(key, `${path}.orderedCandidateKeys[${index}]`),
     );
     return;
   }
@@ -476,17 +515,25 @@ function validateDecisionValue(kind: string, value: unknown, path: string): void
 }
 
 function validateDecisions(value: unknown): void {
-  validateSequencedEntries(requireArray(value, "decisions"), "decisions", (entry, path) => {
-    requireInteger(read(entry, "decisionId"), `${path}.decisionId`, 1);
-    const kind = requireString(read(entry, "kind"), `${path}.kind`);
-    if (!DECISION_KINDS.has(kind)) invalid(`${path}.kind`, "a supported decision kind");
-    requireNullableString(read(entry, "actorId"), `${path}.actorId`);
-    requireArray(read(entry, "candidateKeys"), `${path}.candidateKeys`).forEach(
-      (key, index) => validateCandidateIdentity(key, `${path}.candidateKeys[${index}]`),
-    );
-    validateDecisionValue(kind, read(entry, "value"), `${path}.value`);
-    validateDecisionContext(kind, read(entry, "context"), `${path}.context`);
-  });
+  validateSequencedEntries(
+    requireArray(value, "decisions"),
+    "decisions",
+    (entry, path) => {
+      requireInteger(read(entry, "decisionId"), `${path}.decisionId`, 1);
+      const kind = requireString(read(entry, "kind"), `${path}.kind`);
+      if (!DECISION_KINDS.has(kind))
+        invalid(`${path}.kind`, "a supported decision kind");
+      requireNullableString(read(entry, "actorId"), `${path}.actorId`);
+      requireArray(
+        read(entry, "candidateKeys"),
+        `${path}.candidateKeys`,
+      ).forEach((key, index) =>
+        validateCandidateIdentity(key, `${path}.candidateKeys[${index}]`),
+      );
+      validateDecisionValue(kind, read(entry, "value"), `${path}.value`);
+      validateDecisionContext(kind, read(entry, "context"), `${path}.context`);
+    },
+  );
 }
 
 function validateCardSnapshot(value: unknown, path: string): void {
@@ -516,9 +563,13 @@ function validateCardSnapshot(value: unknown, path: string): void {
   ]) {
     requireFiniteNumber(read(card, key), `${path}.${key}`);
   }
-  requireBoolean(read(card, "properSummonEstablished"), `${path}.properSummonEstablished`);
+  requireBoolean(
+    read(card, "properSummonEstablished"),
+    `${path}.properSummonEstablished`,
+  );
   requireBoolean(read(card, "facedown"), `${path}.facedown`);
-  if (!hasOwn(card, "counters")) invalid(`${path}.counters`, "a serialized value");
+  if (!hasOwn(card, "counters"))
+    invalid(`${path}.counters`, "a serialized value");
   requireIdentity(read(card, "equipTargetId"), `${path}.equipTargetId`, true);
   const statuses = requireObject(read(card, "statuses"), `${path}.statuses`);
   if (!hasOwn(statuses, "effectsNegatedDuration")) {
@@ -556,8 +607,9 @@ function validatePlayerSnapshot(value: unknown, path: string): void {
     "graveyard",
     "banished",
   ]) {
-    requireArray(read(zones, zone), `${path}.zones.${zone}`).forEach((card, index) =>
-      validateCardSnapshot(card, `${path}.zones.${zone}[${index}]`)
+    requireArray(read(zones, zone), `${path}.zones.${zone}`).forEach(
+      (card, index) =>
+        validateCardSnapshot(card, `${path}.zones.${zone}[${index}]`),
     );
   }
   validateCardSnapshot(read(zones, "fieldSpell"), `${path}.zones.fieldSpell`);
@@ -568,7 +620,8 @@ function validateProcedureSnapshot(value: unknown, path: string): void {
   const procedure = requireObject(value, path);
   requireBoolean(read(procedure, "active"), `${path}.active`);
   for (const key of ["last", "transaction"]) {
-    if (!hasOwn(procedure, key)) invalid(`${path}.${key}`, "a serialized value");
+    if (!hasOwn(procedure, key))
+      invalid(`${path}.${key}`, "a serialized value");
   }
 }
 
@@ -583,7 +636,8 @@ function validateStateSnapshot(value: unknown, path: string): void {
   validatePlayerSnapshot(read(players, "bot"), `${path}.players.bot`);
   const chain = requireObject(read(snapshot, "chain"), `${path}.chain`);
   for (const key of ["state", "links", "timing", "triggers"]) {
-    if (!hasOwn(chain, key)) invalid(`${path}.chain.${key}`, "a serialized value");
+    if (!hasOwn(chain, key))
+      invalid(`${path}.chain.${key}`, "a serialized value");
   }
   for (const key of [
     "usage",
@@ -598,13 +652,19 @@ function validateStateSnapshot(value: unknown, path: string): void {
 }
 
 function validateEvents(value: unknown): void {
-  validateSequencedEntries(requireArray(value, "events"), "events", (entry, path) => {
-    const eventName = read(entry, "event");
-    if (!isReplayEvent(eventName)) invalid(`${path}.event`, "a supported replay event");
-    requireInteger(read(entry, "turn"), `${path}.turn`, 0);
-    requirePhase(read(entry, "phase"), `${path}.phase`, true);
-    if (!hasOwn(entry, "payload")) invalid(`${path}.payload`, "a serialized value");
-  });
+  validateSequencedEntries(
+    requireArray(value, "events"),
+    "events",
+    (entry, path) => {
+      const eventName = read(entry, "event");
+      if (!isReplayEvent(eventName))
+        invalid(`${path}.event`, "a supported replay event");
+      requireInteger(read(entry, "turn"), `${path}.turn`, 0);
+      requirePhase(read(entry, "phase"), `${path}.phase`, true);
+      if (!hasOwn(entry, "payload"))
+        invalid(`${path}.payload`, "a serialized value");
+    },
+  );
 }
 
 function validateResult(value: unknown): void {
@@ -616,7 +676,10 @@ function validateResult(value: unknown): void {
   if (hasOwn(result, "reason")) {
     requireNullableString(read(result, "reason"), "result.reason");
   }
-  if (hasOwn(result, "finalStateHash") && read(result, "finalStateHash") !== null) {
+  if (
+    hasOwn(result, "finalStateHash") &&
+    read(result, "finalStateHash") !== null
+  ) {
     requireHash(read(result, "finalStateHash"), "result.finalStateHash");
   }
   if (hasOwn(result, "finalState")) {
@@ -647,13 +710,17 @@ export function validateCanonicalReplay(input: unknown): CanonicalReplay {
     throw new Error(`Unsupported canonical replay schema ${schemaVersion}.`);
   }
   if (read(replay, "cardDatabaseSignature") !== getCardDatabaseSignature()) {
-    throw new Error("Replay card database signature does not match this build.");
+    throw new Error(
+      "Replay card database signature does not match this build.",
+    );
   }
   const setup = read(replay, "setup");
   const commands = read(replay, "commands");
   const decisions = read(replay, "decisions");
   if (!setup || !Array.isArray(commands) || !Array.isArray(decisions)) {
-    throw new Error("Canonical replay is missing setup, commands, or decisions.");
+    throw new Error(
+      "Canonical replay is missing setup, commands, or decisions.",
+    );
   }
 
   if (

@@ -8,10 +8,7 @@
  */
 
 import { isAI } from "../../Player.js";
-import {
-  SUMMON_MODES,
-  SUMMON_ORIGINS,
-} from "../summon/transaction.js";
+import { SUMMON_MODES, SUMMON_ORIGINS } from "../summon/transaction.js";
 import { checkSpecialSummonEligibility } from "../summon/eligibility.js";
 import type {
   BattlePosition,
@@ -235,7 +232,9 @@ interface ExtraDeckHost {
     card: GameCard,
   ): Promise<SummonExecutionResult>;
   createPreparedSummon(input: PreparedSummonInput): PreparedSummon;
-  executeSummonTransaction(prepared: PreparedSummon): Promise<SummonExecutionResult>;
+  executeSummonTransaction(
+    prepared: PreparedSummon,
+  ): Promise<SummonExecutionResult>;
   moveCard(
     card: GameCard,
     player: GamePlayer,
@@ -286,7 +285,8 @@ function cardMatchesRequirement(
   materialZone: CanonicalZone | null = null,
 ): boolean {
   if (!card) return false;
-  if (requirement.cardKind && card.cardKind !== requirement.cardKind) return false;
+  if (requirement.cardKind && card.cardKind !== requirement.cardKind)
+    return false;
   if (requirement.archetype && !cardHasArchetype(card, requirement.archetype)) {
     return false;
   }
@@ -296,10 +296,16 @@ function cardMatchesRequirement(
     const expected = String(requirement.attribute).toLowerCase();
     if (String(card.attribute || "").toLowerCase() !== expected) return false;
   }
-  if (requirement.minLevel !== undefined && (card.level || 0) < requirement.minLevel) {
+  if (
+    requirement.minLevel !== undefined &&
+    (card.level || 0) < requirement.minLevel
+  ) {
     return false;
   }
-  if (requirement.maxLevel !== undefined && (card.level || 0) > requirement.maxLevel) {
+  if (
+    requirement.maxLevel !== undefined &&
+    (card.level || 0) > requirement.maxLevel
+  ) {
     return false;
   }
   const allowedZones = requirement.allowedZones
@@ -318,8 +324,8 @@ function getPlayerZoneCards(
   if (!player) return [];
   const value = Reflect.get(player, zone);
   return Array.isArray(value)
-    ? value.filter(
-        (card): card is GameCard => Boolean(card && typeof card === "object"),
+    ? value.filter((card): card is GameCard =>
+        Boolean(card && typeof card === "object"),
       )
     : [];
 }
@@ -370,7 +376,7 @@ function findMaterialCombos(
 
     const requirement = expanded[reqIndex];
     for (let index = 0; index < remaining.length; index += 1) {
-      const entry = remaining[index];
+      const entry = remaining[index]!; // index is bounded by the dense candidate list.
       if (!cardMatchesRequirement(entry.card, requirement, entry.zone)) {
         continue;
       }
@@ -393,10 +399,9 @@ function getContactFusionMaterialEntries(
   const requirements = card?.fusionMaterials || [];
   const allowedZones = new Set<CanonicalZone>();
   for (const requirement of requirements) {
-    for (const zone of asArray<CanonicalZone>(
-      requirement?.allowedZones,
-      ["field"],
-    )) {
+    for (const zone of asArray<CanonicalZone>(requirement?.allowedZones, [
+      "field",
+    ])) {
       allowedZones.add(zone);
     }
   }
@@ -429,7 +434,8 @@ function materialSelectionMatchesCombo(
 ): boolean {
   if (!Array.isArray(materials) || !Array.isArray(combos)) return false;
   return combos.some((combo) => {
-    if (!Array.isArray(combo) || combo.length !== materials.length) return false;
+    if (!Array.isArray(combo) || combo.length !== materials.length)
+      return false;
     const remaining = [...combo];
     for (const material of materials) {
       const index = remaining.indexOf(material);
@@ -459,10 +465,10 @@ function isAscensionExtraDeckCard(
 ): card is GameCard & { monsterType: "ascension" } {
   return Boolean(
     card &&
-    card.cardKind === "monster" &&
-    card.monsterType === "ascension" &&
-    card.ascension &&
-    typeof card.ascension === "object"
+      card.cardKind === "monster" &&
+      card.monsterType === "ascension" &&
+      card.ascension &&
+      typeof card.ascension === "object",
   );
 }
 
@@ -470,9 +476,7 @@ function isSynchroExtraDeckCard(
   card: GameCard | null | undefined,
 ): card is GameCard & { monsterType: "synchro" } {
   return Boolean(
-    card &&
-    card.cardKind === "monster" &&
-    card.monsterType === "synchro"
+    card && card.cardKind === "monster" && card.monsterType === "synchro",
   );
 }
 
@@ -591,7 +595,10 @@ export function canSummonExtraDeckCardByProcedure(
     fromZone: "extraDeck",
   });
   if (!eligibility.ok) {
-    return { ok: false, reason: eligibility.reason || "Summon procedure is not allowed." };
+    return {
+      ok: false,
+      reason: eligibility.reason || "Summon procedure is not allowed.",
+    };
   }
   let requiredCount = 0;
   let candidates: GameCard[] = [];
@@ -608,8 +615,8 @@ export function canSummonExtraDeckCardByProcedure(
     candidates = uniqueCards(materialCombos.flat());
     fieldCheckExclusions = materialCombos[0] || [];
   } else {
-    const materialReq: ExtraDeckProcedureMaterial =
-      procedure.materials?.[0] || { count: 0 };
+    const materialReq: ExtraDeckProcedureMaterial = procedure
+      .materials?.[0] || { count: 0 };
     requiredCount = Number(materialReq.count || 0);
     candidates = getProcedureMaterials(player, procedure);
     materialEntries = candidates.map((material) => ({
@@ -748,11 +755,13 @@ export function canSummonExtraDeckCard(
   }
 
   if (isSynchroExtraDeckCard(card)) {
-    return this.canSummonSynchroCard?.(player, card, options) || {
-      ok: false,
-      reason: "No Synchro summon procedure.",
-      type: "synchro",
-    };
+    return (
+      this.canSummonSynchroCard?.(player, card, options) || {
+        ok: false,
+        reason: "No Synchro summon procedure.",
+        type: "synchro",
+      }
+    );
   }
 
   return { ok: false, reason: null, type: "none" };
@@ -767,7 +776,8 @@ function buildMaterialSelectionContract(
 ): MaterialSelectionContract {
   const defaultZone = getDefaultMaterialSourceZone(procedure);
   const getMaterialZone = (material: GameCard): CanonicalZone =>
-    materialEntries.find((entry) => entry.card === material)?.zone || defaultZone;
+    materialEntries.find((entry) => entry.card === material)?.zone ||
+    defaultZone;
   return {
     requirements: [
       {
@@ -834,9 +844,10 @@ export async function performExtraDeckSummonProcedure(
       });
       const keys = auto?.selections?.extra_deck_materials || [];
       materials = keys
-        .map((key) =>
-          contract.requirements[0].candidates.find((cand) => cand.key === key)
-            ?.cardRef,
+        .map(
+          (key) =>
+            contract.requirements[0].candidates.find((cand) => cand.key === key)
+              ?.cardRef,
         )
         .filter((material): material is GameCard => Boolean(material));
       if (
@@ -855,9 +866,11 @@ export async function performExtraDeckSummonProcedure(
         execute: (selections) => {
           const keys = selections?.extra_deck_materials || [];
           const selected = keys
-            .map((key) =>
-              contract.requirements[0].candidates.find((cand) => cand.key === key)
-                ?.cardRef,
+            .map(
+              (key) =>
+                contract.requirements[0].candidates.find(
+                  (cand) => cand.key === key,
+                )?.cardRef,
             )
             .filter((material): material is GameCard => Boolean(material));
           void this.performExtraDeckSummonProcedure(card, player, {
@@ -866,7 +879,11 @@ export async function performExtraDeckSummonProcedure(
           return { success: true, needsSelection: false };
         },
       });
-      return { success: false, needsSelection: true, selectionContract: contract };
+      return {
+        success: false,
+        needsSelection: true,
+        selectionContract: contract,
+      };
     }
   }
 
@@ -1020,7 +1037,8 @@ export function openExtraDeckModal(
     }
   }
   this.ui.renderExtraDeckModal(player.extraDeck, {
-    isSummonable: (card) => canUseProcedures && availability.get(card)?.ok === true,
+    isSummonable: (card) =>
+      canUseProcedures && availability.get(card)?.ok === true,
     getDisabledReason: (card) => availability.get(card)?.reason || null,
     onCardClick: async (card) => {
       if (!canUseProcedures) return;

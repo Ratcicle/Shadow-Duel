@@ -301,25 +301,25 @@ function threatScore(card: DragonCard) {
   return score;
 }
 
-function rankCardsByThreat(cards: DragonCard[] = []) {
+function rankCardsByThreat(cards: readonly DragonCard[] = []) {
   return (cards || [])
     .filter((card) => card && card.cardKind === "monster")
     .slice()
     .sort((a, b) => threatScore(b) - threatScore(a));
 }
 
-function rankOwnDragonsByValue(cards: DragonCard[] = []) {
+function rankOwnDragonsByValue(cards: readonly DragonCard[] = []) {
   return (cards || [])
     .filter(isFaceupDragon)
     .slice()
     .sort((a, b) => cardStrategicValue(b) - cardStrategicValue(a));
 }
 
-function countCards(cards: DragonCard[] = [], predicate: (card: DragonCard) => boolean = () => true) {
+function countCards(cards: readonly DragonCard[] = [], predicate: (card: DragonCard) => boolean = () => true) {
   return (cards || []).filter((card) => card && predicate(card)).length;
 }
 
-function hasNamedCard(cards: DragonCard[] = [], name: string) {
+function hasNamedCard(cards: readonly DragonCard[] = [], name: string) {
   return (cards || []).some((card) => card?.name === name);
 }
 
@@ -482,7 +482,7 @@ export default class DragonStrategy extends BaseStrategy {
     this.thoughtProcess = [];
   }
 
-  simulateMainPhaseAction(state: StrategySimulation, action: AIPlannedAction) {
+  override simulateMainPhaseAction(state: StrategySimulation, action: AIPlannedAction) {
     return (simulateDragonAction as (state: StrategySimulation, action: AIPlannedAction) => StrategySimulation)(state, action);
   }
 
@@ -546,7 +546,7 @@ export default class DragonStrategy extends BaseStrategy {
     });
   }
 
-  getPlanningProfile(gameInput: AIState, contextInput: AIPlanningContext = {}) {
+  override getPlanningProfile(gameInput: AIState, contextInput: AIPlanningContext = {}) {
     const game = gameInput as DragonStrategyGame;
     const context = contextInput as DragonLineContext;
     if (!game) return super.getPlanningProfile(gameInput, contextInput);
@@ -558,7 +558,7 @@ export default class DragonStrategy extends BaseStrategy {
     });
   }
 
-  shouldUseDeepPlanning(gameInput: AIState, contextInput: AIPlanningContext = {}) {
+  override shouldUseDeepPlanning(gameInput: AIState, contextInput: AIPlanningContext = {}) {
     const game = gameInput as DragonStrategyGame;
     const context = contextInput as DragonLineContext;
     const profile =
@@ -566,15 +566,15 @@ export default class DragonStrategy extends BaseStrategy {
     return game?.turnLineSearchEnabled === true || profile.enabled === true;
   }
 
-  scoreLineMilestones(context: AIPlanningContext = {}) {
+  override scoreLineMilestones(context: AIPlanningContext = {}) {
     return scoreDragonLineMilestones(context as DragonLineContext);
   }
 
-  scoreLineTerminal(context: AIPlanningContext = {}) {
+  override scoreLineTerminal(context: AIPlanningContext = {}) {
     return scoreDragonLineTerminal(context as DragonLineContext);
   }
 
-  describePlannedLine(context: AIPlanningContext = {}) {
+  override describePlannedLine(context: AIPlanningContext = {}) {
     return describeDragonPlannedLine(context as DragonLineContext);
   }
 
@@ -586,7 +586,7 @@ export default class DragonStrategy extends BaseStrategy {
     return applyDragonSimulatedBattleRewards(context);
   }
 
-  sequenceActions(actions: AIAction[] = []) {
+  override sequenceActions(actions: AIAction[] = []) {
     return sequenceActionsByPriority(actions);
   }
 
@@ -600,8 +600,9 @@ export default class DragonStrategy extends BaseStrategy {
     });
     if (!selected) return { skip: true };
     return {
-      material: selected.material,
-      ascensionCard: selected.ascensionCard,
+      // scoreAscensionChoice rejects entries missing either card before ranking.
+      material: selected.material!,
+      ascensionCard: selected.ascensionCard!,
       position: selected.position,
     };
   }
@@ -626,7 +627,7 @@ export default class DragonStrategy extends BaseStrategy {
   // Board evaluation
   // ─────────────────────────────────────────────────────────────────────────
 
-  evaluateBoard(gameOrState: AIState, perspectivePlayer: SimulatedPlayerState | undefined) {
+  override evaluateBoard(gameOrState: AIState, perspectivePlayer: SimulatedPlayerState | undefined) {
     return evaluateBoardDragon(
       gameOrState as DragonGame,
       perspectivePlayer,
@@ -638,11 +639,11 @@ export default class DragonStrategy extends BaseStrategy {
   // Tribute override — Dragon altTribute logic
   // ─────────────────────────────────────────────────────────────────────────
 
-  getTributeRequirementFor(card: DragonCard, playerState: DragonPlayer) {
+  override getTributeRequirementFor(card: DragonCard, playerState: DragonPlayer) {
     return dragonGetTributeRequirementFor(card, playerState);
   }
 
-  selectBestTributes(field: DragonCard[], tributesNeeded: number, cardToSummon: DragonCard, context: DragonPolicyContext = {}) {
+  override selectBestTributes(field: readonly DragonCard[], tributesNeeded: number, cardToSummon: DragonCard, context: DragonPolicyContext = {}) {
     return selectBestTributes(field, tributesNeeded, cardToSummon, context);
   }
 
@@ -650,7 +651,7 @@ export default class DragonStrategy extends BaseStrategy {
   // Logging
   // ─────────────────────────────────────────────────────────────────────────
 
-  think(thought: string) {
+  override think(thought: string) {
     this.thoughtProcess.push(thought);
     if (!this.bot?.debug) return;
     console.log(`[Dragon AI] ${thought}`);
@@ -796,7 +797,7 @@ export default class DragonStrategy extends BaseStrategy {
   // Main phase action generation
   // ─────────────────────────────────────────────────────────────────────────
 
-  generateMainPhaseActions(gameInput: AIState): AIAction[] {
+  override generateMainPhaseActions(gameInput: AIState): AIAction[] {
     const game = gameInput as DragonStrategyGame;
     const analysis = this.analyzeGameState(game);
     const actions: AIAction[] = [];
@@ -1018,7 +1019,11 @@ export default class DragonStrategy extends BaseStrategy {
             opponent,
             routeKind: "tribute",
           });
-          const tributedCards = tributeIndices.map((i) => fieldMonsters[i]).filter(Boolean);
+          const tributedCards = tributeIndices
+            .flatMap((i) => {
+              const tribute = fieldMonsters[i];
+              return tribute ? [tribute] : [];
+            });
           if (tributedCards.length === 0) return;
 
           // Don't waste the tribute summon if extreme dragon's ATK won't dominate
@@ -1326,6 +1331,7 @@ export default class DragonStrategy extends BaseStrategy {
       if (card.name === "Abyssal Serpent Dragon") {
         if (oppTargets.length === 0) return;
         const topTarget = oppTargets[0];
+        if (!topTarget) return;
         priority = 7 + (topTarget.monsterType === "fusion" || topTarget.monsterType === "ascension" ? 3 : 0);
         if ((topTarget.atk || 0) >= (card.atk || 0)) priority += 2;
         targetPreferences.abyssal_target = {
@@ -1334,7 +1340,9 @@ export default class DragonStrategy extends BaseStrategy {
         };
       } else if (card.name === "Darkness Dragon") {
         if ((bot.hand || []).length === 0 || oppTargets.length === 0) return;
-        priority = 6 + (threatScore(oppTargets[0]) >= 8 ? 2 : 0);
+        const topTarget = oppTargets[0];
+        if (!topTarget) return;
+        priority = 6 + (threatScore(topTarget) >= 8 ? 2 : 0);
         targetPreferences.darkness_dragon_discard_cost = {
           role: "cost",
           preferNames: DRAGON_COST_PREFER_NAMES,
@@ -1379,14 +1387,15 @@ export default class DragonStrategy extends BaseStrategy {
               })[0]?.score || 0);
             return bossDiff || cardStrategicValue(b) - cardStrategicValue(a);
           });
-        if (gyTargets.length === 0) return;
+        const topTarget = gyTargets[0];
+        if (!topTarget) return;
         const bossPref = buildDragonBossTargetPreference(
           gyTargets,
           { analysis, player: bot, bot, opponent, routeKind: "recursion" },
           "recursion",
         );
-        priority = 8 + (gyTargets[0].atk || 0) / 1000;
-        if (bossPref.preferredNames?.includes(gyTargets[0].name!)) priority += 2;
+        priority = 8 + (topTarget.atk || 0) / 1000;
+        if (topTarget.name && bossPref.preferredNames?.includes(topTarget.name)) priority += 2;
         targetPreferences.hellkite_dragon_field_revive = {
           role: "recursion",
           purpose: "pressure",
@@ -1403,7 +1412,9 @@ export default class DragonStrategy extends BaseStrategy {
       } else if (card.name === "Purified Crystal Dragon") {
         const protectTargets = bestOwnDragons.filter((target) => target !== card);
         if (protectTargets.length === 0) return;
-        priority = 7 + (protectTargets[0].atk || 0) / 1200;
+        const protectTarget = protectTargets[0];
+        if (!protectTarget) return;
+        priority = 7 + (protectTarget.atk || 0) / 1200;
         targetPreferences.purified_protection_target = {
           role: "named_preference",
           preferredNames: protectTargets.slice(0, 4).map((target) => target.name!),
@@ -1607,6 +1618,8 @@ export default class DragonStrategy extends BaseStrategy {
           log(`  Skipping Graveyard ignition: Boneflame Dragon - no ATK-upgrade cost`);
           return;
         }
+        const boneflameCost = validBoneflameCosts[0];
+        if (!boneflameCost) return;
         const invalidCostIds = (bot.field || [])
           .filter(
             (candidate) =>
@@ -1617,13 +1630,13 @@ export default class DragonStrategy extends BaseStrategy {
           .filter((id) => id !== null);
         const projectedAtk = getProjectedBoneflameAtk(
           card,
-          validBoneflameCosts[0],
+          boneflameCost,
           bot,
         );
         priority = 7 + Math.min(3, countCards(bot.graveyard || [], isDragonMonster));
         priority += Math.min(
           2,
-          Math.max(0, projectedAtk - getEffectiveAtk(validBoneflameCosts[0])) /
+          Math.max(0, projectedAtk - getEffectiveAtk(boneflameCost)) /
             600,
         );
         targetPreferences.boneflame_cost_target = {

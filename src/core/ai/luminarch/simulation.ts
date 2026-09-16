@@ -65,19 +65,19 @@ interface LuminarchAction {
   index?: number;
   fieldIndex?: number;
   zoneIndex?: number;
-  materialIndex?: number;
+  materialIndex?: number | undefined;
   position?: "attack" | "defense" | "choice";
   facedown?: boolean;
   targetRef?: string;
   zone?: string;
   activationContext?: LuminarchActivationContext;
   sourceAction?: LuminarchAction;
-  fusionTargetHint?: string | null;
+  fusionTargetHint?: string | null | undefined;
   fusionTarget?: string | null;
 }
 
 type PreparedLuminarchAction = AIPlannedAction & {
-  fusionTargetHint?: string | null;
+  fusionTargetHint?: string | null | undefined;
   fusionTarget?: string | null;
 };
 
@@ -107,7 +107,7 @@ interface LuminarchSimulationOptions extends Pick<NonNullable<Parameters<typeof 
 interface LuminarchSearchContext {
   player?: SimulatedPlayerState;
   opponent?: SimulatedPlayerState;
-  strategy?: LuminarchStrategyContext;
+  strategy?: LuminarchStrategyContext | undefined;
   getOpponent?: LuminarchSimulationOptions["getOpponent"];
   game?: LuminarchState & {
     getOpponent?(
@@ -118,13 +118,13 @@ interface LuminarchSearchContext {
   source?: SimulatedCardState;
   sourceCard?: SimulatedCardState;
   ctx?: { activationContext?: LuminarchActivationContext };
-  activationContext?: LuminarchActivationContext;
+  activationContext?: LuminarchActivationContext | undefined;
 }
 
 interface LuminarchPositionContext extends LuminarchSearchContext {
-  action?: LuminarchAction;
-  sourceAction?: LuminarchAction;
-  options?: LuminarchSimulationOptions;
+  action?: LuminarchAction | undefined;
+  sourceAction?: LuminarchAction | undefined;
+  options?: LuminarchSimulationOptions | undefined;
 }
 
 interface LuminarchActionOverrideInput {
@@ -178,11 +178,11 @@ interface LuminarchBattleEvent {
   destroyedCount?: number;
   direct?: boolean;
   barbariasDoubled?: boolean;
-  changed?: boolean;
+  changed?: boolean | undefined;
   directLethal?: boolean;
   createsRemoval?: boolean;
   preventsAttackerLoss?: boolean;
-  createsPiercingDamage?: boolean;
+  createsPiercingDamage?: boolean | undefined;
   damageGain?: number;
   attackStat?: number;
   boostedAtk?: number;
@@ -463,6 +463,7 @@ export function simulateLuminarchSearch(
   const deckIndex = player.deck.indexOf(chosen);
   if (deckIndex < 0) return null;
   const [moved] = player.deck.splice(deckIndex, 1);
+  if (!moved) return null;
   player.hand.push({ ...moved });
   return moved;
 }
@@ -546,6 +547,7 @@ function handleSanctumProtectorShortcut({
   }
 
   const protector = player.hand[handIndex];
+  if (!protector) return true;
   player.hand.splice(handIndex, 1);
   const newCard = { ...protector };
   newCard.position = (action.position || "defense") as "attack" | "defense";
@@ -1006,6 +1008,7 @@ function simulateEnchantedHalberdFollowUp(
   if (halberdIndex < 0) return null;
 
   const [halberd] = player.hand.splice(halberdIndex, 1);
+  if (!halberd) return null;
   const summoned = pushSimulatedFieldMonster(player, halberd, "defense", {
     cannotAttackThisTurn: true,
     _simulatedHalberdFollowUp: true,
@@ -1143,6 +1146,7 @@ function simulatePureKnightSearch(
   );
   if (citadelIndex < 0) return false;
   const [citadel] = player.deck.splice(citadelIndex, 1);
+  if (!citadel) return false;
   player.hand.push(citadel);
   pureKnight._simulatedCitadelSearch = true;
   return true;
@@ -1383,6 +1387,7 @@ function prepareMagicSickleBattleBoost(
   );
   if (handIndex < 0) return null;
   const [sickle] = player.hand.splice(handIndex, 1);
+  if (!sickle) return null;
   player.graveyard.push(sickle);
   attacker.tempAtkBoost = (attacker.tempAtkBoost || 0) + 1200;
   attacker.tempDefBoost = (attacker.tempDefBoost || 0) + 1700;
@@ -1506,6 +1511,7 @@ export function applyLuminarchSimulatedBattleRewards({
     }
     if (summary.attackerName === "Luminarch Aurora Seraph") {
       const destroyed = destroyedOpponentMonsters[0];
+      if (!destroyed) return rewards;
       const baseAtk = destroyed.baseAtk ?? destroyed.atk ?? 0;
       const gained = applyNewLuminarchLpGain(
         state,

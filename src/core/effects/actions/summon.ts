@@ -17,7 +17,13 @@ import type {
   ResolvedTargetMap,
 } from "../../contracts/actionRuntime.js";
 import type { ActionOf } from "../../contracts/actions.js";
-import type { BattlePosition, BattlePositionInput, CardAttribute, CardKind, MonsterType } from "../../contracts/cards.js";
+import type {
+  BattlePosition,
+  BattlePositionInput,
+  CardAttribute,
+  CardKind,
+  MonsterType,
+} from "../../contracts/cards.js";
 import type { CanonicalZone } from "../../contracts/zones.js";
 
 interface SummonRuntimeCard extends ActionRuntimeCard {
@@ -51,7 +57,7 @@ interface SummonActionHost {
   chooseSpecialSummonPosition(
     card: ActionRuntimeCard,
     player: ActionRuntimePlayer,
-    options: { position?: BattlePositionInput | "any" },
+    options: { position?: BattlePositionInput | "any" | undefined },
   ): Promise<BattlePosition>;
 }
 
@@ -89,9 +95,9 @@ export async function applySpecialSummonToken(
   action: TokenAction,
   ctx: EffectContext,
 ): Promise<boolean> {
-  const targetPlayer = (action.player === "opponent"
-    ? ctx.opponent
-    : ctx.player) as ActionRuntimePlayer;
+  const targetPlayer = (
+    action.player === "opponent" ? ctx.opponent : ctx.player
+  ) as ActionRuntimePlayer;
   if (!action.token) return false;
   if (targetPlayer.field.length >= 5) {
     console.log("No space to special summon token.");
@@ -114,7 +120,7 @@ export async function applySpecialSummonToken(
       image: action.token.image || "",
       description: action.token.description || "Special Summoned by effect.",
     },
-    targetPlayer.id
+    targetPlayer.id,
   ) as Card & SummonRuntimeCard;
 
   // Mark as token - this is the canonical flag for token identification
@@ -144,7 +150,7 @@ export async function applySpecialSummonToken(
   const position = await this.chooseSpecialSummonPosition(
     tokenCard,
     targetPlayer,
-    { position: action.position }
+    { position: action.position },
   );
 
   // Try moveCard first for consistent pipeline
@@ -162,7 +168,7 @@ export async function applySpecialSummonToken(
         summonOrigin: "effect_resolution",
         summonMethodOverride: "special",
         summonProcedure: "token_effect",
-      }
+      },
     );
     if (
       moveResult?.success === false &&
@@ -302,8 +308,10 @@ export async function applySpecialSummonSelfAsTrapMonster(
   source.treatedAsCardKinds = normalizeTrapMonsterKinds(source, action);
   source.cardKind = "monster";
   source.monsterType = monster.monsterType || action.monsterType || null;
-  source.type = monster.type || action.monsterTypeName || action.typeName || source.type;
-  source.attribute = monster.attribute || action.attribute || source.attribute || null;
+  source.type =
+    monster.type || action.monsterTypeName || action.typeName || source.type;
+  source.attribute =
+    monster.attribute || action.attribute || source.attribute || null;
   source.level = resolveTrapMonsterStat(monster, action, "level", 0);
   source.baseLevel = source.level;
   source.baseAtk = resolveTrapMonsterStat(monster, action, "atk", 0);
@@ -359,7 +367,9 @@ export async function applyCallOfTheHauntedSummon(
   });
 
   if (card?.boundMonsterTarget) {
-    game.ui.log("Call of the Haunted: This card is already bound to a monster.");
+    game.ui.log(
+      "Call of the Haunted: This card is already bound to a monster.",
+    );
     return false;
   }
 
@@ -395,7 +405,7 @@ export async function applyCallOfTheHauntedSummon(
   const position = await this.chooseSpecialSummonPosition(
     targetMonster,
     player,
-    { position: action.position }
+    { position: action.position },
   );
 
   // Use moveCard for consistent pipeline (handles zones, flags, events)
@@ -465,7 +475,7 @@ export async function applyCallOfTheHauntedSummon(
   game.ui.log(
     `Call of the Haunted: ${targetMonster.name} foi revivido do cemitério em ${
       position === "defense" ? "Defesa" : "Ataque"
-    }!`
+    }!`,
   );
   game.updateBoard();
   return true;

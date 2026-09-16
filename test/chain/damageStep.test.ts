@@ -493,8 +493,8 @@ test("destruição mútua move cartas sequencialmente no mesmo grupo atômico", 
   );
   assert.equal(destroys.length, 2);
   assert.equal(
-    required(destroys[0].options).atomicGroupId,
-    required(destroys[1].options).atomicGroupId,
+    required(required(destroys[0]).options).atomicGroupId,
+    required(required(destroys[1]).options).atomicGroupId,
   );
 });
 
@@ -828,6 +828,7 @@ test("erro limpa a sessão sem rollback e sem reutilizar damageStepId", async ()
         failed = true;
         return { ok: false, reason: "forced_after_calculation_error" };
       }
+      return undefined;
     },
   });
   const attacker = placeCard(

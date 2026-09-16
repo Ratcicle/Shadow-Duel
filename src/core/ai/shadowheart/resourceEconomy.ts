@@ -5,7 +5,7 @@ import type { ShadowHeartCard, ShadowHeartAnalysis } from "./contracts.js";
 type StrategyCard = ShadowHeartCard;
 type Analysis = Pick<ShadowHeartAnalysis, "hand" | "field" | "graveyard" | "summonAvailable" | "normalSummonsAvailable"> & {
   canNormalSummon?: boolean;
-  resourceEconomy?: NonNullable<Parameters<typeof scoreResourcePressure>[0]> & { potential?: ReturnType<typeof computePotential> };
+  resourceEconomy?: NonNullable<Parameters<typeof scoreResourcePressure>[0]> & { potential?: ReturnType<typeof computePotential> } | undefined;
 };
 type ResourceContext = {
   analysis: Analysis;
@@ -13,7 +13,7 @@ type ResourceContext = {
   enablers: ReturnType<typeof getEnablers>;
   totalAccessibleResources: number;
   totalStrandedResources: number;
-  potential?: ReturnType<typeof computePotential>;
+  potential?: ReturnType<typeof computePotential> | undefined;
 };
 
 import { analyzeResourceEconomy } from "../common/resourceEconomy.js";

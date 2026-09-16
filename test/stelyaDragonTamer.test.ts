@@ -202,16 +202,22 @@ test("Stelya declara o novo texto e um único limite compartilhado", () => {
   const search = getEffect(EFFECT_IDS.search);
   assert.deepEqual(handSummon.activationZones, ["hand"]);
   assert.deepEqual(graveyardSummon.activationZones, ["graveyard"]);
-  assert.equal(required(handSummon.targets)[0].intent, "cost");
-  assert.equal(required(graveyardSummon.targets)[0].intent, "cost");
-  assert.equal(required(handSummon.activationCosts)[0].to, "banished");
-  assert.equal(required(graveyardSummon.activationCosts)[0].to, "banished");
-  assert.equal(required(search.targets)[0].excludeSelf, true);
+  assert.equal(required(required(handSummon.targets)[0]).intent, "cost");
+  assert.equal(required(required(graveyardSummon.targets)[0]).intent, "cost");
+  assert.equal(
+    required(required(handSummon.activationCosts)[0]).to,
+    "banished",
+  );
+  assert.equal(
+    required(required(graveyardSummon.activationCosts)[0]).to,
+    "banished",
+  );
+  assert.equal(required(required(search.targets)[0]).excludeSelf, true);
   assert.deepEqual(
     required(search.activationCosts).map((action) => action.targetRef),
     ["self", "stelya_discard_other_card"],
   );
-  assert.equal(required(search.actions)[0].minLevel, 5);
+  assert.equal(required(required(search.actions)[0]).minLevel, 5);
 });
 
 test("qualquer efeito da Stelya bloqueia os outros até o próximo turno", async (t) => {

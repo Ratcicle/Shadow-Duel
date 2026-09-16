@@ -101,10 +101,7 @@ export interface SetSpellTrapReplayCommandPayload extends ReplayCardLocator {}
 
 export interface FlipSummonReplayCommandPayload extends ReplayCardLocator {}
 
-export type ReplayExtraDeckSummonType =
-  | "synchro"
-  | "ascension"
-  | "procedure";
+export type ReplayExtraDeckSummonType = "synchro" | "ascension" | "procedure";
 
 export interface ExtraDeckSummonReplayCommandPayload extends ReplayCardLocator {
   summonType?: ReplayExtraDeckSummonType;
@@ -172,8 +169,7 @@ type MissingCanonicalReplayCommandType = Exclude<
 >;
 type CanonicalReplayCommandManifestIsComplete =
   MissingCanonicalReplayCommandType extends never ? true : never;
-const canonicalReplayCommandManifestIsComplete:
-  CanonicalReplayCommandManifestIsComplete = true;
+const canonicalReplayCommandManifestIsComplete: CanonicalReplayCommandManifestIsComplete = true;
 void canonicalReplayCommandManifestIsComplete;
 
 export interface CanonicalReplayCommandBase<
@@ -186,9 +182,8 @@ export interface CanonicalReplayCommandBase<
   stateHash?: CanonicalHash | null;
 }
 
-export type CanonicalReplayCommandOf<
-  Type extends CanonicalReplayCommandType,
-> = CanonicalReplayCommandBase<Type>;
+export type CanonicalReplayCommandOf<Type extends CanonicalReplayCommandType> =
+  CanonicalReplayCommandBase<Type>;
 
 export type CanonicalReplayCommand = {
   [Type in CanonicalReplayCommandType]: CanonicalReplayCommandOf<Type>;
@@ -314,8 +309,7 @@ type MissingCanonicalReplayEventName = Exclude<
 >;
 type CanonicalReplayEventManifestIsComplete =
   MissingCanonicalReplayEventName extends never ? true : never;
-const canonicalReplayEventManifestIsComplete:
-  CanonicalReplayEventManifestIsComplete = true;
+const canonicalReplayEventManifestIsComplete: CanonicalReplayEventManifestIsComplete = true;
 void canonicalReplayEventManifestIsComplete;
 
 export type CanonicalReplayEventPayloadByName = {
@@ -453,7 +447,7 @@ export interface CanonicalReplay {
 }
 
 export interface ReplayRuntimeCard {
-  id?: RawCardDefinitionId | null;
+  id?: (RawCardDefinitionId | null) | undefined;
   duelCardId?: DuelCardId | number | null;
   owner?: string | null;
   controller?: string | null;
@@ -463,13 +457,13 @@ export interface ReplayRuntimeCard {
   lastSummonedFromZone?: string | null;
   properSummonEstablished?: boolean;
   properSummonProcedure?: string | null;
-  position?: string | null;
-  isFacedown?: boolean;
-  atk?: number;
-  def?: number;
+  position?: (string | null) | undefined;
+  isFacedown?: boolean | undefined;
+  atk?: number | undefined;
+  def?: number | undefined;
   baseAtk?: number;
   baseDef?: number;
-  level?: number;
+  level?: number | undefined;
   baseLevel?: number;
   counters?: object | null;
   equippedTo?: ReplayRuntimeCard | null;
@@ -478,8 +472,8 @@ export interface ReplayRuntimeCard {
   cannotAttackThisTurn?: boolean;
   battlePositionLocked?: boolean;
   banishWhenLeavesField?: boolean;
-  cardKind?: string | null;
-  name?: string | null;
+  cardKind?: (string | null) | undefined;
+  name?: (string | null) | undefined;
 }
 
 export interface ReplayRuntimePlayer {
@@ -528,11 +522,39 @@ export interface CanonicalReplayGamePort {
   getDamageStepState?(): unknown;
 }
 
+// Capture wrappers preserve optional argument keys until the recorder serializes
+// them. Validated replay payloads above still exclude explicit undefined values.
+interface CapturedSummonPayload
+  extends Omit<
+    SummonReplayCommandPayload,
+    "position" | "facedown" | "tributeIndices"
+  > {
+  position?: SummonReplayCommandPayload["position"];
+  facedown?: SummonReplayCommandPayload["facedown"];
+  tributeIndices?: SummonReplayCommandPayload["tributeIndices"];
+}
+
+interface CapturedActivationPayload
+  extends Omit<ActivateReplayCommandPayload, "sourceZone"> {
+  sourceZone?: ActivateReplayCommandPayload["sourceZone"];
+}
+
+interface ReplayCommandPayloadInputByType
+  extends Omit<
+    CanonicalReplayCommandPayloadByType,
+    "summon" | "set_monster" | "activate_card" | "activate_effect"
+  > {
+  summon: CapturedSummonPayload;
+  set_monster: CapturedSummonPayload;
+  activate_card: CapturedActivationPayload;
+  activate_effect: CapturedActivationPayload;
+}
+
 export interface ReplayCommandInput<Type extends CanonicalReplayCommandType> {
   type: Type;
   actorId?: PlayerId | null;
   playerId?: PlayerId | null;
-  payload?: CanonicalReplayCommandPayloadByType[Type];
+  payload?: ReplayCommandPayloadInputByType[Type];
 }
 
 export type CanonicalReplayCommandInput = {
@@ -552,7 +574,8 @@ export type ReplayDecisionRecordingInput =
   | Partial<CanonicalReplayDecision>
   | RecordedDecision;
 
-export interface ReplayRecordedCommandEntry extends ReplayCommandRecordingInput {
+export interface ReplayRecordedCommandEntry
+  extends ReplayCommandRecordingInput {
   sequence: number;
   type: string;
   actorId: string | null;
@@ -606,7 +629,7 @@ export interface ReplayExportOptions {
 }
 
 export interface ReplayFinalizeInput {
-  winner?: PlayerId | string | null;
+  winner?: (PlayerId | string | null) | undefined;
   reason?: string | null;
 }
 

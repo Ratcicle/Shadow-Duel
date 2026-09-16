@@ -13,13 +13,13 @@ import type {
 } from "../../contracts/aiState.js";
 
 interface StrategyAnalysisInput {
-  bot?: AIStrategyBotPort | null;
-  player?: AIStrategyBotPort | null;
-  opponent?: AIStrategyBotPort | null;
+  bot?: AIStrategyBotPort | null | undefined;
+  player?: AIStrategyBotPort | null | undefined;
+  opponent?: AIStrategyBotPort | null | undefined;
   game?: (AIState & {
     getOpponent?(player: SimulatedPlayerState): SimulatedPlayerState | null;
-  }) | null;
-  strategy?: Pick<StrategyRuntimePort, "bot" | "getOpponent"> | null;
+  }) | null | undefined;
+  strategy?: Pick<StrategyRuntimePort, "bot" | "getOpponent"> | null | undefined;
 }
 
 export type StrategyAnalysis<Player extends AIStrategyBotPort> = {
@@ -35,7 +35,7 @@ export type StrategyAnalysis<Player extends AIStrategyBotPort> = {
   oppHand: Player["hand"];
   oppGraveyard: Player["graveyard"];
   oppSpellTrap: Player["spellTrap"];
-  oppFieldSpell: Player["fieldSpell"];
+  oppFieldSpell: Player["fieldSpell"] | undefined;
   oppLp: number;
   oppLP: number;
   currentTurn: number;
@@ -52,10 +52,10 @@ export type StrategyAnalysis<Player extends AIStrategyBotPort> = {
 
 type ExplicitActorAnalysisInput<Player extends AIStrategyBotPort> = Omit<
   StrategyAnalysisInput, "bot" | "player" | "opponent"
-> & { opponent?: Player | null } & (
-  | { player: Player; bot?: Player | null }
+> & { opponent?: Player | null | undefined } & (
+  | { player: Player; bot?: Player | null | undefined }
   | { bot: Player; player?: null }
-);
+) | undefined;
 
 export function buildStrategyAnalysis<Player extends AIStrategyBotPort>(
   input: ExplicitActorAnalysisInput<Player>,

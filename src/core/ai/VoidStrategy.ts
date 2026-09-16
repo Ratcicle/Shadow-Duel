@@ -69,7 +69,7 @@ interface VoidGame extends Omit<AiLiveGamePort, "player" | "bot" | "effectEngine
 }
 type VoidAnalysisInput = Omit<Partial<ReturnType<typeof buildStrategyAnalysis>>, "phase" | "game"> & {
   game?: VoidGame | null;
-  phase?: string | null;
+  phase?: string | null | undefined;
   oppStrongestAtk?: number;
   oppStrongestBattle?: number;
   oppFieldCount?: number;
@@ -125,10 +125,10 @@ interface VoidSelectionAction {
   restrictAttackThisTurn?: boolean;
 }
 interface VoidSelectionContext {
-  game?: AIState;
+  game?: AIState | undefined;
   player?: VoidPlayer;
-  source?: Partial<StrategyCard>;
-  action?: VoidSelectionAction;
+  source?: Partial<StrategyCard> | undefined;
+  action?: VoidSelectionAction | undefined;
   forceSummonAssessment?: boolean;
 }
 interface VoidAscensionContext<Card extends StrategyCard = StrategyCard> {
@@ -164,8 +164,8 @@ interface VoidSummonPayload {
   card?: SimulatedCardState;
   newCard?: SimulatedCardState;
   fusionCard?: SimulatedCardState;
-  fromZone?: string;
-  action?: VoidSelectionAction;
+  fromZone?: string | undefined;
+  action?: VoidSelectionAction | undefined;
 }
 
 import BaseStrategy from "./BaseStrategy.js";
@@ -562,15 +562,15 @@ export default class VoidStrategy extends BaseStrategy {
    * Avaliação de board usando a nova lógica Void-específica.
    * Mantém compatibilidade com evaluateBoard mas usa evaluateBoardVoid internamente.
    */
-  evaluateBoard(gameOrState: AIState, perspectivePlayer?: SimulatedPlayerState) {
+  override evaluateBoard(gameOrState: AIState, perspectivePlayer?: SimulatedPlayerState) {
     return evaluateBoardVoid(gameOrState, perspectivePlayer);
   }
 
-  evaluateBoardV2(gameOrState: AIState, perspectivePlayer?: SimulatedPlayerState) {
+  override evaluateBoardV2(gameOrState: AIState, perspectivePlayer?: SimulatedPlayerState) {
     return evaluateBoardVoid(gameOrState, perspectivePlayer);
   }
 
-  getPlanningProfile(game: AIState, context: AIPlanningContext & { analysis?: VoidAnalysisInput } = {}) {
+  override getPlanningProfile(game: AIState, context: AIPlanningContext & { analysis?: VoidAnalysisInput } = {}) {
     const analysis = context.analysis || this.analyzeGameState(game);
     return buildVoidPlanningProfile(analysis, {
       ...context,
@@ -579,21 +579,21 @@ export default class VoidStrategy extends BaseStrategy {
     });
   }
 
-  shouldUseDeepPlanning(game: AIState, context: AIPlanningContext = {}) {
+  override shouldUseDeepPlanning(game: AIState, context: AIPlanningContext = {}) {
     const profile =
       context.profile || this.getPlanningProfile(game, context);
     return (game as VoidGame)?.turnLineSearchEnabled === true || profile.enabled === true;
   }
 
-  scoreLineMilestones(context: AIPlanningContext = {}) {
+  override scoreLineMilestones(context: AIPlanningContext = {}) {
     return scoreVoidLineMilestones(context);
   }
 
-  scoreLineTerminal(context: AIPlanningContext = {}) {
+  override scoreLineTerminal(context: AIPlanningContext = {}) {
     return scoreVoidLineTerminal(context);
   }
 
-  describePlannedLine(context: AIPlanningContext = {}) {
+  override describePlannedLine(context: AIPlanningContext = {}) {
     return describeVoidPlannedLine(context);
   }
 
@@ -1061,6 +1061,7 @@ export default class VoidStrategy extends BaseStrategy {
     }
 
     const best = scored[0];
+    if (!best) return { skip: true };
     return {
       material: best.material,
       ascensionCard: best.ascensionCard,
@@ -1313,6 +1314,11 @@ export default class VoidStrategy extends BaseStrategy {
         reason: "Sem alvos válidos",
       };
     }
+    const firstVoid = myVoids[0];
+    const firstOpponent = oppMonsters[0];
+    if (!firstVoid || !firstOpponent) {
+      return { shouldActivate: false, priority: 0, reason: "Sem alvos válidos" };
+    }
 
     // Calcular valores
     const myWeakest = myVoids.reduce(
@@ -1321,8 +1327,8 @@ export default class VoidStrategy extends BaseStrategy {
         return atk < min.atk ? { card: m, atk } : min;
       },
       {
-        card: myVoids[0],
-        atk: (myVoids[0].atk || 0) + (myVoids[0].tempAtkBoost || 0),
+        card: firstVoid,
+        atk: (firstVoid.atk || 0) + (firstVoid.tempAtkBoost || 0),
       },
     );
 
@@ -1331,7 +1337,7 @@ export default class VoidStrategy extends BaseStrategy {
         const atk = m.isFacedown ? 1500 : (m.atk || 0) + (m.tempAtkBoost || 0);
         return atk > max.atk ? { card: m, atk } : max;
       },
-      { card: oppMonsters[0], atk: 0 },
+      { card: firstOpponent, atk: 0 },
     );
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -1676,7 +1682,7 @@ export default class VoidStrategy extends BaseStrategy {
     return { mode: "buildup", priority: 5 };
   }
 
-  generateMainPhaseActions(gameInput: AIState): AIAction[] {
+  override generateMainPhaseActions(gameInput: AIState): AIAction[] {
     const game = gameInput as VoidGame;
     const actions: AIAction[] = [];
     const analysis = this.analyzeGameState(game);
@@ -2065,7 +2071,7 @@ export default class VoidStrategy extends BaseStrategy {
               : [];
           const tributeCards = (tributeIndices || [])
             .map((fieldIndex) => bot.field?.[fieldIndex])
-            .filter(Boolean);
+            .filter((tribute): tribute is StrategyCard => Boolean(tribute));
           const tributesNeeded = Math.max(
             0,
             Number(tributeInfo.tributesNeeded) || 0,
@@ -2689,7 +2695,7 @@ export default class VoidStrategy extends BaseStrategy {
       // Boost para cartas que iniciam o combo
       if (combo.sequence && combo.sequence.length > 0) {
         const firstStep = combo.sequence[0];
-        if (firstStep.cardId) {
+        if (firstStep?.cardId) {
           boosts[firstStep.cardId] =
             (boosts[firstStep.cardId] || 0) + combo.priority / 5;
         }
@@ -2721,10 +2727,11 @@ export default class VoidStrategy extends BaseStrategy {
 
     // Pegar a melhor fusão disponível
     const best = fusionCombos[0];
-    return calculateFusionValue(best.combo!.fusion!.target, analysis);
+    const fusion = best?.combo?.fusion;
+    return fusion ? calculateFusionValue(fusion.target, analysis) : 0;
   }
 
-  sequenceActions(actions: AIAction[]) {
+  override sequenceActions(actions: AIAction[]) {
     // Sequenciamento inteligente baseado em combos
     const sorted = actions.sort((a, b) => {
       const planA = Number.isFinite(a.finisherPlanRank)
@@ -2893,6 +2900,7 @@ export default class VoidStrategy extends BaseStrategy {
     );
     if (deckIndex < 0) return;
     const recruited = player.deck.splice(deckIndex, 1)[0];
+    if (!recruited) return;
     recruited.position =
       this.chooseSpecialSummonPosition(recruited, {
         game: state,
@@ -2924,8 +2932,10 @@ export default class VoidStrategy extends BaseStrategy {
     );
     if (deckIndex < 0) return;
     const searched = player.deck.splice(deckIndex, 1)[0];
-    player.hand.push(searched);
-    state._simVoidBeastSearchUsed = true;
+    if (searched) {
+      player.hand.push(searched);
+      state._simVoidBeastSearchUsed = true;
+    }
   }
 
   handleVoidSimulatedFusionSummon({ state, player, fusionCard }: VoidSummonPayload = {}) {
@@ -2935,10 +2945,12 @@ export default class VoidStrategy extends BaseStrategy {
     );
     if (ravenIndex >= 0) {
       const raven = player.hand.splice(ravenIndex, 1)[0];
-      player.graveyard.push(raven);
-      fusionCard.immuneToOpponentEffectsUntilTurn =
-        (state.turnCounter || 0) + 1;
-      fusionCard._simProtectedByRaven = true;
+      if (raven) {
+        player.graveyard.push(raven);
+        fusionCard.immuneToOpponentEffectsUntilTurn =
+          (state.turnCounter || 0) + 1;
+        fusionCard._simProtectedByRaven = true;
+      }
     }
 
     if (fusionCard.id === VOID_IDS.SHADOW_CRAWLER) {
@@ -2963,7 +2975,8 @@ export default class VoidStrategy extends BaseStrategy {
         );
       }
       if (deckIndex >= 0) {
-        player.graveyard.push(deck.splice(deckIndex, 1)[0]);
+        const milled = deck.splice(deckIndex, 1)[0];
+        if (milled) player.graveyard.push(milled);
       }
     }
 
@@ -3022,7 +3035,7 @@ export default class VoidStrategy extends BaseStrategy {
     };
   }
 
-  simulateMainPhaseAction(state: StrategySimulation, action: AIPlannedAction | null | undefined) {
+  override simulateMainPhaseAction(state: StrategySimulation, action: AIPlannedAction | null | undefined) {
     if (!action) return state;
     applyGenericSimulatedMainPhaseAction(
       state as SimulationGameState,
@@ -3038,7 +3051,7 @@ export default class VoidStrategy extends BaseStrategy {
    * lv5, etc.) usam costPolicy Void — preferindo Hollows quando não há fusion path,
    * preservando engine pieces (Conjurer/Walker/Tenebris Horn) e bosses do campo.
    */
-  selectBestTributes(field: StrategyCard[], tributesNeeded: number, cardToSummon: StrategyCard, context: { game?: AIState; oppField?: StrategyCard[]; botState?: AIStrategyBotPort; evaluationContext?: object } = {}) {
+  override selectBestTributes(field: StrategyCard[], tributesNeeded: number, cardToSummon: StrategyCard, context: { game?: AIState; oppField?: StrategyCard[]; botState?: AIStrategyBotPort; evaluationContext?: object } = {}) {
     if (
       tributesNeeded <= 0 ||
       !fieldHasTributeValue(field || [], tributesNeeded, cardToSummon)

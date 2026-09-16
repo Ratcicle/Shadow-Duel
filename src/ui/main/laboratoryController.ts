@@ -44,7 +44,7 @@ import {
 const cardDatabase: readonly DeckCard[] = rawCardDatabase;
 const cardDatabaseById: ReadonlyMap<number, DeckCard> = rawCardDatabaseById;
 
-const LAB_ZONE_CONFIG: readonly LabZoneConfig[] = [
+const LAB_ZONE_CONFIG: readonly [LabZoneConfig, ...LabZoneConfig[]] = [
   { id: "deck", label: "Deck", max: null, defaultCount: 20 },
   {
     id: "extraDeck",
@@ -384,7 +384,8 @@ export function createLaboratoryController({
       return;
     }
     side[zone as LabZone] = Array.from({ length: count }, () => {
-      const card = candidates[Math.floor(Math.random() * candidates.length)];
+      // The nonempty filtered pool and Math.random bound this index.
+      const card = candidates[Math.floor(Math.random() * candidates.length)]!;
       if (zone === "field") {
         return {
           id: card.id,
@@ -773,9 +774,10 @@ export function createLaboratoryController({
       const removeSpec = (event.target as HTMLElement | null)?.dataset
         ?.labRemove;
       if (removeSpec) {
+        // Specs are emitted above as owner:zone:index on each remove button.
         const [owner, zone, indexRaw] = removeSpec.split(":");
-        const index = Number.parseInt(indexRaw, 10);
-        const entries = getLabZone(owner, zone);
+        const index = Number.parseInt(indexRaw!, 10);
+        const entries = getLabZone(owner!, zone!);
         if (!Number.isNaN(index)) {
           entries.splice(index, 1);
           render();
@@ -786,8 +788,9 @@ export function createLaboratoryController({
       const randomSpec = (event.target as HTMLElement | null)?.dataset
         ?.labRandomZone;
       if (randomSpec) {
+        // Specs are emitted above as owner:zone on each randomize button.
         const [owner, zone] = randomSpec.split(":");
-        randomizeZone(owner, zone);
+        randomizeZone(owner!, zone!);
         render();
         return;
       }
@@ -799,9 +802,9 @@ export function createLaboratoryController({
         return;
       }
 
-      const zoneEl = (event.target as HTMLElement | null)?.closest?.<HTMLElement>(
-        ".laboratory-zone",
-      );
+      const zoneEl = (
+        event.target as HTMLElement | null
+      )?.closest?.<HTMLElement>(".laboratory-zone");
       if (zoneEl?.dataset?.owner && zoneEl?.dataset?.zone) {
         applyZoneSelection(zoneEl.dataset.owner, zoneEl.dataset.zone);
       }

@@ -3,7 +3,7 @@ import type { SimulatedCardState } from "../../contracts/aiState.js";
 
 const DEFAULT_RESOURCE_ZONES = ["hand", "field", "graveyard"];
 
-export type ResourceAnalysis<Card extends object = SimulatedCardState | GameCard> = Partial<Record<"hand" | "field" | "graveyard" | "deck" | "spellTrap" | "extraDeck" | "banished" | "oppField", Card[]>>;
+export type ResourceAnalysis<Card extends object = SimulatedCardState | GameCard> = Partial<Record<"hand" | "field" | "graveyard" | "deck" | "spellTrap" | "extraDeck" | "banished", readonly Card[]>> & { oppField?: readonly Card[] | undefined };
 type ResourceCard<Analysis extends ResourceAnalysis<object>> = NonNullable<Analysis[keyof ResourceAnalysis]>[number];
 
 type ResourceCounts = Record<string, number>;
@@ -17,7 +17,7 @@ interface ResourceContext<Analysis extends ResourceAnalysis<object>, Enablers, P
   totalAccessibleResources?: number;
   strandedByZone?: ResourceCounts;
   totalStrandedResources?: number;
-  potential?: Potential;
+  potential?: Potential | undefined;
 }
 
 interface ResourceAccessResult {
@@ -46,7 +46,7 @@ function toZoneList(zones: readonly string[] | null | undefined): readonly strin
 function getCardsInZone<Card extends object>(
   analysis: ResourceAnalysis<Card> = {},
   zone: string,
-): Card[] {
+): readonly Card[] {
   const cards = analysis?.[zone as keyof ResourceAnalysis];
   return Array.isArray(cards) ? cards : [];
 }

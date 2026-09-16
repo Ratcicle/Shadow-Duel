@@ -124,7 +124,7 @@ type DragonSimulationState = Omit<
   opponent?: DragonPlayer | null;
   _gameRef?: DragonGameReference;
   _dragonSimOnce?: DragonOnceLedger;
-  _simMaterialEffectActivationsByMaterialId?: DragonMaterialLedger;
+  _simMaterialEffectActivationsByMaterialId?: DragonMaterialLedger | undefined;
   game?: DragonGameReference | null;
   materialDuelStats?: DragonMaterialStats;
 };
@@ -135,12 +135,12 @@ interface DragonSimulationAction {
   fieldIndex?: number;
   zoneIndex?: number;
   graveyardIndex?: number;
-  materialIndex?: number;
-  materialId?: number;
-  cardId?: number;
-  cardName?: string;
-  effectId?: string | null;
-  position?: BattlePositionInput;
+  materialIndex?: number | undefined;
+  materialId?: number | undefined;
+  cardId?: number | undefined;
+  cardName?: string | undefined;
+  effectId?: string | null | undefined;
+  position?: BattlePositionInput | undefined;
   facedown?: boolean;
   toPosition?: "attack" | "defense";
   ascensionCard?: DragonCard | GameCard | null;
@@ -148,7 +148,7 @@ interface DragonSimulationAction {
   cardKind?: CardKind | readonly CardKind[];
   minLevel?: number;
   maxLevel?: number;
-  zone?: ZoneInput | readonly ZoneInput[];
+  zone?: ZoneInput | readonly ZoneInput[] | undefined;
   sourceZone?: ZoneInput | readonly ZoneInput[];
   fromZone?: ZoneInput;
   to?: CanonicalZone;
@@ -222,15 +222,15 @@ interface DragonCostSelectionOptions {
 }
 
 interface DragonSpecialSummonOptions {
-  position?: BattlePositionInput;
+  position?: BattlePositionInput | undefined;
   cannotAttackThisTurn?: boolean;
   skipAfterSummon?: boolean;
   method?: "normal" | "tribute" | "special" | "fusion" | "ascension";
 }
 
 interface DragonSummonActionView {
-  position?: BattlePositionInput | "any";
-  effectId?: string | null;
+  position?: BattlePositionInput | "any" | undefined;
+  effectId?: string | null | undefined;
 }
 
 interface DragonSummonMetadata {
@@ -269,7 +269,7 @@ interface DragonBanishContext {
   source: DragonCard | null;
   sourceCard: DragonCard | null;
   action: DragonSimulationAction | null;
-  effectId?: string | null;
+  effectId?: string | null | undefined;
 }
 
 type DragonEffectReference = EffectDefinition | { readonly id: string };
@@ -355,10 +355,10 @@ function tributeMatchesAltRequirement(
  * @param action Action to simulate.
  * @returns Modified state.
  */
-export function simulateMainPhaseAction(
-  state: DragonSimulationState,
+export function simulateMainPhaseAction<State extends DragonSimulationState>(
+  state: State,
   action: AIPlannedAction,
-): DragonSimulationState {
+): State {
   if (!action || !state?.bot) return state;
 
   switch (action.type) {
@@ -416,14 +416,14 @@ export function simulateMainPhaseAction(
 
       // Move card from hand to field
       player.hand.splice(action.index!, 1);
-      player.field.push({
+      const summoned: DragonCard = {
         ...card,
         position: (action.position || "attack") as BattlePosition,
         isFacedown: action.facedown || false,
         hasAttacked: false,
-      });
+      };
+      player.field.push(summoned);
       player.summonCount = (player.summonCount || 0) + 1;
-      const summoned = player.field[player.field.length - 1];
       recordNormalSummonForTurn(player, summoned);
       simulateDragonAfterSummonEffects(state, summoned, {
         method: tributeInfo.tributesNeeded > 0 ? "tribute" : "normal",
@@ -567,6 +567,13 @@ export function simulateMainPhaseAction(
       simulateDragonAscension(state, action);
       break;
     }
+    // These variants retain the existing no-op in Dragon's main-phase simulation.
+    case "extraDeckProcedure":
+    case "special_summon_sanctum_protector":
+    case "simulatedBattle":
+      break;
+    default:
+      action satisfies never;
   }
 
   return state;
@@ -612,7 +619,7 @@ function simulateDragonSpellEffect(
 
       if (target) {
         const searched = player.deck.splice(target.index, 1)[0];
-        player.hand.push(searched);
+        if (searched) player.hand.push(searched);
       }
       break;
     }
@@ -721,7 +728,7 @@ function simulateDragonSpellEffect(
       );
       if (lv4GYIdx >= 0) {
         const recovered = player.graveyard.splice(lv4GYIdx, 1)[0];
-        player.hand.push(recovered);
+        if (recovered) player.hand.push(recovered);
       }
       break;
     }
@@ -1030,7 +1037,8 @@ function applyDragonHandToGraveyardTriggers(
     if (recoverEntry) {
       const liveIndex = player.graveyard.indexOf(recoverEntry.candidate);
       if (liveIndex >= 0) {
-        player.hand.push(player.graveyard.splice(liveIndex, 1)[0]);
+        const recovered = player.graveyard.splice(liveIndex, 1)[0];
+        if (recovered) player.hand.push(recovered);
       }
     }
   }
@@ -1324,7 +1332,8 @@ function normalSummonFromHandIndex(
   const liveIndex = player.hand.indexOf(card);
   if (liveIndex < 0) return null;
   const summonedCard = player.hand.splice(liveIndex, 1)[0];
-  const summoned = {
+  if (!summonedCard) return null;
+  const summoned: DragonCard = {
     ...summonedCard,
     position: (action.position || "attack") as BattlePosition,
     isFacedown: false,
@@ -1429,7 +1438,10 @@ function simulateLunarEclipseOnSummon(
   )[0];
   if (selected) {
     const liveDeckIndex = player.deck.indexOf(selected.candidate);
-    if (liveDeckIndex >= 0) player.hand.push(player.deck.splice(liveDeckIndex, 1)[0]);
+    if (liveDeckIndex >= 0) {
+      const searched = player.deck.splice(liveDeckIndex, 1)[0];
+      if (searched) player.hand.push(searched);
+    }
   }
 
   if ((player.field || []).length < 5) {
@@ -1439,6 +1451,7 @@ function simulateLunarEclipseOnSummon(
       const solarIndex = zone.findIndex((candidate) => candidate?.name === "Solar Eclipse Dragon");
       if (solarIndex < 0) continue;
       const solar = zone.splice(solarIndex, 1)[0];
+      if (!solar) continue;
       specialSummonToField(
         state,
         player,
@@ -1482,6 +1495,7 @@ function simulateLuminescentNormalRevive(
   const liveIndex = player.graveyard.indexOf(target.candidate);
   if (liveIndex < 0) return;
   const revived = player.graveyard.splice(liveIndex, 1)[0];
+  if (!revived) return;
   specialSummonToField(state, player, revived, action, { method: "special" });
   recordSimulatedMaterialEffectActivation(state, player, source);
 }
@@ -1515,7 +1529,10 @@ function simulateArmoredDragonSearch(
   )[0];
   if (!target) return;
   const liveIndex = player.deck.indexOf(target.candidate);
-  if (liveIndex >= 0) player.hand.push(player.deck.splice(liveIndex, 1)[0]);
+  if (liveIndex >= 0) {
+    const searched = player.deck.splice(liveIndex, 1)[0];
+    if (searched) player.hand.push(searched);
+  }
 }
 
 function simulateBestConvergingSummon(
@@ -1560,7 +1577,8 @@ function takeExtraDeckCard(
     (candidate) => candidate?.name === name,
   );
   if (extraIndex >= 0) {
-    return player.extraDeck.splice(extraIndex, 1)[0];
+    const fusion = player.extraDeck.splice(extraIndex, 1)[0];
+    if (fusion) return fusion;
   }
   return { ...fallback } as DragonCard;
 }
@@ -1608,6 +1626,7 @@ function simulateTechVoidAfterSummon(
   const liveIndex = player.graveyard.indexOf(target.candidate);
   if (liveIndex < 0) return;
   const banished = player.graveyard.splice(liveIndex, 1)[0];
+  if (!banished) return;
   if (!player.banished) player.banished = [];
   player.banished.push(banished);
   const buff = Math.floor((banished.atk || 0) * 0.5);
@@ -1625,9 +1644,11 @@ function selectRadiantCosmicMaterials(
     .sort((a, b) => materialValue(a) - materialValue(b));
   if (lightMaterials.length === 0) return [];
 
-  const selected = [lightMaterials[0]];
+  const firstLightMaterial = lightMaterials[0];
+  if (!firstLightMaterial) return [];
+  const selected: DragonMaterialEntry[] = [firstLightMaterial];
   const remaining = dragons
-    .filter((entry) => entry !== selected[0])
+    .filter((entry) => entry !== firstLightMaterial)
     .sort((a, b) => materialValue(a) - materialValue(b));
   selected.push(...remaining.slice(0, 2));
 
@@ -1693,6 +1714,7 @@ function pickWorstDeckRefund(graveyard: readonly DragonCard[]): number {
 
   for (let i = 0; i < graveyard.length; i++) {
     const card = graveyard[i];
+    if (!card) continue;
     const knowledge = (CARD_KNOWLEDGE as Partial<
       Record<string, DragonCardKnowledge>
     >)[card.name as string] || {};
@@ -1765,6 +1787,7 @@ function simulateDragonHandIgnition(
     const liveIndex = sourceZone.indexOf(selected.candidate);
     if (liveIndex < 0) return;
     const lunar = sourceZone.splice(liveIndex, 1)[0];
+    if (!lunar) return;
     const summoned = specialSummonToField(state, player, lunar, recruitAction, {
       method: "special",
       skipAfterSummon: true,
@@ -1859,7 +1882,10 @@ function simulateDragonHandIgnition(
     const otherIndex = player.hand.indexOf(otherDiscard.candidate);
     if (otherIndex >= 0) discardHandCardToGraveyard(state, player, otherIndex);
     const liveDeckIndex = player.deck.indexOf(selected.candidate);
-    if (liveDeckIndex >= 0) player.hand.push(player.deck.splice(liveDeckIndex, 1)[0]);
+    if (liveDeckIndex >= 0) {
+      const searched = player.deck.splice(liveDeckIndex, 1)[0];
+      if (searched) player.hand.push(searched);
+    }
     recordSimulatedMaterialEffectActivation(state, player, card);
     return;
   }
@@ -2001,9 +2027,11 @@ function simulateDragonSpellTrapIgnition(
   const targetIndex = player.hand.indexOf(handTargetEntry.candidate);
   if (targetIndex >= 0 && player.field.length < 5) {
     const summoned = player.hand.splice(targetIndex, 1)[0];
-    specialSummonToField(state, player, summoned, action, {
-      method: "special",
-    });
+    if (summoned) {
+      specialSummonToField(state, player, summoned, action, {
+        method: "special",
+      });
+    }
   }
 }
 
@@ -2034,9 +2062,11 @@ function simulateDragonFieldSpellEffect(
   const liveIndex = sourceZone.indexOf(selected.candidate);
   if (liveIndex < 0) return;
   const summoned = sourceZone.splice(liveIndex, 1)[0];
-  specialSummonToField(state, player, summoned, action, {
-    method: "special",
-  });
+  if (summoned) {
+    specialSummonToField(state, player, summoned, action, {
+      method: "special",
+    });
+  }
 }
 
 function simulateDragonFieldMonsterEffect(
@@ -2120,10 +2150,12 @@ function simulateDragonFieldMonsterEffect(
     const gyIndex = player.graveyard.indexOf(gyTarget);
     if (gyIndex >= 0 && player.field.length < 5) {
       const summoned = player.graveyard.splice(gyIndex, 1)[0];
-      specialSummonToField(state, player, summoned, action, {
-        method: "special",
-      });
-      recordSimulatedMaterialEffectActivation(state, player, card);
+      if (summoned) {
+        specialSummonToField(state, player, summoned, action, {
+          method: "special",
+        });
+        recordSimulatedMaterialEffectActivation(state, player, card);
+      }
     }
     return;
   }
@@ -2154,13 +2186,14 @@ function simulateDragonGraveyardSpellEffect(
     : player.graveyard.indexOf(card);
   if (liveIndex >= 0) {
     const banished = player.graveyard.splice(liveIndex, 1)[0];
-    putSimulatedCard(player, banished, "banished");
+    if (banished) putSimulatedCard(player, banished, "banished");
   }
   const deckIndex = (player.deck || []).findIndex(
     (candidate) => candidate?.name === "Jagged Peak of the Dragons",
   );
   if (deckIndex >= 0) {
-    player.hand.push(player.deck.splice(deckIndex, 1)[0]);
+    const searched = player.deck.splice(deckIndex, 1)[0];
+    if (searched) player.hand.push(searched);
   }
 }
 
@@ -2416,8 +2449,10 @@ function simulateDragonGraveyardMonsterEffect(
       if (sourceIndex >= 0) {
         const banished = sourceZone.splice(sourceIndex, 1)[0];
         if (!player.banished) player.banished = [];
-        player.banished.push(banished);
-        resolvedAnyAction = true;
+        if (banished) {
+          player.banished.push(banished);
+          resolvedAnyAction = true;
+        }
       }
       continue;
     }
@@ -2443,10 +2478,14 @@ function simulateDragonGraveyardMonsterEffect(
         card,
         effect,
       )[0];
+      if (!selected) continue;
       const liveIndex = sourceZone.indexOf(selected.candidate);
       if (liveIndex >= 0) {
-        player.hand.push(sourceZone.splice(liveIndex, 1)[0]);
-        resolvedAnyAction = true;
+        const searched = sourceZone.splice(liveIndex, 1)[0];
+        if (searched) {
+          player.hand.push(searched);
+          resolvedAnyAction = true;
+        }
       }
       continue;
     }
@@ -2462,6 +2501,7 @@ function simulateDragonGraveyardMonsterEffect(
         const liveIndex = sourceZone.indexOf(selection.candidate);
         if (liveIndex < 0) continue;
         const summonedCard = sourceZone.splice(liveIndex, 1)[0];
+        if (!summonedCard) continue;
         const summoned = specialSummonToField(
           state,
           player,
@@ -2498,6 +2538,7 @@ function simulateDragonGraveyardMonsterEffect(
         const liveIndex = sourceZone.indexOf(selection.candidate);
         if (liveIndex < 0) continue;
         const summonedCard = sourceZone.splice(liveIndex, 1)[0];
+        if (!summonedCard) continue;
         const summoned = specialSummonToField(
           state,
           player,

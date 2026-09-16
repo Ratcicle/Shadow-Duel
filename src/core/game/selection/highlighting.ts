@@ -14,10 +14,10 @@ import type {
 
 interface SelectionHighlightTarget {
   key: string;
-  zone?: SelectionZone;
-  controller?: string;
-  zoneIndex?: number;
-  name?: string;
+  zone?: SelectionZone | undefined;
+  controller?: string | undefined;
+  zoneIndex?: number | undefined;
+  name?: string | undefined;
   isDirectAttack: boolean;
   isSelected: boolean;
   isAttackTarget: boolean;
@@ -145,15 +145,14 @@ export function highlightTargetCandidates(this: SelectionHighlightHost): void {
   const isAttackSelection = this.targetSelection.kind === "attack";
   const highlightTargets: SelectionHighlightTarget[] =
     requirement.candidates.map((cand) => ({
-    key: cand.key,
-    zone: cand.zone,
-    controller: cand.controller,
-    zoneIndex: cand.zoneIndex,
-    name: cand.name,
-    isDirectAttack: !!cand.isDirectAttack,
-    isSelected: selectedSet.has(cand.key),
-    isAttackTarget:
-      isAttackSelection && selectedSet.has(cand.key),
+      key: cand.key,
+      zone: cand.zone,
+      controller: cand.controller,
+      zoneIndex: cand.zoneIndex,
+      name: cand.name,
+      isDirectAttack: !!cand.isDirectAttack,
+      isSelected: selectedSet.has(cand.key),
+      isAttackTarget: isAttackSelection && selectedSet.has(cand.key),
     }));
 
   if (this.ui && typeof this.ui.applyTargetHighlights === "function") {

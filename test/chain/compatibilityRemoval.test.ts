@@ -17,6 +17,7 @@ import {
   createChainHarness,
   createTestCard,
   createTestEffect,
+  type TestEffect,
   placeCard,
 } from "./helpers/chainHarness.js";
 
@@ -156,11 +157,16 @@ test("cartas exportadas já contêm os metadados canônicos sem clonagem", () =>
 
 test("efeito limitado sem usagePolicy falha em vez de usar fallback", () => {
   const { chain, player } = createChainHarness();
-  const effect = createTestEffect({
-    id: "missing_policy",
-    oncePerTurn: true,
-    usagePolicy: undefined,
-  });
+  const effect = createTestEffect(
+    unsafeFixture<Partial<TestEffect>>(
+      {
+        id: "missing_policy",
+        oncePerTurn: true,
+        usagePolicy: undefined,
+      },
+      "Deliberately missing usagePolicy exercises runtime validation of an invalid limited effect.",
+    ),
+  );
   const card = createTestCard({ effects: [effect] });
   placeCard(player, "field", card);
 

@@ -35,7 +35,7 @@ type FinalizableCard = GameCard & {
 };
 
 interface SpellTrapActivationContext {
-  effectId?: string | null;
+  effectId?: (string | null) | undefined;
   chainId?: number | null;
   linkId?: number | null;
   spellTrapFinalization?: SpellTrapFinalizationOverride;
@@ -67,10 +67,7 @@ interface SpellTrapFinalizationHost {
       owner?: string;
     },
   ): void;
-  assertStateInvariants(
-    scope: string,
-    options: { failFast: false },
-  ): void;
+  assertStateInvariants(scope: string, options: { failFast: false }): void;
 }
 
 interface CardActivationCommitInfo {
@@ -86,8 +83,8 @@ interface FieldSpellTrapActivationSnapshot {
   owner: GamePlayer;
   zone?: SpellTrapActivationZone;
   wasFacedown?: boolean;
-  previousTurnSetOn?: number | null;
-  previousSetTurn?: number | null;
+  previousTurnSetOn?: (number | null) | undefined;
+  previousSetTurn?: (number | null) | undefined;
 }
 
 interface FailureReasonResult {
@@ -105,7 +102,13 @@ interface FailureReasonResult {
 function getCardInstanceId(
   card: FinalizableCard | null | undefined,
 ): RuntimeCardInstanceId {
-  return card?.instanceId ?? card?._instanceId ?? card?.uuid ?? card?.simInstanceId ?? null;
+  return (
+    card?.instanceId ??
+    card?._instanceId ??
+    card?.uuid ??
+    card?.simInstanceId ??
+    null
+  );
 }
 
 function finalizationOverrideMatches(
@@ -226,7 +229,10 @@ export function applySpellTrapFinalizationOverride(
 ): boolean {
   if (!card || !owner) return false;
   const override = options?.activationContext?.spellTrapFinalization;
-  if (!override || (override.type !== "set_source" && override.type !== "default")) {
+  if (
+    !override ||
+    (override.type !== "set_source" && override.type !== "default")
+  ) {
     return false;
   }
   if (!finalizationOverrideMatches(card, override)) return false;
@@ -235,10 +241,7 @@ export function applySpellTrapFinalizationOverride(
   }
   if (!owner.spellTrap?.includes?.(card)) return false;
 
-  if (
-    override.deferUntil &&
-    options.forceDeferredFinalization !== true
-  ) {
+  if (override.deferUntil && options.forceDeferredFinalization !== true) {
     return storePendingSpellTrapFinalization(
       card,
       owner,
@@ -251,7 +254,7 @@ export function applySpellTrapFinalizationOverride(
 
   card.isFacedown = true;
   const setTurn = Number.isFinite(override.setTurn)
-    ? override.setTurn
+    ? override.setTurn!
     : Number(this?.turnCounter || 0);
   card.turnSetOn = setTurn;
   card.setTurn = setTurn;

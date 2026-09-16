@@ -51,9 +51,9 @@ export interface CardGridOptions<T extends UiCard = UiCard> {
   gridClass?: string;
   cardClass?: string;
   infoText?: string;
-  onConfirm?: (cards: T[]) => void;
-  onCancel?: () => void;
-  renderCard?: (card: T, index: number) => UiCardElement | null;
+  onConfirm?: ((cards: T[]) => void) | undefined;
+  onCancel?: (() => void) | undefined;
+  renderCard?: ((card: T, index: number) => UiCardElement | null) | undefined;
 }
 export interface MaterialDisplayRequirement {
   count?: number;
@@ -1302,7 +1302,7 @@ export function showCardGridSelectionModal<T extends UiCard>(
     if (selected.size < minSelect) return;
     const chosen = Array.from(selected)
       .map((i) => cards[i])
-      .filter(Boolean);
+      .filter((card): card is T => Boolean(card));
     overlay.remove();
     if (typeof onConfirm === "function") onConfirm(chosen);
   };

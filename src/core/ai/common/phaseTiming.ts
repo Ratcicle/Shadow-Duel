@@ -5,19 +5,19 @@ import type { SimulatedCardState } from "../../contracts/aiState.js";
 type AiTimingRole = "reactive_backrow" | "pre_battle_value" | "post_battle_payoff";
 interface PhaseTimingCard {
   id?: GameCard["id"] | number;
-  name?: string;
-  cardKind?: string;
-  subtype?: string | null;
+  name?: string | undefined;
+  cardKind?: string | undefined;
+  subtype?: string | null | undefined;
   lastAiActivatedTurn?: number | null;
 }
 type TimingAwareAction = AIPlannedAction & {
   timingRole?: AiTimingRole;
   card?: GameCard | SimulatedCardState | null;
-  cardId?: number;
-  cardName?: string;
+  cardId?: number | undefined;
+  cardName?: string | undefined;
   index?: number;
   cardKind?: GameCard["cardKind"];
-  subtype?: GameCard["subtype"];
+  subtype?: GameCard["subtype"] | undefined;
 };
 
 interface PhaseSource {
@@ -31,7 +31,7 @@ interface PhaseSource {
 interface PhaseAnalysis {
   phase?: unknown;
   turnCounter?: unknown;
-  game?: PhaseSource | null;
+  game?: PhaseSource | null | undefined;
 }
 
 interface PostBattleHookOwner {
@@ -53,8 +53,8 @@ interface PhaseTimingPlayer {
 }
 
 interface PhaseTimingContext {
-  player?: PhaseTimingPlayer | null;
-  bot?: PhaseTimingPlayer | null;
+  player?: PhaseTimingPlayer | null | undefined;
+  bot?: PhaseTimingPlayer | null | undefined;
   state?: PhaseSource | null;
   game?: PhaseSource | null;
   hand?: readonly PhaseTimingCard[];

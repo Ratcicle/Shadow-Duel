@@ -110,8 +110,11 @@ test("Vulcanomaton registra IDs, artes, Reguladores e contratos canônicos", () 
     "vulcanomaton_surveyor_normal_search_and_summon",
   );
   assert.equal(surveyorNormal.usagePolicy, "use");
-  assert.equal(required(surveyorNormal.targets)[0].intent, "cost");
-  assert.equal(required(surveyorNormal.activationCosts)[0].type, "move");
+  assert.equal(required(required(surveyorNormal.targets)[0]).intent, "cost");
+  assert.equal(
+    required(required(surveyorNormal.activationCosts)[0]).type,
+    "move",
+  );
   assert.deepEqual(
     required(surveyorNormal.actions).map((action) => action.type),
     ["search_any", "special_summon_from_zone"],
@@ -123,7 +126,7 @@ test("Vulcanomaton registra IDs, artes, Reguladores e contratos canônicos", () 
   );
   assert.equal(excavatorMaterial.triggerRequirement, "mandatory");
   assert.equal(excavatorMaterial.contextLabel, "synchro_material");
-  assert.equal(required(excavatorMaterial.actions)[0].type, "draw");
+  assert.equal(required(required(excavatorMaterial.actions)[0]).type, "draw");
 });
 
 test("Topógrafo ativa somente na Invocação-Normal e paga o descarte antes da resolução", async (t) => {
@@ -156,7 +159,7 @@ test("Topógrafo ativa somente na Invocação-Normal e paga o descarte antes da 
   });
   assert.equal(normal.entries.length, 1);
   assert.equal(
-    normal.entries[0].effect.id,
+    required(normal.entries[0]).effect.id,
     "vulcanomaton_surveyor_normal_search_and_summon",
   );
 
@@ -238,7 +241,7 @@ test("Topógrafo ativa somente na Invocação-Normal e paga o descarte antes da 
     prepared.success ? undefined : (prepared.reason ?? undefined),
   );
   assert.equal(harness.player.graveyard.includes(cost), true);
-  assert.equal(harness.trace.moves[0].options.contextLabel, "cost");
+  assert.equal(required(harness.trace.moves[0]).options.contextLabel, "cost");
   assert.deepEqual(required(prepared.preparedActivation).targetSelections, {});
 });
 
@@ -273,8 +276,8 @@ test("Topógrafo busca antes de Invocar da mão e nega o monstro Invocado enquan
   );
   const result = await game.effectEngine.applyActions(
     [
-      required(effect.actions)[0],
-      { ...required(effect.actions)[1], position: "attack" },
+      required(required(effect.actions)[0]),
+      { ...required(required(effect.actions)[1]), position: "attack" },
     ],
     {
       source: surveyor,
@@ -333,8 +336,8 @@ test("Escavador ativa após Invocação-Normal ou Especial e encadeia reviver pa
 
   const result = await game.effectEngine.applyActions(
     [
-      { ...required(effect.actions)[0], position: "attack" },
-      required(effect.actions)[1],
+      { ...required(required(effect.actions)[0]), position: "attack" },
+      required(required(effect.actions)[1]),
     ],
     {
       source: excavator,
@@ -381,8 +384,8 @@ test("Escavador não recupera se o alvo de reviver não estiver mais no Cemitér
 
   const result = await game.effectEngine.applyActions(
     [
-      { ...required(effect.actions)[0], position: "attack" },
-      required(effect.actions)[1],
+      { ...required(required(effect.actions)[0]), position: "attack" },
+      required(required(effect.actions)[1]),
     ],
     {
       source: excavator,
@@ -442,7 +445,7 @@ test("Triggers de Matéria Sincro exigem o contexto canônico e o do Escavador c
   });
   assert.equal(surveyorMaterial.entries.length, 1);
   assert.equal(
-    surveyorMaterial.entries[0].effect.id,
+    required(surveyorMaterial.entries[0]).effect.id,
     "vulcanomaton_surveyor_synchro_summon",
   );
 
@@ -457,7 +460,8 @@ test("Triggers de Matéria Sincro exigem o contexto canônico e o do Escavador c
   assert.equal(excavatorMaterial.entries.length, 1);
   const drawEffect = required(
     excavator.effects?.find(
-      (effect) => effect.id === excavatorMaterial.entries[0].effect.id,
+      (effect) =>
+        effect.id === required(excavatorMaterial.entries[0]).effect.id,
     ),
   );
   const drawResult = await game.effectEngine.applyActions(
@@ -579,20 +583,23 @@ test("Corebreaker and Excavation declare canonical contracts, limits, and art", 
   assert.deepEqual(handSummon.activationZones, ["hand"]);
   assert.equal(handSummon.timing, "ignition");
   assert.equal(handSummon.usagePolicy, "use");
-  assert.equal(required(handSummon.targets)[0].intent, "cost");
-  assert.equal(required(handSummon.targets)[0].requireFaceup, true);
+  assert.equal(required(required(handSummon.targets)[0]).intent, "cost");
+  assert.equal(required(required(handSummon.targets)[0]).requireFaceup, true);
   assert.equal(
-    required(handSummon.activationCosts)[0].contextLabel,
+    required(required(handSummon.activationCosts)[0]).contextLabel,
     "tribute_summon_cost",
   );
-  assert.equal(required(handSummon.actions)[0].fieldSlotsFreedBeforeSummon, 1);
+  assert.equal(
+    required(required(handSummon.actions)[0]).fieldSlotsFreedBeforeSummon,
+    1,
+  );
 
   const makeNonTuner = getEffect(
     COREBREAKER_ID,
     "vulcanomaton_corebreaker_make_non_tuner",
   );
-  assert.equal(required(makeNonTuner.targets)[0].excludeSelf, true);
-  assert.equal(required(makeNonTuner.targets)[0].isTuner, true);
+  assert.equal(required(required(makeNonTuner.targets)[0]).excludeSelf, true);
+  assert.equal(required(required(makeNonTuner.targets)[0]).isTuner, true);
   assert.deepEqual(required(makeNonTuner.actions)[0], {
     type: "add_status",
     targetRef: "vulcanomaton_corebreaker_other_tuner",
@@ -606,13 +613,13 @@ test("Corebreaker and Excavation declare canonical contracts, limits, and art", 
     "vulcanomaton_corebreaker_synchro_destroy",
   );
   assert.equal(materialDestroy.contextLabel, "synchro_material");
-  assert.deepEqual(required(materialDestroy.targets)[0].zones, [
+  assert.deepEqual(required(required(materialDestroy.targets)[0]).zones, [
     "field",
     "spellTrap",
     "fieldSpell",
   ]);
   assert.equal(
-    required(materialDestroy.actions)[0].type,
+    required(required(materialDestroy.actions)[0]).type,
     "destroy_targeted_cards",
   );
 
@@ -622,15 +629,15 @@ test("Corebreaker and Excavation declare canonical contracts, limits, and art", 
   );
   assert.equal(excavationEffect.usagePolicy, "activate");
   assert.equal(
-    required(excavationEffect.actions)[0].type,
+    required(required(excavationEffect.actions)[0]).type,
     "add_from_zone_to_hand",
   );
   assert.equal(
-    required(excavationEffect.actions)[0].resultRef,
+    required(required(excavationEffect.actions)[0]).resultRef,
     "vulcanomaton_excavation_added_monster",
   );
   assert.equal(
-    required(excavationEffect.actions)[1].type,
+    required(required(excavationEffect.actions)[1]).type,
     "optional_target_actions",
   );
 });
@@ -706,7 +713,7 @@ test("Corebreaker pays its Tribute before the Chain Link and Special Summons wit
   assert.equal(harness.player.graveyard.includes(tribute), true);
   assert.equal(harness.player.hand.includes(source), true);
   assert.equal(
-    harness.trace.moves[0].options.contextLabel,
+    required(harness.trace.moves[0]).options.contextLabel,
     "tribute_summon_cost",
   );
   assert.deepEqual(required(prepared.preparedActivation).targetSelections, {});
@@ -794,16 +801,17 @@ test("Corebreaker makes another Tuner a non-Tuner, restores it, and triggers onl
       "The legacy targeting port omits nullable fieldPresenceId and the concrete Player game port; these are real runtime models.",
     ),
   ).candidates;
+  // Check live object identity across the deliberately partial targeting fixture.
   assert.equal(
-    candidates.some((candidate) => candidate === corebreaker),
+    candidates.some((candidate) => Object.is(candidate, corebreaker)),
     false,
   );
   assert.equal(
-    candidates.some((candidate) => candidate === facedownTuner),
+    candidates.some((candidate) => Object.is(candidate, facedownTuner)),
     false,
   );
   assert.equal(
-    candidates.some((candidate) => candidate === tuner),
+    candidates.some((candidate) => Object.is(candidate, tuner)),
     true,
   );
 
@@ -893,7 +901,10 @@ test("Corebreaker makes another Tuner a non-Tuner, restores it, and triggers onl
     contextLabel: "synchro_material",
   });
   assert.equal(materialContext.entries.length, 1);
-  assert.equal(materialContext.entries[0].effect.id, materialEffect.id);
+  assert.equal(
+    required(materialContext.entries[0]).effect.id,
+    materialEffect.id,
+  );
 
   for (const target of [
     opponentMonster,

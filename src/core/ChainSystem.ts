@@ -7,9 +7,7 @@
  * anexada ao prototype pelo manifest canônico.
  */
 
-import {
-  attachChainMethods,
-} from "./chain/attachments.js";
+import { attachChainMethods } from "./chain/attachments.js";
 import { FAST_EFFECT_ORIGINS, FAST_EFFECT_STATES } from "./chain/timing.js";
 import type {
   ChainCard,
@@ -44,14 +42,11 @@ export {
 export { USAGE_POLICIES } from "./chain/usage.js";
 
 export interface ChainSystemOptions {
-  responseTimeoutMs?: number;
+  responseTimeoutMs?: number | undefined;
 }
 
 class ChainSystem implements FullChainHost {
-  constructor(
-    game: ChainGamePort | null,
-    options: ChainSystemOptions = {},
-  ) {
+  constructor(game: ChainGamePort | null, options: ChainSystemOptions = {}) {
     this.game = game;
     this.chainWindowOpen = false;
     this.chainWindowContext = null as FastEffectContextInput | null;

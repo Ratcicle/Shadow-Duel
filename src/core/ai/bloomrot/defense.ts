@@ -4,7 +4,7 @@ type PlayerIdentity = string | { id?: string; name?: string; lp?: number };
 type CardInput = BloomrotCard & { card?: BloomrotCard };
 type CardContextKey = "attacker" | "attackingMonster" | "defender" | "attackTarget";
 type PlayerContextKey = "attackerOwner" | "attackingPlayer" | "defenderOwner" | "defendingPlayer";
-export type BloomrotDefenseContext = Partial<Record<CardContextKey, CardInput | { card: BloomrotCard } | null>> & Partial<Record<PlayerContextKey, PlayerIdentity>> & { player?: BloomrotPlayer; directAttack?: boolean; isDirectAttack?: boolean };
+export type BloomrotDefenseContext = Partial<Record<CardContextKey, CardInput | { card: BloomrotCard } | null>> & Partial<Record<PlayerContextKey, PlayerIdentity>> & { player?: Exclude<PlayerIdentity, string> | null; directAttack?: boolean; isDirectAttack?: boolean };
 type DefenseOption = CardInput | { card: BloomrotCard };
 import {
   getEffectiveAtk,
@@ -360,6 +360,9 @@ export function shouldUseRottingGroundNegate(analysis: BloomrotAnalysis = {}) {
   }
 
   const best = candidates[0];
+  if (!best) {
+    return { yes: false, priority: 0, reason: "no dangerous 4+ spore target for Rotting Ground" };
+  }
   return {
     yes: true,
     target: best.card,

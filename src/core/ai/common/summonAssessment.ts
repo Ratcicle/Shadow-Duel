@@ -38,12 +38,12 @@ interface SummonAssessmentPlayer {
 }
 
 interface SummonAssessmentGame {
-  phase?: string | null;
+  phase?: string | null | undefined;
   getOpponent?(player: SummonAssessmentPlayer): SummonAssessmentPlayer | null;
 }
 
 interface SummonAssessmentAnalysis {
-  oppField?: readonly SummonAssessmentCard[];
+  oppField?: readonly SummonAssessmentCard[] | undefined;
   field?: readonly SummonAssessmentCard[];
 }
 
@@ -104,15 +104,15 @@ interface SummonAssessmentProfile {
 
 interface SummonAssessmentContext {
   profile?: SummonAssessmentProfile;
-  game?: SummonAssessmentGame | null;
+  game?: SummonAssessmentGame | null | undefined;
   analysis?: SummonAssessmentAnalysis | null;
   player?: SummonAssessmentPlayer | null;
   bot?: SummonAssessmentPlayer | null;
   opponent?: SummonAssessmentPlayer | null;
   oppField?: readonly SummonAssessmentCard[];
   myField?: readonly SummonAssessmentCard[];
-  phase?: string | null;
-  action?: SummonAssessmentAction | null;
+  phase?: string | null | undefined;
+  action?: SummonAssessmentAction | null | undefined;
   projectEntryStats?: SummonAssessmentProfile["projectEntryStats"];
   isBoss?: boolean;
   isEnginePiece?: boolean;

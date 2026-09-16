@@ -121,7 +121,7 @@ export interface MirageboundContext extends Omit<AIPlanningContext, "planningCon
   source?: MirageboundCard;
   sourceCard?: MirageboundCard;
   card?: MirageboundCard;
-  effect?: EffectDefinition;
+  effect?: EffectDefinition | undefined;
   activationContext?: MirageboundActivationContext;
   activationZone?: CanonicalZone;
   zone?: CanonicalZone;
@@ -143,7 +143,7 @@ export interface MirageboundLineAction {
   cardName?: string;
   card?: MirageboundCard;
   sourceCard?: MirageboundCard;
-  name?: string;
+  name?: string | undefined;
   attackerName?: string;
   targetName?: string | null;
   direct?: boolean;
@@ -152,7 +152,7 @@ export interface MirageboundLineAction {
   material?: MirageboundCard;
   materialName?: string;
   materials?: Array<{
-    name?: string;
+    name?: string | undefined;
   }>;
   materialNames?: string[];
   battleSteps?: MirageboundLineAction[];
@@ -215,10 +215,10 @@ export interface MirageboundChainContext {
 }
 export interface MirageboundBattleContext {
   attacker?: (MirageboundStatCard & {
-    name?: string;
+    name?: string | undefined;
   }) | null;
   target?: (MirageboundStatCard & {
-    name?: string;
+    name?: string | undefined;
   }) | null;
   lethalNow?: boolean;
   attackerSurvived?: boolean;

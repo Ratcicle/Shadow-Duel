@@ -102,7 +102,10 @@ export function markOncePerDuelEffectUsed(
 export function commitEffectUsage(
   this: Pick<TriggerCollectorHost, "game">,
   card: TriggerRuntimeCard | null | undefined,
-  player: TriggerRuntimePlayer | null | undefined,
+  player:
+    | Pick<TriggerRuntimePlayer, "id" | "name" | "oncePerDuelUsageByName">
+    | null
+    | undefined,
   effect: TriggerEffectLike | null | undefined,
 ) {
   if (!effect || !player || (!effect.oncePerTurn && !effect.oncePerDuel)) {

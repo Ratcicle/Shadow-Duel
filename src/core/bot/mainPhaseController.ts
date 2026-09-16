@@ -13,13 +13,22 @@ import {
 } from "../ai/common/phaseTiming.js";
 import { botLogger } from "../BotLogger.js";
 import type { BotRuntimePort, BotGamePort } from "../contracts/bot.js";
-import type { AIAction, AIPlannedAction, AIPlanningContext, AIPlanningProfile, TurnLineSearchResult } from "../contracts/ai.js";
+import type {
+  AIAction,
+  AIPlannedAction,
+  AIPlanningContext,
+  AIPlanningProfile,
+  TurnLineSearchResult,
+} from "../contracts/ai.js";
 
 function hasValue(value: unknown) {
   return value !== undefined && value !== null;
 }
 
-function resolvePlannerMode(game: BotGamePort, profile: Partial<AIPlanningProfile> = {}) {
+function resolvePlannerMode(
+  game: BotGamePort,
+  profile: Partial<AIPlanningProfile> = {},
+) {
   const configuredMode = game?.turnLineSearchMode ?? game?.arenaPlannerMode;
   if (configuredMode === "off") return "off";
   if (configuredMode === "always") return "always";
@@ -29,7 +38,10 @@ function resolvePlannerMode(game: BotGamePort, profile: Partial<AIPlanningProfil
   return profile?.enabled === true ? "critical" : "off";
 }
 
-export async function playBotMainPhase(bot: BotRuntimePort, game: BotGamePort): Promise<void> {
+export async function playBotMainPhase(
+  bot: BotRuntimePort,
+  game: BotGamePort,
+): Promise<void> {
   // Verificar se o jogo já acabou
   if (game.gameOver || game.isDisposed?.()) {
     return;
@@ -40,8 +52,7 @@ export async function playBotMainPhase(bot: BotRuntimePort, game: BotGamePort): 
 
   const opponent = game.player.id === bot.id ? game.bot : game.player;
   const useAutomaticAscension =
-    bot.strategy?.shouldUseAutomaticAscensionShortcut?.(game, bot) !==
-    false;
+    bot.strategy?.shouldUseAutomaticAscensionShortcut?.(game, bot) !== false;
 
   // === LOG DE ESTADO (DEV MODE) ===
   if (bot.debug) {
@@ -99,9 +110,10 @@ export async function playBotMainPhase(bot: BotRuntimePort, game: BotGamePort): 
     totalAttempts++;
 
     // Try Ascension before other actions if available
-    const ascended = useAutomaticAscension && !isMain2Phase(game)
-      ? await bot.tryAscensionIfAvailable(game)
-      : false;
+    const ascended =
+      useAutomaticAscension && !isMain2Phase(game)
+        ? await bot.tryAscensionIfAvailable(game)
+        : false;
     if (ascended) {
       // Allow subsequent actions after ascension
       const successfulActionDelayMs = Number.isFinite(
@@ -211,13 +223,14 @@ export async function playBotMainPhase(bot: BotRuntimePort, game: BotGamePort): 
     const plannerMode = resolvePlannerMode(game, planningProfile);
     const plannerForced = plannerMode === "always";
     const explicitPlannerOptIn =
-      plannerMode !== "off" && (plannerForced || planningProfile.enabled === true);
+      plannerMode !== "off" &&
+      (plannerForced || planningProfile.enabled === true);
     const shouldUsePlanner =
       explicitPlannerOptIn &&
       (plannerForced ||
-      (typeof planningStrategy.shouldUseDeepPlanning === "function"
-        ? planningStrategy.shouldUseDeepPlanning(game, planningContext)
-        : true));
+        (typeof planningStrategy.shouldUseDeepPlanning === "function"
+          ? planningStrategy.shouldUseDeepPlanning(game, planningContext)
+          : true));
 
     if (shouldUsePlanner && actions.length > 0) {
       const plannerBeamWidth =
@@ -307,10 +320,7 @@ export async function playBotMainPhase(bot: BotRuntimePort, game: BotGamePort): 
       if (plannerResult?.action) {
         bestAction = plannerResult.action;
         pendingPlannerTrace = plannerResult;
-        console.log(
-          `[Bot.playMainPhase] ✅ TurnLineSearch chose:`,
-          bestAction,
-        );
+        console.log(`[Bot.playMainPhase] ✅ TurnLineSearch chose:`, bestAction);
       } else {
         console.log(`[Bot.playMainPhase] ❌ TurnLineSearch returned no action`);
       }
@@ -362,7 +372,7 @@ export async function playBotMainPhase(bot: BotRuntimePort, game: BotGamePort): 
         // 🔧 EMERGENCY FIX: Se greedy falhou mas temos ações, forçar primeira
         if (!bestAction && actions.length > 0) {
           bestAction =
-            fallbackActions.length > 0 ? fallbackActions[0] : actions[0];
+            fallbackActions.length > 0 ? fallbackActions[0]! : actions[0]!;
           console.warn(
             `[Bot.playMainPhase] 🚨 EMERGENCY FALLBACK: Forcing first action to avoid pass`,
           );
@@ -393,7 +403,7 @@ export async function playBotMainPhase(bot: BotRuntimePort, game: BotGamePort): 
       }
 
       if (finalFallback.length > 0) {
-        bestAction = finalFallback[0];
+        bestAction = finalFallback[0]!;
         console.log(
           `[Bot.playMainPhase] ?? Using ultimate fallback: first valid action`,
           bestAction,
@@ -428,7 +438,10 @@ export async function playBotMainPhase(bot: BotRuntimePort, game: BotGamePort): 
         selected: false,
         reason: "selected_action_invalid",
         actionType: bestAction.type || null,
-        card: (bestAction as AIAction).card?.name || (bestAction as AIAction).cardName || null,
+        card:
+          (bestAction as AIAction).card?.name ||
+          (bestAction as AIAction).cardName ||
+          null,
       });
       continue;
     }
@@ -438,7 +451,10 @@ export async function playBotMainPhase(bot: BotRuntimePort, game: BotGamePort): 
       attempt: totalAttempts,
       selected: true,
       actionType: bestAction.type || null,
-      card: (bestAction as AIAction).card?.name || (bestAction as AIAction).cardName || null,
+      card:
+        (bestAction as AIAction).card?.name ||
+        (bestAction as AIAction).cardName ||
+        null,
     });
 
     if (bestAction.type === "simulatedBattle") {
@@ -465,8 +481,8 @@ export async function playBotMainPhase(bot: BotRuntimePort, game: BotGamePort): 
       let ranking = -1;
       for (let i = 0; i < sorted.length; i++) {
         if (
-          sorted[i].type === bestAction.type &&
-          sorted[i].index === (bestAction as AIAction).index
+          sorted[i]!.type === bestAction.type &&
+          sorted[i]!.index === (bestAction as AIAction).index
         ) {
           ranking = i;
           break;

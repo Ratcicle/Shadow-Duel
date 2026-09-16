@@ -91,9 +91,15 @@ test("Samurai declara três blocos compactos e limites independentes", async () 
   assert.equal(reviveEffect.usagePolicy, "use");
   assert.notEqual(sendEffect.oncePerTurnName, reviveEffect.oncePerTurnName);
   assert.deepEqual(reviveEffect.activationZones, ["graveyard"]);
-  assert.equal(required(reviveEffect.actions)[0].banishCost, true);
-  assert.equal(record(required(reviveEffect.actions)[0].filters).isTuner, true);
-  assert.equal(record(required(reviveEffect.actions)[0].filters).maxLevel, 4);
+  assert.equal(required(required(reviveEffect.actions)[0]).banishCost, true);
+  assert.equal(
+    record(required(required(reviveEffect.actions)[0]).filters).isTuner,
+    true,
+  );
+  assert.equal(
+    record(required(required(reviveEffect.actions)[0]).filters).maxLevel,
+    4,
+  );
 });
 
 test("Samurai envia o Regulador do Deck e devolve o timing ao estado aberto", async (t) => {

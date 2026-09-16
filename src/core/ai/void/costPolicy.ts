@@ -2,7 +2,7 @@ import type { SimulatedCardState } from "../../contracts/aiState.js";
 import type { GameCard } from "../../contracts/cards.js";
 import type { AIStrategyBotPort } from "../../contracts/ai.js";
 import type { buildStrategyAnalysis } from "../common/analysis.js";
-type Analysis = Omit<Partial<ReturnType<typeof buildStrategyAnalysis>>, "phase"> & { phase?: string | null } & { resolvedOpponent?: Partial<AIStrategyBotPort> | null; myLP?: number };
+type Analysis = Omit<Partial<ReturnType<typeof buildStrategyAnalysis>>, "phase" | "fieldSpell"> & { fieldSpell?: ReturnType<typeof buildStrategyAnalysis>["fieldSpell"] | undefined; phase?: string | null | undefined } & { resolvedOpponent?: Partial<AIStrategyBotPort> | null; myLP?: number };
 // ─────────────────────────────────────────────────────────────────────────────
 // src/core/ai/void/costPolicy.js
 // Cost preferences dinâmicas para o arquétipo Void.

@@ -6,7 +6,7 @@ import type { UiCard } from "../renderer/types.js";
 import type { NormalDuelConfig } from "./gameLauncher.js";
 interface FilterOption {
   id: string;
-  label?: string;
+  label?: string | undefined;
   labelKey?: string;
 }
 interface DeckListEntry {
@@ -94,7 +94,7 @@ const COLLECTION_KIND_ORDER: Record<string, number> = {
   spell: 1,
   trap: 2,
 };
-const COLLECTION_MONSTER_GROUP_ORDER: Record<string, number> = {
+const COLLECTION_MONSTER_GROUP_ORDER = {
   ascension: 0,
   synchro: 1,
   fusion: 2,
@@ -233,7 +233,7 @@ function compareLevel(
 function cardKindOrder(card: UiCard | null | undefined) {
   const kind = String(card?.cardKind || "").toLowerCase();
   return Object.prototype.hasOwnProperty.call(COLLECTION_KIND_ORDER, kind)
-    ? COLLECTION_KIND_ORDER[kind]
+    ? COLLECTION_KIND_ORDER[kind]!
     : 99;
 }
 
@@ -255,7 +255,7 @@ function subtypeOrder(
 ) {
   const subtype = String(card?.subtype || "").toLowerCase();
   return Object.prototype.hasOwnProperty.call(orderMap, subtype)
-    ? orderMap[subtype]
+    ? orderMap[subtype]!
     : 99;
 }
 

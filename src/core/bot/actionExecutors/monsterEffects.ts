@@ -1,9 +1,17 @@
 import type { BotRuntimePort, BotGamePort } from "../../contracts/bot.js";
-import type { AIActionOf, ExtraDeckMaterialHint, AIActivationContext } from "../../contracts/ai.js";
+import type {
+  AIActionOf,
+  ExtraDeckMaterialHint,
+  AIActivationContext,
+} from "../../contracts/ai.js";
 import type { GameCard } from "../../contracts/cards.js";
 import { getCanonicalEffectActivationZones } from "../../chain/legality.js";
 
-export async function executeMonsterEffectAction(bot: BotRuntimePort, game: BotGamePort, action: AIActionOf<"monsterEffect">): Promise<boolean> {
+export async function executeMonsterEffectAction(
+  bot: BotRuntimePort,
+  game: BotGamePort,
+  action: AIActionOf<"monsterEffect">,
+): Promise<boolean> {
   const fieldIndex = Number.isInteger(action.fieldIndex)
     ? action.fieldIndex
     : bot.field.findIndex(
@@ -22,7 +30,10 @@ export async function executeMonsterEffectAction(bot: BotRuntimePort, game: BotG
 
   const actionActivationContext = action.activationContext || {};
   const effectId =
-    action.effectId || action.effect?.id || actionActivationContext.effectId || null;
+    action.effectId ||
+    action.effect?.id ||
+    actionActivationContext.effectId ||
+    null;
   const activationContext: AIActivationContext = {
     ...actionActivationContext,
     fromHand: false,
@@ -32,7 +43,9 @@ export async function executeMonsterEffectAction(bot: BotRuntimePort, game: BotG
     autoSelectTargets: actionActivationContext.autoSelectTargets !== false,
   };
   const activationEffect =
-    game.effectEngine?.getMonsterIgnitionEffect?.(card, "field", { effectId }) ||
+    game.effectEngine?.getMonsterIgnitionEffect?.(card, "field", {
+      effectId,
+    }) ||
     (card.effects || []).find(
       (e) =>
         e &&
@@ -65,13 +78,7 @@ export async function executeMonsterEffectAction(bot: BotRuntimePort, game: BotG
       effect: activationEffect,
     },
     activate: (chosen, ctx, zone) =>
-      game.effectEngine.activateMonsterEffect(
-        card,
-        bot,
-        chosen,
-        zone,
-        ctx,
-      ),
+      game.effectEngine.activateMonsterEffect(card, bot, chosen, zone, ctx),
     finalize: () => {
       game.ui?.log?.(`Bot activates ${card.name}'s effect`);
       game.updateBoard();
@@ -85,7 +92,11 @@ export async function executeMonsterEffectAction(bot: BotRuntimePort, game: BotG
   );
 }
 
-export async function executeGraveyardMonsterEffectAction(bot: BotRuntimePort, game: BotGamePort, action: AIActionOf<"graveyardMonsterEffect">): Promise<boolean> {
+export async function executeGraveyardMonsterEffectAction(
+  bot: BotRuntimePort,
+  game: BotGamePort,
+  action: AIActionOf<"graveyardMonsterEffect">,
+): Promise<boolean> {
   const graveyardIndex = Number.isInteger(action.graveyardIndex)
     ? action.graveyardIndex
     : bot.graveyard.findIndex(
@@ -104,7 +115,10 @@ export async function executeGraveyardMonsterEffectAction(bot: BotRuntimePort, g
 
   const actionActivationContext = action.activationContext || {};
   const effectId =
-    action.effectId || action.effect?.id || actionActivationContext.effectId || null;
+    action.effectId ||
+    action.effect?.id ||
+    actionActivationContext.effectId ||
+    null;
   const graveyardEffect =
     game.effectEngine?.getMonsterIgnitionEffect?.(card, "graveyard", {
       effectId,
@@ -157,12 +171,7 @@ export async function executeGraveyardMonsterEffectAction(bot: BotRuntimePort, g
       effect: graveyardEffect,
     },
     activate: (chosen, ctx) =>
-      game.effectEngine.activateMonsterFromGraveyard(
-        card,
-        bot,
-        chosen,
-        ctx,
-      ),
+      game.effectEngine.activateMonsterFromGraveyard(card, bot, chosen, ctx),
     finalize: () => {
       game.ui?.log?.(`Bot activates ${card.name}'s effect from graveyard`);
       game.updateBoard();
@@ -176,10 +185,14 @@ export async function executeGraveyardMonsterEffectAction(bot: BotRuntimePort, g
   );
 }
 
-export async function executeHandIgnitionAction(bot: BotRuntimePort, game: BotGamePort, action: AIActionOf<"handIgnition">): Promise<boolean> {
+export async function executeHandIgnitionAction(
+  bot: BotRuntimePort,
+  game: BotGamePort,
+  action: AIActionOf<"handIgnition">,
+): Promise<boolean> {
   const resolvedIndex = bot.resolveHandIndexForAction(action, "monster");
   if (resolvedIndex < 0) return false;
-  const card = bot.hand[resolvedIndex];
+  const card = bot.hand[resolvedIndex]!; // resolveHandIndexForAction validated this occupied slot.
 
   console.log(
     `[Bot.executeMainPhaseAction] 🔥 Attempting hand ignition: ${card.name}`,
@@ -188,7 +201,10 @@ export async function executeHandIgnitionAction(bot: BotRuntimePort, game: BotGa
   // Verificar se o efeito pode ser ativado
   const actionActivationContext = action.activationContext || {};
   const effectId =
-    action.effectId || action.effect?.id || actionActivationContext.effectId || null;
+    action.effectId ||
+    action.effect?.id ||
+    actionActivationContext.effectId ||
+    null;
   const handIgnitionEffect =
     game.effectEngine?.getMonsterIgnitionEffect?.(card, "hand", { effectId }) ||
     (card.effects || []).find(
@@ -229,13 +245,7 @@ export async function executeHandIgnitionAction(bot: BotRuntimePort, game: BotGa
       effect: handIgnitionEffect,
     },
     activate: (chosen, ctx, zone) =>
-      game.effectEngine.activateMonsterEffect(
-        card,
-        bot,
-        chosen,
-        "hand",
-        ctx,
-      ),
+      game.effectEngine.activateMonsterEffect(card, bot, chosen, "hand", ctx),
     finalize: () => {
       game.ui?.log?.(`Bot activates ${card.name}'s effect from hand`);
       game.updateBoard();

@@ -1,29 +1,18 @@
-import type {
-  BattlePosition,
-  CardKind,
-  MonsterType,
-} from "./cards.js";
+import type { BattlePosition, CardKind, MonsterType } from "./cards.js";
 import type {
   ChainActivationKind,
   ChainEffectKind,
   ChainResponseContextType,
 } from "./chain.js";
 import type { ChainRuntimePort } from "./chainRuntime.js";
-import type {
-  DamageStepTiming,
-  EffectDefinition,
-} from "./effects.js";
+import type { DamageStepTiming, EffectDefinition } from "./effects.js";
 import type { SummonMethod, SummonOrigin } from "./summon.js";
 import type { RawSelectionContract } from "./selection.js";
 import type { CanonicalZone, LegacyZoneAlias } from "./zones.js";
 
 export type MaybeEventPromise<Value> = Value | PromiseLike<Value>;
 export type EventEntityId = number | string;
-export type EventZone =
-  | CanonicalZone
-  | LegacyZoneAlias
-  | "temporary"
-  | "token";
+export type EventZone = CanonicalZone | LegacyZoneAlias | "temporary" | "token";
 export type EventPhase =
   | "draw"
   | "standby"
@@ -38,7 +27,7 @@ export type EventPhase =
  * owned by their later migration stage.
  */
 export interface EventCard {
-  id?: number | null;
+  id?: number | null | undefined;
   name?: string | null;
   cardName?: string | null;
   instanceId?: EventEntityId | null;
@@ -51,13 +40,13 @@ export interface EventCard {
   originalCardKind?: CardKind | null;
   subtype?: string | null;
   monsterType?: MonsterType | null;
-  type?: string | null;
+  type?: string | null | undefined;
   archetype?: string | null;
   archetypes?: string[];
   owner?: string | null;
   originalOwner?: string | null;
   controller?: string | null;
-  /** Card.js remains a JavaScript producer whose mutable state is string-typed. */
+  /** Event readers also accept the string-valued runtime card projection. */
   position?: string | null;
   previousPosition?: string | null;
   isFacedown?: boolean;
@@ -77,8 +66,8 @@ export interface EventCard {
   lastSummonedFromZone?: EventZone | null;
   lastSummonedTurn?: number | null;
   lastSummonProcedure?: string | null;
-  effectsNegated?: boolean;
-  effectsNegatedDuration?: string | number | null;
+  effectsNegated?: boolean | undefined;
+  effectsNegatedDuration?: (string | number | null) | undefined;
 }
 
 export interface EventPlayer {
@@ -127,10 +116,10 @@ export interface EventPayloadBase {
   reason?: string | null;
   event?: string | null;
   card?: EventCard | null;
-  player?: EventPlayer | null;
+  player?: (EventPlayer | null) | undefined;
   opponent?: EventPlayer | null;
   source?: EventCard | null;
-  sourceCard?: EventCard | null;
+  sourceCard?: (EventCard | null) | undefined;
   sourcePlayer?: EventPlayer | null;
   target?: EventCard | null;
   targetOwner?: EventPlayer | null;
@@ -144,7 +133,7 @@ export interface EventPayloadBase {
   movedCard?: EventCard | null;
   changedCard?: EventCard | null;
   eventCard?: EventCard | null;
-  effect?: EffectDefinition | null;
+  effect?: (EffectDefinition | null) | undefined;
   effectId?: string | null;
   sourceEvent?: string | null;
   fromZone?: EventZone | null;
@@ -507,8 +496,7 @@ type MissingResolvableEventName = Exclude<
 >;
 type ResolvableEventManifestIsComplete =
   MissingResolvableEventName extends never ? true : never;
-const resolvableEventManifestIsComplete: ResolvableEventManifestIsComplete =
-  true;
+const resolvableEventManifestIsComplete: ResolvableEventManifestIsComplete = true;
 void resolvableEventManifestIsComplete;
 
 export interface ActivationTransactionEventPayload {
@@ -585,7 +573,7 @@ export interface ChainFinalizationCompleteEventPayload {
 
 export interface DamageInflictedEventPayload {
   target: EventPlayer;
-  sourceCard?: EventCard | null;
+  sourceCard?: (EventCard | null) | undefined;
   amount: number;
   lpLost: number;
   newLP: number;
@@ -907,8 +895,7 @@ type MissingInformationalEventName = Exclude<
 >;
 type InformationalEventManifestIsComplete =
   MissingInformationalEventName extends never ? true : never;
-const informationalEventManifestIsComplete: InformationalEventManifestIsComplete =
-  true;
+const informationalEventManifestIsComplete: InformationalEventManifestIsComplete = true;
 void informationalEventManifestIsComplete;
 export type RuntimeEventName = ResolvableEventName | InformationalEventName;
 
@@ -968,10 +955,7 @@ export interface EventTriggerPackage {
   onComplete?: EventTriggerCompletion | null;
 }
 
-export type TriggerCollector<
-  Name extends CollectedTriggerEventName,
-  Host,
-> = (
+export type TriggerCollector<Name extends CollectedTriggerEventName, Host> = (
   this: Host,
   payload: CollectedTriggerEventMap[Name],
 ) => MaybeEventPromise<EventTriggerPackage>;
@@ -1015,7 +999,7 @@ export interface EventResolutionOutcome {
   occurrenceId?: EventEntityId;
   pendingCount?: number;
   payload?: EventPayloadBase;
-  occurrence?: EventTriggerOccurrence | null;
+  occurrence?: (EventTriggerOccurrence | null) | undefined;
   entries?: EventTriggerEntry[];
   orderRule?: string | null;
   onComplete?: EventTriggerCompletion | null;
@@ -1039,8 +1023,8 @@ export type EventListenerRegistry = {
 };
 
 export interface EventTelemetryMetadata {
-  turn?: number | null;
-  phase?: string | null;
+  turn?: (number | null) | undefined;
+  phase?: (string | null) | undefined;
 }
 
 export interface RuntimeEventRecorder {
@@ -1143,7 +1127,7 @@ export interface EventChainPort
   resolveTriggerOccurrences(
     occurrences: EventTriggerOccurrence[],
     options?: {
-      actionPlayer?: EventPlayer | null;
+      actionPlayer?: EventPlayer | null | undefined;
       context?: EventPayloadBase;
       deferPostChainWindow?: boolean;
     },
@@ -1185,10 +1169,7 @@ export interface EventResolverHost extends EventBusHost {
   effectEngine?: EventEffectEnginePort | null;
   chainSystem?: EventChainPort | null;
   devLog(eventName: string, payload: object): void;
-  assertStateInvariants(
-    scope: string,
-    options?: { failFast?: boolean },
-  ): void;
+  assertStateInvariants(scope: string, options?: { failFast?: boolean }): void;
   resolveEventEntries(
     eventName: ResolvableEventName,
     payload: EventPayloadBase,
@@ -1196,10 +1177,10 @@ export interface EventResolverHost extends EventBusHost {
     options?: {
       onComplete?: EventTriggerCompletion | null;
       orderRule?: string | null;
-      occurrence?: EventTriggerOccurrence | null;
+      occurrence?: EventTriggerOccurrence | null | undefined;
       startIndex?: number;
       results?: unknown[];
-      selections?: object | null;
+      selections?: object | null | undefined;
     },
   ): Promise<EventResolutionOutcome>;
   queueTriggerOccurrence(

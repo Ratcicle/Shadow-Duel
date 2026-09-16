@@ -24,6 +24,7 @@ test("Natural Selection declares its compact text and canonical transaction", as
   assert.equal(locale.cards["21"].description, EXPECTED_PT_BR);
 
   const [effect] = required(card.effects);
+  assert.ok(effect);
   assert.equal(effect.speed, 2);
   assert.equal(effect.usagePolicy, "activate");
   assert.equal(effect.oncePerTurnName, "natural_selection_activation");

@@ -1,7 +1,10 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import type Card from "../../Card.js";
 import type Player from "../../Player.js";
-import type { BattlePosition, BattlePositionInput } from "../../contracts/cards.js";
+import type {
+  BattlePosition,
+  BattlePositionInput,
+} from "../../contracts/cards.js";
 
 interface SummonPositionHost {
   effectEngine?: {
@@ -14,7 +17,7 @@ interface SummonPositionHost {
 }
 
 interface SummonPositionOptions {
-  position?: BattlePositionInput;
+  position?: BattlePositionInput | undefined;
 }
 
 // src/core/game/ui/prompts.js

@@ -398,6 +398,7 @@ export function scoreDragonBackrowSet(card: DragonCard, context: DragonPolicyCon
     );
     if (preferred.length === 0) return { priority: 4, reason: "Call has no revive target" };
     const top = preferred[0];
+    if (!top) return { priority: 4, reason: "Call has no revive target" };
     let priority = 8;
     if (CALL_REVIVE_ORDER.includes(top.name!)) priority += 2;
     if (DRAGON_BOSS_NAMES.has(top.name!) || isExtremeDragon(top)) priority += 2;

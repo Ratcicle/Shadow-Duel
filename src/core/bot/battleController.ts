@@ -1,9 +1,15 @@
 import type { BotRuntimePort, BotGamePort } from "../contracts/bot.js";
 import type { GameCard } from "../contracts/cards.js";
 
-type BattleCardIdentity = { id?: number; instanceId?: number | string };
+type BattleCardIdentity = {
+  id?: number | undefined;
+  instanceId?: number | string;
+};
 
-export function isSameBattleCard(candidate: BattleCardIdentity | null | undefined, original: BattleCardIdentity | null | undefined): boolean {
+export function isSameBattleCard(
+  candidate: BattleCardIdentity | null | undefined,
+  original: BattleCardIdentity | null | undefined,
+): boolean {
   if (!candidate || !original) return false;
   if (candidate.instanceId != null && original.instanceId != null) {
     return candidate.instanceId === original.instanceId;
@@ -11,7 +17,10 @@ export function isSameBattleCard(candidate: BattleCardIdentity | null | undefine
   return candidate.id === original.id;
 }
 
-export function playBotBattlePhase(bot: BotRuntimePort, game: BotGamePort): void {
+export function playBotBattlePhase(
+  bot: BotRuntimePort,
+  game: BotGamePort,
+): void {
   if (game.isDisposed?.()) return;
 
   const guard = game.canStartAction({
@@ -51,7 +60,11 @@ export function playBotBattlePhase(bot: BotRuntimePort, game: BotGamePort): void
       return;
     }
 
-    let bestAttack: { attacker: GameCard; target: GameCard | null; threshold: number } | null = null;
+    let bestAttack: {
+      attacker: GameCard;
+      target: GameCard | null;
+      threshold: number;
+    } | null = null;
     let bestDelta = -Infinity;
     let bestAttackerAtk = 0;
     const baseScore = bot.evaluateBoard(game, bot);
@@ -76,14 +89,13 @@ export function playBotBattlePhase(bot: BotRuntimePort, game: BotGamePort): void
             attacker.passiveExtraAttackTargetRestriction) === "monster"
         );
 
-      const tauntTargets = opponent.field.filter(
-        (card) =>
-          (typeof game.isActiveAttackPriorityTarget === "function"
-            ? game.isActiveAttackPriorityTarget(card)
-            : card &&
-              card.cardKind === "monster" &&
-              card.mustBeAttacked &&
-              !card.isFacedown),
+      const tauntTargets = opponent.field.filter((card) =>
+        typeof game.isActiveAttackPriorityTarget === "function"
+          ? game.isActiveAttackPriorityTarget(card)
+          : card &&
+            card.cardKind === "monster" &&
+            card.mustBeAttacked &&
+            !card.isFacedown,
       );
 
       const possibleTargets =
@@ -96,13 +108,17 @@ export function playBotBattlePhase(bot: BotRuntimePort, game: BotGamePort): void
               : [];
 
       for (const target of possibleTargets) {
-        if (target === null && opponent.field.length > 0 && !canDirectAttackNow) {
+        if (
+          target === null &&
+          opponent.field.length > 0 &&
+          !canDirectAttackNow
+        ) {
           continue;
         }
 
         const simState = bot.cloneGameState(game);
-        const simAttacker = simState.bot.field.find(
-          (c) => isSameBattleCard(c, attacker),
+        const simAttacker = simState.bot.field.find((c) =>
+          isSameBattleCard(c, attacker),
         );
         const simTarget = target
           ? simState.player.field.find((c) => isSameBattleCard(c, target))
@@ -120,8 +136,8 @@ export function playBotBattlePhase(bot: BotRuntimePort, game: BotGamePort): void
         const scoreAfter = bot.evaluateBoard(simState, simState.bot);
         let delta = scoreAfter - baseScore;
         const opponentLpAfter = simState.player.lp || 0;
-        const attackerSurvived = simState.bot.field.some(
-          (c) => isSameBattleCard(c, attacker),
+        const attackerSurvived = simState.bot.field.some((c) =>
+          isSameBattleCard(c, attacker),
         );
         const targetSurvived = target
           ? simState.player.field.some((c) => isSameBattleCard(c, target))
@@ -165,24 +181,27 @@ export function playBotBattlePhase(bot: BotRuntimePort, game: BotGamePort): void
           delta -= 0.5;
         }
 
-        const strategyBattleDelta =
-          bot.strategy?.scoreBattleAttackCandidate?.({
-            attacker,
-            target,
-            baseDelta: delta,
-            simState,
-            game,
-            bot: bot,
-            opponent,
-            isSecondAttack,
-            attackerSurvived,
-            targetSurvived,
-            lethalNow,
-            opponentLpAfter,
-          });
+        const strategyBattleDelta = bot.strategy?.scoreBattleAttackCandidate?.({
+          attacker,
+          target,
+          baseDelta: delta,
+          simState,
+          game,
+          bot: bot,
+          opponent,
+          isSecondAttack,
+          attackerSurvived,
+          targetSurvived,
+          lethalNow,
+          opponentLpAfter,
+        });
         if (Number.isFinite(strategyBattleDelta)) {
           delta += strategyBattleDelta as number;
-        } else if (Number.isFinite((strategyBattleDelta as { scoreDelta?: number } | null)?.scoreDelta)) {
+        } else if (
+          Number.isFinite(
+            (strategyBattleDelta as { scoreDelta?: number } | null)?.scoreDelta,
+          )
+        ) {
           delta += (strategyBattleDelta as { scoreDelta: number }).scoreDelta;
         }
 
@@ -223,7 +242,11 @@ export function playBotBattlePhase(bot: BotRuntimePort, game: BotGamePort): void
       )
         .then(() => {
           // Verificar todas as condições antes de continuar atacando
-          if (!game.gameOver && !game.isDisposed?.() && game.phase === "battle") {
+          if (
+            !game.gameOver &&
+            !game.isDisposed?.() &&
+            game.phase === "battle"
+          ) {
             setTimeout(() => {
               if (!game.isDisposed?.()) performAttack();
             }, battleDelayMs);

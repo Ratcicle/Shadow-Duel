@@ -60,21 +60,21 @@ import type { SummonMethod } from "../../contracts/summon.js";
 import type { CanonicalZone } from "../../contracts/zones.js";
 
 interface SimulatedHandIndexAction {
-  cardId?: number;
-  cardName?: string;
+  cardId?: number | undefined;
+  cardName?: string | undefined;
   index?: number;
 }
 
 interface SimulatedFieldIndexAction extends SimulatedHandIndexAction {
   fieldIndex?: number;
-  materialIndex?: number;
+  materialIndex?: number | undefined;
 }
 
 interface SimulatedExtraDeckMaterialHint {
   index?: number;
-  id?: number;
-  name?: string;
-  instanceIds?: readonly (string | number)[];
+  id?: number | undefined;
+  name?: string | undefined;
+  instanceIds?: readonly (string | number)[] | undefined;
 }
 
 interface SimulatedExtraDeckAction extends SimulatedHandIndexAction {
@@ -111,7 +111,7 @@ interface SimulatedSelectionOptionsInput
   preferDefense?: boolean;
   changedCard?: SimulatedCardState | null;
   actionContext?: SimulatedSelectionActionContext;
-  activationContext?: AIActivationContext | null;
+  activationContext?: AIActivationContext | null | undefined;
   strategy?: unknown;
   rankSearchCandidates?: unknown;
   evaluateRecruitCandidate?: unknown;
@@ -197,7 +197,7 @@ interface SimulatedEventDispatchOptions
     | "evaluateRecruitCandidate"
     | "chooseSpecialSummonPosition"
   > {
-  activationContext?: AIActivationContext | null;
+  activationContext?: AIActivationContext | null | undefined;
   archetype?: string | null;
   preferDefense?: boolean;
   maxSimulatedEventDepth?: number;
@@ -412,7 +412,7 @@ function buildSelectionOptions(
 
 function getSimOncePerTurnKey(
   effect: SimulatedEffectUsageIdentity | null | undefined,
-  sourceCard: { name?: string | null } | null | undefined,
+  sourceCard: { name?: string | null | undefined } | null | undefined,
 ): string | null {
   if (!effect) return null;
   return (
@@ -425,7 +425,7 @@ function getSimOncePerTurnKey(
 
 interface SimulatedEffectPlayer {
   id?: string | null;
-  effectActivationRestrictions?: readonly SimulatedEffectActivationRestriction[];
+  effectActivationRestrictions?: readonly SimulatedEffectActivationRestriction[] | undefined;
 }
 
 interface SimulatedEffectActivationRestriction {
@@ -640,8 +640,8 @@ function matchesZoneFilter(zone: unknown, filter: unknown): boolean {
 function getOtherSimPlayer(
   state:
     | {
-        bot?: SimulatedPlayerState | null;
-        player?: SimulatedPlayerState | null;
+        bot?: SimulatedPlayerState | null | undefined;
+        player?: SimulatedPlayerState | null | undefined;
       }
     | null
     | undefined,
@@ -1319,8 +1319,8 @@ function dispatchSimulatedEvent(
 }
 
 interface SimulatedEffectActionView {
-  effectId?: string | null;
-  effect?: EffectDefinition | null;
+  effectId?: string | null | undefined;
+  effect?: EffectDefinition | null | undefined;
 }
 
 type SimulatedActionOverrideAction = AIAction;
@@ -2196,7 +2196,12 @@ export function applyGenericSimulatedMainPhaseAction<
       break;
     }
 
+    // These actions are handled by strategy overrides, or leave this generic simulation unchanged.
+    case "graveyardSpellEffect":
+    case "special_summon_sanctum_protector":
+      break;
     default:
+      action satisfies never;
       break;
   }
 

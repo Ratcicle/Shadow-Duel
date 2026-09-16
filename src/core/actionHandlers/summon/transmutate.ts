@@ -1,8 +1,4 @@
-import {
-  getUI,
-  resolveTargetCards,
-  sendCardsToGraveyard,
-} from "../shared.js";
+import { getUI, resolveTargetCards, sendCardsToGraveyard } from "../shared.js";
 import type { ActionOf } from "../../contracts/actions.js";
 import type { SelectionCount } from "../../contracts/actions.js";
 import type {
@@ -76,7 +72,7 @@ export async function resolveTransmutate(
     return false;
   }
 
-  const costCard = costCards[0];
+  const costCard = costCards[0]!; // The selected cost list was checked non-empty.
   const costLevel = costCard?.level ?? 0;
 
   if (!costLevel) {

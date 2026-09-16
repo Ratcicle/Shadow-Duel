@@ -3,7 +3,7 @@
  * precedence, and original index for stable ties.
  */
 interface SequencedAction {
-  priority?: number;
+  priority?: number | undefined;
   type?: string;
 }
 

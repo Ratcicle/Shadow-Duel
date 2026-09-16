@@ -96,6 +96,14 @@ const attachmentsHaveExactKeyset: AttachmentsHaveExactKeyset = true;
 declare const game: Game;
 declare const card: GameCard;
 declare const player: GamePlayer;
+
+// Rollback restores metadata that was absent before the activation.
+game.rollbackFieldSpellTrapActivation({
+  card,
+  owner: player,
+  previousTurnSetOn: undefined,
+  previousSetTurn: undefined,
+});
 declare const duelCardId: DuelCardId;
 declare const summonId: SummonId;
 declare const damageStepId: DamageStepId;

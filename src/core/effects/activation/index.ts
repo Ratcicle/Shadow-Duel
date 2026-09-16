@@ -1,5 +1,5 @@
 /**
- * activation/index.js
+ * activation/index.ts
  * Barrel file for activation module
  */
 

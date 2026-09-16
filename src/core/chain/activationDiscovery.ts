@@ -35,9 +35,9 @@ interface ChainResponsePreviewContext extends FastEffectContextInput {
   activationZone: CanonicalZone;
   chainWindowOpen: boolean;
   isChainWindow: boolean;
-  lastSpellSpeed?: SpellSpeed;
+  lastSpellSpeed?: SpellSpeed | undefined;
   requiredSpellSpeed: SpellSpeed;
-  respondingToSpellSpeed?: SpellSpeed;
+  respondingToSpellSpeed?: SpellSpeed | undefined;
   sourceZone: CanonicalZone;
 }
 
@@ -116,7 +116,9 @@ function wasTriggerEffectAlreadyOffered(
   card: ChainCard,
   effect: ChainEffect,
 ): boolean {
-  return chainSystem.chainTriggerEffectsOffered?.get(card)?.has(effect) === true;
+  return (
+    chainSystem.chainTriggerEffectsOffered?.get(card)?.has(effect) === true
+  );
 }
 
 function buildResponseContext(
@@ -270,7 +272,11 @@ function genericExplicitEffectCheck(
     }
   }
   if (Array.isArray(effect.targets) && effect.targets.length > 0) {
-    const targetPreview = engine?.resolveTargets?.(effect.targets, preview, null);
+    const targetPreview = engine?.resolveTargets?.(
+      effect.targets,
+      preview,
+      null,
+    );
     if (targetPreview?.ok === false && !targetPreview?.needsSelection) {
       return false;
     }
@@ -326,8 +332,7 @@ function trapStateAllows(
   if (card.isFacedown === true) {
     const setTurn = card.setTurn ?? card.turnSetOn ?? null;
     return (
-      setTurn != null &&
-      Number(setTurn) < Number(chainSystem.game!.turnCounter)
+      setTurn != null && Number(setTurn) < Number(chainSystem.game!.turnCounter)
     );
   }
 
@@ -435,12 +440,13 @@ function candidateForEffect(
     return null;
   }
 
-  const restriction = chainSystem.game?.canActivateCardEffectUnderRestrictions?.(
-    card,
-    player,
-    effect,
-    { silent: true },
-  );
+  const restriction =
+    chainSystem.game?.canActivateCardEffectUnderRestrictions?.(
+      card,
+      player,
+      effect,
+      { silent: true },
+    );
   if (restriction?.ok === false) return null;
   const usage = chainSystem.checkActivationUsage?.(card, player, effect);
   if (usage?.ok === false) return null;
@@ -558,7 +564,8 @@ export function revalidateActivationCandidate(
     context,
   });
   return revalidateCanonicalCandidate(candidate, query, {
-    revalidateCandidate: () => revalidateCandidateInternal(this, candidate, player, context),
+    revalidateCandidate: () =>
+      revalidateCandidateInternal(this, candidate, player, context),
   });
 }
 

@@ -437,7 +437,8 @@ export function shouldUseStelyaBanishSummon(context: DragonPolicyContext = {}) {
   const ctx = makeContext(context);
   const candidates = (context.candidates || ctx.field).filter(isFaceupDragon);
   const ranked = rankDragonFieldBanishCosts(candidates, ctx);
-  const best = candidateCard(ranked[0]);
+  const topRanked = ranked[0];
+  const best = topRanked ? candidateCard(topRanked) : null;
   if (!best) {
     return { ok: false, reason: "no field Dragon to banish for Stelya", ranked };
   }

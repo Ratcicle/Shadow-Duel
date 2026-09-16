@@ -303,7 +303,7 @@ export function showAlert(this: Renderer, message: string): void {
 export function showDuelStartAnnouncement(
   this: Renderer,
   message: string,
-  options: { durationMs?: number } = {},
+  options: { durationMs?: number | undefined } = {},
 ): Promise<boolean> {
   if (!message) return Promise.resolve(false);
   if (typeof document === "undefined" || !document.body) {

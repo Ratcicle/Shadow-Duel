@@ -115,5 +115,10 @@ export interface DeterministicRandomPort {
   next(): number;
   shuffle<Value>(items: Value[]): Value[];
   snapshot(): DeterministicRandomSnapshot;
-  restore(snapshot?: Partial<DeterministicRandomSnapshot>): DeterministicRandomSnapshot;
+  restore(
+    snapshot?: Partial<DeterministicRandomSnapshot>,
+  ): DeterministicRandomSnapshot;
 }
+
+/** Delayed actions implemented by the turn scheduler. */
+export type DelayedActionType = "delayed_summon" | "delayed_destroy";

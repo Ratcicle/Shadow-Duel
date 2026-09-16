@@ -110,27 +110,35 @@ test("Transmutate declara custo, alvo por Nível original e limite de ativação
   assert.equal(effect.oncePerTurn, true);
   assert.equal(effect.oncePerTurnName, "transmutate_activation");
   assert.equal(effect.usagePolicy, "activate");
-  assert.equal(required(effect.targets)[0].intent, "cost");
-  assert.equal(required(effect.targets)[0].requireFaceup, true);
+  assert.equal(required(required(effect.targets)[0]).intent, "cost");
+  assert.equal(required(required(effect.targets)[0]).requireFaceup, true);
   assert.equal(
     required(
-      required(required(effect.targets)[0].pairedTarget).compareAttribute,
+      required(required(required(effect.targets)[0]).pairedTarget)
+        .compareAttribute,
     ).attr,
     "originalLevel",
   );
   assert.equal(
-    required(required(effect.targets)[0].pairedTarget).excludeSameName,
+    required(required(required(effect.targets)[0]).pairedTarget)
+      .excludeSameName,
     true,
   );
-  assert.equal(required(effect.targets)[1].excludeNameRef, COST_REF);
-  assert.deepEqual(required(effect.targets)[1].compareAttribute, {
+  assert.equal(required(required(effect.targets)[1]).excludeNameRef, COST_REF);
+  assert.deepEqual(required(required(effect.targets)[1]).compareAttribute, {
     attr: "originalLevel",
     ref: COST_REF,
     op: "eq",
   });
-  assert.equal(required(effect.activationCosts)[0].targetRef, COST_REF);
-  assert.equal(required(effect.actions)[0].type, "special_summon_from_zone");
-  assert.equal(required(effect.actions)[0].targetRef, TARGET_REF);
+  assert.equal(
+    required(required(effect.activationCosts)[0]).targetRef,
+    COST_REF,
+  );
+  assert.equal(
+    required(required(effect.actions)[0]).type,
+    "special_summon_from_zone",
+  );
+  assert.equal(required(required(effect.actions)[0]).targetRef, TARGET_REF);
   assert.equal(
     locale.cards["7"].description,
     "Envie 1 monstro com a face para cima que você controla para o Cemitério e, depois, escolha 1 monstro no seu Cemitério com o mesmo Nível original que ele, mas com um nome diferente; Invoque o alvo por Invocação-Especial. Você só pode ativar 1 “Transmutar” por turno.",

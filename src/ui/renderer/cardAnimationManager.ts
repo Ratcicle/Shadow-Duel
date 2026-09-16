@@ -82,7 +82,7 @@ interface AttackPose {
 interface AttackControllerOptions {
   duration?: number;
   contactOffset?: number;
-  onContact?: (details: AttackContact) => void;
+  onContact?: ((details: AttackContact) => void) | undefined;
 }
 type ContactDetector = () => boolean | AttackContact;
 

@@ -4,9 +4,9 @@ import type { SimulatedCardState } from "../../contracts/aiState.js";
 export type BloomrotCard = (GameCard | SimulatedCardState) & { status?: { effectsNegated?: boolean; piercingDamage?: boolean }; ownerId?: string; controllerId?: string; addCounter?(type: string, amount: number): void; currentController?: string | { id?: string; name?: string }; faceDown?: boolean; faceUp?: boolean; _instanceId?: string | number | null; simInstanceId?: string | number | null; uid?: string | number | null; _simBloomrotRotStagBattleBoost?: boolean; _simBloomrotCarrioncapMarkedBattle?: boolean };
 export type BloomrotPlayer = Omit<Partial<AIStrategyBotPort>, "field"> & { field?: BloomrotCard[] };
 export type BloomrotZone = "hand" | "field" | "graveyard" | "deck" | "extraDeck" | "spellTrap" | "fieldSpell";
-type BaseAnalysis = Partial<ReturnType<typeof buildStrategyAnalysis>>;
+type BaseAnalysis = Omit<Partial<ReturnType<typeof buildStrategyAnalysis>>, "opponent"> & { opponent?: AIStrategyBotPort | null | undefined };
 export type BloomrotPlanningGame = Partial<AIState> & { turnLineSearchEnabled?: boolean; turnLineSearchTurnMode?: AIPlanningProfile["turnMode"]; turnLineSearchBeamWidth?: number; turnLineSearchMaxDepth?: number; turnLineSearchNodeBudget?: number; turnLineSearchCandidateLimit?: number; turnLineSearchBattleStepLimit?: number };
-export type BloomrotAnalysis = Omit<Partial<ReturnType<typeof buildBloomrotAnalysis>>, "game"> & { game?: BloomrotPlanningGame | null } & { selfLp?: number; selfLP?: number; myceliumEligibleMaterials?: BloomrotCard[]; ownField?: BloomrotCard[]; ownMonsters?: BloomrotCard[] };
+export type BloomrotAnalysis = Omit<Partial<ReturnType<typeof buildBloomrotAnalysis>>, "game" | "canNormalSummon" | "opponent"> & { opponent?: AIStrategyBotPort | null | undefined; canNormalSummon?: boolean | undefined; game?: BloomrotPlanningGame | null | undefined } & { selfLp?: number; selfLP?: number; myceliumEligibleMaterials?: BloomrotCard[]; ownField?: BloomrotCard[]; ownMonsters?: BloomrotCard[] };
 type AnalysisInput = NonNullable<Parameters<typeof buildStrategyAnalysis>[0]> & { baseAnalysis?: BaseAnalysis };
 
 import { buildStrategyAnalysis } from "../common/analysis.js";
@@ -117,7 +117,7 @@ function buildBestSporedOpponentTargets(opponentSporedMonsters: BloomrotCard[] =
     );
 }
 
-export function countFieldSpores({ player, opponent }: { player?: BloomrotPlayer | null; opponent?: BloomrotPlayer | null } = {}) {
+export function countFieldSpores({ player, opponent }: { player?: BloomrotPlayer | null | undefined; opponent?: BloomrotPlayer | null | undefined } = {}) {
   return countSporesOnCards([
     ...fieldCounterCards(player),
     ...fieldCounterCards(opponent),

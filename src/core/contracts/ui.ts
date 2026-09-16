@@ -28,10 +28,10 @@ export type TargetingVisualMode = "hover" | "selected";
 
 export interface ImpactFeedback {
   kind?: string;
-  x?: number;
-  y?: number;
-  tone?: string;
-  intensity?: number;
+  x?: number | undefined;
+  y?: number | undefined;
+  tone?: string | undefined;
+  intensity?: number | undefined;
 }
 
 /**

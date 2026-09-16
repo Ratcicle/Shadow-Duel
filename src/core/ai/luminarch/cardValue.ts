@@ -82,10 +82,11 @@ export function evaluateCardExpendability(card: SimulatedCardState, context: Lum
     const usefulSpellTargets = (context.graveyard || []).filter(
       isUsefulMagicSickleSpellTarget,
     );
-    if (context.zone === "graveyard" && usefulSpellTargets.length > 0) {
+    const usefulSpellTarget = usefulSpellTargets[0];
+    if (context.zone === "graveyard" && usefulSpellTarget) {
       return {
         expendable: true,
-        reason: `No GY pode recuperar Magia Luminarch de valor (${usefulSpellTargets[0].name})`,
+        reason: `No GY pode recuperar Magia Luminarch de valor (${usefulSpellTarget.name})`,
         value: 3,
       };
     }

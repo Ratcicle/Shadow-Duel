@@ -61,9 +61,7 @@ function getTriggerPackageMetadata(
   const rawOnComplete: unknown = Reflect.get(triggerPackage, "onComplete");
   return {
     orderRule: typeof rawOrderRule === "string" ? rawOrderRule : null,
-    onComplete: isEventTriggerCompletion(rawOnComplete)
-      ? rawOnComplete
-      : null,
+    onComplete: isEventTriggerCompletion(rawOnComplete) ? rawOnComplete : null,
   };
 }
 
@@ -139,7 +137,8 @@ export async function resolveEvent<Name extends ResolvableEventName>(
   let resolutionResult: EventResolutionOutcome | null = null;
   try {
     if (collectTriggersOnly) {
-      let triggerPackage: EventTriggerPackage | EventTriggerEntry[] | null = null;
+      let triggerPackage: EventTriggerPackage | EventTriggerEntry[] | null =
+        null;
       try {
         triggerPackage =
           (await this.effectEngine?.collectEventTriggers?.(
@@ -147,7 +146,10 @@ export async function resolveEvent<Name extends ResolvableEventName>(
             payload,
           )) ?? null;
       } catch (err) {
-        console.error(`[Game] Failed to collect triggers for "${eventName}":`, err);
+        console.error(
+          `[Game] Failed to collect triggers for "${eventName}":`,
+          err,
+        );
       }
       const metadata = getTriggerPackageMetadata(triggerPackage);
       if (Array.isArray(triggerPackage)) {
@@ -266,17 +268,15 @@ export function queueTriggerOccurrence(
   this: EventResolverHost,
   occurrence: EventTriggerOccurrence | null | undefined,
 ): EventResolutionOutcome {
-  const result =
-    this.chainSystem?.queueTriggerOccurrence?.(occurrence) || {
-      ok: false,
-      deferred: false,
-      reason: "trigger_coordinator_unavailable",
-    };
+  const result = this.chainSystem?.queueTriggerOccurrence?.(occurrence) || {
+    ok: false,
+    deferred: false,
+    reason: "trigger_coordinator_unavailable",
+  };
   this.devLog?.("CHAIN_EVENT_DEFERRED", {
     summary: `${occurrence?.eventName || "event"} queued until Chain completion`,
     event: occurrence?.eventName || null,
-    pendingCount:
-      this.chainSystem?.pendingTriggerOccurrences?.length || 0,
+    pendingCount: this.chainSystem?.pendingTriggerOccurrences?.length || 0,
   });
   return result;
 }
@@ -297,8 +297,10 @@ export async function flushPendingTriggerOccurrences(
   ) {
     return { ok: true, flushed: 0, deferred: true };
   }
-  if (!Array.isArray(chain?.pendingTriggerOccurrences) ||
-      chain.pendingTriggerOccurrences.length === 0) {
+  if (
+    !Array.isArray(chain?.pendingTriggerOccurrences) ||
+    chain.pendingTriggerOccurrences.length === 0
+  ) {
     return { ok: true, flushed: 0 };
   }
 
@@ -365,7 +367,8 @@ async function offerPostEventFastWindow(
     return timing;
   }
   if (eventName === "battle_damage") {
-    const defenderOwner = payload?.defenderOwner || payload?.targetOwner || null;
+    const defenderOwner =
+      payload?.defenderOwner || payload?.targetOwner || null;
     if (payload?.attackerOwner && defenderOwner) {
       return await game.checkAndOfferTraps(eventName, {
         ...payload,
@@ -384,7 +387,8 @@ async function offerPostEventFastWindow(
         payload?.targetOwner ||
         payload?.defenderOwner ||
         null,
-      defender: payload?.destroyed || payload?.defender || payload?.target || null,
+      defender:
+        payload?.destroyed || payload?.defender || payload?.target || null,
       defenderOwner:
         payload?.destroyedOwner ||
         payload?.defenderOwner ||
@@ -408,10 +412,10 @@ export async function resolveEventEntries(
   }: {
     onComplete?: EventTriggerCompletion | null;
     orderRule?: string | null;
-    occurrence?: EventTriggerOccurrence | null;
+    occurrence?: EventTriggerOccurrence | null | undefined;
     startIndex?: number;
     results?: unknown[];
-    selections?: object | null;
+    selections?: object | null | undefined;
   } = {},
 ): Promise<EventResolutionOutcome> {
   const providedEntries = Array.isArray(entries);
@@ -424,7 +428,7 @@ export async function resolveEventEntries(
       orderRule,
       atomicGroupId: payload?.atomicGroupId || null,
     });
-  const result = await this.chainSystem?.resolveTriggerOccurrences?.(
+  const result = (await this.chainSystem?.resolveTriggerOccurrences?.(
     triggerOccurrence ? [triggerOccurrence] : [],
     {
       actionPlayer:
@@ -437,7 +441,7 @@ export async function resolveEventEntries(
         event: eventName,
       },
     },
-  ) || {
+  )) || {
     ok: true,
     success: true,
     chainBuilt: false,

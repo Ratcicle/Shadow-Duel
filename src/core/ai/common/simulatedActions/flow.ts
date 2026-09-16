@@ -354,6 +354,7 @@ export function applyActivateStoredBlueprint(
   } = ctx;
   const sourceCard = options.sourceCard;
   const blueprint = getStoredBlueprints(sourceCard)[0];
+  if (!blueprint) return;
   const effect = blueprint?.effectSnapshot || blueprint?.effect || null;
   if (!effect) return;
   if (

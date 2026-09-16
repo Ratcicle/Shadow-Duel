@@ -83,10 +83,10 @@ export function sortDeck(deckIds: readonly number[] = []) {
     const kindA = (cardA?.cardKind || "").toLowerCase();
     const kindB = (cardB?.cardKind || "").toLowerCase();
     const orderA = Object.prototype.hasOwnProperty.call(cardKindOrder, kindA)
-      ? cardKindOrder[kindA]
+      ? cardKindOrder[kindA]!
       : 99;
     const orderB = Object.prototype.hasOwnProperty.call(cardKindOrder, kindB)
-      ? cardKindOrder[kindB]
+      ? cardKindOrder[kindB]!
       : 99;
     if (orderA !== orderB) return orderA - orderB;
     if (kindA === "monster" && kindB === "monster") {
@@ -103,13 +103,13 @@ export function sortDeck(deckIds: readonly number[] = []) {
         spellTrapSubtypeOrder,
         subtypeA,
       )
-        ? spellTrapSubtypeOrder[subtypeA]
+        ? spellTrapSubtypeOrder[subtypeA]!
         : 99;
       const subtypeOrderB = Object.prototype.hasOwnProperty.call(
         spellTrapSubtypeOrder,
         subtypeB,
       )
-        ? spellTrapSubtypeOrder[subtypeB]
+        ? spellTrapSubtypeOrder[subtypeB]!
         : 99;
       if (subtypeOrderA !== subtypeOrderB) return subtypeOrderA - subtypeOrderB;
     }
@@ -129,13 +129,13 @@ export function sortExtraDeck(extraDeckIds: readonly number[] = []) {
       extraDeckTypeOrder,
       typeA,
     )
-      ? extraDeckTypeOrder[typeA]
+      ? extraDeckTypeOrder[typeA]!
       : 99;
     const orderB = Object.prototype.hasOwnProperty.call(
       extraDeckTypeOrder,
       typeB,
     )
-      ? extraDeckTypeOrder[typeB]
+      ? extraDeckTypeOrder[typeB]!
       : 99;
     if (orderA !== orderB) return orderA - orderB;
     const levelA = levelOf(cardA);
@@ -211,9 +211,9 @@ export function topUpDeck(deck: readonly number[]) {
       const copyLimit = getCardCopyLimit(card.id, {
         deckType: DECK_TYPES.MAIN,
       });
-      if (counts[card.id] < copyLimit && filled.length < targetSize) {
+      if (counts[card.id]! < copyLimit && filled.length < targetSize) {
         filled.push(card.id);
-        counts[card.id]++;
+        counts[card.id]!++;
       }
     }
     if (filled.length === sizeBeforePass) {
@@ -472,9 +472,10 @@ export function inferDeckArchetype(deckIds: readonly number[] = []) {
 
   if (!archetypedCards || counts.size === 0) return "custom";
 
+  // A nonempty Map produces a nonempty dense entries array.
   const [bestName, bestCount] = [...counts.entries()].sort(
     (a, b) => b[1] - a[1] || a[0].localeCompare(b[0]),
-  )[0];
+  )[0]!;
   return bestCount / archetypedCards >= 0.5 ? bestName : "custom";
 }
 
@@ -517,13 +518,13 @@ export function getSortedCardPool<T extends DeckCard>(cards: readonly T[]) {
       spellSubtypeOrder,
       subtypeOf(a),
     )
-      ? spellSubtypeOrder[subtypeOf(a)]
+      ? spellSubtypeOrder[subtypeOf(a)]!
       : 3;
     const subB = Object.prototype.hasOwnProperty.call(
       spellSubtypeOrder,
       subtypeOf(b),
     )
-      ? spellSubtypeOrder[subtypeOf(b)]
+      ? spellSubtypeOrder[subtypeOf(b)]!
       : 3;
     if (subA !== subB) return subA - subB;
     return nameOf(a).localeCompare(nameOf(b));
@@ -550,7 +551,7 @@ export function createDeckState() {
       typeof nameOverride === "string"
         ? nameOverride
         : deckPresets[activeDeckSlot]?.name;
-    deckPresets[activeDeckSlot] = normalizeDeckPreset(
+    const activePreset = normalizeDeckPreset(
       {
         name: currentName,
         deck: currentDeck,
@@ -558,8 +559,9 @@ export function createDeckState() {
       },
       activeDeckSlot,
     );
-    currentDeck = [...deckPresets[activeDeckSlot].deck];
-    currentExtraDeck = [...deckPresets[activeDeckSlot].extraDeck];
+    deckPresets[activeDeckSlot] = activePreset;
+    currentDeck = [...activePreset.deck];
+    currentExtraDeck = [...activePreset.extraDeck];
     persistDeckPresets(deckPresets);
     persistActiveDeckSlot(activeDeckSlot);
     saveLegacyDeckFallback(currentDeck, currentExtraDeck);
@@ -587,7 +589,8 @@ export function createDeckState() {
     saveActiveDeckPreset,
     renameActiveDeckSlot: (name: string) => {
       const fallbackName = `Deck ${activeDeckSlot + 1}`;
-      deckPresets[activeDeckSlot].name =
+      // Presets are normalized to DECK_PRESET_COUNT and the active slot is bounded.
+      deckPresets[activeDeckSlot]!.name =
         String(name || "").trim() || fallbackName;
     },
     switchDeckSlot: (slotIndex: number, currentName?: string) => {

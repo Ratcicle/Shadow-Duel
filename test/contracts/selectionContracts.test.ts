@@ -1,3 +1,4 @@
+import { required } from "../helpers/fixtures.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
@@ -19,7 +20,9 @@ import type {
 const normalizationHost = { buildSelectionCandidateKey };
 
 function normalize(contract: unknown): SelectionNormalizationResult {
-  return Reflect.apply(normalizeSelectionContract, normalizationHost, [contract]);
+  return Reflect.apply(normalizeSelectionContract, normalizationHost, [
+    contract,
+  ]);
 }
 
 test("selection constants expose the closed runtime vocabulary and stay frozen", () => {
@@ -127,8 +130,8 @@ test("normalization keeps override precedence and input objects defensive", () =
   assert.equal(result.contract.message, "override");
   assert.equal(result.contract.ui.allowCancel, false);
   assert.equal(result.contract.ui.useFieldTargeting, true);
-  assert.deepEqual(result.contract.requirements[0].zones, ["field"]);
-  assert.equal(result.contract.requirements[0].owner, "opponent");
+  assert.deepEqual(required(result.contract.requirements[0]).zones, ["field"]);
+  assert.equal(required(result.contract.requirements[0]).owner, "opponent");
 });
 
 test("normalization infers zones and rejects each malformed boundary", () => {
@@ -144,7 +147,9 @@ test("normalization infers zones and rejects each malformed boundary", () => {
   });
   assert.equal(inferred.ok, true);
   if (inferred.ok) {
-    assert.deepEqual(inferred.contract.requirements[0].zones, ["hand"]);
+    assert.deepEqual(required(inferred.contract.requirements[0]).zones, [
+      "hand",
+    ]);
   }
 
   assert.deepEqual(normalize(null), {

@@ -191,7 +191,10 @@ export function createBotArenaController({
     dom.avgTurns.textContent = progress.avgTurns;
 
     // Cancelled results retain the legacy display fallback with absent fields.
-    const result: Pick<ArenaProgressStats["lastResult"], "type" | "duelNumber"> &
+    const result: Pick<
+      ArenaProgressStats["lastResult"],
+      "type" | "duelNumber"
+    > &
       Partial<Pick<ArenaCompletedDuelResult, "winner" | "turns" | "message">> =
       progress.lastResult;
     if (result) {
@@ -235,7 +238,7 @@ export function createBotArenaController({
 
     if (
       dom.log.children.length === 1 &&
-      dom.log.children[0].textContent === "Aguardando início..."
+      dom.log.children[0]!.textContent === "Aguardando início..."
     ) {
       dom.log.innerHTML = "";
     }

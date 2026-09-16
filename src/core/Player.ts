@@ -123,7 +123,8 @@ export function cardMatchesNormalSummonFilters(
   filters: NormalSummonFilter = {},
 ): boolean {
   if (!card || !filters) return false;
-  if (filters.cardKind && !cardMatchesKind(card, filters.cardKind)) return false;
+  if (filters.cardKind && !cardMatchesKind(card, filters.cardKind))
+    return false;
   if (filters.cardId !== undefined && card.id !== filters.cardId) return false;
   if (
     Array.isArray(filters.cardIds) &&
@@ -132,14 +133,20 @@ export function cardMatchesNormalSummonFilters(
   ) {
     return false;
   }
-  if (filters.name && (!card.name || !asArray(filters.name).includes(card.name))) {
+  if (
+    filters.name &&
+    (!card.name || !asArray(filters.name).includes(card.name))
+  ) {
     return false;
   }
   if (filters.cardName && card.name !== filters.cardName) return false;
   if (filters.archetype && !cardHasArchetype(card, filters.archetype)) {
     return false;
   }
-  if (filters.type && (!card.type || !asArray(filters.type).includes(card.type))) {
+  if (
+    filters.type &&
+    (!card.type || !asArray(filters.type).includes(card.type))
+  ) {
     return false;
   }
   if (
@@ -150,7 +157,8 @@ export function cardMatchesNormalSummonFilters(
   }
   if (
     filters.monsterType &&
-    (!card.monsterType || !asArray(filters.monsterType).includes(card.monsterType))
+    (!card.monsterType ||
+      !asArray(filters.monsterType).includes(card.monsterType))
   ) {
     return false;
   }
@@ -302,7 +310,9 @@ function getPassiveNormalSummonPermissions(player: NormalSummonPlayerInput): {
   const seenUniqueKeys = new Set();
   const game = player?.game || null;
 
-  for (const { card, owner, zone } of getActiveNormalSummonPassiveSources(player)) {
+  for (const { card, owner, zone } of getActiveNormalSummonPassiveSources(
+    player,
+  )) {
     if (!card || !Array.isArray(card.effects)) continue;
     if (card.isFacedown === true) continue;
     if (card.effectsNegated === true) continue;
@@ -317,10 +327,14 @@ function getPassiveNormalSummonPermissions(player: NormalSummonPlayerInput): {
       ) {
         continue;
       }
-      if (effectView.requireZone && !asArray(effectView.requireZone).includes(zone)) {
+      if (
+        effectView.requireZone &&
+        !asArray(effectView.requireZone).includes(zone)
+      ) {
         continue;
       }
-      if (effectView.requireFaceup === true && Boolean(card.isFacedown)) continue;
+      if (effectView.requireFaceup === true && Boolean(card.isFacedown))
+        continue;
       if (!passiveAppliesToNormalSummonPlayer(passive, owner, player, game)) {
         continue;
       }
@@ -371,7 +385,11 @@ function maxRestrictedAssignments(
       return false;
     }
 
-    for (let slotIndex = 0; slotIndex < restrictedSlots.length; slotIndex += 1) {
+    for (
+      let slotIndex = 0;
+      slotIndex < restrictedSlots.length;
+      slotIndex += 1
+    ) {
       if (seenSlots[slotIndex]) continue;
       if (!cardMatchesNormalSummonFilters(record, restrictedSlots[slotIndex])) {
         continue;
@@ -495,7 +513,13 @@ export default class Player implements GamePlayer {
     this.oncePerTurnUsageByName = {};
   }
 
-  buildDeck(this: Pick<GamePlayer, "deck" | "maxDeckSize" | "minDeckSize" | "id" | "game" | "shuffleDeck">, deckList: readonly RawCardDefinitionId[] | null = null): void {
+  buildDeck(
+    this: Pick<
+      GamePlayer,
+      "deck" | "maxDeckSize" | "minDeckSize" | "id" | "game" | "shuffleDeck"
+    >,
+    deckList: readonly RawCardDefinitionId[] | null = null,
+  ): void {
     if (Array.isArray(deckList) && deckList.length > 0) {
       assertDeckBanlistLegal({ deck: deckList });
     }
@@ -510,25 +534,26 @@ export default class Player implements GamePlayer {
       const copyLimit = getCardCopyLimit(data.id, {
         deckType: DECK_TYPES.MAIN,
       });
-      if (copies[data.id] >= copyLimit || this.deck.length >= maxDeckSize) return;
+      if (copies[data.id]! >= copyLimit || this.deck.length >= maxDeckSize)
+        return;
       const card = new Card(data, this.id);
       this.game?.ensureDuelCardId?.(card);
       this.deck.push(card);
-      copies[data.id]++;
+      copies[data.id]!++;
     };
 
     const fillWithDefaults = (): void => {
       const targetSize = Math.max(
         minDeckSize,
-        Math.min(maxDeckSize, this.deck.length)
+        Math.min(maxDeckSize, this.deck.length),
       );
       const archetype = "Shadow-Heart";
       const archetypeCards = cardDatabase.filter((c: IndexedCardData) => {
         const archetypes = Array.isArray(c.archetypes)
           ? c.archetypes
           : c.archetype
-          ? [c.archetype]
-          : [];
+            ? [c.archetype]
+            : [];
         return archetypes.includes(archetype);
       });
 
@@ -591,12 +616,12 @@ export default class Player implements GamePlayer {
       const copyLimit = getCardCopyLimit(data.id, {
         deckType: DECK_TYPES.EXTRA,
       });
-      if (copies[data.id] >= copyLimit) return;
+      if (copies[data.id]! >= copyLimit) return;
       if (this.extraDeck.length >= this.maxExtraDeckSize) return;
       const card = new Card(data, this.id);
       this.game?.ensureDuelCardId?.(card);
       this.extraDeck.push(card);
-      copies[data.id]++;
+      copies[data.id]!++;
     };
 
     if (extraDeckList && Array.isArray(extraDeckList)) {
@@ -614,7 +639,8 @@ export default class Player implements GamePlayer {
     }
     for (let i = this.deck.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
-      [this.deck[i], this.deck[j]] = [this.deck[j], this.deck[i]];
+      // Both indices are within the dense deck: 0 <= j <= i < length.
+      [this.deck[i], this.deck[j]] = [this.deck[j]!, this.deck[i]!];
     }
   }
 
@@ -636,7 +662,9 @@ export default class Player implements GamePlayer {
     const alt = card.altTribute;
 
     if (
-      alt && "type" in alt && alt.type === "no_tribute_if_empty_field" &&
+      alt &&
+      "type" in alt &&
+      alt.type === "no_tribute_if_empty_field" &&
       this.field.length === 0 &&
       tributesNeeded > 0
     ) {
@@ -646,7 +674,9 @@ export default class Player implements GamePlayer {
 
     // Check if player has specific card by name
     if (
-      alt && "requiresName" in alt && alt.requiresName &&
+      alt &&
+      "requiresName" in alt &&
+      alt.requiresName &&
       this.field.some((c) => c && c.name === alt.requiresName)
     ) {
       if (alt.tributes < tributesNeeded) {
@@ -726,7 +756,9 @@ export default class Player implements GamePlayer {
       const tributeInfo = this.getTributeRequirement(card);
       let { tributesNeeded, usingAlt, alt } = tributeInfo;
 
-      const matchesAltRequirement = (c: GameCard | null | undefined): boolean => {
+      const matchesAltRequirement = (
+        c: GameCard | null | undefined,
+      ): boolean => {
         if (!c) return false;
         if (alt && "requiresName" in alt && alt.requiresName) {
           return c.name === alt.requiresName;
@@ -770,7 +802,10 @@ export default class Player implements GamePlayer {
               },
             },
           );
-          tributeCards = getTributeCardsFromIndices(this.field, selectedIndices);
+          tributeCards = getTributeCardsFromIndices(
+            this.field,
+            selectedIndices,
+          );
         }
 
         if (usingAlt && alt && !tributeCards.some(matchesAltRequirement)) {
@@ -817,7 +852,10 @@ export default class Player implements GamePlayer {
       }
 
       // Track tributed cards for replay/event system
-      if (!this.game?.createPreparedSummon || !this.game?.executeSummonTransaction) {
+      if (
+        !this.game?.createPreparedSummon ||
+        !this.game?.executeSummonTransaction
+      ) {
         return failSummon(
           "Summon transaction coordinator is unavailable.",
           "SUMMON_COORDINATOR_UNAVAILABLE",
@@ -825,7 +863,9 @@ export default class Player implements GamePlayer {
       }
       const willSet = isFacedown === true || summonPosition === "defense";
       const summonMethod = tributesNeeded > 0 ? "tribute" : "normal";
-      const tributedCards = tributeCards.map((sacrificed) => ({ ...sacrificed }));
+      const tributedCards = tributeCards.map((sacrificed) => ({
+        ...sacrificed,
+      }));
 
       const prepared = this.game.createPreparedSummon({
         card,
@@ -906,8 +946,8 @@ export default class Player implements GamePlayer {
       const idx = this.deck.findIndex((card) => card.name === cardName);
       if (idx > -1) {
         const [card] = this.deck.splice(idx, 1);
-        this.deck.push(card);
-        return card;
+        this.deck.push(card!); // findIndex established the element removed by splice.
+        return card!;
       }
     }
 
@@ -920,8 +960,8 @@ export default class Player implements GamePlayer {
       const targetArchetypes: string[] = Array.isArray(data.archetypes)
         ? data.archetypes
         : data.archetype
-        ? [data.archetype]
-        : [];
+          ? [data.archetype]
+          : [];
 
       let removeIdx = -1;
       // Prefer remover monstros sem arquétipo para não descartar spells/traps importantes (ex: Polymerization)
@@ -930,8 +970,8 @@ export default class Player implements GamePlayer {
           const archetypes = Array.isArray(card.archetypes)
             ? card.archetypes
             : card.archetype
-            ? [card.archetype]
-            : [];
+              ? [card.archetype]
+              : [];
           const archetypeMismatch =
             targetArchetypes.length === 0
               ? archetypes.length === 0
@@ -968,11 +1008,7 @@ export default class Player implements GamePlayer {
       options.suppressVisual === true ||
       options.suppressLpChangeFeedback === true;
     let showedLpChange = false;
-    if (
-      actual > 0 &&
-      !suppressVisual &&
-      this.game?.ui?.showLpChange
-    ) {
+    if (actual > 0 && !suppressVisual && this.game?.ui?.showLpChange) {
       showedLpChange =
         this.game.ui.showLpChange(this, -actual, {
           cause: options.cause || "effect",
@@ -1006,15 +1042,19 @@ export default class Player implements GamePlayer {
     this.lpGainedThisTurn = (this.lpGainedThisTurn || 0) + adjustedAmount;
     let showedLpChange = false;
     if (this.game?.ui?.showLpChange) {
-      showedLpChange = this.game.ui.showLpChange(this, adjustedAmount, {
-        cause: options.cause || "effect",
-        sourceCard: options.sourceCard || null,
-        sourceRect: options.sourceRect || null,
-        fromLp: before,
-        toLp: this.lp,
-      }) === true;
+      showedLpChange =
+        this.game.ui.showLpChange(this, adjustedAmount, {
+          cause: options.cause || "effect",
+          sourceCard: options.sourceCard || null,
+          sourceRect: options.sourceRect || null,
+          fromLp: before,
+          toLp: this.lp,
+        }) === true;
     }
-    if (!showedLpChange && typeof this.game?.queueVisualFeedback === "function") {
+    if (
+      !showedLpChange &&
+      typeof this.game?.queueVisualFeedback === "function"
+    ) {
       this.game.queueVisualFeedback({
         kind: "heal",
         targetOwnerId: this.id,
@@ -1039,7 +1079,8 @@ export default class Player implements GamePlayer {
 
       for (const effect of card.effects || []) {
         const effectView = effect as EffectDefinition & PassiveEffectView;
-        if (!effect || effect.timing !== "passive" || !effectView.passive) continue;
+        if (!effect || effect.timing !== "passive" || !effectView.passive)
+          continue;
 
         if (effectView.passive.type === "lp_gain_multiplier") {
           const multiplier = Number(effectView.passive.multiplier) || 1.0;
@@ -1060,9 +1101,7 @@ export interface PlayerControllerView {
   controllerType?: string | null;
 }
 
-export function isAI(
-  player: PlayerControllerView | null | undefined,
-): boolean {
+export function isAI(player: PlayerControllerView | null | undefined): boolean {
   return player?.controllerType === "ai";
 }
 

@@ -210,7 +210,7 @@ export default class LuminarchStrategy extends BaseStrategy {
     return analysis;
   }
 
-  getPlanningProfile(game: LuminarchGame, context: AIPlanningContext = {}) {
+  override getPlanningProfile(game: LuminarchGame, context: AIPlanningContext = {}) {
     if (!game) return super.getPlanningProfile(game, context);
     const analysis: LuminarchAnalysis = this.buildPlanningAnalysis(game, context as LuminarchContext);
     return buildLuminarchPlanningProfile(analysis, {
@@ -220,21 +220,21 @@ export default class LuminarchStrategy extends BaseStrategy {
     });
   }
 
-  shouldUseDeepPlanning(game: LuminarchGame, context: AIPlanningContext = {}) {
+  override shouldUseDeepPlanning(game: LuminarchGame, context: AIPlanningContext = {}) {
     const profile =
       context.profile || this.getPlanningProfile(game, context) || {};
     return game?.turnLineSearchEnabled === true || profile.enabled === true;
   }
 
-  scoreLineMilestones(context: AIPlanningContext = {}) {
+  override scoreLineMilestones(context: AIPlanningContext = {}) {
     return scoreLuminarchLineMilestones(context as LuminarchContext);
   }
 
-  scoreLineTerminal(context: AIPlanningContext = {}) {
+  override scoreLineTerminal(context: AIPlanningContext = {}) {
     return scoreLuminarchLineTerminal(context as LuminarchContext);
   }
 
-  describePlannedLine(context: AIPlanningContext = {}) {
+  override describePlannedLine(context: AIPlanningContext = {}) {
     return describeLuminarchPlannedLine(context as LuminarchContext);
   }
 
@@ -254,7 +254,7 @@ export default class LuminarchStrategy extends BaseStrategy {
     return scoreLuminarchBattleAttackCandidate(context);
   }
 
-  evaluateBoard(gameOrState: LuminarchGame, perspectivePlayer: SimulatedPlayerState | AIStrategyBotPort | null | undefined) {
+  override evaluateBoard(gameOrState: LuminarchGame, perspectivePlayer: SimulatedPlayerState | AIStrategyBotPort | null | undefined) {
     const perspective = (perspectivePlayer?.id
       ? perspectivePlayer
       : gameOrState.bot) as LuminarchPlayer;
@@ -347,7 +347,7 @@ export default class LuminarchStrategy extends BaseStrategy {
     return score;
   }
 
-  evaluateBoardV2(gameOrState: LuminarchGame, perspectivePlayer: SimulatedPlayerState | AIStrategyBotPort | null | undefined) {
+  override evaluateBoardV2(gameOrState: LuminarchGame, perspectivePlayer: SimulatedPlayerState | AIStrategyBotPort | null | undefined) {
     const perspective = (perspectivePlayer?.id
       ? perspectivePlayer
       : gameOrState.bot) as LuminarchPlayer;
@@ -539,7 +539,7 @@ export default class LuminarchStrategy extends BaseStrategy {
     return score;
   }
 
-  generateMainPhaseActions(game: LuminarchGame) {
+  override generateMainPhaseActions(game: LuminarchGame) {
     const actions: AIAction[] = [];
     const isSimulatedState = game?._isPerspectiveState === true;
     const bot = (isSimulatedState ? game.bot : this.bot || game.bot) as LuminarchPlayer;
@@ -846,6 +846,7 @@ export default class LuminarchStrategy extends BaseStrategy {
           if (cardIndex === -1) continue;
 
           const card = bot.hand[cardIndex];
+          if (!card) continue;
           const tributeInfo = this.getTributeRequirementFor(card, bot);
           const tributesNeeded = Math.max(
             0,
@@ -917,7 +918,7 @@ export default class LuminarchStrategy extends BaseStrategy {
     return finalActions;
   }
 
-  sequenceActions(actions: AIAction[]) {
+  override sequenceActions(actions: AIAction[]) {
     // Ordena por prioridade (P1 priority bonuses aplicados)
     const typePriority = {
       fieldEffect: 0,
@@ -938,11 +939,11 @@ export default class LuminarchStrategy extends BaseStrategy {
     });
   }
 
-  getTributeRequirementFor(card: SimulatedCardState, playerState: SimulatedPlayerState) {
+  override getTributeRequirementFor(card: SimulatedCardState, playerState: SimulatedPlayerState) {
     return getLuminarchTributeRequirementFor(card, playerState);
   }
 
-  selectBestTributes(field: SimulatedCardState[], tributesNeeded: number, cardToSummon: SimulatedCardState, context: LuminarchContext = {}) {
+  override selectBestTributes(field: SimulatedCardState[], tributesNeeded: number, cardToSummon: SimulatedCardState, context: LuminarchContext = {}) {
     return selectBestLuminarchTributes(field, tributesNeeded, cardToSummon, {
       ...context,
       botState: (context.botState || this.bot || {}) as Partial<LuminarchPlayer>,
@@ -970,7 +971,7 @@ export default class LuminarchStrategy extends BaseStrategy {
     return "attack";
   }
 
-  chooseSpecialSummonPosition(card: Parameters<typeof chooseLuminarchSpecialSummonPosition>[0], context: {game?:AIState;state?:AIState;player?:AIStrategyBotPort | null;action?:AIAction;sourceAction?:AIAction | null;activationContext?:import("../contracts/ai.js").AIActivationContext;actionPosition?:BattlePositionInput | null;position?:BattlePositionInput} = {}) {
+  chooseSpecialSummonPosition(card: Parameters<typeof chooseLuminarchSpecialSummonPosition>[0], context: {game?:AIState;state?:AIState;player?:AIStrategyBotPort | null;action?:AIAction;sourceAction?:AIAction | null;activationContext?:import("../contracts/ai.js").AIActivationContext;actionPosition?:BattlePositionInput | null | undefined;position?:BattlePositionInput} = {}) {
     const game = context.game || context.state || {};
     const player = context.player || this.bot || game.bot || null;
     const opponent = player ? this.getOpponent(game, player) : game.player;
@@ -1001,11 +1002,11 @@ export default class LuminarchStrategy extends BaseStrategy {
     return true;
   }
 
-  getOpponent(gameOrState: LuminarchGame, perspectivePlayer: SimulatedPlayerState | AIStrategyBotPort | null | undefined) {
+  override getOpponent(gameOrState: LuminarchGame, perspectivePlayer: SimulatedPlayerState | AIStrategyBotPort | null | undefined) {
     return super.getOpponent(gameOrState, perspectivePlayer) as SimulatedPlayerState | null;
   }
 
-  getPositionChangeActions(game: LuminarchGame, bot: SimulatedPlayerState, opponent: SimulatedPlayerState | null | undefined) {
+  override getPositionChangeActions(game: LuminarchGame, bot: SimulatedPlayerState, opponent: SimulatedPlayerState | null | undefined) {
     const baseActions = super
       .getPositionChangeActions(game, bot, opponent)
       .filter((action) => action.cardName !== "Luminarch Megashield Barbarias");
@@ -1116,7 +1117,7 @@ export default class LuminarchStrategy extends BaseStrategy {
     });
   }
 
-  simulateMainPhaseAction(state: SimulationGameState | PerspectiveGameState | GameTreeSimulationGameState, action: AIPlannedAction) {
+  override simulateMainPhaseAction(state: SimulationGameState | PerspectiveGameState | GameTreeSimulationGameState, action: AIPlannedAction) {
     return simulateLuminarchMainPhaseAction(state as Parameters<typeof simulateLuminarchMainPhaseAction>[0], action, {
       strategy: this,
       getOpponent: this.getOpponent.bind(this),
@@ -1135,7 +1136,7 @@ export default class LuminarchStrategy extends BaseStrategy {
     });
   }
 
-  simulateSpellEffect(state: SimulationGameState | PerspectiveGameState | GameTreeSimulationGameState, card: SimulatedCardState) {
+  override simulateSpellEffect(state: SimulationGameState | PerspectiveGameState | GameTreeSimulationGameState, card: SimulatedCardState) {
     return simulateLuminarchSpellEffect(state as Parameters<typeof simulateLuminarchSpellEffect>[0], card);
   }
   /**

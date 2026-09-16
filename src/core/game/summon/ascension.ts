@@ -58,9 +58,7 @@ interface AscensionEffectEnginePort {
   ): Promise<BattlePosition>;
 }
 
-type AscensionCheckResult =
-  | { ok: true }
-  | { ok: false; reason: string };
+type AscensionCheckResult = { ok: true } | { ok: false; reason: string };
 
 interface AscensionGuardResult {
   ok: boolean;
@@ -124,7 +122,9 @@ interface AscensionHost {
     phaseReq: readonly ("main1" | "main2")[];
   }): AscensionGuardResult;
   createPreparedSummon(input: PreparedSummonInput): PreparedSummon;
-  executeSummonTransaction(input: PreparedSummon): Promise<SummonExecutionResult>;
+  executeSummonTransaction(
+    input: PreparedSummon,
+  ): Promise<SummonExecutionResult>;
   moveCard(
     card: GameCard,
     player: GamePlayer,
@@ -217,7 +217,10 @@ function matchesAscensionMaterialFilters(
   if (filters.cardKind && materialCard.cardKind !== filters.cardKind) {
     return false;
   }
-  if (filters.archetype && !getCardArchetypes(materialCard).includes(filters.archetype)) {
+  if (
+    filters.archetype &&
+    !getCardArchetypes(materialCard).includes(filters.archetype)
+  ) {
     return false;
   }
   if (filters.type && materialCard.type !== filters.type) {
@@ -256,7 +259,10 @@ export function ascensionMaterialMatches(
   const asc = runtimeAscensionDefinition(ascensionCard);
   if (!asc || !materialCard) return false;
 
-  if (typeof asc.materialId === "number" && materialCard.id === asc.materialId) {
+  if (
+    typeof asc.materialId === "number" &&
+    materialCard.id === asc.materialId
+  ) {
     return true;
   }
 
@@ -269,7 +275,8 @@ function getRequirementMaterialId(
   asc: AscensionDefinition,
   materialCard: GameCard | null,
 ) {
-  if (materialCard && typeof materialCard.id === "number") return materialCard.id;
+  if (materialCard && typeof materialCard.id === "number")
+    return materialCard.id;
   if (typeof asc?.materialId === "number") return asc.materialId;
   return null;
 }
@@ -296,7 +303,8 @@ function captureAscensionMaterialMetadata(
     cardId: materialCard.id ?? null,
     name: materialCard.name || null,
     ownerId: materialCard.owner || player?.id || null,
-    controllerId: player?.id || materialCard.controller || materialCard.owner || null,
+    controllerId:
+      player?.id || materialCard.controller || materialCard.owner || null,
     usedOnTurn: Number.isFinite(Number(game?.turnCounter))
       ? Number(game.turnCounter)
       : null,
@@ -326,6 +334,7 @@ function getAscensionZoneCards(
     case "banished":
       return player.banished;
   }
+  zone satisfies never;
 }
 
 function isGamePlayer(value: GamePlayer | null): value is GamePlayer {
@@ -335,7 +344,7 @@ function isGamePlayer(value: GamePlayer | null): value is GamePlayer {
 function countAscensionFieldCounters(
   game: AscensionHost,
   player: GamePlayer,
-  req: AscensionRequirement = {} as AscensionRequirement,
+  req: Partial<AscensionRequirement> = {},
 ) {
   const counterType = req.counterType || "default";
   const ownerRule = req.owner || "self";
@@ -442,7 +451,9 @@ export function checkAscensionRequirements(
     return { ok: false, reason: "Invalid Ascension material." };
   }
 
-  const reqs = Array.isArray(asc.requirements) ? asc.requirements : [];
+  const reqs: readonly AscensionRequirement[] = Array.isArray(asc.requirements)
+    ? asc.requirements
+    : [];
   for (const req of reqs) {
     if (!req || !req.type) continue;
     switch (req.type) {
@@ -530,7 +541,9 @@ export function checkAscensionRequirements(
         const materialForRequirement =
           materialCard ||
           (typeof asc.materialId === "number"
-            ? player.field?.find((c) => c?.id === asc.materialId && !c.isFacedown)
+            ? player.field?.find(
+                (c) => c?.id === asc.materialId && !c.isFacedown,
+              )
             : null);
         if (!materialForRequirement) {
           return {
@@ -538,7 +551,9 @@ export function checkAscensionRequirements(
             reason: `Material not found face-up on field.`,
           };
         }
-        const enteredTurn = this.getMaterialFieldAgeTurnCounter(materialForRequirement);
+        const enteredTurn = this.getMaterialFieldAgeTurnCounter(
+          materialForRequirement,
+        );
         const turnsOnField = this.turnCounter - enteredTurn;
         this.devLog("ASCENSION_REQUIREMENT_CHECK", {
           summary: `Material ${materialForRequirement.name} turns on field: ${turnsOnField}/${need}`,
@@ -572,6 +587,7 @@ export function checkAscensionRequirements(
         break;
       }
       default:
+        req.type satisfies never;
         break;
     }
   }
@@ -664,18 +680,20 @@ export async function performAscensionSummon(
   }
 
   const positionPref =
-    options.position || runtimeAscensionDefinition(ascensionCard)?.position || "choice";
+    options.position ||
+    runtimeAscensionDefinition(ascensionCard)?.position ||
+    "choice";
   const resolvedPosition =
     positionPref === "choice" &&
     typeof this.effectEngine?.chooseSpecialSummonPosition === "function"
       ? await this.effectEngine.chooseSpecialSummonPosition(
           ascensionCard,
           player,
-          { position: positionPref }
+          { position: positionPref },
         )
       : positionPref === "defense"
-      ? "defense"
-      : "attack";
+        ? "defense"
+        : "attack";
   const materialMetadata = captureAscensionMaterialMetadata(
     materialCard,
     player,
@@ -735,7 +753,7 @@ export async function performAscensionSummon(
     game.ui.log(
       `${player.name || player.id} Ascension Summoned ${
         ascensionCard.name
-      } by sending ${materialCard.name} to the Graveyard.`
+      } by sending ${materialCard.name} to the Graveyard.`,
     );
     game.updateBoard();
   } else if (result?.reason) {
@@ -779,14 +797,14 @@ export async function tryAscensionSummon(
 
   const allAscensions = this.getAscensionCandidatesForMaterial(
     player,
-    materialCard
+    materialCard,
   );
   if (allAscensions.length === 0) {
     let hint = "";
     try {
       const extra = Array.isArray(player.extraDeck) ? player.extraDeck : [];
       const ascInExtra = extra.filter(
-        (c) => c && c.cardKind === "monster" && c.monsterType === "ascension"
+        (c) => c && c.cardKind === "monster" && c.monsterType === "ascension",
       );
       if (ascInExtra.length === 0) {
         hint = " No ascension monsters in Extra Deck.";
@@ -795,7 +813,7 @@ export async function tryAscensionSummon(
         const wrongMaterial = ascInExtra.filter(
           (c) =>
             c.ascension &&
-            !ascensionMaterialMatches(c, materialCard, this.effectEngine)
+            !ascensionMaterialMatches(c, materialCard, this.effectEngine),
         ).length;
         if (missingMeta > 0) {
           hint += ` ${missingMeta} ascension card(s) missing metadata.`;
@@ -832,7 +850,11 @@ export async function tryAscensionSummon(
   }
 
   if (eligible.length === 1) {
-    return await this.performAscensionSummon(player, materialCard, eligible[0]);
+    return await this.performAscensionSummon(
+      player,
+      materialCard,
+      eligible[0]!,
+    );
   }
 
   const rawCandidates: Array<RawSelectionCandidate & { cardRef: GameCard }> =
@@ -840,7 +862,8 @@ export async function tryAscensionSummon(
       const zoneIndex = player.extraDeck.indexOf(card);
       return {
         name: card.name,
-        owner: player.id === "player" ? ("player" as const) : ("opponent" as const),
+        owner:
+          player.id === "player" ? ("player" as const) : ("opponent" as const),
         controller: player.id,
         zone: "extraDeck" as const,
         zoneIndex,
@@ -897,7 +920,7 @@ export async function tryAscensionSummon(
         const res = await this.performAscensionSummon(
           player,
           materialCard,
-          chosenCard
+          chosenCard,
         );
         resolve(res);
         return res;

@@ -4,14 +4,14 @@ import type { AiStateShape } from "../../contracts/aiState.js";
 
 
 type StrategyCard = ShadowHeartCard;
-type Player = Omit<Partial<AIStrategyBotPort>, "field"> & { field?: ShadowHeartCard[] };
+type Player = Omit<Partial<AIStrategyBotPort>, "field" | "lp"> & { lp?: number | undefined; field?: ShadowHeartCard[] };
 type State = Partial<AiStateShape>;
 type Zone = "hand" | "field" | "graveyard" | "deck" | "extraDeck" | "spellTrap" | "fieldSpell";
 type PlanningGame = ShadowHeartPlanningGame;
-type Analysis = ShadowHeartAnalysis & { availableCombos?: Array<{ priority?: number }>; finisherPlans?: Array<{ score100?: number }> };
-type LineAction = AIPlannedAction & { cardName?: string; card?: StrategyCard | null; name?: string; attackerName?: string; tributeCount?: number; destroyedCards?: Array<{ owner?: string; cardKind?: string }> };
+type Analysis = ShadowHeartAnalysis & { availableCombos?: Array<{ priority?: number | undefined }>; finisherPlans?: Array<{ score100?: number }> };
+type LineAction = AIPlannedAction & { cardName?: string | undefined; card?: StrategyCard | null; name?: string; attackerName?: string | undefined; tributeCount?: number; destroyedCards?: Array<{ owner?: string; cardKind?: string }> };
 type Profile = AIPlanningProfile & { critical?: boolean; reasons?: string[] };
-type Context = Omit<AIPlanningContext, "sequence" | "profile"> & { strategy?: unknown; game?: PlanningGame; sequence?: LineAction[]; score?: number; profile?: Partial<Profile>; isSimulatedState?: boolean };
+type Context = Omit<AIPlanningContext, "sequence" | "profile"> & { strategy?: unknown; game?: PlanningGame; sequence?: LineAction[]; score?: number; profile?: Partial<Profile> | undefined; isSimulatedState?: boolean };
 interface ImpactContext { initialBot: Player; finalBot: Player; initialOpponent: Player; finalOpponent: Player; sequence: LineAction[]; }
 type ScoringContext = ImpactContext & { initialState?: State; finalState?: State; usedNames: Array<string | null | undefined>; impact: ReturnType<typeof getLineImpact> };
 interface ScoreState { score: number; milestones: string[]; }

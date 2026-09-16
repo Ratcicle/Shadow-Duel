@@ -143,12 +143,13 @@ export function evaluateKnightsConvocationPlan(analysis: LuminarchAnalysis = {})
     offensiveCosts.length === 1 &&
     defensePlan.offensivePayoffsAvailable.length <= 1 &&
     nonOffensiveCosts.length === 0;
+  const onlyOffensiveCost = offensiveCosts[0];
 
-  if (onlyOffensivePayoff && !defensePlan.clearLethalRisk) {
+  if (onlyOffensivePayoff && onlyOffensiveCost && !defensePlan.clearLethalRisk) {
     return {
       yes: false,
       priority: 0,
-      reason: `Preservar ultimo payoff ofensivo (${offensiveCosts[0].name})`,
+      reason: `Preservar ultimo payoff ofensivo (${onlyOffensiveCost.name})`,
       defensePlan,
     };
   }

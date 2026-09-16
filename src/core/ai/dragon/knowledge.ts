@@ -725,7 +725,7 @@ export function getCardKnowledge(name: string) {
  */
 export function selectBestExtremeDragon<Card extends DragonCard>(extremesInHand: Card[], analysis: DragonAnalysis) {
   if (!extremesInHand || extremesInHand.length === 0) return null;
-  if (extremesInHand.length === 1) return extremesInHand[0];
+  if (extremesInHand.length === 1) return extremesInHand[0] ?? null;
 
   const oppField = analysis.oppField || [];
   const oppHand = analysis.oppHand || 0;
@@ -767,5 +767,5 @@ export function selectBestExtremeDragon<Card extends DragonCard>(extremesInHand:
   });
 
   scores.sort((a, b) => b.score - a.score);
-  return scores[0].card;
+  return scores[0]?.card ?? null;
 }

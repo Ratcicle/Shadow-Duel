@@ -23,7 +23,10 @@ interface GameOverModalOptions {
   } | null;
   onMenu(): void;
   onRematch(): void;
-  onExportStrategicReport(): { duelCount: number; filename?: string } | null;
+  onExportStrategicReport(): {
+    duelCount: number;
+    filename?: string | undefined;
+  } | null;
   onExportReplay(): unknown;
 }
 

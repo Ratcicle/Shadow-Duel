@@ -2,7 +2,7 @@ import type { AIActivationContext } from "../../contracts/ai.js";
 import type { CanonicalZone } from "../../contracts/zones.js";
 
 interface NamedPreferenceCard {
-  readonly name?: string | null;
+  readonly name?: string | null | undefined;
 }
 
 export interface CostPreferences {
@@ -25,7 +25,7 @@ export interface BuildCostPreferencesOptions<Extra extends object = object> {
   forceNames?: readonly string[] | null;
   offensivePayoffNames?: readonly string[] | null;
   preserveLastOffensivePayoff?: boolean;
-  availableOffensivePayoffs?: number;
+  availableOffensivePayoffs?: number | undefined;
   extra?: Extra | null;
 }
 
@@ -98,7 +98,7 @@ export interface BuildTargetPreferencesOptions<
   CostPreferencesType,
   TargetProfiles extends object,
 > {
-  costPreferences?: CostPreferencesType | null;
+  costPreferences?: CostPreferencesType | null | undefined;
   targetProfiles?: TargetProfiles | null;
 }
 

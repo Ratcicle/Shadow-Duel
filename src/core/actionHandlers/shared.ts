@@ -8,9 +8,7 @@
 import { isAI } from "../Player.js";
 import { cardMatchesKind } from "../Card.js";
 import type { CardFilter } from "../contracts/effects.js";
-import type {
-  ContextNumberSource,
-} from "../contracts/actions.js";
+import type { ContextNumberSource } from "../contracts/actions.js";
 import type {
   ActionHandlerEnginePort,
   ActionRuntimeCard,
@@ -59,8 +57,8 @@ interface TargetAction {
 }
 
 interface ResolveTargetCardsOptions {
-  readonly targetRef?: string | ActionRuntimeCard[];
-  readonly defaultRef?: string;
+  readonly targetRef?: (string | ActionRuntimeCard[]) | undefined;
+  readonly defaultRef?: string | undefined;
   readonly game?: ActionRuntimeGamePort | null;
   readonly fallbackList?: readonly ActionRuntimeCard[];
   readonly requireArray?: boolean;
@@ -108,11 +106,11 @@ interface SendCardsToGraveyardOptions {
 }
 
 interface CollectZoneCandidatesOptions {
-  readonly source?: ActionRuntimeCard | null;
-  readonly engine?: ActionHandlerEnginePort | null;
-  readonly defaultLevelOp?: "eq" | "lte" | "gte" | "lt" | "gt";
-  readonly excludeSummonRestrict?: readonly string[];
-  readonly extraFilter?: (card: ActionRuntimeCard) => boolean;
+  readonly source?: (ActionRuntimeCard | null) | undefined;
+  readonly engine?: (ActionHandlerEnginePort | null) | undefined;
+  readonly defaultLevelOp?: ("eq" | "lte" | "gte" | "lt" | "gt") | undefined;
+  readonly excludeSummonRestrict?: readonly string[] | undefined;
+  readonly extraFilter?: ((card: ActionRuntimeCard) => boolean) | undefined;
 }
 
 interface SelectionCandidate extends RawSelectionCandidate {
@@ -123,9 +121,9 @@ interface SelectionCandidate extends RawSelectionCandidate {
   zone: SelectionZone;
   zoneIndex: number;
   position: string;
-  atk?: number;
-  def?: number;
-  level?: number;
+  atk?: number | undefined;
+  def?: number | undefined;
+  level?: number | undefined;
   cardKind?: ActionRuntimeCard["cardKind"];
   cardRef: ActionRuntimeCard;
   key?: string;
@@ -153,7 +151,7 @@ interface SelectCardsFromZoneOptions {
   readonly player: ActionRuntimePlayer;
   readonly zone?: readonly ActionRuntimeCard[];
   readonly filters?: LegacyCardFilter;
-  readonly source?: ActionRuntimeCard | null;
+  readonly source?: (ActionRuntimeCard | null) | undefined;
   readonly excludeSummonRestrict?: readonly string[];
   readonly defaultLevelOp?: "eq" | "lte" | "gte" | "lt" | "gt";
   readonly extraFilter?: (card: ActionRuntimeCard) => boolean;
@@ -173,10 +171,12 @@ interface SelectCardsFromZoneOptions {
     cards: readonly ActionRuntimeCard[],
     range: SelectionRange,
   ) => MaybePromise<readonly ActionRuntimeCard[] | null | undefined>;
-  readonly selectionContractBuilder?: (
-    cards: readonly ActionRuntimeCard[],
-    range: SelectionRange,
-  ) => SelectionContractData | null;
+  readonly selectionContractBuilder?:
+    | ((
+        cards: readonly ActionRuntimeCard[],
+        range: SelectionRange,
+      ) => SelectionContractData | null)
+    | undefined;
   readonly engine?: ActionHandlerEnginePort | null;
 }
 
@@ -192,8 +192,8 @@ interface SelectCardsOptions {
   readonly player: ActionRuntimePlayer;
   readonly selectionContract: RawSelectionContract;
   readonly requirementId: string;
-  readonly kind?: SelectionKind;
-  readonly autoSelectorOptions?: object;
+  readonly kind?: SelectionKind | undefined;
+  readonly autoSelectorOptions?: object | undefined;
   readonly autoSelectKeys?: () => readonly string[];
 }
 
@@ -202,12 +202,18 @@ interface SummonFromHandCoreOptions {
   readonly player: ActionRuntimePlayer;
   readonly engine: ActionHandlerEnginePort;
   readonly game: ActionRuntimeGamePort;
-  readonly position?: BattlePositionInput | "any";
+  readonly position?: (BattlePositionInput | "any") | undefined;
   readonly cannotAttackThisTurn?: boolean;
 }
 
 function getCardInstanceId(card: ActionRuntimeCard | null | undefined) {
-  return card?.instanceId ?? card?._instanceId ?? card?.uuid ?? card?.simInstanceId ?? null;
+  return (
+    card?.instanceId ??
+    card?._instanceId ??
+    card?.uuid ??
+    card?.simInstanceId ??
+    null
+  );
 }
 
 function isExcludedInstance(
@@ -229,7 +235,9 @@ function isExcludedInstance(
       ? filters.excludeCardInstanceIds
       : []),
   ].filter((value) => value !== undefined && value !== null);
-  return cardInstanceId !== null && excludedInstanceIds.includes(cardInstanceId);
+  return (
+    cardInstanceId !== null && excludedInstanceIds.includes(cardInstanceId)
+  );
 }
 
 // Stub UI for fallback when game.ui is unavailable
@@ -247,10 +255,12 @@ export function getUI(
   return (game?.ui || game?.renderer || NULL_UI) as ActionHandlerUi;
 }
 
-export function normalizeNegateEffectsDuration(action: {
-  readonly negateEffectsDuration?: string;
-  readonly duration?: string;
-} = {}) {
+export function normalizeNegateEffectsDuration(
+  action: {
+    readonly negateEffectsDuration?: string;
+    readonly duration?: string;
+  } = {},
+) {
   return action.negateEffectsDuration === "while_faceup" ||
     action.duration === "while_faceup"
     ? "while_faceup"
@@ -275,7 +285,7 @@ export function resolveTargetCards(
 ): ActionRuntimeCard[] {
   const hasExplicitRef = Object.prototype.hasOwnProperty.call(
     options,
-    "targetRef"
+    "targetRef",
   );
 
   let targetRef = hasExplicitRef ? options.targetRef : action?.targetRef;
@@ -300,10 +310,7 @@ export function resolveTargetCards(
         expectedOwner.field?.includes?.(card) ||
         card.controller === expectedOwner.id ||
         card.owner === expectedOwner.id);
-    if (
-      ctx?.attacker &&
-      controlsCard(ctx.attacker, ctx.attackerOwner)
-    ) {
+    if (ctx?.attacker && controlsCard(ctx.attacker, ctx.attackerOwner)) {
       return ctx.attacker;
     }
     const defender = ctx?.defender || ctx?.target || null;
@@ -394,7 +401,7 @@ export function resolveTargetCards(
     if (game && player) {
       const opponent = player.id === "player" ? game.bot : game.player;
       resolved = (opponent?.field || []).filter(
-        (c) => c && c.cardKind === "monster" && !c.isFacedown
+        (c) => c && c.cardKind === "monster" && !c.isFacedown,
       );
     }
   } else if (targetRef === "ascension_material") {
@@ -624,7 +631,11 @@ export function resolveFieldScopeCards(
 
   const cards: ActionRuntimeCard[] = [];
   const seen = new Set<ActionRuntimeCard | RuntimeCardId>();
-  for (const owner of getScopeOwners(game, ctx, config.owner || config.player || "self")) {
+  for (const owner of getScopeOwners(
+    game,
+    ctx,
+    config.owner || config.player || "self",
+  )) {
     for (const zone of zones) {
       for (const card of getScopeZoneCards(owner, zone)) {
         const key = card?.instanceId ?? card;
@@ -945,7 +956,7 @@ export async function selectCardsFromZone({
     typeof maxSelect === "number" && Number.isFinite(maxSelect)
       ? maxSelect
       : resolvedCandidates.length,
-    resolvedCandidates.length
+    resolvedCandidates.length,
   );
 
   const resolvedMin = Math.max(Number(minSelect ?? 0), 0);
@@ -1130,16 +1141,20 @@ export async function summonFromHandCore({
   // 🚨 CRITICAL VALIDATION: Only monsters can be summoned to field
   if (card.cardKind !== "monster") {
     console.error(
-      `[summonFromHandCore] ❌ BLOCKED: Attempted to summon non-monster "${card.name}" (kind: ${card.cardKind})`
+      `[summonFromHandCore] ❌ BLOCKED: Attempted to summon non-monster "${card.name}" (kind: ${card.cardKind})`,
     );
     return { success: false, position };
   }
 
-  const restrictionCheck = game?.canSpecialSummonUnderRestrictions?.(card, player, {
-    summonMethod: "special",
-    fromZone: "hand",
-    silent: false,
-  });
+  const restrictionCheck = game?.canSpecialSummonUnderRestrictions?.(
+    card,
+    player,
+    {
+      summonMethod: "special",
+      fromZone: "hand",
+      silent: false,
+    },
+  );
   if (restrictionCheck?.ok === false) {
     return { success: false, position };
   }

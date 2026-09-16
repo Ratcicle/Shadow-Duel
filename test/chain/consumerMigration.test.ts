@@ -167,7 +167,7 @@ test("runtime e simulação compartilham zona, chave e lista canônica", () => {
     createSimulationLegalityAdapter(state),
   );
   assert.equal(candidates.length, 1);
-  assert.equal(candidates[0].candidateKey, "44:quick:hand");
+  assert.equal(required(candidates[0]).candidateKey, "44:quick:hand");
   assert.ok(
     checkEffectZoneLegality(
       quickPlay,
@@ -316,6 +316,7 @@ test("canonical activation candidates preserve observable property order", () =>
     buildActivationQuery({ player }),
     { listCandidates: () => [input] },
   );
+  assert.ok(candidate);
 
   assert.deepEqual(Object.keys(candidate), [
     "candidateKey",

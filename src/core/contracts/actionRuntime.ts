@@ -10,10 +10,7 @@ import type {
   CardStatusRegistry,
   MonsterType,
 } from "./cards.js";
-import type {
-  ChainLink,
-  ChainRuntimePort,
-} from "./chainRuntime.js";
+import type { ChainLink, ChainRuntimePort } from "./chainRuntime.js";
 import type {
   EffectCondition,
   EffectDefinition,
@@ -51,7 +48,8 @@ export type MaybePromise<Value> = Value | PromiseLike<Value>;
  * migrated; dynamic status access must go through the Reflect helpers below.
  */
 export interface ActionRuntimeCard {
-  id?: number;
+  // Card keeps these own properties even when constructor data omits them.
+  id?: number | undefined;
   name: string;
   instanceId?: number;
   _instanceId?: number | string | null;
@@ -62,47 +60,49 @@ export interface ActionRuntimeCard {
   treatedAsCardKinds?: CardKind[];
   subtype?: string | null;
   monsterType?: MonsterType | null;
-  type?: string | null;
+  type?: string | null | undefined;
   types?: string[];
   attribute?: string | null;
   archetype?: string | null;
   archetypes?: string[];
-  description?: string;
-  image?: string;
+  description?: string | undefined;
+  image?: string | undefined;
   owner?: string;
   originalOwner?: string;
   controller?: string;
   level?: number;
   baseLevel?: number;
-  originalLevel?: number | null;
+  originalLevel?: (number | null) | undefined;
   atk?: number;
   def?: number;
   baseAtk?: number;
   baseDef?: number;
-  originalAtk?: number | null;
-  originalDef?: number | null;
+  originalAtk?: (number | null) | undefined;
+  originalDef?: (number | null) | undefined;
   position?: BattlePosition;
   isFacedown?: boolean;
   isToken?: boolean;
   isTuner?: boolean;
   effects?: readonly EffectDefinition[];
-  effectsNegated?: boolean;
-  effectsNegatedDuration?: string | number | null;
+  effectsNegated?: boolean | undefined;
+  effectsNegatedDuration?: (string | number | null) | undefined;
   ascensionMaterials?: ActionRuntimeCard[] | AscensionMaterialRecord[];
-  declaredValues?: CardDeclaredValueMap | {
-    [property: string]:
-      | string
-      | number
-      | boolean
-      | {
-          property: string;
-          value: string | number | boolean;
-          valueLabel?: string;
-          declaredOnTurn?: number;
-          expiresOnTurn?: number;
-          duration?: string;
-        };
-  };
+  declaredValues?:
+    | CardDeclaredValueMap
+    | {
+        [property: string]:
+          | string
+          | number
+          | boolean
+          | {
+              property: string;
+              value: string | number | boolean;
+              valueLabel?: string;
+              declaredOnTurn?: number;
+              expiresOnTurn?: number;
+              duration?: string;
+            };
+      };
   summonRestrict?: string | null;
   cannotAttackThisTurn?: boolean;
   hasAttacked?: boolean;
@@ -127,10 +127,12 @@ export interface ActionRuntimeCard {
   hasChangedPosition?: boolean;
   positionChangedThisTurn?: boolean;
   battlePositionLocked?: boolean;
-  revealedTurn?: number | null;
-  permanentBuffsBySource?: CardPermanentBuffMap | {
-    [sourceName: string]: { atk?: number; def?: number };
-  };
+  revealedTurn?: (number | null) | undefined;
+  permanentBuffsBySource?:
+    | CardPermanentBuffMap
+    | {
+        [sourceName: string]: { atk?: number; def?: number };
+      };
   turnBasedBuffs?: ActionRuntimeTurnBasedBuff[];
   dynamicBuffs?:
     | CardDynamicBuffMap
@@ -158,9 +160,9 @@ export interface ActionRuntimeTurnBasedBuff {
 }
 
 export interface ActionRuntimeDynamicBuff {
-  stats?: readonly ("atk" | "def")[];
+  stats?: readonly ("atk" | "def")[] | undefined;
   value?: number;
-  appliedValues?: { atk?: number; def?: number };
+  appliedValues?: { atk?: number; def?: number } | undefined;
 }
 
 export interface ActionRuntimeSuppressedStats {
@@ -171,7 +173,7 @@ export interface ActionRuntimeProtectionEffect {
   type: string;
   source?: string;
   duration: string | number;
-  grantedOnTurn?: number | null;
+  grantedOnTurn?: (number | null) | undefined;
   expiresOnTurn?: number | null;
   sourceOwner?: string;
   removeOnLeave?: boolean;
@@ -232,9 +234,7 @@ export interface ActionRuntimeAutoSelectorPort {
   select?(
     selectionContract: RawSelectionContract | NormalizedSelectionContract,
     options?: object,
-  ):
-    | { ok: false; reason: string }
-    | { ok: true; selections: SelectionResult };
+  ): { ok: false; reason: string } | { ok: true; selections: SelectionResult };
 }
 
 export interface ActionRuntimeUiPort {
@@ -511,8 +511,8 @@ interface ActionContextState extends ActionNegationContext {
 
 /** Known fields on the context shared across an action sequence. */
 export interface EffectContext {
-  player?: ActionRuntimePlayer | null;
-  opponent?: ActionRuntimePlayer | null;
+  player?: (ActionRuntimePlayer | null) | undefined;
+  opponent?: (ActionRuntimePlayer | null) | undefined;
   source?: ActionRuntimeCard | null;
   card?: ActionRuntimeCard | null;
   target?: ActionRuntimeCard | null;
@@ -535,17 +535,17 @@ export interface EffectContext {
   sourceZone?: ZoneInput | null;
   activationZone?: ZoneInput | null;
   fromZone?: ZoneInput | null;
-  cause?: string | null;
+  cause?: (string | null) | undefined;
   damageAmount?: number;
   isDamageStep?: boolean;
   isPreview?: boolean;
   previewOnly?: boolean;
   eventData?: EventPayloadBase | null;
-  actionContext?: ActionContextState | null;
+  actionContext?: (ActionContextState | null) | undefined;
   activationContext?: ActionContextState | null;
   selections?: CanonicalSelectionMap | null;
   _actionTargets?: ResolvedTargetMap;
-  game?: ActionRuntimeGamePort;
+  game?: ActionRuntimeGamePort | undefined;
   host?: object | null;
   lastAddedCounterCount?: number;
   lastRemovedCounterCount?: number;
@@ -707,7 +707,7 @@ export interface ActionHandlerEnginePort {
   chooseSpecialSummonPosition?(
     card: ActionRuntimeCard,
     player: ActionRuntimePlayer,
-    options?: { position?: BattlePositionInput },
+    options?: { position?: BattlePositionInput | undefined },
   ): MaybePromise<BattlePosition>;
   findCardZone?(
     player: ActionRuntimePlayer,

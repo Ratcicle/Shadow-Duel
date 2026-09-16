@@ -194,7 +194,9 @@ function getMonsterTypesInDatabase(): string[] {
   );
 }
 
-function resolveDeclareChoices(action: DeclareCardPropertyAction): ChoiceValue[] {
+function resolveDeclareChoices(
+  action: DeclareCardPropertyAction,
+): ChoiceValue[] {
   if (Array.isArray(action?.choices)) return action.choices.filter(Boolean);
   if (action?.choices === "monster_types_in_database") {
     return getMonsterTypesInDatabase();
@@ -217,7 +219,10 @@ function getDeclarationExpirationTurn(
   action: DeclareCardPropertyAction,
 ): number | null {
   const currentTurn = Number(game?.turnCounter || 0);
-  if (typeof action.expiresOnTurn === "number" && Number.isFinite(action.expiresOnTurn)) {
+  if (
+    typeof action.expiresOnTurn === "number" &&
+    Number.isFinite(action.expiresOnTurn)
+  ) {
     return action.expiresOnTurn;
   }
   if (
@@ -489,7 +494,7 @@ async function resolveTargetsWithPrompt(
       context: ctx,
       player: ctx?.player || null,
       activationContext: ctx?.activationContext || {},
-    }
+    },
   );
 
   if (!selections || Object.keys(selections).length === 0) {
@@ -532,7 +537,7 @@ export async function handleChooseActionCase(
     availableCases,
     ctx,
     action,
-    engine
+    engine,
   );
   const selectionLabel =
     action.selectionLabel || getUIText("ui.selection.effectLabel");
@@ -574,7 +579,8 @@ export async function handleChooseActionCase(
 
   const chosenKeys = selections[requirementId] || [];
   const chosenKey = Array.isArray(chosenKeys) ? chosenKeys[0] : chosenKeys;
-  const chosenCase = caseByKey.get(chosenKey);
+  const chosenCase =
+    chosenKey === undefined ? undefined : caseByKey.get(chosenKey);
 
   if (!chosenCase) {
     getUI(game)?.log(getUIText("ui.selection.noValidChoice"));
@@ -590,7 +596,7 @@ export async function handleChooseActionCase(
     const targetResult = await resolveTargetsWithPrompt(
       engine,
       ctx,
-      caseTargets
+      caseTargets,
     );
     if (targetResult.needsSelection) {
       return targetResult;
@@ -686,7 +692,8 @@ export async function handleDeclareCardProperty(
 
     const chosenKeys = selections[requirementId] || [];
     const chosenKey = Array.isArray(chosenKeys) ? chosenKeys[0] : chosenKeys;
-    declaredValue = valueByKey.get(chosenKey) || null;
+    declaredValue =
+      (chosenKey === undefined ? undefined : valueByKey.get(chosenKey)) || null;
   }
 
   if (!declaredValue) {

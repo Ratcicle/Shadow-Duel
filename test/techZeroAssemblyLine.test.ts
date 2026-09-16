@@ -98,7 +98,7 @@ test("Assembly Line declara somente o banimento como custo e escolhe a Invoca√ß√
     { type: "forbid_direct_attack_this_turn", player: "self" },
   ]);
 
-  const summonAction = required(effect.actions)[0];
+  const summonAction = required(required(effect.actions)[0]);
   assert.equal(summonAction.type, "special_summon_from_zone");
   assert.equal(summonAction.zone, "deck");
   assert.equal(summonAction.cardKind, "monster");

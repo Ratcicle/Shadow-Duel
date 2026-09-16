@@ -118,7 +118,7 @@ export interface SimulatedStrategyCapabilities {
 }
 
 export interface SimulatedActionOptions {
-  sourceCard?: SimulatedCardState | null;
+  sourceCard?: SimulatedCardState | null | undefined;
   sourceAction?: object | null;
   effect?: EffectDefinition | null;
   activationContext?: AIActivationContext & {
@@ -304,9 +304,9 @@ export interface SimulatedTemporaryBattlePairEffect {
   sourceEffectId: string | null;
   sourceArchetype: string | null;
   sourceArchetypes: string[];
-  firstTargetRef?: string;
-  secondTargetRef?: string;
-  affectedTargetRef?: string;
+  firstTargetRef?: string | undefined;
+  secondTargetRef?: string | undefined;
+  affectedTargetRef?: string | undefined;
   firstTarget: SimulatedCardState;
   secondTarget: SimulatedCardState;
   affectedTarget: SimulatedCardState;
@@ -360,8 +360,8 @@ export type SimulatedRuntimeState = (
   SimulatedRuntimeStateFields;
 
 export interface SimulatedActionBatchInput {
-  actions?: readonly CardAction[] | null;
-  selections?: CanonicalSelectionMap;
+  actions?: readonly CardAction[] | null | undefined;
+  selections?: CanonicalSelectionMap | undefined;
   state: SimulatedRuntimeState;
   selfId?: PlayerId | string;
   options?: SimulatedActionOptions;
@@ -378,7 +378,7 @@ export type SimulatedActionHandlerContext<Type extends ActionType> = Omit<
   | "applySimulatedActions"
 > & {
   targets: SimulatedCardState[];
-  selections?: CanonicalSelectionMap;
+  selections?: CanonicalSelectionMap | undefined;
   options: SimulatedActionOptions;
   state: SimulatedRuntimeState;
   self: SimulatedPlayerState;

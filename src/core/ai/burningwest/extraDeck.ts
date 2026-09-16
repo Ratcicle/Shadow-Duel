@@ -5,13 +5,13 @@ import type { GameCard, CardDeclaredValueDetail } from "../../contracts/cards.js
 type Card = (GameCard | SimulatedCardState) & { uuid?: string | number | null; uid?: string | number | null; simInstanceId?: string | number | null };
 type ReadCard = Partial<Card>;
 type Player = Partial<AIStrategyBotPort> & { oncePerDuelUsageByName?: Record<string, boolean | number>; strategy?: { currentAnalysis?: unknown } };
-type Analysis = Omit<Partial<BurningWestAnalysis>, "player" | "opponent" | "game" | "faceUpOpponentMonsters" | "opponentMonsters" | "faceUpBurningWestMonsters"> & { player?: Player | null; opponent?: Player | null; game?: Game | null; faceUpOpponentMonsters?: ReadCard[]; opponentMonsters?: ReadCard[]; faceUpBurningWestMonsters?: ReadCard[] };
+type Analysis = Omit<Partial<BurningWestAnalysis>, "player" | "opponent" | "game" | "faceUpOpponentMonsters" | "opponentMonsters" | "faceUpBurningWestMonsters"> & { player?: Player | null | undefined; opponent?: Player | null | undefined; game?: Game | null | undefined; faceUpOpponentMonsters?: ReadCard[]; opponentMonsters?: ReadCard[]; faceUpBurningWestMonsters?: ReadCard[] };
 type Game = NonNullable<Parameters<typeof getGenericAscensionActions>[0]["game"]> & { turnCounter?: number; _isPerspectiveState?: boolean; materialDuelStats?: Record<string, { effectActivationsByMaterialId?: Map<number, number> }> };
-type Context = { game?: Game | null; bot?: Player | null; opponent?: Player | null; analysis?: Analysis; burningWestExecutionerEvaluation?: ReturnType<typeof evaluateExecutionerAscension> & { ascensionCard: ReadCard; material: ReadCard } };
-type PositionContext = Context & { ascensionCard?: ReadCard; material?: ReadCard };
+type Context = { game?: Game | null | undefined; bot?: Player | null | undefined; opponent?: Player | null | undefined; analysis?: Analysis; burningWestExecutionerEvaluation?: ReturnType<typeof evaluateExecutionerAscension> & { ascensionCard: ReadCard; material: ReadCard } };
+type PositionContext = Context & { ascensionCard?: ReadCard | undefined; material?: ReadCard | undefined };
 type Strategy = { buildBurningWestActivationContext?(card: Card, analysis: Analysis, options: BurningWestActivationOptions): BurningWestActivationContext };
 type ActionContext = { game?: Game | null; bot?: AIStrategyBotPort | null; analysis?: Analysis; strategy?: Strategy | null };
-type AutomaticContext<Choice extends { ascensionCard: Card; material: Card }> = { choices?: Choice[]; game?: Game | null; bot?: Player | null; opponent?: Player | null; analysis?: Analysis };
+type AutomaticContext<Choice extends { ascensionCard: Card; material: Card }> = { choices?: Choice[]; game?: Game | null | undefined; bot?: Player | null; opponent?: Player | null; analysis?: Analysis };
 import { getGenericAscensionActions } from "../common/ascensionPlanning.js";
 import { ascensionMaterialMatches } from "../../game/summon/ascension.js";
 
@@ -706,6 +706,9 @@ export function selectBurningWestAutomaticAscension<Choice extends { ascensionCa
   }
 
   const best = scored[0];
+  if (!best) {
+    return { skip: true, reason: "no valuable Executioner Ascension" };
+  }
   return {
     material: best.material as Choice["material"],
     ascensionCard: best.ascensionCard as Choice["ascensionCard"],

@@ -176,6 +176,15 @@ export function evaluateLuminarchCrescentShieldPolicy(analysis: LuminarchAnalysi
     .sort((a, b) => b.score - a.score)[0];
 
   const target = best?.card || targets[0];
+  if (!target) {
+    return {
+      yes: false,
+      priority: 0,
+      target: null,
+      targetNames: [],
+      reason: "Sem monstro Luminarch face-up para equipar",
+    };
+  }
   const targetNames = uniqueNames([
     target?.name,
     ...targets
@@ -301,6 +310,15 @@ export function evaluateLuminarchRadiantWavePolicy(analysis: LuminarchAnalysis =
   const bestTarget = targets
     .map((card) => ({ card, score: getLuminarchRemovalTargetScore(card, analysis) }))
     .sort((a, b) => b.score - a.score)[0];
+  if (!bestTarget) {
+    return {
+      yes: false,
+      priority: 0,
+      lpCost,
+      bestTarget: null,
+      reason: "Sem Luminarch em campo/GY ou sem alvo relevante para remover",
+    };
+  }
 
   const targetAtk = bestTarget?.card?.cardKind === "monster"
     ? getVisibleAtk(bestTarget.card)

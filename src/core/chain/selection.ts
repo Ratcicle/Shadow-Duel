@@ -295,7 +295,11 @@ export async function getPlayerSelectionsForEffect(
   };
 
   // Use resolveTargets to check what selections are needed
-  const targetResult = effectEngine.resolveTargets(effect.targets || [], ctx, null);
+  const targetResult = effectEngine.resolveTargets(
+    effect.targets || [],
+    ctx,
+    null,
+  );
   const baseTargets = targetResult.targets || {};
 
   if (targetResult.ok === false) {
@@ -324,10 +328,11 @@ export async function getPlayerSelectionsForEffect(
         const candidates = Array.isArray(req.candidates) ? req.candidates : [];
         const min = Number(req.min ?? 0);
         const max = Number(req.max ?? min);
+        const autoKeys = autoResult?.ok
+          ? autoResult.selections?.[req.id]
+          : undefined;
         const pickCount = Math.min(
-          autoResult?.ok && autoResult.selections?.[req.id]?.length >= min
-            ? max
-            : min,
+          autoKeys && autoKeys.length >= min ? max : min,
           candidates.length,
         );
         const keys =

@@ -1,5 +1,5 @@
 /**
- * activation/preview.js
+ * activation/preview.ts
  * Activation preview/check methods (no side effects)
  * Functions assume `this` = EffectEngine instance
  */
@@ -11,8 +11,25 @@ import {
   isQuickSpell,
 } from "../../game/spellTrap/quickSpellRules.js";
 import { getCanonicalEffectActivationZones } from "../../chain/legality.js";
+import type { CanonicalSelectionMap } from "../../contracts/selection.js";
+import type { ActivationZone } from "../../contracts/activation.js";
+import { asQuickSpellWindowContext } from "./runtime.js";
+import type {
+  ActivationActionPreviewContext,
+  ActivationCard,
+  ActivationConditionContext,
+  ActivationEffectContext,
+  ActivationEngineHost,
+  ActivationPlayer,
+  ActivationPreviewOptions,
+  ActivationPreviewResult,
+  ActivationTargetResolutionContext,
+  ActivationTargetResult,
+} from "./runtime.js";
 
-function hasImpossibleSelectionRequirement(targetResult) {
+function hasImpossibleSelectionRequirement(
+  targetResult: ActivationTargetResult,
+): boolean {
   const requirements = targetResult?.selectionContract?.requirements || [];
   return requirements.some((requirement) => {
     const min = Number(requirement?.min ?? 0);
@@ -23,7 +40,10 @@ function hasImpossibleSelectionRequirement(targetResult) {
   });
 }
 
-function impossibleSelectionReason(targetResult, fallback) {
+function impossibleSelectionReason(
+  targetResult: ActivationTargetResult,
+  fallback: string,
+): string {
   const requirements = targetResult?.selectionContract?.requirements || [];
   const impossible = requirements.find((requirement) => {
     const min = Number(requirement?.min ?? 0);
@@ -39,16 +59,19 @@ function impossibleSelectionReason(targetResult, fallback) {
 /**
  * Check if a monster has an activatable graveyard effect.
  */
-export function hasActivatableGraveyardEffect(card, player = null) {
+export function hasActivatableGraveyardEffect(
+  this: ActivationEngineHost,
+  card: ActivationCard | null | undefined,
+  player: ActivationPlayer | null = null,
+): boolean {
   if (!card) return false;
   if (player) {
     if (card.cardKind === "monster") {
-      const firstActivatable =
-        this.getFirstActivatableMonsterIgnitionEffect?.(
-          card,
-          player,
-          "graveyard",
-        );
+      const firstActivatable = this.getFirstActivatableMonsterIgnitionEffect?.(
+        card,
+        player,
+        "graveyard",
+      );
       return !!(
         firstActivatable ||
         this.canActivateMonsterEffectPreview?.(card, player, "graveyard")?.ok
@@ -58,7 +81,7 @@ export function hasActivatableGraveyardEffect(card, player = null) {
       return !!this.canActivateSpellTrapEffectPreview?.(
         card,
         player,
-        "graveyard"
+        "graveyard",
       )?.ok;
     }
     return false;
@@ -66,14 +89,18 @@ export function hasActivatableGraveyardEffect(card, player = null) {
   return card.effects?.some(
     (e) =>
       e.timing === "ignition" &&
-      getCanonicalEffectActivationZones(card, e).includes("graveyard")
+      getCanonicalEffectActivationZones(card, e).includes("graveyard"),
   );
 }
 
 /**
  * Basic activation check for a spell card.
  */
-export function canActivate(card, player) {
+export function canActivate(
+  this: ActivationEngineHost,
+  card: ActivationCard,
+  player: ActivationPlayer,
+): ActivationPreviewResult {
   if (card.cardKind !== "spell") {
     return { ok: false, reason: "Card is not a spell." };
   }
@@ -90,7 +117,12 @@ export function canActivate(card, player) {
 /**
  * Dry-run check for activating a Spell from hand (no side effects).
  */
-export function canActivateSpellFromHandPreview(card, player, options = {}) {
+export function canActivateSpellFromHandPreview(
+  this: ActivationEngineHost,
+  card: ActivationCard | null | undefined,
+  player: ActivationPlayer | null | undefined,
+  options: ActivationPreviewOptions = {},
+): ActivationPreviewResult {
   options = options || {};
   if (!card || !player) {
     return { ok: false, reason: "Missing card or player." };
@@ -111,7 +143,7 @@ export function canActivateSpellFromHandPreview(card, player, options = {}) {
     (e) =>
       e &&
       Array.isArray(e.actions) &&
-      e.actions.some((a) => a && a.type === "polymerization_fusion_summon")
+      e.actions.some((a) => a && a.type === "polymerization_fusion_summon"),
   );
   if (hasFusionAction) {
     const canActivatePoly = this.game?.canActivatePolymerization?.(player);
@@ -123,8 +155,10 @@ export function canActivateSpellFromHandPreview(card, player, options = {}) {
   const effect = this.getHandActivationEffect(card);
   if (isQuickSpell(card)) {
     const quickSpellContext = {
-      ...(options.activationContext?.quickSpellContext || {}),
-      ...(options.quickSpellContext || {}),
+      ...asQuickSpellWindowContext(
+        options.activationContext?.quickSpellContext,
+      ),
+      ...asQuickSpellWindowContext(options.quickSpellContext),
       activationZone: "hand",
       effect,
     };
@@ -153,10 +187,14 @@ export function canActivateSpellFromHandPreview(card, player, options = {}) {
       : { ok: false, reason: "No on_play effect." };
   }
 
-  const restrictionCheck =
-    this.game?.canActivateCardEffectUnderRestrictions?.(card, player, effect, {
+  const restrictionCheck = this.game?.canActivateCardEffectUnderRestrictions?.(
+    card,
+    player,
+    effect,
+    {
       silent: true,
-    });
+    },
+  );
   if (restrictionCheck?.ok === false) {
     return { ok: false, reason: restrictionCheck.reason };
   }
@@ -171,7 +209,7 @@ export function canActivateSpellFromHandPreview(card, player, options = {}) {
     ...(options.activationContext || {}),
     preview: true,
   };
-  const ctx = {
+  const ctx: ActivationEffectContext = {
     source: card,
     player,
     opponent: this.game?.getOpponent?.(player),
@@ -180,7 +218,12 @@ export function canActivateSpellFromHandPreview(card, player, options = {}) {
   };
 
   if (effect.conditions) {
-    const condResult = this.evaluateConditions(effect.conditions, ctx);
+    // Preview contexts are constructed here; the cast only projects the same
+    // object into the receiving module's narrower legacy context contract.
+    const condResult = this.evaluateConditions(
+      effect.conditions,
+      ctx as ActivationConditionContext,
+    );
     if (!condResult.ok) {
       return { ok: false, reason: condResult.reason };
     }
@@ -190,15 +233,19 @@ export function canActivateSpellFromHandPreview(card, player, options = {}) {
     return { ok: false, reason: "You must control no monsters." };
   }
 
-  const actionCheck = this.checkActionPreviewRequirements(effect.actions || [], {
-    ...ctx,
-    effect,
-  });
+  const actionCheck = this.checkActionPreviewRequirements(
+    effect.actions || [],
+    { ...ctx, effect } as ActivationActionPreviewContext,
+  );
   if (!actionCheck.ok) {
     return { ok: false, reason: actionCheck.reason };
   }
 
-  const targetResult = this.resolveTargets(effect.targets || [], ctx, null);
+  const targetResult = this.resolveTargets(
+    effect.targets || [],
+    ctx as ActivationTargetResolutionContext,
+    null,
+  );
   if (targetResult.ok === false) {
     return { ok: false, reason: targetResult.reason };
   }
@@ -221,12 +268,13 @@ export function canActivateSpellFromHandPreview(card, player, options = {}) {
  * (e.g., showing the Special Summon button in hand).
  */
 export function canActivateMonsterEffectPreview(
-  card,
-  player,
-  activationZone = "field",
-  selections = null,
-  options = {}
-) {
+  this: ActivationEngineHost,
+  card: ActivationCard | null | undefined,
+  player: ActivationPlayer | null | undefined,
+  activationZone: ActivationZone = "field",
+  selections: CanonicalSelectionMap | null = null,
+  options: ActivationPreviewOptions = {},
+): ActivationPreviewResult {
   if (!card || !player) {
     return { ok: false, reason: "Missing card or player." };
   }
@@ -269,18 +317,24 @@ export function canActivateMonsterEffectPreview(
         (e) =>
           e &&
           e.timing === "ignition" &&
-          getCanonicalEffectActivationZones(card, e).includes(activationZone) &&
-          (!requestedEffectId || e.id === requestedEffectId)
+          getCanonicalEffectActivationZones(card, e).some(
+            (zone) => zone === activationZone,
+          ) &&
+          (!requestedEffectId || e.id === requestedEffectId),
       );
 
   if (!effect) {
     return { ok: false, reason: "No ignition effect defined for this zone." };
   }
 
-  const restrictionCheck =
-    this.game?.canActivateCardEffectUnderRestrictions?.(card, player, effect, {
+  const restrictionCheck = this.game?.canActivateCardEffectUnderRestrictions?.(
+    card,
+    player,
+    effect,
+    {
       silent: true,
-    });
+    },
+  );
   if (restrictionCheck?.ok === false) {
     return { ok: false, reason: restrictionCheck.reason };
   }
@@ -298,12 +352,17 @@ export function canActivateMonsterEffectPreview(
     };
   }
 
-  const damageStepCheck = canActivateDuringDamageStep(effect, card, {
-    ...(options.activationContext?.context || {}),
-    ...(options.activationContext?.actionContext || {}),
+  const damageStepContext = {
+    ...asQuickSpellWindowContext(options.activationContext?.context),
+    ...asQuickSpellWindowContext(options.activationContext?.actionContext),
     activationZone,
     phase: this.game?.phase || null,
-  });
+  };
+  const damageStepCheck = canActivateDuringDamageStep(
+    effect,
+    card,
+    damageStepContext,
+  );
   if (!damageStepCheck.ok) {
     return { ok: false, reason: damageStepCheck.reason };
   }
@@ -313,7 +372,7 @@ export function canActivateMonsterEffectPreview(
     ...(effect?.id ? { effectId: effect.id } : {}),
     preview: true,
   };
-  const ctx = {
+  const ctx: ActivationEffectContext = {
     source: card,
     player,
     opponent: this.game.getOpponent(player),
@@ -332,7 +391,10 @@ export function canActivateMonsterEffectPreview(
   }
 
   if (effect.conditions) {
-    const condResult = this.evaluateConditions(effect.conditions, ctx);
+    const condResult = this.evaluateConditions(
+      effect.conditions,
+      ctx as ActivationConditionContext,
+    );
     if (!condResult.ok) {
       return { ok: false, reason: condResult.reason };
     }
@@ -352,7 +414,7 @@ export function canActivateMonsterEffectPreview(
         ...activationContext,
         costSelections: selections || {},
       },
-    },
+    } as ActivationActionPreviewContext,
   );
   if (!activationCostCheck.ok) {
     return { ok: false, reason: activationCostCheck.reason };
@@ -360,7 +422,7 @@ export function canActivateMonsterEffectPreview(
 
   const actionCheck = this.checkActionPreviewRequirements(
     effect.actions || [],
-    { ...ctx, effect }
+    { ...ctx, effect } as ActivationActionPreviewContext,
   );
   if (!actionCheck.ok) {
     return { ok: false, reason: actionCheck.reason };
@@ -368,8 +430,8 @@ export function canActivateMonsterEffectPreview(
 
   const targetResult = this.resolveTargets(
     effect.targets || [],
-    ctx,
-    selections
+    ctx as ActivationTargetResolutionContext,
+    selections,
   );
 
   if (targetResult.needsSelection) {
@@ -393,12 +455,13 @@ export function canActivateMonsterEffectPreview(
  * Preview for Spell/Trap ignition/on_activate effects while on the field.
  */
 export function canActivateSpellTrapEffectPreview(
-  card,
-  player,
-  activationZone = "spellTrap",
-  selections = null,
-  options = {}
-) {
+  this: ActivationEngineHost,
+  card: ActivationCard | null | undefined,
+  player: ActivationPlayer | null | undefined,
+  activationZone: ActivationZone = "spellTrap",
+  selections: CanonicalSelectionMap | null = null,
+  options: ActivationPreviewOptions = {},
+): ActivationPreviewResult {
   if (!card || !player) {
     return { ok: false, reason: "Missing card or player." };
   }
@@ -418,8 +481,7 @@ export function canActivateSpellTrapEffectPreview(
   const effect = this.getSpellTrapActivationEffect(card, {
     fromHand: false,
     activationZone,
-    trapActivationFromSet:
-      card.cardKind === "trap" && card.isFacedown === true,
+    trapActivationFromSet: card.cardKind === "trap" && card.isFacedown === true,
   });
   const setQuickSpell =
     isQuickSpell(card) &&
@@ -443,7 +505,7 @@ export function canActivateSpellTrapEffectPreview(
           e &&
           e.timing === "ignition" &&
           (getCanonicalEffectActivationZones(card, e).includes("spellTrap") ||
-            getCanonicalEffectActivationZones(card, e).includes("field"))
+            getCanonicalEffectActivationZones(card, e).includes("field")),
       );
       if (!hasFieldIgnition) {
         return {
@@ -454,7 +516,7 @@ export function canActivateSpellTrapEffectPreview(
     }
   } else if (card.cardKind === "trap") {
     const validPhases = ["main1", "battle", "main2"];
-    if (!validPhases.includes(this.game?.phase)) {
+    if (!validPhases.some((phase) => phase === this.game?.phase)) {
       return {
         ok: false,
         reason: "Trap cannot be activated during this phase.",
@@ -478,8 +540,10 @@ export function canActivateSpellTrapEffectPreview(
 
   if (setQuickSpell) {
     const quickSpellContext = {
-      ...(options.activationContext?.quickSpellContext || {}),
-      ...(options.quickSpellContext || {}),
+      ...asQuickSpellWindowContext(
+        options.activationContext?.quickSpellContext,
+      ),
+      ...asQuickSpellWindowContext(options.quickSpellContext),
       activationZone: "spellTrap",
       effect,
     };
@@ -505,7 +569,7 @@ export function canActivateSpellTrapEffectPreview(
       return { ok: false, reason: "Card must be face-up to activate." };
     }
     const setTurn = card.setTurn ?? card.turnSetOn ?? null;
-    if (setTurn === null || setTurn >= this.game?.turnCounter) {
+    if (setTurn === null || setTurn >= (this.game?.turnCounter ?? Number.NaN)) {
       return { ok: false, reason: "Spell cannot be activated this turn." };
     }
   }
@@ -528,10 +592,14 @@ export function canActivateSpellTrapEffectPreview(
     return { ok: false, reason: "No ignition effect defined for this card." };
   }
 
-  const restrictionCheck =
-    this.game?.canActivateCardEffectUnderRestrictions?.(card, player, effect, {
+  const restrictionCheck = this.game?.canActivateCardEffectUnderRestrictions?.(
+    card,
+    player,
+    effect,
+    {
       silent: true,
-    });
+    },
+  );
   if (restrictionCheck?.ok === false) {
     return { ok: false, reason: restrictionCheck.reason };
   }
@@ -546,7 +614,7 @@ export function canActivateSpellTrapEffectPreview(
     ...(options.activationContext || {}),
     preview: true,
   };
-  const ctx = {
+  const ctx: ActivationEffectContext = {
     source: card,
     player,
     opponent: this.game?.getOpponent?.(player),
@@ -564,13 +632,16 @@ export function canActivateSpellTrapEffectPreview(
     const allowedPhases = Array.isArray(effect.requirePhase)
       ? effect.requirePhase
       : [effect.requirePhase];
-    if (!allowedPhases.includes(this.game?.phase)) {
+    if (!allowedPhases.some((phase) => phase === this.game?.phase)) {
       return { ok: false, reason: "Effect cannot be activated this phase." };
     }
   }
 
   if (effect.conditions) {
-    const condResult = this.evaluateConditions(effect.conditions, ctx);
+    const condResult = this.evaluateConditions(
+      effect.conditions,
+      ctx as ActivationConditionContext,
+    );
     if (!condResult.ok) {
       return { ok: false, reason: condResult.reason };
     }
@@ -582,7 +653,7 @@ export function canActivateSpellTrapEffectPreview(
 
   const actionCheck = this.checkActionPreviewRequirements(
     effect.actions || [],
-    { ...ctx, effect }
+    { ...ctx, effect } as ActivationActionPreviewContext,
   );
   if (!actionCheck.ok) {
     return { ok: false, reason: actionCheck.reason };
@@ -590,8 +661,8 @@ export function canActivateSpellTrapEffectPreview(
 
   const targetResult = this.resolveTargets(
     effect.targets || [],
-    ctx,
-    selections
+    ctx as ActivationTargetResolutionContext,
+    selections,
   );
   if (targetResult.needsSelection) {
     return { ok: true, needsSelection: true };
@@ -607,11 +678,12 @@ export function canActivateSpellTrapEffectPreview(
  * Preview for Field Spell effects while on the field.
  */
 export function canActivateFieldSpellEffectPreview(
-  card,
-  player,
-  selections = null,
-  options = {}
-) {
+  this: ActivationEngineHost,
+  card: ActivationCard | null | undefined,
+  player: ActivationPlayer | null | undefined,
+  selections: CanonicalSelectionMap | null = null,
+  options: ActivationPreviewOptions = {},
+): ActivationPreviewResult {
   if (!card || !player) {
     return { ok: false, reason: "Missing card or player." };
   }
@@ -639,10 +711,14 @@ export function canActivateFieldSpellEffectPreview(
     return { ok: false, reason: "No field activation effect defined." };
   }
 
-  const restrictionCheck =
-    this.game?.canActivateCardEffectUnderRestrictions?.(card, player, effect, {
+  const restrictionCheck = this.game?.canActivateCardEffectUnderRestrictions?.(
+    card,
+    player,
+    effect,
+    {
       silent: true,
-    });
+    },
+  );
   if (restrictionCheck?.ok === false) {
     return { ok: false, reason: restrictionCheck.reason };
   }
@@ -657,7 +733,7 @@ export function canActivateFieldSpellEffectPreview(
     ...(options.activationContext || {}),
     preview: true,
   };
-  const ctx = {
+  const ctx: ActivationEffectContext = {
     source: card,
     player,
     opponent: this.game?.getOpponent?.(player),
@@ -666,7 +742,10 @@ export function canActivateFieldSpellEffectPreview(
   };
 
   if (effect.conditions) {
-    const condResult = this.evaluateConditions(effect.conditions, ctx);
+    const condResult = this.evaluateConditions(
+      effect.conditions,
+      ctx as ActivationConditionContext,
+    );
     if (!condResult.ok) {
       return { ok: false, reason: condResult.reason };
     }
@@ -678,7 +757,7 @@ export function canActivateFieldSpellEffectPreview(
 
   const actionCheck = this.checkActionPreviewRequirements(
     effect.actions || [],
-    { ...ctx, effect }
+    { ...ctx, effect } as ActivationActionPreviewContext,
   );
   if (!actionCheck.ok) {
     return { ok: false, reason: actionCheck.reason };
@@ -686,8 +765,8 @@ export function canActivateFieldSpellEffectPreview(
 
   const targetResult = this.resolveTargets(
     effect.targets || [],
-    ctx,
-    selections
+    ctx as ActivationTargetResolutionContext,
+    selections,
   );
   if (targetResult.needsSelection) {
     return { ok: true, needsSelection: true };

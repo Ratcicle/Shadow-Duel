@@ -7,6 +7,7 @@
  */
 
 import { DAMAGE_STEP_TIMINGS } from "../../contracts/effects.js";
+import type { ActionType } from "../../contracts/actions.js";
 import type { DamageStepTiming } from "../../contracts/effects.js";
 
 export { DAMAGE_STEP_TIMINGS };
@@ -15,8 +16,8 @@ export interface QuickSpellCardView {
   cardKind?: string | null;
   subtype?: string | null;
   isFacedown?: boolean;
-  setTurn?: number | null;
-  turnSetOn?: number | null;
+  setTurn?: (number | null) | undefined;
+  turnSetOn?: (number | null) | undefined;
 }
 
 export interface QuickSpellPlayerView {
@@ -26,9 +27,9 @@ export interface QuickSpellPlayerView {
 }
 
 export interface QuickSpellGameView {
-  turn?: string | null;
-  phase?: string | null;
-  turnCounter?: number | null;
+  turn?: (string | null) | undefined;
+  phase?: (string | null) | undefined;
+  turnCounter?: (number | null) | undefined;
 }
 
 export interface QuickSpellTargetView {
@@ -72,23 +73,23 @@ export interface QuickSpellEffectView {
 }
 
 export interface QuickSpellContext {
-  requiredSpellSpeed?: number;
-  respondingToSpellSpeed?: number;
-  lastSpellSpeed?: number;
-  legalWindow?: boolean;
-  isChainWindow?: boolean;
-  chainWindowOpen?: boolean;
-  openState?: boolean;
-  type?: string | null;
-  event?: string | null;
-  responseContextType?: string | null;
+  requiredSpellSpeed?: number | undefined;
+  respondingToSpellSpeed?: number | undefined;
+  lastSpellSpeed?: number | undefined;
+  legalWindow?: boolean | undefined;
+  isChainWindow?: boolean | undefined;
+  chainWindowOpen?: boolean | undefined;
+  openState?: boolean | undefined;
+  type?: (string | null) | undefined;
+  event?: (string | null) | undefined;
+  responseContextType?: (string | null) | undefined;
   respondingToChainLink?: unknown;
   activationAttempt?: unknown;
-  isDamageStep?: boolean;
-  damageStepTiming?: DamageStepTiming | string | null;
-  effect?: QuickSpellEffectView | null;
-  activationZone?: string | null;
-  zone?: string | null;
+  isDamageStep?: boolean | undefined;
+  damageStepTiming?: (DamageStepTiming | string | null) | undefined;
+  effect?: (QuickSpellEffectView | null) | undefined;
+  activationZone?: (string | null) | undefined;
+  zone?: (string | null) | undefined;
 }
 
 export type QuickSpellActivationZone = "hand" | "spellTrap";
@@ -109,11 +110,13 @@ export interface QuickSpellLegalityResult
   timing?: DamageStepTiming | string | null;
 }
 
-type QuickSpellResultDetail = Partial<
-  Omit<QuickSpellLegalityResult, "ok">
->;
+type QuickSpellResultDetail = Partial<Omit<QuickSpellLegalityResult, "ok">>;
 
-const QUICK_SPELL_SUBTYPES = new Set<string>(["quick", "quick-play", "quickplay"]);
+const QUICK_SPELL_SUBTYPES = new Set<string>([
+  "quick",
+  "quick-play",
+  "quickplay",
+]);
 
 const CHAIN_WINDOW_CONTEXT_TYPES = new Set<string>([
   "attack_declaration",
@@ -128,7 +131,7 @@ const CHAIN_WINDOW_CONTEXT_TYPES = new Set<string>([
   "summon_attempt",
 ]);
 
-const DIRECT_ATK_DEF_ACTIONS = new Set<string>([
+const DIRECT_ATK_DEF_ACTION_TYPES = [
   "buff_atk_by_lp_gained_this_turn",
   "buff_stats_by_counter",
   "buff_stats_temp",
@@ -137,7 +140,9 @@ const DIRECT_ATK_DEF_ACTIONS = new Set<string>([
   "reduce_self_atk",
   "remove_stat_increases",
   "set_original_stats",
-]);
+] as const satisfies readonly ActionType[];
+type DirectAtkDefActionType = (typeof DIRECT_ATK_DEF_ACTION_TYPES)[number];
+const DIRECT_ATK_DEF_ACTIONS = new Set<string>(DIRECT_ATK_DEF_ACTION_TYPES);
 
 export const DAMAGE_STEP_ACTIVATION_CATEGORIES = Object.freeze({
   COUNTER_TRAP: "counter_trap",
@@ -155,7 +160,9 @@ const PRE_CALCULATION_TIMINGS: readonly DamageStepTiming[] = Object.freeze([
   DAMAGE_STEP_TIMINGS.START,
   DAMAGE_STEP_TIMINGS.BEFORE_CALCULATION,
 ]);
-const DAMAGE_STEP_EVENT_TIMINGS: Readonly<Record<string, DamageStepTiming | null>> = Object.freeze({
+const DAMAGE_STEP_EVENT_TIMINGS: Readonly<
+  Record<string, DamageStepTiming | null>
+> = Object.freeze({
   damage_step: null,
   battle_damage: DAMAGE_STEP_TIMINGS.BEFORE_CALCULATION,
   battle_damage_inflicted: DAMAGE_STEP_TIMINGS.AFTER_CALCULATION,
@@ -249,7 +256,9 @@ function hasLegalQuickSpellWindow(
   return hasExplicitLegalWindow(context) || isOwnMainPhaseOpen(game, player);
 }
 
-function getSetTurn(card: QuickSpellCardView | null | undefined): number | null | undefined {
+function getSetTurn(
+  card: QuickSpellCardView | null | undefined,
+): number | null | undefined {
   return card?.setTurn ?? card?.turnSetOn ?? null;
 }
 
@@ -282,7 +291,9 @@ function actionDirectlyChangesAtkDef(
     return false;
   }
 
-  switch (action.type) {
+  // Membership was checked above; preserve the broad runtime input contract.
+  const actionType = action.type as DirectAtkDefActionType;
+  switch (actionType) {
     case "buff_stats_temp":
       return (
         hasNonZeroNumber(action, ["atkBoost", "defBoost"]) ||
@@ -320,17 +331,16 @@ function actionDirectlyChangesAtkDef(
     case "permanent_buff_named":
       return hasNonZeroNumber(action, ["atkBoost", "defBoost"]);
     case "set_original_stats":
-      return (
-        hasOwnPropertyValue(action, [
-          "atk",
-          "def",
-          "baseAtk",
-          "baseDef",
-          "atkFromContext",
-          "defFromContext",
-        ])
-      );
+      return hasOwnPropertyValue(action, [
+        "atk",
+        "def",
+        "baseAtk",
+        "baseDef",
+        "atkFromContext",
+        "defFromContext",
+      ]);
     default:
+      actionType satisfies never;
       return false;
   }
 }
@@ -407,10 +417,13 @@ function normalizeDamageStepTimings(
   const declared = Array.isArray(effect?.damageStepTimings)
     ? effect.damageStepTimings
     : [];
-  return [...new Set(declared.filter(
-    (timing): timing is DamageStepTiming =>
-      ALL_DAMAGE_STEP_TIMINGS.includes(timing as DamageStepTiming),
-  ))];
+  return [
+    ...new Set(
+      declared.filter((timing): timing is DamageStepTiming =>
+        ALL_DAMAGE_STEP_TIMINGS.includes(timing as DamageStepTiming),
+      ),
+    ),
+  ];
 }
 
 function isActivationResponseContext(context: QuickSpellContext = {}): boolean {
@@ -539,11 +552,9 @@ export function canActivateQuickSpellFromHand(
     );
   }
   if ((player.spellTrap || []).length >= 5) {
-    return failure(
-      "SPELL_TRAP_ZONE_FULL",
-      "Spell/Trap Zone is full.",
-      { activationZone: "hand" },
-    );
+    return failure("SPELL_TRAP_ZONE_FULL", "Spell/Trap Zone is full.", {
+      activationZone: "hand",
+    });
   }
 
   const speedCheck = checkSpellSpeed(context);

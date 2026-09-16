@@ -340,7 +340,7 @@ test("[CS-04] cada movimento de cleanup emite seu evento individual", async () =
   ];
   const owners = [player, bot];
   const links = cards.map((card, index) => {
-    const owner = owners[index];
+    const owner = required(owners[index]);
     placeCard(owner, "spellTrap", card);
     return chain.addToChain(
       chain.createPreparedActivation({
@@ -495,8 +495,11 @@ test("finalizacao canônica adia Counter Trap ate depois de CL1", async () => {
   assert.equal(counterLink.finalizationStatus, "completed");
   assert.equal(counterLink.sourceMoved, true);
   assert.equal(trace.moves.length, 1);
-  assert.equal(trace.moves[0].options.contextLabel, "post_chain_cleanup");
-  assert.equal(trace.moves[0].options.linkId, counterLink.linkId);
+  assert.equal(
+    required(trace.moves[0]).options.contextLabel,
+    "post_chain_cleanup",
+  );
+  assert.equal(required(trace.moves[0]).options.linkId, counterLink.linkId);
 });
 
 test("[CS-08] custo é pago antes da declaração de alvos", async () => {
@@ -608,16 +611,20 @@ test("[CS-08] custo é pago antes da declaração de alvos", async () => {
     .filter((entry) => entry.type === "selection")
     .map((entry) => required(entry.session));
   assert.equal(
-    required(targetContract(selectionSessions[0].selectionContract).purpose),
+    required(
+      targetContract(required(selectionSessions[0]).selectionContract).purpose,
+    ),
     "cost",
   );
-  assert.equal(required(selectionSessions[0].allowCancel), true);
+  assert.equal(required(required(selectionSessions[0]).allowCancel), true);
   assert.equal(
-    required(targetContract(selectionSessions[1].selectionContract).purpose),
+    required(
+      targetContract(required(selectionSessions[1]).selectionContract).purpose,
+    ),
     "target",
   );
-  assert.equal(required(selectionSessions[1].allowCancel), false);
-  assert.equal(selectionSessions[1].onCancel, null);
+  assert.equal(required(required(selectionSessions[1]).allowCancel), false);
+  assert.equal(required(selectionSessions[1]).onCancel, null);
 
   const link = required(chain.addToChain(prepared));
   assert.deepEqual(link.declaredTargets, [
@@ -670,6 +677,7 @@ test("Natural Selection real compromete fonte, descarta custo e congela alvo", a
     legalWindow: true,
   };
   const [candidate] = chain.getActivatableCardsInChain(player, context);
+  assert.ok(candidate);
   assert.equal(candidate.effectId, "natural_selection_activation");
 
   const result = await chain.prepareChainResponse(candidate, player, context);
@@ -1011,9 +1019,14 @@ test("alvo invalido nao gera retarget nem reembolso de custo", async () => {
   assert.equal(bot.graveyard.includes(declaredTarget), true);
   assert.equal(bot.field.includes(replacement), true);
   assert.equal(required(link.targetValidation).satisfiesMinimums, false);
-  assert.equal(required(link.targetValidation).groups[0].cards[0].valid, false);
   assert.equal(
-    required(link.targetValidation).groups[0].cards[0].reason,
+    required(required(required(link.targetValidation).groups[0]).cards[0])
+      .valid,
+    false,
+  );
+  assert.equal(
+    required(required(required(link.targetValidation).groups[0]).cards[0])
+      .reason,
     "target_location_changed",
   );
   assert.equal(
@@ -1081,9 +1094,14 @@ test("alvo congelado e revalidado sem trocar por outro candidato", async () => {
   assert.equal(actionCalls, 0);
   assert.equal(bot.field.includes(target), true);
   assert.equal(bot.field.includes(replacement), true);
-  assert.equal(required(link.targetValidation).groups[0].cards[0].valid, false);
   assert.equal(
-    required(link.targetValidation).groups[0].cards[0].reason,
+    required(required(required(link.targetValidation).groups[0]).cards[0])
+      .valid,
+    false,
+  );
+  assert.equal(
+    required(required(required(link.targetValidation).groups[0]).cards[0])
+      .reason,
     "target_no_longer_matches",
   );
 });

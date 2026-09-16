@@ -35,6 +35,7 @@ import type {
   ArenaSearchOptions,
 } from "../../src/core/contracts/arena.js";
 import type { CanonicalGameStateSnapshot } from "../../src/core/contracts/replay.js";
+import type { GameCard } from "../../src/core/contracts/cards.js";
 import type { getPublicState } from "../../src/core/game/state/serialization.js";
 import type {
   BotGamePort,
@@ -46,8 +47,9 @@ import { buildPrioritizedAction } from "../../src/core/ai/common/actionGeneratio
 import { applyGenericSimulatedMainPhaseAction } from "../../src/core/ai/common/simulation.js";
 
 type Equal<Left, Right> =
-  (<Value>() => Value extends Left ? 1 : 2) extends
-  (<Value>() => Value extends Right ? 1 : 2)
+  (<Value>() => Value extends Left ? 1 : 2) extends <
+    Value,
+  >() => Value extends Right ? 1 : 2
     ? true
     : false;
 
@@ -123,6 +125,12 @@ declare const gameTreeState: GameTreeSimulationGameState;
 declare const simulatedCard: SimulatedCardState;
 declare const bot: BotRuntimePort;
 declare const game: BotGamePort;
+declare const liveCard: GameCard;
+
+bot.selectBestAscension([liveCard], liveCard, game);
+// contract-negative: selection requires at least one eligible Ascension.
+// @ts-expect-error
+bot.selectBestAscension([], liveCard, game);
 declare const strategy: StrategyRuntimePort;
 declare const strategyConstructor: StrategyConstructor;
 declare const registry: StrategyRegistryPort;
@@ -193,13 +201,11 @@ const legacyTurnLineSearchOptions: ArenaSearchOptions = {
   turnLineSearchNodeBudget: 200,
   turnLineSearchCandidateLimit: 8,
 };
-const cloneBoundaryMayPreserveUndefined: Pick<
-  AiStateShape,
-  "turn" | "phase"
-> = {
-  turn: undefined,
-  phase: undefined,
-};
+const cloneBoundaryMayPreserveUndefined: Pick<AiStateShape, "turn" | "phase"> =
+  {
+    turn: undefined,
+    phase: undefined,
+  };
 const gameTreeBoundaryMayPreserveUndefined: Pick<
   GameTreeStateShape,
   "turn" | "phase"
@@ -268,9 +274,11 @@ const unknownRuntimeAction: AIAction = { type: "phase_advance" };
 // @ts-expect-error
 applyGenericSimulatedMainPhaseAction(simulationState, plannerBattleAction);
 
-// contract-negative: the main-phase dispatcher rejects unknown action types.
-// @ts-expect-error
-applyGenericSimulatedMainPhaseAction(perspectiveState, { type: "phase_advance" });
+applyGenericSimulatedMainPhaseAction(perspectiveState, {
+  // contract-negative: the main-phase dispatcher rejects unknown action types.
+  // @ts-expect-error
+  type: "phase_advance",
+});
 
 // contract-negative: live runtime state must be cloned before simulation.
 // @ts-expect-error
@@ -321,9 +329,7 @@ const incompleteExecutors: BotMainPhaseActionExecutors = {
 // @ts-expect-error
 const unscoredAction: ScoredAIAction = { action: summonAction };
 
-declare const incompatibleConstructor: new (
-  id: number,
-) => StrategyRuntimePort;
+declare const incompatibleConstructor: new (id: number) => StrategyRuntimePort;
 
 // contract-negative: strategy constructors receive the canonical bot port.
 // @ts-expect-error
@@ -381,10 +387,8 @@ void incompleteCompletedArenaDuel;
 const actionTypesAreExact: ActionTypesAreExact = true;
 const actionMapKeysAreExact: ActionMapKeysAreExact = true;
 const executorKeysAreExact: ExecutorKeysAreExact = true;
-const replayStateKeepsCanonicalSnapshot: ReplayStateKeepsCanonicalSnapshot =
-  true;
-const simulationProfilesMatchRealCloneFactories: SimulationProfilesMatchRealCloneFactories =
-  true;
+const replayStateKeepsCanonicalSnapshot: ReplayStateKeepsCanonicalSnapshot = true;
+const simulationProfilesMatchRealCloneFactories: SimulationProfilesMatchRealCloneFactories = true;
 const publicStateIsExplicitReturn: PublicStateIsExplicitReturn = true;
 const searchScoresAreRequired: SearchScoresAreRequired = true;
 const gameTreePlayerKeysAreExact: GameTreePlayerKeysAreExact = true;

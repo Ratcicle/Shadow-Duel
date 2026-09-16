@@ -56,7 +56,7 @@ interface SummonTrackingHost extends GameSummonHost {
   chooseSpecialSummonPosition(
     player: GamePlayer,
     card: GameCard,
-    options?: { position?: BattlePositionInput },
+    options?: { position?: BattlePositionInput | undefined },
   ): Promise<BattlePosition>;
   moveCard(
     card: GameCard,
@@ -119,7 +119,7 @@ export function _trackSpecialSummonType(
  */
 export function getSpecialSummonedTypeCount(
   this: SummonTrackingHost,
-  owner: GamePlayer | PlayerId,
+  owner: { id: string } | string,
   typeName: string,
 ): number {
   const playerId = typeof owner === "string" ? owner : owner.id;
@@ -165,7 +165,7 @@ export async function resolveDelayedSummon(
     const zoneList = targetPlayer[originZone];
     if (!Array.isArray(zoneList) || !zoneList.includes(card)) {
       this.ui?.log?.(
-        `${card.name} is no longer in ${originZone}, cannot special summon.`
+        `${card.name} is no longer in ${originZone}, cannot special summon.`,
       );
       continue;
     }
@@ -195,7 +195,7 @@ export async function resolveDelayedSummon(
     });
     if (moveResult?.success === false) {
       this.ui?.log?.(
-        `${card.name} could not be special summoned from delayed action.`
+        `${card.name} could not be special summoned from delayed action.`,
       );
       continue;
     }
@@ -209,7 +209,7 @@ export async function resolveDelayedSummon(
       const expiresOnTurn = this.turnCounter + 1;
       this.applyTurnBasedBuff(card, "atk", 800, expiresOnTurn);
       this.ui?.log?.(
-        `${card.name} gains +800 ATK until the end of turn ${expiresOnTurn}.`
+        `${card.name} gains +800 ATK until the end of turn ${expiresOnTurn}.`,
       );
     }
   }
@@ -217,7 +217,7 @@ export async function resolveDelayedSummon(
   if (successCount > 0) {
     this.updateBoard();
     this.ui?.log?.(
-      `${successCount} card(s) special summoned from delayed action.`
+      `${successCount} card(s) special summoned from delayed action.`,
     );
   }
 }

@@ -84,7 +84,10 @@ interface FusionExecutionHost {
   ): Promise<boolean>;
 }
 
-function readObject(value: object | null | undefined, key: string): object | null {
+function readObject(
+  value: object | null | undefined,
+  key: string,
+): object | null {
   if (!value) return null;
   const nested = Reflect.get(value, key);
   return nested !== null && typeof nested === "object" ? nested : null;
@@ -113,10 +116,7 @@ function getActionContext(ctx: EffectContext): object {
     "actionContext",
   );
   return (
-    ctx?.actionContext ||
-    nestedActionContext ||
-    ctx?.activationContext ||
-    {}
+    ctx?.actionContext || nestedActionContext || ctx?.activationContext || {}
   );
 }
 
@@ -152,14 +152,17 @@ function selectBestMaterialCombo(
 
   // If only one combo, use it
   if (materialCombos.length === 1) {
-    return materialCombos[0];
+    return materialCombos[0]!;
   }
 
   // Define material value priorities
   // Higher value = more important to preserve, lower value = better tribute candidate
   const getMaterialValue = (monster: FusionRuntimeCard): number => {
     const name = monster.name || "";
-    const costPreferences = readObject(getActionContext(ctx), "costPreferences");
+    const costPreferences = readObject(
+      getActionContext(ctx),
+      "costPreferences",
+    );
     const preserveNames = readArray(costPreferences, "preserveNames");
     const preferNames = readArray(costPreferences, "preferNames");
     const payoffNames = readArray(costPreferences, "offensivePayoffNames");
@@ -200,10 +203,10 @@ function selectBestMaterialCombo(
     evaluatedCombos.map((ec) => ({
       materials: ec.combo.map((m) => m.name),
       totalValue: ec.totalValue,
-    }))
+    })),
   );
 
-  return evaluatedCombos[0].combo;
+  return evaluatedCombos[0]!.combo; // Mapping and sorting preserve the non-empty combo list.
 }
 
 function resolveBotFusionPosition(
@@ -264,7 +267,7 @@ export async function performBotFusion(
   // Log bot fusion decision
   console.log(
     `[Bot] Fusion summoning ${fusion.name} using materials:`,
-    materials.map((m) => m.name).join(", ")
+    materials.map((m) => m.name).join(", "),
   );
 
   // Get fusion monster index in extra deck
@@ -280,7 +283,7 @@ export async function performBotFusion(
     fusionIndex,
     resolveBotFusionPosition(fusion, ctx),
     materials,
-    player
+    player,
   );
 
   return success;
@@ -298,22 +301,22 @@ export async function applyPolymerizationFusion(
 
   // Get materials from field and hand
   const fieldMonsters = player.field.filter(
-    (c) => c && c.cardKind === "monster"
+    (c) => c && c.cardKind === "monster",
   );
   const handMonsters = player.hand.filter((c) => c && c.cardKind === "monster");
   const availableMaterials = [...fieldMonsters, ...handMonsters];
 
   console.log(
     "[Polymerization] Field monsters:",
-    fieldMonsters.map((m) => m.name)
+    fieldMonsters.map((m) => m.name),
   );
   console.log(
     "[Polymerization] Hand monsters:",
-    handMonsters.map((m) => m.name)
+    handMonsters.map((m) => m.name),
   );
   console.log(
     "[Polymerization] Extra deck:",
-    player.extraDeck.map((c) => c.name)
+    player.extraDeck.map((c) => c.name),
   );
 
   // Build materialInfo array with zone information for each material
@@ -332,12 +335,12 @@ export async function applyPolymerizationFusion(
     polymerizationFusions,
     availableMaterials,
     player,
-    { materialInfo }
+    { materialInfo },
   );
 
   console.log(
     "[Polymerization] Available fusions:",
-    availableFusions.map((f) => f.fusion.name)
+    availableFusions.map((f) => f.fusion.name),
   );
 
   if (availableFusions.length === 0) {
@@ -397,7 +400,7 @@ export async function applyPolymerizationFusion(
       execute: (selections) => {
         const choice = selections.fusion_choice?.[0];
         resolve(
-          choice ? fusionCards.find((f) => `extra_${f.id}` === choice) : null
+          choice ? fusionCards.find((f) => `extra_${f.id}` === choice) : null,
         );
         return { success: true, needsSelection: false };
       },
@@ -413,7 +416,7 @@ export async function applyPolymerizationFusion(
 
   // Find the material combos for selected fusion
   const selectedFusionData = availableFusions.find(
-    (f) => f.fusion.id === fusionSelection.id
+    (f) => f.fusion.id === fusionSelection.id,
   );
   const materialCombos = selectedFusionData?.materialCombos || [];
 
@@ -425,7 +428,7 @@ export async function applyPolymerizationFusion(
   // If only one combo, use it directly
   let selectedMaterials: FusionRuntimeCard[];
   if (materialCombos.length === 1) {
-    selectedMaterials = materialCombos[0];
+    selectedMaterials = materialCombos[0]!;
   } else {
     // Step 2: Let player select which materials to use
     const requiredCount = this.getRequiredMaterialCount(fusionSelection);
@@ -440,44 +443,46 @@ export async function applyPolymerizationFusion(
       owner: "player",
     }));
 
-    const materialSelection = await new Promise<FusionRuntimeCard[] | null>((resolve) => {
-      const selectionContract: RawSelectionContract = {
-        requirements: [
-          {
-            id: "materials",
-            candidates: materialCandidates,
-            min: requiredCount,
-            max: requiredCount,
-            label: getUIText("ui.fusion.selectMaterialsLabel", {
-              count: requiredCount,
+    const materialSelection = await new Promise<FusionRuntimeCard[] | null>(
+      (resolve) => {
+        const selectionContract: RawSelectionContract = {
+          requirements: [
+            {
+              id: "materials",
+              candidates: materialCandidates,
+              min: requiredCount,
+              max: requiredCount,
+              label: getUIText("ui.fusion.selectMaterialsLabel", {
+                count: requiredCount,
+              }),
+            },
+          ],
+          ui: {
+            allowCancel: true,
+            message: getUIText("ui.fusion.selectMaterialsFor", {
+              cardName:
+                getCardDisplayName(fusionSelection) || fusionSelection.name,
             }),
           },
-        ],
-        ui: {
-          allowCancel: true,
-          message: getUIText("ui.fusion.selectMaterialsFor", {
-            cardName:
-              getCardDisplayName(fusionSelection) || fusionSelection.name,
-          }),
-        },
-      };
+        };
 
-      this.game.startTargetSelectionSession({
-        kind: "fusion_materials",
-        selectionContract,
-        onCancel: () => resolve(null),
-        execute: (selections) => {
-          const keys = selections.materials || [];
-          const mats = keys
-            .map((k) => materialCandidates.find((c) => c.key === k)?.cardRef)
-            .filter(
-              (material): material is FusionRuntimeCard => Boolean(material),
-            );
-          resolve(mats);
-          return { success: true, needsSelection: false };
-        },
-      });
-    });
+        this.game.startTargetSelectionSession({
+          kind: "fusion_materials",
+          selectionContract,
+          onCancel: () => resolve(null),
+          execute: (selections) => {
+            const keys = selections.materials || [];
+            const mats = keys
+              .map((k) => materialCandidates.find((c) => c.key === k)?.cardRef)
+              .filter((material): material is FusionRuntimeCard =>
+                Boolean(material),
+              );
+            resolve(mats);
+            return { success: true, needsSelection: false };
+          },
+        });
+      },
+    );
 
     if (!materialSelection || materialSelection.length !== requiredCount) {
       console.log("[Polymerization] Material selection cancelled or invalid");
@@ -487,7 +492,7 @@ export async function applyPolymerizationFusion(
     // Validate the selection
     const validation = this.evaluateFusionSelection(
       fusionSelection,
-      materialSelection
+      materialSelection,
     );
     if (!validation.valid) {
       this.ui?.showMessage?.(
@@ -501,7 +506,7 @@ export async function applyPolymerizationFusion(
 
   console.log(
     "[Polymerization] Selected materials:",
-    selectedMaterials.map((m) => m.name)
+    selectedMaterials.map((m) => m.name),
   );
 
   // Get fusion monster index in extra deck
@@ -522,7 +527,7 @@ export async function applyPolymerizationFusion(
     fusionIndex,
     position,
     selectedMaterials,
-    player
+    player,
   );
 
   return success;

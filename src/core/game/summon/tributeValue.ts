@@ -19,18 +19,18 @@ export interface TributeValueEntry
 }
 
 export interface TributeCardView {
-  id?: number;
-  name?: string | null;
-  cardKind?: string | null;
-  isFacedown?: boolean;
-  archetype?: string | null;
-  archetypes?: readonly string[];
-  type?: string | null;
+  id?: number | undefined;
+  name?: (string | null) | undefined;
+  cardKind?: (string | null) | undefined;
+  isFacedown?: boolean | undefined;
+  archetype?: (string | null) | undefined;
+  archetypes?: readonly string[] | undefined;
+  type?: string | null | undefined;
   types?: readonly string[];
-  attribute?: string | null;
-  level?: number;
-  atk?: number;
-  def?: number;
+  attribute?: (string | null) | undefined;
+  level?: number | undefined;
+  atk?: number | undefined;
+  def?: number | undefined;
   effectsNegated?: boolean;
   tributeValue?: TributeValueEntry | readonly TributeValueEntry[] | null;
 }
@@ -94,7 +94,8 @@ export function cardMatchesTributeFilters(
   if (filters.attribute && card.attribute !== filters.attribute) return false;
 
   const level = Number(card.level || 0);
-  if (filters.level !== undefined && level !== Number(filters.level)) return false;
+  if (filters.level !== undefined && level !== Number(filters.level))
+    return false;
   if (filters.minLevel !== undefined && level < Number(filters.minLevel)) {
     return false;
   }
@@ -104,10 +105,14 @@ export function cardMatchesTributeFilters(
 
   const atk = Number(card.atk || 0);
   const def = Number(card.def || 0);
-  if (filters.minAtk !== undefined && atk < Number(filters.minAtk)) return false;
-  if (filters.maxAtk !== undefined && atk > Number(filters.maxAtk)) return false;
-  if (filters.minDef !== undefined && def < Number(filters.minDef)) return false;
-  if (filters.maxDef !== undefined && def > Number(filters.maxDef)) return false;
+  if (filters.minAtk !== undefined && atk < Number(filters.minAtk))
+    return false;
+  if (filters.maxAtk !== undefined && atk > Number(filters.maxAtk))
+    return false;
+  if (filters.minDef !== undefined && def < Number(filters.minDef))
+    return false;
+  if (filters.maxDef !== undefined && def > Number(filters.maxDef))
+    return false;
 
   return true;
 }
@@ -163,7 +168,8 @@ export function getTributeValueTotal(
   options: TributeSelectionOptions = {},
 ): number {
   return (tributeCards || []).reduce(
-    (total, card) => total + getTributeValueForSummon(card, summonedCard, options),
+    (total, card) =>
+      total + getTributeValueForSummon(card, summonedCard, options),
     0,
   );
 }
@@ -203,7 +209,9 @@ export function selectedTributesMeetRequirement(
 ): boolean {
   if (tributesNeeded <= 0) return true;
   const tributeCards = getTributeCardsFromIndices(field, tributeIndices);
-  return getTributeValueTotal(tributeCards, summonedCard, options) >= tributesNeeded;
+  return (
+    getTributeValueTotal(tributeCards, summonedCard, options) >= tributesNeeded
+  );
 }
 
 export function fieldHasTributeValue(
@@ -213,7 +221,9 @@ export function fieldHasTributeValue(
   options: TributeSelectionOptions = {},
 ): boolean {
   if (tributesNeeded <= 0) return true;
-  return getTributeValueTotal(field || [], summonedCard, options) >= tributesNeeded;
+  return (
+    getTributeValueTotal(field || [], summonedCard, options) >= tributesNeeded
+  );
 }
 
 export function selectTributeIndicesByValue<Card extends TributeCardView>(
@@ -248,7 +258,7 @@ export function selectTributeIndicesByValue<Card extends TributeCardView>(
     let score = 0;
     for (let bit = 0; bit < entries.length; bit += 1) {
       if ((mask & (1 << bit)) === 0) continue;
-      const entry = entries[bit];
+      const entry = entries[bit]!; // bit is bounded by the dense mapped tribute entries.
       selected.push(entry);
       value += getTributeValueForSummon(entry.card, summonedCard, {
         summonMethod,

@@ -8,10 +8,10 @@ type Player = Partial<AIStrategyBotPort>;
 type Zone = "hand" | "field" | "graveyard" | "deck" | "extraDeck" | "spellTrap" | "fieldSpell";
 type State = Partial<AIState> & { opponent?: Player | null };
 type PlanningGame = State & { turnLineSearchEnabled?: boolean; turnLineSearchTurnMode?: AIPlanningProfile["turnMode"]; turnLineSearchBeamWidth?: number; turnLineSearchNodeBudget?: number; turnLineSearchCandidateLimit?: number };
-type Analysis = Omit<Omit<Partial<ReturnType<typeof buildStrategyAnalysis>>, "phase"> & { phase?: string | null }, "game"> & { game?: PlanningGame | null; bestFinisherPlan?: FinisherPlan | null; readyCombos?: Array<{ priority?: number }>; oppFieldCount?: number; oppStrongestAtk?: number; oppStrongestBattle?: number; voidCount?: number };
-type LineAction = AIPlannedAction & { cardName?: string; attackerName?: string; destroyedCards?: Array<{ owner?: string }> };
+type Analysis = Omit<Omit<Partial<ReturnType<typeof buildStrategyAnalysis>>, "phase" | "fieldSpell"> & { fieldSpell?: ReturnType<typeof buildStrategyAnalysis>["fieldSpell"] | undefined; phase?: string | null | undefined }, "game"> & { game?: PlanningGame | null; bestFinisherPlan?: FinisherPlan | null; readyCombos?: Array<{ priority?: number }>; oppFieldCount?: number; oppStrongestAtk?: number; oppStrongestBattle?: number; voidCount?: number };
+type LineAction = AIPlannedAction & { cardName?: string | undefined; attackerName?: string | undefined; destroyedCards?: Array<{ owner?: string }> };
 interface Milestone { label: string; score: number; detail?: string | null; }
-type Context = Omit<AIPlanningContext, "profile" | "sequence" | "milestones"> & { strategy?: unknown; game?: PlanningGame; profile?: Partial<AIPlanningProfile> & { bestFinisherPlan?: FinisherPlan | null; critical?: boolean }; sequence?: LineAction[]; milestones?: AIPlanningContext["milestones"] };
+type Context = Omit<AIPlanningContext, "profile" | "sequence" | "milestones"> & { strategy?: unknown; game?: PlanningGame; profile?: Partial<AIPlanningProfile> & { bestFinisherPlan?: FinisherPlan | null; critical?: boolean } | undefined; sequence?: LineAction[]; milestones?: AIPlanningContext["milestones"] };
 
 import {
   getEffectiveAtk,

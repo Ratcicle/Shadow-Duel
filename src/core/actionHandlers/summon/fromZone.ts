@@ -49,31 +49,38 @@ type MutableLegacyCardFilter = {
 export type SpecialSummonFromZoneInput = Partial<
   Omit<
     ActionOf<"special_summon_from_zone">,
-    "type" | "count" | "filters" | "monsterType" | "zone" | "sourceZone"
+    | "type"
+    | "count"
+    | "filters"
+    | "monsterType"
+    | "zone"
+    | "sourceZone"
+    | "promptPlayer"
   >
 > &
   Partial<
     Omit<
       ActionOf<"special_summon_matching_level">,
-      "type" | "count" | "filters" | "monsterType" | "zone"
+      "type" | "count" | "filters" | "monsterType" | "zone" | "promptPlayer"
     >
   > & {
-  readonly type?:
-    | "special_summon_from_zone"
-    | "special_summon_matching_level";
-  readonly oncePerTurnScope?: string;
-  readonly contextLabel?: string;
-  readonly count?: number | LegacySelectionCount;
-  readonly filters?: CardFilter;
-  readonly monsterType?: string | readonly string[];
-  readonly zone?: ZoneInput | readonly ZoneInput[];
-  readonly sourceZone?: ZoneInput | readonly ZoneInput[];
-  readonly fromZone?: ZoneInput;
-  readonly levelOp?: CardFilter["levelOp"];
-  readonly summonZone?: ZoneInput | readonly ZoneInput[];
-  readonly activationContext?: object | null;
-  readonly actionContext?: object | null;
-};
+    readonly type?:
+      | "special_summon_from_zone"
+      | "special_summon_matching_level";
+    readonly promptPlayer?: ActionOf<"special_summon_from_zone">["promptPlayer"];
+    readonly oncePerTurnScope?: string;
+    readonly contextLabel?: string;
+    readonly count?: number | LegacySelectionCount;
+    readonly filters?: CardFilter;
+    readonly monsterType?: string | readonly string[];
+    readonly zone?: ZoneInput | readonly ZoneInput[];
+    readonly sourceZone?: ZoneInput | readonly ZoneInput[];
+    readonly fromZone?: ZoneInput;
+    readonly levelOp?: CardFilter["levelOp"];
+    readonly summonZone?: ZoneInput | readonly ZoneInput[];
+    readonly activationContext?: object | null;
+    readonly actionContext?: object | null;
+  };
 
 function isRuntimeCard(value: unknown): value is ActionRuntimeCard {
   return Boolean(
@@ -151,9 +158,9 @@ function resolveNumberFromContext(ref: unknown, ctx: EffectContext) {
         : null;
   const fallback =
     typeof ref === "object" && ref !== null
-      ? Reflect.get(ref, "defaultValue") ??
+      ? (Reflect.get(ref, "defaultValue") ??
         Reflect.get(ref, "default") ??
-        Reflect.get(ref, "fallback")
+        Reflect.get(ref, "fallback"))
       : undefined;
   const rawValue = getContextPathValue(ctx, key);
   const value = rawValue === undefined ? fallback : rawValue;
@@ -170,13 +177,11 @@ function applyContextMaxLevelFilter(
   if (typeof maxLevel !== "number" || !Number.isFinite(maxLevel)) return;
   filters.maxLevel =
     typeof filters.maxLevel === "number" && Number.isFinite(filters.maxLevel)
-    ? Math.min(filters.maxLevel, maxLevel)
-    : maxLevel;
+      ? Math.min(filters.maxLevel, maxLevel)
+      : maxLevel;
 }
 
-function toZoneList(
-  value: ZoneInput | readonly ZoneInput[],
-): ZoneInput[] {
+function toZoneList(value: ZoneInput | readonly ZoneInput[]): ZoneInput[] {
   return Array.isArray(value) ? [...value] : [value as ZoneInput];
 }
 
@@ -332,15 +337,20 @@ export async function handleSpecialSummonFromZone(
       return false;
     }
 
-    const moveResult = await game.moveCard!(source, sourceEntry.owner, "banished", {
-      fromZone: sourceEntry.name,
-      contextLabel: action.contextLabel || "special_summon_banish_cost",
-      sourceCard: source,
-      sourcePlayer: player,
-      effectId: ctx?.effect?.id || null,
-      movedByEffect: false,
-      awaitCardMovedEvent: true,
-    });
+    const moveResult = await game.moveCard!(
+      source,
+      sourceEntry.owner,
+      "banished",
+      {
+        fromZone: sourceEntry.name,
+        contextLabel: action.contextLabel || "special_summon_banish_cost",
+        sourceCard: source,
+        sourcePlayer: player,
+        effectId: ctx?.effect?.id || null,
+        movedByEffect: false,
+        awaitCardMovedEvent: true,
+      },
+    );
 
     if (
       moveResult === false ||
@@ -364,9 +374,9 @@ export async function handleSpecialSummonFromZone(
         game,
         targetRef: action.targetRef,
       });
-    const cardsToSummon = (Array.isArray(resolved) ? resolved : [resolved]).filter(
-      isRuntimeCard,
-    );
+    const cardsToSummon = (
+      Array.isArray(resolved) ? resolved : [resolved]
+    ).filter(isRuntimeCard);
 
     if (cardsToSummon.length === 0) {
       getUI(game)?.log("No valid targets for Special Summon.");
@@ -478,7 +488,11 @@ export async function handleSpecialSummonFromZone(
     if (isOptionalSelection) {
       getUI(game)?.log("No optional Special Summon targets available.");
       if (optEffect && typeof game.markOncePerTurnUsed === "function") {
-        Reflect.apply(game.markOncePerTurnUsed, game, [source, player, optEffect]);
+        Reflect.apply(game.markOncePerTurnUsed, game, [
+          source,
+          player,
+          optEffect,
+        ]);
       }
       return true;
     }
@@ -618,7 +632,11 @@ export async function handleSpecialSummonFromZone(
     if (isOptionalSelection) {
       getUI(game)?.log("No optional Special Summon targets available.");
       if (optEffect && typeof game.markOncePerTurnUsed === "function") {
-        Reflect.apply(game.markOncePerTurnUsed, game, [source, player, optEffect]);
+        Reflect.apply(game.markOncePerTurnUsed, game, [
+          source,
+          player,
+          optEffect,
+        ]);
       }
       return true;
     }
@@ -641,15 +659,13 @@ export async function handleSpecialSummonFromZone(
 
   const dynamicCap =
     typeof count.cap === "number" && Number.isFinite(count.cap)
-    ? count.cap
-    : typeof count.maxCap === "number" && Number.isFinite(count.maxCap)
-      ? count.maxCap
-      : 5;
+      ? count.cap
+      : typeof count.maxCap === "number" && Number.isFinite(count.maxCap)
+        ? count.maxCap
+        : 5;
 
   const baseMax =
-    typeof count.max === "number" && Number.isFinite(count.max)
-      ? count.max
-      : 1;
+    typeof count.max === "number" && Number.isFinite(count.max) ? count.max : 1;
 
   const resolvedMax =
     dynamicMax !== null ? Math.min(dynamicMax, dynamicCap, baseMax) : baseMax;
@@ -692,7 +708,11 @@ export async function handleSpecialSummonFromZone(
       optEffect &&
       typeof game.markOncePerTurnUsed === "function"
     ) {
-      Reflect.apply(game.markOncePerTurnUsed, game, [source, player, optEffect]);
+      Reflect.apply(game.markOncePerTurnUsed, game, [
+        source,
+        player,
+        optEffect,
+      ]);
     }
     return success;
   }
@@ -703,10 +723,7 @@ export async function handleSpecialSummonFromZone(
     // Tentar usar estratégia específica do bot se existir
     const strategy = player?.strategy;
 
-    if (
-      strategy &&
-      typeof strategy.evaluateRecruitCandidate === "function"
-    ) {
+    if (strategy && typeof strategy.evaluateRecruitCandidate === "function") {
       const evaluation = strategy.evaluateRecruitCandidate([...cards], {
         game,
         player,
@@ -716,7 +733,8 @@ export async function handleSpecialSummonFromZone(
         targets,
         ctx,
         effect: ctx?.effect,
-        activationContext: ctx?.activationContext || action.activationContext || null,
+        activationContext:
+          ctx?.activationContext || action.activationContext || null,
         actionContext:
           ctx?.actionContext ||
           ctx?.activationContext?.actionContext ||
@@ -737,7 +755,7 @@ export async function handleSpecialSummonFromZone(
         const cardAtk = card.atk || 0;
         const topAtk = top.atk || 0;
         return cardAtk >= topAtk ? card : top;
-      }, cards[0]),
+      }, cards[0]!), // selectCardsFromZone invokes botSelect only with non-empty candidates.
     ];
   };
 
@@ -769,8 +787,7 @@ export async function handleSpecialSummonFromZone(
             (selectedName: unknown) => {
               const chosen =
                 cards.find(
-                  (candidate) =>
-                    candidate && candidate.name === selectedName,
+                  (candidate) => candidate && candidate.name === selectedName,
                 ) || cards[0];
               game.isResolvingEffect = false;
               resolve(chosen);
@@ -798,7 +815,11 @@ export async function handleSpecialSummonFromZone(
       optEffect &&
       typeof game.markOncePerTurnUsed === "function"
     ) {
-      Reflect.apply(game.markOncePerTurnUsed, game, [source, player, optEffect]);
+      Reflect.apply(game.markOncePerTurnUsed, game, [
+        source,
+        player,
+        optEffect,
+      ]);
     }
     return success;
   }
@@ -819,10 +840,7 @@ export async function handleSpecialSummonFromZone(
   ): readonly ActionRuntimeCard[] => {
     const strategy = player?.strategy;
 
-    if (
-      strategy &&
-      typeof strategy.evaluateRecruitCandidate === "function"
-    ) {
+    if (strategy && typeof strategy.evaluateRecruitCandidate === "function") {
       const evaluation = strategy.evaluateRecruitCandidate([...cards], {
         game,
         player,
@@ -832,7 +850,8 @@ export async function handleSpecialSummonFromZone(
         targets,
         ctx,
         effect: ctx?.effect,
-        activationContext: ctx?.activationContext || action.activationContext || null,
+        activationContext:
+          ctx?.activationContext || action.activationContext || null,
         actionContext:
           ctx?.actionContext ||
           ctx?.activationContext?.actionContext ||
@@ -846,9 +865,8 @@ export async function handleSpecialSummonFromZone(
       const rawScores: unknown = Reflect.get(evaluation, "scores");
       if (Array.isArray(rawScores)) {
         return rawScores
-          .filter(
-            (score): score is object =>
-              Boolean(score && typeof score === "object"),
+          .filter((score): score is object =>
+            Boolean(score && typeof score === "object"),
           )
           .slice()
           .sort(
@@ -892,7 +910,9 @@ export async function handleSpecialSummonFromZone(
           cards,
           { min: range.min, max: range.max },
           (selected: unknown) => {
-            resolve(Array.isArray(selected) ? selected.filter(isRuntimeCard) : []);
+            resolve(
+              Array.isArray(selected) ? selected.filter(isRuntimeCard) : [],
+            );
           },
         );
       });
@@ -1067,7 +1087,8 @@ async function summonCards(
       const fallbackValue: unknown = fallbackZoneName
         ? Reflect.get(player, fallbackZoneName)
         : null;
-      const fallbackArr = sourceEntry?.list ||
+      const fallbackArr =
+        sourceEntry?.list ||
         (Array.isArray(fallbackValue) ? fallbackValue : null) ||
         player.deck ||
         [];
@@ -1176,7 +1197,7 @@ async function summonCards(
       ? action.zone.join("/")
       : action.zone || "deck";
     const cardText =
-      summonedCards.length === 1 ? summonedCards[0].name : `${summoned} cards`;
+      summonedCards.length === 1 ? summonedCards[0]!.name : `${summoned} cards`;
     const positionText =
       action.position === "defense"
         ? "Defense"

@@ -92,14 +92,17 @@ test("Rose Petal Floral Dragon declara Sincro, custo acoplado e Trigger canônic
   assert.equal(ignition.speed, 1);
   assert.deepEqual(ignition.activationZones, ["field"]);
   assert.equal(ignition.usagePolicy, "use");
-  assert.equal(required(ignition.targets)[0].intent, "cost");
+  assert.equal(required(required(ignition.targets)[0]).intent, "cost");
   assert.equal(
-    required(ignition.targets)[1].countFromSelectionRef,
-    required(ignition.targets)[0].id,
+    required(required(ignition.targets)[1]).countFromSelectionRef,
+    required(required(ignition.targets)[0]).id,
   );
-  assert.equal(required(ignition.targets)[1].minAtResolution, 0);
-  assert.equal(required(ignition.activationCosts)[0].type, "banish");
-  assert.equal(required(ignition.actions)[0].type, "destroy_targeted_cards");
+  assert.equal(required(required(ignition.targets)[1]).minAtResolution, 0);
+  assert.equal(required(required(ignition.activationCosts)[0]).type, "banish");
+  assert.equal(
+    required(required(ignition.actions)[0]).type,
+    "destroy_targeted_cards",
+  );
 
   const recovery = getEffect("rose_petal_floral_dragon_leave_field_recover");
   assert.equal(recovery.event, "card_moved");
@@ -107,8 +110,8 @@ test("Rose Petal Floral Dragon declara Sincro, custo acoplado e Trigger canônic
   assert.equal(recovery.requireSelfAsMoved, true);
   assert.equal(recovery.requireMovedCardWasFaceup, true);
   assert.equal(recovery.usagePolicy, "use");
-  assert.equal(required(recovery.actions)[0].type, "move");
-  assert.equal(required(recovery.actions)[0].to, "hand");
+  assert.equal(required(required(recovery.actions)[0]).type, "move");
+  assert.equal(required(required(recovery.actions)[0]).to, "hand");
 });
 
 test("materiais exigem Regulador Planta e aceitam não-Reguladores livres", (t) => {
@@ -303,7 +306,7 @@ test("a transação bane o custo antes dos alvos e limita o custo à capacidade 
     ),
     [monsterTarget, facedownTrapTarget],
   );
-  assert.equal(required(trace.actions)[0].action.type, "banish");
+  assert.equal(required(required(trace.actions)[0]).action.type, "banish");
 
   const link = required(chain.addToChain(prepared));
   assert.doesNotThrow(() => JSON.stringify(chain.getChainSummary()));
@@ -318,9 +321,12 @@ test("a transação bane o custo antes dos alvos e limita o custo à capacidade 
   assert.deepEqual(link.resolvedSelectionCounts, {
     rose_petal_floral_dragon_destroy_targets: 2,
   });
-  assert.deepEqual(chain.getChainSummary()[0].resolvedSelectionCounts, {
-    rose_petal_floral_dragon_destroy_targets: 2,
-  });
+  assert.deepEqual(
+    required(chain.getChainSummary()[0]).resolvedSelectionCounts,
+    {
+      rose_petal_floral_dragon_destroy_targets: 2,
+    },
+  );
 });
 
 test("minAtResolution preserva os alvos restantes sem retarget", async () => {
@@ -376,7 +382,7 @@ test("minAtResolution preserva os alvos restantes sem retarget", async () => {
   assert.ok(result.success === true);
   assert.deepEqual(resolvedTargetIds, ["remaining-target"]);
   assert.equal(required(link.targetValidation).satisfiesMinimums, true);
-  assert.equal(required(link.targetValidation).groups[0].minimum, 0);
+  assert.equal(required(required(link.targetValidation).groups[0]).minimum, 0);
 });
 
 test("o Trigger de deixar o campo exige face-up, cobre todos os destinos e ignora troca de controle", async (t) => {
@@ -424,11 +430,14 @@ test("o Trigger de deixar o campo exige face-up, cobre todos os destinos e ignor
       `Expected Trigger when moving to ${toZone}.`,
     );
     assert.equal(
-      leaving.entries[0].effect.id,
+      required(leaving.entries[0]).effect.id,
       "rose_petal_floral_dragon_leave_field_recover",
     );
     assert.equal(
-      Reflect.get(required(leaving.entries[0].effect.actions)[0], "targetRef"),
+      Reflect.get(
+        required(required(required(leaving.entries[0]).effect.actions)[0]),
+        "targetRef",
+      ),
       "rose_petal_floral_dragon_recover_target",
     );
   }
@@ -588,5 +597,5 @@ test("a simulação preserva a quantidade vinculada e aplica custo antes da dest
     required(effect.targets).filter((target) => target.intent !== "cost"),
     selections,
   );
-  assert.deepEqual(resolvedDefinitions[0].count, { min: 1, max: 1 });
+  assert.deepEqual(required(resolvedDefinitions[0]).count, { min: 1, max: 1 });
 });

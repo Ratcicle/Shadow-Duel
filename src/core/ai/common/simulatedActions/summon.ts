@@ -73,7 +73,7 @@ interface SimulatedAfterSpecialSummonInput {
   card: object;
   action: object;
   fromZone?: string | readonly ZoneInput[];
-  sourceCard?: object | null;
+  sourceCard?: object | null | undefined;
 }
 
 interface SimulatedConditionalSummonMarker extends ConditionalSummonMarker {
@@ -167,7 +167,7 @@ type LegacyTieredCostAction = ActionOf<
 type MutableSummonedCard = SimulatedCardState & {
   summonMethod?: string;
   summonProcedure?: string;
-  cannotBeDestroyedByBattle?: boolean;
+  cannotBeDestroyedByBattle?: boolean | undefined;
 };
 
 function emitSimulatedAfterSpecialSummon({
@@ -1068,7 +1068,9 @@ export function applyPolymerizationFusionSummon(
           matchesTargetFilters(candidate, requirement, fusionCard, "self"),
         );
         if (index < 0) return null;
-        picked.push(remaining[index]);
+        const material = remaining[index];
+        if (!material) return null;
+        picked.push(material);
         remaining.splice(index, 1);
       }
     }
@@ -1097,7 +1099,9 @@ export function applyPolymerizationFusionSummon(
     }
     return estimateMonsterValue(b.fusionCard) - estimateMonsterValue(a.fusionCard);
   });
-  const { fusionCard, materials } = fusionEntries[0];
+  const fusionEntry = fusionEntries[0];
+  if (!fusionEntry) return;
+  const { fusionCard, materials } = fusionEntry;
   materials.forEach((material) => {
     const fromZone = findCardZone(targetPlayer, material) || "field";
     if (moveCardToZone(targetPlayer, material, "graveyard")) {
