@@ -24,10 +24,7 @@ export const MONSTER_TYPES = Object.freeze([
 
 export type MonsterType = (typeof MONSTER_TYPES)[number];
 
-export const BATTLE_POSITIONS = Object.freeze([
-  "attack",
-  "defense",
-] as const);
+export const BATTLE_POSITIONS = Object.freeze(["attack", "defense"] as const);
 
 export type BattlePosition = (typeof BATTLE_POSITIONS)[number];
 
@@ -44,7 +41,7 @@ export type BattlePositionInput = (typeof BATTLE_POSITION_INPUTS)[number];
 
 /** Minimal mutable carrier accepted by the duel identity allocator. */
 export interface DuelCardIdentityCarrier {
-  id?: RawCardDefinitionId | number | null;
+  id?: RawCardDefinitionId | number | null | undefined;
   name?: string | null;
   duelCardId?: DuelCardId | number | null;
 }
@@ -413,7 +410,7 @@ export interface GeneratedCardDefinition {
   readonly monsterType?: MonsterType | null;
   readonly isTuner?: boolean;
   readonly synchroMaterialRoles?: SynchroMaterialRoles | null;
-  readonly archetypes?: readonly string[];
+  readonly archetypes?: readonly string[] | undefined;
   readonly archetype?: string | null;
   readonly atk?: number;
   readonly def?: number;
@@ -424,7 +421,10 @@ export interface GeneratedCardDefinition {
   readonly extraAttackTargetRestriction?: "monster" | null;
   readonly dynamicExtraAttacks?: DynamicExtraAttacksDefinition | null;
   readonly altTribute?: AlternateTributeDefinition | null;
-  readonly tributeValue?: TributeValueDefinition | readonly TributeValueDefinition[] | null;
+  readonly tributeValue?:
+    | TributeValueDefinition
+    | readonly TributeValueDefinition[]
+    | null;
   readonly onBattleDestroy?: string | null;
   readonly cannotAttackDirectly?: boolean;
   readonly summonRestrict?: string | null;
@@ -476,7 +476,7 @@ export interface CardTurnBasedBuff {
 }
 
 export interface CardDynamicStatFormula {
-  type: "count_gy_archetype" | "count_field_archetype" | "fixed" | string;
+  type: "count_gy_archetype" | "count_field_archetype" | "fixed";
   archetype?: string;
   perCard?: number;
   value?: number;
@@ -488,9 +488,9 @@ export interface CardDynamicStatBoost {
 }
 
 export interface CardDynamicBuffEntry {
-  stats?: readonly ("atk" | "def")[];
+  stats?: readonly ("atk" | "def")[] | undefined;
   value?: number;
-  appliedValues?: { atk?: number; def?: number };
+  appliedValues?: { atk?: number; def?: number } | undefined;
 }
 
 export type CardDynamicBuffMap = Record<string, CardDynamicBuffEntry>;
@@ -674,7 +674,10 @@ export interface GameCard {
   cannotAttackUntilTurn: number | null;
   immuneToOpponentEffectsUntilTurn: number | null;
   altTribute: AlternateTributeDefinition | null;
-  tributeValue: TributeValueDefinition | readonly TributeValueDefinition[] | null;
+  tributeValue:
+    | TributeValueDefinition
+    | readonly TributeValueDefinition[]
+    | null;
   onBattleDestroy: string | null;
   canAttackDirectlyThisTurn: boolean;
   cannotAttackDirectly: boolean;
@@ -721,7 +724,7 @@ export interface GameCard {
   tempStatuses: CardStatusRegistry;
   fieldExitStatuses: CardStatusRegistry;
   fieldPresenceId: string | number | null;
-  fieldPresenceState: unknown;
+  fieldPresenceState: Record<string, number> | null;
   effectsNegated: boolean;
   effectsNegatedDuration: string | number | null;
   originalAtk: number | null;
@@ -746,8 +749,8 @@ export interface GameCard {
   isTrapMonster?: boolean;
   trapMonsterOriginalState?: TrapMonsterOriginalState;
   trapMonsterSummonProcedure?: string;
-  setTurn?: number | null;
-  turnSetOn?: number | null;
+  setTurn?: (number | null) | undefined;
+  turnSetOn?: (number | null) | undefined;
   enteredFieldTurn?: number | null;
   summonedTurn?: number | null;
   summonPending?: boolean;

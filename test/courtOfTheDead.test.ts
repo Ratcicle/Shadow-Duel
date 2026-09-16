@@ -122,8 +122,8 @@ test("Court of the Dead declares separated text and pays counters before targeti
     ),
     false,
   );
-  assert.equal(required(reviveEffect.targets)[0].owner, "any");
-  assert.equal(required(reviveEffect.actions)[0].scope, "both");
+  assert.equal(required(required(reviveEffect.targets)[0]).owner, "any");
+  assert.equal(required(required(reviveEffect.actions)[0]).scope, "both");
 
   const locale = JSON.parse(
     readFileSync(

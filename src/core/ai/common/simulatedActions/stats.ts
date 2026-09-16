@@ -38,6 +38,7 @@ import {
 import type { ActionTargetScope } from "../../../contracts/actions.js";
 import type {
   SimulatedCardState,
+  SimulatedReplacementEffect,
   SimulatedPlayerState,
 } from "../../../contracts/aiState.js";
 import type { BattlePosition } from "../../../contracts/cards.js";
@@ -108,7 +109,7 @@ type LegacyProtectedCard = SimulatedCardState & {
   };
   hasChangedPosition?: boolean;
 };
-interface LegacyReplacementEffect {
+interface LegacyReplacementEffect extends SimulatedReplacementEffect {
   _sim: boolean;
   uniqueKey: string;
   playerId: string;
@@ -120,12 +121,9 @@ interface LegacyReplacementEffect {
   usesPerTarget: boolean | null;
   replacementEffect: object | null;
 }
-type LegacyReplacementState = Omit<
-  SimulatedRuntimeState,
-  "_simReplacementEffects"
-> & {
+type LegacyReplacementState = {
   _simReplacementEffects?: LegacyReplacementEffect[];
-};
+} & SimulatedRuntimeState;
 
 function normalizeNegateEffectsDuration(
   action: NegateDurationShape = {},

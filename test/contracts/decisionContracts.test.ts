@@ -1,3 +1,4 @@
+import { required } from "../helpers/fixtures.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 import type {
@@ -98,8 +99,8 @@ test("DecisionBroker keeps the legacy numeric SEGOC serialization behavior", asy
   });
 
   assert.deepEqual(result, [2, 1]);
-  assert.deepEqual(decisions[0].candidateKeys, [1, 2]);
-  assert.deepEqual(decisions[0].value, { orderedCandidateKeys: [] });
+  assert.deepEqual(required(decisions[0]).candidateKeys, [1, 2]);
+  assert.deepEqual(required(decisions[0]).value, { orderedCandidateKeys: [] });
 });
 
 test("DecisionBroker selects the provider, rejects illegal values and records once", async () => {

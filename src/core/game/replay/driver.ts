@@ -137,14 +137,20 @@ async function executeCommand(
         throw new Error("Replay Extra Deck source is missing.");
       }
       const materials = (command.payload.materialIds || [])
-        .map((duelCardId) => findCard(game, actor, { duelCardId })?.card || null)
+        .map(
+          (duelCardId) => findCard(game, actor, { duelCardId })?.card || null,
+        )
         .filter(isReplayRuntimeCard);
       const options = {
         position: command.payload.position,
         ...(materials.length > 0 ? { materials } : {}),
       };
       if (command.payload.summonType === "synchro") {
-        return game.performSynchroSummonFromExtraDeck(source.card, actor, options);
+        return game.performSynchroSummonFromExtraDeck(
+          source.card,
+          actor,
+          options,
+        );
       }
       if (command.payload.summonType === "ascension") {
         return game.performAscensionSummonFromExtraDeck(source.card, actor, {
@@ -190,9 +196,10 @@ async function executeCommand(
         duelCardId: command.payload.attackerId,
       });
       const opponent = game.getOpponent(actor);
-      const target = command.payload.targetId == null
-        ? null
-        : findCard(game, opponent, { duelCardId: command.payload.targetId });
+      const target =
+        command.payload.targetId == null
+          ? null
+          : findCard(game, opponent, { duelCardId: command.payload.targetId });
       if (!attacker) throw new Error("Replay attacker is missing.");
       return game.resolveCombat(attacker.card, target?.card || null, {
         player: actor,
@@ -200,7 +207,7 @@ async function executeCommand(
     }
     default:
       throw new Error(
-        `Unsupported canonical replay command "${runtimeCommandType}".`,
+        `Unsupported canonical replay command "${runtimeCommandType satisfies never}".`,
       );
   }
 }
@@ -224,13 +231,15 @@ export async function replayCanonicalDuel(
   options: ReplayDriverOptions = {},
 ): Promise<CanonicalReplayResultSummary> {
   const canonicalReplay = validateCanonicalReplay(replay);
-  const game = options.game || (new Game({
-    renderer: null,
-    randomSeed: canonicalReplay.setup.seed,
-    replayMode: "playback",
-    captureReplay: false,
-    chainResponseTimeoutMs: 0,
-  }) as ReplayDriverGamePort);
+  const game =
+    options.game ||
+    (new Game({
+      renderer: null,
+      randomSeed: canonicalReplay.setup.seed,
+      replayMode: "playback",
+      captureReplay: false,
+      chainResponseTimeoutMs: 0,
+    }) as ReplayDriverGamePort);
   game.decisionBroker.loadReplayDecisions(canonicalReplay.decisions);
   await game.startWithDecks({
     exactDecks: true,

@@ -52,22 +52,37 @@ test("Luminous God Hyperion declares compact text and its three effect contracts
   );
 
   assert.deepEqual(summon.activationZones, ["hand"]);
-  assert.deepEqual(required(summon.targets)[0].zones, ["field", "graveyard"]);
-  assert.equal(required(summon.targets)[0].attribute, "Light");
-  assert.deepEqual(required(summon.targets)[0].count, { min: 5, max: 5 });
+  assert.deepEqual(required(required(summon.targets)[0]).zones, [
+    "field",
+    "graveyard",
+  ]);
+  assert.equal(required(required(summon.targets)[0]).attribute, "Light");
+  assert.deepEqual(required(required(summon.targets)[0]).count, {
+    min: 5,
+    max: 5,
+  });
   assert.equal(protection.event, "after_summon");
   assert.equal(
-    required(protection.actions)[0].protectionType,
+    required(required(protection.actions)[0]).protectionType,
     "effect_destruction",
   );
-  assert.equal(required(protection.actions)[0].sourceOwner, "opponent");
-  assert.equal(required(protection.actions)[0].duration, "while_faceup");
+  assert.equal(
+    required(required(protection.actions)[0]).sourceOwner,
+    "opponent",
+  );
+  assert.equal(
+    required(required(protection.actions)[0]).duration,
+    "while_faceup",
+  );
   assert.equal(battleEffects.length, 2);
   for (const effect of battleEffects) {
     assert.equal(effect.event, "battle_damage");
-    assert.equal(required(effect.actions)[0].atkBoost, 1000);
-    assert.equal(required(effect.actions)[0].defBoost, 1000);
-    assert.equal(required(effect.actions)[0].duration, "damage_calculation");
+    assert.equal(required(required(effect.actions)[0]).atkBoost, 1000);
+    assert.equal(required(required(effect.actions)[0]).defBoost, 1000);
+    assert.equal(
+      required(required(effect.actions)[0]).duration,
+      "damage_calculation",
+    );
   }
 });
 

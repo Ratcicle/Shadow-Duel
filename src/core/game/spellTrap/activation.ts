@@ -38,15 +38,15 @@ interface ActivationCommitInfo {
 
 interface SpellTrapActivationContext {
   fromHand?: boolean;
-  activationZone?: SpellTrapActivationZone | null;
+  activationZone?: (SpellTrapActivationZone | null) | undefined;
   sourceZone?: SpellTrapActivationZone;
-  committed?: boolean;
+  committed?: boolean | undefined;
   commitInfo?: ActivationCommitInfo | null;
   actionContext?: unknown;
-  effectId?: string | null;
+  effectId?: (string | null) | undefined;
   chainId?: number | null;
   linkId?: number | null;
-  autoSelectSingleTarget?: boolean;
+  autoSelectSingleTarget?: boolean | undefined;
   trapActivationFromSet?: boolean;
   quickSpellActivationFromSet?: boolean;
   quickSpellContext?: QuickSpellContext | null;
@@ -101,8 +101,8 @@ interface FinalizeSpellCardOptions {
   card?: GameCard | null;
   owner?: GamePlayer | null;
   activationZone?: "spellTrap" | "fieldSpell" | null;
-  fromHand?: boolean;
-  effect?: EffectDefinition | null;
+  fromHand?: boolean | undefined;
+  effect?: (EffectDefinition | null) | undefined;
   placementLog?:
     | string
     | ((card: GameCard, info: Partial<ActivationPipelineInfo>) => string);
@@ -205,7 +205,7 @@ interface SpellTrapActivationHost {
     card: GameCard,
     owner: GamePlayer,
     zone: "spellTrap" | "fieldSpell" | null,
-    options: { activationContext?: SpellTrapActivationContext },
+    options: { activationContext?: SpellTrapActivationContext | undefined },
   ): Promise<void>;
   finalizeSpellCardActivation(
     result: ActivationResult,
@@ -270,12 +270,14 @@ export async function presentSpellTrapActivationFlip(
       deferFrames:
         typeof options.deferFrames === "number" &&
         Number.isFinite(options.deferFrames)
-        ? options.deferFrames
-        : 1,
+          ? options.deferFrames
+          : 1,
     },
   );
 
-  const presentations = [boardPresentation, flipPresentation].filter(isPromiseLike);
+  const presentations = [boardPresentation, flipPresentation].filter(
+    isPromiseLike,
+  );
   if (presentations.length === 0) return false;
 
   await Promise.allSettled(presentations);
@@ -342,16 +344,16 @@ export async function tryActivateSpellTrapEffect(
         phaseReq: ["main1", "battle", "main2"],
       }
     : quickSpellActivationFromSet
-    ? {
-        actor: owner,
-        kind: "quick_spell_activation",
-        phaseReq: null,
-      }
-    : {
-        actor: owner,
-        kind: "spelltrap_effect",
-        phaseReq: ["main1", "main2"],
-      };
+      ? {
+          actor: owner,
+          kind: "quick_spell_activation",
+          phaseReq: null,
+        }
+      : {
+          actor: owner,
+          kind: "spelltrap_effect",
+          phaseReq: ["main1", "main2"],
+        };
 
   const guard = this.guardActionStart(guardConfig);
   if (!guard.ok) return this.normalizeActivationResult(guard);
@@ -384,16 +386,17 @@ export async function tryActivateSpellTrapEffect(
     card.cardKind === "trap" && card.isFacedown === true;
   const fieldActivationFromSet =
     trapActivationFromSet || quickSpellActivationFromSet;
-  const fieldActivationSnapshot: FieldActivationSnapshot | null = fieldActivationFromSet
-    ? {
-        card,
-        owner,
-        zone: "spellTrap",
-        wasFacedown: card.isFacedown,
-        previousTurnSetOn: card.turnSetOn,
-        previousSetTurn: card.setTurn,
-      }
-    : null;
+  const fieldActivationSnapshot: FieldActivationSnapshot | null =
+    fieldActivationFromSet
+      ? {
+          card,
+          owner,
+          zone: "spellTrap",
+          wasFacedown: card.isFacedown,
+          previousTurnSetOn: card.turnSetOn,
+          previousSetTurn: card.setTurn,
+        }
+      : null;
   if (card.cardKind === "trap") {
     const confirmed = await this.ui.showTrapActivationModal(
       card,
@@ -435,18 +438,19 @@ export async function tryActivateSpellTrapEffect(
     { fromHand: false, activationZone: "spellTrap", trapActivationFromSet },
   );
 
-  const pipelineQuickSpellContext: QuickSpellContext | null = quickSpellActivationFromSet
-    ? {
-        ...(quickSpellContext || {}),
-        activationZone: "spellTrap" as const,
-        effect: activationEffect,
-      }
-    : null;
+  const pipelineQuickSpellContext: QuickSpellContext | null =
+    quickSpellActivationFromSet
+      ? {
+          ...(quickSpellContext || {}),
+          activationZone: "spellTrap" as const,
+          effect: activationEffect,
+        }
+      : null;
   const pipelinePhaseReq = isTrap
     ? ["main1", "battle", "main2"]
     : quickSpellActivationFromSet
-    ? null
-    : ["main1", "main2"];
+      ? null
+      : ["main1", "main2"];
 
   const pipelineResult = await this.runActivationPipeline({
     card,
@@ -459,8 +463,8 @@ export async function tryActivateSpellTrapEffect(
     guardKind: isTrap
       ? "trap_activation"
       : quickSpellActivationFromSet
-      ? "quick_spell_activation"
-      : "spelltrap_effect",
+        ? "quick_spell_activation"
+        : "spelltrap_effect",
     phaseReq: pipelinePhaseReq,
     gate: quickSpellActivationFromSet
       ? () =>
@@ -477,13 +481,7 @@ export async function tryActivateSpellTrapEffect(
       effect: activationEffect,
     },
     activate: (chosen, ctx, zone) =>
-      this.effectEngine.activateSpellTrapEffect(
-        card,
-        owner,
-        chosen,
-        zone,
-        ctx,
-      ),
+      this.effectEngine.activateSpellTrapEffect(card, owner, chosen, zone, ctx),
     finalize: async (result, info) => {
       if (result.placementOnly) {
         this.ui.log(`${card.name} is placed on the field.`);
@@ -632,9 +630,7 @@ export async function tryActivateSpell(
   );
   if (hasFusionAction && !resume) {
     if (!this.canActivatePolymerization?.(owner)) {
-      this.ui?.showMessage?.(
-        getUIText("ui.spell.noFusionMaterials"),
-      );
+      this.ui?.showMessage?.(getUIText("ui.spell.noFusionMaterials"));
       this.ui?.log?.(
         `${
           owner.name || "Jogador"

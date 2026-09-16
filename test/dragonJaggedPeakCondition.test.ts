@@ -3,6 +3,7 @@ import test from "node:test";
 
 import { evaluateSimulatedConditions } from "../src/core/ai/common/simulatedConditions.js";
 import { evaluateConditions } from "../src/core/effects/conditions/evaluateConditions.js";
+import { unsafeFixture } from "./helpers/fixtures.js";
 import { dragonCards } from "../src/data/cards/dragon.js";
 
 const jaggedPeak = dragonCards.find(({ id }) => id === 262);
@@ -33,11 +34,23 @@ function matchesAttacker(attacker: {
   type: string;
   controller: string;
 }) {
-  return evaluateConditions.call(conditionHost, [attackerCondition], {
-    player,
-    opponent,
-    attacker,
-  }).ok;
+  return evaluateConditions.call(
+    unsafeFixture<ThisParameterType<typeof evaluateConditions>>(
+      conditionHost,
+      "Unit host only implements battle participant ownership.",
+    ),
+    [attackerCondition],
+    {
+      player,
+      opponent,
+      attacker: unsafeFixture<
+        NonNullable<Parameters<typeof evaluateConditions>[1]["attacker"]>
+      >(
+        attacker,
+        "Battle condition fixture only includes the race, kind and controller being inspected.",
+      ),
+    },
+  ).ok;
 }
 
 function matchesSimulatedAttacker(attacker: {

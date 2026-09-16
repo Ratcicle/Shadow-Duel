@@ -71,7 +71,7 @@ interface GenericSetBackrowInput<Card extends BackrowPlanningCard, Decision exte
   spellTrap?: Card[];
   analysis?: ReactiveBackrowAnalysis;
   game?: ReactiveBackrowGame;
-  opponent?: AIStrategyBotPort | null;
+  opponent?: AIStrategyBotPort | null | undefined;
   alreadyUsedHandIndices?: ReadonlySet<number | undefined>;
   maxBackrow?: number;
   basePriority?: number;

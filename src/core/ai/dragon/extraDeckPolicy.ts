@@ -136,7 +136,7 @@ function buildFusionMaterialEntries(player: DragonPlayer = {}) {
     const cards = zoneCards(player, zone);
     for (let index = 0; index < cards.length; index++) {
       const card = cards[index];
-      if (isDragonMonster(card)) entries.push({ zone, index, card });
+      if (card && isDragonMonster(card)) entries.push({ zone, index, card });
     }
   }
   return entries;

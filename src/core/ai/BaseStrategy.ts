@@ -640,6 +640,7 @@ export default class BaseStrategy implements StrategyRuntimePort {
 
       if (indexInActions >= 0) {
         const action = actions[indexInActions];
+        if (!action) return actions;
         action.p2Score = gameTreeScore;
         action.p2Approved = true;
         actions.splice(indexInActions, 1);

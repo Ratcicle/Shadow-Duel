@@ -309,7 +309,7 @@ function computeFlags({
   totalAccessibleResources,
   totalStrandedResources,
   potential,
-}: { countsByZone: Record<string, number>; enablers: ReturnType<typeof getEnablers>; totalAccessibleResources: number; totalStrandedResources: number; potential?: ReturnType<typeof computePotential> }) {
+}: { countsByZone: Record<string, number>; enablers: ReturnType<typeof getEnablers>; totalAccessibleResources: number; totalStrandedResources: number; potential?: ReturnType<typeof computePotential> | undefined }) {
   const gyCount = countsByZone.graveyard || 0;
   const hasRecoveryLine = totalAccessibleResources > (countsByZone.hand || 0) + (countsByZone.field || 0);
   const highValueRecoveryReady =
@@ -417,4 +417,4 @@ export function buildLuminarchResourcePreferences(analysis: LuminarchAnalysis = 
   };
 }
 
-export interface LuminarchResourceEconomy { resourceName: string; countsByZone: Record<string, number>; totalResources: number; enablers: ReturnType<typeof getEnablers>; accessibleByZone: Record<string, number>; totalAccessibleResources: number; strandedByZone: Record<string, number>; totalStrandedResources: number; potential?: ReturnType<typeof computePotential>; flags: ReturnType<typeof computeFlags>; }
+export interface LuminarchResourceEconomy { resourceName: string; countsByZone: Record<string, number>; totalResources: number; enablers: ReturnType<typeof getEnablers>; accessibleByZone: Record<string, number>; totalAccessibleResources: number; strandedByZone: Record<string, number>; totalStrandedResources: number; potential?: ReturnType<typeof computePotential> | undefined; flags: ReturnType<typeof computeFlags>; }

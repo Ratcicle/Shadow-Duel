@@ -50,11 +50,7 @@ export type SelectionPurpose = (typeof SELECTION_PURPOSES)[number];
  * canonical card locations. "extra" is the legacy display alias used by the
  * Fusion picker, while "choice" represents a non-card option.
  */
-export type SelectionZone =
-  | EffectZone
-  | LegacyZoneAlias
-  | "choice"
-  | "extra";
+export type SelectionZone = EffectZone | LegacyZoneAlias | "choice" | "extra";
 
 export type SelectionOwnerInput =
   | "player"
@@ -86,12 +82,12 @@ export interface SelectionEffectReference {
 export interface SelectionScoringCapabilities {
   instanceId?: number | string;
   fieldPresenceId?: number | string | null;
-  archetype?: string | null;
-  archetypes?: string[];
+  archetype?: (string | null) | undefined;
+  archetypes?: string[] | undefined;
   goodDiscard?: boolean;
   cannotBeNormalSummonedOrSet?: boolean;
   usedEffectThisTurn?: boolean;
-  hasAttacked?: boolean;
+  hasAttacked?: boolean | undefined;
   mustBeAttacked?: boolean;
   tempAtkBoost?: number;
   tempDefBoost?: number;
@@ -103,19 +99,19 @@ export interface SelectionScoringCapabilities {
 
 /** Minimal mutable card projection needed by selection and replay identity. */
 export interface SelectionCardReference extends SelectionScoringCapabilities {
-  id?: string | number;
+  id?: string | number | undefined;
   duelCardId?: DuelCardId | number;
-  name?: string;
+  name?: string | undefined;
   label?: string;
-  description?: string;
-  image?: string;
-  cardKind?: CardKind | string;
+  description?: string | undefined;
+  image?: string | undefined;
+  cardKind?: (CardKind | string) | undefined;
   owner?: PlayerId | string;
   controller?: PlayerId | string;
-  position?: string | null;
-  atk?: number | null;
-  def?: number | null;
-  level?: number | null;
+  position?: (string | null) | undefined;
+  atk?: (number | null) | undefined;
+  def?: (number | null) | undefined;
+  level?: (number | null) | undefined;
   effects?: readonly SelectionEffectReference[];
 }
 
@@ -142,20 +138,20 @@ interface SelectionCandidateFields extends SelectionScoringCapabilities {
   card?: SelectionCardReference | null;
   effectId?: string | null;
   effect?: SelectionEffectReference | null;
-  controller?: PlayerId | string;
+  controller?: (PlayerId | string) | undefined;
   owner?: SelectionOwnerInput | PlayerId | string;
   zone?: SelectionZone;
   zoneName?: SelectionZone;
   zoneIndex?: number;
-  name?: string;
+  name?: string | undefined;
   label?: string;
-  description?: string;
-  image?: string | null;
-  position?: string | null;
-  atk?: number | null;
-  def?: number | null;
-  level?: number | null;
-  cardKind?: CardKind | string;
+  description?: string | undefined;
+  image?: string | null | undefined;
+  position?: (string | null) | undefined;
+  atk?: number | null | undefined;
+  def?: number | null | undefined;
+  level?: number | null | undefined;
+  cardKind?: CardKind | string | undefined;
   isDirectAttack?: boolean;
 }
 
@@ -207,10 +203,10 @@ export interface SelectionRequirement {
 
 /** Input-only UI fields. `message` is intentionally not normalized. */
 export interface RawSelectionUIConfig {
-  allowCancel?: boolean;
-  preventCancel?: boolean;
-  useFieldTargeting?: boolean;
-  allowEmpty?: boolean;
+  allowCancel?: boolean | undefined;
+  preventCancel?: boolean | undefined;
+  useFieldTargeting?: boolean | undefined;
+  allowEmpty?: boolean | undefined;
   message?: string | null;
 }
 
@@ -218,8 +214,8 @@ export interface RawSelectionUIConfig {
 export interface SelectionUIConfig {
   allowCancel: boolean;
   preventCancel: boolean;
-  useFieldTargeting?: boolean;
-  allowEmpty?: boolean;
+  useFieldTargeting?: boolean | undefined;
+  allowEmpty?: boolean | undefined;
 }
 
 export interface SelectionFilter extends CardFilter {
@@ -248,7 +244,7 @@ export interface SelectionMetadata {
   intent?: SelectionIntent;
   sourceCard?: SelectionCardReference | string | null;
   sourceCardName?: string | null;
-  sourceCardId?: string | number | null;
+  sourceCardId?: (string | number | null) | undefined;
   sourceZone?: SelectionZone;
   effectId?: string | null;
   cardData?: SelectionCardDisplayData;
@@ -256,7 +252,7 @@ export interface SelectionMetadata {
 
 /** Authoring/runtime input. Legacy aliases remain accepted only here. */
 export interface RawSelectionContract {
-  kind?: SelectionKind;
+  kind?: SelectionKind | undefined;
   timing?: string;
   purpose?: SelectionPurpose;
   message?: string | null;
@@ -282,8 +278,8 @@ export type SelectionNormalizationResult =
   | { ok: false; reason: string };
 
 export interface SelectionNormalizationOverrides {
-  kind?: SelectionKind;
-  message?: string | null;
+  kind?: SelectionKind | undefined;
+  message?: (string | null) | undefined;
   ui?: RawSelectionUIConfig;
 }
 
@@ -377,7 +373,7 @@ export type SelectionSessionResolver = {
 }["bivarianceHack"];
 
 export interface SelectionSessionInput {
-  kind?: SelectionKind;
+  kind?: SelectionKind | undefined;
   selectionContract: RawSelectionContract;
   owner?: SelectionPlayerReference | null;
   player?: SelectionPlayerReference | null;
@@ -397,9 +393,7 @@ export interface SelectionSessionInput {
     selections: SelectionResult,
   ) => SelectionExecutionReturn | PromiseLike<SelectionExecutionReturn>;
   rollback?: () => void;
-  onResult?: (
-    result: NormalizedSelectionExecutionResult,
-  ) => unknown;
+  onResult?: (result: NormalizedSelectionExecutionResult) => unknown;
   onCancel?: () => void;
 }
 

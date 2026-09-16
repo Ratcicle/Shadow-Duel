@@ -78,10 +78,13 @@ test("Magmatic Obsidian Leviathan declara materiais, efeitos e limites canônico
   assert.deepEqual(quick.activationZones, ["field"]);
   assert.equal(quick.requireFaceup, true);
   assert.equal(quick.usagePolicy, "use");
-  assert.equal(required(quick.targets)[0].intent, "cost");
-  assert.equal(required(quick.activationCosts)[0].type, "move");
-  assert.equal(required(quick.actions)[0].type, "set_facedown_defense");
-  assert.equal(required(quick.actions)[0].lockBattlePosition, true);
+  assert.equal(required(required(quick.targets)[0]).intent, "cost");
+  assert.equal(required(required(quick.activationCosts)[0]).type, "move");
+  assert.equal(
+    required(required(quick.actions)[0]).type,
+    "set_facedown_defense",
+  );
+  assert.equal(required(required(quick.actions)[0]).lockBattlePosition, true);
 
   const revive = required(
     required(card.effects).find(
@@ -92,12 +95,15 @@ test("Magmatic Obsidian Leviathan declara materiais, efeitos e limites canônico
   assert.equal(revive.requireSelfAsDestroyed, true);
   assert.deepEqual(revive.condition, { type: "destroyed_by_battle_or_effect" });
   assert.equal(revive.usagePolicy, "use");
-  assert.deepEqual(required(revive.targets)[0].count, { min: 1, max: 2 });
-  assert.equal(required(revive.targets)[0].attribute, "Earth");
-  assert.equal(required(revive.targets)[0].maxLevel, 3);
+  assert.deepEqual(required(required(revive.targets)[0]).count, {
+    min: 1,
+    max: 2,
+  });
+  assert.equal(required(required(revive.targets)[0]).attribute, "Earth");
+  assert.equal(required(required(revive.targets)[0]).maxLevel, 3);
   assert.equal(
-    required(revive.actions)[0].targetRef,
-    required(revive.targets)[0].id,
+    required(required(revive.actions)[0]).targetRef,
+    required(required(revive.targets)[0]).id,
   );
 });
 
@@ -193,9 +199,9 @@ test("set_facedown_defense trava posição, expõe o status e não bloqueia limp
   assert.equal(target.position, "defense");
   assert.equal(target.isFacedown, true);
   assert.equal(target.battlePositionLocked, true);
-  assert.equal(events[0].name, "position_change");
-  assert.equal(events[0].payload.wasSetFacedown, true);
-  assert.equal(events[0].payload.battlePositionLocked, true);
+  assert.equal(required(events[0]).name, "position_change");
+  assert.equal(required(events[0]).payload.wasSetFacedown, true);
+  assert.equal(required(events[0]).payload.battlePositionLocked, true);
   assert.ok(logs.length > 0);
 
   assert.equal(game.canChangePosition(target), false);
@@ -381,7 +387,7 @@ test("o Trigger de destruição Invoca até dois monstros sequencialmente", asyn
       ({ id }) => id === "magmatic_obsidian_leviathan_destroyed_revive",
     ),
   );
-  const action = required(effect.actions)[0];
+  const action = required(required(effect.actions)[0]);
   assert.ok(action.type === "special_summon_from_zone");
   const result = await game.effectEngine.applyActions(
     [{ ...action, position: "attack" }],

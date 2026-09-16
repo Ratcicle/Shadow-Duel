@@ -636,7 +636,7 @@ export function isLuminarchByName(name: string | undefined) {
 /**
  * Helper: verifica se carta é Luminarch (via objeto)
  */
-export function isLuminarch(card: { name?: string; archetype?: SimulatedCardState["archetype"] } | null | undefined) {
+export function isLuminarch(card: { name?: string | undefined; archetype?: SimulatedCardState["archetype"] } | null | undefined) {
   if (!card) return false;
   return card.archetype === "Luminarch" || isLuminarchByName(card.name);
 }

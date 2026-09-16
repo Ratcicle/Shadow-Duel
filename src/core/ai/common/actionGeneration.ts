@@ -47,8 +47,8 @@ interface MutablePrioritizedAction {
   cardId?: number;
   cardName?: string;
   effectId?: string;
-  reason?: string;
-  activationContext?: AIActivationContext;
+  reason?: string | undefined;
+  activationContext?: AIActivationContext | undefined;
 }
 
 interface BuildPrioritizedActionInput<Type extends AIActionType = AIActionType> {
@@ -59,18 +59,18 @@ interface BuildPrioritizedActionInput<Type extends AIActionType = AIActionType> 
   graveyardIndex?: number | null;
   materialIndex?: number | null;
   card?: PlanningCard | null;
-  priority?: number;
-  reason?: string | null;
+  priority?: number | undefined;
+  reason?: string | null | undefined;
   effect?: EffectDefinition | null;
-  activationContext?: AIActivationContext | null;
+  activationContext?: AIActivationContext | null | undefined;
   extra?: AIActionExtra<NoInfer<Type>> | null;
 }
 
 interface ActionDecision {
   yes?: boolean;
   ok?: boolean;
-  priority?: number;
-  reason?: string;
+  priority?: number | undefined;
+  reason?: string | undefined;
   position?: "attack" | "defense" | "choice";
 }
 
@@ -80,24 +80,24 @@ interface ActionAllowedResult {
 
 interface SafetyAdjustmentResult {
   adjustment?: number;
-  priority?: number;
+  priority?: number | undefined;
 }
 
 interface ActionGenerationAnalysis {
-  canNormalSummon?: boolean;
+  canNormalSummon?: boolean | undefined;
   fieldCapacity?: number;
 }
 
 interface HandSpellContext<Analysis = unknown, Player extends AIStrategyBotPort = AIStrategyBotPort> {
-  game?: AIState;
+  game?: AIState | undefined;
   player: Player;
-  analysis?: Analysis;
+  analysis?: Analysis | undefined;
   index: number;
   card: Player["hand"][number];
 }
 
 interface HandSpellOptions<Analysis = unknown, Player extends AIStrategyBotPort = AIStrategyBotPort> {
-  game?: AIState;
+  game?: AIState | undefined;
   player: Player;
   hand?: Player["hand"];
   analysis?: Analysis;
@@ -147,16 +147,16 @@ interface NormalSummonOptions<Analysis extends ActionGenerationAnalysis = Action
 }
 
 interface IgnitionContext<Analysis = unknown, Player extends AIStrategyBotPort = AIStrategyBotPort> {
-  game?: AIState;
+  game?: AIState | undefined;
   player: Player;
-  analysis?: Analysis;
+  analysis?: Analysis | undefined;
   sourceIndex: number;
   card: Player["hand"][number];
-  sourceZone?: string;
+  sourceZone?: string | undefined;
 }
 
 interface IgnitionEffectOptions<Type extends AIActionType, Analysis = unknown, Player extends AIStrategyBotPort = AIStrategyBotPort> {
-  game?: AIState;
+  game?: AIState | undefined;
   player: Player;
   cards?: Player["hand"];
   analysis?: Analysis;
@@ -209,9 +209,9 @@ interface SafetyPolicyMap {
 interface MacroSafetyContext<Macro = unknown> {
   priority: number;
   basePriority: number;
-  actionType?: AIActionType;
-  card?: PlanningCard | null;
-  macroStrategy?: Macro;
+  actionType?: AIActionType | undefined;
+  card?: PlanningCard | null | undefined;
+  macroStrategy?: Macro | undefined;
   safety: SafetyResult | null;
   macroBuff: number;
   safetyScore: number | null;
@@ -630,7 +630,7 @@ export function createActionGenerationContext<Extra extends object>({
   log,
   extra = {} as Extra,
 }: {
-  game?: AIState;
+  game?: AIState | undefined;
   strategy?: unknown;
   bot?: SimulatedPlayerState;
   opponent?: SimulatedPlayerState;
@@ -638,7 +638,7 @@ export function createActionGenerationContext<Extra extends object>({
   actualGame?: AiLiveGamePort;
   isSimulatedState?: boolean;
   macroStrategy?: unknown;
-  activationContext?: AIActivationContext;
+  activationContext?: AIActivationContext | undefined;
   log?: ((message: string) => void) | null;
   extra?: Extra;
 } = {}) {

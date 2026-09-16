@@ -32,27 +32,27 @@ interface AutoSelectorCard extends ActionRuntimeCard {
 }
 
 interface AutoSelectorScorableCard {
-  id?: string | number;
+  id?: (string | number) | undefined;
   instanceId?: string | number;
   fieldPresenceId?: string | number | null;
-  name?: string;
-  cardKind?: string;
-  atk?: number | null;
-  def?: number | null;
-  level?: number | null;
-  position?: string | null;
-  archetype?: string | null;
-  archetypes?: string[];
-  goodDiscard?: boolean;
-  cannotBeNormalSummonedOrSet?: boolean;
-  usedEffectThisTurn?: boolean;
-  hasAttacked?: boolean;
-  mustBeAttacked?: boolean;
+  name?: string | undefined;
+  cardKind?: string | undefined;
+  atk?: (number | null) | undefined;
+  def?: (number | null) | undefined;
+  level?: (number | null) | undefined;
+  position?: (string | null) | undefined;
+  archetype?: (string | null) | undefined;
+  archetypes?: string[] | undefined;
+  goodDiscard?: boolean | undefined;
+  cannotBeNormalSummonedOrSet?: boolean | undefined;
+  usedEffectThisTurn?: boolean | undefined;
+  hasAttacked?: boolean | undefined;
+  mustBeAttacked?: boolean | undefined;
   cannotAttackThisTurn?: boolean;
-  tempAtkBoost?: number;
-  equipAtkBonus?: number;
-  tempDefBoost?: number;
-  equipDefBonus?: number;
+  tempAtkBoost?: number | undefined;
+  equipAtkBonus?: number | undefined;
+  tempDefBoost?: number | undefined;
+  equipDefBonus?: number | undefined;
   piercing?: boolean;
   isFacedown?: boolean;
 }
@@ -133,10 +133,10 @@ interface AutoSelectorPreference {
   preserveNames?: string[];
   attackers?: AutoSelectorCard[];
   opponentLp?: number;
-  atkReduction?: number;
-  defReduction?: number;
-  destroyIfAtkZeroedByThisEffect?: boolean;
-  destroyIfDefZeroedByThisEffect?: boolean;
+  atkReduction?: number | undefined;
+  defReduction?: number | undefined;
+  destroyIfAtkZeroedByThisEffect?: boolean | undefined;
+  destroyIfDefZeroedByThisEffect?: boolean | undefined;
   atkBoost?: number;
   sourceCardId?: string | number | null;
   preferredName?: string;
@@ -202,10 +202,10 @@ function scoreTemporaryCombatDebuff(
   options: {
     attackers: AutoSelectorCard[];
     opponentLp: number;
-    atkReduction?: number;
-    defReduction?: number;
-    destroyIfAtkZeroedByThisEffect?: boolean;
-    destroyIfDefZeroedByThisEffect?: boolean;
+    atkReduction?: number | undefined;
+    defReduction?: number | undefined;
+    destroyIfAtkZeroedByThisEffect?: boolean | undefined;
+    destroyIfDefZeroedByThisEffect?: boolean | undefined;
   },
 ): number {
   const result: unknown = Reflect.apply(
@@ -248,7 +248,10 @@ export default class AutoSelector {
       !isAutoSelectionRequirementArray(selectionContract.requirements) ||
       selectionContract.requirements.length === 0
     ) {
-      return { ok: false, reason: "Selection contract is missing requirements." };
+      return {
+        ok: false,
+        reason: "Selection contract is missing requirements.",
+      };
     }
 
     const selections: SelectionResult = {};
@@ -273,13 +276,13 @@ export default class AutoSelector {
       const ordered = this.orderCandidates(
         requirement,
         candidates,
-        contextWithContract
+        contextWithContract,
       );
       const desiredCount = this.getDesiredCount(
         requirement,
         ordered,
         { min, max },
-        contextWithContract
+        contextWithContract,
       );
       const chosen = ordered.slice(0, desiredCount);
       selections[requirement.id ?? "undefined"] = chosen
@@ -298,14 +301,16 @@ export default class AutoSelector {
   orderTriggerCandidates<Candidate extends TriggerOrderCandidate>(
     candidates: Candidate[] = [],
   ): Candidate[] {
-    return candidates.slice().sort(
-      (a, b) =>
-        Number(a?.collectorOrder || 0) - Number(b?.collectorOrder || 0) ||
-        Number(a?.occurrenceId || 0) - Number(b?.occurrenceId || 0) ||
-        Number(a?.sourceOrder || 0) - Number(b?.sourceOrder || 0) ||
-        Number(a?.effectOrder || 0) - Number(b?.effectOrder || 0) ||
-        Number(a?.candidateId || 0) - Number(b?.candidateId || 0),
-    );
+    return candidates
+      .slice()
+      .sort(
+        (a, b) =>
+          Number(a?.collectorOrder || 0) - Number(b?.collectorOrder || 0) ||
+          Number(a?.occurrenceId || 0) - Number(b?.occurrenceId || 0) ||
+          Number(a?.sourceOrder || 0) - Number(b?.sourceOrder || 0) ||
+          Number(a?.effectOrder || 0) - Number(b?.effectOrder || 0) ||
+          Number(a?.candidateId || 0) - Number(b?.candidateId || 0),
+      );
   }
 
   orderCandidates(
@@ -332,11 +337,7 @@ export default class AutoSelector {
       return candidates.slice().sort((a, b) => (a.def || 0) - (b.def || 0));
     }
 
-    const intent = this.getRequirementIntent(
-      requirement,
-      context,
-      candidates
-    );
+    const intent = this.getRequirementIntent(requirement, context, candidates);
     if (!intent) {
       return candidates;
     }
@@ -375,7 +376,7 @@ export default class AutoSelector {
     const shouldSelectOptional = this.shouldSelectOptional(
       requirement,
       candidates,
-      context
+      context,
     );
     if (!shouldSelectOptional || max <= 0) {
       return 0;
@@ -398,11 +399,7 @@ export default class AutoSelector {
       return candidates.length > 0;
     }
 
-    const intent = this.getRequirementIntent(
-      requirement,
-      context,
-      candidates
-    );
+    const intent = this.getRequirementIntent(requirement, context, candidates);
     if (!intent || intent === "cost") {
       return false;
     }
@@ -479,32 +476,30 @@ export default class AutoSelector {
   }
 
   getCandidateScore(
-    candidate: AutoSelectionCandidate,
+    candidate: AutoSelectionCandidate | undefined,
     intent: SelectionIntent,
     context: AutoSelectorContext,
   ): number {
     const ownerPlayer = this.resolveCandidateOwner(candidate, context);
-    const baseCard =
-      candidate?.cardRef ||
-      {
-        name: candidate?.name,
-        cardKind: candidate?.cardKind,
-        atk: candidate?.atk,
-        def: candidate?.def,
-        level: candidate?.level,
-        position: candidate?.position,
-        archetype: candidate?.archetype,
-        archetypes: candidate?.archetypes,
-        goodDiscard: candidate?.goodDiscard,
-        cannotBeNormalSummonedOrSet: candidate?.cannotBeNormalSummonedOrSet,
-        usedEffectThisTurn: candidate?.usedEffectThisTurn,
-        hasAttacked: candidate?.hasAttacked,
-        mustBeAttacked: candidate?.mustBeAttacked,
-        tempAtkBoost: candidate?.tempAtkBoost,
-        equipAtkBonus: candidate?.equipAtkBonus,
-        tempDefBoost: candidate?.tempDefBoost,
-        equipDefBonus: candidate?.equipDefBonus,
-      };
+    const baseCard = candidate?.cardRef || {
+      name: candidate?.name,
+      cardKind: candidate?.cardKind,
+      atk: candidate?.atk,
+      def: candidate?.def,
+      level: candidate?.level,
+      position: candidate?.position,
+      archetype: candidate?.archetype,
+      archetypes: candidate?.archetypes,
+      goodDiscard: candidate?.goodDiscard,
+      cannotBeNormalSummonedOrSet: candidate?.cannotBeNormalSummonedOrSet,
+      usedEffectThisTurn: candidate?.usedEffectThisTurn,
+      hasAttacked: candidate?.hasAttacked,
+      mustBeAttacked: candidate?.mustBeAttacked,
+      tempAtkBoost: candidate?.tempAtkBoost,
+      equipAtkBonus: candidate?.equipAtkBonus,
+      tempDefBoost: candidate?.tempDefBoost,
+      equipDefBonus: candidate?.equipDefBonus,
+    };
     const options = {
       fieldSpell: ownerPlayer?.fieldSpell || null,
       preferDefense: false,
@@ -573,8 +568,11 @@ export default class AutoSelector {
         targetPreference?.purpose === "offense"
       ) {
         return (
-          this.getOffensiveTemporaryBuffScore(baseCard, context, targetPreference) +
-          (isSelf ? 0.2 : -0.4)
+          this.getOffensiveTemporaryBuffScore(
+            baseCard,
+            context,
+            targetPreference,
+          ) + (isSelf ? 0.2 : -0.4)
         );
       }
       if (targetPreference?.role === "stance_dance_buff") {
@@ -618,9 +616,12 @@ export default class AutoSelector {
         const preferNames = costPreferences.preferNames || [];
         const forceNames = costPreferences.forceNames || [];
         const preserveNames = costPreferences.preserveNames || [];
-        if (baseCard.name && forceNames.includes(baseCard.name)) costScore -= 30;
-        if (baseCard.name && preferNames.includes(baseCard.name)) costScore -= 2.5;
-        if (baseCard.name && preserveNames.includes(baseCard.name)) costScore += 18;
+        if (baseCard.name && forceNames.includes(baseCard.name))
+          costScore -= 30;
+        if (baseCard.name && preferNames.includes(baseCard.name))
+          costScore -= 2.5;
+        if (baseCard.name && preserveNames.includes(baseCard.name))
+          costScore += 18;
         const candidateIds = getCandidateInstanceIds(baseCard, candidate);
         if (
           listIncludesInstance(
@@ -652,11 +653,11 @@ export default class AutoSelector {
           const availablePayoffs =
             typeof configuredPayoffs === "number" &&
             Number.isFinite(configuredPayoffs)
-            ? configuredPayoffs
-            : countAvailableOffensivePayoffs(
-                ownerPlayer,
-                costPreferences.offensivePayoffNames || [],
-              );
+              ? configuredPayoffs
+              : countAvailableOffensivePayoffs(
+                  ownerPlayer,
+                  costPreferences.offensivePayoffNames || [],
+                );
           if (availablePayoffs <= 1) costScore += 80;
         }
       }
@@ -672,8 +673,11 @@ export default class AutoSelector {
           const availablePayoffs =
             typeof configuredPayoffs === "number" &&
             Number.isFinite(configuredPayoffs)
-            ? configuredPayoffs
-            : countAvailableOffensivePayoffs(ownerPlayer, offensivePayoffNames);
+              ? configuredPayoffs
+              : countAvailableOffensivePayoffs(
+                  ownerPlayer,
+                  offensivePayoffNames,
+                );
           if (availablePayoffs <= 1) costScore += 80;
           else if (costPreferences.stableDefense) costScore += 8;
         }
@@ -710,8 +714,8 @@ export default class AutoSelector {
     const atkBoost =
       typeof configuredAtkBoost === "number" &&
       Number.isFinite(configuredAtkBoost)
-      ? configuredAtkBoost
-      : 0;
+        ? configuredAtkBoost
+        : 0;
     if (atkBoost <= 0) return -100;
     if (card.position !== "attack") return -80 + getEffectiveAtk(card) / 10000;
     if (card.cannotAttackThisTurn || card.hasAttacked) {
@@ -735,7 +739,7 @@ export default class AutoSelector {
 
   getStanceDanceBuffScore(
     card: AutoSelectorScorableCard | null | undefined,
-    candidate: AutoSelectionCandidate,
+    candidate: AutoSelectionCandidate | undefined,
     context: AutoSelectorContext,
     preference: AutoSelectorPreference,
   ): number {
@@ -744,14 +748,15 @@ export default class AutoSelector {
     const atkBoost =
       typeof configuredAtkBoost === "number" &&
       Number.isFinite(configuredAtkBoost)
-      ? configuredAtkBoost
-      : 0;
+        ? configuredAtkBoost
+        : 0;
     const sourceCardId =
       preference?.sourceCardId ??
       context?.selectionContract?.metadata?.sourceCardId;
     const isSource =
       sourceCardId != null &&
-      (candidate?.cardRef?.id === sourceCardId || candidate?.id === sourceCardId);
+      (candidate?.cardRef?.id === sourceCardId ||
+        candidate?.id === sourceCardId);
     const expectedAtk = getEffectiveAtk(card) + atkBoost;
     let score = -10;
 
@@ -858,7 +863,7 @@ function countAvailableOffensivePayoffs(
 ): number {
   if (!player) return 0;
   return [...(player.hand || []), ...(player.deck || [])].filter((card) =>
-    isOffensivePayoffCost(card, payoffNames)
+    isOffensivePayoffCost(card, payoffNames),
   ).length;
 }
 
@@ -924,12 +929,14 @@ function getRecursionTargetScore(
     score += def / 450;
     if (def >= atk + 500 || card.mustBeAttacked) score += 2;
     if (card.name && defensiveNames.includes(card.name)) score += 3;
-    if (card.name && offensiveNames.includes(card.name) && def < 2000) score -= 1;
+    if (card.name && offensiveNames.includes(card.name) && def < 2000)
+      score -= 1;
   } else if (purpose === "pressure" || purpose === "offense") {
     score += atk / 450;
     if (atk >= 2000 || card.piercing) score += 2;
     if (card.name && offensiveNames.includes(card.name)) score += 2;
-    if (card.name && defensiveNames.includes(card.name) && atk < 1800) score -= 3;
+    if (card.name && defensiveNames.includes(card.name) && atk < 1800)
+      score -= 3;
   } else {
     if (card.name && defensiveNames.includes(card.name)) score += 0.8;
     if (card.name && offensiveNames.includes(card.name)) score += 0.8;

@@ -740,6 +740,9 @@ function evaluateIceBarrierPlan(analysis: Analysis = {}) {
     evaluateArcanistCardValue(b, analysis) - evaluateArcanistCardValue(a, analysis);
   const targetPool = amplified ? equippedHosts : hosts;
   const target = [...targetPool].sort(sortByValue)[0];
+  if (!target) {
+    return { ok: false as const, reason: "need face-up Arcanist target" };
+  }
   const targetValue = evaluateArcanistCardValue(target, analysis);
   const targetBattleStat = Math.max(target?.atk || 0, target?.def || 0);
   const underBattlePressure = battleThreat >= targetBattleStat;
@@ -1110,7 +1113,9 @@ export function shouldSummonMonster(card: StrategyCard, analysis: Analysis = {},
       evaluationContext: analysis,
       oppField,
     });
-    const tributes = tributeIndices.map((index) => field[index]).filter(Boolean);
+    const tributes = tributeIndices
+      .map((index) => field[index])
+      .filter((tribute): tribute is StrategyCard => Boolean(tribute));
     if (getTributeValueTotal(tributes, card) < tributesNeeded) {
       return { yes: false, reason: "insufficient tributes" };
     }

@@ -34,25 +34,25 @@ interface CardLocation {
 interface SynchroSelectionCandidate extends RawSelectionCandidate {
   key: string;
   readonly name: string;
-  readonly image?: string;
+  readonly image?: string | undefined;
   readonly owner: string;
   readonly controller: string;
   readonly zone: "field" | "extraDeck";
   readonly zoneIndex: number;
-  readonly atk?: number;
-  readonly def?: number;
-  readonly level?: number;
+  readonly atk?: number | undefined;
+  readonly def?: number | undefined;
+  readonly level?: number | undefined;
   readonly cardKind: ActionRuntimeCard["cardKind"];
   readonly monsterType: ActionRuntimeCard["monsterType"];
   readonly cardRef: ActionRuntimeCard;
 }
 
 interface SynchroSelectionContract extends RawSelectionContract {
-  requirements: Array<
+  requirements: [
     RawSelectionRequirement & {
       candidates: SynchroSelectionCandidate[];
-    }
-  >;
+    },
+  ];
 }
 
 interface LegalSynchroEntry {
@@ -333,11 +333,15 @@ function canSpecialSummonMaterial(
     fromZone: "graveyard",
   });
   if (!eligibility.ok) return false;
-  const restrictionCheck = game.canSpecialSummonUnderRestrictions?.(card, player, {
-    summonMethod: "special",
-    fromZone: "graveyard",
-    silent: true,
-  });
+  const restrictionCheck = game.canSpecialSummonUnderRestrictions?.(
+    card,
+    player,
+    {
+      summonMethod: "special",
+      fromZone: "graveyard",
+      silent: true,
+    },
+  );
   if (restrictionCheck?.ok === false) return false;
   const placementCheck = game.canPlaceCardOnField?.(card, player, {
     isFacedown: false,
@@ -377,7 +381,10 @@ function resolveDeSynchroMaterials(
         : null,
     );
     if (!card) {
-      return { ok: false, reason: "Not all Synchro Materials are in your Graveyard." };
+      return {
+        ok: false,
+        reason: "Not all Synchro Materials are in your Graveyard.",
+      };
     }
     if (
       !canSpecialSummonMaterial(game, player, card, {
@@ -506,8 +513,7 @@ export async function handleSynchroSummonFromExtraDeck(
   engine: ActionHandlerEnginePort,
 ) {
   const game = engine?.game;
-  const player =
-    action.player === "opponent" ? ctx?.opponent : ctx?.player;
+  const player = action.player === "opponent" ? ctx?.opponent : ctx?.player;
   if (!game || !player) return false;
 
   const legalEntries = getLegalSynchroEntries(game, player, action, engine);
@@ -567,25 +573,23 @@ export async function handleSynchroSummonFromExtraDeck(
     const materialCombos: unknown = Reflect.get(check, "materialCombos");
     const firstCombo = Array.isArray(materialCombos) ? materialCombos[0] : null;
     materials = Array.isArray(firstCombo)
-      ? firstCombo.filter(
-          (material): material is ActionRuntimeCard =>
-            Boolean(
-              material &&
-                typeof material === "object" &&
-                typeof Reflect.get(material, "name") === "string",
-            ),
+      ? firstCombo.filter((material): material is ActionRuntimeCard =>
+          Boolean(
+            material &&
+              typeof material === "object" &&
+              typeof Reflect.get(material, "name") === "string",
+          ),
         )
       : [];
   } else {
     const rawCandidates: unknown = Reflect.get(check, "candidates");
     const materialCandidates = Array.isArray(rawCandidates)
-      ? rawCandidates.filter(
-          (candidate): candidate is ActionRuntimeCard =>
-            Boolean(
-              candidate &&
-                typeof candidate === "object" &&
-                typeof Reflect.get(candidate, "name") === "string",
-            ),
+      ? rawCandidates.filter((candidate): candidate is ActionRuntimeCard =>
+          Boolean(
+            candidate &&
+              typeof candidate === "object" &&
+              typeof Reflect.get(candidate, "name") === "string",
+          ),
         )
       : [];
     const materialContract = buildMaterialSelectionContract(
@@ -603,14 +607,13 @@ export async function handleSynchroSummonFromExtraDeck(
     });
     if (!Array.isArray(keys) || keys.length === 0) return false;
     materials = keys
-      .map((key) =>
-        materialContract.requirements[0].candidates.find(
-          (candidate) => candidate.key === key,
-        )?.cardRef,
+      .map(
+        (key) =>
+          materialContract.requirements[0].candidates.find(
+            (candidate) => candidate.key === key,
+          )?.cardRef,
       )
-      .filter(
-        (material): material is ActionRuntimeCard => Boolean(material),
-      );
+      .filter((material): material is ActionRuntimeCard => Boolean(material));
   }
 
   const result = await game.performSynchroSummon?.(
@@ -621,7 +624,8 @@ export async function handleSynchroSummonFromExtraDeck(
       checkActionWindow: false,
       position: action.position,
       summonOrigin: "effect_resolution",
-      actionContext: ctx?.actionContext || ctx?.activationContext?.actionContext,
+      actionContext:
+        ctx?.actionContext || ctx?.activationContext?.actionContext,
     },
   );
   return Boolean(
@@ -653,13 +657,12 @@ export function hasSynchroSummonPreviewCandidate(
   const pendingCards: readonly (ActionRuntimeCard | null)[] = pending
     ? Array.isArray(pendingZone)
       ? pendingZone
-          .filter(
-            (card): card is ActionRuntimeCard =>
-              Boolean(
-                card &&
-                  typeof card === "object" &&
-                  typeof Reflect.get(card, "name") === "string",
-              ),
+          .filter((card): card is ActionRuntimeCard =>
+            Boolean(
+              card &&
+                typeof card === "object" &&
+                typeof Reflect.get(card, "name") === "string",
+            ),
           )
           .filter((card) =>
             matchesActionFilters(engine, card, pending.filters || {}),
@@ -671,7 +674,8 @@ export function hasSynchroSummonPreviewCandidate(
   const gameLike = {
     effectEngine: {
       cardMatchesFilters: engine?.cardMatchesFilters?.bind(engine),
-      isEffectNegated: (card: ActionRuntimeCard) => card?.effectsNegated === true,
+      isEffectNegated: (card: ActionRuntimeCard) =>
+        card?.effectsNegated === true,
     },
     canUseAsSynchroMaterial,
   };

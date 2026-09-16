@@ -43,48 +43,48 @@ export interface AIPlanningProfile {
   maxDepth: number;
   nodeBudget: number;
   candidateLimit: number;
-  battleStepLimit?: number;
+  battleStepLimit?: number | undefined;
 }
 
 export interface AIActivationContext {
-  effect?: EffectDefinition | null;
-  effectId?: string | null;
+  effect?: EffectDefinition | null | undefined;
+  effectId?: string | null | undefined;
   fromHand?: boolean;
-  activationZone?: CanonicalZone | null;
-  sourceZone?: CanonicalZone | null;
-  zone?: CanonicalZone | null;
+  activationZone?: CanonicalZone | null | undefined;
+  sourceZone?: CanonicalZone | null | undefined;
+  zone?: CanonicalZone | null | undefined;
   trapActivationFromSet?: boolean;
   autoSelectTargets?: boolean;
   autoSelectSingleTarget?: boolean;
   logTargets?: boolean;
   actionContext?: unknown;
   targetPreferences?: unknown;
-  blueprintSourceCardId?: number | null;
-  blueprintId?: string | null;
+  blueprintSourceCardId?: number | null | undefined;
+  blueprintId?: string | null | undefined;
 }
 
 interface AIActionCommon {
   extraDeck?: boolean;
-  finisherPlanRank?: number;
+  finisherPlanRank?: number | undefined;
   macroBuff?: number;
   safetyScore?: number | null;
-  finisherPlan?: FinisherPlan | null;
+  finisherPlan?: FinisherPlan | null | undefined;
   tributeCostPenalty?: number;
   tributeCostReason?: string | null;
   isExtremeTribute?: boolean;
   isStalemateBreaker?: boolean;
   isCriticalFallback?: boolean;
-  priority?: number;
+  priority?: number | undefined;
   score?: number;
-  reason?: string;
+  reason?: string | undefined;
   card?: SimulatedCardState | GameCard | null;
-  cardId?: RawCardDefinitionId | number;
-  cardName?: string;
+  cardId?: RawCardDefinitionId | number | undefined;
+  cardName?: string | undefined;
   name?: string;
   index?: number;
-  effect?: EffectDefinition | null;
-  effectId?: string | null;
-  activationContext?: AIActivationContext;
+  effect?: EffectDefinition | null | undefined;
+  effectId?: string | null | undefined;
+  activationContext?: AIActivationContext | undefined;
   sourceCard?: SimulatedCardState | GameCard | null;
   sourceAction?: AIAction | null;
   p2Score?: number;
@@ -97,17 +97,17 @@ export interface AscensionAIAction extends AIActionCommon {
   ascensionCard?: SimulatedCardState | GameCard;
   ascensionIndex?: number;
   material?: SimulatedCardState | GameCard;
-  materialIndex?: number;
-  materialId?: RawCardDefinitionId | number;
-  materialName?: string;
-  position?: BattlePositionInput;
+  materialIndex?: number | undefined;
+  materialId?: RawCardDefinitionId | number | undefined;
+  materialName?: string | undefined;
+  position?: BattlePositionInput | undefined;
 }
 
 export interface ExtraDeckMaterialHint {
   index?: number;
-  id?: RawCardDefinitionId | number;
-  name?: string;
-  instanceIds?: Array<string | number>;
+  id?: RawCardDefinitionId | number | undefined;
+  name?: string | undefined;
+  instanceIds?: Array<string | number> | undefined;
 }
 
 export interface ExtraDeckProcedureAIAction extends AIActionCommon {
@@ -126,7 +126,7 @@ export interface ExtraDeckProcedureAIAction extends AIActionCommon {
 
 export interface SanctumProtectorAIAction extends AIActionCommon {
   type: "special_summon_sanctum_protector";
-  materialIndex?: number;
+  materialIndex?: number | undefined;
   position?: BattlePositionInput;
 }
 
@@ -149,13 +149,13 @@ export interface SummonAIAction extends AIActionCommon {
     survivesNextThreat: boolean;
     tradesNextThreat: boolean;
   } | null;
-  position?: BattlePositionInput;
-  facedown?: boolean;
+  position?: BattlePositionInput | undefined;
+  facedown?: boolean | undefined;
   tributeIndices?: number[];
 }
 
 export interface SpellAIAction extends AIActionCommon {
-  fusionTargetHint?: string | null;
+  fusionTargetHint?: string | null | undefined;
   fusionTarget?: string;
   type: "spell";
 }
@@ -218,7 +218,7 @@ export type AIAction = AIActionByType[AIActionType];
 export interface SimulatedBattleAction {
   type: "simulatedBattle";
   attacker?: SimulatedCardState | null;
-  attackerName?: string;
+  attackerName?: string | undefined;
   target?: SimulatedCardState | null;
   targetName?: string | null;
   direct?: boolean;
@@ -363,7 +363,7 @@ export interface AITributeRequirement {
 
 export interface AITributeTradeResult {
   ok: boolean;
-  reason?: string;
+  reason?: string | undefined;
   score?: number;
 }
 
@@ -382,7 +382,7 @@ export interface AIStrategyBotPort extends AiPlayerInput {
 }
 
 export interface AIPlanningContext {
-  profile?: Partial<AIPlanningProfile>;
+  profile?: Partial<AIPlanningProfile> | undefined;
   phase?: GamePhase | string | null;
   turnCounter?: number;
   sequence?: AIPlannedAction[];
@@ -517,7 +517,7 @@ export interface GameTreeSearchResult {
 export interface TurnLineSearchOptions extends BeamSearchOptions {
   candidateLimit?: number;
   turnMode?: AITurnPlanningMode;
-  profile?: Partial<AIPlanningProfile>;
+  profile?: Partial<AIPlanningProfile> | undefined;
   planningContext?: unknown;
   evaluateState?: (
     state: TurnLineSimulationGameState,
@@ -526,7 +526,7 @@ export interface TurnLineSearchOptions extends BeamSearchOptions {
   evaluateMilestones?: (
     context: AIPlanningContext,
   ) => AILineMilestoneScore;
-  battleStepLimit?: number;
+  battleStepLimit?: number | undefined;
 }
 
 export interface TurnLineDiagnostics {
@@ -586,7 +586,7 @@ export interface ChainBlockingRisk {
 export interface SimulatedActionApplicationOptions {
   sourceCard?: SimulatedCardState | null;
   sourceAction?: AIPlannedAction | null;
-  activationContext?: AIActivationContext;
+  activationContext?: AIActivationContext | undefined;
   strategy?: StrategyRuntimePort;
   actionOverrides?: object;
   enableSimulatedEvents?: boolean;

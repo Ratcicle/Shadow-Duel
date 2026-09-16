@@ -36,26 +36,27 @@ test("Battle Between Good and Evil declares compact text and canonical filters",
   assert.equal(locale.cards["25"].description, EXPECTED_PT_BR);
 
   const [effect] = required(card.effects);
+  assert.ok(effect);
   assert.equal(effect.usagePolicy, "activate");
   assert.equal(
     effect.oncePerTurnName,
     "battle_between_good_and_evil_activation",
   );
-  assert.deepEqual(required(required(effect.targets)[0].attribute), [
+  assert.deepEqual(required(required(required(effect.targets)[0]).attribute), [
     "Light",
     "Dark",
   ]);
-  assert.equal(required(required(effect.targets)[0].maxLevel), 4);
+  assert.equal(required(required(required(effect.targets)[0]).maxLevel), 4);
   assert.deepEqual(
     required(effect.actions).map(({ type }) => type),
     ["special_summon_from_zone", "restrict_effect_activations_by_attribute"],
   );
-  assert.equal(required(effect.actions)[0].negateEffects, true);
+  assert.equal(required(required(effect.actions)[0]).negateEffects, true);
   assert.equal(
-    required(effect.actions)[0].negateEffectsDuration,
+    required(required(effect.actions)[0]).negateEffectsDuration,
     "while_faceup",
   );
-  assert.equal(required(effect.actions)[0].haltOnFailure, true);
+  assert.equal(required(required(effect.actions)[0]).haltOnFailure, true);
 });
 
 test("Battle Between Good and Evil summons, negates and restricts other Attributes", async (t) => {
@@ -126,6 +127,7 @@ test("Battle Between Good and Evil summons, negates and restricts other Attribut
   game.player.deck.push(summoned);
 
   const [effect] = required(spell.effects);
+  assert.ok(effect);
   const actions = required(effect.actions).map((action) =>
     action.type === "special_summon_from_zone"
       ? { ...action, position: "attack" as const }

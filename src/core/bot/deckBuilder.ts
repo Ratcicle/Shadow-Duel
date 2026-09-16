@@ -24,13 +24,13 @@ export function buildBotDeck(bot: DeckBuilderBot | null | undefined) {
     const copyLimit = getCardCopyLimit(data.id, {
       deckType: DECK_TYPES.MAIN,
     });
-    if (copies[data.id] >= copyLimit || bot.deck.length >= bot.maxDeckSize) {
+    if (copies[data.id]! >= copyLimit || bot.deck.length >= bot.maxDeckSize) {
       return false;
     }
     const card = new Card(data, bot.id);
     bot.game?.ensureDuelCardId?.(card);
     bot.deck.push(card);
-    copies[data.id]++;
+    copies[data.id]!++;
     return true;
   };
 

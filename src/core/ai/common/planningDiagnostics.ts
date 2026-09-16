@@ -23,16 +23,16 @@ type DiagnosticCounters =
   | Readonly<Record<string, number>>;
 
 interface PlanningDiagnosticCardInput {
-  id?: PlanningCardSummary["id"];
+  id?: PlanningCardSummary["id"] | undefined;
   instanceId?: string | number | null;
   _instanceId?: string | number | null;
   uuid?: string | null;
-  name?: string | null;
+  name?: string | null | undefined;
   cardName?: string | null;
   label?: string | null;
-  cardKind?: string | null;
-  position?: string | null;
-  isFacedown?: boolean;
+  cardKind?: string | null | undefined;
+  position?: string | null | undefined;
+  isFacedown?: boolean | undefined;
   atk?: unknown;
   def?: unknown;
   tempAtkBoost?: unknown;
@@ -40,7 +40,7 @@ interface PlanningDiagnosticCardInput {
   equipAtkBonus?: unknown;
   equipDefBonus?: unknown;
   cannotAttackThisTurn?: boolean;
-  hasAttacked?: boolean;
+  hasAttacked?: boolean | undefined;
   counters?: DiagnosticCounters | null;
   equips?: readonly PlanningDiagnosticCardLike[] | null;
   state?: { blueprintStorage?: object | null } | null;
@@ -54,7 +54,7 @@ interface BlueprintEntryInput {
   id?: string | number;
   effectId?: string | number;
   sourceName?: string | number;
-  name?: string | number;
+  name?: string | number | undefined;
 }
 
 interface BlueprintStorageInput {
@@ -86,7 +86,7 @@ interface PlanningDiagnosticStateInput {
   player?: PlanningDiagnosticPlayerInput | null;
   bot?: PlanningDiagnosticPlayerInput | null;
   _isPerspectiveState?: boolean;
-  phase?: PlanningStateSummary["phase"];
+  phase?: PlanningStateSummary["phase"] | undefined;
   currentPhase?: PlanningStateSummary["phase"];
   turn?: unknown;
   currentPlayer?: { id?: unknown } | null;
@@ -123,9 +123,9 @@ type DiagnosticPlannedAction = AIPlannedAction & {
   fieldIndex?: number;
   zoneIndex?: number;
   graveyardIndex?: number;
-  materialIndex?: number;
+  materialIndex?: number | undefined;
   position?: AIActionFingerprint["position"];
-  name?: string;
+  name?: string | undefined;
 };
 
 function safeArray<Value>(

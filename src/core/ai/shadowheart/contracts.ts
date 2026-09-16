@@ -4,7 +4,7 @@ import type { SimulatedCardShape } from "../../contracts/aiState.js";
 import type { buildStrategyAnalysis } from "../common/analysis.js";
 
 /** Read projections used by the facade summaries and simulated boards. */
-export type ShadowHeartCard = (GameCard | SimulatedCardShape) & { cannotBeDestroyedByBattle?: boolean };
+export type ShadowHeartCard = (GameCard | SimulatedCardShape) & { cannotBeDestroyedByBattle?: boolean | undefined };
 export type ShadowHeartPlanningGame = Partial<AIState> & {
   devModeEnabled?: boolean;
   turnLineSearchEnabled?: boolean;

@@ -1,11 +1,93 @@
+import type { ActionRuntimeCard } from "../../contracts/actionRuntime.js";
+import type {
+  CardKind,
+  SentToGraveMaterialMarker,
+} from "../../contracts/cards.js";
+import type { CardFilter } from "../../contracts/effects.js";
+
+export interface FilterCard
+  extends Omit<
+    ActionRuntimeCard,
+    "id" | "name" | "cardKind" | "equips" | "archetypes"
+  > {
+  id?: (number | null) | undefined;
+  name?: string | null;
+  cardKind?: CardKind | null;
+  lastSummonMethod?: string | null;
+  lastSummonedFromZone?: string | null;
+  lastSentToGraveAsMaterial?: SentToGraveMaterialMarker | null;
+  equips?: FilterCard[];
+  archetypes?: readonly string[];
+}
+
+/** Runtime-only aliases preserve the existing filter boundary; authoring stays closed. */
+export interface RuntimeCardFilter
+  extends Omit<
+    CardFilter,
+    | "attribute"
+    | "monsterType"
+    | "subtype"
+    | "type"
+    | "position"
+    | "sentToGraveAsMaterial"
+    | "equippedWithFilters"
+  > {
+  id?: number;
+  ids?: readonly number[];
+  cardIds?: readonly number[];
+  faceUp?: boolean;
+  excludeName?: string;
+  excludeNames?: readonly string[];
+  excludeId?: number;
+  excludeIds?: readonly number[];
+  excludeCardId?: number;
+  excludeCardIds?: readonly number[];
+  excludeCards?: readonly FilterCard[];
+  excludeInstanceId?: string | number;
+  excludeInstanceIds?: readonly (string | number)[];
+  excludeCardInstanceIds?: readonly (string | number)[];
+  currentTurn?: number;
+  turnCounter?: number;
+  gameTurn?: number;
+  nameOrDescriptionIncludes?: string | readonly string[];
+  textIncludesAny?: readonly string[];
+  attribute?: string | readonly string[];
+  monsterType?: string | readonly string[];
+  subtype?: string | readonly string[];
+  type?: string | readonly string[];
+  position?: string;
+  excludeMonsterType?: string;
+  lastSummonMethod?: string;
+  lastSummonMethods?: readonly string[];
+  summonMethod?: string;
+  summonMethods?: readonly string[];
+  lastSummonedFromZone?: string;
+  lastSummonedFromZones?: readonly string[];
+  sentToGraveAsMaterial?: boolean | string | readonly string[];
+  sentAsMaterial?: boolean | string | readonly string[];
+  lastSentToGraveAsMaterial?: boolean | string | readonly string[];
+  sentToGraveAsMaterialTurn?: number | "current";
+  sentAsMaterialTurn?: number | "current";
+  sentAsMaterialThisTurn?: boolean;
+  hasCounter?: boolean | string;
+  maxCounters?: number;
+  equippedWithFilters?: RuntimeCardFilter;
+}
+
+interface CardFilterHost {
+  game?: { turnCounter: number };
+  isActiveEquipForCard(equip: FilterCard, card: FilterCard): boolean;
+  cardMatchesFilters(card: FilterCard, filters: RuntimeCardFilter): boolean;
+}
+
 import { cardMatchesKind } from "../../Card.js";
 
-function asArray(value) {
+function asArray(value: unknown): readonly unknown[] {
   if (value === undefined || value === null) return [];
   return Array.isArray(value) ? value : [value];
 }
 
-function matchesTextValue(value, expected) {
+function matchesTextValue(value: unknown, expected: unknown) {
   const expectedValues = asArray(expected).filter(
     (entry) => entry !== undefined && entry !== null,
   );
@@ -16,11 +98,17 @@ function matchesTextValue(value, expected) {
   );
 }
 
-function getCardInstanceId(card) {
-  return card?.instanceId ?? card?._instanceId ?? card?.uuid ?? card?.simInstanceId ?? null;
+function getCardInstanceId(card: FilterCard | null | undefined) {
+  return (
+    card?.instanceId ??
+    card?._instanceId ??
+    card?.uuid ??
+    card?.simInstanceId ??
+    null
+  );
 }
 
-function isExcludedInstance(card, filters = {}) {
+function isExcludedInstance(card: FilterCard, filters: RuntimeCardFilter = {}) {
   const excludedCards = Array.isArray(filters.excludeCards)
     ? filters.excludeCards
     : [];
@@ -35,10 +123,15 @@ function isExcludedInstance(card, filters = {}) {
       ? filters.excludeCardInstanceIds
       : []),
   ].filter((value) => value !== undefined && value !== null);
-  return cardInstanceId !== null && excludedInstanceIds.includes(cardInstanceId);
+  return (
+    cardInstanceId !== null && excludedInstanceIds.includes(cardInstanceId)
+  );
 }
 
-function getCurrentTurn(filters = {}, game = null) {
+function getCurrentTurn(
+  filters: RuntimeCardFilter = {},
+  game: { turnCounter: number } | null = null,
+) {
   const turn =
     filters.currentTurn ??
     filters.turnCounter ??
@@ -48,15 +141,17 @@ function getCurrentTurn(filters = {}, game = null) {
   return Number.isFinite(numeric) ? numeric : null;
 }
 
-function cardMatchesSentToGraveMaterialFilter(card, filters = {}, game = null) {
+function cardMatchesSentToGraveMaterialFilter(
+  card: FilterCard,
+  filters: RuntimeCardFilter = {},
+  game: { turnCounter: number } | null = null,
+) {
   const materialTypeFilter =
     filters.sentToGraveAsMaterial ??
     filters.sentAsMaterial ??
     filters.lastSentToGraveAsMaterial;
   const turnFilter =
-    filters.sentToGraveAsMaterialTurn ??
-    filters.sentAsMaterialTurn ??
-    null;
+    filters.sentToGraveAsMaterialTurn ?? filters.sentAsMaterialTurn ?? null;
   const requireThisTurn =
     filters.sentToGraveAsMaterialThisTurn === true ||
     filters.sentAsMaterialThisTurn === true ||
@@ -99,13 +194,30 @@ function cardMatchesSentToGraveMaterialFilter(card, filters = {}, game = null) {
   return true;
 }
 
-export function cardMatchesFilters(card, filters = {}) {
+export function cardMatchesFilters(
+  this: void,
+  card: FilterCard | null | undefined,
+  filters?: Omit<RuntimeCardFilter, "equippedWithFilters"> & {
+    equippedWithFilters?: never;
+  },
+): boolean;
+export function cardMatchesFilters(
+  this: CardFilterHost,
+  card: FilterCard | null | undefined,
+  filters?: RuntimeCardFilter,
+): boolean;
+export function cardMatchesFilters(
+  this: CardFilterHost | void,
+  card: FilterCard | null | undefined,
+  filters: RuntimeCardFilter = {},
+): boolean {
   if (!card) return false;
   const idFilter = filters.cardId ?? filters.id;
   if (idFilter !== undefined && idFilter !== null && card.id !== idFilter) {
     return false;
   }
-  const idsFilter = filters.cardIds ?? filters.ids;
+  const idsFilter: readonly unknown[] | undefined =
+    filters.cardIds ?? filters.ids;
   if (
     Array.isArray(idsFilter) &&
     idsFilter.length > 0 &&
@@ -115,13 +227,16 @@ export function cardMatchesFilters(card, filters = {}) {
   }
   const nameFilter = filters.name || filters.cardName;
   if (nameFilter && card.name !== nameFilter) return false;
-  if ((filters.requireFaceup === true || filters.faceUp === true) && card.isFacedown) {
+  if (
+    (filters.requireFaceup === true || filters.faceUp === true) &&
+    card.isFacedown
+  ) {
     return false;
   }
   if (filters.facedown === true && card.isFacedown !== true) {
     return false;
   }
-  const excludeNameFilters = [
+  const excludeNameFilters: readonly unknown[] = [
     filters.excludeName,
     filters.excludeCardName,
     ...(Array.isArray(filters.excludeNames) ? filters.excludeNames : []),
@@ -130,7 +245,7 @@ export function cardMatchesFilters(card, filters = {}) {
       : []),
   ].filter(Boolean);
   if (excludeNameFilters.includes(card.name)) return false;
-  const excludeIdFilters = [
+  const excludeIdFilters: readonly unknown[] = [
     filters.excludeId,
     filters.excludeCardId,
     ...(Array.isArray(filters.excludeIds) ? filters.excludeIds : []),
@@ -168,13 +283,15 @@ export function cardMatchesFilters(card, filters = {}) {
     if ((card.isTuner === true) !== Boolean(filters.isTuner)) return false;
   }
   if (filters.subtype) {
-    const requiredSubtypes = Array.isArray(filters.subtype)
+    const requiredSubtypes: readonly unknown[] = Array.isArray(filters.subtype)
       ? filters.subtype
       : [filters.subtype];
     if (!requiredSubtypes.includes(card.subtype)) return false;
   }
   if (filters.monsterType) {
-    const requiredMonsterTypes = Array.isArray(filters.monsterType)
+    const requiredMonsterTypes: readonly unknown[] = Array.isArray(
+      filters.monsterType,
+    )
       ? filters.monsterType
       : [filters.monsterType];
     if (!requiredMonsterTypes.includes(card.monsterType)) return false;
@@ -190,7 +307,9 @@ export function cardMatchesFilters(card, filters = {}) {
     filters.lastSummonMethod ||
     filters.summonMethod;
   if (summonMethodFilter) {
-    const requiredSummonMethods = Array.isArray(summonMethodFilter)
+    const requiredSummonMethods: readonly unknown[] = Array.isArray(
+      summonMethodFilter,
+    )
       ? summonMethodFilter
       : [summonMethodFilter];
     if (!requiredSummonMethods.includes(card.lastSummonMethod || null)) {
@@ -199,11 +318,13 @@ export function cardMatchesFilters(card, filters = {}) {
   }
   if (filters.type) {
     const cardType = card.type || null;
-    const cardTypes = Array.isArray(card.types) ? card.types : null;
+    const cardTypes: readonly unknown[] | null = Array.isArray(card.types)
+      ? card.types
+      : null;
     if (Array.isArray(filters.type)) {
       const ok = cardTypes
         ? filters.type.some((t) => cardTypes.includes(t))
-        : filters.type.includes(cardType);
+        : (filters.type as readonly unknown[]).includes(cardType);
       if (!ok) return false;
     } else {
       const ok = cardTypes
@@ -220,7 +341,10 @@ export function cardMatchesFilters(card, filters = {}) {
       return false;
     }
   }
-  if (filters.attribute && !matchesTextValue(card.attribute, filters.attribute)) {
+  if (
+    filters.attribute &&
+    !matchesTextValue(card.attribute, filters.attribute)
+  ) {
     return false;
   }
   if (filters.archetype) {
@@ -290,11 +414,12 @@ export function cardMatchesFilters(card, filters = {}) {
     const equipFilters = filters.equippedWithFilters || {};
     const requireEquipFaceup = equipFilters.requireFaceup !== false;
     const equips = Array.isArray(card.equips) ? card.equips : [];
+    // The overload accepting equippedWithFilters requires the EffectEngine receiver.
     const hasMatchingEquip = equips.some((equip) => {
       if (!equip) return false;
-      if (!this.isActiveEquipForCard(equip, card)) return false;
+      if (!this!.isActiveEquipForCard(equip, card)) return false;
       if (requireEquipFaceup && equip.isFacedown) return false;
-      return this.cardMatchesFilters(equip, equipFilters);
+      return this!.cardMatchesFilters(equip, equipFilters);
     });
     if (!hasMatchingEquip) return false;
   }

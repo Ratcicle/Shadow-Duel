@@ -1,3 +1,50 @@
+import type {
+  CardConstructorData,
+  AscensionDefinition,
+} from "./contracts/cards.js";
+import type {
+  EffectDefinition,
+  EffectTarget,
+  CardFilter,
+} from "./contracts/effects.js";
+import type {
+  ActionWalkResult,
+  ActionPathSegment,
+} from "./actionHandlers/actionWalker.js";
+
+interface ValidatorTarget extends Omit<EffectTarget, "intent"> {
+  readonly intent?: string;
+}
+type ValidatorEffect = Omit<EffectDefinition, "targets"> & {
+  readonly targets?: readonly ValidatorTarget[];
+  readonly allowDamageStepActivation?: unknown;
+  readonly manualActivationOnly?: unknown;
+  readonly summonMethod?: unknown;
+  readonly requireSummonedFrom?: unknown;
+  readonly requiresSourceAtResolution?: unknown;
+};
+type ValidatorCard = Omit<CardConstructorData, "effects" | "ascension"> & {
+  readonly effects?: readonly ValidatorEffect[];
+  readonly ascension?:
+    | (AscensionDefinition & { readonly material?: CardFilter })
+    | null;
+};
+export interface CardValidationIssue {
+  cardId: number | null;
+  cardName: string;
+  effectIndex: number | null;
+  actionIndex: number | null;
+  message: string;
+}
+interface ActionValidationIssue {
+  message: string;
+  actionIndex: number | null;
+}
+interface ActionTreeValidationOptions {
+  allowedActionTypes?: ReadonlySet<string>;
+  actionWalk?: ActionWalkResult;
+}
+
 import {
   cardDatabase,
   cardDatabaseById,
@@ -30,17 +77,17 @@ import {
 } from "./contracts/effects.js";
 import { validateBanlistDefinition } from "./game/deck/banlist.js";
 
-const VALID_TIMINGS = new Set(EFFECT_TIMINGS);
+const VALID_TIMINGS = new Set<unknown>(EFFECT_TIMINGS);
 
 // `on_activate` effects may be scoped to a specific response window. This is
 // distinct from `on_event`: the event limits when the player may activate the
 // card, but the effect is not collected as an automatic event trigger.
-const EVENT_COMPATIBLE_TIMINGS = new Set(["on_event", "on_activate"]);
-const VALID_TRIGGER_REQUIREMENTS = new Set(
+const EVENT_COMPATIBLE_TIMINGS = new Set<unknown>(["on_event", "on_activate"]);
+const VALID_TRIGGER_REQUIREMENTS = new Set<unknown>(
   Object.values(TRIGGER_REQUIREMENTS),
 );
-const VALID_TRIGGER_TIMINGS = new Set(Object.values(TRIGGER_TIMINGS));
-const VALID_ACTIVATION_ZONES = new Set([
+const VALID_TRIGGER_TIMINGS = new Set<unknown>(Object.values(TRIGGER_TIMINGS));
+const VALID_ACTIVATION_ZONES = new Set<unknown>([
   "hand",
   "field",
   "spellTrap",
@@ -48,14 +95,14 @@ const VALID_ACTIVATION_ZONES = new Set([
   "graveyard",
   "banished",
 ]);
-const VALID_USAGE_POLICIES = new Set(Object.values(USAGE_POLICIES));
-const VALID_FIELD_COUNT_COMPARISON_OWNERS = new Set([
+const VALID_USAGE_POLICIES = new Set<unknown>(Object.values(USAGE_POLICIES));
+const VALID_FIELD_COUNT_COMPARISON_OWNERS = new Set<unknown>([
   "self",
   "opponent",
   "any",
   "both",
 ]);
-const VALID_FIELD_COUNT_COMPARISON_OPERATORS = new Set([
+const VALID_FIELD_COUNT_COMPARISON_OPERATORS = new Set<unknown>([
   "gt",
   ">",
   "gte",
@@ -70,9 +117,11 @@ const VALID_FIELD_COUNT_COMPARISON_OPERATORS = new Set([
   "!=",
   "!==",
 ]);
-const VALID_DAMAGE_STEP_TIMINGS = new Set(Object.values(DAMAGE_STEP_TIMINGS));
+const VALID_DAMAGE_STEP_TIMINGS = new Set<unknown>(
+  Object.values(DAMAGE_STEP_TIMINGS),
+);
 
-function activationCollisionKey(effect) {
+function activationCollisionKey(effect: ValidatorEffect | null | undefined) {
   if (!effect || effect.timing === "passive") return null;
   if (effect.timing === "on_event") {
     return `trigger:${effect.event || "unknown"}`;
@@ -86,9 +135,14 @@ function activationCollisionKey(effect) {
   return null;
 }
 
-const VALID_EVENTS = new Set(DUEL_EVENT_NAMES);
+const VALID_EVENTS = new Set<unknown>(DUEL_EVENT_NAMES);
 
-function formatIssue(card, message, effectIndex = null, actionIndex = null) {
+function formatIssue(
+  card: { readonly id?: number; readonly name?: string } | null | undefined,
+  message: string,
+  effectIndex: number | null = null,
+  actionIndex: number | null = null,
+): CardValidationIssue {
   return {
     cardId: card?.id ?? null,
     cardName: card?.name ?? "Unknown",
@@ -98,19 +152,23 @@ function formatIssue(card, message, effectIndex = null, actionIndex = null) {
   };
 }
 
-function rootActionIndexForPath(path) {
+function rootActionIndexForPath(
+  path: readonly ActionPathSegment[],
+): number | null {
   for (let index = 0; index < path.length - 1; index += 1) {
     if (
-      [
-        "activationCosts",
-        "activationCommitActions",
-        "actions",
-        "negationCost",
-        "costActions",
-      ].includes(path[index]) &&
+      (
+        [
+          "activationCosts",
+          "activationCommitActions",
+          "actions",
+          "negationCost",
+          "costActions",
+        ] as readonly unknown[]
+      ).includes(path[index]) &&
       typeof path[index + 1] === "number"
     ) {
-      return path[index + 1];
+      return path[index + 1] as number;
     }
   }
   return null;
@@ -122,28 +180,41 @@ function rootActionIndexForPath(path) {
  * unchanged.
  */
 export function validateEffectActionTree(
-  effect,
+  effect: unknown,
   {
     allowedActionTypes = new Set(listCatalogActionTypes()),
     actionWalk = walkEffectActions(effect),
-  } = {},
+  }: ActionTreeValidationOptions = {},
 ) {
-  const errors = [];
-  const warnings = [];
-  const effectTargets = Array.isArray(effect?.targets) ? effect.targets : [];
-  const targetIds = new Set(
+  const errors: ActionValidationIssue[] = [];
+  const warnings: ActionValidationIssue[] = [];
+  // This validator reads untrusted metadata, including null and legacy shapes.
+  const targetSource = effect as
+    | { readonly targets?: unknown }
+    | null
+    | undefined;
+  const effectTargets: readonly {
+    readonly id?: unknown;
+    readonly intent?: unknown;
+  }[] = Array.isArray(targetSource?.targets) ? targetSource.targets : [];
+  const targetIds = new Set<unknown>(
     effectTargets
       .filter((target) => target && typeof target.id === "string")
       .map((target) => target.id),
   );
-  const costTargetIds = new Set(
+  const costTargetIds = new Set<unknown>(
     effectTargets
       .filter(
         (target) => target?.intent === "cost" && typeof target.id === "string",
       )
       .map((target) => target.id),
   );
-  const push = (collection, message, actionIndex, pathText) => {
+  const push = (
+    collection: ActionValidationIssue[],
+    message: string,
+    actionIndex: number | null,
+    pathText: string,
+  ) => {
     collection.push({
       message: pathText ? `[${pathText}] ${message}` : message,
       actionIndex,
@@ -161,12 +232,13 @@ export function validateEffectActionTree(
   }
 
   for (const visit of actionWalk.visits) {
-    const { action, actionIndex, stage, flow, pathText } = visit;
-    if (!action || typeof action !== "object") {
+    const { action: candidate, actionIndex, stage, flow, pathText } = visit;
+    if (!candidate || typeof candidate !== "object") {
       push(errors, "Action must be an object.", actionIndex, pathText);
       continue;
     }
 
+    const action = candidate as Readonly<Record<string, unknown>>;
     if (!action.type || typeof action.type !== "string") {
       push(
         errors,
@@ -272,11 +344,11 @@ export function validateEffectActionTree(
 }
 
 function validateCardIdGovernance() {
-  const errors = [];
-  const warnings = [];
+  const errors: CardValidationIssue[] = [];
+  const warnings: CardValidationIssue[] = [];
   const summary = [];
-  const groupedCards = new Set();
-  const groupedIds = new Map();
+  const groupedCards = new Set<ValidatorCard>();
+  const groupedIds = new Map<number, string[]>();
 
   for (const message of validateCardIdRangeRegistry()) {
     errors.push(formatIssue(null, message));
@@ -289,10 +361,7 @@ function validateCardIdGovernance() {
     if (!range) {
       const groupKey = group?.rangeKey || "unknown";
       errors.push(
-        formatIssue(
-          null,
-          `Card group "${groupKey}" has no declared ID range.`,
-        ),
+        formatIssue(null, `Card group "${groupKey}" has no declared ID range.`),
       );
       continue;
     }
@@ -342,7 +411,7 @@ function validateCardIdGovernance() {
     }
   }
 
-  for (const card of cardDatabase) {
+  for (const card of cardDatabase as readonly ValidatorCard[]) {
     if (!groupedCards.has(card)) {
       errors.push(
         formatIssue(
@@ -369,8 +438,8 @@ function validateCardIdGovernance() {
 }
 
 export function validateCardDatabase() {
-  const errors = [];
-  const warnings = [];
+  const errors: CardValidationIssue[] = [];
+  const warnings: CardValidationIssue[] = [];
   const idGovernance = validateCardIdGovernance();
   errors.push(...idGovernance.errors);
   warnings.push(...idGovernance.warnings);
@@ -389,10 +458,10 @@ export function validateCardDatabase() {
 
   const allowedActionTypes = new Set(registeredHandlerTypes);
 
-  const seenIds = new Map();
-  const seenNames = new Map();
+  const seenIds = new Map<number, string>();
+  const seenNames = new Map<string, number | undefined>();
 
-  for (const card of cardDatabase) {
+  for (const card of cardDatabase as readonly ValidatorCard[]) {
     if (card.mustFirstBeSpecialSummonedBy !== undefined) {
       const procedures = card.mustFirstBeSpecialSummonedBy;
       const validProcedures = new Set([
@@ -451,7 +520,10 @@ export function validateCardDatabase() {
               "Ascension cards must define materialId or materialFilters.",
             ),
           );
-        } else if (Number.isFinite(materialId) && !cardDatabaseById.get(materialId)) {
+        } else if (
+          Number.isFinite(materialId) &&
+          !cardDatabaseById.get(materialId as number)
+        ) {
           errors.push(
             formatIssue(
               card,
@@ -545,7 +617,7 @@ export function validateCardDatabase() {
     }
 
     const rawEffects = card.effects;
-    let effects = [];
+    let effects: readonly ValidatorEffect[] = [];
     if (rawEffects === undefined) {
       effects = [];
     } else if (Array.isArray(rawEffects)) {
@@ -777,7 +849,7 @@ export function validateCardDatabase() {
             ),
           );
         } else {
-          const uniqueZones = new Set(effect.activationZones);
+          const uniqueZones = new Set<string>(effect.activationZones);
           if (uniqueZones.size !== effect.activationZones.length) {
             errors.push(
               formatIssue(
@@ -875,7 +947,10 @@ export function validateCardDatabase() {
       });
       const actionTypes = new Set(
         actionWalk.visits
-          .map((visit) => visit.action?.type)
+          .map(
+            (visit) =>
+              (visit.action as { readonly type?: unknown } | null)?.type,
+          )
           .filter((type) => typeof type === "string"),
       );
       const responseContexts = new Set(
@@ -931,11 +1006,16 @@ export function validateCardDatabase() {
       const targetIds = new Set(
         Array.isArray(effect.targets)
           ? effect.targets
-              .filter((target) => target && typeof target.id === "string")
-              .map((target) => target.id)
+              .filter(
+                (target: ValidatorTarget) =>
+                  target && typeof target.id === "string",
+              )
+              .map((target: ValidatorTarget) => target.id)
           : [],
       );
-      for (const target of Array.isArray(effect.targets) ? effect.targets : []) {
+      for (const target of Array.isArray(effect.targets)
+        ? effect.targets
+        : []) {
         if (
           target?.intent !== undefined &&
           target.intent !== "cost" &&
@@ -955,13 +1035,15 @@ export function validateCardDatabase() {
         Array.isArray(effect.targets)
           ? effect.targets
               .filter(
-                (target) =>
+                (target: ValidatorTarget) =>
                   target?.intent === "cost" && typeof target.id === "string",
               )
-              .map((target) => target.id)
+              .map((target: ValidatorTarget) => target.id)
           : [],
       );
-      for (const target of Array.isArray(effect.targets) ? effect.targets : []) {
+      for (const target of Array.isArray(effect.targets)
+        ? effect.targets
+        : []) {
         if (target?.countFromSelectionRef !== undefined) {
           if (
             typeof target.countFromSelectionRef !== "string" ||
@@ -1006,7 +1088,7 @@ export function validateCardDatabase() {
           errors.push(
             formatIssue(
               card,
-              'field_card_count_comparison owners must be self, opponent, any, or both.',
+              "field_card_count_comparison owners must be self, opponent, any, or both.",
               effectIndex,
               null,
             ),
@@ -1016,7 +1098,7 @@ export function validateCardDatabase() {
           errors.push(
             formatIssue(
               card,
-              'field_card_count_comparison has an invalid operator.',
+              "field_card_count_comparison has an invalid operator.",
               effectIndex,
               null,
             ),
@@ -1040,7 +1122,7 @@ export function validateCardDatabase() {
       }
     });
 
-    const collisions = new Map();
+    const collisions = new Map<string, ValidatorEffect[]>();
     for (const effect of effects) {
       const key = activationCollisionKey(effect);
       if (!key) continue;

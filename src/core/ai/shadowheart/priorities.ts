@@ -4,7 +4,7 @@ import type { AIStrategyBotPort } from "../../contracts/ai.js";
 import type { GameCard } from "../../contracts/cards.js";
 import type { EffectDefinition } from "../../contracts/effects.js";
 
-type StrategyCard = ShadowHeartCard & { cannotBeDestroyedByBattle?: boolean; requiredTributes?: number };
+type StrategyCard = ShadowHeartCard & { cannotBeDestroyedByBattle?: boolean | undefined; requiredTributes?: number };
 type FullAnalysis = Analysis & Required<Pick<Analysis, "hand" | "field" | "graveyard" | "oppField" | "lp" | "oppLp">>;
 type EntryOwner = { field?: readonly StrategyCard[]; fieldSpell?: StrategyCard | string | null };
 type EntryContext = { fieldSpell?: StrategyCard | string | null; analysis?: EntryOwner | null; player?: EntryOwner | null; bot?: EntryOwner | null; myField?: readonly StrategyCard[] };
@@ -12,7 +12,7 @@ type Player = Omit<Partial<AIStrategyBotPort>, "field"> & { field?: StrategyCard
 type PlanningGame = ShadowHeartPlanningGame;
 type Analysis = ShadowHeartAnalysis & { fieldCapacity?: number; spellTrapZone?: StrategyCard[] };
 interface Strategy { bot?: Player; analyzeGameState?(game: PlanningGame): Analysis; getOpponent?(game: PlanningGame, player: Player): Player | null; }
-type Context = Omit<NonNullable<Parameters<typeof assessSummonEntry>[1]>, "game" | "analysis" | "player" | "bot" | "opponent" | "myField" | "oppField"> & { analysis?: Analysis; bot?: Player; player?: Player; opponent?: Player | null; game?: PlanningGame; strategy?: Strategy; field?: StrategyCard[]; myField?: StrategyCard[]; oppField?: StrategyCard[]; fieldSpell?: StrategyCard | string | null; facedownValue?: number; clearsOpponentBoardOnSummon?: boolean; isEmergencyRemoval?: boolean; source?: StrategyCard | null; botState?: Player; ctx?: { source?: StrategyCard }; getOpponent?(game: PlanningGame, player: Player): Player | null };
+type Context = Omit<NonNullable<Parameters<typeof assessSummonEntry>[1]>, "game" | "analysis" | "player" | "bot" | "opponent" | "myField" | "oppField"> & { analysis?: Analysis; bot?: Player; player?: Player; opponent?: Player | null; game?: PlanningGame; strategy?: Strategy; field?: StrategyCard[]; myField?: StrategyCard[]; oppField?: StrategyCard[]; fieldSpell?: StrategyCard | string | null; facedownValue?: number; clearsOpponentBoardOnSummon?: boolean; isEmergencyRemoval?: boolean | undefined; source?: StrategyCard | null; botState?: Player; ctx?: { source?: StrategyCard }; getOpponent?(game: PlanningGame, player: Player): Player | null };
 
 // ─────────────────────────────────────────────────────────────────────────────
 // src/core/ai/shadowheart/priorities.js
@@ -171,7 +171,7 @@ function hasNamedAtkBuff(card: StrategyCard, sourceName: string) {
   return Number(card?.permanentBuffsBySource?.[sourceName]?.atk || 0) > 0;
 }
 
-function projectShadowHeartEntryStats(card: StrategyCard, context: EntryContext = {}, stats: { atk?: number; def?: number } = {}) {
+function projectShadowHeartEntryStats(card: StrategyCard, context: EntryContext = {}, stats: { atk?: number | undefined; def?: number } = {}) {
   const projected = {
     atk: stats.atk ?? getEffectiveAtk(card),
     def: stats.def ?? getEffectiveDef(card),
@@ -573,6 +573,7 @@ export function chooseCathedralSummonTarget<Card extends StrategyCard>(candidate
     .map((card) => evaluateCard(card))
     .sort((a, b) => b.score - a.score);
   const best = ranked[0];
+  if (!best) return { card: null, score: -999, reason: "no_targets" };
   const hasRelevantSpecialTrigger = cardHasRelevantTriggerForSummonMethod(
     best.card,
     "special",
@@ -1504,7 +1505,7 @@ export function evaluateShadowHeartFusionPlan(analysis: Analysis = {}) {
 
   if (hasScaleDragon && (validLevel8Plus.length > 0 || scaleCount >= 2)) {
     const materialName =
-      validLevel8Plus.length > 0 ? validLevel8Plus[0].name : SH.scale;
+      validLevel8Plus[0]?.name ?? SH.scale;
     return createFinisherPlan({
       kind: "fusion",
       targetName: SH.demonDragon,
@@ -1530,6 +1531,7 @@ export function evaluateShadowHeartFusionPlan(analysis: Analysis = {}) {
     }
 
     const [m1, m2] = shMonsters;
+    if (!m1 || !m2) return null;
     return createFinisherPlan({
       kind: "fusion",
       targetName: SH.warlord,
@@ -1705,8 +1707,8 @@ export function shouldPlaySpell(card: StrategyCard, analysis: FullAnalysis) {
       .filter((card) => isShadowHeartDragon(card) && !card.cannotAttackThisTurn)
       .sort((a, b) => (b.atk || 0) - (a.atk || 0));
 
-    if (rageTargets.length > 0) {
-      const target = rageTargets[0];
+    const target = rageTargets[0];
+    if (target) {
       return {
         yes: true,
         priority: target.name === "Shadow-Heart Scale Dragon" ? 10 : 9,
@@ -1775,9 +1777,12 @@ export function shouldPlaySpell(card: StrategyCard, analysis: FullAnalysis) {
       const valB = CARD_KNOWLEDGE[b.name!]?.value || 0;
       return valB - valA;
     })[0];
+    const worstCard = handValues[0];
+    if (!bestRevival || !worstCard) {
+      return { yes: false, reason: "Sem alvo ou custo válido para revival" };
+    }
     const revivalValue = CARD_KNOWLEDGE[bestRevival.name!]?.value || 0;
 
-    const worstCard = handValues[0];
     const discardCost = worstCard.value;
 
     // Bônus: Specter/Coward têm efeito ao serem descartados
@@ -2098,8 +2103,12 @@ export function shouldPlaySpell(card: StrategyCard, analysis: FullAnalysis) {
       ].includes(c.name!)
     );
 
-    const targetName = shInGY[0].name;
-    const targetATK = shInGY[0].atk || 0;
+    const revivalTarget = shInGY[0];
+    if (!revivalTarget) {
+      return { yes: false, priority: 0, reason: "Sem alvo Shadow-Heart no Cemitério" };
+    }
+    const targetName = revivalTarget.name;
+    const targetATK = revivalTarget.atk || 0;
 
     if (hasBossInGY) {
       return {
@@ -2146,7 +2155,7 @@ export function shouldPlaySpell(card: StrategyCard, analysis: FullAnalysis) {
  * @param {Object} [context]
  * @returns {SummonDecision}
  */
-export function shouldSummonMonster(card: StrategyCard, analysis: FullAnalysis, tributeInfo: { tributesNeeded: number; usingAlt?: boolean; alt?: (GameCard["altTribute"] & { tributes?: number }) | null }, context: Context = {}) {
+export function shouldSummonMonster(card: StrategyCard, analysis: FullAnalysis, tributeInfo: { tributesNeeded: number; usingAlt?: boolean; alt?: (GameCard["altTribute"] & { tributes?: number }) | null | undefined }, context: Context = {}) {
   const name = card.name;
   const knowledge = CARD_KNOWLEDGE[name!];
   const fieldState = context.field || analysis?.field || [];
@@ -2459,14 +2468,14 @@ export function shouldSummonMonster(card: StrategyCard, analysis: FullAnalysis, 
       );
       const tributeATK = projectedTributeIndices
         .map((index) => fieldMonsters[index])
-        .filter(Boolean)
+        .filter((monster): monster is StrategyCard => Boolean(monster))
         .reduce((sum, m) => sum + (m.atk || 0), 0);
       const summonATK = card.atk || 0;
       const atkLoss = tributeATK - summonATK;
 
       if (atkLoss > 1000) {
         // Perdendo muito ATK no trade, só vale se remove ameaça crítica
-        const strongestThreat = analysis.oppField.reduce<{ atk?: number }>(
+        const strongestThreat = analysis.oppField.reduce<{ atk?: number | undefined }>(
           (max, c) => ((c.atk || 0) > (max.atk || 0) ? c : max),
           { atk: 0 }
         );

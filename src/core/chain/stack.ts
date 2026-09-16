@@ -49,10 +49,7 @@ export function addToChain(
 
   this.chainStack.push(chainLink);
 
-  this.log(
-    "CHAIN_LINK_ADDED",
-    this.serializeChainLink?.(chainLink),
-  );
+  this.log("CHAIN_LINK_ADDED", this.serializeChainLink?.(chainLink));
 
   const ui = this.getUI();
   if (ui?.log) {
@@ -72,7 +69,7 @@ export function getChainLength(this: FullChainHost): number {
 
 export function getLastChainLink(this: FullChainHost): ChainLink | null {
   if (this.chainStack.length === 0) return null;
-  return this.chainStack[this.chainStack.length - 1];
+  return this.chainStack[this.chainStack.length - 1]!;
 }
 
 export function isChainResolving(this: FullChainHost): boolean {
@@ -101,9 +98,7 @@ export function cancelChain(this: FullChainHost): void {
   this.resetFastEffectTiming?.();
 }
 
-export function getChainSummary(
-  this: FullChainHost,
-): SerializedChainLink[] {
+export function getChainSummary(this: FullChainHost): SerializedChainLink[] {
   return this.chainStack
     .map((link) => this.serializeChainLink?.(link))
     .filter((link): link is SerializedChainLink => Boolean(link));

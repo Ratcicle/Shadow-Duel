@@ -1,3 +1,4 @@
+import { required } from "../helpers/fixtures.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 
@@ -9,14 +10,20 @@ import {
   validateCanonicalReplay,
 } from "../../src/core/game/replay/canonical.js";
 import { replayCanonicalDuel } from "../../src/core/game/replay/driver.js";
-import type { PlayerId, SelectionCandidateKey } from "../../src/core/contracts/primitives.js";
+import type {
+  PlayerId,
+  SelectionCandidateKey,
+} from "../../src/core/contracts/primitives.js";
 import type { CanonicalReplayDecisionOf } from "../../src/core/contracts/replay.js";
 
 const deck = [1, 2, 3, 4, 5, 6, 7, 8];
 
 type GameInstance = InstanceType<typeof Game>;
 
-async function initialize(game: GameInstance, startingPlayer: PlayerId | null = null) {
+async function initialize(
+  game: GameInstance,
+  startingPlayer: PlayerId | null = null,
+) {
   await game.startWithDecks({
     exactDecks: true,
     initializeOnly: true,
@@ -30,7 +37,11 @@ async function initialize(game: GameInstance, startingPlayer: PlayerId | null = 
   });
 }
 
-function selectionAt(value: unknown, requirementId: string, index: number): unknown {
+function selectionAt(
+  value: unknown,
+  requirementId: string,
+  index: number,
+): unknown {
   assert.ok(typeof value === "object" && value !== null);
   const selections = Reflect.get(value, requirementId);
   assert.ok(Array.isArray(selections));
@@ -61,19 +72,25 @@ test("replay canônico headless termina com o mesmo hash", async () => {
   const game = new Game({ randomSeed: 123, captureReplay: true });
   await initialize(game, "player");
   game.phase = "main1";
-  Reflect.apply(game.recordReplayCommand, game, [{
-    type: "set_phase",
-    actorId: "player",
-    payload: { phase: "main1" },
-  }]);
+  Reflect.apply(game.recordReplayCommand, game, [
+    {
+      type: "set_phase",
+      actorId: "player",
+      payload: { phase: "main1" },
+    },
+  ]);
   game.player.lp = 7100;
-  Reflect.apply(game.recordReplayCommand, game, [{
-    type: "set_lp",
-    actorId: "player",
-    payload: { lp: 7100 },
-  }]);
+  Reflect.apply(game.recordReplayCommand, game, [
+    {
+      type: "set_lp",
+      actorId: "player",
+      payload: { lp: 7100 },
+    },
+  ]);
   const replay = JSON.parse(
-    JSON.stringify(Reflect.apply(game.finalizeReplay, game, [{ reason: "test" }])),
+    JSON.stringify(
+      Reflect.apply(game.finalizeReplay, game, [{ reason: "test" }]),
+    ),
   );
   assert.equal(replay.format, "shadow-duel-canonical-replay");
   assert.equal(replay.schemaVersion, 1);
@@ -99,32 +116,39 @@ test("replay adulterado para na primeira divergência", async () => {
   const game = new Game({ randomSeed: 55, captureReplay: true });
   await initialize(game, "player");
   game.phase = "main1";
-  Reflect.apply(game.recordReplayCommand, game, [{
-    type: "set_phase",
-    actorId: "player",
-    payload: { phase: "main1" },
-  }]);
-  const replay = JSON.parse(JSON.stringify(
-    Reflect.apply(game.finalizeReplay, game, [{ reason: "test" }]),
-  ));
+  Reflect.apply(game.recordReplayCommand, game, [
+    {
+      type: "set_phase",
+      actorId: "player",
+      payload: { phase: "main1" },
+    },
+  ]);
+  const replay = JSON.parse(
+    JSON.stringify(
+      Reflect.apply(game.finalizeReplay, game, [{ reason: "test" }]),
+    ),
+  );
   replay.commands[0].payload.phase = "end";
-  await assert.rejects(() => replayCanonicalDuel(replay), (error: unknown) => {
-    assert.ok(error instanceof Error);
-    const divergence = error as Error & {
-      sequence?: number;
-      command?: { sequence: number; type: string };
-      expectedHash?: string;
-      observedHash?: string;
-    };
-    assert.match(divergence.message, /Replay divergence at command 1/);
-    assert.equal(divergence.sequence, 1);
-    assert.strictEqual(divergence.command, replay.commands[0]);
-    assert.equal(divergence.command?.type, "set_phase");
-    assert.equal(divergence.expectedHash, replay.commands[0].stateHash);
-    assert.match(divergence.observedHash ?? "", /^[0-9a-f]{8}$/);
-    assert.notEqual(divergence.observedHash, divergence.expectedHash);
-    return true;
-  });
+  await assert.rejects(
+    () => replayCanonicalDuel(replay),
+    (error: unknown) => {
+      assert.ok(error instanceof Error);
+      const divergence = error as Error & {
+        sequence?: number;
+        command?: { sequence: number; type: string };
+        expectedHash?: string;
+        observedHash?: string;
+      };
+      assert.match(divergence.message, /Replay divergence at command 1/);
+      assert.equal(divergence.sequence, 1);
+      assert.strictEqual(divergence.command, replay.commands[0]);
+      assert.equal(divergence.command?.type, "set_phase");
+      assert.equal(divergence.expectedHash, replay.commands[0].stateHash);
+      assert.match(divergence.observedHash ?? "", /^[0-9a-f]{8}$/);
+      assert.notEqual(divergence.observedHash, divergence.expectedHash);
+      return true;
+    },
+  );
   game.dispose();
 });
 
@@ -157,43 +181,50 @@ test("playback remapeia seleções por duelCardId sem reutilizar chaves globais"
     zone: "hand",
   }));
   let recordedSelection: unknown = null;
-  Reflect.apply(recording.startTargetSelectionSession, recording, [{
-    kind: "target",
-    owner: recording.player,
-    selectionContract: {
+  Reflect.apply(recording.startTargetSelectionSession, recording, [
+    {
       kind: "target",
-      ui: { useFieldTargeting: false },
-      requirements: [{
-        id: "target",
-        min: 1,
-        max: 1,
-        zones: ["hand"],
-        candidates: recordedCandidates,
-      }],
+      owner: recording.player,
+      selectionContract: {
+        kind: "target",
+        ui: { useFieldTargeting: false },
+        requirements: [
+          {
+            id: "target",
+            min: 1,
+            max: 1,
+            zones: ["hand"],
+            candidates: recordedCandidates,
+          },
+        ],
+      },
+      execute: async (selections: unknown) => {
+        recordedSelection = selections;
+        return { success: true, needsSelection: false };
+      },
     },
-    execute: async (selections: unknown) => {
-      recordedSelection = selections;
-      return { success: true, needsSelection: false };
-    },
-  }]);
+  ]);
   const targetSelection = recording.targetSelection;
   assert.ok(targetSelection);
   targetSelection.selections = {
-    target: [recordedCandidates[0].key as SelectionCandidateKey],
+    target: [required(recordedCandidates[0]).key as SelectionCandidateKey],
   };
   await Reflect.apply(recording.finishTargetSelection, recording, []);
-  assert.equal(selectionAt(recordedSelection, "target", 0), recordedCandidates[0].key);
+  assert.equal(
+    selectionAt(recordedSelection, "target", 0),
+    required(recordedCandidates[0]).key,
+  );
   const replayBuffer = recording._canonicalReplay;
   assert.ok(replayBuffer);
   const decision = structuredClone(
     replayBuffer.decisions[0],
   ) as CanonicalReplayDecisionOf<"target">;
   assert.ok("selections" in decision.value);
-  const serializedTarget = decision.value.selections.target[0];
+  const serializedTarget = required(decision.value.selections.target)[0];
   assert.ok(serializedTarget && "duelCardId" in serializedTarget);
   assert.equal(
     serializedTarget.duelCardId,
-    recording.player.hand[0].duelCardId,
+    required(recording.player.hand[0]).duelCardId,
   );
   assert.equal(serializedTarget.key, null);
 
@@ -211,27 +242,37 @@ test("playback remapeia seleções por duelCardId sem reutilizar chaves globais"
     zone: "hand",
   }));
   let playbackSelection: unknown = null;
-  await Reflect.apply(playback.startTargetSelectionSession, playback, [{
-    kind: "target",
-    owner: playback.player,
-    selectionContract: {
+  await Reflect.apply(playback.startTargetSelectionSession, playback, [
+    {
       kind: "target",
-      ui: { useFieldTargeting: false },
-      requirements: [{
-        id: "target",
-        min: 1,
-        max: 1,
-        zones: ["hand"],
-        candidates: playbackCandidates,
-      }],
+      owner: playback.player,
+      selectionContract: {
+        kind: "target",
+        ui: { useFieldTargeting: false },
+        requirements: [
+          {
+            id: "target",
+            min: 1,
+            max: 1,
+            zones: ["hand"],
+            candidates: playbackCandidates,
+          },
+        ],
+      },
+      execute: async (selections: unknown) => {
+        playbackSelection = selections;
+        return { success: true, needsSelection: false };
+      },
     },
-    execute: async (selections: unknown) => {
-      playbackSelection = selections;
-      return { success: true, needsSelection: false };
-    },
-  }]);
-  assert.equal(selectionAt(playbackSelection, "target", 0), playbackCandidates[0].key);
-  assert.notEqual(playbackCandidates[0].key, recordedCandidates[0].key);
+  ]);
+  assert.equal(
+    selectionAt(playbackSelection, "target", 0),
+    required(playbackCandidates[0]).key,
+  );
+  assert.notEqual(
+    required(playbackCandidates[0]).key,
+    required(recordedCandidates[0]).key,
+  );
   recording.dispose();
   playback.dispose();
 });
@@ -254,13 +295,16 @@ test("trilha canônica cobre ativação, SEGOC, uso, resolução, Invocação e 
   ];
   for (const event of requiredEvents) {
     assert.equal(isReplayEvent(event), true, `${event} must be canonical`);
-    Reflect.apply(game.notify, game, [event, {
-      chainId: 1,
-      linkId: 1,
-      summonId: 1,
-      damageStepId: 1,
-      stage: event,
-    }]);
+    Reflect.apply(game.notify, game, [
+      event,
+      {
+        chainId: 1,
+        linkId: 1,
+        summonId: 1,
+        damageStepId: 1,
+        stage: event,
+      },
+    ]);
   }
   const replayBuffer = game._canonicalReplay;
   assert.ok(replayBuffer);

@@ -137,7 +137,10 @@ interface DamageStepHost {
     amount: number,
     options: BattleDamageOptions,
   ): unknown;
-  markAttackUsed?(attacker: DamageStepCard, target: DamageStepCard | null): void;
+  markAttackUsed?(
+    attacker: DamageStepCard,
+    target: DamageStepCard | null,
+  ): void;
   canDestroyByBattle?(
     card: DamageStepCard,
     context: BattleDestructionContext,
@@ -432,11 +435,8 @@ function buildStagePayload(
     player: transaction.attackerOwner,
     triggerPlayer: transaction.attackerOwner,
     directAttack: transaction.directAttack,
-    wasFacedownAtStart:
-      transaction.sourceAtStart.defender?.faceDown === true,
-    flippedCard: transaction.revealedDefender
-      ? transaction.defender
-      : null,
+    wasFacedownAtStart: transaction.sourceAtStart.defender?.faceDown === true,
+    flippedCard: transaction.revealedDefender ? transaction.defender : null,
     damagedPlayer: outcome.damagedPlayer,
     amount: outcome.damageDealt,
     damageDealt: outcome.damageDealt,
@@ -586,9 +586,8 @@ function calculatePiercingDamage(
 ): number {
   if (!attacker?.piercing) return 0;
   const multiplier = Number(attacker.piercingDamageMultiplier ?? 1);
-  const normalized = Number.isFinite(multiplier) && multiplier > 0
-    ? multiplier
-    : 1;
+  const normalized =
+    Number.isFinite(multiplier) && multiplier > 0 ? multiplier : 1;
   return Math.floor(Math.max(0, attackerAtk - targetDef) * normalized);
 }
 
@@ -654,9 +653,12 @@ function addDestructionCandidate(
   sourceCard: DamageStepCard,
   role: "attacker" | "defender",
 ): void {
-  if (!card || transaction.outcome.destructionCandidates.some(
-    (entry) => entry.card === card,
-  )) {
+  if (
+    !card ||
+    transaction.outcome.destructionCandidates.some(
+      (entry) => entry.card === card,
+    )
+  ) {
     return;
   }
   transaction.outcome.destructionCandidates.push({
@@ -835,18 +837,21 @@ async function finalizeBattleDestruction(
 ): Promise<DamageStepWindowResult> {
   if (transaction.endFinalized) return { ok: true };
   const queue = game.chainSystem?.pendingTriggerOccurrences;
-  const queueStart = (Number.isInteger(transaction.destructionQueueStart)
-    ? transaction.destructionQueueStart
-    : Array.isArray(queue)
-      ? queue.length
-      : 0) as number;
+  const queueStart = (
+    Number.isInteger(transaction.destructionQueueStart)
+      ? transaction.destructionQueueStart
+      : Array.isArray(queue)
+        ? queue.length
+        : 0
+  ) as number;
   transaction.destructionQueueStart = queueStart;
   const atomicGroupId =
     transaction.destructionAtomicGroupId ||
     game.chainSystem?.allocateAtomicEventGroupId?.() ||
     `damage_step:${transaction.damageStepId}:destruction`;
   transaction.destructionAtomicGroupId = atomicGroupId;
-  game.damageStepProcedureDepth = Number(game.damageStepProcedureDepth || 0) + 1;
+  game.damageStepProcedureDepth =
+    Number(game.damageStepProcedureDepth || 0) + 1;
   try {
     while (
       transaction.nextDestructionIndex <
@@ -855,7 +860,7 @@ async function finalizeBattleDestruction(
       const entry =
         transaction.outcome.destructionCandidates[
           transaction.nextDestructionIndex
-        ];
+        ]!; // The sequential cursor is bounded by destructionCandidates.length.
       if (
         !entry.owner?.field?.includes(entry.card) ||
         Number(entry.card.locationVersion ?? 0) !== entry.locationVersion
@@ -911,8 +916,9 @@ async function finalizeBattleDestruction(
     return { ok: true, suppressed: true };
   }
   return (
-    (await resolveQueuedDestructionTriggers(game, transaction, queueStart)) ||
-    { ok: true }
+    (await resolveQueuedDestructionTriggers(game, transaction, queueStart)) || {
+      ok: true,
+    }
   );
 }
 
@@ -1010,11 +1016,7 @@ export async function executeDamageStepTransaction(
         transaction.stoppedBeforeCalculation = true;
         await requireEndOfDamageStep(this, transaction);
       } else {
-        setDamageStepTiming(
-          this,
-          transaction,
-          DAMAGE_STEP_TIMINGS.CALCULATION,
-        );
+        setDamageStepTiming(this, transaction, DAMAGE_STEP_TIMINGS.CALCULATION);
         windowResult = await resolveStageWindow(this, transaction, [
           "damage_step",
         ]);
@@ -1045,7 +1047,8 @@ export async function executeDamageStepTransaction(
           if (transaction.outcome.damageDealt > 0) {
             afterEvents.push("battle_damage_inflicted");
           }
-          if (transaction.outcome.lpChangePayload) afterEvents.push("lp_change");
+          if (transaction.outcome.lpChangePayload)
+            afterEvents.push("lp_change");
           if (!transaction.directAttack) afterEvents.push("battle_completed");
           windowResult = await resolveStageWindow(
             this,
@@ -1081,9 +1084,10 @@ export async function executeDamageStepTransaction(
           resolveTriggers: false,
         });
       } catch (finalizationError: unknown) {
-        transaction.failureReason = `${transaction.failureReason}; safe finalization failed: ${
-          errorMessage(finalizationError, "unknown_error")
-        }`;
+        transaction.failureReason = `${transaction.failureReason}; safe finalization failed: ${errorMessage(
+          finalizationError,
+          "unknown_error",
+        )}`;
       }
     }
     return {
@@ -1128,9 +1132,11 @@ export function cleanupDamageStepTransaction(
   }
   this.clearDamageCalculationBuffs?.();
   this.clearEndOfDamageStepBuffs?.();
-  return this.getDamageStepState?.() || {
-    active: false,
-    transaction: null,
-    last: serializeTransaction(transaction),
-  };
+  return (
+    this.getDamageStepState?.() || {
+      active: false,
+      transaction: null,
+      last: serializeTransaction(transaction),
+    }
+  );
 }

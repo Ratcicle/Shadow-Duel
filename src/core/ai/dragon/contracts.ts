@@ -4,13 +4,12 @@ import type { GameRuntimeState } from "../../contracts/gameRuntime.js";
 import type { analyzeDragonState } from "./stateAnalysis.js";
 
 /** Read projection shared by the Dragon policies for live and simulated cards. */
-/** Read projection shared by the Dragon policies for live and simulated cards. */
 export interface DragonCard extends Omit<SimulatedCardShape, "equips" | "equippedTo" | "equipTarget" | "sourceCard" | "counters"> {
   printedAtk?: number;
   effectActivations?: number;
   simEffectActivations?: number;
   counters?: ReadonlyMap<string, number> | Partial<Record<string, number>>;
-  equips?: DragonCard[];
+  equips?: readonly DragonCard[];
   equippedTo?: DragonCard | null;
   equipTarget?: DragonCard | number | string | null;
   sourceCard?: DragonCard | string | null;
@@ -29,8 +28,8 @@ export type DragonCandidate = DragonCard | {
   index?: number;
 };
 export interface DragonAscensionChoice<Card extends DragonCard = DragonCard> {
-  ascensionCard?: Card;
-  material?: Card;
+  ascensionCard?: Card | undefined;
+  material?: Card | undefined;
   ascensionIndex?: number;
   materialIndex?: number;
 }
@@ -53,13 +52,13 @@ export type DragonZone = "hand" | "field" | "graveyard" | "deck" | "extraDeck" |
 export interface DragonPlayer<Card extends DragonCard = DragonCard> {
   id?: string;
   lp?: number;
-  hand?: Card[];
-  field?: Card[];
-  graveyard?: Card[];
-  deck?: Card[];
-  extraDeck?: Card[];
-  banished?: Card[];
-  spellTrap?: Card[];
+  hand?: readonly Card[];
+  field?: readonly Card[];
+  graveyard?: readonly Card[];
+  deck?: readonly Card[];
+  extraDeck?: readonly Card[];
+  banished?: readonly Card[];
+  spellTrap?: readonly Card[];
   fieldSpell?: Card | null;
   materialEntries?: DragonMaterialEntry[];
   _simMaterialEffectActivationsByMaterialId?: unknown;
@@ -73,8 +72,8 @@ export interface DragonGame {
   player?: DragonPlayer | null;
   bot?: DragonPlayer | null;
   opponent?: DragonPlayer | null;
-  phase?: string | null;
-  turn?: string | null;
+  phase?: string | null | undefined;
+  turn?: string | null | undefined;
   turnCounter?: number;
   turnLineSearchEnabled?: boolean;
   turnLineSearchBeamWidth?: number | null;
@@ -85,7 +84,7 @@ export interface DragonGame {
   _simMaterialEffectActivationsByMaterialId?: {
     player?: unknown;
     bot?: unknown;
-  };
+  } | undefined;
   _isPerspectiveState?: boolean;
   _gameRef?: DragonGame;
   _dragonSimOnce?: {
@@ -134,7 +133,7 @@ export interface DragonAnalysis extends DragonPlayer {
 
 export interface DragonPreference {
   role?: string;
-  purpose?: string;
+  purpose?: string | undefined;
   atkReduction?: number;
   defReduction?: number;
   attackers?: DragonCard[];
@@ -152,16 +151,16 @@ export interface DragonPreference {
 }
 
 export interface DragonPolicyContext {
-  player?: DragonPlayer | null;
-  bot?: DragonPlayer | null;
-  opponent?: DragonPlayer | null;
+  player?: DragonPlayer | null | undefined;
+  bot?: DragonPlayer | null | undefined;
+  opponent?: DragonPlayer | null | undefined;
   owner?: DragonPlayer | null;
-  game?: DragonGame | null;
-  source?: DragonCard | null;
-  sourceCard?: DragonCard | null;
+  game?: DragonGame | null | undefined;
+  source?: DragonCard | null | undefined;
+  sourceCard?: DragonCard | null | undefined;
   card?: DragonCard | null;
-  effect?: Partial<EffectDefinition> | null;
-  effectId?: string | null;
+  effect?: Partial<EffectDefinition> | null | undefined;
+  effectId?: string | null | undefined;
   sourceName?: string;
   other?: object;
   analysis?: DragonAnalysis | null;
@@ -175,7 +174,7 @@ export interface DragonPolicyContext {
   preferNames?: string[];
   preserveNames?: string[];
   routeKind?: string;
-  fieldCostCount?: number;
+  fieldCostCount?: number | undefined;
   hasHellkiteRoarAccess?: boolean;
   action?: DragonSearchAction | null;
   field?: DragonCard[];
@@ -198,9 +197,9 @@ export interface DragonPolicyContext {
 }
 
 export interface DragonSearchAction {
-  cardName?: string;
+  cardName?: string | undefined;
   type?: string;
-  effectId?: string | null;
+  effectId?: string | null | undefined;
   selectionId?: string;
   resultRef?: string;
   filters?: CardFilter;

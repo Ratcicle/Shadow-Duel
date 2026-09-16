@@ -1,5 +1,5 @@
 export interface ValidationIssue {
-  cardId?: string | number;
+  cardId?: string | number | null;
   cardName?: string;
   effectIndex?: number | null;
   actionIndex?: number | null;

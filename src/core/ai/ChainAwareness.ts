@@ -22,8 +22,8 @@ import type {
 import type { ActivationSimulationState } from "../chain/legality.js";
 import type { AiPlayerInput } from "../contracts/aiState.js";
 interface AwarenessCard {
-  name?: string | null;
-  cardKind?: string | null;
+  name?: string | null | undefined;
+  cardKind?: string | null | undefined;
   subtype?: string | null;
   effects?: readonly ChainEffect[];
   spellSpeed?: number;
@@ -258,7 +258,7 @@ export function evaluateActionBlockingRisk(
     riskLevel = "low";
     negationChance = 0.0;
   } else if (blockingCards.length === 1) {
-    const strength = blockingCards[0].strength;
+    const strength = blockingCards[0]?.strength;
     if (strength === "strong") {
       riskLevel = "high";
       negationChance = 0.7;

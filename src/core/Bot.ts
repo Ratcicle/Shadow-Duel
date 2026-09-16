@@ -32,10 +32,25 @@ import {
 import { getPiercingDamage } from "./ai/common/cardStats.js";
 import type { BotCloneGamePort } from "./bot/simulationBridge.js";
 import type {
-  BotArchetypeId, BotGamePort, BotStrategyPort, BotHandActionHint, ExpectedBotHandKind,
+  BotArchetypeId,
+  BotGamePort,
+  BotStrategyPort,
+  BotHandActionHint,
+  ExpectedBotHandKind,
 } from "./contracts/bot.js";
-import type { AIAction, AIState, AITributeRequirement, AITributeTradeResult } from "./contracts/ai.js";
-import type { AiLiveGamePort, SimulatedCardState, SimulatedPlayerState, SimulationGameState, BotPerspectiveGameState } from "./contracts/aiState.js";
+import type {
+  AIAction,
+  AIState,
+  AITributeRequirement,
+  AITributeTradeResult,
+} from "./contracts/ai.js";
+import type {
+  AiLiveGamePort,
+  SimulatedCardState,
+  SimulatedPlayerState,
+  SimulationGameState,
+  BotPerspectiveGameState,
+} from "./contracts/aiState.js";
 import type { GameCard, BattlePositionInput } from "./contracts/cards.js";
 import type { GamePlayer } from "./contracts/player.js";
 
@@ -58,13 +73,15 @@ export default class Bot extends Player {
 
   setPreset(presetId = "shadowheart") {
     const validIds: string[] = Bot.getAvailablePresets().map((p) => p.id);
-    this.archetype = validIds.includes(presetId) ? presetId as BotArchetypeId : "shadowheart";
+    this.archetype = validIds.includes(presetId)
+      ? (presetId as BotArchetypeId)
+      : "shadowheart";
 
     this.strategy = getStrategyFor(this.archetype, this);
   }
 
   // Sobrescreve buildDeck para usar deck do arquétipo selecionado
-  buildDeck() {
+  override buildDeck() {
     buildBotDeck(this);
   }
 
@@ -103,7 +120,7 @@ export default class Bot extends Player {
   }
 
   // Sobrescreve buildExtraDeck para usar fusões do arquétipo
-  buildExtraDeck() {
+  override buildExtraDeck() {
     buildBotExtraDeck(this);
   }
 
@@ -180,10 +197,14 @@ export default class Bot extends Player {
 
       if (phase === "main1" || phase === "main2") {
         await this.playMainPhase(game);
-        game._arenaTracker?.recordProgress?.("bot_make_move_after_main_phase", game, {
-          actor: this.id,
-          phase,
-        });
+        game._arenaTracker?.recordProgress?.(
+          "bot_make_move_after_main_phase",
+          game,
+          {
+            actor: this.id,
+            phase,
+          },
+        );
         if (!game.gameOver && !game.isDisposed?.() && game.phase === phase) {
           const actionDelayMs = Number.isFinite(game?.aiActionDelayMs)
             ? game.aiActionDelayMs
@@ -197,9 +218,13 @@ export default class Bot extends Player {
 
       if (phase === "battle") {
         this.playBattlePhase(game);
-        game._arenaTracker?.recordProgress?.("bot_make_move_after_battle_phase", game, {
-          actor: this.id,
-        });
+        game._arenaTracker?.recordProgress?.(
+          "bot_make_move_after_battle_phase",
+          game,
+          {
+            actor: this.id,
+          },
+        );
         return;
       }
 
@@ -232,7 +257,10 @@ export default class Bot extends Player {
     return playBotMainPhase(this, game);
   }
 
-  isSameBattleCard(candidate: GameCard | SimulatedCardState | null | undefined, original: GameCard | SimulatedCardState | null | undefined): boolean {
+  isSameBattleCard(
+    candidate: GameCard | SimulatedCardState | null | undefined,
+    original: GameCard | SimulatedCardState | null | undefined,
+  ): boolean {
     return isSameBattleCardForBot(candidate, original);
   }
 
@@ -240,12 +268,24 @@ export default class Bot extends Player {
     return playBotBattlePhase(this, game);
   }
 
-  evaluateBoard(gameOrState: AIState, perspectivePlayer?: GamePlayer | SimulatedPlayerState): number {
-    return this.strategy.evaluateBoard(gameOrState, perspectivePlayer as SimulatedPlayerState | undefined);
+  evaluateBoard(
+    gameOrState: AIState,
+    perspectivePlayer?: GamePlayer | SimulatedPlayerState,
+  ): number {
+    return this.strategy.evaluateBoard(
+      gameOrState,
+      perspectivePlayer as SimulatedPlayerState | undefined,
+    );
   }
 
-  evaluateBoardV2(gameOrState: AIState, perspectivePlayer?: GamePlayer | SimulatedPlayerState): number {
-    return this.strategy.evaluateBoardV2(gameOrState, perspectivePlayer as SimulatedPlayerState | undefined);
+  evaluateBoardV2(
+    gameOrState: AIState,
+    perspectivePlayer?: GamePlayer | SimulatedPlayerState,
+  ): number {
+    return this.strategy.evaluateBoardV2(
+      gameOrState,
+      perspectivePlayer as SimulatedPlayerState | undefined,
+    );
   }
 
   generateMainPhaseActions(game: AiLiveGamePort): AIAction[] {
@@ -274,12 +314,23 @@ export default class Bot extends Player {
     return this.strategy.sequenceActions(actions);
   }
 
-  getTributeRequirementFor(card: GameCard | SimulatedCardState, playerState: GamePlayer | SimulatedPlayerState): AITributeRequirement {
-    return this.strategy.getTributeRequirementFor(card as SimulatedCardState, playerState as SimulatedPlayerState);
+  getTributeRequirementFor(
+    card: GameCard | SimulatedCardState,
+    playerState: GamePlayer | SimulatedPlayerState,
+  ): AITributeRequirement {
+    return this.strategy.getTributeRequirementFor(
+      card as SimulatedCardState,
+      playerState as SimulatedPlayerState,
+    );
   }
 
   // Seleciona os melhores monstros para usar como tributo (os PIORES do campo)
-  selectBestTributes(field: Array<GameCard | SimulatedCardState>, tributesNeeded: number, cardToSummon: GameCard | SimulatedCardState, context?: unknown): number[] {
+  selectBestTributes(
+    field: Array<GameCard | SimulatedCardState>,
+    tributesNeeded: number,
+    cardToSummon: GameCard | SimulatedCardState,
+    context?: unknown,
+  ): number[] {
     return this.strategy.selectBestTributes(
       field as SimulatedCardState[],
       tributesNeeded,
@@ -288,7 +339,12 @@ export default class Bot extends Player {
     );
   }
 
-  evaluateTributeTrade(cardToSummon: GameCard | SimulatedCardState, field: Array<GameCard | SimulatedCardState>, tributesNeeded: number, context?: unknown): AITributeTradeResult {
+  evaluateTributeTrade(
+    cardToSummon: GameCard | SimulatedCardState,
+    field: Array<GameCard | SimulatedCardState>,
+    tributesNeeded: number,
+    context?: unknown,
+  ): AITributeTradeResult {
     if (typeof this.strategy?.evaluateTributeTrade === "function") {
       return this.strategy.evaluateTributeTrade(
         cardToSummon as SimulatedCardState,
@@ -300,15 +356,25 @@ export default class Bot extends Player {
     return { ok: true };
   }
 
-  simulateMainPhaseAction(state: SimulationGameState | BotPerspectiveGameState, action: AIAction): ReturnType<typeof simulateBotMainPhaseAction> {
+  simulateMainPhaseAction(
+    state: SimulationGameState | BotPerspectiveGameState,
+    action: AIAction,
+  ): ReturnType<typeof simulateBotMainPhaseAction> {
     return simulateBotMainPhaseAction(this, state, action);
   }
 
-  simulateSpellEffect(state: SimulationGameState | BotPerspectiveGameState, card: SimulatedCardState): void {
+  simulateSpellEffect(
+    state: SimulationGameState | BotPerspectiveGameState,
+    card: SimulatedCardState,
+  ): void {
     return simulateBotSpellEffect(this, state, card);
   }
 
-  simulateBattle(state: SimulationGameState | BotPerspectiveGameState, attacker: SimulatedCardState | null | undefined, target: SimulatedCardState | null | undefined): void {
+  simulateBattle(
+    state: SimulationGameState | BotPerspectiveGameState,
+    attacker: SimulatedCardState | null | undefined,
+    target: SimulatedCardState | null | undefined,
+  ): void {
     if (!attacker) return;
     if (attacker.cannotAttackThisTurn) return;
     if (attacker.position === "defense") return;
@@ -319,7 +385,10 @@ export default class Bot extends Player {
       attacker.attackLimitThisTurn !== null &&
       Number.isFinite(Number(attacker.attackLimitThisTurn));
     if (hasAttackLimit) {
-      maxAttacks = Math.max(0, Math.floor(Number(attacker.attackLimitThisTurn)));
+      maxAttacks = Math.max(
+        0,
+        Math.floor(Number(attacker.attackLimitThisTurn)),
+      );
     } else {
       let _extra = attacker.extraAttacks || 0;
       if (attacker.dynamicExtraAttacks?.source === "graveyard_count") {
@@ -412,23 +481,38 @@ export default class Bot extends Player {
     attacker.hasAttacked = attacker.attacksUsedThisTurn >= effectiveMax;
   }
 
-  resolveHandIndexForAction(action: BotHandActionHint, expectedKind?: ExpectedBotHandKind): number {
+  resolveHandIndexForAction(
+    action: BotHandActionHint,
+    expectedKind?: ExpectedBotHandKind,
+  ): number {
     return resolveHandIndexForBotAction(this, action, expectedKind);
   }
 
-  tributeMatchesAltRequirement(card: GameCard, alt: GameCard["altTribute"]): boolean {
+  tributeMatchesAltRequirement(
+    card: GameCard,
+    alt: GameCard["altTribute"],
+  ): boolean {
     return tributeMatchesAltRequirementForBot(card, alt);
   }
 
-  canResolveSummonActionForCurrentState(action: AIAction, game: BotGamePort): boolean {
+  canResolveSummonActionForCurrentState(
+    action: AIAction,
+    game: BotGamePort,
+  ): boolean {
     return canResolveSummonActionForCurrentStateForBot(this, action, game);
   }
 
-  filterValidActionsForCurrentState(actions: AIAction[], game: BotGamePort): AIAction[] {
+  filterValidActionsForCurrentState(
+    actions: AIAction[],
+    game: BotGamePort,
+  ): AIAction[] {
     return filterValidActionsForCurrentStateForBot(this, actions, game);
   }
 
-  async executeMainPhaseAction(game: BotGamePort, action: AIAction): Promise<boolean> {
+  async executeMainPhaseAction(
+    game: BotGamePort,
+    action: AIAction,
+  ): Promise<boolean> {
     return executeBotMainPhaseAction(this, game, action);
   }
 
@@ -447,11 +531,19 @@ export default class Bot extends Player {
    * @param {Object} game - Instância do jogo
    * @returns {Object} Melhor ascensão
    */
-  selectBestAscension(eligible: GameCard[], material: GameCard, game: BotGamePort): GameCard {
+  selectBestAscension(
+    eligible: readonly [GameCard, ...GameCard[]],
+    material: GameCard,
+    game: BotGamePort,
+  ): GameCard {
     return selectBestAscensionForBot(this, eligible, material, game);
   }
 
-  getAscensionPositionPreference(ascensionCard: GameCard, material: GameCard, game: BotGamePort): BattlePositionInput {
+  getAscensionPositionPreference(
+    ascensionCard: GameCard,
+    material: GameCard,
+    game: BotGamePort,
+  ): BattlePositionInput {
     return getAscensionPositionPreferenceForBot(
       this,
       ascensionCard,

@@ -86,11 +86,11 @@ export type {
 
 interface ActivationPipelineLogDetail {
   summary?: string;
-  reason?: string | null;
-  code?: string | null;
-  lockKey?: string | null;
+  reason?: string | null | undefined;
+  code?: (string | null) | undefined;
+  lockKey?: (string | null) | undefined;
   activationZone?: ActivationZone;
-  fromIndex?: number | null;
+  fromIndex?: (number | null) | undefined;
   replacedFieldSpell?: string | null;
   success?: boolean;
   needsSelection?: boolean;
@@ -106,8 +106,8 @@ interface ActivationAttemptResult {
   success?: boolean;
   blockedByGuard?: boolean;
   blockedOncePerTurn?: boolean;
-  reason?: string | null;
-  code?: string | null;
+  reason?: string | null | undefined;
+  code?: string | null | undefined;
 }
 
 interface ActivationAttemptTracker {
@@ -138,7 +138,11 @@ interface ActivationAutoSelectorPort {
       activationContext: ActivationPipelineContext;
       selectionKind: string;
     },
-  ): { ok: boolean; selections?: CanonicalSelectionMap; reason?: string | null };
+  ): {
+    ok: boolean;
+    selections?: CanonicalSelectionMap;
+    reason?: string | null;
+  };
 }
 
 interface ActivationSelectionSessionInput {
@@ -153,7 +157,7 @@ interface ActivationSelectionSessionInput {
   message: string | null;
   execute(selections: SelectionResult): MaybePromise<unknown>;
   onResult(result: unknown): MaybePromise<unknown>;
-  onCancel?: (() => void) | null;
+  onCancel?: (() => void) | null | undefined;
 }
 
 interface ActivationPipelineHost {
@@ -233,10 +237,7 @@ interface ActivationPipelineHost {
     zone: "graveyard" | "hand" | "spellTrap" | "fieldSpell",
     options: MoveCardOptions,
   ): GameMaybePromise<MoveCardResult>;
-  assertStateInvariants(
-    scope: string,
-    options: { failFast: false },
-  ): void;
+  assertStateInvariants(scope: string, options: { failFast: false }): void;
 }
 
 function isObjectValue(value: unknown): value is object {
@@ -277,9 +278,7 @@ function toChainContextInput(value: unknown): ChainContextInput | null {
   return isObjectValue(value) ? (value as ChainContextInput) : null;
 }
 
-function asActivationPipelineResult(
-  result: unknown,
-): ActivationPipelineResult {
+function asActivationPipelineResult(result: unknown): ActivationPipelineResult {
   return result as ActivationPipelineResult;
 }
 
@@ -320,7 +319,9 @@ export function normalizeActivationResult(
   } as ActivationPipelineResult;
 }
 
-export function createActionResult(result: unknown = {}): ActivationPipelineResult {
+export function createActionResult(
+  result: unknown = {},
+): ActivationPipelineResult {
   const base =
     typeof result === "string"
       ? { success: false, reason: result }
@@ -378,7 +379,11 @@ export async function runActivationPipeline(
 
   const trackActivationAttempt = (
     result: ActivationAttemptResult = {},
-    extra: { blocked?: boolean; reason?: string | null; code?: string | null } = {},
+    extra: {
+      blocked?: boolean;
+      reason?: string | null;
+      code?: string | null;
+    } = {},
   ): void => {
     this._arenaTracker?.recordActivationAttempt?.({
       player: owner,
@@ -529,7 +534,8 @@ export async function runActivationPipeline(
   let commitInfo = config.activationContext?.commitInfo || null;
   const committed = config.activationContext?.committed === true;
   const fromHand =
-    config.activationContext?.fromHand === true || typeof config.commit === "function";
+    config.activationContext?.fromHand === true ||
+    typeof config.commit === "function";
   const sourceWasFacedown =
     typeof config.activationContext?.sourceWasFacedown === "boolean"
       ? config.activationContext.sourceWasFacedown
@@ -566,8 +572,7 @@ export async function runActivationPipeline(
     costSelections: config.activationContext?.costSelections || {},
     targetSelections:
       config.activationContext?.targetSelections || config.selections || {},
-    resolutionSelections:
-      config.activationContext?.resolutionSelections || {},
+    resolutionSelections: config.activationContext?.resolutionSelections || {},
   };
 
   const safeActivate = async (
@@ -627,7 +632,8 @@ export async function runActivationPipeline(
     }
     resolvedCard = commitInfo.cardRef;
     resolvedZone = commitInfo.activationZone || resolvedZone;
-    resolvedActivationZone = commitInfo.activationZone || resolvedActivationZone;
+    resolvedActivationZone =
+      commitInfo.activationZone || resolvedActivationZone;
     activationContext.committed = true;
     activationContext.commitInfo = commitInfo;
     activationContext.activationZone = resolvedActivationZone;
@@ -690,8 +696,7 @@ export async function runActivationPipeline(
         selectionContract,
         {
           kind: selectionKind,
-          message:
-            config.selectionMessage || selectionContract.message || null,
+          message: config.selectionMessage || selectionContract.message || null,
           ui: {
             allowCancel,
             preventCancel:
@@ -955,8 +960,7 @@ export async function runActivationPipeline(
           reason:
             commitmentPreview.reason ||
             "Activation commitment cannot be applied.",
-          code:
-            commitmentPreview.code || "ACTIVATION_COMMITMENT_UNAVAILABLE",
+          code: commitmentPreview.code || "ACTIVATION_COMMITMENT_UNAVAILABLE",
         });
         if (typeof config.onFailure === "function") {
           await config.onFailure(commitmentFailure, activationContext);
@@ -995,7 +999,8 @@ export async function runActivationPipeline(
         committed: activationContext.committed === true,
         targetSelections: preparedSelections,
       };
-      const preparedActivation: PreparedActivation = this.chainSystem?.createPreparedActivation
+      const preparedActivation: PreparedActivation = this.chainSystem
+        ?.createPreparedActivation
         ? this.chainSystem.createPreparedActivation({
             card: resolvedCard,
             controller: owner,
@@ -1004,14 +1009,12 @@ export async function runActivationPipeline(
             costSelections: toChainSelectionMap(
               activationContext.costSelections || {},
             ),
-            targetSelections:
-              toChainSelectionMap(
-                activationContext.targetSelections || preparedSelections,
-              ),
-            resolutionSelections:
-              toChainSelectionMap(
-                activationContext.resolutionSelections || {},
-              ),
+            targetSelections: toChainSelectionMap(
+              activationContext.targetSelections || preparedSelections,
+            ),
+            resolutionSelections: toChainSelectionMap(
+              activationContext.resolutionSelections || {},
+            ),
             costPayment: activationContext.costPayment || null,
             activationCommitment:
               activationContext.activationCommitment || null,
@@ -1023,12 +1026,11 @@ export async function runActivationPipeline(
               preparedActivationContext,
             ),
             selectionKind,
-            context:
-              toChainContextInput(
-                normalized.resolutionContext ||
-                  activationContext.actionContext ||
-                  null,
-              ),
+            context: toChainContextInput(
+              normalized.resolutionContext ||
+                activationContext.actionContext ||
+                null,
+            ),
             committed: activationContext.committed === true,
             costsPaid: activationContext.costsPaid === true,
             skipDefaultFinalization: typeof config.finalize === "function",
@@ -1042,9 +1044,7 @@ export async function runActivationPipeline(
                     > = {},
                   ) => {
                     activationContext.chainFinalizationHandled = true;
-                    if (
-                      linkResult.activationNegated === true
-                    ) {
+                    if (linkResult.activationNegated === true) {
                       return linkResult;
                     }
                     const finalResult = this.normalizeActivationResult({
@@ -1052,7 +1052,7 @@ export async function runActivationPipeline(
                       ...linkResult,
                       needsSelection: false,
                     });
-                     await config.finalize!(finalResult, {
+                    await config.finalize!(finalResult, {
                       card: resolvedCard,
                       owner,
                       activationZone: resolvedActivationZone,
@@ -1077,14 +1077,12 @@ export async function runActivationPipeline(
             costSelections: toChainSelectionMap(
               activationContext.costSelections || {},
             ),
-            targetSelections:
-              toChainSelectionMap(
-                activationContext.targetSelections || preparedSelections,
-              ),
-            resolutionSelections:
-              toChainSelectionMap(
-                activationContext.resolutionSelections || {},
-              ),
+            targetSelections: toChainSelectionMap(
+              activationContext.targetSelections || preparedSelections,
+            ),
+            resolutionSelections: toChainSelectionMap(
+              activationContext.resolutionSelections || {},
+            ),
             activationCommitment:
               activationContext.activationCommitment || null,
             activationContext: toPreparedActivationContext(
@@ -1169,7 +1167,7 @@ export async function runActivationPipeline(
       }
 
       if (preparingForExistingChain) {
-          preparedActivation.pipelineCompletion = async (
+        preparedActivation.pipelineCompletion = async (
           linkResult = { success: true },
         ) => {
           const succeeded =
@@ -1186,8 +1184,7 @@ export async function runActivationPipeline(
               await config.onFailure(failedResult, activationContext);
             }
             trackActivationAttempt(failedResult, {
-              blocked:
-                linkResult?.activationNegated === true,
+              blocked: linkResult?.activationNegated === true,
             });
             return failedResult;
           }
@@ -1233,9 +1230,8 @@ export async function runActivationPipeline(
       }
 
       if (shouldUseChain) {
-        const rawResolutionResult = await this.chainSystem.openActivationChain(
-          preparedActivation,
-        );
+        const rawResolutionResult =
+          await this.chainSystem.openActivationChain(preparedActivation);
         resolutionResult = this.normalizeActivationResult(rawResolutionResult);
       } else {
         const rawResolutionResult = await config.activate!(
@@ -1253,9 +1249,7 @@ export async function runActivationPipeline(
         resolutionResult = this.normalizeActivationResult(rawResolutionResult);
       }
 
-      if (
-        resolutionResult?.activationNegated === true
-      ) {
+      if (resolutionResult?.activationNegated === true) {
         const negatedResult = {
           success: false,
           ok: false,
@@ -1435,16 +1429,16 @@ export async function runActivationPipeline(
     ) {
       const requestedCostSelections =
         await chainSystem.getPlayerSelectionsForDefinitions?.(
-        resolvedCard,
-        costSelectionDefinitions,
-        owner,
-        toFastEffectContext(buildCanonicalContext()),
-        {
-          purpose: "cost",
-          allowCancel: true,
-          activationZone: resolvedActivationZone,
-        },
-      );
+          resolvedCard,
+          costSelectionDefinitions,
+          owner,
+          toFastEffectContext(buildCanonicalContext()),
+          {
+            purpose: "cost",
+            allowCancel: true,
+            activationZone: resolvedActivationZone,
+          },
+        );
       if (requestedCostSelections == null) {
         return {
           result: this.createActionResult({
@@ -1461,11 +1455,13 @@ export async function runActivationPipeline(
     const finalCostSelectionPreview = costSelectionDefinitions.length
       ? this.effectEngine?.resolveTargets?.(
           costSelectionDefinitions,
-          toChainActionContext(buildCanonicalContext({
-            preview: true,
-            isPreview: true,
-            autoSelectTargets: false,
-          })),
+          toChainActionContext(
+            buildCanonicalContext({
+              preview: true,
+              isPreview: true,
+              autoSelectTargets: false,
+            }),
+          ),
           toChainSelectionMap(costSelections),
         )
       : { ok: true };
@@ -1569,8 +1565,7 @@ export async function runActivationPipeline(
         fromSelection: false,
       };
     }
-    activationContext.activationCommitment =
-      draft.activationCommitment || null;
+    activationContext.activationCommitment = draft.activationCommitment || null;
     if (draft.activationCommitment?.status === "applied") {
       this.notify?.("activation_transaction", {
         stage: "commit_actions_applied",
@@ -1597,11 +1592,13 @@ export async function runActivationPipeline(
     const resolvedTargetPreview = resolvedTargetDefinitions.length
       ? this.effectEngine?.resolveTargets?.(
           resolvedTargetDefinitions,
-          toChainActionContext(buildTargetCanonicalContext({
-            preview: true,
-            isPreview: true,
-            autoSelectTargets: false,
-          })),
+          toChainActionContext(
+            buildTargetCanonicalContext({
+              preview: true,
+              isPreview: true,
+              autoSelectTargets: false,
+            }),
+          ),
           null,
         )
       : { ok: true };
@@ -1615,7 +1612,8 @@ export async function runActivationPipeline(
           costsPaid: true,
           noRollback: true,
           code: "ACTIVATION_TARGET_COUNT_UNAVAILABLE",
-          reason: "The selected activation cost cannot be matched by legal targets.",
+          reason:
+            "The selected activation cost cannot be matched by legal targets.",
         }),
         fromSelection: false,
       };
@@ -1628,16 +1626,16 @@ export async function runActivationPipeline(
     ) {
       const requestedTargetSelections =
         await chainSystem.getPlayerSelectionsForDefinitions?.(
-        resolvedCard,
-        resolvedTargetDefinitions,
-        owner,
-        toFastEffectContext(buildTargetCanonicalContext()),
-        {
-          purpose: "target",
-          allowCancel: false,
-          activationZone: resolvedActivationZone,
-        },
-      );
+          resolvedCard,
+          resolvedTargetDefinitions,
+          owner,
+          toFastEffectContext(buildTargetCanonicalContext()),
+          {
+            purpose: "target",
+            allowCancel: false,
+            activationZone: resolvedActivationZone,
+          },
+        );
       if (requestedTargetSelections == null) {
         return {
           result: this.createActionResult({
@@ -1670,15 +1668,20 @@ export async function runActivationPipeline(
     const finalTargetPreview = resolvedTargetDefinitions.length
       ? this.effectEngine?.resolveTargets?.(
           resolvedTargetDefinitions,
-          toChainActionContext(buildTargetCanonicalContext({
-            preview: true,
-            isPreview: true,
-            autoSelectTargets: false,
-          })),
+          toChainActionContext(
+            buildTargetCanonicalContext({
+              preview: true,
+              isPreview: true,
+              autoSelectTargets: false,
+            }),
+          ),
           toChainSelectionMap(targetSelections),
         )
       : { ok: true };
-    if (finalTargetPreview?.ok === false || finalTargetPreview?.needsSelection) {
+    if (
+      finalTargetPreview?.ok === false ||
+      finalTargetPreview?.needsSelection
+    ) {
       return {
         result: this.createActionResult({
           committed: true,
@@ -1711,7 +1714,8 @@ export async function runActivationPipelineWait(
   config: ActivationPipelineConfigInput = {},
 ): Promise<ActivationPipelineResult> {
   let finished = false;
-  let resolvePromise: ((result: ActivationPipelineResult) => void) | null = null;
+  let resolvePromise: ((result: ActivationPipelineResult) => void) | null =
+    null;
 
   const waitForFinish = new Promise<ActivationPipelineResult>((resolve) => {
     resolvePromise = resolve;

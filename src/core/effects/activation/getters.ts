@@ -1,17 +1,31 @@
 /**
- * activation/getters.js
+ * activation/getters.ts
  * Effect getter methods for activation system
  * Functions assume `this` = EffectEngine instance
  */
 
 import { getCanonicalEffectActivationZones } from "../../chain/legality.js";
+import type { EffectDefinition } from "../../contracts/effects.js";
+import type { ActivationZone } from "../../contracts/activation.js";
+import type {
+  ActivatableMonsterEffectEntry,
+  ActivationCard,
+  ActivationEngineHost,
+  ActivationGetterHost,
+  ActivationPlayer,
+  ActivationPreviewOptions,
+  MonsterEffectLookupOptions,
+  SpellTrapActivationOptions,
+} from "./runtime.js";
 
 /**
  * Get the on_play activation effect for a card played from hand.
  * For field spells, only check on_play timing - on_field_activate effects
  * are handled separately after the card is placed on the field.
  */
-export function getHandActivationEffect(card) {
+export function getHandActivationEffect(
+  card: ActivationCard | null | undefined,
+): EffectDefinition | null {
   if (!card || !Array.isArray(card.effects)) {
     return null;
   }
@@ -20,7 +34,10 @@ export function getHandActivationEffect(card) {
   return card.effects.find((e) => e && e.timing === "on_play") || null;
 }
 
-function isTrapActivationFromSet(card, options = {}) {
+function isTrapActivationFromSet(
+  card: ActivationCard,
+  options: SpellTrapActivationOptions = {},
+): boolean {
   return (
     card?.cardKind === "trap" &&
     (options.trapActivationFromSet === true ||
@@ -29,11 +46,14 @@ function isTrapActivationFromSet(card, options = {}) {
   );
 }
 
-function ignitionMatchesActivationZone(effect, activationZone = "spellTrap") {
+function ignitionMatchesActivationZone(
+  effect: EffectDefinition | null | undefined,
+  activationZone: ActivationZone = "spellTrap",
+): boolean {
   if (!effect || effect.timing !== "ignition") return false;
   const allowedZones = getCanonicalEffectActivationZones(null, effect);
   return (
-    allowedZones.includes(activationZone) ||
+    allowedZones.some((zone) => zone === activationZone) ||
     (allowedZones.includes("field") && activationZone === "spellTrap")
   );
 }
@@ -43,19 +63,25 @@ function ignitionMatchesActivationZone(effect, activationZone = "spellTrap") {
  * For traps: on_activate or ignition timing
  * For spells: ignition timing (or on_play if fromHand)
  */
-export function getSpellTrapActivationEffect(card, options = {}) {
+export function getSpellTrapActivationEffect(
+  this: Pick<ActivationEngineHost, "getHandActivationEffect">,
+  card: ActivationCard | null | undefined,
+  options: SpellTrapActivationOptions = {},
+): EffectDefinition | null {
   if (!card || !Array.isArray(card.effects)) {
     return null;
   }
   const activationZone =
-    options.activationZone || (options.fromHand === true ? "hand" : "spellTrap");
+    options.activationZone ||
+    (options.fromHand === true ? "hand" : "spellTrap");
   if (card.cardKind === "trap") {
     if (isTrapActivationFromSet(card, options)) {
       return card.effects.find((e) => e && e.timing === "on_activate") || null;
     }
     return (
-      card.effects.find((e) => ignitionMatchesActivationZone(e, activationZone)) ||
-      null
+      card.effects.find((e) =>
+        ignitionMatchesActivationZone(e, activationZone),
+      ) || null
     );
   }
   if (card.cardKind === "spell") {
@@ -64,7 +90,7 @@ export function getSpellTrapActivationEffect(card, options = {}) {
       return this.getHandActivationEffect(card);
     }
     const ignition = card.effects.find((e) =>
-      ignitionMatchesActivationZone(e, activationZone)
+      ignitionMatchesActivationZone(e, activationZone),
     );
     if (ignition) return ignition;
     if (card.subtype === "continuous" || card.subtype === "field") {
@@ -81,28 +107,35 @@ export function getSpellTrapActivationEffect(card, options = {}) {
 /**
  * Get the ignition effect for a monster based on activation zone.
  */
-function monsterIgnitionMatchesActivationZone(effect, activationZone = "field") {
+function monsterIgnitionMatchesActivationZone(
+  effect: EffectDefinition | null | undefined,
+  activationZone: ActivationZone = "field",
+): boolean {
   if (!effect || effect.timing !== "ignition") return false;
-  return getCanonicalEffectActivationZones(null, effect).includes(
-    activationZone,
+  return getCanonicalEffectActivationZones(null, effect).some(
+    (zone) => zone === activationZone,
   );
 }
 
-export function getMonsterIgnitionEffects(card, activationZone = "field") {
+export function getMonsterIgnitionEffects(
+  card: ActivationCard | null | undefined,
+  activationZone: ActivationZone = "field",
+): EffectDefinition[] {
   if (!card || !Array.isArray(card.effects)) {
     return [];
   }
   return card.effects.filter((effect) =>
-    monsterIgnitionMatchesActivationZone(effect, activationZone)
+    monsterIgnitionMatchesActivationZone(effect, activationZone),
   );
 }
 
 export function getMonsterIgnitionEffect(
-  card,
-  activationZone = "field",
-  options = {},
-) {
-  const engine = this || {};
+  this: ActivationGetterHost | null | undefined,
+  card: ActivationCard | null | undefined,
+  activationZone: ActivationZone = "field",
+  options: MonsterEffectLookupOptions | string = {},
+): EffectDefinition | null {
+  const engine: ActivationGetterHost = this || {};
   const effects = engine.getMonsterIgnitionEffects
     ? engine.getMonsterIgnitionEffects(card, activationZone)
     : getMonsterIgnitionEffects(card, activationZone);
@@ -117,12 +150,13 @@ export function getMonsterIgnitionEffect(
 }
 
 export function getActivatableMonsterIgnitionEffects(
-  card,
-  player,
-  activationZone = "field",
-  options = {},
-) {
-  const engine = this || {};
+  this: ActivationGetterHost | null | undefined,
+  card: ActivationCard,
+  player: ActivationPlayer,
+  activationZone: ActivationZone = "field",
+  options: ActivationPreviewOptions = {},
+): ActivatableMonsterEffectEntry[] {
+  const engine: ActivationGetterHost = this || {};
   const effects = engine.getMonsterIgnitionEffects
     ? engine.getMonsterIgnitionEffects(card, activationZone)
     : getMonsterIgnitionEffects(card, activationZone);
@@ -148,12 +182,13 @@ export function getActivatableMonsterIgnitionEffects(
 }
 
 export function getFirstActivatableMonsterIgnitionEffect(
-  card,
-  player,
-  activationZone = "field",
-  options = {},
-) {
-  const engine = this || {};
+  this: ActivationGetterHost | null | undefined,
+  card: ActivationCard,
+  player: ActivationPlayer,
+  activationZone: ActivationZone = "field",
+  options: ActivationPreviewOptions = {},
+): ActivatableMonsterEffectEntry | null {
+  const engine: ActivationGetterHost = this || {};
   const entries =
     typeof engine.getActivatableMonsterIgnitionEffects === "function"
       ? engine.getActivatableMonsterIgnitionEffects(
@@ -176,7 +211,9 @@ export function getFirstActivatableMonsterIgnitionEffect(
  * Get the activation effect for a Field Spell.
  * Looks for on_field_activate or an ignition effect declared for Field Zone.
  */
-export function getFieldSpellActivationEffect(card) {
+export function getFieldSpellActivationEffect(
+  card: ActivationCard | null | undefined,
+): EffectDefinition | null {
   if (!card || !Array.isArray(card.effects)) {
     return null;
   }
@@ -186,7 +223,7 @@ export function getFieldSpellActivationEffect(card) {
         e &&
         (e.timing === "on_field_activate" ||
           (e.timing === "ignition" &&
-            getCanonicalEffectActivationZones(card, e).includes("fieldSpell")))
+            getCanonicalEffectActivationZones(card, e).includes("fieldSpell"))),
     ) || null
   );
 }

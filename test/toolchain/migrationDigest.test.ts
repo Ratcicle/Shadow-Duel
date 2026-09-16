@@ -1,3 +1,4 @@
+import { required } from "../helpers/fixtures.js";
 import assert from "node:assert/strict";
 import { readFile, stat } from "node:fs/promises";
 import test from "node:test";
@@ -22,12 +23,10 @@ const BASELINE_COMPONENTS = {
     "ebab3971d3ae7d7bc39412842af19152290eff4cfc4b607c5328adcce7433022",
   cardIdMigration:
     "767cedfcc510631425c924d697210454a773b3d58c8021458fdfcd498ae5da89",
-  banlist:
-    "d41709efebdfa620f0b6d78eb70c4c188fe1ceba37bbbb7da808363cc3ba1ae7",
+  banlist: "d41709efebdfa620f0b6d78eb70c4c188fe1ceba37bbbb7da808363cc3ba1ae7",
   actionCatalog:
     "b72dc32aaa0cb2d0e8608f8c92af607de9d358e9e97e7edb9810d12a04b07af7",
-  locales:
-    "39c0e0346c31c4c92dcfec488350295692be931d735ebc5fa2d85d8d300f60de",
+  locales: "39c0e0346c31c4c92dcfec488350295692be931d735ebc5fa2d85d8d300f60de",
 };
 const BASELINE_AGGREGATE =
   "428e28a85f361880302a65745236cec6d153111d0d08fa6bf37cca45bf2b43dd";
@@ -38,17 +37,14 @@ const ACTIVE_COMPONENTS = {
     "ebab3971d3ae7d7bc39412842af19152290eff4cfc4b607c5328adcce7433022",
   cardIdMigration:
     "767cedfcc510631425c924d697210454a773b3d58c8021458fdfcd498ae5da89",
-  banlist:
-    "d41709efebdfa620f0b6d78eb70c4c188fe1ceba37bbbb7da808363cc3ba1ae7",
+  banlist: "d41709efebdfa620f0b6d78eb70c4c188fe1ceba37bbbb7da808363cc3ba1ae7",
   actionCatalog:
     "3bfb38478c5f0a5f145c6ee3f20cb5e1ee8f58507bd8bf08bcf0c46bf29995c7",
-  locales:
-    "39c0e0346c31c4c92dcfec488350295692be931d735ebc5fa2d85d8d300f60de",
+  locales: "39c0e0346c31c4c92dcfec488350295692be931d735ebc5fa2d85d8d300f60de",
 };
 const ACTIVE_AGGREGATE =
   "13ff527c3deb5b8b5e5f09551fcabcb3ec7ca48f922f1f167c6d22c67d12caea";
-const ACTIVE_FUNCTIONAL_COMMIT =
-  "dc9bb45c83ef2a0417c61a151bcee24e93dc3628";
+const ACTIVE_FUNCTIONAL_COMMIT = "dc9bb45c83ef2a0417c61a151bcee24e93dc3628";
 const ACTIVE_APPROVED_AT = "2026-07-31T10:23:33-03:00";
 const REGISTRY_URL = new URL(
   "../../docs/migrations/typescript-digests.json",
@@ -86,10 +82,7 @@ test("canonicalizer preserves an own __proto__ key", () => {
     ["__proto__"]: { x: 1 },
   };
 
-  assert.equal(
-    canonicalJson(value),
-    '{"__proto__":{"x":1},"safe":2}',
-  );
+  assert.equal(canonicalJson(value), '{"__proto__":{"x":1},"safe":2}');
 });
 
 test("canonicalizer rejects values that JSON could omit or normalize", () => {
@@ -120,20 +113,14 @@ test("canonicalizer rejects cycles and malformed arrays", () => {
   assert.throws(() => canonicalize(cycle), /Cycle at \$\.self/);
 
   const sparse: unknown[] = Array(1);
-  assert.throws(
-    () => canonicalize(sparse),
-    /Sparse or extended array at \$/,
-  );
+  assert.throws(() => canonicalize(sparse), /Sparse or extended array at \$/);
 
   const extended: unknown[] = [1];
   Object.defineProperty(extended, "extra", {
     value: true,
     enumerable: true,
   });
-  assert.throws(
-    () => canonicalize(extended),
-    /Sparse or extended array at \$/,
-  );
+  assert.throws(() => canonicalize(extended), /Sparse or extended array at \$/);
 
   const symbolExtended: unknown[] = [1];
   Reflect.set(symbolExtended, Symbol("extra"), true);
@@ -177,15 +164,18 @@ test("registry preserves the baseline and records the active approval", async ()
   assert.equal(registry.legacyReplaySignature, "1cc622e3");
   assert.equal(registry.approvals.length, 2);
   assert.equal(
-    registry.approvals[0].functionalCommit,
+    required(registry.approvals[0]).functionalCommit,
     "cd41114621b2e9d0c4cb1a58f7e067d114c83519",
   );
   assert.equal(
-    registry.approvals[0].approvedAt,
+    required(registry.approvals[0]).approvedAt,
     "2026-07-30T10:35:24-03:00",
   );
-  assert.deepEqual(registry.approvals[0].components, BASELINE_COMPONENTS);
-  assert.equal(registry.approvals[0].aggregate, BASELINE_AGGREGATE);
+  assert.deepEqual(
+    required(registry.approvals[0]).components,
+    BASELINE_COMPONENTS,
+  );
+  assert.equal(required(registry.approvals[0]).aggregate, BASELINE_AGGREGATE);
 
   const activeApproval = registry.approvals.at(-1);
   assert.ok(activeApproval);
@@ -196,110 +186,68 @@ test("registry preserves the baseline and records the active approval", async ()
 });
 
 test("registry rejects invalid format, version, empty history, and legacy signature", async () => {
-  await assertRegistryRejects(
-    (registry) => {
-      Reflect.set(registry, "format", "unknown");
-    },
-    /registry\.format/,
-  );
-  await assertRegistryRejects(
-    (registry) => {
-      Reflect.set(registry, "version", 2);
-    },
-    /registry\.version/,
-  );
-  await assertRegistryRejects(
-    (registry) => {
-      registry.approvals = [];
-    },
-    /non-empty array/,
-  );
-  await assertRegistryRejects(
-    (registry) => {
-      registry.legacyReplaySignature = "1CC622E3";
-    },
-    /lowercase 8-character/,
-  );
+  await assertRegistryRejects((registry) => {
+    Reflect.set(registry, "format", "unknown");
+  }, /registry\.format/);
+  await assertRegistryRejects((registry) => {
+    Reflect.set(registry, "version", 2);
+  }, /registry\.version/);
+  await assertRegistryRejects((registry) => {
+    registry.approvals = [];
+  }, /non-empty array/);
+  await assertRegistryRejects((registry) => {
+    registry.legacyReplaySignature = "1CC622E3";
+  }, /lowercase 8-character/);
 });
 
 test("registry rejects malformed approvals and component keysets", async () => {
-  await assertRegistryRejects(
-    (registry) => {
-      registry.approvals[0].functionalCommit = "cd41114";
-    },
-    /40-character commit hash/,
-  );
-  await assertRegistryRejects(
-    (registry) => {
-      registry.approvals[0].aggregate = "A".repeat(64);
-    },
-    /lowercase SHA-256 hash/,
-  );
-  await assertRegistryRejects(
-    (registry) => {
-      registry.approvals[0].components.locales = "A".repeat(64);
-    },
-    /lowercase SHA-256 hash/,
-  );
-  await assertRegistryRejects(
-    (registry) => {
-      registry.approvals[0].reason = "   ";
-    },
-    /reason must not be empty/,
-  );
-  await assertRegistryRejects(
-    (registry) => {
-      registry.approvals[0].approvedAt = "2026-07-30";
-    },
-    /ISO-8601 timestamp/,
-  );
-  await assertRegistryRejects(
-    (registry) => {
-      registry.approvals[0].approvedAt = "2026-02-31T10:35:24-03:00";
-    },
-    /valid ISO-8601 timestamp/,
-  );
-  await assertRegistryRejects(
-    (registry) => {
-      Reflect.deleteProperty(
-        registry.approvals[0].components,
-        "cardIdRanges",
-      );
-    },
-    /components must contain exactly/,
-  );
-  await assertRegistryRejects(
-    (registry) => {
-      Reflect.set(
-        registry.approvals[0].components,
-        "unexpected",
-        "a".repeat(64),
-      );
-    },
-    /components must contain exactly/,
-  );
+  await assertRegistryRejects((registry) => {
+    required(registry.approvals[0]).functionalCommit = "cd41114";
+  }, /40-character commit hash/);
+  await assertRegistryRejects((registry) => {
+    required(registry.approvals[0]).aggregate = "A".repeat(64);
+  }, /lowercase SHA-256 hash/);
+  await assertRegistryRejects((registry) => {
+    required(registry.approvals[0]).components.locales = "A".repeat(64);
+  }, /lowercase SHA-256 hash/);
+  await assertRegistryRejects((registry) => {
+    required(registry.approvals[0]).reason = "   ";
+  }, /reason must not be empty/);
+  await assertRegistryRejects((registry) => {
+    required(registry.approvals[0]).approvedAt = "2026-07-30";
+  }, /ISO-8601 timestamp/);
+  await assertRegistryRejects((registry) => {
+    required(registry.approvals[0]).approvedAt = "2026-02-31T10:35:24-03:00";
+  }, /valid ISO-8601 timestamp/);
+  await assertRegistryRejects((registry) => {
+    Reflect.deleteProperty(
+      required(registry.approvals[0]).components,
+      "cardIdRanges",
+    );
+  }, /components must contain exactly/);
+  await assertRegistryRejects((registry) => {
+    Reflect.set(
+      required(registry.approvals[0]).components,
+      "unexpected",
+      "a".repeat(64),
+    );
+  }, /components must contain exactly/);
 });
 
 test("registry requires strictly increasing timestamps and unique aggregates", async () => {
-  await assertRegistryRejects(
-    (registry) => {
-      const next = structuredClone(registry.approvals.at(-1));
-      assert.ok(next);
-      next.aggregate = "a".repeat(64);
-      next.approvedAt = "2026-07-31T10:23:32-03:00";
-      registry.approvals.push(next);
-    },
-    /strictly later/,
-  );
-  await assertRegistryRejects(
-    (registry) => {
-      const next = structuredClone(registry.approvals.at(-1));
-      assert.ok(next);
-      next.approvedAt = "2026-07-31T10:23:34-03:00";
-      registry.approvals.push(next);
-    },
-    /aggregate duplicates/,
-  );
+  await assertRegistryRejects((registry) => {
+    const next = structuredClone(registry.approvals.at(-1));
+    assert.ok(next);
+    next.aggregate = "a".repeat(64);
+    next.approvedAt = "2026-07-31T10:23:32-03:00";
+    registry.approvals.push(next);
+  }, /strictly later/);
+  await assertRegistryRejects((registry) => {
+    const next = structuredClone(registry.approvals.at(-1));
+    assert.ok(next);
+    next.approvedAt = "2026-07-31T10:23:34-03:00";
+    registry.approvals.push(next);
+  }, /aggregate duplicates/);
 });
 
 test("verification checks the runtime legacy signature and latest approval", async () => {
@@ -314,8 +262,8 @@ test("verification checks the runtime legacy signature and latest approval", asy
 test("verification treats only the final ordered approval as active", async () => {
   const payload = await loadMigrationPayload();
   const registry = await registryFixture();
-  registry.approvals[0].aggregate = "a".repeat(64);
-  registry.approvals[0].components = {
+  required(registry.approvals[0]).aggregate = "a".repeat(64);
+  required(registry.approvals[0]).components = {
     cardDatabaseGroups: "a".repeat(64),
     cardIdRanges: "a".repeat(64),
     cardIdMigration: "a".repeat(64),

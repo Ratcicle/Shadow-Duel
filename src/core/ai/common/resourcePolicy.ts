@@ -1,7 +1,7 @@
 interface ResourceFlags {
-  shouldPreserve?: boolean;
+  shouldPreserve?: boolean | undefined;
   bahamutReady?: boolean;
-  critical?: boolean;
+  critical?: boolean | undefined;
   needsRecovery?: boolean;
 }
 

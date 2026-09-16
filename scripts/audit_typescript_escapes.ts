@@ -51,7 +51,7 @@ export interface AuditDiagnostic {
   path?: string;
   line?: number;
   column?: number;
-  debtId?: string;
+  debtId?: (string) | undefined;
 }
 
 export interface DebtRegistryParseResult {
@@ -147,9 +147,7 @@ function registryDiagnostic(
   };
 }
 
-export function validateDebtRegistry(
-  value: unknown,
-): DebtRegistryParseResult {
+export function validateDebtRegistry(value: unknown): DebtRegistryParseResult {
   const diagnostics: AuditDiagnostic[] = [];
   const registry = emptyRegistry();
 
@@ -473,7 +471,8 @@ function collectEscapeCandidates(
         kind: "double-cast",
         path: input.path,
         ...location,
-        message: "Nested type assertions are migration debt and must be registered.",
+        message:
+          "Nested type assertions are migration debt and must be registered.",
       });
     }
 
@@ -496,10 +495,7 @@ function collectEscapeCandidates(
     if (directive !== "ts-expect-error") continue;
 
     const isContractTest = input.path.startsWith("test/types/");
-    if (
-      isContractTest &&
-      hasContractNegativeJustification(comments, comment)
-    ) {
+    if (isContractTest && hasContractNegativeJustification(comments, comment)) {
       continue;
     }
 
@@ -581,7 +577,7 @@ export function auditTypeScriptSources(
       });
 
       if (exactMatches.length === 1) {
-        usedDebtIds.add(exactMatches[0].id);
+        usedDebtIds.add(exactMatches[0]!.id);
         continue;
       }
       if (exactMatches.length > 1) {
@@ -691,11 +687,7 @@ async function collectDirectoryFiles(
   try {
     entries = await readdir(directory, { withFileTypes: true });
   } catch (error: unknown) {
-    if (
-      isRecord(error) &&
-      "code" in error &&
-      error.code === "ENOENT"
-    ) {
+    if (isRecord(error) && "code" in error && error.code === "ENOENT") {
       return [];
     }
     throw error;
@@ -803,7 +795,8 @@ if (isDirectExecution(import.meta.url, process.argv[1])) {
       process.exitCode = 1;
     }
   } catch (error: unknown) {
-    const detail = error instanceof Error ? error.stack ?? error.message : String(error);
+    const detail =
+      error instanceof Error ? (error.stack ?? error.message) : String(error);
     console.error(`[typescript-escapes] FAILED: ${detail}`);
     process.exitCode = 1;
   }

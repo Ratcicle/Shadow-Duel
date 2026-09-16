@@ -217,12 +217,12 @@ test("resumo e estado público expõem somente o contrato serializável", () => 
   const summary = chain.getChainSummary();
   const state = game.getPublicState!(player.id);
 
-  assert.equal(summary[0].chainId, link.chainId);
-  assert.equal(summary[0].linkId, link.linkId);
-  assert.equal(summary[0].cardName, "Public source");
-  assert.equal(summary[0].effectKind, CHAIN_EFFECT_KINDS.QUICK);
-  assert.equal(Reflect.get(summary[0], "card"), undefined);
-  assert.equal(Reflect.get(summary[0], "controller"), undefined);
+  assert.equal(required(summary[0]).chainId, link.chainId);
+  assert.equal(required(summary[0]).linkId, link.linkId);
+  assert.equal(required(summary[0]).cardName, "Public source");
+  assert.equal(required(summary[0]).effectKind, CHAIN_EFFECT_KINDS.QUICK);
+  assert.equal(Reflect.get(required(summary[0]), "card"), undefined);
+  assert.equal(Reflect.get(required(summary[0]), "controller"), undefined);
   assert.doesNotThrow(() => JSON.stringify(summary));
   assert.deepEqual(state.chain, {
     chainId: 1,

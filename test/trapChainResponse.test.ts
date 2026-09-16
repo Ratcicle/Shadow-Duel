@@ -243,7 +243,7 @@ test("Power Force Field entrega a Main Phase 2 ao bot somente depois da Chain", 
   assert.equal(game.phase, "main2");
   assert.equal(game.chainSystem.isOpenGameState(), true);
   assert.equal(moveAttempts.length, 1);
-  assert.equal(moveAttempts[0].phase, "main2");
-  assert.equal(moveAttempts[0].timing.state, "open");
-  assert.ok(moveAttempts[0].guard.ok === true);
+  assert.equal(required(moveAttempts[0]).phase, "main2");
+  assert.equal(required(moveAttempts[0]).timing.state, "open");
+  assert.ok(required(moveAttempts[0]).guard.ok === true);
 });

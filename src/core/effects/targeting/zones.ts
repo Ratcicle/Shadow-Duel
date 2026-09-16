@@ -46,7 +46,11 @@ export function getZone(
     case "fieldSpell":
       return player.fieldSpell ? [player.fieldSpell] : [];
     case "field":
+    case "any":
+    case "removed":
+      return player.field;
     default:
+      zone satisfies never;
       return player.field;
   }
 }
@@ -80,7 +84,7 @@ export function findCardZone(
  */
 export function getOwnerByCard(
   this: TargetingZoneHost,
-  card: ActionRuntimeCard | null | undefined,
+  card: Pick<ActionRuntimeCard, "owner"> | null | undefined,
 ): ActionRuntimePlayer | null {
   if (!card || !this.game) return null;
   return card.owner === "player" ? this.game.player : this.game.bot;

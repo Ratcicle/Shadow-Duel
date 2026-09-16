@@ -1,7 +1,7 @@
 interface FusionEvaluation {
-  target?: string | null;
-  priority?: number;
-  reason?: string | null;
+  target?: string | null | undefined;
+  priority?: number | undefined;
+  reason?: string | null | undefined;
   plan?: unknown;
 }
 
@@ -13,7 +13,7 @@ interface FusionPreference {
 
 interface FusionContext {
   actionContext?: {
-    fusionPreferences?: FusionPreference | null;
+    fusionPreferences?: FusionPreference | null | undefined;
   };
 }
 

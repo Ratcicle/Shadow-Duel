@@ -43,8 +43,7 @@ export async function handleTakeControl(
   const game = engine?.game;
   if (!game || typeof game.takeControl !== "function") return false;
 
-  const controller =
-    action.player === "opponent" ? ctx?.opponent : ctx?.player;
+  const controller = action.player === "opponent" ? ctx?.opponent : ctx?.player;
   const cards = resolveTargetCards(action, ctx, targets);
   if (!controller || cards.length === 0) return false;
 
@@ -173,7 +172,7 @@ async function bounceAndSummonCard(
 
   if (target.cardKind !== "monster") {
     console.error(
-      `[bounceAndSummonCard] BLOCKED: Attempted to summon non-monster "${target?.name}" (kind: ${target?.cardKind})`
+      `[bounceAndSummonCard] BLOCKED: Attempted to summon non-monster "${target?.name}" (kind: ${target?.cardKind})`,
     );
     return false;
   }
@@ -219,7 +218,7 @@ async function bounceAndSummonCard(
   // 🚨 CRITICAL VALIDATION: Only monsters can be summoned to field
   if (!target || target.cardKind !== "monster") {
     console.error(
-      `[bounceAndSummonCard] ❌ BLOCKED: Attempted to summon non-monster "${target?.name}" (kind: ${target?.cardKind})`
+      `[bounceAndSummonCard] ❌ BLOCKED: Attempted to summon non-monster "${target?.name}" (kind: ${target?.cardKind})`,
     );
     return false;
   }
@@ -303,7 +302,7 @@ async function bounceAndSummonCard(
   const positionText = position === "defense" ? "Defense" : "Attack";
 
   getUI(game)?.log(
-    `${bounceText}Special Summoned ${target.name} in ${positionText} Position.`
+    `${bounceText}Special Summoned ${target.name} in ${positionText} Position.`,
   );
 
   game.updateBoard!();
@@ -343,8 +342,8 @@ export async function handleShuffleOpponentFieldToDeck(
         ? game.getOpponent(ctx.player)
         : null
       : ctx.player?.id === "player"
-      ? game.bot
-      : game.player;
+        ? game.bot
+        : game.player;
 
   if (!opponent) return false;
 
@@ -402,7 +401,7 @@ export async function handleShuffleOpponentFieldToDeck(
   }
 
   getUI(game)?.log(
-    `${movedCount} card(s) ${opponent.id} controlled were shuffled into the Deck.`
+    `${movedCount} card(s) ${opponent.id} controlled were shuffled into the Deck.`,
   );
 
   if (typeof game.updateBoard === "function") game.updateBoard();
@@ -507,7 +506,7 @@ export async function handleBounceAndSummon(
         const cAtk = c.atk || 0;
         const topAtk = top.atk || 0;
         return cAtk >= topAtk ? c : top;
-      }, validTargets[0]);
+      }, validTargets[0]!); // The filtered candidate list was checked non-empty above.
 
     return await bounceAndSummonCard(source, best, player, action, engine, ctx);
   }
@@ -528,7 +527,7 @@ export async function handleBounceAndSummon(
         async (selectedName: string) => {
           const target =
             validTargets.find((c) => c && c.name === selectedName) ||
-            validTargets[0];
+            validTargets[0]!;
 
           const result = await bounceAndSummonCard(
             source,
@@ -542,13 +541,20 @@ export async function handleBounceAndSummon(
           game.isResolvingEffect = false;
 
           resolve(result);
-        }
+        },
       );
     });
   }
 
   // Fallback
-  const fallback = validTargets[0];
+  const fallback = validTargets[0]!;
 
-  return await bounceAndSummonCard(source, fallback, player, action, engine, ctx);
+  return await bounceAndSummonCard(
+    source,
+    fallback,
+    player,
+    action,
+    engine,
+    ctx,
+  );
 }

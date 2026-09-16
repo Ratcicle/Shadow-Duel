@@ -283,8 +283,9 @@ test("estado público, replay e reset preservam o contrato do Duelo", async (t) 
     required(getEffect().actions),
   );
 
-  const publicEntry = game.getPublicState(game.player.id).temporaryEffects
-    .event[0];
+  const publicEntry = required(
+    game.getPublicState(game.player.id).temporaryEffects.event[0],
+  );
   assert.equal(publicEntry.duration, "duel");
   assert.equal(publicEntry.expiresOnTurn, null);
   assert.equal(publicEntry.usesRemaining, null);
@@ -317,7 +318,7 @@ test("a simulação registra o efeito persistente e aplica o mesmo dano", () => 
   simulateGenericSpellEffect(state, source, { selfId: "bot" });
   assert.equal(state.bot.lp, 1000);
   assert.equal(required(state.temporaryEventEffects).length, 1);
-  const entry = required(state.temporaryEventEffects)[0];
+  const entry = required(required(state.temporaryEventEffects)[0]);
   assert.equal(entry.expiresOnTurn, null);
   assert.equal(entry.usesRemaining, null);
 

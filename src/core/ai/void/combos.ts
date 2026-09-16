@@ -1,6 +1,6 @@
 import type { buildStrategyAnalysis } from "../common/analysis.js";
 
-type Analysis = Omit<Partial<ReturnType<typeof buildStrategyAnalysis>>, "phase"> & { phase?: string | null } & { oppFieldCount?: number; oppStrongestAtk?: number };
+type Analysis = Omit<Partial<ReturnType<typeof buildStrategyAnalysis>>, "phase" | "fieldSpell"> & { fieldSpell?: ReturnType<typeof buildStrategyAnalysis>["fieldSpell"] | undefined; phase?: string | null | undefined } & { oppFieldCount?: number; oppStrongestAtk?: number };
 
 import type { DetectedCombo } from "../common/comboDetection.js";
 // ─────────────────────────────────────────────────────────────────────────────
@@ -460,7 +460,7 @@ export function detectAvailableCombos(analysis: Analysis) {
   const { hand, field, graveyard, extraDeck, fieldSpell, summonAvailable } =
     analysis;
   const deck = analysis.deck || [];
-  const detected: Array<Omit<DetectedCombo, "combo"> & { combo?: typeof COMBO_DATABASE[number] | null; projectedDraws?: number; projectedAtk?: number }> = [];
+  const detected: Array<Omit<DetectedCombo, "combo"> & { combo?: typeof COMBO_DATABASE[number] | null | undefined; projectedDraws?: number; projectedAtk?: number }> = [];
 
   const zoneIndex = createZoneIndex({
     hand,

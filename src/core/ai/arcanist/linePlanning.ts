@@ -2,8 +2,8 @@ import type { AIPlannedAction, AIPlanningContext, AIPlanningProfile, AIStrategyB
 import type { AiStateShape, SimulatedCardState } from "../../contracts/aiState.js";
 import type { GameCard } from "../../contracts/cards.js";
 import type { buildStrategyAnalysis } from "../common/analysis.js";
-type StrategyCard = (GameCard | SimulatedCardState) & { uuid?: string | null; cannotBeDestroyedByBattle?: boolean; cannotBeDestroyedByCardEffects?: boolean; destructionReplacement?: unknown; protectedFromDestruction?: boolean };
-type Player = Omit<Partial<AIStrategyBotPort>, "field"> & { field?: StrategyCard[]; replacementEffects?: unknown[] };
+type StrategyCard = (GameCard | SimulatedCardState) & { uuid?: string | null; cannotBeDestroyedByBattle?: boolean | undefined; cannotBeDestroyedByCardEffects?: boolean; destructionReplacement?: unknown; protectedFromDestruction?: boolean };
+type Player = Omit<Partial<AIStrategyBotPort>, "field" | "spellTrap" | "fieldSpell"> & { spellTrap?: AIStrategyBotPort["spellTrap"] | undefined; fieldSpell?: AIStrategyBotPort["fieldSpell"] | undefined; field?: StrategyCard[] | undefined; replacementEffects?: unknown[] };
 type State = Partial<AiStateShape>;
 type PlanningGame = State & { turnLineSearchEnabled?: boolean; turnLineSearchTurnMode?: AIPlanningProfile["turnMode"] };
 type Analysis = Omit<Partial<ReturnType<typeof buildStrategyAnalysis>>, "game"> & { game?: PlanningGame | null; availableCombos?: Array<{ priority?: number }>; oppStrongestAtk?: number; oppStrongestBattle?: number; inkRiverCounters?: number; arcanistSpellsInGY?: number };

@@ -1,5 +1,15 @@
-import type { BotRuntimePort, BotGamePort, BotHandActionHint, ExpectedBotHandKind } from "../contracts/bot.js";
-import type { AIAction, AIActionOf, ExtraDeckMaterialHint, AIActivationContext } from "../contracts/ai.js";
+import type {
+  BotRuntimePort,
+  BotGamePort,
+  BotHandActionHint,
+  ExpectedBotHandKind,
+} from "../contracts/bot.js";
+import type {
+  AIAction,
+  AIActionOf,
+  ExtraDeckMaterialHint,
+  AIActivationContext,
+} from "../contracts/ai.js";
 import type { GameCard, CardKind } from "../contracts/cards.js";
 import type { GamePlayer } from "../contracts/player.js";
 import type { SimulatedCardShape } from "../contracts/aiState.js";
@@ -16,7 +26,11 @@ import { canUseNormalSummonForCard } from "../Player.js";
 import { canSetReactiveBackrowNow } from "../ai/common/phaseTiming.js";
 import { getCanonicalEffectActivationZones } from "../chain/legality.js";
 
-export function resolveHandIndexForAction(bot: Pick<BotRuntimePort, "hand">, action: BotHandActionHint, expectedKind?: ExpectedBotHandKind): number {
+export function resolveHandIndexForAction(
+  bot: Pick<BotRuntimePort, "hand">,
+  action: BotHandActionHint,
+  expectedKind?: ExpectedBotHandKind,
+): number {
   if (!action) return -1;
   const hand = bot.hand || [];
   const idHint = action.cardId ?? action.card?.id ?? null;
@@ -26,17 +40,17 @@ export function resolveHandIndexForAction(bot: Pick<BotRuntimePort, "hand">, act
     : expectedKind
       ? [expectedKind]
       : null;
-  const matchesKind = (card: GameCard) => {
+  const matchesKind = (card: GameCard | undefined): card is GameCard => {
     if (!card) return false;
     if (expectedKinds && !expectedKinds.includes(card.cardKind)) return false;
     return true;
   };
-  const matchesById = (card: GameCard) => {
+  const matchesById = (card: GameCard | undefined) => {
     if (!matchesKind(card)) return false;
     if (idHint === null || idHint === undefined) return false;
     return card.id === idHint;
   };
-  const matchesByName = (card: GameCard) => {
+  const matchesByName = (card: GameCard | undefined) => {
     if (!matchesKind(card)) return false;
     if (!nameHint) return true;
     return card.name === nameHint;
@@ -75,15 +89,30 @@ export function resolveHandIndexForAction(bot: Pick<BotRuntimePort, "hand">, act
   return -1;
 }
 
-export function tributeMatchesAltRequirement(card: GameCard, alt: GameCard["altTribute"] | undefined): boolean {
+export function tributeMatchesAltRequirement(
+  card: GameCard | undefined,
+  alt: GameCard["altTribute"] | undefined,
+): boolean {
   if (!card || card.cardKind !== "monster" || !alt) return false;
   if (card.isFacedown) return false;
-  if ((alt as { requiresName?: string }).requiresName && card.name !== (alt as { requiresName?: string }).requiresName) return false;
-  if ((alt as { requiresType?: string }).requiresType && card.type !== (alt as { requiresType?: string }).requiresType) return false;
+  if (
+    (alt as { requiresName?: string }).requiresName &&
+    card.name !== (alt as { requiresName?: string }).requiresName
+  )
+    return false;
+  if (
+    (alt as { requiresType?: string }).requiresType &&
+    card.type !== (alt as { requiresType?: string }).requiresType
+  )
+    return false;
   return true;
 }
 
-export function canResolveSummonActionForCurrentState(bot: BotRuntimePort, action: AIAction, game: BotGamePort): boolean {
+export function canResolveSummonActionForCurrentState(
+  bot: BotRuntimePort,
+  action: AIAction,
+  game: BotGamePort,
+): boolean {
   const resolvedIndex = resolveHandIndexForAction(bot, action, "monster");
   if (resolvedIndex < 0) return false;
   const card = bot.hand?.[resolvedIndex];
@@ -102,7 +131,11 @@ export function canResolveSummonActionForCurrentState(bot: BotRuntimePort, actio
 
   let tributeIndices: number[] = [];
   if (tributesNeeded > 0) {
-    const opponent = game ? (bot === game.player ? game.bot : game.player) : null;
+    const opponent = game
+      ? bot === game.player
+        ? game.bot
+        : game.player
+      : null;
     tributeIndices =
       typeof bot.selectBestTributes === "function"
         ? bot.selectBestTributes(field, tributesNeeded, card, {
@@ -142,7 +175,9 @@ export function canResolveSummonActionForCurrentState(bot: BotRuntimePort, actio
 
   if (typeof game?.canPlaceCardOnField === "function") {
     const isFacedown = (action as AIActionOf<"summon">).facedown === true;
-    const excluded = tributeIndices.map((index) => field[index]).filter(Boolean);
+    const excluded = tributeIndices
+      .map((index) => field[index])
+      .filter(Boolean);
     const placeCheck = game.canPlaceCardOnField(card, bot, {
       zone: "monster",
       isFacedown,
@@ -155,7 +190,10 @@ export function canResolveSummonActionForCurrentState(bot: BotRuntimePort, actio
   return true;
 }
 
-function getCardInstanceIds(card: GameCard & Pick<SimulatedCardShape, "_instanceId" | "uid" | "uuid" | "simInstanceId">) {
+function getCardInstanceIds(
+  card: GameCard &
+    Pick<SimulatedCardShape, "_instanceId" | "uid" | "uuid" | "simInstanceId">,
+) {
   return [
     card?.instanceId,
     card?._instanceId,
@@ -189,28 +227,36 @@ function controlledPublicCards(player: GamePlayer) {
   ];
 }
 
-function findEffectForAction(card: GameCard, action: AIAction, fallbackZone: CanonicalZone) {
+function findEffectForAction(
+  card: GameCard,
+  action: AIAction,
+  fallbackZone: CanonicalZone,
+) {
   const contextualEffect = action?.activationContext?.effect;
   if (contextualEffect && Array.isArray(contextualEffect.actions)) {
     return contextualEffect;
   }
 
-  const effects: readonly EffectDefinition[] = Array.isArray(card?.effects) ? card.effects : [];
+  const effects: readonly EffectDefinition[] = Array.isArray(card?.effects)
+    ? card.effects
+    : [];
   if (action?.effectId) {
     const byId = effects.find((effect) => effect?.id === action.effectId);
     if (byId) return byId;
   }
 
-  return effects.find((effect) => {
-    if (effect?.timing !== "ignition") return false;
-    if (
-      fallbackZone &&
-      !getCanonicalEffectActivationZones(card, effect).includes(fallbackZone)
-    ) {
-      return false;
-    }
-    return true;
-  }) || null;
+  return (
+    effects.find((effect) => {
+      if (effect?.timing !== "ignition") return false;
+      if (
+        fallbackZone &&
+        !getCanonicalEffectActivationZones(card, effect).includes(fallbackZone)
+      ) {
+        return false;
+      }
+      return true;
+    }) || null
+  );
 }
 
 function actionRemovesFieldCounters(action: CardAction): boolean {
@@ -234,8 +280,12 @@ function actionSummonsFromHand(action: CardAction): boolean {
   return action?.type === "conditional_summon_from_hand";
 }
 
-function effectRemovesCountersBeforeHandSummon(effect: EffectDefinition | null): boolean {
-  const actions: readonly CardAction[] = Array.isArray(effect?.actions) ? effect.actions : [];
+function effectRemovesCountersBeforeHandSummon(
+  effect: EffectDefinition | null,
+): boolean {
+  const actions: readonly CardAction[] = Array.isArray(effect?.actions)
+    ? effect.actions
+    : [];
   const summonIndex = actions.findIndex(actionSummonsFromHand);
   if (summonIndex <= 0) return false;
   return actions.slice(0, summonIndex).some(actionRemovesFieldCounters);
@@ -252,10 +302,17 @@ function actionSpecialSummonsToSelfField(action: CardAction): boolean {
   ) {
     return false;
   }
-  return (action as { player?: string }).player === undefined || (action as { player?: string }).player === "self";
+  return (
+    (action as { player?: string }).player === undefined ||
+    (action as { player?: string }).player === "self"
+  );
 }
 
-function cardEffectActiveInZone(card: GameCard, zone: string, effect: EffectDefinition): boolean {
+function cardEffectActiveInZone(
+  card: GameCard,
+  zone: string,
+  effect: EffectDefinition,
+): boolean {
   if (!card || !effect) return false;
   if (effect.requireZone && effect.requireZone !== zone) return false;
   if (effect.requireFaceup === true && card.isFacedown === true) return false;
@@ -265,25 +322,36 @@ function cardEffectActiveInZone(card: GameCard, zone: string, effect: EffectDefi
 
 function controlsCounterRemovedSelfSummonTrigger(player: GamePlayer): boolean {
   return controlledPublicCards(player).some(({ card, zone }) => {
-    const effects: readonly EffectDefinition[] = Array.isArray(card?.effects) ? card.effects : [];
+    const effects: readonly EffectDefinition[] = Array.isArray(card?.effects)
+      ? card.effects
+      : [];
     return effects.some((effect) => {
       if (effect?.timing !== "on_event") return false;
       if (effect.event !== "counter_removed") return false;
       if (!cardEffectActiveInZone(card, zone, effect)) return false;
-      const actions: readonly CardAction[] = Array.isArray(effect.actions) ? effect.actions : [];
+      const actions: readonly CardAction[] = Array.isArray(effect.actions)
+        ? effect.actions
+        : [];
       return actions.some(actionSpecialSummonsToSelfField);
     });
   });
 }
 
-function needsCounterRemovedSummonZoneReserve(bot: BotRuntimePort, action: AIAction, card: GameCard): boolean {
+function needsCounterRemovedSummonZoneReserve(
+  bot: BotRuntimePort,
+  action: AIAction,
+  card: GameCard,
+): boolean {
   if ((bot?.field || []).length <= 3) return false;
   const effect = findEffectForAction(card, action, "hand");
   if (!effectRemovesCountersBeforeHandSummon(effect)) return false;
   return controlsCounterRemovedSelfSummonTrigger(bot);
 }
 
-function findExtraDeckCardForAction(bot: BotRuntimePort, action: AIActionOf<"extraDeckProcedure">) {
+function findExtraDeckCardForAction(
+  bot: BotRuntimePort,
+  action: AIActionOf<"extraDeckProcedure">,
+) {
   const extraDeck = bot?.extraDeck || [];
   if (Number.isInteger(action.extraDeckIndex)) {
     const direct = extraDeck[action.extraDeckIndex!];
@@ -305,7 +373,10 @@ function findExtraDeckCardForAction(bot: BotRuntimePort, action: AIActionOf<"ext
   );
 }
 
-function findFieldMaterialForHint(field: GameCard[] = [], hint: ExtraDeckMaterialHint = {}) {
+function findFieldMaterialForHint(
+  field: GameCard[] = [],
+  hint: ExtraDeckMaterialHint = {},
+) {
   const ids = Array.isArray(hint.instanceIds) ? hint.instanceIds : [];
   if (ids.length > 0) {
     const byInstance = field.find((card) => {
@@ -334,7 +405,10 @@ function findFieldMaterialForHint(field: GameCard[] = [], hint: ExtraDeckMateria
   );
 }
 
-function resolveExtraDeckProcedureMaterials(bot: BotRuntimePort, action: AIActionOf<"extraDeckProcedure">) {
+function resolveExtraDeckProcedureMaterials(
+  bot: BotRuntimePort,
+  action: AIActionOf<"extraDeckProcedure">,
+) {
   const field = bot?.field || [];
   const hints = Array.isArray(action.materials)
     ? action.materials
@@ -353,10 +427,14 @@ function resolveExtraDeckProcedureMaterials(bot: BotRuntimePort, action: AIActio
   return materials;
 }
 
-function materialSelectionMatchesCombo(materials: readonly GameCard[] = [], combos: readonly (readonly GameCard[])[] = []): boolean {
+function materialSelectionMatchesCombo(
+  materials: readonly GameCard[] = [],
+  combos: readonly (readonly GameCard[])[] = [],
+): boolean {
   if (!Array.isArray(materials) || !Array.isArray(combos)) return false;
   return combos.some((combo: readonly GameCard[]) => {
-    if (!Array.isArray(combo) || combo.length !== materials.length) return false;
+    if (!Array.isArray(combo) || combo.length !== materials.length)
+      return false;
     const remaining: GameCard[] = [...combo];
     for (const material of materials as readonly GameCard[]) {
       const index = remaining.indexOf(material);
@@ -398,7 +476,11 @@ export function canResolveExtraDeckProcedureActionForCurrentState(
   return true;
 }
 
-export function filterValidActionsForCurrentState(bot: BotRuntimePort, actions: AIAction[], game: BotGamePort): AIAction[] {
+export function filterValidActionsForCurrentState(
+  bot: BotRuntimePort,
+  actions: AIAction[],
+  game: BotGamePort,
+): AIAction[] {
   if (!Array.isArray(actions)) return [];
   return actions.filter((action) => {
     if (!action || !action.type) return false;
@@ -422,7 +504,10 @@ export function filterValidActionsForCurrentState(bot: BotRuntimePort, actions: 
       return preview ? preview.ok !== false : true;
     }
     if (action.type === "set_spell_trap") {
-      const handIndex = resolveHandIndexForAction(bot, action, ["spell", "trap"]);
+      const handIndex = resolveHandIndexForAction(bot, action, [
+        "spell",
+        "trap",
+      ]);
       if (handIndex < 0) return false;
       const card = bot.hand?.[handIndex];
       return canSetReactiveBackrowNow(card, game);
@@ -432,7 +517,8 @@ export function filterValidActionsForCurrentState(bot: BotRuntimePort, actions: 
         ? action.zoneIndex
         : action.index;
       const card = bot.spellTrap?.[zoneIndex!];
-      if (!card || (card.cardKind !== "spell" && card.cardKind !== "trap")) return false;
+      if (!card || (card.cardKind !== "spell" && card.cardKind !== "trap"))
+        return false;
       const activationContext: AIActivationContext = {
         ...(action.activationContext || {}),
         fromHand: false,
@@ -441,7 +527,8 @@ export function filterValidActionsForCurrentState(bot: BotRuntimePort, actions: 
         trapActivationFromSet:
           action.activationContext?.trapActivationFromSet === true ||
           (card.cardKind === "trap" && card.isFacedown === true),
-        autoSelectTargets: action.activationContext?.autoSelectTargets !== false,
+        autoSelectTargets:
+          action.activationContext?.autoSelectTargets !== false,
         autoSelectSingleTarget:
           action.activationContext?.autoSelectSingleTarget !== false,
       };
@@ -512,7 +599,8 @@ export function filterValidActionsForCurrentState(bot: BotRuntimePort, actions: 
         fromHand: true,
         activationZone: "hand",
         sourceZone: "hand",
-        autoSelectTargets: action.activationContext?.autoSelectTargets !== false,
+        autoSelectTargets:
+          action.activationContext?.autoSelectTargets !== false,
       };
       const preview = game?.effectEngine?.canActivateMonsterEffectPreview?.(
         card,
@@ -605,19 +693,27 @@ export function filterValidActionsForCurrentState(bot: BotRuntimePort, actions: 
         action.ascensionCard &&
         typeof game?.canPlaceCardOnField === "function"
       ) {
-        const placeCheck = game.canPlaceCardOnField(action.ascensionCard as GameCard, bot, {
-          isFacedown: false,
-          excludeCards: [material],
-          summonMethod: "ascension",
-          summonProcedure: "ascension",
-          silent: true,
-        });
+        const placeCheck = game.canPlaceCardOnField(
+          action.ascensionCard as GameCard,
+          bot,
+          {
+            isFacedown: false,
+            excludeCards: [material],
+            summonMethod: "ascension",
+            summonProcedure: "ascension",
+            silent: true,
+          },
+        );
         if (placeCheck?.ok === false) return false;
       }
       return true;
     }
     if (action.type === "extraDeckProcedure") {
-      return canResolveExtraDeckProcedureActionForCurrentState(bot, action, game);
+      return canResolveExtraDeckProcedureActionForCurrentState(
+        bot,
+        action,
+        game,
+      );
     }
     if (action.type === "fieldEffect") {
       if (!bot.fieldSpell) return false;

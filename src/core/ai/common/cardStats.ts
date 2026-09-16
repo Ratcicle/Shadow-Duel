@@ -2,15 +2,15 @@ type StatName = "atk" | "def";
 type FacedownValue = number | "printed";
 
 interface StatCardBase {
-  atk?: number | null;
-  def?: number | null;
-  tempAtkBoost?: number;
-  tempDefBoost?: number;
-  equipAtkBonus?: number;
-  equipDefBonus?: number;
-  cardKind?: string | null;
-  position?: string | null;
-  isFacedown?: boolean;
+  atk?: number | null | undefined;
+  def?: number | null | undefined;
+  tempAtkBoost?: number | undefined;
+  tempDefBoost?: number | undefined;
+  equipAtkBonus?: number | undefined;
+  equipDefBonus?: number | undefined;
+  cardKind?: string | null | undefined;
+  position?: string | null | undefined;
+  isFacedown?: boolean | undefined;
   piercing?: boolean;
   piercingDamageMultiplier?: number | null;
 }

@@ -283,7 +283,7 @@ function buildDevourerActivationContext(baseContext: ActivationContext, evaluati
   }) as typeof context;
 }
 
-function buildDevourerAction({ game, bot, analysis, buildActivationContext }: { game: Game; bot: AIStrategyBotPort; analysis: BloomrotAnalysis; buildActivationContext?: Builder }): AIAction | null {
+function buildDevourerAction({ game, bot, analysis, buildActivationContext }: { game: Game; bot: AIStrategyBotPort; analysis: BloomrotAnalysis; buildActivationContext?: Builder | undefined }): AIAction | null {
   const evaluation = evaluateDevourerLine(game, bot, analysis);
   if (!evaluation.viable) return null;
   const poly = bot.hand[evaluation.polyIndex];

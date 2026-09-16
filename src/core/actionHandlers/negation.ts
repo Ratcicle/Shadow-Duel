@@ -9,10 +9,7 @@ import type {
   EffectContext,
   ResolvedTargetMap,
 } from "../contracts/actionRuntime.js";
-import type {
-  ChainLink,
-  ChainCard,
-} from "../contracts/chainRuntime.js";
+import type { ChainLink, ChainCard } from "../contracts/chainRuntime.js";
 import type { ChainLinkId } from "../contracts/primitives.js";
 import type {
   EffectCondition,
@@ -40,7 +37,7 @@ interface NegationContext {
   sourceCard?: ActionRuntimeCard | null;
   respondingToChainLink?: ChainLink | ChainLinkId | number | null;
   linkId?: ChainLinkId | number | null;
-  summonId?: string | null;
+  summonId?: (string | null) | undefined;
   negatedBy?: ChainCard | null;
   negationProtected?: boolean;
   negationProtectionSource?: ActionRuntimeCard;
@@ -74,11 +71,10 @@ interface ActivationProtectionResult {
   passive: ActivationProtectionPassive;
 }
 
-type NegateSummonAction = ActionOf<
-  "negate_summon_or_activation_and_destroy"
-> & {
-  readonly negatedSummonDestination?: ZoneInput;
-};
+type NegateSummonAction =
+  ActionOf<"negate_summon_or_activation_and_destroy"> & {
+    readonly negatedSummonDestination?: ZoneInput;
+  };
 
 function readNegationContext(value: unknown): NegationContext {
   return value && typeof value === "object" ? (value as NegationContext) : {};
@@ -209,7 +205,10 @@ function passiveMatchesActivationCard(
   }
 
   const filters = passive.targetFilters || passive.filters || null;
-  if (filters && !game.effectEngine?.cardMatchesFilters?.(targetCard, filters)) {
+  if (
+    filters &&
+    !game.effectEngine?.cardMatchesFilters?.(targetCard, filters)
+  ) {
     return false;
   }
 
@@ -503,10 +502,7 @@ export async function handleNegateSummonOrActivationAndDestroy(
   }
 
   if (summonTransaction) {
-    const summonId =
-      context.summonId ??
-      summonTransaction.summonId ??
-      null;
+    const summonId = context.summonId ?? summonTransaction.summonId ?? null;
     const rawTransaction = game.markSummonNegated?.(summonId, {
       destination: action.negatedSummonDestination || "graveyard",
       destroyed: true,

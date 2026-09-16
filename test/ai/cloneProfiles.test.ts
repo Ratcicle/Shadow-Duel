@@ -1,9 +1,8 @@
+import { required } from "../helpers/fixtures.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import {
-  greedySearchWithEvalV2,
-} from "../../src/core/ai/BeamSearch.js";
+import { greedySearchWithEvalV2 } from "../../src/core/ai/BeamSearch.js";
 import { gameTreeSearch } from "../../src/core/ai/GameTreeSearch.js";
 import { turnLineSearch } from "../../src/core/ai/TurnLineSearch.js";
 import { cloneBotGameState } from "../../src/core/bot/simulationBridge.js";
@@ -225,8 +224,8 @@ test("Beam/Greedy clone isolates selected mutable card state but keeps legacy al
     preGeneratedActions: [CLONE_PROBE_ACTION],
   });
   const clone = requireCloneState(captured);
-  const sourceCard = game.bot.hand[0];
-  const clonedCard = clone.bot.hand[0];
+  const sourceCard = required(game.bot.hand[0]);
+  const clonedCard = required(clone.bot.hand[0]);
 
   assert.ok(result);
   assert.equal(clone._gameRef, game);
@@ -261,8 +260,8 @@ test("GameTree clone omits unused zones and clears equipment links", () => {
 
   gameTreeSearch(game, strategy, game.bot, 1);
   const clone = requireCloneState(captured);
-  const sourceCard = game.bot.hand[0];
-  const clonedCard = clone.bot.hand[0];
+  const sourceCard = required(game.bot.hand[0]);
+  const clonedCard = required(clone.bot.hand[0]);
 
   assert.equal(clone._gameRef, game);
   assert.notEqual(clone.bot, game.bot);
@@ -304,8 +303,8 @@ test("TurnLine clone deep-isolates planning cards and copied simulation metadata
     nodeBudget: 2,
   });
   const clone = requireCloneState(captured);
-  const sourceCard = game.bot.hand[0];
-  const clonedCard = clone.bot.hand[0];
+  const sourceCard = required(game.bot.hand[0]);
+  const clonedCard = required(clone.bot.hand[0]);
 
   assert.ok(result);
   assert.equal(clone._gameRef, game);
@@ -328,13 +327,10 @@ test("TurnLine clone deep-isolates planning cards and copied simulation metadata
     clone._simLuminarch?.milestones,
     game._simLuminarch.milestones,
   );
+  assert.notEqual(clone.temporaryEventEffects, game.temporaryEventEffects);
   assert.notEqual(
-    clone.temporaryEventEffects,
-    game.temporaryEventEffects,
-  );
-  assert.notEqual(
-    clone.temporaryEventEffects?.[0].nested,
-    game.temporaryEventEffects[0].nested,
+    required(clone.temporaryEventEffects?.[0]).nested,
+    required(game.temporaryEventEffects[0]).nested,
   );
 
   clonedCard.nested.stats.push("def");

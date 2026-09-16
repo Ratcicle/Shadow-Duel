@@ -16,7 +16,16 @@ type LiveFilterableCard = Partial<Omit<GameCard, "equips">> & {
 };
 export type FilterableCard = LiveFilterableCard | SimulatedCardState;
 
-export type AiCardFilter = Omit<CardFilter, "position"> & {
+export type AiCardFilter = Omit<CardFilter, "position" | "cardKind" | "archetype" | "archetypes" | "cardName" | "name" | "minLevel" | "maxLevel" | "minAtk" | "maxAtk" | "subtype"> & {
+  readonly cardKind?: CardFilter["cardKind"] | undefined;
+  readonly archetype?: CardFilter["archetype"] | undefined;
+  readonly cardName?: CardFilter["cardName"] | undefined;
+  readonly name?: CardFilter["name"] | undefined;
+  readonly minLevel?: CardFilter["minLevel"] | undefined;
+  readonly maxLevel?: CardFilter["maxLevel"] | undefined;
+  readonly minAtk?: CardFilter["minAtk"] | undefined;
+  readonly maxAtk?: CardFilter["maxAtk"] | undefined;
+  readonly subtype?: CardFilter["subtype"] | undefined;
   readonly filters?: AiCardFilter;
   readonly currentTurn?: number | string;
   readonly turnCounter?: number | string;
@@ -30,7 +39,7 @@ export type AiCardFilter = Omit<CardFilter, "position"> & {
   readonly cardIds?: readonly number[];
   readonly ids?: readonly number[];
   readonly excludeMonsterType?: string;
-  readonly archetypes?: readonly string[];
+  readonly archetypes?: readonly string[] | undefined;
   readonly nameOrDescriptionIncludes?: OneOrMany<string>;
   readonly textIncludesAny?: OneOrMany<string>;
   readonly lastSummonMethods?: readonly SummonMethod[];

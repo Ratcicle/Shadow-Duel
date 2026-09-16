@@ -1,3 +1,169 @@
+import type {
+  ActionRuntimeCard,
+  ActionRuntimePlayer,
+  EffectContext,
+  ResolvedTargetMap,
+  NormalizedActionExecutionResult,
+  NeedsSelectionResult,
+} from "../../contracts/actionRuntime.js";
+import type { CardAction } from "../../contracts/actions.js";
+import type {
+  CardKind,
+  BlueprintStorageDefinition,
+} from "../../contracts/cards.js";
+import type {
+  EffectCondition,
+  EffectDefinition,
+  EffectTarget,
+} from "../../contracts/effects.js";
+import type {
+  CanonicalSelectionMap,
+  RawSelectionContract,
+  NormalizedSelectionContract,
+} from "../../contracts/selection.js";
+import type { GameUI } from "../../contracts/ui.js";
+
+type BlueprintEffect = EffectDefinition & {
+  readonly blueprintId?: string;
+  readonly blueprintKey?: string;
+  readonly blueprintDisplayName?: string;
+  readonly blueprintName?: string;
+  readonly blueprintText?: string;
+  readonly shortRulesText?: string;
+  readonly respectStoredEffectUsageLimits?: boolean;
+};
+interface RuntimeStorageConfig extends Partial<BlueprintStorageDefinition> {
+  readonly maxStored?: number;
+  readonly maxStoredEffects?: number;
+  readonly allowedArchetype?: string;
+  readonly archetypeTag?: string;
+  readonly allowedCardKind?: CardKind;
+  readonly cardKinds?: readonly CardKind[];
+  readonly effectFlag?: string;
+  readonly requireEquipped?: boolean;
+  readonly requireFaceup?: boolean;
+  readonly respectStoredEffectUsageLimits?: boolean;
+}
+export interface StoredEffectBlueprint {
+  blueprintId: string;
+  sourceCardId?: number | undefined;
+  sourceCardName?: string;
+  sourceCardKind?: CardKind | undefined;
+  sourceCardSubtype?: (string | null) | undefined;
+  sourceImage?: string | null;
+  sourceEffectId?: string | null;
+  archetypeTag?: string | null;
+  displayName?: string;
+  shortRulesText?: string;
+  effectSnapshot?: BlueprintEffect | null;
+  respectUsageLimits?: boolean;
+}
+interface BlueprintStorageState {
+  storedBlueprints: StoredEffectBlueprint[];
+}
+interface BlueprintCard extends ActionRuntimeCard {
+  blueprintStorage?: RuntimeStorageConfig | null;
+  state?: { blueprintStorage?: BlueprintStorageState | null } | null;
+}
+interface BlueprintActivationState {
+  blueprintId?: string;
+  logged?: boolean;
+}
+type BlueprintActionContext = NonNullable<EffectContext["actionContext"]> & {
+  blueprintActivation?: BlueprintActivationState;
+};
+type BlueprintContext = Omit<
+  EffectContext,
+  "actionContext" | "activationContext"
+> & {
+  actionContext?: BlueprintActionContext | null;
+  activationContext?:
+    | (NonNullable<EffectContext["activationContext"]> & {
+        blueprintId?: string;
+        blueprintSourceCardId?: number | undefined;
+        actionContext?: BlueprintActionContext | null;
+      })
+    | null;
+};
+interface BlueprintResult {
+  success: boolean;
+  needsSelection: boolean;
+  reason?: (string | null) | undefined;
+  selectionContract?:
+    | (RawSelectionContract | NormalizedSelectionContract)
+    | undefined;
+  actionResult?: NormalizedActionExecutionResult | NeedsSelectionResult;
+}
+interface BlueprintCheckResult {
+  ok: boolean;
+  reason?: string | null;
+}
+interface BlueprintTargetResult {
+  ok?: boolean | undefined;
+  needsSelection?: boolean;
+  selectionContract?:
+    | (RawSelectionContract | NormalizedSelectionContract)
+    | undefined;
+  reason?: string | null;
+  targets?: ResolvedTargetMap | undefined;
+}
+interface BlueprintHost {
+  ui?: Pick<
+    GameUI,
+    "log" | "showConfirmPrompt" | "showCardGridSelectionModal"
+  > | null;
+  game?: {
+    gameOver?: boolean;
+    getOpponent?(
+      player: Omit<ActionRuntimePlayer, "strategy">,
+    ): Omit<ActionRuntimePlayer, "strategy"> | null;
+    notify?(event: string, payload: object): unknown;
+    updateBoard?(): unknown;
+  } | null;
+  getBlueprintStorageConfig: typeof getBlueprintStorageConfig;
+  getBlueprintStorageState: typeof getBlueprintStorageState;
+  getStoredBlueprints(
+    card: BlueprintCard | null | undefined,
+  ): StoredEffectBlueprint[];
+  buildEffectBlueprint: typeof buildEffectBlueprint;
+  resolveEffectBlueprint: typeof resolveEffectBlueprint;
+  executeEffectBlueprint(
+    blueprint: StoredEffectBlueprint,
+    ctx: BlueprintContext,
+    selections?: CanonicalSelectionMap | null,
+  ): Promise<BlueprintResult>;
+  cardHasArchetype(card: ActionRuntimeCard, archetype: string): boolean;
+  evaluateConditions(
+    conditions: readonly EffectCondition[] | undefined,
+    ctx: EffectContext,
+  ): BlueprintCheckResult;
+  checkOncePerTurn(
+    card: ActionRuntimeCard,
+    player: ActionRuntimePlayer,
+    effect: EffectDefinition,
+  ): BlueprintCheckResult;
+  checkOncePerDuel(
+    card: ActionRuntimeCard,
+    player: ActionRuntimePlayer,
+    effect: EffectDefinition,
+  ): BlueprintCheckResult;
+  commitEffectUsage(
+    card: ActionRuntimeCard,
+    player: ActionRuntimePlayer,
+    effect: EffectDefinition,
+  ): unknown;
+  resolveTargets(
+    targets: readonly EffectTarget[],
+    ctx: EffectContext,
+    selections: CanonicalSelectionMap | null,
+  ): BlueprintTargetResult;
+  applyActions(
+    actions: readonly CardAction[],
+    ctx: EffectContext,
+    targets: ResolvedTargetMap,
+  ): Promise<NormalizedActionExecutionResult | NeedsSelectionResult>;
+}
+
 /**
  * Effect Blueprints - storage and execution helpers for reusable effects.
  * All functions assume `this` = EffectEngine instance.
@@ -8,20 +174,27 @@ import { publicAssetUrl } from "../../publicUrl.js";
 
 const DEFAULT_STORABLE_FLAG = "storableByGrimoire";
 
-const normalizeArray = (value) => {
+const normalizeArray = <T>(
+  value: T | readonly T[] | null | undefined,
+): readonly T[] | null => {
   if (!value) return null;
   if (Array.isArray(value)) return value.filter(Boolean);
-  return [value].filter(Boolean);
+  return [value as T].filter(Boolean);
 };
 
-const resolvePromptResult = async (promptResult) => {
-  if (promptResult && typeof promptResult.then === "function") {
+const resolvePromptResult = async (
+  promptResult: boolean | PromiseLike<boolean> | undefined,
+) => {
+  if (
+    promptResult &&
+    typeof (promptResult as PromiseLike<boolean>).then === "function"
+  ) {
     return !!(await promptResult);
   }
   return !!promptResult;
 };
 
-const buildBlueprintDisplayCard = (blueprint) => ({
+const buildBlueprintDisplayCard = (blueprint: StoredEffectBlueprint) => ({
   id: blueprint.sourceCardId || blueprint.blueprintId,
   name: blueprint.displayName || blueprint.sourceCardName || "Stored Effect",
   description: blueprint.shortRulesText || "",
@@ -31,7 +204,9 @@ const buildBlueprintDisplayCard = (blueprint) => ({
   __blueprintId: blueprint.blueprintId,
 });
 
-const renderBlueprintCard = (card) => {
+const renderBlueprintCard = (
+  card: ReturnType<typeof buildBlueprintDisplayCard>,
+) => {
   const wrapper = document.createElement("div");
   wrapper.className = "card-grid-item blueprint-card-item";
 
@@ -61,9 +236,14 @@ const renderBlueprintCard = (card) => {
 };
 
 const pickBlueprintFromModal = async (
-  ui,
-  blueprints,
-  options = {}
+  ui: BlueprintHost["ui"],
+  blueprints: readonly StoredEffectBlueprint[],
+  options: {
+    title?: string;
+    subtitle?: string;
+    confirmLabel?: string;
+    cancelLabel?: string;
+  } = {},
 ) => {
   if (!ui || typeof ui.showCardGridSelectionModal !== "function") {
     return blueprints[0] || null;
@@ -71,7 +251,7 @@ const pickBlueprintFromModal = async (
 
   const displayCards = blueprints.map(buildBlueprintDisplayCard);
 
-  return new Promise((resolve) => {
+  return new Promise<StoredEffectBlueprint | null>((resolve) => {
     ui.showCardGridSelectionModal({
       title: options.title || "Escolha o efeito armazenado",
       subtitle: options.subtitle || "Selecione 1 efeito.",
@@ -95,21 +275,23 @@ const pickBlueprintFromModal = async (
   });
 };
 
-export function getBlueprintStorageConfig(card) {
+export function getBlueprintStorageConfig(
+  card: BlueprintCard | null | undefined,
+) {
   const raw = card?.blueprintStorage;
   if (!raw || typeof raw !== "object") return null;
 
   const maxSlots = Number(
-    raw.maxSlots ?? raw.maxStored ?? raw.maxStoredEffects ?? 1
+    raw.maxSlots ?? raw.maxStored ?? raw.maxStoredEffects ?? 1,
   );
 
   return {
     maxSlots: Number.isFinite(maxSlots) && maxSlots > 0 ? maxSlots : 1,
     allowedArchetypes: normalizeArray(
-      raw.allowedArchetypes || raw.allowedArchetype || raw.archetypeTag
+      raw.allowedArchetypes || raw.allowedArchetype || raw.archetypeTag,
     ),
     allowedCardKinds: normalizeArray(
-      raw.allowedCardKinds || raw.allowedCardKind || raw.cardKinds
+      raw.allowedCardKinds || raw.allowedCardKind || raw.cardKinds,
     ),
     storableEffectFlag:
       raw.storableEffectFlag || raw.effectFlag || DEFAULT_STORABLE_FLAG,
@@ -122,14 +304,25 @@ export function getBlueprintStorageConfig(card) {
   };
 }
 
-export function getBlueprintStorageState(card, create = false) {
+export function getBlueprintStorageState(
+  card: BlueprintCard,
+  create: true,
+): BlueprintStorageState;
+export function getBlueprintStorageState(
+  card: BlueprintCard | null | undefined,
+  create?: boolean,
+): BlueprintStorageState | null;
+export function getBlueprintStorageState(
+  card: BlueprintCard | null | undefined,
+  create = false,
+): BlueprintStorageState | null {
   if (!card) return null;
   if (!card.state && !create) return null;
   if (!card.state && create) {
     card.state = {};
   }
-  if (!card.state.blueprintStorage && create) {
-    card.state.blueprintStorage = { storedBlueprints: [] };
+  if (!card.state!.blueprintStorage && create) {
+    card.state!.blueprintStorage = { storedBlueprints: [] };
   }
   const storage = card.state?.blueprintStorage || null;
   if (storage && !Array.isArray(storage.storedBlueprints)) {
@@ -138,12 +331,15 @@ export function getBlueprintStorageState(card, create = false) {
   return storage;
 }
 
-export function getStoredBlueprints(card) {
+export function getStoredBlueprints(
+  this: BlueprintHost,
+  card: BlueprintCard | null | undefined,
+) {
   const storage = this.getBlueprintStorageState(card, false);
   return storage?.storedBlueprints || [];
 }
 
-export function clearBlueprintStorage(card) {
+export function clearBlueprintStorage(card: BlueprintCard | null | undefined) {
   if (!card?.state?.blueprintStorage) return false;
   delete card.state.blueprintStorage;
   if (card.state && Object.keys(card.state).length === 0) {
@@ -152,7 +348,10 @@ export function clearBlueprintStorage(card) {
   return true;
 }
 
-export function buildEffectBlueprint(sourceCard, effect) {
+export function buildEffectBlueprint(
+  sourceCard: ActionRuntimeCard | null | undefined,
+  effect: BlueprintEffect | null | undefined,
+): StoredEffectBlueprint | null {
   if (!sourceCard || !effect) return null;
   const blueprintId =
     effect.blueprintId ||
@@ -169,7 +368,7 @@ export function buildEffectBlueprint(sourceCard, effect) {
     sourceCard.description ||
     "";
 
-  let effectSnapshot = null;
+  let effectSnapshot: BlueprintEffect | null = null;
   try {
     effectSnapshot = JSON.parse(JSON.stringify(effect));
   } catch (err) {
@@ -191,15 +390,26 @@ export function buildEffectBlueprint(sourceCard, effect) {
   };
 }
 
-export function resolveEffectBlueprint(blueprint) {
+export function resolveEffectBlueprint(
+  blueprint: StoredEffectBlueprint | null | undefined,
+) {
   if (!blueprint) return null;
   if (blueprint.effectSnapshot) return blueprint.effectSnapshot;
   return null;
 }
 
-export async function executeEffectBlueprint(blueprint, ctx, selections = null) {
+export async function executeEffectBlueprint(
+  this: BlueprintHost,
+  blueprint: StoredEffectBlueprint | null | undefined,
+  ctx: BlueprintContext,
+  selections: CanonicalSelectionMap | null = null,
+): Promise<BlueprintResult> {
   if (!blueprint || !ctx?.player || !ctx?.source) {
-    return { success: false, needsSelection: false, reason: "Missing context." };
+    return {
+      success: false,
+      needsSelection: false,
+      reason: "Missing context.",
+    };
   }
 
   const effect = this.resolveEffectBlueprint(blueprint);
@@ -225,7 +435,7 @@ export async function executeEffectBlueprint(blueprint, ctx, selections = null) 
     actionContext: ctx.actionContext || activationContext.actionContext,
   };
 
-  if (effect.requireEmptyField && execCtx.player.field.length > 0) {
+  if (effect.requireEmptyField && execCtx.player!.field.length > 0) {
     return {
       success: false,
       needsSelection: false,
@@ -244,7 +454,11 @@ export async function executeEffectBlueprint(blueprint, ctx, selections = null) 
 
   const respectUsageLimits = blueprint.respectUsageLimits === true;
   if (respectUsageLimits) {
-    const optCheck = this.checkOncePerTurn(execCtx.source, execCtx.player, effect);
+    const optCheck = this.checkOncePerTurn(
+      execCtx.source!,
+      execCtx.player!,
+      effect,
+    );
     if (!optCheck.ok) {
       return {
         success: false,
@@ -253,7 +467,11 @@ export async function executeEffectBlueprint(blueprint, ctx, selections = null) 
       };
     }
 
-    const duelCheck = this.checkOncePerDuel(execCtx.source, execCtx.player, effect);
+    const duelCheck = this.checkOncePerDuel(
+      execCtx.source!,
+      execCtx.player!,
+      effect,
+    );
     if (!duelCheck.ok) {
       return {
         success: false,
@@ -267,7 +485,7 @@ export async function executeEffectBlueprint(blueprint, ctx, selections = null) 
   const targetResult = this.resolveTargets(
     effect.targets || [],
     execCtx,
-    selectionMap
+    selectionMap,
   );
 
   if (targetResult.needsSelection) {
@@ -289,7 +507,7 @@ export async function executeEffectBlueprint(blueprint, ctx, selections = null) 
   const actionsResult = await this.applyActions(
     effect.actions || [],
     execCtx,
-    targetResult.targets || {}
+    targetResult.targets || {},
   );
   if (
     actionsResult &&
@@ -300,7 +518,7 @@ export async function executeEffectBlueprint(blueprint, ctx, selections = null) 
       success: false,
       needsSelection: true,
       selectionContract: actionsResult.selectionContract,
-      ...actionsResult,
+      ...(actionsResult as Partial<NeedsSelectionResult>),
     };
   }
   if (
@@ -317,13 +535,17 @@ export async function executeEffectBlueprint(blueprint, ctx, selections = null) 
   }
 
   if (respectUsageLimits) {
-    this.commitEffectUsage(execCtx.source, execCtx.player, effect);
+    this.commitEffectUsage(execCtx.source!, execCtx.player!, effect);
   }
 
   return { success: true, needsSelection: false };
 }
 
-export async function activateStoredBlueprint(action, ctx) {
+export async function activateStoredBlueprint(
+  this: BlueprintHost,
+  action: object,
+  ctx: BlueprintContext,
+) {
   const source = ctx?.source;
   const player = ctx?.player;
   if (!source || !player) return false;
@@ -345,9 +567,11 @@ export async function activateStoredBlueprint(action, ctx) {
     actionContext?.blueprintActivation ||
     (actionContext ? (actionContext.blueprintActivation = {}) : {});
 
-  let blueprint = null;
+  let blueprint: StoredEffectBlueprint | null | undefined = null;
   if (activationState.blueprintId) {
-    blueprint = stored.find((bp) => bp.blueprintId === activationState.blueprintId);
+    blueprint = stored.find(
+      (bp) => bp.blueprintId === activationState.blueprintId,
+    );
   }
 
   if (!blueprint) {
@@ -378,7 +602,7 @@ export async function activateStoredBlueprint(action, ctx) {
   const execResult = await this.executeEffectBlueprint(
     blueprint,
     ctx,
-    ctx?.selections
+    ctx?.selections,
   );
 
   if (execResult?.needsSelection) {
@@ -406,9 +630,10 @@ export async function activateStoredBlueprint(action, ctx) {
 }
 
 export async function handleBlueprintStorageAfterResolution(
-  sourceCard,
-  effect,
-  ctx
+  this: BlueprintHost,
+  sourceCard: BlueprintCard | null | undefined,
+  effect: BlueprintEffect | null | undefined,
+  ctx: BlueprintContext,
 ) {
   if (!sourceCard || !effect || sourceCard.cardKind !== "spell") return false;
   const player = ctx?.player;
@@ -416,11 +641,11 @@ export async function handleBlueprintStorageAfterResolution(
   if (this.game.gameOver) return false;
 
   const storageCards = (player.spellTrap || []).filter(
-    (card) => card && this.getBlueprintStorageConfig(card)
+    (card) => card && this.getBlueprintStorageConfig(card),
   );
   if (!storageCards.length) return false;
 
-  const storageCard = storageCards[0];
+  const storageCard = storageCards[0]!; // The filtered storage list is non-empty above.
   const config = this.getBlueprintStorageConfig(storageCard);
   if (!config) return false;
 
@@ -435,14 +660,18 @@ export async function handleBlueprintStorageAfterResolution(
 
   if (config.allowedArchetypes?.length) {
     const matches = config.allowedArchetypes.some((arc) =>
-      this.cardHasArchetype(sourceCard, arc)
+      this.cardHasArchetype(sourceCard, arc),
     );
     if (!matches) return false;
   }
 
   const storableFlag = config.storableEffectFlag || DEFAULT_STORABLE_FLAG;
-  const isEffectStorable = !!effect[storableFlag];
-  const isCardStorable = !!sourceCard[storableFlag];
+  const isEffectStorable = !!(
+    effect as BlueprintEffect & Record<string, unknown>
+  )[storableFlag];
+  const isCardStorable = !!(
+    sourceCard as BlueprintCard & Record<string, unknown>
+  )[storableFlag];
   if (!isEffectStorable && !isCardStorable) return false;
 
   const blueprint = this.buildEffectBlueprint(sourceCard, effect);
@@ -457,7 +686,7 @@ export async function handleBlueprintStorageAfterResolution(
   const hasSpace = storedBlueprints.length < maxSlots;
 
   let shouldStore = true;
-  let replaceIndex = null;
+  let replaceIndex: number | null = null;
 
   if (!hasSpace) {
     if (!config.allowOverwrite) {
@@ -468,7 +697,7 @@ export async function handleBlueprintStorageAfterResolution(
       const existingName =
         storedBlueprints[0]?.displayName || "efeito armazenado";
       const prompt = this.ui?.showConfirmPrompt?.(
-        `Substituir o efeito armazenado (${existingName}) por ${blueprint.displayName}?`
+        `Substituir o efeito armazenado (${existingName}) por ${blueprint.displayName}?`,
       );
       shouldStore = await resolvePromptResult(prompt);
     } else if (isAI(player) && !config.autoStoreForAI) {
@@ -488,14 +717,18 @@ export async function handleBlueprintStorageAfterResolution(
     }
 
     if (storedBlueprints.length > 1 && !isAI(player)) {
-      const replacement = await pickBlueprintFromModal(this.ui, storedBlueprints, {
-        title: "Substituir efeito armazenado",
-        subtitle: "Selecione 1 efeito para substituir.",
-        confirmLabel: "Substituir",
-      });
+      const replacement = await pickBlueprintFromModal(
+        this.ui,
+        storedBlueprints,
+        {
+          title: "Substituir efeito armazenado",
+          subtitle: "Selecione 1 efeito para substituir.",
+          confirmLabel: "Substituir",
+        },
+      );
       replaceIndex = replacement
         ? storedBlueprints.findIndex(
-            (bp) => bp.blueprintId === replacement.blueprintId
+            (bp) => bp.blueprintId === replacement.blueprintId,
           )
         : null;
     }
@@ -505,7 +738,7 @@ export async function handleBlueprintStorageAfterResolution(
     }
   } else if (!isAI(player) && config.promptOnStore) {
     const prompt = this.ui?.showConfirmPrompt?.(
-      `Salvar o efeito desta magia no Grimorio?`
+      `Salvar o efeito desta magia no Grimorio?`,
     );
     shouldStore = await resolvePromptResult(prompt);
   } else if (isAI(player) && !config.autoStoreForAI) {
@@ -524,7 +757,7 @@ export async function handleBlueprintStorageAfterResolution(
     return false;
   }
 
-  let replacedBlueprint = null;
+  let replacedBlueprint: StoredEffectBlueprint | null = null;
   if (replaceIndex != null) {
     replacedBlueprint = storedBlueprints[replaceIndex] || null;
     storedBlueprints[replaceIndex] = blueprint;

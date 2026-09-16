@@ -1,19 +1,19 @@
 export type SupportedLocale = "en" | "pt-br";
 export interface DisplayCard {
-  id?: string | number | null;
-  name?: string | null;
-  description?: string | null;
+  id?: (string | number | null) | undefined;
+  name?: (string | null) | undefined;
+  description?: (string | null) | undefined;
   monsterType?: string | null;
   extraDeckSummonProcedure?: unknown;
   fusionMaterials?: unknown;
   types?: readonly string[] | null;
-  type?: string | null;
-  level?: number | null;
+  type?: (string | null) | undefined;
+  level?: (number | null) | undefined;
   attribute?: string | null;
   isTuner?: boolean;
-  atk?: number | null;
-  def?: number | null;
-  cardKind?: string | null;
+  atk?: (number | null) | undefined;
+  def?: (number | null) | undefined;
+  cardKind?: (string | null) | undefined;
   subtype?: string | null;
 }
 interface CardTranslation {
@@ -803,7 +803,8 @@ export function getCardDisplayDescription(
 function findFirstSentenceBreak(text: unknown) {
   const match = String(text || "").match(/^([\s\S]*?\.)\s+(\S[\s\S]*)$/u);
   if (!match) return -1;
-  return match[1].length;
+  // The first capture is mandatory in a successful match.
+  return match[1]!.length;
 }
 
 function findMaterialLineBreak(text: unknown) {

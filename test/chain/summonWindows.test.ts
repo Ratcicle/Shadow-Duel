@@ -160,7 +160,7 @@ test("[CS-03] Flip Summon abre janela de negação", async (t) => {
   assert.ok(result.success === true);
   assert.equal(attemptWindows, 1);
   assert.equal(afterSummons.length, 1);
-  assert.equal(afterSummons[0].method, "flip");
+  assert.equal(required(afterSummons[0]).method, "flip");
   assert.equal(game.player.field.includes(card), true);
   assert.equal(card.isFacedown, false);
   assert.equal(card.locationVersion, 1);
@@ -254,7 +254,7 @@ test("[CS-03] Invocação produzida durante resolução não abre janela aninhad
   assert.ok(result.success === true);
   assert.deepEqual(game.player.field, [card]);
   assert.equal(afterSummons.length, 1);
-  assert.equal(afterSummons[0].summonOrigin, "effect_resolution");
+  assert.equal(required(afterSummons[0]).summonOrigin, "effect_resolution");
   assert.equal(
     timingOrigins.includes(FAST_EFFECT_ORIGINS.SUMMON_ATTEMPT),
     false,
@@ -329,7 +329,7 @@ test("sucesso move a carta e publica after_summon exatamente uma vez", async (t)
   assert.equal(card.locationVersion, 1);
   assert.equal(moved.filter((payload) => payload.card === card).length, 1);
   assert.equal(afterSummons.length, 1);
-  assert.equal(afterSummons[0].summonId, result.summonId);
+  assert.equal(required(afterSummons[0]).summonId, result.summonId);
   assert.equal(required(game.getSummonState().last).status, "succeeded");
   assert.doesNotThrow(() => JSON.stringify(transactionEvents));
 });

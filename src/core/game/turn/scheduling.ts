@@ -15,7 +15,7 @@ import type {
   GameCard,
   GamePlayer,
 } from "../../contracts/gameRuntime.js";
-import type { GamePhase } from "../../contracts/game.js";
+import type { DelayedActionType, GamePhase } from "../../contracts/game.js";
 import type { PlayerId } from "../../contracts/primitives.js";
 
 interface DelayedTriggerCondition {
@@ -33,17 +33,14 @@ interface DelayedActionPayload {
 
 interface DelayedAction {
   id: string;
-  actionType: string;
+  actionType: DelayedActionType;
   triggerCondition: DelayedTriggerCondition;
   payload: DelayedActionPayload;
   scheduledTurn: number;
   priority: number;
 }
 
-type SchedulingHost = Pick<
-  FullGameHost,
-  "player" | "bot" | "turnCounter"
-> & {
+type SchedulingHost = Pick<FullGameHost, "player" | "bot" | "turnCounter"> & {
   delayedActions: DelayedAction[];
   isDisposed?(): boolean;
   createDeterministicId?(scope: string): string;
@@ -71,7 +68,7 @@ type SchedulingHost = Pick<
  */
 export function scheduleDelayedAction(
   this: SchedulingHost,
-  actionType: string,
+  actionType: DelayedActionType,
   triggerCondition: DelayedTriggerCondition,
   payload: DelayedActionPayload,
   priority = 0,
@@ -83,7 +80,8 @@ export function scheduleDelayedAction(
   }
 
   const action = {
-    id: this.createDeterministicId?.("delayed_action") ||
+    id:
+      this.createDeterministicId?.("delayed_action") ||
       `delayed_action_${this.delayedActions.length + 1}`,
     actionType,
     triggerCondition,
@@ -150,7 +148,7 @@ export async function processDelayedActions(
 
   // Remove resolved actions
   this.delayedActions = this.delayedActions.filter(
-    (action) => !actionsToResolve.includes(action)
+    (action) => !actionsToResolve.includes(action),
   );
 }
 
@@ -173,7 +171,9 @@ export async function resolveDelayedAction(
         await resolveDelayedDestroy.call(this, action.payload);
         break;
       default:
-        console.warn(`Unknown delayed action type: ${action.actionType}`);
+        console.warn(
+          `Unknown delayed action type: ${action.actionType satisfies never}`,
+        );
     }
   } catch (err) {
     console.error("Error resolving delayed action:", err);
@@ -187,7 +187,8 @@ async function resolveDelayedDestroy(
   const card = payload.card || null;
   if (!card) return;
 
-  const expectedOwnerId = payload.owner || payload.ownerId || card.owner || null;
+  const expectedOwnerId =
+    payload.owner || payload.ownerId || card.owner || null;
   const owner =
     expectedOwnerId === "player"
       ? this.player

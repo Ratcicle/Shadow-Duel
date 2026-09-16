@@ -11,13 +11,13 @@ interface SmokeOptions {
   duels: number;
   speed: string;
   matchups: string[];
-  plannerMode: string | null;
-  plannerTurnMode: string | null;
+  plannerMode: string | null | undefined;
+  plannerTurnMode: string | null | undefined;
   plannerBeamWidth: number | null;
   plannerMaxDepth: number | null;
   plannerNodeBudget: number | null;
   plannerCandidateLimit: number | null;
-  out: string | null;
+  out: string | null | undefined;
   verbose: boolean;
 }
 
@@ -72,7 +72,10 @@ function parseArgs(argv = process.argv.slice(2)) {
     const next = () => argv[++index];
     if (arg === "--duels") options.duels = Number(next()) || options.duels;
     else if (arg === "--speed") options.speed = next() || options.speed;
-    else if (arg === "--matchup") options.matchups = [next()].filter(Boolean);
+    else if (arg === "--matchup")
+      options.matchups = [next()].filter((value): value is string =>
+        Boolean(value),
+      );
     else if (arg === "--matchups") {
       options.matchups = String(next() || "")
         .split(",")

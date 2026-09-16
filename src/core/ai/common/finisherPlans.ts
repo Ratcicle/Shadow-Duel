@@ -1,8 +1,8 @@
 interface FinisherPlanInput<Details> {
   kind: string;
-  targetName?: string | null;
+  targetName?: string | null | undefined;
   score100: number;
-  reason?: string | null;
+  reason?: string | null | undefined;
   preserveHollowsInGY?: boolean;
   preserveResources?: readonly string[] | null;
   details?: Details;
@@ -10,10 +10,10 @@ interface FinisherPlanInput<Details> {
 
 export interface FinisherPlan<Details = unknown> {
   kind: string;
-  targetName?: string | null;
+  targetName?: string | null | undefined;
   score100: number;
   actionPriority: number;
-  reason?: string | null;
+  reason?: string | null | undefined;
   preserveHollowsInGY: boolean;
   preserveResources?: string[];
   details: Details;

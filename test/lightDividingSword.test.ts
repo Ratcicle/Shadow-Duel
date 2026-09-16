@@ -96,7 +96,10 @@ test("Light-Dividing Sword declares the corrected target and text", () => {
   );
   assert.ok(effect);
   assert.equal(effect.fromZone, undefined);
-  assert.deepEqual(required(effect.targets)[0].cardKind, ["spell", "trap"]);
+  assert.deepEqual(required(required(effect.targets)[0]).cardKind, [
+    "spell",
+    "trap",
+  ]);
 
   const locale = JSON.parse(
     readFileSync(

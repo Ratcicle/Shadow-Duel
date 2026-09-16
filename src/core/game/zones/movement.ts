@@ -5,10 +5,7 @@ import {
   restoreTemporaryStatuses,
   restoreTrapMonsterOriginalState,
 } from "../../Card.js";
-import {
-  SUMMON_MODES,
-  SUMMON_ORIGINS,
-} from "../summon/transaction.js";
+import { SUMMON_MODES, SUMMON_ORIGINS } from "../summon/transaction.js";
 import {
   checkSpecialSummonEligibility,
   resetProperSummon,
@@ -50,6 +47,7 @@ import {
 } from "../../contracts/zones.js";
 import type { SummonMethod, SummonOrigin } from "../../contracts/summon.js";
 import type { ChainSourceZone } from "../../contracts/chainRuntime.js";
+import type { ActionRuntimeCard } from "../../contracts/actionRuntime.js";
 import type { CardAction } from "../../contracts/actions.js";
 import type {
   CardFilter,
@@ -62,10 +60,7 @@ type MovementSourceZone = CanonicalZone | "token";
 type MovementEventZone = MovementSourceZone | "removed";
 
 interface MovementOptions
-  extends Omit<
-    MoveCardOptions,
-    "fromZone" | "destroyCause"
-  > {
+  extends Omit<MoveCardOptions, "fromZone" | "destroyCause"> {
   fromZone?: MovementSourceZone;
   destroyCause?: string | null;
   animateCards?: boolean;
@@ -79,7 +74,7 @@ type MovementInputOptions = Omit<MovementOptions, "fromZone"> & {
 };
 
 type MovementZoneOpOptions = Omit<ZoneOpOptions, "fromZone"> & {
-  fromZone?: MovementSourceZone | null;
+  fromZone?: MovementSourceZone | null | undefined;
 };
 
 interface MovementUiPort {
@@ -87,7 +82,11 @@ interface MovementUiPort {
   captureCardAnimationSource?(
     card: GameCard,
     options: { ownerId: string; zone: MovementEventZone },
-  ): { rect?: DOMRect | null; hadCardElement?: boolean; visual?: unknown } | null;
+  ): {
+    rect?: DOMRect | null;
+    hadCardElement?: boolean;
+    visual?: unknown;
+  } | null;
   showConfirmPrompt?(message: string, meta?: unknown): Promise<boolean>;
 }
 
@@ -102,7 +101,7 @@ interface MovementEffectEnginePort {
     targets: unknown,
   ): Promise<MovementEffectResult | boolean | null | undefined>;
   assignFieldPresenceId?(card: GameCard): void;
-  cardMatchesFilters?(card: GameCard, filters?: CardFilter): boolean;
+  cardMatchesFilters?(card: ActionRuntimeCard, filters?: CardFilter): boolean;
   checkActionPreviewRequirements?(
     actions: readonly CardAction[],
     context: unknown,
@@ -155,8 +154,15 @@ type MovementHost = Omit<
     operation: () => Result | Promise<Result>,
     options?: MovementZoneOpOptions,
   ): Result | ZoneOpFailure | Promise<Result | ZoneOpFailure>;
-  destroyCard(card: GameCard, options?: unknown): Promise<{ destroyed?: boolean }>;
-  emit(eventName: string, payload: unknown, options?: unknown): Promise<MovementEventResult>;
+  destroyCard(
+    card: GameCard,
+    options?: unknown,
+  ): Promise<{ destroyed?: boolean }>;
+  emit(
+    eventName: string,
+    payload: unknown,
+    options?: unknown,
+  ): Promise<MovementEventResult>;
   updateBoard(): MaybePromise<unknown>;
   waitForBoardPresentation?(): Promise<unknown>;
   waitForPresentationDelay?(delayMs: number): Promise<unknown>;
@@ -347,7 +353,7 @@ export function cleanupTokenReferences(
       eq &&
       eq.cardKind === "spell" &&
       eq.subtype === "equip" &&
-      (eq.equippedTo === token || eq.equipTarget === token)
+      (eq.equippedTo === token || eq.equipTarget === token),
   );
 
   // Process equips: clear refs and send to GY
@@ -395,7 +401,7 @@ export function cleanupTokenReferences(
     }).then((result) => {
       if (result?.destroyed) {
         this.ui.log(
-          `${trap.name} was destroyed as ${token.name} (Token) was removed from the game.`
+          `${trap.name} was destroyed as ${token.name} (Token) was removed from the game.`,
         );
         this.updateBoard();
       }
@@ -502,7 +508,10 @@ function resolveOriginalOwnerDestination(
     return null;
   }
 
-  const originalOwnerId = ensureOriginalOwner(card, fromOwner?.id || card.owner);
+  const originalOwnerId = ensureOriginalOwner(
+    card,
+    fromOwner?.id || card.owner,
+  );
   return getPlayerById(game, originalOwnerId);
 }
 
@@ -571,13 +580,12 @@ export function moveCard(
   inputOptions: MovementInputOptions = {},
 ): MaybePromise<MoveCardResult | SummonExecutionResult | ZoneOpFailure> {
   toZone = normalizeZoneInput(toZone);
-  const options: MovementOptions =
-    !hasNormalizedMovementSource(inputOptions)
-      ? {
-          ...inputOptions,
-          fromZone: "banished",
-        }
-      : inputOptions;
+  const options: MovementOptions = !hasNormalizedMovementSource(inputOptions)
+    ? {
+        ...inputOptions,
+        fromZone: "banished",
+      }
+    : inputOptions;
   this.ensureDuelCardId?.(card);
   const sourceLocation =
     toZone === "field" && card?.cardKind === "monster"
@@ -599,23 +607,18 @@ export function moveCard(
     typeof this.executeSummonTransaction === "function";
   const requiresSummonOrigin =
     sourceLocation != null && sourceLocation.zone !== "field";
-  if (
-    requiresSummonOrigin &&
-    !isSummonOrigin(options.summonOrigin)
-  ) {
+  if (requiresSummonOrigin && !isSummonOrigin(options.summonOrigin)) {
     return {
       success: false,
       code: "SUMMON_ORIGIN_REQUIRED",
-      reason: "Monster movement to the field requires an explicit summonOrigin.",
+      reason:
+        "Monster movement to the field requires an explicit summonOrigin.",
     };
   }
   const coordinatedSummonOrigin = shouldCoordinateSummon
     ? options.summonOrigin
     : null;
-  if (
-    shouldCoordinateSummon &&
-    coordinatedSummonOrigin != null
-  ) {
+  if (shouldCoordinateSummon && coordinatedSummonOrigin != null) {
     const prepared = this.createPreparedSummon({
       card,
       controller: destPlayer,
@@ -650,7 +653,7 @@ export function moveCard(
       card,
       fromZone: options.fromZone,
       toZone,
-    }
+    },
   );
   if (isPromiseLike(result)) {
     return result.then((moveResult: MoveCardResult | ZoneOpFailure) => {
@@ -664,7 +667,13 @@ export function moveCard(
       return moveResult;
     });
   }
-  this._arenaTracker?.recordZoneMove?.(card, destPlayer, toZone, options, result);
+  this._arenaTracker?.recordZoneMove?.(
+    card,
+    destPlayer,
+    toZone,
+    options,
+    result,
+  );
   return result;
 }
 
@@ -757,8 +766,7 @@ async function emitCardMovedEvent(
     linkId: options.linkId ?? null,
     summonId: options.summonTransaction?.summonId ?? options.summonId ?? null,
     summonOrigin: options.summonOrigin || null,
-    summonMethod:
-      options.summonMethodOverride || options.summonMethod || null,
+    summonMethod: options.summonMethodOverride || options.summonMethod || null,
     summonProcedure: options.summonProcedure || null,
     contextLabel: options.contextLabel || null,
     wasDestroyed: options.wasDestroyed === true,
@@ -795,8 +803,10 @@ function buildZoneMoveAnimationIntent(
   options: MovementOptions,
 ): ZoneMoveAnimationIntent | null {
   if (!game?.cardAnimationsReady) return null;
-  if (!card || card.instanceId == null || !fromOwner || !destPlayer) return null;
-  if (options?.animateCards === false || options?.skipAnimation === true) return null;
+  if (!card || card.instanceId == null || !fromOwner || !destPlayer)
+    return null;
+  if (options?.animateCards === false || options?.skipAnimation === true)
+    return null;
   if (fromZone === toZone) return null;
 
   const source = game.ui?.captureCardAnimationSource?.(card, {
@@ -940,8 +950,7 @@ export async function applyPendingSynchroMaterialFollowups(
   options: MovementOptions = {},
 ) {
   const resolvedOwner =
-    ownerPlayer ||
-    (summonedCard?.owner === "player" ? this.player : this.bot);
+    ownerPlayer || (summonedCard?.owner === "player" ? this.player : this.bot);
   const otherPlayer =
     resolvedOwner && typeof this.getOpponent === "function"
       ? this.getOpponent(resolvedOwner)
@@ -1078,7 +1087,9 @@ function resolvePlayerRef(
   if (!game || !ref) return null;
   if (ref === game.player || ref === game.bot) return ref;
   const id =
-    typeof ref === "string" ? ref : ref.id || ref.controller || ref.owner || null;
+    typeof ref === "string"
+      ? ref
+      : ref.id || ref.controller || ref.owner || null;
   if (!id) return null;
   return [game.player, game.bot].find((player) => player?.id === id) || null;
 }
@@ -1172,7 +1183,9 @@ function findSendToGraveReplacementTarget(
     const fieldCards = sourceOwner.field || [];
     for (const sourceCard of fieldCards) {
       if (!sourceCard || sourceCard.isFacedown) continue;
-      const effects = Array.isArray(sourceCard.effects) ? sourceCard.effects : [];
+      const effects = Array.isArray(sourceCard.effects)
+        ? sourceCard.effects
+        : [];
       for (const effect of effects) {
         if (!effect || effect.timing !== "passive") continue;
         const passive = effect.passive;
@@ -1185,7 +1198,9 @@ function findSendToGraveReplacementTarget(
         const targetOwnerKey = passive.targetOwner || "opponent";
         if (targetOwnerKey !== "any") {
           const expectedOwner =
-            targetOwnerKey === "self" ? sourceOwner : game.getOpponent(sourceOwner);
+            targetOwnerKey === "self"
+              ? sourceOwner
+              : game.getOpponent(sourceOwner);
           if (expectedOwner !== fromOwner) continue;
         }
 
@@ -1240,7 +1255,7 @@ function buildBanishProtectionFilters(
   for (const key of keys) {
     const scopeValue = Reflect.get(scope, key);
     const value =
-      key === "type" ? scopeValue : scopeValue ?? Reflect.get(passive, key);
+      key === "type" ? scopeValue : (scopeValue ?? Reflect.get(passive, key));
     if (value !== undefined && Reflect.get(filters, key) === undefined) {
       Reflect.set(filters, key, value);
     }
@@ -1287,9 +1302,7 @@ function banishProtectionAppliesToCard(
         ) {
           continue;
         }
-        if (
-          !banishProtectionSourceMatches(game, passive, cardOwner, options)
-        ) {
+        if (!banishProtectionSourceMatches(game, passive, cardOwner, options)) {
           continue;
         }
 
@@ -1303,9 +1316,10 @@ function banishProtectionAppliesToCard(
           if (expectedOwner !== cardOwner) continue;
         }
 
-        const zones = asArray(scope.zones ?? scope.zone ?? passive.zones ?? passive.zone, [
-          "field",
-        ]);
+        const zones = asArray(
+          scope.zones ?? scope.zone ?? passive.zones ?? passive.zone,
+          ["field"],
+        );
         if (!zones.includes(cardZone)) continue;
         if ((scope.excludeSelf || passive.excludeSelf) && card === sourceCard) {
           continue;
@@ -1346,7 +1360,11 @@ function getSendToGraveReplacementSources(game: MovementHost) {
             : [];
       for (const card of zoneCards) {
         if (!card) continue;
-        entries.push({ sourceCard: card, sourceOwner: owner, sourceZone: zoneName });
+        entries.push({
+          sourceCard: card,
+          sourceOwner: owner,
+          sourceZone: zoneName,
+        });
       }
     }
   }
@@ -1433,7 +1451,8 @@ function matchesSendToGraveReplacement(
 ) {
   const { card, fromOwner, fromZone, sourceOwner } = ctx;
   if (!replacement || replacement.type !== "send_to_grave") return false;
-  if (!card || !fromOwner || !fromZone || !sourceCard || !sourceOwner) return false;
+  if (!card || !fromOwner || !fromZone || !sourceCard || !sourceOwner)
+    return false;
 
   if (
     (replacement.targetMustNotBeSource === true ||
@@ -1501,7 +1520,11 @@ async function trySendToGraveActionReplacement(
   );
   if (!location || location.zone !== "field") return { replaced: false };
 
-  for (const { sourceCard, sourceOwner, sourceZone } of getSendToGraveReplacementSources(game)) {
+  for (const {
+    sourceCard,
+    sourceOwner,
+    sourceZone,
+  } of getSendToGraveReplacementSources(game)) {
     if (!sourceCard || sourceCard.isFacedown) continue;
     if (game.effectEngine?.isEffectNegated?.(sourceCard)) continue;
 
@@ -1522,7 +1545,11 @@ async function trySendToGraveActionReplacement(
         continue;
       }
 
-      const optCheck = game.canUseOncePerTurn?.(sourceCard, sourceOwner, effect);
+      const optCheck = game.canUseOncePerTurn?.(
+        sourceCard,
+        sourceOwner,
+        effect,
+      );
       if (optCheck && optCheck.ok === false) continue;
 
       const opponent = game.getOpponent?.(sourceOwner) || null;
@@ -1551,19 +1578,16 @@ async function trySendToGraveActionReplacement(
 
       const preview =
         typeof game.effectEngine?.checkActionPreviewRequirements === "function"
-          ? game.effectEngine.checkActionPreviewRequirements(
-              actions,
-              {
-                ...replacementCtx,
+          ? game.effectEngine.checkActionPreviewRequirements(actions, {
+              ...replacementCtx,
+              preview: true,
+              isPreview: true,
+              activationContext: {
+                ...replacementCtx.activationContext,
                 preview: true,
                 isPreview: true,
-                activationContext: {
-                  ...replacementCtx.activationContext,
-                  preview: true,
-                  isPreview: true,
-                },
               },
-            )
+            })
           : { ok: true };
       if (preview?.ok === false) continue;
 
@@ -1646,7 +1670,7 @@ function matchesAny<Value>(
 }
 
 function cardMatchesFieldLimitFilters(
-  card: GameCard | null | undefined,
+  card: ActionRuntimeCard | null | undefined,
   filters: RuntimeCardFilter = {},
 ): boolean {
   if (!card) return false;
@@ -1752,8 +1776,8 @@ function getSummonMethodFromOptions(
 }
 
 function cardMatchesRestrictionFilters(
-  game: MovementHost,
-  card: GameCard,
+  game: SpecialSummonRestrictionHost,
+  card: ActionRuntimeCard,
   filters: CardFilter = {},
 ) {
   if (!filters || typeof filters !== "object") return true;
@@ -1761,6 +1785,23 @@ function cardMatchesRestrictionFilters(
     return game.effectEngine.cardMatchesFilters(card, filters);
   }
   return cardMatchesFieldLimitFilters(card, filters);
+}
+
+interface SpecialSummonRestrictionPlayer {
+  name?: string;
+  specialSummonRestrictions?: SpecialSummonRestriction[];
+}
+interface SpecialSummonRestrictionHost {
+  player: SpecialSummonRestrictionPlayer;
+  bot: SpecialSummonRestrictionPlayer;
+  turnCounter?: number;
+  effectEngine?: {
+    cardMatchesFilters?(card: ActionRuntimeCard, filters?: CardFilter): boolean;
+  };
+  ui?: { log?(message: string): void };
+  cleanupExpiredSpecialSummonRestrictions?(
+    player: SpecialSummonRestrictionPlayer,
+  ): void;
 }
 
 interface SpecialSummonRestrictionInput {
@@ -1814,8 +1855,8 @@ export function registerSpecialSummonRestriction(
 }
 
 export function cleanupExpiredSpecialSummonRestrictions(
-  this: MovementHost,
-  player: GamePlayer | null = null,
+  this: SpecialSummonRestrictionHost,
+  player: SpecialSummonRestrictionPlayer | null = null,
 ) {
   const players = player ? [player] : [this?.player, this?.bot].filter(Boolean);
   const currentTurn = Number(this?.turnCounter || 0);
@@ -1823,18 +1864,21 @@ export function cleanupExpiredSpecialSummonRestrictions(
     const restrictions = Array.isArray(entryPlayer?.specialSummonRestrictions)
       ? entryPlayer.specialSummonRestrictions
       : [];
-    entryPlayer.specialSummonRestrictions = restrictions.filter((restriction) => {
-      if (!restriction || restriction.duration !== "until_end_turn") return true;
-      if (!Number.isFinite(restriction.expiresOnTurn)) return true;
-      return Number(restriction.expiresOnTurn) >= currentTurn;
-    });
+    entryPlayer.specialSummonRestrictions = restrictions.filter(
+      (restriction) => {
+        if (!restriction || restriction.duration !== "until_end_turn")
+          return true;
+        if (!Number.isFinite(restriction.expiresOnTurn)) return true;
+        return Number(restriction.expiresOnTurn) >= currentTurn;
+      },
+    );
   }
 }
 
 export function canSpecialSummonUnderRestrictions(
-  this: MovementHost,
-  card: GameCard,
-  player: GamePlayer,
+  this: SpecialSummonRestrictionHost,
+  card: ActionRuntimeCard,
+  player: SpecialSummonRestrictionPlayer,
   options: MovementOptions = {},
 ) {
   if (!card || !player) {
@@ -2172,7 +2216,7 @@ export async function moveCardInternal(
   if (card.cardKind !== "monster" && toZone === "field") {
     console.error(
       `[moveCardInternal] 🚨 ATTEMPT: ${card.cardKind} "${card.name}" → field zone`,
-      { fromZone: options.fromZone, toZone, cardKind: card.cardKind }
+      { fromZone: options.fromZone, toZone, cardKind: card.cardKind },
     );
   }
 
@@ -2185,7 +2229,7 @@ export async function moveCardInternal(
   // 🚨 CRITICAL VALIDATION: Monster field zone only accepts monsters
   if (toZone === "field" && card.cardKind !== "monster") {
     console.error(
-      `[moveCardInternal] ❌ BLOCKED: Attempted to move non-monster "${card.name}" (kind: ${card.cardKind}) to monster field zone`
+      `[moveCardInternal] ❌ BLOCKED: Attempted to move non-monster "${card.name}" (kind: ${card.cardKind}) to monster field zone`,
     );
     this.ui?.log?.(`ERROR: Cannot place ${card.cardKind} in monster zone.`);
     return { success: false, reason: "invalid_card_kind_for_zone" };
@@ -2467,13 +2511,7 @@ export async function moveCardInternal(
 
   if (toZone === "banished") {
     const protection = isCanonicalZone(fromZone)
-      ? banishProtectionAppliesToCard(
-          this,
-          card,
-          fromOwner,
-          fromZone,
-          options,
-        )
+      ? banishProtectionAppliesToCard(this, card, fromOwner, fromZone, options)
       : null;
     if (protection) {
       restoreRemovedCardToSourceZone();
@@ -2507,8 +2545,7 @@ export async function moveCardInternal(
     options.allowExtraDeckMonsterToHand === true;
   const shouldRedirectExtraDeckMonsterToExtraDeck =
     isExtraDeckMonster &&
-    (toZone === "deck" ||
-      (toZone === "hand" && !allowExtraDeckMonsterToHand));
+    (toZone === "deck" || (toZone === "hand" && !allowExtraDeckMonsterToHand));
   const animationToZone = shouldRedirectExtraDeckMonsterToExtraDeck
     ? "extraDeck"
     : toZone;
@@ -2544,7 +2581,9 @@ export async function moveCardInternal(
         if (Reflect.get(equip, "lastEquippedCardLeftField") === card) {
           Reflect.deleteProperty(equip, "lastEquippedCardLeftField");
         }
-        if (Reflect.get(equip, "lastEquippedCardLeftFieldCause") !== undefined) {
+        if (
+          Reflect.get(equip, "lastEquippedCardLeftFieldCause") !== undefined
+        ) {
           Reflect.deleteProperty(equip, "lastEquippedCardLeftFieldCause");
         }
       }
@@ -2563,19 +2602,11 @@ export async function moveCardInternal(
     // Log the removal
     this.ui.log(`${card.name} (Token) was removed from the game.`);
 
-    await emitCardMovedEvent(
-      this,
-      card,
-      fromOwner,
-      null,
-      fromZone,
-      "removed",
-      {
-        ...options,
-        wasFaceupBeforeMove,
-        contextLabel: options.contextLabel || "token_removed",
-      },
-    );
+    await emitCardMovedEvent(this, card, fromOwner, null, fromZone, "removed", {
+      ...options,
+      wasFaceupBeforeMove,
+      contextLabel: options.contextLabel || "token_removed",
+    });
 
     // Update board to reflect removal
     this.updateBoard();
@@ -2719,7 +2750,7 @@ export async function moveCardInternal(
       // ✅ Clear protection effects when card leaves field (duration "while_faceup")
       if (Array.isArray(card.protectionEffects)) {
         card.protectionEffects = card.protectionEffects.filter(
-          (p) => p.removeOnLeave === false && p.duration !== "while_faceup"
+          (p) => p.removeOnLeave === false && p.duration !== "while_faceup",
         );
       }
     }
@@ -2790,7 +2821,11 @@ export async function moveCardInternal(
     // Generalized equip cleanup: if an equip card has destroyEquippedOnLeave, destroy the equipped monster
     // Check for passive effect with id pattern or explicit flag on card
     const hasDestroyOnLeaveEffect = (card.effects || []).some(
-      (e) => e && e.timing === "passive" && e.id && e.id.includes("destroy_on_leave")
+      (e) =>
+        e &&
+        e.timing === "passive" &&
+        e.id &&
+        e.id.includes("destroy_on_leave"),
     );
     if (
       (Reflect.get(card, "destroyEquippedOnLeave") === true ||
@@ -2805,7 +2840,7 @@ export async function moveCardInternal(
       }).then((result) => {
         if (result?.destroyed) {
           this.ui.log(
-            `${host.name} is destroyed as ${card.name} left the field.`
+            `${host.name} is destroyed as ${card.name} left the field.`,
           );
           this.updateBoard();
         }
@@ -2957,7 +2992,7 @@ export async function moveCardInternal(
       }).then((result) => {
         if (result?.destroyed) {
           this.ui.log(
-            `${callTrap.name} was destroyed as ${card.name} left the field.`
+            `${callTrap.name} was destroyed as ${card.name} left the field.`,
           );
           this.updateBoard();
         }
@@ -2990,7 +3025,7 @@ export async function moveCardInternal(
     }).then((result) => {
       if (result?.destroyed) {
         this.ui.log(
-          `${revivedMonster.name} was destroyed as ${card.name} left the field.`
+          `${revivedMonster.name} was destroyed as ${card.name} left the field.`,
         );
         this.updateBoard();
       }
@@ -3057,10 +3092,17 @@ export async function moveCardInternal(
   if (toZone === "field" && card.cardKind !== "monster") {
     console.error(
       `[moveCardInternal] 🚨 CRITICAL: About to push non-monster to field!`,
-      { card: card.name, cardKind: card.cardKind, toZone, stack: new Error().stack }
+      {
+        card: card.name,
+        cardKind: card.cardKind,
+        toZone,
+        stack: new Error().stack,
+      },
     );
     // Block it here too as last resort
-    this.ui?.log?.(`CRITICAL ERROR: ${card.cardKind} cannot go to monster zone`);
+    this.ui?.log?.(
+      `CRITICAL ERROR: ${card.cardKind} cannot go to monster zone`,
+    );
     return { success: false, reason: "invalid_card_kind_final_check" };
   }
 
@@ -3196,8 +3238,7 @@ export async function moveCardInternal(
       position: "defense",
       summonId: options.summonTransaction?.summonId ?? null,
       tributes: Array.isArray(options.tributes) ? options.tributes : [],
-      summonOrigin:
-        options.summonOrigin || SUMMON_ORIGINS.PROCEDURE,
+      summonOrigin: options.summonOrigin || SUMMON_ORIGINS.PROCEDURE,
       atomicGroupId,
     });
   }
@@ -3234,19 +3275,18 @@ export async function moveCardInternal(
     const ownerPlayer = card.owner === "player" ? this.player : this.bot;
     const otherPlayer = ownerPlayer === this.player ? this.bot : this.player;
     const summonMethod = options.summonMethodOverride || "special";
-    const followupResult =
-      await applySynchroMaterialFollowupsBeforeAfterSummon(
-        this,
-        card,
-        ownerPlayer,
-        otherPlayer,
-        options.synchroMaterialFollowups,
-        {
-          actionContext: options.actionContext || null,
-          summonMethod,
-          summonProcedure: options.summonProcedure || null,
-        },
-      );
+    const followupResult = await applySynchroMaterialFollowupsBeforeAfterSummon(
+      this,
+      card,
+      ownerPlayer,
+      otherPlayer,
+      options.synchroMaterialFollowups,
+      {
+        actionContext: options.actionContext || null,
+        summonMethod,
+        summonProcedure: options.summonProcedure || null,
+      },
+    );
     if (
       isMovementEventResult(followupResult) &&
       followupResult.needsSelection
@@ -3271,7 +3311,9 @@ export async function moveCardInternal(
           options.summonId ??
           null,
         summonOrigin:
-          summonOrigin || options.summonOrigin || SUMMON_ORIGINS.EFFECT_RESOLUTION,
+          summonOrigin ||
+          options.summonOrigin ||
+          SUMMON_ORIGINS.EFFECT_RESOLUTION,
         atomicGroupId,
       });
     }
@@ -3327,12 +3369,12 @@ export async function moveCardInternal(
         const delayMs =
           typeof configuredDelayMs === "number" &&
           Number.isFinite(configuredDelayMs)
-          ? configuredDelayMs
-          : 160;
+            ? configuredDelayMs
+            : 160;
         await this.waitForPresentationDelay(delayMs);
       }
       console.log(
-        `[moveCard] Emitting card_to_grave event for ${card.name} (fromZone: ${fromZone})`
+        `[moveCard] Emitting card_to_grave event for ${card.name} (fromZone: ${fromZone})`,
       );
       const cardToGravePayload = {
         card,
@@ -3351,8 +3393,7 @@ export async function moveCardInternal(
           options.summonTransaction?.summonId ??
           summonAttemptResult?.transaction?.summonId ??
           null,
-        summonOrigin:
-          summonOrigin || options.summonOrigin || null,
+        summonOrigin: summonOrigin || options.summonOrigin || null,
         summonMethod:
           options.summonMethodOverride || options.summonMethod || null,
         summonProcedure: options.summonProcedure || null,
@@ -3424,11 +3465,17 @@ export async function moveCardInternal(
       null,
     summonOrigin: summonOrigin || options.summonOrigin || null,
   };
-  if (afterSummonResult?.needsSelection && afterSummonResult.selectionContract) {
+  if (
+    afterSummonResult?.needsSelection &&
+    afterSummonResult.selectionContract
+  ) {
     result.needsSelection = true;
     result.selectionContract = afterSummonResult.selectionContract;
   }
-  if (cardToGraveResult?.needsSelection && cardToGraveResult.selectionContract) {
+  if (
+    cardToGraveResult?.needsSelection &&
+    cardToGraveResult.selectionContract
+  ) {
     result.needsSelection = true;
     result.selectionContract = cardToGraveResult.selectionContract;
   }
@@ -3438,10 +3485,7 @@ export async function moveCardInternal(
       ? cardToGraveResult.entries
       : [];
   }
-  if (
-    summonAttemptResult?.ownsTransaction &&
-    summonAttemptResult.transaction
-  ) {
+  if (summonAttemptResult?.ownsTransaction && summonAttemptResult.transaction) {
     this.finishSummonTransaction?.(summonAttemptResult.transaction, result);
   }
   return result;

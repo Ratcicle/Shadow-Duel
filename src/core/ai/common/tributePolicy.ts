@@ -60,7 +60,7 @@ export function getTributeRequirementFor<Card extends TributeSummonCard>(
   else if ((card.level as number) >= 7) tributesNeeded = 2;
 
   let usingAlt = false;
-  const alt: Card["altTribute"] = card.altTribute;
+  const alt: Card["altTribute"] | undefined = card.altTribute;
   if (
     alt?.type === "no_tribute_if_empty_field" &&
     (playerState.field?.length || 0) === 0 &&

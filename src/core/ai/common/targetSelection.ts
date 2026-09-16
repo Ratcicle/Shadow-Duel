@@ -158,18 +158,18 @@ interface RankCandidateOptions extends TargetSelectionOptions {
 }
 
 interface OffensiveTemporaryBuffOptions {
-  atkBoost?: number;
-  opponentField?: readonly SimulatedCardState[];
-  opponentLp?: number;
+  atkBoost?: number | undefined;
+  opponentField?: readonly SimulatedCardState[] | undefined;
+  opponentLp?: number | undefined;
 }
 
 interface TemporaryCombatDebuffOptions {
   attackers?: readonly SimulatedCardState[];
   opponentLp?: number;
-  atkReduction?: number | null;
-  defReduction?: number | null;
-  destroyIfAtkZeroedByThisEffect?: boolean;
-  destroyIfDefZeroedByThisEffect?: boolean;
+  atkReduction?: number | null | undefined;
+  defReduction?: number | null | undefined;
+  destroyIfAtkZeroedByThisEffect?: boolean | undefined;
+  destroyIfDefZeroedByThisEffect?: boolean | undefined;
 }
 
 interface RecursionPreference {
@@ -180,9 +180,9 @@ interface RecursionPreference {
 
 interface SelectSimulatedTargetsInput {
   targets: readonly AiTargetFilter[] | null | undefined;
-  actions?: readonly (CardAction & ActionIntentView)[] | null;
+  actions?: readonly (CardAction & ActionIntentView)[] | null | undefined;
   state: Pick<AiStateShape, "bot" | "player">;
-  sourceCard?: SimulatedCardState | null;
+  sourceCard?: SimulatedCardState | null | undefined;
   selfId?: string;
   options?: TargetSelectionOptions;
 }

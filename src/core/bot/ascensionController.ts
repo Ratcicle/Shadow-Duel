@@ -1,7 +1,14 @@
-import type { BotRuntimePort, BotGamePort, BotAutomaticAscensionChoice } from "../contracts/bot.js";
+import type {
+  BotRuntimePort,
+  BotGamePort,
+  BotAutomaticAscensionChoice,
+} from "../contracts/bot.js";
 import type { GameCard, BattlePositionInput } from "../contracts/cards.js";
 
-export async function tryAscensionIfAvailable(bot: BotRuntimePort, game: BotGamePort): Promise<boolean> {
+export async function tryAscensionIfAvailable(
+  bot: BotRuntimePort,
+  game: BotGamePort,
+): Promise<boolean> {
   try {
     const choices: BotAutomaticAscensionChoice[] = [];
     const materials = (bot.field || []).filter(
@@ -46,10 +53,15 @@ export async function tryAscensionIfAvailable(bot: BotRuntimePort, game: BotGame
     }
 
     if (!selected) {
-      const firstMaterial = choices[0].material;
-      const eligibleForFirstMaterial = choices
-        .filter((choice) => choice.material === firstMaterial)
-        .map((choice) => choice.ascensionCard);
+      const firstChoice = choices[0]!;
+      const firstMaterial = firstChoice.material;
+      const eligibleForFirstMaterial: [GameCard, ...GameCard[]] = [
+        firstChoice.ascensionCard,
+        ...choices
+          .slice(1)
+          .filter((choice) => choice.material === firstMaterial)
+          .map((choice) => choice.ascensionCard),
+      ];
       selected = {
         material: firstMaterial,
         ascensionCard: bot.selectBestAscension(
@@ -98,7 +110,12 @@ export async function tryAscensionIfAvailable(bot: BotRuntimePort, game: BotGame
  * @param {Object} game - Instancia do jogo
  * @returns {Object} Melhor ascensao
  */
-export function selectBestAscension(bot: BotRuntimePort, eligible: GameCard[], material: GameCard, game: BotGamePort): GameCard {
+export function selectBestAscension(
+  bot: BotRuntimePort,
+  eligible: readonly [GameCard, ...GameCard[]],
+  material: GameCard,
+  game: BotGamePort,
+): GameCard {
   if (eligible.length === 1) return eligible[0];
 
   const opponent = bot.resolveOpponent(game);
@@ -128,10 +145,16 @@ export function selectBestAscension(bot: BotRuntimePort, eligible: GameCard[], m
 
   // Ordenar por score decrescente e retornar o melhor
   scored.sort((a, b) => b.score - a.score);
-  return scored[0].asc;
+  // Mapping and sorting the nonempty tuple preserve at least one scored entry.
+  return scored[0]!.asc;
 }
 
-export function getAscensionPositionPreference(bot: BotRuntimePort, ascensionCard: GameCard, _material: GameCard, game: BotGamePort): BattlePositionInput {
+export function getAscensionPositionPreference(
+  bot: BotRuntimePort,
+  ascensionCard: GameCard,
+  _material: GameCard,
+  game: BotGamePort,
+): BattlePositionInput {
   if (ascensionCard?.name !== "Metal Armored Dragon") {
     return ascensionCard?.ascension?.position || "choice";
   }

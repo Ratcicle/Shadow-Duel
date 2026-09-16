@@ -1,3 +1,4 @@
+import { required } from "../helpers/fixtures.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 import Card from "../../src/core/Card.js";
@@ -36,45 +37,58 @@ test("selection session normalizes, exposes field state and resolves once", asyn
   game.ui.log = () => {};
 
   let executedSelections: object | null = null;
-  Reflect.apply(game.startTargetSelectionSession, game, [{
-    kind: "target",
-    owner: game.player,
-    card,
-    selectionContract: {
+  Reflect.apply(game.startTargetSelectionSession, game, [
+    {
       kind: "target",
-      timing: "activation",
-      purpose: "target",
-      message: "Choose the target",
-      requirements: {
-        id: "target",
-        min: 1,
-        max: 1,
-        candidates: [
-          {
-            cardRef: card,
-            controller: "player",
-            zone: "field",
-            zoneIndex: 0,
-          },
-        ],
+      owner: game.player,
+      card,
+      selectionContract: {
+        kind: "target",
+        timing: "activation",
+        purpose: "target",
+        message: "Choose the target",
+        requirements: {
+          id: "target",
+          min: 1,
+          max: 1,
+          candidates: [
+            {
+              cardRef: card,
+              controller: "player",
+              zone: "field",
+              zoneIndex: 0,
+            },
+          ],
+        },
+        ui: { useFieldTargeting: true, message: "raw-only" },
       },
-      ui: { useFieldTargeting: true, message: "raw-only" },
+      execute(selections: SelectionResult) {
+        executedSelections = selections;
+        return { success: true, needsSelection: false };
+      },
     },
-    execute(selections: SelectionResult) {
-      executedSelections = selections;
-      return { success: true, needsSelection: false };
-    },
-  }]);
+  ]);
 
   assert.equal(game.selectionState, "selecting");
   const targetSelection = game.targetSelection;
   assert.ok(targetSelection);
   assert.equal(targetSelection.usingFieldTargeting, true);
   assert.equal(targetSelection.autoAdvanceOnMax, false);
-  assert.equal(Reflect.get(targetSelection.selectionContract, "purpose"), undefined);
-  assert.equal(Reflect.get(targetSelection.selectionContract, "timing"), undefined);
-  assert.equal(Reflect.get(targetSelection.selectionContract.ui, "message"), undefined);
-  const candidate = targetSelection.requirements[0].candidates[0];
+  assert.equal(
+    Reflect.get(targetSelection.selectionContract, "purpose"),
+    undefined,
+  );
+  assert.equal(
+    Reflect.get(targetSelection.selectionContract, "timing"),
+    undefined,
+  );
+  assert.equal(
+    Reflect.get(targetSelection.selectionContract.ui, "message"),
+    undefined,
+  );
+  const candidate = required(
+    required(targetSelection.requirements[0]).candidates[0],
+  );
   assert.equal(candidate.key, "player:field:0:700");
 
   assert.equal(
@@ -110,39 +124,41 @@ test("selection cancellation preserves callback order and clears modal state", (
   }));
   game.ui.log = () => {};
 
-  Reflect.apply(game.startTargetSelectionSession, game, [{
-    kind: "choice",
-    selectionContract: {
+  Reflect.apply(game.startTargetSelectionSession, game, [
+    {
       kind: "choice",
-      requirements: [
-        {
-          id: "choice",
-          min: 1,
-          max: 1,
-          zones: ["choice"],
-          candidates: [
-            {
-              key: "yes",
-              name: "Yes",
-              controller: "player",
-              zone: "choice",
-            },
-          ],
-        },
-      ],
-      ui: { useFieldTargeting: false, allowCancel: true },
+      selectionContract: {
+        kind: "choice",
+        requirements: [
+          {
+            id: "choice",
+            min: 1,
+            max: 1,
+            zones: ["choice"],
+            candidates: [
+              {
+                key: "yes",
+                name: "Yes",
+                controller: "player",
+                zone: "choice",
+              },
+            ],
+          },
+        ],
+        ui: { useFieldTargeting: false, allowCancel: true },
+      },
+      onCancel() {
+        callbacks.push("cancel");
+      },
+      resolve(value: SelectionResult | SelectionCardReference[] | null) {
+        assert.deepEqual(value, []);
+        callbacks.push("resolve");
+      },
+      execute() {
+        return { success: true, needsSelection: false };
+      },
     },
-    onCancel() {
-      callbacks.push("cancel");
-    },
-    resolve(value: SelectionResult | SelectionCardReference[] | null) {
-      assert.deepEqual(value, []);
-      callbacks.push("resolve");
-    },
-    execute() {
-      return { success: true, needsSelection: false };
-    },
-  }]);
+  ]);
 
   assert.equal(game.selectionState, "selecting");
   Reflect.apply(game.cancelTargetSelection, game, []);
@@ -164,36 +180,40 @@ test("selection completion keeps null card references out of decision telemetry"
     originalNotify(eventName, payload);
   };
 
-  Reflect.apply(game.startTargetSelectionSession, game, [{
-    kind: "choice",
-    selectionContract: {
+  Reflect.apply(game.startTargetSelectionSession, game, [
+    {
       kind: "choice",
-      requirements: [
-        {
-          id: "empty",
-          min: 1,
-          max: 1,
-          zones: ["choice"],
-          candidates: [
-            {
-              key: "empty-choice",
-              cardRef: null,
-              controller: "player",
-              zone: "choice",
-            },
-          ],
-        },
-      ],
-      ui: { useFieldTargeting: false },
+      selectionContract: {
+        kind: "choice",
+        requirements: [
+          {
+            id: "empty",
+            min: 1,
+            max: 1,
+            zones: ["choice"],
+            candidates: [
+              {
+                key: "empty-choice",
+                cardRef: null,
+                controller: "player",
+                zone: "choice",
+              },
+            ],
+          },
+        ],
+        ui: { useFieldTargeting: false },
+      },
+      execute() {
+        return { success: true, needsSelection: false };
+      },
     },
-    execute() {
-      return { success: true, needsSelection: false };
-    },
-  }]);
+  ]);
 
   const targetSelection = game.targetSelection;
   assert.ok(targetSelection);
-  const candidateKey = targetSelection.requirements[0].candidates[0].key;
+  const candidateKey = required(
+    required(targetSelection.requirements[0]).candidates[0],
+  ).key;
   targetSelection.selections = { empty: [candidateKey] };
   await Reflect.apply(game.finishTargetSelection, game, []);
 
@@ -271,38 +291,36 @@ test("selection replay matches duel identity before candidate and fallback keys"
 
   const observed: SelectionResult[] = [];
   for (let index = 0; index < 3; index += 1) {
-    const pending = Reflect.apply(game.startTargetSelectionSession, game, [{
-      kind: "target",
-      owner: game.player,
-      selectionContract: {
+    const pending = Reflect.apply(game.startTargetSelectionSession, game, [
+      {
         kind: "target",
-        requirements: [
-          {
-            id: "target",
-            min: 1,
-            max: 1,
-            zones: ["hand"],
-            candidates,
-          },
-        ],
-        ui: { useFieldTargeting: false },
+        owner: game.player,
+        selectionContract: {
+          kind: "target",
+          requirements: [
+            {
+              id: "target",
+              min: 1,
+              max: 1,
+              zones: ["hand"],
+              candidates,
+            },
+          ],
+          ui: { useFieldTargeting: false },
+        },
+        execute(selections: SelectionResult) {
+          observed.push(selections);
+          return { success: true, needsSelection: false };
+        },
       },
-      execute(selections: SelectionResult) {
-        observed.push(selections);
-        return { success: true, needsSelection: false };
-      },
-    }]);
+    ]);
     await pending;
   }
 
   assert.notEqual(firstDuelCardId, secondDuelCardId);
   assert.deepEqual(
     observed.map((selection) => selection.target),
-    [
-      ["fallback-second"],
-      ["fallback-second"],
-      ["fallback-first"],
-    ],
+    [["fallback-second"], ["fallback-second"], ["fallback-first"]],
   );
   game.dispose();
 });

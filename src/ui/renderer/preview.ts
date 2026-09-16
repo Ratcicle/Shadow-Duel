@@ -6,7 +6,7 @@ interface CounterTooltipMetadata {
 }
 export interface CardElementOptions {
   showStatusIcons?: boolean;
-  turnCounter?: number;
+  turnCounter?: number | undefined;
 }
 
 /**
@@ -132,7 +132,8 @@ function pluralizePortugueseCounterLabel(label: string) {
   if (!match) return normalized;
 
   const pluralBase = "Marcadores";
-  const suffix = match[2].trim();
+  // Both regex captures are mandatory.
+  const suffix = match[2]!.trim();
   if (
     /^de\s+/iu.test(suffix) ||
     /^do\s+/iu.test(suffix) ||
@@ -182,7 +183,7 @@ function extractPortugueseCounterLabels(description: string) {
 
   for (const match of description.matchAll(pattern)) {
     const start = match.index ?? 0;
-    const segment = description.slice(start, start + 80).split(/[.;:,]/)[0];
+    const segment = description.slice(start, start + 80).split(/[.;:,]/)[0]!;
     const trimmed = segment.replace(COUNTER_LABEL_STOP_WORDS, "").trim();
     if (!/\s/.test(trimmed)) continue;
     labels.push(pluralizePortugueseCounterLabel(trimmed));
@@ -197,7 +198,7 @@ function extractEnglishCounterLabels(description: string) {
     /\b([A-Z][A-Za-z'-]*(?:\s+[A-Z][A-Za-z'-]*)*\s+[Cc]ounters?)\b/g;
 
   for (const match of description.matchAll(pattern)) {
-    labels.push(pluralizeEnglishCounterLabel(match[1]));
+    labels.push(pluralizeEnglishCounterLabel(match[1]!));
   }
 
   return uniqueCounterLabels(labels);

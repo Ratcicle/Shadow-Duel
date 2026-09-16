@@ -34,10 +34,10 @@ interface AscensionPlanningGame {
 }
 
 interface AscensionPlanningContext<Player extends AscensionPlanningPlayer = AscensionPlanningPlayer, Game extends AscensionPlanningGame = AscensionPlanningGame, Analysis = unknown> {
-  game?: Game | null;
-  bot?: Player | null;
-  player?: Player | null;
-  opponent?: Player | null;
+  game?: Game | null | undefined;
+  bot?: Player | null | undefined;
+  player?: Player | null | undefined;
+  opponent?: Player | null | undefined;
   analysis?: Analysis;
   isSimulatedState?: boolean;
 }

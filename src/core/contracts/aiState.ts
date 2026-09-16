@@ -52,6 +52,22 @@ type SimulatedCardCore = Partial<
     | "equippedTo"
     | "equips"
     | "equipTarget"
+    | "hasAttacked"
+    | "dynamicBuffs"
+    | "suppressedDynamicBuffStatsByKey"
+    | "temporarySuppressedDynamicBuffStatsByKey"
+    | "name"
+    | "cardKind"
+    | "type"
+    | "attribute"
+    | "level"
+    | "atk"
+    | "def"
+    | "archetype"
+    | "archetypes"
+    | "position"
+    | "isFacedown"
+    | "battleIndestructible"
   >
 >;
 
@@ -74,14 +90,31 @@ export interface SimulatedReplacementEffect {
 
 /** Mutable projection used only by planning; no live Card methods are required. */
 export interface SimulatedCardShape extends SimulatedCardCore {
+  hasAttacked?: GameCard["hasAttacked"] | undefined;
+  dynamicBuffs?: GameCard["dynamicBuffs"] | undefined;
+  suppressedDynamicBuffStatsByKey?: GameCard["suppressedDynamicBuffStatsByKey"] | undefined;
+  temporarySuppressedDynamicBuffStatsByKey?: GameCard["temporarySuppressedDynamicBuffStatsByKey"] | undefined;
+  // Analysis snapshots explicitly forward these optional card reads.
+  name?: GameCard["name"] | undefined;
+  cardKind?: GameCard["cardKind"] | undefined;
+  type?: GameCard["type"] | undefined;
+  attribute?: GameCard["attribute"] | undefined;
+  level?: GameCard["level"] | undefined;
+  atk?: GameCard["atk"] | undefined;
+  def?: GameCard["def"] | undefined;
+  archetype?: GameCard["archetype"] | undefined;
+  archetypes?: GameCard["archetypes"] | undefined;
+  position?: GameCard["position"] | undefined;
+  isFacedown?: GameCard["isFacedown"] | undefined;
+  battleIndestructible?: GameCard["battleIndestructible"] | undefined;
   permanentDefBoost?: number;
   _simPotentialBarbariasPush?: boolean;
-  cannotBeDestroyedByBattle?: boolean;
+  cannotBeDestroyedByBattle?: boolean | undefined;
   cannotBeDestroyedByCardEffects?: boolean;
   state?: { blueprintStorage?: { storedBlueprints: Array<{
-    blueprintId: string; sourceCardId?: GameCard["id"]; sourceCardName?: string;
-    sourceCardKind?: CardKind; sourceCardSubtype?: GameCard["subtype"];
-    displayName?: string; shortRulesText: string; effectSnapshot: EffectDefinition;
+    blueprintId: string; sourceCardId?: GameCard["id"]; sourceCardName?: string | undefined;
+    sourceCardKind?: CardKind | undefined; sourceCardSubtype?: GameCard["subtype"] | undefined;
+    displayName?: string | undefined; shortRulesText: string; effectSnapshot: EffectDefinition;
     _simStoredByGrimoire: boolean;
   }> } };
   fieldAgeTurns?: number;
@@ -127,16 +160,16 @@ export interface SimulatedCardShape extends SimulatedCardCore {
   _simEffectDestructionProtected?: boolean;
   _simEffectDestructionProtectedFromOpponent?: boolean;
   _simEffectDestructionProtectedFromSelf?: boolean;
-  _simElementalistDestroyedOnEquip?: string;
+  _simElementalistDestroyedOnEquip?: string | undefined;
   _simMagicSickleBattleBoost?: boolean;
   _simMasterMirrorsShuffleDraw?: boolean;
-  _simMasterRevivedOnEquip?: string;
+  _simMasterRevivedOnEquip?: string | undefined;
   _simProtectedByRaven?: boolean;
   _simProtection?: SimulatedProtectionEffect;
   _simProtectionEffects?: SimulatedProtectionEffect[];
-  _simRecoveredOnEquip?: string;
+  _simRecoveredOnEquip?: string | undefined;
   _simReplacementProtection?: SimulatedReplacementEffect;
-  _simStoredBlueprintSource?: string;
+  _simStoredBlueprintSource?: string | undefined;
   _simStoredByGrimoire?: boolean;
   _simBattleDestructionProtected?: boolean;
   _simulatedAegisSpecialDefApplied?: boolean;
@@ -263,7 +296,7 @@ export interface SimulatedPlayerState {
   normalSummonsThisTurn?: NormalSummonRecord[];
   specialSummonRestrictions?: SpecialSummonRestriction[];
   effectActivationRestrictions?: EffectActivationRestriction[];
-  controllerType?: string;
+  controllerType?: string | undefined;
   forbidDirectAttacksThisTurn?: boolean;
   oncePerTurnUsageByName?: GameCard["oncePerTurnUsageByName"];
   _simMaterialEffectActivationsByMaterialId?: unknown;
@@ -276,7 +309,7 @@ export interface SimulatedPlayerState {
  */
 export interface GameTreeSimulatedPlayerState {
   id: PlayerId | string;
-  name?: string;
+  name?: string | undefined;
   lp: number;
   hand: SimulatedCardState[];
   field: SimulatedCardState[];
@@ -285,28 +318,28 @@ export interface GameTreeSimulatedPlayerState {
   spellTrap: SimulatedCardState[];
   fieldSpell: SimulatedCardState | null;
   summonCount: number;
-  debug?: boolean;
+  debug?: boolean | undefined;
 }
 
 /** Read-only input projection accepted before a clone establishes brands. */
 export interface AiCardInput {
-  id?: RawCardDefinitionId | number;
+  id?: GameCard["id"];
   instanceId?: number | string;
   _instanceId?: number | string | null;
   uid?: string | number | null;
   uuid?: string | null;
   simInstanceId?: string | number | null;
-  name?: string;
-  cardKind?: CardKind | string;
-  atk?: number;
-  def?: number;
-  level?: number;
-  position?: BattlePosition | string | null;
-  isFacedown?: boolean;
+  name?: string | undefined;
+  cardKind?: CardKind | string | undefined;
+  atk?: number | undefined;
+  def?: number | undefined;
+  level?: number | undefined;
+  position?: BattlePosition | string | null | undefined;
+  isFacedown?: boolean | undefined;
   effects?: GameCard["effects"];
   counters?: ReadonlyMap<string, number>;
   equips?: readonly AiCardInput[];
-  dynamicBuffs?: GameCard["dynamicBuffs"];
+  dynamicBuffs?: GameCard["dynamicBuffs"] | undefined;
   suppressedDynamicBuffStatsByKey?: GameCard[
     "suppressedDynamicBuffStatsByKey"
   ];
@@ -332,15 +365,15 @@ export interface AiPlayerInput {
   normalSummonsThisTurn?: readonly NormalSummonRecord[];
   specialSummonRestrictions?: readonly SpecialSummonRestriction[];
   effectActivationRestrictions?: readonly EffectActivationRestriction[];
-  controllerType?: string;
+  controllerType?: string | undefined;
 }
 
 /** Small live-state boundary accepted by clone builders and strategy entrypoints. */
 export interface AiLiveGamePort {
   player: AiPlayerInput;
   bot: AiPlayerInput;
-  turn?: PlayerId | string | null;
-  phase?: GamePhase | string | null;
+  turn?: PlayerId | string | null | undefined;
+  phase?: GamePhase | string | null | undefined;
   turnCounter?: number;
   effectEngine?: {
     usedThisTurn?: ReadonlyMap<string, number>;
@@ -354,8 +387,8 @@ export interface AiStateInput {
   player?: AiPlayerInput | null;
   bot?: AiPlayerInput | null;
   opponent?: AiPlayerInput | null;
-  turn?: PlayerId | string | null;
-  phase?: GamePhase | string | null;
+  turn?: PlayerId | string | null | undefined;
+  phase?: GamePhase | string | null | undefined;
   turnCounter?: number;
   _isPerspectiveState?: boolean;
   _gameRef?: AiLiveGamePort;
@@ -388,7 +421,7 @@ export interface AiStateShape extends AiLiveGamePort {
   _simArcanistSpellActivations?: number;
   _simLuminarch?: SimulatedLuminarchState;
   _simBurningWest?: SimulatedBurningWestState;
-  _simMaterialEffectActivationsByMaterialId?: SimulatedMaterialActivationLedger;
+  _simMaterialEffectActivationsByMaterialId?: SimulatedMaterialActivationLedger | undefined;
   _simVoidBeastSearchUsed?: boolean;
   _simVoidHollowRecruitUsed?: boolean;
 }

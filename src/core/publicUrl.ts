@@ -7,7 +7,7 @@ function getPublicBaseUrl() {
   return `/${normalizedBase.replace(/^\/+|\/+$/g, "")}/`;
 }
 
-export function publicUrl(path) {
+export function publicUrl(path: unknown) {
   const value = String(path || "").trim();
   if (!value) return "";
 

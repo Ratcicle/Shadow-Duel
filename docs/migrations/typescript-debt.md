@@ -18,6 +18,11 @@ Regras:
 
 Categorias válidas: `explicit-any`, `double-cast` e `ts-expect-error`.
 
+A revisão da Etapa 13 manteve o registro vazio: não há shims temporários,
+escapes registrados nem supressões temporárias. As duas configurações
+verificadas usam apenas TypeScript; o fixture JavaScript de interoperabilidade
+é carregado em runtime e valida seus exports antes do uso.
+
 <!-- typescript-debt-registry -->
 ```json
 {

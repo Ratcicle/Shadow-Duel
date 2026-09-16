@@ -88,7 +88,7 @@ test("Ancient Tree Spirit declares the separated text and Trap Monster contract"
   assert.equal(damageEffect.event, "battle_destroy");
   assert.equal(damageEffect.requireSelfAsDestroyed, true);
   assert.equal(damageEffect.requireSelfSummonProcedure, "trap_monster");
-  assert.equal(required(damageEffect.actions)[0].amount, 500);
+  assert.equal(required(required(damageEffect.actions)[0]).amount, 500);
 
   const locale = JSON.parse(
     readFileSync(

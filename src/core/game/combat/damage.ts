@@ -21,7 +21,7 @@ interface DamagePresentationOptions {
   battleImpactRect?: object | null;
   contactRect?: object | null;
   directAttack?: boolean;
-  screenShake?: boolean;
+  screenShake?: boolean | undefined;
   suppressVisual?: boolean;
   suppressLpChangeFeedback?: boolean;
   suppressLpDamageSequence?: boolean;
@@ -89,7 +89,10 @@ export function inflictDamage(
     player.damageReceivedThisTurn =
       Math.max(0, Number(player.damageReceivedThisTurn || 0)) + actual;
 
-    if (!suppressVisual && typeof this.ui?.showLpDamageSequence === "function") {
+    if (
+      !suppressVisual &&
+      typeof this.ui?.showLpDamageSequence === "function"
+    ) {
       this.ui.showLpDamageSequence(player, actual, {
         cause: options.cause || "effect",
         sourceCard: options.sourceCard || null,

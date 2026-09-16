@@ -48,6 +48,7 @@ test("Desperate Gamble declares three compact effect paragraphs", async () => {
   assert.equal(locale.cards["22"].description, EXPECTED_PT_BR);
 
   const [effect] = required(card.effects);
+  assert.ok(effect);
   assert.equal(effect.usagePolicy, "activate");
   assert.equal(effect.oncePerTurn, true);
   assert.equal(effect.oncePerTurnName, "desperate_gamble_activation");
@@ -55,8 +56,14 @@ test("Desperate Gamble declares three compact effect paragraphs", async () => {
     required(effect.actions).map(({ type }) => type),
     ["draw", "restrict_effect_activations_by_names"],
   );
-  assert.equal(required(effect.actions)[1].nameSource, "lastDrawnCards");
-  assert.equal(required(effect.actions)[1].duration, "until_end_turn");
+  assert.equal(
+    required(required(effect.actions)[1]).nameSource,
+    "lastDrawnCards",
+  );
+  assert.equal(
+    required(required(effect.actions)[1]).duration,
+    "until_end_turn",
+  );
 });
 
 test("Desperate Gamble pays half LP, draws two cards and blocks their names", async (t) => {

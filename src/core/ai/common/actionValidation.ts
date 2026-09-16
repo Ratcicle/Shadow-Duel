@@ -28,7 +28,7 @@ import type { GameCard } from "../../contracts/cards.js";
 import type { GamePlayer, SpecialSummonRestriction } from "../../contracts/player.js";
 
 interface AIActionPlayer extends AiZonePlayer {
-  specialSummonRestrictions?: readonly SpecialSummonRestriction[];
+  specialSummonRestrictions?: readonly SpecialSummonRestriction[] | undefined;
 }
 
 interface ContextNumberReference {
@@ -66,16 +66,16 @@ interface HandIgnitionCandidateInput {
   card?: FilterableCard | null;
   effect?: EffectDefinition | null;
   player?: AIActionPlayer | null;
-  game?: OncePerTurnGamePort | null;
+  game?: OncePerTurnGamePort | null | undefined;
   isSimulatedState?: boolean;
   activationContext?: CostActivationContext | null;
 }
 
 interface CostCandidateCountInput {
-  player?: AIActionPlayer | null;
+  player?: AIActionPlayer | null | undefined;
   effect?: EffectDefinition | null;
   action?: CardAction | null;
-  activationContext?: CostActivationContext | null;
+  activationContext?: CostActivationContext | null | undefined;
 }
 
 interface FieldIgnitionCandidateInput {

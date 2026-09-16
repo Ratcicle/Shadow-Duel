@@ -204,7 +204,7 @@ test("Red Fury Horror dispara para todos os métodos de Invocação-Especial do 
       `Expected trigger for ${method}.`,
     );
     assert.equal(
-      collected.entries[0].effect.id,
+      required(collected.entries[0]).effect.id,
       "red_fury_horror_banish_and_gain",
     );
   }
@@ -386,15 +386,15 @@ test("a resposta de Iron Smasher exige destruição de card próprio no runtime 
   assert.equal(evaluateRuntime(opponentVictim), false);
   assert.equal(evaluateSimulation(opponentVictim), false);
 
-  assert.deepEqual(required(responseEffect.targets)[0].filters, {
+  assert.deepEqual(required(required(responseEffect.targets)[0]).filters, {
     facedown: true,
   });
   assert.equal(
-    required(responseEffect.actions)[0].type,
+    required(required(responseEffect.actions)[0]).type,
     "destroy_targeted_cards",
   );
   assert.equal(
-    required(responseEffect.actions)[0].targetRef,
-    required(responseEffect.targets)[0].id,
+    required(required(responseEffect.actions)[0]).targetRef,
+    required(required(responseEffect.targets)[0]).id,
   );
 });

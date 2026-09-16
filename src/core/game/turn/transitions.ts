@@ -10,11 +10,12 @@
  */
 
 import { isAI } from "../../Player.js";
-import { PHASE_ORDER, getNextPhase, normalizeTargetPhase } from "./phaseRules.js";
-import type {
-  FullGameHost,
-  GamePlayer,
-} from "../../contracts/gameRuntime.js";
+import {
+  PHASE_ORDER,
+  getNextPhase,
+  normalizeTargetPhase,
+} from "./phaseRules.js";
+import type { FullGameHost, GamePlayer } from "../../contracts/gameRuntime.js";
 import type { GamePhase } from "../../contracts/game.js";
 import type { ActionGuardResult } from "../actions/guard.js";
 
@@ -49,7 +50,10 @@ type TransitionHost = Pick<
   pendingTributeSummonSelection: { active?: boolean } | null;
   isDisposed?(): boolean;
   getNextPhase?(phase: GamePhase): GamePhase | null;
-  checkAndOfferTraps(event: "phase_end" | "phase_start", context: unknown): Promise<PhaseTimingResult | null>;
+  checkAndOfferTraps(
+    event: "phase_end" | "phase_start",
+    context: unknown,
+  ): Promise<PhaseTimingResult | null>;
   clearAttackResolutionIndicators(): void;
   clearAttackReadyIndicators(): void;
   updateBoard(): unknown;
@@ -262,9 +266,11 @@ export async function nextPhase(this: TransitionHost) {
       (guard.code === "BLOCKED_RESOLVING" ||
         guard.code === "BLOCKED_SELECTION_ACTIVE")
     ) {
-      const retryDelayMs = typeof this.aiActionDelayMs === "number" && Number.isFinite(this.aiActionDelayMs)
-        ? this.aiActionDelayMs
-        : 250;
+      const retryDelayMs =
+        typeof this.aiActionDelayMs === "number" &&
+        Number.isFinite(this.aiActionDelayMs)
+          ? this.aiActionDelayMs
+          : 250;
       setTimeout(() => {
         if (!this.isDisposed?.()) this.nextPhase();
       }, retryDelayMs);
@@ -275,10 +281,7 @@ export async function nextPhase(this: TransitionHost) {
   const next = this.getNextPhase?.(this.phase) ?? null;
   const leaveResult = await leaveCurrentPhase(this, { nextPhase: next });
   if (!leaveResult.ok) {
-    if (
-      leaveResult.reason === "phase_transition_interrupted" &&
-      isAI(actor)
-    ) {
+    if (leaveResult.reason === "phase_transition_interrupted" && isAI(actor)) {
       scheduleAiMoveAfterPaint(this, actor);
     }
     return leaveResult;
@@ -291,6 +294,7 @@ export async function nextPhase(this: TransitionHost) {
   if (!enterResult.ok) return enterResult;
 
   scheduleAiMoveAfterPaint(this, actor);
+  return undefined;
 }
 
 /**
@@ -364,4 +368,5 @@ export async function skipToPhase(
   if (this.phase !== "draw") {
     scheduleAiMoveAfterPaint(this, actor);
   }
+  return undefined;
 }

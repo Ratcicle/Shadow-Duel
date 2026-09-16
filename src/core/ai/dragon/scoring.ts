@@ -29,25 +29,31 @@ export const DRAGON_EXTREME_RESOURCE_POLICY = {
   },
 };
 
-export function analyzeExtremeDragonEconomy(analysisOrGraveyard: DragonAnalysis | DragonCard[] = {}) {
+export function analyzeExtremeDragonEconomy(analysisOrGraveyard: DragonAnalysis | ReadonlyArray<DragonCard> = {}) {
   const analysis = Array.isArray(analysisOrGraveyard)
     ? { graveyard: analysisOrGraveyard }
-    : analysisOrGraveyard || {};
+    // Array.isArray excludes arrays here, including the readonly input projection.
+    : (analysisOrGraveyard as DragonAnalysis) || {};
 
-  const economy = analyzeResourceEconomy(analysis, {
+  const economy = analyzeResourceEconomy<
+    DragonAnalysis,
+    object,
+    unknown,
+    { usefulExtremeResources: boolean }
+  >(analysis, {
     resourceName: "Extreme Dragon",
     zones: ["graveyard"],
     matchResource: isExtremeDragon,
     computeAccessibility: ({ countsByZone }) => ({
       accessibleByZone: {
-        graveyard: countsByZone.graveyard,
+        graveyard: countsByZone.graveyard ?? 0,
       },
       strandedByZone: {
         graveyard: 0,
       },
     }),
     computeFlags: ({ countsByZone }) => ({
-      usefulExtremeResources: countsByZone.graveyard > 0,
+      usefulExtremeResources: (countsByZone.graveyard ?? 0) > 0,
     }),
   });
 

@@ -37,10 +37,7 @@ import type {
   SelectionResult,
 } from "../../contracts/selection.js";
 import type { SelectionCandidateKey } from "../../contracts/primitives.js";
-import type {
-  CanonicalZone,
-  ZoneInput,
-} from "../../contracts/zones.js";
+import type { CanonicalZone, ZoneInput } from "../../contracts/zones.js";
 
 type ReplacementOwnerRule = "self" | "opponent" | "any" | "both" | "either";
 
@@ -179,7 +176,9 @@ interface DestructionReplacementHost {
   player: GamePlayer;
   bot: GamePlayer;
   turnCounter: number;
-  temporaryReplacementEffects: Array<TemporaryReplacementEntry | null | undefined>;
+  temporaryReplacementEffects: Array<
+    TemporaryReplacementEntry | null | undefined
+  >;
   effectEngine?: ReplacementEffectEnginePort | null;
   ui: ReplacementUiPort;
   getOpponent(player: GamePlayer): GamePlayer | null;
@@ -336,10 +335,7 @@ function hasRuntimeReplacementEffect(
   return "replacementEffect" in effect && effect.replacementEffect != null;
 }
 
-function getPlayerZone(
-  player: GamePlayer,
-  zone: ZoneInput,
-): GameCard[] | null {
+function getPlayerZone(player: GamePlayer, zone: ZoneInput): GameCard[] | null {
   if (zone === "deck") return player.deck;
   if (zone === "hand") return player.hand;
   if (zone === "field") return player.field;
@@ -539,7 +535,8 @@ function getCardZoneIndex(
   if (zoneName === "fieldSpell") {
     return owner.fieldSpell === card ? 0 : -1;
   }
-  const zone = game.getZone?.(owner, zoneName) || getPlayerZone(owner, zoneName) || [];
+  const zone =
+    game.getZone?.(owner, zoneName) || getPlayerZone(owner, zoneName) || [];
   return Array.isArray(zone) ? zone.indexOf(card) : -1;
 }
 
@@ -574,7 +571,10 @@ function decorateSelectionCandidates(
 function getReplacementCostZones(
   replacement: RuntimeReplacementEffect,
 ): readonly ZoneInput[] {
-  if (Array.isArray(replacement.costZones) && replacement.costZones.length > 0) {
+  if (
+    Array.isArray(replacement.costZones) &&
+    replacement.costZones.length > 0
+  ) {
     return replacement.costZones;
   }
   if (Array.isArray(replacement.costZone) && replacement.costZone.length > 0) {
@@ -631,7 +631,9 @@ function getSelectedReplacementCostZone(
   candidateEntries: readonly ReplacementCostCandidate[],
   costCard: GameCard,
 ): ZoneInput {
-  const entry = candidateEntries.find((candidate) => candidate.card === costCard);
+  const entry = candidateEntries.find(
+    (candidate) => candidate.card === costCard,
+  );
   if (entry?.zone) return entry.zone;
 
   return (
@@ -648,13 +650,9 @@ function getCostActionText(costDestination: ZoneInput | null | undefined) {
     return {
       verb: getUIText("ui.replacement.actions.banish.verb"),
       suffix: getUIText("ui.replacement.actions.banish.suffix"),
-      selectionVerb: getUIText(
-        "ui.replacement.actions.banish.selectionVerb",
-      ),
+      selectionVerb: getUIText("ui.replacement.actions.banish.selectionVerb"),
       logVerb: getUIText("ui.replacement.actions.banish.logVerb"),
-      logDestination: getUIText(
-        "ui.replacement.actions.banish.logDestination",
-      ),
+      logDestination: getUIText("ui.replacement.actions.banish.logDestination"),
     };
   }
   if (costDestination === "hand") {
@@ -663,17 +661,13 @@ function getCostActionText(costDestination: ZoneInput | null | undefined) {
       suffix: getUIText("ui.replacement.actions.hand.suffix"),
       selectionVerb: getUIText("ui.replacement.actions.hand.selectionVerb"),
       logVerb: getUIText("ui.replacement.actions.hand.logVerb"),
-      logDestination: getUIText(
-        "ui.replacement.actions.hand.logDestination",
-      ),
+      logDestination: getUIText("ui.replacement.actions.hand.logDestination"),
     };
   }
   return {
     verb: getUIText("ui.replacement.actions.graveyard.verb"),
     suffix: getUIText("ui.replacement.actions.graveyard.suffix"),
-    selectionVerb: getUIText(
-      "ui.replacement.actions.graveyard.selectionVerb",
-    ),
+    selectionVerb: getUIText("ui.replacement.actions.graveyard.selectionVerb"),
     logVerb: getUIText("ui.replacement.actions.graveyard.logVerb"),
     logDestination: getUIText(
       "ui.replacement.actions.graveyard.logDestination",
@@ -817,7 +811,9 @@ function askHumanToSelectReplacementTargets({
         const chosen = chosenKeys
           .map((key) => requirement.candidates.find((cand) => cand.key === key))
           .map((candidate) => candidate?.cardRef)
-          .filter((candidate): candidate is GameCard => candidate !== undefined);
+          .filter(
+            (candidate): candidate is GameCard => candidate !== undefined,
+          );
         resolve(chosen);
         return { success: true, needsSelection: false };
       },
@@ -891,9 +887,7 @@ async function tryReplacement(
 
   if (targetOwnerKey !== "any") {
     const expectedOwner =
-      targetOwnerKey === "self"
-        ? sourceOwner
-        : game.getOpponent(sourceOwner);
+      targetOwnerKey === "self" ? sourceOwner : game.getOpponent(sourceOwner);
     if (expectedOwner !== ownerPlayer) {
       return { replaced: false };
     }
@@ -930,8 +924,7 @@ async function tryReplacement(
     : [];
   if (scopedTargetIds.length > 0 || scopedTargetCards.length > 0) {
     const targetKey = getReplacementTargetKey(card);
-    const matchesScopedId =
-      targetKey && scopedTargetIds.includes(targetKey);
+    const matchesScopedId = targetKey && scopedTargetIds.includes(targetKey);
     const matchesScopedRef = scopedTargetCards.includes(card);
     if (!matchesScopedId && !matchesScopedRef) {
       return { replaced: false };
@@ -1014,69 +1007,68 @@ async function tryReplacement(
     };
   };
 
-  const runReplacementCostActions = async (): Promise<
-    ReplacementActionExecutionResult
-  > => {
-    const costActions = Array.isArray(replacement.costActions)
-      ? replacement.costActions
-      : [];
-    if (costActions.length === 0) return true;
+  const runReplacementCostActions =
+    async (): Promise<ReplacementActionExecutionResult> => {
+      const costActions = Array.isArray(replacement.costActions)
+        ? replacement.costActions
+        : [];
+      if (costActions.length === 0) return true;
 
-    const engine = game.effectEngine;
-    if (!engine || typeof engine.applyActions !== "function") {
-      return false;
-    }
-
-    const previewCtx = buildActionCostCtx({
-      preview: true,
-      isPreview: true,
-      activationContext: {
-        source: sourceCard,
-        player: sourceOwner,
-        preview: true,
-        isPreview: true,
-      },
-    });
-    const previewResult =
-      typeof engine.checkActionPreviewRequirements === "function"
-        ? engine.checkActionPreviewRequirements(costActions, previewCtx)
-        : { ok: true };
-    if (previewResult && previewResult.ok === false) {
-      return false;
-    }
-
-    const sourceIsHuman = sourceOwner?.controllerType === "human";
-    if (sourceIsHuman && replacement.auto !== true) {
-      const targetName = getCardDisplayName(card) || card.name;
-      const sourceName = getCardDisplayName(sourceCard) || sourceCard.name;
-      const prompt =
-        formatReplacementText(replacement.prompt, targetName, sourceName) ||
-        getUIText("ui.replacement.confirmActionCost", {
-          sourceName,
-          cardName: targetName,
-        });
-      const wantsToReplace =
-        (await game.ui?.showConfirmPrompt?.(prompt, {
-          kind: "destruction_replacement",
-          cardName: targetName,
-        })) ?? false;
-      if (!wantsToReplace) {
+      const engine = game.effectEngine;
+      if (!engine || typeof engine.applyActions !== "function") {
         return false;
       }
-    }
 
-    const costCtx = buildActionCostCtx();
-    const costResult = await engine.applyActions(costActions, costCtx, {});
-    if (isReplacementActionResult(costResult) && costResult.needsSelection) {
-      return { ...costResult, success: false };
-    }
-    return (
-      costResult === true ||
-      (costResult &&
-        typeof costResult === "object" &&
-        costResult.success !== false)
-    );
-  };
+      const previewCtx = buildActionCostCtx({
+        preview: true,
+        isPreview: true,
+        activationContext: {
+          source: sourceCard,
+          player: sourceOwner,
+          preview: true,
+          isPreview: true,
+        },
+      });
+      const previewResult =
+        typeof engine.checkActionPreviewRequirements === "function"
+          ? engine.checkActionPreviewRequirements(costActions, previewCtx)
+          : { ok: true };
+      if (previewResult && previewResult.ok === false) {
+        return false;
+      }
+
+      const sourceIsHuman = sourceOwner?.controllerType === "human";
+      if (sourceIsHuman && replacement.auto !== true) {
+        const targetName = getCardDisplayName(card) || card.name;
+        const sourceName = getCardDisplayName(sourceCard) || sourceCard.name;
+        const prompt =
+          formatReplacementText(replacement.prompt, targetName, sourceName) ||
+          getUIText("ui.replacement.confirmActionCost", {
+            sourceName,
+            cardName: targetName,
+          });
+        const wantsToReplace =
+          (await game.ui?.showConfirmPrompt?.(prompt, {
+            kind: "destruction_replacement",
+            cardName: targetName,
+          })) ?? false;
+        if (!wantsToReplace) {
+          return false;
+        }
+      }
+
+      const costCtx = buildActionCostCtx();
+      const costResult = await engine.applyActions(costActions, costCtx, {});
+      if (isReplacementActionResult(costResult) && costResult.needsSelection) {
+        return { ...costResult, success: false };
+      }
+      return (
+        costResult === true ||
+        (costResult &&
+          typeof costResult === "object" &&
+          costResult.success !== false)
+      );
+    };
 
   const runFollowUpActions = async (): Promise<void> => {
     const followUpActions = Array.isArray(effect.actions) ? effect.actions : [];
@@ -1261,8 +1253,7 @@ async function tryReplacement(
       if (!hasArchetype) return false;
     }
 
-    if (costFilters.name && candidate.name !== costFilters.name)
-      return false;
+    if (costFilters.name && candidate.name !== costFilters.name) return false;
 
     return true;
   };
@@ -1391,7 +1382,7 @@ async function tryReplacement(
   ) {
     selections = await game.askPlayerToSelectCards({
       owner: "player",
-      zone: costZones[0],
+      zone: costZones[0]!,
       min: costCount,
       max: costCount,
       filter: filterCandidates,
@@ -1452,7 +1443,8 @@ function collectSources(player: GamePlayer | null): GameCard[] {
     ? player.hand.filter((card) =>
         (card?.effects || []).some(
           (effect) =>
-            hasRuntimeReplacementEffect(effect) && effect.requireZone === "hand",
+            hasRuntimeReplacementEffect(effect) &&
+            effect.requireZone === "hand",
         ),
       )
     : [];
@@ -1495,9 +1487,7 @@ export async function resolveDestructionWithReplacement(
     );
 
     if (guardEquip) {
-      this.ui.log(
-        `${guardEquip.name} was destroyed to protect ${card.name}.`,
-      );
+      this.ui.log(`${guardEquip.name} was destroyed to protect ${card.name}.`);
       const guardResult = await this.destroyCard(guardEquip, {
         cause,
         sourceCard: card,
@@ -1528,8 +1518,8 @@ export async function resolveDestructionWithReplacement(
 
   const currentTurn = this.turnCounter;
   if (Array.isArray(this.temporaryReplacementEffects)) {
-    this.temporaryReplacementEffects =
-      this.temporaryReplacementEffects.filter((entry) => {
+    this.temporaryReplacementEffects = this.temporaryReplacementEffects.filter(
+      (entry) => {
         if (!entry) return false;
         if (
           isFiniteNumber(entry.expiresOnTurn) &&
@@ -1537,14 +1527,12 @@ export async function resolveDestructionWithReplacement(
         ) {
           return false;
         }
-        if (
-          isFiniteNumber(entry.usesRemaining) &&
-          entry.usesRemaining <= 0
-        ) {
+        if (isFiniteNumber(entry.usesRemaining) && entry.usesRemaining <= 0) {
           return false;
         }
         return true;
-      });
+      },
+    );
 
     for (const entry of this.temporaryReplacementEffects) {
       if (!entry) continue;
@@ -1572,7 +1560,13 @@ export async function resolveDestructionWithReplacement(
       ) {
         continue;
       }
-      const result = await tryReplacement(this, sourceCard, sourceOwner, effect, ctx);
+      const result = await tryReplacement(
+        this,
+        sourceCard,
+        sourceOwner,
+        effect,
+        ctx,
+      );
       if (result?.replaced) {
         if (entry.usesPerTarget === true) {
           if (!Array.isArray(entry.usedTargetKeys)) {
@@ -1589,10 +1583,7 @@ export async function resolveDestructionWithReplacement(
         } else if (isFiniteNumber(entry.usesRemaining)) {
           entry.usesRemaining -= 1;
         }
-        if (
-          isFiniteNumber(entry.usesRemaining) &&
-          entry.usesRemaining <= 0
-        ) {
+        if (isFiniteNumber(entry.usesRemaining) && entry.usesRemaining <= 0) {
           this.temporaryReplacementEffects =
             this.temporaryReplacementEffects.filter((e) => e !== entry);
         }
@@ -1602,13 +1593,18 @@ export async function resolveDestructionWithReplacement(
   }
 
   for (const sourceCard of sourcePool) {
-    const sourceOwner =
-      sourceCard.owner === "player" ? this.player : this.bot;
+    const sourceOwner = sourceCard.owner === "player" ? this.player : this.bot;
     if (!sourceOwner) continue;
     const effects = sourceCard.effects || [];
     for (const effect of effects) {
       if (!hasRuntimeReplacementEffect(effect)) continue;
-      const result = await tryReplacement(this, sourceCard, sourceOwner, effect, ctx);
+      const result = await tryReplacement(
+        this,
+        sourceCard,
+        sourceOwner,
+        effect,
+        ctx,
+      );
       if (result?.replaced) {
         return result;
       }

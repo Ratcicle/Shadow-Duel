@@ -29,7 +29,7 @@ import type {
 
 type SearchStrategyInput = SearchStrategyPort & Partial<AIStrategyBotPort>;
 type SearchCardInput = (AiCardInput | GameCard | SimulatedCardState) & {
-  archetypes?: readonly string[];
+  archetypes?: readonly string[] | undefined;
   turnBasedBuffs?: readonly CardTurnBasedBuff[];
 };
 type SearchPlayerInput =
@@ -243,10 +243,10 @@ export async function beamSearchTurn(
         summonCount: safe.summonCount || 0,
         additionalNormalSummons: safe.additionalNormalSummons || 0,
         additionalNormalSummonPermissions:
-          (safe.additionalNormalSummonPermissions || []) as SimulatedPlayerState["additionalNormalSummonPermissions"],
-        normalSummonsThisTurn: (safe.normalSummonsThisTurn || []) as SimulatedPlayerState["normalSummonsThisTurn"],
-        specialSummonRestrictions: (safe.specialSummonRestrictions || []) as SimulatedPlayerState["specialSummonRestrictions"],
-        effectActivationRestrictions: (safe.effectActivationRestrictions || []) as SimulatedPlayerState["effectActivationRestrictions"],
+          (safe.additionalNormalSummonPermissions || []) as NonNullable<SimulatedPlayerState["additionalNormalSummonPermissions"]>,
+        normalSummonsThisTurn: (safe.normalSummonsThisTurn || []) as NonNullable<SimulatedPlayerState["normalSummonsThisTurn"]>,
+        specialSummonRestrictions: (safe.specialSummonRestrictions || []) as NonNullable<SimulatedPlayerState["specialSummonRestrictions"]>,
+        effectActivationRestrictions: (safe.effectActivationRestrictions || []) as NonNullable<SimulatedPlayerState["effectActivationRestrictions"]>,
         controllerType: safe.controllerType,
       };
     };
@@ -401,9 +401,10 @@ export async function beamSearchTurn(
     if (branches.length === 0) {
       const score = evaluateState(currentState, currentState.bot);
       // BUGFIX: Se temos candidatos mas nenhum branch válido, usar primeira ação como fallback
-      if (topCandidates.length > 0 && currentSequence.length === 0) {
+      const firstCandidate = topCandidates[0];
+      if (firstCandidate && currentSequence.length === 0) {
         return {
-          sequence: [topCandidates[0]],
+          sequence: [firstCandidate],
           score,
           finalState: currentState,
         };
@@ -413,7 +414,11 @@ export async function beamSearchTurn(
 
     // Retornar melhor branch
     branches.sort((a, b) => b.score - a.score);
-    return branches[0];
+    const bestBranch = branches[0];
+    if (!bestBranch) {
+      return { sequence: currentSequence, score: evaluateState(currentState, currentState.bot), finalState: currentState };
+    }
+    return bestBranch;
   }
 
   // Início da busca
@@ -438,11 +443,12 @@ export async function beamSearchTurn(
         handForValidation
       );
     }
-    if (fallbackCandidates && fallbackCandidates.length > 0) {
+    const fallbackAction = fallbackCandidates[0];
+    if (fallbackAction) {
       return {
-        action: fallbackCandidates[0],
+        action: fallbackAction,
         score: baseScore,
-        sequence: [fallbackCandidates[0]],
+        sequence: [fallbackAction],
         nodesEvaluated,
       };
     }
@@ -451,6 +457,7 @@ export async function beamSearchTurn(
 
   // BUGFIX: Sempre retornar melhor ação encontrada, mesmo se score não melhorou muito
   // Isso evita bots ficarem presos sem ação quando BeamSearch explora mas não encontra melhoria significativa
+  if (!result.sequence[0]) return null;
   return {
     action: result.sequence[0], // Primeira ação da sequência
     score: result.score,
@@ -510,10 +517,10 @@ export async function greedySearchWithEvalV2(
         summonCount: safe.summonCount || 0,
         additionalNormalSummons: safe.additionalNormalSummons || 0,
         additionalNormalSummonPermissions:
-          (safe.additionalNormalSummonPermissions || []) as SimulatedPlayerState["additionalNormalSummonPermissions"],
-        normalSummonsThisTurn: (safe.normalSummonsThisTurn || []) as SimulatedPlayerState["normalSummonsThisTurn"],
-        specialSummonRestrictions: (safe.specialSummonRestrictions || []) as SimulatedPlayerState["specialSummonRestrictions"],
-        effectActivationRestrictions: (safe.effectActivationRestrictions || []) as SimulatedPlayerState["effectActivationRestrictions"],
+          (safe.additionalNormalSummonPermissions || []) as NonNullable<SimulatedPlayerState["additionalNormalSummonPermissions"]>,
+        normalSummonsThisTurn: (safe.normalSummonsThisTurn || []) as NonNullable<SimulatedPlayerState["normalSummonsThisTurn"]>,
+        specialSummonRestrictions: (safe.specialSummonRestrictions || []) as NonNullable<SimulatedPlayerState["specialSummonRestrictions"]>,
+        effectActivationRestrictions: (safe.effectActivationRestrictions || []) as NonNullable<SimulatedPlayerState["effectActivationRestrictions"]>,
         controllerType: safe.controllerType,
       };
     };
@@ -582,6 +589,7 @@ export async function greedySearchWithEvalV2(
 
   // BUGFIX: Sempre retornar melhor ação (mesmo que não melhore score)
   // Isso garante que o bot não fique preso
+  if (!bestAction) return null;
   return {
     action: bestAction,
     score: bestScore,

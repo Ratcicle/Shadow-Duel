@@ -70,9 +70,11 @@ function material(
   } = {},
 ) {
   return completeCard({
-    instanceId: overrides.instanceId,
+    ...(overrides.instanceId === undefined
+      ? {}
+      : { instanceId: overrides.instanceId }),
     cardKind: "monster",
-    level: overrides.level,
+    ...(overrides.level === undefined ? {} : { level: overrides.level }),
     isTuner: overrides.isTuner === true,
     isFacedown: false,
     monsterType: overrides.monsterType || null,
@@ -414,7 +416,10 @@ test("compromisso da ativação proíbe ataque antes do Chain Link e é serializ
     { index: 0, type: "forbid_attack_this_turn", targetRef: null },
   ]);
   const summary = game.chainSystem.getChainSummary();
-  assert.equal(required(summary[0].activationCommitment).status, "applied");
+  assert.equal(
+    required(required(summary[0]).activationCommitment).status,
+    "applied",
+  );
   assert.doesNotThrow(() => JSON.stringify(summary));
   link.activationNegated = true;
   assert.equal(orathus.cannotAttackThisTurn, true);

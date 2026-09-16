@@ -29,12 +29,11 @@ import type {
 } from "./primitives.js";
 import type { BattlePosition } from "./cards.js";
 import type { SummonMethod, SummonOrigin } from "./summon.js";
+import type { CanonicalZone, LegacyZoneAlias, ZoneInput } from "./zones.js";
 import type {
-  CanonicalZone,
-  LegacyZoneAlias,
-  ZoneInput,
-} from "./zones.js";
-import type { ActiveSelectionSession, SelectionSessionState } from "./selection.js";
+  ActiveSelectionSession,
+  SelectionSessionState,
+} from "./selection.js";
 import type { ReplayRecordingBuffer } from "./replay.js";
 
 export type { MaybePromise } from "./decisions.js";
@@ -68,8 +67,8 @@ export interface ZoneSnapshot {
 
 export interface ZoneOpOptions {
   contextLabel?: string;
-  card?: GameCard | null;
-  fromZone?: ZoneInput | null;
+  card?: (GameCard | null) | undefined;
+  fromZone?: (ZoneInput | null) | undefined;
   toZone?: ZoneInput | null;
 }
 
@@ -135,25 +134,27 @@ export interface SynchroMaterialFollowup {
 }
 
 export interface MoveCardOptions {
-  fromZone?: ZoneInput | "token";
+  fromZone?: (ZoneInput | "token") | undefined;
   position?: BattlePosition;
-  isFacedown?: boolean;
+  isFacedown?: boolean | undefined;
   resetAttackFlags?: boolean;
   summonOrigin?: SummonOrigin | null;
-  summonMethod?: SummonMethod;
+  summonMethod?: SummonMethod | undefined;
   summonMethodOverride?: SummonMethod;
   summonProcedure?: SpecialSummonProcedure | string | null;
   summonMode?: SummonMode;
   summonTransaction?: SummonTransaction | null;
   summonId?: SummonId | number | null;
   tributes?: readonly GameCard[];
-  statusesOnSummon?: KnownCardStatusInput | readonly KnownCardStatusInput[];
+  statusesOnSummon?:
+    | (KnownCardStatusInput | readonly KnownCardStatusInput[])
+    | undefined;
   source?: GameCard | null;
   sourceCard?: GameCard | null;
   sourcePlayer?: GamePlayer | null;
   effectPlayer?: GamePlayer | null;
   destroySource?: GameCard | null;
-  excludeCards?: readonly GameCard[];
+  excludeCards?: readonly GameCard[] | undefined;
   reason?: string;
   cause?: string;
   destroyCause?: string | null;
@@ -292,7 +293,9 @@ export interface SummonCostPayment {
   paid?: boolean;
   contextLabel?: string;
   options?: MoveCardOptions;
-  pay?: (transaction: SummonTransaction) => MaybePromise<MoveCardResult | boolean | null | undefined>;
+  pay?: (
+    transaction: SummonTransaction,
+  ) => MaybePromise<MoveCardResult | boolean | null | undefined>;
 }
 
 export interface SummonNegationOutcome {
@@ -365,9 +368,16 @@ export interface PreparedSummonInput {
   consumesNormalSummon?: boolean;
   costPayments?: readonly SummonCostPayment[];
   cancelled?: boolean;
-  commit?: (transaction: SummonTransaction) => MaybePromise<SummonExecutionResult | boolean | null | undefined>;
-  perform?: (transaction: SummonTransaction) => MaybePromise<SummonExecutionResult | boolean | null | undefined>;
-  onFailure?: (transaction: SummonTransaction, error: unknown) => MaybePromise<unknown>;
+  commit?: (
+    transaction: SummonTransaction,
+  ) => MaybePromise<SummonExecutionResult | boolean | null | undefined>;
+  perform?: (
+    transaction: SummonTransaction,
+  ) => MaybePromise<SummonExecutionResult | boolean | null | undefined>;
+  onFailure?: (
+    transaction: SummonTransaction,
+    error: unknown,
+  ) => MaybePromise<unknown>;
   finalContext?: unknown;
   skipFinalTiming?: boolean;
 }
@@ -399,7 +409,8 @@ export interface PreparedSummon {
   skipFinalTiming: boolean;
 }
 
-export interface SummonTransaction extends Omit<PreparedSummon, "summonId" | "status"> {
+export interface SummonTransaction
+  extends Omit<PreparedSummon, "summonId" | "status"> {
   summonId: SummonId | number;
   status: SummonStatus;
 }
@@ -417,11 +428,7 @@ export interface SummonExecutionResult extends MoveCardResult {
   error?: unknown;
 }
 
-export type DamageStepStatus =
-  | "active"
-  | "completed"
-  | "failed"
-  | "cancelled";
+export type DamageStepStatus = "active" | "completed" | "failed" | "cancelled";
 
 export type DamageStepCard = GameCard & {
   simInstanceId?: string | number | null;
@@ -475,10 +482,7 @@ export interface DamageStepTransactionInput {
   defender?: DamageStepCard | null;
   attackerOwner?: GamePlayer | null;
   defenderOwner?: GamePlayer | null;
-  consumeBattleLpLossFeedback?: (
-    player: GamePlayer,
-    amount: number,
-  ) => boolean;
+  consumeBattleLpLossFeedback?: (player: GamePlayer, amount: number) => boolean;
 }
 
 export interface DamageStepTransaction {
@@ -599,7 +603,11 @@ export interface PlayerGamePort {
     (card: null | undefined): null;
   };
   shuffle?<Value>(items: Value[]): Value[];
-  canPlaceCardOnField?(card: GameCard, player: GamePlayer, options?: MoveCardOptions): MoveCardResult;
+  canPlaceCardOnField?(
+    card: GameCard,
+    player: GamePlayer,
+    options?: MoveCardOptions,
+  ): MoveCardResult;
   createPreparedSummon(input: PreparedSummonInput): PreparedSummon;
   executeSummonTransaction(
     input: PreparedSummonInput | PreparedSummon,
@@ -714,12 +722,17 @@ export interface GameRuntimeState {
   disposed: boolean;
   gameOver: boolean;
   winner: PlayerId | "draw" | null;
-  targetSelection: (ActiveSelectionSession & ReplayCommandDescriptorCarrier) | null;
+  targetSelection:
+    | (ActiveSelectionSession & ReplayCommandDescriptorCarrier)
+    | null;
   selectionState: SelectionSessionState;
   graveyardSelection: unknown;
   selectionSessionCounter: number;
   lastSelectionSessionId: number;
-  eventListeners: Record<string, Array<(payload: unknown) => MaybePromise<unknown>>>;
+  eventListeners: Record<
+    string,
+    Array<(payload: unknown) => MaybePromise<unknown>>
+  >;
   phaseDelayMs: number;
   aiSuccessfulActionDelayMs: number;
   aiPresentationStepDelayMs: number;
@@ -828,7 +841,9 @@ export interface GameZonesHost extends GameCoreHost {
   captureZoneSnapshot(contextLabel?: string): ZoneSnapshot;
   restoreZoneSnapshot(snapshot: ZoneSnapshot | null | undefined): void;
   collectAllZoneCards(): GameCard[];
-  snapshotCardState(card: GameCard | null | undefined): CardStateSnapshot | null;
+  snapshotCardState(
+    card: GameCard | null | undefined,
+  ): CardStateSnapshot | null;
 }
 
 export interface GameSummonHost extends GameCoreHost {
@@ -837,7 +852,9 @@ export interface GameSummonHost extends GameCoreHost {
   lastSummonTransaction: SummonTransactionSnapshot | null;
   summonProcedureDepth: number;
   createPreparedSummon(input?: PreparedSummonInput): PreparedSummon;
-  executeSummonTransaction(input?: PreparedSummonInput | PreparedSummon): Promise<SummonExecutionResult>;
+  executeSummonTransaction(
+    input?: PreparedSummonInput | PreparedSummon,
+  ): Promise<SummonExecutionResult>;
 }
 
 export interface FullGameHost extends GameRuntimeState, GameCoreHost {
@@ -858,9 +875,13 @@ export interface FullGameHost extends GameRuntimeState, GameCoreHost {
   captureZoneSnapshot(contextLabel?: string): ZoneSnapshot;
   restoreZoneSnapshot(snapshot: ZoneSnapshot | null | undefined): void;
   collectAllZoneCards(): GameCard[];
-  snapshotCardState(card: GameCard | null | undefined): CardStateSnapshot | null;
+  snapshotCardState(
+    card: GameCard | null | undefined,
+  ): CardStateSnapshot | null;
   createPreparedSummon(input?: PreparedSummonInput): PreparedSummon;
-  executeSummonTransaction(input?: PreparedSummonInput | PreparedSummon): Promise<SummonExecutionResult>;
+  executeSummonTransaction(
+    input?: PreparedSummonInput | PreparedSummon,
+  ): Promise<SummonExecutionResult>;
   updateBoard?(): MaybePromise<unknown>;
 }
 
@@ -868,12 +889,18 @@ export interface GameHelpersHost {
   player: GamePlayer;
   bot: GamePlayer;
   nextDuelCardId: number;
-  resolvePlayerById(id: PlayerId | string | null | undefined): GamePlayer | null;
+  resolvePlayerById(
+    id: PlayerId | string | null | undefined,
+  ): GamePlayer | null;
   resolveCardData(identifier: number | string): unknown;
   createCardForOwner(
     identifier: number | string,
     owner: PlayerId | GamePlayer,
-    overrides?: { duelCardId?: DuelCardId; position?: BattlePosition; isFacedown?: boolean },
+    overrides?: {
+      duelCardId?: DuelCardId;
+      position?: BattlePosition;
+      isFacedown?: boolean;
+    },
   ): GameCard | null;
 }
 

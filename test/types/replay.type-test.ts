@@ -1,10 +1,25 @@
 import type {
   CanonicalReplay,
   CanonicalReplayCommand,
+  CanonicalReplayCommandInput,
   CanonicalReplayDecision,
   CanonicalReplayEvent,
   SerializableValue,
 } from "../../src/core/contracts/replay.js";
+
+const capturedOptionalPosition: CanonicalReplayCommandInput = {
+  type: "summon",
+  actorId: "player",
+  payload: { duelCardId: 1, position: undefined },
+};
+// contract-negative: serialized canonical commands cannot carry undefined fields.
+// @ts-expect-error
+const unnormalizedCapture: CanonicalReplayCommand = {
+  ...capturedOptionalPosition,
+  sequence: 1,
+  actorId: "player",
+};
+void unnormalizedCapture;
 
 const drawCommand: CanonicalReplayCommand = {
   sequence: 1,

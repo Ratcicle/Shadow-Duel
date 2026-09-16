@@ -9,7 +9,11 @@ import type {
   MonsterType,
 } from "./cards.js";
 import type { CardFilter, EffectDefinition } from "./effects.js";
-import type { ControllerType, PlayerId, RawCardDefinitionId } from "./primitives.js";
+import type {
+  ControllerType,
+  PlayerId,
+  RawCardDefinitionId,
+} from "./primitives.js";
 import type {
   MoveCardResult,
   PlayerGamePort,
@@ -162,19 +166,19 @@ export interface GamePlayer {
 }
 
 export interface NormalSummonCardView {
-  id?: RawCardDefinitionId | null;
-  name?: string | null;
-  cardKind?: CardKind | null;
-  archetype?: string | null;
-  archetypes?: readonly string[];
-  type?: MonsterRace | string | null;
-  attribute?: CardAttribute | null;
+  id?: RawCardDefinitionId | null | undefined;
+  name?: (string | null) | undefined;
+  cardKind?: (CardKind | null) | undefined;
+  archetype?: (string | null) | undefined;
+  archetypes?: readonly string[] | undefined;
+  type?: MonsterRace | string | null | undefined;
+  attribute?: (CardAttribute | null) | undefined;
   monsterType?: MonsterType | null;
   isTuner?: boolean;
-  level?: number;
+  level?: number | undefined;
   effects?: readonly EffectDefinition[];
   effectsNegated?: boolean;
-  isFacedown?: boolean;
+  isFacedown?: boolean | undefined;
 }
 
 /** Minimal mutable state consumed by the shared normal-summon slot helpers. */

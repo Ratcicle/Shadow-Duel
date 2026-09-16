@@ -1,19 +1,30 @@
 import type { BotRuntimePort, BotGamePort } from "../../contracts/bot.js";
-import type { AIActionOf, ExtraDeckMaterialHint, AIActivationContext } from "../../contracts/ai.js";
+import type {
+  AIActionOf,
+  ExtraDeckMaterialHint,
+  AIActivationContext,
+} from "../../contracts/ai.js";
 import type { GameCard } from "../../contracts/cards.js";
 import {
   canSetReactiveBackrowNow,
   isQuickSpellCard,
 } from "../../ai/common/phaseTiming.js";
 
-function markAiQuickSpellActivation(card: GameCard & { lastAiActivatedTurn?: number | null }, game: BotGamePort) {
+function markAiQuickSpellActivation(
+  card: GameCard & { lastAiActivatedTurn?: number | null },
+  game: BotGamePort,
+) {
   if (!isQuickSpellCard(card)) return;
   card.lastAiActivatedTurn = Number.isFinite(Number(game?.turnCounter))
     ? Number(game.turnCounter)
     : null;
 }
 
-export async function executeSpellAction(bot: BotRuntimePort, game: BotGamePort, action: AIActionOf<"spell">): Promise<boolean> {
+export async function executeSpellAction(
+  bot: BotRuntimePort,
+  game: BotGamePort,
+  action: AIActionOf<"spell">,
+): Promise<boolean> {
   const resolvedIndex = bot.resolveHandIndexForAction(action, "spell");
   if (resolvedIndex < 0) {
     console.log(
@@ -23,12 +34,10 @@ export async function executeSpellAction(bot: BotRuntimePort, game: BotGamePort,
     );
     return false;
   }
-  const card = bot.hand[resolvedIndex];
+  const card = bot.hand[resolvedIndex]!; // resolveHandIndexForAction validated this occupied slot.
   const actionActivationContext = action.activationContext || {};
 
-  console.log(
-    `[Bot.executeMainPhaseAction] 📝 Attempting spell: ${card.name}`,
-  );
+  console.log(`[Bot.executeMainPhaseAction] 📝 Attempting spell: ${card.name}`);
 
   if (
     game.effectEngine &&
@@ -49,10 +58,12 @@ export async function executeSpellAction(bot: BotRuntimePort, game: BotGamePort,
     }
   }
 
-  const activationEffect =
-    game.effectEngine?.getSpellTrapActivationEffect?.(card, {
+  const activationEffect = game.effectEngine?.getSpellTrapActivationEffect?.(
+    card,
+    {
       fromHand: true,
-    });
+    },
+  );
 
   const pipelineResult = await game.runActivationPipeline({
     card,
@@ -85,13 +96,17 @@ export async function executeSpellAction(bot: BotRuntimePort, game: BotGamePort,
         ctx,
       ),
     finalize: async (result, info) => {
-      await game.finalizeSpellCardActivation(result as Parameters<BotGamePort["finalizeSpellCardActivation"]>[0], info as Parameters<BotGamePort["finalizeSpellCardActivation"]>[1], {
-        owner: bot,
-        fromHand: true,
-        effect: activationEffect,
-        placementLog: `Bot places ${info.card.name}.`,
-        activationLog: `Bot activates ${info.card.name}`,
-      });
+      await game.finalizeSpellCardActivation(
+        result as Parameters<BotGamePort["finalizeSpellCardActivation"]>[0],
+        info as Parameters<BotGamePort["finalizeSpellCardActivation"]>[1],
+        {
+          owner: bot,
+          fromHand: true,
+          effect: activationEffect,
+          placementLog: `Bot places ${info.card.name}.`,
+          activationLog: `Bot activates ${info.card.name}`,
+        },
+      );
     },
   });
   // Pipeline retorna false, null, ou {success: false} quando falha
@@ -103,7 +118,11 @@ export async function executeSpellAction(bot: BotRuntimePort, game: BotGamePort,
   return success;
 }
 
-export async function executeSetSpellTrapAction(bot: BotRuntimePort, game: BotGamePort, action: AIActionOf<"set_spell_trap">): Promise<boolean> {
+export async function executeSetSpellTrapAction(
+  bot: BotRuntimePort,
+  game: BotGamePort,
+  action: AIActionOf<"set_spell_trap">,
+): Promise<boolean> {
   const resolvedIndex = bot.resolveHandIndexForAction(action, [
     "spell",
     "trap",
@@ -116,7 +135,7 @@ export async function executeSetSpellTrapAction(bot: BotRuntimePort, game: BotGa
     );
     return false;
   }
-  const card = bot.hand[resolvedIndex];
+  const card = bot.hand[resolvedIndex]!; // resolveHandIndexForAction validated this occupied slot.
   if (!canSetReactiveBackrowNow(card, game)) {
     console.log(
       `[Bot.executeMainPhaseAction] Set spell/trap rejected by phase timing: ${card.name}`,
@@ -136,7 +155,11 @@ export async function executeSetSpellTrapAction(bot: BotRuntimePort, game: BotGa
   return true;
 }
 
-export async function executeSpellTrapEffectAction(bot: BotRuntimePort, game: BotGamePort, action: AIActionOf<"spellTrapEffect">): Promise<boolean> {
+export async function executeSpellTrapEffectAction(
+  bot: BotRuntimePort,
+  game: BotGamePort,
+  action: AIActionOf<"spellTrapEffect">,
+): Promise<boolean> {
   const zoneIndex = Number.isInteger(action.zoneIndex)
     ? action.zoneIndex
     : action.index;
@@ -148,11 +171,13 @@ export async function executeSpellTrapEffectAction(bot: BotRuntimePort, game: Bo
     return false;
   }
 
-  const activationEffect =
-    game.effectEngine?.getSpellTrapActivationEffect?.(card, {
+  const activationEffect = game.effectEngine?.getSpellTrapActivationEffect?.(
+    card,
+    {
       fromHand: false,
       activationZone: "spellTrap",
-    });
+    },
+  );
   const actionActivationContext = action.activationContext || {};
 
   const activationContext: AIActivationContext = {
@@ -191,13 +216,7 @@ export async function executeSpellTrapEffectAction(bot: BotRuntimePort, game: Bo
       effect: activationEffect,
     },
     activate: (chosen, ctx, zone) =>
-      game.effectEngine.activateSpellTrapEffect(
-        card,
-        bot,
-        chosen,
-        zone,
-        ctx,
-      ),
+      game.effectEngine.activateSpellTrapEffect(card, bot, chosen, zone, ctx),
     finalize: async (result, info) => {
       if (result.placementOnly) {
         game.ui?.log?.(`Bot places ${info.card.name}.`);
@@ -205,7 +224,9 @@ export async function executeSpellTrapEffectAction(bot: BotRuntimePort, game: Bo
         await game.finalizeSpellTrapActivation(
           info.card,
           bot,
-          info.activationZone as Parameters<BotGamePort["finalizeSpellTrapActivation"]>[2],
+          info.activationZone as Parameters<
+            BotGamePort["finalizeSpellTrapActivation"]
+          >[2],
           { activationContext: info.activationContext },
         );
         game.ui?.log?.(`Bot activates ${info.card.name}`);
@@ -219,7 +240,11 @@ export async function executeSpellTrapEffectAction(bot: BotRuntimePort, game: Bo
   return success;
 }
 
-export async function executeGraveyardSpellEffectAction(bot: BotRuntimePort, game: BotGamePort, action: AIActionOf<"graveyardSpellEffect">): Promise<boolean> {
+export async function executeGraveyardSpellEffectAction(
+  bot: BotRuntimePort,
+  game: BotGamePort,
+  action: AIActionOf<"graveyardSpellEffect">,
+): Promise<boolean> {
   const graveyardIndex = Number.isInteger(action.graveyardIndex)
     ? action.graveyardIndex
     : bot.graveyard.findIndex(
@@ -236,11 +261,13 @@ export async function executeGraveyardSpellEffectAction(bot: BotRuntimePort, gam
     return false;
   }
 
-  const graveyardEffect =
-    game.effectEngine?.getSpellTrapActivationEffect?.(card, {
+  const graveyardEffect = game.effectEngine?.getSpellTrapActivationEffect?.(
+    card,
+    {
       fromHand: false,
       activationZone: "graveyard",
-    });
+    },
+  );
   if (!graveyardEffect) {
     console.log(
       `[Bot.executeMainPhaseAction] No graveyard spell ignition effect found for ${card.name}`,
@@ -282,13 +309,7 @@ export async function executeGraveyardSpellEffectAction(bot: BotRuntimePort, gam
       effect: graveyardEffect,
     },
     activate: (chosen, ctx, zone) =>
-      game.effectEngine.activateSpellTrapEffect(
-        card,
-        bot,
-        chosen,
-        zone,
-        ctx,
-      ),
+      game.effectEngine.activateSpellTrapEffect(card, bot, chosen, zone, ctx),
     finalize: () => {
       game.ui?.log?.(`Bot activates ${card.name}'s effect from graveyard`);
       game.updateBoard();
@@ -303,7 +324,11 @@ export async function executeGraveyardSpellEffectAction(bot: BotRuntimePort, gam
   return success;
 }
 
-export async function executeFieldEffectAction(bot: BotRuntimePort, game: BotGamePort, action: AIActionOf<"fieldEffect">): Promise<boolean> {
+export async function executeFieldEffectAction(
+  bot: BotRuntimePort,
+  game: BotGamePort,
+  action: AIActionOf<"fieldEffect">,
+): Promise<boolean> {
   if (!bot.fieldSpell) return false;
   const fieldSpell = bot.fieldSpell;
   const actionActivationContext = action.activationContext || {};
@@ -337,12 +362,7 @@ export async function executeFieldEffectAction(bot: BotRuntimePort, game: BotGam
       effect: activationEffect,
     },
     activate: (selections, ctx) =>
-      game.effectEngine.activateFieldSpell(
-        fieldSpell,
-        bot,
-        selections,
-        ctx,
-      ),
+      game.effectEngine.activateFieldSpell(fieldSpell, bot, selections, ctx),
     finalize: () => {
       game.ui?.log?.(`Bot activates ${fieldSpell.name}'s effect`);
       game.updateBoard();

@@ -1,3 +1,18 @@
+import type { ActionRuntimeCard } from "../../contracts/actionRuntime.js";
+import type { FusionMaterialDefinition } from "../../contracts/cards.js";
+
+export interface ComplexFusionRequirement
+  extends Omit<FusionMaterialDefinition, "allowedZones"> {
+  readonly isTuner?: boolean;
+  readonly maxLevel?: number;
+  readonly attribute?: string;
+  readonly allowedZones?: readonly string[];
+}
+export type FusionRequirement = string | ComplexFusionRequirement;
+export interface FusionCard extends ActionRuntimeCard {
+  fusionMaterials?: readonly FusionRequirement[] | null;
+}
+
 /**
  * Fusion Requirements Module
  * Extracted from EffectEngine.js - handles fusion material requirements
@@ -10,7 +25,11 @@ import { cardMatchesKind } from "../../Card.js";
 /**
  * Match a card against a fusion requirement
  */
-export function matchesFusionRequirement(card, requirement, materialZone) {
+export function matchesFusionRequirement(
+  card: ActionRuntimeCard,
+  requirement: FusionRequirement | null | undefined,
+  materialZone?: string,
+) {
   // Handle complex object requirements (e.g., { archetype: "Shadow-Heart", minLevel: 5 })
   if (typeof requirement === "object" && requirement !== null) {
     return matchComplexRequirement(card, requirement, materialZone);
@@ -34,7 +53,7 @@ export function matchesFusionRequirement(card, requirement, materialZone) {
   // Specific card match by ID
   if (requirement.startsWith("specific:")) {
     const cardId = requirement.substring("specific:".length);
-    return card.id === cardId;
+    return (card.id as unknown) === cardId;
   }
 
   // Card name match
@@ -104,7 +123,7 @@ export function matchesFusionRequirement(card, requirement, materialZone) {
   }
 
   // Try as direct card ID (backward compatibility)
-  return card.id === requirement;
+  return (card.id as unknown) === requirement;
 }
 
 /**
@@ -112,7 +131,11 @@ export function matchesFusionRequirement(card, requirement, materialZone) {
  * Supports combined conditions like { archetype: "Shadow-Heart", minLevel: 5 }
  * or { type: "Dragon", minLevel: 5 }
  */
-function matchComplexRequirement(card, requirement, materialZone) {
+function matchComplexRequirement(
+  card: ActionRuntimeCard,
+  requirement: ComplexFusionRequirement,
+  materialZone?: string,
+) {
   if (requirement.cardKind) {
     if (!cardMatchesKind(card, requirement.cardKind)) return false;
   }
@@ -176,7 +199,10 @@ function matchComplexRequirement(card, requirement, materialZone) {
 
   // Check zone restriction
   if (requirement.allowedZones) {
-    if (!requirement.allowedZones.includes(materialZone)) return false;
+    if (
+      !(requirement.allowedZones as readonly unknown[]).includes(materialZone)
+    )
+      return false;
   }
 
   return true;
@@ -185,7 +211,9 @@ function matchComplexRequirement(card, requirement, materialZone) {
 /**
  * Get the fusion requirements from a fusion monster definition
  */
-export function getFusionRequirements(fusionMonster) {
+export function getFusionRequirements(
+  fusionMonster: FusionCard,
+): readonly FusionRequirement[] {
   // Support both array format and fusionMaterials object
   if (fusionMonster.fusionMaterials) {
     return fusionMonster.fusionMaterials;
@@ -196,7 +224,9 @@ export function getFusionRequirements(fusionMonster) {
 /**
  * Get the required count of materials for fusion
  */
-export function getFusionRequiredCount(requirements) {
+export function getFusionRequiredCount(
+  requirements: readonly FusionRequirement[],
+) {
   // Each requirement is one material unless it has a count property
   return requirements.reduce((total, req) => {
     if (typeof req === "object" && req.count) {

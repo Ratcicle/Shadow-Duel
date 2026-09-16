@@ -10,13 +10,13 @@ type CounterList = Array<{
   count: number;
 }>;
 interface ArenaCardRef extends Omit<EventCard, "id"> {
-  id?: number | string | null;
+  id?: number | string | null | undefined;
   label?: string | null;
   zone?: string | null;
 }
 type CardRef = ArenaCardRef | string | null | undefined;
 type PlayerRef = {
-  id?: string | number | null;
+  id?: string | number | null | undefined;
 } | string | null | undefined;
 interface ArenaSnapshotPlayer {
   id?: string;
@@ -55,8 +55,8 @@ export interface ArenaAnalyticsOptions {
 }
 export interface ArenaTrackerOptions {
   seed?: number | string | null;
-  beamWidth?: number | null;
-  maxDepth?: number | null;
+  beamWidth?: number | null | undefined;
+  maxDepth?: number | null | undefined;
   plannerMode?: string | null;
   plannerTurnMode?: string | null;
   plannerBeamWidth?: number | null;
@@ -80,7 +80,7 @@ interface PlanningLabelObject {
   type?: unknown;
 }
 interface PlanningAction {
-  type?: string;
+  type?: string | undefined;
   cardName?: string | null;
   name?: string;
   attackerName?: string;
@@ -91,7 +91,7 @@ interface PlanningAction {
 export interface ArenaRecordedAction extends PlanningAction {
   seat?: Seat | null;
   player?: Seat | null;
-  turn?: number;
+  turn?: number | undefined;
   success?: boolean;
   blocked?: boolean;
   reason?: string | null;
@@ -123,8 +123,8 @@ export interface ArenaProgressEntry {
   diffs?: unknown[];
 }
 interface PlanSample {
-  turn?: number;
-  phase?: string | null;
+  turn?: number | undefined;
+  phase?: string | null | undefined;
   mode: string | null;
   turnMode: string | null;
   score: number | null;
@@ -135,8 +135,8 @@ interface PlanSample {
   reason: string | null;
 }
 interface MismatchSample {
-  turn?: number;
-  phase?: string | null;
+  turn?: number | undefined;
+  phase?: string | null | undefined;
   stage?: string;
   severity: string;
   selectedFirstAction: PlanningAction | string | null;
@@ -146,21 +146,21 @@ interface MismatchSample {
   diffs: unknown[];
 }
 export interface ArenaRecordedEvent {
-  t?: number | null;
+  t?: number | null | undefined;
   seat?: string | null;
   type?: string;
   card?: string | null;
   sourceCard?: string | null;
   effectId?: string | null;
   target?: string | null;
-  targets?: (string | null)[];
+  targets?: (string | null)[] | undefined;
   targetOwner?: string | null;
   targetZone?: string | null;
-  position?: string | null;
+  position?: string | null | undefined;
   fromZone?: string | null;
   toZone?: string | null;
-  fromPosition?: string | null;
-  toPosition?: string | null;
+  fromPosition?: string | null | undefined;
+  toPosition?: string | null | undefined;
   stage?: string | null;
   chainId?: number | string | null;
   linkId?: number | string | null;
@@ -362,7 +362,7 @@ interface DuelSummary {
   diagnostics?: ReturnType<typeof compactDuelDiagnostics>;
 }
 interface MoonlitResolution {
-  recovered?: string | null;
+  recovered?: string | null | undefined;
   recoveredFrom: string | null;
   recoveredTo: string | null;
   summoned: boolean;

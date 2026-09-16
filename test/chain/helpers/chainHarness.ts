@@ -102,7 +102,7 @@ export function installPreparedResponses(
         card: required(prepared.card),
         effect: required(prepared.effect),
         sourceZone: required(prepared.activationZone),
-        context,
+        context: required(context),
       },
     );
     preparations.set(candidate, prepared);
@@ -130,7 +130,7 @@ type EmitOptions = { collectTriggersOnly?: boolean };
 export interface TraceEvent {
   eventName: string;
   actionTypes?: string[];
-  payload?: ChainEventPayload & Record<string, unknown>;
+  payload?: (ChainEventPayload & Record<string, unknown>) | undefined;
   options?: EmitOptions;
   channel?: string;
 }
@@ -156,7 +156,9 @@ export interface HarnessTrace {
     [key: string]: unknown;
   }>;
 }
-type MoveOptions = ChainMoveCardOptions & {
+type MoveOptions = Omit<ChainMoveCardOptions, "fromZone" | "contextLabel"> & {
+  contextLabel?: ChainMoveCardOptions["contextLabel"];
+  fromZone?: ChainMoveCardOptions["fromZone"];
   wasDestroyed?: boolean;
   source?: ChainCard | null;
   actionContext?: PreparedActivationContext & {
@@ -321,7 +323,7 @@ export function createTestPlayer(
 export function createTestCard(
   overrides: Omit<Partial<TestCard>, "id" | "archetypes"> & {
     id?: number | string;
-    archetypes?: readonly string[];
+    archetypes?: readonly string[] | undefined;
   } = {},
 ): TestCard {
   const legacyId = overrides.id ?? null;
@@ -722,8 +724,14 @@ export function createChainHarness(options: HarnessOptions = {}) {
     async runActivationPipelineWait(config = {}) {
       const activationContext = {
         ...(config.activationContext || {}),
-        activationZone:
-          config.activationZone || config.activationContext?.activationZone,
+        ...(config.activationZone || config.activationContext?.activationZone
+          ? {
+              activationZone: required(
+                config.activationZone ||
+                  config.activationContext?.activationZone,
+              ),
+            }
+          : {}),
         prepareOnly: true,
         confirmed: config.activationContext?.confirmed === true,
       };
@@ -735,10 +743,12 @@ export function createChainHarness(options: HarnessOptions = {}) {
       const effect = preview?.effect || config.effect || null;
       const selections = preview?.targets || config.selections || {};
       const preparedActivation = game.chainSystem!.createPreparedActivation({
-        card: config.card,
-        controller: config.owner,
+        ...(config.card === undefined ? {} : { card: config.card }),
+        ...(config.owner === undefined ? {} : { controller: config.owner }),
         effect,
-        activationZone: config.activationZone,
+        ...(config.activationZone === undefined
+          ? {}
+          : { activationZone: config.activationZone }),
         activationContext: {
           ...activationContext,
           prepareOnly: false,

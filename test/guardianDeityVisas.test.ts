@@ -37,6 +37,7 @@ test("Guardian Deity Visas declares compact text and canonical response actions"
   assert.equal(locale.cards["23"].description, EXPECTED_PT_BR);
 
   const [effect] = required(card.effects);
+  assert.ok(effect);
   assert.deepEqual(effect.activationZones, ["hand"]);
   assert.equal(effect.speed, 2);
   assert.equal(effect.isQuickEffect, true);
@@ -50,7 +51,7 @@ test("Guardian Deity Visas declares compact text and canonical response actions"
     required(effect.actions).map(({ type }) => type),
     ["special_summon_from_zone", "negate_effect"],
   );
-  assert.equal(required(effect.actions)[0].haltOnFailure, true);
+  assert.equal(required(required(effect.actions)[0]).haltOnFailure, true);
 });
 
 test("Guardian Deity Visas responds only when an opponent effect would banish an own card", (t) => {
@@ -79,6 +80,7 @@ test("Guardian Deity Visas responds only when an opponent effect would banish an
   game.bot.field.push(opponentCard);
 
   const [responseEffect] = required(visas.effects);
+  assert.ok(responseEffect);
   const banishEffect = {
     id: "test_banish_effect",
     actions: [{ type: "banish", targetRef: "banish_target" }],

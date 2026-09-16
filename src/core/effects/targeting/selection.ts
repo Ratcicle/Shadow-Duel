@@ -50,7 +50,7 @@ type TargetingSubtype = CardSubtype | readonly CardSubtype[];
 type TargetingStringFilter = string | readonly string[];
 
 interface TargetingCard extends ActionRuntimeCard {
-  id?: RawCardDefinitionId | number;
+  id?: RawCardDefinitionId | number | undefined;
   fieldPresenceId?: TargetingInstanceId;
   game?: { devModeEnabled?: boolean };
   lastSummonMethod?: SummonMethod | null;

@@ -20,9 +20,9 @@ function resolveScheduledCard(
   if (cardRef === "self" || cardRef === "source") return ctx?.source || null;
   const target = targets?.[cardRef];
   if (Array.isArray(target)) return target[0] || null;
-  return (target || readContextValue(ctx, cardRef) || null) as
-    | ActionRuntimeCard
-    | null;
+  return (target ||
+    readContextValue(ctx, cardRef) ||
+    null) as ActionRuntimeCard | null;
 }
 
 function resolvePlayerId(
@@ -115,7 +115,7 @@ export async function handleAbyssalSerpentDelayedSummon(
     return false;
   }
 
-  const target = targetCards[0];
+  const target = targetCards[0]!; // The resolved target array is non-empty above.
   const opponent = ctx?.opponent || game.getOpponent?.(player);
 
   if (!opponent) {
@@ -175,4 +175,3 @@ export async function handleAbyssalSerpentDelayedSummon(
 
   return true;
 }
-

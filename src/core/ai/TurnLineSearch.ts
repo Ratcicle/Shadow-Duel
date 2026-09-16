@@ -51,7 +51,7 @@ interface PlannerBlueprintEntry {
 }
 
 type PlannerCard = SimulatedCardState & {
-  cannotBeDestroyedByBattle?: boolean;
+  cannotBeDestroyedByBattle?: boolean | undefined;
   storedBlueprints?: PlannerBlueprintEntry[];
   blueprintStorageState?: { storedBlueprints?: PlannerBlueprintEntry[] } | null;
   storedEffects?: PlannerBlueprintEntry[];
@@ -118,12 +118,12 @@ type PlanningGameInput = Omit<AiStateInput, "player" | "bot" | "opponent"> & {
 
 interface DestroyedCardSummary {
   id?: PlannerCard["id"];
-  name?: string;
+  name?: string | undefined;
   owner: string;
-  cardKind?: string;
-  type?: string | null;
-  archetype?: string | null;
-  archetypes?: string[];
+  cardKind?: string | undefined;
+  type?: string | null | undefined;
+  archetype?: string | null | undefined;
+  archetypes?: string[] | undefined;
   level: number;
   monsterType?: string | null;
   atk: number;
@@ -149,7 +149,7 @@ interface PlannerBattlePlan {
 
 interface PlannerBattleSummary extends SimulatedBattleAction {
   type: "simulatedBattle";
-  attackerName?: string;
+  attackerName?: string | undefined;
   targetName?: string | null;
   direct: boolean;
   damage: number;
@@ -173,8 +173,8 @@ interface PlannerBattleHookInput {
   state: PlanningState;
   battlePlan: PlannerBattlePlan;
   summary?: PlannerBattleSummary;
-  attacker?: PlannerCard | null;
-  target?: PlannerCard | null;
+  attacker?: PlannerCard | null | undefined;
+  target?: PlannerCard | null | undefined;
   bot: PlannerPlayer;
   opponent: PlannerPlayer;
   options: TurnLineRuntimeOptions;
@@ -235,18 +235,18 @@ interface TurnLineStrategy {
 }
 
 interface BattlePlanningProfile extends AIPlanningProfile {
-  battleStepLimit?: number;
+  battleStepLimit?: number | undefined;
 }
 
 interface BattlePlanningContext {
-  profile?: { battleStepLimit?: number };
+  profile?: { battleStepLimit?: number | undefined } | undefined;
 }
 
 type TurnLineRuntimeOptions = Omit<
   TurnLineSearchOptions,
   "profile" | "planningContext"
 > & {
-  profile?: Partial<BattlePlanningProfile>;
+  profile?: Partial<BattlePlanningProfile> | undefined;
   planningContext?: BattlePlanningContext;
 };
 
@@ -268,8 +268,8 @@ interface PlannerLineContext extends Omit<AIPlanningContext, "initialState"> {
   initialState?: PlanningState | null;
   finalState?: PlanningState;
   options?: TurnLineRuntimeOptions;
-  profile?: Partial<BattlePlanningProfile>;
-  planningContext?: BattlePlanningContext;
+  profile?: Partial<BattlePlanningProfile> | undefined;
+  planningContext?: BattlePlanningContext | undefined;
 }
 
 interface SearchBranch {
@@ -489,10 +489,10 @@ function clonePlayerState(
     spellTrap: (safe.spellTrap || []) as PlannerCard[],
     summonCount: safe.summonCount || 0,
     additionalNormalSummons: safe.additionalNormalSummons || 0,
-    additionalNormalSummonPermissions: (safe.additionalNormalSummonPermissions || []) as PlannerPlayer["additionalNormalSummonPermissions"],
-    normalSummonsThisTurn: (safe.normalSummonsThisTurn || []) as PlannerPlayer["normalSummonsThisTurn"],
-    specialSummonRestrictions: (safe.specialSummonRestrictions || []) as PlannerPlayer["specialSummonRestrictions"],
-    effectActivationRestrictions: (safe.effectActivationRestrictions || []) as PlannerPlayer["effectActivationRestrictions"],
+    additionalNormalSummonPermissions: (safe.additionalNormalSummonPermissions || []) as NonNullable<PlannerPlayer["additionalNormalSummonPermissions"]>,
+    normalSummonsThisTurn: (safe.normalSummonsThisTurn || []) as NonNullable<PlannerPlayer["normalSummonsThisTurn"]>,
+    specialSummonRestrictions: (safe.specialSummonRestrictions || []) as NonNullable<PlannerPlayer["specialSummonRestrictions"]>,
+    effectActivationRestrictions: (safe.effectActivationRestrictions || []) as NonNullable<PlannerPlayer["effectActivationRestrictions"]>,
     controllerType: safe.controllerType,
   };
   return clonePlain(snapshot) as PlannerPlayer;
@@ -528,13 +528,13 @@ function clonePlanningState(
     _gameRef: game?._gameRef || game,
   } as PlanningState;
   if (game?._simOncePerTurn) {
-    state._simOncePerTurn = clonePlain(game._simOncePerTurn) as PlanningState["_simOncePerTurn"];
+    state._simOncePerTurn = clonePlain(game._simOncePerTurn) as NonNullable<PlanningState["_simOncePerTurn"]>;
   }
   if (game?._simLuminarch) {
-    state._simLuminarch = clonePlain(game._simLuminarch) as PlanningState["_simLuminarch"];
+    state._simLuminarch = clonePlain(game._simLuminarch) as NonNullable<PlanningState["_simLuminarch"]>;
   }
   if (game?._simBurningWest) {
-    state._simBurningWest = clonePlain(game._simBurningWest) as PlanningState["_simBurningWest"];
+    state._simBurningWest = clonePlain(game._simBurningWest) as NonNullable<PlanningState["_simBurningWest"]>;
   }
   if (Array.isArray(game?.temporaryBattlePairEffects)) {
     state.temporaryBattlePairEffects = clonePlain(game.temporaryBattlePairEffects);
@@ -1244,9 +1244,10 @@ function applySimulatedBattle(
   if (!bot || !opponent || !battlePlan) return null;
   const attacker = bot.field?.[battlePlan.attackerIndex];
   const target = Number.isInteger(battlePlan.targetIndex)
-    ? opponent.field?.[battlePlan.targetIndex!]
+    ? opponent.field?.[battlePlan.targetIndex!] ?? null
     : null;
   if (!canPlannerAttackerStillAttack(attacker, state)) return null;
+  if (!attacker) return null;
   const usedAttacks = Number(attacker.attacksUsedThisTurn || 0);
   const summary: PlannerBattleSummary = {
     type: "simulatedBattle",
@@ -1493,16 +1494,16 @@ function aggregateBattleSummaries(
   totalScore = 0,
 ): PlannerBattleSummary {
   const validSteps = (steps || []).filter(Boolean);
-  const first = validSteps[0] || {};
+  const first = validSteps[0];
   const destroyedCards = validSteps.flatMap((step) => step.destroyedCards || []);
   const destroyedNames = validSteps.flatMap((step) => step.destroyedNames || []);
   const rewardNames = validSteps.flatMap((step) => step.rewardNames || []);
   const damage = validSteps.reduce((sum, step) => sum + Number(step.damage || 0), 0);
   return {
     type: "simulatedBattle",
-    attackerName: first.attackerName || "attacker",
-    targetName: first.targetName || null,
-    direct: first.direct === true,
+    attackerName: first?.attackerName || "attacker",
+    targetName: first?.targetName || null,
+    direct: first?.direct === true,
     damage,
     destroyedNames,
     destroyedCards,
@@ -1787,13 +1788,29 @@ export async function turnLineSearch(
     }
 
     branches.sort((a, b) => b.score - a.score);
-    return branches[0];
+    const bestBranch = branches[0];
+    if (!bestBranch) {
+      const terminal = terminalEval();
+      return {
+        sequence,
+        score: terminal.score,
+        baseScore: terminal.baseScore,
+        milestoneScore: terminal.milestoneScore,
+        milestones: terminal.milestones,
+        terminalContext: terminal.context,
+        finalState: currentState,
+        reason: "no_state_changing_branches",
+      };
+    }
+    return bestBranch;
   };
 
   const result = await search(root, 0, []);
   if (!result?.sequence?.length) return null;
+  const firstAction = result.sequence[0];
+  if (!firstAction) return null;
   const firstStepState = clonePlanningState(root, strategy);
-  simulatePlanningAction(firstStepState, result.sequence[0], strategy);
+  simulatePlanningAction(firstStepState, firstAction, strategy);
   const diagnostics = {
     rootSummary: summarizePlanningState(root, { strategy }),
     firstStepSummary: summarizePlanningState(firstStepState, { strategy }),
@@ -1819,7 +1836,7 @@ export async function turnLineSearch(
       : "";
 
   return {
-    action: result.sequence[0],
+    action: firstAction,
     score: result.score,
     baseScore: result.baseScore,
     milestoneScore: result.milestoneScore,

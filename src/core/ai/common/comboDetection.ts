@@ -27,7 +27,7 @@ interface ComboDefinition {
 }
 
 export interface DetectedCombo {
-  combo?: ComboDefinition | null;
+  combo?: ComboDefinition | null | undefined;
   ready: boolean;
   missing: unknown[];
   priority: number;

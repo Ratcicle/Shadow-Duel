@@ -1,6 +1,6 @@
 import type { BloomrotCard, BloomrotPlayer, BloomrotAnalysis, BloomrotPlanningGame } from "./analysis.js";
 import type { AIPlanningProfile } from "../../contracts/ai.js";
-type BattleSummary = { damage?: number; destroyedCards?: Array<{ owner?: string; cardKind?: string }> };
+type BattleSummary = { damage?: number; destroyedCards?: Array<{ owner?: string; cardKind?: string | undefined }> };
 type BattleContext = { attacker?: BloomrotCard | null; target?: BloomrotCard | null; lethalNow?: boolean; attackerSurvived?: boolean; targetSurvived?: boolean; summary?: BattleSummary; opponent?: BloomrotPlayer; opponentLpAfter?: number; game?: BloomrotPlanningGame };
 import {
   getBattleStatForAttackTarget,

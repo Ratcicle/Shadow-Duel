@@ -83,14 +83,14 @@ interface ShadowActionExtras {
   cardKind?: ShadowSearchFilters["cardKind"];
   archetype?: string;
   archetypes?: readonly string[];
-  name?: string;
+  name?: string | undefined;
   minLevel?: number;
   maxLevel?: number;
   minAtk?: number;
   maxAtk?: number;
   subtype?: ShadowSearchFilters["subtype"];
   cannotAttackThisTurn?: boolean;
-  fusionTargetHint?: string | null;
+  fusionTargetHint?: string | null | undefined;
   cathedralPlan?: {
     counterCount?: number;
     targetName?: string | null;
@@ -98,14 +98,14 @@ interface ShadowActionExtras {
 }
 
 type ShadowMainPhaseAction = AIPlannedAction & ShadowActionExtras & {
-  activationContext?: AIActivationContext;
+  activationContext?: AIActivationContext | undefined;
   sourceCard?: SimulatedCardState | GameCard | null;
-  cardName?: string;
+  cardName?: string | undefined;
   index?: number;
   zoneIndex?: number;
   fieldIndex?: number;
-  position?: "attack" | "defense" | "choice";
-  facedown?: boolean;
+  position?: "attack" | "defense" | "choice" | undefined;
+  facedown?: boolean | undefined;
 };
 type ShadowAction = ShadowMainPhaseAction | ShadowSearchAction;
 
@@ -144,7 +144,7 @@ interface ShadowStrategyOptions {
       opponent: SimulatedPlayerState;
       source: SimulatedCardState | null;
       action: ShadowMainPhaseAction;
-      activationContext?: AIActivationContext;
+      activationContext?: AIActivationContext | undefined;
     },
   ) => "attack" | "defense" | null | undefined;
 }
@@ -156,7 +156,7 @@ interface ShadowSimulationOptions extends ShadowStrategyOptions {
     "simulateMainPhaseAction" | "simulateSpellEffect"
   > & ShadowStrategyOptions;
   evaluateRecruitCandidate?: (candidates: SimulatedCardState[], context?: Parameters<typeof evaluateShadowHeartRecruitCandidate>[1]) => ReturnType<typeof evaluateShadowHeartRecruitCandidate<SimulatedCardState>>;
-  activationContext?: AIActivationContext | null;
+  activationContext?: AIActivationContext | null | undefined;
 }
 
 type ShadowOptionsInput = PlaceSpellCard | ShadowSimulationOptions | null;
@@ -597,6 +597,7 @@ function destroyBestOpponentCard(
     return (b.atk || 0) - (a.atk || 0);
   });
   const target = candidates[0];
+  if (!target) return null;
   moveToZone(opponent, target, "graveyard");
   return target;
 }

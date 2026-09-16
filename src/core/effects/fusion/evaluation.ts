@@ -1,3 +1,44 @@
+import type { ActionRuntimePlayer } from "../../contracts/actionRuntime.js";
+import type { FusionCard, FusionRequirement } from "./requirements.js";
+import type { matchesFusionRequirement } from "./requirements.js";
+
+interface FusionEvaluationOptions {
+  readonly materialZone?: string;
+  readonly materialInfo?: readonly { readonly zone: string }[];
+}
+interface IndexedMaterial<Card extends FusionCard> {
+  card: Card;
+  originalIndex: number;
+  zone: string;
+}
+interface FusionEvaluationHost {
+  game?: {
+    canSpecialSummonUnderRestrictions?(
+      card: FusionCard,
+      player: ActionRuntimePlayer,
+      options: {
+        summonMethod: "fusion";
+        summonProcedure: "fusion";
+        silent: boolean;
+      },
+    ): { ok: boolean };
+  };
+  getFusionRequirements(card: FusionCard): readonly FusionRequirement[];
+  getRequiredMaterialCount(card: FusionCard): number;
+  matchesFusionRequirement: typeof matchesFusionRequirement;
+  findFusionMaterialCombos<Card extends FusionCard>(
+    card: FusionCard,
+    materials: readonly Card[],
+    options?: FusionEvaluationOptions,
+  ): Card[][];
+  canSummonFusion(
+    card: FusionCard,
+    materials: readonly FusionCard[],
+    player: ActionRuntimePlayer,
+    options?: FusionEvaluationOptions,
+  ): boolean;
+}
+
 /**
  * Fusion Evaluation Module
  * Extracted from EffectEngine.js - handles fusion availability and material combos
@@ -9,7 +50,7 @@
  * Convert a requirement object to the string format expected by matchesFusionRequirement
  * For complex requirements with multiple conditions (archetype + minLevel), returns an object
  */
-function requirementToString(requirement) {
+function requirementToString(requirement: FusionRequirement | undefined) {
   if (typeof requirement === "string") {
     return requirement;
   }
@@ -51,11 +92,12 @@ function requirementToString(requirement) {
 /**
  * Find all possible material combinations for a fusion monster
  */
-export function findFusionMaterialCombos(
-  fusionMonster,
-  materials,
-  options = {}
-) {
+export function findFusionMaterialCombos<Card extends FusionCard>(
+  this: FusionEvaluationHost,
+  fusionMonster: FusionCard,
+  materials: readonly Card[],
+  options: FusionEvaluationOptions = {},
+): Card[][] {
   const requirements = this.getFusionRequirements(fusionMonster);
 
   if (!requirements || requirements.length === 0) {
@@ -63,7 +105,7 @@ export function findFusionMaterialCombos(
   }
 
   // Expand requirements based on count - each count becomes a separate requirement slot
-  const expandedRequirements = [];
+  const expandedRequirements: FusionRequirement[] = [];
   for (const req of requirements) {
     const count = typeof req === "object" && req.count ? req.count : 1;
     for (let i = 0; i < count; i++) {
@@ -76,7 +118,7 @@ export function findFusionMaterialCombos(
     return [];
   }
 
-  const combos = [];
+  const combos: Card[][] = [];
   const materialZone = options.materialZone || "field";
   const materialInfo = options.materialInfo || [];
 
@@ -88,7 +130,11 @@ export function findFusionMaterialCombos(
   }));
 
   // Recursive function to find all valid combinations
-  const findCombos = (reqIndex, usedMaterials, remainingIndexed) => {
+  const findCombos = (
+    reqIndex: number,
+    usedMaterials: IndexedMaterial<Card>[],
+    remainingIndexed: IndexedMaterial<Card>[],
+  ): void => {
     // All requirements satisfied
     if (reqIndex >= expandedRequirements.length) {
       combos.push(usedMaterials.map((m) => m.card));
@@ -104,7 +150,7 @@ export function findFusionMaterialCombos(
 
     // Try each available material
     for (let i = 0; i < remainingIndexed.length; i++) {
-      const indexed = remainingIndexed[i];
+      const indexed = remainingIndexed[i]!; // i is bounded by this dense material list.
       const material = indexed.card;
       const matZone = indexed.zone;
 
@@ -116,7 +162,7 @@ export function findFusionMaterialCombos(
       const matches = this.matchesFusionRequirement(
         material,
         reqString,
-        matZone
+        matZone,
       );
 
       if (matches) {
@@ -137,7 +183,10 @@ export function findFusionMaterialCombos(
 /**
  * Get the total required material count for a fusion monster
  */
-export function getRequiredMaterialCount(fusionMonster) {
+export function getRequiredMaterialCount(
+  this: FusionEvaluationHost,
+  fusionMonster: FusionCard,
+) {
   const requirements = this.getFusionRequirements(fusionMonster);
   if (!requirements || requirements.length === 0) return 0;
 
@@ -151,9 +200,10 @@ export function getRequiredMaterialCount(fusionMonster) {
  * Evaluate if a selection of materials is valid for fusion
  */
 export function evaluateFusionSelection(
-  fusionMonster,
-  selectedMaterials,
-  options = {}
+  this: FusionEvaluationHost,
+  fusionMonster: FusionCard,
+  selectedMaterials: readonly FusionCard[],
+  options: FusionEvaluationOptions = {},
 ) {
   const requirements = this.getFusionRequirements(fusionMonster);
   if (!requirements || requirements.length === 0) {
@@ -161,7 +211,7 @@ export function evaluateFusionSelection(
   }
 
   // Expand requirements based on count
-  const expandedRequirements = [];
+  const expandedRequirements: FusionRequirement[] = [];
   for (const req of requirements) {
     const count = typeof req === "object" && req.count ? req.count : 1;
     for (let i = 0; i < count; i++) {
@@ -212,10 +262,11 @@ export function evaluateFusionSelection(
  * Check if a fusion monster can be summoned with available materials
  */
 export function canSummonFusion(
-  fusionMonster,
-  materials,
-  player,
-  options = {}
+  this: FusionEvaluationHost,
+  fusionMonster: FusionCard,
+  materials: readonly FusionCard[],
+  player: ActionRuntimePlayer,
+  options: FusionEvaluationOptions = {},
 ) {
   const requirements = this.getFusionRequirements(fusionMonster);
   if (!requirements || requirements.length === 0) return false;
@@ -237,7 +288,7 @@ export function canSummonFusion(
   const combos = this.findFusionMaterialCombos(
     fusionMonster,
     materials,
-    options
+    options,
   );
   return combos.length > 0;
 }
@@ -249,11 +300,12 @@ export function canSummonFusion(
  * @param {Object} player - Player object
  * @param {Object} options - Options including materialInfo with zone data
  */
-export function getAvailableFusions(
-  extraDeck,
-  materials,
-  player,
-  options = {}
+export function getAvailableFusions<Card extends FusionCard>(
+  this: FusionEvaluationHost,
+  extraDeck: readonly Card[],
+  materials: readonly Card[],
+  player: ActionRuntimePlayer,
+  options: FusionEvaluationOptions = {},
 ) {
   const availableFusions = [];
 
@@ -264,7 +316,7 @@ export function getAvailableFusions(
       const combos = this.findFusionMaterialCombos(
         fusionCard,
         materials,
-        options
+        options,
       );
       availableFusions.push({
         fusion: fusionCard,

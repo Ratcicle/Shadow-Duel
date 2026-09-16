@@ -13,7 +13,7 @@ interface MultiAttackCardView {
 }
 
 interface MultiAttackOwnerView {
-  graveyard?: ReadonlyArray<{ name?: string | null }>;
+  graveyard?: ReadonlyArray<{ name?: string | null | undefined }>;
 }
 
 interface CardValueEffectView {
@@ -21,29 +21,29 @@ interface CardValueEffectView {
 }
 
 interface CardValueCardView extends MultiAttackCardView {
-  name?: string | null;
-  cardKind?: string | null;
-  atk?: number | null;
-  def?: number | null;
-  level?: number | null;
-  position?: string | null;
-  archetype?: string | null;
-  archetypes?: readonly string[];
-  isFacedown?: boolean;
+  name?: string | null | undefined;
+  cardKind?: string | null | undefined;
+  atk?: number | null | undefined;
+  def?: number | null | undefined;
+  level?: number | null | undefined;
+  position?: string | null | undefined;
+  archetype?: string | null | undefined;
+  archetypes?: readonly string[] | undefined;
+  isFacedown?: boolean | undefined;
   cannotAttackThisTurn?: boolean;
-  hasAttacked?: boolean;
+  hasAttacked?: boolean | undefined;
   piercing?: boolean;
   piercingDamageMultiplier?: number | null;
   battleIndestructibleOncePerTurn?: boolean;
-  mustBeAttacked?: boolean;
-  tempAtkBoost?: number;
-  tempDefBoost?: number;
+  mustBeAttacked?: boolean | undefined;
+  tempAtkBoost?: number | undefined;
+  tempDefBoost?: number | undefined;
   effects?: readonly CardValueEffectView[];
 }
 
 interface CardValueOptions {
   preferDefense?: boolean;
-  archetype?: string | null;
+  archetype?: string | null | undefined;
   fieldSpell?: CardValueCardView | null;
   owner?: MultiAttackOwnerView | null;
 }

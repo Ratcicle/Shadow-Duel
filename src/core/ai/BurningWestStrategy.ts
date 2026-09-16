@@ -500,22 +500,22 @@ export default class BurningWestStrategy extends BaseStrategy {
     this.thoughtProcess = [];
   }
 
-  get archetypeLabel() {
+  override get archetypeLabel() {
     return "Burning West";
   }
 
-  think(thought: string) {
+  override think(thought: string) {
     this.thoughtProcess.push(thought);
     if (this.bot?.debug) {
       console.log(`[Burning West AI] ${thought}`);
     }
   }
 
-  evaluateBoard(gameOrState: AIState, perspectivePlayer?: SimulatedPlayerState) {
+  override evaluateBoard(gameOrState: AIState, perspectivePlayer?: SimulatedPlayerState) {
     return this.evaluateBoardV2(gameOrState, perspectivePlayer);
   }
 
-  evaluateBoardV2(gameOrState: AIState, perspectivePlayer?: SimulatedPlayerState) {
+  override evaluateBoardV2(gameOrState: AIState, perspectivePlayer?: SimulatedPlayerState) {
     const baseScore = super.evaluateBoardV2(gameOrState, perspectivePlayer);
     return (
       baseScore +
@@ -609,7 +609,7 @@ export default class BurningWestStrategy extends BaseStrategy {
       );
       addTypeWeight(typeScores, type, stillRelevant ? 110 : 25);
     }
-    if (isExtraDeckMonster(strongestOpponent)) {
+    if (strongestOpponent && isExtraDeckMonster(strongestOpponent)) {
       addTypeWeight(typeScores, strongestOpponent.type, 85);
     }
     if (strongestOpponent?.type) addTypeWeight(typeScores, strongestOpponent.type, 65);
@@ -720,11 +720,11 @@ export default class BurningWestStrategy extends BaseStrategy {
     });
   }
 
-  buildBurningWestActivationContext(card: Pick<BurningWestCard, "name"> | undefined, analysis: BurningWestActivationAnalysis, options: Omit<BurningWestActivationOptions, "effect"> & { effect?: EffectDefinition | ChainEffect | null } = {}) {
+  buildBurningWestActivationContext(card: Pick<BurningWestCard, "name"> | undefined, analysis: BurningWestActivationAnalysis, options: Omit<BurningWestActivationOptions, "effect"> & { effect?: EffectDefinition | ChainEffect | null | undefined } = {}) {
     return buildBurningWestActivationContext(card as BurningWestCard, analysis as BurningWestAnalysis, options as BurningWestActivationOptions) as BurningWestActivationContext;
   }
 
-  getPlanningProfile(game: AIState, context: AIPlanningContext = {}) {
+  override getPlanningProfile(game: AIState, context: AIPlanningContext = {}) {
     if (!game) return super.getPlanningProfile(game, context);
     const analysis = (context as BurningWestContext).analysis || this.analyzeGameState(game);
     return buildBurningWestPlanningProfile(analysis, {
@@ -735,21 +735,21 @@ export default class BurningWestStrategy extends BaseStrategy {
     });
   }
 
-  shouldUseDeepPlanning(game: AIState, context: AIPlanningContext = {}) {
+  override shouldUseDeepPlanning(game: AIState, context: AIPlanningContext = {}) {
     const profile =
       context.profile || this.getPlanningProfile(game, context) || {};
     return (game as BurningWestGame)?.turnLineSearchEnabled === true || profile.enabled === true;
   }
 
-  scoreLineMilestones(context: AIPlanningContext = {}) {
+  override scoreLineMilestones(context: AIPlanningContext = {}) {
     return scoreBurningWestLineMilestones(context as BurningWestContext);
   }
 
-  scoreLineTerminal(context: AIPlanningContext = {}) {
+  override scoreLineTerminal(context: AIPlanningContext = {}) {
     return scoreBurningWestLineTerminal(context as BurningWestContext);
   }
 
-  describePlannedLine(context: AIPlanningContext = {}) {
+  override describePlannedLine(context: AIPlanningContext = {}) {
     return describeBurningWestPlannedLine(context as BurningWestContext);
   }
 
@@ -1218,7 +1218,7 @@ export default class BurningWestStrategy extends BaseStrategy {
     });
   }
 
-  generateMainPhaseActions(game: BurningWestGame) {
+  override generateMainPhaseActions(game: BurningWestGame) {
     const analysis = this.analyzeGameState(game);
     const player = analysis.player;
     if (!player) return [];
@@ -1243,7 +1243,7 @@ export default class BurningWestStrategy extends BaseStrategy {
     });
   }
 
-  sequenceActions(actions: AIAction[] = []) {
+  override sequenceActions(actions: AIAction[] = []) {
     return sequenceActionsByPriority(actions, {
       typeOrder: {
         spell: 0,
@@ -1455,7 +1455,7 @@ export default class BurningWestStrategy extends BaseStrategy {
     return scoreBurningWestBattleAttackCandidate(context);
   }
 
-  simulateMainPhaseAction(state: Parameters<BaseStrategy["simulateMainPhaseAction"]>[0], action: AIPlannedAction) {
+  override simulateMainPhaseAction(state: Parameters<BaseStrategy["simulateMainPhaseAction"]>[0], action: AIPlannedAction) {
     return applyGenericSimulatedMainPhaseAction(state as Parameters<typeof applyGenericSimulatedMainPhaseAction>[0], action as AIAction, {
       guardLabel: "BurningWestStrategy",
       selfId: "bot",
@@ -1472,7 +1472,7 @@ export default class BurningWestStrategy extends BaseStrategy {
     });
   }
 
-  selectBestTributes(field: BurningWestCard[] = [], tributesNeeded = 0) {
+  override selectBestTributes(field: BurningWestCard[] = [], tributesNeeded = 0) {
     if (tributesNeeded <= 0) return [];
     return (field || [])
       .map((card, index) => ({

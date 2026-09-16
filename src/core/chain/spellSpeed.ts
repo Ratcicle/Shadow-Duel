@@ -86,11 +86,10 @@ export function getRequiredSpellSpeed(
     return 2;
   }
 
-  const lastLink = this.chainStack[this.chainStack.length - 1];
-  const lastSpeed =
-    Number.isFinite(Number(lastLink.spellSpeed))
-      ? Number(lastLink.spellSpeed)
-      : this.getEffectSpellSpeed(lastLink.effect, lastLink.card);
+  const lastLink = this.chainStack[this.chainStack.length - 1]!;
+  const lastSpeed = Number.isFinite(Number(lastLink.spellSpeed))
+    ? Number(lastLink.spellSpeed)
+    : this.getEffectSpellSpeed(lastLink.effect, lastLink.card);
 
   return Math.max(2, lastSpeed) as SpellSpeed;
 }
@@ -107,7 +106,7 @@ export function canActivateInChain(
   effect?: ChainEffect,
   card?: ChainCard,
   context?: FastEffectContextInput,
-): { ok: boolean; code?: string; reason?: string } {
+): { ok: boolean; code?: string | undefined; reason?: string | undefined } {
   if (!effect || !card) {
     return { ok: false, reason: "Missing effect or card." };
   }
@@ -125,7 +124,10 @@ export function canActivateInChain(
   const contextDef = isChainContextType(context?.type)
     ? CHAIN_CONTEXTS[context.type]
     : undefined;
-  if (contextDef && !includesSpellSpeed(contextDef.allowedSpeeds, effectSpeed)) {
+  if (
+    contextDef &&
+    !includesSpellSpeed(contextDef.allowedSpeeds, effectSpeed)
+  ) {
     return {
       ok: false,
       reason: `Spell Speed ${effectSpeed} not allowed in ${context?.type} context.`,
@@ -136,9 +138,7 @@ export function canActivateInChain(
     if (!effect.canRespondTo.includes(context?.type)) {
       return {
         ok: false,
-        reason: `Effect can only respond to: ${effect.canRespondTo.join(
-          ", ",
-        )}`,
+        reason: `Effect can only respond to: ${effect.canRespondTo.join(", ")}`,
       };
     }
   }

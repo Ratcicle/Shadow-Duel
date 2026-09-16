@@ -99,11 +99,11 @@ export default class BloomrotStrategy extends BaseStrategy {
     this.thoughtProcess = [];
   }
 
-  get archetypeLabel() {
+  override get archetypeLabel() {
     return "Bloomrot";
   }
 
-  think(thought: string) {
+  override think(thought: string) {
     this.thoughtProcess.push(thought);
     if (this.bot?.debug) {
       console.log(`[Bloomrot AI] ${thought}`);
@@ -156,7 +156,7 @@ export default class BloomrotStrategy extends BaseStrategy {
     return buildBloomrotActivationContext(card, analysis, options);
   }
 
-  getPlanningProfile(game: BloomrotGame, context: PlanningContext = {}) {
+  override getPlanningProfile(game: BloomrotGame, context: PlanningContext = {}) {
     if (!game) return super.getPlanningProfile(game, context);
     const analysis = context.analysis || this.analyzeGameState(game);
     return buildBloomrotPlanningProfile(analysis, {
@@ -166,7 +166,7 @@ export default class BloomrotStrategy extends BaseStrategy {
     });
   }
 
-  shouldUseDeepPlanning(game: BloomrotGame, context: PlanningContext = {}) {
+  override shouldUseDeepPlanning(game: BloomrotGame, context: PlanningContext = {}) {
     const profile =
       context.profile || this.getPlanningProfile(game, context) || {};
     return game?.turnLineSearchEnabled === true || profile.enabled === true;
@@ -184,15 +184,15 @@ export default class BloomrotStrategy extends BaseStrategy {
     return scoreBloomrotBattleAttackCandidate(context);
   }
 
-  scoreLineMilestones(context: Parameters<typeof scoreBloomrotLineMilestones>[0] = {}) {
+  override scoreLineMilestones(context: Parameters<typeof scoreBloomrotLineMilestones>[0] = {}) {
     return scoreBloomrotLineMilestones(context);
   }
 
-  scoreLineTerminal(context: Parameters<typeof scoreBloomrotLineTerminal>[0] = {}) {
+  override scoreLineTerminal(context: Parameters<typeof scoreBloomrotLineTerminal>[0] = {}) {
     return scoreBloomrotLineTerminal(context);
   }
 
-  describePlannedLine(context: Parameters<typeof describeBloomrotPlannedLine>[0] = {}) {
+  override describePlannedLine(context: Parameters<typeof describeBloomrotPlannedLine>[0] = {}) {
     return describeBloomrotPlannedLine(context);
   }
 
@@ -206,11 +206,11 @@ export default class BloomrotStrategy extends BaseStrategy {
     return undefined;
   }
 
-  evaluateBoard(gameOrState: AIState, perspectivePlayer: SimulatedPlayerState | undefined) {
+  override evaluateBoard(gameOrState: AIState, perspectivePlayer: SimulatedPlayerState | undefined) {
     return this.evaluateBoardV2(gameOrState, perspectivePlayer);
   }
 
-  evaluateBoardV2(gameOrState: AIState, perspectivePlayer: SimulatedPlayerState | undefined) {
+  override evaluateBoardV2(gameOrState: AIState, perspectivePlayer: SimulatedPlayerState | undefined) {
     const baseScore = super.evaluateBoardV2(gameOrState, perspectivePlayer);
     return evaluateBoardBloomrot(gameOrState, perspectivePlayer, {
       baseScore,
@@ -258,6 +258,9 @@ export default class BloomrotStrategy extends BaseStrategy {
     }
 
     const best = evaluated[0];
+    if (!best) {
+      return { pass: true, reason: "no valuable Bloomrot defense response" };
+    }
     const activationContext = this.buildBloomrotActivationContext(
       best.option.card,
       analysis,
@@ -464,7 +467,7 @@ export default class BloomrotStrategy extends BaseStrategy {
     });
   }
 
-  generateMainPhaseActions(game: BloomrotGame) {
+  override generateMainPhaseActions(game: BloomrotGame) {
     const analysis = this.analyzeGameState(game);
     const bot = analysis.player;
     if (!bot) return [];
@@ -484,7 +487,7 @@ export default class BloomrotStrategy extends BaseStrategy {
     return this.integrateP2IntoActionSelection(game, sequenced, analysis);
   }
 
-  sequenceActions(actions: AIAction[] = []) {
+  override sequenceActions(actions: AIAction[] = []) {
     return sequenceActionsByPriority(actions, {
       typeOrder: {
         spell: 0,

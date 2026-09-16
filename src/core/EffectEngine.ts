@@ -131,14 +131,18 @@ class EffectEngine {
 
   checkOncePerTurn(
     card: ActionRuntimeCard,
-    player: ActionRuntimePlayer,
+    player: Omit<ActionRuntimePlayer, "strategy">,
     effect: EffectDefinition | null | undefined,
   ) {
     const usageGame = getRuntimeUsageGamePort(this.game);
-    const restrictionCheck =
-      usageGame.canActivateCardEffectUnderRestrictions?.(card, player, effect, {
+    const restrictionCheck = usageGame.canActivateCardEffectUnderRestrictions?.(
+      card,
+      player,
+      effect,
+      {
         silent: true,
-      });
+      },
+    );
     if (restrictionCheck?.ok === false) return restrictionCheck;
     if (!effect || !effect.oncePerTurn) {
       return { ok: true };
@@ -154,7 +158,7 @@ class EffectEngine {
 
   checkOncePerDuel(
     card: ActionRuntimeCard,
-    player: ActionRuntimePlayer,
+    player: Omit<ActionRuntimePlayer, "strategy">,
     effect: EffectDefinition,
   ) {
     return canUseOncePerDuelEffect(card, player, effect);
@@ -201,11 +205,13 @@ class EffectEngine {
     const card = ctx?.source as RuntimeUsageCard | null | undefined;
     if (!player) return true;
     if (this.game && typeof this.game.canUseOncePerTurn === "function") {
-      return getRuntimeUsageGamePort(this.game).canUseOncePerTurn!(
-        card,
-        player,
-        effect,
-      ).ok === true;
+      return (
+        getRuntimeUsageGamePort(this.game).canUseOncePerTurn!(
+          card,
+          player,
+          effect,
+        ).ok === true
+      );
     }
     const key = effect.oncePerTurnName || effect.id || ctx?.source?.name;
     if (!key) return true;
@@ -230,7 +236,9 @@ class EffectEngine {
     const used =
       entry === currentTurn
         ? 1
-        : entry && typeof entry === "object" && Number(entry.turn) === currentTurn
+        : entry &&
+            typeof entry === "object" &&
+            Number(entry.turn) === currentTurn
           ? Math.max(0, Math.floor(Number(entry.count ?? 0)) || 0)
           : 0;
     return used < limit;
@@ -273,7 +281,9 @@ class EffectEngine {
       const used =
         entry === currentTurn
           ? 1
-          : entry && typeof entry === "object" && Number(entry.turn) === currentTurn
+          : entry &&
+              typeof entry === "object" &&
+              Number(entry.turn) === currentTurn
             ? Math.max(0, Math.floor(Number(entry.count ?? 0)) || 0)
             : 0;
       usage[key] =

@@ -1,4 +1,82 @@
-export function resolveLpCost(action, ctx, baseAmount = 0, options = {}) {
+import type {
+  ActionRuntimeCard,
+  ActionRuntimePlayer,
+  EffectContext,
+} from "../../contracts/actionRuntime.js";
+import type {
+  EffectDefinition,
+  PassiveRuleDefinition,
+} from "../../contracts/effects.js";
+import type { RuntimeCardFilter } from "../filters/cardFilters.js";
+
+interface ReductionRule
+  extends Omit<PassiveRuleDefinition, "stackMode" | "appliesTo"> {
+  readonly allowFacedown?: boolean;
+  readonly appliesTo?: string | readonly string[];
+  readonly affects?: string | readonly string[];
+  readonly owner?: string | readonly string[];
+  readonly actionType?: string | readonly string[];
+  readonly sourceFilter?: RuntimeCardFilter;
+  readonly reduction?: number;
+  readonly value?: number;
+  readonly stackMode?: "max" | "sum";
+  readonly minFinalAmount?: number;
+  readonly minAmount?: number;
+}
+type CostEffect = EffectDefinition & {
+  readonly allowFacedown?: boolean;
+  readonly passive?: ReductionRule;
+};
+type CostPlayer = Omit<ActionRuntimePlayer, "strategy">;
+interface CostContext extends Omit<EffectContext, "player" | "opponent"> {
+  player?: CostPlayer | null;
+  opponent?: CostPlayer | null;
+  preview?: boolean;
+}
+interface CostOptions {
+  preview?: boolean;
+  consume?: boolean;
+}
+interface CostReducer {
+  card: ActionRuntimeCard;
+  controller: CostPlayer;
+  effect: CostEffect;
+  passive: ReductionRule;
+  reduction: number;
+  stackMode: "max" | "sum";
+}
+interface LpCostHost {
+  game?: {
+    player: CostPlayer;
+    bot: CostPlayer;
+    getOpponent?(player: CostPlayer): CostPlayer | null;
+  };
+  cardMatchesFilters(
+    card: ActionRuntimeCard,
+    filters: RuntimeCardFilter,
+  ): boolean;
+  checkOncePerTurn(
+    card: ActionRuntimeCard,
+    player: CostPlayer,
+    effect: CostEffect,
+  ): { ok: boolean };
+  markOncePerTurn(effect: CostEffect, context: CostContext): void;
+}
+export interface LpCostResult {
+  baseAmount: number;
+  finalAmount: number;
+  reduction: number;
+  appliedCount: number;
+  appliedReducers: CostReducer[];
+}
+
+export function resolveLpCost(
+  this: LpCostHost,
+  action: { type?: string } | null | undefined,
+  ctx: CostContext,
+  baseAmount = 0,
+  options: CostOptions | null = {},
+): LpCostResult {
   options = options || {};
   const resolvedBase = Number(baseAmount) || 0;
   const previewOnly =
@@ -9,7 +87,7 @@ export function resolveLpCost(action, ctx, baseAmount = 0, options = {}) {
     ctx?.activationContext?.preview === true ||
     ctx?.activationContext?.isPreview === true;
   const shouldConsume = !previewOnly;
-  const result = {
+  const result: LpCostResult = {
     baseAmount: resolvedBase,
     finalAmount: resolvedBase,
     reduction: 0,
@@ -25,8 +103,10 @@ export function resolveLpCost(action, ctx, baseAmount = 0, options = {}) {
   const opponent = ctx.opponent || this.game?.getOpponent?.(player);
   const source = ctx.source || null;
 
-  const boards = [player, opponent].filter(Boolean);
-  const reducers = [];
+  const boards = [player, opponent].filter((board): board is CostPlayer =>
+    Boolean(board),
+  );
+  const reducers: CostReducer[] = [];
 
   for (const board of boards) {
     const zoneCards = [
@@ -38,9 +118,9 @@ export function resolveLpCost(action, ctx, baseAmount = 0, options = {}) {
     for (const card of zoneCards) {
       if (!card?.effects || !Array.isArray(card.effects)) continue;
 
-      for (const effect of card.effects) {
+      for (const effect of card.effects as readonly CostEffect[]) {
         if (!effect || effect.timing !== "passive") continue;
-        const passive = effect.passive;
+        const passive: ReductionRule | undefined = effect.passive;
         if (!passive || passive.type !== "lp_cost_reduction") continue;
 
         const allowFacedown =
@@ -64,7 +144,7 @@ export function resolveLpCost(action, ctx, baseAmount = 0, options = {}) {
 
         const actionTypes = passive.actionTypes || passive.actionType;
         if (actionTypes) {
-          const allowedTypes = Array.isArray(actionTypes)
+          const allowedTypes: readonly unknown[] = Array.isArray(actionTypes)
             ? actionTypes
             : [actionTypes];
           if (!allowedTypes.includes(action?.type)) continue;
@@ -108,7 +188,7 @@ export function resolveLpCost(action, ctx, baseAmount = 0, options = {}) {
   let maxReducer = null;
   let maxReduction = 0;
   let sumReduction = 0;
-  const sumReducers = [];
+  const sumReducers: CostReducer[] = [];
 
   for (const reducer of reducers) {
     if (reducer.stackMode === "sum") {
@@ -128,18 +208,14 @@ export function resolveLpCost(action, ctx, baseAmount = 0, options = {}) {
     minFinalAmount = Math.max(
       minFinalAmount,
       Number(
-        maxReducer.passive.minFinalAmount ??
-          maxReducer.passive.minAmount ??
-          0,
+        maxReducer.passive.minFinalAmount ?? maxReducer.passive.minAmount ?? 0,
       ),
     );
   }
   for (const reducer of sumReducers) {
     minFinalAmount = Math.max(
       minFinalAmount,
-      Number(
-        reducer.passive.minFinalAmount ?? reducer.passive.minAmount ?? 0,
-      ),
+      Number(reducer.passive.minFinalAmount ?? reducer.passive.minAmount ?? 0),
     );
   }
 

@@ -4,7 +4,7 @@ import type { GameCard } from "../contracts/cards.js";
 import type { EffectDefinition } from "../contracts/effects.js";
 import type { PreviewGamePort, PreviewGuardResult } from "./common/previewGuards.js";
 import type { CardAction } from "../contracts/actions.js";
-type StrategyCard = (GameCard | SimulatedCardState) & { cannotBeDestroyedByBattle?: boolean };
+type StrategyCard = (GameCard | SimulatedCardState) & { cannotBeDestroyedByBattle?: boolean | undefined };
 type Analysis = ReturnType<ShadowHeartStrategy["analyzeGameState"]>;
 type PolicyAnalysis = NonNullable<Parameters<typeof shouldPlaySpell>[1]>;
 type ShadowGamePort = PreviewGamePort & { canActivatePolymerization?(): boolean; devModeEnabled?: boolean };
@@ -309,7 +309,7 @@ export default class ShadowHeartStrategy extends BaseStrategy {
     this.thoughtProcess = [];
   }
 
-  getPlanningProfile(game: StrategyGame, context: AIPlanningContext & { analysis?: Analysis } = {}): AIPlanningProfile {
+  override getPlanningProfile(game: StrategyGame, context: AIPlanningContext & { analysis?: Analysis } = {}): AIPlanningProfile {
     if (!game) return super.getPlanningProfile(game, context);
     const analysis = context.analysis || this.analyzeGameState(game);
     return buildShadowHeartPlanningProfile(analysis, {
@@ -319,21 +319,21 @@ export default class ShadowHeartStrategy extends BaseStrategy {
     });
   }
 
-  shouldUseDeepPlanning(game: StrategyGame, context: AIPlanningContext = {}) {
+  override shouldUseDeepPlanning(game: StrategyGame, context: AIPlanningContext = {}) {
     const profile =
       context.profile || this.getPlanningProfile(game, context) || {};
     return game?.turnLineSearchEnabled === true || profile.enabled === true;
   }
 
-  scoreLineMilestones(context: AIPlanningContext = {}) {
+  override scoreLineMilestones(context: AIPlanningContext = {}) {
     return scoreShadowHeartLineMilestones(context as Parameters<typeof scoreShadowHeartLineMilestones>[0]);
   }
 
-  scoreLineTerminal(context: AIPlanningContext = {}) {
+  override scoreLineTerminal(context: AIPlanningContext = {}) {
     return scoreShadowHeartLineTerminal(context as Parameters<typeof scoreShadowHeartLineTerminal>[0]);
   }
 
-  describePlannedLine(context: AIPlanningContext = {}) {
+  override describePlannedLine(context: AIPlanningContext = {}) {
     return describeShadowHeartPlannedLine(context as Parameters<typeof describeShadowHeartPlannedLine>[0]);
   }
 
@@ -345,7 +345,7 @@ export default class ShadowHeartStrategy extends BaseStrategy {
     return applyShadowHeartSimulatedBattleRewards(context);
   }
 
-  buildActivationContextForEffect({ sourceCard, effect, player, game }: { sourceCard?: StrategyCard; effect?: EffectDefinition | null; player?: AIStrategyBotPort; game?: StrategyGame } = {}) {
+  buildActivationContextForEffect({ sourceCard, effect, player, game }: { sourceCard?: StrategyCard; effect?: EffectDefinition | null | undefined; player?: AIStrategyBotPort; game?: StrategyGame } = {}) {
     if (!sourceCard || !player || !game) return null;
     const analysis = this.analyzeGameState(game);
     const strategicPreferences = buildShadowHeartTargetPreferences(
@@ -545,7 +545,7 @@ export default class ShadowHeartStrategy extends BaseStrategy {
       normalSummonsAvailable: baseAnalysis.normalSummonsAvailable,
       additionalNormalSummons: baseAnalysis.additionalNormalSummons,
       fieldCapacity: 5 - (baseAnalysis.field || []).length,
-      threatsOnBoard: [] as Array<{ card?: string; atk: number; threat: string }>,
+      threatsOnBoard: [] as Array<{ card?: string | undefined; atk: number; threat: string }>,
       availableCombos: [] as ReturnType<typeof detectAvailableCombos>,
       bestPlays: [] as AIAction[],
     };
@@ -596,7 +596,7 @@ export default class ShadowHeartStrategy extends BaseStrategy {
   /**
    * Registra um pensamento no processo de análise.
    */
-  think(thought: string) {
+  override think(thought: string) {
     this.thoughtProcess.push(thought);
     // Só loga se debug estiver explicitamente ativado
     if (!this.bot?.debug) {
@@ -612,7 +612,7 @@ export default class ShadowHeartStrategy extends BaseStrategy {
   /**
    * Avalia o tabuleiro com análise profunda.
    */
-  evaluateBoard(gameOrState: AIState, perspectivePlayer?: SimulatedPlayerState): number {
+  override evaluateBoard(gameOrState: AIState, perspectivePlayer?: SimulatedPlayerState): number {
     return evaluateBoardShadowHeart(
       gameOrState,
       perspectivePlayer!,
@@ -620,7 +620,7 @@ export default class ShadowHeartStrategy extends BaseStrategy {
     );
   }
 
-  evaluateBoardV2(gameOrState: AIState, perspectivePlayer?: SimulatedPlayerState): number {
+  override evaluateBoardV2(gameOrState: AIState, perspectivePlayer?: SimulatedPlayerState): number {
     const perspective = perspectivePlayer?.id
       ? perspectivePlayer
       : gameOrState?.bot as SimulatedPlayerState;
@@ -690,7 +690,7 @@ export default class ShadowHeartStrategy extends BaseStrategy {
    * Gera ações de main phase com análise profunda.
    * FIDELIDADE: Usa game.bot para lookahead funcionar corretamente.
    */
-  generateMainPhaseActions(game: StrategyGame): AIAction[] {
+  override generateMainPhaseActions(game: StrategyGame): AIAction[] {
     const analysis = this.analyzeGameState(game);
     const actions: AIAction[] = [];
 
@@ -1470,7 +1470,7 @@ export default class ShadowHeartStrategy extends BaseStrategy {
   /**
    * Ordena ações por prioridade estratégica.
    */
-  sequenceActions(actions: AIAction[]) {
+  override sequenceActions(actions: AIAction[]) {
     const sorted = actions.sort(
       (a, b) => (b.priority || 0) - (a.priority || 0),
     );
@@ -1497,11 +1497,11 @@ export default class ShadowHeartStrategy extends BaseStrategy {
     return isShadowHeartByName(name);
   }
 
-  getTributeRequirementFor(card: Parameters<typeof getTributeRequirementFor>[0], playerState: Parameters<typeof getTributeRequirementFor>[1]) {
+  override getTributeRequirementFor(card: Parameters<typeof getTributeRequirementFor>[0], playerState: Parameters<typeof getTributeRequirementFor>[1]) {
     return getTributeRequirementFor(card, playerState);
   }
 
-  selectBestTributes(field: SimulatedCardState[], tributesNeeded: number, cardToSummon: SimulatedCardState, context?: Parameters<typeof selectBestTributes>[3]) {
+  override selectBestTributes(field: SimulatedCardState[], tributesNeeded: number, cardToSummon: SimulatedCardState, context?: Parameters<typeof selectBestTributes>[3]) {
     return selectBestTributes(field, tributesNeeded, cardToSummon, context);
   }
 
@@ -1509,7 +1509,7 @@ export default class ShadowHeartStrategy extends BaseStrategy {
     return evaluateTributeTrade(cardToSummon, field, tributesNeeded, context);
   }
 
-  simulateMainPhaseAction(state: Parameters<StrategyRuntimePort["simulateMainPhaseAction"]>[0], action: AIPlannedAction) {
+  override simulateMainPhaseAction(state: Parameters<StrategyRuntimePort["simulateMainPhaseAction"]>[0], action: AIPlannedAction) {
     return simAction(state as Parameters<typeof simAction>[0], action as AIAction, {
       strategy: this,
       placeSpellCard: this.placeSpellCard.bind(this),
@@ -1520,7 +1520,7 @@ export default class ShadowHeartStrategy extends BaseStrategy {
     });
   }
 
-  simulateSpellEffect(state: Parameters<StrategyRuntimePort["simulateMainPhaseAction"]>[0], card: SimulatedCardState) {
+  override simulateSpellEffect(state: Parameters<StrategyRuntimePort["simulateMainPhaseAction"]>[0], card: SimulatedCardState) {
     return simulateSpellEffect(state as Parameters<typeof simulateSpellEffect>[0], card, {
       strategy: this,
       placeSpellCard: this.placeSpellCard.bind(this),

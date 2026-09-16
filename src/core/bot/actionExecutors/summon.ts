@@ -1,12 +1,17 @@
 import type { BotRuntimePort, BotGamePort } from "../../contracts/bot.js";
-import type { AIActionOf, ExtraDeckMaterialHint, AIActivationContext } from "../../contracts/ai.js";
+import type {
+  AIActionOf,
+  ExtraDeckMaterialHint,
+  AIActivationContext,
+} from "../../contracts/ai.js";
 import type { GameCard } from "../../contracts/cards.js";
-import {
-  SUMMON_MODES,
-  SUMMON_ORIGINS,
-} from "../../game/summon/transaction.js";
+import { SUMMON_MODES, SUMMON_ORIGINS } from "../../game/summon/transaction.js";
 
-export async function executeSpecialSummonSanctumProtectorAction(bot: BotRuntimePort, game: BotGamePort, action: AIActionOf<"special_summon_sanctum_protector">): Promise<boolean> {
+export async function executeSpecialSummonSanctumProtectorAction(
+  bot: BotRuntimePort,
+  game: BotGamePort,
+  action: AIActionOf<"special_summon_sanctum_protector">,
+): Promise<boolean> {
   const resolvedIndex = bot.resolveHandIndexForAction(action, "monster");
   if (resolvedIndex < 0) {
     console.log(
@@ -17,7 +22,7 @@ export async function executeSpecialSummonSanctumProtectorAction(bot: BotRuntime
     return false;
   }
 
-  const card = bot.hand[resolvedIndex];
+  const card = bot.hand[resolvedIndex]!; // resolveHandIndexForAction validated this occupied slot.
   if (!card || card.name !== "Luminarch Sanctum Protector") {
     console.log(
       `[Bot.executeMainPhaseAction] Invalid Sanctum Protector action: card mismatch`,
@@ -93,7 +98,11 @@ export async function executeSpecialSummonSanctumProtectorAction(bot: BotRuntime
   return true;
 }
 
-export async function executeSummonAction(bot: BotRuntimePort, game: BotGamePort, action: AIActionOf<"summon">): Promise<boolean> {
+export async function executeSummonAction(
+  bot: BotRuntimePort,
+  game: BotGamePort,
+  action: AIActionOf<"summon">,
+): Promise<boolean> {
   const resolvedIndex = bot.resolveHandIndexForAction(action, "monster");
   if (resolvedIndex < 0) {
     console.log(
@@ -103,7 +112,7 @@ export async function executeSummonAction(bot: BotRuntimePort, game: BotGamePort
     );
     return false;
   }
-  const cardToSummon = bot.hand[resolvedIndex];
+  const cardToSummon = bot.hand[resolvedIndex]!; // resolveHandIndexForAction validated this occupied slot.
   if (!bot.canResolveSummonActionForCurrentState(action, game)) {
     console.log(
       `[Bot.executeMainPhaseAction] Invalid summon action: summon requirements no longer met for ${cardToSummon?.name || action.cardName || "unknown"}`,
@@ -125,10 +134,15 @@ export async function executeSummonAction(bot: BotRuntimePort, game: BotGamePort
     );
     const tradeCheck =
       typeof bot.evaluateTributeTrade === "function"
-        ? bot.evaluateTributeTrade(cardToSummon, bot.field, tributeInfo.tributesNeeded, {
-            oppField: opponent.field,
-            game,
-          })
+        ? bot.evaluateTributeTrade(
+            cardToSummon,
+            bot.field,
+            tributeInfo.tributesNeeded,
+            {
+              oppField: opponent.field,
+              game,
+            },
+          )
         : { ok: true };
     if (tradeCheck?.ok === false) {
       console.log(

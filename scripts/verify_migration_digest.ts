@@ -23,8 +23,7 @@ import {
 export const MIGRATION_DIGEST_FORMAT =
   "shadow-duel-typescript-migration-digest";
 export const MIGRATION_DIGEST_VERSION = 1;
-export const DIGEST_REGISTRY_FORMAT =
-  "shadow-duel-typescript-digest-registry";
+export const DIGEST_REGISTRY_FORMAT = "shadow-duel-typescript-digest-registry";
 export const DIGEST_REGISTRY_VERSION = 1;
 export const COMPONENT_KEYS = [
   "cardDatabaseGroups",
@@ -118,9 +117,8 @@ export function canonicalize(
 
   if (Array.isArray(value)) {
     if (seen.has(value)) throw new TypeError(`Cycle at ${path}`);
-    const expectedIndexes = Array.from(
-      { length: value.length },
-      (_, index) => String(index),
+    const expectedIndexes = Array.from({ length: value.length }, (_, index) =>
+      String(index),
     );
     const ownKeys = Reflect.ownKeys(value);
     if (
@@ -298,8 +296,7 @@ function requirePattern(
 
 function daysInMonth(year: number, month: number): number {
   if (month === 2) {
-    const leapYear =
-      year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+    const leapYear = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
     return leapYear ? 29 : 28;
   }
   return [4, 6, 9, 11].includes(month) ? 30 : 31;
@@ -324,8 +321,7 @@ function requireIsoTimestamp(value: unknown, path: string): string {
   const minute = Number(components[5]);
   const second = Number(components[6]);
   const offsetHour = components[8] === undefined ? 0 : Number(components[8]);
-  const offsetMinute =
-    components[9] === undefined ? 0 : Number(components[9]);
+  const offsetMinute = components[9] === undefined ? 0 : Number(components[9]);
 
   if (
     month < 1 ||
@@ -424,14 +420,10 @@ function validateApproval(value: unknown, index: number): DigestApproval {
 export function validateDigestRegistry(value: unknown): DigestRegistry {
   const registry = requireRecord(value, "registry");
   if (registry.format !== DIGEST_REGISTRY_FORMAT) {
-    throw new TypeError(
-      `registry.format must be "${DIGEST_REGISTRY_FORMAT}"`,
-    );
+    throw new TypeError(`registry.format must be "${DIGEST_REGISTRY_FORMAT}"`);
   }
   if (registry.version !== DIGEST_REGISTRY_VERSION) {
-    throw new TypeError(
-      `registry.version must be ${DIGEST_REGISTRY_VERSION}`,
-    );
+    throw new TypeError(`registry.version must be ${DIGEST_REGISTRY_VERSION}`);
   }
   const legacyReplaySignature = requirePattern(
     registry.legacyReplaySignature,
@@ -448,7 +440,8 @@ export function validateDigestRegistry(value: unknown): DigestRegistry {
   const aggregateHashes = new Set<string>();
   let previousTimestamp = Number.NEGATIVE_INFINITY;
   for (let index = 0; index < approvals.length; index += 1) {
-    const approval = approvals[index];
+    // The validated map is dense and the loop bounds this index.
+    const approval = approvals[index]!;
     const timestamp = Date.parse(approval.approvedAt);
     if (timestamp <= previousTimestamp) {
       throw new TypeError(
@@ -546,7 +539,9 @@ export function isDirectExecution(
   moduleUrl: string,
   entryPath: string | undefined,
 ): boolean {
-  return entryPath !== undefined && fileURLToPath(moduleUrl) === resolve(entryPath);
+  return (
+    entryPath !== undefined && fileURLToPath(moduleUrl) === resolve(entryPath)
+  );
 }
 
 async function runCli(): Promise<void> {

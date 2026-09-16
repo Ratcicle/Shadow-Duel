@@ -42,7 +42,7 @@ const BETA_INIT = Infinity;
 const FUTURE_DISCOUNT = 0.85; // Desconto por ply: score_ply_n = score * (0.85 ^ n)
 
 interface GameTreeCardExtras {
-  archetypes?: readonly string[];
+  archetypes?: readonly string[] | undefined;
   turnBasedBuffs?: readonly CardTurnBasedBuff[];
   equippedTo?: unknown;
   equipTarget?: unknown;
@@ -53,13 +53,13 @@ interface GameTreeCardExtras {
 type GameTreeCardInput =
   (AiCardInput | GameCard | SimulatedCardState) & GameTreeCardExtras;
 type GameTreePlayerInput = (AiPlayerInput | SimulatedPlayerState) & {
-  name?: string;
-  debug?: boolean;
+  name?: string | undefined;
+  debug?: boolean | undefined;
 };
 
 interface GameTreePlayerState {
   id: string;
-  name?: string;
+  name?: string | undefined;
   lp: number;
   hand: SimulatedCardState[];
   field: SimulatedCardState[];
@@ -68,7 +68,7 @@ interface GameTreePlayerState {
   spellTrap: SimulatedCardState[];
   fieldSpell: SimulatedCardState | null;
   summonCount: number;
-  debug?: boolean;
+  debug?: boolean | undefined;
 }
 
 interface GameTreeStateInput extends AiStateInput {
@@ -89,7 +89,7 @@ type GameTreeState = GameTreeSimulationGameState & {
 };
 
 interface GameTreeStrategy<State, Action extends AIAction> {
-  bot?: { debug?: boolean };
+  bot?: { debug?: boolean } | undefined;
   generateMainPhaseActions(state: State): Action[];
 }
 
@@ -462,7 +462,7 @@ function minimax<State extends GameTreeStateInput, Action extends AIAction>(
   const actions = generateCandidateActions(gameState, strategy, persp);
 
   let bestValue = isMaximizing ? -Infinity : Infinity;
-  let bestAction = actions.length > 0 ? actions[0] : null;
+  let bestAction: Action | null = actions[0] ?? null;
 
   if (actions.length === 0) {
     // Sem ações: avaliar estado atual

@@ -138,7 +138,7 @@ export interface ChainEffectTarget extends Omit<EffectTarget, "position"> {
 
 /** Minimal mutable Card projection actually observed by Chain modules. */
 export interface ChainCard {
-  id?: number;
+  id?: number | undefined;
   duelCardId?: DuelCardId | number;
   instanceId?: ChainEntityId | null;
   _instanceId?: ChainEntityId | null;
@@ -149,7 +149,7 @@ export interface ChainCard {
   cardKind?: CardKind | null;
   subtype?: CardSubtype | string | null;
   monsterType?: MonsterType | null;
-  type?: string | null;
+  type?: string | null | undefined;
   archetype?: string | null;
   archetypes?: string[];
   owner?: PlayerId | string | null;
@@ -161,8 +161,8 @@ export interface ChainCard {
   atk?: number;
   def?: number;
   piercing?: boolean;
-  setTurn?: number | null;
-  turnSetOn?: number | null;
+  setTurn?: (number | null) | undefined;
+  turnSetOn?: (number | null) | undefined;
   zone?: CanonicalZone | null;
   effects?: readonly ChainEffect[];
 }
@@ -314,10 +314,7 @@ export interface ChainUsagePolicy {
   limit: number | null;
 }
 
-export type ChainUsageReservationStatus =
-  | "reserved"
-  | "consumed"
-  | "released";
+export type ChainUsageReservationStatus = "reserved" | "consumed" | "released";
 
 export interface ChainUsageReservation {
   success?: boolean;
@@ -384,18 +381,18 @@ export interface ChainContextPayload {
   card?: ChainCard | null;
   effect?: ChainEffect | null;
   player?: ChainPlayer | null;
-  opponent?: ChainPlayer | null;
+  opponent?: (ChainPlayer | null) | undefined;
   controller?: ChainPlayer | null;
   triggerPlayer?: ChainPlayer | null;
   turnPlayer?: ChainPlayer | null;
   actionPlayer?: ChainPlayer | null;
   priorityPlayer?: ChainPlayer | null;
-  attacker?: ChainCard | null;
-  attackerOwner?: ChainPlayer | null;
-  defender?: ChainCard | null;
-  defenderOwner?: ChainPlayer | null;
-  target?: ChainCard | null;
-  targetOwner?: ChainPlayer | null;
+  attacker?: (ChainCard | null) | undefined;
+  attackerOwner?: (ChainPlayer | null) | undefined;
+  defender?: (ChainCard | null) | undefined;
+  defenderOwner?: (ChainPlayer | null) | undefined;
+  target?: (ChainCard | null) | undefined;
+  targetOwner?: (ChainPlayer | null) | undefined;
   targets?: ChainCard[];
   destroyed?: ChainCard | null;
   destroyedOwner?: ChainPlayer | null;
@@ -452,8 +449,8 @@ export type ChainRuntimeContextType =
 
 type ChainContextOf<Type extends ChainRuntimeContextType> =
   ChainContextPayload & {
-  type: Type;
-};
+    type: Type;
+  };
 
 /** Canonical runtime context: every accepted discriminant is explicit. */
 export type ChainContext = {
@@ -510,7 +507,7 @@ export interface PreparedActivationInput {
   activationKind?: ChainActivationKind;
   effectKind?: ChainEffectKind;
   responseContextType?: ChainResponseContextType;
-  selectionKind?: SelectionKind | string | null;
+  selectionKind?: (SelectionKind | string | null) | undefined;
   sourceAtTrigger?: ChainSourceSnapshot | null;
   sourceAtActivation?: ChainSourceSnapshot | null;
   costSelections?: ChainSelectionMap | null;
@@ -863,7 +860,7 @@ export interface ChainActivationLegality {
   ok: boolean;
   code: string;
   reason: string | null;
-  allowedZones?: CanonicalZone[];
+  allowedZones?: CanonicalZone[] | undefined;
 }
 
 export interface ChainResponseNegotiation {
@@ -901,7 +898,7 @@ export interface FastEffectTransitionDetails {
   turnPlayer?: ChainPlayer | null;
   actionPlayer?: ChainPlayer | null;
   priorityPlayer?: ChainPlayer | null;
-  lastLinkController?: ChainPlayer | null;
+  lastLinkController?: (ChainPlayer | null) | undefined;
   chainId?: ChainId | null;
   consecutivePasses?: number;
   phaseIntent?: ChainPhaseIntent | null;
@@ -925,7 +922,7 @@ export type ChainSelectionContract =
 
 export interface ChainCompatibilitySelectionContract
   extends Omit<RawSelectionContract, "kind" | "purpose"> {
-  kind?: SelectionKind;
+  kind?: SelectionKind | undefined;
   purpose?: SelectionPurpose | "choice";
 }
 
@@ -1277,9 +1274,7 @@ export interface ChainAutoSelectorPort {
   select(
     contract: ChainSelectionContract,
     options?: ChainAutoSelectionOptions,
-  ):
-    | { ok: false; reason?: string }
-    | { ok: true; selections: SelectionResult };
+  ): { ok: false; reason?: string } | { ok: true; selections: SelectionResult };
   orderTriggerCandidates?(
     candidates: ChainTriggerCandidate[],
     options: { group: SegocGroup | null; optional: boolean },
@@ -1537,7 +1532,7 @@ export interface ChainRuntimePort extends ChainSelectionHost {
     effect?: ChainEffect,
     card?: ChainCard,
     context?: FastEffectContextInput,
-  ): { ok: boolean; reason?: string; requiredSpeed?: SpellSpeed };
+  ): { ok: boolean; reason?: string | undefined; requiredSpeed?: SpellSpeed };
   openChainWindow(
     context?: FastEffectContextInput,
     options?: ChainWindowOptions,
@@ -1559,7 +1554,9 @@ export interface ChainRuntimePort extends ChainSelectionHost {
   getEffectActivationCommitActions(
     effect?: ChainEffect | null,
   ): readonly CardAction[];
-  getEffectResolutionActions(effect?: ChainEffect | null): readonly CardAction[];
+  getEffectResolutionActions(
+    effect?: ChainEffect | null,
+  ): readonly CardAction[];
   payActivationCosts(
     prepared: PreparedActivation,
     context?: FastEffectContextInput | null,
@@ -1571,9 +1568,7 @@ export interface ChainRuntimePort extends ChainSelectionHost {
   offerChainResponse(
     player?: ChainPlayer | null,
     context?: FastEffectContextInput,
-  ): ChainMaybePromise<
-    ChainActivationCandidate | ChainOperationResult | null
-  >;
+  ): ChainMaybePromise<ChainActivationCandidate | ChainOperationResult | null>;
   addToChain(prepared: PreparedActivation): ChainLink | null | false;
   resolveChain(): ChainMaybePromise<ChainOperationResult | false>;
   cancelChain(): void;
@@ -1711,9 +1706,7 @@ export interface FullChainHost
     },
   ): ChainLink | null;
   getUsagePolicy(effect?: ChainEffect | null): UsagePolicy | null;
-  reserveUsageForChainLink(
-    link: ChainLink,
-  ): ChainUsageReservation | null;
+  reserveUsageForChainLink(link: ChainLink): ChainUsageReservation | null;
   settleUsageForChainLink(link: ChainLink): ChainUsageReservation | null;
   queueChainFinalization(
     link: ChainLink,
@@ -1735,14 +1728,18 @@ export interface FullChainHost
   orderTriggerCandidates(
     candidates?: ChainTriggerCandidate[],
     options?: { group?: SegocGroup; optional?: boolean },
-  ): ChainMaybePromise<ChainOperationResult & {
-    candidates?: ChainTriggerCandidate[];
-  }>;
+  ): ChainMaybePromise<
+    ChainOperationResult & {
+      candidates?: ChainTriggerCandidate[];
+    }
+  >;
   prepareTriggerOpportunity(
     opportunity: ChainTriggerOpportunity | null,
-  ): ChainMaybePromise<ChainOperationResult & {
-    selectedCandidates?: ChainTriggerCandidate[];
-  }>;
+  ): ChainMaybePromise<
+    ChainOperationResult & {
+      selectedCandidates?: ChainTriggerCandidate[];
+    }
+  >;
   prepareTriggerPackages(
     packages?: ChainTriggerInputPackage[],
     options?: { parentContext?: FastEffectContextInput | null },

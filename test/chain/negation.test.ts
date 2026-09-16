@@ -252,10 +252,10 @@ test("[CS-06] Spell/Trap cuja ativação foi negada recebe o destino correto", a
       assert.equal(link.effectNegated, false);
       assert.equal(trace.moves.length, 1);
       assert.equal(
-        trace.moves[0].options.contextLabel,
+        required(trace.moves[0]).options.contextLabel,
         "negated_activation_cleanup",
       );
-      assert.equal(trace.moves[0].options.linkId, link.linkId);
+      assert.equal(required(trace.moves[0]).options.linkId, link.linkId);
     });
   }
 });
@@ -469,6 +469,8 @@ test("reserva activate cobre limites maiores e oncePerDuel", () => {
   );
 
   const [firstLink, secondLink] = chain.chainStack;
+  assert.ok(firstLink);
+  assert.ok(secondLink);
   chain.settleUsageForChainLink(firstLink);
   chain.markChainLinkActivationNegated(secondLink.linkId);
   chain.settleUsageForChainLink(secondLink);
@@ -709,5 +711,8 @@ test("negar somente o efeito mantem a ativacao e executa o cleanup normal", asyn
   assert.equal(player.graveyard.includes(card), true);
   assert.deepEqual(required(trace.actions), []);
   assert.equal(trace.moves.length, 1);
-  assert.equal(trace.moves[0].options.contextLabel, "post_chain_cleanup");
+  assert.equal(
+    required(trace.moves[0]).options.contextLabel,
+    "post_chain_cleanup",
+  );
 });

@@ -206,7 +206,7 @@ export async function applyMove(
       card.summonRestrict === "shadow_heart_invocation_only"
     ) {
       console.log(
-        `${card.name} can only be Special Summoned by "Shadow-Heart Invocation".`
+        `${card.name} can only be Special Summoned by "Shadow-Heart Invocation".`,
       );
       continue;
     }
@@ -247,11 +247,13 @@ export async function applyMove(
       const levelBeforeMove = getCardLevelForStorage(card);
       const finalPosition = shouldPromptForPosition
         ? chosenPosition || action.position || defaultFieldPosition || "attack"
-        : chosenPosition ?? action.position ?? defaultFieldPosition;
+        : (chosenPosition ?? action.position ?? defaultFieldPosition);
       const isCostMove =
         toZone === "graveyard" &&
         /cost|discard|material|tribute/i.test(
-          String(action.contextLabel || action.targetRef || action.reason || ""),
+          String(
+            action.contextLabel || action.targetRef || action.reason || "",
+          ),
         );
       const contextLabel =
         action.contextLabel || (isCostMove ? "cost" : "applyMove");
@@ -274,7 +276,7 @@ export async function applyMove(
           awaitCardToGraveEvent: toZone === "graveyard",
           allowExtraDeckMonsterToHand: shouldAllowExtraDeckMonsterToHand(
             action,
-            ctx
+            ctx,
           ),
         });
         if (
@@ -349,12 +351,13 @@ export async function applyMove(
       if (this.ui?.log) {
         this.ui.log(`${card.name} moved to ${toZone}.`);
       }
+      return undefined;
     };
 
     if (shouldPromptForPosition) {
       const positionChoice = this.game.chooseSpecialSummonPosition(
         destPlayer,
-        card
+        card,
       ) as MaybePromise<string | null | undefined>;
       if (
         positionChoice &&
@@ -366,7 +369,8 @@ export async function applyMove(
           moveResult &&
           typeof moveResult === "object" &&
           moveResult.needsSelection
-        ) return moveResult;
+        )
+          return moveResult;
       } else {
         const moveResult = await applyMoveWithPosition(
           positionChoice as string | null | undefined,
@@ -375,7 +379,8 @@ export async function applyMove(
           moveResult &&
           typeof moveResult === "object" &&
           moveResult.needsSelection
-        ) return moveResult;
+        )
+          return moveResult;
       }
     } else {
       const moveResult = await applyMoveWithPosition(action.position);
@@ -383,7 +388,8 @@ export async function applyMove(
         moveResult &&
         typeof moveResult === "object" &&
         moveResult.needsSelection
-      ) return moveResult;
+      )
+        return moveResult;
     }
   }
   if (moved) {

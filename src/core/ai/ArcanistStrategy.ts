@@ -16,7 +16,7 @@ type Preference = { preferredInstanceIds?: Array<string | number | null>; avoidI
 type TargetPreferences = Record<string, Preference>;
 type PreferenceAction = Partial<AIAction> & { actionContext?: { targetPreferences?: TargetPreferences } };
 type SearchAction = { type?: string; zone?: string; cardKind?: string; archetype?: string; source?: StrategyCard; targetRef?: string; filters?: { cardKind?: string; archetype?: string } };
-type SearchContext = { game?: AIState | null; ctx?: { game?: AIState }; player?: AIStrategyBotPort; source?: StrategyCard; action?: AIAction; analysis?: Partial<Analysis> | null; activationContext?: AIActivationContext };
+type SearchContext = { game?: AIState | null; ctx?: { game?: AIState }; player?: AIStrategyBotPort; source?: StrategyCard; action?: AIAction; analysis?: Partial<Analysis> | null; activationContext?: AIActivationContext | undefined };
 type TributeContext = { evaluationContext?: Partial<Analysis>; botState?: AIStrategyBotPort; oppField?: StrategyCard[] };
 type ChoiceCase = { id?: string; label?: string; description?: string };
 type ChoiceContext = { source?: StrategyCard; activationContext?: AIActivationContext; state?: AiStateShape };
@@ -273,18 +273,18 @@ export default class ArcanistStrategy extends BaseStrategy {
     this.thoughtProcess = [];
   }
 
-  get archetypeLabel() {
+  override get archetypeLabel() {
     return "Arcanist";
   }
 
-  think(thought: string) {
+  override think(thought: string) {
     this.thoughtProcess.push(thought);
     if (this.bot?.debug) {
       console.log(`[Arcanist AI] ${thought}`);
     }
   }
 
-  getPlanningProfile(game: AIState, context: AIPlanningContext & { analysis?: Analysis } = {}): AIPlanningProfile {
+  override getPlanningProfile(game: AIState, context: AIPlanningContext & { analysis?: Analysis } = {}): AIPlanningProfile {
     if (!game) return super.getPlanningProfile(game, context);
     const analysis = context.analysis || this.analyzeGameState(game);
     return buildArcanistPlanningProfile(analysis as Parameters<typeof buildArcanistPlanningProfile>[0], {
@@ -293,21 +293,21 @@ export default class ArcanistStrategy extends BaseStrategy {
     } as Parameters<typeof buildArcanistPlanningProfile>[1]);
   }
 
-  shouldUseDeepPlanning(game: AIState, context: AIPlanningContext = {}) {
+  override shouldUseDeepPlanning(game: AIState, context: AIPlanningContext = {}) {
     const profile =
       context.profile || this.getPlanningProfile(game, context) || {};
     return (game as AIState & { turnLineSearchEnabled?: boolean })?.turnLineSearchEnabled === true || profile.enabled === true;
   }
 
-  scoreLineMilestones(context: AIPlanningContext = {}) {
+  override scoreLineMilestones(context: AIPlanningContext = {}) {
     return scoreArcanistLineMilestones(context as Parameters<typeof scoreArcanistLineMilestones>[0]);
   }
 
-  scoreLineTerminal(context: AIPlanningContext = {}) {
+  override scoreLineTerminal(context: AIPlanningContext = {}) {
     return scoreArcanistLineTerminal(context as Parameters<typeof scoreArcanistLineTerminal>[0]);
   }
 
-  describePlannedLine(context: AIPlanningContext = {}) {
+  override describePlannedLine(context: AIPlanningContext = {}) {
     return describeArcanistPlannedLine(context as Parameters<typeof describeArcanistPlannedLine>[0]);
   }
 
@@ -374,7 +374,7 @@ export default class ArcanistStrategy extends BaseStrategy {
     return analysis;
   }
 
-  evaluateBoard(gameOrState: AIState, perspectivePlayer?: SimulatedPlayerState): number {
+  override evaluateBoard(gameOrState: AIState, perspectivePlayer?: SimulatedPlayerState): number {
     return evaluateBoardArcanist(
       gameOrState,
       perspectivePlayer,
@@ -382,7 +382,7 @@ export default class ArcanistStrategy extends BaseStrategy {
     );
   }
 
-  evaluateBoardV2(gameOrState: AIState, perspectivePlayer?: SimulatedPlayerState): number {
+  override evaluateBoardV2(gameOrState: AIState, perspectivePlayer?: SimulatedPlayerState): number {
     return this.evaluateBoard(gameOrState, perspectivePlayer);
   }
 
@@ -548,7 +548,7 @@ export default class ArcanistStrategy extends BaseStrategy {
     });
   }
 
-  generateMainPhaseActions(game: AIState): AIAction[] {
+  override generateMainPhaseActions(game: AIState): AIAction[] {
     const analysis = this.analyzeGameState(game);
     const bot = analysis.player;
     const actions = [
@@ -576,7 +576,7 @@ export default class ArcanistStrategy extends BaseStrategy {
     );
   }
 
-  sequenceActions(actions: AIAction[] = []) {
+  override sequenceActions(actions: AIAction[] = []) {
     const typeOrder = {
       handIgnition: 0,
       fieldEffect: 1,
@@ -592,11 +592,11 @@ export default class ArcanistStrategy extends BaseStrategy {
     });
   }
 
-  getTributeRequirementFor(card: StrategyCard, playerState: AIStrategyBotPort) {
+  override getTributeRequirementFor(card: StrategyCard, playerState: AIStrategyBotPort) {
     return getArcanistTributeRequirementFor(card, playerState);
   }
 
-  selectBestTributes(field: SimulatedCardState[], tributesNeeded: number, cardToSummon: SimulatedCardState, context: TributeContext = {}) {
+  override selectBestTributes(field: SimulatedCardState[], tributesNeeded: number, cardToSummon: SimulatedCardState, context: TributeContext = {}) {
     const analysis =
       context.evaluationContext ||
       this.currentAnalysis || {
@@ -686,7 +686,7 @@ export default class ArcanistStrategy extends BaseStrategy {
     return cases[0];
   }
 
-  simulateMainPhaseAction(state: Parameters<StrategyRuntimePort["simulateMainPhaseAction"]>[0], action: AIPlannedAction): ReturnType<StrategyRuntimePort["simulateMainPhaseAction"]> {
+  override simulateMainPhaseAction(state: Parameters<StrategyRuntimePort["simulateMainPhaseAction"]>[0], action: AIPlannedAction): ReturnType<StrategyRuntimePort["simulateMainPhaseAction"]> {
     const beforeSignature = getArcanistSimStateSignature(state as AiStateShape);
     const result = applyGenericSimulatedMainPhaseAction(state as Parameters<typeof applyGenericSimulatedMainPhaseAction>[0], action as AIAction, {
       archetype: "Arcanist",

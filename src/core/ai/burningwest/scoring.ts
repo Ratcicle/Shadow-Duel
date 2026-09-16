@@ -44,7 +44,7 @@ interface ScoringComponent {
   value: number;
   type?: DeclaredType | null;
   bestType?: string;
-  material?: string;
+  material?: string | undefined;
 }
 type ScoringContext = ReturnType<typeof buildScoringContext>;
 
@@ -334,12 +334,15 @@ function hasCrashTown(player: ScoringPlayer = {}) {
 }
 
 function isCrashTown1v1(context: ScoringContext) {
+  const ownMonster = context.ownMonsters[0];
+  const opponentMonster = context.oppMonsters[0];
+  if (!ownMonster || !opponentMonster) return false;
   return (
     hasCrashTown(context.self) &&
     context.ownMonsters.length === 1 &&
     context.oppMonsters.length === 1 &&
-    isFaceUpBurningWestMonster(context.ownMonsters[0]) &&
-    isFaceUp(context.oppMonsters[0])
+    isFaceUpBurningWestMonster(ownMonster) &&
+    isFaceUp(opponentMonster)
   );
 }
 
@@ -659,6 +662,7 @@ function scoreCrashTown(context: ScoringContext, components: ScoringComponent[])
 
   const ownMonster = context.ownMonsters[0];
   const opponentMonster = context.oppMonsters[0];
+  if (!ownMonster || !opponentMonster) return;
   const ownStat = Math.max(getEffectiveAtk(ownMonster), getEffectiveDef(ownMonster));
   const opponentStat = Math.max(getEffectiveAtk(opponentMonster), getBattleStat(opponentMonster));
   if (canDestroyByBattle(ownMonster, opponentMonster) || ownStat >= opponentStat) {

@@ -67,7 +67,7 @@ function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
 }
 
-function cardName(card: {name?:string;cardName?:string;label?:string} | string | null | undefined) {
+function cardName(card: {name?:string | undefined;cardName?:string;label?:string} | string | null | undefined) {
   if (!card) return null;
   if (typeof card === "string") return card;
   return card.name || card.cardName || card.label || null;

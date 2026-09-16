@@ -32,10 +32,10 @@ interface TraceMoveEntry {
   card: {
     name?: string;
   };
-  fromZone?: string | null;
+  fromZone?: string | null | undefined;
   toZone?: string | null;
   options?: {
-    contextLabel?: string | null;
+    contextLabel?: string | null | undefined;
   };
 }
 

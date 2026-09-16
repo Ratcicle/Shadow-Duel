@@ -95,7 +95,7 @@ test("Sword of Two Darks declares its effects and control limit", () => {
   const equipEffect = required(
     required(card.effects).find((effect) => effect.id === EQUIP_EFFECT_ID),
   );
-  assert.equal(required(equipEffect.actions)[0].extraAttacks, 1);
+  assert.equal(required(required(equipEffect.actions)[0]).extraAttacks, 1);
   assert.deepEqual(equipEffect.conditions, [
     {
       type: "control_card_max",
@@ -112,7 +112,7 @@ test("Sword of Two Darks declares its effects and control limit", () => {
     required(card.effects).find((effect) => effect.id === GRAVE_EFFECT_ID),
   );
   assert.equal(graveEffect.fromZone, undefined);
-  assert.deepEqual(required(graveEffect.targets)[0].cardKind, [
+  assert.deepEqual(required(required(graveEffect.targets)[0]).cardKind, [
     "spell",
     "trap",
   ]);

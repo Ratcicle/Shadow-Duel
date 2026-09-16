@@ -31,7 +31,7 @@ import {
 type StatName = "atk" | "def";
 
 interface CardFeedbackOptions {
-  sourceCard?: ActionRuntimeCard | null;
+  sourceCard?: (ActionRuntimeCard | null) | undefined;
   ownerId?: string | null;
   targetZone?: ZoneInput;
   tone?: string;
@@ -124,7 +124,10 @@ function writeCardProperty(
   return Reflect.set(card, property, value);
 }
 
-function deleteCardProperty(card: ActionRuntimeCard, property: string): boolean {
+function deleteCardProperty(
+  card: ActionRuntimeCard,
+  property: string,
+): boolean {
   return Reflect.deleteProperty(card, property);
 }
 
@@ -134,7 +137,10 @@ function queueBanishAnimation(
   card: ActionRuntimeCard | null | undefined,
   fromZone: ZoneInput | null = null,
 ) {
-  if (!game?.cardAnimationsReady || typeof game.queueCardAnimation !== "function") {
+  if (
+    !game?.cardAnimationsReady ||
+    typeof game.queueCardAnimation !== "function"
+  ) {
     return;
   }
   if (!owner || !card || card.instanceId == null) return;
@@ -233,8 +239,8 @@ function resolvePlayerScope(
 ): ActionRuntimePlayer[] {
   const rule = action.owner || action.player || "self";
   if (rule === "opponent") {
-    return [ctx.opponent].filter(
-      (owner): owner is ActionRuntimePlayer => Boolean(owner),
+    return [ctx.opponent].filter((owner): owner is ActionRuntimePlayer =>
+      Boolean(owner),
     );
   }
   if (rule === "both" || rule === "any") {
@@ -242,8 +248,8 @@ function resolvePlayerScope(
       (owner): owner is ActionRuntimePlayer => Boolean(owner),
     );
   }
-  return [ctx.player].filter(
-    (owner): owner is ActionRuntimePlayer => Boolean(owner),
+  return [ctx.player].filter((owner): owner is ActionRuntimePlayer =>
+    Boolean(owner),
   );
 }
 
@@ -251,7 +257,9 @@ function normalizeStatsList(
   value: string | readonly string[] | null | undefined,
 ): StatName[] {
   const list = Array.isArray(value) ? value : value ? [value] : ["atk", "def"];
-  return list.filter((stat): stat is StatName => stat === "atk" || stat === "def");
+  return list.filter(
+    (stat): stat is StatName => stat === "atk" || stat === "def",
+  );
 }
 
 function getBaseStat(card: ActionRuntimeCard, stat: StatName) {
@@ -418,7 +426,10 @@ function consumeTrackedStatIncrease(
 ) {
   let removed = 0;
   const consume = (amount: number) => {
-    const targetAmount = Math.min(Math.max(0, amount || 0), remaining - removed);
+    const targetAmount = Math.min(
+      Math.max(0, amount || 0),
+      remaining - removed,
+    );
     if (targetAmount <= 0) return 0;
     const actual = subtractVisibleStat(card, stat, targetAmount);
     removed += actual;
@@ -695,9 +706,7 @@ export async function handleSetStatsToZeroAndNegate(
     if (effects.length > 0) {
       const cardList = affectedCards.join(", ");
 
-      const message = `${cardList}'s ${effects.join(
-        " and ",
-      )}${
+      const message = `${cardList}'s ${effects.join(" and ")}${
         negateEffectsDuration === "while_faceup"
           ? " while face-up."
           : " until end of turn."
@@ -749,9 +758,7 @@ export async function handleBuffStatsTemp(
   }
   if (statsAction.atkBoostFromTarget) {
     const boostSpec = statsAction.atkBoostFromTarget;
-    const stat = isStatSourceProperty(boostSpec?.stat)
-      ? boostSpec.stat
-      : "atk";
+    const stat = isStatSourceProperty(boostSpec?.stat) ? boostSpec.stat : "atk";
     const boostTarget = resolveTargetCards(
       { targetRef: boostSpec?.targetRef },
       ctx,
@@ -760,7 +767,9 @@ export async function handleBuffStatsTemp(
     )[0];
     const boostValue = Number(boostTarget?.[stat]);
     if (!boostTarget || !Number.isFinite(boostValue)) {
-      getUI(game)?.log("The referenced target is no longer valid for the stat boost.");
+      getUI(game)?.log(
+        "The referenced target is no longer valid for the stat boost.",
+      );
       return false;
     }
     atkBoost += boostValue;
@@ -812,11 +821,11 @@ export async function handleBuffStatsTemp(
       ? " during damage calculation"
       : isEndOfDamageStepBuff
         ? " until the end of the Damage Step"
-      : useTurnBasedBuff && duration === "end_of_next_turn"
-        ? " until end of next turn"
-        : useTurnBasedBuff
-          ? ` until turn ${turnBasedExpiresOnTurn}`
-          : " until end of turn";
+        : useTurnBasedBuff && duration === "end_of_next_turn"
+          ? " until end of next turn"
+          : useTurnBasedBuff
+            ? ` until turn ${turnBasedExpiresOnTurn}`
+            : " until end of turn";
 
   const applyStatChange = (
     card: ActionRuntimeCard,
@@ -842,7 +851,10 @@ export async function handleBuffStatsTemp(
 
     if (useTurnBasedBuff) {
       const buffId = [
-        statsAction.sourceName || ctx.source?.name || action.type || "stat_buff",
+        statsAction.sourceName ||
+          ctx.source?.name ||
+          action.type ||
+          "stat_buff",
         card.instanceId || card.id || "card",
         stat,
         game.turnCounter,
@@ -882,7 +894,8 @@ export async function handleBuffStatsTemp(
   ) {
     targetCards = engine.filterCardsListByImmunity(targetCards, ctx.player, {
       actionType: action.type,
-      effectType: statsAction.effectType || engine.inferEffectType?.(action.type),
+      effectType:
+        statsAction.effectType || engine.inferEffectType?.(action.type),
       sourceCard: ctx?.source || null,
     }).allowed;
   }
@@ -1110,7 +1123,7 @@ export async function handleSetOriginalStats(
       const rawAtk =
         action.atkFromContext !== undefined
           ? resolveContextNumber(action.atkFromContext, ctx, { round: "floor" })
-          : action.atk ?? action.baseAtk;
+          : (action.atk ?? action.baseAtk);
       nextBaseAtk = Math.max(0, Math.floor(Number(rawAtk) || 0));
       card.baseAtk = nextBaseAtk;
       if (updateCurrentStats) card.atk = nextBaseAtk;
@@ -1120,7 +1133,7 @@ export async function handleSetOriginalStats(
       const rawDef =
         action.defFromContext !== undefined
           ? resolveContextNumber(action.defFromContext, ctx, { round: "floor" })
-          : action.def ?? action.baseDef;
+          : (action.def ?? action.baseDef);
       nextBaseDef = Math.max(0, Math.floor(Number(rawDef) || 0));
       card.baseDef = nextBaseDef;
       if (updateCurrentStats) card.def = nextBaseDef;
@@ -1212,7 +1225,9 @@ export async function handleBuffStatsByCounter(
       if (!counterSource || typeof counterSource.getCounter !== "function") {
         return total;
       }
-      return total + Math.max(0, Number(counterSource.getCounter(counterType) || 0));
+      return (
+        total + Math.max(0, Number(counterSource.getCounter(counterType) || 0))
+      );
     }, 0);
 
     if (counterCount < minCounters) continue;
@@ -1339,10 +1354,14 @@ export async function handleModifyStatsTempThenDestroyIfZeroed(
 
       const changes = [];
       if (appliedAtkChange !== 0) {
-        changes.push(`${appliedAtkChange > 0 ? "+" : ""}${appliedAtkChange} ATK`);
+        changes.push(
+          `${appliedAtkChange > 0 ? "+" : ""}${appliedAtkChange} ATK`,
+        );
       }
       if (appliedDefChange !== 0) {
-        changes.push(`${appliedDefChange > 0 ? "+" : ""}${appliedDefChange} DEF`);
+        changes.push(
+          `${appliedDefChange > 0 ? "+" : ""}${appliedDefChange} DEF`,
+        );
       }
       const duration = permanent ? "" : " until end of turn";
       const changeVerb =
@@ -1371,7 +1390,9 @@ export async function handleModifyStatsTempThenDestroyIfZeroed(
         opponent: ctx.opponent,
       });
       destroyed = true;
-      getUI(game)?.log(`${card.name} was destroyed because its stats became 0.`);
+      getUI(game)?.log(
+        `${card.name} was destroyed because its stats became 0.`,
+      );
     }
   }
 
@@ -1379,7 +1400,11 @@ export async function handleModifyStatsTempThenDestroyIfZeroed(
     game.updateBoard();
   }
 
-  return modified || destroyed || targetCards.some((card) => card?.cardKind === "monster");
+  return (
+    modified ||
+    destroyed ||
+    targetCards.some((card) => card?.cardKind === "monster")
+  );
 }
 
 export async function handleHalveTargetStatsAndGainRemoved(
@@ -1402,7 +1427,9 @@ export async function handleHalveTargetStatsAndGainRemoved(
     defaultRef: "self",
     game,
   });
-  const gainCard = gainCards.find((card) => card && card.cardKind === "monster");
+  const gainCard = gainCards.find(
+    (card) => card && card.cardKind === "monster",
+  );
 
   if (targetCards.length === 0 || !gainCard) {
     getUI(game)?.log("No valid targets for stat transfer.");
@@ -1410,7 +1437,8 @@ export async function handleHalveTargetStatsAndGainRemoved(
   }
 
   const stats = normalizeStatsList(action.stats);
-  const sourceName = action.sourceName || getLinkedSourceName(source, action.type);
+  const sourceName =
+    action.sourceName || getLinkedSourceName(source, action.type);
   rememberLinkedBuffSource(source, sourceName);
 
   let anyChanged = false;
@@ -1782,7 +1810,7 @@ export async function handleAddStatus(
             card,
             status,
             Math.max(
-            0,
+              0,
               Number(readCardProperty(card, status)) -
                 (typeof value === "number" ? value : 1),
             ),
@@ -2046,7 +2074,10 @@ export async function handleBanishAndBuff(
         ? engine.findCardZone(banishOwner, banishCard)
         : "graveyard";
 
-    if (!banishOwner || !ownerHasCardInZone(banishOwner, fromZone, banishCard)) {
+    if (
+      !banishOwner ||
+      !ownerHasCardInZone(banishOwner, fromZone, banishCard)
+    ) {
       getUI(game)?.log(`${banishCard.name} could not be banished.`);
       return false;
     }
@@ -2069,14 +2100,19 @@ export async function handleBanishAndBuff(
   for (const entry of banishEntries) {
     queueBanishAnimation(game, entry.owner, entry.card, entry.fromZone);
 
-    const moveResult = await game.moveCard(entry.card, entry.owner, "banished", {
-      fromZone: entry.fromZone,
-      awaitEvents: true,
-      sourceCard: source,
-      sourcePlayer: player,
-      effectId: ctx?.effect?.id || null,
-      contextLabel: "banish_and_buff",
-    });
+    const moveResult = await game.moveCard(
+      entry.card,
+      entry.owner,
+      "banished",
+      {
+        fromZone: entry.fromZone,
+        awaitEvents: true,
+        sourceCard: source,
+        sourcePlayer: player,
+        effectId: ctx?.effect?.id || null,
+        contextLabel: "banish_and_buff",
+      },
+    );
 
     if (isActionMoveResult(moveResult) && moveResult.needsSelection) {
       return {
@@ -2307,7 +2343,9 @@ export async function handleSwitchPosition(
     const ownerId = card.owner === "player" ? "player" : "bot";
     const ownerField =
       ownerId === "player" ? game.player?.field : game.bot?.field;
-    const fieldIndex = Array.isArray(ownerField) ? ownerField.indexOf(card) : -1;
+    const fieldIndex = Array.isArray(ownerField)
+      ? ownerField.indexOf(card)
+      : -1;
     const newPosition = wasFacedown
       ? "attack"
       : card.position === "attack"
@@ -2915,7 +2953,7 @@ export async function handleReduceHandMonsterLevels(
 
   if (modified) {
     getUI(game)?.log(
-      `Nível dos monstros na mão reduzido em ${amount} até o fim do turno.`
+      `Nível dos monstros na mão reduzido em ${amount} até o fim do turno.`,
     );
     game.effectEngine?.clearTargetingCache?.();
     game.updateBoard();

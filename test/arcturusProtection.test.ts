@@ -75,7 +75,7 @@ test("Arcturus abre o modal do Cemitério e bane dois monstros Void para se prot
   };
   game.ui.showTargetSelection = (contract, confirmSelection) => {
     modalContract = contract;
-    const requirement = required(required(contract).requirements)[0];
+    const requirement = required(required(required(contract).requirements)[0]);
     queueMicrotask(() => {
       confirmSelection?.({
         [requirement.id]: requirement.candidates.map(({ key }) => key),
@@ -94,12 +94,13 @@ test("Arcturus abre o modal do Cemitério e bane dois monstros Void para se prot
   assert.ok(modalContract, "The graveyard selection modal must be opened.");
   assert.equal(required(modalContract.ui).useFieldTargeting, false);
   assert.equal(fieldTargetingCalls, 0);
-  assert.deepEqual(required(required(modalContract.requirements)[0].zones), [
-    "graveyard",
-  ]);
+  assert.deepEqual(
+    required(required(required(modalContract.requirements)[0]).zones),
+    ["graveyard"],
+  );
   assert.deepEqual(
     required(
-      required(modalContract.requirements)[0].candidates.map(
+      required(required(modalContract.requirements)[0]).candidates.map(
         ({ cardRef }) => cardRef,
       ),
     ),

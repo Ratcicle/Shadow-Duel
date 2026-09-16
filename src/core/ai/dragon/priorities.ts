@@ -96,7 +96,7 @@ function getDragonBoardValue(card: DragonCard | null, overrides: { projectedAtk?
 
 function evaluateProtectedDragonBossSpend(
   cardToSummon: DragonCard | null,
-  spentCards: DragonCard[],
+  spentCards: readonly DragonCard[],
   context: DragonPolicyContext = {},
   overrides: { projectedAtk?: number; projectedDef?: number } = {},
 ) {
@@ -155,7 +155,7 @@ function evaluateProtectedDragonBossSpend(
   };
 }
 
-function hasRadiantCosmicMaterials(cards: DragonCard[] = []) {
+function hasRadiantCosmicMaterials(cards: readonly DragonCard[] = []) {
   const dragons = (cards || []).filter(isDragonMonster);
   return (
     dragons.length >= 3 &&
@@ -163,7 +163,7 @@ function hasRadiantCosmicMaterials(cards: DragonCard[] = []) {
   );
 }
 
-function hasTechVoidMaterials(cards: DragonCard[] = []) {
+function hasTechVoidMaterials(cards: readonly DragonCard[] = []) {
   const dragons = (cards || []).filter(isDragonMonster);
   return (
     dragons.some((card) => card.name === "Voltaic Dragon") &&
@@ -378,7 +378,7 @@ export function shouldPlaySpell(card: DragonCard, analysis: DragonAnalysis) {
  * @param {Object} [context]
  * @returns {SummonDecision}
  */
-export function shouldSummonMonster(card: DragonCard, analysis: DragonAnalysis, tributeInfo: { tributesNeeded: number; usingAlt?: boolean; alt?: DragonCard["altTribute"] }, context: DragonPolicyContext = {}): { yes: boolean; priority?: number; position?: "attack" | "defense"; facedown?: boolean; reason?: string } {
+export function shouldSummonMonster(card: DragonCard, analysis: DragonAnalysis, tributeInfo: { tributesNeeded: number; usingAlt?: boolean; alt?: DragonCard["altTribute"] }, context: DragonPolicyContext = {}): { yes: boolean; priority?: number; position?: "attack" | "defense"; facedown?: boolean; reason?: string | undefined } {
   const name = card.name!;
   const fieldState = context.field || analysis?.field || [];
   const oppFieldState = context.oppField || analysis?.oppField || [];
@@ -755,7 +755,7 @@ export function getTributeRequirementFor(card: DragonCard, playerState: DragonPl
  * @param {Object} [cardToSummon]
  * @returns {number[]}
  */
-function selectBestTributeSet(field: DragonCard[], tributesNeeded: number, cardToSummon: DragonCard | null = null, context: DragonPolicyContext = {}) {
+function selectBestTributeSet(field: readonly DragonCard[], tributesNeeded: number, cardToSummon: DragonCard | null = null, context: DragonPolicyContext = {}) {
   if (
     tributesNeeded <= 0 ||
     !fieldHasTributeValue(field || [], tributesNeeded, cardToSummon)
@@ -766,7 +766,9 @@ function selectBestTributeSet(field: DragonCard[], tributesNeeded: number, cardT
   const indices = selectTributeIndicesByValue(field || [], tributesNeeded, cardToSummon, {
     scoreCard: (monster) => getTributeValue(monster),
   });
-  const tributes = indices.map((index) => field?.[index]).filter(Boolean);
+  const tributes = indices
+    .map((index) => field?.[index])
+    .filter((tribute): tribute is DragonCard => Boolean(tribute));
 
   if (getTributeValueTotal(tributes, cardToSummon) < tributesNeeded) {
     return { indices: [], tributes, blockedReason: "No valid tributes" };
@@ -788,7 +790,7 @@ function selectBestTributeSet(field: DragonCard[], tributesNeeded: number, cardT
   return { indices, tributes, blockedReason: null };
 }
 
-export function selectBestTributes(field: DragonCard[], tributesNeeded: number, cardToSummon: DragonCard | null = null, context: DragonPolicyContext = {}) {
+export function selectBestTributes(field: readonly DragonCard[], tributesNeeded: number, cardToSummon: DragonCard | null = null, context: DragonPolicyContext = {}) {
   return selectBestTributeSet(field, tributesNeeded, cardToSummon, context).indices;
 }
 
@@ -824,7 +826,7 @@ function getTributeValue(monster: DragonCard) {
  * @param {Object} [context]
  * @returns {{ ok: boolean, reason?: string }}
  */
-export function evaluateTributeTrade(cardToSummon: DragonCard, field: DragonCard[], tributesNeeded: number, context: DragonPolicyContext = {}) {
+export function evaluateTributeTrade(cardToSummon: DragonCard, field: readonly DragonCard[], tributesNeeded: number, context: DragonPolicyContext = {}) {
   if (!cardToSummon || tributesNeeded <= 0) return { ok: true };
 
   const fieldMonsters = (field || []).filter(

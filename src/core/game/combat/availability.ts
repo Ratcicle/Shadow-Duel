@@ -114,7 +114,9 @@ interface AttackAuraMatch {
 
 function getAttackPassive(effect: EffectDefinition): AttackPassiveRule {
   const passive = Reflect.get(effect, "passive");
-  return (passive && typeof passive === "object" ? passive : {}) as AttackPassiveRule;
+  return (
+    passive && typeof passive === "object" ? passive : {}
+  ) as AttackPassiveRule;
 }
 
 function readCombatStat(card: GameCard, key: CombatStatKey): number {
@@ -186,9 +188,8 @@ function getDynamicAttackLimit(
   }
   const dea = attacker.dynamicExtraAttacks;
   const owner = attacker.owner === "player" ? game.player : game.bot;
-  return (owner?.graveyard || []).filter(
-    (c) => c && c.name === dea.name,
-  ).length;
+  return (owner?.graveyard || []).filter((c) => c && c.name === dea.name)
+    .length;
 }
 
 export function getMonsterAttackLimit(
@@ -245,7 +246,8 @@ function cardMatchesAttackPassiveFilters(
 ): boolean {
   if (!card) return false;
   if (filters.requireFaceup === true && card.isFacedown) return false;
-  if (filters.cardKind && !cardMatchesKind(card, filters.cardKind)) return false;
+  if (filters.cardKind && !cardMatchesKind(card, filters.cardKind))
+    return false;
   if (filters.position && filters.position !== "any") {
     if (card.position !== filters.position) return false;
   }
@@ -288,8 +290,8 @@ function normalizePassiveList<Value>(
 }
 
 function samePlayer(
-  left: { id?: string | number | null } | null | undefined,
-  right: { id?: string | number | null } | null | undefined,
+  left: { id?: string | number | null | undefined } | null | undefined,
+  right: { id?: string | number | null | undefined } | null | undefined,
 ): boolean {
   if (!left || !right) return false;
   return left === right || Boolean(left.id && right.id && left.id === right.id);
@@ -345,7 +347,8 @@ function findBattleDestructionPreventionNegationAura(
   if (!game || !card) return null;
 
   const protectedOwner =
-    getPlayerFromContext(game, context.owner) || getPlayerByCardOwner(game, card);
+    getPlayerFromContext(game, context.owner) ||
+    getPlayerByCardOwner(game, card);
   if (!protectedOwner) return null;
 
   const preventionSourceOwner =
@@ -473,7 +476,8 @@ function isBattleIndestructibleByStatMatchPassive(
     }
 
     const sourceStat = passive.sourceStat || passive.stat || "atk";
-    const opponentStat = passive.opponentStat || passive.compareToStat || sourceStat;
+    const opponentStat =
+      passive.opponentStat || passive.compareToStat || sourceStat;
     const sourceValue = readCombatStat(card, sourceStat);
     const opponentValue = readCombatStat(battleOpponent, opponentStat);
     if (
@@ -500,7 +504,9 @@ function equipIsActiveForCard(
   if (equip.cardKind !== "spell" || equip.subtype !== "equip") return false;
   if (equip.equippedTo !== card && equip.equipTarget !== card) return false;
   const equipOwner = getOwnerByCard(game, equip);
-  return Array.isArray(equipOwner?.spellTrap) && equipOwner.spellTrap.includes(equip);
+  return (
+    Array.isArray(equipOwner?.spellTrap) && equipOwner.spellTrap.includes(equip)
+  );
 }
 
 function battleProtectionSourceAffectsCard(
@@ -513,10 +519,14 @@ function battleProtectionSourceAffectsCard(
   if (sourceCard === card) return true;
   const resolvedSourceOwner = sourceOwner || getOwnerByCard(game, sourceCard);
   if (!resolvedSourceOwner) return true;
-  const immunity = game.effectEngine?.checkImmunity?.(card, resolvedSourceOwner, {
-    effectType: "battle_destruction_prevention",
-    sourceCard,
-  });
+  const immunity = game.effectEngine?.checkImmunity?.(
+    card,
+    resolvedSourceOwner,
+    {
+      effectType: "battle_destruction_prevention",
+      sourceCard,
+    },
+  );
   return immunity?.immune !== true;
 }
 
@@ -534,7 +544,8 @@ function passiveConditionsAreMet(
       ? [rawConditions]
       : [];
   if (conditions.length === 0) return true;
-  if (typeof game?.effectEngine?.evaluateConditions !== "function") return false;
+  if (typeof game?.effectEngine?.evaluateConditions !== "function")
+    return false;
   const player = sourceOwner || getOwnerByCard(game, sourceCard);
   const opponent =
     player && typeof game?.getOpponent === "function"
@@ -700,8 +711,8 @@ function getCounterAttackLockReason(
         if (passive.requireZone && sourceZone !== passive.requireZone) continue;
         if (effect.requireFaceup === true && sourceCard.isFacedown) continue;
 
-        const targetOwnersRaw =
-          passive.targetOwners || passive.owners || ["opponent"];
+        const targetOwnersRaw = passive.targetOwners ||
+          passive.owners || ["opponent"];
         const targetOwners = Array.isArray(targetOwnersRaw)
           ? targetOwnersRaw
           : [targetOwnersRaw];
@@ -768,13 +779,15 @@ export function getAttackAvailability(
 
   // Check passive "restrict_opponent_summon_turn_attack" from opponent's field cards
   if (attacker.summonedTurn === this.turnCounter) {
-    const opponentOfAttacker = attacker.owner === "player" ? this.bot : this.player;
+    const opponentOfAttacker =
+      attacker.owner === "player" ? this.bot : this.player;
     for (const fieldCard of getAttackPassiveSources(opponentOfAttacker)) {
       if (!fieldCard || fieldCard.isFacedown) continue;
-      for (const effect of (fieldCard.effects || [])) {
+      for (const effect of fieldCard.effects || []) {
         if (
           effect?.timing === "passive" &&
-          getAttackPassive(effect).type === "restrict_opponent_summon_turn_attack"
+          getAttackPassive(effect).type ===
+            "restrict_opponent_summon_turn_attack"
         ) {
           return {
             ok: false,
@@ -828,7 +841,7 @@ export function getAttackAvailability(
     }
     const opponent = attacker.owner === "player" ? this.bot : this.player;
     const opponentMonsters = (opponent?.field || []).filter(
-      (m) => m && !m.isFacedown
+      (m) => m && !m.isFacedown,
     );
     const opponentMonsterCount = hasExplicitAttackLimitThisTurn(attacker)
       ? Math.min(opponentMonsters.length, maxAttacks)
@@ -910,7 +923,7 @@ export function markAttackUsed(
     // In multi-attack mode, check if there are still unattacked monsters
     const opponent = attacker.owner === "player" ? this.bot : this.player;
     const opponentMonsters = (opponent?.field || []).filter(
-      (m) => m && !m.isFacedown
+      (m) => m && !m.isFacedown,
     );
     const attackedMonsters = attacker.attackedMonstersThisTurn || new Set();
     const unattackedCount = opponentMonsters.filter((m) => {

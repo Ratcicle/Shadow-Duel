@@ -5,11 +5,11 @@ import type { ChainEffect } from "../../contracts/chainRuntime.js";
 import type { CanonicalZone } from "../../contracts/zones.js";
 type Owner = string | { id?: string; name?: string };
 export interface BurningWestDefenseCard {
-  id?: number; name?: string; cardKind?: string | null; type?: string | null; archetype?: string | null; archetypes?: string[]; description?: string; text?: string; effectText?: string;
+  id?: number | undefined; name?: string | undefined; cardKind?: string | null | undefined; type?: string | null | undefined; archetype?: string | null | undefined; archetypes?: string[] | undefined; description?: string | undefined; text?: string; effectText?: string;
   card?: BurningWestDefenseCard; instanceId?: string | number | null; uuid?: string | number | null;
   owner?: Owner | null; controller?: Owner | null; player?: Owner | null;
-  faceUp?: boolean; faceDown?: boolean; isFacedown?: boolean; position?: string | null; battlePosition?: string;
-  atk?: number; def?: number; currentAtk?: number; currentDef?: number; tempAtk?: number; tempDef?: number; tempAtkBoost?: number; tempDefBoost?: number; equipAtkBonus?: number; equipDefBonus?: number; level?: number; monsterType?: string | null;
+  faceUp?: boolean; faceDown?: boolean; isFacedown?: boolean | undefined; position?: string | null | undefined; battlePosition?: string;
+  atk?: number | undefined; def?: number | undefined; currentAtk?: number; currentDef?: number; tempAtk?: number; tempDef?: number; tempAtkBoost?: number; tempDefBoost?: number; equipAtkBonus?: number; equipDefBonus?: number; level?: number | undefined; monsterType?: string | null;
   equippedCards?: BurningWestDefenseCard[]; equips?: BurningWestDefenseCard[]; equipCards?: BurningWestDefenseCard[]; attachedCards?: BurningWestDefenseCard[];
   statuses?: object; flags?: { burningPeacemaker?: unknown; declaredType?: unknown }; declaredType?: unknown; selectedType?: unknown; effects?: readonly unknown[];
 }
@@ -22,27 +22,27 @@ type Player = BurningWestDefensePlayer;
 type LegacyGame = { player1?: Player; player2?: Player; fieldSpell?: Card | null; getOpponent?(player: Player | null | undefined): Player | null };
 type Game = AIState | LegacyGame;
 export interface BurningWestDefenseAnalysis {
- player?: Player | null; opponent?: Player | null; game?: Game | null; currentAttacker?: Card; currentDefender?: Card; activeDeclaredTypes?: unknown[]; declaredTypes?: unknown[]; activeTypeDeclarations?: unknown[]; battleRewardLive?: boolean; threatenedCards?: unknown; fieldSpell?: Card | null; underPressure?: boolean; oppPressure?: boolean; opponentPressure?: boolean; lethalThreat?: boolean;
+ player?: Player | null; opponent?: Player | null; game?: Game | null | undefined; currentAttacker?: Card; currentDefender?: Card; activeDeclaredTypes?: unknown[]; declaredTypes?: unknown[]; activeTypeDeclarations?: unknown[]; battleRewardLive?: boolean | undefined; threatenedCards?: unknown; fieldSpell?: Card | null; underPressure?: boolean | undefined; oppPressure?: boolean; opponentPressure?: boolean; lethalThreat?: boolean;
 }
 type Analysis = BurningWestDefenseAnalysis;
 type CardCandidates = { destroyedCards?: unknown; cardsToDestroy?: unknown; wouldDestroyCards?: unknown; targetCards?: unknown; targets?: unknown };
-type Attack = { attacker?: Card | null; attackingMonster?: Card | null; defender?: Card | null; target?: Card | null; attackTarget?: Card | null; directAttack?: boolean; isDirectAttack?: boolean };
+type Attack = { attacker?: Card | null | undefined; attackingMonster?: Card | null; defender?: Card | null | undefined; target?: Card | null | undefined; attackTarget?: Card | null; directAttack?: boolean; isDirectAttack?: boolean };
 export interface BurningWestDefenseContext extends CardCandidates, Attack {
- game?: Game | null; player?: Player | null; analysis?: Analysis; attack?: Attack; battle?: Attack; battleContext?: Attack; combat?: Attack; attackMonster?: Card; defendingMonster?: Card;
+ game?: Game | null | undefined; player?: Player | null; analysis?: Analysis; attack?: Attack; battle?: Attack; battleContext?: Attack; combat?: Attack; attackMonster?: Card; defendingMonster?: Card;
  destructionTargets?: unknown; threatenedCards?: unknown; affectedCards?: unknown; cardToDestroy?: unknown;
- activationContext?: BurningWestDefenseContext | null; actionContext?: CardCandidates | BurningWestActivationContext["actionContext"] | null; preview?: CardCandidates | boolean; context?: BurningWestDefenseContext | null; sourceName?: string; source?: Card | null; effect?: { id?: string } | null; action?: { contextLabel?: string };
+ activationContext?: BurningWestDefenseContext | null; actionContext?: CardCandidates | BurningWestActivationContext["actionContext"] | null; preview?: CardCandidates | boolean; context?: BurningWestDefenseContext | null; sourceName?: string; source?: Card | null | undefined; effect?: { id?: string } | null | undefined; action?: { contextLabel?: string };
  responsePlayer?: Player | null; activatingPlayer?: Player | null; sourcePlayer?: Player | null; actionPlayer?: Player | null; triggerPlayer?: Player | null; contextPlayer?: Player | null; owner?: Player | null;
  lethal?: boolean; wouldBeLethal?: boolean; preventsLethal?: boolean; underPressure?: boolean; cause?: unknown; reason?: unknown; event?: unknown;
 }
 type Context = BurningWestDefenseContext;
-type ThreatInput = { game?: Game | null; player?: Player | null; analysis?: Analysis; context?: Context };
+type ThreatInput = { game?: Game | null | undefined; player?: Player | null | undefined; analysis?: Analysis; context?: Context };
 type Threat = { attacker?: Card | null; defender?: Card | null; lethal?: boolean; highDamage?: boolean; losesDefender?: boolean };
 type Option = { card?: Card; effect?: EffectDefinition | ChainEffect; zone?: CanonicalZone; context?: Context | null };
 type Chain = { getChainSummary?(): Array<{ cardName?: string | null; controllerId?: string | null }> };
 type Evaluation = { reason?: string; ownTarget?: Card | null; opponentTarget?: Card | null; bestCandidate?: Card | null; threat?: Threat };
 type DefenseResponse<Candidate extends Option> = Evaluation & { option: Candidate; pass: boolean; score: number; reason: string; threatenedCards?: Card[] };
 type ActionContext = NonNullable<BurningWestActivationContext["actionContext"]>;
-type BuilderInput = { option?: Option; analysis?: Analysis; context?: Context; evaluation?: Evaluation; buildActivationContext?(card: Card | undefined, analysis: Analysis, options: Omit<BurningWestActivationOptions, "effect"> & { effect?: EffectDefinition | ChainEffect; reason?: string }): BurningWestActivationContext };
+type BuilderInput = { option?: Option; analysis?: Analysis; context?: Context; evaluation?: Evaluation; buildActivationContext?(card: Card | undefined, analysis: Analysis, options: Omit<BurningWestActivationOptions, "effect"> & { effect?: EffectDefinition | ChainEffect | undefined; reason?: string | undefined }): BurningWestActivationContext };
 type ReplacementInput = { game?: Game | null; player?: Player | null; sourceCard?: Card | null; effect?: EffectDefinition; replacementEffect?: unknown; targetCard?: Card | null; cause?: unknown; fromZone?: string; context?: Context; kind?: string; analysis?: Analysis };
 const BW = Object.freeze({
   AMBUSH: "Ambush in Crash Town",
@@ -608,7 +608,7 @@ export function evaluateBurningWestAmbushResponse<Candidate extends Option>(opti
   };
 }
 
-function crashTownBlocksQuickDraw({ player, opponent, analysis = {} }: { player?: Player | null; opponent?: Player | null; analysis?: Analysis }) {
+function crashTownBlocksQuickDraw({ player, opponent, analysis = {} }: { player?: Player | null | undefined; opponent?: Player | null; analysis?: Analysis }) {
   const fieldSpell =
     analysis.fieldSpell || player?.fieldSpell || player?.fieldZone || (analysis.game as LegacyGame | null | undefined)?.fieldSpell || null;
   if (getCardName(fieldSpell) !== BW.CRASH_TOWN) return false;

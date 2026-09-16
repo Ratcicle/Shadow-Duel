@@ -101,9 +101,9 @@ export interface BurningWestActivationContext extends Omit<AIActivationContext, 
 }
 export interface BurningWestActivationOptions extends BurningWestActivationContext {
   effect?: EffectDefinition | null;
-  zone?: CanonicalZone;
-  activationZone?: CanonicalZone;
-  sourceZone?: CanonicalZone;
+  zone?: CanonicalZone | undefined;
+  activationZone?: CanonicalZone | undefined;
+  sourceZone?: CanonicalZone | undefined;
   fromHand?: boolean;
 }
 export type BurningWestActivationAnalysis = Partial<Pick<BurningWestAnalysis, "quickDrawPair" | "bestBattlePlan" | "battleDestroyableOpponent" | "strongestOpponent" | "faceUpOpponentMonsters" | "bestPeacemakerTarget" | "faceUpBurningWestMonsters" | "plannedDeclaredType" | "preferredDeclaredTypes" | "fieldCapacity" | "handBurningWestLevel5OrLower" | "oppPressure" | "hasLikelyDeclaredBattle" | "wantedActive">>;

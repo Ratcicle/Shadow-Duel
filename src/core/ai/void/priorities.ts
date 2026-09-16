@@ -14,10 +14,10 @@ interface Game extends Partial<Omit<AiStateShape, "effectEngine" | "_gameRef" | 
   canUseAsAscensionMaterial?(player: Player, material: StrategyCard): { ok?: boolean } | null;
   checkAscensionRequirements?(player: Player, card: StrategyCard, material: StrategyCard): { ok?: boolean } | null;
 }
-type Analysis = Omit<Partial<ReturnType<typeof buildStrategyAnalysis>>, "phase"> & { phase?: string | null } & { myLP?: number; hollowCount?: number; voidCount?: number; hollowEconomy?: { hollowsInGY?: number } };
+type Analysis = Omit<Partial<ReturnType<typeof buildStrategyAnalysis>>, "phase" | "fieldSpell"> & { fieldSpell?: ReturnType<typeof buildStrategyAnalysis>["fieldSpell"] | undefined; phase?: string | null | undefined } & { myLP?: number; hollowCount?: number; voidCount?: number; hollowEconomy?: { hollowsInGY?: number } };
 type Context = Omit<NonNullable<Parameters<typeof assessSummonEntry>[1]>, "game" | "analysis" | "player" | "bot" | "opponent" | "action"> & {
-  game?: Game | null; analysis?: Analysis | null; player?: Player | null; bot?: Player | null; opponent?: Player | null; source?: Partial<StrategyCard> | null;
-  action?: { type?: string; cannotAttackThisTurn?: boolean; restrictAttackThisTurn?: boolean } | null;
+  game?: Game | null | undefined; analysis?: Analysis | null; player?: Player | null; bot?: Player | null; opponent?: Player | null; source?: Partial<StrategyCard> | null | undefined;
+  action?: { type?: string; cannotAttackThisTurn?: boolean; restrictAttackThisTurn?: boolean } | null | undefined;
   tributeCards?: StrategyCard[]; tributeCount?: number;
 };
 

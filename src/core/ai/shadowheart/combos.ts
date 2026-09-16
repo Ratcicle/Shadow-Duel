@@ -160,11 +160,12 @@ export function detectAvailableCombos(analysis: Analysis, logFn: ((message: stri
         (c.level || 0) <= 4 &&
         c.name !== "Shadow-Heart Imp",
     );
-    if (targets.length > 0) {
+    const target = targets[0];
+    if (target) {
       addCombo("Imp Extender", {
         priority: 8,
         action: { type: "summon", cardName: "Shadow-Heart Imp" },
-        logMessage: `Combo detectado: Imp Extender com ${targets[0].name}`,
+        logMessage: `Combo detectado: Imp Extender com ${target.name}`,
       });
     }
   }

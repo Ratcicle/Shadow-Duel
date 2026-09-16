@@ -270,7 +270,7 @@ export function updateGYPreview(
   if (existing) existing.remove();
 
   if (Array.isArray(player.graveyard) && player.graveyard.length > 0) {
-    const lastCard = player.graveyard[player.graveyard.length - 1];
+    const lastCard = player.graveyard[player.graveyard.length - 1]!;
     const preview = this.createCardElement(lastCard, true);
     preview.classList.add("gy-preview");
     if (lastCard.graveyardEffectActivating === true) {

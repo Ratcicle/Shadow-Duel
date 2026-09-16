@@ -52,7 +52,7 @@ interface PositionChoiceHost {
 }
 
 export interface SpecialSummonPositionOptions {
-  position?: BattlePositionInput | null;
+  position?: (BattlePositionInput | null) | undefined;
 }
 
 /**
@@ -110,7 +110,10 @@ export async function chooseSpecialSummonPosition(
   if (isAI(player)) {
     const strategy = player?.strategy;
     let chosen: BattlePosition = "attack";
-    if (strategy && typeof strategy.chooseSpecialSummonPosition === "function") {
+    if (
+      strategy &&
+      typeof strategy.chooseSpecialSummonPosition === "function"
+    ) {
       const fromStrategy = strategy.chooseSpecialSummonPosition(card, {
         game: this.game,
         player,

@@ -2,7 +2,7 @@ import type { SpecialSummonProcedure } from "../../contracts/cards.js";
 import type { CanonicalZone } from "../../contracts/zones.js";
 
 export interface SpecialSummonEligibilityCard {
-  name?: string | null;
+  name?: (string | null) | undefined;
   cannotBeSpecialSummoned?: boolean;
   specialSummonOnlyBy?: readonly string[] | string | null;
   mustFirstBeSpecialSummonedBy?: readonly string[] | string | null;

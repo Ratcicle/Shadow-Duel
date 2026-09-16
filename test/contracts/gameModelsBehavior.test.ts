@@ -173,7 +173,7 @@ test("Player shuffle uses the Game port and retains the deterministic fallback",
   assert.equal(delegated, true);
   assert.deepEqual(new Set(player.deck), new Set([first, second, third]));
 
-  player.game = undefined;
+  delete player.game;
   player.deck = [first, second, third];
   const originalRandom = Math.random;
   Math.random = (): number => 0;

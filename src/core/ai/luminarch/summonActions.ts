@@ -241,7 +241,7 @@ function getNormalSummonActions(context: LuminarchActionGenerationContext) {
         : [];
     const projectedTributes = projectedTributeIndices
       .map((fieldIndex) => bot.field?.[fieldIndex])
-      .filter(Boolean);
+      .filter((tribute): tribute is SimulatedCardState => Boolean(tribute));
     if (getTributeValueTotal(projectedTributes, card) < tributesNeeded) {
       if (verboseEval && bot?.debug) {
         console.log(
@@ -426,7 +426,9 @@ function getSanctumProtectorActions(context: LuminarchActionGenerationContext) {
   if (usableAegis.length > 0) {
     const chosenAegis = usableAegis[0];
     const protectorIndex = protectorIndices[0];
+    if (!chosenAegis || protectorIndex === undefined) return actions;
     const protectorCard = bot.hand[protectorIndex];
+    if (!protectorCard) return actions;
 
     const oppStrongest = getStrongestAttackThreat(opponent?.field || [], {
       facedownValue: 1500,
@@ -491,6 +493,7 @@ function getCelestialMarshalHandIgnitionActions(context: LuminarchActionGenerati
   if (marshalIndex < 0) return actions;
 
   const marshal = bot.hand[marshalIndex];
+  if (!marshal) return actions;
   const oppStrongest = getStrongestAttackThreat(opponent?.field || [], {
     facedownValue: 1500,
     includeBoosts: false,
@@ -688,11 +691,13 @@ function getMagicSickleGraveyardActions(context: LuminarchActionGenerationContex
     .filter((entry) => entry.score >= 7)
     .sort((a, b) => b.score - a.score);
   if (spellTargets.length === 0) return actions;
+  const bestSpellTarget = spellTargets[0];
+  if (!bestSpellTarget) return actions;
 
   graveyard.forEach((card, graveyardIndex) => {
     if (!card || card.name !== MAGIC_SICKLE_NAME) return;
 
-    const bestSpell = spellTargets[0].card;
+    const bestSpell = bestSpellTarget.card;
     const sickleContext: LuminarchActivationContext = {
       ...(activationContext || {}),
       fromHand: false,
@@ -725,7 +730,7 @@ function getMagicSickleGraveyardActions(context: LuminarchActionGenerationContex
         type: "graveyardMonsterEffect",
         graveyardIndex,
         card,
-        priority: 7 + spellTargets[0].score + macroBuff,
+        priority: 7 + bestSpellTarget.score + macroBuff,
         reason: `sickle_recover_${bestSpell.name}`,
         activationContext: sickleContext,
       }),

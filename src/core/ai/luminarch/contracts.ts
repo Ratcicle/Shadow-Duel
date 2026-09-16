@@ -11,16 +11,16 @@ export interface LuminarchAnalysis {
   graveyard?: SimulatedCardState[];
   deck?: SimulatedCardState[];
   extraDeck?: SimulatedCardState[];
-  oppField?: SimulatedCardState[];
+  oppField?: SimulatedCardState[] | undefined;
   oppHand?: SimulatedCardState[];
   oppSpellTrap?: SimulatedCardState[];
   oppGraveyard?: SimulatedCardState[];
   fieldSpell?: SimulatedCardState | null;
-  oppFieldSpell?: SimulatedCardState | null;
+  oppFieldSpell?: SimulatedCardState | null | undefined;
   bot?: SimulatedPlayerState | null;
   player?: SimulatedPlayerState | null;
-  opponent?: SimulatedPlayerState | null;
-  game?: LuminarchGame | null;
+  opponent?: SimulatedPlayerState | null | undefined;
+  game?: LuminarchGame | null | undefined;
   lp?: number;
   oppLp?: number;
   oppLP?: number;
@@ -62,14 +62,14 @@ export interface LuminarchHooks {
     afterManualDefense?: boolean;
   }): {
     score: number;
-    reason?: string;
+    reason?: string | undefined;
   };
   getTributeRequirementFor?(card: SimulatedCardState, player: SimulatedPlayerState): AITributeRequirement;
   selectBestTributes?(field: SimulatedCardState[], needed: number, card: SimulatedCardState, context?: LuminarchContext): number[];
   shouldSummonMonsterSafely?(card: SimulatedCardState, game: AIState, opponent: SimulatedPlayerState): {
     yes: boolean;
     priority?: number;
-    reason?: string;
+    reason?: string | undefined;
     position?: BattlePosition;
     lancerPlan?: ReturnType<typeof import("./lancerPlanning.js").evaluateRadiantLancerBattlePlan> | null;
   };
@@ -90,7 +90,7 @@ export interface LuminarchContext extends Omit<AIPlanningContext, "profile" | "p
   shouldSummon?: {
     yes?: boolean;
     priority?: number;
-    reason?: string;
+    reason?: string | undefined;
     lancerPlan?: {
       hasLine?: boolean;
       improvesThreatMatchup?: boolean;
@@ -126,29 +126,29 @@ export type LuminarchGame = AIState & {
   canChangePosition?(card: SimulatedCardState): boolean;
   canUseAsAscensionMaterial?(player: SimulatedPlayerState, card: SimulatedCardState): {
     ok: boolean;
-    reason?: string;
+    reason?: string | undefined;
   };
   getAscensionCandidatesForMaterial?(player: SimulatedPlayerState, card: SimulatedCardState): SimulatedCardState[];
   checkAscensionRequirements?(player: SimulatedPlayerState, card: SimulatedCardState, material?: SimulatedCardState): {
     ok: boolean;
-    reason?: string;
+    reason?: string | undefined;
   };
   effectEngine?: {
     canActivate?(card: SimulatedCardState, player: SimulatedPlayerState): {
       ok: boolean;
-      reason?: string;
+      reason?: string | undefined;
     };
     canActivateSpellFromHandPreview?(card: SimulatedCardState, player: SimulatedPlayerState, options?: object): {
       ok: boolean;
-      reason?: string;
+      reason?: string | undefined;
     };
     canActivateFieldSpellEffectPreview?(card: SimulatedCardState, player: SimulatedPlayerState, selections?: unknown, options?: object): {
       ok: boolean;
-      reason?: string;
+      reason?: string | undefined;
     };
     canActivateMonsterEffectPreview?(card: SimulatedCardState, player: SimulatedPlayerState, zone: string, selections?: unknown, options?: object): {
       ok: boolean;
-      reason?: string;
+      reason?: string | undefined;
     };
     canSummonFusion?(card: SimulatedCardState, materials: SimulatedCardState[], player: SimulatedPlayerState, options?: {
       materialInfo?: Array<{
@@ -177,9 +177,9 @@ export interface LuminarchActionGenerationContext extends LuminarchContext {
   };
   bestFinisherPlan?: LuminarchPlan | null;
   fusionOpportunity?: {
-    fusionName?: string | null;
+    fusionName?: string | null | undefined;
     decision: {
-      reason?: string | null;
+      reason?: string | null | undefined;
       priority: number;
     };
     plan: LuminarchPlan;
@@ -200,10 +200,10 @@ export interface LuminarchPlan extends Omit<FinisherPlan, "details"> {
     spellPriority?: number;
     radiantLancerPlan?: object;
     spellIndex?: number;
-    spellCardId?: number;
+    spellCardId?: number | undefined;
     stanceValue?: {
       score: number;
-      reason?: string;
+      reason?: string | undefined;
     };
     hasFortress?: boolean;
     has2800Tank?: boolean;
@@ -215,17 +215,17 @@ export interface LuminarchPlan extends Omit<FinisherPlan, "details"> {
     summonPriority?: number;
     lancerPlan?: ReturnType<typeof import("./lancerPlanning.js").evaluateRadiantLancerBattlePlan>;
     reviveTargets?: Array<string | undefined>;
-    reason?: string;
+    reason?: string | undefined;
   };
 }
 export interface LuminarchLineAction {
   type?: import("../../contracts/ai.js").AIPlannedAction["type"];
   card?: import("../../contracts/cards.js").GameCard | SimulatedCardState | null;
-  cardName?: string;
+  cardName?: string | undefined;
   name?: string;
   index?: number;
   fusionTarget?: string;
-  reason?: string;
+  reason?: string | undefined;
   direct?: boolean;
   targetName?: string | null;
   attackerName?: string;

@@ -73,7 +73,9 @@ export function getZone(player: GamePlayer, zone: CanonicalZone): GameCard[] {
     case "fieldSpell":
       return player.fieldSpell ? [player.fieldSpell] : [];
     case "field":
+      return player.field;
     default:
+      zone satisfies never;
       return player.field;
   }
 }

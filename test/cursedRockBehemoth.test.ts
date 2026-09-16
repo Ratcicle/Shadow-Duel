@@ -116,9 +116,9 @@ test("Cursed Rock Behemoth declara dados, arte, materiais e contratos canônicos
   assert.equal(gain.speed, 1);
   assert.deepEqual(gain.activationZones, ["field"]);
   assert.equal(gain.requireFaceup, true);
-  assert.equal(required(gain.targets)[0].requireFaceup, true);
+  assert.equal(required(required(gain.targets)[0]).requireFaceup, true);
   assert.equal(gain.usagePolicy, "use");
-  assert.deepEqual(required(gain.actions)[0].atkBoostFromTarget, {
+  assert.deepEqual(required(required(gain.actions)[0]).atkBoostFromTarget, {
     targetRef: "cursed_rock_behemoth_atk_target",
     stat: "baseDef",
   });
@@ -128,17 +128,23 @@ test("Cursed Rock Behemoth declara dados, arte, materiais e contratos canônicos
   assert.equal(control.requireSelfAsDestroyed, true);
   assert.equal(control.usagePolicy, "use");
   assert.equal(
-    required(control.targets)[0].targetFromContext,
+    required(required(control.targets)[0]).targetFromContext,
     "battleDestroyer",
   );
-  assert.equal(required(control.targets)[0].zone, "field");
-  assert.equal(required(control.actions)[0].type, "take_control");
-  assert.equal(required(control.actions)[0].duration, "until_end_phase");
+  assert.equal(required(required(control.targets)[0]).zone, "field");
+  assert.equal(required(required(control.actions)[0]).type, "take_control");
   assert.equal(
-    required(control.actions)[1].bindEventTargetRef,
-    required(control.targets)[0].id,
+    required(required(control.actions)[0]).duration,
+    "until_end_phase",
   );
-  assert.equal(required(control.actions)[1].duration, "until_consumed");
+  assert.equal(
+    required(required(control.actions)[1]).bindEventTargetRef,
+    required(required(control.targets)[0]).id,
+  );
+  assert.equal(
+    required(required(control.actions)[1]).duration,
+    "until_consumed",
+  );
 });
 
 test("materiais exigem Regulador TERRA e aceitam não-Reguladores livres", () => {
@@ -283,7 +289,7 @@ test("o Trigger usa somente o destruidor em campo e recusa destruição mútua o
   );
   assert.equal(available.entries.length, 1);
   assert.equal(
-    available.entries[0].effect.id,
+    required(available.entries[0]).effect.id,
     "cursed_rock_behemoth_battle_control",
   );
 
@@ -460,13 +466,13 @@ test("vínculo imediato acompanha a instância após a devolução, consome a pr
     wasFaceupBeforeMove: true,
   });
   assert.equal(triggers.entries.length, 1);
-  assert.equal(triggers.entries[0].card, behemoth);
+  assert.equal(required(triggers.entries[0]).card, behemoth);
   assert.equal(game.temporaryEventEffects.length, 0);
 
   const revived = objectResult(
-    await triggers.entries[0].config.activate(
+    await required(triggers.entries[0]).config.activate(
       null,
-      triggers.entries[0].config.activationContext,
+      required(triggers.entries[0]).config.activationContext,
     ),
   );
   assert.ok(required(revived.success) === true);
@@ -523,7 +529,7 @@ test("simulação preserva base DEF, controle, vínculo por instância e seleç�
 
   const control = getEffect("cursed_rock_behemoth_battle_control");
   applySimulatedActions({
-    actions: [required(control.actions)[0]],
+    actions: [required(required(control.actions)[0])],
     selections: { cursed_rock_behemoth_destroyer: [destroyer] },
     state,
     selfId: "player",
@@ -533,7 +539,7 @@ test("simulação preserva base DEF, controle, vínculo por instância e seleç�
   assert.equal(destroyer.originalOwner, "bot");
   assert.equal(required(state.temporaryControlEffects).length, 1);
 
-  const targetDef = required(control.targets)[0];
+  const targetDef = required(required(control.targets)[0]);
   assert.deepEqual(
     selectSimulatedTargets({
       targets: [targetDef],

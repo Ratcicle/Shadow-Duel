@@ -125,6 +125,7 @@ test("Cheap Necromancy resolve e Invoca a Ficha com os atributos corretos", asyn
   assert.equal(game.player.graveyard.includes(spell), true);
   assert.equal(game.player.field.length, 1);
   const [token] = game.player.field;
+  assert.ok(token);
   assert.equal(token.name, TOKEN_NAME);
   assert.equal(token.cardKind, "monster");
   assert.equal(token.type, "Zombie");
@@ -140,8 +141,8 @@ test("Cheap Necromancy resolve e Invoca a Ficha com os atributos corretos", asyn
   assert.equal(token.lastSummonMethod, "special");
   assert.equal(token.lastSummonedFromZone, "token");
   assert.equal(summonEvents.length, 1);
-  assert.equal(summonEvents[0].method, "special");
-  assert.equal(summonEvents[0].fromZone, "token");
+  assert.equal(required(summonEvents[0]).method, "special");
+  assert.equal(required(summonEvents[0]).fromZone, "token");
   assert.equal(game.chainSystem.getFastEffectState().state, "open");
   assert.equal(game.chainSystem.getChainLength(), 0);
 });
@@ -177,7 +178,7 @@ test("Cheap Necromancy não pode ser ativada sem uma Zona de Monstro livre", (t)
 });
 
 test("a simulação resolve position choice e preserva os dados da Ficha", () => {
-  const action = required(getEffect().actions)[0];
+  const action = required(required(getEffect().actions)[0]);
   const source = simulationCard({ id: getCardData().id, name: CARD_NAME });
   const state = simulationState({
     turnCounter: 3,
@@ -200,6 +201,7 @@ test("a simulação resolve position choice e preserva os dados da Ficha", () =>
 
   assert.equal(state.bot.field.length, 1);
   const [token] = state.bot.field;
+  assert.ok(token);
   assert.equal(token.name, TOKEN_NAME);
   assert.equal(token.type, "Zombie");
   assert.equal(token.attribute, "Dark");
@@ -210,6 +212,6 @@ test("a simulação resolve position choice e preserva os dados da Ficha", () =>
   assert.equal(token.isToken, true);
   assert.equal(token.cannotAttackThisTurn, false);
   assert.equal(events.length, 1);
-  assert.equal(events[0].event, "after_summon");
-  assert.equal(Reflect.get(events[0].payload, "fromZone"), "token");
+  assert.equal(required(events[0]).event, "after_summon");
+  assert.equal(Reflect.get(required(events[0]).payload, "fromZone"), "token");
 });

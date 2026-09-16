@@ -1,5 +1,5 @@
 /**
- * activation/execution.js
+ * activation/execution.ts
  * Effect activation execution methods
  * Functions assume `this` = EffectEngine instance
  */
@@ -10,8 +10,29 @@ import {
   isQuickSpell,
 } from "../../game/spellTrap/quickSpellRules.js";
 import { getCanonicalEffectActivationZones } from "../../chain/legality.js";
+import type { NormalizedActionExecutionResult } from "../../contracts/actionRuntime.js";
+import type { ActivationZone } from "../../contracts/activation.js";
+import type { EffectDefinition } from "../../contracts/effects.js";
+import type { CanonicalSelectionMap } from "../../contracts/selection.js";
+import { asQuickSpellWindowContext } from "./runtime.js";
+import type {
+  ActivationActionExecutionContext,
+  ActivationBlueprintContext,
+  ActivationActionResult,
+  ActivationCard,
+  ActivationConditionContext,
+  ActivationEffectContext,
+  ActivationEngineHost,
+  ActivationExecutionResult,
+  ActivationPlayer,
+  ActivationRuntimeContext,
+  ActivationTargetResolutionContext,
+  QuickSpellWindowContext,
+} from "./runtime.js";
 
-function hasQuickSpellLegalWindowContext(context = {}) {
+function hasQuickSpellLegalWindowContext(
+  context: QuickSpellWindowContext = {},
+): boolean {
   return (
     context.legalWindow === true ||
     context.isChainWindow === true ||
@@ -21,7 +42,9 @@ function hasQuickSpellLegalWindowContext(context = {}) {
   );
 }
 
-function actionsResultFailed(actionsResult) {
+function actionsResultFailed(
+  actionsResult: ActivationActionResult,
+): actionsResult is NormalizedActionExecutionResult & { success: false } {
   return (
     actionsResult &&
     typeof actionsResult === "object" &&
@@ -30,7 +53,9 @@ function actionsResultFailed(actionsResult) {
   );
 }
 
-function buildActionsFailure(actionsResult) {
+function buildActionsFailure(
+  actionsResult: ActivationActionResult,
+): ActivationExecutionResult {
   return {
     success: false,
     needsSelection: false,
@@ -39,7 +64,9 @@ function buildActionsFailure(actionsResult) {
   };
 }
 
-function getCardInstanceId(card) {
+function getCardInstanceId(
+  card: ActivationCard | null | undefined,
+): number | string | null {
   return (
     card?.instanceId ??
     card?._instanceId ??
@@ -50,10 +77,10 @@ function getCardInstanceId(card) {
 }
 
 function canContinueWithCommittedMovedSource(
-  card,
-  activationZone,
-  activationContext = {},
-) {
+  card: ActivationCard,
+  activationZone: ActivationZone,
+  activationContext: ActivationRuntimeContext = {},
+): boolean {
   const snapshot = activationContext?.sourceAtActivation || null;
   if (
     activationContext?.committed !== true ||
@@ -103,10 +130,26 @@ function canContinueWithCommittedMovedSource(
   return true;
 }
 
-function getActivationResolutionTargets(effect, activationContext = {}) {
+function getActivationResolutionTargets(
+  effect: EffectDefinition,
+  activationContext: ActivationRuntimeContext = {},
+) {
   const definitions = Array.isArray(effect?.targets) ? effect.targets : [];
   if (activationContext?.costsPaid !== true) return definitions;
   return definitions.filter((definition) => definition?.intent !== "cost");
+}
+
+function buildActionsSelection(
+  actionsResult: ActivationActionResult & { needsSelection: true },
+): ActivationExecutionResult {
+  return Object.assign(
+    {
+      success: false,
+      needsSelection: true,
+      selectionContract: actionsResult.selectionContract,
+    },
+    actionsResult,
+  );
 }
 
 /**
@@ -115,11 +158,12 @@ function getActivationResolutionTargets(effect, activationContext = {}) {
  * @returns {Promise<Object>} Result with success/needsSelection status
  */
 export async function activateMonsterFromGraveyard(
-  card,
-  player,
-  selections = null,
-  activationContext = {}
-) {
+  this: ActivationEngineHost,
+  card: ActivationCard | null | undefined,
+  player: ActivationPlayer | null | undefined,
+  selections: CanonicalSelectionMap | null = null,
+  activationContext: ActivationRuntimeContext = {},
+): Promise<ActivationExecutionResult> {
   if (!card || !player) {
     return {
       success: false,
@@ -150,11 +194,7 @@ export async function activateMonsterFromGraveyard(
   }
   if (
     (!player.graveyard || !player.graveyard.includes(card)) &&
-    !canContinueWithCommittedMovedSource(
-      card,
-      "graveyard",
-      activationContext,
-    )
+    !canContinueWithCommittedMovedSource(card, "graveyard", activationContext)
   ) {
     return {
       success: false,
@@ -172,7 +212,7 @@ export async function activateMonsterFromGraveyard(
         (e) =>
           e.timing === "ignition" &&
           getCanonicalEffectActivationZones(card, e).includes("graveyard") &&
-          (!requestedEffectId || e.id === requestedEffectId)
+          (!requestedEffectId || e.id === requestedEffectId),
       );
 
   if (!effect) {
@@ -197,7 +237,7 @@ export async function activateMonsterFromGraveyard(
     };
   }
 
-  const normalizedActivationContext = {
+  const normalizedActivationContext: ActivationRuntimeContext = {
     fromHand: activationContext?.fromHand === true,
     activationZone: "graveyard",
     sourceZone: activationContext?.sourceZone || "graveyard",
@@ -218,7 +258,7 @@ export async function activateMonsterFromGraveyard(
     prepareOnly: activationContext?.prepareOnly === true,
   };
 
-  const ctx = {
+  const ctx: ActivationEffectContext = {
     source: card,
     effect,
     player,
@@ -228,7 +268,12 @@ export async function activateMonsterFromGraveyard(
     actionContext: normalizedActivationContext.actionContext || null,
   };
 
-  const condCheck = this.evaluateConditions(effect.conditions, ctx);
+  // The activation pipeline owns this object and forwards it by identity.
+  // Legacy nested context fields stay unknown until each consumer boundary.
+  const condCheck = this.evaluateConditions(
+    effect.conditions,
+    ctx as ActivationConditionContext,
+  );
   if (!condCheck.ok) {
     return {
       success: false,
@@ -239,8 +284,8 @@ export async function activateMonsterFromGraveyard(
 
   const targetResult = this.resolveTargets(
     getActivationResolutionTargets(effect, normalizedActivationContext),
-    ctx,
-    selections
+    ctx as ActivationTargetResolutionContext,
+    selections,
   );
 
   if (targetResult.needsSelection) {
@@ -273,20 +318,15 @@ export async function activateMonsterFromGraveyard(
   // Await applyActions and propagate needsSelection if returned
   const actionsResult = await this.applyActions(
     effect.actions || [],
-    ctx,
-    targetResult.targets || {}
+    ctx as ActivationActionExecutionContext,
+    targetResult.targets || {},
   );
   if (
     actionsResult &&
     typeof actionsResult === "object" &&
     actionsResult.needsSelection
   ) {
-    return {
-      success: false,
-      needsSelection: true,
-      selectionContract: actionsResult.selectionContract,
-      ...actionsResult,
-    };
+    return buildActionsSelection(actionsResult);
   }
   if (actionsResultFailed(actionsResult)) {
     return buildActionsFailure(actionsResult);
@@ -308,11 +348,12 @@ export async function activateMonsterFromGraveyard(
  * @returns {Promise<Object>} Result with success/needsSelection status
  */
 export async function activateFieldSpell(
-  card,
-  player,
-  selections = null,
-  activationContext = {}
-) {
+  this: ActivationEngineHost,
+  card: ActivationCard | null | undefined,
+  player: ActivationPlayer,
+  selections: CanonicalSelectionMap | null = null,
+  activationContext: ActivationRuntimeContext = {},
+): Promise<ActivationExecutionResult> {
   if (!card || card.cardKind !== "spell" || card.subtype !== "field") {
     return {
       success: false,
@@ -332,7 +373,7 @@ export async function activateFieldSpell(
       e &&
       (e.timing === "on_field_activate" ||
         (e.timing === "ignition" &&
-          getCanonicalEffectActivationZones(card, e).includes("fieldSpell")))
+          getCanonicalEffectActivationZones(card, e).includes("fieldSpell"))),
   );
 
   if (!effect) {
@@ -357,7 +398,7 @@ export async function activateFieldSpell(
     };
   }
 
-  const normalizedActivationContext = {
+  const normalizedActivationContext: ActivationRuntimeContext = {
     fromHand: activationContext?.fromHand === true,
     activationZone: "fieldSpell",
     sourceZone: activationContext?.sourceZone || "fieldSpell",
@@ -373,7 +414,7 @@ export async function activateFieldSpell(
     prepareOnly: activationContext?.prepareOnly === true,
   };
 
-  const ctx = {
+  const ctx: ActivationEffectContext = {
     source: card,
     effect,
     player,
@@ -385,8 +426,8 @@ export async function activateFieldSpell(
 
   const targetResult = this.resolveTargets(
     getActivationResolutionTargets(effect, normalizedActivationContext),
-    ctx,
-    selections
+    ctx as ActivationTargetResolutionContext,
+    selections,
   );
 
   if (targetResult.needsSelection) {
@@ -405,7 +446,6 @@ export async function activateFieldSpell(
     };
   }
 
-
   if (normalizedActivationContext.prepareOnly) {
     return {
       success: true,
@@ -420,20 +460,15 @@ export async function activateFieldSpell(
   // Await applyActions and propagate needsSelection if returned
   const actionsResult = await this.applyActions(
     effect.actions || [],
-    ctx,
-    targetResult.targets || {}
+    ctx as ActivationActionExecutionContext,
+    targetResult.targets || {},
   );
   if (
     actionsResult &&
     typeof actionsResult === "object" &&
     actionsResult.needsSelection
   ) {
-    return {
-      success: false,
-      needsSelection: true,
-      selectionContract: actionsResult.selectionContract,
-      ...actionsResult,
-    };
+    return buildActionsSelection(actionsResult);
   }
   if (actionsResultFailed(actionsResult)) {
     return buildActionsFailure(actionsResult);
@@ -443,7 +478,11 @@ export async function activateFieldSpell(
   this.commitEffectUsage(card, player, effect);
   this.game.checkWinCondition();
 
-  await this.handleBlueprintStorageAfterResolution(card, effect, ctx);
+  await this.handleBlueprintStorageAfterResolution(
+    card,
+    effect,
+    ctx as ActivationBlueprintContext,
+  );
 
   return {
     success: true,
@@ -456,15 +495,19 @@ export async function activateFieldSpell(
  * Activate a Spell/Trap card's effect.
  */
 export async function activateSpellTrapEffect(
-  card,
-  player,
-  selections = null,
-  activationZone = "spellTrap",
-  activationContext = {}
-) {
+  this: ActivationEngineHost,
+  card: ActivationCard | null | undefined,
+  player: ActivationPlayer | null | undefined,
+  selections: CanonicalSelectionMap | null = null,
+  activationZone: ActivationZone = "spellTrap",
+  activationContext: ActivationRuntimeContext = {},
+): Promise<ActivationExecutionResult> {
   const logDev =
-    this.game?.devLog && ((tag, detail) => this.game.devLog(tag, detail || {}));
-  const fail = (reason) => {
+    this.game?.devLog &&
+    ((tag: string, detail?: object) => this.game.devLog?.(tag, detail || {}));
+  const fail = (
+    reason: string | null | undefined,
+  ): ActivationExecutionResult => {
     if (logDev) {
       logDev("SPELL_TRAP_ACTIVATION_FAILED", {
         card: card?.name || "Unknown",
@@ -519,7 +562,10 @@ export async function activateSpellTrapEffect(
       return fail("Card must be face-up to activate.");
     } else {
       const setTurn = card.setTurn ?? card.turnSetOn ?? null;
-      if (setTurn === null || this.game?.turnCounter <= setTurn) {
+      if (
+        setTurn === null ||
+        (this.game?.turnCounter ?? Number.NaN) <= setTurn
+      ) {
         return fail("Spell cannot be activated this turn.");
       }
       flipAfterChecks = true;
@@ -528,23 +574,24 @@ export async function activateSpellTrapEffect(
   if (this.game.turn !== player.id) {
     return fail("Not your turn.");
   }
-  const inMainPhase = this.game.phase === "main1" || this.game.phase === "main2";
-  if (
-    !inMainPhase &&
-    !quickSpellFromHand &&
-    !quickSpellFromSet
-  ) {
+  const inMainPhase =
+    this.game.phase === "main1" || this.game.phase === "main2";
+  if (!inMainPhase && !quickSpellFromHand && !quickSpellFromSet) {
     return fail("Effect can only be activated during Main Phase.");
   }
   if (
     (quickSpellFromHand || quickSpellFromSet) &&
     (!inMainPhase || this.game.turn !== player.id) &&
-    !hasQuickSpellLegalWindowContext(activationContext?.quickSpellContext)
+    !hasQuickSpellLegalWindowContext(
+      activationContext?.quickSpellContext as
+        | QuickSpellWindowContext
+        | undefined,
+    )
   ) {
     return fail("No legal Quick Spell activation window is open.");
   }
 
-  const normalizedActivationContext = {
+  const normalizedActivationContext: ActivationRuntimeContext = {
     fromHand,
     activationZone,
     sourceZone:
@@ -564,7 +611,7 @@ export async function activateSpellTrapEffect(
     resolutionSelections: activationContext?.resolutionSelections || {},
     prepareOnly: activationContext?.prepareOnly === true,
   };
-  let effect = null;
+  let effect: EffectDefinition | null = null;
 
   logDev?.("SPELL_TRAP_ACTIVATION_ATTEMPT", {
     card: card.name,
@@ -660,6 +707,10 @@ export async function activateSpellTrapEffect(
     }
   }
 
+  if (!effect) {
+    return fail("No activation effect defined.");
+  }
+
   if (quickSpellFromSet && card.isFacedown === true) {
     const quickSpellContext = {
       ...(normalizedActivationContext.quickSpellContext || {}),
@@ -685,12 +736,12 @@ export async function activateSpellTrapEffect(
     const allowedPhases = Array.isArray(effect.requirePhase)
       ? effect.requirePhase
       : [effect.requirePhase];
-    if (!allowedPhases.includes(this.game?.phase)) {
+    if (!allowedPhases.some((phase) => phase === this.game?.phase)) {
       return fail("Effect cannot be activated this phase.");
     }
   }
 
-  const ctx = {
+  const ctx: ActivationEffectContext = {
     source: card,
     player,
     opponent: this.game.getOpponent(player),
@@ -702,7 +753,10 @@ export async function activateSpellTrapEffect(
     targetSelections: normalizedActivationContext.targetSelections,
   };
 
-  const condCheck = this.evaluateConditions(effect.conditions, ctx);
+  const condCheck = this.evaluateConditions(
+    effect.conditions,
+    ctx as ActivationConditionContext,
+  );
   if (!condCheck.ok) {
     return fail(condCheck.reason);
   }
@@ -714,8 +768,8 @@ export async function activateSpellTrapEffect(
 
   const targetResult = this.resolveTargets(
     getActivationResolutionTargets(effect, normalizedActivationContext),
-    ctx,
-    selections
+    ctx as ActivationTargetResolutionContext,
+    selections,
   );
   if (targetResult.needsSelection) {
     logDev?.("SPELL_TRAP_NEEDS_SELECTION", {
@@ -750,7 +804,7 @@ export async function activateSpellTrapEffect(
     await this.game?.presentSpellTrapActivationFlip?.(
       card,
       player,
-      activationZone,
+      "spellTrap",
     );
   }
 
@@ -779,20 +833,15 @@ export async function activateSpellTrapEffect(
   });
   const actionsResult = await this.applyActions(
     effect.actions || [],
-    ctx,
-    targetResult.targets || {}
+    ctx as ActivationActionExecutionContext,
+    targetResult.targets || {},
   );
   if (
     actionsResult &&
     typeof actionsResult === "object" &&
     actionsResult.needsSelection
   ) {
-    return {
-      success: false,
-      needsSelection: true,
-      selectionContract: actionsResult.selectionContract,
-      ...actionsResult,
-    };
+    return buildActionsSelection(actionsResult);
   }
   if (actionsResultFailed(actionsResult)) {
     return buildActionsFailure(actionsResult);
@@ -805,7 +854,11 @@ export async function activateSpellTrapEffect(
   this.commitEffectUsage(card, player, effect);
   this.game.checkWinCondition();
 
-  await this.handleBlueprintStorageAfterResolution(card, effect, ctx);
+  await this.handleBlueprintStorageAfterResolution(
+    card,
+    effect,
+    ctx as ActivationBlueprintContext,
+  );
 
   logDev?.("SPELL_TRAP_ACTIVATION_RESOLVED", {
     card: card.name,
@@ -823,12 +876,13 @@ export async function activateSpellTrapEffect(
  * Activate a monster's ignition effect from field or hand.
  */
 export async function activateMonsterEffect(
-  card,
-  player,
-  selections = null,
-  activationZone = "field",
-  activationContext = {}
-) {
+  this: ActivationEngineHost,
+  card: ActivationCard | null | undefined,
+  player: ActivationPlayer | null | undefined,
+  selections: CanonicalSelectionMap | null = null,
+  activationZone: ActivationZone = "field",
+  activationContext: ActivationRuntimeContext = {},
+): Promise<ActivationExecutionResult> {
   if (!card || !player) {
     return {
       success: false,
@@ -910,7 +964,7 @@ export async function activateMonsterEffect(
           (activationZone === "hand"
             ? getCanonicalEffectActivationZones(card, e).includes("hand")
             : getCanonicalEffectActivationZones(card, e).includes("field")) &&
-          (!requestedEffectId || e.id === requestedEffectId)
+          (!requestedEffectId || e.id === requestedEffectId),
       );
 
   if (!effect) {
@@ -935,12 +989,17 @@ export async function activateMonsterEffect(
     };
   }
 
-  const damageStepCheck = canActivateDuringDamageStep(effect, card, {
-    ...(activationContext?.context || {}),
-    ...(activationContext?.actionContext || {}),
+  const damageStepContext: QuickSpellWindowContext = {
+    ...asQuickSpellWindowContext(activationContext?.context),
+    ...asQuickSpellWindowContext(activationContext?.actionContext),
     activationZone,
     phase: this.game.phase || null,
-  });
+  };
+  const damageStepCheck = canActivateDuringDamageStep(
+    effect,
+    card,
+    damageStepContext,
+  );
   if (!damageStepCheck.ok) {
     return {
       success: false,
@@ -951,7 +1010,7 @@ export async function activateMonsterEffect(
 
   const fromHand =
     activationContext?.fromHand === true || activationZone === "hand";
-  const normalizedActivationContext = {
+  const normalizedActivationContext: ActivationRuntimeContext = {
     fromHand,
     activationZone,
     sourceZone:
@@ -973,7 +1032,7 @@ export async function activateMonsterEffect(
     prepareOnly: activationContext?.prepareOnly === true,
   };
 
-  const ctx = {
+  const ctx: ActivationEffectContext = {
     source: card,
     player,
     opponent: this.game.getOpponent(player),
@@ -982,7 +1041,10 @@ export async function activateMonsterEffect(
     actionContext: normalizedActivationContext.actionContext || null,
   };
 
-  const condCheck = this.evaluateConditions(effect.conditions, ctx);
+  const condCheck = this.evaluateConditions(
+    effect.conditions,
+    ctx as ActivationConditionContext,
+  );
   if (!condCheck.ok) {
     return {
       success: false,
@@ -1007,8 +1069,8 @@ export async function activateMonsterEffect(
 
   const targetResult = this.resolveTargets(
     getActivationResolutionTargets(effect, normalizedActivationContext),
-    ctx,
-    selections
+    ctx as ActivationTargetResolutionContext,
+    selections,
   );
   if (targetResult.needsSelection) {
     return {
@@ -1026,7 +1088,6 @@ export async function activateMonsterEffect(
     };
   }
 
-
   if (normalizedActivationContext.prepareOnly) {
     return {
       success: true,
@@ -1040,20 +1101,15 @@ export async function activateMonsterEffect(
 
   const actionsResult = await this.applyActions(
     effect.actions || [],
-    ctx,
-    targetResult.targets || {}
+    ctx as ActivationActionExecutionContext,
+    targetResult.targets || {},
   );
   if (
     actionsResult &&
     typeof actionsResult === "object" &&
     actionsResult.needsSelection
   ) {
-    return {
-      success: false,
-      needsSelection: true,
-      selectionContract: actionsResult.selectionContract,
-      ...actionsResult,
-    };
+    return buildActionsSelection(actionsResult);
   }
   if (actionsResultFailed(actionsResult)) {
     return buildActionsFailure(actionsResult);
