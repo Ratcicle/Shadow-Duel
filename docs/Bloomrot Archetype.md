@@ -1,16 +1,18 @@
 # Bloomrot — Catálogo do Arquétipo
 
-Fonte dos textos: `src/data/cards/bloomrot.ts` via fachada `src/data/cards.ts` (1x cada carta do arquetipo).
+Fonte dos dados canônicos: `src/data/cards/bloomrot.ts` via `src/data/cards.ts`.
+Nomes e textos PT-BR: `public/locales/pt-br.json`.
 
 ## Resumo
 
-O arquetipo **Bloomrot** e focado em Marcadores de Esporo, fichas Planta e controle gradual do campo. O plano central e espalhar Marcadores de Esporo nos cards do oponente, converter esses marcadores em debuffs, destruicao, ganho de PV, protecao e Invocacoes por Ascensao/Fusao.
+Bloomrot reúne 20 cartas com foco em Marcadores de Esporo, Fichas e controle gradual do campo.
 
 **Estilo de jogo:**
-- **Marcadores de Esporo**: quase todas as cartas colocam, removem ou escalam com Spore Counters.
-- **Controle progressivo**: monstros do oponente perdem ATK/DEF, podem ter ataques bloqueados ou efeitos negados.
-- **Fichas como recurso**: `Bloomrot Token` ajuda a estender campo, habilitar `Bloomrot Rootling` e servir de material.
-- **Payoffs de Extra Deck**: Ascensions usam progresso de efeitos/counters; a Fusao exige 4 monstros, incluindo 1 Token.
+
+- distribui Marcadores de Esporo;
+- converte marcadores em redução de atributos, remoção e ganho de PV;
+- utiliza Fichas como recurso e material;
+- desenvolve Ascensões e Fusão.
 
 ---
 
@@ -20,120 +22,209 @@ O arquetipo **Bloomrot** e focado em Marcadores de Esporo, fichas Planta e contr
 
 #### Monstros (8)
 
-| ID  | Nome                    | Tipo  | Atributo | Nivel | ATK  | DEF  |
-| --- | ----------------------- | ----- | -------- | ----- | ---- | ---- |
-| 401 | Bloomrot Sporeling      | Plant | Earth    | 2     | 1200 | 1500 |
-| 402 | Bloomrot Rootling       | Plant | Earth    | 3     | 1200 | 1600 |
-| 403 | Bloomrot Myco-Weaver    | Plant | Earth    | 3     | 1400 | 1700 |
-| 404 | Bloomrot Rot-Stag       | Plant | Earth    | 5     | 2000 | 1900 |
-| 405 | Bloomrot Carrioncap     | Plant | Earth    | 4     | 1600 | 900  |
-| 406 | Bloomrot Moldmender     | Plant | Earth    | 2     | 500  | 2000 |
-| 407 | Bloomrot Gravecap Widow | Plant | Earth    | 6     | 2100 | 2100 |
-| 408 | Bloomrot Ancient Husk   | Plant | Earth    | 7     | 2200 | 2600 |
+| ID | PT-BR | Canônico | Nível | Tipo | Atributo | ATK | DEF |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 401 | Podriflora Esporófito | Bloomrot Sporeling | 2 | Plant | Earth | 1200 | 1500 |
+| 402 | Podriflora Radícula | Bloomrot Rootling | 3 | Plant | Earth | 1200 | 1600 |
+| 403 | Podriflora Tecelão-Micélio | Bloomrot Myco-Weaver | 3 | Plant | Earth | 1400 | 1700 |
+| 404 | Podriflora Cervo-Pútrido | Bloomrot Rot-Stag | 5 | Plant | Earth | 2000 | 1900 |
+| 405 | Podriflora Chapéu-Carniceiro | Bloomrot Carrioncap | 4 | Plant | Earth | 1600 | 900 |
+| 406 | Podriflora Remenda-Mofo | Bloomrot Moldmender | 2 | Plant | Earth | 500 | 2000 |
+| 407 | Podriflora Viúva-Cogutumba | Bloomrot Gravecap Widow | 6 | Plant | Earth | 2100 | 2100 |
+| 408 | Podriflora Casca Ancestral | Bloomrot Ancient Husk | 7 | Plant | Earth | 2200 | 2600 |
 
 #### Magias (7)
 
-| ID  | Nome                    | Subtipo    |
-| --- | ----------------------- | ---------- |
-| 409 | Bloomrot Spore Cloud    | Normal     |
-| 410 | Bloomrot Living Colony  | Field      |
-| 411 | Bloomrot Compost Ritual | Normal     |
-| 412 | Bloomrot Root Network   | Continuous |
-| 413 | Bloomrot Fungal Armor   | Equip      |
-| 414 | Bloomrot Harvest        | Normal     |
-| 415 | Bloomrot Overgrowth     | Equip      |
+| ID | PT-BR | Canônico | Subtipo |
+| --- | --- | --- | --- |
+| 409 | Podriflora Nuvem de Esporos | Bloomrot Spore Cloud | Normal |
+| 410 | Podriflora Colônia Viva | Bloomrot Living Colony | Campo |
+| 411 | Podriflora Ritual de Compostagem | Bloomrot Compost Ritual | Normal |
+| 412 | Podriflora Rede de Raízes | Bloomrot Root Network | Contínua |
+| 413 | Podriflora Armadura Fúngica | Bloomrot Fungal Armor | Equipamento |
+| 414 | Colheita Podriflora | Bloomrot Harvest | Normal |
+| 415 | Podriflora Supercrescimento | Bloomrot Overgrowth | Equipamento |
 
 #### Armadilhas (2)
 
-| ID  | Nome                        | Subtipo    |
-| --- | --------------------------- | ---------- |
-| 416 | Bloomrot Sudden Germination | Normal     |
-| 417 | Bloomrot Rotting Ground     | Continuous |
+| ID | PT-BR | Canônico | Subtipo |
+| --- | --- | --- | --- |
+| 416 | Podriflora Germinação Súbita | Bloomrot Sudden Germination | Normal |
+| 417 | Podriflora Solo Apodrecido | Bloomrot Rotting Ground | Contínua |
 
 ### Extra Deck (3)
 
-| ID  | Nome                               | Tipo      | Atributo | Nivel | ATK  | DEF  |
-| --- | ---------------------------------- | --------- | -------- | ----- | ---- | ---- |
-| 418 | Bloomrot Ancient Mycelium          | Ascension | Earth    | 6     | 2100 | 2600 |
-| 419 | Bloomrot Queen of the Hollow Grove | Ascension | Earth    | 8     | 2500 | 3000 |
-| 420 | Bloomrot Devourer of Dead Roots    | Fusion    | Dark     | 11    | 0    | 3000 |
+| ID | PT-BR | Canônico | Tipo | Nível | Tipo de monstro | Atributo | ATK | DEF |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 418 | Podriflora Micélio Ancestral — Ascensão | Bloomrot Ancient Mycelium | Ascensão | 6 | Plant | Earth | 2100 | 2600 |
+| 419 | Podriflora Rainha do Bosque Oco | Bloomrot Queen of the Hollow Grove | Ascensão | 8 | Plant | Earth | 2500 | 3000 |
+| 420 | Podriflora Devorador de Raízes Mortas | Bloomrot Devourer of Dead Roots | Fusão | 11 | Plant | Dark | 0 | 3000 |
 
-**Material de Ascension (418):** 1 monstro "Bloomrot" (requisito: o material deve ter ativado seu efeito 2 vezes neste Duelo).
+### Tokens / cartas auxiliares
 
-**Material de Ascension (419):** 1 monstro "Bloomrot" de Nivel 5 ou maior (requisito: deve haver pelo menos 8 Marcadores de Esporo no campo).
+| Canônico | Nível | Tipo | Atributo | ATK | DEF | Gerado por (ID) |
+| --- | --- | --- | --- | --- | --- | --- |
+| Bloomrot Token | 1 | Plant | Earth | 0 | 0 | 403, 410, 416 |
 
-**Materiais de Fusao (420):** 4 monstros "Bloomrot", incluindo 1 Token.
+Tokens são gerados por efeitos e não entram na contagem de cartas do Main Deck ou Extra Deck. Seus nomes localizados aparecem nos textos PT-BR das cartas que os geram.
 
-**Ficha gerada:** `Bloomrot Token` (Plant/EARTH/Nivel 1/ATK 0/DEF 0).
+---
+
+## Materiais e procedimentos do Extra Deck
+
+### Fusões
+
+**420 — Bloomrot Devourer of Dead Roots**
+
+> Materiais de Fusão: 4 monstros "Podriflora", incluindo 1 Ficha.
+
+### Ascensões
+
+**418 — Bloomrot Ancient Mycelium**
+
+> Ascensão: 1 monstro "Podriflora". Requisito: o material deve ter ativado seu efeito 2 vezes neste Duelo.
+
+**419 — Bloomrot Queen of the Hollow Grove**
+
+> Ascensão: 1 monstro "Podriflora" de Nível 5 ou maior. Requisito: deve haver pelo menos 8 Marcadores de Esporo no campo.
 
 ---
 
 ## Efeitos & Detalhes
 
-### Monstros (Main Deck)
+### Monstros do Main Deck
 
-**401 - Bloomrot Sporeling** (L2 Earth Plant | ATK 1200 / DEF 1500)
-> If this card is Normal or Special Summoned: You can Special Summon 1 "Bloomrot Rootling" from your hand or Deck in Defense Position, and if you do, place 1 Spore Counter on each face-up card your opponent controls. If this card leaves the field: You can add 1 "Bloomrot" Spell from your Deck to your hand. You can only use each effect of "Bloomrot Sporeling" once per turn.
+**401 — Podriflora Esporófito / Bloomrot Sporeling**
 
-**402 - Bloomrot Rootling** (L3 Earth Plant | ATK 1200 / DEF 1600)
-> If you control a "Bloomrot Token", you can Special Summon this card from your hand. Once per turn: You can target 1 face-up card your opponent controls; place Spore Counters on it equal to the number of "Bloomrot" monsters you control.
+Nível 2, Plant, Earth, 1200/1500.
 
-**403 - Bloomrot Myco-Weaver** (L3 Earth Plant | ATK 1400 / DEF 1700)
-> If this card is Normal or Special Summoned: Special Summon 1 "Bloomrot Token" (Plant/EARTH/Level 1/ATK 0/DEF 0) in Defense Position. Once per turn: You can send 1 "Bloomrot" monster you control to the Graveyard; target 1 face-up card your opponent controls; place 3 Spore Counters on it.
+> Se este card for Invocado por Invocação-Normal ou Especial: você pode Invocar por Invocação-Especial 1 "Podriflora Radícula" da sua mão ou Deck em Posição de Defesa e, se isso acontecer, coloque 1 Marcador de Esporo em cada card com a face para cima que seu oponente controla. Se este card deixar o campo: você pode adicionar 1 Magia "Podriflora" do seu Deck à sua mão. Você só pode usar cada efeito de "Podriflora Esporófito" uma vez por turno.
 
-**404 - Bloomrot Rot-Stag** (L5 Earth Plant | ATK 2000 / DEF 1900)
-> You can Special Summon this card from your hand by removing 2 Spore Counters from the field. If this card is Special Summoned: target 1 face-up card your opponent controls; place 1 Spore Counter on it. If this card battles a monster with a Spore Counter, this card gains 500 ATK during damage calculation. You can only use each effect of "Bloomrot Rot-Stag" once per turn.
+**402 — Podriflora Radícula / Bloomrot Rootling**
 
-**405 - Bloomrot Carrioncap** (L4 Earth Plant | ATK 1600 / DEF 900)
-> Once per turn: You can target 1 face-up monster your opponent controls; place 1 Spore Counter on it, then that monster loses 300 ATK/DEF for each Spore Counter on it until the end of this turn. If this card destroys a monster with a Spore Counter by battle: place 1 Spore Counter on 1 face-up card your opponent controls. You can only use each effect of "Bloomrot Carrioncap" once per turn.
+Nível 3, Plant, Earth, 1200/1600.
 
-**406 - Bloomrot Moldmender** (L2 Earth Plant | ATK 500 / DEF 2000)
-> Before damage calculation, if this card is being attacked by an opponent's monster: place 2 Spore Counters on the attacking monster. If this card is destroyed by battle: You can Special Summon 1 "Bloomrot" monster from your hand or Deck with Level less than or equal to the total number of Spore Counters on the field.
+> Se você controlar uma Ficha "Podriflora", você pode Invocar este card por Invocação-Especial da sua mão. Uma vez por turno: escolha 1 card com a face para cima que seu oponente controla; coloque Marcadores de Esporo nele igual ao número de monstros "Podriflora" que você controla.
 
-**407 - Bloomrot Gravecap Widow** (L6 Earth Plant | ATK 2100 / DEF 2100)
-> You can Special Summon this card from your hand by removing 3 Spore Counters from the field. If this card is Summoned: target 1 monster with a Spore Counter your opponent controls; destroy it. Once per turn, if a monster with a Spore Counter your opponent controls is destroyed: place 1 Spore Counter on 1 face-up card your opponent controls. You can only use each effect of "Bloomrot Gravecap Widow" once per turn.
+**403 — Podriflora Tecelão-Micélio / Bloomrot Myco-Weaver**
 
-**408 - Bloomrot Ancient Husk** (L7 Earth Plant | ATK 2200 / DEF 2600)
-> You can Special Summon this card from your hand by removing 4 Spore Counters from the field. Once per turn: place 1 Spore Counter on up to 2 face-up monsters your opponent controls. If a monster with a Spore Counter is destroyed: place 1 Spore Counter on up to 2 face-up monsters your opponent controls. You can only use each effect of "Bloomrot Ancient Husk" once per turn.
+Nível 3, Plant, Earth, 1400/1700.
+
+> Se este card for Invocado por Invocação-Normal ou Especial: Invoque por Invocação-Especial 1 "Ficha Podriflora" (Planta/TERRA/Nível 1/ATK 0/DEF 0) em Posição de Defesa. Uma vez por turno: você pode enviar 1 monstro "Podriflora" que você controla ao Cemitério; escolha 1 card com a face para cima que seu oponente controla; coloque 3 Marcadores de Esporo nele.
+
+**404 — Podriflora Cervo-Pútrido / Bloomrot Rot-Stag**
+
+Nível 5, Plant, Earth, 2000/1900.
+
+> Você pode Invocar este card por Invocação-Especial da sua mão ao remover 2 Marcadores de Esporo do campo. Se este card for Invocado por Invocação-Especial: escolha 1 card com a face para cima que seu oponente controla; coloque 1 Marcador de Esporo nele. Se este card batalhar um monstro com Marcador de Esporo, este card ganha 500 de ATK durante o cálculo de dano. Você só pode usar cada efeito de "Podriflora Cervo-Pútrido" uma vez por turno.
+
+**405 — Podriflora Chapéu-Carniceiro / Bloomrot Carrioncap**
+
+Nível 4, Plant, Earth, 1600/900.
+
+> Uma vez por turno: escolha 1 monstro com a face para cima que seu oponente controla; coloque 1 Marcador de Esporo nele e, depois, esse monstro perde 300 de ATK/DEF para cada Marcador de Esporo nele até o final deste turno. Se este card destruir um monstro com Marcador de Esporo em batalha: coloque 1 Marcador de Esporo em 1 card com a face para cima que seu oponente controla. Você só pode usar cada efeito de "Podriflora Chapéu-Carniceiro" uma vez por turno.
+
+**406 — Podriflora Remenda-Mofo / Bloomrot Moldmender**
+
+Nível 2, Plant, Earth, 500/2000.
+
+> Antes do cálculo de dano, se este card for atacado por um monstro do oponente: coloque 2 Marcadores de Esporo no monstro atacante. Se este card for destruído em batalha: você pode Invocar por Invocação-Especial da sua mão ou Deck 1 monstro "Podriflora" de Nível igual ou menor ao total de Marcadores de Esporo no campo.
+
+**407 — Podriflora Viúva-Cogutumba / Bloomrot Gravecap Widow**
+
+Nível 6, Plant, Earth, 2100/2100.
+
+> Você pode Invocar este card por Invocação-Especial da sua mão removendo 3 Marcadores de Esporo do campo. Se este card for Invocado: escolha 1 monstro com Marcador de Esporo que seu oponente controla; destrua-o. Uma vez por turno, se um monstro com Marcador de Esporo que seu oponente controla for destruído: coloque 1 Marcador de Esporo em 1 card com a face para cima que seu oponente controla. Você só pode usar cada efeito de "Podriflora Viúva-Cogutumba" uma vez por turno.
+
+**408 — Podriflora Casca Ancestral / Bloomrot Ancient Husk**
+
+Nível 7, Plant, Earth, 2200/2600.
+
+> Você pode Invocar este card por Invocação-Especial da sua mão removendo 4 Marcadores de Esporo do campo. Uma vez por turno: coloque 1 Marcador de Esporo em até 2 monstros com a face para cima que seu oponente controla. Se um monstro com Marcador de Esporo for destruído: coloque 1 Marcador de Esporo em até 2 monstros com a face para cima que seu oponente controla. Você só pode usar cada efeito de "Podriflora Casca Ancestral" uma vez por turno.
 
 ### Magias
 
-**409 - Bloomrot Spore Cloud** (Normal Spell)
-> Target up to 2 face-up monsters your opponent controls; place 2 Spore Counters on each of them. Then, those monsters lose 500 ATK/DEF until the end of this turn. You can only activate 1 "Bloomrot Spore Cloud" per turn.
+**409 — Podriflora Nuvem de Esporos / Bloomrot Spore Cloud**
 
-**410 - Bloomrot Living Colony** (Field Spell)
-> Once per turn: target 1 face-up card your opponent controls; place 1 Spore Counter on it. Monsters your opponent controls lose 100 ATK/DEF for each Spore Counter on them. Each time one or more Spore Counters are removed from the field: Special Summon 1 "Bloomrot Token" (Plant/EARTH/Level 1/ATK 0/DEF 0) in Defense Position. If a "Bloomrot Token" you control is destroyed: place 1 Spore Counter on each face-up card your opponent controls.
+Magia Normal.
 
-**411 - Bloomrot Compost Ritual** (Normal Spell)
-> Target 1 face-up card your opponent controls; place 1 Spore Counter on it, then place 1 additional Spore Counter on it for each "Bloomrot" monster you control. Then, gain 300 LP for each Spore Counter placed by this effect. You can only activate 1 "Bloomrot Compost Ritual" per turn.
+> Escolha até 2 monstros com a face para cima que seu oponente controla; coloque 2 Marcadores de Esporo em cada um deles. Depois, os monstros escolhidos perdem 500 de ATK/DEF até o final deste turno. Você só pode ativar 1 "Podriflora Nuvem de Esporos" por turno.
 
-**412 - Bloomrot Root Network** (Continuous Spell)
-> Monsters your opponent controls with 5 or more Spore Counters cannot declare attacks. Once per turn: You can activate 1 of these effects; remove 2 Spore Counters from the field; add 1 Level 4 or lower "Bloomrot" monster from your Deck to your hand; or remove 3 Spore Counters from the field; add 1 "Bloomrot" card from your Graveyard to your hand.
+**410 — Podriflora Colônia Viva / Bloomrot Living Colony**
 
-**413 - Bloomrot Fungal Armor** (Equip Spell)
-> Equip only to a "Bloomrot" monster you control. The equipped monster gains 500 DEF and 100 ATK for each Spore Counter on the field. Once per turn, if the equipped monster would be destroyed by battle or card effect, you can remove 1 Spore Counter from the field instead. If this card is sent from the field to the Graveyard: place 1 Spore Counter on 1 face-up monster on the field.
+Magia de Campo.
 
-**414 - Bloomrot Harvest** (Normal Spell)
-> Remove all Spore Counters from the field, then target 1 card your opponent controls for every 4 Spore Counters removed; destroy them. "Bloomrot" monsters you control gain 100 ATK/DEF until the end of this turn for each Spore Counter removed. You can only activate 1 "Bloomrot Harvest" per turn.
+> Uma vez por turno: escolha 1 card com a face para cima que seu oponente controla; coloque 1 Marcador de Esporo nele. Monstros que seu oponente controla perdem 100 de ATK/DEF para cada Marcador de Esporo neles. Cada vez que um ou mais Marcadores de Esporo forem removidos do campo: Invoque por Invocação-Especial 1 "Ficha Podriflora" (Planta/TERRA/Nível 1/ATK 0/DEF 0) em Posição de Defesa. Se uma Ficha "Podriflora" que você controla for destruída: coloque 1 Marcador de Esporo em cada card com a face para cima que seu oponente controla.
 
-**415 - Bloomrot Overgrowth** (Equip Spell)
-> Target 1 face-up monster your opponent controls; place 1 Spore Counter on it, then equip this card to it. During each Standby Phase, place 1 Spore Counter on the equipped monster. If the equipped monster is destroyed: place 1 Spore Counter on each face-up card your opponent controls.
+**411 — Podriflora Ritual de Compostagem / Bloomrot Compost Ritual**
+
+Magia Normal.
+
+> Escolha 1 card com a face para cima que seu oponente controla; coloque 1 Marcador de Esporo nele e, depois, coloque 1 Marcador de Esporo adicional nele para cada monstro "Podriflora" que você controla. Depois, ganhe 300 PV para cada Marcador de Esporo colocado por este efeito. Você só pode ativar 1 "Podriflora Ritual de Compostagem" por turno.
+
+**412 — Podriflora Rede de Raízes / Bloomrot Root Network**
+
+Magia Contínua.
+
+> Monstros que seu oponente controla com 5 ou mais Marcadores de Esporo não podem declarar ataques. Uma vez por turno: você pode ativar 1 destes efeitos; ● Remova 2 Marcadores de Esporo do campo; adicione 1 monstro "Podriflora" de Nível 4 ou menor do seu Deck à sua mão. ● Remova 3 Marcadores de Esporo do campo; adicione 1 card "Podriflora" do seu Cemitério à sua mão.
+
+**413 — Podriflora Armadura Fúngica / Bloomrot Fungal Armor**
+
+Magia de Equipamento.
+
+> Equipe apenas a um monstro "Podriflora" que você controla. O monstro equipado ganha 500 de DEF e 100 de ATK para cada Marcador de Esporo no campo. Uma vez por turno, se o monstro equipado seria destruído por batalha ou efeito de card, você pode remover 1 Marcador de Esporo do campo em vez disso. Se este card for enviado do campo ao Cemitério: coloque 1 Marcador de Esporo em 1 monstro com a face para cima no campo.
+
+**414 — Colheita Podriflora / Bloomrot Harvest**
+
+Magia Normal.
+
+> Remova todos os Marcadores de Esporo do campo e, depois, escolha 1 card que seu oponente controla para cada 4 Marcadores de Esporo removidos; destrua-os. Monstros "Podriflora" que você controla ganham 100 de ATK/DEF até o final deste turno para cada Marcador de Esporo removido. Você só pode ativar 1 "Colheita Podriflora" por turno.
+
+**415 — Podriflora Supercrescimento / Bloomrot Overgrowth**
+
+Magia de Equipamento.
+
+> Escolha 1 monstro com a face para cima que seu oponente controla; coloque 1 Marcador de Esporo nele e equipe este card a ele. Durante cada Fase de Apoio, coloque 1 Marcador de Esporo no monstro equipado. Se o monstro equipado for destruído: coloque 1 Marcador de Esporo em cada card com a face para cima que seu oponente controla.
 
 ### Armadilhas
 
-**416 - Bloomrot Sudden Germination** (Normal Trap)
-> When an opponent's monster declares an attack: place 1 Spore Counter on that monster, negate the attack, and Special Summon 1 "Bloomrot Token" (Plant/EARTH/Level 1/ATK 0/DEF 0) in Defense Position. If you control "Bloomrot Living Colony", you can place 1 Spore Counter on 1 other face-up monster your opponent controls. You can only activate 1 "Bloomrot Sudden Germination" per turn.
+**416 — Podriflora Germinação Súbita / Bloomrot Sudden Germination**
 
-**417 - Bloomrot Rotting Ground** (Continuous Trap)
-> Each time your opponent Summons a monster: place 1 Spore Counter on that monster. Monsters your opponent controls with a Spore Counter are unaffected by other card effects, except "Bloomrot" cards. Once per turn: target 1 monster your opponent controls with 4 or more Spore Counters; negate its effects until the end of this turn.
+Armadilha Normal.
+
+> Quando um monstro do oponente declarar ataque: coloque 1 Marcador de Esporo nesse monstro, negue o ataque e Invoque por Invocação-Especial 1 "Ficha Podriflora" (Planta/TERRA/Nível 1/ATK 0/DEF 0) em Posição de Defesa. Se você controlar "Podriflora Colônia Viva", você pode colocar 1 Marcador de Esporo em 1 outro monstro com a face para cima que seu oponente controla. Você só pode ativar 1 "Podriflora Germinação Súbita" por turno.
+
+**417 — Podriflora Solo Apodrecido / Bloomrot Rotting Ground**
+
+Armadilha Contínua.
+
+> Cada vez que seu oponente Invocar um monstro: coloque 1 Marcador de Esporo nesse monstro. Monstros que seu oponente controla com Marcador de Esporo não são afetados por outros efeitos de cards, exceto cards "Podriflora". Uma vez por turno: escolha 1 monstro com 4 ou mais Marcadores de Esporo que seu oponente controla; negue os efeitos dele até o final deste turno.
 
 ### Extra Deck
 
-**418 - Bloomrot Ancient Mycelium** (L6 Ascension Earth Plant | ATK 2100 / DEF 2600)
-> Ascension Material: 1 "Bloomrot" monster. Requirement: The material must have activated its effect 2 times this Duel. If this card is Ascension Summoned: place 1 Spore Counter on all face-up monsters your opponent controls. Once per turn: You can remove 2 Spore Counters from the field; target 1 Defense Position monster your opponent controls; destroy that target.
+**418 — Podriflora Micélio Ancestral — Ascensão / Bloomrot Ancient Mycelium**
 
-**419 - Bloomrot Queen of the Hollow Grove** (L8 Ascension Earth Plant | ATK 2500 / DEF 3000)
-> Ascension Material: 1 Level 5 or higher "Bloomrot" monster. Requirement: There must be at least 8 Spore Counters on the field. If this card is Ascension Summoned: monsters your opponent controls lose 100 ATK/DEF for each Spore Counter on the field. You can remove up to 3 Spore Counters from the field; gain 500 LP for each counter removed. If this card leaves the field: place 1 Spore Counter on each face-up card your opponent controls. You can only use each effect of "Bloomrot Queen of the Hollow Grove" once per turn.
+Ascensão, Nível 6, Plant, Earth, 2100/2600.
 
-**420 - Bloomrot Devourer of Dead Roots** (L11 Fusion Dark Plant | ATK 0 / DEF 3000)
-> Fusion Materials: 4 "Bloomrot" monsters, including 1 Token. If this card is Fusion Summoned: this card's original ATK becomes the number of Spore Counters on the field x500. Once per turn: You can destroy all monsters with Spore Counters your opponent controls. If this card is destroyed by battle or card effect: Special Summon up to 2 "Bloomrot" monsters from your Graveyard, except "Bloomrot Devourer of Dead Roots".
+> Ascensão: 1 monstro "Podriflora". Requisito: o material deve ter ativado seu efeito 2 vezes neste Duelo. Se este card for Invocado por Invocação-Ascensão: coloque 1 Marcador de Esporo em todos os monstros com a face para cima que seu oponente controla. Uma vez por turno: você pode remover 2 Marcadores de Esporo do campo; escolha 1 monstro em Posição de Defesa que seu oponente controla; destrua o alvo.
+
+**419 — Podriflora Rainha do Bosque Oco / Bloomrot Queen of the Hollow Grove**
+
+Ascensão, Nível 8, Plant, Earth, 2500/3000.
+
+> Ascensão: 1 monstro "Podriflora" de Nível 5 ou maior. Requisito: deve haver pelo menos 8 Marcadores de Esporo no campo. Se este card for Invocado por Invocação-Ascensão: monstros que seu oponente controla perdem 100 de ATK/DEF para cada Marcador de Esporo no campo. Você pode remover até 3 Marcadores de Esporo do campo; ganhe 500 PV para cada marcador removido. Se este card deixar o campo: coloque 1 Marcador de Esporo em cada card com a face para cima que seu oponente controla. Você só pode usar cada efeito de "Podriflora Rainha do Bosque Oco — Ascensão" uma vez por turno.
+
+**420 — Podriflora Devorador de Raízes Mortas / Bloomrot Devourer of Dead Roots**
+
+Fusão, Nível 11, Plant, Dark, 0/3000.
+
+> Materiais de Fusão: 4 monstros "Podriflora", incluindo 1 Ficha. Se este card for Invocado por Invocação-Fusão: o ATK original deste card se torna igual ao número de Marcadores de Esporo no campo x500. Uma vez por turno: você pode destruir todos os monstros com Marcadores de Esporo que seu oponente controla. Se este card for destruído em batalha ou por efeito de card: Invoque por Invocação-Especial até 2 monstros "Podriflora" do seu Cemitério, exceto "Podriflora Devorador de Raízes Mortas".
+
+---
+
+## Notas do Arquétipo
+
+- O catálogo possui 20 cartas: 17 no Main Deck e 3 no Extra Deck.
+- O Main Deck contém 8 monstros, 7 Magias e 2 Armadilhas.
+- O Extra Deck contém 1 de Fusão, 2 de Ascensão.
+- As Fichas geradas não são cartas adicionais para montagem do deck.

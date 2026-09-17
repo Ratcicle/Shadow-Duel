@@ -1,111 +1,182 @@
 # Miragebound — Catálogo do Arquétipo
 
-Fonte dos textos: `src/data/cards/*.ts` via fachada `src/data/cards.ts` (1x cada carta do arquetipo).
+Fonte dos dados canônicos: `src/data/cards/miragebound.ts` via `src/data/cards.ts`.
+Nomes e textos PT-BR: `public/locales/pt-br.json`.
 
 ## Resumo
 
-O arquetipo **Miragebound** e focado em controle de posicao de batalha, retorno de cards para a mao e reaproveitamento de recursos. O plano central e deslocar monstros do oponente entre Ataque e Defesa, gerar valor quando cards "Miragebound" voltam para a mao e transformar esses movimentos em buscas, compras, debuffs e pressoes de combate.
+Miragebound reúne 14 cartas com foco em mudanças de posição de batalha e retorno de cartas à mão.
 
 **Estilo de jogo:**
-- **Controle de posicao**: varias cartas mudam a posicao de batalha dos monstros do oponente.
-- **Bounce como recurso**: efeitos devolvem seus proprios "Miragebound" para a mao para buscar, comprar ou proteger.
-- **Pressao por combate**: monstros punem alvos em Defesa com dano perfurante, debuffs ou extensao.
-- **Extra Deck flexivel**: uma linha de Ascension via `Miragebound Scout` e uma Fusao de contato com `Miragebound Glass Viper` + 1 monstro "Miragebound" no campo.
+
+- alterna monstros entre Ataque e Defesa;
+- reaproveita cartas que voltam à mão;
+- pressiona monstros em Defesa;
+- combina Ascensão e Fusão de contato.
 
 ---
 
 ## Catálogo (14 cartas)
 
-### Monstros (Main Deck) (7)
+### Main Deck (12)
 
-| ID  | Nome                        | Tipo        | Nivel | ATK  | DEF  |
-| --- | --------------------------- | ----------- | ----- | ---- | ---- |
-| 351 | Miragebound Scout           | Spellcaster | 3     | 1400 | 1000 |
-| 352 | Miragebound Dancer          | Spellcaster | 4     | 1600 | 1200 |
-| 353 | Miragebound Jackal          | Beast       | 4     | 1700 | 800  |
-| 356 | Miragebound Glass Viper     | Reptile     | 3     | 1000 | 1600 |
-| 357 | Miragebound Sand Priestess  | Spellcaster | 4     | 1300 | 1800 |
-| 358 | Miragebound False King      | Fiend       | 6     | 2200 | 1800 |
-| 364 | Miragebound Rebel           | Spellcaster | 7     | 2100 | 1200 |
+#### Monstros (7)
 
-### Magias (Main Deck) (4)
+| ID | PT-BR | Canônico | Nível | Tipo | Atributo | ATK | DEF |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 351 | Explorador dos Vinculados à Miragem | Miragebound Scout | 3 | Spellcaster | Não informado | 1400 | 1000 |
+| 352 | Dançarina dos Vinculados à Miragem | Miragebound Dancer | 4 | Spellcaster | Não informado | 1600 | 1200 |
+| 353 | Chacal dos Vinculados à Miragem | Miragebound Jackal | 4 | Beast | Não informado | 1700 | 800 |
+| 356 | Víbora de Vidro dos Vinculados à Miragem | Miragebound Glass Viper | 3 | Reptile | Não informado | 1000 | 1600 |
+| 357 | Sacerdotisa de Areia dos Vinculados à Miragem | Miragebound Sand Priestess | 4 | Spellcaster | Não informado | 1300 | 1800 |
+| 358 | Falso Rei dos Vinculados à Miragem | Miragebound False King | 6 | Fiend | Não informado | 2200 | 1800 |
+| 364 | Rebelde dos Vinculados à Miragem | Miragebound Rebel | 7 | Spellcaster | Earth | 2100 | 1200 |
 
-| ID  | Nome                         | Subtipo    |
-| --- | ---------------------------- | ---------- |
-| 354 | Miragebound Oasis            | Field      |
-| 359 | Miragebound Mirror Path      | Continuous |
-| 361 | Miragebound Vanishing Step   | Quick      |
-| 362 | Miragebound Heat Haze        | Normal     |
+#### Magias (4)
 
-### Armadilhas (Main Deck) (1)
+| ID | PT-BR | Canônico | Subtipo |
+| --- | --- | --- | --- |
+| 354 | Oásis dos Vinculados à Miragem | Miragebound Oasis | Campo |
+| 359 | Caminho Espelhado dos Vinculados à Miragem | Miragebound Mirror Path | Contínua |
+| 361 | Passo Evanescente dos Vinculados à Miragem | Miragebound Vanishing Step | Rápida |
+| 362 | Névoa de Calor dos Vinculados à Miragem | Miragebound Heat Haze | Normal |
 
-| ID  | Nome                         | Subtipo |
-| --- | ---------------------------- | ------- |
-| 360 | Miragebound False Horizon    | Normal  |
+#### Armadilhas (1)
+
+| ID | PT-BR | Canônico | Subtipo |
+| --- | --- | --- | --- |
+| 360 | Falso Horizonte dos Vinculados à Miragem | Miragebound False Horizon | Normal |
+
+### Extra Deck (2)
+
+| ID | PT-BR | Canônico | Tipo | Nível | Tipo de monstro | Atributo | ATK | DEF |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 355 | Soberano de Vidro dos Vinculados à Miragem | Miragebound Glass Sovereign | Ascensão | 7 | Spellcaster | Não informado | 2400 | 2200 |
+| 363 | Leviatã do Deserto dos Vinculados à Miragem | Miragebound Desert Leviathan | Fusão | 8 | Beast | Earth | 2400 | 2500 |
+
+### Tokens / cartas auxiliares
+
+Nenhuma carta auxiliar própria do arquétipo está listada neste catálogo.
 
 ---
 
-## Extra Deck (2)
+## Materiais e procedimentos do Extra Deck
 
-| ID  | Nome                         | Tipo      | Nivel | ATK  | DEF  |
-| --- | ---------------------------- | --------- | ----- | ---- | ---- |
-| 355 | Miragebound Glass Sovereign  | Ascension | 7     | 2400 | 2200 |
-| 363 | Miragebound Desert Leviathan | Fusion    | 8     | 2400 | 2500 |
+### Fusões
 
-**Material de Ascension (355):** `Miragebound Scout` (requisito: o material deve ter ativado seus efeitos 2 vezes neste Duelo).
+**363 — Miragebound Desert Leviathan**
 
-**Materiais de Fusao de contato (363):** `Miragebound Glass Viper` + 1 monstro "Miragebound" que voce controla no campo.
+> "Víbora de Vidro dos Vinculados à Miragem" + 1 monstro "Vinculados à Miragem".
+
+### Ascensões
+
+**355 — Miragebound Glass Sovereign**
+
+> Material de Ascensão: "Explorador dos Vinculados à Miragem". Requisito: o material deve ter ativado seus efeitos 2 vezes neste Duelo.
 
 ---
 
 ## Efeitos & Detalhes
 
-### Monstros (Main Deck)
+### Monstros do Main Deck
 
-**351 - Miragebound Scout** (L3 Spellcaster | ATK 1400 / DEF 1000)
-> If this card is Normal Summoned: Add 1 "Miragebound" Spell/Trap from your Deck to your hand. Once per turn: You can target 1 face-up monster your opponent controls; change its battle position. You can only use each effect of "Miragebound Scout" once per turn.
+**351 — Explorador dos Vinculados à Miragem / Miragebound Scout**
 
-**352 - Miragebound Dancer** (L4 Spellcaster | ATK 1600 / DEF 1200)
-> If you control a "Miragebound" monster: You can Special Summon this card from your hand. Once per turn: You can target 1 other "Miragebound" monster you control; return it to the hand, and if you do, this card gains 600 ATK until the end of this turn. You can only use each effect of "Miragebound Dancer" once per turn.
+Nível 3, Spellcaster, Não informado, 1400/1000.
 
-**353 - Miragebound Jackal** (L4 Beast | ATK 1700 / DEF 800)
-> If a monster you control is returned from the field to your hand (Quick Effect): You can Special Summon this card from your hand, and if you do, target 1 monster your opponent controls; change its battle position. You can only use this effect of "Miragebound Jackal" once per turn.
+> Se este card for Invocado por Invocação-Normal: adicione 1 Magia/Armadilha "Vinculados à Miragem" do seu Deck à sua mão. Uma vez por turno: você pode escolher 1 monstro com a face para cima que seu oponente controla; mude a posição de batalha dele. Você só pode usar cada efeito de "Explorador dos Vinculados à Miragem" uma vez por turno.
 
-**356 - Miragebound Glass Viper** (L3 Reptile | ATK 1000 / DEF 1600)
-> If this card is returned from the field to the hand by a card effect: You can Special Summon this card from your hand, but banish it when it leaves the field. If this card is Special Summoned: You can target 1 face-up monster your opponent controls; it loses 500 ATK/DEF until the end of this turn. You can only use each effect of "Miragebound Glass Viper" once per turn.
+**352 — Dançarina dos Vinculados à Miragem / Miragebound Dancer**
 
-**357 - Miragebound Sand Priestess** (L4 Spellcaster | ATK 1300 / DEF 1800)
-> If this card is returned from the field to the hand: You can target 1 "Miragebound" monster in your Graveyard; add it to your hand. Once per turn: You can target 1 monster your opponent controls; change its battle position, and if you do, that monster loses 500 ATK/DEF until the end of the next turn. You can only use each effect of "Miragebound Sand Priestess" once per turn.
+Nível 4, Spellcaster, Não informado, 1600/1200.
 
-**358 - Miragebound False King** (L6 Fiend | ATK 2200 / DEF 1800)
-> You can Special Summon this card from your hand by returning 1 "Miragebound" monster you control to the hand. You can target 1 monster your opponent controls; change its battle position. You can only use each effect of "Miragebound False King" once per turn.
+> Se você controlar um monstro "Vinculados à Miragem": você pode Invocar este card por Invocação-Especial da sua mão. Uma vez por turno: você pode escolher 1 outro monstro "Vinculados à Miragem" que você controla; devolva-o para a mão e, se isso acontecer, este card ganha 600 de ATK até o final deste turno. Você só pode usar cada efeito de "Dançarina dos Vinculados à Miragem" uma vez por turno.
 
-**364 - Miragebound Rebel** (L7 Spellcaster | ATK 2100 / DEF 1200)
-> If a monster's battle position is changed by a card effect (Quick Effect): You can Special Summon this card from your hand. If this card attacks a Defense Position monster, inflict piercing battle damage. During the End Phase: return this card from the field to the hand. You can only use each effect of "Miragebound Rebel" once per turn.
+**353 — Chacal dos Vinculados à Miragem / Miragebound Jackal**
+
+Nível 4, Beast, Não informado, 1700/800.
+
+> Se um monstro que você controla for devolvido do campo para a sua mão (Efeito Rápido): você pode Invocar este card por Invocação-Especial da sua mão e, se isso acontecer, escolha 1 monstro que seu oponente controla; mude a posição de batalha dele. Você só pode usar este efeito de "Chacal dos Vinculados à Miragem" uma vez por turno.
+
+**356 — Víbora de Vidro dos Vinculados à Miragem / Miragebound Glass Viper**
+
+Nível 3, Reptile, Não informado, 1000/1600.
+
+> Se este card for devolvido do campo para a mão por um efeito de card: você pode Invocar este card por Invocação-Especial da sua mão, mas bana-o quando ele deixar o campo. Se este card for Invocado por Invocação-Especial: você pode escolher 1 monstro com a face para cima que seu oponente controla; ele perde 500 de ATK/DEF até o final deste turno. Você só pode usar cada efeito de "Víbora de Vidro dos Vinculados à Miragem" uma vez por turno.
+
+**357 — Sacerdotisa de Areia dos Vinculados à Miragem / Miragebound Sand Priestess**
+
+Nível 4, Spellcaster, Não informado, 1300/1800.
+
+> Se este card for devolvido do campo para a mão: você pode escolher 1 monstro "Vinculados à Miragem" no seu Cemitério; adicione-o à sua mão. Uma vez por turno: você pode escolher 1 monstro que seu oponente controla; mude a posição de batalha dele e, se isso acontecer, esse monstro perde 500 de ATK/DEF até o final do próximo turno. Você só pode usar cada efeito de "Sacerdotisa de Areia dos Vinculados à Miragem" uma vez por turno.
+
+**358 — Falso Rei dos Vinculados à Miragem / Miragebound False King**
+
+Nível 6, Fiend, Não informado, 2200/1800.
+
+> Você pode Invocar este card por Invocação-Especial da sua mão ao devolver 1 monstro "Vinculados à Miragem" que você controla para a mão. Você pode escolher 1 monstro que seu oponente controla; mude a posição de batalha dele. Você só pode usar cada efeito de "Falso Rei dos Vinculados à Miragem" uma vez por turno.
+
+**364 — Rebelde dos Vinculados à Miragem / Miragebound Rebel**
+
+Nível 7, Spellcaster, Earth, 2100/1200.
+
+> Se a posição de batalha de um monstro for alterada por um efeito de card (Efeito Rápido): você pode Invocar este card por Invocação-Especial da sua mão. Se este card atacar um monstro em Posição de Defesa, cause dano de batalha perfurante. Durante a Fase Final: devolva este card do campo para a mão. Você só pode usar cada efeito de "Rebelde dos Vinculados à Miragem" uma vez por turno.
 
 ### Magias
 
-**354 - Miragebound Oasis** (Field Spell)
-> The first time each face-up monster your opponent controls changes its battle position each turn: it loses 400 ATK/DEF until the end of the next turn. Once per turn: You can choose 1 of these effects. - Return 1 "Miragebound" monster you control to the hand, and if you do, target 1 monster your opponent controls; it loses 400 ATK/DEF until the end of this turn. - Target 1 face-up monster your opponent controls; change its battle position.
+**354 — Oásis dos Vinculados à Miragem / Miragebound Oasis**
 
-**359 - Miragebound Mirror Path** (Continuous Spell)
-> The first time each turn a "Miragebound" monster you control would be destroyed by battle, you can return it to the hand instead. Once per turn: You can send this face-up card from the field to the GY; target 1 Spell/Trap your opponent controls; destroy it. You can only control 1 "Miragebound Mirror Path".
+Magia de Campo.
 
-**361 - Miragebound Vanishing Step** (Quick Spell)
-> Target 1 "Miragebound" monster you control; return it to the hand, then target 1 monster your opponent controls; change its battle position, and if you do, it loses 500 ATK/DEF until the end of this turn. You can only activate 1 "Miragebound Vanishing Step" per turn.
+> A primeira vez que cada monstro com a face para cima que seu oponente controla mudar sua Posição de Batalha: ele perde 400 de ATK/DEF até o final do próximo turno. Uma vez por turno: você pode escolher 1 destes efeitos.
+> ● Devolva 1 monstro "Vinculados à Miragem" que você controla para a mão e, se isso acontecer, escolha 1 monstro que seu oponente controla; ele perde 400 de ATK/DEF até o final do turno.
+> ● Escolha 1 monstro com a face para cima que seu oponente controla; mude sua Posição de Batalha.
 
-**362 - Miragebound Heat Haze** (Normal Spell)
-> If you control a "Miragebound" monster: Target 1 monster your opponent controls; change its battle position. Then, if that monster is in Defense Position, you can target 1 "Miragebound" monster in your Graveyard; add it to your hand. You can only activate 1 "Miragebound Heat Haze" per turn.
+**359 — Caminho Espelhado dos Vinculados à Miragem / Miragebound Mirror Path**
+
+Magia Contínua.
+
+> A primeira vez a cada turno que um monstro "Vinculados à Miragem" que você controla seria destruído em batalha, você pode devolvê-lo para a mão em vez disso. Uma vez por turno: você pode enviar este card com a face para cima do campo para o Cemitério; escolha 1 Magia/Armadilha que seu oponente controla; destrua-a. Você só pode controlar 1 "Caminho Espelhado dos Vinculados à Miragem".
+
+**361 — Passo Evanescente dos Vinculados à Miragem / Miragebound Vanishing Step**
+
+Magia Rápida.
+
+> Escolha 1 monstro "Vinculados à Miragem" que você controla; devolva-o para a mão e, depois, escolha 1 monstro que seu oponente controla; mude a posição de batalha dele e, se isso acontecer, ele perde 500 de ATK/DEF até o final deste turno. Você só pode ativar 1 "Passo Evanescente dos Vinculados à Miragem" por turno.
+
+**362 — Névoa de Calor dos Vinculados à Miragem / Miragebound Heat Haze**
+
+Magia Normal.
+
+> Se você controlar um monstro "Vinculados à Miragem": escolha 1 monstro que seu oponente controla; mude a posição de batalha dele. Depois, se esse monstro estiver em Posição de Defesa, você pode escolher 1 monstro "Vinculados à Miragem" no seu Cemitério; adicione-o à sua mão. Você só pode ativar 1 "Névoa de Calor dos Vinculados à Miragem" por turno.
 
 ### Armadilhas
 
-**360 - Miragebound False Horizon** (Normal Trap)
-> When an opponent's monster declares an attack: Target 1 monster your opponent controls; change its battle position. Then, you can return 1 "Miragebound" monster you control to the hand. You can only activate 1 "Miragebound False Horizon" per turn.
+**360 — Falso Horizonte dos Vinculados à Miragem / Miragebound False Horizon**
+
+Armadilha Normal.
+
+> Quando um monstro do oponente declarar um ataque: escolha 1 monstro que seu oponente controla; mude a posição de batalha dele. Depois, você pode devolver 1 monstro "Vinculados à Miragem" que você controla para a mão. Você só pode ativar 1 "Falso Horizonte dos Vinculados à Miragem" por turno.
 
 ### Extra Deck
 
-**355 - Miragebound Glass Sovereign** (L7 Ascension Spellcaster | ATK 2400 / DEF 2200)
-> Ascension Material: "Miragebound Scout". Requirement: The material must have activated its effects 2 times this Duel. If this card is Ascension Summoned: Target up to 2 face-up monsters your opponent controls; change their battle positions. Once per turn: Target 1 other "Miragebound" monster you control and 1 card your opponent controls; return those targets to the hand. If this card attacks a Defense Position monster, inflict piercing battle damage.
+**355 — Soberano de Vidro dos Vinculados à Miragem / Miragebound Glass Sovereign**
 
-**363 - Miragebound Desert Leviathan** (L8 Fusion Beast | ATK 2400 / DEF 2500)
-> "Miragebound Glass Viper" + 1 "Miragebound" monster. You can Fusion Summon this card from your Extra Deck by sending the above materials you control to the GY. If this card is Fusion Summoned: change the battle positions of all monsters your opponent controls. While this card is face-up on the field, each time a monster your opponent controls changes its battle position by a "Miragebound" card effect, it loses 300 ATK/DEF until the end of this turn. If this card would be destroyed by battle: you can return it to the Extra Deck instead.
+Ascensão, Nível 7, Spellcaster, Não informado, 2400/2200.
+
+> Material de Ascensão: "Explorador dos Vinculados à Miragem". Requisito: o material deve ter ativado seus efeitos 2 vezes neste Duelo. Se este card for Invocado por Invocação-Ascensão: escolha até 2 monstros com a face para cima que seu oponente controla; mude as posições de batalha deles. Uma vez por turno: escolha 1 outro monstro "Vinculados à Miragem" que você controla e 1 card que seu oponente controla; devolva os alvos à mão. Se este card atacar um monstro em Posição de Defesa, cause dano perfurante.
+
+**363 — Leviatã do Deserto dos Vinculados à Miragem / Miragebound Desert Leviathan**
+
+Fusão, Nível 8, Beast, Earth, 2400/2500.
+
+> "Víbora de Vidro dos Vinculados à Miragem" + 1 monstro "Vinculados à Miragem". Você pode Invocar este card por Invocação-Fusão do seu Deck Adicional ao enviar os materiais acima que você controla para o Cemitério. Se este card for Invocado por Invocação-Fusão: mude a posição de batalha de todos os monstros que seu oponente controla. Enquanto este card estiver com a face para cima no campo, cada vez que um monstro do seu oponente mudar sua posição de batalha por efeito de um card "Vinculados à Miragem", ele perde 300 ATK/DEF até o final deste turno. Se este card seria destruído em batalha: você pode devolvê-lo para o Deck Adicional em vez disso.
+
+---
+
+## Notas do Arquétipo
+
+- “Não informado” indica um campo ausente na definição canônica; nenhum valor foi presumido.
+- O catálogo possui 14 cartas: 12 no Main Deck e 2 no Extra Deck.
+- O Main Deck contém 7 monstros, 4 Magias e 1 Armadilhas.
+- O Extra Deck contém 1 de Fusão, 1 de Ascensão.

@@ -1,156 +1,258 @@
 # Luminarch — Catálogo do Arquétipo
 
-Fonte dos textos: `src/data/cards/*.ts` via fachada `src/data/cards.ts` (1x cada carta do arquétipo).
+Fonte dos dados canônicos: `src/data/cards/luminarch.ts` via `src/data/cards.ts`.
+Nomes e textos PT-BR: `public/locales/pt-br.json`.
 
 ## Resumo
 
-O arquétipo **Luminarch** é focado em guerreiros sagrados, defensores celestiais e ganho de LP. O tema principal gira em torno de proteção (efeitos de barreira, negação de ataque, absorção de dano como cura), buffs de stats e sinergia com o Field Spell **Sanctum of the Luminarch Citadel**. É um arquétipo mais defensivo que premia jogadores que mantêm monstros no campo e usam LP como recurso estratégico.
+Luminarch reúne 24 cartas com foco em ganho de PV, defesa e conversão de recursos em presença de campo.
 
 **Estilo de jogo:**
-- **Defensivo/Tanque**: Vários monstros com alta DEF e proteções
-- **Recuperação de LP**: Múltiplas cartas que curam baseado em batalhas ou condições
-- **Proteção em cadeia**: Monstros que protegem uns aos outros
-- **Field Spell central**: Sanctum of the Luminarch Citadel é peça chave para combos
+
+- usa ganho e pagamento de PV em seus efeitos;
+- combina proteção e mudanças de posição de batalha;
+- recupera recursos e prepara monstros de Nível alto;
+- desenvolve linhas de Fusão e Ascensão.
 
 ---
 
 ## Catálogo (24 cartas)
 
-### Monstros (Main Deck) (10)
+### Main Deck (20)
 
-| ID  | Nome                                   | Tipo    | Nível | ATK  | DEF  |
-| --- | -------------------------------------- | ------- | ----- | ---- | ---- |
-| 151 | Luminarch Valiant - Knight of the Dawn | Warrior | 4     | 1600 | 1200 |
-| 153 | Luminarch Aegisbearer                  | Warrior | 4     | 1000 | 2000 |
-| 154 | Luminarch Moonblade Captain            | Warrior | 6     | 2200 | 1700 |
-| 155 | Luminarch Celestial Marshal            | Warrior | 7     | 2100 | 2500 |
-| 156 | Luminarch Magic Sickle                 | Warrior | 3     | 1200 | 1700 |
-| 157 | Luminarch Sanctum Protector            | Warrior | 7     | 1800 | 2800 |
-| 158 | Luminarch Radiant Lancer               | Warrior | 8     | 2600 | 2100 |
-| 159 | Luminarch Aurora Seraph                | Fairy   | 8     | 2800 | 2400 |
-| 160 | Luminarch Sanctified Arbiter           | Warrior | 4     | 1500 | 1000 |
-| 168 | Luminarch Enchanted Halberd            | Warrior | 4     | 1600 | 1400 |
+#### Monstros (10)
 
-### Magias (Main Deck) (10)
+| ID | PT-BR | Canônico | Nível | Tipo | Atributo | ATK | DEF |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 151 | Luminarca Valente - Cavaleiro da Aurora | Luminarch Valiant - Knight of the Dawn | 4 | Warrior | Light | 1600 | 1200 |
+| 153 | Portador da Égide Luminarca | Luminarch Aegisbearer | 4 | Warrior | Light | 1000 | 2000 |
+| 154 | Capitão da Lâmina Lunar Luminarca | Luminarch Moonblade Captain | 6 | Warrior | Light | 2200 | 1700 |
+| 155 | Marechal Celestial Luminarca | Luminarch Celestial Marshal | 7 | Warrior | Light | 2100 | 2500 |
+| 156 | Foice Mágica Luminarca | Luminarch Magic Sickle | 3 | Warrior | Light | 1200 | 1700 |
+| 157 | Protetor do Santuário Luminarca | Luminarch Sanctum Protector | 7 | Warrior | Light | 1800 | 2800 |
+| 158 | Lanceiro Radiante Luminarca | Luminarch Radiant Lancer | 8 | Warrior | Light | 2600 | 2100 |
+| 159 | Aurora Serafim Luminarca | Luminarch Aurora Seraph | 8 | Fairy | Light | 2800 | 2400 |
+| 160 | Árbitro Santificado Luminarca | Luminarch Sanctified Arbiter | 4 | Warrior | Light | 1500 | 1000 |
+| 168 | Alabarda Encantada Luminarca | Luminarch Enchanted Halberd | 4 | Warrior | Light | 1600 | 1400 |
 
-| ID  | Nome                             | Subtipo    |
-| --- | -------------------------------- | ---------- |
-| 152 | Luminarch Holy Shield            | Quick      |
-| 161 | Luminarch Knights Convocation    | Continuous |
-| 162 | Sanctum of the Luminarch Citadel | Field      |
-| 163 | Luminarch Holy Ascension         | Normal     |
-| 164 | Luminarch Radiant Wave           | Normal     |
-| 165 | Luminarch Crescent Shield        | Equip      |
-| 166 | Luminarch Sunforged Blade        | Equip      |
-| 167 | Luminarch Spear of Dawnfall      | Normal     |
-| 169 | Luminarch Moonlit Blessing       | Normal     |
-| 170 | Luminarch Sacred Judgment        | Normal     |
+#### Magias (10)
 
-### Traps (0)
+| ID | PT-BR | Canônico | Subtipo |
+| --- | --- | --- | --- |
+| 152 | Escudo Sagrado Luminarca | Luminarch Holy Shield | Rápida |
+| 161 | Convocação dos Cavaleiros Luminarca | Luminarch Knights Convocation | Contínua |
+| 162 | Santuário da Cidadela Luminarca | Sanctum of the Luminarch Citadel | Campo |
+| 163 | Ascensão Sagrada Luminarca | Luminarch Holy Ascension | Normal |
+| 164 | Onda Radiante Luminarca | Luminarch Radiant Wave | Normal |
+| 165 | Escudo Crescente Luminarca | Luminarch Crescent Shield | Equipamento |
+| 166 | Lâmina Solarforjada Luminarca | Luminarch Sunforged Blade | Equipamento |
+| 167 | Lança da Alvorada Luminarca | Luminarch Spear of Dawnfall | Normal |
+| 169 | Bênção do Brilho da Lua Luminarca | Luminarch Moonlit Blessing | Normal |
+| 170 | Julgamento Sagrado Luminarca | Luminarch Sacred Judgment | Normal |
 
-_Nenhuma trap no arquétipo atualmente._
+#### Armadilhas (0)
+
+Nenhuma.
+
+### Extra Deck (4)
+
+| ID | PT-BR | Canônico | Tipo | Nível | Tipo de monstro | Atributo | ATK | DEF |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 171 | Megaescudo Barbarias Luminarca | Luminarch Megashield Barbarias | Fusão | 9 | Warrior | Light | 2500 | 3000 |
+| 172 | Fortaleza Égide Luminarca | Luminarch Fortress Aegis | Ascensão | 6 | Warrior | Light | 1500 | 2500 |
+| 173 | Cavaleiro Puro Luminarca | Luminarch Pure Knight | Fusão | 6 | Warrior | Light | 2000 | 2000 |
+| 174 | Lanceiro Etéreo Luminarca | Luminarch Ethereal Lancer | Ascensão | 6 | Warrior | Light | 2100 | 1600 |
+
+### Tokens / cartas auxiliares
+
+Nenhuma carta auxiliar própria do arquétipo está listada neste catálogo.
 
 ---
 
-## Extra Deck (4)
+## Materiais e procedimentos do Extra Deck
 
-| ID  | Nome                           | Tipo      | Nível | ATK  | DEF  |
-| --- | ------------------------------ | --------- | ----- | ---- | ---- |
-| 171 | Luminarch Megashield Barbarias | Fusion    | 9     | 2500 | 3000 |
-| 172 | Luminarch Fortress Aegis       | Ascension | 6     | 1500 | 2500 |
-| 173 | Luminarch Pure Knight          | Fusion    | 6     | 2000 | 2000 |
-| 174 | Luminarch Ethereal Lancer      | Ascension | 6     | 2100 | 1600 |
+### Fusões
 
-**Materiais de Fusão (171):** "Luminarch Sanctum Protector" + 1 monstro "Luminarch" de Nível 5 ou maior
+**171 — Luminarch Megashield Barbarias**
 
-**Materiais de Fusão (173):** 2 monstros "Luminarch"
+> Materiais: 'Protetor do Santuário Luminarca' + 1 monstro 'Luminarca' de nível 5 ou maior
 
-**Material de Ascensão (172):** "Luminarch Aegisbearer" (requisito: 2 turnos face-up no campo)
+**173 — Luminarch Pure Knight**
 
-**Material de Ascensão (174):** "Luminarch Valiant - Knight of the Dawn"
+> Materiais: 2 monstros 'Luminarca'.
+
+### Ascensões
+
+**172 — Luminarch Fortress Aegis**
+
+> Material de Ascensão: 'Portador da Égide Luminarca' Requisito: o material deve ter ficado com a face para cima no campo por 2 turnos.
+
+**174 — Luminarch Ethereal Lancer**
+
+> Material de Ascensão: "Luminarca Valente - Cavaleiro da Aurora".
 
 ---
 
 ## Efeitos & Detalhes
 
-### Monstros
+### Monstros do Main Deck
 
-**151 - Luminarch Valiant - Knight of the Dawn** (L4 Warrior | ATK 1600 / DEF 1200)
-> If this card is Normal or Special Summoned: Add 1 Level 4 or lower "Luminarch" monster from your Deck to your hand. If this card battles a Defense Position monster, inflict piercing battle damage to your opponent.
+**151 — Luminarca Valente - Cavaleiro da Aurora / Luminarch Valiant - Knight of the Dawn**
 
-**153 - Luminarch Aegisbearer** (L4 Warrior | ATK 1000 / DEF 2000)
-> If this card is Special Summoned: Increase its DEF by 500. While this card is face-up on the field, your opponent must prioritize this card as an attack target, if possible.
+Nível 4, Warrior, Light, 1600/1200.
 
-**154 - Luminarch Moonblade Captain** (L6 Warrior | ATK 2200 / DEF 1700)
-> If this card is Normal Summoned: You can target 1 Level 4 or lower "Luminarch" monster in your GY; Special Summon it. Once per turn, if this card destroys an opponent's monster by battle: it can make a second attack this turn.
+> Se esse card for invocado por invocação-Normal ou Especial: você pode adicionar 1 monstro 'Luminarca' de nível 4 ou menor do seu Deck à sua mão. Se esse card atacar um monstro em posição de defesa, cause dano perfurante.
 
-**155 - Luminarch Celestial Marshal** (L7 Warrior | ATK 2100 / DEF 2500)
-> You can pay 2000 LP; Special Summon this card from your hand. Once per turn, if this card would be destroyed by battle: negate that destruction. If this card is destroyed by battle: gain 1000 LP.
+**153 — Portador da Égide Luminarca / Luminarch Aegisbearer**
 
-**156 - Luminarch Magic Sickle** (L3 Warrior | ATK 1200 / DEF 1700)
-> During the Damage Step, when a "Luminarch" monster you control battles (Quick Effect): you can send this card from your hand to the GY; that monster gains 1200 ATK and 1700 DEF until the end of this turn. You can banish this card from your GY; add 1 "Luminarch" Spell from your GY to your hand. You can only use each effect of "Luminarch Magic Sickle" once per turn.
+Nível 4, Warrior, Light, 1000/2000.
 
-**157 - Luminarch Sanctum Protector** (L7 Warrior | ATK 1800 / DEF 2800)
-> If you control a face-up "Luminarch Aegisbearer", you can send it to the GY; Special Summon this card from your hand. Once per turn, when an opponent's monster declares an attack (Quick Effect): negate that attack.
+> Se este card for Invocado por Invocação-Especial: aumente sua DEF em 500. Enquanto este card estiver com a face para cima no campo, seu oponente deve priorizar este card como alvo de ataques, se possível.
 
-**158 - Luminarch Radiant Lancer** (L8 Warrior | ATK 2600 / DEF 2100)
-> If this card destroys an opponent's monster by battle, it gains 100 ATK while it remains on the field. If this card is destroyed by battle, destroy 1 Spell/Trap your opponent controls.
+**154 — Capitão da Lâmina Lunar Luminarca / Luminarch Moonblade Captain**
 
-**159 - Luminarch Aurora Seraph** (L8 Fairy | ATK 2800 / DEF 2400)
-> If this card destroys an opponent's monster by battle, gain LP equal to half that monster's ATK. Once per turn, if this card would be destroyed by battle or card effect: you can send 1 "Luminarch" monster you control to the GY instead.
+Nível 6, Warrior, Light, 2200/1700.
 
-**160 - Luminarch Sanctified Arbiter** (L4 Warrior | ATK 1500 / DEF 1000)
-> If this card is Normal Summoned: You can add 1 "Luminarch" Spell/Trap from your Deck to your hand. You can only use this effect of "Luminarch Sanctified Arbiter" once per turn.
+> Se esse card for invocado por invocação-Normal: você pode escolher 1 monstro 'Luminarca' de nível 4 ou menor no seu cemitério; invoque-o por invocação-Especial. Uma vez por turno, se esse card destruir um monstro do oponente em batalha: ele pode realizar um segundo ataque.
 
-**168 - Luminarch Enchanted Halberd** (L4 Warrior | ATK 1600 / DEF 1400)
-> Once per turn, if a "Luminarch" monster is Special Summoned to your field: You can Special Summon this card from your hand, but it cannot declare an attack this turn.
+**155 — Marechal Celestial Luminarca / Luminarch Celestial Marshal**
 
----
+Nível 7, Warrior, Light, 2100/2500.
+
+> Você pode pagar 2000 PV; Invoque este card por Invocação-Especial da sua mão. Uma vez por turno, se este card seria destruído em batalha: negue essa destruição. Se este card for destruído em batalha: ganhe 1000 PV.
+
+**156 — Foice Mágica Luminarca / Luminarch Magic Sickle**
+
+Nível 3, Warrior, Light, 1200/1700.
+
+> Durante a Etapa de Dano, quando um monstro 'Luminarca' que você controla batalhar (Efeito Rápido): você pode enviar este card da sua mão para o Cemitério; até o final deste turno, esse monstro ganha 1200 de ATK e 1700 de DEF. Você pode banir este card do seu Cemitério; adicione 1 Magia 'Luminarca' do seu Cemitério à sua mão. Você só pode usar cada efeito de 'Foice Mágica Luminarca' uma vez por turno.
+
+**157 — Protetor do Santuário Luminarca / Luminarch Sanctum Protector**
+
+Nível 7, Warrior, Light, 1800/2800.
+
+> Se você controlar um 'Portador da Égide Luminarca', você pode enviá-lo para o cemitério: invoque este card por invocação-Especial da sua mão. Uma vez por turno, quando um monstro do oponente declarar um ataque (efeito rápido): negue o ataque.
+
+**158 — Lanceiro Radiante Luminarca / Luminarch Radiant Lancer**
+
+Nível 8, Warrior, Light, 2600/2100.
+
+> Se esse card destruir um monstro do oponente em batalha: ele ganha 100 de ATK enquanto estiver com a face para cima no campo. Se esse card for destruído em batalha: escolha uma Magia/Armadilha que seu oponente controla; destrua-a.
+
+**159 — Aurora Serafim Luminarca / Luminarch Aurora Seraph**
+
+Nível 8, Fairy, Light, 2800/2400.
+
+> Se este card destruir um monstro do oponente em batalha: ganhe PV igual a metade do ATK do monstro destruído. Uma vez por turno, se esse card seria destruído por batalha ou efeitos de card: você pode enviar 1 monstro 'Luminarca' do seu cemitério para o cemitério; negue a destruição.
+
+**160 — Árbitro Santificado Luminarca / Luminarch Sanctified Arbiter**
+
+Nível 4, Warrior, Light, 1500/1000.
+
+> Se esse card for invocado por invocação-Normal: você pode adicionar uma Magia/Armadilha 'Luminarca' do seu Deck à sua mão. Você só pode usar esse efeito de 'Árbitro Santificado Luminarca' uma vez por turno.
+
+**168 — Alabarda Encantada Luminarca / Luminarch Enchanted Halberd**
+
+Nível 4, Warrior, Light, 1600/1400.
+
+> Uma vez por turno, se um monstro 'Luminarca' for Invocado por Invocação-Especial no seu campo: você pode Invocar este card por Invocação-Especial da sua mão, mas ele não pode declarar ataque neste turno.
 
 ### Magias
 
-**152 - Luminarch Holy Shield** (Quick Spell)
-> (Quick Effect) Target up to 3 "Luminarch" monsters you control; until the end of this turn, they cannot be destroyed by battle, and any battle damage you would take involving those monsters is gained instead.
+**152 — Escudo Sagrado Luminarca / Luminarch Holy Shield**
 
-**161 - Luminarch Knights Convocation** (Continuous Spell)
-> Once per turn: discard 1 Level 5 or higher Luminarch monster; add 1 Level 4 or lower Luminarch monster from your Deck to your hand. The first time each turn a "Luminarch" monster you control would be destroyed by battle or card effect, negate that destruction.
+Magia Rápida.
 
-**162 - Sanctum of the Luminarch Citadel** (Field Spell)
-> Whenever an opponent's monster declares an attack: gain 500 LP. Once per turn: You can pay 1000 LP, then target 1 "Luminarch" monster you control; it gains 500 ATK/DEF until the end of this turn.
+> Escolha até 3 monstros 'Luminarca' que você controla; até o final do turno, eles não podem ser destruídos em batalha, e qualquer dano de batalha que você sofreria envolvendo esses monstros é transformado em cura.
 
-**163 - Luminarch Holy Ascension** (Normal Spell)
-> Pay 1000 LP, then target 1 "Luminarch" monster you control; it gains 800 ATK/DEF until the end of this turn.
+**161 — Convocação dos Cavaleiros Luminarca / Luminarch Knights Convocation**
 
-**164 - Luminarch Radiant Wave** (Normal Spell)
-> If you control a "Luminarch" monster, or if there is a "Luminarch" monster in your GY: Pay 2000 LP, then target 1 card your opponent controls; destroy it. You can only activate 1 "Luminarch Radiant Wave" per turn.
+Magia Contínua.
 
-**165 - Luminarch Crescent Shield** (Equip Spell)
-> Equip only to a "Luminarch" monster you control. It gains 500 DEF. If the equipped monster would be destroyed by battle, send this card to the GY instead.
+> Uma vez por turno: você pode descartar 1 monstro 'Luminarca' de Nível 5 ou maior; adicione 1 monstro 'Luminarca' de Nível 4 ou menor do seu Deck à sua mão. A primeira vez por turno que um monstro 'Luminarca' que você controla seria destruído em batalha ou por efeito de card: negue essa destruição.
 
-**166 - Luminarch Sunforged Blade** (Equip Spell)
-> Equip only to a "Luminarch" monster you control. Each time you gain LP, place 1 Solar Counter on this card. The equipped monster gains 200 ATK/DEF for each Solar Counter on this card. Once per turn, if the equipped monster would be destroyed by battle: you can pay 1000 LP; it is not destroyed. You can only control 1 "Luminarch Sunforged Blade".
+**162 — Santuário da Cidadela Luminarca / Sanctum of the Luminarch Citadel**
 
-**167 - Luminarch Spear of Dawnfall** (Normal Spell)
-> If you control a "Luminarch" monster: target 1 monster your opponent controls; its ATK and DEF become 0 until the end of this turn. You can only activate 1 "Luminarch Spear of Dawnfall" per turn.
+Magia de Campo.
 
-**169 - Luminarch Moonlit Blessing** (Normal Spell)
-> Target 1 "Luminarch" monster in your Graveyard; add it to your hand, then if you control "Sanctum of the Luminarch Citadel", you can Special Summon that monster. You can only activate 1 "Luminarch Moonlit Blessing" per turn.
+> Quando um monstro do oponente declarar um ataque: ganhe 500 PV. Uma vez por turno, você pode pagar 1000 PV e escolher 1 monstro 'Luminarca' que você controla: ele ganha de 500 ATK/DEF até o final do turno.
 
-**170 - Luminarch Sacred Judgment** (Normal Spell)
-> If your opponent controls 2 or more monsters: Pay 2000 LP; Special Summon "Luminarch" monsters from your GY, up to the number of monsters your opponent controls, then gain 500 LP for each monster Special Summoned. You can only activate 1 "Luminarch Sacred Judgment" per turn.
+**163 — Ascensão Sagrada Luminarca / Luminarch Holy Ascension**
 
----
+Magia Normal.
+
+> Pague 1000 PV, escolha um monstro 'Luminarca' que você controla; ele ganha 800 de ATK até o final do turno.
+
+**164 — Onda Radiante Luminarca / Luminarch Radiant Wave**
+
+Magia Normal.
+
+> Se você controlar um monstro 'Luminarca', ou se houver um monstro 'Luminarca' no seu Cemitério: pague 2000 PV e escolha 1 card que seu oponente controla; destrua-o. Você só pode ativar 1 'Onda Radiante Luminarca' por turno.
+
+**165 — Escudo Crescente Luminarca / Luminarch Crescent Shield**
+
+Magia de Equipamento.
+
+> Só pode ser equipado a um monstro 'Luminarca'. O monstro equipado ganha 500 de DEF. Se o monstro equipado seria destruído em batalha, envie esse card para o cemitério em vez disso.
+
+**166 — Lâmina Solarforjada Luminarca / Luminarch Sunforged Blade**
+
+Magia de Equipamento.
+
+> Só pode ser equipada a um monstro "Luminarca". Cada vez que você ganhar PV, coloque 1 Marcador Solar neste card. O monstro equipado ganha 200 ATK/DEF para cada Marcador Solar neste card. Uma vez por turno, se o monstro equipado seria destruído em batalha: você pode pagar 1000 PV; ele não é destruído. Você só pode controlar 1 "Lâmina Solarforjada Luminarca".
+
+**167 — Lança da Alvorada Luminarca / Luminarch Spear of Dawnfall**
+
+Magia Normal.
+
+> Se você controlar 1 monstro 'Luminarca': escolha 1 monstro que seu oponente controla; o ATK/DEF do alvo se tornam 0 até o final do turno. Você só pode ativar 1 'Lança da Alvorada Luminarca' por turno.
+
+**169 — Bênção do Brilho da Lua Luminarca / Luminarch Moonlit Blessing**
+
+Magia Normal.
+
+> Escolha 1 monstro 'Luminarca' no seu cemitério; adicione o alvo à sua mão, então se você controlar 'Santuário da Cidadela Luminarca', você pode invocar o alvo por invocação-Especial. Você só pode ativar 1 'Bênção do Brilho da Lua Luminarca' por turno.
+
+**170 — Julgamento Sagrado Luminarca / Luminarch Sacred Judgment**
+
+Magia Normal.
+
+> Se seu oponente controlar 2 ou mais monstros: pague 2000 PV; Invoque por Invocação-Especial monstros 'Luminarca' do seu Cemitério, até o número de monstros que seu oponente controla, então ganhe 500 PV por monstro Invocado. Você só pode ativar 1 'Julgamento Sagrado Luminarca' por turno.
+
+### Armadilhas
+
+Nenhuma.
 
 ### Extra Deck
 
-**171 - Luminarch Megashield Barbarias** (L9 Fusion Warrior | ATK 2500 / DEF 3000)
-> 'Luminarch Sanctum Protector' + 1 Level 5 or higher 'Luminarch' monster. All LP you would gain is doubled. Once per turn: You can target 1 monster you control; switch its battle position, and if you do, it gains 800 ATK until the end of this turn.
+**171 — Megaescudo Barbarias Luminarca / Luminarch Megashield Barbarias**
 
-**172 - Luminarch Fortress Aegis** (L6 Ascension Warrior | ATK 1500 / DEF 2500)
-> Ascension Material: 'Luminarch Aegisbearer'. Requirement: The material must have been face-up on the field for 2 turns. Your opponent must prioritize this card as an attack target, if possible. If this card is Ascension Summoned: Gain 500 LP for each 'Luminarch' monster you control. Once per turn: You can pay 1000 LP, then target 1 'Luminarch' monster with 2000 or less DEF in your GY; Special Summon it.
+Fusão, Nível 9, Warrior, Light, 2500/3000.
 
-**173 - Luminarch Pure Knight** (L6 Fusion Warrior | ATK 2000 / DEF 2000)
-> 2 'Luminarch' monsters. If this card is Fusion Summoned: You can add 1 'Sanctum of the Luminarch Citadel' from your Deck to your hand. Twice per turn, when you activate the effect of a 'Luminarch' Spell/Trap that requires paying LP: reduce that cost by 1000. You can only use the Fusion Summon effect of 'Luminarch Pure Knight' once per turn.
+> Materiais: 'Protetor do Santuário Luminarca' + 1 monstro 'Luminarca' de nível 5 ou maior Todo o PV ganho é dobrado. Uma vez por turno, você pode escolher 1 monstro que você controla; troque sua posição de batalha, e se isso acontecer, ele ganha 800 de ATK até o final do turno.
 
-**174 - Luminarch Ethereal Lancer** (L6 Ascension Warrior | ATK 2100 / DEF 1600)
-> Ascension Material: 'Luminarch Valiant - Knight of the Dawn'. If this card is Ascension Summoned: You can target 1 other face-up monster you control; it gains 500 DEF, and if it does, this card gains 500 ATK. If this card attacks a Defense Position monster, inflict double piercing battle damage to your opponent. If this card destroys an opponent's monster by battle: gain 1000 LP.
+**172 — Fortaleza Égide Luminarca / Luminarch Fortress Aegis**
+
+Ascensão, Nível 6, Warrior, Light, 1500/2500.
+
+> Material de Ascensão: 'Portador da Égide Luminarca' Requisito: o material deve ter ficado com a face para cima no campo por 2 turnos. Seu oponente deve priorizar este card como alvo de ataques, se possível. Se este card for Invocado por Ascensão: ganhe 500 PV para cada monstro 'Luminarca' que você controla. Uma vez por turno: você pode pagar 1000 PV e, depois, escolher 1 monstro 'Luminarca' com 2000 ou menos de DEF no seu Cemitério; Invoque-o por Invocação-Especial.
+
+**173 — Cavaleiro Puro Luminarca / Luminarch Pure Knight**
+
+Fusão, Nível 6, Warrior, Light, 2000/2000.
+
+> Materiais: 2 monstros 'Luminarca'. Se este card for Invocado por Invocação-Fusão: você pode adicionar 1 'Santuário da Cidadela Luminarca' do seu Deck à sua mão. Duas vezes por turno, quando você ativar o efeito de uma Magia/Armadilha 'Luminarca' que exija pagar PV: reduza esse custo em 1000. Você só pode usar o efeito de Invocação-Fusão de 'Cavaleiro Puro Luminarca' uma vez por turno.
+
+**174 — Lanceiro Etéreo Luminarca / Luminarch Ethereal Lancer**
+
+Ascensão, Nível 6, Warrior, Light, 2100/1600.
+
+> Material de Ascensão: "Luminarca Valente - Cavaleiro da Aurora". Se este card for Invocado por Invocação-Ascensão: você pode escolher 1 outro monstro com a face para cima que você controla; ele ganha 500 DEF e, se isso acontecer, este card ganha 500 ATK. Se este card atacar um monstro em Posição de Defesa, cause o dobro do dano de batalha perfurante ao seu oponente. Se este card destruir um monstro do oponente em batalha: ganhe 1000 PV.
+
+---
+
+## Notas do Arquétipo
+
+- O catálogo possui 24 cartas: 20 no Main Deck e 4 no Extra Deck.
+- O Main Deck contém 10 monstros, 10 Magias e 0 Armadilhas.
+- O Extra Deck contém 2 de Fusão, 2 de Ascensão.
