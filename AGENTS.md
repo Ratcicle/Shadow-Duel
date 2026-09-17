@@ -2,6 +2,11 @@
 
 **Regra de ouro:** Todo código adicionado ou alterado deve seguir o padrão Shadow Duel: genérico, flexível e pensando nas adições futuras.
 
+A migração para TypeScript está concluída nos critérios técnicos das Etapas
+0–14. A [validação final de paridade](docs/migrations/typescript-stage14.md)
+registra baselines, deltas aprovados e evidências. Novas mudanças devem
+preservar os contratos strict e passar `npm run check`.
+
 ---
 
 ### Guardrails de design e implementação
@@ -183,17 +188,14 @@ registro `docs/migrations/typescript-debt.md` auditável.
 | `shadow_duel_dev_mode`     | Painel dev + logs detalhados                       |
 | `shadow_duel_test_mode`    | Guardas extras de runtime                          |
 | `shadow_duel_bot_preset`   | Define um dos oito arquétipos disponíveis no registry do Bot |
-| `shadow_duel_capture_mode` | Ativa captura de replays                           |
 
-**Sistema de Replays** — Captura canônica e análise de partidas:
+**Sistema de Replays** — Captura e reprodução canônica:
 
-- Ativar: botão `🎬 Replay` no menu principal
-- Captura todas as decisões de ambos jogadores + availableActions
-- Ao fim do duelo: modal para salvar/descartar replay `.json`
-- Dashboard: botão `📊 Replay Analytics` — importa replays, gera training digests
-- Storage: IndexedDB com stores `replays`, `digests`, `aggregates`
+- Duelos normais habilitam `captureReplay: true`. Arena e Laboratório não habilitam captura canônica por padrão; instâncias diretas de `Game` em testes podem solicitá-la com essa opção.
+- O formato serializa setup/RNG, comandos, decisões, eventos e hashes de estado.
+- `Game.exportReplay` exporta o replay executável; o relatório estratégico da Arena é um artefato separado.
 - Execução canônica: [src/core/contracts/replay.ts](src/core/contracts/replay.ts) e [src/core/game/replay/](src/core/game/replay/) (`canonical.ts`, `validation.ts`, `recorder.ts`, `driver.ts`, `index.ts`)
-- Análise estratégica: [src/core/ai/replay/](src/core/ai/replay/) (`ReplayAnalyzer`, `ReplayDatabase`, `ReplayImporter`, `ReplayInsights`, `PatternMatcher`)
+- Análise estratégica da Arena: [ArenaAnalytics.ts](src/core/ai/ArenaAnalytics.ts).
 - Reprodução headless: `npm run replay -- caminho/duelo.json`
 
 **Scripts utilitários** ([scripts/](scripts/)):
@@ -356,9 +358,8 @@ oncePerTurn: true, oncePerTurnName: "Unique Effect Name"
 
 **Estrutura:** [src/core/ai/](src/core/ai/)
 
-A Etapa 9 está dividida em dois PRs. O PR 9A migrou contratos, simulação,
-utilitários e buscas. O PR 9B migra `BaseStrategy`, as oito estratégias,
-suas bases por arquétipo, registry, Bot e Arena para arquivos físicos `.ts`.
+Contratos, simulação, utilitários, buscas, `BaseStrategy`, as oito estratégias,
+suas bases por arquétipo, registry, Bot e Arena são arquivos físicos `.ts`.
 Consumidores continuam usando specifiers `.js`. Os contratos públicos
 verificam tanto o jogo real quanto as projeções de leitura usadas na simulação.
 
@@ -378,13 +379,12 @@ Núcleo de estratégias e busca:
 - `RoleAnalyzer.ts` — Classificação de papéis das cartas em jogo
 - `ArenaAnalytics.ts` — Métricas para o Bot Arena
 
-Subpastas (knowledge bases por arquétipo + replays):
+Subpastas de conhecimento por arquétipo:
 
 - `shadowheart/` — Simulação, combos, conhecimento, prioridades, scoring e planejamento em TypeScript
 - `luminarch/` — Simulação, prioridades, políticas de recursos, fusões e planejamento em TypeScript
 - `dragon/` — Simulação, conhecimento, políticas, scoring e planejamento em TypeScript
 - `void/` — `combos`, `knowledge`, `priorities`, `scoring`
-- `replay/` — `ReplayAnalyzer`, `ReplayDatabase`, `ReplayImporter`, `ReplayInsights`, `PatternMatcher`
 
 **Criar nova estratégia:**
 
@@ -413,9 +413,11 @@ registerStrategy("my_archetype", MyStrategy);
 import { getCardDisplayName, getCardDisplayDescription } from "./i18n.js";
 ```
 
-Fontes: [src/locales/en.json](src/locales/en.json), [src/locales/pt-br.json](src/locales/pt-br.json)
+O inglês canônico vem das definições das cartas; a tradução está em
+[public/locales/pt-br.json](public/locales/pt-br.json). Textos de UI e escolhas
+também usam os dicionários de [src/core/i18n.ts](src/core/i18n.ts).
 
-Toda nova carta exige descrição localizada nos dois idiomas.
+Toda nova carta exige nome/descrição em inglês e tradução para português.
 
 ---
 
@@ -434,7 +436,7 @@ Em [docs/](docs/):
 - [Como criar um handler.md](docs/Como%20criar%20um%20handler.md) — Padrão de handlers
 - [Catalogo de actions.md](docs/Catalogo%20de%20actions.md) — Catálogo gerado de todas as actions disponíveis
 - [Regras para Invocação-Ascensão.md](docs/Regras%20para%20Invocação-Ascensão.md) — Mecânica de Ascensão
-- [Como adicionar um arquetipo.md](docs/Como%20adicionar%20um%20arquetipo.md) — Criando arquétipos
-- [Análise do Sistema de Replays.md](docs/Análise%20do%20Sistema%20de%20Replays.md) e [Sistema de Análise de Replays.md](docs/Sistema%20de%20Análise%20de%20Replays.md) — Sistema de replays
+- [Estrutura do Projeto.md](docs/Estrutura%20do%20Projeto.md) — Organização dos módulos e estratégias
+- [Replay canônico.md](docs/Replay%20can%C3%B4nico.md) — Schema, captura e reprodução de replays
 - Catálogos por arquétipo: `Arcanist`, `Bloomrot`, `Burning West`, `Dragon`,
   `Luminarch`, `Miragebound`, `Shadow-Heart`, `Tech-Zero`, `Void`

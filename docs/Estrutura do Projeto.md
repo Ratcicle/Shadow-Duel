@@ -1,12 +1,15 @@
 # Estrutura do Projeto - Shadow Duel
 
 Documento atualizado a partir da árvore atual do repositório. Ele descreve as
-pastas principais e a responsabilidade dos módulos JavaScript e TypeScript que
+pastas principais e a responsabilidade dos módulos TypeScript que
 formam o jogo.
+
+A migração foi encerrada após a
+[validação de paridade da Etapa 14](migrations/typescript-stage14.md).
 
 ## Visão Geral
 
-Shadow Duel é uma SPA em migração mista JavaScript/TypeScript, usando ES Modules
+Shadow Duel é uma SPA em TypeScript com modo strict, usando ES Modules
 nativos do navegador. Arquivos físicos `.ts` continuam sendo importados por
 specifiers relativos terminados em `.js`; não use specifiers `.ts`. O ponto de
 entrada HTML é [index.html](../index.html), que carrega [src/main.ts](../src/main.ts).
@@ -19,6 +22,12 @@ A aplicação se organiza em três camadas principais:
 O projeto usa Vite para desenvolvimento e build. As dependências de runtime em
 [package.json](../package.json) são `pixi.js`, para efeitos visuais, e
 `@tabler/icons`, consumida por importações SVG pontuais na UI.
+
+Use Node 22 (`>=22.12.0 <23`), `npm ci` e `npm run check`. O gate verifica
+`tsconfig.app.json` e `tsconfig.node.json`, audita escapes de tipagem, executa
+testes, valida Chain/actions/digests e gera o build. Ambos os projetos usam
+`allowJs: false`; o único fixture JavaScript é
+`test/toolchain/fixtures/jsConsumer.js`, para a interoperabilidade `.js` → `.ts`.
 
 ---
 
@@ -57,7 +66,7 @@ Shadow-Duel/
 
 Bootstrap da SPA. Inicializa o locale, coleta referências de DOM, cria os controllers em [src/ui/main/](../src/ui/main/) e conecta ações globais como iniciar duelo, abrir telas, alternar idioma, laboratório e Bot Arena.
 
-`main.js` deve continuar como composição de módulos. Lógica de deck builder, laboratório, Bot Arena, persistência e renderização pertence aos controllers dedicados.
+`main.ts` deve continuar como composição de módulos. Lógica de deck builder, laboratório, Bot Arena, persistência e renderização pertence aos controllers dedicados.
 
 ### `src/data/cards.ts`
 
@@ -117,8 +126,8 @@ Traduções visíveis no jogo. Hoje há [pt-br.json](../public/locales/pt-br.jso
 | [contracts/gameRuntime.ts](../src/core/contracts/gameRuntime.ts) | Estado runtime, hosts mínimos por domínio, transações, resultados e overloads de movimento. |
 | [contracts/aiState.ts](../src/core/contracts/aiState.ts) | Estados vivo, público, de replay, perspectiva e simulação, além dos quatro perfis explícitos de clone. |
 | [contracts/ai.ts](../src/core/contracts/ai.ts) | `AIActionByType`, contratos de estratégia, buscas, scoring e planejamento. |
-| [contracts/bot.ts](../src/core/contracts/bot.ts) | Contratos da camada operacional do Bot, preparada para o PR 9B. |
-| [contracts/arena.ts](../src/core/contracts/arena.ts) | Contratos de presets, execução e analytics da Arena, preparada para o PR 9B. |
+| [contracts/bot.ts](../src/core/contracts/bot.ts) | Contratos da camada operacional do Bot. |
+| [contracts/arena.ts](../src/core/contracts/arena.ts) | Contratos de presets, execução e analytics da Arena. |
 | [contracts/chain.ts](../src/core/contracts/chain.ts) | Constantes e unions fechadas fundamentais de Chain, Fast Effect, SEGOC e uso. |
 | [contracts/chainRuntime.ts](../src/core/contracts/chainRuntime.ts) | Projeções runtime, links, ativações preparadas, contexts, ports, hosts e capability guards. |
 | [ChainSystem.ts](../src/core/ChainSystem.ts) | Fachada do sistema de Chain/Spell Speed, composta pelo manifest de [src/core/chain/](../src/core/chain/); consumidores preservam o specifier `.js`. |
@@ -173,9 +182,9 @@ deve existir em `ActionByType`, `ACTION_BINDINGS`, catálogo e registry.
 
 ## `src/core/ai/` - Inteligência Artificial
 
-A Etapa 9 está dividida em dois PRs. O PR 9A tipa estados, simulação e buscas;
-o PR 9B tipará estratégias, executores, Bot e Arena após o merge do primeiro.
-Arquivos físicos TypeScript continuam sendo importados por specifiers `.js`.
+Estados, simulação, buscas, estratégias, executores, Bot e Arena são arquivos
+físicos TypeScript, importados por specifiers `.js`. Os quatro perfis de clone
+(Bot, Beam/Greedy, GameTree e TurnLine) preservam seus contratos separados.
 
 ### Núcleo Genérico
 
@@ -213,12 +222,12 @@ Os pacotes [shadowheart/](../src/core/ai/shadowheart/), [luminarch/](../src/core
 
 Padrões comuns:
 
-- `knowledge.js` - papéis, valores e regras específicas do arquétipo.
-- `priorities.js` - quando invocar, ativar spells/traps, atacar, tributar ou preservar recursos.
-- `combos.js` - detecção de linhas e sinergias.
-- `scoring.js` - avaliação específica de board.
-- `linePlanning.js` - ordenação e bônus/penalidades de linhas.
-- `simulation.ts` - simulação específica já tipada para Shadow-Heart, Luminarch e Dragon; os demais módulos do pacote permanecem `.js` até o PR 9B.
+- `knowledge.ts` - papéis, valores e regras específicas do arquétipo.
+- `priorities.ts` - quando invocar, ativar spells/traps, atacar, tributar ou preservar recursos.
+- `combos.ts` - detecção de linhas e sinergias.
+- `scoring.ts` - avaliação específica de board.
+- `linePlanning.ts` - ordenação e bônus/penalidades de linhas.
+- `simulation.ts` - simulação específica para Shadow-Heart, Luminarch e Dragon.
 
 Pacotes com módulos extras relevantes:
 
@@ -361,7 +370,7 @@ Controllers da tela inicial e fluxos fora do duelo:
 | [gameLauncher.ts](../src/ui/main/gameLauncher.ts) | Cria `Game` e `Renderer` para duelo comum ou laboratório. |
 | [localeControls.ts](../src/ui/main/localeControls.ts) | Troca de idioma e reload controlado. |
 
-### `src/ui/Renderer.js`
+### `src/ui/Renderer.ts`
 
 Fachada de renderização. Constrói o renderer e delega métodos para [src/ui/renderer/](../src/ui/renderer/).
 
@@ -437,4 +446,4 @@ pelos efeitos visuais do duelo.
 
 ## Arquitetura em Uma Frase
 
-`main.js` compõe controllers de `ui/main/`; o `gameLauncher` cria `Game` e `Renderer`; `Game` delega regras para módulos em `core/game/`, o `Bot` decide via estratégias em `core/ai/` e execução em `core/bot/`, cartas declarativas em `data/cards.js` resolvem pelo `EffectEngine` e `actionHandlers/`, e respostas/Spell Speed passam pelo `ChainSystem`.
+`main.ts` compõe controllers de `ui/main/`; o `gameLauncher` cria `Game` e `Renderer`; `Game` delega regras para módulos em `core/game/`, o `Bot` decide via estratégias em `core/ai/` e execução em `core/bot/`, cartas declarativas em `data/cards.ts` resolvem pelo `EffectEngine` e `actionHandlers/`, e respostas/Spell Speed passam pelo `ChainSystem`.

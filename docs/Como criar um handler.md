@@ -43,6 +43,12 @@ specifiers `.js`. Para código novo, importe pelo specifier
 `./actionHandlers/index.js` ou pelo arquivo de categoria correspondente. A
 fachada pode não expor todos os handlers novos.
 
+Use Node 22 e mantenha as opções strict de app e Node. Refine `action.type`
+antes de acessar campos de uma variante; verifique índices e valores opcionais
+antes da mutação. Campos ausentes e campos com `undefined` são contratos
+distintos. Não alargue o schema declarativo para acomodar um detalhe interno
+do runtime nem introduza escapes de tipagem para silenciar o compilador.
+
 ## Assinatura
 
 ```ts
