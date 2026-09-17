@@ -7,6 +7,12 @@ A migração para TypeScript está concluída nos critérios técnicos das Etapa
 registra baselines, deltas aprovados e evidências. Novas mudanças devem
 preservar os contratos strict e passar `npm run check`.
 
+O compilador oficial é TypeScript 7.0.2 via alias `@typescript/native`; os
+scripts de typecheck/watch chamam seu CLI explicitamente. O alias `typescript`
+aponta para `@typescript/typescript6`, com implementação 6.0.2 fixada, somente
+para a API de `scripts/audit_typescript_escapes.ts`. Não substitua o CLI oficial
+por TS6. Evidências e configuração: [migração TS7](docs/migrations/typescript7-toolchain.md).
+
 ---
 
 ### Guardrails de design e implementação
@@ -132,7 +138,9 @@ Os contratos fundamentais ficam em [src/core/contracts/chain.ts](src/core/contra
 | `resolution.ts` | Preparação, resolução e cleanup dos links |
 | `finalization.ts` | Destino e cleanup pós-Chain de Spell/Trap |
 
-Os métodos anexados são expostos no tipo da fachada por declaration merging, sem class fields emitidos. Ao alterar o Chain, execute `npm run check` e o Bot smoke (`npm run test:bot-smoke -- --duels 1 --matchup arcanist:shadowheart`); o gate completo já inclui as suítes de Chain e replay canônico, auditorias, digest e build.
+Os métodos anexados são expostos no tipo da fachada por declaration merging, sem class fields emitidos. Ao alterar o Chain, durante a implementação execute os testes de Chain e os
+testes diretamente afetados. Execute `npm run check` e o Bot smoke como gate
+final da tarefa.
 
 **Estrutura modular de [src/core/effects/](src/core/effects/):**
 
@@ -161,8 +169,9 @@ npm run dev                   # Inicia o servidor Vite
 npm run check                 # Tipos, testes, auditorias, digest e build
 npm run preview               # Serve o build de produção localmente
 ```
+Durante desenvolvimento iterativo, execute apenas typecheck e testes diretamente relacionados aos arquivos alterados. Não execute a suíte completa nem npm run check após cada edição. Execute o gate completo somente ao finalizar a tarefa, antes de commit/PR, ou quando a alteração afetar múltiplos subsistemas.
 
-O projeto usa TypeScript e Vite, com Node 22 (`>=22.12.0 <23`). Os imports relativos preservam specifiers `.js`, resolvidos para os arquivos físicos `.ts` pelo toolchain. Para distribuição estática, use `npm run build` e publique `dist/`.
+O projeto usa TypeScript e Vite, com Node 24 (`>=24.21.0 <25`). Os imports relativos preservam specifiers `.js`, resolvidos para os arquivos físicos `.ts` pelo toolchain. Para distribuição estática, use `npm run build` e publique `dist/`.
 
 Os projetos app e Node usam `allowJs: false`, `strict` e as seis opções da
 Etapa 13: `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`,

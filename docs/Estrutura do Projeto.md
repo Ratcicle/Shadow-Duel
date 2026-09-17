@@ -23,7 +23,7 @@ O projeto usa Vite para desenvolvimento e build. As dependências de runtime em
 [package.json](../package.json) são `pixi.js`, para efeitos visuais, e
 `@tabler/icons`, consumida por importações SVG pontuais na UI.
 
-Use Node 22 (`>=22.12.0 <23`), `npm ci` e `npm run check`. O gate verifica
+Use Node 24 (`>=24.21.0 <25`), `npm ci` e `npm run check`. O gate verifica
 `tsconfig.app.json` e `tsconfig.node.json`, audita escapes de tipagem, executa
 testes, valida Chain/actions/digests e gera o build. Ambos os projetos usam
 `allowJs: false`; o único fixture JavaScript é
