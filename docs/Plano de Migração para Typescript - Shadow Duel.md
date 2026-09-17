@@ -5,6 +5,12 @@
 **Objetivo:** migrar o código JavaScript atual para TypeScript com ganho real de confiabilidade e manutenção, preservando integralmente o comportamento do jogo.  
 **Contexto:** a baseline já inclui a grande refatoração do Chain System e o ajuste com testes de negação de `tributeValue.js`. Os testes manuais de cartas serão retomados somente depois que a migração completa estiver encerrada.
 
+**Status em 17/09/2026:** migração concluída nos critérios técnicos das
+Etapas 0–14. A [entrega da Etapa 14](migrations/typescript-stage14.md) registra
+568 testes aprovados, paridade de banco/Chain/replay, IA com seeds fixas e
+smoke visual/deploy. Os deltas aprovados das Etapas 3 e 9A estão explicitados.
+A campanha manual de cartas posterior à migração ainda não foi iniciada.
+
 ---
 
 ## 1. Diretriz principal
@@ -2396,6 +2402,32 @@ Não executar uma campanha manual de cartas durante as etapas da migração. Som
 - build e deploy funcionam;
 - documentação de agentes já descreve TypeScript;
 - a migração está encerrada antes do início dos testes manuais de cartas.
+
+---
+
+## Entrega da Etapa 14
+
+A Etapa 13 foi integrada pelo PR #64 em `d81ac1d`. A validação final
+reexecutou a baseline original `c041c6f` (321 testes) e a árvore final
+(568 testes), ambas sem falhas. O gate completo, a validação integral do
+banco, a geração do catálogo e os builds passaram.
+
+Contagem, IDs, nomes, ordem e assinatura legada foram preservados. O digest
+permanece na aprovação da Etapa 3; o replay mantém seu schema e hashes e o
+trace de Chain continua canônico. Os quatro cenários de IA com seeds fixas
+coincidem com a baseline da Etapa 9A; o único delta contra a original é a
+correção já autorizada do ledger `_simOncePerTurn`.
+
+Telas, modais e um fluxo do Laboratório foram comparados com a baseline
+reconstruída. O Pages de `d81ac1d` passou pelo smoke de duelo e Arena.
+Documentação de agentes, estrutura e guias de cartas/handlers foi atualizada.
+O [relatório completo](migrations/typescript-stage14.md), as
+[evidências](migrations/typescript-stage14-evidence.json) e o
+[protocolo da IA](migrations/typescript-stage14-ai-protocol.md) registram
+escopo, reprodução, exceções e limites das verificações.
+
+A migração está encerrada tecnicamente. Este registro segue por PR próprio;
+nenhuma campanha manual de cartas foi iniciada nesta etapa.
 
 ---
 

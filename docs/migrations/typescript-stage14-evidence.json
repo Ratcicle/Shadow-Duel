@@ -1,0 +1,378 @@
+{
+  "format": "shadow-duel-typescript-stage14-evidence",
+  "version": 1,
+  "date": "2026-09-17",
+  "base": "d81ac1de60845afa25fd85f36e5193b262001d9c",
+  "cardIdentity": {
+    "count": 227,
+    "legacySignature": "1cc622e3",
+    "idsSha256": "b7ace9ed6c40cc19990521286fb877004abeb0e7f2a779548fb6e69d73b1a860",
+    "namesSha256": "f25fdf7badb75cd78209813cd5676dd1adadc7ce0dd594eed4a31b35435b01aa",
+    "orderedIdNamePairsSha256": "9a309c0dff03b948338de9465156a292745452ead743d249df79bcd53fdf14e1"
+  },
+  "fixedSeedAI": {
+    "c041c6f": {
+      "format": "shadow-duel-stage14-fixed-seed-ai",
+      "version": 1,
+      "label": "c041c6f",
+      "node": "v22.23.2",
+      "options": {
+        "speed": "instant",
+        "maxTurns": 40,
+        "repeats": 2,
+        "projection": "outcome, final LP, cards played, projected actions, opening sequence, errors and warnings"
+      },
+      "matrix": [
+        {
+          "seed": "stage14-ai-alpha",
+          "matchup": "arcanist:shadowheart",
+          "winner": "player",
+          "turns": 6,
+          "reason": "lp_zero",
+          "finalLP": {
+            "player": 8000,
+            "bot": 0
+          },
+          "cardPlayCount": 7,
+          "actionCount": 8,
+          "cardsSha256": "d1da6fc1bc05be9f2e1f82b7fc5fd7886b722878ff06008f18070c8453cb3654",
+          "actionsSha256": "cb1f21fd048e5d71be18b25510f3099adb3c956c07301ea2202b034cb7813d4d",
+          "openingSha256": "406e6f05344010a7602f3041d98b68126b0930ad780c0ed78926161051798f9d",
+          "projectionSha256": "c01a3794bd39787cd528f2510bb54919484e59126d725c1cb1ad61d8fb81361d",
+          "repeatProjectionSha256": "c01a3794bd39787cd528f2510bb54919484e59126d725c1cb1ad61d8fb81361d",
+          "errors": [],
+          "warnings": []
+        },
+        {
+          "seed": "stage14-ai-beta",
+          "matchup": "arcanist:shadowheart",
+          "winner": "player",
+          "turns": 6,
+          "reason": "lp_zero",
+          "finalLP": {
+            "player": 5800,
+            "bot": 0
+          },
+          "cardPlayCount": 32,
+          "actionCount": 33,
+          "cardsSha256": "5ffe99ecd76ff576e9c4dd18ce1a83b5cf8e68fcb056c08f63fecaacbda7649f",
+          "actionsSha256": "9b6a8fd7c3dfa2004476093a386bf24c0a2bb17b307fa09afbbf211ad324f091",
+          "openingSha256": "a68b9d5b80044e681b5ff6c75d1581b6418ba10a8a61c8729996bf3c24136292",
+          "projectionSha256": "f7ab110e59fc2eefcb1305db53b26c6ff70f84f14c3fa38d97f8459de94809a8",
+          "repeatProjectionSha256": "f7ab110e59fc2eefcb1305db53b26c6ff70f84f14c3fa38d97f8459de94809a8",
+          "errors": [],
+          "warnings": []
+        },
+        {
+          "seed": "stage14-ai-alpha",
+          "matchup": "miragebound:luminarch",
+          "winner": "bot",
+          "turns": 13,
+          "reason": "lp_zero",
+          "finalLP": {
+            "player": 0,
+            "bot": 100
+          },
+          "cardPlayCount": 60,
+          "actionCount": 68,
+          "cardsSha256": "271d3524beab99457ef842054185c86b868a1d4595416edcf042f29f8df01c29",
+          "actionsSha256": "a307383ae6471620313155c5c2d0863ac7f9ba1af395e2582a50cfd5c0fa2ea9",
+          "openingSha256": "2c365c89b56bbc409056b48b6394a30cd3d954e84d57f589b4db5ea3edc8f813",
+          "projectionSha256": "ebd9e6752a9d0753d6f8f2a1457b8597cd0a1f65499d00f04774ebd6d0af718b",
+          "repeatProjectionSha256": "ebd9e6752a9d0753d6f8f2a1457b8597cd0a1f65499d00f04774ebd6d0af718b",
+          "errors": [],
+          "warnings": []
+        },
+        {
+          "seed": "stage14-ai-beta",
+          "matchup": "miragebound:luminarch",
+          "winner": "bot",
+          "turns": 6,
+          "reason": "lp_zero",
+          "finalLP": {
+            "player": 0,
+            "bot": 4900
+          },
+          "cardPlayCount": 22,
+          "actionCount": 25,
+          "cardsSha256": "4bee6b6c809d5e48e098bf08278b990e88755acdc77ea2659cd8510af00b07be",
+          "actionsSha256": "6f411604d56eed3e137495230ede333a2ead7123c1fd59e78828b922ef84f6ed",
+          "openingSha256": "c8a827089186755262936bf38b9e488df4aec2e577fa35d5cbca4b18c50bf0e3",
+          "projectionSha256": "531e95102cda1cc1a38ef66c808fb0d67cdca35194f7458d3701d96b7c5d722f",
+          "repeatProjectionSha256": "531e95102cda1cc1a38ef66c808fb0d67cdca35194f7458d3701d96b7c5d722f",
+          "errors": [],
+          "warnings": []
+        }
+      ]
+    },
+    "c432d64": {
+      "format": "shadow-duel-stage14-fixed-seed-ai",
+      "version": 1,
+      "label": "c432d64",
+      "node": "v22.23.2",
+      "options": {
+        "speed": "instant",
+        "maxTurns": 40,
+        "repeats": 2,
+        "projection": "outcome, final LP, cards played, projected actions, opening sequence, errors and warnings"
+      },
+      "matrix": [
+        {
+          "seed": "stage14-ai-alpha",
+          "matchup": "arcanist:shadowheart",
+          "winner": "player",
+          "turns": 10,
+          "reason": "lp_zero",
+          "finalLP": {
+            "player": 6400,
+            "bot": 0
+          },
+          "cardPlayCount": 24,
+          "actionCount": 26,
+          "cardsSha256": "a96f93639c092ac92496ab24c61a99b7f2929322b4e8f8317acb86f6a9d03825",
+          "actionsSha256": "6411d662bdbfeaf5ba58287aee903f6643d19d3c3cb88c3860b6558493018393",
+          "openingSha256": "8aad43cbab36adc08424806c1c7d650cf067ade73097861aac6004446497cd67",
+          "projectionSha256": "5f91c36e1237a4131f0dd604d53acdb6156ca1a8b378e93b632905a42638b03b",
+          "repeatProjectionSha256": "5f91c36e1237a4131f0dd604d53acdb6156ca1a8b378e93b632905a42638b03b",
+          "errors": [],
+          "warnings": []
+        },
+        {
+          "seed": "stage14-ai-beta",
+          "matchup": "arcanist:shadowheart",
+          "winner": "player",
+          "turns": 6,
+          "reason": "lp_zero",
+          "finalLP": {
+            "player": 5800,
+            "bot": 0
+          },
+          "cardPlayCount": 32,
+          "actionCount": 33,
+          "cardsSha256": "5ffe99ecd76ff576e9c4dd18ce1a83b5cf8e68fcb056c08f63fecaacbda7649f",
+          "actionsSha256": "9b6a8fd7c3dfa2004476093a386bf24c0a2bb17b307fa09afbbf211ad324f091",
+          "openingSha256": "a68b9d5b80044e681b5ff6c75d1581b6418ba10a8a61c8729996bf3c24136292",
+          "projectionSha256": "f7ab110e59fc2eefcb1305db53b26c6ff70f84f14c3fa38d97f8459de94809a8",
+          "repeatProjectionSha256": "f7ab110e59fc2eefcb1305db53b26c6ff70f84f14c3fa38d97f8459de94809a8",
+          "errors": [],
+          "warnings": []
+        },
+        {
+          "seed": "stage14-ai-alpha",
+          "matchup": "miragebound:luminarch",
+          "winner": "bot",
+          "turns": 13,
+          "reason": "lp_zero",
+          "finalLP": {
+            "player": 0,
+            "bot": 100
+          },
+          "cardPlayCount": 60,
+          "actionCount": 68,
+          "cardsSha256": "271d3524beab99457ef842054185c86b868a1d4595416edcf042f29f8df01c29",
+          "actionsSha256": "a307383ae6471620313155c5c2d0863ac7f9ba1af395e2582a50cfd5c0fa2ea9",
+          "openingSha256": "2c365c89b56bbc409056b48b6394a30cd3d954e84d57f589b4db5ea3edc8f813",
+          "projectionSha256": "ebd9e6752a9d0753d6f8f2a1457b8597cd0a1f65499d00f04774ebd6d0af718b",
+          "repeatProjectionSha256": "ebd9e6752a9d0753d6f8f2a1457b8597cd0a1f65499d00f04774ebd6d0af718b",
+          "errors": [],
+          "warnings": []
+        },
+        {
+          "seed": "stage14-ai-beta",
+          "matchup": "miragebound:luminarch",
+          "winner": "bot",
+          "turns": 6,
+          "reason": "lp_zero",
+          "finalLP": {
+            "player": 0,
+            "bot": 4900
+          },
+          "cardPlayCount": 22,
+          "actionCount": 25,
+          "cardsSha256": "4bee6b6c809d5e48e098bf08278b990e88755acdc77ea2659cd8510af00b07be",
+          "actionsSha256": "6f411604d56eed3e137495230ede333a2ead7123c1fd59e78828b922ef84f6ed",
+          "openingSha256": "c8a827089186755262936bf38b9e488df4aec2e577fa35d5cbca4b18c50bf0e3",
+          "projectionSha256": "531e95102cda1cc1a38ef66c808fb0d67cdca35194f7458d3701d96b7c5d722f",
+          "repeatProjectionSha256": "531e95102cda1cc1a38ef66c808fb0d67cdca35194f7458d3701d96b7c5d722f",
+          "errors": [],
+          "warnings": []
+        }
+      ]
+    },
+    "d81ac1d": {
+      "format": "shadow-duel-stage14-fixed-seed-ai",
+      "version": 1,
+      "label": "d81ac1d",
+      "node": "v22.23.2",
+      "options": {
+        "speed": "instant",
+        "maxTurns": 40,
+        "repeats": 2,
+        "projection": "outcome, final LP, cards played, projected actions, opening sequence, errors and warnings"
+      },
+      "matrix": [
+        {
+          "seed": "stage14-ai-alpha",
+          "matchup": "arcanist:shadowheart",
+          "winner": "player",
+          "turns": 10,
+          "reason": "lp_zero",
+          "finalLP": {
+            "player": 6400,
+            "bot": 0
+          },
+          "cardPlayCount": 24,
+          "actionCount": 26,
+          "cardsSha256": "a96f93639c092ac92496ab24c61a99b7f2929322b4e8f8317acb86f6a9d03825",
+          "actionsSha256": "6411d662bdbfeaf5ba58287aee903f6643d19d3c3cb88c3860b6558493018393",
+          "openingSha256": "8aad43cbab36adc08424806c1c7d650cf067ade73097861aac6004446497cd67",
+          "projectionSha256": "5f91c36e1237a4131f0dd604d53acdb6156ca1a8b378e93b632905a42638b03b",
+          "repeatProjectionSha256": "5f91c36e1237a4131f0dd604d53acdb6156ca1a8b378e93b632905a42638b03b",
+          "errors": [],
+          "warnings": []
+        },
+        {
+          "seed": "stage14-ai-beta",
+          "matchup": "arcanist:shadowheart",
+          "winner": "player",
+          "turns": 6,
+          "reason": "lp_zero",
+          "finalLP": {
+            "player": 5800,
+            "bot": 0
+          },
+          "cardPlayCount": 32,
+          "actionCount": 33,
+          "cardsSha256": "5ffe99ecd76ff576e9c4dd18ce1a83b5cf8e68fcb056c08f63fecaacbda7649f",
+          "actionsSha256": "9b6a8fd7c3dfa2004476093a386bf24c0a2bb17b307fa09afbbf211ad324f091",
+          "openingSha256": "a68b9d5b80044e681b5ff6c75d1581b6418ba10a8a61c8729996bf3c24136292",
+          "projectionSha256": "f7ab110e59fc2eefcb1305db53b26c6ff70f84f14c3fa38d97f8459de94809a8",
+          "repeatProjectionSha256": "f7ab110e59fc2eefcb1305db53b26c6ff70f84f14c3fa38d97f8459de94809a8",
+          "errors": [],
+          "warnings": []
+        },
+        {
+          "seed": "stage14-ai-alpha",
+          "matchup": "miragebound:luminarch",
+          "winner": "bot",
+          "turns": 13,
+          "reason": "lp_zero",
+          "finalLP": {
+            "player": 0,
+            "bot": 100
+          },
+          "cardPlayCount": 60,
+          "actionCount": 68,
+          "cardsSha256": "271d3524beab99457ef842054185c86b868a1d4595416edcf042f29f8df01c29",
+          "actionsSha256": "a307383ae6471620313155c5c2d0863ac7f9ba1af395e2582a50cfd5c0fa2ea9",
+          "openingSha256": "2c365c89b56bbc409056b48b6394a30cd3d954e84d57f589b4db5ea3edc8f813",
+          "projectionSha256": "ebd9e6752a9d0753d6f8f2a1457b8597cd0a1f65499d00f04774ebd6d0af718b",
+          "repeatProjectionSha256": "ebd9e6752a9d0753d6f8f2a1457b8597cd0a1f65499d00f04774ebd6d0af718b",
+          "errors": [],
+          "warnings": []
+        },
+        {
+          "seed": "stage14-ai-beta",
+          "matchup": "miragebound:luminarch",
+          "winner": "bot",
+          "turns": 6,
+          "reason": "lp_zero",
+          "finalLP": {
+            "player": 0,
+            "bot": 4900
+          },
+          "cardPlayCount": 22,
+          "actionCount": 25,
+          "cardsSha256": "4bee6b6c809d5e48e098bf08278b990e88755acdc77ea2659cd8510af00b07be",
+          "actionsSha256": "6f411604d56eed3e137495230ede333a2ead7123c1fd59e78828b922ef84f6ed",
+          "openingSha256": "c8a827089186755262936bf38b9e488df4aec2e577fa35d5cbca4b18c50bf0e3",
+          "projectionSha256": "531e95102cda1cc1a38ef66c808fb0d67cdca35194f7458d3701d96b7c5d722f",
+          "repeatProjectionSha256": "531e95102cda1cc1a38ef66c808fb0d67cdca35194f7458d3701d96b7c5d722f",
+          "errors": [],
+          "warnings": []
+        }
+      ]
+    }
+  },
+  "ui": {
+    "viewport": {
+      "width": 1440,
+      "height": 1000
+    },
+    "browser": "Edge headless / Playwright 1.55.1",
+    "accessibleSnapshotsEqual": true,
+    "stableScreenshots": {
+      "home": {
+        "baseline": "ce1a0ead87e741b893579d6a74b2c4912c639d9c68d4131a117693bba7417fed",
+        "preview": "ce1a0ead87e741b893579d6a74b2c4912c639d9c68d4131a117693bba7417fed"
+      },
+      "My-Deck": {
+        "baseline": "4d4cd0eb85fc9863e2fbc66ad4afc7673a8c5c30d5c9e3eba26d1cfac8a669a1",
+        "preview": "4d4cd0eb85fc9863e2fbc66ad4afc7673a8c5c30d5c9e3eba26d1cfac8a669a1"
+      },
+      "Laboratory": {
+        "baseline": "76474e08da583ae767674d6505a552777d2942415fccb688de3f04d2bc29dcaa",
+        "preview": "76474e08da583ae767674d6505a552777d2942415fccb688de3f04d2bc29dcaa"
+      },
+      "Bot-Arena": {
+        "baseline": "bbe7494010b95fcadeb76dcdb331dfd73295d99a2429a73790f8623ad9ab5e56",
+        "preview": "bbe7494010b95fcadeb76dcdb331dfd73295d99a2429a73790f8623ad9ab5e56"
+      },
+      "lab-defense": {
+        "baseline": "af8318a9dfc7521bd5d8cc60c78bf27af4407101830197674016d4152da0cf36",
+        "preview": "af8318a9dfc7521bd5d8cc60c78bf27af4407101830197674016d4152da0cf36"
+      },
+      "pt-home": {
+        "baseline": "e0c614b92225d5e3ecd224cf09340d946c85ca6f57bcdc33b34510e8c26ca94c",
+        "preview": "e0c614b92225d5e3ecd224cf09340d946c85ca6f57bcdc33b34510e8c26ca94c"
+      }
+    },
+    "snapshots": {
+      "home": "- heading \"Shadow Duel\" [level=1]\n- button \"Duel\"\n- button \"My Deck\"\n- button \"Change active deck\": ▾ ▼\n- text: \"Opponent:\"\n- combobox \"Opponent:\":\n  - option \"Shadow-Heart\" [selected]\n  - option \"Luminarch\"\n  - option \"Void\"\n  - option \"Dragon\"\n  - option \"Arcanist\"\n  - option \"Miragebound\"\n  - option \"Bloomrot\"\n  - option \"Burning West\"\n- button \"Bot Arena\"\n- button \"Laboratory\"\n- group \"Language selection\":\n  - button \"EN\" [pressed]\n  - button \"PT-BR\"\n- text: \"Opponent LP: 8000 Deck GY Spell/Trap Monsters Extra Field Turn: Player\"\n- list:\n  - listitem: Draw Phase\n  - listitem: Standby Phase\n  - listitem: Main Phase 1\n  - listitem: Battle Phase\n  - listitem: Main Phase 2\n  - listitem: End Phase\n- text: \"Field Extra Monsters Spell/Trap GY Deck You LP: 8000\"\n- heading \"Hover a card\" [level=2]\n- text: \"Level: - ATK: - DEF: -\"\n- paragraph: Description will appear here.",
+      "My Deck": "- heading \"My Deck\" [level=2]\n- button \"Deck 1\"\n- button \"Edit deck name\": ✎\n- button \"Deck 2\"\n- button \"Deck 3\"\n- button \"Deck 4\"\n- button \"Deck 5\"\n- button \"Deck 6\"\n- button \"Deck 7\"\n- button \"Deck 8\"\n- searchbox \"Search card...\"\n- text: Category\n- combobox \"Category\":\n  - option \"All\" [selected]\n  - option \"Monsters\"\n  - option \"Spells\"\n  - option \"Traps\"\n  - option \"Extra Deck\"\n  - option \"Fusion\"\n  - option \"Synchro\"\n  - option \"Ascension\"\n- text: Type/Subtype\n- combobox \"Type/Subtype\":\n  - option \"All\" [selected]\n  - 'option \"Monster: Beast\"'\n  - 'option \"Monster: Dragon\"'\n  - 'option \"Monster: Fairy\"'\n  - 'option \"Monster: Fiend\"'\n  - 'option \"Monster: Insect\"'\n  - 'option \"Monster: Machine\"'\n  - 'option \"Monster: Plant\"'\n  - 'option \"Monster: Pyro\"'\n  - 'option \"Monster: Reptile\"'\n  - 'option \"Monster: Rock\"'\n  - 'option \"Monster: Sea Serpent\"'\n  - 'option \"Monster: Spellcaster\"'\n  - 'option \"Monster: Spirit\"'\n  - 'option \"Monster: Warrior\"'\n  - 'option \"Monster: Winged Beast\"'\n  - 'option \"Monster: Zombie\"'\n  - 'option \"Spell: Normal\"'\n  - 'option \"Spell: Quick-Play\"'\n  - 'option \"Spell: Equip\"'\n  - 'option \"Spell: Continuous\"'\n  - 'option \"Spell: Field\"'\n  - 'option \"Trap: Normal\"'\n  - 'option \"Trap: Continuous\"'\n  - 'option \"Trap: Counter\"'\n- text: Archetype\n- combobox \"Archetype\":\n  - option \"All\" [selected]\n  - option \"No archetype\"\n  - option \"Arcanist\"\n  - option \"Bloomrot\"\n  - option \"Burning West\"\n  - option \"Extreme Dragons\"\n  - option \"Luminarch\"\n  - option \"Miragebound\"\n  - option \"Shadow-Heart\"\n  - option \"Tech-Zero\"\n  - option \"Void\"\n  - option \"Vulcanomaton\"\n- text: View\n- combobox \"View\":\n  - option \"Grid\" [selected]\n  - option \"List\"\n- text: Sort\n- combobox \"Sort\":\n  - option \"Default\" [selected]\n  - option \"By type\"\n  - option \"By level\"\n  - option \"By name\"\n  - option \"Monsters -> Spells -> Traps\"\n- heading \"Main Deck\" [level=3]\n- text: 20/30\n- heading \"Extra Deck\" [level=3]\n- text: 0/10 0/1 0/1 0/1 0/1 0/1 0/1 0/1 0/1 0/1 0/1 0/1 0/1 0/1 0/1 0/1 0/1 0/1 0/1 0/1 0/1 0/1 0/1 0/1 0/1 0/1 0/1 0/1 0/1 0/1 0/1 0/1 0/1 0/1 0/1 0/1 0/1 0/1 0/1 0/1 0/1 0/1 0/1 0/1 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 1/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 1/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 1/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 1/3 0/3 0/3 0/3 1/3 0/3 1/3 0/3 1/3 0/3 1/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 1/1 1/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 1/3 0/3 0/3 0/3 0/3 0/3 1/3 0/3 0/3 0/3 0/3 0/3 1/3 0/3 0/3 0/3 1/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 0/3 1/3 0/3 0/3 1/3 1/3 0/3 0/3 1/3 0/3 1/3 1/3 0/3\n- heading \"Rainbow Cosmic Dragon\" [level=3]\n- text: \"⭐10 | Dragon | Light ATK: 3500 DEF: 3200\"\n- paragraph: \"Ascension Material: \\\"Purified Crystal Dragon\\\" Requirement: the material must have activated its effects 3 times this Duel. Once per turn: You can target 1 Dragon-type monster you control; it cannot be destroyed by battle or card effects until the end of the next turn. If this card destroys a monster by battle: gain LP equal to the destroyed monster's original ATK. You can banish this card from your GY; send 1 to 3 \\\"Extreme Dragons\\\" monsters from your Deck to the GY.\"\n- text: 227 cards\n- status: Deck saved\n- button \"Save\"\n- button \"Close\"\n- text: \"Opponent LP: 8000 Deck GY Spell/Trap Monsters Extra Field Turn: Player\"\n- list:\n  - listitem: Draw Phase\n  - listitem: Standby Phase\n  - listitem: Main Phase 1\n  - listitem: Battle Phase\n  - listitem: Main Phase 2\n  - listitem: End Phase\n- text: \"Field Extra Monsters Spell/Trap GY Deck You LP: 8000\"\n- heading \"Hover a card\" [level=2]\n- text: \"Level: - ATK: - DEF: -\"\n- paragraph: Description will appear here.",
+      "Laboratory": "- heading \"Laboratório\" [level=2]\n- paragraph: Monte um cenário manual para testar cartas dos dois lados.\n- button \"Fechar\": ×\n- text: Aleatorizar por\n- combobox \"Aleatorizar por\":\n  - option \"Todos\" [selected]\n  - option \"Shadow-Heart\"\n  - option \"Luminarch\"\n  - option \"Void\"\n  - option \"Extreme Dragons\"\n  - option \"Arcanist\"\n  - option \"Miragebound\"\n  - option \"Bloomrot\"\n  - option \"Burning West\"\n  - option \"Tech-Zero\"\n  - option \"Vulcanomaton\"\n- button \"Aleatorizar tudo\"\n- button \"Exportar\"\n- button \"Importar\"\n- button \"Limpar\"\n- heading \"Jogador 1\" [level=3]\n- text: LP\n- spinbutton \"LP\": \"8000\"\n- button \"Aleatorizar lado\"\n- text: Deck (0)\n- button \"Sortear\"\n- text: Vazio Extra Deck (0 / 10)\n- button \"Sortear\"\n- text: Vazio Mão (0)\n- button \"Sortear\"\n- text: Vazio Campo (0 / 5)\n- button \"Sortear\"\n- text: Vazio Magias/Armadilhas (0 / 5)\n- button \"Sortear\"\n- text: Vazio Campo Mágico (0 / 1)\n- button \"Sortear\"\n- text: Vazio Cemitério (0)\n- button \"Sortear\"\n- text: Vazio\n- heading \"Jogador 2\" [level=3]\n- text: LP\n- spinbutton \"LP\": \"8000\"\n- button \"Aleatorizar lado\"\n- text: Deck (0)\n- button \"Sortear\"\n- text: Vazio Extra Deck (0 / 10)\n- button \"Sortear\"\n- text: Vazio Mão (0)\n- button \"Sortear\"\n- text: Vazio Campo (0 / 5)\n- button \"Sortear\"\n- text: Vazio Magias/Armadilhas (0 / 5)\n- button \"Sortear\"\n- text: Vazio Campo Mágico (0 / 1)\n- button \"Sortear\"\n- text: Vazio Cemitério (0)\n- button \"Sortear\"\n- text: Vazio Lado\n- combobox \"Lado\":\n  - option \"Jogador 1\" [selected]\n  - option \"Jogador 2\"\n- text: Zona\n- combobox \"Zona\":\n  - option \"Deck\" [selected]\n  - option \"Extra Deck\"\n  - option \"Mão\"\n  - option \"Campo\"\n  - option \"Magias/Armadilhas\"\n  - option \"Campo Mágico\"\n  - option \"Cemitério\"\n- text: Carta\n- combobox \"Carta\"\n- text: Posição\n- combobox \"Posição\" [disabled]:\n  - option \"Ataque\" [selected]\n  - option \"Defesa\"\n- checkbox \"Baixada\" [disabled]\n- text: Baixada\n- button \"Adicionar\"\n- group \"Modo do Laboratório\":\n  - button \"Modo Teste\"\n  - button \"Modo Duelo\"\n- checkbox \"Jogar contra bot\"\n- text: Jogar contra bot\n- checkbox \"Revelar mão do bot\"\n- text: Revelar mão do bot\n- button \"Iniciar\"\n- text: \"Opponent LP: 8000 Deck GY Spell/Trap Monsters Extra Field Turn: Player\"\n- list:\n  - listitem: Draw Phase\n  - listitem: Standby Phase\n  - listitem: Main Phase 1\n  - listitem: Battle Phase\n  - listitem: Main Phase 2\n  - listitem: End Phase\n- text: \"Field Extra Monsters Spell/Trap GY Deck You LP: 8000\"\n- heading \"Hover a card\" [level=2]\n- text: \"Level: - ATK: - DEF: -\"\n- paragraph: Description will appear here.",
+      "Bot Arena": "- heading \"Bot Arena\" [level=2]\n- button \"Close\": ×\n- heading \"Decks\" [level=3]\n- text: Bot 1 (Player)\n- combobox \"Bot 1 (Player)\":\n  - option \"Deck Padrão\"\n  - option \"Shadow-Heart\" [selected]\n  - option \"Luminarch\"\n  - option \"Void\"\n  - option \"Dragon\"\n  - option \"Arcanist\"\n  - option \"Miragebound\"\n  - option \"Bloomrot\"\n  - option \"Burning West\"\n- text: Bot 2 (Opponent)\n- combobox \"Bot 2 (Opponent)\":\n  - option \"Deck Padrão\"\n  - option \"Shadow-Heart\"\n  - option \"Luminarch\" [selected]\n  - option \"Void\"\n  - option \"Dragon\"\n  - option \"Arcanist\"\n  - option \"Miragebound\"\n  - option \"Bloomrot\"\n  - option \"Burning West\"\n- heading \"Config\" [level=3]\n- text: Numero de duelos\n- combobox \"Numero de duelos\":\n  - option \"1\" [selected]\n  - option \"5\"\n  - option \"10\"\n  - option \"20\"\n  - option \"30\"\n  - option \"50\"\n  - option \"100\"\n- text: Velocidade\n- combobox \"Velocidade\":\n  - option \"1x\" [selected]\n  - option \"2x\"\n  - option \"4x\"\n  - option \"Instant\"\n- text: Auto pause em empate/erro\n- checkbox \"Auto pause em empate/erro\"\n- heading \"Resultados\" [level=3]\n- text: Concluidos 0 Status Pronto Vitorias Bot 1 0 Vitorias Bot 2 0 Empates 0 Media de turnos -\n- paragraph: Aguardando início...\n- button \"Iniciar\"\n- button \"Export Strategic JSON\" [disabled]\n- button \"Cancelar\"\n- text: \"Opponent LP: 8000 Deck GY Spell/Trap Monsters Extra Field Turn: Player\"\n- list:\n  - listitem: Draw Phase\n  - listitem: Standby Phase\n  - listitem: Main Phase 1\n  - listitem: Battle Phase\n  - listitem: Main Phase 2\n  - listitem: End Phase\n- text: \"Field Extra Monsters Spell/Trap GY Deck You LP: 8000\"\n- heading \"Hover a card\" [level=2]\n- text: \"Level: - ATK: - DEF: -\"\n- paragraph: Description will appear here.",
+      "lab-running": "- text: \"Opponent LP: 8000 Deck GY Spell/Trap Monsters Extra Field Turn: Jogador 1 Priority: You\"\n- list:\n  - listitem: Draw Phase\n  - listitem: Standby Phase\n  - listitem: Main Phase 1\n  - listitem: Battle Phase\n  - listitem: Main Phase 2\n  - listitem: End Phase\n- text: \"Field Extra Monsters Fire Extreme Dragon 3000 2600 Spell/Trap GY Deck You LP: 8000\"\n- heading \"Hover a card\" [level=2]\n- text: \"Level: - ATK: - DEF: -\"\n- paragraph: Description will appear here.",
+      "card-menu": "- text: \"Opponent LP: 8000 Deck GY Spell/Trap Monsters Extra Field Turn: Jogador 1 Priority: You\"\n- list:\n  - listitem: Draw Phase\n  - listitem: Standby Phase\n  - listitem: Main Phase 1\n  - listitem: Battle Phase\n  - listitem: Main Phase 2\n  - listitem: End Phase\n- text: \"Field Extra Monsters Fire Extreme Dragon 3000 2600 Spell/Trap GY Deck You LP: 8000\"\n- heading \"Fire Extreme Dragon\" [level=2]\n- text: ⭐10 | Dragon | Fire 3000 2600\n- paragraph: \"There can only be 1 face-up \\\"Extreme Dragon\\\" monster on the field. While this card is the only monster you control, it cannot be destroyed by card effects. If this card destroys an opponent's monster by battle: inflict damage to your opponent equal to half the destroyed monster's original ATK. Each time your opponent activates a card or effect: inflict 300 damage to your opponent.\"\n- button \"To Defense\"",
+      "lab-defense": "- text: \"Opponent LP: 8000 Deck GY Spell/Trap Monsters Extra Field Turn: Jogador 1 Priority: You\"\n- list:\n  - listitem: Draw Phase\n  - listitem: Standby Phase\n  - listitem: Main Phase 1\n  - listitem: Battle Phase\n  - listitem: Main Phase 2\n  - listitem: End Phase\n- text: \"Field Extra Monsters Fire Extreme Dragon 3000 2600 Spell/Trap GY Deck You LP: 8000\"\n- heading \"Fire Extreme Dragon\" [level=2]\n- text: ⭐10 | Dragon | Fire 3000 2600\n- paragraph: \"There can only be 1 face-up \\\"Extreme Dragon\\\" monster on the field. While this card is the only monster you control, it cannot be destroyed by card effects. If this card destroys an opponent's monster by battle: inflict damage to your opponent equal to half the destroyed monster's original ATK. Each time your opponent activates a card or effect: inflict 300 damage to your opponent.\"",
+      "pt-home": "- heading \"Shadow Duel\" [level=1]\n- button \"Duelar\"\n- button \"Meu Deck\"\n- button \"Trocar deck ativo\": ▾ ▼\n- text: \"Oponente:\"\n- combobox \"Oponente:\":\n  - option \"Shadow-Heart\" [selected]\n  - option \"Luminarch\"\n  - option \"Void\"\n  - option \"Dragon\"\n  - option \"Arcanist\"\n  - option \"Miragebound\"\n  - option \"Bloomrot\"\n  - option \"Burning West\"\n- button \"Bot Arena\"\n- button \"Laboratório\"\n- group \"Language selection\":\n  - button \"EN\"\n  - button \"PT-BR\" [pressed]\n- text: \"Opponent LP: 8000 Deck GY Spell/Trap Monsters Extra Field Turn: Player\"\n- list:\n  - listitem: Draw Phase\n  - listitem: Standby Phase\n  - listitem: Main Phase 1\n  - listitem: Battle Phase\n  - listitem: Main Phase 2\n  - listitem: End Phase\n- text: \"Field Extra Monsters Spell/Trap GY Deck You LP: 8000\"\n- heading \"Hover a card\" [level=2]\n- text: \"Level: - ATK: - DEF: -\"\n- paragraph: Description will appear here."
+    },
+    "errors": {
+      "baseline": [
+        {
+          "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+          "location": {
+            "url": "http://127.0.0.1:4174/favicon.ico",
+            "lineNumber": 0,
+            "columnNumber": 0
+          }
+        }
+      ],
+      "preview": [
+        {
+          "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+          "location": {
+            "url": "http://127.0.0.1:4173/favicon.ico",
+            "lineNumber": 0,
+            "columnNumber": 0
+          }
+        }
+      ]
+    }
+  },
+  "deployedSmoke": {
+    "url": "https://ratcicle.github.io/Shadow-Duel/",
+    "duel": "- text: \"Opponent LP: 8000 Deck GY Spell/Trap Monsters Extra 4 Field Turn: Opponent Priority: You\"\n- list:\n  - listitem: Draw Phase\n  - listitem: Standby Phase\n  - listitem: Main Phase 1\n  - listitem: Battle Phase\n  - listitem: Main Phase 2\n  - listitem: End Phase\n- text: \"Field Extra Monsters Spell/Trap GY Deck Ancient Tree Spirit Continuous Trap Cheap Necromancy Normal Spell Light-Dividing Sword Equip Spell Midnight Nightmare Steed 2600 2000 You LP: 8000\"\n- heading \"Hover a card\" [level=2]\n- text: \"Level: - ATK: - DEF: -\"\n- paragraph: Description will appear here.\n- status: O oponente joga primeiro",
+    "arena": "- heading \"Bot Arena\" [level=2]\n- button \"Close\": ×\n- heading \"Decks\" [level=3]\n- text: Bot 1 (Player)\n- combobox \"Bot 1 (Player)\":\n  - option \"Deck Padrão\"\n  - option \"Shadow-Heart\"\n  - option \"Luminarch\"\n  - option \"Void\"\n  - option \"Dragon\"\n  - option \"Arcanist\" [selected]\n  - option \"Miragebound\"\n  - option \"Bloomrot\"\n  - option \"Burning West\"\n- text: Bot 2 (Opponent)\n- combobox \"Bot 2 (Opponent)\":\n  - option \"Deck Padrão\"\n  - option \"Shadow-Heart\" [selected]\n  - option \"Luminarch\"\n  - option \"Void\"\n  - option \"Dragon\"\n  - option \"Arcanist\"\n  - option \"Miragebound\"\n  - option \"Bloomrot\"\n  - option \"Burning West\"\n- heading \"Config\" [level=3]\n- text: Numero de duelos\n- combobox \"Numero de duelos\":\n  - option \"1\" [selected]\n  - option \"5\"\n  - option \"10\"\n  - option \"20\"\n  - option \"30\"\n  - option \"50\"\n  - option \"100\"\n- text: Velocidade\n- combobox \"Velocidade\":\n  - option \"1x\"\n  - option \"2x\"\n  - option \"4x\"\n  - option \"Instant\" [selected]\n- text: Auto pause em empate/erro\n- checkbox \"Auto pause em empate/erro\"\n- heading \"Resultados\" [level=3]\n- text: Concluidos 1 Status Concluído Vitorias Bot 1 1 Vitorias Bot 2 0 Empates 0 Media de turnos 4.0\n- paragraph: \"Duel 1: ✅ Bot 1 venceu (4 turnos)\"\n- paragraph: ✔️ Arena concluída! 1 duelos.\n- button \"Iniciar\"\n- button \"Export Strategic JSON\"\n- button \"Cancelar\"\n- text: \"Opponent LP: 8000 Deck GY Spell/Trap Monsters Extra Field Turn: Player\"\n- list:\n  - listitem: Draw Phase\n  - listitem: Standby Phase\n  - listitem: Main Phase 1\n  - listitem: Battle Phase\n  - listitem: Main Phase 2\n  - listitem: End Phase\n- text: \"Field Extra Monsters Spell/Trap GY Deck You LP: 8000\"\n- heading \"Hover a card\" [level=2]\n- text: \"Level: - ATK: - DEF: -\"\n- paragraph: Description will appear here.",
+    "errors": [
+      {
+        "text": "Failed to load resource: the server responded with a status of 404 ()",
+        "location": {
+          "url": "https://ratcicle.github.io/favicon.ico",
+          "lineNumber": 0,
+          "columnNumber": 0
+        }
+      }
+    ]
+  }
+}

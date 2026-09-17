@@ -17,10 +17,16 @@ export const cards = [
 ] satisfies readonly RawCardDefinition[];
 ```
 
+O projeto usa modo strict, inclusive `exactOptionalPropertyTypes` e
+`noUncheckedIndexedAccess`. Omita campos opcionais sem valor; não introduza
+`undefined` no schema declarativo nem use casts para contornar `satisfies`.
+Preserve o discriminante `type` de conditions/actions e refine a variante
+antes de acessar campos específicos. Execute os comandos deste guia em Node 22.
+
 Este documento descreve o contrato atual do Shadow Duel. As fontes de verdade
 no código são:
 
-- `src/core/CardDatabaseValidator.js`: valida `timing`, `event`, `action.type`
+- `src/core/CardDatabaseValidator.ts`: valida `timing`, `event`, `action.type`
   e contrato declarativo das actions.
 - `src/core/contracts/actions.ts` e `src/core/contracts/actions/`: definem
   `ActionByType` e seus mapas fechados por domínio.
