@@ -336,7 +336,7 @@ export function shouldCommitResourcesNow(card: SimulatedCardState, analysis: Lum
   // Cartas caras (LP): avaliar situação
   if (cardName.includes("Sacred Judgment")) {
     // Sacred Judgment é carta de DESPERATION: opp domina e GY converte em campo
-    const myField = field.length;
+    const myField = (analysis.field || []).length;
     const openMonsterZones = Math.max(0, 5 - myField);
     const oppField = (analysis.oppField || []).length;
 
@@ -426,7 +426,3 @@ export function planNextTurns(analysis: LuminarchAnalysis) {
     nextTurnResources: nextTurn.nextTurnResources,
   };
 }
-
-// Preserve the existing unresolved global lookup in the Sacred Judgment resource-spend branch.
-// Replacing it with the current field is a separate behavioral fix, outside this migration.
-declare const field: SimulatedCardState[];

@@ -8,6 +8,8 @@ import { createRuntimeGame } from "./helpers/game.js";
 import { simulationCard, simulationState } from "./helpers/simulation.js";
 
 import Card from "../src/core/Card.js";
+import LuminarchStrategy from "../src/core/ai/LuminarchStrategy.js";
+import { shouldCommitResourcesNow } from "../src/core/ai/luminarch/multiTurnPlanning.js";
 import { applySwitchPosition } from "../src/core/ai/common/simulatedActions/stats.js";
 import { cardDatabaseByName } from "./helpers/fixtures.js";
 
@@ -117,18 +119,76 @@ test("simulação separa posição de batalha de restrição de ataque", () => {
   assert.equal(restricted.cannotAttackThisTurn, true);
 });
 
-// Migration parity: retain the existing functional bug for a separate fix.
-test("Sacred Judgment resource planning preserves the legacy unresolved field lookup", async () => {
-  const { shouldCommitResourcesNow } = await import(
-    "../src/core/ai/luminarch/multiTurnPlanning.js"
-  );
-  assert.throws(
-    () =>
-      shouldCommitResourcesNow(
-        simulationCard({ name: "Luminarch Sacred Judgment" }),
-        { field: [], lp: 8000, oppField: [] },
-        { stance: "balanced" },
+for (const scenario of [
+  { name: "campo vazio", occupied: 0, lp: 3000, shouldPlay: true },
+  { name: "última zona livre", occupied: 4, lp: 2500, shouldPlay: true },
+  { name: "campo cheio", occupied: 5, lp: 3000, shouldPlay: false },
+  {
+    name: "LP abaixo do limite de emergência",
+    occupied: 0,
+    lp: 2499,
+    shouldPlay: false,
+  },
+  {
+    name: "campo omitido na análise",
+    occupied: null,
+    lp: 3000,
+    shouldPlay: true,
+  },
+]) {
+  test(`Sacred Judgment avalia recursos com ${scenario.name}`, () => {
+    const card = simulationCard({
+      name: "Luminarch Sacred Judgment",
+      cardKind: "spell",
+    });
+    const monster = () => simulationCard({ name: "Monster", cardKind: "monster" });
+    const decision = shouldCommitResourcesNow(
+      card,
+      {
+        hand: [card],
+        lp: scenario.lp,
+        oppField: Array.from({ length: 3 }, monster),
+        ...(scenario.occupied === null
+          ? {}
+          : { field: Array.from({ length: scenario.occupied }, monster) }),
+      },
+      { stance: "balanced" },
+    );
+    assert.equal(decision.shouldPlay, scenario.shouldPlay);
+  });
+}
+
+for (const zone of ["hand", "spellTrap"] as const) {
+  test(`IA inclui Sacred Judgment de ${zone} nas ações de recuperação`, () => {
+    const card = (name: string, owner = "bot") =>
+      simulationCard(new Card(required(cardDatabaseByName.get(name)), owner));
+    const judgment = card("Luminarch Sacred Judgment");
+    judgment.isFacedown = zone === "spellTrap";
+    const state = simulationState({
+      turn: "bot",
+      phase: "main1",
+      turnCounter: 5,
+      bot: {
+        lp: 3000,
+        [zone]: [judgment],
+        graveyard: [
+          card("Luminarch Aegisbearer"),
+          card("Luminarch Moonblade Captain"),
+        ],
+      },
+      player: {
+        field: Array.from({ length: 3 }, () => card("Nightmare Steed", "player")),
+      },
+    });
+    const strategy = new LuminarchStrategy(state.bot);
+    const actions = strategy.generateMainPhaseActions(state);
+    assert.ok(
+      actions.some(
+        (action) =>
+          action.type === (zone === "hand" ? "spell" : "spellTrapEffect") &&
+          action.cardId === judgment.id,
       ),
-    { name: "ReferenceError", message: "field is not defined" },
-  );
-});
+      "Sacred Judgment deve permanecer entre as ações disponíveis",
+    );
+  });
+}
