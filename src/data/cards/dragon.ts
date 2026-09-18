@@ -1887,7 +1887,7 @@ export const dragonCards = [
             type: "control_card_max",
             zone: "spellTrap",
             max: 0,
-            includeFacedown: true,
+            includeFacedown: false,
             filters: { cardId: 277 },
             excludeSource: true,
             reason: 'You can only control 1 "Extreme Dragon Awakening".',

@@ -441,7 +441,10 @@ export function applySpecialSummonFromZone(
     moveCardToZone(sourceOwner, options.sourceCard, "banished");
   }
   chosen.forEach((card) => {
-    removeCardFromZones(targetPlayer, card);
+    const sourceOwner = findCardOwner(state, card) || targetPlayer;
+    removeCardFromZones(sourceOwner, card);
+    card.owner = targetPlayer.id;
+    card.controller = targetPlayer.id;
     const fromZone = action.zone || "deck";
     applySummonState(
       card,

@@ -498,8 +498,12 @@ export function canActivateSpellTrapEffectPreview(
         reason: "Spell can only be activated during Main Phase.",
       };
     }
-    // 🚫 Equip Spells cannot be activated from spellTrap zone
-    if (card.subtype === "equip" && activationZone === "spellTrap") {
+    // A Set Equip Spell can activate; an active Equip needs a field ignition effect.
+    if (
+      card.subtype === "equip" &&
+      activationZone === "spellTrap" &&
+      !card.isFacedown
+    ) {
       const hasFieldIgnition = (card.effects || []).some(
         (e) =>
           e &&
@@ -510,7 +514,7 @@ export function canActivateSpellTrapEffectPreview(
       if (!hasFieldIgnition) {
         return {
           ok: false,
-          reason: "Equip Spell can only be activated from hand.",
+          reason: "Equip Spell is already face-up and has no field ignition effect.",
         };
       }
     }

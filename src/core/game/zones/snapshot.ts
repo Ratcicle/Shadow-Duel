@@ -29,6 +29,8 @@ export function snapshotCardState(
 ): CardStateSnapshot | null {
   if (!card) return null;
   const snapshot = { ...card };
+  // Capture the initial epoch too, so the first rolled-back departure cannot reset soft OPT.
+  snapshot.oncePerTurnResetVersion = card.oncePerTurnResetVersion || 0;
   if (card.counters instanceof Map) {
     snapshot.counters = new Map(card.counters);
   }

@@ -50,6 +50,7 @@ type OncePerTurnHost = Pick<
     card: WeakMap<GameCard, Map<string, unknown>>;
   };
   resetOncePerTurnUsage(reason?: string): void;
+  ensureDuelCardId?(card: GameCard): number;
   ensureOncePerTurnUsageFresh(): void;
   getOncePerTurnLockKey(
     card: GameCard | null,
@@ -103,7 +104,15 @@ export function getOncePerTurnLockKey(
     options.actionId ||
     card?.name ||
     "effect";
-  return `once_per_turn:${base}`;
+  const cardScope =
+    effect?.oncePerTurnScope === "card" || effect?.oncePerTurnPerCard === true;
+  const cardId = cardScope && card
+    ? card.duelCardId ?? this.ensureDuelCardId?.(card) ?? card.instanceId
+    : null;
+  const scope = cardScope && card
+    ? `:card:${cardId}:presence:${card.oncePerTurnResetVersion || 0}`
+    : "";
+  return `once_per_turn:${base}${scope}`;
 }
 
 export function getOncePerTurnStore(

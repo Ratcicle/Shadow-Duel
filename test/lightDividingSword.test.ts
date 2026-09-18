@@ -88,7 +88,7 @@ test("Light-Dividing Sword declares the corrected target and text", () => {
   assert.ok(card);
   assert.equal(
     card.description,
-    "If the equipped monster destroys an opponent's monster by battle: gain 500 LP. If this card is sent to the Graveyard: target 1 Spell/Trap your opponent controls; destroy that target.",
+    "Equip only to a monster you control.\n\nIf the equipped monster destroys an opponent's monster by battle: gain 500 LP.\n\nIf this card is sent to the Graveyard: target 1 Spell/Trap your opponent controls; destroy that target.",
   );
 
   const effect = required(card.effects).find(
@@ -109,7 +109,7 @@ test("Light-Dividing Sword declares the corrected target and text", () => {
   );
   assert.equal(
     locale.cards["10"].description,
-    "Se o monstro equipado destruir um monstro do oponente em batalha: ganhe 500 PV. Se este card for enviado para o Cemitério: escolha 1 Magia/Armadilha que seu oponente controla; destrua-a.",
+    "Equipe apenas a um monstro que você controla.\n\nSe o monstro equipado destruir um monstro do oponente em batalha: ganhe 500 PV.\n\nSe este card for enviado para o Cemitério: escolha 1 Magia/Armadilha que seu oponente controla; destrua-a.",
   );
 
   const validation = validateCardDatabase();
@@ -167,11 +167,12 @@ test("the equipped monster gains 500 LP after destroying by battle", async (t) =
   assert.equal(game.chainSystem.getFastEffectState().state, "open");
 });
 
-for (const { cardKind, fromZone } of [
-  { cardKind: "spell", fromZone: "spellTrap" },
-  { cardKind: "trap", fromZone: "hand" },
+for (const { cardKind, fromZone, targetZone } of [
+  { cardKind: "spell", fromZone: "spellTrap", targetZone: "spellTrap" },
+  { cardKind: "trap", fromZone: "hand", targetZone: "spellTrap" },
+  { cardKind: "spell", fromZone: "hand", targetZone: "fieldSpell" },
 ] as const) {
-  test(`the Graveyard effect destroys an opponent ${cardKind} when sent from ${fromZone}`, async (t) => {
+  test(`the Graveyard effect destroys an opponent ${cardKind} in ${targetZone} when sent from ${fromZone}`, async (t) => {
     const game = createGame(t);
     const sword = makeCard(CARD_NAME, game.player);
     const target = makeCard(
@@ -179,18 +180,19 @@ for (const { cardKind, fromZone } of [
         id: cardKind === "spell" ? 99112 : 99113,
         name: `Opponent ${cardKind}`,
         cardKind,
-        subtype: "normal",
+        subtype: targetZone === "fieldSpell" ? "field" : "normal",
         effects: [],
       },
       game.bot,
     );
     game.player[fromZone].push(sword);
-    game.bot.spellTrap.push(target);
+    if (targetZone === "fieldSpell") game.bot.fieldSpell = target;
+    else game.bot.spellTrap.push(target);
 
     const movePromise = game.moveCard(sword, game.player, "graveyard", {
       fromZone,
     });
-    await selectCard(game, game.bot.id, 0, "spellTrap");
+    await selectCard(game, game.bot.id, 0, targetZone);
     await movePromise;
     await waitUntil(
       () => game.bot.graveyard.includes(target),
@@ -199,6 +201,7 @@ for (const { cardKind, fromZone } of [
 
     assert.equal(game.player.graveyard.includes(sword), true);
     assert.equal(game.bot.spellTrap.includes(target), false);
+    assert.notEqual(game.bot.fieldSpell, target);
     assert.equal(game.chainSystem.getFastEffectState().state, "open");
   });
 }

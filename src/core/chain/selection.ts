@@ -175,6 +175,8 @@ export async function getPlayerSelectionsForDefinitions(
     attackerOwner: context?.attackerOwner,
     defenderOwner: context?.defenderOwner,
     activationZone: options.activationZone || context?.activationZone || null,
+    // Dependent targets must retain the selections made before this prompt (e.g. paid costs).
+    _actionTargets: context?._actionTargets || {},
     activationContext: {
       ...(context?.activationContext || {}),
       timing: "activation",
@@ -184,7 +186,13 @@ export async function getPlayerSelectionsForDefinitions(
     },
   };
   const targetResult = effectEngine.resolveTargets(definitions, ctx, null);
-  const baseTargets = targetResult?.targets || {};
+  const baseTargets: ChainSelectionMap = {};
+  definitions.forEach((definition: ChainEffectTarget) => {
+    const selected = targetResult?.targets
+      ? Reflect.get(targetResult.targets, definition.id)
+      : undefined;
+    if (selected !== undefined) Reflect.set(baseTargets, definition.id, selected);
+  });
   if (targetResult?.ok === false && !targetResult?.needsSelection) return null;
   if (!targetResult?.needsSelection) return baseTargets;
   const contract = targetResult.selectionContract;

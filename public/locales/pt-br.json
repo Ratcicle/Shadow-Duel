@@ -452,7 +452,7 @@
     },
     "5": {
       "name": "Corcel Pesadelo da Meia-Noite",
-      "description": "Você pode Invocar este card por Invocação-Especial da sua mão ao oferecer como Tributo 1 “Corcel Pesadelo”. Se este card destruir um monstro do oponente em batalha: cause 300 de dano ao seu oponente."
+      "description": "Você pode oferecer como Tributo 1 “Corcel Pesadelo” que você controla; Invoque este card por Invocação-Especial da sua mão. Se este card destruir um monstro do oponente em batalha: cause 300 de dano ao seu oponente."
     },
     "7": {
       "name": "Transmutar",
@@ -464,19 +464,19 @@
     },
     "9": {
       "name": "Estudioso Arcano",
-      "description": "Se esse card for invocado por invocação-Normal: compre 1 card."
+      "description": "Quando este card for Invocado por Invocação-Normal: compre 1 card."
     },
     "10": {
       "name": "Espada Divisora de Luz",
-      "description": "Se o monstro equipado destruir um monstro do oponente em batalha: ganhe 500 PV. Se este card for enviado para o Cemitério: escolha 1 Magia/Armadilha que seu oponente controla; destrua-a."
+      "description": "Equipe apenas a um monstro que você controla.\n\nSe o monstro equipado destruir um monstro do oponente em batalha: ganhe 500 PV.\n\nSe este card for enviado para o Cemitério: escolha 1 Magia/Armadilha que seu oponente controla; destrua-a."
     },
     "11": {
       "name": "Espada das Duas Trevas",
-      "description": "O monstro equipado pode realizar 1 ataque adicional durante cada Fase de Batalha.\n\nSe este card for enviado para o Cemitério: escolha 1 Magia/Armadilha que seu oponente controla; destrua-a.\n\nVocê só pode controlar 1 “Espada das Duas Trevas”."
+      "description": "Equipe apenas a um monstro que você controla.\n\nO monstro equipado pode realizar 1 ataque adicional durante cada Fase de Batalha.\n\nSe este card for enviado para o Cemitério: escolha 1 Magia/Armadilha que seu oponente controla; destrua-a.\n\nVocê só pode controlar 1 “Espada das Duas Trevas”."
     },
     "12": {
       "name": "Polimerização",
-      "description": "Invoque por invocação-Fusão 1 monstro Fusão do seu Extra Deck, usando monstros da sua mão ou do campo como matéria de Fusão."
+      "description": "Invoque por Invocação-Fusão 1 Monstro Fusão do seu Extra Deck, usando monstros da sua mão ou do seu campo como Matéria de Fusão."
     },
     "13": {
       "name": "Força Espelho",

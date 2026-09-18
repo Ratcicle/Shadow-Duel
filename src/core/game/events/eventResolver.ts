@@ -409,27 +409,30 @@ export async function resolveEventEntries(
     onComplete = null,
     orderRule = null,
     occurrence = null,
+    occurrences = null,
   }: {
     onComplete?: EventTriggerCompletion | null;
     orderRule?: string | null;
     occurrence?: EventTriggerOccurrence | null | undefined;
+    occurrences?: EventTriggerOccurrence[] | null;
     startIndex?: number;
     results?: unknown[];
     selections?: object | null | undefined;
   } = {},
 ): Promise<EventResolutionOutcome> {
   const providedEntries = Array.isArray(entries);
-  const triggerOccurrence =
-    occurrence ||
-    this.chainSystem?.createTriggerOccurrence?.(eventName, payload || {}, {
-      entries: providedEntries ? entries : [],
-      entriesProvided: providedEntries,
-      onComplete,
-      orderRule,
-      atomicGroupId: payload?.atomicGroupId || null,
-    });
+  const triggerOccurrence = occurrences
+    ? null
+    : occurrence ||
+      this.chainSystem?.createTriggerOccurrence?.(eventName, payload || {}, {
+        entries: providedEntries ? entries : [],
+        entriesProvided: providedEntries,
+        onComplete,
+        orderRule,
+        atomicGroupId: payload?.atomicGroupId || null,
+      });
   const result = (await this.chainSystem?.resolveTriggerOccurrences?.(
-    triggerOccurrence ? [triggerOccurrence] : [],
+    occurrences || (triggerOccurrence ? [triggerOccurrence] : []),
     {
       actionPlayer:
         payload?.player ||

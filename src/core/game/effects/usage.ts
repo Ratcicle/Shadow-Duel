@@ -72,6 +72,7 @@ interface EffectUsageHost {
     card: GameCard | null | undefined,
     player: EffectUsagePlayer,
     effect: EffectDefinition,
+    options?: { lockKey: string },
   ): void;
   checkEffectUsage(input?: EffectUsageInput): EffectUsageCheck;
   notify?(eventName: "effect_usage", payload: EffectUsageEventPayload): void;
@@ -145,8 +146,16 @@ function consume(
   card: GameCard | null | undefined,
   player: EffectUsagePlayer,
   effect: EffectDefinition,
+  reservedTurnKey?: string | null,
 ): void {
-  if (effect?.oncePerTurn) game.markOncePerTurnUsed?.(card, player, effect);
+  if (effect?.oncePerTurn) {
+    game.markOncePerTurnUsed?.(
+      card,
+      player,
+      effect,
+      reservedTurnKey ? { lockKey: reservedTurnKey } : undefined,
+    );
+  }
   if (effect?.oncePerDuel) {
     markOncePerDuelEffectUsed(card, player, effect);
   }
@@ -157,15 +166,17 @@ function activeReservationCounts(
   playerId: string,
   effectTurnKey: string | null,
   effectDuelKey: string | null,
+  cardScope: boolean,
 ): { turn: number; duel: number } {
   let turn = 0;
   let duel = 0;
   for (const reservation of game.effectUsageReservations?.values?.() || []) {
-    if (reservation.status !== "reserved" || reservation.playerId !== playerId) {
+    if (reservation.status !== "reserved") {
       continue;
     }
-    if (effectTurnKey && reservation.turnKey === effectTurnKey) turn += 1;
-    if (effectDuelKey && reservation.duelKey === effectDuelKey) duel += 1;
+    const samePlayer = reservation.playerId === playerId;
+    if ((samePlayer || cardScope) && effectTurnKey && reservation.turnKey === effectTurnKey) turn += 1;
+    if (samePlayer && effectDuelKey && reservation.duelKey === effectDuelKey) duel += 1;
   }
   return { turn, duel };
 }
@@ -203,6 +214,7 @@ export function checkEffectUsage(
     player.id || "player",
     effectTurnKey,
     effectDuelKey,
+    effect.oncePerTurnScope === "card" || effect.oncePerTurnPerCard === true,
   );
   if (effectTurnKey && reserved.turn >= Number(turnCheck.remaining ?? Infinity)) {
     return {
@@ -294,7 +306,13 @@ export function settleEffectUsage(
     reservation.status = "released";
   } else {
     reservation.status = "consumed";
-    consume(this, reservation.card, reservation.player, reservation.effect);
+    consume(
+      this,
+      reservation.card,
+      reservation.player,
+      reservation.effect,
+      reservation.turnKey,
+    );
   }
   this.effectUsageReservations.delete(id);
   const snapshot = compact(reservation);

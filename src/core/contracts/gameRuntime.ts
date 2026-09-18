@@ -35,6 +35,7 @@ import type {
   SelectionSessionState,
 } from "./selection.js";
 import type { ReplayRecordingBuffer } from "./replay.js";
+import type { EventTriggerOccurrence } from "./events.js";
 
 export type { MaybePromise } from "./decisions.js";
 export type { GameCard } from "./cards.js";
@@ -102,6 +103,7 @@ export interface MoveCardResult {
 }
 
 export interface DeferredCardToGraveTriggerPackage {
+  occurrence?: EventTriggerOccurrence | null | undefined;
   success?: boolean;
   ok?: boolean;
   needsSelection?: boolean;

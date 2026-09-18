@@ -232,12 +232,12 @@ export const genericCards = [
         ],
         actions: [
           {
-            type: "move",
+            type: "special_summon_from_zone",
             targetRef: "reborn_target",
-            player: "self",
-            to: "field",
-            isFacedown: false,
-            resetAttackFlags: true,
+            zone: "graveyard",
+            scope: "both",
+            position: "choice",
+            promptPlayer: true,
           },
         ],
       },
@@ -279,7 +279,7 @@ export const genericCards = [
     cardKind: "spell",
     subtype: "equip",
     description:
-      "If the equipped monster destroys an opponent's monster by battle: gain 500 LP. If this card is sent to the Graveyard: target 1 Spell/Trap your opponent controls; destroy that target.",
+      "Equip only to a monster you control.\n\nIf the equipped monster destroys an opponent's monster by battle: gain 500 LP.\n\nIf this card is sent to the Graveyard: target 1 Spell/Trap your opponent controls; destroy that target.",
     image: "assets/Light-Dividing Sword.png",
     effects: [
       {
@@ -333,7 +333,7 @@ export const genericCards = [
           {
             id: "lds_pop_target",
             owner: "opponent",
-            zone: "spellTrap",
+            zones: ["spellTrap", "fieldSpell"],
             cardKind: ["spell", "trap"],
             count: { min: 1, max: 1 },
           },
@@ -347,7 +347,7 @@ export const genericCards = [
     cardKind: "spell",
     subtype: "equip",
     description:
-      'The equipped monster can make 1 additional attack during each Battle Phase. If this card is sent to the Graveyard: target 1 Spell/Trap your opponent controls; destroy that target. You can only control 1 "Sword of Two Darks".',
+      'Equip only to a monster you control.\n\nThe equipped monster can make 1 additional attack during each Battle Phase.\n\nIf this card is sent to the Graveyard: target 1 Spell/Trap your opponent controls; destroy that target.\n\nYou can only control 1 "Sword of Two Darks".',
     image: "assets/Sword of Two Darks.png",
     effects: [
       {
@@ -359,7 +359,7 @@ export const genericCards = [
             type: "control_card_max",
             zone: "spellTrap",
             max: 0,
-            includeFacedown: true,
+            includeFacedown: false,
             filters: { cardId: 11 },
             excludeSource: true,
             reason: 'You can only control 1 "Sword of Two Darks".',
@@ -398,7 +398,7 @@ export const genericCards = [
           {
             id: "sotd_pop_target",
             owner: "opponent",
-            zone: "spellTrap",
+            zones: ["spellTrap", "fieldSpell"],
             cardKind: ["spell", "trap"],
             count: { min: 1, max: 1 },
           },
@@ -616,6 +616,7 @@ export const genericCards = [
         requirePhase: ["main1", "main2"],
         oncePerTurn: true,
         oncePerTurnName: "court_of_the_dead_revive",
+        oncePerTurnScope: "card",
         activationCosts: [
           {
             type: "remove_counter",

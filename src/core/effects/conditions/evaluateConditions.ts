@@ -1973,7 +1973,8 @@ export function evaluateConditions(
         const ownerKey = cond.owner === "opponent" ? "opponent" : "player";
         const owner = ownerKey === "opponent" ? opponent : player;
         const zoneName = cond.zone || "field";
-        const includeFacedown = cond.includeFacedown !== false;
+        // Control limits count face-up cards unless a rule explicitly includes Set cards.
+        const includeFacedown = cond.includeFacedown === true;
         const max = cond.max ?? 0;
         const source = ctx?.source || null;
         const normalizedFilters = { ...(cond.filters || {}) };

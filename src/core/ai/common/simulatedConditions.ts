@@ -942,6 +942,7 @@ interface SimConditionView
   leftFilters?: object;
   rightFilters?: object;
   excludeSource?: boolean;
+  includeFacedown?: boolean;
   requireFaceup?: boolean;
   stateKey?: string | null;
   key?: string | null;
@@ -1262,12 +1263,18 @@ export function evaluateSimulatedConditions(
         ? condition.max as number
         : 0;
       const filters = condition.filters || {};
+      const includeFacedown = condition.includeFacedown === true;
+      const sourceCard = resolveConditionSource(ctx, options, "self");
       const count = zones.reduce(
         (sum, zone) =>
           sum +
-          getZoneCards(owner, zone).filter((card) =>
-            matchesTargetFilters(card, filters, null)
-          ).length,
+          getZoneCards(owner, zone).filter((card) => {
+            if (!includeFacedown && card.isFacedown) return false;
+            if (condition.excludeSource === true && simSameCard(card, sourceCard)) {
+              return false;
+            }
+            return matchesTargetFilters(card, filters, null);
+          }).length,
         0,
       );
       return count <= max;

@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "type": "shadow-duel-laboratory-state",
+  "options": {
+    "laboratoryMode": "test",
+    "useBot": false,
+    "revealBotHand": true,
+    "botPreset": "shadowheart"
+  },
+  "setup": {
+    "player": {
+      "lp": 8000,
+      "deck": [{"id": 1}, {"id": 9}, {"id": 3}, {"id": 4}, {"id": 1}, {"id": 9}, {"id": 3}, {"id": 4}, {"id": 1}, {"id": 9}, {"id": 4}, {"id": 3}],
+      "extraDeck": [{"id": 122}, {"id": 122}, {"id": 31}],
+      "hand": [{"id": 12}, {"id": 12}, {"id": 19}, {"id": 19}, {"id": 20}, {"id": 20}, {"id": 21}, {"id": 21}, {"id": 22}, {"id": 22}, {"id": 107}, {"id": 101}, {"id": 104}, {"id": 9}, {"id": 1}, {"id": 3}, {"id": 4}],
+      "field": [
+        {"id": 508, "position": "attack", "facedown": false},
+        {"id": 1, "position": "attack", "facedown": false},
+        {"id": 101, "position": "attack", "facedown": false}
+      ],
+      "spellTrap": [{"id": 17, "facedown": false}, {"id": 16, "facedown": true}, {"id": 18, "facedown": true}],
+      "fieldSpell": null,
+      "graveyard": [{"id": 9}, {"id": 5}]
+    },
+    "bot": {
+      "lp": 8000,
+      "deck": [{"id": 1}, {"id": 9}, {"id": 3}, {"id": 4}, {"id": 1}, {"id": 9}, {"id": 3}, {"id": 4}, {"id": 1}, {"id": 9}, {"id": 3}, {"id": 4}],
+      "extraDeck": [],
+      "hand": [{"id": 21}, {"id": 3}, {"id": 1}, {"id": 9}],
+      "field": [
+        {"id": 9, "position": "attack", "facedown": false},
+        {"id": 5, "position": "attack", "facedown": false},
+        {"id": 1, "position": "defense", "facedown": false},
+        {"id": 9, "position": "defense", "facedown": true}
+      ],
+      "spellTrap": [{"id": 13, "facedown": true}, {"id": 14, "facedown": true}, {"id": 15, "facedown": true}, {"id": 17, "facedown": false}],
+      "fieldSpell": {"id": 115, "facedown": false},
+      "graveyard": [{"id": 1}]
+    }
+  }
+}

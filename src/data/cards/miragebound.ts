@@ -686,7 +686,7 @@ export const mirageboundCards = [
             type: "control_card_max",
             zone: "spellTrap",
             max: 0,
-            includeFacedown: true,
+            includeFacedown: false,
             filters: { cardId: 359 },
             excludeSource: true,
             reason: 'You can only control 1 "Miragebound Mirror Path".',

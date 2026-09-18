@@ -29,7 +29,7 @@ export const arcanistCards = [
             type: "control_card_max",
             zone: "spellTrap",
             max: 0,
-            includeFacedown: true,
+            includeFacedown: false,
             filters: { cardId: 301 },
             excludeSource: true,
             reason:

@@ -856,7 +856,7 @@ export const luminarchCards = [
             type: "control_card_max",
             zone: "spellTrap",
             max: 0,
-            includeFacedown: true,
+            includeFacedown: false,
             filters: { cardId: 166 },
             excludeSource: true,
             reason:

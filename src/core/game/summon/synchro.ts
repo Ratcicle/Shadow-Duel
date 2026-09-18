@@ -21,6 +21,7 @@ import type {
   ZoneOpOptions,
 } from "../../contracts/gameRuntime.js";
 import type { GamePlayer } from "../../contracts/player.js";
+import type { EventTriggerOccurrence } from "../../contracts/events.js";
 import type {
   RawSelectionCandidate,
   RawSelectionContract,
@@ -237,7 +238,11 @@ interface SynchroHost {
     eventName: "card_to_grave",
     payload: unknown,
     entries: readonly unknown[],
-    options: { orderRule: string; onComplete: (() => void) | null },
+    options: {
+      orderRule: string;
+      onComplete: (() => void) | null;
+      occurrences?: EventTriggerOccurrence[];
+    },
   ): MaybePromise<SynchroFlowResult>;
   applyPendingSynchroMaterialFollowups?(
     card: GameCard,
@@ -673,6 +678,10 @@ async function resolveDeferredSynchroMaterialTriggers(
     Array.isArray(entryPackage?.entries) ? entryPackage.entries : [],
   );
   if (entries.length > 0) {
+    // Keep each material's original event identity inside the shared trigger window.
+    const occurrences = packages.flatMap((entryPackage) =>
+      entryPackage.occurrence ? [entryPackage.occurrence] : [],
+    );
     const onCompleteHandlers = packages
       .map((entryPackage) => entryPackage?.onComplete)
       .filter((handler): handler is () => void => typeof handler === "function");
@@ -694,6 +703,7 @@ async function resolveDeferredSynchroMaterialTriggers(
       entries,
       {
         orderRule: orderRules.join(" -> "),
+        ...(occurrences.length === packages.length ? { occurrences } : {}),
         onComplete:
           onCompleteHandlers.length > 0
             ? () => {

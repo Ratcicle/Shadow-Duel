@@ -694,6 +694,15 @@ function recordCardLocationChange(
     return providedVersion;
   }
   const locationVersion = bumpCardLocationVersion(card);
+  const fieldZones: readonly string[] = ["field", "spellTrap", "fieldSpell"];
+  if (
+    fieldZones.includes(fromZone) && !fieldZones.includes(toZone) &&
+    card.effects?.some((effect) =>
+      effect.oncePerTurnScope === "card" || effect.oncePerTurnPerCard === true,
+    )
+  ) {
+    card.oncePerTurnResetVersion = (card.oncePerTurnResetVersion || 0) + 1;
+  }
   const chainSystem = game.chainSystem;
   if (hasChainSourceMovementCapability(chainSystem)) {
     const movement = {

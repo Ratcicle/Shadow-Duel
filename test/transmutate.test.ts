@@ -253,6 +253,65 @@ test("custo face-down, mesmo nome ou Nível original diferente não tornam a ati
   );
 });
 
+test("a seleção humana oferece apenas outro nome do mesmo Nível original após pagar o custo", async (t) => {
+  const game = createGame(t);
+  game.player.controllerType = "human";
+  game.bot.controllerType = "human";
+  const spell = makeSpell(game.player);
+  const cost = makeMonster(991021, "Human Material", game.player, {
+    level: 4,
+    currentLevel: 7,
+  });
+  const target = makeMonster(991022, "Human Target", game.player);
+  const wrongLevel = makeMonster(991023, "Wrong Level", game.player, { level: 7 });
+  const sameName = makeMonster(991024, "Human Material", game.player);
+  game.player.hand.push(spell);
+  game.player.field.push(cost);
+  game.player.graveyard.push(target, wrongLevel, sameName);
+  const offeredNames: string[][] = [];
+  const paidBeforeSelection: boolean[] = [];
+  const declaredTargetRefs: string[][] = [];
+  game.chainSystem.offerChainResponses = async () => {
+    const link = game.chainSystem.getLastChainLink();
+    if (link?.effectId === EFFECT_ID) {
+      declaredTargetRefs.push(Object.keys(link.targetSelections));
+    }
+    return {
+      lastActivator: null,
+      chainBuilt: false,
+      consecutivePasses: 2,
+      offers: 1,
+      activations: 0,
+    };
+  };
+  game.ui.showTargetSelection = (contract, confirm) => {
+    const requirement = required(required(required(contract).requirements)[0]);
+    offeredNames.push(requirement.candidates.map((candidate) => required(candidate.name)));
+    paidBeforeSelection.push(game.player.graveyard.includes(cost));
+    const chosen = required(requirement.candidates.find((candidate) => candidate.cardRef === target));
+    const onConfirm = required(confirm);
+    setImmediate(() => onConfirm({ [requirement.id]: [chosen.key] }));
+    return { close() {} };
+  };
+  const activation = game.tryActivateSpell(spell, 0);
+  for (let attempt = 0; attempt < 200 && game.targetSelection?.kind !== "cost"; attempt++) {
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  assert.equal(game.targetSelection?.kind, "cost");
+  game.handleTargetSelectionClick(game.player.id, 0, null, "field");
+  game.advanceTargetSelection();
+  const result = await activation;
+
+  assert.equal(result.success, true);
+  assert.deepEqual(paidBeforeSelection, [true]);
+  assert.deepEqual(offeredNames, [[target.name]]);
+  assert.deepEqual(declaredTargetRefs, [[TARGET_REF]], "paid costs are context, not declared targets");
+  assert.equal(game.player.field.includes(target), true);
+  assert.equal(game.player.graveyard.includes(wrongLevel), true);
+  assert.equal(game.player.graveyard.includes(sameName), true);
+  assert.equal(game.player.graveyard.includes(cost), true);
+});
+
 test("um alvo que sai do Cemitério não é substituído e o custo não é devolvido", async (t) => {
   const game = createGame(t);
   const spell = makeSpell(game.player);

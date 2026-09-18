@@ -128,7 +128,7 @@ test("Midnight Nightmare Steed declara a nova Invocação-Especial e o dano corr
   assert.equal(damageEffect.requireDestroyedIsOpponent, true);
   assert.equal(
     locale.cards["5"].description,
-    "Você pode Invocar este card por Invocação-Especial da sua mão ao oferecer como Tributo 1 “Corcel Pesadelo”. Se este card destruir um monstro do oponente em batalha: cause 300 de dano ao seu oponente.",
+    "Você pode oferecer como Tributo 1 “Corcel Pesadelo” que você controla; Invoque este card por Invocação-Especial da sua mão. Se este card destruir um monstro do oponente em batalha: cause 300 de dano ao seu oponente.",
   );
 });
 

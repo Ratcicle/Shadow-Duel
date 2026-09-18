@@ -628,6 +628,7 @@ export interface TrapMonsterOriginalState {
  * boundaries instead of granting every property name to every consumer.
  */
 export interface GameCard {
+  oncePerTurnResetVersion?: number;
   instanceId: number;
   _instanceId?: number | string | null;
   uuid?: string | null;
