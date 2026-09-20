@@ -1,4 +1,5 @@
 import { resolvePerspectivePlayers } from "./StrategyUtils.js";
+import { fingerprintPlanningState } from "./common/stateFingerprint.js";
 import type {
   AIAction,
   GameTreeSearchResult,
@@ -146,26 +147,37 @@ function cloneSuppressedDynamicBuffStats(
   ) as CardSuppressedDynamicBuffStats;
 }
 
-/**
- * Estado simulado do tabuleiro para cache de transposição
- */
-function hashGameState(gameState: GameTreeStateInput | GameTreeState): string {
+function transpositionKey(
+  projection: GameTreeState,
+  perspective: GameTreePlayerInput | null | undefined,
+  depth: number,
+  isMaximizing: boolean,
+  alpha: number,
+  beta: number,
+): string | null {
   try {
-    // Hash simplificado: LP, field size, hand size, graveyard size
-    const bot = gameState.bot || gameState.currentPlayer;
-    const player = gameState.player || gameState.opponent;
-
-    const botHash = `B:${bot?.lp || 0}|${bot?.field?.length || 0}|${
-      bot?.hand?.length || 0
-    }`;
-    const playerHash = `P:${player?.lp || 0}|${player?.field?.length || 0}|${
-      player?.hand?.length || 0
-    }`;
-
-    return `${botHash}~${playerHash}`;
+    // A cutoff result is reusable only for this exact entry window/horizon.
+    // Keep search context outside the shared game-state fingerprint.
+    return JSON.stringify({
+      state: fingerprintPlanningState(projection),
+      perspective: perspective?.id ?? null,
+      depth,
+      isMaximizing,
+      alpha: windowBound(alpha),
+      beta: windowBound(beta),
+    });
   } catch {
-    return `HASH_ERROR_${Math.random()}`;
+    // An unrepresentable node may still be searchable. Never give unrelated
+    // failures a shared key, nor introduce randomness into cache identity.
+    return null;
   }
+}
+
+function windowBound(value: number): number | string {
+  if (value === Infinity) return "Infinity";
+  if (value === -Infinity) return "-Infinity";
+  if (Number.isNaN(value)) return "NaN";
+  return Object.is(value, -0) ? "-0" : value;
 }
 
 /**
@@ -398,15 +410,11 @@ function simulateAction(
  * Nota: usar estratégia existente generateMainPhaseActions()
  */
 function generateCandidateActions<State extends GameTreeStateInput, Action extends AIAction>(
-  gameState: GameTreeStateInput | GameTreeState,
+  stateForActions: GameTreeState | null,
   strategy: GameTreeStrategy<State, Action>,
-  perspective: GameTreePlayerInput | null | undefined,
 ): Action[] {
   try {
-    if (!gameState || typeof gameState !== "object") {
-      return [];
-    }
-    const stateForActions = cloneGameStateDeep(gameState, perspective);
+    if (!stateForActions) return [];
     // Retorna top 2-3 ações por scoring (beam width)
     const allActions = strategy.generateMainPhaseActions(stateForActions as State & GameTreeState);
     return allActions.slice(0, 3); // Limita a 3 para reduzir branching
@@ -446,20 +454,29 @@ function minimax<State extends GameTreeStateInput, Action extends AIAction>(
     return { value: leafValue, action: null };
   }
 
-  // Verificar transposition table
-  const stateHash = hashGameState(gameState);
-  if (transpositions.has(stateHash)) {
-    const cached = transpositions.get(stateHash)!;
-    if (cached.depth >= depth) {
-      return cached.result;
-    }
-  }
-
   const { self: persp } = resolvePerspectivePlayers(
     gameState as Parameters<typeof resolvePerspectivePlayers>[0],
     perspective || gameState.bot,
   );
-  const actions = generateCandidateActions(gameState, strategy, persp);
+  // Reuse the existing candidate-generation clone for identity as well. Root
+  // and descendants therefore share the GameTree projection, without another
+  // deep copy, live-state reads, or changing the state used by simulation/leaves.
+  let stateForActions: GameTreeState | null = null;
+  try {
+    if (gameState && typeof gameState === "object") {
+      stateForActions = cloneGameStateDeep(gameState, persp);
+    }
+  } catch {
+    // Preserve generation's existing failure path: no actions, then evaluate.
+  }
+  const stateKey = stateForActions
+    ? transpositionKey(stateForActions, persp, depth, isMaximizing, alpha, beta)
+    : null;
+  if (stateKey !== null) {
+    const cached = transpositions.get(stateKey);
+    if (cached) return cached.result;
+  }
+  const actions = generateCandidateActions(stateForActions, strategy);
 
   let bestValue = isMaximizing ? -Infinity : Infinity;
   let bestAction: Action | null = actions[0] ?? null;
@@ -509,8 +526,8 @@ function minimax<State extends GameTreeStateInput, Action extends AIAction>(
   }
 
   // Cache resultado
-  if (transpositions.size < TRANSPOSITION_MAX_SIZE) {
-    transpositions.set(stateHash, {
+  if (stateKey !== null && transpositions.size < TRANSPOSITION_MAX_SIZE) {
+    transpositions.set(stateKey, {
       result: { value: bestValue, action: bestAction },
       depth,
     });
