@@ -2,6 +2,10 @@
 // src/core/ai/BeamSearch.js
 import { resolvePerspectivePlayers } from "./StrategyUtils.js";
 import { filterAiActionsForCurrentPhase } from "./common/phaseTiming.js";
+import {
+  fingerprintPlanningState, PLANNING_CARD_FIELDS, PLANNING_CARD_LINKS,
+  PLANNING_LEGACY_CARD_FIELDS, PLANNING_PLAYER_FIELDS, PLANNING_STATE_FIELDS,
+} from "./common/stateFingerprint.js";
 import type {
   AIAction,
   AIState,
@@ -20,9 +24,7 @@ import type {
   SimulatedPlayerState,
 } from "../contracts/aiState.js";
 import type {
-  CardDynamicBuffMap,
   CardKind,
-  CardSuppressedDynamicBuffStats,
   CardTurnBasedBuff,
   GameCard,
 } from "../contracts/cards.js";
@@ -96,62 +98,66 @@ function filterValidHandActions(
 // Com travas: depth fixo, budget de nós, anti-repetição
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Simulation clones must detach mutable buff metadata from live cards.
-function cloneDynamicBuffs(
-  dynamicBuffs: CardDynamicBuffMap | null | undefined,
-): CardDynamicBuffMap | null | undefined {
-  if (!dynamicBuffs || typeof dynamicBuffs !== "object") return dynamicBuffs;
-  return Object.fromEntries(
-    Object.entries(dynamicBuffs).map(([key, entry]) => [
-      key,
-      {
-        ...entry,
-        stats: Array.isArray(entry?.stats) ? [...entry.stats] : entry?.stats,
-        appliedValues:
-          entry?.appliedValues && typeof entry.appliedValues === "object"
-            ? { ...entry.appliedValues }
-            : entry?.appliedValues,
-      },
-    ]),
-  );
-}
+/**
+ * Beam/Greedy's copy boundary, separate from the other profiles. Known mutable
+ * planning data is detached. Equipment shares a memo with all zones, so
+ * common/zones.ts detach/move operations affect the branch's host only.
+ * Unknown legacy card metadata retains its previous shallow-copy behavior.
+ */
+function createPlanningCopy() {
+  const copies = new Map<object, unknown>();
 
-function cloneSuppressedDynamicBuffStats(
-  suppressed: CardSuppressedDynamicBuffStats | undefined,
-): CardSuppressedDynamicBuffStats | undefined {
-  if (!suppressed || typeof suppressed !== "object") return suppressed;
-  return Object.fromEntries(
-    Object.entries(suppressed).map(([key, entry]) => [
-      key,
-      entry && typeof entry === "object" && !Array.isArray(entry)
-        ? { ...entry }
-        : Array.isArray(entry)
-          ? [...entry]
-          : entry,
-    ]),
-  ) as CardSuppressedDynamicBuffStats;
-}
-
-function cloneCardForSim(card: SearchCardInput): SimulatedCardState;
-function cloneCardForSim(
-  card: SearchCardInput | null | undefined,
-): SimulatedCardState | null | undefined {
-  if (!card || typeof card !== "object") return card;
-  const clone = { ...card };
-  clone.dynamicBuffs = cloneDynamicBuffs(card.dynamicBuffs);
-  clone.suppressedDynamicBuffStatsByKey = cloneSuppressedDynamicBuffStats(
-    card.suppressedDynamicBuffStatsByKey,
-  );
-  clone.temporarySuppressedDynamicBuffStatsByKey =
-    cloneSuppressedDynamicBuffStats(card.temporarySuppressedDynamicBuffStatsByKey);
-  if (Array.isArray(card.archetypes)) clone.archetypes = [...card.archetypes];
-  if (Array.isArray(card.effects)) clone.effects = [...card.effects];
-  if (card.counters instanceof Map) clone.counters = new Map(card.counters);
-  if (Array.isArray(card.equips)) clone.equips = [...card.equips];
-  if (Array.isArray(card.turnBasedBuffs)) {
-    clone.turnBasedBuffs = card.turnBasedBuffs.map((buff) => ({ ...buff }));
+  function copyValue(value: unknown): unknown {
+    if (!value || typeof value !== "object") return value;
+    if (copies.has(value)) return copies.get(value);
+    if (Array.isArray(value)) {
+      const result: unknown[] = new Array(value.length);
+      copies.set(value, result);
+      value.forEach((entry, index) => { result[index] = copyValue(entry); });
+      return result;
+    }
+    if (value instanceof Map) {
+      const result = new Map<unknown, unknown>();
+      copies.set(value, result);
+      for (const [key, entry] of value) result.set(copyValue(key), copyValue(entry));
+      return result;
+    }
+    if (value instanceof Set) {
+      const result = new Set<unknown>();
+      copies.set(value, result);
+      for (const entry of value) result.add(copyValue(entry));
+      return result;
+    }
+    const result = {};
+    copies.set(value, result);
+    for (const key of Object.keys(value)) {
+      if (key === "_gameRef") continue;
+      const entry: unknown = Reflect.get(value, key);
+      if (typeof entry !== "function") Reflect.set(result, key, copyValue(entry));
+    }
+    return result;
   }
-  return clone as SimulatedCardState;
+
+  function copyFields(source: object, target: object, keys: readonly string[]): void {
+    for (const key of keys) {
+      if (key in source) Reflect.set(target, key, copyValue(Reflect.get(source, key)));
+    }
+  }
+
+  function cloneCardForSim(card: SearchCardInput): SimulatedCardState {
+    if (!card || typeof card !== "object") return card;
+    // Memo entries are copies of these exact input objects.
+    if (copies.has(card)) return copies.get(card) as SimulatedCardState;
+    const clone = { ...card };
+    copies.set(card, clone);
+    copyFields(card, clone, [
+      ...PLANNING_CARD_FIELDS, ...PLANNING_LEGACY_CARD_FIELDS,
+      ...PLANNING_CARD_LINKS, "equips", "state",
+    ]);
+    return clone as SimulatedCardState;
+  }
+
+  return { cloneCardForSim, copyFields };
 }
 
 /**
@@ -183,29 +189,6 @@ export async function beamSearchTurn(
   const seenStates = new Set<string>(); // Anti-repetição
 
   /**
-   * Gera hash do estado para detecção de repetição.
-   */
-  function getStateHash(state: AIState): string {
-    const bot = state.bot || {};
-    const player = state.player || {};
-
-    const botField = (bot.field || [])
-      .map((c) => c?.id || 0)
-      .sort()
-      .join(",");
-    const oppField = (player.field || [])
-      .map((c) => c?.id || 0)
-      .sort()
-      .join(",");
-    const botLP = bot.lp || 0;
-    const oppLP = player.lp || 0;
-    const botHandLen = (bot.hand || []).length;
-    const botSTLen = (bot.spellTrap || []).length;
-
-    return `${botField}|${oppField}|${botLP}|${oppLP}|${botHandLen}|${botSTLen}`;
-  }
-
-  /**
    * Avalia um estado usando evaluateBoardV2 ou fallback.
    */
   function evaluateState(
@@ -223,11 +206,12 @@ export async function beamSearchTurn(
    * Clona estado do jogo (shallow, mas funcional para simulação).
    */
   function cloneGameState(gameState: AIState): BeamPerspectiveGameState {
+    const { cloneCardForSim, copyFields } = createPlanningCopy();
     const clonePlayer = (
       p: SearchPlayerInput | null | undefined,
     ): SimulatedPlayerState => {
       const safe = p || {};
-      return {
+      const clone = {
         id: safe.id || "unknown",
         lp: safe.lp || 0,
         hand: (safe.hand || []).map(cloneCardForSim),
@@ -249,6 +233,8 @@ export async function beamSearchTurn(
         effectActivationRestrictions: (safe.effectActivationRestrictions || []) as NonNullable<SimulatedPlayerState["effectActivationRestrictions"]>,
         controllerType: safe.controllerType,
       };
+      copyFields(safe, clone, PLANNING_PLAYER_FIELDS);
+      return clone;
     };
 
     const isPerspectiveState = gameState && gameState._isPerspectiveState;
@@ -259,7 +245,7 @@ export async function beamSearchTurn(
       ? gameState.player
       : resolveOpponent(gameState) || gameState.player || gameState.bot;
 
-    return {
+    const clone = {
       player: clonePlayer(sourcePlayer),
       bot: clonePlayer(sourceBot),
       turn: gameState.turn,
@@ -268,6 +254,9 @@ export async function beamSearchTurn(
       _isPerspectiveState: true,
       _gameRef: gameState._gameRef || gameState, // Referência ao game original
     } as BeamPerspectiveGameState;
+    copyFields(gameState, clone, PLANNING_STATE_FIELDS.filter(key => key !== "_isPerspectiveState"));
+    copyFields(gameState, clone, ["_simLuminarch"]);
+    return clone;
   }
 
   /**
@@ -281,15 +270,6 @@ export async function beamSearchTurn(
       strategy.simulateMainPhaseAction(state, action);
     }
     return state;
-  }
-
-  /**
-   * Verifica se uma ação muda o estado de forma significativa.
-   */
-  function actionChangesState(stateBefore: AIState, stateAfter: AIState): boolean {
-    const hashBefore = getStateHash(stateBefore);
-    const hashAfter = getStateHash(stateAfter);
-    return hashBefore !== hashAfter;
   }
 
   /**
@@ -357,13 +337,13 @@ export async function beamSearchTurn(
     for (const action of topCandidates) {
       // Simular ação
       const newState = cloneGameState(currentState);
-      const stateBeforeAction = getStateHash(newState);
+      const stateBeforeAction = fingerprintPlanningState(newState);
 
       simulateAction(newState, action);
       nodesEvaluated++;
 
       // Trava 3: Anti-repetição
-      const stateAfterAction = getStateHash(newState);
+      const stateAfterAction = fingerprintPlanningState(newState);
       if (seenStates.has(stateAfterAction)) {
         continue; // Skip estado já visto
       }
@@ -424,7 +404,7 @@ export async function beamSearchTurn(
   // Início da busca
   const initialState = cloneGameState(game);
   const baseScore = evaluateState(initialState, initialState.bot);
-  seenStates.add(getStateHash(initialState));
+  seenStates.add(fingerprintPlanningState(initialState));
 
   const result = await search(initialState, 0, []);
 
@@ -497,11 +477,12 @@ export async function greedySearchWithEvalV2(
   }
 
   function cloneGameState(gameState: AIState): BeamPerspectiveGameState {
+    const { cloneCardForSim, copyFields } = createPlanningCopy();
     const clonePlayer = (
       p: SearchPlayerInput | null | undefined,
     ): SimulatedPlayerState => {
       const safe = p || {};
-      return {
+      const clone = {
         id: safe.id || "unknown",
         lp: safe.lp || 0,
         hand: (safe.hand || []).map(cloneCardForSim),
@@ -523,6 +504,8 @@ export async function greedySearchWithEvalV2(
         effectActivationRestrictions: (safe.effectActivationRestrictions || []) as NonNullable<SimulatedPlayerState["effectActivationRestrictions"]>,
         controllerType: safe.controllerType,
       };
+      copyFields(safe, clone, PLANNING_PLAYER_FIELDS);
+      return clone;
     };
 
     const isPerspectiveState = gameState && gameState._isPerspectiveState;
@@ -533,7 +516,7 @@ export async function greedySearchWithEvalV2(
       ? gameState.player
       : resolveOpponent(gameState) || gameState.player || gameState.bot;
 
-    return {
+    const clone = {
       player: clonePlayer(sourcePlayer),
       bot: clonePlayer(sourceBot),
       turn: gameState.turn,
@@ -542,6 +525,9 @@ export async function greedySearchWithEvalV2(
       _isPerspectiveState: true,
       _gameRef: gameState._gameRef || gameState,
     } as BeamPerspectiveGameState;
+    copyFields(gameState, clone, PLANNING_STATE_FIELDS.filter(key => key !== "_isPerspectiveState"));
+    copyFields(gameState, clone, ["_simLuminarch"]);
+    return clone;
   }
 
   // BUGFIX: Usar preGeneratedActions primeiro, depois regenerar como fallback

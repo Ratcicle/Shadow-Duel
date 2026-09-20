@@ -206,7 +206,7 @@ test("bot perspective clone preserves its legacy key order and aliasing profile"
   assert.deepEqual([...clone.usedThisTurn], [["probe", 2]]);
 });
 
-test("Beam/Greedy clone isolates selected mutable card state but keeps legacy aliases", async () => {
+test("Beam/Greedy clone isolates planning resources and links but keeps unrelated legacy aliases", async () => {
   const game = makeCloneProfileGame();
   let captured: unknown;
   const strategy = {
@@ -235,14 +235,20 @@ test("Beam/Greedy clone isolates selected mutable card state but keeps legacy al
   assert.notEqual(clonedCard.counters, sourceCard.counters);
   assert.notEqual(clonedCard.turnBasedBuffs, sourceCard.turnBasedBuffs);
   assert.notEqual(clonedCard.turnBasedBuffs[0], sourceCard.turnBasedBuffs[0]);
-  assert.equal(clonedCard.equippedTo, sourceCard.equippedTo);
+  // Equipment movement edits the host: retaining the live link contaminated
+  // siblings. The cloned graph now preserves its links within the branch.
+  assert.notEqual(clonedCard.equippedTo, sourceCard.equippedTo);
   assert.notEqual(clonedCard.equips, sourceCard.equips);
-  assert.equal(clonedCard.equips[0], sourceCard.equips[0]);
-  assert.equal(
+  assert.notEqual(clonedCard.equips[0], sourceCard.equips[0]);
+  assert.equal(clonedCard.equips[0], clonedCard.equippedTo);
+  assert.notEqual(
     clone.bot.additionalNormalSummonPermissions,
     game.bot.additionalNormalSummonPermissions,
   );
-  assert.equal(clone._simOncePerTurn, undefined);
+  // OPT consumers need the previous depth's count; omission reopened effects.
+  assert.notEqual(clone._simOncePerTurn, game._simOncePerTurn);
+  assert.notEqual(clone._simOncePerTurn?.bot, game._simOncePerTurn.bot);
+  assert.deepEqual([...required(clone._simOncePerTurn?.bot)], [["probe", 2]]);
 
   clonedCard.counters.set("charge", 9);
   assert.equal(sourceCard.counters.get("charge"), 2);
