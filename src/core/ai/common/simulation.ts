@@ -14,6 +14,7 @@ import {
   matchesTargetFilters,
 } from "./targetSelection.js";
 import { updateSimulatedSentToGraveMaterialMarker } from "./simulatedActions/shared.js";
+import { resolvePerspectiveSlotForPlayer } from "./perspective.js";
 import type {
   SimulatedActionContextData,
   SimulatedActionOptions,
@@ -818,16 +819,6 @@ function collectSimulatedEventSources(
   return entries;
 }
 
-function getSimulatedPlayerById(
-  state: SimulatedRuntimeState | null | undefined,
-  playerId: string | null | undefined,
-): SimulatedPlayerState | null {
-  if (!state || !playerId) return null;
-  if (state.player?.id === playerId) return state.player;
-  if (state.bot?.id === playerId) return state.bot;
-  return null;
-}
-
 function findSimulatedCardByInstanceId(
   state: SimulatedRuntimeState | null | undefined,
   instanceId: string | number | null | undefined,
@@ -1164,6 +1155,10 @@ function dispatchSimulatedEvent(
   const sourceEntries = collectSimulatedEventSources(state, eventName, payload);
   for (const sourceEntry of sourceEntries) {
     const sourceCard = sourceEntry.card;
+    // Usage persists by physical ID; conditions/actions execute in a slot.
+    const selfId = resolvePerspectiveSlotForPlayer(state, sourceEntry.player);
+    if (selfId === null) continue;
+    const ownerOptions = { ...options, selfId };
     for (const rawEffect of sourceCard?.effects || []) {
       const effect = simEffectForEventCard(rawEffect, payload);
       if (
@@ -1173,7 +1168,7 @@ function dispatchSimulatedEvent(
           payload,
           sourceEntry,
           effect,
-          options,
+          ownerOptions,
         )
       ) {
         continue;
@@ -1203,8 +1198,8 @@ function dispatchSimulatedEvent(
         ...(options.activationContext || {}),
         actionContext,
       };
-    const triggerOptions = attachSimulatedEventEmitter(state, {
-      ...options,
+      const triggerOptions = attachSimulatedEventEmitter(state, {
+        ...ownerOptions,
         sourceCard,
         effect,
         activationContext,
@@ -1216,7 +1211,7 @@ function dispatchSimulatedEvent(
         actions: effectExecutionActions(effect),
         state,
         sourceCard,
-        selfId: options.selfId || "bot",
+        selfId,
         options: triggerOptions,
       });
       if (!hasRequiredSimSelections(effect.targets || [], selections)) {
@@ -1227,7 +1222,7 @@ function dispatchSimulatedEvent(
         actions: effectExecutionActions(effect),
         selections,
         state,
-        selfId: options.selfId || "bot",
+        selfId,
         options: triggerOptions,
       });
       options.onEffectActivated?.({
@@ -1250,7 +1245,10 @@ function dispatchSimulatedEvent(
     eventName,
     payload,
   )) {
-    const owner = getSimulatedPlayerById(state, entry.ownerId);
+    const selfId = resolvePerspectiveSlotForPlayer(state, entry.ownerId);
+    if (selfId === null) continue;
+    const owner = state[selfId];
+    const ownerOptions = { ...options, selfId };
     const sourceCard = findSimulatedCardByInstanceId(
       state,
       entry.sourceInstanceId,
@@ -1271,7 +1269,7 @@ function dispatchSimulatedEvent(
         payload,
         sourceEntry,
         effect,
-        options,
+        ownerOptions,
       )
     ) {
       continue;
@@ -1287,9 +1285,8 @@ function dispatchSimulatedEvent(
     const actionContext = buildSimEventActionContext(eventName, payload, {
       ...(options.actionContext || {}),
     });
-      const triggerOptions = attachSimulatedEventEmitter(state, {
-        ...options,
-      selfId: owner.id,
+    const triggerOptions = attachSimulatedEventEmitter(state, {
+      ...ownerOptions,
       sourceCard,
       effect,
       actionContext,
@@ -1301,7 +1298,7 @@ function dispatchSimulatedEvent(
       actions: effectExecutionActions(effect),
       state,
       sourceCard,
-      selfId: owner.id,
+      selfId,
       options: triggerOptions,
     });
     if (!hasRequiredSimSelections(effect.targets || [], selections)) continue;
@@ -1310,7 +1307,7 @@ function dispatchSimulatedEvent(
       actions: effectExecutionActions(effect),
       selections,
       state,
-      selfId: owner.id,
+      selfId,
       options: triggerOptions,
     });
     if (!consumeOnMatch && Number.isFinite(entry.usesRemaining)) {

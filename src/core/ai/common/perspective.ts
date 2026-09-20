@@ -16,6 +16,23 @@ interface PerspectivePair {
   opponent: SimulatedPlayerState | null;
 }
 
+/** Resolve an explicitly physical player, even when its ID is "bot" or "player". */
+export function resolvePerspectiveSlotForPlayer(
+  state: Pick<AiStateInput, "bot" | "player">,
+  playerOrId: PerspectivePlayerInput | string | null | undefined,
+): "bot" | "player" | null {
+  if (playerOrId == null) return null;
+  if (typeof playerOrId !== "string") {
+    if (playerOrId === state.bot) return "bot";
+    if (playerOrId === state.player) return "player";
+  }
+  const id = typeof playerOrId === "string" ? playerOrId : playerOrId.id;
+  if (id == null) return null;
+  if (state.bot?.id === id) return "bot";
+  if (state.player?.id === id) return "player";
+  return null;
+}
+
 export function getPerspectivePlayers(
   state: Pick<AiStateShape, "player" | "bot">,
   selfId = "bot",
