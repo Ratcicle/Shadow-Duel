@@ -1,25 +1,18 @@
 import { resolvePerspectivePlayers } from "./StrategyUtils.js";
+import { createGameTreeCopy, withoutLiveGameReference } from "./common/gameTreeSimulation.js";
 import { fingerprintPlanningState } from "./common/stateFingerprint.js";
 import type {
   AIAction,
   GameTreeSearchResult,
 } from "../contracts/ai.js";
 import type {
-  AiCardInput,
-  AiLiveGamePort,
   AiPlayerInput,
   AiStateInput,
   GameTreeSimulationGameState,
-  SimulatedCardState,
+  SimulationGameState,
+  PerspectiveGameState,
   SimulatedPlayerState,
 } from "../contracts/aiState.js";
-import type {
-  CardDynamicBuffMap,
-  CardSuppressedDynamicBuffStats,
-  CardTurnBasedBuff,
-  GameCard,
-} from "../contracts/cards.js";
-
 /**
  * GameTreeSearch.js — P2: Deep Lookahead com Minimax + Alpha-Beta Pruning
  *
@@ -42,56 +35,17 @@ const ALPHA_INIT = -Infinity;
 const BETA_INIT = Infinity;
 const FUTURE_DISCOUNT = 0.85; // Desconto por ply: score_ply_n = score * (0.85 ^ n)
 
-interface GameTreeCardExtras {
-  archetypes?: readonly string[] | undefined;
-  turnBasedBuffs?: readonly CardTurnBasedBuff[];
-  equippedTo?: unknown;
-  equipTarget?: unknown;
-  boundMonsterTarget?: unknown;
-  boundTrapSource?: unknown;
-}
-
-type GameTreeCardInput =
-  (AiCardInput | GameCard | SimulatedCardState) & GameTreeCardExtras;
-type GameTreePlayerInput = (AiPlayerInput | SimulatedPlayerState) & {
-  name?: string | undefined;
-  debug?: boolean | undefined;
-};
-
-interface GameTreePlayerState {
-  id: string;
-  name?: string | undefined;
-  lp: number;
-  hand: SimulatedCardState[];
-  field: SimulatedCardState[];
-  graveyard: SimulatedCardState[];
-  extraDeck: SimulatedCardState[];
-  spellTrap: SimulatedCardState[];
-  fieldSpell: SimulatedCardState | null;
-  summonCount: number;
-  debug?: boolean | undefined;
-}
-
+type GameTreePlayerInput = (AiPlayerInput | SimulatedPlayerState) & { debug?: boolean };
 interface GameTreeStateInput extends AiStateInput {
   currentPlayer?: GameTreePlayerInput | null;
   opponent?: GameTreePlayerInput | null;
 }
-
-type GameTreeState = GameTreeSimulationGameState & {
-  bot: GameTreePlayerState;
-  player: GameTreePlayerState;
-  turn?: string | null;
-  phase?: string | null;
-  turnCounter: number;
-  _isPerspectiveState: true;
-  _gameRef: AiLiveGamePort | GameTreeStateInput | GameTreeState;
-  currentPlayer?: GameTreePlayerInput | null;
-  opponent?: GameTreePlayerInput | null;
-};
+type GameTreeState = GameTreeSimulationGameState;
 
 interface GameTreeStrategy<State, Action extends AIAction> {
   bot?: { debug?: boolean } | undefined;
   generateMainPhaseActions(state: State): Action[];
+  simulateMainPhaseAction(state: GameTreeState, action: Action): GameTreeState | SimulationGameState | PerspectiveGameState | void;
 }
 
 interface MinimaxResult<Action extends AIAction> {
@@ -102,49 +56,6 @@ interface MinimaxResult<Action extends AIAction> {
 interface TranspositionEntry<Action extends AIAction> {
   result: MinimaxResult<Action>;
   depth: number;
-}
-
-interface GameTreeActionView {
-  type: string;
-  index?: number;
-  card?: GameTreeCardInput | null;
-  attacker?: GameTreeCardInput | null;
-  target?: GameTreeCardInput | null;
-}
-
-function cloneDynamicBuffs(
-  dynamicBuffs: CardDynamicBuffMap | null | undefined,
-): CardDynamicBuffMap | null | undefined {
-  if (!dynamicBuffs || typeof dynamicBuffs !== "object") return dynamicBuffs;
-  return Object.fromEntries(
-    Object.entries(dynamicBuffs).map(([key, entry]) => [
-      key,
-      {
-        ...entry,
-        stats: Array.isArray(entry?.stats) ? [...entry.stats] : entry?.stats,
-        appliedValues:
-          entry?.appliedValues && typeof entry.appliedValues === "object"
-            ? { ...entry.appliedValues }
-            : entry?.appliedValues,
-      },
-    ]),
-  );
-}
-
-function cloneSuppressedDynamicBuffStats(
-  suppressed: CardSuppressedDynamicBuffStats | undefined,
-): CardSuppressedDynamicBuffStats | undefined {
-  if (!suppressed || typeof suppressed !== "object") return suppressed;
-  return Object.fromEntries(
-    Object.entries(suppressed).map(([key, entry]) => [
-      key,
-      entry && typeof entry === "object" && !Array.isArray(entry)
-        ? { ...entry }
-        : Array.isArray(entry)
-          ? [...entry]
-          : entry,
-    ]),
-  ) as CardSuppressedDynamicBuffStats;
 }
 
 function transpositionKey(
@@ -180,84 +91,8 @@ function windowBound(value: number): number | string {
   return Object.is(value, -0) ? "-0" : value;
 }
 
-/**
- * Clona o game state para simulação profunda
- */
-function cloneCardForSim(card: GameTreeCardInput): SimulatedCardState {
-  if (!card || typeof card !== "object") return card;
-  const clone = { ...card };
-  clone.dynamicBuffs = cloneDynamicBuffs(card.dynamicBuffs);
-  clone.suppressedDynamicBuffStatsByKey = cloneSuppressedDynamicBuffStats(
-    card.suppressedDynamicBuffStatsByKey,
-  );
-  clone.temporarySuppressedDynamicBuffStatsByKey =
-    cloneSuppressedDynamicBuffStats(card.temporarySuppressedDynamicBuffStatsByKey);
-
-  if (Array.isArray(card.archetypes)) {
-    clone.archetypes = [...card.archetypes];
-  }
-  if (Array.isArray(card.effects)) {
-    clone.effects = card.effects.slice();
-  }
-  if (card.counters instanceof Map) {
-    clone.counters = new Map(card.counters);
-  }
-  if (Array.isArray(card.turnBasedBuffs)) {
-    clone.turnBasedBuffs = card.turnBasedBuffs.map((buff) => ({ ...buff }));
-  }
-
-  // Break circular refs that can exist in live cards.
-  clone.equippedTo = null;
-  clone.equipTarget = null;
-  clone.equips = [];
-  clone.boundMonsterTarget = null;
-  clone.boundTrapSource = null;
-
-  return clone as SimulatedCardState;
-}
-
-function clonePlayerForSim(
-  player: GameTreePlayerInput | null | undefined,
-): GameTreePlayerState {
-  const safe = player || {};
-  return {
-    id: safe.id || "unknown",
-    name: safe.name,
-    lp: safe.lp || 0,
-    hand: (safe.hand || []).map(cloneCardForSim),
-    field: (safe.field || []).map(cloneCardForSim),
-    graveyard: (safe.graveyard || []).map(cloneCardForSim),
-    extraDeck: (safe.extraDeck || []).map(cloneCardForSim),
-    spellTrap: (safe.spellTrap || []).map(cloneCardForSim),
-    fieldSpell: safe.fieldSpell ? cloneCardForSim(safe.fieldSpell) : null,
-    summonCount: safe.summonCount || 0,
-    debug: safe.debug,
-  };
-}
-
-function cloneGameStateDeep(
-  gameState: GameTreeStateInput | GameTreeState,
-  perspective: GameTreePlayerInput | null = null,
-): GameTreeState {
-  const safeGame = gameState || {};
-  const resolved = resolvePerspectivePlayers(
-    safeGame as Parameters<typeof resolvePerspectivePlayers>[0],
-    perspective || safeGame.bot || safeGame.currentPlayer || null,
-  );
-  const sourceBot =
-    resolved.self || safeGame.bot || safeGame.currentPlayer || safeGame.player;
-  const sourcePlayer =
-    resolved.opponent || safeGame.player || safeGame.opponent || safeGame.bot;
-
-  return {
-    bot: clonePlayerForSim(sourceBot),
-    player: clonePlayerForSim(sourcePlayer),
-    turn: safeGame.turn,
-    phase: safeGame.phase,
-    turnCounter: safeGame.turnCounter || 0,
-    _isPerspectiveState: true,
-    _gameRef: safeGame._gameRef || safeGame,
-  } as GameTreeState;
+function cloneGameStateDeep(gameState: GameTreeStateInput | GameTreeState, perspective: GameTreePlayerInput | null = null): GameTreeState {
+  return createGameTreeCopy(gameState, perspective || gameState.bot).state;
 }
 
 /**
@@ -327,82 +162,18 @@ function evaluateLeafState(
   }
 }
 
-/**
- * Simula uma ação e retorna novo estado (determinístico para core game state)
- * Nota: Game.js effects/events não são simulados; apenas board state muda
- */
-function simulateAction(
-  gameState: GameTreeStateInput | GameTreeState,
-  action: GameTreeActionView,
-  perspective: GameTreePlayerInput | null | undefined,
+/** Execute exactly once on an isolated graph; unchanged actions are legal no-ops. */
+function simulateAction<State extends GameTreeStateInput, Action extends AIAction>(
+  gameState: GameTreeState, action: Action, strategy: GameTreeStrategy<State, Action>,
 ): GameTreeState {
-  const simState = cloneGameStateDeep(gameState, perspective);
-  const simPersp = simState?.bot;
-  const simOpp = simState?.player;
-  if (!simPersp || !simOpp) return simState;
-
-  try {
-    // Simulação simplificada: apenas atualiza board state
-    // (Não simula efeitos de card, apenas movimento de cartas)
-
-    if (action.type === "summon") {
-      const card =
-        action.card ||
-        (Number.isInteger(action.index)
-          ? simPersp.hand?.[action.index!]
-          : null);
-      if (!card) return simState;
-      if (!simPersp.field) simPersp.field = [];
-      simPersp.field.push({ ...card } as SimulatedCardState);
-
-      // Remove da mão
-      if (simPersp.hand && Array.isArray(simPersp.hand)) {
-        const idx = Number.isInteger(action.index)
-          ? action.index!
-          : simPersp.hand.indexOf(card as SimulatedCardState);
-        if (idx >= 0) simPersp.hand.splice(idx, 1);
-      }
-    } else if (action.type === "attack") {
-      const attacker = action.attacker;
-      const target = action.target;
-      const opp = simOpp;
-
-      // Dano direto ou batalha
-      if (!target) {
-        opp.lp = Math.max(0, (opp.lp || 0) - (attacker?.atk || 0));
-      } else {
-        // Batalha simplificada: maior ATK vence
-        // 🎭 REGRA: Não pode ver DEF real de facedown (usar estimativa)
-        const defValue = target?.isFacedown
-          ? 1500
-          : target?.position === "defense"
-          ? target?.def || 0
-          : target?.atk || 0;
-        if ((attacker?.atk || 0) > defValue) {
-          opp.lp = Math.max(
-            0,
-            (opp.lp || 0) - ((attacker?.atk || 0) - defValue)
-          );
-          if (opp.field && Array.isArray(opp.field)) {
-            const idx = opp.field.indexOf(target as SimulatedCardState);
-            if (idx >= 0) opp.field.splice(idx, 1);
-          }
-        } else {
-          // Attacker é destruído
-          if (simPersp.field && Array.isArray(simPersp.field)) {
-            const idx = simPersp.field.indexOf(attacker as SimulatedCardState);
-            if (idx >= 0) simPersp.field.splice(idx, 1);
-          }
-        }
-      }
-    }
-    // Outras ações: simplemente ignorar por agora (set, spell, etc)
-
-    return simState;
-  } catch (e) {
-    console.warn(`[GameTreeSearch] simulateAction erro:`, e);
-    return simState;
-  }
+  const copy = createGameTreeCopy(gameState, gameState.bot);
+  // The same graph memo rebinds card references inside action preferences.
+  const branchAction = copy.copyAction(action) as Action;
+  const returned = withoutLiveGameReference(copy.state, () =>
+    strategy.simulateMainPhaseAction(copy.state, branchAction));
+  const result = returned || copy.state;
+  result._isPerspectiveState = true;
+  return result as GameTreeState;
 }
 
 /**
@@ -416,7 +187,8 @@ function generateCandidateActions<State extends GameTreeStateInput, Action exten
   try {
     if (!stateForActions) return [];
     // Retorna top 2-3 ações por scoring (beam width)
-    const allActions = strategy.generateMainPhaseActions(stateForActions as State & GameTreeState);
+    const allActions = withoutLiveGameReference(stateForActions, () =>
+      strategy.generateMainPhaseActions(stateForActions as State & GameTreeState));
     return allActions.slice(0, 3); // Limita a 3 para reduzir branching
   } catch {
     return [];
@@ -481,14 +253,14 @@ function minimax<State extends GameTreeStateInput, Action extends AIAction>(
   let bestValue = isMaximizing ? -Infinity : Infinity;
   let bestAction: Action | null = actions[0] ?? null;
 
-  if (actions.length === 0) {
+  if (!stateForActions || actions.length === 0) {
     // Sem ações: avaliar estado atual
     const leafValue = evaluateLeafState(gameState, perspective);
     return { value: leafValue, action: null };
   }
 
   for (const action of actions) {
-    const nextState = simulateAction(gameState, action, persp);
+    const nextState = simulateAction(stateForActions, action, strategy);
 
     // Recursão com troca de perspectiva
     const nextPerspective = nextState.player;
@@ -646,4 +418,3 @@ export function estimateSearchComplexity(maxPly: number, beamWidth = 3): number 
   }
   return nodes;
 }
-

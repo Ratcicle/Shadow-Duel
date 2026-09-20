@@ -42,6 +42,7 @@ import type {
   SimulatedCardState,
   SimulatedPlayerState,
   SimulationGameState,
+  AiStateShape,
 } from "../../contracts/aiState.js";
 import type { CardAction } from "../../contracts/actions.js";
 import type {
@@ -448,6 +449,7 @@ interface SimulatedEffectState {
   player?: SimulatedEffectPlayer | null;
   bot?: SimulatedEffectPlayer | null;
   _simOncePerTurn?: object;
+  _gameTreeActors?: AiStateShape["_gameTreeActors"];
 }
 
 interface SimulatedRuntimeEffect extends SimulatedEffectUsageIdentity {
@@ -464,8 +466,14 @@ type SimulatedEffectSourceCard = SimulatedPlayerState["field"][number];
 function getSimPlayerById(
   state: SimulatedEffectState | null | undefined,
   playerId: string = "bot",
+  ownerIsPhysical = false,
 ): SimulatedEffectPlayer | null | undefined {
   if (!state) return null;
+  if (state._gameTreeActors && ownerIsPhysical) {
+    if (state.player?.id === playerId) return state.player;
+    if (state.bot?.id === playerId) return state.bot;
+    return null;
+  }
   if (playerId === "player") return state.player;
   if (playerId === "bot") return state.bot;
   if (state.player?.id === playerId) return state.player;
@@ -535,9 +543,10 @@ function isSimulatedEffectActivationRestricted(
   effect: SimulatedRuntimeEffect | null | undefined,
   sourceCard: SimulatedEffectSourceCard | null | undefined,
   selfId: string = "bot",
+  ownerIsPhysical = false,
 ): boolean {
   if (!sourceCard || !simEffectCanBeBlocked(effect)) return false;
-  const player = getSimPlayerById(state, selfId);
+  const player = getSimPlayerById(state, selfId, ownerIsPhysical);
   const restrictions = Array.isArray(player?.effectActivationRestrictions)
     ? player.effectActivationRestrictions
     : [];
@@ -568,8 +577,9 @@ function canUseSimulatedEffect(
   effect: SimulatedRuntimeEffect | null | undefined,
   sourceCard: SimulatedEffectSourceCard | null | undefined,
   selfId: string = "bot",
+  ownerIsPhysical = false,
 ): boolean {
-  if (isSimulatedEffectActivationRestricted(state, effect, sourceCard, selfId)) {
+  if (isSimulatedEffectActivationRestricted(state, effect, sourceCard, selfId, ownerIsPhysical)) {
     return false;
   }
   if (!effect?.oncePerTurn && !effect?.oncePerTurnName) return true;
@@ -586,7 +596,7 @@ function canUseSimulatedEffect(
       ),
     ) || 1,
   );
-  return canUseSimOncePerTurn(state, key, limit, selfId);
+  return canUseSimOncePerTurn(state, key, limit, selfId, ownerIsPhysical);
 }
 
 function markSimulatedEffectUsed(
@@ -594,6 +604,7 @@ function markSimulatedEffectUsed(
   effect: SimulatedRuntimeEffect | null | undefined,
   sourceCard: SimulatedEffectSourceCard | null | undefined,
   selfId: string = "bot",
+  ownerIsPhysical = false,
 ): void {
   if (!effect?.oncePerTurn && !effect?.oncePerTurnName) return;
   const key = getSimOncePerTurnKey(effect, sourceCard);
@@ -609,7 +620,7 @@ function markSimulatedEffectUsed(
       ),
     ) || 1,
   );
-  markSimOncePerTurnUsed(state, key, limit, selfId);
+  markSimOncePerTurnUsed(state, key, limit, selfId, ownerIsPhysical);
 }
 
 function effectConditionsPass(
@@ -1167,7 +1178,7 @@ function dispatchSimulatedEvent(
       ) {
         continue;
       }
-      if (!canUseSimulatedEffect(state, effect, sourceCard, sourceEntry.player?.id || "bot")) {
+      if (!canUseSimulatedEffect(state, effect, sourceCard, sourceEntry.player?.id || "bot", true)) {
         continue;
       }
 
@@ -1211,7 +1222,7 @@ function dispatchSimulatedEvent(
       if (!hasRequiredSimSelections(effect.targets || [], selections)) {
         continue;
       }
-      markSimulatedEffectUsed(state, effect, sourceCard, sourceEntry.player?.id || "bot");
+      markSimulatedEffectUsed(state, effect, sourceCard, sourceEntry.player?.id || "bot", true);
       applySimulatedActions({
         actions: effectExecutionActions(effect),
         selections,

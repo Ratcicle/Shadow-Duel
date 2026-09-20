@@ -1,3 +1,4 @@
+import { applyGenericSimulatedMainPhaseAction } from "../../src/core/ai/common/simulation.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { gameTreeSearch } from "../../src/core/ai/GameTreeSearch.js";
@@ -19,8 +20,8 @@ function game() {
 }
 
 const noop: AIAction = { type: "position_change", fieldIndex: 0, toPosition: "attack" };
-const summonFirst: AIAction = { type: "summon", index: 0 };
-const summonSecond: AIAction = { type: "summon", index: 1 };
+const summonFirst: AIAction = { type: "summon", index: 0, cardName: "Small" };
+const summonSecond: AIAction = { type: "summon", index: 1, cardName: "Large" };
 
 interface CacheObservation {
   lookups: string[];
@@ -84,6 +85,7 @@ test("GameTree evaluates different summon compositions instead of reusing the fi
   let generationCalls = 0;
   const evaluatedCompositions: string[][] = [];
   const { result, cache } = observeCache(() => gameTreeSearch(input, {
+    simulateMainPhaseAction: applyGenericSimulatedMainPhaseAction,
     generateMainPhaseActions(state: AiStateInput): AIAction[] {
       generationCalls++;
       if (state.bot?.id === "bot") return [summonFirst, summonFirst, summonSecond];
@@ -115,6 +117,7 @@ test("GameTree reuses equivalent clones only when the entry query context matche
   const input = game();
   let generationCalls = 0;
   const { result, cache } = observeCache(() => gameTreeSearch(input, {
+    simulateMainPhaseAction: () => undefined,
     generateMainPhaseActions(): AIAction[] { generationCalls++; return [noop, noop, noop]; },
   }, input.bot, 2));
   console.log("gametree-baseline equivalent", JSON.stringify({ result, generationCalls, hits: cache.hits, writes: cache.writes.length }));
@@ -142,6 +145,7 @@ for (const [field, other] of [
     const input = game();
     let generationCalls = 0;
     const run = () => gameTreeSearch(input, {
+    simulateMainPhaseAction: () => undefined,
       generateMainPhaseActions(): AIAction[] { generationCalls++; return [noop, noop, noop]; },
     }, input.bot, 2);
     const original = observeCache(run);
@@ -169,7 +173,7 @@ for (const [field, other] of [
   });
 }
 
-test("GameTree fingerprints the same reduced projection at root and descendants", () => {
+test("GameTree fingerprints the same simulation projection at root and descendants", () => {
   const input = game();
   input.bot.id = "custom-self";
   input.player.id = "custom-opponent";
@@ -177,6 +181,7 @@ test("GameTree fingerprints the same reduced projection at root and descendants"
   input.bot.field.push({ instanceId: 1, name: "Host", atk: 1000, counters: new Map([["charge", 2]]) });
   const projected: string[] = [];
   const run = () => gameTreeSearch(input, {
+    simulateMainPhaseAction: () => undefined,
     generateMainPhaseActions(state: AiStateInput): AIAction[] {
       projected.push(fingerprintPlanningState(state));
       return [noop];
@@ -194,15 +199,13 @@ test("GameTree fingerprints the same reduced projection at root and descendants"
     ["custom-self", 1, true],
   ]);
 
-  const host = required(input.bot.field[0]);
-  Object.assign(host, { equippedTo: host, equipTarget: host, equips: [host], boundMonsterTarget: host, boundTrapSource: host });
-  // These properties are not in the GameTree clone. A read would prove that
-  // root cache identity accidentally inspected more than its search profile.
+  // Only presentation/engine services are omitted now. Zones, usage and
+  // equipment are intentionally covered by the Stage 2B simulation profile.
   const forbidden = () => { throw new Error("outside GameTree projection"); };
-  for (const key of ["deck", "banished", "additionalNormalSummonPermissions", "effectActivationRestrictions"]) {
+  for (const key of ["ui", "strategy"]) {
     Object.defineProperty(input.bot, key, { get: forbidden, enumerable: true });
   }
-  for (const key of ["effectEngine", "usedThisTurn", "temporaryEventEffects", "ui"]) {
+  for (const key of ["effectEngine", "ui"]) {
     Object.defineProperty(input, key, { get: forbidden, enumerable: true });
   }
   projected.length = 0;
@@ -225,6 +228,7 @@ test("GameTree fingerprint failure bypasses every cache lookup and write without
   Math.random = () => { randomCalls++; throw new Error("unexpected randomness"); };
   try {
     const { result, cache } = observeCache(() => gameTreeSearch(input, {
+    simulateMainPhaseAction: () => undefined,
       generateMainPhaseActions(): AIAction[] { generationCalls++; return [noop, noop, noop]; },
     }, input.bot, 2));
     assert.equal(result.action, noop);
@@ -244,6 +248,7 @@ test("GameTree tables remain local to each public search invocation", () => {
   for (let attempt = 0; attempt < 2; attempt++) {
     let calls = 0;
     const { cache } = observeCache(() => gameTreeSearch(input, {
+    simulateMainPhaseAction: () => undefined,
       generateMainPhaseActions(): AIAction[] { calls++; return [noop, noop, noop]; },
     }, input.bot, 2));
     counts.push(calls);
@@ -257,6 +262,7 @@ test("GameTree preserves public error handling for an unsearchable input", () =>
   const input = game();
   Object.defineProperty(input, "bot", { get() { throw new Error("invalid player projection"); } });
   const { result, cache } = observeCache(() => gameTreeSearch(input, {
+    simulateMainPhaseAction: () => undefined,
     bot: { debug: false },
     generateMainPhaseActions(): AIAction[] { assert.fail("invalid state must not generate"); },
   }, null, 2));
@@ -280,6 +286,7 @@ for (const [name, change] of [
     const host: AiCardInput = { instanceId: 1, name: "Host", atk: 1000, level: 4, position: "attack", isFacedown: false, counters: new Map([["charge", 2], ["spore", 1]]) };
     input.bot.field.push(host);
     const run = () => gameTreeSearch(input, {
+    simulateMainPhaseAction: () => undefined,
       generateMainPhaseActions(): AIAction[] { return [noop]; },
     }, input.bot, 1);
     const first = observeCache(run);

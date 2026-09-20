@@ -158,8 +158,11 @@ interface SimOptState {
   _simArcanistOptUsed?: Set<string> | string[];
 }
 
-type SimOncePerTurnState = Pick<AiStateShape, "_simOncePerTurn"> | {
+type SimOncePerTurnState = {
   _simOncePerTurn?: object;
+  _gameTreeActors?: AiStateShape["_gameTreeActors"];
+  bot?: { id?: string | null } | null;
+  player?: { id?: string | null } | null;
 };
 
 interface SimSignatureOptions {
@@ -199,6 +202,7 @@ import type {
 export function ensureSimOncePerTurnBucket(
   state: SimOncePerTurnState | null | undefined,
   selfId = "bot",
+  ownerIsPhysical = false,
 ): Map<string, number> {
   if (!state) return new Map<string, number>();
   if (
@@ -209,7 +213,13 @@ export function ensureSimOncePerTurnBucket(
     state._simOncePerTurn = {};
   }
 
-  const ownerKey = selfId || "bot";
+  // GameTree rotates the bot/player slots without changing physical owners.
+  // Event callers already carry an owner's id, which can itself be "bot" or
+  // "player"; those keys must never be interpreted as a rotated slot.
+  const ownerKey = state._gameTreeActors && !ownerIsPhysical &&
+    (selfId === "bot" || selfId === "player")
+    ? state[selfId]?.id || selfId
+    : selfId || "bot";
   const current = Reflect.get(state._simOncePerTurn, ownerKey) as
     | LegacySimOncePerTurnBucket
     | undefined;
@@ -244,9 +254,10 @@ export function canUseSimOncePerTurn(
   key: string | null | undefined,
   limit = 1,
   selfId = "bot",
+  ownerIsPhysical = false,
 ): boolean {
   if (!key) return true;
-  const bucket = ensureSimOncePerTurnBucket(state, selfId);
+  const bucket = ensureSimOncePerTurnBucket(state, selfId, ownerIsPhysical);
   const normalizedLimit = Math.max(1, Math.floor(Number(limit)) || 1);
   return Number(bucket.get(key) || 0) < normalizedLimit;
 }
@@ -256,9 +267,10 @@ export function markSimOncePerTurnUsed(
   key: string | null | undefined,
   limit = 1,
   selfId = "bot",
+  ownerIsPhysical = false,
 ): void {
   if (!key) return;
-  const bucket = ensureSimOncePerTurnBucket(state, selfId);
+  const bucket = ensureSimOncePerTurnBucket(state, selfId, ownerIsPhysical);
   const normalizedLimit = Math.max(1, Math.floor(Number(limit)) || 1);
   bucket.set(
     key,

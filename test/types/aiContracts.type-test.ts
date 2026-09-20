@@ -98,20 +98,7 @@ type SearchScoresAreRequired = Expect<
     : false
 >;
 type GameTreePlayerKeysAreExact = Expect<
-  Equal<
-    keyof GameTreeSimulatedPlayerState,
-    | "id"
-    | "name"
-    | "lp"
-    | "hand"
-    | "field"
-    | "graveyard"
-    | "extraDeck"
-    | "spellTrap"
-    | "fieldSpell"
-    | "summonCount"
-    | "debug"
-  >
+  Equal<keyof GameTreeSimulatedPlayerState, keyof import("../../src/core/contracts/aiState.js").SimulatedPlayerState | "name">
 >;
 
 declare const liveState: LiveGameState;
@@ -250,12 +237,10 @@ const simulationFromPerspective: SimulationGameState = perspectiveState;
 // @ts-expect-error
 const botPerspectiveFromBeam: BotPerspectiveGameState = beamPerspectiveState;
 
-// contract-negative: the GameTree profile intentionally omits the hidden Deck.
-// @ts-expect-error
+// GameTree now carries the supplied Deck for strategy simulation.
 gameTreeState.bot.deck;
 
-// contract-negative: GameTree and full simulation profiles have distinct shapes.
-// @ts-expect-error
+// GameTree now satisfies the common simulator while retaining its own brand.
 const fullSimulationFromGameTree: SimulationGameState = gameTreeState;
 
 // contract-negative: only a real clone may establish simulated-card identity.

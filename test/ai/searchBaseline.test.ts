@@ -1,3 +1,4 @@
+import { applyGenericSimulatedMainPhaseAction } from "../../src/core/ai/common/simulation.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 
@@ -20,6 +21,7 @@ interface SearchAction {
 }
 
 interface SearchCard {
+  cardKind?: "monster";
   name: string;
   atk: number;
   def: number;
@@ -230,6 +232,7 @@ test("game-tree search freezes defaults, three-candidate beam and first-tie beha
     toPosition: "attack",
   };
   const strategy = {
+    simulateMainPhaseAction: () => undefined,
     bot: game.bot,
     generateMainPhaseActions() {
       generationCalls += 1;
@@ -255,12 +258,13 @@ test("game-tree search freezes defaults, three-candidate beam and first-tie beha
 
 test("game-tree search applies the legacy 0.85 future discount", () => {
   const game = makeTreeGame();
-  game.bot.hand.push({ name: "Bot Material", atk: 1000, def: 0 });
+  game.bot.hand.push({ name: "Bot Material", cardKind: "monster", atk: 1000, def: 0 });
   game.player.hand.push({ name: "Player Material", atk: 1000, def: 0 });
-  const summonAction = { type: "summon", index: 0 } as const;
+  const summonAction = { type: "summon", index: 0, cardName: "Bot Material" } as const;
   const strategy = {
     bot: game.bot,
     generateMainPhaseActions: () => [summonAction],
+    simulateMainPhaseAction: applyGenericSimulatedMainPhaseAction,
   };
 
   const result = gameTreeSearch(game, strategy, game.bot, 1);
@@ -300,6 +304,7 @@ test("game-tree transposition cache stops at the legacy 2000-entry boundary", ()
     const game = makeTreeGame();
     game.bot.field.push({ name: "Cache capacity probe", atk: 1000, def: 0 });
     const strategy = {
+    simulateMainPhaseAction: () => undefined,
       bot: game.bot,
       generateMainPhaseActions: () => SEARCH_ACTIONS,
     };
@@ -330,6 +335,7 @@ test("game-tree unrepresentable input retains leaf fallback without random cache
   Math.random = () => { randomCalls++; throw new Error("unexpected randomness"); };
   try {
     const strategy = {
+    simulateMainPhaseAction: () => undefined,
       bot: game.bot,
       generateMainPhaseActions: () => [],
     };

@@ -303,22 +303,11 @@ export interface SimulatedPlayerState {
 }
 
 /**
- * The GameTree clone deliberately omits hidden and unused zones. Keeping this
- * projection separate prevents type annotations from silently adding runtime
- * keys to that search profile.
+ * GameTree carries the supplied zones and legality data required by strategy
+ * simulators. Its builder and brand remain distinct from other clone profiles.
  */
-export interface GameTreeSimulatedPlayerState {
-  id: PlayerId | string;
+export interface GameTreeSimulatedPlayerState extends SimulatedPlayerState {
   name?: string | undefined;
-  lp: number;
-  hand: SimulatedCardState[];
-  field: SimulatedCardState[];
-  graveyard: SimulatedCardState[];
-  extraDeck: SimulatedCardState[];
-  spellTrap: SimulatedCardState[];
-  fieldSpell: SimulatedCardState | null;
-  summonCount: number;
-  debug?: boolean | undefined;
 }
 
 /** Read-only input projection accepted before a clone establishes brands. */
@@ -424,9 +413,17 @@ export interface AiStateShape extends AiLiveGamePort {
   _simMaterialEffectActivationsByMaterialId?: SimulatedMaterialActivationLedger | undefined;
   _simVoidBeastSearchUsed?: boolean;
   _simVoidHollowRecruitUsed?: boolean;
+  /** GameTree-only storage for metadata otherwise bound to the current bot view. */
+  _gameTreeActors?: Record<string, GameTreeActorState>;
 }
 
-export interface GameTreeStateShape extends AiLiveGamePort {
+export type GameTreeActorState = Pick<AiStateShape,
+  | "_simOptUsed" | "_simArcanistOptUsed" | "_simLuminarch" | "_simBurningWest"
+  | "_simGrandLibraryBattleRewardUsed" | "_simArcanistApprenticeSearchUsed"
+  | "_simArcanistSpellActivations" | "_simVoidBeastSearchUsed" | "_simVoidHollowRecruitUsed"
+>;
+
+export interface GameTreeStateShape extends AiStateShape {
   player: GameTreeSimulatedPlayerState;
   bot: GameTreeSimulatedPlayerState;
   turn: PlayerId | string | null | undefined;
