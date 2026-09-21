@@ -80,7 +80,7 @@ export interface VerificationResult extends MigrationDigests {
 }
 
 const REGISTRY_URL = new URL(
-  "../docs/migrations/typescript-digests.json",
+  "../config/toolchain/typescript-digests.json",
   import.meta.url,
 );
 const PT_BR_LOCALE_URL = new URL(
