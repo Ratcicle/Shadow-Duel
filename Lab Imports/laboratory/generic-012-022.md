@@ -27,7 +27,7 @@ As cópias e quantidades são de um cenário de teste, não de um deck competiti
 | ID | Carta | Preparação e resultado a conferir |
 | --- | --- | --- |
 | 12 | Polimerização | Ative da mão. Escolha Shadow-Heart Warlord (122) e use Shadow-Heart Abyssal Eel (101) do seu campo + Shadow-Heart Imp (107) da sua mão. Selecione a posição da Fusão. Os dois materiais vão ao Cemitério, a Fusão entra pelo Extra Deck e Polimerização termina no Cemitério. Materiais do oponente não devem aparecer. |
-| 13 | Força Espelho | Antes da batalha, coloque seu Tech-Zero Pulse Soldier (508) em Defesa. Ataque o Estudioso Arcano adversário com o Corcel Pesadelo e, controlando o Jogador 2, responda com Força Espelho. Os monstros em Ataque do Jogador 1 são destruídos; o Soldado em Defesa e os monstros do Jogador 2 permanecem. O ataque não causa dano. Há uma divergência de negação descrita abaixo. |
+| 13 | Força Espelho | Antes da batalha, coloque seu Tech-Zero Pulse Soldier (508) em Defesa. Ataque o Estudioso Arcano adversário com o Corcel Pesadelo e, controlando o Jogador 2, responda com Força Espelho. Os monstros em Ataque do Jogador 1 são destruídos; o Soldado em Defesa e os monstros do Jogador 2 permanecem. O ataque termina sem dano porque o atacante saiu do campo. Se ele sobreviver por proteção contra destruição, o ataque continua normalmente. |
 | 14 | Campo de Força de Potência | Reinicie e declare o mesmo ataque, respondendo apenas com o ID 14 do Jogador 2. O atacante é o alvo declarado; o ataque é negado, os monstros permanecem e a Fase de Batalha termina, seguindo para a Principal 2 do Jogador 1. |
 | 15 | Queda do Tolo | Invoque normalmente o Corcel Pesadelo (1) da mão do Jogador 1: seus 1700 ATK habilitam a Armadilha do Jogador 2, que deve destruí-lo. Reinicie e Invoque normalmente o Estudioso (9), com 1500 ATK: a Armadilha não deve ser oferecida. A Invocação-Especial do Corcel da Meia-Noite (5) com o ID 18 também não deve habilitá-la. |
 | 16 | Espírito da Árvore Ancestral | Ative a Armadilha do Jogador 1: ela vira um Monstro de Efeito Espírito/TREVAS/Nível 4/1700 ATK/1900 DEF, em Defesa, ainda tratado como Armadilha. Passe ao Jogador 2 e ataque-a com o Corcel da Meia-Noite (5), de 2600 ATK: a destruição em batalha causa 500 de dano ao Jogador 2. Em outro teste, destrua-a com Seleção Natural: não deve causar esses 500. |
@@ -78,34 +78,38 @@ destruição, histórico de materiais Sincro/Fusão e bloqueio de efeitos por no
 | ID | Código comparado com o inglês | Inglês comparado com PT-BR |
 | --- | --- | --- |
 | 12 | Fusão pelo Extra Deck com materiais da própria mão/campo; escolha humana de Fusão e materiais. Alinhado. | Explicitado **seu campo** e padronizada a grafia de Invocação-Fusão/Matéria de Fusão. |
-| 13 | Gatilho de ataque adversário e destruição em Ataque alinhados; o handler também registra negação do ataque, não descrita no texto. | Tradução acompanha o inglês e, portanto, também não menciona essa negação. |
+| 13 | Corrigido: destrói monstros adversários em Ataque na declaração do ataque, sem negar o ataque. Se o atacante sobreviver, o combate continua. | Alinhado ao inglês; textos preservados. |
 | 14 | Ataque adversário, alvo atacante, negação e encerramento da batalha alinhados. | Alinhado. |
 | 15 | Somente Invocação-Normal adversária e ATK atual mínimo de 1600; alvo é o monstro Invocado. Alinhado. | Alinhado. |
 | 16 | Defesa forçada, atributos, dupla natureza monstro/Armadilha e 500 somente por destruição em batalha após seu próprio procedimento. Alinhado. | Alinhado. |
 | 17 | Corrigido: limite por cópia (soft OPT), renovado ao sair do campo e voltar; cada material Sincro gera seu próprio marcador. Custo de oito e Invocação alinhados. | Alinhado ao inglês; não foi necessário mudar os textos. |
 | 18 | Alvo no próprio Cemitério, Ataque forçado e destruição recíproca quando qualquer uma das cartas deixa o campo. Alinhado. | Alinhado. |
 | 19 | Devolução do Sincro, histórico de todos os materiais no próprio Cemitério, opção de reviver e limite por nome. Alinhado. | Alinhado. |
-| 20 | Material de Fusão do turno, recuperação, opção até Nível 4 em Defesa e negação temporária alinhados. O filtro também exclui monstros Fusão/Sincro/Ascensão; essa restrição não está escrita. | Alinhado ao inglês, inclusive a omissão dessa restrição. |
+| 20 | Corrigido: aceita também materiais Fusão/Sincro/Ascensão enviados ao próprio Cemitério neste turno. Eles retornam ao Extra Deck, sem oferecer a Invocação opcional; ela exige que o monstro recuperado esteja na mão. | Alinhado ao inglês; textos preservados. |
 | 21 | Custo de descarte, alvo adversário com a face para cima em todas as zonas de campo, destruição e limite por nome. Alinhado. | Alinhado. |
 | 22 | Metade dos PV como custo, duas compras, bloqueio dos nomes até o fim do turno e limite por nome. Alinhado. | Alinhado. |
 
-### Diferenças para decidir durante a aprovação
+### Correção aprovada de Força Espelho
 
-- **ID 13:** `applyMirrorForceDestroy` em
-  `src/core/effects/actions/destroy.ts` chama `registerAttackNegated` depois
-  das tentativas de destruição, inclusive quando um atacante protegido
-  sobrevive. Isso é mais forte que simplesmente destruir os monstros em
-  Ataque. Para um teste adicional, use um atacante protegido contra
-  destruição por efeitos. O cenário básico não cobre essa proteção.
-- **ID 20:** o alvo declara `excludeMonsterTypes` para Fusão, Sincro e
-  Ascensão. Embora essas cartas não possam ficar na mão, o movimento
-  genérico normalmente as redireciona ao Extra Deck. Proibir selecioná-las
-  é uma regra adicional ao texto atual. O cenário básico usa materiais
-  do Main Deck; este caso exige uma Fusão feita usando um monstro do
-  Extra Deck como material.
+A negação adicional foi removida de `applyMirrorForceDestroy`. A destruição
+continua ocorrendo na declaração do ataque, antes do cálculo de dano. O
+combate encerra sem dano quando o atacante deixa o campo; se ele sobreviver,
+o combate continua. Os testes cobrem os dois casos, inclusive um atacante
+protegido contra destruição por efeitos que sobrevive e causa dano de batalha.
 
-As diferenças dos IDs 13 e 20 continuam registradas para aprovação.
 A única correção textual deste lote está na tradução de Polimerização.
+
+### Correção aprovada de Reciclar Fusão
+
+Materiais Fusão, Sincro e Ascensão agora podem ser selecionados. Eles devem
+estar no próprio Cemitério e ter sido enviados como Matéria de Fusão no
+turno atual, como os demais alvos. O movimento os devolve ao Extra Deck;
+a Invocação opcional não é oferecida, mesmo que tenham Nível 4 ou menor.
+O cenário básico usa materiais do Main Deck. Para testar um material do
+Extra Deck, use o primeiro Warlord (122) como material da segunda Fusão,
+junto de outro Shadow-Heart da mão; depois selecione aquele Warlord com
+Reciclar Fusão. Ele deve voltar ao Extra Deck. Reinicie antes desse teste,
+pois esse percurso altera a sequência de marcadores da Corte.
 
 ### Correções aprovadas da Corte dos Mortos
 

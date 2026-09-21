@@ -270,6 +270,12 @@
       "botArena": "Bot Arena",
       "laboratory": "Laborat\u00f3rio"
     },
+    "laboratory": {
+      "duelControls": "Controles do Laboratório",
+      "back": "Voltar ao Laboratório",
+      "restart": "Reiniciar duelo",
+      "startError": "Não foi possível iniciar o duelo do Laboratório."
+    },
     "deckBuilder": {
       "title": "Meu Deck",
       "toolbarLabel": "Ferramentas do deck builder",
@@ -576,7 +582,7 @@
     },
     "104": {
       "name": "Demônio Arctroth do Coração Sombrio",
-      "description": "Se este card for Invocado por Invocação-Tributo: você pode escolher 1 card que seu oponente controla; destrua-o. No início do cálculo de dano, se este card batalhar um monstro do oponente: remova todos os aumentos de ATK/DEF aplicados a esse monstro."
+      "description": "Se este card for Invocado por Invocação-Tributo: você pode escolher 1 card no campo do oponente; destrua-o. No início do cálculo de dano, se este card batalhar um monstro do oponente: remova todos os aumentos de ATK/DEF aplicados a esse monstro."
     },
     "105": {
       "name": "Hino de Batalha do Coração Sombrio",

@@ -146,7 +146,7 @@ test("modal de resposta devolve a mesma instância do candidato canônico", asyn
   assert.equal(selected.candidateKey, candidate.candidateKey);
 });
 
-test("Mirror Force ativada pelo modal destrói os atacantes e nega o ataque", async (t) => {
+test("Mirror Force ativada pelo modal destrói os atacantes sem negar o ataque", async (t) => {
   const { game, trap, attacker, defender } = createAttackWindowGame(
     t,
     "Mirror Force",
@@ -161,8 +161,33 @@ test("Mirror Force ativada pelo modal destrói os atacantes e nega o ataque", as
   assert.equal(game.player.graveyard.includes(trap), true);
   assert.equal(game.bot.field.includes(attacker), false);
   assert.equal(game.bot.graveyard.includes(attacker), true);
-  assert.equal(game.lastAttackNegated, true);
+  assert.equal(game.lastAttackNegated, false);
   assert.equal(game.chainSystem.isOpenGameState(), true);
+});
+
+test("a destruição por Mirror Force interrompe o combate mesmo sem registrar negação", async (t) => {
+  const { game, trap, attacker, defender } = createAttackWindowGame(t, "Mirror Force");
+  installCanonicalModalSelection(game, trap);
+  const lpBefore = game.player.lp;
+  const result = required(await game.resolveCombat(attacker, defender));
+  assert.equal(result.ok, true);
+  assert.equal(game.lastAttackNegated, false);
+  assert.ok(game.bot.graveyard.includes(attacker));
+  assert.ok(game.player.field.includes(defender));
+  assert.equal(game.player.lp, lpBefore);
+});
+
+test("um atacante protegido da destruição por Mirror Force continua até o dano", async (t) => {
+  const { game, trap, attacker, defender } = createAttackWindowGame(t, "Mirror Force");
+  attacker.protectionEffects = [{ type: "effect_destruction", duration: "while_faceup" }];
+  installCanonicalModalSelection(game, trap);
+  const lpBefore = game.player.lp;
+  const result = required(await game.resolveCombat(attacker, defender));
+  assert.equal(result.ok, true);
+  assert.equal(game.lastAttackNegated, false);
+  assert.ok(game.bot.field.includes(attacker));
+  assert.ok(game.player.graveyard.includes(defender));
+  assert.equal(game.player.lp, lpBefore - 1500);
 });
 
 test("Power Force Field ativada pelo modal nega o ataque e encerra a Battle Phase", async (t) => {

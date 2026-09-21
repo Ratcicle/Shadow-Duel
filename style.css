@@ -253,6 +253,40 @@ body {
   overflow-y: auto;
 }
 
+#laboratory-duel-controls {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  gap: 8px;
+}
+
+#laboratory-duel-controls[hidden] {
+  display: none;
+}
+
+#laboratory-duel-controls button {
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--card-bg);
+  color: var(--text-color);
+  font: 600 0.85rem var(--font-main);
+  cursor: pointer;
+}
+
+#laboratory-duel-controls button:hover:not(:disabled),
+#laboratory-duel-controls button:focus-visible {
+  border-color: var(--accent-color);
+  outline: 2px solid var(--accent-color);
+  outline-offset: 2px;
+}
+
+#laboratory-duel-controls button:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
 #card-preview {
   flex: 1 1 auto;
   min-width: 0;

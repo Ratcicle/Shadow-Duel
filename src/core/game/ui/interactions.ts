@@ -836,19 +836,20 @@ export function bindCardInteractions(this: InteractionHost) {
       this.ui.log(getTributeSelectionMessage(pendingSummon, actor));
       if (hasSelectedRequiredTributeValue(actor, pendingSummon)) {
         clearLaboratoryTributeHighlight(actor);
+        const tributeIndices = [...selectedTributes];
+        // The choice is complete; summon triggers must not inherit its lock.
+        clearTributeSelection();
         const summonResult = await this.performNormalSummon(
           actor,
           currentSummon.cardIndex,
           currentSummon.position,
           currentSummon.isFacedown,
-          selectedTributes
+          tributeIndices
         );
         if (summonResult?.success !== true) {
-          clearTributeSelection();
           this.updateBoard();
           return true;
         }
-        clearTributeSelection();
         this.updateBoard();
       }
       return true;
@@ -1234,20 +1235,22 @@ export function bindCardInteractions(this: InteractionHost) {
             this.ui.clearPlayerFieldTributeable();
           }
 
+          const currentSummon = pendingSummon;
+          const tributeIndices = [...selectedTributes];
+          // Release only the completed tribute choice before summon triggers.
+          clearTributeSelection();
           const summonResult = await this.performNormalSummon(
             this.player,
-            pendingSummon.cardIndex,
-            pendingSummon.position,
-            pendingSummon.isFacedown,
-            selectedTributes
+            currentSummon.cardIndex,
+            currentSummon.position,
+            currentSummon.isFacedown,
+            tributeIndices
           );
 
           if (summonResult?.success !== true) {
-            clearTributeSelection();
             this.updateBoard();
             return;
           }
-          clearTributeSelection();
           this.updateBoard();
         }
         return;

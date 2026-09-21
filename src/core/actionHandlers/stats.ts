@@ -262,14 +262,6 @@ function normalizeStatsList(
   );
 }
 
-function getBaseStat(card: ActionRuntimeCard, stat: StatName) {
-  const baseKey = stat === "def" ? "baseDef" : "baseAtk";
-  const base = Number(card?.[baseKey]);
-  if (Number.isFinite(base)) return base;
-  const current = Number(card?.[stat]);
-  return Number.isFinite(current) ? current : 0;
-}
-
 function getTempBoostKey(stat: StatName): "tempAtkBoost" | "tempDefBoost" {
   return stat === "def" ? "tempDefBoost" : "tempAtkBoost";
 }
@@ -421,31 +413,28 @@ function suppressTemporaryDynamicStatIncreasesForDebuff(
 function consumeTrackedStatIncrease(
   card: ActionRuntimeCard,
   stat: StatName,
-  remaining: number,
   game: ActionRuntimeGamePort,
 ) {
   let removed = 0;
   const consume = (amount: number) => {
-    const targetAmount = Math.min(
-      Math.max(0, amount || 0),
-      remaining - removed,
-    );
-    if (targetAmount <= 0) return 0;
-    const actual = subtractVisibleStat(card, stat, targetAmount);
-    removed += actual;
-    return actual;
+    const targetAmount = Math.max(0, amount || 0);
+    if (!Number.isFinite(targetAmount) || targetAmount <= 0) return 0;
+    // Consume the full positive modifier even when reductions mask it or
+    // the visible stat reaches zero. Negative modifiers remain untouched.
+    subtractVisibleStat(card, stat, targetAmount);
+    removed += targetAmount;
+    return targetAmount;
   };
 
   const tempKey = getTempBoostKey(stat);
   const tempBoost = Number(card[tempKey] || 0);
-  if (tempBoost > 0 && removed < remaining) {
+  if (tempBoost > 0) {
     const actual = consume(tempBoost);
     card[tempKey] = tempBoost - actual;
   }
 
-  if (Array.isArray(card.turnBasedBuffs) && removed < remaining) {
+  if (Array.isArray(card.turnBasedBuffs)) {
     for (const buff of card.turnBasedBuffs) {
-      if (removed >= remaining) break;
       if (buff?.stat !== stat || Number(buff.value || 0) <= 0) continue;
       const actual = consume(Number(buff.value || 0));
       buff.value = Number(buff.value || 0) - actual;
@@ -455,11 +444,10 @@ function consumeTrackedStatIncrease(
     );
   }
 
-  if (card.permanentBuffsBySource && removed < remaining) {
+  if (card.permanentBuffsBySource) {
     for (const [sourceName, buff] of Object.entries(
       card.permanentBuffsBySource,
     )) {
-      if (removed >= remaining) break;
       if (!buff || Number(buff[stat] || 0) <= 0) continue;
       const actual = consume(Number(buff[stat] || 0));
       buff[stat] = Number(buff[stat] || 0) - actual;
@@ -472,9 +460,8 @@ function consumeTrackedStatIncrease(
     }
   }
 
-  if (card.dynamicBuffs && removed < remaining) {
+  if (card.dynamicBuffs) {
     for (const [key, entry] of Object.entries(card.dynamicBuffs)) {
-      if (removed >= remaining) break;
       const applied = getDynamicBuffAppliedValue(entry, stat);
       if (applied <= 0) continue;
       const actual = consume(applied);
@@ -489,18 +476,15 @@ function consumeTrackedStatIncrease(
   }
 
   const equipKey = getEquipBonusKey(stat);
-  if (removed < remaining) {
-    for (const equip of findActiveEquipCards(game, card)) {
-      if (removed >= remaining) break;
-      const bonus = Number(equip?.[equipKey] || 0);
-      if (bonus <= 0) continue;
-      const actual = consume(bonus);
-      equip[equipKey] = bonus - actual;
-    }
+  for (const equip of findActiveEquipCards(game, card)) {
+    const bonus = Number(equip?.[equipKey] || 0);
+    if (bonus <= 0) continue;
+    const actual = consume(bonus);
+    equip[equipKey] = bonus - actual;
   }
 
   const hostStoredEquipBonus = Number(card[equipKey] || 0);
-  if (hostStoredEquipBonus > 0 && removed < remaining) {
+  if (hostStoredEquipBonus > 0) {
     const actual = consume(hostStoredEquipBonus);
     card[equipKey] = hostStoredEquipBonus - actual;
   }
@@ -2497,7 +2481,7 @@ export async function handleSwitchDefenderPositionOnAttack(
 }
 
 /**
- * Removes visible positive ATK/DEF increases from target monsters.
+ * Removes tracked positive ATK/DEF increases from target monsters.
  *
  * This consumes tracked stat sources in a stable order and suppresses removed
  * passive dynamic buff keys so continuous buffs do not immediately reapply
@@ -2526,17 +2510,7 @@ export async function handleRemoveStatIncreases(
 
     const removedByStat: Partial<{ [Key in StatName]: number }> = {};
     for (const stat of stats) {
-      const current = Number(card[stat] || 0);
-      const base = getBaseStat(card, stat);
-      const visibleIncrease = Math.max(0, current - base);
-      if (visibleIncrease <= 0) continue;
-
-      const removed = consumeTrackedStatIncrease(
-        card,
-        stat,
-        visibleIncrease,
-        game,
-      );
+      const removed = consumeTrackedStatIncrease(card, stat, game);
       if (removed > 0) {
         removedByStat[stat] = removed;
         anyRemoved = true;
@@ -2559,7 +2533,7 @@ export async function handleRemoveStatIncreases(
 
   if (anyRemoved) {
     getUI(game)?.log(
-      `${ctx?.source?.name || "An effect"} removed visible stat increases.`,
+      `${ctx?.source?.name || "An effect"} removed stat increases.`,
     );
     game.updateBoard?.();
   }

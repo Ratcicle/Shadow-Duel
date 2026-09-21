@@ -64,6 +64,12 @@ function applyStaticLocalization() {
   setText(dom.startScreen.deckBuilderButton, uiText("start.myDeck"));
   setText(dom.startScreen.botArenaButton, uiText("start.botArena"));
   setText(dom.startScreen.laboratoryButton, uiText("start.laboratory"));
+  setText(dom.laboratory.backToLaboratoryButton, uiText("laboratory.back"));
+  setText(dom.laboratory.restartDuelButton, uiText("laboratory.restart"));
+  dom.laboratory.duelControls?.setAttribute(
+    "aria-label",
+    uiText("laboratory.duelControls"),
+  );
   const deckMenuLabel = uiText("start.changeActiveDeck");
   dom.startScreen.deckMenuButton?.setAttribute("aria-label", deckMenuLabel);
   dom.startScreen.deckMenuButton?.setAttribute("title", deckMenuLabel);
@@ -167,7 +173,41 @@ function startDuel() {
 
   dom.startScreen.root?.classList.add("hidden");
   dom.deckBuilder.root?.classList.add("hidden");
+  if (dom.laboratory.duelControls) dom.laboratory.duelControls.hidden = true;
   gameLauncher.startNormalDuel(config);
+}
+
+let laboratoryTransitionInProgress = false;
+
+async function launchLaboratoryDuel(restart = false) {
+  if (laboratoryTransitionInProgress) return;
+  laboratoryTransitionInProgress = true;
+  const buttons = [
+    dom.laboratory.startButton,
+    dom.laboratory.backToLaboratoryButton,
+    dom.laboratory.restartDuelButton,
+  ];
+  for (const button of buttons) if (button) button.disabled = true;
+  laboratory.hideForDuel(dom.deckBuilder.root);
+  try {
+    if (restart) {
+      await gameLauncher.restartLaboratoryDuel();
+    } else {
+      await gameLauncher.startLaboratoryDuel(laboratory.getStartConfig());
+    }
+  } catch (error) {
+    gameLauncher.disposeActiveGame("laboratory_start_failed");
+    laboratory.open();
+    console.error("[Laboratory] Could not start duel:", error);
+    alert(uiText("laboratory.startError"));
+  } finally {
+    laboratoryTransitionInProgress = false;
+    for (const button of buttons) if (button) button.disabled = false;
+    if (dom.laboratory.duelControls) {
+      dom.laboratory.duelControls.hidden =
+        gameLauncher.getActiveGame()?.laboratoryModeEnabled !== true;
+    }
+  }
 }
 
 async function startLaboratoryDuel() {
@@ -175,9 +215,17 @@ async function startLaboratoryDuel() {
     return;
   }
 
-  const config = laboratory.getStartConfig();
-  laboratory.hideForDuel(dom.deckBuilder.root);
-  await gameLauncher.startLaboratoryDuel(config);
+  await launchLaboratoryDuel();
+}
+
+function returnToLaboratory() {
+  if (
+    laboratoryTransitionInProgress ||
+    gameLauncher.getActiveGame()?.laboratoryModeEnabled !== true
+  ) return;
+  gameLauncher.disposeActiveGame("return_to_laboratory");
+  if (dom.laboratory.duelControls) dom.laboratory.duelControls.hidden = true;
+  laboratory.open();
 }
 
 async function rematch() {
@@ -190,9 +238,7 @@ async function rematch() {
     gameLauncher.getActiveGame()?.laboratoryModeEnabled === true;
 
   if (wasLaboratoryDuel) {
-    const config = laboratory.getStartConfig();
-    laboratory.hideForDuel(dom.deckBuilder.root);
-    await gameLauncher.startLaboratoryDuel(config);
+    await launchLaboratoryDuel(true);
     return;
   }
 
@@ -217,6 +263,13 @@ function bindMainEvents() {
   dom.startScreen.startDuelButton?.addEventListener("click", startDuel);
   dom.startScreen.botArenaButton?.addEventListener("click", botArena.open);
   dom.startScreen.laboratoryButton?.addEventListener("click", laboratory.open);
+  dom.laboratory.backToLaboratoryButton?.addEventListener(
+    "click",
+    returnToLaboratory,
+  );
+  dom.laboratory.restartDuelButton?.addEventListener("click", () => {
+    if (gameLauncher.getActiveGame()?.laboratoryModeEnabled === true) void rematch();
+  });
   window.addEventListener("shadow-duel-rematch", rematch);
 }
 

@@ -165,6 +165,7 @@ export async function getPlayerSelectionsForDefinitions(
   const purpose = options.purpose === "cost" ? "cost" : "target";
   const allowCancel = options.allowCancel !== false;
   const ctx: ChainActionContext = {
+    ...context,
     source: card,
     sourceCard: card,
     player,
@@ -174,6 +175,7 @@ export async function getPlayerSelectionsForDefinitions(
     attacker: context?.attacker,
     attackerOwner: context?.attackerOwner,
     defenderOwner: context?.defenderOwner,
+    summonedCard: context?.summonedCard || context?.card || null,
     activationZone: options.activationZone || context?.activationZone || null,
     // Dependent targets must retain the selections made before this prompt (e.g. paid costs).
     _actionTargets: context?._actionTargets || {},

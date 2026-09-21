@@ -313,6 +313,12 @@ const DEFAULT_LOCALE_TEXTS = {
       botArena: "Bot Arena",
       laboratory: "Laboratory",
     },
+    laboratory: {
+      duelControls: "Laboratory controls",
+      back: "Back to Laboratory",
+      restart: "Restart duel",
+      startError: "Could not start the Laboratory duel.",
+    },
     deckBuilder: {
       title: "My Deck",
       toolbarLabel: "Deck builder tools",

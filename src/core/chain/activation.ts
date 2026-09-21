@@ -55,6 +55,7 @@ interface ActivationEffectContext {
   player: ChainPlayer | null;
   source: ChainCard | null;
   sourceCard: ChainCard | null;
+  summonedCard: ChainCard | null;
 }
 
 interface ActivationPublicationResult extends ChainOperationResult {
@@ -320,6 +321,8 @@ function buildEffectContext(
     effectId: prepared.effect?.id || null,
     player,
     opponent: chainSystem.getOpponent(player),
+    // Summon response windows carry the summoned monster as `card`.
+    summonedCard: context?.summonedCard || context?.card || null,
     activationZone: prepared.activationZone,
     actionContext: context || prepared.context || null,
     activationContext,

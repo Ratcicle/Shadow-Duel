@@ -88,6 +88,13 @@ export function getMainDom() {
       log: document.getElementById("arena-log"),
     },
     laboratory: {
+      duelControls: document.getElementById("laboratory-duel-controls"),
+      backToLaboratoryButton: document.querySelector<HTMLButtonElement>(
+        "#laboratory-duel-back",
+      ),
+      restartDuelButton: document.querySelector<HTMLButtonElement>(
+        "#laboratory-duel-restart",
+      ),
       modal: document.getElementById("laboratory-modal"),
       body: document.getElementById("laboratory-body"),
       closeButton:

@@ -750,7 +750,6 @@ export const genericCards = [
             filters: {
               sentToGraveAsMaterial: "fusion",
               sentToGraveAsMaterialThisTurn: true,
-              excludeMonsterTypes: ["fusion", "synchro", "ascension"],
             },
             count: { min: 1, max: 1 },
           },

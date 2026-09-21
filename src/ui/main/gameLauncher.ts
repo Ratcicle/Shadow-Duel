@@ -23,14 +23,19 @@ export function createGameLauncher({
   Renderer: typeof RendererRuntime;
 }) {
   let game: GameRuntime | null = null;
+  let laboratoryConfig: LaboratoryDuelConfig | null = null;
 
   function createRenderer() {
     return new Renderer();
   }
 
   function disposeActiveGame(reason: string) {
+    game?.forceClearTargetSelection(reason);
+    game?.ui.toggleModal(false);
+    game?.ui.toggleExtraDeckModal(false);
     game?.dispose?.(reason);
     game = null;
+    laboratoryConfig = null;
   }
 
   function startNormalDuel({
@@ -54,17 +59,20 @@ export function createGameLauncher({
     return game;
   }
 
-  async function startLaboratoryDuel({
-    useBot,
-    botPreset,
-    revealBotHand,
-    laboratoryMode,
-    setup,
-    duelDecks,
-  }: LaboratoryDuelConfig) {
+  async function startLaboratoryDuel(config: LaboratoryDuelConfig) {
+    const initialConfig = structuredClone(config);
     disposeActiveGame("start_laboratory_duel");
+    laboratoryConfig = initialConfig;
+    const {
+      useBot,
+      botPreset,
+      revealBotHand,
+      laboratoryMode,
+      setup,
+      duelDecks,
+    } = structuredClone(initialConfig);
     const renderer = createRenderer();
-    game = new Game({
+    const newGame = new Game({
       laboratoryMode: true,
       laboratoryUseBot: useBot,
       laboratoryRevealBotHand: revealBotHand,
@@ -74,6 +82,7 @@ export function createGameLauncher({
       botPreset,
       renderer,
     });
+    game = newGame;
 
     if (laboratoryMode === "duel") {
       const startOptions = {
@@ -84,18 +93,26 @@ export function createGameLauncher({
         exactDecks: true,
         startAtDrawPhase: true,
       } satisfies ExactStartWithDecksOptions & { useBot: boolean };
-      await game.startWithDecks(startOptions);
-      return game;
+      await newGame.startWithDecks(startOptions);
+      return newGame;
     }
 
-    await game.startLaboratory(setup, { useBot, revealBotHand });
-    return game;
+    await newGame.startLaboratory(setup, { useBot, revealBotHand });
+    return newGame;
+  }
+
+  async function restartLaboratoryDuel() {
+    if (!game?.laboratoryModeEnabled || game.isDisposed() || !laboratoryConfig) {
+      return null;
+    }
+    return startLaboratoryDuel(laboratoryConfig);
   }
 
   return {
     getActiveGame: () => game,
     disposeActiveGame,
     startLaboratoryDuel,
+    restartLaboratoryDuel,
     startNormalDuel,
   };
 }

@@ -169,7 +169,7 @@ export const shadowHeartCards = [
     attribute: "Dark",
     archetype: "Shadow-Heart",
     description:
-      "If this card is Tribute Summoned: You can target 1 card your opponent controls; destroy it. At the start of damage calculation, if this card battles an opponent's monster: remove all ATK/DEF increases applied to that monster.",
+      "If this card is Tribute Summoned: You can target 1 card on your opponent's field; destroy it. At the start of damage calculation, if this card battles an opponent's monster: remove all ATK/DEF increases applied to that monster.",
     image: "assets/Shadow-Heart Demon Arctroth.png",
     effects: [
       {

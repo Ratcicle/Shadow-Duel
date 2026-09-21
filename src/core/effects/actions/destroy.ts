@@ -535,11 +535,6 @@ export async function applyMirrorForceDestroy(
 ): Promise<boolean> {
   const game = (ctx?.game as DestroyGamePort | undefined) || this.game;
   const player = ctx?.player || null;
-  const eventData =
-    ctx?.eventData ||
-    ctx?.actionContext ||
-    ctx?.activationContext?.context ||
-    null;
 
   if (!game || !player) {
     return false;
@@ -583,17 +578,6 @@ export async function applyMirrorForceDestroy(
       sourceCard,
       opponent: player,
     });
-  }
-
-  // Negar o ataque que disparou a Mirror Force
-  const eventAttacker =
-    eventData && typeof eventData === "object"
-      ? Reflect.get(eventData, "attacker")
-      : undefined;
-  if (eventAttacker) {
-    game.registerAttackNegated(eventAttacker as ActionRuntimeCard);
-  } else {
-    game.lastAttackNegated = true;
   }
 
   game.updateBoard();
