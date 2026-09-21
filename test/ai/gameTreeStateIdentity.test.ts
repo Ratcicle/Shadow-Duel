@@ -1,7 +1,7 @@
 import { applyGenericSimulatedMainPhaseAction } from "../../src/core/ai/common/simulation.js";
 import assert from "node:assert/strict";
 import test from "node:test";
-import { gameTreeSearch } from "../../src/core/ai/GameTreeSearch.js";
+import { fixtureGameTreeSearch as gameTreeSearch } from "../helpers/gameTree.js";
 import { fingerprintPlanningState } from "../../src/core/ai/common/stateFingerprint.js";
 import type { AIAction } from "../../src/core/contracts/ai.js";
 import type { AiCardInput, AiStateInput } from "../../src/core/contracts/aiState.js";

@@ -1,5 +1,9 @@
 import { resolvePerspectivePlayers } from "./StrategyUtils.js";
 import { createGameTreeCopy, withoutLiveGameReference } from "./common/gameTreeSimulation.js";
+import { resolvePerspectiveSlotForPlayer } from "./common/perspective.js";
+import type { GameTreeModels, PlanningModel } from "../contracts/aiPlanning.js";
+import { withPlanningExecutionContext } from "./common/planningExecution.js";
+import { createPlanningOwnerPolicy } from "./common/planningOwner.js";
 import { fingerprintPlanningState } from "./common/stateFingerprint.js";
 import type {
   AIAction,
@@ -43,7 +47,7 @@ interface GameTreeStateInput extends AiStateInput {
 type GameTreeState = GameTreeSimulationGameState;
 
 interface GameTreeStrategy<State, Action extends AIAction> {
-  bot?: { debug?: boolean } | undefined;
+  bot?: { debug?: boolean; getGameTreeModels?(): GameTreeModels<Action> } | undefined;
   generateMainPhaseActions(state: State): Action[];
   simulateMainPhaseAction(state: GameTreeState, action: Action): GameTreeState | SimulationGameState | PerspectiveGameState | void;
 }
@@ -89,6 +93,10 @@ function windowBound(value: number): number | string {
   if (value === -Infinity) return "-Infinity";
   if (Number.isNaN(value)) return "NaN";
   return Object.is(value, -0) ? "-0" : value;
+}
+
+function captureModel<Action extends AIAction>(model: PlanningModel<Action>): PlanningModel<Action> {
+  return Object.freeze({ id: model.id, create: model.create.bind(model) });
 }
 
 function cloneGameStateDeep(gameState: GameTreeStateInput | GameTreeState, perspective: GameTreePlayerInput | null = null): GameTreeState {
@@ -163,14 +171,16 @@ function evaluateLeafState(
 }
 
 /** Execute exactly once on an isolated graph; unchanged actions are legal no-ops. */
-function simulateAction<State extends GameTreeStateInput, Action extends AIAction>(
-  gameState: GameTreeState, action: Action, strategy: GameTreeStrategy<State, Action>,
+function simulateAction<Action extends AIAction>(
+  gameState: GameTreeState, action: Action, model: PlanningModel<Action>, models: ReadonlyMap<string, PlanningModel>,
 ): GameTreeState {
   const copy = createGameTreeCopy(gameState, gameState.bot);
   // The same graph memo rebinds card references inside action preferences.
   const branchAction = copy.copyAction(action) as Action;
   const returned = withoutLiveGameReference(copy.state, () =>
-    strategy.simulateMainPhaseAction(copy.state, branchAction));
+    withPlanningExecutionContext(copy.state,
+      (_state, owner) => createPlanningOwnerPolicy(copy.state, owner, models),
+      () => model.create(copy.state).simulateMainPhaseAction(copy.state, branchAction)));
   const result = returned || copy.state;
   result._isPerspectiveState = true;
   return result as GameTreeState;
@@ -180,19 +190,19 @@ function simulateAction<State extends GameTreeStateInput, Action extends AIActio
  * Gera ações candidatas para simulação no minimax
  * Nota: usar estratégia existente generateMainPhaseActions()
  */
-function generateCandidateActions<State extends GameTreeStateInput, Action extends AIAction>(
-  stateForActions: GameTreeState | null,
-  strategy: GameTreeStrategy<State, Action>,
+function generateCandidateActions<Action extends AIAction>(
+  stateForActions: GameTreeState,
+  model: PlanningModel<Action>,
 ): Action[] {
-  try {
-    if (!stateForActions) return [];
-    // Retorna top 2-3 ações por scoring (beam width)
-    const allActions = withoutLiveGameReference(stateForActions, () =>
-      strategy.generateMainPhaseActions(stateForActions as State & GameTreeState));
-    return allActions.slice(0, 3); // Limita a 3 para reduzir branching
-  } catch {
-    return [];
-  }
+  // Factory/generation failures are unavailable modeling, not empty responses.
+  return withoutLiveGameReference(stateForActions, () =>
+    model.create(stateForActions).generateMainPhaseActions(stateForActions).slice(0, 3));
+}
+
+function evaluateForRoot(gameState: GameTreeStateInput | GameTreeState, rootPlayerId: string): number {
+  const slot = resolvePerspectiveSlotForPlayer(gameState, rootPlayerId);
+  if (!slot) throw new Error(`Planning root unavailable: ${rootPlayerId}`);
+  return evaluateLeafState(gameState, gameState[slot]);
 }
 
 /**
@@ -204,25 +214,28 @@ function generateCandidateActions<State extends GameTreeStateInput, Action exten
  * - isMaximizing: true = turno do bot (maximizar), false = turno do oponente (minimizar)
  * - alpha: best value maximizer pode garantir
  * - beta: best value minimizer pode garantir
- * - strategy: instância da estratégia (para gerar ações)
- * - perspective: perspectiva (bot/player)
+ * - model: factory isolada do ator que decide neste nó
+ * - rootPlayerId: identidade física da referência fixa do score
+ * - perspective: jogador físico que decide neste nó
  * - transpositions: mapa de hash para cache
  *
  * Retorno: { value: score, action: bestAction }
  */
-function minimax<State extends GameTreeStateInput, Action extends AIAction>(
+function minimax<Action extends AIAction>(
   gameState: GameTreeStateInput | GameTreeState,
   depth: number,
   isMaximizing: boolean,
   alpha: number,
   beta: number,
-  strategy: GameTreeStrategy<State, Action>,
+  model: PlanningModel<Action> | undefined,
+  rootPlayerId: string,
+  models: ReadonlyMap<string, PlanningModel>,
   perspective: GameTreePlayerInput | null | undefined,
-  transpositions: Map<string, TranspositionEntry<Action>> = new Map(),
-): MinimaxResult<Action> {
+  transpositions: Map<string, TranspositionEntry<AIAction>>,
+): MinimaxResult<AIAction> {
   // Base case: folha ou limite de profundidade
   if (depth === 0) {
-    const leafValue = evaluateLeafState(gameState, perspective);
+    const leafValue = evaluateForRoot(gameState, rootPlayerId);
     return { value: leafValue, action: null };
   }
 
@@ -230,6 +243,7 @@ function minimax<State extends GameTreeStateInput, Action extends AIAction>(
     gameState as Parameters<typeof resolvePerspectivePlayers>[0],
     perspective || gameState.bot,
   );
+  const actingPlayerId = persp?.id;
   // Reuse the existing candidate-generation clone for identity as well. Root
   // and descendants therefore share the GameTree projection, without another
   // deep copy, live-state reads, or changing the state used by simulation/leaves.
@@ -248,29 +262,33 @@ function minimax<State extends GameTreeStateInput, Action extends AIAction>(
     const cached = transpositions.get(stateKey);
     if (cached) return cached.result;
   }
-  const actions = generateCandidateActions(stateForActions, strategy);
+  if (!stateForActions) return { value: evaluateForRoot(gameState, rootPlayerId), action: null };
+  if (!model) throw new Error(`Planning model unavailable: ${actingPlayerId || "unknown"}`);
+  const actions = generateCandidateActions(stateForActions, model);
 
   let bestValue = isMaximizing ? -Infinity : Infinity;
   let bestAction: Action | null = actions[0] ?? null;
 
-  if (!stateForActions || actions.length === 0) {
+  if (actions.length === 0) {
     // Sem ações: avaliar estado atual
-    const leafValue = evaluateLeafState(gameState, perspective);
+    const leafValue = evaluateForRoot(gameState, rootPlayerId);
     return { value: leafValue, action: null };
   }
 
   for (const action of actions) {
-    const nextState = simulateAction(stateForActions, action, strategy);
+    const nextState = simulateAction(stateForActions, action, model, models);
 
     // Recursão com troca de perspectiva
     const nextPerspective = nextState.player;
-    const { value } = minimax(
+    const { value } = minimax<AIAction>(
       nextState,
       depth - 1,
       !isMaximizing,
       alpha,
       beta,
-      strategy,
+      models.get(nextPerspective.id),
+      rootPlayerId,
+      models,
       nextPerspective,
       transpositions
     );
@@ -321,21 +339,31 @@ export function gameTreeSearch<
   strategy: GameTreeStrategy<State, Action>,
   perspective: GameTreePlayerInput | null = null,
   maxPly = DEFAULT_MAX_PLY,
-): Omit<GameTreeSearchResult, "action"> & { action: Action | null } {
+  planningModels?: GameTreeModels<Action>,
+): GameTreeSearchResult {
   try {
-    const transpositions = new Map<string, TranspositionEntry<Action>>();
+    const transpositions = new Map<string, TranspositionEntry<AIAction>>();
     const { self: persp } = resolvePerspectivePlayers(
       gameState,
       perspective || gameState.bot,
     );
 
-    const { value: score, action } = minimax(
+    if (!persp) throw new Error("Planning root unavailable");
+    const configured = planningModels || strategy.bot?.getGameTreeModels?.();
+    if (!configured && maxPly > 0) throw new Error("Planning models unavailable: explicit factories required");
+    // Snapshot the descriptor/factory association once; instances remain per-node.
+    const models = new Map(Array.from(configured?.actors || [], ([id, model]) => [id, captureModel(model)] as const));
+    const rootModel = configured ? captureModel(configured.root) : undefined;
+    if (rootModel) models.set(persp.id, rootModel);
+    const { value: score, action } = minimax<Action>(
       gameState,
       maxPly,
       true, // Sempre começa com maximizing (turno do bot)
       ALPHA_INIT,
       BETA_INIT,
-      strategy,
+      rootModel,
+      persp.id,
+      models,
       persp,
       transpositions
     );

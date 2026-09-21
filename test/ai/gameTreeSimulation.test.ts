@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { gameTreeSearch } from "../../src/core/ai/GameTreeSearch.js";
+import { fixtureGameTreeSearch as gameTreeSearch } from "../helpers/gameTree.js";
 import { applyGenericSimulatedMainPhaseAction } from "../../src/core/ai/common/simulation.js";
 import type { AIAction } from "../../src/core/contracts/ai.js";
 import type { AiStateInput, SimulationGameState } from "../../src/core/contracts/aiState.js";
@@ -88,7 +88,7 @@ test("GameTree honors a returned state and invokes mutating/void simulators exac
       },
     }, input.bot, 1);
     assert.equal(calls, 1);
-    assert.equal(result.score, -1 * 0.85 ** 3);
+    assert.equal(result.score, 1 * 0.85 ** 3); // Root gains LP in either return convention.
     assert.equal(input.bot.lp, 8000);
   }
 });

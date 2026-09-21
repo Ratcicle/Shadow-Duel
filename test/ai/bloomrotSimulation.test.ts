@@ -3,6 +3,7 @@ import test from "node:test";
 import Card from "../../src/core/Card.js";
 import BloomrotStrategy from "../../src/core/ai/BloomrotStrategy.js";
 import { gameTreeSearch } from "../../src/core/ai/GameTreeSearch.js";
+import { createGameTreeModels } from "../../src/core/ai/PlanningStrategies.js";
 import { getStrategyFor } from "../../src/core/ai/StrategyRegistry.js";
 import { getCounterValue } from "../../src/core/ai/common/counters.js";
 import { cloneBotGameState } from "../../src/core/bot/simulationBridge.js";
@@ -88,13 +89,16 @@ test("registered Bloomrot simulation places Living Colony and consumes its ignit
 test("GameTree evaluates the real Spore Cloud effect through the registered Bloomrot strategy", () => {
   const fixture = scenario(["Bloomrot Spore Cloud"]);
   fixture.opponent.field.push(new Card(cardDefinition("Bloomrot Myco-Weaver"), "player"));
-  const result = gameTreeSearch(fixture.game, fixture.strategy, fixture.bot, 1);
+  const result = gameTreeSearch(fixture.game, fixture.strategy, fixture.bot, 1, createGameTreeModels(fixture.bot.id, [
+    { id: fixture.bot.id, modelId: "bloomrot" },
+    { id: fixture.opponent.id, modelId: null },
+  ]));
 
   assert.equal(result.action?.type, "spell");
   assert.equal(result.action?.cardName, "Bloomrot Spore Cloud");
-  // Preserve the existing one-ply opponent perspective and discount: its
-  // remaining 900 ATK is worth 1.8, against our spent spell in GY worth 0.3.
-  assert.equal(result.score, 1.5 * Math.pow(0.85, 3));
+  // Root perspective: the opponent's remaining 900 ATK is worth -1.8,
+  // offset by our spent spell in GY worth +0.3. Discount is unchanged.
+  assert.equal(result.score, -1.5 * Math.pow(0.85, 3));
   assert.equal(fixture.bot.hand.length, 1);
   assert.equal(fixture.bot.graveyard.length, 0);
   assert.equal(fixture.opponent.field[0]?.atk, 1400);

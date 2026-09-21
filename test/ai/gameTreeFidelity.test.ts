@@ -2,8 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import Card from "../../src/core/Card.js";
 import { gameTreeSearch } from "../../src/core/ai/GameTreeSearch.js";
-import { getStrategyFor } from "../../src/core/ai/StrategyRegistry.js";
-import type { AIAction, StrategyRuntimePort } from "../../src/core/contracts/ai.js";
+import { getPlanningModel } from "../../src/core/ai/PlanningStrategies.js";
+import type { AIAction } from "../../src/core/contracts/ai.js";
+import type { PlanningModel } from "../../src/core/contracts/aiPlanning.js";
 import type { AiPlayerInput, AiStateInput } from "../../src/core/contracts/aiState.js";
 import { cardDefinition, record, required } from "../helpers/fixtures.js";
 import { createRuntimeGame } from "../helpers/game.js";
@@ -15,17 +16,24 @@ function predict(
   input: AiStateInput,
   actor: AiPlayerInput,
   action: AIAction,
-  strategy: Pick<StrategyRuntimePort, "simulateMainPhaseAction">,
+  modelId: string,
 ) {
   let next: AiStateInput | undefined;
-  const result = gameTreeSearch(input, {
-    generateMainPhaseActions(state: AiStateInput): AIAction[] {
-      if (state.bot?.id === actor.id) return [action];
-      next = state;
-      return [idle];
-    },
-    simulateMainPhaseAction: strategy.simulateMainPhaseAction.bind(strategy),
-  }, actor, 2);
+  const real = getPlanningModel(modelId);
+  const model: PlanningModel = { id: modelId, create(state) {
+    const strategy = real.create(state);
+    return {
+      generateMainPhaseActions(snapshot) {
+        if (snapshot.bot.id === actor.id) return [action];
+        next = snapshot;
+        return [idle];
+      },
+      simulateMainPhaseAction: strategy.simulateMainPhaseAction.bind(strategy),
+      getPlanningSimulationOptions: snapshot => strategy.getPlanningSimulationOptions?.(snapshot) || {},
+    };
+  } };
+  const result = gameTreeSearch(input, { generateMainPhaseActions: () => [], simulateMainPhaseAction() {} }, actor, 2,
+    { root: model, actors: new Map([input.bot, input.player].flatMap(player => player?.id ? [[player.id, model] as const] : [])) });
   assert.equal(result.action, action);
   return { result, next: required(next) };
 }
@@ -39,10 +47,9 @@ test("GameTree follows registered Shadow-Heart Imp into Gecko summon and Deck se
     },
   });
   const before = structuredClone(input);
-  const strategy = getStrategyFor("shadowheart", input.bot);
   const { result, next } = predict(input, input.bot, {
     type: "summon", index: 0, cardName: "Shadow-Heart Imp",
-  }, strategy);
+  }, "shadowheart");
 
   assert.deepEqual(next.player?.field?.map(card => card.name), ["Shadow-Heart Imp", "Shadow-Heart Gecko"]);
   assert.deepEqual(next.player?.hand?.map(card => card.name), ["Shadow-Heart Demon Arctroth"]);
@@ -66,10 +73,9 @@ test("GameTree follows registered Arcanist Apprentice search and preserves its a
     },
   });
   const before = structuredClone(input);
-  const strategy = getStrategyFor("arcanist", input.bot);
   const { result, next } = predict(input, input.bot, {
     type: "summon", index: 0, cardName: "Arcanist Apprentice",
-  }, strategy);
+  }, "arcanist");
 
   assert.deepEqual(next.player?.field?.map(card => card.name), ["Arcanist Apprentice"]);
   assert.deepEqual(next.player?.hand?.map(card => card.name), ["Grimoire of the Apprentice Arcanist"]);
@@ -104,7 +110,7 @@ for (const fromOpponent of [false, true]) {
     game.player.hand.push(spell);
     graveOwner.graveyard.push(target);
     const action: AIAction = { type: "spell", index: 0, cardName: "Monster Reborn" };
-    const { result, next } = predict(game, game.player, action, getStrategyFor("bloomrot", game.player));
+    const { result, next } = predict(game, game.player, action, "bloomrot");
     const predictedActor = required(next.player);
     const predictedOpponent = required(next.bot);
     assert.equal(result.score, 3.3 * 0.85 ** 3 * 0.85 ** 2);

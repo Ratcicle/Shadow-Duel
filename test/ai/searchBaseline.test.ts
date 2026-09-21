@@ -1,3 +1,4 @@
+import { fixtureGameTreeSearch as gameTreeSearch } from "../helpers/gameTree.js";
 import { applyGenericSimulatedMainPhaseAction } from "../../src/core/ai/common/simulation.js";
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -8,7 +9,6 @@ import {
 } from "../../src/core/ai/BeamSearch.js";
 import {
   estimateSearchComplexity,
-  gameTreeSearch,
   shouldUseGameTreeSearch,
 } from "../../src/core/ai/GameTreeSearch.js";
 import { turnLineSearch } from "../../src/core/ai/TurnLineSearch.js";
@@ -270,7 +270,9 @@ test("game-tree search applies the legacy 0.85 future discount", () => {
   const result = gameTreeSearch(game, strategy, game.bot, 1);
 
   assert.equal(result.action, summonAction);
-  assert.equal(result.score, -1.5 * Math.pow(0.85, 3));
+  // The summon gains 1.5 for the physical root; ending on the opponent ply
+  // must not reverse that gain. The legacy discount itself is unchanged.
+  assert.equal(result.score, 1.5 * Math.pow(0.85, 3));
 });
 
 test("game-tree transposition cache stops at the legacy 2000-entry boundary", () => {

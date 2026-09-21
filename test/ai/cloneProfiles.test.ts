@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { greedySearchWithEvalV2 } from "../../src/core/ai/BeamSearch.js";
-import { gameTreeSearch } from "../../src/core/ai/GameTreeSearch.js";
+import { fixtureGameTreeSearch as gameTreeSearch } from "../helpers/gameTree.js";
 import { turnLineSearch } from "../../src/core/ai/TurnLineSearch.js";
 import { cloneBotGameState } from "../../src/core/bot/simulationBridge.js";
 

@@ -1457,11 +1457,17 @@ export default class BurningWestStrategy extends BaseStrategy {
 
   override simulateMainPhaseAction(state: Parameters<BaseStrategy["simulateMainPhaseAction"]>[0], action: AIPlannedAction) {
     return applyGenericSimulatedMainPhaseAction(state as Parameters<typeof applyGenericSimulatedMainPhaseAction>[0], action as AIAction, {
+      ...this.getPlanningSimulationOptions(state),
+      activationContext: (action as AIAction)?.activationContext,
+    });
+  }
+
+  getPlanningSimulationOptions(_state: Parameters<BaseStrategy["simulateMainPhaseAction"]>[0]) {
+    return {
       guardLabel: "BurningWestStrategy",
       selfId: "bot",
       archetype: ARCHETYPE,
       strategy: this,
-      activationContext: (action as AIAction)?.activationContext,
       enableSimulatedEvents: true,
       rankSearchCandidates: this.rankSearchCandidates.bind(this),
       getTributeRequirementFor: this.getTributeRequirementFor.bind(this),
@@ -1469,7 +1475,7 @@ export default class BurningWestStrategy extends BaseStrategy {
       placeSpellCard: this.placeSpellCard.bind(this),
       chooseSpecialSummonPosition: this.chooseSpecialSummonPosition.bind(this),
       chooseActionCase: this.chooseActionCase.bind(this),
-    });
+    };
   }
 
   override selectBestTributes(field: BurningWestCard[] = [], tributesNeeded = 0) {

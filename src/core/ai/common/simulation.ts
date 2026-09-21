@@ -15,9 +15,11 @@ import {
 } from "./targetSelection.js";
 import { updateSimulatedSentToGraveMaterialMarker } from "./simulatedActions/shared.js";
 import { resolvePerspectiveSlotForPlayer } from "./perspective.js";
+import { resolvePlanningOwnerPolicy } from "./planningExecution.js";
 import type {
   SimulatedActionContextData,
   SimulatedActionOptions,
+  SimulatedOwnerPolicy,
   SimulatedRuntimeState,
   SimulatedTemporaryEventEffect,
 } from "./simulatedActions/shared.js";
@@ -181,7 +183,7 @@ interface SimulatedEventActivationInput {
 interface SimulatedEventStrategyCapabilities {
   buildActivationContextForEffect?(
     input: SimulatedEventActivationInput,
-  ): NonNullable<SimulatedActionOptions["activationContext"]> | null;
+  ): SimulatedActionOptions["activationContext"] | null;
 }
 
 interface BuiltSimulatedSelectionOptions extends SimulatedActionOptions {
@@ -410,6 +412,36 @@ function buildSelectionOptions(
       (actionContext as SimulatedSelectionActionContext).specialSummonPositions ||
       {},
   } as BuiltSimulatedSelectionOptions;
+}
+
+/** Reuse the legacy simulation boundary for typed execution-only policies. */
+export function normalizePlanningOwnerPolicy(
+  options: SimulatedActionOverrideOptions,
+): SimulatedOwnerPolicy {
+  const normalized = buildSelectionOptions(options);
+  // Default empty maps must not shadow preferences built for the next effect.
+  if (options.targetPreferences === undefined) delete normalized.targetPreferences;
+  if (!("specialSummonPositions" in options)) delete normalized.specialSummonPositions;
+  const strategy = options.strategy as SimulatedEventStrategyCapabilities | null | undefined;
+  const rankSearchCandidates = normalized.rankSearchCandidates ||
+    normalized.strategy?.rankSearchCandidates?.bind(normalized.strategy);
+  const evaluateRecruitCandidate = normalized.evaluateRecruitCandidate ||
+    normalized.strategy?.evaluateRecruitCandidate?.bind(normalized.strategy);
+  const chooseSpecialSummonPosition = normalized.chooseSpecialSummonPosition ||
+    normalized.strategy?.chooseSpecialSummonPosition?.bind(normalized.strategy);
+  const chooseActionCase = normalized.chooseActionCase ||
+    normalized.strategy?.chooseActionCase?.bind(normalized.strategy);
+  return {
+    ...normalized,
+    ...(rankSearchCandidates ? { rankSearchCandidates } : {}),
+    ...(evaluateRecruitCandidate ? { evaluateRecruitCandidate } : {}),
+    ...(chooseSpecialSummonPosition ? { chooseSpecialSummonPosition } : {}),
+    ...(chooseActionCase ? { chooseActionCase } : {}),
+    ...(options.onEffectActivated ? { onEffectActivated: options.onEffectActivated } : {}),
+    ...(strategy?.buildActivationContextForEffect ? {
+      buildActivationContextForEffect: strategy.buildActivationContextForEffect.bind(strategy),
+    } : {}),
+  };
 }
 
 function getSimOncePerTurnKey(
@@ -1158,8 +1190,18 @@ function dispatchSimulatedEvent(
     // Usage persists by physical ID; conditions/actions execute in a slot.
     const selfId = resolvePerspectiveSlotForPlayer(state, sourceEntry.player);
     if (selfId === null) continue;
-    const ownerOptions = { ...options, selfId };
     for (const rawEffect of sourceCard?.effects || []) {
+      if (rawEffect.timing !== "on_event" || rawEffect.event !== eventName) continue;
+      const ownerPolicy = resolvePlanningOwnerPolicy(state, sourceEntry.player);
+      const ownerOptions: SimulatedEventDispatchOptions = ownerPolicy === undefined
+        ? { ...options, selfId }
+        : {
+          ...(ownerPolicy || {}),
+          selfId,
+          enableSimulatedEvents: true,
+          _simEventDepth: depth,
+          ...(options.maxSimulatedEventDepth === undefined ? {} : { maxSimulatedEventDepth: options.maxSimulatedEventDepth }),
+        };
       const effect = simEffectForEventCard(rawEffect, payload);
       if (
         !matchesSimulatedEventEffect(
@@ -1177,11 +1219,12 @@ function dispatchSimulatedEvent(
         continue;
       }
 
+      const strategy = ownerOptions.strategy as SimulatedEventStrategyCapabilities | null | undefined;
+      const buildActivationContext = ownerPolicy?.buildActivationContextForEffect ||
+        strategy?.buildActivationContextForEffect?.bind(strategy);
       const strategyContext =
-        typeof (options.strategy as SimulatedEventStrategyCapabilities | null)
-          ?.buildActivationContextForEffect === "function"
-          ? (options.strategy as SimulatedEventStrategyCapabilities)
-              .buildActivationContextForEffect!({
+        typeof buildActivationContext === "function"
+          ? buildActivationContext({
               sourceCard,
               effect,
               player: sourceEntry.player,
@@ -1190,22 +1233,22 @@ function dispatchSimulatedEvent(
             }) || {}
           : {};
       const actionContext = buildSimEventActionContext(eventName, payload, {
-        ...(options.actionContext || {}),
+        ...(ownerOptions.actionContext || {}),
         ...(strategyContext.actionContext || {}),
       });
       const activationContext = {
         ...(strategyContext || {}),
-        ...(options.activationContext || {}),
+        ...(ownerOptions.activationContext || {}),
         actionContext,
       };
-      const triggerOptions = attachSimulatedEventEmitter(state, {
+      const triggerOptions = attachSimulatedEventEmitter(state, buildSelectionOptions({
         ...ownerOptions,
         sourceCard,
         effect,
         activationContext,
         actionContext,
         _simEventDepth: depth + 1,
-      });
+      }));
       const selections = selectSimulatedTargets({
         targets: effect.targets || [],
         actions: effectExecutionActions(effect),
@@ -1225,7 +1268,7 @@ function dispatchSimulatedEvent(
         selfId,
         options: triggerOptions,
       });
-      options.onEffectActivated?.({
+      ownerOptions.onEffectActivated?.({
         state,
         action: null,
         player: sourceEntry.player,
@@ -1248,13 +1291,22 @@ function dispatchSimulatedEvent(
     const selfId = resolvePerspectiveSlotForPlayer(state, entry.ownerId);
     if (selfId === null) continue;
     const owner = state[selfId];
-    const ownerOptions = { ...options, selfId };
     const sourceCard = findSimulatedCardByInstanceId(
       state,
       entry.sourceInstanceId,
     );
     const effect = entry.effect || null;
     if (!owner || !sourceCard || !effect) continue;
+    const ownerPolicy = resolvePlanningOwnerPolicy(state, owner);
+    const ownerOptions: SimulatedEventDispatchOptions = ownerPolicy === undefined
+      ? { ...options, selfId }
+      : {
+        ...(ownerPolicy || {}),
+        selfId,
+        enableSimulatedEvents: true,
+        _simEventDepth: depth,
+        ...(options.maxSimulatedEventDepth === undefined ? {} : { maxSimulatedEventDepth: options.maxSimulatedEventDepth }),
+      };
 
     const sourceZone = findCardZone(owner, sourceCard) || "temporary";
     const sourceEntry: SimulatedEventSourceView = {
@@ -1282,17 +1334,24 @@ function dispatchSimulatedEvent(
       entry.usesRemaining = 0;
     }
 
+    const strategy = ownerOptions.strategy as SimulatedEventStrategyCapabilities | null | undefined;
+    const buildActivationContext = ownerPolicy?.buildActivationContextForEffect ||
+      strategy?.buildActivationContextForEffect?.bind(strategy);
+    const strategyContext = ownerPolicy === undefined ? {} : buildActivationContext?.({
+      sourceCard, effect, player: owner, game: state, activationZone: sourceZone,
+    }) || {};
     const actionContext = buildSimEventActionContext(eventName, payload, {
-      ...(options.actionContext || {}),
+      ...(ownerOptions.actionContext || {}),
+      ...(strategyContext.actionContext || {}),
     });
-    const triggerOptions = attachSimulatedEventEmitter(state, {
+    const triggerOptions = attachSimulatedEventEmitter(state, buildSelectionOptions({
       ...ownerOptions,
       sourceCard,
       effect,
       actionContext,
-      activationContext: { ...(options.activationContext || {}), actionContext },
+      activationContext: { ...strategyContext, ...(ownerOptions.activationContext || {}), actionContext },
       _simEventDepth: depth + 1,
-    });
+    }));
     const selections = selectSimulatedTargets({
       targets: effect.targets || [],
       actions: effectExecutionActions(effect),
@@ -1313,7 +1372,7 @@ function dispatchSimulatedEvent(
     if (!consumeOnMatch && Number.isFinite(entry.usesRemaining)) {
       entry.usesRemaining! -= 1;
     }
-    options.onEffectActivated?.({
+    ownerOptions.onEffectActivated?.({
       state,
       action: null,
       player: owner,

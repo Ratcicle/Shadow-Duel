@@ -1,5 +1,6 @@
 ﻿import Player from "./Player.js";
 import { getStrategyFor } from "./ai/StrategyRegistry.js";
+import { createGameTreeModels } from "./ai/PlanningStrategies.js";
 import { botLogger } from "./BotLogger.js";
 import { buildBotDeck, buildBotExtraDeck } from "./bot/deckBuilder.js";
 import {
@@ -58,6 +59,7 @@ export default class Bot extends Player {
   declare maxSimulationsPerPhase: number;
   declare maxChainedActions: number;
   declare archetype: BotArchetypeId;
+  declare planningModelId: string | null;
   declare strategy: BotStrategyPort;
   declare game?: BotGamePort;
   declare debug?: boolean;
@@ -73,11 +75,22 @@ export default class Bot extends Player {
 
   setPreset(presetId = "shadowheart") {
     const validIds: string[] = Bot.getAvailablePresets().map((p) => p.id);
+    this.planningModelId = validIds.includes(presetId) ? presetId : null;
     this.archetype = validIds.includes(presetId)
       ? (presetId as BotArchetypeId)
       : "shadowheart";
 
     this.strategy = getStrategyFor(this.archetype, this);
+  }
+
+  getGameTreeModels() {
+    const participants = this.game ? [this.game.player, this.game.bot] : [this];
+    return createGameTreeModels(this.id, participants.map(participant => ({
+      id: participant.id,
+      modelId: "planningModelId" in participant && typeof participant.planningModelId === "string"
+        ? participant.planningModelId
+        : null,
+    })));
   }
 
   // Sobrescreve buildDeck para usar deck do arquétipo selecionado

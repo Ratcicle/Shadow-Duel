@@ -213,18 +213,24 @@ export default class BloomrotStrategy extends BaseStrategy {
   ) {
     if (action.type === "simulatedBattle") return state;
     return applyGenericSimulatedMainPhaseAction(state, action, {
+      ...this.getPlanningSimulationOptions(state),
+      activationContext: action.activationContext,
+    });
+  }
+
+  getPlanningSimulationOptions(_state: Parameters<BaseStrategy["simulateMainPhaseAction"]>[0]) {
+    return {
       guardLabel: "BloomrotStrategy",
       selfId: "bot",
       archetype: "Bloomrot",
       strategy: this,
-      activationContext: action.activationContext,
       enableSimulatedEvents: true,
       rankSearchCandidates: this.rankSearchCandidates.bind(this),
       getTributeRequirementFor: this.getTributeRequirementFor.bind(this),
       selectBestTributes: this.selectBestTributes.bind(this),
       placeSpellCard: this.placeSpellCard.bind(this),
       chooseSpecialSummonPosition: this.chooseSpecialSummonPosition.bind(this),
-    });
+    };
   }
 
   override evaluateBoard(gameOrState: AIState, perspectivePlayer: SimulatedPlayerState | undefined) {

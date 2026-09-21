@@ -67,6 +67,7 @@ import {
   resolveSimulatedHandIndex as resolveGenericSimulatedHandIndex,
 } from "./common/simulation.js";
 import {
+  buildLuminarchSimulationOptions,
   chooseLuminarchSpecialSummonPosition,
   applyLuminarchSimulatedBattleRewards,
   prepareLuminarchSimulatedBattle,
@@ -1118,7 +1119,11 @@ export default class LuminarchStrategy extends BaseStrategy {
   }
 
   override simulateMainPhaseAction(state: SimulationGameState | PerspectiveGameState | GameTreeSimulationGameState, action: AIPlannedAction) {
-    return simulateLuminarchMainPhaseAction(state as Parameters<typeof simulateLuminarchMainPhaseAction>[0], action, {
+    return simulateLuminarchMainPhaseAction(state as Parameters<typeof simulateLuminarchMainPhaseAction>[0], action, {}, this.getPlanningSimulationOptions(state, action));
+  }
+
+  getPlanningSimulationOptions(state: SimulationGameState | PerspectiveGameState | GameTreeSimulationGameState, action?: AIPlannedAction) {
+    return buildLuminarchSimulationOptions(state as Parameters<typeof buildLuminarchSimulationOptions>[0], action, {
       strategy: this,
       getOpponent: this.getOpponent.bind(this),
       getTributeRequirementFor: (card, playerState) =>

@@ -870,9 +870,7 @@ function handleEffectActivated({
   }
 }
 
-function buildGenericOptions(
-  state: MutableShadowState,
-  action: ShadowMainPhaseAction,
+export function buildShadowHeartSimulationOptions(
   baseOptions: ShadowSimulationOptions = {},
 ) {
   const options = {
@@ -951,18 +949,20 @@ export function simulateMainPhaseAction(
   state: MutableShadowState,
   action: AIPlannedAction,
   placeSpellCardOrOptions?: ShadowOptionsInput,
+  planningOptions?: ReturnType<typeof buildShadowHeartSimulationOptions>,
 ): MutableShadowState;
 export function simulateMainPhaseAction(
   state: MutableShadowState,
   action: ShadowMainPhaseAction,
   placeSpellCardOrOptions: ShadowOptionsInput = null,
+  planningOptions?: ReturnType<typeof buildShadowHeartSimulationOptions>,
 ): MutableShadowState {
   if (!action) return state;
   ensureZones(state.bot || {});
   ensureZones(state.player || {});
   const baseOptions = normalizeOptions(placeSpellCardOrOptions);
   const preparedAction = prepareAction(state, action, baseOptions);
-  const options = buildGenericOptions(state, preparedAction, baseOptions);
+  const options = planningOptions || buildShadowHeartSimulationOptions(baseOptions);
   // The legacy planner may probe `simulatedBattle` through this adapter. The
   // generic dispatcher intentionally exposes only the 13 executable actions,
   // while the erased cast preserves the former runtime no-op path.
@@ -985,7 +985,7 @@ export function simulateSpellEffect(
   const baseOptions = normalizeOptions(placeSpellCardOrOptions);
   const effect = findEffect(card, ["on_play"]);
   const activationContext = buildActivationContext(state, card, effect, baseOptions);
-  const options = buildGenericOptions(state, { type: "spell", cardName: card.name }, {
+  const options = buildShadowHeartSimulationOptions({
     ...baseOptions,
     activationContext,
   });

@@ -78,6 +78,7 @@ import {
   evaluateShadowHeartTributeBossBonus,
 } from "./shadowheart/scoring.js";
 import {
+  buildShadowHeartSimulationOptions,
   simulateMainPhaseAction as simAction,
   simulateSpellEffect,
 } from "./shadowheart/simulation.js";
@@ -1510,7 +1511,12 @@ export default class ShadowHeartStrategy extends BaseStrategy {
   }
 
   override simulateMainPhaseAction(state: Parameters<StrategyRuntimePort["simulateMainPhaseAction"]>[0], action: AIPlannedAction) {
-    return simAction(state as Parameters<typeof simAction>[0], action as AIAction, {
+    const options = this.getPlanningSimulationOptions(state);
+    return simAction(state as Parameters<typeof simAction>[0], action as AIAction, { strategy: this }, options);
+  }
+
+  getPlanningSimulationOptions(_state: Parameters<StrategyRuntimePort["simulateMainPhaseAction"]>[0]) {
+    return buildShadowHeartSimulationOptions({
       strategy: this,
       placeSpellCard: this.placeSpellCard.bind(this),
       buildActivationContextForEffect: this.buildActivationContextForEffect.bind(this),
