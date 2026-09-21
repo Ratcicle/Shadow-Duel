@@ -71,7 +71,7 @@ function scenario(t: TestContext, useRealPhaseTransitions = false) {
   const exits: Record<string, unknown>[] = [];
   game._arenaTracker = {
     recordProgress(label: string, _game: unknown, detail?: unknown) {
-      if (label === "ai_main_phase_exit") exits.push(record(detail));
+      if (label === "ai_main_phase_exit" || label === "ai_main_phase_finalization") exits.push(record(detail));
     },
   };
   bot.generateMainPhaseActions = () => {
@@ -149,11 +149,13 @@ test("Main Phase waits for the executor promise before executing another action"
   assert.equal(fixture.transitions, 1);
 });
 
-test("reentry after Main Phase completion does not schedule another transition", async t => {
+test("reentry while Main Phase finalization is scheduled joins the same transition", async t => {
   const fixture = scenario(t);
   fixture.setActionCount(0);
-  await fixture.bot.makeMove(fixture.game);
-  await fixture.bot.makeMove(fixture.game);
+  const first = fixture.bot.makeMove(fixture.game);
+  await flushMicrotasks();
+  const second = fixture.bot.makeMove(fixture.game);
+  await settle(t, Promise.all([first, second]));
   await advance(t, 200);
   assert.equal(fixture.executions, 0);
   assert.equal(fixture.transitions, 1);
@@ -162,12 +164,13 @@ test("reentry after Main Phase completion does not schedule another transition",
 test("a scheduled transition waits for a newly pending selection to resolve", async t => {
   const fixture = scenario(t);
   fixture.setActionCount(0);
-  await fixture.bot.makeMove(fixture.game);
+  const move = fixture.bot.makeMove(fixture.game);
+  await flushMicrotasks();
   fixture.game.selectionState = "selecting";
   await advance(t, 200);
   const whileSelecting = fixture.transitions;
   fixture.game.selectionState = "idle";
-  await advance(t, 200);
+  await settle(t, move);
   assert.equal(whileSelecting, 0);
   assert.equal(fixture.transitions, 1);
 });
@@ -191,7 +194,7 @@ test("an interrupted phase-end negotiation resumes Main Phase and eventually rea
       phaseTransitionInterrupted: interrupted,
     };
   });
-  await fixture.bot.makeMove(fixture.game);
+  await settle(t, fixture.bot.makeMove(fixture.game));
   for (let tick = 0; tick < 10; tick++) await advance(t, 100);
   assert.equal(phaseEndAttempts, 2, "a completed response Chain requires a renewed transition intent");
   assert.equal(fixture.executions, 1, "newly available actions must be planned after the response Chain");
@@ -200,7 +203,7 @@ test("an interrupted phase-end negotiation resumes Main Phase and eventually rea
 });
 
 for (const planning of ["normal", "battle bridge"] as const) {
-  test(`repeated phase-end interruptions preserve the decision limit for ${planning}`, async t => {
+  test(`interminable phase-end interruptions exhaust finalization protection for ${planning}`, async t => {
     const fixture = scenario(t, true);
     fixture.setActionCount(0);
     if (planning === "battle bridge") configureBattleBridge(fixture);
@@ -217,17 +220,19 @@ for (const planning of ["normal", "battle bridge"] as const) {
     const move = fixture.bot.makeMove(fixture.game);
     for (let tick = 0; tick < 150; tick++) await advance(t, 100);
     await settle(t, move);
-    assert.equal(fixture.exit().reason, "decision_limit");
-    assert.equal(fixture.exit().decisions, 128);
+    assert.equal(fixture.exit().status, "failed");
+    assert.equal(fixture.exit().finalizationOutcome, "limit_reached");
+    assert.equal(fixture.exit().finalizationAttempts, 8);
+    assert.ok(Number(fixture.exit().decisions) <= 128);
     assert.equal(fixture.executions, 0);
     assert.equal(fixture.game.phase, "main1");
-    assert.ok(phaseEndAttempts > 1 && phaseEndAttempts <= 128);
+    assert.equal(phaseEndAttempts, 8);
     assert.equal(fixture.transitions, phaseEndAttempts);
     const attemptsAtLimit = phaseEndAttempts;
     for (let tick = 0; tick < 20; tick++) await advance(t, 100);
     await fixture.bot.makeMove(fixture.game);
     await advance(t, 1000);
-    assert.equal(phaseEndAttempts, attemptsAtLimit, "reentry must not renew an exhausted decision budget");
+    assert.equal(phaseEndAttempts, attemptsAtLimit, "reentry must not renew exhausted finalization protection");
   });
 }
 
@@ -343,10 +348,11 @@ for (const [reason, changeContext] of Object.entries(invalidate)) {
   test(`scheduled Main Phase transition is ignored after ${reason} changes`, async t => {
     const fixture = scenario(t);
     fixture.setActionCount(0);
-    await fixture.bot.makeMove(fixture.game);
+    const move = fixture.bot.makeMove(fixture.game);
+    await flushMicrotasks();
     assert.equal(fixture.transitions, 0);
     changeContext(fixture.game);
-    await advance(t, 200);
+    await settle(t, move);
     assert.equal(fixture.transitions, 0);
   });
 }

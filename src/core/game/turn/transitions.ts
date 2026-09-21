@@ -253,7 +253,7 @@ async function enterPhase(
  * Advances to the next phase in the turn order.
  * Phase order: draw → standby → main1 → battle → main2 → end
  */
-export async function nextPhase(this: TransitionHost) {
+export async function nextPhase(this: TransitionHost, options: { retryOnBlocked?: boolean } = {}) {
   if (this.gameOver || this.isDisposed?.()) return;
   const actor = this.turn === "player" ? this.player : this.bot;
   const guard = this.guardActionStart(
@@ -262,7 +262,7 @@ export async function nextPhase(this: TransitionHost) {
   );
   if (!guard.ok) {
     if (
-      isAI(actor) &&
+      options.retryOnBlocked !== false && isAI(actor) &&
       (guard.code === "BLOCKED_RESOLVING" ||
         guard.code === "BLOCKED_SELECTION_ACTIVE")
     ) {

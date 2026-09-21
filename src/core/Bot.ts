@@ -184,8 +184,12 @@ export default class Bot extends Player {
     // All entrants join the same session, including while its action is busy.
     // Only that session may schedule the corresponding phase transition.
     if (game.phase === "main1" || game.phase === "main2") {
+      const { phase, turn, turnCounter, player, bot } = game;
       await this.playMainPhase(game);
-      scheduleMainPhaseTransition(this, game);
+      if (game.phase === phase && game.turn === turn && game.turnCounter === turnCounter &&
+          game.player === player && game.bot === bot) {
+        await scheduleMainPhaseTransition(this, game);
+      }
       return;
     }
 

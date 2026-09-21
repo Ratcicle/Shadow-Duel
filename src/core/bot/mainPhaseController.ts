@@ -45,7 +45,7 @@ export function playBotMainPhase(bot: BotRuntimePort, game: BotGamePort): Promis
 }
 
 async function runMainPhase(bot: BotRuntimePort, game: BotGamePort, session: MainPhaseSession): Promise<void> {
-  game._arenaTracker?.recordProgress?.("bot_main_phase_enter", game, { actor: bot.id });
+  session.recordProgress("bot_main_phase_enter", game, { actor: bot.id });
   const useV2Evaluation = true;
   const useAutomaticAscension = bot.strategy?.shouldUseAutomaticAscensionShortcut?.(game, bot) !== false;
   while (await session.waitUntilReady()) {
@@ -59,7 +59,7 @@ async function runMainPhase(bot: BotRuntimePort, game: BotGamePort, session: Mai
           session.allowed(stateBeforeDecision, action));
       if (ascension) {
         const accepted = await session.execute(ascension, stateBeforeDecision);
-        if (!session.active() || session.reason) return;
+        if (!session.active() || session.stopReason) return;
         if (accepted && !await session.presentationDelay()) return;
         continue;
       }
@@ -85,13 +85,13 @@ async function runMainPhase(bot: BotRuntimePort, game: BotGamePort, session: Mai
     };
     const actions = phaseFilteredActions.filter(isPermitted);
     const fallbackActions = actions;
-    game._arenaTracker?.recordProgress?.("ai_decision_before", game, {
+    session.recordProgress("ai_decision_before", game, {
       actor: bot.id, attempt: totalAttempts, rawActions: rawActions.length,
       sequencedActions: sequencedActions.length, actions: actions.length,
       fallbackActions: fallbackActions.length,
     });
     if (!actions.length) {
-      session.reason = phaseFilteredActions.length || session.counts.repetitionsSuppressed > suppressedBeforeDecision
+      session.stopReason = phaseFilteredActions.length || session.counts.repetitionsSuppressed > suppressedBeforeDecision
         ? "alternatives_exhausted" : "no_candidates";
       return;
     }
@@ -197,7 +197,7 @@ async function runMainPhase(bot: BotRuntimePort, game: BotGamePort, session: Mai
         planningContext,
       });
 
-      game._arenaTracker?.recordProgress?.("ai_turn_line_search", game, {
+      session.recordProgress("ai_turn_line_search", game, {
         actor: bot.id,
         plannerMode,
         plannerTurnMode,
@@ -319,13 +319,13 @@ async function runMainPhase(bot: BotRuntimePort, game: BotGamePort, session: Mai
     // Se ainda não tem ação, break
     if (!bestAction) {
       console.log(`[Bot.playMainPhase] ⚠️ No action selected, breaking loop`);
-      game._arenaTracker?.recordProgress?.("ai_decision_after", game, {
+      session.recordProgress("ai_decision_after", game, {
         actor: bot.id,
         attempt: totalAttempts,
         selected: false,
         reason: "no_action_selected",
       });
-      session.reason = "alternatives_exhausted";
+      session.stopReason = "alternatives_exhausted";
       return;
     }
 
@@ -336,7 +336,7 @@ async function runMainPhase(bot: BotRuntimePort, game: BotGamePort, session: Mai
       continue;
     }
 
-    game._arenaTracker?.recordProgress?.("ai_decision_after", game, {
+    session.recordProgress("ai_decision_after", game, {
       actor: bot.id,
       attempt: totalAttempts,
       selected: true,
@@ -352,19 +352,14 @@ async function runMainPhase(bot: BotRuntimePort, game: BotGamePort, session: Mai
         `[Bot.playMainPhase] Planner selected battle bridge; advancing to Battle Phase`,
         bestAction,
       );
-      game._arenaTracker?.recordProgress?.("ai_plan_phase_bridge", game, {
+      session.recordProgress("ai_plan_phase_bridge", game, {
         actor: bot.id,
         attempt: totalAttempts,
         plannedAction: fingerprintAction(bestAction),
         plannedMilestones: (pendingPlannerTrace?.milestones || []).slice(0, 8),
         plannerReason: pendingPlannerTrace?.reason || null,
       });
-      session.reason = "planner_transition";
-      if (await session.advancePhase()) {
-        session.resumeRequested = false;
-        session.reason = null;
-        continue;
-      }
+      session.stopReason = "planner_transition";
       return;
     }
 
@@ -398,7 +393,7 @@ async function runMainPhase(bot: BotRuntimePort, game: BotGamePort, session: Mai
     }
 
     const actionSuccess = await session.execute(bestAction, stateBeforeDecision);
-    if (!session.active() || session.reason) return;
+    if (!session.active() || session.stopReason) return;
     if (pendingPlannerTrace) {
       const expectedSummary =
         pendingPlannerTrace.diagnostics?.firstStepSummary || null;
@@ -422,7 +417,7 @@ async function runMainPhase(bot: BotRuntimePort, game: BotGamePort, session: Mai
         plannedMilestones: (pendingPlannerTrace.milestones || []).slice(0, 8),
         plannerReason: pendingPlannerTrace.reason || null,
       };
-      game._arenaTracker?.recordProgress?.(
+      session.recordProgress(
         actionSuccess
           ? "ai_plan_execution_compare"
           : "ai_plan_execution_failed",
