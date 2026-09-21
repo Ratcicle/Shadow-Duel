@@ -27,7 +27,7 @@ import type { GamePhase } from "./game.js";
 import type { GamePlayer } from "./player.js";
 import type { PlayerId, RawCardDefinitionId } from "./primitives.js";
 import type Game from "../Game.js";
-import type { PlayerGamePort, EffectEngineRuntimePort } from "./gameRuntime.js";
+import type { PlayerGamePort, EffectEngineRuntimePort, GameRuntimeState } from "./gameRuntime.js";
 import type { PlayerStrategyPort } from "./player.js";
 import type { EffectDefinition } from "./effects.js";
 import type { AIActivationContext } from "./ai.js";
@@ -143,7 +143,9 @@ export interface BotEffectEnginePort extends EffectEngineRuntimePort {
   activateFieldSpell(card: GameCard, player: GamePlayer, selections: unknown, context?: ActivationPipelineContext): MaybePromise<unknown>;
 }
 
-export interface BotGamePort extends Omit<PlayerGamePort, keyof BotGameMethods>, BotGameMethods {
+export interface BotGamePort extends Omit<PlayerGamePort, keyof BotGameMethods>, BotGameMethods,
+  Partial<Pick<GameRuntimeState, "oncePerTurnUsage" | "oncePerTurnTurnCounter" |
+    "materialDuelStats" | "effectUsageReservations" | "specialSummonTypeCounts">> {
   player: GamePlayer;
   bot: GamePlayer;
   phase: GamePhase;
@@ -190,7 +192,6 @@ export type BotRuntimePort = Omit<
     game?: BotGamePort;
     debug?: boolean;
     maxSimulationsPerPhase: number;
-    maxChainedActions: number;
     resolveOpponent(game: BotGamePort): GamePlayer | null;
     evaluateBoard(
       game: AiLiveGamePort | SimulationGameState,

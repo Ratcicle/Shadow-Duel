@@ -10,6 +10,7 @@ import {
 } from "./bot/presets.js";
 import { executeBotMainPhaseAction } from "./bot/actionExecutor.js";
 import { playBotMainPhase } from "./bot/mainPhaseController.js";
+import { scheduleMainPhaseTransition } from "./bot/mainPhaseSession.js";
 import {
   isSameBattleCard as isSameBattleCardForBot,
   playBotBattlePhase,
@@ -57,7 +58,6 @@ import type { GamePlayer } from "./contracts/player.js";
 
 export default class Bot extends Player {
   declare maxSimulationsPerPhase: number;
-  declare maxChainedActions: number;
   declare archetype: BotArchetypeId;
   declare planningModelId: string | null;
   declare strategy: BotStrategyPort;
@@ -66,7 +66,6 @@ export default class Bot extends Player {
   constructor(archetype = "shadowheart") {
     super("bot", "Opponent", "ai");
     this.maxSimulationsPerPhase = 20;
-    this.maxChainedActions = 6; // Aumentado de 3 para 6 - permite múltiplas ações + efeitos
     this.setPreset(archetype);
   }
   static getAvailablePresets() {
@@ -182,6 +181,14 @@ export default class Bot extends Player {
   async makeMove(game: BotGamePort) {
     if (!game || game.gameOver || game.isDisposed?.()) return;
 
+    // All entrants join the same session, including while its action is busy.
+    // Only that session may schedule the corresponding phase transition.
+    if (game.phase === "main1" || game.phase === "main2") {
+      await this.playMainPhase(game);
+      scheduleMainPhaseTransition(this, game);
+      return;
+    }
+
     try {
       game._arenaTracker?.recordProgress?.("bot_make_move_enter", game, {
         actor: this.id,
@@ -207,27 +214,6 @@ export default class Bot extends Player {
         actor: this.id,
         phase,
       });
-
-      if (phase === "main1" || phase === "main2") {
-        await this.playMainPhase(game);
-        game._arenaTracker?.recordProgress?.(
-          "bot_make_move_after_main_phase",
-          game,
-          {
-            actor: this.id,
-            phase,
-          },
-        );
-        if (!game.gameOver && !game.isDisposed?.() && game.phase === phase) {
-          const actionDelayMs = Number.isFinite(game?.aiActionDelayMs)
-            ? game.aiActionDelayMs
-            : 500;
-          setTimeout(() => {
-            if (!game.isDisposed?.()) game.nextPhase();
-          }, actionDelayMs);
-        }
-        return;
-      }
 
       if (phase === "battle") {
         this.playBattlePhase(game);
