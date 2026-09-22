@@ -11,6 +11,7 @@ export interface ComplexFusionRequirement
 export type FusionRequirement = string | ComplexFusionRequirement;
 export interface FusionCard extends ActionRuntimeCard {
   fusionMaterials?: readonly FusionRequirement[] | null;
+  extraDeckSummonProcedure?: object | string | null;
 }
 
 /**

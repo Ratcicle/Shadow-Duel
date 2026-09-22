@@ -6,6 +6,7 @@
  */
 
 import { isAI } from "../Player.js";
+import { getBaseLpCost } from "../effects/costs/lpCost.js";
 import { cardMatchesKind } from "../Card.js";
 import type {
   ActionOf,
@@ -578,11 +579,7 @@ export async function handlePayLP(
     return false;
   }
 
-  let amount = action.amount || 0;
-
-  if (action.fraction) {
-    amount = Math.floor(player.lp * action.fraction);
-  }
+  let amount = getBaseLpCost(action, player.lp);
 
   if (amount <= 0) {
     console.log("[handlePayLP] Amount is zero or negative:", amount);

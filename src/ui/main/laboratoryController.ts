@@ -262,7 +262,7 @@ export function createLaboratoryController({
       header.innerHTML = `
         <h3>${LAB_OWNER_LABELS[owner as PlayerId]}</h3>
         <label class="laboratory-lp">LP
-          <input type="number" min="0" max="99999" value="${side.lp}" data-lab-lp="${owner}" />
+          <input type="number" min="0" max="99999" step="any" value="${side.lp}" data-lab-lp="${owner}" />
         </label>
         <button type="button" data-lab-random-side="${owner}">Aleatorizar lado</button>
       `;
@@ -412,7 +412,7 @@ export function createLaboratoryController({
 
   function buildSetupForGame() {
     const cloneSide = (side: LabSide) => ({
-      lp: Math.max(0, Math.floor(Number(side.lp) || 0)),
+      lp: Math.max(0, Number(side.lp) || 0),
       deck: side.deck.map(cloneLabEntry).filter(Boolean),
       extraDeck: side.extraDeck.map(cloneLabEntry).filter(Boolean),
       hand: side.hand.map(cloneLabEntry).filter(Boolean),
@@ -473,7 +473,7 @@ export function createLaboratoryController({
       const result: { lp: number } & Partial<
         Record<LabZone, LabEntry | null | (LabEntry | null)[]>
       > = {
-        lp: Math.max(0, Math.floor(Number(side.lp) || 0)),
+        lp: Math.max(0, Number(side.lp) || 0),
       };
       LAB_ZONE_CONFIG.forEach((zoneConfig) => {
         const zone = zoneConfig.id;
@@ -590,7 +590,7 @@ export function createLaboratoryController({
         {}) as Record<string, unknown>;
       const target = normalizedSetup[owner];
       if (typeof source.lp === "number" && Number.isFinite(source.lp)) {
-        target.lp = Math.max(0, Math.floor(source.lp));
+        target.lp = Math.max(0, source.lp);
       }
 
       LAB_ZONE_CONFIG.forEach((zoneConfig) => {
@@ -767,7 +767,7 @@ export function createLaboratoryController({
       if (!owner || !laboratorySetup[owner as PlayerId]) return;
       laboratorySetup[owner as PlayerId].lp = Math.max(
         0,
-        Math.floor(Number((event.target as HTMLInputElement).value) || 0),
+        Number((event.target as HTMLInputElement).value) || 0,
       );
     });
     dom.body?.addEventListener("click", (event) => {

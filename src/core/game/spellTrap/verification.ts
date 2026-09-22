@@ -14,17 +14,12 @@ interface SpellTrapVerificationHost {
   turn: string;
   turnCounter: number;
   effectEngine?: {
-    findFusionMaterialCombos?(
-      fusion: GameCard,
-      materials: GameCard[],
-      options: { materialInfo: FusionMaterialLocation[] },
-    ): GameCard[][];
-    canSummonFusion?(
-      fusion: GameCard,
+    getAvailableFusions(
+      extraDeck: GameCard[],
       materials: GameCard[],
       player: GamePlayer,
       options: { materialInfo: FusionMaterialLocation[] },
-    ): boolean;
+    ): readonly { readonly fusion: GameCard }[];
   } | null;
   devLog?(eventName: string, payload: { summary: string }): void;
 }
@@ -74,8 +69,6 @@ export function canActivatePolymerization(
     return false;
   }
 
-  const fieldFull = (currentPlayer.field || []).length >= 5;
-
   const fieldMonsters = (currentPlayer.field || []).filter(
     (card) => card && card.cardKind === "monster",
   );
@@ -93,41 +86,11 @@ export function canActivatePolymerization(
     return false;
   }
 
-  let hasFusion = false;
-  for (const fusion of currentPlayer.extraDeck) {
-    const combos = this.effectEngine?.findFusionMaterialCombos
-      ? this.effectEngine.findFusionMaterialCombos(fusion, availableMaterials, {
-          materialInfo,
-        })
-      : this.effectEngine?.canSummonFusion?.(
-            fusion,
-            availableMaterials,
-            currentPlayer,
-            { materialInfo },
-          )
-        ? [availableMaterials]
-        : [];
-    if (!combos || combos.length === 0) continue;
-    hasFusion = true;
-
-    if (!fieldFull) {
-      debugPolymerization(`Allowed: can summon ${fusion.name}`);
-      return true;
-    }
-
-    const usesFieldMaterial = combos.some((combo) =>
-      combo.some((mat) => fieldMonsters.includes(mat)),
-    );
-    if (usesFieldMaterial) {
-      debugPolymerization(`Allowed: can summon ${fusion.name}`);
-      return true;
-    }
-  }
-
-  if (fieldFull && hasFusion) {
-    debugPolymerization("Blocked: field full without field material in fusion");
-  } else {
-    debugPolymerization("Blocked: no possible fusion with available materials");
-  }
-  return false;
+  const available = this.effectEngine?.getAvailableFusions(
+    currentPlayer.extraDeck, availableMaterials, currentPlayer, { materialInfo },
+  ) || [];
+  debugPolymerization(available.length > 0
+    ? "Allowed: legal Fusion available"
+    : "Blocked: no legal Fusion available");
+  return available.length > 0;
 }

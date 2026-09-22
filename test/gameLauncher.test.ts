@@ -101,6 +101,24 @@ test("Laboratory restart restores an isolated starting scenario and options repe
   assert.deepEqual(secondRestart.player.hand.map((card) => card.id), [104]);
 });
 
+test("Laboratory initialization and restart preserve fractional LP", async (t) => {
+  const launcher = createLauncher();
+  t.after(() => launcher.disposeActiveGame("test_complete"));
+  const config = scenarioConfig();
+  config.setup.player.lp = 0.5;
+  config.setup.bot.lp = 1.5;
+  const first = await launcher.startLaboratoryDuel(config);
+  assert.equal(first.player.lp, 0.5);
+  assert.equal(first.bot.lp, 1.5);
+  first.player.lp = 0.25;
+  config.setup.player.lp = 3;
+  const restarted = required(await launcher.restartLaboratoryDuel());
+  assert.equal(restarted.player.lp, 0.5);
+  assert.equal(restarted.bot.lp, 1.5);
+  restarted.checkWinCondition();
+  assert.equal(restarted.gameOver, false);
+});
+
 test("Laboratory duel restart preserves deck lists and initial duel options", async (t) => {
   const launcher = createLauncher();
   t.after(() => launcher.disposeActiveGame("test_complete"));

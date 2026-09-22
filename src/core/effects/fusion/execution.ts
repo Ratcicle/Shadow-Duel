@@ -72,6 +72,7 @@ interface FusionExecutionHost {
   evaluateFusionSelection(
     fusion: FusionRuntimeCard,
     materials: FusionRuntimeCard[],
+    options?: { readonly materialInfo: readonly { readonly zone: string }[] },
   ): { readonly valid: boolean; readonly reason?: string };
   chooseSpecialSummonPosition(
     card: FusionRuntimeCard,
@@ -328,11 +329,8 @@ export async function applyPolymerizationFusion(
   console.log("[Polymerization] Material info:", materialInfo);
 
   // Get available fusions from extra deck with zone info
-  const polymerizationFusions = player.extraDeck.filter(
-    (card) => !card.extraDeckSummonProcedure,
-  );
   const availableFusions = this.getAvailableFusions(
-    polymerizationFusions,
+    player.extraDeck,
     availableMaterials,
     player,
     { materialInfo },
@@ -440,68 +438,80 @@ export async function applyPolymerizationFusion(
       atk: m.atk,
       def: m.def,
       zone: materialInfo[idx]?.zone || "field",
-      owner: "player",
+      owner: player.id,
     }));
 
-    const materialSelection = await new Promise<FusionRuntimeCard[] | null>(
-      (resolve) => {
-        const selectionContract: RawSelectionContract = {
-          requirements: [
-            {
-              id: "materials",
-              candidates: materialCandidates,
-              min: requiredCount,
-              max: requiredCount,
-              label: getUIText("ui.fusion.selectMaterialsLabel", {
-                count: requiredCount,
+    while (true) {
+      const materialSelection = await new Promise<FusionRuntimeCard[] | null>(
+        (resolve) => {
+          const selectionContract: RawSelectionContract = {
+            requirements: [
+              {
+                id: "materials",
+                candidates: materialCandidates,
+                min: requiredCount,
+                max: requiredCount,
+                label: getUIText("ui.fusion.selectMaterialsLabel", {
+                  count: requiredCount,
+                }),
+              },
+            ],
+            ui: {
+              allowCancel: true,
+              message: getUIText("ui.fusion.selectMaterialsFor", {
+                cardName:
+                  getCardDisplayName(fusionSelection) || fusionSelection.name,
               }),
             },
-          ],
-          ui: {
-            allowCancel: true,
-            message: getUIText("ui.fusion.selectMaterialsFor", {
-              cardName:
-                getCardDisplayName(fusionSelection) || fusionSelection.name,
-            }),
-          },
-        };
+          };
 
-        this.game.startTargetSelectionSession({
-          kind: "fusion_materials",
-          selectionContract,
-          onCancel: () => resolve(null),
-          execute: (selections) => {
-            const keys = selections.materials || [];
-            const mats = keys
-              .map((k) => materialCandidates.find((c) => c.key === k)?.cardRef)
-              .filter((material): material is FusionRuntimeCard =>
-                Boolean(material),
-              );
-            resolve(mats);
-            return { success: true, needsSelection: false };
-          },
-        });
-      },
-    );
-
-    if (!materialSelection || materialSelection.length !== requiredCount) {
-      console.log("[Polymerization] Material selection cancelled or invalid");
-      return false;
-    }
-
-    // Validate the selection
-    const validation = this.evaluateFusionSelection(
-      fusionSelection,
-      materialSelection,
-    );
-    if (!validation.valid) {
-      this.ui?.showMessage?.(
-        validation.reason || getUIText("ui.fusion.invalidMaterials"),
+          this.game.startTargetSelectionSession({
+            kind: "fusion_materials",
+            selectionContract,
+            onCancel: () => resolve(null),
+            execute: (selections) => {
+              const keys = selections.materials || [];
+              const mats = keys
+                .map((k) => materialCandidates.find((c) => c.key === k)?.cardRef)
+                .filter((material): material is FusionRuntimeCard =>
+                  Boolean(material),
+                );
+              resolve(mats);
+              return { success: true, needsSelection: false };
+            },
+          });
+        },
       );
-      return false;
-    }
 
-    selectedMaterials = materialSelection;
+      if (!materialSelection) {
+        console.log("[Polymerization] Material selection cancelled");
+        return false;
+      }
+
+      // Validate the selection
+      const selectedMaterialInfo = materialSelection.map((material) => ({
+        zone: player.field.includes(material) ? "field" as const : "hand" as const,
+      }));
+      const validation = this.evaluateFusionSelection(
+        fusionSelection,
+        materialSelection,
+        { materialInfo: selectedMaterialInfo },
+      );
+      const materialsStillAvailable = materialSelection.every((material) =>
+        player.field.includes(material) || player.hand.includes(material));
+      const legalSelection = materialsStillAvailable && this.getAvailableFusions(
+        [fusionSelection], materialSelection, player, { materialInfo: selectedMaterialInfo },
+      ).length > 0;
+      if (!validation.valid || !legalSelection) {
+        this.ui?.showMessage?.(
+          validation.reason || getUIText("ui.fusion.invalidMaterials"),
+        );
+        continue;
+      }
+
+      selectedMaterials = materialSelection;
+      break;
+    }
   }
 
   console.log(

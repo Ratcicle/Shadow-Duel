@@ -367,9 +367,7 @@ async function playTravelingLpChangeNumber(
   const cause = options.cause === "battle" ? "battle" : "effect";
   const kind = options.kind === "heal" ? "heal" : "damage";
   float.className = `lp-damage-float ${cause} ${kind}`;
-  float.textContent = `${kind === "heal" ? "+" : "-"}${Math.abs(
-    Math.round(amount),
-  )}`;
+  float.textContent = `${kind === "heal" ? "+" : "-"}${Math.abs(amount)}`;
   float.style.left = `${origin.x}px`;
   float.style.top = `${origin.y}px`;
   layer.appendChild(float);
@@ -496,9 +494,9 @@ async function runLpDamageQueue(
         if (entry.holdFinalUntilReal === true) {
           state.holdFinalUntilReal = true;
         }
-        const toLp = Math.max(0, Math.round(entry.toLp));
+        const toLp = Math.max(0, entry.toLp);
         const fromLp = Number.isFinite(entry.fromLp)
-          ? Math.max(0, Math.round(entry.fromLp))
+          ? Math.max(0, entry.fromLp)
           : state.displayed;
         const kind = entry.kind === "heal" ? "heal" : "damage";
 
@@ -537,7 +535,7 @@ async function runLpDamageQueue(
       if (
         !state.holdFinalUntilReal &&
         Number.isFinite(realLp) &&
-        Math.round(realLp) !== state.displayed
+        realLp !== state.displayed
       ) {
         renderer.setDisplayedLp(player, realLp);
       }
@@ -658,7 +656,7 @@ export function ensureLpDisplayState(
       ? Number(player.lp)
       : (textValue ?? 0);
     this.lpDisplayState[key] = {
-      displayed: Math.max(0, Math.round(initial)),
+      displayed: Math.max(0, initial),
       animating: false,
       queue: [],
       floatingPromises: new Set(),
@@ -692,7 +690,7 @@ export function setDisplayedLp(
   const state = this.ensureLpDisplayState?.(player);
   if (!state) return false;
 
-  const lp = Math.max(0, Math.round(Number(value || 0)));
+  const lp = Math.max(0, Number(value || 0));
   state.displayed = lp;
 
   const el = getLpElement(this, player!);
@@ -759,7 +757,7 @@ export function showLpDamageSequence(
   options: LpChangeOptions = {},
 ): boolean {
   if (!player || !amount) return false;
-  const value = Math.max(0, Math.round(Number(amount || 0)));
+  const value = Math.max(0, Number(amount || 0));
   if (!Number.isFinite(value) || value <= 0) return false;
 
   const state = this.ensureLpDisplayState?.(player);
@@ -768,11 +766,11 @@ export function showLpDamageSequence(
     !state.animating && state.queue.length === 0 && !state.presentationPromise;
 
   const fromLp = Number.isFinite(options.fromLp)
-    ? Math.max(0, Math.round(options.fromLp!))
+    ? Math.max(0, options.fromLp!)
     : state.displayed;
   const kind = options.kind === "heal" ? "heal" : "damage";
   const toLp = Number.isFinite(options.toLp)
-    ? Math.max(0, Math.round(options.toLp!))
+    ? Math.max(0, options.toLp!)
     : kind === "heal"
       ? fromLp + value
       : Math.max(0, fromLp - value);
@@ -822,8 +820,8 @@ export function animateLpOdometer(
   const state = this.ensureLpDisplayState?.(player);
   if (!state) return Promise.resolve(false);
 
-  const from = Math.max(0, Math.round(Number(fromLp || 0)));
-  const to = Math.max(0, Math.round(Number(toLp || 0)));
+  const from = Math.max(0, Number(fromLp || 0));
+  const to = Math.max(0, Number(toLp || 0));
   const amount = Math.abs(from - to);
   const counter = getLpCounter(this, player!);
   const kind = options.kind === "heal" || to > from ? "heal" : "damage";
@@ -849,7 +847,9 @@ export function animateLpOdometer(
       const now = Number.isFinite(nowTime) ? nowTime : Date.now();
       const progress = clamp((now - startedAt) / duration, 0, 1);
       const eased = easeOutCubic(progress);
-      let value = Math.round(from + (to - from) * eased);
+      // Animate the integer distance while retaining the destination's fraction.
+      // The final frame always displays the exact stored value.
+      let value = to + Math.round((from - to) * (1 - eased));
 
       if (progress < 0.94 && amount > 40) {
         const stepSize = Math.max(1, Math.floor(amount / 85));
@@ -858,6 +858,8 @@ export function animateLpOdometer(
             ? Math.max(to, value - (value % stepSize))
             : Math.min(to, value + (stepSize - (value % stepSize)));
       }
+
+      value = clamp(value, Math.min(from, to), Math.max(from, to));
 
       this.setDisplayedLp(player, value);
 
