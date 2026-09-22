@@ -229,7 +229,7 @@ export function applyScenarioSetup(
     resetSide(player);
 
     if (typeof payload.lp === "number" && Number.isFinite(payload.lp)) {
-      player.lp = Math.max(0, Math.floor(payload.lp));
+      player.lp = Math.max(0, payload.lp);
     }
 
     if (Array.isArray(payload.hand)) {

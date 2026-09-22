@@ -70,6 +70,16 @@ export interface LpCostResult {
   appliedReducers: CostReducer[];
 }
 
+/** Base payment shared by activation preview, execution and AI simulation. */
+export function getBaseLpCost(
+  action: { readonly amount?: number; readonly fraction?: number },
+  currentLp: number,
+): number {
+  return action.fraction !== undefined
+    ? currentLp * action.fraction
+    : (action.amount ?? 0);
+}
+
 export function resolveLpCost(
   this: LpCostHost,
   action: { type?: string } | null | undefined,

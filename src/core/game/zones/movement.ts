@@ -1774,7 +1774,7 @@ function isRestrictedSpecialSummonMethod(
 }
 
 function getSummonMethodFromOptions(
-  options: MovementOptions = {},
+  options: Pick<MovementOptions, "summonMethod" | "summonMethodOverride" | "method"> = {},
 ): string | null {
   return (
     options.summonMethod ||
@@ -1921,15 +1921,33 @@ export function canSpecialSummonUnderRestrictions(
   return { ok: true };
 }
 
-/**
- * Generic field-limit check for declarative card rules.
- * @this {import('../../Game.js').default}
- */
+// Read projections shared by placement execution and Fusion previews.
+type FieldPlacementCard = ActionRuntimeCard &
+  Partial<Pick<GameCard, "fieldLimit" | "fieldPresenceRestriction">>;
+interface FieldPlacementPlayer extends SpecialSummonRestrictionPlayer {
+  field: readonly FieldPlacementCard[];
+}
+type FieldPlacementOptions = Omit<MovementOptions, "excludeCards" | "fromZone"> & {
+  fromZone?: MoveCardOptions["fromZone"];
+  excludeCards?: readonly ActionRuntimeCard[] | undefined;
+};
+interface FieldPlacementHost {
+  player: FieldPlacementPlayer;
+  bot: FieldPlacementPlayer;
+  ui?: { log?(message: string): void };
+  canSpecialSummonUnderRestrictions?(
+    card: ActionRuntimeCard,
+    player: SpecialSummonRestrictionPlayer,
+    options?: Pick<MovementOptions, "summonMethod" | "summonProcedure" | "silent">,
+  ): { ok: boolean; reason?: string; code?: string };
+}
+
+/** Generic field-limit check for declarative card rules. */
 export function canPlaceCardOnField(
-  this: MovementHost,
-  card: GameCard,
-  destPlayer: GamePlayer,
-  options: MovementOptions = {},
+  this: FieldPlacementHost,
+  card: FieldPlacementCard,
+  destPlayer: FieldPlacementPlayer,
+  options: FieldPlacementOptions = {},
 ) {
   if (!card || !destPlayer) {
     return { ok: false, reason: "Invalid field placement." };
@@ -1958,7 +1976,7 @@ export function canPlaceCardOnField(
       ? options.isFacedown
       : card.isFacedown === true;
 
-  const hasOnlyMonsterRestriction = (fieldCard: GameCard) =>
+  const hasOnlyMonsterRestriction = (fieldCard: FieldPlacementCard) =>
     fieldCard?.fieldPresenceRestriction?.type ===
       "only_monster_you_control_while_faceup" && !fieldCard.isFacedown;
 
@@ -2568,6 +2586,35 @@ export async function moveCardInternal(
     options,
   );
   const wasFaceupBeforeMove = card.isFacedown !== true;
+  // Capture before field-exit cleanup clears temporary negation.
+  const bindingEffectWasActive =
+    wasFaceupBeforeMove &&
+    card.effectsNegated !== true &&
+    this.effectEngine?.isEffectNegated?.(card) !== true;
+  const pendingBoundDestruction: Array<{
+    target: GameCard;
+    source: GameCard;
+    zone: "field" | "spellTrap";
+    checkActiveSource?: boolean;
+  }> = [];
+  const flushPendingBoundDestruction = async () => {
+    for (const { target, source, zone, checkActiveSource } of pendingBoundDestruction) {
+      const owner = target.owner === "player" ? this.player : this.bot;
+      if (!owner[zone].includes(target)) continue;
+      // A surviving trap can become inactive during the original move's events.
+      // A departing trap instead uses its state captured before exit cleanup.
+      if (checkActiveSource && (
+        source.isFacedown || source.effectsNegated ||
+        this.effectEngine?.isEffectNegated?.(source) === true
+      )) continue;
+      await this.destroyCard(target, {
+        cause: "effect",
+        sourceCard: source,
+        opponent: this.getOpponent(owner),
+      });
+      this.updateBoard();
+    }
+  };
   let pendingAttachedEquipCleanup: Array<{
     equip: GameCard;
     equipOwner: GamePlayer;
@@ -2993,19 +3040,17 @@ export async function moveCardInternal(
       }
       card.boundTrapSource = null;
 
-      // Destroy trap - refs already cleared, state is consistent regardless of result
-      this.destroyCard(callTrap, {
-        cause: "effect",
-        sourceCard: card,
-        opponent: this.getOpponent(fromOwner),
-      }).then((result) => {
-        if (result?.destroyed) {
-          this.ui.log(
-            `${callTrap.name} was destroyed as ${card.name} left the field.`,
-          );
-          this.updateBoard();
-        }
-      });
+      const trapOwner = callTrap.owner === "player" ? this.player : this.bot;
+      if (
+        trapOwner.spellTrap.includes(callTrap) && !callTrap.isFacedown &&
+        !callTrap.effectsNegated &&
+        this.effectEngine?.isEffectNegated?.(callTrap) !== true
+      ) {
+        pendingBoundDestruction.push({
+          target: callTrap, source: callTrap, zone: "spellTrap",
+          checkActiveSource: true,
+        });
+      }
     }
   }
 
@@ -3024,21 +3069,11 @@ export async function moveCardInternal(
     if (revivedMonster.boundTrapSource === card) {
       revivedMonster.boundTrapSource = null;
     }
-    const monsterOwner =
-      revivedMonster.owner === "player" ? this.player : this.bot;
-    // Destroy is fire-and-forget but safe - ref already cleared, state is consistent
-    this.destroyCard(revivedMonster, {
-      cause: "effect",
-      sourceCard: card,
-      opponent: this.getOpponent(monsterOwner),
-    }).then((result) => {
-      if (result?.destroyed) {
-        this.ui.log(
-          `${revivedMonster.name} was destroyed as ${card.name} left the field.`,
-        );
-        this.updateBoard();
-      }
-    });
+    if (bindingEffectWasActive) {
+      pendingBoundDestruction.push({
+        target: revivedMonster, source: card, zone: "field",
+      });
+    }
   }
 
   if (fromZone === "field" && toZone !== "field" && card.isTrapMonster) {
@@ -3093,6 +3128,7 @@ export async function moveCardInternal(
           wasFaceupBeforeMove,
         },
       );
+      await flushPendingBoundDestruction();
       return { success: true, fromZone, toZone: "extraDeck" };
     }
   }
@@ -3461,6 +3497,8 @@ export async function moveCardInternal(
   if (this.effectEngine?.clearTargetingCache) {
     this.effectEngine.clearTargetingCache();
   }
+
+  await flushPendingBoundDestruction();
 
   const result: MoveCardResult = {
     success: !summonNegated,

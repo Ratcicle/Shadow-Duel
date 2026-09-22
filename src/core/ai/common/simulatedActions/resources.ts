@@ -1,4 +1,5 @@
 import { getEffectiveAtk } from "../cardStats.js";
+import { getBaseLpCost } from "../../../effects/costs/lpCost.js";
 import { getCounterValue, setCounterValue } from "../counters.js";
 import { estimateMonsterValue, hasArchetype } from "../cardValue.js";
 import {
@@ -246,13 +247,12 @@ export function applyPayLp(
     applySimulatedActions,
   } = ctx;
   const targetPlayer = resolveActionPlayer(action, self, opponent);
-  const amount = Number.isFinite(Number(action.fraction))
-    ? Math.floor((targetPlayer.lp || 0) * Number(action.fraction))
-    : Number.isFinite(action.amount as number)
-      ? action.amount as number
-      : Number.isFinite((action as LegacyPayLpAction).lp as number)
-        ? (action as LegacyPayLpAction).lp as number
-        : 0;
+  const amount = getBaseLpCost({
+    ...action,
+    amount: Number.isFinite(action.amount)
+      ? action.amount ?? 0
+      : (action as LegacyPayLpAction).lp ?? 0,
+  }, targetPlayer.lp || 0);
   if (amount <= 0) return STOP_SIMULATION;
   const cost = resolveSimulatedLpCost({
     action,

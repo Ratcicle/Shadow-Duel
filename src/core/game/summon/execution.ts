@@ -31,6 +31,10 @@ import { checkSpecialSummonEligibility } from "./eligibility.js";
 
 interface ExecutionEffectEnginePort {
   clearTargetingCache?(): void;
+  evaluateFusionSelection(
+    fusion: GameCard, materials: GameCard[],
+    options: { materialInfo: { zone: string }[] },
+  ): { valid: boolean; reason?: string };
 }
 
 interface ExecutionUiPort {
@@ -470,6 +474,30 @@ export async function performFusionSummon(
     return false;
   }
 
+  const requiredMaterials = requiredSubset?.length ? requiredSubset : materials;
+  if (
+    new Set(materials).size !== materials.length ||
+    materials.some((material) =>
+      material.cardKind !== "monster" ||
+      (!activePlayer.field.includes(material) && !activePlayer.hand.includes(material)),
+    ) ||
+    requiredMaterials.some((material) => !materials.includes(material))
+  ) {
+    this.ui.log("Fusion materials are no longer available in your hand or field.");
+    return false;
+  }
+  const materialCheck = this.effectEngine.evaluateFusionSelection(
+    fusionMonster, requiredMaterials, {
+      materialInfo: requiredMaterials.map((material) => ({
+        zone: activePlayer.field.includes(material) ? "field" : "hand",
+      })),
+    },
+  );
+  if (!materialCheck.valid) {
+    this.ui.log(materialCheck.reason || "Invalid Fusion materials.");
+    return false;
+  }
+
   // Check field space after using any field materials
   const fieldMaterialCount = materials.filter((mat) =>
     activePlayer.field.includes(mat)
@@ -491,8 +519,6 @@ export async function performFusionSummon(
     return false;
   }
 
-  const requiredMaterials =
-    requiredSubset && requiredSubset.length ? requiredSubset : materials;
   const requiredSet = new Set(requiredMaterials);
   const extraMaterials = materials.filter((mat) => !requiredSet.has(mat));
   const hasFieldToGraveTrigger = (card: GameCard) =>

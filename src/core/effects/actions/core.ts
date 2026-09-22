@@ -1,4 +1,5 @@
 import { cardMatchesKind, getCardComparableAttribute } from "../../Card.js";
+import { getBaseLpCost } from "../costs/lpCost.js";
 import { hasSynchroSummonPreviewCandidate } from "../../actionHandlers/summon/synchroEffects.js";
 import { mergeCanonicalSelections } from "../../game/selection/contract.js";
 import { checkSpecialSummonEligibility } from "../../game/summon/eligibility.js";
@@ -1985,10 +1986,7 @@ export function checkActionPreviewRequirements(
     }
 
     if (action.type === "pay_lp") {
-      let amount = Number(action.amount || 0);
-      if (action.fraction) {
-        amount = Math.floor((player.lp || 0) * action.fraction);
-      }
+      let amount = getBaseLpCost(action, player.lp || 0);
       if (amount <= 0) {
         return { ok: false, reason: "LP cost must be greater than 0." };
       }

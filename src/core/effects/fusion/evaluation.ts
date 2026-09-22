@@ -1,6 +1,7 @@
 import type { ActionRuntimePlayer } from "../../contracts/actionRuntime.js";
 import type { FusionCard, FusionRequirement } from "./requirements.js";
 import type { matchesFusionRequirement } from "./requirements.js";
+import { checkSpecialSummonEligibility } from "../../game/summon/eligibility.js";
 
 interface FusionEvaluationOptions {
   readonly materialZone?: string;
@@ -13,6 +14,17 @@ interface IndexedMaterial<Card extends FusionCard> {
 }
 interface FusionEvaluationHost {
   game?: {
+    canPlaceCardOnField?(
+      card: FusionCard,
+      player: ActionRuntimePlayer,
+      options: {
+        isFacedown: false;
+        excludeCards: readonly FusionCard[];
+        summonMethod: "fusion";
+        summonProcedure: "fusion";
+        silent: boolean;
+      },
+    ): { ok: boolean };
     canSpecialSummonUnderRestrictions?(
       card: FusionCard,
       player: ActionRuntimePlayer,
@@ -226,33 +238,15 @@ export function evaluateFusionSelection(
     };
   }
 
-  const materialZone = options.materialZone || "field";
-
-  // Check if each material satisfies its corresponding requirement
-  const usedMaterials = new Set();
-  for (let i = 0; i < expandedRequirements.length; i++) {
-    const requirement = expandedRequirements[i];
-    const reqString = requirementToString(requirement);
-
-    // Find a matching material that hasn't been used
-    let found = false;
-    for (const material of selectedMaterials) {
-      if (
-        !usedMaterials.has(material) &&
-        this.matchesFusionRequirement(material, reqString, materialZone)
-      ) {
-        usedMaterials.add(material);
-        found = true;
-        break;
-      }
-    }
-
-    if (!found) {
-      return {
-        valid: false,
-        reason: `No material satisfies requirement: ${reqString}`,
-      };
-    }
+  if (
+    new Set(selectedMaterials).size !== selectedMaterials.length ||
+    this.findFusionMaterialCombos(fusionMonster, selectedMaterials, options)
+      .length === 0
+  ) {
+    return {
+      valid: false,
+      reason: "The selected materials do not satisfy the Fusion requirements in their current zones.",
+    };
   }
 
   return { valid: true };
@@ -268,9 +262,31 @@ export function canSummonFusion(
   player: ActionRuntimePlayer,
   options: FusionEvaluationOptions = {},
 ) {
-  const requirements = this.getFusionRequirements(fusionMonster);
-  if (!requirements || requirements.length === 0) return false;
-  const restrictionCheck = this.game?.canSpecialSummonUnderRestrictions?.(
+  return getLegalFusionMaterialCombos(
+    this, fusionMonster, materials, player, options,
+  ).length > 0;
+}
+
+/** Shared legality query for preview, human choices and AI execution. */
+function getLegalFusionMaterialCombos<Card extends FusionCard>(
+  engine: FusionEvaluationHost,
+  fusionMonster: FusionCard,
+  materials: readonly Card[],
+  player: ActionRuntimePlayer,
+  options: FusionEvaluationOptions,
+): Card[][] {
+  if (
+    fusionMonster.monsterType !== "fusion" ||
+    fusionMonster.extraDeckSummonProcedure
+  ) return [];
+  const eligibility = checkSpecialSummonEligibility(fusionMonster, {
+    summonProcedure: "fusion",
+    fromZone: "extraDeck",
+  });
+  if (!eligibility.ok) return [];
+  const requirements = engine.getFusionRequirements(fusionMonster);
+  if (!requirements || requirements.length === 0) return [];
+  const restrictionCheck = engine.game?.canSpecialSummonUnderRestrictions?.(
     fusionMonster,
     player,
     {
@@ -279,18 +295,31 @@ export function canSummonFusion(
       silent: true,
     },
   );
-  if (restrictionCheck?.ok === false) return false;
+  if (restrictionCheck?.ok === false) return [];
 
   // Calculate total required materials
-  const requiredCount = this.getRequiredMaterialCount(fusionMonster);
-  if (materials.length < requiredCount) return false;
+  const requiredCount = engine.getRequiredMaterialCount(fusionMonster);
+  if (materials.length < requiredCount) return [];
 
-  const combos = this.findFusionMaterialCombos(
+  const combos = engine.findFusionMaterialCombos(
     fusionMonster,
     materials,
     options,
   );
-  return combos.length > 0;
+  return combos.filter((combo) => {
+    if (new Set(combo).size !== combo.length) return false;
+    const fieldMaterialCount = combo.filter((material) =>
+      player.field.includes(material),
+    ).length;
+    if (player.field.length - fieldMaterialCount + 1 > 5) return false;
+    return engine.game?.canPlaceCardOnField?.(fusionMonster, player, {
+      isFacedown: false,
+      excludeCards: combo,
+      summonMethod: "fusion",
+      summonProcedure: "fusion",
+      silent: true,
+    }).ok !== false;
+  });
 }
 
 /**
@@ -312,12 +341,10 @@ export function getAvailableFusions<Card extends FusionCard>(
   for (const fusionCard of extraDeck) {
     if (fusionCard.monsterType !== "fusion") continue;
 
-    if (this.canSummonFusion(fusionCard, materials, player, options)) {
-      const combos = this.findFusionMaterialCombos(
-        fusionCard,
-        materials,
-        options,
-      );
+    const combos = getLegalFusionMaterialCombos(
+      this, fusionCard, materials, player, options,
+    );
+    if (combos.length > 0) {
       availableFusions.push({
         fusion: fusionCard,
         materialCombos: combos,

@@ -37,6 +37,24 @@ async function initialize(
   });
 }
 
+test("canonical replay preserves fractional LP without changing its schema", async (t) => {
+  const game = new Game({ randomSeed: 456, captureReplay: true });
+  t.after(() => game.dispose());
+  await initialize(game, "player");
+  for (const lp of [1.5, 0.5, 0.25]) {
+    game.player.lp = lp;
+    Reflect.apply(game.recordReplayCommand, game, [{ type: "set_lp", actorId: "player", payload: { lp } }]);
+  }
+  const replay = JSON.parse(JSON.stringify(Reflect.apply(game.finalizeReplay, game, [{ reason: "test" }])));
+  const result = await replayCanonicalDuel(replay);
+  assert.equal(result.ok, true);
+  assert.equal(result.game.player.lp, 0.25);
+  assert.equal(result.finalStateHash, replay.result.finalStateHash);
+  const dispose = Reflect.get(result.game, "dispose");
+  assert.ok(typeof dispose === "function");
+  Reflect.apply(dispose, result.game, []);
+});
+
 function selectionAt(
   value: unknown,
   requirementId: string,

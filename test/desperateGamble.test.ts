@@ -8,6 +8,9 @@ import { createRuntimeGame } from "./helpers/game.js";
 
 import Card from "../src/core/Card.js";
 import { cardDatabaseByName } from "./helpers/fixtures.js";
+import { applySimulatedActions } from "../src/core/ai/common/simulatedActions/index.js";
+import { simulationCard, simulationState } from "./helpers/simulation.js";
+import type { CardAction } from "../src/core/contracts/actions.js";
 
 const EXPECTED_EN =
   'Pay half your LP; draw 2 cards.\n\nFor the rest of this turn, you cannot activate effects of cards with the same names as the cards drawn by this effect.\n\nYou can only activate 1 "Desperate Gamble" per turn.';
@@ -153,4 +156,64 @@ test("Desperate Gamble pays half LP, draws two cards and blocks their names", as
       { silent: true },
     ).ok === true,
   );
+});
+
+for (const initialLp of [8000, 3, 1, 0.5]) {
+  test(`Desperate Gamble preserves half of ${initialLp} LP in execution and simulation`, async (t) => {
+    const game = createRuntimeGame({ captureReplay: false, laboratoryMode: true });
+    t.after(() => game.dispose());
+    Object.assign(game, { turn: "player", phase: "main1", disablePresentationDelays: true });
+    game.player.controllerType = game.bot.controllerType = "human";
+    game.ui.showChainResponseModal = async () => null;
+    const gamble = createCard(cardDatabaseByName.get("Desperate Gamble"), game.player);
+    const copy = createCard(cardDatabaseByName.get("Desperate Gamble"), game.player);
+    const first = createCard(cardDatabaseByName.get("Nightmare Steed"), game.player);
+    const second = createCard(cardDatabaseByName.get("Arcane Scholar"), game.player);
+    const effect = required(required(gamble.effects)[0]);
+    game.player.lp = initialLp;
+    game.player.hand = [gamble, copy];
+    game.player.deck = [first, second];
+    assert.equal(game.effectEngine.canActivateSpellFromHandPreview(gamble, game.player).ok, true);
+    assert.equal((await game.tryActivateSpell(gamble, 0)).success, true);
+    assert.equal(game.player.lp, initialLp / 2);
+    assert.ok(game.player.hand.includes(first) && game.player.hand.includes(second));
+    assert.ok(game.player.graveyard.includes(gamble));
+    assert.equal(game.canUseOncePerTurn(copy, game.player, effect).ok, false);
+    assert.deepEqual(new Set(game.player.effectActivationRestrictions[0]?.blockedNames), new Set([first.name, second.name]));
+    game.checkWinCondition();
+    assert.equal(game.gameOver, false);
+
+    const state = simulationState({ player: { lp: initialLp, deck: [simulationCard(first), simulationCard(second)] } });
+    applySimulatedActions({ state, selfId: "player", actions: [...(effect.activationCosts ?? []), ...(effect.actions ?? [])] });
+    assert.equal(state.player.lp, game.player.lp);
+    assert.equal(state.player.hand.length, 2);
+    assert.deepEqual(new Set(state.player.effectActivationRestrictions?.[0]?.blockedNames), new Set([first.name, second.name]));
+  });
+}
+
+test("Fixed and fractional LP costs retain reducer limits without consuming them in preview", async (t) => {
+  const game = createRuntimeGame({ captureReplay: false, laboratoryMode: true });
+  t.after(() => game.dispose());
+  const knight = createCard(cardDatabaseByName.get("Luminarch Pure Knight"), game.player);
+  const source = createCard({ id: 99203, name: "LP cost fixture", cardKind: "spell", archetype: "Luminarch" }, game.player);
+  const discount = required(knight.effects.find((effect) => effect.id === "luminarch_pure_knight_lp_discount"));
+  game.player.field.push(knight);
+  game.player.lp = 3001;
+  const state = simulationState({ player: { lp: 3001, field: [simulationCard(knight)] } });
+  const cases: { action: CardAction; expected: number }[] = [
+    { action: { type: "pay_lp", amount: 1500 }, expected: 2501 },
+    { action: { type: "pay_lp", fraction: 0.5 }, expected: 2250.5 },
+    { action: { type: "pay_lp", amount: 1500 }, expected: 750.5 },
+  ];
+  for (const [index, { action, expected }] of cases.entries()) {
+    const context = { source, player: game.player, opponent: game.bot };
+    for (let preview = 0; preview < 3; preview++) {
+      assert.equal(game.effectEngine.checkActionPreviewRequirements([action], context).ok, true);
+    }
+    assert.equal(game.canUseOncePerTurn(knight, game.player, discount).ok, index < 2);
+    await game.effectEngine.applyActions([action], context, {});
+    applySimulatedActions({ state, selfId: "player", actions: [action], options: { sourceCard: simulationCard(source) } });
+    assert.equal(game.player.lp, expected);
+    assert.equal(state.player.lp, expected);
+  }
 });
