@@ -2,7 +2,6 @@
  * stats.ts
  *
  * Handlers for stat modifications, status effects, and buffs.
- * Moved from ActionHandlers.js with identical behavior.
  */
 
 import { isAI } from "../Player.js";

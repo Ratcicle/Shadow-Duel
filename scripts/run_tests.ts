@@ -21,7 +21,7 @@ async function collectTestFiles(directory: string): Promise<string[]> {
       files.push(...(await collectTestFiles(entryPath)));
       continue;
     }
-    if (entry.isFile() && /\.test\.(?:js|ts)$/.test(entry.name)) {
+    if (entry.isFile() && /\.test\.ts$/.test(entry.name)) {
       files.push(entryPath);
     }
   }
@@ -34,7 +34,7 @@ const testFiles = (await collectTestFiles(TEST_ROOT)).sort((left, right) =>
 
 if (testFiles.length === 0) {
   console.error(
-    `[test-runner] No .test.js or .test.ts files found under ${
+    `[test-runner] No .test.ts files found under ${
       path.relative(process.cwd(), TEST_ROOT) || "test"
     }.`,
   );

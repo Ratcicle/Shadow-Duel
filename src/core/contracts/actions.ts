@@ -34,8 +34,7 @@ export type ActionCategory =
   | "combat"
   | "counters"
   | "conditional"
-  | "blueprint"
-  | "legacyProxy";
+  | "blueprint";
 
 export type ActionFieldPrimitiveType =
   | "any"

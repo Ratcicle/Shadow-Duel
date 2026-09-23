@@ -1,12 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-
-import * as chainFacade from "../../src/core/ChainSystem.js";
-import * as chainBarrel from "../../src/core/chain/index.js";
 import { CHAIN_CONTEXTS } from "../../src/core/chain/contexts.js";
-import * as chainLink from "../../src/core/chain/link.js";
-import * as chainSegoc from "../../src/core/chain/segoc.js";
-import * as chainTiming from "../../src/core/chain/timing.js";
 import {
   CHAIN_ACTIVATION_KINDS,
   CHAIN_CONTEXT_TYPES,
@@ -112,31 +106,7 @@ test("canonical Chain constants preserve their exact values", () => {
   ]);
 });
 
-test("legacy exports reuse the canonical constant objects by identity", () => {
-  assert.equal(chainLink.CHAIN_ACTIVATION_KINDS, CHAIN_ACTIVATION_KINDS);
-  assert.equal(chainLink.CHAIN_EFFECT_KINDS, CHAIN_EFFECT_KINDS);
-  assert.equal(chainLink.CHAIN_RESPONSE_CONTEXTS, CHAIN_RESPONSE_CONTEXTS);
-  assert.equal(chainTiming.FAST_EFFECT_STATES, FAST_EFFECT_STATES);
-  assert.equal(chainTiming.FAST_EFFECT_ORIGINS, FAST_EFFECT_ORIGINS);
-  assert.equal(chainSegoc.SEGOC_GROUPS, SEGOC_GROUPS);
-
-  assert.equal(chainFacade.CHAIN_ACTIVATION_KINDS, CHAIN_ACTIVATION_KINDS);
-  assert.equal(chainFacade.CHAIN_EFFECT_KINDS, CHAIN_EFFECT_KINDS);
-  assert.equal(chainFacade.CHAIN_RESPONSE_CONTEXTS, CHAIN_RESPONSE_CONTEXTS);
-  assert.equal(chainFacade.FAST_EFFECT_STATES, FAST_EFFECT_STATES);
-  assert.equal(chainFacade.FAST_EFFECT_ORIGINS, FAST_EFFECT_ORIGINS);
-  assert.equal(chainFacade.SEGOC_GROUPS, SEGOC_GROUPS);
-
-  assert.equal(chainBarrel.CHAIN_ACTIVATION_KINDS, CHAIN_ACTIVATION_KINDS);
-  assert.equal(chainBarrel.CHAIN_EFFECT_KINDS, CHAIN_EFFECT_KINDS);
-  assert.equal(chainBarrel.CHAIN_RESPONSE_CONTEXTS, CHAIN_RESPONSE_CONTEXTS);
-  assert.equal(chainBarrel.FAST_EFFECT_STATES, FAST_EFFECT_STATES);
-  assert.equal(chainBarrel.FAST_EFFECT_ORIGINS, FAST_EFFECT_ORIGINS);
-  assert.equal(chainBarrel.SEGOC_GROUPS, SEGOC_GROUPS);
-  assert.equal(chainBarrel.CHAIN_CONTEXTS, CHAIN_CONTEXTS);
-});
-
-test("Chain constants retain their legacy freeze state", () => {
+test("Chain constants keep contract metadata frozen", () => {
   for (const frozenValue of [
     CHAIN_ACTIVATION_KINDS,
     CHAIN_EFFECT_KINDS,

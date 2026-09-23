@@ -32,7 +32,6 @@ const CATEGORY_LABELS = {
   counters: "Counters",
   conditional: "Condicional",
   blueprint: "Blueprint",
-  legacyProxy: "Legacy proxy",
 };
 
 const __dirname = dirname(fileURLToPath(import.meta.url));

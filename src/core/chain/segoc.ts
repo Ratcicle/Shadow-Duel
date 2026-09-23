@@ -35,8 +35,6 @@ import type {
 import type { SegocGroup } from "../contracts/chain.js";
 import { getCardDisplayName, getUIText } from "../i18n.js";
 
-export { SEGOC_GROUPS, TRIGGER_REQUIREMENTS, TRIGGER_TIMINGS };
-
 const SEGOC_GROUP_ORDER = Object.freeze([
   SEGOC_GROUPS.TURN_MANDATORY,
   SEGOC_GROUPS.OPPONENT_MANDATORY,

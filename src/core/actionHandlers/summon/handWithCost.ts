@@ -629,7 +629,7 @@ export async function handleSpecialSummonFromHandWithCost(
             decorated.find((cand) => cand.key === chosenKey)?.cardRef || null;
 
           if (targetToDestroy) {
-            if (engine.isImmuneToOpponentEffects(targetToDestroy, player)) {
+            if (engine.checkImmunity(targetToDestroy, player).immune) {
               getUI(game)?.log(
                 `${targetToDestroy.name} is immune to opponent's effects.`,
               );

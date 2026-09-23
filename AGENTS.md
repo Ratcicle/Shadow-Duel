@@ -2,16 +2,15 @@
 
 **Regra de ouro:** Todo código adicionado ou alterado deve seguir o padrão Shadow Duel: genérico, flexível e pensando nas adições futuras.
 
-A migração para TypeScript está concluída nos critérios técnicos das Etapas
-0–14. A [validação final de paridade](docs/migrations/typescript-stage14.md)
-registra baselines, deltas aprovados e evidências. Novas mudanças devem
-preservar os contratos strict e passar `npm run check`.
+O projeto é uma aplicação TypeScript com contratos strict. Novas mudanças
+devem preservar esses contratos e passar `npm run check`.
 
 O compilador oficial é TypeScript 7.0.2 via alias `@typescript/native`; os
 scripts de typecheck/watch chamam seu CLI explicitamente. O alias `typescript`
 aponta para `@typescript/typescript6`, com implementação 6.0.2 fixada, somente
 para a API de `scripts/audit_typescript_escapes.ts`. Não substitua o CLI oficial
-por TS6. Evidências e configuração: [migração TS7](docs/migrations/typescript7-toolchain.md).
+por TS6. Configuração: [package.json](package.json) e
+[Estrutura do Projeto](docs/Estrutura%20do%20Projeto.md).
 
 ---
 
@@ -118,7 +117,6 @@ Os contratos fundamentais ficam em [src/core/contracts/chain.ts](src/core/contra
 
 | Arquivo | Responsabilidade |
 | --- | --- |
-| `index.ts` | Barrel de compatibilidade; preserva o keyset público legado |
 | `attachments.ts` | Manifest canônico com referências diretas dos 89 métodos anexados e preflight de colisões |
 | `contexts.ts` | `CHAIN_CONTEXTS` e definições de janelas de Chain |
 | `link.ts` | Factory, classificação, snapshots, IDs e serialização de Chain Links |
@@ -166,22 +164,25 @@ final da tarefa.
 ```bash
 npm ci                        # Instala dependências do lockfile
 npm run dev                   # Inicia o servidor Vite
-npm run check                 # Tipos, testes, auditorias, digest e build
+npm run check                 # Tipos, testes, auditorias e build
 npm run preview               # Serve o build de produção localmente
 ```
 Durante desenvolvimento iterativo, execute apenas typecheck e testes diretamente relacionados aos arquivos alterados. Não execute a suíte completa nem npm run check após cada edição. Execute o gate completo somente ao finalizar a tarefa, antes de commit/PR, ou quando a alteração afetar múltiplos subsistemas.
 
 O projeto usa TypeScript e Vite, com Node 24 (`>=24.21.0 <25`). Os imports relativos preservam specifiers `.js`, resolvidos para os arquivos físicos `.ts` pelo toolchain. Para distribuição estática, use `npm run build` e publique `dist/`.
 
-Os projetos app e Node usam `allowJs: false`, `strict` e as seis opções da
-Etapa 13: `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`,
+Os projetos app e Node usam `allowJs: false`, `strict`,
+`noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`,
 `useUnknownInCatchVariables`, `noImplicitReturns`,
 `noFallthroughCasesInSwitch` e `noImplicitOverride`. Ao acessar uma lista ou
 dicionário, comprove a presença do valor; asserções exigem uma garantia local.
 Diferencie campo ausente de campo com `undefined`: amplie apenas projeções
 de runtime com produtores reais, preservando os schemas declarativos e de
-replay serializado. Mantenha dispatches de uniões fechadas exhaustivos e o
-registro `config/toolchain/typescript-debt.json` auditável.
+replay serializado. Mantenha dispatches de uniões fechadas exhaustivos.
+A auditoria de tipos proíbe `any` explícito, casts duplos de escape,
+`@ts-ignore` e `@ts-nocheck`. `@ts-expect-error` só é permitido em testes
+negativos de contratos em `test/types/`, com justificativa `contract-negative`
+imediatamente anterior.
 
 **Bot Arena** — Modo de teste visual ([BotArena.ts](src/core/BotArena.ts)):
 
@@ -216,8 +217,8 @@ Os scripts e testes são TypeScript físico, executados por `tsx` e verificados
 por `tsconfig.node.json`. Helpers em `test/helpers/` e o harness de Chain
 derivam fixtures dos contratos canônicos; entradas inválidas ou hosts
 deliberadamente parciais exigem `unsafeFixture<T>(valor, motivo)` explícito.
-O único fixture JavaScript em `test/toolchain/fixtures/jsConsumer.js` cobre
-a interoperabilidade `.js` → `.ts` do toolchain.
+Os testes de resolução de módulos cobrem os specifiers `.js` e o carregamento
+de SVG no Node e no build Vite.
 
 ---
 
@@ -226,9 +227,9 @@ a interoperabilidade `.js` → `.ts` do toolchain.
 **Arquivo:** [src/data/cards.ts](src/data/cards.ts)
 
 As 11 coleções em `src/data/cards/` usam `satisfies readonly RawCardDefinition[]`.
-O agregador, ranges, migração de IDs e banlist também são TypeScript físico;
+O agregador, ranges e banlist também são TypeScript físico;
 os imports relativos continuam terminando em `.js`. Preserve IDs, ordem,
-dados declarativos e digest ao alterar os contratos ou a infraestrutura.
+dados declarativos ao alterar os contratos ou a infraestrutura.
 
 ```js
 {
@@ -270,7 +271,7 @@ Declarados no manifest exato [src/core/actionHandlers/actionBindings.ts](src/cor
 
 Os contratos compile-time vivem em [src/core/contracts/actions.ts](src/core/contracts/actions.ts) e nos mapas por domínio de [src/core/contracts/actions/](src/core/contracts/actions/). Os arquivos físicos convertidos são `.ts`, mas imports relativos continuam usando specifiers terminados em `.js`.
 
-**Categorias declaradas em `actionCatalog.ts`:** `resources`, `movement`, `summon`, `destruction`, `stats`, `combat`, `counters`, `conditional`, `blueprint`, `legacyProxy`.
+**Categorias declaradas em `actionCatalog.ts`:** `resources`, `movement`, `summon`, `destruction`, `stats`, `combat`, `counters`, `conditional`, `blueprint`.
 
 | Arquivo            | Responsabilidade / handlers principais                                                                    |
 | ------------------ | --------------------------------------------------------------------------------------------------------- |
@@ -434,6 +435,13 @@ Toda nova carta exige nome/descrição em inglês e tradução para português.
 
 - **Main Deck:** 20–30 cartas (máx 3 cópias por id)
 - **Extra Deck:** até 10 cartas (fusão/ascensão, 1 cópia por id)
+
+O deck builder persiste oito slots em `shadow_duel_deck_presets`, no formato
+`{ idSchemaVersion: 3, presets: [{ name, deck, extraDeck }] }`. O campo
+`idSchemaVersion` identifica o único formato aceito; não há conversão de IDs.
+O slot ativo usa `shadow_duel_active_deck_slot`. Dados incompatíveis ou inválidos
+usam os defaults; decks atuais válidos continuam salvos. Não leia ou grave
+chaves históricas de decks nem limpe preferências de outros domínios.
 
 ---
 

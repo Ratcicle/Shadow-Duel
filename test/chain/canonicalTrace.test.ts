@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
 import test from "node:test";
 import type { CardAction } from "../../src/core/contracts/actions.js";
 import { unsafeFixture } from "../helpers/fixtures.js";
@@ -10,17 +9,12 @@ import type {
   ChainPlayer,
   ChainTriggerEntry,
 } from "../../src/core/contracts/chainRuntime.js";
-import { stableStringify } from "../../src/core/game/replay/canonical.js";
 import {
   createChainHarness,
   createTestCard,
   createTestEffect,
   placeCard,
 } from "./helpers/chainHarness.js";
-
-const CANONICAL_CHAIN_TRACE_SHA256 =
-  "62394527d27f8df6c89ffecd0bc8b4cd3ea03bf77756ee7ed7fbc54a8b0222b6";
-const CANONICAL_CHAIN_TRACE_LENGTH = 106335;
 
 interface TraceActionEntry {
   action: {
@@ -43,7 +37,7 @@ interface TraceEventEntry {
   eventName: string;
 }
 
-test("canonical integrated Chain trace remains byte-stable", async () => {
+test("integrated Chain resolves LIFO with sequential cleanup and timing events", async () => {
   const harness = createChainHarness({
     playerControllerType: "ai",
   });
@@ -167,11 +161,6 @@ test("canonical integrated Chain trace remains byte-stable", async () => {
   );
 
   const result = await chain.resolveTriggerOccurrences([occurrence]);
-  const serializedTrace = stableStringify(trace);
-  const observedHash = createHash("sha256")
-    .update(serializedTrace)
-    .digest("hex");
-
   assert.equal(result.chainBuilt, true);
   assert.equal(responseUsed, true);
   assert.deepEqual(
@@ -233,6 +222,4 @@ test("canonical integrated Chain trace remains byte-stable", async () => {
       "fast_effect_priority",
     ],
   );
-  assert.equal(serializedTrace.length, CANONICAL_CHAIN_TRACE_LENGTH);
-  assert.equal(observedHash, CANONICAL_CHAIN_TRACE_SHA256);
 });

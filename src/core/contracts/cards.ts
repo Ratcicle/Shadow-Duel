@@ -356,9 +356,7 @@ export interface TrapCardDefinition
 }
 
 /**
- * Minimal authoring projection. Additional card schema capabilities are
- * introduced with the declarative database migration rather than collected
- * here as an open-ended property bag.
+ * Closed authoring schema for the declarative card database.
  */
 export type RawCardDefinition =
   | MonsterCardDefinition

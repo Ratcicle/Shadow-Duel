@@ -60,7 +60,7 @@ import {
 import {
   ActionHandlerRegistry,
   registerDefaultHandlers,
-} from "./ActionHandlers.js";
+} from "./actionHandlers/index.js";
 import {
   getActionCatalogEntry,
   listCatalogActionTypes,

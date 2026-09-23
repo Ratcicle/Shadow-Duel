@@ -10,33 +10,19 @@ export interface DeckPreset {
   deck: number[];
   extraDeck: number[];
 }
-interface StoredDeckPreset {
-  name?: unknown;
-  deck?: unknown;
-  extraDeck?: unknown;
-}
-interface DeckSanitizeOptions {
-  migrateIds?: boolean;
-}
-
 import { cardDatabase, cardDatabaseById } from "../../data/cards.js";
-import {
-  CARD_ID_MIGRATION_VERSION,
-  migrateCardId,
-} from "../../data/cards/idMigration.js";
 import { DECK_TYPES, getCardCopyLimit } from "../../core/game/deck/banlist.js";
 
 export const BOT_PRESET_KEY = "shadow_duel_bot_preset";
-export const LEGACY_DECK_KEY = "shadow_duel_deck";
-export const LEGACY_EXTRA_DECK_KEY = "shadow_duel_extra_deck";
-export const LEGACY_DECK_ID_SCHEMA_VERSION_KEY =
-  "shadow_duel_deck_id_schema_version";
 export const DECK_PRESETS_KEY = "shadow_duel_deck_presets";
 export const ACTIVE_DECK_SLOT_KEY = "shadow_duel_active_deck_slot";
 export const DECK_PRESET_COUNT = 8;
 export const MIN_DECK_SIZE = 20;
 export const MAX_DECK_SIZE = 30;
 export const MAX_EXTRA_DECK_SIZE = 10;
+
+// The only supported persisted format. Unmarked or different formats are ignored.
+const DECK_PRESETS_FORMAT = 3;
 
 const cardKindOrder: Record<string, number> = { monster: 0, spell: 1, trap: 2 };
 const extraDeckTypeOrder: Record<string, number> = {
@@ -56,14 +42,6 @@ const spellTrapSubtypeOrder: Record<string, number> = {
 
 export function getCardById(cardId: number): DeckCard | undefined {
   return cardDatabaseById.get(cardId);
-}
-
-function normalizeStoredCardId(
-  cardId: unknown,
-  { migrateIds = false }: DeckSanitizeOptions = {},
-) {
-  const normalized = migrateIds ? migrateCardId(cardId) : Number(cardId);
-  return Number.isInteger(normalized) ? normalized : cardId;
 }
 
 export function levelOf(card: UiCard | null | undefined) {
@@ -147,7 +125,6 @@ export function sortExtraDeck(extraDeckIds: readonly number[] = []) {
 
 export function sanitizeExtraDeck(
   extraDeck: readonly unknown[] | null | undefined,
-  options: DeckSanitizeOptions = {},
 ) {
   const valid = new Set(
     cardDatabase
@@ -156,9 +133,8 @@ export function sanitizeExtraDeck(
   );
   const seen = new Set();
   const result = [];
-  for (const rawId of extraDeck || []) {
-    const id = normalizeStoredCardId(rawId, options) as number;
-    if (!valid.has(id)) continue;
+  for (const id of extraDeck || []) {
+    if (typeof id !== "number" || !valid.has(id)) continue;
     if (seen.has(id)) continue;
     if (result.length >= MAX_EXTRA_DECK_SIZE) break;
     seen.add(id);
@@ -169,7 +145,6 @@ export function sanitizeExtraDeck(
 
 export function sanitizeDeck(
   deck: readonly unknown[] | null | undefined,
-  options: DeckSanitizeOptions = {},
 ) {
   const valid = new Set(
     cardDatabase
@@ -178,9 +153,8 @@ export function sanitizeDeck(
   );
   const counts: Record<number, number> = {};
   const result = [];
-  for (const rawId of deck || []) {
-    const id = normalizeStoredCardId(rawId, options) as number;
-    if (!valid.has(id)) continue;
+  for (const id of deck || []) {
+    if (typeof id !== "number" || !valid.has(id)) continue;
     counts[id] = counts[id] || 0;
     if (counts[id] >= 3) continue;
     if (result.length >= MAX_DECK_SIZE) break;
@@ -237,113 +211,75 @@ export function getDefaultDeckPreset(index: number): DeckPreset {
   };
 }
 
-export function normalizeDeckPreset(
-  rawPreset: StoredDeckPreset | null | undefined,
+function normalizeDeckPreset(
+  preset: DeckPreset,
   index: number,
-  options: DeckSanitizeOptions = {},
 ): DeckPreset {
-  const fallback = getDefaultDeckPreset(index);
-  const rawName =
-    typeof rawPreset?.name === "string" ? rawPreset.name.trim() : "";
   return {
-    name: rawName || fallback.name,
-    deck: Array.isArray(rawPreset?.deck)
-      ? sanitizeDeck(rawPreset.deck, options)
-      : fallback.deck,
-    extraDeck: Array.isArray(rawPreset?.extraDeck)
-      ? sanitizeExtraDeck(rawPreset.extraDeck, options)
-      : fallback.extraDeck,
+    name: preset.name.trim() || `Deck ${index + 1}`,
+    deck: sanitizeDeck(preset.deck),
+    extraDeck: sanitizeExtraDeck(preset.extraDeck),
   };
 }
 
-function readLegacyDeckPreset() {
-  const preset: StoredDeckPreset = {};
-  let migrateIds = true;
-  try {
-    migrateIds =
-      localStorage.getItem(LEGACY_DECK_ID_SCHEMA_VERSION_KEY) !==
-      String(CARD_ID_MIGRATION_VERSION);
-  } catch (e) {
-    console.warn("Failed to load legacy deck ID schema version", e);
-  }
-  try {
-    const storedDeck = localStorage.getItem(LEGACY_DECK_KEY);
-    if (storedDeck) {
-      preset.deck = JSON.parse(storedDeck);
-    }
-  } catch (e) {
-    console.warn("Failed to load legacy deck", e);
-  }
-  try {
-    const storedExtraDeck = localStorage.getItem(LEGACY_EXTRA_DECK_KEY);
-    if (storedExtraDeck) {
-      preset.extraDeck = JSON.parse(storedExtraDeck);
-    }
-  } catch (e) {
-    console.warn("Failed to load legacy extra deck", e);
-  }
-  return preset.deck || preset.extraDeck ? { preset, migrateIds } : null;
+function isStoredDeckPreset(value: unknown): value is DeckPreset {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "name" in value &&
+    typeof value.name === "string" &&
+    "deck" in value &&
+    Array.isArray(value.deck) &&
+    value.deck.every(
+      (id: unknown) => typeof id === "number" && Number.isInteger(id) && id > 0,
+    ) &&
+    "extraDeck" in value &&
+    Array.isArray(value.extraDeck) &&
+    value.extraDeck.every(
+      (id: unknown) => typeof id === "number" && Number.isInteger(id) && id > 0,
+    )
+  );
 }
 
-function getStoredDeckPresetPayload(parsed: unknown) {
-  if (Array.isArray(parsed)) {
-    return { presets: parsed, migrateIds: true, shouldPersist: true };
-  }
-
-  if (
-    parsed &&
-    typeof parsed === "object" &&
-    Array.isArray((parsed as { presets?: unknown }).presets)
-  ) {
-    const isCurrentVersion =
-      (parsed as { idSchemaVersion?: unknown }).idSchemaVersion ===
-      CARD_ID_MIGRATION_VERSION;
-    return {
-      presets: (parsed as { presets: unknown[] }).presets,
-      migrateIds: !isCurrentVersion,
-      shouldPersist: !isCurrentVersion,
-    };
-  }
-
-  return null;
-}
-
-function loadDeckPresets() {
+function readStoredDeckPresets(): DeckPreset[] | null {
   try {
     const stored = localStorage.getItem(DECK_PRESETS_KEY);
     const parsed: unknown = stored ? JSON.parse(stored) : null;
-    const payload = getStoredDeckPresetPayload(parsed);
-    if (payload) {
-      const presets = Array.from({ length: DECK_PRESET_COUNT }, (_, index) =>
-        normalizeDeckPreset(
-          payload.presets[index] as StoredDeckPreset | null,
-          index,
-          {
-            migrateIds: payload.migrateIds,
-          },
-        ),
-      );
-      if (payload.shouldPersist) persistDeckPresets(presets);
-      return presets;
+    if (
+      typeof parsed !== "object" ||
+      parsed === null ||
+      !("idSchemaVersion" in parsed) ||
+      parsed.idSchemaVersion !== DECK_PRESETS_FORMAT ||
+      !("presets" in parsed) ||
+      !Array.isArray(parsed.presets)
+    ) {
+      return null;
     }
+
+    const storedPresets: readonly unknown[] = parsed.presets;
+    return Array.from({ length: DECK_PRESET_COUNT }, (_, index) => {
+      const preset = storedPresets[index];
+      return isStoredDeckPreset(preset)
+        ? normalizeDeckPreset(preset, index)
+        : getDefaultDeckPreset(index);
+    });
   } catch (e) {
     console.warn("Failed to load deck presets", e);
+    return null;
   }
+}
 
-  const presets = Array.from({ length: DECK_PRESET_COUNT }, (_, index) =>
-    getDefaultDeckPreset(index),
+function loadDeckPresets() {
+  return (
+    readStoredDeckPresets() ??
+    Array.from({ length: DECK_PRESET_COUNT }, (_, index) =>
+      getDefaultDeckPreset(index),
+    )
   );
-  const legacyPreset = readLegacyDeckPreset();
-  if (legacyPreset) {
-    presets[0] = normalizeDeckPreset(
-      { name: "Deck 1", ...legacyPreset.preset },
-      0,
-      { migrateIds: legacyPreset.migrateIds },
-    );
-    persistDeckPresets(presets);
-    saveLegacyDeckFallback(presets[0].deck, presets[0].extraDeck);
-  }
-  return presets;
+}
+
+export function loadStoredActiveDeckPreset(): DeckPreset | null {
+  return readStoredDeckPresets()?.[loadActiveDeckSlot()] ?? null;
 }
 
 function persistDeckPresets(presets: readonly DeckPreset[]) {
@@ -351,7 +287,7 @@ function persistDeckPresets(presets: readonly DeckPreset[]) {
     localStorage.setItem(
       DECK_PRESETS_KEY,
       JSON.stringify({
-        idSchemaVersion: CARD_ID_MIGRATION_VERSION,
+        idSchemaVersion: DECK_PRESETS_FORMAT,
         presets,
       }),
     );
@@ -377,25 +313,6 @@ function persistActiveDeckSlot(activeDeckSlot: number) {
     localStorage.setItem(ACTIVE_DECK_SLOT_KEY, String(activeDeckSlot));
   } catch (e) {
     console.warn("Failed to save active deck slot", e);
-  }
-}
-
-function saveLegacyDeckFallback(
-  currentDeck: readonly number[],
-  currentExtraDeck: readonly number[],
-) {
-  try {
-    localStorage.setItem(LEGACY_DECK_KEY, JSON.stringify(currentDeck));
-    localStorage.setItem(
-      LEGACY_EXTRA_DECK_KEY,
-      JSON.stringify(currentExtraDeck),
-    );
-    localStorage.setItem(
-      LEGACY_DECK_ID_SCHEMA_VERSION_KEY,
-      String(CARD_ID_MIGRATION_VERSION),
-    );
-  } catch (e) {
-    console.warn("Failed to save legacy deck fallback", e);
   }
 }
 
@@ -539,7 +456,7 @@ export function getSortedCardPool<T extends DeckCard>(cards: readonly T[]) {
 }
 
 export function createDeckState() {
-  let deckPresets = loadDeckPresets();
+  const deckPresets = loadDeckPresets();
   let activeDeckSlot = loadActiveDeckSlot();
   let currentDeck = [
     ...(deckPresets[activeDeckSlot]?.deck || buildDefaultDeck()),
@@ -550,7 +467,7 @@ export function createDeckState() {
     const currentName =
       typeof nameOverride === "string"
         ? nameOverride
-        : deckPresets[activeDeckSlot]?.name;
+        : deckPresets[activeDeckSlot]?.name ?? "";
     const activePreset = normalizeDeckPreset(
       {
         name: currentName,
@@ -564,7 +481,6 @@ export function createDeckState() {
     currentExtraDeck = [...activePreset.extraDeck];
     persistDeckPresets(deckPresets);
     persistActiveDeckSlot(activeDeckSlot);
-    saveLegacyDeckFallback(currentDeck, currentExtraDeck);
   }
 
   return {

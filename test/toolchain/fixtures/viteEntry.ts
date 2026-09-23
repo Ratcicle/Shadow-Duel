@@ -1,3 +1,3 @@
-import { getMixedModeValue } from "./mixedModule.js";
+import { getModuleValue } from "./module.js";
 
-export const viteMixedModeValue = getMixedModeValue();
+export const viteModuleValue = getModuleValue();

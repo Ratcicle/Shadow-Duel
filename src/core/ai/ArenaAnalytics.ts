@@ -391,7 +391,7 @@ interface SuspiciousAlert {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-import { CHAIN_ACTIVATION_KINDS } from "../chain/link.js";
+import { CHAIN_ACTIVATION_KINDS } from "../contracts/chain.js";
 
 // src/core/ai/ArenaAnalytics.js
 // Telemetria e analytics para BotArena — foco em métricas, não em policy.

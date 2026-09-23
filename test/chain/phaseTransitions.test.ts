@@ -5,10 +5,7 @@ import type { ChainPlayer } from "../../src/core/contracts/chainRuntime.js";
 import { record, required, unsafeFixture } from "../helpers/fixtures.js";
 import { installPreparedResponses } from "./helpers/chainHarness.js";
 
-import {
-  FAST_EFFECT_ORIGINS,
-  FAST_EFFECT_STATES,
-} from "../../src/core/chain/timing.js";
+import { FAST_EFFECT_ORIGINS, FAST_EFFECT_STATES } from "../../src/core/contracts/chain.js";
 import { nextPhase } from "../../src/core/game/turn/transitions.js";
 import {
   createChainHarness,

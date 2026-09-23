@@ -3,7 +3,7 @@
 // Spell/Trap trigger methods for Game class — B.9 extraction
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { FAST_EFFECT_ORIGINS } from "../../chain/timing.js";
+import { FAST_EFFECT_ORIGINS } from "../../contracts/chain.js";
 import { isChainContextType } from "../../contracts/chain.js";
 import type {
   ChainContextType,

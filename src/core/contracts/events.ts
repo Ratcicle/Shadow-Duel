@@ -23,8 +23,8 @@ export type EventPhase =
 
 /**
  * Small mutable projections used at the event boundary. They describe only
- * data observed by event consumers; the complete Card and Player models stay
- * owned by their later migration stage.
+ * data observed by event consumers; complete Card and Player models remain
+ * separate from these capabilities.
  */
 export interface EventCard {
   id?: number | null | undefined;

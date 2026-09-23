@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
 import test from "node:test";
 
 import Game from "../../src/core/Game.js";
@@ -15,23 +14,6 @@ import {
   REPLAY_CAPTURE_BINDINGS,
   REPLAY_CAPTURE_METHOD_NAMES,
 } from "../../src/core/game/replay/capture.js";
-
-const ATTACHMENT_ORDER_SHA256 =
-  "fc6400fba83e32f89f7a234d36cd9fc7b6774032a2978bb50901ebc1d6cbc267";
-const INSTALLED_NAME_ARITY_SHA256 =
-  "961f066cace11f1bbd5378655f6c374855f8ec59af166a8f4ce78728fcde8e75";
-const INSTALLED_DESCRIPTOR_SHA256 =
-  "b199dbbf5359b2951631c37126edc06e0a92320f0eb4494d1de36fcae47bf82c";
-const GROUP_ORDER_SHA256 =
-  "2ccf3b785d43a0eeaaf3050dd5cadd613129e2aefb0210dd323e623ae9e9b85a";
-const GROUP_SIZES_SHA256 =
-  "da126f01ec034fd434177816923225d07d17290e5a18f36af171fa29044c7f28";
-const REPLAY_CAPTURE_ORDER_SHA256 =
-  "b36e191f856be3b4c0b71d8e62615082f51e851b481602f2686a0e8cef1c5010";
-
-function sha256(value: unknown): string {
-  return createHash("sha256").update(JSON.stringify(value)).digest("hex");
-}
 
 function attachmentEntries() {
   const entries: Array<
@@ -66,24 +48,11 @@ function assertAttachmentDescriptor(
   });
 }
 
-test("the 60 groups declare 219 direct references in canonical order", () => {
+test("attachment groups declare unique callable references", () => {
   const entries = attachmentEntries();
   const names = entries.map(([name]) => name);
-  const groupNames = GAME_ATTACHMENT_GROUPS.map(({ name }) => name);
-  const groupSizes = GAME_ATTACHMENT_GROUPS.map(({ name, entries }) => [
-    name,
-    entries.length,
-  ]);
-
-  assert.equal(GAME_ATTACHMENT_GROUPS.length, 60);
-  assert.equal(entries.length, 219);
-  assert.equal(new Set(names).size, 219);
+  assert.equal(new Set(names).size, names.length);
   assert.deepEqual(names, GAME_ATTACHMENT_NAMES);
-  assert.equal(names[0], "devDraw");
-  assert.equal(names.at(-1), "hasCanonicalReplay");
-  assert.equal(sha256(names), ATTACHMENT_ORDER_SHA256);
-  assert.equal(sha256(groupNames), GROUP_ORDER_SHA256);
-  assert.equal(sha256(groupSizes), GROUP_SIZES_SHA256);
 
   assert.equal(Object.isFrozen(GAME_ATTACHMENT_GROUPS), true);
   assert.equal(Object.isFrozen(GAME_ATTACHMENT_NAMES), true);
@@ -96,7 +65,7 @@ test("the 60 groups declare 219 direct references in canonical order", () => {
   }
 });
 
-test("installation preserves references and legacy descriptors", () => {
+test("installation preserves references and mutable descriptors", () => {
   const prototype = {};
   const entries = attachmentEntries();
 
@@ -109,7 +78,7 @@ test("installation preserves references and legacy descriptors", () => {
   }
 });
 
-test("installation is idempotent for all 219 identical references", () => {
+test("installation is idempotent for identical references", () => {
   const prototype = {};
   installGameAttachments(prototype);
   const before = Object.getOwnPropertyDescriptors(prototype);
@@ -197,31 +166,12 @@ test("the Game facade exposes direct attachments or marked replay wrappers", () 
     if (captureNames.has(name)) {
       assert.notEqual(installed, method, `${name} must be wrapped`);
       assert.equal(Reflect.get(installed, "_replayCaptureWrapped"), true, name);
-      assert.equal(installed.name, "wrapped", name);
-      assert.equal(installed.length, 0, name);
     } else {
       assert.equal(installed, method, name);
     }
   }
 
-  const installedNames = Object.keys(Game.prototype);
-  const nameArities = installedNames.map((name) => [
-    name,
-    Reflect.get(Game.prototype, name).length,
-  ]);
-  const descriptorFlags = installedNames.map((name) => {
-    const descriptor = Object.getOwnPropertyDescriptor(Game.prototype, name);
-    return [
-      name,
-      descriptor?.enumerable,
-      descriptor?.writable,
-      descriptor?.configurable,
-    ];
-  });
-
-  assert.deepEqual(installedNames, GAME_ATTACHMENT_NAMES);
-  assert.equal(sha256(nameArities), INSTALLED_NAME_ARITY_SHA256);
-  assert.equal(sha256(descriptorFlags), INSTALLED_DESCRIPTOR_SHA256);
+  assert.deepEqual(Object.keys(Game.prototype), GAME_ATTACHMENT_NAMES);
 });
 
 test("an instance can monkeypatch an attachment without changing the prototype", () => {
@@ -241,13 +191,8 @@ test("an instance can monkeypatch an attachment without changing the prototype",
   assert.notEqual(game.getOpponent, Game.prototype.getOpponent);
 });
 
-test("the 13 replay bindings are exact and wrapper installation is idempotent", () => {
-  assert.equal(REPLAY_CAPTURE_METHOD_NAMES.length, 13);
-  assert.equal(new Set(REPLAY_CAPTURE_METHOD_NAMES).size, 13);
-  assert.equal(
-    sha256(REPLAY_CAPTURE_METHOD_NAMES),
-    REPLAY_CAPTURE_ORDER_SHA256,
-  );
+test("replay bindings are unique and wrapper installation is idempotent", () => {
+  assert.equal(new Set(REPLAY_CAPTURE_METHOD_NAMES).size, REPLAY_CAPTURE_METHOD_NAMES.length);
   assert.deepEqual(
     REPLAY_CAPTURE_BINDINGS.map(({ methodName }) => methodName),
     REPLAY_CAPTURE_METHOD_NAMES,

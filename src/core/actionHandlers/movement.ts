@@ -2,7 +2,6 @@
  * movement.js
  *
  * Handlers for card movement effects (bounce, etc.)
- * Moved from ActionHandlers.js with identical behavior.
  */
 
 import { isAI } from "../Player.js";

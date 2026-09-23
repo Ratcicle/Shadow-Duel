@@ -18,15 +18,17 @@ Cada replay gravado contém:
 
 - seed e estado inicial do gerador determinístico;
 - jogador inicial e ordem completa dos Decks e Extra Decks;
-- assinatura legada do banco de cartas;
+- assinatura do banco de cartas;
 - comandos externos e decisões internas;
 - eventos canônicos relevantes;
 - hash do estado após cada comando e hash final.
 
 As cartas recebem `duelCardId` local à partida. Comandos, decisões e snapshots
 usam essa identidade determinística sem depender do contador global de `Card`.
-A assinatura do banco continua sendo `1cc622e3`; seu payload e o FNV-1a legado
-não fazem parte do digest SHA-256 da migração e não podem ser alterados por ele.
+A assinatura do banco é calculada a partir das definições atuais por
+`getCardDatabaseSignature`. Seu payload e o algoritmo FNV-1a fazem parte do
+contrato de gravação e reprodução; mudanças nesse contrato exigem análise
+própria de compatibilidade dos replays.
 
 O mapa discriminado de comandos cobre exatamente estes 15 tipos:
 
@@ -62,8 +64,7 @@ serializável e determinística:
 
 As projeções especiais de `Card` e `Player` para payloads de evento acontecem
 antes dessa normalização geral. O JSON estável alimenta o hash FNV-1a de oito
-caracteres do replay. Esse fluxo é intencionalmente separado do canonicalizador
-estrito e do SHA-256 usados pelo registry da migração.
+caracteres do replay, usado para detectar divergências na reprodução.
 
 ## Validação de importação
 

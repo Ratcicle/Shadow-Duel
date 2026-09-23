@@ -14,7 +14,7 @@
  */
 
 import { isAI } from "../Player.js";
-import { CHAIN_ACTIVATION_KINDS } from "./link.js";
+import { CHAIN_ACTIVATION_KINDS } from "../contracts/chain.js";
 import type { CanonicalZone } from "../contracts/zones.js";
 import type {
   ChainActivationZone,

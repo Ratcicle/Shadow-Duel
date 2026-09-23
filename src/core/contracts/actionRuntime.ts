@@ -727,10 +727,10 @@ export interface ActionHandlerEnginePort {
     activatingPlayer: ActionRuntimePlayer | null | undefined,
     options?: object,
   ): ActionImmunityFilterResult;
-  isImmuneToOpponentEffects(
+  checkImmunity(
     card: ActionRuntimeCard,
     sourcePlayer: ActionRuntimePlayer | null | undefined,
-  ): boolean;
+  ): { immune: boolean; reason: string | null };
   clearTargetingCache(): void;
   resolveLpCost?(
     action: CardAction,

@@ -15,9 +15,7 @@ export { resolveTargets } from "./resolution.js";
 // Immunity and filtering
 export {
   checkImmunity,
-  isImmuneToOpponentEffects,
   filterCardsListByImmunity,
   filterTargetsByImmunity,
   inferEffectType,
-  shouldSkipActionDueToImmunity,
 } from "./filters.js";

@@ -10,10 +10,8 @@ import { required, unsafeFixture } from "../helpers/fixtures.js";
 import type { TestCard } from "./helpers/chainHarness.js";
 import { installPreparedResponses } from "./helpers/chainHarness.js";
 
-import {
-  CHAIN_EFFECT_KINDS,
-  captureSourceSnapshot,
-} from "../../src/core/chain/link.js";
+import { captureSourceSnapshot } from "../../src/core/chain/link.js";
+import { CHAIN_EFFECT_KINDS } from "../../src/core/contracts/chain.js";
 import {
   createChainHarness,
   createTestCard,

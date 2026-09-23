@@ -5,7 +5,8 @@ import type {
   AIActivationContext,
 } from "../../contracts/ai.js";
 import type { GameCard } from "../../contracts/cards.js";
-import { SUMMON_MODES, SUMMON_ORIGINS } from "../../game/summon/transaction.js";
+import { SUMMON_MODES } from "../../game/summon/transaction.js";
+import { SUMMON_ORIGINS } from "../../contracts/summon.js";
 
 export async function executeSpecialSummonSanctumProtectorAction(
   bot: BotRuntimePort,

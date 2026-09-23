@@ -20,11 +20,8 @@ import { required, unsafeFixture } from "../helpers/fixtures.js";
 import type { HarnessTrace } from "./helpers/chainHarness.js";
 
 import { captureSourceSnapshot } from "../../src/core/chain/link.js";
-import {
-  SEGOC_GROUPS,
-  TRIGGER_REQUIREMENTS,
-  TRIGGER_TIMINGS,
-} from "../../src/core/chain/segoc.js";
+import { SEGOC_GROUPS } from "../../src/core/contracts/chain.js";
+import { TRIGGER_REQUIREMENTS, TRIGGER_TIMINGS } from "../../src/core/contracts/effects.js";
 import {
   createChainHarness,
   createTestCard,

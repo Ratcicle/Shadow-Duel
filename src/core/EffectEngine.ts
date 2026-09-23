@@ -1,7 +1,7 @@
 import {
   ActionHandlerRegistry,
   registerDefaultHandlers,
-} from "./ActionHandlers.js";
+} from "./actionHandlers/index.js";
 import { attachEffectModules } from "./effects/attachModules.js";
 import { canUseOncePerDuelEffect } from "./effects/triggers/registration.js";
 import type Game from "./Game.js";

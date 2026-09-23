@@ -13,7 +13,8 @@
  * - tryAscensionSummon
  */
 
-import { SUMMON_MODES, SUMMON_ORIGINS } from "./transaction.js";
+import { SUMMON_MODES } from "./transaction.js";
+import { SUMMON_ORIGINS } from "../../contracts/summon.js";
 import type {
   AscensionDefinition,
   AscensionMaterialRecord,

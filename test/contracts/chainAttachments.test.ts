@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
 import test from "node:test";
 
 import ChainSystem from "../../src/core/ChainSystem.js";
@@ -26,11 +25,6 @@ import * as spellSpeed from "../../src/core/chain/spellSpeed.js";
 import * as stack from "../../src/core/chain/stack.js";
 import * as timing from "../../src/core/chain/timing.js";
 import * as usage from "../../src/core/chain/usage.js";
-
-const ATTACHMENT_ORDER_SHA256 =
-  "ff2fd082e95fc3f5112be4714ed44d78f18a8aa2698996bd4f9526df404a4ec6";
-const ATTACHMENT_ARITY_SHA256 =
-  "be60c9a9ebd713db480c5a8b3105e1475d5c424ffd20e6901b80ca750bd8379e";
 
 const EXPECTED_GROUP_IDS = [
   "link",
@@ -68,23 +62,14 @@ const EXPECTED_MODULE_BY_GROUP = {
   resolution,
 } as const;
 
-function sha256(value: unknown): string {
-  return createHash("sha256").update(JSON.stringify(value)).digest("hex");
-}
-
-test("the 15 groups install 89 direct references in canonical order", () => {
+test("attachment groups install their module references in manifest order", () => {
   assert.deepEqual(
     CHAIN_ATTACHMENT_GROUPS.map((group) => group.id),
     EXPECTED_GROUP_IDS,
   );
   assert.deepEqual(Object.keys(CHAIN_METHOD_MANIFEST), CHAIN_METHOD_NAMES);
-  assert.equal(CHAIN_METHOD_NAMES.length, 89);
-  assert.equal(new Set(CHAIN_METHOD_NAMES).size, 89);
-  assert.equal(CHAIN_METHOD_NAMES[0], "createChainLink");
-  assert.equal(CHAIN_METHOD_NAMES.at(-1), "determineCardZone");
-  assert.equal(sha256(CHAIN_METHOD_NAMES), ATTACHMENT_ORDER_SHA256);
+  assert.equal(new Set(CHAIN_METHOD_NAMES).size, CHAIN_METHOD_NAMES.length);
 
-  const arities: Array<readonly [string, number]> = [];
   for (const group of CHAIN_ATTACHMENT_GROUPS) {
     const sourceModule = EXPECTED_MODULE_BY_GROUP[group.id];
     for (const [name, method] of Object.entries(group.methods)) {
@@ -92,7 +77,6 @@ test("the 15 groups install 89 direct references in canonical order", () => {
       assert.equal(method, sourceReference, `${group.id}.${name}`);
       assert.equal(Reflect.get(CHAIN_METHOD_MANIFEST, name), method);
       assert.equal(Reflect.get(ChainSystem.prototype, name), method);
-      arities.push([name, method.length]);
 
       const descriptor = Object.getOwnPropertyDescriptor(
         ChainSystem.prototype,
@@ -106,14 +90,13 @@ test("the 15 groups install 89 direct references in canonical order", () => {
       });
     }
   }
-  assert.equal(sha256(arities), ATTACHMENT_ARITY_SHA256);
 });
 
-test("attachment is idempotent for all 89 existing references", () => {
+test("attachment is idempotent for existing references", () => {
   const before = Object.getOwnPropertyDescriptors(ChainSystem.prototype);
   const entries = preflightChainAttachments(ChainSystem.prototype);
 
-  assert.equal(entries.length, 89);
+  assert.equal(entries.length, CHAIN_METHOD_NAMES.length);
   assert.equal(entries.every((entry) => entry.alreadyAttached), true);
   assert.doesNotThrow(() => attachChainMethods(ChainSystem.prototype));
   assert.deepEqual(

@@ -422,18 +422,6 @@ export function checkImmunity(
 }
 
 /**
- * Simple boolean check for backward compatibility.
- * Use checkImmunity() for detailed immunity information.
- */
-export function isImmuneToOpponentEffects(
-  this: TargetingFilterHost,
-  card: TargetingCard,
-  sourcePlayer: TargetingPlayer,
-): boolean {
-  return this.checkImmunity(card, sourcePlayer).immune;
-}
-
-/**
  * Filter a list of target cards by immunity, returning allowed and skipped targets.
  * This is the central helper for immunity checking.
  *
@@ -606,22 +594,4 @@ export function inferEffectType(
 
   const inferred: unknown = Reflect.get(typeMap, actionType);
   return isTargetingEffectType(inferred) ? inferred : "target";
-}
-
-/**
- * @deprecated Use filterTargetsByImmunity instead for per-target filtering.
- * This method is kept for backward compatibility but now only returns true
- * when immunityMode is "skip_action" and any target is immune.
- */
-export function shouldSkipActionDueToImmunity(
-  this: TargetingFilterHost,
-  action: ImmunityAction | null | undefined,
-  targets: ResolvedTargetMap,
-  ctx: EffectContext | null | undefined,
-): boolean {
-  if (!action || !action.targetRef || !ctx?.player) return false;
-
-  // Use new filtering system
-  const { skipAction } = this.filterTargetsByImmunity(action, ctx, targets);
-  return skipAction;
 }

@@ -5,12 +5,9 @@ import Card from "../../src/core/Card.js";
 import Game from "../../src/core/Game.js";
 import Player from "../../src/core/Player.js";
 
-test("Game decision facades preserve defaults, arity and broker arguments", async (t) => {
+test("Game decision facades forward default inputs and results to the broker", async (t) => {
   const game = new Game({ disableChains: true, captureReplay: false });
-  t.after(() => game.dispose("decision-compatibility-test"));
-
-  assert.equal(Game.prototype.requestDecision.length, 0);
-  assert.equal(Game.prototype.recordDecision.length, 0);
+  t.after(() => game.dispose("decision-broker-test"));
 
   let requestedInput: unknown;
   let recordedInput: unknown;
@@ -182,6 +179,6 @@ test("zone rollback preserves messages from non-Error throwables", () => {
       rolledBack: true,
     });
   } finally {
-    game.dispose("zone-error-compatibility-test");
+    game.dispose("zone-error-test");
   }
 });

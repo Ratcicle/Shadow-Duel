@@ -37,11 +37,9 @@ src/core/actionHandlers/
   index.ts         # barrel export preferido
 ```
 
-`src/core/ActionHandlers.ts` é uma fachada de compatibilidade. Os arquivos
-físicos desta camada são `.ts`, mas imports relativos continuam usando
-specifiers `.js`. Para código novo, importe pelo specifier
-`./actionHandlers/index.js` ou pelo arquivo de categoria correspondente. A
-fachada pode não expor todos os handlers novos.
+Os arquivos físicos desta camada são `.ts`, mas imports relativos continuam
+usando specifiers `.js`. Importe pelo specifier `./actionHandlers/index.js`
+ou pelo arquivo de categoria correspondente.
 
 Use Node 24 e mantenha as opções strict de app e Node. Refine `action.type`
 antes de acessar campos de uma variante; verifique índices e valores opcionais

@@ -5,7 +5,8 @@ import {
   restoreTemporaryStatuses,
   restoreTrapMonsterOriginalState,
 } from "../../Card.js";
-import { SUMMON_MODES, SUMMON_ORIGINS } from "../summon/transaction.js";
+import { SUMMON_MODES } from "../summon/transaction.js";
+import { SUMMON_ORIGINS } from "../../contracts/summon.js";
 import {
   checkSpecialSummonEligibility,
   resetProperSummon,

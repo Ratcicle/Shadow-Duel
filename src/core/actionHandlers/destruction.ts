@@ -2,7 +2,6 @@
  * destruction.js
  *
  * Handlers for banishment and destruction effects.
- * Moved from ActionHandlers.js with identical behavior.
  */
 
 import { isAI } from "../Player.js";
@@ -1231,7 +1230,7 @@ async function destroySelectiveField(
 
     // Check if opponent's monster is immune to player's effect
 
-    const isImmune = engine.isImmuneToOpponentEffects(card, player);
+    const isImmune = engine.checkImmunity(card, player).immune;
 
     if (isImmune && getUI(game)?.log) {
       getUI(game)?.log(
@@ -1794,7 +1793,7 @@ export async function handleDestroyAttackerOnArchetypeDestruction(
 
   // Check if attacker is immune to opponent's effects
 
-  if (engine.isImmuneToOpponentEffects(attacker, ctx.player)) {
+  if (engine.checkImmunity(attacker, ctx.player).immune) {
     getUI(game)?.log(`${attacker.name} is immune to opponent's effects.`);
 
     return false;

@@ -4,7 +4,7 @@ import type ChainSystem from "../../src/core/ChainSystem.js";
 import type { PreparedActivationInput } from "../../src/core/contracts/chainRuntime.js";
 import { required } from "../helpers/fixtures.js";
 
-import { CHAIN_ACTIVATION_KINDS } from "../../src/core/chain/link.js";
+import { CHAIN_ACTIVATION_KINDS } from "../../src/core/contracts/chain.js";
 import {
   createChainHarness,
   createTestCard,

@@ -3,7 +3,7 @@
 // Spell/Trap set methods for Game class — B.9 extraction
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { FAST_EFFECT_ORIGINS } from "../../chain/timing.js";
+import { FAST_EFFECT_ORIGINS } from "../../contracts/chain.js";
 import type { GameCard } from "../../contracts/cards.js";
 import type { GamePlayer } from "../../contracts/player.js";
 import type { CardSetEventPayload } from "../../contracts/events.js";

@@ -17,13 +17,11 @@ import type {
   PreparedActivation,
 } from "../contracts/chainRuntime.js";
 
-export { FAST_EFFECT_ORIGINS, FAST_EFFECT_STATES };
-
 /**
  * Canonical Fast Effect Timing coordinator.
  *
- * Phase 2 owns priority, passes and the transition back to an open game state.
- * Trigger collection/SEGOC remains owned by Phase 3.
+ * Coordinates priority, passes and the transition back to an open game state.
+ * Trigger collection and simultaneous ordering are handled by segoc.ts.
  */
 
 type TimingContextDraft = Partial<FastEffectContextInput> & {

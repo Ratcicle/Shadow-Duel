@@ -3,7 +3,7 @@
  * Extracted from Game.js as part of B.6 modularization.
  */
 
-import { FAST_EFFECT_ORIGINS } from "../../chain/timing.js";
+import { FAST_EFFECT_ORIGINS } from "../../contracts/chain.js";
 import { bumpCardLocationVersion } from "../../Card.js";
 import {
   hasChainSourceMovementCapability,
@@ -22,11 +22,8 @@ import type {
 } from "../../contracts/gameRuntime.js";
 import type { GamePlayer } from "../../contracts/player.js";
 import type { CanonicalZone } from "../../contracts/zones.js";
-import {
-  SUMMON_MODES,
-  SUMMON_ORIGINS,
-  SUMMON_STATUSES,
-} from "./transaction.js";
+import { SUMMON_MODES, SUMMON_STATUSES } from "./transaction.js";
+import { SUMMON_ORIGINS } from "../../contracts/summon.js";
 import { checkSpecialSummonEligibility } from "./eligibility.js";
 
 interface ExecutionEffectEnginePort {

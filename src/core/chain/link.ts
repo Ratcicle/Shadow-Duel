@@ -1,8 +1,8 @@
 /**
  * Canonical Chain Link contract.
  *
- * Phase 1 owns identity, classification, snapshots, status and serialization.
- * Timing, SEGOC and full resolution semantics remain in their dedicated phases.
+ * Identity, classification, snapshots, status and serialization.
+ * Timing, SEGOC and resolution are handled by their respective modules.
  */
 
 import {
@@ -37,12 +37,6 @@ import type {
   SerializedChainLink,
 } from "../contracts/chainRuntime.js";
 import type { ChainId, ChainLinkId } from "../contracts/primitives.js";
-
-export {
-  CHAIN_ACTIVATION_KINDS,
-  CHAIN_EFFECT_KINDS,
-  CHAIN_RESPONSE_CONTEXTS,
-};
 
 const VALID_ACTIVATION_KINDS = new Set(Object.values(CHAIN_ACTIVATION_KINDS));
 const VALID_EFFECT_KINDS = new Set(Object.values(CHAIN_EFFECT_KINDS));

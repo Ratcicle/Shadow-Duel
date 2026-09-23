@@ -102,7 +102,7 @@ const validLegacyResult: LegacyActionHandlerResult = {
 };
 void validLegacyResult;
 
-// contract-negative: migration does not introduce a status-based result shape.
+// contract-negative: handlers return boolean results, not status objects.
 // @ts-expect-error
 const statusResult: LegacyActionHandlerResult = { status: "ok" };
 void statusResult;

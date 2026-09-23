@@ -1,12 +1,8 @@
-import {
-  USAGE_POLICIES as EFFECT_USAGE_POLICIES,
-} from "../../contracts/effects.js";
+import { USAGE_POLICIES } from "../../contracts/effects.js";
 import type { GameCard } from "../../contracts/cards.js";
 import type { EffectDefinition, UsagePolicy } from "../../contracts/effects.js";
 import type { EffectUsageEventPayload } from "../../contracts/events.js";
 import type { GamePlayer } from "../../contracts/player.js";
-
-export { EFFECT_USAGE_POLICIES };
 
 interface EffectUsageInput {
   card?: GameCard | null;
@@ -95,8 +91,8 @@ type EffectUsageSettlement =
 function usagePolicy(
   effect: EffectDefinition | null | undefined,
 ): UsagePolicy | null {
-  return effect?.usagePolicy === EFFECT_USAGE_POLICIES.USE ||
-    effect?.usagePolicy === EFFECT_USAGE_POLICIES.ACTIVATE
+  return effect?.usagePolicy === USAGE_POLICIES.USE ||
+    effect?.usagePolicy === USAGE_POLICIES.ACTIVATE
     ? effect.usagePolicy
     : null;
 }
@@ -256,7 +252,7 @@ export function reserveEffectUsage(
   const reservation: EffectUsageReservation = {
     reservationId: this.nextEffectUsageReservationId++,
     policy,
-    status: policy === EFFECT_USAGE_POLICIES.USE ? "consumed" : "reserved",
+    status: policy === USAGE_POLICIES.USE ? "consumed" : "reserved",
     playerId: player.id || "player",
     turnKey: turnKey(this, card, effect),
     duelKey: duelKey(card, effect),
@@ -271,7 +267,7 @@ export function reserveEffectUsage(
     effect,
   };
 
-  if (policy === EFFECT_USAGE_POLICIES.USE) consume(this, card, player, effect);
+  if (policy === USAGE_POLICIES.USE) consume(this, card, player, effect);
   else this.effectUsageReservations.set(reservation.reservationId, reservation);
 
   const snapshot = compact(reservation);

@@ -19,10 +19,8 @@ import { applySimulatedActions } from "../src/core/ai/common/simulatedActions/in
 import { cardMatchesFilters } from "../src/core/effects/filters/cardFilters.js";
 import { createCanonicalStateSnapshot } from "../src/core/game/replay/canonical.js";
 import { checkSpecialSummonEligibility } from "../src/core/game/summon/eligibility.js";
-import {
-  SUMMON_MODES,
-  SUMMON_ORIGINS,
-} from "../src/core/game/summon/transaction.js";
+import { SUMMON_MODES } from "../src/core/game/summon/transaction.js";
+import { SUMMON_ORIGINS } from "../src/core/contracts/summon.js";
 import { cardDatabaseById } from "./helpers/fixtures.js";
 
 const ORATHUS_ID = 32;

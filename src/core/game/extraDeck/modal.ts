@@ -8,7 +8,8 @@
  */
 
 import { isAI } from "../../Player.js";
-import { SUMMON_MODES, SUMMON_ORIGINS } from "../summon/transaction.js";
+import { SUMMON_MODES } from "../summon/transaction.js";
+import { SUMMON_ORIGINS } from "../../contracts/summon.js";
 import { checkSpecialSummonEligibility } from "../summon/eligibility.js";
 import type {
   BattlePosition,

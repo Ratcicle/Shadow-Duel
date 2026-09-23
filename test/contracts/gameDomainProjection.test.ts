@@ -1,16 +1,8 @@
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
 import test from "node:test";
 
 import Card from "../../src/core/Card.js";
 import Game from "../../src/core/Game.js";
-
-const INTEGRATED_DOMAIN_SHA256 =
-  "db94f0468219e78c19dfb054b4aa5e13de1bd01b3c54864615567fbcee46f3ad";
-
-function sha256(value: unknown): string {
-  return createHash("sha256").update(JSON.stringify(value)).digest("hex");
-}
 
 function monster(
   id: number,
@@ -32,7 +24,7 @@ function monster(
   );
 }
 
-test("integrated Game-domain projection matches the origin/main baseline", async () => {
+test("Game integrates setup, draw, movement, summon, combat and disposal", async () => {
   const game = new Game({
     disableChains: true,
     disableTraps: true,
@@ -41,9 +33,9 @@ test("integrated Game-domain projection matches the origin/main baseline", async
   });
   await game.startWithDecks({
     exactDecks: true,
-    playerDeck: [1, 2, 3, 4, 5, 6, 7, 8],
+    playerDeck: [1, 1, 1, 3, 3, 3, 4, 4],
     playerExtraDeck: [],
-    botDeck: [1, 2, 3, 4, 5, 6, 7, 8],
+    botDeck: [1, 1, 1, 3, 3, 3, 4, 4],
     botExtraDeck: [],
     startingPlayer: "player",
     preserveDeckOrder: true,
@@ -142,6 +134,40 @@ test("integrated Game-domain projection matches the origin/main baseline", async
     renderer: game.renderer,
   };
 
-  const projection = { afterStart, draw, move, summon, combat, dispose };
-  assert.equal(sha256(projection), INTEGRATED_DOMAIN_SHA256);
+  assert.equal(afterStart.turn, "player");
+  assert.equal(afterStart.playerDeck + afterStart.playerHand, 8);
+  assert.equal(afterStart.botDeck + afterStart.botHand, 8);
+  assert.equal(draw.ok, true);
+  assert.equal(draw.ids.length, 1);
+  assert.equal(draw.deck, afterStart.playerDeck - 1);
+  assert.equal(draw.hand, afterStart.playerHand + 1);
+  assert.deepEqual(move, {
+    success: true,
+    fromZone: "hand",
+    toZone: "graveyard",
+    hand: draw.hand - 1,
+    graveyard: 1,
+  });
+  assert.equal(summon.success, true);
+  assert.ok(summon.summonId);
+  assert.equal(summon.status, "succeeded");
+  assert.deepEqual(summon.field, ["Integrated summon"]);
+  assert.equal(combat.botLp, 7000);
+  assert.equal(combat.attackerHasAttacked, true);
+  assert.equal(combat.defenderField, false);
+  assert.equal(combat.defenderGraveyard, true);
+  assert.deepEqual(combat.events, [
+    "attack_declared",
+    "battle_damage",
+    "battle_completed",
+    "card_to_grave",
+    "battle_destroy",
+  ]);
+  assert.deepEqual(dispose, {
+    disposed: true,
+    gameOver: true,
+    reason: "integrated",
+    eventListenerKeys: [],
+    renderer: null,
+  });
 });

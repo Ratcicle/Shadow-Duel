@@ -7,10 +7,8 @@ import * as chainFacade from "../../src/core/ChainSystem.js";
 import Game from "../../src/core/Game.js";
 import NullChainSystem from "../../src/core/NullChainSystem.js";
 import { createDamageStepTransaction } from "../../src/core/game/combat/damageStep.js";
-import {
-  SUMMON_ORIGINS,
-  createPreparedSummon,
-} from "../../src/core/game/summon/transaction.js";
+import { createPreparedSummon } from "../../src/core/game/summon/transaction.js";
+import { SUMMON_ORIGINS } from "../../src/core/contracts/summon.js";
 import { genericCards } from "../../src/data/cards/generic.js";
 import { cardDatabase, cardDatabaseByName } from "../helpers/fixtures.js";
 import {
@@ -21,12 +19,10 @@ import {
   placeCard,
 } from "./helpers/chainHarness.js";
 
-// Phase 9 freezes the canonical contracts established from the official
-// Rulebook, Fast Effect Timing chart and Damage Step rules cited by the
-// behavior-specific suites. These regressions ensure removed adapters cannot
-// silently become a second rules path again.
+// These regressions keep activation, summon and Damage Step inputs explicit,
+// so rejected aliases cannot silently introduce an alternate rules path.
 
-test("Fase 9 remove aliases de PreparedActivation e Chain Link", () => {
+test("PreparedActivation e Chain Link rejeitam aliases removidos", () => {
   const { chain, player } = createChainHarness();
   const card = createTestCard({ name: "Canonical source" });
   const effect = createTestEffect({ id: "canonical_effect" });
@@ -77,7 +73,7 @@ test("Fase 9 remove aliases de PreparedActivation e Chain Link", () => {
   assert.deepEqual(link.resolutionSelections, {});
 });
 
-test("Fase 9 expõe somente os pontos de entrada canônicos", () => {
+test("Chain expõe somente os pontos de entrada canônicos", () => {
   const ChainSystem = chainFacade.default;
   assert.equal("CHAIN_CONTEXTS" in chainFacade, false);
   assert.equal(

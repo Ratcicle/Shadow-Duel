@@ -2,7 +2,6 @@
  * resources.js
  *
  * Handlers for resource management (LP, draw, search, upkeep).
- * Moved from ActionHandlers.js with identical behavior.
  */
 
 import { isAI } from "../Player.js";

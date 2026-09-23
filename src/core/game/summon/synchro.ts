@@ -1,5 +1,6 @@
 import { isAI } from "../../Player.js";
-import { SUMMON_MODES, SUMMON_ORIGINS } from "./transaction.js";
+import { SUMMON_MODES } from "./transaction.js";
+import { SUMMON_ORIGINS } from "../../contracts/summon.js";
 import { checkSpecialSummonEligibility } from "./eligibility.js";
 import type {
   BattlePosition,

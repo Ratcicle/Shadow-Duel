@@ -97,9 +97,9 @@ export interface TriggerCardFilter extends CardFilter {
 }
 
 /**
- * Closed projection of the legacy trigger capabilities still consumed by the
- * runtime. The canonical declarative contract is stricter; this projection is
- * intentionally confined to the migration boundary.
+ * Closed projection of trigger capabilities consumed by the runtime,
+ * including transient effects. Authored cards use the stricter declarative
+ * contract.
  */
 export interface TriggerEffectLike {
   readonly id?: string | undefined;

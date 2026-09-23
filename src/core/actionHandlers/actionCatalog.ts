@@ -35,7 +35,6 @@ export const ACTION_CATEGORIES = [
   "counters",
   "conditional",
   "blueprint",
-  "legacyProxy",
 ] satisfies readonly ActionCategory[];
 
 export const ACTION_FIELD_DEFS = {

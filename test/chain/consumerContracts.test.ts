@@ -30,7 +30,7 @@ function effect(cardName: string, effectId: string) {
   );
 }
 
-test("Fase 8 migra zonas, políticas, labels e Damage Step sem adapters nas cartas", () => {
+test("cartas declaram zonas, políticas e janelas de Damage Step válidas", () => {
   const validation = validateCardDatabase();
   assert.equal(validation.errors.length, 0);
   assert.equal(validation.warnings.length, 0);
@@ -290,7 +290,7 @@ test("indicador de prioridade acompanha jogador e resolução sem abrir modal", 
   assert.equal(element.textContent, "");
 });
 
-test("canonical activation candidates preserve observable property order", () => {
+test("canonical activation candidates preserve metadata and attach legality", () => {
   const player = createTestPlayer("player");
   const card: ChainCard = {
     id: 77,
@@ -318,18 +318,11 @@ test("canonical activation candidates preserve observable property order", () =>
   );
   assert.ok(candidate);
 
-  assert.deepEqual(Object.keys(candidate), [
-    "candidateKey",
-    "card",
-    "effect",
-    "effectId",
-    "player",
-    "opponent",
-    "sourceZone",
-    "spellSpeed",
-    "category",
-    "activationLabelKey",
-    "marker",
-    "legality",
-  ]);
+  assert.deepEqual(candidate, {
+    ...input,
+    legality: { ok: true, code: "LEGAL", reason: null },
+  });
+  assert.strictEqual(candidate.card, card);
+  assert.strictEqual(candidate.effect, effect);
+  assert.strictEqual(candidate.player, player);
 });

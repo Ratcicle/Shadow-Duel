@@ -3,7 +3,6 @@ import type { AIPlanningMode, AITurnPlanningMode } from "./contracts/ai.js";
 import type { BotRuntimePort } from "./contracts/bot.js";
 import type { GameOptions, GameRendererPort } from "./contracts/game.js";
 import type { PlayerGamePort, GameUiPort } from "./contracts/gameRuntime.js";
-import type { RawCardDefinitionId } from "./contracts/primitives.js";
 
 type ArenaRuntimeGame = PlayerGamePort & ArenaGamePort & {
   _botArenaMode?: boolean;
@@ -25,15 +24,13 @@ type RuntimeGameConstructor = new (options?: GameOptions) => Omit<ArenaRuntimeGa
 
 import Player from "./Player.js";
 import Renderer from "../ui/Renderer.js";
-import { cardDatabaseById } from "../data/cards.js";
+import { loadStoredActiveDeckPreset } from "../ui/main/deckState.js";
 import {
   ArenaAnalytics,
   DuelTracker,
   END_REASONS,
 } from "./ai/ArenaAnalytics.js";
 
-const STORAGE_DECK_KEY = "shadow_duel_deck";
-const STORAGE_EXTRA_DECK_KEY = "shadow_duel_extra_deck";
 const DEFAULT_MAX_TURNS = 50;
 
 /**
@@ -172,20 +169,6 @@ function resolveRuntimeSpeedConfig(speedConfig: ArenaSpeedConfig): ArenaSpeedCon
     pollIntervalMs: 5,
     useRenderer: false,
   };
-}
-
-function readStoredIds(key: string): RawCardDefinitionId[] {
-  try {
-    const raw = localStorage.getItem(key);
-    if (!raw) return [];
-    const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return (parsed as unknown[])
-      .map((value) => Number(value))
-      .filter((id) => Number.isFinite(id) && cardDatabaseById.has(id)) as RawCardDefinitionId[];
-  } catch (err) {
-    return [];
-  }
 }
 
 export default class BotArena {
@@ -354,9 +337,10 @@ export default class BotArena {
   }
 
   loadStoredDeckData() {
+    const preset = loadStoredActiveDeckPreset();
     return {
-      main: readStoredIds(STORAGE_DECK_KEY),
-      extra: readStoredIds(STORAGE_EXTRA_DECK_KEY),
+      main: preset?.deck ?? [],
+      extra: preset?.extraDeck ?? [],
     };
   }
 

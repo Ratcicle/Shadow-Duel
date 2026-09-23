@@ -4,9 +4,6 @@ Documento atualizado a partir da árvore atual do repositório. Ele descreve as
 pastas principais e a responsabilidade dos módulos TypeScript que
 formam o jogo.
 
-A migração foi encerrada após a
-[validação de paridade da Etapa 14](migrations/typescript-stage14.md).
-
 ## Visão Geral
 
 Shadow Duel é uma SPA em TypeScript com modo strict, usando ES Modules
@@ -25,9 +22,30 @@ O projeto usa Vite para desenvolvimento e build. As dependências de runtime em
 
 Use Node 24 (`>=24.21.0 <25`), `npm ci` e `npm run check`. O gate verifica
 `tsconfig.app.json` e `tsconfig.node.json`, audita escapes de tipagem, executa
-testes, valida Chain/actions/digests e gera o build. Ambos os projetos usam
-`allowJs: false`; o único fixture JavaScript é
-`test/toolchain/fixtures/jsConsumer.js`, para a interoperabilidade `.js` → `.ts`.
+testes, valida Chain/actions e gera o build. Ambos os projetos usam
+`allowJs: false` e as opções strict de [tsconfig.base.json](../tsconfig.base.json).
+O compilador oficial é TypeScript 7.0.2, instalado pelo alias `@typescript/native`;
+os scripts de typecheck/watch chamam seu CLI explicitamente. O alias `typescript`
+usa `@typescript/typescript6` 6.0.2 somente para a API de análise de AST da
+auditoria de tipos. Preserve essas versões e a separação entre CLI e API.
+
+A auditoria rejeita `any` explícito, casts duplos de escape, `@ts-ignore` e
+`@ts-nocheck`. Testes negativos em `test/types/` podem usar `@ts-expect-error`
+com uma justificativa `contract-negative` imediatamente anterior.
+
+O deck builder salva oito slots na chave `shadow_duel_deck_presets`, com envelope
+`{ idSchemaVersion: 3, presets: [{ name, deck, extraDeck }] }`, e guarda a seleção
+em `shadow_duel_active_deck_slot`. Esse é o único formato suportado: dados sem
+o marcador ou de outro formato são ignorados, sem conversão de IDs. Slots
+inválidos usam o padrão, preservando os demais. O deck customizado da Bot Arena
+lê o mesmo slot ativo. Decks válidos persistem entre aberturas; preferências
+de outros domínios não são alteradas.
+
+`public/` é copiado para `dist/` pelo Vite. Mantenha `public/assets/` reservado
+às artes, inclusive às de cartas futuras. Auditorias escrevem no terminal;
+o smoke dos bots só grava arquivo quando recebe `--out`. Para saídas locais,
+use uma pasta ignorada, como `.cache/`, nunca `public/`. O catálogo gerado de
+actions pertence a `docs/`.
 
 ---
 
@@ -97,7 +115,6 @@ Módulos de cartas por grupo e governança de IDs:
 | [techZero.ts](../src/data/cards/techZero.ts) | Arquétipo Tech-Zero. |
 | [vulcanomaton.ts](../src/data/cards/vulcanomaton.ts) | Arquétipo Vulcanomaton. |
 | [ranges.ts](../src/data/cards/ranges.ts) | Faixas oficiais de IDs e política de validação. |
-| [idMigration.ts](../src/data/cards/idMigration.ts) | Mapa `oldId -> newId` para migrar decks salvos. |
 
 ### `public/locales/`
 
@@ -112,7 +129,7 @@ Traduções visíveis no jogo. Hoje há [pt-br.json](../public/locales/pt-br.jso
 | Arquivo | Responsabilidade |
 |---|---|
 | [Game.ts](../src/core/Game.ts) | Fachada tipada do estado de jogo. Orquestra turnos, fases, zonas, invocações, batalha, seleção, efeitos e UI, delegando para [src/core/game/](../src/core/game/); consumidores preservam o specifier `.js`. |
-| [Player.ts](../src/core/Player.ts) | Modelo tipado de jogador: LP, mão, deck, campo, Cemitério, banimento, marcadores e helper `isAI()`; preserva o shape e a compatibilidade estrutural legados. |
+| [Player.ts](../src/core/Player.ts) | Modelo tipado de jogador: LP, mão, deck, campo, Cemitério, banimento, marcadores e helper `isAI()`. |
 | [Bot.ts](../src/core/Bot.ts) | Subclasse de `Player` para IA. Usa presets, `StrategyRegistry`, `BeamSearch`, busca de linhas e módulos de execução em [src/core/bot/](../src/core/bot/). |
 | [BotArena.ts](../src/core/BotArena.ts) | Modo AI vs AI para testes, métricas, velocidade e relatórios. |
 | [BotLogger.ts](../src/core/BotLogger.ts) | Logger configurável por `localStorage`, com categorias para decisões, estado e fases. |
@@ -133,7 +150,7 @@ Traduções visíveis no jogo. Hoje há [pt-br.json](../public/locales/pt-br.jso
 | [ChainSystem.ts](../src/core/ChainSystem.ts) | Fachada do sistema de Chain/Spell Speed, composta pelo manifest de [src/core/chain/](../src/core/chain/); consumidores preservam o specifier `.js`. |
 | [NullChainSystem.ts](../src/core/NullChainSystem.ts) | Implementação no-op que satisfaz o `ChainRuntimePort` mínimo sem fingir conformidade com o host interno completo. |
 | [EffectEngine.ts](../src/core/EffectEngine.ts) | Fachada de execução de efeitos declarativos; consumidores preservam o specifier `.js`. |
-| [ActionHandlers.ts](../src/core/ActionHandlers.ts) | Re-export de compatibilidade; consumidores preservam o specifier `.js`. |
+| [actionHandlers/index.ts](../src/core/actionHandlers/index.ts) | API pública do registry, bindings e handlers por categoria. |
 | [AutoSelector.ts](../src/core/AutoSelector.ts) | Resolve contratos de seleção para IA/bot. Não deve substituir decisões humanas. |
 | [UIAdapter.ts](../src/core/UIAdapter.ts) | Ponte entre `Game` e `Renderer` para prompts e atualização visual. |
 | [i18n.ts](../src/core/i18n.ts) | Carregamento de locale e helpers como `getCardDisplayName` e `getCardDisplayDescription`. |
@@ -259,7 +276,6 @@ TypeScript; imports relativos continuam usando `.js`:
 
 | Arquivo | Responsabilidade |
 |---|---|
-| [index.ts](../src/core/chain/index.ts) | Barrel de compatibilidade; preserva o keyset público legado sem ampliar exports incidentalmente. |
 | [attachments.ts](../src/core/chain/attachments.ts) | Manifest canônico de referências diretas e instalação validada dos 89 métodos do prototype. |
 | [contexts.ts](../src/core/chain/contexts.ts) | Definição dos contextos/janelas de Chain. |
 | [spellSpeed.ts](../src/core/chain/spellSpeed.ts) | Regras de Spell Speed e checagem de ativação em Chain. |
@@ -281,7 +297,7 @@ TypeScript; imports relativos continuam usando `.js`:
 
 O manifest mantém a ordem dos 15 grupos e as referências originais dos 89 attachments. O preflight rejeita referências ausentes, duplicatas e colisões incompatíveis; reaplicar a mesma referência é idempotente. A fachada usa declaration merging, sem emitir class fields, e preserva propriedades enumeráveis, graváveis e configuráveis no prototype.
 
-O gate operacional para mudanças nesta área é `npm run check`, que inclui as suítes de Chain e replay canônico, auditorias, assinatura/digest e build. Como a política do bot participa das janelas de resposta, execute também `npm run test:bot-smoke -- --duels 1 --matchup arcanist:shadowheart`.
+O gate operacional para mudanças nesta área é `npm run check`, que inclui as suítes de Chain e replay canônico, auditorias e build. Como a política do bot participa das janelas de resposta, execute também `npm run test:bot-smoke -- --duels 1 --matchup arcanist:shadowheart`.
 
 ---
 
@@ -362,7 +378,7 @@ Controllers da tela inicial e fluxos fora do duelo:
 | Arquivo | Responsabilidade |
 |---|---|
 | [domRefs.ts](../src/ui/main/domRefs.ts) | Referências DOM agrupadas por área. |
-| [deckState.ts](../src/ui/main/deckState.ts) | Estado, persistência, migração e sanitização do deck builder. |
+| [deckState.ts](../src/ui/main/deckState.ts) | Estado, persistência e validação do formato atual do deck builder, compartilhado com o deck customizado da Arena. |
 | [validationPanel.ts](../src/ui/main/validationPanel.ts) | Renderização dos erros do database validator. |
 | [deckBuilderController.ts](../src/ui/main/deckBuilderController.ts) | UI de deck builder, filtros, slots, preview e presets. |
 | [laboratoryController.ts](../src/ui/main/laboratoryController.ts) | UI do Laboratório, import/export e setup manual. |

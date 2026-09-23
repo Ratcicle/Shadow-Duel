@@ -36,7 +36,7 @@ declare const simulatedCardStateBrand: unique symbol;
 
 export type LiveGameState = GameRuntimeState;
 
-/** Existing replay snapshot; Stage 9 does not introduce a second wire shape. */
+/** AI state reads the shared public replay snapshot. */
 export type ReplayGameState = CanonicalGameStateSnapshot;
 
 export type SimulationCloneProfile = "gameTree" | "turnLine";

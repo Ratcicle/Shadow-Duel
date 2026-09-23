@@ -33,10 +33,7 @@ import {
   getDeclaredTargetDefinitions as getEffectTargetDefinitions,
   getPlayerSelectionsForDefinitions as collectSelectionsForDefinitions,
 } from "./chain/selection.js";
-import {
-  FAST_EFFECT_ORIGINS,
-  FAST_EFFECT_STATES,
-} from "./chain/timing.js";
+import { FAST_EFFECT_ORIGINS, FAST_EFFECT_STATES } from "./contracts/chain.js";
 
 const CARD_LIST_ZONES = Object.freeze([
   "hand",

@@ -82,11 +82,8 @@ import {
   executeDamageStepTransaction,
   getDamageStepState,
 } from "../../src/core/game/combat/damageStep.js";
-import {
-  DAMAGE_STEP_ACTIVATION_CATEGORIES,
-  DAMAGE_STEP_TIMINGS,
-  canActivateDuringDamageStep,
-} from "../../src/core/game/spellTrap/quickSpellRules.js";
+import { DAMAGE_STEP_ACTIVATION_CATEGORIES, canActivateDuringDamageStep } from "../../src/core/game/spellTrap/quickSpellRules.js";
+import { DAMAGE_STEP_TIMINGS } from "../../src/core/contracts/effects.js";
 import { resetDuelState } from "../../src/core/game/state/duelReset.js";
 import { isBattleDestructionProtected } from "../../src/core/game/zones/destruction.js";
 import { cardDatabaseByName } from "../helpers/fixtures.js";

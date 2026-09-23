@@ -10,8 +10,6 @@ import type {
   FullChainHost,
 } from "../contracts/chainRuntime.js";
 
-export { USAGE_POLICIES };
-
 function getPolicy(effect?: ChainEffect | null): UsagePolicy | null {
   return effect?.usagePolicy === USAGE_POLICIES.USE ||
     effect?.usagePolicy === USAGE_POLICIES.ACTIVATE

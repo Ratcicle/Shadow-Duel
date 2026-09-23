@@ -1,5 +1,5 @@
 import { isQuickSpell } from "../game/spellTrap/quickSpellRules.js";
-import { CHAIN_ACTIVATION_KINDS } from "./link.js";
+import { CHAIN_ACTIVATION_KINDS } from "../contracts/chain.js";
 import type { ChainId } from "../contracts/primitives.js";
 import type {
   ChainCard,

@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import type { OutputChunk, RollupOutput, RollupWatcher } from "rollup";
 import { build } from "vite";
-import { MIXED_MODE_VALUE, getMixedModeValue } from "./fixtures/mixedModule.js";
+import { MODULE_VALUE, getModuleValue } from "./fixtures/module.js";
 
 const fixtureDirectory = fileURLToPath(new URL("./fixtures/", import.meta.url));
 const fixtureDist = path.join(fixtureDirectory, "dist");
@@ -28,8 +28,8 @@ function isRollupOutput(
 }
 
 test("tsx resolves a .js specifier to a physical TypeScript module", () => {
-  assert.equal(MIXED_MODE_VALUE, "mixed-mode-ok");
-  assert.equal(getMixedModeValue(), MIXED_MODE_VALUE);
+  assert.equal(MODULE_VALUE, "module-resolution-ok");
+  assert.equal(getModuleValue(), MODULE_VALUE);
 });
 
 test("Node asset hooks resolve TypeScript and SVG imports in a fresh process", async () => {
@@ -42,17 +42,17 @@ test("Node asset hooks resolve TypeScript and SVG imports in a fresh process", a
       "--input-type=module",
       "--eval",
       [
-        'import { MIXED_MODE_VALUE } from "./test/toolchain/fixtures/jsConsumer.js";',
+        'import { MODULE_VALUE } from "./test/toolchain/fixtures/module.js";',
         'import icon from "@tabler/icons/outline/swords.svg";',
-        'console.log(JSON.stringify({ value: MIXED_MODE_VALUE, svg: icon.endsWith("/swords.svg") }));',
+        'console.log(JSON.stringify({ value: MODULE_VALUE, svg: icon.endsWith("/swords.svg") }));',
       ].join("\n"),
     ],
     { cwd: root, windowsHide: true, timeout: 30_000 },
   );
-  assert.deepEqual(JSON.parse(stdout), { value: "mixed-mode-ok", svg: true });
+  assert.deepEqual(JSON.parse(stdout), { value: "module-resolution-ok", svg: true });
 });
 
-test("Vite resolves mixed-mode imports without writing build artifacts", async () => {
+test("Vite resolves ESM .js specifiers without writing build artifacts", async () => {
   assert.equal(await pathExists(fixtureDist), false);
 
   const result = await build({
@@ -83,6 +83,6 @@ test("Vite resolves mixed-mode imports without writing build artifacts", async (
     );
 
   assert.ok(entryChunk, "Vite did not produce an entry chunk");
-  assert.match(entryChunk.code, /mixed-mode-ok/);
+  assert.match(entryChunk.code, /module-resolution-ok/);
   assert.equal(await pathExists(fixtureDist), false);
 });

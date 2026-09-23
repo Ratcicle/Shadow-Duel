@@ -10,7 +10,7 @@ import type {
   FastEffectContextInput,
   FullChainHost,
 } from "../contracts/chainRuntime.js";
-import { FAST_EFFECT_STATES } from "./timing.js";
+import { FAST_EFFECT_STATES } from "../contracts/chain.js";
 
 function isChainOperationPromise(
   value: unknown,

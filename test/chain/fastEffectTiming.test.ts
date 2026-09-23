@@ -6,10 +6,7 @@ import { record, required, unsafeFixture } from "../helpers/fixtures.js";
 import type { HarnessTrace } from "./helpers/chainHarness.js";
 import { installPreparedResponses } from "./helpers/chainHarness.js";
 
-import {
-  FAST_EFFECT_ORIGINS,
-  FAST_EFFECT_STATES,
-} from "../../src/core/chain/timing.js";
+import { FAST_EFFECT_ORIGINS, FAST_EFFECT_STATES } from "../../src/core/contracts/chain.js";
 import { canStartAction } from "../../src/core/game/actions/guard.js";
 import { resolveEventEntries } from "../../src/core/game/events/eventResolver.js";
 import { setSpellOrTrap } from "../../src/core/game/spellTrap/set.js";

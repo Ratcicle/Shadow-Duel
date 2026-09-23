@@ -8,7 +8,7 @@
  */
 
 import { attachChainMethods } from "./chain/attachments.js";
-import { FAST_EFFECT_ORIGINS, FAST_EFFECT_STATES } from "./chain/timing.js";
+import { FAST_EFFECT_ORIGINS, FAST_EFFECT_STATES } from "./contracts/chain.js";
 import type {
   ChainCard,
   ChainEffect,
@@ -27,19 +27,6 @@ import type {
   PendingTriggerSelection,
 } from "./contracts/chainRuntime.js";
 import type { ChainId } from "./contracts/primitives.js";
-
-export {
-  CHAIN_ACTIVATION_KINDS,
-  CHAIN_EFFECT_KINDS,
-  CHAIN_RESPONSE_CONTEXTS,
-} from "./chain/link.js";
-export { FAST_EFFECT_ORIGINS, FAST_EFFECT_STATES } from "./chain/timing.js";
-export {
-  SEGOC_GROUPS,
-  TRIGGER_REQUIREMENTS,
-  TRIGGER_TIMINGS,
-} from "./chain/segoc.js";
-export { USAGE_POLICIES } from "./chain/usage.js";
 
 export interface ChainSystemOptions {
   responseTimeoutMs?: number | undefined;

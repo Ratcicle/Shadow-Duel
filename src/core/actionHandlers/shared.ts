@@ -2,7 +2,6 @@
  * shared.js
  *
  * Shared helpers used by multiple action handlers.
- * All functions here are moved from ActionHandlers.js with identical names and signatures.
  */
 
 import { isAI } from "../Player.js";

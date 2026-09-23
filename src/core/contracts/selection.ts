@@ -440,7 +440,7 @@ export type SerializedSelectionCandidateIdentity =
   | FullSerializedSelectionCandidateIdentity
   | SerializedSelectionKeyIdentity;
 
-/** Local decision value only; the canonical replay schema remains Stage 6. */
+/** Local decision value; serialization belongs to the canonical replay schema. */
 export interface SerializedSelectionValue {
   selections: {
     [requirementId: string]: SerializedSelectionCandidateIdentity[];

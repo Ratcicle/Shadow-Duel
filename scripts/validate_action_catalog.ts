@@ -1,7 +1,7 @@
 import {
   ActionHandlerRegistry,
   registerDefaultHandlers,
-} from "../src/core/ActionHandlers.js";
+} from "../src/core/actionHandlers/index.js";
 import {
   ACTION_BINDINGS,
   getActionBindingLabel,

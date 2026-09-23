@@ -1,7 +1,5 @@
-import {
-  DAMAGE_STEP_ACTIVATION_CATEGORIES,
-  DAMAGE_STEP_TIMINGS,
-} from "../spellTrap/quickSpellRules.js";
+import { DAMAGE_STEP_ACTIVATION_CATEGORIES } from "../spellTrap/quickSpellRules.js";
+import { DAMAGE_STEP_TIMINGS } from "../../contracts/effects.js";
 import type {
   ChainOperationResult,
   ChainRuntimePort,

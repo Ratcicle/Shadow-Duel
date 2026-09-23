@@ -25,7 +25,6 @@ import type {
 } from "../contracts/chainRuntime.js";
 import type { CanonicalZone } from "../contracts/zones.js";
 import {
-  CHAIN_ACTIVATION_KINDS,
   buildUsagePolicy,
   captureSourceSnapshot,
   classifyActivationKind,
@@ -33,10 +32,13 @@ import {
   getResponseContextType,
 } from "./link.js";
 import {
+  CHAIN_ACTIVATION_KINDS,
+  FAST_EFFECT_ORIGINS,
+} from "../contracts/chain.js";
+import {
   capCostDefinitionsByLinkedTargetCapacity,
   resolveCountFromSelectionDefinitions,
 } from "./selection.js";
-import { FAST_EFFECT_ORIGINS } from "./timing.js";
 
 const PERSISTENT_SPELL_TRAP_SUBTYPES = new Set([
   "continuous",

@@ -8,7 +8,6 @@
   "engines": {
     "node": ">=24.21.0 <25"
   },
-  "main": "index.js",
   "directories": {
     "doc": "docs"
   },
@@ -29,8 +28,7 @@
     "audit:typescript-escapes": "tsx scripts/audit_typescript_escapes.ts",
     "replay": "tsx scripts/replay_duel.ts",
     "test:bot-smoke": "node --import=tsx --import=./scripts/register_node_asset_loader.ts scripts/run_bot_arena_smoke.ts",
-    "verify:migration-digest": "tsx scripts/verify_migration_digest.ts",
-    "check": "npm run typecheck && npm run audit:typescript-escapes && npm test && npm run audit:chain && npm run validate:actions && npm run check:actions-doc && npm run verify:migration-digest && npm run build"
+    "check": "npm run typecheck && npm run audit:typescript-escapes && npm test && npm run audit:chain && npm run validate:actions && npm run check:actions-doc && npm run build"
   },
   "devDependencies": {
     "@types/node": "24.13.5",

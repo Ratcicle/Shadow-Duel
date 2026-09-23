@@ -61,11 +61,9 @@ export const TARGETING_EFFECT_METHODS = defineEffectMethods({
   selectCandidates: targeting.selectCandidates,
   resolveTargets: targeting.resolveTargets,
   checkImmunity: targeting.checkImmunity,
-  isImmuneToOpponentEffects: targeting.isImmuneToOpponentEffects,
   filterCardsListByImmunity: targeting.filterCardsListByImmunity,
   filterTargetsByImmunity: targeting.filterTargetsByImmunity,
   inferEffectType: targeting.inferEffectType,
-  shouldSkipActionDueToImmunity: targeting.shouldSkipActionDueToImmunity,
 });
 
 export const TRIGGER_EFFECT_METHODS = defineEffectMethods({

@@ -10,8 +10,6 @@ import { DAMAGE_STEP_TIMINGS } from "../../contracts/effects.js";
 import type { ActionType } from "../../contracts/actions.js";
 import type { DamageStepTiming } from "../../contracts/effects.js";
 
-export { DAMAGE_STEP_TIMINGS };
-
 export interface QuickSpellCardView {
   cardKind?: string | null;
   subtype?: string | null;

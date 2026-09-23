@@ -159,7 +159,7 @@ export interface RecordedDecision<Kind extends DecisionKind = DecisionKind> {
   context: DecisionContext<Kind>;
 }
 
-/** Unvalidated replay input remains a compatibility boundary until Stage 6. */
+/** Replay decisions are validated by the broker before being consumed. */
 export interface ReplayDecisionInput {
   decisionId?: DecisionId | number;
   kind: string;

@@ -1,7 +1,4 @@
-import {
-  FAST_EFFECT_ORIGINS,
-  FAST_EFFECT_STATES,
-} from "../../chain/timing.js";
+import { FAST_EFFECT_ORIGINS, FAST_EFFECT_STATES } from "../../contracts/chain.js";
 import { bumpCardLocationVersion } from "../../Card.js";
 import {
   hasChainFastEffectTransitionCapability,
@@ -37,8 +34,6 @@ import {
   checkSpecialSummonEligibility,
   establishProperSummon,
 } from "./eligibility.js";
-
-export { SUMMON_ORIGINS };
 
 export const SUMMON_MODES = Object.freeze({
   SUMMON: "summon",

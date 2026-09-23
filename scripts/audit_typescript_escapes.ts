@@ -3,10 +3,6 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import ts from "typescript";
 
-const DEBT_REGISTRY_FORMAT = "shadow-duel-typescript-debt-registry";
-const DEBT_REGISTRY_VERSION = 1;
-const DEBT_REGISTRY_PATH = "config/toolchain/typescript-debt.json";
-const DEBT_ID_PATTERN = /^TSDEBT-\d{3,}$/;
 const TYPESCRIPT_FILE_PATTERN = /\.(?:ts|tsx|mts|cts)$/i;
 const AUDITED_DIRECTORIES = ["src", "scripts", "test"] as const;
 const EXCLUDED_DIRECTORIES = new Set([
@@ -18,28 +14,6 @@ const EXCLUDED_DIRECTORIES = new Set([
   "node_modules",
 ]);
 
-export const TYPESCRIPT_DEBT_KINDS = [
-  "explicit-any",
-  "double-cast",
-  "ts-expect-error",
-] as const;
-
-export type TypeScriptDebtKind = (typeof TYPESCRIPT_DEBT_KINDS)[number];
-
-export interface TypeScriptDebtEntry {
-  id: string;
-  path: string;
-  kind: TypeScriptDebtKind;
-  justification: string;
-  removalStage: string;
-}
-
-export interface TypeScriptDebtRegistry {
-  format: typeof DEBT_REGISTRY_FORMAT;
-  version: typeof DEBT_REGISTRY_VERSION;
-  entries: TypeScriptDebtEntry[];
-}
-
 export interface TypeScriptSourceInput {
   path: string;
   text: string;
@@ -48,265 +22,29 @@ export interface TypeScriptSourceInput {
 export interface AuditDiagnostic {
   code: string;
   message: string;
-  path?: string;
-  line?: number;
-  column?: number;
-  debtId?: (string) | undefined;
-}
-
-export interface DebtRegistryParseResult {
-  registry: TypeScriptDebtRegistry;
-  diagnostics: AuditDiagnostic[];
+  path: string;
+  line: number;
+  column: number;
 }
 
 export interface TypeScriptEscapeAuditResult {
   diagnostics: AuditDiagnostic[];
   scannedFiles: number;
-  registeredDebts: number;
 }
 
 interface SourceComment {
   start: number;
-  end: number;
   startLine: number;
   endLine: number;
   text: string;
-}
-
-interface DebtMarker {
-  id: string | undefined;
-  comment: SourceComment;
-}
-
-interface EscapeCandidate {
-  kind: TypeScriptDebtKind;
-  path: string;
-  line: number;
-  column: number;
-  message: string;
-}
-
-function emptyRegistry(): TypeScriptDebtRegistry {
-  return {
-    format: DEBT_REGISTRY_FORMAT,
-    version: DEBT_REGISTRY_VERSION,
-    entries: [],
-  };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function isDebtKind(value: unknown): value is TypeScriptDebtKind {
-  return (
-    typeof value === "string" &&
-    TYPESCRIPT_DEBT_KINDS.some((kind) => kind === value)
-  );
-}
-
 function normalizePath(filePath: string): string {
   return filePath.replaceAll("\\", "/");
-}
-
-function isAuditedDebtPath(filePath: string): boolean {
-  if (
-    filePath.length === 0 ||
-    filePath.startsWith("/") ||
-    filePath.startsWith("./") ||
-    filePath.includes("\\") ||
-    /^[A-Za-z]:/.test(filePath)
-  ) {
-    return false;
-  }
-
-  const segments = filePath.split("/");
-  if (segments.some((segment) => segment === "" || segment === "..")) {
-    return false;
-  }
-  if (!TYPESCRIPT_FILE_PATTERN.test(filePath)) {
-    return false;
-  }
-
-  return (
-    segments.length === 1 ||
-    AUDITED_DIRECTORIES.some((directory) => segments[0] === directory)
-  );
-}
-
-function registryDiagnostic(
-  code: string,
-  message: string,
-  debtId?: string,
-): AuditDiagnostic {
-  return {
-    code,
-    message,
-    path: DEBT_REGISTRY_PATH,
-    debtId,
-  };
-}
-
-export function validateDebtRegistry(value: unknown): DebtRegistryParseResult {
-  const diagnostics: AuditDiagnostic[] = [];
-  const registry = emptyRegistry();
-
-  if (!isRecord(value)) {
-    diagnostics.push(
-      registryDiagnostic(
-        "invalid-debt-registry",
-        "The debt registry must be a JSON object.",
-      ),
-    );
-    return { registry, diagnostics };
-  }
-
-  if (value.format !== DEBT_REGISTRY_FORMAT) {
-    diagnostics.push(
-      registryDiagnostic(
-        "invalid-debt-registry-format",
-        `Registry format must be "${DEBT_REGISTRY_FORMAT}".`,
-      ),
-    );
-  }
-  if (value.version !== DEBT_REGISTRY_VERSION) {
-    diagnostics.push(
-      registryDiagnostic(
-        "invalid-debt-registry-version",
-        `Registry version must be ${DEBT_REGISTRY_VERSION}.`,
-      ),
-    );
-  }
-  if (!Array.isArray(value.entries)) {
-    diagnostics.push(
-      registryDiagnostic(
-        "invalid-debt-registry-entries",
-        "Registry entries must be an array.",
-      ),
-    );
-    return { registry, diagnostics };
-  }
-
-  const seenIds = new Set<string>();
-  value.entries.forEach((rawEntry, index) => {
-    if (!isRecord(rawEntry)) {
-      diagnostics.push(
-        registryDiagnostic(
-          "invalid-debt-entry",
-          `Debt entry at index ${index} must be a JSON object.`,
-        ),
-      );
-      return;
-    }
-
-    const id = rawEntry.id;
-    const filePath = rawEntry.path;
-    const kind = rawEntry.kind;
-    const justification = rawEntry.justification;
-    const removalStage = rawEntry.removalStage;
-    let valid = true;
-
-    if (typeof id !== "string" || !DEBT_ID_PATTERN.test(id)) {
-      diagnostics.push(
-        registryDiagnostic(
-          "invalid-debt-id",
-          `Debt entry at index ${index} must use an ID like TSDEBT-001.`,
-          typeof id === "string" ? id : undefined,
-        ),
-      );
-      valid = false;
-    } else if (seenIds.has(id)) {
-      diagnostics.push(
-        registryDiagnostic(
-          "duplicate-debt-id",
-          `Debt ID ${id} is declared more than once.`,
-          id,
-        ),
-      );
-      valid = false;
-    } else {
-      seenIds.add(id);
-    }
-
-    if (typeof filePath !== "string" || !isAuditedDebtPath(filePath)) {
-      diagnostics.push(
-        registryDiagnostic(
-          "invalid-debt-path",
-          `Debt ${typeof id === "string" ? id : `at index ${index}`} must reference a repository-relative audited TypeScript path.`,
-          typeof id === "string" ? id : undefined,
-        ),
-      );
-      valid = false;
-    }
-    if (!isDebtKind(kind)) {
-      diagnostics.push(
-        registryDiagnostic(
-          "invalid-debt-kind",
-          `Debt ${typeof id === "string" ? id : `at index ${index}`} has an unsupported kind.`,
-          typeof id === "string" ? id : undefined,
-        ),
-      );
-      valid = false;
-    }
-    if (typeof justification !== "string" || justification.trim() === "") {
-      diagnostics.push(
-        registryDiagnostic(
-          "invalid-debt-justification",
-          `Debt ${typeof id === "string" ? id : `at index ${index}`} requires a non-empty justification.`,
-          typeof id === "string" ? id : undefined,
-        ),
-      );
-      valid = false;
-    }
-    if (typeof removalStage !== "string" || removalStage.trim() === "") {
-      diagnostics.push(
-        registryDiagnostic(
-          "invalid-debt-removal-stage",
-          `Debt ${typeof id === "string" ? id : `at index ${index}`} requires a non-empty removalStage.`,
-          typeof id === "string" ? id : undefined,
-        ),
-      );
-      valid = false;
-    }
-
-    if (
-      valid &&
-      typeof id === "string" &&
-      typeof filePath === "string" &&
-      isDebtKind(kind) &&
-      typeof justification === "string" &&
-      typeof removalStage === "string"
-    ) {
-      registry.entries.push({
-        id,
-        path: filePath,
-        kind,
-        justification,
-        removalStage,
-      });
-    }
-  });
-
-  return { registry, diagnostics };
-}
-
-export function parseDebtRegistry(
-  source: string,
-): DebtRegistryParseResult {
-  try {
-    return validateDebtRegistry(JSON.parse(source));
-  } catch (error: unknown) {
-    const detail = error instanceof Error ? error.message : String(error);
-    return {
-      registry: emptyRegistry(),
-      diagnostics: [
-        registryDiagnostic(
-          "invalid-debt-registry-json",
-          `The debt registry is not valid JSON: ${detail}`,
-        ),
-      ],
-    };
-  }
 }
 
 function scriptKindFor(filePath: string): ts.ScriptKind {
@@ -343,7 +81,6 @@ function collectComments(
       );
       return {
         start: range.pos,
-        end: range.end,
         startLine: startLocation.line + 1,
         endLine: endLocation.line + 1,
         text: sourceText.slice(range.pos, range.end),
@@ -374,25 +111,6 @@ function directiveKind(
   return undefined;
 }
 
-function collectDebtMarkers(comments: SourceComment[]): DebtMarker[] {
-  const markers: DebtMarker[] = [];
-  for (const comment of comments) {
-    const body = commentBody(comment);
-    const markerPattern = /typescript-debt\s*:\s*([^\s*]+)?/g;
-    for (const match of body.matchAll(markerPattern)) {
-      const candidate = match[1];
-      markers.push({
-        id:
-          candidate !== undefined && DEBT_ID_PATTERN.test(candidate)
-            ? candidate
-            : undefined,
-        comment,
-      });
-    }
-  }
-  return markers;
-}
-
 function hasContractNegativeJustification(
   comments: SourceComment[],
   directive: SourceComment,
@@ -400,7 +118,7 @@ function hasContractNegativeJustification(
   return comments.some((comment) => {
     if (comment.endLine !== directive.startLine - 1) return false;
     const match = /^contract-negative\s*:\s*(.+)$/i.exec(commentBody(comment));
-    return match?.[1]?.trim() !== "";
+    return (match?.[1]?.trim().length ?? 0) > 0;
   });
 }
 
@@ -426,22 +144,20 @@ function isTypeAssertion(
   return ts.isAsExpression(node) || ts.isTypeAssertionExpression(node);
 }
 
-function collectEscapeCandidates(
+function auditSource(
   input: TypeScriptSourceInput,
   sourceFile: ts.SourceFile,
   comments: SourceComment[],
   diagnostics: AuditDiagnostic[],
-): EscapeCandidate[] {
-  const candidates: EscapeCandidate[] = [];
-
+): void {
   const visit = (node: ts.Node): void => {
     if (node.kind === ts.SyntaxKind.AnyKeyword) {
       const location = sourceLocation(sourceFile, node.getStart(sourceFile));
-      candidates.push({
-        kind: "explicit-any",
+      diagnostics.push({
+        code: "prohibited-explicit-any",
         path: input.path,
         ...location,
-        message: "Explicit any is migration debt and must be registered.",
+        message: "Explicit any is prohibited; use a concrete type or narrow unknown.",
       });
     }
 
@@ -450,12 +166,12 @@ function collectEscapeCandidates(
       isTypeAssertion(unwrapParentheses(node.expression))
     ) {
       const location = sourceLocation(sourceFile, node.getStart(sourceFile));
-      candidates.push({
-        kind: "double-cast",
+      diagnostics.push({
+        code: "prohibited-double-cast",
         path: input.path,
         ...location,
         message:
-          "Nested type assertions are migration debt and must be registered.",
+          "Nested type assertions are prohibited; narrow the value or fix its contract.",
       });
     }
 
@@ -469,7 +185,7 @@ function collectEscapeCandidates(
       const location = sourceLocation(sourceFile, comment.start);
       diagnostics.push({
         code: `prohibited-${directive}`,
-        message: `@${directive} is prohibited and cannot be added to the debt registry.`,
+        message: `@${directive} is prohibited.`,
         path: input.path,
         ...location,
       });
@@ -483,39 +199,20 @@ function collectEscapeCandidates(
     }
 
     const location = sourceLocation(sourceFile, comment.start);
-    candidates.push({
-      kind: "ts-expect-error",
+    diagnostics.push({
+      code: "prohibited-ts-expect-error",
       path: input.path,
       ...location,
       message:
-        "@ts-expect-error requires registered migration debt, or an immediately preceding contract-negative justification under test/types/.",
+        "@ts-expect-error requires an immediately preceding contract-negative justification under test/types/.",
     });
   }
-
-  return candidates;
-}
-
-function adjacentMarkers(
-  markers: DebtMarker[],
-  candidate: EscapeCandidate,
-): DebtMarker[] {
-  return markers.filter(
-    (marker) =>
-      marker.comment.endLine === candidate.line ||
-      marker.comment.endLine === candidate.line - 1,
-  );
 }
 
 export function auditTypeScriptSources(
   sources: TypeScriptSourceInput[],
-  registry: TypeScriptDebtRegistry,
 ): TypeScriptEscapeAuditResult {
   const diagnostics: AuditDiagnostic[] = [];
-  const entriesById = new Map(
-    registry.entries.map((entry) => [entry.id, entry]),
-  );
-  const usedDebtIds = new Set<string>();
-  const associatedMarkers = new Set<DebtMarker>();
 
   for (const rawInput of sources) {
     const input = { ...rawInput, path: normalizePath(rawInput.path) };
@@ -526,131 +223,15 @@ export function auditTypeScriptSources(
       true,
       scriptKindFor(input.path),
     );
-    const comments = collectComments(sourceFile, input.text);
-    const markers = collectDebtMarkers(comments);
-    const candidates = collectEscapeCandidates(
-      input,
-      sourceFile,
-      comments,
-      diagnostics,
-    );
-
-    for (const marker of markers) {
-      if (marker.id !== undefined) continue;
-      const location = sourceLocation(sourceFile, marker.comment.start);
-      diagnostics.push({
-        code: "invalid-debt-marker",
-        message: "Debt markers must use the form typescript-debt: TSDEBT-001.",
-        path: input.path,
-        ...location,
-      });
-    }
-
-    for (const candidate of candidates) {
-      const nearby = adjacentMarkers(markers, candidate);
-      const validNearby = nearby.filter(
-        (marker): marker is DebtMarker & { id: string } =>
-          marker.id !== undefined,
-      );
-      for (const marker of nearby) associatedMarkers.add(marker);
-
-      const exactMatches = validNearby.filter((marker) => {
-        const entry = entriesById.get(marker.id);
-        return entry?.path === input.path && entry.kind === candidate.kind;
-      });
-
-      if (exactMatches.length === 1) {
-        usedDebtIds.add(exactMatches[0]!.id);
-        continue;
-      }
-      if (exactMatches.length > 1) {
-        diagnostics.push({
-          code: "ambiguous-debt-marker",
-          message: `Multiple debt markers match ${candidate.kind}; keep one adjacent marker per escape.`,
-          path: candidate.path,
-          line: candidate.line,
-          column: candidate.column,
-        });
-        continue;
-      }
-
-      if (validNearby.length === 0) {
-        diagnostics.push({
-          code: "unregistered-typescript-escape",
-          message: candidate.message,
-          path: candidate.path,
-          line: candidate.line,
-          column: candidate.column,
-        });
-        continue;
-      }
-
-      for (const marker of validNearby) {
-        const entry = entriesById.get(marker.id);
-        if (entry === undefined) continue;
-        if (entry.path !== input.path) {
-          diagnostics.push({
-            code: "debt-path-mismatch",
-            message: `Debt ${marker.id} is registered for ${entry.path}, not ${input.path}.`,
-            path: candidate.path,
-            line: candidate.line,
-            column: candidate.column,
-            debtId: marker.id,
-          });
-        } else if (entry.kind !== candidate.kind) {
-          diagnostics.push({
-            code: "debt-kind-mismatch",
-            message: `Debt ${marker.id} is registered as ${entry.kind}, not ${candidate.kind}.`,
-            path: candidate.path,
-            line: candidate.line,
-            column: candidate.column,
-            debtId: marker.id,
-          });
-        }
-      }
-    }
-
-    for (const marker of markers) {
-      if (marker.id === undefined) continue;
-      const location = sourceLocation(sourceFile, marker.comment.start);
-      if (!entriesById.has(marker.id)) {
-        diagnostics.push({
-          code: "unknown-debt-marker",
-          message: `Debt marker ${marker.id} is not present in the registry.`,
-          path: input.path,
-          ...location,
-          debtId: marker.id,
-        });
-      } else if (!associatedMarkers.has(marker)) {
-        diagnostics.push({
-          code: "orphan-debt-marker",
-          message: `Debt marker ${marker.id} is not adjacent to a matching TypeScript escape.`,
-          path: input.path,
-          ...location,
-          debtId: marker.id,
-        });
-      }
-    }
-  }
-
-  for (const entry of registry.entries) {
-    if (!usedDebtIds.has(entry.id)) {
-      diagnostics.push(
-        registryDiagnostic(
-          "stale-debt-entry",
-          `Debt ${entry.id} has no matching marker and ${entry.kind} escape at ${entry.path}.`,
-          entry.id,
-        ),
-      );
-    }
+    auditSource(input, sourceFile, collectComments(sourceFile, input.text), diagnostics);
   }
 
   diagnostics.sort((left, right) => {
-    const pathOrder = (left.path ?? "").localeCompare(right.path ?? "", "en");
+    const pathOrder = left.path.localeCompare(right.path, "en");
     if (pathOrder !== 0) return pathOrder;
-    const lineOrder = (left.line ?? 0) - (right.line ?? 0);
+    const lineOrder = left.line - right.line;
     if (lineOrder !== 0) return lineOrder;
-    const columnOrder = (left.column ?? 0) - (right.column ?? 0);
+    const columnOrder = left.column - right.column;
     if (columnOrder !== 0) return columnOrder;
     return left.code.localeCompare(right.code, "en");
   });
@@ -658,7 +239,6 @@ export function auditTypeScriptSources(
   return {
     diagnostics,
     scannedFiles: sources.length,
-    registeredDebts: registry.entries.length,
   };
 }
 
@@ -720,10 +300,6 @@ export async function collectAuthoredTypeScriptFiles(
 export async function runTypeScriptEscapeAudit(
   rootDirectory = process.cwd(),
 ): Promise<TypeScriptEscapeAuditResult> {
-  const debtPath = path.join(rootDirectory, DEBT_REGISTRY_PATH);
-  const parsedRegistry = parseDebtRegistry(
-    await readFile(debtPath, "utf8"),
-  );
   const filePaths = await collectAuthoredTypeScriptFiles(rootDirectory);
   const sources = await Promise.all(
     filePaths.map(async (filePath) => ({
@@ -731,22 +307,14 @@ export async function runTypeScriptEscapeAudit(
       text: await readFile(path.join(rootDirectory, filePath), "utf8"),
     })),
   );
-  const audit = auditTypeScriptSources(sources, parsedRegistry.registry);
-  return {
-    ...audit,
-    diagnostics: [...parsedRegistry.diagnostics, ...audit.diagnostics],
-  };
+  return auditTypeScriptSources(sources);
 }
 
 function formatDiagnostic(diagnostic: AuditDiagnostic): string {
-  const location =
-    diagnostic.path === undefined
-      ? ""
-      : `${diagnostic.path}${diagnostic.line === undefined ? "" : `:${diagnostic.line}:${diagnostic.column ?? 1}`}: `;
-  return `${location}[${diagnostic.code}] ${diagnostic.message}`;
+  return `${diagnostic.path}:${diagnostic.line}:${diagnostic.column}: [${diagnostic.code}] ${diagnostic.message}`;
 }
 
-export function isDirectExecution(
+function isDirectExecution(
   metaUrl: string,
   argumentPath: string | undefined,
 ): boolean {
@@ -761,7 +329,7 @@ if (isDirectExecution(import.meta.url, process.argv[1])) {
     const result = await runTypeScriptEscapeAudit();
     if (result.diagnostics.length === 0) {
       console.log(
-        `[typescript-escapes] OK: ${result.scannedFiles} TypeScript files audited; ${result.registeredDebts} registered debts.`,
+        `[typescript-escapes] OK: ${result.scannedFiles} TypeScript files audited.`,
       );
     } else {
       for (const diagnostic of result.diagnostics) {

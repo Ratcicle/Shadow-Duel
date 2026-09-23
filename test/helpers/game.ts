@@ -99,7 +99,7 @@ export function runtimeCard(input: RuntimeCardInput, owner = "player"): Card {
         ? instanceId
         : unsafeFixture<number>(
             instanceId,
-            "Historical unit fixtures use readable string instance IDs; preserve identity through the migration.",
+            "Unit fixtures use readable string instance IDs to distinguish cards.",
           );
   return card;
 }

@@ -1,7 +1,5 @@
-import {
-  DAMAGE_STEP_TIMINGS,
-  canActivateDuringDamageStep,
-} from "../../../game/spellTrap/quickSpellRules.js";
+import { canActivateDuringDamageStep } from "../../../game/spellTrap/quickSpellRules.js";
+import { DAMAGE_STEP_TIMINGS } from "../../../contracts/effects.js";
 import type { CollectedTriggerEventMap } from "../../../contracts/events.js";
 import type { DamageStepTiming } from "../../../contracts/effects.js";
 import type { CanonicalZone } from "../../../contracts/zones.js";

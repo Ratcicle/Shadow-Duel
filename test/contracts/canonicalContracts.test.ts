@@ -34,19 +34,6 @@ import {
   LEGACY_ZONE_ALIASES,
   normalizeZoneInput,
 } from "../../src/core/contracts/zones.js";
-import {
-  CHAIN_ACTIVATION_KINDS as LEGACY_CHAIN_ACTIVATION_KINDS,
-  CHAIN_EFFECT_KINDS as LEGACY_CHAIN_EFFECT_KINDS,
-  CHAIN_RESPONSE_CONTEXTS as LEGACY_CHAIN_RESPONSE_CONTEXTS,
-} from "../../src/core/chain/link.js";
-import {
-  TRIGGER_REQUIREMENTS as LEGACY_TRIGGER_REQUIREMENTS,
-  TRIGGER_TIMINGS as LEGACY_TRIGGER_TIMINGS,
-} from "../../src/core/chain/segoc.js";
-import { USAGE_POLICIES as LEGACY_USAGE_POLICIES } from "../../src/core/chain/usage.js";
-import { EFFECT_USAGE_POLICIES } from "../../src/core/game/effects/usage.js";
-import { DAMAGE_STEP_TIMINGS as LEGACY_DAMAGE_STEP_TIMINGS } from "../../src/core/game/spellTrap/quickSpellRules.js";
-import { SUMMON_ORIGINS as LEGACY_SUMMON_ORIGINS } from "../../src/core/game/summon/transaction.js";
 
 function assertFrozen(value: object): void {
   assert.equal(Object.isFrozen(value), true);
@@ -190,24 +177,6 @@ test("canonical chain constants stay exact and frozen", () => {
     CHAIN_EFFECT_KINDS,
     CHAIN_RESPONSE_CONTEXTS,
   ].forEach(assertFrozen);
-});
-
-test("legacy exports keep the canonical object identities", () => {
-  assert.strictEqual(LEGACY_USAGE_POLICIES, USAGE_POLICIES);
-  assert.strictEqual(EFFECT_USAGE_POLICIES, USAGE_POLICIES);
-  assert.strictEqual(LEGACY_TRIGGER_REQUIREMENTS, TRIGGER_REQUIREMENTS);
-  assert.strictEqual(LEGACY_TRIGGER_TIMINGS, TRIGGER_TIMINGS);
-  assert.strictEqual(LEGACY_DAMAGE_STEP_TIMINGS, DAMAGE_STEP_TIMINGS);
-  assert.strictEqual(LEGACY_SUMMON_ORIGINS, SUMMON_ORIGINS);
-  assert.strictEqual(
-    LEGACY_CHAIN_ACTIVATION_KINDS,
-    CHAIN_ACTIVATION_KINDS,
-  );
-  assert.strictEqual(LEGACY_CHAIN_EFFECT_KINDS, CHAIN_EFFECT_KINDS);
-  assert.strictEqual(
-    LEGACY_CHAIN_RESPONSE_CONTEXTS,
-    CHAIN_RESPONSE_CONTEXTS,
-  );
 });
 
 test("zone guards and normalization preserve canonical values defensively", () => {
