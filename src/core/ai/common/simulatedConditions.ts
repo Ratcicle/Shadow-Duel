@@ -8,6 +8,7 @@ import {
 } from "./targetSelection.js";
 import { mergeCanonicalSelections } from "../../game/selection/contract.js";
 import { walkActionList } from "../../actionHandlers/actionWalker.js";
+import { evaluateActivationPreviewConditions } from "../../effects/conditions/runtime.js";
 import type {
   AiStateShape,
   SimulatedCardState,
@@ -636,6 +637,8 @@ interface SimulatedActionView {
   destination?: string | null;
   useDestroyed?: boolean;
   scope?: string | null;
+  storeNegatedCardAs?: string | null;
+  conditions?: readonly SimConditionView[] | null;
 }
 
 interface SimulatedActivationAttemptView {
@@ -646,11 +649,15 @@ interface SimulatedActivationAttemptView {
 
 interface SimulatedActivationContextView extends SimConditionContext {
   card?: SimulatedCardState | null;
+  targetCard?: SimulatedCardState | null;
+  sourceCard?: SimulatedCardState | null;
   destroyed?: SimulatedCardState | null;
   activationAttempt?: SimulatedActivationAttemptView | null;
   effect?: EffectDefinition | null;
   player?: SimulatedPlayerState | null;
   context?: SimulatedActivationContextView | null;
+  respondingToChainLink?: { context?: SimulatedActivationContextView | null } | null;
+  actionResults?: Record<string, SimulatedCardState[]>;
 }
 
 function simCollectDestroyCandidates(
@@ -761,12 +768,45 @@ function simCollectBanishCandidates(
   activationPlayer: SimulatedPlayerState,
   activationOpponent: SimulatedPlayerState,
   activationContext: SimulatedActivationContextView = {},
+  conditionState?: SimConditionStateView,
 ): SimulatedCardState[] {
   const cards: SimulatedCardState[] = [];
-  for (const action of walkActionList(actions).visits.map(
-    (visit) => visit.action,
-  ) as SimulatedActionView[]) {
+  const previewResults = { ...(activationContext.actionResults || {}) };
+  const previewContext: SimulatedActivationContextView = {
+    ...activationContext,
+    actionResults: previewResults,
+  };
+  const negationContext = activationContext.respondingToChainLink?.context;
+  const negatedCard =
+    negationContext?.activationAttempt?.card ||
+    negationContext?.card ||
+    negationContext?.targetCard ||
+    negationContext?.sourceCard ||
+    null;
+  const skippedBranches: (readonly (string | number)[])[] = [];
+  for (const visit of walkActionList(actions).visits) {
+    if (skippedBranches.some((path) =>
+      path.every((segment, index) => visit.path[index] === segment)
+    )) continue;
+    const action = visit.action as SimulatedActionView | null;
     if (!action) continue;
+    if (action.type === "conditional_actions") {
+      if (!simPreviewBanishBranchConditions(
+        action.conditions,
+        activationPlayer,
+        activationOpponent,
+        activationContext.activationAttempt?.card || activationContext.card || null,
+        previewContext,
+        conditionState,
+      )) skippedBranches.push(visit.path);
+      continue;
+    }
+    if (
+      (action.type === "negate_effect" || action.type === "negate_activation") &&
+      action.storeNegatedCardAs && negatedCard
+    ) {
+      previewResults[action.storeNegatedCardAs] = [negatedCard];
+    }
     if (
       action.type === "banish" ||
       action.type === "banish_destroyed_monster" ||
@@ -782,11 +822,11 @@ function simCollectBanishCandidates(
         }
       }
       if (action.type === "banish_destroyed_monster" || action.useDestroyed === true) {
-        simAppendUnique(cards, activationContext.destroyed);
+        simAppendUnique(cards, previewContext.destroyed);
       }
       for (const card of simSelectedCards(
         action.targetRef || "target",
-        activationContext,
+        previewContext,
       )) {
         simAppendUnique(cards, card);
       }
@@ -820,13 +860,35 @@ function simCollectBanishCandidates(
       }
       for (const card of simSelectedCards(
         action.targetRef || "target",
-        activationContext,
+        previewContext,
       )) {
         simAppendUnique(cards, card);
       }
     }
   }
   return cards;
+}
+
+function simPreviewBanishBranchConditions(
+  conditions: readonly SimConditionView[] | null | undefined,
+  self: SimulatedPlayerState,
+  opponent: SimulatedPlayerState,
+  source: SimulatedCardState | null,
+  previewContext: SimulatedActivationContextView,
+  conditionState?: SimConditionStateView,
+): boolean {
+  const state = conditionState || { player: self, bot: opponent };
+  return evaluateActivationPreviewConditions(conditions, (condition) =>
+    evaluateSimulatedConditions([condition], {
+      ...previewContext,
+      state,
+      selfId: state.player === self ? "player" : "bot",
+      sourceCard: source,
+      source,
+      _actionTargets: previewContext.actionResults,
+      options: { actionContext: previewContext },
+    }),
+  );
 }
 
 function simCollectLeaveFieldCandidates(
@@ -1067,6 +1129,7 @@ function simActivationWouldBanishMatchingCards(
     activationOwner,
     activationOpponent,
     activationContext,
+    (ctx.state || ctx.game || { player: self, bot: opponent }) as SimConditionStateView,
   ).filter(
     (card) =>
       simCardInAllowedZones(card, zones, affectedOwners) &&

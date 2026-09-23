@@ -8,9 +8,11 @@ export type SummonChoice =
   | "defense"
   | "special_from_void_forgotten"
   | "special_from_hand_effect"
+  | "hand_summon_procedure"
   | { type: "hand_effect"; effectId: string };
 export type PositionChoice = "flip" | "to_attack" | "to_defense";
 export interface HandChoiceOptions {
+  handSummonProcedure?: boolean;
   anchorElement?: HTMLElement | null;
   ownerId?: PlayerId;
   canNormalSummon?: boolean;
@@ -126,6 +128,10 @@ export function showSummonModal(
 
   if (canNormalSummon) {
     addChoiceButton(getUIText("ui.summon.normal"), "attack");
+  }
+
+  if (options.handSummonProcedure) {
+    addChoiceButton(getUIText("ui.summon.special"), "hand_summon_procedure");
   }
 
   if (options.specialSummonFromHand) {

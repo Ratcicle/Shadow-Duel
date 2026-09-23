@@ -21,6 +21,7 @@ import * as combatResolution from "./combat/resolution.js";
 import * as combatDamageStep from "./combat/damageStep.js";
 import * as summonTracking from "./summon/tracking.js";
 import * as summonExecution from "./summon/execution.js";
+import * as handProcedure from "./summon/handProcedure.js";
 import * as summonTransaction from "./summon/transaction.js";
 import * as summonAscension from "./summon/ascension.js";
 import * as summonSynchro from "./summon/synchro.js";
@@ -227,6 +228,8 @@ export const GAME_ATTACHMENT_GROUPS = Object.freeze([
   ]),
   group("summonTransaction", [
     ["createPreparedSummon", summonTransaction.createPreparedSummon],
+    ["canSummonFromHandByProcedure", handProcedure.canSummonFromHandByProcedure],
+    ["performHandSummonProcedure", handProcedure.performHandSummonProcedure],
     ["beginSummonTransaction", summonTransaction.beginSummonTransaction],
     ["markSummonAwaitingNegation", summonTransaction.markSummonAwaitingNegation],
     ["markSummonNegated", summonTransaction.markSummonNegated],

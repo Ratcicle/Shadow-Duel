@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import Game from "../../src/core/Game.js";
 import {
   getCardDatabaseSignature,
+  createCanonicalStateSnapshot,
   hashCanonicalValue,
   isReplayEvent,
   validateCanonicalReplay,
@@ -14,7 +15,7 @@ import type {
   PlayerId,
   SelectionCandidateKey,
 } from "../../src/core/contracts/primitives.js";
-import type { CanonicalReplayDecisionOf } from "../../src/core/contracts/replay.js";
+import type { CanonicalReplayDecisionOf, ReplayDriverGamePort } from "../../src/core/contracts/replay.js";
 
 const deck = [1, 2, 3, 4, 5, 6, 7, 8];
 
@@ -53,6 +54,53 @@ test("canonical replay preserves fractional LP without changing its schema", asy
   const dispose = Reflect.get(result.game, "dispose");
   assert.ok(typeof dispose === "function");
   Reflect.apply(dispose, result.game, []);
+});
+
+test("hand procedure capture replays the human's five costs without an activation command", async (t) => {
+  // The shared starting fixture isolates procedure capture from unrelated turns.
+  const installStartingFixture = (game: GameInstance) => {
+    const start = game.startWithDecks.bind(game);
+    game.startWithDecks = async (options) => {
+      await start(options);
+      const cards = [...game.player.hand, ...game.player.deck];
+      game.player.hand = [required(cards.find(card => card.id === 24))];
+      game.player.graveyard = cards.filter(card => card.id === 23);
+      game.player.deck = [];
+      game.phase = "main1";
+      game.disablePresentationDelays = true;
+      game.waitForBoardPresentation = async () => {};
+    };
+  };
+  const recording = new Game({ randomSeed: 712, captureReplay: true });
+  const playback = new Game({ randomSeed: 712, captureReplay: false, replayMode: "playback" });
+  t.after(() => { recording.dispose(); playback.dispose(); });
+  installStartingFixture(recording);
+  installStartingFixture(playback);
+  await recording.startWithDecks({
+    exactDecks: true, initializeOnly: true, startAtDrawPhase: true,
+    announceStartingPlayer: false, startingPlayer: "player",
+    playerDeck: [24, 23, 23, 23, 23, 23], playerExtraDeck: [],
+    botDeck: deck, botExtraDeck: [],
+  });
+  const hyperion = required(recording.player.hand[0]);
+  const result = await recording.performHandSummonProcedure(hyperion, recording.player, { position: "attack" });
+  assert.equal(result.needsSelection, true);
+  const selection = required(recording.targetSelection);
+  selection.selections.hand_summon_cost = required(selection.requirements[0]).candidates.map(candidate => candidate.key);
+  await recording.finishTargetSelection();
+  assert.equal(recording.player.field.includes(hyperion), true);
+  const replay = validateCanonicalReplay(JSON.parse(JSON.stringify(
+    Reflect.apply(recording.finalizeReplay, recording, [{ reason: "test" }]),
+  )));
+  assert.deepEqual(replay.commands.map(command => command.type), ["hand_summon_procedure"]);
+  assert.equal(replay.decisions.filter(decision => decision.kind === "cost").length, 1);
+  // As in the driver factory, this read port refers to this Game's real cards and players.
+  const replayed = await replayCanonicalDuel(replay, { game: playback as ReplayDriverGamePort });
+  assert.equal(replayed.ok, true);
+  assert.equal(playback.player.banished.length, 5);
+  assert.equal(required(playback.player.field[0]).lastSummonProcedure, hyperion.lastSummonProcedure);
+  assert.equal(replayed.finalStateHash, replay.result?.finalStateHash);
+  assert.deepEqual(createCanonicalStateSnapshot(playback), replay.result?.finalState);
 });
 
 function selectionAt(
@@ -118,7 +166,7 @@ test("replay canônico headless termina com o mesmo hash", async () => {
     ["26771e66", "0339db06"],
   );
   assert.equal(replay.result.finalStateHash, "0339db06");
-  assert.equal(hashCanonicalValue(replay), "fea9e5fc");
+  assert.equal(hashCanonicalValue(replay), "e0556fa0");
   assert.equal(JSON.stringify(replay).length, 8526);
 
   const result = await replayCanonicalDuel(replay);

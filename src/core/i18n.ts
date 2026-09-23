@@ -629,7 +629,7 @@ async function loadLocalePayload(publicPath: string): Promise<unknown> {
     const {
       readFile,
     }: { readFile(url: URL): Promise<{ toString(): string }> } = await import(
-      nodeFsPromises
+      /* @vite-ignore */ nodeFsPromises
     );
     const fileData = await readFile(url);
     return JSON.parse(fileData.toString());

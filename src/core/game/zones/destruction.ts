@@ -260,6 +260,7 @@ function findConditionalDestructionProtection(
   opponent: GamePlayer | null,
   cause: string,
   fromZone: CanonicalZone,
+  sourcePlayer: GamePlayer | null,
 ) {
   if (!game || !card || !owner) return null;
   if (!Array.isArray(card.effects)) return null;
@@ -271,6 +272,12 @@ function findConditionalDestructionProtection(
     const passive = runtimeEffect.passive;
     if (!passive) continue;
     if (passive.type !== "conditional_protection") continue;
+    if (
+      passive.requireSummonProcedure &&
+      card.lastSummonProcedure !== passive.requireSummonProcedure
+    ) continue;
+    if (passive.sourceOwner === "opponent" && !samePlayer(opponent, sourcePlayer)) continue;
+    if (passive.sourceOwner === "self" && !samePlayer(owner, sourcePlayer)) continue;
     if (
       game.effectEngine?.isCardEffectNegated?.(card) ||
       (!game.effectEngine?.isCardEffectNegated && card.effectsNegated === true)
@@ -549,6 +556,7 @@ export function isBattleDestructionProtected(
       opponent,
       "battle",
       fromZone,
+      sourcePlayer,
     ),
   );
 }
@@ -661,6 +669,7 @@ export async function destroyCard(
               opponent,
               cause,
               fromZone,
+              sourcePlayer,
             );
       if (conditionalProtection) {
         this.ui?.log?.(

@@ -135,6 +135,8 @@ test("Red Fury Horror e Iron Smasher declaram dados, arte, localização e mater
   );
   assert.equal(locale.cards[RED_FURY_HORROR_ID].name, "Terror Fúria Vermelha");
   assert.equal(locale.cards[IRON_SMASHER_ID].name, "Esmagador de Ferro");
+  assert.ok(locale.cards[RED_FURY_HORROR_ID].description.startsWith("1 Regulador + 1+ monstros não-Reguladores\n"));
+  assert.ok(locale.cards[IRON_SMASHER_ID].description.startsWith("1 Regulador + 1+ monstros não-Reguladores\n"));
 
   const redMaterials = [
     material("red-tuner", 3, true),

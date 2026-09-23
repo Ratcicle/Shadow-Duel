@@ -94,6 +94,9 @@ function driverFixture(consumeDecisions = true): DriverFixture {
     performExtraDeckSummonProcedure(card) {
       calls.push(`procedure:${card.id}`);
     },
+    performHandSummonProcedure(card) {
+      calls.push(`handProcedure:${card.id}`);
+    },
     tryActivateMonsterEffect(card) {
       calls.push(`monsterEffect:${card.id}`);
     },
@@ -148,7 +151,7 @@ function command<Type extends CanonicalReplayCommand["type"]>(
   >;
 }
 
-test("driver executa os 15 command types suportados", async () => {
+test("driver executa os command types suportados", async () => {
   const commands: CanonicalReplayCommand[] = [
     command(1, "noop", {}),
     command(2, "draw", { amount: 2 }),
@@ -195,6 +198,9 @@ test("driver executa os 15 command types suportados", async () => {
       position: "defense",
     }),
     command(15, "attack", { attackerId: 4, targetId: 9 }),
+    command(16, "hand_summon_procedure", {
+      duelCardId: 1, cardId: 1, position: "defense", materialIds: [41],
+    }),
   ];
   const fixture = driverFixture();
   const result = await replayCanonicalDuel(replay(commands), {
@@ -202,7 +208,7 @@ test("driver executa os 15 command types suportados", async () => {
   });
 
   assert.equal(result.ok, true);
-  assert.equal(result.commands, 15);
+  assert.equal(result.commands, 16);
   assert.equal(fixture.game.phase, "main1");
   assert.equal(fixture.game.player.lp, 7000);
   assert.deepEqual(fixture.calls, [
@@ -220,7 +226,24 @@ test("driver executa os 15 command types suportados", async () => {
     "spell:2",
     "position:4:defense",
     "attack:4:9",
+    "handProcedure:1",
   ]);
+});
+
+test("hand procedure replay preserves exact costs and rejects missing materials", async () => {
+  const fixture = driverFixture();
+  const material = fixture.game.player.field[1];
+  assert.ok(material);
+  fixture.game.performHandSummonProcedure = (_card, actor, options) => {
+    assert.strictEqual(actor, fixture.game.player);
+    assert.deepEqual(options, { position: "defense", materials: [material] });
+  };
+  await replayCanonicalDuel(replay([
+    command(1, "hand_summon_procedure", { duelCardId: 1, position: "defense", materialIds: [41] }),
+  ]), { game: fixture.game });
+  await assert.rejects(() => replayCanonicalDuel(replay([
+    command(1, "hand_summon_procedure", { duelCardId: 1, materialIds: [999] }),
+  ]), { game: fixture.game }), /hand procedure cost is missing/);
 });
 
 test("comando desconhecido é rejeitado antes de inicializar o Game", async () => {

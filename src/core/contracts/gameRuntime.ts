@@ -309,6 +309,7 @@ export interface SummonNegationOutcome {
 }
 
 export interface SummonCardIdentitySnapshot {
+  duelCardId?: number;
   cardId: number | null;
   instanceId: string | number | null;
   name: string | null;
@@ -631,6 +632,7 @@ export interface VisualFeedback {
 export type GameUiPort = import("./ui.js").GameUI;
 
 export interface EffectEngineRuntimePort {
+  cardMatchesFilters(card: GameCard, filters: import("./effects.js").CardFilter): boolean;
   clearTargetingCache?(): void;
   updatePassiveBuffs?(): MaybePromise<unknown>;
   getMonsterIgnitionEffect?(

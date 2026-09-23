@@ -17,6 +17,49 @@ import type { FilterCard, RuntimeCardFilter } from "../filters/cardFilters.js";
 import type { TemporaryEventEffect } from "../triggers/runtime.js";
 import type { resolveTargets } from "../targeting/resolution.js";
 
+// These conditions only inspect existing state in both canonical interpreters.
+// Impact predictions recurse into actions; declaration expiry and blueprint
+// normalization can mutate state, so those conditions are not previewed here.
+const READ_ONLY_PREVIEW_CONDITIONS = new Set([
+  "context_number_compare",
+  "control_card",
+  "control_card_filters",
+  "control_card_max",
+  "battle_destroyer_matches_filters",
+  "battle_participant_matches_filters",
+  "field_card_count",
+  "field_card_count_comparison",
+  "event_card_matches_filters",
+  "event_card_matches_declared_value_from_effect_sources",
+  "targetRefMatchesFilters",
+  "source_has_marker",
+  "summoned_card_has_marker",
+  "source_counters_at_least",
+  "attacker_matches",
+]);
+
+/** Reuse canonical predicates without invoking stateful or recursive previews. */
+export function evaluateActivationPreviewConditions(
+  conditions: readonly unknown[] | null | undefined,
+  evaluate: (condition: object) => boolean,
+): boolean {
+  const active = new WeakSet<object>();
+  const visit = (condition: unknown): boolean => {
+    if (!condition || typeof condition !== "object" || active.has(condition)) return false;
+    const type: unknown = Reflect.get(condition, "type");
+    if (type === "any_of") {
+      active.add(condition);
+      const options: unknown = Reflect.get(condition, "conditions") ??
+        Reflect.get(condition, "anyOf") ?? Reflect.get(condition, "any_of");
+      const result = Array.isArray(options) && options.some(visit);
+      active.delete(condition);
+      return result;
+    }
+    return typeof type === "string" && READ_ONLY_PREVIEW_CONDITIONS.has(type) && evaluate(condition);
+  };
+  return !conditions || conditions.every(visit);
+}
+
 export interface ConditionCard extends ActionRuntimeCard {
   effectMarkers?: CardEffectMarkerMap;
   fieldPresenceId?: string | number | null;
@@ -53,6 +96,8 @@ export interface ConditionActivationContext extends SelectionChannelSource {
     effect?: EffectDefinition | null;
   } | null;
   card?: ConditionCard | null;
+  targetCard?: ConditionCard | null;
+  sourceCard?: ConditionCard | null;
   player?: ConditionPlayer | null;
   triggerPlayer?: ConditionPlayer | null;
   effect?: EffectDefinition | null;
@@ -158,6 +203,8 @@ export interface ConditionAction
   cardType?: string;
   scope?: string;
   useDestroyed?: boolean;
+  storeNegatedCardAs?: string;
+  conditions?: readonly RuntimeCondition[];
 }
 
 export interface ConditionTemporaryEffect extends TemporaryEventEffect {

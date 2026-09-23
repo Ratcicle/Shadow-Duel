@@ -2,9 +2,10 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import type { TestContext } from "node:test";
 import test from "node:test";
+import ChainSystem from "../src/core/ChainSystem.js";
 import type { CardConstructorData } from "../src/core/contracts/cards.js";
 import type { GamePlayer } from "../src/core/contracts/player.js";
-import { record, required } from "./helpers/fixtures.js";
+import { required, selectedCards } from "./helpers/fixtures.js";
 import type { RuntimeGame } from "./helpers/game.js";
 import { createRuntimeGame } from "./helpers/game.js";
 
@@ -91,15 +92,134 @@ test("Samurai declara três blocos compactos e limites independentes", async () 
   assert.equal(reviveEffect.usagePolicy, "use");
   assert.notEqual(sendEffect.oncePerTurnName, reviveEffect.oncePerTurnName);
   assert.deepEqual(reviveEffect.activationZones, ["graveyard"]);
-  assert.equal(required(required(reviveEffect.actions)[0]).banishCost, true);
-  assert.equal(
-    record(required(required(reviveEffect.actions)[0]).filters).isTuner,
-    true,
+  assert.deepEqual(reviveEffect.activationCosts, [{
+    type: "move",
+    targetRef: "self",
+    player: "self",
+    fromZone: "graveyard",
+    to: "banished",
+    contextLabel: "misty_katana_ghost_samurai_revive_cost",
+  }]);
+  const reviveTarget = required(required(reviveEffect.targets)[0]);
+  assert.equal(reviveTarget.owner, "self");
+  assert.equal(reviveTarget.zone, "graveyard");
+  assert.equal(reviveTarget.cardKind, "monster");
+  assert.equal(reviveTarget.isTuner, true);
+  assert.equal(reviveTarget.maxLevel, 4);
+  assert.deepEqual(reviveTarget.count, { min: 1, max: 1 });
+  assert.equal(required(required(reviveEffect.actions)[0]).targetRef, reviveTarget.id);
+  assert.equal("banishCost" in required(required(reviveEffect.actions)[0]), false);
+});
+
+test("Samurai paga o banimento e fixa o Regulador antes da janela de respostas", async (t) => {
+  const game = createGame(t);
+  game.player.controllerType = "ai";
+  const samurai = createCard(cardDatabaseByName.get("Misty Katana Ghost Samurai"), game.player);
+  const tuner = createCard(cardDatabaseByName.get("Tech-Zero Energy Core"), game.player);
+  game.player.graveyard.push(samurai, tuner);
+  assert.ok(game.chainSystem instanceof ChainSystem);
+  let observed = false;
+  game.chainSystem.offerChainResponses = async () => {
+    const link = game.chainSystem.getLastChainLink();
+    if (link?.effectId === "misty_katana_ghost_samurai_revive_tuner") {
+      observed = game.player.banished.includes(samurai)
+        && link.costsPaid === true
+        && selectedCards(link.targetSelections, "misty_katana_ghost_samurai_revive_target")?.[0] === tuner;
+    }
+    return { lastActivator: null, chainBuilt: false, consecutivePasses: 2, offers: 1, activations: 0 };
+  };
+  const result = await game.tryActivateMonsterEffect(
+    samurai,
+    { misty_katana_ghost_samurai_revive_target: [tuner] },
+    "graveyard",
+    game.player,
+    { effectId: "misty_katana_ghost_samurai_revive_tuner" },
   );
-  assert.equal(
-    record(required(required(reviveEffect.actions)[0]).filters).maxLevel,
-    4,
+  assert.ok(result.success === true);
+  assert.equal(observed, true);
+  assert.equal(game.player.field.includes(tuner), true);
+});
+
+for (const negation of ["activation", "effect"] as const) {
+  test(`Samurai mantém o custo pago quando a ${negation} é negada`, async (t) => {
+    const game = createGame(t);
+    game.player.controllerType = "ai";
+    const samurai = createCard(cardDatabaseByName.get("Misty Katana Ghost Samurai"), game.player);
+    const tuner = createCard(cardDatabaseByName.get("Tech-Zero Energy Core"), game.player);
+    game.player.graveyard.push(samurai, tuner);
+    assert.ok(game.chainSystem instanceof ChainSystem);
+    game.chainSystem.offerChainResponses = async () => {
+      const link = required(game.chainSystem.getLastChainLink());
+      assert.equal(game.player.banished.includes(samurai), true);
+      if (negation === "activation") {
+        game.chainSystem.markChainLinkActivationNegated(link.linkId, { negatedBy: tuner });
+      } else {
+        game.chainSystem.markChainLinkEffectNegated(link.linkId, { negatedBy: tuner });
+      }
+      return { lastActivator: null, chainBuilt: false, consecutivePasses: 2, offers: 1, activations: 0 };
+    };
+    await game.tryActivateMonsterEffect(
+      samurai,
+      { misty_katana_ghost_samurai_revive_target: [tuner] },
+      "graveyard",
+      game.player,
+      { effectId: "misty_katana_ghost_samurai_revive_tuner" },
+    );
+    assert.equal(game.player.banished.includes(samurai), true);
+    assert.equal(game.player.graveyard.includes(tuner), true);
+    assert.equal(game.player.field.includes(tuner), false);
+  });
+}
+
+test("Samurai não redireciona a Invocação quando o alvo deixa o Cemitério", async (t) => {
+  const game = createGame(t);
+  game.player.controllerType = "ai";
+  const samurai = createCard(cardDatabaseByName.get("Misty Katana Ghost Samurai"), game.player);
+  const chosen = createCard(cardDatabaseByName.get("Tech-Zero Energy Core"), game.player);
+  const alternate = createCard(cardDatabaseByName.get("Tech-Zero Energy Core"), game.player);
+  game.player.graveyard.push(samurai, chosen, alternate);
+  assert.ok(game.chainSystem instanceof ChainSystem);
+  game.chainSystem.offerChainResponses = async () => {
+    const moved = await game.moveCard(chosen, game.player, "banished", { fromZone: "graveyard" });
+    assert.equal(moved.success, true);
+    return { lastActivator: null, chainBuilt: false, consecutivePasses: 2, offers: 1, activations: 0 };
+  };
+  await game.tryActivateMonsterEffect(
+    samurai,
+    { misty_katana_ghost_samurai_revive_target: [chosen] },
+    "graveyard",
+    game.player,
+    { effectId: "misty_katana_ghost_samurai_revive_tuner" },
   );
+  assert.equal(game.player.banished.includes(samurai), true);
+  assert.equal(game.player.banished.includes(chosen), true);
+  assert.equal(game.player.graveyard.includes(alternate), true);
+  assert.equal(game.player.field.includes(alternate), false);
+});
+
+test("Samurai não Invoca nem troca o alvo se ele ultrapassar o Nível 4 durante a Corrente", async (t) => {
+  const game = createGame(t);
+  game.player.controllerType = "ai";
+  const samurai = createCard(cardDatabaseByName.get("Misty Katana Ghost Samurai"), game.player);
+  const chosen = createCard(cardDatabaseByName.get("Tech-Zero Energy Core"), game.player);
+  const alternate = createCard(cardDatabaseByName.get("Tech-Zero Energy Core"), game.player);
+  game.player.graveyard.push(samurai, chosen, alternate);
+  assert.ok(game.chainSystem instanceof ChainSystem);
+  game.chainSystem.offerChainResponses = async () => {
+    chosen.level = 5;
+    return { lastActivator: null, chainBuilt: false, consecutivePasses: 2, offers: 1, activations: 0 };
+  };
+  await game.tryActivateMonsterEffect(
+    samurai,
+    { misty_katana_ghost_samurai_revive_target: [chosen] },
+    "graveyard",
+    game.player,
+    { effectId: "misty_katana_ghost_samurai_revive_tuner" },
+  );
+  assert.equal(game.player.banished.includes(samurai), true);
+  assert.equal(game.player.graveyard.includes(chosen), true);
+  assert.equal(game.player.graveyard.includes(alternate), true);
+  assert.equal(game.player.field.length, 0);
 });
 
 test("Samurai envia o Regulador do Deck e devolve o timing ao estado aberto", async (t) => {

@@ -8,6 +8,7 @@ import type {
   AIAction,
   AIActionOf,
   ExtraDeckMaterialHint,
+  HandProcedureMaterialHint,
   AIActivationContext,
 } from "../contracts/ai.js";
 import type { GameCard, CardKind } from "../contracts/cards.js";
@@ -87,6 +88,64 @@ export function resolveHandIndexForAction(
   }
 
   return -1;
+}
+
+export function resolveHandProcedureMaterials(
+  bot: BotRuntimePort,
+  hints: readonly HandProcedureMaterialHint[],
+): GameCard[] | null {
+  const materials: GameCard[] = [];
+  for (const hint of hints) {
+    const zone = bot[hint.zone];
+    const atIndex = zone[hint.index];
+    const matches = (card: GameCard) =>
+      card.id === hint.cardId && card.instanceId === hint.instanceId;
+    const material = atIndex && matches(atIndex) ? atIndex : zone.find(matches);
+    if (!material || materials.includes(material)) return null;
+    materials.push(material);
+  }
+  return materials;
+}
+
+export function collectHandSummonProcedureActions(
+  bot: BotRuntimePort,
+  game: BotGamePort,
+): AIActionOf<"handSummonProcedure">[] {
+  return bot.hand.flatMap((card, index) => {
+    const procedure = card.handSummonProcedure;
+    if (!procedure) return [];
+    const check = game.canSummonFromHandByProcedure(card, bot);
+    if (!check.ok) return [];
+    const chosen = check.suggestedMaterials;
+    if (chosen.length !== procedure.cost.count) return [];
+    const materials: HandProcedureMaterialHint[] = chosen.map((material) => {
+      const zone = bot.field.includes(material) ? "field" as const : "graveyard" as const;
+      return { zone, index: bot[zone].indexOf(material), cardId: material.id, instanceId: material.instanceId };
+    });
+    return [{
+      type: "handSummonProcedure" as const,
+      card, cardId: card.id, cardName: card.name, index, materials,
+      priority: (card.atk || 0) / 500 + 1,
+    }];
+  });
+}
+
+export function canResolveHandSummonProcedureActionForCurrentState(
+  bot: BotRuntimePort,
+  action: AIActionOf<"handSummonProcedure">,
+  game: BotGamePort,
+): boolean {
+  const index = resolveHandIndexForAction(bot, action, "monster");
+  const card = bot.hand[index];
+  if (!card?.handSummonProcedure) return false;
+  const check = game.canSummonFromHandByProcedure(card, bot);
+  if (!check.ok || action.materials.length !== card.handSummonProcedure.cost.count) return false;
+  const materials = resolveHandProcedureMaterials(bot, action.materials);
+  if (!materials || materials.some((material) => !check.candidates.includes(material))) return false;
+  if (bot.field.length - materials.filter((material) => bot.field.includes(material)).length >= 5) return false;
+  return game.canPlaceCardOnField(card, bot, {
+    isFacedown: false, summonMethod: "special", excludeCards: materials, silent: true,
+  }).ok;
 }
 
 export function tributeMatchesAltRequirement(
@@ -486,6 +545,9 @@ export function filterValidActionsForCurrentState(
     if (!action || !action.type) return false;
     if (action.type === "summon") {
       return canResolveSummonActionForCurrentState(bot, action, game);
+    }
+    if (action.type === "handSummonProcedure") {
+      return canResolveHandSummonProcedureActionForCurrentState(bot, action, game);
     }
     if (action.type === "spell") {
       const handIndex = resolveHandIndexForAction(bot, action, "spell");

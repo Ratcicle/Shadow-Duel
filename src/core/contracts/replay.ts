@@ -109,6 +109,11 @@ export interface ExtraDeckSummonReplayCommandPayload extends ReplayCardLocator {
   materialIds?: Array<DuelCardId | number>;
 }
 
+export interface HandSummonProcedureReplayCommandPayload extends ReplayCardLocator {
+  position?: BattlePosition | null;
+  materialIds?: Array<DuelCardId | number>;
+}
+
 export interface ActivateReplayCommandPayload extends ReplayCardLocator {
   sourceZone?: ReplayCardZone;
   effectId?: string | null;
@@ -136,6 +141,7 @@ export interface CanonicalReplayCommandPayloadByType {
   set_spell_trap: SetSpellTrapReplayCommandPayload;
   flip_summon: FlipSummonReplayCommandPayload;
   extra_deck_summon: ExtraDeckSummonReplayCommandPayload;
+  hand_summon_procedure: HandSummonProcedureReplayCommandPayload;
   activate_effect: ActivateReplayCommandPayload;
   activate_card: ActivateReplayCommandPayload;
   change_position: ChangePositionReplayCommandPayload;
@@ -157,6 +163,7 @@ export const CANONICAL_REPLAY_COMMAND_TYPES = Object.freeze([
   "set_spell_trap",
   "flip_summon",
   "extra_deck_summon",
+  "hand_summon_procedure",
   "activate_effect",
   "activate_card",
   "change_position",
@@ -684,6 +691,11 @@ export interface ReplayDriverGamePort extends CanonicalReplayGamePort {
     options: object,
   ): unknown;
   performExtraDeckSummonProcedure(
+    card: ReplayRuntimeCard,
+    player: ReplayRuntimePlayer,
+    options: object,
+  ): unknown;
+  performHandSummonProcedure(
     card: ReplayRuntimeCard,
     player: ReplayRuntimePlayer,
     options: object,

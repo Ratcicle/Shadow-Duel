@@ -287,6 +287,7 @@ interface SearchBranch {
 function actionRequiresHand(actionType: AIActionType): boolean {
   return (
     actionType === "summon" ||
+    actionType === "handSummonProcedure" ||
     actionType === "spell" ||
     actionType === "handIgnition" ||
     actionType === "set_spell_trap" ||
@@ -299,6 +300,7 @@ function expectedHandKind(
 ): "monster" | "spell" | readonly ["spell", "trap"] | null {
   if (
     actionType === "summon" ||
+    actionType === "handSummonProcedure" ||
     actionType === "handIgnition" ||
     actionType === "special_summon_sanctum_protector"
   ) {

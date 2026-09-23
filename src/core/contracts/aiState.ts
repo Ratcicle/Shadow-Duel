@@ -326,6 +326,7 @@ export interface AiCardInput {
   position?: BattlePosition | string | null | undefined;
   isFacedown?: boolean | undefined;
   effects?: GameCard["effects"];
+  handSummonProcedure?: GameCard["handSummonProcedure"];
   counters?: ReadonlyMap<string, number>;
   equips?: readonly AiCardInput[];
   dynamicBuffs?: GameCard["dynamicBuffs"] | undefined;

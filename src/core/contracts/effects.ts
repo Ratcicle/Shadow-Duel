@@ -429,6 +429,8 @@ export interface PassiveRuleDefinition {
   readonly opponentFilters?: CardFilter;
   readonly preventedEffectOwners?: readonly EffectOwner[];
   readonly protectFrom?: "opponent_effects";
+  readonly requireSummonProcedure?: string;
+  readonly sourceOwner?: "self" | "opponent" | "any" | "both";
   readonly protectionType?: "battle_destruction" | "effect_destruction";
   readonly reason?: string;
   readonly redirectTo?: CanonicalZone;

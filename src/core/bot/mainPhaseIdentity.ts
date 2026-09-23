@@ -4,7 +4,7 @@ import type { BotGamePort, BotRuntimePort } from "../contracts/bot.js";
 import type { GameCard } from "../contracts/cards.js";
 import type { GameRuntimeState } from "../contracts/gameRuntime.js";
 import { fingerprintPlanningState, PLANNING_ZONES } from "../ai/common/stateFingerprint.js";
-import { resolveHandIndexForAction } from "./actionValidation.js";
+import { resolveHandIndexForAction, resolveHandProcedureMaterials } from "./actionValidation.js";
 
 type CanonicalValue = null | boolean | number | string | CanonicalValue[];
 type MainPhaseIdentityGame = Pick<BotGamePort,
@@ -182,11 +182,17 @@ export function fingerprintMainPhaseAction(action: AIPlannedAction, game: MainPh
   let choices: object = {};
   switch (action.type) {
     case "summon":
+    case "handSummonProcedure":
     case "handIgnition":
     case "special_summon_sanctum_protector":
       zone = "hand";
       source = bot.hand[resolveHandIndexForAction(bot, action, "monster")];
       if (action.type === "summon") choices = { position: action.position, facedown: action.facedown, tributes: action.tributeIndices?.map(index => sourceIdentity(bot.field[index], "tribute")) };
+      if (action.type === "handSummonProcedure") {
+        const materials = resolveHandProcedureMaterials(bot, action.materials);
+        if (!materials) throw new TypeError("Unresolved hand procedure materials");
+        choices = { position: action.position || "attack", materials: materials.map(material => sourceIdentity(material, "material")) };
+      }
       if (action.type === "special_summon_sanctum_protector") {
         const material = Number.isInteger(action.materialIndex) ? indexedCard(bot.field, action.materialIndex) : bot.field.find(card => card.name === "Luminarch Aegisbearer" && !card.isFacedown);
         choices = { position: action.position === "attack" ? "attack" : "defense", material: sourceIdentity(material, "material") };

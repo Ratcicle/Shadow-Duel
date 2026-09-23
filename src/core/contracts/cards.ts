@@ -278,7 +278,18 @@ interface CardDefinitionBase {
   readonly properSummonProcedure?: SpecialSummonProcedure;
 }
 
+export interface HandSummonProcedure {
+  readonly id: string;
+  readonly cost: {
+    readonly count: number;
+    readonly zones: readonly ("field" | "graveyard")[];
+    readonly filters: CardFilter;
+    readonly destination: "banished" | "graveyard";
+  };
+}
+
 interface MonsterDefinitionCore extends CardDefinitionBase {
+  readonly handSummonProcedure?: HandSummonProcedure;
   readonly cardKind: "monster";
   readonly type?: MonsterRace;
   readonly attribute?: CardAttribute;
@@ -401,6 +412,7 @@ export interface CardInstance {
  * so this compatibility boundary does not become an open property bag.
  */
 export interface GeneratedCardDefinition {
+  readonly handSummonProcedure?: HandSummonProcedure | null;
   readonly id?: RawCardDefinitionId | CardDefinitionId;
   readonly name: string;
   readonly cardKind?: CardKind;
@@ -626,6 +638,7 @@ export interface TrapMonsterOriginalState {
  * boundaries instead of granting every property name to every consumer.
  */
 export interface GameCard {
+  handSummonProcedure?: HandSummonProcedure | null;
   oncePerTurnResetVersion?: number;
   instanceId: number;
   _instanceId?: number | string | null;

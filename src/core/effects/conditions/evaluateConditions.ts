@@ -22,6 +22,7 @@ import type {
 } from "./runtime.js";
 
 import { walkActionList } from "../../actionHandlers/actionWalker.js";
+import { evaluateActivationPreviewConditions } from "./runtime.js";
 
 function getCardInstanceId(card: ConditionCard | null | undefined) {
   return card?.instanceId ?? card?._instanceId ?? card?.uuid ?? null;
@@ -807,13 +808,40 @@ function collectActionsBanishCandidates(
   activationContext: ConditionActivationContext,
 ) {
   const cards: ConditionCard[] = [];
-  for (const action of walkActionList(actions).visits.map(
-    (visit) => visit.action,
-  )) {
+  const previewTargets = { ...(ctx._actionTargets || {}) };
+  const previewCtx: ConditionContext = {
+    ...ctx,
+    _actionTargets: previewTargets,
+  };
+  const negationContext = activationContext.respondingToChainLink?.context;
+  const negatedCard =
+    negationContext?.activationAttempt?.card ||
+    negationContext?.card ||
+    negationContext?.targetCard ||
+    negationContext?.sourceCard ||
+    null;
+  const skippedBranches: (readonly (string | number)[])[] = [];
+  for (const visit of walkActionList(actions).visits) {
+    if (skippedBranches.some((path) =>
+      path.every((segment, index) => visit.path[index] === segment)
+    )) continue;
+    const action = visit.action as ConditionAction | null;
+    if (action?.type === "conditional_actions") {
+      if (!previewBanishBranchConditions(engine, action.conditions, previewCtx)) {
+        skippedBranches.push(visit.path);
+      }
+      continue;
+    }
+    if (
+      (action?.type === "negate_effect" || action?.type === "negate_activation") &&
+      action.storeNegatedCardAs && negatedCard
+    ) {
+      previewTargets[action.storeNegatedCardAs] = [negatedCard];
+    }
     for (const card of collectActionBanishCandidates(
       engine,
       action,
-      ctx,
+      previewCtx,
       effect,
       activationContext,
     )) {
@@ -821,6 +849,16 @@ function collectActionsBanishCandidates(
     }
   }
   return cards;
+}
+
+function previewBanishBranchConditions(
+  engine: ConditionHost,
+  conditions: readonly RuntimeCondition[] | undefined,
+  ctx: ConditionContext,
+) {
+  return evaluateActivationPreviewConditions(conditions, (condition) =>
+    evaluateConditions.call(engine, [condition], ctx).ok,
+  );
 }
 
 function activationWouldDestroyCardsMatchingFilters(

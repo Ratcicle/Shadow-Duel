@@ -125,6 +125,19 @@ export interface ExtraDeckProcedureAIAction extends AIActionCommon {
   position?: BattlePositionInput;
 }
 
+export interface HandProcedureMaterialHint {
+  zone: "field" | "graveyard";
+  index: number;
+  cardId?: RawCardDefinitionId | number | undefined;
+  instanceId: number;
+}
+
+export interface HandSummonProcedureAIAction extends AIActionCommon {
+  type: "handSummonProcedure";
+  materials: HandProcedureMaterialHint[];
+  position?: BattlePositionInput;
+}
+
 export interface SanctumProtectorAIAction extends AIActionCommon {
   type: "special_summon_sanctum_protector";
   materialIndex?: number | undefined;
@@ -198,6 +211,7 @@ export interface HandIgnitionAIAction extends AIActionCommon {
 export interface AIActionByType {
   ascension: AscensionAIAction;
   extraDeckProcedure: ExtraDeckProcedureAIAction;
+  handSummonProcedure: HandSummonProcedureAIAction;
   special_summon_sanctum_protector: SanctumProtectorAIAction;
   position_change: PositionChangeAIAction;
   summon: SummonAIAction;

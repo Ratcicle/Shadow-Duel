@@ -164,6 +164,7 @@ function cardIdentity(
   return {
     cardId: card.id ?? null,
     instanceId: card.instanceId ?? card._instanceId ?? card.uuid ?? null,
+    ...(card.duelCardId != null ? { duelCardId: card.duelCardId } : {}),
     name: card.name || null,
   };
 }

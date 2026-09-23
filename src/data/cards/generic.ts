@@ -961,72 +961,27 @@ export const genericCards = [
     description:
       "You can Special Summon this card from your hand by banishing 5 LIGHT monsters from your field and/or GY. If Summoned this way, this card cannot be destroyed by your opponent's card effects.\n\nDuring damage calculation, if this card battles an opponent's DARK monster: it gains 1000 ATK/DEF during that damage calculation only.",
     image: "assets/Luminous God Hyperion.png",
+    handSummonProcedure: {
+      id: "luminous_god_hyperion_special_summon",
+      cost: {
+        count: 5,
+        zones: ["field", "graveyard"],
+        filters: { cardKind: "monster", attribute: "Light" },
+        destination: "banished",
+      },
+    },
     effects: [
       {
-
-        activationZones: ["hand"],
-        id: "luminous_god_hyperion_special_summon",
-        timing: "ignition",
-        requirePhase: ["main1", "main2"],
-        targets: [
-          {
-            id: "luminous_god_hyperion_light_banish_cost",
-            owner: "self",
-            zones: ["field", "graveyard"],
-            cardKind: "monster",
-            attribute: "Light",
-            intent: "cost",
-            count: { min: 5, max: 5 },
-          },
-        ],
-        actions: [
-          {
-            type: "special_summon_from_hand_with_cost",
-            costTargetRef: "luminous_god_hyperion_light_banish_cost",
-            costDestination: "banish",
-            costMovedByEffect: false,
-            position: "choice",
-            conditionalMarkersOnSummon: [
-              {
-                key: "luminous_god_hyperion_summoned_by_own_procedure",
-                min: 5,
-                costFilters: {
-                  cardKind: "monster",
-                  attribute: "Light",
-                },
-                bindToFieldPresence: true,
-              },
-            ],
-          },
-        ],
-      },
-      {
         id: "luminous_god_hyperion_grant_opponent_effect_protection",
-        timing: "on_event",
-        triggerRequirement: "mandatory",
-        triggerTiming: "if",
-        event: "after_summon",
-        requireSelfAsSummoned: true,
+        timing: "passive",
+        requireZone: "field",
         requireFaceup: true,
-        promptUser: false,
-        conditions: [
-          {
-            type: "summoned_card_has_marker",
-            key: "luminous_god_hyperion_summoned_by_own_procedure",
-            sourceEffectId: "luminous_god_hyperion_special_summon",
-            minMatchingCostCount: 5,
-          },
-        ],
-        actions: [
-          {
-            type: "grant_protection",
-            targetRef: "self",
-            protectionType: "effect_destruction",
-            duration: "while_faceup",
-            sourceOwner: "opponent",
-            removeOnLeave: true,
-          },
-        ],
+        passive: {
+          type: "conditional_protection",
+          protectionType: "effect_destruction",
+          requireSummonProcedure: "luminous_god_hyperion_special_summon",
+          sourceOwner: "opponent",
+        },
       },
       {
 
@@ -1035,7 +990,8 @@ export const genericCards = [
         timing: "on_event",
         triggerRequirement: "mandatory",
         triggerTiming: "if",
-        event: "battle_damage",
+        event: "damage_step",
+        damageStepTimings: ["damage_calculation"],
         requireZone: "field",
         requireFaceup: true,
         requireSelfAsAttacker: true,
@@ -1067,7 +1023,8 @@ export const genericCards = [
         timing: "on_event",
         triggerRequirement: "mandatory",
         triggerTiming: "if",
-        event: "battle_damage",
+        event: "damage_step",
+        damageStepTimings: ["damage_calculation"],
         requireZone: "field",
         requireFaceup: true,
         requireSelfAsDefender: true,
@@ -1203,19 +1160,33 @@ export const genericCards = [
         requirePhase: ["main1", "main2"],
         oncePerTurn: true,
         oncePerTurnName: "misty_katana_ghost_samurai_revive_tuner",
+        targets: [
+          {
+            id: "misty_katana_ghost_samurai_revive_target",
+            owner: "self",
+            zone: "graveyard",
+            cardKind: "monster",
+            isTuner: true,
+            maxLevel: 4,
+            count: { min: 1, max: 1 },
+          },
+        ],
+        activationCosts: [
+          {
+            type: "move",
+            targetRef: "self",
+            player: "self",
+            fromZone: "graveyard",
+            to: "banished",
+            contextLabel: "misty_katana_ghost_samurai_revive_cost",
+          },
+        ],
         actions: [
           {
             type: "special_summon_from_zone",
+            targetRef: "misty_katana_ghost_samurai_revive_target",
             zone: "graveyard",
-            filters: {
-              cardKind: "monster",
-              isTuner: true,
-              maxLevel: 4,
-            },
-            count: { min: 1, max: 1 },
-            banishCost: true,
             position: "choice",
-            promptPlayer: true,
           },
         ],
       },
@@ -1239,7 +1210,7 @@ export const genericCards = [
       },
     },
     description:
-      '1 EARTH Tuner + 1+ non-Tuner monsters\n\nYou can discard 1 card, then target 1 face-up monster your opponent controls (Quick Effect); change it to face-down Defense Position. Monsters changed to face-down Defense Position by this effect cannot change their battle positions.\n\nIf this card is destroyed by battle or card effect: You can target up to 2 Level 3 or lower EARTH monsters in your Graveyard; Special Summon them.\n\nYou can only use each effect of "Magmatic Obsidian Leviathan" once per turn.',
+      '1 EARTH Tuner + 1+ non-Tuner monsters\n\nYou can discard 1 card, then target 1 face-up monster your opponent controls (Quick Effect); change it to face-down Defense Position. Monsters changed to face-down Defense Position by this effect cannot change their battle positions.\n\nIf this card on the field is destroyed by battle or card effect and sent to the GY: You can target up to 2 Level 3 or lower EARTH monsters in your GY; Special Summon them.\n\nYou can only use each effect of "Magmatic Obsidian Leviathan" once per turn.',
     image: "assets/Magmatic Obsidian Leviathan.png",
     effects: [
       {
@@ -1342,7 +1313,7 @@ export const genericCards = [
       },
     },
     description:
-      '1 Plant Tuner + 1+ non-Tuner monsters\n\nIf your opponent controls more cards than you do: You can banish 1 to 3 Plant monsters from your GY, then target the same number of cards your opponent controls; destroy them.\n\nIf this card leaves the field: You can target 1 Plant monster in your GY; add it to your hand.\n\nYou can only use each effect of "Rose Petal Floral Dragon" once per turn.',
+      '1 Plant Tuner + 1+ non-Tuner monsters\n\nIf your opponent controls more cards than you do: You can banish 1 to 3 Plant monsters from your GY, then target the same number of cards your opponent controls; destroy them.\n\nIf this face-up card leaves the field: You can target 1 Plant monster in your GY; add it to your hand.\n\nYou can only use each effect of "Rose Petal Floral Dragon" once per turn.',
     image: "assets/Rose Petal Floral Dragon.png",
     effects: [
       {
@@ -1453,7 +1424,7 @@ export const genericCards = [
       },
     },
     description:
-      '1 EARTH Tuner + 1+ non-Tuner monsters\n\nYou can target 1 face-up monster your opponent controls; this card gains ATK equal to its original DEF until the end of this turn.\n\nIf this card is destroyed by battle: You can target the monster that destroyed it; take control of it until the End Phase of this turn, then, when that monster leaves the field, Special Summon this card from your GY, but banish it when it leaves the field.\n\nYou can only use each effect of "Cursed Rock Behemoth" once per turn.',
+      '1 EARTH Tuner + 1+ non-Tuner monsters\n\nYou can target 1 face-up monster your opponent controls; this card gains ATK equal to its original DEF until the end of this turn.\n\nIf this card is destroyed by battle: You can target the monster that destroyed it; take control of it until the End Phase of this turn. After this effect resolves, if that monster leaves the field: Special Summon this card from your GY, but banish it when it leaves the field.\n\nYou can only use each effect of "Cursed Rock Behemoth" once per turn.',
     image: "assets/Cursed Rock Behemoth.png",
     effects: [
       {

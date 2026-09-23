@@ -236,6 +236,27 @@ function canSimulatedSpecialSummon(
   });
 }
 
+function canSimulatedProcedureEnterField(
+  card: SimulatedCardState,
+  player: SimulatedPlayerState,
+  opponent: SimulatedPlayerState | null | undefined,
+  materials: readonly SimulatedCardState[],
+): boolean {
+  const remaining = player.field.filter((entry) => !materials.includes(entry));
+  if (remaining.length >= 5) return false;
+  const exclusive = (entry: SimulatedCardState) =>
+    !entry.isFacedown && entry.fieldPresenceRestriction?.type === "only_monster_you_control_while_faceup";
+  if (remaining.some(exclusive)) return false;
+  if (exclusive(card) && remaining.length > 0) return false;
+  const limit = card.fieldLimit;
+  if (!limit || !matchesTargetFilters(card, limit.filters || {})) return true;
+  const fields = limit.scope === "global" ? [...remaining, ...(opponent?.field || [])] : remaining;
+  const matching = fields.filter((entry) =>
+    (!limit.requireFaceup || !entry.isFacedown) && matchesTargetFilters(entry, limit.filters || {})).length;
+  const max = Number.isFinite(Number(limit.max)) ? Number(limit.max) : 1;
+  return matching + 1 <= max;
+}
+
 export function resolveSimulatedHandIndex(
   player: SimulatedPlayerState | null | undefined,
   action: SimulatedHandIndexAction,
@@ -1594,6 +1615,64 @@ export function applyGenericSimulatedMainPhaseAction<
   attachSimulatedEventEmitter(state, selectionOptions);
 
   switch (action.type) {
+    case "handSummonProcedure": {
+      const player = state.bot;
+      const handIndex = resolveSimulatedHandIndex(player, action, "monster");
+      const card = player.hand[handIndex];
+      const procedure = card?.handSummonProcedure;
+      if (!card || !procedure || card.cardKind !== "monster") break;
+      if (!canSimulatedSpecialSummon(card, player, procedure.id, "hand")) break;
+      if (!Number.isInteger(procedure.cost.count) || procedure.cost.count < 1) break;
+      if (action.materials.length !== procedure.cost.count) break;
+      const candidates = [...new Set(procedure.cost.zones.flatMap((zone) => player[zone]))]
+        .filter((candidate) => matchesTargetFilters(candidate, procedure.cost.filters));
+      const materials: SimulatedCardState[] = [];
+      for (const hint of action.materials) {
+        if (!procedure.cost.zones.includes(hint.zone)) break;
+        const zone = player[hint.zone];
+        const match = (entry: SimulatedCardState) =>
+          entry.id === hint.cardId && entry.instanceId === hint.instanceId;
+        const atIndex = zone[hint.index];
+        const material = atIndex && match(atIndex) ? atIndex : zone.find(match);
+        if (!material || !candidates.includes(material) || materials.includes(material)) break;
+        materials.push(material);
+      }
+      if (materials.length !== procedure.cost.count) break;
+      if (!canSimulatedProcedureEnterField(card, player, state.player, materials)) break;
+      const destination = procedure.cost.destination;
+      let costComplete = true;
+      for (const material of materials) {
+        const fromZone = player.field.includes(material) ? "field" : "graveyard";
+        const wasFaceupBeforeMove = material.isFacedown !== true;
+        if (!moveCardToZone(player, material, destination)) {
+          costComplete = false;
+          break;
+        }
+        selectionOptions.emitSimulatedEvent?.("card_moved", {
+          card: material, player, fromZone, toZone: destination,
+          movedByEffect: false, wasFaceupBeforeMove,
+          sourceCard: card, actionContext: selectionOptions.actionContext,
+        });
+      }
+      if (!costComplete || !player.hand.includes(card)) break;
+      player.hand.splice(handIndex, 1);
+      const summoned = {
+        ...card, position: action.position === "defense" ? "defense" as const : "attack" as const, isFacedown: false,
+        hasAttacked: false, attacksUsedThisTurn: 0,
+        lastSummonMethod: "special" as const,
+        lastSummonedFromZone: "hand" as const,
+        lastSummonProcedure: procedure.id,
+      };
+      establishProperSummon(summoned, { summonProcedure: procedure.id, sourceZone: "hand" });
+      player.field.push(summoned);
+      options.onAfterSummon?.({ state, action, player, card, newCard: summoned, options });
+      options.onAfterSpecialSummon?.({ state, action, player, card: summoned, fromZone: "hand", options });
+      selectionOptions.emitSimulatedEvent?.("after_summon", {
+        card: summoned, player, method: "special", fromZone: "hand",
+        sourceCard: summoned, actionContext: selectionOptions.actionContext,
+      });
+      break;
+    }
     case "summon": {
       const player = state.bot;
       const handIndex = resolveSimulatedHandIndex(player, action, "monster");

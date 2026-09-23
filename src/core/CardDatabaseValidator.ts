@@ -489,6 +489,18 @@ export function validateCardDatabase() {
         );
       }
     }
+    if (card.handSummonProcedure) {
+      const procedure = card.handSummonProcedure;
+      if (
+        card.cardKind !== "monster" || !procedure.id.trim() ||
+        !Number.isInteger(procedure.cost.count) || procedure.cost.count < 1 ||
+        procedure.cost.zones.length === 0 ||
+        procedure.cost.zones.some((zone) => zone !== "field" && zone !== "graveyard") ||
+        !["banished", "graveyard"].includes(procedure.cost.destination)
+      ) {
+        errors.push(formatIssue(card, "Hand summon procedures require an id and a positive card cost from supported zones."));
+      }
+    }
     // Basic monster type checks for Extra Deck categories
     if (card.monsterType === "ascension") {
       // Must be a monster and live in Extra Deck during play; validate ascension metadata

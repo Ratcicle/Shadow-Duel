@@ -794,6 +794,8 @@ function targetStillMatchesDefinition(
   copyFilter("archetype");
   copyFilter("level");
   copyFilter("levelOp");
+  copyFilter("minLevel");
+  copyFilter("maxLevel");
   copyFilter("minAtk");
   copyFilter("maxAtk");
   copyFilter("minDef");

@@ -7,6 +7,27 @@ import type {
 import type { GameCard } from "../../contracts/cards.js";
 import { SUMMON_MODES } from "../../game/summon/transaction.js";
 import { SUMMON_ORIGINS } from "../../contracts/summon.js";
+import { canResolveHandSummonProcedureActionForCurrentState, resolveHandProcedureMaterials } from "../actionValidation.js";
+
+export async function executeHandSummonProcedureAction(
+  bot: BotRuntimePort,
+  game: BotGamePort,
+  action: AIActionOf<"handSummonProcedure">,
+): Promise<boolean> {
+  if (!canResolveHandSummonProcedureActionForCurrentState(bot, action, game)) return false;
+  const index = bot.resolveHandIndexForAction(action, "monster");
+  const card = bot.hand[index];
+  const materials = resolveHandProcedureMaterials(bot, action.materials);
+  if (!card || !materials) return false;
+  const result = await game.performHandSummonProcedure(card, bot, {
+    materials,
+    position: action.position === "defense" ? "defense" : "attack",
+  });
+  if (result.success !== true) return false;
+  game.updateBoard();
+  await game.waitForBoardPresentation?.();
+  return true;
+}
 
 export async function executeSpecialSummonSanctumProtectorAction(
   bot: BotRuntimePort,

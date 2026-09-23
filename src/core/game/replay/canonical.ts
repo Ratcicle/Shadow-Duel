@@ -162,7 +162,7 @@ export function hashCanonicalValue(value: unknown): string {
 }
 
 type SignatureCardDefinition = Pick<CardConstructorData,
-  "id" | "name" | "mustFirstBeSpecialSummonedBy" | "effects"
+  "id" | "name" | "mustFirstBeSpecialSummonedBy" | "handSummonProcedure" | "effects"
 >;
 
 export function getCardDatabaseSignature(): string {
@@ -172,6 +172,7 @@ export function getCardDatabaseSignature(): string {
       name: card.name,
       mustFirstBeSpecialSummonedBy:
         card.mustFirstBeSpecialSummonedBy || null,
+      handSummonProcedure: card.handSummonProcedure || null,
       effects: (card.effects || []).map((effect: EffectDefinition) => ({
         id: effect.id || null,
         activationZones: effect.activationZones || null,
@@ -253,8 +254,21 @@ function playerState(
   };
 }
 
+function projectCardIdentitySnapshot(entry: object): SerializableValue | undefined {
+  if (readProperty(entry, "duelCardId") == null || !Object.hasOwn(entry, "instanceId") || !Object.hasOwn(entry, "cardId")) return undefined;
+  // Transaction snapshots keep runtime IDs for diagnostics. Replay hashes use
+  // only the identity allocated within the duel, also for each paid cost.
+  const identity: SerializableObject = {};
+  for (const key of Object.keys(entry).sort(compareCodeUnits)) {
+    if (key === "instanceId") continue;
+    const field = stableValue(readProperty(entry, key));
+    if (field !== undefined) identity[key] = field;
+  }
+  return identity;
+}
+
 function procedureState(value: unknown): CanonicalProcedureStateSnapshot | null {
-  const normalized = stableValue(value);
+  const normalized = normalizeValue(value, new WeakSet(), projectCardIdentitySnapshot);
   if (
     normalized === null ||
     Array.isArray(normalized) ||
@@ -315,6 +329,8 @@ export function serializeReplayEventPayload(
   payload: unknown,
 ): SerializableValue | undefined {
   const project: SpecialProjection = (value) => {
+    const identity = projectCardIdentitySnapshot(value);
+    if (identity !== undefined) return identity;
     const duelCardId = readProperty(value, "duelCardId");
     const cardKind = readProperty(value, "cardKind");
     const name = readProperty(value, "name");
