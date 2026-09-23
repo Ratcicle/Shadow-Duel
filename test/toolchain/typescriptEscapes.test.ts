@@ -1,14 +1,27 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
-import test from "node:test";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import test, { type TestContext } from "node:test";
 import {
   auditTypeScriptSources,
-  parseDebtRegistryMarkdown,
+  parseDebtRegistry,
+  runTypeScriptEscapeAudit,
   type TypeScriptDebtEntry,
   type TypeScriptDebtRegistry,
 } from "../../scripts/audit_typescript_escapes.js";
 
 const REGISTRY_FORMAT = "shadow-duel-typescript-debt-registry";
+const REGISTRY_PATH = "config/toolchain/typescript-debt.json";
+
+async function temporaryAuditRoot(context: TestContext): Promise<string> {
+  const directory = await mkdtemp(path.join(tmpdir(), "shadow-duel-debt-"));
+  context.after(async () => {
+    assert.equal(path.dirname(path.resolve(directory)), path.resolve(tmpdir()));
+    await rm(directory, { recursive: true, force: true });
+  });
+  return directory;
+}
 
 function registry(
   entries: TypeScriptDebtEntry[] = [],
@@ -45,14 +58,62 @@ function diagnosticCodes(
 }
 
 test("the checked-in debt registry is valid and initially empty", async () => {
-  const markdown = await readFile(
-    new URL("../../docs/migrations/typescript-debt.md", import.meta.url),
+  const source = await readFile(
+    new URL("../../config/toolchain/typescript-debt.json", import.meta.url),
     "utf8",
   );
-  const parsed = parseDebtRegistryMarkdown(markdown);
+  const parsed = parseDebtRegistry(source);
 
   assert.deepEqual(parsed.diagnostics, []);
   assert.deepEqual(parsed.registry.entries, []);
+});
+
+test("debt parser rejects invalid JSON and Markdown wrappers", () => {
+  for (const source of ["{", `\`\`\`json\n${JSON.stringify(registry())}\n\`\`\``]) {
+    const parsed = parseDebtRegistry(source);
+    assert.deepEqual(parsed.diagnostics.map(diagnostic => diagnostic.code), ["invalid-debt-registry-json"]);
+    assert.equal(parsed.diagnostics[0]?.path, REGISTRY_PATH);
+  }
+});
+
+test("debt parser rejects incorrect format and version", () => {
+  const parsed = parseDebtRegistry(JSON.stringify({ ...registry(), format: "unknown", version: 2 }));
+  assert.deepEqual(parsed.diagnostics.map(diagnostic => diagnostic.code), [
+    "invalid-debt-registry-format", "invalid-debt-registry-version",
+  ]);
+  assert.ok(parsed.diagnostics.every(diagnostic => diagnostic.path === REGISTRY_PATH));
+});
+
+test("audit rejects a missing mandatory registry at its configuration path", async context => {
+  const directory = await temporaryAuditRoot(context);
+  await assert.rejects(runTypeScriptEscapeAudit(directory), (error: unknown) => {
+    assert.ok(error instanceof Error);
+    assert.equal(Reflect.get(error, "code"), "ENOENT");
+    assert.equal(Reflect.get(error, "path"), path.join(directory, REGISTRY_PATH));
+    assert.doesNotMatch(error.message, /docs[\\/]migrations/);
+    return true;
+  });
+});
+
+test("audit loads pure JSON and keeps invalid or stale registries as failures", async context => {
+  const directory = await temporaryAuditRoot(context);
+  await mkdir(path.join(directory, "config", "toolchain"), { recursive: true });
+  const cases = [
+    { source: JSON.stringify(registry()), codes: [] },
+    { source: "{", codes: ["invalid-debt-registry-json"] },
+    { source: "null", codes: ["invalid-debt-registry"] },
+    { source: JSON.stringify({ ...registry(), entries: [null] }), codes: ["invalid-debt-entry"] },
+    { source: JSON.stringify(registry([entry()])), codes: ["stale-debt-entry"] },
+  ];
+  for (const { source, codes } of cases) {
+    await writeFile(path.join(directory, REGISTRY_PATH), source);
+    const result = await runTypeScriptEscapeAudit(directory);
+    assert.deepEqual(result.diagnostics.map(diagnostic => diagnostic.code), codes);
+    for (const diagnostic of result.diagnostics) {
+      assert.equal(diagnostic.path, REGISTRY_PATH);
+      assert.doesNotMatch(diagnostic.message, /docs[\\/]migrations/);
+    }
+  }
 });
 
 test("AST audit finds explicit any and nested casts without matching strings", () => {
@@ -195,9 +256,7 @@ test("unused registry entries and orphan markers are rejected", () => {
 });
 
 test("registry validation rejects malformed IDs, paths, kinds and metadata", () => {
-  const markdown = `<!-- typescript-debt-registry -->
-\`\`\`json
-{
+  const source = `{
   "format": "shadow-duel-typescript-debt-registry",
   "version": 1,
   "entries": [{
@@ -207,9 +266,8 @@ test("registry validation rejects malformed IDs, paths, kinds and metadata", () 
     "justification": "",
     "removalStage": ""
   }]
-}
-\`\`\``;
-  const parsed = parseDebtRegistryMarkdown(markdown);
+}`;
+  const parsed = parseDebtRegistry(source);
   const codes = parsed.diagnostics.map((diagnostic) => diagnostic.code);
 
   assert.deepEqual(codes, [

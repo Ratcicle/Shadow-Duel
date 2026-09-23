@@ -2038,7 +2038,11 @@ export default class MirageboundStrategy extends BaseStrategy {
   }
 
   override simulateMainPhaseAction(state: Parameters<BaseStrategy["simulateMainPhaseAction"]>[0], action: import("../contracts/ai.js").AIPlannedAction) {
-    return applyGenericSimulatedMainPhaseAction(state as Parameters<typeof applyGenericSimulatedMainPhaseAction>[0], action as AIAction, {
+    return applyGenericSimulatedMainPhaseAction(state as Parameters<typeof applyGenericSimulatedMainPhaseAction>[0], action as AIAction, this.getPlanningSimulationOptions(state));
+  }
+
+  getPlanningSimulationOptions(_state: Parameters<BaseStrategy["simulateMainPhaseAction"]>[0]) {
+    return {
       guardLabel: "MirageboundStrategy",
       selfId: "bot",
       archetype: MIRAGEBOUND,
@@ -2050,7 +2054,7 @@ export default class MirageboundStrategy extends BaseStrategy {
       placeSpellCard: this.placeSpellCard.bind(this),
       chooseSpecialSummonPosition: this.chooseSpecialSummonPosition.bind(this),
       chooseActionCase: this.chooseActionCase.bind(this),
-    });
+    };
   }
 
   chooseActionCase<Case extends object>(cases: readonly Case[] = [], context: object = {}) {

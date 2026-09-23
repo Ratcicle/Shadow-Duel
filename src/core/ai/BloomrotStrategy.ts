@@ -1,4 +1,4 @@
-import type { AIAction, AIActivationContext, AIState, AIStrategyBotPort } from "../contracts/ai.js";
+import type { AIAction, AIActivationContext, AIPlannedAction, AIState, AIStrategyBotPort } from "../contracts/ai.js";
 import type { SimulatedCardState, SimulatedPlayerState } from "../contracts/aiState.js";
 import type { ChainStrategyPort, ChainActivationCandidate, ChainStrategyResponse } from "../contracts/chainRuntime.js";
 import type { BloomrotCard, BloomrotAnalysis, BloomrotPlanningGame } from "./bloomrot/analysis.js";
@@ -21,6 +21,7 @@ import {
 import { getGenericSetBackrowActions } from "./common/backrowPlanning.js";
 import { sequenceActionsByPriority } from "./common/actionSequencing.js";
 import { findIgnitionEffect } from "./common/effectDiscovery.js";
+import { applyGenericSimulatedMainPhaseAction } from "./common/simulation.js";
 import {
   canActivateFieldSpellEffect,
   canActivateMonsterEffect,
@@ -204,6 +205,32 @@ export default class BloomrotStrategy extends BaseStrategy {
       return "defense";
     }
     return undefined;
+  }
+
+  override simulateMainPhaseAction(
+    state: Parameters<BaseStrategy["simulateMainPhaseAction"]>[0],
+    action: AIPlannedAction,
+  ) {
+    if (action.type === "simulatedBattle") return state;
+    return applyGenericSimulatedMainPhaseAction(state, action, {
+      ...this.getPlanningSimulationOptions(state),
+      activationContext: action.activationContext,
+    });
+  }
+
+  getPlanningSimulationOptions(_state: Parameters<BaseStrategy["simulateMainPhaseAction"]>[0]) {
+    return {
+      guardLabel: "BloomrotStrategy",
+      selfId: "bot",
+      archetype: "Bloomrot",
+      strategy: this,
+      enableSimulatedEvents: true,
+      rankSearchCandidates: this.rankSearchCandidates.bind(this),
+      getTributeRequirementFor: this.getTributeRequirementFor.bind(this),
+      selectBestTributes: this.selectBestTributes.bind(this),
+      placeSpellCard: this.placeSpellCard.bind(this),
+      chooseSpecialSummonPosition: this.chooseSpecialSummonPosition.bind(this),
+    };
   }
 
   override evaluateBoard(gameOrState: AIState, perspectivePlayer: SimulatedPlayerState | undefined) {

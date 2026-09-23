@@ -181,7 +181,7 @@ dicionário, comprove a presença do valor; asserções exigem uma garantia loca
 Diferencie campo ausente de campo com `undefined`: amplie apenas projeções
 de runtime com produtores reais, preservando os schemas declarativos e de
 replay serializado. Mantenha dispatches de uniões fechadas exhaustivos e o
-registro `docs/migrations/typescript-debt.md` auditável.
+registro `config/toolchain/typescript-debt.json` auditável.
 
 **Bot Arena** — Modo de teste visual ([BotArena.ts](src/core/BotArena.ts)):
 

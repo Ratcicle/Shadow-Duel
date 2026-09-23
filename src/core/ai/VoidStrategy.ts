@@ -170,6 +170,8 @@ interface VoidSummonPayload {
 
 import BaseStrategy from "./BaseStrategy.js";
 import { applyGenericSimulatedMainPhaseAction } from "./common/simulation.js";
+import { hasPlanningExecutionContext } from "./common/planningExecution.js";
+import { canUseSimOncePerTurn, markSimOncePerTurnUsed } from "./common/simStateUtils.js";
 import { getGenericAscensionActions } from "./common/ascensionPlanning.js";
 import { ascensionMaterialMatches } from "../game/summon/ascension.js";
 import {
@@ -2894,6 +2896,9 @@ export default class VoidStrategy extends BaseStrategy {
   simulateVoidHollowRecruit({ state, player, card, fromZone, action }: Required<Pick<VoidSummonPayload, "state" | "player" | "card">> & Pick<VoidSummonPayload, "fromZone" | "action">) {
     if (card?.id !== VOID_IDS.HOLLOW || fromZone !== "hand") return;
     if (card.effectsNegated || state._simVoidHollowRecruitUsed) return;
+    // Owner hooks and declarative event dispatch share the same physical OPT.
+    if (hasPlanningExecutionContext(state) &&
+        !canUseSimOncePerTurn(state, "void_hollow_summon", 1, player.id, true)) return;
     if ((player.field || []).length >= 5) return;
     const deckIndex = (player.deck || []).findIndex(
       (candidate) => candidate?.id === VOID_IDS.HOLLOW,
@@ -2913,6 +2918,9 @@ export default class VoidStrategy extends BaseStrategy {
     recruited.attacksUsedThisTurn = 0;
     player.field.push(recruited);
     state._simVoidHollowRecruitUsed = true;
+    if (hasPlanningExecutionContext(state)) {
+      markSimOncePerTurnUsed(state, "void_hollow_summon", 1, player.id, true);
+    }
   }
 
   handleVoidSimulatedSpecialSummon(payload: VoidSummonPayload = {}) {
@@ -2996,7 +3004,7 @@ export default class VoidStrategy extends BaseStrategy {
     });
   }
 
-  buildVoidSimulationOptions(action: AIAction) {
+  buildVoidSimulationOptions(action?: AIAction) {
     const placeSpellCard = (simState: AiStateShape, placedCard: SimulatedCardState) => {
       const player = simState.bot;
       if (placedCard.subtype === "field") {
@@ -3019,7 +3027,7 @@ export default class VoidStrategy extends BaseStrategy {
       archetype: "Void",
       guardLabel: "VoidStrategy",
       strategy: this,
-      activationContext: action.activationContext,
+      activationContext: action?.activationContext,
       rankSearchCandidates: this.rankSearchCandidates.bind(this),
       evaluateRecruitCandidate: this.evaluateRecruitCandidate.bind(this),
       chooseSpecialSummonPosition: this.chooseSpecialSummonPosition.bind(this),
@@ -3035,12 +3043,16 @@ export default class VoidStrategy extends BaseStrategy {
     };
   }
 
+  getPlanningSimulationOptions(_state: StrategySimulation) {
+    return this.buildVoidSimulationOptions();
+  }
+
   override simulateMainPhaseAction(state: StrategySimulation, action: AIPlannedAction | null | undefined) {
     if (!action) return state;
     applyGenericSimulatedMainPhaseAction(
       state as SimulationGameState,
       action as AIAction,
-      this.buildVoidSimulationOptions(action as AIAction),
+      { ...this.getPlanningSimulationOptions(state), activationContext: (action as AIAction).activationContext },
     );
     this.applySimulatedVoidPassives(state);
     return state;

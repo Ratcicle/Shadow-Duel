@@ -689,10 +689,19 @@ export default class ArcanistStrategy extends BaseStrategy {
   override simulateMainPhaseAction(state: Parameters<StrategyRuntimePort["simulateMainPhaseAction"]>[0], action: AIPlannedAction): ReturnType<StrategyRuntimePort["simulateMainPhaseAction"]> {
     const beforeSignature = getArcanistSimStateSignature(state as AiStateShape);
     const result = applyGenericSimulatedMainPhaseAction(state as Parameters<typeof applyGenericSimulatedMainPhaseAction>[0], action as AIAction, {
+      ...this.getPlanningSimulationOptions(state),
+      activationContext: (action as AIAction).activationContext,
+    });
+    const changed = getArcanistSimStateSignature(state as AiStateShape) !== beforeSignature;
+    this.applyArcanistSimulationPostProcess(state as AiStateShape, action as AIAction, { changed });
+    return result;
+  }
+
+  getPlanningSimulationOptions(_state: Parameters<StrategyRuntimePort["simulateMainPhaseAction"]>[0]): NonNullable<Parameters<typeof applyGenericSimulatedMainPhaseAction>[2]> {
+    return {
       archetype: "Arcanist",
       guardLabel: "ArcanistStrategy",
       strategy: this,
-      activationContext: (action as AIAction).activationContext,
       rankSearchCandidates: this.rankSearchCandidates.bind(this),
       evaluateRecruitCandidate: this.evaluateRecruitCandidate.bind(this),
       chooseSpecialSummonPosition: this.chooseSpecialSummonPosition.bind(this),
@@ -708,10 +717,7 @@ export default class ArcanistStrategy extends BaseStrategy {
         fieldEffect: ({ state: simState }) =>
           this.simulateGrandLibraryEffect(simState),
       },
-    });
-    const changed = getArcanistSimStateSignature(state as AiStateShape) !== beforeSignature;
-    this.applyArcanistSimulationPostProcess(state as AiStateShape, action as AIAction, { changed });
-    return result;
+    };
   }
 
   simulateArcanistAfterSummon({ state, action, player, newCard }: { state: AiStateShape; action: AIAction; player: SimulatedPlayerState; newCard: SimulatedCardState }) {

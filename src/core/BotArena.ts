@@ -383,6 +383,7 @@ export default class BotArena {
     bot.debug = devMode;
 
     if (isDefault) {
+      bot.planningModelId = null;
       this.applyCustomDeck(bot, deckData);
     }
     return bot;

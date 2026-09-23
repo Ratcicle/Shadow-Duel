@@ -5,7 +5,7 @@ import ts from "typescript";
 
 const DEBT_REGISTRY_FORMAT = "shadow-duel-typescript-debt-registry";
 const DEBT_REGISTRY_VERSION = 1;
-const DEBT_REGISTRY_MARKER = "typescript-debt-registry";
+const DEBT_REGISTRY_PATH = "config/toolchain/typescript-debt.json";
 const DEBT_ID_PATTERN = /^TSDEBT-\d{3,}$/;
 const TYPESCRIPT_FILE_PATTERN = /\.(?:ts|tsx|mts|cts)$/i;
 const AUDITED_DIRECTORIES = ["src", "scripts", "test"] as const;
@@ -142,7 +142,7 @@ function registryDiagnostic(
   return {
     code,
     message,
-    path: "docs/migrations/typescript-debt.md",
+    path: DEBT_REGISTRY_PATH,
     debtId,
   };
 }
@@ -155,7 +155,7 @@ export function validateDebtRegistry(value: unknown): DebtRegistryParseResult {
     diagnostics.push(
       registryDiagnostic(
         "invalid-debt-registry",
-        "The embedded debt registry must be a JSON object.",
+        "The debt registry must be a JSON object.",
       ),
     );
     return { registry, diagnostics };
@@ -290,28 +290,11 @@ export function validateDebtRegistry(value: unknown): DebtRegistryParseResult {
   return { registry, diagnostics };
 }
 
-export function parseDebtRegistryMarkdown(
-  markdown: string,
+export function parseDebtRegistry(
+  source: string,
 ): DebtRegistryParseResult {
-  const markerPattern = new RegExp(
-    `<!--\\s*${DEBT_REGISTRY_MARKER}\\s*-->\\s*\`\`\`json\\s*([\\s\\S]*?)\\s*\`\`\``,
-    "i",
-  );
-  const match = markerPattern.exec(markdown);
-  if (match === null || match[1] === undefined) {
-    return {
-      registry: emptyRegistry(),
-      diagnostics: [
-        registryDiagnostic(
-          "missing-debt-registry",
-          `Expected one JSON fence after <!-- ${DEBT_REGISTRY_MARKER} -->.`,
-        ),
-      ],
-    };
-  }
-
   try {
-    return validateDebtRegistry(JSON.parse(match[1]));
+    return validateDebtRegistry(JSON.parse(source));
   } catch (error: unknown) {
     const detail = error instanceof Error ? error.message : String(error);
     return {
@@ -319,7 +302,7 @@ export function parseDebtRegistryMarkdown(
       diagnostics: [
         registryDiagnostic(
           "invalid-debt-registry-json",
-          `The embedded debt registry is not valid JSON: ${detail}`,
+          `The debt registry is not valid JSON: ${detail}`,
         ),
       ],
     };
@@ -737,13 +720,8 @@ export async function collectAuthoredTypeScriptFiles(
 export async function runTypeScriptEscapeAudit(
   rootDirectory = process.cwd(),
 ): Promise<TypeScriptEscapeAuditResult> {
-  const debtPath = path.join(
-    rootDirectory,
-    "docs",
-    "migrations",
-    "typescript-debt.md",
-  );
-  const parsedRegistry = parseDebtRegistryMarkdown(
+  const debtPath = path.join(rootDirectory, DEBT_REGISTRY_PATH);
+  const parsedRegistry = parseDebtRegistry(
     await readFile(debtPath, "utf8"),
   );
   const filePaths = await collectAuthoredTypeScriptFiles(rootDirectory);

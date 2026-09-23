@@ -24,6 +24,7 @@ import type { PlayerId, RawCardDefinitionId } from "./primitives.js";
 import type { CanonicalSelectionMap } from "./selection.js";
 import type { CanonicalZone } from "./zones.js";
 import type { FinisherPlan } from "../ai/common/finisherPlans.js";
+import type { GameTreeModels, PlanningSimulationOptions } from "./aiPlanning.js";
 
 export type AIState =
   | AiLiveGamePort
@@ -379,6 +380,8 @@ export interface AIStrategyBotPort extends AiPlayerInput {
   fieldSpell: GameCard | SimulatedCardState | null;
   spellTrap: Array<GameCard | SimulatedCardState>;
   debug?: boolean;
+  planningModelId?: string | null;
+  getGameTreeModels?(): GameTreeModels;
 }
 
 export interface AIPlanningContext {
@@ -416,6 +419,8 @@ export interface AILineMilestoneScore {
 
 export interface StrategyRuntimePort {
   bot: AIStrategyBotPort;
+  analyzeGameState?(state: AIState): unknown;
+  getPlanningSimulationOptions?(state: GameTreeSimulationGameState): PlanningSimulationOptions;
   readonly archetypeLabel?: string;
   think?(thought: string): void;
   getPlanningProfile?(

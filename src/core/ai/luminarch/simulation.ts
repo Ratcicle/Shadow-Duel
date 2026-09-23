@@ -1,5 +1,7 @@
 import { estimateCardValue } from "../StrategyUtils.js";
 import { buildStrategyAnalysis } from "../common/analysis.js";
+import { hasPlanningExecutionContext } from "../common/planningExecution.js";
+import { canUseSimOncePerTurn, markSimOncePerTurnUsed } from "../common/simStateUtils.js";
 import {
   getBattleStatForAttackTarget,
   getEffectiveAtk,
@@ -1000,6 +1002,9 @@ function simulateEnchantedHalberdFollowUp(
 ): SimulatedCardState | null {
   const meta = ensureLuminarchSimMeta(state);
   if (meta.halberdSummonedThisTurn) return null;
+  // Owner hooks and declarative event dispatch share the same physical OPT.
+  if (hasPlanningExecutionContext(state) &&
+      !canUseSimOncePerTurn(state, "luminarch_enchanted_halberd_conditional_summon", 1, player.id, true)) return null;
   if (!hasOpenMonsterZone(player)) return null;
 
   const halberdIndex = (player.hand || []).findIndex(
@@ -1015,6 +1020,9 @@ function simulateEnchantedHalberdFollowUp(
     _simulatedHalberdReason: reason,
   });
   meta.halberdSummonedThisTurn = true;
+  if (hasPlanningExecutionContext(state)) {
+    markSimOncePerTurnUsed(state, "luminarch_enchanted_halberd_conditional_summon", 1, player.id, true);
+  }
   meta.milestones.push("halberd_followup");
   return summoned;
 }
@@ -1788,6 +1796,7 @@ export function simulateLuminarchMainPhaseAction(
   state: LuminarchState,
   action: AIPlannedAction,
   options: LuminarchSimulationOptions = {},
+  planningOptions?: ReturnType<typeof buildLuminarchSimulationOptions>,
 ): LuminarchState {
   const preparedAction = prepareLuminarchAction(action);
   // Preserve the legacy planner no-op for `simulatedBattle` without making it
@@ -1795,7 +1804,17 @@ export function simulateLuminarchMainPhaseAction(
   return applyGenericSimulatedMainPhaseAction(
     state,
     preparedAction as AIAction,
-    {
+    planningOptions || buildLuminarchSimulationOptions(state, preparedAction, options),
+  );
+}
+
+export function buildLuminarchSimulationOptions(
+  state: LuminarchState,
+  action: AIPlannedAction | null | undefined,
+  options: LuminarchSimulationOptions = {},
+) {
+  const preparedAction = prepareLuminarchAction(action);
+  return {
       archetype: "Luminarch",
       preferDefense: true,
       selfId: "bot",
@@ -1824,8 +1843,7 @@ export function simulateLuminarchMainPhaseAction(
         handIgnition: handleLuminarchHandIgnitionOverride,
         special_summon_sanctum_protector: handleSanctumProtectorShortcut,
       },
-    },
-  );
+    };
 }
 
 export function simulateLuminarchSpellEffect(

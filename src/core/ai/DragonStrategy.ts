@@ -486,6 +486,14 @@ export default class DragonStrategy extends BaseStrategy {
     return (simulateDragonAction as (state: StrategySimulation, action: AIPlannedAction) => StrategySimulation)(state, action);
   }
 
+  getPlanningSimulationOptions(_state: StrategySimulation) {
+    return {
+      strategy: this,
+      rankSearchCandidates: this.rankSearchCandidates.bind(this),
+      evaluateRecruitCandidate: this.evaluateRecruitCandidate.bind(this),
+    };
+  }
+
   rankSearchCandidates<Card extends DragonCard>(cards: Card[], action: DragonSearchAction, context: DragonPolicyContext = {}) {
     const game = context.game || null;
     const player = context.player || this.bot || game?.bot || {};

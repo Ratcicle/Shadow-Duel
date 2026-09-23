@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { greedySearchWithEvalV2 } from "../../src/core/ai/BeamSearch.js";
-import { gameTreeSearch } from "../../src/core/ai/GameTreeSearch.js";
+import { fixtureGameTreeSearch as gameTreeSearch } from "../helpers/gameTree.js";
 import { turnLineSearch } from "../../src/core/ai/TurnLineSearch.js";
 import { cloneBotGameState } from "../../src/core/bot/simulationBridge.js";
 
@@ -254,10 +254,11 @@ test("Beam/Greedy clone isolates planning resources and links but keeps unrelate
   assert.equal(sourceCard.counters.get("charge"), 2);
 });
 
-test("GameTree clone omits unused zones and clears equipment links", () => {
+test("GameTree copies simulation zones and graph links without reading the external game", () => {
   const game = makeCloneProfileGame();
   let captured: unknown;
   const strategy = {
+    simulateMainPhaseAction: () => undefined,
     generateMainPhaseActions(state: unknown) {
       captured ??= state;
       return [CLONE_PROBE_ACTION];
@@ -272,18 +273,19 @@ test("GameTree clone omits unused zones and clears equipment links", () => {
   assert.equal(clone._gameRef, game);
   assert.notEqual(clone.bot, game.bot);
   assert.notEqual(clonedCard, sourceCard);
-  assert.equal(clonedCard.nested, sourceCard.nested);
+  assert.equal(Object.hasOwn(clonedCard, "nested"), false); // no simulator consumer
   assert.notEqual(clonedCard.counters, sourceCard.counters);
   assert.notEqual(clonedCard.turnBasedBuffs, sourceCard.turnBasedBuffs);
   assert.notEqual(clonedCard.turnBasedBuffs[0], sourceCard.turnBasedBuffs[0]);
-  assert.equal(clonedCard.equippedTo, null);
-  assert.equal(clonedCard.equipTarget, null);
-  assert.deepEqual(clonedCard.equips, []);
-  assert.equal(Object.hasOwn(clone.bot, "deck"), false);
-  assert.equal(Object.hasOwn(clone.bot, "banished"), false);
+  assert.notEqual(clonedCard.equippedTo, sourceCard.equippedTo);
+  assert.notEqual(clonedCard.equipTarget, sourceCard.equipTarget);
+  assert.notEqual(clonedCard.equips, sourceCard.equips);
+  assert.notEqual(clonedCard.equips[0], sourceCard.equips[0]);
+  assert.equal(Object.hasOwn(clone.bot, "deck"), true);
+  assert.equal(Object.hasOwn(clone.bot, "banished"), true);
   assert.equal(
     Object.hasOwn(clone.bot, "additionalNormalSummonPermissions"),
-    false,
+    true,
   );
 
   clonedCard.counters.set("charge", 9);

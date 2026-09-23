@@ -532,6 +532,7 @@ export default class BaseStrategy implements StrategyRuntimePort {
 
   evaluateCriticalSituationWithGameTree(game: AIState, _analysis: unknown = null) {
     try {
+      if (game._isPerspectiveState || ("_suppressP2Analysis" in game && game._suppressP2Analysis === true)) return null;
       const opponent = this.getOpponent(game, this.bot) || (game as AiStateShape).opponent;
       if (!opponent) return null;
 

@@ -1,3 +1,5 @@
+import { fixtureGameTreeSearch as gameTreeSearch } from "../helpers/gameTree.js";
+import { applyGenericSimulatedMainPhaseAction } from "../../src/core/ai/common/simulation.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 
@@ -7,7 +9,6 @@ import {
 } from "../../src/core/ai/BeamSearch.js";
 import {
   estimateSearchComplexity,
-  gameTreeSearch,
   shouldUseGameTreeSearch,
 } from "../../src/core/ai/GameTreeSearch.js";
 import { turnLineSearch } from "../../src/core/ai/TurnLineSearch.js";
@@ -20,6 +21,7 @@ interface SearchAction {
 }
 
 interface SearchCard {
+  cardKind?: "monster";
   name: string;
   atk: number;
   def: number;
@@ -230,6 +232,7 @@ test("game-tree search freezes defaults, three-candidate beam and first-tie beha
     toPosition: "attack",
   };
   const strategy = {
+    simulateMainPhaseAction: () => undefined,
     bot: game.bot,
     generateMainPhaseActions() {
       generationCalls += 1;
@@ -244,9 +247,10 @@ test("game-tree search freezes defaults, three-candidate beam and first-tie beha
     score: 0,
     depth: 4,
     confidence: 0,
-    transpositionHits: 1,
+    // Same no-op board now has separate horizons, perspectives and windows.
+    transpositionHits: 9,
   });
-  assert.equal(generationCalls, 4);
+  assert.equal(generationCalls, 9);
   assert.equal(estimateSearchComplexity(4), 81);
   assert.equal(shouldUseGameTreeSearch(game, game.bot), false);
   assert.equal(shouldUseGameTreeSearch(game, game.bot, true), true);
@@ -254,39 +258,55 @@ test("game-tree search freezes defaults, three-candidate beam and first-tie beha
 
 test("game-tree search applies the legacy 0.85 future discount", () => {
   const game = makeTreeGame();
-  game.bot.hand.push({ name: "Bot Material", atk: 1000, def: 0 });
+  game.bot.hand.push({ name: "Bot Material", cardKind: "monster", atk: 1000, def: 0 });
   game.player.hand.push({ name: "Player Material", atk: 1000, def: 0 });
-  const summonAction = { type: "summon", index: 0 } as const;
+  const summonAction = { type: "summon", index: 0, cardName: "Bot Material" } as const;
   const strategy = {
     bot: game.bot,
     generateMainPhaseActions: () => [summonAction],
+    simulateMainPhaseAction: applyGenericSimulatedMainPhaseAction,
   };
 
   const result = gameTreeSearch(game, strategy, game.bot, 1);
 
   assert.equal(result.action, summonAction);
-  assert.equal(result.score, -1.5 * Math.pow(0.85, 3));
+  // The summon gains 1.5 for the physical root; ending on the opponent ply
+  // must not reverse that gain. The legacy discount itself is unchanged.
+  assert.equal(result.score, 1.5 * Math.pow(0.85, 3));
 });
 
 test("game-tree transposition cache stops at the legacy 2000-entry boundary", () => {
   const NativeMap = globalThis.Map;
   let setCalls = 0;
+  let fingerprintSetCalls = 0;
+  let table: object | undefined;
 
   class NearLimitMap<Key, Value> extends NativeMap<Key, Value> {
+    constructor(entries?: Iterable<readonly [Key, Value]> | null) {
+      super(entries);
+      table ??= this; // gameTreeSearch constructs its table before other Maps.
+    }
+
     override get size(): number {
-      return super.size + 1999;
+      return super.size + (this === table ? 1999 : 0);
     }
 
     override set(key: Key, value: Value): this {
-      setCalls += 1;
+      if (this === table) setCalls += 1;
+      else fingerprintSetCalls += 1;
       return super.set(key, value);
     }
   }
 
+  Object.defineProperty(NearLimitMap, Symbol.hasInstance, {
+    value: (value: unknown) => value instanceof NativeMap,
+  });
   globalThis.Map = NearLimitMap;
   try {
-    const game = makeGame();
+    const game = makeTreeGame();
+    game.bot.field.push({ name: "Cache capacity probe", atk: 1000, def: 0 });
     const strategy = {
+    simulateMainPhaseAction: () => undefined,
       bot: game.bot,
       generateMainPhaseActions: () => SEARCH_ACTIONS,
     };
@@ -294,23 +314,16 @@ test("game-tree transposition cache stops at the legacy 2000-entry boundary", ()
     const result = gameTreeSearch(game, strategy, game.bot, 2);
 
     assert.equal(setCalls, 1);
+    assert.ok(fingerprintSetCalls > 0);
     assert.equal(result.transpositionHits, 2000);
   } finally {
     globalThis.Map = NativeMap;
   }
 });
 
-test("game-tree hash failures retain the randomized HASH_ERROR fingerprint", () => {
-  const NativeMap = globalThis.Map;
+test("game-tree unrepresentable input retains leaf fallback without random cache keys", () => {
   const originalRandom = Math.random;
-  const observedHashes: string[] = [];
-
-  class CapturingMap<Key, Value> extends NativeMap<Key, Value> {
-    override has(key: Key): boolean {
-      observedHashes.push(String(key));
-      return super.has(key);
-    }
-  }
+  let randomCalls = 0;
 
   const game = makeGame();
   Object.defineProperty(game.bot, "lp", {
@@ -321,20 +334,20 @@ test("game-tree hash failures retain the randomized HASH_ERROR fingerprint", () 
     },
   });
 
-  globalThis.Map = CapturingMap;
-  Math.random = () => 0.375;
+  Math.random = () => { randomCalls++; throw new Error("unexpected randomness"); };
   try {
     const strategy = {
+    simulateMainPhaseAction: () => undefined,
       bot: game.bot,
       generateMainPhaseActions: () => [],
     };
 
-    gameTreeSearch(game, strategy, game.bot, 1);
-
-    assert.deepEqual(observedHashes, ["HASH_ERROR_0.375"]);
+    assert.deepEqual(gameTreeSearch(game, strategy, game.bot, 1), {
+      action: null, score: 0, depth: 1, confidence: 0, transpositionHits: 0,
+    });
+    assert.equal(randomCalls, 0);
   } finally {
     Math.random = originalRandom;
-    globalThis.Map = NativeMap;
   }
 });
 

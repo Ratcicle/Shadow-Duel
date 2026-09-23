@@ -11,6 +11,8 @@ import {
   filterAiActionsForCurrentPhase,
   isMain2Phase,
 } from "../ai/common/phaseTiming.js";
+import { runMainPhaseSession, type MainPhaseSession } from "./mainPhaseSession.js";
+import { selectAutomaticAscensionAction } from "./ascensionController.js";
 import { botLogger } from "../BotLogger.js";
 import type { BotRuntimePort, BotGamePort } from "../contracts/bot.js";
 import type {
@@ -38,95 +40,30 @@ function resolvePlannerMode(
   return profile?.enabled === true ? "critical" : "off";
 }
 
-export async function playBotMainPhase(
-  bot: BotRuntimePort,
-  game: BotGamePort,
-): Promise<void> {
-  // Verificar se o jogo já acabou
-  if (game.gameOver || game.isDisposed?.()) {
-    return;
-  }
-  game._arenaTracker?.recordProgress?.("bot_main_phase_enter", game, {
-    actor: bot.id,
-  });
+export function playBotMainPhase(bot: BotRuntimePort, game: BotGamePort): Promise<void> {
+  return runMainPhaseSession(bot, game, session => runMainPhase(bot, game, session));
+}
 
-  const opponent = game.player.id === bot.id ? game.bot : game.player;
-  const useAutomaticAscension =
-    bot.strategy?.shouldUseAutomaticAscensionShortcut?.(game, bot) !== false;
-
-  // === LOG DE ESTADO (DEV MODE) ===
-  if (bot.debug) {
-    console.log(
-      `\n[Bot.playMainPhase] 📊 Estado de ${bot.id} no início da main phase:`,
-    );
-    console.log(
-      `  Hand (${bot.hand.length}): ${
-        bot.hand.map((c) => c.name).join(", ") || "(vazia)"
-      }`,
-    );
-    console.log(
-      `  Field (${bot.field.length}): ${
-        bot.field
-          .map(
-            (c) =>
-              `${c.name}${
-                c.isFacedown
-                  ? "(↓)"
-                  : c.position === "attack"
-                    ? "(↑ATK)"
-                    : "(↑DEF)"
-              }`,
-          )
-          .join(", ") || "(vazio)"
-      }`,
-    );
-    console.log(
-      `  Graveyard (${bot.graveyard.length}): ${
-        bot.graveyard.map((c) => c.name).join(", ") || "(vazio)"
-      }`,
-    );
-    console.log(`  Field Spell: ${bot.fieldSpell?.name || "(nenhum)"}`);
-    console.log(
-      `  LP: ${bot.lp} | Summon Count: ${bot.summonCount}/${1 + (bot.additionalNormalSummons || 0)}`,
-    );
-  }
-
-  let successfulActions = 0;
-  let totalAttempts = 0;
-  const maxSuccessfulActions = bot.maxChainedActions || 2;
-  const maxTotalAttempts = 10; // Limite de segurança contra loops infinitos
-
-  // Track de ações que já falharam neste turno para não tentar novamente
-  const failedActionsThisTurn = new Set();
-
-  // Flag para usar evaluateBoardV2
+async function runMainPhase(bot: BotRuntimePort, game: BotGamePort, session: MainPhaseSession): Promise<void> {
+  session.recordProgress("bot_main_phase_enter", game, { actor: bot.id });
   const useV2Evaluation = true;
-
-  while (
-    successfulActions < maxSuccessfulActions &&
-    totalAttempts < maxTotalAttempts
-  ) {
-    if (game.gameOver || game.isDisposed?.()) return;
-    totalAttempts++;
-
-    // Try Ascension before other actions if available
-    const ascended =
-      useAutomaticAscension && !isMain2Phase(game)
-        ? await bot.tryAscensionIfAvailable(game)
-        : false;
-    if (ascended) {
-      // Allow subsequent actions after ascension
-      const successfulActionDelayMs = Number.isFinite(
-        game?.aiSuccessfulActionDelayMs,
-      )
-        ? game.aiSuccessfulActionDelayMs
-        : game?.phaseDelayMs || 0;
-      await new Promise((resolve) =>
-        setTimeout(resolve, successfulActionDelayMs),
-      );
-      if (game.gameOver || game.isDisposed?.()) return;
+  const useAutomaticAscension = bot.strategy?.shouldUseAutomaticAscensionShortcut?.(game, bot) !== false;
+  while (await session.waitUntilReady()) {
+    if (!session.beginDecision()) return;
+    const totalAttempts = session.counts.decisions;
+    const stateBeforeDecision = session.capture();
+    const suppressedBeforeDecision = session.counts.repetitionsSuppressed;
+    if (useAutomaticAscension && !isMain2Phase(game)) {
+      const ascension = selectAutomaticAscensionAction(bot, game,
+        action => bot.filterValidActionsForCurrentState([action], game).length > 0 &&
+          session.allowed(stateBeforeDecision, action));
+      if (ascension) {
+        const accepted = await session.execute(ascension, stateBeforeDecision);
+        if (!session.active() || session.stopReason) return;
+        if (accepted && !await session.presentationDelay()) return;
+        continue;
+      }
     }
-
     const planningStrategy = bot.strategy || bot;
     const rawActions = bot.generateMainPhaseActions(game);
     const sequencedActions = bot.sequenceActions(rawActions);
@@ -140,61 +77,24 @@ export async function playBotMainPhase(
       },
     );
 
-    // Filtrar ações que já falharam neste turno
-    const actions = phaseFilteredActions.filter((a) => {
-      const actionKey = `${a.type}:${a.cardId || a.card?.id || a.index}`;
-      return !failedActionsThisTurn.has(actionKey);
-    });
-
-    const fallbackActions = bot.filterValidActionsForCurrentState(
-      actions,
-      game,
-    );
-
-    console.log(
-      `[Bot.playMainPhase] Generated ${rawActions.length} raw actions, ${actions.length} phase-valid actions (${failedActionsThisTurn.size} failed-action filtered)`,
-    );
-    game._arenaTracker?.recordProgress?.("ai_decision_before", game, {
-      actor: bot.id,
-      attempt: totalAttempts,
-      rawActions: rawActions.length,
-      sequencedActions: sequencedActions.length,
-      actions: actions.length,
+    const isPermitted = (action: AIPlannedAction): boolean => {
+      const valid = action.type === "simulatedBattle" ? game.phase === "main1" :
+        filterAiActionsForCurrentPhase([action], { game, bot, player: bot, strategy: planningStrategy }).length > 0 &&
+          bot.filterValidActionsForCurrentState([action], game).length > 0;
+      return valid && session.allowed(stateBeforeDecision, action);
+    };
+    const actions = phaseFilteredActions.filter(isPermitted);
+    const fallbackActions = actions;
+    session.recordProgress("ai_decision_before", game, {
+      actor: bot.id, attempt: totalAttempts, rawActions: rawActions.length,
+      sequencedActions: sequencedActions.length, actions: actions.length,
       fallbackActions: fallbackActions.length,
-      failedThisTurn: failedActionsThisTurn.size,
     });
-    if (actions.length > 0) {
-      console.log(
-        `[Bot.playMainPhase] Actions:`,
-        actions.map((a) => `${a.type}:${a.card?.name || a.index}`),
-      );
-    }
-
-    // 📊 Log de fase vazia
     if (!actions.length) {
-      game._arenaTracker?.recordProgress?.("ai_decision_after", game, {
-        actor: bot.id,
-        attempt: totalAttempts,
-        selected: false,
-        reason: "no_actions_generated",
-      });
-      if (botLogger) {
-        botLogger.logEmptyPhase(
-          bot.id,
-          game.turnCounter || 0,
-          game.phase || "unknown",
-          "NO_ACTIONS_GENERATED",
-          {
-            lp: game.player?.lp,
-            handSize: (game.player?.hand || []).length,
-            fieldSize: (game.player?.field || []).length,
-            gySize: (game.player?.graveyard || []).length,
-          },
-        );
-      }
-      break;
+      session.stopReason = phaseFilteredActions.length || session.counts.repetitionsSuppressed > suppressedBeforeDecision
+        ? "alternatives_exhausted" : "no_candidates";
+      return;
     }
-
     let bestAction: AIPlannedAction | null = null;
     let pendingPlannerTrace: TurnLineSearchResult | null = null;
 
@@ -297,7 +197,7 @@ export async function playBotMainPhase(
         planningContext,
       });
 
-      game._arenaTracker?.recordProgress?.("ai_turn_line_search", game, {
+      session.recordProgress("ai_turn_line_search", game, {
         actor: bot.id,
         plannerMode,
         plannerTurnMode,
@@ -317,7 +217,9 @@ export async function playBotMainPhase(
       });
 
       console.log(`[Bot.playMainPhase] TurnLineSearch result:`, plannerResult);
-      if (plannerResult?.action) {
+      if (!await session.waitUntilReady()) return;
+      if (session.capture() !== stateBeforeDecision) continue;
+      if (plannerResult?.action && isPermitted(plannerResult.action)) {
         bestAction = plannerResult.action;
         pendingPlannerTrace = plannerResult;
         console.log(`[Bot.playMainPhase] ✅ TurnLineSearch chose:`, bestAction);
@@ -346,7 +248,9 @@ export async function playBotMainPhase(
       });
 
       console.log(`[Bot.playMainPhase] Beam search result:`, searchResult);
-      if (searchResult && searchResult.action) {
+      if (!await session.waitUntilReady()) return;
+      if (session.capture() !== stateBeforeDecision) continue;
+      if (searchResult?.action && isPermitted(searchResult.action)) {
         bestAction = searchResult.action;
         console.log(`[Bot.playMainPhase] ✅ Beam search chose:`, bestAction);
       } else {
@@ -363,7 +267,9 @@ export async function playBotMainPhase(
       });
 
       console.log(`[Bot.playMainPhase] Greedy search result:`, greedyResult);
-      if (greedyResult && greedyResult.action) {
+      if (!await session.waitUntilReady()) return;
+      if (session.capture() !== stateBeforeDecision) continue;
+      if (greedyResult?.action && isPermitted(greedyResult.action)) {
         bestAction = greedyResult.action;
         console.log(`[Bot.playMainPhase] ✅ Greedy chose:`, bestAction);
       } else {
@@ -371,8 +277,7 @@ export async function playBotMainPhase(
 
         // 🔧 EMERGENCY FIX: Se greedy falhou mas temos ações, forçar primeira
         if (!bestAction && actions.length > 0) {
-          bestAction =
-            fallbackActions.length > 0 ? fallbackActions[0]! : actions[0]!;
+          bestAction = fallbackActions.find(isPermitted) || null;
           console.warn(
             `[Bot.playMainPhase] 🚨 EMERGENCY FALLBACK: Forcing first action to avoid pass`,
           );
@@ -399,11 +304,11 @@ export async function playBotMainPhase(
         finalFallback = bot.filterValidActionsForCurrentState(
           phaseValidRegenerated,
           game,
-        );
+        ).filter(isPermitted);
       }
 
       if (finalFallback.length > 0) {
-        bestAction = finalFallback[0]!;
+        bestAction = finalFallback.find(isPermitted) || null;
         console.log(
           `[Bot.playMainPhase] ?? Using ultimate fallback: first valid action`,
           bestAction,
@@ -414,39 +319,24 @@ export async function playBotMainPhase(
     // Se ainda não tem ação, break
     if (!bestAction) {
       console.log(`[Bot.playMainPhase] ⚠️ No action selected, breaking loop`);
-      game._arenaTracker?.recordProgress?.("ai_decision_after", game, {
+      session.recordProgress("ai_decision_after", game, {
         actor: bot.id,
         attempt: totalAttempts,
         selected: false,
         reason: "no_action_selected",
       });
-      break;
+      session.stopReason = "alternatives_exhausted";
+      return;
     }
 
-    const selectedStillValid =
-      bestAction.type === "simulatedBattle" ||
-      bot.filterValidActionsForCurrentState([bestAction], game).length > 0;
-    if (!selectedStillValid) {
-      const failedKey = `${bestAction.type}:${(bestAction as AIAction).cardId || (bestAction as AIAction).card?.id || (bestAction as AIAction).index}`;
-      failedActionsThisTurn.add(failedKey);
-      console.log(
-        `[Bot.playMainPhase] Selected action no longer valid, retrying: ${failedKey}`,
-      );
-      game._arenaTracker?.recordProgress?.("ai_decision_after", game, {
-        actor: bot.id,
-        attempt: totalAttempts,
-        selected: false,
-        reason: "selected_action_invalid",
-        actionType: bestAction.type || null,
-        card:
-          (bestAction as AIAction).card?.name ||
-          (bestAction as AIAction).cardName ||
-          null,
-      });
+    if (!await session.waitUntilReady()) return;
+    if (session.capture() !== stateBeforeDecision) continue;
+    if (!isPermitted(bestAction)) {
+      session.rejectCandidate(stateBeforeDecision, bestAction);
       continue;
     }
 
-    game._arenaTracker?.recordProgress?.("ai_decision_after", game, {
+    session.recordProgress("ai_decision_after", game, {
       actor: bot.id,
       attempt: totalAttempts,
       selected: true,
@@ -462,14 +352,14 @@ export async function playBotMainPhase(
         `[Bot.playMainPhase] Planner selected battle bridge; advancing to Battle Phase`,
         bestAction,
       );
-      game._arenaTracker?.recordProgress?.("ai_plan_phase_bridge", game, {
+      session.recordProgress("ai_plan_phase_bridge", game, {
         actor: bot.id,
         attempt: totalAttempts,
         plannedAction: fingerprintAction(bestAction),
         plannedMilestones: (pendingPlannerTrace?.milestones || []).slice(0, 8),
         plannerReason: pendingPlannerTrace?.reason || null,
       });
-      await game.nextPhase();
+      session.stopReason = "planner_transition";
       return;
     }
 
@@ -502,7 +392,8 @@ export async function playBotMainPhase(
       }
     }
 
-    const actionSuccess = await bot.executeMainPhaseAction(game, bestAction);
+    const actionSuccess = await session.execute(bestAction, stateBeforeDecision);
+    if (!session.active() || session.stopReason) return;
     if (pendingPlannerTrace) {
       const expectedSummary =
         pendingPlannerTrace.diagnostics?.firstStepSummary || null;
@@ -526,7 +417,7 @@ export async function playBotMainPhase(
         plannedMilestones: (pendingPlannerTrace.milestones || []).slice(0, 8),
         plannerReason: pendingPlannerTrace.reason || null,
       };
-      game._arenaTracker?.recordProgress?.(
+      session.recordProgress(
         actionSuccess
           ? "ai_plan_execution_compare"
           : "ai_plan_execution_failed",
@@ -535,50 +426,8 @@ export async function playBotMainPhase(
       );
     }
     if (!actionSuccess) {
-      // Marcar ação como falhada para não tentar novamente
-      const failedKey = `${bestAction.type}:${(bestAction as AIAction).cardId || (bestAction as AIAction).card?.id || (bestAction as AIAction).index}`;
-      failedActionsThisTurn.add(failedKey);
-      console.log(
-        `[Bot.playMainPhase] ❌ Action failed, added to blacklist: ${failedKey}`,
-      );
-
-      if (botLogger?.logEmptyPhase) {
-        botLogger.logEmptyPhase(
-          bot.id,
-          game.turnCounter,
-          game.phase,
-          "ACTION_FAILED",
-          {
-            lp: bot.lp,
-            handSize: bot.hand.length,
-            fieldSize: bot.field.length,
-            gySize: bot.graveyard.length,
-          },
-        );
-      }
-      if (typeof game.updateBoard === "function") {
-        game.updateBoard();
-      }
-      // NÃO dar break aqui - tentar próxima ação disponível
       continue;
     }
-
-    // Incrementar contador de ações bem-sucedidas
-    successfulActions += 1;
-
-    const successfulActionDelayMs = Number.isFinite(
-      game?.aiSuccessfulActionDelayMs,
-    )
-      ? game.aiSuccessfulActionDelayMs
-      : game?.phaseDelayMs || 0;
-    await new Promise((resolve) =>
-      setTimeout(resolve, successfulActionDelayMs),
-    );
-    if (game.gameOver || game.isDisposed?.()) return;
-  }
-
-  // Final chance to ascend if no actions left
-  if (useAutomaticAscension && !isMain2Phase(game)) {
-    await bot.tryAscensionIfAvailable(game);
+    if (!await session.presentationDelay()) return;
   }
 }

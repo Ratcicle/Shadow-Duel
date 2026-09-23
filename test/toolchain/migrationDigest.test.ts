@@ -47,7 +47,7 @@ const ACTIVE_AGGREGATE =
 const ACTIVE_FUNCTIONAL_COMMIT = "dc9bb45c83ef2a0417c61a151bcee24e93dc3628";
 const ACTIVE_APPROVED_AT = "2026-07-31T10:23:33-03:00";
 const REGISTRY_URL = new URL(
-  "../../docs/migrations/typescript-digests.json",
+  "../../config/toolchain/typescript-digests.json",
   import.meta.url,
 );
 

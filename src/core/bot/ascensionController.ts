@@ -3,35 +3,41 @@ import type {
   BotGamePort,
   BotAutomaticAscensionChoice,
 } from "../contracts/bot.js";
+import type { AIActionOf } from "../contracts/ai.js";
 import type { GameCard, BattlePositionInput } from "../contracts/cards.js";
 
-export async function tryAscensionIfAvailable(
+type AutomaticAscensionAction = AIActionOf<"ascension"> & {
+  materialIndex: number;
+  ascensionCard: GameCard;
+};
+
+/** Select without executing so the Main Phase session owns accounting/guards. */
+export function selectAutomaticAscensionAction(
   bot: BotRuntimePort,
   game: BotGamePort,
-): Promise<boolean> {
-  try {
-    const choices: BotAutomaticAscensionChoice[] = [];
-    const materials = (bot.field || []).filter(
-      (m) => m && m.cardKind === "monster" && !m.isFacedown,
+  allowed: (action: AIActionOf<"ascension">) => boolean = () => true,
+): AutomaticAscensionAction | null {
+  const choices: BotAutomaticAscensionChoice[] = [];
+  const materials = (bot.field || []).filter(
+    (m) => m && m.cardKind === "monster" && !m.isFacedown,
+  );
+  for (const material of materials) {
+    const matCheck = game.canUseAsAscensionMaterial(bot, material);
+    if (!matCheck.ok) continue;
+    const candidates =
+      game.getAscensionCandidatesForMaterial(bot, material) || [];
+    if (!candidates.length) continue;
+    // Filter by requirements
+    const eligible = candidates.filter(
+      (asc) => game.checkAscensionRequirements(bot, asc, material).ok,
     );
-    for (const material of materials) {
-      const matCheck = game.canUseAsAscensionMaterial(bot, material);
-      if (!matCheck.ok) continue;
-      const candidates =
-        game.getAscensionCandidatesForMaterial(bot, material) || [];
-      if (!candidates.length) continue;
-      // Filter by requirements
-      const eligible = candidates.filter(
-        (asc) => game.checkAscensionRequirements(bot, asc, material).ok,
-      );
-      if (!eligible.length) continue;
-      for (const ascensionCard of eligible) {
-        choices.push({ material, ascensionCard });
-      }
+    if (!eligible.length) continue;
+    for (const ascensionCard of eligible) {
+      choices.push({ material, ascensionCard });
     }
+  }
 
-    if (!choices.length) return false;
-
+  while (choices.length) {
     const opponent = bot.resolveOpponent(game);
     const strategicChoice = bot.strategy?.selectAutomaticAscension?.({
       choices,
@@ -40,7 +46,7 @@ export async function tryAscensionIfAvailable(
       opponent,
     });
     if (strategicChoice?.skip === true) {
-      return false;
+      return null;
     }
 
     let selected: BotAutomaticAscensionChoice | null = null;
@@ -87,19 +93,34 @@ export async function tryAscensionIfAvailable(
         game,
       );
 
-    const res = await game.performAscensionSummon(
-      bot,
-      selected.material,
-      selected.ascensionCard,
-      { position },
-    );
-    if (res?.success) {
-      return true;
-    }
-  } catch (e) {
-    // Silent fail; bot ascension is opportunistic
+    const action: AutomaticAscensionAction = {
+      type: "ascension", materialIndex: bot.field.indexOf(selected.material),
+      ascensionCard: selected.ascensionCard, position,
+    };
+    if (allowed(action)) return action;
+    const index = choices.findIndex(choice => choice.material === selected.material &&
+      choice.ascensionCard === selected.ascensionCard);
+    if (index < 0) return null;
+    choices.splice(index, 1);
   }
-  return false;
+  return null;
+}
+
+export async function tryAscensionIfAvailable(
+  bot: BotRuntimePort,
+  game: BotGamePort,
+): Promise<boolean> {
+  try {
+    const action = selectAutomaticAscensionAction(bot, game);
+    const material = action && bot.field[action.materialIndex];
+    if (!action || !material || !action.ascensionCard) return false;
+    const result = await game.performAscensionSummon(bot, material, action.ascensionCard,
+      action.position ? { position: action.position } : {});
+    return result?.success === true;
+  } catch {
+    // Preserve the opportunistic legacy wrapper for external callers.
+    return false;
+  }
 }
 
 /**

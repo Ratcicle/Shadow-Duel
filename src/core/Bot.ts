@@ -1,5 +1,6 @@
 ﻿import Player from "./Player.js";
 import { getStrategyFor } from "./ai/StrategyRegistry.js";
+import { createGameTreeModels } from "./ai/PlanningStrategies.js";
 import { botLogger } from "./BotLogger.js";
 import { buildBotDeck, buildBotExtraDeck } from "./bot/deckBuilder.js";
 import {
@@ -9,6 +10,7 @@ import {
 } from "./bot/presets.js";
 import { executeBotMainPhaseAction } from "./bot/actionExecutor.js";
 import { playBotMainPhase } from "./bot/mainPhaseController.js";
+import { scheduleMainPhaseTransition } from "./bot/mainPhaseSession.js";
 import {
   isSameBattleCard as isSameBattleCardForBot,
   playBotBattlePhase,
@@ -56,15 +58,14 @@ import type { GamePlayer } from "./contracts/player.js";
 
 export default class Bot extends Player {
   declare maxSimulationsPerPhase: number;
-  declare maxChainedActions: number;
   declare archetype: BotArchetypeId;
+  declare planningModelId: string | null;
   declare strategy: BotStrategyPort;
   declare game?: BotGamePort;
   declare debug?: boolean;
   constructor(archetype = "shadowheart") {
     super("bot", "Opponent", "ai");
     this.maxSimulationsPerPhase = 20;
-    this.maxChainedActions = 6; // Aumentado de 3 para 6 - permite múltiplas ações + efeitos
     this.setPreset(archetype);
   }
   static getAvailablePresets() {
@@ -73,11 +74,22 @@ export default class Bot extends Player {
 
   setPreset(presetId = "shadowheart") {
     const validIds: string[] = Bot.getAvailablePresets().map((p) => p.id);
+    this.planningModelId = validIds.includes(presetId) ? presetId : null;
     this.archetype = validIds.includes(presetId)
       ? (presetId as BotArchetypeId)
       : "shadowheart";
 
     this.strategy = getStrategyFor(this.archetype, this);
+  }
+
+  getGameTreeModels() {
+    const participants = this.game ? [this.game.player, this.game.bot] : [this];
+    return createGameTreeModels(this.id, participants.map(participant => ({
+      id: participant.id,
+      modelId: "planningModelId" in participant && typeof participant.planningModelId === "string"
+        ? participant.planningModelId
+        : null,
+    })));
   }
 
   // Sobrescreve buildDeck para usar deck do arquétipo selecionado
@@ -169,6 +181,18 @@ export default class Bot extends Player {
   async makeMove(game: BotGamePort) {
     if (!game || game.gameOver || game.isDisposed?.()) return;
 
+    // All entrants join the same session, including while its action is busy.
+    // Only that session may schedule the corresponding phase transition.
+    if (game.phase === "main1" || game.phase === "main2") {
+      const { phase, turn, turnCounter, player, bot } = game;
+      await this.playMainPhase(game);
+      if (game.phase === phase && game.turn === turn && game.turnCounter === turnCounter &&
+          game.player === player && game.bot === bot) {
+        await scheduleMainPhaseTransition(this, game);
+      }
+      return;
+    }
+
     try {
       game._arenaTracker?.recordProgress?.("bot_make_move_enter", game, {
         actor: this.id,
@@ -194,27 +218,6 @@ export default class Bot extends Player {
         actor: this.id,
         phase,
       });
-
-      if (phase === "main1" || phase === "main2") {
-        await this.playMainPhase(game);
-        game._arenaTracker?.recordProgress?.(
-          "bot_make_move_after_main_phase",
-          game,
-          {
-            actor: this.id,
-            phase,
-          },
-        );
-        if (!game.gameOver && !game.isDisposed?.() && game.phase === phase) {
-          const actionDelayMs = Number.isFinite(game?.aiActionDelayMs)
-            ? game.aiActionDelayMs
-            : 500;
-          setTimeout(() => {
-            if (!game.isDisposed?.()) game.nextPhase();
-          }, actionDelayMs);
-        }
-        return;
-      }
 
       if (phase === "battle") {
         this.playBattlePhase(game);

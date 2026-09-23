@@ -261,6 +261,20 @@ export function fingerprintPlanningState(state: AiStateInput): string {
     ]]);
   }
   cardData.sort(([a], [b]) => compare(a, b));
+  // GameTree rotates the bot view. Inactive actors' resources still affect
+  // future plies; omit Luminarch's diagnostic arrays just as for the active view.
+  const actors: unknown = Reflect.get(state, "_gameTreeActors");
+  if (isObject(actors)) {
+    const actorData = Object.keys(actors).sort(compare).map(id => {
+      const actor: unknown = Reflect.get(actors, id);
+      if (!isObject(actor)) return [id, normalize(actor, id)];
+      const luminarch: unknown = Reflect.get(actor, "_simLuminarch");
+      return [id, project(actor, PLANNING_STATE_FIELDS, id),
+        project(isObject(luminarch) ? luminarch : {}, LUMINARCH_RESOURCE_FIELDS, id)];
+    });
+    return JSON.stringify([stateData, players, resourceData, cardData, actorData,
+      project(state, ["materialDuelStats"], "materialHistory")]);
+  }
   return JSON.stringify([stateData, players, resourceData, cardData]);
 }
 
