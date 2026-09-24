@@ -37,6 +37,10 @@ export interface ExtraDeckRenderOptions {
 import { getUIText } from "../../core/i18n.js";
 import { PANEL_ICONS, createTablerIcon } from "../icons/tablerIcons.js";
 
+// Visual slots follow the packed zone lists on every render. They are not
+// persistent positions and cannot serve as a model for column effects.
+const FIELD_SLOT_COUNT = 5;
+
 function renderZoneCounter(
   counter: Element,
   iconUrl: string,
@@ -141,10 +145,13 @@ export function renderField(
   // Batch DOM updates with DocumentFragment to minimize reflows
   const fragment = document.createDocumentFragment();
 
-  player.field.forEach((card, index) => {
-    if (!card) return; // Defensive: skip empty slots
+  for (let index = 0; index < FIELD_SLOT_COUNT; index += 1) {
     const slotEl = document.createElement("div");
     slotEl.className = "field-card-slot";
+    fragment.appendChild(slotEl);
+
+    const card = player.field[index];
+    if (!card) continue;
 
     const cardEl = this.createCardElement(card, true, {
       showStatusIcons: true,
@@ -166,8 +173,7 @@ export function renderField(
     }
 
     slotEl.appendChild(cardEl);
-    fragment.appendChild(slotEl);
-  });
+  }
 
   container.innerHTML = "";
   container.appendChild(fragment);
@@ -188,8 +194,13 @@ export function renderSpellTrap(this: Renderer, player: GamePlayer): void {
   // Batch DOM updates with DocumentFragment to minimize reflows
   const fragment = document.createDocumentFragment();
 
-  player.spellTrap.forEach((card, index) => {
-    if (!card) return; // Defensive: skip empty slots
+  for (let index = 0; index < FIELD_SLOT_COUNT; index += 1) {
+    const slotEl = document.createElement("div");
+    slotEl.className = "field-card-slot";
+    fragment.appendChild(slotEl);
+
+    const card = player.spellTrap[index];
+    if (!card) continue;
     const isVisible = player.controllerType !== "ai" || !card.isFacedown;
     const cardEl = this.createCardElement(card, isVisible);
     cardEl.dataset.index = String(index);
@@ -203,8 +214,8 @@ export function renderSpellTrap(this: Renderer, player: GamePlayer): void {
       cardEl.style.border = "1px solid #555";
     }
 
-    fragment.appendChild(cardEl);
-  });
+    slotEl.appendChild(cardEl);
+  }
 
   container.innerHTML = "";
   container.appendChild(fragment);

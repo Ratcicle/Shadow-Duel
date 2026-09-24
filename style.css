@@ -721,7 +721,8 @@ body {
 }
 
 .field-zone {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(5, var(--monster-slot-w));
   gap: var(--card-gap);
   width: var(--zone-width);
   min-width: var(--zone-width);
@@ -730,48 +731,21 @@ body {
   height: var(--card-h);
   justify-content: center;
   align-items: center;
-  border: 1px solid var(--zone-border-color);
-  border-radius: 8px;
   padding: 0 var(--zone-pad);
   position: relative;
-  background: radial-gradient(
-    circle at 10% 20%,
-    rgba(187, 134, 252, 0.05),
-    rgba(0, 0, 0, 0)
-  );
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.03);
   margin: 0 auto;
 }
 
-.field-zone::before {
-  content: attr(data-label);
-  position: absolute;
-  top: 6px;
-  left: 10px;
-  font-size: 0.75rem;
-  color: #888;
-  letter-spacing: 0.05em;
-}
-
-.monster-row {
-  background: linear-gradient(135deg, rgba(0, 0, 0, 0.15), rgba(0, 0, 0, 0.05));
-  padding: 0;
-  min-height: var(--card-h);
-}
-
 .field-card-slot {
-  flex: 0 0 var(--monster-slot-w);
   width: var(--monster-slot-w);
   height: var(--card-h);
   display: flex;
   justify-content: center;
   align-items: center;
   position: relative;
-}
-
-.spelltrap-row {
-  background: linear-gradient(135deg, rgba(0, 0, 0, 0.18), rgba(0, 0, 0, 0.08));
-  border-color: var(--border-color);
+  border: 1px solid var(--zone-border-color);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.02);
 }
 
 .spelltrap-zone {
@@ -1082,7 +1056,7 @@ body {
 }
 
 .card.defense:hover {
-  transform: rotate(-90deg) translateY(calc(-1 * var(--hover-lift)));
+  transform: translateY(calc(-1 * var(--hover-lift))) rotate(-90deg);
   box-shadow: 0 0 10px var(--accent-color);
   z-index: 10;
 }
