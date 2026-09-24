@@ -538,7 +538,7 @@ export function renderPreview(
   if (!card) {
     previewImage.style.backgroundImage = "";
     setPreviewCardFrameClass(previewImage, null);
-    previewName.textContent = "Hover a card";
+    previewName.textContent = getUIText("ui.duel.previewPlaceholder");
     renderPreviewStat(
       previewAtk,
       PANEL_ICONS.atk,
@@ -561,7 +561,9 @@ export function renderPreview(
   previewImage.style.backgroundImage = `url('${publicAssetUrl(card.image)}')`;
   setPreviewCardFrameClass(previewImage, card);
   previewName.textContent =
-    getCardDisplayName(card) || (card?.name && card.name) || "Hover a card";
+    getCardDisplayName(card) ||
+    (card?.name && card.name) ||
+    getUIText("ui.duel.previewPlaceholder");
   const isMonster = card.cardKind !== "spell" && card.cardKind !== "trap";
 
   if (isMonster) {

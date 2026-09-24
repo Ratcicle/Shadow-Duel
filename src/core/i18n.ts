@@ -66,6 +66,10 @@ const DEFAULT_LOCALE_TEXTS = {
       cannotAttack: "Cannot attack",
       equipped: "Equipped",
     },
+    duel: {
+      turn: "Turn {turn}",
+      previewPlaceholder: "Hover a card",
+    },
     priority: {
       owner: "Priority: {owner}",
       you: "You",

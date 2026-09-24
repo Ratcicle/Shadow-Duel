@@ -46,9 +46,15 @@ export function log(this: Renderer, message: string): void {
 /**
  * @this {import('../Renderer.js').default}
  */
-export function updateTurn(this: Renderer, player: GamePlayer): void {
+export function updateTurn(
+  this: Renderer,
+  player: GamePlayer,
+  turnCounter: number,
+): void {
   if (!this.elements.turnIndicator) return;
-  this.elements.turnIndicator.textContent = `Turn: ${player.name}`;
+  this.elements.turnIndicator.textContent = getUIText("ui.duel.turn", {
+    turn: turnCounter,
+  });
 
   // Indicador visual de turno: borda brilhante no campo do jogador ativo
   const playerAreaEl = document.getElementById("player-area");

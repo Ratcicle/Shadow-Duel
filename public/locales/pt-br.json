@@ -29,6 +29,10 @@
       "cannotAttack": "Não pode atacar",
       "equipped": "Equipado"
     },
+    "duel": {
+      "turn": "Turno {turn}",
+      "previewPlaceholder": "Passe o mouse sobre uma carta"
+    },
     "priority": {
       "owner": "Prioridade: {owner}",
       "you": "Você",

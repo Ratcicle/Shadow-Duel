@@ -84,13 +84,14 @@ body {
   flex: 1;
   height: 100dvh;
   display: grid;
-  grid-template-rows: 1fr auto 1fr;
+  grid-template-rows: minmax(min-content, 1fr) auto minmax(min-content, 1fr);
   align-items: stretch;
   justify-items: stretch;
   gap: 0;
-  padding: 10px 14px 12px;
+  padding: 10px 14px 6px;
   position: relative;
   min-width: 0; /* Allow flex children to shrink below content size */
+  overflow-y: auto;
 }
 
 .card-animation-layer {
@@ -229,11 +230,13 @@ body {
 }
 
 #bot-area {
-  justify-content: flex-end;
+  justify-content: flex-start;
 }
 
 #player-area {
   justify-content: flex-start;
+  gap: 4px;
+  padding-bottom: 4px;
 }
 
 #sidebar {
@@ -619,11 +622,21 @@ body {
 
 .board-wrapper {
   display: flex;
+  flex-shrink: 0;
   justify-content: center;
   align-items: stretch;
   gap: 18px;
   width: 100%;
   max-width: 100%;
+}
+
+/* Keep the field stacks beside the phase bar; free space belongs by the hands. */
+#bot-area .board-wrapper {
+  margin-top: auto;
+}
+
+#bot-area .board-core {
+  align-self: flex-end;
 }
 
 .fieldspell-dock,
@@ -643,7 +656,7 @@ body {
 .board-core {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   align-items: center;
   width: var(--zone-width);
   min-width: var(--zone-width);
@@ -663,8 +676,13 @@ body {
 .hand-row {
   width: 100%;
   display: flex;
+  flex-shrink: 0;
   justify-content: center;
   margin-top: 6px;
+}
+
+#player-area .hand-row {
+  margin-top: auto;
 }
 
 /* Hand row for bot appears above board, so use margin-bottom */
@@ -957,6 +975,40 @@ body {
   flex: 0 0 var(--card-w);
   min-width: var(--card-w);
   max-width: var(--card-w);
+}
+
+#player-hand {
+  /* Reserve the hover lift above and the subtle fan's outer tips below. */
+  padding: 8px 10px 14px;
+  gap: 0;
+}
+
+#player-hand .card {
+  /* Position offsets are already captured in movement-animation rectangles. */
+  top: var(--hand-offset, 0px);
+  transform: rotate(var(--hand-angle, 0deg));
+  transform-origin: center bottom;
+  z-index: var(--hand-z, 1);
+  transition:
+    top 0.2s,
+    transform 0.2s,
+    box-shadow 0.2s;
+}
+
+#player-hand .card + .card {
+  margin-left: calc(var(--card-w) * -0.12);
+}
+
+#player-hand .card:is(:hover, :focus-visible) {
+  top: -8px;
+  transform: rotate(0deg);
+  z-index: var(--hand-hover-z, 10);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #player-hand .card {
+    transition: none;
+  }
 }
 
 .floating-counter-tooltip {
@@ -2143,25 +2195,6 @@ body {
   100% {
     opacity: 1;
   }
-}
-
-.priority-indicator {
-  min-height: 1.25rem;
-  color: #8fdcff;
-  font-size: 0.82rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  text-align: center;
-  opacity: 0;
-  transition: opacity 120ms ease;
-}
-
-.priority-indicator.visible {
-  opacity: 1;
-}
-
-.priority-indicator.resolving {
-  color: #ffd27a;
 }
 
 @keyframes spell-trap-flip-reveal {
@@ -4513,17 +4546,12 @@ body {
 
 @media (max-height: 900px) {
   #game-container {
-    gap: 8px;
     padding-top: 6px;
     padding-bottom: 6px;
   }
 
   .hand-zone {
     padding: 6px;
-  }
-
-  .board-core {
-    gap: 6px;
   }
 }
 

@@ -81,6 +81,12 @@ export function renderHand(
   // Batch DOM updates with DocumentFragment to minimize reflows
   const fragment = document.createDocumentFragment();
   container.classList.toggle("hand-overlap", player.hand.length > 5);
+  const handCenter = (player.hand.length - 1) / 2;
+  const fanAngle = Math.min(6, handCenter * 3);
+  const fanOffset = Math.min(8, handCenter * 4);
+  if (player.id === "player") {
+    container.style.setProperty("--hand-hover-z", String(player.hand.length + 10));
+  }
 
   player.hand.forEach((card, index) => {
     if (!card) return; // Defensive: skip empty slots
@@ -92,6 +98,17 @@ export function renderHand(
     const cardEl = this.createCardElement(card, isVisible);
     cardEl.dataset.index = String(index);
     cardEl.dataset.location = "hand";
+
+    if (player.id === "player") {
+      // Presentation only: preserve the element, logical index and event targets.
+      const fanPosition = handCenter > 0 ? (index - handCenter) / handCenter : 0;
+      cardEl.style.setProperty("--hand-z", String(index + 1));
+      cardEl.style.setProperty("--hand-angle", `${fanPosition * fanAngle}deg`);
+      cardEl.style.setProperty(
+        "--hand-offset",
+        `${fanPosition * fanPosition * fanOffset}px`,
+      );
+    }
 
     if (!isVisible) {
       cardEl.classList.add("hidden");
