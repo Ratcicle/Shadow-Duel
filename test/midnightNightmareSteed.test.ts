@@ -96,7 +96,7 @@ test("Midnight Nightmare Steed declara a nova Invocação-Especial e o dano corr
   assert.equal("altTribute" in definition, false);
   assert.equal(
     definition.description,
-    'You can Tribute 1 "Nightmare Steed" you control; Special Summon this card from your hand. If this card destroys an opponent\'s monster by battle: inflict 300 damage to your opponent.',
+    'You can Tribute 1 "Nightmare Steed" you control; Special Summon this card from your hand.\n\nIf this card destroys an opponent\'s monster by battle: inflict 300 damage to your opponent.',
   );
   assert.deepEqual(summonEffect.activationZones, ["hand"]);
   assert.deepEqual(summonEffect.requirePhase, ["main1", "main2"]);
@@ -128,7 +128,7 @@ test("Midnight Nightmare Steed declara a nova Invocação-Especial e o dano corr
   assert.equal(damageEffect.requireDestroyedIsOpponent, true);
   assert.equal(
     locale.cards["5"].description,
-    "Você pode oferecer como Tributo 1 “Corcel Pesadelo” que você controla; Invoque este card por Invocação-Especial da sua mão. Se este card destruir um monstro do oponente em batalha: cause 300 de dano ao seu oponente.",
+    "Você pode oferecer como Tributo 1 “Corcel Pesadelo” que você controla; Invoque este card por Invocação-Especial da sua mão.\n\nSe este card destruir um monstro do oponente em batalha: cause 300 de dano ao seu oponente.",
   );
 });
 

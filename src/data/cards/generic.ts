@@ -73,7 +73,7 @@ export const genericCards = [
     type: "Beast",
     attribute: "Dark",
     description:
-      'You can Tribute 1 "Nightmare Steed" you control; Special Summon this card from your hand. If this card destroys an opponent\'s monster by battle: inflict 300 damage to your opponent.',
+      'You can Tribute 1 "Nightmare Steed" you control; Special Summon this card from your hand.\n\nIf this card destroys an opponent\'s monster by battle: inflict 300 damage to your opponent.',
     image: "assets/Midnight Nightmare Steed.png",
     effects: [
       {
@@ -138,7 +138,7 @@ export const genericCards = [
     cardKind: "spell",
     subtype: "normal",
     description:
-      'Send 1 face-up monster you control to the GY, then target 1 monster in your GY with the same original Level it had, but a different name; Special Summon it. You can only activate 1 "Transmutate" per turn.',
+      'Send 1 face-up monster you control to the GY, then target 1 monster in your GY with the same original Level it had, but a different name; Special Summon it.\n\nYou can only activate 1 "Transmutate" per turn.',
     image: "assets/Transmutate.png",
     effects: [
       {
@@ -1592,7 +1592,7 @@ export const genericCards = [
       nonTunerMin: 1,
     },
     description:
-      "1 Tuner + 1+ non-Tuner monsters\nWhile you control another EARTH monster, this card cannot be destroyed by card effects. Once per turn, when your opponent activates a card or effect that would destroy 1 or more cards you control (Quick Effect): You can target 1 face-down card they control; destroy it.",
+      "1 Tuner + 1+ non-Tuner monsters\nWhile you control another EARTH monster, this card cannot be destroyed by card effects.\n\nOnce per turn, when your opponent activates a card or effect that would destroy 1 or more cards you control (Quick Effect): You can target 1 face-down card they control; destroy it.",
     image: "assets/Iron Smasher.png",
     effects: [
       {
@@ -1681,7 +1681,7 @@ export const genericCards = [
       },
     },
     description:
-      "1 Tuner + 1+ non-Tuner EARTH Synchro Monsters\nMust first be Synchro Summoned. If this card is Synchro Summoned: You can target 1 face-up card your opponent controls; negate its effects while it remains face-up on the field. Your opponent must target this card for attacks, if able. Once per turn: You can target 1 monster your opponent controls that was Summoned from the Extra Deck; destroy it, and if you activate this effect, this card cannot attack this turn.",
+      "1 Tuner + 1+ non-Tuner EARTH Synchro Monsters\nMust first be Synchro Summoned.\n\nIf this card is Synchro Summoned: You can target 1 face-up card your opponent controls; negate its effects while it remains face-up on the field.\n\nYour opponent must target this card for attacks, if able.\n\nOnce per turn: You can target 1 monster your opponent controls that was Summoned from the Extra Deck; destroy it, and if you activate this effect, this card cannot attack this turn.",
     image: "assets/Orathus, The Fallen Angel.png",
     effects: [
       {
@@ -1764,7 +1764,7 @@ export const genericCards = [
     cardKind: "spell",
     subtype: "normal",
     description:
-      'Pay 1000 LP; for the rest of this Duel, inflict 300 damage to your opponent during each Standby Phase. You can only activate 1 "The Black Flame" per turn.',
+      'Pay 1000 LP; for the rest of this Duel, inflict 300 damage to your opponent during each Standby Phase.\n\nYou can only activate 1 "The Black Flame" per turn.',
     image: "assets/The Black Flame.png",
     effects: [
       {

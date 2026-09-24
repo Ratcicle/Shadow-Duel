@@ -305,63 +305,79 @@ test("o Trigger usa somente o destruidor em campo e recusa destruição mútua o
   assert.equal(unavailable.entries.length, 0);
 });
 
-test("destruição em batalha prepara a Chain e toma controle do destruidor", async (t) => {
-  const game = createRuntimeGame({
-    captureReplay: false,
-    laboratoryMode: true,
-  });
-  game.turn = game.bot.id;
-  game.phase = "battle";
-  game.battleStep = "battle";
-  game.turnCounter = 2;
-  game.disablePresentationDelays = true;
-  game.waitForBoardPresentation = async () => {};
-  game.player.controllerType = "human";
-  game.bot.controllerType = "ai";
-  game.ui.showTriggerOrderModal = async (options) =>
-    required(required(options).candidates).map(
-      (candidate) => candidate.candidateId,
+for (const behemothAttacks of [false, true]) {
+  test(`destruição em batalha prepara a Chain e toma controle do destruidor: Behemoth ${behemothAttacks ? "ataca" : "defende"}`, async (t) => {
+    const game = createRuntimeGame({
+      captureReplay: false,
+      laboratoryMode: true,
+    });
+    game.turn = behemothAttacks ? game.player.id : game.bot.id;
+    game.phase = "battle";
+    game.battleStep = "battle";
+    game.turnCounter = 2;
+    game.disablePresentationDelays = true;
+    game.waitForBoardPresentation = async () => {};
+    game.player.controllerType = "human";
+    game.bot.controllerType = "ai";
+    game.ui.showTriggerOrderModal = async (options) =>
+      required(required(options).candidates).map(
+        (candidate) => candidate.candidateId,
+      );
+    game.ui.showConfirmPrompt = () => true;
+    t.after(() => game.dispose("cursed_rock_behemoth_chain_test_complete"));
+
+    const behemoth = createRuntimeCard(getBehemoth(), game.player.id);
+    behemoth.position = "attack";
+    const destroyer = createRuntimeCard(
+      {
+        id: 9910,
+        name: "Live battle destroyer",
+        cardKind: "monster",
+        atk: 3000,
+        def: 1000,
+        level: 7,
+        type: "Warrior",
+        attribute: "Dark",
+        effects: [],
+      },
+      game.bot.id,
     );
-  game.ui.showConfirmPrompt = () => true;
-  t.after(() => game.dispose("cursed_rock_behemoth_chain_test_complete"));
+    destroyer.position = "attack";
+    game.player.field.push(behemoth);
+    game.bot.field.push(destroyer);
 
-  const behemoth = createRuntimeCard(getBehemoth(), game.player.id);
-  behemoth.position = "attack";
-  const destroyer = createRuntimeCard(
-    {
-      id: 9910,
-      name: "Live battle destroyer",
-      cardKind: "monster",
-      atk: 3000,
-      def: 1000,
-      level: 7,
-      type: "Warrior",
-      attribute: "Dark",
-      effects: [],
-    },
-    game.bot.id,
-  );
-  destroyer.position = "attack";
-  game.player.field.push(behemoth);
-  game.bot.field.push(destroyer);
+    const preparedCounts: number[] = [];
+    const destructions: RuntimeEventMap["battle_destroy"][] = [];
+    game.on("battle_destroy", (payload) => {
+      destructions.push(payload);
+    });
+    game.on("trigger_chain_prepared", ({ preparedCount }) => {
+      preparedCounts.push(preparedCount);
+    });
 
-  const preparedCounts: number[] = [];
-  game.on("trigger_chain_prepared", ({ preparedCount }) => {
-    preparedCounts.push(preparedCount);
+    const result = required(
+      await game.resolveCombat(
+        behemothAttacks ? behemoth : destroyer,
+        behemothAttacks ? destroyer : behemoth,
+      ),
+    );
+
+    assert.ok(result.ok === true);
+    assert.equal(game.player.graveyard.includes(behemoth), true);
+    assert.equal(game.player.field.includes(destroyer), true);
+    assert.equal(game.bot.field.includes(destroyer), false);
+    assert.equal(destroyer.controller, game.player.id);
+    assert.equal(game.getTemporaryControlState().length, 1);
+    assert.equal(game.temporaryEventEffects.length, 1);
+    assert.equal(preparedCounts.includes(1), true);
+    assert.equal(game.chainSystem.isOpenGameState(), true);
+    assert.equal(destructions.length, 1);
+    const destruction = required(destructions[0]);
+    assert.equal(destruction.attacker, destroyer);
+    assert.equal(destruction.attackerOwner, game.bot);
+    assert.equal(destruction.destroyedOwner, game.player);
   });
-
-  const result = required(await game.resolveCombat(destroyer, behemoth));
-
-  assert.ok(result.ok === true);
-  assert.equal(game.player.graveyard.includes(behemoth), true);
-  assert.equal(game.player.field.includes(destroyer), true);
-  assert.equal(game.bot.field.includes(destroyer), false);
-  assert.equal(destroyer.controller, game.player.id);
-  assert.equal(game.getTemporaryControlState().length, 1);
-  assert.equal(game.temporaryEventEffects.length, 1);
-  assert.equal(preparedCounts.includes(1), true);
-  assert.equal(game.chainSystem.isOpenGameState(), true);
-});
+}
 
 test("controle temporário preserva dono original, não cria movimento e não sobrescreve controle posterior", async (t) => {
   const game = createGame(t);

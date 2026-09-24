@@ -105,7 +105,7 @@ test("Transmutate declara custo, alvo por Nível original e limite de ativação
   assert.equal(validation.warnings.length, 0);
   assert.equal(
     definition.description,
-    'Send 1 face-up monster you control to the GY, then target 1 monster in your GY with the same original Level it had, but a different name; Special Summon it. You can only activate 1 "Transmutate" per turn.',
+    'Send 1 face-up monster you control to the GY, then target 1 monster in your GY with the same original Level it had, but a different name; Special Summon it.\n\nYou can only activate 1 "Transmutate" per turn.',
   );
   assert.equal(effect.oncePerTurn, true);
   assert.equal(effect.oncePerTurnName, "transmutate_activation");
@@ -141,7 +141,7 @@ test("Transmutate declara custo, alvo por Nível original e limite de ativação
   assert.equal(required(required(effect.actions)[0]).targetRef, TARGET_REF);
   assert.equal(
     locale.cards["7"].description,
-    "Envie 1 monstro com a face para cima que você controla para o Cemitério e, depois, escolha 1 monstro no seu Cemitério com o mesmo Nível original que ele, mas com um nome diferente; Invoque o alvo por Invocação-Especial. Você só pode ativar 1 “Transmutar” por turno.",
+    "Envie 1 monstro com a face para cima que você controla para o Cemitério e, depois, escolha 1 monstro no seu Cemitério com o mesmo Nível original que ele, mas com um nome diferente; Invoque o alvo por Invocação-Especial.\n\nVocê só pode ativar 1 “Transmutar” por turno.",
   );
 });
 

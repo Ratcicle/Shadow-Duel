@@ -458,11 +458,11 @@
     },
     "5": {
       "name": "Corcel Pesadelo da Meia-Noite",
-      "description": "Você pode oferecer como Tributo 1 “Corcel Pesadelo” que você controla; Invoque este card por Invocação-Especial da sua mão. Se este card destruir um monstro do oponente em batalha: cause 300 de dano ao seu oponente."
+      "description": "Você pode oferecer como Tributo 1 “Corcel Pesadelo” que você controla; Invoque este card por Invocação-Especial da sua mão.\n\nSe este card destruir um monstro do oponente em batalha: cause 300 de dano ao seu oponente."
     },
     "7": {
       "name": "Transmutar",
-      "description": "Envie 1 monstro com a face para cima que você controla para o Cemitério e, depois, escolha 1 monstro no seu Cemitério com o mesmo Nível original que ele, mas com um nome diferente; Invoque o alvo por Invocação-Especial. Você só pode ativar 1 “Transmutar” por turno."
+      "description": "Envie 1 monstro com a face para cima que você controla para o Cemitério e, depois, escolha 1 monstro no seu Cemitério com o mesmo Nível original que ele, mas com um nome diferente; Invoque o alvo por Invocação-Especial.\n\nVocê só pode ativar 1 “Transmutar” por turno."
     },
     "8": {
       "name": "O Monstro que Renasce",
@@ -558,15 +558,15 @@
     },
     "31": {
       "name": "Esmagador de Ferro",
-      "description": "1 Regulador + 1+ monstros não-Reguladores\nEnquanto você controlar outro monstro de TERRA, este card não pode ser destruído por efeitos de card. Uma vez por turno, quando seu oponente ativar um card ou efeito que destruiria um ou mais cards que você controla (Efeito Rápido): você pode escolher 1 card com a face para baixo que ele controla; destrua-o."
+      "description": "1 Regulador + 1+ monstros não-Reguladores\nEnquanto você controlar outro monstro de TERRA, este card não pode ser destruído por efeitos de card.\n\nUma vez por turno, quando seu oponente ativar um card ou efeito que destruiria um ou mais cards que você controla (Efeito Rápido): você pode escolher 1 card com a face para baixo que ele controla; destrua-o."
     },
     "32": {
       "name": "Orathus, o Anjo Caído",
-      "description": "1 Regulador + 1+ Sincros de TERRA não-Reguladores\nDeve primeiro ser Invocado por Invocação-Sincro. Se este card for Invocado por Invocação-Sincro: você pode escolher 1 card com a face para cima que seu oponente controla; negue seus efeitos enquanto ele permanecer com a face para cima no campo. Seu oponente deve escolher este card como alvo de ataques, se possível. Uma vez por turno: você pode escolher 1 monstro Invocado do Deck Adicional que seu oponente controla; destrua-o e, se você ativar este efeito, este card não pode atacar neste turno."
+      "description": "1 Regulador + 1+ Sincros de TERRA não-Reguladores\nDeve primeiro ser Invocado por Invocação-Sincro.\n\nSe este card for Invocado por Invocação-Sincro: você pode escolher 1 card com a face para cima que seu oponente controla; negue seus efeitos enquanto ele permanecer com a face para cima no campo.\n\nSeu oponente deve escolher este card como alvo de ataques, se possível.\n\nUma vez por turno: você pode escolher 1 monstro Invocado do Deck Adicional que seu oponente controla; destrua-o e, se você ativar este efeito, este card não pode atacar neste turno."
     },
     "33": {
       "name": "A Chama Negra",
-      "description": "Pague 1000 PV; pelo restante deste Duelo, cause 300 de dano ao seu oponente durante cada Fase de Apoio. Você só pode ativar 1 \"A Chama Negra\" por turno."
+      "description": "Pague 1000 PV; pelo restante deste Duelo, cause 300 de dano ao seu oponente durante cada Fase de Apoio.\n\nVocê só pode ativar 1 \"A Chama Negra\" por turno."
     },
     "101": {
       "name": "Enguia Abissal do Coração Sombrio",
