@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "type": "shadow-duel-laboratory-state",
+  "options": {
+    "laboratoryMode": "test",
+    "useBot": false,
+    "revealBotHand": true,
+    "botPreset": "shadowheart"
+  },
+  "setup": {
+    "player": {
+      "lp": 8000,
+      "deck": [{"id": 104}, {"id": 104}, {"id": 103}, {"id": 105}, {"id": 106}, {"id": 107}, {"id": 108}, {"id": 102}, {"id": 109}, {"id": 101}, {"id": 9}, {"id": 1}],
+      "extraDeck": [{"id": 122}],
+      "hand": [{"id": 101}, {"id": 102}, {"id": 102}, {"id": 103}, {"id": 103}, {"id": 104}, {"id": 105}, {"id": 106}, {"id": 106}, {"id": 107}, {"id": 108}, {"id": 109}, {"id": 109}, {"id": 8}, {"id": 8}, {"id": 21}, {"id": 12}, {"id": 1}],
+      "field": [],
+      "spellTrap": [],
+      "fieldSpell": null,
+      "graveyard": [{"id": 101}, {"id": 102}, {"id": 108}, {"id": 103}, {"id": 105}]
+    },
+    "bot": {
+      "lp": 8000,
+      "deck": [{"id": 1}, {"id": 9}, {"id": 1}, {"id": 9}, {"id": 1}, {"id": 9}, {"id": 1}, {"id": 9}, {"id": 1}, {"id": 9}, {"id": 1}, {"id": 9}],
+      "extraDeck": [],
+      "hand": [{"id": 105}, {"id": 21}, {"id": 9}, {"id": 8}],
+      "field": [
+        {"id": 111, "position": "attack", "facedown": false},
+        {"id": 1, "position": "attack", "facedown": false},
+        {"id": 9, "position": "attack", "facedown": false},
+        {"id": 102, "position": "attack", "facedown": false},
+        {"id": 1, "position": "defense", "facedown": true}
+      ],
+      "spellTrap": [{"id": 3, "facedown": true}],
+      "fieldSpell": {"id": 217, "facedown": false},
+      "graveyard": [{"id": 1}]
+    }
+  }
+}
