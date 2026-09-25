@@ -11,7 +11,10 @@
   /* Card size responsive to viewport height */
   --card-h: clamp(92px, 12vh, 165px);
   --card-w: calc(var(--card-h) * 0.6923);
-  --monster-slot-w: var(--card-h);
+  --field-slot-padding: 3px;
+  --field-slot-h: calc(var(--card-h) + 2 * var(--field-slot-padding));
+  --field-panel-inset: 10px;
+  --monster-slot-w: calc(var(--card-h) + 2 * var(--field-slot-padding));
   --card-gap: 3px;
   --zone-pad: 3px;
   --zone-width: calc(
@@ -639,6 +642,10 @@ body {
   align-self: flex-end;
 }
 
+#bot-area .side-dock {
+  align-self: flex-end;
+}
+
 .fieldspell-dock,
 .side-dock {
   display: flex;
@@ -654,7 +661,6 @@ body {
 }
 
 .board-core {
-  --field-panel-inset: 10px;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -678,7 +684,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  align-self: stretch;
+  align-self: flex-start;
 }
 
 .hand-row {
@@ -691,6 +697,8 @@ body {
 
 #player-area .hand-row {
   margin-top: auto;
+  /* Keep the fan and its hover lift clear of the playmat in short viewports. */
+  padding-top: var(--field-panel-inset);
 }
 
 /* Hand row for bot appears above board, so use margin-bottom */
@@ -735,8 +743,8 @@ body {
   width: var(--zone-width);
   min-width: var(--zone-width);
   max-width: var(--zone-width);
-  min-height: var(--card-h);
-  height: var(--card-h);
+  min-height: var(--field-slot-h);
+  height: var(--field-slot-h);
   justify-content: center;
   align-items: center;
   padding: 0 var(--zone-pad);
@@ -746,7 +754,7 @@ body {
 
 .field-card-slot {
   width: var(--monster-slot-w);
-  height: var(--card-h);
+  height: var(--field-slot-h);
   display: flex;
   justify-content: center;
   align-items: center;

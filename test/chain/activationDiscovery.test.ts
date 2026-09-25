@@ -39,6 +39,40 @@ function createResponseContext(bot: ChainPlayer): FastEffectContextInput {
   };
 }
 
+test("placement-only Continuous Trap revalidates without replacing its real card or effects", () => {
+  const { chain, player, bot } = createChainHarness();
+  const card = createTestCard({ cardKind: "trap", subtype: "continuous", isFacedown: true, setTurn: 1, effects: [] });
+  placeCard(player, "spellTrap", card);
+  const context = createResponseContext(bot);
+  const effects = card.effects;
+  const candidate = required(chain.getActivatableCardsInChain(player, context)[0]);
+  assert.equal(candidate.effect.placementOnly, true);
+  assert.strictEqual(candidate.card, card);
+  const revalidated = chain.revalidateActivationCandidate(candidate, player, context);
+  assert.equal(revalidated.ok, true, revalidated.reason || "Placement-only candidate must remain legal.");
+  assert.strictEqual(revalidated.candidate?.card, card);
+  assert.equal(revalidated.candidate?.candidateKey, candidate.candidateKey);
+  assert.strictEqual(card.effects, effects);
+  assert.equal(card.isFacedown, true, "Discovery and revalidation must not commit the activation.");
+});
+
+for (const change of ["faceup", "newly_set", "normal_trap", "declared_activation"] as const) {
+  test(`placement-only revalidation rejects a Continuous Trap that became ${change}`, () => {
+    const { chain, game, player, bot } = createChainHarness();
+    const card = createTestCard({ cardKind: "trap", subtype: "continuous", isFacedown: true, setTurn: 1, effects: [] });
+    placeCard(player, "spellTrap", card);
+    const context = createResponseContext(bot);
+    const candidate = required(chain.getActivatableCardsInChain(player, context)[0]);
+    switch (change) {
+      case "faceup": card.isFacedown = false; break;
+      case "newly_set": card.setTurn = game.turnCounter; break;
+      case "normal_trap": card.subtype = "normal"; break;
+      case "declared_activation": card.effects = [createTestEffect({ timing: "on_activate", speed: 2 })]; break;
+    }
+    assert.equal(chain.revalidateActivationCandidate(candidate, player, context).ok, false);
+  });
+}
+
 test("Call of the Haunted não é oferecida com o Cemitério vazio", () => {
   const { chain, player, bot } = createChainHarness({ turnCounter: 3 });
   const call = createCallOfTheHaunted();

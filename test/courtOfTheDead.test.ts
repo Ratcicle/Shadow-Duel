@@ -142,6 +142,43 @@ test("Court of the Dead declares separated text and pays counters before targeti
   assert.deepEqual(validation.warnings, []);
 });
 
+for (const turn of ["player", "bot"] as const) {
+  test(`set Court activates through the phase response modal during the ${turn} turn`, async (t) => {
+    const game = createGame(t);
+    game.turn = turn;
+    const court = makeCard(CARD_NAME, game.player);
+    court.isFacedown = true;
+    court.setTurn = 1;
+    court.turnSetOn = 1;
+    placeFieldCards(game.player.spellTrap, court);
+    const slot = court.fieldSlot;
+    const effects = court.effects;
+    let prompts = 0;
+    game.ui.showChainResponseModal = async (candidates) => {
+      prompts++;
+      const offered = required(candidates.find(candidate => candidate.card === court));
+      assert.ok(offered.effect);
+      return offered;
+    };
+    const result = await game.chainSystem.openChainWindow({
+      type: "phase_change", event: "phase_end", player: turn === "player" ? game.player : game.bot,
+      toPhase: "main1",
+    }, { firstPlayer: turn === "player" ? game.player : game.bot });
+    assert.equal(prompts, 1);
+    assert.ok(result);
+    assert.equal(result.chainBuilt, true, "The accepted offer must publish an activation link.");
+    assert.equal(court.isFacedown, false);
+    assert.deepEqual(game.player.spellTrap, [court]);
+    assert.equal(court.fieldSlot, slot);
+    assert.strictEqual(court.effects, effects, "The synthetic activation must not replace declared effects.");
+    assert.equal(court.getCounter("funeral"), 0);
+    const monster = makeMonster(99190, "Counter source after modal activation", game.player);
+    game.player.hand.push(monster);
+    await game.moveCard(monster, game.player, "graveyard", { fromZone: "hand" });
+    await waitUntil(() => court.getCounter("funeral") === 1, "The activated Court must retain its declared counter trigger.");
+  });
+}
+
 test("Court gains counters from either Graveyard and revives after paying eight", async (t) => {
   const game = createGame(t);
   const court = makeCard(CARD_NAME, game.player);
