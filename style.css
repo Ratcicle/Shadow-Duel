@@ -654,13 +654,21 @@ body {
 }
 
 .board-core {
+  --field-panel-inset: 10px;
   display: flex;
   flex-direction: column;
   gap: 10px;
   align-items: center;
+  /* Extend the playmat into existing gaps without moving rows or side docks. */
+  box-sizing: content-box;
   width: var(--zone-width);
   min-width: var(--zone-width);
   max-width: var(--zone-width);
+  padding: calc(var(--field-panel-inset) - 1px);
+  margin: calc(-1 * var(--field-panel-inset));
+  background: rgba(0, 0, 0, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.055);
+  border-radius: 12px;
   align-self: flex-start;
 }
 
@@ -746,7 +754,12 @@ body {
   border: 1px solid var(--zone-border-color);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.02);
-  transition: background-color 140ms ease;
+  transition: background-color 70ms linear;
+}
+
+.field-card-slot:hover,
+.field-card-slot.placement-available:focus-visible {
+  transition-duration: 0s;
 }
 
 .field-card-slot:not(.placement-available):hover {
@@ -783,10 +796,12 @@ body {
   min-height: calc(var(--card-h) + 6px);
   justify-content: center;
   align-items: center;
-  background: rgba(0, 0, 0, 0.2);
-  border: 1px solid var(--zone-border-color);
+  background: none;
+  border: 0;
+  box-shadow: none;
   border-radius: 8px;
-  padding: 10px;
+  /* Absorb the former 1px border to preserve the hand's layout. */
+  padding: 11px;
 }
 
 .hand-zone.hand-overlap {
@@ -964,7 +979,7 @@ body {
 
 #player-hand {
   /* Reserve the hover lift above and the subtle fan's outer tips below. */
-  padding: 8px 10px 14px;
+  padding: 9px 11px 15px;
   gap: 0;
 }
 
@@ -4621,7 +4636,7 @@ body {
   }
 
   .hand-zone {
-    padding: 6px;
+    padding: 7px;
   }
 }
 
