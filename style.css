@@ -746,6 +746,17 @@ body {
   border: 1px solid var(--zone-border-color);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.02);
+  transition: background-color 140ms ease;
+}
+
+.field-card-slot:not(.placement-available):hover {
+  background-color: rgba(255, 255, 255, 0.055);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .field-card-slot {
+    transition: none;
+  }
 }
 
 .spelltrap-zone {
@@ -2405,14 +2416,16 @@ body {
   max-width: 300px;
 }
 
-.bot-preset-control label {
+.bot-preset-control label,
+.placement-preference-control label {
   color: #ddd;
   font-size: 0.9rem;
   font-weight: 600;
   white-space: nowrap;
 }
 
-.bot-preset-control select {
+.bot-preset-control select,
+.placement-preference-control select {
   width: 100%;
   min-width: 0;
   background: #16131b;
@@ -2432,7 +2445,8 @@ body {
   gap: 0;
 }
 
-.start-actions .bot-preset-control label {
+.start-actions .bot-preset-control label,
+.start-actions .placement-preference-control label {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2450,7 +2464,8 @@ body {
     box-shadow 150ms ease;
 }
 
-.start-actions .bot-preset-control select {
+.start-actions .bot-preset-control select,
+.start-actions .placement-preference-control select {
   height: 44px;
   background: #2b2536;
   border-color: rgba(187, 134, 252, 0.32);
@@ -2465,21 +2480,56 @@ body {
 }
 
 .start-actions .bot-preset-control:has(select:hover) label,
-.start-actions .bot-preset-control:has(select:focus) label {
+.start-actions .bot-preset-control:has(select:focus) label,
+.start-actions .placement-preference-control:has(select:hover) label,
+.start-actions .placement-preference-control:has(select:focus) label {
   background: #30283d;
   border-color: rgba(187, 134, 252, 0.54);
   box-shadow: 0 0 10px rgba(187, 134, 252, 0.08);
 }
 
 .start-actions .bot-preset-control select:hover,
-.start-actions .bot-preset-control select:focus {
+.start-actions .bot-preset-control select:focus,
+.start-actions .placement-preference-control select:hover,
+.start-actions .placement-preference-control select:focus {
   background: #342a43;
   border-color: rgba(187, 134, 252, 0.6);
   box-shadow: 0 0 10px rgba(187, 134, 252, 0.1);
 }
 
-.start-actions .bot-preset-control select:active {
+.start-actions .bot-preset-control select:active,
+.start-actions .placement-preference-control select:active {
   background: #241d2e;
+}
+
+.placement-preference-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 128px;
+  width: 100%;
+}
+
+.start-actions .placement-preference-control label {
+  height: auto;
+  min-height: 44px;
+  padding: 6px 10px;
+  white-space: normal;
+}
+
+.start-actions .placement-preference-control select {
+  height: 100%;
+  min-height: 44px;
+}
+
+.start-actions .placement-preference-control select:focus-visible {
+  outline: 2px solid var(--accent-color);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .start-actions .placement-preference-control label,
+  .start-actions .placement-preference-control select {
+    transition: none;
+  }
 }
 
 .bot-preset-status {
@@ -4030,24 +4080,6 @@ body {
 }
 
 /* phase track */
-.placement-preference-control {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  align-items: center;
-  gap: 8px;
-  color: var(--text-color);
-  font-size: 0.85rem;
-}
-
-.placement-preference-control select {
-  color: var(--text-color);
-  background: #1a1a1a;
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  padding: 6px 8px;
-}
-
 .field-card-slot.placement-available {
   cursor: pointer;
   border-color: var(--accent-color);

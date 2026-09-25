@@ -16,7 +16,7 @@ function players() {
   };
 }
 
-test("partial-host summons and sequential tokens use the smallest free canonical slots", async () => {
+test("partial-host summons and sequential tokens fill canonical slots from the center out", async () => {
   const { player, opponent } = players();
   const existing = new Card({ name: "Existing", cardKind: "monster" }, "player");
   existing.fieldSlot = 3;
@@ -26,13 +26,13 @@ test("partial-host summons and sequential tokens use the smallest free canonical
   const game = { player, bot: opponent, updateBoard: () => {}, ui: { log: () => {} } };
   const engine = unsafeFixture<ActionHandlerEnginePort>({ game, chooseSpecialSummonPosition: async () => "attack" }, "Partial host deliberately omits moveCard to test the pure fallback allocator.");
   await performSummonFromHand(summoned, 0, player, { type: "draw_and_summon" }, engine);
-  assert.equal(summoned.fieldSlot, 0);
+  assert.equal(summoned.fieldSlot, 2);
   assert.equal(existing.fieldSlot, 3);
   const host = unsafeFixture<ThisParameterType<typeof applySpecialSummonToken>>({ game, chooseSpecialSummonPosition: async () => "defense" }, "Token fallback has no runtime movement coordinator.");
   for (let i = 0; i < 2; i++) {
     assert.equal(await applySpecialSummonToken.call(host, { type: "special_summon_token", token: { name: "Token", atk: 0, def: 0 } }, { player, opponent }), true);
   }
-  assert.deepEqual(player.field.map((card) => card.fieldSlot), [3, 0, 1, 2]);
+  assert.deepEqual(player.field.map((card) => card.fieldSlot), [3, 2, 1, 0]);
 });
 
 test("generic effects preserve the actor when placing on the opponent field", async () => {

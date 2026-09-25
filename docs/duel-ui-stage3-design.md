@@ -21,7 +21,9 @@ Lista depois de B sair: field = [A, C]
 Posições canônicas: A.fieldSlot = 0, C.fieldSlot = 2
 ```
 
-O posicionamento automático será o padrão e escolherá o menor índice local livre. O modo manual escolherá um espaço válido no tabuleiro. Trocar a preferência não movimentará cartas existentes. Ataque/Defesa continua sendo uma decisão separada. Virar, ativar uma carta já Baixada e mudar sua posição de batalha não pedem outro espaço.
+O posicionamento automático será o padrão e escolherá a primeira vaga na prioridade local `[2, 1, 3, 0, 4]`, do centro para fora. O modo manual escolherá um espaço válido no tabuleiro. Trocar a preferência não movimentará cartas existentes. Ataque/Defesa continua sendo uma decisão separada. Virar, ativar uma carta já Baixada e mudar sua posição de batalha não pedem outro espaço.
+
+`chooseAutomaticFieldSlot` é o helper puro compartilhado por `assignAutomaticFieldSlot`, pelo resolvedor automático de `prepareFieldPlacement` e pelas novas adições/sorteios do Laboratório. A preferência considera as vagas atuais no destino, sem reordenar cartas ou candidatos: `FIELD_SLOTS` e a enumeração canônica continuam `[0, 1, 2, 3, 4]`, assim como a ordem de teclado/DOM existente. Um intent ainda válido mantém sua escolha. O broker continua gravando decisões automáticas, e o playback usa o espaço registrado mesmo quando difere desta prioridade; validação e hashes continuam obrigatórios, sem fallback para a política atual.
 
 Não entram nesta etapa: regras ou filtros de coluna, novas cartas, estratégia de colunas da IA, arrastar e soltar, reorganização livre, redesign, mudança de tamanho de cartas, mão, LP, sidebar ou zonas laterais. Magia de Campo continua em `fieldSpell`, fora dos cinco espaços.
 
@@ -129,7 +131,7 @@ Propor um domínio pequeno, sem concentrar a lógica em `Game.ts`:
 | Local proposto | Responsabilidade |
 | --- | --- |
 | Novo `src/core/contracts/placement.ts` | Tipos `FieldSlot`, fileira, contexto, resultado e intenção de colocação. Sem referências DOM. |
-| Novo `src/core/game/zones/placement.ts` | Helpers puros de ocupação/validação/menor vaga e coordenação de preparação da colocação. Adaptadores de runtime e simulação usam os mesmos cálculos, não o mesmo estado mutável. |
+| Novo `src/core/game/zones/placement.ts` | Helpers puros de ocupação/validação/prioridade de vagas e coordenação de preparação da colocação. Adaptadores de runtime e simulação usam os mesmos cálculos, não o mesmo estado mutável. |
 | `contracts/cards.ts`, `Card.ts`, `contracts/gameRuntime.ts` | Escalar canônico e projeções/ports mínimos de colocação e estado procedimental. |
 | `game/attachments.ts`, `Game.ts` | Registro/delegação, caso métodos anexados sejam necessários. Nenhuma nova regra volumosa na fachada. |
 | `zones/movement.ts`, `zones/control.ts`, `summon/transaction.ts`, `spellTrap/finalization.ts` | Integração nos pontos reais de ingresso, compromisso e saída. |
@@ -292,7 +294,7 @@ Cada sessão tem ID/geração, contexto, candidatos imutáveis, modo humano capt
 Todo ponto de **nova colocação executável** solicita `requestDecision("field_placement")` uma vez por tentativa de escolha, inclusive automático, IA e única vaga. O resultado escolhido é registrado, mesmo sem mostrar prompt. Com zero vagas, retornar impossibilidade sem inventar decisão vazia. Permanecer no mesmo espaço, Flip e ativação já Baixada não são novas colocações e não geram esse registro.
 
 - Replay: consumir e validar a decisão gravada antes de consultar qualquer provider.
-- IA/Bot Arena: resolver com o menor índice local livre, sem UI.
+- IA/Bot Arena: resolver com a prioridade local `[2, 1, 3, 0, 4]` entre os espaços livres, sem UI.
 - Humano automático: mesmo algoritmo; não usar `AutoSelector` para pular materiais/alvos/opções.
 - Humano manual com uma vaga: selecionar essa vaga diretamente e registrar.
 - Humano manual com várias vagas: abrir a sessão de escolha.
@@ -391,7 +393,7 @@ Na base auditada, `getPublicState` oculta nome/stats, mas ainda escreve `cardId:
 
 ## 8. IA e simulação
 
-O bot usa o mesmo menor índice livre, sem avaliar colunas nem gerar ramificações de planejamento para escolher slots. A preferência humana não chega à IA. A simulação usa helpers puros de disponibilidade/aplicação sobre suas próprias cópias, sem prompts, broker real, eventos do duelo real ou hidratação de posições ausentes a partir de `_gameRef`.
+O bot usa a mesma prioridade local `[2, 1, 3, 0, 4]`, sem avaliar colunas nem gerar ramificações de planejamento para escolher slots. A preferência humana não chega à IA. A simulação usa helpers puros de disponibilidade/aplicação sobre suas próprias cópias, sem prompts, broker real, eventos do duelo real ou hidratação de posições ausentes a partir de `_gameRef`.
 
 | Área real | Ajuste necessário |
 | --- | --- |
@@ -405,9 +407,9 @@ O bot usa o mesmo menor índice livre, sem avaliar colunas nem gerar ramificaç�
 | [simulatedActions/summon.ts](../src/core/ai/common/simulatedActions/summon.ts), [movement.ts](../src/core/ai/common/simulatedActions/movement.ts), `applyTakeControl`; [destruction.ts](../src/core/ai/common/simulatedActions/destruction.ts) | Cobrir Invocações, Fichas, controle e retorno sem compartilhar mapas com o runtime. O vencimento de D2 precisa de resolução simulada própria da causa `rule`, sem chamar uma action de destruição por efeito. |
 | [common/simulation.ts](../src/core/ai/common/simulation.ts), [dragon/simulation.ts](../src/core/ai/dragon/simulation.ts), [shadowheart/simulation.ts](../src/core/ai/shadowheart/simulation.ts), [luminarch/simulation.ts](../src/core/ai/luminarch/simulation.ts), [VoidStrategy.ts](../src/core/ai/VoidStrategy.ts), `Bot.simulateBattle` | Há `push`/`splice` diretos; convergir atribuição/liberação para helpers de simulação, sem refatorar estratégias ou unificar os quatro perfis de clone. |
 
-Remoção simulada não compacta posições; nova entrada preenche a menor vaga da cópia. Transferência de controle bem-sucedida realoca no destino sem saída/nova Invocação; a exceção aprovada de D2 produz saída real na simulação, como no runtime. Duas distribuições espaciais podem ter a mesma avaliação estratégica nesta etapa, mas não podem ser consideradas o mesmo estado pelo hash pertinente.
+Remoção simulada não compacta posições; nova entrada preenche a vaga preferida da cópia, do centro para fora. Transferência de controle bem-sucedida realoca no destino sem saída/nova Invocação; a exceção aprovada de D2 produz saída real na simulação, como no runtime. Duas distribuições espaciais podem ter a mesma avaliação estratégica nesta etapa, mas não podem ser consideradas o mesmo estado pelo hash pertinente.
 
-`applyTakeControl` já cria registros temporários e limpa registros anteriores, mas não implementa seu vencimento. Prever um resolvedor simulado determinístico para o retorno, integrado aos pontos que modelam a expiração, sem ampliar a estratégia ou o horizonte de busca. Ele deve validar o registro atual, transferir à menor vaga quando houver espaço ou destruir por regra quando não houver, liberando o slot do holder e usando o dono original para o GY normal. Preservar Fichas, vínculos, redirecionamentos e elegibilidade de gatilhos/proteções pertinentes nos limites da simulação; não usar a destruição genérica por efeito como atalho. Registro obsoleto não faz nada, inclusive após saída/reingresso ou substituição durante outro retorno.
+`applyTakeControl` já cria registros temporários e limpa registros anteriores, mas não implementa seu vencimento. Prever um resolvedor simulado determinístico para o retorno, integrado aos pontos que modelam a expiração, sem ampliar a estratégia ou o horizonte de busca. Ele deve validar o registro atual, transferir à vaga preferida no destino quando houver espaço ou destruir por regra quando não houver, liberando o slot do holder e usando o dono original para o GY normal. Preservar Fichas, vínculos, redirecionamentos e elegibilidade de gatilhos/proteções pertinentes nos limites da simulação; não usar a destruição genérica por efeito como atalho. Registro obsoleto não faz nada, inclusive após saída/reingresso ou substituição durante outro retorno.
 
 Os quatro perfis de clone precisam preservar os registros/versões de presença necessários a essa validação e distingui-los nos hashes pertinentes. Testar runtime e simulação com fixtures equivalentes para os dois resultados de D2, sem tocar no estado real, abrir prompt, emitir evento real ou gravar decisão do duelo. Uma falha comum de transferência ou um retorno do banimento não deve herdar essa destruição.
 
@@ -420,10 +422,10 @@ O export do Laboratório é hoje `version: 1`; normalizadores reconstroem entrad
 Política proposta:
 
 1. Exportar **Laboratório v2** com `fieldSlot` obrigatório em todas as entradas de `field`/`spellTrap`, preservando os arrays compactos e sua ordem. Demais zonas não carregam um slot ocupado.
-2. Aceitar setup legado v1/sem versão e sem posições por um normalizador de entrada: validar cartas e limite de cinco; atribuir 0..n−1 em cada fileira/controlador uma única vez, antes de aplicar ao duelo.
+2. Aceitar setup legado v1/sem versão e sem posições por um normalizador de entrada: validar cartas e limite de cinco; atribuir 0..n−1 em cada fileira/controlador uma única vez, antes de aplicar ao duelo. Essa normalização histórica permanece independente da prioridade automática de novas colocações; importar não recentraliza cartas nem modifica posições explícitas válidas.
 3. Formato v2 exige todos os slots; ausência, duplicidade, número inválido ou fileira incompatível rejeitam a importação inteira antes de limpar/alterar o duelo atual. Versões desconhecidas também são rejeitadas. A validação/normalização integral precisa ocorrer antes de `Game.startLaboratory` chamar `resetDuelState` e antes de `gameLauncher.startLaboratoryDuel` chamar `disposeActiveGame`, inclusive para entradas programáticas e reinício. Validar apenas dentro de `applyScenarioSetup` seria tarde demais.
 4. Para cenário programático sem envelope: ausência de posições em todas as fileiras significa legado; se alguma posição for informada, exigir posições explícitas em todas as entradas de campo. Rejeitar mistura parcial em vez de completar silenciosamente.
-5. O editor preserva slots ao remover cartas; ao adicionar automaticamente, usa a menor vaga. Não aplicar a preferência manual de duelo à edição/importação de setup. Não é necessário redesenhar o editor nem adicionar reorganização de cartas.
+5. O editor preserva slots ao remover cartas; ao adicionar automaticamente ou sortear novas cartas de uma zona, usa a prioridade `[2, 1, 3, 0, 4]`. Não aplicar a preferência manual de duelo à edição/importação de setup. Não é necessário redesenhar o editor nem adicionar reorganização de cartas.
 6. `buildSetupForGame` e o clone salvo por `gameLauncher` precisam preservar posições no início/reinício. Setups/comandos dev usam entrada canônica determinística, sem emitir Invocações falsas ou abrir prompts. Nenhuma normalização ocorre no renderer/updateBoard.
 
 Um retorno adiado legado sem ator segue a normalização definida em 5.1; novos dados armazenam ator explícito. Isso não autoriza aceitar replay v1 como v2.

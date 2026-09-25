@@ -5,6 +5,7 @@ import type { BattlePosition } from "../../core/contracts/cards.js";
 import type { PlayerId } from "../../core/contracts/primitives.js";
 import type { LaboratoryDuelConfig } from "./gameLauncher.js";
 import { normalizeScenarioSetup } from "../../core/game/devTools/setup.js";
+import { FIELD_SLOTS, chooseAutomaticFieldSlot } from "../../core/game/zones/placement.js";
 import type { ScenarioDefinition } from "../../core/game/devTools/setup.js";
 type LabZone =
   | "deck"
@@ -344,9 +345,11 @@ export function createLaboratoryController({
     }
     const added = cloneLabEntry(entry);
     if (zone === "field" || zone === "spellTrap") {
-      added.fieldSlot = [0, 1, 2, 3, 4].find((slot) =>
-        entries.every((existing) => existing.fieldSlot !== slot),
-      )!; // Capacity was checked above.
+      const slot = chooseAutomaticFieldSlot(FIELD_SLOTS.filter((candidate) =>
+        entries.every((existing) => existing.fieldSlot !== candidate),
+      ));
+      if (slot === null) return false;
+      added.fieldSlot = slot;
     }
     entries.push(added);
     return true;
@@ -392,19 +395,20 @@ export function createLaboratoryController({
       side[zone as LabZone] = [];
       return;
     }
-    side[zone as LabZone] = Array.from({ length: count }, (_, index) => {
+    const available = [...FIELD_SLOTS];
+    side[zone as LabZone] = Array.from({ length: count }, () => {
       // The nonempty filtered pool and Math.random bound this index.
       const card = candidates[Math.floor(Math.random() * candidates.length)]!;
-      if (zone === "field") {
-        return {
+      if (zone === "field" || zone === "spellTrap") {
+        const slot = chooseAutomaticFieldSlot(available);
+        if (slot === null) throw new Error("Laboratory row capacity exceeded.");
+        available.splice(available.indexOf(slot), 1);
+        return zone === "field" ? {
           id: card.id,
-          fieldSlot: index,
+          fieldSlot: slot,
           position: Math.random() > 0.5 ? "attack" : "defense",
           facedown: false,
-        };
-      }
-      if (zone === "spellTrap") {
-        return { id: card.id, fieldSlot: index, facedown: Math.random() > 0.5 };
+        } : { id: card.id, fieldSlot: slot, facedown: Math.random() > 0.5 };
       }
       return { id: card.id };
     });

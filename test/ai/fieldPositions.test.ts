@@ -35,7 +35,7 @@ test("Dragon simulation rejects hand activation and Set when the spell/trap row 
   }
 });
 
-test("Dragon normal Spell occupies the smallest vacancy during its search and frees it afterwards", () => {
+test("Dragon normal Spell occupies the preferred vacancy during its search and frees it afterwards", () => {
   const spell = simulationCard({ id: 721, name: "Extreme Dragon Awakening", cardKind: "spell", subtype: "normal", fieldSlot: null });
   const recruit = simulationCard({ id: 722, name: "Searchable Dragon", cardKind: "monster", type: "Dragon", level: 8 });
   const occupants = ([0, 2, 3, 4] as const).map(slot => simulationCard({ id: 730 + slot, cardKind: "trap", fieldSlot: slot }));
@@ -108,7 +108,7 @@ test("Arcanist Seismic Impact occupies a vacancy until its effect finishes", () 
   Object.defineProperty(equip, "equippedTo", { configurable: true, get: () => {
     inspectedResolution = true;
     assert.ok(state.bot.spellTrap.includes(spell));
-    assert.equal(spell.fieldSlot, 1);
+    assert.equal(spell.fieldSlot, 2);
     return host;
   }, set: () => {} });
   strategy.simulateArcanistSpell(state, { type: "spell", index: 0, cardId: spell.id });
@@ -154,7 +154,7 @@ function temporaryControlFixture(full = false) {
   return { state, borrowed };
 }
 
-test("simulated temporary control returns to the smallest vacancy without leaving the field", () => {
+test("simulated temporary control returns to the preferred vacancy without leaving the field", () => {
   const { state, borrowed } = temporaryControlFixture();
   const events: string[] = [];
   resolveSimulatedTemporaryControlEffects(state, { emitSimulatedEvent: event => events.push(event) });

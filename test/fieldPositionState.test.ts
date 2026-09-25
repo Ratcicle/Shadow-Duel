@@ -41,6 +41,34 @@ test("modern setup positions are mandatory, unique and in range before any live 
   }
 });
 
+test("explicit setup positions survive normalization and new placement only fills a vacancy", async (t) => {
+  const game = new Game({ disableChains: true, disableTraps: true });
+  t.after(() => game.dispose());
+  const side = {
+    field: [{ id: monsterId, fieldSlot: 4 }, { id: monsterId, fieldSlot: 0 }],
+    spellTrap: [{ id: spellId, fieldSlot: 4 }, { id: spellId, fieldSlot: 0 }],
+  };
+  const setup = { schemaVersion: 2 as const, player: structuredClone(side), bot: structuredClone(side) };
+  const before = structuredClone(setup);
+  assert.deepEqual(normalizeScenarioSetup(setup), setup);
+  assert.equal(game.applyScenarioSetup(setup).success, true);
+  for (const owner of [game.player, game.bot]) {
+    for (const row of ["field", "spellTrap"] as const) {
+      const original = [...owner[row]];
+      assert.deepEqual(original.map(card => card.fieldSlot), [4, 0]);
+      const card = required(game.createCardForOwner({ id: row === "field" ? monsterId : spellId }, owner));
+      owner.hand.push(card);
+      const placement = await game.prepareFieldPlacement(card, owner, row);
+      assert.equal(placement.outcome, "chosen");
+      if (placement.outcome !== "chosen") assert.fail("Expected an available position.");
+      assert.equal(placement.intent.slot, 2);
+      assert.deepEqual(owner[row], original);
+      assert.deepEqual(original.map(item => item.fieldSlot), [4, 0]);
+    }
+  }
+  assert.deepEqual(setup, before);
+});
+
 test("public and canonical snapshots preserve slots while concealing opposing set identities", () => {
   const game = new Game();
   try {
@@ -146,7 +174,7 @@ test("technical placement rollback preserves a completed response and its occupi
     const result = required(await game.performNormalSummon(game.player, 0, "attack", false));
     assert.equal(result.success, false);
     assert.deepEqual(game.player.spellTrap, [response]);
-    assert.equal(response.fieldSlot, 0);
+    assert.equal(response.fieldSlot, 2);
     assert.equal(game.player.hand.includes(response), false);
     assert.equal(game.player.field.includes(entrant), false);
     assert.equal(entrant.fieldSlot, null);
@@ -172,7 +200,7 @@ test("failed control transfer restores controller, slot and temporary return rec
     const result = await game.transferControl(card, game.bot);
     assert.equal(result.success, false);
     assert.equal(card.controller, game.player.id);
-    assert.equal(card.fieldSlot, 0);
+    assert.equal(card.fieldSlot, 2);
     assert.deepEqual(game.player.field, [card]);
     assert.deepEqual(game.bot.field, []);
     assert.deepEqual(game.temporaryControlEffects, records);
@@ -193,7 +221,7 @@ test("technical D2 destruction rollback preserves the pending return record and 
     game.devFailAfterZoneMutation = true;
     await assert.rejects(() => game.processTemporaryControlEffects(), /Temporary control rule destruction failed/);
     assert.deepEqual(game.player.field, [card]);
-    assert.equal(card.fieldSlot, 0);
+    assert.equal(card.fieldSlot, 2);
     assert.deepEqual(game.temporaryControlEffects, records);
     assert.equal(game.bot.graveyard.includes(card), false);
     await game.processTemporaryControlEffects();

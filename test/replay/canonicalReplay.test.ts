@@ -42,9 +42,10 @@ async function initialize(
 
 for (const placement of [
   { outcome: "chosen", slot: 4 },
+  { outcome: "chosen", slot: 0 },
   { outcome: "cancelled" },
 ] satisfies FieldPlacementResult[]) {
-  test(`manual placement ${placement.outcome} replays headlessly without consulting local preference`, async (t) => {
+  test(`manual placement ${placement.outcome === "chosen" ? placement.slot : placement.outcome} replays headlessly without consulting local preference`, async (t) => {
     let prompts = 0;
     const game = new Game({
       randomSeed: 123, captureReplay: true, chainResponseTimeoutMs: 0,
@@ -62,7 +63,7 @@ for (const placement of [
     const card = required(game.player.hand[0]);
     await game.performNormalSummon(game.player, 0, "attack", false);
     assert.equal(prompts, 1);
-    assert.equal(card.fieldSlot, placement.outcome === "chosen" ? 4 : null);
+    assert.equal(card.fieldSlot, placement.outcome === "chosen" ? placement.slot : null);
     assert.equal(game.player.summonCount, placement.outcome === "chosen" ? 1 : 0);
     assert.equal(game.player.hand.includes(card), placement.outcome === "cancelled");
     const replay = validateCanonicalReplay(JSON.parse(JSON.stringify(game.finalizeReplay({ reason: "placement-test" }))));
@@ -73,7 +74,7 @@ for (const placement of [
     const result = await replayCanonicalDuel(replay, { game: unsafeFixture<ReplayDriverGamePort>(playback, "Replay driver uses a narrow player projection; this fixture passes only the real Game's own player/card instances.") });
     assert.equal(result.ok, true);
     assert.equal(result.finalStateHash, replay.result?.finalStateHash);
-    assert.equal(playback.player.field[0]?.fieldSlot ?? null, placement.outcome === "chosen" ? 4 : null);
+    assert.equal(playback.player.field[0]?.fieldSlot ?? null, placement.outcome === "chosen" ? placement.slot : null);
   });
 }
 

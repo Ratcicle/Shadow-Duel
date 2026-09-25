@@ -4,6 +4,12 @@ import type { GameCard } from "../../contracts/cards.js";
 import type { GamePlayer } from "../../contracts/player.js";
 
 export const FIELD_SLOTS: readonly FieldSlot[] = Object.freeze([0, 1, 2, 3, 4]);
+const AUTOMATIC_FIELD_SLOT_PRIORITY: readonly FieldSlot[] = Object.freeze([2, 1, 3, 0, 4]);
+
+/** Center out in the destination controller's coordinates; candidate order stays canonical. */
+export function chooseAutomaticFieldSlot(available: readonly FieldSlot[]): FieldSlot | null {
+  return AUTOMATIC_FIELD_SLOT_PRIORITY.find(slot => available.includes(slot)) ?? null;
+}
 
 interface PositionedCard {
   fieldSlot?: FieldSlot | null;
@@ -25,9 +31,11 @@ export function getAvailableFieldSlots(cards: readonly PositionedCard[]): FieldS
   return FIELD_SLOTS.filter(slot => !occupied.has(slot));
 }
 
-/** Used by setup/simulation; live placements obtain their choice from the broker. */
+/** New automatic additions in setup/simulation; live placements use the broker, imports normalize separately. */
 export function assignAutomaticFieldSlot(card: PositionedCard, cards: readonly PositionedCard[]): FieldSlot | null {
-  const slot = getAvailableFieldSlots(cards.filter(occupant => occupant !== card))[0] ?? null;
+  const available = getAvailableFieldSlots(cards);
+  if (cards.includes(card)) return card.fieldSlot ?? null;
+  const slot = chooseAutomaticFieldSlot(available);
   if (slot !== null) card.fieldSlot = slot;
   return slot;
 }
@@ -89,7 +97,11 @@ export async function prepareFieldPlacement(
   const assertActive = () => {
     if (this.isDisposed() || generation !== this.fieldPlacementGeneration) throw new Error("Field placement belongs to an ended duel.");
   };
-  const automatic = (): FieldPlacementResult => ({ outcome: "chosen", slot: slots[0]! });
+  const automatic = (): FieldPlacementResult => {
+    const slot = chooseAutomaticFieldSlot(slots);
+    if (slot === null) throw new Error("Automatic placement requires an available field position.");
+    return { outcome: "chosen", slot };
+  };
   const resolveHuman = async (): Promise<FieldPlacementResult> => {
     const mode = this.getFieldPlacementMode();
     if (mode !== "manual" || slots.length === 1) return automatic();

@@ -4,7 +4,8 @@ import Card from "../../src/core/Card.js";
 import Game from "../../src/core/Game.js";
 import type { GameOptions } from "../../src/core/contracts/game.js";
 import type { FieldPlacementRequest, FieldPlacementResult } from "../../src/core/contracts/placement.js";
-import { FIELD_SLOTS, getAvailableFieldSlots, getFieldOccupants } from "../../src/core/game/zones/placement.js";
+import { FIELD_SLOTS, assignAutomaticFieldSlot, chooseAutomaticFieldSlot, getAvailableFieldSlots, getFieldOccupants } from "../../src/core/game/zones/placement.js";
+import { appendSimulatedFieldCard } from "../../src/core/ai/common/zones.js";
 import { createRuntimeGame, placeFieldCards, type RuntimeGame } from "../helpers/game.js";
 
 function createGame(t: TestContext, options: GameOptions = {}): RuntimeGame {
@@ -28,16 +29,74 @@ test("canonical monster positions preserve a hole and automatically refill it", 
   }
   const [first, middle, last] = cards;
   assert.ok(first && middle && last);
-  assert.deepEqual(cards.map(card => card.fieldSlot), [0, 1, 2]);
+  assert.deepEqual(cards.map(card => card.fieldSlot), [2, 1, 3]);
   await game.moveCard(middle, game.player, "graveyard", { fromZone: "field" });
   assert.deepEqual(game.player.field, [first, last]);
-  assert.equal(last.fieldSlot, 2);
+  assert.equal(last.fieldSlot, 3);
   assert.equal(middle.fieldSlot, null);
   const added = monster(99103);
   game.player.hand.push(added);
   await game.moveCard(added, game.player, "field", { fromZone: "hand", summonOrigin: "effect_resolution" });
   assert.equal(added.fieldSlot, 1);
   assert.deepEqual(game.player.field, [first, last, added]);
+  await game.moveCard(first, game.player, "graveyard", { fromZone: "field" });
+  const centered = monster(99104);
+  game.player.hand.push(centered);
+  await game.moveCard(centered, game.player, "field", { fromZone: "hand", summonOrigin: "effect_resolution" });
+  assert.equal(centered.fieldSlot, 2);
+  assert.deepEqual(game.player.field, [last, added, centered]);
+  assert.deepEqual(game.player.field.map(card => card.fieldSlot), [3, 1, 2]);
+});
+
+test("automatic placement fills center out on both rows and sides, matching simulation", async (t) => {
+  const game = createGame(t);
+  assert.deepEqual(FIELD_SLOTS, [0, 1, 2, 3, 4], "Canonical enumeration must remain left to right.");
+  for (const owner of [game.player, game.bot]) {
+    for (const row of ["field", "spellTrap"] as const) {
+      const simulated: Card[] = [];
+      const inserted: Card[] = [];
+      for (const expected of [2, 1, 3, 0, 4]) {
+        const createCard = () => row === "field" ? monster(99110 + expected, owner.id) : new Card({ id: 99120 + expected, name: `Spell ${expected}`, cardKind: "spell", subtype: "continuous", effects: [] }, owner.id);
+        const card = createCard();
+        const clone = createCard();
+        assert.equal(appendSimulatedFieldCard(simulated, clone), true);
+        owner.hand.push(card);
+        // The chooser is deliberately different from the destination controller.
+        const actor = owner === game.player ? game.bot : game.player;
+        const result = row === "field"
+          ? await game.moveCard(card, owner, "field", { fromZone: "hand", summonOrigin: "effect_resolution", placementActor: actor })
+          : await game.moveCard(card, owner, "spellTrap", { fromZone: "hand", placementActor: actor });
+        assert.equal(result.success, true);
+        assert.equal(card.fieldSlot, expected);
+        assert.equal(clone.fieldSlot, expected);
+        inserted.push(card);
+        assert.deepEqual(owner[row], inserted, "Placement must preserve insertion order.");
+        assert.deepEqual(owner[row].map(item => item.fieldSlot), simulated.map(item => item.fieldSlot));
+      }
+      const extra = monster(99130, owner.id);
+      assert.equal(assignAutomaticFieldSlot(extra, owner[row]), null);
+      assert.equal(appendSimulatedFieldCard(simulated, extra), false);
+      assert.equal((await game.prepareFieldPlacement(extra, owner, row)).outcome, "unavailable");
+      assert.equal(extra.fieldSlot, null);
+    }
+  }
+});
+
+test("automatic preference is pure, independent of candidate order and preserves existing occupants", () => {
+  const reversed = Object.freeze([4, 0, 3, 1, 2] as const);
+  assert.equal(chooseAutomaticFieldSlot(reversed), 2);
+  assert.deepEqual(reversed, [4, 0, 3, 1, 2]);
+  assert.equal(chooseAutomaticFieldSlot([4, 0]), 0);
+  assert.equal(chooseAutomaticFieldSlot([3, 1]), 1);
+  assert.equal(chooseAutomaticFieldSlot([4]), 4);
+  assert.equal(chooseAutomaticFieldSlot([]), null);
+  const card = monster(99140);
+  card.fieldSlot = 4;
+  const cards = [card];
+  assert.equal(assignAutomaticFieldSlot(card, cards), 4);
+  assert.equal(appendSimulatedFieldCard(cards, card), true);
+  assert.equal(card.fieldSlot, 4);
+  assert.deepEqual(cards, [card]);
 });
 
 test("spell/trap positions are independent of monster positions on both sides", async (t) => {
@@ -52,7 +111,7 @@ test("spell/trap positions are independent of monster positions on both sides", 
     assert.ok(first && middle && last);
     await game.moveCard(middle, player, "graveyard", { fromZone: "spellTrap" });
     assert.deepEqual(player.spellTrap, [first, last]);
-    assert.deepEqual(player.spellTrap.map(card => card.fieldSlot), [0, 2]);
+    assert.deepEqual(player.spellTrap.map(card => card.fieldSlot), [2, 3]);
   }
 });
 
@@ -99,6 +158,7 @@ test("manual Normal Summon chooses slot 4 without changing the packed index", as
   assert.equal(card.fieldSlot, 4);
   assert.equal(requests.length, 1);
   assert.equal(requests[0]?.allowCancel, true);
+  assert.deepEqual(requests[0]?.candidates.map(candidate => candidate.slot), [0, 1, 2, 3, 4]);
   assert.equal(game.player.summonCount, 1);
 });
 
@@ -118,7 +178,11 @@ test("cancelling placement before a Normal Summon preserves card and usage", asy
 
 test("a full field permits Tribute Summon using the vacancy freed by its material", async (t) => {
   const game = createGame(t, { getFieldPlacementMode: () => "manual", fieldPlacementProvider: async () => assert.fail("Only one vacancy must not open a prompt.") });
-  const occupants = FIELD_SLOTS.map(slot => monster(99410 + slot));
+  const occupants = FIELD_SLOTS.map(slot => {
+    const card = monster(99410 + slot);
+    card.fieldSlot = slot;
+    return card;
+  });
   placeFieldCards(game.player.field, ...occupants);
   const tribute = occupants[2];
   assert.ok(tribute);
@@ -147,13 +211,17 @@ test("a pending preference is frozen and invalidated intents require a new recor
   assert.equal(chosen.outcome, "chosen");
   if (chosen.outcome !== "chosen") assert.fail("Expected chosen intent.");
   assert.equal(chosen.intent.slot, 4);
+  const unchanged = await game.prepareFieldPlacement(card, game.player, "field", { intent: chosen.intent });
+  assert.equal(unchanged.outcome, "chosen");
+  if (unchanged.outcome !== "chosen") assert.fail("Expected the existing intent.");
+  assert.strictEqual(unchanged.intent, chosen.intent, "A valid intent survives a switch to automatic mode.");
   const blocker = monster(99421);
   blocker.fieldSlot = 4;
   game.player.field.push(blocker);
   const revalidated = await game.prepareFieldPlacement(card, game.player, "field", { intent: chosen.intent });
   assert.equal(revalidated.outcome, "chosen");
   if (revalidated.outcome !== "chosen") assert.fail("Expected replacement decision.");
-  assert.equal(revalidated.intent.slot, 0);
+  assert.equal(revalidated.intent.slot, 2);
   assert.equal(revalidated.intent.allowCancel, false);
   assert.notEqual(revalidated.intent.procedureId, chosen.intent.procedureId);
   assert.equal(card.fieldSlot, null, "Choosing an intent must not occupy a position.");
@@ -256,7 +324,7 @@ test("invalid occupancy is rejected rather than repaired, including repeated inv
   duplicate.fieldSlot = card.fieldSlot;
   game.player.field.push(duplicate);
   assert.equal(game.assertStateInvariants("positions", { failFast: false }).hasCritical, true);
-  assert.equal(duplicate.fieldSlot, 0);
+  assert.equal(duplicate.fieldSlot, 2);
 });
 
 test("committed effect placement never offers cancellation even when a caller requests it", async (t) => {
