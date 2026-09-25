@@ -1,3 +1,4 @@
+import { placeFieldCards } from "./helpers/game.js";
 import assert from "node:assert/strict";
 import type { TestContext } from "node:test";
 import test from "node:test";
@@ -62,9 +63,9 @@ test("Arcturus abre o modal do Cemitério e bane dois monstros Void para se prot
     game.bot,
   );
 
-  game.player.field.push(arcturus);
+  placeFieldCards(game.player.field, arcturus);
   game.player.graveyard.push(...costs);
-  game.bot.field.push(destroyer);
+  placeFieldCards(game.bot.field, destroyer);
   game.ui.showConfirmPrompt = async () => true;
 
   let modalContract = null as Parameters<GameUI["showTargetSelection"]>[0];

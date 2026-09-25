@@ -123,6 +123,7 @@ test("[CS-03] Flip Summon abre janela de negação", async (t) => {
   card.position = "defense";
   card.setTurn = 1;
   card.positionChangedThisTurn = false;
+  card.fieldSlot = 0;
   game.player.field.push(card);
 
   let attemptWindows = 0;
@@ -176,6 +177,7 @@ test("[CS-03] Tribute Summon negada mantém Tributos pagos e consome a tentativa
     name: "Tribute Monster",
     level: 5,
   });
+  tribute.fieldSlot = 0;
   game.player.field.push(tribute);
   game.player.hand.push(summoned);
 
@@ -346,6 +348,8 @@ test("múltiplos Tributos são pagos sem janela intermediária", async (t) => {
     name: "Two-Tribute Monster",
     level: 7,
   });
+  firstTribute.fieldSlot = 0;
+  secondTribute.fieldSlot = 1;
   game.player.field.push(firstTribute, secondTribute);
   game.player.hand.push(summoned);
   let attempts = 0;
@@ -432,6 +436,7 @@ test("erro pós-commit não reembolsa custos e limpa a tentativa", async (t) => 
     id: 9402,
     name: "Failed Summon",
   });
+  material.fieldSlot = 0;
   game.player.field.push(material);
   game.player.hand.push(summoned);
   const prepared = game.createPreparedSummon({

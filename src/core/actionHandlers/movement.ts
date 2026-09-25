@@ -5,6 +5,7 @@
  */
 
 import { isAI } from "../Player.js";
+import { assignAutomaticFieldSlot, clearFieldSlot } from "../game/zones/placement.js";
 import type { ActionOf } from "../contracts/actions.js";
 import type {
   ActionHandlerEnginePort,
@@ -49,6 +50,7 @@ export async function handleTakeControl(
   let controlled = 0;
   for (const card of cards) {
     const result = await game.takeControl(card, controller, {
+      placementActor: ctx.player,
       duration: action.duration || "permanent",
       sourceCard: ctx?.source || null,
       effectId: ctx?.effect?.id || null,
@@ -138,6 +140,7 @@ export async function handleReturnToHand(
         const idx = sourceZone.indexOf(card);
         if (idx !== -1) {
           sourceZone.splice(idx, 1);
+          clearFieldSlot(card);
           cardOwner.hand = cardOwner.hand || [];
           cardOwner.hand.push(card);
           returnedCount++;
@@ -207,6 +210,7 @@ async function bounceAndSummonCard(
       const fieldIndex = player.field.indexOf(source);
       if (fieldIndex !== -1) {
         player.field.splice(fieldIndex, 1);
+        clearFieldSlot(source);
         player.hand.push(source);
       } else {
         return false;
@@ -261,6 +265,7 @@ async function bounceAndSummonCard(
   const moveResult =
     typeof game.moveCard === "function"
       ? await game.moveCard(target, player, "field", {
+          placementActor: ctx.player || player,
           fromZone: "hand",
           position,
           isFacedown: false,
@@ -280,6 +285,7 @@ async function bounceAndSummonCard(
   }
 
   if (moveResult == null) {
+    if (assignAutomaticFieldSlot(target, player.field) === null) return false;
     const handIndex = player.hand.indexOf(target);
     if (handIndex !== -1) {
       player.hand.splice(handIndex, 1);

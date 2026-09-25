@@ -86,6 +86,7 @@ import type {
 // Effects modules (moved from inline methods)
 import { createDecisionBroker } from "./game/decisions/broker.js";
 import { createDeterministicRandom } from "./game/random.js";
+import { normalizeScenarioSetup } from "./game/devTools/setup.js";
 
 const STARTING_PLAYER_IDS = new Set<PlayerId>(["player", "bot"]);
 const EXTRA_DECK_MONSTER_TYPES = new Set<string | null>([
@@ -162,6 +163,14 @@ interface MonsterEffectActivationOptions {
 
 class Game {
   constructor(options: GameOptions = {}) {
+    this.getFieldPlacementMode = options.getFieldPlacementMode || (() => "automatic");
+    this.fieldPlacementProvider = options.fieldPlacementProvider || null;
+    if (options.replayMode !== "playback" && this.getFieldPlacementMode() === "manual" && !this.fieldPlacementProvider && typeof options.renderer?.chooseFieldPlacement !== "function") {
+      throw new Error("Manual field placement requires a renderer or decision provider.");
+    }
+    this.pendingFieldPlacement = null;
+    this.fieldPlacementGeneration = 0;
+    this.fieldPlacementAbort = null;
     // Mode flags must be ready before any subsystem or player/bot creation
     this.disableChains = !!options.disableChains;
     this.disableTraps = !!options.disableTraps;
@@ -250,6 +259,7 @@ class Game {
     this.temporaryBattlePairEffects = [];
     this.temporaryEventEffects = [];
     this.temporaryControlEffects = [];
+    this.resolvingTemporaryControl = false;
     this.pendingSynchroMaterialFollowups = [];
     this.pendingSynchroMaterialTriggerContinuation = null;
     this.synchroSummonContextCounter = 0;
@@ -377,6 +387,11 @@ class Game {
 
   dispose(reason: string = "dispose"): void {
     if (this.disposed) return;
+    this.fieldPlacementGeneration++;
+    this.fieldPlacementAbort?.abort();
+    this.fieldPlacementAbort = null;
+    this.pendingFieldPlacement = null;
+    this.ui.cancelFieldPlacement();
     this.disposed = true;
     this.gameOver = true;
     this.disposeReason = reason;
@@ -398,6 +413,7 @@ class Game {
     this.temporaryBattlePairEffects = [];
     this.temporaryEventEffects = [];
     this.temporaryControlEffects = [];
+    this.resolvingTemporaryControl = false;
     this.pendingSynchroMaterialFollowups = [];
     this.pendingSynchroMaterialTriggerContinuation = null;
     this.pendingCardAnimations = [];
@@ -669,6 +685,7 @@ class Game {
     setup: Parameters<GameAttachedMethods["applyScenarioSetup"]>[0] = {},
     labOptions: LaboratoryStartOptions = {},
   ): Promise<void> {
+    setup = normalizeScenarioSetup(setup);
     this.laboratoryModeEnabled = true;
     if (labOptions.revealBotHand !== undefined) {
       this.laboratoryRevealBotHand = !!labOptions.revealBotHand;

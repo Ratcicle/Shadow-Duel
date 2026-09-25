@@ -30,6 +30,7 @@ import type {
   SimulatedCardState,
   SimulatedPlayerState,
   SimulationGameState,
+  SimulatedTemporaryControlEffect,
 } from "../../../contracts/aiState.js";
 import type { BattlePosition } from "../../../contracts/cards.js";
 import type {
@@ -330,15 +331,7 @@ export interface SimulatedTemporaryBattlePairEffect {
   actions: readonly CardAction[];
 }
 
-export interface SimulatedTemporaryControlEffect {
-  id: string;
-  cardInstanceId: string | number | null;
-  holderId: PlayerId | string;
-  previousControllerId: PlayerId | string;
-  expiresOnTurn: number;
-  sourceInstanceId: string | number | null;
-  createdOnTurn: number;
-}
+export type { SimulatedTemporaryControlEffect } from "../../../contracts/aiState.js";
 
 export interface SimulatedTemporaryEventEffect {
   event: string;

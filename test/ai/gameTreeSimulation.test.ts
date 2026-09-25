@@ -1,3 +1,4 @@
+import { placeSimulationCards } from "../helpers/simulation.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { fixtureGameTreeSearch as gameTreeSearch } from "../helpers/gameTree.js";
@@ -95,7 +96,7 @@ test("GameTree honors a returned state and invokes mutating/void simulators exac
 
 test("GameTree preserves named OPT for its physical owner across four plies", () => {
   const input = simulationState();
-  for (const player of [input.bot, input.player]) player.field.push(simulationCard({
+  for (const player of [input.bot, input.player]) placeSimulationCards(player.field, simulationCard({
     name: "Same effect", cardKind: "monster", atk: 0,
     effects: [{ id: "reward", timing: "ignition", activationZones: ["field"], oncePerTurn: true, oncePerTurnName: "shared", actions: [{ type: "heal", amount: 100, player: "self" }] }],
   }));

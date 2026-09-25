@@ -10,7 +10,22 @@ import type {
   GameCard,
 } from "../../src/core/contracts/cards.js";
 import type { GameOptions } from "../../src/core/contracts/game.js";
+import type { FieldSlot } from "../../src/core/contracts/placement.js";
+import { assignAutomaticFieldSlot, getAvailableFieldSlots } from "../../src/core/game/zones/placement.js";
 import { unsafeFixture } from "./fixtures.js";
+
+/** Explicit fixture entry boundary; never normalizes live runtime state. */
+export function placeFieldCards<Card extends { fieldSlot?: FieldSlot | null }>(
+  row: Card[],
+  ...cards: Card[]
+): number {
+  for (const card of cards) {
+    if (card.fieldSlot == null) assert.notEqual(assignAutomaticFieldSlot(card, row), null);
+    else assert.ok(getAvailableFieldSlots(row).includes(card.fieldSlot));
+    row.push(card);
+  }
+  return row.length;
+}
 
 // Methods installed by the manifest are called on this verified concrete
 // instance; their standalone host parameter belongs to module-level tests.

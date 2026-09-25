@@ -55,6 +55,34 @@ function duelConfig() {
   } satisfies LaboratoryDuelConfig;
 }
 
+test("invalid modern Laboratory positions preserve the active duel and restart restores sparse slots", async (t) => {
+  const launcher = createLauncher();
+  t.after(() => launcher.disposeActiveGame("test_complete"));
+  const config: LaboratoryDuelConfig = {
+    ...scenarioConfig(),
+    setup: {
+      schemaVersion: 2,
+      player: { field: [{ id: 1, fieldSlot: 4 }], spellTrap: [{ id: 3, fieldSlot: 2 }] },
+      bot: { field: [{ id: 1, fieldSlot: 0 }] },
+    },
+  };
+  const active = await launcher.startLaboratoryDuel(config);
+  const card = required(active.player.field[0]);
+  assert.equal(card.fieldSlot, 4);
+  await assert.rejects(() => launcher.startLaboratoryDuel({
+    ...config,
+    setup: { schemaVersion: 2, player: { field: [{ id: 1, fieldSlot: 2 }, { id: 1, fieldSlot: 2 }] } },
+  }), /fieldSlot/);
+  assert.equal(active.isDisposed(), false);
+  assert.strictEqual(active.player.field[0], card);
+  card.fieldSlot = 1;
+  const restarted = required(await launcher.restartLaboratoryDuel());
+  assert.equal(active.isDisposed(), true);
+  assert.equal(required(restarted.player.field[0]).fieldSlot, 4);
+  assert.equal(required(restarted.player.spellTrap[0]).fieldSlot, 2);
+  assert.equal(required(restarted.bot.field[0]).fieldSlot, 0);
+});
+
 test("Laboratory restart restores an isolated starting scenario and options repeatedly", async (t) => {
   const launcher = createLauncher();
   t.after(() => launcher.disposeActiveGame("test_complete"));

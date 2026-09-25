@@ -1,3 +1,4 @@
+import { appendSimulatedZoneCard } from "../zones.js";
 import { getEffectiveAtk } from "../cardStats.js";
 import { getBaseLpCost } from "../../../effects/costs/lpCost.js";
 import { getCounterValue, setCounterValue } from "../counters.js";
@@ -160,7 +161,7 @@ export function applyDraw(
   for (let i = 0; i < amount; i += 1) {
     const drawn = targetPlayer.deck?.shift?.();
     if (drawn) {
-      targetPlayer.hand.push(drawn);
+      appendSimulatedZoneCard(targetPlayer.hand, drawn);
       drawnCards.push(drawn);
     }
   }
@@ -438,7 +439,7 @@ export function applySearchAny(
   )[0];
   if (!chosen) return;
   removeCardFromZones(targetPlayer, chosen);
-  targetPlayer.hand.push(chosen);
+  appendSimulatedZoneCard(targetPlayer.hand, chosen);
   return;
 }
 
@@ -550,7 +551,7 @@ export function applyAddFromZoneToHand(
   if (chosen.length === 0) return;
   chosen.forEach((card) => {
     removeCardFromZones(targetPlayer, card);
-    targetPlayer.hand.push(card);
+    appendSimulatedZoneCard(targetPlayer.hand, card);
   });
   options.lastAddedToHandCards = chosen;
   options.lastAddedToHandCard = chosen[0] || null;
@@ -584,7 +585,7 @@ export function applyDiscardFromHand(
 
   chosen.forEach((card) => {
     removeCardFromZones(targetPlayer, card);
-    targetPlayer.graveyard.push(card);
+    appendSimulatedZoneCard(targetPlayer.graveyard, card);
   });
   return;
 }

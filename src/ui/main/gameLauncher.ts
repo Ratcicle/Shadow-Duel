@@ -1,6 +1,8 @@
 import type { ExactStartWithDecksOptions } from "../../core/contracts/game.js";
 import type GameRuntime from "../../core/Game.js";
 import type RendererRuntime from "../Renderer.js";
+import type { FieldPlacementMode } from "../../core/contracts/placement.js";
+import { normalizeScenarioSetup } from "../../core/game/devTools/setup.js";
 export interface NormalDuelConfig {
   botPreset: string;
   deck: readonly number[];
@@ -18,9 +20,11 @@ export interface LaboratoryDuelConfig {
 export function createGameLauncher({
   Game,
   Renderer,
+  getFieldPlacementMode = () => "automatic",
 }: {
   Game: typeof GameRuntime;
   Renderer: typeof RendererRuntime;
+  getFieldPlacementMode?: () => FieldPlacementMode;
 }) {
   let game: GameRuntime | null = null;
   let laboratoryConfig: LaboratoryDuelConfig | null = null;
@@ -54,6 +58,7 @@ export function createGameLauncher({
       captureReplay: true,
       playerArchetype,
       renderer,
+      getFieldPlacementMode,
     });
     game.start([...deck], [...extraDeck]);
     return game;
@@ -61,6 +66,9 @@ export function createGameLauncher({
 
   async function startLaboratoryDuel(config: LaboratoryDuelConfig) {
     const initialConfig = structuredClone(config);
+    if (initialConfig.laboratoryMode !== "duel") {
+      initialConfig.setup = normalizeScenarioSetup(initialConfig.setup ?? {});
+    }
     disposeActiveGame("start_laboratory_duel");
     laboratoryConfig = initialConfig;
     const {
@@ -81,6 +89,7 @@ export function createGameLauncher({
       opponentName: "Jogador 2",
       botPreset,
       renderer,
+      getFieldPlacementMode,
     });
     game = newGame;
 

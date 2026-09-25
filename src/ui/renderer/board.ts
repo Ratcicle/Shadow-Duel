@@ -37,9 +37,31 @@ export interface ExtraDeckRenderOptions {
 import { getUIText } from "../../core/i18n.js";
 import { PANEL_ICONS, createTablerIcon } from "../icons/tablerIcons.js";
 
-// Visual slots follow the packed zone lists on every render. They are not
-// persistent positions and cannot serve as a model for column effects.
+// Cards retain their packed-list indices for event bindings. Only canonical
+// fieldSlot selects the visual container; the opponent's local axis is mirrored.
 const FIELD_SLOT_COUNT = 5;
+
+function createFieldSlots(player: GamePlayer, cards: readonly GameCard[]) {
+  const fragment = document.createDocumentFragment();
+  const slots = new Map<number, HTMLElement>();
+  const occupied = new Set<number>();
+  for (const card of cards) {
+    const slot = card.fieldSlot;
+    if (slot === null || !Number.isInteger(slot) || slot < 0 || slot >= FIELD_SLOT_COUNT || occupied.has(slot)) {
+      throw new Error(`Invalid field position for ${player.id}: ${String(slot)}`);
+    }
+    occupied.add(slot);
+  }
+  for (let visualSlot = 0; visualSlot < FIELD_SLOT_COUNT; visualSlot++) {
+    const localSlot = player.id === "bot" ? FIELD_SLOT_COUNT - 1 - visualSlot : visualSlot;
+    const slotEl = document.createElement("div");
+    slotEl.className = "field-card-slot";
+    slotEl.dataset.fieldSlot = String(localSlot);
+    slots.set(localSlot, slotEl);
+    fragment.appendChild(slotEl);
+  }
+  return { fragment, slots };
+}
 
 function renderZoneCounter(
   counter: Element,
@@ -142,16 +164,12 @@ export function renderField(
 
   this.clearFloatingCounterTooltip?.();
 
-  // Batch DOM updates with DocumentFragment to minimize reflows
-  const fragment = document.createDocumentFragment();
+  const { fragment, slots } = createFieldSlots(player, player.field);
 
-  for (let index = 0; index < FIELD_SLOT_COUNT; index += 1) {
-    const slotEl = document.createElement("div");
-    slotEl.className = "field-card-slot";
-    fragment.appendChild(slotEl);
-
-    const card = player.field[index];
-    if (!card) continue;
+  player.field.forEach((card, index) => {
+    // Validated above. No fallback to list index or mutation during rendering.
+    const slotEl = slots.get(card.fieldSlot!);
+    if (!slotEl) throw new Error("Missing canonical monster slot");
 
     const cardEl = this.createCardElement(card, true, {
       showStatusIcons: true,
@@ -173,10 +191,11 @@ export function renderField(
     }
 
     slotEl.appendChild(cardEl);
-  }
+  });
 
   container.innerHTML = "";
   container.appendChild(fragment);
+  this.refreshFieldPlacement?.();
 }
 
 /**
@@ -191,16 +210,11 @@ export function renderSpellTrap(this: Renderer, player: GamePlayer): void {
 
   this.clearFloatingCounterTooltip?.();
 
-  // Batch DOM updates with DocumentFragment to minimize reflows
-  const fragment = document.createDocumentFragment();
+  const { fragment, slots } = createFieldSlots(player, player.spellTrap);
 
-  for (let index = 0; index < FIELD_SLOT_COUNT; index += 1) {
-    const slotEl = document.createElement("div");
-    slotEl.className = "field-card-slot";
-    fragment.appendChild(slotEl);
-
-    const card = player.spellTrap[index];
-    if (!card) continue;
+  player.spellTrap.forEach((card, index) => {
+    const slotEl = slots.get(card.fieldSlot!);
+    if (!slotEl) throw new Error("Missing canonical Spell/Trap slot");
     const isVisible = player.controllerType !== "ai" || !card.isFacedown;
     const cardEl = this.createCardElement(card, isVisible);
     cardEl.dataset.index = String(index);
@@ -215,10 +229,11 @@ export function renderSpellTrap(this: Renderer, player: GamePlayer): void {
     }
 
     slotEl.appendChild(cardEl);
-  }
+  });
 
   container.innerHTML = "";
   container.appendChild(fragment);
+  this.refreshFieldPlacement?.();
 }
 
 /**

@@ -1,4 +1,5 @@
 import type { BattlePosition } from "./cards.js";
+import type { FieldSlot } from "./placement.js";
 import type { ChainRuntimePort } from "./chainRuntime.js";
 import type {
   ChainResponseDecisionContext,
@@ -17,8 +18,8 @@ import type {
 } from "./primitives.js";
 
 export const CANONICAL_REPLAY_FORMAT = "shadow-duel-canonical-replay" as const;
-export const CANONICAL_REPLAY_SCHEMA_VERSION = 1 as const;
-export const CANONICAL_REPLAY_ENGINE_VERSION = "phase-9" as const;
+export const CANONICAL_REPLAY_SCHEMA_VERSION = 2 as const;
+export const CANONICAL_REPLAY_ENGINE_VERSION = "field-positions-v2" as const;
 
 export type SerializablePrimitive = string | number | boolean | null;
 
@@ -353,6 +354,8 @@ export interface CanonicalCardStateSnapshot {
   properSummonEstablished: boolean;
   properSummonProcedure: string | null;
   position: string | null;
+  fieldSlot: FieldSlot | null;
+  fieldPresenceId: string | number | null;
   facedown: boolean;
   atk: number;
   def: number;
@@ -403,6 +406,7 @@ export type CanonicalSummonStateSnapshot = CanonicalProcedureStateSnapshot;
 export type CanonicalCombatStateSnapshot = CanonicalProcedureStateSnapshot;
 
 export interface CanonicalGameStateSnapshot {
+  fieldPlacementSequence: number;
   turn: PlayerId | string | null;
   phase: EventPhase | string | null;
   turnCounter: number;
@@ -458,6 +462,8 @@ export interface ReplayRuntimeCard {
   properSummonEstablished?: boolean;
   properSummonProcedure?: string | null;
   position?: (string | null) | undefined;
+  fieldSlot?: FieldSlot | null;
+  fieldPresenceId?: string | number | null;
   isFacedown?: boolean | undefined;
   atk?: number | undefined;
   def?: number | undefined;
@@ -505,6 +511,7 @@ export type CanonicalReplayChainPort = Partial<
 };
 
 export interface CanonicalReplayGamePort {
+  generatedIdCounters?: ReadonlyMap<string, number>;
   turn?: PlayerId | string | null;
   phase?: EventPhase | string | null;
   turnCounter?: number;

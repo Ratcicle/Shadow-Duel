@@ -11,6 +11,7 @@ import * as zonesSnapshot from "./zones/snapshot.js";
 import * as zonesInvariants from "./zones/invariants.js";
 import * as zonesOperations from "./zones/operations.js";
 import * as zonesMovement from "./zones/movement.js";
+import * as zonesPlacement from "./zones/placement.js";
 import * as zonesControl from "./zones/control.js";
 import * as zonesDestruction from "./zones/destruction.js";
 import * as combatIndicators from "./combat/indicators.js";
@@ -94,6 +95,9 @@ export const GAME_ATTACHMENT_GROUPS = Object.freeze([
   group("devToolsSetup", [
     ["applyManualSetup", devToolsSetup.applyManualSetup],
     ["applyScenarioSetup", devToolsSetup.applyScenarioSetup],
+  ]),
+  group("zonesPlacement", [
+    ["prepareFieldPlacement", zonesPlacement.prepareFieldPlacement],
   ]),
   group("eventBus", [
     ["on", eventBus.on],

@@ -1,12 +1,12 @@
 # Shadow Duel — Etapa 3: posições persistentes e posicionamento manual opcional
 
-**Status:** proposta técnica para revisão. Nenhuma alteração funcional está implementada ou autorizada por este documento. As recomendações abaixo dependem da revisão do diretor criativo e da revisão técnica.
+**Status:** design aprovado para implementação pelo diretor criativo: “Pode implementar a Etapa 3 de acordo com o design proposto.” As entregas A e B usam a mesma posição canônica. A aprovação posterior inclui D1, D4 e D5; D2 e D3 preservam os termos específicos registrados abaixo. Implementação na branch `feature/duel-ui-stage3`, sem integração à `main`.
 
 **Base auditada:** `22bba1ff8f8ade1fb78b681d7ca608584ad79b95`, da `feature/duel-ui-stage2`. A branch local e `origin/feature/duel-ui-stage2` apontavam exatamente para esse commit após consulta ao remoto; não havia commits posteriores. O working tree estava limpo. A `feature/duel-ui-stage3` foi criada diretamente nessa base, sem incorporar `main` nem alterar as branches anteriores.
 
 **Escopo desta tarefa:** analisar o repositório e produzir este documento. Os testes, alterações de contratos e verificações no navegador descritos aqui são trabalho futuro, não resultados de uma implementação já realizada.
 
-## 1. Comportamento pretendido e decisões pendentes
+## 1. Comportamento pretendido e decisões de design
 
 Cada carta em `field` ou `spellTrap` terá um espaço local persistente entre 0 e 4. Isso vale para as duas fileiras de ambos os jogadores. A saída de uma carta não desloca as restantes:
 
@@ -25,17 +25,17 @@ O posicionamento automático será o padrão e escolherá o menor índice local 
 
 Não entram nesta etapa: regras ou filtros de coluna, novas cartas, estratégia de colunas da IA, arrastar e soltar, reorganização livre, redesign, mudança de tamanho de cartas, mão, LP, sidebar ou zonas laterais. Magia de Campo continua em `fieldSpell`, fora dos cinco espaços.
 
-### Decisões que precisam de revisão
+### Decisões aprovadas
 
-| ID | Questão | Recomendação desta proposta | Impacto / alternativa |
+| ID / status | Questão | Decisão ou recomendação | Impacto / alternativa |
 | --- | --- | --- | --- |
-| D1 | Quem escolhe quando um efeito coloca uma carta no campo adversário ou troca seu controle? | O ator do procedimento ou controlador do efeito escolhe; o jogador de destino é informado separadamente. Para retorno automático de controle, escolhe `previousController`. | Não existe regra de espaço no projeto. Há precedente de escolha de Ataque/Defesa pelo controlador do efeito em `actionHandlers/summon/fromZone.ts`, mesmo com destino adversário. Alternativa: sempre o controlador do campo de destino. Não deduzir o ator de `turn`, `owner` ou da área clicada. |
-| D2 | O que fazer quando um retorno temporário de controle não encontra vaga? | Preservar o comportamento atual: transferência falha, carta permanece com o holder e o registro expirado é consumido. Não reservar o espaço antigo durante a ausência. | `zones/control.ts`, `processTemporaryControlEffects`, já funciona assim. Destruir, mandar ao Cemitério, reservar lugar ou tentar novamente em outro turno seriam mudanças de regra e exigiriam outra decisão explícita. |
-| D3 | Compatibilidade de replays anteriores | Novo replay canônico v2; v1 rejeitado com explicação, mantendo os arquivos intactos. Para reproduzir v1, usar o runtime anterior. | Posições, decisões e hashes mudam. Não haverá migração que invente posições e ignore divergências. |
-| D4 | Exposição pública de cartas ocultas | Corrigir, de forma delimitada, a projeção pública das fileiras ao adicionar a posição: ocultar também o ID de catálogo e os metadados identificadores de cartas adversárias Baixadas. | A base atual ainda publica `cardId` apesar de ocultar nome e atributos. Adicionar posição não pode perpetuar esse campo como fonte de identidade para a nova UI. O replay integral continua privado e separado. |
-| D5 | Quando perguntar o espaço em procedimentos com Tributos/materiais? | Depois de pagar os materiais, antes da entrada/tentativa de Invocação, com escolha obrigatória e sem Cancelar. Antes do compromisso continuam valendo os cancelamentos existentes da ação e dos materiais. | Evita pedir clique sobre um espaço ainda ocupado por um material. Alternativa: escolha pré-compromisso sobre vagas projetadas, exigindo UI e validação próprias para espaços ainda ocupados. Esta alternativa não é o caminho proposto abaixo. |
+| D1 — **aprovada** | Quem escolhe quando um efeito coloca uma carta no campo adversário ou troca seu controle? | O ator do procedimento ou controlador do efeito escolhe; o jogador de destino é informado separadamente. Para retorno automático de controle, escolhe `previousController`. | Não existe regra de espaço no projeto. Há precedente de escolha de Ataque/Defesa pelo controlador do efeito em `actionHandlers/summon/fromZone.ts`, mesmo com destino adversário. Alternativa: sempre o controlador do campo de destino. Não deduzir o ator de `turn`, `owner` ou da área clicada. |
+| D2 — **aprovada** | O que fazer quando um retorno temporário de controle não encontra vaga? | Ao expirar um registro ainda válido, tentar devolver ao controlador previsto nele. Sem vaga, destruir o monstro **por regra**, com saída real e destino normal no Cemitério de seu dono original. Não manter com o holder nem reagendar. | Substitui a recomendação anterior e altera esse caso específico do comportamento atual. Não simular transferência bem-sucedida; não classificar como batalha, efeito, custo ou Tributo. Registro obsoleto não produz efeito. Não generalizar para outras falhas de transferência nem para retornos do banimento. Detalhamento em 5.4. |
+| D3 — **aprovada** | Compatibilidade de replays anteriores | O runtime novo aceita somente o formato canônico novo; esta proposta o identifica como v2. Rejeitar formatos anteriores/incompatíveis antes de comandos ou alterações do duelo. | Sem migração, conversor, modo legado, posições inferidas ou fallback de decisões antigas. Não ignorar divergências nem recalcular hashes esperados para aceitar arquivos antigos. Atualizar fixtures válidos; preservar os arquivos antigos do usuário. A política separada de setups do Laboratório permanece inalterada. |
+| D4 — **aprovada** | Exposição pública de cartas ocultas | Corrigir, de forma delimitada, a projeção pública das fileiras ao adicionar a posição: ocultar também o ID de catálogo e os metadados identificadores de cartas adversárias Baixadas. | A base atual ainda publica `cardId` apesar de ocultar nome e atributos. Adicionar posição não pode perpetuar esse campo como fonte de identidade para a nova UI. O replay integral continua privado e separado. |
+| D5 — **aprovada** | Quando perguntar o espaço em procedimentos com Tributos/materiais? | Depois de pagar os materiais, antes da entrada/tentativa de Invocação, com escolha obrigatória e sem Cancelar. Antes do compromisso continuam valendo os cancelamentos existentes da ação e dos materiais. | Evita pedir clique sobre um espaço ainda ocupado por um material. Alternativa: escolha pré-compromisso sobre vagas projetadas, exigindo UI e validação próprias para espaços ainda ocupados. Esta alternativa não é o caminho proposto abaixo. |
 
-As decisões D1–D5 são recomendações, não aprovações presumidas. As seções seguintes descrevem um desenho coerente com elas. Se alguma for rejeitada, os fluxos, contratos e testes correspondentes devem ser revistos antes de implementar.
+D1–D5 estão aprovadas pela autorização posterior de implementar o design proposto. D2 e D3 continuam delimitadas pelos termos explícitos desta tabela; mudanças futuras nessas decisões exigem revisão dos fluxos, contratos e testes.
 
 ## 2. Modelo recomendado e alternativas
 
@@ -44,7 +44,7 @@ As decisões D1–D5 são recomendações, não aprovações presumidas. As seç
 Recomenda-se a alternativa A:
 
 ```ts
-// Contratos propostos; não existem ainda na base.
+// Contratos implementados em src/core/contracts/placement.ts.
 type FieldSlot = 0 | 1 | 2 | 3 | 4;
 type PlacementRow = "field" | "spellTrap";
 
@@ -133,6 +133,7 @@ Propor um domínio pequeno, sem concentrar a lógica em `Game.ts`:
 | `contracts/cards.ts`, `Card.ts`, `contracts/gameRuntime.ts` | Escalar canônico e projeções/ports mínimos de colocação e estado procedimental. |
 | `game/attachments.ts`, `Game.ts` | Registro/delegação, caso métodos anexados sejam necessários. Nenhuma nova regra volumosa na fachada. |
 | `zones/movement.ts`, `zones/control.ts`, `summon/transaction.ts`, `spellTrap/finalization.ts` | Integração nos pontos reais de ingresso, compromisso e saída. |
+| `zones/destruction.ts`, `game/effects/destructionReplacement.ts`, `effects/actions/destroy.ts`, contratos de movimento/eventos | Suporte explícito à destruição por regra exigida por D2, sem os fallbacks atuais que equiparam causa não-batalha a efeito. Reutilizar movimento/limpeza canônicos. |
 
 Separar três operações conceituais:
 
@@ -195,7 +196,7 @@ Os previews existentes que usam `fieldSlotsFreedBeforeSummon`, em [effects/actio
 | **Equipar:** [effects/actions/equip.ts](../src/core/effects/actions/equip.ts), `applyEquip`. | Fonte já em S/T usa seu slot. Caminho que ainda parte da mão prepara ingresso antes de `moveCard`. | Não perguntar novamente depois da ativação da magia. Vínculos e bônus continuam ligados à identidade da carta. |
 | **Movimento/colocação genérica por efeito:** [effects/actions/movement.ts](../src/core/effects/actions/movement.ts), `applyMove`. | O adaptador propaga ator e destino normalizados ao núcleo para cada entrada real em `field`/`spellTrap`. | Mesma fileira/controlador sem saída efetiva preserva slot. Nova fileira/controlador aloca outro; outras zonas limpam. Sem lógica por nome de carta. |
 | **Armadilha-Monstro:** `applySpecialSummonSelfAsTrapMonster` em effects/actions/summon. | Preparar destino antes de remover de S/T; capturar estado original antes das mutações de tipo/stats. | Transferir S/T→field com novo slot, liberando o anterior na aplicação. Falha técnica restaura tipo e posição anterior; falha de regra segue a resolução. Não manter ocupação simultânea nas duas fileiras. A base move a carta, não cria uma segunda representação. |
-| **Controle / retorno temporário:** [zones/control.ts](../src/core/game/zones/control.ts), `transferControl`, `takeControl`, `processTemporaryControlEffects`; [actionHandlers/movement.ts](../src/core/actionHandlers/movement.ts), `handleTakeControl`. | Preparar destino/ator antes de retirar do controlador anterior. Revalidar ambos no compromisso. Retorno sem vaga segue D2. | Remover, atribuir novo slot e inserir como transferência de controle, sem chamar o fluxo de nova Invocação/saída do campo. Preservar `originalOwner`, presença, vínculos, estados e observadores existentes; emitir o `control_changed` já usado. |
+| **Controle / retorno temporário:** [zones/control.ts](../src/core/game/zones/control.ts), `transferControl`, `takeControl`, `processTemporaryControlEffects`; [actionHandlers/movement.ts](../src/core/actionHandlers/movement.ts), `handleTakeControl`. | Preparar destino/ator antes de retirar do controlador anterior; revalidar no compromisso. Na expiração, processar somente registro ainda válido. Com vaga, escolher/alocar no controlador de destino; sem vaga, aplicar D2 e 5.4, sem decisão de espaço vazia. | Transferência bem-sucedida preserva `originalOwner`, presença, vínculos, estados e observadores; emite `control_changed`, sem saída/nova Invocação. Retorno válido sem vaga destrói por regra a partir do campo do holder: saída real, liberação do slot e destino normal no GY do dono original, sem transferência fictícia nem reagendamento. |
 
 Outros ingressos auditados que precisam propagar o mesmo contexto, sem decisões duplicadas por handler:
 
@@ -205,7 +206,7 @@ Outros ingressos auditados que precisam propagar o mesmo contexto, sem decisões
 
 ### 5.2 Saídas, redirecionamentos e caminhos sem `moveCard`
 
-Destruição passa por [zones/destruction.ts](../src/core/game/zones/destruction.ts), `destroyCard`, e por `moveCard`; retorno à mão/Deck, banimento e demais movimentos incluem [actionHandlers/destruction.ts](../src/core/actionHandlers/destruction.ts) e [actionHandlers/movement.ts](../src/core/actionHandlers/movement.ts). Limpar a posição quando a saída realmente ocorre, após determinar substituições/redirecionamentos. Se a carta permanece no campo por proteção/substituição, seu espaço permanece. Reingresso futuro recebe nova alocação, sem memória visual paralela do espaço anterior.
+Destruição passa por [zones/destruction.ts](../src/core/game/zones/destruction.ts), `destroyCard`, e por `moveCard`; retorno à mão/Deck, banimento e demais movimentos incluem [actionHandlers/destruction.ts](../src/core/actionHandlers/destruction.ts) e [actionHandlers/movement.ts](../src/core/actionHandlers/movement.ts). Limpar a posição quando a saída realmente ocorre, após determinar substituições/redirecionamentos aplicáveis à causa real. Quando uma proteção/substituição legal impede uma saída, o espaço permanece; proteções limitadas a batalha/efeito não impedem a saída por regra de D2. Reingresso futuro recebe nova alocação, sem memória visual paralela do espaço anterior.
 
 Capturar a origem para animação/eventos antes da mutação. Cobrir token removido do jogo, redirecionamento para Extra Deck, saídas de equipamentos/Armadilhas-Monstro, falha de Invocação e retornos antecipados. Não colocar limpeza apenas depois do último `push` de `moveCardInternal`.
 
@@ -225,6 +226,32 @@ Esses caminhos precisam usar o mesmo helper puro de aplicação/liberação ou r
 A consulta de ocupação deve reconhecer **essa carta já presente, temporariamente retida pelo procedimento**, por sua identidade e posição canônica. Não é uma intenção de nova entrada. Não criar mapa UI nem duplicar a posição atual em dois registros mutáveis. Se a carta for efetivamente enviada a outra zona por negação/finalização, liberar a posição nesse movimento.
 
 `collectAllZoneCards` e snapshots atuais só percorrem listas; durante esse intervalo não capturam a carta removida. Ampliar explicitamente captura/restauração e projeção procedimental para incluir a carta em trânsito. Com quatro monstros na lista e o quinto em tentativa de Flip, continuam existindo cinco posições ocupadas: outra entrada não pode tomar o lugar retido. A reinserção do próprio monstro reconhece a mesma identidade e não se bloqueia como se fosse uma sexta carta. Isso fecha uma vaga artificial criada pelo `splice` atual; é uma correção delimitada necessária para preservar a posição ao virar, e deve ter teste de janela de resposta próprio.
+
+### 5.4 Retorno temporário sem vaga: destruição por regra (D2 aprovada)
+
+**Escopo exato:** somente a expiração de um registro válido de controle temporário cujo retorno não encontra espaço. A falha genérica de `transferControl` não deve destruir cartas. Alvo ausente, registro substituído, destino inválido ou erro técnico não equivalem a falta de vaga. Retornos do banimento e Specials adiadas conservam o comportamento descrito em 5.1.
+
+**Papéis distintos:** `entry.previousControllerId` identifica quem receberia o controle; `entry.holderId` identifica o campo atual; `card.originalOwner` identifica o dono original e seu Cemitério como destino normal de uma saída. `card.owner` atualmente acompanha o controlador e não substitui `originalOwner`. O controlador de retorno e o dono original podem ser diferentes. Não mudar `owner`/`controller` para o destinatário do retorno antes de destruir.
+
+Fluxo proposto no ponto de expiração já chamado por [turn/lifecycle.ts](../src/core/game/turn/lifecycle.ts):
+
+1. Processar registros expirados na ordem determinística existente, um por vez. Antes de cada aplicação, confirmar identidade da instância, presença atual em `field` do holder, destino válido e vigência daquele registro de controle. Registro de carta que saiu ou teve o controle temporário substituído é descartado sem mover, destruir ou emitir eventos de saída.
+2. A base extrai todos os expirados e os remove da lista antes dos `await`s. Essa cópia isolada não prova validade depois de outra resolução: propor processamento individual, mantendo o registro identificável e vigente até o compromisso de sua transferência/saída, sem permitir processamento duplicado. Vincular também a presença da carta (`locationVersion` ou snapshot equivalente) para não confundir saída/reingresso da mesma instância. Essas informações pertencem ao estado procedimental, com clone, snapshot e hash, sem mapa de UI. Revalidar pelo ID vigente e pela presença após qualquer espera; um registro invalidado durante outro retorno não pode destruir a carta.
+3. Se o monstro já estiver sob o controlador previsto, finalizar sem transferência ou destruição; não interpretar o campo cheio como falha de um retorno já satisfeito. Nos demais casos, com vaga, executar a transferência normal e sua alocação, preservando presença, pose e vínculos. A escolha do ator continua submetida à D1 aprovada. Não reservar o espaço antigo durante a ausência.
+4. Confirmada a validade e a ausência de vaga, executar destruição por regra a partir do holder e consumir o retorno uma única vez no compromisso da saída. Não abrir seleção sem candidatos, não oferecer cancelamento da regra, não emitir `control_changed` de sucesso e não simular nova Invocação. A saída libera o slot do holder; o destino normal é o Cemitério do dono original, sujeito aos redirecionamentos aplicáveis e à regra de Fichas.
+5. Não manter o monstro com o holder nem reagendar a devolução como resultado normal desse caso. Falha técnica segue o limite de rollback/erro explícito de 7.3, sem ser convertida em uma nova política de retorno ou em destruição por uma causa falsa.
+
+**Auditoria do suporte atual e integração necessária:**
+
+| Caminho real | Constatação e alteração prevista no plano |
+| --- | --- |
+| [contracts/gameRuntime.ts](../src/core/contracts/gameRuntime.ts), `MoveCardOptions`; [contracts/events.ts](../src/core/contracts/events.ts), payloads de movimento/GY; opções locais em `zones/destruction.ts` | `cause`/`destroyCause` aceitam strings, mas isso não estabelece semântica de regra. Representar explicitamente a causa `rule` nos contratos e consumidores pertinentes, separada do motivo diagnóstico `temporary_control_return_no_space`. Não tratar como `battle`, `effect`, custo ou Tributo. |
+| [zones/destruction.ts](../src/core/game/zones/destruction.ts), `destroyCard`, `getDestructionProtectionType` e proteções condicionais/auras | O default é `effect`; a seleção de proteção usa `battle` versus todo o restante, e a imunidade usa `cause !== "battle"`. Portanto passar apenas `{ cause: "rule" }` ao helper atual é insuficiente. Prever despacho explícito para regra, sem imunidade/proteção de batalha ou efeito bloqueando D2 e sem log que a descreva como efeito. |
+| [effects/actions/destroy.ts](../src/core/effects/actions/destroy.ts), `checkBeforeDestroyNegations`; [game/effects/destructionReplacement.ts](../src/core/game/effects/destructionReplacement.ts), `resolveDestructionWithReplacement` / `tryReplacement` | O primeiro consulta `before_destroy` sem filtrar a causa antes de oferecer prevenção; o segundo tem default `effect` e substituições genéricas. Não usar esses caminhos implicitamente para negar a regra ou pagar custo para manter o monstro no holder. Auditar a elegibilidade pela causa explícita; `reason: "any"` de um efeito não deve virar autorização implícita para impedir D2. Preservar redirecionamentos de destino realmente aplicáveis, sem criar novas exceções ou efeitos de carta. |
+| [zones/movement.ts](../src/core/game/zones/movement.ts), `resolveOriginalOwnerDestination`, `emitCardMovedEvent`, ramo `tokenRemoved` e limpeza de equipamentos | Reutilizar o ingresso canônico de destruição em `moveCard`, com `fromZone: "field"`, `wasDestroyed: true`, `destroyCause: "rule"` e `movedByEffect: false`. Manter fonte destruidora de efeito ausente; o ID do controle serve para rastreamento, sem atribuir a destruição à carta que originalmente tomou controle. A origem real é o holder. Manter redirecionamentos, eventos, limpeza de vínculos e posições. Ficha é removida do jogo, sem inserir no GY; equipamentos seguem sua própria limpeza e causa, sem herdar automaticamente a destruição do monstro. |
+| [triggers/collectors/cardToGrave.ts](../src/core/effects/triggers/collectors/cardToGrave.ts), [cardMoved.ts](../src/core/effects/triggers/collectors/cardMoved.ts) e `hasMatchingDestroyedGraveyardTrigger` em movement | Os filtros de destruição por batalha/efeito fazem comparações explícitas: preservar a exclusão de `rule`. Não emitir `battle_destroy`. Gatilhos gerais de saída, movimento, destruição ou chegada ao GY são avaliados pelas condições reais e pelo destino efetivo; não suprimi-los em bloco nem emitir chegada ao GY se a carta foi redirecionada/removida. |
+
+Esse suporte deve ficar no domínio de destruição/movimento, reutilizável por causa explícita, sem handler por nome de carta ou nova action declarativa nesta revisão. A integração aprovada da causa `rule` é a de D2; não reclassificar outras falhas/saídas existentes sem necessidade demonstrada.
 
 ## 6. Decisões, preferência, sessão e UI manual
 
@@ -321,7 +348,7 @@ Duas posições diferentes do mesmo elenco/listas devem gerar snapshots/hashes p
 
 ### 7.2 Replay v2 e sequência de decisões
 
-O replay atual usa `CANONICAL_REPLAY_SCHEMA_VERSION = 1` e engine `phase-9` em [contracts/replay.ts](../src/core/contracts/replay.ts). Recomenda-se schema **2 já na entrega A**, com identificador de engine que represente a nova semântica de posições. A entrega B usa o mesmo contrato de posição/decisão: a única diferença é o provider que obtém a escolha. Não condicionar a presença da decisão ao modo manual.
+Na base auditada, o replay usava schema 1 e engine `phase-9`. A implementação usa `CANONICAL_REPLAY_SCHEMA_VERSION = 2` e engine `field-positions-v2` em [contracts/replay.ts](../src/core/contracts/replay.ts), aceitando **somente o formato canônico novo**, conforme D3. A entrega B usa o mesmo contrato de posição/decisão de A: a diferença é o provider que obtém a escolha. A presença da decisão não depende do modo manual.
 
 Atualizar contratos de decisão/contexto/valor em `contracts/replay.ts`, enumerações e validação profunda em [replay/validation.ts](../src/core/game/replay/validation.ts), gravação em [recorder.ts](../src/core/game/replay/recorder.ts), captura em [capture.ts](../src/core/game/replay/capture.ts) e consumo em [driver.ts](../src/core/game/replay/driver.ts).
 
@@ -331,7 +358,11 @@ O driver já opera com `renderer: null` e `replayMode: playback`, compara hashes
 
 Os wrappers de `capture.ts` aguardam o método capturado antes de gravar comando/hash; a pendência atual de alvo usa `targetSelection.replayCommandDescriptor`. A colocação deve ser uma promessa aguardada **dentro do procedimento capturado**, inclusive no automático. Não abrir escolha antes do ponto capturado e deixar decisão órfã; não disparar callback que termine após o hash do comando. Se algum produtor depender de `needsSelection`, ampliar explicitamente o contrato de pendência, sem disfarçar colocação como seleção de carta.
 
-Política de arquivos anteriores: detectar v1 antes de executar comandos e informar que aquela versão não contém posições/decisões compatíveis. Não sobrescrever arquivo, preencher posições, recalcular hashes esperados ou ignorar divergências. A migração de setup antigo do Laboratório é outra fronteira e não autoriza migração de replay.
+**Política aprovada em D3:** replays anteriores ficam obsoletos. Rejeitar versões anteriores ou incompatíveis antes de executar comandos, carregar decisões, reiniciar ou alterar o duelo, inclusive quando o chamador fornece uma instância existente em `options.game`. `replayCanonicalDuel` já chama `validateCanonicalReplay` antes desses passos; preservar e testar essa fronteira para o formato novo.
+
+Não implementar migração, conversor, modo legado, preenchimento de posições ausentes ou fallback para decisões antigas. Não ignorar divergências nem recalcular hashes esperados para fazer um arquivo antigo passar. Não apagar, sobrescrever ou modificar arquivos antigos do usuário. Atualizar os fixtures válidos para representar duelos do formato novo, com suas posições/decisões/eventos reais; não apenas trocar a versão de um replay antigo e aceitar seus dados. Manter fixtures negativos explícitos para rejeição de versões incompatíveis.
+
+Cobrir no replay novo tanto retorno com vaga quanto destruição por regra sem vaga: validade/consumo dos registros, controlador de retorno, dono original, liberação de slot, causa e destino efetivo precisam produzir os mesmos eventos e hashes na reprodução headless. Novos vínculos de validade do registro entram na serialização/snapshot/hash. Não fabricar decisão de colocação quando não há retorno por falta de espaço. A política separada de importação de setups do Laboratório em 9 permanece inalterada por D3.
 
 ### 7.3 Rollback não é desfazer um efeito
 
@@ -369,12 +400,16 @@ O bot usa o mesmo menor índice livre, sem avaliar colunas nem gerar ramificaç�
 | [ai/BeamSearch.ts](../src/core/ai/BeamSearch.ts), clones Beam e Greedy; [common/planningCopy.ts](../src/core/ai/common/planningCopy.ts) | Preservar slot em cada nível, incluindo clones usados antes/depois de ações. |
 | [common/gameTreeSimulation.ts](../src/core/ai/common/gameTreeSimulation.ts), `createGameTreeCopy` | Sua projeção fechada exige incluir o campo em `PLANNING_CARD_FIELDS`; spread em outro perfil não garante isso. |
 | [common/stateFingerprint.ts](../src/core/ai/common/stateFingerprint.ts), `fingerprintPlanningState`; [GameTreeSearch.ts](../src/core/ai/GameTreeSearch.ts); [bot/mainPhaseIdentity.ts](../src/core/bot/mainPhaseIdentity.ts) | Fingerprints de estado/transposição/detecção de progresso precisam distinguir slots diferentes. Verificar invalidação dos caches consumidores. |
-| [TurnLineSearch.ts](../src/core/ai/TurnLineSearch.ts), `clonePlayerState`, `clonePlanningState`, `getCardKey`, `getPlanningStateHash` | Possui clone e hash próprios; atualizar ambos, sem supor que alterar o fingerprint compartilhado basta. |
+| [TurnLineSearch.ts](../src/core/ai/TurnLineSearch.ts), `clonePlayerState`, `clonePlanningState`, `getCardKey`, `getPlanningStateHash` | Possui clone e hash próprios; atualizar ambos, incluindo registros de controle temporário e sua validade necessários a D2, sem supor que alterar o fingerprint compartilhado basta. |
 | [common/zones.ts](../src/core/ai/common/zones.ts), `removeCardFromZones`, `moveCardToZone`; [simulatedActions/shared.ts](../src/core/ai/common/simulatedActions/shared.ts), `hasOpenMonsterZone`, `applySummonState` | Atribuir/liberar slot e validar capacidade; considerar materiais e saídas efetivas. |
-| [simulatedActions/summon.ts](../src/core/ai/common/simulatedActions/summon.ts), [movement.ts](../src/core/ai/common/simulatedActions/movement.ts), `applyTakeControl` | Cobrir Invocações, Fichas, controle e retorno sem compartilhar mapas com o runtime. |
+| [simulatedActions/summon.ts](../src/core/ai/common/simulatedActions/summon.ts), [movement.ts](../src/core/ai/common/simulatedActions/movement.ts), `applyTakeControl`; [destruction.ts](../src/core/ai/common/simulatedActions/destruction.ts) | Cobrir Invocações, Fichas, controle e retorno sem compartilhar mapas com o runtime. O vencimento de D2 precisa de resolução simulada própria da causa `rule`, sem chamar uma action de destruição por efeito. |
 | [common/simulation.ts](../src/core/ai/common/simulation.ts), [dragon/simulation.ts](../src/core/ai/dragon/simulation.ts), [shadowheart/simulation.ts](../src/core/ai/shadowheart/simulation.ts), [luminarch/simulation.ts](../src/core/ai/luminarch/simulation.ts), [VoidStrategy.ts](../src/core/ai/VoidStrategy.ts), `Bot.simulateBattle` | Há `push`/`splice` diretos; convergir atribuição/liberação para helpers de simulação, sem refatorar estratégias ou unificar os quatro perfis de clone. |
 
-Remoção simulada não compacta posições; nova entrada preenche a menor vaga da cópia. Controle simulado realoca no destino sem simular nova Invocação. Duas distribuições espaciais podem ter a mesma avaliação estratégica nesta etapa, mas não podem ser consideradas o mesmo estado pelo hash pertinente.
+Remoção simulada não compacta posições; nova entrada preenche a menor vaga da cópia. Transferência de controle bem-sucedida realoca no destino sem saída/nova Invocação; a exceção aprovada de D2 produz saída real na simulação, como no runtime. Duas distribuições espaciais podem ter a mesma avaliação estratégica nesta etapa, mas não podem ser consideradas o mesmo estado pelo hash pertinente.
+
+`applyTakeControl` já cria registros temporários e limpa registros anteriores, mas não implementa seu vencimento. Prever um resolvedor simulado determinístico para o retorno, integrado aos pontos que modelam a expiração, sem ampliar a estratégia ou o horizonte de busca. Ele deve validar o registro atual, transferir à menor vaga quando houver espaço ou destruir por regra quando não houver, liberando o slot do holder e usando o dono original para o GY normal. Preservar Fichas, vínculos, redirecionamentos e elegibilidade de gatilhos/proteções pertinentes nos limites da simulação; não usar a destruição genérica por efeito como atalho. Registro obsoleto não faz nada, inclusive após saída/reingresso ou substituição durante outro retorno.
+
+Os quatro perfis de clone precisam preservar os registros/versões de presença necessários a essa validação e distingui-los nos hashes pertinentes. Testar runtime e simulação com fixtures equivalentes para os dois resultados de D2, sem tocar no estado real, abrir prompt, emitir evento real ou gravar decisão do duelo. Uma falha comum de transferência ou um retorno do banimento não deve herdar essa destruição.
 
 ## 9. Laboratório, setups e inicialização
 
@@ -403,13 +438,14 @@ Um retorno adiado legado sem ator segue a normalização definida em 5.1; novos 
 | Reserva muda legalidade de resposta | Intenção de nova entrada não ocupa slot. Teste de resposta durante `summon_attempt` preenchendo o slot escolhido, com revalidação e decisão renovada/falha. |
 | Flip vira vaga fantasma | Snapshot da carta em trânsito e retenção de sua posição, sem nova decisão; sucesso, negação e falha técnica cobertos. |
 | Prompt colocado depois de remover origem ou fora do comando capturado | Instrumentar ordem de decisão, mutação, eventos e hash. Nenhum registro órfão, custo repetido ou callback tardio. |
-| Troca de controle aciona saída/summon/reset | Testar eventos emitidos e invariantes de presença/equipamento/efeitos, além da ocupação. |
+| Transferência bem-sucedida aciona saída/summon/reset | Testar eventos emitidos e invariantes de presença/equipamento/efeitos. Distinguir de D2 sem vaga, que exige saída real por regra e não emite transferência fictícia. |
+| D2 tratada como efeito ou aplicada por registro antigo | Testar causa `rule`, dono original, limpeza, exclusão de proteções/gatilhos de batalha/efeito e revalidação após substituição/saída/reingresso. Falha de transferência fora de D2 não destrói. |
 | Rollback deixa slot ou intenção pendurados | Injetar falha antes/depois de mutação, em ficha nova, transferência e após custo; verificar o limite exato restaurado. |
 | Clone/hashes perdem campo novo | Exercitar os quatro perfis e o hash próprio de TurnLine, além do fingerprint compartilhado. |
 | Replay depende da preferência local | Gravar manual e reproduzir headless com preferência oposta; mesma sequência de decisões e hashes. |
 | Posição expõe carta oculta | Testes negativos da projeção pública/UI, incluindo ator diferente do destino. |
 
-Dependências de aprovação: modelo/nomes, convenção de espelhamento, D1–D5 e política de versão precisam estar acordados antes do código. Nenhuma regra externa é usada para resolver silenciosamente essas decisões.
+A autorização posterior aprova o modelo, os nomes, a convenção de espelhamento e D1–D5 conforme esta proposta. Não foram incorporadas regras externas de colunas ou escolha de responsável.
 
 ## 11. Testes e critérios de aceite
 
@@ -423,13 +459,15 @@ Dependências de aprovação: modelo/nomes, convenção de espelhamento, D1–D5
 | Capacidade | Campo cheio com Tributos/materiais válidos permite a ação. Material fora da fileira não cria vaga. Custo que não libera a vaga prevista força a falha/revalidação correta. |
 | Sequência | Múltiplas Specials, Fichas, De-Synchro, efeitos que Baixam/equipam: cada colocação vê o estado atualizado; sem duplicação nem batch mutation. |
 | Fontes/zonas | Mão, Deck, GY, banimento, Extra Deck, token e efeito genérico; S/T da mão em ativação normal e resposta de Chain; Magia de Campo continua lateral. |
-| Controle | Troca e retorno temporário conservam presença/pose/estados/vínculos; nova vaga válida no destino. Sem vaga segue D2. Ator diferente do destino segue D1. |
+| Controle com vaga | Troca e retorno temporário conservam presença/pose/estados/vínculos; nova vaga válida no destino e registro consumido uma vez. Sem saída/nova Invocação. Ator diferente do destino segue D1 aprovada. |
+| D2 sem vaga | Registro válido expirado causa destruição por regra a partir do holder; libera seu slot, limpa equipamentos e envia normalmente ao GY de `originalOwner`, inclusive quando difere do controlador que receberia o retorno. Sem transferência fictícia, permanência ou reagendamento. Cobrir Fichas e redirecionamento efetivo. |
+| D2: causa e validade | `wasDestroyed=true`, `destroyCause=rule`, `movedByEffect=false`; proteções/imunidades de batalha/efeito não impedem a regra, gatilhos que exigem essas causas não qualificam e outros seguem suas condições reais. Registro obsoleto por saída/reingresso ou controle substituído não produz efeito, inclusive entre dois retornos assíncronos. Falha genérica de transferência e retorno do banimento permanecem inalterados. |
 | Cancelamento | Cancelar ação/seleção antes de compromisso não altera custos/uso/cartas. Slot posterior a materiais ou durante resolução não oferece Cancelar. |
 | Revalidação | Outra resolução ocupa o espaço pretendido: nova decisão obrigatória ou impossibilidade explícita, nunca colocação silenciosa em outra vaga. |
 | Falha técnica | Snapshot/restore recupera slots e limpa intenções; nenhuma ficha nova ou callback de sessão antiga deixa ocupação fantasma. Custos e respostas válidas concluídos fora do checkpoint não são desfeitos. |
 | DecisionBroker | Automático, manual, IA e única vaga usam contrato/registro; zero vagas não abre prompt. Resultado inválido, clique duplo e decisão de sessão antiga são rejeitados. |
-| Replay | Duelo manual reproduz exatamente headless em configuração automática; replay automático em configuração manual também. Ator/destino/carta/candidatos adulterados falham. v1 rejeitado e v2 com posições inválidas/duplicadas rejeitado. |
-| Estado/IA | Mesmo elenco com slots diferentes altera hashes. Clone e simulação mantêm slots, preenchem vagas e não mutam runtime nem gravam decisões reais. |
+| Replay | Fixtures válidos no formato novo; duelo manual reproduz exatamente headless em configuração automática e vice-versa. Retornos com vaga/sem vaga de D2 reproduzem registros, causa, destino, eventos e hashes. Ator/destino/carta/candidatos adulterados falham. Versões anteriores/incompatíveis são rejeitadas antes de comandos ou mutação de um duelo existente; arquivos do usuário permanecem intactos. Formato novo com posições inválidas/duplicadas também é rejeitado, sem fallback. |
+| Estado/IA | Mesmo elenco com slots diferentes altera hashes. Clone e simulação mantêm slots e validade dos registros, reproduzem retorno/destruição por regra/registro obsoleto de D2 e não mutam runtime nem gravam decisões reais. |
 | Laboratório | Legado sem posições normalizado uma vez; export/import/restart v2 preserva lacunas; dados duplicados, fora da faixa, parciais ou versão desconhecida rejeitados atomicamente. Setup inválido por API também preserva duelo ativo e configuração de reinício. |
 | Ocultas | Slot e ocupação de carta adversária Baixada visíveis, identidade/arte/efeitos não revelados por preview, foco, acessibilidade, candidato ou snapshot público. |
 
@@ -438,7 +476,9 @@ Dependências de aprovação: modelo/nomes, convenção de espelhamento, D1–D5
 - `test/ui/boardSlots.test.ts`: o helper atual associa `cards[index]` ao slot. Separar índice da lista e posição canônica. O teste de reindexação deve continuar aprovando `data-index` compacto e passar a exigir permanência visual da carta sobrevivente.
 - `test/contracts/gameMovementContracts.test.ts`, `decisionContracts.test.ts`, `gameCallbacks.test.ts`; `test/types/selectionDecisions.type-test.ts` e `replay.type-test.ts`.
 - `test/chain/summonWindows.test.ts`, `activationSemantics.test.ts`; `test/polymerization.test.ts`, `monsterReborn.test.ts`, `genericEarthSynchros.test.ts`, `cursedRockBehemoth.test.ts`, `orathusFallenAngel.test.ts`, `courtOfTheDead.test.ts`.
+- Ampliar especificamente os testes de controle em `test/cursedRockBehemoth.test.ts` e vínculos em `test/callOfTheHaunted.test.ts`, além de `test/arcturusProtection.test.ts` e fixtures de gatilhos: retorno com/sem vaga, GY do dono original distinto do destinatário do retorno, causa de regra, saída real, proteções, registro obsoleto e sequência de múltiplos retornos. Não transformar o comportamento de uma carta específica no mecanismo central de D2.
 - `test/replay/canonicalReplay.test.ts`, `canonicalValidation.test.ts`, `canonicalRecorder.test.ts`, `canonicalDriver.test.ts`, `canonicalNormalization.test.ts`.
+- Atualizar helpers/fixtures válidos de replay para o formato novo e manter casos negativos de versões incompatíveis, sem adaptadores legados. Adicionar o ciclo completo de D2 e comprovar rejeição antes de chamar `startWithDecks`, carregar decisões ou executar comandos em uma instância fornecida.
 - `test/ai/cloneProfiles.test.ts`, `stateFingerprint.test.ts`, `beamStateIdentity.test.ts`, `gameTreeStateIdentity.test.ts`, `commonSimulation.test.ts`, `gameTreeSimulation.test.ts`, `gameTreeFidelity.test.ts`, `planningStrategies.test.ts`, `simulatedActionInventory.test.ts`.
 
 Novos arquivos sugeridos, se a responsabilidade não couber nos existentes: `test/contracts/fieldPlacement.test.ts` para alocação/estado/fluxos e `test/ui/fieldPlacement.test.ts` para sessão/limpeza. Cobrir importação de setups e hash de TurnLine especificamente; não limitar o teste ao helper que a própria implementação chama.
@@ -459,16 +499,16 @@ Ao fechar cada entrega A/B:
 
 ### A. Posições persistentes completas com alocação automática
 
-Recurso completo ao término de A: todas as entradas/saídas reais e simuladas mantêm posições persistentes; preenchimento automático determinístico, espelhamento, estado/replay v2, snapshots/rollback, controle e Laboratório funcionam de ponta a ponta. O broker já registra todas as decisões de colocação, mesmo resolvidas automaticamente.
+Recurso completo ao término de A: todas as entradas/saídas reais e simuladas mantêm posições persistentes; preenchimento automático determinístico, espelhamento, estado/replay v2, snapshots/rollback, controle e Laboratório funcionam de ponta a ponta. D2 já inclui retorno válido sem vaga com destruição por regra, causa/limpeza/gatilhos corretos e proteção contra registros obsoletos, tanto no runtime quanto na simulação. D3 já exige aceitar exclusivamente o formato novo, com fixtures válidos atualizados e rejeição antecipada de versões incompatíveis. O broker registra todas as decisões de colocação, mesmo automáticas; o ramo de destruição sem vaga não fabrica uma decisão de colocação.
 
 Ordem de trabalho sugerida:
 
-1. Aprovar decisões e contratos; testes de invariantes, separação de índices, capacidade e hashes.
-2. Introduzir escalar/tipos, consultas puras e aplicação central; integrar todas as famílias e exceções, inclusive fallbacks, Flip, controle, resets e retornos.
-3. Completar projeções, snapshot/rollback, replay/versões e import/export do Laboratório. Não deixar esses caminhos para B.
-4. Completar clones, movimentos simulados e identidades/caches; bot/headless sempre automáticos.
+1. Aplicar as decisões e contratos aprovados, preservando os limites de D2/D3; testes de invariantes, separação de índices, capacidade e hashes.
+2. Introduzir escalar/tipos, consultas puras e aplicação central; integrar todas as famílias e exceções, inclusive fallbacks, Flip, controle, resets e retornos. Implementar o ramo delimitado de D2 com causa de regra explícita e revalidação do registro.
+3. Completar projeções, snapshot/rollback e replay exclusivamente novo conforme D3, incluindo testes de rejeição e reprodução de D2. Manter a política separada de import/export do Laboratório. Não deixar esses caminhos para B nem adicionar compatibilidade de replay.
+4. Completar clones, movimentos simulados, expiração de controle de D2 e identidades/caches; bot/headless sempre automáticos.
 5. Distribuir cartas nos slots canônicos e espelhar somente a apresentação. Atualizar testes da Etapa 2 e inspecionar os casos visuais.
-6. Executar gates, revisão e apresentar A para avaliação antes de B.
+6. Executar gates e revisão de A; a autorização posterior permite concluir B sobre a mesma infraestrutura nesta branch.
 
 Não entregar uma versão na qual somente a UI conhece os slots ou o duelo real conhece posições que o replay/IA descartam. Se uma família ainda puder produzir carta sem slot, A não está concluída.
 
@@ -484,4 +524,15 @@ Ordem de trabalho sugerida:
 4. Validar cenários de D1/D5, invalidação após janela, reset, replay manual e carta cujo índice difere do espaço.
 5. Executar testes direcionados, gates completos e inspeção visual; apresentar B para avaliação.
 
-Nenhum código funcional deve ser iniciado a partir deste documento até a revisão da proposta. A aprovação do escopo da Etapa 3 não resolve automaticamente as decisões D1–D5.
+As entregas A e B foram autorizadas juntas na solicitação posterior. A implementação mantém as branches anteriores e não publica nem integra a Etapa 3 à `main`.
+
+## 13. Implementação e verificação
+
+- Núcleo: [placement.ts](../src/core/game/zones/placement.ts) e [contratos](../src/core/contracts/placement.ts). `fieldSlot` é canônico; intents guardam somente uma escolha e uma geração local de ciclo de vida, excluída da serialização e dos hashes.
+- Entradas reais passam por `moveCard`/transações; controle usa `transferControl` sem saída fictícia. A expiração é protegida contra chamadas concorrentes; registros temporários são publicados antes do evento de controle, permitindo sua substituição por efeitos posteriores.
+- Cancelamento pré-compromisso mantém mão e limites; materiais pagos e resoluções usam escolha obrigatória. Reset invalida escolhas e continuações antigas. Snapshot técnico restaura slots e registros, com checkpoint para preservar respostas já concluídas.
+- UI: preferência `shadow_duel_card_placement`, Automático por padrão, Manual com mouse/teclado, instrução localizada e cancelamento quando permitido. Oponente espelhado; `data-index` continua sendo índice da lista real.
+- Replay v2 exclusivo; estado público v2 oculta a identidade das cartas adversárias Baixadas. Laboratório normaliza setups antigos uma vez na importação e rejeita posições modernas inválidas. Os quatro perfis de clone e os simuladores preservam a posição.
+- Testes novos em `fieldPlacement`, `fieldPlacementActions`, `fieldPositionState`, `ai/fieldPositions`, replay e UI cobrem entradas, lacunas, decisão, controle, causa de destruição, snapshot, reset e hashes. O replay manual/cancelado tem roundtrip pelo driver; D2 também tem reprodução isolada pelo broker com igualdade de estado e hash.
+- Inspeção com Game/Renderer reais em 1366×768, 1920×1080 e 1366×600: campo vazio, parcial e cheio com cinco Defesas; posição 4/índice 0, preview, equipamento, seleção, leque, teclado, cancelamento e reinício. Em 600px de altura, o scroll interno preserva o tamanho e evita sobreposição. Artefatos locais em `.codex/stage3-qa/`.
+- Gate final: `npm run check` aprovado, com 1.014 testes e zero falhas, typechecks, auditorias e build. Smoke `arcanist:shadowheart` concluído em 11 turnos, sem erros/avisos no relatório. A repetição visual terminou sem erros de página ou HTTP. O build conserva o aviso de chunks grandes; não foram adicionadas dependências.

@@ -70,6 +70,13 @@ const DEFAULT_LOCALE_TEXTS = {
       turn: "Turn {turn}",
       previewPlaceholder: "Hover a card",
     },
+    placement: {
+      preference: "Card placement:",
+      automatic: "Automatic",
+      manual: "Manual",
+      chooseSpace: "Choose a highlighted space.",
+      spaceLabel: "Choose space {number}",
+    },
     priority: {
       owner: "Priority: {owner}",
       you: "You",

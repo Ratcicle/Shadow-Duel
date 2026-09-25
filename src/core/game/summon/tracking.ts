@@ -39,6 +39,7 @@ interface SpecialSummonTrackingPayload {
 interface DelayedSummonEntry {
   card?: GameCard | null;
   owner: PlayerId;
+  placementActorId?: PlayerId;
   fromZone?: CardArrayZone;
   position?: BattlePositionInput;
   statusesOnSummon?: readonly KnownCardStatusInput[];
@@ -187,6 +188,9 @@ export async function resolveDelayedSummon(
 
     // Executar special summon
     const moveResult = await this.moveCard(card, targetPlayer, "field", {
+      placementActor: summonData.placementActorId === "player"
+        ? this.player
+        : summonData.placementActorId === "bot" ? this.bot : targetPlayer,
       position: resolvedPosition,
       statusesOnSummon: summonData.statusesOnSummon,
       summonMethodOverride: summonData.summonMethod || "special",

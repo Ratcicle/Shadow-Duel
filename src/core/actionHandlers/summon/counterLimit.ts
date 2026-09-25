@@ -1,4 +1,5 @@
 import { isAI } from "../../Player.js";
+import { assignAutomaticFieldSlot, clearFieldSlot } from "../../game/zones/placement.js";
 import type { ActionOf } from "../../contracts/actions.js";
 import type {
   ActionHandlerEnginePort,
@@ -202,6 +203,7 @@ async function performSummonFromDeck(
   let usedMoveCard = false;
   if (typeof game.moveCard === "function") {
     const moveResult = await game.moveCard(card, player, "field", {
+      placementActor: player,
       fromZone: "deck",
       position: summonPosition,
       isFacedown: false,
@@ -224,6 +226,7 @@ async function performSummonFromDeck(
     usedMoveCard = true;
   } else {
     const idx = deck.indexOf(card);
+    if (assignAutomaticFieldSlot(card, player.field) === null) return false;
     if (idx !== -1) {
       deck.splice(idx, 1);
     }
@@ -281,6 +284,7 @@ async function performSummonFromDeck(
           const sourceIdx = legacySourceZone.indexOf(source);
           if (sourceIdx === -1) return false;
           legacySourceZone.splice(sourceIdx, 1);
+          clearFieldSlot(source);
           player.graveyard = player.graveyard || [];
           player.graveyard.push(source);
 

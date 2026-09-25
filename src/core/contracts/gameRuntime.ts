@@ -1,3 +1,4 @@
+import type { GamePlacementPort } from "./placement.js";
 import type {
   BattlePositionInput,
   GameCard,
@@ -59,6 +60,7 @@ export type CardStateSnapshot = Partial<GameCard> & {
 
 export interface ZoneSnapshot {
   contextLabel: string;
+  temporaryControlEffects: TemporaryControlEffect[];
   players: {
     player: ZonePlayerSnapshot;
     bot: ZonePlayerSnapshot;
@@ -76,7 +78,7 @@ export interface ZoneOpOptions {
 export interface ZoneOpFailure {
   success: false;
   reason: string;
-  rolledBack: true;
+  rolledBack: boolean;
 }
 
 export interface MoveCardResult {
@@ -136,6 +138,9 @@ export interface SynchroMaterialFollowup {
 }
 
 export interface MoveCardOptions {
+  fieldPlacement?: import("./placement.js").FieldPlacementIntent | null;
+  placementActor?: GamePlayer | null;
+  allowPlacementCancel?: boolean;
   fromZone?: (ZoneInput | "token") | undefined;
   position?: BattlePosition;
   isFacedown?: boolean | undefined;
@@ -279,6 +284,7 @@ export type SummonStatus =
   | "cancelled";
 
 export interface SummonSourceSnapshot {
+  fieldSlot?: import("./placement.js").FieldSlot | null;
   zone: CanonicalZone | "token" | null;
   controllerId: PlayerId | string | null;
   ownerId: PlayerId | string | null;
@@ -310,6 +316,7 @@ export interface SummonNegationOutcome {
 
 export interface SummonCardIdentitySnapshot {
   cardId: number | null;
+  duelCardId: DuelCardId | null;
   instanceId: string | number | null;
   name: string | null;
 }
@@ -331,6 +338,7 @@ export interface SummonNegationSnapshot {
 }
 
 export interface SummonTransactionSnapshot {
+  fieldPlacement?: Omit<import("./placement.js").FieldPlacementIntent, "generation"> | null;
   summonId: SummonId | number | null;
   status: SummonStatus;
   summonOrigin: SummonOrigin | null;
@@ -385,6 +393,7 @@ export interface PreparedSummonInput {
 }
 
 export interface PreparedSummon {
+  fieldPlacement?: import("./placement.js").FieldPlacementIntent | null;
   summonId: null;
   status: "prepared";
   summonOrigin: SummonOrigin | null;
@@ -681,6 +690,9 @@ export type MaterialStatsForPlayer = Record<
 export type MaterialDuelStats = Record<PlayerId, MaterialStatsForPlayer>;
 
 export interface TemporaryControlEffect {
+  cardDuelCardId: DuelCardId;
+  sourceDuelCardId: DuelCardId | null;
+  fieldPresenceId: string | number | null;
   id: string;
   cardInstanceId: number | string | null;
   holderId: string;
@@ -699,6 +711,11 @@ export interface ReplayCommandDescriptorCarrier {
  * erased through interface merging; they must not become emitted class fields.
  */
 export interface GameRuntimeState {
+  getFieldPlacementMode: () => import("./placement.js").FieldPlacementMode;
+  fieldPlacementProvider: ((request: import("./placement.js").FieldPlacementRequest) => Promise<import("./placement.js").FieldPlacementResult>) | null;
+  pendingFieldPlacement: import("./placement.js").FieldPlacementRequest | null;
+  fieldPlacementGeneration: number;
+  fieldPlacementAbort: AbortController | null;
   disableChains: boolean;
   disableTraps: boolean;
   disableEffectActivation: boolean;
@@ -766,6 +783,7 @@ export interface GameRuntimeState {
   temporaryEventEffects: unknown[];
   temporaryControlEffects: TemporaryControlEffect[];
   pendingSynchroMaterialFollowups: unknown[];
+  resolvingTemporaryControl: boolean;
   pendingSynchroMaterialTriggerContinuation: unknown;
   synchroSummonContextCounter: number;
   devModeEnabled: boolean;
@@ -848,7 +866,8 @@ export interface GameZonesHost extends GameCoreHost {
   ): CardStateSnapshot | null;
 }
 
-export interface GameSummonHost extends GameCoreHost {
+export interface GameSummonHost extends GameCoreHost, GamePlacementPort {
+  fieldPlacementGeneration: number;
   nextSummonId: number;
   activeSummonTransaction: SummonTransaction | null;
   lastSummonTransaction: SummonTransactionSnapshot | null;
@@ -859,7 +878,7 @@ export interface GameSummonHost extends GameCoreHost {
   ): Promise<SummonExecutionResult>;
 }
 
-export interface FullGameHost extends GameRuntimeState, GameCoreHost {
+export interface FullGameHost extends GameRuntimeState, GameCoreHost, GamePlacementPort {
   nextDuelCardId: number;
   nextSummonId: number;
   activeSummonTransaction: SummonTransaction | null;
@@ -924,6 +943,7 @@ export interface GameTurnHost extends GameCoreHost {
 }
 
 export interface GameActionGuardHost {
+  pendingFieldPlacement?: import("./placement.js").FieldPlacementRequest | null;
   _arenaTracker?: ArenaProgressTrackerPort | null;
   activeDamageStepTransaction: DamageStepTransaction | null;
   activeSummonTransaction: SummonTransaction | null;

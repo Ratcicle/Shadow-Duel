@@ -7,6 +7,7 @@ import { playBotMainPhase } from "../../src/core/bot/mainPhaseController.js";
 import type { AIAction } from "../../src/core/contracts/ai.js";
 import type { BotGamePort } from "../../src/core/contracts/bot.js";
 import { cardDefinition, record, required, unsafeFixture } from "../helpers/fixtures.js";
+import { placeSimulationCards } from "../helpers/simulation.js";
 
 function scenario(t: TestContext, pairCount = 2) {
   t.mock.method(console, "log", () => {});
@@ -47,7 +48,7 @@ function scenario(t: TestContext, pairCount = 2) {
     const ascension = new Card(cardDefinition(required(ascensionName)), bot.id);
     game.ensureDuelCardId(material);
     game.ensureDuelCardId(ascension);
-    bot.field.push(material);
+    placeSimulationCards(bot.field, material);
     bot.extraDeck.push(ascension);
     assert.equal(game.canUseAsAscensionMaterial(bot, material).ok, true);
     assert.equal(game.checkAscensionRequirements(bot, ascension, material).ok, true);

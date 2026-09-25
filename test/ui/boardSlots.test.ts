@@ -3,10 +3,11 @@ import test, { type TestContext } from "node:test";
 import "../../scripts/register_node_asset_loader.js";
 import Card from "../../src/core/Card.js";
 import Player from "../../src/core/Player.js";
-import type { PlayerId } from "../../src/core/contracts/primitives.js";
+import type { DuelCardId, PlayerId } from "../../src/core/contracts/primitives.js";
 import type Renderer from "../../src/ui/Renderer.js";
 import type { UiCard, UiCardElement } from "../../src/ui/renderer/types.js";
 import type { CardElementOptions } from "../../src/ui/renderer/preview.js";
+import type { FieldPlacementRequest } from "../../src/core/contracts/placement.js";
 import { required, unsafeFixture } from "../helpers/fixtures.js";
 
 const { renderField, renderSpellTrap } = await import(
@@ -15,6 +16,7 @@ const { renderField, renderSpellTrap } = await import(
 const { bindZoneCardClick, bindCardHover } = await import(
   "../../src/ui/renderer/bindings.js"
 );
+const { chooseFieldPlacement, cancelFieldPlacement, refreshFieldPlacement } = await import("../../src/ui/renderer/placement.js");
 
 // Only the DOM operations used by the board and delegated event bindings are
 // modeled here. Layout and native pointer hit testing belong to browser QA.
@@ -27,6 +29,9 @@ class BoardElement extends EventTarget {
   id = "";
   readonly fragment: boolean;
   private html = "";
+  readonly attributes = new Map<string, string>();
+  textContent = "";
+  tabIndex = -1;
 
   constructor(fragment = false) {
     super();
@@ -40,7 +45,29 @@ class BoardElement extends EventTarget {
         .join(" ");
     },
     contains: (name: string) => this.className.split(/\s+/).includes(name),
+    remove: (...names: string[]) => {
+      this.className = this.className.split(/\s+/).filter((name) => !names.includes(name)).join(" ");
+    },
   };
+
+  setAttribute(name: string, value: string): void { this.attributes.set(name, value); }
+  removeAttribute(name: string): void { this.attributes.delete(name); }
+  get isConnected(): boolean { return this.id === "game-container" || Boolean(this.parentElement?.isConnected); }
+  contains(node: BoardElement): boolean { return node === this || this.children.some((child) => child.contains(node)); }
+  remove(): void {
+    if (this.parentElement) this.parentElement.children.splice(this.parentElement.children.indexOf(this), 1);
+    this.parentElement = null;
+  }
+  focus(): void {
+    Object.defineProperty(document, "activeElement", { configurable: true, value: this });
+    for (let parent = this.parentElement; parent; parent = parent.parentElement) {
+      const event = new Event("focusin");
+      Object.defineProperty(event, "target", { value: this });
+      parent.dispatchEvent(event);
+    }
+  }
+  querySelectorAll(selector: string): BoardElement[] { return this.descendantsWithClass(selector.slice(1)); }
+  querySelector(selector: string): BoardElement | null { return this.querySelectorAll(selector)[0] ?? null; }
 
   get innerHTML(): string {
     return this.html;
@@ -107,12 +134,16 @@ function createBoard(t: TestContext) {
   const playerArea = element("player-area", gameContainer);
   const botArea = element("bot-area", gameContainer);
   const elements = {
+    phaseTrack: element("phase-track", gameContainer),
     playerField: element("player-field", playerArea),
     playerSpellTrap: element("player-spelltrap", playerArea),
     botField: element("bot-field", botArea),
     botSpellTrap: element("bot-spelltrap", botArea),
   };
-  const previousDocument = Object.getOwnPropertyDescriptor(globalThis, "document");
+  const previousGlobals = new Map(["document", "HTMLElement", "Element"].map((key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)]));
+  const documentEvents = new EventTarget();
+  Object.defineProperty(globalThis, "HTMLElement", { configurable: true, value: BoardElement });
+  Object.defineProperty(globalThis, "Element", { configurable: true, value: BoardElement });
   Object.defineProperty(globalThis, "document", {
     configurable: true,
     value: unsafeFixture<Document>(
@@ -120,14 +151,18 @@ function createBoard(t: TestContext) {
         createElement: () => new BoardElement(),
         createDocumentFragment: () => new BoardElement(true),
         getElementById: (id: string) => nodes.get(id) ?? null,
+        addEventListener: documentEvents.addEventListener.bind(documentEvents),
+        removeEventListener: documentEvents.removeEventListener.bind(documentEvents),
+        activeElement: null,
       },
       "The board test supplies only its element, fragment and ID lookup DOM operations.",
     ),
   });
   t.after(() => {
-    if (previousDocument)
-      Object.defineProperty(globalThis, "document", previousDocument);
-    else Reflect.deleteProperty(globalThis, "document");
+    for (const [key, descriptor] of previousGlobals) {
+      if (descriptor) Object.defineProperty(globalThis, key, descriptor);
+      else Reflect.deleteProperty(globalThis, key);
+    }
   });
 
   const calls: CardRenderCall[] = [];
@@ -135,6 +170,8 @@ function createBoard(t: TestContext) {
   const renderer = unsafeFixture<Renderer>(
     {
       elements,
+      activeFieldPlacement: null,
+      refreshFieldPlacement,
       createCardElement(
         card: UiCard | null | undefined,
         visible: boolean,
@@ -162,6 +199,12 @@ function createBoard(t: TestContext) {
     calls,
     previews,
     gameContainer,
+    phaseTrack: elements.phaseTrack,
+    dispatchKey(key: string, shiftKey = false) {
+      const event = new Event("keydown", { cancelable: true });
+      Object.defineProperties(event, { key: { value: key }, shiftKey: { value: shiftKey } });
+      documentEvents.dispatchEvent(event);
+    },
     row(owner: PlayerId, zone: Row) {
       return required(
         nodes.get(`${owner}-${zone === "field" ? "field" : "spelltrap"}`),
@@ -185,6 +228,8 @@ function populate(owner: PlayerId, count: number) {
         owner,
       ),
     );
+    required(player.field[index]).fieldSlot = required(([0, 1, 2, 3, 4] as const)[index]);
+    required(player.spellTrap[index]).fieldSlot = required(([0, 1, 2, 3, 4] as const)[index]);
   }
   return player;
 }
@@ -206,7 +251,9 @@ function assertSlots(
     assert.equal(slot.className, "field-card-slot");
     assert.equal(slot.dataset.index, undefined, "The slot is not a card identity.");
     assert.equal(slot.dataset.location, undefined);
-    const card = cards[index];
+    const localSlot = row.id.startsWith("bot-") ? 4 - index : index;
+    assert.equal(slot.dataset.fieldSlot, String(localSlot));
+    const card = cards.find((entry) => entry.fieldSlot === localSlot);
     if (!card) {
       assert.equal(slot.children.length, 0);
       return;
@@ -214,7 +261,7 @@ function assertSlots(
     assert.equal(slot.children.length, 1);
     const rendered = required(slot.children[0]);
     assert.ok(rendered.classList.contains("card"));
-    assert.equal(rendered.dataset.index, String(index));
+    assert.equal(rendered.dataset.index, String(cards.indexOf(card)));
     assert.equal(rendered.dataset.location, location);
     assert.equal(rendered.dataset.cardKey, String(card.instanceId));
   });
@@ -247,7 +294,7 @@ for (const owner of ["player", "bot"] as const) {
     });
   }
 
-  test(`${owner} board reindexes remaining packed cards when refreshed`, (t) => {
+  test(`${owner} list reindexes without moving surviving cards between slots`, (t) => {
     const board = createBoard(t);
     const player = populate(owner, 5);
     renderRows(board.renderer, player);
@@ -280,7 +327,8 @@ for (const owner of ["player", "bot"] as const) {
     required(player.spellTrap[2]).isFacedown = true;
     renderRows(board.renderer, player);
 
-    const monsters = board.row(owner, "field").descendantsWithClass("card");
+    const byListIndex = (left: BoardElement, right: BoardElement) => Number(left.dataset.index) - Number(right.dataset.index);
+    const monsters = board.row(owner, "field").descendantsWithClass("card").sort(byListIndex);
     assert.deepEqual(
       monsters.map((card) => card.classList.contains("defense")),
       [false, true, true],
@@ -291,7 +339,7 @@ for (const owner of ["player", "bot"] as const) {
     );
     assert.equal(required(monsters[2]).innerHTML, '<div class="card-back"></div>');
     assert.equal(required(monsters[2]).style.backgroundImage, "none");
-    const spells = board.row(owner, "spellTrap").descendantsWithClass("card");
+    const spells = board.row(owner, "spellTrap").descendantsWithClass("card").sort(byListIndex);
     assert.deepEqual(
       spells.map((card) => card.classList.contains("facedown")),
       [false, true, true],
@@ -313,6 +361,7 @@ for (const owner of ["player", "bot"] as const) {
     test(`${owner} ${location} delegates only real card clicks and hover through slots`, (t) => {
       const board = createBoard(t);
       const player = populate(owner, 2);
+      required(player[location][1]).fieldSlot = 4;
       renderRows(board.renderer, player);
       const row = board.row(owner, location);
       const clicks: Array<{ index: number; element: HTMLElement }> = [];
@@ -327,14 +376,14 @@ for (const owner of ["player", "bot"] as const) {
       bindCardHover.call(board.renderer, (cardOwner, cardLocation, index) => {
         hovers.push({ owner: cardOwner, location: cardLocation, index });
       });
-      const emptySlot = required(row.children[4], "empty fifth slot");
+      const emptySlot = required(row.children[2], "empty middle slot");
       row.dispatchFrom("click", emptySlot);
       board.gameContainer.dispatchFrom("mouseover", emptySlot);
       assert.deepEqual(clicks, []);
       assert.deepEqual(hovers, []);
       assert.deepEqual(board.previews, [null]);
 
-      const card = required(row.descendantsWithClass("card")[1]);
+      const card = required(row.descendantsWithClass("card").find((entry) => entry.dataset.index === "1"));
       const content = required(card.children[0]);
       row.dispatchFrom("click", card);
       row.dispatchFrom("click", content);
@@ -353,3 +402,96 @@ for (const owner of ["player", "bot"] as const) {
     });
   }
 }
+
+function placementRequest(allowCancel = true): FieldPlacementRequest {
+  return {
+    procedureId: "placement:test",
+    decidingPlayerId: "player",
+    destinationPlayerId: "player",
+    row: "field",
+    duelCardId: unsafeFixture<DuelCardId>("card:test", "UI placement preserves the opaque card identity without resolving it."),
+    allowCancel,
+    candidates: [{ candidateKey: "slot:2", slot: 2 }, { candidateKey: "slot:4", slot: 4 }],
+  };
+}
+
+test("manual placement chooses the fifth slot without invoking card handlers", async (t) => {
+  const board = createBoard(t);
+  const player = populate("player", 1);
+  renderRows(board.renderer, player);
+  const row = board.row("player", "field");
+  let clicks = 0;
+  bindZoneCardClick.call(board.renderer, row.id, () => { clicks++; });
+  const pending = chooseFieldPlacement.call(board.renderer, placementRequest());
+  assert.equal(row.children.filter((slot) => slot.classList.contains("placement-available")).length, 2);
+  assert.equal(required(row.children[0]).classList.contains("placement-available"), false);
+  board.gameContainer.dispatchFrom("click", required(row.children[0]));
+  assert.ok(board.renderer.activeFieldPlacement);
+  board.gameContainer.dispatchFrom("click", required(row.children[4]));
+  assert.deepEqual(await pending, { outcome: "chosen", slot: 4 });
+  assert.equal(clicks, 0);
+  assert.equal(board.renderer.activeFieldPlacement, null);
+  assert.equal(row.children.some((slot) => slot.classList.contains("placement-available")), false);
+  assert.equal(board.phaseTrack.children.length, 0);
+});
+
+test("placement survives row rerenders, retains focus, and supports keyboard choice", async (t) => {
+  const board = createBoard(t);
+  const player = populate("player", 0);
+  renderRows(board.renderer, player);
+  const pending = chooseFieldPlacement.call(board.renderer, placementRequest());
+  const row = board.row("player", "field");
+  required(row.children[4]).focus();
+  // Native DOM returns focus to body when the focused child is detached.
+  Object.defineProperty(document, "body", { configurable: true, value: null });
+  Object.defineProperty(document, "activeElement", { configurable: true, value: null });
+  renderRows(board.renderer, player);
+  assert.equal(document.activeElement, row.children[4]);
+  board.dispatchKey("Enter");
+  assert.deepEqual(await pending, { outcome: "chosen", slot: 4 });
+});
+
+test("cancel is explicit before commitment; mandatory choice ignores Escape and abort rejects", async (t) => {
+  const board = createBoard(t);
+  renderRows(board.renderer, populate("player", 0));
+  const cancelable = chooseFieldPlacement.call(board.renderer, placementRequest());
+  board.dispatchKey("Escape");
+  assert.deepEqual(await cancelable, { outcome: "cancelled" });
+
+  const mandatory = chooseFieldPlacement.call(board.renderer, placementRequest(false));
+  board.dispatchKey("Escape");
+  assert.ok(board.renderer.activeFieldPlacement);
+  const aborted = assert.rejects(mandatory, { name: "AbortError" });
+  cancelFieldPlacement.call(board.renderer);
+  await aborted;
+  assert.equal(board.renderer.activeFieldPlacement, null);
+  assert.equal(board.phaseTrack.children.length, 0);
+  const next = chooseFieldPlacement.call(board.renderer, placementRequest());
+  board.gameContainer.dispatchFrom("click", required(board.row("player", "field").children[2]));
+  assert.deepEqual(await next, { outcome: "chosen", slot: 2 });
+});
+
+test("renderer rejects missing and duplicate canonical positions instead of inventing slots", (t) => {
+  const board = createBoard(t);
+  const player = populate("player", 2);
+  required(player.field[1]).fieldSlot = null;
+  assert.throws(() => renderRows(board.renderer, player), /Invalid field position/);
+  required(player.field[1]).fieldSlot = 0;
+  assert.throws(() => renderRows(board.renderer, player), /Invalid field position/);
+});
+
+test("human placement into the opponent row returns local coordinates and ignores occupied candidates", async (t) => {
+  const board = createBoard(t);
+  const opponent = populate("bot", 1);
+  required(opponent.field[0]).fieldSlot = 2;
+  renderRows(board.renderer, opponent);
+  const pending = chooseFieldPlacement.call(board.renderer, {
+    ...placementRequest(), destinationPlayerId: "bot",
+  });
+  const row = board.row("bot", "field");
+  assert.equal(required(row.children[2]).classList.contains("placement-available"), false);
+  assert.equal(required(row.children[0]).dataset.fieldSlot, "4");
+  assert.equal(required(row.children[0]).classList.contains("placement-available"), true);
+  board.gameContainer.dispatchFrom("click", required(row.children[0]));
+  assert.deepEqual(await pending, { outcome: "chosen", slot: 4 });
+});

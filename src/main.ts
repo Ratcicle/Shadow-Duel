@@ -22,6 +22,7 @@ import { getMainDom } from "./ui/main/domRefs.js";
 import { createGameLauncher } from "./ui/main/gameLauncher.js";
 import { createLaboratoryController } from "./ui/main/laboratoryController.js";
 import { bindLocaleControls } from "./ui/main/localeControls.js";
+import { createPlacementPreference, bindPlacementPreference } from "./ui/main/placementPreference.js";
 import { createValidationPanel } from "./ui/main/validationPanel.js";
 
 initializeLocale();
@@ -32,7 +33,8 @@ const validationPanel = createValidationPanel({
   messagesEl: dom.validation.messages,
   validateCardDatabase,
 });
-const gameLauncher = createGameLauncher({ Game, Renderer });
+const placementPreference = createPlacementPreference();
+const gameLauncher = createGameLauncher({ Game, Renderer, getFieldPlacementMode: placementPreference.getMode });
 
 function uiText(
   key: string,
@@ -60,6 +62,7 @@ function setLabelForControl(control: HTMLElement | null, value: string) {
 }
 
 function applyStaticLocalization() {
+  bindPlacementPreference(dom.startScreen.placementSelect, dom.startScreen.placementLabel, placementPreference);
   setText(dom.startScreen.startDuelButton, uiText("start.startDuel"));
   setText(dom.startScreen.deckBuilderButton, uiText("start.myDeck"));
   setText(dom.startScreen.botArenaButton, uiText("start.botArena"));

@@ -11,9 +11,13 @@ import * as modals from "./modals.js";
 import * as summonModals from "./summonModals.js";
 import * as selectionModals from "./selectionModals.js";
 import * as trapModals from "./trapModals.js";
+import * as placement from "./placement.js";
 
 /** Canonical legacy attachment order; method references retain their receiver. */
 export const RENDERER_METHODS = {
+  chooseFieldPlacement: placement.chooseFieldPlacement,
+  cancelFieldPlacement: placement.cancelFieldPlacement,
+  refreshFieldPlacement: placement.refreshFieldPlacement,
   renderHand: board.renderHand,
   renderField: board.renderField,
   renderSpellTrap: board.renderSpellTrap,

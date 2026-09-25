@@ -4,6 +4,7 @@
  */
 
 import { resolveFieldScopeCards } from "../../actionHandlers/shared.js";
+import { assignAutomaticFieldSlot, clearFieldSlot } from "../../game/zones/placement.js";
 import type {
   ActionMoveResult,
   ActionRuntimeCard,
@@ -260,6 +261,7 @@ export async function applyMove(
 
       if (this.game && typeof this.game.moveCard === "function") {
         const moveResult = await this.game.moveCard(card, destPlayer, toZone, {
+          placementActor: ctx.player,
           fromZone: action.fromZone,
           position: finalPosition,
           isFacedown: action.isFacedown,
@@ -297,6 +299,17 @@ export async function applyMove(
       } else {
         const fromOwner =
           card.owner === "player" ? this.game.player : this.game.bot;
+        const tokenLeavesField = card.isToken === true && fromOwner.field.includes(card) && toZone !== "field";
+        const destArr = this.getZone(destPlayer, toZone);
+        if (!destArr) {
+          console.warn("applyMove: unknown destination zone:", toZone);
+          return;
+        }
+        if (toZone === "field" || toZone === "spellTrap") {
+          if (!destArr.includes(card) && assignAutomaticFieldSlot(card, destArr) === null) return;
+        } else {
+          clearFieldSlot(card);
+        }
         const zones = [
           action.fromZone,
           "field",
@@ -316,12 +329,6 @@ export async function applyMove(
           }
         }
 
-        const destArr = this.getZone(destPlayer, toZone);
-        if (!destArr) {
-          console.warn("applyMove: unknown destination zone:", toZone);
-          return;
-        }
-
         if (finalPosition) {
           card.position = finalPosition as BattlePosition;
         }
@@ -335,7 +342,7 @@ export async function applyMove(
         }
 
         card.owner = destPlayer.id;
-        destArr.push(card);
+        if (!tokenLeavesField) destArr.push(card);
       }
       movedCards.push(card);
       movedLevelSum += levelBeforeMove;

@@ -1,3 +1,5 @@
+import { appendSimulatedZoneCard } from "./zones.js";
+import { appendSimulatedFieldCard } from "./zones.js";
 import {
   applySimulatedActions,
   evaluateSimulatedConditions,
@@ -14,6 +16,8 @@ import {
   matchesTargetFilters,
 } from "./targetSelection.js";
 import { updateSimulatedSentToGraveMaterialMarker } from "./simulatedActions/shared.js";
+import { resolveSimulatedTemporaryControlEffects } from "./simulatedActions/movement.js";
+import { getAvailableFieldSlots } from "../../game/zones/placement.js";
 import { resolvePerspectiveSlotForPlayer } from "./perspective.js";
 import { resolvePlanningOwnerPolicy } from "./planningExecution.js";
 import type {
@@ -142,6 +146,10 @@ interface SimulatedEventPayloadView {
   sourceCard?: SimulatedCardState | null;
   source?: SimulatedCardState | null;
   wasFaceupBeforeChange?: boolean;
+  wasDestroyed?: boolean;
+  destroyCause?: string;
+  destroySource?: SimulatedCardState | null;
+  contextLabel?: string;
 }
 
 interface SimulatedEventSourceView {
@@ -796,7 +804,7 @@ function collectSimulatedEventSources(
     findCardOwner(state, eventCard) ||
     null;
 
-  if (eventName === "card_moved") {
+  if (eventName === "card_moved" || eventName === "card_to_grave") {
     if (eventCard && eventOwner) {
       addSimEventSource(
         entries,
@@ -832,7 +840,7 @@ function collectSimulatedEventSources(
         "hand",
       ]);
     }
-  } else if (eventName === "position_change") {
+  } else if (eventName === "position_change" || eventName === "end_phase") {
     for (const player of players) {
       addPlayerZoneSources(entries, seen, state, player, [
         "field",
@@ -1021,6 +1029,26 @@ function matchesSimulatedEventEffect(
     ) {
       return false;
     }
+  }
+
+  if (eventName === "card_to_grave") {
+    if (sourceCard !== eventCard && !effect.eventCardFilters) return false;
+    if (effect.requireSelfAsDestroyed && !payload.wasDestroyed) return false;
+    if (effect.requireSelfDestroyedByBattle && payload.destroyCause !== "battle") return false;
+    if (effect.requireDestroyedByOpponent &&
+        (!payload.destroySource || payload.destroySource.controller === sourceEntry.player.id)) return false;
+    if (effect.fromZone && !matchesZoneFilter(payload.fromZone, effect.fromZone)) return false;
+    const condition = effect.condition;
+    if (condition && "type" in condition) {
+      if (condition.type === "destroyed_by_battle" && payload.destroyCause !== "battle") return false;
+      if (condition.type === "destroyed_by_battle_or_effect" &&
+          payload.destroyCause !== "battle" && payload.destroyCause !== "effect") return false;
+    }
+  }
+
+  if (eventName === "end_phase") {
+    const phaseOwner = effect.endPhasePlayer;
+    if (phaseOwner !== "any" && sourceEntry.player !== eventPlayer) return false;
   }
 
   if (eventName === "after_summon") {
@@ -1385,6 +1413,18 @@ function dispatchSimulatedEvent(
   cleanupSimulatedTemporaryEventEffects(state);
 }
 
+/** Resolves the modeled End Phase without advancing the planner's horizon. */
+export function resolveSimulatedEndPhase(
+  state: SimulatedRuntimeState,
+  options: SimulatedSelectionOptionsInput = {},
+): void {
+  const events = attachSimulatedEventEmitter(state, { ...options, enableSimulatedEvents: true });
+  state.phase = "end";
+  const player = [state.player, state.bot].find(candidate => candidate.id === state.turn);
+  dispatchSimulatedEvent(state, "end_phase", { player: player || null }, events);
+  resolveSimulatedTemporaryControlEffects(state, events);
+}
+
 interface SimulatedEffectActionView {
   effectId?: string | null | undefined;
   effect?: EffectDefinition | null | undefined;
@@ -1535,7 +1575,7 @@ function setSimulatedSpellTrapAfterResolution(
   }
   delete card.__simSetAfterResolution;
   if (!player.spellTrap.includes(card)) {
-    player.spellTrap.push(card);
+    appendSimulatedFieldCard(player.spellTrap, card);
   }
   return true;
 }
@@ -1649,9 +1689,9 @@ export function applyGenericSimulatedMainPhaseAction<
         console.error(
           `[${options.guardLabel || "Simulation"}] BLOCKED sim: ${newCard.cardKind} "${newCard.name}" tried to enter field!`,
         );
-        player.graveyard.push(newCard);
+        appendSimulatedZoneCard(player.graveyard, newCard);
       } else {
-        player.field.push(newCard);
+        appendSimulatedFieldCard(player.field, newCard);
         options.onAfterSummon?.({
           state,
           action,
@@ -1835,6 +1875,7 @@ export function applyGenericSimulatedMainPhaseAction<
       const handIndex = resolveSimulatedHandIndex(player, action, "spell");
       const card = player.hand[handIndex];
       if (!card) break;
+      if (card.subtype !== "field" && getAvailableFieldSlots(player.spellTrap).length === 0) break;
       const onPlayEffect = resolveEffectForAction(card, action, ["on_play"]);
       if (
         onPlayEffect &&
@@ -1855,7 +1896,9 @@ export function applyGenericSimulatedMainPhaseAction<
       }
       player.hand.splice(handIndex, 1);
       const placedCard = { ...card };
+      if (placedCard.subtype !== "field") appendSimulatedFieldCard(player.spellTrap, placedCard);
       simulateGenericSpellEffect(state, placedCard, selectionOptions);
+      if (placedCard.subtype !== "field" && !player.spellTrap.includes(placedCard)) break;
       if (placedCard.__simSetAfterResolution) {
         if (
           !setSimulatedSpellTrapAfterResolution(
@@ -1865,19 +1908,19 @@ export function applyGenericSimulatedMainPhaseAction<
           )
         ) {
           delete placedCard.__simSetAfterResolution;
-          player.graveyard.push(placedCard);
+          moveCardToZone(player, placedCard, "graveyard");
         }
         break;
       }
       if (resolvesToGraveyardAfterActivation(placedCard)) {
-        player.graveyard.push(placedCard);
+        moveCardToZone(player, placedCard, "graveyard");
         break;
       }
       const placement = options.placeSpellCard?.(state, placedCard) || {
         placed: false,
       };
       if (!placement.placed) {
-        player.graveyard.push(placedCard);
+        moveCardToZone(player, placedCard, "graveyard");
       }
       break;
     }
@@ -1891,6 +1934,7 @@ export function applyGenericSimulatedMainPhaseAction<
       const card = player.hand[handIndex];
       if (!card) break;
       if (card.cardKind === "spell" && card.subtype === "field") break;
+      if (getAvailableFieldSlots(player.spellTrap).length === 0) break;
       player.hand.splice(handIndex, 1);
       const setCard = { ...card, isFacedown: true };
       if (typeof state.turnCounter === "number") {
@@ -1898,9 +1942,9 @@ export function applyGenericSimulatedMainPhaseAction<
       }
       player.spellTrap = player.spellTrap || [];
       if (player.spellTrap.length < 5) {
-        player.spellTrap.push(setCard);
+        appendSimulatedFieldCard(player.spellTrap, setCard);
       } else {
-        player.graveyard.push(setCard);
+        appendSimulatedZoneCard(player.graveyard, setCard);
       }
       break;
     }
@@ -1971,7 +2015,7 @@ export function applyGenericSimulatedMainPhaseAction<
           setSimulatedSpellTrapAfterResolution(player, card, state);
           break;
         }
-        player.graveyard.push(card);
+        appendSimulatedZoneCard(player.graveyard, card);
         if (Array.isArray(player.spellTrap)) {
           player.spellTrap.splice(zoneIndex!, 1);
         }
@@ -2147,7 +2191,7 @@ export function applyGenericSimulatedMainPhaseAction<
       if (!ascensionCard) break;
       if (!canSimulatedSpecialSummon(ascensionCard, player, "ascension", "extraDeck")) break;
       player.field.splice(materialIndex, 1);
-      player.graveyard.push(material);
+      appendSimulatedZoneCard(player.graveyard, material);
       if (extraIndex >= 0) player.extraDeck.splice(extraIndex, 1);
       const summoned = {
         ...ascensionCard,
@@ -2164,7 +2208,7 @@ export function applyGenericSimulatedMainPhaseAction<
         summonProcedure: "ascension",
         sourceZone: "extraDeck",
       });
-      player.field.push(summoned);
+      appendSimulatedFieldCard(player.field, summoned);
       selectionOptions.emitSimulatedEvent?.("after_summon", {
         card: summoned,
         player,
@@ -2251,7 +2295,7 @@ export function applyGenericSimulatedMainPhaseAction<
         summonProcedure,
         sourceZone: "extraDeck",
       });
-      player.field.push(summoned);
+      appendSimulatedFieldCard(player.field, summoned);
       selectionOptions.emitSimulatedEvent?.("after_summon", {
         card: summoned,
         player,

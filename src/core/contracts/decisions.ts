@@ -108,6 +108,12 @@ type SelectionDecisionByKind = {
 
 /** Compile-time source linking each runtime kind to its full decision contract. */
 export type DecisionByKind = SelectionDecisionByKind & {
+  field_placement: DecisionSpec<
+    import("./placement.js").FieldPlacementCandidate,
+    import("./placement.js").FieldPlacementResult,
+    import("./placement.js").FieldPlacementResult,
+    import("./placement.js").FieldPlacementContext
+  >;
   chain_response: DecisionSpec<
     ChainResponseDecisionCandidate,
     ChainResponseDecisionCandidate | null,

@@ -4030,6 +4030,70 @@ body {
 }
 
 /* phase track */
+.placement-preference-control {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-color);
+  font-size: 0.85rem;
+}
+
+.placement-preference-control select {
+  color: var(--text-color);
+  background: #1a1a1a;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 6px 8px;
+}
+
+.field-card-slot.placement-available {
+  cursor: pointer;
+  border-color: var(--accent-color);
+  background: rgba(187, 134, 252, 0.12);
+  box-shadow: inset 0 0 12px rgba(187, 134, 252, 0.18);
+}
+
+.field-card-slot.placement-available:hover,
+.field-card-slot.placement-available:focus-visible {
+  outline: 2px solid var(--accent-color);
+  outline-offset: 2px;
+  background: rgba(187, 134, 252, 0.22);
+}
+
+#phase-track.field-placement-active {
+  position: relative;
+}
+
+#phase-track.field-placement-active > li[data-phase] {
+  visibility: hidden;
+  transition: none;
+}
+
+#phase-track .field-placement-prompt {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  cursor: default;
+  color: var(--text-color);
+}
+
+.field-placement-prompt button {
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--accent-color);
+  color: var(--text-color);
+  background: #262626;
+  cursor: pointer;
+}
+
 #phase-track {
   list-style: none;
   display: flex;

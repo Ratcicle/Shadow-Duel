@@ -1,5 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import Card from "../../src/core/Card.js";
+import type { FieldPlacementResult } from "../../src/core/contracts/placement.js";
+import { createRuntimeGame } from "../helpers/game.js";
 
 import type {
   ReplayRecorderGamePort,
@@ -121,8 +124,8 @@ test("recorder preserva key order, defaults e assinatura do formato", () => {
     "finalized",
   ]);
   assert.equal(recording.format, "shadow-duel-canonical-replay");
-  assert.equal(recording.schemaVersion, 1);
-  assert.equal(recording.engineVersion, "phase-9");
+  assert.equal(recording.schemaVersion, 2);
+  assert.equal(recording.engineVersion, "field-positions-v2");
   assert.equal(recording.cardDatabaseSignature, getCardDatabaseSignature());
   assert.equal(recording.cardDatabaseSignature, "1cc622e3");
   assert.deepEqual(Object.keys(recording.setup), [
@@ -221,4 +224,55 @@ test("finalização e export sem download preservam key order do resultado", () 
   assert.equal(recording?.result?.reason, "test");
   assert.equal(recording?.result?.finalStateHash, hashCanonicalGameState(game));
   assert.strictEqual(exportReplay.call(game, { download: false }), recording);
+});
+
+for (const ending of ["reset", "dispose"] as const) {
+  test(`Set pendente não grava comando antigo após ${ending}`, async (t) => {
+    let choose: ((result: FieldPlacementResult) => void) | undefined;
+    const game = createRuntimeGame({
+      disableChains: true,
+      disableTraps: true,
+      captureReplay: true,
+      getFieldPlacementMode: () => "manual",
+      fieldPlacementProvider: () => new Promise((resolve) => { choose = resolve; }),
+    });
+    t.after(() => game.dispose("recorder-test"));
+    game.phase = "main1";
+    const card = new Card({ id: 99991, name: "Pending Set", cardKind: "spell", subtype: "continuous", effects: [] }, "player");
+    game.player.hand.push(card);
+    const originalRecording = game._canonicalReplay;
+    assert.ok(originalRecording);
+    const pending = game.setSpellOrTrap(card, 0, game.player);
+    assert.ok(choose);
+    if (ending === "reset") game.resetDuelState();
+    else game.dispose("pending-set");
+    const recording = ending === "reset"
+      ? game.startReplayRecording({ enabled: true })
+      : originalRecording;
+    choose({ outcome: "chosen", slot: 4 });
+
+    assert.equal((await pending).ok, false);
+    assert.deepEqual(recording.commands, []);
+    assert.deepEqual(recording.decisions, []);
+    assert.deepEqual(originalRecording.commands, []);
+  });
+}
+
+test("cancelamento humano de Set no mesmo duelo mantém comando e decisão", async (t) => {
+  const game = createRuntimeGame({
+    disableChains: true,
+    disableTraps: true,
+    captureReplay: true,
+    getFieldPlacementMode: () => "manual",
+    fieldPlacementProvider: async () => ({ outcome: "cancelled" }),
+  });
+  t.after(() => game.dispose("recorder-test"));
+  game.phase = "main1";
+  const card = new Card({ id: 99992, name: "Cancelled Set", cardKind: "spell", subtype: "continuous", effects: [] }, "player");
+  game.player.hand.push(card);
+
+  assert.equal((await game.setSpellOrTrap(card, 0, game.player)).ok, false);
+  assert.deepEqual(game._canonicalReplay?.commands.map((command) => command.type), ["set_spell_trap"]);
+  assert.equal(game._canonicalReplay?.decisions.length, 1);
+  assert.deepEqual(game._canonicalReplay?.decisions[0]?.value, { outcome: "cancelled" });
 });

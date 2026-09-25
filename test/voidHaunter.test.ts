@@ -139,6 +139,9 @@ test("efeito da mão paga o custo e Invoca com o campo inicialmente cheio", asyn
     );
     game.player.hand.push(haunter);
     game.player.field.push(cost, ...otherMonsters);
+    game.player.field.forEach((card, index) => {
+      card.fieldSlot = required(([0, 1, 2, 3, 4] as const)[index]);
+    });
 
     const preview = game.effectEngine.canActivateMonsterEffectPreview(
       haunter,

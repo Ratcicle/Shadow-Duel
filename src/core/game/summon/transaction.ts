@@ -163,6 +163,7 @@ function cardIdentity(
   if (!card) return null;
   return {
     cardId: card.id ?? null,
+    duelCardId: card.duelCardId ?? null,
     instanceId: card.instanceId ?? card._instanceId ?? card.uuid ?? null,
     name: card.name || null,
   };
@@ -200,6 +201,15 @@ export function serializeSummonTransaction(
       ? { ...transaction.sourceAtStart }
       : null,
     position: transaction.position || null,
+    fieldPlacement: transaction.fieldPlacement ? {
+      procedureId: transaction.fieldPlacement.procedureId,
+      decidingPlayerId: transaction.fieldPlacement.decidingPlayerId,
+      destinationPlayerId: transaction.fieldPlacement.destinationPlayerId,
+      row: transaction.fieldPlacement.row,
+      duelCardId: transaction.fieldPlacement.duelCardId,
+      allowCancel: transaction.fieldPlacement.allowCancel,
+      slot: transaction.fieldPlacement.slot,
+    } : null,
     consumesNormalSummon: transaction.consumesNormalSummon === true,
     normalSummonCommitted: transaction.normalSummonCommitted === true,
     costs: (transaction.costPayments || [])
@@ -249,12 +259,14 @@ export function createPreparedSummon(
     opponent: input.opponent || this?.getOpponent?.(controller) || null,
     card,
     position: input.position || null,
+    fieldPlacement: null,
     sourceAtStart: {
       zone: sourceZone,
       controllerId: playerId(controller),
       ownerId: card?.owner || playerId(controller),
       faceUp: card ? card.isFacedown !== true : null,
       locationVersion: Number(card?.locationVersion ?? 0),
+      fieldSlot: card?.fieldSlot ?? null,
     },
     consumesNormalSummon: input.consumesNormalSummon === true,
     normalSummonCommitted: false,
@@ -603,9 +615,17 @@ export async function executeSummonTransaction(
       transaction: serializeSummonTransaction(prepared),
     };
   }
+  if (!prepared.cancelled && prepared.summonOrigin === "procedure" && prepared.summonMethod !== "flip" && prepared.costPayments.length === 0 && prepared.card && prepared.controller) {
+    const placement = await this.prepareFieldPlacement(prepared.card, prepared.controller, "field", { actor: prepared.controller, allowCancel: true });
+    if (placement.outcome !== "chosen") {
+      return { success: false, cancelled: placement.outcome === "cancelled", reason: placement.outcome === "cancelled" ? "placement_cancelled" : "field_full", summonId: null };
+    }
+    prepared.fieldPlacement = placement.intent;
+  }
   const begun = this.beginSummonTransaction(prepared);
   if (!begun.ok) return { success: false, reason: begun.reason, summonId: null };
   const transaction = begun.transaction;
+  const placementGeneration = this.fieldPlacementGeneration;
   this.summonProcedureDepth = Number(this.summonProcedureDepth || 0) + 1;
   let result: SummonExecutionResult | boolean | null | undefined = null;
   try {
@@ -643,12 +663,14 @@ export async function executeSummonTransaction(
       error,
     };
     try {
-      await transaction.onFailure?.(transaction, error);
+      if (placementGeneration === this.fieldPlacementGeneration) {
+        await transaction.onFailure?.(transaction, error);
+      }
     } catch {
       // Cleanup must never hide the original transaction failure.
     }
   } finally {
-    this.summonProcedureDepth = Math.max(
+    if (placementGeneration === this.fieldPlacementGeneration) this.summonProcedureDepth = Math.max(
       0,
       Number(this.summonProcedureDepth || 0) - 1,
     );
@@ -658,6 +680,8 @@ export async function executeSummonTransaction(
     typeof result === "object" && result !== null
       ? result
       : { success: !resultFailed(result) };
+
+  if (placementGeneration !== this.fieldPlacementGeneration) return { success: false, reason: "duel_ended" };
 
   if (
     resultFailed(resultObject) &&

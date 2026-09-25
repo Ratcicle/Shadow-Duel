@@ -5,6 +5,7 @@
  */
 
 import { isAI } from "../Player.js";
+import { clearFieldSlot } from "../game/zones/placement.js";
 import { getBaseLpCost } from "../effects/costs/lpCost.js";
 import { cardMatchesKind } from "../Card.js";
 import type {
@@ -1065,6 +1066,7 @@ export async function handleAddFromZoneToHand(
         const idx = zone.indexOf(card);
         if (idx !== -1) {
           zone.splice(idx, 1);
+          clearFieldSlot(card);
           player.hand.push(card);
           movedCards.push(card);
         }
@@ -1439,6 +1441,7 @@ export async function handleSearchThenOptionalSpecialSummonFromHand(
   if (moveResult == null) {
     const index = zone.indexOf(searchedCard);
     if (index !== -1) zone.splice(index, 1);
+    clearFieldSlot(searchedCard);
     player.hand = player.hand || [];
     player.hand.push(searchedCard);
   }

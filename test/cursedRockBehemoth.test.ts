@@ -1,3 +1,4 @@
+import { placeFieldCards } from "./helpers/game.js";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import type { TestContext } from "node:test";
@@ -68,10 +69,11 @@ function createGame(t: TestContext) {
   return game;
 }
 
-function moveBetweenZones<Value>(card: Value, from: Value[], to: Value[]) {
+function moveBetweenZones<Value extends { fieldSlot?: number | null }>(card: Value, from: Value[], to: Value[]) {
   const index = from.indexOf(card);
   assert.ok(index >= 0, "Expected card in source zone.");
   from.splice(index, 1);
+  card.fieldSlot = null;
   to.push(card);
 }
 
@@ -217,8 +219,8 @@ test("o ganho exige alvo face-up, usa a DEF original e expira no fim do turno", 
   );
   facedownTarget.isFacedown = true;
   facedownTarget.position = "defense";
-  game.player.field.push(behemoth);
-  game.bot.field.push(target, facedownTarget);
+  placeFieldCards(game.player.field, behemoth);
+  placeFieldCards(game.bot.field, target, facedownTarget);
 
   const effect = getEffect("cursed_rock_behemoth_gain_original_def");
   const preview = game.effectEngine.resolveTargets(
@@ -269,7 +271,7 @@ test("o Trigger usa somente o destruidor em campo e recusa destruição mútua o
     game.bot.id,
   );
   game.player.graveyard.push(behemoth);
-  game.bot.field.push(destroyer);
+  placeFieldCards(game.bot.field, destroyer);
 
   const payload = {
     attacker: destroyer,
@@ -342,8 +344,8 @@ test("destruição em batalha prepara a Chain e toma controle do destruidor", as
     game.bot.id,
   );
   destroyer.position = "attack";
-  game.player.field.push(behemoth);
-  game.bot.field.push(destroyer);
+  placeFieldCards(game.player.field, behemoth);
+  placeFieldCards(game.bot.field, destroyer);
 
   const preparedCounts: number[] = [];
   game.on("trigger_chain_prepared", ({ preparedCount }) => {
@@ -376,7 +378,7 @@ test("controle temporário preserva dono original, não cria movimento e não so
     },
     game.bot.id,
   );
-  game.bot.field.push(target);
+  placeFieldCards(game.bot.field, target);
   const initialVersion = target.locationVersion;
   const events: Array<RuntimeEventMap["control_changed"]> = [];
   game.on("control_changed", (payload) => events.push(payload));
@@ -426,7 +428,7 @@ test("vínculo imediato acompanha a instância após a devolução, consome a pr
     game.bot.id,
   );
   game.player.graveyard.push(behemoth);
-  game.bot.field.push(destroyer);
+  placeFieldCards(game.bot.field, destroyer);
   const controlEffect = getEffect("cursed_rock_behemoth_battle_control");
 
   const controlled = await game.effectEngine.applyActions(

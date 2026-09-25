@@ -205,6 +205,8 @@ function cardState(
     properSummonEstablished: card.properSummonEstablished === true,
     properSummonProcedure: card.properSummonProcedure || null,
     position: card.position || null,
+    fieldSlot: card.fieldSlot ?? null,
+    fieldPresenceId: card.fieldPresenceId ?? null,
     facedown: card.isFacedown === true,
     atk: numericValue(card.atk),
     def: numericValue(card.def),
@@ -254,7 +256,12 @@ function playerState(
 }
 
 function procedureState(value: unknown): CanonicalProcedureStateSnapshot | null {
-  const normalized = stableValue(value);
+  const canonicalIdentity: SpecialProjection = (entry) => {
+    if (readProperty(entry, "duelCardId") == null || !Object.hasOwn(entry, "instanceId")) return undefined;
+    const stableIdentity = Object.fromEntries(Object.entries(entry).filter(([key]) => key !== "instanceId"));
+    return normalizeValue(stableIdentity, new WeakSet(), canonicalIdentity);
+  };
+  const normalized = normalizeValue(value, new WeakSet(), canonicalIdentity);
   if (
     normalized === null ||
     Array.isArray(normalized) ||
@@ -280,7 +287,20 @@ export function createCanonicalStateSnapshot(
   game: CanonicalReplayGamePort,
 ): CanonicalGameStateSnapshot {
   const usage = game.getEffectUsageState?.() || null;
+  const controlState = game.getTemporaryControlState?.() || game.temporaryControlEffects || [];
+  const canonicalControl = normalizeValue(controlState, new WeakSet(), (entry) => {
+    if (!Object.hasOwn(entry, "cardInstanceId")) return undefined;
+    const record: SerializableObject = {};
+    for (const key of Object.keys(entry)) {
+      const value = readProperty(entry, key);
+      if (key === "cardInstanceId" || key === "sourceInstanceId") {
+        continue;
+      } else record[key] = stableValue(value) ?? null;
+    }
+    return record;
+  });
   return {
+    fieldPlacementSequence: game.generatedIdCounters?.get("field_placement") || 0,
     turn: game.turn ?? null,
     phase: game.phase ?? null,
     turnCounter: Number(game.turnCounter || 0),
@@ -292,9 +312,7 @@ export function createCanonicalStateSnapshot(
     usage,
     delayedActions: stableValue(game.delayedActions || []) ?? [],
     temporaryEventEffects: stableValue(game.temporaryEventEffects || []) ?? [],
-    temporaryControlEffects: stableValue(
-      game.getTemporaryControlState?.() || game.temporaryControlEffects || [],
-    ) ?? [],
+    temporaryControlEffects: canonicalControl ?? [],
     chain: {
       links: stableValue(game.chainSystem?.getChainSummary?.() || []) ?? [],
       state: stableValue(game.chainSystem?.getPublicState?.() || null) ?? null,

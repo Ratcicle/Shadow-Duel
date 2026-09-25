@@ -1,6 +1,8 @@
 export function getMainDom() {
   return {
     startScreen: {
+      placementSelect: document.querySelector<HTMLSelectElement>("#card-placement-select"),
+      placementLabel: document.getElementById("card-placement-label"),
       root: document.getElementById("start-screen"),
       startDuelButton:
         document.querySelector<HTMLButtonElement>("#btn-start-duel"),

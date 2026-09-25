@@ -33,6 +33,13 @@
       "turn": "Turno {turn}",
       "previewPlaceholder": "Passe o mouse sobre uma carta"
     },
+    "placement": {
+      "preference": "Posicionamento de cartas:",
+      "automatic": "Automático",
+      "manual": "Manual",
+      "chooseSpace": "Escolha um espaço destacado.",
+      "spaceLabel": "Escolher espaço {number}"
+    },
     "priority": {
       "owner": "Prioridade: {owner}",
       "you": "Você",

@@ -720,7 +720,6 @@ async function commitResponseSource(
       };
     }
     const wasFacedown = card.isFacedown === true;
-    card.isFacedown = false;
     const moveResult = await chainSystem.game?.moveCard?.(
       card,
       player,
@@ -730,6 +729,8 @@ async function commitResponseSource(
         sourceCard: card,
         effectId: prepared.effect?.id || null,
         contextLabel: "chain_activation_commit",
+        isFacedown: false,
+        allowPlacementCancel: true,
       },
     );
     const moveFailed =

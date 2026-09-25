@@ -10,7 +10,9 @@ import type {
   SimulatedCardState,
   SimulatedPlayerState,
   SimulationGameState,
+  SimulatedTemporaryControlEffect,
 } from "../contracts/aiState.js";
+import { createPlanningCopy } from "../ai/common/planningCopy.js";
 
 interface SimulationBotPort extends AIStrategyBotPort {
   strategy: Required<Pick<
@@ -28,6 +30,7 @@ type CloneablePlayerInput = AiPlayerInput & {
 
 export interface BotCloneGamePort extends Omit<AiLiveGamePort, "player"> {
   player: CloneablePlayerInput;
+  temporaryControlEffects?: readonly SimulatedTemporaryControlEffect[];
 }
 
 export function simulateBotMainPhaseAction(
@@ -50,18 +53,19 @@ export function cloneBotGameState(
   bot: SimulationBotPort,
   game: BotCloneGamePort,
 ): BotPerspectiveGameState {
+  const copy = createPlanningCopy();
   const clonePlayer = (p: CloneablePlayerInput): SimulatedPlayerState => {
     return {
       id: p.id,
       lp: p.lp,
-      hand: p.hand.map((c) => ({ ...c })),
-      field: p.field.map((c) => ({ ...c })),
-      graveyard: p.graveyard.map((c) => ({ ...c })),
-      deck: p.deck ? p.deck.map((c) => ({ ...c })) : [],
-      extraDeck: p.extraDeck ? p.extraDeck.map((c) => ({ ...c })) : [],
-      banished: p.banished ? p.banished.map((c) => ({ ...c })) : [],
-      fieldSpell: p.fieldSpell ? { ...p.fieldSpell } : null,
-      spellTrap: p.spellTrap ? p.spellTrap.map((c) => ({ ...c })) : [],
+      hand: p.hand.map(copy.cloneCardForSim),
+      field: p.field.map(copy.cloneCardForSim),
+      graveyard: p.graveyard.map(copy.cloneCardForSim),
+      deck: p.deck ? p.deck.map(copy.cloneCardForSim) : [],
+      extraDeck: p.extraDeck ? p.extraDeck.map(copy.cloneCardForSim) : [],
+      banished: p.banished ? p.banished.map(copy.cloneCardForSim) : [],
+      fieldSpell: p.fieldSpell ? copy.cloneCardForSim(p.fieldSpell) : null,
+      spellTrap: p.spellTrap ? p.spellTrap.map(copy.cloneCardForSim) : [],
       summonCount: p.summonCount || 0,
       additionalNormalSummons: p.additionalNormalSummons || 0,
       controllerType: p.controllerType,
@@ -69,7 +73,7 @@ export function cloneBotGameState(
   };
   const opponent = bot.resolveOpponent(game) || game.player;
 
-  return {
+  const state = {
     player: clonePlayer(opponent),
     bot: clonePlayer(bot),
     turn: game.turn,
@@ -82,4 +86,6 @@ export function cloneBotGameState(
       ? new Map(game.effectEngine.usedThisTurn)
       : new Map(),
   } as BotPerspectiveGameState;
+  copy.copyFields(game, state, ["temporaryControlEffects", "_simTemporaryControlCounter"]);
+  return state;
 }
