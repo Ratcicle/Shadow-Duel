@@ -12,11 +12,8 @@ import {
 
 test("preview defaults to docked-right and rejects malformed or unsupported storage", () => {
   for (const raw of [null, "", "{", "null", "[]", "true", "4",
-    '{"version":2,"mode":"docked-left"}', '{"mode":"docked-left"}',
-    '{"version":1,"mode":"other"}', '{"version":1,"mode":"floating"}',
-    '{"version":1,"mode":"floating","x":"4","y":8}',
-    '{"version":1,"mode":"floating","x":null,"y":8}',
-    '{"version":1,"mode":"floating","x":1e999,"y":8}',
+    '{"version":3,"mode":"docked-left"}', '{"mode":"docked-left"}',
+    '{"version":1,"mode":"other"}',
   ]) {
     assert.deepEqual(parsePreviewPanelState(raw), { mode: "docked-right" });
   }
@@ -30,7 +27,7 @@ test("preview restores each mode and finite floating coordinates", () => {
     { mode: "floating", x: 42.5, y: -12 });
 });
 
-test("preview persists mode and position, never size or unrelated preferences", () => {
+test("preview persists mode, independent sizes and position without touching unrelated preferences", () => {
   const values = new Map([["other", "keep"]]);
   const storage = {
     getItem: (key: string) => values.get(key) ?? null,
@@ -38,15 +35,22 @@ test("preview persists mode and position, never size or unrelated preferences", 
   };
   const preference = createPreviewPanelPreference(storage);
   assert.deepEqual(preference.getState(), { mode: "docked-right" });
-  preference.setState({ mode: "floating", x: 123, y: 8 });
-  assert.deepEqual(createPreviewPanelPreference(storage).getState(), { mode: "floating", x: 123, y: 8 });
-  assert.equal(values.get(PREVIEW_PANEL_STORAGE_KEY), '{"version":1,"mode":"floating","x":123,"y":8}');
-  preference.setState({ mode: "docked-left" });
-  assert.deepEqual(createPreviewPanelPreference(storage).getState(), { mode: "docked-left" });
-  assert.equal(values.get(PREVIEW_PANEL_STORAGE_KEY), '{"version":1,"mode":"docked-left"}');
-  preference.setState({ mode: "docked-right" });
-  assert.deepEqual(createPreviewPanelPreference(storage).getState(), { mode: "docked-right" });
+  const geometry = { x: 123, y: 80, floatingWidth: 400, floatingHeight: 560, dockedWidth: 280 };
+  for (const mode of ["floating", "docked-left", "docked-right", "floating"] as const) {
+    preference.setState({ mode, ...geometry });
+    assert.deepEqual(createPreviewPanelPreference(storage).getState(), { mode, ...geometry });
+    assert.deepEqual(JSON.parse(values.get(PREVIEW_PANEL_STORAGE_KEY)!), { version: 2, mode, ...geometry });
+  }
   assert.equal(values.get("other"), "keep");
+});
+
+test("preview sanitizes each dimension independently and retains legacy mode and position", () => {
+  assert.deepEqual(parsePreviewPanelState('{"version":1,"mode":"floating","x":40,"y":8}'), { mode: "floating", x: 40, y: 8 });
+  for (const value of [null, "200", -100, 0, 1e999]) {
+    const parsed = parsePreviewPanelState(JSON.stringify({ version: 2, mode: "floating", x: "bad", y: -200, floatingWidth: value, floatingHeight: 560, dockedWidth: 280 }));
+    assert.deepEqual(parsed, { mode: "floating", x: 8, y: -200, floatingHeight: 560, dockedWidth: 280 });
+  }
+  assert.deepEqual(parsePreviewPanelState('{"version":2,"mode":"floating","x":1e999,"y":null,"floatingWidth":9000,"floatingHeight":-1}'), { mode: "floating", x: 8, y: 8, floatingWidth: 9000 });
 });
 
 test("unavailable storage and failed writes still allow live preview layout changes", () => {

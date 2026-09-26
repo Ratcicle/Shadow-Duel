@@ -171,7 +171,7 @@ const botArena = createBotArenaController({
 });
 
 function startDuel() {
-  previewPanelLayout?.cancelDrag();
+  previewPanelLayout?.cancelInteraction();
   if (!validationPanel.run()) {
     return;
   }
@@ -191,7 +191,7 @@ let laboratoryTransitionInProgress = false;
 
 async function launchLaboratoryDuel(restart = false) {
   if (laboratoryTransitionInProgress) return;
-  previewPanelLayout?.cancelDrag();
+  previewPanelLayout?.cancelInteraction();
   laboratoryTransitionInProgress = true;
   const buttons = [
     dom.laboratory.startButton,
@@ -234,14 +234,14 @@ function returnToLaboratory() {
     laboratoryTransitionInProgress ||
     gameLauncher.getActiveGame()?.laboratoryModeEnabled !== true
   ) return;
-  previewPanelLayout?.cancelDrag();
+  previewPanelLayout?.cancelInteraction();
   gameLauncher.disposeActiveGame("return_to_laboratory");
   if (dom.laboratory.duelControls) dom.laboratory.duelControls.hidden = true;
   laboratory.open();
 }
 
 async function rematch() {
-  previewPanelLayout?.cancelDrag();
+  previewPanelLayout?.cancelInteraction();
   if (!validationPanel.run({ silent: true })) {
     alert("Corrija os erros do Card DB antes de reiniciar o duelo.");
     return;
