@@ -476,29 +476,34 @@
 
     <!-- Sidebar -->
     <div id="sidebar">
-      <nav id="laboratory-duel-controls" aria-label="Controles do Laboratório" hidden>
-        <button id="laboratory-duel-back" type="button">Voltar ao Laboratório</button>
-        <button id="laboratory-duel-restart" type="button">Reiniciar duelo</button>
-      </nav>
-      <div id="card-preview">
-        <div id="preview-image"></div>
-        <div id="preview-info">
-          <h2 id="preview-name">Hover a card</h2>
-          <div id="preview-level">Level: -</div>
-          <div id="preview-stats">
-            <span id="preview-atk">ATK: -</span>
-            <span id="preview-def">DEF: -</span>
+      <div class="card-preview-panel">
+        <div class="card-preview-drag-handle" aria-hidden="true"></div>
+        <div class="card-preview-body">
+          <nav id="laboratory-duel-controls" aria-label="Controles do Laboratório" hidden>
+            <button id="laboratory-duel-back" type="button">Voltar ao Laboratório</button>
+            <button id="laboratory-duel-restart" type="button">Reiniciar duelo</button>
+          </nav>
+          <div id="card-preview">
+            <div id="preview-image"></div>
+            <div id="preview-info">
+              <h2 id="preview-name">Hover a card</h2>
+              <div id="preview-level">Level: -</div>
+              <div id="preview-stats">
+                <span id="preview-atk">ATK: -</span>
+                <span id="preview-def">DEF: -</span>
+              </div>
+              <p id="preview-desc">Description will appear here.</p>
+            </div>
           </div>
-          <p id="preview-desc">Description will appear here.</p>
+          <!-- Action log temporarily hidden - will be re-added in the future -->
+          <!-- <div id="action-log">
+            <div class="log-header">
+              <span>Ações</span>
+            </div>
+            <div id="action-log-list"></div>
+          </div> -->
         </div>
       </div>
-      <!-- Action log temporarily hidden - will be re-added in the future -->
-      <!-- <div id="action-log">
-        <div class="log-header">
-          <span>Ações</span>
-        </div>
-        <div id="action-log-list"></div>
-      </div> -->
     </div>
 
     <!-- Graveyard Modal -->

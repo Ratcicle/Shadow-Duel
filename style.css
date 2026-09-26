@@ -244,18 +244,48 @@ body {
 }
 
 #sidebar {
+  --preview-panel-margin: 8px;
+  --preview-panel-radius: 10px;
   flex: 0 0 var(--sidebar-w);
   width: var(--sidebar-w);
   height: 100dvh;
-  background: #1a1a1a;
-  border-left: 1px solid var(--border-color);
-  padding: var(--sidebar-pad);
+  padding: var(--preview-panel-margin);
   display: flex;
   flex-direction: column;
-  gap: 14px;
   position: relative;
   z-index: 500;
   transition: width 0.3s ease;
+}
+
+.card-preview-panel {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--preview-panel-radius);
+  background: linear-gradient(165deg, #1c1c1e, #19191b 65%, #18181a);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025), 0 2px 6px rgba(0, 0, 0, 0.16);
+}
+
+.card-preview-drag-handle {
+  flex: 0 0 12px;
+  border-radius: calc(var(--preview-panel-radius) - 1px) calc(var(--preview-panel-radius) - 1px) 0 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.045);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.card-preview-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  /* Use the existing sidebar gutter for the margin without narrowing the board. */
+  padding: var(--sidebar-pad) calc(var(--sidebar-pad) - var(--preview-panel-margin));
+  border-radius: 0 0 calc(var(--preview-panel-radius) - 1px) calc(var(--preview-panel-radius) - 1px);
   overflow-x: hidden;
   overflow-y: auto;
 }
