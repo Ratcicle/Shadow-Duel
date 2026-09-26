@@ -147,11 +147,8 @@ export function toggleExtraDeckModal(this: Renderer, show: boolean): void {
   }
 }
 
-/**
- * @this {import('../Renderer.js').default}
- */
+/** Shared UI prompt; also attached to Renderer without requiring renderer state. */
 export function showConfirmPrompt(
-  this: Renderer,
   message: string,
   options: ConfirmPromptOptions = {},
 ): boolean | Promise<boolean> {
@@ -247,10 +244,12 @@ export function showConfirmPrompt(
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
+        event.preventDefault();
         finish(false);
       }
       if (event.key === "Enter") {
-        finish(true);
+        event.preventDefault();
+        finish(event.target !== cancelBtn && event.target !== closeBtn);
       }
     };
 

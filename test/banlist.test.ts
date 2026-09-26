@@ -16,13 +16,15 @@ import {
   validateDeckAgainstBanlist,
 } from "../src/core/game/deck/banlist.js";
 import { BANLIST_STATUS, CURRENT_BANLIST } from "../src/data/banlist.js";
-import { createDeckBuilderController } from "../src/ui/main/deckBuilderController.js";
+import "../scripts/register_node_asset_loader.js";
 import {
   buildDefaultDeck,
   sanitizeDeck,
   topUpDeck,
 } from "../src/ui/main/deckState.js";
 import { cardDatabase, cardDatabaseById } from "./helpers/fixtures.js";
+
+const { createDeckBuilderController } = await import("../src/ui/main/deckBuilderController.js");
 
 const MONSTER_REBORN_ID = 8;
 
@@ -216,6 +218,7 @@ test("deck builder blocks an old invalid deck without mutating it", () => {
 
   try {
     const controller = createDeckBuilderController({
+      confirmPrompt: async () => false,
       dom: unsafeFixture<
         Parameters<typeof createDeckBuilderController>[0]["dom"]
       >({}, "The deck validation test does not render or bind DOM elements."),

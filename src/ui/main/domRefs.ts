@@ -28,6 +28,8 @@ export function getMainDom() {
       poolGrid: document.getElementById("pool-grid"),
       deckCount: document.getElementById("deck-count"),
       extraDeckCount: document.getElementById("extradeck-count"),
+      clearMainButton: document.querySelector<HTMLButtonElement>("#deck-clear-main"),
+      clearExtraButton: document.querySelector<HTMLButtonElement>("#deck-clear-extra"),
       poolCount: document.getElementById("deck-pool-count"),
       searchInput: document.querySelector<HTMLInputElement>("#deck-search"),
       categoryFilterSelect: document.querySelector<HTMLSelectElement>(

@@ -4,6 +4,8 @@ import type { MainDom } from "./domRefs.js";
 import type { DeckCard, DeckState } from "./deckState.js";
 import type { UiCard } from "../renderer/types.js";
 import type { NormalDuelConfig } from "./gameLauncher.js";
+import type { ConfirmPromptOptions } from "../renderer/modals.js";
+import { captureDeckCardMove, createDeckBuilderMotion, type DeckCardMoveSource } from "./deckBuilderMotion.js";
 interface FilterOption {
   id: string;
   label?: string | undefined;
@@ -22,6 +24,7 @@ interface DeckListConfig {
   remove: (id: number) => boolean;
 }
 interface DeckBuilderOptions {
+  confirmPrompt: (message: string, options: ConfirmPromptOptions) => boolean | Promise<boolean>;
   dom: MainDom["deckBuilder"];
   deckState: DeckState;
   Bot: typeof BotRuntime;
@@ -42,6 +45,7 @@ import {
   getUIText,
 } from "../../core/i18n.js";
 import { publicAssetUrl } from "../../core/publicUrl.js";
+import { PANEL_ICONS, createTablerIcon } from "../icons/tablerIcons.js";
 import {
   DECK_TYPES,
   getCardCopyLimit,
@@ -86,7 +90,6 @@ const SORT_MODES = [
   { id: "type", labelKey: "sortType" },
   { id: "level", labelKey: "sortLevel" },
   { id: "name", labelKey: "sortName" },
-  { id: "kind", labelKey: "sortKind" },
 ];
 
 const COLLECTION_KIND_ORDER: Record<string, number> = {
@@ -307,13 +310,18 @@ export function createDeckBuilderController({
   Bot,
   getCardDisplayDescription,
   getCardDisplayName,
+  confirmPrompt,
 }: DeckBuilderOptions) {
+  const cardMotion = createDeckBuilderMotion();
+  let clearPending = false;
+  let sessionRevision = 0;
   let categoryFilterMode = "all";
   let typeSubtypeFilterMode = "all";
   let archetypeFilterMode = "all";
   let deckViewMode = "grid";
   let sortMode = "default";
   let searchQuery = "";
+  let previewCard: UiCard | null = null;
   let currentBotPreset = loadBotPreset(Bot.getAvailablePresets());
   let startDeckDom: MainDom["startScreen"] | null = null;
   let editingDeckSlot: number | null = null;
@@ -400,6 +408,7 @@ export function createDeckBuilderController({
 
   function setPreview(card: UiCard | null | undefined) {
     if (!card) return;
+    previewCard = card;
     if (dom.preview.image) {
       dom.preview.image.style.backgroundImage = `url('${publicAssetUrl(card.image)}')`;
       setPreviewCardFrameClass(dom.preview.image, card);
@@ -410,11 +419,18 @@ export function createDeckBuilderController({
     }
     const isMonster = card.cardKind !== "spell" && card.cardKind !== "trap";
     const monsterStats = isMonster ? formatMonsterStatsLine(card) : null;
-    if (dom.preview.atk) {
-      dom.preview.atk.textContent = isMonster ? monsterStats!.atk : "";
-    }
-    if (dom.preview.def) {
-      dom.preview.def.textContent = isMonster ? monsterStats!.def : "";
+    for (const stat of ["atk", "def"] as const) {
+      const element = dom.preview[stat];
+      if (!element) continue;
+      element.replaceChildren();
+      element.removeAttribute("aria-label");
+      if (monsterStats) {
+        const value = monsterStats[stat].replace(/^[^:]+:\s*/, "");
+        const number = document.createElement("span");
+        number.textContent = value;
+        element.append(createTablerIcon(PANEL_ICONS[stat], "panel-stat-icon", { decorative: true }), number);
+        element.setAttribute("aria-label", `${getUIText(`ui.icons.${stat}`)}: ${value}`);
+      }
     }
     if (dom.preview.level) {
       if (isMonster) {
@@ -932,8 +948,7 @@ export function createDeckBuilderController({
   }
 
   function sortMainDeckForMode(deckIds: readonly number[], mode: string) {
-    if (mode === "default") return [...deckIds];
-    if (mode === "kind") return sortDeck(deckIds);
+    if (mode === "default") return sortDeck(deckIds);
     if (mode === "name") {
       return sortIdsBy(deckIds, (a, b) =>
         compareText(cardName(a), cardName(b)),
@@ -952,8 +967,7 @@ export function createDeckBuilderController({
   }
 
   function sortExtraDeckForMode(extraDeckIds: readonly number[], mode: string) {
-    if (mode === "default") return [...extraDeckIds];
-    if (mode === "kind") return sortExtraDeck(extraDeckIds);
+    if (mode === "default") return sortExtraDeck(extraDeckIds);
     if (mode === "name") {
       return sortIdsBy(extraDeckIds, (a, b) =>
         compareText(cardName(a), cardName(b)),
@@ -974,7 +988,6 @@ export function createDeckBuilderController({
   }
 
   function applySortMode() {
-    if (sortMode === "default") return;
     deckState.setCurrentDeck(
       sortMainDeckForMode(deckState.getCurrentDeck(), sortMode),
     );
@@ -983,7 +996,23 @@ export function createDeckBuilderController({
     );
   }
 
-  function addMainCard(card: DeckCard) {
+  function flyToDeck(card: DeckCard, zone: "main" | "extra", source: DeckCardMoveSource | null) {
+    if (!source) return;
+    const ids = zone === "main" ? deckState.getCurrentDeck() : deckState.getCurrentExtraDeck();
+    const grid = zone === "main" ? dom.deckGrid : dom.extraDeckGrid;
+    // Sorting is stable: the appended copy is the last equal ID after sorting.
+    const index = ids.lastIndexOf(card.id);
+    const destination = grid?.querySelector<HTMLElement>(`[data-deck-index="${index}"] [data-card-id="${card.id}"]`) ?? null;
+    cardMotion.move(source, destination);
+  }
+
+  function flyToPool(card: DeckCard, source: DeckCardMoveSource | null) {
+    if (!source) return;
+    const destination = dom.poolGrid?.querySelector<HTMLElement>(`[data-card-id="${card.id}"]`) ?? null;
+    cardMotion.move(source, destination, dom.poolGrid?.parentElement ?? null);
+  }
+
+  function addMainCard(card: DeckCard, source: DeckCardMoveSource | null = null) {
     const currentDeck = deckState.getCurrentDeck();
     const counts = countCards(currentDeck);
     if (currentDeck.length >= MAX_DECK_SIZE) {
@@ -1003,17 +1032,18 @@ export function createDeckBuilderController({
       return false;
     }
     currentDeck.push(card.id);
-    applySortMode();
     render();
     setPreview(card);
+    flyToDeck(card, "main", source);
     return true;
   }
 
-  function removeMainCardByIndex(index: number, card: DeckCard) {
+  function removeMainCardByIndex(index: number, card: DeckCard, source: DeckCardMoveSource | null) {
     const currentDeck = deckState.getCurrentDeck();
     currentDeck.splice(index, 1);
     render();
     setPreview(card);
+    flyToPool(card, source);
   }
 
   function removeMainCardById(cardId: number) {
@@ -1027,7 +1057,7 @@ export function createDeckBuilderController({
     return true;
   }
 
-  function addExtraCard(card: DeckCard) {
+  function addExtraCard(card: DeckCard, source: DeckCardMoveSource | null = null) {
     const currentExtraDeck = deckState.getCurrentExtraDeck();
     const counts = countCards(currentExtraDeck);
     if (currentExtraDeck.length >= MAX_EXTRA_DECK_SIZE) {
@@ -1047,17 +1077,18 @@ export function createDeckBuilderController({
       return false;
     }
     currentExtraDeck.push(card.id);
-    applySortMode();
     render();
     setPreview(card);
+    flyToDeck(card, "extra", source);
     return true;
   }
 
-  function removeExtraCardByIndex(index: number, card: DeckCard) {
+  function removeExtraCardByIndex(index: number, card: DeckCard, source: DeckCardMoveSource | null) {
     const currentExtraDeck = deckState.getCurrentExtraDeck();
     currentExtraDeck.splice(index, 1);
     render();
     setPreview(card);
+    flyToPool(card, source);
   }
 
   function removeExtraCardById(cardId: number) {
@@ -1069,6 +1100,35 @@ export function createDeckBuilderController({
     render();
     if (card) setPreview(card);
     return true;
+  }
+
+  async function clearZone(zone: "main" | "extra") {
+    const cards = zone === "main" ? deckState.getCurrentDeck() : deckState.getCurrentExtraDeck();
+    if (!cards.length || clearPending) return;
+    clearPending = true;
+    const slot = deckState.getActiveDeckSlot();
+    const revision = sessionRevision;
+    try {
+      const accepted = await confirmPrompt(deckText(zone === "main" ? "confirmClearMain" : "confirmClearExtra"), {
+        title: deckText(zone === "main" ? "clearMain" : "clearExtra"),
+        confirmLabel: deckText("clear"),
+        cancelLabel: getUIText("ui.common.cancel"),
+      });
+      if (!accepted || slot !== deckState.getActiveDeckSlot() || revision !== sessionRevision) return;
+      cardMotion.dispose();
+      if (zone === "main") deckState.setCurrentDeck([]);
+      else deckState.setCurrentExtraDeck([]);
+      render();
+    } finally {
+      clearPending = false;
+    }
+  }
+
+  function updateClearButton(button: HTMLButtonElement | null, zone: "main" | "extra", count: number) {
+    if (!button) return;
+    button.textContent = deckText("clear");
+    button.setAttribute("aria-label", deckText(zone === "main" ? "clearMain" : "clearExtra"));
+    button.disabled = count === 0;
   }
 
   function createCountBadge(
@@ -1092,13 +1152,15 @@ export function createDeckBuilderController({
       for (let i = 0; i < MAX_DECK_SIZE; i++) {
         const slot = document.createElement("div");
         slot.className = "deck-slot";
+        slot.dataset.deckIndex = String(i);
+        slot.dataset.deckZone = "main";
         const cardId = currentDeck[i];
         if (cardId) {
           const cardData = cardDatabaseById.get(cardId as number);
           if (cardData) {
             const cardEl = createCardThumb(cardData, getCardDisplayName);
             cardEl.onmouseenter = () => setPreview(cardData);
-            cardEl.onclick = () => removeMainCardByIndex(i, cardData);
+            cardEl.onclick = () => removeMainCardByIndex(i, cardData, captureDeckCardMove(cardEl));
             slot.appendChild(cardEl);
           }
         }
@@ -1111,13 +1173,15 @@ export function createDeckBuilderController({
       for (let i = 0; i < MAX_EXTRA_DECK_SIZE; i++) {
         const slot = document.createElement("div");
         slot.className = "deck-slot";
+        slot.dataset.deckIndex = String(i);
+        slot.dataset.deckZone = "extra";
         const cardId = currentExtraDeck[i];
         if (cardId) {
           const cardData = cardDatabaseById.get(cardId as number);
           if (cardData) {
             const cardEl = createCardThumb(cardData, getCardDisplayName);
             cardEl.onmouseenter = () => setPreview(cardData);
-            cardEl.onclick = () => removeExtraCardByIndex(i, cardData);
+            cardEl.onclick = () => removeExtraCardByIndex(i, cardData, captureDeckCardMove(cardEl));
             slot.appendChild(cardEl);
           }
         }
@@ -1187,7 +1251,12 @@ export function createDeckBuilderController({
     heading.textContent = title;
     const total = document.createElement("span");
     total.textContent = `${config.zoneCount}/${config.zoneMax}`;
-    header.append(heading, total);
+    const clear = document.createElement("button");
+    clear.type = "button";
+    clear.className = "deck-clear-button";
+    updateClearButton(clear, config.deckType, config.zoneCount);
+    clear.addEventListener("click", () => { void clearZone(config.deckType); });
+    header.append(heading, total, clear);
     section.appendChild(header);
 
     if (!entries.length) {
@@ -1273,7 +1342,10 @@ export function createDeckBuilderController({
         ),
       );
       cardEl.onmouseenter = () => setPreview(card);
-      cardEl.onclick = () => (isExtra ? addExtraCard(card) : addMainCard(card));
+      cardEl.onclick = () => {
+        const source = deckViewMode === "grid" ? captureDeckCardMove(cardEl) : null;
+        return isExtra ? addExtraCard(card, source) : addMainCard(card, source);
+      };
       dom.poolGrid!.appendChild(cardEl);
     });
 
@@ -1312,12 +1384,15 @@ export function createDeckBuilderController({
   }
 
   function render() {
+    applySortMode();
     renderFilterControls();
     renderDeckSlotControls();
 
     const currentDeck = deckState.getCurrentDeck();
     const currentExtraDeck = deckState.getCurrentExtraDeck();
     updateDeckCounters(currentDeck, currentExtraDeck);
+    updateClearButton(dom.clearMainButton, "main", currentDeck.length);
+    updateClearButton(dom.clearExtraButton, "extra", currentExtraDeck.length);
     updateViewMode();
     renderDeckGrid(currentDeck, currentExtraDeck);
     renderDeckList(currentDeck, currentExtraDeck);
@@ -1329,7 +1404,7 @@ export function createDeckBuilderController({
     if (dom.poolCount) {
       dom.poolCount.textContent = formatPoolCount(visibleCount);
     }
-    if (firstAvailable) setPreview(firstAvailable);
+    if (previewCard || firstAvailable) setPreview(previewCard || firstAvailable);
   }
 
   function open(startScreenRoot: HTMLElement | null) {
@@ -1341,6 +1416,7 @@ export function createDeckBuilderController({
   }
 
   function close(startScreenRoot: HTMLElement | null) {
+    dispose();
     hideDeckSaveFeedback();
     finishDeckNameEditing({ shouldSave: true, shouldRender: false });
     deckState.saveActiveDeckPreset();
@@ -1429,6 +1505,8 @@ export function createDeckBuilderController({
     populateBotPresetDropdown();
     dom.cancelButton?.addEventListener("click", () => close(startScreenRoot));
     dom.saveButton?.addEventListener("click", saveDeckBuilderChanges);
+    dom.clearMainButton?.addEventListener("click", () => { void clearZone("main"); });
+    dom.clearExtraButton?.addEventListener("click", () => { void clearZone("extra"); });
     dom.searchInput?.addEventListener("input", (event) => {
       searchQuery =
         (event.target as HTMLInputElement | HTMLSelectElement).value || "";
@@ -1452,6 +1530,7 @@ export function createDeckBuilderController({
       render();
     });
     dom.viewModeSelect?.addEventListener("change", (event) => {
+      cardMotion.dispose();
       deckViewMode =
         (event.target as HTMLInputElement | HTMLSelectElement).value === "list"
           ? "list"
@@ -1462,7 +1541,6 @@ export function createDeckBuilderController({
       sortMode =
         (event.target as HTMLInputElement | HTMLSelectElement).value ||
         "default";
-      applySortMode();
       render();
     });
     dom.botPresetSelect?.addEventListener("change", (event) => {
@@ -1496,7 +1574,14 @@ export function createDeckBuilderController({
     });
   }
 
+  function dispose() {
+    sessionRevision += 1;
+    cardMotion.dispose();
+    hideDeckSaveFeedback();
+  }
+
   return {
+    dispose,
     bindStartDeckPicker,
     bind,
     close,
@@ -1515,6 +1600,7 @@ export function createCardThumb(
   const el = document.createElement("div");
   const typeClass = getDeckBuilderCardTypeClass(card);
   el.className = `card-thumb ${typeClass}`;
+  el.dataset.cardId = String(card.id);
   el.style.backgroundImage = `url('${publicAssetUrl(card.image)}')`;
   el.title = getCardDisplayName(card) || card.name;
   return el;

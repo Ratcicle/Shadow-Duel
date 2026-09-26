@@ -17,6 +17,7 @@ import {
 
 import { createBotArenaController } from "./ui/main/botArenaController.js";
 import { createDeckBuilderController } from "./ui/main/deckBuilderController.js";
+import { showConfirmPrompt } from "./ui/renderer/modals.js";
 import { createDeckState } from "./ui/main/deckState.js";
 import { getMainDom } from "./ui/main/domRefs.js";
 import { createGameLauncher } from "./ui/main/gameLauncher.js";
@@ -151,7 +152,9 @@ const deckBuilder = createDeckBuilderController({
   Bot,
   getCardDisplayDescription,
   getCardDisplayName,
+  confirmPrompt: showConfirmPrompt,
 });
+if (import.meta.hot) import.meta.hot.dispose(() => deckBuilder.dispose());
 
 const laboratory = createLaboratoryController({
   dom: dom.laboratory,

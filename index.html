@@ -44,18 +44,18 @@
             <label for="bot-preset-select">Oponente:</label>
             <select id="bot-preset-select"></select>
           </div>
-          <div class="start-secondary-actions">
-            <button id="btn-bot-arena" type="button">Bot Arena</button>
-            <button id="btn-open-laboratory" class="laboratory-toggle">
-              Laboratório
-            </button>
-          </div>
           <div class="placement-preference-control">
             <label id="card-placement-label" for="card-placement-select"></label>
             <select id="card-placement-select">
               <option value="automatic"></option>
               <option value="manual"></option>
             </select>
+          </div>
+          <div class="start-secondary-actions">
+            <button id="btn-bot-arena" type="button">Bot Arena</button>
+            <button id="btn-open-laboratory" class="laboratory-toggle">
+              Laboratório
+            </button>
           </div>
         </div>
         <div
@@ -132,6 +132,7 @@
               <div class="deck-zone-heading">
                 <h3 class="deck-zone-title">Main Deck</h3>
                 <span id="deck-count">0/30</span>
+                <button id="deck-clear-main" class="deck-clear-button" type="button">Limpar</button>
               </div>
               <div id="deck-grid" class="deck-grid"></div>
             </div>
@@ -140,6 +141,7 @@
               <div class="deck-zone-heading">
                 <h3 class="deck-zone-title">Extra Deck</h3>
                 <span id="extradeck-count">0/10</span>
+                <button id="deck-clear-extra" class="deck-clear-button" type="button">Limpar</button>
               </div>
               <div
                 id="extradeck-grid"
@@ -152,13 +154,17 @@
           </div>
           <div class="deck-preview-panel">
             <div class="deck-preview-image" id="deck-preview-image"></div>
-            <h3 id="deck-preview-name">Selecione uma carta</h3>
-            <div id="deck-preview-level">Level: -</div>
-            <div class="deck-preview-stats">
-              <span id="deck-preview-atk">ATK: -</span>
-              <span id="deck-preview-def">DEF: -</span>
+            <div id="deck-preview-info">
+              <div class="card-preview-identity">
+                <h3 id="deck-preview-name">Selecione uma carta</h3>
+                <div id="deck-preview-level">Level: -</div>
+                <div class="deck-preview-stats">
+                  <span id="deck-preview-atk">ATK: -</span>
+                  <span id="deck-preview-def">DEF: -</span>
+                </div>
+              </div>
+              <p id="deck-preview-desc">Descricao aparecera aqui.</p>
             </div>
-            <p id="deck-preview-desc">Descricao aparecera aqui.</p>
           </div>
         </div>
         <div class="deck-footer">

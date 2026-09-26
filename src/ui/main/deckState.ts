@@ -54,6 +54,15 @@ export function isExtraDeckMonster(card: UiCard | null | undefined) {
   return EXTRA_DECK_MONSTER_TYPES.has(card?.monsterType!);
 }
 
+function compareMonsterRank(a: UiCard | undefined, b: UiCard | undefined) {
+  const stat = (card: UiCard | undefined, key: "level" | "atk" | "def") =>
+    Number.isFinite(card?.[key]) ? card![key]! : 0;
+  return stat(b, "level") - stat(a, "level") ||
+    stat(b, "atk") - stat(a, "atk") ||
+    stat(b, "def") - stat(a, "def") ||
+    (a?.name || "").localeCompare(b?.name || "");
+}
+
 export function sortDeck(deckIds: readonly number[] = []) {
   return [...deckIds].sort((aId, bId) => {
     const cardA = getCardById(aId);
@@ -68,9 +77,7 @@ export function sortDeck(deckIds: readonly number[] = []) {
       : 99;
     if (orderA !== orderB) return orderA - orderB;
     if (kindA === "monster" && kindB === "monster") {
-      const levelA = levelOf(cardA);
-      const levelB = levelOf(cardB);
-      if (levelA !== levelB) return levelA - levelB;
+      return compareMonsterRank(cardA, cardB);
     } else if (
       (kindA === "spell" || kindA === "trap") &&
       (kindB === "spell" || kindB === "trap")
@@ -116,10 +123,7 @@ export function sortExtraDeck(extraDeckIds: readonly number[] = []) {
       ? extraDeckTypeOrder[typeB]!
       : 99;
     if (orderA !== orderB) return orderA - orderB;
-    const levelA = levelOf(cardA);
-    const levelB = levelOf(cardB);
-    if (levelA !== levelB) return levelA - levelB;
-    return (cardA?.name || "").localeCompare(cardB?.name || "");
+    return compareMonsterRank(cardA, cardB);
   });
 }
 
