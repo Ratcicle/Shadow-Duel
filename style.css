@@ -395,9 +395,9 @@ body {
   color: var(--accent-color);
   font-size: 1.25rem;
   line-height: 1.25;
-  /* Keep short and two-line names stable without truncating longer names. */
-  min-height: 2lh;
   overflow-wrap: anywhere;
+  padding: 4px 0;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--preview-type-color) 20%, transparent), transparent 95%);
 }
 
 #preview-stats {
@@ -405,7 +405,7 @@ body {
   align-items: center;
   flex-wrap: wrap;
   gap: var(--preview-group-gap) calc(2 * var(--preview-group-gap));
-  font-size: 0.95rem;
+  font-size: 1rem;
   line-height: 1.4;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
@@ -420,6 +420,15 @@ body {
   align-items: center;
   gap: 4px;
   white-space: nowrap;
+}
+
+#preview-stats > span:not(:empty)::before {
+  content: "";
+  flex: 0 0 2px;
+  height: 1em;
+  border-radius: 1px;
+  background: var(--accent-color);
+  opacity: 0.7;
 }
 
 .tabler-icon {
@@ -457,11 +466,13 @@ body {
 
 #preview-level {
   color: var(--text-color);
-  font-size: 0.8rem;
+  font-size: 0.9rem;
   font-weight: 600;
   line-height: 1.5;
   overflow-wrap: anywhere;
   text-transform: uppercase;
+  padding: 2px 0;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--preview-type-color) 8%, transparent), transparent 85%);
 }
 
 .monster-level-number {
@@ -471,8 +482,8 @@ body {
 #preview-desc {
   min-width: 0;
   min-height: 0;
-  font-size: 0.9rem;
-  line-height: 1.55;
+  font-size: 0.95rem;
+  line-height: 1.5;
   color: #ccc;
   overflow-y: auto;
   overflow-x: hidden;
@@ -493,13 +504,40 @@ body {
 }
 
 #preview-info {
-  width: 100%;
+  --preview-type-color: var(--card-border-monster);
+  /* Reuse the body gutter so the inner surface preserves the text's reading width. */
+  width: calc(100% + 2 * var(--preview-group-gap));
+  margin-inline: calc(-1 * var(--preview-group-gap));
+  padding: var(--preview-group-gap);
+  border-radius: 8px;
+  background: #141416;
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.12);
   min-width: 0;
   min-height: 0;
   display: flex;
   flex-direction: column;
   gap: var(--preview-section-gap);
   flex: 1 1 0;
+}
+
+#preview-image.preview-card-fusion + #preview-info {
+  --preview-type-color: var(--card-border-fusion);
+}
+
+#preview-image.preview-card-ascension + #preview-info {
+  --preview-type-color: var(--card-border-ascension);
+}
+
+#preview-image.preview-card-synchro + #preview-info {
+  --preview-type-color: var(--card-border-synchro);
+}
+
+#preview-image.preview-card-spell + #preview-info {
+  --preview-type-color: rgb(66 151 130);
+}
+
+#preview-image.preview-card-trap + #preview-info {
+  --preview-type-color: rgb(153 91 153);
 }
 
 .card-preview-identity {
