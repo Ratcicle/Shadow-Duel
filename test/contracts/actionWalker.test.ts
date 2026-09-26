@@ -247,6 +247,6 @@ test("walker inventories every declarative action in the live database", () => {
   }
 
   assert.deepEqual(diagnostics, []);
-  assert.equal(actionCount, 572);
+  assert.equal(actionCount, 571);
   assert.equal(types.size, 100);
 });

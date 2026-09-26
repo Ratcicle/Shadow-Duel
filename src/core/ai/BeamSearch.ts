@@ -43,6 +43,7 @@ type SearchPlayerInput =
 function actionRequiresHand(actionType: AIAction["type"]): boolean {
   return (
     actionType === "summon" ||
+    actionType === "handSummonProcedure" ||
     actionType === "spell" ||
     actionType === "handIgnition" ||
     actionType === "set_spell_trap" ||
@@ -55,6 +56,7 @@ function expectedHandKind(
 ): CardKind | readonly CardKind[] | null {
   if (
     actionType === "summon" ||
+    actionType === "handSummonProcedure" ||
     actionType === "handIgnition" ||
     actionType === "special_summon_sanctum_protector"
   ) {

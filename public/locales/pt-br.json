@@ -470,11 +470,11 @@
     },
     "5": {
       "name": "Corcel Pesadelo da Meia-Noite",
-      "description": "Você pode oferecer como Tributo 1 “Corcel Pesadelo” que você controla; Invoque este card por Invocação-Especial da sua mão. Se este card destruir um monstro do oponente em batalha: cause 300 de dano ao seu oponente."
+      "description": "Você pode oferecer como Tributo 1 “Corcel Pesadelo” que você controla; Invoque este card por Invocação-Especial da sua mão.\n\nSe este card destruir um monstro do oponente em batalha: cause 300 de dano ao seu oponente."
     },
     "7": {
       "name": "Transmutar",
-      "description": "Envie 1 monstro com a face para cima que você controla para o Cemitério e, depois, escolha 1 monstro no seu Cemitério com o mesmo Nível original que ele, mas com um nome diferente; Invoque o alvo por Invocação-Especial. Você só pode ativar 1 “Transmutar” por turno."
+      "description": "Envie 1 monstro com a face para cima que você controla para o Cemitério e, depois, escolha 1 monstro no seu Cemitério com o mesmo Nível original que ele, mas com um nome diferente; Invoque o alvo por Invocação-Especial.\n\nVocê só pode ativar 1 “Transmutar” por turno."
     },
     "8": {
       "name": "O Monstro que Renasce",
@@ -542,7 +542,7 @@
     },
     "24": {
       "name": "Deus Luminoso Hiperion",
-      "description": "Você pode Invocar este card por Invocação-Especial da sua mão ao banir 5 monstros de LUZ do seu campo e/ou Cemitério. Se Invocado desta forma, este card não pode ser destruído por efeitos de cards do oponente.\n\nDurante o cálculo de dano, se este card batalhar um monstro de TREVAS do oponente: ele ganha 1000 ATK/DEF apenas durante esse cálculo de dano."
+      "description": "Você pode Invocar este card por Invocação-Especial da sua mão ao banir 5 monstros de LUZ do seu campo e/ou Cemitério. Se Invocado desta forma, este card não pode ser destruído por efeitos de cards do oponente.\n\nDurante o cálculo de dano, se este card batalhar contra um monstro de TREVAS do oponente: ele ganha 1000 ATK/DEF apenas durante esse cálculo de dano."
     },
     "25": {
       "name": "Batalha Entre o Bem e o Mal",
@@ -554,31 +554,31 @@
     },
     "27": {
       "name": "Leviatã de Obsidiana Magmática",
-      "description": "1 Regulador de TERRA + 1+ monstros não-Reguladores\n\nVocê pode descartar 1 card e, depois, escolher 1 monstro com a face para cima que seu oponente controla (Efeito Rápido); coloque-o com a face para baixo em Posição de Defesa. Monstros colocados com a face para baixo por este efeito não podem mudar suas posições de batalha.\n\nSe este card for destruído em batalha ou por efeito de card: você pode escolher até 2 monstros de TERRA de Nível 3 ou menor no seu Cemitério; Invoque-os por Invocação-Especial.\n\nVocê só pode usar cada efeito de “Leviatã de Obsidiana Magmática” uma vez por turno."
+      "description": "1 Regulador de TERRA + 1+ monstros não-Reguladores\n\nVocê pode descartar 1 card e, depois, escolher 1 monstro com a face para cima que seu oponente controla (Efeito Rápido); coloque-o com a face para baixo em Posição de Defesa. Monstros colocados com a face para baixo por este efeito não podem mudar suas posições de batalha.\n\nSe este card no campo for destruído em batalha ou por efeito de card e enviado para o Cemitério: você pode escolher até 2 monstros de TERRA de Nível 3 ou menor no seu Cemitério; Invoque-os por Invocação-Especial.\n\nVocê só pode usar cada efeito de “Leviatã de Obsidiana Magmática” uma vez por turno."
     },
     "28": {
       "name": "Dragão Floral de Pétalas de Rosa",
-      "description": "1 Regulador Planta + 1+ monstros não-Reguladores\n\nSe seu oponente controlar mais cards que você: você pode banir de 1 a 3 monstros Planta do seu Cemitério e, depois, escolher o mesmo número de cards que seu oponente controla; destrua-os.\n\nSe este card deixar o campo: você pode escolher 1 monstro Planta no seu Cemitério; adicione-o à sua mão.\n\nVocê só pode usar cada efeito de “Dragão Floral de Pétalas de Rosa” uma vez por turno."
+      "description": "1 Regulador Planta + 1+ monstros não-Reguladores\n\nSe seu oponente controlar mais cards que você: você pode banir de 1 a 3 monstros Planta do seu Cemitério e, depois, escolher o mesmo número de cards que seu oponente controla; destrua-os.\n\nSe este card com a face para cima deixar o campo: você pode escolher 1 monstro Planta no seu Cemitério; adicione-o à sua mão.\n\nVocê só pode usar cada efeito de “Dragão Floral de Pétalas de Rosa” uma vez por turno."
     },
     "29": {
       "name": "Behemoth de Rocha Amaldiçoado",
-      "description": "1 Regulador de TERRA + 1+ monstros não-Reguladores\n\nVocê pode escolher 1 monstro com a face para cima que seu oponente controla; este card ganha ATK igual à DEF original dele até o final deste turno.\n\nSe este card for destruído em batalha: você pode escolher o monstro que o destruiu; tome o controle dele até a Fase Final deste turno e, depois, quando esse monstro deixar o campo, Invoque este card por Invocação-Especial do seu Cemitério, mas bana-o quando ele deixar o campo.\n\nVocê só pode usar cada efeito de \"Behemoth de Rocha Amaldiçoado\" uma vez por turno."
+      "description": "1 Regulador de TERRA + 1+ monstros não-Reguladores\n\nVocê pode escolher 1 monstro com a face para cima que seu oponente controla; este card ganha ATK igual à DEF original dele até o final deste turno.\n\nSe este card for destruído em batalha: você pode escolher o monstro que o destruiu; tome o controle dele até a Fase Final deste turno. Depois que este efeito resolver, se esse monstro deixar o campo: Invoque este card por Invocação-Especial do seu Cemitério e, se isso acontecer, bana este card quando ele deixar o campo.\n\nVocê só pode usar cada efeito de \"Behemoth de Rocha Amaldiçoado\" uma vez por turno."
     },
     "30": {
       "name": "Terror Fúria Vermelha",
-      "description": "1 Regulador + 1+ monstros não Reguladores\nUma vez por turno, se seu oponente Invocar um monstro por Invocação-Especial: você pode escolher 1 monstro no Cemitério dele; bana-o e, se isso acontecer, este card ganha 300 ATK."
+      "description": "1 Regulador + 1+ monstros não-Reguladores\nUma vez por turno, se seu oponente Invocar um monstro por Invocação-Especial: você pode escolher 1 monstro no Cemitério dele; bana-o e, se isso acontecer, este card ganha 300 ATK."
     },
     "31": {
       "name": "Esmagador de Ferro",
-      "description": "1 Regulador + 1+ monstros não Reguladores\nEnquanto você controlar outro monstro de TERRA, este card não pode ser destruído por efeitos de card. Uma vez por turno, quando seu oponente ativar um card ou efeito que destruiria um ou mais cards que você controla (Efeito Rápido): você pode escolher 1 card com a face para baixo que ele controla; destrua-o."
+      "description": "1 Regulador + 1+ monstros não-Reguladores\nEnquanto você controlar outro monstro de TERRA, este card não pode ser destruído por efeitos de card.\n\nUma vez por turno, quando seu oponente ativar um card ou efeito que destruiria um ou mais cards que você controla (Efeito Rápido): você pode escolher 1 card com a face para baixo que ele controla; destrua-o."
     },
     "32": {
       "name": "Orathus, o Anjo Caído",
-      "description": "1 Regulador + 1+ Sincros de TERRA não Reguladores\nDeve primeiro ser Invocado por Invocação-Sincro. Se este card for Invocado por Invocação-Sincro: você pode escolher 1 card com a face para cima que seu oponente controla; negue seus efeitos enquanto ele permanecer com a face para cima no campo. Seu oponente deve escolher este card como alvo de ataques, se possível. Uma vez por turno: você pode escolher 1 monstro Invocado do Deck Adicional que seu oponente controla; destrua-o e, se você ativar este efeito, este card não pode atacar neste turno."
+      "description": "1 Regulador + 1+ Sincros de TERRA não-Reguladores\nDeve primeiro ser Invocado por Invocação-Sincro.\n\nSe este card for Invocado por Invocação-Sincro: você pode escolher 1 card com a face para cima que seu oponente controla; negue seus efeitos enquanto ele permanecer com a face para cima no campo.\n\nSeu oponente deve escolher este card como alvo de ataques, se possível.\n\nUma vez por turno: você pode escolher 1 monstro Invocado do Deck Adicional que seu oponente controla; destrua-o e, se você ativar este efeito, este card não pode atacar neste turno."
     },
     "33": {
       "name": "A Chama Negra",
-      "description": "Pague 1000 PV; pelo restante deste Duelo, cause 300 de dano ao seu oponente durante cada Fase de Apoio. Você só pode ativar 1 \"A Chama Negra\" por turno."
+      "description": "Pague 1000 PV; pelo restante deste Duelo, cause 300 de dano ao seu oponente durante cada Fase de Apoio.\n\nVocê só pode ativar 1 \"A Chama Negra\" por turno."
     },
     "101": {
       "name": "Enguia Abissal do Coração Sombrio",

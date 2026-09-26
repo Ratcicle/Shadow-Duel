@@ -114,7 +114,7 @@ test("A Chama Negra declara dados, localização e contrato persistente", () => 
   assert.deepEqual(locale.cards[String(BLACK_FLAME_ID)], {
     name: "A Chama Negra",
     description:
-      'Pague 1000 PV; pelo restante deste Duelo, cause 300 de dano ao seu oponente durante cada Fase de Apoio. Você só pode ativar 1 "A Chama Negra" por turno.',
+      'Pague 1000 PV; pelo restante deste Duelo, cause 300 de dano ao seu oponente durante cada Fase de Apoio.\n\nVocê só pode ativar 1 "A Chama Negra" por turno.',
   });
 
   assert.equal(effect.timing, "on_play");

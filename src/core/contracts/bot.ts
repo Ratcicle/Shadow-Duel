@@ -39,9 +39,9 @@ import type { BattleCandidateScoreInput } from "../ai/TurnLineSearch.js";
 type BotGameMethodName =
   | "canStartAction" | "nextPhase" | "updateBoard" | "waitForBoardPresentation"
   | "waitForAiPresentationStep" | "isDisposed" | "getOpponent"
-  | "performAscensionSummon" | "performExtraDeckSummonProcedure" | "performNormalSummon"
+  | "performAscensionSummon" | "performExtraDeckSummonProcedure" | "performHandSummonProcedure" | "performNormalSummon"
   | "canUseAsAscensionMaterial" | "getAscensionCandidatesForMaterial" | "checkAscensionRequirements"
-  | "canSummonExtraDeckCardByProcedure" | "canChangePosition" | "changeMonsterPosition"
+  | "canSummonExtraDeckCardByProcedure" | "canSummonFromHandByProcedure" | "canChangePosition" | "changeMonsterPosition"
   | "getAttackAvailability" | "isActiveAttackPriorityTarget" | "resolveCombat"
   | "commitCardActivationFromHand" | "runActivationPipeline" | "setSpellOrTrap"
   | "finalizeSpellCardActivation" | "finalizeSpellTrapActivation" | "canPlaceCardOnField";

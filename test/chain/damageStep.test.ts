@@ -493,6 +493,18 @@ test("destruição mútua move cartas sequencialmente no mesmo grupo atômico", 
     required(required(destroys[0]).options).atomicGroupId,
     required(required(destroys[1]).options).atomicGroupId,
   );
+  const destructions = trace.events.filter(
+    (entry) => entry.channel === "emit" && entry.eventName === "battle_destroy",
+  );
+  assert.equal(destructions.length, 2);
+  const firstDestruction = required(required(destructions[0]).payload);
+  assert.equal(firstDestruction.attacker, defender);
+  assert.equal(firstDestruction.attackerOwner, bot);
+  assert.equal(firstDestruction.destroyedOwner, player);
+  const secondDestruction = required(required(destructions[1]).payload);
+  assert.equal(secondDestruction.attacker, attacker);
+  assert.equal(secondDestruction.attackerOwner, player);
+  assert.equal(secondDestruction.destroyedOwner, bot);
 });
 
 test("erro durante a destruição final conclui com segurança os movimentos pendentes", async () => {

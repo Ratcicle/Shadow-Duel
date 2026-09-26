@@ -12,7 +12,7 @@ import { cardDatabaseByName } from "./helpers/fixtures.js";
 const EXPECTED_EN =
   "You can Special Summon this card from your hand by banishing 5 LIGHT monsters from your field and/or GY. If Summoned this way, this card cannot be destroyed by your opponent's card effects.\n\nDuring damage calculation, if this card battles an opponent's DARK monster: it gains 1000 ATK/DEF during that damage calculation only.";
 const EXPECTED_PT_BR =
-  "Você pode Invocar este card por Invocação-Especial da sua mão ao banir 5 monstros de LUZ do seu campo e/ou Cemitério. Se Invocado desta forma, este card não pode ser destruído por efeitos de cards do oponente.\n\nDurante o cálculo de dano, se este card batalhar um monstro de TREVAS do oponente: ele ganha 1000 ATK/DEF apenas durante esse cálculo de dano.";
+  "Você pode Invocar este card por Invocação-Especial da sua mão ao banir 5 monstros de LUZ do seu campo e/ou Cemitério. Se Invocado desta forma, este card não pode ser destruído por efeitos de cards do oponente.\n\nDurante o cálculo de dano, se este card batalhar contra um monstro de TREVAS do oponente: ele ganha 1000 ATK/DEF apenas durante esse cálculo de dano.";
 
 function createCard(data: CardConstructorData | undefined, player: GamePlayer) {
   assert.ok(data, "Card fixture must exist.");
@@ -22,7 +22,7 @@ function createCard(data: CardConstructorData | undefined, player: GamePlayer) {
   return card;
 }
 
-test("Luminous God Hyperion declares compact text and its three effect contracts", async () => {
+test("Luminous God Hyperion declares its hand procedure, passive protection and battle effects", async () => {
   const card = cardDatabaseByName.get("Luminous God Hyperion");
   assert.ok(card);
   assert.equal(card.description, EXPECTED_EN);
@@ -35,11 +35,7 @@ test("Luminous God Hyperion declares compact text and its three effect contracts
   );
   assert.equal(locale.cards["24"].description, EXPECTED_PT_BR);
 
-  const summon = required(
-    required(card.effects).find(
-      ({ id }) => id === "luminous_god_hyperion_special_summon",
-    ),
-  );
+  const summon = required(card.handSummonProcedure);
   const protection = required(
     required(card.effects).find(
       ({ id }) =>
@@ -51,32 +47,25 @@ test("Luminous God Hyperion declares compact text and its three effect contracts
       id.startsWith("luminous_god_hyperion_") && id.endsWith("_dark_boost"),
   );
 
-  assert.deepEqual(summon.activationZones, ["hand"]);
-  assert.deepEqual(required(required(summon.targets)[0]).zones, [
-    "field",
-    "graveyard",
-  ]);
-  assert.equal(required(required(summon.targets)[0]).attribute, "Light");
-  assert.deepEqual(required(required(summon.targets)[0]).count, {
-    min: 5,
-    max: 5,
+  assert.deepEqual(summon.cost, {
+    count: 5,
+    zones: ["field", "graveyard"],
+    filters: { cardKind: "monster", attribute: "Light" },
+    destination: "banished",
   });
-  assert.equal(protection.event, "after_summon");
-  assert.equal(
-    required(required(protection.actions)[0]).protectionType,
-    "effect_destruction",
-  );
-  assert.equal(
-    required(required(protection.actions)[0]).sourceOwner,
-    "opponent",
-  );
-  assert.equal(
-    required(required(protection.actions)[0]).duration,
-    "while_faceup",
-  );
+  assert.equal(required(card.effects).some(effect => effect.id === summon.id), false);
+  assert.equal(protection.timing, "passive");
+  assert.ok("passive" in protection);
+  assert.deepEqual(protection.passive, {
+    type: "conditional_protection",
+    protectionType: "effect_destruction",
+    requireSummonProcedure: summon.id,
+    sourceOwner: "opponent",
+  });
   assert.equal(battleEffects.length, 2);
   for (const effect of battleEffects) {
-    assert.equal(effect.event, "battle_damage");
+    assert.equal(effect.event, "damage_step");
+    assert.deepEqual(effect.damageStepTimings, ["damage_calculation"]);
     assert.equal(required(required(effect.actions)[0]).atkBoost, 1000);
     assert.equal(required(required(effect.actions)[0]).defBoost, 1000);
     assert.equal(
@@ -132,3 +121,57 @@ test("Hyperion's battle boost requires an opponent DARK monster", (t) => {
   assert.equal(evaluate(darkMonster), true);
   assert.equal(evaluate(lightMonster), false);
 });
+
+for (const role of ["attacker", "defender"] as const) {
+  test(`Hyperion boosts only during damage calculation as ${role}`, async (t) => {
+    const game = createRuntimeGame({ captureReplay: false, laboratoryMode: true });
+    t.after(() => game.dispose());
+    game.disablePresentationDelays = true;
+    game.waitForBoardPresentation = async () => {};
+    game.phase = "battle";
+    game.battleStep = "battle";
+    game.turnCounter = 2;
+    game.turn = role === "attacker" ? game.player.id : game.bot.id;
+    game.player.controllerType = "ai";
+    game.bot.controllerType = "ai";
+    const hyperion = createCard(cardDatabaseByName.get("Luminous God Hyperion"), game.player);
+    const darkMonster = createCard({
+      id: 99223, name: "DARK combat opponent", cardKind: "monster",
+      attribute: "Dark", atk: 3500, def: 2000,
+    }, game.bot);
+    hyperion.position = role === "attacker" ? "attack" : "defense";
+    darkMonster.position = "attack";
+    game.player.field.push(hyperion);
+    game.bot.field.push(darkMonster);
+
+    const boosts: Array<{ timing: string | null; atk: number; def: number }> = [];
+    const applyActions = game.effectEngine.applyActions.bind(game.effectEngine);
+    game.effectEngine.applyActions = async (actions, ctx, targets) => {
+      const result = await applyActions(actions, ctx, targets);
+      if (ctx.source === hyperion && actions.some(action => action.type === "buff_stats_temp")) {
+        boosts.push({
+          timing: game.activeDamageStepTransaction?.timing || null,
+          atk: hyperion.atk, def: hyperion.def,
+        });
+      }
+      return result;
+    };
+    const afterCalculationStats: number[][] = [];
+    game.on("damage_step_outcome", () => {
+      afterCalculationStats.push([hyperion.atk, hyperion.def]);
+    });
+
+    await game.resolveCombat(
+      role === "attacker" ? hyperion : darkMonster,
+      role === "attacker" ? darkMonster : hyperion,
+    );
+
+    assert.deepEqual(boosts, [{ timing: "damage_calculation", atk: 4000, def: 4000 }]);
+    assert.deepEqual(afterCalculationStats, [[3000, 3000]]);
+    assert.equal(game.player.field.includes(hyperion), true);
+    assert.equal(game.player.lp, 8000);
+    assert.equal(game.bot.lp, 7500);
+    assert.equal(hyperion.atk, 3000);
+    assert.equal(hyperion.def, 3000);
+  });
+}

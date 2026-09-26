@@ -160,6 +160,21 @@ async function executeCommand(
       }
       return game.performExtraDeckSummonProcedure(source.card, actor, options);
     }
+    case "hand_summon_procedure": {
+      const source = findCard(game, actor, command.payload);
+      if (!source || source.zone !== "hand") {
+        throw new Error("Replay hand procedure source is missing.");
+      }
+      const materials = command.payload.materialIds?.map(duelCardId => {
+        const material = findCard(game, actor, { duelCardId });
+        if (!material) throw new Error("Replay hand procedure cost is missing.");
+        return material.card;
+      });
+      return game.performHandSummonProcedure(source.card, actor, {
+        ...(command.payload.position ? { position: command.payload.position } : {}),
+        ...(materials ? { materials } : {}),
+      });
+    }
     case "activate_effect":
     case "activate_card": {
       const source = findCard(game, actor, command.payload);

@@ -76,6 +76,9 @@ const commandPayloads = [
   }],
   ["set_spell_trap", { duelCardId: 3, cardId: 3 }],
   ["flip_summon", { duelCardId: 4, cardId: 4 }],
+  ["hand_summon_procedure", {
+    duelCardId: 24, cardId: 24, position: "defense", materialIds: [1, 2, 3, 4, 5],
+  }],
   ["extra_deck_summon", {
     duelCardId: 5,
     cardId: 5,
@@ -118,7 +121,7 @@ test("validator aceita shape mínimo compatível, extras serializáveis e manté
   assert.equal("finalized" in input, false);
 });
 
-test("validator aceita os 15 comandos discriminados", () => {
+test("validator aceita os comandos discriminados, incluindo procedimento da mão", () => {
   const commands = commandPayloads.map(([type, payload], index) => ({
     sequence: index + 1,
     type,
@@ -160,6 +163,8 @@ test("validator preserva defaults compatíveis de comandos e resultado", () => {
 
 test("validator valida campos opcionais quando eles estão presentes", () => {
   const invalidCommands = [
+    { type: "hand_summon_procedure", payload: { cardId: 24, materialIds: [0] } },
+    { type: "hand_summon_procedure", payload: { cardId: 24, position: "sideways" } },
     { type: "draw", payload: { amount: 0 } },
     { type: "set_spell_trap", payload: { duelCardId: null, cardId: null } },
     {

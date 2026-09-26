@@ -35,9 +35,9 @@ import { cardDatabaseById } from "./helpers/fixtures.js";
 
 const LEVIATHAN_ID = 27;
 const EXPECTED_EN =
-  '1 EARTH Tuner + 1+ non-Tuner monsters\n\nYou can discard 1 card, then target 1 face-up monster your opponent controls (Quick Effect); change it to face-down Defense Position. Monsters changed to face-down Defense Position by this effect cannot change their battle positions.\n\nIf this card is destroyed by battle or card effect: You can target up to 2 Level 3 or lower EARTH monsters in your Graveyard; Special Summon them.\n\nYou can only use each effect of "Magmatic Obsidian Leviathan" once per turn.';
+  '1 EARTH Tuner + 1+ non-Tuner monsters\n\nYou can discard 1 card, then target 1 face-up monster your opponent controls (Quick Effect); change it to face-down Defense Position. Monsters changed to face-down Defense Position by this effect cannot change their battle positions.\n\nIf this card on the field is destroyed by battle or card effect and sent to the GY: You can target up to 2 Level 3 or lower EARTH monsters in your GY; Special Summon them.\n\nYou can only use each effect of "Magmatic Obsidian Leviathan" once per turn.';
 const EXPECTED_PT_BR =
-  "1 Regulador de TERRA + 1+ monstros não-Reguladores\n\nVocê pode descartar 1 card e, depois, escolher 1 monstro com a face para cima que seu oponente controla (Efeito Rápido); coloque-o com a face para baixo em Posição de Defesa. Monstros colocados com a face para baixo por este efeito não podem mudar suas posições de batalha.\n\nSe este card for destruído em batalha ou por efeito de card: você pode escolher até 2 monstros de TERRA de Nível 3 ou menor no seu Cemitério; Invoque-os por Invocação-Especial.\n\nVocê só pode usar cada efeito de “Leviatã de Obsidiana Magmática” uma vez por turno.";
+  "1 Regulador de TERRA + 1+ monstros não-Reguladores\n\nVocê pode descartar 1 card e, depois, escolher 1 monstro com a face para cima que seu oponente controla (Efeito Rápido); coloque-o com a face para baixo em Posição de Defesa. Monstros colocados com a face para baixo por este efeito não podem mudar suas posições de batalha.\n\nSe este card no campo for destruído em batalha ou por efeito de card e enviado para o Cemitério: você pode escolher até 2 monstros de TERRA de Nível 3 ou menor no seu Cemitério; Invoque-os por Invocação-Especial.\n\nVocê só pode usar cada efeito de “Leviatã de Obsidiana Magmática” uma vez por turno.";
 
 function getLeviathan() {
   const card = cardDatabaseById.get(LEVIATHAN_ID);
@@ -148,6 +148,32 @@ test("materiais de Sincro exigem Regulador TERRA e aceitam não-Reguladores livr
 
   const combos = game.getSynchroMaterialCombos(player, leviathan);
   assert.deepEqual(combos, [[earthTuner, nonTuner]]);
+});
+
+test("recuperação só dispara quando Leviathan sai do campo destruído para o Cemitério", async (t) => {
+  const game = createRuntimeGame({ disableChains: true, captureReplay: false, laboratoryMode: true });
+  t.after(() => game.dispose());
+  const leviathan = new Card(structuredClone(getLeviathan()), game.player.id);
+  leviathan.owner = game.player.id;
+  leviathan.controller = game.player.id;
+  const earth = new Card({ id: 99650, name: "EARTH revival", cardKind: "monster", attribute: "Earth", level: 3, atk: 500, def: 500 }, game.player.id);
+  earth.owner = game.player.id;
+  earth.controller = game.player.id;
+  game.player.graveyard.push(leviathan, earth);
+  const collect = (fromZone: "field" | "hand", wasDestroyed: boolean, destroyCause: "battle" | "effect" | undefined) =>
+    game.effectEngine.collectCardToGraveTriggers({
+      card: leviathan,
+      player: game.player,
+      opponent: game.bot,
+      fromZone,
+      toZone: "graveyard",
+      wasDestroyed,
+      ...(destroyCause ? { destroyCause } : {}),
+    });
+  assert.equal((await collect("field", true, "battle")).entries.length, 1);
+  assert.equal((await collect("field", true, "effect")).entries.length, 1);
+  assert.equal((await collect("hand", true, "effect")).entries.length, 0);
+  assert.equal((await collect("field", false, undefined)).entries.length, 0);
 });
 
 test("set_facedown_defense trava posição, expõe o status e não bloqueia limpeza ao sair", async (t) => {

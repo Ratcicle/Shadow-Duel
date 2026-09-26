@@ -28,6 +28,7 @@ import {
 } from "./bot/simulationBridge.js";
 import {
   canResolveSummonActionForCurrentState as canResolveSummonActionForCurrentStateForBot,
+  collectHandSummonProcedureActions,
   filterValidActionsForCurrentState as filterValidActionsForCurrentStateForBot,
   resolveHandIndexForAction as resolveHandIndexForBotAction,
   tributeMatchesAltRequirement as tributeMatchesAltRequirementForBot,
@@ -293,7 +294,10 @@ export default class Bot extends Player {
   }
 
   generateMainPhaseActions(game: AiLiveGamePort): AIAction[] {
-    const actions = this.strategy.generateMainPhaseActions(game);
+    const actions = [
+      ...this.strategy.generateMainPhaseActions(game),
+      ...collectHandSummonProcedureActions(this, game as BotGamePort),
+    ];
 
     // 📊 Log de geração de ações
     if (botLogger) {

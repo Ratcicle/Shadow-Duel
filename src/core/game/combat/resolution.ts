@@ -10,6 +10,7 @@ import {
 
 import type { GameCard } from "../../contracts/cards.js";
 import type { GamePlayer } from "../../contracts/player.js";
+import { DAMAGE_STEP_TIMINGS, type EffectDefinition } from "../../contracts/effects.js";
 
 type CombatCardId = string | number | null;
 type BattleCardMatch = boolean | string | number | null | undefined;
@@ -334,8 +335,16 @@ function hasBattleDamageTimingEffect(
 ): boolean {
   return Array.isArray(card?.effects)
     ? card.effects.some(
-        (effect) =>
-          effect?.timing === "on_event" && effect.event === "battle_damage",
+        (effect: EffectDefinition) =>
+          effect?.timing === "on_event" &&
+          (effect.event === "battle_damage" ||
+            (effect.event === "damage_step" &&
+              (!effect.damageStepTimings?.length ||
+                effect.damageStepTimings.some((timing) =>
+                  timing === DAMAGE_STEP_TIMINGS.START ||
+                  timing === DAMAGE_STEP_TIMINGS.BEFORE_CALCULATION ||
+                  timing === DAMAGE_STEP_TIMINGS.CALCULATION
+                )))),
       )
     : false;
 }

@@ -95,6 +95,7 @@ interface QuickSpellContext {
 
 type SummonModalChoice =
   | BattlePosition
+  | "hand_summon_procedure"
   | "special_from_void_forgotten"
   | "special_from_hand_effect"
   | { type?: "hand_effect"; effectId?: string };
@@ -195,6 +196,8 @@ type InteractionHost = Omit<
   devLog(code: string, detail?: unknown): void;
   canStartAction?(options: unknown): ActionGuardResult;
   guardActionStart(options: unknown): ActionGuardResult;
+  canSummonFromHandByProcedure(card: GameCard, player: GamePlayer): { ok: boolean };
+  performHandSummonProcedure(card: GameCard, player: GamePlayer): Promise<SummonExecutionResult>;
   setSelectionState(state: "confirming"): void;
   finishTargetSelection(): Promise<unknown>;
   isActiveAttackPriorityTarget?(card: GameCard): boolean;
@@ -648,9 +651,11 @@ export function bindCardInteractions(this: InteractionHost) {
       const tributesNeeded = tributeInfo.tributesNeeded;
       const handEffectChoices = getAvailableHandEffectChoices(actor, card);
       const canUseHandEffect = handEffectChoices.length > 0;
+      const canUseHandProcedure = this.canSummonFromHandByProcedure(card, actor).ok;
 
       if (
         !canUseHandEffect &&
+        !canUseHandProcedure &&
         tributesNeeded > 0 &&
         !fieldHasTributeValue(actor.field || [], tributesNeeded, card)
       ) {
@@ -661,6 +666,10 @@ export function bindCardInteractions(this: InteractionHost) {
       this.ui.showSummonModal(
         index,
         async (choice) => {
+          if (choice === "hand_summon_procedure") {
+            await this.performHandSummonProcedure(card, actor);
+            return;
+          }
           if (
             choice === "special_from_void_forgotten" ||
             choice === "special_from_hand_effect" ||
@@ -732,6 +741,7 @@ export function bindCardInteractions(this: InteractionHost) {
           canNormalSummon: canNormalSummonFromHand(actor, card, tributeInfo),
           canSet: canNormalSummonFromHand(actor, card, tributeInfo),
           specialSummonFromHand: false,
+          handSummonProcedure: canUseHandProcedure,
           handEffectChoices,
           specialSummonFromHandEffect:
             canUseHandEffect && handEffectChoices.length === 0,
@@ -977,9 +987,11 @@ export function bindCardInteractions(this: InteractionHost) {
           card,
         );
         const canUseHandEffect = handEffectChoices.length > 0;
+        const canUseHandProcedure = this.canSummonFromHandByProcedure(card, this.player).ok;
 
         if (
           !canUseHandEffect &&
+          !canUseHandProcedure &&
           tributesNeeded > 0 &&
           !fieldHasTributeValue(this.player.field || [], tributesNeeded, card)
         ) {
@@ -990,6 +1002,10 @@ export function bindCardInteractions(this: InteractionHost) {
         this.ui.showSummonModal(
           index,
           async (choice) => {
+            if (choice === "hand_summon_procedure") {
+              await this.performHandSummonProcedure(card, this.player);
+              return;
+            }
             if (choice === "special_from_void_forgotten") {
               this.tryActivateMonsterEffect(card, null, "hand");
               return;
@@ -1091,6 +1107,7 @@ export function bindCardInteractions(this: InteractionHost) {
             ),
             canSet: canNormalSummonFromHand(this.player, card, tributeInfo),
             specialSummonFromHand: false,
+            handSummonProcedure: canUseHandProcedure,
             handEffectChoices,
             specialSummonFromHandEffect:
               canUseHandEffect && handEffectChoices.length === 0,

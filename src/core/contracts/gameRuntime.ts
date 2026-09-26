@@ -640,6 +640,7 @@ export interface VisualFeedback {
 export type GameUiPort = import("./ui.js").GameUI;
 
 export interface EffectEngineRuntimePort {
+  cardMatchesFilters(card: GameCard, filters: import("./effects.js").CardFilter): boolean;
   clearTargetingCache?(): void;
   updatePassiveBuffs?(): MaybePromise<unknown>;
   getMonsterIgnitionEffect?(

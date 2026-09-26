@@ -56,6 +56,11 @@ interface CapturedGameMethods {
     player?: GamePlayer,
     options?: ExtraDeckCaptureOptions,
   ): Promise<unknown>;
+  performHandSummonProcedure(
+    card: GameCard,
+    player?: GamePlayer,
+    options?: ExtraDeckCaptureOptions,
+  ): Promise<unknown>;
   setSpellOrTrap(
     card: GameCard,
     handIndex?: number,
@@ -106,6 +111,7 @@ export const REPLAY_CAPTURE_METHOD_NAMES = Object.freeze([
   "performSynchroSummonFromExtraDeck",
   "performAscensionSummonFromExtraDeck",
   "performExtraDeckSummonProcedure",
+  "performHandSummonProcedure",
   "setSpellOrTrap",
   "tryActivateMonsterEffect",
   "tryActivateSpell",
@@ -310,6 +316,19 @@ export const REPLAY_CAPTURE_BINDINGS = Object.freeze([
           }),
         }
       : null;
+  }),
+  binding("performHandSummonProcedure", function (args) {
+    const [card, actor = this.player, options = {}] = args;
+    return {
+      type: "hand_summon_procedure",
+      actorId: actor.id,
+      payload: cardPayload(this, card, {
+        position: options.position || null,
+        ...(options.materials ? {
+          materialIds: options.materials.map(material => this.ensureDuelCardId(material)),
+        } : {}),
+      }),
+    };
   }),
   binding("setSpellOrTrap", function (args) {
     const [card, , actor = this.player] = args;

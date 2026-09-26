@@ -2,6 +2,7 @@ import { executeAscensionAction } from "./actionExecutors/ascension.js";
 import { executeExtraDeckProcedureAction } from "./actionExecutors/extraDeck.js";
 import {
   executeSpecialSummonSanctumProtectorAction,
+  executeHandSummonProcedureAction,
   executeSummonAction,
 } from "./actionExecutors/summon.js";
 import { executePositionChangeAction } from "./actionExecutors/position.js";
@@ -24,6 +25,7 @@ import type { AIAction, AIActionOf, AIActionType } from "../contracts/ai.js";
 const EXECUTORS = {
   ascension: executeAscensionAction,
   extraDeckProcedure: executeExtraDeckProcedureAction,
+  handSummonProcedure: executeHandSummonProcedureAction,
   special_summon_sanctum_protector: executeSpecialSummonSanctumProtectorAction,
   position_change: executePositionChangeAction,
   summon: executeSummonAction,

@@ -227,6 +227,7 @@ export function isPreBattleValueAction(
   const type = action.type;
   return (
     type === "summon" ||
+    type === "handSummonProcedure" ||
     type === "special_summon_sanctum_protector" ||
     type === "extraDeckProcedure" ||
     type === "ascension" ||

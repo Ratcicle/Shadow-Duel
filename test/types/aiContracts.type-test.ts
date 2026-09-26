@@ -58,6 +58,7 @@ type Expect<Value extends true> = Value;
 type ExpectedAIActionType =
   | "ascension"
   | "extraDeckProcedure"
+  | "handSummonProcedure"
   | "special_summon_sanctum_protector"
   | "position_change"
   | "summon"

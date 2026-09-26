@@ -890,6 +890,12 @@ async function finalizeBattleDestruction(
             atomicGroupId,
           ),
           attacker: entry.sourceCard,
+          // battle_destroy uses `attacker` for the battle destroyer, including
+          // a defending monster that defeated the original attacker.
+          attackerOwner:
+            entry.role === "attacker"
+              ? transaction.defenderOwner! // Battle destruction requires a defender and its owner.
+              : transaction.attackerOwner,
           battleDestroyer: entry.sourceCard,
           battleDestroyers: [entry.sourceCard].filter(Boolean),
           destroyed: entry.card,

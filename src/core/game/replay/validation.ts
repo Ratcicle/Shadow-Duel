@@ -291,6 +291,7 @@ function validateCommandPayload(
     case "flip_summon":
       validateCardLocator(payload, path);
       return;
+    case "hand_summon_procedure":
     case "extra_deck_summon": {
       validateCardLocator(payload, path);
       if (hasOwn(payload, "summonType")) {

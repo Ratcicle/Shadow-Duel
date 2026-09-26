@@ -21,6 +21,7 @@ import type {
   DynamicExtraAttacksDefinition,
   EffectUsageMap,
   ExtraDeckSummonProcedure,
+  HandSummonProcedure,
   FieldLimitDefinition,
   FieldPresenceRestriction,
   FusionMaterialDefinition,
@@ -343,6 +344,7 @@ export default class Card implements GameCard {
   declare fieldLimit: FieldLimitDefinition | null;
   declare fieldPresenceRestriction: FieldPresenceRestriction | null;
   declare extraDeckSummonProcedure: ExtraDeckSummonProcedure | null;
+  declare handSummonProcedure: HandSummonProcedure | null;
   declare equipAtkBonus: number;
   declare equipDefBonus: number;
   declare equipExtraAttacks: number;
@@ -498,6 +500,9 @@ export default class Card implements GameCard {
     this.fieldLimit = data.fieldLimit ? cloneJsonValue(data.fieldLimit) : null;
     this.fieldPresenceRestriction = data.fieldPresenceRestriction
       ? cloneJsonValue(data.fieldPresenceRestriction)
+      : null;
+    this.handSummonProcedure = data.handSummonProcedure
+      ? cloneJsonValue(data.handSummonProcedure)
       : null;
     this.extraDeckSummonProcedure = data.extraDeckSummonProcedure
       ? cloneJsonValue(data.extraDeckSummonProcedure)

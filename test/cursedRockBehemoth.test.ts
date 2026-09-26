@@ -28,9 +28,9 @@ import { cardDatabaseById } from "./helpers/fixtures.js";
 
 const CURSED_ROCK_BEHEMOTH_ID = 29;
 const EXPECTED_EN_DESCRIPTION =
-  '1 EARTH Tuner + 1+ non-Tuner monsters\n\nYou can target 1 face-up monster your opponent controls; this card gains ATK equal to its original DEF until the end of this turn.\n\nIf this card is destroyed by battle: You can target the monster that destroyed it; take control of it until the End Phase of this turn, then, when that monster leaves the field, Special Summon this card from your GY, but banish it when it leaves the field.\n\nYou can only use each effect of "Cursed Rock Behemoth" once per turn.';
+  '1 EARTH Tuner + 1+ non-Tuner monsters\n\nYou can target 1 face-up monster your opponent controls; this card gains ATK equal to its original DEF until the end of this turn.\n\nIf this card is destroyed by battle: You can target the monster that destroyed it; take control of it until the End Phase of this turn. After this effect resolves, if that monster leaves the field: Special Summon this card from your GY, but banish it when it leaves the field.\n\nYou can only use each effect of "Cursed Rock Behemoth" once per turn.';
 const EXPECTED_PT_BR_DESCRIPTION =
-  '1 Regulador de TERRA + 1+ monstros não-Reguladores\n\nVocê pode escolher 1 monstro com a face para cima que seu oponente controla; este card ganha ATK igual à DEF original dele até o final deste turno.\n\nSe este card for destruído em batalha: você pode escolher o monstro que o destruiu; tome o controle dele até a Fase Final deste turno e, depois, quando esse monstro deixar o campo, Invoque este card por Invocação-Especial do seu Cemitério, mas bana-o quando ele deixar o campo.\n\nVocê só pode usar cada efeito de "Behemoth de Rocha Amaldiçoado" uma vez por turno.';
+  '1 Regulador de TERRA + 1+ monstros não-Reguladores\n\nVocê pode escolher 1 monstro com a face para cima que seu oponente controla; este card ganha ATK igual à DEF original dele até o final deste turno.\n\nSe este card for destruído em batalha: você pode escolher o monstro que o destruiu; tome o controle dele até a Fase Final deste turno. Depois que este efeito resolver, se esse monstro deixar o campo: Invoque este card por Invocação-Especial do seu Cemitério e, se isso acontecer, bana este card quando ele deixar o campo.\n\nVocê só pode usar cada efeito de "Behemoth de Rocha Amaldiçoado" uma vez por turno.';
 
 function getBehemoth() {
   const card = cardDatabaseById.get(CURSED_ROCK_BEHEMOTH_ID);
@@ -307,63 +307,79 @@ test("o Trigger usa somente o destruidor em campo e recusa destruição mútua o
   assert.equal(unavailable.entries.length, 0);
 });
 
-test("destruição em batalha prepara a Chain e toma controle do destruidor", async (t) => {
-  const game = createRuntimeGame({
-    captureReplay: false,
-    laboratoryMode: true,
-  });
-  game.turn = game.bot.id;
-  game.phase = "battle";
-  game.battleStep = "battle";
-  game.turnCounter = 2;
-  game.disablePresentationDelays = true;
-  game.waitForBoardPresentation = async () => {};
-  game.player.controllerType = "human";
-  game.bot.controllerType = "ai";
-  game.ui.showTriggerOrderModal = async (options) =>
-    required(required(options).candidates).map(
-      (candidate) => candidate.candidateId,
+for (const behemothAttacks of [false, true]) {
+  test(`destruição em batalha prepara a Chain e toma controle do destruidor: Behemoth ${behemothAttacks ? "ataca" : "defende"}`, async (t) => {
+    const game = createRuntimeGame({
+      captureReplay: false,
+      laboratoryMode: true,
+    });
+    game.turn = behemothAttacks ? game.player.id : game.bot.id;
+    game.phase = "battle";
+    game.battleStep = "battle";
+    game.turnCounter = 2;
+    game.disablePresentationDelays = true;
+    game.waitForBoardPresentation = async () => {};
+    game.player.controllerType = "human";
+    game.bot.controllerType = "ai";
+    game.ui.showTriggerOrderModal = async (options) =>
+      required(required(options).candidates).map(
+        (candidate) => candidate.candidateId,
+      );
+    game.ui.showConfirmPrompt = () => true;
+    t.after(() => game.dispose("cursed_rock_behemoth_chain_test_complete"));
+
+    const behemoth = createRuntimeCard(getBehemoth(), game.player.id);
+    behemoth.position = "attack";
+    const destroyer = createRuntimeCard(
+      {
+        id: 9910,
+        name: "Live battle destroyer",
+        cardKind: "monster",
+        atk: 3000,
+        def: 1000,
+        level: 7,
+        type: "Warrior",
+        attribute: "Dark",
+        effects: [],
+      },
+      game.bot.id,
     );
-  game.ui.showConfirmPrompt = () => true;
-  t.after(() => game.dispose("cursed_rock_behemoth_chain_test_complete"));
+    destroyer.position = "attack";
+    placeFieldCards(game.player.field, behemoth);
+    placeFieldCards(game.bot.field, destroyer);
 
-  const behemoth = createRuntimeCard(getBehemoth(), game.player.id);
-  behemoth.position = "attack";
-  const destroyer = createRuntimeCard(
-    {
-      id: 9910,
-      name: "Live battle destroyer",
-      cardKind: "monster",
-      atk: 3000,
-      def: 1000,
-      level: 7,
-      type: "Warrior",
-      attribute: "Dark",
-      effects: [],
-    },
-    game.bot.id,
-  );
-  destroyer.position = "attack";
-  placeFieldCards(game.player.field, behemoth);
-  placeFieldCards(game.bot.field, destroyer);
+    const preparedCounts: number[] = [];
+    const destructions: RuntimeEventMap["battle_destroy"][] = [];
+    game.on("battle_destroy", (payload) => {
+      destructions.push(payload);
+    });
+    game.on("trigger_chain_prepared", ({ preparedCount }) => {
+      preparedCounts.push(preparedCount);
+    });
 
-  const preparedCounts: number[] = [];
-  game.on("trigger_chain_prepared", ({ preparedCount }) => {
-    preparedCounts.push(preparedCount);
+    const result = required(
+      await game.resolveCombat(
+        behemothAttacks ? behemoth : destroyer,
+        behemothAttacks ? destroyer : behemoth,
+      ),
+    );
+
+    assert.ok(result.ok === true);
+    assert.equal(game.player.graveyard.includes(behemoth), true);
+    assert.equal(game.player.field.includes(destroyer), true);
+    assert.equal(game.bot.field.includes(destroyer), false);
+    assert.equal(destroyer.controller, game.player.id);
+    assert.equal(game.getTemporaryControlState().length, 1);
+    assert.equal(game.temporaryEventEffects.length, 1);
+    assert.equal(preparedCounts.includes(1), true);
+    assert.equal(game.chainSystem.isOpenGameState(), true);
+    assert.equal(destructions.length, 1);
+    const destruction = required(destructions[0]);
+    assert.equal(destruction.attacker, destroyer);
+    assert.equal(destruction.attackerOwner, game.bot);
+    assert.equal(destruction.destroyedOwner, game.player);
   });
-
-  const result = required(await game.resolveCombat(destroyer, behemoth));
-
-  assert.ok(result.ok === true);
-  assert.equal(game.player.graveyard.includes(behemoth), true);
-  assert.equal(game.player.field.includes(destroyer), true);
-  assert.equal(game.bot.field.includes(destroyer), false);
-  assert.equal(destroyer.controller, game.player.id);
-  assert.equal(game.getTemporaryControlState().length, 1);
-  assert.equal(game.temporaryEventEffects.length, 1);
-  assert.equal(preparedCounts.includes(1), true);
-  assert.equal(game.chainSystem.isOpenGameState(), true);
-});
+}
 
 test("controle temporário preserva dono original, não cria movimento e não sobrescreve controle posterior", async (t) => {
   const game = createGame(t);
@@ -412,6 +428,47 @@ test("controle temporário preserva dono original, não cria movimento e não so
     game.bot.id,
   );
   assert.doesNotThrow(() => JSON.stringify(snapshot));
+});
+
+test("vínculo Invoca Behemoth quando o destruidor sai antes da Fase Final", async (t) => {
+  const game = createGame(t);
+  const behemoth = createRuntimeCard(getBehemoth(), game.player.id);
+  const destroyer = createRuntimeCard({ id: 9907, name: "Early leaving destroyer", cardKind: "monster", atk: 3000, def: 1000 }, game.bot.id);
+  game.player.graveyard.push(behemoth);
+  placeFieldCards(game.bot.field, destroyer);
+  const effect = getEffect("cursed_rock_behemoth_battle_control");
+  const controlled = await game.effectEngine.applyActions(
+    required(effect.actions),
+    { source: behemoth, player: game.player, opponent: game.bot, effect },
+    { cursed_rock_behemoth_destroyer: [destroyer] },
+  );
+  assert.ok(controlled.success === true);
+  assert.equal(game.player.field.includes(destroyer), true);
+  assert.equal(game.getTemporaryControlState().length, 1);
+  assert.equal(game.temporaryEventEffects.length, 1);
+
+  moveBetweenZones(destroyer, game.player.field, game.bot.graveyard);
+  destroyer.owner = game.bot.id;
+  destroyer.controller = game.bot.id;
+  const event = {
+    card: destroyer,
+    fromZone: "field" as const,
+    toZone: "graveyard" as const,
+    player: game.bot,
+    fromPlayer: game.player,
+    toPlayer: game.bot,
+    wasFaceupBeforeMove: true,
+  };
+  const triggers = await game.effectEngine.collectEventTriggers("card_moved", event);
+  assert.equal(triggers.entries.length, 1);
+  const revived = objectResult(await required(triggers.entries[0]).config.activate(
+    null,
+    required(triggers.entries[0]).config.activationContext,
+  ));
+  assert.ok(required(revived.success) === true);
+  assert.equal(game.player.field.includes(behemoth), true);
+  assert.equal(behemoth.banishWhenLeavesField, true);
+  assert.equal((await game.effectEngine.collectEventTriggers("card_moved", event)).entries.length, 0);
 });
 
 test("vínculo imediato acompanha a instância após a devolução, consome a primeira saída e Invoca o Behemoth banível", async (t) => {
