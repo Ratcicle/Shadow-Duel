@@ -42,11 +42,11 @@ function driverFixture(consumeDecisions = true): DriverFixture {
     { id: 2, duelCardId: 2, cardKind: "spell" },
   );
   human.field.push(
-    { id: 4, duelCardId: 4, cardKind: "monster" },
-    { id: 41, duelCardId: 41, cardKind: "monster" },
+    { id: 4, duelCardId: 4, cardKind: "monster", fieldSlot: 0 },
+    { id: 41, duelCardId: 41, cardKind: "monster", fieldSlot: 4 },
   );
   human.extraDeck.push({ id: 5, duelCardId: 5, cardKind: "monster" });
-  bot.field.push({ id: 9, duelCardId: 9, cardKind: "monster" });
+  bot.field.push({ id: 9, duelCardId: 9, cardKind: "monster", fieldSlot: 2 });
 
   const game: ReplayDriverGamePort = {
     player: human,
@@ -123,8 +123,8 @@ function replay(commands: ReadonlyArray<CanonicalReplayCommand> = []) {
   const decisions: unknown[] = [];
   return {
     format: "shadow-duel-canonical-replay",
-    schemaVersion: 1,
-    engineVersion: "phase-9",
+    schemaVersion: 2,
+    engineVersion: "field-positions-v2",
     cardDatabaseSignature: getCardDatabaseSignature(),
     setup: {
       seed: 123,
@@ -139,6 +139,16 @@ function replay(commands: ReadonlyArray<CanonicalReplayCommand> = []) {
     decisions,
   };
 }
+
+test("incompatible replay versions never initialize or mutate an existing duel", async () => {
+  for (const schemaVersion of [0, 1, 3]) {
+    const { game, calls } = driverFixture();
+    const before = createCanonicalStateSnapshot(game);
+    await assert.rejects(() => replayCanonicalDuel({ ...replay(), schemaVersion }, { game }), /Unsupported canonical replay schema/);
+    assert.deepEqual(calls, []);
+    assert.deepEqual(createCanonicalStateSnapshot(game), before);
+  }
+});
 
 function command<Type extends CanonicalReplayCommand["type"]>(
   sequence: number,

@@ -52,7 +52,7 @@ export const PLANNING_CARD_FIELDS = [
   "name", "cardKind", "originalCardKind", "treatedAsCardKinds", "subtype",
   "monsterType", "isTuner", "synchroMaterialRoles", "archetypes", "archetype",
   "baseAtk", "baseDef", "atk", "def", "type", "types", "attribute", "level",
-  "baseLevel", "originalLevel", "position", "previousPosition",
+  "baseLevel", "originalLevel", "position", "fieldSlot", "previousPosition",
   "positionChangedThisTurn", "revealedTurn", "isFacedown", "battlePositionLocked",
   "hasAttacked", "extraAttacks", "baseExtraAttackTargetRestriction",
   "extraAttackTargetRestriction", "dynamicExtraAttacks", "attackLimitThisTurn",

@@ -1,3 +1,4 @@
+import { placeFieldCards } from "./helpers/game.js";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import type { TestContext } from "node:test";
@@ -189,9 +190,9 @@ test("Red Fury Horror dispara para todos os métodos de Invocação-Especial do 
     },
     game.bot.id,
   );
-  game.player.field.push(redFury);
+  placeFieldCards(game.player.field, redFury);
   game.bot.graveyard.push(graveTarget);
-  game.bot.field.push(summoned);
+  placeFieldCards(game.bot.field, summoned);
 
   for (const method of ["special", "fusion", "synchro", "ascension"] as const) {
     const collected = await game.effectEngine.collectAfterSummonTriggers({
@@ -249,7 +250,7 @@ test("Red Fury Horror bane antes de aplicar o bônus e não ganha ATK se o alvo 
     },
     game.bot.id,
   );
-  game.player.field.push(redFury);
+  placeFieldCards(game.player.field, redFury);
   game.bot.graveyard.push(validTarget);
 
   const resolved = await game.effectEngine.applyActions(
@@ -295,7 +296,7 @@ test("Iron Smasher recebe proteção somente de outro monstro TERRA com a face p
     },
     game.player.id,
   );
-  game.player.field.push(ironSmasher, earthAlly);
+  placeFieldCards(game.player.field, ironSmasher, earthAlly);
 
   const protectedResult = await game.destroyCard(ironSmasher, {
     cause: "effect",
@@ -352,8 +353,8 @@ test("a resposta de Iron Smasher exige destruição de card próprio no runtime 
     definition,
     "iron_smasher_destroy_facedown_response",
   );
-  game.player.field.push(ironSmasher, ownVictim);
-  game.bot.field.push(opponentVictim, activatedCard);
+  placeFieldCards(game.player.field, ironSmasher, ownVictim);
+  placeFieldCards(game.bot.field, opponentVictim, activatedCard);
 
   const makeActionContext = (victim: Card) => ({
     activationAttempt: {

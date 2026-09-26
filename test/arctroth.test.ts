@@ -1,4 +1,5 @@
-﻿import assert from "node:assert/strict";
+﻿import { placeFieldCards } from "./helpers/game.js";
+import assert from "node:assert/strict";
 import test from "node:test";
 import Card from "../src/core/Card.js";
 import { cardDefinition, required, unsafeFixture } from "./helpers/fixtures.js";
@@ -57,13 +58,13 @@ for (const { laboratoryMode, actorId, activateEffect } of [
       const arctroth = new Card(cardDefinition("Shadow-Heart Demon Arctroth"), actor.id);
       actor.hand.push(arctroth);
       if (useHeartbearer) {
-        actor.field.push(new Card(cardDefinition("Shadow-Heart Heartbearer"), actor.id));
+        placeFieldCards(actor.field, new Card(cardDefinition("Shadow-Heart Heartbearer"), actor.id));
       } else {
-        actor.field.push(...[0, 1].map(() => new Card(cardDefinition("Nightmare Steed"), actor.id)));
+        placeFieldCards(actor.field, ...[0, 1].map(() => new Card(cardDefinition("Nightmare Steed"), actor.id)));
       }
       const target = new Card(cardDefinition("Nightmare Steed"), opponent.id);
       target.isFacedown = true;
-      opponent.field.push(target);
+      placeFieldCards(opponent.field, target);
       game.bindCardInteractions();
       if (actorId === "bot") {
         const originalDocument = Object.getOwnPropertyDescriptor(globalThis, "document");
@@ -115,8 +116,8 @@ for (const defending of [false, true]) {
         increase: { atk: 1000, def: 1000 },
         decrease: { atk: -reduction, def: -reduction },
       };
-      game.player.field.push(arctroth);
-      game.bot.field.push(opponent);
+      placeFieldCards(game.player.field, arctroth);
+      placeFieldCards(game.bot.field, opponent);
       let removals = 0;
       game.on("stat_increases_removed", () => {
         removals++;

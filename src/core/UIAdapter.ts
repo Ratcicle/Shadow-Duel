@@ -3,6 +3,8 @@ import type { GameRendererPort } from "./contracts/game.js";
 
 /** No UI decision is made on behalf of a player by these inert methods. */
 const UI_FALLBACKS: GameUI = {
+  chooseFieldPlacement: () => Promise.reject(new Error("Manual field placement requires a live UI provider")),
+  cancelFieldPlacement: () => undefined,
   renderHand: () => undefined,
   renderField: () => undefined,
   renderSpellTrap: () => undefined,

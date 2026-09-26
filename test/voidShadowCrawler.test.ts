@@ -1,3 +1,4 @@
+import { placeFieldCards } from "./helpers/game.js";
 import assert from "node:assert/strict";
 import type { TestContext } from "node:test";
 import test from "node:test";
@@ -57,8 +58,8 @@ test("Void Shadow Crawler exige alvo de Nível 5 ou maior com a face para cima",
   const facedownTarget = makeCard(LEVEL_FIVE_TARGET_ID, game.bot);
   facedownTarget.isFacedown = true;
   facedownTarget.position = "defense";
-  game.player.field.push(crawler, cost);
-  game.bot.field.push(faceupTarget, facedownTarget);
+  placeFieldCards(game.player.field, crawler, cost);
+  placeFieldCards(game.bot.field, faceupTarget, facedownTarget);
 
   const preview = game.effectEngine.resolveTargets(
     required(effect.targets),
@@ -105,8 +106,8 @@ test("cada cópia de Void Shadow Crawler pode usar seu efeito uma vez no turno",
   const secondTarget = makeCard(LEVEL_FIVE_TARGET_ID, game.bot);
   firstTarget.effects = [];
   secondTarget.effects = [];
-  game.player.field.push(firstCrawler, secondCrawler, firstCost, secondCost);
-  game.bot.field.push(firstTarget, secondTarget);
+  placeFieldCards(game.player.field, firstCrawler, secondCrawler, firstCost, secondCost);
+  placeFieldCards(game.bot.field, firstTarget, secondTarget);
 
   const activate = (crawler: Card, cost: Card, target: Card) =>
     game.tryActivateMonsterEffect(

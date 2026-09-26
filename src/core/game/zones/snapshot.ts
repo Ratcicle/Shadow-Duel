@@ -9,10 +9,13 @@ import type {
   GameZonesHost,
   ZonePlayerSnapshot,
   ZoneSnapshot,
+  SummonTransaction,
+  TemporaryControlEffect,
 } from "../../contracts/gameRuntime.js";
 import type { GamePlayer } from "../../contracts/player.js";
 
 interface ZoneSnapshotHost extends GameZonesHost {
+  temporaryControlEffects?: TemporaryControlEffect[];
   normalizeZoneCardOwnership(
     contextLabel?: string,
     options?: { enforceZoneOwner?: boolean },
@@ -44,7 +47,7 @@ export function snapshotCardState(
  * Collect all cards from all zones (player + bot).
  * @returns {Array} Array of all cards
  */
-export function collectAllZoneCards(this: GameZonesHost): GameCard[] {
+export function collectAllZoneCards(this: GameZonesHost & { activeSummonTransaction?: SummonTransaction | null }): GameCard[] {
   const cards = new Set<GameCard>();
   const addList = (list: GameCard[] | null | undefined) => {
     if (!Array.isArray(list)) return;
@@ -67,6 +70,8 @@ export function collectAllZoneCards(this: GameZonesHost): GameCard[] {
   };
   addPlayer(this.player);
   addPlayer(this.bot);
+  // Flip Summon temporarily removes its card from the compact field list.
+  if (this.activeSummonTransaction?.card) cards.add(this.activeSummonTransaction.card);
   return [...cards];
 }
 
@@ -76,11 +81,12 @@ export function collectAllZoneCards(this: GameZonesHost): GameCard[] {
  * @returns Snapshot object
  */
 export function captureZoneSnapshot(
-  this: GameZonesHost,
+  this: GameZonesHost & { temporaryControlEffects?: TemporaryControlEffect[] },
   contextLabel = "zone_op",
 ): ZoneSnapshot {
   const snapshot: ZoneSnapshot = {
     contextLabel,
+    temporaryControlEffects: (this.temporaryControlEffects || []).map((record) => ({ ...record })),
     players: {
       player: {
         hand: [...(this.player?.hand || [])],
@@ -117,6 +123,40 @@ export function captureZoneSnapshot(
   return snapshot;
 }
 
+/** Commit completed response effects to the rollback baseline of the entrant.
+ * The entrant is still in transit, so restore only its original source in the
+ * snapshot, without putting it back into the live duel or undoing paid costs.
+ */
+export function checkpointZoneSnapshotAfterResponse(
+  game: Pick<GameZonesHost, "zoneOpSnapshot" | "zoneOpDepth" | "captureZoneSnapshot">,
+  entrant: GameCard,
+): void {
+  const before = game.zoneOpSnapshot;
+  if (game.zoneOpDepth !== 1 || !before) return;
+  const checkpoint = game.captureZoneSnapshot(before.contextLabel);
+  const zones = ["hand", "field", "spellTrap", "graveyard", "banished", "deck", "extraDeck"] as const;
+  const owners = ["player", "bot"] as const;
+  const isAlreadyPlaced = owners.some((owner) => {
+    const side = checkpoint.players[owner];
+    return side.fieldSpell === entrant || zones.some((zone) => side[zone].includes(entrant));
+  });
+  if (!isAlreadyPlaced) {
+    for (const owner of owners) {
+      const source = before.players[owner];
+      const target = checkpoint.players[owner];
+      if (source.fieldSpell === entrant) target.fieldSpell = entrant;
+      for (const zone of zones) {
+        const index = source[zone].indexOf(entrant);
+        if (index >= 0) target[zone].splice(Math.min(index, target[zone].length), 0, entrant);
+      }
+    }
+    const sourceState = before.cardState.get(entrant);
+    if (sourceState) checkpoint.cardState.set(entrant, sourceState);
+    else checkpoint.cardState.delete(entrant);
+  }
+  game.zoneOpSnapshot = checkpoint;
+}
+
 /**
  * Restore zone state from a snapshot.
  * @param snapshot - Snapshot to restore
@@ -126,6 +166,12 @@ export function restoreZoneSnapshot(
   snapshot: ZoneSnapshot | null | undefined,
 ) {
   if (!snapshot) return;
+  this.temporaryControlEffects = snapshot.temporaryControlEffects.map((record) => ({ ...record }));
+  // Newly created cards (including Tokens) may outlive references held by an
+  // interrupted procedure; they must not retain an abandoned occupied slot.
+  for (const card of this.collectAllZoneCards()) {
+    if (!snapshot.cardState.has(card)) card.fieldSlot = null;
+  }
   const restorePlayer = (
     player: GamePlayer | null | undefined,
     state: ZonePlayerSnapshot | null | undefined,
@@ -188,6 +234,8 @@ export function compareZoneSnapshot(
     if (left.length !== right.length) return false;
     for (let i = 0; i < left.length; i += 1) {
       if (left[i] !== right[i]) return false;
+      const card = left[i];
+      if (card && a?.cardState.get(card)?.fieldSlot !== b?.cardState.get(card)?.fieldSlot) return false;
     }
     return true;
   };

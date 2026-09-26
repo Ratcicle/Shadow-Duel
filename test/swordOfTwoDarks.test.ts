@@ -1,3 +1,4 @@
+import { placeFieldCards } from "./helpers/game.js";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import type { TestContext } from "node:test";
@@ -163,8 +164,8 @@ test("the equipped monster can attack twice during the Battle Phase", async (t) 
     game.bot,
   );
   game.player.hand.push(sword);
-  game.player.field.push(attacker);
-  game.bot.field.push(defender);
+  placeFieldCards(game.player.field, attacker);
+  placeFieldCards(game.bot.field, defender);
 
   const equipPromise = game.tryActivateSpell(sword, 0);
   await selectCard(game, game.player.id, 0, "field");
@@ -195,10 +196,10 @@ for (const swordName of ["Light-Dividing Sword", CARD_NAME]) {
     const ownMonster = makeCard("Nightmare Steed", game.player);
     const opponentMonster = makeCard("Nightmare Steed", game.bot);
     game.player.hand.push(sword);
-    game.bot.field.push(opponentMonster);
+    placeFieldCards(game.bot.field, opponentMonster);
     assert.equal((await game.tryActivateSpell(sword, 0)).ok, false);
     assert.equal(game.player.hand.includes(sword), true);
-    game.player.field.push(ownMonster);
+    placeFieldCards(game.player.field, ownMonster);
     game.effectEngine.clearTargetingCache();
     const activation = game.tryActivateSpell(sword, 0);
     await waitUntil(() => game.targetSelection?.kind === "target", "Expected equip selection.");
@@ -232,11 +233,11 @@ for (const cardName of [
     );
     const context = { source, player: game.player, opponent: game.bot };
     other.isFacedown = true;
-    game.player.spellTrap.push(other);
+    placeFieldCards(game.player.spellTrap, other);
     assert.equal(game.effectEngine.evaluateConditions(conditions, context).ok, true);
     // The source can already be face-up during activation; it must not count itself.
     source.isFacedown = false;
-    game.player.spellTrap.push(source);
+    placeFieldCards(game.player.spellTrap, source);
     assert.equal(game.effectEngine.evaluateConditions(conditions, context).ok, true);
     other.isFacedown = false;
     assert.equal(game.effectEngine.evaluateConditions(conditions, context).ok, false);
@@ -253,7 +254,7 @@ for (const cardName of [
     const state = simulationState({ player: { spellTrap: [other] } });
     const context = { state, selfId: "player", sourceCard: source };
     assert.equal(evaluateSimulatedConditions(conditions, context), true);
-    state.player.spellTrap.push(source);
+    placeFieldCards(state.player.spellTrap, source);
     assert.equal(evaluateSimulatedConditions(conditions, context), true);
     other.isFacedown = false;
     assert.equal(evaluateSimulatedConditions(conditions, context), false);
@@ -265,7 +266,7 @@ test("control_card_max defaults to face-up copies and supports explicit facedown
   const source = makeCard(CARD_NAME, game.player);
   const other = makeCard(CARD_NAME, game.player);
   other.isFacedown = true;
-  game.player.spellTrap.push(other);
+  placeFieldCards(game.player.spellTrap, other);
   const context = { source, player: game.player, opponent: game.bot };
   const condition = {
     type: "control_card_max",
@@ -300,7 +301,7 @@ test("multiple copies can be Set, but only one can be activated face-up", async 
   const third = makeCard(CARD_NAME, game.player);
   const equipTarget = makeCard("Nightmare Steed", game.player);
   game.player.hand.push(first, second, third);
-  game.player.field.push(equipTarget);
+  placeFieldCards(game.player.field, equipTarget);
   for (const sword of [first, second]) {
     const result = required(await game.setSpellOrTrap(
       sword, game.player.hand.indexOf(sword), game.player,
@@ -349,9 +350,9 @@ test("a second copy cannot be activated while another copy is face-up", async (t
     game.player,
   );
   controlledSword.isFacedown = false;
-  game.player.spellTrap.push(controlledSword);
+  placeFieldCards(game.player.spellTrap, controlledSword);
   game.player.hand.push(secondSword);
-  game.player.field.push(equipTarget);
+  placeFieldCards(game.player.field, equipTarget);
 
   const result = await game.tryActivateSpell(secondSword, 0);
 
@@ -381,7 +382,7 @@ for (const { cardKind, fromZone, targetZone } of [
     );
     game.player[fromZone].push(sword);
     if (targetZone === "fieldSpell") game.bot.fieldSpell = target;
-    else game.bot.spellTrap.push(target);
+    else placeFieldCards(game.bot.spellTrap, target);
 
     const movePromise = game.moveCard(sword, game.player, "graveyard", {
       fromZone,

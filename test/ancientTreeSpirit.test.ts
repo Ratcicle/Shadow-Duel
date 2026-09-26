@@ -1,3 +1,4 @@
+import { placeFieldCards } from "./helpers/game.js";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import type { TestContext } from "node:test";
@@ -112,7 +113,7 @@ test("Ancient Tree Spirit becomes a Trap Monster and inflicts damage when destro
   spirit.isFacedown = true;
   spirit.setTurn = 1;
   spirit.turnSetOn = 1;
-  game.player.spellTrap.push(spirit);
+  placeFieldCards(game.player.spellTrap, spirit);
 
   const activation = await game.tryActivateSpellTrapEffect(spirit, null, {
     owner: game.player,
@@ -145,7 +146,7 @@ test("Ancient Tree Spirit becomes a Trap Monster and inflicts damage when destro
     },
     game.bot,
   );
-  game.bot.field.push(attacker);
+  placeFieldCards(game.bot.field, attacker);
   game.turn = game.bot.id;
   game.phase = "battle";
   const opponentLpBefore = game.bot.lp;

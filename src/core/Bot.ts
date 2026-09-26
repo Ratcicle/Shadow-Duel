@@ -1,4 +1,5 @@
-﻿import Player from "./Player.js";
+﻿import { appendSimulatedZoneCard } from "./ai/common/zones.js";
+import Player from "./Player.js";
 import { getStrategyFor } from "./ai/StrategyRegistry.js";
 import { createGameTreeModels } from "./ai/PlanningStrategies.js";
 import { botLogger } from "./BotLogger.js";
@@ -449,15 +450,15 @@ export default class Bot extends Player {
     if (target.position === "attack") {
       if (attackStat > targetStat) {
         defenderOwner.lp -= attackStat - targetStat;
-        defenderOwner.graveyard.push(target);
+        appendSimulatedZoneCard(defenderOwner.graveyard, target);
         defenderOwner.field.splice(defenderOwner.field.indexOf(target), 1);
       } else if (attackStat < targetStat) {
         attackerOwner.lp -= targetStat - attackStat;
-        attackerOwner.graveyard.push(attacker);
+        appendSimulatedZoneCard(attackerOwner.graveyard, attacker);
         attackerOwner.field.splice(attackerOwner.field.indexOf(attacker), 1);
       } else {
-        attackerOwner.graveyard.push(attacker);
-        defenderOwner.graveyard.push(target);
+        appendSimulatedZoneCard(attackerOwner.graveyard, attacker);
+        appendSimulatedZoneCard(defenderOwner.graveyard, target);
         attackerOwner.field.splice(attackerOwner.field.indexOf(attacker), 1);
         defenderOwner.field.splice(defenderOwner.field.indexOf(target), 1);
       }
@@ -465,7 +466,7 @@ export default class Bot extends Player {
       // BUG #12 FIX: Target in defense position - consider piercing damage
       if (attackStat > targetStat) {
         // Attacker wins - destroy defender
-        defenderOwner.graveyard.push(target);
+        appendSimulatedZoneCard(defenderOwner.graveyard, target);
         defenderOwner.field.splice(defenderOwner.field.indexOf(target), 1);
         // Check for piercing damage (inflict excess damage to LP)
         const piercingDamage = getPiercingDamage(

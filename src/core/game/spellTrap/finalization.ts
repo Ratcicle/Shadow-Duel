@@ -372,12 +372,14 @@ export async function commitCardActivationFromHand(
 
   // Ensure face-up when placed
   const wasFacedown = card.isFacedown === true;
-  card.isFacedown = false;
 
   // Move to destination
   if (typeof this.moveCard === "function") {
     const moveResult = await this.moveCard(card, player, activationZone, {
       fromZone: "hand",
+      isFacedown: false,
+      placementActor: player,
+      allowPlacementCancel: true,
     });
     const committed =
       activationZone === "fieldSpell"

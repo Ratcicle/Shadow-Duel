@@ -1,3 +1,4 @@
+import { placeFieldCards } from "./helpers/game.js";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
@@ -25,11 +26,11 @@ for (const trapOwnerId of ["player", "bot"] as const) {
       const trap = new Card(required(cardDatabaseByName.get("Down of the Fool")), owner.id);
       trap.isFacedown = true;
       trap.setTurn = 1;
-      owner.spellTrap.push(trap);
+      placeFieldCards(owner.spellTrap, trap);
       const monster = new Card(required(cardDatabaseByName.get("Nightmare Steed")), opponent.id);
       opponent.hand.push(monster);
       const otherMonster = new Card(required(cardDatabaseByName.get("Nightmare Steed")), opponent.id);
-      opponent.field.push(otherMonster);
+      placeFieldCards(opponent.field, otherMonster);
       let prompts = 0;
       game.ui.showChainResponseModal = async (candidates, context) => {
         const candidate = required(candidates.find((entry) => entry.card === trap));
@@ -73,7 +74,7 @@ for (const scenario of ["1600 ATK", "1599 ATK", "Special Summon", "own summon", 
     const trap = new Card(required(cardDatabaseByName.get("Down of the Fool")), game.player.id);
     trap.isFacedown = true;
     trap.setTurn = scenario === "set this turn" ? 2 : 1;
-    game.player.spellTrap.push(trap);
+    placeFieldCards(game.player.spellTrap, trap);
     const monster = new Card({
       id: 99015, name: "Summon response target", cardKind: "monster",
       level: 4, atk: scenario === "1599 ATK" ? 1599 : 1600, def: 1000,

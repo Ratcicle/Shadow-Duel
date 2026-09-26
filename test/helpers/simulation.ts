@@ -8,6 +8,21 @@ import type {
   SimulationGameState,
 } from "../../src/core/contracts/aiState.js";
 import type { CardConstructorData } from "../../src/core/contracts/cards.js";
+import type { FieldSlot } from "../../src/core/contracts/placement.js";
+import { assignAutomaticFieldSlot, getAvailableFieldSlots } from "../../src/core/game/zones/placement.js";
+
+/** Test setup boundary: legacy fixture entries acquire positions once. */
+export function placeSimulationCards<Card extends { fieldSlot?: FieldSlot | null }>(
+  row: Card[],
+  ...cards: Card[]
+): number {
+  for (const card of cards) {
+    if (card.fieldSlot == null) assert.notEqual(assignAutomaticFieldSlot(card, row), null);
+    else assert.ok(getAvailableFieldSlots(row).includes(card.fieldSlot));
+    row.push(card);
+  }
+  return row.length;
+}
 
 type CardInput = AiCardInput &
   Omit<
@@ -42,7 +57,7 @@ function simulationPlayer(
   id: "player" | "bot",
   values: Partial<FixturePlayer> = {},
 ): FixturePlayer {
-  return {
+  const player = {
     id,
     lp: 8000,
     hand: [],
@@ -57,6 +72,16 @@ function simulationPlayer(
     additionalNormalSummons: 0,
     ...values,
   };
+  for (const row of [player.field, player.spellTrap]) {
+    const explicit = row.filter(card => card.fieldSlot != null);
+    getAvailableFieldSlots(explicit);
+    for (const card of row) {
+      if (card.fieldSlot != null) continue;
+      assert.notEqual(assignAutomaticFieldSlot(card, explicit), null);
+      explicit.push(card);
+    }
+  }
+  return player;
 }
 
 type StateInput = Partial<Omit<FixtureState, "player" | "bot">> & {

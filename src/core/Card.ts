@@ -310,6 +310,7 @@ export default class Card implements GameCard {
   declare baseLevel: number;
   declare originalLevel?: number | null;
   declare position: BattlePosition;
+  declare fieldSlot: import("./contracts/placement.js").FieldSlot | null;
   declare previousPosition?: BattlePosition | null;
   declare positionChangedThisTurn?: boolean;
   declare revealedTurn?: number | null;
@@ -461,6 +462,7 @@ export default class Card implements GameCard {
     this.level = data.level ?? 0;
     this.baseLevel = data.level ?? 0;
     this.position = "attack";
+    this.fieldSlot = null;
     this.isFacedown = false;
     this.battlePositionLocked = false;
     this.hasAttacked = false;

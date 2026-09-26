@@ -4,6 +4,9 @@ import type { DeckCard } from "./deckState.js";
 import type { BattlePosition } from "../../core/contracts/cards.js";
 import type { PlayerId } from "../../core/contracts/primitives.js";
 import type { LaboratoryDuelConfig } from "./gameLauncher.js";
+import { normalizeScenarioSetup } from "../../core/game/devTools/setup.js";
+import { FIELD_SLOTS, chooseAutomaticFieldSlot } from "../../core/game/zones/placement.js";
+import type { ScenarioDefinition } from "../../core/game/devTools/setup.js";
 type LabZone =
   | "deck"
   | "extraDeck"
@@ -14,6 +17,7 @@ type LabZone =
   | "graveyard";
 interface LabEntry {
   id: number;
+  fieldSlot?: number;
   position?: BattlePosition;
   facedown?: boolean;
 }
@@ -339,7 +343,15 @@ export function createLaboratoryController({
       alert("Esta carta não é válida para a zona selecionada.");
       return false;
     }
-    entries.push(cloneLabEntry(entry));
+    const added = cloneLabEntry(entry);
+    if (zone === "field" || zone === "spellTrap") {
+      const slot = chooseAutomaticFieldSlot(FIELD_SLOTS.filter((candidate) =>
+        entries.every((existing) => existing.fieldSlot !== candidate),
+      ));
+      if (slot === null) return false;
+      added.fieldSlot = slot;
+    }
+    entries.push(added);
     return true;
   }
 
@@ -383,18 +395,20 @@ export function createLaboratoryController({
       side[zone as LabZone] = [];
       return;
     }
+    const available = [...FIELD_SLOTS];
     side[zone as LabZone] = Array.from({ length: count }, () => {
       // The nonempty filtered pool and Math.random bound this index.
       const card = candidates[Math.floor(Math.random() * candidates.length)]!;
-      if (zone === "field") {
-        return {
+      if (zone === "field" || zone === "spellTrap") {
+        const slot = chooseAutomaticFieldSlot(available);
+        if (slot === null) throw new Error("Laboratory row capacity exceeded.");
+        available.splice(available.indexOf(slot), 1);
+        return zone === "field" ? {
           id: card.id,
+          fieldSlot: slot,
           position: Math.random() > 0.5 ? "attack" : "defense",
           facedown: false,
-        };
-      }
-      if (zone === "spellTrap") {
-        return { id: card.id, facedown: Math.random() > 0.5 };
+        } : { id: card.id, fieldSlot: slot, facedown: Math.random() > 0.5 };
       }
       return { id: card.id };
     });
@@ -422,6 +436,7 @@ export function createLaboratoryController({
       graveyard: side.graveyard.map(cloneLabEntry).filter(Boolean),
     });
     return {
+      schemaVersion: 2 as const,
       player: cloneSide(laboratorySetup.player),
       bot: cloneSide(laboratorySetup.bot),
     };
@@ -459,6 +474,7 @@ export function createLaboratoryController({
     const card = getLabCard(entry);
     if (!card) return null;
     const out: LabEntry = { id: card.id };
+    if (zone === "field" || zone === "spellTrap") out.fieldSlot = entry.fieldSlot!;
     if (zone === "field") {
       out.position = entry.position === "defense" ? "defense" : "attack";
       out.facedown = entry.facedown === true;
@@ -496,7 +512,7 @@ export function createLaboratoryController({
     };
 
     return {
-      version: 1,
+      version: 2,
       type: "shadow-duel-laboratory-state",
       exportedAt: new Date().toISOString(),
       laboratoryMode: options.laboratoryMode,
@@ -505,6 +521,7 @@ export function createLaboratoryController({
       botPreset: options.botPreset,
       options,
       setup: {
+        schemaVersion: 2,
         player: exportSide(laboratorySetup.player),
         bot: exportSide(laboratorySetup.bot),
       },
@@ -545,6 +562,11 @@ export function createLaboratoryController({
       return null;
     }
     const normalized: LabEntry = { id: card.id };
+    if ((zone === "field" || zone === "spellTrap") && entry && typeof entry === "object") {
+      const slot: unknown = Reflect.get(entry, "fieldSlot");
+      if (typeof slot !== "number") throw new Error("fieldSlot ausente no setup normalizado.");
+      normalized.fieldSlot = slot;
+    }
     if (zone === "field") {
       normalized.position =
         (entry as { position?: unknown } | null)?.position === "defense"
@@ -568,6 +590,7 @@ export function createLaboratoryController({
     let optionsPayload: Record<string, unknown> = {};
     const record = payload as Record<string, unknown>;
     if (record.type === "shadow-duel-laboratory-state") {
+      if (record.version !== 1 && record.version !== 2) throw new Error("Versão de Laboratório incompatível.");
       setupPayload = record.setup;
       optionsPayload = {
         ...record,
@@ -582,6 +605,9 @@ export function createLaboratoryController({
     if (!setupPayload || typeof setupPayload !== "object") {
       throw new Error("Setup de Laboratório ausente ou inválido.");
     }
+    setupPayload = normalizeScenarioSetup(setupPayload as ScenarioDefinition, {
+      requireFieldSlots: record.type === "shadow-duel-laboratory-state" && record.version === 2,
+    });
 
     const warnings: string[] = [];
     const normalizedSetup = createEmptyLaboratorySetup();

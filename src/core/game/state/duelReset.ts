@@ -59,6 +59,8 @@ export function resetPlayerDuelState(
 ) {
   if (!player) return;
 
+  for (const card of [...player.field, ...player.spellTrap]) card.fieldSlot = null;
+
   player.lp = 8000;
   player.deck = [];
   player.extraDeck = [];
@@ -78,6 +80,12 @@ export function resetDuelState(
   reason = "reset",
   options: DuelResetOptions = {},
 ) {
+  this.fieldPlacementGeneration++;
+  this.fieldPlacementAbort?.abort();
+  this.fieldPlacementAbort = null;
+  this.pendingFieldPlacement = null;
+  this.ui.cancelFieldPlacement();
+  if (this.activeSummonTransaction?.card) this.activeSummonTransaction.card.fieldSlot = null;
   const turn = options.turn || "player";
   const phase = options.phase || "draw";
   const turnCounter = typeof options.turnCounter === "number" && Number.isFinite(options.turnCounter)
@@ -127,6 +135,7 @@ export function resetDuelState(
   this.temporaryBattlePairEffects = [];
   this.temporaryEventEffects = [];
   this.temporaryControlEffects = [];
+  this.resolvingTemporaryControl = false;
   this.pendingSynchroMaterialFollowups = [];
   this.pendingSynchroMaterialTriggerContinuation = null;
   this.synchroSummonContextCounter = 0;

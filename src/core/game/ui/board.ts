@@ -45,7 +45,7 @@ interface BoardUiPort {
   renderSpellTrap?(player: GamePlayer): void;
   updateLP(player: GamePlayer): void;
   updatePhaseTrack(phase: GamePhase, game: BoardHost): void;
-  updateTurn(player: GamePlayer): void;
+  updateTurn(player: GamePlayer, turnCounter: number): void;
   updateGYPreview(player: GamePlayer): void;
   updateExtraDeckPreview?(player: GamePlayer): void;
   syncEquipLinkIndicators?(): void;
@@ -238,7 +238,10 @@ export function updateBoard(
     this.ui.updateLP(renderPlayer);
     this.ui.updateLP(renderBot);
     this.ui.updatePhaseTrack(this.phase, this);
-    this.ui.updateTurn(this.turn === "player" ? this.player : this.bot);
+    this.ui.updateTurn(
+      this.turn === "player" ? this.player : this.bot,
+      this.turnCounter,
+    );
     this.ui.updateGYPreview(renderPlayer);
     this.ui.updateGYPreview(renderBot);
 

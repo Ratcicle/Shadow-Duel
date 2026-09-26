@@ -1,3 +1,4 @@
+import { placeFieldCards } from "./helpers/game.js";
 import assert from "node:assert/strict";
 import type { TestContext } from "node:test";
 import test from "node:test";
@@ -62,9 +63,9 @@ function createAttackWindowGame(t: TestContext, trapName: string) {
   );
   defender.position = "attack";
 
-  game.player.spellTrap.push(trap);
-  game.bot.field.push(attacker);
-  game.player.field.push(defender);
+  placeFieldCards(game.player.spellTrap, trap);
+  placeFieldCards(game.bot.field, attacker);
+  placeFieldCards(game.player.field, defender);
   t.after(() => game.dispose("trap_chain_response_test_complete"));
 
   return { game, trap, attacker, defender };

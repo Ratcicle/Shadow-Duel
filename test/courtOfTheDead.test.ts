@@ -1,3 +1,4 @@
+import { placeFieldCards } from "./helpers/game.js";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import type { TestContext } from "node:test";
@@ -141,11 +142,48 @@ test("Court of the Dead declares separated text and pays counters before targeti
   assert.deepEqual(validation.warnings, []);
 });
 
+for (const turn of ["player", "bot"] as const) {
+  test(`set Court activates through the phase response modal during the ${turn} turn`, async (t) => {
+    const game = createGame(t);
+    game.turn = turn;
+    const court = makeCard(CARD_NAME, game.player);
+    court.isFacedown = true;
+    court.setTurn = 1;
+    court.turnSetOn = 1;
+    placeFieldCards(game.player.spellTrap, court);
+    const slot = court.fieldSlot;
+    const effects = court.effects;
+    let prompts = 0;
+    game.ui.showChainResponseModal = async (candidates) => {
+      prompts++;
+      const offered = required(candidates.find(candidate => candidate.card === court));
+      assert.ok(offered.effect);
+      return offered;
+    };
+    const result = await game.chainSystem.openChainWindow({
+      type: "phase_change", event: "phase_end", player: turn === "player" ? game.player : game.bot,
+      toPhase: "main1",
+    }, { firstPlayer: turn === "player" ? game.player : game.bot });
+    assert.equal(prompts, 1);
+    assert.ok(result);
+    assert.equal(result.chainBuilt, true, "The accepted offer must publish an activation link.");
+    assert.equal(court.isFacedown, false);
+    assert.deepEqual(game.player.spellTrap, [court]);
+    assert.equal(court.fieldSlot, slot);
+    assert.strictEqual(court.effects, effects, "The synthetic activation must not replace declared effects.");
+    assert.equal(court.getCounter("funeral"), 0);
+    const monster = makeMonster(99190, "Counter source after modal activation", game.player);
+    game.player.hand.push(monster);
+    await game.moveCard(monster, game.player, "graveyard", { fromZone: "hand" });
+    await waitUntil(() => court.getCounter("funeral") === 1, "The activated Court must retain its declared counter trigger.");
+  });
+}
+
 test("Court gains counters from either Graveyard and revives after paying eight", async (t) => {
   const game = createGame(t);
   const court = makeCard(CARD_NAME, game.player);
   court.isFacedown = false;
-  game.player.spellTrap.push(court);
+  placeFieldCards(game.player.spellTrap, court);
   assert.ok(
     game.effectEngine.canActivateSpellTrapEffectPreview(
       court,
@@ -164,8 +202,8 @@ test("Court gains counters from either Graveyard and revives after paying eight"
     "Opposing Funeral Counter source",
     game.bot,
   );
-  game.player.field.push(ownMonster);
-  game.bot.field.push(opposingMonster);
+  placeFieldCards(game.player.field, ownMonster);
+  placeFieldCards(game.bot.field, opposingMonster);
 
   await game.moveCard(ownMonster, game.player, "graveyard", {
     fromZone: "field",
@@ -233,7 +271,7 @@ test("Court has a soft OPT per copy and resets after leaving the field", async (
   const game = createGame(t);
   const first = makeCard(CARD_NAME, game.player);
   const second = makeCard(CARD_NAME, game.player);
-  game.player.spellTrap.push(first, second);
+  placeFieldCards(game.player.spellTrap, first, second);
   first.addCounter("funeral", 8);
   second.addCounter("funeral", 8);
   const targets = [99150, 99151, 99152].map((id) =>
@@ -261,13 +299,13 @@ test("each Court counts each Synchro Material after the summon", async (t) => {
   game.ui.showChainResponseModal = async () => null;
   const courts = [game.player, game.bot].map((owner) => {
     const court = makeCard(CARD_NAME, owner);
-    owner.spellTrap.push(court);
+    placeFieldCards(owner.spellTrap, court);
     return court;
   });
   const tuner = makeCard("Tech-Zero Pulse Soldier", game.player);
   const material = makeCard("Nightmare Steed", game.player);
   const synchro = makeCard("Iron Smasher", game.player);
-  game.player.field.push(tuner, material);
+  placeFieldCards(game.player.field, tuner, material);
   game.player.extraDeck.push(synchro);
   const result = await game.performSynchroSummonFromExtraDeck(synchro, game.player, {
     materials: [tuner, material],
@@ -283,7 +321,7 @@ test("soft OPT reservations stay with their copy and original field presence", a
   const game = createGame(t);
   const first = makeCard(CARD_NAME, game.player);
   const second = makeCard(CARD_NAME, game.player);
-  game.player.spellTrap.push(first, second);
+  placeFieldCards(game.player.spellTrap, first, second);
   const effect = required(first.effects.find((entry) => entry.id === "court_of_the_dead_revive"));
   const input = { card: first, player: game.player, effect };
   const reservation = required(game.reserveEffectUsage(input));
@@ -301,7 +339,7 @@ test("soft OPT reservations stay with their copy and original field presence", a
 test("soft OPT survives a control change, hard OPT survives leaving and returning", async (t) => {
   const game = createGame(t);
   const court = makeCard(CARD_NAME, game.player);
-  game.player.spellTrap.push(court);
+  placeFieldCards(game.player.spellTrap, court);
   const soft = required(court.effects.find((entry) => entry.id === "court_of_the_dead_revive"));
   game.markOncePerTurnUsed(court, game.player, soft);
   await game.moveCard(court, game.bot, "spellTrap", { fromZone: "spellTrap" });
@@ -310,7 +348,7 @@ test("soft OPT survives a control change, hard OPT survives leaving and returnin
   const hardCard = makeCard("Desperate Gamble", game.player);
   const otherCopy = makeCard("Desperate Gamble", game.player);
   const hard = required(hardCard.effects[0]);
-  game.player.spellTrap.push(hardCard);
+  placeFieldCards(game.player.spellTrap, hardCard);
   game.markOncePerTurnUsed(hardCard, game.player, hard);
   await game.moveCard(hardCard, game.player, "graveyard", { fromZone: "spellTrap" });
   await game.moveCard(hardCard, game.player, "hand", { fromZone: "graveyard" });
@@ -324,7 +362,7 @@ test("soft OPT survives a control change, hard OPT survives leaving and returnin
 test("a rolled-back departure keeps the soft OPT spent", async (t) => {
   const game = createGame(t);
   const court = makeCard(CARD_NAME, game.player);
-  game.player.spellTrap.push(court);
+  placeFieldCards(game.player.spellTrap, court);
   const effect = required(court.effects.find((entry) => entry.id === "court_of_the_dead_revive"));
   game.markOncePerTurnUsed(court, game.player, effect);
   const snapshot = game.captureZoneSnapshot("soft_opt_rollback");
@@ -350,7 +388,7 @@ test("legacy per-card OPT also resets when its card leaves the field", async (t)
   const game = createGame(t);
   const card = makeCard("Wanted in the Burning West", game.player);
   const effect = required(card.effects.find((entry) => entry.oncePerTurnPerCard));
-  game.player.spellTrap.push(card);
+  placeFieldCards(game.player.spellTrap, card);
   game.markOncePerTurnUsed(card, game.player, effect);
   assert.equal(game.canUseOncePerTurn(card, game.player, effect).ok, false);
   await game.moveCard(card, game.player, "graveyard", { fromZone: "spellTrap" });

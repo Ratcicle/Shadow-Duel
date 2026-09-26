@@ -77,6 +77,8 @@ export function bindCardHover(
   const gameContainer = document.getElementById("game-container");
   if (!gameContainer) return;
 
+  this.renderPreview(null);
+
   bindManagedEvent(gameContainer, "card-hover", "mouseover", (e) => {
     const cardEl = (e.target as Element).closest<HTMLElement>(".card");
     if (cardEl && !cardEl.classList.contains("hidden")) {

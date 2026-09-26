@@ -351,6 +351,13 @@ function candidateForEffect(
   zone: CanonicalZone,
   context: FastEffectContextInput,
 ): ChainActivationCandidate | null {
+  const placementOnly = effect.placementOnly === true;
+  if (
+    placementOnly &&
+    (zone !== "spellTrap" || card.isFacedown !== true || !canUsePlacementOnly(card))
+  ) {
+    return null;
+  }
   if (!getEffectActivationZones(card, effect).includes(zone)) return null;
   if (pairAlreadyInChain(chainSystem, card, effect)) return null;
   if (wasTriggerEffectAlreadyOffered(chainSystem, card, effect)) return null;
@@ -368,8 +375,12 @@ function candidateForEffect(
   let matchedEffect = null;
   if (card.cardKind === "trap") {
     if (!trapStateAllows(chainSystem, card, effect, zone)) return null;
+    // Card activation is synthetic for these Continuous Traps. The matcher
+    // requires effect membership in both discovery and revalidation; only its
+    // read-only projection gets the synthetic effect, never the live card.
+    const matchingCard = placementOnly ? { ...card, effects: [effect] } : card;
     matchedEffect = chainSystem.findActivatableEffect?.(
-      card,
+      matchingCard,
       responseContext,
       player,
       zone,
@@ -526,18 +537,12 @@ function collectActivationCandidates(
         const candidate = candidateForEffect(
           chainSystem,
           player,
-          { ...card, effects: [placement] },
+          card,
           placement,
           zone,
           context,
         );
         if (candidate) {
-          candidate.card = card;
-          candidate.candidateKey = getActivationCandidateKey(
-            card,
-            placement,
-            zone,
-          );
           candidates.push(candidate);
         }
       }

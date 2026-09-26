@@ -1,3 +1,4 @@
+import { placeFieldCards } from "../helpers/game.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 
@@ -112,8 +113,8 @@ test("Game integrates setup, draw, movement, summon, combat and disposal", async
     2_000,
   );
   const defender = monster(9_902, "Integrated defender", "bot", 1_000);
-  game.player.field.push(attacker);
-  game.bot.field.push(defender);
+  placeFieldCards(game.player.field, attacker);
+  placeFieldCards(game.bot.field, defender);
   game.phase = "battle";
   game.turn = "player";
   await game.resolveCombat(attacker, defender);

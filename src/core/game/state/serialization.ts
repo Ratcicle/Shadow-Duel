@@ -69,15 +69,16 @@ export function getPublicState(
       const hidden = card.isFacedown && !isSelf;
       return {
         duelCardId: card.duelCardId ?? null,
-        cardId: card.id,
+        cardId: hidden ? null : card.id,
+        fieldSlot: card.fieldSlot,
         owner: card.owner ?? null,
         controller: card.controller ?? card.owner ?? null,
         originalOwner: card.originalOwner ?? null,
         locationVersion: Number(card.locationVersion ?? 0),
-        lastSummonMethod: card.lastSummonMethod || null,
-        lastSummonedFromZone: card.lastSummonedFromZone || null,
-        properSummonEstablished: card.properSummonEstablished === true,
-        properSummonProcedure: card.properSummonProcedure || null,
+        lastSummonMethod: hidden ? null : card.lastSummonMethod || null,
+        lastSummonedFromZone: hidden ? null : card.lastSummonedFromZone || null,
+        properSummonEstablished: hidden ? null : card.properSummonEstablished === true,
+        properSummonProcedure: hidden ? null : card.properSummonProcedure || null,
         name: hidden ? null : card.name,
         position: card.position,
         atk: hidden ? null : card.atk,
@@ -91,11 +92,11 @@ export function getPublicState(
         isTuner: hidden ? null : card.isTuner === true,
         faceDown: !!card.isFacedown,
         status: {
-          cannotAttackThisTurn: !!card.cannotAttackThisTurn,
-          battlePositionLocked: !!card.battlePositionLocked,
-          effectsNegated: !!card.effectsNegated,
-          effectsNegatedDuration: card.effectsNegatedDuration || null,
-          canAttackAll: !!card.canAttackAllOpponentMonstersThisTurn,
+          cannotAttackThisTurn: hidden ? null : !!card.cannotAttackThisTurn,
+          battlePositionLocked: hidden ? null : !!card.battlePositionLocked,
+          effectsNegated: hidden ? null : !!card.effectsNegated,
+          effectsNegatedDuration: hidden ? null : card.effectsNegatedDuration || null,
+          canAttackAll: hidden ? null : !!card.canAttackAllOpponentMonstersThisTurn,
         },
       };
     });
@@ -123,13 +124,14 @@ export function getPublicState(
       const hidden = card.isFacedown && !isSelf;
       return {
         duelCardId: card.duelCardId ?? null,
-        cardId: card.id,
+        cardId: hidden ? null : card.id,
+        fieldSlot: card.fieldSlot,
         name: hidden ? null : card.name,
         faceDown: !!card.isFacedown,
-        cardKind: card.cardKind,
+        cardKind: hidden ? null : card.cardKind,
         subtype: hidden ? null : card.subtype,
-        effectsNegated: card.effectsNegated === true,
-        effectsNegatedDuration: card.effectsNegatedDuration || null,
+        effectsNegated: hidden ? null : card.effectsNegated === true,
+        effectsNegatedDuration: hidden ? null : card.effectsNegatedDuration || null,
       };
     });
 
@@ -217,7 +219,7 @@ export function getPublicState(
   });
 
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     turn: this.turn,
     phase: this.phase,
     turnCounter: this.turnCounter,

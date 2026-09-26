@@ -1,3 +1,4 @@
+import { placeFieldCards } from "./helpers/game.js";
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
 import test from "node:test";
@@ -147,7 +148,7 @@ test("Topógrafo ativa somente na Invocação-Normal e paga o descarte antes da 
     game.player.id,
   );
   const discard = makeMonster({ id: 9901, name: "Discard" }, game.player.id);
-  game.player.field.push(surveyor);
+  placeFieldCards(game.player.field, surveyor);
   game.player.deck.push(deckCard);
   game.player.hand.push(discard);
 
@@ -266,7 +267,7 @@ test("Topógrafo busca antes de Invocar da mão e nega o monstro Invocado enquan
     { id: 9902, name: "Hand EARTH" },
     game.player.id,
   );
-  game.player.field.push(surveyor);
+  placeFieldCards(game.player.field, surveyor);
   game.player.deck.push(searched);
   game.player.hand.push(earthMonster);
 
@@ -317,7 +318,7 @@ test("Escavador ativa após Invocação-Normal ou Especial e encadeia reviver pa
     getCardDefinition(SURVEYOR_ID),
     game.player.id,
   );
-  game.player.field.push(excavator);
+  placeFieldCards(game.player.field, excavator);
   game.player.graveyard.push(revive, recover);
   const effect = getEffect(
     EXCAVATOR_ID,
@@ -374,7 +375,7 @@ test("Escavador não recupera se o alvo de reviver não estiver mais no Cemitér
     getCardDefinition(SURVEYOR_ID),
     game.player.id,
   );
-  game.player.field.push(excavator);
+  placeFieldCards(game.player.field, excavator);
   game.player.hand.push(invalid);
   game.player.graveyard.push(recover);
   const effect = getEffect(
@@ -421,7 +422,7 @@ test("Triggers de Matéria Sincro exigem o contexto canônico e o do Escavador c
     game.player.id,
   );
   const drawCard = makeMonster({ id: 9905, name: "Draw card" }, game.player.id);
-  game.player.field.push(surveyor, excavator);
+  placeFieldCards(game.player.field, surveyor, excavator);
   game.player.hand.push(handVulcanomaton);
   game.player.deck.push(drawCard);
 
@@ -737,7 +738,7 @@ test("Corebreaker pays its Tribute before the Chain Link and Special Summons wit
     makeMonster({ id: 9910 + index, name: `Filler ${index}` }, game.player.id),
   );
   game.player.hand.push(runtimeSource);
-  game.player.field.push(runtimeTribute, ...fillers);
+  placeFieldCards(game.player.field, runtimeTribute, ...fillers);
   const execution = await game.effectEngine.applyActions(
     [...required(effect.activationCosts), ...required(effect.actions)],
     {
@@ -781,7 +782,7 @@ test("Corebreaker makes another Tuner a non-Tuner, restores it, and triggers onl
     game.player.id,
   );
   facedownTuner.isFacedown = true;
-  game.player.field.push(corebreaker, tuner, facedownTuner);
+  placeFieldCards(game.player.field, corebreaker, tuner, facedownTuner);
   const effect = getEffect(
     COREBREAKER_ID,
     "vulcanomaton_corebreaker_make_non_tuner",
@@ -880,8 +881,8 @@ test("Corebreaker makes another Tuner a non-Tuner, restores it, and triggers onl
     { id: 9920, name: "Opponent field", cardKind: "spell", subtype: "field" },
     game.bot.id,
   );
-  game.bot.field.push(opponentMonster);
-  game.bot.spellTrap.push(opponentSpell);
+  placeFieldCards(game.bot.field, opponentMonster);
+  placeFieldCards(game.bot.spellTrap, opponentSpell);
   game.bot.fieldSpell = opponentField;
   const wrongContext = await game.effectEngine.collectCardToGraveTriggers({
     card: corebreaker,
@@ -954,7 +955,7 @@ test("Excavation searches the exact monster and only Special Summons with its co
     { id: 9923, name: "Invalid level", attribute: "Earth", level: 5 },
     game.player.id,
   );
-  game.player.field.push(conditionMonster);
+  placeFieldCards(game.player.field, conditionMonster);
   game.player.hand.push(existingHand);
   game.player.deck.push(added, invalid);
   const effect = getEffect(

@@ -1,3 +1,4 @@
+import { placeFieldCards } from "./helpers/game.js";
 import assert from "node:assert/strict";
 import test, { type TestContext } from "node:test";
 import Card from "../src/core/Card.js";
@@ -15,7 +16,7 @@ async function setup(t: TestContext) {
   const trap = new Card(cardDefinition("Call of the Haunted"), "player");
   Object.assign(trap, { isFacedown: true, setTurn: 1, turnSetOn: 1 });
   const monster = new Card(cardDefinition("Nightmare Steed"), "player");
-  game.player.spellTrap.push(trap);
+  placeFieldCards(game.player.spellTrap, trap);
   game.player.graveyard.push(monster);
   t.after(() => game.dispose());
   assert.equal((await game.tryActivateSpellTrapEffect(trap, { haunted_target: [monster] }, { owner: game.player })).success, true);
@@ -28,7 +29,7 @@ for (const departing of ["monster", "trap"] as const) {
       const { game, trap, monster } = await setup(t);
       if (negated) {
         const source = new Card(cardDefinition("Orathus, The Fallen Angel"), "bot");
-        game.bot.field.push(source);
+        placeFieldCards(game.bot.field, source);
         const effect = required(source.effects.find((entry) => entry.id === "orathus_synchro_summon_negate"));
         await game.effectEngine.applyActions(required(effect.actions), { source, player: game.bot, opponent: game.player, effect },
           { orathus_negate_target: [trap] });

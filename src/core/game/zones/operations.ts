@@ -13,6 +13,7 @@ import type { GamePlayer } from "../../contracts/player.js";
 import type { CanonicalZone } from "../../contracts/zones.js";
 
 interface ZoneOperationHost extends GameZonesHost {
+  fieldPlacementGeneration?: number;
   devLog(code: string, detail?: unknown): void;
   normalizeZoneCardOwnership(
     contextLabel?: string,
@@ -95,6 +96,7 @@ export function runZoneOp<Result>(
 ): Result | ZoneOpFailure | Promise<Result | ZoneOpFailure> {
   const contextLabel = options.contextLabel || opLabel;
   const root = this.zoneOpDepth === 0;
+  const generation = this.fieldPlacementGeneration;
   if (root) {
     this.zoneOpSnapshot = this.captureZoneSnapshot(contextLabel);
   }
@@ -132,6 +134,7 @@ export function runZoneOp<Result>(
   };
 
   const finalizeFailure = (error: unknown): ZoneOpFailure => {
+    if (generation !== this.fieldPlacementGeneration) return { success: false, reason: "duel_ended", rolledBack: false };
     this.zoneOpDepth = Math.max(0, this.zoneOpDepth - 1);
     rollback(error);
     if (root && this.zoneOpSnapshot) {
@@ -148,6 +151,7 @@ export function runZoneOp<Result>(
   };
 
   const finalizeSuccess = (result: Result): Result | ZoneOpFailure => {
+    if (generation !== this.fieldPlacementGeneration) return { success: false, reason: "duel_ended", rolledBack: false };
     try {
       this.normalizeZoneCardOwnership(contextLabel, {
         enforceZoneOwner: true,

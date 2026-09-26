@@ -11,6 +11,7 @@ import type * as modals from "../../ui/renderer/modals.js";
 import type * as summonModals from "../../ui/renderer/summonModals.js";
 import type * as selectionModals from "../../ui/renderer/selectionModals.js";
 import type * as trapModals from "../../ui/renderer/trapModals.js";
+import type * as placement from "../../ui/renderer/placement.js";
 import type { UiCard } from "../../ui/renderer/types.js";
 /** Serializable geometry shared by the engine and presentation layers. */
 export interface UiPoint {
@@ -40,6 +41,8 @@ export interface ImpactFeedback {
  * selection methods are explicit so candidate identity is preserved in callbacks.
  */
 export interface GameUI {
+  chooseFieldPlacement: OmitThisParameter<typeof placement.chooseFieldPlacement>;
+  cancelFieldPlacement: OmitThisParameter<typeof placement.cancelFieldPlacement>;
   renderHand: OmitThisParameter<typeof board.renderHand>;
   renderField: OmitThisParameter<typeof board.renderField>;
   renderSpellTrap: OmitThisParameter<typeof board.renderSpellTrap>;

@@ -22,6 +22,7 @@ const DECISION_KINDS: ReadonlySet<string> = new Set([
   "target_selection",
   "chain_response",
   "segoc_order",
+  "field_placement",
 ]);
 const PHASES: ReadonlySet<string> = new Set([
   "draw",
@@ -474,8 +475,20 @@ function validateDecisionContext(
   value: unknown,
   path: string,
 ): void {
-  if (value === null) return;
+  if (value === null && kind !== "field_placement") return;
   const context = requireObject(value, path);
+  if (kind === "field_placement") {
+    requireString(read(context, "procedureId"), `${path}.procedureId`);
+    for (const key of ["decidingPlayerId", "destinationPlayerId"]) {
+      const player = read(context, key);
+      if (player !== "player" && player !== "bot") invalid(`${path}.${key}`, "a player id");
+    }
+    const row = read(context, "row");
+    if (row !== "field" && row !== "spellTrap") invalid(`${path}.row`, "field or spellTrap");
+    requireIdentity(read(context, "duelCardId"), `${path}.duelCardId`, false);
+    requireBoolean(read(context, "allowCancel"), `${path}.allowCancel`);
+    return;
+  }
   if (kind === "chain_response") {
     requireNullableString(read(context, "type"), `${path}.type`);
     for (const key of ["chainId", "respondingToLinkId"]) {
@@ -497,6 +510,13 @@ function validateDecisionValue(
   path: string,
 ): void {
   const decisionValue = requireObject(value, path);
+  if (kind === "field_placement") {
+    if (read(decisionValue, "outcome") === "cancelled") return;
+    if (read(decisionValue, "outcome") !== "chosen") invalid(`${path}.outcome`, "chosen or cancelled");
+    const slot = requireInteger(read(decisionValue, "slot"), `${path}.slot`, 0);
+    if (slot > 4) invalid(`${path}.slot`, "an integer between 0 and 4");
+    return;
+  }
   if (kind === "chain_response") {
     validateCandidateDecisionValue(decisionValue, path);
     return;
@@ -533,13 +553,42 @@ function validateDecisions(value: unknown): void {
       );
       validateDecisionValue(kind, read(entry, "value"), `${path}.value`);
       validateDecisionContext(kind, read(entry, "context"), `${path}.context`);
+      if (kind === "field_placement") {
+        const context = requireObject(read(entry, "context"), `${path}.context`);
+        const result = requireObject(read(entry, "value"), `${path}.value`);
+        if (read(entry, "actorId") !== read(context, "decidingPlayerId")) {
+          invalid(`${path}.actorId`, "the deciding player from context");
+        }
+        const prefix = `${read(context, "destinationPlayerId")}:${read(context, "row")}:`;
+        const keys = requireArray(read(entry, "candidateKeys"), `${path}.candidateKeys`);
+        if (keys.length === 0 || keys.length > 5 || new Set(keys).size !== keys.length || keys.some((key) =>
+          typeof key !== "string" || ![0, 1, 2, 3, 4].some((slot) => key === `${prefix}${slot}`),
+        )) invalid(`${path}.candidateKeys`, "distinct field slots for this destination");
+        if (read(result, "outcome") === "cancelled") {
+          if (read(context, "allowCancel") !== true) invalid(`${path}.value`, "a required field placement");
+        } else if (!keys.includes(`${prefix}${read(result, "slot")}`)) {
+          invalid(`${path}.value.slot`, "one of the recorded candidates");
+        }
+      }
     },
   );
 }
 
-function validateCardSnapshot(value: unknown, path: string): void {
-  if (value === null) return;
+function validateCardSnapshot(value: unknown, path: string, onField = false): void {
+  if (value === null) {
+    if (onField) invalid(path, "a real card (compact row)");
+    return;
+  }
   const card = requireObject(value, path);
+  const presenceId = read(card, "fieldPresenceId");
+  if (presenceId !== null && typeof presenceId !== "string" && typeof presenceId !== "number") {
+    invalid(`${path}.fieldPresenceId`, "a field presence identity or null");
+  }
+  const fieldSlot = read(card, "fieldSlot");
+  if (onField) {
+    const slot = requireInteger(fieldSlot, `${path}.fieldSlot`, 0);
+    if (slot > 4) invalid(`${path}.fieldSlot`, "an integer between 0 and 4");
+  } else if (fieldSlot !== null) invalid(`${path}.fieldSlot`, "null outside a field row");
   requireIdentity(read(card, "duelCardId"), `${path}.duelCardId`, true);
   requireIdentity(read(card, "cardId"), `${path}.cardId`, true);
   for (const key of [
@@ -608,10 +657,18 @@ function validatePlayerSnapshot(value: unknown, path: string): void {
     "graveyard",
     "banished",
   ]) {
-    requireArray(read(zones, zone), `${path}.zones.${zone}`).forEach(
-      (card, index) =>
-        validateCardSnapshot(card, `${path}.zones.${zone}[${index}]`),
-    );
+    const cards = requireArray(read(zones, zone), `${path}.zones.${zone}`);
+    const onField = zone === "field" || zone === "spellTrap";
+    if (onField && cards.length > 5) invalid(`${path}.zones.${zone}`, "at most five cards");
+    const occupied = new Set<unknown>();
+    cards.forEach((card, index) => {
+      validateCardSnapshot(card, `${path}.zones.${zone}[${index}]`, onField);
+      if (onField && isObject(card)) {
+        const slot = read(card, "fieldSlot");
+        if (occupied.has(slot)) invalid(`${path}.zones.${zone}[${index}].fieldSlot`, "a unique occupied slot");
+        occupied.add(slot);
+      }
+    });
   }
   validateCardSnapshot(read(zones, "fieldSpell"), `${path}.zones.fieldSpell`);
 }
@@ -628,6 +685,7 @@ function validateProcedureSnapshot(value: unknown, path: string): void {
 
 function validateStateSnapshot(value: unknown, path: string): void {
   const snapshot = requireObject(value, path);
+  requireInteger(read(snapshot, "fieldPlacementSequence"), `${path}.fieldPlacementSequence`, 0);
   requireNullableString(read(snapshot, "turn"), `${path}.turn`);
   requireNullableString(read(snapshot, "phase"), `${path}.phase`);
   requireFiniteNumber(read(snapshot, "turnCounter"), `${path}.turnCounter`);
@@ -648,6 +706,18 @@ function validateStateSnapshot(value: unknown, path: string): void {
   ]) {
     if (!hasOwn(snapshot, key)) invalid(`${path}.${key}`, "a serialized value");
   }
+  requireArray(read(snapshot, "temporaryControlEffects"), `${path}.temporaryControlEffects`).forEach((value, index) => {
+    const controlPath = `${path}.temporaryControlEffects[${index}]`;
+    const control = requireObject(value, controlPath);
+    requireIdentity(read(control, "cardDuelCardId"), `${controlPath}.cardDuelCardId`, false);
+    requireIdentity(read(control, "sourceDuelCardId"), `${controlPath}.sourceDuelCardId`, true);
+    requireString(read(control, "id"), `${controlPath}.id`);
+    requireString(read(control, "holderId"), `${controlPath}.holderId`);
+    requireNullableString(read(control, "previousControllerId"), `${controlPath}.previousControllerId`);
+    for (const key of ["expiresOnTurn", "createdOnTurn"]) requireInteger(read(control, key), `${controlPath}.${key}`, 0);
+    const presenceId = read(control, "fieldPresenceId");
+    if (presenceId !== null && typeof presenceId !== "number" && typeof presenceId !== "string") invalid(`${controlPath}.fieldPresenceId`, "a field presence identity or null");
+  });
   validateProcedureSnapshot(read(snapshot, "summon"), `${path}.summon`);
   validateProcedureSnapshot(read(snapshot, "combat"), `${path}.combat`);
 }

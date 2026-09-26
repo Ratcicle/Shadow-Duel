@@ -1,3 +1,5 @@
+import { appendSimulatedZoneCard } from "../zones.js";
+import { appendSimulatedFieldCard } from "../zones.js";
 import { getEffectiveAtk } from "../cardStats.js";
 import {
   canUseAsSynchroMaterial,
@@ -441,6 +443,7 @@ export function applySpecialSummonFromZone(
     moveCardToZone(sourceOwner, options.sourceCard, "banished");
   }
   chosen.forEach((card) => {
+    if (!hasOpenMonsterZone(targetPlayer)) return;
     const sourceOwner = findCardOwner(state, card) || targetPlayer;
     removeCardFromZones(sourceOwner, card);
     card.owner = targetPlayer.id;
@@ -453,7 +456,7 @@ export function applySpecialSummonFromZone(
       targetPlayer,
       options,
     );
-    targetPlayer.field.push(card);
+    appendSimulatedFieldCard(targetPlayer.field, card);
     options.onAfterSpecialSummon?.({
       state,
       player: targetPlayer,
@@ -593,7 +596,7 @@ export function applySynchroSummonFromExtraDeck(
   synchroCard.synchroMaterials = materials.map((material) =>
     captureSimSynchroMaterialMetadata(material, player, state),
   );
-  player.field.push(synchroCard);
+  appendSimulatedFieldCard(player.field, synchroCard);
   options.emitSimulatedEvent?.("after_summon", {
     card: synchroCard,
     player,
@@ -631,7 +634,7 @@ export function applySearchThenOptionalSpecialSummonFromHand(
   )[0];
   if (!searched) return;
   removeCardFromZones(targetPlayer, searched);
-  targetPlayer.hand.push(searched);
+  appendSimulatedZoneCard(targetPlayer.hand, searched);
 
   const canSummon =
     hasOpenMonsterZone(targetPlayer) &&
@@ -654,7 +657,7 @@ export function applySearchThenOptionalSpecialSummonFromHand(
       action,
     } as SimulatedActionOptions),
   );
-  targetPlayer.field.push(searched);
+  appendSimulatedFieldCard(targetPlayer.field, searched);
   options.onAfterSpecialSummon?.({
     state,
     player: targetPlayer,
@@ -736,7 +739,7 @@ export function applySpecialSummonFromHandWithCost(
     targetPlayer,
     options,
   );
-  targetPlayer.field.push(sourceCard);
+  appendSimulatedFieldCard(targetPlayer.field, sourceCard);
   applySimConditionalMarkersOnSummon({
     action,
     sourceCard,
@@ -835,7 +838,7 @@ export function applySpecialSummonFromHandWithTieredCost(
     (sourceCard as MutableSummonedCard).cannotBeDestroyedByBattle = true;
     sourceCard._simBattleDestructionProtected = true;
   }
-  targetPlayer.field.push(sourceCard);
+  appendSimulatedFieldCard(targetPlayer.field, sourceCard);
   options.onAfterSpecialSummon?.({
     state,
     player: targetPlayer,
@@ -912,7 +915,7 @@ export function applyBounceAndSummon(
     targetPlayer,
     options,
   );
-  targetPlayer.field.push(chosen);
+  appendSimulatedFieldCard(targetPlayer.field, chosen);
   options.onAfterSpecialSummon?.({
     state,
     player: targetPlayer,
@@ -971,7 +974,7 @@ export function applySpecialSummonToken(
     targetPlayer,
     options,
   );
-  targetPlayer.field.push(summonedToken);
+  appendSimulatedFieldCard(targetPlayer.field, summonedToken);
   emitSimulatedAfterSpecialSummon({
     options,
     state,
@@ -1014,7 +1017,7 @@ export function applyConditionalSummonFromHand(
       targetPlayer,
       options,
     );
-    targetPlayer.field.push(chosen);
+    appendSimulatedFieldCard(targetPlayer.field, chosen);
     emitSimulatedAfterSpecialSummon({
       options,
       state,
@@ -1129,7 +1132,7 @@ export function applyPolymerizationFusionSummon(
     options,
   );
   (fusionCard as MutableSummonedCard).summonMethod = "fusion";
-  targetPlayer.field.push(fusionCard);
+  appendSimulatedFieldCard(targetPlayer.field, fusionCard);
   options.onFusionSummon?.({
     state,
     player: targetPlayer,

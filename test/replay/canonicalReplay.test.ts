@@ -1,4 +1,4 @@
-import { required } from "../helpers/fixtures.js";
+import { required, unsafeFixture } from "../helpers/fixtures.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 
@@ -6,6 +6,7 @@ import Game from "../../src/core/Game.js";
 import {
   getCardDatabaseSignature,
   createCanonicalStateSnapshot,
+  hashCanonicalGameState,
   hashCanonicalValue,
   isReplayEvent,
   validateCanonicalReplay,
@@ -16,6 +17,8 @@ import type {
   SelectionCandidateKey,
 } from "../../src/core/contracts/primitives.js";
 import type { CanonicalReplayDecisionOf, ReplayDriverGamePort } from "../../src/core/contracts/replay.js";
+import type { FieldPlacementResult } from "../../src/core/contracts/placement.js";
+import type { ReplayDecisionInput } from "../../src/core/contracts/decisions.js";
 
 const deck = [1, 2, 3, 4, 5, 6, 7, 8];
 
@@ -38,6 +41,77 @@ async function initialize(
   });
 }
 
+for (const placement of [
+  { outcome: "chosen", slot: 4 },
+  { outcome: "chosen", slot: 0 },
+  { outcome: "cancelled" },
+] satisfies FieldPlacementResult[]) {
+  test(`manual placement ${placement.outcome === "chosen" ? placement.slot : placement.outcome} replays headlessly without consulting local preference`, async (t) => {
+    let prompts = 0;
+    const game = new Game({
+      randomSeed: 123, captureReplay: true, chainResponseTimeoutMs: 0,
+      getFieldPlacementMode: () => "manual",
+      fieldPlacementProvider: async (request) => {
+        prompts++;
+        assert.equal(request.allowCancel, true);
+        return placement;
+      },
+    });
+    t.after(() => game.dispose());
+    await game.startWithDecks({ exactDecks: true, initializeOnly: true, startAtDrawPhase: true, announceStartingPlayer: false, startingPlayer: "player", playerDeck: Array(12).fill(1), botDeck: Array(12).fill(1), playerExtraDeck: [], botExtraDeck: [] });
+    game.phase = "main1";
+    game.recordReplayCommand({ type: "set_phase", actorId: "player", payload: { phase: "main1" } });
+    const card = required(game.player.hand[0]);
+    await game.performNormalSummon(game.player, 0, "attack", false);
+    assert.equal(prompts, 1);
+    assert.equal(card.fieldSlot, placement.outcome === "chosen" ? placement.slot : null);
+    assert.equal(game.player.summonCount, placement.outcome === "chosen" ? 1 : 0);
+    assert.equal(game.player.hand.includes(card), placement.outcome === "cancelled");
+    const replay = validateCanonicalReplay(JSON.parse(JSON.stringify(game.finalizeReplay({ reason: "placement-test" }))));
+    assert.equal(replay.decisions.filter((decision) => decision.kind === "field_placement").length, 1);
+    assert.equal(replay.commands.filter((command) => command.type === "summon").length, 1);
+    const playback = new Game({ replayMode: "playback", captureReplay: false, chainResponseTimeoutMs: 0, getFieldPlacementMode: () => { throw new Error("Playback must not read local preferences."); } });
+    t.after(() => playback.dispose());
+    const result = await replayCanonicalDuel(replay, { game: unsafeFixture<ReplayDriverGamePort>(playback, "Replay driver uses a narrow player projection; this fixture passes only the real Game's own player/card instances.") });
+    assert.equal(result.ok, true);
+    assert.equal(result.finalStateHash, replay.result?.finalStateHash);
+    assert.equal(playback.player.field[0]?.fieldSlot ?? null, placement.outcome === "chosen" ? placement.slot : null);
+  });
+}
+
+test("D2 broker playback reproduces rule destruction, original graveyard and canonical positions", async (t) => {
+  const decisions: ReplayDecisionInput[] = [];
+  const live = new Game({ disableChains: true, captureReplay: false, randomSeed: 91, getFieldPlacementMode: () => "manual", fieldPlacementProvider: async () => ({ outcome: "chosen", slot: 4 }) });
+  const playback = new Game({ disableChains: true, captureReplay: false, replayMode: "playback", randomSeed: 91, getFieldPlacementMode: () => { throw new Error("Replay must not consult local placement settings."); } });
+  t.after(() => { live.dispose(); playback.dispose(); });
+  live.on("decision_made", (decision) => { decisions.push(decision); });
+  const run = async (game: Game) => {
+    game.turnCounter = 7;
+    game.applyScenarioSetup({ schemaVersion: 2, player: { hand: [{ id: 3 }] }, bot: { field: [4, 0, 1, 2, 3].map((fieldSlot) => ({ id: 1, fieldSlot })), hand: [{ id: 1 }] } });
+    const borrowed = required(game.bot.field[0]);
+    const source = required(game.player.hand[0]);
+    await game.takeControl(borrowed, game.player, { duration: "until_end_phase", sourceCard: source });
+    const pending = createCanonicalStateSnapshot(game);
+    assert.equal(borrowed.fieldSlot, 4);
+    await game.moveCard(required(game.bot.hand[0]), game.bot, "field", { fromZone: "hand", summonOrigin: "effect_resolution" });
+    const causes: unknown[] = [];
+    game.on("card_moved", (event) => { if (event.card === borrowed) causes.push(event.destroyCause); });
+    await game.processTemporaryControlEffects();
+    assert.deepEqual(causes, ["rule"]);
+    assert.equal(game.player.field.length, 0);
+    assert.deepEqual(game.bot.graveyard, [borrowed]);
+    assert.equal(borrowed.fieldSlot, null);
+    assert.equal(game.temporaryControlEffects.length, 0);
+    return { pending, final: createCanonicalStateSnapshot(game), hash: hashCanonicalGameState(game) };
+  };
+  const expected = await run(live);
+  assert.equal(decisions.filter((decision) => decision.kind === "field_placement").length, 2);
+  playback.decisionBroker.loadReplayDecisions(decisions);
+  const actual = await run(playback);
+  assert.deepEqual(actual, expected);
+  assert.equal(playback.decisionBroker.replayCursor, decisions.length);
+});
+
 test("canonical replay preserves fractional LP without changing its schema", async (t) => {
   const game = new Game({ randomSeed: 456, captureReplay: true });
   t.after(() => game.dispose());
@@ -56,7 +130,7 @@ test("canonical replay preserves fractional LP without changing its schema", asy
   Reflect.apply(dispose, result.game, []);
 });
 
-test("hand procedure capture replays the human's five costs without an activation command", async (t) => {
+test("hand procedure capture replays the human's five costs and manual slot without an activation command", async (t) => {
   // The shared starting fixture isolates procedure capture from unrelated turns.
   const installStartingFixture = (game: GameInstance) => {
     const start = game.startWithDecks.bind(game);
@@ -71,8 +145,15 @@ test("hand procedure capture replays the human's five costs without an activatio
       game.waitForBoardPresentation = async () => {};
     };
   };
-  const recording = new Game({ randomSeed: 712, captureReplay: true });
-  const playback = new Game({ randomSeed: 712, captureReplay: false, replayMode: "playback" });
+  const recording = new Game({
+    randomSeed: 712, captureReplay: true,
+    getFieldPlacementMode: () => "manual",
+    fieldPlacementProvider: async () => ({ outcome: "chosen", slot: 4 }),
+  });
+  const playback = new Game({
+    randomSeed: 712, captureReplay: false, replayMode: "playback",
+    getFieldPlacementMode: () => { throw new Error("Playback must use the recorded placement."); },
+  });
   t.after(() => { recording.dispose(); playback.dispose(); });
   installStartingFixture(recording);
   installStartingFixture(playback);
@@ -89,15 +170,18 @@ test("hand procedure capture replays the human's five costs without an activatio
   selection.selections.hand_summon_cost = required(selection.requirements[0]).candidates.map(candidate => candidate.key);
   await recording.finishTargetSelection();
   assert.equal(recording.player.field.includes(hyperion), true);
+  assert.equal(hyperion.fieldSlot, 4);
   const replay = validateCanonicalReplay(JSON.parse(JSON.stringify(
     Reflect.apply(recording.finalizeReplay, recording, [{ reason: "test" }]),
   )));
   assert.deepEqual(replay.commands.map(command => command.type), ["hand_summon_procedure"]);
   assert.equal(replay.decisions.filter(decision => decision.kind === "cost").length, 1);
+  assert.equal(replay.decisions.filter(decision => decision.kind === "field_placement").length, 1);
   // As in the driver factory, this read port refers to this Game's real cards and players.
   const replayed = await replayCanonicalDuel(replay, { game: playback as ReplayDriverGamePort });
   assert.equal(replayed.ok, true);
   assert.equal(playback.player.banished.length, 5);
+  assert.equal(required(playback.player.field[0]).fieldSlot, 4);
   assert.equal(required(playback.player.field[0]).lastSummonProcedure, hyperion.lastSummonProcedure);
   assert.equal(replayed.finalStateHash, replay.result?.finalStateHash);
   assert.deepEqual(createCanonicalStateSnapshot(playback), replay.result?.finalState);
@@ -159,15 +243,15 @@ test("replay canônico headless termina com o mesmo hash", async () => {
     ),
   );
   assert.equal(replay.format, "shadow-duel-canonical-replay");
-  assert.equal(replay.schemaVersion, 1);
+  assert.equal(replay.schemaVersion, 2);
   assert.equal(replay.cardDatabaseSignature, getCardDatabaseSignature());
   assert.deepEqual(
     replay.commands.map((command: { stateHash: string }) => command.stateHash),
-    ["26771e66", "0339db06"],
+    ["f2d08f36", "6dff35de"],
   );
-  assert.equal(replay.result.finalStateHash, "0339db06");
-  assert.equal(hashCanonicalValue(replay), "e0556fa0");
-  assert.equal(JSON.stringify(replay).length, 8526);
+  assert.equal(replay.result.finalStateHash, "6dff35de");
+  assert.equal(hashCanonicalValue(replay), "c4397961");
+  assert.equal(JSON.stringify(replay).length, 9044);
 
   const result = await replayCanonicalDuel(replay);
   assert.equal(result.ok, true);
@@ -223,7 +307,7 @@ test("banco incompatível e relatórios v4 são rejeitados explicitamente", () =
     () =>
       validateCanonicalReplay({
         format: "shadow-duel-canonical-replay",
-        schemaVersion: 1,
+        schemaVersion: 2,
         cardDatabaseSignature: "tampered",
         setup: {},
         commands: [],

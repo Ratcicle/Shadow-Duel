@@ -78,6 +78,7 @@ export async function handleScheduleSpecialSummon(
         {
           card,
           owner: owner.id,
+          placementActorId: player.id,
           fromZone,
           position: action.position,
           statusesOnSummon: action.statusesOnSummon || null,
@@ -148,12 +149,14 @@ export async function handleAbyssalSerpentDelayedSummon(
       {
         card: source,
         owner: "player",
+        placementActorId: player.id,
         fromZone: "graveyard",
         getsBuffIfTargetWasFusionOrAscension: isFusionOrAscension,
       },
       {
         card: target,
         owner: "bot",
+        placementActorId: player.id,
         fromZone: "graveyard",
         getsBuffIfTargetWasFusionOrAscension: false,
       },

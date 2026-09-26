@@ -190,6 +190,17 @@ export class DecisionBroker {
           `Replay decision mismatch at ${this.replayCursor}: expected ${runtimeInput.kind}.`,
         );
       }
+      if (runtimeInput.kind === "field_placement") {
+        const expectedContext = runtimeInput.contextSnapshot;
+        const receivedContext = recorded.context;
+        const keys = ["procedureId", "decidingPlayerId", "destinationPlayerId", "row", "duelCardId", "allowCancel"];
+        if (!expectedContext || !receivedContext ||
+            recorded.actorId !== (runtimeInput.actor?.id || runtimeInput.actorId || null) ||
+            keys.some(key => Reflect.get(expectedContext, key) !== Reflect.get(receivedContext, key)) ||
+            JSON.stringify(recorded.candidateKeys) !== JSON.stringify(candidates.map(candidateKey))) {
+          throw new Error("Replay field placement context or candidates do not match the current procedure.");
+        }
+      }
       const result = typeof runtimeInput.deserializeReplayValue === "function"
         ? runtimeInput.deserializeReplayValue(recorded.value, candidates)
         : matchReplayValue(recorded.value, candidates);

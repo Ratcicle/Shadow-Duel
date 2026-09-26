@@ -66,6 +66,7 @@ export function canStartAction(
   const tributeSelectionActive =
     this.pendingTributeSummonSelection?.active === true;
   const selectionInteractive =
+    !!this.pendingFieldPlacement ||
     !!this.targetSelection ||
     tributeSelectionActive ||
     selectionState === "selecting" ||

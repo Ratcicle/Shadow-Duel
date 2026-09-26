@@ -2,6 +2,8 @@ import type Renderer from "../Renderer.js";
 import type { GamePlayer } from "../../core/contracts/player.js";
 import type { GamePhase } from "../../core/contracts/game.js";
 import type { PlayerId } from "../../core/contracts/primitives.js";
+import { getBotPresetPresentation } from "../../core/bot/presets.js";
+import { publicAssetUrl } from "../../core/publicUrl.js";
 
 export interface PriorityDisplayState {
   state?: string;
@@ -46,9 +48,15 @@ export function log(this: Renderer, message: string): void {
 /**
  * @this {import('../Renderer.js').default}
  */
-export function updateTurn(this: Renderer, player: GamePlayer): void {
+export function updateTurn(
+  this: Renderer,
+  player: GamePlayer,
+  turnCounter: number,
+): void {
   if (!this.elements.turnIndicator) return;
-  this.elements.turnIndicator.textContent = `Turn: ${player.name}`;
+  this.elements.turnIndicator.textContent = getUIText("ui.duel.turn", {
+    turn: turnCounter,
+  });
 
   // Indicador visual de turno: borda brilhante no campo do jogador ativo
   const playerAreaEl = document.getElementById("player-area");
@@ -124,6 +132,46 @@ export function updatePriorityIndicator(
   element.classList.toggle("resolving", resolving);
 }
 
+export function writeLpValue(element: HTMLElement, value: number): void {
+  const text = String(value);
+  element.textContent = text;
+  // Fit larger valid values without abbreviating them; very long values may wrap.
+  element.style?.setProperty("--lp-digits", String(Math.max(5, text.length)));
+}
+
+function updateHudIdentity(hud: HTMLElement, player: GamePlayer): void {
+  const name = hud.querySelector<HTMLElement>(".name");
+  if (name) {
+    name.textContent = player.name;
+    name.title = player.name;
+  }
+  const preset = player.controllerType === "ai" ? getBotPresetPresentation(player.archetype) : null;
+  if (preset) hud.style.setProperty("--hud-accent", preset.hudAccent);
+  else hud.style.removeProperty("--hud-accent");
+
+  const frame = hud.querySelector<HTMLElement>(".player-avatar-frame");
+  if (!frame) return;
+  const currentImage = frame.querySelector<HTMLImageElement>(".player-avatar-portrait");
+  if (!preset) {
+    if (currentImage) frame.replaceChildren();
+    return;
+  }
+  const { asset, sourceWidth, crop } = preset.avatarPortrait;
+  const src = publicAssetUrl(asset);
+  const image = currentImage?.getAttribute("src") === src
+    ? currentImage : frame.ownerDocument.createElement("img");
+  if (image !== currentImage) {
+    image.className = "player-avatar-portrait";
+    image.alt = ""; // The frame is decorative; the participant name identifies the HUD.
+    image.draggable = false;
+    image.src = src;
+    frame.replaceChildren(image);
+  }
+  image.style.setProperty("--portrait-scale", String(sourceWidth / crop.size));
+  image.style.setProperty("--portrait-x", String(crop.x / crop.size));
+  image.style.setProperty("--portrait-y", String(crop.y / crop.size));
+}
+
 /**
  * @this {import('../Renderer.js').default}
  */
@@ -131,6 +179,8 @@ export function updateLP(this: Renderer, player: GamePlayer): void {
   const el =
     player.id === "player" ? this.elements.playerLP : this.elements.botLP;
   if (!el) return;
+  const hud = el.closest<HTMLElement>(".player-info");
+  if (hud) updateHudIdentity(hud, player);
 
   if (
     typeof this.ensureLpDisplayState === "function" &&
@@ -141,7 +191,7 @@ export function updateLP(this: Renderer, player: GamePlayer): void {
     if (state?.animating || state?.queue?.length! > 0) {
       const displayed = this.getDisplayedLp(player);
       if (displayed != null) {
-        el.textContent = String(displayed);
+        writeLpValue(el, displayed);
       }
       return;
     }
@@ -153,5 +203,5 @@ export function updateLP(this: Renderer, player: GamePlayer): void {
     return;
   }
 
-  el.textContent = String(player.lp);
+  writeLpValue(el, player.lp);
 }

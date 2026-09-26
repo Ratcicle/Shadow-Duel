@@ -146,8 +146,8 @@ const functionValue: SerializableValue = () => true;
 
 const replay: CanonicalReplay = {
   format: "shadow-duel-canonical-replay",
-  schemaVersion: 1,
-  engineVersion: "phase-9",
+  schemaVersion: 2,
+  engineVersion: "field-positions-v2",
   cardDatabaseSignature: "1cc622e3",
   setup: {
     seed: 123,
@@ -165,9 +165,9 @@ const replay: CanonicalReplay = {
 
 const wrongSchema: CanonicalReplay = {
   ...replay,
-  // contract-negative: schema version remains the literal 1
+  // contract-negative: obsolete schema 1 cannot enter the new runtime
   // @ts-expect-error
-  schemaVersion: 2,
+  schemaVersion: 1,
 };
 
 const wrongEngine: CanonicalReplay = {

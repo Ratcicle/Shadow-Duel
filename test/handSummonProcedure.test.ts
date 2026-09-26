@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import Card from "../src/core/Card.js";
 import { cardDatabaseByName, required } from "./helpers/fixtures.js";
-import { createRuntimeGame } from "./helpers/game.js";
+import { createRuntimeGame, placeFieldCards } from "./helpers/game.js";
 
 function setup() {
   const game = createRuntimeGame();
@@ -88,17 +88,20 @@ test("hand procedure can free a full field using its own facedown LIGHT monster"
   const fieldCost = required(materials[0]);
   game.player.graveyard.splice(0, 1);
   fieldCost.isFacedown = true;
-  game.player.field.push(fieldCost, ...Array.from({ length: 4 }, (_, index) => new Card({ name: `Field ${index}`, cardKind: "monster", attribute: "Dark" }, game.player.id)));
+  placeFieldCards(game.player.field, fieldCost, ...Array.from({ length: 4 }, (_, index) => new Card({ name: `Field ${index}`, cardKind: "monster", attribute: "Dark" }, game.player.id)));
+  const freedSlot = fieldCost.fieldSlot;
   assert.equal(game.canSummonFromHandByProcedure(card, game.player).ok, true);
   assert.equal((await game.performHandSummonProcedure(card, game.player, { materials, position: "defense" })).success, true);
   assert.equal(game.player.field.length, 5);
   assert.equal(card.position, "defense");
+  assert.equal(card.fieldSlot, freedSlot);
+  assert.equal(fieldCost.fieldSlot, null);
 });
 
 test("procedure is unavailable with a full field and no selected field cost", async (t) => {
   const { game, card, materials } = setup();
   t.after(() => game.dispose());
-  game.player.field.push(...Array.from({ length: 5 }, (_, index) => new Card({ name: `Field ${index}`, cardKind: "monster", attribute: "Dark" }, game.player.id)));
+  placeFieldCards(game.player.field, ...Array.from({ length: 5 }, (_, index) => new Card({ name: `Field ${index}`, cardKind: "monster", attribute: "Dark" }, game.player.id)));
   assert.equal(game.canSummonFromHandByProcedure(card, game.player).ok, false);
   assert.equal((await game.performHandSummonProcedure(card, game.player, { materials, position: "attack" })).success, false);
   assert.equal(game.player.banished.length, 0);
@@ -135,7 +138,7 @@ test("AI procedure selects a legal field-releasing cost when the field is full",
   t.after(() => game.dispose());
   game.player.controllerType = "ai";
   const fieldCost = new Card({ name: "Field Light", cardKind: "monster", attribute: "Light", atk: 3000 }, game.player.id);
-  game.player.field.push(fieldCost, ...Array.from({ length: 4 }, (_, index) => new Card({ name: `Field ${index}`, cardKind: "monster", attribute: "Dark" }, game.player.id)));
+  placeFieldCards(game.player.field, fieldCost, ...Array.from({ length: 4 }, (_, index) => new Card({ name: `Field ${index}`, cardKind: "monster", attribute: "Dark" }, game.player.id)));
   const result = await game.performHandSummonProcedure(card, game.player, { position: "attack" });
   assert.equal(result.success, true);
   assert.ok(game.player.banished.includes(fieldCost));

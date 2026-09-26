@@ -1,3 +1,4 @@
+import { placeSimulationCards } from "../helpers/simulation.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { beamSearchTurn } from "../../src/core/ai/BeamSearch.js";
@@ -20,7 +21,7 @@ function player(id: string): SimulatedPlayerState {
 
 function game(): AiStateShape {
   const bot = player("bot");
-  bot.field.push(card(1));
+  placeSimulationCards(bot.field, card(1));
   return { bot, player: player("player"), turn: "bot", phase: "main1", turnCounter: 1 };
 }
 
@@ -201,7 +202,7 @@ test("Beam equipment movement resolves against the branch host across depths", a
   equip.equippedTo = host;
   equip.equipTarget = host;
   host.equips = [equip];
-  input.bot.spellTrap.push(equip);
+  placeSimulationCards(input.bot.spellTrap, equip);
   let detached = 0;
   const result = required(await beamSearchTurn(input, {
     generateMainPhaseActions(state) {

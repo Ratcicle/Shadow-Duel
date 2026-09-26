@@ -25,6 +25,8 @@ import type {
   MonsterType,
 } from "../../contracts/cards.js";
 import type { CanonicalZone } from "../../contracts/zones.js";
+import type { FieldPlacementPreparation, FieldPlacementIntent, PlacementRow } from "../../contracts/placement.js";
+import { assignAutomaticFieldSlot } from "../../game/zones/placement.js";
 
 interface SummonRuntimeCard extends ActionRuntimeCard {
   tokenSourceCard?: string | null;
@@ -40,6 +42,12 @@ interface SummonRuntimeCard extends ActionRuntimeCard {
 type SummonGamePort = Omit<ActionRuntimeGamePort, "moveCard" | "ui"> & {
   ui: { log(message: string): void };
   ensureDuelCardId?(card: ActionRuntimeCard): number | string;
+  prepareFieldPlacement?(
+    card: ActionRuntimeCard,
+    destination: ActionRuntimePlayer,
+    row: PlacementRow,
+    options: { actor: ActionRuntimePlayer; allowCancel: boolean },
+  ): Promise<FieldPlacementPreparation>;
   moveCard(
     card: ActionRuntimeCard,
     player: ActionRuntimePlayer,
@@ -162,6 +170,7 @@ export async function applySpecialSummonToken(
       "field",
       {
         fromZone: "token",
+        placementActor: ctx.player,
         position,
         isFacedown: false,
         resetAttackFlags: true,
@@ -170,10 +179,7 @@ export async function applySpecialSummonToken(
         summonProcedure: "token_effect",
       },
     );
-    if (
-      moveResult?.success === false &&
-      moveResult?.reason !== "card_not_found"
-    ) {
+    if (moveResult?.success === false) {
       return false;
     }
     moved = moveResult?.success === true;
@@ -185,6 +191,7 @@ export async function applySpecialSummonToken(
       console.log("No space to special summon token.");
       return false;
     }
+    if (assignAutomaticFieldSlot(tokenCard, targetPlayer.field) === null) return false;
     tokenCard.position = position;
     tokenCard.isFacedown = false;
     tokenCard.hasAttacked = false;
@@ -293,7 +300,6 @@ export async function applySpecialSummonSelfAsTrapMonster(
   }
 
   const monster = action.monster || {};
-  const original = captureTrapMonsterOriginalState(source)!;
   const summonProcedure = action.summonProcedure || "trap_monster";
   let position = action.position || monster.position || "defense";
   if (position !== "attack" && position !== "defense") {
@@ -301,6 +307,34 @@ export async function applySpecialSummonSelfAsTrapMonster(
       position,
     });
   }
+
+  // Choose before transforming the source, so the live Spell/Trap remains
+  // unchanged while a mandatory resolution choice is pending.
+  let fieldPlacement: FieldPlacementIntent | null = null;
+  if (game.prepareFieldPlacement) {
+    const choice = await game.prepareFieldPlacement(source, player, "field", {
+      actor: ctx.player || player,
+      allowCancel: false,
+    });
+    if (choice.outcome !== "chosen") return false;
+    fieldPlacement = choice.intent;
+  }
+  const sourceSnapshot = Object.getOwnPropertyDescriptors(source);
+  const original = captureTrapMonsterOriginalState(source)!;
+  const restoreFailedTransformation = () => {
+    if (player.spellTrap.includes(source)) {
+      // The zone transaction restored the source (or never removed it).
+      // Restore added/absent properties as well as the original canonical slot.
+      for (const key of Object.keys(source)) {
+        if (!(key in sourceSnapshot)) Reflect.deleteProperty(source, key);
+      }
+      Object.defineProperties(source, sourceSnapshot);
+    } else {
+      // A committed rule failure may have sent the card elsewhere. Its actual
+      // zone/slot must remain intact; only undo the Trap Monster treatment.
+      restoreTrapMonsterOriginalState(source);
+    }
+  };
 
   source.originalCardKind = original.cardKind || source.cardKind;
   source.isTrapMonster = true;
@@ -323,8 +357,12 @@ export async function applySpecialSummonSelfAsTrapMonster(
   source.hasAttacked = false;
   source.attacksUsedThisTurn = 0;
 
-  const moveResult = await game.moveCard(source, player, "field", {
+  let moveResult: ActionMoveResult;
+  try {
+    moveResult = await game.moveCard(source, player, "field", {
     fromZone: sourceZone,
+    placementActor: ctx.player || player,
+    fieldPlacement,
     position,
     isFacedown: false,
     resetAttackFlags: true,
@@ -333,10 +371,14 @@ export async function applySpecialSummonSelfAsTrapMonster(
     summonOrigin: "effect_resolution",
     sourceCard: source,
     effectId: ctx?.effectId || ctx?.effect?.id || null,
-  });
+    });
+  } catch (error) {
+    restoreFailedTransformation();
+    throw error;
+  }
 
   if (moveResult?.success === false) {
-    restoreTrapMonsterOriginalState(source);
+    restoreFailedTransformation();
     return false;
   }
 
@@ -412,6 +454,7 @@ export async function applyCallOfTheHauntedSummon(
   let usedMoveCard = false;
   if (game && typeof game.moveCard === "function") {
     const moveResult = await game.moveCard(targetMonster, player, "field", {
+      placementActor: ctx.player || player,
       fromZone: "graveyard",
       position,
       isFacedown: false,
@@ -432,6 +475,7 @@ export async function applyCallOfTheHauntedSummon(
       game.ui.log("Field is full. Cannot summon.");
       return false;
     }
+    if (assignAutomaticFieldSlot(targetMonster, player.field) === null) return false;
     // Manual removal from graveyard
     const gyIndex = player.graveyard.indexOf(targetMonster);
     if (gyIndex > -1) {

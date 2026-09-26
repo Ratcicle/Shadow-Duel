@@ -1,3 +1,4 @@
+import { appendSimulatedZoneCard } from "../zones.js";
 import { getEffectiveAtk } from "../cardStats.js";
 import { getCounterValue, setCounterValue } from "../counters.js";
 import { estimateMonsterValue, hasArchetype } from "../cardValue.js";
@@ -282,7 +283,7 @@ export function applyDestroyCardsByScope(
   if (!Array.isArray(drawPlayer.hand)) drawPlayer.hand = [];
   for (let i = 0; i < drawAmount; i += 1) {
     const drawn = drawPlayer.deck?.shift?.();
-    if (drawn) drawPlayer.hand.push(drawn);
+    if (drawn) appendSimulatedZoneCard(drawPlayer.hand, drawn);
   }
   return;
 }

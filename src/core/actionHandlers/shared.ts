@@ -5,6 +5,7 @@
  */
 
 import { isAI } from "../Player.js";
+import { assignAutomaticFieldSlot, clearFieldSlot } from "../game/zones/placement.js";
 import { cardMatchesKind } from "../Card.js";
 import type { CardFilter } from "../contracts/effects.js";
 import type { ContextNumberSource } from "../contracts/actions.js";
@@ -713,6 +714,7 @@ export async function sendCardsToGraveyard(
     }
 
     player.graveyard = player.graveyard || [];
+    clearFieldSlot(card);
     player.graveyard.push(card);
     movedCards.push(card);
   }
@@ -1168,6 +1170,7 @@ export async function summonFromHandCore({
   const moveResult =
     typeof game.moveCard === "function"
       ? await game.moveCard(card, player, "field", {
+          placementActor: player,
           fromZone: "hand",
           position: resolvedPosition,
           isFacedown: false,
@@ -1191,6 +1194,7 @@ export async function summonFromHandCore({
   }
 
   if (moveResult == null) {
+    if (assignAutomaticFieldSlot(card, player.field) === null) return { success: false, position: resolvedPosition };
     const handIndex = player.hand.indexOf(card);
     if (handIndex !== -1) {
       player.hand.splice(handIndex, 1);

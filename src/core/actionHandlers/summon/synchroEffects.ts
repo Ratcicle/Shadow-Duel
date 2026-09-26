@@ -480,6 +480,7 @@ export async function handleDeSynchro(
       [material, player, { position: action.position || "choice" }],
     );
     const result = await game.moveCard(material, player, "field", {
+      placementActor: ctx.player || player,
       fromZone: "graveyard",
       position,
       isFacedown: false,

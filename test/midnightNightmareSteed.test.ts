@@ -1,3 +1,4 @@
+import { placeFieldCards } from "./helpers/game.js";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import type { TestContext } from "node:test";
@@ -140,7 +141,7 @@ test("o Tributo é pago antes da resposta e libera uma zona para a Invocação",
     makeFiller(id, game.player),
   );
   game.player.hand.push(source);
-  game.player.field.push(tribute, ...fillers);
+  placeFieldCards(game.player.field, tribute, ...fillers);
 
   const preview = game.effectEngine.canActivateMonsterEffectPreview(
     source,
@@ -201,7 +202,7 @@ test("a Invocação exige exatamente Nightmare Steed e não reduz Tributos da In
   const source = makeCard(getDefinition(CARD_NAME), game.player);
   const wrongTribute = makeFiller(990505, game.player);
   game.player.hand.push(source);
-  game.player.field.push(wrongTribute);
+  placeFieldCards(game.player.field, wrongTribute);
 
   const preview = game.effectEngine.canActivateMonsterEffectPreview(
     source,
@@ -235,8 +236,8 @@ test("destruir um monstro do oponente em batalha causa exatamente 300 de dano", 
     game.bot,
   );
   defender.position = "defense";
-  game.player.field.push(attacker);
-  game.bot.field.push(defender);
+  placeFieldCards(game.player.field, attacker);
+  placeFieldCards(game.bot.field, defender);
   game.bot.lp = 8000;
 
   const result = required(await game.resolveCombat(attacker, defender));

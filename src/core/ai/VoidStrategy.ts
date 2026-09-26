@@ -1,3 +1,5 @@
+import { appendSimulatedZoneCard } from "./common/zones.js";
+import { appendSimulatedFieldCard } from "./common/zones.js";
 import type {
   AIAction,
   AIPlannedAction,
@@ -2916,7 +2918,7 @@ export default class VoidStrategy extends BaseStrategy {
     recruited.isFacedown = false;
     recruited.hasAttacked = false;
     recruited.attacksUsedThisTurn = 0;
-    player.field.push(recruited);
+    appendSimulatedFieldCard(player.field, recruited);
     state._simVoidHollowRecruitUsed = true;
     if (hasPlanningExecutionContext(state)) {
       markSimOncePerTurnUsed(state, "void_hollow_summon", 1, player.id, true);
@@ -2941,7 +2943,7 @@ export default class VoidStrategy extends BaseStrategy {
     if (deckIndex < 0) return;
     const searched = player.deck.splice(deckIndex, 1)[0];
     if (searched) {
-      player.hand.push(searched);
+      appendSimulatedZoneCard(player.hand, searched);
       state._simVoidBeastSearchUsed = true;
     }
   }
@@ -2954,7 +2956,7 @@ export default class VoidStrategy extends BaseStrategy {
     if (ravenIndex >= 0) {
       const raven = player.hand.splice(ravenIndex, 1)[0];
       if (raven) {
-        player.graveyard.push(raven);
+        appendSimulatedZoneCard(player.graveyard, raven);
         fusionCard.immuneToOpponentEffectsUntilTurn =
           (state.turnCounter || 0) + 1;
         fusionCard._simProtectedByRaven = true;
@@ -2984,7 +2986,7 @@ export default class VoidStrategy extends BaseStrategy {
       }
       if (deckIndex >= 0) {
         const milled = deck.splice(deckIndex, 1)[0];
-        if (milled) player.graveyard.push(milled);
+        if (milled) appendSimulatedZoneCard(player.graveyard, milled);
       }
     }
 
@@ -2997,10 +2999,10 @@ export default class VoidStrategy extends BaseStrategy {
       destroyed.push(card);
       return false;
     });
-    destroyed.forEach((card) => player.graveyard.push(card));
+    destroyed.forEach((card) => appendSimulatedZoneCard(player.graveyard, card));
     destroyed.forEach(() => {
       const drawn = player.deck?.shift?.();
-      if (drawn) player.hand.push(drawn);
+      if (drawn) appendSimulatedZoneCard(player.hand, drawn);
     });
   }
 
@@ -3008,7 +3010,7 @@ export default class VoidStrategy extends BaseStrategy {
     const placeSpellCard = (simState: AiStateShape, placedCard: SimulatedCardState) => {
       const player = simState.bot;
       if (placedCard.subtype === "field") {
-        if (player.fieldSpell) player.graveyard.push(player.fieldSpell);
+        if (player.fieldSpell) appendSimulatedZoneCard(player.graveyard, player.fieldSpell);
         player.fieldSpell = placedCard;
         return { placed: true };
       }
@@ -3017,7 +3019,7 @@ export default class VoidStrategy extends BaseStrategy {
         placedCard.subtype === "equip"
       ) {
         player.spellTrap = player.spellTrap || [];
-        player.spellTrap.push(placedCard);
+        appendSimulatedFieldCard(player.spellTrap, placedCard);
         return { placed: true };
       }
       return { placed: false };

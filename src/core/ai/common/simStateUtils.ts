@@ -1,3 +1,5 @@
+import { appendSimulatedFieldCard, appendSimulatedZoneCard, clearSimulatedFieldPosition } from "./zones.js";
+
 /**
  * Remove a card reference from a simulated player zone.
  * This intentionally avoids engine movement hooks; callers use it only on
@@ -13,6 +15,7 @@ export function removeFromZone(
   const index = zone.indexOf(card);
   if (index < 0) return false;
   zone.splice(index, 1);
+  clearSimulatedFieldPosition(card);
   return true;
 }
 
@@ -27,7 +30,11 @@ export function pushToZone(
 ): void {
   if (!player || !card) return;
   if (!Array.isArray(player[zoneName])) player[zoneName] = [];
-  player[zoneName].push(card);
+  if (zoneName === "field" || zoneName === "spellTrap") {
+    appendSimulatedFieldCard(player[zoneName], card);
+  } else {
+    appendSimulatedZoneCard(player[zoneName], card);
+  }
 }
 
 /**
@@ -61,6 +68,7 @@ function summarizePlayer(
     field: (player.field || []).map((card) => ({
       name: card?.name || "?",
       position: card?.position || null,
+      fieldSlot: card?.fieldSlot ?? null,
       faceDown: !!card?.isFacedown,
       atk: card?.atk || 0,
       def: card?.def || 0,
@@ -73,6 +81,7 @@ function summarizePlayer(
     })),
     spellTrap: (player.spellTrap || []).map((card) => ({
       name: card?.name || "?",
+      fieldSlot: card?.fieldSlot ?? null,
       faceDown: !!card?.isFacedown,
       counters: getSpellTrapCounters(card),
     })),
@@ -99,6 +108,7 @@ export function getSimStateSignature(
   return JSON.stringify({
     bot: summarizePlayer(state?.bot as SimPlayerSummaryInput, options),
     player: summarizePlayer(state?.player as SimPlayerSummaryInput, options),
+    temporaryControlEffects: state.temporaryControlEffects || [],
     ...extraState,
   });
 }

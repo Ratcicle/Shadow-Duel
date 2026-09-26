@@ -6,6 +6,7 @@
 import type { GameCard } from "../../contracts/cards.js";
 import type { FullGameHost } from "../../contracts/gameRuntime.js";
 import type { GamePlayer } from "../../contracts/player.js";
+import { getFieldOccupants, isFieldSlot } from "./placement.js";
 
 type CheckedZoneName =
   | "hand"
@@ -239,6 +240,28 @@ export function assertStateInvariants(
   // Fix: Previne warns em duelos bot vs bot com efeitos em cadeia
   if (this.eventResolutionDepth > 1) {
     return { ok: true, issues: [], hasCritical: false, criticalIssues: [] };
+  }
+
+  // Canonical occupancy is never repaired from list order, even when diagnostics
+  // are throttled. Run this check at every completed top-level zone operation.
+  const positionIssues: ZoneIssue[] = [];
+  for (const player of [this.player, this.bot]) {
+    for (const row of ["field", "spellTrap"] as const) {
+      const occupied = new Set<number>();
+      for (const card of getFieldOccupants(this, player, row)) {
+        if (!card) continue; // Existing nullish-zone diagnostics handle malformed lists.
+        if (!isFieldSlot(card.fieldSlot) || occupied.has(card.fieldSlot)) {
+          positionIssues.push({ message: "invalid_field_position", playerId: player.id, zone: row, detail: { duelCardId: card.duelCardId, fieldSlot: card.fieldSlot } });
+        } else occupied.add(card.fieldSlot);
+      }
+    }
+    for (const card of [...player.hand, ...player.deck, ...player.extraDeck, ...player.graveyard, ...player.banished, ...(player.fieldSpell ? [player.fieldSpell] : [])]) {
+      if (card && card.fieldSlot != null) positionIssues.push({ message: "position_outside_field", playerId: player.id, detail: { duelCardId: card.duelCardId, fieldSlot: card.fieldSlot } });
+    }
+  }
+  if (positionIssues.length) {
+    if (options.failFast ?? this.devModeEnabled) throw new Error(`Invalid canonical field positions (${contextLabel}).`);
+    return { ok: false, issues: positionIssues, hasCritical: true, criticalIssues: positionIssues };
   }
 
   // CORREÇÃO: Rate limiting agressivo (500ms → 2000ms)

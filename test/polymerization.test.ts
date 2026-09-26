@@ -1,3 +1,4 @@
+import { placeFieldCards } from "./helpers/game.js";
 import assert from "node:assert/strict";
 import test, { type TestContext } from "node:test";
 import Card from "../src/core/Card.js";
@@ -23,7 +24,7 @@ function berserkerSetup(game: RuntimeGame) {
   const fieldBrute = make("Void Slayer Brute");
   const handBrute = make("Void Slayer Brute");
   const hollow = make("Void Hollow");
-  game.player.field.push(fieldBrute);
+  placeFieldCards(game.player.field, fieldBrute);
   game.player.hand.push(spell, handBrute, hollow);
   game.player.extraDeck.push(fusion);
   return { spell, fusion, fieldBrute, handBrute, hollow };
@@ -96,7 +97,7 @@ test("Fusion availability excludes exclusive procedures and combinations that ca
   const fusion = make("Shadow-Heart Warlord");
   game.player.extraDeck.push(fusion);
   game.player.hand.push(make("Shadow-Heart Abyssal Eel"), make("Shadow-Heart Abyssal Eel"));
-  game.player.field.push(...Array.from({ length: 5 }, () => make("Nightmare Steed")));
+  placeFieldCards(game.player.field, ...Array.from({ length: 5 }, () => make("Nightmare Steed")));
   assert.equal(game.effectEngine.getAvailableFusions(game.player.extraDeck, game.player.hand, game.player,
     { materialInfo: game.player.hand.map(() => ({ zone: "hand" })) }).length, 0);
   game.player.field.pop();
@@ -110,7 +111,7 @@ test("Polymerization resolves without consuming materials if a Chain response fo
   const { spell, fusion, fieldBrute, hollow } = berserkerSetup(game);
   const response = new Card(cardDefinition("Ancient Tree Spirit"), "bot");
   Object.assign(response, { isFacedown: true, setTurn: 1, turnSetOn: 1 });
-  game.bot.spellTrap.push(response);
+  placeFieldCards(game.bot.spellTrap, response);
   let responded = false;
   game.ui.showChainResponseModal = async (candidates) => {
     if (!responded && candidates.some((candidate) => candidate.card === response)) {
@@ -132,7 +133,7 @@ test("Bot fusion choices use legal combinations that free space on a full field"
   const game = setup(t);
   game.player.controllerType = "ai";
   const { spell, fusion, fieldBrute, handBrute } = berserkerSetup(game);
-  game.player.field.push(...Array.from({ length: 4 }, () => make("Nightmare Steed")));
+  placeFieldCards(game.player.field, ...Array.from({ length: 4 }, () => make("Nightmare Steed")));
   assert.equal(game.canActivatePolymerization(game.player), true);
   assert.equal((await game.tryActivateSpell(spell, 0)).success, true);
   assert.ok(game.player.field.includes(fusion));
@@ -157,7 +158,7 @@ test("Fusion preview respects field presence limits after excluding its material
   berserkerSetup(game);
   const exclusive = make("Nightmare Steed");
   exclusive.fieldPresenceRestriction = { type: "only_monster_you_control_while_faceup" };
-  game.player.field.push(exclusive);
+  placeFieldCards(game.player.field, exclusive);
   assert.equal(game.canActivatePolymerization(game.player), false);
   exclusive.isFacedown = true;
   assert.equal(game.canActivatePolymerization(game.player), true);
@@ -170,7 +171,7 @@ test("A human can correct a material combination that leaves the monster field f
   const fieldMaterial = make("Shadow-Heart Abyssal Eel");
   const handMaterials = [make("Shadow-Heart Abyssal Eel"), make("Shadow-Heart Abyssal Eel")];
   game.player.extraDeck.push(fusion);
-  game.player.field.push(fieldMaterial, ...Array.from({ length: 4 }, () => make("Nightmare Steed")));
+  placeFieldCards(game.player.field, fieldMaterial, ...Array.from({ length: 4 }, () => make("Nightmare Steed")));
   game.player.hand.push(spell, ...handMaterials);
   const activation = game.tryActivateSpell(spell, 0);
   await choose(game, "fusion_select", [fusion]);

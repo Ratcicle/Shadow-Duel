@@ -1,3 +1,5 @@
+import { appendSimulatedZoneCard } from "../common/zones.js";
+import { appendSimulatedFieldCard } from "../common/zones.js";
 import { estimateCardValue } from "../StrategyUtils.js";
 import { buildStrategyAnalysis } from "../common/analysis.js";
 import { hasPlanningExecutionContext } from "../common/planningExecution.js";
@@ -466,7 +468,7 @@ export function simulateLuminarchSearch(
   if (deckIndex < 0) return null;
   const [moved] = player.deck.splice(deckIndex, 1);
   if (!moved) return null;
-  player.hand.push({ ...moved });
+  appendSimulatedZoneCard(player.hand, { ...moved });
   return moved;
 }
 
@@ -545,7 +547,7 @@ function handleSanctumProtectorShortcut({
   const material = player.field[materialIndex];
   if (material) {
     player.field.splice(materialIndex, 1);
-    player.graveyard.push(material);
+    appendSimulatedZoneCard(player.graveyard, material);
   }
 
   const protector = player.hand[handIndex];
@@ -560,9 +562,9 @@ function handleSanctumProtectorShortcut({
     console.error(
       `[LuminarchStrategy] BLOCKED sim protector: ${newCard.cardKind} "${newCard.name}" tried to enter field!`,
     );
-    player.graveyard.push(newCard);
+    appendSimulatedZoneCard(player.graveyard, newCard);
   } else {
-    player.field.push(newCard);
+    appendSimulatedFieldCard(player.field, newCard);
   }
   return true;
 }
@@ -924,7 +926,7 @@ function pushSimulatedFieldMonster(
     attacksUsedThisTurn: 0,
     ...extra,
   };
-  player.field.push(newCard);
+  appendSimulatedFieldCard(player.field, newCard);
   return newCard;
 }
 
@@ -1155,7 +1157,7 @@ function simulatePureKnightSearch(
   if (citadelIndex < 0) return false;
   const [citadel] = player.deck.splice(citadelIndex, 1);
   if (!citadel) return false;
-  player.hand.push(citadel);
+  appendSimulatedZoneCard(player.hand, citadel);
   pureKnight._simulatedCitadelSearch = true;
   return true;
 }
@@ -1396,7 +1398,7 @@ function prepareMagicSickleBattleBoost(
   if (handIndex < 0) return null;
   const [sickle] = player.hand.splice(handIndex, 1);
   if (!sickle) return null;
-  player.graveyard.push(sickle);
+  appendSimulatedZoneCard(player.graveyard, sickle);
   attacker.tempAtkBoost = (attacker.tempAtkBoost || 0) + 1200;
   attacker.tempDefBoost = (attacker.tempDefBoost || 0) + 1700;
   attacker._simMagicSickleBattleBoost = true;

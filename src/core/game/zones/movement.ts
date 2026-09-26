@@ -6,6 +6,9 @@ import {
   restoreTrapMonsterOriginalState,
 } from "../../Card.js";
 import { SUMMON_MODES } from "../summon/transaction.js";
+import { getAvailableFieldSlots, getFieldOccupants, isFieldSlot } from "./placement.js";
+import { checkpointZoneSnapshotAfterResponse } from "./snapshot.js";
+import type { FieldPlacementIntent } from "../../contracts/placement.js";
 import { SUMMON_ORIGINS } from "../../contracts/summon.js";
 import {
   checkSpecialSummonEligibility,
@@ -168,7 +171,7 @@ type MovementHost = Omit<
   waitForBoardPresentation?(): Promise<unknown>;
   waitForPresentationDelay?(delayMs: number): Promise<unknown>;
   queueCardAnimation?(intent: ZoneMoveAnimationIntent): void;
-  cleanupTokenReferences(card: GameCard, owner: GamePlayer): void;
+  cleanupTokenReferences(card: GameCard, owner: GamePlayer): Promise<void>;
   finishSummonTransaction?(
     transaction: SummonTransaction,
     result?: SummonExecutionResult,
@@ -340,25 +343,24 @@ function retainLocatedSourceZone(
  * @param token - The token card
  * @param tokenOwner - The token's owner player
  */
-export function cleanupTokenReferences(
+export async function cleanupTokenReferences(
   this: MovementHost,
   token: GameCard | null | undefined,
   tokenOwner: GamePlayer,
 ) {
   if (!token) return;
+  this.effectEngine.clearFieldPresenceId?.(token);
 
   // Find and process equip spells attached to this token (same logic as monster cleanup)
-  const equipZone = this.getZone(tokenOwner, "spellTrap") || [];
-  const attachedEquips = equipZone.filter(
-    (eq) =>
-      eq &&
-      eq.cardKind === "spell" &&
-      eq.subtype === "equip" &&
-      (eq.equippedTo === token || eq.equipTarget === token),
+  const attachedEquips = [this.player, this.bot].flatMap(owner =>
+    (this.getZone(owner, "spellTrap") || [])
+      .filter(eq => eq.cardKind === "spell" && eq.subtype === "equip" &&
+        (eq.equippedTo === token || eq.equipTarget === token))
+      .map(equip => ({ equip, owner })),
   );
 
   // Process equips: clear refs and send to GY
-  for (const equip of attachedEquips) {
+  for (const { equip, owner } of attachedEquips) {
     // Clear equip references
     if (equip.equippedTo === token) {
       equip.equippedTo = null;
@@ -374,7 +376,7 @@ export function cleanupTokenReferences(
     equip.grantsCrescentShieldGuard = false;
 
     // Move equip to graveyard - refs already cleared, so equip's cleanup block will be skipped
-    this.moveCard(equip, tokenOwner, "graveyard", {
+    await this.moveCard(equip, owner, "graveyard", {
       fromZone: "spellTrap",
     });
   }
@@ -394,19 +396,18 @@ export function cleanupTokenReferences(
     }
     token.boundTrapSource = null;
 
-    // Destroy the Call of the Haunted trap (fire-and-forget, ref already cleared)
-    this.destroyCard(trap, {
+    // Complete the linked cleanup before reporting the token's departure.
+    const result = await this.destroyCard(trap, {
       cause: "effect",
       sourceCard: token,
       opponent: this.getOpponent(tokenOwner),
-    }).then((result) => {
-      if (result?.destroyed) {
+    });
+    if (result?.destroyed) {
         this.ui.log(
           `${trap.name} was destroyed as ${token.name} (Token) was removed from the game.`,
         );
         this.updateBoard();
-      }
-    });
+    }
   }
 
   // If this token is equipped to something (unlikely but possible), clean up
@@ -2239,6 +2240,14 @@ export async function moveCardInternal(
   if (!card || !destPlayer || !toZone) {
     return { success: false, reason: "invalid_args" };
   }
+  const generation = this.fieldPlacementGeneration;
+  const duringCurrentDuel = async <Result>(operation: MaybePromise<Result>): Promise<Result> => {
+    const result = await operation;
+    if (generation !== this.fieldPlacementGeneration || this.isDisposed()) {
+      throw new Error("Movement belongs to an ended duel.");
+    }
+    return result;
+  };
 
   // 🔍 DEBUG: Log EVERY moveCard attempt to catch spells going to field
   if (card.cardKind !== "monster" && toZone === "field") {
@@ -2263,7 +2272,7 @@ export async function moveCardInternal(
     return { success: false, reason: "invalid_card_kind_for_zone" };
   }
 
-  if (toZone === "field" && destArr.length >= 5) {
+  if (toZone === "field" && getAvailableFieldSlots(getFieldOccupants(this, destPlayer, "field").filter(occupant => occupant !== card)).length === 0) {
     this.ui.log("Field is full (max 5 cards).");
     return { success: false, reason: "field_full" };
   }
@@ -2297,7 +2306,7 @@ export async function moveCardInternal(
       };
     }
   }
-  if (toZone === "spellTrap" && destArr.length >= 5) {
+  if (toZone === "spellTrap" && getAvailableFieldSlots(destPlayer.spellTrap.filter(occupant => occupant !== card)).length === 0) {
     this.ui.log("Spell/Trap zone is full (max 5 cards).");
     return { success: false, reason: "spell_trap_full" };
   }
@@ -2307,12 +2316,12 @@ export async function moveCardInternal(
     options?.skipSendToGraveReplacement !== true &&
     options?.skipSendToGraveActionReplacement !== true
   ) {
-    const replacementResult = await trySendToGraveActionReplacement(
+    const replacementResult = await duringCurrentDuel(trySendToGraveActionReplacement(
       this,
       card,
       destPlayer,
       options,
-    );
+    ));
     if (replacementResult?.replaced) {
       return {
         success: true,
@@ -2381,6 +2390,24 @@ export async function moveCardInternal(
   ];
   let fromOwner: GamePlayer | null = null;
   let fromZone: MovementSourceZone | null = null;
+  const originalFieldSlot = card.fieldSlot;
+  const sameFieldRow = (toZone === "field" || toZone === "spellTrap") && initialLocation?.owner === destPlayer && initialLocation.zone === toZone;
+  let fieldPlacement: FieldPlacementIntent | null = null;
+  if ((toZone === "field" || toZone === "spellTrap") && !sameFieldRow) {
+    const expectedVersion = card.locationVersion;
+    const sourceController = options.sourceCard?.controller || options.source?.controller;
+    const placementActor = options.placementActor || options.effectPlayer || options.sourcePlayer || (sourceController === this.player.id ? this.player : sourceController === this.bot.id ? this.bot : destPlayer);
+    const placement = await duringCurrentDuel(this.prepareFieldPlacement(card, destPlayer, toZone, {
+      actor: placementActor,
+      allowCancel: options.allowPlacementCancel === true && !options.summonTransaction && !this.activeSummonTransaction && options.summonOrigin !== SUMMON_ORIGINS.EFFECT_RESOLUTION,
+      intent: options.fieldPlacement || options.summonTransaction?.fieldPlacement || null,
+    }));
+    if (placement.outcome !== "chosen") return { success: false, reason: `placement_${placement.outcome}` };
+    if (card.locationVersion !== expectedVersion) return { success: false, reason: "placement_source_changed" };
+    fieldPlacement = placement.intent;
+    if (options.summonTransaction) options.summonTransaction.fieldPlacement = fieldPlacement;
+  }
+  if (sameFieldRow && !isFieldSlot(card.fieldSlot)) throw new Error("Existing field card has no canonical position.");
 
   const removeFromZone = (
     owner: GamePlayer | null | undefined,
@@ -2454,6 +2481,7 @@ export async function moveCardInternal(
   if (!fromZone || !fromOwner) {
     return { success: false, reason: "card_not_found" };
   }
+  card.fieldSlot = null;
   ensureOriginalOwner(card, fromOwner.id);
 
   // A control-return record only matters while its bound instance remains on
@@ -2475,6 +2503,7 @@ export async function moveCardInternal(
   }
 
   const restoreRemovedCardToSourceZone = () => {
+    card.fieldSlot = originalFieldSlot;
     if (!fromOwner || !fromZone || !card) return;
     if (fromZone === "token") return;
     if (fromZone === "fieldSpell") {
@@ -2608,11 +2637,11 @@ export async function moveCardInternal(
         source.isFacedown || source.effectsNegated ||
         this.effectEngine?.isEffectNegated?.(source) === true
       )) continue;
-      await this.destroyCard(target, {
+      await duringCurrentDuel(this.destroyCard(target, {
         cause: "effect",
         sourceCard: source,
         opponent: this.getOpponent(owner),
-      });
+      }));
       this.updateBoard();
     }
   };
@@ -2629,10 +2658,10 @@ export async function moveCardInternal(
       try {
         const equipZone = this.getZone(equipOwner, "spellTrap") || [];
         if (equipZone.includes(equip)) {
-          await this.moveCard(equip, equipOwner, "graveyard", {
+          await duringCurrentDuel(this.moveCard(equip, equipOwner, "graveyard", {
             fromZone: "spellTrap",
             contextLabel: "equipped_host_left_field",
-          });
+          }));
         }
       } finally {
         if (Reflect.get(equip, "lastEquippedCardLeftField") === card) {
@@ -2654,16 +2683,16 @@ export async function moveCardInternal(
     queueZoneMoveAnimation(this, cardAnimationIntent, toZone);
 
     // Clean up any references that might point to this token
-    this.cleanupTokenReferences(card, fromOwner);
+    await duringCurrentDuel(this.cleanupTokenReferences(card, fromOwner));
 
     // Log the removal
     this.ui.log(`${card.name} (Token) was removed from the game.`);
 
-    await emitCardMovedEvent(this, card, fromOwner, null, fromZone, "removed", {
+    await duringCurrentDuel(emitCardMovedEvent(this, card, fromOwner, null, fromZone, "removed", {
       ...options,
       wasFaceupBeforeMove,
       contextLabel: options.contextLabel || "token_removed",
-    });
+    }));
 
     // Update board to reflect removal
     this.updateBoard();
@@ -2938,7 +2967,7 @@ export async function moveCardInternal(
       throw new Error("DEV_ZONE_MUTATION_FAIL");
     }
     queueZoneMoveAnimation(this, cardAnimationIntent, "fieldSpell");
-    await emitCardMovedEvent(
+    await duringCurrentDuel(emitCardMovedEvent(
       this,
       card,
       fromOwner,
@@ -2949,7 +2978,7 @@ export async function moveCardInternal(
         ...options,
         wasFaceupBeforeMove,
       },
-    );
+    ));
     return { success: true, fromZone, toZone };
   }
 
@@ -3116,8 +3145,8 @@ export async function moveCardInternal(
         throw new Error("DEV_ZONE_MUTATION_FAIL");
       }
       queueZoneMoveAnimation(this, cardAnimationIntent, "extraDeck");
-      await flushPendingAttachedEquipCleanup();
-      await emitCardMovedEvent(
+      await duringCurrentDuel(flushPendingAttachedEquipCleanup());
+      await duringCurrentDuel(emitCardMovedEvent(
         this,
         card,
         fromOwner,
@@ -3128,8 +3157,8 @@ export async function moveCardInternal(
           ...options,
           wasFaceupBeforeMove,
         },
-      );
-      await flushPendingBoundDestruction();
+      ));
+      await duringCurrentDuel(flushPendingBoundDestruction());
       return { success: true, fromZone, toZone: "extraDeck" };
     }
   }
@@ -3168,14 +3197,15 @@ export async function moveCardInternal(
       typeof this.offerSummonAttempt === "function"
     ) {
       const summonMethod = options.summonMethodOverride || "special";
-      summonAttemptResult = await this.offerSummonAttempt(card, destPlayer, {
+      summonAttemptResult = await duringCurrentDuel(this.offerSummonAttempt(card, destPlayer, {
         method: summonMethod,
         fromZone,
         position: options.position || card.position || null,
         summonProcedure: options.summonProcedure || null,
         summonOrigin,
         summonTransaction: options.summonTransaction || null,
-      });
+      }));
+      checkpointZoneSnapshotAfterResponse(this, card);
       if (summonAttemptResult?.needsSelection) {
         return {
           success: false,
@@ -3234,6 +3264,28 @@ export async function moveCardInternal(
   }
 
   const finalDestArr = destArrRedirected || destArr;
+  if (toZone === "field" || toZone === "spellTrap") {
+    if (sameFieldRow) {
+      if (!isFieldSlot(originalFieldSlot)) throw new Error("Invalid retained field position.");
+      card.fieldSlot = originalFieldSlot;
+    } else {
+      const placement = await duringCurrentDuel(this.prepareFieldPlacement(card, destPlayer, toZone, {
+        actor: fieldPlacement?.decidingPlayerId === this.player.id ? this.player : fieldPlacement?.decidingPlayerId === this.bot.id ? this.bot : destPlayer,
+        intent: fieldPlacement,
+      }));
+      if (placement.outcome !== "chosen") {
+        restoreRemovedCardToSourceZone();
+        return { success: false, reason: "field_full_after_response" };
+      }
+      fieldPlacement = placement.intent;
+      // No await between final occupancy validation and publication of the card.
+      if (!getAvailableFieldSlots(getFieldOccupants(this, destPlayer, toZone)).includes(fieldPlacement.slot)) {
+        restoreRemovedCardToSourceZone();
+        return { success: false, reason: "placement_conflict" };
+      }
+      card.fieldSlot = fieldPlacement.slot;
+    }
+  }
   finalDestArr.push(card);
   const locationVersion = recordCardLocationChange(
     this,
@@ -3274,8 +3326,8 @@ export async function moveCardInternal(
     card.setTurn = this.turnCounter;
     card.revealedTurn = null;
     const setPlayer = card.owner === "player" ? this.player : this.bot;
-    await presentSummonBeforeAfterSummon(this, options);
-    await this.emit("monster_set", {
+    await duringCurrentDuel(presentSummonBeforeAfterSummon(this, options));
+    await duringCurrentDuel(this.emit("monster_set", {
       card,
       player: setPlayer,
       opponent: this.getOpponent?.(setPlayer) || null,
@@ -3286,7 +3338,7 @@ export async function moveCardInternal(
       tributes: Array.isArray(options.tributes) ? options.tributes : [],
       summonOrigin: options.summonOrigin || SUMMON_ORIGINS.PROCEDURE,
       atomicGroupId,
-    });
+    }));
   }
 
   if (
@@ -3321,7 +3373,7 @@ export async function moveCardInternal(
     const ownerPlayer = card.owner === "player" ? this.player : this.bot;
     const otherPlayer = ownerPlayer === this.player ? this.bot : this.player;
     const summonMethod = options.summonMethodOverride || "special";
-    const followupResult = await applySynchroMaterialFollowupsBeforeAfterSummon(
+    const followupResult = await duringCurrentDuel(applySynchroMaterialFollowupsBeforeAfterSummon(
       this,
       card,
       ownerPlayer,
@@ -3332,15 +3384,15 @@ export async function moveCardInternal(
         summonMethod,
         summonProcedure: options.summonProcedure || null,
       },
-    );
+    ));
     if (
       isMovementEventResult(followupResult) &&
       followupResult.needsSelection
     ) {
       afterSummonResult = followupResult;
     } else {
-      await presentSummonBeforeAfterSummon(this, options);
-      afterSummonResult = await this.emit("after_summon", {
+      await duringCurrentDuel(presentSummonBeforeAfterSummon(this, options));
+      afterSummonResult = await duringCurrentDuel(this.emit("after_summon", {
         card,
         player: ownerPlayer,
         opponent: otherPlayer,
@@ -3361,7 +3413,7 @@ export async function moveCardInternal(
           options.summonOrigin ||
           SUMMON_ORIGINS.EFFECT_RESOLUTION,
         atomicGroupId,
-      });
+      }));
     }
   }
 
@@ -3399,7 +3451,7 @@ export async function moveCardInternal(
       hasMatchingDestroyedGraveyardTrigger(card, fromZone, options);
     const presentedDestroyedGraveyardTrigger =
       shouldPresentDestroyedGraveyardTrigger
-        ? await presentDestroyedGraveyardTrigger(this, card, options)
+        ? await duringCurrentDuel(presentDestroyedGraveyardTrigger(this, card, options))
         : false;
 
     try {
@@ -3417,7 +3469,7 @@ export async function moveCardInternal(
           Number.isFinite(configuredDelayMs)
             ? configuredDelayMs
             : 160;
-        await this.waitForPresentationDelay(delayMs);
+        await duringCurrentDuel(this.waitForPresentationDelay(delayMs));
       }
       console.log(
         `[moveCard] Emitting card_to_grave event for ${card.name} (fromZone: ${fromZone})`,
@@ -3461,7 +3513,7 @@ export async function moveCardInternal(
         options.awaitEvents === true ||
         options.awaitCardToGraveEvent === true
       ) {
-        cardToGraveResult = await cardToGraveEvent;
+        cardToGraveResult = await duringCurrentDuel(cardToGraveEvent);
       } else {
         void cardToGraveEvent;
       }
@@ -3474,13 +3526,13 @@ export async function moveCardInternal(
   }
 
   // Limpar cache de targeting após mover cartas (estado do jogo mudou)
-  await flushPendingAttachedEquipCleanup();
+  await duringCurrentDuel(flushPendingAttachedEquipCleanup());
 
   if (this.effectEngine?.clearTargetingCache) {
     this.effectEngine.clearTargetingCache();
   }
 
-  await emitCardMovedEvent(
+  await duringCurrentDuel(emitCardMovedEvent(
     this,
     card,
     fromOwner,
@@ -3493,13 +3545,13 @@ export async function moveCardInternal(
       wasFaceupBeforeMove,
       atomicGroupId,
     },
-  );
+  ));
 
   if (this.effectEngine?.clearTargetingCache) {
     this.effectEngine.clearTargetingCache();
   }
 
-  await flushPendingBoundDestruction();
+  await duringCurrentDuel(flushPendingBoundDestruction());
 
   const result: MoveCardResult = {
     success: !summonNegated,

@@ -1,3 +1,4 @@
+import { placeFieldCards } from "./helpers/game.js";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
@@ -123,7 +124,7 @@ test("Battle Between Good and Evil summons, negates and restricts other Attribut
     },
     game.player,
   );
-  game.player.spellTrap.push(spell);
+  placeFieldCards(game.player.spellTrap, spell);
   game.player.deck.push(summoned);
 
   const [effect] = required(spell.effects);

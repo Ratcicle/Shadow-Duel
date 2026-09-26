@@ -1,3 +1,5 @@
+import { appendSimulatedZoneCard } from "./common/zones.js";
+import { appendSimulatedFieldCard } from "./common/zones.js";
 import {
   calculateThreatScore,
   rankOpponentThreats,
@@ -360,7 +362,7 @@ export default class BaseStrategy implements StrategyRuntimePort {
 
     if (card.subtype === "field") {
       if (player.fieldSpell) {
-        player.graveyard.push(player.fieldSpell);
+        appendSimulatedZoneCard(player.graveyard, player.fieldSpell);
       }
       player.fieldSpell = card;
       return { placed: true, zone: "fieldSpell" };
@@ -373,7 +375,7 @@ export default class BaseStrategy implements StrategyRuntimePort {
     ) {
       player.spellTrap = player.spellTrap || [];
       if (!player.spellTrap.includes(card)) {
-        player.spellTrap.push(card);
+        appendSimulatedFieldCard(player.spellTrap, card);
       }
       return { placed: true, zone: "spellTrap" };
     }

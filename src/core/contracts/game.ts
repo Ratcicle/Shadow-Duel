@@ -29,6 +29,8 @@ export interface DeterministicRandomSnapshot {
 
 /** Explicit constructor surface retained by Game during its TypeScript move. */
 export interface GameOptions {
+  getFieldPlacementMode?: () => import("./placement.js").FieldPlacementMode;
+  fieldPlacementProvider?: (request: import("./placement.js").FieldPlacementRequest) => Promise<import("./placement.js").FieldPlacementResult>;
   disableChains?: boolean;
   disableTraps?: boolean;
   disableEffectActivation?: boolean;
