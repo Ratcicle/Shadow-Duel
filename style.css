@@ -396,7 +396,8 @@ body {
   font-size: 1.25rem;
   line-height: 1.25;
   overflow-wrap: anywhere;
-  padding: 4px 0;
+  margin-inline: -4px;
+  padding: 4px 4px;
   background: linear-gradient(90deg, color-mix(in srgb, var(--preview-type-color) 20%, transparent), transparent 95%);
 }
 
@@ -471,7 +472,8 @@ body {
   line-height: 1.5;
   overflow-wrap: anywhere;
   text-transform: uppercase;
-  padding: 2px 0;
+  margin-inline: -4px;
+  padding: 2px 4px;
   background: linear-gradient(90deg, color-mix(in srgb, var(--preview-type-color) 8%, transparent), transparent 85%);
 }
 
