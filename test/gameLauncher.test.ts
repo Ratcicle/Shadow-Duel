@@ -96,6 +96,17 @@ test("Laboratory human identities and explicit participant names remain unchange
   assert.equal(explicit.bot.name, "Rival humano");
 });
 
+test("Laboratory AI names follow the resolved preset across restart and return to human seats", async (t) => {
+  const launcher = createLauncher();
+  t.after(() => launcher.disposeActiveGame("test_complete"));
+  const game = await launcher.startLaboratoryDuel({ ...scenarioConfig(), useBot: true, botPreset: "luminarch" });
+  assert.equal(game.bot.name, "Luminarch Bot");
+  assert.equal(required(await launcher.restartLaboratoryDuel()).bot.name, "Luminarch Bot");
+  const human = await launcher.startLaboratoryDuel(scenarioConfig());
+  assert.equal(human.bot.name, "Jogador 2");
+  assert.equal(human.bot.controllerType, "human");
+});
+
 test("invalid modern Laboratory positions preserve the active duel and restart restores sparse slots", async (t) => {
   const launcher = createLauncher();
   t.after(() => launcher.disposeActiveGame("test_complete"));

@@ -3,7 +3,7 @@ import type GameRuntime from "../../core/Game.js";
 import type RendererRuntime from "../Renderer.js";
 import type { FieldPlacementMode } from "../../core/contracts/placement.js";
 import { normalizeScenarioSetup } from "../../core/game/devTools/setup.js";
-import { getAvailableBotPresets } from "../../core/bot/presets.js";
+import { getBotPresetPresentation } from "../../core/bot/presets.js";
 export interface NormalDuelConfig {
   botPreset: string;
   deck: readonly number[];
@@ -18,6 +18,14 @@ export interface LaboratoryDuelConfig {
   setup: Parameters<GameRuntime["startLaboratory"]>[0];
   duelDecks: Omit<ExactStartWithDecksOptions, "exactDecks">;
 }
+
+function nameBotParticipant(game: GameRuntime) {
+  if (game.bot.controllerType !== "ai") return;
+  // Bot has already resolved its preset/fallback. Keep the name on the participant.
+  const preset = getBotPresetPresentation(game.bot.archetype);
+  if (preset) game.bot.name = `${preset.label} Bot`;
+}
+
 export function createGameLauncher({
   Game,
   Renderer,
@@ -61,10 +69,7 @@ export function createGameLauncher({
       renderer,
       getFieldPlacementMode,
     });
-    // Bot has already resolved its canonical preset/fallback. Keep identity on the
-    // participant so every board update and rematch uses the same proper name.
-    const preset = getAvailableBotPresets().find(({ id }) => id === game!.bot.archetype);
-    if (preset) game.bot.name = `${preset.label} Bot`;
+    nameBotParticipant(game);
     game.start([...deck], [...extraDeck]);
     return game;
   }
@@ -97,6 +102,7 @@ export function createGameLauncher({
       getFieldPlacementMode,
     });
     game = newGame;
+    nameBotParticipant(newGame);
 
     if (laboratoryMode === "duel") {
       const startOptions = {

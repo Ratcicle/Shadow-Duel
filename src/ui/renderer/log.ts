@@ -2,6 +2,8 @@ import type Renderer from "../Renderer.js";
 import type { GamePlayer } from "../../core/contracts/player.js";
 import type { GamePhase } from "../../core/contracts/game.js";
 import type { PlayerId } from "../../core/contracts/primitives.js";
+import { getBotPresetPresentation } from "../../core/bot/presets.js";
+import { publicAssetUrl } from "../../core/publicUrl.js";
 
 export interface PriorityDisplayState {
   state?: string;
@@ -137,6 +139,39 @@ export function writeLpValue(element: HTMLElement, value: number): void {
   element.style?.setProperty("--lp-digits", String(Math.max(5, text.length)));
 }
 
+function updateHudIdentity(hud: HTMLElement, player: GamePlayer): void {
+  const name = hud.querySelector<HTMLElement>(".name");
+  if (name) {
+    name.textContent = player.name;
+    name.title = player.name;
+  }
+  const preset = player.controllerType === "ai" ? getBotPresetPresentation(player.archetype) : null;
+  if (preset) hud.style.setProperty("--hud-accent", preset.hudAccent);
+  else hud.style.removeProperty("--hud-accent");
+
+  const frame = hud.querySelector<HTMLElement>(".player-avatar-frame");
+  if (!frame) return;
+  const currentImage = frame.querySelector<HTMLImageElement>(".player-avatar-portrait");
+  if (!preset) {
+    if (currentImage) frame.replaceChildren();
+    return;
+  }
+  const { asset, sourceWidth, crop } = preset.avatarPortrait;
+  const src = publicAssetUrl(asset);
+  const image = currentImage?.getAttribute("src") === src
+    ? currentImage : frame.ownerDocument.createElement("img");
+  if (image !== currentImage) {
+    image.className = "player-avatar-portrait";
+    image.alt = ""; // The frame is decorative; the participant name identifies the HUD.
+    image.draggable = false;
+    image.src = src;
+    frame.replaceChildren(image);
+  }
+  image.style.setProperty("--portrait-width", `${100 * sourceWidth / crop.size}%`);
+  image.style.setProperty("--portrait-left", `${-100 * crop.x / crop.size}%`);
+  image.style.setProperty("--portrait-top", `${-100 * crop.y / crop.size}%`);
+}
+
 /**
  * @this {import('../Renderer.js').default}
  */
@@ -144,11 +179,8 @@ export function updateLP(this: Renderer, player: GamePlayer): void {
   const el =
     player.id === "player" ? this.elements.playerLP : this.elements.botLP;
   if (!el) return;
-  const name = el.closest(".player-info")?.querySelector<HTMLElement>(".name");
-  if (name) {
-    name.textContent = player.name;
-    name.title = player.name;
-  }
+  const hud = el.closest<HTMLElement>(".player-info");
+  if (hud) updateHudIdentity(hud, player);
 
   if (
     typeof this.ensureLpDisplayState === "function" &&

@@ -1,14 +1,41 @@
 import type { BotArchetypeId } from "../contracts/bot.js";
 
-const AVAILABLE_BOT_PRESETS: Array<{ id: BotArchetypeId; label: string }> = [
-  { id: "shadowheart", label: "Shadow-Heart" },
-  { id: "luminarch", label: "Luminarch" },
-  { id: "void", label: "Void" },
-  { id: "dragon", label: "Dragon" },
-  { id: "arcanist", label: "Arcanist" },
-  { id: "miragebound", label: "Miragebound" },
-  { id: "bloomrot", label: "Bloomrot" },
-  { id: "burningwest", label: "Burning West" },
+export interface BotPresetPresentation {
+  id: BotArchetypeId | "techzero";
+  label: string;
+  hudAccent: string;
+  avatarPortrait: {
+    asset: string;
+    sourceWidth: number;
+    /** Square in original image pixels; scaled uniformly at every HUD size. */
+    crop: { x: number; y: number; size: number };
+  };
+}
+
+const BOT_PRESET_PRESENTATIONS: readonly BotPresetPresentation[] = [
+  { id: "shadowheart", label: "Shadow-Heart", hudAccent: "#de648b",
+    avatarPortrait: { asset: "assets/Shadow-Heart Scale Dragon.png", sourceWidth: 896, crop: { x: 190, y: 105, size: 470 } } },
+  { id: "luminarch", label: "Luminarch", hudAccent: "#dfbd69",
+    avatarPortrait: { asset: "assets/Luminarch Fortress Aegis.png", sourceWidth: 896, crop: { x: 300, y: 115, size: 420 } } },
+  { id: "void", label: "Void", hudAccent: "#9975e2",
+    avatarPortrait: { asset: "assets/Arcturus, Lord of the Void.png", sourceWidth: 896, crop: { x: 210, y: 30, size: 520 } } },
+  { id: "dragon", label: "Dragon", hudAccent: "#7ca9ed",
+    avatarPortrait: { asset: "assets/Radiant Cosmic Dragon.png", sourceWidth: 896, crop: { x: 220, y: 90, size: 560 } } },
+  { id: "arcanist", label: "Arcanist", hudAccent: "#58c9e0",
+    avatarPortrait: { asset: "assets/Arcanist Apprentice.png", sourceWidth: 896, crop: { x: 155, y: 100, size: 470 } } },
+  { id: "miragebound", label: "Miragebound", hudAccent: "#64bfae",
+    avatarPortrait: { asset: "assets/Miragebound Rebel.png", sourceWidth: 896, crop: { x: 235, y: 45, size: 470 } } },
+  { id: "bloomrot", label: "Bloomrot", hudAccent: "#a7bc62",
+    avatarPortrait: { asset: "assets/Bloomrot Carrioncap.png", sourceWidth: 896, crop: { x: 240, y: 230, size: 590 } } },
+  { id: "burningwest", label: "Burning West", hudAccent: "#e8874f",
+    avatarPortrait: { asset: "assets/Gunslinger of the Burning West.png", sourceWidth: 896, crop: { x: 220, y: 65, size: 440 } } },
+  // Presentation is ready; Tech-Zero is not a playable AI preset yet.
+  { id: "techzero", label: "Tech-Zero", hudAccent: "#eb645b",
+    avatarPortrait: { asset: "assets/Tech Zero Explosive Lancer.png", sourceWidth: 896, crop: { x: 240, y: 230, size: 530 } } },
+];
+
+const AVAILABLE_BOT_PRESET_IDS: readonly BotArchetypeId[] = [
+  "shadowheart", "luminarch", "void", "dragon", "arcanist", "miragebound", "bloomrot", "burningwest",
 ];
 
 const MAIN_DECKS: Record<string, number[]> = {
@@ -63,7 +90,16 @@ function copyDeckList(deckList: readonly number[] = []) {
 }
 
 export function getAvailableBotPresets() {
-  return AVAILABLE_BOT_PRESETS.map((preset) => ({ ...preset }));
+  return AVAILABLE_BOT_PRESET_IDS.map((id) => {
+    const presentation = getBotPresetPresentation(id);
+    if (!presentation) throw new Error(`Missing presentation for bot preset: ${id}`);
+    return { ...presentation, id };
+  });
+}
+
+export function getBotPresetPresentation(id: string | undefined): BotPresetPresentation | null {
+  const preset = BOT_PRESET_PRESENTATIONS.find((preset) => preset.id === id);
+  return preset ? structuredClone(preset) : null;
 }
 
 export function getBotDeckList(archetype = "shadowheart") {
