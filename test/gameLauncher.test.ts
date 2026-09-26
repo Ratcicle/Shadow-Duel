@@ -7,6 +7,8 @@ import {
   type LaboratoryDuelConfig,
 } from "../src/ui/main/gameLauncher.js";
 import { required, unsafeFixture } from "./helpers/fixtures.js";
+import { getAvailableBotPresets } from "../src/core/bot/presets.js";
+import { getLocale, setLocale } from "../src/core/i18n.js";
 
 class HeadlessRenderer {}
 
@@ -54,6 +56,45 @@ function duelConfig() {
     },
   } satisfies LaboratoryDuelConfig;
 }
+
+test("normal duels name the actual bot preset identically in both locales, including rematches and fallback", (t) => {
+  const launcher = createLauncher();
+  const locale = getLocale();
+  t.after(() => { launcher.disposeActiveGame("test_complete"); setLocale(locale); });
+  const config = { deck: [1, 3, 4, 9, 1, 3, 4, 9], extraDeck: [31], playerArchetype: "dragon" };
+  for (const language of ["en", "pt-br"]) {
+    setLocale(language);
+    for (const preset of getAvailableBotPresets()) {
+      const first = launcher.startNormalDuel({ ...config, botPreset: preset.id });
+      assert.equal(first.bot.name, `${preset.label} Bot`);
+      assert.equal(first.player.name, "You");
+      first.updateBoard();
+      assert.equal(first.bot.name, `${preset.label} Bot`);
+      const rematch = launcher.startNormalDuel({ ...config, botPreset: preset.id });
+      assert.equal(first.isDisposed(), true);
+      assert.equal(rematch.bot.name, `${preset.label} Bot`);
+    }
+    const fallback = launcher.startNormalDuel({ ...config, botPreset: "invalid-preset" });
+    assert.equal(fallback.bot.archetype, "shadowheart");
+    assert.equal(fallback.bot.name, "Shadow-Heart Bot");
+  }
+});
+
+test("Laboratory human identities and explicit participant names remain unchanged", async (t) => {
+  const launcher = createLauncher();
+  t.after(() => launcher.disposeActiveGame("test_complete"));
+  const game = await launcher.startLaboratoryDuel(scenarioConfig());
+  assert.equal(game.player.name, "Jogador 1");
+  assert.equal(game.bot.name, "Jogador 2");
+  assert.equal(game.bot.controllerType, "human");
+  const restarted = required(await launcher.restartLaboratoryDuel());
+  assert.equal(restarted.bot.name, "Jogador 2");
+  const explicit = new Game({ laboratoryMode: true, playerName: "Alice", opponentName: "Rival humano" });
+  t.after(() => explicit.dispose());
+  explicit.updateBoard();
+  assert.equal(explicit.player.name, "Alice");
+  assert.equal(explicit.bot.name, "Rival humano");
+});
 
 test("invalid modern Laboratory positions preserve the active duel and restart restores sparse slots", async (t) => {
   const launcher = createLauncher();

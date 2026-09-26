@@ -1,4 +1,5 @@
 import type Renderer from "../Renderer.js";
+import { writeLpValue } from "./log.js";
 import type { UiPoint, UiRect } from "../../core/contracts/ui.js";
 import type { PlayerId } from "../../core/contracts/primitives.js";
 import type {
@@ -695,7 +696,7 @@ export function setDisplayedLp(
 
   const el = getLpElement(this, player!);
   if (el) {
-    el.textContent = String(lp);
+    writeLpValue(el, lp);
   }
   return true;
 }
@@ -917,6 +918,9 @@ export function showLpChange(
   );
   if (!container) return;
 
+  const lpEl = getLpElement(this, player);
+  const counter = lpEl?.closest(".lp-counter");
+
   const float = document.createElement("div");
   float.className = [
     "lp-float",
@@ -924,15 +928,12 @@ export function showLpChange(
     player.id === "player" ? "lp-float-player" : "lp-float-bot",
   ].join(" ");
   float.textContent = `${isHeal ? "+" : ""}${Math.abs(value)}`;
-  container.appendChild(float);
+  (counter || container).appendChild(float);
 
   requestAnimationFrame(() => {
     float.classList.add("lp-float-animate");
   });
 
-  const lpEl =
-    player.id === "player" ? this.elements.playerLP : this.elements.botLP;
-  const counter = lpEl ? lpEl.closest(".lp-counter") : null;
   if (counter) {
     const flashClass = isHeal ? "lp-flash-heal" : "lp-flash-damage";
     counter.classList.remove("lp-flash-heal", "lp-flash-damage");

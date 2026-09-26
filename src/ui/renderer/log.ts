@@ -130,6 +130,13 @@ export function updatePriorityIndicator(
   element.classList.toggle("resolving", resolving);
 }
 
+export function writeLpValue(element: HTMLElement, value: number): void {
+  const text = String(value);
+  element.textContent = text;
+  // Fit larger valid values without abbreviating them; very long values may wrap.
+  element.style?.setProperty("--lp-digits", String(Math.max(5, text.length)));
+}
+
 /**
  * @this {import('../Renderer.js').default}
  */
@@ -137,6 +144,11 @@ export function updateLP(this: Renderer, player: GamePlayer): void {
   const el =
     player.id === "player" ? this.elements.playerLP : this.elements.botLP;
   if (!el) return;
+  const name = el.closest(".player-info")?.querySelector<HTMLElement>(".name");
+  if (name) {
+    name.textContent = player.name;
+    name.title = player.name;
+  }
 
   if (
     typeof this.ensureLpDisplayState === "function" &&
@@ -147,7 +159,7 @@ export function updateLP(this: Renderer, player: GamePlayer): void {
     if (state?.animating || state?.queue?.length! > 0) {
       const displayed = this.getDisplayedLp(player);
       if (displayed != null) {
-        el.textContent = String(displayed);
+        writeLpValue(el, displayed);
       }
       return;
     }
@@ -159,5 +171,5 @@ export function updateLP(this: Renderer, player: GamePlayer): void {
     return;
   }
 
-  el.textContent = String(player.lp);
+  writeLpValue(el, player.lp);
 }

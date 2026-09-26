@@ -3,6 +3,7 @@ import type GameRuntime from "../../core/Game.js";
 import type RendererRuntime from "../Renderer.js";
 import type { FieldPlacementMode } from "../../core/contracts/placement.js";
 import { normalizeScenarioSetup } from "../../core/game/devTools/setup.js";
+import { getAvailableBotPresets } from "../../core/bot/presets.js";
 export interface NormalDuelConfig {
   botPreset: string;
   deck: readonly number[];
@@ -60,6 +61,10 @@ export function createGameLauncher({
       renderer,
       getFieldPlacementMode,
     });
+    // Bot has already resolved its canonical preset/fallback. Keep identity on the
+    // participant so every board update and rematch uses the same proper name.
+    const preset = getAvailableBotPresets().find(({ id }) => id === game!.bot.archetype);
+    if (preset) game.bot.name = `${preset.label} Bot`;
     game.start([...deck], [...extraDeck]);
     return game;
   }

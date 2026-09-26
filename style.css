@@ -677,6 +677,7 @@ body {
 }
 
 .player-area {
+  container: player-field / inline-size;
   flex: 0 0 auto;
   display: flex;
   flex-direction: column;
@@ -4495,7 +4496,7 @@ body {
 
 .lp-float {
   position: absolute;
-  right: 16px;
+  right: 0;
   font-size: 1.2rem;
   font-weight: 700;
   opacity: 0;
@@ -4505,11 +4506,11 @@ body {
 }
 
 .lp-float-player {
-  bottom: 18px;
+  bottom: 100%;
 }
 
 .lp-float-bot {
-  top: 18px;
+  top: 100%;
 }
 
 .lp-float-damage {
@@ -4773,67 +4774,103 @@ body {
 }
 
 .player-info {
-  display: flex;
-  justify-content: space-between;
+  --hud-avatar-size: 56px;
+  --hud-lp-size: 42px;
+  --hud-inset: 14px;
+  display: grid;
+  grid-template-columns: var(--hud-avatar-size) minmax(0, 1fr);
   align-items: center;
-  padding: 8px 12px;
+  width: 234px;
+  padding: 10px;
   font-weight: bold;
   font-size: 1rem;
-  border-radius: 8px;
-  background: var(--zone-bg);
-  backdrop-filter: blur(6px);
-  gap: 12px;
+  border-radius: 10px;
+  background: linear-gradient(155deg, #222026, #18171b 75%);
+  gap: 10px;
   z-index: 100;
-  box-shadow: 0 0 10px rgba(187, 134, 252, 0.2);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.025);
   border: 1px solid rgba(187, 134, 252, 0.2);
 }
 
+.player-avatar-frame {
+  width: var(--hud-avatar-size);
+  aspect-ratio: 1;
+  border-radius: 6px;
+  background: #141316;
+  border: 1px solid rgba(187, 134, 252, 0.22);
+  box-shadow: inset 0 1px 4px rgba(0, 0, 0, 0.2);
+}
+
+.player-hud-details { min-width: 0; }
+
 .player-info .name {
-  min-width: 60px;
-  color: #ccc;
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  line-height: 1.3;
+  margin-bottom: 2px;
+  color: #ded9e4;
 }
 
 .lp-counter {
-  white-space: nowrap;
-  font-size: 1.1rem;
-  color: #bb86fc;
+  position: relative;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  color: var(--accent-color);
   font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+
+.lp-label { font-size: 12px; flex: 0 0 auto; }
+
+.lp-value {
+  min-width: 0;
+  font-size: clamp(18px, calc(var(--hud-lp-size) * 5 / var(--lp-digits, 5)), var(--hud-lp-size));
+  line-height: 1;
+  overflow-wrap: anywhere;
 }
 
 /* HUD-style placement for Life Points - inside player areas */
 #bot-area .player-info {
   position: absolute;
-  bottom: 8px;
-  right: 8px;
+  top: var(--hud-inset);
+  right: var(--hud-inset);
+  grid-template-columns: minmax(0, 1fr) var(--hud-avatar-size);
+  text-align: right;
 }
+
+#bot-area .lp-counter { justify-content: flex-end; }
 
 #player-area .player-info {
   position: absolute;
-  top: 8px;
-  left: 8px;
+  bottom: var(--hud-inset);
+  left: var(--hud-inset);
 }
 
-/* Ensure LP is always visible even at zoom levels */
-@media (max-width: 1400px) {
+/* React to the actual field width, including either docked preview width. */
+@container player-field (max-width: 1050px) {
   .player-info {
-    font-size: 0.95rem;
-    padding: 6px 10px;
-  }
-
-  .lp-counter {
-    font-size: 1rem;
+    --hud-avatar-size: 44px;
+    --hud-lp-size: 34px;
+    width: 190px;
+    font-size: 14px;
+    padding: 8px;
+    gap: 6px;
   }
 }
 
-@media (max-height: 900px) {
+@container player-field (max-width: 850px) {
   .player-info {
-    font-size: 0.9rem;
-    padding: 5px 8px;
+    --hud-avatar-size: 32px;
+    --hud-lp-size: 26px;
+    --hud-inset: 12px;
+    width: 144px;
+    padding: 4px;
+    gap: 4px;
   }
-
-  .lp-counter {
-    font-size: 0.95rem;
-  }
+  .lp-counter { gap: 4px; }
 }
 
 @media (max-height: 900px) {

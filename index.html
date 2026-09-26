@@ -385,8 +385,11 @@
       <!-- Bot Area (Top) -->
       <div id="bot-area" class="player-area">
         <div class="player-info">
-          <span class="name">Opponent</span>
-          <div class="lp-counter">LP: <span id="bot-lp">8000</span></div>
+          <div class="player-hud-details">
+            <span class="name">Opponent</span>
+            <div class="lp-counter"><span class="lp-label">LP</span><span id="bot-lp" class="lp-value">8000</span></div>
+          </div>
+          <div class="player-avatar-frame" aria-hidden="true"></div>
         </div>
         <div class="hand-row">
           <div class="hand-zone" id="bot-hand"></div>
@@ -468,8 +471,11 @@
           <div class="hand-zone" id="player-hand"></div>
         </div>
         <div class="player-info">
-          <span class="name">You</span>
-          <div class="lp-counter">LP: <span id="player-lp">8000</span></div>
+          <div class="player-avatar-frame" aria-hidden="true"></div>
+          <div class="player-hud-details">
+            <span class="name">You</span>
+            <div class="lp-counter"><span class="lp-label">LP</span><span id="player-lp" class="lp-value">8000</span></div>
+          </div>
         </div>
       </div>
     </div>
