@@ -167,9 +167,9 @@ function updateHudIdentity(hud: HTMLElement, player: GamePlayer): void {
     image.src = src;
     frame.replaceChildren(image);
   }
-  image.style.setProperty("--portrait-width", `${100 * sourceWidth / crop.size}%`);
-  image.style.setProperty("--portrait-left", `${-100 * crop.x / crop.size}%`);
-  image.style.setProperty("--portrait-top", `${-100 * crop.y / crop.size}%`);
+  image.style.setProperty("--portrait-scale", String(sourceWidth / crop.size));
+  image.style.setProperty("--portrait-x", String(crop.x / crop.size));
+  image.style.setProperty("--portrait-y", String(crop.y / crop.size));
 }
 
 /**

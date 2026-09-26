@@ -4776,21 +4776,22 @@ body {
 .player-info {
   --hud-accent: var(--accent-color);
   --hud-fade-direction: to right;
-  --hud-avatar-size: 56px;
+  --hud-details-width: 176px;
   --hud-lp-size: 42px;
   --hud-inset: 14px;
+  --hud-text-inset: 9px;
+  --hud-text-bottom: 8px;
+  --hud-inner-radius: 9px;
   display: grid;
-  grid-template-columns: var(--hud-avatar-size) minmax(0, 1fr);
-  align-items: center;
-  width: 234px;
-  padding: 10px 9px;
+  grid-template-columns: auto var(--hud-details-width);
+  align-items: stretch;
+  width: max-content;
+  padding: 0;
   font-weight: bold;
   font-size: 1rem;
   border-radius: 10px;
-  background:
-    linear-gradient(var(--hud-fade-direction), color-mix(in srgb, var(--hud-accent) 12%, transparent), transparent 55%),
-    linear-gradient(155deg, #222026, #18171b 75%);
-  gap: 8px;
+  background: linear-gradient(155deg, #222026, #18171b 75%);
+  /* Keep LP fallback indicators visible outside the HUD; only the portrait clips. */
   z-index: 100;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.025);
   border: 1px solid rgba(187, 134, 252, 0.2);
@@ -4799,27 +4800,32 @@ body {
 .player-avatar-frame {
   position: relative;
   overflow: hidden;
-  width: var(--hud-avatar-size);
+  container-type: size;
   aspect-ratio: 1;
-  border-radius: 6px;
+  border-radius: var(--hud-inner-radius) 0 0 var(--hud-inner-radius);
   background: #141316;
-  border: 1px solid color-mix(in srgb, var(--hud-accent) 38%, transparent);
   box-shadow: inset 0 1px 4px rgba(0, 0, 0, 0.2);
 }
 
 .player-avatar-portrait {
   position: absolute;
-  width: var(--portrait-width);
+  /* Cover the full-height column with the selected square, preserving source proportions. */
+  width: calc(100cqmax * var(--portrait-scale));
   max-width: none;
   height: auto;
-  left: var(--portrait-left);
-  top: var(--portrait-top);
+  left: calc(50% - 50cqmax - 100cqmax * var(--portrait-x));
+  top: calc(50% - 50cqmax - 100cqmax * var(--portrait-y));
   display: block;
   pointer-events: none;
   user-select: none;
 }
 
-.player-hud-details { min-width: 0; }
+.player-hud-details {
+  min-width: 0;
+  padding: 0 var(--hud-text-inset) var(--hud-text-bottom);
+  border-radius: 0 var(--hud-inner-radius) var(--hud-inner-radius) 0;
+  background: linear-gradient(var(--hud-fade-direction), color-mix(in srgb, var(--hud-accent) 12%, transparent), transparent 65%);
+}
 
 .player-info .name {
   display: block;
@@ -4827,8 +4833,9 @@ body {
   white-space: nowrap;
   text-overflow: ellipsis;
   line-height: 1.3;
-  margin-bottom: 2px;
-  padding: 2px 4px;
+  margin: 0 calc(-1 * var(--hud-text-inset)) 4px;
+  padding: 4px var(--hud-text-inset);
+  border-top-right-radius: var(--hud-inner-radius);
   border-top: 1px solid color-mix(in srgb, var(--hud-accent) 75%, transparent);
   background: rgba(10, 9, 13, 0.65);
   color: #ded9e4;
@@ -4859,11 +4866,24 @@ body {
   position: absolute;
   top: var(--hud-inset);
   right: var(--hud-inset);
-  grid-template-columns: minmax(0, 1fr) var(--hud-avatar-size);
+  grid-template-columns: var(--hud-details-width) auto;
   text-align: right;
 }
 
 #bot-area .lp-counter { justify-content: flex-end; }
+
+#bot-area .player-avatar-frame {
+  border-radius: 0 var(--hud-inner-radius) var(--hud-inner-radius) 0;
+}
+
+#bot-area .player-hud-details {
+  border-radius: var(--hud-inner-radius) 0 0 var(--hud-inner-radius);
+}
+
+#bot-area .player-info .name {
+  border-top-right-radius: 0;
+  border-top-left-radius: var(--hud-inner-radius);
+}
 
 #player-area .player-info {
   position: absolute;
@@ -4874,24 +4894,22 @@ body {
 /* React to the actual field width, including either docked preview width. */
 @container player-field (max-width: 1050px) {
   .player-info {
-    --hud-avatar-size: 44px;
+    --hud-details-width: 144px;
     --hud-lp-size: 34px;
-    width: 190px;
+    --hud-text-inset: 7px;
+    --hud-text-bottom: 6px;
     font-size: 14px;
-    padding: 8px 7px;
-    gap: 4px;
   }
   .lp-counter { gap: 7px; }
 }
 
 @container player-field (max-width: 850px) {
   .player-info {
-    --hud-avatar-size: 32px;
+    --hud-details-width: 110px;
     --hud-lp-size: 26px;
     --hud-inset: 12px;
-    width: 144px;
-    padding: 4px 3px;
-    gap: 3px;
+    --hud-text-inset: 3px;
+    --hud-text-bottom: 4px;
   }
   .lp-counter { gap: 6px; }
 }

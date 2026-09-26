@@ -7,31 +7,31 @@ export interface BotPresetPresentation {
   avatarPortrait: {
     asset: string;
     sourceWidth: number;
-    /** Square in original image pixels; scaled uniformly at every HUD size. */
+    /** Square in source pixels; centered and covered uniformly by the avatar column. */
     crop: { x: number; y: number; size: number };
   };
 }
 
 const BOT_PRESET_PRESENTATIONS: readonly BotPresetPresentation[] = [
   { id: "shadowheart", label: "Shadow-Heart", hudAccent: "#de648b",
-    avatarPortrait: { asset: "assets/Shadow-Heart Scale Dragon.png", sourceWidth: 896, crop: { x: 190, y: 105, size: 470 } } },
+    avatarPortrait: { asset: "assets/Shadow-Heart Scale Dragon.png", sourceWidth: 896, crop: { x: 130, y: 100, size: 430 } } },
   { id: "luminarch", label: "Luminarch", hudAccent: "#dfbd69",
-    avatarPortrait: { asset: "assets/Luminarch Fortress Aegis.png", sourceWidth: 896, crop: { x: 300, y: 115, size: 420 } } },
-  { id: "void", label: "Void", hudAccent: "#9975e2",
-    avatarPortrait: { asset: "assets/Arcturus, Lord of the Void.png", sourceWidth: 896, crop: { x: 210, y: 30, size: 520 } } },
+    avatarPortrait: { asset: "assets/Luminarch Fortress Aegis.png", sourceWidth: 896, crop: { x: 280, y: 100, size: 350 } } },
+  { id: "void", label: "Void", hudAccent: "#5686a2",
+    avatarPortrait: { asset: "assets/Arcturus, Lord of the Void.png", sourceWidth: 896, crop: { x: 250, y: 35, size: 400 } } },
   { id: "dragon", label: "Dragon", hudAccent: "#7ca9ed",
-    avatarPortrait: { asset: "assets/Radiant Cosmic Dragon.png", sourceWidth: 896, crop: { x: 220, y: 90, size: 560 } } },
+    avatarPortrait: { asset: "assets/Radiant Cosmic Dragon.png", sourceWidth: 896, crop: { x: 210, y: 90, size: 500 } } },
   { id: "arcanist", label: "Arcanist", hudAccent: "#58c9e0",
-    avatarPortrait: { asset: "assets/Arcanist Apprentice.png", sourceWidth: 896, crop: { x: 155, y: 100, size: 470 } } },
-  { id: "miragebound", label: "Miragebound", hudAccent: "#64bfae",
-    avatarPortrait: { asset: "assets/Miragebound Rebel.png", sourceWidth: 896, crop: { x: 235, y: 45, size: 470 } } },
+    avatarPortrait: { asset: "assets/Arcanist Apprentice.png", sourceWidth: 896, crop: { x: 235, y: 110, size: 380 } } },
+  { id: "miragebound", label: "Miragebound", hudAccent: "#c99a4d",
+    avatarPortrait: { asset: "assets/Miragebound Rebel.png", sourceWidth: 896, crop: { x: 240, y: 40, size: 360 } } },
   { id: "bloomrot", label: "Bloomrot", hudAccent: "#a7bc62",
-    avatarPortrait: { asset: "assets/Bloomrot Carrioncap.png", sourceWidth: 896, crop: { x: 240, y: 230, size: 590 } } },
+    avatarPortrait: { asset: "assets/Bloomrot Carrioncap.png", sourceWidth: 896, crop: { x: 345, y: 230, size: 500 } } },
   { id: "burningwest", label: "Burning West", hudAccent: "#e8874f",
-    avatarPortrait: { asset: "assets/Gunslinger of the Burning West.png", sourceWidth: 896, crop: { x: 220, y: 65, size: 440 } } },
+    avatarPortrait: { asset: "assets/Gunslinger of the Burning West.png", sourceWidth: 896, crop: { x: 205, y: 65, size: 400 } } },
   // Presentation is ready; Tech-Zero is not a playable AI preset yet.
-  { id: "techzero", label: "Tech-Zero", hudAccent: "#eb645b",
-    avatarPortrait: { asset: "assets/Tech Zero Explosive Lancer.png", sourceWidth: 896, crop: { x: 240, y: 230, size: 530 } } },
+  { id: "techzero", label: "Tech-Zero", hudAccent: "#6faec6",
+    avatarPortrait: { asset: "assets/Tech Zero Explosive Lancer.png", sourceWidth: 896, crop: { x: 300, y: 210, size: 420 } } },
 ];
 
 const AVAILABLE_BOT_PRESET_IDS: readonly BotArchetypeId[] = [
