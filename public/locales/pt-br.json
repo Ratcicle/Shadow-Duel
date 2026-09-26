@@ -31,7 +31,8 @@
     },
     "duel": {
       "turn": "Turno {turn}",
-      "previewPlaceholder": "Passe o mouse sobre uma carta"
+      "previewPlaceholder": "Passe o mouse sobre uma carta",
+      "previewDragHandle": "Arrastar painel de preview da carta"
     },
     "placement": {
       "preference": "Posicionamento de cartas:",

@@ -69,6 +69,7 @@ const DEFAULT_LOCALE_TEXTS = {
     duel: {
       turn: "Turn {turn}",
       previewPlaceholder: "Hover a card",
+      previewDragHandle: "Drag card preview panel",
     },
     placement: {
       preference: "Card placement:",
