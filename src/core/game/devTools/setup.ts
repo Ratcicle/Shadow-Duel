@@ -11,12 +11,15 @@ import type {
 } from "../../contracts/gameRuntime.js";
 import type { BattlePosition } from "../../contracts/cards.js";
 import type { PlayerId } from "../../contracts/primitives.js";
+import type { FieldSlot } from "../../contracts/placement.js";
+import { isFieldSlot } from "../zones/placement.js";
 
-interface ScenarioCardEntry {
+export interface ScenarioCardEntry {
   id?: number;
   name?: string;
   duelCardId?: number;
   position?: BattlePosition;
+  fieldSlot?: number | null;
   facedown?: boolean;
   isFacedown?: boolean;
   turnSetOn?: number;
@@ -37,11 +40,67 @@ interface ScenarioSide {
   deckTop?: ScenarioEntry[];
 }
 
-interface ScenarioDefinition {
+export interface ScenarioDefinition {
+  schemaVersion?: 2;
   player?: ScenarioSide;
   bot?: ScenarioSide;
   turn?: string;
   phase?: string;
+}
+
+/** Normalize legacy setups at ingress, never during rendering or board updates. */
+export function normalizeScenarioSetup(
+  definition: ScenarioDefinition,
+  options: { requireFieldSlots?: boolean } = {},
+): ScenarioDefinition {
+  if (!definition || typeof definition !== "object" || Array.isArray(definition)) {
+    throw new Error("Setup must be an object.");
+  }
+  if (definition.schemaVersion !== undefined && definition.schemaVersion !== 2) {
+    throw new Error("Unsupported scenario schemaVersion.");
+  }
+  const entries = [definition.player, definition.bot].flatMap((side) =>
+    [side?.field ?? [], side?.spellTrap ?? []].flat(),
+  );
+  const hasExplicitPositions = entries.some((entry) =>
+    typeof entry === "object" && entry !== null && Object.hasOwn(entry, "fieldSlot"),
+  );
+  const requirePositions = options.requireFieldSlots === true ||
+    definition.schemaVersion === 2 || hasExplicitPositions;
+  const normalizeSide = (side: ScenarioSide): ScenarioSide => {
+    if (!side || typeof side !== "object" || Array.isArray(side)) throw new Error("Scenario player must be an object.");
+    const result = structuredClone(side);
+    for (const zone of ["hand", "graveyard", "fieldSpell", "extraDeck", "deck", "deckTop"] as const) {
+      const raw = side[zone];
+      const cards = Array.isArray(raw) ? raw : raw ? [raw] : [];
+      if (cards.some((entry) => typeof entry === "object" && entry !== null && entry.fieldSlot != null)) {
+        throw new Error(`${zone}.fieldSlot must be null outside a field row.`);
+      }
+    }
+    for (const row of ["field", "spellTrap"] as const) {
+      const cards = side[row] ?? [];
+      if (!Array.isArray(cards) || cards.length > 5) {
+        throw new Error(`${row} must contain at most five cards.`);
+      }
+      const occupied = new Set<number>();
+      result[row] = cards.map((entry, index) => {
+        const normalized = typeof entry === "string" ? { name: entry } : { ...entry };
+        const slot = requirePositions ? normalized.fieldSlot : index;
+        if (!isFieldSlot(slot) || occupied.has(slot)) {
+          throw new Error(`${row}.fieldSlot must be unique integers between 0 and 4.`);
+        }
+        occupied.add(slot);
+        return { ...normalized, fieldSlot: slot };
+      });
+    }
+    return result;
+  };
+  return {
+    ...definition,
+    schemaVersion: 2,
+    ...(definition.player ? { player: normalizeSide(definition.player) } : {}),
+    ...(definition.bot ? { bot: normalizeSide(definition.bot) } : {}),
+  };
 }
 
 interface ScenarioOptions {
@@ -127,6 +186,11 @@ export function applyScenarioSetup(
   if (!definition || typeof definition !== "object") {
     return { success: false, reason: "Setup must be an object." };
   }
+  try {
+    definition = normalizeScenarioSetup(definition);
+  } catch (error) {
+    return { success: false, reason: error instanceof Error ? error.message : "Invalid setup positions." };
+  }
 
   const warnings: string[] = [];
   const setupTurn =
@@ -154,6 +218,7 @@ export function applyScenarioSetup(
       warnings.push(`Card "${normalized.name || normalized.id}" not found.`);
       return;
     }
+    card.fieldSlot = null;
 
     switch (zone) {
       case "hand":
@@ -177,6 +242,7 @@ export function applyScenarioSetup(
         card.enteredFieldTurn = setupTurn;
         card.summonedTurn = setupTurn;
         card.setTurn = card.isFacedown ? setupTurn : null;
+        card.fieldSlot = normalized.fieldSlot as FieldSlot;
         player.field.push(card);
         break;
       case "spellTrap":
@@ -190,6 +256,7 @@ export function applyScenarioSetup(
         }
         card.isFacedown = normalized.facedown === true;
         card.turnSetOn = normalized.facedown === true ? setupTurn : null;
+        card.fieldSlot = normalized.fieldSlot as FieldSlot;
         player.spellTrap.push(card);
         break;
       case "graveyard":
@@ -215,6 +282,7 @@ export function applyScenarioSetup(
   };
 
   const resetSide = (player: GamePlayer) => {
+    for (const card of [...player.field, ...player.spellTrap]) card.fieldSlot = null;
     player.hand = [];
     player.field = [];
     player.spellTrap = [];

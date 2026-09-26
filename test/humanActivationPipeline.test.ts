@@ -1,3 +1,4 @@
+import { placeFieldCards } from "./helpers/game.js";
 import assert from "node:assert/strict";
 import type { TestContext } from "node:test";
 import test from "node:test";
@@ -83,8 +84,8 @@ test("seleção humana do Behemoth sobrevive à revalidação canônica", async 
     },
     game.bot,
   );
-  game.player.field.push(behemoth);
-  game.bot.field.push(target);
+  placeFieldCards(game.player.field, behemoth);
+  placeFieldCards(game.bot.field, target);
 
   void game.tryActivateMonsterEffect(behemoth, null, "field", game.player);
   await selectCard(game, "target", game.bot.id, 0, "field");
@@ -117,7 +118,7 @@ test("Natural Selection paga custo humano, declara alvo e resolve", async (t) =>
     game.bot,
   );
   game.player.hand.push(naturalSelection, discard);
-  game.bot.field.push(target);
+  placeFieldCards(game.bot.field, target);
 
   void game.tryActivateSpell(naturalSelection, 0);
   await selectCard(game, "cost", game.player.id, 1, "hand");
@@ -153,7 +154,7 @@ test("Topógrafo aceita descarte humano sem candidato prévio para a Invocação
     cardDatabaseByName.get("Vulcanomaton Excavator"),
     game.player,
   );
-  game.player.field.push(surveyor);
+  placeFieldCards(game.player.field, surveyor);
   game.player.hand.push(discard);
   game.player.deck.push(searchable);
 
@@ -220,8 +221,8 @@ test("Behemoth destroi Abyssal Eel sem prender a transicao para Main Phase 2", a
     cardDatabaseByName.get("Darkness Valley"),
     game.bot,
   );
-  game.player.field.push(behemoth);
-  game.bot.field.push(eel);
+  placeFieldCards(game.player.field, behemoth);
+  placeFieldCards(game.bot.field, eel);
   game.bot.graveyard.push(darknessValley);
 
   void game.tryActivateMonsterEffect(behemoth, null, "field", game.player);
@@ -283,8 +284,8 @@ test("falha de Trigger no fim do Damage Step recupera o Fast Effect Timing", asy
     cardDatabaseByName.get("Darkness Valley"),
     game.bot,
   );
-  game.player.field.push(attacker);
-  game.bot.field.push(eel);
+  placeFieldCards(game.player.field, attacker);
+  placeFieldCards(game.bot.field, eel);
   game.bot.graveyard.push(darknessValley);
   game.phase = "battle";
   game.battleStep = "battle";

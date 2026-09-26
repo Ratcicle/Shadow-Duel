@@ -88,6 +88,20 @@ export interface SimulatedReplacementEffect {
   duration?: string | number | null;
 }
 
+/** Planning may start from a minimal projection without live replay IDs. */
+export interface SimulatedTemporaryControlEffect {
+  id: string;
+  cardDuelCardId: DuelCardId | null;
+  sourceDuelCardId: DuelCardId | null;
+  cardInstanceId: string | number | null;
+  fieldPresenceId: string | number | null;
+  holderId: string;
+  previousControllerId: string | null;
+  expiresOnTurn: number;
+  sourceInstanceId: string | number | null;
+  createdOnTurn: number;
+}
+
 /** Mutable projection used only by planning; no live Card methods are required. */
 export interface SimulatedCardShape extends SimulatedCardCore {
   hasAttacked?: GameCard["hasAttacked"] | undefined;
@@ -312,6 +326,7 @@ export interface GameTreeSimulatedPlayerState extends SimulatedPlayerState {
 
 /** Read-only input projection accepted before a clone establishes brands. */
 export interface AiCardInput {
+  fieldSlot?: GameCard["fieldSlot"];
   id?: GameCard["id"];
   instanceId?: number | string;
   _instanceId?: number | string | null;
@@ -380,11 +395,13 @@ export interface AiStateInput {
   turn?: PlayerId | string | null | undefined;
   phase?: GamePhase | string | null | undefined;
   turnCounter?: number;
+  temporaryControlEffects?: readonly SimulatedTemporaryControlEffect[];
   _isPerspectiveState?: boolean;
   _gameRef?: AiLiveGamePort;
 }
 
 export interface AiStateShape extends AiLiveGamePort {
+  temporaryControlEffects?: SimulatedTemporaryControlEffect[];
   player: SimulatedPlayerState;
   bot: SimulatedPlayerState;
   opponent?: SimulatedPlayerState | null;
@@ -456,14 +473,15 @@ export type TurnLineSimulationGameState = SimulationGameState<"turnLine">;
 
 export interface PublicFieldCardState {
   duelCardId: DuelCardId | null;
-  cardId: GameCard["id"];
+  cardId: GameCard["id"] | null;
+  fieldSlot: GameCard["fieldSlot"];
   owner: PlayerId | string | null;
   controller: PlayerId | string | null;
   originalOwner: PlayerId | string | null;
   locationVersion: number;
   lastSummonMethod: GameCard["lastSummonMethod"];
   lastSummonedFromZone: CanonicalZone | null;
-  properSummonEstablished: boolean;
+  properSummonEstablished: boolean | null;
   properSummonProcedure: GameCard["properSummonProcedure"];
   name: string | null;
   position: BattlePosition;
@@ -476,11 +494,11 @@ export interface PublicFieldCardState {
   isTuner: boolean | null;
   faceDown: boolean;
   status: {
-    cannotAttackThisTurn: boolean;
-    battlePositionLocked: boolean;
-    effectsNegated: boolean;
+    cannotAttackThisTurn: boolean | null;
+    battlePositionLocked: boolean | null;
+    effectsNegated: boolean | null;
     effectsNegatedDuration: string | number | null;
-    canAttackAll: boolean;
+    canAttackAll: boolean | null;
   };
 }
 
@@ -500,12 +518,13 @@ export interface PublicHandCardState {
 
 export interface PublicSpellTrapCardState {
   duelCardId: DuelCardId | null;
-  cardId: GameCard["id"];
+  cardId: GameCard["id"] | null;
+  fieldSlot: GameCard["fieldSlot"];
   name: string | null;
   faceDown: boolean;
-  cardKind: CardKind;
+  cardKind: CardKind | null;
   subtype: GameCard["subtype"];
-  effectsNegated: boolean;
+  effectsNegated: boolean | null;
   effectsNegatedDuration: string | number | null;
 }
 
@@ -581,6 +600,9 @@ export interface PublicEffectUsageReservation {
 
 export interface PublicTemporaryControlState {
   id: string;
+  cardDuelCardId: DuelCardId;
+  sourceDuelCardId: DuelCardId | null;
+  fieldPresenceId: number | string | null;
   cardInstanceId: number | string | null;
   holderId: string;
   previousControllerId: string | null;
@@ -602,7 +624,7 @@ export interface PublicTemporaryEventState {
 }
 
 export interface PublicGameState {
-  schemaVersion: 1;
+  schemaVersion: 2;
   turn: PlayerId;
   phase: GamePhase;
   turnCounter: number;

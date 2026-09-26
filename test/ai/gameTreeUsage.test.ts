@@ -1,3 +1,4 @@
+import { placeSimulationCards } from "../helpers/simulation.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { applyGenericSimulatedMainPhaseAction } from "../../src/core/ai/common/simulation.js";
@@ -43,8 +44,8 @@ for (const [actorId, opponentId] of [["player", "bot"], ["north", "south"]]) {
       { id: "direct", timing: "ignition", activationZones: ["field"], oncePerTurn: true, oncePerTurnName: "shared", actions: [{ type: "heal", amount: 100, player: "self" }] },
       { id: "event", timing: "on_event", event: "after_summon", triggerRequirement: "mandatory", triggerTiming: "if", oncePerTurn: true, oncePerTurnName: "shared", actions: [{ type: "heal", amount: 100, player: "self" }] },
     ];
-    game.bot.field.push(card(1, "actor source", effects));
-    game.player.field.push(card(2, "opponent source", effects));
+    placeSimulationCards(game.bot.field, card(1, "actor source", effects));
+    placeSimulationCards(game.player.field, card(2, "opponent source", effects));
     game.bot.hand.push(card(3, "summoned"));
     const activated: string[] = [];
     const options = {
@@ -71,8 +72,8 @@ for (const blockedSlot of ["bot", "player"] as const) {
       id: "reward", timing: "on_event", event: "after_summon", triggerRequirement: "mandatory", triggerTiming: "if", oncePerTurn: true,
       actions: [{ type: "heal", amount: 100, player: "self" }],
     }];
-    game.bot.field.push(card(1, "actor source", effects));
-    game.player.field.push(card(2, "opponent source", effects));
+    placeSimulationCards(game.bot.field, card(1, "actor source", effects));
+    placeSimulationCards(game.player.field, card(2, "opponent source", effects));
     game.bot.hand.push(card(3, "summoned"));
     game[blockedSlot].effectActivationRestrictions = [{ blockedNames: ["actor source", "opponent source"], allowedAttributes: [], restrictedCardFilters: {}, duration: "turn", expiresOnTurn: 1, reason: null, sourceName: null, sourceId: null, effectId: null }];
     const activated: string[] = [];
@@ -135,9 +136,9 @@ test("Nested bound temporary trigger keeps owner conditions, targets and until_c
   }]);
   source.counters = new Map();
   const bound = card(51, "Bound");
-  owner.field.push(source, bound);
+  placeSimulationCards(owner.field, source, bound);
   owner.deck.push(card(52, "Owner draw"));
-  other.field.push(card(53, "Mover", [{
+  placeSimulationCards(other.field, card(53, "Mover", [{
     id: "move-on-summon", timing: "on_event", event: "after_summon", triggerRequirement: "mandatory", triggerTiming: "if",
     targets: [{ id: "victim", owner: "opponent", zone: "field", name: "Bound" }],
     actions: [{ type: "move", targetRef: "victim", player: "opponent", fromZone: "field", to: "graveyard" }],
@@ -177,7 +178,7 @@ for (const ids of [["bot", "player"], ["north", "south"]] as const) {
         ],
       }]);
       source.counters = new Map();
-      owner.field.push(source);
+      placeSimulationCards(owner.field, source);
       if (rotated) [game.bot, game.player] = [game.player, game.bot];
       summonForEvent(game, 20);
       assert.equal(owner.lp, 8100);
@@ -194,7 +195,7 @@ for (const ids of [["bot", "player"], ["north", "south"]] as const) {
       const other = game.player;
       owner.deck.push(card(30, "Owner draw"), card(31, "Owner second draw"));
       other.deck.push(card(32, "Other draw"));
-      owner.field.push(card(10, "Registrar", [{
+      placeSimulationCards(owner.field, card(10, "Registrar", [{
         id: "register", timing: "ignition", activationZones: ["field"], actions: [{
           type: "register_temporary_event_effect", event: "after_summon", triggerRequirement: "mandatory", triggerTiming: "if",
           duration: "until_consumed", uses: 2,

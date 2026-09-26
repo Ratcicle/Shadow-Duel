@@ -5,6 +5,7 @@ import {
 } from "./renderer/attachments.js";
 import type { EquipLink, LpDisplayState } from "./renderer/types.js";
 import type { PlayerId } from "../core/contracts/primitives.js";
+import type { FieldPlacementSession } from "./renderer/placement.js";
 
 /**
  * Renderer - Main UI rendering class for Shadow Duel
@@ -21,6 +22,7 @@ class Renderer implements GameUI {
   declare leftMouseHeldForChainSkip: boolean;
   declare chainSkipInputCleanup: (() => void) | null;
   declare activeTrapModalCancel: (() => void) | null;
+  declare activeFieldPlacement: FieldPlacementSession | null;
   declare activeEquipLinks: EquipLink[];
   declare equipLinkResizeHandler: (() => void) | null;
   declare lpDisplayState: Partial<Record<PlayerId, LpDisplayState>>;
@@ -52,6 +54,7 @@ class Renderer implements GameUI {
     this.leftMouseHeldForChainSkip = false;
     this.chainSkipInputCleanup = null;
     this.activeTrapModalCancel = null;
+    this.activeFieldPlacement = null;
     this.activeEquipLinks = [];
     this.equipLinkResizeHandler = null;
     this.lpDisplayState = {
@@ -177,6 +180,7 @@ class Renderer implements GameUI {
   destroy() {
     if (this.destroyed) return;
     this.destroyed = true;
+    this.cancelFieldPlacement();
     this.chainSkipInputCleanup?.();
     this.chainSkipInputCleanup = null;
     this.activeTrapModalCancel?.();

@@ -22,17 +22,25 @@ import { getMainDom } from "./ui/main/domRefs.js";
 import { createGameLauncher } from "./ui/main/gameLauncher.js";
 import { createLaboratoryController } from "./ui/main/laboratoryController.js";
 import { bindLocaleControls } from "./ui/main/localeControls.js";
+import { createPlacementPreference, bindPlacementPreference } from "./ui/main/placementPreference.js";
+import { installPreviewPanelLayout } from "./ui/main/previewPanelLayout.js";
 import { createValidationPanel } from "./ui/main/validationPanel.js";
 
 initializeLocale();
 
 const dom = getMainDom();
+const previewPanelLayout = installPreviewPanelLayout(
+  document.getElementById("sidebar"),
+  getUIText("ui.duel.previewDragHandle"),
+);
+if (import.meta.hot) import.meta.hot.dispose(() => previewPanelLayout?.dispose());
 const deckState = createDeckState();
 const validationPanel = createValidationPanel({
   messagesEl: dom.validation.messages,
   validateCardDatabase,
 });
-const gameLauncher = createGameLauncher({ Game, Renderer });
+const placementPreference = createPlacementPreference();
+const gameLauncher = createGameLauncher({ Game, Renderer, getFieldPlacementMode: placementPreference.getMode });
 
 function uiText(
   key: string,
@@ -60,6 +68,7 @@ function setLabelForControl(control: HTMLElement | null, value: string) {
 }
 
 function applyStaticLocalization() {
+  bindPlacementPreference(dom.startScreen.placementSelect, dom.startScreen.placementLabel, placementPreference);
   setText(dom.startScreen.startDuelButton, uiText("start.startDuel"));
   setText(dom.startScreen.deckBuilderButton, uiText("start.myDeck"));
   setText(dom.startScreen.botArenaButton, uiText("start.botArena"));
@@ -162,6 +171,7 @@ const botArena = createBotArenaController({
 });
 
 function startDuel() {
+  previewPanelLayout?.cancelInteraction();
   if (!validationPanel.run()) {
     return;
   }
@@ -181,6 +191,7 @@ let laboratoryTransitionInProgress = false;
 
 async function launchLaboratoryDuel(restart = false) {
   if (laboratoryTransitionInProgress) return;
+  previewPanelLayout?.cancelInteraction();
   laboratoryTransitionInProgress = true;
   const buttons = [
     dom.laboratory.startButton,
@@ -223,12 +234,14 @@ function returnToLaboratory() {
     laboratoryTransitionInProgress ||
     gameLauncher.getActiveGame()?.laboratoryModeEnabled !== true
   ) return;
+  previewPanelLayout?.cancelInteraction();
   gameLauncher.disposeActiveGame("return_to_laboratory");
   if (dom.laboratory.duelControls) dom.laboratory.duelControls.hidden = true;
   laboratory.open();
 }
 
 async function rematch() {
+  previewPanelLayout?.cancelInteraction();
   if (!validationPanel.run({ silent: true })) {
     alert("Corrija os erros do Card DB antes de reiniciar o duelo.");
     return;

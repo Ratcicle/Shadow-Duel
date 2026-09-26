@@ -1,3 +1,4 @@
+import { placeFieldCards } from "./helpers/game.js";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import type { TestContext } from "node:test";
@@ -145,8 +146,8 @@ test("the equipped monster gains 500 LP after destroying by battle", async (t) =
     game.bot,
   );
   game.player.hand.push(sword);
-  game.player.field.push(attacker);
-  game.bot.field.push(defender);
+  placeFieldCards(game.player.field, attacker);
+  placeFieldCards(game.bot.field, defender);
 
   const equipPromise = game.tryActivateSpell(sword, 0);
   await selectCard(game, game.player.id, 0, "field");
@@ -187,7 +188,7 @@ for (const { cardKind, fromZone, targetZone } of [
     );
     game.player[fromZone].push(sword);
     if (targetZone === "fieldSpell") game.bot.fieldSpell = target;
-    else game.bot.spellTrap.push(target);
+    else placeFieldCards(game.bot.spellTrap, target);
 
     const movePromise = game.moveCard(sword, game.player, "graveyard", {
       fromZone,

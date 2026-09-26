@@ -130,6 +130,8 @@ type ReplayCaptureGameHost = CapturedGameMethods &
     GameRuntimeState,
     | "captureReplayEnabled"
     | "replayMode"
+    | "fieldPlacementGeneration"
+    | "_canonicalReplay"
     | "_activeDeferredReplayCommandDescriptor"
     | "targetSelection"
     | "player"
@@ -196,10 +198,14 @@ function installReplayCommandCapture(
     this: ReplayCaptureGameHost,
     ...args: unknown[]
   ): Promise<unknown> {
+    const generation = this.fieldPlacementGeneration;
+    const recording = this._canonicalReplay;
     const descriptor = Reflect.apply(describe, this, [args]);
     const result = await Reflect.apply(original, this, args);
     if (
       descriptor &&
+      generation === this.fieldPlacementGeneration &&
+      recording === this._canonicalReplay &&
       this.captureReplayEnabled &&
       this.replayMode !== "playback" &&
       !this._activeDeferredReplayCommandDescriptor

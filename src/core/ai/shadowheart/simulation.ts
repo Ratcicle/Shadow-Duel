@@ -1,3 +1,5 @@
+import { appendSimulatedZoneCard, clearSimulatedFieldPosition } from "../common/zones.js";
+import { appendSimulatedFieldCard } from "../common/zones.js";
 // ---------------------------------------------------------------------------
 // src/core/ai/shadowheart/simulation.js
 // Shadow-Heart simulation layer for lookahead/beam/planner clones.
@@ -295,6 +297,7 @@ function removeFromZone(
   const index = list?.indexOf(card) ?? -1;
   if (index < 0) return false;
   list!.splice(index, 1);
+  clearSimulatedFieldPosition(card);
   return true;
 }
 
@@ -318,11 +321,14 @@ function moveToZone(
   }
   if (player.fieldSpell === card) player.fieldSpell = null;
   if (zone === "fieldSpell") {
-    if (player.fieldSpell) player.graveyard.push(player.fieldSpell);
+    if (player.fieldSpell) appendSimulatedZoneCard(player.graveyard, player.fieldSpell);
     player.fieldSpell = card;
   } else {
     player[zone as ShadowListZone] = player[zone as ShadowListZone] || [];
-    player[zone as ShadowListZone].push(card);
+    if (zone === "field" || zone === "spellTrap") {
+      return appendSimulatedFieldCard(player[zone], card);
+    }
+    appendSimulatedZoneCard(player[zone as ShadowListZone], card);
   }
   return true;
 }
@@ -354,12 +360,12 @@ function defaultPlaceSpellCard(
 ): ShadowPlaceResult {
   const player = ensureZones(state.bot || {});
   if (card.subtype === "field") {
-    if (player.fieldSpell) player.graveyard.push(player.fieldSpell);
+    if (player.fieldSpell) appendSimulatedZoneCard(player.graveyard, player.fieldSpell);
     player.fieldSpell = card;
     return { placed: true, zone: "fieldSpell" };
   }
   if (card.subtype === "continuous" || card.subtype === "equip") {
-    player.spellTrap.push(card);
+    appendSimulatedFieldCard(player.spellTrap, card);
     return { placed: true, zone: "spellTrap" };
   }
   return { placed: false, zone: null };
@@ -431,7 +437,7 @@ function searchDeck(
   const chosen = rankSearchCandidates(candidates, action, state, sourceCard, options)[0];
   if (!chosen) return null;
   removeFromZone(player.deck, chosen);
-  player.hand.push(chosen);
+  appendSimulatedZoneCard(player.hand, chosen);
   return chosen;
 }
 
@@ -678,7 +684,7 @@ function handleAfterSummon({
       chosen.lastSummonMethod = "special";
       chosen.lastSummonedFromZone = "hand";
       chosen.sourceCard = SH.imp;
-      player.field.push(chosen);
+      appendSimulatedFieldCard(player.field, chosen);
       markSimOpt(state, "shadow_heart_imp_on_summon");
       handleAfterSummon({
         state,
@@ -766,7 +772,7 @@ function simulateNormalSummon(
       if (!tribute) return;
       tributes.push(tribute);
       player.field.splice(idx, 1);
-      player.graveyard.push(tribute);
+      appendSimulatedZoneCard(player.graveyard, tribute);
     });
 
   player.hand.splice(handIndex, 1);
@@ -782,7 +788,7 @@ function simulateNormalSummon(
     (tribute) => tribute.name as string,
   );
   summoned.lastTributeMaterialCount = tributes.length;
-  player.field.push(summoned);
+  appendSimulatedFieldCard(player.field, summoned);
   player.summonCount = (player.summonCount || 0) + 1;
   recordNormalSummonForTurn(player, summoned);
 
@@ -832,10 +838,10 @@ function simulateCathedralEffect(
   chosen.lastSummonMethod = "special";
   chosen.lastSummonedFromZone = "deck";
   chosen.sourceCard = SH.cathedral;
-  player.field.push(chosen);
+  appendSimulatedFieldCard(player.field, chosen);
 
   player.spellTrap.splice(zoneIndex, 1);
-  player.graveyard.push(card);
+  appendSimulatedZoneCard(player.graveyard, card);
 
   handleAfterSummon({
     state,

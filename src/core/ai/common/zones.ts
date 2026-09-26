@@ -1,4 +1,10 @@
 import { restoreFieldExitStatuses } from "../../Card.js";
+import {
+  assignAutomaticFieldSlot,
+  clearFieldSlot,
+  getAvailableFieldSlots,
+} from "../../game/zones/placement.js";
+import type { FieldSlot } from "../../contracts/placement.js";
 import type {
   AiStateShape,
   SimulatedCardState,
@@ -14,6 +20,49 @@ type SimulatedArrayZone =
   | "deck"
   | "extraDeck";
 type SimulatedZone = SimulatedArrayZone | "fieldSpell";
+
+interface SimulatedPositionedCard {
+  fieldSlot?: FieldSlot | null;
+  fieldPresenceId?: string | number | null;
+  locationVersion?: number;
+  duelCardId?: string | number | null;
+  instanceId?: string | number | null;
+  _instanceId?: string | number | null;
+  id?: number | undefined;
+}
+
+/** New simulated entries use their own canonical slots, never live/UI state. */
+export function appendSimulatedFieldCard<Card extends SimulatedPositionedCard>(
+  cards: Card[],
+  card: NoInfer<Card>,
+  preserveFieldPresence = false,
+): boolean {
+  if (cards.includes(card)) {
+    getAvailableFieldSlots(cards);
+    return true;
+  }
+  if (assignAutomaticFieldSlot(card, cards) === null) return false;
+  if (!preserveFieldPresence) {
+    card.locationVersion = (card.locationVersion || 0) + 1;
+    card.fieldPresenceId ??= `sim_field_${card.duelCardId ?? card.instanceId ?? card._instanceId ?? card.id}_${card.locationVersion}`;
+  }
+  cards.push(card);
+  return true;
+}
+
+export function clearSimulatedFieldPosition(card: SimulatedPositionedCard): void {
+  clearFieldSlot(card);
+  card.fieldPresenceId = null;
+}
+
+/** Off-field insertion clears only this card, without compacting survivors. */
+export function appendSimulatedZoneCard<Card extends SimulatedPositionedCard>(
+  cards: Card[],
+  card: NoInfer<Card>,
+): number {
+  clearSimulatedFieldPosition(card);
+  return cards.push(card);
+}
 
 interface SimulatedEquipAction {
   atkBonus?: number;
@@ -148,11 +197,13 @@ export function removeCardFromZones(
     const idx = list.indexOf(card);
     if (idx !== -1) {
       list.splice(idx, 1);
+      clearSimulatedFieldPosition(card);
       return true;
     }
   }
   if (player.fieldSpell === card) {
     player.fieldSpell = null;
+    clearSimulatedFieldPosition(card);
     return true;
   }
   return false;
@@ -199,9 +250,15 @@ export function moveCardToZone(
   player: SimulatedPlayerState | null | undefined,
   card: SimulatedCardState | null | undefined,
   zone: string,
+  sourcePlayer: SimulatedPlayerState | null | undefined = player,
 ): boolean {
-  if (!player || !card) return false;
-  const fromZone = findCardZone(player, card);
+  if (!player || !sourcePlayer || !card) return false;
+  const fromZone = findCardZone(sourcePlayer, card);
+  if (zone === fromZone && player === sourcePlayer) return true;
+  if (
+    (zone === "field" || zone === "spellTrap") &&
+    getAvailableFieldSlots(player[zone] || []).length === 0
+  ) return false;
   if (fromZone === "field" && zone !== "field") {
     card.battlePositionLocked = false;
     restoreFieldExitStatuses(card);
@@ -217,12 +274,12 @@ export function moveCardToZone(
     attachedEquips.forEach((equip) => {
       if (!equip) return;
       detachSimulatedEquip(equip);
-      removeCardFromZones(player, equip);
+      removeCardFromZones(sourcePlayer, equip);
       if (!Array.isArray(player.graveyard)) player.graveyard = [];
-      player.graveyard.push(equip);
+      appendSimulatedZoneCard(player.graveyard, equip);
     });
   }
-  removeCardFromZones(player, card);
+  removeCardFromZones(sourcePlayer, card);
   if (zone === "extraDeck") {
     card.properSummonEstablished = false;
     card.properSummonProcedure = null;
@@ -238,6 +295,10 @@ export function moveCardToZone(
       (player as SimulatedZonePlayer)[zone as SimulatedArrayZone],
     )
   ) {
+    if (zone === "field" || zone === "spellTrap") {
+      return appendSimulatedFieldCard(player[zone], card);
+    }
+    clearSimulatedFieldPosition(card);
     (player as SimulatedZonePlayer)[zone as SimulatedArrayZone].push(card);
     return true;
   }

@@ -82,7 +82,9 @@ type ExpectedGameOptionKey =
   | "playerArchetype"
   | "botArchetype"
   | "devMode"
-  | "chainResponseTimeoutMs";
+  | "chainResponseTimeoutMs"
+  | "getFieldPlacementMode"
+  | "fieldPlacementProvider";
 
 type GameOptionsHaveExactKeyset = Expect<
   Equal<keyof GameOptions, ExpectedGameOptionKey>

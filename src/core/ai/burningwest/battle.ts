@@ -1,3 +1,4 @@
+import { appendSimulatedZoneCard } from "../common/zones.js";
 import type { SimulatedCardState, SimulatedCardShape, SimulatedPlayerState, AiStateShape } from "../../contracts/aiState.js";
 import type { CardDeclaredValue, CardDeclaredValueDetail, CardDeclaredValueMap } from "../../contracts/cards.js";
 import type { GameCard } from "../../contracts/cards.js";
@@ -364,7 +365,7 @@ function applyDeadeyeReward({ state, bot, opponent, destroyed, summary }: Pick<R
   const drawn = bot.deck?.shift?.();
   if (drawn) {
     if (!Array.isArray(bot.hand)) bot.hand = [];
-    bot.hand.push(drawn);
+    appendSimulatedZoneCard(bot.hand, drawn);
     rewards.push("Deadeye drew 1");
   }
   if (isExtraDeckMonster(destroyed)) {

@@ -1,3 +1,4 @@
+import { placeFieldCards } from "./helpers/game.js";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import type { TestContext } from "node:test";
@@ -165,7 +166,7 @@ test("o custo usa o Nível original, é pago antes do alvo e libera a zona", asy
     makeMonster(id, `Occupied Zone ${id}`, game.player),
   );
   game.player.hand.push(spell);
-  game.player.field.push(cost, ...fillers);
+  placeFieldCards(game.player.field, cost, ...fillers);
   game.player.graveyard.push(target, wrongLevel, sameName);
 
   const preview = game.effectEngine.canActivateSpellFromHandPreview(
@@ -216,7 +217,7 @@ test("o custo usa o Nível original, é pago antes do alvo e libera a zona", asy
   const secondTarget = makeMonster(991010, "Second Target", game.player);
   game.player.hand.push(secondCopy);
   game.player.field.pop();
-  game.player.field.push(secondCost);
+  placeFieldCards(game.player.field, secondCost);
   game.player.graveyard.push(secondTarget);
   assert.ok(
     game.effectEngine.canActivateSpellFromHandPreview(secondCopy, game.player)
@@ -238,7 +239,7 @@ test("custo face-down, mesmo nome ou Nível original diferente não tornam a ati
     level: 6,
   });
   game.player.hand.push(spell);
-  game.player.field.push(facedownCost);
+  placeFieldCards(game.player.field, facedownCost);
   game.player.graveyard.push(sameName, wrongLevel);
 
   assert.ok(
@@ -266,7 +267,7 @@ test("a seleção humana oferece apenas outro nome do mesmo Nível original apó
   const wrongLevel = makeMonster(991023, "Wrong Level", game.player, { level: 7 });
   const sameName = makeMonster(991024, "Human Material", game.player);
   game.player.hand.push(spell);
-  game.player.field.push(cost);
+  placeFieldCards(game.player.field, cost);
   game.player.graveyard.push(target, wrongLevel, sameName);
   const offeredNames: string[][] = [];
   const paidBeforeSelection: boolean[] = [];
@@ -319,7 +320,7 @@ test("um alvo que sai do Cemitério não é substituído e o custo não é devol
   const declared = makeMonster(991015, "Declared Target", game.player);
   const replacement = makeMonster(991016, "Replacement Target", game.player);
   game.player.hand.push(spell);
-  game.player.field.push(cost);
+  placeFieldCards(game.player.field, cost);
   game.player.graveyard.push(declared, replacement);
 
   game.chainSystem.offerChainResponses = async () => {

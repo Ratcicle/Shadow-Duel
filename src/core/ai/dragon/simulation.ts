@@ -1,3 +1,6 @@
+import { appendSimulatedZoneCard, clearSimulatedFieldPosition } from "../common/zones.js";
+import { appendSimulatedFieldCard } from "../common/zones.js";
+import { getAvailableFieldSlots } from "../../game/zones/placement.js";
 import type { DragonCard as DragonReadCard, DragonPlayer as DragonReadPlayer } from "./contracts.js";
 // ─────────────────────────────────────────────────────────────────────────────
 // src/core/ai/dragon/simulation.js
@@ -429,6 +432,8 @@ export function simulateMainPhaseAction<State extends DragonSimulationState>(
         player: DragonPlayer,
       ) => AITributeRequirement)(card, player);
 
+      if (tributeInfo.tributesNeeded === 0 && getAvailableFieldSlots(player.field).length === 0) break;
+
       if (
         tributeInfo.tributesNeeded > 0 &&
         !fieldHasTributeValue(player.field || [], tributeInfo.tributesNeeded, card)
@@ -464,7 +469,7 @@ export function simulateMainPhaseAction<State extends DragonSimulationState>(
         tributeIndices.forEach((idx) => {
           const t = player.field[idx];
           if (t) {
-            player.graveyard.push(t);
+            appendSimulatedZoneCard(player.graveyard, t);
             player.field.splice(idx, 1);
           }
         });
@@ -478,7 +483,7 @@ export function simulateMainPhaseAction<State extends DragonSimulationState>(
         isFacedown: action.facedown || false,
         hasAttacked: false,
       };
-      player.field.push(summoned);
+      appendSimulatedFieldCard(player.field, summoned);
       player.summonCount = (player.summonCount || 0) + 1;
       recordNormalSummonForTurn(player, summoned);
       simulateDragonAfterSummonEffects(state, summoned, {
@@ -491,19 +496,25 @@ export function simulateMainPhaseAction<State extends DragonSimulationState>(
       const player = state.bot;
       const card = player.hand[action.index!];
       if (!card) break;
-
+      const resolvingCard: DragonCard = { ...card, isFacedown: false };
+      if (card.subtype === "field") {
+        clearSimulatedFieldPosition(resolvingCard);
+        player.fieldSpell = resolvingCard;
+      } else if (!appendSimulatedFieldCard(player.spellTrap, resolvingCard)) {
+        break;
+      }
       player.hand.splice(action.index!, 1);
 
-      simulateDragonSpellEffect(state, card, action);
+      // The Spell occupies its position throughout resolution, even when its
+      // normal destination afterwards is the Graveyard.
+      simulateDragonSpellEffect(state, resolvingCard, action);
 
-      if (card.subtype === "field") {
-        player.fieldSpell = { ...card };
-      } else if (card.subtype === "continuous" || card.subtype === "equip") {
-        if (!player.spellTrap) player.spellTrap = [];
-        if (player.spellTrap.length < 5) player.spellTrap.push({ ...card });
-        else player.graveyard.push({ ...card });
-      } else {
-        player.graveyard.push({ ...card });
+      if (card.subtype !== "field" && card.subtype !== "continuous" && card.subtype !== "equip") {
+        const index = player.spellTrap.indexOf(resolvingCard);
+        if (index >= 0) {
+          player.spellTrap.splice(index, 1);
+          appendSimulatedZoneCard(player.graveyard, resolvingCard);
+        }
       }
       break;
     }
@@ -590,13 +601,8 @@ export function simulateMainPhaseAction<State extends DragonSimulationState>(
       const card = player.hand[action.index!];
       if (!card) break;
       if (card.cardKind === "spell" && card.subtype === "field") break;
+      if (!appendSimulatedFieldCard(player.spellTrap, { ...card, isFacedown: true })) break;
       player.hand.splice(action.index!, 1);
-      player.spellTrap = player.spellTrap || [];
-      if (player.spellTrap.length < 5) {
-        player.spellTrap.push({ ...card, isFacedown: true });
-      } else {
-        player.graveyard.push({ ...card });
-      }
       break;
     }
 
@@ -675,7 +681,7 @@ function simulateDragonSpellEffect(
 
       if (target) {
         const searched = player.deck.splice(target.index, 1)[0];
-        if (searched) player.hand.push(searched);
+        if (searched) appendSimulatedZoneCard(player.hand, searched);
       }
       break;
     }
@@ -784,7 +790,7 @@ function simulateDragonSpellEffect(
       );
       if (lv4GYIdx >= 0) {
         const recovered = player.graveyard.splice(lv4GYIdx, 1)[0];
-        if (recovered) player.hand.push(recovered);
+        if (recovered) appendSimulatedZoneCard(player.hand, recovered);
       }
       break;
     }
@@ -1026,6 +1032,7 @@ function putSimulatedCard(
       : destination;
 
   if (zone === "fieldSpell") {
+    clearSimulatedFieldPosition(card);
     owner.fieldSpell = card;
     return;
   }
@@ -1033,7 +1040,11 @@ function putSimulatedCard(
   if (!(owner as DragonZoneStorage)[zone]) {
     (owner as DragonZoneStorage)[zone] = [];
   }
-  (owner as DragonZoneStorage)[zone]!.push(card);
+  if (zone === "field" || zone === "spellTrap") {
+    appendSimulatedFieldCard((owner as DragonZoneStorage)[zone]!, card);
+  } else {
+    appendSimulatedZoneCard((owner as DragonZoneStorage)[zone]!, card);
+  }
 }
 
 function moveFieldIndexToGraveyard(
@@ -1094,7 +1105,7 @@ function applyDragonHandToGraveyardTriggers(
       const liveIndex = player.graveyard.indexOf(recoverEntry.candidate);
       if (liveIndex >= 0) {
         const recovered = player.graveyard.splice(liveIndex, 1)[0];
-        if (recovered) player.hand.push(recovered);
+        if (recovered) appendSimulatedZoneCard(player.hand, recovered);
       }
     }
   }
@@ -1318,7 +1329,7 @@ function specialSummonToField(
     cannotAttackThisTurn: options.cannotAttackThisTurn === true,
   };
   applySimulatedPassiveBuffs(summoned, player);
-  player.field.push(summoned);
+  appendSimulatedFieldCard(player.field, summoned);
   if (options.skipAfterSummon !== true) {
     simulateDragonAfterSummonEffects(state, summoned, {
       method: options.method || "special",
@@ -1395,7 +1406,7 @@ function normalSummonFromHandIndex(
     isFacedown: false,
     hasAttacked: false,
   };
-  player.field.push(summoned);
+  appendSimulatedFieldCard(player.field, summoned);
   player.summonCount = (player.summonCount || 0) + 1;
   recordNormalSummonForTurn(player, summoned);
   simulateDragonAfterSummonEffects(state, summoned, {
@@ -1496,7 +1507,7 @@ function simulateLunarEclipseOnSummon(
     const liveDeckIndex = player.deck.indexOf(selected.candidate);
     if (liveDeckIndex >= 0) {
       const searched = player.deck.splice(liveDeckIndex, 1)[0];
-      if (searched) player.hand.push(searched);
+      if (searched) appendSimulatedZoneCard(player.hand, searched);
     }
   }
 
@@ -1587,7 +1598,7 @@ function simulateArmoredDragonSearch(
   const liveIndex = player.deck.indexOf(target.candidate);
   if (liveIndex >= 0) {
     const searched = player.deck.splice(liveIndex, 1)[0];
-    if (searched) player.hand.push(searched);
+    if (searched) appendSimulatedZoneCard(player.hand, searched);
   }
 }
 
@@ -1684,7 +1695,7 @@ function simulateTechVoidAfterSummon(
   const banished = player.graveyard.splice(liveIndex, 1)[0];
   if (!banished) return;
   if (!player.banished) player.banished = [];
-  player.banished.push(banished);
+  appendSimulatedZoneCard(player.banished, banished);
   const buff = Math.floor((banished.atk || 0) * 0.5);
   summoned.tempAtkBoost = (summoned.tempAtkBoost || 0) + buff;
 }
@@ -1760,7 +1771,7 @@ function simulateRadiantCosmicRefund(player: DragonPlayer): void {
   }
 
   if ((player.deck || []).length > 0) {
-    player.hand.push(player.deck.shift()!);
+    appendSimulatedZoneCard(player.hand, player.deck.shift()!);
   }
 }
 
@@ -1940,7 +1951,7 @@ function simulateDragonHandIgnition(
     const liveDeckIndex = player.deck.indexOf(selected.candidate);
     if (liveDeckIndex >= 0) {
       const searched = player.deck.splice(liveDeckIndex, 1)[0];
-      if (searched) player.hand.push(searched);
+      if (searched) appendSimulatedZoneCard(player.hand, searched);
     }
     recordSimulatedMaterialEffectActivation(state, player, card);
     return;
@@ -1964,7 +1975,7 @@ function simulateDragonHandIgnition(
       if (liveCostIndex >= 0) {
         const banished = player.field.splice(liveCostIndex, 1)[0];
         if (!player.banished) player.banished = [];
-        if (banished) player.banished.push(banished);
+        if (banished) appendSimulatedZoneCard(player.banished, banished);
       }
       player.hand.splice(liveIndex, 1);
       const summoned = specialSummonToField(state, player, card, action, {
@@ -2011,7 +2022,7 @@ function simulateDragonHandIgnition(
       for (const index of costIndices) {
         const banished = player.graveyard.splice(index, 1)[0];
         if (!player.banished) player.banished = [];
-        if (banished) player.banished.push(banished);
+        if (banished) appendSimulatedZoneCard(player.banished, banished);
       }
       const liveIndex = player.hand.indexOf(card);
       if (liveIndex >= 0) {
@@ -2249,7 +2260,7 @@ function simulateDragonGraveyardSpellEffect(
   );
   if (deckIndex >= 0) {
     const searched = player.deck.splice(deckIndex, 1)[0];
-    if (searched) player.hand.push(searched);
+    if (searched) appendSimulatedZoneCard(player.hand, searched);
   }
 }
 
@@ -2506,7 +2517,7 @@ function simulateDragonGraveyardMonsterEffect(
         const banished = sourceZone.splice(sourceIndex, 1)[0];
         if (!player.banished) player.banished = [];
         if (banished) {
-          player.banished.push(banished);
+          appendSimulatedZoneCard(player.banished, banished);
           resolvedAnyAction = true;
         }
       }
@@ -2539,7 +2550,7 @@ function simulateDragonGraveyardMonsterEffect(
       if (liveIndex >= 0) {
         const searched = sourceZone.splice(liveIndex, 1)[0];
         if (searched) {
-          player.hand.push(searched);
+          appendSimulatedZoneCard(player.hand, searched);
           resolvedAnyAction = true;
         }
       }
@@ -2626,7 +2637,7 @@ function simulateDragonGraveyardMonsterEffect(
         cannotAttackThisTurn: false,
       };
       applySimulatedPassiveBuffs(summoned, player);
-      player.field.push(summoned);
+      appendSimulatedFieldCard(player.field, summoned);
       simulateDragonAfterSummonEffects(state, summoned, { method: "special" });
       resolvedAnyAction = true;
     }

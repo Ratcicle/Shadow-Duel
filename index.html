@@ -50,6 +50,13 @@
               Laboratório
             </button>
           </div>
+          <div class="placement-preference-control">
+            <label id="card-placement-label" for="card-placement-select"></label>
+            <select id="card-placement-select">
+              <option value="automatic"></option>
+              <option value="manual"></option>
+            </select>
+          </div>
         </div>
         <div
           class="language-toggle"
@@ -378,8 +385,11 @@
       <!-- Bot Area (Top) -->
       <div id="bot-area" class="player-area">
         <div class="player-info">
-          <span class="name">Opponent</span>
-          <div class="lp-counter">LP: <span id="bot-lp">8000</span></div>
+          <div class="player-hud-details">
+            <span class="name">Opponent</span>
+            <div class="lp-counter"><span class="lp-label">LP</span><span id="bot-lp" class="lp-value">8000</span></div>
+          </div>
+          <div class="player-avatar-frame" aria-hidden="true"></div>
         </div>
         <div class="hand-row">
           <div class="hand-zone" id="bot-hand"></div>
@@ -416,8 +426,7 @@
 
       <!-- Center Info / Phase Indicator -->
       <div id="center-info">
-        <div id="turn-indicator">Turn: Player</div>
-        <div id="priority-indicator" class="priority-indicator" aria-live="polite"></div>
+        <div id="turn-indicator"></div>
         <ul id="phase-track">
           <li data-phase="draw" class="active">Draw Phase</li>
           <li data-phase="standby">Standby Phase</li>
@@ -462,37 +471,47 @@
           <div class="hand-zone" id="player-hand"></div>
         </div>
         <div class="player-info">
-          <span class="name">You</span>
-          <div class="lp-counter">LP: <span id="player-lp">8000</span></div>
+          <div class="player-avatar-frame" aria-hidden="true"></div>
+          <div class="player-hud-details">
+            <span class="name">You</span>
+            <div class="lp-counter"><span class="lp-label">LP</span><span id="player-lp" class="lp-value">8000</span></div>
+          </div>
         </div>
       </div>
     </div>
 
     <!-- Sidebar -->
     <div id="sidebar">
-      <nav id="laboratory-duel-controls" aria-label="Controles do Laboratório" hidden>
-        <button id="laboratory-duel-back" type="button">Voltar ao Laboratório</button>
-        <button id="laboratory-duel-restart" type="button">Reiniciar duelo</button>
-      </nav>
-      <div id="card-preview">
-        <div id="preview-image"></div>
-        <div id="preview-info">
-          <h2 id="preview-name">Hover a card</h2>
-          <div id="preview-level">Level: -</div>
-          <div id="preview-stats">
-            <span id="preview-atk">ATK: -</span>
-            <span id="preview-def">DEF: -</span>
+      <div class="card-preview-panel">
+        <div class="card-preview-drag-handle" aria-hidden="true"></div>
+        <div class="card-preview-body">
+          <nav id="laboratory-duel-controls" aria-label="Controles do Laboratório" hidden>
+            <button id="laboratory-duel-back" type="button">Voltar ao Laboratório</button>
+            <button id="laboratory-duel-restart" type="button">Reiniciar duelo</button>
+          </nav>
+          <div id="card-preview">
+            <div id="preview-image"></div>
+            <div id="preview-info">
+              <div class="card-preview-identity">
+                <h2 id="preview-name">Hover a card</h2>
+                <div id="preview-level">Level: -</div>
+                <div id="preview-stats">
+                  <span id="preview-atk">ATK: -</span>
+                  <span id="preview-def">DEF: -</span>
+                </div>
+              </div>
+              <p id="preview-desc">Description will appear here.</p>
+            </div>
           </div>
-          <p id="preview-desc">Description will appear here.</p>
+          <!-- Action log temporarily hidden - will be re-added in the future -->
+          <!-- <div id="action-log">
+            <div class="log-header">
+              <span>Ações</span>
+            </div>
+            <div id="action-log-list"></div>
+          </div> -->
         </div>
       </div>
-      <!-- Action log temporarily hidden - will be re-added in the future -->
-      <!-- <div id="action-log">
-        <div class="log-header">
-          <span>Ações</span>
-        </div>
-        <div id="action-log-list"></div>
-      </div> -->
     </div>
 
     <!-- Graveyard Modal -->

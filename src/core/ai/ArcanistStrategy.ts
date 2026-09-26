@@ -1,3 +1,5 @@
+import { appendSimulatedFieldCard } from "./common/zones.js";
+import { getAvailableFieldSlots } from "../game/zones/placement.js";
 import type { AIAction, AIPlannedAction, AIPlanningContext, AIPlanningProfile, AIState, AIStrategyBotPort, AIActivationContext, StrategyRuntimePort } from "../contracts/ai.js";
 import type { AiStateShape, SimulatedCardState, SimulatedPlayerState } from "../contracts/aiState.js";
 import type { GameCard } from "../contracts/cards.js";
@@ -1108,7 +1110,7 @@ export default class ArcanistStrategy extends BaseStrategy {
     if ((player.field || []).length >= 5) return true;
     if (!useSimOpt(state, "albus_arcanist_ice_special_summon")) return true;
     player.hand.splice(handIndex, 1);
-    player.field.push({
+    appendSimulatedFieldCard(player.field, {
       ...card,
       position: "attack",
       isFacedown: false,
@@ -1123,6 +1125,7 @@ export default class ArcanistStrategy extends BaseStrategy {
     const handIndex = resolveSimulatedHandIndex(player, action, "spell");
     const card = player.hand?.[handIndex];
     if (!card) return false;
+    if (card.subtype !== "field" && getAvailableFieldSlots(player.spellTrap).length === 0) return true;
 
     if (card.name === ARCANIST_NAMES.GRIMOIRE) {
       const analysis = this.analyzeGameState(state);
@@ -1137,12 +1140,11 @@ export default class ArcanistStrategy extends BaseStrategy {
         hosts.find((candidate) => candidate.name === hostName) ||
         hosts[0];
       if (!host) return true;
+      appendSimulatedFieldCard(player.spellTrap, card);
       player.hand.splice(handIndex, 1);
       card.equippedTo = host;
       if (!Array.isArray(host.equips)) host.equips = [];
       host.equips.push(card);
-      player.spellTrap = player.spellTrap || [];
-      player.spellTrap.push(card);
       this.simulateArcanistOnEquipTriggers(state, host, card, action);
       return true;
     }
@@ -1179,8 +1181,8 @@ export default class ArcanistStrategy extends BaseStrategy {
         ) || findOpponentTarget(state);
       if (!target) return true;
       if (!useSimOpt(state, "seismic_impact_effect")) return true;
+      appendSimulatedFieldCard(player.spellTrap, card);
       player.hand.splice(handIndex, 1);
-      pushToZone(player, "graveyard", card);
       removeFromZone(player, "spellTrap", equipCost);
       for (const monster of player.field || []) {
         if (Array.isArray(monster.equips)) {
@@ -1190,6 +1192,8 @@ export default class ArcanistStrategy extends BaseStrategy {
       removeEquipRelation(equipCost);
       pushToZone(player, "graveyard", equipCost);
       removeOpponentCard(state, target, "banished");
+      removeFromZone(player, "spellTrap", card);
+      pushToZone(player, "graveyard", card);
       return true;
     }
 
@@ -1225,7 +1229,7 @@ export default class ArcanistStrategy extends BaseStrategy {
       if (!recruit) return true;
       removeFromZone(player, "deck", recruit);
       player.lp = Math.max(0, (player.lp || 0) - 2000);
-      player.field.push({
+      appendSimulatedFieldCard(player.field, {
         ...recruit,
         position: "attack",
         isFacedown: false,

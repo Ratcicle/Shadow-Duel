@@ -638,6 +638,7 @@ export interface TrapMonsterOriginalState {
  * boundaries instead of granting every property name to every consumer.
  */
 export interface GameCard {
+  fieldSlot: import("./placement.js").FieldSlot | null;
   handSummonProcedure?: HandSummonProcedure | null;
   oncePerTurnResetVersion?: number;
   instanceId: number;

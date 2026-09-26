@@ -1,4 +1,5 @@
 import { getUI } from "../shared.js";
+import { assignAutomaticFieldSlot } from "../../game/zones/placement.js";
 import type { ActionOf } from "../../contracts/actions.js";
 import type {
   ActionHandlerEnginePort,
@@ -48,6 +49,7 @@ export async function performSummonFromHand(
   const moveResult =
     typeof game.moveCard === "function"
       ? await game.moveCard(card, player, "field", {
+          placementActor: player,
           fromZone: "hand",
           position,
           isFacedown: false,
@@ -71,6 +73,7 @@ export async function performSummonFromHand(
   }
 
   if (moveResult == null) {
+    if (assignAutomaticFieldSlot(card, player.field) === null) return false;
     player.hand.splice(handIndex, 1);
 
     card.position = position;

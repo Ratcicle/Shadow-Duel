@@ -7,6 +7,8 @@ import {
   type LaboratoryDuelConfig,
 } from "../src/ui/main/gameLauncher.js";
 import { required, unsafeFixture } from "./helpers/fixtures.js";
+import { getAvailableBotPresets } from "../src/core/bot/presets.js";
+import { getLocale, setLocale } from "../src/core/i18n.js";
 
 class HeadlessRenderer {}
 
@@ -54,6 +56,84 @@ function duelConfig() {
     },
   } satisfies LaboratoryDuelConfig;
 }
+
+test("normal duels name the actual bot preset identically in both locales, including rematches and fallback", (t) => {
+  const launcher = createLauncher();
+  const locale = getLocale();
+  t.after(() => { launcher.disposeActiveGame("test_complete"); setLocale(locale); });
+  const config = { deck: [1, 3, 4, 9, 1, 3, 4, 9], extraDeck: [31], playerArchetype: "dragon" };
+  for (const language of ["en", "pt-br"]) {
+    setLocale(language);
+    for (const preset of getAvailableBotPresets()) {
+      const first = launcher.startNormalDuel({ ...config, botPreset: preset.id });
+      assert.equal(first.bot.name, `${preset.label} Bot`);
+      assert.equal(first.player.name, "You");
+      first.updateBoard();
+      assert.equal(first.bot.name, `${preset.label} Bot`);
+      const rematch = launcher.startNormalDuel({ ...config, botPreset: preset.id });
+      assert.equal(first.isDisposed(), true);
+      assert.equal(rematch.bot.name, `${preset.label} Bot`);
+    }
+    const fallback = launcher.startNormalDuel({ ...config, botPreset: "invalid-preset" });
+    assert.equal(fallback.bot.archetype, "shadowheart");
+    assert.equal(fallback.bot.name, "Shadow-Heart Bot");
+  }
+});
+
+test("Laboratory human identities and explicit participant names remain unchanged", async (t) => {
+  const launcher = createLauncher();
+  t.after(() => launcher.disposeActiveGame("test_complete"));
+  const game = await launcher.startLaboratoryDuel(scenarioConfig());
+  assert.equal(game.player.name, "Jogador 1");
+  assert.equal(game.bot.name, "Jogador 2");
+  assert.equal(game.bot.controllerType, "human");
+  const restarted = required(await launcher.restartLaboratoryDuel());
+  assert.equal(restarted.bot.name, "Jogador 2");
+  const explicit = new Game({ laboratoryMode: true, playerName: "Alice", opponentName: "Rival humano" });
+  t.after(() => explicit.dispose());
+  explicit.updateBoard();
+  assert.equal(explicit.player.name, "Alice");
+  assert.equal(explicit.bot.name, "Rival humano");
+});
+
+test("Laboratory AI names follow the resolved preset across restart and return to human seats", async (t) => {
+  const launcher = createLauncher();
+  t.after(() => launcher.disposeActiveGame("test_complete"));
+  const game = await launcher.startLaboratoryDuel({ ...scenarioConfig(), useBot: true, botPreset: "luminarch" });
+  assert.equal(game.bot.name, "Luminarch Bot");
+  assert.equal(required(await launcher.restartLaboratoryDuel()).bot.name, "Luminarch Bot");
+  const human = await launcher.startLaboratoryDuel(scenarioConfig());
+  assert.equal(human.bot.name, "Jogador 2");
+  assert.equal(human.bot.controllerType, "human");
+});
+
+test("invalid modern Laboratory positions preserve the active duel and restart restores sparse slots", async (t) => {
+  const launcher = createLauncher();
+  t.after(() => launcher.disposeActiveGame("test_complete"));
+  const config: LaboratoryDuelConfig = {
+    ...scenarioConfig(),
+    setup: {
+      schemaVersion: 2,
+      player: { field: [{ id: 1, fieldSlot: 4 }], spellTrap: [{ id: 3, fieldSlot: 2 }] },
+      bot: { field: [{ id: 1, fieldSlot: 0 }] },
+    },
+  };
+  const active = await launcher.startLaboratoryDuel(config);
+  const card = required(active.player.field[0]);
+  assert.equal(card.fieldSlot, 4);
+  await assert.rejects(() => launcher.startLaboratoryDuel({
+    ...config,
+    setup: { schemaVersion: 2, player: { field: [{ id: 1, fieldSlot: 2 }, { id: 1, fieldSlot: 2 }] } },
+  }), /fieldSlot/);
+  assert.equal(active.isDisposed(), false);
+  assert.strictEqual(active.player.field[0], card);
+  card.fieldSlot = 1;
+  const restarted = required(await launcher.restartLaboratoryDuel());
+  assert.equal(active.isDisposed(), true);
+  assert.equal(required(restarted.player.field[0]).fieldSlot, 4);
+  assert.equal(required(restarted.player.spellTrap[0]).fieldSlot, 2);
+  assert.equal(required(restarted.bot.field[0]).fieldSlot, 0);
+});
 
 test("Laboratory restart restores an isolated starting scenario and options repeatedly", async (t) => {
   const launcher = createLauncher();

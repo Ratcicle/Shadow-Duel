@@ -4,6 +4,7 @@
  * devGetSelectionCleanupState, devForceTargetCleanup, devAutoConfirmTargetSelection
  */
 
+import { assignAutomaticFieldSlot } from "../zones/placement.js";
 import type {
   FullGameHost,
   GameCard,
@@ -162,6 +163,9 @@ export function devGiveCard(
         reason: "Only Spell/Trap cards can go to that zone.",
       };
     }
+    if (assignAutomaticFieldSlot(card, player.spellTrap) === null) {
+      return { success: false, reason: "Spell/Trap zone is full." };
+    }
     player.spellTrap.push(card);
   } else if (zone === "field-attack" || zone === "field-defense") {
     if (player.field.length >= 5) {
@@ -173,6 +177,9 @@ export function devGiveCard(
     card.position = zone === "field-defense" ? "defense" : "attack";
     card.hasAttacked = false;
     card.attacksUsedThisTurn = 0;
+    if (assignAutomaticFieldSlot(card, player.field) === null) {
+      return { success: false, reason: "Field is full (max 5 monsters)." };
+    }
     player.field.push(card);
   } else if (zone === "fieldspell") {
     if (card.cardKind !== "spell" || card.subtype !== "field") {

@@ -24,7 +24,7 @@ function setup() {
 function replay(overrides: MutableReplay = {}): MutableReplay {
   return {
     format: "shadow-duel-canonical-replay",
-    schemaVersion: 1,
+    schemaVersion: 2,
     cardDatabaseSignature: getCardDatabaseSignature(),
     setup: setup(),
     commands: [],
@@ -32,6 +32,26 @@ function replay(overrides: MutableReplay = {}): MutableReplay {
     ...overrides,
   };
 }
+
+test("field placement replay decisions validate actor, destination, candidates and cancellation", () => {
+  const placement = {
+    sequence: 1, decisionId: 1, kind: "field_placement", actorId: "player",
+    candidateKeys: ["bot:field:2", "bot:field:4"],
+    value: { outcome: "chosen", slot: 4 },
+    context: { procedureId: "placement_1", decidingPlayerId: "player", destinationPlayerId: "bot", row: "field", duelCardId: 7, allowCancel: false },
+  };
+  assert.doesNotThrow(() => validateCanonicalReplay(replay({ decisions: [placement] })));
+  for (const invalid of [
+    { ...placement, actorId: "bot" },
+    { ...placement, candidateKeys: ["player:field:4"] },
+    { ...placement, candidateKeys: ["bot:field:4", "bot:field:4"] },
+    { ...placement, value: { outcome: "chosen", slot: 3 } },
+    { ...placement, value: { outcome: "chosen", slot: 5 } },
+    { ...placement, value: { outcome: "cancelled" } },
+    { ...placement, value: { pass: true } },
+    { ...placement, context: null },
+  ]) assert.throws(() => validateCanonicalReplay(replay({ decisions: [invalid] })), /Invalid canonical replay/);
+});
 
 const commandPayloads = [
   ["noop", {}],
@@ -287,7 +307,7 @@ test("validator valida profundamente snapshots presentes", () => {
         finalState: {},
       },
     })),
-    /result\.finalState\.turn/,
+    /result\.finalState\.fieldPlacementSequence/,
   );
 });
 
@@ -329,7 +349,7 @@ test("toda a árvore, inclusive extras e payloads, precisa ser JSON serializáve
   );
 });
 
-test("ordem dos checks legados permanece formato, schema, assinatura e campos mínimos", () => {
+test("rejeita versões incompatíveis antes de assinatura ou conteúdo", () => {
   assert.throws(
     () => validateCanonicalReplay({ reportVersion: 4 }),
     /Unsupported replay format \(legacy\/report version 4\)/,
@@ -337,14 +357,14 @@ test("ordem dos checks legados permanece formato, schema, assinatura e campos m�
   assert.throws(
     () => validateCanonicalReplay({
       format: "shadow-duel-canonical-replay",
-      schemaVersion: 2,
+      schemaVersion: 1,
     }),
-    /Unsupported canonical replay schema 2/,
+    /Unsupported canonical replay schema 1/,
   );
   assert.throws(
     () => validateCanonicalReplay({
       format: "shadow-duel-canonical-replay",
-      schemaVersion: 1,
+      schemaVersion: 2,
       cardDatabaseSignature: "00000000",
     }),
     /database signature/,
@@ -352,7 +372,7 @@ test("ordem dos checks legados permanece formato, schema, assinatura e campos m�
   assert.throws(
     () => validateCanonicalReplay({
       format: "shadow-duel-canonical-replay",
-      schemaVersion: 1,
+      schemaVersion: 2,
       cardDatabaseSignature: getCardDatabaseSignature(),
     }),
     /missing setup, commands, or decisions/,

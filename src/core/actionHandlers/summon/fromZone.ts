@@ -1,4 +1,5 @@
 import { isAI } from "../../Player.js";
+import { assignAutomaticFieldSlot } from "../../game/zones/placement.js";
 import { applyStatusesOnSummon } from "../../Card.js";
 import type { ActionOf } from "../../contracts/actions.js";
 import type {
@@ -1055,6 +1056,7 @@ async function summonCards(
 
     if (canUseMoveCard) {
       const moveResult = await game.moveCard(card, summonPlayer, "field", {
+        placementActor: ctx?.player || player,
         fromZone: resolvedFromZone || undefined,
         position,
         isFacedown: false,
@@ -1078,6 +1080,7 @@ async function summonCards(
       usedMoveCard = true;
     } else {
       // Remove from source zone (fallback)
+      if (assignAutomaticFieldSlot(card, summonPlayer.field) === null) continue;
       const fallbackZoneName =
         resolvedFromZone ||
         (Array.isArray(sourceZoneEntries) && sourceZoneEntries.length > 0

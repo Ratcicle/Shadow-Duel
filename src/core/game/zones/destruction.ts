@@ -579,9 +579,10 @@ export async function destroyCard(
       }
 
       const cause = options.cause || options.reason || "effect";
+      const ruleDestruction = cause === "rule";
       const battleDestructionDetermined =
         cause === "battle" && options.battleDestructionDetermined === true;
-      const sourceCard = options.sourceCard || options.source || null;
+      const sourceCard = ruleDestruction ? null : options.sourceCard || options.source || null;
       const opponent = options.opponent || this.getOpponent(owner);
       const sourcePlayer =
         options.sourcePlayer ||
@@ -611,7 +612,7 @@ export async function destroyCard(
           fromZone,
         });
 
-      if (cause !== "battle" && sourceCard && sourcePlayer) {
+      if (!ruleDestruction && cause !== "battle" && sourceCard && sourcePlayer) {
         const immunity = this.effectEngine?.checkImmunity?.(
           card,
           sourcePlayer,
@@ -628,6 +629,7 @@ export async function destroyCard(
 
       // Check protection effects before destruction
       if (
+        !ruleDestruction &&
         !battleDestructionDetermined &&
         !battleDestructionPreventionNegated &&
         Array.isArray(card.protectionEffects) &&
@@ -660,7 +662,7 @@ export async function destroyCard(
       }
 
       const conditionalProtection =
-        battleDestructionDetermined || battleDestructionPreventionNegated
+        ruleDestruction || battleDestructionDetermined || battleDestructionPreventionNegated
           ? null
           : findConditionalDestructionProtection(
               this,
@@ -691,7 +693,7 @@ export async function destroyCard(
         };
       }
 
-      const auraProtection = battleDestructionDetermined
+      const auraProtection = ruleDestruction || battleDestructionDetermined
         ? null
         : findConditionalDestructionProtectionAura(
             this,
@@ -721,6 +723,7 @@ export async function destroyCard(
       }
 
       if (
+        !ruleDestruction &&
         !battleDestructionDetermined &&
         !battleDestructionPreventionNegated &&
         this.effectEngine?.checkBeforeDestroyNegations
@@ -745,7 +748,7 @@ export async function destroyCard(
         }
       }
 
-      const { replaced } = (await this.resolveDestructionWithReplacement(card, {
+      const { replaced } = (!ruleDestruction && await this.resolveDestructionWithReplacement(card, {
         cause,
         sourceCard,
         sourcePlayer,
@@ -775,6 +778,7 @@ export async function destroyCard(
         wasDestroyed: true,
         destroyCause: cause,
         destroySource: sourceCard,
+        ...(ruleDestruction ? { movedByEffect: false } : {}),
         awaitCardToGraveEvent: options.awaitCardToGraveEvent !== false,
         awaitCardMovedEvent: options.awaitCardMovedEvent,
         deferCardToGraveTriggerResolution:
@@ -808,7 +812,7 @@ export async function destroyCard(
       toZone: "graveyard",
     },
   );
-  if ("destroyed" in result && result.destroyed && card) {
+  if ("destroyed" in result && result.destroyed && card && (options.cause || options.reason) !== "rule") {
     const sourceCard = options.sourceCard || options.source || null;
     this.recordMaterialDestroyedOpponentMonster(sourceCard, card);
   }

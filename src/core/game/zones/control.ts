@@ -11,12 +11,17 @@ import type { GameCard } from "../../contracts/cards.js";
 import type {
   FullGameHost,
   TemporaryControlEffect,
+  ZoneOpFailure,
+  ZoneOpOptions,
 } from "../../contracts/gameRuntime.js";
 import type { GamePlayer } from "../../contracts/player.js";
+import type { DuelCardId } from "../../contracts/primitives.js";
+import { getAvailableFieldSlots, getFieldOccupants } from "./placement.js";
 
 type ControlCard = GameCard;
 
 interface ControlChangeOptions {
+  placementActor?: GamePlayer | null;
   sourceCard?: ControlCard | null;
   effectId?: string | null;
   reason?: string;
@@ -35,6 +40,9 @@ interface TemporaryControlOptions {
 type TemporaryControlRecord = TemporaryControlEffect;
 
 interface PublicControlRecord {
+  cardDuelCardId: DuelCardId;
+  sourceDuelCardId: DuelCardId | null;
+  fieldPresenceId: string | number | null;
   id: string;
   cardInstanceId: number | string | null;
   holderId: string;
@@ -56,6 +64,8 @@ type ControlChangeResult =
     };
 
 type ControlHost = FullGameHost & {
+  runZoneOp<Result>(label: string, operation: () => Result | Promise<Result>, options?: ZoneOpOptions): Result | ZoneOpFailure | Promise<Result | ZoneOpFailure>;
+  destroyCard: OmitThisParameter<typeof import("./destruction.js").destroyCard>;
   temporaryControlEffects: TemporaryControlRecord[];
   effectEngine?: { clearTargetingCache?(): void };
   emit?(eventName: string, payload: unknown): Promise<unknown>;
@@ -119,6 +129,9 @@ function publicControlRecord(
   if (!record) return null;
   return {
     id: record.id,
+    cardDuelCardId: record.cardDuelCardId,
+    sourceDuelCardId: record.sourceDuelCardId,
+    fieldPresenceId: record.fieldPresenceId,
     cardInstanceId: record.cardInstanceId,
     holderId: record.holderId,
     previousControllerId: record.previousControllerId,
@@ -157,54 +170,85 @@ export async function transferControl(
     };
   }
 
-  if ((nextController.field || []).length >= 5) {
+  if (getAvailableFieldSlots(getFieldOccupants(this, nextController, "field")).length === 0) {
     return { success: false, reason: "field_full" };
   }
 
-  if (!removeFromField(previousController, card)) {
-    return { success: false, reason: "target_not_on_field" };
+  const presence = card.fieldPresenceId;
+  const actor = options.placementActor || getPlayerById(this, options.sourceCard?.controller) || nextController;
+  let placement = await this.prepareFieldPlacement(card, nextController, "field", { actor });
+  while (placement.outcome === "chosen" && !getAvailableFieldSlots(getFieldOccupants(this, nextController, "field")).includes(placement.intent.slot)) {
+    placement = await this.prepareFieldPlacement(card, nextController, "field", { actor, intent: placement.intent });
+  }
+  if (placement.outcome !== "chosen") return { success: false, reason: "field_full" };
+  if (findFieldController(this, card) !== previousController || card.fieldPresenceId !== presence ||
+      (options.temporaryControlId && !this.temporaryControlEffects.some(entry => entry.id === options.temporaryControlId && entry.cardInstanceId === getCardInstanceId(card) && entry.fieldPresenceId === presence))) {
+    return { success: false, reason: "control_changed_or_left_field" };
   }
 
-  // A later control-changing effect supersedes any pending temporary return.
-  // The card still remains on the field, so instance-bound leave-field
-  // watchers are intentionally left untouched.
-  if (Array.isArray(this.temporaryControlEffects)) {
-    const cardInstanceId = getCardInstanceId(card);
-    this.temporaryControlEffects = this.temporaryControlEffects.filter(
-      (entry) => entry?.cardInstanceId !== cardInstanceId,
-    );
-  }
+  const chosenSlot = placement.intent.slot;
+  return await this.runZoneOp<ControlChangeResult>("TRANSFER_CONTROL", async () => {
+    if (!getAvailableFieldSlots(getFieldOccupants(this, nextController, "field")).includes(chosenSlot)) {
+      return { success: false, reason: "placement_conflict" };
+    }
+    if (!removeFromField(previousController, card)) {
+      return { success: false, reason: "target_not_on_field" };
+    }
 
-  nextController.field.push(card);
-  card.owner = nextController.id;
-  card.controller = nextController.id;
-  if (!card.originalOwner) {
-    card.originalOwner = previousController.id;
-  }
+    // A later control-changing effect supersedes any pending temporary return.
+    // The card still remains on the field, so instance-bound leave-field
+    // watchers are intentionally left untouched.
+    if (Array.isArray(this.temporaryControlEffects)) {
+      const cardInstanceId = getCardInstanceId(card);
+      this.temporaryControlEffects = this.temporaryControlEffects.filter(
+        (entry) => entry?.cardInstanceId !== cardInstanceId,
+      );
+    }
 
-  this.effectEngine?.clearTargetingCache?.();
-  this.updateBoard?.();
+    card.fieldSlot = chosenSlot;
+    nextController.field.push(card);
+    card.owner = nextController.id;
+    card.controller = nextController.id;
+    if (!card.originalOwner) {
+      card.originalOwner = previousController.id;
+    }
 
-  const payload = {
-    card,
-    fromPlayer: previousController,
-    toPlayer: nextController,
-    previousControllerId: previousController.id,
-    controllerId: nextController.id,
-    originalOwnerId: card.originalOwner || null,
-    sourceCard: options.sourceCard || null,
-    effectId: options.effectId || null,
-    reason: options.reason || "effect",
-    temporaryControlId: options.temporaryControlId || null,
-  };
-  await this.emit?.("control_changed", payload);
+    // Publish the lifetime with the transfer. A subsequent control change
+    // during control_changed must be able to supersede this record.
+    const temporaryControl = options.duration === "until_end_phase"
+      ? this.registerTemporaryControl(card, {
+          holder: nextController,
+          previousControllerId: previousController.id,
+          expiresOnTurn: this.turnCounter,
+          sourceCard: options.sourceCard || null,
+        })
+      : null;
 
-  return {
-    success: true,
-    card,
-    fromPlayer: previousController,
-    toPlayer: nextController,
-  };
+    this.effectEngine?.clearTargetingCache?.();
+    this.updateBoard?.();
+
+    const payload = {
+      card,
+      fromPlayer: previousController,
+      toPlayer: nextController,
+      previousControllerId: previousController.id,
+      controllerId: nextController.id,
+      originalOwnerId: card.originalOwner || null,
+      sourceCard: options.sourceCard || null,
+      effectId: options.effectId || null,
+      reason: options.reason || "effect",
+      temporaryControlId: options.temporaryControlId || temporaryControl?.id || null,
+    };
+    await this.emit?.("control_changed", payload);
+
+    return {
+      success: true,
+      card,
+      fromPlayer: previousController,
+      toPlayer: nextController,
+      temporaryControl,
+    };
+  }, { card, fromZone: "field", toZone: "field" });
 }
 
 /**
@@ -223,6 +267,9 @@ export function registerTemporaryControl(
   }
 
   const record = {
+    cardDuelCardId: this.ensureDuelCardId(card),
+    sourceDuelCardId: options.sourceCard ? this.ensureDuelCardId(options.sourceCard) : null,
+    fieldPresenceId: card.fieldPresenceId,
     id:
       options.id ||
       this.createDeterministicId?.("temporary_control") ||
@@ -248,22 +295,11 @@ export async function takeControl(
   controller: GamePlayer,
   options: ControlChangeOptions = {},
 ): Promise<ControlChangeResult> {
-  const previousController = findFieldController(this, card);
-  const result = await this.transferControl(card, controller, {
+  return await this.transferControl(card, controller, {
     ...options,
+    placementActor: options.placementActor || controller,
     reason: options.reason || "take_control",
   });
-  if (!result?.success || options.duration !== "until_end_phase") {
-    return result;
-  }
-
-  const record = this.registerTemporaryControl(card, {
-    holder: controller,
-    previousControllerId: previousController?.id || null,
-    expiresOnTurn: this.turnCounter,
-    sourceCard: options.sourceCard || null,
-  });
-  return { ...result, temporaryControl: record };
 }
 
 /**
@@ -272,46 +308,67 @@ export async function takeControl(
  * what prevents one temporary effect from overwriting a newer one.
  */
 export async function processTemporaryControlEffects(this: ControlHost) {
+  // Reentrant/concurrent End Phase continuations must not resolve the same
+  // return twice while its movement or human placement is awaiting completion.
+  if (this.resolvingTemporaryControl) return [];
   if (!Array.isArray(this.temporaryControlEffects)) {
     this.temporaryControlEffects = [];
     return [];
   }
 
-  const currentTurn = Number(this.turnCounter || 0);
-  const expiring = this.temporaryControlEffects.filter(
-    (entry) => Number(entry?.expiresOnTurn) === currentTurn,
-  );
-  this.temporaryControlEffects = this.temporaryControlEffects.filter(
-    (entry) => Number(entry?.expiresOnTurn) !== currentTurn,
-  );
+  const generation = this.fieldPlacementGeneration;
+  this.resolvingTemporaryControl = true;
+  try {
+    const currentTurn = Number(this.turnCounter || 0);
+    const expiring = this.temporaryControlEffects.filter(
+      (entry) => Number(entry?.expiresOnTurn) === currentTurn,
+    );
 
-  const results: Array<
-    PublicControlRecord & { returned: boolean; reason: string | null }
-  > = [];
-  for (const entry of expiring) {
-    const card = [this.player, this.bot]
-      .flatMap((player) => player?.field || [])
-      .find((candidate) => getCardInstanceId(candidate) === entry.cardInstanceId);
-    const holder = getPlayerById(this, entry.holderId);
-    const previousController = getPlayerById(this, entry.previousControllerId);
+    const results: Array<
+      PublicControlRecord & { returned: boolean; reason: string | null }
+    > = [];
+    for (const entry of expiring) {
+      const card = [this.player, this.bot]
+        .flatMap((player) => player?.field || [])
+        .find((candidate) => getCardInstanceId(candidate) === entry.cardInstanceId);
+      const holder = getPlayerById(this, entry.holderId);
+      const previousController = getPlayerById(this, entry.previousControllerId);
 
-    if (!card || !holder || !previousController || !holder.field.includes(card)) {
-      results.push({ ...publicControlRecord(entry), returned: false, reason: "control_changed_or_left_field" });
-      continue;
+      if (!this.temporaryControlEffects.includes(entry) || !card || !holder || !previousController || !holder.field.includes(card) || card.fieldPresenceId !== entry.fieldPresenceId) {
+        this.temporaryControlEffects = this.temporaryControlEffects.filter(record => record !== entry);
+        results.push({ ...publicControlRecord(entry), returned: false, reason: "control_changed_or_left_field" });
+        continue;
+      }
+
+      const result = await this.transferControl(card, previousController, {
+        reason: "temporary_control_expired",
+        temporaryControlId: entry.id,
+        placementActor: previousController,
+      });
+      if (!result.success && result.reason === "field_full" && this.temporaryControlEffects.includes(entry) && holder.field.includes(card) && card.fieldPresenceId === entry.fieldPresenceId) {
+        const destroyed = await this.destroyCard(card, {
+          cause: "rule",
+          fromZone: "field",
+          contextLabel: "temporary_control_return_no_space",
+          awaitCardToGraveEvent: true,
+          awaitCardMovedEvent: true,
+        });
+        if (!("destroyed" in destroyed) || !destroyed.destroyed) throw new Error("Temporary control rule destruction failed.");
+        results.push({ ...publicControlRecord(entry), returned: false, reason: "destroyed_by_rule" });
+        continue;
+      }
+      this.temporaryControlEffects = this.temporaryControlEffects.filter(record => record !== entry);
+      results.push({
+        ...publicControlRecord(entry),
+        returned: result.success === true,
+        reason: "reason" in result ? result.reason : null,
+      });
     }
 
-    const result = await this.transferControl(card, previousController, {
-      reason: "temporary_control_expired",
-      temporaryControlId: entry.id,
-    });
-    results.push({
-      ...publicControlRecord(entry),
-      returned: result.success === true,
-      reason: "reason" in result ? result.reason : null,
-    });
+    return results;
+  } finally {
+    if (generation === this.fieldPlacementGeneration) this.resolvingTemporaryControl = false;
   }
-
-  return results;
 }
 
 export function getTemporaryControlState(this: ControlHost) {

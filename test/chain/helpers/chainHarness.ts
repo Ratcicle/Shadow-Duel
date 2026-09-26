@@ -1,4 +1,5 @@
 import AutoSelector from "../../../src/core/AutoSelector.js";
+import { assignAutomaticFieldSlot } from "../../../src/core/game/zones/placement.js";
 import { bumpCardLocationVersion } from "../../../src/core/Card.js";
 import ChainSystem from "../../../src/core/ChainSystem.js";
 import {
@@ -250,7 +251,7 @@ export interface HarnessGame extends ChainGamePort {
   _flushingPendingTriggerOccurrences: boolean;
   nextEffectUsageReservationId: number;
   effectUsageReservations: UsageHost["effectUsageReservations"];
-  ui: ChainUiPort;
+  ui: ChainUiPort & { cancelFieldPlacement(): void };
   effectEngine: HarnessEngine;
   chainSystem?: ChainSystem;
   _turnUsage: Map<string, number>;
@@ -339,6 +340,7 @@ export function createTestCard(
     id,
     instanceId: overrides.instanceId ?? null,
     locationVersion: overrides.locationVersion ?? 0,
+    fieldSlot: null,
     name: overrides.name || "Test Card",
     owner: overrides.owner || null,
     cardKind: overrides.cardKind || "monster",
@@ -393,6 +395,10 @@ export function placeCard<Value extends ChainCard>(
   removeCardFromPlayer(owner, card);
   card.owner = owner.id;
   card.controller = owner.id;
+  card.fieldSlot = null;
+  if (zone === "field" || zone === "spellTrap") {
+    if (assignAutomaticFieldSlot(card, owner[zone]) === null) throw new Error("Fixture field row is full.");
+  }
   if (zone === "fieldSpell") {
     owner.fieldSpell = card;
     return card;
@@ -532,6 +538,7 @@ export function createChainHarness(options: HarnessOptions = {}) {
       releaseEffectUsageReservations.call(game as UsageHost, reason);
     },
     ui: {
+      cancelFieldPlacement() {},
       log(...args) {
         trace.logs.push(args);
       },

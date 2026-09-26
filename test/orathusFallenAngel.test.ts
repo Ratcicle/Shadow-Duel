@@ -1,3 +1,4 @@
+import { placeFieldCards } from "./helpers/game.js";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import type { TestContext } from "node:test";
@@ -285,8 +286,8 @@ test("Trigger de Sincro nega qualquer card face-up enquanto ele permanecer face-
     },
     game.bot,
   );
-  game.player.field.push(orathus);
-  game.bot.field.push(target);
+  placeFieldCards(game.player.field, orathus);
+  placeFieldCards(game.bot.field, target);
 
   const synchroTriggers = await game.effectEngine.collectAfterSummonTriggers({
     card: orathus,
@@ -342,7 +343,7 @@ test("Trigger de Sincro nega qualquer card face-up enquanto ele permanecer face-
     },
     game.bot,
   );
-  game.bot.spellTrap.push(faceupSpell);
+  placeFieldCards(game.bot.spellTrap, faceupSpell);
   await game.effectEngine.applyActions(
     required(effect.actions),
     { source: orathus, player: game.player, opponent: game.bot, effect },
@@ -359,7 +360,7 @@ test("obrigação de ataque usa a lista canônica e é desligada por face-down o
   const game = createGame(t, { disableChains: true });
   const first = runtimeCard(getOrathus(), game.player);
   const second = runtimeCard(getOrathus(), game.player);
-  game.player.field.push(first, second);
+  placeFieldCards(game.player.field, first, second);
   assert.equal(game.isActiveAttackPriorityTarget(first), true);
   assert.equal(game.isActiveAttackPriorityTarget(second), true);
   first.effectsNegated = true;
@@ -392,7 +393,7 @@ test("compromisso da ativação proíbe ataque antes do Chain Link e é serializ
   const game = createGame(t);
   const orathus = runtimeCard(getOrathus(), game.player);
   const effect = getEffect("orathus_destroy_extra_deck_summoned_monster");
-  game.player.field.push(orathus);
+  placeFieldCards(game.player.field, orathus);
   const prepared = game.chainSystem.createPreparedActivation({
     card: orathus,
     controller: game.player,
@@ -423,7 +424,7 @@ test("compromisso da ativação proíbe ataque antes do Chain Link e é serializ
   assert.equal(orathus.cannotAttackThisTurn, true);
 
   const cancelledSource = runtimeCard(getOrathus(), game.player);
-  game.player.field.push(cancelledSource);
+  placeFieldCards(game.player.field, cancelledSource);
   game.chainSystem.createPreparedActivation({
     card: cancelledSource,
     controller: game.player,
@@ -448,8 +449,8 @@ test("pipeline humano aplica a proibição antes de solicitar o alvo", async (t)
     game.bot,
   );
   target.lastSummonedFromZone = "extraDeck";
-  game.player.field.push(orathus);
-  game.bot.field.push(target);
+  placeFieldCards(game.player.field, orathus);
+  placeFieldCards(game.bot.field, target);
 
   void game.tryActivateMonsterEffect(orathus, null, "field", game.player);
   await waitUntil(
@@ -489,8 +490,8 @@ test("alvo que deixa o campo não é substituído por outro monstro elegível", 
   );
   declared.lastSummonedFromZone = "extraDeck";
   replacement.lastSummonedFromZone = "extraDeck";
-  game.player.field.push(orathus);
-  game.bot.field.push(declared, replacement);
+  placeFieldCards(game.player.field, orathus);
+  placeFieldCards(game.bot.field, declared, replacement);
   await game.moveCard(declared, game.bot, "graveyard", { fromZone: "field" });
 
   await game.effectEngine.applyActions(
@@ -539,7 +540,7 @@ test("Ignition rejeita Orathus que já atacou e simulação aplica a restrição
   orathus.properSummonProcedure = "synchro";
   orathus.lastSummonMethod = "synchro";
   orathus.lastSummonedFromZone = "extraDeck";
-  game.player.field.push(orathus);
+  placeFieldCards(game.player.field, orathus);
   const publicState = game.getPublicState(game.player.id);
   const replayState = createCanonicalStateSnapshot(game);
   assert.equal(

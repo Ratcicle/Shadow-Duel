@@ -138,6 +138,7 @@ export interface ChainEffectTarget extends Omit<EffectTarget, "position"> {
 
 /** Minimal mutable Card projection actually observed by Chain modules. */
 export interface ChainCard {
+  fieldSlot?: import("./placement.js").FieldSlot | null;
   id?: number | undefined;
   duelCardId?: DuelCardId | number;
   instanceId?: ChainEntityId | null;
@@ -1352,6 +1353,8 @@ export interface ChainPendingEventSelection {
 }
 
 export interface ChainMoveCardOptions {
+  isFacedown?: boolean;
+  allowPlacementCancel?: boolean;
   fromZone?: ChainActivationZone;
   sourceCard?: ChainCard | null;
   effectId?: string | null;

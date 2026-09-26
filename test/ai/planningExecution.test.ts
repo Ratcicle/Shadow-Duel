@@ -1,3 +1,4 @@
+import { placeSimulationCards } from "../helpers/simulation.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { applyGenericSimulatedMainPhaseAction, normalizePlanningOwnerPolicy } from "../../src/core/ai/common/simulation.js";
@@ -59,13 +60,13 @@ test("nested owner effects replace every selection and summon callback, then res
       ] },
     ] }],
   }];
-  owner.field.push(ownerSource);
+  placeSimulationCards(owner.field, ownerSource);
   const actorSource = monster(99107, "Actor nested trigger");
   actorSource.effects = [{
     id: "actor-nested", timing: "on_event", event: "after_summon", triggerRequirement: "mandatory", triggerTiming: "if", summonMethods: ["special"], requireOpponentSummon: true,
     actions: [{ type: "heal", amount: 33, player: "self" }],
   }];
-  actor.field.push(actorSource);
+  placeSimulationCards(actor.field, actorSource);
   const ownerPolicy: SimulatedOwnerPolicy = {
     buildActivationContextForEffect() { calls.push("owner:context"); return {}; },
     chooseActionCase(cases) { calls.push("owner:case"); return cases[1]; },
@@ -105,7 +106,7 @@ test("temporary effects build the owner context and invoke its hook exactly once
   const wrong = monster(99204, "Wrong target");
   right.counters = new Map();
   wrong.counters = new Map();
-  owner.field.push(wrong, right);
+  placeSimulationCards(owner.field, wrong, right);
   game.temporaryEventEffects = [{
     event: "after_summon", ownerId: owner.id, sourceCardId: source.id || null, sourceName: source.name || null,
     sourceCardKind: "monster", sourceCardSubtype: null, sourceArchetype: null, sourceArchetypes: [], sourceEffectId: "temporary", sourceInstanceId: 99202,
@@ -171,7 +172,7 @@ test(`Void owner special-summon followup respects declarative usage (already use
   const input = simulationState({ _isPerspectiveState: true, bot: { hand: [monster(99301, "Actor summon")] } });
   const source = monster(99302, "Owner source");
   source.effects = [{ id: "owner-followup", timing: "on_event", event: "after_summon", triggerRequirement: "mandatory", triggerTiming: "if", summonMethods: ["normal"], requireOpponentSummon: true, actions: [{ type: "special_summon_from_zone", zone: "hand", filters: { name: "Void Hollow" }, position: "attack" }] }];
-  input.player.field.push(source);
+  placeSimulationCards(input.player.field, source);
   input.player.hand.push(simulationCard({ ...definition, instanceId: 99303 }));
   input.player.deck.push(simulationCard({ ...definition, instanceId: 99304 }), simulationCard({ ...definition, instanceId: 99305 }));
   const { state } = createGameTreeCopy(input);
@@ -196,7 +197,7 @@ test(`Luminarch owner special-summon followup respects declarative usage (alread
   source.effects = [{ id: "owner-followup", timing: "on_event", event: "after_summon", triggerRequirement: "mandatory", triggerTiming: "if", summonMethods: ["normal"], requireOpponentSummon: true, actions: [{ type: "special_summon_from_zone", zone: "graveyard", position: "attack" }] }];
   const recruit = monster(99403, "Luminarch recruit");
   recruit.archetype = "Luminarch";
-  input.player.field.push(source);
+  placeSimulationCards(input.player.field, source);
   input.player.graveyard.push(recruit);
   input.player.hand.push(simulationCard({ ...definition, instanceId: 99404 }), simulationCard({ ...definition, instanceId: 99405 }));
   const { state } = createGameTreeCopy(input);

@@ -1,3 +1,4 @@
+import { appendSimulatedZoneCard } from "./common/zones.js";
 import {
   getBattleStatForAttackTarget,
   getEffectiveAtk,
@@ -42,6 +43,7 @@ import type {
 } from "../contracts/aiState.js";
 import type { CardAction } from "../contracts/actions.js";
 import type { GameCard } from "../contracts/cards.js";
+import type { SimulatedTemporaryControlEffect } from "./common/simulatedActions/shared.js";
 
 interface PlannerBlueprintEntry {
   id?: string | number;
@@ -103,6 +105,7 @@ interface TemporaryBattleEffectView {
 type PlanningState = TurnLineSimulationGameState & {
   temporaryBattlePairEffects?: TemporaryBattleEffectView[];
   temporaryEventEffects?: TemporaryBattleEffectView[];
+  temporaryControlEffects?: SimulatedTemporaryControlEffect[];
 };
 
 type PlanningGameInput = Omit<AiStateInput, "player" | "bot" | "opponent"> & {
@@ -114,6 +117,8 @@ type PlanningGameInput = Omit<AiStateInput, "player" | "bot" | "opponent"> & {
   _simBurningWest?: unknown;
   temporaryBattlePairEffects?: readonly TemporaryBattleEffectView[];
   temporaryEventEffects?: readonly TemporaryBattleEffectView[];
+  temporaryControlEffects?: readonly SimulatedTemporaryControlEffect[];
+  _simTemporaryControlCounter?: number;
 };
 
 interface DestroyedCardSummary {
@@ -544,6 +549,12 @@ function clonePlanningState(
   if (Array.isArray(game?.temporaryEventEffects)) {
     state.temporaryEventEffects = clonePlain(game.temporaryEventEffects);
   }
+  if (Array.isArray(game?.temporaryControlEffects)) {
+    state.temporaryControlEffects = clonePlain(game.temporaryControlEffects);
+  }
+  if (game?._simTemporaryControlCounter !== undefined) {
+    state._simTemporaryControlCounter = game._simTemporaryControlCounter;
+  }
   return state;
 }
 
@@ -590,6 +601,10 @@ function getCardKey(card: PlannerCard | null | undefined): string {
     card.name || "",
     card.cardKind || "",
     card.position || "",
+    card.fieldSlot ?? "off-field",
+    card.fieldPresenceId || "",
+    card.originalOwner || "",
+    card.controller || "",
     card.isFacedown ? "fd" : "fu",
     card.atk || 0,
     card.def || 0,
@@ -690,6 +705,8 @@ function getPlanningStateHash(state: PlanningState): string {
     summarizeSimOpt(state?._simBurningWest),
     summarizeTemporaryEffects(state?.temporaryBattlePairEffects),
     summarizeTemporaryEffects(state?.temporaryEventEffects),
+    JSON.stringify(state?.temporaryControlEffects || []),
+    state?._simTemporaryControlCounter || 0,
   ].join("||");
 }
 
@@ -880,7 +897,7 @@ function pushToGraveyard(
 ): void {
   if (!player || !card) return;
   if (!Array.isArray(player.graveyard)) player.graveyard = [];
-  player.graveyard.push(card);
+  appendSimulatedZoneCard(player.graveyard, card);
 }
 
 function sameCardIdentity(
@@ -1064,7 +1081,7 @@ function applyGrandLibraryBattleReward(
   const drawn = bot.deck?.shift?.();
   if (!drawn) return [];
   if (!Array.isArray(bot.hand)) bot.hand = [];
-  bot.hand.push(drawn);
+  appendSimulatedZoneCard(bot.hand, drawn);
   state._simGrandLibraryBattleRewardUsed = true;
   return [drawn.name || "drawn card"];
 }

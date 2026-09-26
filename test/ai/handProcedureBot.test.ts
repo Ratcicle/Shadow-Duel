@@ -4,7 +4,7 @@ import Bot from "../../src/core/Bot.js";
 import Card from "../../src/core/Card.js";
 import { applyGenericSimulatedMainPhaseAction } from "../../src/core/ai/common/simulation.js";
 import { cardDefinition } from "../helpers/fixtures.js";
-import { createRuntimeGame } from "../helpers/game.js";
+import { createRuntimeGame, placeFieldCards } from "../helpers/game.js";
 import { unsafeFixture } from "../helpers/fixtures.js";
 import type { AiLiveGamePort } from "../../src/core/contracts/aiState.js";
 import type { BotGamePort } from "../../src/core/contracts/bot.js";
@@ -50,10 +50,10 @@ test("Bot discovers and executes hand procedure after its normal summon is spent
 test("Bot selects a field material when the field is full and the cost can clear a slot", (t) => {
   const { game, botGame, bot } = setup();
   t.after(() => game.dispose());
-  bot.field = Array.from({ length: 4 }, (_, index) => new Card({
+  placeFieldCards(bot.field, ...Array.from({ length: 4 }, (_, index) => new Card({
     name: `Dark field ${index}`, cardKind: "monster", attribute: "Dark", level: 1, atk: 100, def: 100,
-  }, bot.id));
-  bot.field.push(new Card({ name: "Light field", cardKind: "monster", attribute: "Light", level: 1, atk: 100, def: 100 }, bot.id));
+  }, bot.id)));
+  placeFieldCards(bot.field, new Card({ name: "Light field", cardKind: "monster", attribute: "Light", level: 1, atk: 100, def: 100 }, bot.id));
   const action = bot.generateMainPhaseActions(botGame).find((entry) => entry.type === "handSummonProcedure");
   assert.ok(action);
   assert.equal(action.materials.filter((hint) => hint.zone === "field").length, 1);
@@ -62,6 +62,8 @@ test("Bot selects a field material when the field is full and the cost can clear
   assert.equal(state.bot.field.length, 5);
   assert.equal(state.bot.banished.length, 5);
   assert.equal(state.bot.field.some((card) => card.name === "Light field"), false);
+  assert.deepEqual(state.bot.field.map((card) => card.fieldSlot), [2, 1, 3, 0, 4]);
+  assert.ok(state.bot.banished.every((card) => card.fieldSlot === null));
 });
 
 test("Bot rejects a stale graveyard-only payment after the field fills", (t) => {
@@ -69,10 +71,10 @@ test("Bot rejects a stale graveyard-only payment after the field fills", (t) => 
   t.after(() => game.dispose());
   const action = bot.generateMainPhaseActions(botGame).find((entry) => entry.type === "handSummonProcedure");
   assert.ok(action);
-  bot.field = Array.from({ length: 4 }, (_, index) => new Card({
+  placeFieldCards(bot.field, ...Array.from({ length: 4 }, (_, index) => new Card({
     name: `Dark field ${index}`, cardKind: "monster", attribute: "Dark", level: 1, atk: 100, def: 100,
-  }, bot.id));
-  bot.field.push(new Card({ name: "Light field", cardKind: "monster", attribute: "Light", level: 1, atk: 100, def: 100 }, bot.id));
+  }, bot.id)));
+  placeFieldCards(bot.field, new Card({ name: "Light field", cardKind: "monster", attribute: "Light", level: 1, atk: 100, def: 100 }, bot.id));
   assert.equal(bot.filterValidActionsForCurrentState([action], botGame).length, 0);
 });
 
@@ -90,4 +92,18 @@ test("planner applies procedure cost and special summon without consuming normal
   assert.equal(state.bot.hand.length, 0);
   assert.equal(state.bot.graveyard.length, 0);
   assert.equal(state.bot.banished.length, 5);
+});
+
+test("hand procedure simulation assigns a persistent slot and permits the next summon", (t) => {
+  const { game, botGame, bot } = setup();
+  t.after(() => game.dispose());
+  bot.hand.push(new Card({ name: "Next summon", cardKind: "monster", level: 4, atk: 100, def: 100 }, bot.id));
+  const action = bot.generateMainPhaseActions(botGame).find((entry) => entry.type === "handSummonProcedure");
+  assert.ok(action);
+  const state = bot.cloneGameState(botGame);
+  applyGenericSimulatedMainPhaseAction(state, action);
+  assert.deepEqual(state.bot.field.map((card) => card.fieldSlot), [2]);
+  applyGenericSimulatedMainPhaseAction(state, { type: "summon", index: 0, cardName: "Next summon" });
+  assert.deepEqual(state.bot.field.map((card) => card.fieldSlot), [2, 1]);
+  assert.equal(state.bot.hand.length, 0);
 });

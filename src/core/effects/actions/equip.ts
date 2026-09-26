@@ -159,6 +159,7 @@ export async function applyEquip(
     const zone = this.game.getZone(player, "hand");
     if (zone && zone.includes(equipCard)) {
       const moveResult = await this.game.moveCard(equipCard, player, "spellTrap", {
+        placementActor: ctx.player || player,
         fromZone: "hand",
         isFacedown: false,
         resetAttackFlags: false,

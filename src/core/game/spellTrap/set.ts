@@ -8,6 +8,8 @@ import type { GameCard } from "../../contracts/cards.js";
 import type { GamePlayer } from "../../contracts/player.js";
 import type { CardSetEventPayload } from "../../contracts/events.js";
 import type { MaybePromise } from "../../contracts/actionRuntime.js";
+import type { MoveCardOptions } from "../../contracts/gameRuntime.js";
+import { assignAutomaticFieldSlot } from "../zones/placement.js";
 
 interface SetActionGuardResult {
   ok: boolean;
@@ -50,7 +52,7 @@ interface SetSpellTrapHost {
     card: GameCard,
     player: GamePlayer,
     zone: "spellTrap",
-    options: { fromZone: "hand" },
+    options: MoveCardOptions,
   ): MaybePromise<unknown>;
   notify(eventName: "card_set", payload: CardSetEventPayload): void;
   updateBoard(): void;
@@ -91,19 +93,20 @@ export async function setSpellOrTrap(
     return { ok: false, reason: "zone_full" };
   }
 
-  card.isFacedown = true;
-  card.turnSetOn = this.turnCounter;
-  card.setTurn = this.turnCounter;
-
   if (typeof this.moveCard === "function") {
-    await this.moveCard(card, actor, "spellTrap", { fromZone: "hand" });
+    await this.moveCard(card, actor, "spellTrap", { fromZone: "hand", isFacedown: true, placementActor: actor, allowPlacementCancel: true });
+    if (!actor.spellTrap.includes(card)) return { ok: false, reason: "placement_not_committed" };
   } else {
     // Fallback (should not happen)
+    if (assignAutomaticFieldSlot(card, actor.spellTrap) === null) return { ok: false, reason: "zone_full" };
     if (handIndex >= 0 && handIndex < actor.hand.length) {
       actor.hand.splice(handIndex, 1);
     }
     actor.spellTrap.push(card);
   }
+  card.isFacedown = true;
+  card.turnSetOn = this.turnCounter;
+  card.setTurn = this.turnCounter;
 
   // Emitir evento informativo para captura de replay (não bloqueia)
   this.notify("card_set", {

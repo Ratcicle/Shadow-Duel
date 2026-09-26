@@ -1,4 +1,5 @@
 import type { ActionOf, ActionType, CardAction } from "./actions.js";
+import type { FieldSlot } from "./placement.js";
 import type {
   AscensionMaterialRecord,
   BattlePosition,
@@ -48,6 +49,7 @@ export type MaybePromise<Value> = Value | PromiseLike<Value>;
  * migrated; dynamic status access must go through the Reflect helpers below.
  */
 export interface ActionRuntimeCard {
+  fieldSlot?: FieldSlot | null;
   // Card keeps these own properties even when constructor data omits them.
   id?: number | undefined;
   name: string;

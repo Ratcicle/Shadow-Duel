@@ -943,6 +943,8 @@ async function resolveBattleDestroyTrigger(
   attacker.position = "attack";
   defender.position = "defense";
   defender.atk = 1600;
+  attacker.fieldSlot = 0;
+  defender.fieldSlot = 0;
   game.player.field.push(attacker);
   game.bot.field.push(defender);
   game.player.lp = 4000;

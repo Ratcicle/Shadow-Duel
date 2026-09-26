@@ -239,7 +239,7 @@ test("deck builder blocks an old invalid deck without mutating it", () => {
       ),
       Bot: class FixtureBot extends Bot {
         static override getAvailablePresets() {
-          return [{ id: "shadowheart" as const, label: "Shadow-Heart" }];
+          return super.getAvailablePresets().filter(preset => preset.id === "shadowheart");
         }
       },
       getCardDisplayDescription: (card) => card?.description || "",
