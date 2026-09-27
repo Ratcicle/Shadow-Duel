@@ -111,6 +111,11 @@ type ShadowMainPhaseAction = AIPlannedAction & ShadowActionExtras & {
 };
 type ShadowAction = ShadowMainPhaseAction | ShadowSearchAction;
 
+// A triggered summon may choose its position independently of the source action.
+type ShadowSummonPositionInput = Omit<ShadowMainPhaseAction, "position"> & {
+  position?: "attack" | "defense" | "choice" | undefined;
+};
+
 interface ShadowPlaceResult {
   placed: boolean;
   zone: "fieldSpell" | "spellTrap" | null;
@@ -145,7 +150,7 @@ interface ShadowStrategyOptions {
       player: SimulatedPlayerState;
       opponent: SimulatedPlayerState;
       source: SimulatedCardState | null;
-      action: ShadowMainPhaseAction;
+      action: ShadowSummonPositionInput;
       activationContext?: AIActivationContext | undefined;
     },
   ) => "attack" | "defense" | null | undefined;
@@ -342,6 +347,7 @@ function applyDarknessValleyBuffToCard(
   if (!isShadowHeart(card)) return;
   if (card._simDarknessValleyBuff) return;
   card.tempAtkBoost = (card.tempAtkBoost || 0) + 300;
+  card.atk = (card.atk || 0) + 300;
   card._simDarknessValleyBuff = true;
 }
 
@@ -550,7 +556,7 @@ function prepareAction(
 
 function chooseSpecialSummonPosition(
   card: SimulatedCardState,
-  action: ShadowMainPhaseAction,
+  action: ShadowSummonPositionInput,
   state: MutableShadowState,
   options: ShadowSimulationOptions = {},
 ): "attack" | "defense" {
@@ -574,7 +580,7 @@ function chooseSpecialSummonPosition(
 
 function applySummonState(
   card: SimulatedCardState,
-  action: ShadowMainPhaseAction,
+  action: ShadowSummonPositionInput,
   state: MutableShadowState,
   options: ShadowSimulationOptions = {},
 ): void {
@@ -869,6 +875,8 @@ function handleEffectActivated({
     if (rageTarget) {
       rageTarget.tempAtkBoost = (rageTarget.tempAtkBoost || 0) + 700;
       rageTarget.tempDefBoost = (rageTarget.tempDefBoost || 0) + 700;
+      rageTarget.atk = (rageTarget.atk || 0) + 700;
+      rageTarget.def = (rageTarget.def || 0) + 700;
       rageTarget.canMakeSecondAttackThisTurn = true;
       rageTarget.secondAttackUsedThisTurn = false;
       player.forbidDirectAttacksThisTurn = true;

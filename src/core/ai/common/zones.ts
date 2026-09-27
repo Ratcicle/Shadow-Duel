@@ -1,4 +1,6 @@
-import { restoreFieldExitStatuses } from "../../Card.js";
+import { restoreFieldExitStatuses, restoreTemporaryStatuses } from "../../Card.js";
+import { cardMatchesFilter } from "./cardFilters.js";
+import { removeFieldAuraBuffContributions } from "../../effects/passives/passiveBuffs.js";
 import {
   assignAutomaticFieldSlot,
   clearFieldSlot,
@@ -6,6 +8,9 @@ import {
 } from "../../game/zones/placement.js";
 import type { FieldSlot } from "../../contracts/placement.js";
 import type {
+  AiCardInput,
+  AiPlayerInput,
+  AiStateInput,
   AiStateShape,
   SimulatedCardState,
   SimulatedPlayerState,
@@ -72,10 +77,6 @@ interface SimulatedEquipAction {
   grantCrescentShieldGuard?: boolean;
 }
 
-type SimulatedZonePlayer = SimulatedPlayerState & {
-  [Zone in SimulatedArrayZone]: SimulatedCardState[];
-};
-
 export function getZoneCards(
   player: SimulatedPlayerState | null | undefined,
   zone: string,
@@ -96,14 +97,16 @@ export function getZoneCards(
       return player.fieldSpell ? [player.fieldSpell] : [];
     case "banished":
       return Array.isArray(player.banished) ? player.banished : [];
+    case "extraDeck":
+      return Array.isArray(player.extraDeck) ? player.extraDeck : [];
     default:
       return [];
   }
 }
 
 export function findCardZone(
-  player: SimulatedPlayerState | null | undefined,
-  card: SimulatedCardState | null | undefined,
+  player: AiPlayerInput | null | undefined,
+  card: AiCardInput | null | undefined,
 ): SimulatedZone | null {
   if (!player || !card) return null;
   if (player.fieldSpell === card) return "fieldSpell";
@@ -246,28 +249,159 @@ export function attachSimulatedEquip(
   return true;
 }
 
+export interface SimulatedMoveOptions {
+  state?: Pick<AiStateShape, "bot" | "player">;
+  movedByEffect?: boolean;
+  sourceCard?: SimulatedCardState | null;
+  sourcePlayer?: SimulatedPlayerState | null;
+  allowExtraDeckMonsterToHand?: boolean;
+}
+
+interface ReadMoveOptions {
+  state?: Pick<AiStateInput, "bot" | "player">;
+  movedByEffect?: boolean;
+  sourceCard?: AiCardInput | null;
+  sourcePlayer?: AiPlayerInput | null;
+  allowExtraDeckMonsterToHand?: boolean;
+}
+
+function isSimulatedZone(zone: string): zone is SimulatedZone {
+  return zone === "hand" || zone === "field" || zone === "graveyard" ||
+    zone === "spellTrap" || zone === "banished" || zone === "deck" ||
+    zone === "extraDeck" || zone === "fieldSpell";
+}
+
+function isSimulatedBanishProtected(
+  card: AiCardInput,
+  owner: AiPlayerInput,
+  fromZone: SimulatedZone,
+  options: ReadMoveOptions,
+): boolean {
+  const players = options.state ? [options.state.player, options.state.bot] : [owner];
+  for (const sourceOwner of players) {
+    if (!sourceOwner) continue;
+    const sources = [...(sourceOwner.field || []), ...(sourceOwner.spellTrap || []),
+      ...(sourceOwner.fieldSpell ? [sourceOwner.fieldSpell] : [])];
+    for (const source of sources) {
+      if (source.isFacedown || source.effectsNegated) continue;
+      for (const effect of source.effects || []) {
+        if (effect.timing !== "passive" || !("passive" in effect)) continue;
+        const passive = effect.passive;
+        if (passive?.type !== "banish_protection") continue;
+        if (effect.requireZone && effect.requireZone !== findCardZone(sourceOwner, source)) continue;
+        const scope = passive.targetScope;
+        const ownerRule = scope?.owner || passive.targetOwner || "self";
+        if ((ownerRule === "self" && sourceOwner !== owner) ||
+            (ownerRule === "opponent" && sourceOwner === owner)) continue;
+        const zones = scope?.zones || (scope?.zone ? [scope.zone] : ["field"]);
+        if (!zones.includes(fromZone)) continue;
+        if (scope?.excludeSelf && source === card) continue;
+        if (scope?.requireFaceup && card.isFacedown) continue;
+        if (passive.protectFrom === "opponent_effects") {
+          const effectOwner = options.sourcePlayer || players.find(candidate => findCardZone(candidate, options.sourceCard));
+          if ((!options.movedByEffect && !options.sourceCard) || !effectOwner || effectOwner === owner) continue;
+        }
+        const filters = { ...(scope?.filters || passive.filters || {}),
+          ...(passive.archetype ? { archetype: passive.archetype } : {}),
+          ...(passive.cardKind ? { cardKind: passive.cardKind } : {}) };
+        if (!cardMatchesFilter(card, filters)) continue;
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function resolveSimulatedMove(
+  player: AiPlayerInput | null | undefined,
+  card: AiCardInput | null | undefined,
+  requestedZone: string,
+  sourcePlayer: AiPlayerInput | null | undefined,
+  options: ReadMoveOptions,
+): { fromZone: SimulatedZone | null; toZone: SimulatedZone | "removed" } | null {
+  if (!player || !sourcePlayer || !card || !isSimulatedZone(requestedZone)) return null;
+  const fromZone = findCardZone(sourcePlayer, card);
+  let toZone: SimulatedZone | "removed" = requestedZone;
+  if (toZone === fromZone && player === sourcePlayer) return { fromZone, toZone };
+  if (fromZone === "field" && toZone !== "field" && card.banishWhenLeavesField && !card.isToken) {
+    toZone = "banished";
+  }
+  if (toZone === "banished" && fromZone && isSimulatedBanishProtected(card, sourcePlayer, fromZone, options)) return null;
+  if (fromZone === "field" && toZone !== "field" && card.isToken) toZone = "removed";
+  const extraMonster = card.monsterType === "fusion" || card.monsterType === "ascension" || card.monsterType === "synchro";
+  if (extraMonster && (toZone === "deck" || (toZone === "hand" && !options.allowExtraDeckMonsterToHand))) toZone = "extraDeck";
+  if ((toZone === "field" || toZone === "spellTrap") && getAvailableFieldSlots(player[toZone] || []).length === 0) return null;
+  return { fromZone, toZone };
+}
+
+/** Read-only preflight; a rejected departure must not consume materials or statuses. */
+export function canMoveCardToZone(
+  player: AiPlayerInput | null | undefined,
+  card: AiCardInput | null | undefined,
+  zone: string,
+  sourcePlayer: AiPlayerInput | null | undefined = player,
+  options: ReadMoveOptions = {},
+): boolean {
+  return resolveSimulatedMove(player, card, zone, sourcePlayer, options) !== null;
+}
+
 export function moveCardToZone(
   player: SimulatedPlayerState | null | undefined,
   card: SimulatedCardState | null | undefined,
   zone: string,
   sourcePlayer: SimulatedPlayerState | null | undefined = player,
+  options: SimulatedMoveOptions = {},
 ): boolean {
   if (!player || !sourcePlayer || !card) return false;
-  const fromZone = findCardZone(sourcePlayer, card);
-  if (zone === fromZone && player === sourcePlayer) return true;
-  if (
-    (zone === "field" || zone === "spellTrap") &&
-    getAvailableFieldSlots(player[zone] || []).length === 0
-  ) return false;
-  if (fromZone === "field" && zone !== "field") {
+  const move = resolveSimulatedMove(player, card, zone, sourcePlayer, options);
+  if (!move) return false;
+  const { fromZone, toZone } = move;
+  if (toZone === fromZone && player === sourcePlayer) return true;
+  if ((fromZone === "field" || fromZone === "spellTrap" || fromZone === "fieldSpell") &&
+      toZone !== "field" && toZone !== "spellTrap" && toZone !== "fieldSpell") {
+    const field = options.state ? [...options.state.player.field, ...options.state.bot.field] : sourcePlayer.field;
+    removeFieldAuraBuffContributions(card, field, field.indexOf(card));
+  }
+  if (fromZone === "field" && toZone !== "field") {
+    delete card.oncePerTurnUsageByName;
+    card.oncePerTurnResetVersion = (card.oncePerTurnResetVersion || 0) + 1;
+    delete card.banishWhenLeavesField;
     card.battlePositionLocked = false;
     restoreFieldExitStatuses(card);
+    restoreTemporaryStatuses(card);
+    if (card.cardKind === "monster") {
+      card.summonedTurn = null;
+      card.setTurn = null;
+      card.positionChangedThisTurn = false;
+      card.cannotAttackThisTurn = false;
+      card.cannotAttackUntilTurn = null;
+      card.immuneToOpponentEffectsUntilTurn = null;
+      delete card.attackLimitThisTurn;
+      delete card.attackLimitDuration;
+      if (card.tempAtkBoost) { card.atk = Math.max(0, (card.atk || 0) - card.tempAtkBoost); card.tempAtkBoost = 0; }
+      if (card.tempDefBoost) { card.def = Math.max(0, (card.def || 0) - card.tempDefBoost); card.tempDefBoost = 0; }
+      if (card.originalAtk != null) { card.atk = card.originalAtk; card.originalAtk = null; }
+      if (card.originalDef != null) { card.def = card.originalDef; card.originalDef = null; }
+      if (card.originalLevel != null) { card.level = card.originalLevel; card.originalLevel = null; }
+      for (const buff of card.turnBasedBuffs || []) {
+        if (buff.stat === "atk") card.atk = Math.max(0, (card.atk || 0) - buff.value);
+        if (buff.stat === "def") card.def = Math.max(0, (card.def || 0) - buff.value);
+      }
+      card.turnBasedBuffs = [];
+      card.effectsNegated = false;
+      card.effectsNegatedDuration = null;
+    }
+  }
+  if ((fromZone === "spellTrap" || fromZone === "fieldSpell") &&
+      toZone !== "field" && toZone !== "spellTrap" && toZone !== "fieldSpell") {
+    card.effectsNegated = false;
+    card.effectsNegatedDuration = null;
   }
   if (
     card.cardKind === "monster" &&
     Array.isArray(card.equips) &&
     card.equips.length > 0 &&
-    zone !== "field"
+    toZone !== "field"
   ) {
     const attachedEquips = card.equips.slice();
     card.equips = [];
@@ -280,29 +414,21 @@ export function moveCardToZone(
     });
   }
   removeCardFromZones(sourcePlayer, card);
-  if (zone === "extraDeck") {
+  card.location = toZone === "removed" ? null : toZone;
+  if (toZone === "removed") return true;
+  if (toZone === "graveyard" || toZone === "banished") card.isFacedown = false;
+  if (toZone === "extraDeck") {
     card.properSummonEstablished = false;
     card.properSummonProcedure = null;
   }
-  if (zone === "fieldSpell") {
+  if (toZone === "fieldSpell") {
     player.fieldSpell = card;
     return true;
   }
-  (player as SimulatedZonePlayer)[zone as SimulatedArrayZone] ||
-    ((player as SimulatedZonePlayer)[zone as SimulatedArrayZone] = []);
-  if (
-    Array.isArray(
-      (player as SimulatedZonePlayer)[zone as SimulatedArrayZone],
-    )
-  ) {
-    if (zone === "field" || zone === "spellTrap") {
-      return appendSimulatedFieldCard(player[zone], card);
-    }
-    clearSimulatedFieldPosition(card);
-    (player as SimulatedZonePlayer)[zone as SimulatedArrayZone].push(card);
-    return true;
-  }
-  return false;
+  player[toZone] ||= [];
+  if (toZone === "field" || toZone === "spellTrap") return appendSimulatedFieldCard(player[toZone], card);
+  appendSimulatedZoneCard(player[toZone], card);
+  return true;
 }
 
 export function findCardOwner(
@@ -328,6 +454,7 @@ export function findCardOwner(
     if (Array.isArray(player.banished) && player.banished.includes(card)) {
       return player;
     }
+    if (Array.isArray(player.extraDeck) && player.extraDeck.includes(card)) return player;
   }
   return null;
 }

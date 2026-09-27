@@ -1,5 +1,13 @@
-import type { ArenaWinner } from "../contracts/arena.js";
-import type { EventCard } from "../contracts/events.js";
+import type {
+  ArenaChainLinkSample,
+  ArenaChainLinkStats,
+  ArenaWinner,
+} from "../contracts/arena.js";
+import type {
+  ChainLinkResolutionOutcome,
+  EventCard,
+} from "../contracts/events.js";
+import type { TurnLineTerminationReason } from "../contracts/ai.js";
 
 
 type Seat = "player" | "bot";
@@ -109,6 +117,9 @@ export interface ArenaProgressEntry {
   plannerUsed?: boolean;
   plannedLineLength?: number;
   plannedNodesEvaluated?: number;
+  plannerTerminationReason?: TurnLineTerminationReason;
+  plannerUnsupportedBranches?: number;
+  plannerRepeatedStates?: number;
   plannedScore?: number;
   plannedMilestones?: readonly unknown[];
   selectedFirstAction?: PlanningAction | string | null;
@@ -130,6 +141,10 @@ interface PlanSample {
   score: number | null;
   lineLength: number;
   nodes: number;
+  used: boolean;
+  terminationReason: TurnLineTerminationReason | null;
+  unsupportedBranches: number;
+  repeatedStates: number;
   firstAction: string | null;
   milestones: (string | null)[];
   reason: string | null;
@@ -144,6 +159,8 @@ interface MismatchSample {
   action: PlanningAction | string | null;
   reason: string | null;
   diffs: unknown[];
+  /** Observed links during this execution, including responses by either controller. */
+  chainLinks: ArenaChainLinkSample[];
 }
 export interface ArenaRecordedEvent {
   t?: number | null | undefined;
@@ -172,6 +189,15 @@ export interface ArenaRecordedEvent {
   damageStepId?: string | number | null;
   activationNegated?: boolean | null;
   effectNegated?: boolean | null;
+  success?: boolean;
+  outcome?: ChainLinkResolutionOutcome;
+  executed?: boolean;
+  failedAction?: string | null;
+  reason?: string | null;
+  chainLevel?: number | null;
+  cardId?: number | null;
+  cardInstanceId?: string | number | null;
+  resolvedWithoutEffect?: boolean;
   costPayment?: unknown;
   targetIds?: unknown;
   method?: string;
@@ -208,7 +234,7 @@ export interface ArenaEventPayload {
     id?: string | null;
   } | null;
   effectId?: string | null;
-  controllerId?: string;
+  controllerId?: string | null;
   playerId?: string;
   stage?: string;
   status?: string;
@@ -223,6 +249,15 @@ export interface ArenaEventPayload {
   damageStepId?: string | number | null;
   activationNegated?: boolean;
   effectNegated?: boolean;
+  success?: boolean;
+  outcome?: ChainLinkResolutionOutcome;
+  executed?: boolean;
+  failedAction?: string | null;
+  chainLevel?: number | null;
+  cardId?: number | null;
+  cardInstanceId?: string | number | null;
+  cardName?: string | null;
+  resolvedWithoutEffect?: boolean;
   costPayment?: unknown;
   targetIds?: unknown;
   method?: string;
@@ -241,7 +276,7 @@ export interface ArenaEventPayload {
     sourceZone?: string | null;
   } | null;
   wasDestroyed?: boolean;
-  reason?: string;
+  reason?: string | null;
   cause?: string;
   destroyCause?: string;
   contextLabel?: string;
@@ -338,6 +373,7 @@ interface StrategicMatchup {
 }
 interface DuelSummary {
   duelNumber: number;
+  seed: number | string | null;
   matchup: string;
   winner: ArenaWinner;
   turns: number;
@@ -547,10 +583,13 @@ function createPlanningStats() {
     totalLineLength: 0,
     totalNodesEvaluated: 0,
     totalNodesWhenUsed: 0,
+    unsupportedBranches: 0,
+    repeatedStates: 0,
     scoreTotal: 0,
     scoreCount: 0,
     modeCounts: createCounter(),
     turnModeCounts: createCounter(),
+    terminationReasons: createCounter(),
     selectedFirstActions: createCounter(),
     executedFirstActions: createCounter(),
     topMilestones: createCounter(),
@@ -598,6 +637,9 @@ function compactPlanningStats(planning: Partial<PlanningStats> = {}) {
       : null,
     modeCounts: topCounter(planning.modeCounts),
     turnModeCounts: topCounter(planning.turnModeCounts),
+    terminationReasons: topCounter(planning.terminationReasons),
+    unsupportedBranches: planning.unsupportedBranches || 0,
+    repeatedStates: planning.repeatedStates || 0,
     selectedFirstActions: topCounter(planning.selectedFirstActions),
     executedFirstActions: topCounter(planning.executedFirstActions),
     topMilestones: topCounter(planning.topMilestones),
@@ -771,9 +813,23 @@ function classifyActivationEvent(eventName: string, payload: ArenaEventPayload =
   return "effect";
 }
 
+function createChainLinkStats(): ArenaChainLinkStats {
+  return {
+    total: 0,
+    succeeded: 0,
+    partialFailures: 0,
+    failed: 0,
+    activationNegated: 0,
+    effectNegated: 0,
+    samples: [],
+  };
+}
+
 function createSeatStats(archetype = "unknown") {
   return {
     archetype,
+    decisionCount: 0,
+    decisionTimeMs: 0,
     actions: 0,
     summons: 0,
     monsterSets: 0,
@@ -808,6 +864,7 @@ function createSeatStats(archetype = "unknown") {
     noUsefulTurns: 0,
     turnActions: createCounter(),
     planning: createPlanningStats(),
+    chainLinks: createChainLinkStats(),
     warnings: [] as unknown[],
   };
 }
@@ -815,6 +872,9 @@ function createSeatStats(archetype = "unknown") {
 function compactSeatStats(stats: SeatStats) {
   return {
     archetype: stats.archetype,
+    decisionCount: stats.decisionCount,
+    decisionTimeMs: stats.decisionTimeMs,
+    avgDecisionTimeMs: stats.decisionCount ? round(stats.decisionTimeMs / stats.decisionCount, 2) : null,
     actions: stats.actions,
     summons: stats.summons,
     fusionSummons: stats.fusionSummons,
@@ -850,6 +910,7 @@ function compactSeatStats(stats: SeatStats) {
     banished: topCounter(stats.banished),
     graveyardResourceUses: stats.graveyardResourceUses,
     planning: compactPlanningStats(stats.planning),
+    chainLinks: { ...stats.chainLinks, samples: stats.chainLinks.samples.slice(0, 5) },
     warnings: stats.warnings.slice(0, 8),
   };
 }
@@ -1512,6 +1573,7 @@ export class ArenaAnalytics {
       );
       const summary: DuelSummary = {
         duelNumber: record.duelNumber,
+        seed: record.seed,
         matchup: `${record.archetype1}_vs_${record.archetype2}`,
         winner: record.winner,
         turns: record.turns,
@@ -1610,7 +1672,9 @@ export class ArenaAnalytics {
   }
 
     mergeSeatStats(target: SeatStats, source: CompactSeatStats) {
-      for (const field of [
+    for (const field of [
+      "decisionCount",
+      "decisionTimeMs",
       "actions",
       "summons",
       "monsterSets",
@@ -1653,6 +1717,12 @@ export class ArenaAnalytics {
         }
       }
       this.mergePlanningStats(target.planning, source.planning);
+      if (source.chainLinks) {
+        for (const field of ["total", "succeeded", "partialFailures", "failed", "activationNegated", "effectNegated"] as const) {
+          target.chainLinks[field] += source.chainLinks[field] || 0;
+        }
+        target.chainLinks.samples = [...target.chainLinks.samples, ...(source.chainLinks.samples || [])].slice(0, 5);
+      }
     }
 
     mergePlanningStats(target = createPlanningStats(), source: Partial<CompactPlanningStats & Pick<PlanningStats, "totalLineLength" | "totalNodesEvaluated" | "totalNodesWhenUsed" | "scoreTotal" | "scoreCount">> = {}) {
@@ -1665,6 +1735,8 @@ export class ArenaAnalytics {
         "totalLineLength",
         "totalNodesEvaluated",
         "totalNodesWhenUsed",
+        "unsupportedBranches",
+        "repeatedStates",
         "scoreTotal",
         "scoreCount",
       ] as const) {
@@ -1696,6 +1768,9 @@ export class ArenaAnalytics {
       }
       for (const { name, count } of source.turnModeCounts || []) {
         addCount(target.turnModeCounts, name, count);
+      }
+      for (const { name, count } of source.terminationReasons || []) {
+        addCount(target.terminationReasons, name, count);
       }
       for (const { name, count } of source.selectedFirstActions || []) {
         addCount(target.selectedFirstActions, name, count);
@@ -2337,6 +2412,9 @@ export class DuelTracker {
   declare actionsExecuted: ArenaRecordedAction[];
   declare decisionTimes: number[];
   declare nodesVisited: number[];
+  private readonly pendingDecisionStarts = new Map<Seat, number>();
+  private readonly completedChainLinks = new Set<string>();
+  private readonly planningChainLinks = new Map<Seat, ArenaChainLinkSample[]>();
   declare openingSequence: PlanningAction[];
   declare openingTurnLimit: number;
   declare currentTurn: number;
@@ -2527,6 +2605,24 @@ export class DuelTracker {
     }
 
     recordPlanningProgress(entry: ArenaProgressEntry = {}) {
+      const decisionSeat = playerSeat(entry.actor || entry.currentPlayer);
+      if (decisionSeat && (entry.stage === "ai_decision_before" || entry.stage === "ai_main_phase_exit")) {
+        this.planningChainLinks.delete(decisionSeat);
+      }
+      if (decisionSeat && Number.isFinite(entry.t)) {
+        if (entry.stage === "ai_decision_before") {
+          this.pendingDecisionStarts.set(decisionSeat, entry.t!);
+        } else if (entry.stage === "ai_decision_after" || entry.stage === "ai_main_phase_exit") {
+          const started = this.pendingDecisionStarts.get(decisionSeat);
+          this.pendingDecisionStarts.delete(decisionSeat);
+          if (started !== undefined && entry.t! >= started) {
+            const elapsed = entry.t! - started;
+            this.recordDecision(elapsed);
+            this.seats[decisionSeat].decisionCount++;
+            this.seats[decisionSeat].decisionTimeMs += elapsed;
+          }
+        }
+      }
       if (
         entry.stage !== "ai_turn_line_search" &&
         entry.stage !== "ai_plan_execution_compare" &&
@@ -2540,9 +2636,15 @@ export class DuelTracker {
       const planning = stats.planning || (stats.planning = createPlanningStats());
 
       if (entry.stage === "ai_turn_line_search") {
+        if (entry.plannerUsed) this.planningChainLinks.set(seat!, []);
+        else this.planningChainLinks.delete(seat!);
+        if (Number.isFinite(entry.plannedNodesEvaluated)) this.nodesVisited.push(entry.plannedNodesEvaluated!);
         planning.attempts += 1;
         addCount(planning.modeCounts, entry.plannerMode || "unknown");
         addCount(planning.turnModeCounts, entry.plannerTurnMode || "unknown");
+        addCount(planning.terminationReasons, entry.plannerTerminationReason || "unknown");
+        planning.unsupportedBranches += Number(entry.plannerUnsupportedBranches || 0);
+        planning.repeatedStates += Number(entry.plannerRepeatedStates || 0);
         if (entry.plannerUsed) {
           planning.used += 1;
           planning.totalLineLength += Number(entry.plannedLineLength || 0);
@@ -2561,7 +2663,7 @@ export class DuelTracker {
           entry.selectedFirstAction || entry.plannedFirstAction || null;
         addCount(planning.selectedFirstActions, planningActionLabel(firstAction));
         if (
-          entry.plannerUsed &&
+          (entry.plannerUsed || entry.plannerTerminationReason) &&
           (planning.planSamples || []).length < 5
         ) {
           planning.planSamples.push({
@@ -2572,6 +2674,10 @@ export class DuelTracker {
             score: Number.isFinite(score) ? round(score, 2) : null,
             lineLength: entry.plannedLineLength || 0,
             nodes: entry.plannedNodesEvaluated || 0,
+            used: entry.plannerUsed === true,
+            terminationReason: entry.plannerTerminationReason || null,
+            unsupportedBranches: entry.plannerUnsupportedBranches || 0,
+            repeatedStates: entry.plannerRepeatedStates || 0,
             firstAction: planningActionLabel(firstAction),
             milestones: (entry.plannedMilestones || [])
               .map(planningLabel)
@@ -2585,6 +2691,8 @@ export class DuelTracker {
 
       const executedFirstAction =
         entry.executedFirstAction || entry.actualAction || null;
+      const chainLinks = this.planningChainLinks.get(seat!) || [];
+      this.planningChainLinks.delete(seat!);
       addCount(
         planning.executedFirstActions,
         planningActionLabel(executedFirstAction),
@@ -2619,6 +2727,7 @@ export class DuelTracker {
           action: entry.plannedAction || entry.actualAction || null,
           reason: entry.plannerReason || null,
           diffs: (entry.diffs || []).slice(0, 3),
+          chainLinks,
         });
       }
     }
@@ -2700,8 +2809,55 @@ export class DuelTracker {
       this.recordCounterEvent(payload, meta);
     } else if (eventName === "damage_inflicted" || eventName === "lp_change") {
       this.recordLpEvent(eventName, payload, meta);
+    } else if (eventName === "chain_link_resolution") {
+      this.recordChainLinkResolution(payload, meta);
     } else if (CANONICAL_LIFECYCLE_EVENTS.has(eventName)) {
       this.recordCanonicalLifecycleEvent(eventName, payload, meta);
+    }
+  }
+
+  recordChainLinkResolution(payload: ArenaEventPayload, meta: EventMeta) {
+    const seat = playerSeat(payload.controllerId);
+    if (payload.stage === "resolving") {
+      this.recordCanonicalLifecycleEvent("chain_link_resolution", payload, meta);
+      return;
+    }
+    if (payload.stage !== "completed" && payload.stage !== "failed") return;
+    if (payload.chainId != null && payload.linkId != null) {
+      const key = JSON.stringify([payload.chainId, payload.linkId]);
+      if (this.completedChainLinks.has(key)) return;
+      this.completedChainLinks.add(key);
+    }
+    this.recordCanonicalLifecycleEvent("chain_link_resolution", payload, meta);
+    // Older traces without a terminal outcome remain visible without guessing success.
+    if (!seat || !payload.outcome || payload.chainId == null || payload.linkId == null) return;
+    const stats = this.seats[seat].chainLinks;
+    stats.total++;
+    switch (payload.outcome) {
+      case "success": stats.succeeded++; break;
+      case "partial_failure": stats.partialFailures++; break;
+      case "failed": stats.failed++; break;
+      case "activation_negated": stats.activationNegated++; break;
+      case "effect_negated": stats.effectNegated++; break;
+      default: payload.outcome satisfies never;
+    }
+    const sample: ArenaChainLinkSample = {
+      turn: meta.turn ?? this.currentTurn,
+      chainId: payload.chainId,
+      linkId: payload.linkId,
+      chainLevel: payload.chainLevel ?? null,
+      controllerId: seat,
+      cardId: payload.cardId ?? null,
+      cardInstanceId: payload.cardInstanceId ?? null,
+      cardName: payload.cardName || null,
+      effectId: payload.effectId || null,
+      outcome: payload.outcome,
+      failedAction: payload.failedAction || null,
+      reason: payload.reason || null,
+    };
+    if (stats.samples.length < 5) stats.samples.push(sample);
+    for (const links of this.planningChainLinks.values()) {
+      links.push(sample);
     }
   }
 
@@ -2725,6 +2881,19 @@ export class DuelTracker {
       damageStepId: payload.damageStepId ?? null,
       activationNegated: payload.activationNegated === true || null,
       effectNegated: payload.effectNegated === true || null,
+      ...(payload.outcome ? {
+        success: payload.success,
+        outcome: payload.outcome,
+        executed: payload.executed,
+        failedAction: payload.failedAction || null,
+        reason: payload.reason || null,
+        card: payload.cardName || null,
+        cardId: payload.cardId ?? null,
+        cardInstanceId: payload.cardInstanceId ?? null,
+        chainLevel: payload.chainLevel ?? null,
+        effectKind: payload.effectKind || null,
+        resolvedWithoutEffect: payload.resolvedWithoutEffect,
+      } : {}),
       costPayment: payload.costPayment || null,
       targetIds: payload.targetIds || null,
     });

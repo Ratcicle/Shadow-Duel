@@ -181,6 +181,8 @@ export interface ChainStrategyPort {
 
 export interface ChainStrategyResponse {
   pass?: boolean;
+  /** Omit only these canonical candidates from the generic bot fallback. */
+  declinedCandidateKeys?: readonly string[];
   reason?: string;
   candidateKey?: string;
   card?: ChainCard;
@@ -349,6 +351,7 @@ export interface ChainActivationAttempt {
 }
 
 export interface PreparedActivationContext {
+  decisions?: import("./ai.js").AIDecisionPlan;
   activationZone?: ChainActivationZone;
   sourceZone?: ChainSourceZone | null;
   sourceWasFacedown?: boolean;
@@ -627,6 +630,8 @@ export interface ChainTargetValidation {
 export interface ChainOperationResult {
   ok?: boolean;
   success?: boolean;
+  executed?: boolean;
+  failedAction?: string;
   needsSelection?: boolean;
   reason?: string | null;
   code?: string;
@@ -678,6 +683,8 @@ export interface ChainOperationResult {
   linkResults?: ChainOperationResult[];
   finalizationResult?: ChainOperationResult | null;
   resolutionResult?: ChainOperationResult | null;
+  /** Outcome of the single prepared activation, separate from the whole Chain. */
+  activationResult?: ChainOperationResult;
   timing?: ChainOperationResult | null;
   responses?: ChainResponseNegotiation;
   lastLinkController?: ChainPlayer | null;
@@ -1230,6 +1237,9 @@ export interface ChainDecisionRequest {
   contextSnapshot: ChainDecisionContextSnapshot;
   resolveAI?: () => unknown;
   resolveHuman?: () => unknown;
+  normalizeCandidateResult?: (candidate: unknown, result: unknown) => unknown;
+  serializeResult?: (result: unknown) => unknown;
+  deserializeReplayValue?: (value: unknown, candidates: unknown[]) => unknown;
 }
 
 export interface ChainResponseDecisionContextSnapshot {

@@ -143,7 +143,7 @@ function getMoonlitPurpose(analysis: LuminarchAnalysis) {
       isLuminarch(card) &&
       !card.isFacedown &&
       (LUMINARCH_DEFENSIVE_NAMES.includes(card.name!) ||
-        (card.def || 0) + (card.tempDefBoost || 0) >= oppStrongest),
+        (card.def || 0) >= oppStrongest),
   );
   if (
     (analysis.lp || 8000) <= 3500 ||

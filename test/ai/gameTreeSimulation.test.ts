@@ -17,6 +17,7 @@ const monsterEffect: AIAction = { type: "monsterEffect", fieldIndex: 0 };
 
 function observeAction(input: SimulationGameState, action: AIAction) {
   let after: AiStateInput | undefined;
+  let afterAction: AiStateInput | undefined;
   let simulations = 0;
   let generations = 0;
   const start = performance.now();
@@ -29,25 +30,31 @@ function observeAction(input: SimulationGameState, action: AIAction) {
     },
     simulateMainPhaseAction(state: SimulationGameState, chosen: AIAction) {
       simulations++;
-      return applyGenericSimulatedMainPhaseAction(state, chosen, { enableSimulatedEvents: true });
+      const result = applyGenericSimulatedMainPhaseAction(state, chosen, { enableSimulatedEvents: true });
+      afterAction ??= result;
+      return result;
     },
   }, input.bot, 2);
   console.log("gametree-simulation", JSON.stringify({ action: action.type, result, generations, simulations, ms: performance.now() - start }));
-  return { result, after: required(after), simulations };
+  return { result, after: required(after || afterAction), simulations };
 }
 
-test("GameTree spell draws from its supplied Deck and changes the evaluated resources", () => {
+test("GameTree scores drawn resource counts and stops before revealing the supplied Deck", () => {
   const input = simulationState({ bot: {
     hand: [simulationCard({ name: "Draw", cardKind: "spell", subtype: "normal", effects: [{ id: "draw", timing: "on_play", actions: [{ type: "draw", amount: 2 }] }] })],
     deck: [simulationCard({ name: "First", cardKind: "monster" }), simulationCard({ name: "Second", cardKind: "monster" })],
   } });
   const before = structuredClone(input);
   const { result, after, simulations } = observeAction(input, spell);
-  assert.deepEqual(after.player?.hand?.map(card => card.name), ["First", "Second"]);
-  assert.deepEqual(after.player?.graveyard?.map(card => card.name), ["Draw"]);
-  assert.equal(after.player?.deck?.length, 0);
-  assert.equal(result.score, 1.3 * 0.85 ** 3 * 0.85 ** 2);
-  assert.equal(simulations, 2);
+  const owner = required([after.bot, after.player].find(player => player?.id === input.bot.id));
+  assert.deepEqual(owner.hand?.map(card => card.name), [undefined, undefined]);
+  assert.deepEqual(owner.hand?.map(card => card.instanceId), ["sim:draw:1", "sim:draw:2"]);
+  assert.deepEqual(owner.graveyard?.map(card => card.name), ["Draw"]);
+  assert.equal(owner.deck?.length, 0);
+  assert.ok("_simRequiresReplan" in after);
+  assert.equal(after._simRequiresReplan, true);
+  assert.equal(result.score, 1.3 * 0.85 ** 2);
+  assert.equal(simulations, 1);
   assert.deepEqual(input, before);
 });
 
@@ -205,14 +212,16 @@ test("GameTree keeps restrictions and additional Normal Summon permission for a 
   assert.equal(input.bot.field.length, 1);
 });
 
-test("GameTree preserves unsupported declarative action diagnostics into descendants", () => {
+test("GameTree preserves unsupported diagnostics and rejects the dependent branch", () => {
   const input = simulationState({ bot: { field: [simulationCard({
     name: "Unsupported", cardKind: "monster", atk: 0,
     effects: [{ id: "unsupported", timing: "ignition", activationZones: ["field"], actions: [{ type: "heal_from_destroyed_atk", fraction: 0.5 }] }],
   })] } });
-  const { after, result } = observeAction(input, monsterEffect);
+  const { after, result, simulations } = observeAction(input, monsterEffect);
   assert.deepEqual(Reflect.get(after, "_simUnsupportedActions"), ["heal_from_destroyed_atk"]);
   assert.equal(result.score, 0);
+  assert.equal(result.action, null);
+  assert.equal(simulations, 1);
   assert.equal(input._simUnsupportedActions, undefined);
 });
 

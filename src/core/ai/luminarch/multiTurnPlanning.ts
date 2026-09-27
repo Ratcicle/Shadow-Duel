@@ -244,9 +244,9 @@ export function shouldCommitResourcesNow(card: SimulatedCardState, analysis: Lum
       const canOvercome = myField.some((m) => {
         if (!m || m.cardKind !== "monster" || m.isFacedown) return false;
         const myAtk =
-          (m.atk || 0) + (m.tempAtkBoost || 0) + (m.equipAtkBonus || 0);
+          (m.atk || 0);
         const myDef =
-          (m.def || 0) + (m.tempDefBoost || 0) + (m.equipDefBonus || 0);
+          (m.def || 0);
         // +800 de buff supera o ATK mais alto do oponente?
         return myAtk + 800 > oppStrongestAtk || myDef + 800 > oppStrongestAtk;
       });

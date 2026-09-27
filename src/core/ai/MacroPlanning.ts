@@ -92,7 +92,7 @@ export function detectLethalOpportunity(
   ) as StrategicCardView[];
 
   for (const attacker of directAttackers) {
-    const atk = (attacker.atk || 0) + (attacker.tempAtkBoost || 0);
+    const atk = (attacker.atk || 0);
     totalDamage += atk * getMaxAttacks(attacker, botPlayer as Parameters<typeof getMaxAttacks>[1]);
   }
 
@@ -149,7 +149,7 @@ export function detectDefensiveNeed(
 
   let totalOppDamage = 0;
   for (const monster of oppMonsters) {
-    const atk = (monster.atk || 0) + (monster.tempAtkBoost || 0);
+    const atk = (monster.atk || 0);
     totalOppDamage += atk;
   }
 

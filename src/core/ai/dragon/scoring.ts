@@ -95,8 +95,8 @@ export function evaluateDragonMonster(monster: DragonCard, owner: DragonPlayer |
   let value = 0;
 
   // Base ATK/DEF value
-  const atk = (monster.atk || 0) + (monster.tempAtkBoost || 0);
-  const def = (monster.def || 0) + (monster.tempDefBoost || 0);
+  const atk = (monster.atk || 0);
+  const def = (monster.def || 0);
   const stat = monster.position === "defense" ? def : atk;
   value += stat / 900;
   value += (monster.level || 0) * 0.1;

@@ -45,9 +45,25 @@ export interface AIPlanningProfile {
   nodeBudget: number;
   candidateLimit: number;
   battleStepLimit?: number | undefined;
+  allowEarlyStop?: boolean;
+}
+
+/** Revalidated instance decisions. Missing instances never fall back to names. */
+export interface AIDecisionPlan {
+  selections?: Readonly<Record<string, readonly (number | string)[]>>;
+  cases?: Readonly<Record<string, string>>;
+  specialSummons?: Readonly<Record<string, readonly (number | string)[]>>;
+  /** Explicitly keep a legal subset of the planned instances at resolution. */
+  specialSummonRevalidation?: Readonly<Record<string, "remaining">>;
+  synchroSummons?: Readonly<Record<string, {
+    synchroInstanceId: number | string;
+    materialInstanceIds: readonly (number | string)[];
+    position: BattlePosition;
+  }>>;
 }
 
 export interface AIActivationContext {
+  decisions?: AIDecisionPlan;
   effect?: EffectDefinition | null | undefined;
   effectId?: string | null | undefined;
   fromHand?: boolean;
@@ -109,6 +125,13 @@ export interface ExtraDeckMaterialHint {
   id?: RawCardDefinitionId | number | undefined;
   name?: string | undefined;
   instanceIds?: Array<string | number> | undefined;
+}
+
+export interface SynchroAIAction extends AIActionCommon {
+  type: "synchro";
+  synchroInstanceId: number | string;
+  materialInstanceIds: Array<number | string>;
+  position: BattlePosition;
 }
 
 export interface ExtraDeckProcedureAIAction extends AIActionCommon {
@@ -210,6 +233,7 @@ export interface HandIgnitionAIAction extends AIActionCommon {
 
 export interface AIActionByType {
   ascension: AscensionAIAction;
+  synchro: SynchroAIAction;
   extraDeckProcedure: ExtraDeckProcedureAIAction;
   handSummonProcedure: HandSummonProcedureAIAction;
   special_summon_sanctum_protector: SanctumProtectorAIAction;
@@ -264,6 +288,8 @@ export interface AIActionFingerprint {
   zoneIndex?: number | null;
   graveyardIndex?: number | null;
   materialIndex?: number | null;
+  synchroInstanceId?: number | string;
+  materialInstanceIds?: Array<number | string>;
   position?: BattlePositionInput | null;
   targetName?: string | null;
   direct?: boolean;
@@ -279,6 +305,7 @@ export interface PlanningCardSummary {
   name: string;
   id: RawCardDefinitionId | number | null;
   instanceId: string | number | null;
+  fieldSlot?: number | null;
   kind: string | null;
   position: string | null;
   faceDown: boolean;
@@ -302,6 +329,7 @@ export interface PlanningPlayerSummary {
   additionalNormalSummons: number;
   hand: string[];
   handSize: number;
+  unknownHandCount?: number;
   field: PlanningCardSummary[];
   spellTrap: PlanningCardSummary[];
   fieldSpell: PlanningCardSummary | null;
@@ -453,6 +481,11 @@ export interface StrategyRuntimePort {
   evaluateBoard(state: AIState, perspective?: SimulatedPlayerState): number;
   evaluateBoardV2?(state: AIState, perspective?: SimulatedPlayerState): number;
   generateMainPhaseActions(state: AIState): AIAction[];
+  selectPlanningCandidates?(
+    actions: readonly AIAction[],
+    state: AIState,
+    limit: number,
+  ): AIAction[];
   sequenceActions?(actions: AIAction[]): AIAction[];
   simulateMainPhaseAction(
     state:
@@ -535,6 +568,8 @@ export interface GameTreeSearchResult {
 
 export interface TurnLineSearchOptions extends BeamSearchOptions {
   candidateLimit?: number;
+  allowEarlyStop?: boolean;
+  onComplete?: (completion: TurnLineSearchCompletion) => void;
   turnMode?: AITurnPlanningMode;
   profile?: Partial<AIPlanningProfile> | undefined;
   planningContext?: unknown;
@@ -546,6 +581,23 @@ export interface TurnLineSearchOptions extends BeamSearchOptions {
     context: AIPlanningContext,
   ) => AILineMilestoneScore;
   battleStepLimit?: number | undefined;
+}
+
+export type TurnLineTerminationReason =
+  | "no_candidates"
+  | "max_depth"
+  | "node_budget"
+  | "requires_replan"
+  | "unsupported_branches"
+  | "no_state_changing_branches"
+  | "preferred_terminal"
+  | "invalid_input";
+
+export interface TurnLineSearchCompletion {
+  terminationReason: TurnLineTerminationReason;
+  nodesEvaluated: number;
+  unsupportedBranches: number;
+  repeatedStates: number;
 }
 
 export interface TurnLineDiagnostics {
@@ -565,6 +617,7 @@ export interface TurnLineSearchResult {
   nodesEvaluated: number;
   milestones: AILineMilestone[];
   diagnostics: TurnLineDiagnostics;
+  completion: TurnLineSearchCompletion;
   reason: string;
   used: true;
 }

@@ -11,6 +11,7 @@ import type {
   FullChainHost,
 } from "../contracts/chainRuntime.js";
 import { FAST_EFFECT_STATES } from "../contracts/chain.js";
+import { createChainResponseDecisionAdapter } from "../game/decisions/chainResponse.js";
 
 function isChainOperationPromise(
   value: unknown,
@@ -94,6 +95,7 @@ export async function openChainWindow(
   this.resetChainFinalizationState?.("new_chain");
 
   // Phase 3 will own collection/order; Phase 2 only consumes an ordered list.
+  let initialLinkId: ChainLink["linkId"] | null = null;
   for (const preparedActivation of preparedActivations) {
     const rootLink = this.addToChain({
       ...preparedActivation,
@@ -104,6 +106,7 @@ export async function openChainWindow(
         ...(preparedActivation.context || {}),
       },
     }) as ChainLink;
+    if (preparedActivations.length === 1) initialLinkId = rootLink?.linkId ?? null;
     const publication = await this.publishChainLinkActivation?.(rootLink);
     await this.appendActivationTriggerPackages?.(publication, context);
   }
@@ -172,6 +175,9 @@ export async function openChainWindow(
     }
   }
   this.log(`[ChainSystem] Chain resolution complete`);
+  const activationResult = initialLinkId === null ? undefined :
+    resolutionResult.linkResults?.find(result => result.linkId === initialLinkId);
+  if (activationResult) resolutionResult = { ...resolutionResult, activationResult };
   if (this.chainWindowOpen) {
     await this.completeActivationTriggerPackages?.();
     cleanupChainWindow(this);
@@ -311,6 +317,7 @@ export async function offerChainResponse(
           kind: "chain_response",
           actor: player,
           candidates: activatable,
+          ...createChainResponseDecisionAdapter(this.game, activatable),
           contextSnapshot: {
             type: context?.type || null,
             chainId: this.activeChainId ?? null,

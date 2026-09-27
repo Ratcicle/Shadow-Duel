@@ -268,7 +268,7 @@ function detachDynamicBuffsForSim(card: StrategyCard | null | undefined) {
 }
 
 function getEffectiveBattleStat(card: StrategyCard | null | undefined, stat: "atk" | "def") {
-  return getEffectiveStat(card, stat, { includeEquip: false });
+  return getEffectiveStat(card, stat);
 }
 
 function getOpponentStrongestBattleStat(analysis: VoidAnalysisInput = {}) {
@@ -639,7 +639,7 @@ export default class VoidStrategy extends BaseStrategy {
       oppFieldCount: (opponent?.field || []).length,
       oppStrongestAtk: (opponent?.field || []).reduce((max, m) => {
         if (!m || m.cardKind !== "monster") return max;
-        const atk = m.isFacedown ? 1500 : (m.atk || 0) + (m.tempAtkBoost || 0);
+        const atk = m.isFacedown ? 1500 : (m.atk || 0);
         return Math.max(max, atk);
       }, 0),
       oppStrongestBattle: (opponent?.field || []).reduce((max, m) => {
@@ -647,13 +647,13 @@ export default class VoidStrategy extends BaseStrategy {
         if (m.isFacedown) return Math.max(max, 1500);
         const stat =
           m.position === "defense"
-            ? (m.def || 0) + (m.tempDefBoost || 0)
-            : (m.atk || 0) + (m.tempAtkBoost || 0);
+            ? (m.def || 0)
+            : (m.atk || 0);
         return Math.max(max, stat);
       }, 0),
       myStrongestAtk: (bot.field || []).reduce((max, m) => {
         if (!m || m.cardKind !== "monster") return max;
-        return Math.max(max, (m.atk || 0) + (m.tempAtkBoost || 0));
+        return Math.max(max, (m.atk || 0));
       }, 0),
       hollowCount: (bot.field || []).filter((m) => m?.id === VOID_IDS.HOLLOW)
         .length,
@@ -1327,18 +1327,18 @@ export default class VoidStrategy extends BaseStrategy {
     // Calcular valores
     const myWeakest = myVoids.reduce(
       (min, m) => {
-        const atk = (m.atk || 0) + (m.tempAtkBoost || 0);
+        const atk = (m.atk || 0);
         return atk < min.atk ? { card: m, atk } : min;
       },
       {
         card: firstVoid,
-        atk: (firstVoid.atk || 0) + (firstVoid.tempAtkBoost || 0),
+        atk: (firstVoid.atk || 0),
       },
     );
 
     const oppStrongest = oppMonsters.reduce(
       (max, m) => {
-        const atk = m.isFacedown ? 1500 : (m.atk || 0) + (m.tempAtkBoost || 0);
+        const atk = m.isFacedown ? 1500 : (m.atk || 0);
         return atk > max.atk ? { card: m, atk } : max;
       },
       { card: firstOpponent, atk: 0 },

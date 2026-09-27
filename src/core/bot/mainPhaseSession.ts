@@ -10,7 +10,7 @@ export const MAIN_PHASE_MAX_EXECUTIONS = 64;
 export const MAIN_PHASE_MAX_FINALIZATION_ATTEMPTS = 8;
 
 export type MainPhaseExitReason = "no_candidates" | "alternatives_exhausted" |
-  "planner_transition" | "decision_limit" | "execution_limit" | "game_over" |
+  "planner_transition" | "planned_stop" | "decision_limit" | "execution_limit" | "game_over" |
   "context_lost" | "capture_error" | "execution_error" | "guard_blocked";
 
 type SessionStatus = "planning" | "finalizing" | "completed" | "invalidated" | "failed";

@@ -718,7 +718,7 @@ export function shouldPrioritizeDefense(analysis: LuminarchAnalysis = {}) {
     return true;
   }
   const myAttack = state.faceupLuminarch.reduce(
-    (sum, monster) => sum + (monster.atk || 0) + (monster.tempAtkBoost || 0),
+    (sum, monster) => sum + (monster.atk || 0),
     0,
   );
   return myAttack > 0 && state.oppThreat >= myAttack * 2;
@@ -762,7 +762,7 @@ export function canAttemptLethal(analysis: LuminarchAnalysis = {}) {
     (monster) => monster.position === "attack" && !monster.hasAttacked,
   );
   const totalAtk = attackers.reduce(
-    (sum, monster) => sum + (monster.atk || 0) + (monster.tempAtkBoost || 0),
+    (sum, monster) => sum + (monster.atk || 0),
     0,
   );
   if (state.oppMonsters.length === 0 && totalAtk >= state.oppLp) return true;

@@ -6,6 +6,7 @@ import type {
   SerializedSelectionValue,
 } from "./selection.js";
 import type { DecisionId } from "./primitives.js";
+import type { AIDecisionPlan } from "./ai.js";
 
 export type MaybePromise<Value> = Value | PromiseLike<Value>;
 
@@ -31,6 +32,24 @@ export interface ChainResponseDecisionCandidate extends DecisionCandidateBase {
   candidateKey: string;
   card: object;
   effect: { id?: string };
+  context?: object;
+}
+
+/** All card identities in this plan are duel-local, never runtime instance ids. */
+export interface SerializedChainResponseDecisions {
+  selections?: Readonly<Record<string, readonly number[]>>;
+  cases?: NonNullable<AIDecisionPlan["cases"]>;
+  specialSummons?: Readonly<Record<string, readonly number[]>>;
+  specialSummonRevalidation?: NonNullable<AIDecisionPlan["specialSummonRevalidation"]>;
+  synchroSummons?: Readonly<Record<string, {
+    synchroDuelCardId: number;
+    materialDuelCardIds: readonly number[];
+    position: "attack" | "defense";
+  }>>;
+}
+
+export interface ChainResponseDecisionValue extends CandidateDecisionValue {
+  decisions?: SerializedChainResponseDecisions;
 }
 
 export interface SegocOrderDecisionCandidate extends DecisionCandidateBase {
@@ -117,7 +136,7 @@ export type DecisionByKind = SelectionDecisionByKind & {
   chain_response: DecisionSpec<
     ChainResponseDecisionCandidate,
     ChainResponseDecisionCandidate | null,
-    PassDecisionValue | CandidateDecisionValue,
+    PassDecisionValue | ChainResponseDecisionValue,
     ChainResponseDecisionContext | null
   >;
   segoc_order: DecisionSpec<
@@ -147,6 +166,10 @@ export interface DecisionRequest<Kind extends DecisionKind> {
   contextSnapshot?: DecisionContext<Kind>;
   resolveAI?: () => MaybePromise<DecisionResult<Kind>>;
   resolveHuman?: () => MaybePromise<DecisionResult<Kind>>;
+  normalizeCandidateResult?: (
+    candidate: DecisionCandidate<Kind>,
+    result: DecisionResult<Kind>,
+  ) => DecisionResult<Kind>;
   serializeResult?: (
     result: DecisionResult<Kind>,
   ) => DecisionReplayValue<Kind>;

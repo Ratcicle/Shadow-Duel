@@ -8,6 +8,7 @@ import type { GameCard } from "../../contracts/cards.js";
 import { SUMMON_MODES } from "../../game/summon/transaction.js";
 import { SUMMON_ORIGINS } from "../../contracts/summon.js";
 import { canResolveHandSummonProcedureActionForCurrentState, resolveHandProcedureMaterials } from "../actionValidation.js";
+import { selectPayableTributes } from "../../ai/common/tributePolicy.js";
 
 export async function executeHandSummonProcedureAction(
   bot: BotRuntimePort,
@@ -148,17 +149,18 @@ export async function executeSummonAction(
 
   if (tributeInfo.tributesNeeded > 0) {
     const opponent = bot === game.player ? game.bot : game.player;
-    tributeIndices = bot.selectBestTributes(
-      bot.field,
+    const selection = selectPayableTributes(bot, bot.field, game, candidates => bot.selectBestTributes(
+      candidates,
       tributeInfo.tributesNeeded,
       cardToSummon,
       { oppField: opponent.field, game },
-    );
+    ));
+    tributeIndices = selection.indices;
     const tradeCheck =
       typeof bot.evaluateTributeTrade === "function"
         ? bot.evaluateTributeTrade(
             cardToSummon,
-            bot.field,
+            selection.candidates,
             tributeInfo.tributesNeeded,
             {
               oppField: opponent.field,

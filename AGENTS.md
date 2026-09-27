@@ -189,7 +189,7 @@ imediatamente anterior.
 - Acesse pelo botão "Bot Arena" na tela inicial
 - Testa AI vs AI com velocidades: 1x, 2x, 4x, instant
 - Gera analytics: win rate, tempo de decisão, opening book (ver [ArenaAnalytics.ts](src/core/ai/ArenaAnalytics.ts))
-- Presets disponíveis: `shadowheart`, `luminarch`, `void`, `dragon`, `arcanist`, `miragebound`, `bloomrot`, `burningwest`
+- Presets disponíveis: `shadowheart`, `luminarch`, `void`, `dragon`, `arcanist`, `miragebound`, `bloomrot`, `burningwest`, `techzero` (busca de linhas, avaliação sequencial de combate e política de respostas de Chain)
 
 **Flags de dev** (via `localStorage.setItem(key, "true")`):
 
@@ -197,7 +197,7 @@ imediatamente anterior.
 | -------------------------- | -------------------------------------------------- |
 | `shadow_duel_dev_mode`     | Painel dev + logs detalhados                       |
 | `shadow_duel_test_mode`    | Guardas extras de runtime                          |
-| `shadow_duel_bot_preset`   | Define um dos oito arquétipos disponíveis no registry do Bot |
+| `shadow_duel_bot_preset`   | Define um dos nove presets disponíveis no catálogo do Bot |
 
 **Sistema de Replays** — Captura e reprodução canônica:
 
@@ -368,7 +368,7 @@ oncePerTurn: true, oncePerTurnName: "Unique Effect Name"
 
 **Estrutura:** [src/core/ai/](src/core/ai/)
 
-Contratos, simulação, utilitários, buscas, `BaseStrategy`, as oito estratégias,
+Contratos, simulação, utilitários, buscas, `BaseStrategy`, as nove estratégias,
 suas bases por arquétipo, registry, Bot e Arena são arquivos físicos `.ts`.
 Consumidores continuam usando specifiers `.js`. Os contratos públicos
 verificam tanto o jogo real quanto as projeções de leitura usadas na simulação.
@@ -395,6 +395,7 @@ Subpastas de conhecimento por arquétipo:
 - `luminarch/` — Simulação, prioridades, políticas de recursos, fusões e planejamento em TypeScript
 - `dragon/` — Simulação, conhecimento, políticas, scoring e planejamento em TypeScript
 - `void/` — `combos`, `knowledge`, `priorities`, `scoring`
+- `techzero/` — Conhecimento, prioridades de recursos, decisões exatas, configuração da simulação compartilhada, planejamento de linhas, projeção pública de ataques em `battle.ts` e respostas canônicas em `responses.ts`
 
 **Criar nova estratégia:**
 
@@ -446,6 +447,9 @@ chaves históricas de decks nem limpe preferências de outros domínios.
 ---
 
 ### Documentação Detalhada
+
+Mantenha apenas arquivos Markdown na pasta `docs/`. Relatórios JSON, logs,
+arquivos compactados e outros artefatos devem ser salvos fora dessa pasta.
 
 Em [docs/](docs/):
 

@@ -155,7 +155,9 @@ test("Nested bound temporary trigger keeps owner conditions, targets and until_c
   assert.deepEqual(game.temporaryEventEffects, []);
   assert.equal(owner.lp, 8100);
   assert.equal(other.lp, 8000);
-  assert.deepEqual(owner.hand.map(entry => entry.name), ["Owner draw"]);
+  assert.deepEqual(owner.hand.map(entry => entry.owner), [owner.id]);
+  assert.ok(owner.hand.every(entry => entry._simUnknownDraw));
+  assert.equal(game._simRequiresReplan, true);
   assert.deepEqual(other.hand, []);
   assert.deepEqual(owner.graveyard, [bound]);
   assert.equal(source.counters.get("reward"), 1);
@@ -212,14 +214,20 @@ for (const ids of [["bot", "player"], ["north", "south"]] as const) {
       summonForEvent(game, 40);
       assert.equal(entry.usesRemaining, 1);
       assert.equal(owner.lp, reward === "heal" ? 8100 : 8000);
-      assert.deepEqual(owner.hand.map(entry => entry.name), reward === "draw" ? ["Owner draw"] : []);
+      assert.deepEqual(owner.hand.map(entry => entry.owner), reward === "draw" ? [owner.id] : []);
+      assert.ok(owner.hand.every(entry => entry._simUnknownDraw));
       assert.equal(other.lp, 8000);
       assert.deepEqual(other.hand, []);
       summonForEvent(game, 41);
       assert.equal(entry.usesRemaining, 0);
       assert.deepEqual(game.temporaryEventEffects, []);
       assert.equal(owner.lp, reward === "heal" ? 8200 : 8000);
-      assert.deepEqual(owner.hand.map(entry => entry.name), reward === "draw" ? ["Owner draw", "Owner second draw"] : []);
+      assert.deepEqual(owner.hand.map(entry => entry.owner), reward === "draw" ? [owner.id, owner.id] : []);
+      assert.ok(owner.hand.every(entry => entry._simUnknownDraw));
+      if (reward === "draw") {
+        assert.equal(owner.deck.length, 0);
+        assert.equal(new Set(owner.hand.map(entry => entry.instanceId)).size, 2);
+      }
     });
   }
 }

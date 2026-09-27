@@ -1,5 +1,6 @@
 import type {
   BattlePosition,
+  BattlePositionInput,
   CardKind,
   GameCard,
 } from "./cards.js";
@@ -28,7 +29,10 @@ import type {
   RawCardDefinitionId,
 } from "./primitives.js";
 import type { CanonicalGameStateSnapshot } from "./replay.js";
-import type { CanonicalZone } from "./zones.js";
+import type { CanonicalZone, ZoneInput } from "./zones.js";
+import type { CardAction } from "./actions.js";
+import type { ActionProperties } from "./actions/shared.js";
+import type { SpecialSummonEligibilityCard } from "../game/summon/eligibility.js";
 
 declare const perspectiveGameStateBrand: unique symbol;
 declare const simulationGameStateBrand: unique symbol;
@@ -68,6 +72,7 @@ type SimulatedCardCore = Partial<
     | "position"
     | "isFacedown"
     | "battleIndestructible"
+    | "instanceId"
   >
 >;
 
@@ -104,6 +109,10 @@ export interface SimulatedTemporaryControlEffect {
 
 /** Mutable projection used only by planning; no live Card methods are required. */
 export interface SimulatedCardShape extends SimulatedCardCore {
+  /** Generated planning cards use IDs disjoint from numeric runtime instances. */
+  instanceId?: number | string;
+  _simUnknownDraw?: boolean;
+  _simUnknownCard?: boolean;
   hasAttacked?: GameCard["hasAttacked"] | undefined;
   dynamicBuffs?: GameCard["dynamicBuffs"] | undefined;
   suppressedDynamicBuffStatsByKey?: GameCard["suppressedDynamicBuffStatsByKey"] | undefined;
@@ -326,6 +335,17 @@ export interface GameTreeSimulatedPlayerState extends SimulatedPlayerState {
 
 /** Read-only input projection accepted before a clone establishes brands. */
 export interface AiCardInput {
+  banishWhenLeavesField?: GameCard["banishWhenLeavesField"];
+  owner?: GameCard["owner"];
+  description?: GameCard["description"];
+  subtype?: GameCard["subtype"];
+  types?: readonly string[];
+  isToken?: GameCard["isToken"];
+  lastSummonMethod?: GameCard["lastSummonMethod"];
+  lastSummonedFromZone?: GameCard["lastSummonedFromZone"];
+  lastSentToGraveAsMaterial?: GameCard["lastSentToGraveAsMaterial"];
+  equippedTo?: AiCardInput | null;
+  equipTarget?: AiCardInput | number | string | null;
   fieldSlot?: GameCard["fieldSlot"];
   id?: GameCard["id"];
   instanceId?: number | string;
@@ -338,6 +358,22 @@ export interface AiCardInput {
   atk?: number | undefined;
   def?: number | undefined;
   level?: number | undefined;
+  monsterType?: GameCard["monsterType"];
+  isTuner?: GameCard["isTuner"];
+  synchro?: GameCard["synchro"];
+  synchroMaterialRoles?: GameCard["synchroMaterialRoles"];
+  effectsNegated?: GameCard["effectsNegated"];
+  archetype?: GameCard["archetype"] | undefined;
+  archetypes?: readonly string[] | undefined;
+  type?: GameCard["type"] | undefined;
+  attribute?: GameCard["attribute"] | undefined;
+  cannotBeSpecialSummoned?: GameCard["cannotBeSpecialSummoned"];
+  specialSummonOnlyBy?: Exclude<SpecialSummonEligibilityCard["specialSummonOnlyBy"], undefined>;
+  mustFirstBeSpecialSummonedBy?: Exclude<SpecialSummonEligibilityCard["mustFirstBeSpecialSummonedBy"], undefined>;
+  properSummonEstablished?: GameCard["properSummonEstablished"];
+  properSummonProcedure?: GameCard["properSummonProcedure"];
+  fieldLimit?: GameCard["fieldLimit"];
+  fieldPresenceRestriction?: GameCard["fieldPresenceRestriction"];
   position?: BattlePosition | string | null | undefined;
   isFacedown?: boolean | undefined;
   effects?: GameCard["effects"];
@@ -389,6 +425,8 @@ export interface AiLiveGamePort {
 
 /** Permissive read boundary retained for legacy search callers and fixtures. */
 export interface AiStateInput {
+  oncePerTurnUsage?: AiRuntimeOncePerTurnUsage;
+  oncePerTurnTurnCounter?: number;
   player?: AiPlayerInput | null;
   bot?: AiPlayerInput | null;
   opponent?: AiPlayerInput | null;
@@ -401,6 +439,11 @@ export interface AiStateInput {
 }
 
 export interface AiStateShape extends AiLiveGamePort {
+  _simGeneratedInstanceCounter?: number;
+  _simRequiresReplan?: boolean;
+  _simUnknownDrawCount?: number;
+  pendingSynchroMaterialFollowups?: SimulatedSynchroMaterialFollowup[];
+  delayedActions?: SimulatedDelayedAction[];
   temporaryControlEffects?: SimulatedTemporaryControlEffect[];
   player: SimulatedPlayerState;
   bot: SimulatedPlayerState;
@@ -413,6 +456,7 @@ export interface AiStateShape extends AiLiveGamePort {
   _gameRef?: AiLiveGamePort;
   _suppressP2Analysis?: boolean;
   _simOncePerTurn?: SimulatedOptLedger;
+  _simOncePerTurnTurn?: number;
   _dragonSimOnce?: SimulatedDragonOnceLedger;
   _simOptUsed?: Set<string>;
   _simArcanistOptUsed?: Set<string>;
@@ -434,6 +478,56 @@ export interface AiStateShape extends AiLiveGamePort {
   /** GameTree-only storage for metadata otherwise bound to the current bot view. */
   _gameTreeActors?: Record<string, GameTreeActorState>;
 }
+
+/** Canonical Game ledgers are projected once at the live-to-planning boundary. */
+export interface AiRuntimeOncePerTurnUsage {
+  player?: ReadonlyMap<string, unknown>;
+  bot?: ReadonlyMap<string, unknown>;
+  card?: { get(card: AiCardInput): unknown };
+}
+
+export interface SimulatedSynchroMaterialFollowup {
+  id: string;
+  type: "synchro_material_followup";
+  synchroSummonContextId: string;
+  ownerId: string;
+  source: SimulatedCardState;
+  sourceName: string | null;
+  sourceCardId: number | null;
+  sourceInstanceId: number | string | null;
+  sourceEffectId: string | null;
+  actions: readonly CardAction[];
+}
+
+export interface SimulatedDelayedSummonAction {
+  id: string;
+  actionType: "delayed_summon";
+  triggerCondition: { phase: string; player: string };
+  payload: { summons: Array<{
+    card: SimulatedCardState;
+    owner: string;
+    placementActorId: string;
+    fromZone: ZoneInput;
+    position?: BattlePositionInput | undefined;
+    statusesOnSummon: ActionProperties["statusesOnSummon"] | null;
+    summonMethod: string;
+    summonProcedure: string | null;
+  }> };
+  scheduledTurn: number;
+  priority: number;
+}
+
+export interface SimulatedDelayedDestroyAction extends Omit<SimulatedDelayedSummonAction, "actionType" | "payload"> {
+  actionType: "delayed_destroy";
+  payload: {
+    card: SimulatedCardState;
+    owner: string;
+    sourceCard: SimulatedCardState | null;
+    sourcePlayer: SimulatedPlayerState | null;
+  };
+}
+
+export type SimulatedDelayedAction = SimulatedDelayedSummonAction | SimulatedDelayedDestroyAction;
 
 export type GameTreeActorState = Pick<AiStateShape,
   | "_simOptUsed" | "_simArcanistOptUsed" | "_simLuminarch" | "_simBurningWest"

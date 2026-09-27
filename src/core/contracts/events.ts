@@ -530,6 +530,14 @@ export interface CardSetEventPayload {
   zone: "spellTrap";
 }
 
+export type ChainLinkResolutionOutcome =
+  | "success"
+  /** At least one action succeeded before a subsequent required action failed. */
+  | "partial_failure"
+  | "failed"
+  | "activation_negated"
+  | "effect_negated";
+
 export interface ChainLinkResolutionEventPayload {
   stage: "resolving" | "completed" | "failed";
   chainId: EventEntityId | null;
@@ -540,6 +548,12 @@ export interface ChainLinkResolutionEventPayload {
   activationKind?: ChainActivationKind | null;
   effectKind?: ChainEffectKind | null;
   success?: boolean;
+  outcome?: ChainLinkResolutionOutcome;
+  executed?: boolean;
+  failedAction?: string | null;
+  cardId?: number | null;
+  cardInstanceId?: EventEntityId | null;
+  cardName?: string | null;
   activationNegated?: boolean;
   effectNegated?: boolean;
   resolvedWithoutEffect?: boolean;
@@ -985,6 +999,7 @@ export interface EmitOptions {
 export interface EventResolutionOutcome {
   ok?: boolean;
   success?: boolean;
+  cancelled?: boolean;
   reason?: string | null;
   skipped?: boolean;
   deferred?: boolean;

@@ -25,6 +25,7 @@ interface RuntimeDecisionInput {
   contextSnapshot?: object | null;
   resolveAI?: () => unknown;
   resolveHuman?: () => unknown;
+  normalizeCandidateResult?: (candidate: unknown, result: unknown) => unknown;
   serializeResult?: (result: unknown) => unknown;
   deserializeReplayValue?: (value: unknown, candidates: unknown[]) => unknown;
 }
@@ -135,6 +136,23 @@ function replayValueIsPass(value: unknown): boolean {
   return isObject(value) && readValue(value, "pass") === true;
 }
 
+function normalizeCandidateResult(
+  input: RuntimeDecisionInput,
+  result: unknown,
+  candidates: unknown[],
+): unknown {
+  if (result == null) return null;
+  const requiresCandidate = input.kind === "chain_response" || input.requireCandidate !== false;
+  if (!requiresCandidate || (input.kind !== "chain_response" && (Array.isArray(result) || candidates.length === 0))) return result;
+  const canonical = candidates.includes(result)
+    ? result
+    : candidates.find(candidate => candidateKey(candidate) === candidateKey(result));
+  if (!canonical) return null;
+  return input.normalizeCandidateResult
+    ? input.normalizeCandidateResult(canonical, result)
+    : canonical;
+}
+
 export class DecisionBroker {
   game: DecisionBrokerGamePort;
   mode: DecisionBrokerMode;
@@ -190,6 +208,14 @@ export class DecisionBroker {
           `Replay decision mismatch at ${this.replayCursor}: expected ${runtimeInput.kind}.`,
         );
       }
+      if (runtimeInput.kind === "chain_response" && runtimeInput.contextSnapshot) {
+        const expected = runtimeInput.contextSnapshot;
+        const received = recorded.context;
+        if (!received || recorded.actorId !== (runtimeInput.actor?.id || runtimeInput.actorId || null) ||
+            ["type", "chainId", "respondingToLinkId"].some(key => Reflect.get(expected, key) !== Reflect.get(received, key))) {
+          throw new Error("Replay Chain response context does not match the current responder or window.");
+        }
+      }
       if (runtimeInput.kind === "field_placement") {
         const expectedContext = runtimeInput.contextSnapshot;
         const receivedContext = recorded.context;
@@ -201,9 +227,12 @@ export class DecisionBroker {
           throw new Error("Replay field placement context or candidates do not match the current procedure.");
         }
       }
-      const result = typeof runtimeInput.deserializeReplayValue === "function"
+      const decoded = typeof runtimeInput.deserializeReplayValue === "function"
         ? runtimeInput.deserializeReplayValue(recorded.value, candidates)
         : matchReplayValue(recorded.value, candidates);
+      const result = runtimeInput.kind === "chain_response"
+        ? normalizeCandidateResult(runtimeInput, decoded, candidates)
+        : decoded;
       if (!replayValueIsPass(recorded.value) && result == null) {
         throw new Error(
           `Replay decision ${recorded.decisionId || this.replayCursor} is no longer legal.`,
@@ -215,23 +244,13 @@ export class DecisionBroker {
     const resolver = runtimeInput.actor?.controllerType === "ai"
       ? runtimeInput.resolveAI
       : runtimeInput.resolveHuman;
-    let result = typeof resolver === "function" ? await resolver() : null;
-    if (
-      result != null &&
-      runtimeInput.requireCandidate !== false &&
-      !Array.isArray(result) &&
-      candidates.length > 0 &&
-      !candidates.includes(result)
-    ) {
-      result = candidates.find(
-        (candidate) => candidateKey(candidate) === candidateKey(result),
-      ) || null;
-      if (!result) {
-        this.game?.notify?.("decision_rejected", {
-          kind: runtimeInput.kind || "choice",
-          reason: "choice_not_in_candidate_list",
-        });
-      }
+    const proposed = typeof resolver === "function" ? await resolver() : null;
+    const result = normalizeCandidateResult(runtimeInput, proposed, candidates);
+    if (proposed != null && result == null) {
+      this.game?.notify?.("decision_rejected", {
+        kind: runtimeInput.kind || "choice",
+        reason: "choice_not_in_candidate_list",
+      });
     }
     recordRuntimeDecision(this, runtimeInput, result);
     return result;

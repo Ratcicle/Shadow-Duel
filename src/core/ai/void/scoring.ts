@@ -270,7 +270,7 @@ export function evaluateVoidMonster(monster: GameCard | SimulatedCardState | nul
     phase = "main",
   } = context;
   const knowledge = getVoidCardKnowledge(monster);
-  const atk = (monster.atk || 0) + (monster.tempAtkBoost || 0);
+  const atk = (monster.atk || 0);
   const def = monster.def || 0;
   const position = monster.position || "attack";
 
@@ -464,7 +464,7 @@ export function evaluateBoardVoid(gameOrState: AIState, perspectivePlayer?: Simu
 
   const oppStrongestAtk = oppField.reduce((max, m) => {
     if (!m || m.cardKind !== "monster") return max;
-    const atk = m.isFacedown ? 1500 : (m.atk || 0) + (m.tempAtkBoost || 0);
+    const atk = m.isFacedown ? 1500 : (m.atk || 0);
     return Math.max(max, atk);
   }, 0);
 
@@ -647,7 +647,7 @@ export function evaluateBoardVoid(gameOrState: AIState, perspectivePlayer?: Simu
   // Check se EU posso dar lethal
   const myTotalAtk = myField
     .filter((m) => m?.position === "attack" && !m?.hasAttacked)
-    .reduce((sum, m) => sum + (m?.atk || 0) + (m?.tempAtkBoost || 0), 0);
+    .reduce((sum, m) => sum + (m?.atk || 0), 0);
 
   if (oppField.length === 0 && myTotalAtk >= oppLP) {
     score += 6.0; // Lethal disponível!

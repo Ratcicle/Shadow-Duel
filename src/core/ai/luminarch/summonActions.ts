@@ -73,7 +73,7 @@ function hasStableWall(bot: SimulatedPlayerState, opponent: SimulatedPlayerState
   return (bot?.field || []).some((card) => {
     if (!card || card.cardKind !== "monster" || card.isFacedown) return false;
     if (card.mustBeAttacked) return true;
-    return (card.def || 0) + (card.tempDefBoost || 0) >= oppStrongest;
+    return (card.def || 0) >= oppStrongest;
   });
 }
 

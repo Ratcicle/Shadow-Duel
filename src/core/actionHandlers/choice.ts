@@ -564,13 +564,19 @@ export async function handleChooseActionCase(
     },
   } satisfies ChoiceSelectionContract;
 
+  const decisions = ctx.activationContext?.decisions;
+  const plannedCase = decisions?.cases?.[action.effectChoiceKey || requirementId];
+  const activationContext = plannedCase === undefined ? ctx.activationContext : {
+    ...ctx.activationContext,
+    decisions: { ...decisions, cases: { ...decisions?.cases, [requirementId]: plannedCase } },
+  };
   const selections = await runSelectionContract(game, selectionContract, {
     kind: action.selectionKind || "choice",
     card: ctx?.source || null,
     allowCancel: action.allowCancel !== false,
     context: ctx,
     player,
-    activationContext: ctx?.activationContext || {},
+    activationContext: activationContext || {},
   });
 
   if (!selections || Object.keys(selections).length === 0) {

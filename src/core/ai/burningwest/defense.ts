@@ -172,9 +172,7 @@ function getEffectiveAtk(card: Card | null | undefined) {
   return Math.max(
     0,
     numberValue(card?.currentAtk, numberValue(card?.atk, 0)) +
-      numberValue(card?.tempAtk, 0) +
-      numberValue(card?.tempAtkBoost, 0) +
-      numberValue(card?.equipAtkBonus, 0)
+      numberValue(card?.tempAtk, 0)
   );
 }
 
@@ -182,9 +180,7 @@ function getEffectiveDef(card: Card | null | undefined) {
   return Math.max(
     0,
     numberValue(card?.currentDef, numberValue(card?.def, 0)) +
-      numberValue(card?.tempDef, 0) +
-      numberValue(card?.tempDefBoost, 0) +
-      numberValue(card?.equipDefBonus, 0)
+      numberValue(card?.tempDef, 0)
   );
 }
 

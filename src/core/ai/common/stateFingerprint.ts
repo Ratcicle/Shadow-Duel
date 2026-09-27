@@ -32,8 +32,11 @@ export const PLANNING_PLAYER_FIELDS = [
 export const PLANNING_STATE_FIELDS = [
   "turn", "phase", "turnCounter", "_isPerspectiveState", "gameOver", "winner",
   "usedThisTurn", "_simOncePerTurn", "_dragonSimOnce", "_simOptUsed",
+  "_simOncePerTurnTurn",
   "_simArcanistOptUsed", "_simPassiveOncePerTurn", "_simReplacementEffects",
   "_simTemporaryControlCounter", "_simFieldPresenceSeq", "_simEventDepth",
+  "_simGeneratedInstanceCounter", "_simRequiresReplan", "_simUnknownDrawCount",
+  "pendingSynchroMaterialFollowups", "delayedActions",
   "_simPlanningBattleDone", "_simGrandLibraryBattleRewardUsed",
   "_simArcanistApprenticeSearchUsed", "_simArcanistSpellActivations",
   "_simBurningWest", "_simMaterialEffectActivationsByMaterialId",
@@ -49,6 +52,7 @@ export const PLANNING_CARD_LINKS = [
 // effective-stat helpers collapse durations and are insufficient for identity.
 export const PLANNING_CARD_FIELDS = [
   "id", "duelCardId", "instanceId", "_instanceId", "uid", "uuid", "simInstanceId",
+  "_simUnknownDraw", "_simUnknownCard",
   "name", "cardKind", "originalCardKind", "treatedAsCardKinds", "subtype",
   "monsterType", "isTuner", "synchroMaterialRoles", "archetypes", "archetype",
   "baseAtk", "baseDef", "atk", "def", "type", "types", "attribute", "level",
@@ -137,13 +141,15 @@ function isObject(value: unknown): value is object {
  * Instance IDs are preserved across clones. Legacy cards without one use their
  * first zone/index (or link path): deterministic within the projection, but
  * unable to identify indistinguishable copies after an identity-free swap.
- * Equipment is a table of identities, never recursively serialized cards.
+ * Equipment and supplied participants use identity references; a deferred
+ * effect's source Player must not pull its Game graph into this projection.
  * Unsupported-action reports, Luminarch histories/milestones, UI and search
  * diagnostics are excluded. The projection covers the declared fields below,
  * not unmodeled engine/Chain state or data absent from the planner input.
  */
 export function fingerprintPlanningState(state: AiStateInput): string {
   const identities = new Map<object, string>();
+  const playerIdentities = new Map<object, string>();
   const cards = new Map<string, object>();
   const pending: Array<[string, object]> = [];
 
@@ -175,6 +181,8 @@ export function fingerprintPlanningState(state: AiStateInput): string {
       return Number.isFinite(value) && !Object.is(value, -0) ? value : ["number", String(value), Object.is(value, -0)];
     }
     if (!isObject(value)) return ["undefined"];
+    const playerIdentity = playerIdentities.get(value);
+    if (playerIdentity !== undefined) return ["player", playerIdentity];
     if (identities.has(value)) return cardReference(value, path);
     if (ancestors.has(value)) throw new TypeError("Cyclic non-card planning metadata");
     ancestors.add(value);
@@ -221,6 +229,7 @@ export function fingerprintPlanningState(state: AiStateInput): string {
   for (const seat of ["bot", "player", "opponent"] as const) {
     const player = state[seat];
     if (!player) continue;
+    playerIdentities.set(player, player.id || seat);
     for (const zone of PLANNING_ZONES) {
       player[zone]?.forEach((card, index) => cardReference(card, `${seat}/${zone}/${index}`));
     }

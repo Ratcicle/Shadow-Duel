@@ -92,8 +92,6 @@ function getEffectiveAtkValue(card: DragonCard | null) {
   if (!card) return 0;
   return (
     (card.atk || 0) +
-    (card.tempAtkBoost || 0) +
-    (card.equipAtkBonus || 0) +
     (card.permanentAtkBoost || 0)
   );
 }

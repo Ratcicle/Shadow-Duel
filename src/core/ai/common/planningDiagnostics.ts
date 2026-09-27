@@ -23,6 +23,7 @@ type DiagnosticCounters =
   | Readonly<Record<string, number>>;
 
 interface PlanningDiagnosticCardInput {
+  _simUnknownDraw?: boolean;
   id?: PlanningCardSummary["id"] | undefined;
   instanceId?: string | number | null;
   _instanceId?: string | number | null;
@@ -33,6 +34,7 @@ interface PlanningDiagnosticCardInput {
   cardKind?: string | null | undefined;
   position?: string | null | undefined;
   isFacedown?: boolean | undefined;
+  fieldSlot?: number | null;
   atk?: unknown;
   def?: unknown;
   tempAtkBoost?: unknown;
@@ -184,8 +186,20 @@ function summarizeEquips(card: PlanningDiagnosticCardInput): string[] {
 
 function summarizeCard(
   card: PlanningDiagnosticCardLike,
+  { publicOnly = false, monsterZone = false }: { publicOnly?: boolean; monsterZone?: boolean } = {},
 ): PlanningCardSummary | null {
   if (!card) return null;
+  if (publicOnly && typeof card === "object" && card.isFacedown) {
+    // Only the card's public location survives. Reading identity or stats here
+    // would compare the runtime's secrets with the planner's opaque projection.
+    card = {
+      instanceId: card.instanceId ?? card._instanceId ?? card.uuid ?? null,
+      fieldSlot: card.fieldSlot ?? null,
+      position: card.position ?? null,
+      isFacedown: true,
+      cardKind: monsterZone ? "monster" : null,
+    };
+  }
   return {
     name: cardName(card) || "unknown",
     id: (card as PlanningDiagnosticCardInput).id ?? null,
@@ -194,6 +208,7 @@ function summarizeCard(
       (card as PlanningDiagnosticCardInput)._instanceId ||
       (card as PlanningDiagnosticCardInput).uuid ||
       null,
+    fieldSlot: (card as PlanningDiagnosticCardInput).fieldSlot ?? null,
     kind: (card as PlanningDiagnosticCardInput).cardKind || null,
     position: (card as PlanningDiagnosticCardInput).position || null,
     faceDown: !!(card as PlanningDiagnosticCardInput).isFacedown,
@@ -213,10 +228,10 @@ function summarizeCard(
 
 function summarizeZone(
   cards: readonly PlanningDiagnosticCardLike[] | null = [],
-  { sort = false }: { sort?: boolean } = {},
+  { sort = false, publicOnly = false, monsterZone = false }: { sort?: boolean; publicOnly?: boolean; monsterZone?: boolean } = {},
 ): PlanningCardSummary[] {
   const list = safeArray(cards)
-    .map(summarizeCard)
+    .map(card => summarizeCard(card, { publicOnly, monsterZone }))
     .filter(Boolean) as PlanningCardSummary[];
   if (sort) {
     list.sort((a, b) => {
@@ -232,28 +247,42 @@ function summarizeZone(
 
 function summarizeNameZone(
   cards: readonly PlanningDiagnosticCardLike[] | null = [],
+  { hideAll = false, hideFacedown = false }: { hideAll?: boolean; hideFacedown?: boolean } = {},
 ): string[] {
   return safeArray(cards)
-    .map((card) => cardName(card) || "unknown")
+    .map((card) => {
+      if (hideAll || (hideFacedown && typeof card === "object" && card.isFacedown)) {
+        const instanceId = typeof card === "object"
+          ? card.instanceId ?? card._instanceId ?? card.uuid
+          : null;
+        // Preserve counts and physical-card movements without exposing identity.
+        return instanceId == null ? "unknown" : `unknown:${instanceId}`;
+      }
+      return cardName(card) || "unknown";
+    })
     .sort();
 }
 
 function summarizePlayer(
   player: PlanningDiagnosticPlayerInput = {},
+  publicOnly = false,
 ): PlanningPlayerSummary {
+  const unknownHandCount = safeArray(player.hand).filter(card =>
+    typeof card === "object" && card._simUnknownDraw === true).length;
   return {
     id: player.id || null,
     lp: roundStat(player.lp),
     summonCount: roundStat(player.summonCount),
     additionalNormalSummons: roundStat(player.additionalNormalSummons),
-    hand: summarizeNameZone(player.hand),
+    hand: summarizeNameZone(player.hand, { hideAll: publicOnly }),
     handSize: safeArray(player.hand).length,
-    field: summarizeZone(player.field),
-    spellTrap: summarizeZone(player.spellTrap),
-    fieldSpell: summarizeCard(player.fieldSpell),
+    ...(unknownHandCount ? { unknownHandCount } : {}),
+    field: summarizeZone(player.field, { publicOnly, monsterZone: true }),
+    spellTrap: summarizeZone(player.spellTrap, { publicOnly }),
+    fieldSpell: summarizeCard(player.fieldSpell, { publicOnly }),
     graveyard: summarizeNameZone(player.graveyard),
     graveyardSize: safeArray(player.graveyard).length,
-    banished: summarizeNameZone(player.banished),
+    banished: summarizeNameZone(player.banished, { hideFacedown: publicOnly }),
     banishedSize: safeArray(player.banished).length,
     deckSize: safeArray(player.deck).length,
     extraDeckSize: safeArray(player.extraDeck).length,
@@ -313,6 +342,20 @@ export function fingerprintAction(
         : null,
     };
   }
+  if (action.type === "synchro") {
+    return {
+      type: action.type,
+      cardName: action.cardName || null,
+      synchroInstanceId: action.synchroInstanceId,
+      materialInstanceIds: action.materialInstanceIds.slice().sort((left, right) => {
+        const a = JSON.stringify(left);
+        const b = JSON.stringify(right);
+        return a < b ? -1 : a > b ? 1 : 0;
+      }),
+      position: action.position,
+      priority: Number.isFinite(Number(action.priority)) ? Number(action.priority) : null,
+    };
+  }
   const context = action.activationContext || {};
   const targetPreferences = context.targetPreferences || {};
   return {
@@ -351,7 +394,7 @@ export function summarizePlanningState(
     turn: stateOrGame?.turn || stateOrGame?.currentPlayer?.id || null,
     turnCounter: roundStat(stateOrGame?.turnCounter),
     bot: summarizePlayer(bot),
-    opponent: summarizePlayer(opponent),
+    opponent: summarizePlayer(opponent, true),
   };
 }
 
@@ -425,6 +468,7 @@ function equivalentCardExceptStatRepresentation(
   actual: PlanningCardSummary | null | undefined,
 ): boolean {
   if (!expected || !actual) return false;
+  if (expected.faceDown || actual.faceDown) return false;
   const expectedStable = statRepresentationStableCard(expected);
   const actualStable = statRepresentationStableCard(actual);
   return (
@@ -504,6 +548,25 @@ function compareCardZone(
   compareField(prefix, expected, actual, diffs, zoneDiffCategory(expected, actual));
 }
 
+function matchesRevealedHand(expected: Partial<PlanningPlayerSummary>, actual: Partial<PlanningPlayerSummary>): boolean {
+  const unknown = expected.unknownHandCount || 0;
+  if (!Number.isInteger(unknown) || unknown <= 0 || !expected.hand || !actual.hand ||
+      expected.hand.length !== actual.hand.length) return false;
+  const known = [...expected.hand];
+  for (let index = 0; index < unknown; index++) {
+    const marker = known.indexOf("unknown");
+    if (marker < 0) return false;
+    known.splice(marker, 1);
+  }
+  const remaining = [...actual.hand];
+  for (const name of known) {
+    const index = remaining.indexOf(name);
+    if (index < 0) return false;
+    remaining.splice(index, 1);
+  }
+  return remaining.length === unknown;
+}
+
 function comparePlayer(
   prefix: string,
   expected: Partial<PlanningPlayerSummary> = {},
@@ -512,7 +575,12 @@ function comparePlayer(
 ): void {
   compareField(`${prefix}.lp`, expected.lp, actual.lp, diffs);
   compareField(`${prefix}.summonCount`, expected.summonCount, actual.summonCount, diffs, "minor");
-  compareField(`${prefix}.hand`, expected.hand, actual.hand, diffs, "hand_deck_mismatch");
+  if (matchesRevealedHand(expected, actual)) {
+    diffs.push({ path: `${prefix}.hand`, severity: "minor", reason: "unknown_draw_revealed",
+      expected: expected.hand, actual: actual.hand });
+  } else {
+    compareField(`${prefix}.hand`, expected.hand, actual.hand, diffs, "hand_deck_mismatch");
+  }
   compareCardZone(`${prefix}.field`, expected.field, actual.field, diffs);
   compareField(`${prefix}.spellTrap`, expected.spellTrap, actual.spellTrap, diffs, "host_equip_mismatch");
   compareField(`${prefix}.fieldSpell`, expected.fieldSpell, actual.fieldSpell, diffs, "host_equip_mismatch");
@@ -589,6 +657,8 @@ function compactDiffValue(value: unknown): unknown {
       return {
         name: (value as PlanningCardSummary).name || null,
         id: (value as PlanningCardSummary).id ?? null,
+        instanceId: (value as PlanningCardSummary).instanceId ?? null,
+        fieldSlot: (value as PlanningCardSummary).fieldSlot ?? null,
         position: (value as PlanningCardSummary).position || null,
         faceDown: (value as PlanningCardSummary).faceDown ?? null,
         atk: (value as PlanningCardSummary).atk ?? null,

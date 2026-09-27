@@ -25,7 +25,10 @@ function fixture(): AiStateShape {
   const bot = player("bot");
   const opponent = player("player");
   for (const zone of ["hand", "field", "spellTrap", "deck", "graveyard", "extraDeck", "banished"] as const) {
-    for (const entry of opponent[zone]) entry.instanceId = required(entry.instanceId) + 100;
+    for (const entry of opponent[zone]) {
+      assert.equal(typeof entry.instanceId, "number");
+      entry.instanceId = Number(entry.instanceId) + 100;
+    }
   }
   required(opponent.fieldSpell).instanceId = 111;
   return { bot, player: opponent, phase: "main1", turn: "bot", turnCounter: 3, _isPerspectiveState: true };
@@ -191,6 +194,22 @@ test("replacement references outside zones also terminate at card identities", (
   assert.equal(fingerprint(structuredClone(state)), before);
   host.atk = 2000;
   assert.notEqual(fingerprint(state), before);
+});
+
+test("deferred player references use participant identity and reject unrelated metadata cycles", () => {
+  const state = fixture();
+  const payload = { sourcePlayer: state.bot };
+  Object.assign(state.bot, { game: state });
+  Object.assign(state.player, { game: state });
+  Object.assign(state, { delayedActions: [{ payload }] });
+  const before = fingerprint(state);
+  assert.equal(fingerprint(structuredClone(state)), before);
+  payload.sourcePlayer = state.player;
+  assert.notEqual(fingerprint(state), before);
+  const unregistered = { id: state.bot.id };
+  Object.assign(unregistered, { cycle: unregistered });
+  Reflect.set(payload, "sourcePlayer", unregistered);
+  assert.throws(() => fingerprint(state), /Cyclic non-card planning metadata/);
 });
 
 test("temporary control expiry, event uses and battle-pair links participate in identity", () => {

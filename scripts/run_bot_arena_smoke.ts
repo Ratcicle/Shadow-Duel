@@ -4,10 +4,12 @@ import BotArena from "../src/core/BotArena.js";
 import Game from "../src/core/Game.js";
 import type {
   ArenaCompletionStats,
+  ArenaDuelResult,
   ArenaSearchOptions,
 } from "../src/core/contracts/arena.js";
 
 interface SmokeOptions {
+  randomSeed: number | null;
   duels: number;
   speed: string;
   matchups: string[];
@@ -54,6 +56,7 @@ function ensureLocalStorage() {
 
 function parseArgs(argv = process.argv.slice(2)) {
   const options: SmokeOptions = {
+    randomSeed: null,
     duels: 3,
     speed: "instant",
     matchups: DEFAULT_MATCHUPS,
@@ -70,7 +73,14 @@ function parseArgs(argv = process.argv.slice(2)) {
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     const next = () => argv[++index];
-    if (arg === "--duels") options.duels = Number(next()) || options.duels;
+    if (arg === "--seed") {
+      const raw = next();
+      const seed = raw?.trim() ? Number(raw) : NaN;
+      if (!Number.isInteger(seed) || seed < 0 || seed > 0xffffffff) {
+        throw new RangeError("--seed must be an integer between 0 and 4294967295.");
+      }
+      options.randomSeed = seed;
+    } else if (arg === "--duels") options.duels = Number(next()) || options.duels;
     else if (arg === "--speed") options.speed = next() || options.speed;
     else if (arg === "--matchup")
       options.matchups = [next()].filter((value): value is string =>
@@ -149,6 +159,9 @@ function compactStrategicReport(report: StrategicReport | null) {
     failedActions: bot.failedActions,
     blockedActions: bot.blockedActions,
     noUsefulTurns: bot.noUsefulTurns,
+    decisionCount: bot.decisionCount,
+    decisionTimeMs: bot.decisionTimeMs,
+    avgDecisionTimeMs: bot.avgDecisionTimeMs,
     planning: compactPlanning(bot.planning),
   });
   return {
@@ -165,6 +178,7 @@ function compactStrategicReport(report: StrategicReport | null) {
     suspiciousPatterns: report.suspiciousPatterns,
     duels: (report.duels || []).map((duel) => ({
       duelNumber: duel.duelNumber,
+      seed: duel.seed,
       matchup: duel.matchup,
       winner: duel.winner,
       turns: duel.turns,
@@ -185,16 +199,17 @@ async function runMatchup(matchup: string, options: SmokeOptions) {
   const [seat1, seat2] = splitMatchup(matchup);
   const arena = new BotArena(Game, Bot);
   // BotArena normalizes the raw CLI mode strings against its supported modes.
-  arena.setSearchParams(plannerOptions(options) as ArenaSearchOptions);
+  arena.setSearchParams({ ...plannerOptions(options), randomSeed: options.randomSeed } as ArenaSearchOptions);
 
   let completion: ArenaCompletionStats | null = null;
+  const duels: ArenaDuelResult[] = [];
   await arena.startArena(
     seat1,
     seat2,
     options.duels,
     options.speed,
     false,
-    undefined,
+    progress => duels.push(progress.lastResult),
     (result) => {
       completion = result;
     },
@@ -205,6 +220,7 @@ async function runMatchup(matchup: string, options: SmokeOptions) {
     matchup,
     seat1,
     seat2,
+    duels,
     completion: compactCompletion(completion),
     strategicReport: compactStrategicReport(strategicReport),
   };
@@ -228,6 +244,7 @@ async function main() {
       generatedAt: new Date().toISOString(),
       speed: options.speed,
       duelsPerMatchup: options.duels,
+      ...(options.randomSeed === null ? {} : { randomSeed: options.randomSeed }),
       planner: plannerOptions(options),
       results,
     };

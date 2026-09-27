@@ -51,5 +51,5 @@ test("playable presets expose their canonical identity without exposing mutable 
     preset.avatarPortrait.crop.x = -1;
     assert.ok(getBotPresetPresentation(preset.id)!.avatarPortrait.crop.x >= 0);
   }
-  assert.equal(getAvailableBotPresets().length, 8, "visual data must not silently add an unsupported AI");
+  assert.equal(getAvailableBotPresets().length, 9, "playable presets include the initial Tech-Zero deck");
 });

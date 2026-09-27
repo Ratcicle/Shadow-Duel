@@ -11,6 +11,7 @@ import ArcanistStrategy from "./ArcanistStrategy.js";
 import MirageboundStrategy from "./MirageboundStrategy.js";
 import BloomrotStrategy from "./BloomrotStrategy.js";
 import BurningWestStrategy from "./BurningWestStrategy.js";
+import TechZeroStrategy from "./TechZeroStrategy.js";
 
 const registry = new Map<string, RegisteredStrategyConstructor>();
 
@@ -41,3 +42,4 @@ registerStrategy("arcanist", ArcanistStrategy);
 registerStrategy("miragebound", MirageboundStrategy);
 registerStrategy("bloomrot", BloomrotStrategy);
 registerStrategy("burningwest", BurningWestStrategy);
+registerStrategy("techzero", TechZeroStrategy);

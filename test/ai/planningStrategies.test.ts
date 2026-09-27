@@ -35,7 +35,8 @@ function snapshot(): GameTreeSimulationGameState {
 
 test("every registered planning strategy is freshly bound to its own snapshot", () => {
   const ids = getRegisteredStrategyIds();
-  assert.equal(ids.length, 8);
+  assert.equal(ids.length, 9);
+  assert.ok(ids.includes("techzero"));
   for (const id of ids) {
     const model = getPlanningModel(id);
     const left = snapshot();

@@ -1,6 +1,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // src/core/ai/BeamSearch.js
-import { createPlanningCopy } from "./common/planningCopy.js";
+import { createPlanningCopy, projectRuntimeEffectUsage } from "./common/planningCopy.js";
+import { isSimulatedMainPhaseActionSupported } from "./common/simulation.js";
 import { resolvePerspectivePlayers } from "./StrategyUtils.js";
 import { filterAiActionsForCurrentPhase } from "./common/phaseTiming.js";
 import {
@@ -93,8 +94,8 @@ function filterValidHandActions(
   hand: readonly SearchCardInput[] | null | undefined,
 ): AIAction[] {
   if (!Array.isArray(actions)) return [];
-  if (!Array.isArray(hand)) return actions.slice();
-  return actions.filter((action) => actionIsValidForHand(action, hand));
+  return actions.filter((action) => isSimulatedMainPhaseActionSupported(action) &&
+    (!Array.isArray(hand) || actionIsValidForHand(action, hand)));
 }
 // Beam search lookahead system — shallow tree search (2–3 plies)
 // Com travas: depth fixo, budget de nós, anti-repetição
@@ -112,6 +113,8 @@ export async function beamSearchTurn(
   strategy: SearchStrategyInput,
   options: BeamSearchOptions = {},
 ): Promise<BeamSearchResult | null> {
+  if (("_simUnsupportedActions" in game && game._simUnsupportedActions?.length) ||
+      ("_simRequiresReplan" in game && game._simRequiresReplan)) return null;
   const {
     beamWidth = 2,
     maxDepth = 2,
@@ -146,7 +149,7 @@ export async function beamSearchTurn(
    * Clona estado do jogo (shallow, mas funcional para simulação).
    */
   function cloneGameState(gameState: AIState): BeamPerspectiveGameState {
-    const { cloneCardForSim, copyFields } = createPlanningCopy();
+    const { cloneCardForSim, copyFields, registerPlayerCopy } = createPlanningCopy();
     const clonePlayer = (
       p: SearchPlayerInput | null | undefined,
     ): SimulatedPlayerState => {
@@ -173,6 +176,7 @@ export async function beamSearchTurn(
         effectActivationRestrictions: (safe.effectActivationRestrictions || []) as NonNullable<SimulatedPlayerState["effectActivationRestrictions"]>,
         controllerType: safe.controllerType,
       };
+      registerPlayerCopy(safe, clone);
       copyFields(safe, clone, PLANNING_PLAYER_FIELDS);
       return clone;
     };
@@ -195,7 +199,8 @@ export async function beamSearchTurn(
       _gameRef: gameState._gameRef || gameState, // Referência ao game original
     } as BeamPerspectiveGameState;
     copyFields(gameState, clone, PLANNING_STATE_FIELDS.filter(key => key !== "_isPerspectiveState"));
-    copyFields(gameState, clone, ["_simLuminarch"]);
+    copyFields(gameState, clone, ["_simLuminarch", "_simUnsupportedActions"]);
+    projectRuntimeEffectUsage(gameState, clone);
     return clone;
   }
 
@@ -228,7 +233,7 @@ export async function beamSearchTurn(
     currentSequence: AIAction[] = [],
   ): Promise<BeamBranch> {
     // Trava 1: Depth limit
-    if (depth >= maxDepth) {
+    if (depth >= maxDepth || currentState._simRequiresReplan) {
       const score = evaluateState(currentState, currentState.bot);
       return { sequence: currentSequence, score, finalState: currentState };
     }
@@ -249,7 +254,7 @@ export async function beamSearchTurn(
       );
     }
     if (!candidates || candidates.length === 0) {
-      candidates = strategy.generateMainPhaseActions(currentState);
+      candidates = strategy.generateMainPhaseActions(currentState).filter(isSimulatedMainPhaseActionSupported);
     }
     candidates = filterAiActionsForCurrentPhase(candidates, {
       state: currentState,
@@ -273,6 +278,7 @@ export async function beamSearchTurn(
       depth === 0 ? Math.min(beamWidth + 1, candidates.length) : beamWidth;
     const topCandidates = candidates.slice(0, effectiveBeamWidth);
     const branches: BeamBranch[] = [];
+    let completeFallback: AIAction | undefined;
 
     for (const action of topCandidates) {
       // Simular ação
@@ -281,6 +287,8 @@ export async function beamSearchTurn(
 
       simulateAction(newState, action);
       nodesEvaluated++;
+      if (newState._simUnsupportedActions?.length) continue;
+      completeFallback ??= action;
 
       // Trava 3: Anti-repetição
       const stateAfterAction = fingerprintPlanningState(newState);
@@ -321,7 +329,7 @@ export async function beamSearchTurn(
     if (branches.length === 0) {
       const score = evaluateState(currentState, currentState.bot);
       // BUGFIX: Se temos candidatos mas nenhum branch válido, usar primeira ação como fallback
-      const firstCandidate = topCandidates[0];
+      const firstCandidate = completeFallback;
       if (firstCandidate && currentSequence.length === 0) {
         return {
           sequence: [firstCandidate],
@@ -343,35 +351,12 @@ export async function beamSearchTurn(
 
   // Início da busca
   const initialState = cloneGameState(game);
-  const baseScore = evaluateState(initialState, initialState.bot);
   seenStates.add(fingerprintPlanningState(initialState));
 
   const result = await search(initialState, 0, []);
 
-  // BUGFIX: Se não encontrou sequência mas temos candidatos, usar primeira ação como último recurso
+  // An absent sequence cannot authorize an unmodeled fallback action.
   if (!result || !result.sequence || result.sequence.length === 0) {
-    // BUGFIX: Usar preGeneratedActions primeiro, depois regenerar como último recurso
-    const handForValidation =
-      perspectiveBot?.hand || game?.bot?.hand || game?.player?.hand || [];
-    let fallbackCandidates = filterValidHandActions(
-      preGeneratedActions,
-      handForValidation
-    );
-    if (!fallbackCandidates.length) {
-      fallbackCandidates = filterValidHandActions(
-        strategy.generateMainPhaseActions(game),
-        handForValidation
-      );
-    }
-    const fallbackAction = fallbackCandidates[0];
-    if (fallbackAction) {
-      return {
-        action: fallbackAction,
-        score: baseScore,
-        sequence: [fallbackAction],
-        nodesEvaluated,
-      };
-    }
     return null;
   }
 
@@ -399,6 +384,8 @@ export async function greedySearchWithEvalV2(
   strategy: SearchStrategyInput,
   options: BeamSearchOptions = {},
 ): Promise<GreedySearchResult | null> {
+  if (("_simUnsupportedActions" in game && game._simUnsupportedActions?.length) ||
+      ("_simRequiresReplan" in game && game._simRequiresReplan)) return null;
   const { useV2Evaluation = true, preGeneratedActions = null } = options;
   const perspectiveBot = strategy?.bot || (strategy?.id ? strategy : null);
   const resolveOpponent = (state: AIState): SimulatedPlayerState | null => {
@@ -417,7 +404,7 @@ export async function greedySearchWithEvalV2(
   }
 
   function cloneGameState(gameState: AIState): BeamPerspectiveGameState {
-    const { cloneCardForSim, copyFields } = createPlanningCopy();
+    const { cloneCardForSim, copyFields, registerPlayerCopy } = createPlanningCopy();
     const clonePlayer = (
       p: SearchPlayerInput | null | undefined,
     ): SimulatedPlayerState => {
@@ -444,6 +431,7 @@ export async function greedySearchWithEvalV2(
         effectActivationRestrictions: (safe.effectActivationRestrictions || []) as NonNullable<SimulatedPlayerState["effectActivationRestrictions"]>,
         controllerType: safe.controllerType,
       };
+      registerPlayerCopy(safe, clone);
       copyFields(safe, clone, PLANNING_PLAYER_FIELDS);
       return clone;
     };
@@ -466,7 +454,8 @@ export async function greedySearchWithEvalV2(
       _gameRef: gameState._gameRef || gameState,
     } as BeamPerspectiveGameState;
     copyFields(gameState, clone, PLANNING_STATE_FIELDS.filter(key => key !== "_isPerspectiveState"));
-    copyFields(gameState, clone, ["_simLuminarch"]);
+    copyFields(gameState, clone, ["_simLuminarch", "_simUnsupportedActions"]);
+    projectRuntimeEffectUsage(gameState, clone);
     return clone;
   }
 
@@ -496,7 +485,7 @@ export async function greedySearchWithEvalV2(
   }
 
   const baseScore = evaluateState(game, (perspectiveBot || strategy.bot) as SimulatedPlayerState);
-  let bestAction = candidates[0]; // BUGFIX: Inicializar com primeira ação como fallback
+  let bestAction: AIAction | undefined;
   let bestScore = baseScore;
 
   for (const action of candidates) {
@@ -504,10 +493,11 @@ export async function greedySearchWithEvalV2(
     if (typeof strategy.simulateMainPhaseAction === "function") {
       strategy.simulateMainPhaseAction(simState, action);
     }
+    if (simState._simUnsupportedActions?.length) continue;
     const score = evaluateState(simState, simState.bot);
 
     // BUGFIX: Usar >= em vez de > para sempre ter uma ação escolhida
-    if (score >= bestScore) {
+    if (!bestAction || score >= bestScore) {
       bestScore = score;
       bestAction = action;
     }

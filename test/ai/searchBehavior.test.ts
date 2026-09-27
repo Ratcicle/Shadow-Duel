@@ -12,6 +12,8 @@ import {
   shouldUseGameTreeSearch,
 } from "../../src/core/ai/GameTreeSearch.js";
 import { turnLineSearch } from "../../src/core/ai/TurnLineSearch.js";
+import type { AIAction, AIState, TurnLineSearchCompletion } from "../../src/core/contracts/ai.js";
+import type { TurnLineSimulationGameState } from "../../src/core/contracts/aiState.js";
 
 interface SearchAction {
   type: "position_change";
@@ -516,3 +518,181 @@ test("turn-line diagnostics preserve deterministic action fingerprints", async (
     first.diagnostics.sequenceFingerprints,
   );
 });
+
+test("turn-line reports why an empty search ended without inventing an action", async () => {
+  const reports: TurnLineSearchCompletion[] = [];
+  const game = makeGame();
+  const result = await turnLineSearch(game, {
+    bot: game.bot,
+    generateMainPhaseActions: () => [],
+    simulateMainPhaseAction() {},
+  }, { onComplete: report => reports.push(report) });
+  assert.equal(result, null);
+  assert.deepEqual(reports, [{
+    terminationReason: "no_candidates", nodesEvaluated: 0,
+    unsupportedBranches: 0, repeatedStates: 0,
+  }]);
+});
+
+test("turn-line preserves termination metrics when the strategy describes the line", async () => {
+  const game = makeGame();
+  const reports: TurnLineSearchCompletion[] = [];
+  const result = await turnLineSearch(game, {
+    bot: game.bot,
+    generateMainPhaseActions: () => SEARCH_ACTIONS,
+    simulateMainPhaseAction(state: MutableScoreState) { state.bot.lp += 1; },
+    evaluateBoardV2: (state: MutableScoreState) => state.bot.lp,
+    describePlannedLine: () => "Useful resource preserved",
+  }, { maxDepth: 5, nodeBudget: 2, onComplete: report => reports.push(report) });
+  assert.ok(result);
+  assert.equal(result.reason, "Useful resource preserved");
+  assert.equal(result.completion.terminationReason, "node_budget");
+  assert.equal(result.nodesEvaluated, 2);
+  assert.deepEqual(reports, [result.completion]);
+});
+
+test("turn-line ends at an unknown draw and never generates its continuation", async () => {
+  const game = makeGame();
+  let generations = 0;
+  const result = await turnLineSearch(game, {
+    bot: game.bot,
+    generateMainPhaseActions() { generations++; return SEARCH_ACTIONS.slice(0, 1); },
+    simulateMainPhaseAction(state: TurnLineSimulationGameState) {
+      state.bot.lp += 1;
+      state._simRequiresReplan = true;
+    },
+    evaluateBoardV2: (state: MutableScoreState) => state.bot.lp,
+  }, { maxDepth: 8 });
+  assert.ok(result);
+  assert.equal(result.completion.terminationReason, "requires_replan");
+  assert.equal(result.sequence.length, 1);
+  assert.equal(generations, 1);
+});
+
+test("turn-line rejects unsupported rewards and reports the exhausted branches", async () => {
+  const game = makeGame();
+  const reports: TurnLineSearchCompletion[] = [];
+  const result = await turnLineSearch(game, {
+    bot: game.bot,
+    generateMainPhaseActions: () => SEARCH_ACTIONS.slice(0, 1),
+    simulateMainPhaseAction(state: TurnLineSimulationGameState) {
+      state.bot.lp += 99999;
+      state._simUnsupportedActions = ["unmodeled reward"];
+    },
+    evaluateBoardV2: (state: MutableScoreState) => state.bot.lp,
+  }, { onComplete: report => reports.push(report) });
+  assert.equal(result, null);
+  assert.deepEqual(reports, [{ terminationReason: "unsupported_branches", nodesEvaluated: 1,
+    unsupportedBranches: 1, repeatedStates: 0 }]);
+});
+
+test("turn-line stops a recycling cycle without repeating its milestone reward", async () => {
+  const game = makeGame();
+  const result = await turnLineSearch(game, {
+    bot: game.bot,
+    generateMainPhaseActions: () => SEARCH_ACTIONS.slice(0, 1),
+    simulateMainPhaseAction(state: MutableScoreState) { state.bot.lp = state.bot.lp === 8000 ? 8001 : 8000; },
+    evaluateBoardV2: (state: MutableScoreState) => state.bot.lp - 8000,
+    scoreLineMilestones: () => ({ scoreDelta: 10, milestones: [] }),
+  }, { maxDepth: 20, nodeBudget: 30 });
+  assert.ok(result);
+  assert.equal(result.sequence.length, 1);
+  assert.equal(result.score, 11);
+  assert.equal(result.completion.terminationReason, "no_state_changing_branches");
+  assert.equal(result.completion.repeatedStates, 1);
+});
+
+test("turn-line can opt into stopping at a stronger intermediate board", async () => {
+  const game = makeGame();
+  const strategy = {
+    bot: game.bot,
+    generateMainPhaseActions: () => SEARCH_ACTIONS.slice(0, 1),
+    simulateMainPhaseAction(state: MutableScoreState) { state.bot.lp += state.bot.lp === 8000 ? 10 : -2; },
+    evaluateBoardV2: (state: MutableScoreState) => state.bot.lp,
+  };
+  const result = await turnLineSearch(game, strategy, { maxDepth: 3, allowEarlyStop: true });
+  assert.ok(result);
+  assert.equal(result.sequence.length, 1);
+  assert.equal(result.score, 8010);
+  assert.equal(result.completion.terminationReason, "preferred_terminal");
+  const legacy = await turnLineSearch(game, strategy, { maxDepth: 3 });
+  assert.equal(legacy?.sequence.length, 3, "other profiles retain their existing search behavior");
+});
+
+test("turn-line explicitly chooses to preserve the current board over every worse action", async () => {
+  const game = makeGame();
+  const reports: TurnLineSearchCompletion[] = [];
+  const result = await turnLineSearch(game, {
+    bot: game.bot,
+    generateMainPhaseActions: () => SEARCH_ACTIONS,
+    simulateMainPhaseAction(state: MutableScoreState) { state.bot.lp -= 10; },
+    evaluateBoardV2: (state: MutableScoreState) => state.bot.lp,
+  }, { maxDepth: 2, allowEarlyStop: true, onComplete: report => reports.push(report) });
+  assert.equal(result, null);
+  assert.equal(reports[0]?.terminationReason, "preferred_terminal");
+});
+
+test("turn-line candidate policy retains a necessary low-priority setup before beam truncation", async () => {
+  const game = makeGame();
+  const high: SearchAction = { type: "position_change", tag: "immediate", priority: 100, toPosition: "attack" };
+  const low: SearchAction = { type: "position_change", tag: "setup", priority: 1, toPosition: "attack" };
+  const finish: SearchAction = { type: "position_change", tag: "finish", priority: 10, toPosition: "attack" };
+  const calls: { count: number; limit: number; lp: number }[] = [];
+  const strategy = {
+    bot: game.bot,
+    generateMainPhaseActions(state: MutableScoreState) {
+      return state.bot.lp === 8000 ? [high, low] : state.bot.lp === 7999 ? [finish] : [];
+    },
+    simulateMainPhaseAction(state: MutableScoreState, action: SearchAction) {
+      state.bot.lp += action.tag === "setup" ? -1 : action.tag === "finish" ? 20 : 2;
+    },
+    evaluateBoardV2: (state: MutableScoreState) => state.bot.lp - 8000,
+  };
+  const options = { beamWidth: 1, candidateLimit: 1, maxDepth: 3, nodeBudget: 3 };
+  const legacy = await turnLineSearch(game, strategy, options);
+  assert.equal(legacy?.action, high);
+  const planned = await turnLineSearch(game, {
+    ...strategy,
+    selectPlanningCandidates(actions: readonly AIAction[], state: AIState, limit: number) {
+      calls.push({ count: actions.length, limit, lp: state.bot?.lp || 0 });
+      return actions.includes(low) ? [low] : [...actions];
+    },
+  }, options);
+  assert.ok(planned);
+  assert.equal(planned.action, low);
+  assert.deepEqual(planned.sequence, [low, finish]);
+  assert.equal(planned.score, 19);
+  assert.equal(planned.nodesEvaluated, 2);
+  assert.deepEqual(calls, [{ count: 2, limit: 1, lp: 8000 }, { count: 1, limit: 1, lp: 7999 }]);
+});
+
+for (const limits of [{ beamWidth: 1, candidateLimit: 3 }, { beamWidth: 3, candidateLimit: 1 }]) {
+  test(`turn-line bounds candidate policy output and ignores injected or repeated actions (${JSON.stringify(limits)})`, async () => {
+    const game = makeGame();
+    const injected: SearchAction = { type: "position_change", tag: "not-legal", priority: 999, toPosition: "attack" };
+    const simulated: string[] = [];
+    let policyCalls = 0;
+    const result = await turnLineSearch(game, {
+      bot: game.bot,
+      generateMainPhaseActions: () => SEARCH_ACTIONS,
+      selectPlanningCandidates(actions: readonly AIAction[], _state: AIState, limit: number) {
+        policyCalls++;
+        assert.equal(limit, 1);
+        const first = actions[0];
+        assert.ok(first);
+        return [injected, first, first, ...actions];
+      },
+      simulateMainPhaseAction(state: MutableScoreState, action: SearchAction) {
+        simulated.push(action.tag);
+        state.bot.lp++;
+      },
+      evaluateBoardV2: (state: MutableScoreState) => state.bot.lp,
+    }, { ...limits, maxDepth: 10, nodeBudget: 1 });
+    assert.ok(result);
+    assert.equal(result.action, SEARCH_ACTIONS[0]);
+    assert.equal(policyCalls, 1);
+    assert.equal(result.nodesEvaluated, 1);
+    assert.equal(result.completion.terminationReason, "node_budget");
+    assert.deepEqual(simulated, ["first", "first"], "only one branch plus first-step diagnostics is simulated");
+  });
+}

@@ -170,9 +170,7 @@ function isUnderPressure(analysis: BloomrotAnalysis = {}) {
     (analysis.lp || analysis.player?.lp || 8000) <= 3500 ||
     opponentMonsters.some((card) => {
       const atk =
-        Number(card?.atk || 0) +
-        Number(card?.tempAtkBoost || 0) +
-        Number(card?.equipAtkBonus || 0);
+        Number(card?.atk || 0);
       return atk >= 2200;
     })
   );

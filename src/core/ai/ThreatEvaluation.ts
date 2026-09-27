@@ -47,11 +47,11 @@ export function calculateThreatScore(
 
   // 1. BASE STATS
   const atk =
-    (card.atk || 0) + (card.tempAtkBoost || 0) + (card.equipAtkBonus || 0);
+    (card.atk || 0);
   // 🎭 REGRA: Não pode ver DEF real de facedown (usar estimativa)
   const def = card.isFacedown
     ? 1500
-    : (card.def || 0) + (card.tempDefBoost || 0) + (card.equipDefBonus || 0);
+    : (card.def || 0);
   const stat = card.position === "defense" ? def : atk;
 
   score += stat / 1000; // 2000 ATK = +2.0 score
@@ -191,9 +191,9 @@ export function calculateResourceValue(
   let value = 0;
 
   // Base stats
-  const atk = (card.atk || 0) + (card.tempAtkBoost || 0);
+  const atk = (card.atk || 0);
   // 🎭 REGRA: Não pode ver DEF real de facedown
-  const def = card.isFacedown ? 1500 : (card.def || 0) + (card.tempDefBoost || 0);
+  const def = card.isFacedown ? 1500 : (card.def || 0);
   value += Math.max(atk, def) / 1000;
   value += (card.level || 0) * 0.1;
 
@@ -277,7 +277,7 @@ export function estimateTurnsToKill(
   if (card.position !== "attack") return Infinity;
 
   const atk =
-    (card.atk || 0) + (card.tempAtkBoost || 0) + (card.equipAtkBonus || 0);
+    (card.atk || 0);
   if (atk <= 0) return Infinity;
 
   const damagePerTurn = atk * getMaxAttacks(card, owner);
@@ -304,7 +304,7 @@ export function canOpponentLethal(
     if (card.position !== "attack") continue;
 
     const atk =
-      (card.atk || 0) + (card.tempAtkBoost || 0) + (card.equipAtkBonus || 0);
+      (card.atk || 0);
 
     totalDamage += atk * getMaxAttacks(card, opponent);
   }

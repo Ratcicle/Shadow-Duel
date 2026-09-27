@@ -1,4 +1,6 @@
 import { cardMatchesKind, getCardComparableAttribute } from "../../Card.js";
+import { isAI } from "../../Player.js";
+import { resolveExactInstanceSelection } from "../../AutoSelector.js";
 import { getBaseLpCost } from "../costs/lpCost.js";
 import { hasSynchroSummonPreviewCandidate } from "../../actionHandlers/summon/synchroEffects.js";
 import { mergeCanonicalSelections } from "../../game/selection/contract.js";
@@ -1793,7 +1795,10 @@ function hasSpecialSummonCandidate(
   const zoneCards = sourceOwners.flatMap((owner) =>
     zoneNames.flatMap((zoneName) => getPreviewZoneCards(owner, zoneName)),
   );
-  if (zoneCards.length === 0) return false;
+  const plannedIds = isAI(player) ? ctx.activationContext?.decisions?.specialSummons?.[
+    ctx.effect?.id || action.type
+  ] : undefined;
+  if (zoneCards.length === 0 && plannedIds === undefined) return false;
 
   if (action.requireSource) {
     return source ? zoneCards.includes(source) : false;
@@ -1837,6 +1842,13 @@ function hasSpecialSummonCandidate(
   const min = Number(
     typeof action.count === "object" ? (action.count.min ?? 1) : 1,
   );
+  if (plannedIds !== undefined) {
+    const max = Math.min(typeof action.count === "object" ? action.count.max ?? 1 : 1,
+      5 - (destinationPlayer?.field.length || 0) + Number(action.fieldSlotsFreedBeforeSummon || 0));
+    const selected = resolveExactInstanceSelection(candidates, plannedIds, { min, max,
+      revalidation: ctx.activationContext?.decisions?.specialSummonRevalidation?.[ctx.effect?.id || action.type] });
+    return selected !== null && (action.distinctNames !== true || countDistinctPreviewNames(selected) === selected.length);
+  }
   const requiredCount = Number.isFinite(min) && min > 0 ? min : 1;
   const availableCount =
     action.distinctNames === true
@@ -1947,7 +1959,11 @@ export function checkActionPreviewRequirements(
       const cases: readonly ActionCase[] = Array.isArray(action.cases)
         ? action.cases
         : [];
+      const plannedCase = isAI(player) ? ctx.activationContext?.decisions?.cases?.[
+        action.effectChoiceKey || action.requirementId || "action_case_choice"
+      ] ?? ctx.activationContext?.decisions?.cases?.[action.requirementId || "action_case_choice"] : undefined;
       const hasAllowedCase = cases.some((caseEntry) =>
+        (plannedCase === undefined || (caseEntry.id || caseEntry.key) === plannedCase) &&
         isChoiceCaseAllowedInPreview(this, caseEntry, ctx),
       );
       if (!hasAllowedCase) {
@@ -2139,8 +2155,12 @@ export function checkActionPreviewRequirements(
         typeof count === "object" ? count.min || 0 : Number(count || 0),
         0,
       );
-      if (min > 0) {
-        const hasCandidate = zone.some((card) => {
+      const rawSelectionId: unknown = Reflect.get(action, "selectionId");
+      const decisionKey = typeof rawSelectionId === "string" && rawSelectionId
+        ? rawSelectionId : `${ctx.effect?.id || action.type}_selection`;
+      const plannedIds = isAI(player) ? ctx.activationContext?.decisions?.selections?.[decisionKey] : undefined;
+      if (min > 0 || plannedIds !== undefined) {
+        const candidates = zone.filter((card) => {
           if (!card) return false;
           if (typeof this?.cardMatchesFilters === "function") {
             if (!this.cardMatchesFilters(card, filters)) return false;
@@ -2166,7 +2186,8 @@ export function checkActionPreviewRequirements(
           }
           return true;
         });
-        if (!hasCandidate) {
+        const max = typeof count === "object" ? count.max ?? min : Number(count);
+        if (plannedIds !== undefined ? !resolveExactInstanceSelection(candidates, plannedIds, { min, max }) : candidates.length < min) {
           return {
             ok: false,
             reason: `No valid cards in ${sourceZone} matching filters.`,
@@ -2224,7 +2245,7 @@ export function checkActionPreviewRequirements(
         return { ok: false, reason: "Field is full." };
       }
       if (
-        !optionalSummon &&
+        (!optionalSummon || (isAI(player) && ctx.activationContext?.decisions?.specialSummons?.[ctx.effect?.id || action.type] !== undefined)) &&
         (action.type === "special_summon_from_zone" ||
           action.type === "special_summon_matching_level") &&
         !hasSpecialSummonCandidate(this, action, previewCtx)

@@ -1,11 +1,12 @@
 import type { GameCard } from "../../contracts/cards.js";
-import type { SimulatedCardState } from "../../contracts/aiState.js";
+import type { AiCardInput, SimulatedCardState } from "../../contracts/aiState.js";
 import type {
   CardFilter,
   EffectZone,
   OneOrMany,
 } from "../../contracts/effects.js";
 import type { SummonMethod } from "../../contracts/summon.js";
+import { markPlanningUnknownCardRead } from "./planningExecution.js";
 
 type LiveFilterableCard = Partial<Omit<GameCard, "equips">> & {
   _instanceId?: number | string | null;
@@ -14,7 +15,8 @@ type LiveFilterableCard = Partial<Omit<GameCard, "equips">> & {
   archetypes?: readonly string[];
   equips?: readonly FilterableCard[];
 };
-export type FilterableCard = LiveFilterableCard | SimulatedCardState;
+type ReadFilterableCard = Omit<LiveFilterableCard, keyof AiCardInput> & AiCardInput;
+export type FilterableCard = LiveFilterableCard | SimulatedCardState | ReadFilterableCard;
 
 export type AiCardFilter = Omit<CardFilter, "position" | "cardKind" | "archetype" | "archetypes" | "cardName" | "name" | "minLevel" | "maxLevel" | "minAtk" | "maxAtk" | "subtype"> & {
   readonly cardKind?: CardFilter["cardKind"] | undefined;
@@ -187,6 +189,15 @@ function matchesSentToGraveMaterial(
   return true;
 }
 
+// These fields only use public placement/identity or configure the selection.
+// Other populated filters may depend on attributes omitted from an opaque card.
+const PUBLIC_CARD_FILTER_FIELDS = new Set([
+  "filters", "zone", "zones", "owner", "count", "optional", "autoSelect", "intent",
+  "minAtResolution", "countFromSelectionRef", "requireFaceup", "faceup", "facedown", "position",
+  "excludeSelf", "requireThisCard", "excludeSource", "excludeInstanceId", "excludeInstanceIds",
+  "excludeCardInstanceIds", "excludeCards", "currentTurn", "turnCounter", "gameTurn",
+]);
+
 export function cardMatchesFilter(
   card: FilterableCard | null | undefined,
   filter: AiCardFilter = {},
@@ -198,6 +209,15 @@ export function cardMatchesFilter(
 
   for (const current of checks) {
     if (!current) continue;
+    if (current.requireFaceup && card.isFacedown) return false;
+    if (current.facedown === true && card.isFacedown !== true) return false;
+    if (current.position && current.position !== "any" && card.position !== current.position) return false;
+    if ("_simUnknownCard" in card && card._simUnknownCard &&
+      Object.entries(current).some(([key, value]) => value !== undefined && value !== null &&
+        !(Array.isArray(value) && value.length === 0) &&
+        (key === "cardKind" ? !card.cardKind : !PUBLIC_CARD_FILTER_FIELDS.has(key)))) {
+      markPlanningUnknownCardRead(card);
+    }
     if (current.cardKind && !matchesOne(card.cardKind, current.cardKind)) {
       return false;
     }
@@ -281,15 +301,6 @@ export function cardMatchesFilter(
       !asArray<EffectZone | null>(summonedFromZoneFilter).includes(
         card.lastSummonedFromZone || null,
       )
-    ) {
-      return false;
-    }
-    if (current.requireFaceup && card.isFacedown) return false;
-    if (current.facedown === true && card.isFacedown !== true) return false;
-    if (
-      current.position &&
-      current.position !== "any" &&
-      card.position !== current.position
     ) {
       return false;
     }

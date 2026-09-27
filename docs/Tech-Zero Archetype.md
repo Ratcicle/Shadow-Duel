@@ -277,6 +277,11 @@ Magia Normal.
 
 ## Deck Jogável Sugerido (20 + 10)
 
+Esta é a sugestão geral do catálogo. O preset do bot usa a lista específica de
+20 + 10 cartas definida em [Bot Tech-Zero — estratégia e combos](Bot%20Tech-Zero%20-%20Estrat%C3%A9gia%20e%20Combos.md),
+com 2 Iron Raptor, 2 Prism Activator, 1 Pulse Soldier, 2 Assembly Line,
+2 Scrapyard e 1 Court of the Dead.
+
 Main Deck legal com todas as cartas Tech-Zero incluidas pelo menos 1 vez.
 
 ### Main Deck (20)

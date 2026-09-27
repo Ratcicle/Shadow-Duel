@@ -55,6 +55,76 @@ type LegacyTemporaryEventAction = SimulatedActionHandlerContext<
 
 type ChosenCase = ActionCase | string | number | null | undefined;
 
+export function applyRegisterSynchroMaterialFollowup(
+  ctx: SimulatedActionHandlerContext<"register_synchro_material_followup">,
+): void {
+  const { action, state, self, options } = ctx;
+  const source = options.sourceCard;
+  const context = options.actionContext || options.activationContext?.actionContext;
+  const synchroSummonContextId = action.synchroSummonContextId || context?.synchroSummonContextId;
+  if (!source || !synchroSummonContextId) {
+    state._simUnsupportedActions ??= [];
+    state._simUnsupportedActions.push(action.type);
+    return;
+  }
+  if (action.actions.length === 0) return;
+  state._simGeneratedInstanceCounter = (state._simGeneratedInstanceCounter || 0) + 1;
+  state.pendingSynchroMaterialFollowups ??= [];
+  state.pendingSynchroMaterialFollowups.push({
+    id: action.uniqueKey || `sim_synchro_followup_${state._simGeneratedInstanceCounter}`,
+    type: "synchro_material_followup", synchroSummonContextId, ownerId: self.id,
+    source, sourceName: action.sourceName || source.name || null,
+    sourceCardId: source.id ?? null, sourceInstanceId: getCardInstanceId(source),
+    sourceEffectId: options.effect?.id || null, actions: action.actions,
+  });
+}
+
+export function applyScheduleSpecialSummon(
+  ctx: SimulatedActionHandlerContext<"schedule_special_summon">,
+): void {
+  const { action, state, self, opponent, options, selections } = ctx;
+  const reference = action.cardRef || action.targetRef || "self";
+  const card = reference === "self" || reference === "source" ? options.sourceCard :
+    resolveTargetsForAction({ targetRef: reference }, selections || {}, options, opponent)[0];
+  if (!card) {
+    state._simUnsupportedActions ??= [];
+    state._simUnsupportedActions.push(action.type);
+    return;
+  }
+  const owner = action.owner === "opponent" || action.summonPlayer === "opponent" ? opponent : self;
+  const trigger = action.triggerPlayer || action.player || "current";
+  const triggerPlayer = trigger === "current" ? state.turn :
+    trigger === "self" ? self.id : trigger === "opponent" ? opponent.id : trigger;
+  const fromZone = action.fromZone || action.zone || "graveyard";
+  if (!triggerPlayer || typeof fromZone !== "string" || action.position === "any") {
+    state._simUnsupportedActions ??= [];
+    state._simUnsupportedActions.push(action.type);
+    return;
+  }
+  state._simGeneratedInstanceCounter = (state._simGeneratedInstanceCounter || 0) + 1;
+  state.delayedActions ??= [];
+  state.delayedActions.push({
+    id: `sim_delayed_action_${state._simGeneratedInstanceCounter}`, actionType: "delayed_summon",
+    triggerCondition: { phase: action.phase || action.returnPhase || "end", player: triggerPlayer },
+    payload: { summons: [{
+      card, owner: owner.id, placementActorId: self.id, fromZone,
+      position: action.position, statusesOnSummon: action.statusesOnSummon || null,
+      summonMethod: action.summonMethod || "special", summonProcedure: action.summonProcedure || null,
+    }] },
+    scheduledTurn: state.turnCounter || 0,
+    priority: Number.isFinite(Number(action.priority)) ? Number(action.priority) : 1,
+  });
+}
+
+export function applyNegateSummonOrActivationAndDestroy(
+  ctx: SimulatedActionHandlerContext<"negate_summon_or_activation_and_destroy">,
+): void {
+  // Turn planning has no producer for pending Summon/Chain transactions yet.
+  // A card reference alone cannot establish that a negation succeeds.
+  ctx.state._simUnsupportedActions ??= [];
+  ctx.state._simUnsupportedActions.push(ctx.action.type);
+}
+
 export function applyNegateActivation(
   ctx: SimulatedActionHandlerContext<"negate_activation">,
 ): void {
@@ -67,7 +137,10 @@ export function applyNegateActivation(
     activationContext.card ||
     activationContext.targetCard ||
     null;
-  if (!activationAttempt || !targetCard) return;
+  if (!activationAttempt || !targetCard) {
+    (ctx.state._simUnsupportedActions ??= []).push(action.type);
+    return;
+  }
 
   activationAttempt.activationNegated = true;
   activationContext.activationNegated = true;
@@ -94,7 +167,10 @@ export function applyNegateEffect(
     activationContext.card ||
     activationContext.targetCard ||
     null;
-  if (!activationAttempt || !targetCard) return;
+  if (!activationAttempt || !targetCard) {
+    (ctx.state._simUnsupportedActions ??= []).push(action.type);
+    return;
+  }
 
   activationContext.effectNegated = true;
   if (activationContext.respondingToChainLink) {
@@ -243,6 +319,7 @@ export function applyOptionalTargetActions(
     const selectedTargets = selectSimulatedTargets({
       targets: targetDefs,
       actions: nestedActions,
+      selections: nestedSelections,
       state,
       sourceCard: options.sourceCard,
       selfId,
@@ -399,7 +476,7 @@ export function applyActivateStoredBlueprint(
 
 export function applyChooseActionCase(
   ctx: SimulatedActionHandlerContext<"choose_action_case">,
-): void {
+): void | typeof STOP_SIMULATION {
   const {
     action,
     targets,
@@ -411,7 +488,11 @@ export function applyChooseActionCase(
     opponent,
     applySimulatedActions,
   } = ctx;
+  const decisionKey = action.effectChoiceKey || action.requirementId || "action_case_choice";
+  const exactCase = options.activationContext?.decisions?.cases?.[decisionKey] ??
+    options.activationContext?.decisions?.cases?.[action.requirementId || "action_case_choice"];
   const validCases = (action.cases || [])
+    .filter(choiceCase => exactCase === undefined || choiceCase.id === exactCase)
     .map((choiceCase) => {
       if (!choiceCase) return null;
       if (
@@ -438,13 +519,19 @@ export function applyChooseActionCase(
       return { choiceCase, caseSelections };
     })
     .filter(Boolean) as SimulatedCaseEntry[];
-  if (validCases.length === 0) return;
+  if (validCases.length === 0) {
+    if (exactCase !== undefined) {
+      (state._simUnsupportedActions ??= []).push(`exact_case:${decisionKey}`);
+      return STOP_SIMULATION;
+    }
+    return;
+  }
 
   const chooser =
     options.chooseActionCase ||
     options.strategy?.chooseActionCase?.bind(options.strategy);
   let chosenEntry: SimulatedCaseEntry | null | undefined = null;
-  if (typeof chooser === "function") {
+  if (exactCase === undefined && typeof chooser === "function") {
     const chosen = chooser(
       validCases.map((entry) => entry.choiceCase),
       {

@@ -1278,7 +1278,7 @@ export async function openActivationChain(
     preparedActivation: prepared,
     addTriggerToChain: true,
   } as FastEffectContextInput;
-  return await this.runFastEffectTiming({
+  const timing = await this.runFastEffectTiming({
     origin: FAST_EFFECT_ORIGINS.ACTIVATION,
     context,
     actionPlayer: controller,
@@ -1286,6 +1286,28 @@ export async function openActivationChain(
     deferPostChainWindow:
       this.game?._flushingPendingTriggerOccurrences === true,
   });
+  const resolutionResult = timing.resolutionResult;
+  const activationResult = resolutionResult?.activationResult;
+  if (
+    !resolutionResult ||
+    !activationResult ||
+    timing.needsSelection ||
+    timing.cancelled ||
+    resolutionResult.cancelled ||
+    resolutionResult.finalizationResult?.success === false
+  ) {
+    return timing;
+  }
+  const success = activationResult.success !== false && activationResult.ok !== false;
+  return {
+    ...timing,
+    ...activationResult,
+    resolutionResult,
+    success,
+    ok: success,
+    activationNegated: activationResult.activationNegated === true,
+    effectNegated: activationResult.effectNegated === true,
+  };
 }
 
 export async function openEventWindow(

@@ -7,19 +7,80 @@
  */
 
 import type {
+  AIAction,
   AIActionOf,
   AIActionType,
   AIActivationContext,
   AIStrategyBotPort,
   AIState,
+  SynchroAIAction,
 } from "../../contracts/ai.js";
 import type {
+  AiCardInput,
   AiLiveGamePort,
   SimulatedCardState,
   SimulatedPlayerState,
 } from "../../contracts/aiState.js";
 import type { GameCard } from "../../contracts/cards.js";
 import type { EffectDefinition } from "../../contracts/effects.js";
+import { enumerateSynchroMaterialCombos } from "../../game/summon/synchro.js";
+import { matchesCardFilter, type RuntimeCardFilter } from "../../effects/filters/cardFilters.js";
+import { isActiveEquipInZone } from "../../effects/passives/passiveBuffs.js";
+import { canSimulatedSpecialSummon, canSimulatedProcedureEnterField } from "./simulation.js";
+import { canMoveCardToZone } from "./zones.js";
+import { hasActionZoneCandidates } from "./actionValidation.js";
+
+/** Enumerate procedures from this state only; no live Game lookup or archetype scoring. */
+export function getGenericSynchroActions(
+  game: AIState,
+  options: { existingActions?: readonly AIAction[] } = {},
+): SynchroAIAction[] {
+  if (game.phase !== "main1" && game.phase !== "main2") return [];
+  const player = game._isPerspectiveState ? game.bot :
+    [game.player, game.bot].find(candidate => candidate?.id === game.turn);
+  if (!player) return [];
+  const opponent = player === game.bot ? game.player : game.bot;
+  const field = player.field || [];
+  const cardMatchesFilters = (candidate: AiCardInput, filters: RuntimeCardFilter): boolean =>
+    matchesCardFilter(candidate, filters, {
+      turnCounter: game.turnCounter,
+      getCounter: (entry, type) => entry.counters?.get(type) || 0,
+      hasMatchingEquip: (entry, equipFilters, requireFaceup) => (entry.equips || []).some(equip => {
+        const owner = [game.player, game.bot].find(entryPlayer => entryPlayer?.id === equip.owner);
+        return isActiveEquipInZone(equip, entry, owner?.spellTrap || []) &&
+          (!requireFaceup || !equip.isFacedown) && cardMatchesFilters(equip, equipFilters);
+      }),
+    });
+  const actions: SynchroAIAction[] = [];
+  const existingSynchros = (options.existingActions || []).filter(action => action.type === "synchro");
+  for (const card of player.extraDeck || []) {
+    if (card.monsterType !== "synchro" || card.instanceId == null ||
+        !canSimulatedSpecialSummon(card, player, "synchro", "extraDeck", cardMatchesFilters)) continue;
+    for (const materials of enumerateSynchroMaterialCombos<AiCardInput>(field, card, {
+      effectEngine: { cardMatchesFilters },
+      canUseMaterial: material => canMoveCardToZone(player, material, "graveyard", player, { state: game }),
+    })) {
+      if (!canSimulatedProcedureEnterField(card, player, opponent, materials, cardMatchesFilters)) continue;
+      const materialInstanceIds = materials.map(material => material.instanceId);
+      if (!materialInstanceIds.every((id): id is string | number => id != null) ||
+          new Set(materialInstanceIds).size !== materials.length) continue;
+      const positionPreference = card.synchro?.position;
+      const positions = positionPreference === "attack" || positionPreference === "defense"
+        ? [positionPreference] : ["attack", "defense"] as const;
+      for (const position of positions) {
+        // Keep strategy scores and choices; ordered materials preserve resolution order.
+        if (existingSynchros.some(action => action.synchroInstanceId === card.instanceId &&
+            action.position === position && action.materialInstanceIds.length === materialInstanceIds.length &&
+            action.materialInstanceIds.every((id, index) => id === materialInstanceIds[index]))) continue;
+        actions.push({
+          type: "synchro", synchroInstanceId: card.instanceId, materialInstanceIds: [...materialInstanceIds],
+          position, cardId: card.id, cardName: card.name,
+        });
+      }
+    }
+  }
+  return actions;
+}
 
 type PlanningCard = GameCard | SimulatedCardState;
 type ActionIndexKey =
@@ -502,6 +563,8 @@ export function getGenericIgnitionEffectActions<Type extends AIActionType, Analy
         ? findEffect(card, sourceZone, context)
         : null;
     if (!effect) continue;
+    if (effect.actions?.some(action => action.type === "bounce_and_summon" &&
+        !hasActionZoneCandidates(player, action, card))) continue;
 
     const decision =
       typeof shouldActivate === "function"

@@ -21,6 +21,7 @@ import type {
   SelectionStrategy,
 } from "./contracts/selection.js";
 import type { SelectionCandidateKey } from "./contracts/primitives.js";
+import type { AIDecisionPlan } from "./contracts/ai.js";
 
 interface AutoSelectorCard extends ActionRuntimeCard {
   fieldPresenceId?: string | number | null;
@@ -156,6 +157,7 @@ interface AutoSelectorActionContext {
 }
 
 interface AutoSelectorActivationContext {
+  decisions?: AIDecisionPlan;
   actionContext?: AutoSelectorActionContext | null;
   costPreferences?: AutoSelectorPreference | null;
 }
@@ -185,9 +187,32 @@ export type AutoSelectionResult =
   | { ok: false; reason: string }
   | { ok: true; selections: SelectionResult };
 
-function hasCanonicalCandidateKey(
-  candidate: AutoSelectionCandidate,
-): candidate is AutoSelectionCandidate & { key: SelectionCandidateKey } {
+export function resolveExactInstanceSelection<
+  Card extends { instanceId?: number | string },
+>(
+  candidates: readonly Card[],
+  ids: readonly (number | string)[],
+  limits: { min: number; max: number; revalidation?: "remaining" | undefined },
+): Card[] | null {
+  const remaining = limits.revalidation === "remaining";
+  if (
+    ids.length < limits.min || (!remaining && ids.length > limits.max) ||
+    new Set(ids).size !== ids.length
+  ) return null;
+  const selected: Card[] = [];
+  for (const id of ids) {
+    const matches = candidates.filter(card => card.instanceId === id);
+    if (matches.length === 0 && remaining) continue;
+    if (matches.length !== 1 || !matches[0]) return null;
+    selected.push(matches[0]);
+  }
+  const result = remaining ? selected.slice(0, Math.max(0, limits.max)) : selected;
+  return result.length < limits.min ? null : result;
+}
+
+function hasCanonicalCandidateKey<Candidate extends { key?: string }>(
+  candidate: Candidate,
+): candidate is Candidate & { key: SelectionCandidateKey } {
   return typeof candidate.key === "string" && candidate.key.length > 0;
 }
 
@@ -266,6 +291,31 @@ export default class AutoSelector {
         : [];
       const min = Number(requirement.min ?? 0);
       const max = Number(requirement.max ?? min);
+      const id = requirement.id ?? "undefined";
+      const decisions = context.activationContext?.decisions;
+      const exactIds = decisions?.selections?.[id];
+      const exactCase = decisions?.cases?.[id];
+      if (exactIds !== undefined || exactCase !== undefined) {
+        const identified = candidates.map(candidate => {
+          const instanceId = candidate.cardRef?.instanceId ?? candidate.instanceId;
+          return { candidate, ...(instanceId !== undefined ? { instanceId } : {}) };
+        });
+        const chosen = exactIds !== undefined
+          ? resolveExactInstanceSelection(identified, exactIds, { min, max })
+              ?.map(entry => entry.candidate) ?? null
+          : candidates.filter(candidate => candidate.cardRef?.id === exactCase);
+        if (
+          !chosen || chosen.length < min || chosen.length > max ||
+          chosen.some(candidate => !hasCanonicalCandidateKey(candidate))
+        ) {
+          return { ok: false, reason: `Planned selection is no longer valid for ${id}.` };
+        }
+        if (exactCase !== undefined && chosen.length !== 1) {
+          return { ok: false, reason: `Planned case is no longer valid for ${id}.` };
+        }
+        selections[id] = chosen.filter(hasCanonicalCandidateKey).map(candidate => candidate.key);
+        continue;
+      }
       if (candidates.length < min) {
         return {
           ok: false,

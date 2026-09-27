@@ -3,6 +3,33 @@ import type { BotArchetypeId, BotRuntimePort } from "./bot.js";
 import type { GameOptions, GameRendererPort } from "./game.js";
 import type { GamePlayer } from "./player.js";
 import type { RawCardDefinitionId } from "./primitives.js";
+import type { ChainLinkResolutionOutcome } from "./events.js";
+
+export interface ArenaChainLinkSample {
+  turn: number;
+  chainId: string | number;
+  linkId: string | number;
+  chainLevel: number | null;
+  controllerId: "player" | "bot";
+  cardId: number | null;
+  cardInstanceId: string | number | null;
+  cardName: string | null;
+  effectId: string | null;
+  outcome: ChainLinkResolutionOutcome;
+  failedAction: string | null;
+  reason: string | null;
+}
+
+/** Link outcomes are separate from attempted bot actions and planned executions. */
+export interface ArenaChainLinkStats {
+  total: number;
+  succeeded: number;
+  partialFailures: number;
+  failed: number;
+  activationNegated: number;
+  effectNegated: number;
+  samples: ArenaChainLinkSample[];
+}
 
 export type ArenaSpeed = "1x" | "2x" | "4x" | "instant";
 
@@ -46,6 +73,8 @@ export interface ArenaPlannerConfig {
 }
 
 export interface ArenaSearchOptions {
+  /** Unsigned 32-bit base seed; null restores the Game default. */
+  randomSeed?: number | null;
   beamWidth?: number | null;
   maxDepth?: number | null;
   nodeBudget?: number | null;
@@ -87,6 +116,7 @@ export type ArenaDuelOutcome =
 
 export interface ArenaCompletedDuelResult {
   duelNumber: number;
+  randomSeed?: number;
   winner: ArenaWinner;
   turns: number;
   type: "completed" | "draw" | "error";
@@ -100,6 +130,7 @@ export interface ArenaCompletedDuelResult {
 export interface ArenaCancelledDuelResult {
   type: "cancelled";
   duelNumber: number;
+  randomSeed?: number;
 }
 
 export type ArenaDuelResult =

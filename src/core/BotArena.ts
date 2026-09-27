@@ -192,6 +192,7 @@ export default class BotArena {
   declare customPlannerTurnMode: AITurnPlanningMode | null;
   declare customDiagnosticLog: boolean | null;
   declare customQuietLogs: boolean | null;
+  declare randomSeed: number | null;
 
   constructor(GameClass: RuntimeGameConstructor, BotClass: ArenaBotConstructor, _shadowHeartStrategy?: unknown, _luminarchStrategy?: unknown) {
     this.GameClass = GameClass;
@@ -224,6 +225,7 @@ export default class BotArena {
     this.customPlannerCandidateLimit = null;
     this.customDiagnosticLog = null;
     this.customQuietLogs = null;
+    this.randomSeed = null;
   }
 
   /**
@@ -239,6 +241,13 @@ export default class BotArena {
    * @param {Object} options
    */
   setSearchParams(options: ArenaSearchOptions = {}) {
+    if (options.randomSeed !== undefined) {
+      const seed = options.randomSeed;
+      if (seed !== null && (!Number.isInteger(seed) || seed < 0 || seed > 0xffffffff)) {
+        throw new RangeError("Arena random seed must be an integer between 0 and 4294967295.");
+      }
+      this.randomSeed = seed;
+    }
     const beamWidth = positiveInteger(options.beamWidth);
     const maxDepth = positiveInteger(options.maxDepth);
     const nodeBudget = positiveInteger(options.nodeBudget);
@@ -373,7 +382,12 @@ export default class BotArena {
     return bot;
   }
 
-  createGame(preset1: string, preset2: string, speedConfig: ArenaSpeedConfig, deckData: ArenaDeckData) {
+  /** One-based duel numbers keep paired matchups on the same seed sequence. */
+  getDuelRandomSeed(duelNumber: number): number | undefined {
+    return this.randomSeed === null ? undefined : (this.randomSeed + duelNumber - 1) >>> 0;
+  }
+
+  createGame(preset1: string, preset2: string, speedConfig: ArenaSpeedConfig, deckData: ArenaDeckData, duelNumber = 1) {
     const useBrowserRenderer = canUseBrowserRenderer(speedConfig);
     const renderer = useBrowserRenderer
       ? this.renderer || new Renderer()
@@ -382,7 +396,11 @@ export default class BotArena {
       this.renderer = renderer;
     }
 
-    const game: ArenaRuntimeGame = new this.GameClass({ renderer });
+    const randomSeed = this.getDuelRandomSeed(duelNumber);
+    const game: ArenaRuntimeGame = new this.GameClass({
+      renderer,
+      ...(randomSeed === undefined ? {} : { randomSeed }),
+    });
     game.phaseDelayMs = speedConfig.phaseDelayMs;
     game.aiActionDelayMs = speedConfig.actionDelayMs;
     game.aiSuccessfulActionDelayMs = speedConfig.actionDelayMs;
@@ -548,7 +566,9 @@ export default class BotArena {
   }
 
   async runDuel(preset1: string, preset2: string, speedConfig: ArenaSpeedConfig, duelNumber: number, deckData: ArenaDeckData): Promise<ArenaDuelResult> {
-    const game = this.createGame(preset1, preset2, speedConfig, deckData);
+    const randomSeed = this.getDuelRandomSeed(duelNumber);
+    const seedResult = randomSeed === undefined ? {} : { randomSeed };
+    const game = this.createGame(preset1, preset2, speedConfig, deckData, duelNumber);
     this.activeGame = game;
 
     // Determinar arquétipos
@@ -557,6 +577,7 @@ export default class BotArena {
 
     // Criar tracker para este duelo
     const tracker = new DuelTracker(duelNumber, arch1, arch2, {
+      seed: randomSeed ?? null,
       beamWidth: game.arenaBeamWidth,
       maxDepth: game.arenaMaxDepth,
       plannerMode: game.turnLineSearchMode ?? game.arenaPlannerMode ?? null,
@@ -605,7 +626,7 @@ export default class BotArena {
     this.activeGame = null;
 
     if (outcome.type === "cancelled") {
-      return { type: "cancelled", duelNumber };
+      return { type: "cancelled", duelNumber, ...seedResult };
     }
 
     const winner = this.resolveWinner(game, outcome);
@@ -649,6 +670,7 @@ export default class BotArena {
 
     return {
       duelNumber,
+      ...seedResult,
       winner,
       turns: game.turnCounter || 0,
       type: outcome.type,
@@ -719,8 +741,10 @@ export default class BotArena {
           result = await this.runDuel(preset1, preset2, speedConfig, i, deckData);
         }
       } catch (err) {
+        const randomSeed = this.getDuelRandomSeed(i);
         result = {
           duelNumber: i,
+          ...(randomSeed === undefined ? {} : { randomSeed }),
           winner: "draw",
           turns: 0,
           type: "error",
@@ -732,6 +756,7 @@ export default class BotArena {
         // Registrar erro no analytics
         this.analytics.recordDuel({
           duelNumber: i,
+          seed: randomSeed ?? null,
           archetype1: preset1 === "default" ? "custom" : preset1,
           archetype2: preset2 === "default" ? "custom" : preset2,
           winner: "draw",

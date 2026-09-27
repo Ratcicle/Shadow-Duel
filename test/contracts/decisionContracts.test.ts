@@ -226,3 +226,27 @@ test("DecisionBroker reports mismatch and replay illegality at the exact cursor"
     /Replay decision 12 is no longer legal/,
   );
 });
+
+test("Chain response candidate checks cannot be disabled", async () => {
+  const { broker } = createHarness();
+  assert.equal(await broker.requestDecision({
+    kind: "chain_response", actor: { id: "bot", controllerType: "ai" },
+    candidates: [chainCandidate("legal")], requireCandidate: false,
+    resolveAI: () => chainCandidate("forged"),
+  }), null);
+});
+
+test("Chain replay rejects a different responder or response window", async () => {
+  const { broker } = createHarness();
+  const candidate = chainCandidate("legal");
+  const context = { type: "effect_activation", chainId: 9, respondingToLinkId: 3 };
+  for (const recorded of [
+    { actorId: "player", context },
+    { actorId: "bot", context: { ...context, respondingToLinkId: 7 } },
+  ]) {
+    broker.loadReplayDecisions([{ kind: "chain_response", value: { pass: false, candidateKey: "legal", effectId: "legal_effect" }, ...recorded }]);
+    await assert.rejects(() => broker.requestDecision({
+      kind: "chain_response", actor: { id: "bot", controllerType: "ai" }, candidates: [candidate], contextSnapshot: context,
+    }), /Replay Chain response context/);
+  }
+});

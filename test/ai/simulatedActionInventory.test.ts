@@ -148,3 +148,27 @@ test("malformed action containers retain their permissive no-op behavior", () =>
   assert.equal(state.bot.lp, 8000);
   assert.equal(state.player.lp, 8000);
 });
+
+
+test("every Tech-Zero action has a handler or an explicit unsupported diagnostic", () => {
+  for (const card of cardDatabase.filter(card => "archetype" in card && card.archetype === "Tech-Zero")) {
+    for (const effect of card.effects || []) {
+      for (const visit of walkEffectActions(effect).visits) {
+        const action = visit.action;
+        assert.ok(action && typeof action === "object" && "type" in action && typeof action.type === "string");
+        assert.ok(Object.hasOwn(SIMULATED_ACTION_HANDLERS, action.type), `${card.name}: ${action.type}`);
+      }
+    }
+  }
+  const state = createState();
+  applyRuntimeSimulatedActions({ state, actions: [{ type: "negate_summon_or_activation_and_destroy" }] });
+  assert.deepEqual(Reflect.get(state, "_simUnsupportedActions"), ["negate_summon_or_activation_and_destroy"]);
+});
+
+for (const type of ["negate_effect", "negate_activation"] as const) {
+  test(`${type} requires an actual modeled activation context`, () => {
+    const state = createState();
+    applyRuntimeSimulatedActions({ state, actions: [{ type }] });
+    assert.deepEqual(Reflect.get(state, "_simUnsupportedActions"), [type]);
+  });
+}

@@ -131,17 +131,13 @@ function isContinuousFieldOrEquipSpell(card: StrategyCard) {
 
 function getEffectiveAtk(card: StrategyCard) {
   return (
-    (card?.atk || 0) +
-    (card?.tempAtkBoost || 0) +
-    (card?.equipAtkBonus || 0)
+    (card?.atk || 0)
   );
 }
 
 function getEffectiveDef(card: StrategyCard) {
   return (
-    (card?.def || 0) +
-    (card?.tempDefBoost || 0) +
-    (card?.equipDefBonus || 0)
+    (card?.def || 0)
   );
 }
 
@@ -187,24 +183,28 @@ function clearSimulatedArcanistPassiveStats(player: SimulatedPlayerState) {
     const aura = card._simArcanistApprenticeAuraAtk || 0;
     if (aura) {
       card.tempAtkBoost = (card.tempAtkBoost || 0) - aura;
+      card.atk = Math.max(0, (card.atk || 0) - aura);
       delete card._simArcanistApprenticeAuraAtk;
     }
 
     const debuffAtk = card._simArcanistAzrathSpellDebuffAtk || 0;
     if (debuffAtk) {
       card.tempAtkBoost = (card.tempAtkBoost || 0) - debuffAtk;
+      card.atk = Math.max(0, (card.atk || 0) - debuffAtk);
       delete card._simArcanistAzrathSpellDebuffAtk;
     }
 
     const debuffDef = card._simArcanistAzrathSpellDebuffDef || 0;
     if (debuffDef) {
       card.tempDefBoost = (card.tempDefBoost || 0) - debuffDef;
+      card.def = Math.max(0, (card.def || 0) - debuffDef);
       delete card._simArcanistAzrathSpellDebuffDef;
     }
 
     const elementalistBuff = card._simArcanistElementalistSpellBuffAtk || 0;
     if (elementalistBuff) {
       card.tempAtkBoost = (card.tempAtkBoost || 0) - elementalistBuff;
+      card.atk = Math.max(0, (card.atk || 0) - elementalistBuff);
       delete card._simArcanistElementalistSpellBuffAtk;
     }
   }
@@ -875,6 +875,7 @@ export default class ArcanistStrategy extends BaseStrategy {
     if (selfTargets.includes(target)) {
       if (!target._simArcanistLightningAtkBoost) {
         target.tempAtkBoost = (target.tempAtkBoost || 0) + 500;
+        target.atk = (target.atk || 0) + 500;
         target._simArcanistLightningAtkBoost = 500;
       }
       target.piercing = true;
@@ -1065,6 +1066,7 @@ export default class ArcanistStrategy extends BaseStrategy {
           !card._simArcanistApprenticeAuraAtk;
         if (rawAuraAlreadyPresent) continue;
         card.tempAtkBoost = (card.tempAtkBoost || 0) + amount;
+        card.atk = (card.atk || 0) + amount;
         card._simArcanistApprenticeAuraAtk = amount;
       }
     }
@@ -1080,6 +1082,7 @@ export default class ArcanistStrategy extends BaseStrategy {
           continue;
         }
         card.tempAtkBoost = (card.tempAtkBoost || 0) + amount;
+        card.atk = (card.atk || 0) + amount;
         card._simArcanistElementalistSpellBuffAtk = amount;
       }
     }
@@ -1093,10 +1096,14 @@ export default class ArcanistStrategy extends BaseStrategy {
     if (debuff) {
       for (const card of state.player?.field || []) {
         if (!card || card.cardKind !== "monster" || card.isFacedown) continue;
-        card.tempAtkBoost = (card.tempAtkBoost || 0) + debuff;
-        card.tempDefBoost = (card.tempDefBoost || 0) + debuff;
-        card._simArcanistAzrathSpellDebuffAtk = debuff;
-        card._simArcanistAzrathSpellDebuffDef = debuff;
+        const atkDelta = Math.max(0, (card.atk || 0) + debuff) - (card.atk || 0);
+        const defDelta = Math.max(0, (card.def || 0) + debuff) - (card.def || 0);
+        card.atk = (card.atk || 0) + atkDelta;
+        card.def = (card.def || 0) + defDelta;
+        card.tempAtkBoost = (card.tempAtkBoost || 0) + atkDelta;
+        card.tempDefBoost = (card.tempDefBoost || 0) + defDelta;
+        card._simArcanistAzrathSpellDebuffAtk = atkDelta;
+        card._simArcanistAzrathSpellDebuffDef = defDelta;
       }
     }
   }

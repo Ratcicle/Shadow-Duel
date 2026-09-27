@@ -16,6 +16,10 @@ import Card from "../src/core/Card.js";
 import { validateCardDatabase } from "../src/core/CardDatabaseValidator.js";
 import { evaluateSimulatedConditions } from "../src/core/ai/common/simulatedConditions.js";
 import { cardDatabaseById } from "./helpers/fixtures.js";
+import {
+  enumerateSynchroMaterialCombos,
+  type SynchroCardView,
+} from "../src/core/game/summon/synchro.js";
 
 const RED_FURY_HORROR_ID = 30;
 const IRON_SMASHER_ID = 31;
@@ -64,6 +68,27 @@ function material(
     isFacedown: false,
   });
 }
+
+test("Synchro enumeration keeps numeric and string instance identities distinct", () => {
+  const numericTuner = Object.freeze({
+    instanceId: 7001, cardKind: "monster", level: 2, isTuner: true,
+  });
+  const stringTuner = Object.freeze({ ...numericTuner, instanceId: "7001" });
+  const nonTuner = Object.freeze({
+    instanceId: 7002, cardKind: "monster", level: 4, isTuner: false,
+  });
+  const field: readonly SynchroCardView[] = Object.freeze([
+    numericTuner, stringTuner, nonTuner,
+  ]);
+  const destination: SynchroCardView = Object.freeze({
+    cardKind: "monster", monsterType: "synchro", level: 6,
+  });
+
+  assert.deepEqual(enumerateSynchroMaterialCombos(field, destination), [
+    [numericTuner, nonTuner],
+    [stringTuner, nonTuner],
+  ]);
+});
 
 test("Red Fury Horror e Iron Smasher declaram dados, arte, localização e materiais canônicos", (t) => {
   const redFury = getCard(RED_FURY_HORROR_ID);

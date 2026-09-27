@@ -23,6 +23,7 @@ import type {
 } from "../../contracts/gameRuntime.js";
 import type { GamePlayer } from "../../contracts/player.js";
 import type { EventTriggerOccurrence } from "../../contracts/events.js";
+import type { ChainRuntimePort } from "../../contracts/chainRuntime.js";
 import type {
   RawSelectionCandidate,
   RawSelectionContract,
@@ -60,8 +61,37 @@ interface RuntimeSynchroDefinition
   readonly materialFilters?: RuntimeSynchroMaterialFilters;
 }
 
-interface SynchroMaterialRoleEntry {
-  card: GameCard;
+/** Read-only material rules shared by the live game and planning snapshots. */
+export interface SynchroCardView {
+  readonly id?: number | undefined;
+  readonly instanceId?: number | string | null | undefined;
+  readonly _instanceId?: number | string | null | undefined;
+  readonly uuid?: string | null | undefined;
+  readonly name?: string | undefined;
+  readonly cardKind?: string | undefined;
+  readonly monsterType?: string | null | undefined;
+  readonly isTuner?: boolean | undefined;
+  readonly isFacedown?: boolean | undefined;
+  readonly effectsNegated?: boolean | undefined;
+  readonly level?: number | undefined;
+  readonly synchro?: SynchroDefinition | null | undefined;
+  readonly synchroMaterialRoles?: GameCard["synchroMaterialRoles"] | undefined;
+  readonly archetype?: string | null | undefined;
+  readonly archetypes?: readonly string[] | undefined;
+  readonly type?: string | null | undefined;
+  readonly attribute?: string | null | undefined;
+}
+
+export interface SynchroEnumerationContext<Card extends SynchroCardView> {
+  canUseMaterial?(card: Card): boolean;
+  effectEngine?: {
+    isEffectNegated?(card: Card): boolean;
+    cardMatchesFilters?(card: Card, filters: CardFilter): boolean;
+  } | undefined;
+}
+
+interface SynchroMaterialRoleEntry<Card extends SynchroCardView> {
+  card: Card;
   role: "tuner" | "nonTuner";
 }
 
@@ -188,9 +218,12 @@ interface SynchroHost {
   bot: GamePlayer;
   turnCounter: number;
   synchroSummonContextCounter: number;
+  summonProcedureDepth?: number;
   pendingSynchroMaterialFollowups: SynchroMaterialFollowup[];
   pendingSynchroMaterialTriggerContinuation: SynchroTriggerContinuation | null;
   effectEngine?: SynchroEffectEnginePort;
+  chainSystem?: Pick<ChainRuntimePort, "isChainResolving" | "isChainWindowOpen" | "isPreparingActivation">;
+  queueTriggerOccurrence?(occurrence: EventTriggerOccurrence): unknown;
   ui: { log?(message: string): void };
   canUseAsSynchroMaterial(
     player: GamePlayer,
@@ -264,20 +297,20 @@ interface SynchroHost {
 }
 
 function runtimeSynchroDefinition(
-  card: GameCard | null | undefined,
+  card: SynchroCardView | null | undefined,
 ): RuntimeSynchroDefinition | null {
   return card?.synchro ?? null;
 }
 
 function getCardInstanceId(
-  card: GameCard | null | undefined,
+  card: SynchroCardView | null | undefined,
 ): number | string | null {
   return card?.instanceId ?? card?._instanceId ?? card?.uuid ?? null;
 }
 
-function isSynchroExtraDeckCard(
-  card: GameCard | null | undefined,
-): card is GameCard & { monsterType: "synchro" } {
+function isSynchroExtraDeckCard<Card extends SynchroCardView>(
+  card: Card | null | undefined,
+): card is Card & { monsterType: "synchro" } {
   return Boolean(
     card &&
     card.cardKind === "monster" &&
@@ -285,7 +318,7 @@ function isSynchroExtraDeckCard(
   );
 }
 
-function isTuner(card: GameCard | null | undefined): boolean {
+function isTuner(card: SynchroCardView | null | undefined): boolean {
   return card?.isTuner === true;
 }
 
@@ -301,9 +334,9 @@ function normalizeRoleRules(
   return typeof value === "object" ? [value as CardFilter] : [];
 }
 
-function materialEffectsAreActive(
-  game: SynchroHost,
-  card: GameCard | null | undefined,
+function materialEffectsAreActive<Card extends SynchroCardView>(
+  game: SynchroEnumerationContext<Card>,
+  card: Card | null | undefined,
 ): boolean {
   if (!card || card.isFacedown) return false;
   if (typeof game.effectEngine?.isEffectNegated === "function") {
@@ -312,7 +345,7 @@ function materialEffectsAreActive(
   return card.effectsNegated !== true;
 }
 
-function getCardLevel(card: GameCard | null | undefined): number {
+function getCardLevel(card: SynchroCardView | null | undefined): number {
   const level = Number(card?.level || 0);
   return Number.isFinite(level) ? level : 0;
 }
@@ -352,7 +385,7 @@ function selectionMatchesCombo(
 }
 
 function getSynchroConfig(
-  card: GameCard | null | undefined,
+  card: SynchroCardView | null | undefined,
 ): RuntimeSynchroConfig {
   const config = runtimeSynchroDefinition(card);
   return {
@@ -382,7 +415,7 @@ function valueMatchesFilter<Value>(
 }
 
 function cardMatchesSimpleSynchroFilter(
-  card: GameCard | null | undefined,
+  card: SynchroCardView | null | undefined,
   filters: RuntimeSynchroFilter = {},
 ): boolean {
   if (!card) return false;
@@ -425,9 +458,9 @@ function cardMatchesSimpleSynchroFilter(
   return true;
 }
 
-function cardMatchesSynchroFilter(
-  game: SynchroHost,
-  card: GameCard,
+function cardMatchesSynchroFilter<Card extends SynchroCardView>(
+  game: SynchroEnumerationContext<Card>,
+  card: Card,
   filters: RuntimeSynchroFilter | null | undefined,
 ): boolean {
   if (!filters || Object.keys(filters).length === 0) return true;
@@ -437,10 +470,10 @@ function cardMatchesSynchroFilter(
   return cardMatchesSimpleSynchroFilter(card, filters);
 }
 
-function materialPassesSynchroFilters(
-  game: SynchroHost,
-  card: GameCard,
-  role: SynchroMaterialRoleEntry["role"],
+function materialPassesSynchroFilters<Card extends SynchroCardView>(
+  game: SynchroEnumerationContext<Card>,
+  card: Card,
+  role: SynchroMaterialRoleEntry<Card>["role"],
   materialFilters: RuntimeSynchroMaterialFilters = {},
 ): boolean {
   if (!cardMatchesSynchroFilter(game, card, materialFilters.all || {})) {
@@ -453,10 +486,10 @@ function materialPassesSynchroFilters(
   return cardMatchesSynchroFilter(game, card, roleFilters);
 }
 
-function canTreatAsSynchroNonTuner(
-  game: SynchroHost,
-  card: GameCard,
-  synchroCard: GameCard,
+function canTreatAsSynchroNonTuner<Card extends SynchroCardView>(
+  game: SynchroEnumerationContext<Card>,
+  card: Card,
+  synchroCard: Card,
 ): boolean {
   if (!isTuner(card)) return true;
   if (!materialEffectsAreActive(game, card)) return false;
@@ -467,13 +500,13 @@ function canTreatAsSynchroNonTuner(
   return rules.some((rule) => cardMatchesSynchroFilter(game, synchroCard, rule));
 }
 
-function getSynchroMaterialRoleEntries(
-  game: SynchroHost,
-  card: GameCard,
-  synchroCard: GameCard,
+function getSynchroMaterialRoleEntries<Card extends SynchroCardView>(
+  game: SynchroEnumerationContext<Card>,
+  card: Card,
+  synchroCard: Card,
   config: RuntimeSynchroConfig,
-): SynchroMaterialRoleEntry[] {
-  const entries: SynchroMaterialRoleEntry[] = [];
+): SynchroMaterialRoleEntry<Card>[] {
+  const entries: SynchroMaterialRoleEntry<Card>[] = [];
   if (
     isTuner(card) &&
     materialPassesSynchroFilters(
@@ -501,30 +534,32 @@ function getSynchroMaterialRoleEntries(
   return entries;
 }
 
-function roleGroupsShareCards(
-  left: readonly SynchroMaterialRoleEntry[] = [],
-  right: readonly SynchroMaterialRoleEntry[] = [],
+function roleGroupsShareCards<Card extends SynchroCardView>(
+  left: readonly SynchroMaterialRoleEntry<Card>[] = [],
+  right: readonly SynchroMaterialRoleEntry<Card>[] = [],
 ): boolean {
   const used = new Set(
-    left.map((entry) => getCardInstanceId(entry.card) || entry.card),
+    left.map((entry) => getCardInstanceId(entry.card) ?? entry.card),
   );
   return right.some((entry) =>
-    used.has(getCardInstanceId(entry.card) || entry.card),
+    used.has(getCardInstanceId(entry.card) ?? entry.card),
   );
 }
 
-function dedupeSynchroCombos(
-  combos: readonly (readonly GameCard[])[] = [],
-): GameCard[][] {
+function dedupeSynchroCombos<Card extends SynchroCardView>(
+  combos: readonly (readonly Card[])[] = [],
+): Card[][] {
   const seen = new Set<string>();
-  const result: GameCard[][] = [];
+  const result: Card[][] = [];
   for (const combo of combos) {
     const instanceIds = combo.map((card) => getCardInstanceId(card));
     if (instanceIds.some((id) => id === null)) {
       result.push([...combo]);
       continue;
     }
-    const key = instanceIds.map(String).sort().join("|");
+    const key = JSON.stringify(
+      instanceIds.map((id) => JSON.stringify([typeof id, id])).sort(),
+    );
     if (seen.has(key)) continue;
     seen.add(key);
     result.push([...combo]);
@@ -683,6 +718,28 @@ async function resolveDeferredSynchroMaterialTriggers(
     const occurrences = packages.flatMap((entryPackage) =>
       entryPackage.occurrence ? [entryPackage.occurrence] : [],
     );
+    if (occurrences.length === packages.length && game.queueTriggerOccurrence &&
+        (Number(game.summonProcedureDepth || 0) > 0 || game.chainSystem?.isChainResolving() ||
+          game.chainSystem?.isChainWindowOpen() || game.chainSystem?.isPreparingActivation)) {
+      const lastOccurrence = occurrences.at(-1);
+      if (lastOccurrence) {
+        const complete = lastOccurrence.onComplete;
+        const summonedAtVersion = synchroCard.locationVersion;
+        lastOccurrence.onComplete = async results => {
+          await complete?.(results);
+          if (!player.field.includes(synchroCard) || synchroCard.locationVersion !== summonedAtVersion) {
+            takeSynchroMaterialFollowups(game, synchroSummonContextId);
+            return;
+          }
+          await applySynchroMaterialFollowupsForContext(game, synchroSummonContextId, synchroCard, player, actionContext);
+        };
+      }
+      // Material triggers keep their original identity and wait for the active
+      // summon transaction or Chain to finish before opening a response window.
+      // Their followups belong to this exact field presence.
+      for (const occurrence of occurrences) game.queueTriggerOccurrence(occurrence);
+      return { ok: true, needsSelection: false };
+    }
     const onCompleteHandlers = packages
       .map((entryPackage) => entryPackage?.onComplete)
       .filter((handler): handler is () => void => typeof handler === "function");
@@ -862,18 +919,30 @@ export function getSynchroMaterialCombos(
   player: GamePlayer | null | undefined,
   synchroCard: GameCard | null | undefined,
 ): GameCard[][] {
-  if (!player || !isSynchroExtraDeckCard(synchroCard)) return [];
+  if (!player) return [];
+  return enumerateSynchroMaterialCombos(player.field || [], synchroCard, {
+    effectEngine: this.effectEngine,
+    canUseMaterial: (card) =>
+      this.canUseAsSynchroMaterial?.(player, card)?.ok === true,
+  });
+}
+
+/** Enumerate material sets without requiring mutable players or a live Game. */
+export function enumerateSynchroMaterialCombos<Card extends SynchroCardView>(
+  field: readonly Card[],
+  synchroCard: Card | null | undefined,
+  context: SynchroEnumerationContext<Card> = {},
+): Card[][] {
+  if (!isSynchroExtraDeckCard(synchroCard)) return [];
   const targetLevel = getCardLevel(synchroCard);
   if (targetLevel <= 0) return [];
 
   const config = getSynchroConfig(synchroCard);
-  const materialRoleEntries = (player.field || []).flatMap((card) => {
-    const materialCheck = this.canUseAsSynchroMaterial?.(player, card) || {
-      ok: false,
-    };
-    if (materialCheck.ok !== true) return [];
+  const materialRoleEntries = field.flatMap((card) => {
+    if (card.cardKind !== "monster" || card.isFacedown) return [];
+    if (context.canUseMaterial?.(card) === false) return [];
     return getSynchroMaterialRoleEntries(
-      this,
+      context,
       card,
       synchroCard,
       config,
@@ -895,7 +964,7 @@ export function getSynchroMaterialCombos(
     config.nonTunerMax,
   );
 
-  const combos: GameCard[][] = [];
+  const combos: Card[][] = [];
   for (const tunerGroup of tunerCombos) {
     if (tunerGroup.length !== config.tunerCount) continue;
     for (const nonTunerGroup of nonTunerCombos) {
@@ -973,27 +1042,36 @@ export function canSummonSynchroCard(
     };
   }
 
-  const fieldCheck = this.canPlaceCardOnField?.(synchroCard, player, {
-    isFacedown: false,
-    excludeCards: materialCombos[0],
-    summonMethod: "synchro",
-    summonProcedure: "synchro",
-    silent: options.silent !== false,
+  // Placement depends on which materials leave the field (limits and exclusivity).
+  // Check every set before exposing it to either human selection or AI planning.
+  let firstFieldFailure: MoveCardResult | undefined;
+  const legalMaterialCombos = materialCombos.filter((materials) => {
+    const fieldCheck = this.canPlaceCardOnField?.(synchroCard, player, {
+      isFacedown: false,
+      excludeCards: materials,
+      summonMethod: "synchro",
+      summonProcedure: "synchro",
+      silent: true,
+    });
+    if (fieldCheck?.ok !== false) return true;
+    firstFieldFailure ??= fieldCheck;
+    return false;
   });
-  if (fieldCheck?.ok === false) {
+  if (legalMaterialCombos.length === 0) {
     return {
-      ...fieldCheck,
+      ...firstFieldFailure,
+      ok: false,
       type: "synchro",
-      candidates: uniqueCards(materialCombos.flat()),
-      materialCombos,
-    } as SynchroSummonCheck;
+      candidates: [],
+      materialCombos: [],
+    };
   }
 
   return {
     ok: true,
     type: "synchro",
-    candidates: uniqueCards(materialCombos.flat()),
-    materialCombos,
+    candidates: uniqueCards(legalMaterialCombos.flat()),
+    materialCombos: legalMaterialCombos,
     requiredCount: null,
   };
 }

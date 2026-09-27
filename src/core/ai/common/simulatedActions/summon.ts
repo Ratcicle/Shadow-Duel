@@ -1,10 +1,9 @@
 import { appendSimulatedZoneCard } from "../zones.js";
+import { resolveExactInstanceSelection } from "../../../AutoSelector.js";
 import { appendSimulatedFieldCard } from "../zones.js";
 import { getEffectiveAtk } from "../cardStats.js";
-import {
-  canUseAsSynchroMaterial,
-  getSynchroMaterialCombos,
-} from "../../../game/summon/synchro.js";
+import { getGenericSynchroActions } from "../actionGeneration.js";
+import { attachSimulatedEventEmitter, canSimulatedProcedureEnterField } from "../simulation.js";
 import {
   checkSpecialSummonEligibility,
   establishProperSummon,
@@ -28,8 +27,10 @@ import {
 } from "../targetSelection.js";
 import {
   attachSimulatedEquip,
+  canMoveCardToZone,
   findCardOwner,
   findCardZone,
+  getZoneCards,
   moveCardToZone,
   removeCardFromZones,
 } from "../zones.js";
@@ -66,6 +67,8 @@ import type {
   SimulatedActionHandlerContext,
   SimulatedActionOptions,
   SimulatedRuntimeState,
+  SimulatedSynchroChoice,
+  SimulatedEventOccurrence,
 } from "./shared.js";
 
 interface SimulatedAfterSpecialSummonInput {
@@ -110,6 +113,7 @@ interface SimulatedCardToGraveInput {
 interface LegacySimulatedSpecialSummonRestriction {
   allowedFilters: CardFilter;
   duration: string;
+  expiresOnTurn?: number | undefined;
   reason: string | null;
   sourceName: string | null;
   sourceId: number | null;
@@ -118,21 +122,6 @@ interface LegacySimulatedSpecialSummonRestriction {
 interface SimulatedSynchroEntry {
   card: SimulatedCardState;
   combos: SimulatedCardState[][];
-}
-
-interface SimulatedSynchroGameLike {
-  effectEngine: {
-    isEffectNegated(card: GameCard): boolean;
-  };
-  canUseAsSynchroMaterial: typeof canUseAsSynchroMaterial;
-}
-
-interface SimulatedSynchroComboCallable {
-  call(
-    thisArg: SimulatedSynchroGameLike,
-    player: SimulatedPlayerState,
-    card: SimulatedCardState,
-  ): SimulatedCardState[][];
 }
 
 interface MutablePositionFilter {
@@ -297,15 +286,6 @@ function captureSimSynchroMaterialMetadata(
   };
 }
 
-function getSimSynchroGameLike(): SimulatedSynchroGameLike {
-  return {
-    effectEngine: {
-      isEffectNegated: (card: GameCard) => card?.effectsNegated === true,
-    },
-    canUseAsSynchroMaterial,
-  };
-}
-
 function getSimSynchroEntries(
   player: SimulatedPlayerState,
   action: ActionOf<"synchro_summon_from_extra_deck">,
@@ -316,7 +296,8 @@ function getSimSynchroEntries(
     monsterType: "synchro",
     ...(action.filters || action.candidateFilters || {}),
   };
-  const gameLike = getSimSynchroGameLike();
+  const opponent = state.bot === player ? state.player : state.bot;
+  const actions = getGenericSynchroActions({ bot: player, player: opponent, turn: state.turn, turnCounter: state.turnCounter, phase: "main1", _isPerspectiveState: true });
   return (player?.extraDeck || [])
     .filter(
       (card) =>
@@ -325,8 +306,11 @@ function getSimSynchroEntries(
     )
     .map((card) => ({
       card,
-      combos: (getSynchroMaterialCombos as SimulatedSynchroComboCallable)
-        .call(gameLike, player, card) || [],
+      combos: actions.filter(entry => entry.synchroInstanceId === card.instanceId)
+        .filter((entry, index, all) => all.findIndex(other =>
+          JSON.stringify(other.materialInstanceIds) === JSON.stringify(entry.materialInstanceIds)) === index)
+        .map(entry => entry.materialInstanceIds.map(id => player.field.find(material => material.instanceId === id))
+          .filter((material): material is SimulatedCardState => !!material)),
     }))
     .filter((entry) =>
       entry.combos.some(
@@ -362,7 +346,7 @@ function emitSimulatedCardToGrave({
 export function applyRestrictSpecialSummons(
   ctx: SimulatedActionHandlerContext<"restrict_special_summons">,
 ): void {
-  const { action, options, self, opponent } = ctx;
+  const { action, options, self, opponent, state } = ctx;
   const targetPlayer = resolveActionPlayer(action, self, opponent);
   if (!targetPlayer || !action.allowedFilters) return;
   targetPlayer.specialSummonRestrictions =
@@ -371,6 +355,7 @@ export function applyRestrictSpecialSummons(
     LegacySimulatedSpecialSummonRestriction[]).push({
     allowedFilters: { ...action.allowedFilters },
     duration: action.duration || "until_end_turn",
+    expiresOnTurn: state.turnCounter,
     reason: action.reason || null,
     sourceName: options?.sourceCard?.name || null,
     sourceId: options?.sourceCard?.id || null,
@@ -379,7 +364,7 @@ export function applyRestrictSpecialSummons(
 
 export function applySpecialSummonFromZone(
   ctx: SimulatedActionHandlerContext<"special_summon_from_zone">,
-): void {
+): void | typeof STOP_SIMULATION {
   const {
     action,
     targets,
@@ -395,7 +380,9 @@ export function applySpecialSummonFromZone(
     action.summonToOwner === "opponent"
       ? opponent
       : resolveActionPlayer(action, self, opponent);
-  if (!hasOpenMonsterZone(targetPlayer)) return;
+  const decisionKey = ("contextLabel" in action && typeof action.contextLabel === "string" && action.contextLabel) || options.effect?.id || action.type;
+  const exactIds = options.activationContext?.decisions?.specialSummons?.[decisionKey];
+  if (!hasOpenMonsterZone(targetPlayer) && exactIds === undefined) return;
   let candidates = action.requireSource && options.sourceCard
     ? [options.sourceCard]
     : action.targetRef
@@ -423,32 +410,54 @@ export function applySpecialSummonFromZone(
       );
     }
   }
-  candidates = candidates.filter((card) => canSimSpecialSummon(card, targetPlayer));
+  const otherPlayer = targetPlayer === self ? opponent : self;
+  candidates = candidates.filter((card) => canSimSpecialSummon(card, targetPlayer) &&
+    canSimulatedProcedureEnterField(card, targetPlayer, otherPlayer, []));
   const max = Math.min(
     pickCountForAction(action, 1),
     candidates.length,
     5 - (targetPlayer.field || []).length,
   );
-  const chosen = chooseRankedCards(
+  const ranked = chooseRankedCards(
     candidates,
     "summon",
     action,
     state,
     targetPlayer,
     options,
-  ).slice(0, max);
+  );
+  const preferred = exactIds === undefined
+    ? options.chooseSpecialSummonCards?.(candidates, { action, player: targetPlayer, state, sourceCard: options.sourceCard })
+    : resolveExactInstanceSelection(candidates, exactIds, { min: normalizeCount(action.count, 1).min, max,
+      revalidation: options.activationContext?.decisions?.specialSummonRevalidation?.[decisionKey] });
+  if (exactIds !== undefined && (preferred === null ||
+      (action.distinctNames && preferred && new Set(preferred.map(card => card.name)).size !== preferred.length))) {
+    (state._simUnsupportedActions ??= []).push(`exact_special_summon:${decisionKey}`);
+    return STOP_SIMULATION;
+  }
+  if (preferred === null) return;
+  const chosen: SimulatedCardState[] = [];
+  for (const card of preferred ?? ranked) {
+    if (chosen.length >= max) break;
+    if (!candidates.includes(card) || chosen.includes(card)) continue;
+    if (action.distinctNames && chosen.some(other => other.name === card.name)) continue;
+    chosen.push(card);
+  }
   if (chosen.length === 0) return;
   if (action.banishCost && options.sourceCard) {
     const sourceOwner = findCardOwner(state, options.sourceCard) || targetPlayer;
     moveCardToZone(sourceOwner, options.sourceCard, "banished");
   }
+  const summoned: SimulatedCardState[] = [];
   chosen.forEach((card) => {
     if (!hasOpenMonsterZone(targetPlayer)) return;
     const sourceOwner = findCardOwner(state, card) || targetPlayer;
+    const fromZone = findCardZone(sourceOwner, card);
+    if (!fromZone || !canSimSpecialSummon(card, targetPlayer) ||
+        !canSimulatedProcedureEnterField(card, targetPlayer, otherPlayer, [])) return;
     removeCardFromZones(sourceOwner, card);
     card.owner = targetPlayer.id;
     card.controller = targetPlayer.id;
-    const fromZone = action.zone || "deck";
     applySummonState(
       card,
       action as SimulatedSummonStateAction,
@@ -457,6 +466,7 @@ export function applySpecialSummonFromZone(
       options,
     );
     appendSimulatedFieldCard(targetPlayer.field, card);
+    summoned.push(card);
     options.onAfterSpecialSummon?.({
       state,
       player: targetPlayer,
@@ -474,17 +484,21 @@ export function applySpecialSummonFromZone(
       fromZone,
       sourceCard: options.sourceCard,
     });
+    options.emitSimulatedEvent?.("card_moved", {
+      card, player: targetPlayer, fromZone, toZone: "field", sourceCard: options.sourceCard,
+      actionContext: options.actionContext,
+    });
   });
-  if (chosen.length > 0) {
-    options.lastSpecialSummonedCards = chosen;
-    options.lastSpecialSummonedCard = chosen[0] || null;
+  if (summoned.length > 0) {
+    options.lastSpecialSummonedCards = summoned;
+    options.lastSpecialSummonedCard = summoned[0] || null;
     if (options.actionContext && typeof options.actionContext === "object") {
       (options.actionContext as SimulatedLastSpecialSummonContext)
-        .lastSpecialSummonedCards = chosen;
+        .lastSpecialSummonedCards = summoned;
       (options.actionContext as SimulatedLastSpecialSummonContext)
-        .lastSpecialSummonedCard = chosen[0] || null;
+        .lastSpecialSummonedCard = summoned[0] || null;
     }
-    storeSimActionResult(action, selections, options, chosen);
+    storeSimActionResult(action, selections, options, summoned);
   }
   return;
 }
@@ -550,37 +564,77 @@ export function applyDeSynchro(
 
 export function applySynchroSummonFromExtraDeck(
   ctx: SimulatedActionHandlerContext<"synchro_summon_from_extra_deck">,
-): void {
+): void | typeof STOP_SIMULATION {
   const { action, state, options, self, opponent } = ctx;
   const player = resolveActionPlayer(action, self, opponent);
   if (!player) return;
   const entries = getSimSynchroEntries(player, action, state);
   const selected = entries[0];
-  const synchroCard = selected?.card || null;
-  const materials = selected?.combos?.[0] || [];
-  if (!synchroCard || materials.length < 2) return;
+  const fallbackMaterials = selected?.combos[0];
+  const decisionKey = ("contextLabel" in action && typeof action.contextLabel === "string" && action.contextLabel) || options.effect?.id || action.type;
+  const exactChoice = options.activationContext?.decisions?.synchroSummons?.[decisionKey];
+  const choice = exactChoice !== undefined ? exactChoice : options.chooseSynchroMaterials
+    ? options.chooseSynchroMaterials({ candidates: entries, player, state, sourceCard: options.sourceCard })
+    : selected?.card.instanceId != null && fallbackMaterials?.every(card => card.instanceId != null)
+      ? { synchroInstanceId: selected.card.instanceId,
+        materialInstanceIds: fallbackMaterials.map(card => card.instanceId!),
+        position: action.position === "defense" ? "defense" as const : "attack" as const } : null;
+  const success = choice && entries.some(entry => entry.card.instanceId === choice.synchroInstanceId) &&
+    ((action.position !== "attack" && action.position !== "defense") || (choice.position || "attack") === action.position) &&
+    simulateSynchroSummon(state, player, choice, options, ctx.applySimulatedActions);
+  if (!success && exactChoice !== undefined) {
+    (state._simUnsupportedActions ??= []).push(`exact_synchro_summon:${decisionKey}`);
+    return STOP_SIMULATION;
+  }
+}
 
-  materials.forEach((material) => {
-    const fromZone = findCardZone(player, material) || "field";
-    if (moveCardToZone(player, material, "graveyard")) {
-      emitSimulatedCardToGrave({
-        options,
-        player,
-        card: material,
-        fromZone,
-        sourceCard: synchroCard,
-        contextLabel: "synchro_material",
-      });
+/** One shared procedure for explicit AI actions and Synchros performed by effects. */
+export function simulateSynchroSummon(
+  state: SimulatedRuntimeState,
+  player: SimulatedPlayerState,
+  choice: SimulatedSynchroChoice,
+  options: SimulatedActionOptions,
+  applyActions: SimulatedActionHandlerContext<"synchro_summon_from_extra_deck">["applySimulatedActions"],
+): boolean {
+  options = attachSimulatedEventEmitter(state, { ...options, enableSimulatedEvents: true });
+  const opponent = state.bot === player ? state.player : state.bot;
+  const position = choice.position || "attack";
+  const ids = choice.materialInstanceIds;
+  if (new Set(ids).size !== ids.length) return false;
+  const legal = getGenericSynchroActions({ bot: player, player: opponent, turn: state.turn, turnCounter: state.turnCounter, phase: "main1", _isPerspectiveState: true })
+    .some(action => action.synchroInstanceId === choice.synchroInstanceId && action.position === position &&
+      action.materialInstanceIds.length === ids.length && action.materialInstanceIds.every(id => ids.includes(id)));
+  if (!legal) return false;
+  const synchroCard = player.extraDeck.find(card => card.instanceId === choice.synchroInstanceId);
+  const materials = ids.map(id => player.field.find(card => card.instanceId === id))
+    .filter((card): card is SimulatedCardState => !!card);
+  if (!synchroCard || materials.length !== ids.length) return false;
+  if (!materials.every(material => canMoveCardToZone(player, material, "graveyard", player, { state }))) return false;
+  const metadata = materials.map(card => captureSimSynchroMaterialMetadata(card, player, state));
+  const contextId = `sim:synchro:${state._simGeneratedInstanceCounter = (state._simGeneratedInstanceCounter || 0) + 1}`;
+  const actionContext = { ...options.actionContext, synchroSummonContextId: contextId };
+  const deferred: SimulatedEventOccurrence[] = [];
+  for (const material of materials) {
+    const wasFaceupBeforeMove = !material.isFacedown;
+    const effectsNegatedAtFieldExit = material.effectsNegated === true;
+    if (!moveCardToZone(player, material, "graveyard", player, { state })) return false;
+    const toZone = findCardZone(player, material) || "removed";
+    const payload = { card: material, player, fromZone: "field", toZone,
+      wasFaceupBeforeMove, effectsNegatedAtFieldExit, movedByEffect: false,
+      contextLabel: "synchro_material", sourceCard: synchroCard, actionContext };
+    if (toZone === "graveyard") {
+      updateSimulatedSentToGraveMaterialMarker({ card: material, state, player, fromZone: "field", contextLabel: "synchro_material" });
+      // The runtime emits movement immediately and holds its trigger until the
+      // Synchro attempt finishes. Observe now; resolve the batch below.
+      options.onSimulatedEvent?.("card_to_grave", payload);
+      deferred.push({ event: "card_to_grave", payload, observed: true });
     }
-  });
-
-  removeCardFromZones(player, synchroCard);
+    options.emitSimulatedEvent?.("card_moved", payload);
+  }
+  if (!moveCardToZone(player, synchroCard, "field", player, { state })) return false;
   applySummonState(
     synchroCard,
-    {
-      ...action,
-      position: action.position || synchroCard.synchro?.position || "attack",
-    } as SimulatedSummonStateAction,
+    { position },
     state,
     player,
     options,
@@ -593,19 +647,35 @@ export function applySynchroSummonFromExtraDeck(
     summonProcedure: "synchro",
     sourceZone: "extraDeck",
   });
-  synchroCard.synchroMaterials = materials.map((material) =>
-    captureSimSynchroMaterialMetadata(material, player, state),
-  );
-  appendSimulatedFieldCard(player.field, synchroCard);
-  options.emitSimulatedEvent?.("after_summon", {
+  synchroCard.synchroMaterials = metadata;
+  const summonEvent: SimulatedEventOccurrence = { event: "after_summon", observed: true, payload: {
     card: synchroCard,
     player,
     method: "synchro",
     summonProcedure: "synchro",
     fromZone: "extraDeck",
     sourceCard: synchroCard,
-    actionContext: options.actionContext,
-  });
+    actionContext,
+  } };
+  options.onSimulatedEvent?.(summonEvent.event, summonEvent.payload);
+  options.emitSimulatedEvent?.("card_moved", { card: synchroCard, player, fromZone: "extraDeck", toZone: "field", actionContext });
+  // The runtime finishes the material trigger window before discovering the
+  // summoned monster's queued trigger targets. Keep those choices separate:
+  // a material effect can remove a prospective target from the Graveyard.
+  if (options.emitSimulatedEvents) options.emitSimulatedEvents(deferred);
+  else for (const entry of deferred) options.emitSimulatedEvent?.(entry.event, entry.payload);
+  if (options.emitSimulatedEvents) options.emitSimulatedEvents([summonEvent]);
+  else options.emitSimulatedEvent?.(summonEvent.event, summonEvent.payload);
+  const followups = (state.pendingSynchroMaterialFollowups || []).filter(entry => entry.synchroSummonContextId === contextId);
+  state.pendingSynchroMaterialFollowups = (state.pendingSynchroMaterialFollowups || []).filter(entry => entry.synchroSummonContextId !== contextId);
+  for (const followup of followups) {
+    if (!player.field.includes(synchroCard)) break;
+    applyActions({ actions: followup.actions, state,
+      selfId: state.bot === player ? "bot" : "player", selections: { synchro_summoned_card: [synchroCard] },
+      options: { ...options, sourceCard: followup.source, actionContext },
+    });
+  }
+  return true;
 }
 
 export function applySearchThenOptionalSpecialSummonFromHand(
@@ -875,39 +945,36 @@ export function applyBounceAndSummon(
     applySimulatedActions,
   } = ctx;
   const targetPlayer = resolveActionPlayer(action, self, opponent);
-  if (!hasOpenMonsterZone(targetPlayer)) return;
   const sourceCard = options.sourceCard;
   if (!sourceCard || !targetPlayer.field?.includes(sourceCard)) return;
-  if (action.bounceSource) {
+  const bouncesSource = action.bounceSource !== false;
+  if (!hasOpenMonsterZone(targetPlayer) && !bouncesSource) return;
+  // Position belongs to the arriving monster, not to the hand-card filter.
+  const candidates = getActionCandidates(targetPlayer, { filters: action.filters || {} }, "hand", options)
+    .filter(card => card !== sourceCard && canSimSpecialSummon(card, targetPlayer));
+  const chosen = chooseRankedCards(candidates, "summon", action, state, targetPlayer, options)[0];
+  if (!chosen || !candidates.includes(chosen)) return;
+
+  if (bouncesSource) {
     const wasFaceupBeforeMove = sourceCard.isFacedown !== true;
-    if (moveCardToZone(targetPlayer, sourceCard, "hand")) {
-      options.emitSimulatedEvent?.("card_moved", {
-        card: sourceCard,
-        player: targetPlayer,
-        fromZone: "field",
-        toZone: "hand",
-        movedByEffect: true,
-        wasFaceupBeforeMove,
-        sourceCard,
-        effectId: options.effect?.id || null,
-        actionContext: options.actionContext,
-      });
-    }
+    if (!moveCardToZone(targetPlayer, sourceCard, "hand", targetPlayer, {
+      state, movedByEffect: true, sourceCard, sourcePlayer: self,
+    })) return;
+    options.emitSimulatedEvent?.("card_moved", {
+      card: sourceCard,
+      player: targetPlayer,
+      fromZone: "field",
+      toZone: findCardZone(targetPlayer, sourceCard) || "removed",
+      movedByEffect: true,
+      wasFaceupBeforeMove,
+      sourceCard,
+      effectId: options.effect?.id || null,
+      actionContext: options.actionContext,
+    });
   }
-  const candidates = getActionCandidates(targetPlayer, action, "hand")
-    .filter(
-      (card) => card !== sourceCard && canSimSpecialSummon(card, targetPlayer),
-    );
-  const chosen = chooseRankedCards(
-    candidates,
-    "summon",
-    action,
-    state,
-    targetPlayer,
-    options,
-  )[0];
-  if (!chosen) return;
-  removeCardFromZones(targetPlayer, chosen);
+  if (!targetPlayer.hand.includes(chosen) || !moveCardToZone(targetPlayer, chosen, "field", targetPlayer, {
+    state, movedByEffect: true, sourceCard, sourcePlayer: self,
+  })) return;
   applySummonState(
     chosen,
     action as SimulatedSummonStateAction,
@@ -915,7 +982,6 @@ export function applyBounceAndSummon(
     targetPlayer,
     options,
   );
-  appendSimulatedFieldCard(targetPlayer.field, chosen);
   options.onAfterSpecialSummon?.({
     state,
     player: targetPlayer,
@@ -932,6 +998,11 @@ export function applyBounceAndSummon(
     action,
     fromZone: "hand",
     sourceCard,
+  });
+  options.emitSimulatedEvent?.("card_moved", {
+    card: chosen, player: targetPlayer, fromZone: "hand", toZone: "field",
+    movedByEffect: true, sourceCard, effectId: options.effect?.id || null,
+    actionContext: options.actionContext,
   });
   return;
 }
@@ -967,6 +1038,13 @@ export function applySpecialSummonToken(
     owner: targetPlayer.id,
     controller: targetPlayer.id,
   };
+  const occupiedIds = new Set([state.bot, state.player].flatMap(player =>
+    ["field", "hand", "deck", "extraDeck", "graveyard", "banished", "spellTrap", "fieldSpell"]
+      .flatMap(zone => getZoneCards(player, zone).map(card => card.instanceId))));
+  do {
+    state._simGeneratedInstanceCounter = (state._simGeneratedInstanceCounter || 0) + 1;
+    summonedToken.instanceId = `sim:token:${state._simGeneratedInstanceCounter}`;
+  } while (occupiedIds.has(summonedToken.instanceId));
   applySummonState(
     summonedToken,
     action as SimulatedSummonStateAction,

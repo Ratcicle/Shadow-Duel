@@ -172,7 +172,6 @@ function canUseCitadelBuff(bot: SimulatedPlayerState, opponent: SimulatedPlayerS
   const target = bestBuffTarget.monster;
   const projectedDef =
     (target.def || 0) +
-    (target.tempDefBoost || 0) +
     CITADEL_TEMP_BUFF.defBoost;
   const createsWall =
     target.mustBeAttacked ||
@@ -297,7 +296,7 @@ export default class LuminarchStrategy extends BaseStrategy {
         monster &&
         monster.cardKind === "monster" &&
         monster.position === "attack" &&
-        (monster.atk || 0) + (monster.tempAtkBoost || 0) <
+        (monster.atk || 0) <
           Math.max(500, opponentStrongest - 200),
     ).length;
     score -= exposedAttackers * 0.25;
@@ -408,9 +407,7 @@ export default class LuminarchStrategy extends BaseStrategy {
     const myStrongestDef = myField.reduce((max, monster) => {
       if (!monster || monster.cardKind !== "monster") return max;
       const def =
-        (monster.def || 0) +
-        (monster.tempDefBoost || 0) +
-        (monster.equipDefBonus || 0);
+        (monster.def || 0);
       return Math.max(max, def);
     }, 0);
 
@@ -431,7 +428,7 @@ export default class LuminarchStrategy extends BaseStrategy {
     );
     if (tauntWalls.length > 0) {
       const bestTauntDef = tauntWalls.reduce((max, monster) => {
-        const def = (monster.def || 0) + (monster.tempDefBoost || 0);
+        const def = (monster.def || 0);
         return Math.max(max, def);
       }, 0);
       score += opponentStrongestAtk > 0 ? 0.6 : 0.2;
@@ -449,7 +446,7 @@ export default class LuminarchStrategy extends BaseStrategy {
     const exposedAttackers = myField.filter((monster) => {
       if (!monster || monster.cardKind !== "monster") return false;
       if (monster.position !== "attack") return false;
-      const atk = (monster.atk || 0) + (monster.tempAtkBoost || 0);
+      const atk = (monster.atk || 0);
       return atk < Math.max(500, opponentStrongestAtk - 200);
     }).length;
     score -= exposedAttackers * 0.45;

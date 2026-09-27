@@ -78,6 +78,7 @@ function getCardInstanceId(
 
 function canContinueWithCommittedMovedSource(
   card: ActivationCard,
+  player: ActivationPlayer,
   activationZone: ActivationZone,
   activationContext: ActivationRuntimeContext = {},
 ): boolean {
@@ -87,6 +88,7 @@ function canContinueWithCommittedMovedSource(
     activationContext?.costsPaid !== true ||
     activationContext?.sourceMoved !== true ||
     !snapshot ||
+    snapshot.controllerId !== player.id ||
     snapshot.zone !== activationZone
   ) {
     return false;
@@ -95,8 +97,8 @@ function canContinueWithCommittedMovedSource(
   const snapshotInstanceId = snapshot.cardInstanceId ?? null;
   const currentInstanceId = getCardInstanceId(card);
   if (
-    snapshotInstanceId !== null &&
-    currentInstanceId !== null &&
+    snapshotInstanceId === null ||
+    currentInstanceId === null ||
     snapshotInstanceId !== currentInstanceId
   ) {
     return false;
@@ -194,7 +196,7 @@ export async function activateMonsterFromGraveyard(
   }
   if (
     (!player.graveyard || !player.graveyard.includes(card)) &&
-    !canContinueWithCommittedMovedSource(card, "graveyard", activationContext)
+    !canContinueWithCommittedMovedSource(card, player, "graveyard", activationContext)
   ) {
     return {
       success: false,
@@ -247,6 +249,7 @@ export async function activateMonsterFromGraveyard(
     autoSelectSingleTarget: activationContext?.autoSelectSingleTarget,
     autoSelectTargets: activationContext?.autoSelectTargets,
     actionContext: activationContext?.actionContext || null,
+    ...(activationContext.decisions ? { decisions: activationContext.decisions } : {}),
     costsPaid: activationContext?.costsPaid === true,
     costSelections: activationContext?.costSelections || {},
     targetSelections: activationContext?.targetSelections || selections || {},
@@ -407,6 +410,7 @@ export async function activateFieldSpell(
     autoSelectSingleTarget: activationContext?.autoSelectSingleTarget,
     autoSelectTargets: activationContext?.autoSelectTargets,
     actionContext: activationContext?.actionContext || null,
+    ...(activationContext.decisions ? { decisions: activationContext.decisions } : {}),
     costsPaid: activationContext?.costsPaid === true,
     costSelections: activationContext?.costSelections || {},
     targetSelections: activationContext?.targetSelections || selections || {},
@@ -521,7 +525,10 @@ export async function activateSpellTrapEffect(
   if (!card || !player) {
     return fail("Missing card or player.");
   }
-  if (card.owner !== player.id) {
+  if (
+    card.owner !== player.id &&
+    !canContinueWithCommittedMovedSource(card, player, activationZone, activationContext)
+  ) {
     return fail("Card does not belong to the requesting player.");
   }
   if (card.cardKind !== "spell" && card.cardKind !== "trap") {
@@ -601,6 +608,7 @@ export async function activateSpellTrapEffect(
     autoSelectSingleTarget: activationContext?.autoSelectSingleTarget,
     autoSelectTargets: activationContext?.autoSelectTargets,
     actionContext: activationContext?.actionContext || null,
+    ...(activationContext.decisions ? { decisions: activationContext.decisions } : {}),
     quickSpellContext: activationContext?.quickSpellContext || null,
     quickSpellActivationFromSet,
     resolvedTargets: activationContext?.resolvedTargets || null,
@@ -609,6 +617,10 @@ export async function activateSpellTrapEffect(
     costSelections: activationContext?.costSelections || {},
     targetSelections: activationContext?.targetSelections || selections || {},
     resolutionSelections: activationContext?.resolutionSelections || {},
+    sourceAtActivation: activationContext?.sourceAtActivation || null,
+    sourceMoved: activationContext?.sourceMoved === true,
+    latestSourceLocation: activationContext?.latestSourceLocation || null,
+    costPayment: activationContext?.costPayment || null,
     prepareOnly: activationContext?.prepareOnly === true,
   };
   let effect: EffectDefinition | null = null;
@@ -890,7 +902,10 @@ export async function activateMonsterEffect(
       reason: "Missing card or player.",
     };
   }
-  if (card.owner !== player.id) {
+  if (
+    card.owner !== player.id &&
+    !canContinueWithCommittedMovedSource(card, player, activationZone, activationContext)
+  ) {
     return {
       success: false,
       needsSelection: false,
@@ -925,6 +940,7 @@ export async function activateMonsterEffect(
       (!player.hand || !player.hand.includes(card)) &&
       !canContinueWithCommittedMovedSource(
         card,
+        player,
         activationZone,
         activationContext,
       )
@@ -940,6 +956,7 @@ export async function activateMonsterEffect(
       (!player.field || !player.field.includes(card)) &&
       !canContinueWithCommittedMovedSource(
         card,
+        player,
         activationZone,
         activationContext,
       )
@@ -1021,6 +1038,7 @@ export async function activateMonsterEffect(
     autoSelectSingleTarget: activationContext?.autoSelectSingleTarget,
     autoSelectTargets: activationContext?.autoSelectTargets,
     actionContext: activationContext?.actionContext || null,
+    ...(activationContext.decisions ? { decisions: activationContext.decisions } : {}),
     costsPaid: activationContext?.costsPaid === true,
     costSelections: activationContext?.costSelections || {},
     targetSelections: activationContext?.targetSelections || selections || {},

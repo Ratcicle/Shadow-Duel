@@ -374,6 +374,10 @@ export function simulateMainPhaseAction<State extends DragonSimulationState>(
   if (!action || !state?.bot) return state;
 
   switch (action.type) {
+    case "synchro":
+      state._simUnsupportedActions ??= [];
+      if (!state._simUnsupportedActions.includes("synchro")) state._simUnsupportedActions.push("synchro");
+      break;
     case "handSummonProcedure": {
       const player = state.bot;
       const direct = Number.isInteger(action.index) ? player.hand[action.index!] : undefined;
@@ -1452,6 +1456,7 @@ function simulateDragonAfterSummonEffects(
     }
     if (destroyed > 0) {
       summoned.tempAtkBoost = (summoned.tempAtkBoost || 0) + destroyed * 300;
+      summoned.atk = (summoned.atk || 0) + destroyed * 300;
     }
   }
 
@@ -1461,6 +1466,7 @@ function simulateDragonAfterSummonEffects(
       .sort((a, b) => cardStrategicSimValue(b) - cardStrategicSimValue(a))[0];
     if (target) {
       target.tempAtkBoost = (target.tempAtkBoost || 0) + 500;
+      target.atk = (target.atk || 0) + 500;
     }
   }
 }
@@ -1698,6 +1704,7 @@ function simulateTechVoidAfterSummon(
   appendSimulatedZoneCard(player.banished, banished);
   const buff = Math.floor((banished.atk || 0) * 0.5);
   summoned.tempAtkBoost = (summoned.tempAtkBoost || 0) + buff;
+  summoned.atk = (summoned.atk || 0) + buff;
 }
 
 function selectRadiantCosmicMaterials(
@@ -2387,8 +2394,8 @@ function simulateDragonGraveyardMonsterEffect(
               (entry.candidate === luminescentDebuffPlan?.target ? 10000 : 0) +
               (order >= 0 ? 1000 - order * 20 : 0) +
               Math.max(
-                Number(entry.candidate?.atk || 0) + Number(entry.candidate?.tempAtkBoost || 0),
-                Number(entry.candidate?.def || 0) + Number(entry.candidate?.tempDefBoost || 0),
+                Number(entry.candidate?.atk || 0),
+                Number(entry.candidate?.def || 0),
               )
             );
           };

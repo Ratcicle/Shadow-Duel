@@ -3,6 +3,23 @@ import {
   selectTributeIndicesByValue,
 } from "../../game/summon/tributeValue.js";
 import type { TributeCardView } from "../../game/summon/tributeValue.js";
+import type { AiCardInput, AiPlayerInput, AiStateInput } from "../../contracts/aiState.js";
+import { canMoveCardToZone } from "./zones.js";
+
+/** Preserve policy ranking while excluding costs that cannot leave their current field. */
+export function selectPayableTributes<Card extends AiCardInput>(
+  player: AiPlayerInput,
+  field: readonly Card[],
+  state: Pick<AiStateInput, "bot" | "player">,
+  select: (candidates: Card[]) => readonly number[],
+): { candidates: Card[]; indices: number[] } {
+  const candidates = field.filter(card => canMoveCardToZone(player, card, "graveyard", player, { state }));
+  const indices = select(candidates).flatMap(index => {
+    const card = Number.isInteger(index) ? candidates[index] : undefined;
+    return card ? [field.indexOf(card)] : [];
+  });
+  return { candidates, indices };
+}
 
 interface TributeAlternative {
   type?: string;

@@ -17,6 +17,10 @@ import type {
 import type { FilterCard, RuntimeCardFilter } from "../filters/cardFilters.js";
 
 type PassiveStat = "atk" | "def";
+type PassiveStatCard = {
+  [Key in "atk" | "def" | "dynamicBuffs" | "suppressedDynamicBuffStatsByKey" |
+    "temporarySuppressedDynamicBuffStatsByKey"]?: ActionRuntimeCard[Key] | undefined;
+};
 type PassiveCard = ActionRuntimeCard & {
   extraAttacks?: number;
   passiveExtraAttackBonuses?: Record<string, CardPassiveExtraAttackBonus>;
@@ -121,14 +125,25 @@ export function cardHasArchetype(
   return false;
 }
 
+interface CardInstanceReference {
+  readonly instanceId?: number | string | null | undefined;
+}
+
+interface EquipCardView extends CardInstanceReference {
+  readonly cardKind?: string | null | undefined;
+  readonly subtype?: string | null | undefined;
+  readonly equippedTo?: CardInstanceReference | null | undefined;
+  readonly equipTarget?: CardInstanceReference | string | number | null | undefined;
+}
+
 export function isSameCardReference(
   ref:
-    | Pick<ActionRuntimeCard, "instanceId">
+    | CardInstanceReference
     | string
     | number
     | null
     | undefined,
-  card: Pick<ActionRuntimeCard, "instanceId"> | null | undefined,
+  card: CardInstanceReference | null | undefined,
 ) {
   if (!ref || !card) return false;
   if (ref === card) return true;
@@ -144,24 +159,27 @@ export function isSameCardReference(
   return false;
 }
 
+/** Shared read-only equip eligibility for the runtime and planning snapshots. */
+export function isActiveEquipInZone<Card extends EquipCardView>(
+  equip: Card,
+  card: Card,
+  spellTrap: readonly Card[],
+  sameReference: typeof isSameCardReference = isSameCardReference,
+): boolean {
+  if (equip.cardKind !== "spell" || equip.subtype !== "equip") return false;
+  if (!sameReference(equip.equippedTo, card) && !sameReference(equip.equipTarget, card)) return false;
+  return spellTrap.includes(equip);
+}
+
 export function isActiveEquipForCard(
   this: EquipHost,
   equip: FilterCard | null | undefined,
   card: FilterCard | null | undefined,
 ) {
   if (!equip || !card) return false;
-  if (equip.cardKind !== "spell" || equip.subtype !== "equip") return false;
-
-  const isAttached =
-    this.isSameCardReference(equip.equippedTo, card) ||
-    this.isSameCardReference(equip.equipTarget, card);
-  if (!isAttached) return false;
-
   const equipOwner = this.getOwnerByCard(equip);
   if (!equipOwner) return false;
-  return (
-    Array.isArray(equipOwner.spellTrap) && equipOwner.spellTrap.includes(equip)
-  );
+  return isActiveEquipInZone(equip, card, equipOwner.spellTrap, this.isSameCardReference);
 }
 
 function getPassiveBuffStats(
@@ -194,7 +212,7 @@ function passiveSourceEffectsAreNegated(
 }
 
 function clearPassiveBuffEntry(
-  card: PassiveCard | null | undefined,
+  card: PassiveStatCard | null | undefined,
   entry: CardDynamicBuffEntry | null | undefined,
 ) {
   if (!card || !entry) return false;
@@ -238,7 +256,7 @@ function addSuppressedPassiveStats(
 }
 
 function getSuppressedPassiveStats(
-  card: PassiveCard | null | undefined,
+  card: PassiveStatCard | null | undefined,
   effectKey: string,
 ) {
   if (!card || !effectKey) return null;
@@ -255,7 +273,7 @@ function getSuppressedPassiveStats(
 }
 
 export function applyPassiveBuffValue(
-  card: PassiveCard | null | undefined,
+  card: PassiveStatCard | null | undefined,
   effectKey: string,
   amount: number,
   stats: PassiveStat | readonly PassiveStat[] = ["atk", "def"],
@@ -311,6 +329,37 @@ export function applyPassiveBuffValue(
   };
 
   return previousValue !== amount || statsChanged || appliedAnyStat;
+}
+
+/** Stable source identity lets live and simulated state remove one aura contribution. */
+export function getFieldAuraBuffKey(
+  card: { id?: number | undefined; instanceId?: string | number | null | undefined;
+    fieldPresenceId?: string | number | null | undefined },
+  effectId: string | undefined,
+  effectIndex: number,
+  fieldIndex: number,
+  stat: PassiveStat,
+): string {
+  const sourceKey = card.fieldPresenceId || card.instanceId || `${card.id}_${fieldIndex}`;
+  return `${effectId || `passive_${card.id}_${effectIndex}_field_aura`}_${sourceKey}_${stat}`;
+}
+
+/** Remove one source's existing aura before its field identity is cleared. */
+export function removeFieldAuraBuffContributions(
+  source: Parameters<typeof getFieldAuraBuffKey>[0] & { effects?: readonly EffectDefinition[] | undefined },
+  recipients: readonly PassiveStatCard[],
+  sourceFieldIndex: number,
+): void {
+  source.effects?.forEach((effect, index) => {
+    if (effect.timing !== "passive" || !("passive" in effect) ||
+        effect.passive?.type !== "field_archetype_aura_buff") return;
+    for (const stat of ["atk", "def"] as const) {
+      const key = getFieldAuraBuffKey(source, effect.id, index, sourceFieldIndex, stat);
+      for (const recipient of recipients) {
+        if (recipient.dynamicBuffs?.[key]) applyPassiveBuffValue(recipient, key, 0, [stat]);
+      }
+    }
+  });
 }
 
 export function clearPassiveBuffsForCard(card: PassiveCard | null | undefined) {
@@ -1067,12 +1116,6 @@ export function updatePassiveBuffs(this: PassiveHost) {
           passive.requireTargetFaceup === true;
         const includeSelf = passive.includeSelf !== false;
         const targetFilters = passive.targetFilters || null;
-        const sourceKey =
-          card.fieldPresenceId ||
-          card.instanceId ||
-          `${card.id}_${fieldCards.indexOf(card)}`;
-        const baseBuffKey =
-          effect.id || `passive_${card.id}_${index}_field_aura`;
         const statBoosts: { stat: PassiveStat; amount: number }[] = [];
 
         if (typeof passive.amount === "number") {
@@ -1113,7 +1156,7 @@ export function updatePassiveBuffs(this: PassiveHost) {
           for (const boost of statBoosts) {
             const applied = this.applyPassiveBuffValue(
               target,
-              `${baseBuffKey}_${sourceKey}_${boost.stat}`,
+              getFieldAuraBuffKey(card, effect.id, index, fieldCards.indexOf(card), boost.stat),
               boost.amount,
               [boost.stat],
             );

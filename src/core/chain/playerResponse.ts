@@ -1,4 +1,5 @@
 import { isAI } from "../Player.js";
+import { createChainResponseDecisionAdapter } from "../game/decisions/chainResponse.js";
 import type {
   ChainActivationCandidate,
   ChainMaybePromise,
@@ -76,6 +77,7 @@ export async function playerChooseChainResponse(
               kind: "chain_response",
               actor: player,
               candidates: activatable,
+              ...createChainResponseDecisionAdapter(this.game, activatable),
               contextSnapshot: {
                 type: context?.type || null,
                 chainId: this.activeChainId ?? null,

@@ -53,6 +53,26 @@ test("field placement replay decisions validate actor, destination, candidates a
   ]) assert.throws(() => validateCanonicalReplay(replay({ decisions: [invalid] })), /Invalid canonical replay/);
 });
 
+test("Chain response replay validates exact decisions and rejects execution context", () => {
+  const value = { pass: false, candidateKey: "1:response:spellTrap", effectId: "response", decisions: {
+    selections: { target: [2] }, cases: { mode: "increase" }, specialSummons: { revive: [2, 3] },
+    specialSummonRevalidation: { revive: "remaining" },
+    synchroSummons: { summon: { synchroDuelCardId: 4, materialDuelCardIds: [2, 3], position: "attack" } },
+  } };
+  const decision = { sequence: 1, decisionId: 1, kind: "chain_response", actorId: "bot", candidateKeys: [value.candidateKey], value, context: null };
+  assert.doesNotThrow(() => validateCanonicalReplay(replay({ decisions: [decision] })));
+  for (const invalid of [
+    { ...value, activationContext: { costsPaid: true } },
+    { ...value, decisions: { selections: { target: ["global-instance"] } } },
+    { ...value, decisions: { selections: { target: [0] } } },
+    { ...value, decisions: { selections: { target: [2, 2] } } },
+    { ...value, decisions: { specialSummonRevalidation: { revive: "all" } } },
+    { ...value, decisions: { synchroSummons: { summon: { synchroDuelCardId: 4, materialDuelCardIds: [2], position: "sideways" } } } },
+    { ...value, decisions: { allowDuringResolving: true } },
+    { pass: true, decisions: value.decisions },
+  ]) assert.throws(() => validateCanonicalReplay(replay({ decisions: [{ ...decision, value: invalid }] })), /Invalid canonical replay/);
+});
+
 const commandPayloads = [
   ["noop", {}],
   ["draw", { amount: 2 }],

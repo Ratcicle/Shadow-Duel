@@ -187,7 +187,10 @@ for (const initialLp of [8000, 3, 1, 0.5]) {
     applySimulatedActions({ state, selfId: "player", actions: [...(effect.activationCosts ?? []), ...(effect.actions ?? [])] });
     assert.equal(state.player.lp, game.player.lp);
     assert.equal(state.player.hand.length, 2);
-    assert.deepEqual(new Set(state.player.effectActivationRestrictions?.[0]?.blockedNames), new Set([first.name, second.name]));
+    assert.equal(state._simRequiresReplan, true);
+    assert.ok(state.player.hand.every(card => card._simUnknownDraw && card.name == null));
+    assert.equal(state.player.effectActivationRestrictions?.length || 0, 0,
+      "restriction names are learned only after the real draw reveals the cards");
   });
 }
 

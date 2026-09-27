@@ -1,4 +1,5 @@
 import { isAI } from "../../Player.js";
+import { resolveExactInstanceSelection } from "../../AutoSelector.js";
 import type { ActionOf } from "../../contracts/actions.js";
 import type {
   ActionHandlerEnginePort,
@@ -524,8 +525,12 @@ export async function handleSynchroSummonFromExtraDeck(
   }
 
   let selectedEntry: LegalSynchroEntry | null | undefined = null;
+  const planned = isAI(player) ? ctx.activationContext?.decisions?.synchroSummons?.[
+    ctx.effect?.id || action.type
+  ] : undefined;
+  if (planned && action.position && action.position !== "choice" && action.position !== planned.position) return false;
   if (isAI(player)) {
-    selectedEntry = legalEntries
+    selectedEntry = planned ? legalEntries.find(entry => entry.card.instanceId === planned.synchroInstanceId) : legalEntries
       .slice()
       .sort(
         (a, b) =>
@@ -570,7 +575,13 @@ export async function handleSynchroSummonFromExtraDeck(
   }
 
   let materials: ActionRuntimeCard[] = [];
-  if (isAI(player)) {
+  if (planned) {
+    const chosen = resolveExactInstanceSelection(player.field || [], planned.materialInstanceIds, { min: 1, max: 5 });
+    if (!chosen) return false;
+    const combos: unknown = Reflect.get(check, "materialCombos");
+    if (!Array.isArray(combos) || !combos.some(combo => Array.isArray(combo) && combo.length === chosen.length && chosen.every(card => combo.includes(card)))) return false;
+    materials = chosen;
+  } else if (isAI(player)) {
     const materialCombos: unknown = Reflect.get(check, "materialCombos");
     const firstCombo = Array.isArray(materialCombos) ? materialCombos[0] : null;
     materials = Array.isArray(firstCombo)
@@ -623,7 +634,7 @@ export async function handleSynchroSummonFromExtraDeck(
     synchroCard,
     {
       checkActionWindow: false,
-      position: action.position,
+      position: planned?.position || action.position,
       summonOrigin: "effect_resolution",
       actionContext:
         ctx?.actionContext || ctx?.activationContext?.actionContext,
@@ -645,9 +656,13 @@ export function hasSynchroSummonPreviewCandidate(
   const player = action?.player === "opponent" ? ctx?.opponent : ctx?.player;
   if (!game || !player) return false;
 
+  const planned = isAI(player) ? ctx.activationContext?.decisions?.synchroSummons?.[
+    ctx.effect?.id || action.type
+  ] : undefined;
+  if (planned && action.position && action.position !== "choice" && action.position !== planned.position) return false;
   const filters = getSynchroCandidateFilters(action);
   const extraDeckCandidates = (player.extraDeck || []).filter((card) =>
-    matchesActionFilters(engine, card, filters),
+    matchesActionFilters(engine, card, filters) && (!planned || card.instanceId === planned.synchroInstanceId),
   );
   if (extraDeckCandidates.length === 0) return false;
 
@@ -698,8 +713,11 @@ export function hasSynchroSummonPreviewCandidate(
       return (
         Array.isArray(rawCombos) &&
         rawCombos.some(
-          (combo) =>
-            Array.isArray(combo) && field.length - combo.length + 1 <= 5,
+          (combo) => Array.isArray(combo) && field.length - combo.length + 1 <= 5 && (!planned || (
+            new Set(planned.materialInstanceIds).size === planned.materialInstanceIds.length &&
+            combo.length === planned.materialInstanceIds.length && planned.materialInstanceIds.every(id =>
+              combo.some((material: unknown) => typeof material === "object" && material !== null && Reflect.get(material, "instanceId") === id))
+          )),
         )
       );
     });

@@ -239,6 +239,10 @@ export async function executeHandIgnitionAction(
     selectionMessage: "Select target(s) for the monster effect.",
     guardKind: "bot_hand_ignition",
     phaseReq: ["main1", "main2"],
+    preview: () =>
+      game.effectEngine?.canActivateMonsterEffectPreview?.(
+        card, bot, "hand", null, { activationContext },
+      ),
     oncePerTurn: {
       card,
       player: bot,

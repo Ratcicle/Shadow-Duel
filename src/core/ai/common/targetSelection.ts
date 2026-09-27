@@ -5,6 +5,8 @@ import {
   getPiercingDamage,
 } from "./cardStats.js";
 import { getCardComparableAttribute } from "../../Card.js";
+import { resolveExactInstanceSelection } from "../../AutoSelector.js";
+import type { AIDecisionPlan } from "../../contracts/ai.js";
 import { cardMatchesFilter } from "./cardFilters.js";
 import {
   estimateCardValue,
@@ -71,6 +73,7 @@ interface TargetSelectionOptions {
   costPreferences?: TargetPreference | null;
   actionContext?: ActionPreferenceContext | null;
   activationContext?: {
+    decisions?: AIDecisionPlan;
     actionContext?: ActionPreferenceContext | null;
     costPreferences?: TargetPreference | null;
   } | null;
@@ -181,10 +184,11 @@ interface RecursionPreference {
 interface SelectSimulatedTargetsInput {
   targets: readonly AiTargetFilter[] | null | undefined;
   actions?: readonly (CardAction & ActionIntentView)[] | null | undefined;
-  state: Pick<AiStateShape, "bot" | "player">;
+  state: Pick<AiStateShape, "bot" | "player" | "_simUnsupportedActions">;
   sourceCard?: SimulatedCardState | null | undefined;
   selfId?: string;
   options?: TargetSelectionOptions;
+  selections?: CanonicalSelectionMap;
 }
 
 export function asArray<Value>(
@@ -663,11 +667,19 @@ export function selectSimulatedTargets({
   sourceCard,
   selfId = "bot",
   options = {},
+  selections = {},
 }: SelectSimulatedTargetsInput): CanonicalSelectionMap {
-  const result: CanonicalSelectionMap = {};
+  const result: CanonicalSelectionMap = { ...selections };
   if (!Array.isArray(targets) || targets.length === 0) return result;
   const { self, opponent } = getPerspectivePlayers(state, selfId);
   const intents = buildTargetIntents(actions || []);
+  const exactSelection = (id: string, candidates: readonly SimulatedCardState[], count: NormalizedCount) => {
+    const ids = options.activationContext?.decisions?.selections?.[id];
+    if (ids === undefined) return undefined;
+    const selected = resolveExactInstanceSelection(candidates, ids, count);
+    if (selected === null) (state._simUnsupportedActions ??= []).push(`exact_selection:${id}`);
+    return selected || [];
+  };
   const comparisonPasses = (
     candidate: SimulatedCardState | null | undefined,
     reference: SimulatedCardState | null | undefined,
@@ -778,7 +790,7 @@ export function selectSimulatedTargets({
         );
       });
       const count = normalizeCount(target.count, 1);
-      result[target.id] = contextCards.slice(
+      result[target.id] = exactSelection(target.id, contextCards, count) ?? contextCards.slice(
         0,
         Math.min(count.max, contextCards.length),
       );
@@ -909,7 +921,7 @@ export function selectSimulatedTargets({
     if (min === 0 && intent !== "cost") {
       pickCount = 0;
     }
-    result[target.id] = ordered.slice(0, Math.min(pickCount, ordered.length));
+    result[target.id] = exactSelection(target.id, filtered, count) ?? ordered.slice(0, Math.min(pickCount, ordered.length));
   });
 
   return result;

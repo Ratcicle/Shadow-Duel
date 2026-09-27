@@ -396,7 +396,6 @@ export const techZeroCards = [
             requireSource: true,
             position: "choice",
             promptPlayer: true,
-            oncePerTurnName: "tech_zero_glider_wyvern_special_summon",
           },
         ],
       },

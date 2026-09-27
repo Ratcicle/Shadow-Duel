@@ -5,6 +5,7 @@ import type { SimulatedCardState } from "../../contracts/aiState.js";
 type AiTimingRole = "reactive_backrow" | "pre_battle_value" | "post_battle_payoff";
 interface PhaseTimingCard {
   id?: GameCard["id"] | number;
+  instanceId?: number | string;
   name?: string | undefined;
   cardKind?: string | undefined;
   subtype?: string | null | undefined;
@@ -140,7 +141,6 @@ export function getActionCard(
   context: PhaseTimingContext = {},
 ): PhaseTimingCard | null {
   if (!action) return null;
-  if (action.card) return action.card;
   const player =
     context.player ||
     context.bot ||
@@ -148,6 +148,10 @@ export function getActionCard(
     context.game?.bot ||
     context.game?.player ||
     null;
+  if (action.type === "synchro") {
+    return player?.extraDeck?.find(card => card.instanceId === action.synchroInstanceId) || null;
+  }
+  if (action.card) return action.card;
   const hand = context.hand || player?.hand || [];
   if (Number.isInteger(action.index) && Array.isArray(hand)) {
     const handCard = hand[action.index!];
@@ -230,6 +234,7 @@ export function isPreBattleValueAction(
     type === "handSummonProcedure" ||
     type === "special_summon_sanctum_protector" ||
     type === "extraDeckProcedure" ||
+    type === "synchro" ||
     type === "ascension" ||
     type === "spell" ||
     type === "monsterEffect" ||
@@ -259,6 +264,9 @@ export function isAllowedAiActionForCurrentPhase(
   }
 
   if (isMain2Phase(gameOrState, context.analysis || null)) {
+    // Synchro can rebuild the field after combat; strategic value is scored by
+    // the caller instead of requiring an archetype-specific timing hook.
+    if (action.type === "synchro") return true;
     return isPostBattlePayoffAction(action, context);
   }
 

@@ -40,6 +40,7 @@ type BotGameMethodName =
   | "canStartAction" | "nextPhase" | "updateBoard" | "waitForBoardPresentation"
   | "waitForAiPresentationStep" | "isDisposed" | "getOpponent"
   | "performAscensionSummon" | "performExtraDeckSummonProcedure" | "performHandSummonProcedure" | "performNormalSummon"
+  | "performSynchroSummon" | "canSummonSynchroCard"
   | "canUseAsAscensionMaterial" | "getAscensionCandidatesForMaterial" | "checkAscensionRequirements"
   | "canSummonExtraDeckCardByProcedure" | "canSummonFromHandByProcedure" | "canChangePosition" | "changeMonsterPosition"
   | "getAttackAvailability" | "isActiveAttackPriorityTarget" | "resolveCombat"
@@ -100,7 +101,8 @@ export type BotArchetypeId =
   | "arcanist"
   | "miragebound"
   | "bloomrot"
-  | "burningwest";
+  | "burningwest"
+  | "techzero";
 
 export interface BotPresetDefinition {
   id: BotArchetypeId;

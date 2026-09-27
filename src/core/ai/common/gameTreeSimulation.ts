@@ -1,5 +1,5 @@
 import { resolvePerspectivePlayers } from "./perspective.js";
-import { createPlanningCopy } from "./planningCopy.js";
+import { createPlanningCopy, projectRuntimeEffectUsage } from "./planningCopy.js";
 import {
   PLANNING_PLAYER_FIELDS,
   PLANNING_STATE_FIELDS,
@@ -54,6 +54,7 @@ export function createGameTreeCopy(
       additionalNormalSummons: safe.additionalNormalSummons || 0,
     };
     // Player summon legality, activation restrictions, passive usage and stats.
+    copy.registerPlayerCopy(safe, result);
     copy.copyFields(safe, result, [...PLANNING_PLAYER_FIELDS, "name", "debug"]);
     return result;
   };
@@ -88,12 +89,13 @@ export function createGameTreeCopy(
   for (const key of GAME_TREE_ACTOR_FIELDS) {
     if (key in active) Reflect.set(state, key, active[key]);
   }
+  projectRuntimeEffectUsage(input, state);
   return { state, copyAction: copy.copyValue };
 }
 
 /** Never let strategy fallbacks hydrate a projected node from the live duel. */
 export function withoutLiveGameReference<Result>(
-  state: GameTreeSimulationGameState,
+  state: Pick<GameTreeSimulationGameState, "_gameRef">,
   run: () => Result,
 ): Result {
   const external = state._gameRef;

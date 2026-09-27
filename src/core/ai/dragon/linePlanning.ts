@@ -1069,11 +1069,11 @@ function countOpponentBoardCards(player: DragonPlayer = {}) {
 }
 
 function getEffectiveAtk(card: DragonCard | null | undefined = {}) {
-  return Number(card?.atk || 0) + Number(card?.tempAtkBoost || 0);
+  return Number(card?.atk || 0);
 }
 
 function getEffectiveDef(card: DragonCard | null | undefined = {}) {
-  return Number(card?.def || 0) + Number(card?.tempDefBoost || 0);
+  return Number(card?.def || 0);
 }
 
 function getStrongestAtk(cards: readonly DragonCard[] = []) {

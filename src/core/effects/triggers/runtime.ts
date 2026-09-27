@@ -44,6 +44,13 @@ export type TriggerRuntimeCard = Omit<EventCard, "effects"> & {
 };
 
 export interface TriggerStrategyPort {
+  shouldActivateEffect?(input: {
+    sourceCard: TriggerRuntimeCard;
+    effect: TriggerEffectLike;
+    player: TriggerRuntimePlayer;
+    game: TriggerGamePort;
+    activationZone?: TriggerZone | undefined;
+  }): boolean;
   buildActivationContextForEffect?(input: {
     sourceCard: TriggerRuntimeCard;
     effect: TriggerEffectLike;
@@ -243,6 +250,7 @@ export interface TriggerActionContext {
 }
 
 export interface TriggerActivationContext {
+  decisions?: import("../../contracts/ai.js").AIDecisionPlan;
   fromHand?: boolean;
   activationZone?: TriggerZone | undefined;
   sourceZone?: TriggerZone;

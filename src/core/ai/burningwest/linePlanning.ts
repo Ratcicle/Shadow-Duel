@@ -109,16 +109,14 @@ function countWhere(cards: BurningWestCard[] = [], predicate: (card: BurningWest
 
 function getEffectiveAtk(card: Partial<BurningWestCard> = {}) {
   return (
-    Number(card?.atk || 0) +
-    Number(card?.tempAtkBoost || 0) +
-    Number(card?.equipAtkBonus || 0)
+    Number(card?.atk || 0)
   );
 }
 
 function getBattleTargetStat(card: BurningWestCard = {}) {
   if (!card || card.cardKind !== "monster") return 0;
   if (card.position === "attack") return getEffectiveAtk(card);
-  return Number(card.def || 0) + Number(card.tempDefBoost || 0) + Number(card.equipDefBonus || 0);
+  return Number(card.def || 0);
 }
 
 function canAttack(card: BurningWestCard = {}) {

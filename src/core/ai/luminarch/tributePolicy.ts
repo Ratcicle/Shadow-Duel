@@ -198,8 +198,8 @@ function evaluateLuminarchTributeKeepScore(card: SimulatedCardState, evaluationC
     includeBoosts: false,
   });
 
-  const atk = (card.atk || 0) + (card.tempAtkBoost || 0);
-  const def = (card.def || 0) + (card.tempDefBoost || 0);
+  const atk = (card.atk || 0);
+  const def = (card.def || 0);
   const hiddenDef = card.isFacedown ? 1500 : 0;
   const combatStat = Math.max(atk, def, hiddenDef);
 

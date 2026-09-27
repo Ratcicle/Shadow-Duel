@@ -48,6 +48,7 @@ import type {
   AITributeRequirement,
   AITributeTradeResult,
 } from "./contracts/ai.js";
+import { getGenericSynchroActions } from "./ai/common/actionGeneration.js";
 import type {
   AiLiveGamePort,
   SimulatedCardState,
@@ -298,6 +299,7 @@ export default class Bot extends Player {
       ...this.strategy.generateMainPhaseActions(game),
       ...collectHandSummonProcedureActions(this, game as BotGamePort),
     ];
+    actions.push(...getGenericSynchroActions(game, { existingActions: actions }));
 
     // 📊 Log de geração de ações
     if (botLogger) {

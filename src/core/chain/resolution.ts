@@ -16,6 +16,7 @@
 import { isAI } from "../Player.js";
 import { CHAIN_ACTIVATION_KINDS } from "../contracts/chain.js";
 import type { CanonicalZone } from "../contracts/zones.js";
+import type { ChainLinkResolutionOutcome } from "../contracts/events.js";
 import type {
   ChainActivationZone,
   ChainCard,
@@ -92,6 +93,43 @@ function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
   ) && typeof Reflect.get(value, "then") === "function";
 }
 
+function notifyChainLinkOutcome(
+  chain: FullChainHost,
+  link: ChainLink,
+  result: ChainOperationResult | undefined,
+  stage: "completed" | "failed" = "completed",
+): void {
+  const success = result?.success !== false;
+  const outcome: ChainLinkResolutionOutcome = result?.activationNegated === true
+    ? "activation_negated"
+    : result?.effectNegated === true
+      ? "effect_negated"
+      : !success
+        ? result?.executed === true ? "partial_failure" : "failed"
+        : "success";
+  chain.game?.notify?.("chain_link_resolution", {
+    stage,
+    chainId: link.chainId,
+    linkId: link.linkId,
+    chainLevel: link.chainLevel,
+    controllerId: link.controller?.id || null,
+    cardId: link.card.id ?? null,
+    cardInstanceId: link.card.instanceId ?? null,
+    cardName: link.card.name || null,
+    effectId: link.effectId || link.effect?.id || null,
+    activationKind: link.activationKind,
+    effectKind: link.effectKind,
+    success,
+    outcome,
+    executed: result?.executed === true,
+    failedAction: result?.failedAction || null,
+    reason: result?.reason || (result?.fizzled ? link.sourceValidity?.reason || "source_unavailable" : null),
+    activationNegated: result?.activationNegated === true,
+    effectNegated: result?.effectNegated === true,
+    resolvedWithoutEffect: result?.resolvedWithoutEffect === true,
+  });
+}
+
 export async function resolveChain(
   this: FullChainHost,
 ): Promise<ChainOperationResult | false> {
@@ -160,19 +198,7 @@ export async function resolveChain(
           linkId: link.linkId,
           ...result,
         });
-        this.game?.notify?.("chain_link_resolution", {
-          stage: "completed",
-          chainId: link.chainId,
-          linkId: link.linkId,
-          chainLevel: link.chainLevel,
-          controllerId: link.controller?.id || null,
-          effectId: link.effectId || link.effect?.id || null,
-          activationKind: link.activationKind,
-          effectKind: link.effectKind,
-          activationNegated: result?.activationNegated === true,
-          effectNegated: result?.effectNegated === true,
-          resolvedWithoutEffect: result?.resolvedWithoutEffect === true,
-        });
+        notifyChainLinkOutcome(this, link, result);
       } catch (error) {
         this.setChainLinkResolutionStatus?.(link, "failed", {
           finalizationStatus: "failed",
@@ -193,15 +219,7 @@ export async function resolveChain(
           linkId: link.linkId,
           ...result,
         });
-        this.game?.notify?.("chain_link_resolution", {
-          stage: "failed",
-          chainId: link.chainId,
-          linkId: link.linkId,
-          chainLevel: link.chainLevel,
-          controllerId: link.controller?.id || null,
-          effectId: link.effectId || link.effect?.id || null,
-          reason: caughtErrorMessage(error) || "Chain link failed.",
-        });
+        notifyChainLinkOutcome(this, link, result, "failed");
       } finally {
         if (this.currentResolvingLink === link) {
           this.currentResolvingLink = null;
@@ -520,19 +538,7 @@ export async function resumePendingChainSelection(
       };
     }
 
-    this.game?.notify?.("chain_link_resolution", {
-      stage: "completed",
-      chainId: link.chainId,
-      linkId: link.linkId,
-      chainLevel: link.chainLevel,
-      controllerId: link.controller?.id || null,
-      effectId: link.effectId || link.effect?.id || null,
-      activationKind: link.activationKind,
-      effectKind: link.effectKind,
-      activationNegated: linkResult?.activationNegated === true,
-      effectNegated: linkResult?.effectNegated === true,
-      resolvedWithoutEffect: linkResult?.resolvedWithoutEffect === true,
-    });
+    notifyChainLinkOutcome(this, link, linkResult);
 
     const remainingResult =
       this.chainStack.length > 0
@@ -1000,6 +1006,7 @@ async function applyChainEffect(
     actionContext: link.context || null,
     activationContext: {
       ...inheritedActivationContext,
+      ...(link.activationContext?.decisions ? { decisions: link.activationContext.decisions } : {}),
       chainLevel: link.chainLevel,
       effectId: effect?.id || null,
       sourceZone: activationZone,
@@ -1041,6 +1048,7 @@ async function applyChainEffect(
     typeof cs.getEffectResolutionActions === "function"
       ? cs.getEffectResolutionActions(effect)
       : effect.actions || [];
+  let executed = false;
   if (Array.isArray(resolutionActions)) {
     try {
       const actionsResult = await effectEngine.applyActions(
@@ -1048,6 +1056,7 @@ async function applyChainEffect(
         ctx,
         resolvedSelections || {},
       );
+      executed = actionsResult?.executed === true;
       if (actionsResult?.needsSelection) {
         const contract = actionsResult.selectionContract
           ? {
@@ -1122,7 +1131,7 @@ async function applyChainEffect(
 
   cs.game?.checkWinCondition?.();
 
-  return { success: true, activationContext: ctx.activationContext };
+  return { success: true, executed, activationContext: ctx.activationContext };
 }
 
 /**

@@ -7,6 +7,7 @@ import { playBotMainPhase } from "../../src/core/bot/mainPhaseController.js";
 import type { AIAction } from "../../src/core/contracts/ai.js";
 import { cardDefinition, record, required, unsafeFixture } from "../helpers/fixtures.js";
 import type { BotGamePort } from "../../src/core/contracts/bot.js";
+import { placeFieldCards } from "../helpers/game.js";
 
 function scenario(t: TestContext) {
   t.mock.method(console, "log", () => {});
@@ -47,6 +48,28 @@ test("Main Phase completes twelve productive executions instead of stopping at s
   await playBotMainPhase(bot, game);
   assert.equal(executed, 12);
   assert.equal(bot.lp, 7988);
+});
+
+test("Main Phase fallback does not execute a Synchro whose simulation is unsupported", async t => {
+  const { game, bot, exit } = scenario(t);
+  const multimodal = new Card(cardDefinition(503), bot.id);
+  const phoenix = new Card(cardDefinition(514), bot.id);
+  const lancer = new Card(cardDefinition(516), bot.id);
+  placeFieldCards(bot.field, multimodal, phoenix);
+  bot.extraDeck.push(lancer);
+  bot.deck.push(new Card(cardDefinition(518), bot.id));
+  const action: AIAction = {
+    type: "synchro", synchroInstanceId: lancer.instanceId,
+    materialInstanceIds: [multimodal.instanceId, phoenix.instanceId], position: "attack",
+  };
+  bot.generateMainPhaseActions = () => [action];
+  bot.simulateMainPhaseAction = state => { state._simUnsupportedActions = ["synchro"]; return state; };
+  assert.equal(bot.filterValidActionsForCurrentState([action], game).length, 1,
+    "the action is legal but this planning policy reports incomplete simulation");
+  await playBotMainPhase(bot, game);
+  assert.deepEqual(bot.field, [multimodal, phoenix]);
+  assert.deepEqual(bot.extraDeck, [lancer]);
+  assert.equal(exit().executions, 0);
 });
 
 function effect(effectId: string): AIAction {

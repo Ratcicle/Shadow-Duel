@@ -97,8 +97,8 @@ export function estimateMonsterValue(
   const archetype = options.archetype || null;
   const fieldSpell = options.fieldSpell || null;
 
-  const atk = (monster.atk || 0) + (monster.tempAtkBoost || 0);
-  const def = monster.isFacedown ? 1500 : (monster.def || 0) + (monster.tempDefBoost || 0);
+  const atk = (monster.atk || 0);
+  const def = monster.isFacedown ? 1500 : (monster.def || 0);
   const level = monster.level || 0;
   const base = monster.position === "defense" || preferDefense ? def : atk;
 

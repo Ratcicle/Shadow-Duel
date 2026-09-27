@@ -1,6 +1,21 @@
 import type { BotRuntimePort, BotGamePort } from "../../contracts/bot.js";
 import type { AIActionOf, ExtraDeckMaterialHint, AIActivationContext } from "../../contracts/ai.js";
 import type { GameCard } from "../../contracts/cards.js";
+import { resolveSynchroActionForCurrentState } from "../actionValidation.js";
+
+export async function executeSynchroAction(
+  bot: BotRuntimePort,
+  game: BotGamePort,
+  action: AIActionOf<"synchro">,
+): Promise<boolean> {
+  const resolved = resolveSynchroActionForCurrentState(bot, action, game);
+  if (!resolved) return false;
+  const result = await game.performSynchroSummon(bot, resolved.materials, resolved.card, {
+    position: action.position,
+  });
+  return result.success === true;
+}
+
 function getCardInstanceIds(card: GameCard & { uid?: string | number; simInstanceId?: string | number }) {
   return [
     card?.instanceId,

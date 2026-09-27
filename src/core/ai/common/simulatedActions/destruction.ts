@@ -19,6 +19,7 @@ import {
 import {
   attachSimulatedEquip,
   findCardOwner,
+  findCardZone,
   getZoneCards,
   moveCardToZone,
   removeCardFromZones,
@@ -46,10 +47,39 @@ import type {
 } from "../../../contracts/aiState.js";
 import type { CardFilter, EffectCondition } from "../../../contracts/effects.js";
 import type { SimulatedActionHandlerContext } from "./shared.js";
+import type { SimulatedActionOptions, SimulatedRuntimeState } from "./shared.js";
+import { hasSimulatedProtection } from "./lifecycle.js";
 
 interface ScopedCard {
   card: SimulatedCardState;
   owner: SimulatedPlayerState;
+}
+
+export function destroySimulatedCard(
+  card: SimulatedCardState,
+  owner: SimulatedPlayerState,
+  sourcePlayer: SimulatedPlayerState,
+  state: SimulatedRuntimeState,
+  options: SimulatedActionOptions,
+): boolean {
+  const fromZone = findCardZone(owner, card);
+  if (!fromZone) return false;
+  const protectedFromSource = hasSimulatedProtection(card, "effect_destruction", state.turnCounter || 0,
+    { ownerId: owner.id, sourceOwnerId: sourcePlayer.id });
+  if (fromZone === "field" && protectedFromSource) return false;
+  const wasFaceupBeforeMove = card.isFacedown !== true;
+  const effectsNegatedAtFieldExit = card.effectsNegated === true;
+  if (!moveCardToZone(owner, card, "graveyard", owner, {
+    state, movedByEffect: true, sourceCard: options.sourceCard || null, sourcePlayer,
+  })) return false;
+  const toZone = findCardZone(owner, card) || "removed";
+  const payload = { card, player: owner, fromZone, toZone, wasFaceupBeforeMove,
+    effectsNegatedAtFieldExit, wasDestroyed: true, destroyCause: "effect",
+    destroySource: options.sourceCard || null, sourceCard: options.sourceCard || null,
+    movedByEffect: true, actionContext: options.actionContext };
+  if (toZone === "graveyard") options.emitSimulatedEvent?.("card_to_grave", payload);
+  options.emitSimulatedEvent?.("card_moved", payload);
+  return true;
 }
 
 type ScopeFilterKey =
@@ -107,7 +137,7 @@ export function applyDestroy(
   targets.forEach((card) => {
     const owner = findCardOwner(state, card);
     if (!owner) return;
-    moveCardToZone(owner, card, "graveyard");
+    destroySimulatedCard(card, owner, self, state, options);
   });
   return;
 }
@@ -143,9 +173,8 @@ export function applyDestroyAndDamageByTargetAtk(
       atk: getEffectiveAtk(card),
     }));
   });
-  destroyed.forEach(({ card, owner }) => {
-    if (owner) moveCardToZone(owner, card, "graveyard");
-  });
+  const successful = destroyed.filter(({ card, owner }) =>
+    owner && destroySimulatedCard(card, owner, self, state, options));
   const skipDamage = (playerKey: "self" | "opponent"): boolean => {
     const conditions = action.skipDamageIf?.[playerKey];
     if (!conditions) return false;
@@ -155,7 +184,7 @@ export function applyDestroyAndDamageByTargetAtk(
       options,
     });
   };
-  destroyed.forEach(({ owner, damagePlayer, multiplier, atk }) => {
+  successful.forEach(({ owner, damagePlayer, multiplier, atk }) => {
     if (!owner) return;
     let recipient: SimulatedPlayerState | null = null;
     if (damagePlayer === "self") recipient = self;
@@ -269,7 +298,7 @@ export function applyDestroyCardsByScope(
   entries.forEach(({ card, owner }) => {
     const actualOwner = owner || findCardOwner(ctx.state, card);
     if (!actualOwner) return;
-    if (moveCardToZone(actualOwner, card, "graveyard")) {
+    if (destroySimulatedCard(card, actualOwner, self, ctx.state, ctx.options)) {
       destroyedCount += 1;
     }
   });
@@ -278,12 +307,7 @@ export function applyDestroyCardsByScope(
   const drawAmount = Math.floor(destroyedCount * drawPerDestroyed);
   if (drawAmount <= 0) return;
 
-  const drawPlayer = action.drawPlayer === "opponent" ? opponent : self;
-  if (!drawPlayer) return;
-  if (!Array.isArray(drawPlayer.hand)) drawPlayer.hand = [];
-  for (let i = 0; i < drawAmount; i += 1) {
-    const drawn = drawPlayer.deck?.shift?.();
-    if (drawn) appendSimulatedZoneCard(drawPlayer.hand, drawn);
-  }
+  ctx.applySimulatedActions({ state: ctx.state, selfId: ctx.selfId, options: ctx.options,
+    actions: [{ type: "draw", amount: drawAmount, player: action.drawPlayer || "self" }] });
   return;
 }

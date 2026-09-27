@@ -127,17 +127,13 @@ function getRebelPositionEffectBonus(analysis: MirageboundAnalysis = {} as Mirag
 
 function getEffectiveAtk(card: MirageboundStatCard | null | undefined) {
   return (
-    Number(card?.atk || 0) +
-    Number(card?.tempAtkBoost || 0) +
-    Number(card?.equipAtkBonus || 0)
+    Number(card?.atk || 0)
   );
 }
 
 function getEffectiveDef(card: MirageboundStatCard | null | undefined) {
   return (
-    Number(card?.def || 0) +
-    Number(card?.tempDefBoost || 0) +
-    Number(card?.equipDefBonus || 0)
+    Number(card?.def || 0)
   );
 }
 

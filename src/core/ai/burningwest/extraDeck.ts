@@ -78,17 +78,13 @@ function isExecutioner(card: ReadCard | null | undefined) {
 
 function getEffectiveAtk(card: ReadCard | null | undefined = {}) {
   return (
-    Number(card?.atk || 0) +
-    Number(card?.tempAtkBoost || 0) +
-    Number(card?.equipAtkBonus || 0)
+    Number(card?.atk || 0)
   );
 }
 
 function getEffectiveDef(card: ReadCard | null | undefined = {}) {
   return (
-    Number(card?.def || 0) +
-    Number(card?.tempDefBoost || 0) +
-    Number(card?.equipDefBonus || 0)
+    Number(card?.def || 0)
   );
 }
 

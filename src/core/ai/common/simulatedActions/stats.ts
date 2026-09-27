@@ -1,4 +1,5 @@
 import { getEffectiveAtk } from "../cardStats.js";
+import { removeFieldAuraBuffContributions } from "../../../effects/passives/passiveBuffs.js";
 import { getCounterValue, setCounterValue } from "../counters.js";
 import { estimateMonsterValue, hasArchetype } from "../cardValue.js";
 import {
@@ -35,7 +36,7 @@ import {
   resolveTargetsForAction,
   STOP_SIMULATION,
 } from "./shared.js";
-import type { ActionTargetScope } from "../../../contracts/actions.js";
+import type { ActionTargetScope, ContextNumberSource } from "../../../contracts/actions.js";
 import type {
   SimulatedCardState,
   SimulatedReplacementEffect,
@@ -47,6 +48,7 @@ import type { CanonicalSelectionMap } from "../../../contracts/selection.js";
 import type { ZoneInput } from "../../../contracts/zones.js";
 import type {
   SimulatedActionHandlerContext,
+  SimulatedActionOptions,
   SimulatedRuntimeState,
 } from "./shared.js";
 
@@ -89,19 +91,7 @@ type DynamicSimulatedCard = SimulatedCardState & CanonicalSelectionMap;
 type LegacyZoneCollections = SimulatedPlayerState & Partial<{
   [Zone in ZoneInput]: SimulatedCardState[];
 }>;
-interface LegacyProtection {
-  type: string;
-  duration: string;
-  sourceOwner: string;
-  removeOnLeave: boolean;
-  sourceName: string | null;
-}
 type LegacyProtectedCard = SimulatedCardState & {
-  _simProtectionEffects?: LegacyProtection[];
-  cannotBeDestroyedByOpponentCardEffects?: boolean;
-  cannotBeDestroyedByOwnCardEffects?: boolean;
-  cannotBeDestroyedByCardEffects?: boolean;
-  _simProtection?: LegacyProtection;
   _simReplacementProtection?: {
     uniqueKey: string;
     duration: string;
@@ -294,23 +284,45 @@ export function applySetFacedownDefense(
   }
 }
 
+function resolveStatBoostFromContext(
+  spec: ContextNumberSource | undefined,
+  options: SimulatedActionOptions,
+): number {
+  if (!spec) return 0;
+  const readPath = (root: unknown): unknown => {
+    let value = root;
+    for (const part of spec.key.split(".").filter(Boolean)) {
+      if (!value || typeof value !== "object") return undefined;
+      value = Reflect.get(value, part);
+    }
+    return value;
+  };
+  const raw = readPath(options) ?? readPath(options.actionContext) ??
+    readPath(options.activationContext) ?? readPath(options.activationContext?.actionContext);
+  let value = Number(raw ?? 0);
+  if (!Number.isFinite(value)) value = 0;
+  const divisor = Number(spec.divideBy ?? 0);
+  if (Number.isFinite(divisor) && divisor !== 0) value /= divisor;
+  const multiplier = Number(spec.multiplier ?? 1);
+  if (Number.isFinite(multiplier)) value *= multiplier;
+  if (spec.round === "floor") return Math.floor(value);
+  if (spec.round === "ceil") return Math.ceil(value);
+  if (spec.round === "round") return Math.round(value);
+  return value;
+}
+
 export function applyBuffStatsTemp(
   ctx: SimulatedActionHandlerContext<"buff_stats_temp">,
 ): void {
-  const {
-    action,
-    targets,
-    selections,
-    state,
-    selfId,
-    options,
-    self,
-    opponent,
-    applySimulatedActions,
-  } = ctx;
-  let atkBoost = Number.isFinite(action.atkBoost)
-    ? action.atkBoost as number
-    : 0;
+  const { action, targets, selections, state, options, self, opponent } = ctx;
+  const duration = action.duration || "end_of_turn";
+  if (duration === "damage_calculation" || duration === "end_of_damage_step") {
+    state._simUnsupportedActions ??= [];
+    state._simUnsupportedActions.push(action.type);
+    return;
+  }
+  let atkBoost = (Number.isFinite(action.atkBoost) ? action.atkBoost! : 0) +
+    resolveStatBoostFromContext(action.atkBoostFromContext, options);
   if (action.atkBoostFromTarget) {
     const spec = action.atkBoostFromTarget;
     const stat = ["baseAtk", "baseDef", "atk", "def"].includes(spec?.stat)
@@ -329,16 +341,35 @@ export function applyBuffStatsTemp(
     if (!reference || !Number.isFinite(value)) return;
     atkBoost += value;
   }
-  targets.forEach((card) => {
-    if (!card) return;
-    if (atkBoost !== 0) {
-      card.tempAtkBoost = (card.tempAtkBoost || 0) + atkBoost;
-      card.atk = Math.max(0, (card.atk || 0) + atkBoost);
-    }
-    if (Number.isFinite(action.defBoost)) {
-      card.tempDefBoost =
-        (card.tempDefBoost || 0) + (action.defBoost as number);
-      card.def = Math.max(0, (card.def || 0) + (action.defBoost as number));
+  const defBoost = (Number.isFinite(action.defBoost) ? action.defBoost! : 0) +
+    resolveStatBoostFromContext(action.defBoostFromContext, options);
+  let expiresOnTurn: number | null = null;
+  if (!action.permanent) {
+    if (duration === "end_of_next_turn") expiresOnTurn = state.turnCounter + 1;
+    else if (Number.isFinite(action.durationTurns) && action.durationTurns! > 0) {
+      expiresOnTurn = state.turnCounter + action.durationTurns!;
+    } else if (Number.isFinite(action.expiresOnTurn)) expiresOnTurn = action.expiresOnTurn!;
+  }
+  const recipients = action.targetScope
+    ? getTargetScopeCards(action.targetScope as LegacyTargetScope, self, opponent)
+    : targets;
+  recipients.forEach((card) => {
+    if (card.cardKind !== "monster") return;
+    for (const [stat, boost] of [["atk", atkBoost], ["def", defBoost]] as const) {
+      const current = Number(card[stat] || 0);
+      const next = Math.max(0, current + boost);
+      const applied = next - current;
+      if (!applied) continue;
+      if (expiresOnTurn !== null) {
+        card.turnBasedBuffs ??= [];
+        const id = [action.sourceName || options.sourceCard?.name || action.type,
+          card.instanceId || card.id || "card", stat, state.turnCounter, card.turnBasedBuffs.length].join("_");
+        card.turnBasedBuffs.push({ id, stat, value: applied, expiresOnTurn });
+      } else if (!action.permanent) {
+        const temporaryStat = stat === "atk" ? "tempAtkBoost" : "tempDefBoost";
+        card[temporaryStat] = (card[temporaryStat] || 0) + applied;
+      }
+      card[stat] = next;
     }
     if (
       (action as LegacyBuffStatsAction).grantSecondAttack === true ||
@@ -354,6 +385,26 @@ export function applyBuffStatsTemp(
     }
   });
   return;
+}
+
+export function applyModifyLevel(
+  ctx: SimulatedActionHandlerContext<"modify_level">,
+): void {
+  const { action, targets } = ctx;
+  const amount = action.amount;
+  if (!Number.isFinite(amount) || amount === 0) return;
+  const minimum = Number.isFinite(Number(action.minLevel)) ? Number(action.minLevel) : 1;
+  const maximum = Number.isFinite(Number(action.maxLevel)) ? Number(action.maxLevel) : null;
+  for (const card of targets) {
+    if (card.cardKind !== "monster") continue;
+    const current = Number(card.level || 0);
+    if (!Number.isFinite(current)) continue;
+    let next = Math.max(minimum, current + amount);
+    if (maximum !== null) next = Math.min(maximum, next);
+    if (next === current) continue;
+    if (action.duration !== "permanent" && card.originalLevel == null) card.originalLevel = current;
+    card.level = next;
+  }
 }
 
 export function applyBuffAtkTemp(
@@ -551,48 +602,29 @@ export function applyForbidAttackThisTurn(
 export function applyGrantProtection(
   ctx: SimulatedActionHandlerContext<"grant_protection">,
 ): void {
-  const {
-    action,
-    targets,
-    selections,
-    state,
-    selfId,
-    options,
-    self,
-    opponent,
-    applySimulatedActions,
-  } = ctx;
-  targets.forEach((card) => {
-    if (!card) return;
-    const protectionType = action.protectionType || "generic";
-    const sourceOwner = action.sourceOwner || "any";
-    const protection = {
-      type: protectionType,
-      duration: action.duration || "temporary",
-      sourceOwner,
+  const { action, targets, state, options, self, opponent } = ctx;
+  const protectionType = action.protectionType || "effect_destruction";
+  if (protectionType !== "battle_destruction" && protectionType !== "effect_destruction") {
+    state._simUnsupportedActions ??= [];
+    state._simUnsupportedActions.push(action.type);
+    return;
+  }
+  const recipients = action.targetScope
+    ? getTargetScopeCards(action.targetScope as LegacyTargetScope, self, opponent) : targets;
+  const duration = action.duration || "while_faceup";
+  const currentTurn = Number(state.turnCounter || 0);
+  const expiresOnTurn = duration === "end_of_next_turn" ? currentTurn + 1 :
+    duration === "end_of_turn" ? currentTurn :
+      Number.isFinite(Number(duration)) ? Number(duration) : null;
+  for (const card of recipients) {
+    card.protectionEffects ??= [];
+    card.protectionEffects.push({
+      type: protectionType, source: options.sourceCard?.name || "Unknown", duration,
+      grantedOnTurn: currentTurn, expiresOnTurn,
+      sourceOwner: action.sourceOwner === "self" || action.sourceOwner === "opponent" ? action.sourceOwner : "any",
       removeOnLeave: action.removeOnLeave !== false,
-      sourceName: options?.sourceCard?.name || null,
-    };
-    if (!Array.isArray((card as LegacyProtectedCard)._simProtectionEffects)) {
-      (card as LegacyProtectedCard)._simProtectionEffects = [];
-    }
-    (card as LegacyProtectedCard)._simProtectionEffects!.push(protection);
-    if (action.protectionType === "effect_destruction") {
-      if (sourceOwner === "opponent") {
-        (card as LegacyProtectedCard).cannotBeDestroyedByOpponentCardEffects = true;
-        card._simEffectDestructionProtectedFromOpponent = true;
-      } else if (sourceOwner === "self") {
-        (card as LegacyProtectedCard).cannotBeDestroyedByOwnCardEffects = true;
-        card._simEffectDestructionProtectedFromSelf = true;
-      } else {
-        (card as LegacyProtectedCard).cannotBeDestroyedByCardEffects = true;
-        card._simEffectDestructionProtected = true;
-      }
-    } else {
-      (card as LegacyProtectedCard)._simProtection = protection;
-    }
-  });
-  return;
+    });
+  }
 }
 
 export function applyRegisterReplacementEffect(
@@ -787,6 +819,19 @@ export function applyAddStatus(
         if (status === "effectsNegated") {
           card.effectsNegatedDuration = normalizeNegateEffectsDuration(action);
         }
+      }
+      if (status === "effectsNegated") {
+        const field = [...state.player.field, ...state.bot.field];
+        if (card.effectsNegated === true) removeFieldAuraBuffContributions(card, field, field.indexOf(card));
+        card.effects?.forEach((effect) => {
+          if (effect.timing !== "passive") return;
+          const passiveType = "passive" in effect ? effect.passive?.type : undefined;
+          if (card.effectsNegated !== true || passiveType !== "field_archetype_aura_buff") {
+            state._simUnsupportedActions ??= [];
+            state._simUnsupportedActions.push(`add_status:passive_recalculation:${passiveType || "unknown"}`);
+            return;
+          }
+        });
       }
     }
   });

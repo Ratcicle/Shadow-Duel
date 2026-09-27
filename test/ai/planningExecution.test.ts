@@ -1,6 +1,13 @@
 import { placeSimulationCards } from "../helpers/simulation.js";
 import assert from "node:assert/strict";
-import test from "node:test";
+import test, { type TestContext } from "node:test";
+import Bot from "../../src/core/Bot.js";
+import Card from "../../src/core/Card.js";
+import Game from "../../src/core/Game.js";
+import { playBotMainPhase } from "../../src/core/bot/mainPhaseController.js";
+import { cardDefinition, record, unsafeFixture } from "../helpers/fixtures.js";
+import type { BotGamePort } from "../../src/core/contracts/bot.js";
+import type { AIAction, AIState } from "../../src/core/contracts/ai.js";
 import { applyGenericSimulatedMainPhaseAction, normalizePlanningOwnerPolicy } from "../../src/core/ai/common/simulation.js";
 import { simulationCard, simulationState } from "../helpers/simulation.js";
 import { hasPlanningExecutionContext, registerPlanningExecutionView, resolvePlanningOwnerPolicy, withPlanningExecutionContext } from "../../src/core/ai/common/planningExecution.js";
@@ -11,8 +18,29 @@ import { getPlanningModel } from "../../src/core/ai/PlanningStrategies.js";
 import { voidCards } from "../../src/data/cards/void.js";
 import { luminarchCards } from "../../src/data/cards/luminarch.js";
 import { canUseSimOncePerTurn, markSimOncePerTurnUsed } from "../../src/core/ai/common/simStateUtils.js";
+import { cardMatchesFilter } from "../../src/core/ai/common/cardFilters.js";
 
 const monster = (id: number, name: string) => simulationCard({ id, instanceId: id, name, cardKind: "monster", atk: 1000, def: 1000, level: 4 });
+
+test("unknown filter dependencies stay in the active branch and restore after nested failures", () => {
+  const hidden = simulationCard({ _simUnknownCard: true, instanceId: 99000 });
+  const outer = simulationState({ player: { deck: [hidden] } });
+  const inner = simulationState({ player: { deck: [hidden] } });
+  const inspect = () => cardMatchesFilter(hidden, { cardKind: "monster" });
+  withPlanningExecutionContext(outer, () => null, () => {
+    assert.throws(() => withPlanningExecutionContext(inner, () => null, () => {
+      inspect();
+      throw new Error("nested failure");
+    }), /nested failure/);
+    assert.equal(inner._simRequiresReplan, true);
+    assert.equal(outer._simRequiresReplan, undefined);
+    inspect();
+    assert.equal(outer._simRequiresReplan, true);
+    delete outer._simRequiresReplan;
+  });
+  inspect();
+  assert.equal(outer._simRequiresReplan, undefined, "completed contexts do not retain branch mutation callbacks");
+});
 
 test("opponent trigger builds its own preferences instead of inheriting the actor activation", () => {
   const wrong = simulationCard({ id: 99001, name: "Actor choice", cardKind: "monster", atk: 1000, def: 1000, level: 4, counters: new Map() });
@@ -213,4 +241,99 @@ test(`Luminarch owner special-summon followup respects declarative usage (alread
   assert.equal(canUseSimOncePerTurn(state, "luminarch_enchanted_halberd_conditional_summon", 1, state.bot.id, true), true);
   assert.equal(state._simLuminarch, undefined);
 });
+}
+
+function plannerControllerScenario(t: TestContext) {
+  t.mock.method(console, "log", () => {});
+  t.mock.method(console, "warn", () => {});
+  const game = unsafeFixture<Game & BotGamePort>(new Game({
+    laboratoryMode: true, laboratoryUseBot: true, disableChains: true, captureReplay: false,
+  }), "Concrete Game installs the EffectEngine methods required by the Bot preview port.");
+  t.after(() => game.dispose("planning_execution_controller"));
+  const bot = game.bot;
+  assert.ok(bot instanceof Bot);
+  bot.setPreset("techzero");
+  game.turn = bot.id;
+  game.phase = "main1";
+  game.turnCounter = 2;
+  game.disablePresentationDelays = true;
+  game.aiSuccessfulActionDelayMs = 0;
+  game.aiActionDelayMs = 0;
+  game.waitForBoardPresentation = async () => {};
+  game.waitForAiPresentationStep = async () => {};
+  bot.strategy.shouldUseAutomaticAscensionShortcut = () => false;
+  bot.strategy.getPlanningProfile = () => ({
+    enabled: true, mode: "always", turnMode: "mainOnly", beamWidth: 2,
+    maxDepth: 3, nodeBudget: 20, candidateLimit: 3, allowEarlyStop: true,
+  });
+  // These controller scenarios pair a synthetic simulator with an LP-only score.
+  bot.strategy.scoreLineMilestones = () => ({ scoreDelta: 0, milestones: [] });
+  bot.strategy.scoreLineTerminal = context => context?.baseScore || 0;
+  bot.strategy.selectPlanningCandidates = (actions, _state, limit) => actions.slice(0, limit);
+  bot.sequenceActions = actions => actions;
+  bot.filterValidActionsForCurrentState = actions => actions;
+  bot.field.push(new Card(cardDefinition(501), bot.id));
+  bot.field.push(new Card(cardDefinition(502), bot.id));
+  const progress: { kind: string; details: Record<string, unknown> }[] = [];
+  Reflect.set(game, "_arenaTracker", { recordProgress(kind: string, _game: unknown, details: object) {
+    progress.push({ kind, details: record(details) });
+  } });
+  return { game, bot, progress };
+}
+
+test("controller honors a planned stop without executing a worse fallback", async t => {
+  const { game, bot, progress } = plannerControllerScenario(t);
+  const action: AIAction = { type: "monsterEffect", fieldIndex: 0, effectId: "worse" };
+  bot.generateMainPhaseActions = () => [action];
+  bot.strategy.generateMainPhaseActions = () => [action];
+  bot.strategy.evaluateBoardV2 = state => state.bot?.lp || 0;
+  bot.strategy.simulateMainPhaseAction = state => { state.bot.lp -= 100; return state; };
+  let executions = 0;
+  bot.executeMainPhaseAction = async () => { executions++; return false; };
+  await playBotMainPhase(bot, game);
+  assert.equal(executions, 0);
+  assert.equal(progress.find(entry => entry.kind === "ai_turn_line_search")?.details.plannerTerminationReason, "preferred_terminal");
+  assert.equal(progress.filter(entry => entry.kind === "ai_main_phase_exit").at(-1)?.details.reason, "planned_stop");
+});
+
+for (const changed of ["draw", "chain_result", "removed_material"] as const) {
+  test(`controller searches the new snapshot after ${changed} and discards the old continuation`, async t => {
+    const { game, bot, progress } = plannerControllerScenario(t);
+    const action = (effectId: string): AIAction => ({ type: "monsterEffect", fieldIndex: 0, effectId });
+    const generate = (state: AIState): AIAction[] => {
+      const self = state.bot;
+      assert.ok(self);
+      if ((self.lp || 0) >= 8300) return [];
+      if (self.hand?.length || self.field?.length === 1 || (self.lp || 0) >= 8100) return [action("fresh")];
+      return [action(self.lp === 8000 ? "prepare" : "obsolete")];
+    };
+    bot.generateMainPhaseActions = generate;
+    bot.strategy.generateMainPhaseActions = generate;
+    bot.strategy.evaluateBoardV2 = state => state.bot?.lp || 0;
+    bot.strategy.simulateMainPhaseAction = (state, planned) => {
+      if (planned.type === "monsterEffect" && planned.effectId === "prepare") {
+        state.bot.lp++;
+        if (changed === "draw") state._simRequiresReplan = true;
+      } else state.bot.lp = 8300;
+      return state;
+    };
+    const executions: string[] = [];
+    bot.executeMainPhaseAction = async (_game, selected) => {
+      const effectId = selected.type === "monsterEffect" ? selected.effectId || "" : "";
+      executions.push(effectId);
+      if (effectId === "prepare") {
+        bot.lp++;
+        if (changed === "draw") bot.hand.push(new Card(cardDefinition(502), bot.id));
+        if (changed === "chain_result") bot.lp = 8100;
+        if (changed === "removed_material") bot.field.splice(1, 1);
+      } else bot.lp = 8300;
+      return true;
+    };
+    await playBotMainPhase(bot, game);
+    assert.deepEqual(executions, ["prepare", "fresh"]);
+    const searches = progress.filter(entry => entry.kind === "ai_turn_line_search");
+    assert.equal(searches.length, 2);
+    assert.equal(searches[0]?.details.plannedLineLength, changed === "draw" ? 1 : 2);
+    assert.equal(searches[1]?.details.plannedLineLength, 1);
+  });
 }

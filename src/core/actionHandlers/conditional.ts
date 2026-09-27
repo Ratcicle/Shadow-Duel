@@ -970,6 +970,7 @@ export async function handleRegisterSynchroMaterialFollowup(
   const synchroSummonContextId =
     action.synchroSummonContextId ||
     readStringValue(actionContext, "synchroSummonContextId") ||
+    readStringValue(readRecordValue(actionContext, "actionContext"), "synchroSummonContextId") ||
     null;
   const actions = Array.isArray(action?.actions) ? action.actions : [];
 

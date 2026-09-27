@@ -26,6 +26,9 @@ import {
 import { canUseNormalSummonForCard } from "../Player.js";
 import { canSetReactiveBackrowNow } from "../ai/common/phaseTiming.js";
 import { getCanonicalEffectActivationZones } from "../chain/legality.js";
+import { canMoveCardToZone } from "../ai/common/zones.js";
+import { hasActionZoneCandidates } from "../ai/common/actionValidation.js";
+import { selectPayableTributes } from "../ai/common/tributePolicy.js";
 
 export function resolveHandIndexForAction(
   bot: Pick<BotRuntimePort, "hand">,
@@ -195,13 +198,14 @@ export function canResolveSummonActionForCurrentState(
         ? game.bot
         : game.player
       : null;
-    tributeIndices =
+    const selection = selectPayableTributes(bot, field, game, candidates =>
       typeof bot.selectBestTributes === "function"
-        ? bot.selectBestTributes(field, tributesNeeded, card, {
+        ? bot.selectBestTributes(candidates, tributesNeeded, card, {
             oppField: opponent?.field || [],
             game,
           })
-        : field.map((_entry, index) => index).slice(0, tributesNeeded);
+        : candidates.map((_entry, index) => index).slice(0, tributesNeeded));
+    tributeIndices = selection.indices;
     if (!Array.isArray(tributeIndices) || tributeIndices.length === 0) {
       return false;
     }
@@ -210,9 +214,10 @@ export function canResolveSummonActionForCurrentState(
     );
     const tributeCards = getTributeCardsFromIndices(field, uniqueIndices);
     if (getTributeValueTotal(tributeCards, card) < tributesNeeded) return false;
+    if (!tributeCards.every(tribute => canMoveCardToZone(bot, tribute, "graveyard", bot, { state: game }))) return false;
     const tradeCheck =
       typeof bot.evaluateTributeTrade === "function"
-        ? bot.evaluateTributeTrade(card, field, tributesNeeded, {
+        ? bot.evaluateTributeTrade(card, selection.candidates, tributesNeeded, {
             oppField: opponent?.field || [],
             game,
           })
@@ -543,6 +548,9 @@ export function filterValidActionsForCurrentState(
   if (!Array.isArray(actions)) return [];
   return actions.filter((action) => {
     if (!action || !action.type) return false;
+    if (action.type === "synchro") {
+      return resolveSynchroActionForCurrentState(bot, action, game) !== null;
+    }
     if (action.type === "summon") {
       return canResolveSummonActionForCurrentState(bot, action, game);
     }
@@ -715,6 +723,9 @@ export function filterValidActionsForCurrentState(
       if (!card || card.cardKind !== "monster" || card.isFacedown) {
         return false;
       }
+      const effect = findEffectForAction(card, action, "field");
+      if (effect?.actions?.some(effectAction => effectAction.type === "bounce_and_summon" &&
+          !hasActionZoneCandidates(bot, effectAction, card))) return false;
       const preview = game?.effectEngine?.canActivateMonsterEffectPreview?.(
         card,
         bot,
@@ -820,4 +831,33 @@ export function filterValidActionsForCurrentState(
     }
     return true;
   });
+}
+
+/** Resolve exact instances and recheck the complete material set before payment. */
+export function resolveSynchroActionForCurrentState(
+  bot: BotRuntimePort,
+  action: AIActionOf<"synchro">,
+  game: BotGamePort,
+): { card: GameCard; materials: GameCard[] } | null {
+  if (action.position !== "attack" && action.position !== "defense") return null;
+  const destinations = bot.extraDeck.filter(card => card.instanceId === action.synchroInstanceId);
+  const card = destinations[0];
+  if (destinations.length !== 1 || !card || card.monsterType !== "synchro") return null;
+  if (!Array.isArray(action.materialInstanceIds) || action.materialInstanceIds.length === 0 ||
+      new Set(action.materialInstanceIds).size !== action.materialInstanceIds.length) return null;
+  const materials: GameCard[] = [];
+  for (const id of action.materialInstanceIds) {
+    const matches = bot.field.filter(material => material.instanceId === id);
+    const material = matches[0];
+    if (matches.length !== 1 || !material) return null;
+    materials.push(material);
+  }
+  if (!materials.every(material => canMoveCardToZone(bot, material, "graveyard", bot, { state: game }))) return null;
+  const check = game.canSummonSynchroCard(bot, card, { silent: true });
+  if (!check.ok || !materialSelectionMatchesCombo(materials, check.materialCombos)) return null;
+  const placement = game.canPlaceCardOnField(card, bot, {
+    excludeCards: materials, isFacedown: false,
+    summonMethod: "synchro", summonProcedure: "synchro", silent: true,
+  });
+  return placement.ok === false ? null : { card, materials };
 }

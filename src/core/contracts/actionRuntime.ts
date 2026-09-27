@@ -495,6 +495,7 @@ export interface ActionRuntimeGamePort {
 }
 
 interface ActionContextState extends ActionNegationContext {
+  decisions?: import("./ai.js").AIDecisionPlan;
   effectId?: string | null;
   actionContext?: object | null;
   selections?: CanonicalSelectionMap | null;

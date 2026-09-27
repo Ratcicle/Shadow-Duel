@@ -109,7 +109,7 @@ test("Beam still rejects a genuine no-op without expanding the fallback", async 
   assert.deepEqual(result.sequence, [setup]); // Existing root fallback is intentional.
   assert.equal(result.nodesEvaluated, 1);
   assert.equal(generations, 1);
-  assert.equal(evaluations, 2); // root + exhausted root; no successor evaluation
+  assert.equal(evaluations, 1); // exhausted root only; no successor evaluation
 });
 
 test("Beam preserves simulated usage across depths and isolates sibling ledgers", async () => {

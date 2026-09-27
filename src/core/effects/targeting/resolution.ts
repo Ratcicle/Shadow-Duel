@@ -6,6 +6,7 @@
  */
 
 import { isAI } from "../../Player.js";
+import { resolveExactInstanceSelection } from "../../AutoSelector.js";
 import { checkSpecialSummonEligibility } from "../../game/summon/eligibility.js";
 import type {
   ActionRuntimeCard,
@@ -38,6 +39,7 @@ type RuntimeCard = ActionRuntimeCard;
 type RuntimePlayer = ActionRuntimePlayer & { debug?: boolean };
 
 interface TargetActivationContext {
+  decisions?: import("../../contracts/ai.js").AIDecisionPlan;
   preview?: boolean;
   isPreview?: boolean;
   autoSelectTargets?: boolean;
@@ -579,7 +581,8 @@ export function resolveTargets(
     const hasResolved =
       resolvedTargets &&
       Object.prototype.hasOwnProperty.call(resolvedTargets, def.id);
-    if (hasResolved) {
+    const exactIds = isAIPlayer ? activationContext.decisions?.selections?.[def.id] : undefined;
+    if (hasResolved && exactIds === undefined) {
       const resolved = resolvedTargets[def.id];
       targetMap[def.id] = normalizeResolvedCards(resolved);
       continue;
@@ -594,6 +597,13 @@ export function resolveTargets(
 
     if (candidates.length < min) {
       return { ok: false, reason: "No valid targets for this effect." };
+    }
+
+    if (exactIds !== undefined) {
+      const chosen = resolveExactInstanceSelection(candidates, exactIds, { min, max });
+      if (!chosen) return { ok: false, reason: "Planned targets are no longer valid." };
+      targetMap[def.id] = chosen;
+      continue;
     }
 
     const decoratedCandidates = candidates.map((card, idx) => {

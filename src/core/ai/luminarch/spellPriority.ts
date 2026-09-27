@@ -176,7 +176,7 @@ export function shouldPlaySpell(card: SimulatedCardState, analysis: LuminarchAna
         }))
         .sort((a, b) => b.score - a.score)[0] || { attacker: null, score: 0 };
       const totalAtkNow = attackers.reduce(
-        (sum, m) => sum + (m.atk || 0) + (m.tempAtkBoost || 0),
+        (sum, m) => sum + (m.atk || 0),
         0
       );
       const directLethal =

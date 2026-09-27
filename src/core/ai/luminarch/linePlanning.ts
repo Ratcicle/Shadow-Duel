@@ -608,7 +608,7 @@ function getAttackDamage(player: Partial<SimulatedPlayerState> = {}) {
   return stateCards(player, "field").reduce((sum, card) => {
     if (!card || card.cardKind !== "monster" || card.isFacedown) return sum;
     if (card.position === "defense" || card.cannotAttackThisTurn) return sum;
-    return sum + Math.max(0, Number(card.atk || 0) + Number(card.tempAtkBoost || 0));
+    return sum + Math.max(0, Number(card.atk || 0));
   }, 0);
 }
 
@@ -638,7 +638,6 @@ function isLuminarchWall(card: SimulatedCardState) {
   if (card._simulatedRole === "defensive_wall") return true;
   const defense =
     Number(card.def || 0) +
-    Number(card.tempDefBoost || 0) +
     Number(card.permanentDefBoost || 0);
   return card.position === "defense" && defense >= 2400;
 }
@@ -857,11 +856,9 @@ function getBattleWallValue(card: SimulatedCardState) {
   if (!card || card.cardKind !== "monster") return 0;
   const atk =
     Number(card.atk || 0) +
-    Number(card.tempAtkBoost || 0) +
     Number(card.permanentAtkBoost || 0);
   const def =
     Number(card.def || 0) +
-    Number(card.tempDefBoost || 0) +
     Number(card.permanentDefBoost || 0);
   return card.position === "attack" ? atk : def;
 }

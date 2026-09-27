@@ -146,8 +146,8 @@ export function evaluateMonster(monster: StrategyCard, owner: AIStrategyBotPort,
   let value = knowledge?.value || 0;
 
   // Valor base de stats
-  const atk = (monster.atk || 0) + (monster.tempAtkBoost || 0);
-  const def = (monster.def || 0) + (monster.tempDefBoost || 0);
+  const atk = (monster.atk || 0);
+  const def = (monster.def || 0);
   const stat = monster.position === "defense" ? def : atk;
   value += stat / 800;
   value += (monster.level || 0) * 0.1;

@@ -464,6 +464,14 @@ export function buildTriggerEntry(
   }
 
   if (
+    isAI(owner) && effect.triggerRequirement === "optional" &&
+    owner.strategy?.shouldActivateEffect?.({
+      sourceCard, effect, player: owner, game: this.game,
+      activationZone: options.activationZone,
+    }) === false
+  ) return null;
+
+  if (
     typeof options.activate !== "function" &&
     !hasRegisteredTriggerActions(effect, this.actionHandlers)
   ) {

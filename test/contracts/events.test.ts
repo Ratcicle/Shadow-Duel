@@ -18,6 +18,7 @@ import type {
   EventResolutionOutcome,
   EventResolverHost,
   EventTriggerEntry,
+  EventTriggerOccurrence,
   InformationalEventMap,
   InformationalEventName,
   ResolvableEventName,
@@ -30,6 +31,7 @@ import {
   on,
 } from "../../src/core/game/events/eventBus.js";
 import {
+  flushPendingTriggerOccurrences,
   resolveEvent,
   resolveEventEntries,
 } from "../../src/core/game/events/eventResolver.js";
@@ -423,3 +425,71 @@ test("resolveEventEntries copies attack redirects back to the original payload",
   assert.strictEqual(payload.redirectedTarget, redirected);
   assert.strictEqual(payload.redirectedTargetOwner, defenderOwner);
 });
+
+function triggerOccurrence(eventName: ResolvableEventName): EventTriggerOccurrence {
+  return { eventName, entries: [], entriesProvided: true, orderRule: null, onComplete: null };
+}
+
+test("pending trigger batches keep draining after a failed link and preserve its result", async () => {
+  const host = createResolverHost();
+  const first = triggerOccurrence("card_to_grave");
+  const second = triggerOccurrence("after_summon");
+  const third = triggerOccurrence("card_moved");
+  const pending = [first];
+  const batches: EventTriggerOccurrence[][] = [];
+  const failure = { ok: false, success: false, chainBuilt: true,
+    reason: "draw_failed", resolutionResult: { success: false, reason: "deck_empty" } };
+  host.chainSystem = {
+    pendingTriggerOccurrences: pending,
+    async resolveTriggerOccurrences(occurrences) {
+      batches.push(occurrences);
+      if (occurrences.includes(first)) {
+        pending.push(second);
+        return failure;
+      }
+      if (occurrences.includes(second)) {
+        pending.push(third);
+        return { ok: false, success: false, reason: "later_failure" };
+      }
+      return { ok: true, success: true };
+    },
+  };
+
+  const result = await flushPendingTriggerOccurrences.call(host);
+
+  assert.deepEqual(batches, [[first], [second], [third]]);
+  assert.deepEqual(pending, []);
+  assert.deepEqual(result, { ...failure, flushed: 3 });
+  assert.equal(host._flushingPendingTriggerOccurrences, false);
+  assert.equal(host.chainSystem._flushingPendingTriggerOccurrences, false);
+});
+
+for (const interruption of [
+  { ok: true, needsSelection: true },
+  { ok: false, cancelled: true },
+  { ok: false, resolutionResult: { success: false, cancelled: true } },
+]) {
+  test(`pending triggers stop for selection or cancellation: ${JSON.stringify(interruption)}`, async () => {
+    const host = createResolverHost();
+    const first = triggerOccurrence("after_summon");
+    const second = triggerOccurrence("card_to_grave");
+    const pending = [first];
+    let calls = 0;
+    host.chainSystem = {
+      pendingTriggerOccurrences: pending,
+      async resolveTriggerOccurrences() {
+        calls += 1;
+        assert.equal(calls, 1, "an interrupted batch must keep the remaining queue suspended");
+        pending.push(second);
+        return interruption;
+      },
+    };
+
+    const result = await flushPendingTriggerOccurrences.call(host);
+
+    assert.deepEqual(pending, [second]);
+    assert.deepEqual(result, { ...interruption, chainBuilt: false, flushed: 1 });
+    assert.equal(host._flushingPendingTriggerOccurrences, false);
+    assert.equal(host.chainSystem._flushingPendingTriggerOccurrences, false);
+  });
+}

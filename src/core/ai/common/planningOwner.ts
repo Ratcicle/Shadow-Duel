@@ -1,5 +1,5 @@
-import type { PlanningModel } from "../../contracts/aiPlanning.js";
-import type { GameTreeSimulationGameState, SimulatedPlayerState } from "../../contracts/aiState.js";
+import type { PlanningModel, PlanningSimulationState } from "../../contracts/aiPlanning.js";
+import type { SimulatedPlayerState } from "../../contracts/aiState.js";
 import type { SimulatedOwnerPolicy } from "./simulatedActions/shared.js";
 import { GAME_TREE_ACTOR_FIELDS } from "./gameTreeSimulation.js";
 import { resolvePerspectiveSlotForPlayer } from "./perspective.js";
@@ -7,7 +7,7 @@ import { normalizePlanningOwnerPolicy } from "./simulation.js";
 import { registerPlanningExecutionView } from "./planningExecution.js";
 
 /** A decision view of the same branch graph, never another effect execution. */
-function ownerView(state: GameTreeSimulationGameState, owner: SimulatedPlayerState): GameTreeSimulationGameState {
+function ownerView(state: PlanningSimulationState, owner: SimulatedPlayerState): PlanningSimulationState {
   const slot = resolvePerspectiveSlotForPlayer(state, owner);
   if (!slot) throw new Error(`Planning effect owner unavailable: ${owner.id}`);
   const actorKeys = new Set<string>(GAME_TREE_ACTOR_FIELDS);
@@ -55,7 +55,7 @@ function ownerView(state: GameTreeSimulationGameState, owner: SimulatedPlayerSta
 }
 
 export function createPlanningOwnerPolicy(
-  state: GameTreeSimulationGameState,
+  state: PlanningSimulationState,
   owner: SimulatedPlayerState,
   models: ReadonlyMap<string, PlanningModel>,
 ): SimulatedOwnerPolicy {

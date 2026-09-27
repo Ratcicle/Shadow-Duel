@@ -3,13 +3,19 @@ import test from "node:test";
 import Bot from "../../src/core/Bot.js";
 import Card from "../../src/core/Card.js";
 import Game from "../../src/core/Game.js";
-import type { AIAction } from "../../src/core/contracts/ai.js";
+import type { AIAction, SynchroAIAction } from "../../src/core/contracts/ai.js";
 import type { EffectDefinition } from "../../src/core/contracts/effects.js";
 import {
   fingerprintMainPhaseAction as actionKey,
   fingerprintMainPhaseState as stateKey,
 } from "../../src/core/bot/mainPhaseIdentity.js";
-import { cardDefinition, required } from "../helpers/fixtures.js";
+import { cardDefinition, required, unsafeFixture } from "../helpers/fixtures.js";
+import { fingerprintAction } from "../../src/core/ai/common/planningDiagnostics.js";
+import {
+  filterAiActionsForCurrentPhase,
+  getActionCard,
+  hasPreBattleValueActions,
+} from "../../src/core/ai/common/phaseTiming.js";
 
 function fixture() {
   const bot = new Bot();
@@ -82,6 +88,33 @@ test("contextual action identity separates copies, effects, preferences and acto
   assert.equal(actionKey({ ...base, score: 200, reason: "diagnostic", activationContext: { logTargets: true } }, game, bot), fingerprint);
   bot.id = "player";
   assert.notEqual(actionKey(base, game, bot), fingerprint);
+});
+
+test("simulating a summon-and-equip spell preserves the executable action metadata", t => {
+  const { game, bot } = fixture();
+  t.after(() => game.dispose("simulation_action_metadata_test"));
+  const spell = new Card(cardDefinition("The Shadow Heart"), bot.id);
+  const target = new Card(cardDefinition("Shadow-Heart Abyssal Eel"), bot.id);
+  bot.field = [];
+  bot.hand = [spell];
+  bot.graveyard = [target];
+  const action: AIAction = {
+    type: "spell", index: 0, cardId: spell.id, cardName: spell.name,
+    activationContext: { actionContext: { targetPreferences: {} } },
+  };
+  const identity = actionKey(action, game, bot);
+  const metadata = structuredClone(action.activationContext);
+  const state = bot.cloneGameState(unsafeFixture<Parameters<typeof bot.cloneGameState>[0]>(game,
+    "Concrete Game supports cloning; legacy engine usage metadata is optional"));
+
+  bot.simulateMainPhaseAction(state, action);
+
+  const summoned = required(state.bot.field[0]);
+  const equip = required(summoned.equips?.[0]);
+  assert.equal(equip.equippedTo, summoned, "the simulation retains its valid equipment cycle");
+  assert.equal(actionKey(action, game, bot), identity, "simulation results must not leak into executable choices");
+  assert.deepEqual(action.activationContext, metadata);
+  assert.deepEqual(bot.field, [], "the live state stays untouched");
 });
 
 test("index zero resolves live source and unchanged instance survives action regeneration after reorder", () => {
@@ -163,3 +196,71 @@ test("planner aggregate battle identity represents a phase bridge without an att
   assert.notEqual(actionKey({ type: "simulatedBattle", phaseBridge: "main2" }, game, bot), aggregate);
   assert.doesNotThrow(() => actionKey({ type: "simulatedBattle" }, game, bot));
 });
+
+test("Synchro identity preserves the destination and material copies across zone reordering", () => {
+  const { game, bot } = fixture();
+  const first = required(bot.field[0]);
+  const second = required(bot.field[1]);
+  const third = new Card(cardDefinition("Luminarch Aegisbearer"), bot.id);
+  bot.field.push(third);
+  const destination = new Card(cardDefinition("Tech-Zero Final Singularity"), bot.id);
+  const destinationCopy = new Card(cardDefinition("Tech-Zero Final Singularity"), bot.id);
+  bot.extraDeck.push(destination, destinationCopy);
+  const action: SynchroAIAction = {
+    type: "synchro", synchroInstanceId: destination.instanceId,
+    materialInstanceIds: [first.instanceId, second.instanceId], position: "attack",
+  };
+  const before = actionKey(action, game, bot);
+  assert.equal(actionKey({ ...action, materialInstanceIds: [second.instanceId, first.instanceId] }, game, bot), before);
+  assert.notEqual(actionKey({ ...action, materialInstanceIds: [first.instanceId, third.instanceId] }, game, bot), before);
+  assert.notEqual(actionKey({ ...action, synchroInstanceId: destinationCopy.instanceId }, game, bot), before);
+  assert.notEqual(actionKey({ ...action, position: "defense" }, game, bot), before);
+  bot.field.reverse();
+  bot.extraDeck.reverse();
+  assert.equal(actionKey(action, game, bot), before);
+  assert.deepEqual(action.materialInstanceIds, [first.instanceId, second.instanceId]);
+  assert.throws(() => actionKey({ ...action, synchroInstanceId: String(destination.instanceId) }, game, bot), /source/i);
+  bot.field = bot.field.filter(card => card !== second);
+  assert.throws(() => actionKey(action, game, bot), /material/i);
+});
+
+test("Synchro diagnostic fingerprints canonicalize material sets without conflating ID types", () => {
+  const action: SynchroAIAction = {
+    type: "synchro", synchroInstanceId: "extra:7", materialInstanceIds: [2, "1"], position: "attack",
+  };
+  const before = required(fingerprintAction(action));
+  assert.deepEqual(before.materialInstanceIds, ["1", 2]);
+  assert.equal(before.synchroInstanceId, "extra:7");
+  assert.deepEqual(fingerprintAction({ ...action, materialInstanceIds: ["1", 2] }), before);
+  assert.notDeepEqual(fingerprintAction({ ...action, materialInstanceIds: [1, 2] }), before);
+  assert.notDeepEqual(fingerprintAction({ ...action, synchroInstanceId: 7 }), before);
+  assert.notDeepEqual(fingerprintAction({ ...action, position: "defense" }), before);
+  assert.notDeepEqual(fingerprintAction({ ...action, materialInstanceIds: ["a|b", "c"] }), fingerprintAction({ ...action, materialInstanceIds: ["a", "b|c"] }));
+  assert.deepEqual(action.materialInstanceIds, [2, "1"]);
+});
+
+test("Synchro phase hooks resolve the exact destination instance", () => {
+  const { game, bot } = fixture();
+  const destination = new Card(cardDefinition("Tech-Zero Final Singularity"), bot.id);
+  const destinationCopy = new Card(cardDefinition("Tech-Zero Final Singularity"), bot.id);
+  bot.extraDeck.push(destinationCopy, destination);
+  const action: SynchroAIAction = {
+    type: "synchro", synchroInstanceId: destination.instanceId,
+    materialInstanceIds: bot.field.map(card => card.instanceId), position: "attack",
+  };
+  assert.equal(getActionCard(action, { game, bot }), destination);
+  assert.equal(getActionCard({ ...action, synchroInstanceId: String(destination.instanceId) }, { game, bot }), null);
+});
+
+for (const phase of ["main1", "main2"] as const) {
+  test(`Synchro phase policy retains field construction in ${phase}`, () => {
+    const { game, bot } = fixture();
+    game.phase = phase;
+    const attack: SynchroAIAction = {
+      type: "synchro", synchroInstanceId: "extra:7", materialInstanceIds: [1, 2], position: "attack",
+    };
+    const defense: SynchroAIAction = { ...attack, position: "defense" };
+    if (phase === "main1") assert.equal(hasPreBattleValueActions([attack], { game, bot }), true);
+    assert.deepEqual(filterAiActionsForCurrentPhase([attack, defense], { game, bot }), [attack, defense]);
+  });
+}

@@ -228,6 +228,16 @@ export function fingerprintMainPhaseAction(action: AIPlannedAction, game: MainPh
       source = action.ascensionCard;
       choices = { position: action.position, material: sourceIdentity(indexedCard(bot.field, action.materialIndex), "material") };
       break;
+    case "synchro":
+      zone = "extraDeck";
+      source = bot.extraDeck.find(card => card.instanceId === action.synchroInstanceId);
+      choices = {
+        position: action.position,
+        materials: action.materialInstanceIds
+          .map(id => sourceIdentity(bot.field.find(card => card.instanceId === id), "material"))
+          .sort(compare),
+      };
+      break;
     case "extraDeckProcedure": {
       zone = "extraDeck";
       source = extraDeckSource(bot, action);

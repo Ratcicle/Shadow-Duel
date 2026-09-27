@@ -27,35 +27,22 @@ interface StatOptions {
 }
 
 export function getEffectiveAtk(card: StatCardBase | null | undefined): number {
-  return (
-    (card?.atk || 0) +
-    (card?.tempAtkBoost || 0) +
-    (card?.equipAtkBonus || 0)
-  );
+  // Runtime and simulated cards store their current total in atk/def.
+  // Temporary/equip deltas are cleanup records, not unapplied bonuses.
+  return Number(card?.atk || 0);
 }
 
 export function getEffectiveDef(card: StatCardBase | null | undefined): number {
-  return (
-    (card?.def || 0) +
-    (card?.tempDefBoost || 0) +
-    (card?.equipDefBonus || 0)
-  );
+  return Number(card?.def || 0);
 }
 
 export function getEffectiveStat(
   card: StatCardBase | null | undefined,
   stat: StatName,
-  { includeEquip = true }: Pick<StatOptions, "includeEquip"> = {},
 ): number {
   if (!card) return 0;
   const key = stat === "def" ? "def" : "atk";
-  const tempKey = key === "def" ? "tempDefBoost" : "tempAtkBoost";
-  const equipKey = key === "def" ? "equipDefBonus" : "equipAtkBonus";
-  return (
-    Number(card[key] || 0) +
-    Number(card[tempKey] || 0) +
-    (includeEquip ? Number(card[equipKey] || 0) : 0)
-  );
+  return Number(card[key] || 0);
 }
 
 export function getVisibleAtk(card: StatCardBase | null | undefined): number {

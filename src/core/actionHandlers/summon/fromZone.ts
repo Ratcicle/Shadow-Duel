@@ -1,4 +1,5 @@
 import { isAI } from "../../Player.js";
+import { resolveExactInstanceSelection } from "../../AutoSelector.js";
 import { assignAutomaticFieldSlot } from "../../game/zones/placement.js";
 import { applyStatusesOnSummon } from "../../Card.js";
 import type { ActionOf } from "../../contracts/actions.js";
@@ -253,6 +254,11 @@ export async function handleSpecialSummonFromZone(
   const minRequired = Number(count.min ?? 1);
   const isOptionalSelection = Number.isFinite(minRequired) && minRequired <= 0;
   const requireDistinctNames = action.distinctNames === true;
+  const decisionKey = action.contextLabel || ctx.effect?.id || action.type || "special_summon_from_zone";
+  const plannedIds = isAI(player)
+    ? ctx.activationContext?.decisions?.specialSummons?.[decisionKey] : undefined;
+  const revalidation = isAI(player)
+    ? ctx.activationContext?.decisions?.specialSummonRevalidation?.[decisionKey] : undefined;
 
   const zoneEntries = buildSourceZoneEntries(zoneNames, sourceOwners);
 
@@ -485,7 +491,8 @@ export async function handleSpecialSummonFromZone(
 
   const zoneHasCards = zoneEntries.some((entry) => entry.list.length > 0);
 
-  if (!zoneHasCards) {
+  if (!zoneHasCards && !(plannedIds !== undefined && revalidation === "remaining")) {
+    if (plannedIds?.length) return false;
     if (isOptionalSelection) {
       getUI(game)?.log("No optional Special Summon targets available.");
       if (optEffect && typeof game.markOncePerTurnUsed === "function") {
@@ -625,11 +632,12 @@ export async function handleSpecialSummonFromZone(
     return true;
   });
 
-  if (requireDistinctNames) {
+  if (requireDistinctNames && plannedIds === undefined) {
     candidates = keepOneCardPerName(candidates);
   }
 
-  if (candidates.length === 0) {
+  if (candidates.length === 0 && !(plannedIds !== undefined && revalidation === "remaining")) {
+    if (plannedIds?.length) return false;
     if (isOptionalSelection) {
       getUI(game)?.log("No optional Special Summon targets available.");
       if (optEffect && typeof game.markOncePerTurnUsed === "function") {
@@ -677,7 +685,8 @@ export async function handleSpecialSummonFromZone(
     5 - (summonPlayer?.field?.length || 0),
   );
 
-  if (maxSelect === 0) {
+  if (maxSelect === 0 && !(isOptionalSelection && (plannedIds?.length === 0 ||
+      (plannedIds !== undefined && revalidation === "remaining")))) {
     getUI(game)?.log("Field is full, cannot Special Summon.");
     return false;
   }
@@ -687,6 +696,23 @@ export async function handleSpecialSummonFromZone(
       `Need ${minRequired} valid Special Summon target(s), but only ${maxSelect} available.`,
     );
     return false;
+  }
+
+  if (plannedIds !== undefined) {
+    const selected = resolveExactInstanceSelection(candidates, plannedIds, {
+      min: minRequired, max: maxSelect, revalidation,
+    });
+    if (!selected || (
+      requireDistinctNames && new Set(selected.map(card => card.name)).size !== selected.length
+    )) return false;
+    if (!(await payBanishCost())) return false;
+    const success = selected.length === 0 || await summonCards(
+      selected, zoneEntries, player, action, engine, ctx, targets,
+    );
+    if (success && optEffect && typeof game.markOncePerTurnUsed === "function") {
+      Reflect.apply(game.markOncePerTurnUsed, game, [source, player, optEffect]);
+    }
+    return success;
   }
 
   if (!(await payBanishCost())) {

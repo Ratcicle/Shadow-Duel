@@ -1,4 +1,5 @@
 import { isQuickSpell } from "../game/spellTrap/quickSpellRules.js";
+import { normalizeChainResponseCandidate } from "../game/decisions/chainResponse.js";
 import type {
   ChainActivationCandidate,
   ChainCard,
@@ -78,10 +79,8 @@ export async function botChooseChainResponse(
     if (strategyResponse?.card && strategyResponse?.effect) {
       const canonicalChoice = activatable.find(
         (candidate) =>
-          (strategyResponse.candidateKey &&
-            candidate.candidateKey === strategyResponse.candidateKey) ||
-          (candidate.card === strategyResponse.card &&
-            candidate.effect === strategyResponse.effect),
+          (!strategyResponse.candidateKey || candidate.candidateKey === strategyResponse.candidateKey) &&
+          candidate.card === strategyResponse.card && candidate.effect === strategyResponse.effect,
       );
       if (!canonicalChoice) {
         this.game?.notify?.("ai_activation_rejected", {
@@ -92,11 +91,16 @@ export async function botChooseChainResponse(
         });
         return null;
       }
-      const responseContext = buildResponseContext(context, strategyResponse);
-      return {
+      const responseContext = buildResponseContext(canonicalChoice.context, strategyResponse);
+      return normalizeChainResponseCandidate(canonicalChoice, {
         ...canonicalChoice,
         context: responseContext,
-      };
+      });
+    }
+    if (strategyResponse?.declinedCandidateKeys?.length) {
+      const declined = new Set(strategyResponse.declinedCandidateKeys);
+      activatable = activatable.filter(candidate => !declined.has(candidate.candidateKey));
+      if (activatable.length === 0) return null;
     }
   }
   const holyShieldOption = activatable.find(

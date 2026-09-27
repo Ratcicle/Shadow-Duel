@@ -1,7 +1,7 @@
 import type { BotArchetypeId } from "../contracts/bot.js";
 
 export interface BotPresetPresentation {
-  id: BotArchetypeId | "techzero";
+  id: BotArchetypeId;
   label: string;
   hudAccent: string;
   avatarPortrait: {
@@ -29,13 +29,12 @@ const BOT_PRESET_PRESENTATIONS: readonly BotPresetPresentation[] = [
     avatarPortrait: { asset: "assets/Bloomrot Carrioncap.png", sourceWidth: 896, crop: { x: 345, y: 230, size: 500 } } },
   { id: "burningwest", label: "Burning West", hudAccent: "#e8874f",
     avatarPortrait: { asset: "assets/Gunslinger of the Burning West.png", sourceWidth: 896, crop: { x: 205, y: 65, size: 400 } } },
-  // Presentation is ready; Tech-Zero is not a playable AI preset yet.
   { id: "techzero", label: "Tech-Zero", hudAccent: "#6faec6",
     avatarPortrait: { asset: "assets/Tech Zero Explosive Lancer.png", sourceWidth: 896, crop: { x: 300, y: 210, size: 420 } } },
 ];
 
 const AVAILABLE_BOT_PRESET_IDS: readonly BotArchetypeId[] = [
-  "shadowheart", "luminarch", "void", "dragon", "arcanist", "miragebound", "bloomrot", "burningwest",
+  "shadowheart", "luminarch", "void", "dragon", "arcanist", "miragebound", "bloomrot", "burningwest", "techzero",
 ];
 
 const MAIN_DECKS: Record<string, number[]> = {
@@ -72,6 +71,11 @@ const MAIN_DECKS: Record<string, number[]> = {
     454, 454, 454, 451, 451, 451, 455, 455, 460, 460, 453, 461, 452, 452,
     452, 456, 456, 457, 457, 458, 459, 462, 463, 463, 464, 465,
   ],
+  // Uses the existing strategy fallback until the dedicated combo policy is implemented.
+  techzero: [
+    501, 501, 501, 502, 502, 502, 505, 505, 504, 504,
+    506, 506, 507, 508, 519, 519, 518, 520, 520, 17,
+  ],
 };
 
 const EXTRA_DECKS: Record<string, number[]> = {
@@ -83,6 +87,7 @@ const EXTRA_DECKS: Record<string, number[]> = {
   miragebound: [355, 363],
   bloomrot: [418, 419, 420],
   burningwest: [466],
+  techzero: [503, 509, 510, 511, 512, 513, 514, 515, 516, 517],
 };
 
 function copyDeckList(deckList: readonly number[] = []) {

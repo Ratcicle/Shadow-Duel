@@ -33,6 +33,7 @@ import type {
   SimulatedPlayerState,
 } from "../../../contracts/aiState.js";
 import type { CardFilter } from "../../../contracts/effects.js";
+import type { ZoneInput } from "../../../contracts/zones.js";
 import type { SimulatedActionHandlerContext, SimulatedRuntimeState, SimulatedActionOptions } from "./shared.js";
 
 type ScopeFilterKey =
@@ -114,6 +115,36 @@ import {
   updateSimulatedSentToGraveMaterialMarker,
 } from "./shared.js";
 
+/** Publish a completed move using its actual destination, including token removal. */
+export function emitSimulatedMove(
+  card: SimulatedCardState,
+  state: SimulatedRuntimeState,
+  owner: SimulatedPlayerState,
+  destination: SimulatedPlayerState,
+  fromZone: ZoneInput | null,
+  wasFaceupBeforeMove: boolean,
+  effectsNegatedAtFieldExit: boolean,
+  options: SimulatedActionOptions,
+  contextLabel: string | null = null,
+  movedByEffect = true,
+): void {
+  const toZone = findCardZone(destination, card) || "removed";
+  const payload = {
+    card, player: destination, fromPlayer: owner,
+    toPlayer: toZone === "removed" ? null : destination,
+    fromZone, toZone, movedByEffect, wasFaceupBeforeMove,
+    effectsNegatedAtFieldExit, contextLabel,
+    sourceCard: options.sourceCard || null,
+    effectId: options.effect?.id || null,
+    actionContext: options.actionContext,
+  };
+  if (toZone === "graveyard" && fromZone !== "graveyard") {
+    updateSimulatedSentToGraveMaterialMarker({ card, state, player: destination, fromZone, contextLabel });
+    options.emitSimulatedEvent?.("card_to_grave", payload);
+  }
+  options.emitSimulatedEvent?.("card_moved", payload);
+}
+
 export function applyBanish(
   ctx: SimulatedActionHandlerContext<"banish">,
 ): void {
@@ -134,9 +165,12 @@ export function applyBanish(
     const fromZone = findCardZone(owner, card);
     const destination =
       fromZone === "field" ? getOriginalOwner(state, card, owner) : owner;
-    if (fromZone === "field") clearSimulatedTemporaryControl(state, card);
-    if (moveCardToZone(destination, card, "banished", owner)) {
+    const wasFaceupBeforeMove = card.isFacedown !== true;
+    const effectsNegatedAtFieldExit = fromZone === "field" && card.effectsNegated === true;
+    if (moveCardToZone(destination, card, "banished", owner, { state, movedByEffect: true, sourceCard: options.sourceCard || null, sourcePlayer: self })) {
+      if (fromZone === "field") clearSimulatedTemporaryControl(state, card);
       setSimulatedController(card, destination);
+      emitSimulatedMove(card, state, owner, destination, fromZone, wasFaceupBeforeMove, effectsNegatedAtFieldExit, options);
     }
   });
   return;
@@ -161,24 +195,13 @@ export function applyReturnToHand(
     if (!owner) return;
     const fromZone = findCardZone(owner, card) || action.fromZone || "field";
     const wasFaceupBeforeMove = card.isFacedown !== true;
+    const effectsNegatedAtFieldExit = fromZone === "field" && card.effectsNegated === true;
     const destination =
       fromZone === "field" ? getOriginalOwner(state, card, owner) : owner;
-    if (fromZone === "field") clearSimulatedTemporaryControl(state, card);
-    if (moveCardToZone(destination, card, "hand", owner)) {
+    if (moveCardToZone(destination, card, "hand", owner, { state, movedByEffect: true, sourceCard: options.sourceCard || null, sourcePlayer: self })) {
+      if (fromZone === "field") clearSimulatedTemporaryControl(state, card);
       setSimulatedController(card, destination);
-      options.emitSimulatedEvent?.("card_moved", {
-        card,
-        player: destination,
-        fromPlayer: owner,
-        toPlayer: destination,
-        fromZone,
-        toZone: "hand",
-        movedByEffect: true,
-        wasFaceupBeforeMove,
-        sourceCard: options.sourceCard || null,
-        effectId: options.effect?.id || null,
-        actionContext: options.actionContext,
-      });
+      emitSimulatedMove(card, state, owner, destination, fromZone, wasFaceupBeforeMove, effectsNegatedAtFieldExit, options);
     }
   });
   return;
@@ -270,6 +293,7 @@ export function applyMove(
     return action.allowEmpty === true ? undefined : STOP_SIMULATION;
   }
   let moved = false;
+  let movedLevelSum = 0;
   const movedCards: SimulatedCardState[] = [];
   targetCards.forEach((card) => {
     const owner = findCardOwner(state, card);
@@ -287,23 +311,14 @@ export function applyMove(
     const fromZone = findCardZone(owner, card) || action.fromZone || null;
     if (fromZone === "field" && to !== "field") {
       destPlayer = getOriginalOwner(state, card, owner);
-      clearSimulatedTemporaryControl(state, card);
     }
     const wasFaceupBeforeMove = card.isFacedown !== true;
-    if (fromZone === "field" && to !== "field") {
-      card.battlePositionLocked = false;
-    }
-    if (moveCardToZone(destPlayer || owner, card, to, owner)) {
+    const effectsNegatedAtFieldExit = fromZone === "field" && card.effectsNegated === true;
+    const levelBeforeMove = Number(card.level || 0);
+    if (moveCardToZone(destPlayer || owner, card, to, owner, { state, movedByEffect: true, sourceCard: options.sourceCard || null, sourcePlayer: self,
+      allowExtraDeckMonsterToHand: action.allowExtraDeckMonsterToHand === true })) {
+      if (fromZone === "field" && to !== "field") clearSimulatedTemporaryControl(state, card);
       setSimulatedController(card, destPlayer || owner);
-      if (to === "graveyard") {
-        updateSimulatedSentToGraveMaterialMarker({
-          card,
-          state,
-          player: destPlayer || owner,
-          fromZone,
-          contextLabel: action.contextLabel || null,
-        });
-      }
       if (action.resetAttackFlags) {
         card.hasAttacked = false;
         card.cannotAttackThisTurn = false;
@@ -311,26 +326,20 @@ export function applyMove(
         card.canMakeSecondAttackThisTurn = false;
         card.secondAttackUsedThisTurn = false;
       }
-      options.emitSimulatedEvent?.("card_moved", {
-        card,
-        player: destPlayer || owner,
-        fromPlayer: owner,
-        toPlayer: destPlayer || owner,
-        fromZone,
-        toZone: to,
-        movedByEffect: true,
-        wasFaceupBeforeMove,
-        sourceCard: options.sourceCard || null,
-        effectId: options.effect?.id || null,
-        actionContext: options.actionContext,
-      });
+      emitSimulatedMove(card, state, owner, destPlayer || owner, fromZone, wasFaceupBeforeMove, effectsNegatedAtFieldExit, options, action.contextLabel || null);
       movedCards.push(card);
+      movedLevelSum += Number.isFinite(levelBeforeMove) ? levelBeforeMove : 0;
       moved = true;
     }
   });
   if (!moved && action.allowEmpty !== true) return STOP_SIMULATION;
   if (moved) {
     storeSimActionResult(action, selections, options, movedCards);
+    if (action.storeLevelSumAs) {
+      const context = options.actionContext || options.activationContext?.actionContext ||
+        options.activationContext || (options.actionContext = {});
+      Reflect.set(context, action.storeLevelSumAs, movedLevelSum);
+    }
   }
   return;
 }

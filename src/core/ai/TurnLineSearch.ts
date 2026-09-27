@@ -1,4 +1,8 @@
 import { appendSimulatedZoneCard } from "./common/zones.js";
+import { createPlanningCopy, projectRuntimeEffectUsage } from "./common/planningCopy.js";
+import { PLANNING_PLAYER_FIELDS, PLANNING_STATE_FIELDS, PLANNING_ZONES } from "./common/stateFingerprint.js";
+import { isSimulatedMainPhaseActionSupported } from "./common/simulation.js";
+import { hasSimulatedProtection } from "./common/simulatedActions/lifecycle.js";
 import {
   getBattleStatForAttackTarget,
   getEffectiveAtk,
@@ -20,6 +24,10 @@ import {
   selectTributeIndicesByValue,
 } from "../game/summon/tributeValue.js";
 import { canUseNormalSummonForCard } from "../Player.js";
+import { withPlanningExecutionContext } from "./common/planningExecution.js";
+import { createPlanningOwnerPolicy } from "./common/planningOwner.js";
+import { withoutLiveGameReference } from "./common/gameTreeSimulation.js";
+import type { GameTreeModels, PlanningModel } from "../contracts/aiPlanning.js";
 
 import type {
   AIAction,
@@ -33,6 +41,8 @@ import type {
   SimulatedBattleAction,
   TurnLineSearchOptions,
   TurnLineSearchResult,
+  TurnLineSearchCompletion,
+  TurnLineTerminationReason,
 } from "../contracts/ai.js";
 import type {
   AiPlayerInput,
@@ -43,7 +53,7 @@ import type {
 } from "../contracts/aiState.js";
 import type { CardAction } from "../contracts/actions.js";
 import type { GameCard } from "../contracts/cards.js";
-import type { SimulatedTemporaryControlEffect } from "./common/simulatedActions/shared.js";
+import type { SimulatedRuntimeStateFields, SimulatedTemporaryControlEffect } from "./common/simulatedActions/shared.js";
 
 interface PlannerBlueprintEntry {
   id?: string | number;
@@ -83,29 +93,29 @@ interface BattlePairActionView {
 interface TemporaryBattleEffectView {
   event?: string;
   timing?: string;
-  sourceName?: string;
-  sourceCardId?: string | number;
-  sourceEffectId?: string;
-  expiresOnTurn?: number;
-  usesRemaining?: number;
+  sourceName?: string | null;
+  sourceCardId?: string | number | null;
+  sourceEffectId?: string | null;
+  expiresOnTurn?: number | null;
+  usesRemaining?: number | null;
   firstTarget?: PlannerCard | null;
-  firstInstanceId?: string | number;
+  firstInstanceId?: string | number | null;
   firstFieldPresenceId?: string | number;
   secondTarget?: PlannerCard | null;
-  secondInstanceId?: string | number;
+  secondInstanceId?: string | number | null;
   secondFieldPresenceId?: string | number;
   affectedTarget?: PlannerCard | null;
   affectedTargetRef?: string;
-  affectedInstanceId?: string | number;
+  affectedInstanceId?: string | number | null;
   affectedFieldPresenceId?: string | number;
   declaredValues?: unknown;
   actions?: readonly BattlePairActionView[];
 }
 
-type PlanningState = TurnLineSimulationGameState & {
-  temporaryBattlePairEffects?: TemporaryBattleEffectView[];
-  temporaryEventEffects?: TemporaryBattleEffectView[];
-  temporaryControlEffects?: SimulatedTemporaryControlEffect[];
+type PlanningState = TurnLineSimulationGameState & SimulatedRuntimeStateFields & {
+  _isPerspectiveState: true;
+  turnCounter: number;
+  temporaryBattlePairEffects?: Array<NonNullable<SimulatedRuntimeStateFields["temporaryBattlePairEffects"]>[number] & TemporaryBattleEffectView>;
 };
 
 type PlanningGameInput = Omit<AiStateInput, "player" | "bot" | "opponent"> & {
@@ -206,9 +216,14 @@ export interface BattleCandidateScoreInput {
 }
 
 interface TurnLineStrategy {
-  bot?: PlannerPlayerInput;
+  bot?: PlannerPlayerInput & { getGameTreeModels?(): GameTreeModels };
   id?: string;
   generateMainPhaseActions?(state: PlanningState): AIAction[];
+  selectPlanningCandidates?(
+    actions: readonly AIAction[],
+    state: PlanningState,
+    limit: number,
+  ): AIAction[];
   simulateMainPhaseAction?(state: PlanningState, action: AIPlannedAction): unknown;
   evaluateBoard?(state: PlanningState, perspective: PlannerPlayer): number;
   evaluateBoardV2?(state: PlanningState, perspective: PlannerPlayer): number;
@@ -286,7 +301,7 @@ interface SearchBranch {
   milestones: AILineMilestone[];
   terminalContext: PlannerLineContext;
   finalState: PlanningState;
-  reason: string;
+  reason: TurnLineTerminationReason;
 }
 
 function actionRequiresHand(actionType: AIActionType): boolean {
@@ -460,26 +475,9 @@ function summonActionIsStillLegal(
   return true;
 }
 
-function clonePlain<Value>(value: Value): Value {
-  if (typeof structuredClone === "function") {
-    try {
-      return structuredClone(value);
-    } catch (_err) {
-      // Fall through to JSON clone for plain simulation data.
-    }
-  }
-  return JSON.parse(
-    JSON.stringify(value, (_key, nested) => {
-      if (nested instanceof Map) return Object.fromEntries(nested.entries());
-      if (nested instanceof Set) return [...nested];
-      if (typeof nested === "function") return undefined;
-      return nested;
-    }),
-  );
-}
-
 function clonePlayerState(
   player: PlannerPlayerInput | null | undefined,
+  copy: ReturnType<typeof createPlanningCopy>,
 ): PlannerPlayer {
   const safe = player || {};
   const snapshot = {
@@ -502,7 +500,12 @@ function clonePlayerState(
     effectActivationRestrictions: (safe.effectActivationRestrictions || []) as NonNullable<PlannerPlayer["effectActivationRestrictions"]>,
     controllerType: safe.controllerType,
   };
-  return clonePlain(snapshot) as PlannerPlayer;
+  for (const key of PLANNING_PLAYER_FIELDS) {
+    if (key in safe) Reflect.set(snapshot, key, Reflect.get(safe, key));
+  }
+  const result = copy.copyValue(snapshot) as PlannerPlayer;
+  copy.registerPlayerCopy(safe, result);
+  return result;
 }
 
 function resolvePerspectiveBot(
@@ -515,6 +518,7 @@ function resolvePerspectiveBot(
 function clonePlanningState(
   game: PlanningGameInput,
   strategy: TurnLineStrategy,
+  publicOpponent = false,
 ): PlanningState {
   const perspectiveBot = resolvePerspectiveBot(game, strategy);
   const isPerspectiveState = game?._isPerspectiveState === true;
@@ -525,36 +529,39 @@ function clonePlanningState(
     ? game.bot
     : perspectiveBot || game?.bot || game?.player;
 
+  const copy = createPlanningCopy();
+  if (publicOpponent && opponent) {
+    // Register before copying either participant: links to the same hidden card
+    // must resolve to the same opaque projection, never to a second full copy.
+    const hide = (card: PlannerCardInput | null | undefined, monster = false) => {
+      if (!card) return;
+      const projection: PlannerCardInput & { _simUnknownCard: true } = { _simUnknownCard: true };
+      copy.copyFields(card, projection, ["instanceId", "fieldPresenceId", "fieldSlot", "isFacedown", "position", "controller", "originalOwner"]);
+      if (monster) projection.cardKind = "monster";
+      copy.registerCardProjection(card, projection);
+    };
+    for (const zone of ["hand", "deck", "extraDeck"] as const) {
+      for (const card of opponent[zone] || []) hide(card);
+    }
+    for (const card of opponent.field || []) if (card?.isFacedown) hide(card, true);
+    for (const card of opponent.spellTrap || []) if (card?.isFacedown) hide(card);
+    if (opponent.fieldSpell?.isFacedown) hide(opponent.fieldSpell);
+    for (const card of opponent.banished || []) if (card?.isFacedown) hide(card);
+  }
   const state = {
-    player: clonePlayerState(opponent || game?.player),
-    bot: clonePlayerState(sourceBot),
+    player: clonePlayerState(opponent || game?.player, copy),
+    bot: clonePlayerState(sourceBot, copy),
     turn: game?.turn,
     phase: game?.phase,
     turnCounter: game?.turnCounter || 0,
     _isPerspectiveState: true,
     _gameRef: game?._gameRef || game,
   } as PlanningState;
-  if (game?._simOncePerTurn) {
-    state._simOncePerTurn = clonePlain(game._simOncePerTurn) as NonNullable<PlanningState["_simOncePerTurn"]>;
-  }
-  if (game?._simLuminarch) {
-    state._simLuminarch = clonePlain(game._simLuminarch) as NonNullable<PlanningState["_simLuminarch"]>;
-  }
-  if (game?._simBurningWest) {
-    state._simBurningWest = clonePlain(game._simBurningWest) as NonNullable<PlanningState["_simBurningWest"]>;
-  }
-  if (Array.isArray(game?.temporaryBattlePairEffects)) {
-    state.temporaryBattlePairEffects = clonePlain(game.temporaryBattlePairEffects);
-  }
-  if (Array.isArray(game?.temporaryEventEffects)) {
-    state.temporaryEventEffects = clonePlain(game.temporaryEventEffects);
-  }
-  if (Array.isArray(game?.temporaryControlEffects)) {
-    state.temporaryControlEffects = clonePlain(game.temporaryControlEffects);
-  }
-  if (game?._simTemporaryControlCounter !== undefined) {
-    state._simTemporaryControlCounter = game._simTemporaryControlCounter;
-  }
+  copy.copyFields(game, state, [
+    ...PLANNING_STATE_FIELDS.filter(key => key !== "_isPerspectiveState"),
+    "_simUnsupportedActions", "_simLuminarch", "_gameTreeActors",
+  ]);
+  projectRuntimeEffectUsage(game, state);
   return state;
 }
 
@@ -727,9 +734,35 @@ function simulatePlanningAction(
   state: PlanningState,
   action: AIPlannedAction,
   strategy: TurnLineStrategy,
+  models: ReadonlyMap<string, PlanningModel> | null,
 ): PlanningState {
   if (typeof strategy?.simulateMainPhaseAction === "function") {
-    strategy.simulateMainPhaseAction(state, action);
+    if (models) {
+      const unknownLocations = () => {
+        const locations = new Map<PlannerCard, string>();
+        for (const player of [state.bot, state.player]) {
+          for (const zone of PLANNING_ZONES) {
+            for (const card of player[zone]) if (card._simUnknownCard) {
+              locations.set(card, `${player.id}:${zone}:${card.isFacedown === true}`);
+            }
+          }
+          if (player.fieldSpell?._simUnknownCard) {
+            locations.set(player.fieldSpell, `${player.id}:fieldSpell:${player.fieldSpell.isFacedown === true}`);
+          }
+        }
+        return locations;
+      };
+      const before = unknownLocations();
+      withoutLiveGameReference(state, () => withPlanningExecutionContext(state,
+        (_state, owner) => createPlanningOwnerPolicy(state, owner, models),
+        () => strategy.simulateMainPhaseAction?.(state, action)));
+      const after = unknownLocations();
+      if ([...before].some(([card, location]) => after.get(card) !== location)) {
+        state._simRequiresReplan = true;
+      }
+    } else {
+      strategy.simulateMainPhaseAction(state, action);
+    }
   }
   return state;
 }
@@ -1012,6 +1045,8 @@ function getSimTurnCounter(turnCounter: unknown): number {
 function hasBattleDestructionProtection(
   card: PlannerCard | null | undefined,
   turnCounter: unknown,
+  ownerId: string,
+  sourceOwnerId: string,
 ): boolean {
   const currentTurn = getSimTurnCounter(turnCounter);
   return Boolean(
@@ -1019,6 +1054,7 @@ function hasBattleDestructionProtection(
       card?.tempBattleIndestructible ||
       card?.cannotBeDestroyedByBattle ||
       card?.simBattleDestructionProtected ||
+      hasSimulatedProtection(card, "battle_destruction", currentTurn, { ownerId, sourceOwnerId }) ||
       (card?.battleIndestructibleOncePerTurn &&
         card?.battleIndestructibleOncePerTurnLastUsedTurn !== currentTurn),
   );
@@ -1027,14 +1063,17 @@ function hasBattleDestructionProtection(
 function preventBattleDestruction(
   card: PlannerCard | null | undefined,
   turnCounter: unknown,
+  ownerId: string,
+  sourceOwnerId: string,
 ): boolean {
-  if (!hasBattleDestructionProtection(card, turnCounter)) return false;
+  if (!hasBattleDestructionProtection(card, turnCounter, ownerId, sourceOwnerId)) return false;
   const currentTurn = getSimTurnCounter(turnCounter);
   const nonOnceProtection = Boolean(
     card?.battleIndestructible ||
       card?.tempBattleIndestructible ||
       card?.cannotBeDestroyedByBattle ||
-      card?.simBattleDestructionProtected,
+      card?.simBattleDestructionProtected ||
+      hasSimulatedProtection(card, "battle_destruction", currentTurn, { ownerId, sourceOwnerId }),
   );
   if (card?.simBattleDestructionProtected) {
     card.simBattleDestructionProtected = false;
@@ -1195,7 +1234,7 @@ function resolveSimulatedBattlePairEffects(
     : [];
   if (!target || entries.length === 0) return { stopped: false };
   const opponent = state?.player || {};
-  const remaining: TemporaryBattleEffectView[] = [];
+  const remaining: NonNullable<PlanningState["temporaryBattlePairEffects"]> = [];
   let stopped = false;
 
   for (const entry of entries) {
@@ -1327,7 +1366,7 @@ function applySimulatedBattle(
     ownerLabel: string,
   ): boolean => {
     if (!card) return false;
-    if (preventBattleDestruction(card, state?.turnCounter)) return false;
+    if (preventBattleDestruction(card, state?.turnCounter, owner.id, owner === bot ? opponent.id : bot.id)) return false;
     recordDestroyedCard(summary, card, ownerLabel, "battle");
     return destroyPlannerMonster(owner, card);
   };
@@ -1445,7 +1484,7 @@ function chooseBestSingleSimulatedBattle(
       Number(originalAttacker?.attacksUsedThisTurn || 0) > 0;
     const candidateState = clonePlanningState(state, strategy);
     const summary = applySimulatedBattle(candidateState, plan, strategy, options);
-    if (!summary) return;
+    if (!summary || candidateState._simUnsupportedActions?.length) return;
     const destroyedOpponent = summary.destroyedNames.filter(
       (_name, index) => summary.destroyedCards[index]?.owner === "opponent",
     ).length;
@@ -1551,7 +1590,7 @@ function chooseBestSimulatedBattle(
     steps.push(next.summary);
     totalScore += Number(next.score || 0);
     currentState = next.state;
-    if ((currentState.player?.lp || 0) <= 0) break;
+    if ((currentState.player?.lp || 0) <= 0 || currentState._simRequiresReplan) break;
   }
 
   if (steps.length === 0) return null;
@@ -1569,6 +1608,7 @@ function tryMainBattleMain2Bridge(
   strategy: TurnLineStrategy,
   options: TurnLineRuntimeOptions = {},
 ): { state: PlanningState; action: PlannerBattleSummary; score: number } | null {
+  if (state._simUnsupportedActions?.length || state._simRequiresReplan) return null;
   if (!isMainBattleMain2Mode(options)) return null;
   if (state?._simPlanningBattleDone) return null;
   if (!isMain1Phase(state?.phase)) return null;
@@ -1596,7 +1636,7 @@ function getCandidatesForDepth(
   options: TurnLineRuntimeOptions,
 ): AIAction[] {
   const filterForPhase = (actions: AIAction[]): AIAction[] =>
-    filterAiActionsForCurrentPhase(actions, {
+    filterAiActionsForCurrentPhase(actions.filter(isSimulatedMainPhaseActionSupported), {
       state,
       game: state,
       bot: state?.bot,
@@ -1635,14 +1675,36 @@ export async function turnLineSearch(
     turnMode = "mainOnly",
   } = options;
 
-  if (turnMode !== "mainOnly" && turnMode !== "mainBattleMain2") return null;
+  let nodesEvaluated = 0;
+  let unsupportedBranches = 0;
+  let repeatedStates = 0;
+  const complete = (terminationReason: TurnLineTerminationReason): TurnLineSearchCompletion => {
+    const completion = { terminationReason, nodesEvaluated, unsupportedBranches, repeatedStates };
+    options.onComplete?.(completion);
+    return completion;
+  };
+  if (turnMode !== "mainOnly" && turnMode !== "mainBattleMain2") {
+    complete("invalid_input");
+    return null;
+  }
   if (!game || !strategy || typeof strategy.simulateMainPhaseAction !== "function") {
+    complete("invalid_input");
+    return null;
+  }
+  if ("_simUnsupportedActions" in game && Array.isArray(game._simUnsupportedActions) && game._simUnsupportedActions.length) {
+    complete("unsupported_branches");
+    return null;
+  }
+  if ("_simRequiresReplan" in game && game._simRequiresReplan === true) {
+    complete("requires_replan");
     return null;
   }
 
-  let nodesEvaluated = 0;
+  const allowEarlyStop = options.allowEarlyStop ?? options.profile?.allowEarlyStop ?? false;
   const seenStates = new Set<string>();
-  const root = clonePlanningState(game, strategy);
+  const configuredModels = strategy.bot?.getGameTreeModels?.();
+  const models = configuredModels ? new Map(configuredModels.actors) : null;
+  const root = clonePlanningState(game, strategy, models !== null);
   seenStates.add(getPlanningStateHash(root));
 
   const search = async (
@@ -1653,7 +1715,7 @@ export async function turnLineSearch(
     const terminalEval = () =>
       evaluatePlanningTerminal(currentState, strategy, options, sequence, root);
 
-    if (depth >= maxDepth || nodesEvaluated >= nodeBudget) {
+    if (depth >= maxDepth || nodesEvaluated >= nodeBudget || currentState._simRequiresReplan) {
       const terminal = terminalEval();
       return {
         sequence,
@@ -1663,7 +1725,7 @@ export async function turnLineSearch(
         milestones: terminal.milestones,
         terminalContext: terminal.context,
         finalState: currentState,
-        reason: depth >= maxDepth ? "max_depth" : "node_budget",
+        reason: currentState._simRequiresReplan ? "requires_replan" : depth >= maxDepth ? "max_depth" : "node_budget",
       };
     }
 
@@ -1724,23 +1786,35 @@ export async function turnLineSearch(
       },
     });
 
-    candidates = candidates
-      .slice()
-      .sort((a, b) => (b.priority || 0) - (a.priority || 0))
-      .slice(0, Math.max(1, candidateLimit));
+    candidates = candidates.slice().sort((a, b) => (b.priority || 0) - (a.priority || 0));
+    if (typeof strategy.selectPlanningCandidates === "function") {
+      const selectionLimit = Math.max(1, Math.min(beamWidth, candidateLimit, candidates.length));
+      const legalCandidates = new Set(candidates);
+      const selected = strategy.selectPlanningCandidates(candidates, currentState, selectionLimit);
+      candidates = [...new Set(selected)].filter(action => legalCandidates.has(action)).slice(0, selectionLimit);
+    } else {
+      candidates = candidates.slice(0, Math.max(1, candidateLimit));
+    }
 
     const effectiveBeamWidth = Math.max(1, Math.min(beamWidth, candidates.length));
     const branches: SearchBranch[] = [];
+    let unsupportedAtThisDepth = 0;
 
     for (const action of candidates.slice(0, effectiveBeamWidth)) {
       if (nodesEvaluated >= nodeBudget) break;
       const nextState = clonePlanningState(currentState, strategy);
       const beforeHash = getPlanningStateHash(nextState);
-      simulatePlanningAction(nextState, action, strategy);
+      simulatePlanningAction(nextState, action, strategy, models);
       nodesEvaluated += 1;
+      if (nextState._simUnsupportedActions?.length) {
+        unsupportedBranches++;
+        unsupportedAtThisDepth++;
+        continue;
+      }
       const afterHash = getPlanningStateHash(nextState);
 
       if (beforeHash === afterHash || seenStates.has(afterHash)) {
+        repeatedStates++;
         continue;
       }
       seenStates.add(afterHash);
@@ -1802,7 +1876,7 @@ export async function turnLineSearch(
         milestones: terminal.milestones,
         terminalContext: terminal.context,
         finalState: currentState,
-        reason: "no_state_changing_branches",
+        reason: unsupportedAtThisDepth > 0 ? "unsupported_branches" : "no_state_changing_branches",
       };
     }
 
@@ -1821,15 +1895,37 @@ export async function turnLineSearch(
         reason: "no_state_changing_branches",
       };
     }
+    if (allowEarlyStop) {
+      const terminal = terminalEval();
+      if (terminal.score > bestBranch.score) {
+        return {
+          sequence, score: terminal.score, baseScore: terminal.baseScore,
+          milestoneScore: terminal.milestoneScore, milestones: terminal.milestones,
+          terminalContext: terminal.context, finalState: currentState,
+          reason: "preferred_terminal",
+        };
+      }
+    }
     return bestBranch;
   };
 
   const result = await search(root, 0, []);
-  if (!result?.sequence?.length) return null;
+  if (!result?.sequence?.length) {
+    complete(result.reason);
+    return null;
+  }
   const firstAction = result.sequence[0];
-  if (!firstAction) return null;
+  if (!firstAction) {
+    complete(result.reason);
+    return null;
+  }
   const firstStepState = clonePlanningState(root, strategy);
-  simulatePlanningAction(firstStepState, firstAction, strategy);
+  simulatePlanningAction(firstStepState, firstAction, strategy, models);
+  if (firstStepState._simUnsupportedActions?.length) {
+    unsupportedBranches++;
+    complete("unsupported_branches");
+    return null;
+  }
   const diagnostics = {
     rootSummary: summarizePlanningState(root, { strategy }),
     firstStepSummary: summarizePlanningState(firstStepState, { strategy }),
@@ -1864,6 +1960,7 @@ export async function turnLineSearch(
     nodesEvaluated,
     milestones: result.milestones || [],
     diagnostics,
+    completion: complete(result.reason),
     reason:
       described ||
       result.reason ||

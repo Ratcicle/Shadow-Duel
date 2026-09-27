@@ -1,5 +1,6 @@
 import { beamSearchTurn, greedySearchWithEvalV2 } from "../ai/BeamSearch.js";
 import { turnLineSearch } from "../ai/TurnLineSearch.js";
+import { isSimulatedMainPhaseActionSupported } from "../ai/common/simulation.js";
 import {
   compactPlanningDiffs,
   diffPlanningSummaries,
@@ -21,6 +22,7 @@ import type {
   AIPlanningContext,
   AIPlanningProfile,
   TurnLineSearchResult,
+  TurnLineSearchCompletion,
 } from "../contracts/ai.js";
 
 function hasValue(value: unknown) {
@@ -78,6 +80,7 @@ async function runMainPhase(bot: BotRuntimePort, game: BotGamePort, session: Mai
     );
 
     const isPermitted = (action: AIPlannedAction): boolean => {
+      if (!isSimulatedMainPhaseActionSupported(action)) return false;
       const valid = action.type === "simulatedBattle" ? game.phase === "main1" :
         filterAiActionsForCurrentPhase([action], { game, bot, player: bot, strategy: planningStrategy }).length > 0 &&
           bot.filterValidActionsForCurrentState([action], game).length > 0;
@@ -184,6 +187,7 @@ async function runMainPhase(bot: BotRuntimePort, game: BotGamePort, session: Mai
       console.log(
         `[Bot.playMainPhase] Running TurnLineSearch with ${actions.length} actions (width=${plannerBeamWidth}, depth=${plannerMaxDepth}, budget=${plannerNodeBudget}, battleSteps=${plannerBattleStepLimit})...`,
       );
+      const searchReport: { completion?: TurnLineSearchCompletion } = {};
       const plannerResult = await turnLineSearch(game, planningStrategy, {
         beamWidth: plannerBeamWidth,
         maxDepth: plannerMaxDepth,
@@ -195,6 +199,7 @@ async function runMainPhase(bot: BotRuntimePort, game: BotGamePort, session: Mai
         preGeneratedActions: actions,
         profile: planningProfile,
         planningContext,
+        onComplete: completion => { searchReport.completion = completion; },
       });
 
       session.recordProgress("ai_turn_line_search", game, {
@@ -204,7 +209,10 @@ async function runMainPhase(bot: BotRuntimePort, game: BotGamePort, session: Mai
         plannerBattleStepLimit,
         plannerUsed: Boolean(plannerResult?.action),
         plannedLineLength: plannerResult?.sequence?.length || 0,
-        plannedNodesEvaluated: plannerResult?.nodesEvaluated || 0,
+        plannedNodesEvaluated: searchReport.completion?.nodesEvaluated || 0,
+        plannerTerminationReason: searchReport.completion?.terminationReason || "invalid_input",
+        plannerUnsupportedBranches: searchReport.completion?.unsupportedBranches || 0,
+        plannerRepeatedStates: searchReport.completion?.repeatedStates || 0,
         plannedScore: plannerResult?.score ?? null,
         plannedBaseScore: plannerResult?.baseScore ?? null,
         plannedMilestoneScore: plannerResult?.milestoneScore ?? null,
@@ -219,6 +227,10 @@ async function runMainPhase(bot: BotRuntimePort, game: BotGamePort, session: Mai
       console.log(`[Bot.playMainPhase] TurnLineSearch result:`, plannerResult);
       if (!await session.waitUntilReady()) return;
       if (session.capture() !== stateBeforeDecision) continue;
+      if (!plannerResult && searchReport.completion?.terminationReason === "preferred_terminal") {
+        session.stopReason = "planned_stop";
+        return;
+      }
       if (plannerResult?.action && isPermitted(plannerResult.action)) {
         bestAction = plannerResult.action;
         pendingPlannerTrace = plannerResult;
@@ -275,47 +287,10 @@ async function runMainPhase(bot: BotRuntimePort, game: BotGamePort, session: Mai
       } else {
         console.log(`[Bot.playMainPhase] ❌ Greedy returned no action`);
 
-        // 🔧 EMERGENCY FIX: Se greedy falhou mas temos ações, forçar primeira
-        if (!bestAction && actions.length > 0) {
-          bestAction = fallbackActions.find(isPermitted) || null;
-          console.warn(
-            `[Bot.playMainPhase] 🚨 EMERGENCY FALLBACK: Forcing first action to avoid pass`,
-          );
-        }
       }
     }
 
-    // BUGFIX: Ultimate fallback - Se search falhou mas temos ações, usar a primeira
-    if (!bestAction) {
-      let finalFallback = fallbackActions;
-      if (!finalFallback.length && actions.length > 0) {
-        const regenerated = bot.sequenceActions(
-          bot.generateMainPhaseActions(game),
-        );
-        const phaseValidRegenerated = filterAiActionsForCurrentPhase(
-          regenerated,
-          {
-            game,
-            bot,
-            player: bot,
-            strategy: planningStrategy,
-          },
-        );
-        finalFallback = bot.filterValidActionsForCurrentState(
-          phaseValidRegenerated,
-          game,
-        ).filter(isPermitted);
-      }
-
-      if (finalFallback.length > 0) {
-        bestAction = finalFallback.find(isPermitted) || null;
-        console.log(
-          `[Bot.playMainPhase] ?? Using ultimate fallback: first valid action`,
-          bestAction,
-        );
-      }
-    }
-
+    // Greedy already preserves complete no-op fallbacks; null has no modeled action.
     // Se ainda não tem ação, break
     if (!bestAction) {
       console.log(`[Bot.playMainPhase] ⚠️ No action selected, breaking loop`);

@@ -5,6 +5,7 @@
  */
 
 import { isAI } from "../Player.js";
+import { resolveExactInstanceSelection } from "../AutoSelector.js";
 import { clearFieldSlot } from "../game/zones/placement.js";
 import { getBaseLpCost } from "../effects/costs/lpCost.js";
 import { cardMatchesKind } from "../Card.js";
@@ -1102,6 +1103,13 @@ export async function handleAddFromZoneToHand(
     game.updateBoard();
     return true;
   };
+
+  const decisionKey = readString(action, "selectionId") || `${ctx.effect?.id || action.type}_selection`;
+  const plannedIds = isAI(player) ? ctx.activationContext?.decisions?.selections?.[decisionKey] : undefined;
+  if (plannedIds !== undefined) {
+    const selected = resolveExactInstanceSelection(candidates, plannedIds, { min: minSelect, max: maxSelect });
+    return selected ? finalizeSelection(selected) : false;
+  }
 
   const selection = await selectCardsFromZone({
     game,

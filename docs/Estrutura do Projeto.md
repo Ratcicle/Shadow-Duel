@@ -161,7 +161,7 @@ Camada operacional do bot, separada da estratégia. Ela valida ações, executa 
 
 | Arquivo/Pasta | Responsabilidade |
 |---|---|
-| [presets.ts](../src/core/bot/presets.ts) | Presets disponíveis: Shadow-Heart, Luminarch, Void, Dragon, Arcanist, Miragebound, Bloomrot e Burning West. |
+| [presets.ts](../src/core/bot/presets.ts) | Presets disponíveis: Shadow-Heart, Luminarch, Void, Dragon, Arcanist, Miragebound, Bloomrot, Burning West e Tech-Zero. Cada preset tem uma estratégia registrada; Tech-Zero possui decisões exatas e busca de linhas em Main Phase. |
 | [deckBuilder.ts](../src/core/bot/deckBuilder.ts) | Montagem de listas do bot a partir dos presets. |
 | [actionValidation.ts](../src/core/bot/actionValidation.ts) | Valida se uma ação planejada ainda é legal no estado atual. |
 | [actionExecutor.ts](../src/core/bot/actionExecutor.ts) | Executa ações escolhidas pela IA. |
@@ -232,10 +232,11 @@ físicos TypeScript, importados por specifiers `.js`. Os quatro perfis de clone
 | [MirageboundStrategy.ts](../src/core/ai/MirageboundStrategy.ts) | Miragebound |
 | [BloomrotStrategy.ts](../src/core/ai/BloomrotStrategy.ts) | Bloomrot |
 | [BurningWestStrategy.ts](../src/core/ai/BurningWestStrategy.ts) | Burning West |
+| [TechZeroStrategy.ts](../src/core/ai/TechZeroStrategy.ts) | Tech-Zero |
 
 ### Pacotes Por Arquétipo
 
-Os pacotes [shadowheart/](../src/core/ai/shadowheart/), [luminarch/](../src/core/ai/luminarch/), [void/](../src/core/ai/void/), [dragon/](../src/core/ai/dragon/), [arcanist/](../src/core/ai/arcanist/), [miragebound/](../src/core/ai/miragebound/), [bloomrot/](../src/core/ai/bloomrot/) e [burningwest/](../src/core/ai/burningwest/) concentram knowledge bases, prioridades, combos, scoring, simulação e planejamento específicos de cada deck.
+Os pacotes [shadowheart/](../src/core/ai/shadowheart/), [luminarch/](../src/core/ai/luminarch/), [void/](../src/core/ai/void/), [dragon/](../src/core/ai/dragon/), [arcanist/](../src/core/ai/arcanist/), [miragebound/](../src/core/ai/miragebound/), [bloomrot/](../src/core/ai/bloomrot/), [burningwest/](../src/core/ai/burningwest/) e [techzero/](../src/core/ai/techzero/) concentram knowledge bases, prioridades, combos, scoring, simulação e planejamento específicos de cada deck.
 
 Padrões comuns:
 
@@ -253,6 +254,7 @@ Pacotes com módulos extras relevantes:
 - [bloomrot/](../src/core/ai/bloomrot/) possui análise, batalha, defesa, extra deck, resource policy, targeting, scoring e planejamento de linha.
 - [miragebound/](../src/core/ai/miragebound/) possui planejamento de linha próprio.
 - [burningwest/](../src/core/ai/burningwest/) possui módulos dedicados de batalha, defesa, Extra Deck, scoring e planejamento de linha.
+- [techzero/](../src/core/ai/techzero/) concentra papéis, prioridades de recursos, decisões exatas, configuração da simulação compartilhada e [linePlanning.ts](../src/core/ai/techzero/linePlanning.ts). A busca usa `TurnLineSearch` em `mainOnly`, preserva marcos de combo e pode manter o campo atual. A avaliação terminal usa recursos próprios e informação pública; compras encerram a expansão para replanejamento após a revelação. [battle.ts](../src/core/ai/techzero/battle.ts) compara sequências de ataques, sem certificar letal diante de interações não resolvidas. [responses.ts](../src/core/ai/techzero/responses.ts) escolhe entre candidatos legais da Chain e prepara escolhas exatas para Scrapyard.
 
 ### `src/core/ai/common/`
 

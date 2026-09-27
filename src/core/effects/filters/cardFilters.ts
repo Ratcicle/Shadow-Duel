@@ -20,6 +20,47 @@ export interface FilterCard
   archetypes?: readonly string[];
 }
 
+/** Attributes read by the canonical filter, independent of mutable card methods. */
+export interface CardFilterView {
+  readonly id?: number | null | undefined;
+  readonly instanceId?: number | string | null | undefined;
+  readonly _instanceId?: number | string | null | undefined;
+  readonly uuid?: string | null | undefined;
+  readonly simInstanceId?: number | string | null | undefined;
+  readonly name?: string | null | undefined;
+  readonly description?: string | undefined;
+  readonly cardKind?: string | null | undefined;
+  readonly originalCardKind?: string | null | undefined;
+  readonly treatedAsCardKinds?: readonly string[] | undefined;
+  readonly subtype?: string | null | undefined;
+  readonly monsterType?: string | null | undefined;
+  readonly type?: string | null | undefined;
+  readonly types?: readonly string[] | undefined;
+  readonly attribute?: string | null | undefined;
+  readonly archetype?: string | null | undefined;
+  readonly archetypes?: readonly string[] | undefined;
+  readonly position?: string | null | undefined;
+  readonly isFacedown?: boolean | undefined;
+  readonly isToken?: boolean | undefined;
+  readonly isTuner?: boolean | undefined;
+  readonly level?: number | undefined;
+  readonly atk?: number | undefined;
+  readonly def?: number | undefined;
+  readonly lastSummonMethod?: string | null | undefined;
+  readonly lastSummonedFromZone?: string | null | undefined;
+  readonly lastSentToGraveAsMaterial?: SentToGraveMaterialMarker | null | undefined;
+}
+
+export interface CardFilterContext<Card extends CardFilterView> {
+  turnCounter?: number | undefined;
+  getCounter?(card: Card, type: string): number;
+  hasMatchingEquip?(
+    card: Card,
+    filters: RuntimeCardFilter,
+    requireFaceup: boolean,
+  ): boolean;
+}
+
 /** Runtime-only aliases preserve the existing filter boundary; authoring stays closed. */
 export interface RuntimeCardFilter
   extends Omit<
@@ -98,7 +139,7 @@ function matchesTextValue(value: unknown, expected: unknown) {
   );
 }
 
-function getCardInstanceId(card: FilterCard | null | undefined) {
+function getCardInstanceId(card: CardFilterView | null | undefined) {
   return (
     card?.instanceId ??
     card?._instanceId ??
@@ -108,8 +149,8 @@ function getCardInstanceId(card: FilterCard | null | undefined) {
   );
 }
 
-function isExcludedInstance(card: FilterCard, filters: RuntimeCardFilter = {}) {
-  const excludedCards = Array.isArray(filters.excludeCards)
+function isExcludedInstance(card: CardFilterView, filters: RuntimeCardFilter = {}) {
+  const excludedCards: readonly object[] = Array.isArray(filters.excludeCards)
     ? filters.excludeCards
     : [];
   if (excludedCards.includes(card)) return true;
@@ -130,21 +171,21 @@ function isExcludedInstance(card: FilterCard, filters: RuntimeCardFilter = {}) {
 
 function getCurrentTurn(
   filters: RuntimeCardFilter = {},
-  game: { turnCounter: number } | null = null,
+  turnCounter?: number,
 ) {
   const turn =
     filters.currentTurn ??
     filters.turnCounter ??
     filters.gameTurn ??
-    game?.turnCounter;
+    turnCounter;
   const numeric = Number(turn);
   return Number.isFinite(numeric) ? numeric : null;
 }
 
 function cardMatchesSentToGraveMaterialFilter(
-  card: FilterCard,
+  card: CardFilterView,
   filters: RuntimeCardFilter = {},
-  game: { turnCounter: number } | null = null,
+  turnCounter?: number,
 ) {
   const materialTypeFilter =
     filters.sentToGraveAsMaterial ??
@@ -177,7 +218,7 @@ function cardMatchesSentToGraveMaterialFilter(
   }
 
   if (requireThisTurn) {
-    const currentTurn = getCurrentTurn(filters, game);
+    const currentTurn = getCurrentTurn(filters, turnCounter);
     if (currentTurn !== null) {
       return Number(marker.turn) === currentTurn;
     }
@@ -210,6 +251,29 @@ export function cardMatchesFilters(
   this: CardFilterHost | void,
   card: FilterCard | null | undefined,
   filters: RuntimeCardFilter = {},
+): boolean {
+  return matchesCardFilter(card, filters, {
+    turnCounter: this?.game?.turnCounter,
+    getCounter: (candidate, type) =>
+      typeof candidate.getCounter === "function" ? candidate.getCounter(type) : 0,
+    hasMatchingEquip: (candidate, equipFilters, requireFaceup) => {
+      const equips = Array.isArray(candidate.equips) ? candidate.equips : [];
+      // The overload accepting equippedWithFilters requires the EffectEngine receiver.
+      return equips.some((equip) => {
+        if (!equip) return false;
+        if (!this!.isActiveEquipForCard(equip, candidate)) return false;
+        if (requireFaceup && equip.isFacedown) return false;
+        return this!.cardMatchesFilters(equip, equipFilters);
+      });
+    },
+  });
+}
+
+/** Apply the same scalar rules to live cards and read-only planning snapshots. */
+export function matchesCardFilter<Card extends CardFilterView>(
+  card: Card | null | undefined,
+  filters: RuntimeCardFilter = {},
+  context: CardFilterContext<Card> = {},
 ): boolean {
   if (!card) return false;
   const idFilter = filters.cardId ?? filters.id;
@@ -382,7 +446,7 @@ export function cardMatchesFilters(
   if (filters.maxDef !== undefined && (card.def || 0) > filters.maxDef) {
     return false;
   }
-  if (!cardMatchesSentToGraveMaterialFilter(card, filters, this?.game)) {
+  if (!cardMatchesSentToGraveMaterialFilter(card, filters, context.turnCounter)) {
     return false;
   }
   const counterType =
@@ -394,8 +458,7 @@ export function cardMatchesFilters(
     filters.maxCounters !== undefined;
   if (hasCounterFilter) {
     const type = counterType || "default";
-    const counterCount =
-      typeof card.getCounter === "function" ? card.getCounter(type) : 0;
+    const counterCount = context.getCounter?.(card, type) ?? 0;
     const minCounters =
       filters.minCounters !== undefined
         ? filters.minCounters
@@ -413,14 +476,7 @@ export function cardMatchesFilters(
   if (filters.equippedWithFilters) {
     const equipFilters = filters.equippedWithFilters || {};
     const requireEquipFaceup = equipFilters.requireFaceup !== false;
-    const equips = Array.isArray(card.equips) ? card.equips : [];
-    // The overload accepting equippedWithFilters requires the EffectEngine receiver.
-    const hasMatchingEquip = equips.some((equip) => {
-      if (!equip) return false;
-      if (!this!.isActiveEquipForCard(equip, card)) return false;
-      if (requireEquipFaceup && equip.isFacedown) return false;
-      return this!.cardMatchesFilters(equip, equipFilters);
-    });
+    const hasMatchingEquip = context.hasMatchingEquip?.(card, equipFilters, requireEquipFaceup);
     if (!hasMatchingEquip) return false;
   }
   return true;

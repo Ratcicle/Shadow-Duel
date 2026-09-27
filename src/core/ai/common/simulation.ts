@@ -7,6 +7,7 @@ import {
   selectSimulatedTargets,
 } from "../StrategyUtils.js";
 import {
+  canMoveCardToZone,
   findCardOwner,
   findCardZone,
   getZoneCards,
@@ -16,7 +17,10 @@ import {
   matchesTargetFilters,
 } from "./targetSelection.js";
 import { updateSimulatedSentToGraveMaterialMarker } from "./simulatedActions/shared.js";
-import { resolveSimulatedTemporaryControlEffects } from "./simulatedActions/movement.js";
+import { emitSimulatedMove, resolveSimulatedTemporaryControlEffects } from "./simulatedActions/movement.js";
+import { simulateSynchroSummon } from "./simulatedActions/summon.js";
+import { selectPayableTributes } from "./tributePolicy.js";
+import { processSimulatedDelayedActions, cleanupSimulatedEndTurn, cleanupExpiredSimulatedTurnEffects } from "./simulatedActions/lifecycle.js";
 import { getAvailableFieldSlots } from "../../game/zones/placement.js";
 import { resolvePerspectiveSlotForPlayer } from "./perspective.js";
 import { resolvePlanningOwnerPolicy } from "./planningExecution.js";
@@ -26,6 +30,7 @@ import type {
   SimulatedOwnerPolicy,
   SimulatedRuntimeState,
   SimulatedTemporaryEventEffect,
+  SimulatedEventOccurrence,
 } from "./simulatedActions/shared.js";
 import {
   fieldHasTributeValue,
@@ -41,15 +46,18 @@ import {
   establishProperSummon,
 } from "../../game/summon/eligibility.js";
 import {
-  canUseSimOncePerTurn,
-  markSimOncePerTurnUsed,
+  canUseSimulatedEffectUsage,
+  markSimulatedEffectUsage,
 } from "./simStateUtils.js";
+import type { SimulatedUsageEffect } from "./simStateUtils.js";
 import type {
   PerspectiveGameState,
   SimulatedCardState,
   SimulatedPlayerState,
   SimulationGameState,
   AiStateShape,
+  AiCardInput,
+  AiPlayerInput,
 } from "../../contracts/aiState.js";
 import type { CardAction } from "../../contracts/actions.js";
 import type {
@@ -59,8 +67,10 @@ import type {
 import type {
   AIAction,
   AIActivationContext,
+  AIPlannedAction,
 } from "../../contracts/ai.js";
 import type {
+  CardFilter,
   EffectDefinition,
   EffectTiming,
 } from "../../contracts/effects.js";
@@ -127,12 +137,9 @@ interface SimulatedSelectionOptionsInput
   specialSummonPositions?: object;
 }
 
-interface SimulatedEffectUsageIdentity {
-  id?: string | null;
-  oncePerTurnName?: string | null;
-}
-
 interface SimulatedEventPayloadView {
+  actionContext?: SimulatedActionContextData;
+  effectsNegatedAtFieldExit?: boolean;
   card?: SimulatedCardState | null;
   eventCard?: SimulatedCardState | null;
   changedCard?: SimulatedCardState | null;
@@ -220,11 +227,12 @@ interface SimulatedEventDispatchOptions
   onEffectActivated?(payload: object): void;
 }
 
-function canSimulatedSpecialSummon(
-  card: SimulatedPlayerState["field"][number] | null | undefined,
-  player: SimulatedPlayerState | null | undefined,
+export function canSimulatedSpecialSummon(
+  card: AiCardInput | null | undefined,
+  player: Pick<AiPlayerInput, "specialSummonRestrictions"> | null | undefined,
   summonProcedure: string = "special",
   fromZone: string | null = null,
+  matchesFilters: (card: AiCardInput, filters: CardFilter) => boolean = matchesTargetFilters,
 ): boolean {
   if (!card || !player) return false;
   if (
@@ -240,27 +248,28 @@ function canSimulatedSpecialSummon(
     : [];
   return restrictions.every((restriction) => {
     const filters = restriction?.allowedFilters;
-    return !filters || matchesTargetFilters(card, filters, null, "self");
+    return !filters || matchesFilters(card, filters);
   });
 }
 
-function canSimulatedProcedureEnterField(
-  card: SimulatedCardState,
-  player: SimulatedPlayerState,
-  opponent: SimulatedPlayerState | null | undefined,
-  materials: readonly SimulatedCardState[],
+export function canSimulatedProcedureEnterField(
+  card: AiCardInput,
+  player: Pick<AiPlayerInput, "field">,
+  opponent: Pick<AiPlayerInput, "field"> | null | undefined,
+  materials: readonly AiCardInput[],
+  matchesFilters: (card: AiCardInput, filters: CardFilter) => boolean = matchesTargetFilters,
 ): boolean {
-  const remaining = player.field.filter((entry) => !materials.includes(entry));
+  const remaining = (player.field || []).filter((entry) => !materials.includes(entry));
   if (remaining.length >= 5) return false;
-  const exclusive = (entry: SimulatedCardState) =>
+  const exclusive = (entry: AiCardInput) =>
     !entry.isFacedown && entry.fieldPresenceRestriction?.type === "only_monster_you_control_while_faceup";
   if (remaining.some(exclusive)) return false;
   if (exclusive(card) && remaining.length > 0) return false;
   const limit = card.fieldLimit;
-  if (!limit || !matchesTargetFilters(card, limit.filters || {})) return true;
+  if (!limit || !matchesFilters(card, limit.filters || {})) return true;
   const fields = limit.scope === "global" ? [...remaining, ...(opponent?.field || [])] : remaining;
   const matching = fields.filter((entry) =>
-    (!limit.requireFaceup || !entry.isFacedown) && matchesTargetFilters(entry, limit.filters || {})).length;
+    (!limit.requireFaceup || !entry.isFacedown) && matchesFilters(entry, limit.filters || {})).length;
   const max = Number.isFinite(Number(limit.max)) ? Number(limit.max) : 1;
   return matching + 1 <= max;
 }
@@ -422,16 +431,28 @@ function resolveSimulatedExtraDeckMaterials(
 function buildSelectionOptions(
   options: SimulatedSelectionOptionsInput = {},
 ): BuiltSimulatedSelectionOptions {
-  const actionContext =
+  const inputActionContext =
     options.actionContext ||
     options.activationContext?.actionContext ||
     {};
+  // Effect handlers store simulated results in these contexts. Keep that
+  // scratch state separate from the action later fingerprinted and executed.
+  const actionContext = { ...inputActionContext } as SimulatedSelectionActionContext;
+  const activationContext = options.activationContext
+    ? {
+        ...options.activationContext,
+        ...(options.activationContext.actionContext ? {
+          actionContext: options.activationContext.actionContext === inputActionContext
+            ? actionContext : { ...options.activationContext.actionContext },
+        } : {}),
+      }
+    : undefined;
   return {
     ...options,
     archetype: options.archetype,
     preferDefense: options.preferDefense,
-    actionContext: actionContext as SimulatedSelectionActionContext,
-    activationContext: options.activationContext as SimulatedActionOptions["activationContext"],
+    actionContext,
+    activationContext: activationContext as SimulatedActionOptions["activationContext"],
     targetPreferences:
       options.targetPreferences ||
       (actionContext as SimulatedSelectionActionContext).targetPreferences ||
@@ -473,19 +494,6 @@ export function normalizePlanningOwnerPolicy(
   };
 }
 
-function getSimOncePerTurnKey(
-  effect: SimulatedEffectUsageIdentity | null | undefined,
-  sourceCard: { name?: string | null | undefined } | null | undefined,
-): string | null {
-  if (!effect) return null;
-  return (
-    effect.oncePerTurnName ||
-    (sourceCard?.name && effect.id ? `${sourceCard.name}:${effect.id}` : null) ||
-    effect.id ||
-    null
-  );
-}
-
 interface SimulatedEffectPlayer {
   id?: string | null;
   effectActivationRestrictions?: readonly SimulatedEffectActivationRestriction[] | undefined;
@@ -508,13 +516,15 @@ interface SimulatedRestrictionAttribute {
 }
 
 interface SimulatedEffectState {
+  turnCounter?: number;
+  _simOncePerTurnTurn?: number;
   player?: SimulatedEffectPlayer | null;
   bot?: SimulatedEffectPlayer | null;
   _simOncePerTurn?: object;
   _gameTreeActors?: AiStateShape["_gameTreeActors"];
 }
 
-interface SimulatedRuntimeEffect extends SimulatedEffectUsageIdentity {
+interface SimulatedRuntimeEffect extends SimulatedUsageEffect {
   timing?: EffectTiming | null;
   placementOnly?: boolean;
   oncePerTurn?: boolean;
@@ -644,21 +654,7 @@ function canUseSimulatedEffect(
   if (isSimulatedEffectActivationRestricted(state, effect, sourceCard, selfId, ownerIsPhysical)) {
     return false;
   }
-  if (!effect?.oncePerTurn && !effect?.oncePerTurnName) return true;
-  const key = getSimOncePerTurnKey(effect, sourceCard);
-  if (!key) return true;
-  const limit = Math.max(
-    1,
-    Math.floor(
-      Number(
-        effect.oncePerTurnLimit ??
-          effect.usesPerTurn ??
-          effect.maxUsesPerTurn ??
-          1,
-      ),
-    ) || 1,
-  );
-  return canUseSimOncePerTurn(state, key, limit, selfId, ownerIsPhysical);
+  return canUseSimulatedEffectUsage(state, effect, sourceCard, selfId, ownerIsPhysical);
 }
 
 function markSimulatedEffectUsed(
@@ -668,21 +664,7 @@ function markSimulatedEffectUsed(
   selfId: string = "bot",
   ownerIsPhysical = false,
 ): void {
-  if (!effect?.oncePerTurn && !effect?.oncePerTurnName) return;
-  const key = getSimOncePerTurnKey(effect, sourceCard);
-  if (!key) return;
-  const limit = Math.max(
-    1,
-    Math.floor(
-      Number(
-        effect.oncePerTurnLimit ??
-          effect.usesPerTurn ??
-          effect.maxUsesPerTurn ??
-          1,
-      ),
-    ) || 1,
-  );
-  markSimOncePerTurnUsed(state, key, limit, selfId, ownerIsPhysical);
+  markSimulatedEffectUsage(state, effect, sourceCard, selfId, ownerIsPhysical);
 }
 
 function effectConditionsPass(
@@ -1004,6 +986,13 @@ function matchesSimulatedEventEffect(
   if (!effect || effect.timing !== "on_event" || effect.event !== eventName) {
     return false;
   }
+  if (effect.contextLabel && effect.contextLabel !== payload.contextLabel) return false;
+  const sourceOnField = ["field", "fieldSpell", "spellTrap"].includes(sourceZone);
+  if (sourceOnField && sourceCard.effectsNegated === true) return false;
+  if (sourceCard === eventCard && payload.fromZone === "field") {
+    if (effect.requireFaceupAtFieldExit && !payload.wasFaceupBeforeMove) return false;
+    if (payload.effectsNegatedAtFieldExit && !effect.allowIfEffectsNegatedAtFieldExit) return false;
+  }
   if (
     ["field", "fieldSpell", "spellTrap"].includes(sourceZone) &&
     sourceCard.isFacedown === true
@@ -1133,6 +1122,8 @@ function matchesSimulatedEventEffect(
 
   return effectConditionsPass(state, effect, sourceCard, {
     ...options,
+    actionContext: { ...buildSimEventActionContext(eventName, payload, options.actionContext),
+      player: sourceEntry.player, opponent: getOtherSimPlayer(state, sourceEntry.player) },
     eventCard,
     movedCard: eventName === "card_moved" ? eventCard : null,
     changedCard: eventName === "position_change" ? eventCard : null,
@@ -1167,6 +1158,7 @@ function buildSimEventActionContext(
 ) {
   const eventCard = payload.card || payload.eventCard || payload.changedCard || null;
   return {
+    ...(payload.actionContext || {}),
     ...(base || {}),
     simEventName: eventName,
     eventCard,
@@ -1185,15 +1177,15 @@ function buildSimEventActionContext(
   };
 }
 
-function attachSimulatedEventEmitter(
+export function attachSimulatedEventEmitter(
   state: SimulatedRuntimeState,
   options: SimulatedEventDispatchOptions,
 ): ManagedSimulatedEventOptions;
-function attachSimulatedEventEmitter(
+export function attachSimulatedEventEmitter(
   state: SimulatedRuntimeState,
   options?: ManagedSimulatedEventOptions,
 ): ManagedSimulatedEventOptions;
-function attachSimulatedEventEmitter(
+export function attachSimulatedEventEmitter(
   state: SimulatedRuntimeState,
   options: SimulatedEventDispatchOptions | ManagedSimulatedEventOptions = {},
 ): ManagedSimulatedEventOptions {
@@ -1211,13 +1203,34 @@ function attachSimulatedEventEmitter(
     eventName: string,
     payload: object = {},
     extra: SimulatedActionOptions = {},
-  ) =>
+  ) => {
+    options.onSimulatedEvent?.(eventName, payload);
     dispatchSimulatedEvent(state, eventName, payload as SimulatedEventPayloadView, {
       ...options,
       ...extra,
       _simEventDepth: Number(options._simEventDepth || 0),
     });
+  };
+  options.emitSimulatedEvents = (events: readonly SimulatedEventOccurrence[]) => {
+    const queue: SimulatedQueuedTrigger[] = [];
+    for (const occurrence of events) {
+      if (!occurrence.observed) options.onSimulatedEvent?.(occurrence.event, occurrence.payload);
+      dispatchSimulatedEvent(state, occurrence.event, occurrence.payload, options, queue);
+    }
+    // Runtime SEGOC publishes active mandatory, opposing mandatory, active
+    // optional, opposing optional triggers, then resolves the Chain LIFO.
+    const group = (entry: SimulatedQueuedTrigger) =>
+      (entry.optional ? 2 : 0) + (entry.ownerId === state.turn ? 0 : 1);
+    queue.sort((a, b) => group(a) - group(b));
+    for (const trigger of queue.reverse()) trigger.resolve();
+  };
   return options as ManagedSimulatedEventOptions;
+}
+
+interface SimulatedQueuedTrigger {
+  ownerId: string;
+  optional: boolean;
+  resolve(): void;
 }
 
 function dispatchSimulatedEvent(
@@ -1225,13 +1238,17 @@ function dispatchSimulatedEvent(
   eventName: string,
   payload: SimulatedEventPayloadView = {},
   options: SimulatedEventDispatchOptions = {},
+  queue?: SimulatedQueuedTrigger[],
 ): void {
   if (options.enableSimulatedEvents !== true) return;
   const depth = Number(options._simEventDepth || 0);
   const maxDepth = Number.isFinite(options.maxSimulatedEventDepth as number)
     ? options.maxSimulatedEventDepth!
     : 8;
-  if (depth >= maxDepth) return;
+  if (depth >= maxDepth) {
+    (state._simUnsupportedActions ??= []).push("simulated_event_depth");
+    return;
+  }
 
   const sourceEntries = collectSimulatedEventSources(state, eventName, payload);
   for (const sourceEntry of sourceEntries) {
@@ -1267,6 +1284,9 @@ function dispatchSimulatedEvent(
       if (!canUseSimulatedEffect(state, effect, sourceCard, sourceEntry.player?.id || "bot", true)) {
         continue;
       }
+      if (effect.triggerRequirement === "optional" && ownerOptions.shouldActivateEffect?.({
+        sourceCard, effect, player: sourceEntry.player, state,
+      }) === false) continue;
 
       const strategy = ownerOptions.strategy as SimulatedEventStrategyCapabilities | null | undefined;
       const buildActivationContext = ownerPolicy?.buildActivationContextForEffect ||
@@ -1284,10 +1304,13 @@ function dispatchSimulatedEvent(
       const actionContext = buildSimEventActionContext(eventName, payload, {
         ...(ownerOptions.actionContext || {}),
         ...(strategyContext.actionContext || {}),
+        player: sourceEntry.player,
+        opponent: sourceEntry.opponent,
       });
       const activationContext = {
         ...(strategyContext || {}),
         ...(ownerOptions.activationContext || {}),
+        ...(strategyContext.decisions ? { decisions: strategyContext.decisions } : {}),
         actionContext,
       };
       const triggerOptions = attachSimulatedEventEmitter(state, buildSelectionOptions({
@@ -1310,22 +1333,17 @@ function dispatchSimulatedEvent(
         continue;
       }
       markSimulatedEffectUsed(state, effect, sourceCard, sourceEntry.player?.id || "bot", true);
-      applySimulatedActions({
-        actions: effectExecutionActions(effect),
-        selections,
-        state,
-        selfId,
-        options: triggerOptions,
-      });
-      ownerOptions.onEffectActivated?.({
-        state,
-        action: null,
-        player: sourceEntry.player,
-        card: sourceCard,
-        effect,
-        zone: sourceEntry.zone,
-        options: triggerOptions,
-      });
+      const resolve = () => {
+        applySimulatedActions({
+          actions: effectExecutionActions(effect), selections, state, selfId, options: triggerOptions,
+        });
+        ownerOptions.onEffectActivated?.({
+          state, action: null, player: sourceEntry.player, card: sourceCard,
+          effect, zone: sourceEntry.zone, options: triggerOptions,
+        });
+      };
+      if (queue) queue.push({ ownerId: sourceEntry.player.id, optional: effect.triggerRequirement === "optional", resolve });
+      else resolve();
     }
   }
 
@@ -1392,13 +1410,16 @@ function dispatchSimulatedEvent(
     const actionContext = buildSimEventActionContext(eventName, payload, {
       ...(ownerOptions.actionContext || {}),
       ...(strategyContext.actionContext || {}),
+      player: owner,
+      opponent: getOtherSimPlayer(state, owner),
     });
     const triggerOptions = attachSimulatedEventEmitter(state, buildSelectionOptions({
       ...ownerOptions,
       sourceCard,
       effect,
       actionContext,
-      activationContext: { ...strategyContext, ...(ownerOptions.activationContext || {}), actionContext },
+      activationContext: { ...strategyContext, ...(ownerOptions.activationContext || {}),
+        ...(strategyContext.decisions ? { decisions: strategyContext.decisions } : {}), actionContext },
       _simEventDepth: depth + 1,
     }));
     const selections = selectSimulatedTargets({
@@ -1411,25 +1432,18 @@ function dispatchSimulatedEvent(
     });
     if (!hasRequiredSimSelections(effect.targets || [], selections)) continue;
 
-    applySimulatedActions({
-      actions: effectExecutionActions(effect),
-      selections,
-      state,
-      selfId,
-      options: triggerOptions,
-    });
-    if (!consumeOnMatch && Number.isFinite(entry.usesRemaining)) {
-      entry.usesRemaining! -= 1;
-    }
-    ownerOptions.onEffectActivated?.({
-      state,
-      action: null,
-      player: owner,
-      card: sourceCard,
-      effect,
-      zone: sourceZone,
-      options: triggerOptions,
-    });
+    if (!consumeOnMatch && Number.isFinite(entry.usesRemaining)) entry.usesRemaining! -= 1;
+    const resolve = () => {
+      applySimulatedActions({
+        actions: effectExecutionActions(effect), selections, state, selfId, options: triggerOptions,
+      });
+      ownerOptions.onEffectActivated?.({
+        state, action: null, player: owner, card: sourceCard,
+        effect, zone: sourceZone, options: triggerOptions,
+      });
+    };
+    if (queue) queue.push({ ownerId: owner.id, optional: effect.triggerRequirement === "optional", resolve });
+    else resolve();
   }
   cleanupSimulatedTemporaryEventEffects(state);
 }
@@ -1444,6 +1458,8 @@ export function resolveSimulatedEndPhase(
   const player = [state.player, state.bot].find(candidate => candidate.id === state.turn);
   dispatchSimulatedEvent(state, "end_phase", { player: player || null }, events);
   resolveSimulatedTemporaryControlEffects(state, events);
+  if (state.turn) processSimulatedDelayedActions(state, "end", state.turn, events);
+  cleanupSimulatedEndTurn(state);
 }
 
 interface SimulatedEffectActionView {
@@ -1562,7 +1578,7 @@ export function simulateGenericSpellEffect<State extends SimulatedMainPhaseState
     selections,
     state,
     selfId: options.selfId || "bot",
-    options: { ...selectionOptions, sourceCard: card },
+    options: { ...selectionOptions, sourceCard: card, effect },
   });
   markSimulatedEffectUsed(state, effect, card, options.selfId || "bot");
 }
@@ -1624,6 +1640,11 @@ function runActionOverride(
   );
 }
 
+/** Search must exclude actions whose state transitions are not implemented yet. */
+export function isSimulatedMainPhaseActionSupported(action: Pick<AIPlannedAction, "type">): boolean {
+  return Boolean(action.type);
+}
+
 export function applyGenericSimulatedMainPhaseAction<
   State extends SimulatedMainPhaseState,
 >(
@@ -1632,6 +1653,7 @@ export function applyGenericSimulatedMainPhaseAction<
   options: SimulatedActionOverrideOptions = {},
 ): State {
   if (!action) return state;
+  cleanupExpiredSimulatedTurnEffects(state);
 
   if (!state._isPerspectiveState && state.player && state.bot) {
     console.error(
@@ -1655,6 +1677,11 @@ export function applyGenericSimulatedMainPhaseAction<
   attachSimulatedEventEmitter(state, selectionOptions);
 
   switch (action.type) {
+    case "synchro": {
+      if (state.phase !== "main1" && state.phase !== "main2") break;
+      simulateSynchroSummon(state, state.bot, action, selectionOptions, applySimulatedActions);
+      break;
+    }
     case "handSummonProcedure": {
       const player = state.bot;
       const handIndex = resolveSimulatedHandIndex(player, action, "monster");
@@ -1728,12 +1755,12 @@ export function applyGenericSimulatedMainPhaseAction<
       const tributesNeeded = Math.max(0, Number(tributeInfo.tributesNeeded) || 0);
       if (!fieldHasTributeValue(player.field || [], tributesNeeded, card)) break;
 
-      const tributeIndices =
-        options.selectBestTributes?.(player.field, tributesNeeded, card, {
+      const { indices: tributeIndices } = selectPayableTributes(player, player.field, state, candidates =>
+        options.selectBestTributes?.(candidates, tributesNeeded, card, {
           botState: player,
           oppField: state.player?.field || [],
           game: state,
-        }) || [];
+        }) || []);
       const validTributeIndices = [...new Set(tributeIndices)].filter(
         (idx) =>
           Number.isInteger(idx) &&
@@ -1745,15 +1772,37 @@ export function applyGenericSimulatedMainPhaseAction<
         validTributeIndices,
       );
       if (getTributeValueTotal(tributeCards, card) < tributesNeeded) break;
+      if (!tributeCards.every(tribute => canMoveCardToZone(player, tribute, "graveyard", player, { state }))) break;
       if ((player.field || []).length - validTributeIndices.length + 1 > 5) break;
 
-      validTributeIndices.sort((a, b) => b - a);
-      validTributeIndices.forEach((idx) => {
-        const tribute = player.field[idx];
-        if (tribute) {
-          moveCardToZone(player, tribute, "graveyard");
+      const deferredTributeEvents: SimulatedEventOccurrence[] = [];
+      const tributeOptions: SimulatedActionOptions = { ...selectionOptions,
+        emitSimulatedEvent(event, payload) {
+          // Observe each cost now; runtime holds its triggers until the summon ends.
+          selectionOptions.onSimulatedEvent?.(event, payload);
+          deferredTributeEvents.push({ event, payload, observed: true });
+        },
+      };
+      const resolveDeferredEvents = (events: readonly SimulatedEventOccurrence[]) => {
+        if (selectionOptions.emitSimulatedEvents) selectionOptions.emitSimulatedEvents(events);
+        else for (const entry of events) selectionOptions.emitSimulatedEvent?.(entry.event, entry.payload);
+      };
+      let tributeCostComplete = true;
+      for (const tribute of tributeCards) {
+        const wasFaceupBeforeMove = tribute.isFacedown !== true;
+        const effectsNegatedAtFieldExit = tribute.effectsNegated === true;
+        if (!player.field.includes(tribute) ||
+            !moveCardToZone(player, tribute, "graveyard", player, { state })) {
+          tributeCostComplete = false;
+          break;
         }
-      });
+        emitSimulatedMove(tribute, state, player, player, "field", wasFaceupBeforeMove,
+          effectsNegatedAtFieldExit, tributeOptions, "tribute_summon_cost", false);
+      }
+      if (!tributeCostComplete) {
+        resolveDeferredEvents(deferredTributeEvents);
+        break;
+      }
 
       player.hand.splice(handIndex, 1);
       const newCard = { ...card };
@@ -1764,6 +1813,7 @@ export function applyGenericSimulatedMainPhaseAction<
       newCard.attacksUsedThisTurn = 0;
       newCard.lastSummonMethod = tributesNeeded > 0 ? "tribute" : "normal";
       newCard.lastSummonedFromZone = "hand";
+      let summonEvent: SimulatedEventOccurrence | null = null;
       if (newCard.cardKind !== "monster") {
         console.error(
           `[${options.guardLabel || "Simulation"}] BLOCKED sim: ${newCard.cardKind} "${newCard.name}" tried to enter field!`,
@@ -1779,17 +1829,22 @@ export function applyGenericSimulatedMainPhaseAction<
           newCard,
           options,
         });
-        selectionOptions.emitSimulatedEvent?.("after_summon", {
+        summonEvent = { event: "after_summon", observed: true, payload: {
           card: newCard,
           player,
           method: newCard.lastSummonMethod,
           fromZone: "hand",
           sourceCard: newCard,
           actionContext: selectionOptions.actionContext,
-        });
+        } };
+        selectionOptions.onSimulatedEvent?.(summonEvent.event, summonEvent.payload);
       }
       player.summonCount = (player.summonCount || 0) + 1;
       recordNormalSummonForTurn(player, newCard);
+      // The normal procedure flushes costs and summon triggers together after
+      // completion, so SEGOC orders them in one Chain before resolving LIFO.
+      if (summonEvent) deferredTributeEvents.push(summonEvent);
+      resolveDeferredEvents(deferredTributeEvents);
       break;
     }
 
@@ -1831,13 +1886,8 @@ export function applyGenericSimulatedMainPhaseAction<
           );
       const card = player.field?.[fieldIndex];
       if (!card || card.cardKind !== "monster" || card.isFacedown) break;
-      const effect = (card.effects || []).find(
-        (entry) =>
-          entry &&
-          entry.timing === "ignition" &&
-          entry.activationZones?.includes("field"),
-      );
-      if (!effect) break;
+      const effect = resolveEffectForAction(card, action, ["ignition"]);
+      if (!effect || (effect.activationZones && !effect.activationZones.includes("field"))) break;
       if (!effectConditionsPass(state, effect, card, selectionOptions)) {
         break;
       }
@@ -1871,12 +1921,13 @@ export function applyGenericSimulatedMainPhaseAction<
         selfId: options.selfId || "bot",
         options: selectionOptions,
       });
+      if (!hasRequiredSimSelections(effect.targets || [], selections)) break;
       applySimulatedActions({
-        actions: effectExecutionActions(effect),
+        actions: card.effectsNegated ? [...(effect.activationCosts || []), ...(effect.activationCommitActions || [])] : effectExecutionActions(effect),
         selections,
         state,
         selfId: options.selfId || "bot",
-        options: { ...selectionOptions, sourceCard: card },
+        options: { ...selectionOptions, sourceCard: card, effect },
       });
       markSimulatedEffectUsed(
         state,
@@ -1929,7 +1980,7 @@ export function applyGenericSimulatedMainPhaseAction<
         selections,
         state,
         selfId: options.selfId || "bot",
-        options: { ...selectionOptions, sourceCard: card },
+        options: { ...selectionOptions, sourceCard: card, effect },
       });
       markSimulatedEffectUsed(
         state,
@@ -2070,7 +2121,7 @@ export function applyGenericSimulatedMainPhaseAction<
           selections,
           state,
           selfId: options.selfId || "bot",
-          options: { ...selectionOptions, sourceCard: card },
+          options: { ...selectionOptions, sourceCard: card, effect },
         });
         markSimulatedEffectUsed(
           state,
@@ -2166,6 +2217,7 @@ export function applyGenericSimulatedMainPhaseAction<
         options: {
           ...selectionOptions,
           sourceCard: fieldSpell,
+          effect,
           targetPreference,
         },
       });
@@ -2228,7 +2280,7 @@ export function applyGenericSimulatedMainPhaseAction<
         selections,
         state,
         selfId: options.selfId || "bot",
-        options: { ...selectionOptions, sourceCard: card },
+        options: { ...selectionOptions, sourceCard: card, effect },
       });
       markSimulatedEffectUsed(
         state,

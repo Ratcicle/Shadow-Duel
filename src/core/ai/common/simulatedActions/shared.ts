@@ -1,3 +1,4 @@
+import { canUseSimulatedEffectUsage, markSimulatedEffectUsage } from "../simStateUtils.js";
 import {
   asArray,
   buildActionFilter,
@@ -45,6 +46,8 @@ import type {
 import type { CanonicalZone, ZoneInput } from "../../../contracts/zones.js";
 
 export interface SimulatedActionContextData {
+  player?: SimulatedPlayerState | null;
+  opponent?: SimulatedPlayerState | null;
   attacker?: SimulatedCardState | null;
   defender?: SimulatedCardState | null;
   target?: SimulatedCardState | null;
@@ -84,6 +87,19 @@ export interface SimulatedActionContextData {
   lastAddedToHandCards?: SimulatedCardState[];
   lastDrawnCard?: SimulatedCardState | null;
   lastDrawnCards?: SimulatedCardState[];
+  synchroSummonContextId?: string;
+}
+
+export interface SimulatedSynchroChoice {
+  synchroInstanceId: string | number;
+  materialInstanceIds: readonly (string | number)[];
+  position?: BattlePosition;
+}
+
+export interface SimulatedEventOccurrence {
+  event: string;
+  payload: object;
+  observed?: boolean;
 }
 
 interface SimulatedRecruitScore {
@@ -99,6 +115,13 @@ interface SimulatedRecruitResult {
 }
 
 export interface SimulatedStrategyCapabilities {
+  buildActivationContextForEffect?(input: {
+    sourceCard: SimulatedCardState;
+    effect: EffectDefinition;
+    player: SimulatedPlayerState;
+    game: SimulatedRuntimeState;
+    activationZone: CanonicalZone | "temporary";
+  }): SimulatedActionOptions["activationContext"] | null;
   rankSearchCandidates?(
     candidates: SimulatedCardState[],
     action: CardAction,
@@ -159,6 +182,26 @@ export interface SimulatedActionOptions {
     context: object,
   ) => object | string | number | null | undefined;
   emitSimulatedEvent?: (event: string, payload: object) => void;
+  emitSimulatedEvents?: (events: readonly SimulatedEventOccurrence[]) => void;
+  onSimulatedEvent?: (event: string, payload: object) => void;
+  chooseSynchroMaterials?: (input: {
+    candidates: readonly { card: SimulatedCardState; combos: readonly (readonly SimulatedCardState[])[] }[];
+    state: SimulatedRuntimeState;
+    player: SimulatedPlayerState;
+    sourceCard?: SimulatedCardState | null | undefined;
+  }) => SimulatedSynchroChoice | null;
+  chooseSpecialSummonCards?: (candidates: readonly SimulatedCardState[], input: {
+    action: ActionOf<"special_summon_from_zone">;
+    player: SimulatedPlayerState;
+    state: SimulatedRuntimeState;
+    sourceCard?: SimulatedCardState | null | undefined;
+  }) => readonly SimulatedCardState[] | null;
+  shouldActivateEffect?: (input: {
+    sourceCard: SimulatedCardState;
+    effect: EffectDefinition;
+    player: SimulatedPlayerState;
+    state: SimulatedRuntimeState;
+  }) => boolean;
   onAfterSpecialSummon?(payload: object): void;
   onFusionSummon?(payload: object): void;
   evaluateSimulatedConditions?: (
@@ -433,45 +476,7 @@ export function canUseSimulatedPassive(
   card: SimulatedCardState,
   effect: EffectDefinition,
 ): boolean {
-  if (!effect?.oncePerTurn && !effect?.oncePerTurnName) return true;
-  const key = getSimulatedOncePerTurnKey(effect, card);
-  if (!key) return true;
-  const currentTurn = state?.turnCounter || 0;
-  const limit = Math.max(
-    1,
-    Math.floor(
-      Number(
-        effect.oncePerTurnLimit ??
-          (effect as LegacyEffectDefinition).usesPerTurn ??
-          (effect as LegacyEffectDefinition).maxUsesPerTurn ??
-          1,
-      ),
-    ) || 1,
-  );
-  const usage =
-    effect.oncePerTurnScope === "card" || effect.oncePerTurnPerCard
-      ? card?.oncePerTurnUsageByName || {}
-      : player?.oncePerTurnUsageByName || {};
-  const entry = usage[key];
-  const persistedUsed =
-    entry === currentTurn
-      ? 1
-      : entry && typeof entry === "object" && Number(entry.turn) === currentTurn
-        ? Math.max(0, Math.floor(Number(entry.count ?? 0)) || 0)
-        : 0;
-  if (!state._simPassiveOncePerTurn) state._simPassiveOncePerTurn = new Map();
-  if (state._simPassiveOncePerTurn instanceof Set) {
-    const migrated = new Map<string, number>();
-    for (const entryKey of state._simPassiveOncePerTurn as Set<string>) {
-      migrated.set(entryKey, 1);
-    }
-    state._simPassiveOncePerTurn = migrated;
-  }
-  const ownerKey = player?.id || (player === state?.bot ? "bot" : "player");
-  const cardKey = card?.instanceId || card?.id || card?.name || "card";
-  const simKey = `${ownerKey}:${cardKey}:${key}`;
-  const simulatedUsed = Number(state._simPassiveOncePerTurn.get(simKey) || 0);
-  return persistedUsed + simulatedUsed < limit;
+  return canUseSimulatedEffectUsage(state, effect, card, player.id, true);
 }
 
 export function markSimulatedPassiveUsed(
@@ -480,22 +485,7 @@ export function markSimulatedPassiveUsed(
   card: SimulatedCardState,
   effect: EffectDefinition,
 ): void {
-  if (!effect?.oncePerTurn && !effect?.oncePerTurnName) return;
-  const key = getSimulatedOncePerTurnKey(effect, card);
-  if (!key) return;
-  if (!state._simPassiveOncePerTurn) state._simPassiveOncePerTurn = new Map();
-  if (state._simPassiveOncePerTurn instanceof Set) {
-    const migrated = new Map<string, number>();
-    for (const entryKey of state._simPassiveOncePerTurn as Set<string>) {
-      migrated.set(entryKey, 1);
-    }
-    state._simPassiveOncePerTurn = migrated;
-  }
-  const ownerKey = player?.id || (player === state?.bot ? "bot" : "player");
-  const cardKey = card?.instanceId || card?.id || card?.name || "card";
-  const simKey = `${ownerKey}:${cardKey}:${key}`;
-  const current = Number(state._simPassiveOncePerTurn.get(simKey) || 0);
-  state._simPassiveOncePerTurn.set(simKey, current + 1);
+  markSimulatedEffectUsage(state, effect, card, player.id, true);
 }
 
 export function resolveSimulatedLpCost({
@@ -742,7 +732,7 @@ export function updateSimulatedSentToGraveMaterialMarker({
   };
 }
 
-function getContextPathValue(
+export function getContextPathValue(
   ctx: object | null | undefined,
   path: string | null,
 ): unknown {
@@ -975,6 +965,8 @@ export function applySummonState(
   options: SimulatedActionOptions = {},
 ): void {
   assignSimulatedFieldPresenceId(card, state);
+  card.summonedTurn = state.turnCounter ?? null;
+  card.lastSummonedTurn = state.turnCounter ?? null;
   card.position = chooseSpecialSummonPosition(card, action, state, player, options);
   card.isFacedown = false;
   card.hasAttacked = false;
@@ -993,10 +985,12 @@ export function applySummonState(
   if (action.setAtkToZeroAfterSummon) card.atk = 0;
   if (action.setDefToZeroAfterSummon) card.def = 0;
   if (Number.isFinite(action.atkBoostAfterSummon)) {
+    card.atk = Math.max(0, (card.atk || 0) + (action.atkBoostAfterSummon as number));
     card.tempAtkBoost =
       (card.tempAtkBoost || 0) + (action.atkBoostAfterSummon as number);
   }
   if (Number.isFinite(action.defBoostAfterSummon)) {
+    card.def = Math.max(0, (card.def || 0) + (action.defBoostAfterSummon as number));
     card.tempDefBoost =
       (card.tempDefBoost || 0) + (action.defBoostAfterSummon as number);
   }

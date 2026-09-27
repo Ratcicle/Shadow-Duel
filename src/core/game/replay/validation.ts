@@ -1,4 +1,5 @@
 import { SELECTION_KINDS } from "../../contracts/selection.js";
+import { readChainResponseDecisions } from "../decisions/chainResponse.js";
 import {
   CANONICAL_REPLAY_COMMAND_TYPES,
   CANONICAL_REPLAY_ENGINE_VERSION,
@@ -519,6 +520,16 @@ function validateDecisionValue(
   }
   if (kind === "chain_response") {
     validateCandidateDecisionValue(decisionValue, path);
+    const allowedKeys = read(decisionValue, "pass") === true
+      ? ["pass"]
+      : ["pass", "candidateKey", "effectId", "decisions"];
+    if (Object.keys(decisionValue).some(key => !allowedKeys.includes(key))) {
+      invalid(path, "a Chain response identity and typed choices only");
+    }
+    if (hasOwn(decisionValue, "decisions") &&
+        !readChainResponseDecisions(read(decisionValue, "decisions"), id => id, true)) {
+      invalid(`${path}.decisions`, "valid duel-local Chain response choices");
+    }
     return;
   }
   if (kind === "segoc_order") {

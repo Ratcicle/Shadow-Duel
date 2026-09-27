@@ -50,17 +50,13 @@ function isFaceup(card: BloomrotCard | null | undefined) {
 
 function effectiveAtk(card: BloomrotCard | null | undefined) {
   return (
-    Number(card?.atk || 0) +
-    Number(card?.tempAtkBoost || 0) +
-    Number(card?.equipAtkBonus || 0)
+    Number(card?.atk || 0)
   );
 }
 
 function effectiveDef(card: BloomrotCard | null | undefined) {
   return (
-    Number(card?.def || 0) +
-    Number(card?.tempDefBoost || 0) +
-    Number(card?.equipDefBonus || 0)
+    Number(card?.def || 0)
   );
 }
 

@@ -701,8 +701,10 @@ function applySunforgedLpGainEvent(
       blade.equipTarget ||
       null) as GameCard | SimulatedCardState | null;
     if (host && isLuminarchMonster(host)) {
-      host.equipAtkBonus = (host.equipAtkBonus || 0) + 200;
-      host.equipDefBonus = (host.equipDefBonus || 0) + 200;
+      host.atk = (host.atk || 0) + 200;
+      host.def = (host.def || 0) + 200;
+      blade.equipAtkBonus = (blade.equipAtkBonus || 0) + 200;
+      blade.equipDefBonus = (blade.equipDefBonus || 0) + 200;
     }
     counterEvents += 1;
     recordLuminarchBattleEvent(state, {
@@ -1401,6 +1403,8 @@ function prepareMagicSickleBattleBoost(
   appendSimulatedZoneCard(player.graveyard, sickle);
   attacker.tempAtkBoost = (attacker.tempAtkBoost || 0) + 1200;
   attacker.tempDefBoost = (attacker.tempDefBoost || 0) + 1700;
+  attacker.atk = (attacker.atk || 0) + 1200;
+  attacker.def = (attacker.def || 0) + 1700;
   attacker._simMagicSickleBattleBoost = true;
   meta.magicSickleBattleUsed = true;
   meta.milestones.push("magic_sickle_battle_boost");

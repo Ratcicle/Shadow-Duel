@@ -28,6 +28,7 @@ export interface ActivationCommitInfo {
 }
 
 export interface ActivationPipelineContext {
+  decisions?: import("./ai.js").AIDecisionPlan;
   fromHand?: boolean;
   activationZone?: ActivationZone | undefined;
   sourceZone?: ActivationZone | undefined;

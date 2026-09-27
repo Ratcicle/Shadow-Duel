@@ -12,7 +12,8 @@ import type {
   SimulationGameState,
   SimulatedTemporaryControlEffect,
 } from "../contracts/aiState.js";
-import { createPlanningCopy } from "../ai/common/planningCopy.js";
+import { createPlanningCopy, projectRuntimeEffectUsage } from "../ai/common/planningCopy.js";
+import { PLANNING_PLAYER_FIELDS, PLANNING_STATE_FIELDS } from "../ai/common/stateFingerprint.js";
 
 interface SimulationBotPort extends AIStrategyBotPort {
   strategy: Required<Pick<
@@ -55,7 +56,7 @@ export function cloneBotGameState(
 ): BotPerspectiveGameState {
   const copy = createPlanningCopy();
   const clonePlayer = (p: CloneablePlayerInput): SimulatedPlayerState => {
-    return {
+    const player = {
       id: p.id,
       lp: p.lp,
       hand: p.hand.map(copy.cloneCardForSim),
@@ -70,6 +71,9 @@ export function cloneBotGameState(
       additionalNormalSummons: p.additionalNormalSummons || 0,
       controllerType: p.controllerType,
     } as SimulatedPlayerState;
+    copy.registerPlayerCopy(p, player);
+    copy.copyFields(p, player, PLANNING_PLAYER_FIELDS);
+    return player;
   };
   const opponent = bot.resolveOpponent(game) || game.player;
 
@@ -86,6 +90,10 @@ export function cloneBotGameState(
       ? new Map(game.effectEngine.usedThisTurn)
       : new Map(),
   } as BotPerspectiveGameState;
-  copy.copyFields(game, state, ["temporaryControlEffects", "_simTemporaryControlCounter"]);
+  copy.copyFields(game, state, [
+    ...PLANNING_STATE_FIELDS.filter(key => key !== "_isPerspectiveState"),
+    "_simUnsupportedActions",
+  ]);
+  projectRuntimeEffectUsage(game, state);
   return state;
 }

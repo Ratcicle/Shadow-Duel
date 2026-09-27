@@ -1,4 +1,5 @@
 import { appendSimulatedZoneCard } from "../zones.js";
+import { resolveExactInstanceSelection } from "../../../AutoSelector.js";
 import { getEffectiveAtk } from "../cardStats.js";
 import { getBaseLpCost } from "../../../effects/costs/lpCost.js";
 import { getCounterValue, setCounterValue } from "../counters.js";
@@ -36,6 +37,7 @@ import {
   resolveTargetsForAction,
   STOP_SIMULATION,
   storeSimActionResult,
+  getContextPathValue,
 } from "./shared.js";
 import type {
   ActionOf,
@@ -122,9 +124,9 @@ function readSimContextNumber(
   const config: LegacySimNumberConfig =
     typeof spec === "string" ? { key: spec } : spec;
   const key = config.key;
-  const source = options.actionContext || {};
+  const source = options.actionContext || options.activationContext?.actionContext || options.activationContext || {};
   const raw = key
-    ? (source as DynamicActionContext)[key]
+    ? getContextPathValue(source, key)
     : config.defaultValue;
   let value = Number(raw ?? config.defaultValue ?? 0);
   if (!Number.isFinite(value)) value = 0;
@@ -143,30 +145,49 @@ function readSimContextNumber(
 
 export function applyDraw(
   ctx: SimulatedActionHandlerContext<"draw">,
-): void {
-  const {
-    action,
-    targets,
-    selections,
-    state,
-    selfId,
-    options,
-    self,
-    opponent,
-    applySimulatedActions,
-  } = ctx;
+): void | typeof STOP_SIMULATION {
+  const { action, state, options, self, opponent } = ctx;
   const targetPlayer = resolveActionPlayer(action, self, opponent);
-  const amount = action.amount || 1;
+  const amount = Math.max(0, Number(action.amount ?? 1) || 0);
   const drawnCards: SimulatedCardState[] = [];
-  for (let i = 0; i < amount; i += 1) {
-    const drawn = targetPlayer.deck?.shift?.();
-    if (drawn) {
-      appendSimulatedZoneCard(targetPlayer.hand, drawn);
-      drawnCards.push(drawn);
-    }
+  for (let i = 0; i < amount && targetPlayer.deck.length > 0; i += 1) {
+    // Runtime draws from the end. Identity stays hidden until the real action
+    // resolves, so this branch receives only an unknown hand resource.
+    targetPlayer.deck.pop();
+    state._simGeneratedInstanceCounter = (state._simGeneratedInstanceCounter || 0) + 1;
+    const unknownDraw = {
+      instanceId: `sim:draw:${state._simGeneratedInstanceCounter}`,
+      owner: targetPlayer.id,
+      _simUnknownDraw: true,
+    } as SimulatedCardState;
+    targetPlayer.hand.push(unknownDraw);
+    drawnCards.push(unknownDraw);
   }
   options.lastDrawnCards = drawnCards;
-  return;
+  options.lastDrawnCard = drawnCards[0] || null;
+  for (const context of new Set([options.actionContext, options.activationContext?.actionContext])) {
+    if (!context) continue;
+    context.lastDrawnCards = drawnCards;
+    context.lastDrawnCard = drawnCards[0] || null;
+  }
+  if (drawnCards.length > 0) {
+    state._simRequiresReplan = true;
+    state._simUnknownDrawCount = (state._simUnknownDrawCount || 0) + drawnCards.length;
+  } else if (amount > 0 && !("optional" in action && action.optional === true)) {
+    // Runtime treats an empty mandatory draw as a failed action, not a duel
+    // loss. Stop this action sequence while retaining separate queued effects.
+    return STOP_SIMULATION;
+  }
+}
+
+export function applyDrawAndSummon(
+  ctx: SimulatedActionHandlerContext<"draw_and_summon">,
+): void | typeof STOP_SIMULATION {
+  const drawResult = applyDraw({ ...ctx, action: { type: "draw", amount: ctx.action.drawAmount || 1 } });
+  if (drawResult === STOP_SIMULATION && ctx.action.optional !== true) return STOP_SIMULATION;
+  // The condition and summon choice depend on the revealed card. Preserve the
+  // draw and resume planning only after the real result is available.
+  if (ctx.options.lastDrawnCards?.length) return STOP_SIMULATION;
 }
 
 export function applyHeal(
@@ -363,7 +384,7 @@ function readSimAttributeSource(
 export function applyRestrictEffectActivationsByNames(
   ctx: SimulatedActionHandlerContext<"restrict_effect_activations_by_names">,
 ): void {
-  const { action, options, self, opponent } = ctx;
+  const { action, options, self, opponent, state } = ctx;
   const targetPlayer = resolveActionPlayer(action, self, opponent);
   if (!targetPlayer) return;
 
@@ -380,6 +401,7 @@ export function applyRestrictEffectActivationsByNames(
   targetPlayer.effectActivationRestrictions.push({
     blockedNames,
     duration: action.duration || "until_end_turn",
+    expiresOnTurn: state.turnCounter,
     reason: action.reason || null,
     sourceName: options?.sourceCard?.name || null,
     sourceId: options?.sourceCard?.id || null,
@@ -389,7 +411,7 @@ export function applyRestrictEffectActivationsByNames(
 export function applyRestrictEffectActivationsByAttribute(
   ctx: SimulatedActionHandlerContext<"restrict_effect_activations_by_attribute">,
 ): void {
-  const { action, selections, options, self, opponent } = ctx;
+  const { action, selections, options, self, opponent, state } = ctx;
   const targetPlayer = resolveActionPlayer(action, self, opponent);
   if (!targetPlayer) return;
 
@@ -407,6 +429,7 @@ export function applyRestrictEffectActivationsByAttribute(
     allowedAttributes,
     restrictedCardFilters: action.restrictedCardFilters || { cardKind: "monster" },
     duration: action.duration || "until_end_turn",
+    expiresOnTurn: state.turnCounter,
     reason: action.reason || null,
     sourceName: options?.sourceCard?.name || null,
     sourceId: options?.sourceCard?.id || null,
@@ -504,7 +527,7 @@ function markSimAddedCards(
 
 export function applyAddFromZoneToHand(
   ctx: SimulatedActionHandlerContext<"add_from_zone_to_hand">,
-): void {
+): void | typeof STOP_SIMULATION {
   const {
     action,
     targets,
@@ -540,7 +563,9 @@ export function applyAddFromZoneToHand(
     },
   );
   const pickCount = pickCountForAction(action, 1);
-  const chosen = chooseRankedCards(
+  const decisionKey = action.selectionId || `${options.effect?.id || action.type}_selection`;
+  const exactIds = options.activationContext?.decisions?.selections?.[decisionKey];
+  const chosen = exactIds !== undefined ? resolveExactInstanceSelection(candidates, exactIds, normalizeCount(action.count, 1)) : chooseRankedCards(
     candidates,
     "benefit",
     action,
@@ -548,6 +573,10 @@ export function applyAddFromZoneToHand(
     targetPlayer,
     options,
   ).slice(0, Math.min(pickCount, candidates.length));
+  if (chosen === null) {
+    (state._simUnsupportedActions ??= []).push(`exact_selection:${decisionKey}`);
+    return STOP_SIMULATION;
+  }
   if (chosen.length === 0) return;
   chosen.forEach((card) => {
     removeCardFromZones(targetPlayer, card);

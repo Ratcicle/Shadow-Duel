@@ -1,4 +1,5 @@
 import { resolvePerspectivePlayers } from "./StrategyUtils.js";
+import { isSimulatedMainPhaseActionSupported } from "./common/simulation.js";
 import { createGameTreeCopy, withoutLiveGameReference } from "./common/gameTreeSimulation.js";
 import { resolvePerspectiveSlotForPlayer } from "./common/perspective.js";
 import type { GameTreeModels, PlanningModel } from "../contracts/aiPlanning.js";
@@ -196,7 +197,8 @@ function generateCandidateActions<Action extends AIAction>(
 ): Action[] {
   // Factory/generation failures are unavailable modeling, not empty responses.
   return withoutLiveGameReference(stateForActions, () =>
-    model.create(stateForActions).generateMainPhaseActions(stateForActions).slice(0, 3));
+    model.create(stateForActions).generateMainPhaseActions(stateForActions)
+      .filter(isSimulatedMainPhaseActionSupported).slice(0, 3));
 }
 
 function evaluateForRoot(gameState: GameTreeStateInput | GameTreeState, rootPlayerId: string): number {
@@ -233,8 +235,9 @@ function minimax<Action extends AIAction>(
   perspective: GameTreePlayerInput | null | undefined,
   transpositions: Map<string, TranspositionEntry<AIAction>>,
 ): MinimaxResult<AIAction> {
+  if ("_simUnsupportedActions" in gameState && gameState._simUnsupportedActions?.length) return { value: 0, action: null };
   // Base case: folha ou limite de profundidade
-  if (depth === 0) {
+  if (depth === 0 || ("_simRequiresReplan" in gameState && gameState._simRequiresReplan)) {
     const leafValue = evaluateForRoot(gameState, rootPlayerId);
     return { value: leafValue, action: null };
   }
@@ -267,7 +270,7 @@ function minimax<Action extends AIAction>(
   const actions = generateCandidateActions(stateForActions, model);
 
   let bestValue = isMaximizing ? -Infinity : Infinity;
-  let bestAction: Action | null = actions[0] ?? null;
+  let bestAction: Action | null = null;
 
   if (actions.length === 0) {
     // Sem ações: avaliar estado atual
@@ -277,6 +280,7 @@ function minimax<Action extends AIAction>(
 
   for (const action of actions) {
     const nextState = simulateAction(stateForActions, action, model, models);
+    if (nextState._simUnsupportedActions?.length) continue;
 
     // Recursão com troca de perspectiva
     const nextPerspective = nextState.player;
@@ -315,6 +319,7 @@ function minimax<Action extends AIAction>(
     if (beta <= alpha) break;
   }
 
+  if (!bestAction) return { value: evaluateForRoot(gameState, rootPlayerId), action: null };
   // Cache resultado
   if (stateKey !== null && transpositions.size < TRANSPOSITION_MAX_SIZE) {
     transpositions.set(stateKey, {

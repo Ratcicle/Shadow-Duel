@@ -57,6 +57,7 @@ type Expect<Value extends true> = Value;
 
 type ExpectedAIActionType =
   | "ascension"
+  | "synchro"
   | "extraDeckProcedure"
   | "handSummonProcedure"
   | "special_summon_sanctum_protector"
@@ -128,6 +129,17 @@ const summonAction: AIActionOf<"summon"> = {
   index: 0,
   position: "attack",
 };
+const synchroAction: AIActionOf<"synchro"> = {
+  type: "synchro", synchroInstanceId: "extra:1", materialInstanceIds: [2, "token:3"], position: "defense",
+};
+// contract-negative: a Synchro action must identify its material instances.
+// @ts-expect-error
+const incompleteSynchro: AIActionOf<"synchro"> = { type: "synchro", synchroInstanceId: 1, position: "attack" };
+// contract-negative: an AI Synchro action carries a resolved battle position.
+// @ts-expect-error
+const unresolvedSynchro: AIActionOf<"synchro"> = { ...synchroAction, position: "choice" };
+void incompleteSynchro;
+void unresolvedSynchro;
 const spellAction: AIActionOf<"spell"> = {
   type: "spell",
   index: 1,

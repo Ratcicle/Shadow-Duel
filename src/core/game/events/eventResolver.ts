@@ -308,6 +308,7 @@ export async function flushPendingTriggerOccurrences(
   chain._flushingPendingTriggerOccurrences = true;
   let flushed = 0;
   let chainBuilt = false;
+  let firstFailure: EventResolutionOutcome | null = null;
   try {
     while (chain.pendingTriggerOccurrences.length > 0) {
       const occurrences = chain.pendingTriggerOccurrences.splice(0);
@@ -321,10 +322,18 @@ export async function flushPendingTriggerOccurrences(
         deferPostChainWindow: true,
       });
       chainBuilt = chainBuilt || result?.chainBuilt === true;
-      if (result?.needsSelection || result?.ok === false) {
+      if (
+        result?.needsSelection ||
+        result?.cancelled === true ||
+        result?.resolutionResult?.cancelled === true
+      ) {
         return { ...result, chainBuilt, flushed };
       }
+      // Failed links can follow successful movements that queued valid triggers.
+      // Finish those opportunities while preserving the original failure.
+      if (result?.ok === false) firstFailure ??= result;
     }
+    if (firstFailure) return { ...firstFailure, chainBuilt, flushed };
     return { ok: true, success: true, chainBuilt, flushed };
   } finally {
     chain._flushingPendingTriggerOccurrences = false;

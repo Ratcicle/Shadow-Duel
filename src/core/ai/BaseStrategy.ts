@@ -146,7 +146,7 @@ export default class BaseStrategy implements StrategyRuntimePort {
 
     const context = {
       myStrongestAtk: Math.max(
-        ...myField.map((m) => (m?.atk || 0) + (m?.tempAtkBoost || 0)),
+        ...myField.map((m) => (m?.atk || 0)),
         0,
       ),
       hasDefenses: myField.some((m) => m?.position === "defense"),
@@ -213,7 +213,7 @@ export default class BaseStrategy implements StrategyRuntimePort {
     );
     for (const attacker of readyAttackers) {
       const atkValue =
-        ((attacker?.atk || 0) + (attacker?.tempAtkBoost || 0)) / 1200;
+        ((attacker?.atk || 0)) / 1200;
       score += atkValue * 0.6; // 3000 ATK = +1.5 score
       // Bônus se oponente tem campo vazio (direct attack potential)
       if (oppField.length === 0) {
@@ -250,13 +250,9 @@ export default class BaseStrategy implements StrategyRuntimePort {
 
     // Base stats
     const atk =
-      (monster.atk || 0) +
-      (monster.tempAtkBoost || 0) +
-      (monster.equipAtkBonus || 0);
+      (monster.atk || 0);
     const def =
-      (monster.def || 0) +
-      (monster.tempDefBoost || 0) +
-      (monster.equipDefBonus || 0);
+      (monster.def || 0);
     const stat = monster.position === "defense" ? def : atk;
     value += stat / 900;
     value += (monster.level || 0) * 0.1;
@@ -412,9 +408,9 @@ export default class BaseStrategy implements StrategyRuntimePort {
       if (!card || card.cardKind !== "monster") return 0;
       if (card.isFacedown) return 1500;
       const atk =
-        (card.atk || 0) + (card.tempAtkBoost || 0) + (card.equipAtkBonus || 0);
+        (card.atk || 0);
       const def =
-        (card.def || 0) + (card.tempDefBoost || 0) + (card.equipDefBonus || 0);
+        (card.def || 0);
       return card.position === "attack" ? atk : def;
     };
 
@@ -441,9 +437,9 @@ export default class BaseStrategy implements StrategyRuntimePort {
       if (!canChangePosition(card)) continue;
 
       const atk =
-        (card.atk || 0) + (card.tempAtkBoost || 0) + (card.equipAtkBonus || 0);
+        (card.atk || 0);
       const def =
-        (card.def || 0) + (card.tempDefBoost || 0) + (card.equipDefBonus || 0);
+        (card.def || 0);
 
       if (card.position === "defense") {
         if (card.cannotAttackThisTurn) continue;

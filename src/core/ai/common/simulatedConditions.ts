@@ -1546,6 +1546,8 @@ export function evaluateSimulatedConditions(
     }
     if (condition.type === "event_card_matches_filters") {
       const card = resolveEventCardByRef(condition, ctx, options);
+      if (condition.excludeSource === true &&
+          simSameCard(card, resolveConditionSource(ctx, options, "self"))) return false;
       const ownerKey = condition.owner || "any";
       if (ownerKey !== "any") {
         const expectedOwner = ownerKey === "opponent" ? opponent : self;

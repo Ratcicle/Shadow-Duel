@@ -9,6 +9,7 @@ import type {
 } from "./shared.js";
 import {
   applyDraw,
+  applyDrawAndSummon,
   applyHeal,
   applyHealPerArchetypeMonster,
   applyDamage,
@@ -55,6 +56,7 @@ import {
   applyRemoveCounter,
 } from "./counters.js";
 import {
+  applyModifyLevel,
   applyBuffStatsTemp,
   applyBuffAtkTemp,
   applySetAttackLimitFromZoneCount,
@@ -79,6 +81,9 @@ import {
   applySetSourceAfterResolutionIf,
 } from "./combat.js";
 import {
+  applyRegisterSynchroMaterialFollowup,
+  applyScheduleSpecialSummon,
+  applyNegateSummonOrActivationAndDestroy,
   applyConditionalActions,
   applyConditionalTargetActions,
   applyOptionalTargetActions,
@@ -91,7 +96,12 @@ import {
 } from "./flow.js";
 
 export const SIMULATED_ACTION_HANDLERS = {
+  "modify_level": applyModifyLevel,
+  "register_synchro_material_followup": applyRegisterSynchroMaterialFollowup,
+  "schedule_special_summon": applyScheduleSpecialSummon,
+  "negate_summon_or_activation_and_destroy": applyNegateSummonOrActivationAndDestroy,
   "draw": applyDraw,
+  "draw_and_summon": applyDrawAndSummon,
   "heal": applyHeal,
   "heal_per_archetype_monster": applyHealPerArchetypeMonster,
   "damage": applyDamage,

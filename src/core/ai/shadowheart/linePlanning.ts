@@ -161,7 +161,7 @@ function getBattleTargetStat(card: StrategyCard) {
   if (!card || card.cardKind !== "monster") return 0;
   if (card.isFacedown) return 1500;
   return card.position === "defense"
-    ? Number(card.def || 0) + Number(card.tempDefBoost || 0)
+    ? Number(card.def || 0)
     : getEffectiveAtk(card);
 }
 
