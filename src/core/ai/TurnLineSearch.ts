@@ -615,6 +615,7 @@ function getCardKey(card: PlannerCard | null | undefined): string {
     card.isFacedown ? "fd" : "fu",
     card.atk || 0,
     card.def || 0,
+    card.level ?? "no-level",
     card.tempAtkBoost || 0,
     card.tempDefBoost || 0,
     card.equipAtkBonus || 0,

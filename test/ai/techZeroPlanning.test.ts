@@ -4,6 +4,7 @@ import Bot from "../../src/core/Bot.js";
 import Card from "../../src/core/Card.js";
 import TechZeroStrategy from "../../src/core/ai/TechZeroStrategy.js";
 import { turnLineSearch } from "../../src/core/ai/TurnLineSearch.js";
+import { playBotMainPhase } from "../../src/core/bot/mainPhaseController.js";
 import { fingerprintAction } from "../../src/core/ai/common/planningDiagnostics.js";
 import { markSimulatedEffectUsage } from "../../src/core/ai/common/simStateUtils.js";
 import { getBotDeckList, getBotExtraDeckList } from "../../src/core/bot/presets.js";
@@ -108,6 +109,107 @@ test("Tech-Zero retains different Synchro destinations before duplicate position
   assert.ok(kept.includes(required(actions[7])), "retain Ghost as a distinct destination");
   assert.ok(kept.every(action => actions.includes(action)), "preserve exact action and material identities");
 });
+
+test("Catapult with only Raptor in GY does not stop the controller for phantom recovery", async t => {
+  const { bot, botGame, opponent, make } = scenario(t, "bot");
+  bot.hand = [make(502)]; bot.graveyard = [make(505)];
+  bot.deck = []; bot.extraDeck = []; opponent.lp = 8000;
+  const profile = required(bot.strategy.getPlanningProfile).call(bot.strategy, botGame);
+  const reports: TurnLineSearchCompletion[] = [];
+  const result = await turnLineSearch(botGame, bot.strategy, { ...profile, profile, onComplete: report => reports.push(report) });
+  assert.ok(result);
+  assert.equal(result.action.type, "summon");
+  assert.notEqual(reports[0]?.terminationReason, "preferred_terminal");
+  await playBotMainPhase(bot, botGame);
+  assert.equal(bot.hand.length, 0);
+  assert.deepEqual(bot.field.map(card => card.id), [502]);
+  assert.deepEqual(bot.graveyard.map(card => card.id), [505]);
+});
+
+test("preferred_terminal can preserve Catapult plus Prism as real recovery without a profitable conversion", async t => {
+  const { bot, botGame, opponent, make } = scenario(t, "bot");
+  bot.hand = [make(502)]; bot.graveyard = [make(506)];
+  bot.deck = []; bot.extraDeck = []; opponent.lp = 8000;
+  const profile = required(bot.strategy.getPlanningProfile).call(bot.strategy, botGame);
+  const reports: TurnLineSearchCompletion[] = [];
+  const result = await turnLineSearch(botGame, bot.strategy, { ...profile, profile, onComplete: report => reports.push(report) });
+  assert.equal(result, null);
+  assert.equal(reports[0]?.terminationReason, "preferred_terminal");
+  await playBotMainPhase(bot, botGame);
+  assert.deepEqual(bot.hand.map(card => card.id), [502]);
+  assert.deepEqual(bot.graveyard.map(card => card.id), [506]);
+  assert.equal(bot.field.length, 0);
+});
+
+test("same Lancer with different materials survives level choices, candidate selection and turn search", async t => {
+  const { bot, botGame, make } = scenario(t, "bot");
+  assert.ok(bot.strategy instanceof TechZeroStrategy);
+  bot.hand = []; bot.deck = []; bot.graveyard = []; bot.summonCount = 1;
+  const machine = make(503), phoenix = make(514), reactor = make(515), lancer = make(516);
+  for (const card of [machine, phoenix, reactor]) {
+    card.properSummonEstablished = true; card.properSummonProcedure = "synchro";
+  }
+  placeFieldCards(bot.field, machine, phoenix, reactor);
+  bot.extraDeck = [lancer];
+  const actions = bot.strategy.generateMainPhaseActions(botGame);
+  const synchros = actions.filter(action => action.type === "synchro");
+  assert.ok(synchros.some(action => action.materialInstanceIds.includes(phoenix.instanceId)));
+  assert.ok(synchros.every(action => !action.materialInstanceIds.includes(reactor.instanceId)));
+  const adjustments = actions.filter(action => action.effectId === "tech_zero_multimodal_machine_level_mod");
+  const targetRef = "tech_zero_multimodal_machine_level_down_1_target";
+  for (const target of [machine, reactor]) {
+    const adjustment = required(adjustments.find(action =>
+      action.activationContext?.decisions?.selections?.[targetRef]?.includes(target.instanceId)));
+    const state = bot.cloneGameState(botGame);
+    await bot.strategy.simulateMainPhaseAction(state, adjustment);
+    const after = bot.strategy.generateMainPhaseActions(state).filter(action => action.type === "synchro");
+    assert.ok(after.some(action => action.synchroInstanceId === lancer.instanceId &&
+      action.materialInstanceIds.includes(machine.instanceId) && action.materialInstanceIds.includes(reactor.instanceId)));
+    assert.equal(machine.level, 3, "planning leaves the live field unchanged");
+  }
+  const profile = required(bot.strategy.getPlanningProfile).call(bot.strategy, botGame);
+  const kept = required(bot.strategy.selectPlanningCandidates).call(bot.strategy, actions, botGame, profile.beamWidth);
+  assert.ok(adjustments.every(action => kept.includes(action)));
+  const levels = new Set<string>(), materials = new Set<string>();
+  const score = required(bot.strategy.scoreLineTerminal).bind(bot.strategy);
+  t.mock.method(bot.strategy, "scoreLineTerminal", (context: Parameters<typeof score>[0]) => {
+    const field = context?.finalState?.bot.field || [];
+    levels.add(`${field.find(card => card.instanceId === machine.instanceId)?.level}/${field.find(card => card.instanceId === reactor.instanceId)?.level}`);
+    for (const action of context?.sequence || []) if (action.type === "synchro" && action.synchroInstanceId === lancer.instanceId)
+      materials.add([...action.materialInstanceIds].sort().join(","));
+    return score(context);
+  });
+  await turnLineSearch(botGame, bot.strategy, { ...profile, profile });
+  assert.ok(levels.has("2/8") && levels.has("3/7"), "different level adjustments must not collide as repeated states");
+  for (const partner of [phoenix, reactor]) assert.ok(materials.has([machine.instanceId, partner.instanceId].sort().join(",")),
+    "both exact Lancer procedures must reach terminal comparison");
+  const reduceMachine = required(adjustments.find(action =>
+    action.activationContext?.decisions?.selections?.[targetRef]?.includes(machine.instanceId)));
+  assert.equal(await bot.executeMainPhaseAction(botGame, reduceMachine), true);
+  assert.equal(machine.level, 2);
+  const preservePhoenix = required(bot.generateMainPhaseActions(botGame).find(action => action.type === "synchro" &&
+    action.synchroInstanceId === lancer.instanceId && action.materialInstanceIds.includes(reactor.instanceId)));
+  assert.equal(await bot.executeMainPhaseAction(botGame, preservePhoenix), true);
+  assert.ok(bot.field.includes(phoenix));
+  assert.ok(bot.field.includes(lancer));
+  assert.ok(bot.graveyard.includes(reactor));
+});
+
+for (const zone of ["hand", "graveyard"] as const) {
+  test(`Catapult revives non-Tuner Prism from ${zone} through the real controller for lethal`, async t => {
+    const { bot, botGame, opponent, make } = scenario(t, "bot");
+    bot.hand = [make(502)]; bot.graveyard = []; bot.deck = []; bot.extraDeck = [];
+    const prism = make(506);
+    bot[zone].push(prism);
+    opponent.lp = 1000;
+    await playBotMainPhase(bot, botGame);
+    assert.ok(bot.field.some(card => card === prism));
+    assert.ok(bot.field.some(card => card.id === 502));
+    assert.equal(bot.summonCount, 1);
+    assert.equal(prism.isTuner, false);
+    assert.equal(prism.level, 2);
+  });
+}
 
 test("Wyvern's unavailable optional removal does not invalidate a legal Synchro line", t => {
   const { bot, botGame } = scenario(t, "bot", "wyvern");

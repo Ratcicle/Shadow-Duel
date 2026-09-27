@@ -96,6 +96,84 @@ test("real recovery survives in the score only while its required targets remain
   assert.ok(terminal(initialState, finalState) < score);
 });
 
+test("Catapult Normal follow-up accepts Prism in hand or GY, never level-three Raptor", () => {
+  for (const zone of ["hand", "graveyard"] as const) {
+    const catapult = card(502), raptor = card(505), prism = card(506);
+    const position = state({ hand: [catapult], deck: [] });
+    position.bot[zone].push(raptor);
+    assert.ok(!scoreTechZeroLineMilestones({ finalState: position }).milestones.includes(M.FOLLOW_UP));
+    const withoutRecovery = terminal(position, position);
+    position.bot[zone] = position.bot[zone].map(entry => entry === raptor ? prism : entry);
+    assert.ok(scoreTechZeroLineMilestones({ finalState: position }).milestones.includes(M.FOLLOW_UP));
+    assert.equal(terminal(position, position) - withoutRecovery, 3);
+    assert.equal(scoreTechZeroLineMilestones({ initialState: state(), finalState: position }).scoreDelta, 2);
+  }
+});
+
+test("Catapult Normal follow-up needs an available Normal, two zones and a summonable known target", () => {
+  const catapult = card(502), prism = card(506);
+  const position = state({ hand: [catapult], graveyard: [prism] });
+  const follows = () => scoreTechZeroLineMilestones({ finalState: position }).milestones.includes(M.FOLLOW_UP);
+  assert.equal(follows(), true);
+  position.bot.summonCount = 1;
+  assert.equal(follows(), false);
+  position.bot.summonCount = 0;
+  position.bot.field = [card(504), card(504), card(504), card(504)];
+  assert.equal(follows(), false);
+  position.bot.field = [];
+  prism.cannotBeSpecialSummoned = true;
+  assert.equal(follows(), false);
+  prism.cannotBeSpecialSummoned = false;
+  position.bot.hand = [catapult, { ...prism, _simUnknownDraw: true }];
+  position.bot.graveyard = [];
+  assert.equal(follows(), false);
+  position.bot.hand = [];
+  position.bot.spellTrap = [catapult];
+  position.bot.graveyard = [prism];
+  assert.equal(follows(), false, "a misplaced Catapult is not an available Normal Summon");
+});
+
+test("Catapult material follow-up needs a legal procedure using it, and accepts any revivable Tuner", () => {
+  for (const tunerId of [505, 553]) {
+    const catapult = card(502), core = card(501), tuner = card(tunerId);
+    core.cannotBeSpecialSummoned = true;
+    const position = state({ field: [catapult, core], graveyard: [tuner], extraDeck: [card(510)] });
+    const follows = () => scoreTechZeroLineMilestones({ finalState: position }).milestones.includes(M.FOLLOW_UP);
+    assert.equal(follows(), true);
+    tuner.cannotBeSpecialSummoned = true;
+    assert.equal(follows(), false);
+    tuner.cannotBeSpecialSummoned = false;
+    position.bot.extraDeck = [];
+    assert.equal(follows(), false);
+    position.bot.extraDeck = [card(510)];
+    catapult.isFacedown = true;
+    assert.equal(follows(), false);
+    catapult.isFacedown = false;
+    position.bot.graveyard = [card(506)];
+    // Core itself reaches the GY as material and is a legal revival target.
+    core.cannotBeSpecialSummoned = false;
+    assert.equal(follows(), true);
+    core.cannotBeSpecialSummoned = true;
+    assert.equal(follows(), false);
+  }
+});
+
+test("Catapult material recovery follows actual departures to GY and restored Tuner status", () => {
+  const catapult = card(502), core = card(501);
+  const position = state({ field: [catapult, core], extraDeck: [card(510)] });
+  const follows = () => scoreTechZeroLineMilestones({ finalState: position }).milestones.includes(M.FOLLOW_UP);
+  assert.equal(follows(), true);
+  catapult.banishWhenLeavesField = true;
+  assert.equal(follows(), false, "Catapult banished as material cannot trigger its GY effect");
+  catapult.banishWhenLeavesField = false;
+  core.banishWhenLeavesField = true;
+  assert.equal(follows(), false, "the only Tuner never reaches the GY");
+  core.banishWhenLeavesField = false;
+  core.fieldExitStatuses = { isTuner: false };
+  assert.equal(follows(), false, "temporary Tuner status must not survive field exit in the probe");
+  assert.equal(core.isTuner, true, "scoring must leave the input untouched");
+});
+
 test("larger boss does not beat protected pressure with real reconstruction just for having a higher level", () => {
   const initialState = state();
   const protectedLancer = state({ field: [protect(card(516))], hand: [card(502)], graveyard: [card(501)] });

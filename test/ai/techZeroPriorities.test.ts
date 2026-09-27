@@ -53,6 +53,21 @@ test("level policy refuses a stale target and a change that opens no Synchro", (
   assert.equal(chooseTechZeroLevelAdjustment(core, [core], context({ player: { field: [core] } })), null);
 });
 
+test("level policy opens different exact materials for an already available Lancer", () => {
+  const machine = card(503), phoenix = card(514), reactor = card(515), lancer = card(516);
+  const ctx = context({ player: { field: [machine, phoenix, reactor], extraDeck: [lancer] } });
+  assert.deepEqual(chooseTechZeroLevelAdjustment(machine, [machine], ctx), {
+    caseId: "decrease_1", targetInstanceId: machine.instanceId,
+    targetRef: "tech_zero_multimodal_machine_level_down_1_target",
+  });
+  assert.deepEqual(chooseTechZeroLevelAdjustment(machine, [reactor], ctx), {
+    caseId: "decrease_1", targetInstanceId: reactor.instanceId,
+    targetRef: "tech_zero_multimodal_machine_level_down_1_target",
+  });
+  assert.equal(machine.level, 3);
+  assert.equal(reactor.level, 8);
+});
+
 test("Portal restores M, E and Core once each regardless of graveyard order", () => {
   const core = card(501), spareCore = card(501), catapult = card(502), multimodal = card(503), prism = card(506);
   const candidates = [prism, spareCore, catapult, core, multimodal];

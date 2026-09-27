@@ -18,7 +18,7 @@ import { canUseSimulatedEffectUsage } from "./common/simStateUtils.js";
 import { getTributeRequirementFor, selectBestTributes } from "./common/tributePolicy.js";
 import { applyGenericSimulatedMainPhaseAction } from "./common/simulation.js";
 import { TECH_ZERO_IDS as TZ } from "./techzero/knowledge.js";
-import { buildTechZeroActivationContext, getTechZeroVisibleBattlePolicy, scoreTechZeroSummon, shouldUseTechZeroAssembly,
+import { buildTechZeroActivationContext, enumerateTechZeroLevelAdjustments, getTechZeroVisibleBattlePolicy, scoreTechZeroSummon, shouldUseTechZeroAssembly,
   type TechZeroPolicyContext } from "./techzero/priorities.js";
 import { buildTechZeroSimulationOptions, scoreTechZeroSynchro } from "./techzero/simulation.js";
 import { getTechZeroPlanningProfile, scoreTechZeroLineMilestones, scoreTechZeroLineTerminal,
@@ -215,7 +215,7 @@ export default class TechZeroStrategy extends BaseStrategy {
       const cards = zone === "fieldSpell" ? (player.fieldSpell ? [player.fieldSpell] : []) : player[zone];
       const type = zone === "hand" ? "handIgnition" : zone === "field" ? "monsterEffect"
         : zone === "graveyard" ? "graveyardMonsterEffect" : zone === "spellTrap" ? "spellTrapEffect" : "fieldEffect";
-      actions.push(...getGenericIgnitionEffectActions({
+      const ignitionActions = getGenericIgnitionEffectActions({
         game, player, cards, type, sourceZone: zone,
         indexFields: zone === "field" ? ["fieldIndex"] : zone === "graveyard" ? ["graveyardIndex"] : ["index"],
         findEffect: card => findIgnitionEffect(card, zone), includeEffectId: true,
@@ -225,7 +225,22 @@ export default class TechZeroStrategy extends BaseStrategy {
         canActivate: ({ card, activationContext }) => card.cardKind === "monster"
           ? canActivateMonsterEffect(game, card, player, zone, activationContext)
           : canActivateSpellTrapEffect(game, card, player, zone, activationContext),
-      }));
+      });
+      for (const action of ignitionActions) {
+        const card = action.type === "monsterEffect" ? cards[action.fieldIndex ?? -1] : undefined;
+        if (zone !== "field" || card?.id !== TZ.MULTIMODAL || action.effectId !== "tech_zero_multimodal_machine_level_mod") {
+          actions.push(action);
+          continue;
+        }
+        const effect = findIgnitionEffect(card, zone);
+        if (!effect) continue;
+        for (const adjustment of enumerateTechZeroLevelAdjustments(card, player.field, policy)) {
+          const activationContext = { ...buildTechZeroActivationContext(card, effect, policy, adjustment),
+            activationZone: zone, sourceZone: zone };
+          if (useful(card, effect, activationContext) && canActivateMonsterEffect(game, card, player, zone, activationContext))
+            actions.push({ ...action, activationContext });
+        }
+      }
     }
     actions.push(...getGenericSynchroActions(game).map(action => ({ ...action,
       priority: scoreTechZeroSynchro(action, policy,

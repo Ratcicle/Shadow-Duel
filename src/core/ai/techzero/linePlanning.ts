@@ -4,6 +4,9 @@ import { canUseNormalSummonForCard } from "../../Player.js";
 import { enumerateSynchroMaterialCombos } from "../../game/summon/synchro.js";
 import { getEffectiveAtk, getBattleStatForAttackTarget } from "../common/cardStats.js";
 import { canSimulatedSpecialSummon, canSimulatedProcedureEnterField } from "../common/simulation.js";
+import { getGenericSynchroActions } from "../common/actionGeneration.js";
+import { createPlanningCopy } from "../common/planningCopy.js";
+import { moveCardToZone } from "../common/zones.js";
 import { hasSimulatedProtection } from "../common/simulatedActions/lifecycle.js";
 import { TECH_ZERO_IDS as TZ, TECH_ZERO_MILESTONES as M, isTechZero } from "./knowledge.js";
 import { evaluateTechZeroVisibleBattle } from "./battle.js";
@@ -82,8 +85,40 @@ function hasFollowUp(state: AiStateShape): boolean {
   const grave = self.graveyard.filter(card => card.cardKind === "monster" && isTechZero(card));
   const support = [...self.hand.filter(known), ...self.spellTrap, ...(self.fieldSpell ? [self.fieldSpell] : [])];
   const revivable = grave.filter(card => canSimulatedSpecialSummon(card, self, "special", "graveyard"));
-  if (support.some(card => card.id === TZ.ELECTROCATAPULT) &&
-    revivable.some(card => (card.level || 0) <= 3 && card.isTuner)) return true;
+  // The Normal trigger summons any small Tech-Zero, including non-Tuners.
+  // Reserve room for both Catapult and its target, and honor this turn's Normal availability.
+  if (self.hand.some(catapult => known(catapult) && catapult.id === TZ.ELECTROCATAPULT &&
+    canUseNormalSummonForCard(self, catapult) &&
+    canSimulatedProcedureEnterField(catapult, self, state.player, []) &&
+    (["hand", "graveyard"] as const).some(zone => self[zone].some(target => known(target) &&
+      target.cardKind === "monster" && isTechZero(target) && (target.level || 0) <= 2 &&
+      canSimulatedSpecialSummon(target, self, "special", zone) &&
+      canSimulatedProcedureEnterField(target, { field: [...self.field, catapult] }, state.player, []))))) return true;
+  // The material trigger is reachable only through a legal procedure containing Catapult.
+  // Its Tuner can already be in the GY or enter it as part of that exact procedure.
+  if (self.field.some(card => card.id === TZ.ELECTROCATAPULT && faceUp(card)) &&
+    getGenericSynchroActions({ ...state, _isPerspectiveState: true }).some(action => {
+      const materials = self.field.filter(card => card.instanceId != null && action.materialInstanceIds.includes(card.instanceId));
+      if (!materials.some(card => card.id === TZ.ELECTROCATAPULT)) return false;
+      const destination = self.extraDeck.find(card => card.instanceId === action.synchroInstanceId);
+      if (!destination) return false;
+      // Reuse movement cleanup: a material can be banished instead, and temporary
+      // statuses must expire before checking which Tuners can actually be revived.
+      const copy = createPlanningCopy();
+      const projected = { bot: { ...self }, player: { ...state.player } };
+      copy.copyFields(self, projected.bot, Object.keys(self));
+      copy.copyFields(state.player, projected.player, Object.keys(state.player));
+      for (const id of action.materialInstanceIds) {
+        const material = projected.bot.field.find(card => card.instanceId === id);
+        if (!material || !moveCardToZone(projected.bot, material, "graveyard", projected.bot, { state: projected })) return false;
+      }
+      if (!projected.bot.graveyard.some(card => card.id === TZ.ELECTROCATAPULT &&
+        card.instanceId != null && action.materialInstanceIds.includes(card.instanceId))) return false;
+      const field = [...projected.bot.field, destination];
+      return projected.bot.graveyard.some(tuner => tuner.cardKind === "monster" && tuner.isTuner &&
+        canSimulatedSpecialSummon(tuner, projected.bot, "special", "graveyard") &&
+        canSimulatedProcedureEnterField({ ...tuner, isFacedown: false }, { field }, projected.player, []));
+    })) return true;
   if (support.some(card => card.id === TZ.COURT) && revivable.some(card => (card.level || 0) <= 4)) return true;
   if (support.some(card => card.id === TZ.LAB && !card.effectsNegated) &&
     grave.some(card => card.monsterType === "synchro") && grave.length >= 2) return true;

@@ -70,19 +70,23 @@ export function scoreTechZeroSynchro(card: AiCardInput, ctx: TechZeroPolicyConte
   }
 }
 
-export function chooseTechZeroLevelAdjustment(
+/** Keep distinct exact procedures even when their Extra Deck destination is unchanged. */
+export function enumerateTechZeroLevelAdjustments(
   source: AiCardInput,
   candidates: readonly AiCardInput[],
   ctx: TechZeroPolicyContext,
-): TechZeroLevelAdjustment | null {
+): TechZeroLevelAdjustment[] {
   const field = ctx.player.field || [];
-  if (source.effectsNegated || source.isFacedown || !field.some(card => sameInstance(card, source))) return null;
+  if (source.effectsNegated || source.isFacedown || !field.some(card => sameInstance(card, source))) return [];
   const isCore = source.id === TZ.CORE;
-  if (!isCore && source.id !== TZ.MULTIMODAL) return null;
+  if (!isCore && source.id !== TZ.MULTIMODAL) return [];
   const shifts = isCore ? [-1, 1] : [-2, -1, 1, 2];
-  const existing = new Set(summonDestinations(field, ctx).map(card => card.instanceId));
-  let best: TechZeroLevelAdjustment | null = null;
-  let bestScore = -Infinity;
+  const materialKey = (materials: readonly AiCardInput[]) => JSON.stringify(
+    materials.map(card => card.instanceId).sort((a, b) =>
+      `${typeof a}:${a}`.localeCompare(`${typeof b}:${b}`)));
+  const destinations = (ctx.player.extraDeck || []).map(card => ({ card,
+    existing: new Set(enumerateSynchroMaterialCombos(field, card).map(materialKey)) }));
+  const choices: { adjustment: TechZeroLevelAdjustment; score: number }[] = [];
   for (const candidate of rank(candidates, () => 0)) {
     if (candidate.instanceId == null || candidate.isFacedown ||
         !field.some(card => sameInstance(card, candidate)) || (isCore && !isTechZero(candidate))) continue;
@@ -90,26 +94,37 @@ export function chooseTechZeroLevelAdjustment(
       const level = (candidate.level || 0) + amount;
       if (level < 1) continue;
       const adjusted = field.map(card => sameInstance(card, candidate) ? { ...card, level } : card);
-      const opened = summonDestinations(adjusted, ctx).filter(card => !existing.has(card.instanceId));
+      const opened = destinations.filter(({ card, existing }) =>
+        enumerateSynchroMaterialCombos(adjusted, card).some(materials => !existing.has(materialKey(materials))))
+        .map(entry => entry.card);
+      let bestScore = -Infinity;
       for (const destination of opened) {
         let score = scoreTechZeroSynchro(destination, ctx);
         // The two stable opening steps preserve Core as level one and M as a live alternate-role material.
         if (isCore && candidate.id === TZ.ELECTROCATAPULT && level === 2 && destination.id === TZ.MULTIMODAL) score += 100;
         if (!isCore && sameInstance(candidate, source) && level === 1 && destination.id === TZ.PORTAL) score += 100;
         if (score <= bestScore) continue;
+        bestScore = score;
+      }
+      if (bestScore > -Infinity) {
         const direction = amount < 0 ? "decrease" : "increase";
         const refDirection = amount < 0 ? "down" : "up";
-        bestScore = score;
-        best = {
+        choices.push({ score: bestScore, adjustment: {
           caseId: isCore ? direction : `${direction}_${Math.abs(amount)}`,
           targetInstanceId: candidate.instanceId,
           targetRef: isCore ? `tech_zero_energy_core_level_${refDirection}_target` :
             `tech_zero_multimodal_machine_level_${refDirection}_${Math.abs(amount)}_target`,
-        };
+        } });
       }
     }
   }
-  return best;
+  return choices.sort((a, b) => b.score - a.score).map(entry => entry.adjustment);
+}
+
+export function chooseTechZeroLevelAdjustment(
+  source: AiCardInput, candidates: readonly AiCardInput[], ctx: TechZeroPolicyContext,
+): TechZeroLevelAdjustment | null {
+  return enumerateTechZeroLevelAdjustments(source, candidates, ctx)[0] || null;
 }
 
 function recoveryValue(card: AiCardInput): number {
@@ -292,6 +307,7 @@ function scrapyardChoice(candidates: readonly AiCardInput[], ctx: TechZeroPolicy
 /** Compile resource policy into the same exact decision plan used by preview and execution. */
 export function buildTechZeroActivationContext(
   source: AiCardInput, effect: EffectDefinition, ctx: TechZeroPolicyContext,
+  levelAdjustment?: TechZeroLevelAdjustment,
 ): AIActivationContext {
   const selections: Record<string, readonly (number | string)[]> = {};
   const cases: Record<string, string> = {};
@@ -301,7 +317,7 @@ export function buildTechZeroActivationContext(
   const effectId = effect.id || "techzero_effect";
   const choice = effect.actions?.find(action => action.type === "choose_action_case");
   if (choice) {
-    const adjustment = chooseTechZeroLevelAdjustment(source, ctx.player.field || [], ctx);
+    const adjustment = levelAdjustment ?? chooseTechZeroLevelAdjustment(source, ctx.player.field || [], ctx);
     if (adjustment) {
       cases.action_case_choice = adjustment.caseId;
       cases[choice.effectChoiceKey || effectId] = adjustment.caseId;

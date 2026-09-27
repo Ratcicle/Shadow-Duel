@@ -519,6 +519,36 @@ test("turn-line diagnostics preserve deterministic action fingerprints", async (
   );
 });
 
+test("turn-line state hashes distinguish branches differing only in current monster Level", async () => {
+  const base = makeGame();
+  const game = { ...base, bot: { ...base.bot, field: [{
+    instanceId: 123, name: "Level probe", cardKind: "monster" as const, level: 3, atk: 1000, def: 1000,
+  }] } };
+  const actions: SearchAction[] = [
+    { type: "position_change", tag: "level-two", priority: 2, toPosition: "attack" },
+    { type: "position_change", tag: "level-four", priority: 1, toPosition: "attack" },
+  ];
+  const visited = new Set<number>();
+  const result = await turnLineSearch(game, {
+    bot: game.bot,
+    generateMainPhaseActions: () => actions,
+    simulateMainPhaseAction(state: TurnLineSimulationGameState, action: SearchAction) {
+      const monster = state.bot.field[0];
+      assert.ok(monster);
+      monster.level = action.tag === "level-two" ? 2 : 4;
+    },
+    evaluateBoardV2(state: TurnLineSimulationGameState) {
+      const level = state.bot.field[0]?.level || 0;
+      visited.add(level);
+      return level;
+    },
+  }, { maxDepth: 1 });
+  assert.ok(result);
+  assert.equal(result.action, actions[1]);
+  assert.equal(result.completion.repeatedStates, 0);
+  assert.ok(visited.has(2) && visited.has(4), "both distinct level states reach evaluation");
+});
+
 test("turn-line reports why an empty search ended without inventing an action", async () => {
   const reports: TurnLineSearchCompletion[] = [];
   const game = makeGame();
