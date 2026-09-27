@@ -5,6 +5,7 @@ import type {
   ResolvedTargetMap,
 } from "../../contracts/actionRuntime.js";
 import type { ActionOf } from "../../contracts/actions.js";
+import { suppressTemporaryDynamicStatIncreasesForDebuff } from "../passives/passiveBuffs.js";
 
 interface StatsRuntimeCard extends ActionRuntimeCard {
   tempAtkBoost?: number;
@@ -113,18 +114,20 @@ export function applyModifyStatsTemp(
     if (atkFactor !== 1) {
       const currentAtk = card.atk ?? 0;
       const newAtk = Math.floor(currentAtk * atkFactor);
-      const deltaAtk = newAtk - currentAtk;
+      suppressTemporaryDynamicStatIncreasesForDebuff(card, "atk", newAtk - currentAtk);
+      const deltaAtk = newAtk - (card.atk ?? 0);
       card.atk = newAtk;
       card.tempAtkBoost = (card.tempAtkBoost || 0) + deltaAtk;
-      deltaTotal += deltaAtk;
+      deltaTotal += newAtk - currentAtk;
     }
     if (defFactor !== 1) {
       const currentDef = card.def ?? 0;
       const newDef = Math.floor(currentDef * defFactor);
-      const deltaDef = newDef - currentDef;
+      suppressTemporaryDynamicStatIncreasesForDebuff(card, "def", newDef - currentDef);
+      const deltaDef = newDef - (card.def ?? 0);
       card.def = newDef;
       card.tempDefBoost = (card.tempDefBoost || 0) + deltaDef;
-      deltaTotal += deltaDef;
+      deltaTotal += newDef - currentDef;
     }
     if (deltaTotal !== 0) {
       queueStatFeedback(

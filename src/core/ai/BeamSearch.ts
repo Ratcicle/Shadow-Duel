@@ -1,6 +1,6 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // src/core/ai/BeamSearch.js
-import { createPlanningCopy, projectRuntimeEffectUsage } from "./common/planningCopy.js";
+import { createPlanningCopy, hasPendingPassiveRestoration, projectRuntimeEffectUsage } from "./common/planningCopy.js";
 import { isSimulatedMainPhaseActionSupported } from "./common/simulation.js";
 import { resolvePerspectivePlayers } from "./StrategyUtils.js";
 import { filterAiActionsForCurrentPhase } from "./common/phaseTiming.js";
@@ -113,7 +113,7 @@ export async function beamSearchTurn(
   strategy: SearchStrategyInput,
   options: BeamSearchOptions = {},
 ): Promise<BeamSearchResult | null> {
-  if (("_simUnsupportedActions" in game && game._simUnsupportedActions?.length) ||
+  if (hasPendingPassiveRestoration(game) || ("_simUnsupportedActions" in game && game._simUnsupportedActions?.length) ||
       ("_simRequiresReplan" in game && game._simRequiresReplan)) return null;
   const {
     beamWidth = 2,
@@ -384,7 +384,7 @@ export async function greedySearchWithEvalV2(
   strategy: SearchStrategyInput,
   options: BeamSearchOptions = {},
 ): Promise<GreedySearchResult | null> {
-  if (("_simUnsupportedActions" in game && game._simUnsupportedActions?.length) ||
+  if (hasPendingPassiveRestoration(game) || ("_simUnsupportedActions" in game && game._simUnsupportedActions?.length) ||
       ("_simRequiresReplan" in game && game._simRequiresReplan)) return null;
   const { useV2Evaluation = true, preGeneratedActions = null } = options;
   const perspectiveBot = strategy?.bot || (strategy?.id ? strategy : null);

@@ -5,8 +5,9 @@ O catálogo canônico está em `src/core/bot/presets.ts`. Cada apresentação co
 `getAvailableBotPresets()` expõe os nove presets jogáveis com esses dados;
 `getBotPresetPresentation(id)` permite consultar cada apresentação.
 Tech-Zero possui o preset de 20 + 10 cartas, decisões exatas e busca de linhas
-de combo em Main Phase. Combate e respostas avançadas seguem o plano em
-[Bot Tech-Zero — estratégia e combos](Bot%20Tech-Zero%20-%20Estrat%C3%A9gia%20e%20Combos.md).
+de combo em Main Phase. Combate e respostas estão implementados nos módulos
+[battle.ts](../src/core/ai/techzero/battle.ts) e
+[responses.ts](../src/core/ai/techzero/responses.ts).
 
 ## Paleta dos arquétipos
 

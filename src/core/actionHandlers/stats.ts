@@ -5,6 +5,7 @@
  */
 
 import { isAI } from "../Player.js";
+import { suppressTemporaryDynamicStatIncreasesForDebuff } from "../effects/passives/passiveBuffs.js";
 import type { ActionOf } from "../contracts/actions.js";
 import type {
   ActionHandlerEnginePort,
@@ -362,51 +363,6 @@ function getDynamicBuffAppliedValue(
     appliedValues?.[stat] ?? (stats.includes(stat) ? entry?.value : 0) ?? 0,
   );
   return Number.isFinite(applied) ? applied : 0;
-}
-
-function getPositiveDynamicStatEntries(
-  card: ActionRuntimeCard | null | undefined,
-  stat: StatName,
-) {
-  if (!card?.dynamicBuffs || typeof card.dynamicBuffs !== "object") return [];
-  return Object.entries(card.dynamicBuffs)
-    .map(([key, entry]) => ({
-      key,
-      entry,
-      applied: getDynamicBuffAppliedValue(entry, stat),
-    }))
-    .filter(({ applied }) => applied > 0);
-}
-
-function suppressTemporaryDynamicStatIncreasesForDebuff(
-  card: ActionRuntimeCard | null | undefined,
-  stat: StatName,
-  boost: number,
-) {
-  if (!card || !stat || !Number.isFinite(Number(boost)) || boost >= 0) return 0;
-
-  const entries = getPositiveDynamicStatEntries(card, stat);
-  if (entries.length === 0) return 0;
-
-  const current = Number(card[stat] || 0);
-  const dynamicTotal = entries.reduce(
-    (total, { applied }) => total + applied,
-    0,
-  );
-  if (current - dynamicTotal + boost > 0) return 0;
-
-  let suppressed = 0;
-  for (const { key, entry, applied } of entries) {
-    const actual = subtractVisibleStat(card, stat, applied);
-    if (actual <= 0) continue;
-    suppressDynamicBuffStat(card, key, stat, { temporary: true });
-    if (!entry.appliedValues || typeof entry.appliedValues !== "object") {
-      entry.appliedValues = {};
-    }
-    entry.appliedValues[stat] = applied - actual;
-    suppressed += actual;
-  }
-  return suppressed;
 }
 
 function consumeTrackedStatIncrease(

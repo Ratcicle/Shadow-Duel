@@ -13,6 +13,14 @@ import {
 import type { EffectUsageMap } from "../../contracts/cards.js";
 type SearchCardInput = AiCardInput;
 
+/** Passive restoration is not modeled, including suppression inherited from a live duel. */
+export function hasPendingPassiveRestoration(state: Pick<AiStateInput, "bot" | "player">): boolean {
+  return [state.bot, state.player].some(player => player?.field?.some(card =>
+    Object.values(card.temporarySuppressedDynamicBuffStatsByKey || {})
+      .some(stats => stats.atk === true || stats.def === true),
+  ));
+}
+
 /** Snapshot canonical runtime counters without keeping their Maps/WeakMap. */
 export function projectRuntimeEffectUsage(input: AiStateInput, state: AiStateShape): void {
   const runtime = input.oncePerTurnUsage;

@@ -1,6 +1,7 @@
 import { resolvePerspectivePlayers } from "./StrategyUtils.js";
 import { isSimulatedMainPhaseActionSupported } from "./common/simulation.js";
 import { createGameTreeCopy, withoutLiveGameReference } from "./common/gameTreeSimulation.js";
+import { hasPendingPassiveRestoration } from "./common/planningCopy.js";
 import { resolvePerspectiveSlotForPlayer } from "./common/perspective.js";
 import type { GameTreeModels, PlanningModel } from "../contracts/aiPlanning.js";
 import { withPlanningExecutionContext } from "./common/planningExecution.js";
@@ -235,7 +236,7 @@ function minimax<Action extends AIAction>(
   perspective: GameTreePlayerInput | null | undefined,
   transpositions: Map<string, TranspositionEntry<AIAction>>,
 ): MinimaxResult<AIAction> {
-  if ("_simUnsupportedActions" in gameState && gameState._simUnsupportedActions?.length) return { value: 0, action: null };
+  if (hasPendingPassiveRestoration(gameState) || ("_simUnsupportedActions" in gameState && gameState._simUnsupportedActions?.length)) return { value: 0, action: null };
   // Base case: folha ou limite de profundidade
   if (depth === 0 || ("_simRequiresReplan" in gameState && gameState._simRequiresReplan)) {
     const leafValue = evaluateForRoot(gameState, rootPlayerId);

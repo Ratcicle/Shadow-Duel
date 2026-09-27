@@ -1,5 +1,5 @@
 import { appendSimulatedZoneCard } from "./common/zones.js";
-import { createPlanningCopy, projectRuntimeEffectUsage } from "./common/planningCopy.js";
+import { createPlanningCopy, hasPendingPassiveRestoration, projectRuntimeEffectUsage } from "./common/planningCopy.js";
 import { PLANNING_PLAYER_FIELDS, PLANNING_STATE_FIELDS, PLANNING_ZONES } from "./common/stateFingerprint.js";
 import { isSimulatedMainPhaseActionSupported } from "./common/simulation.js";
 import { hasSimulatedProtection } from "./common/simulatedActions/lifecycle.js";
@@ -1691,7 +1691,7 @@ export async function turnLineSearch(
     complete("invalid_input");
     return null;
   }
-  if ("_simUnsupportedActions" in game && Array.isArray(game._simUnsupportedActions) && game._simUnsupportedActions.length) {
+  if (hasPendingPassiveRestoration(game) || ("_simUnsupportedActions" in game && Array.isArray(game._simUnsupportedActions) && game._simUnsupportedActions.length)) {
     complete("unsupported_branches");
     return null;
   }

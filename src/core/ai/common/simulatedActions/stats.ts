@@ -1,5 +1,5 @@
 import { getEffectiveAtk } from "../cardStats.js";
-import { removeFieldAuraBuffContributions } from "../../../effects/passives/passiveBuffs.js";
+import { removeFieldAuraBuffContributions, suppressTemporaryDynamicStatIncreasesForDebuff } from "../../../effects/passives/passiveBuffs.js";
 import { getCounterValue, setCounterValue } from "../counters.js";
 import { estimateMonsterValue, hasArchetype } from "../cardValue.js";
 import {
@@ -690,23 +690,37 @@ export function applyModifyStatsTemp(
     opponent,
     applySimulatedActions,
   } = ctx;
+  let requiresPassiveRecalculation = false;
   targets.forEach((card) => {
     if (!card) return;
     if (Number.isFinite(action.atkFactor)) {
       const previousAtk = card.atk || 0;
       const newAtk = Math.floor(previousAtk * (action.atkFactor as number));
+      if (suppressTemporaryDynamicStatIncreasesForDebuff(card, "atk", newAtk - previousAtk) > 0) {
+        requiresPassiveRecalculation = true;
+      }
+      const deltaAtk = newAtk - (card.atk || 0);
       card.atk = newAtk;
       card.tempAtkBoost =
-        (card.tempAtkBoost || 0) + newAtk - previousAtk;
+        (card.tempAtkBoost || 0) + deltaAtk;
     }
     if (Number.isFinite(action.defFactor)) {
       const previousDef = card.def || 0;
       const newDef = Math.floor(previousDef * (action.defFactor as number));
+      if (suppressTemporaryDynamicStatIncreasesForDebuff(card, "def", newDef - previousDef) > 0) {
+        requiresPassiveRecalculation = true;
+      }
+      const deltaDef = newDef - (card.def || 0);
       card.def = newDef;
       card.tempDefBoost =
-        (card.tempDefBoost || 0) + newDef - previousDef;
+        (card.tempDefBoost || 0) + deltaDef;
     }
   });
+  // Immediate stats are known, but restoring suppressed auras after a move or
+  // at turn end needs the runtime's passive refresh. Reject this search branch.
+  if (requiresPassiveRecalculation) {
+    (state._simUnsupportedActions ??= []).push("modify_stats_temp:passive_recalculation");
+  }
   return;
 }
 

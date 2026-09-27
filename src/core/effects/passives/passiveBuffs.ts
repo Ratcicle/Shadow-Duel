@@ -272,6 +272,35 @@ function getSuppressedPassiveStats(
   return result.size > 0 ? result : null;
 }
 
+/** Keep clamped temporary reductions separate from the auras they suppress. */
+export function suppressTemporaryDynamicStatIncreasesForDebuff(
+  card: PassiveStatCard | null | undefined,
+  stat: PassiveStat,
+  boost: number,
+): number {
+  if (!card || !Number.isFinite(boost) || boost >= 0) return 0;
+  const entries = Object.entries(card.dynamicBuffs || {})
+    .filter(([, entry]) => getPassiveBuffStats(entry).includes(stat))
+    .map(([key, entry]) => ({ key, entry, applied: getPassiveBuffAppliedValue(entry, stat) }))
+    .filter(({ applied }) => applied > 0);
+  const current = Number(card[stat] || 0);
+  const total = entries.reduce((sum, { applied }) => sum + applied, 0);
+  if (current - total + boost > 0) return 0;
+
+  let suppressed = 0;
+  for (const { key, entry, applied } of entries) {
+    const actual = Math.min(applied, Math.max(0, Number(card[stat] || 0)));
+    if (actual <= 0) continue;
+    card[stat] = Math.max(0, Number(card[stat] || 0) - actual);
+    const map = card.temporarySuppressedDynamicBuffStatsByKey ||= {};
+    map[key] = { ...map[key], [stat]: true };
+    entry.appliedValues ||= {};
+    entry.appliedValues[stat] = applied - actual;
+    suppressed += actual;
+  }
+  return suppressed;
+}
+
 export function applyPassiveBuffValue(
   card: PassiveStatCard | null | undefined,
   effectKey: string,
