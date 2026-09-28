@@ -427,6 +427,7 @@ export interface TemporaryEventEffect {
   usesRemaining?: number | null;
   boundEventTargetInstanceId?: number | string | null;
   requireBoundTargetLeavesField?: boolean;
+  requireBoundTargetDestroyed?: boolean;
   duration?: string;
 }
 

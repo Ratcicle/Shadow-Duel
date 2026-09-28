@@ -930,6 +930,9 @@ export async function handleRegisterTemporaryEventEffect(
       : null,
     requireBoundTargetLeavesField:
       action.requireBoundTargetLeavesField === true,
+    ...(action.requireBoundTargetDestroyed === true
+      ? { requireBoundTargetDestroyed: true }
+      : {}),
     effect,
     declaredValues: cloneDeclaredValuesForTemporaryEffect(action, source),
     createdOnTurn: Number(game.turnCounter || 0),

@@ -41,13 +41,16 @@ for (const actor of ["player", "bot"] as const) {
     const predicted: string[] = [];
     const actualCountersAtSummonEffect: number[][] = [];
     const predictedCountersAtSummonEffect: number[][] = [];
+    // Arctroth can destroy a Court. Keep its identity after it leaves the row;
+    // the simulator reports activation after actions, runtime before resolution.
+    const actualCourts = [game.player, game.bot].map(player => required(player.spellTrap[0]));
+    const predictedCourts = [state.player, state.bot].map(player => required(player.spellTrap[0]));
     const summonEffectId = "shadow_heart_arctroth_on_summon";
     game.on("chain_link_resolution", payload => {
       if (payload.stage !== "resolving" || !payload.effectId) return;
       actual.push(payload.effectId);
       if (payload.effectId === summonEffectId) {
-        actualCountersAtSummonEffect.push([game.player, game.bot].map(player =>
-          required(player.spellTrap[0]).getCounter("funeral")));
+        actualCountersAtSummonEffect.push(actualCourts.map(court => court.getCounter("funeral")));
       }
     });
     applyGenericSimulatedMainPhaseAction(state, action, {
@@ -62,8 +65,7 @@ for (const actor of ["player", "bot"] as const) {
         if (typeof effectId !== "string") return;
         predicted.push(effectId);
         if (effectId === summonEffectId) {
-          predictedCountersAtSummonEffect.push([state.player, state.bot].map(player =>
-            required(player.spellTrap[0]).counters?.get("funeral") || 0));
+          predictedCountersAtSummonEffect.push(predictedCourts.map(court => court.counters?.get("funeral") || 0));
         }
       },
     });

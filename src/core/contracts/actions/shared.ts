@@ -359,6 +359,7 @@ type BooleanActionProperty =
   | "removeFromAllField"
   | "removeOnLeave"
   | "requireBoundTargetLeavesField"
+  | "requireBoundTargetDestroyed"
   | "requireConfirmation"
   | "requireFaceup"
   | "requireSource"

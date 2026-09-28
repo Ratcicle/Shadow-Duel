@@ -586,15 +586,15 @@
     },
     "101": {
       "name": "Enguia Abissal do Coração Sombrio",
-      "description": "Se esse card for atacado em posição de defesa: cause 600 de dano ao oponente. Se esse card for destruído em batalha: você pode adicionar 1 Magia/Armadilha 'Coração Sombrio' do seu cemitério à sua mão."
+      "description": "Se este card for atacado em Posição de Defesa: cause 600 de dano ao seu oponente.\n\nSe este card for destruído em batalha: você pode escolher 1 Magia/Armadilha “Coração Sombrio” no seu Cemitério; adicione-a à sua mão."
     },
     "102": {
       "name": "Espectro do Coração Sombrio",
-      "description": "Se esse card for enviado para o cemitério: você pode escolher 1 monstro 'Coração Sombrio' no seu cemitério, exceto 'Espectro do Coração Sombrio'; adicione-o à sua mão."
+      "description": "Se este card for enviado para o Cemitério: você pode escolher 1 monstro “Coração Sombrio” no seu Cemitério, exceto “Espectro do Coração Sombrio”; adicione-o à sua mão.\n\nVocê só pode usar este efeito de “Espectro do Coração Sombrio” uma vez por turno."
     },
     "103": {
       "name": "Purificação do Coração Sombrio",
-      "description": "Descarte 1 card \"Coração Sombrio\" e, então, escolha 1 monstro com a face para cima que o oponente controla; ele perde 1000 de ATK até o final deste turno. Se o ATK desse monstro se tornar 0 por este efeito, destrua-o. Você só pode ativar 1 \"Purificação do Coração Sombrio\" por turno."
+      "description": "Descarte 1 card \"Coração Sombrio\" e, depois, escolha 1 monstro com a face para cima que seu oponente controla; ele perde 1000 ATK.\n\nSe um monstro cujo ATK foi reduzido por este efeito for destruído neste turno: todos os monstros que seu oponente controla perdem 1000 ATK.\n\nVocê só pode ativar 1 \"Purificação do Coração Sombrio\" por turno."
     },
     "104": {
       "name": "Demônio Arctroth do Coração Sombrio",

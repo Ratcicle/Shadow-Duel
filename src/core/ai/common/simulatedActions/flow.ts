@@ -388,6 +388,7 @@ export function applyRegisterTemporaryEventEffect(
       : null,
     requireBoundTargetLeavesField:
       action.requireBoundTargetLeavesField === true,
+    ...(action.requireBoundTargetDestroyed === true ? { requireBoundTargetDestroyed: true } : {}),
     duration: action.duration || "end_of_turn",
     createdOnTurn: currentTurn,
     expiresOnTurn,

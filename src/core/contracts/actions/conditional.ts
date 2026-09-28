@@ -39,7 +39,7 @@ export interface ConditionalActionMap {
     | "conditions" | "targets" | "duration" | "uses" | "unlimitedUses"
     | "effectId" | "sourceName" | "declaredValueRef" | "declaredValueStateKey"
     | "stateKey" | "promptUser" | "promptMessage" | "uniqueKey"
-    | "bindEventTargetRef" | "requireBoundTargetLeavesField"
+    | "bindEventTargetRef" | "requireBoundTargetLeavesField" | "requireBoundTargetDestroyed"
   >;
   register_synchro_material_followup: DefineAction<
     "register_synchro_material_followup",

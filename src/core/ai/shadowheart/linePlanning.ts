@@ -1178,7 +1178,7 @@ function getRetentionFloor(action: Partial<LineAction> = {}, analysis: Analysis 
       if (!hasPurgeLine(analysis)) return null;
       return oppStrongest >= 2200
         ? { minPriority: 11, reason: "retain Purge answer to threat" }
-        : { minPriority: 8.5, reason: "retain Purge removal option" };
+        : { minPriority: 8.5, reason: "retain Purge combat debuff option" };
     case SH.shadowHeartEquip:
       return field.length === 0 && getAnalysisCards(analysis, "graveyard").some(
         (card) => card?.cardKind === "monster" && isShadowHeartCard(card),

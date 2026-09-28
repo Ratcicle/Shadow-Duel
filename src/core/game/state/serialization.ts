@@ -31,6 +31,7 @@ interface SerializedTemporaryEventSource {
   sourceInstanceId?: number | string | null;
   boundEventTargetInstanceId?: number | string | null;
   requireBoundTargetLeavesField?: boolean;
+  requireBoundTargetDestroyed?: boolean;
   duration?: string | null;
   expiresOnTurn?: number | null;
   usesRemaining?: number | null;
@@ -260,6 +261,9 @@ export function getPublicState(
         boundEventTargetInstanceId: entry.boundEventTargetInstanceId ?? null,
         requireBoundTargetLeavesField:
           entry.requireBoundTargetLeavesField === true,
+        ...(entry.requireBoundTargetDestroyed === true
+          ? { requireBoundTargetDestroyed: true }
+          : {}),
         duration: entry.duration || null,
         expiresOnTurn: entry.expiresOnTurn ?? null,
         usesRemaining: entry.usesRemaining ?? null,

@@ -712,6 +712,7 @@ export interface PublicTemporaryEventState {
   sourceInstanceId: number | string | null;
   boundEventTargetInstanceId: number | string | null;
   requireBoundTargetLeavesField: boolean;
+  requireBoundTargetDestroyed?: boolean;
   duration: string | null;
   expiresOnTurn: number | null;
   usesRemaining: number | null;

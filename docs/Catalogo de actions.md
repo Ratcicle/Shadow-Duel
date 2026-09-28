@@ -2342,6 +2342,7 @@ Temporarily modifies ATK and/or DEF.
 | `permanent` | nao | boolean |  |
 | `sourceName` | nao | string |  |
 | `allowEmpty` | nao | boolean |  |
+| `storeAs` | nao | string |  |
 
 **Exemplos**
 
@@ -2356,7 +2357,7 @@ Temporarily modifies ATK and/or DEF.
 
 **Notas**
 
-_Sem notas._
+- storeAs exposes only cards whose ATK or DEF actually changed as an internal target reference.
 
 ### `buff_stats_temp_with_second_attack`
 
@@ -3916,6 +3917,7 @@ Registers a virtual event trigger owned by the resolving player for a bounded du
 | `uniqueKey` | nao | string |  |
 | `bindEventTargetRef` | nao | string |  |
 | `requireBoundTargetLeavesField` | nao | boolean |  |
+| `requireBoundTargetDestroyed` | nao | boolean |  |
 
 **Exemplos**
 
@@ -3956,6 +3958,7 @@ Registers a virtual event trigger owned by the resolving player for a bounded du
 **Notas**
 
 - Use duration: "duel" with unlimitedUses: true for effects that trigger repeatedly for the rest of the Duel.
+- With card_moved and bindEventTargetRef, requireBoundTargetDestroyed consumes the bound card's first field exit and triggers only for battle/effect destruction.
 
 ### `set_source_after_resolution_if`
 

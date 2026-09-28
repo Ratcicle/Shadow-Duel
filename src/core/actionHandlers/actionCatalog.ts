@@ -561,10 +561,12 @@ export const ACTION_CATALOG = {
       "permanent",
       "sourceName",
       "allowEmpty",
+      "storeAs",
     ],
     fields: {
       ...COMMON_TARGET_FIELDS,
       atkBoost: { type: "number" },
+      storeAs: { type: "string" },
       defBoost: { type: "number" },
       targetScope: { type: "object" },
       atkBoostFromContext: { type: "object" },
@@ -587,6 +589,7 @@ export const ACTION_CATALOG = {
     selection: "usesTargets",
     mutates: ["stats"],
     examples: [{ type: "buff_stats_temp", targetRef: "sanctum_citadel_target", atkBoost: 500, defBoost: 500 }],
+    notes: ["storeAs exposes only cards whose ATK or DEF actually changed as an internal target reference."],
   }),
   set_facedown_defense: action({
     category: "stats",
@@ -1031,6 +1034,7 @@ export const ACTION_CATALOG = {
       "uniqueKey",
       "bindEventTargetRef",
       "requireBoundTargetLeavesField",
+      "requireBoundTargetDestroyed",
     ],
     fields: {
       event: { type: "string" },
@@ -1055,6 +1059,7 @@ export const ACTION_CATALOG = {
       uniqueKey: { type: "string" },
       bindEventTargetRef: { type: "string" },
       requireBoundTargetLeavesField: { type: "boolean" },
+      requireBoundTargetDestroyed: { type: "boolean" },
     },
     mutates: ["temporaryEffects"],
     preview: "covered",
@@ -1080,6 +1085,7 @@ export const ACTION_CATALOG = {
     ],
     notes: [
       'Use duration: "duel" with unlimitedUses: true for effects that trigger repeatedly for the rest of the Duel.',
+      "With card_moved and bindEventTargetRef, requireBoundTargetDestroyed consumes the bound card's first field exit and triggers only for battle/effect destruction.",
     ],
   }),
   register_synchro_material_followup: action({

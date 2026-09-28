@@ -389,6 +389,7 @@ export interface SimulatedTemporaryEventEffect {
   sourceInstanceId: string | number | null;
   boundEventTargetInstanceId: string | number | null;
   requireBoundTargetLeavesField: boolean;
+  requireBoundTargetDestroyed?: boolean;
   duration: string;
   createdOnTurn: number;
   expiresOnTurn: number | null;

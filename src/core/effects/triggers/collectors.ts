@@ -205,10 +205,24 @@ function collectTemporaryEventTriggers(
       continue;
     }
     if (
-      tempEntry.requireBoundTargetLeavesField === true &&
+      (tempEntry.requireBoundTargetLeavesField === true ||
+        tempEntry.requireBoundTargetDestroyed === true) &&
       (payload?.fromZone !== "field" || payload?.toZone === "field")
     ) {
       continue;
+    }
+
+    // A destruction follow-up belongs to this field presence, not later summons.
+    // Consume on the first exit even if it was a bounce/banish rather than destruction.
+    if (tempEntry.requireBoundTargetDestroyed === true) {
+      tempEntry.usesRemaining = 0;
+      if (
+        !("wasDestroyed" in payload) || payload.wasDestroyed !== true ||
+        !("destroyCause" in payload) ||
+        (payload.destroyCause !== "battle" && payload.destroyCause !== "effect")
+      ) {
+        continue;
+      }
     }
 
     const owner = getPlayerById(game, tempEntry.ownerId);
@@ -245,8 +259,9 @@ function collectTemporaryEventTriggers(
     }
 
     const consumeOnMatch =
-      tempEntry.duration === "until_consumed" &&
-      tempEntry.boundEventTargetInstanceId != null;
+      tempEntry.requireBoundTargetDestroyed === true ||
+      (tempEntry.duration === "until_consumed" &&
+        tempEntry.boundEventTargetInstanceId != null);
     if (
       consumeOnMatch &&
       typeof tempEntry.usesRemaining === "number" &&

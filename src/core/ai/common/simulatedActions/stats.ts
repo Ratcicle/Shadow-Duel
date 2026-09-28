@@ -353,13 +353,16 @@ export function applyBuffStatsTemp(
   const recipients = action.targetScope
     ? getTargetScopeCards(action.targetScope as LegacyTargetScope, self, opponent)
     : targets;
+  const changedCards: SimulatedCardState[] = [];
   recipients.forEach((card) => {
     if (card.cardKind !== "monster") return;
+    let changed = false;
     for (const [stat, boost] of [["atk", atkBoost], ["def", defBoost]] as const) {
       const current = Number(card[stat] || 0);
       const next = Math.max(0, current + boost);
       const applied = next - current;
       if (!applied) continue;
+      changed = true;
       if (expiresOnTurn !== null) {
         card.turnBasedBuffs ??= [];
         const id = [action.sourceName || options.sourceCard?.name || action.type,
@@ -371,6 +374,7 @@ export function applyBuffStatsTemp(
       }
       card[stat] = next;
     }
+    if (changed) changedCards.push(card);
     if (
       (action as LegacyBuffStatsAction).grantSecondAttack === true ||
       (action as LegacyBuffStatsAction).type === "grant_second_attack" ||
@@ -384,6 +388,7 @@ export function applyBuffStatsTemp(
       }
     }
   });
+  if (action.storeAs && selections) selections[action.storeAs] = changedCards;
   return;
 }
 

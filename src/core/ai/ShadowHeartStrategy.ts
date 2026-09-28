@@ -279,7 +279,6 @@ function buildShadowHeartSpellActivationContext(card: StrategyCard, bot: AIStrat
           opponentLp: opponent?.lp || 0,
           atkReduction: 1000,
           defReduction: 0,
-          destroyIfAtkZeroedByThisEffect: true,
         },
       },
     },

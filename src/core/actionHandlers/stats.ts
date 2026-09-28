@@ -54,6 +54,7 @@ interface DurationAction {
 }
 
 interface BuffStatsActionView {
+  readonly storeAs?: string;
   readonly type:
     | "buff_stats_temp"
     | "reduce_self_atk"
@@ -690,6 +691,12 @@ export async function handleBuffStatsTemp(
   if (!player || !game) return false;
 
   const statsAction: BuffStatsActionView = action;
+  const changedCards: ActionRuntimeCard[] = [];
+  if (statsAction.storeAs) {
+    ctx._actionTargets ??= {};
+    ctx._actionTargets[statsAction.storeAs] = changedCards;
+    targets[statsAction.storeAs] = changedCards;
+  }
 
   let atkBoost = statsAction.atkBoost || 0;
   if (statsAction.atkBoostFromContext) {
@@ -827,10 +834,7 @@ export async function handleBuffStatsTemp(
         defaultRef: "self",
         game,
       });
-  if (
-    statsAction.targetScope &&
-    typeof engine.filterCardsListByImmunity === "function"
-  ) {
+  if (typeof engine.filterCardsListByImmunity === "function") {
     targetCards = engine.filterCardsListByImmunity(targetCards, ctx.player, {
       actionType: action.type,
       effectType:
@@ -888,6 +892,7 @@ export async function handleBuffStatsTemp(
     }
 
     if (cardBuffed) {
+      changedCards.push(card);
       if (isDamageCalculationBuff) {
         game.damageCalculationTempBuffs = Array.isArray(
           game.damageCalculationTempBuffs,

@@ -377,15 +377,15 @@ export const CARD_KNOWLEDGE: Record<string, CardKnowledge> = {
     value: 5,
   },
   "Shadow-Heart Purge": {
-    role: "conditional_removal",
+    role: "combat_debuff",
     priority: 6,
     playCondition: "discard_shadowheart_and_faceup_opponent_monster",
     effect:
-      "Descarta 1 Shadow-Heart; o alvo perde 1000 ATK ate o fim do turno e e destruido se este efeito zerar o ATK",
+      "Descarta 1 Shadow-Heart; o alvo perde 1000 ATK permanentemente. Se o monstro enfraquecido for destruido neste turno, os monstros do oponente perdem 1000 ATK permanentemente",
     synergies: ["discard", "debuffs", "battle setup"],
     playPatterns: [
-      "Destruir monstros pequenos que tenham ate 1000 ATK",
-      "Combinar com outros debuffs para zerar monstros maiores",
+      "Enfraquecer o alvo para abrir uma troca favoravel em combate",
+      "Destruir o alvo enfraquecido no mesmo turno para reduzir o ATK dos demais monstros",
       "Usar antes da Battle Phase quando o debuff abre troca ou dano relevante",
     ],
     value: 5,

@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import Card from "../src/core/Card.js";
-import { cardDefinition, required, unsafeFixture } from "./helpers/fixtures.js";
+import { cardDefinition, required, selectedCards, unsafeFixture } from "./helpers/fixtures.js";
 import { createRuntimeGame } from "./helpers/game.js";
 
 for (const { laboratoryMode, actorId, activateEffect } of [
@@ -39,6 +39,7 @@ for (const { laboratoryMode, actorId, activateEffect } of [
       game.ui.showSummonModal = (_index, callback) => { callbacks.summon = callback; };
       let confirmations = 0;
       let targetSelections = 0;
+      const selectionDuringResolution: boolean[] = [];
       game.ui.showConfirmPrompt = async () => {
         confirmations++;
         assert.equal(game.pendingTributeSummonSelection, null);
@@ -46,6 +47,7 @@ for (const { laboratoryMode, actorId, activateEffect } of [
       };
       game.ui.showFieldTargetingControls = () => {
         targetSelections++;
+        selectionDuringResolution.push(game.chainSystem.isResolving);
         // Supply the human choice through the real selection session.
         queueMicrotask(() => {
           const selection = required(game.targetSelection);
@@ -89,9 +91,67 @@ for (const { laboratoryMode, actorId, activateEffect } of [
       if (!useHeartbearer) await required(callbacks.field)(event, element, 1);
       assert.equal(confirmations, 1);
       assert.equal(targetSelections, activateEffect ? 1 : 0);
+      assert.deepEqual(selectionDuringResolution, activateEffect ? [false] : []);
       assert.ok(actor.field.includes(arctroth));
       assert.ok(activateEffect ? opponent.graveyard.includes(target) : opponent.field.includes(target));
       assert.equal(game.pendingTributeSummonSelection, null);
+    });
+  }
+}
+
+for (const zone of ["field", "spellTrap", "fieldSpell"] as const) {
+  for (const response of ["pass", "move_target", "negate"] as const) {
+    test(`Arctroth declares its ${zone} target before responses (${response})`, async t => {
+      const game = createRuntimeGame({ laboratoryMode: true, captureReplay: false });
+      t.after(() => game.dispose());
+      game.turn = game.player.id;
+      game.turnCounter = 2;
+      game.phase = "main1";
+      game.disablePresentationDelays = true;
+      game.player.controllerType = game.bot.controllerType = "human";
+      game.ui.showConfirmPrompt = async () => true;
+      game.ui.showChainResponseModal = async () => null;
+      const arctroth = new Card(cardDefinition("Shadow-Heart Demon Arctroth"), game.player.id);
+      game.player.hand.push(arctroth);
+      placeFieldCards(game.player.field, new Card(cardDefinition("Shadow-Heart Heartbearer"), game.player.id));
+      const target = new Card(zone === "field"
+        ? { id: 99401, name: "Declared destruction target", cardKind: "monster", atk: 1000, def: 1000 }
+        : { id: 99402, name: "Declared destruction target", cardKind: "spell", subtype: zone === "fieldSpell" ? "field" : "normal" }, game.bot.id);
+      target.isFacedown = zone !== "fieldSpell";
+      if (zone === "fieldSpell") game.bot.fieldSpell = target;
+      else placeFieldCards(game.bot[zone], target);
+      let selections = 0;
+      game.ui.showFieldTargetingControls = () => {
+        selections++;
+        queueMicrotask(() => {
+          const selection = required(game.targetSelection);
+          const requirement = required(selection.requirements[0]);
+          selection.selections[requirement.id] = [required(requirement.candidates[0]).key];
+          void game.finishTargetSelection();
+        });
+        return { close() {}, updateState() {} };
+      };
+      let declaredBeforeResponses = false;
+      const alternate = new Card({ id: 99403, name: "Do not retarget", cardKind: "monster", atk: 500, def: 500 }, game.bot.id);
+      game.chainSystem.offerChainResponses = async () => {
+        const link = game.chainSystem.getLastChainLink();
+        if (link?.effectId === "shadow_heart_arctroth_on_summon") {
+          declaredBeforeResponses = selectedCards(link.targetSelections, "arctroth_destroy_target")?.[0] === target;
+          if (response === "move_target") {
+            await game.moveCard(target, game.bot, "hand", { fromZone: zone, awaitEvents: true });
+            placeFieldCards(game.bot.field, alternate);
+          } else if (response === "negate") {
+            game.chainSystem.markChainLinkEffectNegated(link.linkId);
+          }
+        }
+        return { lastActivator: null, chainBuilt: false, consecutivePasses: 2, offers: 1, activations: 0 };
+      };
+      await game.performNormalSummon(game.player, 0, "attack", false, [0]);
+      assert.equal(declaredBeforeResponses, true);
+      assert.equal(selections, 1);
+      assert.equal(game.bot.graveyard.includes(target), response === "pass");
+      assert.equal(game.bot.graveyard.includes(alternate), false);
+      if (response === "move_target") assert.ok(game.bot.hand.includes(target));
     });
   }
 }

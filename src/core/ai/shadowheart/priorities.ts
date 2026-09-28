@@ -1264,12 +1264,11 @@ export function evaluateShadowHeartOffensivePlan(analysis: Analysis) {
     hand.some((card) => card.name === "Shadow-Heart Purge") &&
     attackers.length > 0 &&
     oppField.some((target) => {
-      if (!target || target.cardKind !== "monster" || target.isFacedown) {
+      if (!target || target.cardKind !== "monster" || target.isFacedown || target.position === "defense") {
         return false;
       }
       const currentAtk = target.atk || 0;
       const debuffedAtk = Math.max(0, currentAtk - 1000);
-      if (currentAtk > 0 && currentAtk <= 1000) return true;
       return attackers.some((attacker) => {
         const atk = attacker.atk || 0;
         const before = atk > currentAtk ? atk - currentAtk : 0;
@@ -1924,7 +1923,7 @@ export function shouldPlaySpell(card: StrategyCard, analysis: FullAnalysis) {
     };
   }
 
-  // Shadow-Heart Purge - conditional debuff/removal
+  // Shadow-Heart Purge - permanent debuff with a destruction-dependent follow-up.
   if (name === "Shadow-Heart Purge") {
     const shadowHeartCardsInHand = analysis.hand.filter(
       (c) => isShadowHeart(c) || isShadowHeartByName(c.name),
@@ -1942,23 +1941,10 @@ export function shouldPlaySpell(card: StrategyCard, analysis: FullAnalysis) {
       return { yes: false, reason: "Oponente sem monstros face-up" };
     }
 
-    const zeroableTarget = faceUpOpponents
-      .filter((c) => (c.atk || 0) > 0 && (c.atk || 0) <= 1000)
-      .sort((a, b) => (b.atk || 0) - (a.atk || 0))[0];
-
-    if (zeroableTarget) {
-      const targetATK = zeroableTarget.atk || 0;
-      return {
-        yes: true,
-        priority: targetATK >= 800 ? 7 : 5,
-        reason: `Purge zera e destroi ${zeroableTarget.name || "alvo"} (${targetATK} ATK)`,
-      };
-    }
-
     if (analysis.phase === "main2") {
       return {
         yes: false,
-        reason: "Main2: debuff temporario sem remocao seria desperdicado",
+        reason: "Main2: preservar Purge para aproveitar o debuff e a possivel destruicao em combate",
       };
     }
 
@@ -2021,7 +2007,7 @@ export function shouldPlaySpell(card: StrategyCard, analysis: FullAnalysis) {
 
     return {
       yes: false,
-      reason: "Nenhum alvo gera remocao ou ganho real de combate",
+      reason: "Nenhum alvo gera ganho real de combate neste turno",
     };
   }
 

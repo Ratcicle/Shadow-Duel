@@ -931,6 +931,15 @@ function getMatchingSimulatedTemporaryEventEffects(
     ) {
       return false;
     }
+    if (entry.requireBoundTargetDestroyed === true) {
+      if (payload.fromZone !== "field" || payload.toZone === "field") return false;
+      // Any first field exit ends the binding, including a bounce or banish.
+      entry.usesRemaining = 0;
+      if (
+        payload.wasDestroyed !== true ||
+        (payload.destroyCause !== "battle" && payload.destroyCause !== "effect")
+      ) return false;
+    }
       return true;
     },
   );
@@ -1395,8 +1404,9 @@ function dispatchSimulatedEvent(
     }
 
     const consumeOnMatch =
-      entry.duration === "until_consumed" &&
-      entry.boundEventTargetInstanceId != null;
+      entry.requireBoundTargetDestroyed === true ||
+      (entry.duration === "until_consumed" &&
+        entry.boundEventTargetInstanceId != null);
     if (consumeOnMatch && Number.isFinite(entry.usesRemaining)) {
       entry.usesRemaining = 0;
     }

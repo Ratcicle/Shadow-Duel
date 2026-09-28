@@ -18,7 +18,7 @@ export interface StatsActionMap {
     | "targetRef" | "atkBoost" | "defBoost" | "targetScope"
     | "atkBoostFromContext" | "atkBoostFromTarget" | "defBoostFromContext"
     | "duration" | "durationTurns" | "expiresOnTurn" | "permanent"
-    | "sourceName" | "allowEmpty"
+    | "sourceName" | "allowEmpty" | "storeAs"
   >;
   set_facedown_defense: DefineAction<
     "set_facedown_defense",

@@ -12,7 +12,7 @@ export const shadowHeartCards = [
     attribute: "Water",
     archetype: "Shadow-Heart",
     description:
-      'If this card is attacked while in Defense Position: inflict 600 damage to your opponent. If this card is destroyed by battle: You can add 1 "Shadow-Heart" Spell/Trap from your Graveyard to your hand.',
+      'If this card is attacked while in Defense Position: inflict 600 damage to your opponent.\n\nIf this card is destroyed by battle: You can target 1 "Shadow-Heart" Spell/Trap in your Graveyard; add it to your hand.',
     image: "assets/Shadow-Heart Abyssal Eel.png",
     effects: [
       {
@@ -70,7 +70,7 @@ export const shadowHeartCards = [
     attribute: "Dark",
     archetype: "Shadow-Heart",
     description:
-      'If this card is sent to the Graveyard: You can target 1 "Shadow-Heart" monster in your Graveyard, except "Shadow-Heart Specter"; add it to your hand. You can only use this effect of "Shadow-Heart Specter" once per turn.',
+      'If this card is sent to the Graveyard: You can target 1 "Shadow-Heart" monster in your Graveyard, except "Shadow-Heart Specter"; add it to your hand.\n\nYou can only use this effect of "Shadow-Heart Specter" once per turn.',
     image: "assets/Shadow-Heart Specter.png",
     effects: [
       {
@@ -113,7 +113,7 @@ export const shadowHeartCards = [
     subtype: "normal",
     archetype: "Shadow-Heart",
     description:
-      'Discard 1 "Shadow-Heart" card, then target 1 face-up monster your opponent controls; it loses 1000 ATK until the end of this turn. If that monster\'s ATK becomes 0 by this effect, destroy it. You can only activate 1 "Shadow-Heart Purge" per turn.',
+      'Discard 1 "Shadow-Heart" card, then target 1 face-up monster your opponent controls; it loses 1000 ATK.\n\nIf a monster whose ATK was reduced by this effect is destroyed this turn: all monsters your opponent controls lose 1000 ATK.\n\nYou can only activate 1 "Shadow-Heart Purge" per turn.',
     image: "assets/Shadow-Heart Purge.png",
     effects: [
       {
@@ -127,6 +127,7 @@ export const shadowHeartCards = [
         targets: [
           {
             id: "purge_discard",
+            intent: "cost",
             owner: "self",
             zone: "hand",
             archetype: "Shadow-Heart",
@@ -141,18 +142,42 @@ export const shadowHeartCards = [
             count: { min: 1, max: 1 },
           },
         ],
-        actions: [
+        activationCosts: [
           {
             type: "move",
             targetRef: "purge_discard",
             player: "self",
+            fromZone: "hand",
             to: "graveyard",
+            contextLabel: "discard_cost",
+          },
+        ],
+        actions: [
+          {
+            type: "buff_stats_temp",
+            targetRef: "purge_target_monster",
+            atkBoost: -1000,
+            permanent: true,
+            storeAs: "purge_reduced_monsters",
           },
           {
-            type: "modify_stats_temp_then_destroy_if_zeroed",
-            targetRef: "purge_target_monster",
-            atkChange: -1000,
-            destroyIfAtkZeroedByThisEffect: true,
+            type: "register_temporary_event_effect",
+            event: "card_moved",
+            triggerRequirement: "mandatory",
+            triggerTiming: "if",
+            duration: "end_of_turn",
+            uses: 1,
+            bindEventTargetRef: "purge_reduced_monsters",
+            requireBoundTargetLeavesField: true,
+            requireBoundTargetDestroyed: true,
+            actions: [
+              {
+                type: "buff_stats_temp",
+                targetScope: { owner: "opponent", filters: { cardKind: "monster" }, requireFaceup: true },
+                atkBoost: -1000,
+                permanent: true,
+              },
+            ],
           },
         ],
       },
@@ -181,12 +206,18 @@ export const shadowHeartCards = [
         summonMethods: ["tribute"],
         requireSelfAsSummoned: true,
         promptUser: true,
+        targets: [
+          {
+            id: "arctroth_destroy_target",
+            owner: "opponent",
+            zones: ["field", "spellTrap", "fieldSpell"],
+            count: { min: 1, max: 1 },
+          },
+        ],
         actions: [
           {
             type: "destroy_targeted_cards",
-            zones: ["field", "spellTrap", "fieldSpell"],
-            minTargets: 1,
-            maxTargets: 1,
+            targetRef: "arctroth_destroy_target",
           },
         ],
       },
