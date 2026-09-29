@@ -6,8 +6,75 @@ import type { AiLiveGamePort } from "../../src/core/contracts/aiState.js";
 import type { BotGamePort } from "../../src/core/contracts/bot.js";
 import type { BotCloneGamePort } from "../../src/core/bot/simulationBridge.js";
 import type { ActivationRuntimeContext } from "../../src/core/effects/activation/runtime.js";
-import { cardDefinition, required, unsafeFixture } from "../helpers/fixtures.js";
+import { cardDefinition, chainSelections, required, unsafeFixture } from "../helpers/fixtures.js";
 import { createRuntimeGame, placeFieldCards, runtimeCard } from "../helpers/game.js";
+
+for (const [id, effectId, targetRef, baseAtk, boostedAtk] of [
+  [29, "cursed_rock_behemoth_gain_original_def", "cursed_rock_behemoth_atk_target", 2300, 3300],
+  [30, "red_fury_horror_banish_and_gain", "red_fury_horror_graveyard_target", 2700, 3000],
+] as const) {
+  for (const sourceState of ["unchanged", "graveyard", "returned", "facedown"] as const) {
+    test(`self stat gain only affects the original face-up field presence (${id}, ${sourceState})`, async t => {
+      const game = createRuntimeGame({ laboratoryMode: true, captureReplay: false });
+      t.after(() => game.dispose());
+      game.player.controllerType = game.bot.controllerType = "ai";
+      game.turn = game.player.id;
+      game.phase = "main1";
+      game.turnCounter = 2;
+      game.disablePresentationDelays = true;
+      const source = new Card(cardDefinition(id), game.player.id);
+      const target = runtimeCard({ cardKind: "monster", atk: 1000, def: 1000 }, game.bot.id);
+      placeFieldCards(game.player.field, source);
+      if (id === 29) placeFieldCards(game.bot.field, target);
+      else game.bot.graveyard.push(target);
+      const effect = required(source.effects.find(entry => entry.id === effectId));
+      const link = required(game.chainSystem.addToChain(game.chainSystem.createPreparedActivation({
+        card: source,
+        controller: game.player,
+        effect,
+        activationZone: "field",
+        committed: true,
+        costsPaid: true,
+        targetSelections: chainSelections({ [targetRef]: [target] }),
+      })));
+      assert.ok(link);
+      if (sourceState === "graveyard" || sourceState === "returned") {
+        await game.moveCard(source, game.player, "graveyard", { fromZone: "field", awaitEvents: true });
+        if (sourceState === "returned") {
+          const returned = await game.moveCard(source, game.player, "field", {
+            fromZone: "graveyard", position: "attack", summonMethodOverride: "special", summonOrigin: "effect_resolution",
+          });
+          assert.equal(returned.success, true, returned.reason || undefined);
+          assert.ok(game.player.field.includes(source));
+          assert.notEqual(source.locationVersion, required(link.sourceAtActivation).locationVersion);
+        }
+      } else if (sourceState === "facedown") {
+        await game.effectEngine.applyActions(
+          [{ type: "set_facedown_defense", targetRef: "target" }],
+          { source: target, player: game.bot, opponent: game.player },
+          { target: [source] },
+        );
+        assert.equal(source.isFacedown, true);
+      }
+
+      await game.chainSystem.resolveChain();
+
+      if (id === 30 && sourceState !== "facedown") {
+        assert.ok(game.bot.banished.includes(target), "source movement must not cancel the independent banishment");
+      }
+      assert.equal(source.atk, sourceState === "unchanged" ? boostedAtk : baseAtk);
+      if (sourceState === "graveyard") {
+        game.cleanupTempBoosts(game.player);
+        game.turnCounter++;
+        await game.moveCard(source, game.player, "field", {
+          fromZone: "graveyard", position: "attack", summonMethodOverride: "special", summonOrigin: "effect_resolution",
+        });
+        assert.ok(game.player.field.includes(source));
+        assert.equal(source.atk, baseAtk, "a later summon must not inherit a buff resolved in the graveyard");
+      }
+    });
+  }
+}
 
 function scenario(t: TestContext, actor: "player" | "bot") {
   const first = new Bot("techzero"); first.id = "player";

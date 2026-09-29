@@ -30,6 +30,22 @@ import {
 
 type StatName = "atk" | "def";
 
+/** A field effect cannot modify its source's stats after that presence ends. */
+function isStatTargetStillValid(
+  card: ActionRuntimeCard,
+  ctx: EffectContext,
+  game: ActionRuntimeGamePort,
+): boolean {
+  if (card !== ctx.source) return true;
+  const snapshot = ctx.activationContext?.sourceAtActivation;
+  if (snapshot?.zone !== "field" && ctx.activationZone !== "field") return true;
+  return (
+    card.isFacedown !== true &&
+    [game.player, game.bot].some(owner => owner?.field.includes(card)) &&
+    (!snapshot || Number(card.locationVersion ?? 0) === snapshot.locationVersion)
+  );
+}
+
 interface CardFeedbackOptions {
   sourceCard?: (ActionRuntimeCard | null) | undefined;
   ownerId?: string | null;
@@ -866,6 +882,7 @@ export async function handleBuffStatsTemp(
 
   for (const card of targetCards) {
     if (!card || card.cardKind !== "monster") continue;
+    if (!isStatTargetStillValid(card, ctx, game)) continue;
 
     let cardBuffed = false;
 
@@ -2586,6 +2603,7 @@ export async function handlePermanentBuffNamed(
 
   for (const card of targetCards) {
     if (!card || card.cardKind !== "monster") continue;
+    if (!isStatTargetStillValid(card, ctx, game)) continue;
 
     // Check archetype filter again for summoned card scenario
 

@@ -29,6 +29,7 @@ import { validateHandIgnitionCandidate } from "./common/actionValidation.js";
 import {
   applyMacroAndSafety,
   buildPrioritizedAction,
+  getGenericGraveyardSpellTrapActions,
 } from "./common/actionGeneration.js";
 import { buildStrategyAnalysis } from "./common/analysis.js";
 import { getGenericSetBackrowActions } from "./common/backrowPlanning.js";
@@ -1191,6 +1192,8 @@ export default class ShadowHeartStrategy extends BaseStrategy {
         effectId: ignitionEffect.id,
       });
     });
+
+    actions.push(...getGenericGraveyardSpellTrapActions(game, bot));
 
     // === STALEMATE BREAKER ===
     // Se não há ações e há capacidade de campo, forçar summon mesmo que já tenha invocado

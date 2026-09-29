@@ -44,8 +44,9 @@ de outros domínios não são alteradas.
 `public/` é copiado para `dist/` pelo Vite. Mantenha `public/assets/` reservado
 às artes, inclusive às de cartas futuras. Auditorias escrevem no terminal;
 o smoke dos bots só grava arquivo quando recebe `--out`. Para saídas locais,
-use uma pasta ignorada, como `.cache/`, nunca `public/`. O catálogo gerado de
-actions pertence a `docs/`.
+use uma pasta ignorada, como `.cache/`, nunca `public/`. Mantenha somente Markdown
+em `docs/`, incluindo o catálogo gerado de actions; JSON, logs e demais artefatos
+de execução ficam fora dessa pasta.
 
 ---
 
@@ -58,7 +59,6 @@ Shadow-Duel/
 ├── .github/                    # Workflows e configuração do GitHub
 ├── .gitignore                  # Ignora dependências, logs e artefatos locais
 ├── AGENTS.md                   # Instruções para agentes de IA
-├── DuelLog.log                 # Log de duelos gerado em runtime
 ├── README.md                   # Manual do jogador
 ├── dist/                       # Build gerado pelo Vite
 ├── docs/                       # Documentação técnica e catálogos de arquétipo
@@ -73,6 +73,10 @@ Shadow-Duel/
 ├── src/                        # Código-fonte da aplicação
 ├── test/                       # Testes automatizados
 ├── style.css                   # Estilos globais
+├── tsconfig.json               # Configuração padrão que estende o projeto app
+├── tsconfig.base.json          # Opções strict compartilhadas
+├── tsconfig.app.json           # Typecheck do código da aplicação
+├── tsconfig.node.json          # Typecheck dos scripts, testes e Vite
 └── vite.config.ts              # Base e opções de build/development server
 ```
 
@@ -143,6 +147,12 @@ Traduções visíveis no jogo. Hoje há [pt-br.json](../public/locales/pt-br.jso
 | [contracts/gameRuntime.ts](../src/core/contracts/gameRuntime.ts) | Estado runtime, hosts mínimos por domínio, transações, resultados e overloads de movimento. |
 | [contracts/aiState.ts](../src/core/contracts/aiState.ts) | Estados vivo, público, de replay, perspectiva e simulação, além dos quatro perfis explícitos de clone. |
 | [contracts/ai.ts](../src/core/contracts/ai.ts) | `AIActionByType`, contratos de estratégia, buscas, scoring e planejamento. |
+| [contracts/aiPlanning.ts](../src/core/contracts/aiPlanning.ts) | Modelos e estratégias de planejamento vinculados ao snapshot simulado de cada participante. |
+| [contracts/effects.ts](../src/core/contracts/effects.ts) | Schema declarativo fechado de effects, targets, conditions, filtros e passivas. |
+| [contracts/decisions.ts](../src/core/contracts/decisions.ts) | Decisões compartilhadas por humano, IA e replay, incluindo respostas de Chain e posição de campo. |
+| [contracts/placement.ts](../src/core/contracts/placement.ts) | Slots, pedidos, resultados e intenções de colocação de cartas no campo. |
+| [contracts/replay.ts](../src/core/contracts/replay.ts) | Schema 2 do replay canônico, comandos, decisões, eventos e snapshots serializáveis. |
+| [contracts/ui.ts](../src/core/contracts/ui.ts) | Superfície pública `GameUI`, satisfeita pelo Renderer e pelos adapters. |
 | [contracts/bot.ts](../src/core/contracts/bot.ts) | Contratos da camada operacional do Bot. |
 | [contracts/arena.ts](../src/core/contracts/arena.ts) | Contratos de presets, execução e analytics da Arena. |
 | [contracts/chain.ts](../src/core/contracts/chain.ts) | Constantes e unions fechadas fundamentais de Chain, Fast Effect, SEGOC e uso. |
@@ -154,6 +164,7 @@ Traduções visíveis no jogo. Hoje há [pt-br.json](../public/locales/pt-br.jso
 | [AutoSelector.ts](../src/core/AutoSelector.ts) | Resolve contratos de seleção para IA/bot. Não deve substituir decisões humanas. |
 | [UIAdapter.ts](../src/core/UIAdapter.ts) | Ponte entre `Game` e `Renderer` para prompts e atualização visual. |
 | [i18n.ts](../src/core/i18n.ts) | Carregamento de locale e helpers como `getCardDisplayName` e `getCardDisplayDescription`. |
+| [publicUrl.ts](../src/core/publicUrl.ts) | Resolução de URLs de assets e locales pela base pública do Vite. |
 
 ### `src/core/bot/`
 
@@ -166,6 +177,8 @@ Camada operacional do bot, separada da estratégia. Ela valida ações, executa 
 | [actionValidation.ts](../src/core/bot/actionValidation.ts) | Valida se uma ação planejada ainda é legal no estado atual. |
 | [actionExecutor.ts](../src/core/bot/actionExecutor.ts) | Executa ações escolhidas pela IA. |
 | [mainPhaseController.ts](../src/core/bot/mainPhaseController.ts) | Sequência de ações da Main Phase. |
+| [mainPhaseSession.ts](../src/core/bot/mainPhaseSession.ts) | Sessão de execução por jogador, duelo, turno e fase, com limites, recuperação e finalização. |
+| [mainPhaseIdentity.ts](../src/core/bot/mainPhaseIdentity.ts) | Identidade de estados e ações para detectar progresso e evitar repetir tentativas sem mudança de estado. |
 | [battleController.ts](../src/core/bot/battleController.ts) | Decisões e execução de batalha. |
 | [ascensionController.ts](../src/core/bot/ascensionController.ts) | Coordenação de Invocação-Ascensão para IA. |
 | [simulationBridge.ts](../src/core/bot/simulationBridge.ts) | Ponte tipada entre estado real e o perfil de perspectiva do Bot; consumidores preservam o specifier `.js`. |
@@ -183,6 +196,7 @@ deve existir em `ActionByType`, `ACTION_BINDINGS`, catálogo e registry.
 | [actionBindings.ts](../src/core/actionHandlers/actionBindings.ts) | Manifest exato que liga `ActionByType` aos handlers e proxies. |
 | [wiring.ts](../src/core/actionHandlers/wiring.ts) | Aplica o manifest ao registry na ordem canônica. |
 | [actionCatalog.ts](../src/core/actionHandlers/actionCatalog.ts) | Schema central validado por scripts e pelo database validator. |
+| [actionWalker.ts](../src/core/actionHandlers/actionWalker.ts) | Percurso compartilhado de actions aninhadas, custos, compromisso e resolução, com referências e diagnósticos. |
 | [blueprints.ts](../src/core/actionHandlers/blueprints.ts) | Handlers ligados a blueprints e efeitos armazenados. |
 | [choice.ts](../src/core/actionHandlers/choice.ts) | Escolhas declarativas de efeito. |
 | [conditional.ts](../src/core/actionHandlers/conditional.ts) | Condições e ações condicionais. |
@@ -207,7 +221,8 @@ físicos TypeScript, importados por specifiers `.js`. Os quatro perfis de clone
 
 | Arquivo | Responsabilidade |
 |---|---|
-| [StrategyRegistry.ts](../src/core/ai/StrategyRegistry.ts) | Registra `shadowheart`, `luminarch`, `void`, `dragon`, `arcanist`, `miragebound`, `bloomrot` e `burningwest`. |
+| [StrategyRegistry.ts](../src/core/ai/StrategyRegistry.ts) | Registra `shadowheart`, `luminarch`, `void`, `dragon`, `arcanist`, `miragebound`, `bloomrot`, `burningwest` e `techzero`. |
+| [PlanningStrategies.ts](../src/core/ai/PlanningStrategies.ts) | Cria modelos de planejamento por participante a partir do registry e uma política genérica para participantes sem modelo registrado. |
 | [BaseStrategy.ts](../src/core/ai/BaseStrategy.ts) | Classe-base com avaliação genérica de board e helpers comuns. |
 | [StrategyUtils.ts](../src/core/ai/StrategyUtils.ts) | Utilitários tipados de valor, arquétipo, filtros e scoring. |
 | [BeamSearch.ts](../src/core/ai/BeamSearch.ts) | Busca em feixe e avaliação de linhas, incluindo o perfil Beam/Greedy de clone. |
@@ -262,13 +277,16 @@ Camada compartilhada entre estratégias. Os módulos físicos abaixo já são
 TypeScript; imports relativos continuam usando `.js`:
 
 - Geração e execução planejada: `actionGeneration.ts`, `actionSequencing.ts`, `actionValidation.ts`, `effectDiscovery.ts`.
+- Contexto de execução e políticas por dono: `planningExecution.ts`, `planningOwner.ts`.
 - Análise e perspectiva: `analysis.ts`, `perspective.ts`, `planningDiagnostics.ts`.
+- Cópia e identidade do estado de planejamento: `planningCopy.ts`, `gameTreeSimulation.ts`, `stateFingerprint.ts`.
 - Filtros e stats: `cardFilters.ts`, `cardStats.ts`, `cardValue.ts`, `zones.ts`.
 - Combos e counters: `comboDetection.ts`, `counters.ts`.
 - Planejamento: `ascensionPlanning.ts`, `backrowPlanning.ts`, `finisherPlans.ts`, `fusionPlanning.ts`, `summonAssessment.ts`.
+- Legalidade e oportunidade por fase: `phaseTiming.ts`.
 - Recursos e preferências: `resourceEconomy.ts`, `resourcePolicy.ts`, `preferencePolicy.ts`, `tributePolicy.ts`.
 - Targeting e simulação: `targetAvailability.ts`, `targetSelection.ts`, `simulation.ts`, `simStateUtils.ts`, `simulatedConditions.ts`, `previewGuards.ts`.
-- Simuladores declarativos: [simulatedActions/](../src/core/ai/common/simulatedActions/) contém dez módulos físicos `.ts`, ligados aos contratos de actions das cartas.
+- Simuladores declarativos: [simulatedActions/](../src/core/ai/common/simulatedActions/) contém 12 arquivos `.ts`: `combat`, `counters`, `destruction`, `equip`, `flow`, `index`, `lifecycle`, `movement`, `resources`, `shared`, `stats` e `summon`.
 
 ---
 
@@ -346,7 +364,7 @@ preservar a resolução ESM e o output runtime:
 | [actions/](../src/core/game/actions/) | `guard.ts` - validação antes de iniciar ações. |
 | [analytics/](../src/core/game/analytics/) | `strategicReport.ts` - ciclo de vida do Strategic Report. |
 | [combat/](../src/core/game/combat/) | `availability.ts`, `damage.ts`, `damageStep.ts`, `indicators.ts`, `resolution.ts` e `targeting.ts`; inclui a transação canônica das cinco subetapas do Damage Step. |
-| [decisions/](../src/core/game/decisions/) | `broker.ts` - `DecisionBroker` compartilhado por humano, IA e replay. |
+| [decisions/](../src/core/game/decisions/) | `broker.ts` - `DecisionBroker` compartilhado por humano, IA e replay; `chainResponse.ts` valida e serializa planos de decisões de respostas de Chain. |
 | [deck/](../src/core/game/deck/) | `banlist.ts` e `draw.ts` - validação de lista, compras e deck-out. |
 | [devTools/](../src/core/game/devTools/) | `commands.ts`, `setup.ts` - comandos e setups de teste. |
 | [effects/](../src/core/game/effects/) | `activationPipeline.ts`, `activationRestrictions.ts`, `destructionReplacement.ts` e `usage.ts`. |
@@ -358,14 +376,14 @@ preservar a resolução ESM e o output runtime:
 | [selection/](../src/core/game/selection/) | `contract.ts`, `handlers.ts`, `highlighting.ts`, `session.ts`. |
 | [spellTrap/](../src/core/game/spellTrap/) | `activation.ts`, `finalization.ts`, `index.ts`, `quickSpellRules.ts`, `set.ts`, `triggers.ts`, `verification.ts`. |
 | [state/](../src/core/game/state/) | `duelReset.ts`, `serialization.ts`. |
-| [summon/](../src/core/game/summon/) | `ascension.ts`, `eligibility.ts`, `execution.ts`, `materialStats.ts`, `position.ts`, `synchro.ts`, `tracking.ts`, `transaction.ts` e `tributeValue.ts`. |
+| [summon/](../src/core/game/summon/) | `ascension.ts`, `eligibility.ts`, `execution.ts`, `handProcedure.ts`, `materialStats.ts`, `position.ts`, `synchro.ts`, `tracking.ts`, `transaction.ts` e `tributeValue.ts`; `handProcedure.ts` valida e executa procedimentos declarativos de Invocação da mão. |
 | [turn/](../src/core/game/turn/) | `cleanup.ts`, `lifecycle.ts`, `oncePerTurn.ts`, `phaseRules.ts`, `scheduling.ts`, `transitions.ts`. |
 | [ui/](../src/core/game/ui/) | `board.ts`, `cardAnimations.ts`, `index.ts`, `indicators.ts`, `interactions.ts`, `modals.ts`, `prompts.ts`, `winCondition.ts`. |
-| [zones/](../src/core/game/zones/) | `control.ts`, `destruction.ts`, `invariants.ts`, `movement.ts`, `operations.ts`, `ownership.ts`, `snapshot.ts`. |
+| [zones/](../src/core/game/zones/) | `control.ts`, `destruction.ts`, `invariants.ts`, `movement.ts`, `operations.ts`, `ownership.ts`, `placement.ts`, `snapshot.ts`; `placement.ts` mantém slots e prepara decisões de colocação pelo broker. |
 
 Na raiz de `src/core/game/`, `random.ts` fornece o RNG determinístico e
-`attachments.ts` mantém o manifest canônico dos 219 métodos em 60 grupos.
-O preflight valida o manifest antes de qualquer escrita no prototype, e os 13
+`attachments.ts` mantém o manifest canônico dos 222 métodos em 61 grupos.
+O preflight valida o manifest antes de qualquer escrita no prototype, e os 14
 wrappers de captura de replay são instalados separadamente por
 `replay/capture.ts`, depois dos attachments.
 
@@ -383,6 +401,9 @@ Controllers da tela inicial e fluxos fora do duelo:
 | [deckState.ts](../src/ui/main/deckState.ts) | Estado, persistência e validação do formato atual do deck builder, compartilhado com o deck customizado da Arena. |
 | [validationPanel.ts](../src/ui/main/validationPanel.ts) | Renderização dos erros do database validator. |
 | [deckBuilderController.ts](../src/ui/main/deckBuilderController.ts) | UI de deck builder, filtros, slots, preview e presets. |
+| [deckBuilderMotion.ts](../src/ui/main/deckBuilderMotion.ts) | Animações de adição e remoção de cartas no deck builder. |
+| [previewPanelLayout.ts](../src/ui/main/previewPanelLayout.ts) e [previewPanelGeometry.ts](../src/ui/main/previewPanelGeometry.ts) | Painel de preview acoplado ou flutuante, arraste, redimensionamento, limites da viewport e persistência do layout. |
+| [placementPreference.ts](../src/ui/main/placementPreference.ts) | Preferência de colocação automática/manual em `shadow_duel_card_placement`, aplicada aos duelos pelo launcher. |
 | [laboratoryController.ts](../src/ui/main/laboratoryController.ts) | UI do Laboratório, import/export e setup manual. |
 | [botArenaController.ts](../src/ui/main/botArenaController.ts) | UI da Bot Arena, velocidade, logs e relatórios. |
 | [gameLauncher.ts](../src/ui/main/gameLauncher.ts) | Cria `Game` e `Renderer` para duelo comum ou laboratório. |
@@ -391,12 +412,16 @@ Controllers da tela inicial e fluxos fora do duelo:
 ### `src/ui/Renderer.ts`
 
 Fachada de renderização. Constrói o renderer e delega métodos para [src/ui/renderer/](../src/ui/renderer/).
+O manifest `renderer/attachments.ts` instala as referências no prototype; a
+fachada expõe esses métodos por declaration merging, sem emitir class fields.
 
 ### `src/ui/renderer/`
 
 | Arquivo | Responsabilidade |
 |---|---|
 | [index.ts](../src/ui/renderer/index.ts) | Barrel. |
+| [attachments.ts](../src/ui/renderer/attachments.ts) | Manifest e instalação dos métodos anexados ao Renderer. |
+| [types.ts](../src/ui/renderer/types.ts) | Projeções de cartas, estado de LP, elementos DOM e contratos internos de apresentação. |
 | [bindings.ts](../src/ui/renderer/bindings.ts) | Event listeners DOM. |
 | [board.ts](../src/ui/renderer/board.ts) | Renderização das zonas. |
 | [animations.ts](../src/ui/renderer/animations.ts) | Animações visuais. |
@@ -408,6 +433,7 @@ Fachada de renderização. Constrói o renderer e delega métodos para [src/ui/r
 | [modals.ts](../src/ui/renderer/modals.ts) | Modais genéricos. |
 | [preview.ts](../src/ui/renderer/preview.ts) | Preview grande de cartas. |
 | [selectionModals.ts](../src/ui/renderer/selectionModals.ts) | Modais de seleção. |
+| [placement.ts](../src/ui/renderer/placement.ts) | Escolha manual de slot, atualização e cancelamento da sessão de colocação. |
 | [summonModals.ts](../src/ui/renderer/summonModals.ts) | Modais de Normal/Special/Fusion/Ascension Summon. |
 | [trapModals.ts](../src/ui/renderer/trapModals.ts) | Modais de traps e respostas em Chain. |
 
@@ -432,6 +458,10 @@ pelos efeitos visuais do duelo.
 | [run_tests.ts](../scripts/run_tests.ts) | Descobre e executa a suíte de testes Node. |
 | [run_bot_arena_smoke.ts](../scripts/run_bot_arena_smoke.ts) | Smoke test curto da Bot Arena por CLI. |
 | [audit_chain_metadata.ts](../scripts/audit_chain_metadata.ts) | Audita metadados canônicos de ativação, uso e Chain. |
+| [audit_typescript_escapes.ts](../scripts/audit_typescript_escapes.ts) | Audita escapes de tipagem usando a API de AST do alias `typescript`. |
+| [register_node_asset_loader.ts](../scripts/register_node_asset_loader.ts) e [node_asset_loader_hooks.ts](../scripts/node_asset_loader_hooks.ts) | Registro e hooks para carregar assets, incluindo SVG, nos fluxos Node. |
+| [run_techzero_benchmark.ts](../scripts/run_techzero_benchmark.ts) | Executa casos de benchmark do Tech-Zero e registra resultados e observações de batalha. |
+| [analyze_techzero_benchmark.ts](../scripts/analyze_techzero_benchmark.ts) | Compara relatórios das variantes especializada e fallback e produz a análise em Markdown. |
 | [replay_duel.ts](../scripts/replay_duel.ts) | Executa e valida replays canônicos por CLI. |
 
 ---
@@ -444,7 +474,7 @@ pelos efeitos visuais do duelo.
 - [Estrutura do Projeto.md](Estrutura%20do%20Projeto.md)
 - [Regras para Invocação-Ascensão.md](Regras%20para%20Invoca%C3%A7%C3%A3o-Ascens%C3%A3o.md)
 - [Replay canônico.md](Replay%20can%C3%B4nico.md)
-- Catálogos de arquétipo: [Arcanist](Arcanist%20Archetype.md), [Bloomrot](Bloomrot%20Archetype.md), [Burning West](Burning%20West%20Archetype.md), [Dragon](Dragon%20Archetype.md), [Luminarch](Luminarch%20Archetype.md), [Miragebound](Miragebound%20Archetype.md), [Shadow-Heart](Shadow-Heart%20Archetype.md), [Tech-Zero](Tech-Zero%20Archetype.md), [Void](Void%20Archetype.md).
+- Catálogos em [Archetypes/](Archetypes/): [Arcanist](Archetypes/Arcanist%20Archetype.md), [Bloomrot](Archetypes/Bloomrot%20Archetype.md), [Burning West](Archetypes/Burning%20West%20Archetype.md), [Dragon](Archetypes/Dragon%20Archetype.md), [Luminarch](Archetypes/Luminarch%20Archetype.md), [Miragebound](Archetypes/Miragebound%20Archetype.md), [Shadow-Heart](Archetypes/Shadow-Heart%20Archetype.md), [Tech-Zero](Archetypes/Tech-Zero%20Archetype.md), [Void](Archetypes/Void%20Archetype.md).
 
 ---
 

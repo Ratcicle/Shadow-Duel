@@ -30,6 +30,28 @@ import type { ZoneInput } from "../contracts/zones.js";
 
 type RuntimeCardId = number | string | null;
 
+/** Keep optional confirmations in the same decision stream as target choices. */
+export async function requestOptionalConfirmation(
+  game: ActionRuntimeGamePort,
+  player: ActionRuntimePlayer | null,
+  resolveHuman: () => MaybePromise<boolean>,
+): Promise<boolean> {
+  if (!game.requestDecision) return Boolean(await resolveHuman());
+  const result = await game.requestDecision({
+    kind: "choice",
+    actor: player,
+    candidates: [],
+    requireCandidate: false,
+    resolveHuman: async () => (await resolveHuman()) ? {} : null,
+    serializeResult: value => value
+      ? { pass: false, candidateKey: "confirm", effectId: null }
+      : { pass: true },
+    deserializeReplayValue: value => "candidateKey" in value && value.candidateKey === "confirm"
+      ? {} : null,
+  });
+  return result !== null;
+}
+
 interface ExclusionFilters {
   readonly excludeCards?: readonly ActionRuntimeCard[];
   readonly excludeInstanceId?: RuntimeCardId;
@@ -1115,6 +1137,7 @@ export async function selectCards({
   // Use client-side target selection
   return new Promise((resolve) => {
     game.startTargetSelectionSession!({
+      owner: player,
       kind,
       selectionContract,
       onCancel: () => resolve(null),

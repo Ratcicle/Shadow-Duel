@@ -1,3 +1,4 @@
+import { handleNormalSummonFromHand } from "./summon/normalFromHand.js";
 import type {
   ActionOf,
   ActionType,
@@ -143,6 +144,7 @@ function proxy<const Method extends string>(method: Method) {
  * registry registration order because listTypes() exposes that order.
  */
 export const ACTION_BINDINGS = {
+  normal_summon_from_hand: direct("handleNormalSummonFromHand", handleNormalSummonFromHand),
   special_summon_from_zone: direct("handleSpecialSummonFromZone", handleSpecialSummonFromZone),
   restrict_special_summons: direct("handleRestrictSpecialSummons", handleRestrictSpecialSummons),
   de_synchro: direct("handleDeSynchro", handleDeSynchro),

@@ -13,6 +13,8 @@ import { turnLineSearch } from "../../src/core/ai/TurnLineSearch.js";
 import { cloneBotGameState } from "../../src/core/bot/simulationBridge.js";
 import { fingerprintPlanningState } from "../../src/core/ai/common/stateFingerprint.js";
 import { processSimulatedDelayedActions } from "../../src/core/ai/common/simulatedActions/lifecycle.js";
+import { detachSimulatedEquip } from "../../src/core/ai/common/zones.js";
+import { placeFieldCards } from "../helpers/game.js";
 
 type BotCloneCard = Parameters<typeof cloneBotGameState>[0]["hand"][number];
 
@@ -357,6 +359,59 @@ test("TurnLine clone deep-isolates planning cards and copied simulation metadata
 });
 
 const CLONE_PROFILES = ["bot", "beamGreedy", "gameTree", "turnLine"] as const;
+for (const profile of CLONE_PROFILES) {
+  test(`${profile} preserves the inactive equip contribution without subtracting other attacks`, async t => {
+    const game = createRuntimeGame({ laboratoryMode: true, captureReplay: false });
+    t.after(() => game.dispose("equip_clone_test"));
+    game.turn = "bot";
+    game.phase = "main1";
+    const host = new Card({ id: 99881, name: "Clone host", cardKind: "monster", extraAttacks: 2 }, "bot");
+    const equip = new Card(cardDefinition(11), "bot");
+    placeFieldCards(game.bot.field, host);
+    placeFieldCards(game.bot.spellTrap, equip);
+    assert.equal(await game.effectEngine.applyEquip({ type: "equip", targetRef: "host", extraAttacks: 1 },
+      { source: equip, player: game.bot, opponent: game.player }, { host: [host] }), true);
+    await game.effectEngine.applyActions([
+      { type: "add_status", status: "effectsNegated", targetRef: "equip", duration: "while_faceup" },
+    ], { source: equip, player: game.bot, opponent: game.player }, { equip: [equip] });
+    assert.equal(game.getMonsterAttackLimit(host), 3);
+    let captured: unknown;
+    const strategy = {
+      bot: game.bot,
+      generateMainPhaseActions(state: unknown) {
+        if (profile === "gameTree") captured ??= state;
+        return [CLONE_PROBE_ACTION];
+      },
+      simulateMainPhaseAction(state: unknown) { captured ??= state; requireCloneState(state).bot.lp += 1; },
+      simulateSpellEffect: () => undefined,
+      evaluateBoardV2: (state: unknown) => requireCloneState(state).bot.lp,
+      evaluateBoard: (state: unknown) => requireCloneState(state).bot.lp,
+    };
+    if (profile === "bot") {
+      captured = cloneBotGameState(unsafeFixture<Parameters<typeof cloneBotGameState>[0]>(
+        { ...game.bot, strategy, resolveOpponent: () => game.player },
+        "Concrete equipped cards with a minimal AI strategy for clone regression"),
+      unsafeFixture<Parameters<typeof cloneBotGameState>[1]>(game,
+        "Live Game supplies the complete clone source without a legacy EffectEngine usage map"));
+    } else if (profile === "beamGreedy") {
+      await greedySearchWithEvalV2(game, strategy, { preGeneratedActions: [CLONE_PROBE_ACTION] });
+    } else if (profile === "gameTree") {
+      gameTreeSearch(game, { ...strategy, bot: { debug: false } }, game.bot, 1);
+    } else {
+      await turnLineSearch(unsafeFixture<Parameters<typeof turnLineSearch>[0]>(game,
+        "Live Game has no temporary battle registrations in this fixture"), strategy,
+      { maxDepth: 1, beamWidth: 1, nodeBudget: 2 });
+    }
+    const state = unsafeFixture<AiStateShape>(required(captured), "The profile captured a canonical simulation projection");
+    const clonedHost = required(state.bot.field[0]);
+    const clonedEquip = required(state.bot.spellTrap[0]);
+    assert.equal(clonedEquip.equippedTo, clonedHost);
+    detachSimulatedEquip(clonedEquip);
+    assert.equal(clonedHost.extraAttacks, 2);
+    assert.equal(host.extraAttacks, 2);
+    assert.equal(equip.equippedTo, host, "Detach in a branch must not change the live equip");
+  });
+}
 for (const profile of CLONE_PROFILES) {
   for (const actor of ["bot", "player"] as const) {
     test(`${profile} keeps delayed destruction's source player inside the branch (${actor})`, async () => {

@@ -1,5 +1,8 @@
 import type { ActionOf, ActionType, CardAction } from "./actions.js";
 import type { FieldSlot } from "./placement.js";
+import type { DecisionBrokerPort } from "./decisions.js";
+import type { AdditionalNormalSummonPermission, NormalSummonOptions, NormalSummonRecord } from "./player.js";
+import type { AlternateTributeDefinition, TributeValueDefinition, CardAttribute } from "./cards.js";
 import type {
   AscensionMaterialRecord,
   BattlePosition,
@@ -11,7 +14,7 @@ import type {
   CardStatusRegistry,
   MonsterType,
 } from "./cards.js";
-import type { ChainLink, ChainRuntimePort } from "./chainRuntime.js";
+import type { ChainLink, ChainRuntimePort, ChainSourceSnapshot } from "./chainRuntime.js";
 import type {
   EffectCondition,
   EffectDefinition,
@@ -49,11 +52,15 @@ export type MaybePromise<Value> = Value | PromiseLike<Value>;
  * migrated; dynamic status access must go through the Reflect helpers below.
  */
 export interface ActionRuntimeCard {
+  duelCardId?: number;
   fieldSlot?: FieldSlot | null;
   // Card keeps these own properties even when constructor data omits them.
   id?: number | undefined;
   name: string;
+  nameKey?: string;
+  descriptionKey?: string;
   instanceId?: number;
+  locationVersion?: number;
   _instanceId?: number | string | null;
   uuid?: string | null;
   simInstanceId?: number | string | null;
@@ -64,7 +71,7 @@ export interface ActionRuntimeCard {
   monsterType?: MonsterType | null;
   type?: string | null | undefined;
   types?: string[];
-  attribute?: string | null;
+  attribute?: CardAttribute | null;
   archetype?: string | null;
   archetypes?: string[];
   description?: string | undefined;
@@ -106,6 +113,10 @@ export interface ActionRuntimeCard {
             };
       };
   summonRestrict?: string | null;
+  cannotBeNormalSummonedOrSet?: boolean;
+  requiredTributes?: number | null;
+  altTribute?: AlternateTributeDefinition | null;
+  tributeValue?: TributeValueDefinition | readonly TributeValueDefinition[] | null;
   cannotAttackThisTurn?: boolean;
   hasAttacked?: boolean;
   canMakeSecondAttackThisTurn?: boolean;
@@ -196,7 +207,11 @@ export interface ActionRuntimePlayer {
   banished: ActionRuntimeCard[];
   fieldSpell: ActionRuntimeCard | null;
   additionalNormalSummons?: number;
-  additionalNormalSummonPermissions?: object[];
+  additionalNormalSummonPermissions?: AdditionalNormalSummonPermission[];
+  summonCount?: number;
+  normalSummonsThisTurn?: NormalSummonRecord[];
+  summon?(cardIndex: number, position?: BattlePosition, isFacedown?: boolean,
+    tributeIndices?: readonly number[] | null, options?: NormalSummonOptions): Promise<{ success?: boolean } | null>;
   lpGainedThisTurn?: number;
   strategy?: ActionRuntimeStrategyPort | null;
   draw?(count?: number): ActionRuntimeCard | null;
@@ -346,6 +361,7 @@ export interface ActionNegationContext {
  * class.
  */
 export interface ActionRuntimeGamePort {
+  requestDecision?: DecisionBrokerPort["requestDecision"];
   player: ActionRuntimePlayer;
   bot: ActionRuntimePlayer;
   turn?: string;
@@ -485,6 +501,7 @@ export interface ActionRuntimeGamePort {
     options?: object,
   ): MaybePromise<LegacyActionHandlerResult>;
   createDeterministicId?(scope?: string): string;
+  ensureDuelCardId?(card: ActionRuntimeCard): number;
   applyTurnBasedBuff?(
     card: ActionRuntimeCard,
     stat: "atk" | "def",
@@ -495,6 +512,7 @@ export interface ActionRuntimeGamePort {
 }
 
 interface ActionContextState extends ActionNegationContext {
+  sourceAtActivation?: ChainSourceSnapshot | null;
   decisions?: import("./ai.js").AIDecisionPlan;
   effectId?: string | null;
   actionContext?: object | null;

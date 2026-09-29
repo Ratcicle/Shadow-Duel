@@ -51,8 +51,11 @@ Campos básicos:
   id: 124,                         // ID livre dentro da faixa do modulo
   name: "Card Name",               // nome único
   cardKind: "monster",             // "monster" | "spell" | "trap"
+  level: 4,
+  atk: 1800,
+  def: 1200,
   image: "assets/Card Name.png",
-  description: "Texto exibido na UI.",
+  description: "Card text shown in the English UI.",
   effects: []
 }
 ```
@@ -67,6 +70,10 @@ Campos comuns por tipo:
   `monsterType: "ascension"`.
 - Materiais de Tributo especiais: use `tributeValue` no card que sera oferecido
   como Tributo quando ele puder contar como mais de 1 Tributo.
+
+Para monstros, `level`, `atk` e `def` são obrigatórios. Para Spells e Traps,
+`subtype` é obrigatório. Escreva `name` e `description` em inglês; a tradução
+portuguesa fica em `public/locales/pt-br.json`.
 
 IDs devem ser numericos e ficar dentro da faixa oficial do modulo. O validador
 rejeita IDs fora da faixa, IDs duplicados, nomes duplicados, timings invalidos,
@@ -230,7 +237,7 @@ Eventos aceitos pelo validador:
 | `damage_step` | Em uma subetapa canônica do Damage Step. | Combine com `damageStepTimings` para limitar os momentos permitidos. |
 | `card_flipped` | Quando um card com a face para baixo é revelado. | Card revelado, controlador e contexto de batalha/efeito. |
 | `battle_damage_inflicted` | Quando dano de batalha é efetivamente infligido. | Jogador que recebeu o dano, valor, atacante e defensor. |
-| `card_to_grave` | Carta enviada ao Cemitério. | `fromZone`, `contextLabel`, `contextLabels`, `requireSelfAsDestroyed`, `conditions`, `condition.type: "destroyed_by_battle"`, `"destroyed_by_effect"` ou `"destroyed_by_battle_or_effect"`. |
+| `card_to_grave` | Carta enviada ao Cemitério. | `fromZone`, `contextLabel`, `requireSelfAsDestroyed`, `conditions`, `condition.type: "destroyed_by_battle"` ou `"destroyed_by_battle_or_effect"`. |
 | `card_moved` | Depois de um movimento canônico entre zonas. | `fromZone`, `toZone`, card movido, dono/controlador e `contextLabel`. |
 | `counter_removed` | Depois que counters são removidos. | Fonte dos counters, tipo, quantidade e jogador responsável. |
 | `standby_phase` | Standby Phase do jogador ativo. | Fonte precisa estar em campo/spellTrap/fieldSpell. |
@@ -252,7 +259,7 @@ Se um efeito declara `event` com timing diferente de `on_event`, o validador pod
 aceitar o evento, mas registra warning. Use `event` apenas em `on_event`.
 
 Para efeitos que so devem disparar por um motivo especifico, use
-`contextLabel` ou `contextLabels`. Exemplo: triggers de material Sincro usam
+`contextLabel`. Exemplo: triggers de material Sincro usam
 `contextLabel: "synchro_material"` e nao disparam por destruicao, descarte,
 Fusao ou Ascensao. Quando um trigger proprio precisa funcionar mesmo se a carta
 estava com efeitos negados ao sair do campo, declare
@@ -266,43 +273,10 @@ Targets resolvem seleções antes das actions. Cada target gera uma entrada em
 ```js
 {
   id: "target_id",
-  owner: "self",                   // "self" | "opponent" | "any"
-  zone: "field",                   // zona principal
-  zones: ["field", "spellTrap"],   // opcional: múltiplas zonas
+  owner: "opponent",               // "self" | "opponent" | "any" | "both"
+  zone: "field",
   cardKind: "monster",
-  subtype: "equip",
-  type: "Dragon",
-  archetype: "Void",
-  cardName: "Exact Name",
-  level: 4,
-  minLevel: 1,
-  maxLevel: 4,
-  minAtk: 0,
-  maxAtk: 2000,
-  isTuner: true,
-  lastSummonedFromZone: "extraDeck", // zona da última Invocação, não o tipo
   requireFaceup: true,
-  position: "attack",              // "attack" | "defense" | "any"
-  excludeCardName: "X",
-  excludeNameRef: "previous_target",
-  anyOf: [{ archetype: "Void" }, { type: "Dragon" }],
-  compareAttribute: { attr: "level", ref: "other_target", op: "lte" },
-  pairedTarget: {
-    owner: "self",
-    zone: "graveyard",
-    cardKind: "monster",
-    compareAttribute: { attr: "level", op: "eq" },
-    excludeSameName: true
-  },
-  maxAtkByCounters: true,
-  counterType: "judgment_marker",
-  counterMultiplier: 500,
-  requireThisCard: false,
-  allowSelf: true,
-  distinct: true,
-  autoSelect: false,
-  strategy: "highest_atk",         // ou "lowest_atk"
-  optional: false,
   count: { min: 1, max: 1 }
 }
 ```
@@ -311,34 +285,40 @@ Notas importantes:
 
 - Use `owner: "any"` no card data. Internamente a UI exibe isso como `either`.
 - `targetFromContext` pega uma carta do contexto do evento, por exemplo
-  `targetFromContext: "targetedCard"` ou `"defender"`.
+  `targetFromContext: "target"` ou `"defender"`.
 - `pairedTarget` exige que cada candidato tenha ao menos uma carta pareada
   em outra zona. Use para custos que so sao validos se ja houver um alvo
   posterior compativel, como "mesmo Nivel e nome diferente" no Cemiterio.
 - Em `compareAttribute`, use `attr: "originalLevel"` para comparar o Nível
   impresso da instância, ignorando alterações temporárias de Nível.
 - `requireThisCard: true` permite selecionar a própria fonte.
-- `lastSummonedFromZone` ou `lastSummonedFromZones` distingue a origem da última
+- `lastSummonedFromZone` distingue a origem da última
   Invocação. Um monstro do Deck Adicional revivido do Cemitério terá origem
   `graveyard`, não `extraDeck`.
-- Sem `autoSelect`, jogador humano recebe modal quando há escolha.
+- `anyOf`, `excludeNameRef`, `minAtk`, `maxLevel` e `isTuner` pertencem ao
+  contrato de target; combine somente filtros que possam encontrar o mesmo
+  card. `position` e `maxAtk` não são campos diretos de target no schema de
+  autoria atual.
+- Sem `autoSelect`, jogador humano recebe modal quando há escolha. Definir
+  `autoSelect: true` também automatiza a escolha humana; use somente se o
+  efeito realmente não exigir decisão do jogador.
 - Para bots, `activationContext.autoSelectTargets` pode selecionar automaticamente.
 
 ## Conditions
 
-`conditions` é uma lista; a primeira condição falsa cancela a ativação. Tipos
-atuais em `EffectEngine.evaluateConditions`:
+`conditions` é uma lista; a primeira condição falsa cancela a ativação. Para
+declarar condições em cards, use os tipos do contrato `EffectConditionType`
+que o `EffectEngine.evaluateConditions` avalia:
 
 | Tipo | Uso |
 | --- | --- |
 | `playerFieldEmpty` | Exige que o jogador não controle monstros. |
-| `playerFieldCount` | Checa quantidade no campo; aceita `count`, `min`, `max`, `monstersOnly`. |
-| `control_card` | Exige controlar carta por `cardName`, `cardId`, `cardIds` ou `filters`. |
+| `playerFieldCount` | Checa quantidade de monstros no campo; aceita `count`, `min` e `max`. |
+| `control_card` | Exige controlar carta por `cardName`, `cardId` ou `filters`. |
 | `control_card_max` | Limita quantidade de cartas controladas que batem filtros. |
-| `any_of` | Passa se qualquer condição interna passar (`conditions` ou `anyOf`). |
+| `any_of` | Passa se qualquer condição interna em `conditions` passar. |
 | `control_card_filters` | Conta cartas por filtros em uma ou mais zonas; aceita os filtros canônicos, `requireFaceup`, `excludeSource`, `min` e `max`. |
 | `equipped_with_filters` | Exige que a fonte esteja equipada com cards que batem filtros. |
-| `turn_player` | Exige turno de `self`, `opponent` ou id direto. |
 | `has_stored_blueprint` | Exige blueprints armazenados na fonte. |
 | `control_card_type` | Exige controlar monstro de tipo específico. |
 | `opponentMonstersMin` | Exige mínimo de monstros do oponente. |
@@ -365,7 +345,7 @@ atuais em `EffectEngine.evaluateConditions`:
 | `field_counters_at_least` | Exige uma quantidade mínima de counters somados no escopo de campo declarado. |
 
 Filtros usados por conditions e actions geralmente passam por `cardMatchesFilters`:
-`id`, `cardId`, `ids`, `cardIds`, `name`, `cardName`, `cardKind`, `subtype`,
+`cardId`, `name`, `cardName`, `cardKind`, `subtype`,
 `monsterType`, `type`, `attribute`, `archetype`, `level`, `levelOp` (`eq`, `lte`, `gte`,
 `lt`, `gt`), `isTuner` e `equippedWithFilters`.
 
@@ -373,7 +353,7 @@ Filtros usados por conditions e actions geralmente passam por `cardMatchesFilter
 
 ```js
 condition: { requires: "self_in_hand" }
-condition: { triggerArchetype: "Shadow-Heart" }
+condition: { requires: "self_in_hand", triggerArchetype: "Shadow-Heart" }
 condition: { type: "destroyed_by_battle_or_effect" }
 ```
 
@@ -411,6 +391,23 @@ Actions comuns:
 { type: "schedule_special_summon", cardRef: "self", fromZone: "graveyard", phase: "end", triggerPlayer: "current" }
 { type: "special_summon_token", position: "choice", cannotAttackThisTurn: false, token: { name: "Token", atk: 500, def: 500 } }
 ```
+
+### Fichas e confirmações traduzidas
+
+`special_summon_token.token` aceita `nameKey` e `descriptionKey` opcionais.
+Mantenha `name` e `description` em inglês e declare as chaves nos dicionários
+EN/PT-BR. A ficha guarda as chaves; `getCardDisplayName` e
+`getCardDisplayDescription` resolvem o idioma atual, inclusive depois da
+criação. Uma chave ausente usa o texto canônico. Isso não exige ID de carta.
+
+`optional_target_actions` e `de_synchro` aceitam `promptMessageKey`,
+`promptTitleKey`, `confirmLabelKey` e `cancelLabelKey`. Os campos literais
+correspondentes (`promptMessage`, `promptTitle`, `confirmLabel`, `cancelLabel`)
+continuam como fallback. Em `de_synchro`, `{sourceCardName}` recebe o nome de
+exibição do monstro Sincro selecionado. Traduza a apresentação; preserve os
+valores de decisão `yes` e `no` usados pelo broker e pelo replay.
+
+### Efeitos persistentes
 
 Efeitos virtuais que continuam disparando pelo restante do Duelo podem ser
 registrados declarativamente. Mantenha `triggerRequirement` e `triggerTiming`
@@ -502,9 +499,9 @@ Passives usam:
 
 Tipos suportados atualmente:
 
-- `lp_cost_reduction`: reduz custos de `pay_lp`; aceita `amount`/`reduction`,
-  `appliesTo`/`affects`/`owner`, `actionType`/`actionTypes`, `sourceFilter(s)`,
-  `stackMode` (`max` ou `sum`) e `minFinalAmount`.
+- `lp_cost_reduction`: reduz custos de `pay_lp`; no card data, use `amount`,
+  `appliesTo`, `actionTypes`, `sourceFilters` e `stackMode: "max"`. O runtime
+  reconhece aliases legados, mas eles não pertencem ao schema de autoria.
 - `position_status`: aplica status enquanto a carta está em uma posição.
 - `conditional_status`: aplica status enquanto as condições declaradas passam.
 - `conditional_extra_attacks`: concede ataques adicionais enquanto as condições
@@ -518,9 +515,9 @@ Tipos suportados atualmente:
 - `field_presence_type_summon_count_buff`: buff por invocações de tipo feitas
   enquanto a fonte esteve face-up no campo.
 - `additional_normal_summon`: concede uma Normal Summon adicional enquanto a
-  fonte estiver ativa; aceita `count`, `filters`/`archetype`/`cardKind` e
-  `targetPlayer` (`self`, `opponent`, `both`). Se o efeito tiver
-  `oncePerTurnName`, multiplas fontes com o mesmo nome so criam uma permissao.
+  fonte estiver ativa para seu controlador; aceita `count`, `filters`,
+  `archetype` e `cardKind`. Se o efeito tiver `oncePerTurnName`, multiplas
+  fontes com o mesmo nome so criam uma permissao.
 - `archetype_count_buff`: buff por quantidade de cartas de arquétipo no campo.
 - `equipped_counter_buff`: buff baseado nos counters dos equipamentos vinculados
   à fonte.
@@ -553,8 +550,10 @@ Tipos suportados atualmente:
   oponente contra destruição em batalha.
 - `lp_gain_multiplier`: multiplica ganhos de LP do jogador afetado.
 
-Campos comuns de buff: `amountPerCard`, `perCard`, `buffPerCard`, `stats`,
-`owners`/`countOwners`, `cardKinds`, `includeSelf`, `requireFaceup`.
+Campos comuns de buff aceitos no card data: `amountPerCard`, `stats`,
+`countOwners`, `cardKinds`, `includeSelf`, `requireFaceup`. Consulte
+`PassiveRuleDefinition` em `src/core/contracts/effects.ts` antes de usar
+outros campos lidos por projeções internas do runtime.
 
 ## Fusion, Synchro e Ascension
 
@@ -571,27 +570,53 @@ Fusion:
 ```
 
 `polymerization_fusion_summon` usa `fusionMaterials` para validar materiais.
+Uma Fusion também pode declarar `extraDeckSummonProcedure` como alternativa
+para um procedimento próprio, como banir materiais do Cemitério. Nesse caso,
+`fusionMaterials` não é obrigatório:
+
+```js
+{
+  monsterType: "fusion",
+  extraDeckSummonProcedure: {
+    type: "graveyard_banish_fusion",
+    summonMethod: "fusion",
+    materialDestination: "banished",
+    requiresManualMaterialSelection: true,
+    materials: [
+      { zone: "graveyard", cardKind: "monster", archetype: "Void", count: 2 }
+    ]
+  }
+}
+```
+
+Os tipos de procedimento aceitos são `contact_fusion` e
+`graveyard_banish_fusion`. A seleção de materiais para jogadores humanos deve
+continuar manual quando há escolha.
 
 Synchro:
+
+Mesmo com as regras clássicas, a definição de um monstro Sincro precisa
+de `synchro.tunerCount` e `synchro.nonTunerMin` para satisfazer o contrato:
 
 ```js
 {
   monsterType: "synchro",
-  level: 4
+  level: 4,
+  synchro: { tunerCount: 1, nonTunerMin: 1 }
 }
 ```
 
 Por padrao, a Invocacao-Sincro usa regras classicas: materiais devem estar
 face-up no campo, exatamente 1 Regulador (`isTuner: true`) + 1 ou mais
 nao-Reguladores, e a soma dos Niveis deve ser exatamente igual ao Nivel do
-monstro Sincro. Metadados `synchro` sao opcionais para futuras restricoes; sem
-eles, esse contrato default e usado.
+monstro Sincro. `synchro.materialFilters` é opcional para restrições adicionais.
 
 Use `synchro.materialFilters` quando o monstro Sincro restringir materiais:
 
 ```js
 {
   monsterType: "synchro",
+  level: 8,
   synchro: {
     tunerCount: 1,
     nonTunerMin: 1,
@@ -689,6 +714,29 @@ Requirement types aceitos pelo validador:
 - `player_lp_lte`
 - `player_hand_gte`
 - `player_graveyard_gte`
+- `field_counters_at_least`
+
+## Procedimento próprio de Invocação da mão
+
+Para um monstro que se Invoca da mão pagando materiais do próprio campo ou
+Cemitério, declare `handSummonProcedure` no card. `id` identifica o
+procedimento no runtime; `cost` define quantidade, zonas de origem, filtros e
+destino de cada material:
+
+```js
+handSummonProcedure: {
+  id: "example_hand_procedure",
+  cost: {
+    count: 2,
+    zones: ["field", "graveyard"],
+    filters: { cardKind: "monster", attribute: "Light" },
+    destination: "banished"
+  }
+}
+```
+
+O procedimento abre seleção de custo para o jogador humano e executa os
+movimentos dos materiais pela transação de Invocação.
 
 ## Exemplos
 
@@ -764,7 +812,6 @@ Ignition com target e custo:
       zone: "field",
       cardKind: "monster",
       requireFaceup: true,
-      intent: "target",
       count: { min: 1, max: 1 }
     }
   ],
@@ -777,21 +824,45 @@ Ignition com target e custo:
 }
 ```
 
+## Tradução da carta
+
+O inglês em `src/data/cards/<grupo>.ts` é o texto canônico. Para cada carta
+nova, adicione nome e descrição em português na seção `cards` de
+`public/locales/pt-br.json`, usando o ID numérico como chave de string:
+
+```json
+{
+  "cards": {
+    "99": {
+      "name": "Magia de Compra de Exemplo",
+      "description": "Compre 2 cartas."
+    }
+  }
+}
+```
+
+Confira também chaves de UI como `activationLabelKey` e
+`handModalLabelKey` nos dicionários de inglês e português quando a carta as
+usar.
+
 ## Checklist antes de commitar
 
 1. ID esta livre e dentro da faixa oficial do modulo.
 2. Imagem existe em `public/assets/` e a carta a referencia como `assets/...`.
-3. `timing` e `event` existem nos contratos aceitos pelo validador.
-4. Cada `action.type` existe em `ActionByType`, `ACTION_BINDINGS`, catálogo e registry.
-5. `targetRef` bate exatamente com um `targets[].id`, salvo contexto explícito
+3. Nome e descrição canônicos estão em inglês, com tradução por ID em
+   `public/locales/pt-br.json`.
+4. `timing` e `event` existem nos contratos aceitos pelo validador.
+5. Cada `action.type` existe em `ActionByType`, `ACTION_BINDINGS`, catálogo e registry.
+6. `targetRef` bate exatamente com um `targets[].id`, salvo contexto explícito
    aceito pelo catálogo.
-6. Efeitos opcionais usam `promptUser`/`promptMessage` quando fazem sentido.
-7. Efeitos por turno/duelo usam `oncePerTurnName`/`oncePerDuelName` estáveis.
-8. Movement usa handlers/actions que preservam eventos e invariantes.
-9. Extra Deck usa `monsterType` correto; Fusion define `fusionMaterials`,
-   Synchro pode usar a regra default, e Ascension define `ascension` completo.
-10. A carta funciona no deck builder e no duelo real.
-11. Rode o jogo e confira se o validador de database não bloqueia o duelo.
+7. Efeitos opcionais usam `promptUser`/`promptMessage` quando fazem sentido.
+8. Efeitos por turno/duelo usam `oncePerTurnName`/`oncePerDuelName` estáveis.
+9. Movement usa handlers/actions que preservam eventos e invariantes.
+10. Extra Deck usa `monsterType` correto; Fusion define `fusionMaterials` ou
+    `extraDeckSummonProcedure`, Synchro define `synchro` mesmo nas regras
+    clássicas, e Ascension define `ascension` completo.
+11. A carta funciona no deck builder e no duelo real.
+12. Rode o jogo e confira se o validador de database não bloqueia o duelo.
 
 Para atualizar os contratos e a documentação de actions:
 
@@ -855,3 +926,20 @@ O campo `allowDamageStepActivation` não é aceito em cartas. Rode também:
 ```powershell
 npm run audit:chain
 ```
+
+
+## Invocação-Normal por efeito
+
+Use `normal_summon_from_hand` para executar uma Invocação-Normal durante a resolução:
+
+```ts
+{ type: "normal_summon_from_hand", player: "self", filters: { archetype: "Shadow-Heart" } }
+```
+
+A action escolhe o monstro e seus Tributos durante a resolução, com decisões manuais para humanos. Ela usa uma permissão de Invocação-Normal disponível, respeita Tributos alternativos, valores de Tributo e limites de campo, e Invoca com a face para cima em Ataque. O preview exige ao menos uma combinação legal. Se as opções deixarem de ser legais antes da execução, nenhum Tributo é pago.
+
+`Player.summon` recebe a opção `summonOrigin: "effect_resolution"`; a transação não abre uma janela separada de negação de Invocação. As escolhas passam pelo broker e a execução interna não produz outro comando externo de Invocação no replay. `grant_additional_normal_summon` apenas concede permissões futuras.
+
+Os contadores, registros e permissões temporárias de Invocação-Normal de ambos os jogadores são reinicializados no início de cada turno. Permissões passivas continuam sendo consultadas normalmente.
+
+Para efeitos de Magia/Armadilha no Cemitério, declare `activationZones: ["graveyard"]`, `timing: "ignition"`, `speed: 1` e `requirePhase: ["main1", "main2"]`. A entrada `tryActivateSpellTrapEffect` aceita `activationZone: "graveyard"`, compartilhando a execução do modal com o replay. Custos de banir a fonte pertencem a `activationCosts`.

@@ -57,10 +57,10 @@ function createRuntimeCard(
   return card;
 }
 
-function createGame(t: TestContext) {
+function createGame(t: TestContext, disableChains = true) {
   const game = createRuntimeGame({
     captureReplay: false,
-    disableChains: true,
+    disableChains,
     laboratoryMode: true,
   });
   game.player.controllerType = "ai";
@@ -545,6 +545,26 @@ test("vínculo imediato acompanha a instância após a devolução, consome a pr
   assert.ok(leaveResult.success === true);
   assert.equal(game.player.banished.includes(behemoth), true);
   assert.equal(game.player.graveyard.includes(behemoth), false);
+});
+
+test("Chain revives the physical Behemoth through its temporary registration once", async (t) => {
+  const game = createGame(t, false);
+  game.disablePresentationDelays = true;
+  const behemoth = createRuntimeCard(getBehemoth(), game.player.id);
+  const destroyer = completeCard({ id: 9904, name: "Bound destroyer", cardKind: "monster", atk: 3000, def: 1000 }, game.bot.id);
+  game.player.graveyard.push(behemoth);
+  placeFieldCards(game.bot.field, destroyer);
+  const effect = getEffect("cursed_rock_behemoth_battle_control");
+  const result = await game.effectEngine.applyActions(required(effect.actions), {
+    source: behemoth, player: game.player, opponent: game.bot, effect,
+  }, { cursed_rock_behemoth_destroyer: [destroyer] });
+  assert.equal(result.success, true);
+  assert.equal(game.temporaryEventEffects.length, 1);
+  await game.moveCard(destroyer, game.player, "graveyard", { fromZone: "field", awaitEvents: true });
+  assert.ok(game.player.field.includes(behemoth));
+  assert.ok(!game.player.graveyard.includes(behemoth));
+  assert.equal(behemoth.banishWhenLeavesField, true);
+  assert.equal(game.temporaryEventEffects.length, 0);
 });
 
 test("simulação preserva base DEF, controle, vínculo por instância e seleção de contexto por zona", () => {

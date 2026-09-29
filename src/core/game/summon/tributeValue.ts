@@ -1,6 +1,66 @@
 import type { TributeValueDefinition } from "../../contracts/cards.js";
 import type { CardFilter } from "../../contracts/effects.js";
 import type { SummonMethod } from "../../contracts/summon.js";
+import type { AlternateTributeDefinition } from "../../contracts/cards.js";
+import type { NormalSummonCardView, NormalSummonPlayerView } from "../../contracts/player.js";
+import { canUseNormalSummonForCard } from "../../Player.js";
+
+export interface NormalSummonCandidate extends NormalSummonCardView {
+  id?: number | undefined;
+  name?: string | null | undefined;
+  level?: number | undefined;
+  requiredTributes?: number | null;
+  altTribute?: AlternateTributeDefinition | null;
+  cannotBeNormalSummonedOrSet?: boolean;
+  summonRestrict?: string | null;
+  tributeValue?: TributeCardView["tributeValue"];
+  types?: string[];
+}
+
+export function getNormalTributeRequirement(
+  card: NormalSummonCandidate,
+  field: readonly NormalSummonCandidate[],
+) {
+  let tributesNeeded = (card.level || 0) >= 7 ? 2 : (card.level || 0) >= 5 ? 1 : 0;
+  let usingAlt = false;
+  const alt = card.altTribute ?? null;
+  if (alt && "type" in alt && alt.type === "no_tribute_if_empty_field" && field.length === 0 && tributesNeeded > 0) {
+    tributesNeeded = 0;
+    usingAlt = true;
+  }
+  if (alt && "requiresName" in alt && field.some(c => c.name === alt.requiresName) && alt.tributes < tributesNeeded) {
+    tributesNeeded = alt.tributes;
+    usingAlt = true;
+  }
+  if (alt && "requiresType" in alt && !usingAlt && field.some(c => !c.isFacedown && (c.types || [c.type]).includes(alt.requiresType)) && alt.tributes < tributesNeeded) {
+    tributesNeeded = alt.tributes;
+    usingAlt = true;
+  }
+  if (typeof card.requiredTributes === "number" && card.requiredTributes >= 0) tributesNeeded = card.requiredTributes;
+  return { tributesNeeded, usingAlt, alt };
+}
+
+/** Enumerate legal physical costs (at most five field cards), shared by preview, resolution and AI. */
+export function getNormalSummonTributeOptions<Card extends NormalSummonCandidate>(
+  player: Omit<NormalSummonPlayerView, "field"> & { hand: Card[]; field: Card[] },
+  card: Card,
+  canPlace: (tributes: Card[]) => boolean = () => true,
+): Card[][] {
+  if (!player.hand.includes(card) || card.cardKind !== "monster" || card.cannotBeNormalSummonedOrSet ||
+      card.summonRestrict === "shadow_heart_invocation_only" || !canUseNormalSummonForCard(player, card)) return [];
+  const { tributesNeeded, usingAlt, alt } = getNormalTributeRequirement(card, player.field);
+  if (tributesNeeded === 0) return player.field.length < 5 && canPlace([]) ? [[]] : [];
+  const options: Card[][] = [];
+  for (let mask = 1; mask < (1 << player.field.length); mask++) {
+    const tributes = player.field.filter((_, index) => (mask & (1 << index)) !== 0);
+    if (tributes.some(c => c.cardKind !== "monster") || tributes.length > tributesNeeded) continue;
+    if (getTributeValueTotal(tributes, card) < tributesNeeded) continue;
+    if (usingAlt && alt && "requiresName" in alt && !tributes.some(c => c.name === alt.requiresName)) continue;
+    if (usingAlt && alt && "requiresType" in alt && !tributes.some(c => (c.types || [c.type]).includes(alt.requiresType))) continue;
+    if (player.field.length - tributes.length + 1 <= 5 && canPlace(tributes)) options.push(tributes);
+  }
+  return options;
+}
 
 export interface TributeCardFilters extends CardFilter {
   /** Legacy raw-id alias retained by the runtime matcher. */
@@ -31,8 +91,8 @@ export interface TributeCardView {
   level?: number | undefined;
   atk?: number | undefined;
   def?: number | undefined;
-  effectsNegated?: boolean;
-  tributeValue?: TributeValueEntry | readonly TributeValueEntry[] | null;
+  effectsNegated?: boolean | undefined;
+  tributeValue?: TributeValueEntry | readonly TributeValueEntry[] | null | undefined;
 }
 
 export interface TributeSelectionOptions<

@@ -361,6 +361,11 @@ export function hasActionZoneCandidates(
 ): boolean {
   if (!player || !action) return true;
 
+  if (action.type === "add_from_zone_to_hand") {
+    const zones = action.zone ? (Array.isArray(action.zone) ? action.zone : [action.zone]) : ["graveyard"];
+    return zones.flatMap(zone => getPlayerZoneCards(player, zone)).filter(card => cardMatchesFilter(card, action.filters || {})).length >= (action.count?.min ?? 1);
+  }
+
   if (action.type === "special_summon_from_zone") {
     const zoneSpec = action.zone || action.sourceZone || "deck";
     const zoneNames = Array.isArray(zoneSpec) ? zoneSpec : [zoneSpec];

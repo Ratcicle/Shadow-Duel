@@ -1,4 +1,6 @@
 import { appendSimulatedZoneCard } from "../zones.js";
+import { getNormalSummonTributeOptions } from "../../../game/summon/tributeValue.js";
+import { recordNormalSummonForTurn } from "../../../Player.js";
 import { resolveExactInstanceSelection } from "../../../AutoSelector.js";
 import { appendSimulatedFieldCard } from "../zones.js";
 import { getEffectiveAtk } from "../cardStats.js";
@@ -1005,6 +1007,48 @@ export function applyBounceAndSummon(
     actionContext: options.actionContext,
   });
   return;
+}
+
+export function applyNormalSummonFromHand(ctx: SimulatedActionHandlerContext<"normal_summon_from_hand">): void {
+  const { action, state, self, opponent, options } = ctx;
+  const player = resolveActionPlayer(action, self, opponent);
+  if (!player) return;
+  const other = player === self ? opponent : self;
+  const entries = player.hand.flatMap(card => {
+    if (!matchesTargetFilters(card, action.filters || {}, options.sourceCard, "self")) return [];
+    const costs = getNormalSummonTributeOptions(player, card, tributes =>
+      tributes.every(tribute => canMoveCardToZone(player, tribute, "graveyard", player, { state })) &&
+      canSimulatedProcedureEnterField(card, player, other, tributes));
+    return costs.length ? [{ card, costs }] : [];
+  }).sort((a, b) => (b.card.atk || 0) - (a.card.atk || 0));
+  const entry = entries[0];
+  if (!entry) return;
+  const tributes = entry.costs.sort((a, b) =>
+    a.reduce((sum, c) => sum + (c.atk || 0), 0) - b.reduce((sum, c) => sum + (c.atk || 0), 0) || a.length - b.length)[0];
+  if (!tributes) return;
+  const events: SimulatedEventOccurrence[] = [];
+  for (const tribute of tributes) {
+    if (!moveCardToZone(player, tribute, "graveyard", player, { state })) return;
+    events.push({ event: "card_to_grave", payload: { card: tribute, player, fromZone: "field", wasTributed: true, context: "tribute_summon_cost" } });
+  }
+  const card = entry.card;
+  if (!moveCardToZone(player, card, "field", player, { state })) return;
+  card.position = "attack";
+  card.isFacedown = false;
+  card.hasAttacked = false;
+  card.attacksUsedThisTurn = 0;
+  card.lastSummonMethod = tributes.length ? "tribute" : "normal";
+  card.lastSummonedFromZone = "hand";
+  player.summonCount = (player.summonCount || 0) + 1;
+  recordNormalSummonForTurn(player, card);
+  card.lastTributeMaterialNames = tributes.map(tribute => tribute.name || "");
+  card.lastTributeMaterialCount = tributes.length;
+  if (!options.enableSimulatedEvents) {
+    options.onAfterNormalSummon?.({ state, player, card, method: card.lastSummonMethod });
+  }
+  events.push({ event: "after_summon", payload: { card, player, method: card.lastSummonMethod, fromZone: "hand", tributes } });
+  if (options.emitSimulatedEvents) options.emitSimulatedEvents(events);
+  else for (const event of events) options.emitSimulatedEvent?.(event.event, event.payload);
 }
 
 export function applySpecialSummonToken(

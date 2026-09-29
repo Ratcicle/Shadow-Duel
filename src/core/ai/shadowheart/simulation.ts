@@ -921,6 +921,13 @@ export function buildShadowHeartSimulationOptions(
         return true;
       },
     },
+    onAfterNormalSummon: ({ state: simState, player, card, method }: {
+      state: MutableShadowState; player: SimulatedPlayerState; card: SimulatedCardState; method: "normal" | "tribute";
+    }) => handleAfterSummon({
+      state: simState, player, card, method,
+      action: { type: "summon", cardName: card.name },
+      options: options as ShadowSimulationOptions,
+    }),
     onAfterSpecialSummon: ({
       state: simState,
       player,

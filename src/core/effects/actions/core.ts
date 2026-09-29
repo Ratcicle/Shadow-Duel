@@ -1,3 +1,4 @@
+import { getNormalSummonEntries } from "../../actionHandlers/summon/normalFromHand.js";
 import { cardMatchesKind, getCardComparableAttribute } from "../../Card.js";
 import { isAI } from "../../Player.js";
 import { resolveExactInstanceSelection } from "../../AutoSelector.js";
@@ -5,6 +6,7 @@ import { getBaseLpCost } from "../costs/lpCost.js";
 import { hasSynchroSummonPreviewCandidate } from "../../actionHandlers/summon/synchroEffects.js";
 import { mergeCanonicalSelections } from "../../game/selection/contract.js";
 import { checkSpecialSummonEligibility } from "../../game/summon/eligibility.js";
+import { checkTrapMonsterSummon } from "./summon.js";
 import type { ActionHandlerRegistry } from "../../actionHandlers/registry.js";
 import type {
   ActionHandlerEnginePort,
@@ -2257,6 +2259,10 @@ export function checkActionPreviewRequirements(
       }
     }
 
+    if (action.type === "normal_summon_from_hand" && getNormalSummonEntries(this, action.player === "opponent" ? ctx.opponent || player : player, action.filters).length === 0) {
+      return { ok: false, reason: "No legal Normal Summon is available." };
+    }
+
     if (action.type === "synchro_summon_from_extra_deck") {
       if (
         !Reflect.apply(hasSynchroSummonPreviewCandidate, undefined, [
@@ -2354,20 +2360,16 @@ export function checkActionPreviewRequirements(
     }
 
     if (action.type === "special_summon_self_as_trap_monster") {
-      if ((player.field || []).length >= 5) {
-        return { ok: false, reason: "Field is full." };
-      }
       const source = ctx?.source;
-      if (!source || !cardMatchesKind(source, ["spell", "trap"])) {
+      if (!source) {
         return { ok: false, reason: "Source is not a Spell/Trap card." };
       }
       const sourceZone =
         typeof this?.findCardZone === "function"
           ? this.findCardZone(player, source)
           : null;
-      if (sourceZone && sourceZone !== "spellTrap") {
-        return { ok: false, reason: "Source must be in the Spell/Trap zone." };
-      }
+      const check = checkTrapMonsterSummon(this.game, source, player, action, sourceZone);
+      if (!check.ok) return check;
     }
 
     if (action.type === "special_summon_from_hand_with_tiered_cost") {

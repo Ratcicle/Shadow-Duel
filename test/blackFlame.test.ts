@@ -35,16 +35,84 @@ function getEffect() {
   return effect;
 }
 
-function createGame(t: TestContext) {
+function createGame(t: TestContext, disableChains = true) {
   const game = createRuntimeGame({
     captureReplay: false,
-    disableChains: true,
+    disableChains,
     laboratoryMode: true,
   });
   game.player.controllerType = "ai";
   game.bot.controllerType = "ai";
+  game.disablePresentationDelays = true;
+  game.turn = game.player.id;
+  game.phase = "main1";
+  game.turnCounter = 2;
   t.after(() => game.dispose());
   return game;
+}
+
+async function activateBlackFlame(game: RuntimeGame, source: Card) {
+  const result = await game.tryActivateSpell(
+    source, game.player.hand.indexOf(source), null, { owner: game.player },
+  );
+  assert.equal(result.success, true, result.reason ?? undefined);
+  assert.ok(game.player.graveyard.includes(source));
+}
+
+for (const zone of ["graveyard", "banished", "deck", "hand", "spellTrap"] as const) {
+  test(`Chain: persistent burn leaves its physical source unchanged in ${zone}`, async (t) => {
+    const game = createGame(t, false);
+    const source = createRuntimeCard(game);
+    game.player.hand.push(source);
+    await activateBlackFlame(game, source);
+    assert.equal(game.player.lp, 7000);
+    if (zone !== "graveyard") {
+      await game.moveCard(source, game.player, zone, {
+        fromZone: "graveyard", awaitEvents: true, isFacedown: zone === "spellTrap",
+      });
+    }
+    const version = source.locationVersion;
+    const facedown = source.isFacedown;
+    for (const activePlayer of [game.player, game.bot]) {
+      const before = game.bot.lp;
+      await game.emit("standby_phase", {
+        player: activePlayer, opponent: game.getOpponent(activePlayer),
+      });
+      assert.equal(game.bot.lp, before - 300);
+      assert.ok(game.player[zone].includes(source), `source must remain in ${zone}`);
+      assert.equal(source.isFacedown, facedown);
+      assert.equal(source.locationVersion, version);
+      assert.equal(game.player.lp, 7000, "the persistent effect must not pay the cost again");
+      assert.equal(game.temporaryEventEffects.length, 1);
+    }
+  });
+}
+
+for (const sameCopy of [true, false]) {
+  test(`Chain: two registrations stack independently (same copy: ${sameCopy})`, async (t) => {
+    const game = createGame(t, false);
+    const first = createRuntimeCard(game);
+    const second = sameCopy ? first : createRuntimeCard(game);
+    game.player.hand.push(first);
+    await activateBlackFlame(game, first);
+    game.turnCounter += 1;
+    if (sameCopy) {
+      await game.moveCard(second, game.player, "hand", { fromZone: "graveyard", awaitEvents: true });
+    } else {
+      game.player.hand.push(second);
+    }
+    await activateBlackFlame(game, second);
+    assert.equal(game.player.lp, 6000);
+    assert.equal(game.temporaryEventEffects.length, 2);
+    for (const activePlayer of [game.player, game.bot]) {
+      const before = game.bot.lp;
+      await game.emit("standby_phase", {
+        player: activePlayer, opponent: game.getOpponent(activePlayer),
+      });
+      assert.equal(game.bot.lp, before - 600);
+      assert.equal(game.temporaryEventEffects.length, 2);
+    }
+  });
 }
 
 function createRuntimeCard(game: RuntimeGame, owner: GamePlayer = game.player) {

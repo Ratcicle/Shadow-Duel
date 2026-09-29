@@ -1,4 +1,5 @@
 import { isQuickSpell } from "../game/spellTrap/quickSpellRules.js";
+import { isEquipWithoutValidHost } from "../game/spellTrap/finalization.js";
 import { CHAIN_ACTIVATION_KINDS } from "../contracts/chain.js";
 import type { ChainId } from "../contracts/primitives.js";
 import type {
@@ -152,6 +153,10 @@ async function moveToGraveyard(
     entry.disposition = state.zone || "unknown";
     return false;
   }
+  if (typeof result === "object" && result !== null) {
+    const occurrence = result.deferredCardToGraveTriggerPackage?.occurrence;
+    if (occurrence) chainSystem.game?.queueTriggerOccurrence?.(occurrence);
+  }
   entry.status = "completed";
   entry.disposition = "graveyard";
   return true;
@@ -245,10 +250,13 @@ async function finalizeEntry(
     entry.activationKind === CHAIN_ACTIVATION_KINDS.SPELL_TRAP_CARD;
   const spellTrap = isSpellTrap(entry.card);
   const activationNegated = outcome.activationNegated === true;
+  const invalidEquip = isEquipWithoutValidHost(entry.card, [
+    chainSystem.game?.player?.field || [], chainSystem.game?.bot?.field || [],
+  ]);
   const shouldUseDefault =
     spellTrap &&
     cardActivation &&
-    (activationNegated ||
+    (activationNegated || invalidEquip ||
       (link.skipDefaultFinalization !== true &&
         isSingleUseSpellTrap(entry.card)));
 
@@ -273,7 +281,7 @@ async function finalizeEntry(
       entry.disposition = state.zone || "unknown";
     }
 
-    if (link.skipDefaultFinalization !== true || activationNegated) {
+    if (link.skipDefaultFinalization !== true || shouldUseDefault) {
       await runPipelineFinalization(entry);
     }
     link.finalizationStatus = entry.status;

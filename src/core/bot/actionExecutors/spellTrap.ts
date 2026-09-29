@@ -254,7 +254,7 @@ export async function executeGraveyardSpellEffectAction(
             (!action.cardId && c.name === action.cardName)),
       );
   const card = bot.graveyard?.[graveyardIndex!];
-  if (!card || card.cardKind !== "spell") {
+  if (!card || (card.cardKind !== "spell" && card.cardKind !== "trap")) {
     console.log(
       `[Bot.executeMainPhaseAction] Invalid graveyardSpellEffect action: no spell at index ${graveyardIndex}`,
     );
@@ -276,7 +276,7 @@ export async function executeGraveyardSpellEffectAction(
   }
 
   const actionActivationContext = action.activationContext || {};
-  const activationContext: AIActivationContext = {
+  const activationContext = {
     ...actionActivationContext,
     fromHand: false,
     activationZone: "graveyard",
@@ -284,36 +284,12 @@ export async function executeGraveyardSpellEffectAction(
     autoSelectTargets: actionActivationContext.autoSelectTargets !== false,
     autoSelectSingleTarget:
       actionActivationContext.autoSelectSingleTarget !== false,
-  };
+  } satisfies AIActivationContext;
 
-  const pipelineResult = await game.runActivationPipeline({
-    card,
+  const pipelineResult = await game.tryActivateSpellTrapEffect(card, null, {
     owner: bot,
     activationZone: "graveyard",
     activationContext,
-    selectionKind: "graveyardEffect",
-    selectionMessage: "Select target(s) for the graveyard spell effect.",
-    guardKind: "bot_graveyard_spell_effect",
-    phaseReq: ["main1", "main2"],
-    preview: () =>
-      game.effectEngine?.canActivateSpellTrapEffectPreview?.(
-        card,
-        bot,
-        "graveyard",
-        null,
-        { activationContext },
-      ),
-    oncePerTurn: {
-      card,
-      player: bot,
-      effect: graveyardEffect,
-    },
-    activate: (chosen, ctx, zone) =>
-      game.effectEngine.activateSpellTrapEffect(card, bot, chosen, zone, ctx),
-    finalize: () => {
-      game.ui?.log?.(`Bot activates ${card.name}'s effect from graveyard`);
-      game.updateBoard();
-    },
   });
 
   const success =

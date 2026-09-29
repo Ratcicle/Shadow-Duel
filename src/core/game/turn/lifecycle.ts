@@ -241,10 +241,12 @@ export async function startTurn(this: LifecycleHost) {
       card.immuneToOpponentEffectsUntilTurn = null;
     }
   });
-  activePlayer.summonCount = 0;
-  activePlayer.additionalNormalSummons = 0;
-  activePlayer.additionalNormalSummonPermissions = [];
-  activePlayer.normalSummonsThisTurn = [];
+  for (const player of [this.player, this.bot]) {
+    player.summonCount = 0;
+    player.additionalNormalSummons = 0;
+    player.additionalNormalSummonPermissions = [];
+    player.normalSummonsThisTurn = [];
+  }
 
   this.updateBoard();
   await this.checkAndOfferTraps("phase_start", {

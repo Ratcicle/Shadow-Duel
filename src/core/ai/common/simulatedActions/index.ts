@@ -23,6 +23,7 @@ import {
   applyRestrictEffectActivationsByNames,
 } from "./resources.js";
 import {
+  applyNormalSummonFromHand,
   applySpecialSummonFromZone,
   applySearchThenOptionalSpecialSummonFromHand,
   applySpecialSummonFromHandWithCost,
@@ -124,6 +125,7 @@ export const SIMULATED_ACTION_HANDLERS = {
   "polymerization_fusion_summon": applyPolymerizationFusionSummon,
   "de_synchro": applyDeSynchro,
   "synchro_summon_from_extra_deck": applySynchroSummonFromExtraDeck,
+  "normal_summon_from_hand": applyNormalSummonFromHand,
   "banish": applyBanish,
   "return_to_hand": applyReturnToHand,
   "move": applyMove,

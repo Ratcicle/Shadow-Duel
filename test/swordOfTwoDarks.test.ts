@@ -11,6 +11,9 @@ import type { RuntimeGame } from "./helpers/game.js";
 import { createRuntimeGame } from "./helpers/game.js";
 import { simulationCard, simulationState } from "./helpers/simulation.js";
 import { evaluateSimulatedConditions } from "../src/core/ai/common/simulatedConditions.js";
+import { applySimulatedActions } from "../src/core/ai/common/simulatedActions/index.js";
+import { attachSimulatedEquip, detachSimulatedEquip } from "../src/core/ai/common/zones.js";
+import { createPlanningCopy } from "../src/core/ai/common/planningCopy.js";
 
 import Card from "../src/core/Card.js";
 import { validateCardDatabase } from "../src/core/CardDatabaseValidator.js";
@@ -19,6 +22,24 @@ import { cardDatabaseByName } from "./helpers/fixtures.js";
 const CARD_NAME = "Sword of Two Darks";
 const EQUIP_EFFECT_ID = "sword_of_two_darks_equip";
 const GRAVE_EFFECT_ID = "sword_of_two_darks_pop_backrow";
+
+async function equipSword(game: RuntimeGame, host: Card) {
+  const sword = makeCard(CARD_NAME, game.player);
+  game.player.hand.push(sword);
+  const result = await game.tryActivateSpell(sword, game.player.hand.indexOf(sword), {
+    sotd_equip_target: [host],
+  });
+  assert.equal(result.success, true);
+  return sword;
+}
+
+async function setEquipNegation(game: RuntimeGame, sword: Card, remove = false) {
+  const result = await game.effectEngine.applyActions([
+    { type: "add_status", targetRef: "equip", status: "effectsNegated", value: true,
+      duration: "while_faceup", ...(remove ? { remove: true } : {}) },
+  ], { source: sword, player: game.player, opponent: game.bot }, { equip: [sword] });
+  assert.equal(result.success, true);
+}
 
 function makeCard(
   dataOrName: string | CardConstructorData,
@@ -187,6 +208,123 @@ test("the equipped monster can attack twice during the Battle Phase", async (t) 
   assert.ok(secondAttack.ok === true);
   assert.equal(game.bot.lp, lpBeforeSecondAttack - attacker.atk);
   assert.equal(attacker.attacksUsedThisTurn, 2);
+});
+
+test("Orathus negates the equip's additional attack and removing negation restores it once", async (t) => {
+  const game = createGame(t);
+  game.bot.controllerType = "human";
+  game.ui.showChainResponseModal = async () => null;
+  game.ui.showConfirmPrompt = async () => true;
+  const host = makeCard("Nightmare Steed", game.player);
+  placeFieldCards(game.player.field, host);
+  const sword = await equipSword(game, host);
+  host.attacksUsedThisTurn = 1;
+  assert.equal(game.getMonsterAttackLimit(host), 2);
+  const orathus = makeCard("Orathus, The Fallen Angel", game.bot);
+  game.bot.extraDeck.push(orathus);
+  game.turn = "bot";
+  const summon = game.executeSummonTransaction(game.createPreparedSummon({
+    card: orathus, controller: game.bot, sourceZone: "extraDeck",
+    summonOrigin: "procedure", summonMode: "summon", summonMethod: "synchro",
+    summonProcedure: "synchro", position: "attack",
+    perform: (transaction) => game.moveCard(orathus, game.bot, "field", {
+      fromZone: "extraDeck", position: "attack", isFacedown: false,
+      summonMethodOverride: "synchro", summonProcedure: "synchro",
+      summonOrigin: "procedure", summonTransaction: transaction,
+    }),
+  }));
+  await selectCard(game, "player", 0, "spellTrap");
+  assert.equal((await summon).success, true);
+  assert.equal(sword.effectsNegated, true);
+  assert.equal(game.getMonsterAttackLimit(host), 1);
+  assert.equal(host.hasAttacked, true);
+  await setEquipNegation(game, sword, true);
+  game.effectEngine.updatePassiveBuffs();
+  game.effectEngine.updatePassiveBuffs();
+  assert.equal(game.getMonsterAttackLimit(host), 2);
+  assert.equal(host.hasAttacked, false);
+});
+
+for (const destination of ["graveyard", "hand", "banished"] as const) {
+  test(`removing a negated equip to ${destination} preserves the host's other extra attacks`, async (t) => {
+    const game = createGame(t);
+    const host = makeCard({ id: 99125, name: "Innate extra attacks", cardKind: "monster",
+      atk: 1500, def: 1000, extraAttacks: 2 }, game.player);
+    placeFieldCards(game.player.field, host);
+    const sword = await equipSword(game, host);
+    assert.equal(game.getMonsterAttackLimit(host), 4);
+    await setEquipNegation(game, sword);
+    assert.equal(game.getMonsterAttackLimit(host), 3);
+    await game.moveCard(sword, game.player, destination, { fromZone: "spellTrap" });
+    game.effectEngine.updatePassiveBuffs();
+    assert.equal(game.getMonsterAttackLimit(host), 3);
+    assert.equal(sword.equippedTo, null);
+  });
+}
+
+test("re-equipping a negated source moves only its contribution and repeated equip does not stack", async (t) => {
+  const game = createGame(t);
+  const first = makeCard({ id: 99126, name: "First host", cardKind: "monster", extraAttacks: 2 }, game.player);
+  const second = makeCard("Nightmare Steed", game.player);
+  placeFieldCards(game.player.field, first, second);
+  const sword = await equipSword(game, first);
+  await setEquipNegation(game, sword);
+  for (let index = 0; index < 2; index++) {
+    assert.equal(await game.effectEngine.applyEquip({ type: "equip", targetRef: "host", extraAttacks: 1 },
+      { source: sword, player: game.player, opponent: game.bot }, { host: [second] }), true);
+  }
+  assert.equal(game.getMonsterAttackLimit(first), 3);
+  assert.equal(game.getMonsterAttackLimit(second), 1);
+  await setEquipNegation(game, sword, true);
+  assert.equal(game.getMonsterAttackLimit(first), 3);
+  assert.equal(game.getMonsterAttackLimit(second), 2);
+  await game.moveCard(second, game.player, "graveyard", { fromZone: "field" });
+  assert.equal(game.player.graveyard.includes(sword), true);
+  assert.equal(game.getMonsterAttackLimit(first), 3);
+});
+
+test("simulation and planning copies preserve independent equipment contributions through negation and detach", () => {
+  const host = simulationCard({ id: 99127, instanceId: "host", cardKind: "monster", extraAttacks: 2 });
+  const sword = simulationCard({ ...cardDefinition(CARD_NAME), instanceId: "sword" });
+  const secondEquip = simulationCard({ id: 99128, instanceId: "other-equip", cardKind: "spell", subtype: "equip" });
+  const state = simulationState({ player: { field: [host], spellTrap: [sword, secondEquip] } });
+  assert.equal(attachSimulatedEquip(sword, host, { extraAttacks: 1 }), true);
+  assert.equal(attachSimulatedEquip(secondEquip, host, { extraAttacks: 2 }), true);
+  assert.equal(host.extraAttacks, 5);
+  applySimulatedActions({ state, selfId: "player", selections: { equip: [sword] },
+    actions: [{ type: "add_status", targetRef: "equip", status: "effectsNegated", duration: "while_faceup" }] });
+  assert.equal(host.extraAttacks, 4);
+  const copy = createPlanningCopy();
+  const clonedHost = copy.cloneCardForSim(host);
+  const clonedSword = copy.cloneCardForSim(sword);
+  const clonedSecond = copy.cloneCardForSim(secondEquip);
+  const clonedState = simulationState({ player: { field: [clonedHost], spellTrap: [clonedSword, clonedSecond] } });
+  applySimulatedActions({ state: clonedState, selfId: "player", selections: { equip: [clonedSword] },
+    actions: [{ type: "add_status", targetRef: "equip", status: "effectsNegated", remove: true }] });
+  assert.equal(clonedHost.extraAttacks, 5);
+  assert.equal(host.extraAttacks, 4, "Restoring the clone must not alter its parent state");
+  detachSimulatedEquip(sword);
+  assert.equal(host.extraAttacks, 4, "Negated equipment has no active bonus to subtract");
+  detachSimulatedEquip(clonedSword);
+  assert.equal(clonedHost.extraAttacks, 4);
+  detachSimulatedEquip(clonedSecond);
+  assert.equal(clonedHost.extraAttacks, 2);
+  assert.equal(host.extraAttacks, 4);
+});
+
+test("equipment recovered after its token disappears can grant its attack to a new host", async (t) => {
+  const game = createGame(t);
+  const token = makeCard({ id: 99129, name: "Token host", cardKind: "monster" }, game.player);
+  token.isToken = true;
+  const host = makeCard("Nightmare Steed", game.player);
+  placeFieldCards(game.player.field, token, host);
+  const sword = await equipSword(game, token);
+  await game.moveCard(token, game.player, "graveyard", { fromZone: "field" });
+  assert.equal(game.player.graveyard.includes(sword), true);
+  await game.moveCard(sword, game.player, "hand", { fromZone: "graveyard" });
+  assert.equal((await game.tryActivateSpell(sword, game.player.hand.indexOf(sword),
+    { sotd_equip_target: [host] })).success, true);
+  assert.equal(game.getMonsterAttackLimit(host), 2);
 });
 
 for (const swordName of ["Light-Dividing Sword", CARD_NAME]) {

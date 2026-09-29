@@ -1,4 +1,6 @@
 import type { CardAction } from "./actions.js";
+import type { DeferredCardToGraveTriggerPackage } from "./gameRuntime.js";
+import type { EventTriggerOccurrence } from "./events.js";
 import type {
   BattlePosition,
   CardKind,
@@ -138,6 +140,7 @@ export interface ChainEffectTarget extends Omit<EffectTarget, "position"> {
 
 /** Minimal mutable Card projection actually observed by Chain modules. */
 export interface ChainCard {
+  equippedTo?: ChainCard | null;
   fieldSlot?: import("./placement.js").FieldSlot | null;
   id?: number | undefined;
   duelCardId?: DuelCardId | number;
@@ -628,6 +631,7 @@ export interface ChainTargetValidation {
 }
 
 export interface ChainOperationResult {
+  deferredCardToGraveTriggerPackage?: DeferredCardToGraveTriggerPackage;
   ok?: boolean;
   success?: boolean;
   executed?: boolean;
@@ -1021,6 +1025,7 @@ export interface ChainTriggerEntryConfig {
 }
 
 export interface ChainTriggerEntry {
+  registrationId?: string;
   card?: ChainCard;
   effect?: ChainEffect;
   owner?: ChainPlayer;
@@ -1452,6 +1457,7 @@ export interface ChainGamePort {
     destination: CanonicalZone,
     options?: ChainMoveCardOptions,
   ): ChainMaybePromise<ChainOperationResult | boolean | null | undefined>;
+  queueTriggerOccurrence?(occurrence: EventTriggerOccurrence): unknown;
 }
 
 export interface ChainActivationPipelineInput {

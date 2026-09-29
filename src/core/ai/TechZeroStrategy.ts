@@ -3,7 +3,7 @@ import Card from "../Card.js";
 import { scoreTechZeroBattleAttackCandidate } from "./techzero/battle.js";
 import type { BotStrategyPort } from "../contracts/bot.js";
 import { canUseNormalSummonForCard } from "../Player.js";
-import { fieldHasTributeValue } from "../game/summon/tributeValue.js";
+import { getTributeCardsFromIndices, getTributeValueTotal } from "../game/summon/tributeValue.js";
 import { buildStrategyAnalysis } from "./common/analysis.js";
 import { getGenericHandSpellActions, getGenericIgnitionEffectActions, getGenericNormalSummonActions,
   getGenericSynchroActions } from "./common/actionGeneration.js";
@@ -15,10 +15,10 @@ import { resolvePerspectivePlayers } from "./common/perspective.js";
 import { createPlanningCopy } from "./common/planningCopy.js";
 import { assessSummonEntry } from "./common/summonAssessment.js";
 import { canUseSimulatedEffectUsage } from "./common/simStateUtils.js";
-import { getTributeRequirementFor, selectBestTributes } from "./common/tributePolicy.js";
+import { getTributeRequirementFor, selectPayableTributes } from "./common/tributePolicy.js";
 import { applyGenericSimulatedMainPhaseAction } from "./common/simulation.js";
 import { TECH_ZERO_IDS as TZ } from "./techzero/knowledge.js";
-import { buildTechZeroActivationContext, enumerateTechZeroLevelAdjustments, getTechZeroVisibleBattlePolicy, scoreTechZeroSummon, shouldUseTechZeroAssembly,
+import { buildTechZeroActivationContext, enumerateTechZeroLevelAdjustments, getTechZeroVisibleBattlePolicy, scoreTechZeroSummon, shouldUseTechZeroAssembly, selectTechZeroTributes,
   type TechZeroPolicyContext } from "./techzero/priorities.js";
 import { buildTechZeroSimulationOptions, scoreTechZeroSynchro } from "./techzero/simulation.js";
 import { getTechZeroPlanningProfile, scoreTechZeroLineMilestones, scoreTechZeroLineTerminal,
@@ -190,8 +190,10 @@ export default class TechZeroStrategy extends BaseStrategy {
       getTributeRequirement: getTributeRequirementFor,
       shouldSummon: (card, _analysis, info) => {
         const needed = info.tributesNeeded || 0;
-        const tributes = selectBestTributes(player.field, needed, card);
-        return { yes: canUseNormalSummonForCard(normalSummonPlayer, card) && fieldHasTributeValue(player.field, needed, card) &&
+        const { indices: tributes } = selectPayableTributes(player, player.field, game,
+          candidates => selectTechZeroTributes(candidates, needed, card));
+        return { yes: canUseNormalSummonForCard(normalSummonPlayer, card) &&
+          getTributeValueTotal(getTributeCardsFromIndices(player.field, tributes), card) >= needed &&
           player.field.length - tributes.length < 5, priority: scoreTechZeroSummon(card, policy) / 10,
           position: this.chooseSpecialSummonPosition(card, { game, player }) };
       },
@@ -260,10 +262,7 @@ export default class TechZeroStrategy extends BaseStrategy {
   }
 
   override selectBestTributes(field: SimulatedCardState[], count: number, card: SimulatedCardState) {
-    return selectBestTributes(field, count, card, {}, {
-      evaluateCardValue: candidate => (candidate.atk || 0) + (candidate.isTuner ? 1800 : 0) +
-        (candidate.monsterType === "synchro" ? 2500 : 0),
-    });
+    return selectTechZeroTributes(field, count, card);
   }
 
   override simulateMainPhaseAction(state: Parameters<BaseStrategy["simulateMainPhaseAction"]>[0], action: AIPlannedAction) {

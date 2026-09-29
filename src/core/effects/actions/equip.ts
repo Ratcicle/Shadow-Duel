@@ -9,11 +9,13 @@ import type {
 } from "../../contracts/actionRuntime.js";
 import type { ActionOf } from "../../contracts/actions.js";
 import type { CanonicalZone } from "../../contracts/zones.js";
+import { refreshEquipExtraAttackBonus } from "../passives/passiveBuffs.js";
 
 interface EquipRuntimeCard extends ActionRuntimeCard {
   equipAtkBonus?: number;
   equipDefBonus?: number;
   equipExtraAttacks?: number;
+  equipExtraAttacksApplied?: number;
   grantsBattleIndestructible?: boolean;
   grantsCrescentShieldGuard?: boolean;
   extraAttacks?: number;
@@ -76,23 +78,7 @@ export async function applyEquip(
         ? [resolvedTarget]
         : [];
   if (!targetCards.length) {
-    const sourceZone =
-      typeof this.findCardZone === "function"
-        ? this.findCardZone(player, equipCard)
-        : null;
-    if (
-      sourceZone === "spellTrap" &&
-      this.game &&
-      typeof this.game.moveCard === "function"
-    ) {
-      await this.game.moveCard(equipCard, player, "graveyard", {
-        fromZone: "spellTrap",
-        contextLabel: action.contextLabel || "equip_target_missing",
-        sourceCard: equipCard,
-        effectId: ctx?.effect?.id || null,
-      });
-      return true;
-    }
+    // Cleanup belongs to activation finalization, after the Chain resolves.
     return false;
   }
 
@@ -126,17 +112,7 @@ export async function applyEquip(
         (previousHost.def || 0) - equipCard.equipDefBonus
       );
     }
-    if (
-      typeof equipCard.equipExtraAttacks === "number" &&
-      equipCard.equipExtraAttacks !== 0
-    ) {
-      const currentExtra = previousHost.extraAttacks || 0;
-      const nextExtra = currentExtra - equipCard.equipExtraAttacks;
-      previousHost.extraAttacks = Math.max(0, nextExtra);
-      const prevMaxAttacks = 1 + (previousHost.extraAttacks || 0);
-      previousHost.hasAttacked =
-        (previousHost.attacksUsedThisTurn || 0) >= prevMaxAttacks;
-    }
+    refreshEquipExtraAttackBonus(equipCard, previousHost, false);
     if (equipCard.grantsBattleIndestructible) {
       previousHost.battleIndestructible = false;
     }
@@ -152,6 +128,9 @@ export async function applyEquip(
   if (!target || target.cardKind !== "monster") return false;
   if (target.isFacedown) {
     console.warn("Cannot equip to a facedown monster:", target.name);
+    return false;
+  }
+  if (![this.game.player, this.game.bot].some(owner => owner.field.includes(target))) {
     return false;
   }
 
@@ -200,9 +179,11 @@ export async function applyEquip(
     equipCard.equipDefBonus = action.defBonus;
     target.def = (target.def ?? 0) + action.defBonus;
   }
-  if (typeof action.extraAttacks === "number" && action.extraAttacks !== 0) {
+  if (typeof action.extraAttacks === "number") {
+    // Preserve the previous applied amount before replacing the configured grant.
+    equipCard.equipExtraAttacksApplied ??= equipCard.equipExtraAttacks || 0;
     equipCard.equipExtraAttacks = action.extraAttacks;
-    target.extraAttacks = (target.extraAttacks || 0) + action.extraAttacks;
+    refreshEquipExtraAttackBonus(equipCard, target, equipCard.effectsNegated !== true);
   }
 
   if (action.battleIndestructible) {

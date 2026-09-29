@@ -1,5 +1,18 @@
 {
   "ui": {
+    "tokens": {
+      "summonedSkeleton": {
+        "name": "Ficha de Esqueleto Invocado",
+        "description": "Uma Ficha de Esqueleto Invocada por Invocação-Especial por necromancia."
+      }
+    },
+    "genericEffects": {
+      "specialSummon": "Invocar por Invocação-Especial",
+      "deSynchroRevive": "Invocar por Invocação-Especial os Materiais Sincro usados para {sourceCardName}?",
+      "fusionRecycleSummon": "Invocar por Invocação-Especial o monstro adicionado em Posição de Defesa?",
+      "keepInHand": "Manter na mão"
+    },
+    "normalSummonEffect": { "chooseMonster": "Escolha um monstro para Invocar por Invocação-Normal.", "chooseTributes": "Escolha os Tributos para {card}.", "invalidTributes": "Escolha uma combinação válida de Tributos." },
     "common": {
       "ok": "OK",
       "cancel": "Cancelar",
@@ -460,6 +473,10 @@
     }
   },
   "cards": {
+    "126": {
+      "name": "Cova do Coração Sombrio",
+      "description": "Invoque por Invocação-Normal 1 monstro \"Coração Sombrio\" da sua mão. Você pode banir este card do seu Cemitério; adicione até 2 monstros \"Coração Sombrio\" de Nível 8 do seu Cemitério à sua mão. Você só pode usar cada efeito de \"Cova do Coração Sombrio\" uma vez por turno."
+    },
     "1": {
       "name": "Corcel Pesadelo",
       "description": "Um cavalo demoníaco com a juba flamejante."

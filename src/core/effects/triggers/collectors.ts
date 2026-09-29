@@ -47,7 +47,6 @@ import type {
   TriggerPackage,
   TriggerRuntimeCard,
   TriggerRuntimePlayer,
-  TriggerZone,
 } from "./runtime.js";
 
 function getPlayerById(
@@ -121,32 +120,6 @@ function findCardByInstanceId(
           String(instanceId),
       );
       if (card) return card;
-    }
-  }
-  return null;
-}
-
-function findCardLocation(
-  game: TriggerGamePort | null | undefined,
-  card: TriggerRuntimeCard | null | undefined,
-): { player: TriggerRuntimePlayer; zone: TriggerZone } | null {
-  if (!game || !card) return null;
-  const zones = [
-    "deck",
-    "extraDeck",
-    "hand",
-    "field",
-    "spellTrap",
-    "graveyard",
-    "banished",
-  ] as const;
-  for (const player of [game.player, game.bot]) {
-    if (!player) continue;
-    if (player.fieldSpell === card) return { player, zone: "fieldSpell" };
-    for (const zone of zones) {
-      if (Array.isArray(player[zone]) && player[zone].includes(card)) {
-        return { player, zone };
-      }
     }
   }
   return null;
@@ -231,7 +204,6 @@ function collectTemporaryEventTriggers(
     const sourceCard =
       findCardByInstanceId(game, tempEntry.sourceInstanceId) ||
       buildTemporarySourceCard(tempEntry, owner);
-    const sourceLocation = findCardLocation(game, sourceCard);
     const effect = tempEntry.effect || {
       id: tempEntry.id,
       timing: "on_event",
@@ -276,8 +248,11 @@ function collectTemporaryEventTriggers(
       effect,
       ctx,
       activationContext: {
-        activationZone: sourceLocation?.zone || "temporary",
-        sourceZone: sourceLocation?.zone || "temporary",
+        // The registration triggers independently of the physical card's zone.
+        // Keep sourceCard available for actions that explicitly refer to self.
+        activationZone: "temporary",
+        sourceZone: "temporary",
+        sourceWasFacedown: false,
         committed: false,
       },
       selectionKind: "triggered",
@@ -295,7 +270,12 @@ function collectTemporaryEventTriggers(
       },
     });
 
-    if (triggerEntry) entries.push(triggerEntry);
+    if (triggerEntry) {
+      entries.push({
+        ...triggerEntry,
+        ...(tempEntry.id != null ? { registrationId: tempEntry.id } : {}),
+      });
+    }
   }
 
   cleanupTemporaryEventEffects(game);

@@ -1,5 +1,7 @@
 export type SupportedLocale = "en" | "pt-br";
 export interface DisplayCard {
+  nameKey?: string;
+  descriptionKey?: string;
   id?: (string | number | null) | undefined;
   name?: (string | null) | undefined;
   description?: (string | null) | undefined;
@@ -37,6 +39,18 @@ const SUPPORTED_LOCALES = ["en", "pt-br"] as const;
 
 const DEFAULT_LOCALE_TEXTS = {
   ui: {
+    tokens: {
+      summonedSkeleton: {
+        name: "Summoned Skeleton Token",
+        description: "A Skeleton Token Special Summoned by necromancy.",
+      },
+    },
+    genericEffects: {
+      specialSummon: "Special Summon",
+      deSynchroRevive: "Special Summon the Synchro Materials used for {sourceCardName}?",
+      fusionRecycleSummon: "Special Summon the added monster in Defense Position?",
+      keepInHand: "Keep in hand",
+    },
     common: {
       ok: "OK",
       cancel: "Cancel",
@@ -157,6 +171,11 @@ const DEFAULT_LOCALE_TEXTS = {
       spellSelection: "Select target(s) for the spell effect.",
       spellTrapSelection: "Select target(s) for the spell/trap effect.",
       noFusionMaterials: "You do not have valid materials for a Fusion Summon!",
+    },
+    normalSummonEffect: {
+      chooseMonster: "Choose a monster to Normal Summon.",
+      chooseTributes: "Choose Tributes for {card}.",
+      invalidTributes: "Choose a legal combination of Tributes.",
     },
     trap: {
       activateTitle: "Activate Trap?",
@@ -1093,6 +1112,8 @@ function getCardDisplayProperty(
   const fallbackText = String(
     property === "name" ? card?.name || "" : card?.description || "",
   ).trim();
+  const textKey = property === "name" ? card?.nameKey : card?.descriptionKey;
+  if (textKey) return getUIText(textKey, {}, fallbackText);
   const idKey = card && (card.id !== undefined ? String(card.id) : null);
   if (idKey) {
     const localeEntry = normalizedLocales[currentLocale]?.cards?.[idKey];

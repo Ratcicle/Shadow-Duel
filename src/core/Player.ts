@@ -1,3 +1,5 @@
+import { getNormalTributeRequirement } from "./game/summon/tributeValue.js";
+import type { NormalSummonOptions } from "./contracts/player.js";
 import {
   cardDatabase,
   cardDatabaseById,
@@ -654,60 +656,7 @@ export default class Player implements GamePlayer {
   }
 
   getTributeRequirement(card: GameCard): TributeRequirement {
-    let tributesNeeded = 0;
-    if (card.level >= 5 && card.level <= 6) tributesNeeded = 1;
-    else if (card.level >= 7) tributesNeeded = 2;
-
-    let usingAlt = false;
-    const alt = card.altTribute;
-
-    if (
-      alt &&
-      "type" in alt &&
-      alt.type === "no_tribute_if_empty_field" &&
-      this.field.length === 0 &&
-      tributesNeeded > 0
-    ) {
-      tributesNeeded = 0;
-      usingAlt = true;
-    }
-
-    // Check if player has specific card by name
-    if (
-      alt &&
-      "requiresName" in alt &&
-      alt.requiresName &&
-      this.field.some((c) => c && c.name === alt.requiresName)
-    ) {
-      if (alt.tributes < tributesNeeded) {
-        tributesNeeded = alt.tributes;
-        usingAlt = true;
-      }
-    }
-
-    // Check if player has card of specific type
-    if (alt && "requiresType" in alt && alt.requiresType && !usingAlt) {
-      const hasRequiredType = this.field.some((c) => {
-        if (!c || c.isFacedown) return false;
-        return Array.isArray(c.types)
-          ? c.types.includes(alt.requiresType)
-          : c.type === alt.requiresType;
-      });
-
-      if (hasRequiredType && alt.tributes < tributesNeeded) {
-        tributesNeeded = alt.tributes;
-        usingAlt = true;
-      }
-    }
-
-    if (
-      typeof card.requiredTributes === "number" &&
-      card.requiredTributes >= 0
-    ) {
-      tributesNeeded = card.requiredTributes;
-    }
-
-    return { tributesNeeded, usingAlt, alt };
+    return getNormalTributeRequirement(card, this.field);
   }
 
   async summon(
@@ -715,6 +664,7 @@ export default class Player implements GamePlayer {
     position: BattlePosition = "attack",
     isFacedown = false,
     tributeIndices: readonly number[] | null = null,
+    options: NormalSummonOptions = {},
   ): Promise<SummonExecutionResult | null> {
     const card = this.hand[cardIndex];
     const failSummon = (reason: string, code = "SUMMON_BLOCKED"): null => {
@@ -871,7 +821,7 @@ export default class Player implements GamePlayer {
         card,
         controller: this,
         sourceZone: "hand",
-        summonOrigin: "procedure",
+        summonOrigin: options.summonOrigin ?? "procedure",
         summonMode: willSet ? "set" : "summon",
         summonMethod,
         summonProcedure: summonMethod,
@@ -903,7 +853,7 @@ export default class Player implements GamePlayer {
             resetAttackFlags: true,
             summonMethodOverride: summonMethod,
             summonProcedure: summonMethod,
-            summonOrigin: "procedure",
+            summonOrigin: options.summonOrigin ?? "procedure",
             summonMode: willSet ? "set" : "summon",
             summonTransaction: transaction,
             tributes: tributedCards,

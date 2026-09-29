@@ -3,7 +3,9 @@ import test from "node:test";
 import type ChainSystem from "../../src/core/ChainSystem.js";
 import type { CardAction } from "../../src/core/contracts/actions.js";
 import type { ChainPlayer } from "../../src/core/contracts/chainRuntime.js";
+import type { EffectDefinition } from "../../src/core/contracts/effects.js";
 import { objectResult, required, unsafeFixture } from "../helpers/fixtures.js";
+import { createRuntimeGame, placeFieldCards, runtimeCard } from "../helpers/game.js";
 
 import {
   handleNegateActivation,
@@ -199,6 +201,144 @@ test("[CS-06] efeito de monstro sob Skill Drain pode ser ativado e resolve negad
   assert.equal(link.effectNegationReason, "continuous_effect_negation");
   assert.equal(link.resolvedWithoutEffect, true);
   assert.equal(player.field.includes(source), true);
+});
+
+test("negação contínua alcança efeitos face-up de cada zona sem devolver o custo ou negar a ativação", async (t) => {
+  const cases = [
+    ["Monster", "monster", null, "field"],
+    ["Equip Spell", "spell", "equip", "spellTrap"],
+    ["Continuous Spell", "spell", "continuous", "spellTrap"],
+    ["Continuous Trap", "trap", "continuous", "spellTrap"],
+    ["Field Spell", "spell", "field", "fieldSpell"],
+  ] as const;
+
+  for (const [name, cardKind, subtype, zone] of cases) {
+    await t.test(name, async (caseContext) => {
+      const game = createRuntimeGame({ laboratoryMode: true, captureReplay: false });
+      caseContext.after(() => game.dispose());
+      game.player.controllerType = "ai";
+      game.bot.controllerType = "ai";
+      game.disablePresentationDelays = true;
+      const effect = {
+        id: "negated_faceup_effect",
+        timing: "manual",
+        speed: 2,
+        isQuickEffect: true,
+        activationZones: [zone],
+        oncePerTurn: true,
+        usagePolicy: "activate",
+        activationCosts: [{ type: "pay_lp", player: "self", amount: 400 }],
+        actions: [{ type: "damage", player: "opponent", amount: 300 }],
+      } satisfies EffectDefinition;
+      const source = runtimeCard({
+        name,
+        cardKind,
+        subtype,
+        effects: [effect],
+        effectsNegated: true,
+      }, game.player.id);
+      if (zone === "fieldSpell") game.player.fieldSpell = source;
+      else placeFieldCards(game.player[zone], source);
+      const prepared = game.chainSystem.createPreparedActivation({
+        card: source,
+        controller: game.player,
+        effect,
+        activationZone: zone,
+        committed: true,
+      });
+      const cost = await game.chainSystem.payActivationCosts(prepared);
+      assert.equal(cost.success, true);
+      assert.equal(game.player.lp, 7600);
+      const link = game.chainSystem.addToChain(prepared);
+      assert.ok(link);
+
+      const result = objectResult(await game.chainSystem.resolveChain());
+
+      assert.equal(result.success, true);
+      assert.equal(game.bot.lp, 8000, "The negated damage action must not resolve.");
+      assert.equal(game.player.lp, 7600, "Effect negation must not refund activation costs.");
+      assert.equal(link.activationNegated, false);
+      assert.equal(link.effectNegated, true);
+      assert.equal(link.effectNegationReason, "continuous_effect_negation");
+      assert.equal(required(link.usageReservation).status, "consumed");
+      assert.equal(game.chainSystem.determineCardZone(source, game.player), zone);
+    });
+  }
+});
+
+test("negação da nova permanência não alcança o elo criado antes de a fonte sair e voltar", async (t) => {
+  const cases = [
+    ["Monster", "monster", null, "field"],
+    ["Normal Spell", "spell", "normal", "spellTrap"],
+    ["Normal Trap", "trap", "normal", "spellTrap"],
+  ] as const;
+
+  for (const [name, cardKind, subtype, zone] of cases) {
+    await t.test(name, async () => {
+      const { chain, game, player, trace } = createChainHarness();
+      const card = createTestCard({ name, cardKind, subtype, effectsNegated: true });
+      placeCard(player, zone, card);
+      const link = required(chain.addToChain(chain.createPreparedActivation({
+        card,
+        controller: player,
+        effect: createTestEffect({ actions: [{ type: "draw", amount: 1 }] }),
+        activationZone: zone,
+        committed: true,
+        costsPaid: true,
+      })));
+      await game.moveCard(card, player, "graveyard", { fromZone: zone });
+      await game.moveCard(card, player, zone, { fromZone: "graveyard" });
+
+      const result = objectResult(await chain.resolveChain());
+
+      assert.equal(result.success, true);
+      assert.equal(trace.actions.length, 1);
+      assert.equal(required(link.sourceValidity).sameLocation, false);
+      assert.equal(link.activationNegated, false);
+      assert.equal(link.effectNegated, false);
+      const context = required(trace.actions[0]).ctx.activationContext;
+      assert.equal(context?.sourceAtActivation?.locationVersion, 0);
+      assert.equal(context?.sourceAtActivation?.zone, zone);
+      assert.equal(context?.sourceAtActivation?.cardInstanceId, card.instanceId);
+    });
+  }
+});
+
+test("negação contínua revalida face e permanência depois da apresentação da ativação", async (t) => {
+  for (const leavesField of [false, true]) {
+    await t.test(leavesField ? "leaves and returns" : "revealed on the field", async () => {
+      const { chain, game, player, trace } = createChainHarness();
+      const card = createTestCard({
+        name: "Source during activation presentation",
+        cardKind: "spell",
+        subtype: "normal",
+        isFacedown: true,
+        effectsNegated: true,
+      });
+      placeCard(player, "spellTrap", card);
+      const link = required(chain.addToChain(chain.createPreparedActivation({
+        card,
+        controller: player,
+        effect: createTestEffect({ actions: [{ type: "draw", amount: 1 }] }),
+        activationZone: "spellTrap",
+        committed: true,
+        costsPaid: true,
+      })));
+      game.presentSpellTrapActivationFlip = async () => {
+        if (leavesField) {
+          await game.moveCard(card, player, "graveyard", { fromZone: "spellTrap" });
+          await game.moveCard(card, player, "spellTrap", { fromZone: "graveyard" });
+        }
+        card.isFacedown = false;
+      };
+
+      const result = objectResult(await chain.resolveChain());
+
+      assert.equal(result.success, true);
+      assert.equal(trace.actions.length, leavesField ? 1 : 0);
+      assert.equal(link.effectNegated, !leavesField);
+    });
+  }
 });
 
 test("[CS-06] Spell/Trap cuja ativação foi negada recebe o destino correto", async (t) => {

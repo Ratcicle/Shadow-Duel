@@ -29,6 +29,26 @@ import { isActiveEquipInZone } from "../../effects/passives/passiveBuffs.js";
 import { canSimulatedSpecialSummon, canSimulatedProcedureEnterField } from "./simulation.js";
 import { canMoveCardToZone } from "./zones.js";
 import { hasActionZoneCandidates } from "./actionValidation.js";
+import { canActivateSpellTrapEffect } from "./previewGuards.js";
+import { canUseSimulatedEffectUsage } from "./simStateUtils.js";
+
+/** GY ignition candidates shared by strategies; the legacy action name also covers Traps. */
+export function getGenericGraveyardSpellTrapActions(game: AIState, player: AIStrategyBotPort): AIActionOf<"graveyardSpellEffect">[] {
+  if ((game.phase !== "main1" && game.phase !== "main2") || game.turn !== player.id) return [];
+  return (player.graveyard || []).flatMap((card, graveyardIndex) => {
+    if (card.cardKind !== "spell" && card.cardKind !== "trap") return [];
+    const effect = card.effects?.find(e => e.timing === "ignition" && e.activationZones?.includes("graveyard"));
+    if (!effect) return [];
+    const activationContext: AIActivationContext = { activationZone: "graveyard", sourceZone: "graveyard", effectId: effect.id };
+    if (game._isPerspectiveState) {
+      if (!canUseSimulatedEffectUsage(game, effect, card, player.id, true)) return [];
+      if (!effect.actions?.every(action => hasActionZoneCandidates(player, action, card))) return [];
+      if (effect.activationCosts?.some(cost => cost.type === "move" && cost.targetRef === "self" &&
+        !canMoveCardToZone(player, card, cost.to || "graveyard", player, { state: game }))) return [];
+    } else if (!canActivateSpellTrapEffect(game, card, player, "graveyard", activationContext)) return [];
+    return [buildPrioritizedAction({ type: "graveyardSpellEffect", graveyardIndex, card, effect, priority: 6, activationContext })];
+  });
+}
 
 /** Enumerate procedures from this state only; no live Game lookup or archetype scoring. */
 export function getGenericSynchroActions(

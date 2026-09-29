@@ -670,10 +670,16 @@ function getChainLinkEffectNegation(
       source: link.effectNegatedBy || null,
     };
   }
-  if (link.card?.cardKind !== "monster" || activationZone !== "field") {
+  if (
+    activationZone !== "field" &&
+    activationZone !== "spellTrap" &&
+    activationZone !== "fieldSpell"
+  ) {
     return { negated: false, reason: null, source: null };
   }
-  const validity = link.sourceValidity || chainSystem.getChainSourceValidity?.(link);
+  // Activation presentation can yield after the earlier source-validity check.
+  const validity = chainSystem.getChainSourceValidity?.(link) || link.sourceValidity;
+  if (validity) link.sourceValidity = validity;
   if (!validity?.sameLocation || validity.faceUp !== true) {
     return { negated: false, reason: null, source: null };
   }
@@ -1009,6 +1015,7 @@ async function applyChainEffect(
       ...(link.activationContext?.decisions ? { decisions: link.activationContext.decisions } : {}),
       chainLevel: link.chainLevel,
       effectId: effect?.id || null,
+      sourceAtActivation: link.sourceAtActivation,
       sourceZone: activationZone,
       chainContext: link.context?.type || null,
       context: link.context || null,

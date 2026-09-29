@@ -2249,6 +2249,7 @@ export function applyGenericSimulatedMainPhaseAction<
       break;
     }
 
+    case "graveyardSpellEffect":
     case "graveyardMonsterEffect": {
       const player = state.bot;
       const graveyardIndex = Number.isInteger(action.graveyardIndex as number)
@@ -2256,12 +2257,12 @@ export function applyGenericSimulatedMainPhaseAction<
         : player.graveyard?.findIndex(
             (card) =>
               card &&
-              card.cardKind === "monster" &&
+              (action.type === "graveyardMonsterEffect" ? card.cardKind === "monster" : card.cardKind === "spell" || card.cardKind === "trap") &&
               (card.id === action.cardId ||
                 (!action.cardId && card.name === action.cardName)),
           );
       const card = player.graveyard?.[graveyardIndex!];
-      if (!card || card.cardKind !== "monster") break;
+      if (!card || (action.type === "graveyardMonsterEffect" ? card.cardKind !== "monster" : card.cardKind !== "spell" && card.cardKind !== "trap")) break;
       const effect = resolveEffectForAction(card, action, ["ignition"]);
       if (!effect || !effect.activationZones?.includes("graveyard")) break;
       if (!effectConditionsPass(state, effect, card, selectionOptions)) {
@@ -2449,7 +2450,6 @@ export function applyGenericSimulatedMainPhaseAction<
     }
 
     // These actions are handled by strategy overrides, or leave this generic simulation unchanged.
-    case "graveyardSpellEffect":
     case "special_summon_sanctum_protector":
       break;
     default:

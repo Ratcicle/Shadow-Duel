@@ -517,6 +517,7 @@ export async function collectTriggerCandidates(
         occurrence.atomicGroupId,
         stableCardKey(card),
         effect.id || effectOrder,
+        entry.registrationId ?? "",
       ].join("|");
       if (dedupe.has(key)) continue;
       dedupe.add(key);
