@@ -10,13 +10,14 @@ import {
 } from "./quickSpellRules.js";
 import type { QuickSpellContext } from "./quickSpellRules.js";
 import { getUIText } from "../../i18n.js";
+import type { DecisionBrokerPort } from "../../contracts/decisions.js";
 import type { MaybePromise } from "../../contracts/actionRuntime.js";
 import type { GameCard } from "../../contracts/cards.js";
 import type { EffectDefinition } from "../../contracts/effects.js";
 import type { GamePlayer } from "../../contracts/player.js";
 import type { CanonicalSelectionMap } from "../../contracts/selection.js";
 
-type SpellTrapActivationZone = "hand" | "spellTrap" | "fieldSpell";
+type SpellTrapActivationZone = "hand" | "spellTrap" | "fieldSpell" | "graveyard";
 
 interface ActivationResult {
   ok?: boolean;
@@ -30,7 +31,7 @@ interface ActivationResult {
 
 interface ActivationCommitInfo {
   cardRef: GameCard;
-  activationZone: "spellTrap" | "fieldSpell";
+  activationZone: "spellTrap" | "fieldSpell" | "graveyard";
   fromIndex: number;
   zoneIndex?: number | null;
   replacedFieldSpell?: GameCard | null;
@@ -41,12 +42,14 @@ interface SpellTrapActivationContext {
   activationZone?: (SpellTrapActivationZone | null) | undefined;
   sourceZone?: SpellTrapActivationZone;
   committed?: boolean | undefined;
+  chainFinalizationHandled?: boolean;
   commitInfo?: ActivationCommitInfo | null;
   actionContext?: unknown;
   effectId?: (string | null) | undefined;
   chainId?: number | null;
   linkId?: number | null;
   autoSelectSingleTarget?: boolean | undefined;
+  autoSelectTargets?: boolean | undefined;
   trapActivationFromSet?: boolean;
   quickSpellActivationFromSet?: boolean;
   quickSpellContext?: QuickSpellContext | null;
@@ -61,17 +64,17 @@ interface ActionGuardConfig {
 interface ActivationPipelineInfo {
   card: GameCard;
   owner: GamePlayer;
-  activationZone: "spellTrap" | "fieldSpell";
+  activationZone: "spellTrap" | "fieldSpell" | "graveyard";
   activationContext: SpellTrapActivationContext;
 }
 
 interface SpellTrapPipelineConfig {
   card: GameCard;
   owner: GamePlayer;
-  activationZone?: "spellTrap" | "fieldSpell";
+  activationZone?: "spellTrap" | "fieldSpell" | "graveyard";
   activationContext: SpellTrapActivationContext;
   selections?: CanonicalSelectionMap | null;
-  selectionKind: "spellTrapEffect" | "fieldSpell";
+  selectionKind: "spellTrapEffect" | "fieldSpell" | "graveyardEffect";
   selectionMessage: string;
   guardKind: string;
   phaseReq: readonly string[] | null;
@@ -86,14 +89,14 @@ interface SpellTrapPipelineConfig {
   activate(
     selections: CanonicalSelectionMap | null,
     context: SpellTrapActivationContext,
-    zone: "spellTrap" | "fieldSpell",
+    zone: "spellTrap" | "fieldSpell" | "graveyard",
     resolvedCard: GameCard,
   ): MaybePromise<ActivationResult | boolean | null | undefined>;
   finalize?(
     result: ActivationResult,
     info: ActivationPipelineInfo,
   ): MaybePromise<void>;
-  onFailure?(result: ActivationResult): void;
+  onFailure?(result: ActivationResult, context: SpellTrapActivationContext): void;
   onCancel?(): void;
 }
 
@@ -112,6 +115,7 @@ interface FinalizeSpellCardOptions {
 }
 
 interface SpellTrapActivationOptions {
+  activationContext?: SpellTrapActivationContext;
   owner?: GamePlayer | null;
   activationZone?: SpellTrapActivationZone | null;
   effectId?: string | null;
@@ -134,6 +138,7 @@ interface FieldActivationSnapshot {
 }
 
 interface SpellTrapActivationHost {
+  requestDecision: DecisionBrokerPort["requestDecision"];
   player: GamePlayer;
   bot: GamePlayer;
   turn: string;
@@ -158,7 +163,7 @@ interface SpellTrapActivationHost {
     canActivateSpellTrapEffectPreview?(
       card: GameCard,
       owner: GamePlayer,
-      zone: "spellTrap",
+      zone: "spellTrap" | "graveyard",
       selections: CanonicalSelectionMap | null,
       options: unknown,
     ): ActivationResult | null;
@@ -326,6 +331,31 @@ export async function tryActivateSpellTrapEffect(
     zone: "spellTrap",
   });
 
+  if (options.activationZone === "graveyard") {
+    if (!owner.graveyard.includes(card)) return this.createActionResult({ success: false, reason: "Card is not in your Graveyard." });
+    const activationContext: SpellTrapActivationContext = {
+      ...options.activationContext,
+      fromHand: false,
+      activationZone: "graveyard",
+      sourceZone: "graveyard",
+      committed: false,
+    };
+    const preview = this.effectEngine.canActivateSpellTrapEffectPreview?.(card, owner, "graveyard", selections, { activationContext });
+    if (preview?.ok === false) return this.normalizeActivationResult(preview);
+    const effect = this.effectEngine.getSpellTrapActivationEffect?.(card, { fromHand: false, activationZone: "graveyard" });
+    return this.runActivationPipeline({
+      card, owner, activationZone: "graveyard", selections,
+      activationContext: { ...activationContext, effectId: effect?.id || null },
+      selectionKind: "graveyardEffect",
+      selectionMessage: getSpellTrapSelectionMessage(card),
+      guardKind: "graveyard_spell_effect",
+      phaseReq: ["main1", "main2"],
+      oncePerTurn: { card, player: owner, effect },
+      activate: (chosen, context) => this.effectEngine.activateSpellTrapEffect(card, owner, chosen, "graveyard", context),
+      finalize: () => { this.updateBoard(); },
+    });
+  }
+
   const isTrap = card.cardKind === "trap";
   const quickSpellActivationFromSet =
     isQuickSpell(card) &&
@@ -398,10 +428,19 @@ export async function tryActivateSpellTrapEffect(
         }
       : null;
   if (card.cardKind === "trap") {
-    const confirmed = await this.ui.showTrapActivationModal(
-      card,
-      "manual_activation",
-    );
+    const confirmation = await this.requestDecision({
+      kind: "choice",
+      actor: owner,
+      candidates: [],
+      requireCandidate: false,
+      resolveHuman: async () => await this.ui.showTrapActivationModal(card, "manual_activation")
+        ? {} : null,
+      resolveAI: () => ({}),
+      serializeResult: result => result ? { pass: false, candidateKey: "activate", effectId: null } : { pass: true },
+      deserializeReplayValue: value => "candidateKey" in value && value.candidateKey === "activate"
+        ? {} : null,
+    });
+    const confirmed = confirmation !== null;
 
     if (!confirmed) {
       this.devLog?.("TRAP_ACTIVATION_CANCELLED", {
@@ -489,15 +528,15 @@ export async function tryActivateSpellTrapEffect(
         await this.finalizeSpellTrapActivation(
           card,
           owner,
-          info.activationZone,
+          info.activationZone === "graveyard" ? null : info.activationZone,
           { activationContext: info.activationContext },
         );
         this.ui.log(`${card.name} effect activated.`);
       }
       this.updateBoard();
     },
-    onFailure: (result) => {
-      if (fieldActivationSnapshot) {
+    onFailure: (result, context) => {
+      if (fieldActivationSnapshot && context.chainFinalizationHandled !== true) {
         this.rollbackFieldSpellTrapActivation?.(
           fieldActivationSnapshot,
           result,
@@ -545,7 +584,7 @@ export async function finalizeSpellCardActivation(
   if (placementOnly) {
     this.ui?.log?.(placementLog || `${card.name} is placed on the field.`);
   } else {
-    await this.finalizeSpellTrapActivation(card, owner, activationZone, {
+    await this.finalizeSpellTrapActivation(card, owner, activationZone === "graveyard" ? null : activationZone, {
       activationContext: info.activationContext,
     });
     this.ui?.log?.(

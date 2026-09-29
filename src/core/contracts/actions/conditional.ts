@@ -26,7 +26,7 @@ export interface ConditionalActionMap {
     | "promptMessageKey" | "promptTitle" | "promptTitleKey" | "allowCancel"
     | "logIfSkipped" | "optional" | "confirmOnly" | "requireConfirmation"
     | "confirmationId" | "selectionId" | "selectionLabel" | "confirmLabel"
-    | "cancelLabel"
+    | "cancelLabel" | "confirmLabelKey" | "cancelLabelKey"
   >;
   conditional_actions: DefineAction<
     "conditional_actions",

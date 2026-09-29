@@ -1,5 +1,5 @@
 import { getEffectiveAtk } from "../cardStats.js";
-import { removeFieldAuraBuffContributions, suppressTemporaryDynamicStatIncreasesForDebuff } from "../../../effects/passives/passiveBuffs.js";
+import { refreshEquipExtraAttackBonus, removeFieldAuraBuffContributions, suppressTemporaryDynamicStatIncreasesForDebuff } from "../../../effects/passives/passiveBuffs.js";
 import { getCounterValue, setCounterValue } from "../counters.js";
 import { estimateMonsterValue, hasArchetype } from "../cardValue.js";
 import {
@@ -840,6 +840,9 @@ export function applyAddStatus(
         }
       }
       if (status === "effectsNegated") {
+        if (card.cardKind === "spell" && card.subtype === "equip" && card.equippedTo) {
+          refreshEquipExtraAttackBonus(card, card.equippedTo, card.effectsNegated !== true);
+        }
         const field = [...state.player.field, ...state.bot.field];
         if (card.effectsNegated === true) removeFieldAuraBuffContributions(card, field, field.indexOf(card));
         card.effects?.forEach((effect) => {

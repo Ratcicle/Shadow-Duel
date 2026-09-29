@@ -1,6 +1,7 @@
 import type { DefineAction } from "./shared.js";
 
 export interface SummonActionMap {
+  normal_summon_from_hand: DefineAction<"normal_summon_from_hand", never, "player" | "filters">;
   abyssal_serpent_delayed_summon: DefineAction<
     "abyssal_serpent_delayed_summon",
     never,
@@ -82,6 +83,7 @@ export interface SummonActionMap {
     "targetRef",
     | "position" | "contextLabel" | "reviveContextLabel" | "promptMessage"
     | "promptTitle" | "confirmLabel" | "cancelLabel"
+    | "promptMessageKey" | "promptTitleKey" | "confirmLabelKey" | "cancelLabelKey"
   >;
   synchro_summon_from_extra_deck: DefineAction<
     "synchro_summon_from_extra_deck",

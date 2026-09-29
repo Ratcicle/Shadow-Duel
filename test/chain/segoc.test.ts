@@ -415,6 +415,26 @@ test("eventos sobrepostos no mesmo grupo atÃ´mico nÃ£o duplicam o mesmo trig
   assert.deepEqual(activatedEffects(trace), ["deduplicated_effect"]);
 });
 
+test("temporary registrations deduplicate within each atomic group independently", async () => {
+  const harness = createChainHarness({ playerControllerType: "ai" });
+  const { chain, player, trace } = harness;
+  const group = chain.allocateAtomicEventGroupId();
+  const entry = createEntry(harness, player, "registered");
+  const entries = [
+    { ...entry, registrationId: "first" },
+    { ...entry, registrationId: "second" },
+  ];
+  const result = await chain.resolveTriggerOccurrences([
+    occurrence(chain, entries, { atomicGroupId: group }),
+    occurrence(chain, entries, { atomicGroupId: group }),
+  ]);
+  assert.equal(result.triggerCount, 2);
+  assert.deepEqual(activatedEffects(trace), ["registered_effect", "registered_effect"]);
+
+  const next = await chain.resolveTriggerOccurrences([occurrence(chain, entries)]);
+  assert.equal(next.triggerCount, 2);
+});
+
 test("estado e eventos de SEGOC sÃ£o serializÃ¡veis", async () => {
   const harness = createChainHarness({ playerControllerType: "ai" });
   const { chain, game, player, trace } = harness;

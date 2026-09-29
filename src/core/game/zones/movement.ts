@@ -6,6 +6,7 @@ import {
   restoreTrapMonsterOriginalState,
 } from "../../Card.js";
 import { SUMMON_MODES } from "../summon/transaction.js";
+import { refreshEquipExtraAttackBonus } from "../../effects/passives/passiveBuffs.js";
 import { getAvailableFieldSlots, getFieldOccupants, isFieldSlot } from "./placement.js";
 import { checkpointZoneSnapshotAfterResponse } from "./snapshot.js";
 import type { FieldPlacementIntent } from "../../contracts/placement.js";
@@ -361,6 +362,7 @@ export async function cleanupTokenReferences(
 
   // Process equips: clear refs and send to GY
   for (const { equip, owner } of attachedEquips) {
+    refreshEquipExtraAttackBonus(equip, token, false);
     // Clear equip references
     if (equip.equippedTo === token) {
       equip.equippedTo = null;
@@ -1900,11 +1902,16 @@ export function canSpecialSummonUnderRestrictions(
     return { ok: true };
   }
 
-  this.cleanupExpiredSpecialSummonRestrictions?.(player);
+  if (options.silent !== true) this.cleanupExpiredSpecialSummonRestrictions?.(player);
   const restrictions = Array.isArray(player.specialSummonRestrictions)
     ? player.specialSummonRestrictions
     : [];
   for (const restriction of restrictions) {
+    if (
+      restriction?.duration === "until_end_turn" &&
+      Number.isFinite(restriction.expiresOnTurn) &&
+      Number(restriction.expiresOnTurn) < Number(this.turnCounter || 0)
+    ) continue;
     if (!restriction?.allowedFilters) continue;
     if (cardMatchesRestrictionFilters(this, card, restriction.allowedFilters)) {
       continue;
@@ -2880,15 +2887,8 @@ export async function moveCardInternal(
         card.equipDefBonus = 0;
       }
 
-      if (
-        typeof card.equipExtraAttacks === "number" &&
-        card.equipExtraAttacks !== 0
-      ) {
-        const currentExtra = host.extraAttacks || 0;
-        const nextExtra = currentExtra - card.equipExtraAttacks;
-        host.extraAttacks = Math.max(0, nextExtra);
-        card.equipExtraAttacks = 0;
-      }
+      refreshEquipExtraAttackBonus(card, host, false);
+      card.equipExtraAttacks = 0;
 
       const maxAttacksAfterEquipChange = 1 + (host.extraAttacks || 0);
       host.hasAttacked =
@@ -3020,14 +3020,8 @@ export async function moveCardInternal(
         card.def = Math.max(0, (card.def || 0) - equip.equipDefBonus);
         equip.equipDefBonus = 0;
       }
-      if (
-        typeof equip.equipExtraAttacks === "number" &&
-        equip.equipExtraAttacks !== 0
-      ) {
-        const currentExtra = card.extraAttacks || 0;
-        card.extraAttacks = Math.max(0, currentExtra - equip.equipExtraAttacks);
-        equip.equipExtraAttacks = 0;
-      }
+      refreshEquipExtraAttackBonus(equip, card, false);
+      equip.equipExtraAttacks = 0;
       if (equip.grantsBattleIndestructible) {
         card.battleIndestructible = false;
         equip.grantsBattleIndestructible = false;

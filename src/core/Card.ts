@@ -290,6 +290,8 @@ export default class Card implements GameCard {
   declare id: RawCardDefinitionId | CardDefinitionId | undefined;
   declare duelCardId?: DuelCardId;
   declare name: string;
+  declare nameKey?: string;
+  declare descriptionKey?: string;
   declare cardKind: CardKind;
   declare originalCardKind?: CardKind | null;
   declare treatedAsCardKinds?: CardKind[];
@@ -348,6 +350,7 @@ export default class Card implements GameCard {
   declare equipAtkBonus: number;
   declare equipDefBonus: number;
   declare equipExtraAttacks: number;
+  declare equipExtraAttacksApplied?: number;
   declare grantsBattleIndestructible: boolean;
   declare battleIndestructible: boolean;
   declare tempBattleIndestructible: boolean;
@@ -437,6 +440,8 @@ export default class Card implements GameCard {
     this.locationVersion = 0;
     this.id = data.id;
     this.name = data.name;
+    if (data.nameKey !== undefined) this.nameKey = data.nameKey;
+    if (data.descriptionKey !== undefined) this.descriptionKey = data.descriptionKey;
     this.cardKind = data.cardKind || "monster"; // monster | spell | trap
     this.subtype = data.subtype || null; // normal | quick | continuous | counter | etc
     this.monsterType = data.monsterType || null; // fusion, synchro, etc.

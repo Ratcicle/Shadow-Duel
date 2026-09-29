@@ -308,6 +308,18 @@ export function createCanonicalStateSnapshot(
     }
     return record;
   });
+  const canonicalEventEffects = normalizeValue(game.temporaryEventEffects || [], new WeakSet(), (entry) => {
+    if (!Object.hasOwn(entry, "sourceDuelCardId") || !Object.hasOwn(entry, "boundEventTargetDuelCardId")) return undefined;
+    const record: SerializableObject = {};
+    for (const key of Object.keys(entry)) {
+      // Runtime links use process-local instance IDs. Registered duel identities
+      // survive even if the source/target has disappeared from every zone.
+      if (key === "sourceInstanceId" || key === "boundEventTargetInstanceId") continue;
+      const value = stableValue(readProperty(entry, key));
+      if (value !== undefined) record[key] = value;
+    }
+    return record;
+  });
   return {
     fieldPlacementSequence: game.generatedIdCounters?.get("field_placement") || 0,
     turn: game.turn ?? null,
@@ -320,7 +332,7 @@ export function createCanonicalStateSnapshot(
     },
     usage,
     delayedActions: stableValue(game.delayedActions || []) ?? [],
-    temporaryEventEffects: stableValue(game.temporaryEventEffects || []) ?? [],
+    temporaryEventEffects: canonicalEventEffects ?? [],
     temporaryControlEffects: canonicalControl ?? [],
     chain: {
       links: stableValue(game.chainSystem?.getChainSummary?.() || []) ?? [],

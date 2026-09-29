@@ -18,6 +18,58 @@ import { createRuntimeGame, placeFieldCards } from "../helpers/game.js";
 type Actor = "player" | "bot";
 type Combo = "lancer" | "wyvern" | "raptor";
 
+for (const actor of ["player", "bot"] as const) {
+  test(`Tech-Zero preserves Final Singularity instead of tribute summoning Connector (${actor})`, async t => {
+    const { bot, botGame, make } = scenario(t, actor);
+    const singularity = make(517), connector = make(507);
+    bot.hand = [connector]; bot.deck = []; bot.extraDeck = [];
+    placeFieldCards(bot.field, singularity);
+    const state = bot.cloneGameState(botGame);
+    assert.equal(bot.generateMainPhaseActions(botGame).some(action => action.type === "summon"), false);
+    assert.equal(bot.strategy.generateMainPhaseActions(state).some(action => action.type === "summon"), false);
+    await playBotMainPhase(bot, botGame);
+    assert.ok(bot.field.includes(singularity));
+    assert.ok(bot.hand.includes(connector));
+    assert.equal(bot.summonCount, 0);
+  });
+
+  test(`Tech-Zero rejects a stale Connector tribute in simulation and execution (${actor})`, async t => {
+    const { bot, botGame, make } = scenario(t, actor);
+    const singularity = make(517), connector = make(507);
+    singularity.atk = 0;
+    singularity.effectsNegated = true;
+    bot.hand = [connector]; bot.deck = []; bot.extraDeck = [];
+    placeFieldCards(bot.field, singularity);
+    const action: AIAction = { type: "summon", index: 0, cardId: 507, position: "attack" };
+    const state = bot.cloneGameState(botGame);
+    bot.strategy.simulateMainPhaseAction(state, action);
+    assert.deepEqual(state.bot.field.map(card => card.id), [517]);
+    assert.deepEqual(state.bot.hand.map(card => card.id), [507]);
+    assert.equal(await bot.executeMainPhaseAction(botGame, action), false);
+    assert.deepEqual(bot.field, [singularity]);
+    assert.deepEqual(bot.hand, [connector]);
+    assert.equal(bot.summonCount, 0);
+  });
+
+  test(`Tech-Zero tributes an expendable monster beside Final Singularity (${actor})`, async t => {
+    const { bot, botGame, make } = scenario(t, actor);
+    const singularity = make(517), connector = make(507), prism = make(506);
+    singularity.atk = 0;
+    prism.atk = 10000;
+    bot.hand = [connector]; bot.deck = []; bot.extraDeck = [];
+    placeFieldCards(bot.field, singularity, prism);
+    const action = required(bot.generateMainPhaseActions(botGame).find(entry =>
+      entry.type === "summon" && entry.cardId === 507 && entry.position === "attack"));
+    const state = bot.cloneGameState(botGame);
+    bot.strategy.simulateMainPhaseAction(state, action);
+    assert.deepEqual(state.bot.field.map(card => card.id), [517, 507]);
+    assert.ok(state.bot.graveyard.some(card => card.id === 506));
+    assert.equal(await bot.executeMainPhaseAction(botGame, action), true);
+    assert.deepEqual(bot.field, [singularity, connector]);
+    assert.ok(bot.graveyard.includes(prism));
+  });
+}
+
 function scenario(t: TestContext, actor: Actor, combo: Combo = "lancer", drawIds = [518, 17]) {
   const first = new Bot("techzero");
   first.id = "player";

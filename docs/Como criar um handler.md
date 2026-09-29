@@ -11,6 +11,8 @@ Este documento descreve o fluxo atual. Fontes de verdade:
 - `src/core/actionHandlers/registry.ts`: `ActionHandlerRegistry` e `proxyEngineMethod`.
 - `src/core/actionHandlers/actionBindings.ts`: binding exato de cada `action.type`.
 - `src/core/actionHandlers/actionCatalog.ts`: contrato declarativo dos campos.
+- `src/core/actionHandlers/actionWalker.ts`: percorre actions aninhadas e acompanha
+  a ordem e as referências disponíveis para validação.
 - `src/core/effects/actions/core.ts`: dispatcher `applyActions`.
 - `src/core/EffectEngine.ts`: contexto, conditions, passives e métodos legados.
 - `src/core/actionHandlers/shared.ts`: helpers para seleção, custo, summon e zonas.
@@ -24,6 +26,7 @@ src/core/actionHandlers/
   conditional.ts   # conditional_target_actions
   actionCatalog.ts # contratos declarativos das actions
   actionBindings.ts # handlers/proxies ligados a ActionByType
+  actionWalker.ts # percurso de actions aninhadas para validação
   destruction.ts   # destroy/banish/replacement helpers
   movement.ts      # return_to_hand, bounce_and_summon
   negation.ts      # negação de ativação, efeito, Invocação e fluxos relacionados
@@ -68,8 +71,9 @@ Parâmetros:
 - `ctx`: contexto de ativação. Campos comuns: `player`, `opponent`, `source`,
   `activationZone`, `activationContext`, `actionContext`, `summonedCard`,
   `destroyed`, `attacker`, `defender`, `host`, `selections`.
-- `targets`: mapa resolvido por `EffectEngine.resolveTargets`; exemplo:
-  `targets.my_target` é uma lista de cards.
+- `targets`: mapa resolvido por `EffectEngine.resolveTargets`. Um valor pode ser
+  uma carta, lista de cartas, envelope `{ card }`, `null` ou `undefined`.
+  Use `resolveTargetCards` para obter uma lista antes de iterar.
 - `engine`: instância de `EffectEngine`; use `engine.game` para acessar o jogo.
 
 Retornos aceitos:
@@ -90,8 +94,10 @@ O dispatcher combina resultados: se qualquer action retorna `needsSelection`,
 2. Antes de chamar o handler, aplica filtro de imunidade em `targetRef`.
 3. Busca o handler em `engine.actionHandlers.get(action.type)`.
 4. Chama `handler(action, ctx, filteredTargets, engine)`.
-5. Se o handler pedir seleção, a resolução é pausada.
-6. Caso contrário, o próximo action roda.
+5. Se o handler pedir seleção, a resolução é pausada e o contrato é propagado.
+6. Se retornar `false` ou `{ success: false }`, a sequência termina com falha;
+   actions com `optional: true` ou `count.min <= 0` podem ser ignoradas. Nos
+   demais casos, a próxima action roda.
 
 Imunidade:
 
@@ -116,6 +122,9 @@ Não crie handler quando:
 - A carta pode ser expressa com `draw`, `move`, `destroy`, `special_summon_from_zone`,
   `buff_stats_temp`, `add_from_zone_to_hand`, etc.
 - A lógica é puramente um filtro/condição; prefira `targets` ou `conditions`.
+
+Não adicione novas actions de negação, hand traps ou interrupções semelhantes
+sem pedido explícito do diretor criativo.
 
 ## Passo a passo
 
@@ -191,11 +200,14 @@ actions: [{ type: "minha_action", targetRef: "my_target" }]
 
 O typecheck exige keysets idênticos entre `ActionByType`, `ACTION_BINDINGS` e o
 catálogo. O validador também confirma registry, labels, campos e `targetRef`.
+`actionWalker.ts` percorre inclusive actions aninhadas, custos de ativação e
+efeitos de substituição; mantenha referências e ordem válidas nesses fluxos.
 
 ## Trabalhando com targets
 
-Se a carta já declarou `effects[].targets`, consuma via `targets[action.targetRef]`.
-Use os helpers de `shared.ts` quando precisar normalizar:
+Se a carta já declarou `effects[].targets`, obtenha o valor por
+`targets[action.targetRef]` e trate os formatos do contrato. Use os helpers de
+`shared.ts` quando precisar normalizar:
 
 - `resolveTargetCards(action, ctx, targets, options)`: pega alvos por `targetRef`
   e aceita fallback controlado.
@@ -207,7 +219,10 @@ Use os helpers de `shared.ts` quando precisar normalizar:
 - `summonFromHandCore(...)`: núcleo de special summon da mão.
 
 Regra de UI: handler não deve abrir modal próprio se o target pode ser expresso
-em `targets`. Para seleção dinâmica, retorne:
+em `targets`. Para seleção dinâmica que precisa passar pelo pipeline de ativação,
+retorne um `NeedsSelectionResult`. No exemplo, `decoratedCandidates` é uma lista
+de candidatos elegíveis com `key` estável e `cardRef`, como a construída em
+`resources.ts`:
 
 ```ts
 return {
@@ -222,16 +237,27 @@ return {
         zones: ["graveyard"],
         owner: "player",
         filters: { cardKind: "monster" },
-        candidates
+        candidates: decoratedCandidates
       }
     ]
-  },
-  resume: { action, ctx }
+  }
 };
 ```
 
+O resultado não possui campo `resume`. Após a escolha, o pipeline reinvoca a
+ativação com as seleções, disponíveis em `ctx.selections` por id do requisito;
+os valores selecionados são chaves de candidatos. Valide as chaves e recupere
+as cartas antes de aplicar a regra. Prepare o handler para esse novo ingresso
+sem cobrar custos ou repetir mutações já concluídas. Para escolhas humanas,
+preserve a seleção manual; `AutoSelector` pertence aos fluxos de bot/IA.
+
 Antes de criar esse fluxo, procure exemplos reais em `resources.ts`, `summon.ts`
 e `shared.ts`, porque os contratos de seleção também alimentam replay/rede.
+
+Confirmações opcionais devem usar `requestOptionalConfirmation` de
+`shared.ts`, preservando o broker para humano, IA e replay. Resolva as chaves
+de mensagem, título e botões no idioma atual e use os mesmos rótulos no modal
+e na seleção alternativa. Os valores `yes`/`no` independem do idioma.
 
 ## Estado, zonas e eventos
 
@@ -243,6 +269,9 @@ Prefira APIs do jogo em vez de mexer direto em arrays:
 - Emita eventos apenas quando o helper usado não emite automaticamente.
 - Preserve `owner`, `controller`, `isFacedown`, `position`, `summonMethod`,
   flags de ataque e vínculos de equip.
+
+Resolva movimentos, destruições e Invocações um por vez. Cada mudança deve
+concluir seu fluxo de eventos, log e atualização visível antes da próxima.
 
 Eventos importantes que outras cartas escutam:
 
@@ -257,6 +286,14 @@ Eventos importantes que outras cartas escutam:
 Mover/remover carta manualmente sem emitir o evento correto pode quebrar triggers,
 replays, ascension tracking e passives.
 
+Para Equipamentos, declare `requireFaceup: true` no alvo. A Chain revalida a
+mesma carta e sua permanência durante a resolução; o handler não deve escolher
+outro alvo. Equipamentos sem vínculo válido recebem cleanup na finalização da
+ativação, respeitando a permanência da fonte. Se o movimento usar
+`deferCardToGraveTriggerResolution`, encaminhe a `occurrence` retornada em
+`deferredCardToGraveTriggerPackage` à fila de triggers: coletar o pacote não o
+enfileira automaticamente.
+
 ## Custos e falhas
 
 Um handler deve validar antes de mutar sempre que possível:
@@ -267,12 +304,22 @@ Um handler deve validar antes de mutar sempre que possível:
 - LP insuficiente: não mutar.
 - Campo cheio: não invocar.
 
+O preview de `special_summon_self_as_trap_monster` e sua execução compartilham
+`projectTrapMonster` e `checkTrapMonsterSummon`, no domínio existente de
+Invocação. Restrições consultam as características projetadas do monstro, a
+origem `spellTrap` e o procedimento da action. Preview não transforma a fonte
+nem abre escolhas; a execução revalida antes e depois das escolhas de posição
+e slot, antes de transformar e mover a carta.
+
 Se uma action tem custo e efeito, tente executar em ordem segura. Para custos
 complexos, prefira `payCostAndThen` ou um helper existente.
 
 Exemplo atual simplificado de `pay_lp`:
 
 ```ts
+import type { ActionHandler } from "../contracts/actionRuntime.js";
+import { getBaseLpCost } from "../effects/costs/lpCost.js";
+
 export const handlePayLP: ActionHandler<"pay_lp"> = async (
   action,
   ctx,
@@ -283,10 +330,7 @@ export const handlePayLP: ActionHandler<"pay_lp"> = async (
   const game = engine.game;
   if (!player || !game) return false;
 
-  let amount = action.amount || 0;
-  if (action.fraction) {
-    amount = Math.floor(player.lp * action.fraction);
-  }
+  let amount = getBaseLpCost(action, player.lp);
   if (amount <= 0) return false;
 
   if (engine.resolveLpCost) {
@@ -312,6 +356,10 @@ export const handlePayLP: ActionHandler<"pay_lp"> = async (
   return true;
 };
 ```
+
+`getBaseLpCost` usa `fraction` quando ela está presente e multiplica pelo LP
+atual sem arredondar. Preview, execução e simulação de IA compartilham essa
+regra; não calcule ou arredonde a fração separadamente no handler.
 
 ## Preview e ativação
 
@@ -360,8 +408,8 @@ npm run check
 
 ## Boas práticas
 
-- Mantenha action genérica; nomes de carta dentro de handler só como fallback
-  legado ou quando inevitável.
+- Mantenha actions genéricas e reutilizáveis. Parametrize filtros e regras;
+  não adicione lógica hardcoded por nome de carta.
 - Valide entradas e retorne `false` sem mutar em caso inválido.
 - Use `game.moveCard`/helpers para preservar invariantes.
 - Atualize board após mutação.

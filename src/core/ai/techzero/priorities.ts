@@ -7,6 +7,21 @@ import { matchesTargetFilters, normalizeCount } from "../common/targetSelection.
 import { resolvePerspectivePlayers } from "../common/perspective.js";
 import { evaluateTechZeroVisibleBattle } from "./battle.js";
 import { TECH_ZERO_IDS as TZ, isTechZero } from "./knowledge.js";
+import { selectBestTributes } from "../common/tributePolicy.js";
+
+/** Keep the deck's final win condition out of Normal Summon costs, even while weakened. */
+export function selectTechZeroTributes<Card extends AiCardInput>(
+  field: readonly Card[], count: number, cardToSummon: Card,
+): number[] {
+  const candidates = field.filter(card => card.id !== TZ.SINGULARITY);
+  return selectBestTributes(candidates, count, cardToSummon, {}, {
+    evaluateCardValue: card => (card.atk || 0) + (card.isTuner ? 1800 : 0) +
+      (card.monsterType === "synchro" ? 2500 : 0),
+  }).flatMap(index => {
+    const card = candidates[index];
+    return card ? [field.indexOf(card)] : [];
+  });
+}
 
 export interface TechZeroPolicyContext {
   player: AiPlayerInput;

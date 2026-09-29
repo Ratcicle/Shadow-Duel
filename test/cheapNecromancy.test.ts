@@ -93,6 +93,8 @@ test("Cheap Necromancy declara a nova Ficha e a localização PT-BR", () => {
     cannotAttackThisTurn: false,
     token: {
       name: TOKEN_NAME,
+      nameKey: "ui.tokens.summonedSkeleton.name",
+      descriptionKey: "ui.tokens.summonedSkeleton.description",
       atk: 500,
       def: 500,
       level: 1,

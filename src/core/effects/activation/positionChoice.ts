@@ -1,4 +1,5 @@
 import { isAI } from "../../Player.js";
+import type { DecisionBrokerPort } from "../../contracts/decisions.js";
 import type {
   ActionRuntimeCard,
   ActionRuntimePlayer,
@@ -33,6 +34,7 @@ interface PositionChosenPayload {
 }
 
 interface PositionChoiceGamePort {
+  requestDecision?: DecisionBrokerPort["requestDecision"];
   turnCounter?: number;
   phase?: string;
   devLog?(event: "SS_POSITION", payload: object): void;
@@ -145,7 +147,7 @@ export async function chooseSpecialSummonPosition(
   // Player gets modal for position choice
   if (this.ui && typeof this.ui.showSpecialSummonPositionModal === "function") {
     const ui = this.ui;
-    return new Promise<BattlePosition>((resolve) => {
+    const resolveHuman = () => new Promise<BattlePosition>((resolve) => {
       ui.showSpecialSummonPositionModal(card, (choice) => {
         const resolved = choice === "defense" ? "defense" : "attack";
         this.game?.devLog?.("SS_POSITION", {
@@ -156,19 +158,34 @@ export async function chooseSpecialSummonPosition(
           playerChoice: choice,
         });
 
-        // Emit informational event for replay capture (non-blocking)
-        this.game?.notify?.("position_chosen", {
-          card,
-          player,
-          position: resolved,
-          context: "special_summon",
-          turn: this.game?.turnCounter,
-          phase: this.game?.phase,
-        });
-
         resolve(resolved);
       });
     });
+    let position: BattlePosition;
+    if (this.game.requestDecision) {
+      const result = await this.game.requestDecision({
+        kind: "choice",
+        actor: player,
+        candidates: [],
+        requireCandidate: false,
+        resolveHuman: async () => ({ [await resolveHuman()]: [] }),
+        serializeResult: value => ({
+          pass: false, candidateKey: value && "defense" in value ? "defense" : "attack", effectId: null,
+        }),
+        deserializeReplayValue: value => "candidateKey" in value &&
+          (value.candidateKey === "attack" || value.candidateKey === "defense")
+          ? { [value.candidateKey]: [] } : null,
+      });
+      if (!result) throw new Error("Special Summon position decision is missing.");
+      position = "defense" in result ? "defense" : "attack";
+    } else {
+      position = await resolveHuman();
+    }
+    this.game?.notify?.("position_chosen", {
+      card, player, position, context: "special_summon",
+      turn: this.game?.turnCounter, phase: this.game?.phase,
+    });
+    return position;
   }
 
   // Fallback: default to "attack" if no UI available (offline only)

@@ -1,4 +1,4 @@
-import type { BattlePositionInput, CardKind, MonsterType } from "../cards.js";
+import type { BattlePositionInput, CardKind, MonsterType, CardAttribute } from "../cards.js";
 import type {
   CardFilter,
   EffectCondition,
@@ -125,7 +125,7 @@ export interface ReplacementRegistrationEntry {
 
 export interface EmbeddedMonsterDefinition {
   readonly type: string;
-  readonly attribute?: string;
+  readonly attribute?: CardAttribute;
   readonly atk: number;
   readonly def: number;
   readonly level: number;
@@ -133,11 +133,13 @@ export interface EmbeddedMonsterDefinition {
 
 export interface TokenDefinition {
   readonly name: string;
+  readonly nameKey?: string;
+  readonly descriptionKey?: string;
   readonly description?: string;
   readonly image?: string;
   readonly archetype?: string;
   readonly type?: string;
-  readonly attribute?: string;
+  readonly attribute?: CardAttribute;
   readonly atk: number;
   readonly def: number;
   readonly level?: number;
@@ -174,6 +176,7 @@ type StringActionProperty =
   | "buffTarget"
   | "buffType"
   | "cancelLabel"
+  | "cancelLabelKey"
   | "cardName"
   | "cardRef"
   | "cardType"
@@ -183,6 +186,7 @@ type StringActionProperty =
   | "chooser"
   | "conditionType"
   | "confirmLabel"
+  | "confirmLabelKey"
   | "confirmationId"
   | "contextKey"
   | "contextLabel"

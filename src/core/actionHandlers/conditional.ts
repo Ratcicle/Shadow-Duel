@@ -1,5 +1,5 @@
 import { cardMatchesKind } from "../Card.js";
-import { getUIText } from "../i18n.js";
+import { getCardDisplayName, getUIText } from "../i18n.js";
 import type { ActionCase, ActionOf } from "../contracts/actions.js";
 import type {
   ActionRuntimeCard,
@@ -19,7 +19,7 @@ import type {
   RawSelectionRequirement,
   SelectionResult,
 } from "../contracts/selection.js";
-import { getUI, resolveTargetCards } from "./shared.js";
+import { getUI, requestOptionalConfirmation, resolveTargetCards } from "./shared.js";
 import { isAI } from "../Player.js";
 
 type OptionalTargetAction = ActionOf<"optional_target_actions">;
@@ -394,7 +394,7 @@ function runOptionalTargetSelection(
       kind: selectionContract?.kind || "target",
       selectionContract,
       card: ctx?.source || null,
-      message: action?.selectionMessage || selectionContract?.message || null,
+      message: selectionContract?.message || action?.selectionMessage || null,
       allowCancel: action?.allowCancel !== false,
       resolve: (value) => finalize(Array.isArray(value) ? null : value),
       execute: (selections) => {
@@ -416,7 +416,7 @@ function buildOptionalConfirmationContract(
     `${ctx?.effect?.id || action?.type || "optional"}_confirm`;
   return {
     kind: "choice",
-    message: action?.selectionMessage || "Apply this optional effect?",
+    message: getOptionalConfirmationText(action, ctx),
     requirements: [
       {
         id: requirementId,
@@ -430,16 +430,16 @@ function buildOptionalConfirmationContract(
           {
             key: "yes",
             id: "yes",
-            name: action?.confirmLabel || "Yes",
-            label: action?.confirmLabel || "Yes",
+            name: getOptionalConfirmationLabel(action, "confirm"),
+            label: getOptionalConfirmationLabel(action, "confirm"),
             zone: "choice",
             cardKind: "spell",
           },
           {
             key: "no",
             id: "no",
-            name: action?.cancelLabel || "No",
-            label: action?.cancelLabel || "No",
+            name: getOptionalConfirmationLabel(action, "cancel"),
+            label: getOptionalConfirmationLabel(action, "cancel"),
             zone: "choice",
             cardKind: "spell",
           },
@@ -474,7 +474,7 @@ function getOptionalConfirmationText(
   return translate(
     key,
     {
-      sourceCardName: ctx?.source?.name || "",
+      sourceCardName: getCardDisplayName(ctx?.source),
       effectId: ctx?.effect?.id || "",
     },
     fallback,
@@ -489,6 +489,17 @@ function getOptionalConfirmationTitle(action: OptionalTargetAction): string {
     : fallback;
 }
 
+function getOptionalConfirmationLabel(
+  action: OptionalTargetAction,
+  kind: "confirm" | "cancel",
+): string {
+  const key = kind === "confirm" ? action.confirmLabelKey : action.cancelLabelKey;
+  const fallback = kind === "confirm"
+    ? action.confirmLabel || translate("ui.common.yes")
+    : action.cancelLabel || translate("ui.common.no");
+  return key ? translate(key, {}, fallback) : fallback;
+}
+
 async function confirmOptionalAction(
   action: OptionalTargetAction,
   ctx: EffectContext,
@@ -500,20 +511,23 @@ async function confirmOptionalAction(
   const selectionContract = buildOptionalConfirmationContract(action, ctx);
   const player = ctx?.player || null;
   const ui = getUI(game);
+  const showConfirmPrompt = ui?.showConfirmPrompt?.bind(ui);
 
-  if (!isAI(player) && typeof ui?.showConfirmPrompt === "function") {
-    const result = ui.showConfirmPrompt(
-      getOptionalConfirmationText(action, ctx),
-      {
-        kind: "optional_target_actions",
-        sourceCardName: ctx?.source?.name || null,
-        effectId: ctx?.effect?.id || null,
-        confirmLabel: action?.confirmLabel,
-        cancelLabel: action?.cancelLabel,
-        title: getOptionalConfirmationTitle(action),
-      },
-    );
-    return !!(await result);
+  if (!isAI(player) && showConfirmPrompt) {
+    return requestOptionalConfirmation(game, player, async () => {
+      const result = await showConfirmPrompt(
+        getOptionalConfirmationText(action, ctx),
+        {
+          kind: "optional_target_actions",
+          sourceCardName: ctx?.source?.name || null,
+          effectId: ctx?.effect?.id || null,
+          confirmLabel: getOptionalConfirmationLabel(action, "confirm"),
+          cancelLabel: getOptionalConfirmationLabel(action, "cancel"),
+          title: getOptionalConfirmationTitle(action),
+        },
+      );
+      return Boolean(result);
+    });
   }
 
   const selections = await runOptionalTargetSelection(
@@ -907,9 +921,10 @@ export async function handleRegisterTemporaryEventEffect(
   const entry = {
     id:
       action.uniqueKey ||
+      game.createDeterministicId?.("temporary_event") ||
       `${source.instanceId || source.id || source.name}:${
         ctx?.effect?.id || action.type
-      }:${game.createDeterministicId?.("temporary_event") || game.temporaryEventEffects?.length || 0}`,
+      }:${game.temporaryEventEffects?.length || 0}`,
     event: action.event,
     ownerId: player.id,
     sourceName: action.sourceName || source.name,
@@ -924,9 +939,13 @@ export async function handleRegisterTemporaryEventEffect(
         : [],
     sourceImage: source.image || null,
     sourceInstanceId: getCardInstanceId(source),
+    sourceDuelCardId: game.ensureDuelCardId?.(source) ?? source.duelCardId ?? null,
     sourceEffectId: ctx?.effect?.id || null,
     boundEventTargetInstanceId: action.bindEventTargetRef
       ? getCardInstanceId(boundTarget)
+      : null,
+    boundEventTargetDuelCardId: boundTarget
+      ? game.ensureDuelCardId?.(boundTarget) ?? boundTarget.duelCardId ?? null
       : null,
     requireBoundTargetLeavesField:
       action.requireBoundTargetLeavesField === true,

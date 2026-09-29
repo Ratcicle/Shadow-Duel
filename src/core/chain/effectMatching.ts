@@ -713,6 +713,13 @@ export function findActivatableEffect(
           }
         }
 
+        if (!effectActionsCanResolveInChain(
+          this, card, effect, context, cardOwner,
+          activationZoneOverride || "spellTrap",
+        )) {
+          continue;
+        }
+
         // ignition timing typically for main phase, but traps can chain
         // Allow if we're in a valid chain window
         if (

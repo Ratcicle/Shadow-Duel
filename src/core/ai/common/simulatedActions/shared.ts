@@ -203,6 +203,12 @@ export interface SimulatedActionOptions {
     state: SimulatedRuntimeState;
   }) => boolean;
   onAfterSpecialSummon?(payload: object): void;
+  onAfterNormalSummon?(payload: {
+    state: SimulatedRuntimeState;
+    player: SimulatedPlayerState;
+    card: SimulatedCardState;
+    method: "normal" | "tribute";
+  }): void;
   onFusionSummon?(payload: object): void;
   evaluateSimulatedConditions?: (
     conditions: readonly object[],

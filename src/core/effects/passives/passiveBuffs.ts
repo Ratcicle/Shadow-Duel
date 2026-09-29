@@ -23,6 +23,8 @@ type PassiveStatCard = {
 };
 type PassiveCard = ActionRuntimeCard & {
   extraAttacks?: number;
+  equipExtraAttacks?: number;
+  equipExtraAttacksApplied?: number;
   passiveExtraAttackBonuses?: Record<string, CardPassiveExtraAttackBonus>;
   passiveExtraAttackTargetRestriction?: string | null;
   fieldPresenceId?: string | number | null;
@@ -209,6 +211,32 @@ function passiveSourceEffectsAreNegated(
     return engine.isEffectNegated(card);
   }
   return card.effectsNegated === true;
+}
+
+interface EquipAttackBonusSource {
+  equipExtraAttacks?: number;
+  equipExtraAttacksApplied?: number;
+}
+
+interface EquipAttackBonusTarget {
+  extraAttacks?: number;
+  attacksUsedThisTurn?: number;
+  hasAttacked?: boolean | undefined;
+}
+
+/** Keep the configured equip bonus separate from its currently active contribution. */
+export function refreshEquipExtraAttackBonus(
+  equip: EquipAttackBonusSource,
+  host: EquipAttackBonusTarget,
+  enabled: boolean,
+): boolean {
+  const previous = Math.max(0, Number(equip.equipExtraAttacksApplied ?? equip.equipExtraAttacks ?? 0));
+  const next = enabled ? Math.max(0, Number(equip.equipExtraAttacks || 0)) : 0;
+  equip.equipExtraAttacksApplied = next;
+  if (previous === next) return false;
+  host.extraAttacks = Math.max(0, Number(host.extraAttacks || 0) - previous + next);
+  host.hasAttacked = Number(host.attacksUsedThisTurn || 0) >= 1 + host.extraAttacks;
+  return true;
 }
 
 function clearPassiveBuffEntry(
@@ -638,6 +666,14 @@ export function updatePassiveBuffs(this: PassiveHost) {
 
   // PHASE 2: Recalculate fresh buffs based on current game state
   for (const card of passiveSources) {
+    if (card.cardKind === "spell" && card.subtype === "equip" && card.equippedTo) {
+      const host = card.equippedTo as PassiveCard;
+      if (refreshEquipExtraAttackBonus(card, host,
+        fieldCards.includes(host) && card.isFacedown !== true &&
+        !passiveSourceEffectsAreNegated(this, card))) {
+        updated = true;
+      }
+    }
     const effects: readonly PassiveEffect[] = card.effects || [];
 
     effects.forEach((effect, index) => {

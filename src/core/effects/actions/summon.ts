@@ -27,6 +27,7 @@ import type {
 import type { CanonicalZone } from "../../contracts/zones.js";
 import type { FieldPlacementPreparation, FieldPlacementIntent, PlacementRow } from "../../contracts/placement.js";
 import { assignAutomaticFieldSlot } from "../../game/zones/placement.js";
+import { checkSpecialSummonEligibility } from "../../game/summon/eligibility.js";
 
 interface SummonRuntimeCard extends ActionRuntimeCard {
   tokenSourceCard?: string | null;
@@ -80,7 +81,7 @@ type TrapMonsterAction = ActionOf<"special_summon_self_as_trap_monster"> & {
     readonly position?: BattlePositionInput;
     readonly monsterType?: MonsterType;
     readonly type?: string;
-    readonly attribute?: string;
+    readonly attribute?: CardAttribute;
     readonly level?: number;
     readonly atk?: number;
     readonly def?: number;
@@ -88,7 +89,7 @@ type TrapMonsterAction = ActionOf<"special_summon_self_as_trap_monster"> & {
   readonly monsterTypeName?: string;
   readonly monsterType?: MonsterType;
   readonly typeName?: string;
-  readonly attribute?: string;
+  readonly attribute?: CardAttribute;
   readonly treatedAsCardKinds?: CardKind | readonly CardKind[];
 };
 
@@ -116,6 +117,8 @@ export async function applySpecialSummonToken(
     {
       cardKind: "monster",
       name: action.token.name || "Token",
+      ...(action.token.nameKey !== undefined ? { nameKey: action.token.nameKey } : {}),
+      ...(action.token.descriptionKey !== undefined ? { descriptionKey: action.token.descriptionKey } : {}),
       atk: action.token.atk ?? 0,
       def: action.token.def ?? 0,
       level: action.token.level ?? 1,
@@ -261,6 +264,56 @@ function resolveTrapMonsterStat(
   return Number.isFinite(numeric) ? numeric : fallback;
 }
 
+/** Characteristics shared by legality previews and the committed transformation. */
+export function projectTrapMonster(source: ActionRuntimeCard, action: TrapMonsterAction) {
+  const monster = action.monster || {};
+  return {
+    ...source,
+    originalCardKind: source.originalCardKind || source.cardKind || "trap",
+    isTrapMonster: true,
+    trapMonsterSummonProcedure: action.summonProcedure || "trap_monster",
+    treatedAsCardKinds: normalizeTrapMonsterKinds(source, action),
+    cardKind: "monster" as const,
+    monsterType: monster.monsterType || action.monsterType || null,
+    type: monster.type || action.monsterTypeName || action.typeName || source.type,
+    attribute: monster.attribute || action.attribute || source.attribute || null,
+    level: resolveTrapMonsterStat(monster, action, "level", 0),
+    baseLevel: resolveTrapMonsterStat(monster, action, "level", 0),
+    atk: resolveTrapMonsterStat(monster, action, "atk", 0),
+    baseAtk: resolveTrapMonsterStat(monster, action, "atk", 0),
+    def: resolveTrapMonsterStat(monster, action, "def", 0),
+    baseDef: resolveTrapMonsterStat(monster, action, "def", 0),
+    isFacedown: false,
+  };
+}
+
+export function checkTrapMonsterSummon(
+  game: Pick<ActionRuntimeGamePort, "canPlaceCardOnField">,
+  source: ActionRuntimeCard,
+  player: ActionRuntimePlayer,
+  action: TrapMonsterAction,
+  sourceZone: string | null,
+) {
+  if (sourceZone !== "spellTrap" || !player.spellTrap.includes(source)) {
+    return { ok: false, reason: "Source must be in the Spell/Trap zone." };
+  }
+  if (source.cardKind !== "trap" && source.cardKind !== "spell") {
+    return { ok: false, reason: "Source is not a Spell/Trap card." };
+  }
+  if (player.field.length >= 5) return { ok: false, reason: "Field is full." };
+  const projected = projectTrapMonster(source, action);
+  const options = {
+    summonMethod: "special",
+    summonProcedure: action.summonProcedure || "trap_monster",
+    fromZone: "spellTrap",
+    isFacedown: false,
+    silent: true,
+  };
+  const eligibility = checkSpecialSummonEligibility(projected, options);
+  if (!eligibility.ok) return eligibility;
+  return game.canPlaceCardOnField?.(projected, player, options) || { ok: true };
+}
+
 /**
  * Special Summons the source Spell/Trap as a monster while retaining trap treatment.
  * Generic support for Trap Monsters such as Ancient Tree Spirit.
@@ -281,23 +334,13 @@ export async function applySpecialSummonSelfAsTrapMonster(
     | undefined;
   if (!game || !player || !source) return false;
 
-  const sourceZone =
+  const sourceZone = () =>
     typeof this.findCardZone === "function"
       ? this.findCardZone(player, source)
       : ctx?.activationZone || ctx?.sourceZone || null;
 
-  if (sourceZone !== "spellTrap") {
-    game.ui?.log?.(`${source.name} must be in the Spell/Trap zone.`);
-    return false;
-  }
-  if (source.cardKind !== "trap" && source.cardKind !== "spell") {
-    game.ui?.log?.(`${source.name} is not a Spell/Trap card.`);
-    return false;
-  }
-  if ((player.field || []).length >= 5) {
-    game.ui?.log?.("Field is full. Cannot summon.");
-    return false;
-  }
+  const canSummon = () => checkTrapMonsterSummon(game, source, player, action, sourceZone()).ok;
+  if (!canSummon()) return false;
 
   const monster = action.monster || {};
   const summonProcedure = action.summonProcedure || "trap_monster";
@@ -307,6 +350,7 @@ export async function applySpecialSummonSelfAsTrapMonster(
       position,
     });
   }
+  if (!canSummon()) return false;
 
   // Choose before transforming the source, so the live Spell/Trap remains
   // unchanged while a mandatory resolution choice is pending.
@@ -319,8 +363,10 @@ export async function applySpecialSummonSelfAsTrapMonster(
     if (choice.outcome !== "chosen") return false;
     fieldPlacement = choice.intent;
   }
+  if (!canSummon()) return false;
+  const projected = projectTrapMonster(source, action);
   const sourceSnapshot = Object.getOwnPropertyDescriptors(source);
-  const original = captureTrapMonsterOriginalState(source)!;
+  captureTrapMonsterOriginalState(source);
   const restoreFailedTransformation = () => {
     if (player.spellTrap.includes(source)) {
       // The zone transaction restored the source (or never removed it).
@@ -336,22 +382,7 @@ export async function applySpecialSummonSelfAsTrapMonster(
     }
   };
 
-  source.originalCardKind = original.cardKind || source.cardKind;
-  source.isTrapMonster = true;
-  source.trapMonsterSummonProcedure = summonProcedure;
-  source.treatedAsCardKinds = normalizeTrapMonsterKinds(source, action);
-  source.cardKind = "monster";
-  source.monsterType = monster.monsterType || action.monsterType || null;
-  source.type =
-    monster.type || action.monsterTypeName || action.typeName || source.type;
-  source.attribute =
-    monster.attribute || action.attribute || source.attribute || null;
-  source.level = resolveTrapMonsterStat(monster, action, "level", 0);
-  source.baseLevel = source.level;
-  source.baseAtk = resolveTrapMonsterStat(monster, action, "atk", 0);
-  source.baseDef = resolveTrapMonsterStat(monster, action, "def", 0);
-  source.atk = source.baseAtk;
-  source.def = source.baseDef;
+  Object.assign(source, projected);
   source.position = position;
   source.isFacedown = false;
   source.hasAttacked = false;
@@ -360,7 +391,7 @@ export async function applySpecialSummonSelfAsTrapMonster(
   let moveResult: ActionMoveResult;
   try {
     moveResult = await game.moveCard(source, player, "field", {
-    fromZone: sourceZone,
+    fromZone: "spellTrap",
     placementActor: ctx.player || player,
     fieldPlacement,
     position,

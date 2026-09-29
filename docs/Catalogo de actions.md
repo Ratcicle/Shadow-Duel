@@ -4,7 +4,7 @@
 
 Este catalogo descreve o contrato declarativo de cada `action.type` registrado no Shadow Duel. O runtime vem de `src/core/actionHandlers/actionBindings.ts`, aplicado por `wiring.ts`; este documento serve para criar cartas, revisar handlers e validar o banco de cartas.
 
-Total de actions catalogadas: 109.
+Total de actions catalogadas: 110.
 
 ## Recursos
 
@@ -1092,9 +1092,13 @@ Returns a targeted Synchro Monster to the Extra Deck, then optionally Special Su
 | `contextLabel` | nao | string |  |
 | `reviveContextLabel` | nao | string |  |
 | `promptMessage` | nao | string |  |
+| `promptMessageKey` | nao | string |  |
 | `promptTitle` | nao | string |  |
+| `promptTitleKey` | nao | string |  |
 | `confirmLabel` | nao | string |  |
+| `confirmLabelKey` | nao | string |  |
 | `cancelLabel` | nao | string |  |
+| `cancelLabelKey` | nao | string |  |
 
 **Exemplos**
 
@@ -1163,6 +1167,38 @@ Draws cards and may Special Summon the drawn card from hand when it matches conf
 - Use condition.type: "match_card_props" with condition.filters for full cardMatchesFilters support.
 - Legacy condition fields typeName, cardKind, minLevel, and maxLevel are still supported.
 - After a successful draw, the action succeeds even if no Special Summon occurs.
+
+### `normal_summon_from_hand`
+
+Normal Summons from hand during resolution, paying Tributes and consuming an available Normal Summon.
+
+- Handler: `handleNormalSummonFromHand`
+- Target: `none`
+- Selecao: `dynamic`
+- Mutacoes: hand, field, graveyard
+- Eventos emitidos: after_summon, card_to_grave, card_moved
+- Atualiza board: sim
+- Preview: `covered`
+
+| Campo | Obrigatorio | Contrato | Descricao |
+| --- | --- | --- | --- |
+| `player` | nao | enum: self, opponent | Perspective for the action: "self" or "opponent". |
+| `filters` | nao | object | Card filter object evaluated by the handler. |
+
+**Exemplos**
+
+```json
+{
+  "type": "normal_summon_from_hand",
+  "filters": {
+    "archetype": "Shadow-Heart"
+  }
+}
+```
+
+**Notas**
+
+_Sem notas._
 
 ### `polymerization_fusion_summon`
 
@@ -1560,7 +1596,7 @@ Special Summons the source Spell/Trap as a monster while retaining its original 
 
 **Notas**
 
-_Sem notas._
+- Preview and execution share a pure monster projection for summon eligibility, restrictions and field presence. Preview never transforms the source or requests choices.
 
 ### `special_summon_token`
 
@@ -1576,7 +1612,7 @@ Creates and Special Summons a token.
 
 | Campo | Obrigatorio | Contrato | Descricao |
 | --- | --- | --- | --- |
-| `token` | sim | object |  |
+| `token` | sim | object | Canonical token data; optional nameKey and descriptionKey resolve presentation in the current locale, falling back to name and description. |
 | `player` | nao | enum: self, opponent | Perspective for the action: "self" or "opponent". |
 | `position` | nao | enum: attack, defense, choice | Battle position: "attack", "defense", or "choice". |
 | `cannotAttackThisTurn` | nao | boolean |  |
@@ -3827,7 +3863,9 @@ Optionally resolves its own targets and executes nested actions when conditions 
 | `selectionId` | nao | string |  |
 | `selectionLabel` | nao | string |  |
 | `confirmLabel` | nao | string |  |
+| `confirmLabelKey` | nao | string |  |
 | `cancelLabel` | nao | string |  |
+| `cancelLabelKey` | nao | string |  |
 
 **Exemplos**
 

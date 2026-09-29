@@ -4,6 +4,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import type { GameCard } from "../../contracts/cards.js";
+import type { EventTriggerOccurrence } from "../../contracts/events.js";
 import type {
   MaybePromise,
   MoveCardOptions,
@@ -48,6 +49,9 @@ interface SpellTrapFinalizationOptions {
 }
 
 interface SpellTrapFinalizationHost {
+  queueTriggerOccurrence?(occurrence: EventTriggerOccurrence): unknown;
+  player?: Pick<GamePlayer, "field">;
+  bot?: Pick<GamePlayer, "field">;
   turnCounter: number;
   ui: { log(message: string): void };
   moveCard(
@@ -145,6 +149,24 @@ function storePendingSpellTrapFinalization(
   return true;
 }
 
+interface EquipFinalizationCard {
+  cardKind?: string | null;
+  subtype?: string | null;
+  isFacedown?: boolean;
+  equippedTo?: EquipFinalizationCard | null;
+}
+
+/** A face-up Equip must have a face-up monster host still on the field. */
+export function isEquipWithoutValidHost(
+  card: EquipFinalizationCard,
+  fields: readonly (readonly EquipFinalizationCard[])[],
+): boolean {
+  if (card.cardKind !== "spell" || card.subtype !== "equip" || card.isFacedown) return false;
+  const host = card.equippedTo;
+  return !host || host.cardKind !== "monster" || host.isFacedown === true ||
+    !fields.some(field => field.includes(host));
+}
+
 async function applyDefaultSpellTrapFinalization(
   game: SpellTrapFinalizationHost,
   card: FinalizableCard | null | undefined,
@@ -155,15 +177,19 @@ async function applyDefaultSpellTrapFinalization(
   if (!card || !owner) return false;
   const subtype = card?.subtype || "";
   const kind = card?.cardKind || "";
+  const activationContext = options.activationContext || {};
+  // Chain finalization owns its source-permanence guard and deferred triggers.
+  const invalidEquip = activationContext.chainId == null && isEquipWithoutValidHost(
+    card, [game.player?.field || owner.field, game.bot?.field || []],
+  );
   const shouldSendToGY =
     (kind === "spell" && (subtype === "normal" || isQuickSpell(card))) ||
-    (kind === "trap" && (subtype === "normal" || subtype === "counter"));
+    (kind === "trap" && (subtype === "normal" || subtype === "counter")) || invalidEquip;
 
   if (!shouldSendToGY) return false;
   if (!isSpellTrapInActivationZone(owner, card, activationZone)) return false;
   if (!activationZone) return false;
-  const activationContext = options.activationContext || {};
-  await game.moveCard(card, owner, "graveyard", {
+  const moveResult = await game.moveCard(card, owner, "graveyard", {
     fromZone: activationZone,
     sourceCard: card,
     effectId: activationContext.effectId || null,
@@ -176,6 +202,8 @@ async function applyDefaultSpellTrapFinalization(
     awaitEvents: true,
     deferCardToGraveTriggerResolution: activationContext.chainId != null,
   });
+  const occurrence = moveResult.deferredCardToGraveTriggerPackage?.occurrence;
+  if (occurrence) game.queueTriggerOccurrence?.(occurrence);
   game.updateBoard?.();
   return true;
 }

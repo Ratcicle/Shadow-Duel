@@ -1,6 +1,6 @@
 import { restoreFieldExitStatuses, restoreTemporaryStatuses } from "../../Card.js";
 import { cardMatchesFilter } from "./cardFilters.js";
-import { removeFieldAuraBuffContributions } from "../../effects/passives/passiveBuffs.js";
+import { refreshEquipExtraAttackBonus, removeFieldAuraBuffContributions } from "../../effects/passives/passiveBuffs.js";
 import {
   assignAutomaticFieldSlot,
   clearFieldSlot,
@@ -150,15 +150,7 @@ export function detachSimulatedEquip(
   ) {
     host.def = Math.max(0, (host.def || 0) - equipCard.equipDefBonus);
   }
-  if (
-    typeof equipCard.equipExtraAttacks === "number" &&
-    equipCard.equipExtraAttacks !== 0
-  ) {
-    host.extraAttacks = Math.max(
-      0,
-      (host.extraAttacks || 0) - equipCard.equipExtraAttacks,
-    );
-  }
+  refreshEquipExtraAttackBonus(equipCard, host, false);
   if (equipCard.grantsBattleIndestructible) {
     host.battleIndestructible = false;
   }
@@ -236,8 +228,9 @@ export function attachSimulatedEquip(
     target.def = (target.def || 0) + action.defBonus!;
   }
   if (Number.isFinite(action.extraAttacks as number) && action.extraAttacks !== 0) {
+    equipCard.equipExtraAttacksApplied = 0;
     equipCard.equipExtraAttacks = action.extraAttacks!;
-    target.extraAttacks = (target.extraAttacks || 0) + action.extraAttacks!;
+    refreshEquipExtraAttackBonus(equipCard, target, equipCard.effectsNegated !== true);
   }
   if (action.battleIndestructible) {
     equipCard.grantsBattleIndestructible = true;

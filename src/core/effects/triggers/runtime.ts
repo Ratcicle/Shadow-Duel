@@ -367,6 +367,7 @@ export interface TriggerEntryConfig {
 }
 
 export interface TriggerEntry {
+  readonly registrationId?: string;
   readonly summary: string;
   readonly card: TriggerRuntimeCard;
   readonly effect: TriggerEffectLike;

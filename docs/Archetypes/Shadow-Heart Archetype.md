@@ -5,7 +5,7 @@ Nomes e textos PT-BR: `public/locales/pt-br.json`.
 
 ## Resumo
 
-Shadow-Heart reúne 25 cartas com foco em pressão de batalha, reciclagem do Cemitério, Invocações por Tributo e progressão para monstros de Extra Deck.
+Shadow-Heart reúne 26 cartas com foco em pressão de batalha, reciclagem do Cemitério, Invocações por Tributo e progressão para monstros de Extra Deck.
 
 **Estilo de jogo:**
 
@@ -16,9 +16,9 @@ Shadow-Heart reúne 25 cartas com foco em pressão de batalha, reciclagem do Cem
 
 ---
 
-## Catálogo (25 cartas)
+## Catálogo (26 cartas)
 
-### Main Deck (21)
+### Main Deck (22)
 
 #### Monstros (12)
 
@@ -51,9 +51,11 @@ Shadow-Heart reúne 25 cartas com foco em pressão de batalha, reciclagem do Cem
 | 119 | Catedral do Coração Sombrio | Shadow-Heart Cathedral | Contínua |
 | 120 | O Coração Sombrio | The Shadow Heart | Equipamento |
 
-#### Armadilhas (0)
+#### Armadilhas (1)
 
-Nenhuma.
+| ID | PT-BR | Canônico | Subtipo |
+| --- | --- | --- | --- |
+| 126 | Cova do Coração Sombrio | Shadow-Heart Grave | Normal |
 
 ### Extra Deck (4)
 
@@ -239,7 +241,13 @@ Magia de Equipamento.
 
 ### Armadilhas
 
-Nenhuma.
+**126 — Cova do Coração Sombrio / Shadow-Heart Grave**
+
+Armadilha Normal.
+
+> Invoque por Invocação-Normal 1 monstro "Coração Sombrio" da sua mão. Você pode banir este card do seu Cemitério; adicione até 2 monstros "Coração Sombrio" de Nível 8 do seu Cemitério à sua mão. Você só pode usar cada efeito de "Cova do Coração Sombrio" uma vez por turno.
+
+O primeiro efeito pode resolver nos dois turnos. Cada novo turno renova a Invocação-Normal básica de ambos os jogadores. O segundo efeito escolhe 1 ou 2 monstros na resolução; monstros de Extra Deck retornam ao Extra Deck. Cada efeito tem limite próprio compartilhado entre cópias, consumido mesmo quando sua ativação é negada.
 
 ### Extra Deck
 
@@ -271,8 +279,8 @@ Ascensão, Nível 10, Dragon, Dark, 3300/3000.
 
 ## Notas do Arquétipo
 
-- O catálogo possui 25 cartas: 21 no Main Deck e 4 no Extra Deck.
-- O Main Deck contém 12 monstros, 9 Magias e 0 Armadilhas.
+- O catálogo possui 26 cartas: 22 no Main Deck e 4 no Extra Deck.
+- O Main Deck contém 12 monstros, 9 Magias e 1 Armadilha.
 - O Extra Deck contém 2 de Fusão, 2 de Ascensão.
 - Shadow-Heart Scale Dragon e Shadow-Heart Demon Arctroth são os materiais das duas linhas de Ascensão.
 - Shadow-Heart Scale Dragon também participa da Fusão de Shadow-Heart Demon Dragon.

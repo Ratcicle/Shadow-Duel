@@ -257,6 +257,8 @@ export interface DynamicExtraAttacksDefinition {
 }
 
 interface CardDefinitionBase {
+  readonly nameKey?: string;
+  readonly descriptionKey?: string;
   readonly id: RawCardDefinitionId;
   readonly name: string;
   readonly cardKind: CardKind;
@@ -396,6 +398,8 @@ export interface CardInstance {
   duelCardId?: DuelCardId;
   id: CardDefinitionId;
   name: string;
+  nameKey?: string;
+  descriptionKey?: string;
   cardKind: CardKind;
   monsterType: MonsterType | null;
   owner: PlayerId;
@@ -412,6 +416,8 @@ export interface CardInstance {
  * so this compatibility boundary does not become an open property bag.
  */
 export interface GeneratedCardDefinition {
+  readonly nameKey?: string;
+  readonly descriptionKey?: string;
   readonly handSummonProcedure?: HandSummonProcedure | null;
   readonly id?: RawCardDefinitionId | CardDefinitionId;
   readonly name: string;
@@ -648,6 +654,8 @@ export interface GameCard {
   id: RawCardDefinitionId | CardDefinitionId | undefined;
   duelCardId?: DuelCardId;
   name: string;
+  nameKey?: string;
+  descriptionKey?: string;
   cardKind: CardKind;
   originalCardKind?: CardKind | null;
   treatedAsCardKinds?: CardKind[];
@@ -704,6 +712,7 @@ export interface GameCard {
   equipAtkBonus: number;
   equipDefBonus: number;
   equipExtraAttacks: number;
+  equipExtraAttacksApplied?: number;
   grantsBattleIndestructible: boolean;
   battleIndestructible: boolean;
   tempBattleIndestructible: boolean;

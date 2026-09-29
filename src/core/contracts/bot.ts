@@ -44,7 +44,7 @@ type BotGameMethodName =
   | "canUseAsAscensionMaterial" | "getAscensionCandidatesForMaterial" | "checkAscensionRequirements"
   | "canSummonExtraDeckCardByProcedure" | "canSummonFromHandByProcedure" | "canChangePosition" | "changeMonsterPosition"
   | "getAttackAvailability" | "isActiveAttackPriorityTarget" | "resolveCombat"
-  | "commitCardActivationFromHand" | "runActivationPipeline" | "setSpellOrTrap"
+  | "commitCardActivationFromHand" | "runActivationPipeline" | "setSpellOrTrap" | "tryActivateSpellTrapEffect"
   | "finalizeSpellCardActivation" | "finalizeSpellTrapActivation" | "canPlaceCardOnField";
 
 type BotGameMethods = {

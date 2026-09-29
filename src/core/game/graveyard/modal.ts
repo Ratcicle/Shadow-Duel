@@ -83,6 +83,7 @@ interface GraveyardUiPort {
 }
 
 interface GraveyardHost {
+  tryActivateSpellTrapEffect(card: GameCard, selections: null, options: { owner: GamePlayer; activationZone: "graveyard" }): Promise<unknown>;
   turn: "player" | "bot";
   graveyardSelection: { onCancel: (() => void) | null } | null;
   effectEngine: GraveyardEffectEnginePort;
@@ -144,6 +145,11 @@ export function openGraveyardModal(
           if (preview?.reason) {
             this.ui.log(preview.reason);
           }
+          return;
+        }
+        if (isSpellTrap) {
+          this.closeGraveyardModal(false);
+          void this.tryActivateSpellTrapEffect(card, null, { owner: player, activationZone: "graveyard" });
           return;
         }
         const activationContext = {

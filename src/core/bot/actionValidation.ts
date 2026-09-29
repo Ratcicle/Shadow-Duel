@@ -621,7 +621,7 @@ export function filterValidActionsForCurrentState(
                 (!action.cardId && c.name === action.cardName)),
           );
       const card = bot.graveyard?.[graveyardIndex!];
-      if (!card || card.cardKind !== "spell") return false;
+      if (!card || (card.cardKind !== "spell" && card.cardKind !== "trap")) return false;
       const activationContext: AIActivationContext = {
         ...(action.activationContext || {}),
         fromHand: false,

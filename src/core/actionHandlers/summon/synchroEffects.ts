@@ -1,4 +1,5 @@
 import { isAI } from "../../Player.js";
+import { getCardDisplayName, getUIText } from "../../i18n.js";
 import { resolveExactInstanceSelection } from "../../AutoSelector.js";
 import type { ActionOf } from "../../contracts/actions.js";
 import type {
@@ -22,7 +23,12 @@ import {
   getSynchroMaterialCombos,
 } from "../../game/summon/synchro.js";
 import { checkSpecialSummonEligibility } from "../../game/summon/eligibility.js";
-import { getUI, resolveTargetCards, selectCards } from "../shared.js";
+import {
+  getUI,
+  requestOptionalConfirmation,
+  resolveTargetCards,
+  selectCards,
+} from "../shared.js";
 
 type CardInstanceId = string | number | null;
 type SynchroSummonAction = ActionOf<"synchro_summon_from_extra_deck">;
@@ -309,17 +315,21 @@ async function confirmOptionalRevive(
 ) {
   if (isAI(player)) return true;
   const ui = getUI(game);
-  if (typeof ui?.showConfirmPrompt !== "function") return true;
-  const result = ui.showConfirmPrompt(
-    action.promptMessage ||
-      `Special Summon the Synchro Materials used for ${source?.name || "that monster"}?`,
-    {
-      title: action.promptTitle || "Confirm",
-      confirmLabel: action.confirmLabel || "Special Summon",
-      cancelLabel: action.cancelLabel || "Cancel",
-    },
-  );
-  return Boolean(await result);
+  const showConfirmPrompt = ui?.showConfirmPrompt?.bind(ui);
+  if (!showConfirmPrompt) return true;
+  return requestOptionalConfirmation(game, player, async () => {
+    const sourceCardName = getCardDisplayName(source) || "that monster";
+    const result = await showConfirmPrompt(
+      getUIText(action.promptMessageKey, { sourceCardName },
+        action.promptMessage || `Special Summon the Synchro Materials used for ${sourceCardName}?`),
+      {
+        title: getUIText(action.promptTitleKey, {}, action.promptTitle || "Confirm"),
+        confirmLabel: getUIText(action.confirmLabelKey, {}, action.confirmLabel || "Special Summon"),
+        cancelLabel: getUIText(action.cancelLabelKey, {}, action.cancelLabel || "Cancel"),
+      },
+    );
+    return Boolean(result);
+  });
 }
 
 function canSpecialSummonMaterial(

@@ -20,6 +20,11 @@ import type {
   SummonExecutionResult,
 } from "./gameRuntime.js";
 import type { ChainStrategyPort } from "./chainRuntime.js";
+import type { SummonOrigin } from "./summon.js";
+
+export interface NormalSummonOptions {
+  summonOrigin?: SummonOrigin;
+}
 
 export interface NormalSummonFilter {
   cardKind?: CardKind | readonly CardKind[];
@@ -158,6 +163,7 @@ export interface GamePlayer {
     position?: BattlePosition,
     isFacedown?: boolean,
     tributeIndices?: readonly number[] | null,
+    options?: NormalSummonOptions,
   ): Promise<SummonExecutionResult | null>;
   ensureCardOnTop(cardName: string, createNew?: boolean): GameCard | null;
   takeDamage(amount: number, options?: PlayerDamageOptions): void;
@@ -177,7 +183,7 @@ export interface NormalSummonCardView {
   isTuner?: boolean;
   level?: number | undefined;
   effects?: readonly EffectDefinition[];
-  effectsNegated?: boolean;
+  effectsNegated?: boolean | undefined;
   isFacedown?: boolean | undefined;
 }
 

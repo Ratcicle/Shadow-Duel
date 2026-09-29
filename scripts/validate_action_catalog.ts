@@ -240,9 +240,9 @@ const directBindings = bindingTypeOrder.filter(
 const proxyBindings = bindingTypeOrder.filter(
   (type) => ACTION_BINDINGS[type].kind === "proxy",
 );
-if (directBindings.length !== 80 || proxyBindings.length !== 29) {
+if (directBindings.length !== 81 || proxyBindings.length !== 29) {
   errors.push(
-    `ACTION_BINDINGS must contain 80 direct and 29 proxy bindings; found ${directBindings.length} direct and ${proxyBindings.length} proxy.`,
+    `ACTION_BINDINGS must contain 81 direct and 29 proxy bindings; found ${directBindings.length} direct and ${proxyBindings.length} proxy.`,
   );
 }
 
