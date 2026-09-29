@@ -90,18 +90,60 @@ Evitar power creep artificial apenas para elevar win rate.
 
 ---
 
-## 5. Suporte Arcanista — Relíquias Arcanistas
-Objetivo: implementar o pacote de suporte já planejado para o arquétipo Arcanista.
+## 5. Modo Gauntlet
+
+**Objetivo:** criar um modo de sobrevivência em que o jogador enfrenta todos os 9 bots em sequência dentro de um único duelo contínuo.
+
+Regras principais:
+
+- o jogador deve derrotar todos os 9 bots para completar a Gauntlet;
+- derrotar um bot não encerra o duelo: após concluir com segurança a resolução ou bloco atômico atual, inicia-se uma curta transição para o próximo adversário;
+- o jogador preserva seu estado durante toda a Gauntlet, incluindo PV, mão, Deck, Extra Deck, campo, Cemitério e banidos;
+- cada novo bot entra com seus próprios PV, mão inicial, Deck, Extra Deck e IA/estratégia;
+- o lado adversário preserva entre os bots o campo de monstros, Zona de Magias/Armadilhas, Magia de Campo, Cemitério e cards banidos;
+- cards Set, Equipamentos, vínculos, Marcadores e outros estados persistentes das cartas no campo também permanecem;
+- efeitos, progressos e limitações definidos como válidos "neste Duelo" continuam atravessando as trocas de bot, pois toda a Gauntlet é um único duelo;
+- efeitos "uma vez por Duelo" continuam consumidos depois da troca de adversário;
+- efeitos temporais e históricos podem atravessar adversários quando seu contrato permitir. Em particular, **Relíquia Arcanista — Livro dos Tempos** pode restaurar um estado de campo registrado quando um bot anterior ainda era o duelista ativo;
+- cartas de bots anteriores que permanecerem no Cemitério ou banidas podem ser usadas por efeitos de bots posteriores, permitindo sinergias emergentes entre arquétipos;
+- a troca nunca deve ocorrer no meio de uma Chain ou de uma subetapa atômica do Damage Step.
+
+Transição visual planejada:
+
+1. o bot atual chega a 0 PV;
+2. o jogo conclui a resolução necessária para estabilizar o estado;
+3. cartas pessoais do duelista derrotado que não pertencem às zonas compartilhadas saem visualmente da partida;
+4. o próximo bot assume o mesmo lado do campo;
+5. seu Deck e Extra Deck entram;
+6. ele recebe seus PV iniciais e compra a mão inicial;
+7. o duelo continua do ponto apropriado.
+
+Recompensa planejada:
+
+- uma **carta secreta genérica de reciclagem**, inspirada em efeitos como Pote da Avarice, capaz de devolver cards do Cemitério ao Deck e gerar compra;
+- a recompensa deve ser especialmente útil em futuras tentativas da própria Gauntlet sem ser obrigatória para decks normais.
+
+A implementação deve evitar uma abstração de equipes grande demais neste momento. A experiência obtida com a persistência de zonas e troca de duelista ativo poderá servir de base conceitual futura para modos multiplayer **2x2** ou **3x3**.
+
+---
+
+## 6. Suporte Arcanista — Relíquias Arcanistas
+
+**Objetivo:** implementar o pacote de suporte já planejado para o arquétipo Arcanista.
+
 Prioridade moderada: o deck ainda é funcional e não precisa desse suporte antes de Burning West e Bloomrot.
+
 Principais peças:
+
 - Relíquia Arcanista — Livro dos Tempos
 - Relíquia Arcanista — Orbe Anulador
 - Relíquia Arcanista — Cajado do Necromente
+
 Antes de implementar, revisar a compatibilidade do motor com restauração histórica de estado, espaços individuais, vínculos de Equipamentos, supressão de gatilhos e persistência de efeitos temporários. O design das Relíquias já está consolidado, mas não foi implementado nem testado.
 
 ---
 
-## 6. Modo Online
+## 7. Modo Online
 
 **Objetivo:** permitir duelos reais entre jogadores.
 
@@ -126,9 +168,11 @@ Não priorizar inicialmente:
 - espectador;
 - sistemas sociais extensos.
 
+A arquitetura do modo Gauntlet poderá futuramente informar a implementação de formatos de equipe **2x2** ou **3x3**, com troca de duelista ativo e zonas compartilhadas por lado.
+
 ---
 
-## 7. Renderer Three.js
+## 8. Renderer Three.js
 
 **Objetivo:** modernizar animações e apresentação visual sem alterar a identidade do Shadow Duel.
 
@@ -160,8 +204,10 @@ Cada etapa deve ser revisada visualmente antes da seguinte.
 2. **IAs atuais**
 3. **Carmim Real**
 4. **Burning West + Bloomrot**
-5. **Modo Online**
-6. **Three.js definitivo**
+5. **Modo Gauntlet**
+6. **Relíquias Arcanistas**
+7. **Modo Online**
+8. **Three.js definitivo**
 
 ---
 
