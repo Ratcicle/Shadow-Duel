@@ -194,7 +194,7 @@ export const shadowHeartCards = [
     attribute: "Dark",
     archetype: "Shadow-Heart",
     description:
-      "If this card is Tribute Summoned: You can target 1 card on your opponent's field; destroy it. At the start of damage calculation, if this card battles an opponent's monster: remove all ATK/DEF increases applied to that monster.",
+      "If this card is Tribute Summoned: You can target 1 card on your opponent's field; destroy it.\n\nDuring damage calculation, if this card battles an opponent's monster: remove all ATK/DEF increases applied to that monster.",
     image: "assets/Shadow-Heart Demon Arctroth.png",
     effects: [
       {
@@ -228,7 +228,8 @@ export const shadowHeartCards = [
         timing: "on_event",
         triggerRequirement: "mandatory",
         triggerTiming: "if",
-        event: "battle_damage",
+        event: "damage_step",
+        damageStepTimings: ["damage_calculation"],
         requireZone: "field",
         requireFaceup: true,
         requireSelfAsAttacker: true,
@@ -248,7 +249,8 @@ export const shadowHeartCards = [
         timing: "on_event",
         triggerRequirement: "mandatory",
         triggerTiming: "if",
-        event: "battle_damage",
+        event: "damage_step",
+        damageStepTimings: ["damage_calculation"],
         requireZone: "field",
         requireFaceup: true,
         requireSelfAsDefender: true,

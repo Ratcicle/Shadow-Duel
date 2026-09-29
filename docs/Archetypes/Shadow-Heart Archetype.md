@@ -114,7 +114,16 @@ Nível 2, Spirit, Dark, 800/800.
 
 Nível 8, Fiend, Dark, 2600/2200.
 
-> Se este card for Invocado por Invocação-Tributo: você pode escolher 1 card que seu oponente controla; destrua-o. No início do cálculo de dano, se este card batalhar um monstro do oponente: remova todos os aumentos de ATK/DEF aplicados a esse monstro.
+> Se este card for Invocado por Invocação-Tributo: você pode escolher 1 card no campo do oponente; destrua-o.
+>
+> Durante o cálculo de dano, se este card batalhar contra um monstro do oponente: remova todos os aumentos de ATK/DEF aplicados a esse monstro.
+
+Os efeitos de combate de Arctroth e Hiperion disparam em `damage_step`, com `damageStepTimings: ["damage_calculation"]`. São efeitos obrigatórios: o do jogador do turno ocupa o Elo 1 e o do oponente, o Elo 2; a Corrente resolve em ordem inversa. Com ambos em Ataque e sem outros modificadores:
+
+- Arctroth ataca: Hiperion ganha 1000 ATK/DEF no Elo 2; Arctroth remove o aumento no Elo 1. Hiperion fica com 3000 ATK durante o cálculo, destrói Arctroth e causa 400 de dano.
+- Hiperion ataca: Arctroth remove os aumentos existentes no Elo 2; Hiperion ganha 1000 ATK/DEF no Elo 1. Hiperion fica com 4000 ATK durante o cálculo, destrói Arctroth e causa 1400 de dano.
+
+Não há prioridade especial nem bloqueio de novos aumentos. O bônus temporário do Hiperion termina após o cálculo, sem subtrair novamente um aumento já removido.
 
 **107 — Imp do Coração Sombrio / Shadow-Heart Imp**
 

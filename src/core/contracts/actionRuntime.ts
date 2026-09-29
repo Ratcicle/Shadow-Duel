@@ -362,8 +362,8 @@ export interface ActionRuntimeGamePort {
   banishedCards?: ActionRuntimeCard[];
   battleStep?: "start" | "battle" | "damage" | "end" | null;
   damageCalculationStatChangePending?: boolean;
-  damageCalculationTempBuffs?: object[];
-  endOfDamageStepTempBuffs?: object[];
+  damageCalculationTempBuffs?: Array<{ card?: ActionRuntimeCard | null; atk?: number; def?: number }>;
+  endOfDamageStepTempBuffs?: Array<{ card?: ActionRuntimeCard | null; atk?: number; def?: number }>;
   temporaryReplacementEffects?: ActionRuntimeRegistration[];
   temporaryEventEffects?: ActionRuntimeRegistration[];
   pendingSynchroMaterialFollowups?: ActionRuntimeRegistration[];

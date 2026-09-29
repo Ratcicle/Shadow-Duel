@@ -387,6 +387,19 @@ function consumeTrackedStatIncrease(
   if (tempBoost > 0) {
     const actual = consume(tempBoost);
     card[tempKey] = tempBoost - actual;
+    // These entries are expiry bookkeeping for the same temporary modifier.
+    // Retire the consumed amount so expiry cannot subtract it a second time
+    // or consume a later, independently applied buff.
+    let remaining = actual;
+    for (const buffs of [game.damageCalculationTempBuffs, game.endOfDamageStepTempBuffs]) {
+      for (const buff of buffs || []) {
+        if (!sameCardReference(buff.card, card) || remaining <= 0) continue;
+        const tracked = Math.max(0, Number(buff[stat] || 0));
+        const consumed = Math.min(tracked, remaining);
+        buff[stat] = Number(buff[stat] || 0) - consumed;
+        remaining -= consumed;
+      }
+    }
   }
 
   if (Array.isArray(card.turnBasedBuffs)) {

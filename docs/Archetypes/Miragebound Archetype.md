@@ -24,12 +24,12 @@ Miragebound reúne 14 cartas com foco em mudanças de posição de batalha e ret
 
 | ID | PT-BR | Canônico | Nível | Tipo | Atributo | ATK | DEF |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 351 | Explorador dos Vinculados à Miragem | Miragebound Scout | 3 | Spellcaster | Não informado | 1400 | 1000 |
-| 352 | Dançarina dos Vinculados à Miragem | Miragebound Dancer | 4 | Spellcaster | Não informado | 1600 | 1200 |
-| 353 | Chacal dos Vinculados à Miragem | Miragebound Jackal | 4 | Beast | Não informado | 1700 | 800 |
-| 356 | Víbora de Vidro dos Vinculados à Miragem | Miragebound Glass Viper | 3 | Reptile | Não informado | 1000 | 1600 |
-| 357 | Sacerdotisa de Areia dos Vinculados à Miragem | Miragebound Sand Priestess | 4 | Spellcaster | Não informado | 1300 | 1800 |
-| 358 | Falso Rei dos Vinculados à Miragem | Miragebound False King | 6 | Fiend | Não informado | 2200 | 1800 |
+| 351 | Explorador dos Vinculados à Miragem | Miragebound Scout | 3 | Spellcaster | Earth | 1400 | 1000 |
+| 352 | Dançarina dos Vinculados à Miragem | Miragebound Dancer | 4 | Spellcaster | Earth | 1600 | 1200 |
+| 353 | Chacal dos Vinculados à Miragem | Miragebound Jackal | 4 | Beast | Earth | 1700 | 800 |
+| 356 | Víbora de Vidro dos Vinculados à Miragem | Miragebound Glass Viper | 3 | Reptile | Earth | 1000 | 1600 |
+| 357 | Sacerdotisa de Areia dos Vinculados à Miragem | Miragebound Sand Priestess | 4 | Spellcaster | Earth | 1300 | 1800 |
+| 358 | Falso Rei dos Vinculados à Miragem | Miragebound False King | 6 | Fiend | Earth | 2200 | 1800 |
 | 364 | Rebelde dos Vinculados à Miragem | Miragebound Rebel | 7 | Spellcaster | Earth | 2100 | 1200 |
 
 #### Magias (4)
@@ -51,7 +51,7 @@ Miragebound reúne 14 cartas com foco em mudanças de posição de batalha e ret
 
 | ID | PT-BR | Canônico | Tipo | Nível | Tipo de monstro | Atributo | ATK | DEF |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 355 | Soberano de Vidro dos Vinculados à Miragem | Miragebound Glass Sovereign | Ascensão | 7 | Spellcaster | Não informado | 2400 | 2200 |
+| 355 | Soberano de Vidro dos Vinculados à Miragem | Miragebound Glass Sovereign | Ascensão | 7 | Spellcaster | Earth | 2400 | 2200 |
 | 363 | Leviatã do Deserto dos Vinculados à Miragem | Miragebound Desert Leviathan | Fusão | 8 | Beast | Earth | 2400 | 2500 |
 
 ### Tokens / cartas auxiliares
@@ -82,37 +82,37 @@ Nenhuma carta auxiliar própria do arquétipo está listada neste catálogo.
 
 **351 — Explorador dos Vinculados à Miragem / Miragebound Scout**
 
-Nível 3, Spellcaster, Não informado, 1400/1000.
+Nível 3, Spellcaster, Earth, 1400/1000.
 
 > Se este card for Invocado por Invocação-Normal: adicione 1 Magia/Armadilha "Vinculados à Miragem" do seu Deck à sua mão. Uma vez por turno: você pode escolher 1 monstro com a face para cima que seu oponente controla; mude a posição de batalha dele. Você só pode usar cada efeito de "Explorador dos Vinculados à Miragem" uma vez por turno.
 
 **352 — Dançarina dos Vinculados à Miragem / Miragebound Dancer**
 
-Nível 4, Spellcaster, Não informado, 1600/1200.
+Nível 4, Spellcaster, Earth, 1600/1200.
 
 > Se você controlar um monstro "Vinculados à Miragem": você pode Invocar este card por Invocação-Especial da sua mão. Uma vez por turno: você pode escolher 1 outro monstro "Vinculados à Miragem" que você controla; devolva-o para a mão e, se isso acontecer, este card ganha 600 de ATK até o final deste turno. Você só pode usar cada efeito de "Dançarina dos Vinculados à Miragem" uma vez por turno.
 
 **353 — Chacal dos Vinculados à Miragem / Miragebound Jackal**
 
-Nível 4, Beast, Não informado, 1700/800.
+Nível 4, Beast, Earth, 1700/800.
 
 > Se um monstro que você controla for devolvido do campo para a sua mão (Efeito Rápido): você pode Invocar este card por Invocação-Especial da sua mão e, se isso acontecer, escolha 1 monstro que seu oponente controla; mude a posição de batalha dele. Você só pode usar este efeito de "Chacal dos Vinculados à Miragem" uma vez por turno.
 
 **356 — Víbora de Vidro dos Vinculados à Miragem / Miragebound Glass Viper**
 
-Nível 3, Reptile, Não informado, 1000/1600.
+Nível 3, Reptile, Earth, 1000/1600.
 
 > Se este card for devolvido do campo para a mão por um efeito de card: você pode Invocar este card por Invocação-Especial da sua mão, mas bana-o quando ele deixar o campo. Se este card for Invocado por Invocação-Especial: você pode escolher 1 monstro com a face para cima que seu oponente controla; ele perde 500 de ATK/DEF até o final deste turno. Você só pode usar cada efeito de "Víbora de Vidro dos Vinculados à Miragem" uma vez por turno.
 
 **357 — Sacerdotisa de Areia dos Vinculados à Miragem / Miragebound Sand Priestess**
 
-Nível 4, Spellcaster, Não informado, 1300/1800.
+Nível 4, Spellcaster, Earth, 1300/1800.
 
 > Se este card for devolvido do campo para a mão: você pode escolher 1 monstro "Vinculados à Miragem" no seu Cemitério; adicione-o à sua mão. Uma vez por turno: você pode escolher 1 monstro que seu oponente controla; mude a posição de batalha dele e, se isso acontecer, esse monstro perde 500 de ATK/DEF até o final do próximo turno. Você só pode usar cada efeito de "Sacerdotisa de Areia dos Vinculados à Miragem" uma vez por turno.
 
 **358 — Falso Rei dos Vinculados à Miragem / Miragebound False King**
 
-Nível 6, Fiend, Não informado, 2200/1800.
+Nível 6, Fiend, Earth, 2200/1800.
 
 > Você pode Invocar este card por Invocação-Especial da sua mão ao devolver 1 monstro "Vinculados à Miragem" que você controla para a mão. Você pode escolher 1 monstro que seu oponente controla; mude a posição de batalha dele. Você só pode usar cada efeito de "Falso Rei dos Vinculados à Miragem" uma vez por turno.
 
@@ -162,7 +162,7 @@ Armadilha Normal.
 
 **355 — Soberano de Vidro dos Vinculados à Miragem / Miragebound Glass Sovereign**
 
-Ascensão, Nível 7, Spellcaster, Não informado, 2400/2200.
+Ascensão, Nível 7, Spellcaster, Earth, 2400/2200.
 
 > Material de Ascensão: "Explorador dos Vinculados à Miragem". Requisito: o material deve ter ativado seus efeitos 2 vezes neste Duelo. Se este card for Invocado por Invocação-Ascensão: escolha até 2 monstros com a face para cima que seu oponente controla; mude as posições de batalha deles. Uma vez por turno: escolha 1 outro monstro "Vinculados à Miragem" que você controla e 1 card que seu oponente controla; devolva os alvos à mão. Se este card atacar um monstro em Posição de Defesa, cause dano perfurante.
 
@@ -176,7 +176,7 @@ Fusão, Nível 8, Beast, Earth, 2400/2500.
 
 ## Notas do Arquétipo
 
-- “Não informado” indica um campo ausente na definição canônica; nenhum valor foi presumido.
+- Todos os 9 monstros do arquétipo possuem o Atributo Earth (TERRA).
 - O catálogo possui 14 cartas: 12 no Main Deck e 2 no Extra Deck.
 - O Main Deck contém 7 monstros, 4 Magias e 1 Armadilhas.
 - O Extra Deck contém 1 de Fusão, 1 de Ascensão.

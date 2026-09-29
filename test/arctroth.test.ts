@@ -1,9 +1,101 @@
 ﻿import { placeFieldCards } from "./helpers/game.js";
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFileSync } from "node:fs";
 import Card from "../src/core/Card.js";
 import { cardDefinition, required, selectedCards, unsafeFixture } from "./helpers/fixtures.js";
 import { createRuntimeGame } from "./helpers/game.js";
+import { cleanupTempBoosts } from "../src/core/game/turn/cleanup.js";
+
+for (const duration of ["damage_calculation", "end_of_damage_step"] as const) {
+  test(`removing ${duration} increases retires only their expiry records and permits later buffs`, async t => {
+    const game = createRuntimeGame({ laboratoryMode: true, captureReplay: false });
+    t.after(() => game.dispose());
+    game.disablePresentationDelays = true;
+    const monster = new Card({ id: 99410, name: "Stat expiry fixture", cardKind: "monster", atk: 2000, def: 2000 }, game.player.id);
+    placeFieldCards(game.player.field, monster);
+    const ctx = { source: monster, player: game.player, opponent: game.bot };
+    const targets = { target: [monster] };
+    await game.effectEngine.applyActions([{ type: "buff_stats_temp", targetRef: "target", atkBoost: 1000, defBoost: 700, duration }], ctx, targets);
+    await game.effectEngine.applyActions([{ type: "remove_stat_increases", targetRef: "target", stats: ["atk", "def"] }], ctx, targets);
+    assert.deepEqual([monster.atk, monster.def], [2000, 2000]);
+    await game.effectEngine.applyActions([{ type: "buff_stats_temp", targetRef: "target", atkBoost: 500, defBoost: 200 }], ctx, targets);
+    game.clearDamageCalculationBuffs();
+    game.clearEndOfDamageStepBuffs();
+    assert.deepEqual([monster.atk, monster.def], [2500, 2200]);
+    assert.deepEqual([monster.tempAtkBoost, monster.tempDefBoost], [500, 200]);
+    cleanupTempBoosts(game.player);
+    assert.deepEqual([monster.atk, monster.def], [2000, 2000]);
+  });
+}
+
+test("Arctroth declares damage-calculation triggers and synchronized timing text", () => {
+  const definition = cardDefinition("Shadow-Heart Demon Arctroth");
+  const effects = required(definition.effects).filter(effect => effect.id.endsWith("remove_stat_increases"));
+  assert.equal(effects.length, 2);
+  for (const effect of effects) {
+    assert.equal(effect.event, "damage_step");
+    assert.deepEqual(effect.damageStepTimings, ["damage_calculation"]);
+    assert.equal(effect.triggerRequirement, "mandatory");
+    assert.deepEqual(effect.actions, [{ type: "remove_stat_increases", targetRef: "battle_opponent", stats: ["atk", "def"] }]);
+  }
+  assert.equal(definition.description,
+    "If this card is Tribute Summoned: You can target 1 card on your opponent's field; destroy it.\n\nDuring damage calculation, if this card battles an opponent's monster: remove all ATK/DEF increases applied to that monster.");
+  const locale = JSON.parse(readFileSync(new URL("../public/locales/pt-br.json", import.meta.url), "utf8"));
+  assert.equal(locale.cards["104"].description,
+    "Se este card for Invocado por Invocação-Tributo: você pode escolher 1 card no campo do oponente; destrua-o.\n\nDurante o cálculo de dano, se este card batalhar contra um monstro do oponente: remova todos os aumentos de ATK/DEF aplicados a esse monstro.");
+});
+
+for (const arctrothOwnerId of ["player", "bot"] as const) {
+  for (const arctrothAttacks of [true, false]) {
+    test(`Arctroth and Hyperion use SEGOC/LIFO during calculation (Arctroth=${arctrothOwnerId}, attacks=${arctrothAttacks})`, async t => {
+      const game = createRuntimeGame({ laboratoryMode: true, captureReplay: false });
+      t.after(() => game.dispose());
+      const arctrothOwner = game[arctrothOwnerId];
+      const hyperionOwner = game[arctrothOwnerId === "player" ? "bot" : "player"];
+      game.turn = arctrothAttacks ? arctrothOwner.id : hyperionOwner.id;
+      game.phase = "battle";
+      game.battleStep = "battle";
+      game.turnCounter = 2;
+      game.disablePresentationDelays = true;
+      game.waitForBoardPresentation = async () => {};
+      game.player.controllerType = game.bot.controllerType = "human";
+      game.ui.showChainResponseModal = async () => null;
+      const arctroth = new Card(cardDefinition("Shadow-Heart Demon Arctroth"), arctrothOwner.id);
+      const hyperion = new Card(cardDefinition("Luminous God Hyperion"), hyperionOwner.id);
+      arctroth.position = hyperion.position = "attack";
+      placeFieldCards(arctrothOwner.field, arctroth);
+      placeFieldCards(hyperionOwner.field, hyperion);
+      const arctrothEffect = `shadow_heart_arctroth_${arctrothAttacks ? "attack" : "defense"}_remove_stat_increases`;
+      const hyperionEffect = `luminous_god_hyperion_${arctrothAttacks ? "defense" : "attack"}_dark_boost`;
+      const resolutions: Array<{ id: string; level: number; chain: unknown; controller: string | null; timing: string | null; atk: number; def: number }> = [];
+      game.on("chain_link_resolution", payload => {
+        if (payload.stage !== "completed" || (payload.effectId !== arctrothEffect && payload.effectId !== hyperionEffect)) return;
+        resolutions.push({ id: payload.effectId, level: payload.chainLevel, chain: payload.chainId,
+          controller: payload.controllerId, timing: game.activeDamageStepTransaction?.timing || null,
+          atk: hyperion.atk, def: hyperion.def });
+      });
+      await game.resolveCombat(arctrothAttacks ? arctroth : hyperion, arctrothAttacks ? hyperion : arctroth);
+      assert.equal(resolutions.length, 2);
+      assert.deepEqual(resolutions.map(entry => entry.id), arctrothAttacks
+        ? [hyperionEffect, arctrothEffect] : [arctrothEffect, hyperionEffect]);
+      assert.deepEqual(resolutions.map(entry => entry.level), [2, 1]);
+      assert.notEqual(resolutions[0]?.chain, null);
+      assert.equal(resolutions[0]?.chain, resolutions[1]?.chain);
+      assert.equal(resolutions[1]?.controller, game.turn);
+      assert.deepEqual(resolutions.map(entry => entry.timing), ["damage_calculation", "damage_calculation"]);
+      assert.deepEqual(resolutions.map(entry => [entry.atk, entry.def]), arctrothAttacks
+        ? [[4000, 4000], [3000, 3000]] : [[3000, 3000], [4000, 4000]]);
+      assert.equal(arctrothOwner.lp, 8000 - (arctrothAttacks ? 400 : 1400));
+      assert.equal(hyperionOwner.lp, 8000);
+      assert.ok(arctrothOwner.graveyard.includes(arctroth));
+      assert.ok(hyperionOwner.field.includes(hyperion));
+      assert.deepEqual([hyperion.atk, hyperion.def], [3000, 3000]);
+      assert.deepEqual([hyperion.tempAtkBoost, hyperion.tempDefBoost], [0, 0]);
+      assert.deepEqual(game.damageCalculationTempBuffs, []);
+    });
+  }
+}
 
 for (const { laboratoryMode, actorId, activateEffect } of [
   { laboratoryMode: false, actorId: "player", activateEffect: true },
