@@ -4,6 +4,7 @@
  */
 
 import { resolveFieldScopeCards } from "../../actionHandlers/shared.js";
+import { captureCostMarkerEvidence } from "../costs/summonMarkers.js";
 import { assignAutomaticFieldSlot, clearFieldSlot } from "../../game/zones/placement.js";
 import type {
   ActionMoveResult,
@@ -17,7 +18,7 @@ import type {
 } from "../../contracts/actionRuntime.js";
 import { writeContextValue } from "../../contracts/actionRuntime.js";
 import type { ActionOf } from "../../contracts/actions.js";
-import type { EffectCondition } from "../../contracts/effects.js";
+import type { CardFilter, EffectCondition } from "../../contracts/effects.js";
 import type { BattlePosition } from "../../contracts/cards.js";
 import type { ZoneInput } from "../../contracts/zones.js";
 
@@ -55,6 +56,7 @@ interface MovementGamePort
 }
 
 interface MovementActionHost {
+  cardMatchesFilters(card: ActionRuntimeCard, filters: CardFilter): boolean;
   game: MovementGamePort;
   readonly ui: { log?(message: string): void } | null;
   getZone(
@@ -197,11 +199,25 @@ export async function applyMove(
     return false;
   }
 
+  const payingCost = ctx.activationContext?.payingActivationCosts === true;
+  if (action.requireAll || payingCost) {
+    if (new Set(targetCards).size !== targetCards.length) return false;
+    for (const card of targetCards) {
+      const owner = card.owner === "bot" ? this.game.bot : this.game.player;
+      if (action.fromZone && !this.getZone(owner, action.fromZone)?.includes(card)) return false;
+      if (payingCost && action.requireDestination && card.isToken && toZone !== "field") return false;
+    }
+  }
+
   let moved = false;
   const movedCards: MovementRuntimeCard[] = [];
   let movedLevelSum = 0;
 
   for (const card of targetCards) {
+    const markerEvidence = payingCost && action.targetRef
+      ? captureCostMarkerEvidence(ctx.effect, action.targetRef, filters => this.cardMatchesFilters(card, filters))
+      : [];
+    const movedBefore = movedCards.length;
     if (
       toZone === "field" &&
       card.summonRestrict === "shadow_heart_invocation_only"
@@ -281,22 +297,20 @@ export async function applyMove(
             ctx,
           ),
         });
+        if (typeof moveResult === "object" && moveResult !== null &&
+          moveResult.needsSelection && moveResult.selectionContract) {
+          return moveResult;
+        }
         if (
           moveResult === false || (typeof moveResult === "object" &&
           moveResult !== null &&
           (moveResult.success === false ||
+            (action.requireDestination === true &&
+              (!("toZone" in moveResult) || moveResult.toZone !== toZone)) ||
             (action.contextLabel === "destruction_replacement" &&
               "toZone" in moveResult && moveResult.toZone != null && moveResult.toZone !== toZone)))
         ) {
           return;
-        }
-        if (
-          typeof moveResult === "object" &&
-          moveResult !== null &&
-          moveResult.needsSelection &&
-          moveResult.selectionContract
-        ) {
-          return moveResult;
         }
       } else {
         const fromOwner =
@@ -345,8 +359,12 @@ export async function applyMove(
 
         card.owner = destPlayer.id;
         if (!tokenLeavesField) destArr.push(card);
+        if (tokenLeavesField && action.requireDestination === true) return;
       }
       movedCards.push(card);
+      if (markerEvidence.length && ctx.activationContext?.costPayment) {
+        (ctx.activationContext.costPayment.summonMarkers ??= []).push(...markerEvidence);
+      }
       movedLevelSum += levelBeforeMove;
       moved = true;
 
@@ -400,7 +418,9 @@ export async function applyMove(
       )
         return moveResult;
     }
+    if (action.requireAll && movedCards.length === movedBefore) return false;
   }
+  if (action.requireAll && movedCards.length !== targetCards.length) return false;
   if (moved) {
     storeMoveActionResults(action, ctx, targets, movedCards, movedLevelSum);
   }

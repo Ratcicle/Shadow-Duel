@@ -559,6 +559,7 @@ export function validateCardDatabase() {
           const allowedReqs = new Set([
             "material_destroyed_opponent_monsters",
             "material_effect_activations",
+            "material_effects_activated",
             "material_turns_on_field",
             "player_lp_gte",
             "player_lp_lte",
@@ -575,6 +576,21 @@ export function validateCardDatabase() {
                 idx,
               ),
             );
+          }
+          if (req.type === "material_effects_activated") {
+            const ids = req.effectIds;
+            const material = typeof asc.materialId === "number" ? cardDatabaseById.get(asc.materialId) : undefined;
+            if (!Array.isArray(ids) || ids.length === 0 || ids.some(id => typeof id !== "string" || !id.trim()) || new Set(ids).size !== ids.length) {
+              errors.push(formatIssue(card, "Ascension material_effects_activated requires nonempty, unique effectIds.", null, idx));
+            } else if (!material) {
+              errors.push(formatIssue(card, "Ascension material_effects_activated requires a valid materialId.", null, idx));
+            } else {
+              for (const id of ids) {
+                if (!material.effects?.some(effect => effect.id === id && effect.timing !== "passive")) {
+                  errors.push(formatIssue(card, `Ascension effectId "${id}" is not an activated effect of material ${asc.materialId}.`, null, idx));
+                }
+              }
+            }
           }
         });
       }

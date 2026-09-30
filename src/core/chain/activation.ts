@@ -563,6 +563,7 @@ export async function payActivationCosts(
 
   const ctx = buildEffectContext(this, prepared, context);
   ctx.activationContext.payingActivationCosts = true;
+  ctx.activationContext.costPayment = { status: "paid", actions: [], summonMarkers: [] };
   const result = await effectEngine.applyActions(
     costs,
     ctx,
@@ -583,12 +584,15 @@ export async function payActivationCosts(
   prepared.costsPaid = true;
   prepared.costPayment = {
     status: "paid",
+    ...(ctx.activationContext.costPayment.summonMarkers?.length
+      ? { summonMarkers: ctx.activationContext.costPayment.summonMarkers } : {}),
     actions: costs.map((action, index) => ({
       index,
       type: action?.type || null,
       targetRef: actionTargetRef(action),
     })),
   };
+  prepared.activationContext.costPayment = prepared.costPayment;
   return { success: true, needsSelection: false };
 }
 

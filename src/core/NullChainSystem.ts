@@ -1,6 +1,7 @@
 import type { CardAction } from "./contracts/actions.js";
 import type {
   ChainActivationCandidate,
+  ChainCostPayment,
   ChainCard,
   ChainRuntimeTriggerOccurrence,
   ChainRuntimeTriggerState,
@@ -407,6 +408,7 @@ class NullChainSystem implements ChainRuntimePort {
       return { success: true, needsSelection: false };
     }
     const player = prepared.controller || null;
+    const payment: ChainCostPayment = { status: "paid", actions: [], summonMarkers: [] };
     const result = await this.game?.effectEngine?.applyActions?.(
       actions,
       {
@@ -422,6 +424,7 @@ class NullChainSystem implements ChainRuntimePort {
         activationContext: {
           ...(prepared.activationContext || {}),
           payingActivationCosts: true,
+          costPayment: payment,
           committed: prepared.committed === true,
           costSelections: prepared.costSelections || {},
           targetSelections: prepared.targetSelections || {},
@@ -433,12 +436,14 @@ class NullChainSystem implements ChainRuntimePort {
     prepared.costsPaid = true;
     prepared.costPayment = {
       status: "paid",
+      ...(payment.summonMarkers?.length ? { summonMarkers: payment.summonMarkers } : {}),
       actions: actions.map((action, index) => ({
         index,
         type: action.type || null,
         targetRef: actionTargetRef(action),
       })),
     };
+    prepared.activationContext.costPayment = prepared.costPayment;
     return { success: true, needsSelection: false };
   }
 

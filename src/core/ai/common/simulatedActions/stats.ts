@@ -778,28 +778,24 @@ export function applyModifyStatsTempThenDestroyIfZeroed(
 export function applySetStatsToZeroAndNegate(
   ctx: SimulatedActionHandlerContext<"set_stats_to_zero_and_negate">,
 ): void {
-  const {
-    action,
-    targets,
-    selections,
-    state,
-    selfId,
-    options,
-    self,
-    opponent,
-    applySimulatedActions,
-  } = ctx;
+  const { action, targets } = ctx;
+  const setAtkToZero = action.setAtkToZero !== false;
+  const setDefToZero = action.setDefToZero !== false;
   targets.forEach((card) => {
-    if (!card) return;
-    if (action.setAtkToZero) {
-      card.atk = 0;
-      card.tempAtkBoost = 0;
+    if (!card || card.cardKind !== "monster") return;
+    if (!card.isFacedown && (setAtkToZero || setDefToZero)) {
+      applyModifyStatsTemp({
+        ...ctx,
+        action: {
+          type: "modify_stats_temp",
+          targetRef: action.targetRef,
+          atkFactor: setAtkToZero ? 0 : 1,
+          defFactor: setDefToZero ? 0 : 1,
+        },
+        targets: [card],
+      });
     }
-    if (action.setDefToZero) {
-      card.def = 0;
-      card.tempDefBoost = 0;
-    }
-    if (action.negateEffects) {
+    if (action.negateEffects !== false) {
       card.effectsNegated = true;
       card.effectsNegatedDuration = normalizeNegateEffectsDuration(action);
     }

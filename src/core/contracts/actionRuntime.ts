@@ -14,7 +14,7 @@ import type {
   CardStatusRegistry,
   MonsterType,
 } from "./cards.js";
-import type { ChainLink, ChainRuntimePort, ChainSourceSnapshot } from "./chainRuntime.js";
+import type { ChainCostPayment, ChainLink, ChainRuntimePort, ChainSourceSnapshot } from "./chainRuntime.js";
 import type {
   EffectCondition,
   EffectDefinition,
@@ -52,6 +52,8 @@ export type MaybePromise<Value> = Value | PromiseLike<Value>;
  * migrated; dynamic status access must go through the Reflect helpers below.
  */
 export interface ActionRuntimeCard {
+  fieldPresenceId?: string | number | null;
+  effectMarkers?: import("./cards.js").CardEffectMarkerMap;
   duelCardId?: number;
   fieldSlot?: FieldSlot | null;
   // Card keeps these own properties even when constructor data omits them.
@@ -509,6 +511,8 @@ export interface ActionRuntimeGamePort {
 }
 
 interface ActionContextState extends ActionNegationContext {
+  costPayment?: ChainCostPayment | null;
+  payingActivationCosts?: boolean;
   sourceAtActivation?: ChainSourceSnapshot | null;
   decisions?: import("./ai.js").AIDecisionPlan;
   effectId?: string | null;

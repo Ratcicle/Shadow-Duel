@@ -169,13 +169,13 @@ Nível 5, Fiend, Dark, 2000/1000.
 
 Nível 2, Winged Beast, Dark, 300/300.
 
-> Se um Monstro de Fusão 'Vazio' for Invocado por Invocação-Fusão: você pode descartar este card da sua mão; esse monstro fica imune aos efeitos de cards do oponente até o final do próximo turno. Você só pode usar este efeito de 'Corvo do Vazio' uma vez por turno.
+> Se você Invocar por Invocação-Fusão um Monstro de Fusão 'Vazio': você pode descartar este card da sua mão; esse monstro fica imune aos efeitos de cards do oponente até o final do próximo turno. Você só pode usar este efeito de 'Corvo do Vazio' uma vez por turno.
 
 **211 — Chifre Tenebris do Vazio / Void Tenebris Horn**
 
 Nível 4, Fiend, Dark, 1500/800.
 
-> Ganha 100 de ATK/DEF para cada monstro "Vazio" no seu campo e no seu Cemitério. Uma vez por turno e até três vezes por Duelo: se este card estiver no seu Cemitério e houver 2 ou mais "Oco do Vazio" no seu campo e/ou Cemitério; você pode Invocá-lo por Invocação-Especial.
+> Ganha 100 de ATK/DEF para cada monstro "Vazio" no seu campo e no seu Cemitério. Se este card estiver no seu Cemitério e houver 2 ou mais "Oco do Vazio" no seu campo e/ou Cemitério: você pode Invocá-lo por Invocação-Especial. Você só pode ativar este efeito de "Chifre Tenebris do Vazio" uma vez por turno e apenas 3 vezes por Duelo.
 
 **212 — Brutamontes Matador do Vazio / Void Slayer Brute**
 
@@ -271,7 +271,7 @@ Ascensão, Nível 8, Fiend, Dark, 2600/2400.
 
 Fusão, Nível 10, Warrior, Dark, 3000/0.
 
-> Deve ser Invocado por Invocação-Fusão do seu Deck Adicional ao banir 1 'Arcturus, Senhor do Vazio' do seu Cemitério. Se este card for destruído em batalha: destrua o monstro que batalhou este card. Você pode banir este card do seu Cemitério; Invoque por Invocação-Especial de 1 a 3 monstros 'Vazio' com nomes diferentes do seu Cemitério, exceto 'Arcturus, o Lorde Caído' e 'Arcturus, Senhor do Vazio', mas negue seus efeitos. Você só pode usar este efeito de 'Arcturus, o Lorde Caído' uma vez por turno.
+> Deve ser Invocado por Invocação-Fusão do seu Deck Adicional ao banir 1 'Arcturus, Senhor do Vazio' do seu Cemitério. Se este card for destruído em batalha: destrua o monstro que batalhou este card. Você pode banir este card do seu Cemitério; Invoque por Invocação-Especial de 1 a 3 monstros 'Vazio' com nomes diferentes do seu Cemitério, exceto 'Arcturus, o Lorde Caído' e 'Arcturus, Senhor do Vazio', mas negue seus efeitos.
 
 **226 — Rastejador Sombrio do Vazio / Void Shadow Crawler**
 

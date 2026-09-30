@@ -40,12 +40,24 @@ Para Invocar por Ascensão:
 - O usuário deve ter **mais de 7000 LP**.
 - O usuário deve ter **menos de 1000 LP**.
 - O material deve ter **ativado seu efeito Y vezes** neste duelo.
+- O material deve ter **ativado cada um dos efeitos especificados** neste duelo.
 - Você deve ter **Z cartas na mão**.
 - Você deve ter **Z cartas no Cemitério**.
 
 ---
 
 ## 5) Progresso por “nome do material” (vale para qualquer cópia)
+
+O requisito declarativo `material_effects_activated` usa `effectIds` para exigir
+cada efeito listado ao menos uma vez. Exemplo: Demônio Malicioso (223) exige
+`thousand_arms_summon_from_hand` e `thousand_arms_bounce_and_revive` do material
+Mil Braços (221). Repetir um deles não substitui o outro.
+
+Esse histórico registra ativações válidas mesmo quando o efeito é negado ou
+resolve sem resultado. Ativações negadas, canceladas ou inválidas não contam.
+O registro é separado por jogador, persiste entre turnos e mudanças de zona e
+é limpo ao reiniciar o duelo. O requisito numérico `material_effect_activations`
+mantém sua contagem existente, separada desse histórico de efeitos distintos.
 
 - Uma vez que os requisitos forem cumpridos **pelo monstro‑matéria (por identidade/nome do material)**, **qualquer uma das 3 cópias** desse monstro pode servir como material para a Invocação‑Ascensão.
 - Em outras palavras: o “progresso/contagem” do requisito é **compartilhado por todas as cópias** daquele material no duelo (não é preso a uma única instância).

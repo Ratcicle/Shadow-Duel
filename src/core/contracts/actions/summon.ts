@@ -66,6 +66,7 @@ export interface SummonActionMap {
   special_summon_from_zone: DefineAction<
     "special_summon_from_zone",
     never,
+    | "costTargetRef" | "conditionalMarkersOnSummon"
     | "targetRef" | "zone" | "sourceZone" | "sourceOwner" | "summonToOwner"
     | "scope" | "filters" | "count" | "player" | "archetype" | "cardKind"
     | "cardName" | "monsterType" | "isToken" | "isTuner" | "minAtk"

@@ -15,6 +15,7 @@ import type { GamePhase } from "./game.js";
 import type {
   DamageStepState,
   GameRuntimeState,
+  MaterialDuelStats,
   SummonState,
 } from "./gameRuntime.js";
 import type {
@@ -439,6 +440,7 @@ export interface AiStateInput {
 }
 
 export interface AiStateShape extends AiLiveGamePort {
+  materialDuelStats?: MaterialDuelStats;
   _simGeneratedInstanceCounter?: number;
   _simRequiresReplan?: boolean;
   _simUnknownDrawCount?: number;

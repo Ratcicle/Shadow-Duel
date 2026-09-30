@@ -583,7 +583,7 @@ export function getGenericIgnitionEffectActions<Type extends AIActionType, Analy
         ? findEffect(card, sourceZone, context)
         : null;
     if (!effect) continue;
-    if (effect.actions?.some(action => action.type === "bounce_and_summon" &&
+    if (effect.actions?.some(action => (action.type === "bounce_and_summon" || (effect.activationCosts?.length && action.type === "special_summon_from_zone")) &&
         !hasActionZoneCandidates(player, action, card))) continue;
 
     const decision =

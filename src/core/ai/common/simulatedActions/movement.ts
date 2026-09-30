@@ -1,3 +1,4 @@
+import { captureCostMarkerEvidence } from "../../../effects/costs/summonMarkers.js";
 import { appendSimulatedFieldCard } from "../zones.js";
 import { restoreFieldExitStatuses } from "../../../Card.js";
 import { getAvailableFieldSlots } from "../../../game/zones/placement.js";
@@ -292,12 +293,24 @@ export function applyMove(
   if (targetCards.length === 0) {
     return action.allowEmpty === true ? undefined : STOP_SIMULATION;
   }
+  const payingCost = options.effect?.activationCosts?.includes(action) === true;
+  if (action.requireAll || payingCost) {
+    if (new Set(targetCards).size !== targetCards.length) return STOP_SIMULATION;
+    for (const card of targetCards) {
+      const owner = findCardOwner(state, card);
+      if (!owner || (action.fromZone && findCardZone(owner, card) !== action.fromZone)) return STOP_SIMULATION;
+      if (payingCost && action.requireDestination && card.isToken && action.to !== "field") return STOP_SIMULATION;
+    }
+  }
   let moved = false;
   let movedLevelSum = 0;
   const movedCards: SimulatedCardState[] = [];
-  targetCards.forEach((card) => {
+  for (const card of targetCards) {
+    const evidence = payingCost ? captureCostMarkerEvidence(options.effect, action.targetRef || "self",
+      filters => matchesTargetFilters(card, filters)) : [];
+    const movedBefore = movedCards.length;
     const owner = findCardOwner(state, card);
-    if (!owner) return;
+    if (!owner) continue;
     const to = action.to || "graveyard";
     let destPlayer =
       action.player === "opponent"
@@ -306,7 +319,8 @@ export function applyMove(
           ? self
           : owner;
     if (to === "field" && (destPlayer?.field || []).length >= 5) {
-      return;
+      if (action.requireAll) return STOP_SIMULATION;
+      continue;
     }
     const fromZone = findCardZone(owner, card) || action.fromZone || null;
     if (fromZone === "field" && to !== "field") {
@@ -326,12 +340,22 @@ export function applyMove(
         card.canMakeSecondAttackThisTurn = false;
         card.secondAttackUsedThisTurn = false;
       }
+      const reachedDestination = findCardZone(destPlayer || owner, card) === to;
       emitSimulatedMove(card, state, owner, destPlayer || owner, fromZone, wasFaceupBeforeMove, effectsNegatedAtFieldExit, options, action.contextLabel || null);
+      if (action.requireDestination === true && !reachedDestination) {
+        if (action.requireAll) return STOP_SIMULATION;
+        continue;
+      }
       movedCards.push(card);
+      if (evidence.length) {
+        options.costPayment ??= { status: "paid", actions: [], summonMarkers: [] };
+        (options.costPayment.summonMarkers ??= []).push(...evidence);
+      }
       movedLevelSum += Number.isFinite(levelBeforeMove) ? levelBeforeMove : 0;
       moved = true;
     }
-  });
+    if (action.requireAll && movedCards.length === movedBefore) return STOP_SIMULATION;
+  }
   if (!moved && action.allowEmpty !== true) return STOP_SIMULATION;
   if (moved) {
     storeSimActionResult(action, selections, options, movedCards);

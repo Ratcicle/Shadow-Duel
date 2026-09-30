@@ -319,7 +319,7 @@ function buildVoidTargetPreferences(costPreferences: Partial<ReturnType<typeof b
         role: "cost",
         intent: "cost",
       },
-      void_shadow_crawler_cost: {
+      void_shadow_crawler_send: {
         role: "cost",
         intent: "cost",
       },
@@ -328,10 +328,6 @@ function buildVoidTargetPreferences(costPreferences: Partial<ReturnType<typeof b
       },
       void_aberration_destroy_target: {
         intent: "harm",
-      },
-      void_raven_discard_cost: {
-        role: "cost",
-        intent: "cost",
       },
       void_gravitational_self: {
         role: "named_preference",

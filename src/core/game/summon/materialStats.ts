@@ -17,7 +17,7 @@
  */
 
 import type { GameCard } from "../../contracts/cards.js";
-import type { GameCoreHost } from "../../contracts/gameRuntime.js";
+import type { GameCoreHost, MaterialDuelStats, MaterialStatsForPlayer } from "../../contracts/gameRuntime.js";
 import type { GamePlayer } from "../../contracts/player.js";
 import type { PlayerId } from "../../contracts/primitives.js";
 
@@ -27,9 +27,8 @@ type MaterialStatMapName =
 
 interface MaterialStatMeta {
   contextLabel?: string;
+  effectId?: string;
 }
-
-type MaterialStatsForPlayer = Record<MaterialStatMapName, Map<number, number>>;
 
 interface MaterialStatsHost extends GameCoreHost {
   materialDuelStats: Record<PlayerId, MaterialStatsForPlayer>;
@@ -42,17 +41,23 @@ interface MaterialStatsHost extends GameCoreHost {
   ): void;
 }
 
-export function resetMaterialDuelStats(this: MaterialStatsHost, reason = "reset") {
-  this.materialDuelStats = {
+export function createMaterialDuelStats(): MaterialDuelStats {
+  return {
     player: {
       destroyedOpponentMonstersByMaterialId: new Map(),
       effectActivationsByMaterialId: new Map(),
+      activatedEffectIdsByMaterialId: new Map(),
     },
     bot: {
       destroyedOpponentMonstersByMaterialId: new Map(),
       effectActivationsByMaterialId: new Map(),
+      activatedEffectIdsByMaterialId: new Map(),
     },
   };
+}
+
+export function resetMaterialDuelStats(this: MaterialStatsHost, reason = "reset") {
+  this.materialDuelStats = createMaterialDuelStats();
   this.devLog("MATERIAL_STATS_RESET", { summary: reason });
 }
 
@@ -81,6 +86,7 @@ export function recordMaterialEffectActivation(
   if (playerId !== "player" && playerId !== "bot") return;
   if (!sourceCard || sourceCard.cardKind !== "monster") return;
   if (typeof sourceCard.id !== "number") return;
+  recordMaterialEffectIdentity(this.materialDuelStats, playerId, sourceCard, meta.effectId);
   this.incrementMaterialStat(
     playerId,
     "effectActivationsByMaterialId",
@@ -94,6 +100,25 @@ export function recordMaterialEffectActivation(
     cardId: sourceCard.id,
     context: meta.contextLabel,
   });
+}
+
+/** Distinct activation history is independent of successful-resolution counts. */
+export function recordMaterialEffectIdentity(
+  stats: MaterialDuelStats | undefined,
+  playerId: string,
+  sourceCard: {
+    readonly id?: GameCard["id"] | null | undefined;
+    readonly cardKind?: GameCard["cardKind"] | null | undefined;
+  },
+  effectId: string | null | undefined,
+): void {
+  if (playerId !== "player" && playerId !== "bot") return;
+  if (sourceCard.cardKind !== "monster" || typeof sourceCard.id !== "number" || !effectId) return;
+  const history = stats?.[playerId].activatedEffectIdsByMaterialId;
+  if (!history) return;
+  const activated = history.get(sourceCard.id) || new Set<string>();
+  activated.add(effectId);
+  history.set(sourceCard.id, activated);
 }
 
 export function recordMaterialDestroyedOpponentMonster(

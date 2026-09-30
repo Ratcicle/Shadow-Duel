@@ -365,6 +365,8 @@ type BooleanActionProperty =
   | "requireBoundTargetLeavesField"
   | "requireBoundTargetDestroyed"
   | "requireConfirmation"
+  | "requireDestination"
+  | "requireAll"
   | "requireFaceup"
   | "requireSource"
   | "resetAttackFlags"

@@ -40,6 +40,7 @@ export const PLANNING_STATE_FIELDS = [
   "_simPlanningBattleDone", "_simGrandLibraryBattleRewardUsed",
   "_simArcanistApprenticeSearchUsed", "_simArcanistSpellActivations",
   "_simBurningWest", "_simMaterialEffectActivationsByMaterialId",
+  "materialDuelStats",
   "_simVoidBeastSearchUsed", "_simVoidHollowRecruitUsed",
   "temporaryEventEffects", "temporaryControlEffects", "temporaryBattlePairEffects",
 ] as const satisfies readonly (keyof AiStateShape | keyof GameRuntimeState)[];

@@ -1,3 +1,4 @@
+import { applyCostSummonMarker } from "../../effects/costs/summonMarkers.js";
 import { isAI } from "../../Player.js";
 import type { ActionOf } from "../../contracts/actions.js";
 import type {
@@ -171,31 +172,9 @@ function applyConditionalMarkersOnSummon(
     const matchingCostCards = (paidCostCards || []).filter((card) =>
       costCardMatchesMarkerFilters(card, filters, engine),
     );
-    const min = Number.isFinite(markerConfig.min) ? markerConfig.min : 1;
-    if (matchingCostCards.length < min) continue;
-
-    let effectMarkers: unknown = Reflect.get(source, "effectMarkers");
-    if (!effectMarkers || typeof effectMarkers !== "object") {
-      effectMarkers = {};
-      Reflect.set(source, "effectMarkers", effectMarkers);
-    }
-
-    const marker = {
-      key: markerConfig.key,
-      sourceEffectId:
-        markerConfig.sourceEffectId || ctx?.effect?.id || action?.sourceEffectId || null,
-      createdOnTurn: Number(engine?.game?.turnCounter || 0),
-      matchingCostCount: matchingCostCards.length,
-    };
-
-    const fieldPresenceId: unknown = Reflect.get(source, "fieldPresenceId");
-    if (markerConfig.bindToFieldPresence === true && fieldPresenceId) {
-      Reflect.set(marker, "fieldPresenceId", fieldPresenceId);
-    }
-
-    if (effectMarkers && typeof effectMarkers === "object") {
-      Reflect.set(effectMarkers, markerConfig.key, marker);
-    }
+    applyCostSummonMarker(source, markerConfig, matchingCostCards.length,
+      markerConfig.sourceEffectId || ctx?.effect?.id || action?.sourceEffectId || null,
+      Number(engine?.game?.turnCounter || 0));
   }
 }
 

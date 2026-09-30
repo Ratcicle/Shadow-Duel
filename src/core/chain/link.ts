@@ -663,6 +663,9 @@ export function serializeChainLink(
     costPayment: link.costPayment
       ? {
           status: link.costPayment.status || null,
+          ...(link.costPayment.summonMarkers ? {
+            summonMarkers: link.costPayment.summonMarkers.map(entry => ({ ...entry })),
+          } : {}),
           actions: Array.isArray(link.costPayment.actions)
             ? link.costPayment.actions.map((entry) => ({ ...entry }))
             : [],

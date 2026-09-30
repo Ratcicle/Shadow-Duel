@@ -699,7 +699,9 @@ export type MaterialStatMapName =
 export type MaterialStatsForPlayer = Record<
   MaterialStatMapName,
   Map<number, number>
->;
+> & {
+  activatedEffectIdsByMaterialId: Map<number, Set<string>>;
+};
 
 export type MaterialDuelStats = Record<PlayerId, MaterialStatsForPlayer>;
 

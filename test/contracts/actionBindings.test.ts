@@ -59,7 +59,7 @@ test("all action types reached by the canonical walker have bindings", () => {
     }
   }
 
-  assert.equal(usedTypes.size, 98);
+  assert.equal(usedTypes.size, 97);
   for (const type of usedTypes) {
     assert.equal(
       Object.hasOwn(ACTION_BINDINGS, type),
