@@ -799,23 +799,23 @@
     },
     "201": {
       "name": "Conjurador do Vazio",
-      "description": "Invoque por Invocação-Especial 1 monstro 'Vazio' de Nível 4 ou menor do seu Deck, exceto 'Conjurador do Vazio', mas ele não pode atacar neste turno e é destruído na End Phase. Se este card estiver no seu Cemitério: você pode enviar 1 monstro 'Vazio' que você controla para o Cemitério; Invoque este card por Invocação-Especial, mas negue seus efeitos até o final do turno. Você só pode usar cada efeito de 'Conjurador do Vazio' uma vez por turno."
+      "description": "Invoque por Invocação-Especial 1 monstro 'Vazio' de Nível 4 ou menor do seu Deck, exceto 'Conjurador do Vazio', mas ele não pode atacar neste turno e é destruído na End Phase.\nSe este card estiver no seu Cemitério: você pode enviar 1 monstro 'Vazio' que você controla para o Cemitério; Invoque este card por Invocação-Especial, mas negue seus efeitos até o final do turno.\nVocê só pode usar cada efeito de 'Conjurador do Vazio' uma vez por turno."
     },
     "202": {
       "name": "Andarilho do Vazio",
-      "description": "Não pode atacar no turno em que é Invocado por Invocação-Especial. Uma vez por turno: você pode devolver este card à sua mão; Invoque por Invocação-Especial 1 monstro 'Vazio' de Nível 4 ou menor da sua mão, exceto 'Andarilho do Vazio'."
+      "description": "Não pode atacar no turno em que é Invocado por Invocação-Especial.\nUma vez por turno: você pode devolver este card à sua mão; Invoque por Invocação-Especial 1 monstro 'Vazio' de Nível 4 ou menor da sua mão, exceto 'Andarilho do Vazio'."
     },
     "203": {
       "name": "Fera do Vazio",
-      "description": "Se este card for Invocado por Invocação-Normal: você pode adicionar 1 monstro \"Vazio\" que mencione \"Oco do Vazio\" em seu texto, exceto \"Fera do Vazio\", do seu Deck à sua mão. Se este card destruir um monstro do oponente em batalha: você pode Invocar por Invocação-Especial 1 \"Oco do Vazio\" da sua mão ou Deck. Você só pode usar cada efeito de \"Fera do Vazio\" uma vez por turno."
+      "description": "Se este card for Invocado por Invocação-Normal: você pode adicionar 1 monstro \"Vazio\" que mencione \"Oco do Vazio\" em seu texto, exceto \"Fera do Vazio\", do seu Deck à sua mão.\nSe este card destruir um monstro do oponente em batalha: você pode Invocar por Invocação-Especial 1 \"Oco do Vazio\" da sua mão ou Deck.\nVocê só pode usar cada efeito de \"Fera do Vazio\" uma vez por turno."
     },
     "204": {
       "name": "Oco do Vazio",
-      "description": "Se este card for Invocado por Invocação-Especial da sua mão: você pode Invocar por Invocação-Especial 1 'Oco do Vazio' do seu Deck. Você só pode usar este efeito de 'Oco do Vazio' uma vez por turno."
+      "description": "Se este card for Invocado por Invocação-Especial da sua mão: você pode Invocar por Invocação-Especial 1 'Oco do Vazio' do seu Deck.\nVocê só pode usar este efeito de 'Oco do Vazio' uma vez por turno."
     },
     "205": {
       "name": "Assombração do Vazio",
-      "description": "Você pode enviar 1 monstro 'Vazio' que você controla para o Cemitério; Invoque por Invocação-Especial este card da sua mão. Você pode banir este card do seu Cemitério e, depois, escolher até 3 'Oco do Vazio' no seu Cemitério; Invoque por Invocação-Especial esses alvos, mas o ATK/DEF deles se tornam 0. Você só pode usar cada efeito de 'Assombração do Vazio' uma vez por turno."
+      "description": "Você pode enviar 1 monstro 'Vazio' que você controla para o Cemitério; Invoque por Invocação-Especial este card da sua mão.\nVocê pode banir este card do seu Cemitério e, depois, escolher até 3 'Oco do Vazio' no seu Cemitério; Invoque por Invocação-Especial esses alvos, mas o ATK/DEF deles se tornam 0.\nVocê só pode usar cada efeito de 'Assombração do Vazio' uma vez por turno."
     },
     "206": {
       "name": "Lobo Fantasma do Vazio",
@@ -823,87 +823,87 @@
     },
     "207": {
       "name": "Rei Oco do Vazio",
-      "description": "Materiais: 3 monstros \"Oco do Vazio\". Se este card for destruído em batalha ou por efeito de card: você pode Invocar por Invocação-Especial até 3 \"Oco do Vazio\" do seu Cemitério. Se este card destruir um monstro do oponente em batalha: você pode Invocar por Invocação-Especial 1 \"Oco do Vazio\" do seu Cemitério. (Efeito Rápido) Você pode enviar 1 \"Oco do Vazio\" com a face para cima que você controla para o Cemitério; este card ganha 1000 ATK até o final deste turno."
+      "description": "3 monstros \"Oco do Vazio\"\n\nSe este card for destruído em batalha ou por efeito de card: você pode Invocar por Invocação-Especial até 3 \"Oco do Vazio\" do seu Cemitério.\nSe este card destruir um monstro do oponente em batalha: você pode Invocar por Invocação-Especial 1 \"Oco do Vazio\" do seu Cemitério.\n(Efeito Rápido) Você pode enviar 1 \"Oco do Vazio\" com a face para cima que você controla para o Cemitério; este card ganha 1000 ATK até o final deste turno."
     },
     "208": {
       "name": "Aranha Óssea do Vazio",
-      "description": "Escolha 1 monstro com a face para cima que seu oponente controla; envie 1 \"Oco do Vazio\" da sua mão ou campo para o Cemitério e, se isso acontecer, esse monstro não pode declarar ataque até o final do próximo turno. Se este card for enviado do campo para o Cemitério: Invoque por Invocação-Especial 1 \"Oco do Vazio\" do seu Cemitério."
+      "description": "Escolha 1 monstro com a face para cima que seu oponente controla; envie 1 \"Oco do Vazio\" da sua mão ou campo para o Cemitério e, se isso acontecer, esse monstro não pode declarar ataque até o final do próximo turno.\nSe este card for enviado do campo para o Cemitério: Invoque por Invocação-Especial 1 \"Oco do Vazio\" do seu Cemitério."
     },
     "209": {
       "name": "Cavaleiro Esquecido do Vazio",
-      "description": "Você pode enviar 1 monstro 'Vazio' com a face para cima que você controla para o Cemitério; Invoque por Invocação-Especial este card da sua mão. Este card ganha 100 de ATK para cada 'Oco do Vazio' no seu Cemitério. Você pode banir este card do seu Cemitério; escolha 1 Magia/Armadilha com a face para cima que seu oponente controla; destrua-a. Você só pode usar cada efeito de 'Cavaleiro Esquecido do Vazio' uma vez por turno."
+      "description": "Você pode enviar 1 monstro 'Vazio' com a face para cima que você controla para o Cemitério; Invoque por Invocação-Especial este card da sua mão.\nEste card ganha 100 de ATK para cada 'Oco do Vazio' no seu Cemitério.\nVocê pode banir este card do seu Cemitério; escolha 1 Magia/Armadilha com a face para cima que seu oponente controla; destrua-a.\nVocê só pode usar cada efeito de 'Cavaleiro Esquecido do Vazio' uma vez por turno."
     },
     "210": {
       "name": "Corvo do Vazio",
-      "description": "Se você Invocar por Invocação-Fusão um Monstro de Fusão 'Vazio': você pode descartar este card da sua mão; esse monstro fica imune aos efeitos de cards do oponente até o final do próximo turno. Você só pode usar este efeito de 'Corvo do Vazio' uma vez por turno."
+      "description": "Se você Invocar por Invocação-Fusão um Monstro de Fusão 'Vazio': você pode descartar este card da sua mão; esse monstro fica imune aos efeitos de cards do oponente até o final do próximo turno.\nVocê só pode usar este efeito de 'Corvo do Vazio' uma vez por turno."
     },
     "211": {
       "name": "Chifre Tenebris do Vazio",
-      "description": "Ganha 100 de ATK/DEF para cada monstro \"Vazio\" no seu campo e no seu Cemitério. Se este card estiver no seu Cemitério e houver 2 ou mais \"Oco do Vazio\" no seu campo e/ou Cemitério: você pode Invocá-lo por Invocação-Especial. Você só pode ativar este efeito de \"Chifre Tenebris do Vazio\" uma vez por turno e apenas 3 vezes por Duelo."
+      "description": "Ganha 100 de ATK/DEF para cada monstro \"Vazio\" no seu campo e no seu Cemitério.\nSe este card estiver no seu Cemitério e houver 2 ou mais \"Oco do Vazio\" no seu campo e/ou Cemitério: você pode Invocá-lo por Invocação-Especial.\nVocê só pode ativar este efeito de \"Chifre Tenebris do Vazio\" uma vez por turno e apenas 3 vezes por Duelo."
     },
     "212": {
       "name": "Brutamontes Matador do Vazio",
-      "description": "Uma vez por turno: você pode Invocar por Invocação-Especial este card da sua mão ao enviar 2 monstros 'Vazio' que você controla para o Cemitério. Se 'Oco do Vazio' foi enviado ao Cemitério para ativar este efeito, este card ganha o seguinte efeito: se este card destruir um monstro do oponente em batalha: bana esse monstro."
+      "description": "Uma vez por turno: você pode Invocar por Invocação-Especial este card da sua mão ao enviar 2 monstros 'Vazio' que você controla para o Cemitério.\nSe 'Oco do Vazio' foi enviado ao Cemitério para ativar este efeito, este card ganha o seguinte efeito: se este card destruir um monstro do oponente em batalha: bana esse monstro."
     },
     "213": {
       "name": "Berserker do Vazio",
-      "description": "Materiais: Brutamontes Matador do Vazio (no campo) + 1 monstro 'Vazio' Este card pode realizar até 2 ataques durante cada Fase de Batalha. Uma vez por turno, se este card destruir um monstro do oponente em batalha: você pode escolher 1 card que seu oponente controla; devolva-o para a mão."
+      "description": "\"Brutamontes Matador do Vazio\" (no campo) + 1 monstro \"Vazio\"\n\nEste card pode realizar até 2 ataques durante cada Fase de Batalha.\nUma vez por turno, se este card destruir um monstro do oponente em batalha: você pode escolher 1 card que seu oponente controla; devolva-o para a mão."
     },
     "214": {
       "name": "Draco Serpente do Vazio",
-      "description": "Uma vez por turno: você pode Invocar este card por Invocação-Especial da sua mão ao enviar 1 \"Oco do Vazio\" que você controla para o Cemitério. Este card não pode ser destruído em batalha enquanto você controlar \"Oco do Vazio\". Monstros \"Vazio\" no seu campo e no seu Cemitério não podem ser banidos por efeitos de cards do oponente."
+      "description": "Uma vez por turno: você pode Invocar este card por Invocação-Especial da sua mão ao enviar 1 \"Oco do Vazio\" que você controla para o Cemitério.\nEste card não pode ser destruído em batalha enquanto você controlar \"Oco do Vazio\".\nMonstros \"Vazio\" no seu campo e no seu Cemitério não podem ser banidos por efeitos de cards do oponente."
     },
     "215": {
       "name": "Titã Hidra do Vazio",
-      "description": "Materiais: 6 monstros 'Vazio' Se este card for Invocado por Invocação-Fusão: destrua todos os cards de Magia e Armadilha que seu oponente controla e, se isso acontecer, compre 1 card para cada card destruído. Uma vez por turno: se este card seria destruído em batalha ou por efeitos de card: você pode reduzir o ATK dele em 700; negue a destruição deste card."
+      "description": "6 monstros \"Vazio\"\n\nSe este card for Invocado por Invocação-Fusão: destrua todos os cards de Magia e Armadilha que seu oponente controla e, se isso acontecer, compre 1 card para cada card destruído.\nUma vez por turno: se este card seria destruído em batalha ou por efeitos de card: você pode reduzir o ATK dele em 700; negue a destruição deste card."
     },
     "216": {
       "name": "Selando o Vazio",
-      "description": "Escolha 1 monstro 'Vazio' com a face para cima que você controla; até o final deste turno, o ATK/DEF desse monstro se tornam 0 e seus efeitos são negados. Se este efeito resolver, você pode realizar 1 Invocação-Normal adicional neste turno. Você só pode ativar 1 'Selando o Vazio' por turno."
+      "description": "Escolha 1 monstro 'Vazio' com a face para cima que você controla; até o final deste turno, o ATK/DEF desse monstro se tornam 0 e seus efeitos são negados. Se este efeito resolver, você pode realizar 1 Invocação-Normal adicional neste turno.\nVocê só pode ativar 1 'Selando o Vazio' por turno."
     },
     "217": {
       "name": "O Vazio",
-      "description": "Durante sua Fase Principal, se você não controlar monstros: você pode Invocar por Invocação-Especial 1 monstro 'Vazio' de Nível 4 ou menor do seu Cemitério, mas seus efeitos são negados. Você só pode usar este efeito de 'O Vazio' uma vez por turno."
+      "description": "Durante sua Fase Principal, se você não controlar monstros: você pode Invocar por Invocação-Especial 1 monstro 'Vazio' de Nível 4 ou menor do seu Cemitério, mas seus efeitos são negados.\nVocê só pode usar este efeito de 'O Vazio' uma vez por turno."
     },
     "218": {
       "name": "Atração Gravitacional do Vazio",
-      "description": "Escolha 1 monstro 'Vazio' com a face para cima que você controla e 1 monstro que seu oponente controla; devolva os alvos para a mão. Você só pode ativar 1 'Atração Gravitacional do Vazio' por turno."
+      "description": "Escolha 1 monstro 'Vazio' com a face para cima que você controla e 1 monstro que seu oponente controla; devolva os alvos para a mão.\nVocê só pode ativar 1 'Atração Gravitacional do Vazio' por turno."
     },
     "219": {
       "name": "Trono Perdido do Vazio",
-      "description": "Adicione 1 monstro 'Vazio' com 1600 ou menos de ATK do seu Deck à sua mão. Depois, se você não controlar monstros, você pode Invocar esse monstro por Invocação-Especial da sua mão. Você só pode ativar 1 'Trono Perdido do Vazio' por turno."
+      "description": "Adicione 1 monstro 'Vazio' com 1600 ou menos de ATK do seu Deck à sua mão. Depois, se você não controlar monstros, você pode Invocar esse monstro por Invocação-Especial da sua mão.\nVocê só pode ativar 1 'Trono Perdido do Vazio' por turno."
     },
     "220": {
       "name": "Dimensão Espelho do Vazio",
-      "description": "Se seu oponente Invocar um monstro: você pode Invocar por Invocação-Especial 1 monstro da sua mão com o mesmo Nível que esse monstro, mas, até o final deste turno, seus efeitos são negados. Você só pode ativar 1 'Dimensão Espelho do Vazio' por turno."
+      "description": "Se seu oponente Invocar um monstro: você pode Invocar por Invocação-Especial 1 monstro da sua mão com o mesmo Nível que esse monstro, mas, até o final deste turno, seus efeitos são negados.\nVocê só pode ativar 1 'Dimensão Espelho do Vazio' por turno."
     },
     "221": {
       "name": "Mil-Braços do Vazio",
-      "description": "Uma vez por turno: você pode Invocar por Invocação-Especial este card da sua mão ao enviar 1 monstro \"Vazio\" que você controla para o Cemitério. Uma vez por turno: você pode devolver este card com a face para cima que você controla para a mão; Invoque por Invocação-Especial até 2 \"Oco do Vazio\" do seu Cemitério."
+      "description": "Uma vez por turno: você pode Invocar por Invocação-Especial este card da sua mão ao enviar 1 monstro \"Vazio\" que você controla para o Cemitério.\nUma vez por turno: você pode devolver este card com a face para cima que você controla para a mão; Invoque por Invocação-Especial até 2 \"Oco do Vazio\" do seu Cemitério."
     },
     "222": {
       "name": "Andarilho Cósmico do Vazio",
-      "description": "Material de Ascensão: 'Andarilho do Vazio'. Requisito: o efeito do material foi ativado duas vezes neste duelo. Você pode Invocar por Invocação-Especial 1 'Oco do Vazio' da sua mão ou do seu Cemitério. Se este card for destruído em batalha ou por efeito de card do oponente: você pode Invocar por Invocação-Especial até 3 'Oco do Vazio' da sua mão, Deck ou Cemitério. Você só pode usar cada efeito de 'Andarilho Cósmico do Vazio' uma vez por turno."
+      "description": "\"Andarilho do Vazio\"\n\nRequisito: o efeito do material foi ativado duas vezes neste duelo.\nVocê pode Invocar por Invocação-Especial 1 'Oco do Vazio' da sua mão ou do seu Cemitério.\nSe este card for destruído em batalha ou por efeito de card do oponente: você pode Invocar por Invocação-Especial até 3 'Oco do Vazio' da sua mão, Deck ou Cemitério.\nVocê só pode usar cada efeito de 'Andarilho Cósmico do Vazio' uma vez por turno."
     },
     "223": {
       "name": "Demônio Malicioso do Vazio",
-      "description": "Material de Ascensão: 'Mil-Braços do Vazio'. Requisito: ambos os efeitos do material foram ativados neste Duelo. O número de ataques que este card pode declarar por Fase de Batalha é igual ao número de 'Oco do Vazio' no seu Cemitério. Se este card no campo for enviado para o Cemitério: você pode Invocar por Invocação-Especial até 3 'Oco do Vazio' do seu Cemitério e, se isso acontecer, adicione 1 'Polimerização' do seu Deck à sua mão."
+      "description": "\"Mil-Braços do Vazio\"\n\nRequisito: ambos os efeitos do material foram ativados neste Duelo.\nO número de ataques que este card pode declarar por Fase de Batalha é igual ao número de 'Oco do Vazio' no seu Cemitério.\nSe este card no campo for enviado para o Cemitério: você pode Invocar por Invocação-Especial até 3 'Oco do Vazio' do seu Cemitério e, se isso acontecer, adicione 1 'Polimerização' do seu Deck à sua mão."
     },
     "224": {
       "name": "Arcturus, Senhor do Vazio",
-      "description": "Enquanto este card for o único monstro com a face para cima que você controla, ele ganha 100 de ATK para cada monstro 'Vazio' no seu Cemitério. Seu oponente não pode ativar cards ou efeitos durante a Fase de Batalha. Se este card seria destruído por um efeito de card: você pode banir 2 monstros 'Vazio' do seu Cemitério em vez disso."
+      "description": "Enquanto este card for o único monstro com a face para cima que você controla, ele ganha 100 de ATK para cada monstro 'Vazio' no seu Cemitério.\nSeu oponente não pode ativar cards ou efeitos durante a Fase de Batalha.\nSe este card seria destruído por um efeito de card: você pode banir 2 monstros 'Vazio' do seu Cemitério em vez disso."
     },
     "225": {
       "name": "Arcturus, o Lorde Caído",
-      "description": "Deve ser Invocado por Invocação-Fusão do seu Deck Adicional ao banir 1 'Arcturus, Senhor do Vazio' do seu Cemitério. Se este card for destruído em batalha: destrua o monstro que batalhou este card. Você pode banir este card do seu Cemitério; Invoque por Invocação-Especial de 1 a 3 monstros 'Vazio' com nomes diferentes do seu Cemitério, exceto 'Arcturus, o Lorde Caído' e 'Arcturus, Senhor do Vazio', mas negue seus efeitos."
+      "description": "1 \"Arcturus, Senhor do Vazio\"\n\nDeve ser Invocado por Invocação-Fusão do seu Deck Adicional ao banir 1 'Arcturus, Senhor do Vazio' do seu Cemitério.\nSe este card for destruído em batalha: destrua o monstro que batalhou este card.\nVocê pode banir este card do seu Cemitério; Invoque por Invocação-Especial de 1 a 3 monstros 'Vazio' com nomes diferentes do seu Cemitério, exceto 'Arcturus, o Lorde Caído' e 'Arcturus, Senhor do Vazio', mas negue seus efeitos."
     },
     "226": {
       "name": "Rastejador Sombrio do Vazio",
-      "description": "Materiais: 2 monstros 'Vazio'. Se este card for Invocado por Invocação-Fusão: você pode enviar 1 monstro 'Vazio' do seu Deck para o Cemitério. Uma vez por turno: você pode escolher 1 monstro de Nível 5 ou maior que seu oponente controla; envie 1 monstro 'Vazio' que você controla para o Cemitério e, se isso acontecer, destrua o alvo."
+      "description": "2 monstros \"Vazio\"\n\nSe este card for Invocado por Invocação-Fusão: você pode enviar 1 monstro 'Vazio' do seu Deck para o Cemitério.\nUma vez por turno: você pode escolher 1 monstro de Nível 5 ou maior que seu oponente controla; envie 1 monstro 'Vazio' que você controla para o Cemitério e, se isso acontecer, destrua o alvo."
     },
     "227": {
       "name": "Aberração do Vazio",
-      "description": "Materiais: 'Chifre Tenebris do Vazio' + 1 monstro 'Vazio'. Este card ganha 100 de ATK/DEF até o final do turno cada vez que um monstro 'Vazio' é enviado ao Cemitério. Se este card for enviado do campo para o Cemitério: você pode escolher 1 card com a face para cima que seu oponente controla; destrua o alvo."
+      "description": "\"Chifre Tenebris do Vazio\" + 1 monstro \"Vazio\"\n\nEste card ganha 100 de ATK/DEF até o final do turno cada vez que um monstro 'Vazio' é enviado ao Cemitério.\nSe este card for enviado do campo para o Cemitério: você pode escolher 1 card com a face para cima que seu oponente controla; destrua o alvo."
     },
     "251": {
       "name": "Dragão Luminoso",
