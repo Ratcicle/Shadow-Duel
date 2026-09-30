@@ -242,7 +242,7 @@ for (const zone of ["hand", "graveyard", "banished"] as const) {
     assert.equal(lancer.atk, 2600);
     assert.equal(moveCardToZone(state.bot, lancer, "field"), true);
     assert.equal(lancer.atk, 2600);
-    assert.deepEqual(lancer.permanentBuffsBySource, {});
+    assert.deepEqual(Object.keys(lancer.permanentBuffsBySource ?? {}), []);
   });
 }
 

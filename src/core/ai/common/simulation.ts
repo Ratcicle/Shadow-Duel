@@ -1366,7 +1366,10 @@ function dispatchSimulatedEvent(
       if (!hasRequiredSimSelections(effect.targets || [], selections)) {
         continue;
       }
-      triggerOptions.referenceSnapshots = captureSimulatedReferences(effect, selections, sourceEntry.player, sourceEntry.opponent);
+      const bindsSourceStats = effect.actions?.some(action =>
+        action.type === "permanent_buff_named" && (action.targetRef || "self") === "self" && !action.applyToAllField);
+      triggerOptions.referenceSnapshots = captureSimulatedReferences(effect, selections, sourceEntry.player, sourceEntry.opponent,
+        bindsSourceStats ? { self: [sourceCard] } : {});
       markSimulatedEffectUsed(state, effect, sourceCard, sourceEntry.player?.id || "bot", true);
       const resolve = () => {
         applySimulatedActions({
@@ -2396,7 +2399,8 @@ export function applyGenericSimulatedMainPhaseAction<
         sourceZone: "extraDeck",
       });
       appendSimulatedFieldCard(player.field, summoned);
-      selectionOptions.emitSimulatedEvent?.("after_summon", {
+      const ascensionEvents = attachSimulatedEventEmitter(state, { ...selectionOptions, enableSimulatedEvents: true });
+      ascensionEvents.emitSimulatedEvent?.("after_summon", {
         card: summoned,
         player,
         method: "ascension",

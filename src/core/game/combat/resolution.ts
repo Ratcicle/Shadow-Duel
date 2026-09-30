@@ -792,6 +792,9 @@ export async function resolveCombat(
     damageStepTiming: null,
   };
 
+  if (!target && attackerOwner) {
+    attackerOwner.directAttacksDeclaredThisTurn += 1;
+  }
   await this.emit("attack_declared", attackDeclaredPayload);
 
   if (applyAttackRedirect(attackDeclaredPayload)) {

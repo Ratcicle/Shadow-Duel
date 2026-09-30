@@ -198,6 +198,8 @@ export async function startTurn(this: LifecycleHost) {
   this.bot.lpGainedThisTurn = 0;
   this.player.damageReceivedThisTurn = 0;
   this.bot.damageReceivedThisTurn = 0;
+  this.player.directAttacksDeclaredThisTurn = 0;
+  this.bot.directAttacksDeclaredThisTurn = 0;
 
   // Clean up expired turn-based buffs at the start of the turn
   this.cleanupExpiredBuffs();
@@ -404,6 +406,8 @@ export async function endTurn(this: LifecycleHost) {
   this.cleanupTempBoosts(this.bot);
   this.player.forbidDirectAttacksThisTurn = false;
   this.bot.forbidDirectAttacksThisTurn = false;
+  this.player.directAttacksDeclaredThisTurn = 0;
+  this.bot.directAttacksDeclaredThisTurn = 0;
 
   // Clear all attack indicators at end of turn
   this.clearAttackResolutionIndicators();

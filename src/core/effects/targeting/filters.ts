@@ -1,3 +1,5 @@
+import { matchesCardFilter, type CardFilterView, type RuntimeCardFilter } from "../filters/cardFilters.js";
+import { isActiveEquipInZone } from "../passives/passiveBuffs.js";
 import type {
   ActionRuntimeCard,
   ActionRuntimePlayer,
@@ -149,9 +151,41 @@ function asArray(
   return [value];
 }
 
-function isTargetingPlayer(
-  value: TargetingPlayer | null | undefined,
-): value is TargetingPlayer {
+/** Read-only immunity inputs shared by live resolution and planning. */
+export interface ImmunityCardView extends CardFilterView {
+  readonly counters?: ReadonlyMap<string, number> | Readonly<Record<string, number>> | undefined;
+  readonly equips?: readonly ImmunityCardView[] | undefined;
+  readonly equippedTo?: ImmunityCardView | null | undefined;
+  readonly equipTarget?: ImmunityCardView | number | string | null | undefined;
+  readonly owner?: string | undefined;
+  readonly controller?: string | undefined;
+  readonly effects?: readonly EffectDefinition[] | undefined;
+  readonly effectsNegated?: boolean | undefined;
+  readonly immuneToOpponentEffectsUntilTurn?: number | null | undefined;
+  readonly immuneToOpponentEffects?: boolean | undefined;
+  readonly unaffectedByOpponentCardEffects?: boolean | undefined;
+  readonly unaffectedByOtherCardEffects?: boolean | undefined;
+  readonly cannotBeTargeted?: boolean | undefined;
+  readonly immuneTo?: TargetingEffectType | readonly TargetingEffectType[] | undefined;
+}
+interface ImmunityPlayerView {
+  readonly id: string;
+  readonly field: readonly ImmunityCardView[];
+  readonly spellTrap: readonly ImmunityCardView[];
+  readonly fieldSpell?: ImmunityCardView | null | undefined;
+}
+interface ImmunityQueryContext {
+  readonly game?: { readonly player?: ImmunityPlayerView | null; readonly bot?: ImmunityPlayerView | null; readonly turnCounter?: number } | null | undefined;
+}
+interface ImmunityQueryOptions {
+  readonly effectType?: TargetingEffectType | null | undefined;
+  readonly sourceCard?: ImmunityCardView | null;
+  readonly source?: ImmunityCardView | null;
+}
+
+function isImmunityPlayerView(
+  value: ImmunityPlayerView | null | undefined,
+): value is ImmunityPlayerView {
   return value != null;
 }
 
@@ -165,7 +199,7 @@ function isTargetingEffectType(value: unknown): value is TargetingEffectType {
 }
 
 function cardHasAnyArchetype(
-  card: TargetingCard | null | undefined,
+  card: ImmunityCardView | null | undefined,
   archetypes: readonly string[] = [],
 ): boolean {
   if (!card || archetypes.length === 0) return false;
@@ -178,9 +212,9 @@ function cardHasAnyArchetype(
 }
 
 function getPlayerByCardOwner(
-  game: TargetingFilterHost["game"],
-  card: TargetingCard | null | undefined,
-): TargetingPlayer | null {
+  game: ImmunityQueryContext["game"],
+  card: ImmunityCardView | null | undefined,
+): ImmunityPlayerView | null {
   if (!game || !card) return null;
   if (card.owner === "player" || card.controller === "player") {
     return game.player || null;
@@ -192,8 +226,8 @@ function getPlayerByCardOwner(
 }
 
 function getPassiveSourceCards(
-  owner: TargetingPlayer | null | undefined,
-): TargetingCard[] {
+  owner: ImmunityPlayerView | null | undefined,
+): ImmunityCardView[] {
   if (!owner) return [];
   const field = Array.isArray(owner.field) ? owner.field : [];
   const spellTrap = Array.isArray(owner.spellTrap) ? owner.spellTrap : [];
@@ -202,15 +236,11 @@ function getPassiveSourceCards(
 }
 
 function findCardZone(
-  engine: TargetingFilterHost | null | undefined,
-  owner: TargetingPlayer | null | undefined,
-  card: TargetingCard | null | undefined,
+  owner: ImmunityPlayerView | null | undefined,
+  card: ImmunityCardView | null | undefined,
 ): CanonicalZone | null {
   if (!owner || !card) return null;
-  if (typeof engine?.findCardZone === "function") {
-    const zone = engine.findCardZone(owner, card);
-    if (zone) return zone;
-  }
+
   if (owner.fieldSpell === card) return "fieldSpell";
   if (Array.isArray(owner.field) && owner.field.includes(card)) return "field";
   if (Array.isArray(owner.spellTrap) && owner.spellTrap.includes(card)) {
@@ -220,7 +250,7 @@ function findCardZone(
 }
 
 function sourceIsAllowedByPassive(
-  sourceCard: TargetingCard | null | undefined,
+  sourceCard: ImmunityCardView | null | undefined,
   passive: ConditionalUnaffectedPassive,
 ): boolean {
   if (!sourceCard) return false;
@@ -236,14 +266,14 @@ function sourceIsAllowedByPassive(
       passive.allowedSourceNames ||
       passive.sourceNameExceptions,
   );
-  return allowedNames.includes(sourceCard.name);
+  return allowedNames.includes(sourceCard.name || "");
 }
 
 function targetMatchesConditionalUnaffectedPassive(
-  engine: TargetingFilterHost,
-  card: TargetingCard,
-  targetOwner: TargetingPlayer,
-  sourceOwner: TargetingPlayer,
+  engine: ImmunityQueryContext,
+  card: ImmunityCardView,
+  targetOwner: ImmunityPlayerView,
+  sourceOwner: ImmunityPlayerView,
   passive: ConditionalUnaffectedPassive,
 ): boolean {
   if (!card || !targetOwner || !sourceOwner || !passive) return false;
@@ -257,7 +287,7 @@ function targetMatchesConditionalUnaffectedPassive(
   }
 
   const targetZones = asArray(passive.targetZones || passive.zones, ["field"]);
-  const targetZone = findCardZone(engine, targetOwner, card);
+  const targetZone = findCardZone(targetOwner, card);
   if (!targetZone || !targetZones.includes(targetZone)) return false;
 
   const filters = passive.targetFilters || {};
@@ -270,21 +300,42 @@ function targetMatchesConditionalUnaffectedPassive(
     return false;
   }
 
-  if (
-    typeof engine?.cardMatchesFilters === "function" &&
-    !engine.cardMatchesFilters(card, filters)
-  ) {
+  if (!matchesImmunityFilter(engine, card, filters)) {
     return false;
   }
 
   return true;
 }
 
+function matchesImmunityFilter(
+  context: ImmunityQueryContext,
+  card: ImmunityCardView,
+  filters: RuntimeCardFilter,
+): boolean {
+  return matchesCardFilter(card, filters, {
+    turnCounter: context.game?.turnCounter,
+    getCounter: (candidate, type) => {
+      const counters = candidate.counters;
+      if (!counters) return 0;
+      return typeof counters.get === "function"
+        ? counters.get(type) || 0
+        : Number(Reflect.get(counters, type) || 0);
+    },
+    hasMatchingEquip: (candidate, equipFilters, requireFaceup) =>
+      (candidate.equips || []).some(equip => {
+        const owner = getPlayerByCardOwner(context.game, equip);
+        return !!owner && (!requireFaceup || !equip.isFacedown) &&
+          isActiveEquipInZone(equip, candidate, owner.spellTrap) &&
+          matchesImmunityFilter(context, equip, equipFilters);
+      }),
+  });
+}
+
 function findConditionalUnaffectedPassiveReason(
-  engine: TargetingFilterHost,
-  card: TargetingCard,
-  sourcePlayer: TargetingPlayer,
-  options: ImmunityCheckOptions,
+  engine: ImmunityQueryContext,
+  card: ImmunityCardView,
+  sourcePlayer: ImmunityPlayerView,
+  options: ImmunityQueryOptions,
 ): string | null {
   const game = engine?.game;
   const sourceCard = options.sourceCard || options.source || null;
@@ -294,17 +345,14 @@ function findConditionalUnaffectedPassiveReason(
   const targetOwner = getPlayerByCardOwner(game, card);
   if (!targetOwner) return null;
 
-  for (const sourceOwner of [game.player, game.bot].filter(isTargetingPlayer)) {
+  for (const sourceOwner of [game.player, game.bot].filter(isImmunityPlayerView)) {
     for (const passiveSource of getPassiveSourceCards(sourceOwner)) {
       if (!passiveSource || passiveSource.isFacedown) continue;
-      if (
-        typeof engine?.isEffectNegated === "function" &&
-        engine.isEffectNegated(passiveSource)
-      ) {
+      if (passiveSource.effectsNegated === true) {
         continue;
       }
 
-      const sourceZone = findCardZone(engine, sourceOwner, passiveSource);
+      const sourceZone = findCardZone(sourceOwner, passiveSource);
       for (const effect of passiveSource.effects || []) {
         if (effect?.timing !== "passive") continue;
         if (!("passive" in effect)) continue;
@@ -343,11 +391,11 @@ function findConditionalUnaffectedPassiveReason(
   return null;
 }
 
-export function checkImmunity(
-  this: TargetingFilterHost,
-  card: TargetingCard | null | undefined,
-  sourcePlayer: TargetingPlayer | null | undefined,
-  options: ImmunityCheckOptions = {},
+export function getCardEffectImmunity(
+  context: ImmunityQueryContext,
+  card: ImmunityCardView | null | undefined,
+  sourcePlayer: ImmunityPlayerView | null | undefined,
+  options: ImmunityQueryOptions = {},
 ): ImmunityResult {
   if (!card || !sourcePlayer) {
     return { immune: false, reason: null };
@@ -361,7 +409,7 @@ export function checkImmunity(
   }
 
   const conditionalUnaffectedReason = findConditionalUnaffectedPassiveReason(
-    this,
+    context,
     card,
     sourcePlayer,
     { ...options, sourceCard },
@@ -375,7 +423,7 @@ export function checkImmunity(
 
   // Check 1: Temporary immunity to opponent effects (turn-based)
   if (card.immuneToOpponentEffectsUntilTurn && card.owner) {
-    const currentTurn = this.game?.turnCounter ?? 0;
+    const currentTurn = context.game?.turnCounter ?? 0;
     if (
       currentTurn <= card.immuneToOpponentEffectsUntilTurn &&
       card.owner !== sourcePlayer.id
@@ -419,6 +467,15 @@ export function checkImmunity(
 
   // No immunity detected
   return { immune: false, reason: null };
+}
+
+export function checkImmunity(
+  this: TargetingFilterHost,
+  card: TargetingCard | null | undefined,
+  sourcePlayer: TargetingPlayer | null | undefined,
+  options: ImmunityCheckOptions = {},
+): ImmunityResult {
+  return getCardEffectImmunity({ game: this.game }, card, sourcePlayer, options);
 }
 
 /**

@@ -252,6 +252,7 @@ function playerState(
       specialSummon: player?.specialSummonRestrictions || [],
       effectActivation: player?.effectActivationRestrictions || [],
       directAttackForbidden: player?.forbidDirectAttacksThisTurn === true,
+      directAttacksDeclaredThisTurn: Number(player?.directAttacksDeclaredThisTurn || 0),
     }) ?? {},
   };
 }

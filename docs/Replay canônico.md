@@ -209,3 +209,22 @@ hash final e ausência de comando externo adicional durante a resolução.
 Também cobrem a recusa opcional do Dragão de Escamas: Cancelar grava uma
 seleção vazia pelo broker. Escolhas obrigatórias bloqueiam o cancelamento
 pelos controles e por Escape.
+
+## Histórico de ataques diretos e efeitos persistentes
+
+A projeção canônica `players.<assento>.restrictions` inclui
+`directAttacksDeclaredThisTurn`. Cada declaração válida incrementa esse valor
+antes das respostas, mesmo que o ataque seja posteriormente negado. O reset
+do duelo e a troca de turno zeram os dois jogadores. O valor também integra
+os estados públicos, clones e fingerprints do planejador.
+
+Os comandos e decisões mantêm o schema existente. As definições alteradas
+atualizam a assinatura do banco; gravações incompatíveis continuam sendo
+recusadas, sem migração. O playback reconstrói os modificadores por meio das
+actions e movimentos canônicos, incluindo seu cleanup por saída de campo.
+
+`test/replay/shadowHeartFinalRulesReplay.test.ts` cobre Covarde como material
+de Fusão da mão, Purificação com custo, Fúria após ataque direto e Ascensão
+do Perseguidor contra um monstro Invocado por Sincro. Humanos e bots nos
+dois assentos gravam em EN e reproduzem em PT-BR, em outra instância sem UI,
+com todas as decisões consumidas e hashes iguais.

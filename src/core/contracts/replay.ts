@@ -506,6 +506,7 @@ export interface ReplayRuntimePlayer {
   specialSummonRestrictions?: unknown[];
   effectActivationRestrictions?: unknown[];
   forbidDirectAttacksThisTurn?: boolean;
+  directAttacksDeclaredThisTurn?: number;
 }
 
 export type CanonicalReplayChainPort = Partial<

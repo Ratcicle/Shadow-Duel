@@ -1,3 +1,4 @@
+import { removeTrackedStatChange } from "../../../effects/actions/stats.js";
 import { restoreTemporaryStatuses } from "../../../Card.js";
 import { SUMMON_METHODS } from "../../../contracts/summon.js";
 import { normalizeZoneInput } from "../../../contracts/zones.js";
@@ -73,8 +74,8 @@ export function processSimulatedDelayedActions(
 export function cleanupSimulatedEndTurn(state: SimulatedRuntimeState): void {
   for (const player of [state.bot, state.player]) {
     for (const card of player.field) {
-      if (card.tempAtkBoost) { card.atk = Math.max(0, (card.atk || 0) - card.tempAtkBoost); card.tempAtkBoost = 0; }
-      if (card.tempDefBoost) { card.def = Math.max(0, (card.def || 0) - card.tempDefBoost); card.tempDefBoost = 0; }
+      if (card.tempAtkBoost) { removeTrackedStatChange(card, "atk", card.tempAtkBoost); card.tempAtkBoost = 0; }
+      if (card.tempDefBoost) { removeTrackedStatChange(card, "def", card.tempDefBoost); card.tempDefBoost = 0; }
       delete card.temporarySuppressedDynamicBuffStatsByKey;
       if (card.originalAtk != null) { card.atk = card.originalAtk; card.originalAtk = null; }
       if (card.originalDef != null) { card.def = card.originalDef; card.originalDef = null; }
@@ -98,6 +99,7 @@ export function cleanupSimulatedEndTurn(state: SimulatedRuntimeState): void {
       if (card.originalLevel != null) { card.level = card.originalLevel; card.originalLevel = null; }
     }
     player.forbidDirectAttacksThisTurn = false;
+    player.directAttacksDeclaredThisTurn = 0;
   }
 }
 
@@ -110,8 +112,8 @@ export function cleanupExpiredSimulatedTurnEffects(state: SimulatedRuntimeState)
     for (const card of player.field) {
       for (const buff of card.turnBasedBuffs || []) {
         if (!expired(buff)) continue;
-        if (buff.stat === "atk") card.atk = Math.max(0, (card.atk || 0) - buff.value);
-        else card.def = Math.max(0, (card.def || 0) - buff.value);
+        if (buff.stat === "atk") removeTrackedStatChange(card, "atk", buff.value);
+        else removeTrackedStatChange(card, "def", buff.value);
       }
       if (card.turnBasedBuffs) card.turnBasedBuffs = card.turnBasedBuffs.filter(entry => !expired(entry));
       if (card.protectionEffects) card.protectionEffects = card.protectionEffects.filter(entry => !expired(entry));

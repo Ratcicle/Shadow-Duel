@@ -95,6 +95,27 @@ export function createMemoryStorage(): Storage {
   };
 }
 
+/** Drive explicit human selections while the real broker owns the pending action. */
+export async function completeTestSelections(game: RuntimeGame, action: Promise<unknown>): Promise<void> {
+  let done = false;
+  let failure: unknown;
+  const completion = action.then(() => { done = true; }, error => { failure = error; done = true; });
+  for (let attempt = 0; attempt < 3000; attempt++) {
+    const session = game.targetSelection;
+    if (session) {
+      for (const requirement of session.requirements) {
+        session.selections[requirement.id] = requirement.candidates.slice(0, requirement.min).map(card => card.key);
+      }
+      await game.finishTargetSelection();
+    }
+    if (done && !game.targetSelection) break;
+    await new Promise<void>(resolve => setTimeout(resolve, 1));
+  }
+  assert.ok(done, "the action must finish with all human selections consumed");
+  await completion;
+  if (failure) throw failure;
+}
+
 type RuntimeCardInput = Partial<CardConstructorData> &
   Partial<Omit<GameCard, keyof CardConstructorData | "instanceId">> & {
     instanceId?: string | number;

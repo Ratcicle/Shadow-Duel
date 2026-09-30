@@ -1,3 +1,4 @@
+import { removeTrackedStatChange } from "./stats.js";
 import type {
   ActionMoveResult,
   ActionRuntimeCard,
@@ -98,19 +99,13 @@ export async function applyEquip(
       typeof equipCard.equipAtkBonus === "number" &&
       equipCard.equipAtkBonus !== 0
     ) {
-      previousHost.atk = Math.max(
-        0,
-        (previousHost.atk || 0) - equipCard.equipAtkBonus
-      );
+      removeTrackedStatChange(previousHost, "atk", equipCard.equipAtkBonus);
     }
     if (
       typeof equipCard.equipDefBonus === "number" &&
       equipCard.equipDefBonus !== 0
     ) {
-      previousHost.def = Math.max(
-        0,
-        (previousHost.def || 0) - equipCard.equipDefBonus
-      );
+      removeTrackedStatChange(previousHost, "def", equipCard.equipDefBonus);
     }
     refreshEquipExtraAttackBonus(equipCard, previousHost, false);
     if (equipCard.grantsBattleIndestructible) {

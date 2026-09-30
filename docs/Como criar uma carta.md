@@ -42,6 +42,15 @@ lógica exclusiva de uma carta no engine; prefira `effects`, `targets`,
 `conditions` e `actions` genéricas. Crie handler novo apenas quando a mecânica
 for reutilizável ou não existir action equivalente.
 
+## Formatação das descrições
+
+- Use aspas duplas para citar nomes de cartas e arquétipos em ambos os idiomas. Preserve apóstrofos gramaticais, como em `opponent's`.
+- Separe efeitos diferentes com `\n\n`, em inglês e português. A interface exibe essas quebras como parágrafos compactos.
+- Mantenha no mesmo parágrafo as etapas, consequências e restrições que pertencem à mesma resolução.
+- Coloque a restrição de hard OPT em um parágrafo próprio, incluindo limites de ativação de Magias/Armadilhas.
+- Nos monstros do Extra Deck, use o primeiro parágrafo para os materiais, sem prefixos como “Materiais:”, “Fusion Materials:” ou “Material de Ascensão:”. Coloque nomes específicos entre aspas duplas, por exemplo: `"Luminarch Sanctum Protector" + 1 Level 5 or higher "Luminarch" monster`.
+- Preserve os requisitos e procedimentos especiais de Invocação nos parágrafos seguintes. Use quebras simples dentro de listas de opções de um mesmo efeito.
+
 ## Estrutura da carta
 
 Campos básicos:
@@ -1088,3 +1097,48 @@ Declare pagamentos em `activationCosts` para concluí-los antes da janela de res
 `move.requireAll: true` valida todas as cartas selecionadas antes de movimentá-las e exige sucesso em cada movimento. Combine com `requireDestination: true` quando todos os materiais precisam chegar ao destino declarado. Um pagamento incompleto interrompe a ativação; movimentos já concluídos permanecem pagos. Movimentos, eventos e apresentação continuam sequenciais. Actions que omitem `requireAll` preservam o comportamento existente.
 
 Mantenha as escolhas de Invocação em `special_summon_from_zone`, durante a resolução. `fieldSlotsFreedBeforeSummon` considera as vagas liberadas pelo pagamento na validação prévia; `requireSource: true` Invoca a fonte original. `costTargetRef` e `conditionalMarkersOnSummon` consultam evidências tipadas capturadas durante o pagamento bem-sucedido: mudanças posteriores no nome ou na zona do material não alteram essas evidências. Os marcadores são aplicados somente após a Invocação bem-sucedida. Use `bindToFieldPresence: true` para limitá-los àquela permanência no campo; outra Invocação ou outra cópia não herda o bônus.
+
+### Histórico de ataques e modificadores persistentes
+
+`player.directAttacksDeclaredThisTurn` conta declarações válidas de ataque
+direto, antes das respostas. Negação, interrupção, ausência de dano ou saída
+do atacante não desfazem o registro. Tentativas recusadas antes da declaração
+não contam. Ambos os jogadores são reinicializados na troca de turno e no
+reset do duelo. Condições podem consultar o histórico declarativamente:
+
+```ts
+conditions: [{
+  type: "context_number_compare",
+  key: "player.directAttacksDeclaredThisTurn",
+  op: "eq",
+  value: 0,
+}],
+activationCommitActions: [{
+  type: "forbid_direct_attack_this_turn",
+  player: "self",
+}],
+```
+
+O compromisso aplica a restrição antes das respostas, inclusive quando a
+ativação ou o efeito forem negados. Cancelamento anterior ao compromisso
+não executa essas actions. Preview, runtime e simulação consultam o mesmo
+histórico do controlador.
+
+`buff_stats_temp` com `permanent: true` registra o delta efetivamente aplicado
+em `permanentBuffsBySource` de cada monstro. O modificador persiste entre
+turnos e após a saída da fonte, mas é removido quando o afetado deixa o campo.
+O cleanup subtrai os deltas registrados, sem sobrescrever atributos base.
+Ao expirar um bônus sobreposto, o ajuste pelo piso zero também é registrado
+para impedir que uma saída posterior restaure ATK/DEF em excesso.
+Isso inclui bônus temporários, auras e modificadores `while_faceup`. O refresh
+das passivas mantém contribuições positivas inalteradas e remove as que
+perderam sua fonte ou condição, sem reaplicar uma aura sobre uma redução.
+
+`halve_target_stats_and_gain_removed` registra redução e ganho separadamente
+em seus destinatários. A saída de um não remove o modificador do outro.
+Somente valores efetivamente reduzidos concedem ganho; imunidade ou redução
+nula não geram bônus. O destinatário do ganho precisa manter sua presença
+válida, com a face para cima no campo, durante a resolução.
+
+`card_to_grave` com `fromZone: "hand"` abrange qualquer envio efetivo da mão
+ao Cemitério, incluindo custos e materiais. Não o use como sinônimo de descarte.

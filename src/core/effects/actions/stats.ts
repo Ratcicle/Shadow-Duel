@@ -17,6 +17,85 @@ interface StatsActionHost {
   game: ActionRuntimeGamePort;
 }
 
+interface PersistentStatsCard {
+  atk?: number | undefined;
+  def?: number | undefined;
+  permanentBuffsBySource?: CardPermanentBuffMap | null | undefined;
+}
+
+export function applyNamedStatChange(
+  card: PersistentStatsCard | null | undefined,
+  sourceName: string,
+  atkChange = 0,
+  defChange = 0,
+) {
+  if (!card || !sourceName) return { atk: 0, def: 0 };
+  if (!card.permanentBuffsBySource) {
+    card.permanentBuffsBySource = {};
+  }
+  if (!card.permanentBuffsBySource[sourceName]) {
+    card.permanentBuffsBySource[sourceName] = {};
+  }
+
+  let appliedAtk = 0;
+  let appliedDef = 0;
+
+  if (atkChange !== 0) {
+    const previous = Number(card.atk || 0);
+    const next = Math.max(0, previous + atkChange);
+    appliedAtk = next - previous;
+    card.atk = next;
+    card.permanentBuffsBySource[sourceName].atk =
+      Number(card.permanentBuffsBySource[sourceName].atk || 0) + appliedAtk;
+  }
+
+  if (defChange !== 0) {
+    const previous = Number(card.def || 0);
+    const next = Math.max(0, previous + defChange);
+    appliedDef = next - previous;
+    card.def = next;
+    card.permanentBuffsBySource[sourceName].def =
+      Number(card.permanentBuffsBySource[sourceName].def || 0) + appliedDef;
+  }
+
+  if (
+    !card.permanentBuffsBySource[sourceName].atk &&
+    !card.permanentBuffsBySource[sourceName].def
+  ) {
+    delete card.permanentBuffsBySource[sourceName];
+  }
+  if (Object.keys(card.permanentBuffsBySource).length === 0) {
+    delete card.permanentBuffsBySource;
+  }
+
+  return { atk: appliedAtk, def: appliedDef };
+}
+
+/** Field exit removes actual deltas, without replacing the original stats. */
+export function clearPermanentStatBuffs(card: PersistentStatsCard): void {
+  const buffs = Object.values(card.permanentBuffsBySource ?? {});
+  for (const stat of ["atk", "def"] as const) {
+    const delta = buffs.reduce((total, buff) => total + (buff[stat] || 0), 0);
+    if (delta) card[stat] = Math.max(0, (card[stat] || 0) - delta);
+  }
+  delete card.permanentBuffsBySource;
+}
+
+/** Preserve the zero-floor adjustment while other registered modifiers remain. */
+export function removeTrackedStatChange(
+  card: PersistentStatsCard,
+  stat: "atk" | "def",
+  delta: number,
+): void {
+  const next = (card[stat] || 0) - delta;
+  card[stat] = Math.max(0, next);
+  const buffs = card.permanentBuffsBySource;
+  if (next < 0 && buffs && Object.keys(buffs).length > 0) {
+    const adjustment = buffs.stat_cleanup_floor ??= {};
+    adjustment[stat] = (adjustment[stat] || 0) - next;
+  }
+}
+
 /** Setting a monster ends these gains; turning it face-up cannot restore them. */
 export function expireFaceupStatBuffs(card: {
   atk?: number | undefined;
@@ -25,8 +104,8 @@ export function expireFaceupStatBuffs(card: {
 }): void {
   for (const [name, buff] of Object.entries(card.permanentBuffsBySource ?? {})) {
     if (buff.duration !== "while_faceup") continue;
-    card.atk = Math.max(0, (card.atk ?? 0) - (buff.atk ?? 0));
-    card.def = Math.max(0, (card.def ?? 0) - (buff.def ?? 0));
+    removeTrackedStatChange(card, "atk", buff.atk ?? 0);
+    removeTrackedStatChange(card, "def", buff.def ?? 0);
     delete card.permanentBuffsBySource?.[name];
   }
 }

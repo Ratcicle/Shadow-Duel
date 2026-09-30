@@ -659,7 +659,7 @@ export const genericCards = [
     subtype: "continuous",
     speed: 2,
     description:
-      "Activate this card by targeting 1 monster in your GY; Special Summon that target in Attack Position.\n\nWhen this card leaves the field, destroy that target. When that target leaves the field, destroy this card.",
+      "Activate this card by targeting 1 monster in your GY; Special Summon that target in Attack Position.\n\nWhen this card leaves the field, destroy that target.\n\nWhen that target leaves the field, destroy this card.",
     image: "assets/Call of the Haunted.png",
     effects: [
       {
@@ -881,7 +881,7 @@ export const genericCards = [
     cardKind: "spell",
     subtype: "normal",
     description:
-      "Pay half your LP; draw 2 cards.\n\nFor the rest of this turn, you cannot activate effects of cards with the same names as the cards drawn by this effect.\n\nYou can only activate 1 \"Desperate Gamble\" per turn.",
+      "Pay half your LP; draw 2 cards. For the rest of this turn, you cannot activate effects of cards with the same names as the cards drawn by this effect.\n\nYou can only activate 1 \"Desperate Gamble\" per turn.",
     image: "assets/Desperate Gamble.png",
     effects: [
       {
@@ -1541,7 +1541,7 @@ export const genericCards = [
       nonTunerMin: 1,
     },
     description:
-      "1 Tuner + 1+ non-Tuner monsters\nOnce per turn, if your opponent Special Summons a monster: You can target 1 monster in their GY; banish it, and if you do, this card gains 300 ATK.",
+      "1 Tuner + 1+ non-Tuner monsters\n\nOnce per turn, if your opponent Special Summons a monster: You can target 1 monster in their GY; banish it, and if you do, this card gains 300 ATK.",
     image: "assets/Red Fury Horror.png",
     effects: [
       {
@@ -1604,7 +1604,7 @@ export const genericCards = [
       nonTunerMin: 1,
     },
     description:
-      "1 Tuner + 1+ non-Tuner monsters\nWhile you control another EARTH monster, this card cannot be destroyed by card effects.\n\nOnce per turn, when your opponent activates a card or effect that would destroy 1 or more cards you control (Quick Effect): You can target 1 face-down card they control; destroy it.",
+      "1 Tuner + 1+ non-Tuner monsters\n\nWhile you control another EARTH monster, this card cannot be destroyed by card effects.\n\nOnce per turn, when your opponent activates a card or effect that would destroy 1 or more cards you control (Quick Effect): You can target 1 face-down card they control; destroy it.",
     image: "assets/Iron Smasher.png",
     effects: [
       {
@@ -1693,7 +1693,7 @@ export const genericCards = [
       },
     },
     description:
-      "1 Tuner + 1+ non-Tuner EARTH Synchro Monsters\nMust first be Synchro Summoned.\n\nIf this card is Synchro Summoned: You can target 1 face-up card your opponent controls; negate its effects while it remains face-up on the field.\n\nYour opponent must target this card for attacks, if able.\n\nOnce per turn: You can target 1 monster your opponent controls that was Summoned from the Extra Deck; destroy it, and if you activate this effect, this card cannot attack this turn.",
+      "1 Tuner + 1+ non-Tuner EARTH Synchro Monsters\n\nMust first be Synchro Summoned.\n\nIf this card is Synchro Summoned: You can target 1 face-up card your opponent controls; negate its effects while it remains face-up on the field.\n\nYour opponent must target this card for attacks, if able.\n\nOnce per turn: You can target 1 monster your opponent controls that was Summoned from the Extra Deck; destroy it, and if you activate this effect, this card cannot attack this turn.",
     image: "assets/Orathus, The Fallen Angel.png",
     effects: [
       {

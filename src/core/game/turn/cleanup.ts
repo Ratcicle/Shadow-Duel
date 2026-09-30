@@ -13,6 +13,7 @@
  */
 
 import { restoreTemporaryStatuses } from "../../Card.js";
+import { removeTrackedStatChange } from "../../effects/actions/stats.js";
 import type {
   FullGameHost,
   GameCard,
@@ -115,9 +116,9 @@ export function cleanupExpiredBuffs(this: CleanupHost) {
       for (const buff of expiredBuffs) {
         // Remove stat value
         if (buff.stat === "atk") {
-          card.atk = Math.max(0, card.atk - buff.value);
+          removeTrackedStatChange(card, "atk", buff.value);
         } else if (buff.stat === "def") {
-          card.def = Math.max(0, card.def - buff.value);
+          removeTrackedStatChange(card, "def", buff.value);
         }
 
         this.devLog?.("TURN_BASED_BUFF_EXPIRED", {
@@ -284,13 +285,11 @@ export function cleanupTempBoosts(
 ) {
   player.field.forEach((card: GameCard) => {
     if (card.tempAtkBoost) {
-      card.atk -= card.tempAtkBoost;
-      if (card.atk < 0) card.atk = 0;
+      removeTrackedStatChange(card, "atk", card.tempAtkBoost);
       card.tempAtkBoost = 0;
     }
     if (card.tempDefBoost) {
-      card.def -= card.tempDefBoost;
-      if (card.def < 0) card.def = 0;
+      removeTrackedStatChange(card, "def", card.tempDefBoost);
       card.tempDefBoost = 0;
     }
     delete card.temporarySuppressedDynamicBuffStatsByKey;

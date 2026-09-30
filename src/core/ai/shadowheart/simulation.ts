@@ -870,30 +870,6 @@ function simulateCathedralEffect(
   return true;
 }
 
-function handleEffectActivated({
-  state,
-  card,
-}: {
-  state: MutableShadowState;
-  card: SimulatedCardState | null | undefined;
-}): void {
-  const player = ensureZones(state.bot || {});
-  if (card?.name === SH.rage) {
-    const rageTarget = (player.field || [])
-      .filter(isShadowHeartDragon)
-      .sort((a, b) => (b.atk || 0) - (a.atk || 0))[0];
-    if (rageTarget) {
-      rageTarget.tempAtkBoost = (rageTarget.tempAtkBoost || 0) + 700;
-      rageTarget.tempDefBoost = (rageTarget.tempDefBoost || 0) + 700;
-      rageTarget.atk = (rageTarget.atk || 0) + 700;
-      rageTarget.def = (rageTarget.def || 0) + 700;
-      rageTarget.canMakeSecondAttackThisTurn = true;
-      rageTarget.secondAttackUsedThisTurn = false;
-      player.forbidDirectAttacksThisTurn = true;
-    }
-  }
-}
-
 export function buildShadowHeartSimulationOptions(
   baseOptions: ShadowSimulationOptions = {},
 ) {
@@ -962,10 +938,6 @@ export function buildShadowHeartSimulationOptions(
         destroyBestOpponentCard(simState);
       }
     },
-    onEffectActivated: (ctx: {
-      state: MutableShadowState;
-      card: SimulatedCardState | null | undefined;
-    }) => handleEffectActivated(ctx),
   };
 
   if (!options.chooseSpecialSummonPosition && options.strategy?.chooseSpecialSummonPosition) {
@@ -1025,6 +997,5 @@ export function simulateSpellEffect(
     sourceCard: card,
     activationContext,
   });
-  handleEffectActivated({ state, card });
   return state;
 }

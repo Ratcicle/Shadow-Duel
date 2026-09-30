@@ -1,6 +1,6 @@
 import { restoreFieldExitStatuses, restoreTemporaryStatuses } from "../../Card.js";
 import { cardMatchesFilter } from "./cardFilters.js";
-import { expireFaceupStatBuffs } from "../../effects/actions/stats.js";
+import { clearPermanentStatBuffs, expireFaceupStatBuffs, removeTrackedStatChange } from "../../effects/actions/stats.js";
 import { refreshEquipExtraAttackBonus, removeFieldAuraBuffContributions } from "../../effects/passives/passiveBuffs.js";
 import {
   assignAutomaticFieldSlot,
@@ -143,13 +143,13 @@ export function detachSimulatedEquip(
     typeof equipCard.equipAtkBonus === "number" &&
     equipCard.equipAtkBonus !== 0
   ) {
-    host.atk = Math.max(0, (host.atk || 0) - equipCard.equipAtkBonus);
+    removeTrackedStatChange(host, "atk", equipCard.equipAtkBonus);
   }
   if (
     typeof equipCard.equipDefBonus === "number" &&
     equipCard.equipDefBonus !== 0
   ) {
-    host.def = Math.max(0, (host.def || 0) - equipCard.equipDefBonus);
+    removeTrackedStatChange(host, "def", equipCard.equipDefBonus);
   }
   refreshEquipExtraAttackBonus(equipCard, host, false);
   if (equipCard.grantsBattleIndestructible) {
@@ -387,17 +387,17 @@ export function moveCardToZone(
       card.immuneToOpponentEffectsUntilTurn = null;
       delete card.attackLimitThisTurn;
       delete card.attackLimitDuration;
-      if (card.tempAtkBoost) { card.atk = Math.max(0, (card.atk || 0) - card.tempAtkBoost); card.tempAtkBoost = 0; }
-      if (card.tempDefBoost) { card.def = Math.max(0, (card.def || 0) - card.tempDefBoost); card.tempDefBoost = 0; }
+      if (card.tempAtkBoost) { removeTrackedStatChange(card, "atk", card.tempAtkBoost); card.tempAtkBoost = 0; }
+      if (card.tempDefBoost) { removeTrackedStatChange(card, "def", card.tempDefBoost); card.tempDefBoost = 0; }
       if (card.originalAtk != null) { card.atk = card.originalAtk; card.originalAtk = null; }
       if (card.originalDef != null) { card.def = card.originalDef; card.originalDef = null; }
       if (card.originalLevel != null) { card.level = card.originalLevel; card.originalLevel = null; }
       for (const buff of card.turnBasedBuffs || []) {
-        if (buff.stat === "atk") card.atk = Math.max(0, (card.atk || 0) - buff.value);
-        if (buff.stat === "def") card.def = Math.max(0, (card.def || 0) - buff.value);
+        if (buff.stat === "atk") removeTrackedStatChange(card, "atk", buff.value);
+        if (buff.stat === "def") removeTrackedStatChange(card, "def", buff.value);
       }
       card.turnBasedBuffs = [];
-      expireFaceupStatBuffs(card);
+      clearPermanentStatBuffs(card);
       card.effectsNegated = false;
       card.effectsNegatedDuration = null;
     }

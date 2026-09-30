@@ -247,6 +247,6 @@ test("walker inventories every declarative action in the live database", () => {
   }
 
   assert.deepEqual(diagnostics, []);
-  assert.equal(actionCount, 587); // Includes declarative activation costs.
+  assert.equal(actionCount, 586); // Includes declarative activation costs.
   assert.equal(types.size, 97);
 });

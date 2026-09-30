@@ -90,7 +90,7 @@ export interface StatsActionMap {
     never,
     | "targetRef" | "sourceName" | "archetype" | "atkBoost" | "defBoost"
     | "applyToAllField" | "cumulative"
-  > & { readonly duration?: "while_faceup" };
+  > & { readonly duration?: "while_faceup"; readonly requireStatChange?: boolean };
   reduce_self_atk: DefineAction<
     "reduce_self_atk",
     never,

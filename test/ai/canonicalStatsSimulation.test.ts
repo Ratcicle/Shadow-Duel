@@ -5,7 +5,7 @@ import ArcanistStrategy from "../../src/core/ai/ArcanistStrategy.js";
 import { getEffectiveAtk, getEffectiveDef } from "../../src/core/ai/common/cardStats.js";
 import { createPlanningCopy } from "../../src/core/ai/common/planningCopy.js";
 import { moveCardToZone } from "../../src/core/ai/common/zones.js";
-import { buildShadowHeartSimulationOptions } from "../../src/core/ai/shadowheart/simulation.js";
+import { simulateSpellEffect } from "../../src/core/ai/shadowheart/simulation.js";
 import { simulateMainPhaseAction as simulateDragon } from "../../src/core/ai/dragon/simulation.js";
 import { prepareLuminarchSimulatedBattle, applyLuminarchSimulatedBattleRewards } from "../../src/core/ai/luminarch/simulation.js";
 import { cardDefinition, required, unsafeFixture } from "../helpers/fixtures.js";
@@ -43,7 +43,7 @@ test("Arcanist simulated boosts update canonical totals and passive refresh stay
 test("Shadow-Heart Rage applies its ATK and DEF once to canonical stats", () => {
   const dragon = make("Shadow-Heart Scale Dragon");
   const state = simulationState({ bot: { field: [dragon] } });
-  buildShadowHeartSimulationOptions().onEffectActivated({ state, card: make("Shadow-Heart Rage") });
+  simulateSpellEffect(state, make("Shadow-Heart Rage"));
   assert.equal(dragon.atk, required(dragon.baseAtk) + 700);
   assert.equal(dragon.def, required(dragon.baseDef) + 700);
   assert.equal(getEffectiveAtk(dragon), dragon.atk);

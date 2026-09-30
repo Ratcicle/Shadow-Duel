@@ -36,6 +36,8 @@ interface BlueprintCardView {
 }
 
 interface SimConditionContext {
+  player?: SimulatedPlayerState | null;
+  opponent?: SimulatedPlayerState | null;
   state?: object | null;
   game?: object | null;
   selfId?: string;
@@ -1228,8 +1230,9 @@ export function evaluateSimulatedConditions(
     }
     const owner = condition.owner === "opponent" ? opponent : self;
     if (condition.type === "context_number_compare") {
+      const numberContext = { ...ctx, player: self, opponent };
       const rawCurrent = readSimContextPath(
-        ctx,
+        numberContext,
         options,
         condition.key || condition.path,
       );
@@ -1239,7 +1242,7 @@ export function evaluateSimulatedConditions(
           ? condition.valueFromContext
           : condition.valueFromContext?.key || condition.valueFromContext?.path;
       const rawExpected = valueFromContext
-        ? readSimContextPath(ctx, options, valueFromContext)
+        ? readSimContextPath(numberContext, options, valueFromContext)
         : undefined;
       const expected = Number(
         rawExpected ??

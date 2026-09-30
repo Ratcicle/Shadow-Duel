@@ -168,6 +168,7 @@ export function getPublicState(
     name: owner.name,
     lp: owner.lp,
     damageReceivedThisTurn: owner.damageReceivedThisTurn || 0,
+    directAttacksDeclaredThisTurn: owner.directAttacksDeclaredThisTurn,
     specialSummonRestrictions: Array.isArray(owner.specialSummonRestrictions)
       ? owner.specialSummonRestrictions.map((restriction) => ({
           allowedFilters: restriction.allowedFilters || {},

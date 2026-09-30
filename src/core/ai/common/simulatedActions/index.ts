@@ -58,6 +58,7 @@ import {
 } from "./counters.js";
 import {
   applyModifyLevel,
+  applyPermanentBuffNamed,
   applyBuffStatsTemp,
   applyBuffAtkTemp,
   applySetAttackLimitFromZoneCount,
@@ -97,6 +98,7 @@ import {
 } from "./flow.js";
 
 export const SIMULATED_ACTION_HANDLERS = {
+  "permanent_buff_named": applyPermanentBuffNamed,
   "modify_level": applyModifyLevel,
   "register_synchro_material_followup": applyRegisterSynchroMaterialFollowup,
   "schedule_special_summon": applyScheduleSpecialSummon,
@@ -139,6 +141,7 @@ export const SIMULATED_ACTION_HANDLERS = {
   "count_field_counters": applyCountFieldCounters,
   "remove_counter": applyRemoveCounter,
   "buff_stats_temp": applyBuffStatsTemp,
+  "buff_stats_temp_with_second_attack": applyBuffStatsTemp,
   "buff_atk_temp": applyBuffAtkTemp,
   "set_attack_limit_from_zone_count": applySetAttackLimitFromZoneCount,
   "remove_stat_increases": applyRemoveStatIncreases,
@@ -180,7 +183,20 @@ export function applySimulatedActions({
 }: SimulatedActionBatchInput): boolean {
   if (!Array.isArray(actions)) return true;
   const { self, opponent } = getPerspectivePlayers(state, selfId);
-  options = { ...options, referenceSnapshots: options.referenceSnapshots || captureSimulatedReferences(options.effect, selections, self, opponent) };
+  // Persistent stat recipients remain bound to their original field presence.
+  const statReferences = Object.fromEntries(actions
+    .filter(action => action?.type === "permanent_buff_named" && !action.applyToAllField)
+    .map(action => {
+      const ref = action.targetRef || "self";
+      const cards = ref === "self" ? [options.sourceCard].filter(Boolean)
+        : ref === "summonedCard" ? [options.actionContext?.summonedCard].filter(Boolean)
+        : selections?.[ref] || [];
+      return [ref, cards];
+    }));
+  options = { ...options, referenceSnapshots: {
+    ...captureSimulatedReferences(options.effect, selections, self, opponent, statReferences),
+    ...options.referenceSnapshots,
+  } };
 
   for (const action of actions) {
     if (!action || !action.type) continue;

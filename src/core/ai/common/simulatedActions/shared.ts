@@ -151,17 +151,23 @@ export interface SimulatedReferenceSnapshot {
 }
 
 export function captureSimulatedReferences(effect: EffectDefinition | null | undefined, selections: CanonicalSelectionMap | undefined,
-  self: SimulatedPlayerState, opponent: SimulatedPlayerState | null): Record<string, SimulatedReferenceSnapshot[]> {
+  self: SimulatedPlayerState, opponent: SimulatedPlayerState | null,
+  additionalReferences: CanonicalSelectionMap = {}): Record<string, SimulatedReferenceSnapshot[]> {
   const snapshots: Record<string, SimulatedReferenceSnapshot[]> = {};
+  const references: CanonicalSelectionMap = { ...additionalReferences };
   for (const definition of effect?.targets || []) {
-    if (definition.intent !== "reference") continue;
-    const selected = selections?.[definition.id];
-    snapshots[definition.id] = [];
+    const persistentStatTarget = effect?.actions?.some(action =>
+      action.type === "permanent_buff_named" && action.targetRef === definition.id);
+    if (definition.intent !== "reference" && !persistentStatTarget) continue;
+    references[definition.id] = selections?.[definition.id] || [];
+  }
+  for (const [id, selected] of Object.entries(references)) {
+    snapshots[id] = [];
     for (const owner of [self, opponent]) {
       if (!owner) continue;
       for (const zone of ["field", "spellTrap", "fieldSpell", "hand", "deck", "extraDeck", "graveyard", "banished"] as const) {
         for (const card of getZoneCards(owner, zone)) {
-          if (Array.isArray(selected) && selected.some(entry => entry === card)) snapshots[definition.id]!.push({
+          if (Array.isArray(selected) && selected.some(entry => entry === card)) snapshots[id]!.push({
             card, owner, zone, locationVersion: card.locationVersion || 0,
           });
         }

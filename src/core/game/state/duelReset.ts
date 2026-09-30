@@ -51,6 +51,7 @@ function resetKnownPlayerTurnFlags(player: GamePlayer) {
   player.specialSummonRestrictions = [];
   player.effectActivationRestrictions = [];
   player.forbidDirectAttacksThisTurn = false;
+  player.directAttacksDeclaredThisTurn = 0;
 }
 
 export function resetPlayerDuelState(

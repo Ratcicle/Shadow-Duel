@@ -1,3 +1,4 @@
+import { removeTrackedStatChange } from "../actions/stats.js";
 import type {
   ActionRuntimeCard,
   ActionRuntimePlayer,
@@ -19,7 +20,7 @@ import type { FilterCard, RuntimeCardFilter } from "../filters/cardFilters.js";
 type PassiveStat = "atk" | "def";
 type PassiveStatCard = {
   [Key in "atk" | "def" | "dynamicBuffs" | "suppressedDynamicBuffStatsByKey" |
-    "temporarySuppressedDynamicBuffStatsByKey"]?: ActionRuntimeCard[Key] | undefined;
+    "temporarySuppressedDynamicBuffStatsByKey" | "permanentBuffsBySource"]?: ActionRuntimeCard[Key] | undefined;
 };
 type PassiveCard = ActionRuntimeCard & {
   extraAttacks?: number;
@@ -249,7 +250,7 @@ function clearPassiveBuffEntry(
     if (typeof card[stat] !== "number") continue;
     const appliedValue = getPassiveBuffAppliedValue(entry, stat);
     if (appliedValue === 0) continue;
-    card[stat] = Math.max(0, card[stat] - appliedValue);
+    removeTrackedStatChange(card, stat, appliedValue);
     changed = true;
   }
   return changed;
@@ -352,6 +353,22 @@ export function applyPassiveBuffValue(
     previousEntry &&
     (previousStats.length !== normalizedStats.length ||
       previousStats.some((stat) => !normalizedStats.includes(stat)));
+
+  // Reconcile positive contributions by their difference. Removing and then
+  // reapplying them would erase a persistent reduction at the zero floor.
+  if (previousEntry && previousValue > 0 && amount > 0 && !statsChanged) {
+    const delta = amount - previousValue;
+    if (delta === 0) return false;
+    for (const stat of normalizedStats) {
+      if (typeof card[stat] !== "number") continue;
+      if (delta < 0) removeTrackedStatChange(card, stat, -delta);
+      else card[stat] += delta;
+      previousEntry.appliedValues ??= {};
+      previousEntry.appliedValues[stat] = getPassiveBuffAppliedValue(previousEntry, stat) + delta;
+    }
+    previousEntry.value = amount;
+    return true;
+  }
 
   if (previousEntry) {
     clearPassiveBuffEntry(card, previousEntry);
@@ -643,28 +660,18 @@ export function updatePassiveBuffs(this: PassiveHost) {
 
   let updated = false;
 
-  // BUG #11 FIX - PHASE 1: Clear ALL dynamic buffs before recalculating
-  // This prevents "ghost buffs" from accumulating when effect IDs change
-  // or when passive conditions are no longer met
+  // Reconcile existing contributions without removing and reapplying unchanged auras.
+  // Entries not visited in this pass belong to departed or inactive sources.
+  const staleBuffs = new Map<PassiveStatCard, Set<string>>(fieldCards.map(card =>
+    [card, new Set(Object.keys(card.dynamicBuffs || {}))] as const));
+  const refreshBuff: typeof applyPassiveBuffValue = (card, key, amount, stats) => {
+    if (card) staleBuffs.get(card)?.delete(key);
+    return this.applyPassiveBuffValue(card, key, amount, stats);
+  };
   for (const card of fieldCards) {
-    if (clearPassiveExtraAttacksForCard(card)) {
-      updated = true;
-    }
-    if (!card.dynamicBuffs) continue;
-
-    // Revert all currently applied buffs
-    for (const key of Object.keys(card.dynamicBuffs)) {
-      const entry = card.dynamicBuffs[key];
-      if (clearPassiveBuffEntry(card, entry)) {
-        updated = true;
-      }
-    }
-
-    // Clear the buffs object completely - will be rebuilt in Phase 2
-    card.dynamicBuffs = {};
+    if (clearPassiveExtraAttacksForCard(card)) updated = true;
   }
 
-  // PHASE 2: Recalculate fresh buffs based on current game state
   for (const card of passiveSources) {
     if (card.cardKind === "spell" && card.subtype === "equip" && card.equippedTo) {
       const host = card.equippedTo as PassiveCard;
@@ -808,7 +815,7 @@ export function updatePassiveBuffs(this: PassiveHost) {
           passive.amountPerCard ?? passive.perCard ?? passive.buffPerCard ?? 0;
         const stats: readonly PassiveStat[] = passive.stats || ["atk", "def"];
         const buffKey = effect.id || `passive_${card.id}_${index}_gy_type`;
-        const applied = this.applyPassiveBuffValue(
+        const applied = refreshBuff(
           card,
           buffKey,
           typeCount * perCard,
@@ -842,7 +849,7 @@ export function updatePassiveBuffs(this: PassiveHost) {
           passive.amountPerCard ?? passive.perCard ?? passive.buffPerCard ?? 0;
         const stats: readonly PassiveStat[] = passive.stats || ["atk", "def"];
         const buffKey = effect.id || `passive_${card.id}_${index}_gy_card`;
-        const applied = this.applyPassiveBuffValue(
+        const applied = refreshBuff(
           card,
           buffKey,
           cardCount * perCard,
@@ -864,7 +871,7 @@ export function updatePassiveBuffs(this: PassiveHost) {
             (c) => c && c.cardKind === "monster" && !c.isFacedown,
           );
           if (faceUpMonsters.length !== 1 || faceUpMonsters[0] !== card) {
-            this.applyPassiveBuffValue(
+            refreshBuff(
               card,
               effect.id || `passive_${card.id}_${index}_gy_archetype`,
               0,
@@ -888,7 +895,7 @@ export function updatePassiveBuffs(this: PassiveHost) {
           passive.amountPerCard ?? passive.perCard ?? passive.buffPerCard ?? 0;
         const stats: readonly PassiveStat[] = passive.stats || ["atk", "def"];
         const buffKey = effect.id || `passive_${card.id}_${index}_gy_archetype`;
-        const applied = this.applyPassiveBuffValue(
+        const applied = refreshBuff(
           card,
           buffKey,
           archetypeCount * perCard,
@@ -928,7 +935,7 @@ export function updatePassiveBuffs(this: PassiveHost) {
           passive.amountPerCard ?? passive.perCard ?? passive.buffPerCard ?? 0;
         const stats: readonly PassiveStat[] = passive.stats || ["atk", "def"];
         const buffKey = effect.id || `passive_${card.id}_${index}_type_count`;
-        const applied = this.applyPassiveBuffValue(
+        const applied = refreshBuff(
           card,
           buffKey,
           count * perCard,
@@ -953,7 +960,7 @@ export function updatePassiveBuffs(this: PassiveHost) {
         const stats: readonly PassiveStat[] = passive.stats || ["atk", "def"];
         const buffKey =
           effect.id || `passive_${card.id}_${index}_field_presence_type`;
-        const applied = this.applyPassiveBuffValue(
+        const applied = refreshBuff(
           card,
           buffKey,
           count * perCard,
@@ -1010,7 +1017,7 @@ export function updatePassiveBuffs(this: PassiveHost) {
           `${card.id}_${passiveSources.indexOf(card)}`;
         const buffKey =
           effect.id || `passive_${card.id}_${index}_${sourceKey}_counter_equip`;
-        const applied = this.applyPassiveBuffValue(
+        const applied = refreshBuff(
           target,
           buffKey,
           counterCount * amountPerCounter,
@@ -1068,7 +1075,7 @@ export function updatePassiveBuffs(this: PassiveHost) {
         const buffKey =
           effect.id ||
           `passive_${card.id}_${index}_${sourceKey}_field_counter_equip`;
-        const applied = this.applyPassiveBuffValue(
+        const applied = refreshBuff(
           target,
           buffKey,
           counterCount * amountPerCounter,
@@ -1142,7 +1149,7 @@ export function updatePassiveBuffs(this: PassiveHost) {
             typeof target.getCounter === "function"
               ? Math.max(0, Number(target.getCounter(counterType) || 0))
               : 0;
-          const applied = this.applyPassiveBuffValue(
+          const applied = refreshBuff(
             target,
             `${baseBuffKey}_${sourceKey}_${counterType}`,
             counterCount * amountPerCounter,
@@ -1232,7 +1239,7 @@ export function updatePassiveBuffs(this: PassiveHost) {
           }
 
           for (const boost of statBoosts) {
-            const applied = this.applyPassiveBuffValue(
+            const applied = refreshBuff(
               target,
               getFieldAuraBuffKey(card, effect.id, index, fieldCards.indexOf(card), boost.stat),
               boost.amount,
@@ -1272,7 +1279,7 @@ export function updatePassiveBuffs(this: PassiveHost) {
       }
 
       const buffKey = effect.id || `passive_${card.id}_${index}`;
-      const applied = this.applyPassiveBuffValue(
+      const applied = refreshBuff(
         card,
         buffKey,
         count * perCard,
@@ -1312,6 +1319,12 @@ export function updatePassiveBuffs(this: PassiveHost) {
         updated = true;
       }
     });
+  }
+
+  for (const [card, keys] of staleBuffs) {
+    for (const key of keys) {
+      if (this.applyPassiveBuffValue(card, key, 0)) updated = true;
+    }
   }
 
   return updated;

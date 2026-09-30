@@ -473,6 +473,7 @@ export default class Player implements GamePlayer {
   declare specialSummonRestrictions: SpecialSummonRestriction[];
   declare effectActivationRestrictions: EffectActivationRestriction[];
   declare forbidDirectAttacksThisTurn: boolean;
+  declare directAttacksDeclaredThisTurn: number;
   declare maxDeckSize: number;
   declare minDeckSize: number;
   declare maxExtraDeckSize: number;
@@ -509,6 +510,7 @@ export default class Player implements GamePlayer {
     this.specialSummonRestrictions = [];
     this.effectActivationRestrictions = [];
     this.forbidDirectAttacksThisTurn = false;
+    this.directAttacksDeclaredThisTurn = 0;
     this.maxDeckSize = 30;
     this.minDeckSize = 20;
     this.maxExtraDeckSize = 10;

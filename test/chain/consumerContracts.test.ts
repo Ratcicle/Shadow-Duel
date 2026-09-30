@@ -78,13 +78,19 @@ test("cartas declaram zonas, políticas e janelas de Damage Step válidas", () =
   );
   for (const [cardName, effectId] of [
     ["The Shadow Heart", "the_shadow_heart_summon_and_equip"],
-    ["Void Raven", "void_raven_fusion_immunity"],
     ["Arcturus, the Fallen Lord", "arcturus_fallen_gy_revival"],
     ["Bloomrot Moldmender", "bloomrot_mold_mender_attack_spores"],
   ] as const) {
     assert.equal(effect(cardName, effectId).oncePerTurn, undefined);
     assert.equal(effect(cardName, effectId).oncePerDuel, undefined);
   }
+
+  const raven = effect("Void Raven", "void_raven_fusion_immunity");
+  assert.equal(raven.oncePerTurn, true);
+  assert.equal(raven.oncePerTurnName, "void_raven_fusion_immunity");
+  assert.equal(raven.oncePerTurnScope, undefined);
+  assert.equal(raven.usagePolicy, "use");
+  assert.equal(raven.oncePerDuel, undefined);
 });
 
 test("cinco cartas representativas preservam a semântica canônica de negação", () => {

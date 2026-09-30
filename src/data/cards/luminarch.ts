@@ -13,7 +13,7 @@ export const luminarchCards = [
     archetype: "Luminarch",
     piercing: true,
     description:
-      'If this card is Normal or Special Summoned: You can add 1 Level 4 or lower "Luminarch" monster from your Deck to your hand. If this card battles a Defense Position monster, inflict piercing battle damage to your opponent.',
+      "If this card is Normal or Special Summoned: You can add 1 Level 4 or lower \"Luminarch\" monster from your Deck to your hand.\n\nIf this card battles a Defense Position monster, inflict piercing battle damage to your opponent.",
     image: "assets/Luminarch Valiant – Knight of the Dawn.png",
     effects: [
       {
@@ -93,7 +93,7 @@ export const luminarchCards = [
     archetype: "Luminarch",
     mustBeAttacked: true,
     description:
-      "If this card is Special Summoned: Increase its DEF by 500. While this card is face-up on the field, your opponent must prioritize this card as an attack target, if possible.",
+      "If this card is Special Summoned: Increase its DEF by 500.\n\nWhile this card is face-up on the field, your opponent must prioritize this card as an attack target, if possible.",
     image: "assets/Luminarch Aegisbearer.png",
     effects: [
       {
@@ -141,7 +141,7 @@ export const luminarchCards = [
     attribute: "Light",
     archetype: "Luminarch",
     description:
-      'If this card is Normal Summoned: You can target 1 Level 4 or lower "Luminarch" monster in your GY; Special Summon it. Once per turn, if this card destroys an opponent\'s monster by battle: it can make a second attack this turn.',
+      "If this card is Normal Summoned: You can target 1 Level 4 or lower \"Luminarch\" monster in your GY; Special Summon it.\n\nOnce per turn, if this card destroys an opponent's monster by battle: it can make a second attack this turn.",
     image: "assets/Luminarch Moonblade Captain.png",
     effects: [
       {
@@ -206,7 +206,7 @@ export const luminarchCards = [
     archetype: "Luminarch",
     battleIndestructibleOncePerTurn: true,
     description:
-      "You can pay 2000 LP; Special Summon this card from your hand. Once per turn, if this card would be destroyed by battle: negate that destruction. If this card is destroyed by battle: gain 1000 LP.",
+      "You can pay 2000 LP; Special Summon this card from your hand.\n\nOnce per turn, if this card would be destroyed by battle: negate that destruction.\n\nIf this card is destroyed by battle: gain 1000 LP.",
     image: "assets/Luminarch Celestial Marshal.png",
     effects: [
       {
@@ -258,7 +258,7 @@ export const luminarchCards = [
     attribute: "Light",
     archetype: "Luminarch",
     description:
-      'During the Damage Step, when a "Luminarch" monster you control battles a monster or attacks directly (Quick Effect): you can send this card from your hand to the GY; that monster gains 1200 ATK and 1700 DEF until the end of this turn. You can banish this card from your GY; add 1 "Luminarch" Spell from your GY to your hand. You can only use each effect of "Luminarch Magic Sickle" once per turn.',
+      "During the Damage Step, when a \"Luminarch\" monster you control battles a monster or attacks directly (Quick Effect): you can send this card from your hand to the GY; that monster gains 1200 ATK and 1700 DEF until the end of this turn.\n\nYou can banish this card from your GY; add 1 \"Luminarch\" Spell from your GY to your hand.\n\nYou can only use each effect of \"Luminarch Magic Sickle\" once per turn.",
     image: "assets/Luminarch Magic Sickle.png",
     effects: [
       {
@@ -359,7 +359,7 @@ export const luminarchCards = [
     attribute: "Light",
     archetype: "Luminarch",
     description:
-      'If you control a face-up "Luminarch Aegisbearer", you can send it to the GY; Special Summon this card from your hand. Once per turn, when an opponent\'s monster declares an attack (Quick Effect): negate that attack.',
+      "If you control a face-up \"Luminarch Aegisbearer\", you can send it to the GY; Special Summon this card from your hand.\n\nOnce per turn, when an opponent's monster declares an attack (Quick Effect): negate that attack.",
     image: "assets/Luminarch Sanctum Protector.png",
     effects: [
       {
@@ -430,7 +430,7 @@ export const luminarchCards = [
     attribute: "Light",
     archetype: "Luminarch",
     description:
-      "If this card destroys an opponent's monster by battle, it gains 100 ATK while it remains face-up on the field. If this card is destroyed by battle, destroy 1 Spell/Trap your opponent controls.",
+      "If this card destroys an opponent's monster by battle, it gains 100 ATK while it remains face-up on the field.\n\nIf this card is destroyed by battle, destroy 1 Spell/Trap your opponent controls.",
     image: "assets/Luminarch Radiant Lancer.png",
     effects: [
       {
@@ -502,7 +502,7 @@ export const luminarchCards = [
     attribute: "Light",
     archetype: "Luminarch",
     description:
-      "If this card destroys an opponent's monster by battle, gain LP equal to half that monster's ATK. Once per turn, if this card would be destroyed by battle or card effect: you can send 1 other \"Luminarch\" monster you control to the GY instead.",
+      "If this card destroys an opponent's monster by battle, gain LP equal to half that monster's ATK.\n\nOnce per turn, if this card would be destroyed by battle or card effect: you can send 1 other \"Luminarch\" monster you control to the GY instead.",
     image: "assets/Luminarch Aurora Seraph.png",
     effects: [
       {
@@ -555,7 +555,7 @@ export const luminarchCards = [
     attribute: "Light",
     archetype: "Luminarch",
     description:
-      'If this card is Normal Summoned: You can add 1 "Luminarch" Spell/Trap from your Deck to your hand. You can only use this effect of "Luminarch Sanctified Arbiter" once per turn.',
+      "If this card is Normal Summoned: You can add 1 \"Luminarch\" Spell/Trap from your Deck to your hand.\n\nYou can only use this effect of \"Luminarch Sanctified Arbiter\" once per turn.",
     image: "assets/Luminarch Sanctified Arbiter.png",
     effects: [
       {
@@ -588,7 +588,7 @@ export const luminarchCards = [
     subtype: "continuous",
     archetype: "Luminarch",
     description:
-      'Once per turn: discard 1 Level 5 or higher Luminarch monster; add 1 Level 4 or lower Luminarch monster from your Deck to your hand. The first time each turn a "Luminarch" monster you control would be destroyed by battle or card effect, negate that destruction.',
+      "Once per turn: discard 1 Level 5 or higher Luminarch monster; add 1 Level 4 or lower Luminarch monster from your Deck to your hand.\n\nThe first time each turn a \"Luminarch\" monster you control would be destroyed by battle or card effect, negate that destruction.",
     image: "assets/Luminarch Knights Convocation.png",
     effects: [
       {
@@ -666,7 +666,7 @@ export const luminarchCards = [
     subtype: "field",
     archetype: "Luminarch",
     description:
-      'Whenever an opponent\'s monster declares an attack: gain 500 LP. Once per turn: You can pay 1000 LP, then target 1 "Luminarch" monster you control; it gains 500 ATK/DEF until the end of this turn.',
+      "Whenever an opponent's monster declares an attack: gain 500 LP.\n\nOnce per turn: You can pay 1000 LP, then target 1 \"Luminarch\" monster you control; it gains 500 ATK/DEF until the end of this turn.",
     image: "assets/Sanctum of the Luminarch Citadel.png",
     effects: [
       {
@@ -770,7 +770,7 @@ export const luminarchCards = [
     subtype: "normal",
     archetype: "Luminarch",
     description:
-      'If you control a "Luminarch" monster, or if there is a "Luminarch" monster in your GY: Pay 2000 LP, then target 1 card your opponent controls; destroy it. You can only activate 1 "Luminarch Radiant Wave" per turn.',
+      "If you control a \"Luminarch\" monster, or if there is a \"Luminarch\" monster in your GY: Pay 2000 LP, then target 1 card your opponent controls; destroy it.\n\nYou can only activate 1 \"Luminarch Radiant Wave\" per turn.",
     image: "assets/Luminarch Radiant Wave.png",
     effects: [
       {
@@ -832,7 +832,7 @@ export const luminarchCards = [
     subtype: "equip",
     archetype: "Luminarch",
     description:
-      'Equip only to a "Luminarch" monster you control. It gains 500 DEF. If the equipped monster would be destroyed by battle, send this card to the GY instead.',
+      "Equip only to a \"Luminarch\" monster you control.\n\nIt gains 500 DEF.\n\nIf the equipped monster would be destroyed by battle, send this card to the GY instead.",
     image: "assets/Luminarch Crescent Shield.png",
     effects: [
       {
@@ -890,7 +890,7 @@ export const luminarchCards = [
     subtype: "equip",
     archetype: "Luminarch",
     description:
-      'Equip only to a "Luminarch" monster you control. Each time you gain LP, place 1 Solar Counter on this card. The equipped monster gains 200 ATK/DEF for each Solar Counter on this card. Once per turn, if the equipped monster would be destroyed by battle: you can pay 1000 LP; it is not destroyed. You can only control 1 "Luminarch Sunforged Blade".',
+      "Equip only to a \"Luminarch\" monster you control.\n\nEach time you gain LP, place 1 Solar Counter on this card.\n\nThe equipped monster gains 200 ATK/DEF for each Solar Counter on this card.\n\nOnce per turn, if the equipped monster would be destroyed by battle: you can pay 1000 LP; it is not destroyed.\n\nYou can only control 1 \"Luminarch Sunforged Blade\".",
     image: "assets/Luminarch Sunforged Blade.png",
     effects: [
       {
@@ -998,7 +998,7 @@ export const luminarchCards = [
     subtype: "normal",
     archetype: "Luminarch",
     description:
-      'If you control a "Luminarch" monster: target 1 monster your opponent controls; its ATK and DEF become 0 until the end of this turn. You can only activate 1 "Luminarch Spear of Dawnfall" per turn.',
+      "If you control a \"Luminarch\" monster: target 1 monster your opponent controls; its ATK and DEF become 0 until the end of this turn.\n\nYou can only activate 1 \"Luminarch Spear of Dawnfall\" per turn.",
     image: "assets/Luminarch Spear of Dawnfall.png",
     effects: [
       {
@@ -1088,7 +1088,7 @@ export const luminarchCards = [
     subtype: "normal",
     archetype: "Luminarch",
     description:
-      'Target 1 "Luminarch" monster in your Graveyard; add it to your hand, then if you control "Sanctum of the Luminarch Citadel", you can Special Summon that monster. You can only activate 1 "Luminarch Moonlit Blessing" per turn.',
+      "Target 1 \"Luminarch\" monster in your Graveyard; add it to your hand, then if you control \"Sanctum of the Luminarch Citadel\", you can Special Summon that monster.\n\nYou can only activate 1 \"Luminarch Moonlit Blessing\" per turn.",
     image: "assets/Luminarch Moonlit Blessing.png",
     effects: [
       {
@@ -1142,7 +1142,7 @@ export const luminarchCards = [
     subtype: "normal",
     archetype: "Luminarch",
     description:
-      'If your opponent controls 2 or more monsters: Pay 2000 LP; Special Summon "Luminarch" monsters from your GY, up to the number of monsters your opponent controls, then gain 500 LP for each monster Special Summoned. You can only activate 1 "Luminarch Sacred Judgment" per turn.',
+      "If your opponent controls 2 or more monsters: Pay 2000 LP; Special Summon \"Luminarch\" monsters from your GY, up to the number of monsters your opponent controls, then gain 500 LP for each monster Special Summoned.\n\nYou can only activate 1 \"Luminarch Sacred Judgment\" per turn.",
     image: "assets/Luminarch Sacred Judgment.png",
     effects: [
       {
@@ -1200,7 +1200,7 @@ export const luminarchCards = [
     archetype: "Luminarch",
     archetypes: ["Luminarch"],
     description:
-      "'Luminarch Sanctum Protector' + 1 Level 5 or higher 'Luminarch' monster. All LP you would gain is doubled. Once per turn: You can target 1 monster you control; switch its battle position, and if you do, it gains 800 ATK until the end of this turn.",
+      "\"Luminarch Sanctum Protector\" + 1 Level 5 or higher \"Luminarch\" monster\n\nAll LP you would gain is doubled.\n\nOnce per turn: You can target 1 monster you control; switch its battle position, and if you do, it gains 800 ATK until the end of this turn.",
     image: "assets/Luminarch Megashield Barbarias.png",
     fusionMaterials: [
       { name: "Luminarch Sanctum Protector", count: 1 },
@@ -1264,7 +1264,7 @@ export const luminarchCards = [
       position: "choice",
     },
     description:
-      "Ascension Material: 'Luminarch Aegisbearer'. Requirement: The material must have been face-up on the field for 2 turns. Your opponent must prioritize this card as an attack target, if possible. If this card is Ascension Summoned: Gain 500 LP for each 'Luminarch' monster you control. Once per turn: You can pay 1000 LP, then target 1 'Luminarch' monster with 2000 or less DEF in your GY; Special Summon it.",
+      "\"Luminarch Aegisbearer\"\n\nRequirement: The material must have been face-up on the field for 2 turns.\n\nYour opponent must prioritize this card as an attack target, if possible.\n\nIf this card is Ascension Summoned: Gain 500 LP for each \"Luminarch\" monster you control.\n\nOnce per turn: You can pay 1000 LP, then target 1 \"Luminarch\" monster with 2000 or less DEF in your GY; Special Summon it.",
     image: "assets/Luminarch Fortress Aegis.png",
     effects: [
       {
@@ -1341,7 +1341,7 @@ export const luminarchCards = [
     archetype: "Luminarch",
     archetypes: ["Luminarch"],
     description:
-      "2 'Luminarch' monsters. If this card is Fusion Summoned: You can add 1 'Sanctum of the Luminarch Citadel' from your Deck to your hand. Twice per turn, when you activate the effect of a 'Luminarch' Spell/Trap that requires paying LP: reduce that cost by 1000. You can only use the Fusion Summon effect of 'Luminarch Pure Knight' once per turn.",
+      "2 \"Luminarch\" monsters\n\nIf this card is Fusion Summoned: You can add 1 \"Sanctum of the Luminarch Citadel\" from your Deck to your hand.\n\nTwice per turn, when you activate the effect of a \"Luminarch\" Spell/Trap that requires paying LP: reduce that cost by 1000.\n\nYou can only use the Fusion Summon effect of \"Luminarch Pure Knight\" once per turn.",
     image: "assets/Luminarch Pure Knight.png",
     fusionMaterials: [{ archetype: "Luminarch", count: 2 }],
     effects: [
@@ -1409,7 +1409,7 @@ export const luminarchCards = [
       position: "choice",
     },
     description:
-      'Ascension Material: "Luminarch Valiant - Knight of the Dawn". If this card is Ascension Summoned: You can target 1 other face-up monster you control; it gains 500 DEF, and if it does, this card gains 500 ATK. If this card attacks a Defense Position monster, inflict double piercing battle damage to your opponent. If this card destroys an opponent\'s monster by battle: gain 1000 LP.',
+      "\"Luminarch Valiant - Knight of the Dawn\"\n\nIf this card is Ascension Summoned: You can target 1 other face-up monster you control; it gains 500 DEF while it remains face-up on the field, and if it does, this card gains 500 ATK while it remains face-up on the field.\n\nIf this card attacks a Defense Position monster, inflict double piercing battle damage to your opponent.\n\nIf this card destroys an opponent's monster by battle: gain 1000 LP.",
     image: "assets/Luminarch Ethereal Lancer.png",
     effects: [
       {
@@ -1437,28 +1437,15 @@ export const luminarchCards = [
             type: "permanent_buff_named",
             targetRef: "ethereal_lancer_buff_target",
             defBoost: 500,
+            duration: "while_faceup",
+            requireStatChange: true,
             sourceName: "luminarch_ethereal_lancer_ascension_buff",
           },
           {
             type: "permanent_buff_named",
             targetRef: "self",
             atkBoost: 500,
-            sourceName: "luminarch_ethereal_lancer_ascension_buff",
-          },
-        ],
-      },
-      {
-        id: "luminarch_ethereal_lancer_buff_cleanup",
-        timing: "on_event",
-        triggerRequirement: "mandatory",
-        triggerTiming: "if",
-        event: "card_to_grave",
-        fromZone: "field",
-        actions: [
-          {
-            type: "remove_permanent_buff_named",
-            targetRef: "self",
-            removeFromAllField: true,
+            duration: "while_faceup",
             sourceName: "luminarch_ethereal_lancer_ascension_buff",
           },
         ],

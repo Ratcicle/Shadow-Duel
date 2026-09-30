@@ -2360,7 +2360,7 @@ _Sem notas._
 
 ### `buff_stats_temp`
 
-Temporarily modifies ATK and/or DEF.
+Modifies ATK/DEF temporarily, or until field exit with permanent: true.
 
 - Handler: `handleBuffStatsTemp`
 - Target: `optional`
@@ -2401,6 +2401,7 @@ Temporarily modifies ATK and/or DEF.
 **Notas**
 
 - storeAs exposes only cards whose ATK or DEF actually changed as an internal target reference.
+- permanent records the actual applied delta on each affected card; source departure and turn cleanup do not remove it. Field exit removes the registered modifiers without overwriting base stats.
 
 ### `buff_stats_temp_with_second_attack`
 
@@ -2577,7 +2578,7 @@ Halves target stats and gives the removed values to another monster.
 
 **Notas**
 
-_Sem notas._
+- Reduction and gain persist independently until their respective recipients leave the field. Only an actual reduction of a non-immune target grants stats; the gaining monster must remain a valid face-up field presence.
 
 ### `modify_level`
 
@@ -2704,6 +2705,7 @@ Applies a named persistent buff.
 | `applyToAllField` | nao | boolean |  |
 | `cumulative` | nao | boolean |  |
 | `duration` | nao | enum: while_faceup |  |
+| `requireStatChange` | nao | boolean |  |
 
 **Exemplos**
 

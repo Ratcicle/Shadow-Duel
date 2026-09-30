@@ -1322,6 +1322,7 @@ function applySimulatedBattle(
     phaseBridge: "main1_battle_main2",
   };
 
+  if (!target) bot.directAttacksDeclaredThisTurn = (bot.directAttacksDeclaredThisTurn || 0) + 1;
   const battlePairResult = resolveSimulatedBattlePairEffects(
     state,
     attacker,

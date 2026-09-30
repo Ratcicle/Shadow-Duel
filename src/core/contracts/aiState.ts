@@ -322,6 +322,7 @@ export interface SimulatedPlayerState {
   effectActivationRestrictions?: EffectActivationRestriction[];
   controllerType?: string | undefined;
   forbidDirectAttacksThisTurn?: boolean;
+  directAttacksDeclaredThisTurn?: number;
   oncePerTurnUsageByName?: GameCard["oncePerTurnUsageByName"];
   _simMaterialEffectActivationsByMaterialId?: unknown;
 }
@@ -646,6 +647,7 @@ export interface PublicPlayerState {
   name: string;
   lp: number;
   damageReceivedThisTurn: number;
+  directAttacksDeclaredThisTurn: number;
   specialSummonRestrictions: Array<{
     allowedFilters: SpecialSummonRestriction["allowedFilters"];
     duration: string | null;

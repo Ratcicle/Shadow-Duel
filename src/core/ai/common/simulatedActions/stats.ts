@@ -1,3 +1,5 @@
+import { applyNamedStatChange } from "../../../effects/actions/stats.js";
+import { getCardEffectImmunity } from "../../../effects/targeting/filters.js";
 import { getEffectiveAtk } from "../cardStats.js";
 import { expireFaceupStatBuffs } from "../../../effects/actions/stats.js";
 import { refreshEquipExtraAttackBonus, removeFieldAuraBuffContributions, suppressTemporaryDynamicStatIncreasesForDebuff } from "../../../effects/passives/passiveBuffs.js";
@@ -313,10 +315,56 @@ function resolveStatBoostFromContext(
   return value;
 }
 
+export function applyPermanentBuffNamed(
+  ctx: SimulatedActionHandlerContext<"permanent_buff_named">,
+): void | typeof STOP_SIMULATION {
+  const { action, targets, options, self, opponent } = ctx;
+  const source = options.sourceCard;
+  if (!source) return STOP_SIMULATION;
+  const ref = action.targetRef || "self";
+  const fieldWideAura = ref === "self" && action.applyToAllField;
+  const recipients = fieldWideAura
+    ? self.field.filter(card => card.cardKind === "monster" && !card.isFacedown &&
+      (!action.archetype || hasArchetype(card, action.archetype)))
+    : action.targetRef ? targets
+    : resolveTargetsForAction({ targetRef: "self" }, ctx.selections, options, opponent);
+  const definition = options.effect?.targets?.find(target => target.id === ref);
+  const sourceName = action.sourceName || source.name || "";
+  const cumulative = action.cumulative !== false;
+  let anyStatChanged = false;
+  for (const card of recipients) {
+    if (card.cardKind !== "monster" || (card.owner && card.owner !== self.id)) continue;
+    if (action.duration === "while_faceup" &&
+      (card.isFacedown || ![self, opponent].some(owner => owner.field.includes(card)))) continue;
+    if (definition && !matchesTargetFilters(card, definition, source, self.field.includes(card) ? "self" : "opponent")) continue;
+    if (action.archetype && ref === "summonedCard" && !hasArchetype(card, action.archetype)) continue;
+    const buffs = card.permanentBuffsBySource ??= {};
+    const buff = buffs[sourceName] ??= {};
+    const atkBoost = action.atkBoost || 0;
+    const defBoost = action.defBoost || 0;
+    if (!cumulative && (buff.atk || 0) === atkBoost && (buff.def || 0) === defBoost) continue;
+    let buffed = false;
+    for (const [stat, boost] of [["atk", atkBoost], ["def", defBoost]] as const) {
+      if (!boost) continue;
+      const previousBuff = buff[stat] || 0;
+      const nextBuff = cumulative ? previousBuff + boost : boost;
+      const previous = card[stat] || 0;
+      card[stat] = Math.max(0, previous + nextBuff - previousBuff);
+      buff[stat] = nextBuff;
+      anyStatChanged ||= card[stat] !== previous;
+      buffed = true;
+    }
+    if (buffed && action.duration) buff.duration = action.duration;
+  }
+  if (action.requireStatChange && !anyStatChanged) return STOP_SIMULATION;
+  if (!fieldWideAura && !recipients.some(card => card.cardKind === "monster")) return STOP_SIMULATION;
+}
+
 export function applyBuffStatsTemp(
-  ctx: SimulatedActionHandlerContext<"buff_stats_temp">,
+  ctx: SimulatedActionHandlerContext<"buff_stats_temp" | "buff_stats_temp_with_second_attack">,
 ): void {
-  const { action, targets, selections, state, options, self, opponent } = ctx;
+  const { targets, selections, state, options, self, opponent } = ctx;
+  const action: SimulatedActionHandlerContext<"buff_stats_temp">["action"] = { ...ctx.action, type: "buff_stats_temp" };
   const duration = action.duration || "end_of_turn";
   if (duration === "damage_calculation" || duration === "end_of_damage_step") {
     state._simUnsupportedActions ??= [];
@@ -358,6 +406,11 @@ export function applyBuffStatsTemp(
   const changedCards: SimulatedCardState[] = [];
   recipients.forEach((card) => {
     if (card.cardKind !== "monster") return;
+    if (getCardEffectImmunity({ game: {
+      player: self.id === "player" ? self : opponent,
+      bot: self.id === "bot" ? self : opponent,
+      turnCounter: state.turnCounter,
+    } }, card, self, { sourceCard: options.sourceCard || null }).immune) return;
     let changed = false;
     for (const [stat, boost] of [["atk", atkBoost], ["def", defBoost]] as const) {
       const current = Number(card[stat] || 0);
@@ -370,7 +423,10 @@ export function applyBuffStatsTemp(
         const id = [action.sourceName || options.sourceCard?.name || action.type,
           card.instanceId || card.id || "card", stat, state.turnCounter, card.turnBasedBuffs.length].join("_");
         card.turnBasedBuffs.push({ id, stat, value: applied, expiresOnTurn });
-      } else if (!action.permanent) {
+      } else if (action.permanent) {
+        const name = action.sourceName || `${action.type}_${options.sourceCard?.instanceId ?? options.sourceCard?.id ?? "source"}`;
+        applyNamedStatChange(card, name, stat === "atk" ? applied : 0, stat === "def" ? applied : 0);
+      } else {
         const temporaryStat = stat === "atk" ? "tempAtkBoost" : "tempDefBoost";
         card[temporaryStat] = (card[temporaryStat] || 0) + applied;
       }
@@ -378,6 +434,7 @@ export function applyBuffStatsTemp(
     }
     if (changed) changedCards.push(card);
     if (
+      ctx.action.type === "buff_stats_temp_with_second_attack" ||
       (action as LegacyBuffStatsAction).grantSecondAttack === true ||
       (action as LegacyBuffStatsAction).type === "grant_second_attack" ||
       (action as LegacyBuffStatsAction).type ===
@@ -533,36 +590,35 @@ export function applyRemoveStatIncreases(
 export function applyHalveTargetStatsAndGainRemoved(
   ctx: SimulatedActionHandlerContext<"halve_target_stats_and_gain_removed">,
 ): void {
-  const { action, targets, options } = ctx;
+  const { action, targets, options, state, self, opponent } = ctx;
   const gainTargets = action.gainTargetRef === "self" && options?.sourceCard
     ? [options.sourceCard]
     : [];
   const gainCard = gainTargets[0] || options?.sourceCard || null;
+  const canGain = gainCard && !gainCard.isFacedown &&
+    [self, opponent].some(owner => owner.field.includes(gainCard)) &&
+    !getCardEffectImmunity({ game: {
+      player: self.id === "player" ? self : opponent,
+      bot: self.id === "bot" ? self : opponent,
+      turnCounter: state.turnCounter,
+    } }, gainCard, self, { sourceCard: options.sourceCard || null }).immune;
   const stats = Array.isArray(action.stats) && action.stats.length > 0
     ? action.stats
     : ["atk", "def"];
 
-  targets.forEach((card) => {
-    if (!card || !gainCard) return;
-    if (stats.includes("atk")) {
-      const reduction = Math.floor(Number(card.atk || 0) / 2);
-      if (reduction > 0) {
-        card.atk = Math.max(0, Number(card.atk || 0) - reduction);
-        card.tempAtkBoost = Number(card.tempAtkBoost || 0) - reduction;
-        gainCard.atk = Math.max(0, Number(gainCard.atk || 0) + reduction);
-        gainCard.tempAtkBoost = Number(gainCard.tempAtkBoost || 0) + reduction;
-      }
-    }
-    if (stats.includes("def")) {
-      const reduction = Math.floor(Number(card.def || 0) / 2);
-      if (reduction > 0) {
-        card.def = Math.max(0, Number(card.def || 0) - reduction);
-        card.tempDefBoost = Number(card.tempDefBoost || 0) - reduction;
-        gainCard.def = Math.max(0, Number(gainCard.def || 0) + reduction);
-        gainCard.tempDefBoost = Number(gainCard.tempDefBoost || 0) + reduction;
-      }
-    }
-  });
+  const name = action.sourceName || `${action.type}_${options.sourceCard?.instanceId ?? options.sourceCard?.id ?? "source"}`;
+  for (const card of targets) {
+    if (!card || !gainCard || card.cardKind !== "monster" || card.isFacedown) continue;
+    if (getCardEffectImmunity({ game: {
+      player: self.id === "player" ? self : opponent,
+      bot: self.id === "bot" ? self : opponent,
+      turnCounter: state.turnCounter,
+    } }, card, self, { sourceCard: options.sourceCard || null }).immune) continue;
+    const atk = stats.includes("atk") ? Math.floor(Number(card.atk || 0) / 2) : 0;
+    const def = stats.includes("def") ? Math.floor(Number(card.def || 0) / 2) : 0;
+    const applied = applyNamedStatChange(card, name, -atk, -def);
+    if (canGain && (applied.atk < 0 || applied.def < 0)) applyNamedStatChange(gainCard, name, -applied.atk, -applied.def);
+  }
   return;
 }
 

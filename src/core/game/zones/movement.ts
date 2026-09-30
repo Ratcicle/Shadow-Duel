@@ -1,3 +1,4 @@
+import { clearPermanentStatBuffs, removeTrackedStatChange } from "../../effects/actions/stats.js";
 import {
   applyStatusesOnSummon,
   bumpCardLocationVersion,
@@ -2106,10 +2107,10 @@ function removeNamedBuffFromCard(
   if (!buffData) return false;
 
   if (buffData.atk) {
-    card.atk = Math.max(0, (card.atk || 0) - buffData.atk);
+    removeTrackedStatChange(card, "atk", buffData.atk);
   }
   if (buffData.def) {
-    card.def = Math.max(0, (card.def || 0) - buffData.def);
+    removeTrackedStatChange(card, "def", buffData.def);
   }
 
   delete card.permanentBuffsBySource[sourceName];
@@ -2762,13 +2763,11 @@ export async function moveCardInternal(
 
     // Clean up temporary stat modifiers from effects (e.g., Shadow-Heart Coward debuff)
     if (card.tempAtkBoost) {
-      card.atk -= card.tempAtkBoost;
-      if (card.atk < 0) card.atk = 0;
+      removeTrackedStatChange(card, "atk", card.tempAtkBoost);
       card.tempAtkBoost = 0;
     }
     if (card.tempDefBoost) {
-      card.def -= card.tempDefBoost;
-      if (card.def < 0) card.def = 0;
+      removeTrackedStatChange(card, "def", card.tempDefBoost);
       card.tempDefBoost = 0;
     }
     if (card.originalAtk != null) {
@@ -2786,9 +2785,9 @@ export async function moveCardInternal(
     if (Array.isArray(card.turnBasedBuffs) && card.turnBasedBuffs.length > 0) {
       for (const buff of card.turnBasedBuffs) {
         if (buff?.stat === "atk") {
-          card.atk = Math.max(0, (card.atk || 0) - (buff.value || 0));
+          removeTrackedStatChange(card, "atk", buff.value || 0);
         } else if (buff?.stat === "def") {
-          card.def = Math.max(0, (card.def || 0) - (buff.value || 0));
+          removeTrackedStatChange(card, "def", buff.value || 0);
         }
       }
       card.turnBasedBuffs = [];
@@ -2799,23 +2798,7 @@ export async function moveCardInternal(
     }
 
     // Remove permanent named buffs when the monster leaves the field
-    if (toZone !== "field" && card.permanentBuffsBySource) {
-      let totalAtkBuff = 0;
-      let totalDefBuff = 0;
-      Object.values(card.permanentBuffsBySource).forEach((buff) => {
-        if (buff?.atk) totalAtkBuff += buff.atk;
-        if (buff?.def) totalDefBuff += buff.def;
-      });
-      if (totalAtkBuff) {
-        card.atk -= totalAtkBuff;
-        if (card.atk < 0) card.atk = 0;
-      }
-      if (totalDefBuff) {
-        card.def -= totalDefBuff;
-        if (card.def < 0) card.def = 0;
-      }
-      delete card.permanentBuffsBySource;
-    }
+    if (toZone !== "field") clearPermanentStatBuffs(card);
     if (toZone !== "field" && card.originalStatsOverride) {
       const original = card.originalStatsOverride;
       if (Number.isFinite(Number(original.baseAtk))) {
@@ -2878,12 +2861,12 @@ export async function moveCardInternal(
     // Remove stat bonuses (clamp to 0 to prevent negative stats)
     if (host) {
       if (typeof card.equipAtkBonus === "number" && card.equipAtkBonus !== 0) {
-        host.atk = Math.max(0, (host.atk || 0) - card.equipAtkBonus);
+        removeTrackedStatChange(host, "atk", card.equipAtkBonus);
         card.equipAtkBonus = 0;
       }
 
       if (typeof card.equipDefBonus === "number" && card.equipDefBonus !== 0) {
-        host.def = Math.max(0, (host.def || 0) - card.equipDefBonus);
+        removeTrackedStatChange(host, "def", card.equipDefBonus);
         card.equipDefBonus = 0;
       }
 
@@ -3010,14 +2993,14 @@ export async function moveCardInternal(
         typeof equip.equipAtkBonus === "number" &&
         equip.equipAtkBonus !== 0
       ) {
-        card.atk = Math.max(0, (card.atk || 0) - equip.equipAtkBonus);
+        removeTrackedStatChange(card, "atk", equip.equipAtkBonus);
         equip.equipAtkBonus = 0;
       }
       if (
         typeof equip.equipDefBonus === "number" &&
         equip.equipDefBonus !== 0
       ) {
-        card.def = Math.max(0, (card.def || 0) - equip.equipDefBonus);
+        removeTrackedStatChange(card, "def", equip.equipDefBonus);
         equip.equipDefBonus = 0;
       }
       refreshEquipExtraAttackBonus(equip, card, false);

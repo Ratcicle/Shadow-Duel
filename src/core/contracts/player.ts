@@ -144,6 +144,7 @@ export interface GamePlayer {
   specialSummonRestrictions: SpecialSummonRestriction[];
   effectActivationRestrictions: EffectActivationRestriction[];
   forbidDirectAttacksThisTurn: boolean;
+  directAttacksDeclaredThisTurn: number;
   maxDeckSize: number;
   minDeckSize: number;
   maxExtraDeckSize: number;

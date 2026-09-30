@@ -19,6 +19,7 @@ export const PLANNING_PLAYER_FIELDS = [
   "additionalNormalSummonPermissions", "normalSummonsThisTurn",
   "specialSummonRestrictions", "effectActivationRestrictions",
   "forbidDirectAttacksThisTurn", "oncePerTurnUsageByName", "usedEffects",
+  "directAttacksDeclaredThisTurn",
   "_simMaterialEffectActivationsByMaterialId", "oncePerDuelUsageByName",
   "lpGainMultiplier", "lpGainedThisTurn", "damageReceivedThisTurn",
 ] as const satisfies readonly (keyof SimulatedPlayerState | keyof GamePlayer)[];

@@ -545,7 +545,7 @@ export const ACTION_CATALOG = {
   }),
   buff_stats_temp: action({
     category: "stats",
-    summary: "Temporarily modifies ATK and/or DEF.",
+    summary: "Modifies ATK/DEF temporarily, or until field exit with permanent: true.",
     handler: "handleBuffStatsTemp",
     optional: [
       "targetRef",
@@ -589,7 +589,10 @@ export const ACTION_CATALOG = {
     selection: "usesTargets",
     mutates: ["stats"],
     examples: [{ type: "buff_stats_temp", targetRef: "sanctum_citadel_target", atkBoost: 500, defBoost: 500 }],
-    notes: ["storeAs exposes only cards whose ATK or DEF actually changed as an internal target reference."],
+    notes: [
+      "storeAs exposes only cards whose ATK or DEF actually changed as an internal target reference.",
+      "permanent records the actual applied delta on each affected card; source departure and turn cleanup do not remove it. Field exit removes the registered modifiers without overwriting base stats.",
+    ],
   }),
   set_facedown_defense: action({
     category: "stats",
@@ -1989,6 +1992,7 @@ export const ACTION_CATALOG = {
       "applyToAllField",
       "cumulative",
       "duration",
+      "requireStatChange",
     ],
     fields: {
       ...COMMON_TARGET_FIELDS,
@@ -1999,6 +2003,7 @@ export const ACTION_CATALOG = {
       applyToAllField: { type: "boolean" },
       cumulative: { type: "boolean" },
       duration: { enum: ["while_faceup"] },
+      requireStatChange: { type: "boolean" },
     },
     targetRef: "optional",
     selection: "usesTargets",
@@ -2342,6 +2347,7 @@ export const ACTION_CATALOG = {
     selection: "usesTargets",
     mutates: ["stats"],
     examples: [{ type: "halve_target_stats_and_gain_removed", targetRef: "target", gainTargetRef: "self" }],
+    notes: ["Reduction and gain persist independently until their respective recipients leave the field. Only an actual reduction of a non-immune target grants stats; the gaining monster must remain a valid face-up field presence."],
   }),
   return_to_hand: action({
     category: "movement",

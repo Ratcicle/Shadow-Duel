@@ -5,7 +5,7 @@
  */
 
 import { isAI } from "../Player.js";
-import { expireFaceupStatBuffs } from "../effects/actions/stats.js";
+import { applyNamedStatChange, expireFaceupStatBuffs, removeTrackedStatChange } from "../effects/actions/stats.js";
 import { suppressTemporaryDynamicStatIncreasesForDebuff } from "../effects/passives/passiveBuffs.js";
 import type { ActionOf } from "../contracts/actions.js";
 import type {
@@ -486,66 +486,6 @@ function getLinkedSourceName(
   return `${actionType}_${sourceId}`;
 }
 
-function rememberLinkedBuffSource(
-  source: ActionRuntimeCard | null | undefined,
-  sourceName: string,
-) {
-  if (!source || !sourceName) return;
-  if (!Array.isArray(source.linkedPermanentBuffSourceNames)) {
-    source.linkedPermanentBuffSourceNames = [];
-  }
-  if (!source.linkedPermanentBuffSourceNames.includes(sourceName)) {
-    source.linkedPermanentBuffSourceNames.push(sourceName);
-  }
-}
-
-function applyNamedStatChange(
-  card: ActionRuntimeCard | null | undefined,
-  sourceName: string,
-  atkChange = 0,
-  defChange = 0,
-) {
-  if (!card || !sourceName) return { atk: 0, def: 0 };
-  if (!card.permanentBuffsBySource) {
-    card.permanentBuffsBySource = {};
-  }
-  if (!card.permanentBuffsBySource[sourceName]) {
-    card.permanentBuffsBySource[sourceName] = {};
-  }
-
-  let appliedAtk = 0;
-  let appliedDef = 0;
-
-  if (atkChange !== 0) {
-    const previous = Number(card.atk || 0);
-    const next = Math.max(0, previous + atkChange);
-    appliedAtk = next - previous;
-    card.atk = next;
-    card.permanentBuffsBySource[sourceName].atk =
-      Number(card.permanentBuffsBySource[sourceName].atk || 0) + appliedAtk;
-  }
-
-  if (defChange !== 0) {
-    const previous = Number(card.def || 0);
-    const next = Math.max(0, previous + defChange);
-    appliedDef = next - previous;
-    card.def = next;
-    card.permanentBuffsBySource[sourceName].def =
-      Number(card.permanentBuffsBySource[sourceName].def || 0) + appliedDef;
-  }
-
-  if (
-    !card.permanentBuffsBySource[sourceName].atk &&
-    !card.permanentBuffsBySource[sourceName].def
-  ) {
-    delete card.permanentBuffsBySource[sourceName];
-  }
-  if (Object.keys(card.permanentBuffsBySource).length === 0) {
-    delete card.permanentBuffsBySource;
-  }
-
-  return { atk: appliedAtk, def: appliedDef };
-}
 
 function ownerHasCardInZone(
   owner: ActionRuntimePlayer | null | undefined,
@@ -696,7 +636,7 @@ export async function handleSetStatsToZeroAndNegate(
  * - atkBoost: ATK boost amount (default: 0)
  * - defBoost: DEF boost amount (default: 0)
  * - untilEndOfTurn: boolean (default: true)
- * - permanent: boolean (default: false) - if true, boost is not tracked for cleanup
+ * - permanent: boolean (default: false) - persists until the affected card leaves the field
  */
 export async function handleBuffStatsTemp(
   action: ActionOf<
@@ -841,6 +781,11 @@ export async function handleBuffStatsTemp(
       return applied;
     }
 
+    if (permanent) {
+      const sourceName = statsAction.sourceName || getLinkedSourceName(ctx.source, action.type);
+      applyNamedStatChange(card, sourceName, stat === "atk" ? applied : 0, stat === "def" ? applied : 0);
+      return applied;
+    }
     if (!permanent) {
       if (stat === "atk") {
         card.tempAtkBoost = (card.tempAtkBoost || 0) + applied;
@@ -1388,7 +1333,7 @@ export async function handleHalveTargetStatsAndGainRemoved(
 
   if (!player || !game || !source) return false;
 
-  const targetCards = resolveTargetCards(action, ctx, targets, {
+  let targetCards = resolveTargetCards(action, ctx, targets, {
     targetRef: action.targetRef,
     game,
   });
@@ -1400,16 +1345,23 @@ export async function handleHalveTargetStatsAndGainRemoved(
   const gainCard = gainCards.find(
     (card) => card && card.cardKind === "monster",
   );
+  targetCards = engine.filterCardsListByImmunity(targetCards, player, {
+    actionType: action.type,
+    sourceCard: source,
+  }).allowed;
 
   if (targetCards.length === 0 || !gainCard) {
     getUI(game)?.log("No valid targets for stat transfer.");
     return false;
   }
+  const canGain = !gainCard.isFacedown &&
+    [game.player, game.bot].some(owner => owner?.field.includes(gainCard)) &&
+    isStatTargetStillValid(gainCard, ctx, game) &&
+    engine.filterCardsListByImmunity([gainCard], player, { sourceCard: source }).allowed.length > 0;
 
   const stats = normalizeStatsList(action.stats);
   const sourceName =
     action.sourceName || getLinkedSourceName(source, action.type);
-  rememberLinkedBuffSource(source, sourceName);
 
   let anyChanged = false;
 
@@ -1438,14 +1390,14 @@ export async function handleHalveTargetStatsAndGainRemoved(
 
     if (removedAtk <= 0 && removedDef <= 0) continue;
 
-    applyNamedStatChange(gainCard, sourceName, removedAtk, removedDef);
+    if (canGain) applyNamedStatChange(gainCard, sourceName, removedAtk, removedDef);
     anyChanged = true;
 
     queueCardFeedback(game, "debuff", target, {
       sourceCard: source,
       tone: "red",
     });
-    queueCardFeedback(game, "buff", gainCard, {
+    if (canGain) queueCardFeedback(game, "buff", gainCard, {
       sourceCard: source,
       tone: "green",
     });
@@ -1465,7 +1417,9 @@ export async function handleHalveTargetStatsAndGainRemoved(
   }
 
   if (anyChanged) {
-    getUI(game)?.log(`${source.name} drained ATK/DEF and gained that power.`);
+    getUI(game)?.log(canGain
+      ? `${source.name} drained ATK/DEF and gained that power.`
+      : `${source.name} reduced the target's ATK/DEF.`);
     game.updateBoard?.();
   }
 
@@ -2598,7 +2552,7 @@ export async function handlePermanentBuffNamed(
   }
 
   if (targetCards.length === 0) {
-    return fieldWideAura;
+    return action.requireStatChange ? false : fieldWideAura;
   }
 
   const atkBoost = action.atkBoost || 0;
@@ -2610,6 +2564,7 @@ export async function handlePermanentBuffNamed(
   const cumulative = action.cumulative !== false;
 
   let anyBuffed = false;
+  let anyStatChanged = false;
 
   for (const card of targetCards) {
     if (!card || card.cardKind !== "monster") continue;
@@ -2668,7 +2623,9 @@ export async function handlePermanentBuffNamed(
 
       const delta = newBuff - currentBuff;
 
-      card.atk = Math.max(0, (card.atk || 0) + delta);
+      const previous = card.atk || 0;
+      card.atk = Math.max(0, previous + delta);
+      anyStatChanged ||= card.atk !== previous;
 
       cardBuffed = true;
     }
@@ -2688,7 +2645,9 @@ export async function handlePermanentBuffNamed(
 
       const delta = newBuff - currentBuff;
 
-      card.def = Math.max(0, (card.def || 0) + delta);
+      const previous = card.def || 0;
+      card.def = Math.max(0, previous + delta);
+      anyStatChanged ||= card.def !== previous;
 
       cardBuffed = true;
     }
@@ -2719,7 +2678,7 @@ export async function handlePermanentBuffNamed(
     game.updateBoard();
   }
 
-  return (
+  return action.requireStatChange ? anyStatChanged : (
     anyBuffed ||
     fieldWideAura ||
     targetCards.some((card) => card?.cardKind === "monster")
@@ -2801,11 +2760,11 @@ export async function handleRemovePermanentBuffNamed(
     // Remove buffs from stats (clamp to 0)
 
     if (buffData.atk) {
-      card.atk = Math.max(0, (card.atk || 0) - buffData.atk);
+      removeTrackedStatChange(card, "atk", buffData.atk);
     }
 
     if (buffData.def) {
-      card.def = Math.max(0, (card.def || 0) - buffData.def);
+      removeTrackedStatChange(card, "def", buffData.def);
     }
 
     // Remove buff tracking
