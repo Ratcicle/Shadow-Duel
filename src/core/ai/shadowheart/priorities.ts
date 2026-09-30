@@ -1176,6 +1176,7 @@ export function evaluateShadowHeartRecruitCandidate<Card extends StrategyCard>(c
   const scoreCard = (card: StrategyCard) => {
     if (!card) return -999;
     let score = CARD_KNOWLEDGE[card.name!]?.value || (card.atk || 0) / 1000;
+    if (sourceName === SH.imp && chooseImpSpecialTargetName(analysis, cards).name === card.name) score += 100;
     if (sourceName === SH.infusion) {
       if ([SH.scale, SH.arctroth, SH.deathWyrm].includes(card.name!)) score += 40;
       if (card.name === SH.gecko && !hasLevel8PlusShadowHeart(analysis.hand, { excludeScale: true })) {

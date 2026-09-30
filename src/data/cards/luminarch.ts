@@ -13,13 +13,13 @@ export const luminarchCards = [
     archetype: "Luminarch",
     piercing: true,
     description:
-      'If this card is Normal or Special Summoned: Add 1 Level 4 or lower "Luminarch" monster from your Deck to your hand. If this card battles a Defense Position monster, inflict piercing battle damage to your opponent.',
+      'If this card is Normal or Special Summoned: You can add 1 Level 4 or lower "Luminarch" monster from your Deck to your hand. If this card battles a Defense Position monster, inflict piercing battle damage to your opponent.',
     image: "assets/Luminarch Valiant – Knight of the Dawn.png",
     effects: [
       {
         id: "luminarch_valiant_search",
         timing: "on_event",
-        triggerRequirement: "mandatory",
+        triggerRequirement: "optional",
         triggerTiming: "if",
         event: "after_summon",
         requireSelfAsSummoned: true,
@@ -258,7 +258,7 @@ export const luminarchCards = [
     attribute: "Light",
     archetype: "Luminarch",
     description:
-      'During the Damage Step, when a "Luminarch" monster you control battles (Quick Effect): you can send this card from your hand to the GY; that monster gains 1200 ATK and 1700 DEF until the end of this turn. You can banish this card from your GY; add 1 "Luminarch" Spell from your GY to your hand. You can only use each effect of "Luminarch Magic Sickle" once per turn.',
+      'During the Damage Step, when a "Luminarch" monster you control battles a monster or attacks directly (Quick Effect): you can send this card from your hand to the GY; that monster gains 1200 ATK and 1700 DEF until the end of this turn. You can banish this card from your GY; add 1 "Luminarch" Spell from your GY to your hand. You can only use each effect of "Luminarch Magic Sickle" once per turn.',
     image: "assets/Luminarch Magic Sickle.png",
     effects: [
       {
@@ -268,7 +268,8 @@ export const luminarchCards = [
         timing: "on_event",
         triggerRequirement: "optional",
         triggerTiming: "when",
-        event: "battle_damage",
+        event: "damage_step",
+        damageStepTimings: ["before_damage_calculation"],
         speed: 2,
         isQuickEffect: true,
         requireZone: "hand",
@@ -324,12 +325,16 @@ export const luminarchCards = [
         timing: "ignition",
         oncePerTurn: true,
         oncePerTurnName: "luminarch_magic_sickle_gy_spell_recovery",
-        actions: [
+        activationCosts: [
           {
-            type: "banish",
+            type: "move",
             targetRef: "self",
             fromZone: "graveyard",
+            to: "banished",
+            contextLabel: "cost",
           },
+        ],
+        actions: [
           {
             type: "add_from_zone_to_hand",
             zone: "graveyard",
@@ -374,12 +379,24 @@ export const luminarchCards = [
             intent: "cost",
           },
         ],
+        activationCosts: [
+          {
+            type: "move",
+            targetRef: "aegisbearer_cost",
+            player: "self",
+            fromZone: "field",
+            to: "graveyard",
+            contextLabel: "cost",
+          },
+        ],
         actions: [
           {
-            type: "special_summon_from_hand_with_cost",
-            costTargetRef: "aegisbearer_cost",
+            type: "special_summon_from_zone",
+            zone: "hand",
+            requireSource: true,
             position: "choice",
-            cannotAttackThisTurn: false,
+            promptPlayer: true,
+            fieldSlotsFreedBeforeSummon: 1,
           },
         ],
       },
@@ -413,7 +430,7 @@ export const luminarchCards = [
     attribute: "Light",
     archetype: "Luminarch",
     description:
-      "If this card destroys an opponent's monster by battle, it gains 100 ATK while it remains on the field. If this card is destroyed by battle, destroy 1 Spell/Trap your opponent controls.",
+      "If this card destroys an opponent's monster by battle, it gains 100 ATK while it remains face-up on the field. If this card is destroyed by battle, destroy 1 Spell/Trap your opponent controls.",
     image: "assets/Luminarch Radiant Lancer.png",
     effects: [
       {
@@ -430,6 +447,7 @@ export const luminarchCards = [
             type: "permanent_buff_named",
             targetRef: "self",
             atkBoost: 100,
+            duration: "while_faceup",
           },
         ],
       },
@@ -484,7 +502,7 @@ export const luminarchCards = [
     attribute: "Light",
     archetype: "Luminarch",
     description:
-      "If this card destroys an opponent's monster by battle, gain LP equal to half that monster's ATK. Once per turn, if this card would be destroyed by battle or card effect: you can send 1 \"Luminarch\" monster you control to the GY instead.",
+      "If this card destroys an opponent's monster by battle, gain LP equal to half that monster's ATK. Once per turn, if this card would be destroyed by battle or card effect: you can send 1 other \"Luminarch\" monster you control to the GY instead.",
     image: "assets/Luminarch Aurora Seraph.png",
     effects: [
       {
@@ -582,6 +600,7 @@ export const luminarchCards = [
         timing: "ignition",
         oncePerTurn: true,
         oncePerTurnName: "luminarch_knights_convocation_effect",
+        oncePerTurnScope: "card",
         targets: [
           {
             id: "convocation_discard",
@@ -591,15 +610,20 @@ export const luminarchCards = [
             archetype: "Luminarch",
             minLevel: 5,
             count: { min: 1, max: 1 },
+            intent: "cost",
           },
         ],
-        actions: [
+        activationCosts: [
           {
             type: "move",
             targetRef: "convocation_discard",
             player: "self",
+            fromZone: "hand",
             to: "graveyard",
+            contextLabel: "cost",
           },
+        ],
+        actions: [
           {
             type: "search_any",
             player: "self",
@@ -617,6 +641,7 @@ export const luminarchCards = [
         requireFaceup: true,
         oncePerTurn: true,
         oncePerTurnName: "luminarch_knights_convocation_first_destruction_guard",
+        oncePerTurnScope: "card",
         replacementEffect: {
           type: "destruction",
           reason: "any",
@@ -704,7 +729,7 @@ export const luminarchCards = [
     subtype: "normal",
     archetype: "Luminarch",
     description:
-      'Pay 1000 LP, then target 1 "Luminarch" monster you control; it gains 800 ATK/DEF until the end of this turn.',
+      'Pay 1000 LP, then target 1 "Luminarch" monster you control; it gains 800 ATK until the end of this turn.',
     image: "assets/Luminarch Holy Ascension.png",
     effects: [
       {
@@ -733,7 +758,6 @@ export const luminarchCards = [
             type: "buff_stats_temp",
             targetRef: "holy_ascension_target",
             atkBoost: 800,
-            defBoost: 800,
           },
         ],
       },
@@ -831,9 +855,31 @@ export const luminarchCards = [
             type: "equip",
             targetRef: "crescent_shield_target",
             defBonus: 500,
-            grantCrescentShieldGuard: true,
           },
         ],
+      },
+      {
+        id: "luminarch_crescent_shield_battle_protection",
+        timing: "passive",
+        requireZone: "spellTrap",
+        requireFaceup: true,
+        replacementEffect: {
+          type: "destruction",
+          reason: "battle",
+          auto: true,
+          targetMustBeEquippedToSource: true,
+          targetOwner: "any",
+          targetZones: ["field"],
+          targetRequireFaceup: true,
+          costActions: [{
+            type: "move",
+            targetRef: "self",
+            fromZone: "spellTrap",
+            to: "graveyard",
+            contextLabel: "destruction_replacement",
+          }],
+          logMessage: "{source} was sent to the GY to protect {target} from battle destruction.",
+        },
       },
     ],
   },
@@ -909,7 +955,6 @@ export const luminarchCards = [
           counterType: "solar",
           amountPerCounter: 200,
           stats: ["atk", "def"],
-          targetFilters: { archetype: "Luminarch" },
         },
       },
       {
@@ -926,12 +971,11 @@ export const luminarchCards = [
           type: "destruction",
           reason: "battle",
           targetMustBeEquippedToSource: true,
-          targetOwner: "self",
+          targetOwner: "any",
           targetZones: ["field"],
           targetRequireFaceup: true,
           targetFilters: {
             cardKind: "monster",
-            archetype: "Luminarch",
           },
           costActions: [
             {
@@ -965,16 +1009,15 @@ export const luminarchCards = [
         speed: 1,
         oncePerTurn: true,
         oncePerTurnName: "luminarch_spear_dawnfall_activation",
-        targets: [
+        conditions: [
           {
-            id: "spear_luminarch_check",
+            type: "control_card_filters",
             owner: "self",
             zone: "field",
-            cardKind: "monster",
-            archetype: "Luminarch",
-            count: { min: 1, max: 1 },
-            autoSelect: true,
+            filters: { cardKind: "monster", archetype: "Luminarch" },
           },
+        ],
+        targets: [
           {
             id: "spear_zero_target",
             owner: "opponent",
@@ -1017,9 +1060,11 @@ export const luminarchCards = [
         triggerRequirement: "optional",
         triggerTiming: "if",
         event: "after_summon",
-        summonMethods: ["special"],
+        summonMethods: ["special", "fusion", "synchro", "ascension"],
+        triggerPlayer: "self",
         oncePerTurn: true,
         oncePerTurnName: "luminarch_enchanted_halberd_conditional_summon",
+        oncePerTurnScope: "card",
         condition: {
           triggerArchetype: "Luminarch",
           requires: "self_in_hand",
@@ -1030,7 +1075,7 @@ export const luminarchCards = [
             targetRef: "self",
             position: "choice",
             restrictAttackThisTurn: true,
-            optional: true,
+            optional: false,
           },
         ],
       },
@@ -1110,7 +1155,6 @@ export const luminarchCards = [
         oncePerTurnName: "luminarch_sacred_judgment",
         conditions: [
           { type: "opponentMonstersMin", min: 2 },
-          { type: "playerLpMin", min: 2000 },
           {
             type: "graveyardHasMatch",
             owner: "self",
@@ -1130,14 +1174,13 @@ export const luminarchCards = [
             type: "special_summon_from_zone",
             zone: "graveyard",
             filters: { cardKind: "monster", archetype: "Luminarch" },
-            count: { min: 0, max: 5, maxFrom: "opponentFieldCount", cap: 5 },
+            count: { min: 1, max: 5, maxFrom: "opponentFieldCount", cap: 5 },
             position: "choice",
             promptPlayer: true,
           },
           {
-            type: "heal_per_archetype_monster",
-            archetype: "Luminarch",
-            amountPerMonster: 500,
+            type: "heal",
+            amountFromContext: { key: "lastSpecialSummonedCards.length", multiplier: 500 },
             player: "self",
           },
         ],
@@ -1314,7 +1357,6 @@ export const luminarchCards = [
         requireSelfAsSummoned: true,
         oncePerTurn: true,
         oncePerTurnName: "luminarch_pure_knight_fusion_search",
-        oncePerTurnScope: "card",
         actions: [
           {
             type: "search_any",

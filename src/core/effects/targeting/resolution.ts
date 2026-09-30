@@ -818,7 +818,7 @@ export function resolveTargets(
       zones,
       owner,
       filters,
-      intent: def.intent || null,
+      intent: def.intent === "reference" ? null : def.intent || null,
       allowSelf:
         def.excludeSelf === true
           ? false

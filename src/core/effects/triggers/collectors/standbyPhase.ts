@@ -7,7 +7,7 @@ import type {
   TriggerRuntimeCard,
   TriggerRuntimePlayer,
 } from "../runtime.js";
-import { debugTriggerLog } from "./shared.js";
+import { debugTriggerLog, isTriggerSourceLegal } from "./shared.js";
 
 function getStandbyPlayerRule(effect: TriggerEffect): string {
   return effect.standbyPlayer || "self";
@@ -70,6 +70,8 @@ export async function collectStandbyPhaseTriggers(
         if (!effect || effect.timing !== "on_event") continue;
         if (effect.event !== "standby_phase") continue;
         if (!canTriggerForStandbyPlayer(owner, effect)) continue;
+        if (!isTriggerSourceLegal(card, effect, this.findCardZone(owner, card))) continue;
+        if (card.subtype === "equip" && !card.equippedTo) continue;
 
         // Check requireFaceup condition
         if (effect.requireFaceup === true && card.isFacedown === true) {

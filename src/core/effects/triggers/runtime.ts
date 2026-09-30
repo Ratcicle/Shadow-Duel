@@ -197,6 +197,7 @@ export interface TriggerEffectLike {
   readonly positionTo?: BattlePosition | readonly BattlePosition[] | "any";
   readonly minAmount?: number;
   readonly minLpGained?: number;
+  readonly lpChangeKind?: "gain" | "loss" | "damage";
   readonly counterType?: string;
   readonly counterTypes?: readonly string[];
   readonly damageStepTimings?: readonly DamageStepTiming[];
@@ -293,6 +294,9 @@ export interface TriggerContext {
   currentPhase?: (string | null) | undefined;
   attacker?: TriggerRuntimeCard | null;
   attackerOwner?: TriggerRuntimePlayer | null;
+  battleAttacker?: TriggerRuntimeCard | null;
+  battleAttackerOwner?: TriggerRuntimePlayer | null;
+  battleAttackerLocationVersion?: number;
   defender?: TriggerRuntimeCard | null;
   defenderOwner?: TriggerRuntimePlayer | null;
   destroyed?: TriggerRuntimeCard | null;
@@ -304,6 +308,9 @@ export interface TriggerContext {
   target?: TriggerRuntimeCard | null;
   targetOwner?: TriggerRuntimePlayer | null;
   damageAmount?: number;
+  lpGained?: number;
+  lpLost?: number;
+  lpPaid?: number;
   damageDealt?: number;
   isDamageStep?: boolean;
   targetDestroyed?: boolean;

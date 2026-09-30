@@ -23,6 +23,7 @@ export const shadowHeartCards = [
         event: "attack_declared",
         requireDefenderPosition: true,
         requireSelfAsDefender: true,
+        requireFaceup: true,
         actions: [
           {
             type: "damage",
@@ -279,23 +280,14 @@ export const shadowHeartCards = [
         id: "shadow_heart_battle_hymn",
         timing: "on_play",
         speed: 1,
-        targets: [
-          {
-            id: "shadowheart_allies",
-            owner: "self",
-            zone: "field",
-            cardKind: "monster",
-            archetype: "Shadow-Heart", // <<< filtro de arquÃ©tipo
-            requireFaceup: true,
-            count: { min: 1, max: 5 },
-            autoSelect: true, // pega automaticamente todos os vÃ¡lidos
-          },
-        ],
+        conditions: [{ type: "control_card_filters", owner: "self", zones: ["field"],
+          filters: { cardKind: "monster", archetype: "Shadow-Heart", requireFaceup: true }, min: 1 }],
         actions: [
           {
-            type: "buff_atk_temp",
-            targetRef: "shadowheart_allies",
-            amount: 500,
+            type: "buff_stats_temp",
+            targetScope: { owner: "self", zones: ["field"], filters: { cardKind: "monster", archetype: "Shadow-Heart" }, requireFaceup: true },
+            atkBoost: 500,
+            duration: "until_end_turn",
           },
         ],
       },
@@ -372,22 +364,12 @@ export const shadowHeartCards = [
         summonMethods: ["normal"],
         oncePerTurn: true,
         oncePerTurnName: "shadow_heart_imp_on_summon",
-        targets: [
-          {
-            id: "imp_special_from_hand",
-            owner: "self",
-            zone: "hand",
-            cardKind: "monster",
-            archetype: "Shadow-Heart",
-            maxLevel: 4,
-            // limita a monstros Level 4 ou menos
-            count: { min: 0, max: 1 },
-          },
-        ],
         actions: [
           {
             type: "special_summon_from_zone",
-            targetRef: "imp_special_from_hand",
+            selectionId: "imp_special_from_hand",
+            filters: { cardKind: "monster", archetype: "Shadow-Heart", maxLevel: 4 },
+            count: { min: 1, max: 1 },
             zone: "hand",
             position: "choice",
           },
@@ -513,48 +495,13 @@ export const shadowHeartCards = [
         speed: 1,
         oncePerTurn: true,
         oncePerTurnName: "shadow_heart_infusion",
-        targets: [
-          {
-            id: "infusion_discard",
-            owner: "self",
-            zone: "hand",
-            count: { min: 2, max: 2 },
-          },
-        ],
         actions: [
-          {
-            type: "move",
-            targetRef: "infusion_discard",
-            player: "self",
-            to: "graveyard",
-          },
-          {
-            type: "optional_target_actions",
-            allowCancel: false,
-            logIfSkipped: true,
-            selectionMessage:
-              'Choose 1 "Shadow-Heart" monster in your Graveyard to Special Summon.',
-            targets: [
-              {
-                id: "infusion_revive_target",
-                owner: "self",
-                zone: "graveyard",
-                archetype: "Shadow-Heart",
-                cardKind: "monster",
-                count: { min: 1, max: 1 },
-              },
-            ],
-            actions: [
-              {
-                type: "special_summon_from_zone",
-                targetRef: "infusion_revive_target",
-                zone: "graveyard",
-                excludeSummonRestrict: ["shadow_heart_invocation_only"],
-                position: "choice",
-                cannotAttackThisTurn: true,
-              },
-            ],
-          },
+          { type: "discard_from_hand", player: "self", count: { min: 2, max: 2 },
+            filters: { excludeSelf: true }, selectionId: "infusion_discard", contextLabel: "discard" },
+          { type: "special_summon_from_zone", zone: "graveyard",
+            selectionId: "infusion_revive_target", filters: { cardKind: "monster", archetype: "Shadow-Heart" },
+            count: { min: 1, max: 1 }, excludeSummonRestrict: ["shadow_heart_invocation_only"],
+            position: "choice", cannotAttackThisTurn: true },
         ],
       },
     ],
@@ -714,6 +661,8 @@ export const shadowHeartCards = [
         triggerRequirement: "mandatory",
         triggerTiming: "if",
         event: "standby_phase",
+        requireZone: "spellTrap",
+        requireFaceup: true,
         promptUser: false,
         actions: [
           {
@@ -773,7 +722,13 @@ export const shadowHeartCards = [
         triggerRequirement: "mandatory",
         triggerTiming: "if",
         event: "battle_destroy",
-        requireSelfAsDestroyed: true,
+        requireZone: "fieldSpell",
+        destroyedCardFilters: {
+          owner: "self",
+          cardKind: "monster",
+          archetype: "Shadow-Heart",
+          minLevel: 8,
+        },
         oncePerTurn: true,
         oncePerTurnName: "Darkness Valley",
         actions: [
@@ -797,26 +752,30 @@ export const shadowHeartCards = [
     attribute: "Dark",
     archetype: "Shadow-Heart",
     description:
-      'Quick Effect: Once per turn, when a "Shadow-Heart" monster you control is destroyed by battle: You can Special Summon this card from your hand.',
+      'Once per turn, if a "Shadow-Heart" monster you control is destroyed by battle: You can Special Summon this card from your hand.',
     image: "assets/Shadow-Heart Death Wyrm.png",
     effects: [
       {
 
-        usagePolicy: "activate",
+        usagePolicy: "use",
         id: "shadow_heart_death_wyrm_hand_summon",
         timing: "on_event",
+        speed: 1,
         triggerRequirement: "optional",
-        triggerTiming: "when",
+        triggerTiming: "if",
         event: "battle_destroy",
+        requireZone: "hand",
+        activationZones: ["hand"],
         requireOwnMonsterArchetype: "Shadow-Heart",
         oncePerTurn: true,
+        oncePerTurnScope: "card",
         oncePerTurnName: "Shadow-Heart Death Wyrm",
         actions: [
           {
             type: "conditional_summon_from_hand",
             targetRef: "self",
             position: "choice",
-            optional: true,
+            optional: false,
             cannotAttackThisTurn: false,
           },
         ],
@@ -834,7 +793,7 @@ export const shadowHeartCards = [
     attribute: "Water",
     archetype: "Shadow-Heart",
     description:
-      'You can Special Summon this card from your hand by sending 1 "Shadow-Heart Abyssal Eel" you control to the GY. If this card destroys a monster by battle: inflict 500 damage to your opponent. If this card is destroyed by battle: inflict 800 damage to your opponent.',
+      'You can send 1 "Shadow-Heart Abyssal Eel" you control to the GY; Special Summon this card from your hand. If this card destroys a monster by battle: inflict 500 damage to your opponent. If this card is destroyed by battle: inflict 800 damage to your opponent.',
     image: "assets/Shadow-Heart Leviathan.png",
     effects: [
       {
@@ -842,9 +801,12 @@ export const shadowHeartCards = [
         activationZones: ["hand"],
         id: "shadow_heart_leviathan_special_summon_hand",
         timing: "ignition",
+        speed: 1,
+        requirePhase: ["main1", "main2"],
         targets: [
           {
             id: "leviathan_cost",
+            intent: "cost",
             owner: "self",
             zone: "field",
             cardKind: "monster",
@@ -852,10 +814,13 @@ export const shadowHeartCards = [
             count: { min: 1, max: 1 },
           },
         ],
+        activationCosts: [{ type: "move", targetRef: "leviathan_cost", player: "self", fromZone: "field", to: "graveyard", contextLabel: "cost" }],
         actions: [
           {
-            type: "special_summon_from_hand_with_cost",
-            costTargetRef: "leviathan_cost",
+            type: "special_summon_from_zone",
+            zone: "hand",
+            requireSource: true,
+            fieldSlotsFreedBeforeSummon: 1,
             position: "choice",
             cannotAttackThisTurn: false,
           },
@@ -935,7 +900,10 @@ export const shadowHeartCards = [
         timing: "on_event",
         triggerRequirement: "mandatory",
         triggerTiming: "if",
-        event: "opponent_damage",
+        event: "lp_change",
+        lpChangeKind: "loss",
+        triggerPlayer: "opponent",
+        requireZone: "field",
         oncePerTurn: true,
         oncePerTurnName: "shadow_heart_void_mage_draw",
         actions: [
@@ -955,7 +923,7 @@ export const shadowHeartCards = [
     subtype: "continuous",
     archetype: "Shadow-Heart",
     description:
-      'Each time your opponent takes 500 or more damage: place 1 Judgment Counter on this card. During your Main Phase: You can send this face-up card to the GY; Special Summon 1 "Shadow-Heart" monster from your Deck with ATK less than or equal to 500 x the number of Judgment Counters on this card. You can only use this effect of "Shadow-Heart Cathedral" once per turn.',
+      'Each time your opponent takes 500 or more damage: place 1 Judgment Counter on this card. During your Main Phase: You can send this face-up card to the GY; Special Summon 1 "Shadow-Heart" monster from your Deck with ATK less than or equal to 500 x the number of Judgment Counters this card had on the field. You can only use this effect of "Shadow-Heart Cathedral" once per turn.',
     image: "assets/Shadow-Heart Cathedral.png",
     effects: [
       {
@@ -963,12 +931,16 @@ export const shadowHeartCards = [
         timing: "on_event",
         triggerRequirement: "mandatory",
         triggerTiming: "if",
-        event: "opponent_damage",
+        event: "lp_change",
+        lpChangeKind: "damage",
+        triggerPlayer: "opponent",
+        requireZone: "spellTrap",
+        minAmount: 500,
         actions: [
           {
             type: "add_counter",
             counterType: "judgment_marker",
-            damagePerCounter: 500,
+            amount: 1,
             targetRef: "self",
           },
         ],
@@ -980,6 +952,11 @@ export const shadowHeartCards = [
         usagePolicy: "use",
         id: "shadow_heart_cathedral_summon_effect",
         timing: "ignition",
+        speed: 1,
+        requirePhase: ["main1", "main2"],
+        requireFaceup: true,
+        requiresSourceAtResolution: false,
+        activationCosts: [{ type: "move", targetRef: "self", player: "self", fromZone: "spellTrap", to: "graveyard", contextLabel: "cost" }],
         oncePerTurn: true,
         oncePerTurnName: "shadow_heart_cathedral_summon",
         actions: [
@@ -988,7 +965,7 @@ export const shadowHeartCards = [
             counterType: "judgment_marker",
             counterMultiplier: 500,
             archetype: "Shadow-Heart",
-            sendSourceToGraveAfter: true,
+            counterSource: "activation",
           },
         ],
       },
@@ -1069,9 +1046,11 @@ export const shadowHeartCards = [
         event: "after_summon",
         summonMethods: ["fusion"],
         requireSelfAsSummoned: true,
+        targets: [{ id: "demon_dragon_destroy_target", owner: "opponent", zones: ["field", "spellTrap", "fieldSpell"], count: { min: 1, max: 1 } }],
         actions: [
           {
             type: "destroy_targeted_cards",
+            targetRef: "demon_dragon_destroy_target",
             maxTargets: 1,
           },
         ],
@@ -1114,7 +1093,7 @@ export const shadowHeartCards = [
     archetype: "Shadow-Heart",
     archetypes: ["Shadow-Heart"],
     description:
-      "2 'Shadow-Heart' monsters. The first time per turn this card would be destroyed by battle, you can send 1 'Shadow-Heart' monster you control to the GY instead. If this card destroys an opponent's monster by battle: You can Special Summon 1 'Shadow-Heart' monster of Level 4 or lower from your GY, but it cannot attack this turn. You can only use this effect of 'Shadow-Heart Warlord' once per turn.",
+      "2 'Shadow-Heart' monsters. If this card would be destroyed by battle, you can send 1 'Shadow-Heart' monster you control to the GY instead. If this card destroys an opponent's monster by battle: You can Special Summon 1 'Shadow-Heart' monster of Level 4 or lower from your GY, but it cannot attack this turn. You can only use each effect of 'Shadow-Heart Warlord' once per turn.",
     image: "assets/Shadow-Heart Warlord.png",
     fusionMaterials: [{ archetype: "Shadow-Heart", count: 2 }],
     effects: [
@@ -1125,7 +1104,6 @@ export const shadowHeartCards = [
         timing: "passive",
         oncePerTurn: true,
         oncePerTurnName: "shadow_heart_warlord_protect",
-        oncePerTurnScope: "card",
         replacementEffect: {
           type: "destruction",
           reason: "battle",
@@ -1153,22 +1131,12 @@ export const shadowHeartCards = [
         requireDestroyedIsOpponent: true,
         oncePerTurn: true,
         oncePerTurnName: "shadow_heart_warlord_revive",
-        oncePerTurnScope: "card",
-        targets: [
-          {
-            id: "warlord_revive_target",
-            owner: "self",
-            zone: "graveyard",
-            cardKind: "monster",
-            archetype: "Shadow-Heart",
-            maxLevel: 4,
-            count: { min: 1, max: 1 },
-          },
-        ],
         actions: [
           {
             type: "special_summon_from_zone",
-            targetRef: "warlord_revive_target",
+            selectionId: "warlord_revive_target",
+            filters: { cardKind: "monster", archetype: "Shadow-Heart", maxLevel: 4 },
+            count: { min: 1, max: 1 },
             zone: "graveyard",
             position: "choice",
             cannotAttackThisTurn: true,
@@ -1385,6 +1353,7 @@ export const shadowHeartCards = [
           {
             id: "shadow_heart_heartbearer_destroyed_monster",
             targetFromContext: "eventCard",
+            intent: "reference",
             owner: "self",
             zone: "graveyard",
             cardKind: "monster",

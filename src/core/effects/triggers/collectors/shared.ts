@@ -4,7 +4,34 @@ import type {
   TriggerPlayerReference,
   TriggerRuntimeCard,
   TriggerRuntimePlayer,
+  TriggerEffectLike,
+  TriggerZone,
 } from "../runtime.js";
+
+/** Source legality at trigger discovery and before activation commitment. */
+export function isTriggerSourceLegal(
+  card: TriggerRuntimeCard,
+  effect: TriggerEffectLike,
+  sourceZone: TriggerZone,
+): boolean {
+  if (sourceZone === "temporary") return true;
+  if (effect.requireZone && !matchesZoneFilter(sourceZone, effect.requireZone)) {
+    return false;
+  }
+  if (
+    Array.isArray(effect.activationZones) &&
+    (sourceZone === null || !effect.activationZones.includes(sourceZone))
+  ) {
+    return false;
+  }
+  if (
+    (sourceZone === "field" || sourceZone === "fieldSpell" || sourceZone === "spellTrap") &&
+    card.isFacedown === true
+  ) {
+    return false;
+  }
+  return effect.requireFaceup !== true || card.isFacedown !== true;
+}
 
 export function getCardControllerId(
   card: TriggerRuntimeCard | null | undefined,

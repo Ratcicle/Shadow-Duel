@@ -651,7 +651,7 @@
     },
     "113": {
       "name": "Escudo do Coração Sombrio",
-      "description": "Só pode ser equipado a um monstro 'Coração Sombrio'. O monstro equipado ganha 500 de ATK/DEF e não pode ser destruído em batalha. Durante cada fase de espera: pague 800 PV ou envie essa carta para o cemitério."
+      "description": "Só pode ser equipado a um monstro 'Coração Sombrio'. O monstro equipado ganha 500 de ATK/DEF e não pode ser destruído em batalha. Durante cada uma das suas Fases de Apoio: pague 800 PV ou envie este card para o Cemitério."
     },
     "114": {
       "name": "Grifo do Coração Sombrio",
@@ -663,19 +663,19 @@
     },
     "116": {
       "name": "Verme da Morte do Coração Sombrio",
-      "description": "Efeito rápido: uma vez por turno, se um monstro 'Coração Sombrio' que você controla for destruído em batalha: Você pode invocar esse card por invocação-Especial da sua mão."
+      "description": "Uma vez por turno, se um monstro \"Coração Sombrio\" que você controla for destruído em batalha: você pode Invocar este card por Invocação-Especial da sua mão."
     },
     "117": {
       "name": "Leviatã do Coração Sombrio",
-      "description": "Você pode invocar este card por Invocação-Especial da sua mão ao enviar 1 'Enguia Abissal do Coração Sombrio' que você controla para o cemitério. Se esse card destruir um monstro em batalha: cause 500 de dano ao oponente. Se esse card for destruído em batalha: cause 800 de dano ao oponente."
+      "description": "Você pode enviar 1 \"Enguia Abissal do Coração Sombrio\" que você controla para o Cemitério; Invoque este card por Invocação-Especial da sua mão. Se esse card destruir um monstro em batalha: cause 500 de dano ao oponente. Se esse card for destruído em batalha: cause 800 de dano ao oponente."
     },
     "118": {
       "name": "Mago do Vazio do Coração Sombrio",
-      "description": "Se esse card for invocado por invocação-Normal: Você pode adicionar 1 Magia/Armadilha 'Coração Sombrio' do seu Deck à sua mão. Se o oponente perder PV enquanto este card estiver no campo: compre 1 card."
+      "description": "Se esse card for invocado por invocação-Normal: Você pode adicionar 1 Magia/Armadilha 'Coração Sombrio' do seu Deck à sua mão. Se o oponente perder PV enquanto este card estiver no campo: compre 1 card. Você só pode usar este efeito de \"Mago do Vazio do Coração Sombrio\" uma vez por turno."
     },
     "119": {
       "name": "Catedral do Coração Sombrio",
-      "description": "Cada vez que seu oponente perder PV: coloque 1 Marcador do Julgamento neste card para cada 500 de dano. Durante sua Fase Principal: você pode enviar este card para o cemitério; Invoque por invocação-Especial 1 monstro 'Coração Sombrio' do seu Deck com o ataque igual ou menor ao número de Marcadores do Julgamento x 500. Você só pode usar este efeito de 'Catedral do Coração Sombrio' uma vez por turno."
+      "description": "Cada vez que seu oponente sofrer 500 ou mais de dano: coloque 1 Marcador do Julgamento neste card. Durante sua Fase Principal: você pode enviar este card com a face para cima para o Cemitério; Invoque por Invocação-Especial 1 monstro 'Coração Sombrio' do seu Deck com ATK menor ou igual a 500 x o número de Marcadores do Julgamento que este card possuía no campo. Você só pode usar este efeito de 'Catedral do Coração Sombrio' uma vez por turno."
     },
     "120": {
       "name": "O Coração Sombrio",
@@ -687,7 +687,7 @@
     },
     "122": {
       "name": "Senhor da Guerra do Coração Sombrio",
-      "description": "Materiais: 2 monstros 'Coração Sombrio'. A primeira vez por turno que este card seria destruído em batalha, você pode enviar 1 monstro 'Coração Sombrio' que você controla para o Cemitério em vez disso. Se este card destruir um monstro do oponente em batalha: você pode Invocar por Invocação-Especial 1 monstro 'Coração Sombrio' de Nível 4 ou menor do seu Cemitério, mas ele não pode atacar neste turno. Você só pode usar este efeito de 'Senhor da Guerra do Coração Sombrio' uma vez por turno."
+      "description": "Materiais: 2 monstros 'Coração Sombrio'. Se este card seria destruído em batalha, você pode enviar 1 monstro 'Coração Sombrio' que você controla para o Cemitério em vez disso. Se este card destruir um monstro do oponente em batalha: você pode Invocar por Invocação-Especial 1 monstro 'Coração Sombrio' de Nível 4 ou menor do seu Cemitério, mas ele não pode atacar neste turno. Você só pode usar cada efeito de 'Senhor da Guerra do Coração Sombrio' uma vez por turno."
     },
     "123": {
       "name": "Perseguidor Arctroth do Coração Sombrio",
@@ -723,11 +723,11 @@
     },
     "156": {
       "name": "Foice Mágica Luminarca",
-      "description": "Durante a Etapa de Dano, quando um monstro 'Luminarca' que você controla batalhar (Efeito Rápido): você pode enviar este card da sua mão para o Cemitério; até o final deste turno, esse monstro ganha 1200 de ATK e 1700 de DEF. Você pode banir este card do seu Cemitério; adicione 1 Magia 'Luminarca' do seu Cemitério à sua mão. Você só pode usar cada efeito de 'Foice Mágica Luminarca' uma vez por turno."
+      "description": "Durante a Etapa de Dano, quando um monstro 'Luminarca' que você controla batalhar com um monstro ou atacar diretamente (Efeito Rápido): você pode enviar este card da sua mão para o Cemitério; até o final deste turno, esse monstro ganha 1200 de ATK e 1700 de DEF. Você pode banir este card do seu Cemitério; adicione 1 Magia 'Luminarca' do seu Cemitério à sua mão. Você só pode usar cada efeito de 'Foice Mágica Luminarca' uma vez por turno."
     },
     "157": {
       "name": "Protetor do Santuário Luminarca",
-      "description": "Se você controlar um 'Portador da Égide Luminarca', você pode enviá-lo para o cemitério: invoque este card por invocação-Especial da sua mão. Uma vez por turno, quando um monstro do oponente declarar um ataque (efeito rápido): negue o ataque."
+      "description": "Se você controlar um 'Portador da Égide Luminarca' com a face para cima, você pode enviá-lo para o Cemitério; Invoque este card por Invocação-Especial da sua mão. Uma vez por turno, quando um monstro do oponente declarar um ataque (efeito rápido): negue o ataque."
     },
     "158": {
       "name": "Lanceiro Radiante Luminarca",
@@ -735,7 +735,7 @@
     },
     "159": {
       "name": "Aurora Serafim Luminarca",
-      "description": "Se este card destruir um monstro do oponente em batalha: ganhe PV igual a metade do ATK do monstro destruído. Uma vez por turno, se esse card seria destruído por batalha ou efeitos de card: você pode enviar 1 monstro 'Luminarca' do seu cemitério para o cemitério; negue a destruição."
+      "description": "Se este card destruir um monstro do oponente em batalha: ganhe PV igual a metade do ATK do monstro destruído. Uma vez por turno, se esse card seria destruído por batalha ou efeitos de card: você pode enviar 1 outro monstro 'Luminarca' que você controla para o Cemitério em vez disso."
     },
     "160": {
       "name": "Árbitro Santificado Luminarca",
@@ -759,11 +759,11 @@
     },
     "165": {
       "name": "Escudo Crescente Luminarca",
-      "description": "Só pode ser equipado a um monstro 'Luminarca'. O monstro equipado ganha 500 de DEF. Se o monstro equipado seria destruído em batalha, envie esse card para o cemitério em vez disso."
+      "description": "Só pode ser equipado a um monstro 'Luminarca' que você controla. O monstro equipado ganha 500 de DEF. Se o monstro equipado seria destruído em batalha, envie esse card para o cemitério em vez disso."
     },
     "166": {
       "name": "Lâmina Solarforjada Luminarca",
-      "description": "Só pode ser equipada a um monstro \"Luminarca\". Cada vez que você ganhar PV, coloque 1 Marcador Solar neste card. O monstro equipado ganha 200 ATK/DEF para cada Marcador Solar neste card. Uma vez por turno, se o monstro equipado seria destruído em batalha: você pode pagar 1000 PV; ele não é destruído. Você só pode controlar 1 \"Lâmina Solarforjada Luminarca\"."
+      "description": "Só pode ser equipada a um monstro \"Luminarca\" que você controla. Cada vez que você ganhar PV, coloque 1 Marcador Solar neste card. O monstro equipado ganha 200 ATK/DEF para cada Marcador Solar neste card. Uma vez por turno, se o monstro equipado seria destruído em batalha: você pode pagar 1000 PV; ele não é destruído. Você só pode controlar 1 \"Lâmina Solarforjada Luminarca\"."
     },
     "167": {
       "name": "Lança da Alvorada Luminarca",

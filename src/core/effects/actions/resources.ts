@@ -7,13 +7,6 @@ import type {
 } from "../../contracts/actionRuntime.js";
 import { writeContextValue } from "../../contracts/actionRuntime.js";
 import type { ActionOf } from "../../contracts/actions.js";
-import type { CardAction } from "../../contracts/actions.js";
-import type { EffectDefinition } from "../../contracts/effects.js";
-import type {
-  NeedsSelectionResult,
-  NormalizedActionExecutionResult,
-  ResolvedTargetMap,
-} from "../../contracts/actionRuntime.js";
 
 type ShuffleDeckAction = ActionOf<"shuffle_deck"> & {
   readonly silent?: boolean;
@@ -31,7 +24,6 @@ type HealPerArchetypeMonsterAction =
   };
 
 type DamageAction = ActionOf<"damage"> & {
-  readonly triggerOnly?: boolean;
   readonly cause?: string;
   readonly sourceRect?: unknown;
   readonly screenShake?: boolean;
@@ -45,21 +37,7 @@ type ResourcePlayer = ActionRuntimePlayer & {
 
 interface ResourceActionHost {
   game: ActionRuntimeGamePort;
-  applyActions(
-    actions: readonly CardAction[],
-    context: EffectContext,
-    targets: ResolvedTargetMap,
-  ): Promise<NormalizedActionExecutionResult | NeedsSelectionResult>;
-  checkOncePerTurn(
-    card: ActionRuntimeCard,
-    player: ActionRuntimePlayer,
-    effect: EffectDefinition,
-  ): { ok: boolean; reason?: string };
-  commitEffectUsage(
-    card: ActionRuntimeCard,
-    player: ActionRuntimePlayer,
-    effect: EffectDefinition,
-  ): void;
+
 }
 
 /**
@@ -149,6 +127,9 @@ async function emitLpGainEvent(
     player,
     sourceCard,
     lpGained: gained,
+    lpLost: 0,
+    lpPaid: 0,
+    damageAmount: 0,
     before,
     after: player.lp,
   };
@@ -257,121 +238,27 @@ export async function applyDamage(
     : ctx.opponent) as ResourcePlayer;
   const amount = action.amount ?? 0;
 
-  // Apply damage to LP only if not in trigger-only mode
-  // (inflictDamage from Game already applied the damage)
-  if (!action.triggerOnly) {
-    if (this.game && typeof this.game.inflictDamage === "function") {
-      this.game.inflictDamage(targetPlayer, amount, {
-        cause: action.cause || "effect",
-        sourceCard: ctx.source || null,
-        sourceRect: action.sourceRect || ctx?.activationContext?.sourceRect || null,
-        screenShake: action.screenShake,
-        triggerOpponentDamage: false,
+  if (!targetPlayer || amount <= 0) return false;
+  const before = targetPlayer.lp;
+  if (typeof this.game.inflictDamage === "function") {
+    await this.game.inflictDamage(targetPlayer, amount, {
+      cause: action.cause || "effect",
+      sourceCard: ctx.source || null,
+      sourceRect: action.sourceRect || ctx.activationContext?.sourceRect || null,
+      screenShake: action.screenShake,
+    });
+  } else {
+    targetPlayer.takeDamage(amount, { cause: action.cause || "effect", screenShake: action.screenShake });
+    const lost = Math.max(0, before - targetPlayer.lp);
+    if (lost > 0) {
+      this.game.notify?.("damage_inflicted", {
+        target: targetPlayer, sourceCard: ctx.source, amount: lost, lpLost: lost, newLP: targetPlayer.lp,
       });
-    } else {
-      const before = targetPlayer.lp || 0;
-      targetPlayer.takeDamage(amount, {
-        cause: action.cause || "effect",
-        screenShake: action.screenShake,
+      await this.game.emit?.("lp_change", {
+        player: targetPlayer, sourceCard: ctx.source, before, after: targetPlayer.lp,
+        lpGained: 0, lpLost: lost, lpPaid: 0, damageAmount: lost, damagedPlayer: targetPlayer,
       });
-      const lost = Math.max(0, before - (targetPlayer.lp || 0));
-      if (lost > 0) {
-        this.game?.notify?.("damage_inflicted", {
-          target: targetPlayer,
-          sourceCard: ctx.source,
-          amount: lost,
-          lpLost: lost,
-          newLP: targetPlayer.lp,
-        });
-      }
     }
   }
-
-  // Trigger effects that care about opponent losing LP
-  if (amount > 0 && this.game) {
-    const damaged =
-      targetPlayer.id === "player" ? this.game.player : this.game.bot;
-    const other = damaged.id === "player" ? this.game.bot : this.game.player;
-
-    // Check field cards (including spellTrap zone for continuous spells)
-    const fieldCards = [
-      ...(other.field || []),
-      ...(other.spellTrap || []).filter(
-        (c: ActionRuntimeCard | null) => c && c.subtype === "continuous",
-      ),
-    ].filter(Boolean);
-
-    for (const card of fieldCards) {
-      if (!card?.effects) continue;
-
-      for (const effect of card.effects) {
-        if (effect.timing !== "on_event" || effect.event !== "opponent_damage")
-          continue;
-
-        const optCheck = this.checkOncePerTurn(card, other, effect);
-        if (!optCheck.ok) {
-          this.game?.devLog?.("OPPONENT_DAMAGE_SKIP", {
-            card: card.name,
-            reason: optCheck.reason,
-          });
-          continue;
-        }
-
-        const ctx2 = {
-          source: card,
-          player: other,
-          opponent: damaged,
-          damageAmount: amount, // Pass damage amount for counter calculation
-        };
-
-        // Await applyActions to properly handle async effects
-        // NOTE: opponent_damage triggers should NOT require selection (design rule)
-        // If needsSelection is returned, log warning and skip to avoid blocking damage resolution
-        const actionsResult = await this.applyActions(
-          effect.actions || [],
-          ctx2,
-          {}
-        );
-        if (
-          actionsResult &&
-          typeof actionsResult === "object" &&
-          actionsResult.needsSelection
-        ) {
-          // Design rule violation: opponent_damage effects must not require selection
-          // Log detailed warning for debugging and skip this effect
-          console.warn(
-            `[applyDamage] opponent_damage effect on "${card.name}" returned needsSelection. ` +
-              `This violates design rules - opponent_damage triggers must not require manual selection. ` +
-              `Effect skipped to avoid blocking damage resolution.`
-          );
-          this.game?.devLog?.("OPPONENT_DAMAGE_SELECTION_VIOLATION", {
-            card: card.name,
-            effectId: effect.id,
-            selectionContract: actionsResult.selectionContract,
-          });
-          continue;
-        }
-        if (
-          actionsResult &&
-          typeof actionsResult === "object" &&
-          actionsResult.success === false
-        ) {
-          this.game?.devLog?.("OPPONENT_DAMAGE_ACTIONS_FAILED", {
-            card: card.name,
-            effectId: effect.id,
-            reason: actionsResult.reason || null,
-          });
-          continue;
-        }
-
-        this.commitEffectUsage(card, other, effect);
-
-        if (this.game && typeof this.game.updateBoard === "function") {
-          this.game.updateBoard();
-        }
-      }
-    }
-  }
-
-  return amount !== 0;
+  return targetPlayer.lp < before;
 }

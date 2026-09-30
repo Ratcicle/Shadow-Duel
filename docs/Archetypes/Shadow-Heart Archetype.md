@@ -82,7 +82,7 @@ Nenhuma carta auxiliar própria do arquétipo está listada neste catálogo.
 
 **122 — Shadow-Heart Warlord**
 
-> Materiais: 2 monstros 'Coração Sombrio'. A primeira vez por turno que este card seria destruído em batalha, você pode enviar 1 monstro 'Coração Sombrio' que você controla para o Cemitério em vez disso.
+> Materiais: 2 monstros 'Coração Sombrio'. Se este card seria destruído em batalha, você pode enviar 1 monstro 'Coração Sombrio' que você controla para o Cemitério em vez disso.
 
 ### Ascensões
 
@@ -163,19 +163,19 @@ Nível 5, Winged Beast, Dark, 2000/1500.
 
 Nível 8, Fiend, Dark, 2400/2000.
 
-> Efeito rápido: uma vez por turno, se um monstro 'Coração Sombrio' que você controla for destruído em batalha: Você pode invocar esse card por invocação-Especial da sua mão.
+> Uma vez por turno, se um monstro "Coração Sombrio" que você controla for destruído em batalha: você pode Invocar este card por Invocação-Especial da sua mão.
 
 **117 — Leviatã do Coração Sombrio / Shadow-Heart Leviathan**
 
 Nível 6, Sea Serpent, Water, 2200/1800.
 
-> Você pode invocar este card por Invocação-Especial da sua mão ao enviar 1 'Enguia Abissal do Coração Sombrio' que você controla para o cemitério. Se esse card destruir um monstro em batalha: cause 500 de dano ao oponente. Se esse card for destruído em batalha: cause 800 de dano ao oponente.
+> Você pode enviar 1 "Enguia Abissal do Coração Sombrio" que você controla para o Cemitério; Invoque este card por Invocação-Especial da sua mão. Se esse card destruir um monstro em batalha: cause 500 de dano ao oponente. Se esse card for destruído em batalha: cause 800 de dano ao oponente.
 
 **118 — Mago do Vazio do Coração Sombrio / Shadow-Heart Void Mage**
 
 Nível 4, Spellcaster, Dark, 1500/1500.
 
-> Se esse card for invocado por invocação-Normal: Você pode adicionar 1 Magia/Armadilha 'Coração Sombrio' do seu Deck à sua mão. Se o oponente perder PV enquanto este card estiver no campo: compre 1 card.
+> Se esse card for invocado por invocação-Normal: Você pode adicionar 1 Magia/Armadilha 'Coração Sombrio' do seu Deck à sua mão. Se o oponente perder PV enquanto este card estiver no campo: compre 1 card. Você só pode usar este efeito de "Mago do Vazio do Coração Sombrio" uma vez por turno.
 
 **125 — Portador do Coração Sombrio / Shadow-Heart Heartbearer**
 
@@ -219,7 +219,7 @@ Magia Normal.
 
 Magia de Equipamento.
 
-> Só pode ser equipado a um monstro 'Coração Sombrio'. O monstro equipado ganha 500 de ATK/DEF e não pode ser destruído em batalha. Durante cada fase de espera: pague 800 PV ou envie essa carta para o cemitério.
+> Só pode ser equipado a um monstro 'Coração Sombrio'. O monstro equipado ganha 500 de ATK/DEF e não pode ser destruído em batalha. Durante cada uma das suas Fases de Apoio: pague 800 PV ou envie este card para o Cemitério.
 
 **115 — Vale das Trevas / Darkness Valley**
 
@@ -231,7 +231,7 @@ Magia de Campo.
 
 Magia Contínua.
 
-> Cada vez que seu oponente perder PV: coloque 1 Marcador do Julgamento neste card para cada 500 de dano. Durante sua Fase Principal: você pode enviar este card para o cemitério; Invoque por invocação-Especial 1 monstro 'Coração Sombrio' do seu Deck com o ataque igual ou menor ao número de Marcadores do Julgamento x 500. Você só pode usar este efeito de 'Catedral do Coração Sombrio' uma vez por turno.
+> Cada vez que seu oponente sofrer 500 ou mais de dano: coloque 1 Marcador do Julgamento neste card. Durante sua Fase Principal: você pode enviar este card com a face para cima para o Cemitério; Invoque por Invocação-Especial 1 monstro 'Coração Sombrio' do seu Deck com ATK menor ou igual a 500 x o número de Marcadores do Julgamento que este card possuía no campo. Você só pode usar este efeito de 'Catedral do Coração Sombrio' uma vez por turno.
 
 **120 — O Coração Sombrio / The Shadow Heart**
 
@@ -261,7 +261,7 @@ Fusão, Nível 10, Dragon, Dark, 3000/3000.
 
 Fusão, Nível 8, Warrior, Dark, 2300/1900.
 
-> Materiais: 2 monstros 'Coração Sombrio'. A primeira vez por turno que este card seria destruído em batalha, você pode enviar 1 monstro 'Coração Sombrio' que você controla para o Cemitério em vez disso. Se este card destruir um monstro do oponente em batalha: você pode Invocar por Invocação-Especial 1 monstro 'Coração Sombrio' de Nível 4 ou menor do seu Cemitério, mas ele não pode atacar neste turno. Você só pode usar este efeito de 'Senhor da Guerra do Coração Sombrio' uma vez por turno.
+> Materiais: 2 monstros 'Coração Sombrio'. Se este card seria destruído em batalha, você pode enviar 1 monstro 'Coração Sombrio' que você controla para o Cemitério em vez disso. Se este card destruir um monstro do oponente em batalha: você pode Invocar por Invocação-Especial 1 monstro 'Coração Sombrio' de Nível 4 ou menor do seu Cemitério, mas ele não pode atacar neste turno. Você só pode usar cada efeito de 'Senhor da Guerra do Coração Sombrio' uma vez por turno.
 
 **123 — Perseguidor Arctroth do Coração Sombrio / Shadow-Heart Arctroth Pursuer**
 
@@ -284,3 +284,18 @@ Ascensão, Nível 10, Dragon, Dark, 3300/3000.
 - O Extra Deck contém 2 de Fusão, 2 de Ascensão.
 - Shadow-Heart Scale Dragon e Shadow-Heart Demon Arctroth são os materiais das duas linhas de Ascensão.
 - Shadow-Heart Scale Dragon também participa da Fusão de Shadow-Heart Demon Dragon.
+
+## Resolução e limites — lote SH7, SH8 e SH11
+
+- Hino de Batalha aplica o bônus ao conjunto de monstros próprios Shadow-Heart
+  com a face para cima na resolução, incluindo os que entrarem em resposta.
+- Imp e o revive do Senhor da Guerra escolhem o monstro durante a resolução,
+  após a confirmação única do Trigger opcional.
+- Infusão descarta exatamente duas cartas como parte do efeito e depois
+  escolhe no Cemitério; pode reviver uma das cartas recém-descartadas.
+- Portador mantém o vínculo exclusivo com o monstro destruído do evento.
+  Esse vínculo não é alvo; seu envio ao Cemitério continua sendo custo.
+- Dragão Demônio declara um alvo adversário antes das respostas, incluindo
+  cartas Baixadas nas zonas de monstros, Magias/Armadilhas e Campo.
+- Proteção e revive do Senhor da Guerra têm limites independentes por nome,
+  compartilhados entre cópias, com política `use`.

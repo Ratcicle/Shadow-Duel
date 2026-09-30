@@ -66,7 +66,7 @@ interface BattleDamageOptions {
   targetCard: DamageStepCard | null;
   cause: "battle";
   directAttack: boolean;
-  triggerOpponentDamage: false;
+  deferLpChangeEvent: true;
   suppressVisual: boolean;
 }
 
@@ -192,6 +192,7 @@ function cardSnapshot(
 ): DamageStepCardSnapshot | null {
   if (!card) return null;
   return {
+    duelCardId: card.duelCardId ?? null,
     cardId: card.id ?? null,
     instanceId: getCardInstanceId(card),
     name: card.name || null,
@@ -209,6 +210,7 @@ function serializeCardSnapshot(
 ): DamageStepCardSnapshot | null {
   if (!snapshot) return null;
   return {
+    duelCardId: hidden ? null : snapshot.duelCardId,
     cardId: hidden ? null : snapshot.cardId,
     instanceId: hidden ? null : snapshot.instanceId,
     name: hidden ? null : snapshot.name,
@@ -232,6 +234,10 @@ function serializeOutcome(
     healingApplied: Number(outcome.healingApplied || 0),
     targetDestroyed: outcome.targetDestroyed === true,
     attackerDestroyed: outcome.attackerDestroyed === true,
+    destructionDuelCardIds: (outcome.destructionCandidates || [])
+      .flatMap(({ card }) => card.duelCardId == null ? [] : [card.duelCardId]),
+    movedAtEndDuelCardIds: (outcome.movedAtEnd || [])
+      .flatMap(card => card.duelCardId == null ? [] : [card.duelCardId]),
     destructionInstanceIds: (outcome.destructionCandidates || [])
       .map((entry) => getCardInstanceId(entry.card))
       .filter((id) => id !== null),
@@ -425,6 +431,9 @@ function buildStagePayload(
     isDamageStep: true,
     atomicGroupId,
     attacker: transaction.attacker,
+    battleAttacker: transaction.attacker,
+    battleAttackerOwner: transaction.attackerOwner,
+    battleAttackerLocationVersion: transaction.sourceAtStart.attacker.locationVersion,
     defender: transaction.defender,
     target: transaction.defender,
     attackerOwner: transaction.attackerOwner,
@@ -438,7 +447,11 @@ function buildStagePayload(
     damagedPlayer: outcome.damagedPlayer,
     amount: outcome.damageDealt,
     damageDealt: outcome.damageDealt,
+    lpChangePlayer: outcome.lpChangePayload?.player || null,
     lpGained: Number(outcome.lpChangePayload?.lpGained || 0),
+    lpLost: Number(outcome.lpChangePayload?.lpLost || 0),
+    lpPaid: Number(outcome.lpChangePayload?.lpPaid || 0),
+    damageAmount: Number(outcome.lpChangePayload?.damageAmount || 0),
     before: outcome.lpChangePayload?.before ?? null,
     after: outcome.lpChangePayload?.after ?? null,
     sourceCard: outcome.lpChangePayload?.sourceCard || transaction.attacker,
@@ -466,7 +479,7 @@ async function collectStageOccurrences(
   for (const eventName of events) {
     const result = await game.emit?.(
       eventName,
-      { ...payload, event: eventName },
+      { ...payload, event: eventName, ...(eventName === "lp_change" ? { player: payload.lpChangePlayer ?? payload.player } : {}) },
       { collectTriggersOnly: true },
     );
     if (result?.occurrence) occurrences.push(result.occurrence);
@@ -624,12 +637,12 @@ async function applyBattleLpChange(
   }
   const actual = getActualLpLoss(player, amount);
   const before = Number(player.lp || 0);
-  game.inflictDamage?.(player, amount, {
+  await game.inflictDamage?.(player, amount, {
     sourceCard: transaction.attacker,
     targetCard: transaction.defender,
     cause: "battle",
     directAttack: transaction.directAttack,
-    triggerOpponentDamage: false,
+    deferLpChangeEvent: true,
     suppressVisual:
       transaction.damageOptions.consumeBattleLpLossFeedback?.(
         player,
@@ -638,6 +651,10 @@ async function applyBattleLpChange(
   });
   const applied = Math.max(0, before - Number(player.lp || 0));
   if (applied > 0) {
+    transaction.outcome.lpChangePayload = {
+      player, sourceCard: transaction.attacker, before, after: player.lp,
+      lpGained: 0, lpLost: applied, lpPaid: 0, damageAmount: applied,
+    };
     transaction.outcome.damagedPlayer = player;
     transaction.outcome.damageDealt += Math.min(actual, applied);
   }

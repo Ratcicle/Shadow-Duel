@@ -270,7 +270,18 @@ function projectCardIdentitySnapshot(entry: object): SerializableValue | undefin
 }
 
 function procedureState(value: unknown): CanonicalProcedureStateSnapshot | null {
-  const normalized = normalizeValue(value, new WeakSet(), projectCardIdentitySnapshot);
+  const normalized = normalizeValue(value, new WeakSet(), entry => {
+    if (Object.hasOwn(entry, "destructionDuelCardIds") && Object.hasOwn(entry, "movedAtEndDuelCardIds")) {
+      const outcome: SerializableObject = {};
+      for (const key of Object.keys(entry)) {
+        if (key === "destructionInstanceIds" || key === "movedAtEndInstanceIds") continue;
+        const field = stableValue(readProperty(entry, key));
+        if (field !== undefined) outcome[key] = field;
+      }
+      return outcome;
+    }
+    return projectCardIdentitySnapshot(entry);
+  });
   if (
     normalized === null ||
     Array.isArray(normalized) ||

@@ -137,28 +137,22 @@ test("Assembly Line funciona com exatamente dois monstros no Cemitério e escolh
     return originalOpenActivationChain(prepared);
   };
 
-  let resolutionChoiceSnapshot = null;
-  game.ui.getSearchModalElements = () =>
-    unsafeFixture<ReturnType<typeof game.ui.getSearchModalElements>>(
-      {},
-      "The replacement visual callback reads candidate data and never accesses DOM elements.",
-    );
-  game.ui.showSearchModalVisual = (
-    _elements,
-    candidates,
-    _defaultName,
-    select,
-  ) => {
-    resolutionChoiceSnapshot = {
-      isResolving: game.chainSystem.isResolving === true,
-      candidates: candidates.map((card) => card.name),
-    };
-    select(selectedCandidate.name, selectedCandidate);
-  };
-
-  const result = await game.tryActivateSpell(spell, 0, {
+  const activation = game.tryActivateSpell(spell, 0, {
     [COST_REF]: costs,
   });
+  for (let attempt = 0; attempt < 100 && !game.targetSelection; attempt++) {
+    await new Promise<void>(resolve => setTimeout(resolve, 1));
+  }
+  const session = required(game.targetSelection);
+  const requirement = required(session.requirements[0]);
+  const resolutionChoiceSnapshot = {
+    isResolving: game.chainSystem.isResolving === true,
+    candidates: requirement.candidates.map(candidate => candidate.cardRef?.name),
+  };
+  const chosen = required(requirement.candidates.find(candidate => candidate.cardRef === selectedCandidate));
+  session.selections[requirement.id] = [chosen.key];
+  await game.finishTargetSelection();
+  const result = await activation;
 
   assert.ok(result.success === true);
   assert.equal(

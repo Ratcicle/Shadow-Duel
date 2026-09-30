@@ -237,7 +237,7 @@ export interface EffectTarget {
   readonly excludeTargetRef?: string;
   readonly faceup?: boolean;
   readonly filters?: CardFilter;
-  readonly intent?: "cost";
+  readonly intent?: "cost" | "reference";
   readonly isTuner?: boolean;
   readonly lastSummonedFromZone?: CanonicalZone;
   readonly maxDef?: number;
@@ -535,6 +535,8 @@ interface EffectCapabilities {
   readonly fromZone?: EffectZone;
   readonly handModalLabelKey?: string;
   readonly minAmount?: number;
+  /** lp_change defaults to gain; loss includes damage and payments. */
+  readonly lpChangeKind?: "gain" | "loss" | "damage";
   readonly movedByEffect?: boolean;
   readonly negationCost?: readonly NegationCostDefinition[];
   readonly oncePerDuel?: boolean;
@@ -561,6 +563,7 @@ interface EffectCapabilities {
   readonly requireEquipCardFilters?: EquippedCardFilter;
   readonly requireEquippedAsBattleDestroyer?: boolean;
   readonly requireFaceup?: boolean;
+  readonly requiresSourceAtResolution?: boolean;
   readonly requireMovedCardWasFaceup?: boolean;
   readonly requireOpponentAttack?: boolean;
   readonly requireOpponentSummon?: boolean;

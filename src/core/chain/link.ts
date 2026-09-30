@@ -67,6 +67,7 @@ export function captureSourceSnapshot(
 ): ChainSourceSnapshot | null {
   if (!card) return null;
   return {
+    counters: Object.fromEntries(card.counters instanceof Map ? card.counters : Object.entries(card.counters || {})),
     cardInstanceId: cardInstanceId(card),
     controllerId: controller?.id ?? card.controller ?? card.owner ?? null,
     zone: zone || null,
@@ -226,7 +227,7 @@ export function collectDeclaredTargets(
 ): ChainDeclaredTarget[] {
   const declared: ChainDeclaredTarget[] = [];
   for (const target of effect?.targets || []) {
-    if (!target?.id || target.intent === "cost") continue;
+    if (!target?.id || (target.intent === "cost" || target.intent === "reference")) continue;
     const cards = selectionCards(Reflect.get(selections, target.id), []);
     declared.push({ targetId: target.id, cards });
   }
@@ -454,6 +455,7 @@ export function createChainLink(
     declaredTargetSnapshots:
       preparedInput.declaredTargetSnapshots ||
       captureDeclaredTargetSnapshots(this, declaredTargets),
+    referenceSnapshots: preparedInput.referenceSnapshots || [],
     targetValidation: preparedInput.targetValidation || null,
     committed: preparedInput.committed === true,
     costsPaid: preparedInput.costsPaid === true,

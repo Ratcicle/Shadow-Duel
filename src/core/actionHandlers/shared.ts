@@ -1,3 +1,4 @@
+import { getUIText } from "../i18n.js";
 /**
  * shared.js
  *
@@ -27,22 +28,26 @@ import type {
   SelectionZone,
 } from "../contracts/selection.js";
 import type { ZoneInput } from "../contracts/zones.js";
+import type { DecisionActor } from "../contracts/decisions.js";
+import type { SelectionCandidateKey } from "../contracts/primitives.js";
 
 type RuntimeCardId = number | string | null;
 
 /** Keep optional confirmations in the same decision stream as target choices. */
 export async function requestOptionalConfirmation(
-  game: ActionRuntimeGamePort,
-  player: ActionRuntimePlayer | null,
+  game: Pick<ActionRuntimeGamePort, "requestDecision">,
+  player: DecisionActor | null,
   resolveHuman: () => MaybePromise<boolean>,
+  resolveAI: () => MaybePromise<boolean> = () => false,
 ): Promise<boolean> {
-  if (!game.requestDecision) return Boolean(await resolveHuman());
+  if (!game.requestDecision) return Boolean(await (isAI(player) ? resolveAI() : resolveHuman()));
   const result = await game.requestDecision({
     kind: "choice",
     actor: player,
     candidates: [],
     requireCandidate: false,
     resolveHuman: async () => (await resolveHuman()) ? {} : null,
+    resolveAI: async () => (await resolveAI()) ? {} : null,
     serializeResult: value => value
       ? { pass: false, candidateKey: "confirm", effectId: null }
       : { pass: true },
@@ -50,6 +55,31 @@ export async function requestOptionalConfirmation(
       ? {} : null,
   });
   return result !== null;
+}
+
+/** Preserve card choices made by a resolution modal in canonical replay. */
+export async function requestResolutionCards(
+  game: Pick<ActionRuntimeGamePort, "requestDecision">,
+  player: DecisionActor,
+  cards: readonly ActionRuntimeCard[],
+  choose: () => MaybePromise<readonly ActionRuntimeCard[]>,
+): Promise<ActionRuntimeCard[]> {
+  if (!game.requestDecision) return [...await choose()];
+  const keyOf = (card: ActionRuntimeCard) => `resolution:${card.duelCardId ?? card.instanceId}` as SelectionCandidateKey;
+  const result = await game.requestDecision({
+    kind: "target",
+    actor: player,
+    candidates: [],
+    requireCandidate: false,
+    resolveHuman: async () => ({ resolution: (await choose()).map(keyOf) }),
+    resolveAI: async () => ({ resolution: (await choose()).map(keyOf) }),
+    serializeResult: value => ({ orderedCandidateKeys: value?.resolution || [] }),
+    deserializeReplayValue: value => "orderedCandidateKeys" in value
+      ? { resolution: value.orderedCandidateKeys.map(key => cards.map(keyOf).find(candidate => candidate === key))
+          .filter((key): key is SelectionCandidateKey => key !== undefined) } : null,
+  });
+  return (result?.resolution || []).map(key => cards.find(card => keyOf(card) === key))
+    .filter((card): card is ActionRuntimeCard => !!card);
 }
 
 interface ExclusionFilters {
@@ -217,6 +247,7 @@ interface SelectCardsOptions {
   readonly kind?: SelectionKind | undefined;
   readonly autoSelectorOptions?: object | undefined;
   readonly autoSelectKeys?: () => readonly string[];
+  readonly cancelAsEmptySelection?: boolean;
 }
 
 interface SummonFromHandCoreOptions {
@@ -1110,6 +1141,7 @@ export async function selectCards({
   kind,
   autoSelectorOptions,
   autoSelectKeys,
+  cancelAsEmptySelection = false,
 }: SelectCardsOptions): Promise<readonly string[] | null> {
   if (!game || !player || !selectionContract || !requirementId) {
     return null;
@@ -1140,6 +1172,7 @@ export async function selectCards({
       owner: player,
       kind,
       selectionContract,
+      cancelAsEmptySelection,
       onCancel: () => resolve(null),
       execute: (selections) => {
         const selected = selections[requirementId];
@@ -1148,6 +1181,50 @@ export async function selectCards({
       },
     });
   });
+}
+
+/** A resolution choice uses instance keys and the same broker for both controllers. */
+export async function selectResolutionCards(options: {
+  game: ActionRuntimeGamePort;
+  player: ActionRuntimePlayer;
+  cards: readonly ActionRuntimeCard[];
+  requirementId: string;
+  min: number;
+  max: number;
+  message?: string | null | undefined;
+  locate: (card: ActionRuntimeCard) => { player: ActionRuntimePlayer; zone: ZoneInput; index: number };
+  resolveAI: () => readonly ActionRuntimeCard[];
+}): Promise<readonly ActionRuntimeCard[] | null> {
+  const { game, player, cards, requirementId, min, max } = options;
+  const decorated = cards.map((card, index) => {
+    const location = options.locate(card);
+    const candidate = { cardRef: card, name: card.name, image: card.image,
+      controller: location.player.id, owner: location.player.id === "player" ? "player" : "opponent",
+      zone: location.zone, zoneIndex: location.index };
+    return { ...candidate, key: game.buildSelectionCandidateKey!(candidate, index) };
+  });
+  let keys: readonly string[] | null;
+  if (isAI(player)) {
+    const resolveAI = () => ({ [requirementId]: options.resolveAI().flatMap(card => { const entry = decorated.find(entry => entry.cardRef === card); return entry ? [entry.key] : []; }) });
+    const result = game.requestDecision ? await game.requestDecision({
+      kind: "choice", actor: player, candidates: [], requireCandidate: false, resolveAI,
+      serializeResult: value => ({ orderedCandidateKeys: value?.[requirementId] || [] }),
+      deserializeReplayValue: value => "orderedCandidateKeys" in value ? { [requirementId]: value.orderedCandidateKeys.flatMap(key => { const entry = decorated.find(entry => entry.key === key); return entry ? [entry.key] : []; }) } : null,
+    }) : resolveAI();
+    keys = result?.[requirementId] || null;
+  } else {
+    if (!game.startTargetSelectionSession) return null;
+    keys = await selectCards({ game, player, kind: "choice", requirementId, cancelAsEmptySelection: min === 0,
+      selectionContract: { kind: "choice", message: options.message || getUIText("ui.selection.chooseTargetCount", { count: max, label: "" }),
+        requirements: [{ id: requirementId, min, max, distinct: true, candidates: decorated }],
+        ui: { allowCancel: min === 0, preventCancel: min > 0, allowEmpty: min === 0 },
+      },
+    });
+  }
+  if (!keys || keys.length < min || keys.length > max || new Set(keys).size !== keys.length) return null;
+  const selected = keys.map(key => decorated.find(entry => entry.key === key)?.cardRef);
+  if (selected.some(card => !card)) return null;
+  return selected.filter((card): card is ActionRuntimeCard => !!card);
 }
 
 export async function summonFromHandCore({

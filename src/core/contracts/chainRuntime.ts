@@ -140,6 +140,7 @@ export interface ChainEffectTarget extends Omit<EffectTarget, "position"> {
 
 /** Minimal mutable Card projection actually observed by Chain modules. */
 export interface ChainCard {
+  counters?: Map<string, number> | Record<string, number>;
   equippedTo?: ChainCard | null;
   fieldSlot?: import("./placement.js").FieldSlot | null;
   id?: number | undefined;
@@ -213,6 +214,7 @@ export interface ChainPlayer {
 }
 
 export interface ChainSourceSnapshot {
+  counters?: Readonly<Record<string, number>>;
   cardInstanceId: ChainCardInstanceId;
   controllerId: PlayerId | string | null;
   zone: ChainSourceZone | null;
@@ -285,6 +287,8 @@ export interface ChainSummonTransactionReference {
 
 /** Fields propagated to EffectEngine while a Chain action is evaluated. */
 export interface ChainActionContext extends ChainContextPayload {
+  /** Strategy preferences carried unchanged to resolution-time decisions. */
+  costPreferences?: object | null;
   source?: ChainCard | null;
   sourceCard?: ChainCard | null;
   effectId?: string | null;
@@ -469,6 +473,7 @@ export type ChainContext = {
  * partially populated context before the Chain selected a concrete window.
  */
 export interface ChainContextInput extends ChainContextPayload {
+  eventCard?: ChainCard | null;
   type?: ChainRuntimeContextType;
 }
 
@@ -525,6 +530,7 @@ export interface PreparedActivationInput {
   activationCommitment?: ChainActivationCommitment | null;
   declaredTargets?: ChainDeclaredTarget[];
   declaredTargetSnapshots?: ChainDeclaredTargetSnapshot[];
+  referenceSnapshots?: ChainDeclaredTargetSnapshot[];
   targetValidation?: ChainTargetValidation | null;
   usagePolicy?: ChainUsagePolicy;
   usageReservation?: ChainUsageReservation | null;
@@ -744,6 +750,7 @@ export interface ChainLink {
   activationCommitment: ChainActivationCommitment | null;
   declaredTargets: ChainDeclaredTarget[];
   declaredTargetSnapshots: ChainDeclaredTargetSnapshot[];
+  referenceSnapshots?: ChainDeclaredTargetSnapshot[];
   targetValidation: ChainTargetValidation | null;
   committed: boolean;
   costsPaid: boolean;

@@ -5,6 +5,7 @@
  */
 
 import { isAI } from "../Player.js";
+import { expireFaceupStatBuffs } from "../effects/actions/stats.js";
 import { suppressTemporaryDynamicStatIncreasesForDebuff } from "../effects/passives/passiveBuffs.js";
 import type { ActionOf } from "../contracts/actions.js";
 import type {
@@ -2229,6 +2230,7 @@ export async function handleSetFacedownDefense(
     const previousPosition = card.position;
     card.position = "defense";
     card.isFacedown = true;
+    expireFaceupStatBuffs(card);
     if (
       card.effectsNegated === true &&
       card.effectsNegatedDuration === "while_faceup"
@@ -2618,6 +2620,9 @@ export async function handlePermanentBuffNamed(
     if (!card || card.cardKind !== "monster") continue;
     if (!isStatTargetStillValid(card, ctx, game)) continue;
 
+    if (action.duration === "while_faceup" &&
+        (card.isFacedown || ![game.player, game.bot].some(owner => owner?.field.includes(card)))) continue;
+
     // Check archetype filter again for summoned card scenario
 
     if (action.archetype && targetRef === "summonedCard") {
@@ -2694,6 +2699,8 @@ export async function handlePermanentBuffNamed(
     }
 
     if (cardBuffed) {
+      const buff = card.permanentBuffsBySource[sourceName];
+      if (buff && action.duration) buff.duration = action.duration;
       anyBuffed = true;
       const weakensStats = atkBoost < 0 || defBoost < 0;
       queueCardFeedback(game, weakensStats ? "debuff" : "buff", card, {

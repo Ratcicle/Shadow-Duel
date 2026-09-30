@@ -683,9 +683,22 @@ export function updatePassiveBuffs(this: PassiveHost) {
         sourceOwner && typeof this.findCardZone === "function"
           ? this.findCardZone(sourceOwner, card)
           : null;
+      const passive = effect.passive;
+      if (
+        card.isFacedown === true &&
+        (sourceZone === "field" || sourceZone === "fieldSpell" || sourceZone === "spellTrap")
+      ) {
+        if (passive?.type === "position_status" || passive?.type === "conditional_status") {
+          const statusName = passive.status || "battleIndestructible";
+          if ((card as PassiveCard & Record<string, unknown>)[statusName]) {
+            delete (card as PassiveCard & Record<string, unknown>)[statusName];
+            updated = true;
+          }
+        }
+        return;
+      }
       if (effect.requireZone && sourceZone !== effect.requireZone) return;
       if (effect.requireFaceup === true && card.isFacedown === true) return;
-      const passive = effect.passive;
       if (!passive) return;
       const sourceEffectsNegated = passiveSourceEffectsAreNegated(this, card);
       if (sourceEffectsNegated) {

@@ -385,6 +385,8 @@ export interface SelectionSessionInput {
   preventCancel?: boolean;
   useFieldTargeting?: boolean;
   allowEmpty?: boolean;
+  /** Resolution choices may decline by recording an empty selection. */
+  cancelAsEmptySelection?: boolean;
   autoAdvanceOnMax?: boolean;
   activationContext?: SelectionActivationContext | null;
   replayCommandDescriptor?: object | null;

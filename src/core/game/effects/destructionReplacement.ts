@@ -16,6 +16,8 @@ import {
   markOncePerDuelEffectUsed,
 } from "../../effects/triggers/registration.js";
 import { getCardDisplayName, getUIText } from "../../i18n.js";
+import { requestOptionalConfirmation } from "../../actionHandlers/shared.js";
+import type { DecisionBrokerPort } from "../../contracts/decisions.js";
 import type {
   ActionReplacementEffect,
   CardAction,
@@ -173,6 +175,7 @@ interface TemporaryReplacementEntry {
 }
 
 interface DestructionReplacementHost {
+  requestDecision?: DecisionBrokerPort["requestDecision"];
   player: GamePlayer;
   bot: GamePlayer;
   turnCounter: number;
@@ -979,7 +982,7 @@ async function tryReplacement(
     context: ctx,
     kind: "destruction",
   });
-  if (!strategyAllowsReplacement) {
+  if (replacement.auto !== true && !strategyAllowsReplacement) {
     return { replaced: false };
   }
 
@@ -1047,11 +1050,11 @@ async function tryReplacement(
             sourceName,
             cardName: targetName,
           });
-        const wantsToReplace =
+        const wantsToReplace = await requestOptionalConfirmation(game, sourceOwner, async () =>
           (await game.ui?.showConfirmPrompt?.(prompt, {
             kind: "destruction_replacement",
             cardName: targetName,
-          })) ?? false;
+          })) ?? false);
         if (!wantsToReplace) {
           return false;
         }
@@ -1478,29 +1481,6 @@ export async function resolveDestructionWithReplacement(
       : destructionSourceCard?.owner === "bot"
         ? this.bot
         : null);
-
-  // Check for Equip Spell protection (e.g., Crescent Shield Guard)
-  if (cause === "battle" && card.cardKind === "monster") {
-    const guardEquip = (card.equips || []).find(
-      (equip) =>
-        equip && equip.grantsCrescentShieldGuard && equip.equippedTo === card,
-    );
-
-    if (guardEquip) {
-      this.ui.log(`${guardEquip.name} was destroyed to protect ${card.name}.`);
-      const guardResult = await this.destroyCard(guardEquip, {
-        cause,
-        sourceCard: card,
-        opponent: this.getOpponent(ownerPlayer),
-        fromZone: "spellTrap",
-      });
-      if (guardResult?.destroyed) {
-        guardEquip.grantsCrescentShieldGuard = false;
-        return { replaced: true };
-      }
-      return { replaced: false };
-    }
-  }
 
   const ctx: ReplacementContext = {
     card,

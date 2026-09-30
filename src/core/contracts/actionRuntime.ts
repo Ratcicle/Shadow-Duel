@@ -141,11 +141,7 @@ export interface ActionRuntimeCard {
   positionChangedThisTurn?: boolean;
   battlePositionLocked?: boolean;
   revealedTurn?: (number | null) | undefined;
-  permanentBuffsBySource?:
-    | CardPermanentBuffMap
-    | {
-        [sourceName: string]: { atk?: number; def?: number };
-      };
+  permanentBuffsBySource?: CardPermanentBuffMap;
   turnBasedBuffs?: ActionRuntimeTurnBasedBuff[];
   dynamicBuffs?:
     | CardDynamicBuffMap
@@ -297,6 +293,7 @@ export interface ActionRuntimeRegistration {
 
 export interface CompletedActionMoveResult {
   success?: boolean;
+  toZone?: CanonicalZone | null;
   needsSelection?: false;
   reason?: string | null;
   negated?: boolean;
@@ -541,6 +538,9 @@ export interface EffectContext {
   targetOwner?: ActionRuntimePlayer | null;
   attacker?: ActionRuntimeCard | null;
   attackerOwner?: ActionRuntimePlayer | null;
+  battleAttacker?: ActionRuntimeCard | null;
+  battleAttackerOwner?: ActionRuntimePlayer | null;
+  battleAttackerLocationVersion?: number;
   defender?: ActionRuntimeCard | null;
   defenderOwner?: ActionRuntimePlayer | null;
   summonedCard?: ActionRuntimeCard | null;
@@ -558,6 +558,9 @@ export interface EffectContext {
   fromZone?: ZoneInput | null;
   cause?: (string | null) | undefined;
   damageAmount?: number;
+  lpGained?: number;
+  lpLost?: number;
+  lpPaid?: number;
   isDamageStep?: boolean;
   isPreview?: boolean;
   previewOnly?: boolean;

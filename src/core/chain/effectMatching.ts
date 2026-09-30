@@ -413,6 +413,12 @@ export function findActivatableEffect(
               continue;
             }
           }
+          if (effect.event === "after_summon" && activeContext?.type === "summon") {
+            const summoner = activeContext.player || activeContext.triggerPlayer;
+            const controllerId = ownerPlayer?.id || card.owner;
+            if (effect.triggerPlayer === "self" && summoner?.id !== controllerId) continue;
+            if (effect.triggerPlayer === "opponent" && summoner?.id === controllerId) continue;
+          }
           if (effect.requireOpponentSummon && activeContext?.type === "summon") {
             // Only valid if opponent summoned (check from card owner's perspective)
             const cardOwnerId = ownerPlayer?.id || card.owner;

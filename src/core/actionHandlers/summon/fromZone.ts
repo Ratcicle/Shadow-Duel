@@ -1,4 +1,5 @@
 import { isAI } from "../../Player.js";
+import { checkSpecialSummonEligibility } from "../../game/summon/eligibility.js";
 import { resolveExactInstanceSelection } from "../../AutoSelector.js";
 import { assignAutomaticFieldSlot } from "../../game/zones/placement.js";
 import { applyStatusesOnSummon } from "../../Card.js";
@@ -21,7 +22,7 @@ import {
   collectZoneCandidates,
   normalizeNegateEffectsDuration,
   resolveTargetCards,
-  selectCardsFromZone,
+  selectResolutionCards,
 } from "../shared.js";
 import {
   buildSourceZoneEntries,
@@ -29,6 +30,18 @@ import {
   getSourceOwners,
   type SourceZoneEntry,
 } from "./sourceZones.js";
+
+/** Shared, read-only legality for preview and resolution, including projected costs. */
+export function isLegalZoneSummon(
+  card: ActionRuntimeCard, player: ActionRuntimePlayer, fromZone: ZoneInput,
+  game: Pick<ActionHandlerEnginePort["game"], "canSpecialSummonUnderRestrictions" | "canPlaceCardOnField">,
+  excludeCards: readonly ActionRuntimeCard[] = [],
+): boolean {
+  return card.cardKind === "monster" &&
+    checkSpecialSummonEligibility(card, { fromZone, summonProcedure: "card_effect" }).ok &&
+    game.canSpecialSummonUnderRestrictions?.(card, player, { summonMethod: "special", fromZone, silent: true })?.ok !== false &&
+    game.canPlaceCardOnField?.(card, player, { isFacedown: false, silent: true, excludeCards: [...excludeCards] })?.ok !== false;
+}
 import { mergeCanonicalSelections } from "../../game/selection/contract.js";
 
 interface LegacySelectionCount {
@@ -217,6 +230,9 @@ export async function handleSpecialSummonFromZone(
   targets: ResolvedTargetMap,
   engine: ActionHandlerEnginePort,
 ) {
+  ctx.lastSpecialSummonedCards = [];
+  ctx.lastSpecialSummonedCard = null;
+  storeActionResultCards(action, ctx, targets, []);
   const { player, source, destroyed } = ctx;
   const game = engine.game;
   const optName = action.oncePerTurnName;
@@ -608,28 +624,9 @@ export async function handleSpecialSummonFromZone(
     );
   }
 
-  // ? FASE 1: Filtrar cartas que não podem ser special summoned
-  candidates = candidates.filter((card) => {
-    if (Reflect.get(card, "cannotBeSpecialSummoned") === true) {
-      const ui = getUI(game);
-      if (ui && ui.log) {
-        ui.log(`${card.name} cannot be Special Summoned.`);
-      }
-      return false;
-    }
-    const restrictionCheck = game.canSpecialSummonUnderRestrictions?.(
-      card,
-      summonPlayer,
-      {
-        summonMethod: "special",
-        fromZone: Array.isArray(zoneSpec) ? null : zoneSpec,
-        silent: true,
-      },
-    );
-    if (restrictionCheck?.ok === false) {
-      return false;
-    }
-    return true;
+  candidates = candidates.filter(card => {
+    const entry = findSourceEntryForCard(zoneEntries, card);
+    return !!entry && isLegalZoneSummon(card, summonPlayer, entry.name, game);
   });
 
   if (requireDistinctNames && plannedIds === undefined) {
@@ -699,13 +696,22 @@ export async function handleSpecialSummonFromZone(
   }
 
   if (plannedIds !== undefined) {
-    const selected = resolveExactInstanceSelection(candidates, plannedIds, {
+    const planned = resolveExactInstanceSelection(candidates, plannedIds, {
       min: minRequired, max: maxSelect, revalidation,
     });
-    if (!selected || (
-      requireDistinctNames && new Set(selected.map(card => card.name)).size !== selected.length
+    if (!planned || (
+      requireDistinctNames && new Set(planned.map(card => card.name)).size !== planned.length
     )) return false;
-    if (!(await payBanishCost())) return false;
+    const selected = await selectResolutionCards({ game, player, cards: candidates,
+      requirementId: action.selectionId || `${ctx.effect?.id || action.type}_selection`,
+      min: minRequired, max: maxSelect, message: action.selectionMessage,
+      locate: card => {
+        const entry = findSourceEntryForCard(zoneEntries, card)!;
+        return { player: entry.owner, zone: entry.name, index: entry.list.indexOf(card) };
+      },
+      resolveAI: () => planned,
+    });
+    if (!selected || !(await payBanishCost())) return false;
     const success = selected.length === 0 || await summonCards(
       selected, zoneEntries, player, action, engine, ctx, targets,
     );
@@ -786,80 +792,6 @@ export async function handleSpecialSummonFromZone(
     ];
   };
 
-  // Single card summon (original behavior)
-  if (count.max === 1 || maxSelect === 1) {
-    const selection = await selectCardsFromZone({
-      game,
-      player,
-      candidates,
-      maxSelect: 1,
-      promptPlayer: action.promptPlayer !== false,
-      botSelect: smartBotSelect,
-      selectSingle: (cards) => {
-        const renderer = getUI(game);
-        const searchModal = renderer?.getSearchModalElements?.();
-        const defaultCardName = cards[0]?.name || "";
-
-        if (!searchModal) {
-          return cards[0];
-        }
-
-        return new Promise((resolve) => {
-          game.isResolvingEffect = true;
-
-          renderer.showSearchModalVisual!(
-            searchModal,
-            [...cards],
-            defaultCardName,
-            (selectedName: unknown) => {
-              const chosen =
-                cards.find(
-                  (candidate) => candidate && candidate.name === selectedName,
-                ) || cards[0];
-              game.isResolvingEffect = false;
-              resolve(chosen);
-            },
-          );
-        });
-      },
-    });
-
-    if (!selection.selected || selection.selected.length === 0) {
-      return false;
-    }
-
-    const success = await summonCards(
-      selection.selected,
-      zoneEntries,
-      player,
-      action,
-      engine,
-      ctx,
-      targets,
-    );
-    if (
-      success &&
-      optEffect &&
-      typeof game.markOncePerTurnUsed === "function"
-    ) {
-      Reflect.apply(game.markOncePerTurnUsed, game, [
-        source,
-        player,
-        optEffect,
-      ]);
-    }
-    return success;
-  }
-
-  // Multi-card summon (graveyard revival pattern)
-  // Bot: usar estratégia se disponível, senão maior ATK
-  const multiMinRequired = Number(count.min ?? 0);
-
-  const dynamicMaxSelect =
-    dynamicMax !== null
-      ? Math.min(dynamicMax, dynamicCap, 5 - (summonPlayer?.field?.length || 0))
-      : maxSelect;
-
   // Helper para multi-select inteligente
   const smartBotSelectMulti = (
     cards: readonly ActionRuntimeCard[],
@@ -917,49 +849,20 @@ export async function handleSpecialSummonFromZone(
       .slice(0, max);
   };
 
-  const selection = await selectCardsFromZone({
-    game,
-    player,
-    candidates,
-    maxSelect: dynamicMaxSelect,
-    minSelect: multiMinRequired,
-    botSelect: smartBotSelectMulti,
-    selectMulti: (cards, range) => {
-      if (!getUI(game)?.showMultiSelectModal) {
-        return cards
-          .slice()
-          .sort((a, b) => (b.atk || 0) - (a.atk || 0))
-          .slice(0, range.max);
-      }
-
-      return new Promise((resolve) => {
-        getUI(game).showMultiSelectModal!(
-          cards,
-          { min: range.min, max: range.max },
-          (selected: unknown) => {
-            resolve(
-              Array.isArray(selected) ? selected.filter(isRuntimeCard) : [],
-            );
-          },
-        );
-      });
+  const selected = await selectResolutionCards({ game, player, cards: candidates,
+    requirementId: action.selectionId || `${ctx.effect?.id || action.type}_selection`,
+    min: minRequired, max: maxSelect, message: action.selectionMessage,
+    locate: card => {
+      const entry = findSourceEntryForCard(zoneEntries, card)!;
+      return { player: entry.owner, zone: entry.name, index: entry.list.indexOf(card) };
+    },
+    resolveAI: () => {
+      const chosen = maxSelect === 1 ? smartBotSelect(candidates) : smartBotSelectMulti(candidates, maxSelect);
+      return chosen.length >= minRequired ? chosen : candidates.slice(0, minRequired);
     },
   });
-
-  const selected = selection.selected || [];
-
-  if (selected.length === 0) {
-    if (multiMinRequired === 0) {
-      getUI(game)?.log("No cards selected (optional).");
-      if (typeof game.updateBoard === "function") {
-        game.updateBoard();
-      }
-      return true;
-    }
-
-    getUI(game)?.log("No cards selected.");
-    return false;
-  }
+  if (!selected) return false;
+  if (selected.length === 0) return minRequired === 0;
 
   const success = await summonCards(
     selected,
@@ -1029,6 +932,7 @@ async function summonCards(
   for (const card of cards) {
     if (!card || !summonPlayer || summonPlayer.field.length >= 5) break;
     const sourceEntry = findSourceEntryForCard(sourceZoneEntries, card);
+    if (!sourceEntry || !isLegalZoneSummon(card, summonPlayer, sourceEntry.name, game)) continue;
 
     // 🚨 CRITICAL VALIDATION: Only monsters can be special summoned to field
     if (card.cardKind !== "monster") {
@@ -1071,6 +975,8 @@ async function summonCards(
       [card, player, { position: action.position }],
     );
 
+    if (!sourceEntry.list.includes(card) || !isLegalZoneSummon(card, summonPlayer, sourceEntry.name, game)) continue;
+
     let usedMoveCard = false;
     const previousEffectsNegated = card.effectsNegated;
     const previousEffectsNegatedDuration = card.effectsNegatedDuration;
@@ -1094,9 +1000,9 @@ async function summonCards(
       });
 
       if (
-        moveResult !== null &&
+        moveResult === false || (moveResult !== null &&
         typeof moveResult === "object" &&
-        moveResult.success === false
+        (moveResult.success === false || moveResult.negated === true))
       ) {
         card.effectsNegated = previousEffectsNegated;
         card.effectsNegatedDuration = previousEffectsNegatedDuration;

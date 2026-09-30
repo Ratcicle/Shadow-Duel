@@ -1,6 +1,6 @@
 import type { CollectedTriggerEventMap } from "../../../contracts/events.js";
 import type { TriggerCollectorHost, TriggerEntry, TriggerPackage } from "../runtime.js";
-import { debugTriggerLog } from "./shared.js";
+import { debugTriggerLog, isTriggerSourceLegal } from "./shared.js";
 
 /**
  * Collects trigger entries for attack_declared event.
@@ -65,6 +65,7 @@ export async function collectAttackDeclaredTriggers(
       for (const effect of card.effects) {
         if (!effect || effect.timing !== "on_event") continue;
         if (effect.event !== "attack_declared") continue;
+        if (!isTriggerSourceLegal(card, effect, this.findCardZone(player, card))) continue;
 
         // Rate limiting de logs (reduz spam em bot arena)
         const devMode = this.game?.devModeEnabled || false;

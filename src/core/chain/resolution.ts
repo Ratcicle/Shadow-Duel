@@ -828,14 +828,15 @@ function targetStillMatchesDefinition(
 function revalidateDeclaredTargets(
   chainSystem: FullChainHost,
   link: ChainLink,
+  reference = false,
 ): { selections: ChainSelectionMap; validation: ChainTargetValidation } {
   const definitions = new Map(
     (link.effect?.targets || [])
-      .filter((definition) => definition?.intent !== "cost")
+      .filter((definition) => reference ? definition.intent === "reference" : definition.intent !== "cost" && definition.intent !== "reference")
       .map((definition) => [definition.id, definition]),
   );
   const snapshots = new Map(
-    (link.declaredTargetSnapshots || []).map((entry) => [
+    ((reference ? link.referenceSnapshots : link.declaredTargetSnapshots) || []).map((entry) => [
       entry.targetId,
       entry,
     ]),
@@ -845,7 +846,7 @@ function revalidateDeclaredTargets(
   let satisfiesMinimums = true;
 
   for (const [targetId, definition] of definitions) {
-    const declaredValue = Reflect.get(link.targetSelections, targetId);
+    const declaredValue = reference ? snapshots.get(targetId)?.cards.map(snapshot => snapshot.card) : Reflect.get(link.targetSelections, targetId);
     const declaredCards: ChainCard[] = Array.isArray(declaredValue)
       ? declaredValue.filter(isChainCardValue)
       : [];
@@ -918,7 +919,7 @@ function revalidateDeclaredTargets(
   }
 
   const validation = { satisfiesMinimums, groups };
-  link.targetValidation = validation;
+  if (!reference) link.targetValidation = validation;
   return { selections, validation };
 }
 
@@ -982,7 +983,14 @@ async function applyChainEffect(
       reason: "No effect engine available",
     };
   }
-  const inheritedActivationContext = link.context?.activationContext || {};
+  const inheritedActivationContext = {
+    ...(link.context?.activationContext || {}),
+    ...(link.activationContext || {}),
+    actionContext: {
+      ...(link.context?.activationContext?.actionContext || {}),
+      ...(link.activationContext?.actionContext || {}),
+    },
+  };
 
   const ctx = {
     source: card,
@@ -1033,12 +1041,14 @@ async function applyChainEffect(
   link.activationContext = ctx.activationContext;
 
   const targetRevalidation = revalidateDeclaredTargets(cs, link);
+  const references = revalidateDeclaredTargets(cs, link, true);
   const resolvedSelections = {
     ...(link.costSelections || {}),
     ...(targetRevalidation.selections || {}),
     ...(link.resolutionSelections || {}),
+    ...references.selections,
   };
-  if (!targetRevalidation.validation.satisfiesMinimums) {
+  if (!targetRevalidation.validation.satisfiesMinimums || !references.validation.satisfiesMinimums) {
     cs.log(`${card.name} has no frozen declaration for a required target.`);
     return {
       success: false,

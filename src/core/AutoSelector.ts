@@ -482,7 +482,9 @@ export default class AutoSelector {
       requirement.filters?.intent ||
       selectionContractIntent(context) ||
       null;
-    if (explicit) return explicit;
+    // Discarding during resolution uses the same resource policy as paying a
+    // cost; the selection contract and movement still retain their own intent.
+    if (explicit) return explicit === "discard" ? "cost" : explicit;
 
     const contractKind = context?.selectionContract?.kind;
     if (contractKind === "cost") return "cost";

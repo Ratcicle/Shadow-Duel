@@ -1,3 +1,5 @@
+import { getUIText } from "../../i18n.js";
+import { checkSpecialSummonEligibility } from "../../game/summon/eligibility.js";
 import { isAI } from "../../Player.js";
 import { assignAutomaticFieldSlot, clearFieldSlot } from "../../game/zones/placement.js";
 import type { ActionOf } from "../../contracts/actions.js";
@@ -11,7 +13,7 @@ import type {
 } from "../../contracts/actionRuntime.js";
 import type { BattlePositionInput } from "../../contracts/cards.js";
 import type { CardFilter } from "../../contracts/effects.js";
-import { getUI } from "../shared.js";
+import { getUI, selectCards } from "../shared.js";
 
 type CounterLimitAction = ActionOf<
   "special_summon_from_deck_with_counter_limit"
@@ -22,142 +24,74 @@ type CounterLimitAction = ActionOf<
   readonly cannotAttackThisTurn?: boolean;
 };
 
-export async function handleSpecialSummonFromDeckWithCounterLimit(
+/** Read-only query shared by activation preview and resolution. */
+export function getCounterLimitSummonOptions(
   action: CounterLimitAction,
   ctx: EffectContext,
-  targets: ResolvedTargetMap,
+  engine: { game: Pick<ActionHandlerEnginePort["game"], "canSpecialSummonUnderRestrictions" | "canPlaceCardOnField"> },
+  preview = false,
+) {
+  const { player, source } = ctx;
+  const counterType = action.counterType || "judgment_marker";
+  const snapshot = ctx.activationContext?.sourceAtActivation || ctx.actionContext?.sourceAtActivation;
+  const counterCount = action.counterSource === "activation" && !preview
+    ? snapshot?.counters?.[counterType] ?? 0
+    : source?.getCounter?.(counterType) ?? (source?.counters instanceof Map ? source.counters.get(counterType) : source?.counters?.[counterType]) ?? 0;
+  const maxAtk = counterCount * (action.counterMultiplier ?? 500);
+  const game = engine.game;
+  const candidates = !player || counterCount <= 0 || player.field.length >= 5 ? [] : player.deck.filter(card =>
+    card.cardKind === "monster" && (card.atk ?? 0) <= maxAtk &&
+    (!action.archetype || card.archetype === action.archetype || card.archetypes?.includes(action.archetype)) &&
+    checkSpecialSummonEligibility(card, { fromZone: "deck", summonProcedure: "card_effect" }).ok &&
+    game.canSpecialSummonUnderRestrictions?.(card, player, { summonMethod: "special", fromZone: "deck", silent: true })?.ok !== false &&
+    game.canPlaceCardOnField?.(card, player, { isFacedown: false, silent: true })?.ok !== false);
+  return { counterCount, maxAtk, candidates };
+}
+
+export async function handleSpecialSummonFromDeckWithCounterLimit(
+  action: CounterLimitAction, ctx: EffectContext, _targets: ResolvedTargetMap,
   engine: ActionHandlerEnginePort,
 ): Promise<LegacyActionHandlerResult> {
   const { player, source } = ctx;
   const game = engine.game;
-
-  if (!player || !source || !game) return false;
-
-  const effectId = action.effectId || ctx.effectId || ctx.effect?.id || null;
-  const counterType = action.counterType || "judgment_marker";
-  const counterMultiplier = action.counterMultiplier || 500;
-  const filters = { ...(action.filters || {}) };
-  if (action.archetype && !filters.archetype) {
-    filters.archetype = action.archetype;
-  }
-  const position = action.position || "choice";
-
-  const rawCounterCount =
-    typeof source.getCounter === "function"
-      ? source.getCounter(counterType)
-      : source.counters instanceof Map
-        ? source.counters.get(counterType)
-        : 0;
-  const counterCount = Number(rawCounterCount ?? 0);
-  const maxAtk = counterCount * counterMultiplier;
-
-  if (maxAtk === 0) {
-    getUI(game)?.log(
-      `No ${counterType} counters on ${source.name}. Cannot summon.`,
-    );
-    return false;
-  }
-
-  const deck = player.deck || [];
-
-  const candidates = deck.filter((card) => {
-    if (!card || card.cardKind !== "monster") return false;
-    if ((card.atk ?? 0) > maxAtk) return false;
-
-    if (filters.archetype) {
-      const hasArchetype =
-        card.archetype === filters.archetype ||
-        (Array.isArray(card.archetypes) &&
-          card.archetypes.includes(filters.archetype));
-      if (!hasArchetype) return false;
-    }
-
-    return true;
+  if (!player || !source) return false;
+  const { candidates, counterCount, maxAtk } = getCounterLimitSummonOptions(action, ctx, engine);
+  if (!candidates.length) return false;
+  const owner = player.id === "player" ? "player" : "opponent";
+  const decorated = candidates.map((card, index) => {
+    const candidate = { name: card.name, image: card.image, cardRef: card, owner,
+      controller: player.id, zone: "deck" as const, zoneIndex: player.deck.indexOf(card) };
+    return { ...candidate, key: game.buildSelectionCandidateKey!(candidate, index) };
   });
-
-  if (candidates.length === 0) {
-    getUI(game)?.log(`No monsters in deck with ATK <= ${maxAtk} to summon.`);
-    return false;
-  }
-
+  const requirementId = "counter_summon";
+  let keys: readonly string[] | null;
   if (isAI(player)) {
-    const evaluation = player.strategy?.evaluateRecruitCandidate?.(candidates, {
-      game,
-      player,
-      source,
-      action,
+    const resolveAI = () => {
+      const evaluation = player.strategy?.evaluateRecruitCandidate?.(candidates, { game, player, source, action });
+      const best = evaluation?.best && candidates.includes(evaluation.best) ? evaluation.best
+        : candidates.reduce((previous, card) => (card.atk ?? 0) > (previous.atk ?? 0) ? card : previous);
+      return { [requirementId]: decorated.filter(entry => entry.cardRef === best).map(entry => entry.key) };
+    };
+    const result = game.requestDecision ? await game.requestDecision({
+      kind: "choice", actor: player, candidates: [], requireCandidate: false, resolveAI,
+      serializeResult: value => ({ orderedCandidateKeys: value?.[requirementId] || [] }),
+      deserializeReplayValue: value => "orderedCandidateKeys" in value
+        ? { [requirementId]: decorated.filter(entry => value.orderedCandidateKeys.includes(entry.key)).map(entry => entry.key) } : null,
+    }) : resolveAI();
+    keys = result?.[requirementId] || null;
+  } else {
+    keys = await selectCards({ game, player, kind: "choice", requirementId,
+      selectionContract: { kind: "choice",
+        message: getUIText("ui.shadowHeartCathedral.subtitle", { maxAtk, counterCount }),
+        requirements: [{ id: requirementId, min: 1, max: 1, zones: ["deck"], owner, candidates: decorated, distinct: true }],
+        ui: { allowCancel: false, preventCancel: true },
+      },
     });
-    if (evaluation?.blockedAll) {
-      getUI(game)?.log("No strategically valid monster to summon.");
-      return false;
-    }
-    const strategicChoice =
-      evaluation?.best && candidates.includes(evaluation.best)
-        ? evaluation.best
-        : null;
-    const chosen =
-      strategicChoice ||
-      candidates.reduce((best, card) =>
-        (card.atk ?? 0) > (best.atk ?? 0) ? card : best,
-      );
-
-    return await performSummonFromDeck(
-      chosen,
-      deck,
-      player,
-      action,
-      engine,
-      source,
-      effectId,
-    );
   }
-
-  return new Promise<LegacyActionHandlerResult>((resolve) => {
-    const onSelected = async (
-      selected: ActionRuntimeCard | readonly ActionRuntimeCard[] | null,
-    ) => {
-      const chosen = Array.isArray(selected) ? selected[0] : selected;
-      if (!chosen) {
-        resolve(false);
-        return;
-      }
-
-      const result = await performSummonFromDeck(
-        chosen,
-        deck,
-        player,
-        action,
-        engine,
-        source,
-        effectId,
-      );
-
-      resolve(result);
-    };
-
-    if (typeof game.showShadowHeartCathedralModal === "function") {
-      game.showShadowHeartCathedralModal(
-        candidates,
-        maxAtk,
-        counterCount,
-        onSelected,
-      );
-      return;
-    }
-
-    const modalConfig = {
-      title: `Select 1 monster (Max ATK: ${maxAtk}, ${counterCount}x ${counterType})`,
-      subtitle: `Monsters with ATK <= ${maxAtk}`,
-      infoText: `You have ${counterCount} ${counterType} counters. After summoning, this card will be sent to the Graveyard.`,
-    };
-
-    getUI(game)?.showCardSelectionModal!(
-      candidates,
-      modalConfig.title,
-      1,
-      onSelected,
-    );
-  });
+  const chosen = decorated.find(entry => keys?.includes(entry.key))?.cardRef;
+  if (!chosen || !getCounterLimitSummonOptions(action, ctx, engine).candidates.includes(chosen)) return false;
+  return await performSummonFromDeck(chosen, player.deck, player, action, engine, source,
+    action.effectId || ctx.effectId || ctx.effect?.id || null, ctx);
 }
 
 async function performSummonFromDeck(
@@ -168,6 +102,7 @@ async function performSummonFromDeck(
   engine: ActionHandlerEnginePort,
   source: ActionRuntimeCard,
   effectId: string | null = null,
+  ctx: EffectContext = {},
 ) {
   const game = engine.game;
 
@@ -199,6 +134,8 @@ async function performSummonFromDeck(
     player,
     { position: action.position },
   );
+
+  if (!getCounterLimitSummonOptions(action, ctx, engine).candidates.includes(card)) return false;
 
   let usedMoveCard = false;
   if (typeof game.moveCard === "function") {

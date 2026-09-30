@@ -282,9 +282,11 @@ export async function applyMove(
           ),
         });
         if (
-          typeof moveResult === "object" &&
+          moveResult === false || (typeof moveResult === "object" &&
           moveResult !== null &&
-          moveResult.success === false
+          (moveResult.success === false ||
+            (action.contextLabel === "destruction_replacement" &&
+              "toZone" in moveResult && moveResult.toZone != null && moveResult.toZone !== toZone)))
         ) {
           return;
         }

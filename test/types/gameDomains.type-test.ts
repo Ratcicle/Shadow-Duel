@@ -406,6 +406,7 @@ if ("damageStepId" in preparedDamageStep) {
 }
 
 const damageStepCardSnapshot: DamageStepCardSnapshot = {
+  duelCardId: 1,
   cardId: 1,
   instanceId: 10,
   name: "Type Test Attacker",
@@ -423,6 +424,8 @@ const damageStepOutcomeSnapshot: DamageStepOutcomeSnapshot = {
   healingApplied: 0,
   targetDestroyed: true,
   attackerDestroyed: false,
+  destructionDuelCardIds: [1],
+  movedAtEndDuelCardIds: [1],
   destructionInstanceIds: [11],
   movedAtEndInstanceIds: [11],
 };

@@ -247,6 +247,6 @@ test("walker inventories every declarative action in the live database", () => {
   }
 
   assert.deepEqual(diagnostics, []);
-  assert.equal(actionCount, 576);
-  assert.equal(types.size, 100);
+  assert.equal(actionCount, 579); // Includes declarative costs from the Shadow-Heart and Luminarch batches.
+  assert.equal(types.size, 98);
 });

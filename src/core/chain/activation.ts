@@ -6,6 +6,7 @@ import type {
   ChainCard,
   ChainEffect,
   ChainEffectTarget,
+  ChainDeclaredTargetSnapshot,
   ChainEventPayload,
   ChainLink,
   ChainOperationResult,
@@ -138,6 +139,28 @@ export function getEffectResolutionActions(
   return Array.isArray(effect?.actions) ? effect.actions : [];
 }
 
+/** Bind contextual references before costs, without making an activation target. */
+function captureReferenceSnapshots(input: PreparedActivationInput): ChainDeclaredTargetSnapshot[] {
+  return (input.effect?.targets || []).filter(def => def.intent === "reference").map(def => {
+    const context = input.context || input.activationContext?.actionContext || {};
+    const value: unknown = def.targetFromContext ? Reflect.get(context, def.targetFromContext) : null;
+    const values: unknown[] = Array.isArray(value) ? value : value ? [value] : [];
+    const cards = values.filter((card): card is ChainCard => !!card && typeof card === "object" && typeof Reflect.get(card, "name") === "string");
+    return { targetId: def.id, cards: cards.map(card => {
+      const owners = [input.controller, input.opponent].filter((owner): owner is ChainPlayer => !!owner);
+      let zone: CanonicalZone | null = null;
+      let controllerId = card.controller ?? card.owner ?? null;
+      for (const owner of owners) {
+        if (owner.fieldSpell === card) { zone = "fieldSpell"; controllerId = owner.id; break; }
+        const found = (["hand", "deck", "graveyard", "banished", "extraDeck", "field", "spellTrap"] as const).find(name => owner[name].includes(card));
+        if (found) { zone = found; controllerId = owner.id; break; }
+      }
+      return { card, cardInstanceId: card.instanceId ?? card._instanceId ?? card.id ?? null,
+        controllerId, zone, faceUp: card.isFacedown !== true, locationVersion: Number(card.locationVersion || 0) };
+    }) };
+  });
+}
+
 export function createPreparedActivation(
   input: PreparedActivationInput = {},
 ): PreparedActivation {
@@ -222,7 +245,8 @@ export function createPreparedActivation(
     activationNegated: activationAttempt.activationNegated === true,
   };
   const costSelections = input.costSelections || {};
-  const targetSelections = input.targetSelections || {};
+  const referenceIds = new Set((effect?.targets || []).filter(def => def.intent === "reference").map(def => def.id));
+  const targetSelections = Object.fromEntries(Object.entries(input.targetSelections || {}).filter(([id]) => !referenceIds.has(id)));
   const resolutionSelections = input.resolutionSelections || {};
 
   const prepared: PreparedActivation = {
@@ -234,6 +258,7 @@ export function createPreparedActivation(
     costSelections,
     targetSelections,
     resolutionSelections,
+    referenceSnapshots: input.referenceSnapshots || captureReferenceSnapshots(input),
     costPayment: input.costPayment || null,
     activationCommitment:
       input.activationCommitment ||
@@ -367,7 +392,7 @@ function flattenDeclaredEffectTargets(
 ): ChainCard[] {
   const costIds = new Set(
     (effect?.targets || [])
-      .filter((target) => target?.intent === "cost")
+      .filter((target) => (target?.intent === "cost" || target?.intent === "reference"))
       .map((target) => target.id),
   );
   return flattenSelectionCards(
@@ -796,6 +821,7 @@ export async function prepareChainResponse(
   const prepared = createPreparedActivation({
     card: candidate.card,
     controller: player,
+    opponent: this.getOpponent(player),
     effect: candidate.effect,
     activationZone: sourceZone,
     costSelections: {},

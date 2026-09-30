@@ -44,7 +44,7 @@ export interface SummonActionMap {
   special_summon_from_deck_with_counter_limit: DefineAction<
     "special_summon_from_deck_with_counter_limit",
     never,
-    "archetype" | "counterMultiplier" | "counterType" | "sendSourceToGraveAfter"
+    "archetype" | "counterMultiplier" | "counterType" | "counterSource" | "sendSourceToGraveAfter"
   >;
   restrict_special_summons: DefineAction<
     "restrict_special_summons",
@@ -76,7 +76,7 @@ export interface SummonActionMap {
     | "negateEffectsDuration" | "oncePerTurnName" | "setAtkToZeroAfterSummon"
     | "setDefToZeroAfterSummon" | "atkBoostAfterSummon" | "defBoostAfterSummon"
     | "statusesOnSummon" | "resultRef" | "storeResultAs" | "haltOnFailure"
-    | "stopOnFailure" | "fieldSlotsFreedBeforeSummon"
+    | "stopOnFailure" | "fieldSlotsFreedBeforeSummon" | "selectionId" | "selectionMessage"
   >;
   de_synchro: DefineAction<
     "de_synchro",

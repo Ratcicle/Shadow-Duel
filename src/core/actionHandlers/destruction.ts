@@ -1013,7 +1013,7 @@ export async function handleBanishAllGraveyardAndBurn(
   const totalDamage = banishedCount * damagePerCard;
   if (totalDamage > 0 && targetPlayer) {
     if (typeof game.inflictDamage === "function") {
-      game.inflictDamage(targetPlayer, totalDamage, {
+      await game.inflictDamage(targetPlayer, totalDamage, {
         cause: "effect",
         sourceCard: ctx.source || null,
       });
@@ -1755,7 +1755,8 @@ export async function handleDestroyAttackerOnArchetypeDestruction(
 
   engine: ActionHandlerEnginePort,
 ) {
-  const { destroyed, attacker } = ctx;
+  const { destroyed } = ctx;
+  const attacker = ctx.battleAttacker || ctx.attacker;
 
   const game = engine.game;
 
@@ -1790,6 +1791,11 @@ export async function handleDestroyAttackerOnArchetypeDestruction(
   const attackerOwner = engine.getOwnerByCard(attacker);
 
   if (!attackerOwner || attackerOwner.id === ctx.player.id) return false;
+  if (!attackerOwner.field.includes(attacker)) return false;
+  if (
+    ctx.battleAttackerLocationVersion != null &&
+    attacker.locationVersion !== ctx.battleAttackerLocationVersion
+  ) return false;
 
   // Check if attacker is immune to opponent's effects
 

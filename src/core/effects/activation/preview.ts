@@ -13,6 +13,7 @@ import {
 import { getCanonicalEffectActivationZones } from "../../chain/legality.js";
 import type { CanonicalSelectionMap } from "../../contracts/selection.js";
 import type { ActivationZone } from "../../contracts/activation.js";
+import type { EffectDefinition } from "../../contracts/effects.js";
 import { asQuickSpellWindowContext } from "./runtime.js";
 import type {
   ActivationActionPreviewContext,
@@ -26,6 +27,23 @@ import type {
   ActivationTargetResolutionContext,
   ActivationTargetResult,
 } from "./runtime.js";
+
+function checkActivationCosts(
+  engine: ActivationEngineHost,
+  effect: EffectDefinition,
+  ctx: ActivationEffectContext,
+  selections: CanonicalSelectionMap | null = null,
+): ActivationPreviewResult {
+  return engine.checkActionPreviewRequirements(effect.activationCosts || [], {
+    ...ctx,
+    effect,
+    _actionTargets: selections || {},
+    activationContext: {
+      ...ctx.activationContext,
+      costSelections: selections || {},
+    },
+  } as ActivationActionPreviewContext);
+}
 
 function hasImpossibleSelectionRequirement(
   targetResult: ActivationTargetResult,
@@ -233,6 +251,9 @@ export function canActivateSpellFromHandPreview(
     return { ok: false, reason: "You must control no monsters." };
   }
 
+  const costCheck = checkActivationCosts(this, effect, ctx);
+  if (!costCheck.ok) return costCheck;
+
   const actionCheck = this.checkActionPreviewRequirements(
     effect.actions || [],
     { ...ctx, effect } as ActivationActionPreviewContext,
@@ -404,25 +425,12 @@ export function canActivateMonsterEffectPreview(
     return { ok: false, reason: "You must control no monsters." };
   }
 
-  const activationCostCheck = this.checkActionPreviewRequirements(
-    effect.activationCosts || [],
-    {
-      ...ctx,
-      effect,
-      _actionTargets: selections || {},
-      activationContext: {
-        ...activationContext,
-        costSelections: selections || {},
-      },
-    } as ActivationActionPreviewContext,
-  );
-  if (!activationCostCheck.ok) {
-    return { ok: false, reason: activationCostCheck.reason };
-  }
+  const costCheck = checkActivationCosts(this, effect, ctx, selections);
+  if (!costCheck.ok) return costCheck;
 
   const actionCheck = this.checkActionPreviewRequirements(
     effect.actions || [],
-    { ...ctx, effect } as ActivationActionPreviewContext,
+    { ...ctx, effect, _actionTargets: selections || {} } as ActivationActionPreviewContext,
   );
   if (!actionCheck.ok) {
     return { ok: false, reason: actionCheck.reason };
@@ -655,6 +663,9 @@ export function canActivateSpellTrapEffectPreview(
     return { ok: false, reason: "You must control no monsters." };
   }
 
+  const costCheck = checkActivationCosts(this, effect, ctx, selections);
+  if (!costCheck.ok) return costCheck;
+
   const actionCheck = this.checkActionPreviewRequirements(
     effect.actions || [],
     { ...ctx, effect } as ActivationActionPreviewContext,
@@ -758,6 +769,9 @@ export function canActivateFieldSpellEffectPreview(
   if (effect.requireEmptyField && (player.field?.length || 0) > 0) {
     return { ok: false, reason: "You must control no monsters." };
   }
+
+  const costCheck = checkActivationCosts(this, effect, ctx, selections);
+  if (!costCheck.ok) return costCheck;
 
   const actionCheck = this.checkActionPreviewRequirements(
     effect.actions || [],

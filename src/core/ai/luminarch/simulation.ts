@@ -2,8 +2,7 @@ import { appendSimulatedZoneCard } from "../common/zones.js";
 import { appendSimulatedFieldCard } from "../common/zones.js";
 import { estimateCardValue } from "../StrategyUtils.js";
 import { buildStrategyAnalysis } from "../common/analysis.js";
-import { hasPlanningExecutionContext } from "../common/planningExecution.js";
-import { canUseSimOncePerTurn, markSimOncePerTurnUsed } from "../common/simStateUtils.js";
+import { canUseSimulatedEffectUsage, markSimulatedEffectUsage } from "../common/simStateUtils.js";
 import {
   getBattleStatForAttackTarget,
   getEffectiveAtk,
@@ -677,16 +676,10 @@ function hasFaceupBarbarias(
 
 function collectSunforgedBlades(
   player: Partial<SimulatedPlayerState> = {},
-): Array<GameCard | SimulatedCardState> {
-  const fromSpellTrap = (player.spellTrap || []).filter(
-    (card) => card?.name === SUNFORGED_BLADE_NAME && !card.isFacedown,
+): SimulatedCardState[] {
+  return (player.spellTrap || []).filter(
+    (card) => card?.name === SUNFORGED_BLADE_NAME && !card.isFacedown && !card.effectsNegated,
   );
-  const fromHosts = (player.field || []).flatMap((host) =>
-    (host?.equips || []).filter(
-      (equip) => equip?.name === SUNFORGED_BLADE_NAME && !equip.isFacedown,
-    ),
-  );
-  return [...new Set([...fromSpellTrap, ...fromHosts])];
 }
 
 function applySunforgedLpGainEvent(
@@ -700,7 +693,7 @@ function applySunforgedLpGainEvent(
     const host = (blade.equippedTo ||
       blade.equipTarget ||
       null) as GameCard | SimulatedCardState | null;
-    if (host && isLuminarchMonster(host)) {
+    if (host && [...state.bot.field, ...state.player.field].includes(host as SimulatedCardState)) {
       host.atk = (host.atk || 0) + 200;
       host.def = (host.def || 0) + 200;
       blade.equipAtkBonus = (blade.equipAtkBonus || 0) + 200;
@@ -1005,29 +998,30 @@ function simulateEnchantedHalberdFollowUp(
   reason = "special_summon",
 ): SimulatedCardState | null {
   const meta = ensureLuminarchSimMeta(state);
-  if (meta.halberdSummonedThisTurn) return null;
-  // Owner hooks and declarative event dispatch share the same physical OPT.
-  if (hasPlanningExecutionContext(state) &&
-      !canUseSimOncePerTurn(state, "luminarch_enchanted_halberd_conditional_summon", 1, player.id, true)) return null;
   if (!hasOpenMonsterZone(player)) return null;
 
   const halberdIndex = (player.hand || []).findIndex(
-    (card) => card?.name === ENCHANTED_HALBERD_NAME,
+    (card) => {
+      if (card?.name !== ENCHANTED_HALBERD_NAME) return false;
+      const effect = card.effects?.find(entry => entry.id === "luminarch_enchanted_halberd_conditional_summon");
+      return !!effect && canUseSimulatedEffectUsage(state, effect, card, player.id, true);
+    },
   );
   if (halberdIndex < 0) return null;
 
   const [halberd] = player.hand.splice(halberdIndex, 1);
   if (!halberd) return null;
+  const effect = halberd.effects?.find(entry => entry.id === "luminarch_enchanted_halberd_conditional_summon");
+  // Consume the same per-copy key as declarative event dispatch, before moving.
+  markSimulatedEffectUsage(state, effect, halberd, player.id, true);
   const summoned = pushSimulatedFieldMonster(player, halberd, "defense", {
     cannotAttackThisTurn: true,
     _simulatedHalberdFollowUp: true,
     _simulatedHalberdReason: reason,
   });
   meta.halberdSummonedThisTurn = true;
-  if (hasPlanningExecutionContext(state)) {
-    markSimOncePerTurnUsed(state, "luminarch_enchanted_halberd_conditional_summon", 1, player.id, true);
-  }
   meta.milestones.push("halberd_followup");
+  simulateEnchantedHalberdFollowUp(state, player, "special_summon");
   return summoned;
 }
 
@@ -1228,6 +1222,7 @@ function handleLuminarchAfterSpecialSummon({
   card: SimulatedCardState;
   sourceCard?: SimulatedCardState | null;
 }): void {
+  if (!isLuminarchMonster(card)) return;
   if (!card || !isLuminarch(card)) return;
   if (
     card.name === AEGISBEARER_NAME &&
@@ -1303,17 +1298,6 @@ function getLuminarchFieldEffectTargetPreference({
   options: LuminarchSimulationOptions;
 }): unknown {
   return fieldSpell.name?.includes("Citadel") ? options.citadelTempBuff : null;
-}
-
-function wouldAttackerBeDestroyedByBattle(
-  attacker: SimulatedCardState | null | undefined,
-  target: SimulatedCardState | null | undefined,
-): boolean {
-  if (!attacker || !target || target.cardKind !== "monster") return false;
-  if (target.position !== "attack") return false;
-  const attackStat = getEffectiveAtk(attacker);
-  const targetStat = getBattleStatForAttackTarget(target, { facedownValue: 1500 });
-  return attackStat <= targetStat;
 }
 
 function analyzeMagicSickleBattleImpact(
@@ -1418,50 +1402,6 @@ function prepareMagicSickleBattleBoost(
   return "Magic Sickle changed combat";
 }
 
-function prepareSunforgedBattleProtection(
-  state: LuminarchState,
-  attacker: SimulatedCardState,
-  target: SimulatedCardState | null,
-): string | null {
-  const player = state?.bot;
-  const meta = ensureLuminarchSimMeta(state);
-  if (!player || meta.sunforgedBattleProtectionUsed) return null;
-  if (!isLuminarchMonster(attacker)) return null;
-  const blade = collectSunforgedBlades(player).find((candidate) => {
-    const host = (candidate?.equippedTo ||
-      candidate?.equipTarget ||
-      null) as GameCard | SimulatedCardState | null;
-    return host === attacker;
-  });
-  if (!blade) return null;
-  if (!wouldAttackerBeDestroyedByBattle(attacker, target)) return null;
-  const beforeLp = Number(player.lp || 0);
-  const finalLp = beforeLp - 1000;
-  if (finalLp <= 0) return null;
-  player.lp = finalLp;
-  attacker.simBattleDestructionProtected = true;
-  meta.sunforgedBattleProtectionUsed = true;
-  meta.milestones.push("sunforged_battle_protection");
-  recordLuminarchBattleEvent(state, {
-    tag: "sunforgedProtected",
-    cardName: SUNFORGED_BLADE_NAME,
-    attackerName: attacker.name || null,
-    targetName: target?.name || null,
-    beforeLp,
-    afterLp: finalLp,
-    cost: 1000,
-  });
-  recordLuminarchLpPayment(state, {
-    cardName: SUNFORGED_BLADE_NAME,
-    cost: 1000,
-    beforeLp,
-    afterLp: finalLp,
-    createsWall: true,
-    createsPayoff: true,
-  });
-  return "Sunforged Blade protected battle";
-}
-
 export function prepareLuminarchSimulatedBattle({
   state,
   attacker,
@@ -1471,8 +1411,6 @@ export function prepareLuminarchSimulatedBattle({
   const rewards: string[] = [];
   const sickle = prepareMagicSickleBattleBoost(state, attacker, target, opponent);
   if (sickle) rewards.push(sickle);
-  const sunforged = prepareSunforgedBattleProtection(state, attacker, target);
-  if (sunforged) rewards.push(sunforged);
   return rewards;
 }
 
@@ -1513,13 +1451,21 @@ export function applyLuminarchSimulatedBattleRewards({
       rewards.push("Moonblade gained second attack");
     }
     if (summary.attackerName === "Luminarch Radiant Lancer") {
-      attacker.atk = (attacker.atk || 0) + 200;
-      attacker.permanentAtkBoost = (attacker.permanentAtkBoost || 0) + 200;
+      const growth = attacker.effects?.find(effect =>
+        effect.event === "battle_destroy" && effect.requireSelfAsAttacker,
+      )?.actions?.find(action => action.type === "permanent_buff_named");
+      const amount = (growth?.atkBoost ?? 0) * destroyedOpponentMonsters.length;
+      const sourceName = growth?.sourceName || summary.attackerName;
+      attacker.permanentBuffsBySource ??= {};
+      const buff = attacker.permanentBuffsBySource[sourceName] ??= {};
+      buff.atk = (buff.atk ?? 0) + amount;
+      if (growth?.duration) buff.duration = growth.duration;
+      attacker.atk = (attacker.atk || 0) + amount;
       ensureLuminarchSimMeta(state).milestones.push("radiant_lancer_growth");
       recordLuminarchBattleEvent(state, {
         tag: "radiantLancerGrowth",
         attackerName: summary.attackerName,
-        amount: 200,
+        amount,
       });
       rewards.push("Radiant Lancer gained ATK");
     }
@@ -1828,6 +1774,9 @@ export function buildLuminarchSimulationOptions(
       ...options,
       onAfterSummon: handleLuminarchAfterSummon,
       onAfterSpecialSummon: handleLuminarchAfterSpecialSummon,
+      onLpGain: ({ state: gainState, player }: Parameters<NonNullable<import("../common/simulatedActions/shared.js").SimulatedActionOptions["onLpGain"]>>[0]) => {
+        applySunforgedLpGainEvent(gainState, player);
+      },
       onEffectActivated: handleLuminarchEffectActivated,
       onFusionSummon: handleLuminarchFusionSummon,
       onMonsterEffect: handleLuminarchMonsterEffect,
@@ -1857,12 +1806,7 @@ export function simulateLuminarchSpellEffect(
   card: SimulatedCardState,
   options: LuminarchSimulationOptions = {},
 ): void {
-  return simulateGenericSpellEffect(state, card, {
-    archetype: "Luminarch",
-    preferDefense: true,
-    selfId: "bot",
-    ...options,
-  });
+  return simulateGenericSpellEffect(state, card, buildLuminarchSimulationOptions(state, null, options));
 }
 
 type LuminarchBattleReadCard = Pick<import("../../contracts/aiState.js").SimulatedCardShape,"name"|"archetype"|"archetypes"|"cardKind"|"atk"|"def"|"level"|"position"|"isFacedown"|"tempAtkBoost"|"tempDefBoost"|"equipAtkBonus"|"equipDefBonus"|"piercing"|"piercingDamageMultiplier"|"mustBeAttacked"|"instanceId">;

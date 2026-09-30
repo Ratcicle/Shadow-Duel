@@ -398,6 +398,7 @@ type BooleanActionProperties = {
 };
 
 export interface ComplexActionProperties {
+  readonly counterSource?: "current" | "activation";
   readonly actions: readonly CardAction[];
   readonly defaultActions: readonly CardAction[];
   readonly targets: readonly EffectTarget[];

@@ -1,3 +1,4 @@
+import { selectResolutionCards } from "./shared.js";
 /**
  * resources.js
  *
@@ -43,6 +44,7 @@ import {
 } from "../i18n.js";
 import {
   getUI,
+  requestOptionalConfirmation,
   collectZoneCandidates,
   selectCardsFromZone,
   summonFromHandCore,
@@ -215,6 +217,9 @@ async function emitLpGainEvent(
     player,
     sourceCard,
     lpGained: gained,
+    lpLost: 0,
+    lpPaid: 0,
+    damageAmount: 0,
     before,
     after: player.lp,
   };
@@ -616,9 +621,12 @@ export async function handlePayLP(
   console.log(
     `[handlePayLP] SUCCESS: Paid ${amount} LP, remaining ${player.lp}`,
   );
-  game.notify?.("lp_change", {
+  await game.emit?.("lp_change", {
     player,
     sourceCard: ctx.source,
+    lpGained: 0,
+    lpLost: amount,
+    damageAmount: 0,
     lpPaid: amount,
     before,
     after: player.lp,
@@ -1247,70 +1255,27 @@ export async function handleDiscardFromHand(
     return minSelect === 0;
   }
 
-  const canUseTargetSelection =
-    typeof game.startTargetSelectionSession === "function";
-  const selectionContractBuilder = canUseTargetSelection
-    ? buildDiscardSelectionContract(action, ctx, {
-        affectedPlayer,
-        game,
-      })
-    : undefined;
-
-  let selected: ActionRuntimeCard[] = [];
-  if (isAI(affectedPlayer) && typeof selectionContractBuilder === "function") {
-    const selectionData = selectionContractBuilder(candidates, {
-      min: minSelect,
-      max: maxSelect,
-    });
-    const autoResult = game.autoSelector?.select?.(
-      selectionData.selectionContract,
-      {
-        owner: affectedPlayer,
-        player: affectedPlayer,
-        source,
-        selectionContract: selectionData.selectionContract,
-        game,
-        activationContext: ctx?.activationContext || {},
-      },
-    );
-    const selectedKeys = autoResult?.ok
-      ? autoResult.selections[selectionData.requirementId] || []
-      : [];
-    const decorated = selectionData.decorated || [];
-    selected = selectedKeys
-      .map(
-        (key) => decorated.find((candidate) => candidate.key === key)?.cardRef,
-      )
-      .filter(isRuntimeCard);
-    if (selected.length < minSelect) {
-      selected = rankDiscardCandidates(candidates, maxSelect);
-    }
-  } else {
-    const selection = await selectCardsFromZone({
-      game,
-      player: affectedPlayer,
-      zone: hand,
-      source,
-      filters: action.filters || {},
-      candidates,
-      maxSelect,
-      minSelect,
-      promptPlayer: action.promptPlayer !== false,
-      botSelect: (cards, max) => rankDiscardCandidates(cards, max),
-      selectSingle: (cards) => cards[0],
-      selectMulti: (cards, range) => cards.slice(0, range.max),
-      selectionContractBuilder,
-    });
-
-    selected = Array.isArray(selection.selected)
-      ? selection.selected.filter(isRuntimeCard)
-      : [];
-  }
-
-  if (selected.length < minSelect) {
-    getUI(game)?.log("Discard cancelled.");
-    return false;
-  }
+  const builder = buildDiscardSelectionContract(action, ctx, { affectedPlayer, game });
+  const data = builder(candidates, { min: minSelect, max: maxSelect });
+  const selected = await selectResolutionCards({ game, player: affectedPlayer, cards: candidates,
+    requirementId: data.requirementId, min: minSelect, max: maxSelect,
+    message: data.selectionContract.message,
+    locate: card => ({ player: affectedPlayer, zone: "hand", index: hand.indexOf(card) }),
+    resolveAI: () => {
+      const result = game.autoSelector?.select?.(data.selectionContract, {
+        owner: affectedPlayer, player: affectedPlayer, source, game,
+        selectionContract: data.selectionContract, activationContext: ctx.activationContext || {},
+      });
+      const keys = result?.ok ? result.selections[data.requirementId] || [] : [];
+      const chosen = keys.flatMap(key => {
+        const entry = (data.decorated || []).find(candidate => candidate.key === key);
+        return entry ? [entry.cardRef] : [];
+      });
+      return chosen.length >= minSelect ? chosen : rankDiscardCandidates(candidates, maxSelect);
+    },
+  });
+  const current = collectZoneCandidates(hand, action.filters || {}, { source, engine });
+  if (!selected || selected.some(card => !current.includes(card))) return false;
 
   for (const card of selected) {
     const moveResult = await game.moveCard(card, affectedPlayer, "graveyard", {
@@ -1726,7 +1691,7 @@ export async function handleDamageFromDestroyedAtk(
   if (damageAmount <= 0) return false;
 
   if (typeof game.inflictDamage === "function") {
-    game.inflictDamage(targetPlayer, damageAmount, {
+    await game.inflictDamage(targetPlayer, damageAmount, {
       cause: "effect",
       sourceCard: ctx.source || destroyed,
       targetCard: destroyed,
@@ -2218,7 +2183,7 @@ async function confirmHumanUpkeepPayment(
     );
   }
 
-  return true;
+  return false;
 }
 
 /**
@@ -2285,15 +2250,26 @@ export async function handleUpkeepPayOrSendToGrave(
     return await sendToFailureZone("insufficient LP for upkeep");
   }
 
-  const shouldPay = isAI(player)
-    ? shouldAiPayUpkeep(action, player, source, lpCost)
-    : await confirmHumanUpkeepPayment(action, game, player, source, lpCost);
+  const shouldPay = !isAI(player) && Reflect.get(action, "promptPlayer") === false
+    ? true
+    : await requestOptionalConfirmation(
+      game, player,
+      () => confirmHumanUpkeepPayment(action, game, player, source, lpCost),
+      () => shouldAiPayUpkeep(action, player, source, lpCost),
+    );
 
   if (!shouldPay) {
     return await sendToFailureZone("upkeep not paid");
   }
 
+  const before = player.lp;
   player.lp -= lpCost;
+  if (lpCost > 0) {
+    await game.emit?.("lp_change", {
+      player, sourceCard: source, before, after: player.lp,
+      lpGained: 0, lpLost: lpCost, lpPaid: lpCost, damageAmount: 0,
+    });
+  }
 
   getUI(game)?.log(`Paid ${lpCost} LP to maintain ${source.name}.`);
 

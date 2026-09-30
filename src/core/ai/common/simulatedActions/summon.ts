@@ -236,7 +236,7 @@ function applySimConditionalMarkersOnSummon({
   }
 }
 
-function canSimSpecialSummon(
+export function canSimSpecialSummon(
   card: SimulatedCardState | null | undefined,
   player: SimulatedPlayerState | null | undefined,
   summonProcedure: SpecialSummonProcedure | string = "special",
@@ -378,6 +378,13 @@ export function applySpecialSummonFromZone(
     opponent,
     applySimulatedActions,
   } = ctx;
+  options.lastSpecialSummonedCards = [];
+  options.lastSpecialSummonedCard = null;
+  if (options.actionContext) {
+    (options.actionContext as SimulatedLastSpecialSummonContext).lastSpecialSummonedCards = [];
+    (options.actionContext as SimulatedLastSpecialSummonContext).lastSpecialSummonedCard = null;
+  }
+  storeSimActionResult(action, selections, options, []);
   const targetPlayer =
     action.summonToOwner === "opponent"
       ? opponent
@@ -415,8 +422,13 @@ export function applySpecialSummonFromZone(
   const otherPlayer = targetPlayer === self ? opponent : self;
   candidates = candidates.filter((card) => canSimSpecialSummon(card, targetPlayer) &&
     canSimulatedProcedureEnterField(card, targetPlayer, otherPlayer, []));
+  const count = typeof action.count === "object" ? action.count : null;
+  const dynamicMax = count?.maxFrom === "opponentFieldCount"
+    ? Math.min(opponent.field.length, count.cap ?? 5)
+    : Infinity;
   const max = Math.min(
     pickCountForAction(action, 1),
+    dynamicMax,
     candidates.length,
     5 - (targetPlayer.field || []).length,
   );

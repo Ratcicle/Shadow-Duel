@@ -1,3 +1,4 @@
+import { isTriggerSourceLegal } from "./shared.js";
 import { canActivateDuringDamageStep } from "../../../game/spellTrap/quickSpellRules.js";
 import { DAMAGE_STEP_TIMINGS } from "../../../contracts/effects.js";
 import type { CollectedTriggerEventMap } from "../../../contracts/events.js";
@@ -11,8 +12,6 @@ import type {
   TriggerRuntimeCard,
   TriggerRuntimePlayer,
 } from "../runtime.js";
-
-const BOARD_ZONES = new Set(["field", "spellTrap", "fieldSpell"]);
 
 function asArray(
   value: DamageStepTiming | readonly DamageStepTiming[] | null | undefined,
@@ -56,8 +55,7 @@ function effectMatchesDamageStepEvent(
   if (!effect || effect.timing !== "on_event") return false;
   if (eventName === "battle_damage_inflicted") {
     return (
-      effect.event === "battle_damage_inflicted" ||
-      effect.event === "opponent_damage"
+      effect.event === "battle_damage_inflicted"
     );
   }
   if (effect.event !== eventName) return false;
@@ -66,28 +64,6 @@ function effectMatchesDamageStepEvent(
     effect.damageStepTimings,
   );
   return timings.some((allowedTiming) => allowedTiming === timing);
-}
-
-function effectSourceIsLegal(
-  effect: TriggerEffect,
-  card: TriggerRuntimeCard,
-  zone: CanonicalZone,
-): boolean {
-  if (effect.requireZone && effect.requireZone !== zone) return false;
-  if (
-    Array.isArray(effect.activationZones) &&
-    !effect.activationZones.includes(zone)
-  ) {
-    return false;
-  }
-  if (
-    BOARD_ZONES.has(zone) &&
-    card.isFacedown === true &&
-    (effect.requireFaceup === true || zone !== "field")
-  ) {
-    return false;
-  }
-  return true;
 }
 
 function eventOwnershipMatches(
@@ -138,7 +114,7 @@ async function collectDamageStepEvent<Name extends DamageCollectorEventName>(
       seen.add(card);
       for (const effect of card.effects || []) {
         if (!effectMatchesDamageStepEvent(effect, eventName, timing)) continue;
-        if (!effectSourceIsLegal(effect, card, zone)) continue;
+        if (!isTriggerSourceLegal(card, effect, zone)) continue;
         if (!eventOwnershipMatches(effect, eventName, owner, payload)) continue;
         const legality = canActivateDuringDamageStep(effect, card, {
           ...payload,

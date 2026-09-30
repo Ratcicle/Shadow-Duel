@@ -321,6 +321,7 @@ export function startTargetSelectionSession(
     sessionId: this.lastSelectionSessionId,
     usingFieldTargeting,
     allowCancel: selectionContract.ui.allowCancel !== false,
+    preventCancel: selectionContract.ui.preventCancel === true,
     allowEmpty: selectionContract.ui.allowEmpty === true,
     autoAdvanceOnMax:
       typeof session.autoAdvanceOnMax === "boolean"
@@ -609,6 +610,12 @@ export function cancelTargetSelection(this: SelectionSessionHost): void {
     return;
   }
   const selection = this.targetSelection;
+  if (selection.cancelAsEmptySelection && selection.allowEmpty &&
+      selection.requirements.every(requirement => requirement.min === 0)) {
+    selection.selections = Object.fromEntries(selection.requirements.map(requirement => [requirement.id, []]));
+    void this.finishTargetSelection();
+    return;
+  }
   if (typeof selection.onCancel === "function") {
     selection.onCancel();
   }

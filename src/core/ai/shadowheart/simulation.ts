@@ -1,3 +1,4 @@
+import { canSimSpecialSummon } from "../common/simulatedActions/summon.js";
 import { appendSimulatedZoneCard, clearSimulatedFieldPosition } from "../common/zones.js";
 import { appendSimulatedFieldCard } from "../common/zones.js";
 // ---------------------------------------------------------------------------
@@ -7,6 +8,7 @@ import { appendSimulatedFieldCard } from "../common/zones.js";
 
 import {
   applyGenericSimulatedMainPhaseAction,
+  canSimulatedProcedureEnterField,
   resolveSimulatedHandIndex,
   simulateGenericSpellEffect,
 } from "../common/simulation.js";
@@ -14,6 +16,8 @@ import { cardMatchesFilter } from "../common/cardFilters.js";
 import { getCounterCount } from "../common/counters.js";
 import {
   canUseSimOncePerTurn,
+  canUseSimulatedEffectUsage,
+  markSimulatedEffectUsage,
   markSimOncePerTurnUsed,
 } from "../common/simStateUtils.js";
 import { isShadowHeart, isShadowHeartByName } from "./knowledge.js";
@@ -820,10 +824,13 @@ function simulateCathedralEffect(
   ) as number;
   const card = player.spellTrap?.[zoneIndex];
   if (!card || card.name !== SH.cathedral) return false;
+  const effectId = "effectId" in action ? action.effectId : null;
+  const effect = card.effects?.find(entry => entry.timing === "ignition" && (!effectId || entry.id === effectId));
+  if (!effect || !canUseSimulatedEffectUsage(state, effect, card, "bot")) return true;
   if (card.isFacedown) return true;
   if ((player.field || []).length >= 5) return true;
 
-  const counterCount = action.cathedralPlan?.counterCount || getCounterCount(card);
+  const counterCount = getCounterCount(card);
   if (counterCount <= 0) return true;
   const maxAtk = counterCount * 500;
   const candidates = player.deck.filter(
@@ -831,7 +838,9 @@ function simulateCathedralEffect(
       candidate &&
       candidate.cardKind === "monster" &&
       isShadowHeart(candidate) &&
-      (candidate.atk || 0) <= maxAtk,
+      (candidate.atk || 0) <= maxAtk &&
+      canSimSpecialSummon(candidate, player, "card_effect") &&
+      canSimulatedProcedureEnterField(candidate, player, state.player, []),
   );
   const targetName = action.cathedralPlan?.targetName || null;
   const chosen =
@@ -839,15 +848,16 @@ function simulateCathedralEffect(
     chooseCathedralSummonTarget(candidates, buildSimAnalysis(state)).card;
   if (!chosen) return true;
 
+  markSimulatedEffectUsage(state, effect, card, "bot");
+  player.spellTrap.splice(zoneIndex, 1);
+  appendSimulatedZoneCard(player.graveyard, card);
+
   removeFromZone(player.deck, chosen);
-  applySummonState(chosen, { ...action, position: "attack" }, state, options);
+  applySummonState(chosen, { ...action, position: "choice" }, state, options);
   chosen.lastSummonMethod = "special";
   chosen.lastSummonedFromZone = "deck";
   chosen.sourceCard = SH.cathedral;
   appendSimulatedFieldCard(player.field, chosen);
-
-  player.spellTrap.splice(zoneIndex, 1);
-  appendSimulatedZoneCard(player.graveyard, card);
 
   handleAfterSummon({
     state,

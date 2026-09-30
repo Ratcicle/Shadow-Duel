@@ -5,6 +5,7 @@ import type {
   ResolvedTargetMap,
 } from "../../contracts/actionRuntime.js";
 import type { ActionOf } from "../../contracts/actions.js";
+import type { CardPermanentBuffMap } from "../../contracts/cards.js";
 import { suppressTemporaryDynamicStatIncreasesForDebuff } from "../passives/passiveBuffs.js";
 
 interface StatsRuntimeCard extends ActionRuntimeCard {
@@ -14,6 +15,20 @@ interface StatsRuntimeCard extends ActionRuntimeCard {
 
 interface StatsActionHost {
   game: ActionRuntimeGamePort;
+}
+
+/** Setting a monster ends these gains; turning it face-up cannot restore them. */
+export function expireFaceupStatBuffs(card: {
+  atk?: number | undefined;
+  def?: number | undefined;
+  permanentBuffsBySource?: CardPermanentBuffMap | null | undefined;
+}): void {
+  for (const [name, buff] of Object.entries(card.permanentBuffsBySource ?? {})) {
+    if (buff.duration !== "while_faceup") continue;
+    card.atk = Math.max(0, (card.atk ?? 0) - (buff.atk ?? 0));
+    card.def = Math.max(0, (card.def ?? 0) - (buff.def ?? 0));
+    delete card.permanentBuffsBySource?.[name];
+  }
 }
 
 /**

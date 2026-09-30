@@ -49,6 +49,51 @@ import type { CardFilter, EffectCondition } from "../../../contracts/effects.js"
 import type { SimulatedActionHandlerContext } from "./shared.js";
 import type { SimulatedActionOptions, SimulatedRuntimeState } from "./shared.js";
 import { hasSimulatedProtection } from "./lifecycle.js";
+import { canUseSimulatedEffectUsage, markSimulatedEffectUsage } from "../simStateUtils.js";
+
+/** Resolve supported equipment costs after battle damage has been calculated. */
+export function replaceSimulatedBattleDestruction(
+  state: SimulatedRuntimeState,
+  target: SimulatedCardState,
+): SimulatedCardState | null {
+  const targetOwner = [state.bot, state.player].find(owner => owner.field.includes(target));
+  if (!targetOwner) return null;
+  for (const owner of [state.bot, state.player]) {
+    for (const source of [...owner.spellTrap]) {
+      if (source.isFacedown || source.effectsNegated || (source.equippedTo || source.equipTarget) !== target) continue;
+      for (const effect of source.effects || []) {
+        if (effect.timing !== "passive" || !("replacementEffect" in effect)) continue;
+        const replacement = effect.replacementEffect;
+        if (!replacement || replacement.type !== "destruction" || replacement.reason !== "battle" ||
+            !replacement.targetMustBeEquippedToSource ||
+            (replacement.targetRequireFaceup && target.isFacedown) ||
+            (replacement.targetOwner === "self" && owner !== targetOwner) ||
+            (replacement.targetOwner === "opponent" && owner === targetOwner) ||
+            (replacement.targetFilters && !matchesTargetFilters(target, replacement.targetFilters)) ||
+            !canUseSimulatedEffectUsage(state, effect, source, owner.id, true)) continue;
+        const costs = replacement.costActions;
+        // Leave unsupported cost sequences to the full runtime.
+        if (costs?.length !== 1) continue;
+        const costAction = costs[0];
+        if (!costAction) continue;
+        if (costAction.type === "move" && costAction.targetRef === "self" && costAction.to === "graveyard") {
+          if (!moveCardToZone(owner, source, "graveyard", owner, { state })) continue;
+          if (!owner.graveyard.includes(source)) continue;
+        } else if (costAction.type === "pay_lp") {
+          const opponent = owner === state.bot ? state.player : state.bot;
+          const cost = resolveSimulatedLpCost({ action: costAction, targetPlayer: owner, self: owner,
+            opponent, state, options: { sourceCard: source }, baseAmount: costAction.amount || 0 });
+          if (owner.lp <= cost.finalAmount) continue;
+          owner.lp -= cost.finalAmount;
+          for (const reducer of cost.appliedReducers) markSimulatedPassiveUsed(state, reducer.board, reducer.card, reducer.effect);
+        } else continue;
+        markSimulatedEffectUsage(state, effect, source, owner.id, true);
+        return source;
+      }
+    }
+  }
+  return null;
+}
 
 interface ScopedCard {
   card: SimulatedCardState;

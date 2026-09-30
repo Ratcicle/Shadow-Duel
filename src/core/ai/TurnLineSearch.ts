@@ -3,6 +3,7 @@ import { createPlanningCopy, hasPendingPassiveRestoration, projectRuntimeEffectU
 import { PLANNING_PLAYER_FIELDS, PLANNING_STATE_FIELDS, PLANNING_ZONES } from "./common/stateFingerprint.js";
 import { isSimulatedMainPhaseActionSupported } from "./common/simulation.js";
 import { hasSimulatedProtection } from "./common/simulatedActions/lifecycle.js";
+import { replaceSimulatedBattleDestruction } from "./common/simulatedActions/destruction.js";
 import {
   getBattleStatForAttackTarget,
   getEffectiveAtk,
@@ -1368,6 +1369,11 @@ function applySimulatedBattle(
   ): boolean => {
     if (!card) return false;
     if (preventBattleDestruction(card, state?.turnCounter, owner.id, owner === bot ? opponent.id : bot.id)) return false;
+    const replacement = replaceSimulatedBattleDestruction(state, card);
+    if (replacement) {
+      summary.rewardNames.push(`${replacement.name} protected battle`);
+      return false;
+    }
     recordDestroyedCard(summary, card, ownerLabel, "battle");
     return destroyPlannerMonster(owner, card);
   };

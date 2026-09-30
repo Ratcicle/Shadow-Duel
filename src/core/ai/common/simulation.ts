@@ -1,3 +1,4 @@
+import { captureSimulatedReferences } from "./simulatedActions/shared.js";
 import { appendSimulatedZoneCard } from "./zones.js";
 import { appendSimulatedFieldCard } from "./zones.js";
 import {
@@ -1071,6 +1072,8 @@ function matchesSimulatedEventEffect(
   }
 
   if (eventName === "after_summon") {
+    if (effect.triggerPlayer === "self" && eventRole !== "self") return false;
+    if (effect.triggerPlayer === "opponent" && eventRole !== "opponent") return false;
     if (effect.requireSelfAsSummoned === true && sourceCard !== eventCard) {
       return false;
     }
@@ -1341,6 +1344,7 @@ function dispatchSimulatedEvent(
       if (!hasRequiredSimSelections(effect.targets || [], selections)) {
         continue;
       }
+      triggerOptions.referenceSnapshots = captureSimulatedReferences(effect, selections, sourceEntry.player, sourceEntry.opponent);
       markSimulatedEffectUsed(state, effect, sourceCard, sourceEntry.player?.id || "bot", true);
       const resolve = () => {
         applySimulatedActions({

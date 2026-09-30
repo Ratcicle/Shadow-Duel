@@ -194,6 +194,26 @@ export async function resolveEvent<Name extends ResolvableEventName>(
       Number(this.summonProcedureDepth || 0) > 0 ||
       Number(this.damageStepProcedureDepth || 0) > 0
     ) {
+      if (eventName === "lp_change" && occurrence) {
+        try {
+          const triggerPackage =
+            (await this.effectEngine?.collectEventTriggers?.(eventName, payload)) ?? null;
+          const metadata = getTriggerPackageMetadata(triggerPackage);
+          entries = Array.isArray(triggerPackage)
+            ? triggerPackage
+            : Array.isArray(triggerPackage?.entries)
+              ? triggerPackage.entries
+              : [];
+          orderRule = metadata.orderRule;
+          onComplete = metadata.onComplete;
+        } catch (err) {
+          console.error(`[Game] Failed to collect triggers for "${eventName}":`, err);
+        }
+        occurrence.entries = entries;
+        occurrence.entriesProvided = true;
+        occurrence.orderRule = orderRule;
+        occurrence.onComplete = onComplete;
+      }
       resolutionResult = this.queueTriggerOccurrence(occurrence);
     } else {
       resolutionResult = await this.resolveEventEntries(

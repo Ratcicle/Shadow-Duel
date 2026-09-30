@@ -1,6 +1,6 @@
 import type { CollectedTriggerEventMap } from "../../../contracts/events.js";
 import type { TriggerCollectorHost, TriggerEntry, TriggerPackage } from "../runtime.js";
-import { debugTriggerLog } from "./shared.js";
+import { debugTriggerLog, isTriggerSourceLegal } from "./shared.js";
 
 /**
  * Collects trigger entries for lp_change events.
@@ -13,9 +13,9 @@ export async function collectLpChangeTriggers(
 ): Promise<TriggerPackage> {
   const entries: TriggerEntry[] = [];
   const orderRule =
-    "LP gainer -> opponent; sources: fieldSpell -> field -> spellTrap";
+    "LP recipient -> opponent; sources: fieldSpell -> field -> spellTrap";
 
-  if (!payload || !payload.player || (payload.lpGained || 0) <= 0) {
+  if (!payload || !payload.player) {
     return { entries, orderRule };
   }
 
@@ -29,7 +29,13 @@ export async function collectLpChangeTriggers(
   }
 
   const currentPhase = this.game?.phase;
-  const lpGained = payload.lpGained || 0;
+  const hasValues = typeof payload.before === "number" && typeof payload.after === "number";
+  const delta = hasValues ? Number(payload.after) - Number(payload.before) : null;
+  const lpGained = Math.max(0, delta ?? payload.lpGained ?? 0);
+  const lpLost = Math.max(0, delta === null ? payload.lpLost ?? payload.lpPaid ?? 0 : -delta);
+  const lpPaid = Math.min(lpLost, Math.max(0, payload.lpPaid ?? 0));
+  const damageAmount = Math.min(lpLost, Math.max(0, payload.damageAmount ?? 0));
+  if (lpGained === 0 && lpLost === 0) return { entries, orderRule };
   const before = payload.before ?? null;
   const after = payload.after ?? null;
   const lpChangeSourceCard = payload.sourceCard || null;
@@ -54,18 +60,16 @@ export async function collectLpChangeTriggers(
       if (!sourceCard?.effects || !Array.isArray(sourceCard.effects)) continue;
 
       const sourceZone = this.findCardZone(owner, sourceCard);
-      const isFaceDownOnBoard =
-        sourceCard?.isFacedown === true &&
-        ["field", "spellTrap", "fieldSpell"].some(
-          (zone) => zone === sourceZone,
-        );
-
       const ctx = {
+        ...payload,
         source: sourceCard,
         player: owner,
         opponent: other,
         lpChangePlayer: lpPlayer,
         lpGained,
+        lpLost,
+        lpPaid,
+        damageAmount,
         before,
         after,
         sourceCard: lpChangeSourceCard,
@@ -75,30 +79,17 @@ export async function collectLpChangeTriggers(
 
       for (const effect of sourceCard.effects) {
         if (!effect || effect.timing !== "on_event") continue;
-        if (effect.event !== "lp_change") continue;
+        const compatibilityDamage = effect.event === "opponent_damage";
+        if (effect.event !== "lp_change" && !compatibilityDamage) continue;
+        if (!isTriggerSourceLegal(sourceCard, effect, sourceZone)) continue;
 
-        if (isFaceDownOnBoard) {
-          continue;
-        }
-
-        if (effect.requireFaceup === true && sourceCard.isFacedown === true) {
-          continue;
-        }
-
-        if (effect.requireZone && sourceZone !== effect.requireZone) {
-          continue;
-        }
-
-        const triggerPlayer = effect.triggerPlayer || "any";
+        const triggerPlayer = compatibilityDamage ? "opponent" : effect.triggerPlayer || "any";
         if (triggerPlayer === "self" && owner !== lpPlayer) continue;
         if (triggerPlayer === "opponent" && owner === lpPlayer) continue;
 
-        if (
-          effect.minLpGained !== undefined &&
-          lpGained < Number(effect.minLpGained)
-        ) {
-          continue;
-        }
+        const kind = compatibilityDamage ? "damage" : effect.lpChangeKind || "gain";
+        const amount = kind === "gain" ? lpGained : kind === "loss" ? lpLost : damageAmount;
+        if (amount <= 0 || amount < (effect.minAmount ?? (kind === "gain" ? effect.minLpGained : undefined) ?? 0)) continue;
 
         const sourceFilters =
           effect.lpChangeSourceFilters || effect.sourceCardFilters || null;

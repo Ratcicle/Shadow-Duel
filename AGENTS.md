@@ -356,11 +356,23 @@ this.effectEngine.clearTargetingCache();
 
 Já chamado automaticamente em `moveCard` e início de turno.
 
-**Limite de uso por turno:**
+**Limites uma vez por turno (OPT):**
 
-```js
-oncePerTurn: true, oncePerTurnName: "Unique Effect Name"
-```
+- **Por nome (hard OPT):** o limite é compartilhado entre todas as cópias da
+  carta para o mesmo jogador. A restrição aparece ao final do efeito:
+  “Você só pode ativar este efeito de "Carta" uma vez por turno.”
+- **Por cópia (soft OPT):** cada cópia tem seu próprio limite. A restrição
+  aparece no começo do efeito: “Uma vez por turno: compre 1 card”.
+- Ambos usam `oncePerTurn: true`. Para hard OPT, use uma chave estável em
+  `oncePerTurnName` e omita `oncePerTurnScope`. Para soft OPT, declare
+  `oncePerTurnScope: "card"`.
+- `usagePolicy` é uma dimensão separada: `"use"` consome o uso mesmo se a
+  ativação for negada; `"activate"` libera outra tentativa se a própria
+  ativação for negada. O verbo “ativar” não determina se o limite é por nome
+  ou por cópia.
+
+Exemplos EN/PT e configuração no guia
+[Como criar uma carta](docs/Como%20criar%20uma%20carta.md#limites-uma-vez-por-turno-opt).
 
 ---
 

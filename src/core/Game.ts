@@ -827,6 +827,9 @@ class Game {
       selectionMessage: "Select target(s) for the monster effect.",
       guardKind: "monster_effect",
       phaseReq,
+      preview: () => this.effectEngine.canActivateMonsterEffectPreview?.(
+        card, owner, activationZone, selections, { activationContext },
+      ) || { ok: true },
       oncePerTurn: {
         card,
         player: owner,

@@ -1,5 +1,5 @@
 import { getPerspectivePlayers } from "../perspective.js";
-import { resolveTargetsForAction, STOP_SIMULATION } from "./shared.js";
+import { resolveTargetsForAction, captureSimulatedReferences, STOP_SIMULATION } from "./shared.js";
 import type { ActionOf, ActionType } from "../../../contracts/actions.js";
 import type {
   SimulatedActionBatchInput,
@@ -180,6 +180,7 @@ export function applySimulatedActions({
 }: SimulatedActionBatchInput): void {
   if (!Array.isArray(actions)) return;
   const { self, opponent } = getPerspectivePlayers(state, selfId);
+  options = { ...options, referenceSnapshots: options.referenceSnapshots || captureSimulatedReferences(options.effect, selections, self, opponent) };
 
   for (const action of actions) {
     if (!action || !action.type) continue;

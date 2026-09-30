@@ -208,7 +208,18 @@ export function applyHeal(
   const amount =
     (Number.isFinite(Number(action.amount)) ? Number(action.amount) : 0) +
     readSimContextNumber(action.amountFromContext, options);
-  targetPlayer.lp += Math.floor(amount);
+  const multiplier = (targetPlayer.field || []).reduce((highest, card) => {
+    if (card.isFacedown || card.cardKind !== "monster") return highest;
+    return (card.effects || []).reduce((value, effect) =>
+      effect.timing === "passive" && "passive" in effect && effect.passive?.type === "lp_gain_multiplier"
+        ? Math.max(value, Number(effect.passive.multiplier) || 1)
+        : value, highest);
+  }, 1);
+  const before = targetPlayer.lp;
+  targetPlayer.lp += Math.floor(amount * multiplier);
+  if (targetPlayer.lp > before) {
+    options.onLpGain?.({ state, player: targetPlayer, sourceCard: options.sourceCard || null, before, after: targetPlayer.lp });
+  }
   return;
 }
 
@@ -598,7 +609,7 @@ export function applyDiscardFromHand(
 ): void | typeof STOP_SIMULATION {
   const { action, state, options, self, opponent } = ctx;
   const targetPlayer = resolveActionPlayer(action, self, opponent);
-  const candidates = getActionCandidates(targetPlayer, action, "hand");
+  const candidates = getActionCandidates(targetPlayer, action, "hand", options).filter(card => !action.filters?.excludeSelf || card !== options.sourceCard);
   const count = normalizeCount(action.count, 1);
   if (candidates.length < count.min) return STOP_SIMULATION;
 

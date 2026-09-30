@@ -11,6 +11,7 @@ import {
   debugTriggerLog,
   matchesLastSummonMethod,
   matchesLastSummonProcedure,
+  isTriggerSourceLegal,
 } from "./shared.js";
 
 /**
@@ -31,6 +32,8 @@ export async function collectBattleDestroyTriggers(
   }
 
   const attacker = payload.attacker;
+  const battleAttacker = payload.battleAttacker || attacker;
+  const battleAttackerLocationVersion = payload.battleAttackerLocationVersion ?? battleAttacker.locationVersion;
   const destroyed = payload.destroyed;
   const destroyedPosition =
     payload.destroyedPosition || destroyed.position || null;
@@ -42,6 +45,7 @@ export async function collectBattleDestroyTriggers(
       ? [battleDestroyer]
       : [];
   const attackerOwner = payload.attackerOwner || this.getOwnerByCard(attacker);
+  const battleAttackerOwner = payload.battleAttackerOwner || this.getOwnerByCard(battleAttacker);
   const destroyedOwner =
     payload.destroyedOwner || this.getOwnerByCard(destroyed);
 
@@ -99,8 +103,11 @@ export async function collectBattleDestroyTriggers(
         player: owner,
         opponent: side.other,
         attacker,
+        battleAttacker,
+        ...(battleAttackerLocationVersion !== undefined ? { battleAttackerLocationVersion } : {}),
         destroyed,
         attackerOwner,
+        battleAttackerOwner,
         destroyedOwner,
         battleDestroyer,
         battleDestroyers,
@@ -112,6 +119,7 @@ export async function collectBattleDestroyTriggers(
       for (const effect of card.effects) {
         if (!effect || effect.timing !== "on_event") continue;
         if (effect.event !== "battle_destroy") continue;
+        if (!isTriggerSourceLegal(card, effect, this.findCardZone(owner, card))) continue;
 
         if (effect.requireZone) {
           const sourceZone = this.findCardZone?.(owner, card) || null;
@@ -202,8 +210,11 @@ export async function collectBattleDestroyTriggers(
             player: owner,
             opponent: side.other,
             attacker,
+            battleAttacker,
+            ...(battleAttackerLocationVersion !== undefined ? { battleAttackerLocationVersion } : {}),
             destroyed,
             attackerOwner,
+            battleAttackerOwner,
             destroyedOwner,
             battleDestroyer,
             battleDestroyers,

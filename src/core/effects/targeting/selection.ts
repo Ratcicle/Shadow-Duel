@@ -180,7 +180,7 @@ interface RuntimeEffectTarget extends TargetingCardFilter {
   excludeCardNames?: readonly string[];
   excludeSelf?: boolean;
   filters?: TargetingCardFilter;
-  intent?: "cost" | "target" | "benefit" | "harm";
+  intent?: "reference" | "cost" | "target" | "benefit" | "harm";
   pairedTarget?: PairedTargetSpec;
   requiresPairedTarget?: PairedTargetSpec;
   requireThisCard?: boolean;

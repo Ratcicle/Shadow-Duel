@@ -679,7 +679,7 @@ async function requestHumanOrder(
         },
       );
       const normalizeConfirmation = (confirmed: unknown) =>
-        confirmed ? [candidate.candidateId] : [];
+        confirmed ? [candidate] : [];
       if (isPromiseLike(returned)) {
         returned.then(
           (confirmed) => finish(normalizeConfirmation(confirmed)),
@@ -705,7 +705,10 @@ async function requestHumanOrder(
         actor: candidates[0]?.controller || null,
         candidates,
         contextSnapshot: { group, optional },
-        resolveHuman,
+        resolveHuman: async () => {
+          const normalized = normalizeHumanDecision(await resolveHuman(), candidates, optional);
+          return normalized.ok ? normalized.candidates || [] : null;
+        },
       })
     : await resolveHuman();
   if (decision == null && !optional) {

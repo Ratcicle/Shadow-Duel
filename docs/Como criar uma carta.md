@@ -150,7 +150,7 @@ Campos frequentes:
 - `activationZones`: lista canônica de zonas nas quais um efeito `ignition` ou
   `manual` pode ser ativado.
 - `requirePhase`: fase ou lista de fases, como `["main1", "main2"]`.
-- `requireFaceup`: exige que a fonte esteja face-up.
+- `requireFaceup`: exige que a fonte esteja face-up. Fontes Baixadas nas zonas de campo nunca geram triggers nem aplicam passivas, mesmo sem esse campo. A ativação normal de uma Armadilha revela a carta antes de executar seu efeito; triggers de virar a carta e do Cemitério continuam disponíveis nas respectivas zonas.
 - `requireEmptyField`: exige campo de monstros vazio.
 - `oncePerTurn`, `oncePerTurnName`, `oncePerTurnScope`: controle por turno.
 - `oncePerTurnLimit`: limite numerico opcional para efeitos com mais de 1 uso por
@@ -166,6 +166,47 @@ Campos frequentes:
   `speed: 2`.
 - `allowManualActivation`: permite ativação manual de alguns `on_event` em janela
   de chain. Use com cuidado.
+
+### Limites uma vez por turno (OPT)
+
+A convenção de autoria do jogo distingue o escopo do limite pela redação:
+
+| Escopo | Regra | Redação PT | Redação EN |
+| --- | --- | --- | --- |
+| **Por nome (hard OPT)** | Todas as cópias da carta compartilham o limite para o mesmo jogador. | Ao final do efeito: “Você só pode ativar este efeito de "Carta" uma vez por turno.” | Ao final do efeito: “You can only activate this effect of "Card" once per turn.” |
+| **Por cópia (soft OPT)** | Cada cópia da carta tem seu próprio limite. | No começo do efeito: “Uma vez por turno: compre 1 card”. | No começo do efeito: “Once per turn: Draw 1 card.” |
+
+Declare o escopo nos dados; a engine não o infere da descrição. Exemplo dos
+campos de um hard OPT com a redação “ativar”:
+
+```js
+oncePerTurn: true,
+oncePerTurnName: "Card: draw",
+usagePolicy: "activate"
+```
+
+O hard OPT omite `oncePerTurnScope` e usa uma chave estável em
+`oncePerTurnName`, compartilhada entre as cópias. Para limites independentes
+entre efeitos, use uma chave diferente para cada efeito.
+
+Exemplo dos campos de um soft OPT:
+
+```js
+oncePerTurn: true,
+oncePerTurnName: "Card: draw",
+oncePerTurnScope: "card",
+usagePolicy: "use"
+```
+
+No escopo `card`, a identidade da cópia faz parte do controle de uso; manter
+uma chave estável em `oncePerTurnName` não torna esse limite compartilhado.
+
+`usagePolicy` trata separadamente o resultado de uma negação: `"use"`
+consome o uso mesmo quando a ativação é negada; `"activate"` permite outra
+tentativa quando a própria ativação é negada. Negar somente o efeito não
+libera o limite. Tanto hard OPT quanto soft OPT exigem uma política explícita;
+o escopo, por si só, não determina essa política. A redação “usar” ou “ativar”
+deve corresponder à política declarada.
 
 ### Zonas e transação de ativação
 
@@ -244,13 +285,13 @@ Eventos aceitos pelo validador:
 | `end_phase` | End Phase do jogador ativo. | Fonte precisa estar em campo/spellTrap/fieldSpell; use `endPhasePlayer: "any"` para disparar em ambas End Phases. |
 | `attack_declared` | Ataque declarado. | `requireOpponentAttack`, `requireDefenderIsSelf`, `requireSelfAsDefender`, `requireSelfAsAttacker`, `requireDefenderPosition`, `requireDefenderType`. |
 | `battle_damage` | Evento de dano publicado pelo pipeline de batalha. | Valor, jogador afetado, atacante, defensor e contexto do Damage Step. |
-| `opponent_damage` | Oponente recebe dano. | Evite targets manuais; esse fluxo espera efeitos automáticos. |
+| `opponent_damage` | Compatibilidade para dano adversário. | Coletado pela ocorrência `lp_change`, com as mesmas regras de Chain e seleção de alvos. Prefira `lpChangeKind: "damage"` e `triggerPlayer: "opponent"`. |
 | `before_destroy` | Antes de destruição. | Usado para substituições/negações de destruição. |
 | `effect_targeted` | Uma carta vira alvo de efeito. | `requireTargetType`, `targetFromContext`. |
 | `card_activation` | Ativação de um Spell/Trap Card como card. | Fonte ativada, jogador, zona e Chain Link. Não confundir com ativação de efeito já face-up. |
 | `effect_activation` | Janela associada à ativação de um efeito. | Fonte, efeito, jogador e contexto da corrente. |
 | `card_equipped` | Uma carta é equipada. | `requireEquipCardFilters`, `requireEquippedCardFilters`. |
-| `lp_change` | Depois de uma alteração observável de LP. | Jogador, valores anterior/atual e quantidade ganha, perdida ou paga. |
+| `lp_change` | Depois de uma alteração efetiva de PV. | `lpChangeKind: "gain"` (padrão), `"loss"` ou `"damage"`; `minAmount` limita a quantidade correspondente. |
 | `spell_activated` | Uma spell é ativada. | `triggerPlayer`, `activatedCardFilters`. |
 | `effect_activated` | Depois que uma ativação de efeito é publicada. | Fonte, efeito, jogador e Chain Link ativado. |
 | `position_change` | Depois que a posição de batalha muda. | Card, posição anterior/atual, jogador e origem da mudança. |
@@ -264,6 +305,47 @@ Para efeitos que so devem disparar por um motivo especifico, use
 Fusao ou Ascensao. Quando um trigger proprio precisa funcionar mesmo se a carta
 estava com efeitos negados ao sair do campo, declare
 `allowIfEffectsNegatedAtFieldExit: true`.
+
+### Alterações de PV e fontes de triggers
+
+`lp_change` transporta `player`, `sourceCard`, `before`, `after`, `lpGained`,
+`lpLost`, `lpPaid` e `damageAmount`. Perda inclui dano, custo e manutenção;
+pagamentos têm `damageAmount: 0`. Dano usa a perda efetiva, limitada aos PV
+que o jogador possuía. Ganho, perda e pagamento não são ocorrências separadas
+da mesma alteração. Alteração nula e configuração inicial não geram triggers.
+
+```ts
+{
+  timing: "on_event",
+  event: "lp_change",
+  triggerRequirement: "mandatory",
+  triggerTiming: "if",
+  triggerPlayer: "opponent",
+  lpChangeKind: "damage",
+  minAmount: 500,
+  actions: [{ type: "add_counter", targetRef: "self", counterType: "judgment_marker", amount: 1 }]
+}
+```
+
+Os produtores aguardam `game.emit("lp_change", payload)`. Custos e actions
+concluem cada alteração sequencialmente; se uma Chain está sendo preparada
+ou resolvida, a ocorrência fica para a próxima oportunidade de triggers.
+As fontes elegíveis são coletadas no instante da alteração de PV, inclusive
+quando a lista fica vazia; revelar ou colocar uma fonte em campo depois não
+recupera uma ocorrência anterior. A publicação revalida zona e presença.
+O dano de batalha é coletado depois do cálculo de dano, uma única vez.
+`damage_inflicted` continua sendo uma notificação de apresentação e análise.
+
+Os coletores e a preparação da ativação compartilham a legalidade de zona e
+face da fonte. `requireZone` e `activationZones` devem refletir onde o efeito
+ativa; registros temporários mantêm sua zona lógica própria. Depois da
+ativação, a resolução normal da Chain aplica negação e as regras de
+permanência da fonte.
+
+Em `battle_destroy`, `attacker` continua representando o destruidor da
+batalha. Use `battleAttacker`, `battleAttackerOwner` e
+`battleAttackerLocationVersion` quando o texto se refere ao atacante original;
+a versão impede afetar uma carta que saiu do campo e retornou.
 
 ## Targets
 
@@ -908,6 +990,29 @@ Todo efeito com `oncePerTurn` ou `oncePerDuel` deve declarar `usagePolicy`:
 Não infira zona, política de uso ou legalidade a partir da descrição da carta.
 Custos de ativação devem estar em `activationCosts`; actions de resolução nunca
 são reinterpretadas como custo pelo runtime.
+
+Quando a própria fonte for enviada como custo, declare `requiresSourceAtResolution:
+false` no efeito que deve resolver depois desse envio. Sem essa exceção explícita,
+Magias Contínuas continuam exigindo a fonte ativa no campo. Uma seleção usada
+somente para pagar pertence a `targets` com `intent: "cost"`; ela não publica
+`effect_targeted`. Invocações em `actions` resolvem depois das respostas da Chain.
+
+`special_summon_from_deck_with_counter_limit` aceita `counterSource: "current"`
+(padrão) ou `"activation"`. O segundo usa os contadores copiados em
+`sourceAtActivation.counters` imediatamente antes do custo. Não há fallback para
+os contadores atuais quando esse snapshot está ausente. O preview exige marcadores
+positivos, espaço e ao menos um candidato permitido pelas regras de Invocação.
+A seleção do Deck é obrigatória durante a resolução e passa pelo broker, assim
+como posição e slot; se nenhum candidato continuar legal, não há Invocação.
+`sendSourceToGraveAfter` continua disponível para consumidores legados, mas não
+representa um custo de ativação.
+
+Confirmações opcionais de handlers usam `requestOptionalConfirmation`, incluindo
+o resolvedor opcional de política da IA. O playback consome o valor gravado, sem
+chamar esse resolvedor ou a UI. Falta de interface não autoriza pagamento humano.
+Quando o Trigger opcional já confirmou a Invocação, sua action deve usar
+`optional: false` para não perguntar novamente.
+
 Restrições assumidas ao ativar, como “este card não pode atacar neste turno”,
 devem ficar em `activationCommitActions`. Elas não são custos, não são
 reembolsadas se a ativação for negada e não rodam se o jogador cancelar antes
@@ -943,3 +1048,34 @@ A action escolhe o monstro e seus Tributos durante a resolução, com decisões 
 Os contadores, registros e permissões temporárias de Invocação-Normal de ambos os jogadores são reinicializados no início de cada turno. Permissões passivas continuam sendo consultadas normalmente.
 
 Para efeitos de Magia/Armadilha no Cemitério, declare `activationZones: ["graveyard"]`, `timing: "ignition"`, `speed: 1` e `requirePhase: ["main1", "main2"]`. A entrada `tryActivateSpellTrapEffect` aceita `activationZone: "graveyard"`, compartilhando a execução do modal com o replay. Custos de banir a fonte pertencem a `activationCosts`.
+
+## Escolhas durante a resolução e referências de evento
+
+`targets` declara alvos antes das respostas. Use-o somente quando o texto pede
+um alvo. Para escolher durante a resolução, configure os filtros e a quantidade
+da action `special_summon_from_zone` ou `discard_from_hand`. `selectionId`
+identifica a escolha; `selectionMessage` permite personalizar a apresentação.
+As decisões usam instâncias, inclusive para distinguir cópias de mesmo nome,
+e passam pelo broker para humanos e IA. Uma escolha com mínimo positivo não
+oferece cancelamento após o compromisso; mínimo zero preserva a recusa.
+A ausência de UI não autoriza selecionar uma carta para um humano.
+Cancelar uma escolha opcional grava a seleção vazia pelo broker. A Chain
+preserva as preferências de recursos da ativação para as escolhas da IA
+na resolução; cada descarte mantém a ordem das instâncias escolhidas.
+
+Para um efeito coletivo, `buff_stats_temp.targetScope` consulta o campo na
+resolução. Declare uma condição de ativação separada quando for necessário
+controlar ao menos um monstro elegível antes de ativar.
+
+Uma seleção com `intent: "reference"` exige `targetFromContext`. Ela vincula
+a instância do evento, sem seleção humana nem `effect_targeted`. A preparação
+captura sua zona, controlador e versão de localização em `referenceSnapshots`,
+separadamente dos alvos. Sair da zona e retornar invalida o vínculo; outra cópia
+não o substitui. O custo já pago permanece pago.
+
+O preview sequencial considera as cartas que `discard_from_hand` pode colocar
+no Cemitério. Ele exige o mínimo completo, exclui a fonte quando configurada
+com `filters.excludeSelf` e verifica a possibilidade da Invocação posterior.
+Na resolução, consulta novamente a mão, move cada descarte individualmente e
+só então consulta o Cemitério. A perda posterior de candidatos não desfaz os
+descartes. Descarte de efeito não deve ser declarado como custo de ativação.

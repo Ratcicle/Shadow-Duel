@@ -2,6 +2,7 @@ import { getCardDisplayName, getUIText } from "../../i18n.js";
 import { isAI } from "../../Player.js";
 import { captureSourceSnapshot } from "../../chain/link.js";
 import { walkActionList } from "../../actionHandlers/actionWalker.js";
+import { isTriggerSourceLegal } from "./collectors/shared.js";
 import type { CardAction } from "../../contracts/actions.js";
 import type { RawSelectionRequirement } from "../../contracts/selection.js";
 import type {
@@ -463,6 +464,10 @@ export function buildTriggerEntry(
     return null;
   }
 
+  const sourceZone = options.activationContext?.activationZone ||
+    options.activationZone || this.findCardZone(owner, sourceCard);
+  if (!isTriggerSourceLegal(sourceCard, effect, sourceZone)) return null;
+
   if (
     isAI(owner) && effect.triggerRequirement === "optional" &&
     owner.strategy?.shouldActivateEffect?.({
@@ -606,6 +611,14 @@ export function buildTriggerEntry(
       effect,
     },
     activate: async (selections, activationCtx) => {
+      if (activationCtx.committed !== true) {
+        const liveSourceZone = activationCtx.activationZone === "temporary"
+          ? "temporary"
+          : this.findCardZone(owner, sourceCard) || activationCtx.activationZone || null;
+        if (!isTriggerSourceLegal(sourceCard, effect, liveSourceZone)) {
+          return { success: false, needsSelection: false, activationSkipped: true, reason: "Trigger source is no longer legal." };
+        }
+      }
       const resolvedCtx = {
         ...baseCtx,
         activationZone: activationCtx.activationZone,

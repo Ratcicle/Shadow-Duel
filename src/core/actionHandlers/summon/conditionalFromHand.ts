@@ -8,7 +8,7 @@ import type {
   ResolvedTargetMap,
 } from "../../contracts/actionRuntime.js";
 import { getCardDisplayName, getUIText } from "../../i18n.js";
-import { getUI } from "../shared.js";
+import { getUI, requestOptionalConfirmation } from "../shared.js";
 import { performSummonFromHand } from "./fromHand.js";
 import { resolveContextualSummonPosition } from "./position.js";
 
@@ -172,12 +172,41 @@ export async function handleConditionalSummonFromHand(
     return false;
   }
 
+  const restrictionCheck = game.canSpecialSummonUnderRestrictions?.(
+    handCard,
+    player,
+    { summonMethod: "special", fromZone: "hand", silent: true },
+  );
+  if (restrictionCheck?.ok === false) return false;
+
   const handIndex = player.hand.indexOf(handCard);
   if (handIndex === -1) {
     return false;
   }
 
   const optional = action.optional !== false;
+
+  if (optional) {
+    const conditionText = condition.cardName
+      ? getUIText("ui.summon.controlsCard", {
+          cardName: condition.cardName,
+        })
+      : getUIText("ui.summon.conditionMet");
+    const cardName = getCardDisplayName(handCard) || handCard.name;
+
+    const wantsToSummon =
+      await requestOptionalConfirmation(game, player, async () => (await getUI(game)?.showConfirmPrompt?.(
+        getUIText("ui.summon.conditionalPrompt", {
+          conditionText,
+          cardName,
+        }),
+        { kind: "conditional_summon", cardName },
+      )) ?? false, () => true);
+
+    if (!wantsToSummon) {
+      return false;
+    }
+  }
 
   if (isAI(player)) {
     const summonAction = {
@@ -191,28 +220,6 @@ export async function handleConditionalSummonFromHand(
       summonAction,
       engine,
     );
-  }
-
-  if (optional) {
-    const conditionText = condition.cardName
-      ? getUIText("ui.summon.controlsCard", {
-          cardName: condition.cardName,
-        })
-      : getUIText("ui.summon.conditionMet");
-    const cardName = getCardDisplayName(handCard) || handCard.name;
-
-    const wantsToSummon =
-      (await getUI(game)?.showConfirmPrompt?.(
-        getUIText("ui.summon.conditionalPrompt", {
-          conditionText,
-          cardName,
-        }),
-        { kind: "conditional_summon", cardName },
-      )) ?? false;
-
-    if (!wantsToSummon) {
-      return false;
-    }
   }
 
   return await performSummonFromHand(

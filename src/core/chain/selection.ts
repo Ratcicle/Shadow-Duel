@@ -144,7 +144,7 @@ export function getActivationCostTargetDefinitions(
 export function getDeclaredTargetDefinitions(
   effect?: ChainEffect | null,
 ): ChainEffectTarget[] {
-  return (effect?.targets || []).filter((target) => target?.intent !== "cost");
+  return (effect?.targets || []).filter((target) => target?.intent !== "cost" && target?.intent !== "reference");
 }
 
 export async function getPlayerSelectionsForDefinitions(

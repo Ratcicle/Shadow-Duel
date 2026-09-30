@@ -32,7 +32,7 @@ type CardInstanceKey = number | string;
 type TargetableCard = (FilterableCard | SimulatedCardState) & {
   uid?: CardInstanceKey | null;
 };
-type TargetIntent = "benefit" | "cost" | "harm";
+type TargetIntent = "benefit" | "cost" | "harm" | "reference";
 type TargetOwnerRole = "self" | "opponent";
 type ComparisonOperator =
   | "eq"

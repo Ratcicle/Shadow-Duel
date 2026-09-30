@@ -125,13 +125,13 @@ Nível 7, Warrior, Light, 2100/2500.
 
 Nível 3, Warrior, Light, 1200/1700.
 
-> Durante a Etapa de Dano, quando um monstro 'Luminarca' que você controla batalhar (Efeito Rápido): você pode enviar este card da sua mão para o Cemitério; até o final deste turno, esse monstro ganha 1200 de ATK e 1700 de DEF. Você pode banir este card do seu Cemitério; adicione 1 Magia 'Luminarca' do seu Cemitério à sua mão. Você só pode usar cada efeito de 'Foice Mágica Luminarca' uma vez por turno.
+> Durante a Etapa de Dano, quando um monstro 'Luminarca' que você controla batalhar com um monstro ou atacar diretamente (Efeito Rápido): você pode enviar este card da sua mão para o Cemitério; até o final deste turno, esse monstro ganha 1200 de ATK e 1700 de DEF. Você pode banir este card do seu Cemitério; adicione 1 Magia 'Luminarca' do seu Cemitério à sua mão. Você só pode usar cada efeito de 'Foice Mágica Luminarca' uma vez por turno.
 
 **157 — Protetor do Santuário Luminarca / Luminarch Sanctum Protector**
 
 Nível 7, Warrior, Light, 1800/2800.
 
-> Se você controlar um 'Portador da Égide Luminarca', você pode enviá-lo para o cemitério: invoque este card por invocação-Especial da sua mão. Uma vez por turno, quando um monstro do oponente declarar um ataque (efeito rápido): negue o ataque.
+> Se você controlar um 'Portador da Égide Luminarca' com a face para cima, você pode enviá-lo para o Cemitério; Invoque este card por Invocação-Especial da sua mão. Uma vez por turno, quando um monstro do oponente declarar um ataque (efeito rápido): negue o ataque.
 
 **158 — Lanceiro Radiante Luminarca / Luminarch Radiant Lancer**
 
@@ -143,7 +143,7 @@ Nível 8, Warrior, Light, 2600/2100.
 
 Nível 8, Fairy, Light, 2800/2400.
 
-> Se este card destruir um monstro do oponente em batalha: ganhe PV igual a metade do ATK do monstro destruído. Uma vez por turno, se esse card seria destruído por batalha ou efeitos de card: você pode enviar 1 monstro 'Luminarca' do seu cemitério para o cemitério; negue a destruição.
+> Se este card destruir um monstro do oponente em batalha: ganhe PV igual a metade do ATK do monstro destruído. Uma vez por turno, se esse card seria destruído por batalha ou efeitos de card: você pode enviar 1 outro monstro 'Luminarca' que você controla para o Cemitério em vez disso.
 
 **160 — Árbitro Santificado Luminarca / Luminarch Sanctified Arbiter**
 
@@ -193,13 +193,13 @@ Magia Normal.
 
 Magia de Equipamento.
 
-> Só pode ser equipado a um monstro 'Luminarca'. O monstro equipado ganha 500 de DEF. Se o monstro equipado seria destruído em batalha, envie esse card para o cemitério em vez disso.
+> Só pode ser equipado a um monstro 'Luminarca' que você controla. O monstro equipado ganha 500 de DEF. Se o monstro equipado seria destruído em batalha, envie esse card para o cemitério em vez disso.
 
 **166 — Lâmina Solarforjada Luminarca / Luminarch Sunforged Blade**
 
 Magia de Equipamento.
 
-> Só pode ser equipada a um monstro "Luminarca". Cada vez que você ganhar PV, coloque 1 Marcador Solar neste card. O monstro equipado ganha 200 ATK/DEF para cada Marcador Solar neste card. Uma vez por turno, se o monstro equipado seria destruído em batalha: você pode pagar 1000 PV; ele não é destruído. Você só pode controlar 1 "Lâmina Solarforjada Luminarca".
+> Só pode ser equipada a um monstro "Luminarca" que você controla. Cada vez que você ganhar PV, coloque 1 Marcador Solar neste card. O monstro equipado ganha 200 ATK/DEF para cada Marcador Solar neste card. Uma vez por turno, se o monstro equipado seria destruído em batalha: você pode pagar 1000 PV; ele não é destruído. Você só pode controlar 1 "Lâmina Solarforjada Luminarca".
 
 **167 — Lança da Alvorada Luminarca / Luminarch Spear of Dawnfall**
 

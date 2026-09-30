@@ -3,13 +3,13 @@
  * Extracted from Game.js as part of B.5 modularization.
  */
 
-import type { ActionOf } from "../../contracts/actions.js";
 import type { GameCard } from "../../contracts/cards.js";
 import type { GamePlayer } from "../../contracts/player.js";
 import type {
   DamageInflictedEventPayload,
   InformationalEventName,
   InformationalEventMap,
+  LpChangeEventPayload,
 } from "../../contracts/events.js";
 
 interface DamagePresentationOptions {
@@ -25,7 +25,8 @@ interface DamagePresentationOptions {
   suppressVisual?: boolean;
   suppressLpChangeFeedback?: boolean;
   suppressLpDamageSequence?: boolean;
-  triggerOpponentDamage?: boolean;
+  /** Battle publishes the occurrence at its after-calculation window. */
+  deferLpChangeEvent?: boolean;
 }
 
 interface DamageUiPort {
@@ -36,22 +37,11 @@ interface DamageUiPort {
   ): void;
 }
 
-interface DamageEffectEnginePort {
-  applyDamage(
-    action: ActionOf<"damage"> & { triggerOnly: true },
-    context: {
-      player: GamePlayer;
-      opponent: GamePlayer;
-      source: GameCard | null;
-    },
-  ): unknown;
-}
-
 interface DamageHost {
   player: GamePlayer;
   bot: GamePlayer;
   ui?: DamageUiPort | null;
-  effectEngine?: DamageEffectEnginePort | null;
+  emit?(eventName: "lp_change", payload: LpChangeEventPayload): Promise<unknown>;
   notify?<Name extends InformationalEventName>(
     eventName: Name,
     payload: InformationalEventMap[Name],
@@ -60,19 +50,19 @@ interface DamageHost {
 
 /**
  * Apply damage to a player through the centralized damage pipeline.
- * Triggers opponent_damage effects via EffectEngine.
+ * Publishes one canonical LP occurrence for normal trigger collection.
  * Should be used instead of direct player.takeDamage() calls.
  *
  * @param player - Player taking damage
  * @param {number} amount - Damage amount
  * @param options - Additional context (cause, sourceCard, etc.)
  */
-export function inflictDamage(
+export async function inflictDamage(
   this: DamageHost,
   player: GamePlayer | null | undefined,
   amount: number,
   options: DamagePresentationOptions = {},
-): void {
+): Promise<void> {
   if (!player || !amount || amount <= 0) return;
 
   // Apply the damage to player LP
@@ -116,28 +106,18 @@ export function inflictDamage(
       newLP: player.lp,
     };
     this.notify?.("damage_inflicted", payload);
-  }
-
-  // Trigger opponent_damage effects via EffectEngine
-  if (
-    options.triggerOpponentDamage !== false &&
-    this.effectEngine &&
-    typeof this.effectEngine.applyDamage === "function"
-  ) {
-    const opponent = player === this.player ? this.bot : this.player;
-    const ctx = {
-      player: opponent, // The one whose effects will trigger
-      opponent: player, // The one taking damage
-      source: options.sourceCard || null,
-    };
-    const action: ActionOf<"damage"> & { triggerOnly: true } = {
-      type: "damage",
-      player: "opponent", // From opponent's perspective
-      amount: amount,
-      triggerOnly: true, // Don't apply damage again, just trigger effects
-    };
-
-    // This will trigger all opponent_damage effects
-    this.effectEngine.applyDamage(action, ctx);
+    if (!options.deferLpChangeEvent) {
+      await this.emit?.("lp_change", {
+        player,
+        sourceCard: options.sourceCard || null,
+        before,
+        after: player.lp,
+        lpGained: 0,
+        lpLost: actual,
+        lpPaid: 0,
+        damageAmount: actual,
+        damagedPlayer: player,
+      });
+    }
   }
 }

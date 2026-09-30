@@ -1,5 +1,6 @@
 import { restoreFieldExitStatuses, restoreTemporaryStatuses } from "../../Card.js";
 import { cardMatchesFilter } from "./cardFilters.js";
+import { expireFaceupStatBuffs } from "../../effects/actions/stats.js";
 import { refreshEquipExtraAttackBonus, removeFieldAuraBuffContributions } from "../../effects/passives/passiveBuffs.js";
 import {
   assignAutomaticFieldSlot,
@@ -316,6 +317,21 @@ function resolveSimulatedMove(
   const fromZone = findCardZone(sourcePlayer, card);
   let toZone: SimulatedZone | "removed" = requestedZone;
   if (toZone === fromZone && player === sourcePlayer) return { fromZone, toZone };
+  if (toZone === "graveyard" && !card.isToken && options.state) {
+    for (const controller of [options.state.player, options.state.bot]) {
+      for (const source of controller?.field || []) {
+        if (source.isFacedown || source === card) continue;
+        for (const effect of source.effects || []) {
+          if (effect.timing !== "passive" || !("passive" in effect) || effect.passive?.type !== "send_to_grave_replacement") continue;
+          const ownerRule = effect.passive.targetOwner || "opponent";
+          if ((ownerRule === "self" && controller !== sourcePlayer) ||
+              (ownerRule === "opponent" && controller === sourcePlayer)) continue;
+          const destination = effect.passive.redirectTo || "banished";
+          if (toZone === "graveyard" && isSimulatedZone(destination)) toZone = destination;
+        }
+      }
+    }
+  }
   if (fromZone === "field" && toZone !== "field" && card.banishWhenLeavesField && !card.isToken) {
     toZone = "banished";
   }
@@ -381,6 +397,7 @@ export function moveCardToZone(
         if (buff.stat === "def") card.def = Math.max(0, (card.def || 0) - buff.value);
       }
       card.turnBasedBuffs = [];
+      expireFaceupStatBuffs(card);
       card.effectsNegated = false;
       card.effectsNegatedDuration = null;
     }
@@ -407,6 +424,7 @@ export function moveCardToZone(
     });
   }
   removeCardFromZones(sourcePlayer, card);
+  if (toZone !== "field" && toZone !== "spellTrap") card.locationVersion = (card.locationVersion || 0) + 1;
   card.location = toZone === "removed" ? null : toZone;
   if (toZone === "removed") return true;
   if (toZone === "graveyard" || toZone === "banished") card.isFacedown = false;

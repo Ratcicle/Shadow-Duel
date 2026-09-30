@@ -549,6 +549,7 @@ export interface CardProtectionEffect {
 export interface CardPermanentStatBuff {
   atk?: number;
   def?: number;
+  duration?: "while_faceup";
 }
 
 export type CardPermanentBuffMap = Record<string, CardPermanentStatBuff>;

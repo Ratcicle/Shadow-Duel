@@ -143,6 +143,8 @@ export async function collectAfterSummonTriggers(
           }
         }
 
+        if (effect.triggerPlayer === "self" && summoner.id !== owner.id) continue;
+        if (effect.triggerPlayer === "opponent" && summoner.id === owner.id) continue;
         if (effect.requireOpponentSummon === true) {
           const isOpponentSummon = summoner?.id && summoner.id !== owner.id;
           if (!isOpponentSummon) continue;

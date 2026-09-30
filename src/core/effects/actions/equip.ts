@@ -172,12 +172,14 @@ export async function applyEquip(
   }
 
   if (typeof action.atkBonus === "number") {
+    const previousBonus = equipCard.equipAtkBonus || 0;
     equipCard.equipAtkBonus = action.atkBonus;
-    target.atk = (target.atk ?? 0) + action.atkBonus;
+    target.atk = (target.atk ?? 0) + action.atkBonus - previousBonus;
   }
   if (typeof action.defBonus === "number") {
+    const previousBonus = equipCard.equipDefBonus || 0;
     equipCard.equipDefBonus = action.defBonus;
-    target.def = (target.def ?? 0) + action.defBonus;
+    target.def = (target.def ?? 0) + action.defBonus - previousBonus;
   }
   if (typeof action.extraAttacks === "number") {
     // Preserve the previous applied amount before replacing the configured grant.

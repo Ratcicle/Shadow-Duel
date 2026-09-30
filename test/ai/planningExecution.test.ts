@@ -17,7 +17,7 @@ import { createPlanningOwnerPolicy } from "../../src/core/ai/common/planningOwne
 import { getPlanningModel } from "../../src/core/ai/PlanningStrategies.js";
 import { voidCards } from "../../src/data/cards/void.js";
 import { luminarchCards } from "../../src/data/cards/luminarch.js";
-import { canUseSimOncePerTurn, markSimOncePerTurnUsed } from "../../src/core/ai/common/simStateUtils.js";
+import { canUseSimOncePerTurn, markSimOncePerTurnUsed, canUseSimulatedEffectUsage, markSimulatedEffectUsage } from "../../src/core/ai/common/simStateUtils.js";
 import { cardMatchesFilter } from "../../src/core/ai/common/cardFilters.js";
 
 const monster = (id: number, name: string) => simulationCard({ id, instanceId: id, name, cardKind: "monster", atk: 1000, def: 1000, level: 4 });
@@ -229,16 +229,24 @@ test(`Luminarch owner special-summon followup respects declarative usage (alread
   input.player.graveyard.push(recruit);
   input.player.hand.push(simulationCard({ ...definition, instanceId: 99404 }), simulationCard({ ...definition, instanceId: 99405 }));
   const { state } = createGameTreeCopy(input);
-  if (alreadyUsed) markSimOncePerTurnUsed(state, "luminarch_enchanted_halberd_conditional_summon", 1, state.player.id, true);
+  const first = state.player.hand[0];
+  const effect = definition.effects[0];
+  assert.ok(first && effect);
+  if (alreadyUsed) markSimulatedEffectUsage(state, effect, first, state.player.id, true);
   const models = new Map([["bot", getPlanningModel(null)], ["player", getPlanningModel("luminarch")]]);
   withPlanningExecutionContext(state, (_graph, owner) => createPlanningOwnerPolicy(state, owner, models), () => {
     applyGenericSimulatedMainPhaseAction(state, { type: "summon", index: 0, cardName: "Actor summon" }, { enableSimulatedEvents: true });
   });
-  assert.equal(state.player.field.filter(card => card.name === "Luminarch Enchanted Halberd").length, alreadyUsed ? 0 : 1);
-  assert.equal(state.player.hand.length, alreadyUsed ? 2 : 1);
-  assert.equal(state._gameTreeActors?.player?._simLuminarch?.halberdSummonedThisTurn, alreadyUsed ? undefined : true);
-  assert.equal(canUseSimOncePerTurn(state, "luminarch_enchanted_halberd_conditional_summon", 1, state.player.id, true), false);
-  assert.equal(canUseSimOncePerTurn(state, "luminarch_enchanted_halberd_conditional_summon", 1, state.bot.id, true), true);
+  const summoned = state.player.field.filter(card => card.name === "Luminarch Enchanted Halberd");
+  assert.equal(summoned.length, alreadyUsed ? 1 : 2);
+  assert.equal(state.player.hand.length, alreadyUsed ? 1 : 0);
+  assert.equal(state._gameTreeActors?.player?._simLuminarch?.halberdSummonedThisTurn, true);
+  for (const card of summoned) {
+    assert.equal(card.cannotAttackThisTurn, true);
+    assert.equal(canUseSimulatedEffectUsage(state, effect, card, state.player.id, true), false);
+  }
+  state.turnCounter++;
+  assert.equal(canUseSimulatedEffectUsage(state, effect, first, state.player.id, true), true);
   assert.equal(state._simLuminarch, undefined);
 });
 }

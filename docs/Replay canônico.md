@@ -31,6 +31,29 @@ A assinatura do banco é calculada a partir das definições atuais por
 contrato de gravação e reprodução; mudanças nesse contrato exigem análise
 própria de compatibilidade dos replays.
 
+Snapshots do Damage Step também carregam `duelCardId`, incluindo as cartas
+destruídas e movidas ao final da batalha. Seus IDs de instância permanecem
+disponíveis para diagnóstico no runtime, mas não entram no hash canônico.
+Isso permite reproduzir combate em outra instância de `Game` no mesmo processo.
+
+Triggers de perda e dano de PV passam pela Chain a partir de uma única
+ocorrência `lp_change`; escolhas de ordem usam o broker existente. O primeiro
+lote Shadow-Heart mantém schema, comandos e decisões existentes. As definições
+alteradas atualizam a assinatura do banco, sem migração de replays antigos.
+O segundo lote encaminha a manutenção do Escudo e as confirmações opcionais de
+`conditional_summon_from_hand` pelo broker. O Verme da Morte confirma somente
+o Trigger; sua action não repete a pergunta. A ordenação humana de triggers
+normaliza os candidatos antes da serialização, preservando seus IDs.
+
+Catedral e Leviatã pagam `activationCosts` antes das respostas. A Catedral usa
+uma cópia dos contadores em `sourceAtActivation`, capturada antes do custo.
+Seleção do Deck, posição e slot são decisões internas; suas Invocações não
+geram outro comando externo. O playback consome decisões sem chamar UI nem
+recalcular escolhas da IA. As regressões em
+[`shadowHeartCostsReplay.test.ts`](../test/replay/shadowHeartCostsReplay.test.ts)
+cobrem humanos e IA nos dois assentos, com gravação EN e reprodução PT-BR.
+O schema permanece inalterado; as definições atualizam a assinatura do banco.
+
 O mapa discriminado de comandos cobre exatamente estes 16 tipos:
 
 ```text
@@ -165,3 +188,24 @@ diferente encerra a validação antes da partida.
 Toda aleatoriedade que altera o estado do duelo deve passar por `Game.random()`
 ou `Game.shuffle()`. Aleatoriedade exclusivamente visual não faz parte do
 replay.
+
+## Escolhas tardias de Shadow-Heart
+
+As escolhas de `discard_from_hand` e `special_summon_from_zone` passam pelo
+broker tanto para humanos quanto para IA, inclusive decisões exatas do
+planejador. O valor gravado usa chaves de instância; nomes traduzidos servem
+apenas à apresentação. Playback consome a decisão sem UI nem nova avaliação
+da estratégia. Posição e slot continuam usando os seus canais existentes.
+
+Referências declaradas com `intent: "reference"` não geram uma decisão de
+escolha nem um evento de targeting. O vínculo é reconstruído a partir do
+evento e revalidado pela identidade de localização. Esses snapshots são
+internos à ativação: o schema de comandos e decisões permanece inalterado.
+
+As regressões em `test/replay/shadowHeartTargetingReplay.test.ts` gravam em
+inglês e reproduzem em português os fluxos de Infusão, Imp, Senhor da Guerra
+e Portador, com humanos e bots nos dois assentos. Conferem decisões consumidas,
+hash final e ausência de comando externo adicional durante a resolução.
+Também cobrem a recusa opcional do Dragão de Escamas: Cancelar grava uma
+seleção vazia pelo broker. Escolhas obrigatórias bloqueiam o cancelamento
+pelos controles e por Escape.

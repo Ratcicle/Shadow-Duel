@@ -1353,13 +1353,14 @@ Special Summons from deck using source counters as an ATK limit.
 - Mutacoes: deck, field, graveyard
 - Eventos emitidos: after_summon
 - Atualiza board: sim
-- Preview: `missing`
+- Preview: `covered`
 
 | Campo | Obrigatorio | Contrato | Descricao |
 | --- | --- | --- | --- |
 | `archetype` | nao | string |  |
 | `counterMultiplier` | nao | number |  |
 | `counterType` | nao | string |  |
+| `counterSource` | nao | enum: current, activation |  |
 | `sendSourceToGraveAfter` | nao | boolean |  |
 
 **Exemplos**
@@ -1462,6 +1463,8 @@ Special Summons cards from a configured zone.
 | Campo | Obrigatorio | Contrato | Descricao |
 | --- | --- | --- | --- |
 | `targetRef` | nao | string | References an effect target id or a context target such as self. |
+| `selectionId` | nao | string |  |
+| `selectionMessage` | nao | string |  |
 | `zone` | nao | zone; valores: deck, hand, field, graveyard, spellTrap, fieldSpell, extraDeck, banish, banished | Source zone used by the action. |
 | `sourceZone` | nao | zone; valores: deck, hand, field, graveyard, spellTrap, fieldSpell, extraDeck, banish, banished | Alternative source zone used by some summon actions. |
 | `sourceOwner` | nao | enum: self, opponent |  |
@@ -2696,6 +2699,7 @@ Applies a named persistent buff.
 | `defBoost` | nao | number |  |
 | `applyToAllField` | nao | boolean |  |
 | `cumulative` | nao | boolean |  |
+| `duration` | nao | enum: while_faceup |  |
 
 **Exemplos**
 

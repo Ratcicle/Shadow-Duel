@@ -1,4 +1,5 @@
 import { getEffectiveAtk } from "../cardStats.js";
+import { expireFaceupStatBuffs } from "../../../effects/actions/stats.js";
 import { refreshEquipExtraAttackBonus, removeFieldAuraBuffContributions, suppressTemporaryDynamicStatIncreasesForDebuff } from "../../../effects/passives/passiveBuffs.js";
 import { getCounterValue, setCounterValue } from "../counters.js";
 import { estimateMonsterValue, hasArchetype } from "../cardValue.js";
@@ -257,6 +258,7 @@ export function applySetFacedownDefense(
     const previousPosition = card.position || "attack";
     card.position = "defense";
     card.isFacedown = true;
+    expireFaceupStatBuffs(card);
     if (
       card.effectsNegated === true &&
       card.effectsNegatedDuration === "while_faceup"

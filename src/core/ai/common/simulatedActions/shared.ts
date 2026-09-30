@@ -10,7 +10,7 @@ import {
   rankCandidates,
 } from "../targetSelection.js";
 import type { AiCardFilter } from "../cardFilters.js";
-import { getZoneCards } from "../zones.js";
+import { getZoneCards, findCardZone } from "../zones.js";
 import { applyStatusesOnSummon } from "../../../Card.js";
 import type {
   ActionOf,
@@ -83,6 +83,8 @@ export interface SimulatedActionContextData {
   lastFieldCounterCount?: number;
   fieldCounterCounts?: object;
   destroyedOwner?: SimulatedPlayerState | PlayerId | string | null;
+  lastSpecialSummonedCard?: SimulatedCardState | null;
+  lastSpecialSummonedCards?: SimulatedCardState[];
   lastAddedToHandCard?: SimulatedCardState | null;
   lastAddedToHandCards?: SimulatedCardState[];
   lastDrawnCard?: SimulatedCardState | null;
@@ -141,7 +143,36 @@ export interface SimulatedStrategyCapabilities {
   ): object | string | number | null | undefined;
 }
 
+export interface SimulatedReferenceSnapshot {
+  card: SimulatedCardState;
+  owner: SimulatedPlayerState;
+  zone: ZoneInput;
+  locationVersion: number;
+}
+
+export function captureSimulatedReferences(effect: EffectDefinition | null | undefined, selections: CanonicalSelectionMap | undefined,
+  self: SimulatedPlayerState, opponent: SimulatedPlayerState | null): Record<string, SimulatedReferenceSnapshot[]> {
+  const snapshots: Record<string, SimulatedReferenceSnapshot[]> = {};
+  for (const definition of effect?.targets || []) {
+    if (definition.intent !== "reference") continue;
+    const selected = selections?.[definition.id];
+    snapshots[definition.id] = [];
+    for (const owner of [self, opponent]) {
+      if (!owner) continue;
+      for (const zone of ["field", "spellTrap", "fieldSpell", "hand", "deck", "extraDeck", "graveyard", "banished"] as const) {
+        for (const card of getZoneCards(owner, zone)) {
+          if (Array.isArray(selected) && selected.some(entry => entry === card)) snapshots[definition.id]!.push({
+            card, owner, zone, locationVersion: card.locationVersion || 0,
+          });
+        }
+      }
+    }
+  }
+  return snapshots;
+}
+
 export interface SimulatedActionOptions {
+  referenceSnapshots?: Record<string, SimulatedReferenceSnapshot[]>;
   sourceCard?: SimulatedCardState | null | undefined;
   sourceAction?: object | null;
   effect?: EffectDefinition | null;
@@ -203,6 +234,13 @@ export interface SimulatedActionOptions {
     state: SimulatedRuntimeState;
   }) => boolean;
   onAfterSpecialSummon?(payload: object): void;
+  onLpGain?(payload: {
+    state: SimulatedRuntimeState;
+    player: SimulatedPlayerState;
+    sourceCard: SimulatedCardState | null;
+    before: number;
+    after: number;
+  }): void;
   onAfterNormalSummon?(payload: {
     state: SimulatedRuntimeState;
     player: SimulatedPlayerState;
@@ -314,6 +352,7 @@ export type SimulatedCardIntent = "benefit" | "cost" | "summon";
 interface SimulatedSummonActionShape {
   readonly position?: BattlePosition | "choice";
   readonly cannotAttackThisTurn?: boolean;
+  readonly restrictAttackThisTurn?: boolean;
   readonly destroySummonedAtEndPhase?: boolean;
   readonly negateEffects?: boolean;
   readonly negateEffectsDuration?: string;
@@ -608,6 +647,9 @@ export function resolveTargetsForAction(
   opponent: SimulatedPlayerState | null | undefined,
 ): SimulatedCardState[] {
   if (!action?.targetRef) return [];
+  const bound = options.referenceSnapshots?.[action.targetRef];
+  if (bound) return bound.filter(snapshot => findCardZone(snapshot.owner, snapshot.card) === snapshot.zone &&
+    (snapshot.card.locationVersion || 0) === snapshot.locationVersion).map(snapshot => snapshot.card);
   if (action.targetRef === "self") {
     return [options.sourceCard].filter(Boolean) as SimulatedCardState[];
   }
@@ -978,7 +1020,7 @@ export function applySummonState(
   card.isFacedown = false;
   card.hasAttacked = false;
   card.attacksUsedThisTurn = 0;
-  if (action.cannotAttackThisTurn) card.cannotAttackThisTurn = true;
+  if (action.cannotAttackThisTurn || action.restrictAttackThisTurn) card.cannotAttackThisTurn = true;
   if (action.destroySummonedAtEndPhase) {
     (card as LegacySummonedCard).destroyAtEndPhase = true;
     (card as LegacySummonedCard).destroyAtEndPhaseTurn = state?.turnCounter ?? null;

@@ -17,6 +17,7 @@ const PREPARED_ACTIVATION_KEYS = [
   "costSelections",
   "targetSelections",
   "resolutionSelections",
+  "referenceSnapshots",
   "costPayment",
   "activationCommitment",
   "activationContext",
@@ -59,6 +60,7 @@ const CHAIN_LINK_KEYS = [
   "activationCommitment",
   "declaredTargets",
   "declaredTargetSnapshots",
+  "referenceSnapshots",
   "targetValidation",
   "committed",
   "costsPaid",
@@ -217,6 +219,7 @@ test("Chain Link allocator brands stable integer identities and preserves shape"
   assert.equal(first.activationNegated, false);
   assert.equal(first.effectNegated, false);
   assert.deepEqual(first.sourceAtActivation, {
+    counters: {},
     cardInstanceId: 1700,
     controllerId: "player",
     zone: "field",

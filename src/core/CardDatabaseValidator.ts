@@ -1031,6 +1031,7 @@ export function validateCardDatabase() {
         if (
           target?.intent !== undefined &&
           target.intent !== "cost" &&
+          target.intent !== "reference" &&
           target.intent !== "target"
         ) {
           errors.push(
@@ -1041,6 +1042,11 @@ export function validateCardDatabase() {
               null,
             ),
           );
+        }
+      }
+      for (const target of effect.targets || []) {
+        if (target.intent === "reference" && !target.targetFromContext) {
+          errors.push(formatIssue(card, "Reference selection requires targetFromContext.", effectIndex, null));
         }
       }
       const costTargetIds = new Set(

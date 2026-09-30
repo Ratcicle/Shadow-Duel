@@ -1,3 +1,5 @@
+import { isLegalZoneSummon } from "../../actionHandlers/summon/fromZone.js";
+import { getCounterLimitSummonOptions } from "../../actionHandlers/summon/counterLimit.js";
 import { getNormalSummonEntries } from "../../actionHandlers/summon/normalFromHand.js";
 import { cardMatchesKind, getCardComparableAttribute } from "../../Card.js";
 import { isAI } from "../../Player.js";
@@ -70,6 +72,7 @@ interface PreviewContext extends EffectContext {
   activationContext?:
     | (NonNullable<EffectContext["activationContext"]> & {
         costSelections?: ResolvedTargetMap;
+        costsPaid?: boolean;
         sourceRect?: unknown;
       })
     | null;
@@ -199,6 +202,7 @@ interface FieldCountSpec {
 }
 
 interface PreviewAction {
+  excludeSummonRestrict?: readonly string[];
   readonly type: ActionType | string;
   readonly allowBelow?: boolean;
   readonly allowCancel?: boolean;
@@ -542,7 +546,8 @@ async function emitEffectTargetedBeforeActions(
   if (activationContext?.skipEffectTargetedEvent === true) return null;
   if (activationContext?._effectTargetedResolved === true) return null;
 
-  const targetCards = getTargetCards(targets);
+  const nonTargets = new Set((ctx.effect?.targets || []).filter(def => def.intent === "reference" || def.intent === "cost").map(def => def.id));
+  const targetCards = getTargetCards(Object.fromEntries(Object.entries(targets).filter(([id]) => !nonTargets.has(id))));
   if (targetCards.length === 0) return null;
 
   const emitted = new Set();
@@ -1370,6 +1375,14 @@ function recordPreviewMoveCandidates(
   player: ActionRuntimePlayer,
   previewMoves: PreviewMove[],
 ): void {
+  if (action.type === "discard_from_hand") {
+    const owner = action.player === "opponent" ? ctx.opponent : player;
+    if (!owner) return;
+    const cards = owner.hand.filter(card => matchesPreviewFilters(engine, card, action.filters || {}, ctx));
+    const count = typeof action.count === "number" ? { min: action.count, max: action.count } : action.count || { min: 1, max: 1 };
+    if (cards.length >= (count.min ?? 1)) previewMoves.push({ owner, zone: "graveyard", cards, maxCount: count.max ?? 1 });
+    return;
+  }
   if (action?.type !== "move" || !Array.isArray(previewMoves)) return;
   const toZone = action.to || action.toZone;
   if (!toZone || !action.targetRef) return;
@@ -1780,10 +1793,57 @@ function hasAscensionMaterialPreviewCandidate(
   });
 }
 
+function getPreviewSelectedCostCards(
+  engine: EffectEngine,
+  ctx: PreviewContext,
+  ref: string,
+  selected: unknown,
+): PreviewCard[] {
+  const target = ctx.effect?.targets?.find(entry => entry.id === ref);
+  if (!target) return [];
+  const result = engine.resolveTargets([target], ctx, { [ref]: selected });
+  if (!result || typeof result !== "object" || Reflect.get(result, "ok") === false) return [];
+  const targets: unknown = Reflect.get(result, "targets");
+  if (!targets || typeof targets !== "object") return [];
+  return getTargetCards({ selected: Reflect.get(targets, ref) });
+}
+
+/** Project only field cards that an activation cost can move before resolution. */
+function getPreviewFieldCostCards(
+  engine: EffectEngine,
+  ctx: PreviewContext,
+  destination: ActionRuntimePlayer,
+): PreviewCard[] {
+  if (!ctx.player || ctx.activationContext?.costsPaid) return [];
+  const cards = new Set<PreviewCard>();
+  for (const cost of ctx.effect?.activationCosts || []) {
+    if (cost.type !== "move" || cost.to === "field") continue;
+    const ref = cost.targetRef || "self";
+    if (ref === "self") {
+      if (ctx.source && destination.field.includes(ctx.source)) cards.add(ctx.source);
+      continue;
+    }
+    const selected = ctx._actionTargets?.[ref] || ctx.activationContext?.costSelections?.[ref];
+    if (selected) {
+      for (const card of getPreviewSelectedCostCards(engine, ctx, ref, selected)) {
+        if (destination.field.includes(card)) cards.add(card);
+      }
+      continue;
+    }
+    const target = getEffectTargetDefinition(ctx, ref);
+    if (!target || target.intent !== "cost") continue;
+    const entries = collectPreviewTargetEntries(engine, target, ctx, ctx.player)
+      .filter(entry => entry.owner === destination && entry.zone === "field" && !cards.has(entry.card));
+    for (const entry of entries.slice(0, getPreviewTargetMinCount(target))) cards.add(entry.card);
+  }
+  return [...cards];
+}
+
 function hasSpecialSummonCandidate(
   engine: EffectEngine,
   action: PreviewAction,
   ctx: PreviewContext,
+  previewMoves: readonly PreviewMove[] = [],
 ): boolean {
   const player = ctx?.player;
   if (!player) return false;
@@ -1791,11 +1851,13 @@ function hasSpecialSummonCandidate(
   const destinationPlayer =
     action.summonToOwner === "opponent" ? ctx?.opponent : player;
 
+  if (!destinationPlayer) return false;
+
   const zoneSpec = action.zone || action.sourceZone || "deck";
   const zoneNames = Array.isArray(zoneSpec) ? zoneSpec : [zoneSpec];
   const sourceOwners = getSourceOwnersForPreview(action, ctx, player);
   const zoneCards = sourceOwners.flatMap((owner) =>
-    zoneNames.flatMap((zoneName) => getPreviewZoneCards(owner, zoneName)),
+    zoneNames.flatMap((zoneName) => [...getPreviewZoneCards(owner, zoneName), ...previewMoves.filter(move => move.owner === owner && move.zone === zoneName).flatMap(move => move.cards)]),
   );
   const plannedIds = isAI(player) ? ctx.activationContext?.decisions?.specialSummons?.[
     ctx.effect?.id || action.type
@@ -1803,7 +1865,16 @@ function hasSpecialSummonCandidate(
   if (zoneCards.length === 0 && plannedIds === undefined) return false;
 
   if (action.requireSource) {
-    return source ? zoneCards.includes(source) : false;
+    if (!source || !zoneCards.includes(source)) return false;
+    const fromZone = zoneNames.find(zone => sourceOwners.some(owner => getPreviewZoneCards(owner, zone).includes(source)));
+    return checkSpecialSummonEligibility(source, { fromZone, summonProcedure: "card_effect" }).ok &&
+      engine.game.canSpecialSummonUnderRestrictions?.(source, destinationPlayer, {
+        summonMethod: "special", fromZone, silent: true,
+      })?.ok !== false &&
+      engine.game.canPlaceCardOnField?.(source, destinationPlayer, {
+        isFacedown: false, silent: true,
+        excludeCards: getPreviewFieldCostCards(engine, ctx, destinationPlayer),
+      })?.ok !== false;
   }
   const ascensionMaterialPreview = hasAscensionMaterialPreviewCandidate(
     action,
@@ -1811,7 +1882,15 @@ function hasSpecialSummonCandidate(
     zoneCards,
   );
   if (ascensionMaterialPreview !== null) return ascensionMaterialPreview;
-  if (action.targetRef) return true;
+  if (action.targetRef) {
+    const definition = getEffectTargetDefinition(ctx, action.targetRef);
+    if (definition?.intent !== "reference" || !definition.targetFromContext) return true;
+    const value = readContextValue(ctx, definition.targetFromContext);
+    const bound = zoneCards.filter(card => card === value || (Array.isArray(value) && value.includes(card)));
+    return bound.some(card => zoneCards.includes(card) && zoneNames.some(zone =>
+      sourceOwners.some(owner => getPreviewZoneCards(owner, zone).includes(card)) &&
+      isLegalZoneSummon(card, destinationPlayer, zone, engine.game, getPreviewFieldCostCards(engine, ctx, destinationPlayer))));
+  }
 
   const filters = buildPreviewFilters(action, ctx);
   if (action.matchLevelRef) {
@@ -1828,17 +1907,10 @@ function hasSpecialSummonCandidate(
 
   const candidates = zoneCards.filter((card) => {
     if (!card || card.cardKind !== "monster") return false;
-    if (card.cannotBeSpecialSummoned) return false;
-    const restrictionCheck = engine?.game?.canSpecialSummonUnderRestrictions?.(
-      card,
-      destinationPlayer,
-      {
-        summonMethod: "special",
-        fromZone: Array.isArray(zoneSpec) ? null : zoneSpec,
-        silent: true,
-      },
-    );
-    if (restrictionCheck?.ok === false) return false;
+    const fromZone = zoneNames.find(zone => sourceOwners.some(owner => getPreviewZoneCards(owner, zone).includes(card)) || previewMoves.some(move => move.zone === zone && move.cards.includes(card)));
+    if (!fromZone || !isLegalZoneSummon(card, destinationPlayer, fromZone, engine.game,
+      getPreviewFieldCostCards(engine, ctx, destinationPlayer))) return false;
+    if (action.excludeSummonRestrict?.includes(card.summonRestrict || "")) return false;
     return matchesPreviewFilters(engine, card, filters);
   });
   const min = Number(
@@ -2238,6 +2310,7 @@ export function checkActionPreviewRequirements(
       const fieldSlotsFreedBeforeSummon = Math.max(
         0,
         Number(action.fieldSlotsFreedBeforeSummon || 0),
+        destinationPlayer ? getPreviewFieldCostCards(this, previewCtx, destinationPlayer).length : 0,
       );
       const occupiedMonsterZones = Math.max(
         0,
@@ -2250,7 +2323,7 @@ export function checkActionPreviewRequirements(
         (!optionalSummon || (isAI(player) && ctx.activationContext?.decisions?.specialSummons?.[ctx.effect?.id || action.type] !== undefined)) &&
         (action.type === "special_summon_from_zone" ||
           action.type === "special_summon_matching_level") &&
-        !hasSpecialSummonCandidate(this, action, previewCtx)
+        !hasSpecialSummonCandidate(this, action, previewCtx, previewMoves)
       ) {
         return {
           ok: false,
@@ -2279,45 +2352,8 @@ export function checkActionPreviewRequirements(
     }
 
     if (action.type === "special_summon_from_deck_with_counter_limit") {
-      if ((player.field || []).length >= 5) {
-        return { ok: false, reason: "Field is full." };
-      }
-
-      const source = ctx?.source;
-      const counterType = action.counterType || "judgment_marker";
-      const counterMultiplier = action.counterMultiplier || 500;
-      const counterCount = getRuntimeCounter(source, counterType);
-      const maxAtk = counterCount * counterMultiplier;
-      if (maxAtk <= 0) {
-        return {
-          ok: false,
-          reason: `No ${counterType} counters on ${source?.name || "source"}.`,
-        };
-      }
-
-      const filters = { ...(action.filters || {}) };
-      if (action.archetype && !filters.archetype) {
-        filters.archetype = action.archetype;
-      }
-      const hasCandidate = (player.deck || []).some((card) => {
-        if (!card || card.cardKind !== "monster") return false;
-        if ((card.atk || 0) > maxAtk) return false;
-        if (filters.archetype) {
-          const archetypes = Array.isArray(card.archetypes)
-            ? card.archetypes
-            : card.archetype
-              ? [card.archetype]
-              : [];
-          if (!archetypes.includes(filters.archetype)) return false;
-        }
-        return true;
-      });
-
-      if (!hasCandidate) {
-        return {
-          ok: false,
-          reason: `No valid monsters in deck with ATK <= ${maxAtk}.`,
-        };
+      if (!getCounterLimitSummonOptions(action, ctx, this, true).candidates.length) {
+        return { ok: false, reason: "No legal summon within the source counter limit." };
       }
     }
 
@@ -2416,6 +2452,25 @@ export function checkActionPreviewRequirements(
         return { ok: false, reason: "Field is full." };
       }
 
+      const summonCard = action.targetRef === "self"
+        ? ctx.source
+        : action.cardName
+          ? player.hand.find((card) => card?.name === action.cardName)
+          : null;
+      if (action.targetRef === "self" || action.cardName) {
+        if (!summonCard || summonCard.cardKind !== "monster" || !player.hand.includes(summonCard)) {
+          return { ok: false, reason: "Summon source is not in hand." };
+        }
+        const restrictionCheck = this.game?.canSpecialSummonUnderRestrictions?.(
+          summonCard,
+          player,
+          { summonMethod: "special", fromZone: "hand", silent: true },
+        );
+        if (restrictionCheck?.ok === false) {
+          return { ok: false, reason: restrictionCheck.reason || "Special Summon is restricted." };
+        }
+      }
+
       // Check condition
       const condition = action.condition || {};
       if (condition.type === "control_card") {
@@ -2471,10 +2526,6 @@ export function checkActionPreviewRequirements(
     }
 
     if (action.type === "special_summon_from_hand_with_cost") {
-      if ((player.field || []).length >= 5) {
-        return { ok: false, reason: "Field is full." };
-      }
-
       // Get cost target filter from effect.targets
       const costTargetRef = action.costTargetRef || "bbd_cost";
       const costEffect = ctx?.effect;
@@ -2512,6 +2563,13 @@ export function checkActionPreviewRequirements(
       const validCosts = zoneCards.filter((card) =>
         matchesPreviewFilters(this, card, filters, ctx),
       );
+      const selectedCosts = ctx._actionTargets?.[costTargetRef] || ctx.activationContext?.costSelections?.[costTargetRef];
+      const possibleCosts = selectedCosts ? getPreviewSelectedCostCards(this, ctx, costTargetRef, selectedCosts) : validCosts;
+      const freesMonsterZone = action.costDestination !== "field" && possibleCosts.some(card =>
+        validCosts.includes(card) && player.field.includes(card));
+      if (player.field.length >= 5 && !freesMonsterZone) {
+        return { ok: false, reason: "Field is full." };
+      }
       if (validCosts.length < requiredCount) {
         const zoneLabel = zones.join("/");
         const filterLabel =

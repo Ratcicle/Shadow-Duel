@@ -448,6 +448,7 @@ export type DamageStepCard = GameCard & {
 export type DamageStepCardInstanceId = string | number | null;
 
 export interface DamageStepCardSnapshot {
+  duelCardId: number | null;
   cardId: number | null;
   instanceId: DamageStepCardInstanceId;
   name: string | null;
@@ -471,6 +472,9 @@ export interface DamageStepLpChangePayload {
   player: GamePlayer;
   sourceCard: DamageStepCard;
   lpGained?: number;
+  lpLost?: number;
+  lpPaid?: number;
+  damageAmount?: number;
   before: number;
   after: number;
 }
@@ -532,6 +536,8 @@ export interface DamageStepOutcomeSnapshot {
   healingApplied: number;
   targetDestroyed: boolean;
   attackerDestroyed: boolean;
+  destructionDuelCardIds: number[];
+  movedAtEndDuelCardIds: number[];
   destructionInstanceIds: Array<Exclude<DamageStepCardInstanceId, null>>;
   movedAtEndInstanceIds: Array<Exclude<DamageStepCardInstanceId, null>>;
 }
@@ -648,6 +654,13 @@ export interface EffectEngineRuntimePort {
     activationZone?: CanonicalZone,
     options?: { effectId?: string | null },
   ): EffectDefinition | null | undefined;
+  canActivateMonsterEffectPreview?(
+    card: GameCard,
+    player: GamePlayer,
+    zone: CanonicalZone,
+    selections?: import("./selection.js").CanonicalSelectionMap | null,
+    options?: { activationContext?: import("./activation.js").ActivationPipelineContext },
+  ): { ok: boolean; reason?: string | null; code?: string | null } | null;
   activateMonsterEffect(
     card: GameCard,
     player: GamePlayer,

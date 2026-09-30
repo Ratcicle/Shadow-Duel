@@ -126,6 +126,9 @@ export interface EventPayloadBase {
   targets?: EventCard[];
   attacker?: EventCard | null;
   attackerOwner?: EventPlayer | null;
+  battleAttacker?: EventCard | null;
+  battleAttackerOwner?: EventPlayer | null;
+  battleAttackerLocationVersion?: number;
   defender?: EventCard | null;
   defenderOwner?: EventPlayer | null;
   destroyed?: EventCard | null;
@@ -157,6 +160,9 @@ export interface EventPayloadBase {
   before?: number | null;
   after?: number | null;
   lpGained?: number;
+  lpLost?: number;
+  lpPaid?: number;
+  damageAmount?: number;
   directAttack?: boolean;
   targetDestroyed?: boolean;
   attackerDestroyed?: boolean;
@@ -345,9 +351,6 @@ export interface LpChangeEventPayload extends EventPayloadBase {
   player: EventPlayer;
   before: number | null;
   after: number | null;
-  lpGained?: number;
-  lpPaid?: number;
-  lpLost?: number;
   damagedPlayer?: EventPlayer | null;
 }
 
@@ -594,6 +597,7 @@ export interface DamageInflictedEventPayload {
 }
 
 export interface DamageStepCardSnapshot {
+  duelCardId: number | null;
   cardId: number | null;
   instanceId: EventEntityId | null;
   name: string | null;
@@ -612,6 +616,8 @@ export interface DamageStepOutcomeSnapshot {
   healingApplied: number;
   targetDestroyed: boolean;
   attackerDestroyed: boolean;
+  destructionDuelCardIds: number[];
+  movedAtEndDuelCardIds: number[];
   destructionInstanceIds: EventEntityId[];
   movedAtEndInstanceIds: EventEntityId[];
 }
