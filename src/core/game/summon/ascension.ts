@@ -476,6 +476,17 @@ export function checkAscensionRequirements(
         }
         break;
       }
+      case "material_effects_activated": {
+        const materialId = getRequirementMaterialId(asc, materialCard);
+        if (typeof materialId !== "number") {
+          return { ok: false, reason: "Missing selected Ascension material." };
+        }
+        const activated = this.materialDuelStats?.[player.id]?.activatedEffectIdsByMaterialId?.get(materialId);
+        if (!req.effectIds?.length || !req.effectIds.every(id => activated?.has(id))) {
+          return { ok: false, reason: "Ascension requirement not met: each required material effect must have been activated in this Duel." };
+        }
+        break;
+      }
       case "material_effect_activations": {
         const materialId = getRequirementMaterialId(asc, materialCard);
         if (typeof materialId !== "number") {

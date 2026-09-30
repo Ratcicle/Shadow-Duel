@@ -172,6 +172,7 @@ export function captureSimulatedReferences(effect: EffectDefinition | null | und
 }
 
 export interface SimulatedActionOptions {
+  costPayment?: import("../../../contracts/chainRuntime.js").ChainCostPayment;
   referenceSnapshots?: Record<string, SimulatedReferenceSnapshot[]>;
   sourceCard?: SimulatedCardState | null | undefined;
   sourceAction?: object | null;

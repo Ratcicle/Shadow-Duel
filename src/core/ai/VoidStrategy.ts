@@ -1,4 +1,5 @@
 import { appendSimulatedZoneCard } from "./common/zones.js";
+import { createMaterialDuelStats, recordMaterialEffectIdentity } from "../game/summon/materialStats.js";
 import { appendSimulatedFieldCard } from "./common/zones.js";
 import type {
   AIAction,
@@ -37,9 +38,7 @@ interface VoidGame extends Omit<AiLiveGamePort, "player" | "bot" | "effectEngine
   bot: VoidPlayer;
   _gameRef?: VoidGame;
   turnLineSearchEnabled?: boolean;
-  materialDuelStats?: Partial<Record<string, {
-    effectActivationsByMaterialId?: unknown;
-  }>>;
+  materialDuelStats?: NonNullable<AiStateShape["materialDuelStats"]>;
   _simMaterialEffectActivationsByMaterialId?: AiStateShape["_simMaterialEffectActivationsByMaterialId"];
   effectEngine?: {
     usedThisTurn?: ReadonlyMap<string, number>;
@@ -161,6 +160,7 @@ interface VoidPassiveState {
 }
 type StrategySimulation = SimulationGameState | PerspectiveGameState | GameTreeSimulationGameState;
 interface VoidSummonPayload {
+  effect?: EffectDefinition;
   state?: AiStateShape;
   player?: SimulatedPlayerState;
   card?: SimulatedCardState;
@@ -436,6 +436,7 @@ function hasImmediateVoidFusionPlan(bot: VoidPlayer) {
 
 function getMaterialEffectActivationCount(game: VoidGame | null | undefined, player: VoidPlayer | null | undefined, materialId: number | undefined) {
   const playerId = (player?.id || player) as string;
+  if (playerId !== "player" && playerId !== "bot") return 0;
   const readMapLike = (value: unknown): number => {
     if (!value) return 0;
     if (typeof (value as { get?: unknown }).get === "function") return (value as { get(id: number | undefined): number }).get(materialId) || 0;
@@ -453,11 +454,32 @@ function getMaterialEffectActivationCount(game: VoidGame | null | undefined, pla
   return realCount + simCount;
 }
 
+function hasRequiredMaterialEffects(
+  game: VoidGame | null | undefined,
+  player: VoidPlayer,
+  materialId: number | undefined,
+  effectIds: readonly string[] | undefined,
+): boolean {
+  if (materialId === undefined || !effectIds?.length) return false;
+  if (player.id !== "player" && player.id !== "bot") return false;
+  // Planning snapshots own both inherited and newly simulated history.
+  const stats = game?.materialDuelStats ||
+    (game?._isPerspectiveState ? undefined : game?._gameRef?.materialDuelStats);
+  const activated = stats?.[player.id]?.activatedEffectIdsByMaterialId?.get(materialId);
+  return effectIds.every(id => activated?.has(id));
+}
+
+function hasRequiredDistinctEffects(game: VoidGame | null | undefined, player: VoidPlayer, ascension: StrategyCard): boolean {
+  const requirements = ascension.ascension?.requirements?.filter(req => req.type === "material_effects_activated");
+  return !!requirements?.length && requirements.every(req =>
+    hasRequiredMaterialEffects(game, player, ascension.ascension?.materialId, req.effectIds));
+}
+
 function isMaliciousAscensionReady(game: VoidGame | null | undefined, player: VoidPlayer | null | undefined, material: StrategyCard) {
   if (!game || !player || material?.id !== VOID_IDS.THOUSAND_ARMS) {
     return false;
   }
-  const realGame = game?._gameRef || game;
+  const realGame = game._isPerspectiveState ? game : game._gameRef || game;
   const malicious = (player.extraDeck || []).find(
     (card) => card?.id === VOID_IDS.MALICIOUS_DEMON,
   );
@@ -468,7 +490,8 @@ function isMaliciousAscensionReady(game: VoidGame | null | undefined, player: Vo
     player,
     malicious,
   );
-  return requirementCheck?.ok === true;
+  return requirementCheck?.ok === true ||
+    (requirementCheck === undefined && hasRequiredDistinctEffects(game, player, malicious));
 }
 
 function getThousandArmsMaliciousSetup(game: VoidGame | null | undefined, player: VoidPlayer | null | undefined, material: StrategyCard) {
@@ -483,7 +506,7 @@ function getThousandArmsMaliciousSetup(game: VoidGame | null | undefined, player
     };
   }
 
-  const realGame = game?._gameRef || game;
+  const realGame = game._isPerspectiveState ? game : game._gameRef || game;
   const malicious = (player.extraDeck || []).find(
     (card) => card?.id === VOID_IDS.MALICIOUS_DEMON,
   );
@@ -510,7 +533,7 @@ function getThousandArmsMaliciousSetup(game: VoidGame | null | undefined, player
   );
   const requirementsMet =
     requirementCheck?.ok === true ||
-    (typeof requirementCheck?.ok !== "boolean" && activations >= 2);
+    (typeof requirementCheck?.ok !== "boolean" && hasRequiredDistinctEffects(game, player, malicious));
   const materialCheck = realGame.canUseAsAscensionMaterial?.(player, material);
   const canAscendNow =
     requirementsMet && (materialCheck?.ok !== false || !materialCheck);
@@ -542,6 +565,9 @@ function getSimulatedVoidAscensionCandidates(game: VoidGame, player: VoidPlayer,
     }
     const requirements = candidate.ascension?.requirements || [];
     return requirements.every((requirement) => {
+      if (requirement?.type === "material_effects_activated") {
+        return hasRequiredMaterialEffects(game, player, material.id, requirement.effectIds);
+      }
       if (requirement?.type !== "material_effect_activations") return true;
       const required = Number(requirement.count || 0);
       return getMaterialEffectActivationCount(game, player, material.id) >= required;
@@ -2875,7 +2901,9 @@ export default class VoidStrategy extends BaseStrategy {
     }
   }
 
-  recordSimulatedMaterialActivation(state: AiStateShape, player: SimulatedPlayerState, card: SimulatedCardState) {
+  recordSimulatedMaterialActivation(state: AiStateShape, player: SimulatedPlayerState, card: SimulatedCardState, effect?: EffectDefinition) {
+    state.materialDuelStats ||= createMaterialDuelStats();
+    recordMaterialEffectIdentity(state.materialDuelStats, player.id, card, effect?.id);
     if (![VOID_IDS.WALKER, VOID_IDS.THOUSAND_ARMS].includes(card?.id!)) {
       return;
     }
@@ -3040,8 +3068,8 @@ export default class VoidStrategy extends BaseStrategy {
       onAfterSpecialSummon: (payload: VoidSummonPayload) =>
         this.handleVoidSimulatedSpecialSummon(payload),
       onFusionSummon: (payload: VoidSummonPayload) => this.handleVoidSimulatedFusionSummon(payload),
-      onEffectActivated: ({ state, player, card }: Required<Pick<VoidSummonPayload, "state" | "player" | "card">>) =>
-        this.recordSimulatedMaterialActivation(state, player, card),
+      onEffectActivated: ({ state, player, card, effect }: Required<Pick<VoidSummonPayload, "state" | "player" | "card">> & Pick<VoidSummonPayload, "effect">) =>
+        this.recordSimulatedMaterialActivation(state, player, card, effect),
     };
   }
 

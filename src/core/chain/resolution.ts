@@ -14,6 +14,7 @@
  */
 
 import { isAI } from "../Player.js";
+import { recordMaterialEffectIdentity } from "../game/summon/materialStats.js";
 import { CHAIN_ACTIVATION_KINDS } from "../contracts/chain.js";
 import type { CanonicalZone } from "../contracts/zones.js";
 import type { ChainLinkResolutionOutcome } from "../contracts/events.js";
@@ -286,6 +287,7 @@ export async function resolveChainLink(
       this.queueChainFinalization?.(link, negatedResult);
       return negatedResult;
     }
+    recordMaterialEffectIdentity(this.game?.materialDuelStats, player.id, card, effect.id);
     const shouldPresentSpellTrapFlip =
       activationZone === "spellTrap" &&
       card.isFacedown === true &&
@@ -1024,6 +1026,7 @@ async function applyChainEffect(
       chainLevel: link.chainLevel,
       effectId: effect?.id || null,
       sourceAtActivation: link.sourceAtActivation,
+      costPayment: link.costPayment,
       sourceZone: activationZone,
       chainContext: link.context?.type || null,
       context: link.context || null,

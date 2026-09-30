@@ -1,3 +1,4 @@
+import { applyCostSummonMarker, applyPaidCostSummonMarkers } from "../../../effects/costs/summonMarkers.js";
 import { appendSimulatedZoneCard } from "../zones.js";
 import { getNormalSummonTributeOptions } from "../../../game/summon/tributeValue.js";
 import { recordNormalSummonForTurn } from "../../../Player.js";
@@ -58,7 +59,6 @@ import type {
   SimulatedPlayerState,
 } from "../../../contracts/aiState.js";
 import type {
-  CardEffectMarker,
   GameCard,
   SpecialSummonProcedure,
   SynchroMaterialRecord,
@@ -209,30 +209,11 @@ function applySimConditionalMarkersOnSummon({
     const matchingCostCards = (paidCostCards || []).filter((card) =>
       matchesTargetFilters(card, filters, sourceCard, "self"),
     );
-    const min = Number.isFinite(markerConfig.min) ? markerConfig.min : 1;
-    if (matchingCostCards.length < min) continue;
-
-    if (!sourceCard.effectMarkers || typeof sourceCard.effectMarkers !== "object") {
-      sourceCard.effectMarkers = {};
-    }
-
-    const marker: CardEffectMarker = {
-      key: markerConfig.key,
-      sourceEffectId:
-        markerConfig.sourceEffectId || options.effect?.id || action.sourceEffectId || null,
-      createdOnTurn: Number(state?.turnCounter || 0),
-      matchingCostCount: matchingCostCards.length,
-    };
-
-    if (markerConfig.bindToFieldPresence === true && sourceCard.fieldPresenceId) {
-      marker.fieldPresenceId = sourceCard.fieldPresenceId;
-    }
-
-    if (targetPlayer?.id) {
-      marker.controllerId = targetPlayer.id;
-    }
-
-    sourceCard.effectMarkers[markerConfig.key] = marker;
+    applyCostSummonMarker(sourceCard, markerConfig, matchingCostCards.length,
+      markerConfig.sourceEffectId || options.effect?.id || action.sourceEffectId || null,
+      Number(state?.turnCounter || 0));
+    const marker = sourceCard.effectMarkers?.[markerConfig.key];
+    if (marker && targetPlayer?.id) marker.controllerId = targetPlayer.id;
   }
 }
 
@@ -480,6 +461,8 @@ export function applySpecialSummonFromZone(
       options,
     );
     appendSimulatedFieldCard(targetPlayer.field, card);
+    applyPaidCostSummonMarkers(action, card, options.costPayment?.summonMarkers || [],
+      options.effect?.id || null, Number(state.turnCounter || 0));
     summoned.push(card);
     options.onAfterSpecialSummon?.({
       state,

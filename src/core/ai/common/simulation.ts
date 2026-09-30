@@ -1,4 +1,5 @@
-import { captureSimulatedReferences } from "./simulatedActions/shared.js";
+import { hasActionZoneCandidates } from "./actionValidation.js";
+import { resolveTargetsForAction, captureSimulatedReferences } from "./simulatedActions/shared.js";
 import { appendSimulatedZoneCard } from "./zones.js";
 import { appendSimulatedFieldCard } from "./zones.js";
 import {
@@ -1143,6 +1144,27 @@ function matchesSimulatedEventEffect(
   });
 }
 
+function canPaySimulatedMoveCosts(
+  effect: EffectDefinition,
+  selections: ReturnType<typeof selectSimulatedTargets>,
+  source: SimulatedCardState,
+  player: SimulatedPlayerState,
+  state: SimulatedRuntimeState,
+): boolean {
+  return (effect.activationCosts || []).every(cost => {
+    if (cost.type !== "move" || !cost.targetRef) return true;
+    const cards = resolveTargetsForAction(cost, selections, { sourceCard: source, self: player, selfId: player.id },
+      state.player === player ? state.bot : state.player);
+    if (!cards.length || new Set(cards).size !== cards.length) return false;
+    return cards.every(card => {
+      const owner = findCardOwner(state, card);
+      if (!owner || (cost.fromZone && findCardZone(owner, card) !== cost.fromZone)) return false;
+      if (cost.requireDestination && card.isToken && cost.to !== "field") return false;
+      return canMoveCardToZone(player, card, cost.to || "graveyard", owner, { state });
+    });
+  });
+}
+
 function hasRequiredSimSelections(
   targets: NonNullable<EffectDefinition["targets"]> = [],
   selections: ReturnType<typeof selectSimulatedTargets> = {},
@@ -1936,12 +1958,21 @@ export function applyGenericSimulatedMainPhaseAction<
         options: selectionOptions,
       });
       if (!hasRequiredSimSelections(effect.targets || [], selections)) break;
+      if (!canPaySimulatedMoveCosts(effect, selections, card, player, state)) break;
+      if (effect.activationCosts?.length && !effect.actions?.every(
+        candidate => hasActionZoneCandidates(player, candidate, card),
+      )) break;
+      const resolutionOptions: SimulatedActionOptions = {
+        ...selectionOptions, sourceCard: card, effect,
+        referenceSnapshots: captureSimulatedReferences(effect, selections, player, state.player),
+        actionContext: selectionOptions.actionContext || {},
+        costPayment: { status: "paid", actions: [], summonMarkers: [] },
+      };
+      if (!applySimulatedActions({ actions: effect.activationCosts || [], selections, state,
+        selfId: options.selfId || "bot", options: resolutionOptions })) break;
       applySimulatedActions({
-        actions: card.effectsNegated ? [...(effect.activationCosts || []), ...(effect.activationCommitActions || [])] : effectExecutionActions(effect),
-        selections,
-        state,
-        selfId: options.selfId || "bot",
-        options: { ...selectionOptions, sourceCard: card, effect },
+        actions: [...(effect.activationCommitActions || []), ...(card.effectsNegated ? [] : effect.actions || [])],
+        selections, state, selfId: options.selfId || "bot", options: resolutionOptions,
       });
       markSimulatedEffectUsed(
         state,
@@ -1989,12 +2020,22 @@ export function applyGenericSimulatedMainPhaseAction<
         selfId: options.selfId || "bot",
         options: selectionOptions,
       });
+      if (!hasRequiredSimSelections(effect.targets || [], selections)) break;
+      if (!canPaySimulatedMoveCosts(effect, selections, card, player, state)) break;
+      if (effect.activationCosts?.length && !effect.actions?.every(
+        candidate => hasActionZoneCandidates(player, candidate, card),
+      )) break;
+      const resolutionOptions: SimulatedActionOptions = {
+        ...selectionOptions, sourceCard: card, effect,
+        referenceSnapshots: captureSimulatedReferences(effect, selections, player, state.player),
+        actionContext: selectionOptions.actionContext || {},
+        costPayment: { status: "paid", actions: [], summonMarkers: [] },
+      };
+      if (!applySimulatedActions({ actions: effect.activationCosts || [], selections, state,
+        selfId: options.selfId || "bot", options: resolutionOptions })) break;
       applySimulatedActions({
-        actions: effectExecutionActions(effect),
-        selections,
-        state,
-        selfId: options.selfId || "bot",
-        options: { ...selectionOptions, sourceCard: card, effect },
+        actions: [...(effect.activationCommitActions || []), ...(effect.actions || [])],
+        selections, state, selfId: options.selfId || "bot", options: resolutionOptions,
       });
       markSimulatedEffectUsed(
         state,

@@ -120,10 +120,17 @@ export const voidCards = [
         timing: "ignition",
         oncePerTurn: true,
         oncePerTurnName: "void_walker_bounce_summon",
+        oncePerTurnScope: "card",
+        activationCosts: [{
+          type: "move", targetRef: "self", player: "self",
+          fromZone: "field", to: "hand", contextLabel: "cost", requireDestination: true,
+        }],
         actions: [
           {
-            type: "bounce_and_summon",
-            bounceSource: true,
+            type: "special_summon_from_zone",
+            zone: "hand",
+            count: { min: 1, max: 1 },
+            fieldSlotsFreedBeforeSummon: 1,
             filters: {
               archetype: "Void",
               cardKind: "monster",
@@ -380,6 +387,7 @@ export const voidCards = [
         timing: "ignition",
         oncePerTurn: true,
         oncePerTurnName: "void_ghost_wolf_direct",
+        oncePerTurnScope: "card",
         targets: [
           {
             id: "ghost_self",
@@ -526,35 +534,43 @@ export const voidCards = [
         targets: [
           {
             id: "void_bone_spider_lock_target",
+            minAtResolution: 0,
             owner: "opponent",
             zone: "field",
             cardKind: "monster",
             count: { min: 1, max: 1 },
             requireFaceup: true,
           },
-          {
-            id: "void_bone_spider_hollow_cost",
-            owner: "self",
-            zones: ["hand", "field"],
-            cardName: "Void Hollow",
-            cardKind: "monster",
-            count: { min: 1, max: 1 },
-            intent: "cost",
-          },
-        ],
-        activationCosts: [
-          {
-            type: "move",
-            targetRef: "void_bone_spider_hollow_cost",
-            to: "graveyard",
-            contextLabel: "cost",
-          },
         ],
         actions: [
           {
-            type: "forbid_attack_next_turn",
-            targetRef: "void_bone_spider_lock_target",
-            turns: 1,
+            type: "optional_target_actions",
+            optional: false,
+            allowCancel: false,
+            targets: [
+              {
+                id: "void_bone_spider_hollow_send",
+                owner: "self",
+                zones: ["hand", "field"],
+                cardName: "Void Hollow",
+                cardKind: "monster",
+                count: { min: 1, max: 1 },
+              },
+            ],
+            actions: [
+              {
+                type: "move",
+                targetRef: "void_bone_spider_hollow_send",
+                to: "graveyard",
+                contextLabel: "effect",
+                requireDestination: true,
+              },
+              {
+                type: "forbid_attack_next_turn",
+                targetRef: "void_bone_spider_lock_target",
+                turns: 1,
+              },
+            ],
           },
         ],
       },
@@ -621,16 +637,27 @@ export const voidCards = [
             zone: "field",
             cardKind: "monster",
             archetype: "Void",
-            excludeCardName: "Void Forgotten Knight",
             requireFaceup: true,
             intent: "cost",
             count: { min: 1, max: 1 },
           },
         ],
+        activationCosts: [
+          {
+            type: "move",
+            targetRef: "void_forgotten_knight_cost",
+            player: "self",
+            fromZone: "field",
+            to: "graveyard",
+            contextLabel: "cost",
+          },
+        ],
         actions: [
           {
-            type: "special_summon_from_hand_with_cost",
-            costTargetRef: "void_forgotten_knight_cost",
+            type: "special_summon_from_zone",
+            zone: "hand",
+            requireSource: true,
+            fieldSlotsFreedBeforeSummon: 1,
             position: "choice",
             cannotAttackThisTurn: false,
           },
@@ -645,16 +672,17 @@ export const voidCards = [
         timing: "ignition",
         oncePerTurn: true,
         oncePerTurnName: "void_forgotten_knight_gy_destroy",
-        targets: [
+        activationCosts: [
           {
-            id: "void_forgotten_knight_gy_self",
-            owner: "self",
-            zone: "graveyard",
-            cardKind: "monster",
-            cardName: "Void Forgotten Knight",
-            count: { min: 1, max: 1 },
-            autoSelect: true,
+            type: "move",
+            targetRef: "self",
+            player: "self",
+            fromZone: "graveyard",
+            to: "banished",
+            contextLabel: "cost",
           },
+        ],
+        targets: [
           {
             id: "void_forgotten_knight_gy_target",
             owner: "opponent",
@@ -664,10 +692,6 @@ export const voidCards = [
           },
         ],
         actions: [
-          {
-            type: "banish",
-            targetRef: "void_forgotten_knight_gy_self",
-          },
           {
             type: "destroy",
             targetRef: "void_forgotten_knight_gy_target",
@@ -687,15 +711,19 @@ export const voidCards = [
     attribute: "Dark",
     archetype: "Void",
     description:
-      "If a 'Void' Fusion Monster is Fusion Summoned: You can discard this card; that monster becomes immune to your opponent's card effects until the end of the next turn.",
+      "If you Fusion Summon a 'Void' Fusion Monster: You can discard this card; that monster becomes immune to your opponent's card effects until the end of the next turn. You can only use this effect of 'Void Raven' once per turn.",
     image: "assets/Void Raven.png",
     effects: [
       {
         id: "void_raven_fusion_immunity",
+        oncePerTurn: true,
+        oncePerTurnName: "void_raven_fusion_immunity",
+        usagePolicy: "use",
         timing: "on_event",
         triggerRequirement: "optional",
         triggerTiming: "if",
         event: "after_summon",
+        triggerPlayer: "self",
         summonMethods: ["fusion"],
         promptUser: true,
         promptMessage:
@@ -704,25 +732,17 @@ export const voidCards = [
           requires: "self_in_hand",
           triggerArchetype: "Void",
         },
-        targets: [
+        activationCosts: [
           {
-            id: "void_raven_discard_cost",
-            owner: "self",
-            zone: "hand",
-            cardKind: "monster",
-            cardName: "Void Raven",
-            requireThisCard: true,
-            count: { min: 1, max: 1 },
-            autoSelect: true,
+            type: "move",
+            targetRef: "self",
+            player: "self",
+            fromZone: "hand",
+            to: "graveyard",
+            contextLabel: "cost",
           },
         ],
         actions: [
-          {
-            type: "move",
-            targetRef: "void_raven_discard_cost",
-            player: "self",
-            to: "graveyard",
-          },
           {
             type: "grant_void_fusion_immunity",
             archetype: "Void",
@@ -743,7 +763,7 @@ export const voidCards = [
     attribute: "Dark",
     archetype: "Void",
     description:
-      'Gains 100 ATK/DEF for each "Void" monster on your field and in your GY. Once per turn, up to three times per Duel, if this card is in your GY and you have 2 or more "Void Hollow" on your field and/or in your GY: You can Special Summon it.',
+      'Gains 100 ATK/DEF for each "Void" monster on your field and in your GY. If this card is in your GY and you have 2 or more "Void Hollow" on your field and/or in your GY: You can Special Summon it. You can only activate this effect of "Void Tenebris Horn" once per turn, and only 3 times per Duel.',
     image: "assets/Void Tenebris Horn.png",
     effects: [
       {
@@ -844,6 +864,7 @@ export const voidCards = [
         timing: "ignition",
         oncePerTurn: true,
         oncePerTurnName: "void_slayer_brute_hand_summon",
+        oncePerTurnScope: "card",
         targets: [
           {
             id: "void_slayer_brute_cost",
@@ -851,12 +872,21 @@ export const voidCards = [
             zone: "field",
             cardKind: "monster",
             archetype: "Void",
+            intent: "cost",
             count: { min: 2, max: 2 },
           },
         ],
+        activationCosts: [{
+          type: "move", targetRef: "void_slayer_brute_cost", player: "self",
+          fromZone: "field", to: "graveyard", contextLabel: "cost",
+          requireDestination: true, requireAll: true,
+        }],
         actions: [
           {
-            type: "special_summon_from_hand_with_cost",
+            type: "special_summon_from_zone",
+            zone: "hand",
+            requireSource: true,
+            fieldSlotsFreedBeforeSummon: 2,
             costTargetRef: "void_slayer_brute_cost",
             position: "choice",
             cannotAttackThisTurn: false,
@@ -930,6 +960,7 @@ export const voidCards = [
         requireDestroyedIsOpponent: true,
         oncePerTurn: true,
         oncePerTurnName: "void_berserker_bounce_on_destroy",
+        oncePerTurnScope: "card",
         promptUser: true,
         promptMessage:
           "Ativar Void Berserker para devolver 1 carta do oponente para a mÃ£o?",
@@ -975,6 +1006,7 @@ export const voidCards = [
         timing: "ignition",
         oncePerTurn: true,
         oncePerTurnName: "void_serpent_drake_hand_special",
+        oncePerTurnScope: "card",
         targets: [
           {
             id: "void_serpent_drake_hollow_cost",
@@ -986,10 +1018,17 @@ export const voidCards = [
             count: { min: 1, max: 1 },
           },
         ],
+        activationCosts: [{
+          type: "move", targetRef: "void_serpent_drake_hollow_cost", player: "self",
+          fromZone: "field", to: "graveyard", contextLabel: "cost",
+          requireDestination: true,
+        }],
         actions: [
           {
-            type: "special_summon_from_hand_with_cost",
-            costTargetRef: "void_serpent_drake_hollow_cost",
+            type: "special_summon_from_zone",
+            zone: "hand",
+            requireSource: true,
+            fieldSlotsFreedBeforeSummon: 1,
             position: "choice",
             cannotAttackThisTurn: false,
           },
@@ -1062,12 +1101,13 @@ export const voidCards = [
       {
         id: "void_hydra_titan_summon",
         timing: "on_event",
-        triggerRequirement: "optional",
-        triggerTiming: "when",
+        triggerRequirement: "mandatory",
+        triggerTiming: "if",
         event: "after_summon",
         summonMethods: ["fusion"],
+        requireSelfAsSummoned: true,
         description:
-          "When Fusion Summoned: Destroy all Spell and Trap Cards your opponent controls, and if you do, draw 1 card for each card destroyed.",
+          "If this card is Fusion Summoned: Destroy all Spell and Trap Cards your opponent controls, and if you do, draw 1 card for each card destroyed.",
         actions: [
           {
             type: "destroy_cards_by_scope",
@@ -1092,7 +1132,7 @@ export const voidCards = [
         triggerTiming: "if",
         event: "before_destroy",
         description:
-          "[Once per turn]: You can negate the destruction of this card; reduce its ATK by 700.",
+          "Once per turn: If this card would be destroyed by battle or card effects: You can reduce its ATK by 700; negate the destruction of this card.",
         oncePerTurn: true,
         oncePerTurnScope: "card",
         oncePerTurnName: "void_hydra_titan_negate_destruction",
@@ -1334,6 +1374,7 @@ export const voidCards = [
         timing: "ignition",
         oncePerTurn: true,
         oncePerTurnName: "thousand_arms_summon_from_hand",
+        oncePerTurnScope: "card",
         targets: [
           {
             id: "thousand_arms_cost",
@@ -1345,10 +1386,22 @@ export const voidCards = [
             count: { min: 1, max: 1 },
           },
         ],
+        activationCosts: [
+          {
+            type: "move",
+            targetRef: "thousand_arms_cost",
+            player: "self",
+            fromZone: "field",
+            to: "graveyard",
+            contextLabel: "cost",
+          },
+        ],
         actions: [
           {
-            type: "special_summon_from_hand_with_cost",
-            costTargetRef: "thousand_arms_cost",
+            type: "special_summon_from_zone",
+            zone: "hand",
+            requireSource: true,
+            fieldSlotsFreedBeforeSummon: 1,
             position: "choice",
             cannotAttackThisTurn: false,
           },
@@ -1364,13 +1417,19 @@ export const voidCards = [
         requireFaceup: true,
         oncePerTurn: true,
         oncePerTurnName: "thousand_arms_bounce_and_revive",
-        actions: [
+        oncePerTurnScope: "card",
+        activationCosts: [
           {
             type: "move",
             targetRef: "self",
             player: "self",
+            fromZone: "field",
             to: "hand",
+            contextLabel: "cost",
+            requireDestination: true,
           },
+        ],
+        actions: [
           {
             type: "special_summon_from_zone",
             zone: "graveyard",
@@ -1471,7 +1530,10 @@ export const voidCards = [
     monsterType: "ascension",
     ascension: {
       materialId: 221,
-      requirements: [{ type: "material_effect_activations", count: 2 }],
+      requirements: [{
+        type: "material_effects_activated",
+        effectIds: ["thousand_arms_summon_from_hand", "thousand_arms_bounce_and_revive"],
+      }],
       position: "choice",
     },
     dynamicExtraAttacks: { source: "graveyard_count", name: "Void Hollow" },
@@ -1640,6 +1702,14 @@ export const voidCards = [
 
         activationZones: ["graveyard"],
         id: "arcturus_fallen_gy_revival",
+        activationCosts: [{
+          type: "move",
+          targetRef: "self",
+          player: "self",
+          fromZone: "graveyard",
+          to: "banished",
+          contextLabel: "cost",
+        }],
         timing: "ignition",
         actions: [
           {
@@ -1655,7 +1725,6 @@ export const voidCards = [
             },
             count: { min: 1, max: 3 },
             distinctNames: true,
-            banishCost: true,
             position: "choice",
             promptPlayer: true,
             negateEffects: true,
@@ -1726,6 +1795,7 @@ export const voidCards = [
         targets: [
           {
             id: "void_shadow_crawler_destroy_target",
+            minAtResolution: 0,
             owner: "opponent",
             zone: "field",
             cardKind: "monster",
@@ -1733,29 +1803,37 @@ export const voidCards = [
             requireFaceup: true,
             count: { min: 1, max: 1 },
           },
-          {
-            id: "void_shadow_crawler_cost",
-            owner: "self",
-            zone: "field",
-            cardKind: "monster",
-            archetype: "Void",
-            intent: "cost",
-            count: { min: 1, max: 1 },
-          },
-        ],
-        activationCosts: [
-          {
-            type: "move",
-            targetRef: "void_shadow_crawler_cost",
-            player: "self",
-            to: "graveyard",
-            contextLabel: "cost",
-          },
         ],
         actions: [
           {
-            type: "destroy",
-            targetRef: "void_shadow_crawler_destroy_target",
+            type: "optional_target_actions",
+            optional: false,
+            allowCancel: false,
+            targets: [
+              {
+                id: "void_shadow_crawler_send",
+                owner: "self",
+                zone: "field",
+                cardKind: "monster",
+                archetype: "Void",
+                count: { min: 1, max: 1 },
+              },
+            ],
+            actions: [
+              {
+                type: "move",
+                targetRef: "void_shadow_crawler_send",
+                player: "self",
+                fromZone: "field",
+                to: "graveyard",
+                contextLabel: "effect",
+                requireDestination: true,
+              },
+              {
+                type: "destroy",
+                targetRef: "void_shadow_crawler_destroy_target",
+              },
+            ],
           },
         ],
       },

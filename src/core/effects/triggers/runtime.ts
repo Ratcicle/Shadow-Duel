@@ -22,6 +22,7 @@ import type {
   TriggerTiming,
 } from "../../contracts/effects.js";
 import type { SummonMethod } from "../../contracts/summon.js";
+import type { MaterialDuelStats } from "../../contracts/gameRuntime.js";
 import type {
   RawSelectionContract,
   RawSelectionRequirement,
@@ -440,6 +441,7 @@ export interface TemporaryEventEffect {
 }
 
 export interface TriggerGamePort {
+  materialDuelStats?: MaterialDuelStats;
   player: TriggerRuntimePlayer;
   bot: TriggerRuntimePlayer;
   phase?: string;

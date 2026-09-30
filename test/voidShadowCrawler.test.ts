@@ -108,21 +108,34 @@ test("cada cópia de Void Shadow Crawler pode usar seu efeito uma vez no turno",
   secondTarget.effects = [];
   placeFieldCards(game.player.field, firstCrawler, secondCrawler, firstCost, secondCost);
   placeFieldCards(game.bot.field, firstTarget, secondTarget);
+  game.player.controllerType = "human";
+  const choices = [firstCost, secondCost];
+  t.mock.method(game, "startTargetSelectionSession", (input: Parameters<typeof game.startTargetSelectionSession>[0]) => {
+    const card = required(choices.shift());
+    assert.ok(input);
+    const normalized = game.normalizeSelectionContract(input.selectionContract);
+    assert.ok(normalized.ok);
+    const requirement = required(normalized.contract.requirements[0]);
+    assert.equal(requirement.id, "void_shadow_crawler_send");
+    const candidate = required(requirement.candidates?.find(c => c.cardRef === card));
+    input.execute?.({ [requirement.id]: [required(candidate.key)] });
+  });
 
-  const activate = (crawler: Card, cost: Card, target: Card) =>
+  const activate = (crawler: Card, target: Card) =>
     game.tryActivateMonsterEffect(
       crawler,
       {
         void_shadow_crawler_destroy_target: [target],
-        void_shadow_crawler_cost: [cost],
       },
       "field",
       game.player,
       { effectId: EFFECT_ID },
     );
 
-  const firstResult = await activate(firstCrawler, firstCost, firstTarget);
-  const secondResult = await activate(secondCrawler, secondCost, secondTarget);
+  const firstResult = await activate(firstCrawler, firstTarget);
+  const retry = await activate(firstCrawler, secondTarget);
+  assert.equal(retry.success, false);
+  const secondResult = await activate(secondCrawler, secondTarget);
 
   assert.ok(firstResult.success === true);
   assert.ok(secondResult.success === true);

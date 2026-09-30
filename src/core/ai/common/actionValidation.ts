@@ -168,6 +168,13 @@ export function validateHandIgnitionCandidate({
     return { ok: false, reason: "effect is not from hand" };
   }
 
+  for (const target of effect.targets || []) {
+    if (target.intent !== "cost" || target.owner !== "self") continue;
+    if (countStrategicallyViableCostCandidates(player, target, activationContext) < (target.count?.min ?? 1)) {
+      return { ok: false, reason: "not enough cost targets" };
+    }
+  }
+
   const actions = effect.actions || [];
   const summonsFromHand = actions.some((action) =>
     String(action?.type || "").startsWith("special_summon_from_hand"),
@@ -191,6 +198,9 @@ export function validateHandIgnitionCandidate({
   }
 
   for (const action of actions) {
+    if (effect.activationCosts?.length && !hasActionZoneCandidates(player, action, card, activationContext)) {
+      return { ok: false, reason: "No legal summon candidate" };
+    }
     const costCheck = validateCostCandidateCount({
       player,
       effect,
@@ -372,7 +382,8 @@ export function hasActionZoneCandidates(
     const zoneCards = zoneNames.flatMap((zone) => getPlayerZoneCards(player, zone));
 
     if (action.requireSource) {
-      return !!source && zoneCards.includes(source);
+      return !!source && zoneCards.includes(source) && cardPassesSpecialSummonRestrictions(source, player) &&
+        (player.field || []).length - (action.fieldSlotsFreedBeforeSummon || 0) < 5;
     }
 
     const filters: MutableAiCardFilter = {

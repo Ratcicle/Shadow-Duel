@@ -77,8 +77,8 @@ for (const actor of ["player", "bot"] as const) {
       const state = bot.cloneGameState(botGame);
       const simSource = required(state.bot.field[0]); const simTarget = required(state.bot.hand[0]);
       const simulatedEvents: string[] = [];
-      applySimulatedActions({ state, actions: effect.actions, options: {
-        sourceCard: simSource, chooseSpecialSummonPosition: () => position,
+      applySimulatedActions({ state, actions: [...(effect.activationCosts || []), ...(effect.actions || [])], options: {
+        effect, sourceCard: simSource, chooseSpecialSummonPosition: () => position,
         emitSimulatedEvent(event, payload) {
           const card = Reflect.get(payload, "card");
           if (event === "card_moved") simulatedEvents.push(card === simSource ? "source_to_hand" : "target_to_field");

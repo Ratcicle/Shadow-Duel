@@ -1,5 +1,6 @@
 import { getCardDisplayName, getUIText } from "../../i18n.js";
 import { isAI } from "../../Player.js";
+import { recordMaterialEffectIdentity } from "../../game/summon/materialStats.js";
 import { captureSourceSnapshot } from "../../chain/link.js";
 import { walkActionList } from "../../actionHandlers/actionWalker.js";
 import { isTriggerSourceLegal } from "./collectors/shared.js";
@@ -321,6 +322,9 @@ export async function handleTriggeredEffect(
     }
   }
 
+  if (ctx.player) {
+    recordMaterialEffectIdentity(this.game.materialDuelStats, ctx.player.id, sourceCard, effect.id);
+  }
   const actionsResult = await this.applyActions(
     effect.actions || [],
     ctx,

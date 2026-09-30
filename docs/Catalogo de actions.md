@@ -829,6 +829,8 @@ Moves target cards to another zone.
 | `contextLabel` | nao | string |  |
 | `storeResultAs` | nao | string | Stores successfully moved cards as an internal target reference. |
 | `storeLevelSumAs` | nao | string | Stores the sum of the moved cards' Levels on the action context. |
+| `requireDestination` | nao | boolean | Only counts moves reaching the declared destination as successful; redirected moves and removed tokens do not satisfy dependent actions. |
+| `requireAll` | nao | boolean | Requires every selected card to move successfully; stops the sequence on an incomplete move. |
 
 **Exemplos**
 
@@ -1462,6 +1464,8 @@ Special Summons cards from a configured zone.
 
 | Campo | Obrigatorio | Contrato | Descricao |
 | --- | --- | --- | --- |
+| `costTargetRef` | nao | string |  |
+| `conditionalMarkersOnSummon` | nao | array | Grants field-presence markers after a successful summon using immutable evidence of the paid activation cost. |
 | `targetRef` | nao | string | References an effect target id or a context target such as self. |
 | `selectionId` | nao | string |  |
 | `selectionMessage` | nao | string |  |

@@ -177,8 +177,8 @@ export function applySimulatedActions({
   state,
   selfId = "bot",
   options = {},
-}: SimulatedActionBatchInput): void {
-  if (!Array.isArray(actions)) return;
+}: SimulatedActionBatchInput): boolean {
+  if (!Array.isArray(actions)) return true;
   const { self, opponent } = getPerspectivePlayers(state, selfId);
   options = { ...options, referenceSnapshots: options.referenceSnapshots || captureSimulatedReferences(options.effect, selections, self, opponent) };
 
@@ -216,6 +216,7 @@ export function applySimulatedActions({
       opponent,
       applySimulatedActions,
     });
-    if (result === STOP_SIMULATION) return;
+    if (result === STOP_SIMULATION) return false;
   }
+  return true;
 }

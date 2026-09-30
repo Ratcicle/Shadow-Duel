@@ -1761,6 +1761,8 @@ export const ACTION_CATALOG = {
       "contextLabel",
       "storeResultAs",
       "storeLevelSumAs",
+      "requireDestination",
+      "requireAll",
     ],
     fields: {
       ...COMMON_TARGET_FIELDS,
@@ -1790,6 +1792,11 @@ export const ACTION_CATALOG = {
         type: "string",
         description:
           "Stores the sum of the moved cards' Levels on the action context.",
+      },
+      requireAll: { type: "boolean", description: "Requires every selected card to move successfully; stops the sequence on an incomplete move." },
+      requireDestination: {
+        type: "boolean",
+        description: "Only counts moves reaching the declared destination as successful; redirected moves and removed tokens do not satisfy dependent actions.",
       },
     },
     targetRef: "optional",
@@ -2612,6 +2619,8 @@ export const ACTION_CATALOG = {
     summary: "Special Summons cards from a configured zone.",
     handler: "handleSpecialSummonFromZone",
     optional: [
+      "costTargetRef",
+      "conditionalMarkersOnSummon",
       "targetRef",
       "selectionId",
       "selectionMessage",
@@ -2654,6 +2663,8 @@ export const ACTION_CATALOG = {
       "fieldSlotsFreedBeforeSummon",
     ],
     fields: {
+      costTargetRef: { type: "string" },
+      conditionalMarkersOnSummon: { type: "array", description: "Grants field-presence markers after a successful summon using immutable evidence of the paid activation cost." },
       selectionId: { type: "string" },
       selectionMessage: { type: "string" },
       ...COMMON_TARGET_FIELDS,

@@ -1079,3 +1079,12 @@ com `filters.excludeSelf` e verifica a possibilidade da Invocação posterior.
 Na resolução, consulta novamente a mão, move cada descarte individualmente e
 só então consulta o Cemitério. A perda posterior de candidatos não desfaz os
 descartes. Descarte de efeito não deve ser declarado como custo de ativação.
+
+
+### Custos de movimento e marcadores de Invocação
+
+Declare pagamentos em `activationCosts` para concluí-los antes da janela de respostas. Nos custos de movimento, informe `fromZone`, `contextLabel: "cost"` e `requireDestination: true`. Use `targetRef: "self"` quando a própria fonte deve pagar; para materiais escolhidos pelo jogador, declare alvos com `intent: "cost"`.
+
+`move.requireAll: true` valida todas as cartas selecionadas antes de movimentá-las e exige sucesso em cada movimento. Combine com `requireDestination: true` quando todos os materiais precisam chegar ao destino declarado. Um pagamento incompleto interrompe a ativação; movimentos já concluídos permanecem pagos. Movimentos, eventos e apresentação continuam sequenciais. Actions que omitem `requireAll` preservam o comportamento existente.
+
+Mantenha as escolhas de Invocação em `special_summon_from_zone`, durante a resolução. `fieldSlotsFreedBeforeSummon` considera as vagas liberadas pelo pagamento na validação prévia; `requireSource: true` Invoca a fonte original. `costTargetRef` e `conditionalMarkersOnSummon` consultam evidências tipadas capturadas durante o pagamento bem-sucedido: mudanças posteriores no nome ou na zona do material não alteram essas evidências. Os marcadores são aplicados somente após a Invocação bem-sucedida. Use `bindToFieldPresence: true` para limitá-los àquela permanência no campo; outra Invocação ou outra cópia não herda o bônus.

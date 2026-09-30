@@ -145,6 +145,7 @@ export interface AscensionRequirement {
   readonly type:
     | "field_counters_at_least"
     | "material_effect_activations"
+    | "material_effects_activated"
     | "material_turns_on_field"
     | "material_destroyed_opponent_monsters"
     | "player_lp_gte"
@@ -153,6 +154,7 @@ export interface AscensionRequirement {
     | "player_graveyard_gte";
   readonly amount?: number;
   readonly count?: number;
+  readonly effectIds?: readonly string[];
   readonly counterType?: string;
   readonly filters?: CardFilter;
   readonly max?: number;

@@ -1,4 +1,5 @@
 import { isAI } from "../../Player.js";
+import { applyPaidCostSummonMarkers } from "../../effects/costs/summonMarkers.js";
 import { checkSpecialSummonEligibility } from "../../game/summon/eligibility.js";
 import { resolveExactInstanceSelection } from "../../AutoSelector.js";
 import { assignAutomaticFieldSlot } from "../../game/zones/placement.js";
@@ -1116,6 +1117,10 @@ async function summonCards(
       );
     }
 
+    if (summonPlayer.field.includes(card)) {
+      applyPaidCostSummonMarkers(action, card, ctx?.activationContext?.costPayment?.summonMarkers || [],
+        ctx?.effect?.id || ctx?.activationContext?.effectId || null, Number(game.turnCounter || 0));
+    }
     summoned++;
     summonedCards.push(card);
   }

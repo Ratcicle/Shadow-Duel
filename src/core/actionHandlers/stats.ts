@@ -618,22 +618,17 @@ export async function handleSetStatsToZeroAndNegate(
 
     let cardModified = false;
 
-    // Store original stats if setting to zero
-
-    if (setAtkToZero && card.originalAtk == null) {
-      card.originalAtk = card.atk;
-
-      card.atk = 0;
-
-      cardModified = true;
-    }
-
-    if (setDefToZero && card.originalDef == null) {
-      card.originalDef = card.def;
-
-      card.def = 0;
-
-      cardModified = true;
+    if (setAtkToZero || setDefToZero) {
+      cardModified = (await engine.applyModifyStatsTemp(
+        {
+          type: "modify_stats_temp",
+          targetRef: action.targetRef,
+          atkFactor: setAtkToZero ? 0 : 1,
+          defFactor: setDefToZero ? 0 : 1,
+        },
+        ctx,
+        { [action.targetRef]: [card] },
+      )) !== false;
     }
 
     // Negate effects

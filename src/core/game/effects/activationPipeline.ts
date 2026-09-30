@@ -18,6 +18,7 @@
  */
 
 import { isAI } from "../../Player.js";
+import { recordMaterialEffectIdentity } from "../summon/materialStats.js";
 import {
   capCostDefinitionsByLinkedTargetCapacity,
   resolveCountFromSelectionDefinitions,
@@ -74,6 +75,7 @@ import type {
   MaybePromise as GameMaybePromise,
   MoveCardOptions,
   MoveCardResult,
+  MaterialDuelStats,
 } from "../../contracts/gameRuntime.js";
 
 export type {
@@ -161,6 +163,7 @@ interface ActivationSelectionSessionInput {
 }
 
 interface ActivationPipelineHost {
+  materialDuelStats?: MaterialDuelStats;
   player: GamePlayer;
   turnCounter: number;
   disableChains: boolean;
@@ -1234,6 +1237,7 @@ export async function runActivationPipeline(
           await this.chainSystem.openActivationChain(preparedActivation);
         resolutionResult = this.normalizeActivationResult(rawResolutionResult);
       } else {
+        recordMaterialEffectIdentity(this.materialDuelStats, owner.id, resolvedCard, preparedEffect.id);
         const rawResolutionResult = await config.activate!(
           preparedSelections,
           {

@@ -28,6 +28,7 @@ type DestroyGamePort = Omit<ActionRuntimeGamePort, "ui"> & {
 
 interface DestroyActionHost {
   game: DestroyGamePort;
+  isEffectNegated(card: ActionRuntimeCard): boolean | null | undefined;
   readonly ui: {
     log?(message: string): void;
     showDestructionNegationPrompt?(
@@ -173,7 +174,7 @@ export async function checkBeforeDestroyNegations(
   card: ActionRuntimeCard | null | undefined,
   ctx: EffectContext,
 ): Promise<NegationCheckResult> {
-  if (!card || !card.effects) {
+  if (!card || !card.effects || this.isEffectNegated(card)) {
     return { negated: false };
   }
 
@@ -185,6 +186,7 @@ export async function checkBeforeDestroyNegations(
   for (const effect of card.effects) {
     if (!effect || effect.timing !== "on_event") continue;
     if (effect.event !== "before_destroy") continue;
+    if (!canPayDestructionNegationCost(card, effect)) continue;
 
     // Check once-per-turn for negation
     const optCheck = this.checkOncePerTurn(card, owner, effect);
@@ -206,6 +208,13 @@ export async function checkBeforeDestroyNegations(
         continue;
       }
     }
+
+    // A human prompt may yield while the card's state changes.
+    if (
+      this.isEffectNegated(card) ||
+      !canPayDestructionNegationCost(card, effect) ||
+      !this.checkOncePerTurn(card, owner, effect).ok
+    ) continue;
 
     // Apply negation actions (e.g., cost payment)
     const negationCtx = {
@@ -245,6 +254,20 @@ export async function checkBeforeDestroyNegations(
   }
 
   return { negated: false };
+}
+
+function canPayDestructionNegationCost(
+  card: ActionRuntimeCard,
+  effect: EffectDefinition,
+): boolean {
+  let atkCost = 0;
+  for (const action of effect.negationCost || []) {
+    if (action.type !== "reduce_self_atk") continue;
+    const amount = action.amount;
+    if (!Number.isFinite(amount) || amount < 0) return false;
+    atkCost += amount;
+  }
+  return atkCost === 0 || (typeof card.atk === "number" && Number.isFinite(card.atk) && card.atk >= atkCost);
 }
 
 /**

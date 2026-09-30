@@ -1,5 +1,5 @@
 import type { CardAction } from "./actions.js";
-import type { DeferredCardToGraveTriggerPackage } from "./gameRuntime.js";
+import type { DeferredCardToGraveTriggerPackage, MaterialDuelStats } from "./gameRuntime.js";
 import type { EventTriggerOccurrence } from "./events.js";
 import type {
   BattlePosition,
@@ -307,6 +307,15 @@ export interface ChainActionTraceEntry {
 export interface ChainCostPayment {
   status: "not_required" | "paid";
   actions: ChainActionTraceEntry[];
+  summonMarkers?: PaidCostMarkerEvidence[];
+}
+
+/** Filter results captured when a card actually pays a cost, before responses. */
+export interface PaidCostMarkerEvidence {
+  sourceEffectId: string | null;
+  costTargetRef: string;
+  key: string;
+  matchingCostCount: number;
 }
 
 export interface ChainActivationCommitment {
@@ -358,6 +367,7 @@ export interface ChainActivationAttempt {
 }
 
 export interface PreparedActivationContext {
+  costPayment?: ChainCostPayment | null;
   decisions?: import("./ai.js").AIDecisionPlan;
   activationZone?: ChainActivationZone;
   sourceZone?: ChainSourceZone | null;
@@ -1389,6 +1399,7 @@ export interface ChainMoveCardOptions {
 
 /** Minimal Game surface consumed by Chain modules. */
 export interface ChainGamePort {
+  materialDuelStats?: MaterialDuelStats;
   player: ChainPlayer;
   bot: ChainPlayer;
   turn?: PlayerId | string;
