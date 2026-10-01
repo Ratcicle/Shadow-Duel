@@ -989,7 +989,7 @@ export const mirageboundCards = [
       },
     ],
     description:
-      "\"Miragebound Glass Viper\" + 1 \"Miragebound\" monster\n\nYou can Fusion Summon this card from your Extra Deck by sending the above materials you control to the GY.\n\nIf this card is Fusion Summoned: change the battle positions of all monsters your opponent controls.\n\nWhile this card is face-up on the field, each time a monster your opponent controls changes its battle position by a \"Miragebound\" card effect, it loses 300 ATK/DEF until the end of this turn.\n\nIf this card would be destroyed by battle: you can return it to the Extra Deck instead.",
+      "\"Miragebound Glass Viper\" + 1 \"Miragebound\" monster\n\nMust be Fusion Summoned from your Extra Deck by sending the above materials you control to the GY, and cannot be Special Summoned by other ways.\n\nIf this card is Fusion Summoned: change the battle positions of all monsters your opponent controls.\n\nWhile this card is face-up on the field, each time a monster your opponent controls changes its battle position by a \"Miragebound\" card effect, it loses 300 ATK/DEF until the end of this turn.\n\nIf this card would be destroyed by battle: you can return it to the Extra Deck instead.",
     image: "assets/Miragebound Desert Leviathan.png",
     effects: [
       {

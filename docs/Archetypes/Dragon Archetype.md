@@ -97,8 +97,6 @@ Nenhuma carta auxiliar própria do arquétipo está listada neste catálogo.
 **253 — Metal Armored Dragon**
 
 > Material de Ascensão: “Dragão Blindado”. Requisito: nenhum.
-> 
-> Enquanto estiver em Posição de Defesa, este card
 
 **267 — Rainbow Cosmic Dragon**
 

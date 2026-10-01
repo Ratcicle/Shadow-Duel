@@ -698,6 +698,10 @@ export interface ReplayDriverGamePort extends CanonicalReplayGamePort {
     player: ReplayRuntimePlayer,
     options: object,
   ): unknown;
+  tryAscensionSummon(
+    material: ReplayRuntimeCard,
+    options: { player: ReplayRuntimePlayer },
+  ): unknown;
   performExtraDeckSummonProcedure(
     card: ReplayRuntimeCard,
     player: ReplayRuntimePlayer,

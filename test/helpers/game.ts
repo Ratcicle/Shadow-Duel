@@ -100,18 +100,28 @@ export async function completeTestSelections(game: RuntimeGame, action: Promise<
   let done = false;
   let failure: unknown;
   const completion = action.then(() => { done = true; }, error => { failure = error; done = true; });
+  const resolutions = new Set<Promise<void>>();
   for (let attempt = 0; attempt < 3000; attempt++) {
     const session = game.targetSelection;
     if (session) {
       for (const requirement of session.requirements) {
         session.selections[requirement.id] = requirement.candidates.slice(0, requirement.min).map(card => card.key);
       }
-      await game.finishTargetSelection();
+      // Resolving one choice can wait for a second choice from an on-summon
+      // trigger. Keep driving that session while the first callback is pending.
+      const resolution = game.finishTargetSelection();
+      resolutions.add(resolution);
+      void resolution.then(() => resolutions.delete(resolution), error => {
+        failure = error;
+        resolutions.delete(resolution);
+      });
     }
-    if (done && !game.targetSelection) break;
+    if (done && !game.targetSelection && resolutions.size === 0) break;
     await new Promise<void>(resolve => setTimeout(resolve, 1));
   }
   assert.ok(done, "the action must finish with all human selections consumed");
+  assert.equal(game.targetSelection, null, "all human choices must be submitted");
+  assert.equal(resolutions.size, 0, "all selection callbacks must finish");
   await completion;
   if (failure) throw failure;
 }

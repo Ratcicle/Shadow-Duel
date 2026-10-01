@@ -1,13 +1,16 @@
 # Shadow Duel — Regras da Invocação-Ascensão (Ascension Summon)
 
-Este documento consolida **todas as regras definidas até agora** para o novo tipo de Invocação: **Invocação‑Ascensão**.
+Este documento descreve as regras e os procedimentos atuais da
+**Invocação‑Ascensão**, incluindo as decisões de redirecionamento de materiais
+e seleção humana confirmadas em 30/09/2026.
 
 ---
 
 ## 1) O que é Invocação‑Ascensão
 
-- **Invocação‑Ascensão** é uma forma de invocação especial de um **Monstro de Ascensão** (uma “evolução” de um monstro específico).
-- Monstros de Ascensão ficam no **Extra Deck**, junto com **Monstros de Fusão**.
+- **Invocação‑Ascensão** é uma forma de Invocação-Especial de um **Monstro de Ascensão**, usando um material indicado pela carta.
+- O material pode ser um monstro específico (`materialId`) ou um monstro que satisfaça filtros declarativos (`materialFilters`), como arquétipo e Nível.
+- Monstros de Ascensão ficam no **Extra Deck**, junto com os monstros de **Fusão** e **Sincro**.
 
 ---
 
@@ -15,18 +18,25 @@ Este documento consolida **todas as regras definidas até agora** para o novo ti
 
 Para Invocar por Ascensão:
 
-1. Você deve **controlar no campo** um **Monstro Material** específico.
-2. Você realiza a Ascensão ao **enviar esse monstro do campo para o Cemitério**.
-3. O **Monstro de Ascensão** correspondente é então **Invocado do Extra Deck**.
+1. Na sua **Fase Principal 1 ou 2**, com a janela normal de ação disponível, você deve controlar um material elegível **com a face para cima**.
+2. Escolha o material e o Monstro de Ascensão, cumprindo o cooldown e os requisitos da carta.
+3. O material é enviado do campo para o Cemitério pelo movimento canônico, sujeito aos redirecionamentos aplicáveis.
+4. O Monstro de Ascensão é Invocado do Extra Deck pela transação normal de Invocação, com sua janela de resposta e escolha de posição/espaço.
 
-**Regra fixa:** o **material usado** na Invocação‑Ascensão **vai para o Cemitério**.
+**Redirecionamento permitido:** se um efeito fizer o material ser banido em
+vez de chegar ao Cemitério, a Ascensão continua válida. O destino solicitado
+é o Cemitério, mas não é obrigatório que seja o destino final. Uma tentativa
+de movimento que falhe não paga o material. O movimento e a Invocação são
+etapas separadas, com os eventos próprios de cada uma.
 
 ---
 
 ## 3) Regra global obrigatória (cooldown de 1 turno)
 
-- **Todo Monstro Material de Ascensão deve estar no campo por pelo menos 1 turno** antes da Invocação‑Ascensão.
-- Portanto, **não é permitido** realizar a Invocação‑Ascensão **no mesmo turno** em que o material foi invocado/colocado no campo.
+- O material deve estar **com a face para cima** desde um turno anterior.
+- Não é permitido usá-lo no mesmo turno em que foi Invocado com a face para cima ou revelado. O runtime considera o mais recente entre `summonedTurn` e `revealedTurn`; `setTurn` não satisfaz esse requisito.
+- O tempo que o monstro passou Baixado não permite Ascensão imediata ao revelá-lo. Exemplo: Baixado no turno 1 e revelado no turno 3, ele só pode servir de material a partir do turno 4, respeitando as demais condições.
+- A troca para o turno seguinte pode ser a do adversário; realizar o procedimento continua exigindo a própria Fase Principal.
 
 ---
 
@@ -46,7 +56,7 @@ Para Invocar por Ascensão:
 
 ---
 
-## 5) Progresso por “nome do material” (vale para qualquer cópia)
+## 5) Progresso compartilhado entre cópias do material
 
 O requisito declarativo `material_effects_activated` usa `effectIds` para exigir
 cada efeito listado ao menos uma vez. Exemplo: Demônio Malicioso (223) exige
@@ -59,11 +69,15 @@ O registro é separado por jogador, persiste entre turnos e mudanças de zona e
 é limpo ao reiniciar o duelo. O requisito numérico `material_effect_activations`
 mantém sua contagem existente, separada desse histórico de efeitos distintos.
 
-- Uma vez que os requisitos forem cumpridos **pelo monstro‑matéria (por identidade/nome do material)**, **qualquer uma das 3 cópias** desse monstro pode servir como material para a Invocação‑Ascensão.
+- Uma vez cumpridos os requisitos históricos de um material, **qualquer cópia elegível** daquele monstro pode usar esse progresso para a Invocação‑Ascensão.
 - Em outras palavras: o “progresso/contagem” do requisito é **compartilhado por todas as cópias** daquele material no duelo (não é preso a uma única instância).
 
+O histórico é indexado por jogador e **ID de definição do material**. Quando
+`materialFilters` permite monstros de IDs diferentes, usar o mesmo filtro
+não soma seus históricos: consulta-se o ID do material escolhido.
+
 > Observação: isso não elimina a regra global do item (3).  
-> Mesmo que o requisito já esteja “cumprido”, a cópia usada como material ainda precisa estar no campo há pelo menos 1 turno.
+> Mesmo que o requisito já esteja cumprido, a cópia usada ainda precisa satisfazer o cooldown com a face para cima.
 
 ---
 
@@ -72,23 +86,28 @@ mantém sua contagem existente, separada desse histórico de efeitos distintos.
 Uma Invocação‑Ascensão é válida quando **todas** as condições abaixo são verdadeiras:
 
 1. O Monstro de Ascensão está no **Extra Deck**.
-2. Existe no campo um Monstro que corresponde ao **material específico** exigido por aquele Monstro de Ascensão.
-3. O material escolhido está no campo há **pelo menos 1 turno**.
-4. Se o Monstro de Ascensão tiver requisitos específicos, eles estão **cumpridos** (por progresso compartilhado por nome do material e/ou checagens de estado como LP/mão/gy).
+2. Você controla um monstro **com a face para cima** que corresponde ao material específico ou aos filtros exigidos.
+3. O material escolhido satisfaz o cooldown contado da Invocação face-up ou da revelação mais recente.
+4. Se o Monstro de Ascensão tiver requisitos específicos, eles estão **cumpridos** (por progresso compartilhado entre cópias do material e/ou checagens de estado como PV, mão e Cemitério).
+5. É a sua Fase Principal 1 ou 2, sem Chain, resolução, seleção ou outra janela de resposta pendente que impeça iniciar a ação.
+6. As restrições de Invocação e de presença no campo são respeitadas, considerando o espaço liberado pelo material.
 
 ---
 
 ## 7) Diretrizes de implementação (para engine)
 
-*(Opcional, para orientar implementação sem engessar o design)*
-
-- O engine deve conseguir:
-  - Validar material específico.
-  - Aplicar a regra global de 1 turno no campo.
+- A engine deve:
+  - Validar o material específico ou os filtros declarados.
+  - Aplicar o cooldown de presença com a face para cima.
   - Checar requisitos opcionais declarativos (sem “parser de texto”).
-  - Armazenar progresso por **identidade/nome do material** (ex.: destruições e ativações).
-- A resolução deve ser **manual**, sem auto‑seleções:
-  - escolher material no campo → escolher Monstro de Ascensão no Extra Deck → escolher posição → resolver.
+  - Armazenar progresso por jogador e ID de definição do material (ex.: destruições e ativações).
+- Há dois pontos de entrada humanos:
+  - pelo material no campo: escolher o material → escolher o Monstro de Ascensão no Extra Deck;
+  - pelo Extra Deck: escolher o Monstro de Ascensão → escolher o material no campo.
+- A escolha restante é apresentada **mesmo quando há uma única opção legal**. Nenhum material é comprometido antes da confirmação; o jogador pode cancelar essa seleção.
+- Posição e espaço seguem seus fluxos próprios. A preferência de colocação de cartas continua definindo a escolha automática/manual do slot.
+- Uma escolha explícita já fornecida pelo fluxo não exige uma segunda seleção do mesmo card. A IA continua usando seus resolvedores de decisão.
+- As escolhas humanas usam a sessão de seleção e o broker; ausência de interface não autoriza uma escolha automática. O playback consome as decisões gravadas.
 
 ---
 

@@ -127,7 +127,7 @@ test("recorder preserva key order, defaults e assinatura do formato", () => {
   assert.equal(recording.schemaVersion, 2);
   assert.equal(recording.engineVersion, "field-positions-v2");
   assert.equal(recording.cardDatabaseSignature, getCardDatabaseSignature());
-  assert.equal(recording.cardDatabaseSignature, "6cbacf19");
+  assert.equal(recording.cardDatabaseSignature, "d8a1d23a");
   assert.deepEqual(Object.keys(recording.setup), [
     "seed",
     "randomState",

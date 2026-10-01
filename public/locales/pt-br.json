@@ -1139,7 +1139,7 @@
     },
     "363": {
       "name": "Leviatã do Deserto dos Vinculados à Miragem",
-      "description": "\"Víbora de Vidro dos Vinculados à Miragem\" + 1 monstro \"Vinculados à Miragem\"\n\nVocê pode Invocar este card por Invocação-Fusão do seu Deck Adicional ao enviar os materiais acima que você controla para o Cemitério.\n\nSe este card for Invocado por Invocação-Fusão: mude a posição de batalha de todos os monstros que seu oponente controla.\n\nEnquanto este card estiver com a face para cima no campo, cada vez que um monstro do seu oponente mudar sua posição de batalha por efeito de um card \"Vinculados à Miragem\", ele perde 300 ATK/DEF até o final deste turno.\n\nSe este card seria destruído em batalha: você pode devolvê-lo para o Deck Adicional em vez disso."
+      "description": "\"Víbora de Vidro dos Vinculados à Miragem\" + 1 monstro \"Vinculados à Miragem\"\n\nDeve ser Invocado por Invocação-Fusão do seu Deck Adicional enviando os materiais acima que você controla para o Cemitério, e não pode ser Invocado por Invocação-Especial de outras formas.\n\nSe este card for Invocado por Invocação-Fusão: mude a posição de batalha de todos os monstros que seu oponente controla.\n\nEnquanto este card estiver com a face para cima no campo, cada vez que um monstro do seu oponente mudar sua posição de batalha por efeito de um card \"Vinculados à Miragem\", ele perde 300 ATK/DEF até o final deste turno.\n\nSe este card seria destruído em batalha: você pode devolvê-lo para o Deck Adicional em vez disso."
     },
     "364": {
       "name": "Rebelde dos Vinculados à Miragem",

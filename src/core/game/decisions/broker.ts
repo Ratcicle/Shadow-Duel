@@ -11,6 +11,7 @@ import type {
   DefaultDecisionValue,
   RecordedDecision,
   ReplayDecisionInput,
+  SelectionDecisionKind,
 } from "../../contracts/decisions.js";
 import type { SelectionResult } from "../../contracts/selection.js";
 
@@ -178,6 +179,15 @@ export class DecisionBroker {
       ? (decisions as ReplayDecisionInput[])
       : [];
     this.replayCursor = 0;
+  }
+
+  /** Inspect only the next decision; requestDecision still owns its consumption. */
+  hasReplaySelection(kind: SelectionDecisionKind, actorId: string, requirementId: string): boolean {
+    if (this.mode !== "replay") return false;
+    const next = this.replayDecisions[this.replayCursor];
+    if (next?.kind !== kind || next.actorId !== actorId || !isObject(next.value)) return false;
+    const selections = readValue(next.value, "selections");
+    return isObject(selections) && Object.hasOwn(selections, requirementId);
   }
 
   recordDecision<Kind extends DecisionKind>(

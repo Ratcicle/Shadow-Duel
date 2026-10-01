@@ -133,6 +133,9 @@ async function executeCommand(
     }
     case "extra_deck_summon": {
       const source = findCard(game, actor, command.payload);
+      if (source?.zone === "field" && command.payload.summonType === "ascension") {
+        return game.tryAscensionSummon(source.card, { player: actor });
+      }
       if (!source || source.zone !== "extraDeck") {
         throw new Error("Replay Extra Deck source is missing.");
       }

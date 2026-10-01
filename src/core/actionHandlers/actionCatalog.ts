@@ -304,6 +304,7 @@ export const ACTION_CATALOG = {
     },
     selection: "dynamic",
     mutates: ["hand", "deck", "graveyard"],
+    emits: ["cards_added_to_hand"],
     preview: "covered",
     examples: [
       {
@@ -588,6 +589,7 @@ export const ACTION_CATALOG = {
     targetRef: "optional",
     selection: "usesTargets",
     mutates: ["stats"],
+    emits: ["stat_buff_applied"],
     examples: [{ type: "buff_stats_temp", targetRef: "sanctum_citadel_target", atkBoost: 500, defBoost: 500 }],
     notes: [
       "storeAs exposes only cards whose ATK or DEF actually changed as an internal target reference.",
@@ -643,6 +645,7 @@ export const ACTION_CATALOG = {
     targetRef: "optional",
     selection: "usesTargets",
     mutates: ["stats"],
+    emits: ["original_stats_changed"],
     examples: [
       {
         type: "set_original_stats",
@@ -797,7 +800,9 @@ export const ACTION_CATALOG = {
     targetRef: "required",
     selection: "usesTargets",
     mutates: ["stats", "status"],
+    emits: ["stat_buff_applied"],
     examples: [{ type: "buff_stats_temp_with_second_attack", targetRef: "rage_dragon_target", atkBoost: 1000 }],
+    notes: ["stat_buff_applied is emitted when ATK or DEF changes; granting only the extra attack does not emit it."],
   }),
   call_of_haunted_summon_and_bind: action({
     category: "summon",
@@ -1246,6 +1251,7 @@ export const ACTION_CATALOG = {
       player: field("player"),
     },
     mutates: ["lp"],
+    emits: ["damage_inflicted", "lp_change"],
     examples: [{ type: "damage", player: "opponent", amount: 500 }],
   }),
   damage_from_destroyed_atk: action({
@@ -1386,7 +1392,7 @@ export const ACTION_CATALOG = {
     },
     selection: "none",
     mutates: ["field", "spellTrap", "graveyard"],
-    emits: ["before_destroy", "card_to_grave"],
+    emits: ["before_destroy", "card_to_grave", "cards_added_to_hand"],
     preview: "missing",
     examples: [
       {
@@ -1398,6 +1404,7 @@ export const ACTION_CATALOG = {
         },
       },
     ],
+    notes: ["cards_added_to_hand is emitted only when drawPerDestroyed causes cards to be drawn after destruction."],
   }),
   draw: action({
     category: "resources",
@@ -1410,6 +1417,7 @@ export const ACTION_CATALOG = {
       player: field("player"),
     },
     mutates: ["deck", "hand"],
+    emits: ["cards_added_to_hand"],
     examples: [{ type: "draw", player: "self", amount: 2 }],
   }),
   draw_and_summon: action({
@@ -1888,9 +1896,13 @@ export const ACTION_CATALOG = {
       player: field("player"),
     },
     mutates: ["lp"],
+    emits: ["lp_change"],
     preview: "covered",
     examples: [{ type: "pay_lp", amount: 1000 }, { type: "pay_lp", fraction: 0.5 }],
-    notes: ["Provide either amount or fraction."],
+    notes: [
+      "Provide either amount or fraction.",
+      "lp_change is emitted when LP is paid; a cost reduced to zero does not emit it.",
+    ],
   }),
   restrict_effect_activations_by_names: action({
     category: "resources",
@@ -2023,7 +2035,7 @@ export const ACTION_CATALOG = {
   }),
   reduce_self_atk: action({
     category: "stats",
-    summary: "Alias for temporary self ATK reduction through buff handler.",
+    summary: "Reduces ATK until field exit with amount, or applies temporary explicit stat modifiers.",
     handler: "handleBuffStatsTemp",
     optional: ["targetRef", "atkBoost", "defBoost", "amount"],
     fields: {
@@ -2035,7 +2047,12 @@ export const ACTION_CATALOG = {
     targetRef: "optional",
     selection: "usesTargets",
     mutates: ["stats"],
+    emits: ["stat_buff_applied"],
     examples: [{ type: "reduce_self_atk", targetRef: "self", amount: 700 }],
+    notes: [
+      "With a positive amount and no nonzero atkBoost, the handler applies -amount to ATK and marks the stat changes permanent until field exit.",
+      "A nonzero atkBoost takes precedence over amount; explicit atkBoost/defBoost otherwise expire at the end of the turn.",
+    ],
   }),
   register_replacement_effect: action({
     category: "destruction",
@@ -2329,6 +2346,7 @@ export const ACTION_CATALOG = {
     targetRef: "required",
     selection: "usesTargets",
     mutates: ["stats"],
+    emits: ["stat_increases_removed"],
     examples: [{ type: "remove_stat_increases", targetRef: "battle_opponent", stats: ["atk", "def"] }],
   }),
   halve_target_stats_and_gain_removed: action({
@@ -2346,6 +2364,7 @@ export const ACTION_CATALOG = {
     targetRef: "required",
     selection: "usesTargets",
     mutates: ["stats"],
+    emits: ["stat_buff_applied"],
     examples: [{ type: "halve_target_stats_and_gain_removed", targetRef: "target", gainTargetRef: "self" }],
     notes: ["Reduction and gain persist independently until their respective recipients leave the field. Only an actual reduction of a non-immune target grants stats; the gaining monster must remain a valid face-up field presence."],
   }),
@@ -2431,6 +2450,7 @@ export const ACTION_CATALOG = {
     },
     selection: "dynamic",
     mutates: ["deck", "hand"],
+    emits: ["cards_added_to_hand"],
     preview: "covered",
     examples: [{ type: "search_any", archetype: "Shadow-Heart", count: { min: 1, max: 1 } }],
   }),
@@ -2932,8 +2952,9 @@ export const ACTION_CATALOG = {
       failureZone: field("to"),
     },
     mutates: ["lp", "zones"],
-    emits: ["card_to_grave"],
+    emits: ["card_to_grave", "lp_change"],
     examples: [{ type: "upkeep_pay_or_send_to_grave", lpCost: 500, failureZone: "graveyard" }],
+    notes: ["lp_change is emitted when a positive upkeep cost is paid; card_to_grave belongs to the unpaid path when the source reaches the Graveyard."],
   }),
 } satisfies BoundActionCatalog;
 

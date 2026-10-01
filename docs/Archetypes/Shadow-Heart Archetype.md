@@ -99,6 +99,7 @@ Nenhuma carta auxiliar própria do arquétipo está listada neste catálogo.
 > Se este card destruir um monstro do oponente em batalha: você pode escolher 1 monstro no Cemitério do seu oponente, exceto o monstro destruído por esta batalha; Invoque-o por Invocação-Especial no campo do seu oponente e, se isso acontecer, este card pode realizar 1 ataque adicional contra monstros durante esta Fase de Batalha.
 >
 > Você só pode usar cada efeito de "Perseguidor Arctroth do Coração Sombrio" uma vez por turno.
+
 **124 — Shadow-Heart Devastation Dragon**
 
 > Material de Ascensão: "Dragão de Escamas do Coração Sombrio" Requisito: o material deve ter ficado com a face para cima no campo por 3 turnos.
@@ -113,13 +114,17 @@ Nenhuma carta auxiliar própria do arquétipo está listada neste catálogo.
 
 Nível 4, Sea Serpent, Water, 1600/1700.
 
-> Se esse card for atacado em posição de defesa: cause 600 de dano ao oponente. Se esse card for destruído em batalha: você pode adicionar 1 Magia/Armadilha "Coração Sombrio" do seu cemitério à sua mão.
+> Se este card for atacado em Posição de Defesa: cause 600 de dano ao seu oponente.
+>
+> Se este card for destruído em batalha: você pode escolher 1 Magia/Armadilha “Coração Sombrio” no seu Cemitério; adicione-a à sua mão.
 
 **102 — Espectro do Coração Sombrio / Shadow-Heart Specter**
 
 Nível 2, Spirit, Dark, 800/800.
 
-> Se esse card for enviado para o cemitério: você pode escolher 1 monstro "Coração Sombrio" no seu cemitério, exceto "Espectro do Coração Sombrio"; adicione-o à sua mão.
+> Se este card for enviado para o Cemitério: você pode escolher 1 monstro “Coração Sombrio” no seu Cemitério, exceto “Espectro do Coração Sombrio”; adicione-o à sua mão.
+>
+> Você só pode usar este efeito de “Espectro do Coração Sombrio” uma vez por turno.
 
 **104 — Demônio Arctroth do Coração Sombrio / Shadow-Heart Demon Arctroth**
 
@@ -310,7 +315,7 @@ Fusão, Nível 10, Dragon, Dark, 3000/3000.
 >
 > Se esse card for invocado por invocação-Fusão: Escolha 1 card no campo do oponente; destrua-o.
 >
-> Se esse card for destruído em batalha ou por efeitos de card: Você pode invocar um "Dragão de Escamas do Coração Sombrio" do seu cemitério.
+> Se esse card for destruído em batalha ou por efeitos de card: Você pode Invocar por Invocação-Especial um "Dragão de Escamas do Coração Sombrio" do seu cemitério.
 
 **122 — Senhor da Guerra do Coração Sombrio / Shadow-Heart Warlord**
 
@@ -328,7 +333,13 @@ Fusão, Nível 8, Warrior, Dark, 2300/1900.
 
 Ascensão, Nível 9, Fiend, Dark, 2800/2700.
 
-> Material de Ascensão: "Demônio Arctroth do Coração Sombrio" Se este card for Invocado por Invocação-Ascensão: escolha 1 monstro Invocado por Invocação-Especial com a face para cima que seu oponente controla; o ATK/DEF dele é diminuído pela metade, e este card ganha o ATK/DEF diminuído por esse efeito. Se este card destruir um monstro do oponente em batalha: você pode escolher 1 monstro no Cemitério do seu oponente, exceto o monstro destruído por esta batalha; Invoque-o por Invocação-Especial no campo do oponente e, se isso acontecer, este card pode realizar 1 ataque adicional contra monstros durante esta Fase de Batalha.
+> "Demônio Arctroth do Coração Sombrio"
+>
+> Se este card for Invocado por Invocação-Ascensão: escolha 1 monstro com a face para cima Invocado por Invocação-Especial que seu oponente controla; reduza o ATK/DEF dele pela metade e, se isso acontecer, este card ganha ATK/DEF iguais aos valores perdidos por aquele monstro.
+>
+> Se este card destruir um monstro do oponente em batalha: você pode escolher 1 monstro no Cemitério do seu oponente, exceto o monstro destruído por esta batalha; Invoque-o por Invocação-Especial no campo do seu oponente e, se isso acontecer, este card pode realizar 1 ataque adicional contra monstros durante esta Fase de Batalha.
+>
+> Você só pode usar cada efeito de "Perseguidor Arctroth do Coração Sombrio" uma vez por turno.
 
 **124 — Dragão da Devastação do Coração Sombrio / Shadow-Heart Devastation Dragon**
 

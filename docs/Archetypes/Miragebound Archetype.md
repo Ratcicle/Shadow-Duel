@@ -68,6 +68,8 @@ Nenhuma carta auxiliar própria do arquétipo está listada neste catálogo.
 
 > "Víbora de Vidro dos Vinculados à Miragem" + 1 monstro "Vinculados à Miragem".
 
+**Procedimento vigente na engine:** o Leviatã só pode ser Invocado por Invocação-Especial pelo procedimento `contact_fusion`, enviando os materiais do seu campo ao Cemitério. A definição usa `specialSummonOnlyBy: ["contact_fusion"]`, que também impede Invocá-lo por Fusão comum ou do Cemitério. Os textos EN/PT explicitam essa exclusividade.
+
 ### Ascensões
 
 **355 — Miragebound Glass Sovereign**
@@ -220,7 +222,7 @@ Fusão, Nível 8, Beast, Earth, 2400/2500.
 
 > "Víbora de Vidro dos Vinculados à Miragem" + 1 monstro "Vinculados à Miragem"
 >
-> Você pode Invocar este card por Invocação-Fusão do seu Deck Adicional ao enviar os materiais acima que você controla para o Cemitério.
+> Deve ser Invocado por Invocação-Fusão do seu Deck Adicional enviando os materiais acima que você controla para o Cemitério, e não pode ser Invocado por Invocação-Especial de outras formas.
 >
 > Se este card for Invocado por Invocação-Fusão: mude a posição de batalha de todos os monstros que seu oponente controla.
 >

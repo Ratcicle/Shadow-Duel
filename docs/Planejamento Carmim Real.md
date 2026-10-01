@@ -1,5 +1,19 @@
 # Royal Carmine / Carmim Real — Rascunho do Arquétipo
 
+## Estado do planejamento — 30/09/2026
+
+Este documento descreve cartas e linhas propostas. O arquétipo ainda não está implementado no banco de cartas nem possui IA própria; as avaliações de força abaixo são hipóteses para testes futuros.
+
+Antes da implementação, ainda é preciso definir:
+
+- a interação dos PV pagos pelo oponente via Palácio;
+- a soma de PV pagos e dano sofrido na Sociedade Secreta;
+- o escopo da redução de custo de Alexander;
+- o limite de ativação e uso do Pacto;
+- as condições de retorno e de ganho de ATK da Imperatriz.
+
+Os detalhes estão em “Pontos a definir antes de implementar” e “Pontos de atenção para testes”.
+
 ## Identidade do arquétipo
 
 **Royal Carmine / Carmim Real** é um arquétipo **Fada / TREVAS** com estética aristocrática, trajes claros e elegantes, aparência de pureza e efeitos baseados em sacrificar os próprios PV para gerar vantagem.
@@ -17,7 +31,7 @@
 - Também terá efeitos que ligam quando o jogador **sofre dano**.
 - Não é um deck de burn como plano principal.
 - Deve depender bastante de **Magias/Armadilhas “Carmim Real”** para rodar.
-- O deck agora possui um **Regulador** próprio, permitindo linhas Sincro internas no Extra Deck.
+- O rascunho inclui um **Regulador** próprio para permitir linhas Sincro internas no Extra Deck.
 
 ### Observações de regra
 
@@ -30,7 +44,7 @@
 
 ---
 
-## Decklist atual
+## Lista de cartas proposta
 
 ### Monstros — Main Deck
 
@@ -405,7 +419,7 @@
 
 ---
 
-# Linhas e sinergias atuais
+# Linhas e sinergias propostas
 
 ## Barão + Pajem
 
@@ -431,7 +445,7 @@
 2. Use ambos como Matéria Sincro, caso exista um alvo Sincro Nível 7 próprio ou futuro no Extra Deck.
 3. Pajem pode pagar 500 PV para recuperar 1 monstro “Carmim Real” do Cemitério.
 
-**Resultado:** linha em observação para um possível Sincro Nível 7 próprio do arquétipo; por enquanto, o foco do Extra Deck definido é **Marechal Alexander**, **Arquiduque Arvid** e **Rei Arthur Chevalier**.
+**Resultado:** linha em observação para um possível Sincro Nível 7 próprio do arquétipo. O Extra Deck proposto inclui **Marechal Alexander**, **Arquiduque Arvid**, **Rei Arthur Chevalier** e **Imperatriz Victoria**; ainda não há um Sincro Nível 7 definido nessa lista.
 
 ## Marechal Alexander + Pajem = Rei Arthur
 

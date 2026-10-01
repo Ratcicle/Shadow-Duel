@@ -33,6 +33,14 @@ function replay(overrides: MutableReplay = {}): MutableReplay {
   };
 }
 
+test("replays com a assinatura parcial antiga são rejeitados antes da reprodução", () => {
+  assert.throws(
+    () => validateCanonicalReplay(replay({ cardDatabaseSignature: "6cbacf19" })),
+    /card database signature does not match/,
+  );
+  assert.doesNotThrow(() => validateCanonicalReplay(replay()));
+});
+
 test("field placement replay decisions validate actor, destination, candidates and cancellation", () => {
   const placement = {
     sequence: 1, decisionId: 1, kind: "field_placement", actorId: "player",

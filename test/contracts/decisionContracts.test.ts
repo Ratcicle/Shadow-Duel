@@ -41,6 +41,27 @@ function segocCandidate(id: number): SegocOrderDecisionCandidate {
   };
 }
 
+test("replay selection lookup checks only the next kind, actor and requirement without consuming it", async () => {
+  const { broker } = createHarness();
+  const ascension = { kind: "ascension", actorId: "bot", value: { selections: { ascension_material: [] } } };
+  assert.equal(broker.hasReplaySelection("ascension", "bot", "ascension_material"), false);
+  broker.loadReplayDecisions([
+    { kind: "target", actorId: "bot", value: { selections: { target: [] } } },
+    ascension,
+  ]);
+  assert.equal(broker.hasReplaySelection("ascension", "bot", "ascension_material"), false);
+  assert.equal(broker.replayCursor, 0);
+  await broker.requestDecision({ kind: "target", actorId: "bot", requireCandidate: false });
+  assert.equal(broker.hasReplaySelection("ascension", "bot", "ascension_material"), true);
+  assert.equal(broker.hasReplaySelection("ascension", "player", "ascension_material"), false);
+  assert.equal(broker.hasReplaySelection("ascension", "bot", "ascension_choice"), false);
+  assert.equal(broker.hasReplaySelection("target", "bot", "ascension_material"), false);
+  assert.equal(broker.replayCursor, 1);
+  await broker.requestDecision({ kind: "ascension", actorId: "bot", requireCandidate: false });
+  assert.equal(broker.replayCursor, 2);
+  assert.equal(broker.hasReplaySelection("ascension", "bot", "ascension_material"), false);
+});
+
 test("DecisionBroker records exact legacy values and monotonic branded ids", () => {
   const { broker, decisions, notifications } = createHarness();
   const first = chainCandidate("first");

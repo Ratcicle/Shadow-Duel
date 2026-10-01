@@ -2,6 +2,19 @@
 
 Este documento registra a direção geral de desenvolvimento do **Shadow Duel** para evitar dispersão entre múltiplas frentes e preservar uma ordem de prioridades clara.
 
+## Estado de referência — 30/09/2026
+
+| Frente | Estado conferido no repositório |
+| --- | --- |
+| Estabilização pós-TypeScript | Há testes e correções de regras; o encerramento da etapa ainda precisa ser avaliado. |
+| IAs atuais | Os nove bots têm estratégias registradas. A comparação de força entre eles precisa de benchmarks atuais em condições equivalentes. |
+| Carmim Real | Catálogo proposto, com decisões de regra em aberto; cartas e IA ainda não implementadas. |
+| Suporte adicional de Burning West e Bloomrot | Planejado; escopo e necessidade dependem do diagnóstico dos decks e das IAs. |
+| Gauntlet | Planejado, ainda não implementado. |
+| Relíquias Arcanistas | Design consolidado, ainda não implementado nem testado. Os espaços individuais do campo já existem. |
+| Online | Planejado, ainda não implementado. |
+| Renderer Three.js | Planejado; a apresentação atual usa DOM e Pixi. |
+
 ## Princípio geral
 
 Manter no máximo:
@@ -35,8 +48,10 @@ Esta é a fundação para todas as etapas seguintes.
 
 Motivação:
 
-- o Bot Tech-Zero tem desempenho muito superior à maioria dos bots atuais;
+- comparar a qualidade dos bots, incluindo o Tech-Zero, com benchmarks reproduzíveis;
 - resultados de bot vs bot podem refletir qualidade da IA, não apenas força real do deck.
+
+Este documento não contém uma medição atual de desempenho relativo dos bots.
 
 Revisar principalmente:
 
@@ -54,10 +69,11 @@ Revisar principalmente:
 
 **Objetivo:** adicionar o novo arquétipo ao jogo.
 
-O design do deck já está pronto no papel.
+O [catálogo proposto do Carmim Real](Planejamento%20Carmim%20Real.md) define as cartas e suas funções, mas ainda mantém decisões de regra em aberto.
 
 Pendências principais:
 
+- definir como PV pagos pelo oponente interagem com os efeitos do arquétipo, a agregação de PV pagos e dano sofrido, o escopo das reduções de custo, os limites do Pacto e as condições de retorno da Imperatriz;
 - finalizar as artes;
 - implementar cartas e efeitos;
 - adicionar traduções;
@@ -71,7 +87,9 @@ Pendências principais:
 
 ## 4. Novo suporte para Burning West e Bloomrot
 
-**Objetivo:** fortalecer os dois arquétipos que atualmente apresentam o pior desempenho.
+**Objetivo:** preparar suporte para Burning West e Bloomrot com base nos gargalos confirmados de cada deck.
+
+A classificação desses decks como os dois de pior desempenho ainda precisa de um benchmark atual, com IAs comparáveis. A prioridade de suporte permanece a proposta deste roadmap.
 
 O suporte deve ser criado somente após:
 
@@ -139,7 +157,7 @@ Principais peças:
 - Relíquia Arcanista — Orbe Anulador
 - Relíquia Arcanista — Cajado do Necromente
 
-Antes de implementar, revisar a compatibilidade do motor com restauração histórica de estado, espaços individuais, vínculos de Equipamentos, supressão de gatilhos e persistência de efeitos temporários. O design das Relíquias já está consolidado, mas não foi implementado nem testado.
+Os espaços individuais do campo já existem no motor, na UI e no replay. Antes de implementar as Relíquias, revisar como a restauração histórica usará esses espaços, os vínculos de Equipamentos, a supressão de gatilhos e os efeitos temporários. O design das Relíquias já está consolidado, mas não foi implementado nem testado.
 
 ---
 

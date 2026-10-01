@@ -15,6 +15,7 @@
 
 import { SUMMON_MODES } from "./transaction.js";
 import { SUMMON_ORIGINS } from "../../contracts/summon.js";
+import { isAI } from "../../Player.js";
 import type {
   AscensionDefinition,
   AscensionMaterialRecord,
@@ -24,6 +25,7 @@ import type {
   GameCard,
 } from "../../contracts/cards.js";
 import type { CardFilter } from "../../contracts/effects.js";
+import type { DecisionBrokerPort } from "../../contracts/decisions.js";
 import type {
   MaterialDuelStats,
   MaybePromise,
@@ -89,6 +91,7 @@ interface AscensionSelectionSessionInput
 }
 
 interface AscensionHost {
+  decisionBroker: Pick<DecisionBrokerPort, "mode" | "hasReplaySelection">;
   player: GamePlayer;
   bot: GamePlayer;
   turnCounter: number;
@@ -783,7 +786,7 @@ export async function performAscensionSummon(
 
 /**
  * Attempts to perform an Ascension Summon with the given material.
- * Handles candidate selection if multiple Ascension monsters are available.
+ * Humans choose the Ascension monster even when only one is available.
  * @param materialCard - The material card to use
  * @param options - Options (reserved for future use)
  * @returns {Promise<{ success: boolean, reason?: string }>}
@@ -861,7 +864,10 @@ export async function tryAscensionSummon(
     return { success: false, reason };
   }
 
-  if (eligible.length === 1) {
+  const requiresChoice = this.decisionBroker.mode === "replay"
+    ? this.decisionBroker.hasReplaySelection("ascension", player.id, "ascension_choice")
+    : !isAI(player);
+  if (!requiresChoice && eligible.length === 1) {
     return await this.performAscensionSummon(
       player,
       materialCard,

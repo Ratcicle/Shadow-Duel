@@ -54,8 +54,8 @@ de execução ficam fora dessa pasta.
 
 ```text
 Shadow-Duel/
-├── .claude/                    # Configuração local/trackeada de agentes Claude
-├── .codex/                     # Ambientes auxiliares do Codex
+├── .agents/
+│   └── skills/                 # Skills de agentes específicas do Shadow Duel
 ├── .github/                    # Workflows e configuração do GitHub
 ├── .gitignore                  # Ignora dependências, logs e artefatos locais
 ├── AGENTS.md                   # Instruções para agentes de IA
@@ -383,7 +383,7 @@ preservar a resolução ESM e o output runtime:
 
 Na raiz de `src/core/game/`, `random.ts` fornece o RNG determinístico e
 `attachments.ts` mantém o manifest canônico dos 222 métodos em 61 grupos.
-O preflight valida o manifest antes de qualquer escrita no prototype, e os 14
+O preflight valida o manifest antes de qualquer escrita no prototype, e os 15
 wrappers de captura de replay são instalados separadamente por
 `replay/capture.ts`, depois dos attachments.
 
@@ -486,8 +486,7 @@ pelos efeitos visuais do duelo.
 - **`dist/`** - artefato local produzido por `npm run build`; não é fonte canônica.
 - Replays e Strategic Reports são arquivos exportados/importados pelo usuário e
   não exigem um diretório versionado fixo.
-- **`.claude/`** - configuração local/trackeada de agentes Claude.
-- **`.codex/`** - ambientes auxiliares do Codex.
+- **`.agents/skills/`** - skills versionadas de desenvolvimento de bots, auditoria e autoria de cartas, playtest e mudanças de engine.
 - **`node_modules/`** - dependências instaladas, incluindo `vite` e `pixi.js`.
 
 ---
