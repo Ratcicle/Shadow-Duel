@@ -260,6 +260,7 @@ export function applySetFacedownDefense(
     const previousPosition = card.position || "attack";
     card.position = "defense";
     card.isFacedown = true;
+    card.fieldPresenceSummons = [];
     expireFaceupStatBuffs(card);
     if (
       card.effectsNegated === true &&
@@ -902,6 +903,8 @@ export function applyAddStatus(
         card.effects?.forEach((effect) => {
           if (effect.timing !== "passive") return;
           const passiveType = "passive" in effect ? effect.passive?.type : undefined;
+          // These rules read negation directly at attack/movement time.
+          if (passiveType === "restrict_opponent_summon_turn_attack" || passiveType === "send_to_grave_replacement") return;
           if (card.effectsNegated !== true || passiveType !== "field_archetype_aura_buff") {
             state._simUnsupportedActions ??= [];
             state._simUnsupportedActions.push(`add_status:passive_recalculation:${passiveType || "unknown"}`);

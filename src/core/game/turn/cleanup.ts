@@ -283,6 +283,9 @@ export function cleanupExpiredTemporaryEventEffects(this: CleanupHost) {
 export function cleanupTempBoosts(
   player: GamePlayer,
 ) {
+  for (const card of [...player.field, ...player.spellTrap, ...(player.fieldSpell ? [player.fieldSpell] : [])]) {
+    card.fieldPresenceSummons = [];
+  }
   player.field.forEach((card: GameCard) => {
     if (card.tempAtkBoost) {
       removeTrackedStatChange(card, "atk", card.tempAtkBoost);

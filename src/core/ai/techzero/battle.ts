@@ -3,6 +3,7 @@ import type { GameCard } from "../../contracts/cards.js";
 import type { BotStrategyPort } from "../../contracts/bot.js";
 import { getBattleStatForAttackTarget, getEffectiveAtk, getPiercingDamage } from "../common/cardStats.js";
 import { hasSimulatedProtection } from "../common/simulatedActions/lifecycle.js";
+import { isFieldPresenceSummonAttackRestricted } from "../../game/combat/availability.js";
 
 type BattleCard = SimulatedCardState | GameCard;
 interface TechZeroBattlePlayer {
@@ -83,7 +84,7 @@ function uncertaintyReasons(self: TechZeroBattlePlayer, opponent: TechZeroBattle
         }
         if (interaction === "base" && owner === opponent && effect.timing === "manual") reasons.add("visible_responses");
         if (interaction === "base" && !owner.graveyard.includes(card) && effect.timing === "passive" && "passive" in effect && effect.passive &&
-          !["stat_boost", "modify_stats", "extra_attacks"].includes(effect.passive.type)) {
+          !["stat_boost", "modify_stats", "extra_attacks", "restrict_opponent_summon_turn_attack"].includes(effect.passive.type)) {
           reasons.add("unprojected_passive");
         }
       }
@@ -151,6 +152,8 @@ export function evaluateTechZeroVisibleBattle(
     for (const [index, card] of own.entries()) {
       if (!node.ownAlive[index] || card.instanceId == null || card.isFacedown ||
           card.position !== "attack" || card.cannotAttackThisTurn) continue;
+      if (isFieldPresenceSummonAttackRestricted(card,
+        [...targets.map(target => target.card), ...opponent.spellTrap, ...(opponent.fieldSpell ? [opponent.fieldSpell] : [])], turnCounter, self.id)) continue;
       const used = node.used[index] || 0, limit = limits[index] || 0;
       const allTargets = card.canAttackAllOpponentMonstersThisTurn;
       const explicit = card.attackLimitThisTurn != null && Number.isFinite(card.attackLimitThisTurn);

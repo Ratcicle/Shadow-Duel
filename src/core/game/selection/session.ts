@@ -486,6 +486,21 @@ export async function finishTargetSelection(
 ): Promise<void> {
   if (!this.targetSelection) return;
   const selection = this.targetSelection;
+  const invalidRequirement = selection.requirements.findIndex(requirement => {
+    const chosen = selection.selections[requirement.id] || [];
+    return chosen.length < requirement.min || chosen.length > requirement.max ||
+      (requirement.distinct && new Set(chosen).size !== chosen.length) ||
+      chosen.some(key => !requirement.candidates.some(candidate => candidate.key === key));
+  });
+  if (invalidRequirement >= 0) {
+    if (this.decisionBroker?.mode === "replay") {
+      throw new Error("Replay selection does not satisfy the current selection contract.");
+    }
+    selection.currentRequirement = invalidRequirement;
+    this.setSelectionState("selecting");
+    this.updateFieldTargetingProgress();
+    return;
+  }
   this.setSelectionState("resolving");
   this.targetSelection = null;
   this.graveyardSelection = null;

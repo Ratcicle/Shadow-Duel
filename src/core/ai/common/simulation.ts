@@ -26,6 +26,7 @@ import { processSimulatedDelayedActions, cleanupSimulatedEndTurn, cleanupExpired
 import { getAvailableFieldSlots } from "../../game/zones/placement.js";
 import { resolvePerspectiveSlotForPlayer } from "./perspective.js";
 import { resolvePlanningOwnerPolicy } from "./planningExecution.js";
+import { recordFieldPresenceSummon } from "../../effects/triggers/counters.js";
 import type {
   SimulatedActionContextData,
   SimulatedActionOptions,
@@ -1160,7 +1161,10 @@ function canPaySimulatedMoveCosts(
       const owner = findCardOwner(state, card);
       if (!owner || (cost.fromZone && findCardZone(owner, card) !== cost.fromZone)) return false;
       if (cost.requireDestination && card.isToken && cost.to !== "field") return false;
-      return canMoveCardToZone(player, card, cost.to || "graveyard", owner, { state });
+      return canMoveCardToZone(player, card, cost.to || "graveyard", owner, {
+        state, requireDestination: cost.requireDestination === true,
+        allowExtraDeckMonsterToHand: cost.allowExtraDeckMonsterToHand === true,
+      });
     });
   });
 }
@@ -1645,6 +1649,7 @@ function setSimulatedSpellTrapAfterResolution(
     return false;
   }
   card.isFacedown = true;
+  card.fieldPresenceSummons = [];
   if (typeof state.turnCounter === "number") {
     card.turnSetOn = state.turnCounter;
     card.setTurn = state.turnCounter;
@@ -1727,6 +1732,7 @@ export function applyGenericSimulatedMainPhaseAction<
       const card = player.hand[handIndex];
       const procedure = card?.handSummonProcedure;
       if (!card || !procedure || card.cardKind !== "monster") break;
+      if (!canUseSimulatedEffectUsage(state, procedure, card, player.id, true)) break;
       if (!canSimulatedSpecialSummon(card, player, procedure.id, "hand")) break;
       if (!Number.isInteger(procedure.cost.count) || procedure.cost.count < 1) break;
       if (action.materials.length !== procedure.cost.count) break;
@@ -1745,6 +1751,7 @@ export function applyGenericSimulatedMainPhaseAction<
       }
       if (materials.length !== procedure.cost.count) break;
       if (!canSimulatedProcedureEnterField(card, player, state.player, materials)) break;
+      markSimulatedEffectUsage(state, procedure, card, player.id, true);
       const destination = procedure.cost.destination;
       let costComplete = true;
       for (const material of materials) {
@@ -1771,6 +1778,7 @@ export function applyGenericSimulatedMainPhaseAction<
       };
       establishProperSummon(summoned, { summonProcedure: procedure.id, sourceZone: "hand" });
       appendSimulatedFieldCard(player.field, summoned);
+      recordFieldPresenceSummon(state, { card: summoned, player });
       options.onAfterSummon?.({ state, action, player, card, newCard: summoned, options });
       options.onAfterSpecialSummon?.({ state, action, player, card: summoned, fromZone: "hand", options });
       selectionOptions.emitSimulatedEvent?.("after_summon", {
@@ -1860,6 +1868,7 @@ export function applyGenericSimulatedMainPhaseAction<
         appendSimulatedZoneCard(player.graveyard, newCard);
       } else {
         appendSimulatedFieldCard(player.field, newCard);
+        recordFieldPresenceSummon(state, { card: newCard, player });
         options.onAfterSummon?.({
           state,
           action,
@@ -1903,6 +1912,7 @@ export function applyGenericSimulatedMainPhaseAction<
         target.isFacedown = false;
         target.position = "attack";
         target.positionChangedThisTurn = true;
+        recordFieldPresenceSummon(state, { card: target, player });
         break;
       }
       const newPosition =
@@ -2400,6 +2410,7 @@ export function applyGenericSimulatedMainPhaseAction<
       });
       appendSimulatedFieldCard(player.field, summoned);
       const ascensionEvents = attachSimulatedEventEmitter(state, { ...selectionOptions, enableSimulatedEvents: true });
+      recordFieldPresenceSummon(state, { card: summoned, player });
       ascensionEvents.emitSimulatedEvent?.("after_summon", {
         card: summoned,
         player,
@@ -2487,6 +2498,7 @@ export function applyGenericSimulatedMainPhaseAction<
         sourceZone: "extraDeck",
       });
       appendSimulatedFieldCard(player.field, summoned);
+      recordFieldPresenceSummon(state, { card: summoned, player });
       selectionOptions.emitSimulatedEvent?.("after_summon", {
         card: summoned,
         player,

@@ -109,6 +109,9 @@ function driverFixture(consumeDecisions = true): DriverFixture {
     tryActivateSpellTrapEffect(card) {
       calls.push(`spellTrapEffect:${card.id}`);
     },
+    activateFieldSpellEffect(card) {
+      calls.push(`fieldSpellEffect:${card.id}`);
+    },
     changeMonsterPosition(card, position) {
       calls.push(`position:${card.id}:${position}`);
     },
@@ -127,7 +130,7 @@ function replay(commands: ReadonlyArray<CanonicalReplayCommand> = []) {
   return {
     format: "shadow-duel-canonical-replay",
     schemaVersion: 2,
-    engineVersion: "field-positions-v2",
+    engineVersion: "dragon-rules-v3",
     cardDatabaseSignature: getCardDatabaseSignature(),
     setup: {
       seed: 123,

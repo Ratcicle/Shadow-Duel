@@ -1,3 +1,4 @@
+import { getCounterCount, setCounterValue } from "../common/counters.js";
 import type {
   DragonCard,
   DragonPlayer,
@@ -62,6 +63,7 @@ import { getValidBoneflameCostCandidates } from "./boneflamePolicy.js";
 import { scoreDragonBattleAttack } from "./battleDefensePolicy.js";
 import { actionBreaksSoloExtremeProtection } from "./bossPolicy.js";
 import { selectDragonFusionPlan } from "./extraDeckPolicy.js";
+import { isFieldPresenceSummonAttackRestricted } from "../../game/combat/availability.js";
 import {
   CURRENT_AWAKENING_TARGET_NAMES,
   isOutOfPlanDragonCardName,
@@ -394,7 +396,7 @@ function hasPurifiedLine({ hand, field, graveyard, extraDeck, game, player }: { 
 function hasJaggedCashout(fieldSpell: DragonCard | null | undefined) {
   return (
     fieldSpell?.name === "Jagged Peak of the Dragons" &&
-    ((fieldSpell!.counters as Partial<Record<string, number>> | undefined)?.dragon_peak || 0) >= 5
+    getCounterCount(fieldSpell, "dragon_peak") >= 7
   );
 }
 
@@ -502,8 +504,8 @@ function hasBlackBullBattlePlan({ field = [], opponentField = [] }: { field?: re
 
 function hasJaggedBattleCounterPlan({ field = [], opponentField = [], fieldSpell = null }: { field?: readonly DragonCard[]; opponentField?: readonly DragonCard[]; fieldSpell?: DragonCard | null | undefined } = {}) {
   if (fieldSpell?.name !== "Jagged Peak of the Dragons") return false;
-  const counters = Number((fieldSpell!.counters as Partial<Record<string, number>> | undefined)?.dragon_peak || 0);
-  return counters >= 4 && hasBattleRemoval({ field, opponentField });
+  const counters = getCounterCount(fieldSpell, "dragon_peak");
+  return counters >= 6 && hasBattleRemoval({ field, opponentField });
 }
 
 function hasNamedBattlePlan({ field = [], opponentField = [] }: { field?: readonly DragonCard[]; opponentField?: readonly DragonCard[] } = {}, name: string) {
@@ -524,7 +526,7 @@ function hasRadiantSafeBattle({ field = [], opponentField = [] }: { field?: read
 }
 
 function hasBattleMain2Payoff({ fieldSpell = null, spellTrap = [], hand = [], field = [], deck = [] }: { fieldSpell?: DragonCard | null | undefined; spellTrap?: readonly DragonCard[]; hand?: readonly DragonCard[]; field?: readonly DragonCard[]; deck?: readonly DragonCard[] } = {}) {
-  if (fieldSpell?.name === "Jagged Peak of the Dragons" && Number((fieldSpell!.counters as Partial<Record<string, number>> | undefined)?.dragon_peak || 0) >= 4) {
+  if (fieldSpell?.name === "Jagged Peak of the Dragons" && getCounterCount(fieldSpell, "dragon_peak") >= 6) {
     return true;
   }
   if (
@@ -962,10 +964,7 @@ function getDestroyedOpponentMonsters(summary: DragonBattleSummary = {}) {
 
 function addJaggedCounter(fieldSpell: DragonCard | null | undefined) {
   if (!fieldSpell || fieldSpell.name !== "Jagged Peak of the Dragons") return false;
-  if (!fieldSpell.counters || typeof fieldSpell.counters !== "object") {
-    fieldSpell.counters = {};
-  }
-  (fieldSpell!.counters as Partial<Record<string, number>>).dragon_peak = Number((fieldSpell!.counters as Partial<Record<string, number>>).dragon_peak || 0) + 1;
+  setCounterValue(fieldSpell, "dragon_peak", getCounterCount(fieldSpell, "dragon_peak") + 1);
   return true;
 }
 
@@ -1371,7 +1370,7 @@ export function scoreDragonLineMilestones(context: DragonLineContext = {}) {
       addLineMilestone(milestones, "Battle: Volcanic burn mattered", 2.5);
     }
     if (battleRewards.includes("Jagged Peak counter")) {
-      const finalCounters = Number((finalBot.fieldSpell?.counters as Partial<Record<string, number>> | undefined)?.dragon_peak || 0);
+      const finalCounters = getCounterCount(finalBot.fieldSpell, "dragon_peak");
       addLineMilestone(
         milestones,
         finalCounters >= 5
@@ -1905,7 +1904,7 @@ function hasGraveyardFollowUp(player: DragonPlayer = {}) {
 function scoreJaggedSetup(player: DragonPlayer = {}) {
   const fieldSpell = player.fieldSpell;
   if (fieldSpell?.name !== "Jagged Peak of the Dragons") return 0;
-  const counters = (fieldSpell!.counters as Partial<Record<string, number>> | undefined)?.dragon_peak || 0;
+  const counters = getCounterCount(fieldSpell, "dragon_peak");
   return 1.4 + Math.min(3.2, counters * 0.45);
 }
 
@@ -2384,24 +2383,26 @@ export function buildDragonPlanningProfile(analysis: DragonAnalysis = {}, contex
   }
 
   const main1Phase = phase === "main1" || phase === "main";
-  const blackBullBattlePlan = hasBlackBullBattlePlan({ field, opponentField });
+  const battleField = field.filter(card => !isFieldPresenceSummonAttackRestricted(card,
+    [...opponentField, ...(opponent?.spellTrap || []), ...(opponent?.fieldSpell ? [opponent.fieldSpell] : [])], game?.turnCounter));
+  const blackBullBattlePlan = hasBlackBullBattlePlan({ field: battleField, opponentField });
   const battleBridge =
     main1Phase &&
     (
-      hasDirectLethal({ field, opponent }) ||
-      hasBattleRemoval({ field, opponentField }) ||
+      hasDirectLethal({ field: battleField, opponent }) ||
+      hasBattleRemoval({ field: battleField, opponentField }) ||
       blackBullBattlePlan ||
-      hasJaggedBattleCounterPlan({ field, opponentField, fieldSpell }) ||
-      hasNamedBattlePlan({ field, opponentField }, "Volcanic Extreme Dragon") ||
-      hasNamedBattlePlan({ field, opponentField }, "Rainbow Cosmic Dragon") ||
-      hasNamedBattlePlan({ field, opponentField }, "Purified Crystal Dragon") ||
-      hasRadiantSafeBattle({ field, opponentField }) ||
+      hasJaggedBattleCounterPlan({ field: battleField, opponentField, fieldSpell }) ||
+      hasNamedBattlePlan({ field: battleField, opponentField }, "Volcanic Extreme Dragon") ||
+      hasNamedBattlePlan({ field: battleField, opponentField }, "Rainbow Cosmic Dragon") ||
+      hasNamedBattlePlan({ field: battleField, opponentField }, "Purified Crystal Dragon") ||
+      hasRadiantSafeBattle({ field: battleField, opponentField }) ||
       hasBattleMain2Payoff({ fieldSpell, spellTrap, hand, field, deck })
     );
   if (battleBridge) {
     if (blackBullBattlePlan) {
       reasons.push("Black Bull can convert battle into Main 2");
-    } else if (hasJaggedBattleCounterPlan({ field, opponentField, fieldSpell })) {
+    } else if (hasJaggedBattleCounterPlan({ field: battleField, opponentField, fieldSpell })) {
       reasons.push("Battle can charge Jagged Peak for Main 2");
     } else {
       reasons.push("Dragon battle bridge has Main 2 value");

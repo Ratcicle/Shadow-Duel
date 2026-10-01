@@ -5,6 +5,7 @@
 
 import { resolveFieldScopeCards } from "../../actionHandlers/shared.js";
 import { captureCostMarkerEvidence } from "../costs/summonMarkers.js";
+import { getSendToGraveReplacementDestination } from "../passives/passiveBuffs.js";
 import { assignAutomaticFieldSlot, clearFieldSlot } from "../../game/zones/placement.js";
 import type {
   ActionMoveResult,
@@ -206,6 +207,13 @@ export async function applyMove(
       const owner = card.owner === "bot" ? this.game.bot : this.game.player;
       if (action.fromZone && !this.getZone(owner, action.fromZone)?.includes(card)) return false;
       if (payingCost && action.requireDestination && card.isToken && toZone !== "field") return false;
+      if (payingCost && action.requireDestination) {
+        if (owner.field.includes(card) && card.banishWhenLeavesField && toZone !== "field" && toZone !== "banished") return false;
+        const redirect = toZone === "graveyard"
+          ? getSendToGraveReplacementDestination(card, owner, [this.game.player, this.game.bot])
+          : null;
+        if (redirect && redirect !== toZone) return false;
+      }
     }
   }
 

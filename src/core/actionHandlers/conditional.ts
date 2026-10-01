@@ -372,12 +372,38 @@ function runOptionalTargetSelection(
   ctx: EffectContext,
   action: OptionalTargetAction,
 ): Promise<SelectionResult | null> {
-  const autoSelection = resolveOptionalAutoSelection(
-    game,
-    selectionContract,
-    ctx,
-  );
-  if (autoSelection) return Promise.resolve(autoSelection);
+  const player = ctx.player;
+  if (!player) return Promise.resolve(null);
+  if (isAI(player)) {
+    const resolveAI = () => resolveOptionalAutoSelection(game, selectionContract, ctx);
+    if (!game.requestDecision) return Promise.resolve(resolveAI());
+    const requirements = Array.isArray(selectionContract.requirements)
+      ? selectionContract.requirements
+      : selectionContract.requirements ? [selectionContract.requirements] : [];
+    return game.requestDecision({
+      kind: "choice",
+      actor: player,
+      candidates: [],
+      requireCandidate: false,
+      resolveAI,
+      serializeResult: value => ({ selections: Object.fromEntries(
+        Object.entries(value || {}).map(([id, keys]) => [id, keys.map(key => ({ key }))]),
+      ) }),
+      deserializeReplayValue: value => {
+        if (!("selections" in value)) return null;
+        const selections: SelectionResult = {};
+        for (const requirement of requirements) {
+          if (!requirement.id) continue;
+          const recorded = value.selections[requirement.id] || [];
+          selections[requirement.id] = recorded.flatMap(identity => {
+            const candidate = requirement.candidates?.find(candidate => candidate.key === identity.key);
+            return candidate && isSelectionCandidateKey(candidate.key) ? [candidate.key] : [];
+          });
+        }
+        return selections;
+      },
+    });
+  }
 
   return new Promise<SelectionResult | null>((resolve) => {
     let resolved = false;
@@ -391,11 +417,13 @@ function runOptionalTargetSelection(
       throw new TypeError("game.startTargetSelectionSession is not a function");
     }
     game.startTargetSelectionSession({
-      kind: selectionContract?.kind || "target",
+      kind: "choice",
+      owner: player,
       selectionContract,
       card: ctx?.source || null,
       message: selectionContract?.message || action?.selectionMessage || null,
       allowCancel: action?.allowCancel !== false,
+      preventCancel: action?.allowCancel === false,
       resolve: (value) => finalize(Array.isArray(value) ? null : value),
       execute: (selections) => {
         finalize(selections);
@@ -579,14 +607,24 @@ async function resolveOptionalTargets(
     activationContext: {
       ...(ctx?.activationContext || {}),
       logTargets: false,
+      purpose: "choice" as const,
+      timing: "resolution",
+      autoSelectTargets: false,
+      autoSelectSingleTarget: false,
     },
   };
+  // Planned choices guide the broker's AI resolver, never bypass its recording.
+  // A local choice must also inspect the current candidates rather than reuse
+  // a same-named activation target from the enclosing effect.
+  delete targetCtx.activationContext.decisions;
+  delete targetCtx.activationContext.resolvedTargets;
 
   if (!engine.resolveTargets) {
     throw new TypeError("engine.resolveTargets is not a function");
   }
   let targetResult = engine.resolveTargets(targetDefs, targetCtx, null);
   if (targetResult?.ok === false && !targetResult?.needsSelection) {
+    if (action.optional !== false) return { ...targetResult, optionalDeclined: true };
     return targetResult;
   }
 
@@ -606,7 +644,7 @@ async function resolveOptionalTargets(
   const selections = await runOptionalTargetSelection(
     game,
     selectionContract,
-    targetCtx,
+    ctx,
     action,
   );
 

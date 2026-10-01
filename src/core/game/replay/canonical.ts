@@ -196,6 +196,8 @@ function cardState(
     position: card.position || null,
     fieldSlot: card.fieldSlot ?? null,
     fieldPresenceId: card.fieldPresenceId ?? null,
+    fieldPresenceSummons: (card.fieldPresenceSummons || []).map(entry => ({ ...entry })),
+    protectionEffects: (card.protectionEffects || []).map(entry => ({ ...entry })),
     facedown: card.isFacedown === true,
     atk: numericValue(card.atk),
     def: numericValue(card.def),
@@ -331,7 +333,12 @@ export function createCanonicalStateSnapshot(
       bot: playerState(game, game.bot),
     },
     usage,
-    delayedActions: stableValue(game.delayedActions || []) ?? [],
+    namedOncePerTurnUsage: stableValue({
+      turn: game.oncePerTurnTurnCounter ?? null,
+      player: game.oncePerTurnUsage?.player || new Map(),
+      bot: game.oncePerTurnUsage?.bot || new Map(),
+    }) ?? null,
+    delayedActions: serializeReplayEventPayload(game, game.delayedActions || []) ?? [],
     temporaryEventEffects: canonicalEventEffects ?? [],
     temporaryControlEffects: canonicalControl ?? [],
     chain: {

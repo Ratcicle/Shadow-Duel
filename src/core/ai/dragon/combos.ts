@@ -118,23 +118,13 @@ export const COMBO_DATABASE = [
   },
   {
     name: "Black Bull Rush",
-    description: "Discard 2 Dragons, including Voltaic when valuable, -> SS Black Bull Dragon",
+    description: "Send 2 Dragons from hand to the GY -> SS Black Bull Dragon",
     requires: ["Black Bull Dragon in hand", "2+ Dragon monsters in hand"],
-    result: "2500 ATK + GY setup + 800 burn damage if Voltaic is discarded",
+    result: "2500 ATK for a later turn and GY setup",
     priority: 9,
     strategicPriority: DRAGON_COMBO_PRIORITY.MEDIUM,
     status: DRAGON_COMBO_STATUS.PARTIAL,
-    needs: ["discard value simulation"],
-  },
-  {
-    name: "Luminous + Black Bull + Voltaic",
-    description: "Luminous on field turns Black Bull discard into Voltaic burn plus Dragon recovery",
-    requires: ["Luminous Dragon", "Black Bull Dragon", "Voltaic Dragon", "discardable Dragon"],
-    result: "Black Bull pressure, 800 burn, and one recovered Dragon",
-    priority: 10,
-    strategicPriority: DRAGON_COMBO_PRIORITY.MEDIUM,
-    status: DRAGON_COMBO_STATUS.PLANNED_BY_TURN_LINE_SEARCH,
-    needs: ["TurnLineSearch", "discard-trigger simulation"],
+    needs: ["GY cost value simulation"],
   },
   {
     name: "Luminous + Grey Loop",
@@ -260,7 +250,7 @@ export const COMBO_DATABASE = [
     name: "Awakening to Black Bull Attacker",
     description: "Awakening converts 2 Dragons into Black Bull for immediate pressure",
     requires: ["Awakening face-up", "Black Bull Dragon in hand", "2 controlled Dragons"],
-    result: "Black Bull attacker without paying discard cost",
+    result: "Black Bull attacker without sending cards from hand",
     priority: 13,
     strategicPriority: DRAGON_COMBO_PRIORITY.HIGH,
     status: DRAGON_COMBO_STATUS.PLANNED_BY_TURN_LINE_SEARCH,
@@ -504,15 +494,6 @@ export function detectAvailableCombos(analysis: DragonAnalysis, logFn: ((message
       available.push(availableCombo("Black Bull Rush", { type: "handIgnition", cardName: "Black Bull Dragon" }));
       log("Combo: Black Bull Dragon SS");
     }
-  }
-
-  if (
-    handNames.includes("Luminous Dragon") &&
-    handNames.includes("Black Bull Dragon") &&
-    handNames.includes("Voltaic Dragon")
-  ) {
-    available.push(availableCombo("Luminous + Black Bull + Voltaic", { type: "handIgnition", cardName: "Luminous Dragon" }));
-    log("Combo: Luminous + Black Bull + Voltaic");
   }
 
   if (

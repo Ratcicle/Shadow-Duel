@@ -28,6 +28,7 @@ import { checkSpecialSummonEligibility } from "./eligibility.js";
 
 interface ExecutionEffectEnginePort {
   clearTargetingCache?(): void;
+  assignFieldPresenceId?(card: GameCard): void;
   evaluateFusionSelection(
     fusion: GameCard, materials: GameCard[],
     options: { materialInfo: { zone: string }[] },
@@ -254,6 +255,8 @@ export async function flipSummon(
       card.positionChangedThisTurn = true;
       card.hasAttacked = false;
       card.attacksUsedThisTurn = 0;
+      // A monster placed face-down has no successful summon presence yet.
+      if (card.fieldPresenceId == null) this.effectEngine?.assignFieldPresenceId?.(card);
       this.effectEngine?.clearTargetingCache?.();
       const locationVersion = bumpCardLocationVersion(card);
       const chainSystem = this.chainSystem;

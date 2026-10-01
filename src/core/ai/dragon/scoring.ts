@@ -1,3 +1,5 @@
+import { isFieldPresenceSummonAttackRestricted } from "../../game/combat/availability.js";
+import { getCounterCount } from "../common/counters.js";
 import type {
   DragonCard,
   DragonPlayer,
@@ -88,7 +90,7 @@ export function assessDragonExtremeResourcePolicy(analysis: DragonAnalysis = {})
  * @param {Object} opponent
  * @returns {number}
  */
-export function evaluateDragonMonster(monster: DragonCard, owner: DragonPlayer | null | undefined, opponent: DragonPlayer | null | undefined) {
+export function evaluateDragonMonster(monster: DragonCard, owner: DragonPlayer | null | undefined, opponent: DragonPlayer | null | undefined, turnCounter?: number) {
   if (!monster) return 0;
 
   const knowledge = CARD_KNOWLEDGE[monster.name!] || {};
@@ -112,7 +114,9 @@ export function evaluateDragonMonster(monster: DragonCard, owner: DragonPlayer |
   if (isExtremeDragon(monster)) value += 1.0;
 
   // Battle readiness
-  if (monster.position === "attack" && !monster.hasAttacked && !monster.cannotAttackThisTurn) {
+  const passiveAttackLock = isFieldPresenceSummonAttackRestricted(monster,
+    [...(opponent?.field || []), ...(opponent?.spellTrap || []), ...(opponent?.fieldSpell ? [opponent.fieldSpell] : [])], turnCounter);
+  if (monster.position === "attack" && !monster.hasAttacked && !monster.cannotAttackThisTurn && !passiveAttackLock) {
     value += 0.4;
     const oppField = opponent?.field || [];
     if (oppField.length === 0 && !monster.cannotAttackDirectly && monster.name !== "Grey Dragon") {
@@ -125,11 +129,11 @@ export function evaluateDragonMonster(monster: DragonCard, owner: DragonPlayer |
   if (monster.simBattleDestructionProtected || monster.simEffectDestructionProtected) value += 0.7;
   if (monster.simProtectedUntilNextTurn) value += 0.3;
   if (monster.simFutureRevive) value += 0.6;
-  if (monster.simMultiAttackPressure && !monster.cannotAttackThisTurn) value += 0.6;
+  if (monster.simMultiAttackPressure && !monster.cannotAttackThisTurn && !passiveAttackLock) value += 0.6;
   if (monster.effectsNegated) value -= 0.5;
 
   // Penalties
-  if (monster.cannotAttackThisTurn) value -= 0.3;
+  if (monster.cannotAttackThisTurn || passiveAttackLock) value -= 0.3;
   if (monster.hasAttacked) value -= 0.2;
   if (monster.isFacedown) value *= 0.7;
 
@@ -171,13 +175,13 @@ export function evaluateBoardDragon(gameOrState: DragonGame, perspectivePlayer: 
 
   for (const monster of myField) {
     if (!monster || monster.cardKind !== "monster") continue;
-    score += evaluateDragonMonster(monster, perspective, opponent);
+    score += evaluateDragonMonster(monster, perspective, opponent, gameOrState.turnCounter);
     if (currentListMode && isOutOfPlanDragonCardName(monster.name!)) score -= 4;
   }
 
   for (const monster of oppField) {
     if (!monster || monster.cardKind !== "monster") continue;
-    const oppValue = evaluateDragonMonster(monster, opponent, perspective);
+    const oppValue = evaluateDragonMonster(monster, opponent, perspective, gameOrState.turnCounter);
     score -= oppValue * 0.85;
   }
 
@@ -215,9 +219,9 @@ export function evaluateBoardDragon(gameOrState: DragonGame, perspectivePlayer: 
   // ── Field spell (Jagged Peak) ─────────────────────────────────────────────
   if (perspective?.fieldSpell?.name === "Jagged Peak of the Dragons") {
     score += 1.5;
-    const peakCounters = (perspective!.fieldSpell!.counters as Partial<Record<string, number>> | undefined)?.dragon_peak || 0;
-    score += peakCounters * 0.3;  // Each counter toward 5 is valuable
-    if (peakCounters >= 5) score += 2.0;  // Can SS Extreme Dragon now!
+    const peakCounters = getCounterCount(perspective.fieldSpell, "dragon_peak");
+    score += peakCounters * 0.3;
+    if (peakCounters >= 7) score += 2.0;
   }
   if (opponent?.fieldSpell) score -= 1.0;
 

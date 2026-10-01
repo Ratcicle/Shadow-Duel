@@ -8,6 +8,34 @@ import type {
   SelectionResult,
 } from "../../src/core/contracts/selection.js";
 
+test("mandatory selection cannot finish with empty, repeated, or excessive choices", async t => {
+  const game = new Game({ captureReplay: false, disableChains: true });
+  t.after(() => game.dispose());
+  const card = new Card({ name: "Mandatory choice", cardKind: "monster" }, "player");
+  let completions = 0;
+  game.startTargetSelectionSession({
+    kind: "choice", owner: game.player, card, preventCancel: true,
+    selectionContract: {
+      kind: "choice", requirements: [{ id: "chosen", min: 1, max: 1, zone: "field",
+        candidates: [{ cardRef: card, name: card.name, zone: "field", owner: "player" }] }],
+    },
+    execute: () => { completions++; return { success: true, needsSelection: false }; },
+  });
+  const session = required(game.targetSelection);
+  const key = required(required(session.requirements[0]).candidates[0]).key;
+  await game.finishTargetSelection();
+  assert.equal(game.targetSelection, session);
+  assert.equal(completions, 0);
+  session.selections.chosen = [key, key];
+  await game.finishTargetSelection();
+  assert.equal(game.targetSelection, session);
+  assert.equal(completions, 0);
+  session.selections.chosen = [key];
+  await game.finishTargetSelection();
+  assert.equal(game.targetSelection, null);
+  assert.equal(completions, 1);
+});
+
 test("selection session normalizes, exposes field state and resolves once", async () => {
   const game = new Game({ captureReplay: false, disableChains: true });
   const card = new Card(

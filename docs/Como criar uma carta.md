@@ -834,6 +834,17 @@ handSummonProcedure: {
 O procedimento abre seleção de custo para o jogador humano e executa os
 movimentos dos materiais pela transação de Invocação.
 
+Para limitar o procedimento por nome, acrescente `oncePerTurn: true` e uma
+chave estável em `oncePerTurnName`. O preview e a validação após as escolhas
+consultam o limite existente. O uso é consumido no compromisso da tentativa,
+antes do primeiro pagamento, e permanece consumido se a Invocação for negada.
+Cancelar antes desse compromisso preserva materiais e uso. Sem esses campos,
+o procedimento continua sem limite próprio.
+
+Procedimentos não são ativações de efeito, não criam links de Chain e não
+incrementam contadores de ativações do material. As janelas normais de tentativa
+e conclusão de Invocação continuam disponíveis.
+
 ## Exemplos
 
 Spell simples:
@@ -1098,6 +1109,17 @@ descartes. Descarte de efeito não deve ser declarado como custo de ativação.
 ### Custos de movimento e marcadores de Invocação
 
 Declare pagamentos em `activationCosts` para concluí-los antes da janela de respostas. Nos custos de movimento, informe `fromZone`, `contextLabel: "cost"` e `requireDestination: true`. Use `targetRef: "self"` quando a própria fonte deve pagar; para materiais escolhidos pelo jogador, declare alvos com `intent: "cost"`.
+
+Para descarte real, use `contextLabel: "discard"`, inclusive quando for custo.
+Triggers de descarte filtram esse marcador. Enviar da mão ao Cemitério ou usar
+materiais não conta como descarte. O marcador descreve a natureza do movimento;
+`activationCosts` e `intent: "cost"` determinam o momento do pagamento.
+
+Escolhas de `optional_target_actions` são locais à resolução e passam pelo
+DecisionBroker sem publicar `effect_targeted`. `optional: true` permite
+prosseguir sem candidatos; `allowCancel: false` exige a escolha quando houver
+candidatos válidos. Um alvo declarado no efeito continua sendo escolhido antes
+das respostas e mantém a identidade daquela presença até a resolução.
 
 `move.requireAll: true` valida todas as cartas selecionadas antes de movimentá-las e exige sucesso em cada movimento. Combine com `requireDestination: true` quando todos os materiais precisam chegar ao destino declarado. Um pagamento incompleto interrompe a ativação; movimentos já concluídos permanecem pagos. Movimentos, eventos e apresentação continuam sequenciais. Actions que omitem `requireAll` preservam o comportamento existente.
 

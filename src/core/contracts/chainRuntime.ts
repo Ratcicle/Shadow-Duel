@@ -1283,6 +1283,7 @@ export interface ChainAutoSelectionOptions {
   owner: ChainPlayer;
   selectionContract: ChainSelectionContract;
   selectionKind: "cost" | "target";
+  activationContext?: Pick<PreparedActivationContext, "decisions">;
 }
 
 export interface ChainTriggerOrderModalOptions {
@@ -1453,7 +1454,7 @@ export interface ChainGamePort {
     outcome: { activationNegated: boolean; effectNegated: boolean },
   ): ChainUsageReservation | null;
   releaseEffectUsageReservations?(reason: string): void;
-  requestDecision?(request: ChainDecisionRequest): ChainMaybePromise<unknown>;
+  requestDecision?(request: ChainDecisionRequest | import("./decisions.js").DecisionRequest<"cost" | "target">): ChainMaybePromise<unknown>;
   startTargetSelectionSession?(session: ChainSelectionSessionInput): unknown;
   resumePendingEventSelection?(
     selections: ChainSelectionMap | SelectionResult,
@@ -1632,6 +1633,7 @@ export interface ChainSelectionHost {
       purpose?: "cost" | "target";
       allowCancel?: boolean;
       activationZone?: CanonicalZone | null;
+      selections?: ChainSelectionMap;
     },
   ): ChainMaybePromise<ChainSelectionMap | null>;
 }

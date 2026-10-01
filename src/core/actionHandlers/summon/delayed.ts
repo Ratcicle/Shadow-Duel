@@ -80,6 +80,7 @@ export async function handleScheduleSpecialSummon(
           owner: owner.id,
           placementActorId: player.id,
           fromZone,
+          expectedLocationVersion: card.locationVersion,
           position: action.position,
           statusesOnSummon: action.statusesOnSummon || null,
           summonMethod: action.summonMethod || "special",
@@ -137,31 +138,40 @@ export async function handleAbyssalSerpentDelayedSummon(
   const isFusionOrAscension =
     target.monsterType === "fusion" || target.monsterType === "ascension";
 
-  await game.moveCard!(source, player, "graveyard");
-  await game.moveCard!(target, opponent, "graveyard");
-
-  ui?.log?.(
-    `${source.name} and ${target.name} are sent to the GY. They will be special summoned during the opponent's next Standby Phase.`,
-  );
+  const sourceMove = await game.moveCard!(source, player, "graveyard");
+  const sourceOwner = sourceMove === false || (typeof sourceMove === "object" && sourceMove?.success === false)
+    ? null
+    : [game.player, game.bot].find(owner => owner.graveyard.includes(source));
+  const sourceSummon = sourceOwner ? {
+    card: source,
+    owner: sourceOwner.id,
+    placementActorId: player.id,
+    fromZone: "graveyard",
+    expectedLocationVersion: source.locationVersion,
+    getsBuffIfTargetWasFusionOrAscension: isFusionOrAscension,
+  } : null;
+  const targetMove = await game.moveCard!(target, opponent, "graveyard");
+  const targetOwner = targetMove === false || (typeof targetMove === "object" && targetMove?.success === false)
+    ? null
+    : [game.player, game.bot].find(owner => owner.graveyard.includes(target));
+  const targetSummon = targetOwner ? {
+    card: target,
+    owner: targetOwner.id,
+    placementActorId: player.id,
+    fromZone: "graveyard",
+    expectedLocationVersion: target.locationVersion,
+    getsBuffIfTargetWasFusionOrAscension: false,
+  } : null;
 
   const summonPayload = {
-    summons: [
-      {
-        card: source,
-        owner: "player",
-        placementActorId: player.id,
-        fromZone: "graveyard",
-        getsBuffIfTargetWasFusionOrAscension: isFusionOrAscension,
-      },
-      {
-        card: target,
-        owner: "bot",
-        placementActorId: player.id,
-        fromZone: "graveyard",
-        getsBuffIfTargetWasFusionOrAscension: false,
-      },
-    ],
+    summons: [...(sourceSummon ? [sourceSummon] : []), ...(targetSummon ? [targetSummon] : [])],
   };
+
+  if (summonPayload.summons.length === 0) return false;
+
+  ui?.log?.(
+    `${summonPayload.summons.map(entry => entry.card.name).join(" and ")} will be Special Summoned during the opponent's next Standby Phase.`,
+  );
 
   const opponentPlayerId =
     opponent.id || (player.id === "player" ? "bot" : "player");

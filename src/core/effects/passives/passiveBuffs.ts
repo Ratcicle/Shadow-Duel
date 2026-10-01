@@ -16,6 +16,7 @@ import type {
   EffectOwner,
 } from "../../contracts/effects.js";
 import type { FilterCard, RuntimeCardFilter } from "../filters/cardFilters.js";
+import type { CanonicalZone } from "../../contracts/zones.js";
 
 type PassiveStat = "atk" | "def";
 type PassiveStatCard = {
@@ -212,6 +213,45 @@ function passiveSourceEffectsAreNegated(
     return engine.isEffectNegated(card);
   }
   return card.effectsNegated === true;
+}
+
+/** Continuous rules share the same face-up and negation gate in every projection. */
+export function isPassiveSourceActive(card: {
+  readonly isFacedown?: boolean | undefined;
+  readonly effectsNegated?: boolean | undefined;
+} | null | undefined): boolean {
+  return !!card && card.isFacedown !== true && card.effectsNegated !== true;
+}
+
+interface GraveReplacementSource {
+  readonly isFacedown?: boolean | undefined;
+  readonly effectsNegated?: boolean | undefined;
+  readonly effects?: readonly EffectDefinition[] | undefined;
+}
+
+interface GraveReplacementPlayer {
+  readonly field?: readonly GraveReplacementSource[] | undefined;
+}
+
+/** Query the same continuous replacement before payment and during movement. */
+export function getSendToGraveReplacementDestination(
+  card: object,
+  fromOwner: GraveReplacementPlayer,
+  players: readonly (GraveReplacementPlayer | null | undefined)[],
+): CanonicalZone | null {
+  for (const controller of players) {
+    for (const source of controller?.field || []) {
+      if (source === card || !isPassiveSourceActive(source)) continue;
+      for (const effect of source.effects || []) {
+        if (effect.timing !== "passive" || !("passive" in effect) || effect.passive?.type !== "send_to_grave_replacement") continue;
+        const ownerRule = effect.passive.targetOwner || "opponent";
+        if ((ownerRule === "self" && controller !== fromOwner) ||
+            (ownerRule === "opponent" && controller === fromOwner)) continue;
+        return effect.passive.redirectTo || "banished";
+      }
+    }
+  }
+  return null;
 }
 
 interface EquipAttackBonusSource {

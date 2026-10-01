@@ -88,6 +88,7 @@ interface CapturedGameMethods {
     selections?: CanonicalSelectionMap | null,
     options?: SpellActivationCaptureOptions,
   ): Promise<unknown>;
+  activateFieldSpellEffect(card: GameCard | null | undefined): unknown;
   changeMonsterPosition(
     card: GameCard,
     position: BattlePosition,
@@ -121,6 +122,7 @@ export const REPLAY_CAPTURE_METHOD_NAMES = Object.freeze([
   "tryActivateMonsterEffect",
   "tryActivateSpell",
   "tryActivateSpellTrapEffect",
+  "activateFieldSpellEffect",
   "changeMonsterPosition",
   "resolveCombat",
   "nextPhase",
@@ -408,6 +410,15 @@ export const REPLAY_CAPTURE_BINDINGS = Object.freeze([
           }),
         }
       : null;
+  }),
+  binding("activateFieldSpellEffect", function (args) {
+    const [card] = args;
+    const actor = card?.owner === "bot" ? this.bot : this.player;
+    return card ? {
+      type: "activate_effect",
+      actorId: actor.id,
+      payload: cardPayload(this, card, { sourceZone: "fieldSpell" as const }),
+    } : null;
   }),
   binding("changeMonsterPosition", function (args) {
     const [card, position] = args;

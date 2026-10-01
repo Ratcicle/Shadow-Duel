@@ -1,7 +1,7 @@
 # Replay canônico
 
 O replay executável usa o formato `shadow-duel-canonical-replay`, schema `2` e
-`engineVersion: "field-positions-v2"`. Ele é independente do relatório
+`engineVersion: "dragon-rules-v3"`. Ele é independente do relatório
 estratégico. O importador aceita somente o schema `2`: relatórios v4 e replays
 de schemas anteriores não são partidas executáveis nesta versão.
 
@@ -92,6 +92,31 @@ compatibilidade histórica (`trigger_opportunity`, `trigger_ordered`, `activatio
 
 ## Efeitos temporários e escolhas durante a resolução
 
+O lote Dragon usa a engine `dragon-rules-v3` com os mesmos comandos e kinds de
+decisão do schema `2`. Snapshots incluem `fieldPresenceSummons` por fonte,
+proteções concedidas e `namedOncePerTurnUsage`, incluindo o limite dos
+procedimentos da mão. O histórico de Invocações guarda a presença do monstro,
+o jogador que o Invocou e o turno. Os snapshots copiam essas listas.
+
+Agendamentos de Invocação preservam `expectedLocationVersion` após o envio
+bem-sucedido. Referências a cartas e jogadores nesses registros são projetadas
+para identidades canônicas antes do hash, sem objetos vivos ou `instanceId`.
+Na execução, o retorno exige a mesma carta, zona, dono e versão, inclusive após
+a escolha de posição. A saída e reentrada no Cemitério invalidam o retorno.
+
+O procedimento limitado da mão consome seu uso no compromisso da tentativa,
+inclusive se ela for negada. Ativações de efeitos de Magias de Campo já no
+campo são capturadas como `activate_effect` com origem `fieldSpell`. O driver
+usa a mesma rota pública para reproduzi-las. As decisões do Blindado e da
+Galáxia e as escolhas locais de resolução passam pelo broker. As regressões em
+[`dragonRulesReplay.test.ts`](../test/replay/dragonRulesReplay.test.ts) cobrem
+humanos e IA nos dois assentos, com gravação EN e reprodução PT-BR.
+
+Seleções fornecidas pelo chamador e alvos exatos do planejador também são
+registrados pelo broker, preservando a carta escolhida. O playback consome
+essas identidades canônicas sem consultar o seletor da IA. Essa integração
+é coberta por [`plannedTargetReplay.test.ts`](../test/replay/plannedTargetReplay.test.ts).
+
 Registros criados por `register_temporary_event_effect` recebem um ID do
 contador determinístico `temporary_event`. A fonte e o alvo vinculado guardam
 `sourceDuelCardId` e `boundEventTargetDuelCardId`, mesmo quando a carta deixa
@@ -137,10 +162,11 @@ caracteres do replay, usado para detectar divergências na reprodução.
 
 `validateCanonicalReplay(input)` recebe `unknown`, não muta a entrada e retorna
 a mesma referência somente depois de validar o documento. `setup`, `commands` e
-`decisions` são obrigatórios. `engineVersion`, `events`, `result` e `finalized`
-continuam opcionais na importação de arquivos do schema `2`; quando presentes,
-são validados profundamente. O valor de `engineVersion`, se presente, deve ser
-`"field-positions-v2"`.
+`decisions` e `engineVersion` são obrigatórios. A versão da engine deve ser
+`"dragon-rules-v3"`; gravações sem essa versão são rejeitadas antes da validação
+profunda e da reprodução. `events`, `result` e `finalized` continuam opcionais
+na importação de arquivos do schema `2`; quando presentes, são validados
+profundamente. Os comandos e kinds de decisão permanecem os mesmos.
 
 A validação preserva a ordem e as mensagens públicas dos checks de formato,
 schema, assinatura do banco e campos mínimos. Também valida setup e RNG, as

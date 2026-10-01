@@ -16,6 +16,7 @@ import type {
 } from "../contracts/chainRuntime.js";
 import type { CanonicalZone } from "../contracts/zones.js";
 import type { SelectionCandidateKey } from "../contracts/primitives.js";
+import type { SelectionResult } from "../contracts/selection.js";
 
 function selectionCards(value: unknown): unknown[] {
   if (Array.isArray(value)) {
@@ -157,6 +158,7 @@ export async function getPlayerSelectionsForDefinitions(
     purpose?: "cost" | "target";
     allowCancel?: boolean;
     activationZone?: CanonicalZone | null;
+    selections?: ChainSelectionMap;
   } = {},
 ): Promise<ChainSelectionMap | null> {
   if (!Array.isArray(definitions) || definitions.length === 0) return {};
@@ -184,9 +186,13 @@ export async function getPlayerSelectionsForDefinitions(
       timing: "activation",
       purpose,
       autoSelectSingleTarget: isAI(player),
-      autoSelectTargets: isAI(player),
+      autoSelectTargets: false,
     },
   };
+  // Discover legal candidates independently of a caller's cached or planned
+  // selection. The live resolver applies that choice inside the broker.
+  delete ctx.activationContext?.decisions;
+  if (ctx.activationContext) Reflect.deleteProperty(ctx.activationContext, "resolvedTargets");
   const targetResult = effectEngine.resolveTargets(definitions, ctx, null);
   const baseTargets: ChainSelectionMap = {};
   definitions.forEach((definition: ChainEffectTarget) => {
@@ -208,19 +214,91 @@ export async function getPlayerSelectionsForDefinitions(
     preventCancel: !allowCancel,
   };
 
-  if (isAI(player) && this.game?.autoSelector) {
-    const autoResult = this.game.autoSelector.select(contract, {
-      owner: player,
-      selectionContract: contract,
-      selectionKind: purpose,
-    });
-    if (!autoResult?.ok) return null;
+  const requirements = contract.requirements || [];
+  const hasCompleteProvidedSelection = requirements.every(requirement =>
+    options.selections && Object.prototype.hasOwnProperty.call(options.selections, requirement.id));
+  if (this.game && ((isAI(player) && this.game.autoSelector) || hasCompleteProvidedSelection)) {
+    const game = this.game;
+    const normalizeSelections = (value: unknown): SelectionResult | null => {
+      if (!value || typeof value !== "object") return null;
+      const result: SelectionResult = {};
+      for (const requirement of requirements) {
+        const keys: unknown = Reflect.get(value, requirement.id);
+        if (!Array.isArray(keys)) return null;
+        const candidates = requirement.candidates || [];
+        if (new Set(keys).size !== keys.length) return null;
+        const selected = keys.flatMap(key => {
+          const candidate = candidates.find(candidate => candidate.key === key);
+          return candidate ? [candidate] : [];
+        });
+        const min = requirement.min ?? 1;
+        if (selected.length !== keys.length || selected.length < min || selected.length > (requirement.max ?? min)) return null;
+        result[requirement.id] = selected.flatMap(candidate => candidate.key ? [candidate.key] : []);
+      }
+      return result;
+    };
+    const resolveProvided = (): SelectionResult | null => {
+      const providedDefinitions = definitions.filter(definition =>
+        options.selections && Object.prototype.hasOwnProperty.call(options.selections, definition.id) &&
+        !(isAI(player) && context?.activationContext?.decisions?.selections?.[definition.id] !== undefined));
+      const resolved = effectEngine.resolveTargets(providedDefinitions, ctx, options.selections || null);
+      if (resolved.ok === false || resolved.needsSelection) return null;
+      const selected: SelectionResult = {};
+      for (const requirement of requirements) {
+        if (!providedDefinitions.some(definition => definition.id === requirement.id)) continue;
+        const cards = selectionCards(resolved.targets && Reflect.get(resolved.targets, requirement.id));
+        const keys = cards.flatMap(card => {
+          const candidate = requirement.candidates?.find(candidate => candidate.cardRef === card);
+          return candidate?.key ? [candidate.key] : [];
+        });
+        if (keys.length !== cards.length) return null;
+        selected[requirement.id] = keys;
+      }
+      return selected;
+    };
+    const resolveAI = () => {
+      const provided = resolveProvided();
+      if (!provided) return null;
+      const remaining = requirements.filter(requirement => !Object.prototype.hasOwnProperty.call(provided, requirement.id));
+      if (remaining.length === 0) return normalizeSelections(provided);
+      const remainingContract = { ...contract, requirements: remaining };
+      const result = game.autoSelector?.select(remainingContract, {
+        owner: player, selectionContract: remainingContract, selectionKind: purpose,
+        activationContext: context?.activationContext || {},
+      });
+      return result?.ok ? normalizeSelections({ ...provided, ...result.selections }) : null;
+    };
+    const selections = game.requestDecision ? normalizeSelections(await game.requestDecision({
+      kind: purpose, actor: player, candidates: [], requireCandidate: false, resolveAI,
+      resolveHuman: () => normalizeSelections(resolveProvided()),
+      serializeResult: value => ({ selections: Object.fromEntries(requirements.map(requirement => [requirement.id,
+        (value?.[requirement.id] || []).map(key => {
+          const candidate = requirement.candidates?.find(candidate => candidate.key === key);
+          const card = candidate?.cardRef;
+          const duelCardId = card ? game.ensureDuelCardId?.(card) ?? card.duelCardId ?? null : null;
+          return { duelCardId, cardId: card?.id ?? null, effectId: null, candidateKey: null, key: duelCardId == null ? key : null };
+        }),
+      ])) }),
+      deserializeReplayValue: value => {
+        if (!("selections" in value)) return null;
+        const result: SelectionResult = {};
+        for (const requirement of requirements) {
+          result[requirement.id] = (value.selections[requirement.id] || []).flatMap(identity => {
+            const candidate = requirement.candidates?.find(candidate => "duelCardId" in identity && identity.duelCardId != null
+              ? candidate.cardRef?.duelCardId === identity.duelCardId : candidate.key === identity.key);
+            return candidate?.key ? [candidate.key] : [];
+          });
+        }
+        return normalizeSelections(result);
+      },
+    })) : isAI(player) ? resolveAI() : normalizeSelections(resolveProvided());
+    if (!selections) return null;
     return {
       ...baseTargets,
       ...resolveSelectionCards(
         this,
-        autoResult.selections || {},
-        contract.requirements || [],
+        selections,
+        requirements,
         player,
       ),
     };

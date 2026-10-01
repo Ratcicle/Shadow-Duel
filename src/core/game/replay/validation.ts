@@ -596,6 +596,27 @@ function validateCardSnapshot(value: unknown, path: string, onField = false): vo
     invalid(`${path}.fieldPresenceId`, "a field presence identity or null");
   }
   const fieldSlot = read(card, "fieldSlot");
+  requireArray(read(card, "fieldPresenceSummons"), `${path}.fieldPresenceSummons`).forEach((value, index) => {
+    const entryPath = `${path}.fieldPresenceSummons[${index}]`;
+    const entry = requireObject(value, entryPath);
+    const target = read(entry, "targetFieldPresenceId");
+    if (typeof target !== "string" && typeof target !== "number") invalid(`${entryPath}.targetFieldPresenceId`, "a field presence identity");
+    if (read(entry, "summoningPlayerId") !== "player" && read(entry, "summoningPlayerId") !== "bot") invalid(`${entryPath}.summoningPlayerId`, "a player identity");
+    requireInteger(read(entry, "turn"), `${entryPath}.turn`, 0);
+  });
+  requireArray(read(card, "protectionEffects"), `${path}.protectionEffects`).forEach((value, index) => {
+    const entryPath = `${path}.protectionEffects[${index}]`;
+    const entry = requireObject(value, entryPath);
+    if (!["battle_destruction", "effect_destruction"].includes(String(read(entry, "type")))) invalid(`${entryPath}.type`, "a destruction protection type");
+    const duration = read(entry, "duration");
+    if (typeof duration !== "string" && typeof duration !== "number") invalid(`${entryPath}.duration`, "a duration");
+    for (const key of ["expiresOnTurn", "grantedOnTurn"]) {
+      if (hasOwn(entry, key) && read(entry, key) !== null) requireInteger(read(entry, key), `${entryPath}.${key}`, 0);
+    }
+    if (hasOwn(entry, "source")) requireNullableString(read(entry, "source"), `${entryPath}.source`);
+    if (hasOwn(entry, "removeOnLeave")) requireBoolean(read(entry, "removeOnLeave"), `${entryPath}.removeOnLeave`);
+    if (hasOwn(entry, "sourceOwner") && !["self", "opponent", "any"].includes(String(read(entry, "sourceOwner")))) invalid(`${entryPath}.sourceOwner`, "a protection source scope");
+  });
   if (onField) {
     const slot = requireInteger(fieldSlot, `${path}.fieldSlot`, 0);
     if (slot > 4) invalid(`${path}.fieldSlot`, "an integer between 0 and 4");
@@ -711,6 +732,7 @@ function validateStateSnapshot(value: unknown, path: string): void {
   }
   for (const key of [
     "usage",
+    "namedOncePerTurnUsage",
     "delayedActions",
     "temporaryEventEffects",
     "temporaryControlEffects",
@@ -806,7 +828,6 @@ export function validateCanonicalReplay(input: unknown): CanonicalReplay {
   }
 
   if (
-    hasOwn(replay, "engineVersion") &&
     read(replay, "engineVersion") !== CANONICAL_REPLAY_ENGINE_VERSION
   ) {
     invalid("engineVersion", `"${CANONICAL_REPLAY_ENGINE_VERSION}"`);

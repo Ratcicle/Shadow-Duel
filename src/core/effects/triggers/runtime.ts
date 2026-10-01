@@ -8,7 +8,7 @@ import type {
   ResolvedTargetMap,
 } from "../../contracts/actionRuntime.js";
 import type { CardAction } from "../../contracts/actions.js";
-import type { BattlePosition, CardKind } from "../../contracts/cards.js";
+import type { BattlePosition, CardKind, FieldPresenceSummonRecord } from "../../contracts/cards.js";
 import type { EventCard, EventPlayer } from "../../contracts/events.js";
 import type {
   CardFilter,
@@ -38,6 +38,7 @@ export type TriggerRuntimeCard = Omit<EventCard, "effects"> & {
   declaredValues?: { [property: string]: unknown };
   fieldPresenceId?: string | number | null;
   fieldPresenceState?: { [counter: string]: number } | null;
+  fieldPresenceSummons?: FieldPresenceSummonRecord[];
   state?: {
     specialSummonTypeCount?: { [typeName: string]: number };
   };

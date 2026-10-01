@@ -13,6 +13,7 @@
 
 import BaseStrategy from "./BaseStrategy.js";
 import type { BotStrategyPort } from "../contracts/bot.js";
+import { getCounterCount } from "./common/counters.js";
 import type {
   AIAction,
   AIActivationContext,
@@ -750,7 +751,7 @@ export default class DragonStrategy extends BaseStrategy {
       extremeDragonEconomy,
       extremeResourcePolicy: assessDragonExtremeResourcePolicy({ extremeDragonEconomy }),
       hasJaggedPeak: bot.fieldSpell?.name === "Jagged Peak of the Dragons",
-      jaggedPeakCounters: (bot.fieldSpell?.counters as Partial<Record<string, number>> | undefined)?.dragon_peak || 0,
+      jaggedPeakCounters: getCounterCount(bot.fieldSpell, "dragon_peak"),
       dragonState,
       hasSolarInHand: dragonState.hasSolarInHand,
       hasSolarInGY: dragonState.hasSolarInGY,
@@ -1880,9 +1881,9 @@ export default class DragonStrategy extends BaseStrategy {
     // === FIELD SPELL IGNITION ACTIONS ===
     const fieldSpell = bot.fieldSpell;
     if (fieldSpell?.name === "Jagged Peak of the Dragons") {
-      const counters = (fieldSpell!.counters as Partial<Record<string, number>> | undefined)?.dragon_peak || 0;
+      const counters = getCounterCount(fieldSpell, "dragon_peak");
       const ignition = findIgnitionEffect(fieldSpell, "fieldSpell");
-      if (ignition && counters >= 5) {
+      if (ignition && counters >= 7) {
         const dragonCandidates = [
           ...rankOwnDragonsByValue(bot.hand || []),
           ...(bot.deck || []).filter(isDragonMonster).sort((a, b) => cardStrategicValue(b) - cardStrategicValue(a)),

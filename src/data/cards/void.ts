@@ -739,7 +739,7 @@ export const voidCards = [
             player: "self",
             fromZone: "hand",
             to: "graveyard",
-            contextLabel: "cost",
+            contextLabel: "discard",
           },
         ],
         actions: [

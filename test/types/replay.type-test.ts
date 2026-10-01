@@ -147,7 +147,7 @@ const functionValue: SerializableValue = () => true;
 const replay: CanonicalReplay = {
   format: "shadow-duel-canonical-replay",
   schemaVersion: 2,
-  engineVersion: "field-positions-v2",
+  engineVersion: "dragon-rules-v3",
   cardDatabaseSignature: "1cc622e3",
   setup: {
     seed: 123,

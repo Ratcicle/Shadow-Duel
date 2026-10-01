@@ -104,7 +104,7 @@ for (const actor of ["player", "bot"] as const) {
     const realEvents: string[] = [];
     game.on("card_moved", payload => { if (payload.card === phoenix) realEvents.push("card_moved"); });
     game.on("after_summon", payload => { if (payload.card === phoenix) realEvents.push("after_summon"); });
-    await game.resolveDelayedSummon({ summons: [{ card: phoenix, owner: actor, fromZone: "graveyard", position: "defense", statusesOnSummon: [{ status: "banishWhenLeavesField" }] }] });
+    await game.resolveDelayedSummon({ summons: [{ card: phoenix, owner: actor, fromZone: "graveyard", expectedLocationVersion: phoenix.locationVersion, position: "defense", statusesOnSummon: [{ status: "banishWhenLeavesField" }] }] });
     const events: string[] = [];
     lifecycle.processSimulatedDelayedActions(state, "end", actor, { emitSimulatedEvent: event => events.push(event) });
     assert.equal(required(state.bot.field[0]), simulated);

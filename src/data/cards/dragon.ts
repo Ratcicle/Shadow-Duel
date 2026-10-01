@@ -41,6 +41,7 @@ export const dragonCards = [
         triggerRequirement: "optional",
         triggerTiming: "if",
         event: "card_to_grave",
+        contextLabel: "discard",
         requireZone: "field",
         requireFaceup: true,
         eventCardFilters: {
@@ -221,6 +222,7 @@ export const dragonCards = [
         activationZones: ["graveyard"],
         id: "grey_dragon_gy_return",
         timing: "ignition",
+        requiresSourceAtResolution: true,
         requirePhase: ["main1", "main2"],
         targets: [
           {
@@ -239,6 +241,7 @@ export const dragonCards = [
             targetRef: "grey_dragon_discard_cost",
             player: "self",
             to: "graveyard",
+            contextLabel: "discard",
           },
         ],
         actions: [
@@ -276,6 +279,7 @@ export const dragonCards = [
         triggerRequirement: "mandatory",
         triggerTiming: "if",
         event: "card_to_grave",
+        contextLabel: "discard",
         fromZone: "hand",
         oncePerTurn: true,
         oncePerTurnName: "voltaic_dragon_discard_damage",
@@ -334,16 +338,22 @@ export const dragonCards = [
         event: "after_summon",
         summonMethods: ["normal"],
         requireSelfAsSummoned: true,
+        targets: [
+          {
+            id: "luminescent_revive_target",
+            owner: "self",
+            zone: "graveyard",
+            cardKind: "monster",
+            type: "Dragon",
+            maxLevel: 4,
+            count: { min: 1, max: 1 },
+          },
+        ],
         actions: [
           {
             type: "special_summon_from_zone",
+            targetRef: "luminescent_revive_target",
             zone: "graveyard",
-            filters: {
-              cardKind: "monster",
-              type: "Dragon",
-            },
-            maxLevel: 4,
-            count: { min: 0, max: 1 },
             position: "choice",
             promptPlayer: true,
           },
@@ -365,12 +375,17 @@ export const dragonCards = [
             count: { min: 1, max: 1 },
           },
         ],
-        actions: [
+        activationCosts: [
           {
-            type: "banish",
+            type: "move",
             targetRef: "self",
             fromZone: "graveyard",
+            to: "banished",
+            contextLabel: "cost",
+            requireDestination: true,
           },
+        ],
+        actions: [
           {
             type: "buff_stats_temp",
             targetRef: "luminescent_debuff_target",
@@ -487,6 +502,7 @@ export const dragonCards = [
             targetRef: "darkness_dragon_discard_cost",
             player: "self",
             to: "graveyard",
+            contextLabel: "discard",
           },
         ],
         actions: [
@@ -528,14 +544,26 @@ export const dragonCards = [
             zone: "hand",
             cardKind: "monster",
             filters: { type: "Dragon" },
+            excludeSelf: true,
             count: { min: 2, max: 2 },
             intent: "cost",
           },
         ],
+        activationCosts: [
+          {
+            type: "move",
+            targetRef: "bbd_cost",
+            fromZone: "hand",
+            to: "graveyard",
+            contextLabel: "cost",
+            requireDestination: true,
+          },
+        ],
         actions: [
           {
-            type: "special_summon_from_hand_with_cost",
-            costTargetRef: "bbd_cost",
+            type: "special_summon_from_zone",
+            zone: "hand",
+            requireSource: true,
             position: "choice",
             cannotAttackThisTurn: true,
           },
@@ -547,12 +575,17 @@ export const dragonCards = [
         id: "bbd_gy_banish_search",
         timing: "ignition",
         requirePhase: ["main1", "main2"],
-        actions: [
+        activationCosts: [
           {
-            type: "banish",
+            type: "move",
             targetRef: "self",
             fromZone: "graveyard",
+            to: "banished",
+            contextLabel: "cost",
+            requireDestination: true,
           },
+        ],
+        actions: [
           {
             type: "add_from_zone_to_hand",
             zone: "deck",
@@ -596,10 +629,22 @@ export const dragonCards = [
             intent: "cost",
           },
         ],
+        activationCosts: [
+          {
+            type: "move",
+            targetRef: "hellkite_cost_field_dragon",
+            fromZone: "field",
+            to: "graveyard",
+            contextLabel: "cost",
+            requireDestination: true,
+          },
+        ],
         actions: [
           {
-            type: "special_summon_from_hand_with_cost",
-            costTargetRef: "hellkite_cost_field_dragon",
+            type: "special_summon_from_zone",
+            zone: "hand",
+            requireSource: true,
+            fieldSlotsFreedBeforeSummon: 1,
             position: "choice",
           },
         ],
@@ -614,13 +659,18 @@ export const dragonCards = [
         requirePhase: ["main1", "main2"],
         oncePerTurn: true,
         oncePerTurnName: "hellkite_dragon_field_revive",
-        actions: [
+        activationCosts: [
           {
             type: "move",
             targetRef: "self",
             player: "self",
+            fromZone: "field",
             to: "graveyard",
+            contextLabel: "cost",
+            requireDestination: true,
           },
+        ],
+        actions: [
           {
             type: "special_summon_from_zone",
             zone: "graveyard",
@@ -630,6 +680,7 @@ export const dragonCards = [
               excludeCardName: "Hellkite Dragon",
             },
             maxLevel: 7,
+            fieldSlotsFreedBeforeSummon: 1,
             count: { min: 1, max: 1 },
             position: "choice",
             promptPlayer: true,
@@ -675,8 +726,10 @@ export const dragonCards = [
         id: "hellkite_roar_gy_search_peak",
         timing: "ignition",
         requirePhase: ["main1", "main2"],
+        activationCosts: [
+          { type: "move", targetRef: "self", fromZone: "graveyard", to: "banished", contextLabel: "cost", requireDestination: true },
+        ],
         actions: [
-          { type: "banish", targetRef: "self", fromZone: "graveyard" },
           {
             type: "add_from_zone_to_hand",
             zone: "deck",
@@ -694,7 +747,7 @@ export const dragonCards = [
     cardKind: "spell",
     subtype: "field",
     description:
-      "When this card is activated: You can add 1 Level 4 or lower Dragon from your GY to your hand.\n\nEach time a Dragon-type monster destroys an opponent's monster by battle, place 1 Dragon Peak counter on this card.\n\nOnce per turn: If this card has 7 or more Dragon Peak counters; you can send it to the GY, and if you do, Special Summon 1 Dragon-type monster from your hand, Deck, or GY.",
+      "When this card is activated: You can add 1 Level 4 or lower Dragon from your GY to your hand.\n\nEach time a Dragon-type monster destroys an opponent's monster by battle, place 1 Dragon Peak counter on this card.\n\nOnce per turn, if this card has 7 or more Dragon Peak counters: You can send this card to the GY; Special Summon 1 Dragon-type monster from your hand, Deck, or GY.",
     image: "assets/Jagged Peak of Dragons.png",
     effects: [
       {
@@ -742,6 +795,7 @@ export const dragonCards = [
 
         usagePolicy: "activate",
         id: "dragon_peak_ignite_summon",
+        requiresSourceAtResolution: false,
         timing: "ignition",
         requirePhase: ["main1", "main2"],
         oncePerTurn: true,
@@ -753,8 +807,10 @@ export const dragonCards = [
             min: 7,
           },
         ],
+        activationCosts: [
+          { type: "move", targetRef: "self", player: "self", fromZone: "fieldSpell", to: "graveyard", contextLabel: "cost", requireDestination: true },
+        ],
         actions: [
-          { type: "move", targetRef: "self", player: "self", to: "graveyard" },
           {
             type: "special_summon_from_zone",
             zone: ["hand", "deck", "graveyard"],
@@ -819,38 +875,20 @@ export const dragonCards = [
     atk: 2500,
     def: 1700,
     description:
-      "You can Special Summon this card from your hand by banishing 3 Dragon monsters from your GY.\n\nIf this card destroys a monster by battle: Gain LP equal to the destroyed monster's Level x100.\n\nOnce per turn: You can target 1 other Dragon monster you control; it cannot be destroyed by card effects until the end of the next turn.\n\nYou can only use each effect of \"Purified Crystal Dragon\" once per turn.",
+      "You can Special Summon this card from your hand by banishing 3 Dragon monsters from your GY. You can only attempt to Special Summon \"Purified Crystal Dragon\" once per turn this way, even if the Summon is negated.\n\nIf this card destroys a monster by battle: Gain LP equal to the destroyed monster's Level x100.\n\nYou can target 1 other Dragon monster you control; it cannot be destroyed by card effects until the end of the next turn.\n\nYou can only use each effect of \"Purified Crystal Dragon\" once per turn.",
     image: "assets/Purified Crystal Dragon.png",
-    effects: [
-      {
-
-        activationZones: ["hand"],
-
-        usagePolicy: "use",
-        id: "purified_crystal_special_summon",
-        timing: "ignition",
-        requirePhase: ["main1", "main2"],
-        oncePerTurn: true,
-        oncePerTurnName: "purified_crystal_special_summon",
-        targets: [
-          {
-            id: "purified_banish_cost",
-            owner: "self",
-            zone: "graveyard",
-            cardKind: "monster",
-            type: "Dragon",
-            count: { min: 3, max: 3 },
-          },
-        ],
-        actions: [
-          {
-            type: "special_summon_from_hand_with_cost",
-            costTargetRef: "purified_banish_cost",
-            costDestination: "banish",
-            position: "choice",
-          },
-        ],
+    handSummonProcedure: {
+      id: "purified_crystal_special_summon",
+      oncePerTurn: true,
+      oncePerTurnName: "purified_crystal_special_summon",
+      cost: {
+        count: 3,
+        zones: ["graveyard"],
+        filters: { cardKind: "monster", type: "Dragon" },
+        destination: "banished",
       },
+    },
+    effects: [
       {
 
         usagePolicy: "use",
@@ -1058,22 +1096,13 @@ export const dragonCards = [
         promptUser: true,
         promptMessage:
           'Activate "Radiant Cosmic Dragon" to Special Summon 1 Dragon monster from your GY?',
-        targets: [
-          {
-            id: "radiant_cosmic_revive_target",
-            owner: "self",
-            zone: "graveyard",
-            cardKind: "monster",
-            type: "Dragon",
-            excludeEventCardName: true,
-            count: { min: 1, max: 1 },
-          },
-        ],
         actions: [
           {
             type: "special_summon_from_zone",
-            targetRef: "radiant_cosmic_revive_target",
+            selectionId: "radiant_cosmic_revive_target",
             zone: "graveyard",
+            filters: { cardKind: "monster", type: "Dragon", excludeCardName: "Radiant Cosmic Dragon" },
+            count: { min: 1, max: 1 },
             position: "choice",
             promptPlayer: true,
           },
@@ -1124,25 +1153,16 @@ export const dragonCards = [
         ],
         actions: [
           {
-            type: "register_replacement_effect",
+            type: "grant_protection",
             targetRef: "rainbow_cosmic_protection_target",
+            protectionType: "battle_destruction",
             duration: "end_of_next_turn",
-            sourceName: "Rainbow Cosmic Dragon",
-            logMessage:
-              "Rainbow Cosmic Dragon protects the chosen Dragon until the end of the next turn.",
-            replacementEffect: {
-              type: "destruction",
-              reason: "any",
-              targetOwner: "self",
-              targetZones: ["field"],
-              targetFilters: {
-                cardKind: "monster",
-                type: "Dragon",
-              },
-              targetRequireFaceup: true,
-              auto: true,
-              logMessage: "{target} avoided destruction due to {source}.",
-            },
+          },
+          {
+            type: "grant_protection",
+            targetRef: "rainbow_cosmic_protection_target",
+            protectionType: "effect_destruction",
+            duration: "end_of_next_turn",
           },
         ],
       },
@@ -1169,31 +1189,35 @@ export const dragonCards = [
         id: "rainbow_cosmic_dragon_gy_send_extremes",
         timing: "ignition",
         requirePhase: ["main1", "main2"],
-        targets: [
+        activationCosts: [
           {
-            id: "rainbow_cosmic_extreme_send_targets",
-            owner: "self",
-            zone: "deck",
-            cardKind: "monster",
-            archetype: "Extreme Dragons",
-            count: { min: 1, max: 3 },
+            type: "move",
+            targetRef: "self",
+            fromZone: "graveyard",
+            to: "banished",
+            contextLabel: "cost",
+            requireDestination: true,
           },
         ],
         actions: [
           {
-            type: "banish",
-            targetRef: "self",
-            fromZone: "graveyard",
-          },
-          {
-            type: "move",
-            targetRef: "rainbow_cosmic_extreme_send_targets",
-            player: "self",
-            to: "graveyard",
-          },
-          {
-            type: "shuffle_deck",
-            player: "self",
+            type: "optional_target_actions",
+            optional: false,
+            allowCancel: false,
+            targets: [
+              {
+                id: "rainbow_cosmic_extreme_send_targets",
+                owner: "self",
+                zone: "deck",
+                cardKind: "monster",
+                archetype: "Extreme Dragons",
+                count: { min: 1, max: 3 },
+              },
+            ],
+            actions: [
+              { type: "move", targetRef: "rainbow_cosmic_extreme_send_targets", player: "self", fromZone: "deck", to: "graveyard" },
+              { type: "shuffle_deck", player: "self" },
+            ],
           },
         ],
       },
@@ -1218,7 +1242,7 @@ export const dragonCards = [
         triggerTiming: "when",
         event: "attack_declared",
         requireDefenderIsSelf: true,
-        requireDefenderType: "dragon",
+        requireDefenderType: "Dragon",
         oncePerTurn: true,
         oncePerTurnName: "dragon_spirit_sanctuary",
         targets: [
@@ -1226,7 +1250,7 @@ export const dragonCards = [
             id: "returning",
             targetFromContext: "defender",
             cardKind: "monster",
-            type: "dragon",
+            type: "Dragon",
             count: { min: 1, max: 1 },
           },
           {
@@ -1234,7 +1258,7 @@ export const dragonCards = [
             owner: "self",
             zone: "hand",
             cardKind: "monster",
-            type: "dragon",
+            type: "Dragon",
             count: { min: 1, max: 1 },
             compareAttribute: {
               attr: "level",
@@ -1272,7 +1296,7 @@ export const dragonCards = [
             id: "returning",
             targetFromContext: "target",
             cardKind: "monster",
-            type: "dragon",
+            type: "Dragon",
             count: { min: 1, max: 1 },
           },
           {
@@ -1280,7 +1304,7 @@ export const dragonCards = [
             owner: "self",
             zone: "hand",
             cardKind: "monster",
-            type: "dragon",
+            type: "Dragon",
             count: { min: 1, max: 1 },
             compareAttribute: {
               attr: "level",
@@ -1332,6 +1356,7 @@ export const dragonCards = [
         targets: [
           {
             id: "boneflame_cost_target",
+            intent: "cost",
             owner: "self",
             zone: "field",
             cardKind: "monster",
@@ -1340,17 +1365,23 @@ export const dragonCards = [
             count: { min: 1, max: 1 },
           },
         ],
-        actions: [
+        activationCosts: [
           {
             type: "move",
             targetRef: "boneflame_cost_target",
             player: "self",
+            fromZone: "field",
             to: "graveyard",
+            contextLabel: "cost",
+            requireDestination: true,
           },
+        ],
+        actions: [
           {
             type: "special_summon_from_zone",
             zone: "graveyard",
             requireSource: true,
+            fieldSlotsFreedBeforeSummon: 1,
             position: "choice",
           },
         ],
@@ -1578,7 +1609,7 @@ export const dragonCards = [
       },
     },
     description:
-      "There can only be 1 face-up \"Extreme Dragon\" monster on the field.\n\nMonsters your opponent controls that were summoned this turn cannot declare attacks.\n\nOnce per turn: you can target 1 card your opponent controls; return it to the hand.\n\nIf this card is destroyed by battle: shuffle all cards your opponent controls into the Deck.",
+      "There can only be 1 face-up \"Extreme Dragon\" monster on the field.\n\nWhile this card remains face-up on the field, monsters your opponent Summons cannot declare attacks during the turn they are Summoned. This restriction does not apply to monsters already on the field when this card entered the field or to monsters that change control.\n\nOnce per turn: you can target 1 card your opponent controls; return it to the hand.\n\nIf this card is destroyed by battle: shuffle all cards your opponent controls into the Deck.",
     image: "assets/Mist Extreme Dragon.png",
     effects: [
       {
@@ -1642,7 +1673,7 @@ export const dragonCards = [
       },
     },
     description:
-      "There can only be 1 face-up \"Extreme Dragon\" monster on the field.\n\nAny card sent to your opponent's Graveyard is banished instead.\n\nOnce per Duel, if this card would be destroyed by battle or by card effect: you can banish it until the end of the next turn instead, and if you do, choose 1 card your opponent controls; banish it.",
+      "There can only be 1 face-up \"Extreme Dragon\" monster on the field.\n\nAny card sent to your opponent's Graveyard is banished instead.\n\nOnce per Duel, if this card would be destroyed by battle or by card effect: you can banish it until the end of the next turn instead. Then, if your opponent controls any cards, choose 1 of them and banish it.",
     image: "assets/Galaxy Extreme Dragon.png",
     effects: [
       {
@@ -1670,18 +1701,10 @@ export const dragonCards = [
           targetMustBeSource: true,
           targetZones: ["field"],
           targetRequireFaceup: true,
-          auto: true,
+          auto: false,
           logMessage:
             "{source} banishes itself until the end of the next turn instead of being destroyed.",
         },
-        targets: [
-          {
-            id: "galaxy_extreme_dragon_banish_target",
-            owner: "opponent",
-            zones: ["field", "spellTrap", "fieldSpell"],
-            count: { min: 1, max: 1 },
-          },
-        ],
         actions: [
           { type: "banish", targetRef: "self", fromZone: "field" },
           {
@@ -1691,8 +1714,18 @@ export const dragonCards = [
             returnPhase: "end",
           },
           {
-            type: "banish",
-            targetRef: "galaxy_extreme_dragon_banish_target",
+            type: "optional_target_actions",
+            optional: true,
+            allowCancel: false,
+            targets: [
+              {
+                id: "galaxy_extreme_dragon_banish_target",
+                owner: "opponent",
+                zones: ["field", "spellTrap", "fieldSpell"],
+                count: { min: 1, max: 1 },
+              },
+            ],
+            actions: [{ type: "banish", targetRef: "galaxy_extreme_dragon_banish_target" }],
           },
         ],
       },
@@ -1850,18 +1883,25 @@ export const dragonCards = [
         targets: [
           {
             id: "estrelas_convergentes_discard",
+            intent: "cost",
+            excludeSelf: true,
             owner: "self",
             zone: "hand",
             count: { min: 1, max: 1 },
           },
         ],
-        actions: [
+        activationCosts: [
           {
             type: "move",
             targetRef: "estrelas_convergentes_discard",
             player: "self",
+            fromZone: "hand",
             to: "graveyard",
+            contextLabel: "discard",
+            requireDestination: true,
           },
+        ],
+        actions: [
           {
             type: "reduce_hand_monster_levels",
             amount: 2,
@@ -1947,12 +1987,17 @@ export const dragonCards = [
         requirePhase: ["main1", "main2"],
         oncePerTurn: true,
         oncePerTurnName: "extreme_dragon_awakening_gy_search",
-        actions: [
+        activationCosts: [
           {
-            type: "banish",
+            type: "move",
             targetRef: "self",
             fromZone: "graveyard",
+            to: "banished",
+            contextLabel: "cost",
+            requireDestination: true,
           },
+        ],
+        actions: [
           {
             type: "add_from_zone_to_hand",
             zone: "deck",
@@ -2100,14 +2145,14 @@ export const dragonCards = [
             targetRef: "self",
             player: "self",
             to: "graveyard",
-            contextLabel: "cost",
+            contextLabel: "discard",
           },
           {
             type: "move",
             targetRef: "stelya_discard_other_card",
             player: "self",
             to: "graveyard",
-            contextLabel: "cost",
+            contextLabel: "discard",
           },
         ],
         actions: [
@@ -2178,7 +2223,7 @@ export const dragonCards = [
             targetRef: "self",
             player: "self",
             to: "graveyard",
-            contextLabel: "cost",
+            contextLabel: "discard",
           },
         ],
         actions: [
@@ -2296,7 +2341,7 @@ export const dragonCards = [
             player: "self",
             fromZone: "hand",
             to: "graveyard",
-            contextLabel: "cost",
+            contextLabel: "discard",
           },
         ],
         actions: [

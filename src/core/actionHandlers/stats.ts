@@ -2179,6 +2179,7 @@ export async function handleSetFacedownDefense(
     const previousPosition = card.position;
     card.position = "defense";
     card.isFacedown = true;
+    card.fieldPresenceSummons = [];
     expireFaceupStatBuffs(card);
     if (
       card.effectsNegated === true &&

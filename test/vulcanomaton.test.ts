@@ -242,7 +242,7 @@ test("Topógrafo ativa somente na Invocação-Normal e paga o descarte antes da 
     prepared.success ? undefined : (prepared.reason ?? undefined),
   );
   assert.equal(harness.player.graveyard.includes(cost), true);
-  assert.equal(required(harness.trace.moves[0]).options.contextLabel, "cost");
+  assert.equal(required(harness.trace.moves[0]).options.contextLabel, "discard");
   assert.deepEqual(required(prepared.preparedActivation).targetSelections, {});
 });
 

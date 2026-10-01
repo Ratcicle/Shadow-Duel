@@ -1,6 +1,10 @@
 import { appendSimulatedZoneCard, clearSimulatedFieldPosition } from "../common/zones.js";
 import { appendSimulatedFieldCard } from "../common/zones.js";
+import { canMoveCardToZone, moveCardToZone } from "../common/zones.js";
+import { canUseSimulatedEffectUsage, markSimulatedEffectUsage } from "../common/simStateUtils.js";
 import { getAvailableFieldSlots } from "../../game/zones/placement.js";
+import { recordFieldPresenceSummon } from "../../effects/triggers/counters.js";
+import { getCounterCount } from "../common/counters.js";
 import type { DragonCard as DragonReadCard, DragonPlayer as DragonReadPlayer } from "./contracts.js";
 // ─────────────────────────────────────────────────────────────────────────────
 // src/core/ai/dragon/simulation.js
@@ -19,7 +23,6 @@ import {
   rankDragonFieldBanishCosts,
   rankDragonGyBanishCosts,
   rankTechVoidBanishTargets,
-  shouldUsePurifiedBanishSummon,
   shouldUseStelyaBanishSummon,
 } from "./banishPolicy.js";
 import { getLuminescentBattleDebuffPlan } from "./battleDefensePolicy.js";
@@ -28,7 +31,7 @@ import { evaluateDragonRecruitCandidate } from "./actionPolicy.js";
 import { selectDragonFusionPlan } from "./extraDeckPolicy.js";
 import { getEffectiveAtk } from "../common/cardStats.js";
 import { matchesTargetFilters } from "../common/targetSelection.js";
-import { checkSpecialSummonEligibility } from "../../game/summon/eligibility.js";
+import { checkSpecialSummonEligibility, establishProperSummon } from "../../game/summon/eligibility.js";
 import { isValidBoneflameCost } from "./boneflamePolicy.js";
 import { ascensionMaterialMatches } from "../../game/summon/ascension.js";
 import {
@@ -48,6 +51,7 @@ import type {
 import type {
   AiLiveGamePort,
   SimulatedCardState,
+  SimulatedDelayedSummonAction,
   SimulatedPlayerState,
   SimulationGameState,
 } from "../../contracts/aiState.js";
@@ -74,11 +78,11 @@ type DragonCard = Omit<SimulatedCardState, "counters"> & {
   counters?: ReadonlyMap<string, number> | DragonCounterObject;
 };
 
-function filterableDragonCard(card: DragonCard): SimulatedCardState {
+function filterableDragonCard(card: DragonCard): SimulatedCardState & { counters: Map<string, number> } {
   const counters = card.counters instanceof Map
     ? card.counters
     : new Map(Object.entries(card.counters || {}).filter((entry): entry is [string, number] => typeof entry[1] === "number"));
-  return { ...card, counters } as SimulatedCardState;
+  return { ...card, counters };
 }
 type DragonPlayer = Omit<
   SimulatedPlayerState,
@@ -105,6 +109,19 @@ type DragonPlayer = Omit<
 type DragonZoneName =
   | CanonicalZone
   | "banish";
+
+/** Bridge legacy counter objects without replacing cards referenced by delayed actions. */
+function sharedSimulationPlayer(player: DragonPlayer): SimulatedPlayerState {
+  const normalize = (card: DragonCard): SimulatedCardState =>
+    Object.assign(card, { counters: filterableDragonCard(card).counters });
+  return Object.assign(player, {
+    hand: player.hand.map(normalize), field: player.field.map(normalize),
+    graveyard: player.graveyard.map(normalize), deck: player.deck.map(normalize),
+    extraDeck: player.extraDeck.map(normalize), banished: player.banished.map(normalize),
+    spellTrap: player.spellTrap.map(normalize),
+    fieldSpell: player.fieldSpell ? normalize(player.fieldSpell) : null,
+  });
+}
 
 interface DragonMaterialStatsPlayer {
   effectActivationsByMaterialId?: DragonNumericMapLike;
@@ -387,6 +404,7 @@ export function simulateMainPhaseAction<State extends DragonSimulationState>(
       const card = direct && matchesSource(direct) ? direct : player.hand.find(matchesSource);
       const procedure = card?.handSummonProcedure;
       if (!card || !procedure || card.cardKind !== "monster") break;
+      if (!canUseSimulatedEffectUsage(state, procedure, card, player.id, true)) break;
       if (!checkSpecialSummonEligibility(card, { summonProcedure: procedure.id, fromZone: "hand" }).ok) break;
       if (player.specialSummonRestrictions?.some((restriction) =>
         restriction.allowedFilters && !matchesTargetFilters(filterableDragonCard(card), restriction.allowedFilters))) break;
@@ -416,6 +434,7 @@ export function simulateMainPhaseAction<State extends DragonSimulationState>(
         const max = Number.isFinite(Number(limit.max)) ? Number(limit.max) : 1;
         if (matching + 1 > max) break;
       }
+      markSimulatedEffectUsage(state, procedure, card, player.id, true);
       for (const material of materials) moveSimulatedCard(player, material.card, material.zone, procedure.cost.destination, state);
       moveSimulatedCard(player, card, "hand", "field", state);
       card.position = action.position === "defense" ? "defense" : "attack";
@@ -423,6 +442,8 @@ export function simulateMainPhaseAction<State extends DragonSimulationState>(
       card.lastSummonMethod = "special";
       card.lastSummonedFromZone = "hand";
       card.lastSummonProcedure = procedure.id;
+      establishProperSummon(card, { summonProcedure: procedure.id, fromZone: "hand" });
+      recordFieldPresenceSummon(state, { card, player });
       return state;
     }
     case "summon": {
@@ -620,6 +641,7 @@ export function simulateMainPhaseAction<State extends DragonSimulationState>(
         target.isFacedown = false;
         target.position = "attack";
         target.positionChangedThisTurn = true;
+        recordFieldPresenceSummon(state, { card: target, player: state.bot });
         break;
       }
       const newPos = action.toPosition === "defense" ? "defense" : "attack";
@@ -1426,6 +1448,7 @@ function simulateDragonAfterSummonEffects(
 ): void {
   const player = state.bot;
   if (!summoned || summoned.isFacedown) return;
+  recordFieldPresenceSummon(state, { card: summoned, player });
 
   if (summoned.name === "Armored Dragon" && meta.method === "normal") {
     simulateArmoredDragonSearch(state, player, summoned);
@@ -1902,8 +1925,9 @@ function simulateDragonHandIgnition(
     const cost = selectFieldDragonCosts(player, 1, {
       preserveNames: ["Luminous Dragon", "Purified Crystal Dragon"],
     })[0];
-    if (cost && player.field.length < 5) {
-      moveFieldIndexToGraveyard(player, cost.index);
+    if (cost && player.field.length <= 5) {
+      if (!canPaySimulatedMoveCost(state, player, cost.candidate, "graveyard", true)) return;
+      moveSimulatedCard(player, cost.candidate, "field", "graveyard", state, "cost");
       const liveIndex = player.hand.indexOf(card);
       if (liveIndex >= 0) {
         player.hand.splice(liveIndex, 1);
@@ -1994,12 +2018,11 @@ function simulateDragonHandIgnition(
   }
 
   if (card.name === "Black Bull Dragon") {
-    // Discard 2 Dragons → SS Black Bull (can't attack this turn)
-    const toDiscard = selectHandDragonDiscardCosts(state, player, card, 2);
-    if (toDiscard.length >= 2 && player.field.length < 5) {
-      const discardIndices = toDiscard.map(({ index }) => index).sort((a, b) => b - a);
-      for (const index of discardIndices) {
-        discardHandCardToGraveyard(state, player, index);
+    const toSend = selectHandDragonDiscardCosts(state, player, card, 2);
+    if (toSend.length >= 2 && player.field.length < 5) {
+      if (toSend.some(entry => !canPaySimulatedMoveCost(state, player, entry.candidate, "graveyard", true))) return;
+      for (const entry of toSend) {
+        moveSimulatedCard(player, entry.candidate, "hand", "graveyard", state, "cost");
       }
       const liveIndex = player.hand.indexOf(card);
       if (liveIndex >= 0) {
@@ -2017,31 +2040,6 @@ function simulateDragonHandIgnition(
     return;
   }
 
-  if (card.name === "Purified Crystal Dragon") {
-    // Banish 3 GY Dragons → SS
-    const purifiedDecision = shouldUsePurifiedBanishSummon(
-      buildSimBanishContext(state, player, card, action),
-    );
-    if (!purifiedDecision.ok) return;
-    const gyCost = selectGraveyardDragonCosts(state, player, 3, card, action);
-    if (gyCost.length >= 3 && player.field.length < 5) {
-      const costIndices = gyCost.map(({ index }) => index).sort((a, b) => b - a);
-      for (const index of costIndices) {
-        const banished = player.graveyard.splice(index, 1)[0];
-        if (!player.banished) player.banished = [];
-        if (banished) appendSimulatedZoneCard(player.banished, banished);
-      }
-      const liveIndex = player.hand.indexOf(card);
-      if (liveIndex >= 0) {
-        player.hand.splice(liveIndex, 1);
-        const summoned = specialSummonToField(state, player, card, action, {
-          method: "special",
-        });
-        if (summoned) recordSimulatedMaterialEffectActivation(state, player, summoned);
-      }
-    }
-    return;
-  }
 }
 
 function simulateDragonSpellTrapIgnition(
@@ -2116,11 +2114,8 @@ function simulateDragonFieldSpellEffect(
 ): void {
   const player = state.bot;
   if (card.name !== "Jagged Peak of the Dragons") return;
-  if (((card.counters as DragonCounterObject)?.dragon_peak || 0) < 5) return;
+  if (getCounterCount(card, "dragon_peak") < 7) return;
   if ((player.field || []).length >= 5) return;
-
-  player.fieldSpell = null;
-  putSimulatedCard(player, card, "graveyard");
 
   const zones = ["hand", "deck", "graveyard"] as const;
   const candidates: DragonFieldSpellCandidateEntry[] = [];
@@ -2132,6 +2127,8 @@ function simulateDragonFieldSpellEffect(
   candidates.sort((a, b) => cardStrategicSimValue(b.candidate) - cardStrategicSimValue(a.candidate));
   const selected = candidates[0];
   if (!selected) return;
+  if (!canPaySimulatedMoveCost(state, player, card, "graveyard", true)) return;
+  moveSimulatedCard(player, card, "fieldSpell", "graveyard", state, "cost");
   const sourceZone = player[selected.zone] || [];
   const liveIndex = sourceZone.indexOf(selected.candidate);
   if (liveIndex < 0) return;
@@ -2155,12 +2152,29 @@ function simulateDragonFieldMonsterEffect(
   if (card.name === "Abyssal Serpent Dragon") {
     const target = rankSimThreats(opponent.field || [])[0];
     if (!target) return;
-    player.field.splice(fieldIndex, 1);
-    putSimulatedCard(player, card, "graveyard");
-    const targetIndex = opponent.field.indexOf(target);
-    if (targetIndex >= 0) {
-      opponent.field.splice(targetIndex, 1);
-      putSimulatedCard(opponent, target, "graveyard");
+    const players = [sharedSimulationPlayer(player), sharedSimulationPlayer(opponent)];
+    const sharedState = { bot: players[0]!, player: players[1]! };
+    const summons: SimulatedDelayedSummonAction["payload"]["summons"] = [];
+    const targetWasExtraMonster = target.monsterType === "fusion" || target.monsterType === "ascension";
+    for (const [index, moved] of [card, target].entries()) {
+      const sharedCard = Object.assign(moved, { counters: filterableDragonCard(moved).counters });
+      const sourceOwner = players.find(owner => owner.field.includes(sharedCard));
+      if (!sourceOwner) continue;
+      const originalOwner = players.find(owner => owner.id === (moved.originalOwner || moved.owner)) || sourceOwner;
+      if (!moveCardToZone(originalOwner, sharedCard, "graveyard", sourceOwner, { state: sharedState })) continue;
+      const graveOwner = players.find(owner => owner.graveyard.includes(sharedCard));
+      if (!graveOwner) continue;
+      summons.push({ card: sharedCard, owner: graveOwner.id, placementActorId: player.id,
+        fromZone: "graveyard", expectedLocationVersion: sharedCard.locationVersion || 0,
+        statusesOnSummon: null, summonMethod: "special", summonProcedure: null,
+        getsBuffIfTargetWasFusionOrAscension: index === 0 && targetWasExtraMonster });
+    }
+    if (summons.length > 0) {
+      state._simGeneratedInstanceCounter = (state._simGeneratedInstanceCounter || 0) + 1;
+      state.delayedActions ??= [];
+      state.delayedActions.push({ id: `sim_delayed_action_${state._simGeneratedInstanceCounter}`,
+        actionType: "delayed_summon", triggerCondition: { phase: "standby", player: opponent.id },
+        payload: { summons }, scheduledTurn: state.turnCounter || 0, priority: 1 });
     }
     recordSimulatedMaterialEffectActivation(state, player, card);
     return;
@@ -2206,10 +2220,12 @@ function simulateDragonFieldMonsterEffect(
       .filter(isFaceupDragon)
       .sort((a, b) => cardStrategicSimValue(b) - cardStrategicSimValue(a))[0];
     if (!target) return;
-    target.simBattleDestructionProtected = true;
-    target.simEffectDestructionProtected = true;
-    target.simProtectedUntilNextTurn = true;
-    target.simProtectedBy = "Rainbow Cosmic Dragon";
+    target.protectionEffects ??= [];
+    for (const type of ["battle_destruction", "effect_destruction"] as const) {
+      target.protectionEffects.push({ type, source: card.name, duration: "end_of_next_turn",
+        grantedOnTurn: state.turnCounter || 0, expiresOnTurn: (state.turnCounter || 0) + 1,
+        sourceOwner: "any", removeOnLeave: true });
+    }
     recordSimulatedMaterialEffectActivation(state, player, card);
     return;
   }
@@ -2219,8 +2235,8 @@ function simulateDragonFieldMonsterEffect(
       .filter((candidate) => isDragonMonster(candidate) && (candidate.level || 0) <= 7)
       .sort((a, b) => cardStrategicSimValue(b) - cardStrategicSimValue(a))[0];
     if (!gyTarget) return;
-    player.field.splice(fieldIndex, 1);
-    putSimulatedCard(player, card, "graveyard");
+    if (!canPaySimulatedMoveCost(state, player, card, "graveyard", true)) return;
+    moveSimulatedCard(player, card, "field", "graveyard", state, "cost");
     const gyIndex = player.graveyard.indexOf(gyTarget);
     if (gyIndex >= 0 && player.field.length < 5) {
       const summoned = player.graveyard.splice(gyIndex, 1)[0];
@@ -2321,7 +2337,11 @@ function simulateDragonGraveyardMonsterEffect(
 
   const targetSelections: DragonTargetSelectionMap = {};
   let resolvedAnyAction = false;
-  for (const target of effect.targets || []) {
+  const resolutionActions = (effect.actions || []).flatMap(action =>
+    action.type === "optional_target_actions" ? action.actions || [] : [action]);
+  const resolutionTargets = (effect.actions || []).flatMap(action =>
+    action.type === "optional_target_actions" ? action.targets || [] : []);
+  for (const target of [...(effect.targets || []), ...resolutionTargets]) {
     const owner = target.owner === "opponent" ? opponent : player;
     const zoneName = target.zone || "field";
     const zone =
@@ -2432,7 +2452,7 @@ function simulateDragonGraveyardMonsterEffect(
       (costAction.type === "move" || costAction.type === "banish"),
   );
   const dynamicSummonPlans = new Map<CardAction, DragonTargetSelection[]>();
-  for (const effectAction of effect.actions || []) {
+  for (const effectAction of resolutionActions) {
     if (
       effectAction?.type !== "special_summon_from_zone" ||
       effectAction.targetRef ||
@@ -2466,6 +2486,16 @@ function simulateDragonGraveyardMonsterEffect(
     dynamicSummonPlans.set(effectAction, ranked);
   }
 
+  for (const costAction of effect.activationCosts || []) {
+    if (costAction.type !== "move" && costAction.type !== "banish") continue;
+    const destination = costAction.type === "banish" ? "banished" : costAction.to || "graveyard";
+    const requiredDestination = costAction.type === "move" && costAction.requireDestination === true;
+    const selected = costAction.targetRef === "self"
+      ? [{ candidate: card, owner: player }]
+      : targetSelections[costAction.targetRef || ""] || [];
+    if (selected.some(entry => !canPaySimulatedMoveCost(state, entry.owner || player, entry.candidate, destination, requiredDestination))) return;
+  }
+
   if (
     effectUsageKey &&
     !useSimulatedOnce(state, player, effectUsageKey)
@@ -2483,7 +2513,7 @@ function simulateDragonGraveyardMonsterEffect(
         costAction.type === "banish"
           ? "banished"
           : costAction.to || "graveyard";
-      moveSimulatedCard(player, card, fromZone, toZone, state);
+      moveSimulatedCard(player, card, fromZone, toZone, state, costAction.type === "move" ? costAction.contextLabel : undefined);
       continue;
     }
     for (const selection of targetSelections[costAction.targetRef as string] || []) {
@@ -2495,11 +2525,12 @@ function simulateDragonGraveyardMonsterEffect(
           ? "banished"
           : costAction.to || "graveyard",
         state,
+        costAction.type === "move" ? costAction.contextLabel : undefined,
       );
     }
   }
 
-  for (const effectAction of effect.actions || []) {
+  for (const effectAction of resolutionActions) {
     if (effectAction.type === "move" && effectAction.targetRef) {
       const selections = targetSelections[effectAction.targetRef] || [];
       for (const selection of selections) {
@@ -2509,6 +2540,7 @@ function simulateDragonGraveyardMonsterEffect(
           selection.zoneName,
           effectAction.to || "graveyard",
           state,
+          effectAction.contextLabel,
         );
         resolvedAnyAction = true;
       }
@@ -2790,12 +2822,28 @@ function collectSimulatedActionZoneEntries(
   );
 }
 
+function canPaySimulatedMoveCost(
+  state: DragonSimulationState,
+  owner: DragonPlayer,
+  card: DragonCard,
+  destination: DragonZoneName,
+  requireDestination: boolean,
+): boolean {
+  const sharedOwner = sharedSimulationPlayer(owner);
+  const sharedCard = Object.assign(card, { counters: filterableDragonCard(card).counters });
+  return canMoveCardToZone(sharedOwner, sharedCard, destination === "banish" ? "banished" : destination, sharedOwner, {
+    state: { bot: sharedSimulationPlayer(state.bot), player: sharedSimulationPlayer(state.player) },
+    requireDestination,
+  });
+}
+
 function moveSimulatedCard(
   owner: DragonPlayer,
   card: DragonCard,
   fromZone: DragonZoneName,
   toZone: DragonZoneName,
   state: DragonSimulationState | null = null,
+  contextLabel?: string,
 ): void {
   if (!owner || !card) return;
   const sourceZone =
@@ -2806,13 +2854,11 @@ function moveSimulatedCard(
       : (owner as DragonZoneStorage)[fromZone] || [];
   const sourceIndex = sourceZone.indexOf(card);
   if (sourceIndex < 0) return;
-  if (fromZone === "fieldSpell") {
-    owner.fieldSpell = null;
-  } else {
-    sourceZone.splice(sourceIndex, 1);
-  }
-  putSimulatedCard(owner, card, toZone);
-  if (state && fromZone === "hand" && toZone === "graveyard") {
+  const sharedOwner = sharedSimulationPlayer(owner);
+  const sharedCard = Object.assign(card, { counters: filterableDragonCard(card).counters });
+  const options = state ? { state: { bot: sharedSimulationPlayer(state.bot), player: sharedSimulationPlayer(state.player) } } : {};
+  if (!moveCardToZone(sharedOwner, sharedCard, toZone === "banish" ? "banished" : toZone, sharedOwner, options)) return;
+  if (state && fromZone === "hand" && owner.graveyard.includes(card) && contextLabel === "discard") {
     applyDragonHandToGraveyardTriggers(state, owner, card);
   }
 }

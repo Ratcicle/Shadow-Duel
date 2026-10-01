@@ -6,6 +6,7 @@
  */
 
 import type { SummonMethod } from "../../contracts/summon.js";
+import type { FieldPresenceSummonRecord } from "../../contracts/cards.js";
 import type {
   TriggerCollectorHost,
   TriggerRuntimeCard,
@@ -16,6 +17,71 @@ interface SummonCounterPayload {
   readonly card?: TriggerRuntimeCard | null;
   readonly player?: TriggerRuntimePlayer | null;
   readonly method?: SummonMethod | null;
+}
+
+/** Narrow shared projections keep factual history usable by runtime and planners. */
+export interface FieldPresenceHistoryCard {
+  readonly cardKind?: string | undefined;
+  readonly isFacedown?: boolean | undefined;
+  readonly effectsNegated?: boolean | undefined;
+  readonly fieldPresenceId?: string | number | null;
+  readonly effects?: readonly {
+    readonly timing?: string;
+    readonly passive?: { readonly type?: string };
+  }[];
+  fieldPresenceSummons?: FieldPresenceSummonRecord[];
+}
+
+interface FieldPresenceHistoryPlayer {
+  readonly id?: string;
+  readonly field?: readonly FieldPresenceHistoryCard[];
+  readonly spellTrap?: readonly FieldPresenceHistoryCard[];
+  readonly fieldSpell?: FieldPresenceHistoryCard | null;
+}
+
+interface FieldPresenceHistoryState {
+  readonly player?: FieldPresenceHistoryPlayer;
+  readonly bot?: FieldPresenceHistoryPlayer;
+  readonly turnCounter?: number | null;
+}
+
+function presenceSources(player: FieldPresenceHistoryPlayer | undefined): FieldPresenceHistoryCard[] {
+  return [...(player?.field || []), ...(player?.spellTrap || []), ...(player?.fieldSpell ? [player.fieldSpell] : [])];
+}
+
+export function recordFieldPresenceSummon(
+  state: FieldPresenceHistoryState,
+  payload: { readonly card?: FieldPresenceHistoryCard | null; readonly player?: { readonly id?: string } | null },
+): void {
+  const card = payload.card;
+  const playerId = payload.player?.id;
+  if (!card || card.cardKind !== "monster" || card.isFacedown || card.fieldPresenceId == null ||
+      (playerId !== "player" && playerId !== "bot") || state.turnCounter == null) return;
+  // Only committed field entries are facts; attempted or negated summons are absent.
+  if (![state.player, state.bot].some(player => player?.field?.includes(card))) return;
+  for (const owner of [state.player, state.bot]) {
+    if (!owner || owner.id === playerId) continue;
+    for (const source of presenceSources(owner)) {
+      if (source === card || source.isFacedown || !source.effects?.some(effect =>
+        effect.timing === "passive" && effect.passive?.type === "restrict_opponent_summon_turn_attack")) continue;
+      // Negation suppresses application, not the fact that the source was face-up.
+      const records = (source.fieldPresenceSummons ||= []);
+      if (!records.some(record => record.turn === state.turnCounter && record.targetFieldPresenceId === card.fieldPresenceId)) {
+        records.push({ targetFieldPresenceId: card.fieldPresenceId, summoningPlayerId: playerId, turn: state.turnCounter });
+      }
+    }
+  }
+}
+
+export function clearFieldPresenceSummonTarget(state: FieldPresenceHistoryState, card: FieldPresenceHistoryCard): void {
+  if (card.fieldPresenceId == null) return;
+  for (const owner of [state.player, state.bot]) {
+    for (const source of presenceSources(owner)) {
+      if (source.fieldPresenceSummons?.length) source.fieldPresenceSummons = source.fieldPresenceSummons.filter(
+        record => record.targetFieldPresenceId !== card.fieldPresenceId,
+      );
+    }
+  }
 }
 
 /**
@@ -77,6 +143,7 @@ export function assignFieldPresenceId(
   card.fieldPresenceId =
     this.game?.createDeterministicId?.(`field_presence_${card.id}`) ||
     `field_presence_${card.id}_${card.locationVersion || 0}`;
+  card.fieldPresenceSummons = [];
 
   // Initialize presence-specific state for tracking counters
   if (!card.fieldPresenceState) {
@@ -98,6 +165,7 @@ export function clearFieldPresenceId(
   if (card.fieldPresenceState) {
     card.fieldPresenceState = null;
   }
+  card.fieldPresenceSummons = [];
 
   // Clear the presence ID
   delete card.fieldPresenceId;

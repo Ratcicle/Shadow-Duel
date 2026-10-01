@@ -22,7 +22,7 @@ import type {
   GameCard,
   GamePlayer,
 } from "../../contracts/gameRuntime.js";
-import type { EffectDefinition } from "../../contracts/effects.js";
+import type { OncePerTurnDefinition } from "../../contracts/cards.js";
 
 interface OncePerTurnOptions {
   lockKey?: string;
@@ -32,13 +32,7 @@ interface OncePerTurnOptions {
   limit?: number;
 }
 
-type OncePerTurnEffect = EffectDefinition & {
-  oncePerTurnScope?: "card";
-  oncePerTurnPerCard?: boolean;
-  oncePerTurnLimit?: number;
-  usesPerTurn?: number;
-  maxUsesPerTurn?: number;
-};
+type OncePerTurnEffect = OncePerTurnDefinition;
 
 type OncePerTurnHost = Pick<
   FullGameHost,

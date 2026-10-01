@@ -3,13 +3,15 @@ import type { BattlePosition, GameCard } from "../../contracts/cards.js";
 import type { GamePlayer } from "../../contracts/player.js";
 import type { SummonExecutionResult } from "../../contracts/gameRuntime.js";
 import type { RawSelectionContract } from "../../contracts/selection.js";
+import type { SelectionCandidateKey } from "../../contracts/primitives.js";
 import { SUMMON_ORIGINS } from "../../contracts/summon.js";
 import { checkSpecialSummonEligibility } from "./eligibility.js";
 
 type HandProcedureHost = Pick<Game,
   "player" | "canStartAction" | "canPlaceCardOnField" | "effectEngine" |
   "startTargetSelectionSession" | "autoSelector" | "createPreparedSummon" |
-  "executeSummonTransaction" | "moveCard" | "updateBoard"
+  "executeSummonTransaction" | "moveCard" | "updateBoard" |
+  "canUseOncePerTurn" | "markOncePerTurnUsed" | "requestDecision" | "ensureDuelCardId"
 >;
 
 export interface HandSummonProcedureOptions {
@@ -69,6 +71,7 @@ function checkHandProcedure(
   const unavailable = (reason: string): HandSummonProcedureCheck => ({ ok: false, reason, candidates: [], suggestedMaterials: [] });
   const procedure = card.handSummonProcedure;
   if (!procedure || !player.hand.includes(card)) return unavailable("missing_hand_procedure");
+  if (!this.canUseOncePerTurn(card, player, procedure).ok) return unavailable("hand_procedure_used_this_turn");
   const guard = this.canStartAction({ actor: player, kind: "summon", phaseReq: ["main1", "main2"], silent: true, allowDuringResolving: completingSelection });
   if (!guard.ok) return unavailable(guard.reason || "summon_unavailable");
   const eligibility = checkSpecialSummonEligibility(card, { summonProcedure: procedure.id, fromZone: "hand" });
@@ -104,8 +107,8 @@ async function executeHandProcedure(
   if (!check.ok || !procedure) return { success: false, reason: check.reason || "missing_hand_procedure" };
   let materials = options.materials;
   if (!materials) {
-    const candidates = check.candidates.map((material, index) => ({
-      key: `${material.instanceId}_${index}`,
+    const candidates = check.candidates.map((material) => ({
+      key: `hand_summon_cost:${this.ensureDuelCardId(material)}` as SelectionCandidateKey,
       cardRef: material, name: material.name, image: material.image,
       atk: material.atk, def: material.def,
       zone: player.field.includes(material) ? "field" as const : "graveyard" as const,
@@ -121,13 +124,33 @@ async function executeHandProcedure(
       return candidate ? [candidate.cardRef] : [];
     });
     if (player.controllerType === "ai") {
-      const result = this.autoSelector.select(contract, { owner: player, selectionKind: "cost", selectionContract: contract });
-      materials = selectedCards(result?.ok ? result.selections.hand_summon_cost || [] : []);
-      if (materials.length !== procedure.cost.count ||
-          player.field.filter((fieldCard) => !materials?.includes(fieldCard)).length >= 5 ||
-          !this.canPlaceCardOnField(card, player, { isFacedown: false, summonMethod: "special", silent: true, excludeCards: materials }).ok) {
-        materials = check.suggestedMaterials;
-      }
+      const result = await this.requestDecision({
+        kind: "cost", actor: player, candidates, requireCandidate: false,
+        resolveAI: () => {
+          const automatic = this.autoSelector.select(contract, { owner: player, selectionKind: "cost", selectionContract: contract });
+          let chosen = selectedCards(automatic?.ok ? automatic.selections.hand_summon_cost || [] : []);
+          if (chosen.length !== procedure.cost.count ||
+              player.field.filter(fieldCard => !chosen.includes(fieldCard)).length >= 5 ||
+              !this.canPlaceCardOnField(card, player, { isFacedown: false, summonMethod: "special", silent: true, excludeCards: chosen }).ok) {
+            chosen = check.suggestedMaterials;
+          }
+          return { hand_summon_cost: chosen.flatMap(material => {
+            const candidate = candidates.find(entry => entry.cardRef === material);
+            return candidate ? [candidate.key] : [];
+          }) };
+        },
+        serializeResult: value => ({ orderedCandidateKeys: value?.hand_summon_cost || [] }),
+        deserializeReplayValue: value => {
+          if (!("orderedCandidateKeys" in value)) throw new Error("Replay hand procedure cost is missing its selected cards.");
+          const keys = value.orderedCandidateKeys.map(key => {
+            const candidate = candidates.find(entry => entry.key === key);
+            if (!candidate) throw new Error("Replay hand procedure cost card is unavailable.");
+            return candidate.key;
+          });
+          return { hand_summon_cost: keys };
+        },
+      });
+      materials = selectedCards(result?.hand_summon_cost || []);
     } else {
       const sourceVersion = card.locationVersion;
       this.startTargetSelectionSession({
@@ -171,6 +194,11 @@ async function executeHandProcedure(
       toZone: procedure.cost.destination, kind: "hand_summon_cost",
       options: { movedByEffect: false },
     })),
+    commit: () => {
+      if (!this.canUseOncePerTurn(card, player, procedure).ok) return { success: false, reason: "hand_procedure_used_this_turn" };
+      this.markOncePerTurnUsed(card, player, procedure);
+      return { success: true };
+    },
     perform: async (transaction) => {
       if (!player.hand.includes(card) || card.locationVersion !== sourceVersion) return { success: false, reason: "source_moved" };
       return this.moveCard(card, player, "field", {

@@ -196,6 +196,7 @@ async function executeCommand(
           owner: actor,
         });
       }
+      if (source.zone === "fieldSpell") return game.activateFieldSpellEffect(source.card);
       return game.tryActivateSpellTrapEffect(source.card, null, {
         owner: actor,
         activationZone: source.zone,

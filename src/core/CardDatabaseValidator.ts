@@ -496,9 +496,10 @@ export function validateCardDatabase() {
         !Number.isInteger(procedure.cost.count) || procedure.cost.count < 1 ||
         procedure.cost.zones.length === 0 ||
         procedure.cost.zones.some((zone) => zone !== "field" && zone !== "graveyard") ||
-        !["banished", "graveyard"].includes(procedure.cost.destination)
+        !["banished", "graveyard"].includes(procedure.cost.destination) ||
+        (procedure.oncePerTurn === true && !procedure.oncePerTurnName?.trim())
       ) {
-        errors.push(formatIssue(card, "Hand summon procedures require an id and a positive card cost from supported zones."));
+        errors.push(formatIssue(card, "Hand summon procedures require an id, a positive card cost from supported zones, and a name key for any turn limit."));
       }
     }
     // Basic monster type checks for Extra Deck categories

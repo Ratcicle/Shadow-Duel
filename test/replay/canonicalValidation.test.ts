@@ -5,7 +5,7 @@ import {
   getCardDatabaseSignature,
   validateCanonicalReplay,
 } from "../../src/core/game/replay/canonical.js";
-import { CANONICAL_REPLAY_EVENT_NAMES } from "../../src/core/contracts/replay.js";
+import { CANONICAL_REPLAY_EVENT_NAMES, CANONICAL_REPLAY_ENGINE_VERSION } from "../../src/core/contracts/replay.js";
 
 type MutableReplay = Record<string, unknown>;
 
@@ -25,6 +25,7 @@ function replay(overrides: MutableReplay = {}): MutableReplay {
   return {
     format: "shadow-duel-canonical-replay",
     schemaVersion: 2,
+    engineVersion: CANONICAL_REPLAY_ENGINE_VERSION,
     cardDatabaseSignature: getCardDatabaseSignature(),
     setup: setup(),
     commands: [],
@@ -32,6 +33,13 @@ function replay(overrides: MutableReplay = {}): MutableReplay {
     ...overrides,
   };
 }
+
+test("engine version is required and rejects recordings with previous semantics", () => {
+  const missing = replay();
+  delete missing.engineVersion;
+  assert.throws(() => validateCanonicalReplay(missing), /engineVersion/);
+  assert.throws(() => validateCanonicalReplay(replay({ engineVersion: "field-positions-v2" })), /engineVersion/);
+});
 
 test("replays com a assinatura parcial antiga são rejeitados antes da reprodução", () => {
   assert.throws(
@@ -143,7 +151,7 @@ test("validator aceita shape mínimo compatível, extras serializáveis e manté
 
   assert.strictEqual(result, input);
   assert.deepEqual(input, before);
-  assert.equal("engineVersion" in input, false);
+  assert.equal(input.engineVersion, CANONICAL_REPLAY_ENGINE_VERSION);
   assert.equal("events" in input, false);
   assert.equal("result" in input, false);
   assert.equal("finalized" in input, false);

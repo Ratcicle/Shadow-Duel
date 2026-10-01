@@ -1,13 +1,14 @@
 import { restoreFieldExitStatuses, restoreTemporaryStatuses } from "../../Card.js";
 import { cardMatchesFilter } from "./cardFilters.js";
 import { clearPermanentStatBuffs, expireFaceupStatBuffs, removeTrackedStatChange } from "../../effects/actions/stats.js";
-import { refreshEquipExtraAttackBonus, removeFieldAuraBuffContributions } from "../../effects/passives/passiveBuffs.js";
+import { getSendToGraveReplacementDestination, refreshEquipExtraAttackBonus, removeFieldAuraBuffContributions } from "../../effects/passives/passiveBuffs.js";
 import {
   assignAutomaticFieldSlot,
   clearFieldSlot,
   getAvailableFieldSlots,
 } from "../../game/zones/placement.js";
 import type { FieldSlot } from "../../contracts/placement.js";
+import type { FieldPresenceSummonRecord } from "../../contracts/cards.js";
 import type {
   AiCardInput,
   AiPlayerInput,
@@ -28,6 +29,7 @@ type SimulatedArrayZone =
 type SimulatedZone = SimulatedArrayZone | "fieldSpell";
 
 interface SimulatedPositionedCard {
+  fieldPresenceSummons?: FieldPresenceSummonRecord[];
   fieldSlot?: FieldSlot | null;
   fieldPresenceId?: string | number | null;
   locationVersion?: number;
@@ -59,6 +61,7 @@ export function appendSimulatedFieldCard<Card extends SimulatedPositionedCard>(
 export function clearSimulatedFieldPosition(card: SimulatedPositionedCard): void {
   clearFieldSlot(card);
   card.fieldPresenceId = null;
+  card.fieldPresenceSummons = [];
 }
 
 /** Off-field insertion clears only this card, without compacting survivors. */
@@ -244,6 +247,7 @@ export function attachSimulatedEquip(
 }
 
 export interface SimulatedMoveOptions {
+  requireDestination?: boolean;
   state?: Pick<AiStateShape, "bot" | "player">;
   movedByEffect?: boolean;
   sourceCard?: SimulatedCardState | null;
@@ -252,6 +256,7 @@ export interface SimulatedMoveOptions {
 }
 
 interface ReadMoveOptions {
+  requireDestination?: boolean;
   state?: Pick<AiStateInput, "bot" | "player">;
   movedByEffect?: boolean;
   sourceCard?: AiCardInput | null;
@@ -318,19 +323,8 @@ function resolveSimulatedMove(
   let toZone: SimulatedZone | "removed" = requestedZone;
   if (toZone === fromZone && player === sourcePlayer) return { fromZone, toZone };
   if (toZone === "graveyard" && !card.isToken && options.state) {
-    for (const controller of [options.state.player, options.state.bot]) {
-      for (const source of controller?.field || []) {
-        if (source.isFacedown || source === card) continue;
-        for (const effect of source.effects || []) {
-          if (effect.timing !== "passive" || !("passive" in effect) || effect.passive?.type !== "send_to_grave_replacement") continue;
-          const ownerRule = effect.passive.targetOwner || "opponent";
-          if ((ownerRule === "self" && controller !== sourcePlayer) ||
-              (ownerRule === "opponent" && controller === sourcePlayer)) continue;
-          const destination = effect.passive.redirectTo || "banished";
-          if (toZone === "graveyard" && isSimulatedZone(destination)) toZone = destination;
-        }
-      }
-    }
+    const destination = getSendToGraveReplacementDestination(card, sourcePlayer, [options.state.player, options.state.bot]);
+    if (destination && isSimulatedZone(destination)) toZone = destination;
   }
   if (fromZone === "field" && toZone !== "field" && card.banishWhenLeavesField && !card.isToken) {
     toZone = "banished";
@@ -339,6 +333,7 @@ function resolveSimulatedMove(
   if (fromZone === "field" && toZone !== "field" && card.isToken) toZone = "removed";
   const extraMonster = card.monsterType === "fusion" || card.monsterType === "ascension" || card.monsterType === "synchro";
   if (extraMonster && (toZone === "deck" || (toZone === "hand" && !options.allowExtraDeckMonsterToHand))) toZone = "extraDeck";
+  if (options.requireDestination && toZone !== requestedZone) return null;
   if ((toZone === "field" || toZone === "spellTrap") && getAvailableFieldSlots(player[toZone] || []).length === 0) return null;
   return { fromZone, toZone };
 }
@@ -372,6 +367,9 @@ export function moveCardToZone(
     removeFieldAuraBuffContributions(card, field, field.indexOf(card));
   }
   if (fromZone === "field" && toZone !== "field") {
+    card.protectionEffects = (card.protectionEffects || []).filter(
+      entry => entry.removeOnLeave === false && entry.duration !== "while_faceup",
+    );
     delete card.oncePerTurnUsageByName;
     card.oncePerTurnResetVersion = (card.oncePerTurnResetVersion || 0) + 1;
     delete card.banishWhenLeavesField;
