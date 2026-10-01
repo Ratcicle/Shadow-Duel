@@ -59,6 +59,11 @@ export async function openChainWindow(
     };
   }
 
+  const selectionGeneration = this.game.selectionAbortGeneration ?? 0;
+  const selectionWasAborted = () => (this.game?.selectionAbortGeneration ?? 0) !== selectionGeneration;
+  const abortedResult = (): ChainOperationResult => ({
+    success: false, ok: false, needsSelection: false, code: "SELECTION_ABORTED",
+  });
   const firstPlayer = options.firstPlayer || context.firstPlayer || null;
   const secondPlayer =
     options.secondPlayer || this.getOpponent?.(firstPlayer) || null;
@@ -120,6 +125,7 @@ export async function openChainWindow(
     context,
     { initialPasses: options.initialPasses || 0 },
   );
+  if (selectionWasAborted()) return abortedResult();
   const chainBuilt = this.chainStack.length > 0;
   const chainId = this.activeChainId;
   const lastLink = this.getLastChainLink?.() || null;
@@ -155,6 +161,7 @@ export async function openChainWindow(
     cleanupChainWindow(this);
     throw error;
   }
+  if (selectionWasAborted()) return abortedResult();
   if (resolutionResult?.needsSelection) {
     const pendingResolution =
       this.startPendingChainSelection?.(resolutionResult);
@@ -174,6 +181,7 @@ export async function openChainWindow(
       };
     }
   }
+  if (selectionWasAborted()) return abortedResult();
   this.log(`[ChainSystem] Chain resolution complete`);
   const activationResult = initialLinkId === null ? undefined :
     resolutionResult.linkResults?.find(result => result.linkId === initialLinkId);
@@ -209,6 +217,7 @@ export async function offerChainResponses(
   context: FastEffectContextInput,
   options: { initialPasses?: number } = {},
 ): Promise<ChainResponseNegotiation> {
+  const selectionGeneration = this.game?.selectionAbortGeneration ?? 0;
   let consecutivePasses = Math.max(0, Number(options.initialPasses || 0));
   let currentResponder: ChainPlayer | null = firstPlayer;
   let offers = 0;
@@ -223,6 +232,7 @@ export async function offerChainResponses(
       lastLinkController: this.getLastChainLink?.()?.controller || null,
     });
     const response = await this.offerChainResponse(currentResponder, context);
+    if ((this.game?.selectionAbortGeneration ?? 0) !== selectionGeneration) break;
 
     if (response) {
       const preparation = await this.prepareChainResponse(
@@ -230,6 +240,7 @@ export async function offerChainResponses(
         currentResponder,
         response.context || context,
       );
+      if ((this.game?.selectionAbortGeneration ?? 0) !== selectionGeneration) break;
       if (!preparation?.success || !preparation.preparedActivation) {
         this.log(
           `${currentResponder.id} response preparation failed: ${

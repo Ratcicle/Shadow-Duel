@@ -130,6 +130,7 @@ type ScenarioHost = GameDevToolsHost &
     | "isResolvingEffect"
     | "eventResolutionDepth"
     | "pendingSpecialSummon"
+    | "chainSystem"
     | "effectEngine"
     | "ui"
   > & {
@@ -145,7 +146,7 @@ type ScenarioHost = GameDevToolsHost &
         facedown?: boolean | undefined;
       },
     ): void;
-    cancelTargetSelection(): void;
+    forceClearTargetSelection(reason?: string): void;
     updateBoard(): unknown;
     resetOncePerTurnUsage(reason?: string): void;
     assertStateInvariants(
@@ -191,6 +192,9 @@ export function applyScenarioSetup(
   } catch (error) {
     return { success: false, reason: error instanceof Error ? error.message : "Invalid setup positions." };
   }
+
+  this.forceClearTargetSelection("scenario_setup");
+  this.chainSystem?.cancelChain?.();
 
   const warnings: string[] = [];
   const setupTurn =
@@ -366,7 +370,6 @@ export function applyScenarioSetup(
   this.isResolvingEffect = false;
   this.eventResolutionDepth = 0;
   this.pendingSpecialSummon = null;
-  this.cancelTargetSelection();
   this.effectEngine?.updatePassiveBuffs();
   if (options.updateBoard !== false) {
     this.updateBoard();

@@ -222,6 +222,7 @@ class Game {
     this.targetSelection = null;
     this.selectionState = "idle";
     this.graveyardSelection = null;
+    this.selectionAbortGeneration = 0;
     this.selectionSessionCounter = 0;
     this.lastSelectionSessionId = 0;
     this.eventListeners = {};
@@ -387,6 +388,7 @@ class Game {
 
   dispose(reason: string = "dispose"): void {
     if (this.disposed) return;
+    this.forceClearTargetSelection(reason);
     this.fieldPlacementGeneration++;
     this.fieldPlacementAbort?.abort();
     this.fieldPlacementAbort = null;

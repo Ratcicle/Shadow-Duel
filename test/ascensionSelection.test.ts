@@ -261,3 +261,16 @@ for (const entry of ["material", "extraDeck"] as const) {
     assert.equal(playback.decisionBroker.replayCursor, replay.decisions.length);
   });
 }
+
+test("scenario replacement settles a pending Ascension choice without summoning into the new field", async t => {
+  const { game } = setup(t, "material", 2);
+  let settled = false;
+  const pending = begin(game, "material", "player").then(value => { settled = true; return value; });
+  assert.ok(game.targetSelection);
+  game.applyScenarioSetup({ phase: "main1", player: { field: [{ id: 1 }], extraDeck: [] } });
+  await new Promise<void>(resolve => setImmediate(resolve));
+  assert.equal(settled, true);
+  assert.equal((await pending).success, false);
+  assert.deepEqual(game.player.field.map(card => card.id), [1]);
+  assert.equal(game.targetSelection, null);
+});

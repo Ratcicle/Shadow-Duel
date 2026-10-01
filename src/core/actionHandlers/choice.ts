@@ -464,6 +464,7 @@ function runSelectionContract(
         return { success: true, needsSelection: false };
       },
       onCancel: () => finalize(null),
+      onAbort: () => finalize(null),
     });
   });
 }

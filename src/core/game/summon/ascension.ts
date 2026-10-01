@@ -924,6 +924,7 @@ export async function tryAscensionSummon(
       selectionContract,
       onCancel: () =>
         resolve({ success: false, reason: "Ascension cancelled." }),
+      onAbort: () => resolve({ success: false, reason: "Ascension selection aborted." }),
       execute: async (selections) => {
         const chosenKey = (selections?.[requirementId] || [])[0];
         const chosenCard =

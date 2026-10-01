@@ -364,6 +364,7 @@ export interface ActionNegationContext {
  * class.
  */
 export interface ActionRuntimeGamePort {
+  readonly selectionAbortGeneration?: number;
   requestDecision?: DecisionBrokerPort["requestDecision"];
   player: ActionRuntimePlayer;
   bot: ActionRuntimePlayer;

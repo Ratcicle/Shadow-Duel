@@ -1011,6 +1011,7 @@ export interface ChainSelectionSessionInput {
   rollback?(): void;
   onResult?(result: ChainOperationResult): unknown;
   onCancel?: (() => void) | null;
+  onAbort?: (reason: string) => void;
 }
 
 /** Descriptor is forwarded untouched to the canonical replay recorder. */
@@ -1403,6 +1404,7 @@ export interface ChainMoveCardOptions {
 
 /** Minimal Game surface consumed by Chain modules. */
 export interface ChainGamePort {
+  readonly selectionAbortGeneration?: number;
   materialDuelStats?: MaterialDuelStats;
   player: ChainPlayer;
   bot: ChainPlayer;

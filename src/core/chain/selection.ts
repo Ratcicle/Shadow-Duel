@@ -332,6 +332,7 @@ export async function getPlayerSelectionsForDefinitions(
         return { success: true, needsSelection: false };
       },
       onCancel: allowCancel ? () => resolve(null) : null,
+      onAbort: () => resolve(null),
     });
   });
 }
@@ -476,6 +477,7 @@ export async function getPlayerSelectionsForEffect(
           onCancel: () => {
             resolve(null);
           },
+          onAbort: () => resolve(null),
         });
       });
     }

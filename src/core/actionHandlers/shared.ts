@@ -1164,6 +1164,7 @@ export async function selectCards({
       selectionContract,
       cancelAsEmptySelection,
       onCancel: () => resolve(null),
+      onAbort: () => resolve(null),
       execute: (selections) => {
         const selected = selections[requirementId];
         resolve(Array.isArray(selected) ? selected : []);

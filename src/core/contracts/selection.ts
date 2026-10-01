@@ -397,6 +397,8 @@ export interface SelectionSessionInput {
   rollback?: () => void;
   onResult?: (result: NormalizedSelectionExecutionResult) => unknown;
   onCancel?: () => void;
+  /** System teardown, independent of whether the player may cancel. Settle pending work without executing a choice. */
+  onAbort?: (reason: string) => void;
 }
 
 export interface SelectionControlsState {

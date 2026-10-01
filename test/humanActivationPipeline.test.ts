@@ -342,3 +342,44 @@ test("falha de Trigger no fim do Damage Step recupera o Fast Effect Timing", asy
   );
   assert.equal(game.phase, "main2");
 });
+
+test("system abort settles the legacy activation waiter without player-cancellation or result callbacks", async t => {
+  const game = createRuntimeGame({ disableChains: true, captureReplay: false });
+  t.after(() => game.dispose());
+  const card = new Card({ name: "Selection source", cardKind: "spell", subtype: "normal", effects: [] }, "player");
+  game.player.hand.push(card);
+  let settled = false;
+  const pending = game.runActivationPipelineWait({ card, owner: game.player, activationZone: "hand",
+    prepareForExistingChain: true, openActivationWindow: false,
+    onCancel: () => assert.fail("System abort must not call player cancellation"),
+    onFailure: () => assert.fail("System abort must not finalize an old activation"),
+    activate: () => ({ success: false, needsSelection: true,
+      selectionContract: { requirements: [{ id: "chosen", min: 1, max: 1, zone: "choice", candidates: [{ key: "yes", zone: "choice" }] }] } }),
+  }).then(value => { settled = true; return value; });
+  await waitUntil(() => game.targetSelection, "activation must open its choice");
+  game.applyScenarioSetup({ player: { lp: 6000 } });
+  await new Promise<void>(resolve => setImmediate(resolve));
+  assert.equal(settled, true);
+  assert.equal((await pending).code, "SELECTION_ABORTED");
+});
+
+for (const nested of [false, true]) {
+  test(`system abort stops the old optional action sequence after scenario replacement (nested=${nested})`, async t => {
+    const game = createRuntimeGame({ disableChains: true, captureReplay: false });
+    t.after(() => game.dispose());
+    game.applyScenarioSetup({ player: { hand: [{ id: 1 }] } });
+    const optional = { type: "optional_target_actions" as const, optional: true, allowCancel: false,
+      targets: [{ id: "pick", owner: "self" as const, zone: "hand" as const, cardKind: "monster" as const, count: { min: 1, max: 1 } }],
+      actions: [{ type: "draw" as const, amount: 1 }] };
+    const actions = [nested ? { type: "optional_target_actions" as const, optional: false, targets: [], actions: [optional, { type: "draw" as const, amount: 1 }] } : optional,
+      { type: "draw" as const, amount: 1 }];
+    const pending = game.effectEngine.applyActions(actions,
+      { player: game.player, opponent: game.bot, source: required(game.player.hand[0]), activationContext: { timing: "resolution" } }, {});
+    await waitUntil(() => game.targetSelection, "optional action must open selection");
+    game.applyScenarioSetup({ player: { hand: [], deck: [{ id: 3 }, { id: 4 }] } });
+    const result = await pending;
+    assert.equal(result.success, false);
+    assert.deepEqual(game.player.hand, []);
+    assert.deepEqual(game.player.deck.map(card => card.id), [3, 4]);
+  });
+}

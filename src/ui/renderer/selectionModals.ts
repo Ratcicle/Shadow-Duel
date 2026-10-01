@@ -872,7 +872,7 @@ export function showFieldTargetingControls(
   confirmBtn.textContent = labels.confirm;
   confirmBtn.className = "primary";
   confirmBtn.onclick = () => {
-    if (typeof onConfirm === "function") onConfirm();
+    if (bar.isConnected && typeof onConfirm === "function") onConfirm();
   };
 
   if (allowCancel) {
@@ -880,8 +880,9 @@ export function showFieldTargetingControls(
     cancelBtn.textContent = labels.cancel;
     cancelBtn.className = "secondary";
     cancelBtn.onclick = () => {
+      if (!bar.isConnected) return;
       if (typeof onCancel === "function") onCancel();
-      this.hideFieldTargetingControls();
+      closeControls();
     };
     actions.appendChild(cancelBtn);
   }
@@ -909,6 +910,11 @@ export function showFieldTargetingControls(
     document.removeEventListener("pointerout", scheduleReposition, true);
   };
 
+  const closeControls = () => {
+    bar.__fieldTargetingCleanup?.();
+    bar.remove();
+  };
+
   const updateState = ({
     selected = 0,
     min = 0,
@@ -926,7 +932,7 @@ export function showFieldTargetingControls(
 
   return {
     updateState,
-    close: () => this.hideFieldTargetingControls(),
+    close: closeControls,
   };
 }
 

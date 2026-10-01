@@ -171,3 +171,29 @@ test("Chain transport records every choice channel with duel-local identities", 
       materialInstanceIds: [playback.core.instanceId, playback.prism.instanceId], position: "defense" } },
   });
 });
+
+for (const reset of ["scenario", "duel", "dispose"] as const) {
+  test(`mandatory human Chain decision settles on ${reset} teardown without a recorded choice`, async t => {
+    const game = createRuntimeGame({ captureReplay: false, laboratoryMode: true });
+    t.after(() => game.dispose());
+    const source = new Card({ name: "Abort source", cardKind: "trap" }, "player");
+    game.applyScenarioSetup({ phase: "main1", player: { hand: [{ id: 1 }] } });
+    const decisions: unknown[] = [];
+    game.on("decision_made", decision => { decisions.push(decision); });
+    let settled = false;
+    const pending = Promise.resolve(game.chainSystem.getPlayerSelectionsForDefinitions(source,
+      [{ id: "chosen", owner: "self", zone: "hand", cardKind: "monster", count: { min: 1, max: 1 } }],
+      game.player, null, { purpose: "target", allowCancel: false })).then(value => { settled = true; return value; });
+    assert.ok(game.targetSelection);
+    game.cancelTargetSelection();
+    assert.ok(game.targetSelection, "player cannot abandon the mandatory decision");
+    if (reset === "scenario") game.applyScenarioSetup({ phase: "main1", player: { hand: [{ id: 3 }] } });
+    else if (reset === "duel") game.resetDuelState();
+    else game.dispose();
+    await new Promise<void>(resolve => setImmediate(resolve));
+    assert.equal(settled, true, "teardown must settle the decision consumer");
+    assert.equal(await pending, null);
+    assert.deepEqual(decisions, []);
+    assert.equal(game.targetSelection, null);
+  });
+}

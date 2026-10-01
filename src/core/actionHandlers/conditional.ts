@@ -430,6 +430,7 @@ function runOptionalTargetSelection(
         return { success: true, needsSelection: false };
       },
       onCancel: () => finalize(null),
+      onAbort: () => finalize(null),
     });
   });
 }

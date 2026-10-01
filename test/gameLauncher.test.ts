@@ -307,3 +307,32 @@ test("a pending Laboratory launch returns its own game when a later launch super
   assert.equal(first.isDisposed(), true);
   assert.equal(launcher.getActiveGame(), later);
 });
+
+test("normal Laboratory restart systemically settles a mandatory selection and ignores its late callback", async t => {
+  const launcher = createLauncher();
+  t.after(() => launcher.disposeActiveGame("test_complete"));
+  const first = await launcher.startLaboratoryDuel(scenarioConfig());
+  let confirmOld: (() => void) | undefined;
+  first.ui.showTargetSelection = (_contract, confirm) => {
+    confirmOld = () => confirm?.({ chosen: ["yes"] }); return { close() {} };
+  };
+  let settled = false, executed = false;
+  const pending = new Promise<void>(resolve => {
+    first.startTargetSelectionSession({ allowCancel: false, useFieldTargeting: false,
+      selectionContract: { requirements: [{ id: "chosen", min: 1, max: 1, zone: "choice", candidates: [{ key: "yes", zone: "choice" }] }] },
+      onAbort: () => { settled = true; resolve(); },
+      onCancel: () => assert.fail("Restart is not a player cancellation"),
+      execute: () => { executed = true; return true; },
+    });
+  });
+  const next = required(await launcher.restartLaboratoryDuel());
+  assert.equal(settled, true);
+  await pending;
+  confirmOld?.();
+  assert.equal(executed, false);
+  assert.equal(first.isDisposed(), true);
+  assert.equal(first.targetSelection, null);
+  assert.equal(next.targetSelection, null);
+  assert.equal(next.selectionState, "idle");
+  assert.equal(next.player.lp, 6400);
+});
