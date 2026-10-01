@@ -1,3 +1,5 @@
+import { requiresUnnegatedTarget } from "../../effects/negation.js";
+import { applyGenericSimulatedMainPhaseAction } from "../common/simulation.js";
 import { appendSimulatedZoneCard, clearSimulatedFieldPosition } from "../common/zones.js";
 import { appendSimulatedFieldCard } from "../common/zones.js";
 import { canMoveCardToZone, moveCardToZone } from "../common/zones.js";
@@ -2149,6 +2151,20 @@ function simulateDragonFieldMonsterEffect(
   const player = state.bot;
   const opponent = state.player;
 
+  const effect = card.effects?.find(entry => entry.timing === "ignition" && (!action.effectId || entry.id === action.effectId));
+  if (effect?.targets?.some(target => requiresUnnegatedTarget(effect, target))) {
+    const { opponent: _opponent, _gameRef: _gameRef, game: _game,
+      _dragonSimOnce: _dragonOnce, _simMaterialEffectActivationsByMaterialId: _materialActivations,
+      ...sharedFields } = state;
+    const sharedState = { ...sharedFields, bot: sharedSimulationPlayer(player), player: sharedSimulationPlayer(opponent) };
+    applyGenericSimulatedMainPhaseAction(sharedState, {
+      type: "monsterEffect", fieldIndex, cardId: card.id,
+      ...(effect.id ? { effectId: effect.id } : {}),
+    });
+    Object.assign(state, sharedState);
+    return;
+  }
+
   if (card.name === "Abyssal Serpent Dragon") {
     const target = rankSimThreats(opponent.field || [])[0];
     if (!target) return;
@@ -2176,21 +2192,6 @@ function simulateDragonFieldMonsterEffect(
         actionType: "delayed_summon", triggerCondition: { phase: "standby", player: opponent.id },
         payload: { summons }, scheduledTurn: state.turnCounter || 0, priority: 1 });
     }
-    recordSimulatedMaterialEffectActivation(state, player, card);
-    return;
-  }
-
-  if (card.name === "Darkness Dragon") {
-    if ((player.hand || []).length > 0) {
-      const discardIdx = pickWorstDiscard(player.hand, {
-        state,
-        player,
-        source: card,
-      });
-      discardHandCardToGraveyard(state, player, discardIdx);
-    }
-    const target = rankSimThreats(opponent.field || [])[0];
-    if (target) target.effectsNegated = true;
     recordSimulatedMaterialEffectActivation(state, player, card);
     return;
   }

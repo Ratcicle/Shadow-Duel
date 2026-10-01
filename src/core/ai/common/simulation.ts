@@ -1,3 +1,4 @@
+import { expireEffectNegation } from "../../effects/negation.js";
 import { hasActionZoneCandidates } from "./actionValidation.js";
 import { resolveTargetsForAction, captureSimulatedReferences } from "./simulatedActions/shared.js";
 import { appendSimulatedZoneCard } from "./zones.js";
@@ -1361,6 +1362,7 @@ function dispatchSimulatedEvent(
       }));
       const selections = selectSimulatedTargets({
         targets: effect.targets || [],
+        effect,
         actions: effectExecutionActions(effect),
         state,
         sourceCard,
@@ -1467,6 +1469,7 @@ function dispatchSimulatedEvent(
     }));
     const selections = selectSimulatedTargets({
       targets: effect.targets || [],
+      effect,
       actions: effectExecutionActions(effect),
       state,
       sourceCard,
@@ -1610,6 +1613,7 @@ export function simulateGenericSpellEffect<State extends SimulatedMainPhaseState
   attachSimulatedEventEmitter(state, selectionOptions);
   const selections = selectSimulatedTargets({
     targets: effect.targets || [],
+    effect,
     actions: effectExecutionActions(effect),
     state,
     sourceCard: card,
@@ -1649,6 +1653,7 @@ function setSimulatedSpellTrapAfterResolution(
     return false;
   }
   card.isFacedown = true;
+  expireEffectNegation(card, "while_faceup");
   card.fieldPresenceSummons = [];
   if (typeof state.turnCounter === "number") {
     card.turnSetOn = state.turnCounter;
@@ -1964,6 +1969,7 @@ export function applyGenericSimulatedMainPhaseAction<
 
       const selections = selectSimulatedTargets({
         targets: effect.targets || [],
+        effect,
         actions: effectExecutionActions(effect),
         state,
         sourceCard: card,
@@ -2027,6 +2033,7 @@ export function applyGenericSimulatedMainPhaseAction<
       }
       const selections = selectSimulatedTargets({
         targets: effect.targets || [],
+        effect,
         actions: effectExecutionActions(effect),
         state,
         sourceCard: card,
@@ -2178,6 +2185,7 @@ export function applyGenericSimulatedMainPhaseAction<
         }
         const selections = selectSimulatedTargets({
           targets: effect.targets || [],
+          effect,
           actions: effectExecutionActions(effect),
           state,
           sourceCard: card,
@@ -2265,6 +2273,7 @@ export function applyGenericSimulatedMainPhaseAction<
         }) as object | null | undefined) || null;
       const selections = selectSimulatedTargets({
         targets: effect.targets || [],
+        effect,
         actions: effectExecutionActions(effect),
         state,
         sourceCard: fieldSpell,
@@ -2338,6 +2347,7 @@ export function applyGenericSimulatedMainPhaseAction<
       }
       const selections = selectSimulatedTargets({
         targets: effect.targets || [],
+        effect,
         actions: effectExecutionActions(effect),
         state,
         sourceCard: card,

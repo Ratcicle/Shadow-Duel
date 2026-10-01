@@ -1,3 +1,4 @@
+import { expireEffectNegation } from "../../effects/negation.js";
 /**
  * cleanup.js
  *
@@ -285,6 +286,7 @@ export function cleanupTempBoosts(
 ) {
   for (const card of [...player.field, ...player.spellTrap, ...(player.fieldSpell ? [player.fieldSpell] : [])]) {
     card.fieldPresenceSummons = [];
+    expireEffectNegation(card, "until_end_turn");
   }
   player.field.forEach((card: GameCard) => {
     if (card.tempAtkBoost) {
@@ -309,12 +311,6 @@ export function cleanupTempBoosts(
     if (card.originalLevel != null) {
       card.level = card.originalLevel;
       card.originalLevel = null;
-    }
-
-    // Remove temporary effect negation; field-presence negation is cleared on move.
-    if (card.effectsNegated && card.effectsNegatedDuration !== "while_faceup") {
-      card.effectsNegated = false;
-      card.effectsNegatedDuration = null;
     }
 
     card.tempBattleIndestructible = false;

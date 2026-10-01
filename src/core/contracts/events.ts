@@ -68,6 +68,7 @@ export interface EventCard {
   lastSummonProcedure?: string | null;
   effectsNegated?: boolean | undefined;
   effectsNegatedDuration?: (string | number | null) | undefined;
+  effectsNegationContributions?: import("./cards.js").EffectNegationContribution[] | undefined;
 }
 
 export interface EventPlayer {

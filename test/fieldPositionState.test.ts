@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import Game from "../src/core/Game.js";
+import { CANONICAL_REPLAY_ENGINE_VERSION } from "../src/core/contracts/replay.js";
 import { cardDatabase } from "../src/data/cards.js";
 import { normalizeScenarioSetup } from "../src/core/game/devTools/setup.js";
 import { compareZoneSnapshot } from "../src/core/game/zones/snapshot.js";
@@ -118,7 +119,7 @@ test("replay v2 rejects absent, duplicate or non-field positions instead of repa
   try {
     game.applyScenarioSetup({ player: { field: [{ id: monsterId }, { id: monsterId }], hand: [{ id: monsterId }] } });
     const replay = {
-      format: "shadow-duel-canonical-replay", schemaVersion: 2, engineVersion: "dragon-rules-v3",
+      format: "shadow-duel-canonical-replay", schemaVersion: 2, engineVersion: CANONICAL_REPLAY_ENGINE_VERSION,
       cardDatabaseSignature: getCardDatabaseSignature(),
       setup: { seed: 1, randomState: null, startingPlayer: "player", playerDeck: [], botDeck: [], playerExtraDeck: [], botExtraDeck: [] },
       commands: [], decisions: [], result: { finalState: createCanonicalStateSnapshot(game) },

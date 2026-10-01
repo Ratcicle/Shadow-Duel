@@ -450,6 +450,7 @@ export const REPLAY_CAPTURE_BINDINGS = Object.freeze([
       type: "phase_intent",
       actorId: this.turn,
       payload: {
+        mode: "next",
         fromPhase: this.phase,
         toPhase: this.getNextPhase?.(this.phase) || null,
       },
@@ -459,7 +460,7 @@ export const REPLAY_CAPTURE_BINDINGS = Object.freeze([
     return {
       type: "phase_intent",
       actorId: this.turn,
-      payload: { fromPhase: this.phase, toPhase: args[0] || null },
+      payload: { mode: "skip", fromPhase: this.phase, toPhase: args[0] || null },
     };
   }),
 ] as const satisfies readonly ReplayCaptureBindingUnion[]);

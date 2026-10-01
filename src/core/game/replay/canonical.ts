@@ -1,3 +1,4 @@
+import { getNegationContributions } from "../../effects/negation.js";
 import { cardDatabase } from "../../../data/cards.js";
 import type { RawCardDefinition } from "../../contracts/cards.js";
 import {
@@ -210,6 +211,7 @@ function cardState(
     statuses: {
       effectsNegated: card.effectsNegated === true,
       effectsNegatedDuration: card.effectsNegatedDuration || null,
+      effectsNegationContributions: getNegationContributions(card).map(entry => ({ ...entry })),
       cannotAttackThisTurn: card.cannotAttackThisTurn === true,
       battlePositionLocked: card.battlePositionLocked === true,
       banishWhenLeavesField: card.banishWhenLeavesField === true,

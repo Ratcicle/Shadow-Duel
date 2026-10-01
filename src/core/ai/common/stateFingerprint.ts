@@ -79,7 +79,7 @@ export const PLANNING_CARD_FIELDS = [
   "properSummonEstablished", "properSummonProcedure", "unaffectedByOtherCardEffects",
   "lastSummonMethod", "lastSummonedFromZone", "lastSummonedTurn", "lastSummonProcedure",
   "turnBasedBuffs", "tempStatuses", "fieldExitStatuses", "fieldPresenceId",
-  "fieldPresenceState", "fieldPresenceSummons", "effectsNegated", "effectsNegatedDuration", "originalAtk",
+  "fieldPresenceState", "fieldPresenceSummons", "effectsNegated", "effectsNegatedDuration", "effectsNegationContributions", "originalAtk",
   "originalDef", "counters", "blueprintStorage", "effects", "fusionMaterials",
   "ascension", "ascensionMaterials", "synchro", "synchroMaterials", "owner",
   "originalOwner", "controller", "location", "zone", "locationVersion", "isToken",

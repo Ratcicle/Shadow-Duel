@@ -1,3 +1,4 @@
+import { addEffectNegation, clearEffectNegation, expireEffectNegation } from "../effects/negation.js";
 /**
  * stats.ts
  *
@@ -574,8 +575,8 @@ export async function handleSetStatsToZeroAndNegate(
     // Negate effects
 
     if (negateEffects) {
-      card.effectsNegated = true;
-      card.effectsNegatedDuration = negateEffectsDuration;
+      if (ctx.source) game.ensureDuelCardId?.(ctx.source);
+      addEffectNegation(card, negateEffectsDuration, ctx.source, ctx.effect);
 
       cardModified = true;
     }
@@ -1676,7 +1677,7 @@ export async function handleAddStatus(
   ) {
     const currentCandidates = engine.selectCandidates(
       declaredTarget,
-      ctx,
+      { ...ctx, activationContext: { ...ctx.activationContext, timing: "resolution" } },
     )?.candidates;
     if (Array.isArray(currentCandidates)) {
       const validNow = new Set(currentCandidates);
@@ -1714,7 +1715,7 @@ export async function handleAddStatus(
   for (const card of targetCards) {
     if (!card) continue;
 
-    if (!remove && untilEndOfTurn) {
+    if (!remove && untilEndOfTurn && status !== "effectsNegated") {
       if (!card.tempStatuses) {
         card.tempStatuses = {};
       }
@@ -1758,7 +1759,7 @@ export async function handleAddStatus(
         Reflect.deleteProperty(card.tempStatuses, status);
       }
       if (status === "effectsNegated") {
-        card.effectsNegatedDuration = null;
+        clearEffectNegation(card);
       }
     } else {
       // For additive status, sum values instead of replacing
@@ -1768,11 +1769,14 @@ export async function handleAddStatus(
           status,
           Number(readCardProperty(card, status) || 0) + value,
         );
-      } else {
+      } else if (status !== "effectsNegated") {
         writeCardProperty(card, status, value);
       }
       if (status === "effectsNegated") {
-        card.effectsNegatedDuration = normalizeNegateEffectsDuration(action);
+        if (value === true) {
+          if (ctx.source) game.ensureDuelCardId?.(ctx.source);
+          addEffectNegation(card, normalizeNegateEffectsDuration(action), ctx.source, ctx.effect);
+        } else clearEffectNegation(card);
       }
 
       modified = true;
@@ -2181,13 +2185,7 @@ export async function handleSetFacedownDefense(
     card.isFacedown = true;
     card.fieldPresenceSummons = [];
     expireFaceupStatBuffs(card);
-    if (
-      card.effectsNegated === true &&
-      card.effectsNegatedDuration === "while_faceup"
-    ) {
-      card.effectsNegated = false;
-      card.effectsNegatedDuration = null;
-    }
+    expireEffectNegation(card, "while_faceup");
     card.hasChangedPosition = true;
     card.positionChangedThisTurn = true;
     if (action.lockBattlePosition === true) {

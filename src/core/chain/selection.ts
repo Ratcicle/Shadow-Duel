@@ -359,7 +359,7 @@ export async function getPlayerSelectionsForEffect(
       card,
       definitions,
       player,
-      context,
+      { ...context, effect },
       { purpose: "target", allowCancel: true },
     );
   }
@@ -374,6 +374,7 @@ export async function getPlayerSelectionsForEffect(
   // Build context with attack info if available
   const ctx = {
     source: card,
+    effect,
     player,
     opponent: this.getOpponent(player),
     defender: context?.defender || context?.target,

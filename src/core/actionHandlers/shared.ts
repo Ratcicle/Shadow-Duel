@@ -308,17 +308,7 @@ export function getUI(
   return (game?.ui || game?.renderer || NULL_UI) as ActionHandlerUi;
 }
 
-export function normalizeNegateEffectsDuration(
-  action: {
-    readonly negateEffectsDuration?: string;
-    readonly duration?: string;
-  } = {},
-) {
-  return action.negateEffectsDuration === "while_faceup" ||
-    action.duration === "while_faceup"
-    ? "while_faceup"
-    : "until_end_turn";
-}
+export { normalizeNegationDuration as normalizeNegateEffectsDuration } from "../effects/negation.js";
 
 // Map technical status names to user-friendly descriptions
 export const STATUS_DISPLAY_NAMES = {

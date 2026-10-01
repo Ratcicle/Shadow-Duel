@@ -1,3 +1,4 @@
+import { expireEffectNegation } from "../../../effects/negation.js";
 import { removeTrackedStatChange } from "../../../effects/actions/stats.js";
 import { restoreTemporaryStatuses } from "../../../Card.js";
 import { SUMMON_METHODS } from "../../../contracts/summon.js";
@@ -81,6 +82,7 @@ export function cleanupSimulatedEndTurn(state: SimulatedRuntimeState): void {
   for (const player of [state.bot, state.player]) {
     for (const card of [...player.field, ...player.spellTrap, ...(player.fieldSpell ? [player.fieldSpell] : [])]) {
       card.fieldPresenceSummons = [];
+      expireEffectNegation(card, "until_end_turn");
     }
     for (const card of player.field) {
       if (card.tempAtkBoost) { removeTrackedStatChange(card, "atk", card.tempAtkBoost); card.tempAtkBoost = 0; }
@@ -89,10 +91,7 @@ export function cleanupSimulatedEndTurn(state: SimulatedRuntimeState): void {
       if (card.originalAtk != null) { card.atk = card.originalAtk; card.originalAtk = null; }
       if (card.originalDef != null) { card.def = card.originalDef; card.originalDef = null; }
       if (card.originalLevel != null) { card.level = card.originalLevel; card.originalLevel = null; }
-      if (card.effectsNegated && card.effectsNegatedDuration !== "while_faceup") {
-        card.effectsNegated = false;
-        card.effectsNegatedDuration = null;
-      }
+
       card.tempBattleIndestructible = false;
       card.battleDamageHealsControllerThisTurn = false;
       card.canAttackDirectlyThisTurn = false;

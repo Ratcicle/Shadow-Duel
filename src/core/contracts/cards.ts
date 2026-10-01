@@ -265,6 +265,13 @@ export interface DynamicExtraAttacksDefinition {
   readonly name: string;
 }
 
+/** Independent contributions to the current affected presence. */
+export interface EffectNegationContribution {
+  duration: "until_end_turn" | "while_faceup";
+  sourceDuelCardId: number | null;
+  sourceEffectId: string | null;
+}
+
 interface CardDefinitionBase {
   readonly nameKey?: string;
   readonly descriptionKey?: string;
@@ -490,6 +497,7 @@ export interface GeneratedCardDefinition {
   readonly lastSummonProcedure?: SpecialSummonProcedure | string | null;
   readonly effectsNegated?: boolean;
   readonly effectsNegatedDuration?: string | number | null;
+  readonly effectsNegationContributions?: readonly EffectNegationContribution[];
   readonly blueprintStorage?: BlueprintStorageDefinition | null;
   readonly description?: string;
   readonly effects?: readonly EffectDefinition[];
@@ -769,6 +777,7 @@ export interface GameCard {
   fieldPresenceSummons: FieldPresenceSummonRecord[];
   effectsNegated: boolean;
   effectsNegatedDuration: string | number | null;
+  effectsNegationContributions: EffectNegationContribution[];
   originalAtk: number | null;
   originalDef: number | null;
   counters: Map<string, number>;

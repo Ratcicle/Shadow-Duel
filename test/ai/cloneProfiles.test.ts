@@ -406,6 +406,12 @@ for (const profile of CLONE_PROFILES) {
     const clonedHost = required(state.bot.field[0]);
     const clonedEquip = required(state.bot.spellTrap[0]);
     assert.equal(clonedEquip.equippedTo, clonedHost);
+    assert.deepEqual(clonedEquip.effectsNegationContributions, equip.effectsNegationContributions);
+    assert.notEqual(clonedEquip.effectsNegationContributions, equip.effectsNegationContributions);
+    const clonedNegation = required(clonedEquip.effectsNegationContributions?.[0]);
+    assert.notEqual(clonedNegation, equip.effectsNegationContributions[0]);
+    clonedNegation.duration = "until_end_turn";
+    assert.equal(equip.effectsNegationContributions[0]?.duration, "while_faceup");
     detachSimulatedEquip(clonedEquip);
     assert.equal(clonedHost.extraAttacks, 2);
     assert.equal(host.extraAttacks, 2);

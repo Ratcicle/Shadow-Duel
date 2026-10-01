@@ -1191,7 +1191,7 @@ export async function prepareChainResponse(
       preparedCard,
       resolvedTargetDefinitions,
       player,
-        withCostSelectionContext(responseContext) as FastEffectContextInput,
+      withCostSelectionContext({ ...responseContext, effect: preparedEffect }) as FastEffectContextInput,
       {
         purpose: "target",
         allowCancel: false,

@@ -1,3 +1,4 @@
+import { addEffectNegation, clearEffectNegation, expireEffectNegation } from "../../../effects/negation.js";
 import { applyNamedStatChange } from "../../../effects/actions/stats.js";
 import { getCardEffectImmunity } from "../../../effects/targeting/filters.js";
 import { getEffectiveAtk } from "../cardStats.js";
@@ -262,13 +263,7 @@ export function applySetFacedownDefense(
     card.isFacedown = true;
     card.fieldPresenceSummons = [];
     expireFaceupStatBuffs(card);
-    if (
-      card.effectsNegated === true &&
-      card.effectsNegatedDuration === "while_faceup"
-    ) {
-      card.effectsNegated = false;
-      card.effectsNegatedDuration = null;
-    }
+    expireEffectNegation(card, "while_faceup");
     (card as LegacyProtectedCard).hasChangedPosition = true;
     card.positionChangedThisTurn = true;
     if (action.lockBattlePosition === true) {
@@ -853,8 +848,7 @@ export function applySetStatsToZeroAndNegate(
       });
     }
     if (action.negateEffects !== false) {
-      card.effectsNegated = true;
-      card.effectsNegatedDuration = normalizeNegateEffectsDuration(action);
+      addEffectNegation(card, normalizeNegateEffectsDuration(action), ctx.options.sourceCard, ctx.options.effect);
     }
   });
   return;
@@ -886,13 +880,13 @@ export function applyAddStatus(
       if (action.remove === true) {
         delete (card as DynamicSimulatedCard)[status];
         if (status === "effectsNegated") {
-          card.effectsNegatedDuration = null;
+          clearEffectNegation(card);
         }
       } else {
-        (card as DynamicSimulatedCard)[status] = action.value ?? true;
         if (status === "effectsNegated") {
-          card.effectsNegatedDuration = normalizeNegateEffectsDuration(action);
-        }
+          if (action.value === undefined || action.value === true) addEffectNegation(card, normalizeNegateEffectsDuration(action), options.sourceCard, options.effect);
+          else clearEffectNegation(card);
+        } else (card as DynamicSimulatedCard)[status] = action.value ?? true;
       }
       if (status === "effectsNegated") {
         if (card.cardKind === "spell" && card.subtype === "equip" && card.equippedTo) {

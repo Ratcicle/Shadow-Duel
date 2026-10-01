@@ -512,10 +512,16 @@ async function resolveTargetsWithPrompt(
 
 export async function handleChooseActionCase(
   action: ActionOf<"choose_action_case">,
-  ctx: EffectContext,
+  enclosingCtx: EffectContext,
   targets: ResolvedTargetMap,
   engine: ActionHandlerEnginePort,
 ) {
+  // Case availability and its local target choices run after activation.
+  // Keep activation-only eligibility out of every branch and resumed choice.
+  const ctx: EffectContext = {
+    ...enclosingCtx,
+    activationContext: { ...enclosingCtx.activationContext, timing: "resolution" },
+  };
   const game = engine?.game;
   const player = ctx?.player;
   if (!game || !player) return false;

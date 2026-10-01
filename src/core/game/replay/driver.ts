@@ -100,6 +100,8 @@ async function executeCommand(
       actor.lp = Number(command.payload.lp);
       return true;
     case "phase_intent":
+      if (command.payload.mode === "next") return game.nextPhase();
+      // Mode-less records retain their historical target-based interpretation.
       return command.payload.toPhase
         ? game.skipToPhase(command.payload.toPhase)
         : game.nextPhase();

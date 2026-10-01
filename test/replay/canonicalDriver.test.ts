@@ -130,7 +130,7 @@ function replay(commands: ReadonlyArray<CanonicalReplayCommand> = []) {
   return {
     format: "shadow-duel-canonical-replay",
     schemaVersion: 2,
-    engineVersion: "dragon-rules-v3",
+    engineVersion: "engine-rules-v4",
     cardDatabaseSignature: getCardDatabaseSignature(),
     setup: {
       seed: 123,

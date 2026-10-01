@@ -238,7 +238,7 @@ test("a replay wrapper preserves results and records its canonical descriptor", 
     {
       type: "phase_intent",
       actorId: "player",
-      payload: { fromPhase: "main1", toPhase: "battle" },
+      payload: { mode: "next", fromPhase: "main1", toPhase: "battle" },
     },
   ]);
 });
@@ -274,6 +274,6 @@ test("a replay wrapper defers its descriptor while selection is pending", async 
   assert.deepEqual(targetSelection.replayCommandDescriptor, {
     type: "phase_intent",
     actorId: "bot",
-    payload: { fromPhase: "battle", toPhase: "main2" },
+    payload: { mode: "next", fromPhase: "battle", toPhase: "main2" },
   });
 });

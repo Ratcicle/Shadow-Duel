@@ -1,3 +1,4 @@
+import { clearEffectNegation, expireEffectNegation } from "../../effects/negation.js";
 import { clearPermanentStatBuffs, removeTrackedStatChange } from "../../effects/actions/stats.js";
 import {
   applyStatusesOnSummon,
@@ -2680,6 +2681,8 @@ export async function moveCardInternal(
     card.cardKind === "monster" &&
     card.effectsNegated === true;
 
+  if (options.isFacedown === true) expireEffectNegation(card, "while_faceup");
+
   if (isCanonicalZone(fromZone)) {
     cleanupNamedBuffsWhenSourceLeavesField(
       this,
@@ -2703,8 +2706,7 @@ export async function moveCardInternal(
     !activeZones.includes(toZone) &&
     (card.cardKind === "spell" || card.cardKind === "trap")
   ) {
-    card.effectsNegated = false;
-    card.effectsNegatedDuration = null;
+    clearEffectNegation(card);
   }
 
   if (fromZone === "field" && card.cardKind === "monster") {
@@ -2755,8 +2757,7 @@ export async function moveCardInternal(
       card.turnBasedBuffs = [];
     }
     if (toZone !== "field") {
-      card.effectsNegated = false;
-      card.effectsNegatedDuration = null;
+      clearEffectNegation(card);
     }
 
     // Remove permanent named buffs when the monster leaves the field

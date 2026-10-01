@@ -19,7 +19,7 @@ import type {
 
 export const CANONICAL_REPLAY_FORMAT = "shadow-duel-canonical-replay" as const;
 export const CANONICAL_REPLAY_SCHEMA_VERSION = 2 as const;
-export const CANONICAL_REPLAY_ENGINE_VERSION = "dragon-rules-v3" as const;
+export const CANONICAL_REPLAY_ENGINE_VERSION = "engine-rules-v4" as const;
 
 export type SerializablePrimitive = string | number | boolean | null;
 
@@ -88,6 +88,7 @@ export interface SetLpReplayCommandPayload {
 }
 
 export interface PhaseIntentReplayCommandPayload {
+  mode?: "next" | "skip";
   fromPhase?: EventPhase;
   toPhase?: EventPhase | null;
 }
@@ -344,6 +345,7 @@ export type CanonicalReplayEvent = {
 export interface CanonicalCardStatusSnapshot {
   effectsNegated: boolean;
   effectsNegatedDuration: SerializableValue;
+  effectsNegationContributions: import("./cards.js").EffectNegationContribution[];
   cannotAttackThisTurn: boolean;
   battlePositionLocked: boolean;
   banishWhenLeavesField: boolean;
@@ -487,6 +489,7 @@ export interface ReplayRuntimeCard {
   equippedTo?: ReplayRuntimeCard | null;
   effectsNegated?: boolean;
   effectsNegatedDuration?: string | number | null;
+  effectsNegationContributions?: import("./cards.js").EffectNegationContribution[];
   cannotAttackThisTurn?: boolean;
   battlePositionLocked?: boolean;
   banishWhenLeavesField?: boolean;
