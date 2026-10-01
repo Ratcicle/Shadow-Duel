@@ -197,6 +197,7 @@ function cardState(
     position: card.position || null,
     fieldSlot: card.fieldSlot ?? null,
     fieldPresenceId: card.fieldPresenceId ?? null,
+    fieldPresenceState: { ...(card.fieldPresenceState || {}) },
     fieldPresenceSummons: (card.fieldPresenceSummons || []).map(entry => ({ ...entry })),
     protectionEffects: (card.protectionEffects || []).map(entry => ({ ...entry })),
     facedown: card.isFacedown === true,
@@ -236,6 +237,7 @@ function playerState(
   return {
     id: player?.id ?? null,
     lp: numericValue(player?.lp),
+    lpGainedThisTurn: numericValue(player?.lpGainedThisTurn),
     zones,
     summonCount: Number(player?.summonCount || 0),
     additionalNormalSummons: Number(player?.additionalNormalSummons || 0),

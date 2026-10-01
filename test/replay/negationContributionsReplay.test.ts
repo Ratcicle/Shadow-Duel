@@ -46,9 +46,11 @@ for (const seat of ["player", "bot"] as const) for (const controller of ["human"
     assert.equal(result.success, true);
     assert.deepEqual(target.effectsNegationContributions, [{ duration: "until_end_turn", sourceDuelCardId: source.duelCardId, sourceEffectId: "darkness_dragon_negate" }]);
     const replay = validateCanonicalReplay(JSON.parse(JSON.stringify(live.finalizeReplay({ reason: "negation" }))));
-    assert.equal(replay.engineVersion, "engine-rules-v4");
+    assert.equal(replay.engineVersion, "engine-rules-v6");
     assert.equal(replay.schemaVersion, 2);
-    assert.throws(() => validateCanonicalReplay({ ...replay, engineVersion: "dragon-rules-v3" }), /engineVersion/);
+    for (const engineVersion of ["dragon-rules-v3", "engine-rules-v4", "dragon-rules-v5"]) {
+      assert.throws(() => validateCanonicalReplay({ ...replay, engineVersion }), /engineVersion/);
+    }
     const malformed = structuredClone(replay);
     const snapshot = required(malformed.result?.finalState);
     const opponentId = seat === "player" ? "bot" : "player";

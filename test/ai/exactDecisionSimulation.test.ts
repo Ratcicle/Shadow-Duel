@@ -6,6 +6,7 @@ import { createPlanningCopy } from "../../src/core/ai/common/planningCopy.js";
 import { selectSimulatedTargets } from "../../src/core/ai/common/targetSelection.js";
 import { applyGenericSimulatedMainPhaseAction, attachSimulatedEventEmitter, simulateGenericSpellEffect } from "../../src/core/ai/common/simulation.js";
 import { applySimulatedActions } from "../../src/core/ai/common/simulatedActions/index.js";
+import { evaluateSimulatedConditions } from "../../src/core/ai/common/simulatedConditions.js";
 import type { SimulatedRuntimeState } from "../../src/core/ai/common/simulatedActions/shared.js";
 import type { AIDecisionPlan } from "../../src/core/contracts/ai.js";
 import { cardDefinition, required, unsafeFixture } from "../helpers/fixtures.js";
@@ -20,6 +21,74 @@ function scenario(actor: "player" | "bot" = "bot") {
   const copy = createPlanningCopy();
   const make = (id: number) => copy.cloneCardForSim(new Card(cardDefinition(id), actor));
   return { state, make };
+}
+
+const optionalBackrowDestruction = {
+  type: "destroy_targeted_cards", minTargets: 0, maxTargets: 1,
+  zones: ["spellTrap", "fieldSpell"], cardKind: ["spell", "trap"],
+} as const;
+
+for (const count of [0, 1]) for (const fieldSpell of [false, true]) {
+  test(`optional destruction simulates ${count} exact choices (field spell ${fieldSpell})`, () => {
+    const { state, make } = scenario();
+    const source = make(261), first = make(262), chosen = make(262);
+    state.player.spellTrap.push(first);
+    if (fieldSpell) state.player.fieldSpell = chosen;
+    else state.player.spellTrap.push(chosen);
+    applySimulatedActions({ state, actions: [optionalBackrowDestruction], options: { sourceCard: source,
+      activationContext: { decisions: { selections: { destroy_targets: count ? [required(chosen.instanceId)] : [] } } } } });
+    assert.equal(state.player.graveyard.includes(chosen), count === 1);
+    assert.equal(state.player.spellTrap.includes(first), true);
+    assert.deepEqual(state._simUnsupportedActions || [], []);
+  });
+}
+
+for (const invalid of ["stale", "duplicate", "too_many", "wrong_zone", "wrong_kind"] as const) {
+  test(`optional destruction simulation rejects ${invalid} exact choices without fallback`, () => {
+    const { state, make } = scenario();
+    const source = make(261), first = make(262), chosen = make(invalid === "wrong_kind" ? 260 : 262);
+    state.player.spellTrap.push(first);
+    if (invalid === "wrong_zone") state.player.hand.push(chosen);
+    else state.player.spellTrap.push(chosen);
+    const id = required(chosen.instanceId);
+    const ids = invalid === "stale" ? ["missing"] : invalid === "duplicate" ? [id, id]
+      : invalid === "too_many" ? [required(first.instanceId), id] : [id];
+    const result = applySimulatedActions({ state, actions: [optionalBackrowDestruction], options: { sourceCard: source,
+      activationContext: { decisions: { selections: { destroy_targets: ids } } } } });
+    assert.equal(result, false);
+    assert.equal(state.player.graveyard.length, 0);
+    assert.ok(state._simUnsupportedActions?.includes("exact_selection:destroy_targets"));
+  });
+}
+
+test("optional destruction without an exact plan removes at most one filtered opponent card", () => {
+  const { state, make } = scenario();
+  const source = make(261), first = make(262), second = make(262), monster = make(260);
+  state.player.spellTrap.push(first, second);
+  state.player.field.push(monster);
+  applySimulatedActions({ state, actions: [optionalBackrowDestruction], options: { sourceCard: source } });
+  assert.equal(state.player.graveyard.length, 1);
+  assert.equal(state.player.spellTrap.length, 1);
+  assert.deepEqual(state.player.field, [monster]);
+});
+
+test("optional destruction simulation ignores zones outside the runtime field rows", () => {
+  const { state, make } = scenario();
+  const target = make(262);
+  state.player.hand.push(target);
+  applySimulatedActions({ state, actions: [{ ...optionalBackrowDestruction, zones: ["hand"] }] });
+  assert.deepEqual(state.player.hand, [target]);
+  assert.equal(state.player.graveyard.length, 0);
+});
+
+for (const eligible of [false, true]) {
+  test(`Roar's simulated Dragon condition requires a face-up Level 7 Dragon (${eligible})`, () => {
+    const { state, make } = scenario();
+    const dragon = make(260); dragon.isFacedown = !eligible;
+    state.bot.field.push(dragon);
+    assert.equal(evaluateSimulatedConditions([{ type: "control_type_min_level", typeName: "Dragon",
+      minLevel: 7, zone: "field", requireFaceup: true }], { state, selfId: "bot" }), eligible);
+  });
 }
 
 test("exact target selection preserves instance identity over rank and name", () => {

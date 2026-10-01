@@ -218,9 +218,23 @@ export function applyHeal(
   const before = targetPlayer.lp;
   targetPlayer.lp += Math.floor(amount * multiplier);
   if (targetPlayer.lp > before) {
+    targetPlayer.lpGainedThisTurn = (targetPlayer.lpGainedThisTurn || 0) + (targetPlayer.lp - before);
     options.onLpGain?.({ state, player: targetPlayer, sourceCard: options.sourceCard || null, before, after: targetPlayer.lp });
   }
   return;
+}
+
+export function applyHealPerOpponentCardsAndHand(
+  ctx: SimulatedActionHandlerContext<"heal_per_opponent_cards_and_hand">,
+): void {
+  const { action, opponent } = ctx;
+  if (action.amountPerCard <= 0) return;
+  const counted = [
+    ...opponent.field, ...opponent.spellTrap, ...opponent.hand,
+    ...(opponent.fieldSpell ? [opponent.fieldSpell] : []),
+  ].filter(Boolean).length;
+  if (counted === 0) return;
+  applyHeal({ ...ctx, action: { type: "heal", amount: counted * action.amountPerCard, player: action.player || "self" } });
 }
 
 export function applyHealPerArchetypeMonster(

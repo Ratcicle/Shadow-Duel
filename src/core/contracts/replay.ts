@@ -19,7 +19,7 @@ import type {
 
 export const CANONICAL_REPLAY_FORMAT = "shadow-duel-canonical-replay" as const;
 export const CANONICAL_REPLAY_SCHEMA_VERSION = 2 as const;
-export const CANONICAL_REPLAY_ENGINE_VERSION = "engine-rules-v4" as const;
+export const CANONICAL_REPLAY_ENGINE_VERSION = "engine-rules-v6" as const;
 
 export type SerializablePrimitive = string | number | boolean | null;
 
@@ -365,6 +365,7 @@ export interface CanonicalCardStateSnapshot {
   position: string | null;
   fieldSlot: FieldSlot | null;
   fieldPresenceId: string | number | null;
+  fieldPresenceState: Record<string, number>;
   fieldPresenceSummons: FieldPresenceSummonRecord[];
   protectionEffects: CardProtectionEffect[];
   facedown: boolean;
@@ -393,6 +394,7 @@ export interface CanonicalPlayerZonesSnapshot {
 export interface CanonicalPlayerStateSnapshot {
   id: PlayerId | string | null;
   lp: number;
+  lpGainedThisTurn: number;
   zones: CanonicalPlayerZonesSnapshot;
   summonCount: number;
   additionalNormalSummons: number;
@@ -476,6 +478,7 @@ export interface ReplayRuntimeCard {
   position?: (string | null) | undefined;
   fieldSlot?: FieldSlot | null;
   fieldPresenceId?: string | number | null;
+  fieldPresenceState?: Readonly<Record<string, number>> | null;
   fieldPresenceSummons?: readonly FieldPresenceSummonRecord[];
   protectionEffects?: readonly CardProtectionEffect[];
   isFacedown?: boolean | undefined;
@@ -500,6 +503,7 @@ export interface ReplayRuntimeCard {
 export interface ReplayRuntimePlayer {
   id: PlayerId | string;
   lp: number;
+  lpGainedThisTurn?: number;
   deck: ReplayRuntimeCard[];
   extraDeck: ReplayRuntimeCard[];
   hand: ReplayRuntimeCard[];

@@ -2,6 +2,7 @@ import { placeSimulationCards } from "../helpers/simulation.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { beamSearchTurn } from "../../src/core/ai/BeamSearch.js";
+import { turnLineSearch } from "../../src/core/ai/TurnLineSearch.js";
 import { canUseSimOncePerTurn, markSimOncePerTurnUsed } from "../../src/core/ai/common/simStateUtils.js";
 import { detachSimulatedEquip } from "../../src/core/ai/common/zones.js";
 import { applyGenericSimulatedMainPhaseAction } from "../../src/core/ai/common/simulation.js";
@@ -23,6 +24,32 @@ function game(): AiStateShape {
   const bot = player("bot");
   placeSimulationCards(bot.field, card(1));
   return { bot, player: player("player"), turn: "bot", phase: "main1", turnCounter: 1 };
+}
+
+for (const resource of ["presence", "lpGain"] as const) {
+  test(`TurnLine retains branches that change only latent ${resource} history`, async () => {
+    const input = game();
+    const source = required(input.bot.field[0]);
+    source.effectsNegated = true;
+    source.fieldPresenceState = { summon_count_Dragon: 0 };
+    input.bot.lpGainedThisTurn = 0;
+    const result = await turnLineSearch(input, {
+      bot: input.bot,
+      generateMainPhaseActions: () => [{ type: "position_change", fieldIndex: 0, toPosition: "attack" }],
+      simulateMainPhaseAction(state) {
+        if (resource === "presence") required(required(state.bot.field[0]).fieldPresenceState).summon_count_Dragon = 1;
+        else state.bot.lpGainedThisTurn = 200;
+      },
+      evaluateBoard: state => resource === "presence"
+        ? (state.bot.field[0]?.fieldPresenceState?.summon_count_Dragon || 0) * 100
+        : state.bot.lpGainedThisTurn || 0,
+    }, { maxDepth: 1, nodeBudget: 5 });
+    assert.ok(result, "a latent resource change must remain a distinct planning branch");
+    assert.equal(result.sequence.length, 1);
+    assert.equal(result.completion.repeatedStates, 0);
+    assert.equal(source.fieldPresenceState.summon_count_Dragon, 0);
+    assert.equal(input.bot.lpGainedThisTurn, 0);
+  });
 }
 
 function requireBeamState(state: AIState): asserts state is BeamPerspectiveGameState & SimulatedRuntimeStateFields {

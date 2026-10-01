@@ -168,7 +168,7 @@ export const dragonCards = [
           typeName: "Dragon",
           amountPerCard: 100,
           summonMethods: ["special"],
-          countOwner: "self",
+          countOwner: "any",
           stats: ["atk", "def"],
         },
       },
@@ -420,6 +420,7 @@ export const dragonCards = [
         requirePhase: ["main1", "main2"],
         oncePerTurn: true,
         oncePerTurnName: "majestic_silver_dragon_position_switch",
+        oncePerTurnScope: "card",
         targets: [
           {
             id: "majestic_position_target",
@@ -479,6 +480,7 @@ export const dragonCards = [
         requirePhase: ["main1", "main2"],
         oncePerTurn: true,
         oncePerTurnName: "darkness_dragon_negate",
+        oncePerTurnScope: "card",
         targets: [
           {
             id: "darkness_dragon_discard_cost",
@@ -659,6 +661,7 @@ export const dragonCards = [
         requirePhase: ["main1", "main2"],
         oncePerTurn: true,
         oncePerTurnName: "hellkite_dragon_field_revive",
+        oncePerTurnScope: "card",
         activationCosts: [
           {
             type: "move",
@@ -714,6 +717,7 @@ export const dragonCards = [
         actions: [
           {
             type: "destroy_targeted_cards",
+            minTargets: 0,
             maxTargets: 1,
             zones: ["spellTrap", "fieldSpell"],
             cardKind: ["spell", "trap"],
@@ -800,6 +804,7 @@ export const dragonCards = [
         requirePhase: ["main1", "main2"],
         oncePerTurn: true,
         oncePerTurnName: "dragon_peak_ignite_summon",
+        oncePerTurnScope: "card",
         conditions: [
           {
             type: "source_counters_at_least",
@@ -1353,6 +1358,7 @@ export const dragonCards = [
         requirePhase: ["main1", "main2"],
         oncePerTurn: true,
         oncePerTurnName: "boneflame_dragon_gy_revive",
+        oncePerTurnScope: "card",
         targets: [
           {
             id: "boneflame_cost_target",
@@ -1629,12 +1635,12 @@ export const dragonCards = [
         requireFaceup: true,
         oncePerTurn: true,
         oncePerTurnName: "mist_extreme_dragon_bounce",
+        oncePerTurnScope: "card",
         targets: [
           {
             id: "mist_bounce_target",
             owner: "opponent",
             zones: ["field", "spellTrap", "fieldSpell"],
-            requireFaceup: true,
             count: { min: 1, max: 1 },
           },
         ],
@@ -1764,6 +1770,7 @@ export const dragonCards = [
         requireZone: "field",
         requireFaceup: true,
         triggerPlayer: "self",
+        standbyPlayer: "any",
         promptUser: false,
         actions: [
           {
@@ -1809,6 +1816,7 @@ export const dragonCards = [
         requireFaceup: true,
         oncePerTurn: true,
         oncePerTurnName: "forest_extreme_dragon_lp_gain_boost",
+        oncePerTurnScope: "card",
         actions: [{ type: "buff_atk_by_lp_gained_this_turn" }],
       },
     ],

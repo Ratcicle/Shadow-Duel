@@ -2,7 +2,7 @@ import { clearEffectNegation } from "../../effects/negation.js";
 import { restoreFieldExitStatuses, restoreTemporaryStatuses } from "../../Card.js";
 import { cardMatchesFilter } from "./cardFilters.js";
 import { clearPermanentStatBuffs, expireFaceupStatBuffs, removeTrackedStatChange } from "../../effects/actions/stats.js";
-import { getSendToGraveReplacementDestination, refreshEquipExtraAttackBonus, removeFieldAuraBuffContributions } from "../../effects/passives/passiveBuffs.js";
+import { applyPassiveBuffValue, getSendToGraveReplacementDestination, refreshEquipExtraAttackBonus, removeFieldAuraBuffContributions } from "../../effects/passives/passiveBuffs.js";
 import {
   assignAutomaticFieldSlot,
   clearFieldSlot,
@@ -16,6 +16,7 @@ import type {
   AiStateInput,
   AiStateShape,
   SimulatedCardState,
+  SimulatedCardShape,
   SimulatedPlayerState,
 } from "../../contracts/aiState.js";
 
@@ -29,10 +30,32 @@ type SimulatedArrayZone =
   | "extraDeck";
 type SimulatedZone = SimulatedArrayZone | "fieldSpell";
 
-interface SimulatedPositionedCard {
+type FieldPresenceBuffCard = Pick<SimulatedCardShape,
+  "atk" | "def" | "dynamicBuffs" | "suppressedDynamicBuffStatsByKey" |
+  "temporarySuppressedDynamicBuffStatsByKey"> & {
+  readonly cardKind?: string | null | undefined;
+  readonly isFacedown?: boolean | undefined;
+  readonly effectsNegated?: boolean | undefined;
+  fieldPresenceId?: string | number | null;
+  fieldPresenceState?: Record<string, number> | null;
+  readonly effects?: readonly {
+    readonly id?: string | undefined;
+    readonly timing?: string | undefined;
+    readonly passive?: {
+      readonly type?: string | undefined;
+      readonly typeName?: string | undefined;
+      readonly monsterType?: string | undefined;
+      readonly amountPerCard?: number | undefined;
+      readonly stats?: readonly ("atk" | "def")[] | undefined;
+    } | undefined;
+  }[] | undefined;
+};
+
+interface SimulatedPositionedCard extends FieldPresenceBuffCard {
   fieldPresenceSummons?: FieldPresenceSummonRecord[];
   fieldSlot?: FieldSlot | null;
   fieldPresenceId?: string | number | null;
+  fieldPresenceState?: Record<string, number> | null;
   locationVersion?: number;
   duelCardId?: string | number | null;
   instanceId?: string | number | null;
@@ -62,7 +85,36 @@ export function appendSimulatedFieldCard<Card extends SimulatedPositionedCard>(
 export function clearSimulatedFieldPosition(card: SimulatedPositionedCard): void {
   clearFieldSlot(card);
   card.fieldPresenceId = null;
+  card.fieldPresenceState = null;
   card.fieldPresenceSummons = [];
+  refreshSimulatedFieldPresenceTypeSummonBuffForCard(card);
+}
+
+export interface SimulatedFieldPresenceBuffState {
+  readonly player?: { readonly field?: readonly FieldPresenceBuffCard[] };
+  readonly bot?: { readonly field?: readonly FieldPresenceBuffCard[] };
+}
+
+export function refreshSimulatedFieldPresenceTypeSummonBuffForCard(card: FieldPresenceBuffCard): void {
+  for (const effect of card.effects || []) {
+    if (effect.timing !== "passive" || !effect.id || effect.passive?.type !== "field_presence_type_summon_count_buff") continue;
+    const passive = effect.passive;
+    const typeName = passive.typeName || passive.monsterType;
+    if (!typeName) continue;
+    const active = card.cardKind === "monster" && !card.isFacedown &&
+      !card.effectsNegated && card.fieldPresenceId != null;
+    const count = active ? card.fieldPresenceState?.[`summon_count_${typeName}`] || 0 : 0;
+    applyPassiveBuffValue(card, effect.id, count * (passive.amountPerCard || 0), passive.stats || ["atk", "def"]);
+  }
+}
+
+/** Reconcile only presence-count contributions, preserving all other stat rules. */
+export function refreshSimulatedFieldPresenceTypeSummonBuffs(state: SimulatedFieldPresenceBuffState): void {
+  for (const player of [state.player, state.bot]) {
+    for (const card of player?.field || []) {
+      refreshSimulatedFieldPresenceTypeSummonBuffForCard(card);
+    }
+  }
 }
 
 /** Off-field insertion clears only this card, without compacting survivors. */
@@ -366,13 +418,13 @@ export function moveCardToZone(
       toZone !== "field" && toZone !== "spellTrap" && toZone !== "fieldSpell") {
     const field = options.state ? [...options.state.player.field, ...options.state.bot.field] : sourcePlayer.field;
     removeFieldAuraBuffContributions(card, field, field.indexOf(card));
+    delete card.oncePerTurnUsageByName;
+    card.oncePerTurnResetVersion = (card.oncePerTurnResetVersion || 0) + 1;
   }
   if (fromZone === "field" && toZone !== "field") {
     card.protectionEffects = (card.protectionEffects || []).filter(
       entry => entry.removeOnLeave === false && entry.duration !== "while_faceup",
     );
-    delete card.oncePerTurnUsageByName;
-    card.oncePerTurnResetVersion = (card.oncePerTurnResetVersion || 0) + 1;
     delete card.banishWhenLeavesField;
     card.battlePositionLocked = false;
     restoreFieldExitStatuses(card);

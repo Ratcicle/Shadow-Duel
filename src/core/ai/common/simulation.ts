@@ -1,6 +1,6 @@
 import { expireEffectNegation } from "../../effects/negation.js";
 import { hasActionZoneCandidates } from "./actionValidation.js";
-import { resolveTargetsForAction, captureSimulatedReferences } from "./simulatedActions/shared.js";
+import { resolveTargetsForAction, captureSimulatedReferences, recordCompletedSimulatedSummon } from "./simulatedActions/shared.js";
 import { appendSimulatedZoneCard } from "./zones.js";
 import { appendSimulatedFieldCard } from "./zones.js";
 import {
@@ -27,7 +27,6 @@ import { processSimulatedDelayedActions, cleanupSimulatedEndTurn, cleanupExpired
 import { getAvailableFieldSlots } from "../../game/zones/placement.js";
 import { resolvePerspectiveSlotForPlayer } from "./perspective.js";
 import { resolvePlanningOwnerPolicy } from "./planningExecution.js";
-import { recordFieldPresenceSummon } from "../../effects/triggers/counters.js";
 import type {
   SimulatedActionContextData,
   SimulatedActionOptions,
@@ -847,6 +846,12 @@ function collectSimulatedEventSources(
         "hand",
       ]);
     }
+  } else if (eventName === "standby_phase") {
+    const standbyPlayers = [...players].sort((first, second) =>
+      Number(second.id === eventOwner?.id) - Number(first.id === eventOwner?.id));
+    for (const player of standbyPlayers) {
+      addPlayerZoneSources(entries, seen, state, player, ["field", "spellTrap", "fieldSpell"]);
+    }
   } else if (eventName === "position_change" || eventName === "end_phase") {
     for (const player of players) {
       addPlayerZoneSources(entries, seen, state, player, [
@@ -989,6 +994,7 @@ function matchesSimulatedEventEffect(
     | null
     | undefined,
   options: SimulatedSelectionOptionsInput = {},
+  isTemporaryRegistration = false,
 ): effect is EffectDefinition & LegacySimulatedEventEffectFields {
   const sourceCard = sourceEntry.card;
   const sourceZone = sourceEntry.zone;
@@ -1027,6 +1033,12 @@ function matchesSimulatedEventEffect(
   if (effect.requirePhase) {
     const phases = asArray(effect.requirePhase);
     if (!phases.includes(state?.phase || "main1")) return false;
+  }
+
+  if (eventName === "standby_phase" && !isTemporaryRegistration) {
+    if (!payload.player) return false;
+    if (effect.standbyPlayer !== "any" && eventRole !== "self") return false;
+    if (sourceCard.subtype === "equip" && !sourceCard.equippedTo) return false;
   }
 
   if (eventName === "card_moved") {
@@ -1345,6 +1357,7 @@ function dispatchSimulatedEvent(
         ...(strategyContext.actionContext || {}),
         player: sourceEntry.player,
         opponent: sourceEntry.opponent,
+        ...(eventName === "standby_phase" ? { host: sourceCard.equippedTo || null } : {}),
       });
       const activationContext = {
         ...(strategyContext || {}),
@@ -1433,6 +1446,7 @@ function dispatchSimulatedEvent(
         sourceEntry,
         effect,
         ownerOptions,
+        true,
       )
     ) {
       continue;
@@ -1783,7 +1797,7 @@ export function applyGenericSimulatedMainPhaseAction<
       };
       establishProperSummon(summoned, { summonProcedure: procedure.id, sourceZone: "hand" });
       appendSimulatedFieldCard(player.field, summoned);
-      recordFieldPresenceSummon(state, { card: summoned, player });
+      recordCompletedSimulatedSummon(state, { card: summoned, player, method: "special" });
       options.onAfterSummon?.({ state, action, player, card, newCard: summoned, options });
       options.onAfterSpecialSummon?.({ state, action, player, card: summoned, fromZone: "hand", options });
       selectionOptions.emitSimulatedEvent?.("after_summon", {
@@ -1873,7 +1887,7 @@ export function applyGenericSimulatedMainPhaseAction<
         appendSimulatedZoneCard(player.graveyard, newCard);
       } else {
         appendSimulatedFieldCard(player.field, newCard);
-        recordFieldPresenceSummon(state, { card: newCard, player });
+        if (!newCard.isFacedown) recordCompletedSimulatedSummon(state, { card: newCard, player, method: newCard.lastSummonMethod });
         options.onAfterSummon?.({
           state,
           action,
@@ -1917,7 +1931,7 @@ export function applyGenericSimulatedMainPhaseAction<
         target.isFacedown = false;
         target.position = "attack";
         target.positionChangedThisTurn = true;
-        recordFieldPresenceSummon(state, { card: target, player });
+        recordCompletedSimulatedSummon(state, { card: target, player, method: "flip" });
         break;
       }
       const newPosition =
@@ -1987,6 +2001,7 @@ export function applyGenericSimulatedMainPhaseAction<
         actionContext: selectionOptions.actionContext || {},
         costPayment: { status: "paid", actions: [], summonMarkers: [] },
       };
+      const usageSourceAtActivation = { ...card };
       if (!applySimulatedActions({ actions: effect.activationCosts || [], selections, state,
         selfId: options.selfId || "bot", options: resolutionOptions })) break;
       applySimulatedActions({
@@ -1996,7 +2011,7 @@ export function applyGenericSimulatedMainPhaseAction<
       markSimulatedEffectUsed(
         state,
         effect,
-        card,
+        usageSourceAtActivation,
         options.selfId || "bot",
       );
       options.onEffectActivated?.({
@@ -2286,6 +2301,7 @@ export function applyGenericSimulatedMainPhaseAction<
           opponentLp: state.player?.lp || 0,
         },
       });
+      const usageSourceAtActivation = { ...fieldSpell };
       applySimulatedActions({
         actions: effectExecutionActions(effect),
         selections,
@@ -2301,7 +2317,7 @@ export function applyGenericSimulatedMainPhaseAction<
       markSimulatedEffectUsed(
         state,
         effect,
-        fieldSpell,
+        usageSourceAtActivation,
         options.selfId || "bot",
       );
       options.onEffectActivated?.({
@@ -2420,7 +2436,7 @@ export function applyGenericSimulatedMainPhaseAction<
       });
       appendSimulatedFieldCard(player.field, summoned);
       const ascensionEvents = attachSimulatedEventEmitter(state, { ...selectionOptions, enableSimulatedEvents: true });
-      recordFieldPresenceSummon(state, { card: summoned, player });
+      recordCompletedSimulatedSummon(state, { card: summoned, player, method: "ascension" });
       ascensionEvents.emitSimulatedEvent?.("after_summon", {
         card: summoned,
         player,
@@ -2508,7 +2524,7 @@ export function applyGenericSimulatedMainPhaseAction<
         sourceZone: "extraDeck",
       });
       appendSimulatedFieldCard(player.field, summoned);
-      recordFieldPresenceSummon(state, { card: summoned, player });
+      recordCompletedSimulatedSummon(state, { card: summoned, player, method: summoned.lastSummonMethod });
       selectionOptions.emitSimulatedEvent?.("after_summon", {
         card: summoned,
         player,

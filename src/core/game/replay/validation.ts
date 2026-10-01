@@ -602,6 +602,10 @@ function validateCardSnapshot(value: unknown, path: string, onField = false): vo
     invalid(`${path}.fieldPresenceId`, "a field presence identity or null");
   }
   const fieldSlot = read(card, "fieldSlot");
+  const presenceState = requireObject(read(card, "fieldPresenceState"), `${path}.fieldPresenceState`);
+  for (const key of Object.keys(presenceState)) {
+    requireFiniteNumber(read(presenceState, key), `${path}.fieldPresenceState.${key}`);
+  }
   requireArray(read(card, "fieldPresenceSummons"), `${path}.fieldPresenceSummons`).forEach((value, index) => {
     const entryPath = `${path}.fieldPresenceSummons[${index}]`;
     const entry = requireObject(value, entryPath);
@@ -686,6 +690,9 @@ function validatePlayerSnapshot(value: unknown, path: string): void {
   const player = requireObject(value, path);
   requireNullableString(read(player, "id"), `${path}.id`);
   requireFiniteNumber(read(player, "lp"), `${path}.lp`);
+  if (requireFiniteNumber(read(player, "lpGainedThisTurn"), `${path}.lpGainedThisTurn`) < 0) {
+    invalid(`${path}.lpGainedThisTurn`, "a nonnegative number");
+  }
   requireFiniteNumber(read(player, "summonCount"), `${path}.summonCount`);
   requireFiniteNumber(
     read(player, "additionalNormalSummons"),

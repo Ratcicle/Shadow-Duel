@@ -7,7 +7,9 @@ import { replayCanonicalDuel } from "../../src/core/game/replay/driver.js";
 import { required, unsafeFixture } from "../helpers/fixtures.js";
 import { completeTestSelections, createRuntimeGame, placeFieldCards, type RuntimeGame } from "../helpers/game.js";
 
-type Scenario = "crystal" | "bull" | "peak" | "abyssal" | "rainbow" | "protection" | "galaxy" | "armored" | "mist";
+type Scenario = "crystal" | "bull" | "peak" | "abyssal" | "rainbow" | "protection" | "galaxy" | "armored" | "mist"
+  | "roar-empty" | "roar-zero" | "roar-one" | "mist-bounce-monster" | "mist-bounce-backrow" | "soft-opt"
+  | "forest-standby-self" | "forest-standby-opponent" | "metal-own-summon" | "metal-opponent-summon";
 
 function install(game: RuntimeGame, scenario: Scenario, seat: "player" | "bot", controller: "human" | "ai") {
   const start = game.startWithDecks.bind(game);
@@ -28,7 +30,25 @@ function install(game: RuntimeGame, scenario: Scenario, seat: "player" | "bot", 
       card.isFacedown = false; card.position = "attack";
       return card;
     };
-    if (scenario === "crystal") {
+    if (scenario === "forest-standby-self" || scenario === "forest-standby-opponent") {
+      game.phase = "end";
+      game.turn = scenario === "forest-standby-self" ? opponent.id : owner.id;
+      placeFieldCards(owner.field, take(274));
+      placeFieldCards(opponent.field, take(254, opponent));
+      const backrow = take(261, opponent); backrow.isFacedown = true;
+      placeFieldCards(opponent.spellTrap, backrow);
+      opponent.fieldSpell = take(262, opponent);
+      opponent.hand.push(take(251, opponent), take(255, opponent));
+    } else if (scenario === "metal-own-summon" || scenario === "metal-opponent-summon") {
+      const material = take(252); material.summonedTurn = 0;
+      placeFieldCards(owner.field, material);
+      if (scenario === "metal-own-summon") owner.hand.push(take(255));
+      else {
+        opponent.controllerType = controller;
+        placeFieldCards(opponent.field, take(254, opponent));
+        opponent.hand.push(take(255, opponent));
+      }
+    } else if (scenario === "crystal") {
       owner.hand.push(take(264)); owner.graveyard.push(take(251), take(254), take(255));
     } else if (scenario === "bull") {
       owner.hand.push(take(259), take(254), take(255)); placeFieldCards(owner.field, take(251));
@@ -42,6 +62,20 @@ function install(game: RuntimeGame, scenario: Scenario, seat: "player" | "bot", 
       placeFieldCards(owner.field, required(owner.extraDeck.shift()), take(255));
     } else if (scenario === "mist") {
       placeFieldCards(opponent.field, take(272, opponent)); owner.hand.push(take(255));
+    } else if (scenario.startsWith("roar-")) {
+      owner.hand.push(take(261)); placeFieldCards(owner.field, take(257));
+      if (scenario !== "roar-empty") {
+        const backrow = take(261, opponent); backrow.isFacedown = true;
+        placeFieldCards(opponent.spellTrap, backrow);
+      }
+    } else if (scenario === "mist-bounce-monster" || scenario === "mist-bounce-backrow") {
+      placeFieldCards(owner.field, take(272));
+      const target = take(scenario === "mist-bounce-monster" ? 254 : 261, opponent);
+      target.isFacedown = true; target.position = "defense";
+      if (scenario === "mist-bounce-monster") placeFieldCards(opponent.field, target);
+      else placeFieldCards(opponent.spellTrap, target);
+    } else if (scenario === "soft-opt") {
+      placeFieldCards(owner.field, take(257), take(257)); placeFieldCards(opponent.field, take(254, opponent));
     } else {
       game.phase = "battle"; game.turn = opponent.id;
       placeFieldCards(owner.field, take(scenario === "galaxy" ? 273 : 252));
@@ -54,7 +88,9 @@ function install(game: RuntimeGame, scenario: Scenario, seat: "player" | "bot", 
 
 for (const seat of ["player", "bot"] as const) {
   for (const controller of ["human", "ai"] as const) {
-    for (const scenario of ["crystal", "bull", "peak", "abyssal", "rainbow", "protection", "galaxy", "armored", "mist"] as const) {
+    for (const scenario of ["crystal", "bull", "peak", "abyssal", "rainbow", "protection", "galaxy", "armored", "mist",
+      "roar-empty", "roar-zero", "roar-one", "mist-bounce-monster", "mist-bounce-backrow", "soft-opt",
+      "forest-standby-self", "forest-standby-opponent", "metal-own-summon", "metal-opponent-summon"] as const) {
       test(`Dragon ${scenario} ${seat} ${controller} records and replays in another instance`, async t => {
         setLocale("en");
         const live = createRuntimeGame({ captureReplay: true, randomSeed: 629, laboratoryMode: true,
@@ -70,20 +106,69 @@ for (const seat of ["player", "bot"] as const) {
         playback.ui.showChainResponseModal = async () => assert.fail("Replay cannot request a response");
         playback.ui.showSpecialSummonPositionModal = () => assert.fail("Replay cannot request position");
         playback.autoSelector.select = () => assert.fail("Replay cannot recompute an AI selection");
-        const deck = [251, 252, 254, 255, 257, 259, 262, 263, 264, 270, 271, 272, 273, 274, ...Array<number>(8).fill(3)];
+        const deck = [251, 252, 254, 255, 257, 257, 259, 261, 262, 263, 264, 270, 271, 272, 273, 274, ...Array<number>(8).fill(3)];
         await live.startWithDecks({ exactDecks: true, preserveDeckOrder: true, initializeOnly: true,
           startAtDrawPhase: true, startingPlayer: seat, announceStartingPlayer: false,
-          playerDeck: deck, botDeck: deck, playerExtraDeck: [267], botExtraDeck: [267] });
+          playerDeck: deck, botDeck: deck, playerExtraDeck: [267, 253], botExtraDeck: [267, 253] });
         const owner = live[seat], opponent = live.getOpponent(owner);
-        const action = scenario === "crystal" ? live.performHandSummonProcedure(required(owner.hand[0]), owner, { position: "defense" })
+        const select = live.autoSelector.select.bind(live.autoSelector);
+        live.autoSelector.select = (contract, context) => {
+          if (!contract || !("requirements" in contract)) return select(contract, context);
+          const normalized = live.normalizeSelectionContract(contract);
+          if (!normalized.ok) return select(contract, context);
+          const requirement = normalized.contract.requirements.find(requirement => requirement.id === "destroy_targets");
+          if (!requirement) return select(contract, context);
+          return { ok: true, selections: { destroy_targets: scenario === "roar-one" ? [required(requirement.candidates[0]).key] : [] } };
+        };
+        const metalAction = async () => {
+          const ascension = await live.tryAscensionSummon(required(owner.field[0]), { player: owner });
+          assert.equal(ascension.success, true);
+          if (scenario === "metal-opponent-summon") {
+            await live.skipToPhase("end");
+            assert.equal(live.turn, opponent.id, "the End shortcut starts the opponent turn");
+            assert.equal(live.phase, "main1", "Voltaic must activate in the opponent Main Phase");
+          }
+          const actor = scenario === "metal-opponent-summon" ? opponent : owner;
+          return live.tryActivateMonsterEffect(required(actor.hand.find(card => card.id === 255)), null, "hand", actor,
+            { effectId: "voltaic_dragon_special_summon" });
+        };
+        const action = scenario.startsWith("forest-standby-") ? live.nextPhase()
+          : scenario.startsWith("metal-") ? metalAction()
+          : scenario === "crystal" ? live.performHandSummonProcedure(required(owner.hand[0]), owner, { position: "defense" })
           : scenario === "bull" ? live.tryActivateMonsterEffect(required(owner.hand[0]), null, "hand", owner, { effectId: "bbd_special_summon_from_hand" })
           : scenario === "peak" ? live.activateFieldSpellEffect(required(owner.fieldSpell))
           : scenario === "rainbow" ? live.tryActivateMonsterEffect(required(owner.graveyard[0]), null, "graveyard", owner, { effectId: "rainbow_cosmic_dragon_gy_send_extremes" })
           : scenario === "abyssal" ? live.tryActivateMonsterEffect(required(owner.field[0]), null, "field", owner, { effectId: "abyssal_serpent_delayed_summon_effect" })
           : scenario === "protection" ? live.tryActivateMonsterEffect(required(owner.field[0]), null, "field", owner, { effectId: "rainbow_cosmic_dragon_protect_dragon" })
           : scenario === "mist" ? live.performNormalSummon(owner, 0, "attack", false)
+          : scenario.startsWith("roar-") ? live.tryActivateSpell(required(owner.hand[0]), 0, null, { owner })
+          : scenario === "mist-bounce-monster" || scenario === "mist-bounce-backrow" ? live.tryActivateMonsterEffect(required(owner.field[0]), null, "field", owner, { effectId: "mist_extreme_dragon_bounce" })
+          : scenario === "soft-opt" ? live.tryActivateMonsterEffect(required(owner.field[0]), null, "field", owner, { effectId: "majestic_silver_dragon_position_switch" })
           : live.resolveCombat(required(opponent.field[0]), required(owner.field[0]));
+        if (scenario === "roar-one" && controller === "human") {
+          for (let attempts = 0; attempts < 300 && !live.targetSelection; attempts++) await new Promise<void>(resolve => setTimeout(resolve, 1));
+          const session = required(live.targetSelection);
+          const requirement = required(session.requirements.find(requirement => requirement.id === "destroy_targets"));
+          session.selections[requirement.id] = [required(requirement.candidates[0]).key];
+          await live.finishTargetSelection();
+        }
         await completeTestSelections(live, Promise.resolve(action));
+        if (scenario.startsWith("metal-")) {
+          const result = await action;
+          assert.ok(result && typeof result === "object" && "success" in result && result.success,
+            result && typeof result === "object" && "reason" in result ? String(result.reason) : "Metal summon must complete");
+        }
+        if (scenario.startsWith("roar-")) {
+          const result = await action;
+          assert.ok(result && typeof result === "object" && "success" in result && result.success,
+            result && typeof result === "object" && "reason" in result ? String(result.reason) : "Roar must resolve successfully");
+        }
+        if (scenario === "soft-opt") {
+          const result = live.tryActivateMonsterEffect(required(owner.field[1]), null, "field", owner, { effectId: "majestic_silver_dragon_position_switch" });
+          await completeTestSelections(live, result);
+          assert.equal((await result).success, true);
+          assert.equal(opponent.field[0]?.position, "attack", "each copy changed the target's position once");
+        }
         if (scenario === "crystal") { assert.equal(owner.banished.length, 3); assert.equal(owner.field[0]?.id, 264); }
         if (scenario === "bull") { assert.equal(owner.graveyard.length, 2); assert.ok(owner.field.some(card => card.id === 259 && card.cannotAttackThisTurn)); assert.equal(opponent.lp, 8000); }
         if (scenario === "peak") { assert.equal(owner.fieldSpell, null); assert.equal(owner.field.length, 1); }
@@ -93,8 +178,42 @@ for (const seat of ["player", "bot"] as const) {
         if (scenario === "galaxy") assert.equal(owner.banished[0]?.id, 273);
         if (scenario === "armored") assert.ok(owner.field.some(card => card.id === 255));
         if (scenario === "mist") assert.equal(opponent.field[0]?.fieldPresenceSummons.length, 1);
+        if (scenario.startsWith("roar-")) {
+          assert.ok(owner.graveyard.some(card => card.id === 261), "Roar must complete its normal post-Chain cleanup");
+          assert.equal(opponent.graveyard.some(card => card.id === 261), scenario === "roar-one");
+          assert.equal(opponent.spellTrap.length, scenario === "roar-zero" ? 1 : 0);
+        }
+        if (scenario === "mist-bounce-monster" || scenario === "mist-bounce-backrow") {
+          assert.equal(opponent.hand.length, 1, "the facedown target returned to its owner's hand");
+        }
+        if (scenario.startsWith("forest-standby-")) {
+          const expected = scenario === "forest-standby-self" ? 1000 : 1200;
+          assert.equal(owner.lp, 8000 + expected);
+          assert.equal(owner.lpGainedThisTurn, expected);
+          assert.equal(opponent.lp, 8000);
+          assert.equal(live.phase, "main1");
+        }
+        if (scenario.startsWith("metal-")) {
+          const metal = required(owner.field.find(card => card.id === 253));
+          assert.equal(metal.fieldPresenceState?.summon_count_Dragon, 1);
+          assert.equal(metal.atk, 1700); assert.equal(metal.def, 2100);
+        }
         const replay = validateCanonicalReplay(JSON.parse(JSON.stringify(live.finalizeReplay({ reason: `dragon-${scenario}` }))));
-        assert.equal(replay.commands.length, 1, "Resolution must not add external commands");
+        const commandCount = scenario === "metal-opponent-summon" ? 3 :
+          scenario === "soft-opt" || scenario === "metal-own-summon" ? 2 : 1;
+        assert.equal(replay.commands.length, commandCount, "Resolution must not add external commands");
+        if (scenario.startsWith("metal-")) {
+          assert.equal(replay.events?.filter(event => event.event === "after_summon").length, 2);
+        }
+        if (scenario.startsWith("roar-")) {
+          const choices = replay.decisions.filter(decision => decision.kind === "choice");
+          assert.equal(choices.length, scenario === "roar-empty" ? 0 : 1);
+          if (scenario !== "roar-empty") {
+            const value = required(choices[0]).value;
+            assert.ok("selections" in value);
+            assert.equal(required(value.selections.destroy_targets).length, scenario === "roar-one" ? 1 : 0);
+          }
+        }
         setLocale("pt-br");
         const result = await replayCanonicalDuel(replay, { game: unsafeFixture<ReplayDriverGamePort>(playback, "Real Game exposes its own players and cards to the replay driver.") });
         assert.equal(result.ok, true);

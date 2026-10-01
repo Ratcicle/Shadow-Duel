@@ -61,9 +61,33 @@ O replay Dragon cobre procedimento, custos do Touro Negro, Pico Escarpado, retor
 
 `plannedTargetReplay.test.ts` acrescenta seis cenários com escolhas fornecidas por humano/IA ou pelo planejamento, conferindo a identidade escolhida e a decisão consumida sem nova seleção.
 
+## Implementação dos itens 12–14 — 1 de outubro de 2026
+
+Os três itens foram corrigidos no checkout baseado em `7e1075a7d63f9ff2c3ac1b915f030789dfa9aafa`, preservando os textos EN/PT, custos, timings e chaves de uso. Os itens 15–18 e as investigações separadas da fila original permanecem fora deste lote.
+
+| Item | Correção aplicada | Regressões principais |
+| --- | --- | --- |
+| 12 | Os sete efeitos de 257, 258, 260, 262, 269, 272 e 274 usam `oncePerTurnScope: "card"`, mantendo `usagePolicy: "activate"`. A IA consulta e consome o limite pelos helpers compartilhados. A simulação vincula o uso à presença anterior ao custo, preserva a contagem após troca de controle e reseta o uso quando a fonte sai do campo, incluindo Magias de Campo. | `dragonChoicesIdentity.test.ts`, `ai/dragonCostSemantics.test.ts`, `ai/commonSimulation.test.ts` |
+| 13 | `mist_bounce_target` aceita cartas adversárias Baixadas nas zonas já declaradas. A fonte continua exigindo face para cima; controle, quantidade e identidade do alvo permanecem validados. | `dragonChoicesIdentity.test.ts`, `replay/dragonRulesReplay.test.ts` |
+| 14 | Rugido Infernal declara `minTargets: 0` e `maxTargets: 1`. Preview e destruição genérica aceitam zero; sem candidatos, resolvem sem decisão. Com candidatos, humano e IA escolhem pelo broker na resolução; cancelar a seleção opcional equivale a zero. Uma carta segue a destruição normal e a Magia recebe o cleanup pós-Chain. A simulação Dragon delega ao caminho compartilhado, incluindo a condição de Dragão face-up de Nível 7 ou maior. | `dragonCostsAndChoices.test.ts`, `actionResolutionChoices.test.ts`, `ai/exactDecisionSimulation.test.ts`, `replay/dragonRulesReplay.test.ts` |
+
+Os itens 12 e 13 reutilizam capacidade declarativa existente (`DECLARATIVE_EXISTING`); o item 14 generaliza a seleção dinâmica existente (`GENERIC_EXTENSION`). Não foram criadas actions nem alterados schema, interfaces públicas ou suporte estratégico de Mist/Forest.
+
+Escolhas físicas de resolução são gravadas por `duelCardId` para ambos os controladores. O replay rejeita identidade ausente, carta substituta, duplicidade e excesso de escolhas, sem converter falha em recusa ou selecionar outra cópia. Opções sem carta preservam suas chaves. Caminhos obrigatórios, alvos declarados e quantidades derivadas de contexto foram mantidos.
+
+A engine vigente é `dragon-rules-v4`, com schema `2`; gravações `dragon-rules-v3` são rejeitadas antes da reprodução. A seção P1 acima preserva a versão histórica daquele lote.
+
+### Validação dos itens 12–14
+
+- Regressões falharam antes dos patches, incluindo bloqueio da segunda cópia, alvos Baixados de Mist, seleção vazia, troca de controle e substituição de cópia no replay.
+- **472/472 testes passaram** em 22 arquivos explicitamente selecionados, cobrindo Dragon, preview, decisões, Chain, simulação, identidade dos clones, replay e consumidores diretos dos helpers alterados (`.cache/dragon-items12-14/final-focused.log`). Os sete efeitos têm ativações com duas cópias em Game e Chain reais, nos dois assentos.
+- Os cenários de replay gravam em EN e reproduzem em PT-BR em outra instância, com humano/IA e ambos os assentos. Incluem zero candidatos, zero/uma destruição, duas cópias de Majestic e alvos Baixados de Mist; conferem decisões consumidas e hashes sem consultar UI ou seletor da IA.
+- Typecheck oficial TS7 da aplicação e de Node: passou (`final-typecheck.log`). `npm run validate:actions`: 110 entradas, bindings e handlers compatíveis (`final-actions.log`). `git diff --check`: passou.
+- Revisão independente encerrada sem achados abertos no escopo. Não foram executados suíte global, build, navegador ou Bot Arena neste lote.
+
 ## Ordem de prioridade de correção
 
-Fila original após as decisões de design, organizada em **18 frentes**. A ordem considera alcance do defeito, alteração indevida do estado do duelo, perda de escolhas e dependências entre correções. A tabela preserva os defeitos que motivaram cada prioridade; o estado atual dos itens P1 está na seção de implementação acima.
+Fila original após as decisões de design, organizada em **18 frentes**. A ordem considera alcance do defeito, alteração indevida do estado do duelo, perda de escolhas e dependências entre correções. A tabela preserva os defeitos que motivaram cada prioridade; o estado atual dos itens P1 e 12–14 está nas seções de implementação acima.
 
 ### P1 Alta prioridade
 

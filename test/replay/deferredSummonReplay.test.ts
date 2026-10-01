@@ -133,7 +133,16 @@ for (const destroyBinding of [true, false]) {
     const replay = validateCanonicalReplay(JSON.parse(JSON.stringify(live.finalizeReplay({ reason: "deferred-summon-test" }))));
     assert.deepEqual(replay.commands.map(command => command.type), ["activate_card"]);
     assert.ok(replay.decisions.some(decision => decision.kind === "chain_response"));
-    assert.equal(replay.decisions.filter(decision => decision.kind === "target").length, destroyBinding ? 2 : 3);
+    assert.equal(replay.decisions.filter(decision => decision.kind === "target").length, destroyBinding ? 1 : 2);
+    const choices = replay.decisions.filter(decision => decision.kind === "choice");
+    assert.equal(choices.length, 1, "Hellkite destruction is a resolution choice, not an activation target");
+    const choiceValue = required(choices[0]).value;
+    assert.ok("selections" in choiceValue);
+    const chosen = required(choiceValue.selections.destroy_targets);
+    assert.equal(chosen.length, 1);
+    const identity = required(chosen[0]);
+    assert.ok("duelCardId" in identity);
+    assert.equal(identity.duelCardId, destroyTarget.duelCardId, "the resolution choice records the exact physical card");
     setLocale("pt-br");
     const result = await replayCanonicalDuel(replay, {
       game: unsafeFixture<ReplayDriverGamePort>(playback, "Concrete Game owns the card and player instances used by canonical playback."),

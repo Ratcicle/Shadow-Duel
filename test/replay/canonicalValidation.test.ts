@@ -2,10 +2,14 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  createCanonicalStateSnapshot,
   getCardDatabaseSignature,
   validateCanonicalReplay,
 } from "../../src/core/game/replay/canonical.js";
 import { CANONICAL_REPLAY_EVENT_NAMES, CANONICAL_REPLAY_ENGINE_VERSION } from "../../src/core/contracts/replay.js";
+import Card from "../../src/core/Card.js";
+import { cardDefinition, required } from "../helpers/fixtures.js";
+import { createRuntimeGame, placeFieldCards } from "../helpers/game.js";
 
 type MutableReplay = Record<string, unknown>;
 
@@ -35,10 +39,47 @@ function replay(overrides: MutableReplay = {}): MutableReplay {
 }
 
 test("engine version is required and rejects recordings with previous semantics", () => {
+  assert.equal(CANONICAL_REPLAY_ENGINE_VERSION, "engine-rules-v6");
+  assert.throws(() => validateCanonicalReplay(replay({ engineVersion: "engine-rules-v4" })), /engineVersion/);
+  assert.throws(() => validateCanonicalReplay(replay({ engineVersion: "dragon-rules-v5" })), /engineVersion/);
+  assert.throws(() => validateCanonicalReplay(replay({ engineVersion: "dragon-rules-v4" })), /engineVersion/);
+  assert.throws(() => validateCanonicalReplay(replay({ engineVersion: "dragon-rules-v3" })), /engineVersion/);
   const missing = replay();
   delete missing.engineVersion;
   assert.throws(() => validateCanonicalReplay(missing), /engineVersion/);
   assert.throws(() => validateCanonicalReplay(replay({ engineVersion: "field-positions-v2" })), /engineVersion/);
+});
+
+test("canonical validation requires a numeric presence-state map in card snapshots", t => {
+  const game = createRuntimeGame({ disableChains: true, captureReplay: false });
+  t.after(() => game.dispose());
+  const source = new Card(cardDefinition(253), "player");
+  placeFieldCards(game.player.field, source);
+  source.fieldPresenceState = { summon_count_Dragon: 2, anotherCounter: 0 };
+  const snapshot = createCanonicalStateSnapshot(game);
+  assert.doesNotThrow(() => validateCanonicalReplay(replay({ result: { finalState: snapshot } })));
+  for (const invalid of [null, [], { summon_count_Dragon: "2" }, { summon_count_Dragon: null }]) {
+    const changed = structuredClone(snapshot);
+    Reflect.set(required(changed.players.player.zones.field[0]), "fieldPresenceState", invalid);
+    assert.throws(() => validateCanonicalReplay(replay({ result: { finalState: changed } })), /fieldPresenceState/);
+  }
+  const absent = structuredClone(snapshot);
+  Reflect.deleteProperty(required(absent.players.player.zones.field[0]), "fieldPresenceState");
+  assert.throws(() => validateCanonicalReplay(replay({ result: { finalState: absent } })), /fieldPresenceState/);
+});
+
+test("canonical validation requires nonnegative LP gained in player snapshots", t => {
+  const game = createRuntimeGame({ disableChains: true, captureReplay: false });
+  t.after(() => game.dispose());
+  const snapshot = createCanonicalStateSnapshot(game);
+  for (const invalid of [-1, "200", null]) {
+    const changed = structuredClone(snapshot);
+    Reflect.set(changed.players.player, "lpGainedThisTurn", invalid);
+    assert.throws(() => validateCanonicalReplay(replay({ result: { finalState: changed } })), /lpGainedThisTurn/);
+  }
+  const absent = structuredClone(snapshot);
+  Reflect.deleteProperty(absent.players.player, "lpGainedThisTurn");
+  assert.throws(() => validateCanonicalReplay(replay({ result: { finalState: absent } })), /lpGainedThisTurn/);
 });
 
 test("replays com a assinatura parcial antiga são rejeitados antes da reprodução", () => {

@@ -1,7 +1,7 @@
 # Replay canônico
 
 O replay executável usa o formato `shadow-duel-canonical-replay`, schema `2` e
-`engineVersion: "engine-rules-v4"`. Ele é independente do relatório
+`engineVersion: "engine-rules-v6"`. Ele é independente do relatório
 estratégico. O importador aceita somente o schema `2`: relatórios v4 e replays
 de schemas anteriores não são partidas executáveis nesta versão.
 
@@ -112,6 +112,13 @@ Galáxia e as escolhas locais de resolução passam pelo broker. As regressões 
 [`dragonRulesReplay.test.ts`](../test/replay/dragonRulesReplay.test.ts) cobrem
 humanos e IA nos dois assentos, com gravação EN e reprodução PT-BR.
 
+A engine `dragon-rules-v4` inclui os limites por cópia dos sete efeitos Dragon
+do item 12 da auditoria, a devolução de cartas Baixadas por Névoa e a
+escolha opcional de destruir zero ou uma carta com Rugido Infernal. Quando há
+candidatos, essa escolha passa pelo broker na resolução; sem candidatos, não
+há decisão a registrar. Identidades inválidas não são convertidas em recusa.
+O schema permanece `2`; gravações `dragon-rules-v3` são incompatíveis.
+
 Seleções fornecidas pelo chamador e alvos exatos do planejador também são
 registrados pelo broker, preservando a carta escolhida. O playback consome
 essas identidades canônicas sem consultar o seletor da IA. Essa integração
@@ -163,7 +170,7 @@ caracteres do replay, usado para detectar divergências na reprodução.
 `validateCanonicalReplay(input)` recebe `unknown`, não muta a entrada e retorna
 a mesma referência somente depois de validar o documento. `setup`, `commands` e
 `decisions` e `engineVersion` são obrigatórios. A versão da engine deve ser
-`"engine-rules-v4"`; gravações sem essa versão são rejeitadas antes da validação
+`"engine-rules-v6"`; gravações sem essa versão são rejeitadas antes da validação
 profunda e da reprodução. `events`, `result` e `finalized` continuam opcionais
 na importação de arquivos do schema `2`; quando presentes, são validados
 profundamente. Os comandos e kinds de decisão permanecem os mesmos.
@@ -292,7 +299,7 @@ com todas as decisões consumidas e hashes iguais.
 
 ## Compatibilidade de negação e transições de fase
 
-A versão de execução `engine-rules-v4` mantém `schemaVersion: 2` e o envelope
+A versão de execução `engine-rules-v6` mantém `schemaVersion: 2` e o envelope
 canônico existente. A negação agora serializa cada contribuição independente
 (duração, `sourceDuelCardId` e `sourceEffectId`), inclusive quando duas
 contribuições produzem a mesma projeção visual. O hash cobre esses registros;
@@ -315,3 +322,12 @@ ou nulo chama o avanço ordinário. Isso não permite executar uma versão antig
 da engine. O evento `end_phase` ocorre uma vez na entrada da End Phase, antes
 da negociação de prioridade para sair dela; seleções e Chains pendentes
 interrompem a saída até que sejam concluídas.
+
+
+### Integração das regras Dragon e da End Phase
+
+A engine `engine-rules-v6` combina as contribuições independentes de negação e
+o fluxo canônico de fases com `fieldPresenceState` e `lpGainedThisTurn` do lote
+Dragon. Schema 2 é preservado. Gravações de `engine-rules-v4` e `dragon-rules-v5`
+são recusadas antes da reprodução: nenhuma dessas engines isoladas produzia o
+mesmo estado/fluxo combinado. Nenhum arquivo histórico é removido ou migrado.

@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { CANONICAL_REPLAY_ENGINE_VERSION } from "../../src/core/contracts/replay.js";
 
 import type {
   CanonicalReplayCommand,
@@ -130,7 +131,7 @@ function replay(commands: ReadonlyArray<CanonicalReplayCommand> = []) {
   return {
     format: "shadow-duel-canonical-replay",
     schemaVersion: 2,
-    engineVersion: "engine-rules-v4",
+    engineVersion: CANONICAL_REPLAY_ENGINE_VERSION,
     cardDatabaseSignature: getCardDatabaseSignature(),
     setup: {
       seed: 123,

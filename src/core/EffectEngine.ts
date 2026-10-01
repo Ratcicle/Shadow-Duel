@@ -4,7 +4,7 @@ import {
 } from "./actionHandlers/index.js";
 import { attachEffectModules } from "./effects/attachModules.js";
 import { canUseOncePerDuelEffect } from "./effects/triggers/registration.js";
-import { recordFieldPresenceSummon } from "./effects/triggers/counters.js";
+import { recordCompletedFieldSummon } from "./effects/triggers/counters.js";
 import type Game from "./Game.js";
 import type {
   ActionRuntimeCard,
@@ -83,9 +83,9 @@ class EffectEngine {
     // Defer listener registration until game is fully initialized
     if (game && typeof game.on === "function") {
       game.on("after_summon", (payload: object) => {
-        recordFieldPresenceSummon(game, payload);
+        recordCompletedFieldSummon(game, payload);
         this.handleSpecialSummonTypeCounters(payload);
-        this.handleFieldPresenceTypeSummonCounters(payload);
+        this.updatePassiveBuffs();
       });
     }
   }

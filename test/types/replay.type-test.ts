@@ -4,8 +4,24 @@ import type {
   CanonicalReplayCommandInput,
   CanonicalReplayDecision,
   CanonicalReplayEvent,
+  CanonicalCardStateSnapshot,
+  CanonicalPlayerStateSnapshot,
   SerializableValue,
 } from "../../src/core/contracts/replay.js";
+import { CANONICAL_REPLAY_ENGINE_VERSION } from "../../src/core/contracts/replay.js";
+
+const presenceState: CanonicalCardStateSnapshot["fieldPresenceState"] = { summon_count_Dragon: 1 };
+const lpGainState: Pick<CanonicalPlayerStateSnapshot, "lpGainedThisTurn"> = { lpGainedThisTurn: 200 };
+// contract-negative: canonical presence counters cannot retain undefined values.
+// @ts-expect-error
+const undefinedPresenceCounter: CanonicalCardStateSnapshot["fieldPresenceState"] = { counter: undefined };
+// contract-negative: canonical LP history must be normalized before serialization.
+// @ts-expect-error
+const undefinedLpGain: Pick<CanonicalPlayerStateSnapshot, "lpGainedThisTurn"> = { lpGainedThisTurn: undefined };
+void presenceState;
+void lpGainState;
+void undefinedPresenceCounter;
+void undefinedLpGain;
 
 const capturedOptionalPosition: CanonicalReplayCommandInput = {
   type: "summon",
@@ -147,7 +163,7 @@ const functionValue: SerializableValue = () => true;
 const replay: CanonicalReplay = {
   format: "shadow-duel-canonical-replay",
   schemaVersion: 2,
-  engineVersion: "engine-rules-v4",
+  engineVersion: CANONICAL_REPLAY_ENGINE_VERSION,
   cardDatabaseSignature: "1cc622e3",
   setup: {
     seed: 123,

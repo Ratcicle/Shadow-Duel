@@ -2217,7 +2217,9 @@ export function checkActionPreviewRequirements(
         const requestedMinTargets = Number.isFinite(action.minTargets)
           ? action.minTargets
           : requestedMaxTargets;
-        const minTargets = Math.max(1, requestedMinTargets);
+        const minTargets = action.minTargets === 0 && !action.targetRef
+          ? 0
+          : Math.max(1, requestedMinTargets);
         if (availableTargets < minTargets) {
           return {
             ok: false,

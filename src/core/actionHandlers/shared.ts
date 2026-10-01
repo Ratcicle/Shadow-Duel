@@ -1157,8 +1157,8 @@ export async function selectCards({
   }
 
   // Use client-side target selection
-  return new Promise((resolve) => {
-    game.startTargetSelectionSession!({
+  return new Promise((resolve, reject) => {
+    const pending: unknown = game.startTargetSelectionSession!({
       owner: player,
       kind,
       selectionContract,
@@ -1170,6 +1170,7 @@ export async function selectCards({
         return { success: true, needsSelection: false };
       },
     });
+    if (pending instanceof Promise) void pending.catch(reject);
   });
 }
 
@@ -1183,23 +1184,42 @@ export async function selectResolutionCards(options: {
   max: number;
   message?: string | null | undefined;
   locate: (card: ActionRuntimeCard) => { player: ActionRuntimePlayer; zone: ZoneInput; index: number };
-  resolveAI: () => readonly ActionRuntimeCard[];
+  resolveAI: () => readonly ActionRuntimeCard[] | null;
 }): Promise<readonly ActionRuntimeCard[] | null> {
   const { game, player, cards, requirementId, min, max } = options;
   const decorated = cards.map((card, index) => {
+    const duelCardId = game.ensureDuelCardId?.(card) ?? card.duelCardId ?? null;
     const location = options.locate(card);
     const candidate = { cardRef: card, name: card.name, image: card.image,
       controller: location.player.id, owner: location.player.id === "player" ? "player" : "opponent",
       zone: location.zone, zoneIndex: location.index };
-    return { ...candidate, key: game.buildSelectionCandidateKey!(candidate, index) };
+    return { ...candidate, duelCardId, key: game.buildSelectionCandidateKey!(candidate, index) };
   });
   let keys: readonly string[] | null;
   if (isAI(player)) {
-    const resolveAI = () => ({ [requirementId]: options.resolveAI().flatMap(card => { const entry = decorated.find(entry => entry.cardRef === card); return entry ? [entry.key] : []; }) });
+    const resolveAI = () => {
+      const cards = options.resolveAI();
+      if (!cards || cards.length < min || cards.length > max || new Set(cards).size !== cards.length) return null;
+      const entries = cards.map(card => decorated.find(entry => entry.cardRef === card));
+      if (entries.some(entry => !entry || (game.requestDecision && entry.duelCardId === null))) return null;
+      return { [requirementId]: entries.map(entry => entry!.key) };
+    };
     const result = game.requestDecision ? await game.requestDecision({
       kind: "choice", actor: player, candidates: [], requireCandidate: false, resolveAI,
-      serializeResult: value => ({ orderedCandidateKeys: value?.[requirementId] || [] }),
-      deserializeReplayValue: value => "orderedCandidateKeys" in value ? { [requirementId]: value.orderedCandidateKeys.flatMap(key => { const entry = decorated.find(entry => entry.key === key); return entry ? [entry.key] : []; }) } : null,
+      serializeResult: value => value ? { selections: { [requirementId]: (value[requirementId] || []).map(key => {
+        const entry = decorated.find(candidate => candidate.key === key);
+        return { duelCardId: entry?.duelCardId ?? null, cardId: entry?.cardRef.id ?? null,
+          effectId: null, candidateKey: null, key: null };
+      }) } } : { pass: true },
+      deserializeReplayValue: value => {
+        if (!("selections" in value)) return null;
+        const recorded = value.selections[requirementId];
+        if (!Array.isArray(recorded) || recorded.length < min || recorded.length > max) return null;
+        const entries = recorded.map(identity => "duelCardId" in identity && identity.duelCardId !== null
+          ? decorated.find(entry => entry.duelCardId === identity.duelCardId) : undefined);
+        if (entries.some(entry => !entry) || new Set(entries).size !== entries.length) return null;
+        return { [requirementId]: entries.map(entry => entry!.key) };
+      },
     }) : resolveAI();
     keys = result?.[requirementId] || null;
   } else {

@@ -245,14 +245,14 @@ test("replay canônico headless termina com o mesmo hash", async () => {
   assert.equal(replay.format, "shadow-duel-canonical-replay");
   assert.equal(replay.schemaVersion, 2);
   assert.equal(replay.cardDatabaseSignature, getCardDatabaseSignature());
-  // engine-rules-v4 also hashes independent negation contribution arrays on every serialized card.
+  // Combined rules hash presence counters, LP-gain history and independent negation contributions.
   assert.deepEqual(
     replay.commands.map((command: { stateHash: string }) => command.stateHash),
-    ["dd2975ec", "c68d1e78"],
+    ["a897fa58", "297e0fe8"],
   );
-  assert.equal(replay.result.finalStateHash, "c68d1e78");
-  assert.equal(hashCanonicalValue(replay), "91d5cc7a");
-  assert.equal(JSON.stringify(replay).length, 10161);
+  assert.equal(replay.result.finalStateHash, "297e0fe8");
+  assert.equal(hashCanonicalValue(replay), "6fff8bc0");
+  assert.equal(JSON.stringify(replay).length, 10491);
 
   const result = await replayCanonicalDuel(replay);
   assert.equal(result.ok, true);

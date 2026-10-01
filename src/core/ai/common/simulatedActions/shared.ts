@@ -11,9 +11,10 @@ import {
   rankCandidates,
 } from "../targetSelection.js";
 import type { AiCardFilter } from "../cardFilters.js";
-import { getZoneCards, findCardZone } from "../zones.js";
+import { getZoneCards, findCardZone, refreshSimulatedFieldPresenceTypeSummonBuffs } from "../zones.js";
+import type { SimulatedFieldPresenceBuffState } from "../zones.js";
 import { applyStatusesOnSummon } from "../../../Card.js";
-import { recordFieldPresenceSummon } from "../../../effects/triggers/counters.js";
+import { recordCompletedFieldSummon } from "../../../effects/triggers/counters.js";
 import type {
   ActionOf,
   ActionProperties,
@@ -48,6 +49,7 @@ import type {
 import type { CanonicalZone, ZoneInput } from "../../../contracts/zones.js";
 
 export interface SimulatedActionContextData {
+  host?: SimulatedCardState | null;
   player?: SimulatedPlayerState | null;
   opponent?: SimulatedPlayerState | null;
   attacker?: SimulatedCardState | null;
@@ -1052,7 +1054,15 @@ export function applySummonState(
       (card.tempDefBoost || 0) + (action.defBoostAfterSummon as number);
   }
   applyStatusesOnSummon(card, action.statusesOnSummon);
-  recordFieldPresenceSummon(state, { card, player });
+}
+
+/** Facts are recorded after committed placement and before summon callbacks. */
+export function recordCompletedSimulatedSummon(
+  state: Parameters<typeof recordCompletedFieldSummon>[0] & SimulatedFieldPresenceBuffState,
+  payload: Parameters<typeof recordCompletedFieldSummon>[1],
+): void {
+  recordCompletedFieldSummon(state, payload);
+  refreshSimulatedFieldPresenceTypeSummonBuffs(state);
 }
 
 export function pickCountForAction(
