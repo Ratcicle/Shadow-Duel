@@ -199,6 +199,9 @@ function deserializeSelectionValue(
     const recorded = isObject(recordedSelections)
       ? readValue(recordedSelections, requirement.id)
       : undefined;
+    if (selection.kind === "choice" && !Array.isArray(recorded)) {
+      throw new Error("Replay resolution choice must contain its recorded selection array.");
+    }
     const recordedEntries = Array.isArray(recorded) ? recorded : [];
     output[requirement.id] = recordedEntries
       .map((identity: SerializedSelectionCandidateIdentity) => {
@@ -216,6 +219,9 @@ function deserializeSelectionValue(
                 Reflect.get(current, "effectId") === identityEffectId)
             );
           }
+          if (selection.kind === "choice" && Reflect.get(current, "duelCardId") != null) {
+            return false;
+          }
           if (identityCandidateKey != null) {
             return (
               String(Reflect.get(current, "candidateKey")) ===
@@ -224,6 +230,9 @@ function deserializeSelectionValue(
           }
           return String(candidate.key ?? candidate.id) === String(identityKey);
         });
+        if (!match && selection.kind === "choice") {
+          throw new Error("Replay resolution choice identity is no longer available.");
+        }
         return match?.key ?? match?.id ?? null;
       })
       .filter((key) => key != null) as SelectionCandidateKey[];

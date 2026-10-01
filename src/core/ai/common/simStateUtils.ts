@@ -281,12 +281,18 @@ export function canUseSimulatedEffectUsage(
   const player = simulatedUsagePlayer(state, selfId, ownerIsPhysical);
   const key = getSimulatedEffectUsageKey(effect, card);
   if (!key) return true;
-  const persisted = effect.oncePerTurnScope === "card" || effect.oncePerTurnPerCard === true
+  const cardScoped = effect.oncePerTurnScope === "card" || effect.oncePerTurnPerCard === true;
+  const persisted = cardScoped
     ? card?.oncePerTurnUsageByName : player?.oncePerTurnUsageByName;
   const base = effect.oncePerTurnName || effect.id || card?.name || "";
   const used = simulatedUsageCount(persisted?.[base], turn);
   const bucket = ensureSimOncePerTurnBucket(state, player?.id || selfId, true);
-  return used + Number(bucket.get(key) || 0) < simulatedUsageLimit(effect);
+  // A control change retains this card's presence and usage across owner buckets.
+  const simulated = cardScoped
+    ? Object.keys(state._simOncePerTurn || {}).reduce((count, ownerId) =>
+      count + Number(ensureSimOncePerTurnBucket(state, ownerId, true).get(key) || 0), 0)
+    : Number(bucket.get(key) || 0);
+  return used + simulated < simulatedUsageLimit(effect);
 }
 
 export function markSimulatedEffectUsage(

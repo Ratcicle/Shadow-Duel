@@ -5,6 +5,7 @@
  */
 
 import { isAI } from "../Player.js";
+import { resolveExactInstanceSelection } from "../AutoSelector.js";
 import type {
   ActionOf,
   DestroyDamageEntry,
@@ -29,6 +30,7 @@ import {
   resolveTargetCards,
   buildFieldSelectionCandidates,
   selectCards,
+  selectResolutionCards,
 } from "./shared.js";
 
 const PLAYER_ARRAY_ZONES = [
@@ -1481,10 +1483,16 @@ export async function handleDestroyTargetedCards(
     });
   }
 
+  const optionalSelection = action.minTargets === 0 && !action.targetCountFromContext;
+  const exactSelection = optionalSelection ? ctx.activationContext?.decisions?.selections?.destroy_targets : undefined;
+  if (optionalSelection && exactSelection !== undefined &&
+    resolveExactInstanceSelection(opponentCards, exactSelection, { min: 0, max: action.maxTargets || 1 }) === null) {
+    return false;
+  }
   if (opponentCards.length === 0) {
     getUI(game)?.log("Opponent has no cards to destroy.");
 
-    return false;
+    return optionalSelection;
   }
 
   // action.maxTargets: maximum cards to target (default 1)
@@ -1572,48 +1580,65 @@ export async function handleDestroyTargetedCards(
     metadata: { context: "destroy_targets" },
   };
 
-  const selectedKeys = await selectCards({
-    game,
+  let targetCards: ActionRuntimeCard[];
+  if (optionalSelection) {
+    const selected = await selectResolutionCards({
+      game, player, cards: opponentCards, requirementId: "destroy_targets", min: 0, max: maxTargets,
+      message: `Select up to ${maxTargets} opponent card(s) to destroy.`,
+      locate: card => {
+        const zone = opponent.field?.includes(card) ? "field"
+          : opponent.spellTrap?.includes(card) ? "spellTrap" : "fieldSpell";
+        const index = zone === "fieldSpell" ? 0 : (opponent[zone] || []).indexOf(card);
+        return { player: opponent, zone, index };
+      },
+      resolveAI: () => {
+        const exact = ctx.activationContext?.decisions?.selections?.destroy_targets;
+        if (exact !== undefined) return resolveExactInstanceSelection(opponentCards, exact, { min: 0, max: maxTargets });
+        const automatic = game.autoSelector?.select?.({ ...selectionContract, kind: "choice" }, {
+          owner: player, activationContext: ctx.activationContext, selectionKind: "choice",
+        });
+        if (!automatic) return opponentCards.slice(0, maxTargets);
+        if (!automatic.ok) return null;
+        const keys = automatic.selections.destroy_targets || [];
+        const cards = keys.map(key => candidates.find(candidate => candidate.key === key)?.cardRef);
+        return cards.every(isRuntimeCard) ? cards : null;
+      },
+    });
+    if (selected === null) return false;
+    if (selected.length === 0) return true;
+    targetCards = [...selected];
+  } else {
+    const selectedKeys = await selectCards({
+      game,
+      player,
+      selectionContract,
+      requirementId: "destroy_targets",
+      kind: "target",
+      autoSelectorOptions: {
+        owner: player,
+        activationContext: ctx.activationContext,
+        selectionKind: "target",
+      },
+      autoSelectKeys: () =>
+        candidates
+          .slice(0, maxTargets)
+          .map((cand) => cand.key)
+          .filter((key): key is string => typeof key === "string"),
+    });
 
-    player,
+    if (selectedKeys === null) {
+      getUI(game)?.log("Target selection cancelled.");
+      return false;
+    }
 
-    selectionContract,
+    targetCards = selectedKeys
+      .map((key) => candidates.find((cand) => cand.key === key)?.cardRef)
+      .filter(isRuntimeCard);
 
-    requirementId: "destroy_targets",
-
-    kind: "target",
-
-    autoSelectorOptions: {
-      owner: player,
-
-      activationContext: ctx.activationContext,
-
-      selectionKind: "target",
-    },
-
-    autoSelectKeys: () =>
-      candidates
-        .slice(0, maxTargets)
-        .map((cand) => cand.key)
-        .filter((key): key is string => typeof key === "string"),
-  });
-
-  if (selectedKeys === null) {
-    getUI(game)?.log("Target selection cancelled.");
-
-    return false;
-  }
-
-  const targetCards: ActionRuntimeCard[] = selectedKeys
-
-    .map((key) => candidates.find((cand) => cand.key === key)?.cardRef)
-
-    .filter(isRuntimeCard);
-
-  if (targetCards.length === 0) {
-    getUI(game)?.log("No cards selected.");
-
-    return false;
+    if (targetCards.length === 0) {
+      getUI(game)?.log("No cards selected.");
+      return false;
+    }
   }
 
   // Filter out immune cards before destroying

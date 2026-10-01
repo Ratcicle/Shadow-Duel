@@ -2,8 +2,9 @@ import { appendSimulatedZoneCard, clearSimulatedFieldPosition } from "../common/
 import { appendSimulatedFieldCard } from "../common/zones.js";
 import { canMoveCardToZone, moveCardToZone } from "../common/zones.js";
 import { canUseSimulatedEffectUsage, markSimulatedEffectUsage } from "../common/simStateUtils.js";
+import { simulateGenericSpellEffect } from "../common/simulation.js";
 import { getAvailableFieldSlots } from "../../game/zones/placement.js";
-import { recordFieldPresenceSummon } from "../../effects/triggers/counters.js";
+import { recordCompletedSimulatedSummon } from "../common/simulatedActions/shared.js";
 import { getCounterCount } from "../common/counters.js";
 import type { DragonCard as DragonReadCard, DragonPlayer as DragonReadPlayer } from "./contracts.js";
 // ─────────────────────────────────────────────────────────────────────────────
@@ -45,6 +46,7 @@ import {
 } from "../../Player.js";
 import type {
   AIActionType,
+  AIActivationContext,
   AIPlannedAction,
   AITributeRequirement,
 } from "../../contracts/ai.js";
@@ -159,6 +161,7 @@ type DragonSimulationState = Omit<
 };
 
 interface DragonSimulationAction {
+  activationContext?: AIActivationContext | undefined;
   type?: AIActionType | ActionType | "simulatedBattle";
   index?: number;
   fieldIndex?: number;
@@ -443,7 +446,7 @@ export function simulateMainPhaseAction<State extends DragonSimulationState>(
       card.lastSummonedFromZone = "hand";
       card.lastSummonProcedure = procedure.id;
       establishProperSummon(card, { summonProcedure: procedure.id, fromZone: "hand" });
-      recordFieldPresenceSummon(state, { card, player });
+      recordCompletedSimulatedSummon(state, { card, player, method: "special" });
       return state;
     }
     case "summon": {
@@ -509,6 +512,9 @@ export function simulateMainPhaseAction<State extends DragonSimulationState>(
         hasAttacked: false,
       };
       appendSimulatedFieldCard(player.field, summoned);
+      if (!summoned.isFacedown) recordCompletedSimulatedSummon(state, {
+        card: summoned, player, method: tributeInfo.tributesNeeded > 0 ? "tribute" : "normal",
+      });
       player.summonCount = (player.summonCount || 0) + 1;
       recordNormalSummonForTurn(player, summoned);
       simulateDragonAfterSummonEffects(state, summoned, {
@@ -641,7 +647,7 @@ export function simulateMainPhaseAction<State extends DragonSimulationState>(
         target.isFacedown = false;
         target.position = "attack";
         target.positionChangedThisTurn = true;
-        recordFieldPresenceSummon(state, { card: target, player: state.bot });
+        recordCompletedSimulatedSummon(state, { card: target, player: state.bot, method: "flip" });
         break;
       }
       const newPos = action.toPosition === "defense" ? "defense" : "attack";
@@ -822,16 +828,17 @@ function simulateDragonSpellEffect(
     }
 
     case "Hellkite Roar": {
-      // Destroy up to 1 opp spell/trap - approximate by removing one backrow from state.
-      const opp = state.player;
-      if (opp?.spellTrap?.length > 0) {
-        const destroyed = opp.spellTrap.shift();
-        if (destroyed) putSimulatedCard(opp, destroyed, "graveyard");
-      } else if (opp?.fieldSpell) {
-        const destroyed = opp.fieldSpell;
-        opp.fieldSpell = null;
-        putSimulatedCard(opp, destroyed, "graveyard");
-      }
+      const { _gameRef: _liveGameRef, ...simulatedState } = state;
+      const sharedState = {
+        ...simulatedState,
+        bot: sharedSimulationPlayer(state.bot), player: sharedSimulationPlayer(state.player),
+        opponent: state.opponent ? sharedSimulationPlayer(state.opponent) : null,
+      };
+      simulateGenericSpellEffect(sharedState, filterableDragonCard(card), {
+        activationContext: action.activationContext, selfId: "bot",
+      });
+      if (sharedState._simUnsupportedActions) state._simUnsupportedActions = sharedState._simUnsupportedActions;
+      if (sharedState._simRequiresReplan !== undefined) state._simRequiresReplan = sharedState._simRequiresReplan;
       break;
     }
 
@@ -1355,7 +1362,8 @@ function specialSummonToField(
     cannotAttackThisTurn: options.cannotAttackThisTurn === true,
   };
   applySimulatedPassiveBuffs(summoned, player);
-  appendSimulatedFieldCard(player.field, summoned);
+  if (!appendSimulatedFieldCard(player.field, summoned)) return null;
+  recordCompletedSimulatedSummon(state, { card: summoned, player, method: options.method || "special" });
   if (options.skipAfterSummon !== true) {
     simulateDragonAfterSummonEffects(state, summoned, {
       method: options.method || "special",
@@ -1433,6 +1441,9 @@ function normalSummonFromHandIndex(
     hasAttacked: false,
   };
   appendSimulatedFieldCard(player.field, summoned);
+  recordCompletedSimulatedSummon(state, {
+    card: summoned, player, method: tributeInfo.tributesNeeded > 0 ? "tribute" : "normal",
+  });
   player.summonCount = (player.summonCount || 0) + 1;
   recordNormalSummonForTurn(player, summoned);
   simulateDragonAfterSummonEffects(state, summoned, {
@@ -1448,7 +1459,6 @@ function simulateDragonAfterSummonEffects(
 ): void {
   const player = state.bot;
   if (!summoned || summoned.isFacedown) return;
-  recordFieldPresenceSummon(state, { card: summoned, player });
 
   if (summoned.name === "Armored Dragon" && meta.method === "normal") {
     simulateArmoredDragonSearch(state, player, summoned);
@@ -2114,6 +2124,10 @@ function simulateDragonFieldSpellEffect(
 ): void {
   const player = state.bot;
   if (card.name !== "Jagged Peak of the Dragons") return;
+  const effect = (card.effects || []).find(entry => entry.timing === "ignition" &&
+    entry.activationZones?.includes("fieldSpell") && (!action.effectId || entry.id === action.effectId));
+  if (!effect || !canUseSimulatedEffectUsage(state, effect, card, player.id, true)) return;
+  const usageSourceAtActivation = { ...card };
   if (getCounterCount(card, "dragon_peak") < 7) return;
   if ((player.field || []).length >= 5) return;
 
@@ -2129,6 +2143,7 @@ function simulateDragonFieldSpellEffect(
   if (!selected) return;
   if (!canPaySimulatedMoveCost(state, player, card, "graveyard", true)) return;
   moveSimulatedCard(player, card, "fieldSpell", "graveyard", state, "cost");
+  markSimulatedEffectUsage(state, effect, usageSourceAtActivation, player.id, true);
   const sourceZone = player[selected.zone] || [];
   const liveIndex = sourceZone.indexOf(selected.candidate);
   if (liveIndex < 0) return;
@@ -2148,6 +2163,12 @@ function simulateDragonFieldMonsterEffect(
 ): void {
   const player = state.bot;
   const opponent = state.player;
+
+  const effect = (card.effects || []).find(entry => entry.timing === "ignition" &&
+    entry.activationZones?.includes("field") && (!action.effectId || entry.id === action.effectId));
+  const scopedEffect = effect?.oncePerTurnScope === "card" ? effect : null;
+  if (scopedEffect && !canUseSimulatedEffectUsage(state, scopedEffect, card, player.id, true)) return;
+  const usageSourceAtActivation = { ...card };
 
   if (card.name === "Abyssal Serpent Dragon") {
     const target = rankSimThreats(opponent.field || [])[0];
@@ -2181,6 +2202,8 @@ function simulateDragonFieldMonsterEffect(
   }
 
   if (card.name === "Darkness Dragon") {
+    const target = rankSimThreats(opponent.field || [])[0];
+    if (!target || player.hand.length === 0) return;
     if ((player.hand || []).length > 0) {
       const discardIdx = pickWorstDiscard(player.hand, {
         state,
@@ -2189,8 +2212,8 @@ function simulateDragonFieldMonsterEffect(
       });
       discardHandCardToGraveyard(state, player, discardIdx);
     }
-    const target = rankSimThreats(opponent.field || [])[0];
-    if (target) target.effectsNegated = true;
+    if (scopedEffect) markSimulatedEffectUsage(state, scopedEffect, usageSourceAtActivation, player.id, true);
+    if (card.effectsNegated !== true) target.effectsNegated = true;
     recordSimulatedMaterialEffectActivation(state, player, card);
     return;
   }
@@ -2198,7 +2221,8 @@ function simulateDragonFieldMonsterEffect(
   if (card.name === "Majestic Silver Dragon") {
     const target = rankSimThreats(opponent.field || [])[0];
     if (target) {
-      target.position = target.position === "defense" ? "attack" : "defense";
+      if (scopedEffect) markSimulatedEffectUsage(state, scopedEffect, usageSourceAtActivation, player.id, true);
+      if (card.effectsNegated !== true) target.position = target.position === "defense" ? "attack" : "defense";
       recordSimulatedMaterialEffectActivation(state, player, card);
     }
     return;
@@ -2237,6 +2261,7 @@ function simulateDragonFieldMonsterEffect(
     if (!gyTarget) return;
     if (!canPaySimulatedMoveCost(state, player, card, "graveyard", true)) return;
     moveSimulatedCard(player, card, "field", "graveyard", state, "cost");
+    if (scopedEffect) markSimulatedEffectUsage(state, scopedEffect, usageSourceAtActivation, player.id, true);
     const gyIndex = player.graveyard.indexOf(gyTarget);
     if (gyIndex >= 0 && player.field.length < 5) {
       const summoned = player.graveyard.splice(gyIndex, 1)[0];
@@ -2307,9 +2332,11 @@ function simulateDragonGraveyardMonsterEffect(
   );
   if (!effect) return;
   const effectUsageKey = getSimulatedEffectOnceKey(effect);
+  const cardScopedUsage = effect.oncePerTurnScope === "card";
+  const usageSourceAtActivation = { ...card };
   if (
-    effectUsageKey &&
-    !canUseSimulatedOnce(state, player, effectUsageKey)
+    cardScopedUsage ? !canUseSimulatedEffectUsage(state, effect, card, player.id, true)
+      : effectUsageKey && !canUseSimulatedOnce(state, player, effectUsageKey)
   ) {
     return;
   }
@@ -2497,7 +2524,7 @@ function simulateDragonGraveyardMonsterEffect(
   }
 
   if (
-    effectUsageKey &&
+    !cardScopedUsage && effectUsageKey &&
     !useSimulatedOnce(state, player, effectUsageKey)
   ) {
     return;
@@ -2529,6 +2556,8 @@ function simulateDragonGraveyardMonsterEffect(
       );
     }
   }
+
+  if (cardScopedUsage) markSimulatedEffectUsage(state, effect, usageSourceAtActivation, player.id, true);
 
   for (const effectAction of resolutionActions) {
     if (effectAction.type === "move" && effectAction.targetRef) {
@@ -2677,6 +2706,7 @@ function simulateDragonGraveyardMonsterEffect(
       };
       applySimulatedPassiveBuffs(summoned, player);
       appendSimulatedFieldCard(player.field, summoned);
+      recordCompletedSimulatedSummon(state, { card: summoned, player, method: "special" });
       simulateDragonAfterSummonEffects(state, summoned, { method: "special" });
       resolvedAnyAction = true;
     }

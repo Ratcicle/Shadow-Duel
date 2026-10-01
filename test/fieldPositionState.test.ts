@@ -1,14 +1,55 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import Game from "../src/core/Game.js";
+import Card from "../src/core/Card.js";
+import { applyPassiveBuffValue } from "../src/core/effects/passives/passiveBuffs.js";
+import { CANONICAL_REPLAY_ENGINE_VERSION } from "../src/core/contracts/replay.js";
 import { cardDatabase } from "../src/data/cards.js";
 import { normalizeScenarioSetup } from "../src/core/game/devTools/setup.js";
 import { compareZoneSnapshot } from "../src/core/game/zones/snapshot.js";
 import { createCanonicalStateSnapshot, getCardDatabaseSignature, hashCanonicalValue, validateCanonicalReplay } from "../src/core/game/replay/canonical.js";
-import { required } from "./helpers/fixtures.js";
+import { cardDefinition, required } from "./helpers/fixtures.js";
+import { createRuntimeGame, placeFieldCards } from "./helpers/game.js";
 
 const monsterId = required(cardDatabase.find((card) => card.cardKind === "monster")).id;
 const spellId = required(cardDatabase.find((card) => card.cardKind === "spell" && card.subtype !== "field")).id;
+
+test("zone rollback restores presence counters and passive contributions without sharing their baseline", t => {
+  const game = createRuntimeGame({ disableChains: true, captureReplay: false });
+  t.after(() => game.dispose());
+  const metal = new Card(cardDefinition(253), "player");
+  placeFieldCards(game.player.field, metal);
+  metal.fieldPresenceState = { summon_count_Dragon: 1 };
+  const buffKey = "metal_armored_dragon_field_presence_buff";
+  applyPassiveBuffValue(metal, buffKey, 100, ["atk", "def"]);
+  const snapshot = game.captureZoneSnapshot("metal-counter");
+  const baseline = required(snapshot.cardState.get(metal));
+  metal.fieldPresenceState.summon_count_Dragon = 2;
+  applyPassiveBuffValue(metal, buffKey, 200, ["atk", "def"]);
+  assert.deepEqual(baseline.fieldPresenceState, { summon_count_Dragon: 1 });
+  assert.deepEqual(baseline.dynamicBuffs?.[buffKey], {
+    value: 100, stats: ["atk", "def"], appliedValues: { atk: 100, def: 100 },
+  });
+
+  game.restoreZoneSnapshot(snapshot);
+  assert.equal(metal.atk, 1700);
+  assert.equal(metal.def, 2100);
+  assert.notEqual(metal.fieldPresenceState, baseline.fieldPresenceState);
+  assert.notEqual(metal.dynamicBuffs, baseline.dynamicBuffs);
+  const restoredBuff = required(metal.dynamicBuffs?.[buffKey]);
+  const savedBuff = required(baseline.dynamicBuffs?.[buffKey]);
+  assert.notEqual(restoredBuff.stats, savedBuff.stats);
+  assert.notEqual(restoredBuff.appliedValues, savedBuff.appliedValues);
+  required(metal.fieldPresenceState).summon_count_Dragon = 3;
+  restoredBuff.stats = ["atk"];
+  required(restoredBuff.appliedValues).atk = 300;
+  assert.deepEqual(baseline.fieldPresenceState, { summon_count_Dragon: 1 });
+  assert.deepEqual(savedBuff, { value: 100, stats: ["atk", "def"], appliedValues: { atk: 100, def: 100 } });
+  game.restoreZoneSnapshot(snapshot);
+  game.effectEngine.updatePassiveBuffs();
+  assert.equal(metal.atk, 1700);
+  assert.equal(metal.def, 2100);
+});
 
 test("legacy setups normalize positions once without mutating their input", () => {
   const setup = { player: { field: [{ id: monsterId }, { id: monsterId }] }, bot: { spellTrap: [{ id: spellId }] } };
@@ -118,7 +159,7 @@ test("replay v2 rejects absent, duplicate or non-field positions instead of repa
   try {
     game.applyScenarioSetup({ player: { field: [{ id: monsterId }, { id: monsterId }], hand: [{ id: monsterId }] } });
     const replay = {
-      format: "shadow-duel-canonical-replay", schemaVersion: 2, engineVersion: "dragon-rules-v3",
+      format: "shadow-duel-canonical-replay", schemaVersion: 2, engineVersion: CANONICAL_REPLAY_ENGINE_VERSION,
       cardDatabaseSignature: getCardDatabaseSignature(),
       setup: { seed: 1, randomState: null, startingPlayer: "player", playerDeck: [], botDeck: [], playerExtraDeck: [], botExtraDeck: [] },
       commands: [], decisions: [], result: { finalState: createCanonicalStateSnapshot(game) },

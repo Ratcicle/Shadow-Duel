@@ -15,11 +15,24 @@ import Card from "../src/core/Card.js";
 import { validateCardDatabase } from "../src/core/CardDatabaseValidator.js";
 import { ACTION_CATALOG } from "../src/core/actionHandlers/actionCatalog.js";
 import { applySimulatedActions } from "../src/core/ai/common/simulatedActions/index.js";
-import { simulateGenericSpellEffect } from "../src/core/ai/common/simulation.js";
+import { simulateGenericSpellEffect, attachSimulatedEventEmitter } from "../src/core/ai/common/simulation.js";
 import { createCanonicalStateSnapshot } from "../src/core/game/replay/canonical.js";
 import { cardDatabaseById } from "./helpers/fixtures.js";
 
 const BLACK_FLAME_ID = 33;
+
+test("shared Standby keeps Black Flame's temporary registration active in both players' phases", () => {
+  const source = simulationCard({ ...getBlackFlame(), instanceId: "sim-every-standby", owner: "bot", controller: "bot" });
+  const state = simulationState({ turnCounter: 4, phase: "standby", bot: { lp: 4000, hand: [source] } });
+  simulateGenericSpellEffect(state, source);
+  const events = attachSimulatedEventEmitter(state, { enableSimulatedEvents: true });
+  for (const active of [state.bot, state.player]) {
+    const before = state.player.lp;
+    events.emitSimulatedEvent?.("standby_phase", { player: active, opponent: active === state.bot ? state.player : state.bot });
+    assert.equal(state.player.lp, before - 300);
+    assert.equal(state.temporaryEventEffects?.length, 1);
+  }
+});
 
 function getBlackFlame() {
   const card = cardDatabaseById.get(BLACK_FLAME_ID);

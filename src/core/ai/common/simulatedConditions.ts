@@ -1017,6 +1017,9 @@ interface SimConditionView
   attackerType?: string | null;
   monsterType?: string | null;
   cardType?: string | null;
+  typeName?: string | null;
+  minLevel?: number;
+  level?: number;
   race?: string | null;
   minMatchingCostCount?: number;
   requireCurrentFieldPresence?: boolean;
@@ -1278,6 +1281,15 @@ export function evaluateSimulatedConditions(
     }
     if (condition.type === "control_card" || condition.control_card) {
       return playerControlsMatching(owner, condition);
+    }
+    if (condition.type === "control_type_min_level") {
+      const typeName = condition.typeName || condition.cardType;
+      if (!typeName) return false;
+      return getZoneCards(self, condition.zone || "field").some(card => {
+        const types = Array.isArray(card.types) ? card.types : [card.type];
+        return card.cardKind === "monster" && (condition.requireFaceup === false || !card.isFacedown) &&
+          types.includes(typeName) && (card.level || 0) >= (condition.minLevel ?? condition.level ?? 1);
+      });
     }
     if (
       condition.type === "control_card_filters" ||

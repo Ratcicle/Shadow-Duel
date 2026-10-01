@@ -306,6 +306,7 @@ export interface SimulatedPlayerState {
   debug?: boolean;
   id: PlayerId | string;
   lp: number;
+  lpGainedThisTurn?: number;
   hand: SimulatedCardState[];
   field: SimulatedCardState[];
   graveyard: SimulatedCardState[];
@@ -377,6 +378,7 @@ export interface AiCardInput {
   fieldLimit?: GameCard["fieldLimit"];
   fieldPresenceRestriction?: GameCard["fieldPresenceRestriction"];
   fieldPresenceId?: GameCard["fieldPresenceId"];
+  fieldPresenceState?: Readonly<Record<string, number>> | null;
   fieldPresenceSummons?: readonly Readonly<GameCard["fieldPresenceSummons"][number]>[];
   position?: BattlePosition | string | null | undefined;
   isFacedown?: boolean | undefined;
@@ -396,6 +398,7 @@ export interface AiCardInput {
 export interface AiPlayerInput {
   id?: PlayerId | string;
   lp?: number;
+  lpGainedThisTurn?: number;
   hand?: readonly AiCardInput[];
   field?: readonly AiCardInput[];
   graveyard?: readonly AiCardInput[];

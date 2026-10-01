@@ -24,6 +24,7 @@ import {
   findCardOwner,
   getZoneCards,
   moveCardToZone,
+  refreshSimulatedFieldPresenceTypeSummonBuffForCard,
   removeCardFromZones,
 } from "../zones.js";
 import {
@@ -227,6 +228,7 @@ export function applySwitchPosition(
             ((action as LegacyPositionAction).defBoost as number),
         );
     }
+    refreshSimulatedFieldPresenceTypeSummonBuffForCard(card);
     const owner = findCardOwner(state, card);
     options.emitSimulatedEvent?.("position_change", {
       card,
@@ -274,6 +276,7 @@ export function applySetFacedownDefense(
     if (action.lockBattlePosition === true) {
       card.battlePositionLocked = true;
     }
+    refreshSimulatedFieldPresenceTypeSummonBuffForCard(card);
     options.emitSimulatedEvent?.("position_change", {
       card,
       player: owner,
@@ -855,6 +858,7 @@ export function applySetStatsToZeroAndNegate(
     if (action.negateEffects !== false) {
       card.effectsNegated = true;
       card.effectsNegatedDuration = normalizeNegateEffectsDuration(action);
+      refreshSimulatedFieldPresenceTypeSummonBuffForCard(card);
     }
   });
   return;
@@ -895,6 +899,7 @@ export function applyAddStatus(
         }
       }
       if (status === "effectsNegated") {
+        refreshSimulatedFieldPresenceTypeSummonBuffForCard(card);
         if (card.cardKind === "spell" && card.subtype === "equip" && card.equippedTo) {
           refreshEquipExtraAttackBonus(card, card.equippedTo, card.effectsNegated !== true);
         }
@@ -903,6 +908,7 @@ export function applyAddStatus(
         card.effects?.forEach((effect) => {
           if (effect.timing !== "passive") return;
           const passiveType = "passive" in effect ? effect.passive?.type : undefined;
+          if (passiveType === "field_presence_type_summon_count_buff") return;
           // These rules read negation directly at attack/movement time.
           if (passiveType === "restrict_opponent_summon_turn_attack" || passiveType === "send_to_grave_replacement") return;
           if (card.effectsNegated !== true || passiveType !== "field_archetype_aura_buff") {

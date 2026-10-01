@@ -1,7 +1,7 @@
 # Replay canônico
 
 O replay executável usa o formato `shadow-duel-canonical-replay`, schema `2` e
-`engineVersion: "dragon-rules-v3"`. Ele é independente do relatório
+`engineVersion: "dragon-rules-v4"`. Ele é independente do relatório
 estratégico. O importador aceita somente o schema `2`: relatórios v4 e replays
 de schemas anteriores não são partidas executáveis nesta versão.
 
@@ -92,7 +92,7 @@ compatibilidade histórica (`trigger_opportunity`, `trigger_ordered`, `activatio
 
 ## Efeitos temporários e escolhas durante a resolução
 
-O lote Dragon usa a engine `dragon-rules-v3` com os mesmos comandos e kinds de
+O lote Dragon usa a engine `dragon-rules-v4` com os mesmos comandos e kinds de
 decisão do schema `2`. Snapshots incluem `fieldPresenceSummons` por fonte,
 proteções concedidas e `namedOncePerTurnUsage`, incluindo o limite dos
 procedimentos da mão. O histórico de Invocações guarda a presença do monstro,
@@ -111,6 +111,13 @@ usa a mesma rota pública para reproduzi-las. As decisões do Blindado e da
 Galáxia e as escolhas locais de resolução passam pelo broker. As regressões em
 [`dragonRulesReplay.test.ts`](../test/replay/dragonRulesReplay.test.ts) cobrem
 humanos e IA nos dois assentos, com gravação EN e reprodução PT-BR.
+
+A engine `dragon-rules-v4` inclui os limites por cópia dos sete efeitos Dragon
+do item 12 da auditoria, a devolução de cartas Baixadas por Névoa e a
+escolha opcional de destruir zero ou uma carta com Rugido Infernal. Quando há
+candidatos, essa escolha passa pelo broker na resolução; sem candidatos, não
+há decisão a registrar. Identidades inválidas não são convertidas em recusa.
+O schema permanece `2`; gravações `dragon-rules-v3` são incompatíveis.
 
 Seleções fornecidas pelo chamador e alvos exatos do planejador também são
 registrados pelo broker, preservando a carta escolhida. O playback consome
@@ -163,7 +170,7 @@ caracteres do replay, usado para detectar divergências na reprodução.
 `validateCanonicalReplay(input)` recebe `unknown`, não muta a entrada e retorna
 a mesma referência somente depois de validar o documento. `setup`, `commands` e
 `decisions` e `engineVersion` são obrigatórios. A versão da engine deve ser
-`"dragon-rules-v3"`; gravações sem essa versão são rejeitadas antes da validação
+`"dragon-rules-v4"`; gravações sem essa versão são rejeitadas antes da validação
 profunda e da reprodução. `events`, `result` e `finalized` continuam opcionais
 na importação de arquivos do schema `2`; quando presentes, são validados
 profundamente. Os comandos e kinds de decisão permanecem os mesmos.

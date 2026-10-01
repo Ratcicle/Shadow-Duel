@@ -1,4 +1,5 @@
 import { appendSimulatedZoneCard } from "../zones.js";
+import { resolveExactInstanceSelection } from "../../../AutoSelector.js";
 import { getEffectiveAtk } from "../cardStats.js";
 import { getCounterValue, setCounterValue } from "../counters.js";
 import { estimateMonsterValue, hasArchetype } from "../cardValue.js";
@@ -249,8 +250,26 @@ export function applyDestroyAndDamageByTargetAtk(
 
 export function applyDestroyTargetedCards(
   ctx: SimulatedActionHandlerContext<"destroy_targeted_cards">,
-): void {
-  return applyDestroy(ctx);
+): void | typeof STOP_SIMULATION {
+  const { action, opponent, self, state, options } = ctx;
+  if (action.targetRef || action.targetCountFromContext || action.minTargets !== 0) return applyDestroy(ctx);
+  const zones = (action.zones || ["field", "spellTrap", "fieldSpell"])
+    .filter(zone => zone === "field" || zone === "spellTrap" || zone === "fieldSpell");
+  const candidates = getActionCandidates(opponent, {
+    ...action, zones,
+  }, "field", options);
+  const max = Math.max(0, Math.floor(action.maxTargets || 1));
+  const exact = options.activationContext?.decisions?.selections?.destroy_targets;
+  const selected = exact !== undefined
+    ? resolveExactInstanceSelection(candidates, exact, { min: 0, max })
+    : rankCandidates(candidates, "harm", {
+        ...options, targetPreference: getTargetPreference(options, "destroy_targets"),
+      }).slice(0, max);
+  if (selected === null) {
+    (state._simUnsupportedActions ??= []).push("exact_selection:destroy_targets");
+    return STOP_SIMULATION;
+  }
+  for (const card of selected) destroySimulatedCard(card, opponent, self, state, options);
 }
 
 function resolveScopeOwners(

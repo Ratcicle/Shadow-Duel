@@ -22,6 +22,17 @@ interface ZoneSnapshotHost extends GameZonesHost {
   ): void;
 }
 
+function copyDynamicBuffs(
+  buffs: GameCard["dynamicBuffs"] | undefined,
+): GameCard["dynamicBuffs"] {
+  if (!buffs) return null;
+  return Object.fromEntries(Object.entries(buffs).map(([key, entry]) => [key, {
+    ...entry,
+    ...(entry.stats ? { stats: [...entry.stats] } : {}),
+    ...(entry.appliedValues ? { appliedValues: { ...entry.appliedValues } } : {}),
+  }]));
+}
+
 /**
  * Create a snapshot of a single card's state.
  * @param card - The card to snapshot
@@ -34,6 +45,8 @@ export function snapshotCardState(
   const snapshot = { ...card };
   // Capture the initial epoch too, so the first rolled-back departure cannot reset soft OPT.
   snapshot.oncePerTurnResetVersion = card.oncePerTurnResetVersion || 0;
+  snapshot.fieldPresenceState = card.fieldPresenceState ? { ...card.fieldPresenceState } : null;
+  snapshot.dynamicBuffs = copyDynamicBuffs(card.dynamicBuffs);
   if (card.counters instanceof Map) {
     snapshot.counters = new Map(card.counters);
   }
@@ -194,6 +207,14 @@ export function restoreZoneSnapshot(
     snapshot.cardState.forEach((state, card) => {
       if (!card || !state) return;
       Object.keys(state).forEach((key) => {
+        if (key === "fieldPresenceState") {
+          card.fieldPresenceState = state.fieldPresenceState ? { ...state.fieldPresenceState } : null;
+          return;
+        }
+        if (key === "dynamicBuffs") {
+          card.dynamicBuffs = copyDynamicBuffs(state.dynamicBuffs);
+          return;
+        }
         if (key === "counters" && state.counters instanceof Map) {
           card.counters = new Map(state.counters);
           return;

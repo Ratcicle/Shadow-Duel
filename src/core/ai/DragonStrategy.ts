@@ -14,6 +14,7 @@
 import BaseStrategy from "./BaseStrategy.js";
 import type { BotStrategyPort } from "../contracts/bot.js";
 import { getCounterCount } from "./common/counters.js";
+import { canUseSimulatedEffectUsage } from "./common/simStateUtils.js";
 import type {
   AIAction,
   AIActivationContext,
@@ -1331,6 +1332,8 @@ export default class DragonStrategy extends BaseStrategy {
       if (isCurrentDragonListMode(analysis) && isOutOfPlanDragonCardName(card.name!)) return;
       const ignition = findIgnitionEffect(card, "field");
       if (!ignition) return;
+      if (isSimulatedState && ignition.oncePerTurnScope === "card" &&
+          !canUseSimulatedEffectUsage(gameInput, ignition, card, bot.id, true)) return;
 
       let priority: number | null = null;
       const targetPreferences: Record<string, DragonPreference | undefined> = {};
@@ -1707,6 +1710,8 @@ export default class DragonStrategy extends BaseStrategy {
           return;
         }
       } else if (
+        (graveyardIgnitionEffect.oncePerTurnScope === "card" &&
+          !canUseSimulatedEffectUsage(gameInput, graveyardIgnitionEffect, card, bot.id, true)) ||
         !effectTargetsAvailable(graveyardIgnitionEffect, {
           player: bot,
           opponent,
@@ -1883,7 +1888,8 @@ export default class DragonStrategy extends BaseStrategy {
     if (fieldSpell?.name === "Jagged Peak of the Dragons") {
       const counters = getCounterCount(fieldSpell, "dragon_peak");
       const ignition = findIgnitionEffect(fieldSpell, "fieldSpell");
-      if (ignition && counters >= 7) {
+      if (ignition && counters >= 7 && (!isSimulatedState || ignition.oncePerTurnScope !== "card" ||
+          canUseSimulatedEffectUsage(gameInput, ignition, fieldSpell, bot.id, true))) {
         const dragonCandidates = [
           ...rankOwnDragonsByValue(bot.hand || []),
           ...(bot.deck || []).filter(isDragonMonster).sort((a, b) => cardStrategicValue(b) - cardStrategicValue(a)),

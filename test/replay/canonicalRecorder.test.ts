@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import Card from "../../src/core/Card.js";
 import { cardDefinition } from "../helpers/fixtures.js";
 import type { FieldPlacementResult } from "../../src/core/contracts/placement.js";
-import { createRuntimeGame } from "../helpers/game.js";
+import { createRuntimeGame, placeFieldCards } from "../helpers/game.js";
 
 import type {
   ReplayRecorderGamePort,
@@ -68,6 +68,41 @@ function recorderGame(): ReplayRecorderGamePort {
     finalizeReplay,
   };
 }
+
+test("canonical hashes distinguish latent presence counters and detach their snapshot", t => {
+  const game = createRuntimeGame({ disableChains: true, captureReplay: false, randomSeed: 15 });
+  t.after(() => game.dispose());
+  const metal = new Card(cardDefinition(253), "player");
+  placeFieldCards(game.player.field, metal);
+  metal.effectsNegated = true;
+  metal.fieldPresenceState = { summon_count_Dragon: 0 };
+  const initial = hashCanonicalGameState(game);
+  metal.fieldPresenceState.summon_count_Dragon = 1;
+  assert.equal(metal.atk, 1600);
+  assert.notEqual(hashCanonicalGameState(game), initial);
+  const snapshot = createCanonicalStateSnapshot(game);
+  metal.fieldPresenceState.summon_count_Dragon = 2;
+  assert.deepEqual(snapshot.players.player.zones.field[0]?.fieldPresenceState, { summon_count_Dragon: 1 });
+  metal.fieldPresenceState = null;
+  assert.deepEqual(createCanonicalStateSnapshot(game).players.player.zones.field[0]?.fieldPresenceState, {});
+  const withoutHistory = hashCanonicalGameState(game);
+  metal.fieldPresenceState = {};
+  assert.equal(hashCanonicalGameState(game), withoutHistory);
+  Reflect.deleteProperty(metal, "fieldPresenceState");
+  assert.equal(hashCanonicalGameState(game), withoutHistory);
+});
+
+test("canonical hashes include LP gained even when damage restores the previous LP", t => {
+  const game = createRuntimeGame({ disableChains: true, captureReplay: false, randomSeed: 15 });
+  t.after(() => game.dispose());
+  const initial = hashCanonicalGameState(game);
+  game.player.gainLP(200);
+  game.player.takeDamage(200, { suppressVisual: true });
+  assert.equal(game.player.lp, 8000);
+  assert.notEqual(hashCanonicalGameState(game), initial);
+  assert.equal(createCanonicalStateSnapshot(game).players.player.lpGainedThisTurn, 200);
+  assert.equal(createCanonicalStateSnapshot(recorderGame()).players.player.lpGainedThisTurn, 0);
+});
 
 test("canonical state includes summon history, protections and named procedure usage", t => {
   const game = createRuntimeGame({ laboratoryMode: true, captureReplay: false, randomSeed: 15 });
@@ -167,9 +202,9 @@ test("recorder preserva key order, defaults e assinatura do formato", () => {
   ]);
   assert.equal(recording.format, "shadow-duel-canonical-replay");
   assert.equal(recording.schemaVersion, 2);
-  assert.equal(recording.engineVersion, "dragon-rules-v3");
+  assert.equal(recording.engineVersion, "dragon-rules-v5");
   assert.equal(recording.cardDatabaseSignature, getCardDatabaseSignature());
-  assert.equal(recording.cardDatabaseSignature, "5b84ee08");
+  assert.equal(recording.cardDatabaseSignature, "98cfeb64");
   assert.deepEqual(Object.keys(recording.setup), [
     "seed",
     "randomState",

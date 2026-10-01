@@ -4,6 +4,7 @@ import Card from "../src/core/Card.js";
 import { createRuntimeGame, placeFieldCards, completeTestSelections } from "./helpers/game.js";
 import { cardDefinition, required } from "./helpers/fixtures.js";
 import type { CanonicalSelectionMap } from "../src/core/contracts/selection.js";
+import type { ReplayDecisionInput } from "../src/core/contracts/decisions.js";
 
 function setup(t: TestContext) {
   const game = createRuntimeGame({ laboratoryMode: true, randomSeed: 251, chainResponseTimeoutMs: 0 });
@@ -16,6 +17,129 @@ function setup(t: TestContext) {
   game.player.controllerType = game.bot.controllerType = "ai";
   const make = (id: number) => new Card(cardDefinition(id), game.player.id);
   return { game, owner: game.player, make };
+}
+
+for (const seat of ["player", "bot"] as const) for (const active of ["self", "opponent"] as const) {
+  test(`Forest heals its controller during ${active} Standby through the real Chain (${seat})`, async t => {
+    const { game } = setup(t);
+    const owner = game[seat], opponent = game[seat === "player" ? "bot" : "player"];
+    const source = new Card(cardDefinition(274), owner.id);
+    placeFieldCards(owner.field, source);
+    const monster = new Card(cardDefinition(252), opponent.id), trap = new Card(cardDefinition(268), opponent.id);
+    monster.isFacedown = trap.isFacedown = true;
+    placeFieldCards(opponent.field, monster); placeFieldCards(opponent.spellTrap, trap);
+    opponent.fieldSpell = new Card(cardDefinition(262), opponent.id);
+    opponent.hand.push(new Card(cardDefinition(251), opponent.id), new Card(cardDefinition(255), opponent.id));
+    const actor = active === "self" ? owner : opponent;
+    game.turn = actor.id; game.phase = "standby";
+    let links = 0;
+    game.on("effect_activated", event => { if (event.effectId === "forest_extreme_dragon_standby_heal") links++; });
+    game.chainSystem.offerChainResponses = async () =>
+      ({ lastActivator: null, chainBuilt: false, consecutivePasses: 2, offers: 1, activations: 0 });
+    await game.emit("standby_phase", { player: actor, opponent: actor === owner ? opponent : owner });
+    assert.equal(owner.lp, 9000); assert.equal(owner.lpGainedThisTurn, 1000);
+    assert.equal(opponent.lp, 8000); assert.equal(links, 1);
+  });
+}
+
+test("Forest counts current opposing cards when its Standby link resolves", async t => {
+  const { game, owner, make } = setup(t);
+  const source = make(274), counted = new Card(cardDefinition(252), game.bot.id);
+  placeFieldCards(owner.field, source); game.bot.hand.push(counted);
+  game.turn = game.bot.id; game.phase = "standby";
+  game.chainSystem.offerChainResponses = async () => {
+    if (game.chainSystem.getLastChainLink()?.effect?.id === "forest_extreme_dragon_standby_heal") {
+      await game.moveCard(counted, game.bot, "graveyard", { fromZone: "hand" });
+    }
+    return { lastActivator: null, chainBuilt: false, consecutivePasses: 2, offers: 1, activations: 0 };
+  };
+  await game.emit("standby_phase", { player: game.bot, opponent: owner });
+  assert.ok(game.bot.graveyard.includes(counted));
+  assert.equal(owner.lp, 8000); assert.equal(owner.lpGainedThisTurn, 0);
+});
+
+for (const suppressed of ["facedown", "negated"] as const) {
+  test(`Forest has no Standby gain with a ${suppressed} source`, async t => {
+    const { game, owner, make } = setup(t);
+    const source = make(274);
+    source.isFacedown = suppressed === "facedown"; source.effectsNegated = suppressed === "negated";
+    placeFieldCards(owner.field, source); game.bot.hand.push(new Card(cardDefinition(252), game.bot.id));
+    game.phase = "standby";
+    game.chainSystem.offerChainResponses = async () =>
+      ({ lastActivator: null, chainBuilt: false, consecutivePasses: 2, offers: 1, activations: 0 });
+    await game.emit("standby_phase", { player: owner, opponent: game.bot });
+    assert.equal(owner.lp, 8000); assert.equal(owner.lpGainedThisTurn, 0);
+  });
+}
+
+const optionalBackrowDestruction = {
+  type: "destroy_targeted_cards", minTargets: 0, maxTargets: 1,
+  zones: ["spellTrap", "fieldSpell"], cardKind: ["spell", "trap"],
+} as const;
+
+test("explicit optional destruction previews and resolves with no candidates or decision", async t => {
+  const { game, owner, make } = setup(t);
+  const source = make(261);
+  const decisions: ReplayDecisionInput[] = [];
+  game.on("decision_made", decision => { decisions.push(decision); });
+  const context = { source, player: owner, opponent: game.bot };
+  assert.equal(game.effectEngine.checkActionPreviewRequirements([optionalBackrowDestruction], context).ok, true);
+  const result = await game.effectEngine.applyActions([optionalBackrowDestruction], context, {});
+  assert.equal(result.success, true);
+  assert.equal(game.targetSelection, null);
+  assert.equal(decisions.length, 0);
+});
+
+for (const human of [false, true]) for (const count of [0, 1]) {
+  test(`optional destruction records a resolution choice of ${count} (${human ? "human" : "AI"})`, async t => {
+    const { game, owner, make } = setup(t);
+    owner.controllerType = human ? "human" : "ai";
+    const source = make(261), spared = new Card(cardDefinition(3), game.bot.id);
+    const chosen = new Card(cardDefinition(3), game.bot.id);
+    placeFieldCards(game.bot.spellTrap, spared, chosen);
+    const decisions: ReplayDecisionInput[] = [];
+    game.on("decision_made", decision => { decisions.push(decision); });
+    const action = game.effectEngine.applyActions([optionalBackrowDestruction], {
+      source, player: owner, opponent: game.bot,
+      activationContext: { decisions: { selections: { destroy_targets: count ? [chosen.instanceId] : [] } } },
+    }, {});
+    if (human) {
+      for (let attempt = 0; attempt < 100 && !game.targetSelection; attempt++) await new Promise<void>(resolve => setTimeout(resolve, 1));
+      const session = required(game.targetSelection);
+      assert.equal(session.kind, "choice");
+      assert.equal(session.requirements[0]?.min, 0);
+      assert.equal(session.requirements[0]?.max, 1);
+      const requirement = required(session.requirements[0]);
+      session.selections[requirement.id] = count ? [required(requirement.candidates.find(candidate => candidate.cardRef === chosen)).key] : [];
+      await game.finishTargetSelection();
+    }
+    assert.equal((await action).success, true);
+    assert.equal(game.bot.graveyard.includes(chosen), count === 1);
+    assert.equal(game.bot.spellTrap.includes(spared), true);
+    assert.equal(decisions.length, 1);
+    assert.equal(decisions[0]?.kind, "choice");
+    assert.equal(decisions[0]?.actorId, owner.id);
+  });
+}
+
+test("optional destruction does not replace a vanished exact choice with an empty choice", async t => {
+  const { game, owner, make } = setup(t);
+  const result = await game.effectEngine.applyActions([optionalBackrowDestruction], {
+    source: make(261), player: owner, opponent: game.bot,
+    activationContext: { decisions: { selections: { destroy_targets: ["vanished"] } } },
+  }, {});
+  assert.equal(result.success, false);
+});
+
+for (const minimum of [undefined, -1, 1]) {
+  test(`required destruction still rejects an empty board (minimum ${minimum})`, async t => {
+    const { game, owner, make } = setup(t);
+    const { minTargets: _optionalMinimum, ...base } = optionalBackrowDestruction;
+    const action = minimum === undefined ? base : { ...base, minTargets: minimum };
+    const context = { source: make(261), player: owner, opponent: game.bot };
+    assert.equal(game.effectEngine.checkActionPreviewRequirements([action], context).ok, false);
+    assert.equal((await game.effectEngine.applyActions([action], context, {})).success, false);
+  });
 }
 
 const costCases = [

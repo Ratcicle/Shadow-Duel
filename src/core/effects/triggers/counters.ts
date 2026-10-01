@@ -21,28 +21,41 @@ interface SummonCounterPayload {
 
 /** Narrow shared projections keep factual history usable by runtime and planners. */
 export interface FieldPresenceHistoryCard {
-  readonly cardKind?: string | undefined;
+  readonly cardKind?: string | null | undefined;
+  readonly type?: string | null | undefined;
   readonly isFacedown?: boolean | undefined;
   readonly effectsNegated?: boolean | undefined;
   readonly fieldPresenceId?: string | number | null;
   readonly effects?: readonly {
     readonly timing?: string;
-    readonly passive?: { readonly type?: string };
+    readonly passive?: {
+      readonly type?: string;
+      readonly typeName?: string;
+      readonly summonMethods?: readonly SummonMethod[];
+      readonly countOwner?: "self" | "opponent" | "any" | "both";
+    };
   }[];
+  fieldPresenceState?: Record<string, number> | null;
   fieldPresenceSummons?: FieldPresenceSummonRecord[];
 }
 
-interface FieldPresenceHistoryPlayer {
+export interface FieldPresenceHistoryPlayer {
   readonly id?: string;
   readonly field?: readonly FieldPresenceHistoryCard[];
   readonly spellTrap?: readonly FieldPresenceHistoryCard[];
   readonly fieldSpell?: FieldPresenceHistoryCard | null;
 }
 
-interface FieldPresenceHistoryState {
+export interface FieldPresenceHistoryState {
   readonly player?: FieldPresenceHistoryPlayer;
   readonly bot?: FieldPresenceHistoryPlayer;
   readonly turnCounter?: number | null;
+}
+
+export interface CompletedFieldSummonPayload {
+  readonly card?: FieldPresenceHistoryCard | null | undefined;
+  readonly player?: { readonly id?: string } | null | undefined;
+  readonly method?: SummonMethod | null | undefined;
 }
 
 function presenceSources(player: FieldPresenceHistoryPlayer | undefined): FieldPresenceHistoryCard[] {
@@ -51,7 +64,7 @@ function presenceSources(player: FieldPresenceHistoryPlayer | undefined): FieldP
 
 export function recordFieldPresenceSummon(
   state: FieldPresenceHistoryState,
-  payload: { readonly card?: FieldPresenceHistoryCard | null; readonly player?: { readonly id?: string } | null },
+  payload: CompletedFieldSummonPayload,
 ): void {
   const card = payload.card;
   const playerId = payload.player?.id;
@@ -71,6 +84,45 @@ export function recordFieldPresenceSummon(
       }
     }
   }
+}
+
+function recordFieldPresenceTypeSummonCounters(
+  state: FieldPresenceHistoryState,
+  payload: CompletedFieldSummonPayload,
+): void {
+  const { card: summonedCard, method } = payload;
+  const summoningPlayerId = payload.player?.id;
+  if (!summonedCard || summonedCard.cardKind !== "monster" || summonedCard.fieldPresenceId == null ||
+      !summonedCard.type || (summoningPlayerId !== "player" && summoningPlayerId !== "bot") ||
+      ![state.player, state.bot].some(owner => owner?.field?.includes(summonedCard))) return;
+  const isSpecialSummon = method === "special" || method === "ascension" || method === "fusion" || method === "synchro";
+  for (const controller of [state.player, state.bot]) {
+    for (const source of controller?.field || []) {
+      if (source === summonedCard || source.cardKind !== "monster" || source.isFacedown || source.fieldPresenceId == null) continue;
+      for (const effect of source.effects || []) {
+        const passive = effect.passive;
+        if (effect.timing !== "passive" || passive?.type !== "field_presence_type_summon_count_buff" ||
+            passive.typeName !== summonedCard.type) continue;
+        const methods = passive.summonMethods || ["special"];
+        if (methods.includes("special") ? !isSpecialSummon : !methods.some(candidate => candidate === method)) continue;
+        const countOwner = passive.countOwner || "self";
+        if ((countOwner === "self" && controller?.id !== summoningPlayerId) ||
+            (countOwner === "opponent" && controller?.id === summoningPlayerId)) continue;
+        const counters = (source.fieldPresenceState ||= {});
+        const key = `summon_count_${summonedCard.type}`;
+        counters[key] = (counters[key] || 0) + 1;
+      }
+    }
+  }
+}
+
+/** Called once after field entry commits, before summon callbacks or triggers. */
+export function recordCompletedFieldSummon(
+  state: FieldPresenceHistoryState,
+  payload: CompletedFieldSummonPayload,
+): void {
+  recordFieldPresenceSummon(state, payload);
+  recordFieldPresenceTypeSummonCounters(state, payload);
 }
 
 export function clearFieldPresenceSummonTarget(state: FieldPresenceHistoryState, card: FieldPresenceHistoryCard): void {
@@ -178,77 +230,9 @@ export function clearFieldPresenceId(
  * @param {Object} payload - Event payload from after_summon
  */
 export function handleFieldPresenceTypeSummonCounters(
-  this: Pick<TriggerCollectorHost, "updatePassiveBuffs">,
+  this: Pick<TriggerCollectorHost, "game" | "updatePassiveBuffs">,
   payload: SummonCounterPayload | null | undefined,
 ): void {
-  const { card: summonedCard, player, method } = payload || {};
-
-  // Validate payload
-  if (!summonedCard || !player) return;
-
-  const typeName = summonedCard.type || null;
-  if (!typeName) return;
-
-  const controllerId = player.id || player;
-  const fieldCards = player.field || [];
-
-  // Find all cards with field_presence_type_summon_count_buff passives
-  for (const fieldCard of fieldCards) {
-    if (!fieldCard || fieldCard.isFacedown) continue;
-    if (fieldCard.cardKind !== "monster") continue;
-    if (!fieldCard.fieldPresenceId) continue; // Must have a presence ID
-
-    // Don't count the card that was just summoned for itself
-    if (fieldCard === summonedCard) continue;
-
-    const effects = fieldCard.effects || [];
-    for (const effect of effects) {
-      if (!effect || effect.timing !== "passive") continue;
-      const passive = effect.passive;
-      if (!passive) continue;
-      if (passive.type !== "field_presence_type_summon_count_buff") continue;
-
-      // Check if this passive tracks the summoned card's type
-      const passiveType = passive.typeName || null;
-      if (!passiveType || passiveType !== typeName) continue;
-
-      // Check summon method filter
-      const summonMethods = passive.summonMethods || ["special"];
-      const isSpecialSummon =
-        method === "special" ||
-        method === "ascension" ||
-        method === "fusion" ||
-        method === "synchro";
-      if (summonMethods.includes("special") && !isSpecialSummon) continue;
-      if (
-        !summonMethods.includes("special") &&
-        !summonMethods.some((summonMethod) => summonMethod === method)
-      )
-        continue;
-
-      // Check owner filter
-      const countOwner = passive.countOwner || "self";
-      const summonedOwner = summonedCard.owner || null;
-      if (countOwner === "self" && summonedOwner !== controllerId) continue;
-      if (countOwner === "opponent" && summonedOwner === controllerId) continue;
-
-      // Initialize field presence state if needed
-      if (!fieldCard.fieldPresenceState) {
-        fieldCard.fieldPresenceState = {};
-      }
-
-      // Initialize counter for this type
-      const counterKey = `summon_count_${typeName}`;
-      if (!fieldCard.fieldPresenceState[counterKey]) {
-        fieldCard.fieldPresenceState[counterKey] = 0;
-      }
-
-      // Increment counter
-      fieldCard.fieldPresenceState[counterKey] =
-        (fieldCard.fieldPresenceState[counterKey] || 0) + 1;
-    }
-  }
-
-  // Update passive buffs to reflect new counts
+  recordFieldPresenceTypeSummonCounters(this.game, payload || {});
   this.updatePassiveBuffs();
 }

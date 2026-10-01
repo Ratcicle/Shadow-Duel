@@ -612,6 +612,7 @@ function getCardKey(card: PlannerCard | null | undefined): string {
     card.position || "",
     card.fieldSlot ?? "off-field",
     card.fieldPresenceId || "",
+    summarizeSimOpt(card.fieldPresenceState || {}),
     JSON.stringify(card.fieldPresenceSummons || []),
     card.originalOwner || "",
     card.controller || "",
@@ -694,6 +695,7 @@ function getPlanningStateHash(state: PlanningState): string {
     [
       player.id || "",
       player.lp || 0,
+      player.lpGainedThisTurn || 0,
       player.summonCount || 0,
       player.additionalNormalSummons || 0,
       summarizeSimOpt(player.additionalNormalSummonPermissions || []),

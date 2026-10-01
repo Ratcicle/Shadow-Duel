@@ -39,6 +39,7 @@ import {
 } from "../zones.js";
 import {
   applySummonState,
+  recordCompletedSimulatedSummon,
   chooseRankedCards,
   getActionCandidates,
   hasOpenMonsterZone,
@@ -54,7 +55,6 @@ import {
 } from "./shared.js";
 import type { ActionOf } from "../../../contracts/actions.js";
 import type { ConditionalSummonMarker } from "../../../contracts/actions/shared.js";
-import { recordFieldPresenceSummon } from "../../../effects/triggers/counters.js";
 import type {
   SimulatedCardState,
   SimulatedPlayerState,
@@ -462,7 +462,7 @@ export function applySpecialSummonFromZone(
       options,
     );
     appendSimulatedFieldCard(targetPlayer.field, card);
-    recordFieldPresenceSummon(state, { card, player: targetPlayer });
+    recordCompletedSimulatedSummon(state, { card, player: targetPlayer, method: "special" });
     applyPaidCostSummonMarkers(action, card, options.costPayment?.summonMarkers || [],
       options.effect?.id || null, Number(state.turnCounter || 0));
     summoned.push(card);
@@ -550,6 +550,7 @@ export function applyDeSynchro(
       player,
       options,
     );
+    recordCompletedSimulatedSummon(state, { card: material, player, method: "special" });
     options.emitSimulatedEvent?.("after_summon", {
       card: material,
       player,
@@ -647,6 +648,7 @@ export function simulateSynchroSummon(
     sourceZone: "extraDeck",
   });
   synchroCard.synchroMaterials = metadata;
+  recordCompletedSimulatedSummon(state, { card: synchroCard, player, method: "synchro" });
   const summonEvent: SimulatedEventOccurrence = { event: "after_summon", observed: true, payload: {
     card: synchroCard,
     player,
@@ -727,7 +729,7 @@ export function applySearchThenOptionalSpecialSummonFromHand(
     } as SimulatedActionOptions),
   );
   appendSimulatedFieldCard(targetPlayer.field, searched);
-  recordFieldPresenceSummon(state, { card: searched, player: targetPlayer });
+  recordCompletedSimulatedSummon(state, { card: searched, player: targetPlayer, method: "special" });
   options.onAfterSpecialSummon?.({
     state,
     player: targetPlayer,
@@ -810,7 +812,7 @@ export function applySpecialSummonFromHandWithCost(
     options,
   );
   appendSimulatedFieldCard(targetPlayer.field, sourceCard);
-  recordFieldPresenceSummon(state, { card: sourceCard, player: targetPlayer });
+  recordCompletedSimulatedSummon(state, { card: sourceCard, player: targetPlayer, method: "special" });
   applySimConditionalMarkersOnSummon({
     action,
     sourceCard,
@@ -910,7 +912,7 @@ export function applySpecialSummonFromHandWithTieredCost(
     sourceCard._simBattleDestructionProtected = true;
   }
   appendSimulatedFieldCard(targetPlayer.field, sourceCard);
-  recordFieldPresenceSummon(state, { card: sourceCard, player: targetPlayer });
+  recordCompletedSimulatedSummon(state, { card: sourceCard, player: targetPlayer, method: "special" });
   options.onAfterSpecialSummon?.({
     state,
     player: targetPlayer,
@@ -984,6 +986,7 @@ export function applyBounceAndSummon(
     targetPlayer,
     options,
   );
+  recordCompletedSimulatedSummon(state, { card: chosen, player: targetPlayer, method: "special" });
   options.onAfterSpecialSummon?.({
     state,
     player: targetPlayer,
@@ -1041,7 +1044,7 @@ export function applyNormalSummonFromHand(ctx: SimulatedActionHandlerContext<"no
   card.lastSummonedFromZone = "hand";
   player.summonCount = (player.summonCount || 0) + 1;
   recordNormalSummonForTurn(player, card);
-  recordFieldPresenceSummon(state, { card, player });
+  recordCompletedSimulatedSummon(state, { card, player, method: card.lastSummonMethod });
   card.lastTributeMaterialNames = tributes.map(tribute => tribute.name || "");
   card.lastTributeMaterialCount = tributes.length;
   if (!options.enableSimulatedEvents) {
@@ -1098,7 +1101,7 @@ export function applySpecialSummonToken(
     options,
   );
   appendSimulatedFieldCard(targetPlayer.field, summonedToken);
-  recordFieldPresenceSummon(state, { card: summonedToken, player: targetPlayer });
+  recordCompletedSimulatedSummon(state, { card: summonedToken, player: targetPlayer, method: "special" });
   emitSimulatedAfterSpecialSummon({
     options,
     state,
@@ -1142,7 +1145,7 @@ export function applyConditionalSummonFromHand(
       options,
     );
     appendSimulatedFieldCard(targetPlayer.field, chosen);
-    recordFieldPresenceSummon(state, { card: chosen, player: targetPlayer });
+    recordCompletedSimulatedSummon(state, { card: chosen, player: targetPlayer, method: "special" });
     emitSimulatedAfterSpecialSummon({
       options,
       state,
@@ -1258,7 +1261,7 @@ export function applyPolymerizationFusionSummon(
   );
   (fusionCard as MutableSummonedCard).summonMethod = "fusion";
   appendSimulatedFieldCard(targetPlayer.field, fusionCard);
-  recordFieldPresenceSummon(state, { card: fusionCard, player: targetPlayer });
+  recordCompletedSimulatedSummon(state, { card: fusionCard, player: targetPlayer, method: "fusion" });
   options.onFusionSummon?.({
     state,
     player: targetPlayer,

@@ -5,7 +5,7 @@ import { normalizeZoneInput } from "../../../contracts/zones.js";
 import { establishProperSummon } from "../../../game/summon/eligibility.js";
 import { canSimulatedProcedureEnterField, canSimulatedSpecialSummon } from "../simulation.js";
 import { getZoneCards, moveCardToZone } from "../zones.js";
-import { applySummonState } from "./shared.js";
+import { applySummonState, recordCompletedSimulatedSummon } from "./shared.js";
 import { destroySimulatedCard } from "./destruction.js";
 import type { SimulatedCardState } from "../../../contracts/aiState.js";
 import type { CardProtectionEffect } from "../../../contracts/cards.js";
@@ -64,6 +64,7 @@ export function processSimulatedDelayedActions(
       card.lastSummonProcedure = summon.summonProcedure;
       card.lastSummonedTurn = state.turnCounter;
       establishProperSummon(card, { summonProcedure: summon.summonProcedure || method, fromZone });
+      recordCompletedSimulatedSummon(state, { card, player: owner, method });
       options.emitSimulatedEvent?.("after_summon", { card, player: owner, method, fromZone,
         summonProcedure: summon.summonProcedure, sourceCard: card });
       options.emitSimulatedEvent?.("card_moved", { card, player: owner, fromZone, toZone: "field", movedByEffect: true });
