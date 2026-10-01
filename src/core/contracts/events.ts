@@ -182,6 +182,8 @@ export interface AfterSummonEventPayload extends EventPayloadBase {
   summonOrigin?: SummonOrigin | null;
   tributes?: EventCard[];
   position?: BattlePosition;
+  /** Internal collection hint; activation availability is checked at SEGOC. */
+  deferActivationChecks?: boolean;
 }
 
 export interface AttackDeclaredEventPayload extends EventPayloadBase {

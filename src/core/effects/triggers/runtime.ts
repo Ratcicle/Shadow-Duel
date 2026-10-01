@@ -395,6 +395,7 @@ export interface TriggerEntry {
   readonly triggerTiming: TriggerTiming | null;
   readonly sourceAtTrigger: object | null;
   readonly config: TriggerEntryConfig;
+  readonly materialize?: () => TriggerEntry | null;
 }
 
 export interface TriggerPackage {
@@ -419,6 +420,7 @@ export interface BuildTriggerEntryOptions {
   readonly allowDuringResolving?: boolean;
   readonly allowDuringOpponentTurn?: boolean;
   readonly skipTargetPreview?: boolean;
+  readonly deferActivationChecks?: boolean;
   readonly activate?: (
     selections: object | null | undefined,
     activationContext: TriggerActivationContext,

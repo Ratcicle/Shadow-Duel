@@ -465,6 +465,7 @@ export function buildTriggerEntry(
   const sourceCard = options.sourceCard;
   const owner = options.owner;
   const effect = options.effect;
+  const deferActivationChecks = options.deferActivationChecks === true;
 
   if (!sourceCard || !owner || !effect) {
     return null;
@@ -475,7 +476,7 @@ export function buildTriggerEntry(
   if (!isTriggerSourceLegal(sourceCard, effect, sourceZone)) return null;
 
   if (
-    isAI(owner) && effect.triggerRequirement === "optional" &&
+    !deferActivationChecks && isAI(owner) && effect.triggerRequirement === "optional" &&
     owner.strategy?.shouldActivateEffect?.({
       sourceCard, effect, player: owner, game: this.game,
       activationZone: options.activationZone,
@@ -512,7 +513,7 @@ export function buildTriggerEntry(
     selectionKind: "triggered",
   };
   const strategyContext =
-    typeof owner.strategy?.buildActivationContextForEffect === "function"
+    !deferActivationChecks && typeof owner.strategy?.buildActivationContextForEffect === "function"
       ? owner.strategy.buildActivationContextForEffect({
           sourceCard,
           effect,
@@ -532,7 +533,7 @@ export function buildTriggerEntry(
     options.summary ||
     `${owner.id}:${sourceCard.name}:${effect.id || effect.event || "trigger"}`;
 
-  const triggerGuard = this.game?.canStartAction?.({
+  const triggerGuard = !deferActivationChecks && this.game?.canStartAction?.({
     actor: owner,
     kind: options.guardKind || selectionKind || "triggered",
     phaseReq: options.phaseReq || null,
@@ -541,7 +542,7 @@ export function buildTriggerEntry(
     allowDuringOpponentTurn: options.allowDuringOpponentTurn !== false,
     silent: true,
   });
-  if (triggerGuard?.ok === false) {
+  if (triggerGuard && triggerGuard.ok === false) {
     // Arcturus-style battle locks are real activation rules. Skipping the
     // trigger here keeps analytics focused on bad AI actions instead of
     // recording a blocked activation attempt that could never resolve.
@@ -564,17 +565,17 @@ export function buildTriggerEntry(
     effect,
   };
   const activationRestriction =
-    this.game?.canActivateCardEffectUnderRestrictions?.(
+    !deferActivationChecks && this.game?.canActivateCardEffectUnderRestrictions?.(
       sourceCard,
       owner,
       effect,
       { silent: true },
     );
-  if (activationRestriction?.ok === false) {
+  if (activationRestriction && activationRestriction.ok === false) {
     return null;
   }
   const actionPreview =
-    typeof this.checkActionPreviewRequirements === "function"
+    !deferActivationChecks && typeof this.checkActionPreviewRequirements === "function"
       ? this.checkActionPreviewRequirements(effect.actions || [], previewCtx)
       : { ok: true };
   if (actionPreview?.ok === false) {
@@ -582,7 +583,7 @@ export function buildTriggerEntry(
   }
 
   if (
-    options.skipTargetPreview !== true &&
+    !deferActivationChecks && options.skipTargetPreview !== true &&
     Array.isArray(effect.targets) &&
     effect.targets.length > 0
   ) {
@@ -711,6 +712,7 @@ export function buildTriggerEntry(
     },
   };
 
+  let materializedEntry: TriggerEntry | null | undefined;
   return {
     summary,
     card: sourceCard,
@@ -720,5 +722,17 @@ export function buildTriggerEntry(
     triggerTiming: effect.triggerTiming || null,
     sourceAtTrigger: activationContext.sourceAtTrigger || null,
     config,
+    ...(deferActivationChecks ? {
+      materialize: () => {
+        if (materializedEntry === undefined) {
+          materializedEntry = this.buildTriggerEntry({
+            ...options,
+            activationContext,
+            deferActivationChecks: false,
+          });
+        }
+        return materializedEntry;
+      },
+    } : {}),
   };
 }

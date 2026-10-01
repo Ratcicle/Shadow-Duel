@@ -194,10 +194,14 @@ export async function resolveEvent<Name extends ResolvableEventName>(
       Number(this.summonProcedureDepth || 0) > 0 ||
       Number(this.damageStepProcedureDepth || 0) > 0
     ) {
-      if (eventName === "lp_change" && occurrence) {
+      if ((eventName === "lp_change" || eventName === "after_summon") && occurrence) {
+        // Preserve the event's sources and their presence before later links
+        // move them; summon activation choices/availability still wait for SEGOC.
         try {
           const triggerPackage =
-            (await this.effectEngine?.collectEventTriggers?.(eventName, payload)) ?? null;
+            (await this.effectEngine?.collectEventTriggers?.(eventName,
+              eventName === "after_summon" ? { ...payload, deferActivationChecks: true } : payload,
+            )) ?? null;
           const metadata = getTriggerPackageMetadata(triggerPackage);
           entries = Array.isArray(triggerPackage)
             ? triggerPackage

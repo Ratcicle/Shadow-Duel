@@ -29,6 +29,7 @@ export async function collectAfterSummonTriggers(
 
   const { card, player: summoner, method, fromZone: summonFromZone } = payload;
   const actionContext = payload?.actionContext || null;
+  const deferActivationChecks = payload.deferActivationChecks === true;
   const opponent = this.game?.getOpponent?.(summoner);
   const participants: {
     owner: TriggerRuntimePlayer;
@@ -214,7 +215,7 @@ export async function collectAfterSummonTriggers(
           }
         }
 
-        if (Array.isArray(effect.targets) && effect.targets.length > 0) {
+        if (!deferActivationChecks && Array.isArray(effect.targets) && effect.targets.length > 0) {
           const precheckCtx = {
             ...ctx,
             activationContext: {
@@ -257,6 +258,7 @@ export async function collectAfterSummonTriggers(
           effect,
           ctx,
           activationContext,
+          deferActivationChecks,
           selectionKind: "triggered",
           selectionMessage: "Select target(s) for the triggered effect.",
         });

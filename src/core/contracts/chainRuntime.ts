@@ -1051,6 +1051,8 @@ export interface ChainTriggerEntry {
   config?: ChainTriggerEntryConfig;
   pipeline?: ChainTriggerEntryConfig;
   summary?: string | null;
+  /** Complete captured event entries at their legal activation opportunity. */
+  materialize?: () => ChainTriggerEntry | null;
 }
 
 export type ChainTriggerCompletion = () => ChainMaybePromise<unknown>;

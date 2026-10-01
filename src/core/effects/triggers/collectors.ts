@@ -247,6 +247,8 @@ function collectTemporaryEventTriggers(
       owner,
       effect,
       ctx,
+      deferActivationChecks: eventName === "after_summon" &&
+        "deferActivationChecks" in payload && payload.deferActivationChecks === true,
       activationContext: {
         // The registration triggers independently of the physical card's zone.
         // Keep sourceCard available for actions that explicitly refer to self.
