@@ -1,7 +1,7 @@
 # Replay canônico
 
 O replay executável usa o formato `shadow-duel-canonical-replay`, schema `2` e
-`engineVersion: "field-positions-v2"`. Ele é independente do relatório
+`engineVersion: "dragon-rules-v3"`. Ele é independente do relatório
 estratégico. O importador aceita somente o schema `2`: relatórios v4 e replays
 de schemas anteriores não são partidas executáveis nesta versão.
 
@@ -26,10 +26,24 @@ Cada replay gravado contém:
 
 As cartas recebem `duelCardId` local à partida. Comandos, decisões e snapshots
 usam essa identidade determinística sem depender do contador global de `Card`.
-A assinatura do banco é calculada a partir das definições atuais por
-`getCardDatabaseSignature`. Seu payload e o algoritmo FNV-1a fazem parte do
-contrato de gravação e reprodução; mudanças nesse contrato exigem análise
-própria de compatibilidade dos replays.
+A assinatura do banco é calculada por `getCardDatabaseSignature` sobre as
+definições declarativas completas, incluindo características, materiais,
+restrições, condições, custos, efeitos e actions aninhadas. As chaves dos
+objetos são ordenadas; a ordem das listas é preservada. Essa normalização
+mantém `effects`, ao contrário da projeção de objetos runtime usada nos
+hashes de estado. O algoritmo continua sendo FNV-1a.
+
+Nomes, descrições EN, chaves de tradução e caminhos de arte presentes nas
+definições também entram na assinatura. Alterar esses dados pode invalidar
+um replay mesmo sem mudar uma regra. O conteúdo de `pt-br.json` e o idioma
+selecionado não fazem parte do banco canônico nem dessa assinatura.
+
+A correção da assinatura completa substitui a assinatura parcial antiga,
+que descartava `effects`. Replays gravados com a assinatura antiga são
+recusados pelo importador, sem migração. O schema `2`, os comandos, as
+decisões e a normalização dos hashes de estado permanecem os mesmos.
+Mudanças futuras no payload da assinatura exigem nova análise de
+compatibilidade.
 
 Snapshots do Damage Step também carregam `duelCardId`, incluindo as cartas
 destruídas e movidas ao final da batalha. Seus IDs de instância permanecem
@@ -78,6 +92,31 @@ compatibilidade histórica (`trigger_opportunity`, `trigger_ordered`, `activatio
 
 ## Efeitos temporários e escolhas durante a resolução
 
+O lote Dragon usa a engine `dragon-rules-v3` com os mesmos comandos e kinds de
+decisão do schema `2`. Snapshots incluem `fieldPresenceSummons` por fonte,
+proteções concedidas e `namedOncePerTurnUsage`, incluindo o limite dos
+procedimentos da mão. O histórico de Invocações guarda a presença do monstro,
+o jogador que o Invocou e o turno. Os snapshots copiam essas listas.
+
+Agendamentos de Invocação preservam `expectedLocationVersion` após o envio
+bem-sucedido. Referências a cartas e jogadores nesses registros são projetadas
+para identidades canônicas antes do hash, sem objetos vivos ou `instanceId`.
+Na execução, o retorno exige a mesma carta, zona, dono e versão, inclusive após
+a escolha de posição. A saída e reentrada no Cemitério invalidam o retorno.
+
+O procedimento limitado da mão consome seu uso no compromisso da tentativa,
+inclusive se ela for negada. Ativações de efeitos de Magias de Campo já no
+campo são capturadas como `activate_effect` com origem `fieldSpell`. O driver
+usa a mesma rota pública para reproduzi-las. As decisões do Blindado e da
+Galáxia e as escolhas locais de resolução passam pelo broker. As regressões em
+[`dragonRulesReplay.test.ts`](../test/replay/dragonRulesReplay.test.ts) cobrem
+humanos e IA nos dois assentos, com gravação EN e reprodução PT-BR.
+
+Seleções fornecidas pelo chamador e alvos exatos do planejador também são
+registrados pelo broker, preservando a carta escolhida. O playback consome
+essas identidades canônicas sem consultar o seletor da IA. Essa integração
+é coberta por [`plannedTargetReplay.test.ts`](../test/replay/plannedTargetReplay.test.ts).
+
 Registros criados por `register_temporary_event_effect` recebem um ID do
 contador determinístico `temporary_event`. A fonte e o alvo vinculado guardam
 `sourceDuelCardId` e `boundEventTargetDuelCardId`, mesmo quando a carta deixa
@@ -123,10 +162,11 @@ caracteres do replay, usado para detectar divergências na reprodução.
 
 `validateCanonicalReplay(input)` recebe `unknown`, não muta a entrada e retorna
 a mesma referência somente depois de validar o documento. `setup`, `commands` e
-`decisions` são obrigatórios. `engineVersion`, `events`, `result` e `finalized`
-continuam opcionais na importação de arquivos do schema `2`; quando presentes,
-são validados profundamente. O valor de `engineVersion`, se presente, deve ser
-`"field-positions-v2"`.
+`decisions` e `engineVersion` são obrigatórios. A versão da engine deve ser
+`"dragon-rules-v3"`; gravações sem essa versão são rejeitadas antes da validação
+profunda e da reprodução. `events`, `result` e `finalized` continuam opcionais
+na importação de arquivos do schema `2`; quando presentes, são validados
+profundamente. Os comandos e kinds de decisão permanecem os mesmos.
 
 A validação preserva a ordem e as mensagens públicas dos checks de formato,
 schema, assinatura do banco e campos mínimos. Também valida setup e RNG, as
@@ -154,9 +194,19 @@ replay canônico; o relatório estratégico continua sendo um artefato separado.
 
 O `Game` expõe as APIs `startReplayRecording`, `recordReplayCommand`,
 `recordReplayDecision`, `recordReplayEvent`, `finalizeReplay` e `exportReplay`.
-`capture.ts` instala 14 wrappers nos métodos de ações externas para registrar
+`capture.ts` instala 15 wrappers nos métodos de ações externas para registrar
 o comando após sua resolução. A gravação exige `captureReplay: true` ou uma
 chamada explícita a `startReplayRecording`; a reprodução desabilita a captura.
+
+A Ascensão iniciada pelo monstro no campo (`tryAscensionSummon`) e a iniciada
+pelo Extra Deck usam `extra_deck_summon` com `summonType: "ascension"`. A zona
+da carta identifica o ingresso: material no campo ou destino no Extra Deck.
+Humanos escolhem o candidato restante mesmo quando só há um. A confirmação
+e a Invocação produzem um único comando; cancelar antes do compromisso não
+registra comando. O playback consome a decisão pelo broker sem abrir a UI.
+Para decidir se abre essa seleção no playback, o broker consulta somente
+o próximo registro por tipo, jogador e requisito, sem consumi-lo. O fluxo
+gravado prevalece sobre o tipo de controlador atual do assento.
 
 Ativações de Magias/Armadilhas no Cemitério passam por
 `tryActivateSpellTrapEffect` com `activationZone: "graveyard"`. A confirmação
@@ -179,9 +229,19 @@ Use o comando npm atual:
 npm run replay -- caminho\duelo.json
 ```
 
-A reprodução não usa UI, IA, animações ou relógio real. Ela consome as decisões
-gravadas e interrompe na primeira divergência. Uma assinatura de banco
-diferente encerra a validação antes da partida.
+A reprodução dispensa UI, animações e relógio real. As escolhas encaminhadas
+ao broker consomem as decisões gravadas sem avaliar a estratégia da IA. O
+driver interrompe na primeira divergência; uma assinatura de banco diferente
+encerra a validação antes da partida.
+
+**Limitação conhecida — posição de Invocação-Especial:**
+`chooseSpecialSummonPosition` ainda consulta `isAI` antes do broker. Se uma
+escolha humana de posição for reproduzida em um assento configurado como IA,
+esse caminho pode recalcular a posição e deixar a decisão gravada sem consumo.
+O caso foi reproduzido com Ascensão em Defesa por humano no assento `bot` e
+playback com o controlador padrão desse assento. A seleção de material/destino
+da Ascensão já segue a decisão gravada; a correção geral da escolha de posição
+permanece pendente.
 
 ## Aleatoriedade
 

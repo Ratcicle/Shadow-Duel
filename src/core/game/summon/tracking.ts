@@ -39,6 +39,7 @@ interface SpecialSummonTrackingPayload {
 interface DelayedSummonEntry {
   card?: GameCard | null;
   owner: PlayerId;
+  expectedLocationVersion: number;
   placementActorId?: PlayerId;
   fromZone?: CardArrayZone;
   position?: BattlePositionInput;
@@ -154,17 +155,18 @@ export async function resolveDelayedSummon(
   for (const summonData of summons) {
     const card = summonData.card;
     const targetOwner = summonData.owner;
-    const targetPlayer = targetOwner === "player" ? this.player : this.bot;
+    const targetPlayer = targetOwner === "player" ? this.player : targetOwner === "bot" ? this.bot : null;
 
-    if (!card) {
+    if (!card || !targetPlayer) {
       this.ui?.log?.(`Card reference missing in delayed summon.`);
       continue;
     }
 
     // Verificar se carta ainda está na zona de origem esperada
     const originZone = summonData.fromZone || "graveyard";
-    const zoneList = targetPlayer[originZone];
-    if (!Array.isArray(zoneList) || !zoneList.includes(card)) {
+    const stillInScheduledLocation = () => card.locationVersion === summonData.expectedLocationVersion &&
+      targetPlayer[originZone].includes(card);
+    if (!stillInScheduledLocation()) {
       this.ui?.log?.(
         `${card.name} is no longer in ${originZone}, cannot special summon.`,
       );
@@ -186,8 +188,11 @@ export async function resolveDelayedSummon(
           ? "defense"
           : "attack";
 
+    if (!stillInScheduledLocation()) continue;
+
     // Executar special summon
     const moveResult = await this.moveCard(card, targetPlayer, "field", {
+      fromZone: originZone,
       placementActor: summonData.placementActorId === "player"
         ? this.player
         : summonData.placementActorId === "bot" ? this.bot : targetPlayer,

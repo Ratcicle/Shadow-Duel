@@ -10,6 +10,7 @@ import type {
   CardDeclaredValueMap,
   CardDynamicBuffMap,
   CardKind,
+  FieldPresenceSummonRecord,
   CardPermanentBuffMap,
   CardStatusRegistry,
   MonsterType,
@@ -53,6 +54,7 @@ export type MaybePromise<Value> = Value | PromiseLike<Value>;
  */
 export interface ActionRuntimeCard {
   fieldPresenceId?: string | number | null;
+  fieldPresenceSummons?: FieldPresenceSummonRecord[];
   effectMarkers?: import("./cards.js").CardEffectMarkerMap;
   duelCardId?: number;
   fieldSlot?: FieldSlot | null;
@@ -93,6 +95,7 @@ export interface ActionRuntimeCard {
   position?: BattlePosition;
   isFacedown?: boolean;
   isToken?: boolean;
+  banishWhenLeavesField?: boolean;
   isTuner?: boolean;
   effects?: readonly EffectDefinition[];
   effectsNegated?: boolean | undefined;
@@ -511,6 +514,9 @@ export interface ActionRuntimeGamePort {
 }
 
 interface ActionContextState extends ActionNegationContext {
+  autoSelectTargets?: boolean | undefined;
+  autoSelectSingleTarget?: boolean | undefined;
+  resolvedTargets?: ResolvedTargetMap | null | undefined;
   costPayment?: ChainCostPayment | null;
   payingActivationCosts?: boolean;
   sourceAtActivation?: ChainSourceSnapshot | null;

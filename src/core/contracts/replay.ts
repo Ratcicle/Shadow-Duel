@@ -1,4 +1,4 @@
-import type { BattlePosition } from "./cards.js";
+import type { BattlePosition, CardProtectionEffect, FieldPresenceSummonRecord } from "./cards.js";
 import type { FieldSlot } from "./placement.js";
 import type { ChainRuntimePort } from "./chainRuntime.js";
 import type {
@@ -19,7 +19,7 @@ import type {
 
 export const CANONICAL_REPLAY_FORMAT = "shadow-duel-canonical-replay" as const;
 export const CANONICAL_REPLAY_SCHEMA_VERSION = 2 as const;
-export const CANONICAL_REPLAY_ENGINE_VERSION = "field-positions-v2" as const;
+export const CANONICAL_REPLAY_ENGINE_VERSION = "dragon-rules-v3" as const;
 
 export type SerializablePrimitive = string | number | boolean | null;
 
@@ -363,6 +363,8 @@ export interface CanonicalCardStateSnapshot {
   position: string | null;
   fieldSlot: FieldSlot | null;
   fieldPresenceId: string | number | null;
+  fieldPresenceSummons: FieldPresenceSummonRecord[];
+  protectionEffects: CardProtectionEffect[];
   facedown: boolean;
   atk: number;
   def: number;
@@ -423,6 +425,7 @@ export interface CanonicalGameStateSnapshot {
     bot: CanonicalPlayerStateSnapshot;
   };
   usage: SerializableValue;
+  namedOncePerTurnUsage: SerializableValue;
   delayedActions: SerializableValue;
   temporaryEventEffects: SerializableValue;
   temporaryControlEffects: SerializableValue;
@@ -447,7 +450,7 @@ export interface CanonicalReplayResult {
 export interface CanonicalReplay {
   format: typeof CANONICAL_REPLAY_FORMAT;
   schemaVersion: typeof CANONICAL_REPLAY_SCHEMA_VERSION;
-  engineVersion?: typeof CANONICAL_REPLAY_ENGINE_VERSION;
+  engineVersion: typeof CANONICAL_REPLAY_ENGINE_VERSION;
   cardDatabaseSignature: CanonicalHash;
   setup: CanonicalReplaySetup;
   commands: CanonicalReplayCommand[];
@@ -471,6 +474,8 @@ export interface ReplayRuntimeCard {
   position?: (string | null) | undefined;
   fieldSlot?: FieldSlot | null;
   fieldPresenceId?: string | number | null;
+  fieldPresenceSummons?: readonly FieldPresenceSummonRecord[];
+  protectionEffects?: readonly CardProtectionEffect[];
   isFacedown?: boolean | undefined;
   atk?: number | undefined;
   def?: number | undefined;
@@ -519,6 +524,8 @@ export type CanonicalReplayChainPort = Partial<
 };
 
 export interface CanonicalReplayGamePort {
+  oncePerTurnTurnCounter?: number;
+  oncePerTurnUsage?: { player: ReadonlyMap<string, unknown>; bot: ReadonlyMap<string, unknown> };
   generatedIdCounters?: ReadonlyMap<string, number>;
   turn?: PlayerId | string | null;
   phase?: EventPhase | string | null;
@@ -664,6 +671,7 @@ export interface ReplayDecisionBrokerPort {
 }
 
 export interface ReplayDriverGamePort extends CanonicalReplayGamePort {
+  activateFieldSpellEffect(card: ReplayRuntimeCard): unknown;
   player: ReplayRuntimePlayer;
   bot: ReplayRuntimePlayer;
   phase: EventPhase | string | null;
@@ -697,6 +705,10 @@ export interface ReplayDriverGamePort extends CanonicalReplayGamePort {
     card: ReplayRuntimeCard,
     player: ReplayRuntimePlayer,
     options: object,
+  ): unknown;
+  tryAscensionSummon(
+    material: ReplayRuntimeCard,
+    options: { player: ReplayRuntimePlayer },
   ): unknown;
   performExtraDeckSummonProcedure(
     card: ReplayRuntimeCard,

@@ -281,6 +281,7 @@ export function applySpellTrapFinalizationOverride(
   if (override.type === "default") return false;
 
   card.isFacedown = true;
+  card.fieldPresenceSummons = [];
   const setTurn = Number.isFinite(override.setTurn)
     ? override.setTurn!
     : Number(this?.turnCounter || 0);

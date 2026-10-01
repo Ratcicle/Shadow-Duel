@@ -91,6 +91,9 @@ function driverFixture(consumeDecisions = true): DriverFixture {
     performAscensionSummonFromExtraDeck(card) {
       calls.push(`ascension:${card.id}`);
     },
+    tryAscensionSummon(card) {
+      calls.push(`ascensionMaterial:${card.id}`);
+    },
     performExtraDeckSummonProcedure(card) {
       calls.push(`procedure:${card.id}`);
     },
@@ -105,6 +108,9 @@ function driverFixture(consumeDecisions = true): DriverFixture {
     },
     tryActivateSpellTrapEffect(card) {
       calls.push(`spellTrapEffect:${card.id}`);
+    },
+    activateFieldSpellEffect(card) {
+      calls.push(`fieldSpellEffect:${card.id}`);
     },
     changeMonsterPosition(card, position) {
       calls.push(`position:${card.id}:${position}`);
@@ -124,7 +130,7 @@ function replay(commands: ReadonlyArray<CanonicalReplayCommand> = []) {
   return {
     format: "shadow-duel-canonical-replay",
     schemaVersion: 2,
-    engineVersion: "field-positions-v2",
+    engineVersion: "dragon-rules-v3",
     cardDatabaseSignature: getCardDatabaseSignature(),
     setup: {
       seed: 123,
@@ -254,6 +260,20 @@ test("hand procedure replay preserves exact costs and rejects missing materials"
   await assert.rejects(() => replayCanonicalDuel(replay([
     command(1, "hand_summon_procedure", { duelCardId: 1, materialIds: [999] }),
   ]), { game: fixture.game }), /hand procedure cost is missing/);
+});
+
+test("Ascension replay dispatches by source location and rejects invalid sources", async () => {
+  const fixture = driverFixture();
+  await replayCanonicalDuel(replay([
+    command(1, "extra_deck_summon", { duelCardId: 4, summonType: "ascension" }),
+    command(2, "extra_deck_summon", { duelCardId: 5, summonType: "ascension" }),
+  ]), { game: fixture.game });
+  assert.deepEqual(fixture.calls.slice(2), ["ascensionMaterial:4", "ascension:5"]);
+  for (const [duelCardId, summonType] of [[1, "ascension"], [4, "synchro"], [4, "procedure"], [999, "ascension"]] as const) {
+    await assert.rejects(() => replayCanonicalDuel(replay([
+      command(1, "extra_deck_summon", { duelCardId, summonType }),
+    ]), { game: fixture.game }), /Replay Extra Deck source is missing/);
+  }
 });
 
 test("comando desconhecido é rejeitado antes de inicializar o Game", async () => {

@@ -863,7 +863,7 @@ export const genericCards = [
             player: "self",
             fromZone: "hand",
             to: "graveyard",
-            contextLabel: "natural_selection_cost",
+            contextLabel: "discard",
           },
         ],
         actions: [
@@ -1259,7 +1259,7 @@ export const genericCards = [
             player: "self",
             fromZone: "hand",
             to: "graveyard",
-            contextLabel: "magmatic_obsidian_leviathan_discard_cost",
+            contextLabel: "discard",
           },
         ],
         actions: [

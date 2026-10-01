@@ -211,12 +211,29 @@ Se a carta já declarou `effects[].targets`, obtenha o valor por
 
 - `resolveTargetCards(action, ctx, targets, options)`: pega alvos por `targetRef`
   e aceita fallback controlado.
-- `sendCardsToGraveyard(...)`: envia cartas preservando eventos.
+- `sendCardsToGraveyard(...)`: envia cartas com `moveCard`; veja o fallback abaixo.
 - `collectZoneCandidates(zone, filters, options)`: filtra uma zona.
 - `selectCardsFromZone(...)`: pede seleção de uma zona.
 - `selectCards(...)`: seleção genérica.
 - `payCostAndThen(...)`: padrão custo + efeito.
 - `summonFromHandCore(...)`: núcleo de special summon da mão.
+
+`sendCardsToGraveyard` aguarda cada `moveCard`, mas seu fallback padrão pode
+mover a carta diretamente entre arrays se a API estiver ausente ou o movimento
+falhar. Esse fallback não emite os eventos do movimento. Em novos handlers,
+use `allowFallback: false` para exigir o fluxo canônico e confira o resultado
+antes de continuar um efeito que depende do envio de todas as cartas:
+
+```ts
+const result = await sendCardsToGraveyard(cards, player, engine, {
+  fromZone: "field",
+  allowFallback: false,
+});
+if (result.movedCount !== cards.length) return false;
+```
+
+`movedCards` contém as cartas enviadas com sucesso. Uma falha posterior não
+desfaz os movimentos anteriores.
 
 Regra de UI: handler não deve abrir modal próprio se o target pode ser expresso
 em `targets`. Para seleção dinâmica que precisa passar pelo pipeline de ativação,
@@ -345,9 +362,12 @@ export const handlePayLP: ActionHandler<"pay_lp"> = async (
 
   const before = player.lp;
   player.lp -= amount;
-  game.notify?.("lp_change", {
+  await game.emit?.("lp_change", {
     player,
     sourceCard: ctx.source,
+    lpGained: 0,
+    lpLost: amount,
+    damageAmount: 0,
     lpPaid: amount,
     before,
     after: player.lp

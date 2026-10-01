@@ -28,6 +28,13 @@ export const BATTLE_POSITIONS = Object.freeze(["attack", "defense"] as const);
 
 export type BattlePosition = (typeof BATTLE_POSITIONS)[number];
 
+/** Successful opponent summons observed during one uninterrupted face-up presence. */
+export interface FieldPresenceSummonRecord {
+  targetFieldPresenceId: string | number;
+  summoningPlayerId: PlayerId;
+  turn: number;
+}
+
 /**
  * "choice" is an input sentinel used while selecting a summon position. It is
  * never a valid position stored on a card instance.
@@ -282,7 +289,16 @@ interface CardDefinitionBase {
   readonly properSummonProcedure?: SpecialSummonProcedure;
 }
 
-export interface HandSummonProcedure {
+/** Shared turn limit metadata; consuming a limit does not activate an effect. */
+export type OncePerTurnDefinition = Pick<EffectDefinition,
+  "id" | "oncePerTurn" | "oncePerTurnName" | "oncePerTurnScope" |
+  "oncePerTurnPerCard" | "oncePerTurnLimit"
+> & {
+  readonly usesPerTurn?: number;
+  readonly maxUsesPerTurn?: number;
+};
+
+export interface HandSummonProcedure extends Pick<OncePerTurnDefinition, "oncePerTurn" | "oncePerTurnName"> {
   readonly id: string;
   readonly cost: {
     readonly count: number;
@@ -750,6 +766,7 @@ export interface GameCard {
   fieldExitStatuses: CardStatusRegistry;
   fieldPresenceId: string | number | null;
   fieldPresenceState: Record<string, number> | null;
+  fieldPresenceSummons: FieldPresenceSummonRecord[];
   effectsNegated: boolean;
   effectsNegatedDuration: string | number | null;
   originalAtk: number | null;

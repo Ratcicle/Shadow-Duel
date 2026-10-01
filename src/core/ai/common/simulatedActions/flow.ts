@@ -108,6 +108,7 @@ export function applyScheduleSpecialSummon(
     triggerCondition: { phase: action.phase || action.returnPhase || "end", player: triggerPlayer },
     payload: { summons: [{
       card, owner: owner.id, placementActorId: self.id, fromZone,
+      expectedLocationVersion: card.locationVersion || 0,
       position: action.position, statusesOnSummon: action.statusesOnSummon || null,
       summonMethod: action.summonMethod || "special", summonProcedure: action.summonProcedure || null,
     }] },

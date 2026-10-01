@@ -970,21 +970,25 @@ async function tryReplacement(
     return { replaced: false };
   }
 
-  const strategyAllowsReplacement = await shouldUseAiReplacementEffect({
-    game,
-    player: sourceOwner,
-    sourceCard,
-    effect,
-    replacementEffect: replacement,
-    targetCard: card,
-    cause,
-    fromZone,
-    context: ctx,
-    kind: "destruction",
-  });
-  if (replacement.auto !== true && !strategyAllowsReplacement) {
-    return { replaced: false };
-  }
+  const confirmReplacement = async (message?: string): Promise<boolean> => {
+    if (replacement.auto === true) return true;
+    const targetName = getCardDisplayName(card) || card.name;
+    const sourceName = getCardDisplayName(sourceCard) || sourceCard.name;
+    const prompt = message ||
+      formatReplacementText(replacement.prompt, targetName, sourceName) ||
+      getUIText("ui.replacement.confirmActionCost", { sourceName, cardName: targetName });
+    return requestOptionalConfirmation(
+      game,
+      sourceOwner,
+      async () => (await game.ui?.showConfirmPrompt?.(prompt, {
+        kind: "destruction_replacement", cardName: targetName,
+      })) ?? false,
+      () => shouldUseAiReplacementEffect({
+        game, player: sourceOwner, sourceCard, effect, replacementEffect: replacement,
+        targetCard: card, cause, fromZone, context: ctx, kind: "destruction",
+      }),
+    );
+  };
 
   const markOncePerDuelUsedIfNeeded = () => {
     markOncePerDuelEffectUsed(sourceCard, sourceOwner, effect);
@@ -1040,25 +1044,7 @@ async function tryReplacement(
         return false;
       }
 
-      const sourceIsHuman = sourceOwner?.controllerType === "human";
-      if (sourceIsHuman && replacement.auto !== true) {
-        const targetName = getCardDisplayName(card) || card.name;
-        const sourceName = getCardDisplayName(sourceCard) || sourceCard.name;
-        const prompt =
-          formatReplacementText(replacement.prompt, targetName, sourceName) ||
-          getUIText("ui.replacement.confirmActionCost", {
-            sourceName,
-            cardName: targetName,
-          });
-        const wantsToReplace = await requestOptionalConfirmation(game, sourceOwner, async () =>
-          (await game.ui?.showConfirmPrompt?.(prompt, {
-            kind: "destruction_replacement",
-            cardName: targetName,
-          })) ?? false);
-        if (!wantsToReplace) {
-          return false;
-        }
-      }
+      if (!await confirmReplacement()) return false;
 
       const costCtx = buildActionCostCtx();
       const costResult = await engine.applyActions(costActions, costCtx, {});
@@ -1214,6 +1200,7 @@ async function tryReplacement(
   }
 
   if (replacement.auto === true || costCount === 0) {
+    if (!await confirmReplacement()) return { replaced: false };
     game.markOncePerTurnUsed(sourceCard, sourceOwner, effect);
     markOncePerDuelUsedIfNeeded();
     const logMessage = formatReplacementText(
@@ -1279,6 +1266,20 @@ async function tryReplacement(
   );
   const costActionText = getCostActionText(costDestination);
 
+  const costDescription = getCostTypeDescription(costFilters, costCount);
+  const targetName = getCardDisplayName(card) || card.name;
+  const sourceName = getCardDisplayName(sourceCard) || sourceCard.name;
+  const prompt =
+    formatReplacementText(replacement.prompt, targetName, sourceName) ||
+    getUIText("ui.replacement.confirmCost", {
+      verb: costActionText.verb,
+      count: costCount,
+      costDescription,
+      suffix: costActionText.suffix,
+      cardName: targetName,
+    });
+  if (!await confirmReplacement(prompt)) return { replaced: false };
+
   // AI auto-selection (lowest ATK for cost). Bot Arena can place an AI in the
   // "player" seat, so controllerType is the reliable human/AI boundary.
   if (costOwner.controllerType !== "human") {
@@ -1323,28 +1324,6 @@ async function tryReplacement(
       );
     }
     return { replaced: true };
-  }
-
-  const costDescription = getCostTypeDescription(costFilters, costCount);
-  const targetName = getCardDisplayName(card) || card.name;
-  const sourceName = getCardDisplayName(sourceCard) || sourceCard.name;
-  const prompt =
-    formatReplacementText(replacement.prompt, targetName, sourceName) ||
-    getUIText("ui.replacement.confirmCost", {
-      verb: costActionText.verb,
-      count: costCount,
-      costDescription,
-      suffix: costActionText.suffix,
-      cardName: targetName,
-    });
-
-  const wantsToReplace =
-    (await game.ui?.showConfirmPrompt?.(prompt, {
-      kind: "destruction_replacement",
-      cardName: targetName,
-    })) ?? false;
-  if (!wantsToReplace) {
-    return { replaced: false };
   }
 
   const selectionMessage =

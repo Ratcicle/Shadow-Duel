@@ -951,7 +951,7 @@
     },
     "262": {
       "name": "Pico Escarpado dos Dragões",
-      "description": "Quando este card for ativado: você pode adicionar 1 monstro Dragão de Nível 4 ou menor do seu Cemitério à sua mão.\n\nCada vez que um monstro Dragão destruir um monstro do oponente em batalha, coloque 1 Marcador de Pico Dracônico neste card.\n\nUma vez por turno: se este card tiver 7 ou mais Marcadores de Pico Dracônico, você pode enviar este card para o Cemitério; Invoque por Invocação-Especial 1 monstro do tipo Dragão da sua mão, Deck ou Cemitério."
+      "description": "Quando este card for ativado: você pode adicionar 1 monstro Dragão de Nível 4 ou menor do seu Cemitério à sua mão.\n\nCada vez que um monstro Dragão destruir um monstro do oponente em batalha, coloque 1 Marcador de Pico Dracônico neste card.\n\nUma vez por turno, se este card tiver 7 ou mais Marcadores de Pico Dracônico: você pode enviar este card para o Cemitério; Invoque por Invocação-Especial 1 monstro do tipo Dragão da sua mão, Deck ou Cemitério."
     },
     "263": {
       "name": "Dragão Serpente Abissal",
@@ -959,7 +959,7 @@
     },
     "264": {
       "name": "Dragão de Cristal Purificado",
-      "description": "Você pode Invocar este card por Invocação-Especial da sua mão ao banir 3 monstros do tipo Dragão do seu Cemitério.\n\nSe este card destruir um monstro em batalha: ganhe LP igual ao Nível do monstro destruído x100.\n\nVocê pode escolher 1 outro monstro Dragão que você controla; ele não pode ser destruído por efeitos de card até o final do próximo turno.\n\nVocê só pode usar cada efeito de \"Dragão de Cristal Purificado\" uma vez por turno."
+      "description": "Você pode Invocar este card por Invocação-Especial da sua mão ao banir 3 monstros do tipo Dragão do seu Cemitério. Você só pode tentar Invocar \"Dragão de Cristal Purificado\" por Invocação-Especial desta forma uma vez por turno, mesmo que a Invocação seja negada.\n\nSe este card destruir um monstro em batalha: ganhe LP igual ao Nível do monstro destruído x100.\n\nVocê pode escolher 1 outro monstro Dragão que você controla; ele não pode ser destruído por efeitos de card até o final do próximo turno.\n\nVocê só pode usar cada efeito de \"Dragão de Cristal Purificado\" uma vez por turno."
     },
     "265": {
       "name": "Dragão Tecno-Vazio",
@@ -971,11 +971,11 @@
     },
     "267": {
       "name": "Dragão Cósmico Arco-Íris",
-      "description": "\"Dragão de Cristal Purificado\"\n\nRequisito: o material deve ter ativado seus efeitos 3 vezes neste duelo.\n\nUma vez por turno: escolha 1 monstro do Tipo Dragão que você controla; ele não pode ser destruído em batalha ou por efeitos de card até o final do próximo turno.\n\nSe este card destruir um monstro em batalha: ganhe PV igual ao ATK original do monstro destruído.\n\nVocê pode banir este card do seu Cemitério; envie de 1 a 3 monstros \"Dragão Extremo\" do seu Deck para o Cemitério."
+      "description": "\"Dragão de Cristal Purificado\"\n\nRequisito: o material deve ter ativado seus efeitos 3 vezes neste duelo.\n\nUma vez por turno: você pode escolher 1 monstro do Tipo Dragão que você controla; ele não pode ser destruído em batalha ou por efeitos de card até o final do próximo turno.\n\nSe este card destruir um monstro em batalha: ganhe PV igual ao ATK original do monstro destruído.\n\nVocê pode banir este card do seu Cemitério; envie de 1 a 3 monstros \"Dragão Extremo\" do seu Deck para o Cemitério."
     },
     "268": {
       "name": "Santuário do Espírito do Dragão",
-      "description": "Quando um monstro Dragão que você controla for alvo de um ataque ou efeito de card do oponente: devolva esse monstro para a mão; então Invoque por Invocação-Especial 1 monstro Dragão da sua mão com Nível menor ou igual ao do monstro devolvido.\n\nVocê só pode ativar 1 \"Santuário do Espírito Dragão\" por turno."
+      "description": "Quando um monstro Dragão que você controla for alvo de um ataque ou efeito de card do oponente: devolva esse monstro para a mão; então Invoque por Invocação-Especial 1 monstro Dragão da sua mão com Nível menor ou igual ao do monstro devolvido.\n\nVocê só pode ativar 1 \"Santuário do Espírito do Dragão\" por turno."
     },
     "269": {
       "name": "Dragão da Chama Óssea",
@@ -983,7 +983,7 @@
     },
     "270": {
       "name": "Dragão Extremo de Fogo",
-      "description": "Só pode haver 1 monstro \"Dragão Extremo\" com a face para cima no campo.\n\nEnquanto este card for o único monstro que você controla, ele não pode ser destruído por efeitos de cards.\n\nSe este card destruir um monstro do oponente em batalha: cause dano ao seu oponente igual à metade do ATK original do monstro destruído.\n\nCada vez que seu oponente ativar um card ou efeito: cause 300 de dano ao seu oponente.\n\nSe este card for destruído em batalha: você pode Invocar por Invocação-Especial 1 \"Dragão Extremo Vulcânico\" da sua mão ou do Deck."
+      "description": "Só pode haver 1 monstro \"Dragão Extremo\" com a face para cima no campo.\n\nEnquanto este card for o único monstro que você controla, ele não pode ser destruído por efeitos de cards.\n\nSe este card destruir um monstro do oponente em batalha: cause dano ao seu oponente igual à metade do ATK original do monstro destruído.\n\nCada vez que seu oponente ativar um card ou efeito: cause 300 de dano ao seu oponente."
     },
     "271": {
       "name": "Dragão Extremo Vulcânico",
@@ -991,15 +991,15 @@
     },
     "272": {
       "name": "Dragão Extremo da Névoa",
-      "description": "Só pode haver 1 monstro \"Dragão Extremo\" com a face para cima no campo.\n\nMonstros Invocados pelo seu oponente não podem declarar ataques no turno em que forem Invocados.\n\nUma vez por turno: você pode escolher 1 card que seu oponente controla; devolva-o para a mão.\n\nSe este card for destruído em batalha: embaralhe no Deck todos os cards que seu oponente controla."
+      "description": "Só pode haver 1 monstro \"Dragão Extremo\" com a face para cima no campo.\n\nEnquanto este card permanecer com a face para cima no campo, monstros que seu oponente Invocar não podem declarar ataques no turno em que forem Invocados. Esta restrição não se aplica a monstros que já estavam no campo quando este card entrou no campo nem a monstros que mudarem de controle.\n\nUma vez por turno: você pode escolher 1 card que seu oponente controla; devolva-o para a mão.\n\nSe este card for destruído em batalha: embaralhe no Deck todos os cards que seu oponente controla."
     },
     "273": {
       "name": "Dragão Extremo da Galáxia",
-      "description": "Só pode haver 1 monstro \"Dragão Extremo\" com a face para cima no campo.\n\nQualquer card enviado ao Cemitério do seu oponente é banido em vez disso.\n\nUma vez por Duelo, se este card seria destruído em batalha ou por efeito de card: você pode bani-lo até o final do próximo turno e, se isso acontecer, escolha 1 card que seu oponente controla; bana-o."
+      "description": "Só pode haver 1 monstro \"Dragão Extremo\" com a face para cima no campo.\n\nQualquer card enviado ao Cemitério do seu oponente é banido em vez disso.\n\nUma vez por Duelo, se este card seria destruído em batalha ou por efeito de card: você pode bani-lo até o final do próximo turno em vez disso. Depois, se seu oponente controlar algum card, escolha 1 desses cards e bana-o."
     },
     "274": {
       "name": "Dragão Extremo da Floresta",
-      "description": "Só pode haver 1 monstro \"Dragão Extremo\" com a face para cima no campo.\n\nDurante cada Fase de Apoio: ganhe 200 PV para cada card que seu oponente controla e para cada card na mão dele.\n\nCada vez que seu oponente Invocar um monstro ou ativar um card ou efeito: ganhe 100 PV.\n\nUma vez por turno (Efeito Rápido): este card ganha ATK igual ao total de PV que você ganhou neste turno, até o final deste turno."
+      "description": "Só pode haver 1 monstro \"Dragão Extremo\" com a face para cima no campo.\n\nDurante cada Fase de Espera: ganhe 200 PV para cada card que seu oponente controla e para cada card na mão dele.\n\nCada vez que seu oponente Invocar um monstro ou ativar um card ou efeito: ganhe 100 PV.\n\nUma vez por turno (Efeito Rápido): este card ganha ATK igual ao total de PV que você ganhou neste turno, até o final deste turno."
     },
     "275": {
       "name": "Dragão Bahamut Supremo",
@@ -1139,7 +1139,7 @@
     },
     "363": {
       "name": "Leviatã do Deserto dos Vinculados à Miragem",
-      "description": "\"Víbora de Vidro dos Vinculados à Miragem\" + 1 monstro \"Vinculados à Miragem\"\n\nVocê pode Invocar este card por Invocação-Fusão do seu Deck Adicional ao enviar os materiais acima que você controla para o Cemitério.\n\nSe este card for Invocado por Invocação-Fusão: mude a posição de batalha de todos os monstros que seu oponente controla.\n\nEnquanto este card estiver com a face para cima no campo, cada vez que um monstro do seu oponente mudar sua posição de batalha por efeito de um card \"Vinculados à Miragem\", ele perde 300 ATK/DEF até o final deste turno.\n\nSe este card seria destruído em batalha: você pode devolvê-lo para o Deck Adicional em vez disso."
+      "description": "\"Víbora de Vidro dos Vinculados à Miragem\" + 1 monstro \"Vinculados à Miragem\"\n\nDeve ser Invocado por Invocação-Fusão do seu Deck Adicional enviando os materiais acima que você controla para o Cemitério, e não pode ser Invocado por Invocação-Especial de outras formas.\n\nSe este card for Invocado por Invocação-Fusão: mude a posição de batalha de todos os monstros que seu oponente controla.\n\nEnquanto este card estiver com a face para cima no campo, cada vez que um monstro do seu oponente mudar sua posição de batalha por efeito de um card \"Vinculados à Miragem\", ele perde 300 ATK/DEF até o final deste turno.\n\nSe este card seria destruído em batalha: você pode devolvê-lo para o Deck Adicional em vez disso."
     },
     "364": {
       "name": "Rebelde dos Vinculados à Miragem",

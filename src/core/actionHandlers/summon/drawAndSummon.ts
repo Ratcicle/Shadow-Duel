@@ -8,7 +8,7 @@ import type {
 } from "../../contracts/actionRuntime.js";
 import type { CardFilter } from "../../contracts/effects.js";
 import { getCardDisplayName, getUIText } from "../../i18n.js";
-import { getUI } from "../shared.js";
+import { getUI, requestOptionalConfirmation } from "../shared.js";
 import { performSummonFromHand } from "./fromHand.js";
 
 type DrawConditionFilters = Omit<CardFilter, "type"> & {
@@ -180,6 +180,20 @@ export async function handleDrawAndSummon(
     return true;
   }
 
+  if (optional) {
+    const cardName = getCardDisplayName(drawnCard) || drawnCard.name;
+    const wantsToSummon = await requestOptionalConfirmation(
+      game,
+      player,
+      async () => (await getUI(game)?.showConfirmPrompt?.(
+        getUIText("ui.summon.drawnPrompt", { cardName }),
+        { kind: "draw_and_summon", cardName },
+      )) ?? false,
+      () => true,
+    );
+    if (!wantsToSummon) return true;
+  }
+
   if (isAI(player)) {
     const summonResult = await performSummonFromHand(
       drawnCard,
@@ -193,19 +207,6 @@ export async function handleDrawAndSummon(
       "needsSelection" in summonResult
       ? summonResult
       : true;
-  }
-
-  if (optional) {
-    const cardName = getCardDisplayName(drawnCard) || drawnCard.name;
-    const wantsToSummon =
-      (await getUI(game)?.showConfirmPrompt?.(
-        getUIText("ui.summon.drawnPrompt", { cardName }),
-        { kind: "draw_and_summon", cardName },
-      )) ?? false;
-
-    if (!wantsToSummon) {
-      return true;
-    }
   }
 
   const summonResult = await performSummonFromHand(

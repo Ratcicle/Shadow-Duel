@@ -1,3 +1,4 @@
+import { getCounterCount } from "../common/counters.js";
 import type {
   DragonCard,
   DragonPlayer,
@@ -181,7 +182,7 @@ export function buildDragonBossContext(context: DragonPolicyContext = {}) {
     hasName(spellTrap, "Call of the Haunted");
   const hasJaggedCashout =
     player?.fieldSpell?.name === "Jagged Peak of the Dragons" &&
-    Number((player.fieldSpell?.counters as Partial<Record<string, number>> | undefined)?.dragon_peak || 0) >= 5;
+    getCounterCount(player.fieldSpell, "dragon_peak") >= 7;
 
   const ctx = {
     ...context,

@@ -30,6 +30,7 @@ import { createPlanningOwnerPolicy } from "./common/planningOwner.js";
 import { withoutLiveGameReference } from "./common/gameTreeSimulation.js";
 import type { GameTreeModels, PlanningModel } from "../contracts/aiPlanning.js";
 
+import { isFieldPresenceSummonAttackRestricted } from "../game/combat/availability.js";
 import type {
   AIAction,
   AIActionType,
@@ -611,6 +612,7 @@ function getCardKey(card: PlannerCard | null | undefined): string {
     card.position || "",
     card.fieldSlot ?? "off-field",
     card.fieldPresenceId || "",
+    JSON.stringify(card.fieldPresenceSummons || []),
     card.originalOwner || "",
     card.controller || "",
     card.isFacedown ? "fd" : "fu",
@@ -911,6 +913,9 @@ function canPlannerAttackerStillAttack(
   state: PlanningState,
 ): boolean {
   if (!isBattleReadyPlannerAttacker(card)) return false;
+  const opponent = state.player;
+  if (isFieldPresenceSummonAttackRestricted(card,
+    [...opponent.field, ...opponent.spellTrap, ...(opponent.fieldSpell ? [opponent.fieldSpell] : [])], state.turnCounter, state.bot.id)) return false;
   const used = Number(card.attacksUsedThisTurn || 0);
   return used < getPlannerMaxAttacks(card, state);
 }

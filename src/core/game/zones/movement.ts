@@ -7,7 +7,7 @@ import {
   restoreTrapMonsterOriginalState,
 } from "../../Card.js";
 import { SUMMON_MODES } from "../summon/transaction.js";
-import { refreshEquipExtraAttackBonus } from "../../effects/passives/passiveBuffs.js";
+import { getSendToGraveReplacementDestination, refreshEquipExtraAttackBonus } from "../../effects/passives/passiveBuffs.js";
 import { getAvailableFieldSlots, getFieldOccupants, isFieldSlot } from "./placement.js";
 import { checkpointZoneSnapshotAfterResponse } from "./snapshot.js";
 import type { FieldPlacementIntent } from "../../contracts/placement.js";
@@ -1190,47 +1190,7 @@ function findSendToGraveReplacementTarget(
   card: GameCard,
   fromOwner: GamePlayer,
 ): CanonicalZone | null {
-  if (!game || !card || !fromOwner) return null;
-
-  const players = [game.player, game.bot].filter(Boolean);
-  for (const sourceOwner of players) {
-    const fieldCards = sourceOwner.field || [];
-    for (const sourceCard of fieldCards) {
-      if (!sourceCard || sourceCard.isFacedown) continue;
-      const effects = Array.isArray(sourceCard.effects)
-        ? sourceCard.effects
-        : [];
-      for (const effect of effects) {
-        if (!effect || effect.timing !== "passive") continue;
-        const passive = effect.passive;
-        if (!passive || passive.type !== "send_to_grave_replacement") continue;
-
-        // Determine which card-owner this replacement applies to.
-        // "self"     → cards owned by the source's controller
-        // "opponent" → cards owned by the source's opponent (most common)
-        // "any"      → any card
-        const targetOwnerKey = passive.targetOwner || "opponent";
-        if (targetOwnerKey !== "any") {
-          const expectedOwner =
-            targetOwnerKey === "self"
-              ? sourceOwner
-              : game.getOpponent(sourceOwner);
-          if (expectedOwner !== fromOwner) continue;
-        }
-
-        // Galaxy Extreme Dragon must not redirect cards going to its own
-        // controller's Graveyard. The check above already handles that, but
-        // also skip the source card itself (it should never end up redirected
-        // by its own passive).
-        if (sourceCard === card) continue;
-
-        const redirectTo = passive.redirectTo || "banished";
-        return redirectTo;
-      }
-    }
-  }
-
-  return null;
+  return getSendToGraveReplacementDestination(card, fromOwner, [game.player, game.bot]);
 }
 
 function asArray<Value>(
@@ -2712,6 +2672,8 @@ export async function moveCardInternal(
   if (card.owner !== fromOwner.id) {
     card.owner = fromOwner.id;
   }
+
+  if (fromZone !== toZone || options.isFacedown === true) card.fieldPresenceSummons = [];
 
   const effectsNegatedAtFieldExit =
     fromZone === "field" &&

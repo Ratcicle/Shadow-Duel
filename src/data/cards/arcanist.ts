@@ -695,6 +695,7 @@ export const arcanistCards = [
                     targetRef: "meeting_arcanists_discard_monsters",
                     player: "self",
                     to: "graveyard",
+                    contextLabel: "discard",
                   },
                   {
                     type: "search_any",
@@ -725,6 +726,7 @@ export const arcanistCards = [
                     targetRef: "meeting_arcanists_discard_spells",
                     player: "self",
                     to: "graveyard",
+                    contextLabel: "discard",
                   },
                   {
                     type: "search_any",

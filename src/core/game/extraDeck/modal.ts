@@ -19,6 +19,7 @@ import type {
   FusionMaterialDefinition,
   GameCard,
 } from "../../contracts/cards.js";
+import type { DecisionBrokerPort } from "../../contracts/decisions.js";
 import type {
   MaybePromise,
   MoveCardOptions,
@@ -165,6 +166,7 @@ interface ExtraDeckUiPort {
 }
 
 interface ExtraDeckHost {
+  decisionBroker: Pick<DecisionBrokerPort, "mode" | "hasReplaySelection">;
   turn: string;
   ui: ExtraDeckUiPort;
   autoSelector?: {
@@ -976,8 +978,11 @@ export async function performAscensionSummonFromExtraDeck(
   }
 
   const materials = check.candidates || [];
+  const requiresChoice = this.decisionBroker.mode === "replay"
+    ? this.decisionBroker.hasReplaySelection("ascension", player.id, "ascension_material")
+    : !isAI(player);
   const material =
-    options.material || (materials.length === 1 ? materials[0] : null);
+    options.material || (!requiresChoice && materials.length === 1 ? materials[0] : null);
   if (material) {
     this.closeExtraDeckModal?.();
     return await this.performAscensionSummon(player, material, card);

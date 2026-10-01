@@ -12,6 +12,7 @@ import {
 import type { AiCardFilter } from "../cardFilters.js";
 import { getZoneCards, findCardZone } from "../zones.js";
 import { applyStatusesOnSummon } from "../../../Card.js";
+import { recordFieldPresenceSummon } from "../../../effects/triggers/counters.js";
 import type {
   ActionOf,
   ActionProperties,
@@ -1051,6 +1052,7 @@ export function applySummonState(
       (card.tempDefBoost || 0) + (action.defBoostAfterSummon as number);
   }
   applyStatusesOnSummon(card, action.statusesOnSummon);
+  recordFieldPresenceSummon(state, { card, player });
 }
 
 export function pickCountForAction(

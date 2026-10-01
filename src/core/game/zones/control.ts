@@ -8,6 +8,7 @@
  */
 
 import type { GameCard } from "../../contracts/cards.js";
+import { clearFieldPresenceSummonTarget } from "../../effects/triggers/counters.js";
 import type {
   FullGameHost,
   TemporaryControlEffect,
@@ -209,6 +210,7 @@ export async function transferControl(
     nextController.field.push(card);
     card.owner = nextController.id;
     card.controller = nextController.id;
+    clearFieldPresenceSummonTarget(this, card);
     if (!card.originalOwner) {
       card.originalOwner = previousController.id;
     }

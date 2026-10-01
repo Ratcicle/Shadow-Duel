@@ -51,6 +51,10 @@ interface CapturedGameMethods {
     player?: GamePlayer,
     options?: ExtraDeckCaptureOptions,
   ): Promise<unknown>;
+  tryAscensionSummon(
+    material: GameCard,
+    options?: { player?: GamePlayer; owner?: GamePlayer },
+  ): Promise<unknown>;
   performExtraDeckSummonProcedure(
     cardOrIndex: GameCard | number,
     player?: GamePlayer,
@@ -84,6 +88,7 @@ interface CapturedGameMethods {
     selections?: CanonicalSelectionMap | null,
     options?: SpellActivationCaptureOptions,
   ): Promise<unknown>;
+  activateFieldSpellEffect(card: GameCard | null | undefined): unknown;
   changeMonsterPosition(
     card: GameCard,
     position: BattlePosition,
@@ -110,12 +115,14 @@ export const REPLAY_CAPTURE_METHOD_NAMES = Object.freeze([
   "flipSummon",
   "performSynchroSummonFromExtraDeck",
   "performAscensionSummonFromExtraDeck",
+  "tryAscensionSummon",
   "performExtraDeckSummonProcedure",
   "performHandSummonProcedure",
   "setSpellOrTrap",
   "tryActivateMonsterEffect",
   "tryActivateSpell",
   "tryActivateSpellTrapEffect",
+  "activateFieldSpellEffect",
   "changeMonsterPosition",
   "resolveCombat",
   "nextPhase",
@@ -201,9 +208,24 @@ function installReplayCommandCapture(
     const generation = this.fieldPlacementGeneration;
     const recording = this._canonicalReplay;
     const descriptor = Reflect.apply(describe, this, [args]);
-    const result = await Reflect.apply(original, this, args);
+    const previousSelection = this.targetSelection;
+    const pending = Reflect.apply(original, this, args);
+    const openedSelection = this.targetSelection;
+    // Some entrypoints settle only after their selection has finished. Attach
+    // before awaiting so confirmation records once and cancellation records nothing.
+    const deferredToSelection = Boolean(
+      descriptor && openedSelection && openedSelection !== previousSelection &&
+      generation === this.fieldPlacementGeneration && recording === this._canonicalReplay &&
+      this.captureReplayEnabled && this.replayMode !== "playback" &&
+      !this._activeDeferredReplayCommandDescriptor,
+    );
+    if (deferredToSelection && openedSelection) {
+      openedSelection.replayCommandDescriptor = descriptor;
+    }
+    const result = await pending;
     if (
       descriptor &&
+      !deferredToSelection &&
       generation === this.fieldPlacementGeneration &&
       recording === this._canonicalReplay &&
       this.captureReplayEnabled &&
@@ -297,6 +319,15 @@ export const REPLAY_CAPTURE_BINDINGS = Object.freeze([
         }
       : null;
   }),
+  binding("tryAscensionSummon", function (args) {
+    const [material, options = {}] = args;
+    const actor = options.player || options.owner || this.player;
+    return {
+      type: "extra_deck_summon",
+      actorId: actor.id,
+      payload: cardPayload(this, material, { summonType: "ascension" as const }),
+    };
+  }),
   binding("performExtraDeckSummonProcedure", function (args) {
     const [cardOrIndex, actor = this.player, options = {}] = args;
     const card =
@@ -379,6 +410,15 @@ export const REPLAY_CAPTURE_BINDINGS = Object.freeze([
           }),
         }
       : null;
+  }),
+  binding("activateFieldSpellEffect", function (args) {
+    const [card] = args;
+    const actor = card?.owner === "bot" ? this.bot : this.player;
+    return card ? {
+      type: "activate_effect",
+      actorId: actor.id,
+      payload: cardPayload(this, card, { sourceZone: "fieldSpell" as const }),
+    } : null;
   }),
   binding("changeMonsterPosition", function (args) {
     const [card, position] = args;

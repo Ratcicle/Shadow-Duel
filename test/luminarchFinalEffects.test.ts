@@ -422,23 +422,30 @@ for (const seat of ["player", "bot"] as const) {
           void summon.then(() => { finished = true; }, () => { finished = true; });
           const submitted = new Set<NonNullable<RuntimeGame["targetSelection"]>>();
           const selections: Promise<unknown>[] = [];
-          for (let attempts = 0; attempts < 1000 && !finished; attempts++) {
+          let pendingSelections = 0;
+          let materialChoices = 0;
+          for (let attempts = 0; attempts < 1000; attempts++) {
             const session = live.targetSelection;
             if (session && !submitted.has(session)) {
               submitted.add(session);
-              choices++;
+              if (session.kind === "ascension") materialChoices++;
+              else choices++;
               for (const requirement of session.requirements) {
-                assert.deepEqual(requirement.candidates.map(candidate => candidate.cardRef?.id), [1]);
+                assert.deepEqual(requirement.candidates.map(candidate => candidate.cardRef?.id), [session.kind === "ascension" ? 151 : 1]);
                 session.selections[requirement.id] = [required(requirement.candidates[0]).key];
               }
-              selections.push(live.finishTargetSelection());
+              pendingSelections++;
+              selections.push(live.finishTargetSelection().finally(() => { pendingSelections--; }));
             }
+            if (finished && pendingSelections === 0 && !live.targetSelection) break;
             await new Promise<void>(resolve => setImmediate(resolve));
           }
           assert.equal(finished, true, "human summon and target decisions must finish");
           await Promise.all(selections);
           const result = await summon;
-          assert.equal(result.success, true);
+          assert.equal(result.needsSelection, true);
+          assert.ok(owner.field.includes(lancer));
+          assert.equal(materialChoices, 1);
           assert.deepEqual([lancer.atk, target.def], [accept ? 2600 : 2100, previousDef + (accept ? 500 : 0)]);
           assert.equal(choices, accept ? 1 : 0);
         }

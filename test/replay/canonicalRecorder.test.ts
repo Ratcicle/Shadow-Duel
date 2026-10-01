@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import Card from "../../src/core/Card.js";
+import { cardDefinition } from "../helpers/fixtures.js";
 import type { FieldPlacementResult } from "../../src/core/contracts/placement.js";
 import { createRuntimeGame } from "../helpers/game.js";
 
@@ -68,6 +69,47 @@ function recorderGame(): ReplayRecorderGamePort {
   };
 }
 
+test("canonical state includes summon history, protections and named procedure usage", t => {
+  const game = createRuntimeGame({ laboratoryMode: true, captureReplay: false, randomSeed: 15 });
+  t.after(() => game.dispose());
+  const source = new Card(cardDefinition(272), "player");
+  game.player.hand.push(source);
+  const initial = hashCanonicalGameState(game);
+  source.fieldPresenceSummons.push({ targetFieldPresenceId: "presence_1", summoningPlayerId: "bot", turn: 1 });
+  const withHistory = hashCanonicalGameState(game);
+  assert.notEqual(withHistory, initial);
+  source.protectionEffects = [{ type: "effect_destruction", duration: "until_end_of_next_turn", expiresOnTurn: 2, removeOnLeave: true }];
+  const withProtection = hashCanonicalGameState(game);
+  assert.notEqual(withProtection, withHistory);
+  game.oncePerTurnUsage.player.set("once_per_turn:procedure", 1);
+  assert.notEqual(hashCanonicalGameState(game), withProtection);
+  const snapshot = createCanonicalStateSnapshot(game);
+  source.fieldPresenceSummons[0]!.turn = 5;
+  source.protectionEffects[0]!.expiresOnTurn = 6;
+  assert.equal(snapshot.players.player.zones.hand[0]?.fieldPresenceSummons[0]?.turn, 1);
+  assert.equal(snapshot.players.player.zones.hand[0]?.protectionEffects[0]?.expiresOnTurn, 2);
+});
+
+test("delayed summons serialize duel identities independently of process-local cards", t => {
+  const make = () => {
+    const game = createRuntimeGame({ laboratoryMode: true, captureReplay: false, randomSeed: 15 });
+    t.after(() => game.dispose());
+    const card = new Card(cardDefinition(254), "player");
+    game.player.graveyard.push(card);
+    game.ensureDuelCardId(card);
+    game.delayedActions.push({ id: "delayed_action_1", actionType: "delayed_summon", scheduledTurn: 1, priority: 1,
+      triggerCondition: { player: "player", phase: "standby" },
+      payload: { summons: [{ card, owner: "player", fromZone: "graveyard", expectedLocationVersion: 0 }] },
+    });
+    return game;
+  };
+  const first = make(), second = make();
+  assert.equal(hashCanonicalGameState(first), hashCanonicalGameState(second));
+  const serialized = JSON.stringify(createCanonicalStateSnapshot(first).delayedActions);
+  assert.ok(!serialized.includes("instanceId"));
+  assert.ok(serialized.includes("duelCardId"));
+});
+
 test("APIs canônicas preservam as aridades públicas", () => {
   assert.deepEqual(
     {
@@ -125,9 +167,9 @@ test("recorder preserva key order, defaults e assinatura do formato", () => {
   ]);
   assert.equal(recording.format, "shadow-duel-canonical-replay");
   assert.equal(recording.schemaVersion, 2);
-  assert.equal(recording.engineVersion, "field-positions-v2");
+  assert.equal(recording.engineVersion, "dragon-rules-v3");
   assert.equal(recording.cardDatabaseSignature, getCardDatabaseSignature());
-  assert.equal(recording.cardDatabaseSignature, "6cbacf19");
+  assert.equal(recording.cardDatabaseSignature, "5b84ee08");
   assert.deepEqual(Object.keys(recording.setup), [
     "seed",
     "randomState",

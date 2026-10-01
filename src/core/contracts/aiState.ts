@@ -376,6 +376,8 @@ export interface AiCardInput {
   properSummonProcedure?: GameCard["properSummonProcedure"];
   fieldLimit?: GameCard["fieldLimit"];
   fieldPresenceRestriction?: GameCard["fieldPresenceRestriction"];
+  fieldPresenceId?: GameCard["fieldPresenceId"];
+  fieldPresenceSummons?: readonly Readonly<GameCard["fieldPresenceSummons"][number]>[];
   position?: BattlePosition | string | null | undefined;
   isFacedown?: boolean | undefined;
   effects?: GameCard["effects"];
@@ -511,6 +513,8 @@ export interface SimulatedDelayedSummonAction {
     owner: string;
     placementActorId: string;
     fromZone: ZoneInput;
+    expectedLocationVersion: number;
+    getsBuffIfTargetWasFusionOrAscension?: boolean;
     position?: BattlePositionInput | undefined;
     statusesOnSummon: ActionProperties["statusesOnSummon"] | null;
     summonMethod: string;

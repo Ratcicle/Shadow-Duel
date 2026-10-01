@@ -48,7 +48,8 @@ export function processSimulatedDelayedActions(
         state._simUnsupportedActions.push("delayed_summon_method");
         continue;
       }
-      if (!owner || !getZoneCards(owner, fromZone).includes(card)) continue;
+      if (!owner || !getZoneCards(owner, fromZone).includes(card) ||
+          (card.locationVersion || 0) !== summon.expectedLocationVersion) continue;
       if (!canSimulatedSpecialSummon(card, owner, summon.summonProcedure || method, fromZone) ||
           !canSimulatedProcedureEnterField(card, owner, opponent, [])) continue;
       if (!moveCardToZone(owner, card, "field", owner, { state })) continue;
@@ -66,6 +67,11 @@ export function processSimulatedDelayedActions(
       options.emitSimulatedEvent?.("after_summon", { card, player: owner, method, fromZone,
         summonProcedure: summon.summonProcedure, sourceCard: card });
       options.emitSimulatedEvent?.("card_moved", { card, player: owner, fromZone, toZone: "field", movedByEffect: true });
+      if (summon.getsBuffIfTargetWasFusionOrAscension && card.cardKind === "monster") {
+        card.atk = (card.atk || 0) + 800;
+        card.turnBasedBuffs ??= [];
+        card.turnBasedBuffs.push({ stat: "atk", value: 800, expiresOnTurn: (state.turnCounter || 0) + 1 });
+      }
     }
   }
 }
@@ -73,6 +79,9 @@ export function processSimulatedDelayedActions(
 /** End Phase cleanup does not advance turnCounter or remove next-turn effects. */
 export function cleanupSimulatedEndTurn(state: SimulatedRuntimeState): void {
   for (const player of [state.bot, state.player]) {
+    for (const card of [...player.field, ...player.spellTrap, ...(player.fieldSpell ? [player.fieldSpell] : [])]) {
+      card.fieldPresenceSummons = [];
+    }
     for (const card of player.field) {
       if (card.tempAtkBoost) { removeTrackedStatChange(card, "atk", card.tempAtkBoost); card.tempAtkBoost = 0; }
       if (card.tempDefBoost) { removeTrackedStatChange(card, "def", card.tempDefBoost); card.tempDefBoost = 0; }

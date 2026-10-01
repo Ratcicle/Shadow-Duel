@@ -71,7 +71,7 @@ Campos básicos:
 
 Campos comuns por tipo:
 
-- Monstros: `atk`, `def`, `level`, `type`, `types`, `archetype`,
+- Monstros: `atk`, `def`, `level`, `type`, `archetype`,
   `archetypes`, `isTuner`, `synchroMaterialRoles`.
 - Spells/Traps: `subtype`, normalmente `normal`, `continuous`, `field`,
   `equip`, `quick` ou `counter`.
@@ -158,7 +158,8 @@ Campos frequentes:
   Não use em efeitos `ignition` ou `manual`.
 - `activationZones`: lista canônica de zonas nas quais um efeito `ignition` ou
   `manual` pode ser ativado.
-- `requirePhase`: fase ou lista de fases, como `["main1", "main2"]`.
+- `requirePhase`: lista de fases `main1`/`main2`, como `["main1", "main2"]`.
+  Use uma lista mesmo para uma única fase, como `["main1"]`.
 - `requireFaceup`: exige que a fonte esteja face-up. Fontes Baixadas nas zonas de campo nunca geram triggers nem aplicam passivas, mesmo sem esse campo. A ativação normal de uma Armadilha revela a carta antes de executar seu efeito; triggers de virar a carta e do Cemitério continuam disponíveis nas respectivas zonas.
 - `requireEmptyField`: exige campo de monstros vazio.
 - `oncePerTurn`, `oncePerTurnName`, `oncePerTurnScope`: controle por turno.
@@ -169,12 +170,10 @@ Campos frequentes:
   `"activate"` quando negar a própria ativação liberar uma nova tentativa.
 - `activationCommitActions`: actions irreversíveis aplicadas depois dos custos
   e antes da declaração final de alvos e da criação do Chain Link.
-- `promptUser`, `promptMessage`, `customPromptMethod`: controle de confirmação
+- `promptUser`, `promptMessage`: controle de confirmação
   para triggers opcionais.
 - `isQuickEffect`: marca efeito rápido de monstro; normalmente combine com
   `speed: 2`.
-- `allowManualActivation`: permite ativação manual de alguns `on_event` em janela
-  de chain. Use com cuidado.
 
 ### Limites uma vez por turno (OPT)
 
@@ -248,7 +247,7 @@ O validador aceita:
 
 | Timing | Uso |
 | --- | --- |
-| `on_play` | Spell/Trap ativada da mão. Field/continuous spells sem `on_play` podem ser apenas colocadas. |
+| `on_play` | Ativação de Magia da mão. Magias Normais, Rápidas e de Equipamento Baixadas também podem usar esse timing na Zona de Magias/Armadilhas. Field/continuous spells sem `on_play` podem ser apenas colocadas. |
 | `on_activate` | Trap ativada do campo/setada. |
 | `on_field_activate` | Efeito de Field Spell já em `fieldSpell`. |
 | `ignition` | Efeito manual de Main Phase. Declara `activationZones` para mão, campo, Cemitério, Spell/Trap Zone ou Field Zone. |
@@ -296,10 +295,10 @@ Eventos aceitos pelo validador:
 | `battle_damage` | Evento de dano publicado pelo pipeline de batalha. | Valor, jogador afetado, atacante, defensor e contexto do Damage Step. |
 | `opponent_damage` | Compatibilidade para dano adversário. | Coletado pela ocorrência `lp_change`, com as mesmas regras de Chain e seleção de alvos. Prefira `lpChangeKind: "damage"` e `triggerPlayer: "opponent"`. |
 | `before_destroy` | Antes de destruição. | Usado para substituições/negações de destruição. |
-| `effect_targeted` | Uma carta vira alvo de efeito. | `requireTargetType`, `targetFromContext`. |
+| `effect_targeted` | Uma carta vira alvo de efeito. | `targetFromContext: "target"` referencia a carta alvo. |
 | `card_activation` | Ativação de um Spell/Trap Card como card. | Fonte ativada, jogador, zona e Chain Link. Não confundir com ativação de efeito já face-up. |
 | `effect_activation` | Janela associada à ativação de um efeito. | Fonte, efeito, jogador e contexto da corrente. |
-| `card_equipped` | Uma carta é equipada. | `requireEquipCardFilters`, `requireEquippedCardFilters`. |
+| `card_equipped` | Uma carta é equipada. | `requireEquipCardFilters` filtra o card de Equipamento. |
 | `lp_change` | Depois de uma alteração efetiva de PV. | `lpChangeKind: "gain"` (padrão), `"loss"` ou `"damage"`; `minAmount` limita a quantidade correspondente. |
 | `spell_activated` | Uma spell é ativada. | `triggerPlayer`, `activatedCardFilters`. |
 | `effect_activated` | Depois que uma ativação de efeito é publicada. | Fonte, efeito, jogador e Chain Link ativado. |
@@ -382,7 +381,8 @@ Notas importantes:
   posterior compativel, como "mesmo Nivel e nome diferente" no Cemiterio.
 - Em `compareAttribute`, use `attr: "originalLevel"` para comparar o Nível
   impresso da instância, ignorando alterações temporárias de Nível.
-- `requireThisCard: true` permite selecionar a própria fonte.
+- `requireThisCard: true` restringe a seleção à própria fonte, respeitando a
+  zona e os demais filtros declarados.
 - `lastSummonedFromZone` distingue a origem da última
   Invocação. Um monstro do Deck Adicional revivido do Cemitério terá origem
   `graveyard`, não `extraDeck`.
@@ -405,7 +405,7 @@ que o `EffectEngine.evaluateConditions` avalia:
 | --- | --- |
 | `playerFieldEmpty` | Exige que o jogador não controle monstros. |
 | `playerFieldCount` | Checa quantidade de monstros no campo; aceita `count`, `min` e `max`. |
-| `control_card` | Exige controlar carta por `cardName`, `cardId` ou `filters`. |
+| `control_card` | Exige controlar carta por `cardName` ou `filters`; para um ID específico, use `filters: { cardId: 99 }`. |
 | `control_card_max` | Limita quantidade de cartas controladas que batem filtros. |
 | `any_of` | Passa se qualquer condição interna em `conditions` passar. |
 | `control_card_filters` | Conta cartas por filtros em uma ou mais zonas; aceita os filtros canônicos, `requireFaceup`, `excludeSource`, `min` e `max`. |
@@ -601,8 +601,6 @@ Tipos suportados atualmente:
 - `graveyard_card_count_buff`: buff pela quantidade de cards no Cemitério que
   batem os filtros.
 - `graveyard_archetype_count_buff`: buff por quantidade de um arquétipo no Cemitério.
-- `type_special_summoned_count_buff`: buff por quantidade de invocações especiais
-  de um tipo.
 - `field_presence_type_summon_count_buff`: buff por invocações de tipo feitas
   enquanto a fonte esteve face-up no campo.
 - `additional_normal_summon`: concede uma Normal Summon adicional enquanto a
@@ -800,12 +798,19 @@ Requirement types aceitos pelo validador:
 
 - `material_destroyed_opponent_monsters`
 - `material_effect_activations`
+- `material_effects_activated`
 - `material_turns_on_field`
 - `player_lp_gte`
 - `player_lp_lte`
 - `player_hand_gte`
 - `player_graveyard_gte`
 - `field_counters_at_least`
+
+`material_effect_activations` exige uma quantidade total de ativações, definida
+por `count`. `material_effects_activated` exige que cada efeito listado em
+`effectIds` tenha sido ativado neste Duelo. Para este último, declare um
+`ascension.materialId` válido e uma lista `effectIds` não vazia, sem repetições,
+com IDs de efeitos ativos daquele material.
 
 ## Procedimento próprio de Invocação da mão
 
@@ -828,6 +833,17 @@ handSummonProcedure: {
 
 O procedimento abre seleção de custo para o jogador humano e executa os
 movimentos dos materiais pela transação de Invocação.
+
+Para limitar o procedimento por nome, acrescente `oncePerTurn: true` e uma
+chave estável em `oncePerTurnName`. O preview e a validação após as escolhas
+consultam o limite existente. O uso é consumido no compromisso da tentativa,
+antes do primeiro pagamento, e permanece consumido se a Invocação for negada.
+Cancelar antes desse compromisso preserva materiais e uso. Sem esses campos,
+o procedimento continua sem limite próprio.
+
+Procedimentos não são ativações de efeito, não criam links de Chain e não
+incrementam contadores de ativações do material. As janelas normais de tentativa
+e conclusão de Invocação continuam disponíveis.
 
 ## Exemplos
 
@@ -1093,6 +1109,17 @@ descartes. Descarte de efeito não deve ser declarado como custo de ativação.
 ### Custos de movimento e marcadores de Invocação
 
 Declare pagamentos em `activationCosts` para concluí-los antes da janela de respostas. Nos custos de movimento, informe `fromZone`, `contextLabel: "cost"` e `requireDestination: true`. Use `targetRef: "self"` quando a própria fonte deve pagar; para materiais escolhidos pelo jogador, declare alvos com `intent: "cost"`.
+
+Para descarte real, use `contextLabel: "discard"`, inclusive quando for custo.
+Triggers de descarte filtram esse marcador. Enviar da mão ao Cemitério ou usar
+materiais não conta como descarte. O marcador descreve a natureza do movimento;
+`activationCosts` e `intent: "cost"` determinam o momento do pagamento.
+
+Escolhas de `optional_target_actions` são locais à resolução e passam pelo
+DecisionBroker sem publicar `effect_targeted`. `optional: true` permite
+prosseguir sem candidatos; `allowCancel: false` exige a escolha quando houver
+candidatos válidos. Um alvo declarado no efeito continua sendo escolhido antes
+das respostas e mantém a identidade daquela presença até a resolução.
 
 `move.requireAll: true` valida todas as cartas selecionadas antes de movimentá-las e exige sucesso em cada movimento. Combine com `requireDestination: true` quando todos os materiais precisam chegar ao destino declarado. Um pagamento incompleto interrompe a ativação; movimentos já concluídos permanecem pagos. Movimentos, eventos e apresentação continuam sequenciais. Actions que omitem `requireAll` preservam o comportamento existente.
 

@@ -1,6 +1,5 @@
 import { cardDatabase } from "../../../data/cards.js";
-import type { CardConstructorData } from "../../contracts/cards.js";
-import type { EffectDefinition } from "../../contracts/effects.js";
+import type { RawCardDefinition } from "../../contracts/cards.js";
 import {
   CANONICAL_REPLAY_EVENT_NAMES,
   CANONICAL_REPLAY_FORMAT,
@@ -80,6 +79,7 @@ function normalizeValue(
   value: unknown,
   stack: WeakSet<object>,
   project?: SpecialProjection,
+  skipRuntimeKeys = true,
 ): SerializableValue | undefined {
   if (value == null || typeof value === "string" || typeof value === "boolean") {
     return value;
@@ -106,7 +106,7 @@ function normalizeValue(
         { length: value.length },
         (_, index) =>
           Object.prototype.hasOwnProperty.call(value, index)
-            ? normalizeValue(value[index], stack, project) ?? null
+            ? normalizeValue(value[index], stack, project, skipRuntimeKeys) ?? null
             : null,
       );
     }
@@ -114,13 +114,13 @@ function normalizeValue(
       return [...value.entries()]
         .map(([key, entry]) => [
           String(key),
-          normalizeValue(entry, stack, project) ?? null,
+          normalizeValue(entry, stack, project, skipRuntimeKeys) ?? null,
         ] satisfies SerializableValue[])
         .sort((left, right) => compareCodeUnits(String(left[0]), String(right[0])));
     }
     if (value instanceof Set) {
       return [...value].map((entry, index) => {
-        const normalized = normalizeValue(entry, stack, project) ?? null;
+        const normalized = normalizeValue(entry, stack, project, skipRuntimeKeys) ?? null;
         return {
           normalized,
           canonical: JSON.stringify(normalized),
@@ -133,8 +133,8 @@ function normalizeValue(
 
     const output: SerializableObject = {};
     for (const key of Object.keys(value).sort(compareCodeUnits)) {
-      if (SKIPPED_RUNTIME_KEYS.has(key)) continue;
-      const normalized = normalizeValue(readProperty(value, key), stack, project);
+      if (skipRuntimeKeys && SKIPPED_RUNTIME_KEYS.has(key)) continue;
+      const normalized = normalizeValue(readProperty(value, key), stack, project, skipRuntimeKeys);
       if (normalized !== undefined) output[key] = normalized;
     }
     return output;
@@ -152,7 +152,10 @@ export function stableStringify(value: unknown): string {
 }
 
 export function hashCanonicalValue(value: unknown): string {
-  const text = stableStringify(value);
+  return hashCanonicalText(stableStringify(value));
+}
+
+function hashCanonicalText(text: string): string {
   let hash = 2166136261;
   for (let i = 0; i < text.length; i += 1) {
     hash ^= text.charCodeAt(i);
@@ -161,27 +164,12 @@ export function hashCanonicalValue(value: unknown): string {
   return (hash >>> 0).toString(16).padStart(8, "0");
 }
 
-type SignatureCardDefinition = Pick<CardConstructorData,
-  "id" | "name" | "mustFirstBeSpecialSummonedBy" | "handSummonProcedure" | "effects"
->;
-
-export function getCardDatabaseSignature(): string {
-  return hashCanonicalValue(
-    cardDatabase.map((card: SignatureCardDefinition) => ({
-      id: card.id,
-      name: card.name,
-      mustFirstBeSpecialSummonedBy:
-        card.mustFirstBeSpecialSummonedBy || null,
-      handSummonProcedure: card.handSummonProcedure || null,
-      effects: (card.effects || []).map((effect: EffectDefinition) => ({
-        id: effect.id || null,
-        activationZones: effect.activationZones || null,
-        usagePolicy: effect.usagePolicy || null,
-        damageStepTimings: effect.damageStepTimings || null,
-        activationCommitActions: effect.activationCommitActions || null,
-      })),
-    })),
-  );
+export function getCardDatabaseSignature(
+  definitions: readonly RawCardDefinition[] = cardDatabase,
+): string {
+  // Definitions contain rules, not live references: never strip their effects.
+  const normalized = normalizeValue(definitions, new WeakSet(), undefined, false);
+  return hashCanonicalText(JSON.stringify(normalized) ?? "null");
 }
 
 function numericValue(value: unknown): number {
@@ -208,6 +196,8 @@ function cardState(
     position: card.position || null,
     fieldSlot: card.fieldSlot ?? null,
     fieldPresenceId: card.fieldPresenceId ?? null,
+    fieldPresenceSummons: (card.fieldPresenceSummons || []).map(entry => ({ ...entry })),
+    protectionEffects: (card.protectionEffects || []).map(entry => ({ ...entry })),
     facedown: card.isFacedown === true,
     atk: numericValue(card.atk),
     def: numericValue(card.def),
@@ -343,7 +333,12 @@ export function createCanonicalStateSnapshot(
       bot: playerState(game, game.bot),
     },
     usage,
-    delayedActions: stableValue(game.delayedActions || []) ?? [],
+    namedOncePerTurnUsage: stableValue({
+      turn: game.oncePerTurnTurnCounter ?? null,
+      player: game.oncePerTurnUsage?.player || new Map(),
+      bot: game.oncePerTurnUsage?.bot || new Map(),
+    }) ?? null,
+    delayedActions: serializeReplayEventPayload(game, game.delayedActions || []) ?? [],
     temporaryEventEffects: canonicalEventEffects ?? [],
     temporaryControlEffects: canonicalControl ?? [],
     chain: {

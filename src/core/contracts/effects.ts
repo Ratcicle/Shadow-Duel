@@ -555,7 +555,7 @@ interface EffectCapabilities {
   readonly requireDefender?: boolean;
   readonly requireDefenderIsSelf?: boolean;
   readonly requireDefenderPosition?: boolean;
-  readonly requireDefenderType?: Lowercase<MonsterRace>;
+  readonly requireDefenderType?: MonsterRace;
   readonly requireDestroyedByOpponent?: boolean;
   readonly requireDestroyedIsOpponent?: boolean;
   readonly requireDestroyedPosition?: BattlePosition;

@@ -150,7 +150,7 @@ export const shadowHeartCards = [
             player: "self",
             fromZone: "hand",
             to: "graveyard",
-            contextLabel: "discard_cost",
+            contextLabel: "discard",
           },
         ],
         actions: [

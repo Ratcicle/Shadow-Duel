@@ -35,7 +35,7 @@ test("Natural Selection declares its compact text and canonical transaction", as
       player: "self",
       fromZone: "hand",
       to: "graveyard",
-      contextLabel: "natural_selection_cost",
+      contextLabel: "discard",
     },
   ]);
   assert.deepEqual(

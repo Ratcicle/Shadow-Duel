@@ -1,3 +1,4 @@
+import { getCounterCount } from "../common/counters.js";
 import type {
   DragonCard,
   DragonPlayer,
@@ -8,6 +9,7 @@ import type {
 
 import { isExtremeDragon } from "./knowledge.js";
 import { getEffectiveAtk, getEffectiveDef } from "../common/cardStats.js";
+import { isFieldPresenceSummonAttackRestricted } from "../../game/combat/availability.js";
 
 const SOLO_EXTREME_NAMES = new Set([
   "Fire Extreme Dragon",
@@ -177,12 +179,15 @@ export function getMajesticBattlePositionPlan({
 export function getLuminescentBattleDebuffPlan<Card extends DragonCard>({
   bot = {},
   opponent = {},
+  game,
 }: DragonPolicyContext & { bot?: DragonPlayer<Card>; opponent?: DragonPlayer<Card> | null } = {}) {
   const attackers = zoneCards(bot, "field").filter(
     (card) =>
       isFaceupDragon(card) &&
       card.position !== "defense" &&
       !card.cannotAttackThisTurn &&
+      !isFieldPresenceSummonAttackRestricted(card,
+        [...(opponent?.field || []), ...(opponent?.spellTrap || []), ...(opponent?.fieldSpell ? [opponent.fieldSpell] : [])], game?.turnCounter) &&
       !card.hasAttacked,
   );
   if (attackers.length === 0) return null;
@@ -264,8 +269,8 @@ export function scoreDragonBattleAttack(context: DragonPolicyContext = {}) {
   }
 
   if (targetDestroyed && bot.fieldSpell?.name === "Jagged Peak of the Dragons") {
-    const counters = Number((bot.fieldSpell!.counters as Partial<Record<string, number>> | undefined)?.dragon_peak || 0);
-    score += counters >= 4 ? 4.2 : 1.5;
+    const counters = getCounterCount(bot.fieldSpell, "dragon_peak");
+    score += counters >= 6 ? 4.2 : 1.5;
   }
 
   if (attacker.name === "Fire Extreme Dragon" && targetDestroyed) {

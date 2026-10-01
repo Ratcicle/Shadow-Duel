@@ -10,6 +10,7 @@
  *  - getPublicState
  */
 
+import { isFieldPresenceSummonAttackRestricted } from "../combat/availability.js";
 import type {
   FullGameHost,
   GameCard,
@@ -68,6 +69,9 @@ export function getPublicState(
     (owner.field || []).map((card: GameCard) => {
       if (!card) return null;
       const hidden = card.isFacedown && !isSelf;
+      const opposingOwner = owner === this.player ? this.bot : this.player;
+      const opposingSources = [...opposingOwner.field, ...opposingOwner.spellTrap,
+        ...(opposingOwner.fieldSpell ? [opposingOwner.fieldSpell] : [])];
       return {
         duelCardId: card.duelCardId ?? null,
         cardId: hidden ? null : card.id,
@@ -93,7 +97,8 @@ export function getPublicState(
         isTuner: hidden ? null : card.isTuner === true,
         faceDown: !!card.isFacedown,
         status: {
-          cannotAttackThisTurn: hidden ? null : !!card.cannotAttackThisTurn,
+          cannotAttackThisTurn: hidden ? null : !!card.cannotAttackThisTurn || isFieldPresenceSummonAttackRestricted(card,
+            opposingSources, this.turnCounter, owner.id),
           battlePositionLocked: hidden ? null : !!card.battlePositionLocked,
           effectsNegated: hidden ? null : !!card.effectsNegated,
           effectsNegatedDuration: hidden ? null : card.effectsNegatedDuration || null,

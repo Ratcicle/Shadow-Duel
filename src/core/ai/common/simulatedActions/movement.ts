@@ -1,4 +1,5 @@
 import { captureCostMarkerEvidence } from "../../../effects/costs/summonMarkers.js";
+import { clearFieldPresenceSummonTarget } from "../../../effects/triggers/counters.js";
 import { appendSimulatedFieldCard } from "../zones.js";
 import { restoreFieldExitStatuses } from "../../../Card.js";
 import { getAvailableFieldSlots } from "../../../game/zones/placement.js";
@@ -21,6 +22,7 @@ import {
 } from "../targetSelection.js";
 import {
   attachSimulatedEquip,
+  canMoveCardToZone,
   findCardOwner,
   findCardZone,
   getZoneCards,
@@ -300,6 +302,16 @@ export function applyMove(
       const owner = findCardOwner(state, card);
       if (!owner || (action.fromZone && findCardZone(owner, card) !== action.fromZone)) return STOP_SIMULATION;
       if (payingCost && action.requireDestination && card.isToken && action.to !== "field") return STOP_SIMULATION;
+      if (payingCost) {
+        const to = action.to || "graveyard";
+        const destination = findCardZone(owner, card) === "field" && to !== "field"
+          ? getOriginalOwner(state, card, owner)
+          : action.player === "opponent" ? opponent : action.player === "self" ? self : owner;
+        if (!canMoveCardToZone(destination, card, to, owner, {
+          state, requireDestination: action.requireDestination === true,
+          allowExtraDeckMonsterToHand: action.allowExtraDeckMonsterToHand === true,
+        })) return STOP_SIMULATION;
+      }
     }
   }
   let moved = false;
@@ -330,7 +342,8 @@ export function applyMove(
     const effectsNegatedAtFieldExit = fromZone === "field" && card.effectsNegated === true;
     const levelBeforeMove = Number(card.level || 0);
     if (moveCardToZone(destPlayer || owner, card, to, owner, { state, movedByEffect: true, sourceCard: options.sourceCard || null, sourcePlayer: self,
-      allowExtraDeckMonsterToHand: action.allowExtraDeckMonsterToHand === true })) {
+      allowExtraDeckMonsterToHand: action.allowExtraDeckMonsterToHand === true,
+      requireDestination: payingCost && action.requireDestination === true })) {
       if (fromZone === "field" && to !== "field") clearSimulatedTemporaryControl(state, card);
       setSimulatedController(card, destPlayer || owner);
       if (action.resetAttackFlags) {
@@ -393,6 +406,7 @@ export function applyTakeControl(
     appendSimulatedFieldCard(destination.field, card, true);
     if (!card.originalOwner) card.originalOwner = previousController.id;
     setSimulatedController(card, destination);
+    clearFieldPresenceSummonTarget(state, card);
 
     if (action.duration === "until_end_phase") {
       if (!Array.isArray(state.temporaryControlEffects)) {
@@ -463,6 +477,7 @@ export function resolveSimulatedTemporaryControlEffects(
       clearSimulatedTemporaryControl(state, card);
       appendSimulatedFieldCard(destination.field, card, true);
       setSimulatedController(card, destination);
+      clearFieldPresenceSummonTarget(state, card);
       options.emitSimulatedEvent?.("control_changed", {
         card, fromPlayer: holder, toPlayer: destination,
         previousControllerId: holder.id, controllerId: destination.id,

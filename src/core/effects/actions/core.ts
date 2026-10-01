@@ -5,6 +5,7 @@ import { cardMatchesKind, getCardComparableAttribute } from "../../Card.js";
 import { isAI } from "../../Player.js";
 import { resolveExactInstanceSelection } from "../../AutoSelector.js";
 import { getBaseLpCost } from "../costs/lpCost.js";
+import { getSendToGraveReplacementDestination } from "../passives/passiveBuffs.js";
 import { hasSynchroSummonPreviewCandidate } from "../../actionHandlers/summon/synchroEffects.js";
 import { mergeCanonicalSelections } from "../../game/selection/contract.js";
 import { checkSpecialSummonEligibility } from "../../game/summon/eligibility.js";
@@ -231,6 +232,7 @@ interface PreviewAction {
   readonly damagePerCounter?: number;
   readonly distinctNames?: boolean;
   readonly fieldSlotsFreedBeforeSummon?: number;
+  readonly fromZone?: PreviewZone;
   readonly filters?: PreviewFilter;
   readonly fraction?: number;
   readonly isTuner?: boolean;
@@ -255,6 +257,7 @@ interface PreviewAction {
   readonly position?: string;
   readonly property?: string;
   readonly required?: boolean;
+  readonly requireDestination?: boolean;
   readonly requireFaceup?: boolean;
   readonly requireSource?: boolean;
   readonly resultKey?: string;
@@ -1493,6 +1496,39 @@ function checkPreviewMoveTargetAvailability(
       action.player === "opponent" ? ctx?.opponent : ctx?.player || player;
     if ((destinationPlayer?.field || []).length >= 5) {
       return { ok: false, reason: "Field is full." };
+    }
+  }
+  if (action.requireDestination && toZone) {
+    const players = [engine.game.player, engine.game.bot];
+    const canReachDestination = (entry: PreviewTargetEntry): boolean => {
+      if (entry.card.isToken && toZone !== "field") return false;
+      if (entry.zone === "field" && entry.card.banishWhenLeavesField && toZone !== "field" && toZone !== "banished") return false;
+      const redirect = toZone === "graveyard"
+        ? getSendToGraveReplacementDestination(entry.card, entry.owner, players)
+        : null;
+      return !redirect || redirect === toZone;
+    };
+    const ref = action.targetRef;
+    const definition = ref ? getEffectTargetDefinition(ctx, ref) : null;
+    let entries: PreviewTargetEntry[] = [];
+    if ((ref === "self" || ref === "source") && ctx.source) {
+      const source = ctx.source;
+      for (const owner of players) {
+        const zones: readonly PreviewZone[] = action.fromZone ? [action.fromZone] : ["hand", "field", "graveyard", "fieldSpell", "spellTrap", "deck", "banished", "extraDeck"];
+        for (const zone of zones) if (getPreviewZoneCards(owner, zone).includes(source)) entries.push({ card: source, owner, zone });
+      }
+    } else if (definition && ref) {
+      entries = collectPreviewTargetEntries(engine, definition, ctx, player);
+      const selected = ctx._actionTargets?.[ref] || ctx.activationContext?.costSelections?.[ref];
+      if (selected) {
+        const cards = getPreviewSelectedCostCards(engine, ctx, ref, selected);
+        entries = entries.filter(entry => cards.includes(entry.card));
+        if (entries.some(entry => !canReachDestination(entry))) return { ok: false, reason: "Selected cost cannot reach its required destination." };
+      }
+    }
+    if ((definition || ref === "self" || ref === "source") &&
+        entries.filter(canReachDestination).length < (definition ? getPreviewTargetMinCount(definition, 1) : 1)) {
+      return { ok: false, reason: "Cannot pay the required move destination." };
     }
   }
   if (!action.targetRef) return { ok: true };

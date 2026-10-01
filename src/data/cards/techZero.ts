@@ -598,7 +598,7 @@ export const techZeroCards = [
             player: "self",
             fromZone: "hand",
             to: "graveyard",
-            contextLabel: "cost",
+            contextLabel: "discard",
           },
           {
             type: "move",
@@ -606,7 +606,7 @@ export const techZeroCards = [
             player: "self",
             fromZone: "hand",
             to: "graveyard",
-            contextLabel: "cost",
+            contextLabel: "discard",
           },
         ],
         actions: [

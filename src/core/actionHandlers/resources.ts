@@ -989,6 +989,7 @@ export async function handleAddFromZoneToHand(
 
   const extraFilter = (card: ActionRuntimeCard): boolean => {
     if (!card) return false;
+    if (action.type === "add_from_zone_to_hand" && action.requireSource && card !== source) return false;
     if (Array.isArray(filters.cardKind)) {
       if (!cardMatchesKind(card, filters.cardKind)) return false;
     }
@@ -1111,6 +1112,12 @@ export async function handleAddFromZoneToHand(
     game.updateBoard();
     return true;
   };
+
+  if (action.type === "add_from_zone_to_hand" && action.requireSource) {
+    return source && candidates.includes(source) && minSelect <= 1 && maxSelect >= 1
+      ? finalizeSelection([source])
+      : false;
+  }
 
   const decisionKey = readString(action, "selectionId") || `${ctx.effect?.id || action.type}_selection`;
   const plannedIds = isAI(player) ? ctx.activationContext?.decisions?.selections?.[decisionKey] : undefined;

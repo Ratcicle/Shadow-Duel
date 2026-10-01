@@ -150,7 +150,7 @@ Se o espaço necessário continuar ocupado por um card imune que permaneceu, o c
 
 Um Equipamento só pode ser restaurado se também for possível restaurar validamente seu portador e o vínculo original. Se não for possível, ele permanece onde está; não retorna solto nem escolhe um novo monstro.
 
-**Dependência informada por Gb:** o sistema de espaços individuais ainda será implementado. O Livro precisa conservar esse requisito no design; não entregar uma versão definitiva que use apenas listas sem identidade de espaço.
+**Estado da dependência — 30/09/2026:** os espaços individuais já estão implementados: o contrato [`FieldSlot`](../src/core/contracts/placement.ts) identifica as posições de 0 a 4, o [movimento e broker de colocação](../src/core/game/zones/placement.ts) preservam essa identidade, e a UI e o replay registram a posição escolhida. A captura do marco e a restauração histórica do Livro continuam pendentes. Sua implementação deverá preservar os espaços exatos conforme as regras desta seção.
 
 ## 2.9. Restauração simultânea e sem gatilhos
 

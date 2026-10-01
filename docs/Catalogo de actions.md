@@ -16,7 +16,7 @@ Adds selected cards from a zone to hand.
 - Target: `none`
 - Selecao: `dynamic`
 - Mutacoes: hand, deck, graveyard
-- Eventos emitidos: nenhum
+- Eventos emitidos: cards_added_to_hand
 - Atualiza board: sim
 - Preview: `covered`
 
@@ -83,7 +83,7 @@ Deals LP damage.
 - Target: `none`
 - Selecao: `none`
 - Mutacoes: lp
-- Eventos emitidos: nenhum
+- Eventos emitidos: damage_inflicted, lp_change
 - Atualiza board: sim
 - Preview: `notNeeded`
 
@@ -191,7 +191,7 @@ Draws cards.
 - Target: `none`
 - Selecao: `none`
 - Mutacoes: deck, hand
-- Eventos emitidos: nenhum
+- Eventos emitidos: cards_added_to_hand
 - Atualiza board: sim
 - Preview: `notNeeded`
 
@@ -511,7 +511,7 @@ Pays LP as a cost.
 - Target: `none`
 - Selecao: `none`
 - Mutacoes: lp
-- Eventos emitidos: nenhum
+- Eventos emitidos: lp_change
 - Atualiza board: sim
 - Preview: `covered`
 
@@ -539,6 +539,7 @@ Pays LP as a cost.
 **Notas**
 
 - Provide either amount or fraction.
+- lp_change is emitted when LP is paid; a cost reduced to zero does not emit it.
 
 ### `restrict_effect_activations_by_attribute`
 
@@ -632,7 +633,7 @@ Searches the deck and adds a card to hand.
 - Target: `none`
 - Selecao: `dynamic`
 - Mutacoes: deck, hand
-- Eventos emitidos: nenhum
+- Eventos emitidos: cards_added_to_hand
 - Atualiza board: sim
 - Preview: `covered`
 
@@ -774,7 +775,7 @@ Pays LP upkeep or sends the source to a failure zone.
 - Target: `none`
 - Selecao: `none`
 - Mutacoes: lp, zones
-- Eventos emitidos: card_to_grave
+- Eventos emitidos: card_to_grave, lp_change
 - Atualiza board: sim
 - Preview: `notNeeded`
 
@@ -795,7 +796,7 @@ Pays LP upkeep or sends the source to a failure zone.
 
 **Notas**
 
-_Sem notas._
+- lp_change is emitted when a positive upkeep cost is paid; card_to_grave belongs to the unpaid path when the source reaches the Graveyard.
 
 ## Movimento
 
@@ -1938,7 +1939,7 @@ Destroys every card matching a field scope without manual targeting.
 - Target: `none`
 - Selecao: `none`
 - Mutacoes: field, spellTrap, graveyard
-- Eventos emitidos: before_destroy, card_to_grave
+- Eventos emitidos: before_destroy, card_to_grave, cards_added_to_hand
 - Atualiza board: sim
 - Preview: `missing`
 
@@ -1972,7 +1973,7 @@ Destroys every card matching a field scope without manual targeting.
 
 **Notas**
 
-_Sem notas._
+- cards_added_to_hand is emitted only when drawPerDestroyed causes cards to be drawn after destruction.
 
 ### `destroy_other_dragons_and_buff`
 
@@ -2366,7 +2367,7 @@ Modifies ATK/DEF temporarily, or until field exit with permanent: true.
 - Target: `optional`
 - Selecao: `usesTargets`
 - Mutacoes: stats
-- Eventos emitidos: nenhum
+- Eventos emitidos: stat_buff_applied
 - Atualiza board: sim
 - Preview: `notNeeded`
 
@@ -2411,7 +2412,7 @@ Applies a temporary stat buff and grants a second attack.
 - Target: `required`
 - Selecao: `usesTargets`
 - Mutacoes: stats, status
-- Eventos emitidos: nenhum
+- Eventos emitidos: stat_buff_applied
 - Atualiza board: sim
 - Preview: `notNeeded`
 
@@ -2433,7 +2434,7 @@ Applies a temporary stat buff and grants a second attack.
 
 **Notas**
 
-_Sem notas._
+- stat_buff_applied is emitted when ATK or DEF changes; granting only the extra attack does not emit it.
 
 ### `equip`
 
@@ -2555,7 +2556,7 @@ Halves target stats and gives the removed values to another monster.
 - Target: `required`
 - Selecao: `usesTargets`
 - Mutacoes: stats
-- Eventos emitidos: nenhum
+- Eventos emitidos: stat_buff_applied
 - Atualiza board: sim
 - Preview: `notNeeded`
 
@@ -2754,13 +2755,13 @@ _Sem notas._
 
 ### `reduce_self_atk`
 
-Alias for temporary self ATK reduction through buff handler.
+Reduces ATK until field exit with amount, or applies temporary explicit stat modifiers.
 
 - Handler: `handleBuffStatsTemp`
 - Target: `optional`
 - Selecao: `usesTargets`
 - Mutacoes: stats
-- Eventos emitidos: nenhum
+- Eventos emitidos: stat_buff_applied
 - Atualiza board: sim
 - Preview: `notNeeded`
 
@@ -2783,7 +2784,8 @@ Alias for temporary self ATK reduction through buff handler.
 
 **Notas**
 
-_Sem notas._
+- With a positive amount and no nonzero atkBoost, the handler applies -amount to ATK and marks the stat changes permanent until field exit.
+- A nonzero atkBoost takes precedence over amount; explicit atkBoost/defBoost otherwise expire at the end of the turn.
 
 ### `remove_permanent_buff_named`
 
@@ -2826,7 +2828,7 @@ Removes visible positive ATK/DEF increases from target monsters.
 - Target: `required`
 - Selecao: `usesTargets`
 - Mutacoes: stats
-- Eventos emitidos: nenhum
+- Eventos emitidos: stat_increases_removed
 - Atualiza board: sim
 - Preview: `notNeeded`
 
@@ -2891,7 +2893,7 @@ Sets a monster's original ATK and/or DEF, optionally from context.
 - Target: `optional`
 - Selecao: `usesTargets`
 - Mutacoes: stats
-- Eventos emitidos: nenhum
+- Eventos emitidos: original_stats_changed
 - Atualiza board: sim
 - Preview: `notNeeded`
 

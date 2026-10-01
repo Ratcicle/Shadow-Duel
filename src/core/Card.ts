@@ -24,6 +24,7 @@ import type {
   HandSummonProcedure,
   FieldLimitDefinition,
   FieldPresenceRestriction,
+  FieldPresenceSummonRecord,
   FusionMaterialDefinition,
   GameCard,
   MonsterRace,
@@ -388,6 +389,7 @@ export default class Card implements GameCard {
   declare fieldExitStatuses: CardStatusRegistry;
   declare fieldPresenceId: string | number | null;
   declare fieldPresenceState: Record<string, number> | null;
+  declare fieldPresenceSummons: FieldPresenceSummonRecord[];
   declare effectsNegated: boolean;
   declare effectsNegatedDuration: string | number | null;
   declare originalAtk: number | null;
@@ -587,6 +589,7 @@ export default class Card implements GameCard {
     // Field presence tracking (for mechanics like "while this card is face-up on field")
     this.fieldPresenceId = null;
     this.fieldPresenceState = null;
+    this.fieldPresenceSummons = [];
 
     // Effect negation tracking
     this.effectsNegated = data.effectsNegated === true;

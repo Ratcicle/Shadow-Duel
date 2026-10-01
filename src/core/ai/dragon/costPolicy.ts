@@ -244,6 +244,7 @@ export function scoreDragonDiscardCandidate(card: DragonCard, context: DragonPol
   if (!card) return 9999;
   const ctx = context.dragonState ? context as ReturnType<typeof makeContext> : makeContext(context);
   const name = card.name!;
+  const sendsToGraveyard = ctx.sourceName === "Black Bull Dragon" || ctx.effectId === "bbd_special_summon_from_hand";
   let score = 55 + cardStrategicValue(card, ctx.fallbackValue);
 
   if (name === "Solar Eclipse Dragon") {
@@ -251,7 +252,7 @@ export function scoreDragonDiscardCandidate(card: DragonCard, context: DragonPol
     if (ctx.dragonState.opt?.solarGy?.canUse !== false) score -= 12;
     if ((ctx.dragonState.solarReviveTargets || []).length > 0) score -= 8;
   } else if (name === "Voltaic Dragon") {
-    score -= 52;
+    if (!sendsToGraveyard) score -= 52;
     if (ctx.techVoidClose && ctx.voltaicTotal <= 1) score += 80;
   } else if (name === "Stelya, Dragon Tamer") {
     score -= 42;
@@ -315,7 +316,7 @@ export function scoreDragonDiscardCandidate(card: DragonCard, context: DragonPol
     }
   }
   if (ctx.sourceName === "Black Bull Dragon" || ctx.effectId === "bbd_special_summon_from_hand") {
-    if (["Voltaic Dragon", "Solar Eclipse Dragon", "Grey Dragon", "Lunar Eclipse Dragon", "Stelya, Dragon Tamer"].includes(name)) {
+    if (["Solar Eclipse Dragon", "Grey Dragon", "Lunar Eclipse Dragon", "Stelya, Dragon Tamer"].includes(name)) {
       score -= 18;
     }
     if (["Polymerization", "Extreme Dragon Awakening", "Dragon Spirit Sanctuary"].includes(name)) {

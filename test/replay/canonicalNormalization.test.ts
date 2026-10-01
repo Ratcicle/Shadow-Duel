@@ -2,10 +2,12 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  getCardDatabaseSignature,
   hashCanonicalValue,
   serializeReplayEventPayload,
   stableStringify,
 } from "../../src/core/game/replay/canonical.js";
+import type { RawCardDefinition } from "../../src/core/contracts/cards.js";
 import type { CanonicalReplayGamePort } from "../../src/core/contracts/replay.js";
 
 const serializationGame: CanonicalReplayGamePort = {
@@ -13,6 +15,65 @@ const serializationGame: CanonicalReplayGamePort = {
     return card.duelCardId ?? null;
   },
 };
+
+const signatureCard = {
+  id: 999,
+  name: "Signature fixture",
+  cardKind: "monster",
+  atk: 1000,
+  def: 1200,
+  level: 4,
+  type: "Warrior",
+  attribute: "Dark",
+  archetype: "Signature",
+  description: "Draw 1 card.",
+  image: "assets/fixture.png",
+  effects: [{
+    id: "signature_draw",
+    timing: "ignition",
+    activationZones: ["field"],
+    actions: [{ type: "draw", amount: 1, player: "self" }],
+  }],
+} as const satisfies RawCardDefinition;
+
+test("assinatura inclui regras completas, actions aninhadas e características declarativas", () => {
+  const baseline = getCardDatabaseSignature([signatureCard]);
+  const variants: RawCardDefinition[] = [
+    { ...signatureCard, atk: 900 },
+    { ...signatureCard, level: 5 },
+    { ...signatureCard, specialSummonOnlyBy: ["fusion"] },
+    { ...signatureCard, effects: [{ ...signatureCard.effects[0], oncePerTurn: true, usagePolicy: "use" }] },
+    { ...signatureCard, effects: [{ ...signatureCard.effects[0], actions: [{ type: "draw", amount: 2, player: "self" }] }] },
+    { ...signatureCard, effects: [{ ...signatureCard.effects[0], activationCosts: [{ type: "pay_lp", amount: 500 }] }] },
+    { ...signatureCard, effects: [{ ...signatureCard.effects[0], conditions: [{ type: "context_number_compare", key: "player.lp", op: "gt", value: 2000 }] }] },
+    { ...signatureCard, monsterType: "ascension", ascension: { materialId: 101, requirements: [{ type: "material_turns_on_field", count: 2 }] } },
+  ];
+  for (const variant of variants) {
+    assert.notEqual(getCardDatabaseSignature([variant]), baseline);
+  }
+  const conditionalCard = (amount: number): RawCardDefinition => ({
+    ...signatureCard,
+    effects: [{ ...signatureCard.effects[0], actions: [{
+      type: "conditional_actions",
+      actions: [{ type: "draw", amount, player: "self" }],
+    }] }],
+  });
+  assert.notEqual(
+    getCardDatabaseSignature([conditionalCard(1)]),
+    getCardDatabaseSignature([conditionalCard(2)]),
+  );
+});
+
+test("assinatura ordena propriedades e preserva regras que a projeção runtime omite", () => {
+  const { effects, ...rest } = signatureCard;
+  const reordered: RawCardDefinition = { effects, ...rest };
+  assert.equal(getCardDatabaseSignature([reordered]), getCardDatabaseSignature([signatureCard]));
+  const withoutEffects: RawCardDefinition = { ...signatureCard, effects: [] };
+  assert.notEqual(getCardDatabaseSignature([withoutEffects]), getCardDatabaseSignature([signatureCard]));
+  assert.notEqual(getCardDatabaseSignature([{ ...signatureCard, description: "Changed text." }]), getCardDatabaseSignature([signatureCard]));
+  assert.notEqual(getCardDatabaseSignature([{ ...signatureCard, image: "assets/other.png" }]), getCardDatabaseSignature([signatureCard]));
+  assert.equal(stableStringify({ effects: signatureCard.effects, image: "ignored", value: 1 }), '{"value":1}');
+});
 
 test("normalizador preserva os goldens FNV-1a legados", () => {
   const specialValues = {

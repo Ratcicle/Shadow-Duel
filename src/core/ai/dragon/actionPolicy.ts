@@ -47,7 +47,6 @@ const BLACK_BULL_GOOD_COST_NAMES = new Set([
   "Solar Eclipse Dragon",
   "Lunar Eclipse Dragon",
   "Stelya, Dragon Tamer",
-  "Voltaic Dragon",
   "Grey Dragon",
   "Black Bull Dragon",
 ]);
@@ -654,7 +653,7 @@ export function evaluateDragonHandIgnition(card: DragonCard, effect: import("../
       (candidate) => isDragonMonster(candidate) && candidate !== card,
     );
     if (handDragons.length < 2) {
-      return { handled: true, ok: false, reason: "insufficient Dragon discard costs" };
+      return { handled: true, ok: false, reason: "insufficient Dragons to send as cost" };
     }
     if (ctx.fieldCapacity <= 0) {
       return { handled: true, ok: false, reason: "field full" };
@@ -680,7 +679,7 @@ export function evaluateDragonHandIgnition(card: DragonCard, effect: import("../
       return {
         handled: true,
         ok: false,
-        reason: "Black Bull discard costs do not justify a non-attacking body",
+        reason: "Black Bull send costs do not justify a non-attacking body",
       };
     }
     const costPrefs = buildDragonTargetCostPreferences({
@@ -696,7 +695,7 @@ export function evaluateDragonHandIgnition(card: DragonCard, effect: import("../
       targetPreferences: {
         bbd_cost: costPrefs.bbd_cost,
       },
-      reason: "Black Bull has acceptable Dragon discard costs",
+      reason: "Black Bull has acceptable Dragons to send as cost",
     };
   }
 

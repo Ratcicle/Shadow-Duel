@@ -582,9 +582,14 @@ export async function runActivationPipeline(
     selections: CanonicalSelectionMap | null,
   ): Promise<unknown> => {
     try {
+      const preparationContext = { ...activationContext, prepareOnly: true, autoSelectTargets: false };
+      delete preparationContext.decisions;
+      Reflect.deleteProperty(preparationContext, "resolvedTargets");
       return await config.activate!(
         selections,
-        { ...activationContext, prepareOnly: true },
+        // Preparation discovers requirements. Canonical selection records the
+        // actual choice through the broker before publishing the activation.
+        preparationContext,
         resolvedActivationZone,
         resolvedCard,
         owner,
@@ -1427,10 +1432,7 @@ export async function runActivationPipeline(
       );
 
     let costSelections = selectProvided(costDefinitions);
-    if (
-      costSelectionDefinitions.length > 0 &&
-      Object.keys(costSelections).length === 0
-    ) {
+    if (costSelectionDefinitions.length > 0) {
       const requestedCostSelections =
         await chainSystem.getPlayerSelectionsForDefinitions?.(
           resolvedCard,
@@ -1441,6 +1443,7 @@ export async function runActivationPipeline(
             purpose: "cost",
             allowCancel: true,
             activationZone: resolvedActivationZone,
+            selections: toChainSelectionMap(costSelections),
           },
         );
       if (requestedCostSelections == null) {
@@ -1624,10 +1627,7 @@ export async function runActivationPipeline(
     }
 
     let targetSelections = selectProvided(resolvedTargetDefinitions);
-    if (
-      resolvedTargetDefinitions.length > 0 &&
-      Object.keys(targetSelections).length === 0
-    ) {
+    if (resolvedTargetDefinitions.length > 0) {
       const requestedTargetSelections =
         await chainSystem.getPlayerSelectionsForDefinitions?.(
           resolvedCard,
@@ -1638,6 +1638,7 @@ export async function runActivationPipeline(
             purpose: "target",
             allowCancel: false,
             activationZone: resolvedActivationZone,
+            selections: toChainSelectionMap(targetSelections),
           },
         );
       if (requestedTargetSelections == null) {

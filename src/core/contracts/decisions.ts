@@ -211,6 +211,7 @@ export interface DecisionBrokerPort {
   mode: DecisionBrokerMode;
   replayCursor: number;
   loadReplayDecisions(decisions?: ReplayDecisionInput[]): void;
+  hasReplaySelection(kind: SelectionDecisionKind, actorId: string, requirementId: string): boolean;
   recordDecision(): RecordedDecision<"choice">;
   recordDecision<Kind extends DecisionKind>(
     input: DecisionRequest<Kind>,

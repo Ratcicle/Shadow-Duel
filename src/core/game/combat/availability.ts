@@ -1,7 +1,9 @@
 import { cardMatchesKind } from "../../Card.js";
+import { isPassiveSourceActive } from "../../effects/passives/passiveBuffs.js";
 import type {
   BattlePosition,
   CardSubtype,
+  FieldPresenceSummonRecord,
   GameCard,
 } from "../../contracts/cards.js";
 import type {
@@ -151,6 +153,26 @@ function getAttackPassiveSources(
   const spellTrap = Array.isArray(player.spellTrap) ? player.spellTrap : [];
   const fieldSpell = player.fieldSpell ? [player.fieldSpell] : [];
   return [...field, ...spellTrap, ...fieldSpell].filter(Boolean);
+}
+
+/** Read-only attack rule shared by live combat and hypothetical boards. */
+export function isFieldPresenceSummonAttackRestricted(
+  attacker: { readonly fieldPresenceId?: string | number | null; readonly owner?: string; readonly controller?: string | null },
+  opposingSources: readonly {
+    readonly isFacedown?: boolean | undefined;
+    readonly effectsNegated?: boolean | undefined;
+    readonly effects?: readonly { readonly timing?: string; readonly passive?: { readonly type?: string } }[];
+    readonly fieldPresenceSummons?: readonly Readonly<FieldPresenceSummonRecord>[];
+  }[],
+  turnCounter: number | null | undefined,
+  controllerId = attacker.controller || attacker.owner,
+): boolean {
+  if (attacker.fieldPresenceId == null || turnCounter == null) return false;
+  return opposingSources.some(source => isPassiveSourceActive(source) &&
+    source.effects?.some(effect => effect.timing === "passive" &&
+      effect.passive?.type === "restrict_opponent_summon_turn_attack") &&
+    source.fieldPresenceSummons?.some(record => record.turn === turnCounter &&
+      record.summoningPlayerId === controllerId && record.targetFieldPresenceId === attacker.fieldPresenceId));
 }
 
 export function isActiveAttackPriorityTarget(
@@ -777,25 +799,10 @@ export function getAttackAvailability(
     };
   }
 
-  // Check passive "restrict_opponent_summon_turn_attack" from opponent's field cards
-  if (attacker.summonedTurn === this.turnCounter) {
-    const opponentOfAttacker =
-      attacker.owner === "player" ? this.bot : this.player;
-    for (const fieldCard of getAttackPassiveSources(opponentOfAttacker)) {
-      if (!fieldCard || fieldCard.isFacedown) continue;
-      for (const effect of fieldCard.effects || []) {
-        if (
-          effect?.timing === "passive" &&
-          getAttackPassive(effect).type ===
-            "restrict_opponent_summon_turn_attack"
-        ) {
-          return {
-            ok: false,
-            reason: `${attacker.name} cannot attack on the turn it was summoned.`,
-          };
-        }
-      }
-    }
+  const attackerOwner = getOwnerByCard(this, attacker);
+  const opposingOwner = attackerOwner === this.player ? this.bot : this.player;
+  if (isFieldPresenceSummonAttackRestricted(attacker, getAttackPassiveSources(opposingOwner), this.turnCounter, attackerOwner?.id)) {
+    return { ok: false, reason: `${attacker.name} cannot attack on the turn it was summoned.` };
   }
   if (attacker.position === "defense") {
     return {
