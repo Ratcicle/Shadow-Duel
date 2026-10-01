@@ -367,3 +367,62 @@ for (const scenario of ["valiant", "sickle"] as const) {
     });
   }
 }
+
+for (const seat of ["player", "bot"] as const) {
+  test(`canonical replay preserves Magic Sickle's AI cost, target, and battle result (${seat})`, async t => {
+    const live = createRuntimeGame({ laboratoryMode: true, captureReplay: true, randomSeed: 151156 });
+    const playback = createRuntimeGame({ laboratoryMode: true, captureReplay: false, replayMode: "playback" });
+    t.after(() => { live.dispose(); playback.dispose(); });
+    for (const game of [live, playback]) {
+      const start = game.startWithDecks.bind(game);
+      game.startWithDecks = async options => {
+        await start(options);
+        game.turn = seat;
+        game.turnCounter = 2;
+        game.phase = "battle";
+        game.battleStep = "battle";
+        game.disablePresentationDelays = true;
+        game.waitForBoardPresentation = async () => {};
+        game.waitForPresentationDelay = async () => {};
+        game.waitForAiPresentationStep = async () => {};
+        game.player.controllerType = game.bot.controllerType = "ai";
+        const owner = game[seat];
+        owner.deck.push(...owner.hand.splice(0));
+        const take = (id: number) => {
+          const card = required(owner.deck.find(card => card.id === id));
+          owner.deck.splice(owner.deck.indexOf(card), 1);
+          return card;
+        };
+        placeFieldCards(owner.field, take(151));
+        owner.hand.push(take(156));
+      };
+      game.ui.showChainResponseModal = async () => null;
+      game.ui.showConfirmPrompt = async () => assert.fail("AI/replay must resolve through the decision broker");
+      game.ui.showTargetSelection = () => assert.fail("AI/replay must not open a human selection");
+    }
+    const luminarchDeck = [151, 156, 153, ...Array<number>(10).fill(3)];
+    const otherDeck = Array<number>(13).fill(3);
+    await live.startWithDecks({ exactDecks: true, preserveDeckOrder: true, initializeOnly: true,
+      startAtDrawPhase: true, startingPlayer: seat, announceStartingPlayer: false,
+      playerDeck: seat === "player" ? luminarchDeck : otherDeck,
+      botDeck: seat === "bot" ? luminarchDeck : otherDeck,
+      playerExtraDeck: [], botExtraDeck: [] });
+    const owner = live[seat];
+    const opponent = seat === "player" ? live.bot : live.player;
+    const attacker = required(owner.field[0]);
+    await live.resolveCombat(attacker, null);
+    assert.deepEqual([attacker.atk, attacker.def, opponent.lp], [2800, 2900, 5200]);
+    assert.deepEqual(owner.graveyard.map(card => card.id), [156]);
+    const replay = validateCanonicalReplay(JSON.parse(JSON.stringify(live.finalizeReplay({ reason: "sickle-ai-context" }))));
+    assert.equal(replay.commands.length, 1);
+    assert.deepEqual(replay.decisions.map(decision => decision.kind), ["segoc_order", "cost", "target"]);
+    playback.autoSelector.select = () => assert.fail("Replay must consume recorded choices without recalculating AI policy");
+    const result = await replayCanonicalDuel(replay, {
+      game: unsafeFixture<ReplayDriverGamePort>(playback, "Concrete Game supplies the canonical playback methods."),
+    });
+    assert.equal(result.ok, true);
+    assert.equal(result.finalStateHash, replay.result?.finalStateHash);
+    assert.equal(playback.decisionBroker.replayCursor, replay.decisions.length);
+    assert.deepEqual([playback[seat].field[0]?.atk, playback[seat].field[0]?.def], [2800, 2900]);
+  });
+}

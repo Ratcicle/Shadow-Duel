@@ -20,9 +20,12 @@ O projeto usa Vite para desenvolvimento e build. As dependências de runtime em
 [package.json](../package.json) são `pixi.js`, para efeitos visuais, e
 `@tabler/icons`, consumida por importações SVG pontuais na UI.
 
-Use Node 24 (`>=24.21.0 <25`), `npm ci` e `npm run check`. O gate verifica
-`tsconfig.app.json` e `tsconfig.node.json`, audita escapes de tipagem, executa
-testes, valida Chain/actions e gera o build. Ambos os projetos usam
+Use Node 24 (`>=24.21.0 <25`) e `npm ci`. Durante todo o trabalho, inclusive
+no encerramento, execute somente testes diretamente relacionados aos arquivos
+e caminhos alterados, justificando dependências e consumidores diretos conforme
+`AGENTS.md`. Execute typecheck, auditorias, validação de Chain/actions e build
+separadamente quando pertinentes; não use `npm test` ou `npm run check`
+automaticamente. Execução global exige solicitação explícita futura do usuário. Ambos os projetos usam
 `allowJs: false` e as opções strict de [tsconfig.base.json](../tsconfig.base.json).
 O compilador oficial é TypeScript 7.0.2, instalado pelo alias `@typescript/native`;
 os scripts de typecheck/watch chamam seu CLI explicitamente. O alias `typescript`
@@ -317,7 +320,7 @@ TypeScript; imports relativos continuam usando `.js`:
 
 O manifest mantém a ordem dos 15 grupos e as referências originais dos 89 attachments. O preflight rejeita referências ausentes, duplicatas e colisões incompatíveis; reaplicar a mesma referência é idempotente. A fachada usa declaration merging, sem emitir class fields, e preserva propriedades enumeráveis, graváveis e configuráveis no prototype.
 
-O gate operacional para mudanças nesta área é `npm run check`, que inclui as suítes de Chain e replay canônico, auditorias e build. Como a política do bot participa das janelas de resposta, execute também `npm run test:bot-smoke -- --duels 1 --matchup arcanist:shadowheart`.
+Para mudanças nesta área, selecione somente testes de Chain e dos consumidores diretamente afetados, incluindo replay e política de respostas do bot conforme o impacto. Justifique o alcance e mantenha-o no encerramento; typecheck, auditorias e build pertinentes são separados. Quando a mudança afetar respostas do bot, escolha um smoke relacionado, por exemplo `npm run test:bot-smoke -- --duels 1 --matchup arcanist:shadowheart`, ajustando o matchup ao caso. Siga a política de testes do `AGENTS.md`.
 
 ---
 

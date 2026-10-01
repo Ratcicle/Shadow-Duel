@@ -268,6 +268,7 @@ export async function handleTriggeredEffect(
       success: false,
       needsSelection: true,
       selectionContract: targetResult.selectionContract,
+      resolutionContext: ctx,
     };
   }
 
@@ -342,6 +343,7 @@ export async function handleTriggeredEffect(
         selectionContract: actionsResult.selectionContract,
       },
       actionsResult,
+      { resolutionContext: ctx },
     );
   }
   if (

@@ -978,8 +978,13 @@ npm run typecheck
 npm run validate:actions
 npm run generate:actions
 npm run check:actions-doc
-npm run check
 ```
+
+Execute somente os testes diretamente ligados à carta/action e aos caminhos
+alterados, inclusive no encerramento. Justifique dependências e consumidores
+diretos (Chain, decisões, replay, simulação/IA) conforme o impacto. Auditorias,
+build e smokes são separados e somente quando pertinentes. Siga `AGENTS.md`;
+`npm test` e `npm run check` não são gates automáticos.
 
 ## Metadados canônicos de ativação e uso
 

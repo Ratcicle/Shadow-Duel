@@ -3,7 +3,8 @@
 **Regra de ouro:** Todo código adicionado ou alterado deve seguir o padrão Shadow Duel: genérico, flexível e pensando nas adições futuras.
 
 O projeto é uma aplicação TypeScript com contratos strict. Novas mudanças
-devem preservar esses contratos e passar `npm run check`.
+devem preservar esses contratos e passar as verificações pertinentes, com testes
+diretamente relacionados aos arquivos e caminhos alterados.
 
 O compilador oficial é TypeScript 7.0.2 via alias `@typescript/native`; os
 scripts de typecheck/watch chamam seu CLI explicitamente. O alias `typescript`
@@ -136,9 +137,7 @@ Os contratos fundamentais ficam em [src/core/contracts/chain.ts](src/core/contra
 | `resolution.ts` | Preparação, resolução e cleanup dos links |
 | `finalization.ts` | Destino e cleanup pós-Chain de Spell/Trap |
 
-Os métodos anexados são expostos no tipo da fachada por declaration merging, sem class fields emitidos. Ao alterar o Chain, durante a implementação execute os testes de Chain e os
-testes diretamente afetados. Execute `npm run check` e o Bot smoke como gate
-final da tarefa.
+Os métodos anexados são expostos no tipo da fachada por declaration merging, sem class fields emitidos. Ao alterar o Chain, execute somente os testes de Chain e de consumidores diretamente afetados, inclusive no encerramento. Justifique a cobertura de decisões, replay e IA pelo caminho alterado; Bot smoke é necessário apenas quando pertinente ao impacto, com cenários focados.
 
 **Estrutura modular de [src/core/effects/](src/core/effects/):**
 
@@ -164,10 +163,17 @@ final da tarefa.
 ```bash
 npm ci                        # Instala dependências do lockfile
 npm run dev                   # Inicia o servidor Vite
-npm run check                 # Tipos, testes, auditorias e build
+npm run typecheck             # Verifica contratos TypeScript
+npm run build                 # Gera o build quando pertinente
 npm run preview               # Serve o build de produção localmente
 ```
-Durante desenvolvimento iterativo, execute apenas typecheck e testes diretamente relacionados aos arquivos alterados. Não execute a suíte completa nem npm run check após cada edição. Execute o gate completo somente ao finalizar a tarefa, antes de commit/PR, ou quando a alteração afetar múltiplos subsistemas.
+Durante todo o trabalho, inclusive no encerramento e antes de commit/PR, execute somente testes diretamente relacionados aos arquivos e caminhos alterados. Inclua dependências compartilhadas e consumidores diretos (Chain, decisões, replay, simulação e IA) conforme o impacto e justifique o alcance escolhido. Não execute `npm test`, `npm run check` ou outra suíte global automaticamente, mesmo em mudanças que afetem múltiplos subsistemas; uma solicitação explícita futura do usuário pode autorizar execução global. Confira o runner: argumentos extras de `npm test` podem não filtrar os arquivos. Para testes focados, use o Node diretamente com os arquivos selecionados:
+
+```bash
+node --import=tsx --import=./scripts/register_node_asset_loader.ts --test --test-concurrency=1 test/caminho/arquivo.test.ts
+```
+
+Typecheck, auditorias, validação estrutural e build continuam sendo executados separadamente quando pertinentes. Smokes também devem ter relação direta com a mudança; não há smoke global obrigatório. Em alterações exclusivamente documentais, confira texto, links e consistência das instruções.
 
 O projeto usa TypeScript e Vite, com Node 24 (`>=24.21.0 <25`). Os imports relativos preservam specifiers `.js`, resolvidos para os arquivos físicos `.ts` pelo toolchain. Para distribuição estática, use `npm run build` e publique `dist/`.
 
@@ -333,7 +339,8 @@ my_action_type: direct("handleMyAction", handleMyAction),
 **E declarar em `actionCatalog.ts`** com a categoria correta e os campos esperados.
 
 Depois, execute `npm run validate:actions`, `npm run generate:actions`,
-`npm run check:actions-doc` e, como gate final, `npm run check`.
+`npm run check:actions-doc`, typecheck e somente os testes diretamente ligados ao
+handler/action e aos consumidores afetados, conforme a política acima.
 
 ---
 

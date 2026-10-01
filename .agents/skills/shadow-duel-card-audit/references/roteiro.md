@@ -65,7 +65,7 @@ ID da definição, identidade da cópia (`instanceId`), identidade do duelo (`du
    node --import=tsx --import=./scripts/register_node_asset_loader.ts --test --test-concurrency=1 test/chain/costsTargetsAndCleanup.test.ts
    ```
 
-Grave sondagens/logs/replays em uma subpasta própria de `.cache/`. O relatório deve permitir reconstruir a evidência se o cache desaparecer. Comece com testes focados; não execute `npm run check` como investigação inicial. Uma auditoria apenas diagnóstica pode terminar sem gate completo, declarando isso. Não regenere catálogo ou outros artefatos durante o diagnóstico.
+Grave sondagens/logs/replays em uma subpasta própria de `.cache/`. O relatório deve permitir reconstruir a evidência se o cache desaparecer. Execute somente testes diretamente ligados aos arquivos/caminhos investigados ou alterados, inclusive no encerramento, conforme `AGENTS.md`. Não execute `npm test`, `npm run check` ou outra suíte global automaticamente. Declare o alcance e as verificações não executadas. Não regenere catálogo ou outros artefatos durante o diagnóstico.
 
 ## Relatório
 

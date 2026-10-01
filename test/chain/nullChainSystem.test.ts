@@ -2,7 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import NullChainSystem from "../../src/core/NullChainSystem.js";
-import type { ChainPlayer } from "../../src/core/contracts/chainRuntime.js";
+import type {
+  ChainEffectTarget,
+  ChainPlayer,
+} from "../../src/core/contracts/chainRuntime.js";
+import { createRuntimeGame, placeFieldCards, runtimeCard } from "../helpers/game.js";
 
 interface SelectionCandidate {
   key: string;
@@ -78,7 +82,8 @@ test("NullChainSystem resolves a human activation selection", async () => {
   const observedSessions: SelectionSessionFixture[] = [];
   const game = {
     effectEngine: {
-      resolveTargets() {
+      resolveTargets(definitions: readonly ChainEffectTarget[]) {
+        if (definitions.length === 0) return { ok: true, targets: {} };
         return {
           ok: true,
           needsSelection: true,
@@ -122,7 +127,8 @@ test("NullChainSystem resolves the same activation selection for AI", async () =
   let humanSessionOpened = false;
   const game = {
     effectEngine: {
-      resolveTargets() {
+      resolveTargets(definitions: readonly ChainEffectTarget[]) {
+        if (definitions.length === 0) return { ok: true, targets: {} };
         return {
           ok: true,
           needsSelection: true,
@@ -158,6 +164,45 @@ test("NullChainSystem resolves the same activation selection for AI", async () =
 
   assert.deepEqual(selections, { target: [target] });
   assert.equal(humanSessionOpened, false);
+});
+
+test("NullChainSystem resolves AI selections with the real EffectEngine and AutoSelector", async (t) => {
+  const game = createRuntimeGame({ disableChains: true });
+  t.after(() => game.dispose());
+  game.bot.controllerType = "ai";
+  const source = runtimeCard({ id: 900, name: "Source" }, game.bot.id);
+  const candidates = [901, 902].map((id) => runtimeCard({
+    id,
+    name: `Selection target ${id}`,
+    cardKind: "monster",
+    atk: 1000,
+    def: 1000,
+    level: 4,
+  }, game.bot.id));
+  placeFieldCards(game.bot.field, ...candidates);
+  const autoSelect = t.mock.method(game.autoSelector, "select");
+  t.mock.method(game, "startTargetSelectionSession", () => {
+    assert.fail("AI must not open a human selection session");
+  });
+
+  // No provided definitions or prior action targets require no further choice.
+  assert.deepEqual(
+    game.effectEngine.resolveTargets([], { source, player: game.bot }, null),
+    { ok: true, targets: {} },
+  );
+  const selections = await game.chainSystem.getPlayerSelectionsForDefinitions(
+    source,
+    [{ id: "target", owner: "self", zone: "field", cardKind: "monster", count: { min: 1, max: 1 } }],
+    game.bot,
+    { type: "card_activation" },
+  );
+
+  assert.equal(autoSelect.mock.callCount(), 1);
+  assert.ok(selections);
+  const selected: unknown = Reflect.get(selections, "target");
+  assert.ok(Array.isArray(selected));
+  assert.equal(selected.length, 1);
+  assert.ok(candidates.some((candidate) => candidate === selected[0]));
 });
 
 test("NullChainSystem preserves auto-resolved targets without a session", async () => {

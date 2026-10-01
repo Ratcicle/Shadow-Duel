@@ -332,22 +332,32 @@ export interface TriggerUsageCheck {
 }
 
 export type TriggerResolutionResult =
-  | NormalizedActionExecutionResult
-  | NeedsSelectionResult
-  | LegacyActionHandlerResult
+  | (NeedsSelectionResult & {
+      readonly resolutionContext: TriggerContext;
+    })
+  | {
+      readonly success: true;
+      readonly needsSelection: false;
+      readonly prepared: true;
+      readonly effect: TriggerEffectLike;
+      readonly targets: ResolvedTargetMap;
+      readonly activationContext: TriggerActivationContext;
+      readonly resolutionContext: TriggerContext;
+    }
   | {
       readonly success: boolean;
-      readonly needsSelection: boolean;
+      readonly needsSelection: false;
       readonly activationSkipped?: boolean;
-      readonly prepared?: boolean;
+      readonly prepared?: false;
       readonly reason?: string | undefined;
-      readonly selectionContract?: RawSelectionContract;
-      readonly effect?: TriggerEffectLike;
-      readonly targets?: ResolvedTargetMap;
-      readonly activationContext?: TriggerActivationContext;
-      readonly resolutionContext?: TriggerContext;
       readonly actionResult?: object;
     };
+
+/** Custom activation callbacks may still return legacy action outcomes. */
+export type TriggerActivationResult =
+  | TriggerResolutionResult
+  | NormalizedActionExecutionResult
+  | LegacyActionHandlerResult;
 
 export interface TriggerEntryConfig {
   readonly card: TriggerRuntimeCard;
@@ -368,9 +378,9 @@ export interface TriggerEntryConfig {
   readonly activate: (
     selections: object | null | undefined,
     activationContext: TriggerActivationContext,
-  ) => MaybePromise<TriggerResolutionResult>;
+  ) => MaybePromise<TriggerActivationResult>;
   readonly onSuccess: (
-    result: TriggerResolutionResult,
+    result: TriggerActivationResult,
     activationContext: TriggerActivationContext,
   ) => MaybePromise<void>;
 }
@@ -413,9 +423,9 @@ export interface BuildTriggerEntryOptions {
     selections: object | null | undefined,
     activationContext: TriggerActivationContext,
     resolvedContext: TriggerContext,
-  ) => MaybePromise<TriggerResolutionResult>;
+  ) => MaybePromise<TriggerActivationResult>;
   readonly onSuccess?: (
-    result: TriggerResolutionResult,
+    result: TriggerActivationResult,
     activationContext: TriggerActivationContext,
   ) => MaybePromise<void>;
 }

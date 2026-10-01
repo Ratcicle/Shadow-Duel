@@ -35,7 +35,7 @@ Prioridades:
 - revisar cartas e efeitos;
 - corrigir divergências entre texto e comportamento;
 - garantir estabilidade de Chain, batalha, movimento de cartas e Extra Deck;
-- manter `npm run check` passando;
+- manter contratos, verificações pertinentes e testes diretamente ligados às mudanças passando, inclusive no encerramento, conforme `AGENTS.md`;
 - usar replays e testes como regressão para comportamentos corrigidos.
 
 Esta é a fundação para todas as etapas seguintes.

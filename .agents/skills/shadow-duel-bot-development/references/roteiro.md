@@ -98,7 +98,7 @@ Reutilize `BaseStrategy`, geração, preview, simulação e políticas comuns. C
 1. Regressão pequena que reproduz a decisão indesejada e falha antes, quando possível. Asserte custo/alvo/linha/recursos, não apenas vitória.
 2. Paridade runtime/simulação/preview quando afetados, incluindo falhas e revalidação pertinentes.
 3. Planejamento com candidatos concorrentes, controles e limites conhecidos.
-4. Smoke determinístico de Arena; mesma lista de seeds, decks, matchups, assentos e configurações antes/depois. Depois use seeds/matchups adicionais para reduzir overfitting.
+4. Smoke determinístico de Arena quando pertinente ao impacto; seeds, decks, matchups, assentos e configurações relacionados à mudança e iguais antes/depois. Use seeds/matchups adicionais somente quando necessários à hipótese.
 5. Amostras maiores apenas se necessárias à conclusão. Observe latência e encerramentos por timeout, não só vencedor.
 
 Escolha métricas vinculadas à hipótese: falhas/bloqueios, divergências plano/execução, turnos sem ação útil, decisões/tempo, linhas, recursos desperdiçados, letal perdido, Extra Deck, targeting, respostas de Chain e quantidade de estados que reproduzem a regressão. Algumas exigem asserções/instrumentação focada; não invente campos do relatório.
@@ -111,7 +111,7 @@ npm run test:bot-smoke -- --seed 4242 --duels 1 --matchups bloomrot:techzero,tec
 
 Os números são parâmetros de exemplo, não requisitos de qualidade. Confirme seeds efetivas por duelo e repita condições no resultado posterior. O smoke compacta o Strategic Report; se faltarem amostras da divergência, obtenha o relatório detalhado, eventos e setup. Strategic Report não é replay canônico. Para replay executável, siga documentação/contratos atuais de captura e reprodução; Arena/Laboratório podem não capturá-lo por padrão. Confira broker, RNG, ordem e identidades quando a mudança afetar determinismo.
 
-Win rate contextualiza. Amostra pequena pode piorar apesar da correção específica; ganho que explora bug é inválido. Derrotas não autorizam buff de carta, vitórias não provam qualidade da IA. Diagnóstico puro começa por testes focados e pode dispensar gate completo; mudanças implementadas seguem os gates atuais do projeto. Registre exatamente comandos, resultados e omissões. Artefatos temporários em `.cache/`; em `docs/`, somente Markdown.
+Win rate contextualiza. Amostra pequena pode piorar apesar da correção específica; ganho que explora bug é inválido. Derrotas não autorizam buff de carta, vitórias não provam qualidade da IA. Diagnóstico e implementação usam somente testes diretamente ligados aos arquivos/caminhos afetados, inclusive no encerramento; justifique dependências diretas conforme `AGENTS.md`. Não execute `npm test`, `npm run check` ou outra suíte global automaticamente. Typecheck, auditorias e build pertinentes são separados. Registre exatamente comandos, resultados e omissões. Artefatos temporários em `.cache/`; em `docs/`, somente Markdown.
 
 ## 5. Relatório
 

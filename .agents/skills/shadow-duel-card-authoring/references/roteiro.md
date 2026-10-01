@@ -103,7 +103,7 @@ Humano escolhe pelo contrato de seleção/posição/colocação; IA usa a polít
 
 Leia as asserções existentes e escolha casos que demonstrem a semântica, incluindo legalidade/falha. Testes verdes e validação estrutural não bastam para declarar o efeito correto.
 
-Ordem de execução: **typecheck/validação estrutural pertinente → carta/efeito → action compartilhada alterada → Chain/decisão/replay relevantes → simulação/IA afetadas → smoke determinístico quando pertinente → `npm run check` final**. Use comandos do checkout, não versões/números congelados nesta skill. Se alterar Chain, aplique também o gate específico do `AGENTS.md`, incluindo Bot smoke. Não rode o gate completo após cada pequena edição.
+Ordem de execução, limitada aos arquivos/caminhos alterados e dependências diretas: **typecheck/validação estrutural pertinente → carta/efeito → action compartilhada alterada → Chain/decisão/replay relevantes → simulação/IA afetadas → smoke determinístico quando pertinente**. Justifique esse alcance e mantenha testes focados também no encerramento. Use comandos do checkout, não versões/números congelados nesta skill. Siga `AGENTS.md`: Bot smoke somente quando pertinente; typecheck, auditorias e build são separados. Não execute `npm test`, `npm run check` ou outra suíte global automaticamente; execução global exige solicitação explícita futura do usuário.
 
 Para efeito existente, capture comportamento anterior, seed/setup quando necessário, regressão que falha antes quando possível e casos de controle. Para carta nova, teste contrato e execução nova; não alegue RED histórico inexistente. Separe comandos executados, resultados e testes apenas propostos.
 

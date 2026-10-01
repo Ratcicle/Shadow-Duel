@@ -216,19 +216,19 @@ Ordem sugerida, limitada ao impacto real:
 4. Chain, decisões e replay aplicáveis.
 5. Paridade de simulação, ambos os assentos e informação oculta.
 6. UI/headless, idioma quando pertinente, regressões dos consumidores.
-7. Smoke determinístico pertinente e gate final.
+7. Smoke determinístico pertinente e verificações finais do escopo afetado.
 
 Para **replay**: gravar → serializar → validar → reproduzir em novo `Game` → conferir decisões consumidas e hashes. Verifique ausência de UI/política recalculada, eventos e comandos duplicados. Para **estado**: criar → mutar → clonar → sair/retornar → limpar → serializar/restaurar quando aplicável. Um teste unitário isolado não prova uma mudança transversal.
 
 ### Comandos
 
-Consulte `package.json` e os scripts atuais antes de executar; descubra os testes reais com `rg --files test`. Durante a implementação, use `npm run typecheck` e testes diretamente afetados. A execução Node pode exigir o asset loader do projeto; confira o runner vigente em [run_tests.ts](../../../../scripts/run_tests.ts).
+Consulte `package.json` e os scripts atuais antes de executar; descubra os testes reais com `rg --files test`. Durante todo o trabalho, inclusive no encerramento, use somente testes diretamente ligados aos arquivos/caminhos alterados; execute `npm run typecheck` separadamente quando pertinente. A execução Node pode exigir o asset loader do projeto; confira o runner vigente em [run_tests.ts](../../../../scripts/run_tests.ts).
 
-Quando actions/contratos do catálogo mudarem, rode os scripts atuais: `npm run validate:actions`, `npm run generate:actions`, `npm run check:actions-doc`. Para Chain, cumpra também os gates de AGENTS: testes de Chain e consumidores durante o trabalho, `npm run check` e Bot smoke ao finalizar.
+Quando actions/contratos do catálogo mudarem, rode os scripts atuais: `npm run validate:actions`, `npm run generate:actions`, `npm run check:actions-doc`. Para Chain, selecione testes de Chain e consumidores diretamente afetados e justifique decisões/replay/IA pelo impacto; Bot smoke somente quando pertinente, com cenários focados, conforme `AGENTS.md`.
 
 Use `npm run replay -- <arquivo>` para o artefato aplicável e `npm run test:bot-smoke -- <argumentos suportados>` quando pertinente; confira as flags em [run_bot_arena_smoke.ts](../../../../scripts/run_bot_arena_smoke.ts). Compare baseline e mudança com as mesmas seeds, presets, assentos e limites. Explique diferenças esperadas; erros, travamentos ou regressões de legalidade impedem conclusão.
 
-Execute `npm run check` como gate final de implementação da engine. Não repita a suíte inteira após cada edição. Registre comandos, exit codes/resultados e testes não executados. Artefatos temporários ficam fora de `docs/`, preferencialmente em `.cache/`.
+Não execute `npm test`, `npm run check` ou outra suíte global automaticamente, inclusive no encerramento; execução global exige solicitação explícita futura do usuário. Typecheck, auditorias e build pertinentes são comandos separados. Justifique o alcance dos testes pelos arquivos/caminhos alterados e suas dependências diretas. Registre comandos, exit codes/resultados e testes não executados. Artefatos temporários ficam fora de `docs/`, preferencialmente em `.cache/`.
 
 ## 13. Relatório
 
