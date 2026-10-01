@@ -59,6 +59,7 @@ import {
 } from "./counters.js";
 import {
   applyModifyLevel,
+  applyReduceHandMonsterLevels,
   applyPermanentBuffNamed,
   applyBuffStatsTemp,
   applyBuffAtkTemp,
@@ -101,6 +102,7 @@ import {
 export const SIMULATED_ACTION_HANDLERS = {
   "permanent_buff_named": applyPermanentBuffNamed,
   "modify_level": applyModifyLevel,
+  "reduce_hand_monster_levels": applyReduceHandMonsterLevels,
   "register_synchro_material_followup": applyRegisterSynchroMaterialFollowup,
   "schedule_special_summon": applyScheduleSpecialSummon,
   "negate_summon_or_activation_and_destroy": applyNegateSummonOrActivationAndDestroy,

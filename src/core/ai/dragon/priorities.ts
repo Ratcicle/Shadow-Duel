@@ -337,14 +337,14 @@ export function shouldPlaySpell(card: DragonCard, analysis: DragonAnalysis) {
         ["Luminescent Dragon", "Hellkite Dragon", "Voltaic Dragon", "Boneflame Dragon"].includes(c.name!)
       );
       if (!canBuildFodder) {
-        return { yes: true, priority: 8, reason: "Search Level 8+ Dragon and set up Awakening for later" };
+        return { yes: true, priority: 8, reason: "Prepare Awakening field ignition for later" };
       }
-      return { yes: true, priority: 10, reason: "Search Level 8+ Dragon; extenders can produce fodder" };
+      return { yes: true, priority: 10, reason: "Prepare field ignition; extenders can produce fodder" };
     }
     if (hasSummonableLv8InHand) {
       return { yes: true, priority: 12, reason: "Activate and threaten ignition: 2 Dragon fodder + Level 8+ Dragon in hand" };
     }
-    return { yes: true, priority: 11, reason: "Activate to search Level 8+ Dragon, then use ignition with 2 Dragon fodder" };
+    return { yes: true, priority: 11, reason: "Prepare field ignition with 2 Dragon fodder; needs a Level 8+ Dragon in hand" };
   }
 
   // ── Call of the Haunted ────────────────────────────────────────────────────

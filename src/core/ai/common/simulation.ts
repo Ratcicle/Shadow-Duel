@@ -1605,39 +1605,62 @@ function resolveEffectForAction(
   );
 }
 
+/** Choices are validated while the source is still in its activation zone. */
+export interface PreparedSimulatedSpellEffect {
+  effect: EffectDefinition;
+  selections: ReturnType<typeof selectSimulatedTargets>;
+  selfId: string;
+  options: BuiltSimulatedSelectionOptions;
+  consumed: boolean;
+}
+
+export function prepareSimulatedSpellEffect<State extends SimulatedMainPhaseState>(
+  state: State,
+  card: SimulatedCardState | null | undefined,
+  options: SimulatedEventDispatchOptions = {},
+): PreparedSimulatedSpellEffect | null {
+  const effect = card?.effects?.find(entry => entry.timing === "on_play");
+  if (!card || !effect) return null;
+  const selfId = options.selfId || "bot";
+  if (!effectConditionsPass(state, effect, card, options)) return null;
+  if (!canUseSimulatedEffect(state, effect, card, selfId)) return null;
+  const selectionOptions = buildSelectionOptions(options);
+  const selections = selectSimulatedTargets({
+    targets: effect.targets || [], actions: effectExecutionActions(effect),
+    state, sourceCard: card, selfId, options: selectionOptions,
+  });
+  if (!hasRequiredSimSelections(effect.targets || [], selections)) return null;
+  const player = selfId === "player" ? state.player : state.bot;
+  if (!canPaySimulatedMoveCosts(effect, selections, card, player, state)) return null;
+  return { effect, selections, selfId, options: selectionOptions, consumed: false };
+}
+
 export function simulateGenericSpellEffect<State extends SimulatedMainPhaseState>(
   state: State,
   card: SimulatedCardState | null | undefined,
   options: SimulatedEventDispatchOptions = {},
+  prepared: PreparedSimulatedSpellEffect | null = prepareSimulatedSpellEffect(state, card, options),
 ): void {
-  if (!card || !Array.isArray(card.effects)) return;
-  const effect = card.effects.find(
-    (entry) => entry && entry.timing === "on_play",
-  );
-  if (!effect) return;
-  if (!effectConditionsPass(state, effect, card, options)) return;
-  if (!canUseSimulatedEffect(state, effect, card, options.selfId || "bot")) {
-    return;
-  }
-
-  const selectionOptions = buildSelectionOptions(options);
-  attachSimulatedEventEmitter(state, selectionOptions);
-  const selections = selectSimulatedTargets({
-    targets: effect.targets || [],
-    actions: effectExecutionActions(effect),
-    state,
-    sourceCard: card,
-    selfId: options.selfId || "bot",
-    options: selectionOptions,
-  });
+  if (!card || !prepared || prepared.consumed) return;
+  prepared.consumed = true;
+  const { effect, selections, selfId } = prepared;
+  const selectionOptions = attachSimulatedEventEmitter(state, prepared.options);
+  const player = selfId === "player" ? state.player : state.bot;
+  const opponent = selfId === "player" ? state.bot : state.player;
+  const resolutionOptions: SimulatedActionOptions = {
+    ...selectionOptions, sourceCard: card, effect,
+    referenceSnapshots: captureSimulatedReferences(effect, selections, player, opponent),
+    actionContext: selectionOptions.actionContext || {},
+    costPayment: { status: "paid", actions: [], summonMarkers: [] },
+  };
+  const usageSourceAtActivation = { ...card };
+  if (!applySimulatedActions({ actions: effect.activationCosts || [], selections, state,
+    selfId, options: resolutionOptions })) return;
   applySimulatedActions({
-    actions: effectExecutionActions(effect),
-    selections,
-    state,
-    selfId: options.selfId || "bot",
-    options: { ...selectionOptions, sourceCard: card, effect },
+    actions: [...(effect.activationCommitActions || []), ...(effect.actions || [])],
+    selections, state, selfId, options: resolutionOptions,
   });
-  markSimulatedEffectUsed(state, effect, card, options.selfId || "bot");
+  markSimulatedEffectUsed(state, effect, usageSourceAtActivation, selfId);
 }
 
 function resolvesToGraveyardAfterActivation(

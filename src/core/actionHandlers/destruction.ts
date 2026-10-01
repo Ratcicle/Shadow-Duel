@@ -734,6 +734,9 @@ export async function handleScheduleReturnFromBanished(
     return false;
   }
 
+  const banishedOwner = [game.player, game.bot].find(owner => owner.banished.includes(cardToReturn));
+  if (!banishedOwner) return false;
+
   const returnPhase = action?.returnPhase || "end";
   const delayTurns =
     typeof action.delayTurns === "number" && Number.isFinite(action.delayTurns)
@@ -752,8 +755,10 @@ export async function handleScheduleReturnFromBanished(
     summons: [
       {
         card: cardToReturn,
-        owner: player.id,
+        owner: banishedOwner.id,
         fromZone: "banished",
+        expectedLocationVersion: cardToReturn.locationVersion,
+        summonMethod: "special",
       },
     ],
   };

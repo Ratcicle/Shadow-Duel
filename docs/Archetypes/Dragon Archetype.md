@@ -5,7 +5,7 @@ Nomes e textos PT-BR: `public/locales/pt-br.json`.
 
 ## Regras textuais aprovadas
 
-Os textos em inglês e português das cartas, refletidos neste catálogo, são a fonte de verdade para o comportamento esperado. A implementação deve seguir essas regras. As decisões abaixo foram aprovadas em 30 de setembro de 2026.
+Os textos em inglês e português das cartas, refletidos neste catálogo, são a fonte de verdade para o comportamento esperado. A implementação deve seguir essas regras. As decisões abaixo foram aprovadas em 30 de setembro de 2026, com o complemento de 268 em 1 de outubro.
 
 - **262:** a Ignition envia a própria Magia de Campo ao Cemitério como custo, antes de abrir a janela de respostas. A Invocação-Especial acontece na resolução da Chain.
 - **272:** a trava considera somente monstros Invocados pelo oponente durante a permanência atual da Névoa com a face para cima no campo e somente no turno da Invocação. Monstros que já estavam no campo quando ela entrou e monstros que mudarem de controle ficam fora da restrição; a troca de controle também encerra a restrição para um monstro antes abrangido.
@@ -13,7 +13,7 @@ Os textos em inglês e português das cartas, refletidos neste catálogo, são a
 - **270:** a destruição em batalha não concede uma Invocação do Extremo Vulcânico.
 - **264:** a Invocação da mão ao banir 3 Dragões do Cemitério é um procedimento, sem ativação de efeito, limitado por nome a uma tentativa por turno desta forma, inclusive se a Invocação for negada. O compromisso da tentativa consome o uso antes do primeiro pagamento; cancelar antes dele preserva recursos e uso. Permanecem as janelas normais de tentativa e conclusão da Invocação. O hard OPT final continua independente para cada efeito. O procedimento não conta para as três ativações exigidas pela Ascensão de 267.
 - **273:** a substituição da destruição é opcional, inclusive com campo adversário vazio. Após banir a fonte, se houver cards adversários, o jogador deve escolher 1 para banir.
-- **268:** o nome PT-BR é "Santuário do Espírito do Dragão".
+- **268:** o nome PT-BR é "Santuário do Espírito do Dragão". A devolução e a Invocação acontecem na mesma resolução; a janela de respostas é da ativação da Armadilha. O substituto é escolhido depois da devolução e pode ser o próprio monstro devolvido. O limite usa o Nível desse monstro na mão.
 - **263 e 274:** Standby Phase é traduzida como "Fase de Espera".
 
 ## Resumo
@@ -363,7 +363,7 @@ Magia Contínua.
 
 Armadilha Normal.
 
-> Quando um monstro Dragão que você controla for alvo de um ataque ou efeito de card do oponente: devolva esse monstro para a mão; então Invoque por Invocação-Especial 1 monstro Dragão da sua mão com Nível menor ou igual ao do monstro devolvido.
+> Quando um monstro Dragão que você controla for alvo de um ataque ou efeito de card do oponente: devolva esse monstro para a mão, então Invoque por Invocação-Especial 1 monstro Dragão da sua mão com Nível menor ou igual ao Nível desse monstro na mão.
 >
 > Você só pode ativar 1 "Santuário do Espírito do Dragão" por turno.
 

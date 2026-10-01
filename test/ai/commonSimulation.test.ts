@@ -8,7 +8,7 @@ import {
   markSimOncePerTurnUsed,
   useSimOpt,
 } from "../../src/core/ai/common/simStateUtils.js";
-import { applyGenericSimulatedMainPhaseAction, attachSimulatedEventEmitter } from "../../src/core/ai/common/simulation.js";
+import { applyGenericSimulatedMainPhaseAction, attachSimulatedEventEmitter, prepareSimulatedSpellEffect, simulateGenericSpellEffect } from "../../src/core/ai/common/simulation.js";
 import { applySimulatedActions } from "../../src/core/ai/common/simulatedActions/index.js";
 import { cloneBotGameState } from "../../src/core/bot/simulationBridge.js";
 import { simulationCard, simulationState } from "../helpers/simulation.js";
@@ -290,3 +290,37 @@ test("generic spell placement preserves hook receiver and truthy results", () =>
   assert.equal(state.bot.spellTrap[0]?.name, spell.name);
   assert.equal(state.bot.graveyard.length, 0);
 });
+
+
+for (const actor of ["bot", "player"] as const) {
+  test(`prepared Spell choices pay once before declarative resolution (${actor})`, () => {
+    const spell = simulationCard({ id: 9001, instanceId: "prepared-spell", cardKind: "spell", effects: [{
+      id: "prepared-effect", timing: "on_play", oncePerTurn: true, oncePerTurnName: "prepared-effect",
+      targets: [{ id: "cost", intent: "cost", zone: "hand", owner: "self", excludeSelf: true, count: { min: 1, max: 1 } }],
+      activationCosts: [{ type: "move", targetRef: "cost", fromZone: "hand", to: "graveyard", requireDestination: true, contextLabel: "discard" }],
+      actions: [{ type: "reduce_hand_monster_levels", amount: 2 }],
+    }] });
+    const paid = simulationCard({ id: 9002, instanceId: "prepared-cost", cardKind: "monster", level: 6 });
+    const remaining = simulationCard({ id: 9003, instanceId: "prepared-hand", cardKind: "monster", level: 6 });
+    const state = simulationState({ turn: actor, phase: "main1", turnCounter: 4, _isPerspectiveState: true,
+      bot: { id: actor, hand: [spell, paid, remaining] }, player: { id: actor === "bot" ? "player" : "bot" } });
+    let events = 0;
+    const prepared = prepareSimulatedSpellEffect(state, spell, { selfId: "bot", enableSimulatedEvents: true,
+      activationContext: { decisions: { selections: { cost: ["prepared-cost"] } } },
+      emitSimulatedEvent(event) {
+        if (event !== "card_to_grave") return;
+        events++;
+        assert.ok(state.bot.graveyard.includes(paid));
+        assert.equal(paid.level, 6, "the cost card leaves hand before hand levels are changed");
+        assert.equal(remaining.level, 6, "the discard event precedes resolution");
+      },
+    });
+    assert.ok(prepared); assert.equal(events, 0); assert.equal(state.bot.hand.length, 3);
+    simulateGenericSpellEffect(state, spell, {}, prepared);
+    assert.equal(events, 1); assert.equal(remaining.level, 4); assert.equal(paid.level, 6);
+    assert.equal(remaining.originalLevel, 6);
+    simulateGenericSpellEffect(state, spell, {}, prepared);
+    assert.equal(events, 1); assert.equal(remaining.level, 4);
+    assert.equal(prepareSimulatedSpellEffect(state, spell, { selfId: "bot" }), null, "the named use is consumed");
+  });
+}

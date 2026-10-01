@@ -92,6 +92,12 @@ export async function handleReturnToHand(
   if (!targetPlayer) return false;
 
   let returnedCount = 0;
+  const returnedCards: ActionRuntimeCard[] = [];
+  if (action.storeResultAs) {
+    ctx._actionTargets ??= {};
+    ctx._actionTargets[action.storeResultAs] = returnedCards;
+    targets[action.storeResultAs] = returnedCards;
+  }
 
   for (const card of cards) {
     if (!card) continue;
@@ -120,9 +126,11 @@ export async function handleReturnToHand(
 
     if (
       moveResult &&
-      (typeof moveResult !== "object" || moveResult.success !== false)
+      (typeof moveResult !== "object" || moveResult.success !== false) &&
+      (!action.requireDestination || game.player.hand.includes(card) || game.bot.hand.includes(card))
     ) {
       returnedCount++;
+      returnedCards.push(card);
       getUI(game)?.log(`${card.name} returned to hand.`);
 
       // If this bounce removes the current attack target, negate the attack
@@ -133,7 +141,7 @@ export async function handleReturnToHand(
       ) {
         game.registerAttackNegated(ctx.attacker);
       }
-    } else {
+    } else if (!action.requireDestination) {
       // Fallback for older moveCard implementations
       const sourceZone: unknown = Reflect.get(cardOwner, fromZone);
       if (Array.isArray(sourceZone)) {
@@ -144,6 +152,7 @@ export async function handleReturnToHand(
           cardOwner.hand = cardOwner.hand || [];
           cardOwner.hand.push(card);
           returnedCount++;
+          returnedCards.push(card);
           getUI(game)?.log(`${card.name} returned to hand.`);
         }
       }

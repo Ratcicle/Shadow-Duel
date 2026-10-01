@@ -36,7 +36,9 @@ test("Dragon simulation rejects hand activation and Set when the spell/trap row 
 });
 
 test("Dragon normal Spell occupies the preferred vacancy during its search and frees it afterwards", () => {
-  const spell = simulationCard({ id: 721, name: "Extreme Dragon Awakening", cardKind: "spell", subtype: "normal", fieldSlot: null });
+  const spell = simulationCard({ id: 721, name: "Extreme Dragon Awakening", cardKind: "spell", subtype: "normal", fieldSlot: null,
+    effects: [{ id: "position_search", timing: "on_play", actions: [{ type: "add_from_zone_to_hand", zone: "deck",
+      filters: { cardKind: "monster", type: "Dragon", minLevel: 8 } }] }] });
   const recruit = simulationCard({ id: 722, name: "Searchable Dragon", cardKind: "monster", type: "Dragon", level: 8 });
   const occupants = ([0, 2, 3, 4] as const).map(slot => simulationCard({ id: 730 + slot, cardKind: "trap", fieldSlot: slot }));
   const state = simulationState({ bot: { hand: [spell], deck: [recruit], spellTrap: occupants.slice() } });

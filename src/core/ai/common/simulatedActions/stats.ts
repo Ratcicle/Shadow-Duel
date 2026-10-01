@@ -455,6 +455,19 @@ export function applyBuffStatsTemp(
   return;
 }
 
+/** Match the runtime hand-level action and its existing end-turn cleanup. */
+export function applyReduceHandMonsterLevels(
+  ctx: SimulatedActionHandlerContext<"reduce_hand_monster_levels">,
+): void {
+  const amount = Math.max(1, Number(ctx.action.amount ?? 1) || 1);
+  for (const card of ctx.self.hand) {
+    const current = card.level ?? 0;
+    if (card.cardKind !== "monster" || current <= 1) continue;
+    if (card.originalLevel == null) card.originalLevel = current;
+    card.level = Math.max(1, current - amount);
+  }
+}
+
 export function applyModifyLevel(
   ctx: SimulatedActionHandlerContext<"modify_level">,
 ): void {

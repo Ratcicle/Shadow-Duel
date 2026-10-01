@@ -267,6 +267,7 @@ interface PreviewAction {
   readonly sourceZone?: PreviewZone | readonly PreviewZone[];
   readonly stateKey?: string;
   readonly storeAs?: string;
+  readonly storeResultAs?: string;
   readonly subtype?: string | readonly string[];
   readonly summonToOwner?: "self" | "opponent";
   readonly targetCountFromContext?: ContextNumberSource | string;
@@ -294,6 +295,7 @@ interface PreviewMove {
   zone: PreviewZone;
   cards: PreviewCard[];
   maxCount: number | null;
+  projections?: Map<PreviewCard, PreviewCard>;
 }
 
 interface PreviewResult {
@@ -1341,11 +1343,15 @@ function collectPreviewTargetEntries(
   const filters = buildTargetPreviewFilters(target);
   const entries: PreviewTargetEntry[] = [];
   const seen = new Set<PreviewCard>();
+  const contextValue = readContextValue(ctx, target.targetFromContext);
+  const contextCards = target.targetFromContext
+    ? Array.isArray(contextValue) ? contextValue : [contextValue] : null;
 
   for (const owner of owners) {
     for (const zone of zones) {
       for (const card of getPreviewZoneCards(owner, zone)) {
         if (!card || seen.has(card)) continue;
+        if (contextCards && !contextCards.includes(card)) continue;
         if (shouldExcludePreviewTargetCard(card, target, ctx, zone)) continue;
         if (!matchesPreviewFilters(engine, card, filters, ctx)) continue;
         if (!previewTargetCandidateMatches(engine, card, target, ctx, player)) {
@@ -1386,8 +1392,8 @@ function recordPreviewMoveCandidates(
     if (cards.length >= (count.min ?? 1)) previewMoves.push({ owner, zone: "graveyard", cards, maxCount: count.max ?? 1 });
     return;
   }
-  if (action?.type !== "move" || !Array.isArray(previewMoves)) return;
-  const toZone = action.to || action.toZone;
+  if (action.type !== "move" && action.type !== "return_to_hand") return;
+  const toZone = action.type === "return_to_hand" ? "hand" : action.to || action.toZone;
   if (!toZone || !action.targetRef) return;
 
   const targetDef = getEffectTargetDefinition(ctx, action.targetRef);
@@ -1404,13 +1410,13 @@ function recordPreviewMoveCandidates(
   const maxCount = getPreviewTargetMaxCount(targetDef, sourceEntries.length);
   if (maxCount !== null && maxCount <= 0) return;
 
+  const results: PreviewCard[] = [];
+
   for (const entry of sourceEntries) {
-    const owner = getPreviewMoveDestinationOwner(
-      action,
-      ctx,
-      entry.owner,
-      player,
-    );
+    const owner = action.type === "return_to_hand"
+      ? [engine.game.player, engine.game.bot].find(owner =>
+          owner.id === (entry.card.originalOwner || entry.card.owner)) || entry.owner
+      : getPreviewMoveDestinationOwner(action, ctx, entry.owner, player);
     if (!owner) continue;
     let group = previewMoves.find(
       (candidate) => candidate.owner === owner && candidate.zone === toZone,
@@ -1425,6 +1431,13 @@ function recordPreviewMoveCandidates(
       previewMoves.push(group);
     }
     group.cards.push(entry.card);
+    const projected = toZone !== "field" && entry.card.originalLevel != null
+      ? { ...entry.card, level: entry.card.originalLevel, originalLevel: null } : entry.card;
+    (group.projections ??= new Map()).set(entry.card, projected);
+    results.push(projected);
+  }
+  if (action.storeResultAs) {
+    ctx._actionTargets = { ...ctx._actionTargets, [action.storeResultAs]: results };
   }
 }
 
@@ -1489,8 +1502,8 @@ function checkPreviewMoveTargetAvailability(
   player: ActionRuntimePlayer,
   previewMoves: readonly PreviewMove[],
 ): PreviewResult {
-  if (action?.type !== "move") return { ok: true };
-  const toZone = action.to || action.toZone;
+  if (action.type !== "move" && action.type !== "return_to_hand") return { ok: true };
+  const toZone = action.type === "return_to_hand" ? "hand" : action.to || action.toZone;
   if (toZone === "field") {
     const destinationPlayer =
       action.player === "opponent" ? ctx?.opponent : ctx?.player || player;
@@ -1502,6 +1515,8 @@ function checkPreviewMoveTargetAvailability(
     const players = [engine.game.player, engine.game.bot];
     const canReachDestination = (entry: PreviewTargetEntry): boolean => {
       if (entry.card.isToken && toZone !== "field") return false;
+      if (action.type === "return_to_hand" &&
+          ["fusion", "synchro", "ascension"].includes(entry.card.monsterType || "")) return false;
       if (entry.zone === "field" && entry.card.banishWhenLeavesField && toZone !== "field" && toZone !== "banished") return false;
       const redirect = toZone === "graveyard"
         ? getSendToGraveReplacementDestination(entry.card, entry.owner, players)
@@ -1945,9 +1960,12 @@ function hasSpecialSummonCandidate(
     if (!card || card.cardKind !== "monster") return false;
     const fromZone = zoneNames.find(zone => sourceOwners.some(owner => getPreviewZoneCards(owner, zone).includes(card)) || previewMoves.some(move => move.zone === zone && move.cards.includes(card)));
     if (!fromZone || !isLegalZoneSummon(card, destinationPlayer, fromZone, engine.game,
-      getPreviewFieldCostCards(engine, ctx, destinationPlayer))) return false;
+      [...getPreviewFieldCostCards(engine, ctx, destinationPlayer),
+        ...previewMoves.filter(move => move.zone !== "field").flatMap(move => move.cards)
+          .filter(moved => destinationPlayer.field.includes(moved))])) return false;
     if (action.excludeSummonRestrict?.includes(card.summonRestrict || "")) return false;
-    return matchesPreviewFilters(engine, card, filters);
+    const projected = previewMoves.find(move => move.projections?.has(card))?.projections?.get(card) || card;
+    return matchesPreviewFilters(engine, projected, filters);
   });
   const min = Number(
     typeof action.count === "object" ? (action.count.min ?? 1) : 1,
@@ -2098,7 +2116,7 @@ export function checkActionPreviewRequirements(
       }
     }
 
-    if (action.type === "move") {
+    if (action.type === "move" || (action.type === "return_to_hand" && action.requireDestination)) {
       const moveTargetCheck = checkPreviewMoveTargetAvailability(
         this,
         action,
@@ -2619,7 +2637,7 @@ export function checkActionPreviewRequirements(
       }
     }
 
-    recordPreviewMoveCandidates(this, action, ctx, player, previewMoves);
+    recordPreviewMoveCandidates(this, action, previewCtx, player, previewMoves);
   }
 
   return { ok: true };

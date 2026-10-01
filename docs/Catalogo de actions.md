@@ -868,6 +868,8 @@ Returns target cards to hand.
 | `contextLabel` | nao | string |  |
 | `haltOnFailure` | nao | boolean |  |
 | `stopOnFailure` | nao | boolean |  |
+| `storeResultAs` | nao | string |  |
+| `requireDestination` | nao | boolean |  |
 
 **Exemplos**
 

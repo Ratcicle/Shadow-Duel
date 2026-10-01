@@ -5,6 +5,7 @@ import Card from "../../src/core/Card.js";
 import DragonStrategy from "../../src/core/ai/DragonStrategy.js";
 import { applyGenericSimulatedMainPhaseAction } from "../../src/core/ai/common/simulation.js";
 import { applySimulatedActions } from "../../src/core/ai/common/simulatedActions/index.js";
+import { captureSimulatedReferences } from "../../src/core/ai/common/simulatedActions/shared.js";
 import { cleanupExpiredSimulatedTurnEffects, processSimulatedDelayedActions } from "../../src/core/ai/common/simulatedActions/lifecycle.js";
 import { moveCardToZone } from "../../src/core/ai/common/zones.js";
 import type { BotCloneGamePort } from "../../src/core/bot/simulationBridge.js";
@@ -25,6 +26,45 @@ function setup(t: TestContext) {
   const make = (id: number) => new Card(cardDefinition(id), bot.id);
   return { bot, game, botGame, make };
 }
+
+for (const fieldLevel of [1, 9]) {
+  test(`Sanctuary simulation uses the returned Dragon's Level, not field Level ${fieldLevel}`, t => {
+    const { bot, botGame, make } = setup(t);
+    const source = make(268), dragon = make(254), other = make(251);
+    dragon.originalLevel = dragon.level; dragon.level = fieldLevel;
+    placeFieldCards(bot.field, dragon); placeFieldCards(bot.spellTrap, source);
+    bot.hand.push(other);
+    const state = bot.cloneGameState(botGame), untouched = bot.cloneGameState(botGame);
+    const returned = required(state.bot.field[0]), trap = required(state.bot.spellTrap[0]);
+    const effect = required(source.effects[0]);
+    assert.equal(applySimulatedActions({ state, actions: required(effect.actions), selections: { returning: [returned] },
+      options: { sourceCard: trap, effect } }), true);
+    assert.equal(state.bot.field[0], returned);
+    assert.equal(returned.level, 4);
+    assert.deepEqual(state.bot.hand.map(card => card.id), [251]);
+    assert.ok(required(returned.locationVersion) > dragon.locationVersion);
+    assert.equal(bot.field[0]?.level, fieldLevel);
+    assert.equal(untouched.bot.field[0]?.level, fieldLevel);
+    assert.deepEqual(untouched.bot.hand.map(card => card.id), [251]);
+  });
+}
+
+test("Sanctuary simulation rejects a stale reference without returning or summoning a substitute", t => {
+  const { bot, botGame, make } = setup(t);
+  const source = make(268), dragon = make(254);
+  placeFieldCards(bot.field, dragon); placeFieldCards(bot.spellTrap, source);
+  bot.hand.push(make(255));
+  const state = bot.cloneGameState(botGame);
+  const returned = required(state.bot.field[0]), trap = required(state.bot.spellTrap[0]);
+  const effect = required(source.effects[0]), selections = { returning: [returned] };
+  const referenceSnapshots = captureSimulatedReferences(effect, selections, state.bot, state.player);
+  moveCardToZone(state.bot, returned, "graveyard", state.bot, { state });
+  moveCardToZone(state.bot, returned, "field", state.bot, { state });
+  assert.equal(applySimulatedActions({ state, actions: required(effect.actions), selections,
+    options: { sourceCard: trap, effect, referenceSnapshots } }), false);
+  assert.deepEqual(state.bot.field.map(card => card.id), [254]);
+  assert.deepEqual(state.bot.hand.map(card => card.id), [255]);
+});
 
 test("common planner consumes the procedure name limit across Purified copies", t => {
   const { bot, botGame, make } = setup(t);
@@ -78,6 +118,34 @@ test("simulated delayed summons reject a graveyard card that left and returned",
   processSimulatedDelayedActions(state, "end", bot.id);
   assert.ok(state.bot.graveyard.includes(card));
   assert.equal(state.delayedActions?.length, 0);
+});
+
+test("Galaxy's live return schedule clones its banished presence without sharing state", async t => {
+  const { bot, game, botGame, make } = setup(t);
+  const source = make(273);
+  bot.banished.push(source);
+  const result = await game.effectEngine.applyActions([
+    { type: "schedule_return_from_banished", cardRef: "self", delayTurns: 1, returnPhase: "end" },
+  ], { source, player: game.bot, opponent: game.player }, {});
+  assert.equal(result.success, true);
+  const returned = bot.cloneGameState(botGame), stale = bot.cloneGameState(botGame);
+  const returnedCard = required(returned.bot.banished[0]), staleCard = required(stale.bot.banished[0]);
+  const scheduled = required(returned.delayedActions?.[0]);
+  assert.equal(scheduled.actionType, "delayed_summon");
+  if (scheduled.actionType !== "delayed_summon") return;
+  assert.equal(scheduled.payload.summons[0]?.card, returnedCard);
+  assert.equal(scheduled.payload.summons[0]?.expectedLocationVersion, source.locationVersion);
+  assert.notEqual(returnedCard, source);
+  assert.notEqual(returnedCard, staleCard);
+  moveCardToZone(stale.bot, staleCard, "graveyard", stale.bot, { state: stale });
+  moveCardToZone(stale.bot, staleCard, "banished", stale.bot, { state: stale });
+  returned.turnCounter = stale.turnCounter = 5;
+  processSimulatedDelayedActions(returned, "end", game.player.id);
+  processSimulatedDelayedActions(stale, "end", game.player.id);
+  assert.ok(returned.bot.field.includes(returnedCard));
+  assert.ok(stale.bot.banished.includes(staleCard));
+  assert.ok(bot.banished.includes(source));
+  assert.equal(game.delayedActions.length, 1);
 });
 
 test("simulated Rainbow protection is removed when the protected target leaves field", t => {

@@ -34,6 +34,59 @@ function setup(t: TestContext, seat: "player" | "bot" = "player") {
 }
 
 for (const seat of ["player", "bot"] as const) {
+  test(`Galaxy returns to the owner of the banished zone after control changes (${seat})`, async t => {
+    const { game, owner, opponent, make } = setup(t, seat);
+    const source = make(273, opponent);
+    placeFieldCards(opponent.field, source);
+    assert.equal((await game.takeControl(source, owner)).success, true);
+    owner.controllerType = "human";
+    game.ui.showConfirmPrompt = async () => true;
+    await game.destroyCard(source, { cause: "effect", sourceCard: make(7, opponent), sourcePlayer: opponent });
+    assert.ok(opponent.banished.includes(source));
+    assert.equal(game.delayedActions.length, 1);
+    game.turn = opponent.id; game.turnCounter = 5; game.phase = "end";
+    await game.processDelayedActions("end", opponent.id);
+    assert.ok(opponent.field.includes(source));
+    assert.equal(owner.field.length, 0);
+    assert.equal(game.delayedActions.length, 0);
+  });
+
+  for (const departure of ["none", "before_return", "during_position"] as const) {
+    test(`Galaxy returns only its original banished presence: ${departure} (${seat})`, async t => {
+      const { game, owner, opponent, make } = setup(t, seat);
+      const source = make(273);
+      owner.controllerType = "human";
+      game.ui.showConfirmPrompt = async () => true;
+      placeFieldCards(owner.field, source);
+      await game.destroyCard(source, { cause: "effect", sourceCard: make(7, opponent), sourcePlayer: opponent });
+      assert.ok(owner.banished.includes(source));
+      assert.equal(game.delayedActions.length, 1);
+      owner.controllerType = "ai";
+      const leaveAndReturn = async () => {
+        await game.moveCard(source, owner, "graveyard", { fromZone: "banished" });
+        await game.moveCard(source, owner, "banished", { fromZone: "graveyard" });
+      };
+      if (departure === "before_return") await leaveAndReturn();
+      let choices = 0;
+      const choose = game.chooseSpecialSummonPosition.bind(game);
+      game.chooseSpecialSummonPosition = async (player, card, options) => {
+        choices++;
+        if (departure === "during_position") await leaveAndReturn();
+        return choose(player, card, options);
+      };
+      await game.processDelayedActions("end", owner.id);
+      assert.ok(owner.banished.includes(source), "the current turn is too early");
+      game.turn = opponent.id; game.turnCounter = 5; game.phase = "end";
+      await game.processDelayedActions("end", opponent.id);
+      assert.equal(choices, departure === "before_return" ? 0 : 1);
+      assert.equal(owner.field.includes(source), departure === "none");
+      assert.equal(owner.banished.includes(source), departure !== "none");
+      assert.equal(game.delayedActions.length, 0);
+    });
+  }
+}
+
+for (const seat of ["player", "bot"] as const) {
   test(`Abyssal returns both original graveyard presences for ${seat}`, async t => {
     const { game, owner, opponent, make, standby } = setup(t, seat);
     const source = make(263), target = make(257, opponent);

@@ -38,6 +38,45 @@ const softOptEffects = [
 ] as const;
 
 for (const seat of ["player", "bot"] as const) {
+  test(`Bahamut negates again only after a fresh field presence (${seat})`, async t => {
+    const { game, owner, opponent, make } = setup(t, seat);
+    const source = make(275);
+    placeFieldCards(owner.field, source);
+    game.chainSystem.botChooseChainResponse = async (_player, candidates) =>
+      candidates.find(candidate => candidate.card === source) || null;
+    let negations = 0;
+    game.on("effect_activated", event => { if (event.effectId === "supreme_bahamut_dragon_negate") negations++; });
+    const activateOpponentSpell = async () => {
+      const spell = make(277, opponent);
+      opponent.hand.push(spell);
+      game.turn = opponent.id;
+      await game.tryActivateSpell(spell, opponent.hand.indexOf(spell), null, { owner: opponent });
+      return spell;
+    };
+    const firstSpell = await activateOpponentSpell();
+    assert.equal(negations, 1);
+    assert.ok(opponent.graveyard.includes(firstSpell));
+    const secondSpell = await activateOpponentSpell();
+    assert.equal(negations, 1, "the same presence cannot respond again");
+    assert.ok(opponent.spellTrap.includes(secondSpell));
+    // Model recycling through public zone transitions, then execute the actual Fusion procedure.
+    await game.moveCard(source, owner, "graveyard", { fromZone: "field" });
+    await game.moveCard(source, owner, "extraDeck", { fromZone: "graveyard" });
+    await game.moveCard(secondSpell, opponent, "graveyard", { fromZone: "spellTrap" });
+    const materials = [270, 271, 272, 273, 274].map(id => make(id));
+    owner.graveyard.push(...materials);
+    game.turn = owner.id;
+    const summoned = await game.performExtraDeckSummonProcedure(source, owner, { materials, position: "attack" });
+    assert.equal(summoned.success, true, summoned.reason || undefined);
+    assert.equal(owner.banished.length, 5);
+    const thirdSpell = await activateOpponentSpell();
+    assert.equal(negations, 2, "the newly summoned presence has an independent use");
+    assert.ok(opponent.graveyard.includes(thirdSpell));
+    assert.equal(game.turnCounter, 4, "no turn reset grants the second use");
+  });
+}
+
+for (const seat of ["player", "bot"] as const) {
   for (const [id, effectId] of softOptEffects) {
     test(`${effectId} tracks each copy and resets on field exit or a new turn (${seat})`, async t => {
       const { game, owner, opponent, make } = setup(t, seat);
@@ -317,11 +356,17 @@ for (const event of ["attack", "effect"] as const) {
     placeFieldCards(owner.field, source);
     placeFieldCards(opponent.field, dragon);
     opponent.hand.push(replacement);
-    opponent.spellTrap.push(trap);
+    placeFieldCards(opponent.spellTrap, trap);
     trap.isFacedown = true;
     trap.turnSetOn = trap.setTurn = 1;
-    game.chainSystem.botChooseChainResponse = async (_player, candidates) =>
-      candidates.find(candidate => candidate.card === trap) || null;
+    game.chainSystem.botChooseChainResponse = async (_player, candidates) => {
+      const candidate = candidates.find(candidate => candidate.card === trap);
+      return candidate ? { ...candidate, context: { ...candidate.context, activationContext: {
+        ...candidate.context.activationContext,
+        decisions: { specialSummons: { [required(candidate.effect?.id)]: [replacement.instanceId] } },
+      },
+      } } : null;
+    };
     const activations: string[] = [];
     game.on("effect_activated", value => { activations.push(value.effectId || ""); });
     const summons: number[] = [];
@@ -338,6 +383,109 @@ for (const event of ["attack", "effect"] as const) {
     assert.ok(opponent.hand.includes(dragon));
     assert.ok(summons.includes(required(replacement.id)), JSON.stringify({ summons, hand: opponent.hand.map(c => c.id),
       field: opponent.field.map(c => c.id), graveyard: opponent.graveyard.map(c => c.id) }));
+  });
+}
+
+for (const seat of ["player", "bot"] as const) for (const event of ["attack", "effect"] as const) {
+  for (const scenario of ["self", "lowered", "raised", "full", "stale", "negated"] as const) {
+    test(`Sanctuary resolves its current hand choice: ${scenario}, ${event} (${seat})`, async t => {
+      const { game, owner, opponent, make } = setup(t, seat);
+      const trap = make(268), dragon = make(254), attacker = make(257, opponent);
+      const baseLevel = dragon.level;
+      placeFieldCards(owner.field, dragon); placeFieldCards(opponent.field, attacker);
+      placeFieldCards(owner.spellTrap, trap);
+      trap.isFacedown = true; trap.turnSetOn = trap.setTurn = 1;
+      if (scenario === "lowered" || scenario === "raised") {
+        dragon.originalLevel = dragon.level;
+        dragon.level = scenario === "lowered" ? 1 : 9;
+        owner.hand.push(make(251)); // Level 5 is excluded after Grey returns to Level 4.
+      }
+      if (scenario === "full") placeFieldCards(owner.field, ...Array.from({ length: 4 }, () => make(255)));
+      let summons = 0, publishedTargets = 0, responsesDuringReturn = 0;
+      let returnInProgress = false;
+      const activations: { inField: boolean; version: number; isTrapLink: boolean }[] = [];
+      const choices: { inHand: boolean; level: number | undefined }[] = [];
+      const presence = dragon.locationVersion;
+      game.on("effect_activated", async payload => {
+        if (payload.sourceCard !== trap) return;
+        const link = required(game.chainSystem.getLastChainLink());
+        activations.push({ inField: owner.field.includes(dragon), version: dragon.locationVersion,
+          isTrapLink: link.card === trap });
+        if (scenario === "stale") {
+          await game.moveCard(dragon, owner, "graveyard", { fromZone: "field" });
+          await game.moveCard(dragon, owner, "field", { fromZone: "graveyard", summonMethod: "special",
+            summonOrigin: "effect_resolution", isFacedown: false, position: "attack" });
+        }
+        if (scenario === "negated") link.effectNegated = true;
+      });
+      game.on("after_summon", payload => { if (payload.card === dragon) { summons++; returnInProgress = false; } });
+      game.on("effect_targeted", payload => { if (payload.sourceCard === trap) publishedTargets++; });
+      game.on("card_moved", payload => { if (payload.card === dragon && payload.toZone === "hand") returnInProgress = true; });
+      game.on("decision_made", decision => {
+        if (returnInProgress && decision.kind === "chain_response") responsesDuringReturn++;
+        const value = decision.value;
+        if (decision.kind === "choice" && value && typeof value === "object" && "selections" in value &&
+            value.selections && typeof value.selections === "object" && "replacement" in value.selections) {
+          choices.push({ inHand: owner.hand.includes(dragon), level: dragon.level });
+        }
+      });
+      game.chainSystem.botChooseChainResponse = async (_player, candidates) =>
+        candidates.find(candidate => candidate.card === trap) || null;
+      game.turn = opponent.id;
+      if (event === "attack") {
+        game.phase = "battle"; game.battleStep = "battle";
+        await game.resolveCombat(attacker, dragon);
+      } else {
+        await game.tryActivateMonsterEffect(attacker, { majestic_position_target: [dragon] }, "field", opponent,
+          { effectId: "majestic_silver_dragon_position_switch" });
+      }
+      assert.deepEqual(activations, [{ inField: true, version: presence, isTrapLink: true }],
+        "the Dragon stays in the field through activation");
+      const resolves = scenario !== "stale" && scenario !== "negated";
+      assert.deepEqual(choices, resolves ? [{ inHand: true, level: baseLevel }] : [],
+        "the choice sees the Dragon's level after returning to hand");
+      assert.equal(summons, resolves ? 1 : scenario === "stale" ? 1 : 0);
+      assert.equal(publishedTargets, 0, "Sanctuary references the attacked/targeted Dragon without declaring a new target");
+      assert.equal(responsesDuringReturn, 0, "return and summon share a single resolution");
+      if (resolves) assert.ok(owner.field.includes(dragon), "the returned Dragon can be chosen again");
+    });
+  }
+}
+
+for (const seat of ["player", "bot"] as const) {
+  for (const destination of ["extraDeck", "banished"] as const) {
+    test(`Sanctuary rejects a return redirected to ${destination} (${seat})`, async t => {
+      const { game, owner, opponent, make } = setup(t, seat);
+      const source = make(268), dragon = make(destination === "extraDeck" ? 253 : 254);
+      if (destination === "banished") dragon.banishWhenLeavesField = true;
+      placeFieldCards(owner.spellTrap, source); placeFieldCards(owner.field, dragon);
+      const substitute = make(255); owner.hand.push(substitute);
+      const effect = required(source.effects[0]);
+      const context = { source, player: owner, opponent, effect, defender: dragon };
+      assert.equal(game.effectEngine.checkActionPreviewRequirements(required(effect.actions), context).ok, false);
+      // If the redirect appears after activation, resolution still cannot summon.
+      const result = await game.effectEngine.applyActions(required(effect.actions), context, { returning: [dragon] });
+      assert.equal(result.success, false);
+      assert.ok(owner[destination].includes(dragon));
+      assert.ok(owner.hand.includes(substitute));
+      assert.equal(owner.field.length, 0);
+    });
+  }
+
+  test(`Sanctuary preview returns a controlled Dragon to its original owner's hand (${seat})`, async t => {
+    const { game, owner, opponent, make } = setup(t, seat);
+    const source = make(268), dragon = make(254, opponent);
+    placeFieldCards(owner.spellTrap, source); placeFieldCards(opponent.field, dragon);
+    assert.equal((await game.takeControl(dragon, owner)).success, true);
+    const effect = required(source.effects[0]);
+    const context = { source, player: owner, opponent, effect, defender: dragon };
+    assert.equal(game.effectEngine.checkActionPreviewRequirements(required(effect.actions), context).ok, false,
+      "a card returning to the opponent's hand cannot fill our summon requirement");
+    owner.hand.push(make(255));
+    assert.equal(game.effectEngine.checkActionPreviewRequirements(required(effect.actions), context).ok, true);
+    assert.equal(await game.effectEngine.applyActions(required(effect.actions), context, { returning: [dragon] }).then(r => r.success), true);
+    assert.ok(opponent.hand.includes(dragon));
+    assert.equal(owner.field[0]?.id, 255);
   });
 }
 

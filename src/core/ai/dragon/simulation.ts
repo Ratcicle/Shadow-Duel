@@ -2,7 +2,8 @@ import { appendSimulatedZoneCard, clearSimulatedFieldPosition } from "../common/
 import { appendSimulatedFieldCard } from "../common/zones.js";
 import { canMoveCardToZone, moveCardToZone } from "../common/zones.js";
 import { canUseSimulatedEffectUsage, markSimulatedEffectUsage } from "../common/simStateUtils.js";
-import { simulateGenericSpellEffect } from "../common/simulation.js";
+import { prepareSimulatedSpellEffect, simulateGenericSpellEffect } from "../common/simulation.js";
+import type { PreparedSimulatedSpellEffect } from "../common/simulation.js";
 import { getAvailableFieldSlots } from "../../game/zones/placement.js";
 import { recordCompletedSimulatedSummon } from "../common/simulatedActions/shared.js";
 import { getCounterCount } from "../common/counters.js";
@@ -123,6 +124,26 @@ function sharedSimulationPlayer(player: DragonPlayer): SimulatedPlayerState {
     spellTrap: player.spellTrap.map(normalize),
     fieldSpell: player.fieldSpell ? normalize(player.fieldSpell) : null,
   });
+}
+
+/** Keep live Game references outside the shared simulation boundary. */
+function sharedDragonSimulationState(state: DragonSimulationState) {
+  const { _gameRef: _liveGameRef, ...simulatedState } = state;
+  return {
+    ...simulatedState,
+    bot: sharedSimulationPlayer(state.bot), player: sharedSimulationPlayer(state.player),
+    opponent: state.opponent ? sharedSimulationPlayer(state.opponent) : null,
+  };
+}
+
+function syncSharedDragonSimulationState(
+  state: DragonSimulationState,
+  shared: ReturnType<typeof sharedDragonSimulationState>,
+): void {
+  if (shared._simOncePerTurn) state._simOncePerTurn = shared._simOncePerTurn;
+  if (shared._simOncePerTurnTurn !== undefined) state._simOncePerTurnTurn = shared._simOncePerTurnTurn;
+  if (shared._simUnsupportedActions) state._simUnsupportedActions = shared._simUnsupportedActions;
+  if (shared._simRequiresReplan !== undefined) state._simRequiresReplan = shared._simRequiresReplan;
 }
 
 interface DragonMaterialStatsPlayer {
@@ -343,19 +364,6 @@ interface DragonLuminescentDebuffPlan {
 
 const AWAKENING_TARGET_ORDER = [...CURRENT_AWAKENING_TARGET_NAMES];
 
-const CONVERGING_SUMMON_ORDER = [
-  "Darkness Dragon",
-  "Abyssal Serpent Dragon",
-  "Majestic Silver Dragon",
-  "Black Bull Dragon",
-  "Purified Crystal Dragon",
-  "Volcanic Extreme Dragon",
-  "Galaxy Extreme Dragon",
-  "Forest Extreme Dragon",
-  "Fire Extreme Dragon",
-  "Mist Extreme Dragon",
-];
-
 const EXTREME_GY_SEND_ORDER = [
   "Volcanic Extreme Dragon",
   "Fire Extreme Dragon",
@@ -528,6 +536,14 @@ export function simulateMainPhaseAction<State extends DragonSimulationState>(
       const card = player.hand[action.index!];
       if (!card) break;
       const resolvingCard: DragonCard = { ...card, isFacedown: false };
+      const sharedState = card.id === 276 || card.id === 277 ? sharedDragonSimulationState(state) : null;
+      const prepared = sharedState ? prepareSimulatedSpellEffect(sharedState, filterableDragonCard(card), {
+        activationContext: action.activationContext, selfId: "bot", enableSimulatedEvents: true,
+      }) : null;
+      if (sharedState) {
+        syncSharedDragonSimulationState(state, sharedState);
+        if (!prepared) break;
+      }
       if (card.subtype === "field") {
         clearSimulatedFieldPosition(resolvingCard);
         player.fieldSpell = resolvingCard;
@@ -538,7 +554,7 @@ export function simulateMainPhaseAction<State extends DragonSimulationState>(
 
       // The Spell occupies its position throughout resolution, even when its
       // normal destination afterwards is the Graveyard.
-      simulateDragonSpellEffect(state, resolvingCard, action);
+      simulateDragonSpellEffect(state, resolvingCard, action, prepared, sharedState);
 
       if (card.subtype !== "field" && card.subtype !== "continuous" && card.subtype !== "equip") {
         const index = player.spellTrap.indexOf(resolvingCard);
@@ -683,62 +699,21 @@ function simulateDragonSpellEffect(
   state: DragonSimulationState,
   card: DragonCard,
   action: DragonSimulationAction,
+  prepared: PreparedSimulatedSpellEffect | null = null,
+  preparedState: ReturnType<typeof sharedDragonSimulationState> | null = null,
 ): void {
   const player = state.bot;
 
   switch (card.name) {
-    case "Extreme Dragon Awakening": {
-      const effect = (card.effects || []).find(
-        (entry) => entry?.id === "extreme_dragon_awakening_gy_search",
-      );
-      const action: DragonSimulationAction = {
-        type: "add_from_zone_to_hand",
-        zone: "deck",
-        filters: { cardKind: "monster", type: "Dragon" },
-        minLevel: 8,
-      };
-      const target = rankSearchEntriesForSimulation(
-        (player.deck || [])
-          .map((candidate, index) => ({ candidate, index }))
-          .filter(
-            ({ candidate }) =>
-              isDragonMonster(candidate) &&
-              (candidate.level || 0) >= 8,
-          ),
-        state,
-        action,
-        card,
-        effect,
-      )[0];
-
-      if (target) {
-        const searched = player.deck.splice(target.index, 1)[0];
-        if (searched) appendSimulatedZoneCard(player.hand, searched);
-      }
-      break;
-    }
-
+    case "Extreme Dragon Awakening":
     case "Converging Stars": {
-      // Step 1: discard 1 card from hand.
-      if (player.hand.length > 0) {
-        const discardIdx = pickWorstDiscard(player.hand, {
-          state,
-          player,
-          source: card,
-        });
-        discardHandCardToGraveyard(state, player, discardIdx);
-      }
-
-      // Step 2: Reduce all hand monster levels by 2
-      player.hand = player.hand.map((c) => {
-        if (c.cardKind === "monster" && (c.level || 0) > 1) {
-          return { ...c, level: Math.max(1, (c.level || 0) - 2) };
-        }
-        return c;
-      });
-
-      // Step 3: approximate the immediate normal summon that the level reduction unlocks.
-      simulateBestConvergingSummon(state, player, action);
+      const sharedState = preparedState || sharedDragonSimulationState(state);
+      simulateGenericSpellEffect(sharedState, filterableDragonCard(card), {
+        activationContext: action.activationContext, selfId: "bot", enableSimulatedEvents: true,
+      }, prepared || prepareSimulatedSpellEffect(sharedState, filterableDragonCard(card), {
+        activationContext: action.activationContext, selfId: "bot", enableSimulatedEvents: true,
+      }));
+      syncSharedDragonSimulationState(state, sharedState);
       break;
     }
 
@@ -828,17 +803,11 @@ function simulateDragonSpellEffect(
     }
 
     case "Hellkite Roar": {
-      const { _gameRef: _liveGameRef, ...simulatedState } = state;
-      const sharedState = {
-        ...simulatedState,
-        bot: sharedSimulationPlayer(state.bot), player: sharedSimulationPlayer(state.player),
-        opponent: state.opponent ? sharedSimulationPlayer(state.opponent) : null,
-      };
+      const sharedState = sharedDragonSimulationState(state);
       simulateGenericSpellEffect(sharedState, filterableDragonCard(card), {
         activationContext: action.activationContext, selfId: "bot",
       });
-      if (sharedState._simUnsupportedActions) state._simUnsupportedActions = sharedState._simUnsupportedActions;
-      if (sharedState._simRequiresReplan !== undefined) state._simRequiresReplan = sharedState._simRequiresReplan;
+      syncSharedDragonSimulationState(state, sharedState);
       break;
     }
 
@@ -1386,72 +1355,6 @@ function reduceHandMonsterLevelsForTurn(
   }
 }
 
-function normalSummonFromHandIndex(
-  state: DragonSimulationState,
-  player: DragonPlayer,
-  handIndex: number,
-  action: Pick<DragonSimulationAction, "position"> = {},
-): DragonCard | null {
-  const card = player?.hand?.[handIndex];
-  if (!card || !canUseNormalSummonForCard(player, card)) return null;
-  const tributeInfo = (getTributeRequirementFor as (
-    card: DragonCard,
-    player: DragonPlayer,
-  ) => AITributeRequirement)(card, player);
-  if (!fieldHasTributeValue(player.field || [], tributeInfo.tributesNeeded, card)) {
-    return null;
-  }
-  if (tributeInfo.tributesNeeded === 0 && (player.field || []).length >= 5) return null;
-
-  if (tributeInfo.tributesNeeded > 0) {
-    const tributeIndices = (selectBestTributes as (
-      field: DragonCard[],
-      tributesNeeded: number,
-      cardToSummon?: DragonCard | null,
-    ) => number[])(
-      player.field,
-      tributeInfo.tributesNeeded,
-      card,
-    )
-      .sort((a, b) => b - a);
-    const tributeCards = getTributeCardsFromIndices(player.field, tributeIndices);
-    if (getTributeValueTotal(tributeCards, card) < tributeInfo.tributesNeeded) {
-      return null;
-    }
-    if (
-      tributeInfo.usingAlt === true &&
-      tributeInfo.alt &&
-      !tributeIndices.some((idx) =>
-        tributeMatchesAltRequirement(player.field[idx], tributeInfo.alt),
-      )
-    ) {
-      return null;
-    }
-    for (const index of tributeIndices) moveFieldIndexToGraveyard(player, index);
-  }
-
-  const liveIndex = player.hand.indexOf(card);
-  if (liveIndex < 0) return null;
-  const summonedCard = player.hand.splice(liveIndex, 1)[0];
-  if (!summonedCard) return null;
-  const summoned: DragonCard = {
-    ...summonedCard,
-    position: (action.position || "attack") as BattlePosition,
-    isFacedown: false,
-    hasAttacked: false,
-  };
-  appendSimulatedFieldCard(player.field, summoned);
-  recordCompletedSimulatedSummon(state, {
-    card: summoned, player, method: tributeInfo.tributesNeeded > 0 ? "tribute" : "normal",
-  });
-  player.summonCount = (player.summonCount || 0) + 1;
-  recordNormalSummonForTurn(player, summoned);
-  simulateDragonAfterSummonEffects(state, summoned, {
-    method: tributeInfo.tributesNeeded > 0 ? "tribute" : "normal",
-  });
-  return summoned;
-}
-
 function simulateDragonAfterSummonEffects(
   state: DragonSimulationState,
   summoned: DragonCard,
@@ -1639,39 +1542,6 @@ function simulateArmoredDragonSearch(
     const searched = player.deck.splice(liveIndex, 1)[0];
     if (searched) appendSimulatedZoneCard(player.hand, searched);
   }
-}
-
-function simulateBestConvergingSummon(
-  state: DragonSimulationState,
-  player: DragonPlayer,
-  action: DragonSimulationAction,
-): DragonCard | null {
-  const candidates = (player.hand || [])
-    .map((candidate, index) => ({ candidate, index }))
-    .filter(({ candidate }) => {
-      if (!isDragonMonster(candidate)) return false;
-      if (!canUseNormalSummonForCard(player, candidate)) return false;
-      const tributeInfo = (getTributeRequirementFor as (
-        card: DragonCard,
-        player: DragonPlayer,
-      ) => AITributeRequirement)(candidate, player);
-      if ((player.field || []).length < tributeInfo.tributesNeeded) return false;
-      if (tributeInfo.tributesNeeded === 0 && (player.field || []).length >= 5) return false;
-      return (
-        CONVERGING_SUMMON_ORDER.includes(candidate.name as string) ||
-        (candidate.level || 0) >= 5
-      );
-    })
-    .sort((a, b) => {
-      const score = (entry: DragonCandidateEntry) =>
-        orderBonus(entry.candidate, CONVERGING_SUMMON_ORDER, 18) +
-        cardStrategicSimValue(entry.candidate);
-      return score(b) - score(a);
-    });
-
-  const selected = candidates[0];
-  if (!selected) return null;
-  return normalSummonFromHandIndex(state, player, selected.index, action);
 }
 
 function takeExtraDeckCard(

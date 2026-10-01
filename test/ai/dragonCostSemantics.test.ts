@@ -10,6 +10,8 @@ import { cardDefinition, required, unsafeFixture } from "../helpers/fixtures.js"
 import { createRuntimeGame, placeFieldCards } from "../helpers/game.js";
 import { simulationCard, simulationState } from "../helpers/simulation.js";
 import { canUseSimulatedEffectUsage, markSimulatedEffectUsage } from "../../src/core/ai/common/simStateUtils.js";
+import { createPlanningCopy } from "../../src/core/ai/common/planningCopy.js";
+import { cleanupSimulatedEndTurn } from "../../src/core/ai/common/simulatedActions/lifecycle.js";
 import { moveCardToZone } from "../../src/core/ai/common/zones.js";
 import type { AIAction } from "../../src/core/contracts/ai.js";
 import type { BotCloneGamePort } from "../../src/core/bot/simulationBridge.js";
@@ -275,4 +277,169 @@ for (const negated of [false, true]) {
       assert.equal(state.bot.banished.length, 0);
     });
   }
+}
+
+// Items 17/18: activation resolves only the declared on_play effect.
+for (const actor of ["bot", "player"] as const) {
+  test(`Awakening activation prepares field ignition without searching (${actor})`, () => {
+    const source = { ...make(277), owner: actor, controller: actor }, search = make(270);
+    const state = simulationState({ turn: actor, phase: "main1", turnCounter: 4, _isPerspectiveState: true,
+      bot: { id: actor, hand: [source], deck: [search] }, player: { id: actor === "bot" ? "player" : "bot" } });
+    simulateMainPhaseAction(state, { type: "spell", index: 0, cardId: 277 });
+    assert.deepEqual(state.bot.deck, [search]);
+    assert.equal(state.bot.hand.length, 0);
+    assert.equal(state.bot.graveyard.length, 0);
+    assert.equal(state.bot.spellTrap.length, 1);
+    assert.equal(state.bot.spellTrap[0]?.isFacedown, false);
+    assert.equal(state.bot.summonCount, 0);
+  });
+
+  test(`Converging Stars pays the exact cost and leaves the Normal Summon separate (${actor})`, () => {
+    const source = make(276), cost = make(254), monster = make(258), otherSpell = make(268);
+    const state = simulationState({ turn: actor, phase: "main1", turnCounter: 4, _isPerspectiveState: true,
+      bot: { id: actor, hand: [source, cost, monster, otherSpell] }, player: { id: actor === "bot" ? "player" : "bot" } });
+    simulateMainPhaseAction(state, { type: "spell", index: 0, cardId: 276,
+      activationContext: { decisions: { selections: { estrelas_convergentes_discard: [required(cost.instanceId)] } } } });
+    assert.ok(state.bot.graveyard.includes(cost));
+    assert.deepEqual(state.bot.hand, [monster, otherSpell]);
+    assert.equal(monster.level, 3);
+    assert.equal(monster.originalLevel, 5);
+    assert.equal(state.bot.field.length, 0);
+    assert.equal(state.bot.summonCount, 0);
+  });
+}
+
+for (const invalid of ["absent", "empty", "stale", "source", "two", "opponent", "redirected"] as const) {
+  test(`Converging Stars rejects ${invalid} cost before changing zones or levels`, () => {
+    const source = make(276), cost = make(254), monster = make(258), opponent = { ...make(254), instanceId: "opponent-cost", owner: "player", controller: "player" };
+    const hand = invalid === "absent" ? [source] : [source, cost, monster];
+    const state = simulationState({ turn: "bot", phase: "main1", turnCounter: 4, _isPerspectiveState: true,
+      bot: { hand }, player: { hand: [opponent], field: invalid === "redirected" ? [{ ...make(273), owner: "player", controller: "player" }] : [] } });
+    const selection = invalid === "empty" ? [] : invalid === "stale" ? ["missing"] : invalid === "source" ? [required(source.instanceId)]
+      : invalid === "two" ? [required(cost.instanceId), required(monster.instanceId)] : invalid === "opponent" ? [required(opponent.instanceId)] : [required(cost.instanceId)];
+    const before = state.bot.hand.slice();
+    simulateMainPhaseAction(state, { type: "spell", index: 0, cardId: 276,
+      ...(invalid === "absent" ? {} : { activationContext: { decisions: { selections: { estrelas_convergentes_discard: selection } } } }) });
+    assert.deepEqual(state.bot.hand, before);
+    assert.equal(state.bot.spellTrap.length, 0);
+    assert.equal(state.bot.graveyard.length, 0);
+    assert.equal(state.bot.banished.length, 0);
+    assert.equal(monster.level, 5);
+    assert.equal(monster.originalLevel, undefined);
+  });
+}
+
+test("Awakening rejects its declared control limit before moving the source", () => {
+  const source = make(277), existing = { ...make(277), instanceId: "existing-awakening", isFacedown: false };
+  const state = simulationState({ turn: "bot", phase: "main1", turnCounter: 4, _isPerspectiveState: true,
+    bot: { hand: [source], spellTrap: [existing] } });
+  simulateMainPhaseAction(state, { type: "spell", index: 0, cardId: 277 });
+  assert.deepEqual(state.bot.hand, [source]);
+  assert.deepEqual(state.bot.spellTrap, [existing]);
+});
+
+test("Repeated Converging Stars clamps levels and restores their first originals at end turn", () => {
+  const first = make(276), second = { ...make(276), instanceId: "second-stars" }, cost = make(268), secondCost = { ...make(268), instanceId: "second-cost" };
+  const high = make(258), low = { ...make(254), level: 2 }, minimum = { ...make(252), level: 1 };
+  const state = simulationState({ turn: "bot", phase: "main1", turnCounter: 4, _isPerspectiveState: true,
+    bot: { hand: [first, second, cost, secondCost, high, low, minimum] } });
+  for (const [source, discard] of [[first, cost], [second, secondCost]]) {
+    simulateMainPhaseAction(state, { type: "spell", index: state.bot.hand.indexOf(required(source)), cardId: 276,
+      activationContext: { decisions: { selections: { estrelas_convergentes_discard: [required(required(discard).instanceId)] } } } });
+  }
+  assert.equal(high.level, 1); assert.equal(high.originalLevel, 5);
+  assert.equal(low.level, 1); assert.equal(low.originalLevel, 2);
+  assert.equal(minimum.level, 1); assert.equal(minimum.originalLevel, undefined);
+  cleanupSimulatedEndTurn(state);
+  assert.equal(high.level, 5); assert.equal(low.level, 2); assert.equal(minimum.level, 1);
+  assert.equal(state.bot.summonCount, 0);
+});
+
+for (const id of [251, 255]) for (const actor of ["bot", "player"] as const) {
+  test(`Converging Stars dispatches a real discard trigger for ${id} once across spell actions (${actor})`, () => {
+    const first = make(276), second = { ...make(276), instanceId: "second-stars" };
+    const discard = make(255), secondDiscard = { ...make(255), instanceId: "second-trigger-copy" }, recruit = make(254);
+    const luminous = make(251);
+    for (const card of [first, second, discard, secondDiscard, recruit, luminous]) {
+      card.owner = actor; card.controller = actor;
+    }
+    const state = simulationState({ turn: actor, phase: "main1", turnCounter: 4, _isPerspectiveState: true,
+      bot: { id: actor, hand: [first, second, discard, secondDiscard], graveyard: [recruit], field: id === 251 ? [luminous] : [] },
+      player: { id: actor === "bot" ? "player" : "bot" } });
+    for (const [source, cost] of [[first, discard], [second, secondDiscard]]) {
+      simulateMainPhaseAction(state, { type: "spell", index: state.bot.hand.indexOf(required(source)), cardId: 276,
+        activationContext: { decisions: { selections: { estrelas_convergentes_discard: [required(required(cost).instanceId)] } } } });
+    }
+    if (id === 255) assert.equal(state.player.lp, 7200);
+    else { assert.ok(state.bot.hand.includes(recruit)); assert.equal(recruit.level, 1); assert.ok(state.bot.graveyard.includes(secondDiscard)); }
+    assert.ok(state._simOncePerTurn);
+    assert.equal(state._simUnsupportedActions, undefined);
+  });
+}
+
+for (const actor of ["bot", "player"] as const) {
+  test(`DragonStrategy clones Stars activation then discovers and executes a separate summon (${actor})`, t => {
+    const bot = new Bot();
+    const game = createRuntimeGame({ opponentOverride: bot, disableChains: true, randomSeed: 1 });
+    t.after(() => game.dispose());
+    if (actor === "player") {
+      const opponent = game.player; opponent.id = "bot"; bot.id = "player";
+      game.player = unsafeFixture<typeof game.player>(bot, "A Bot is the physical player for this opposite-seat clone integration");
+      game.bot = opponent;
+    }
+    game.turn = actor; game.phase = "main1"; game.turnCounter = 4;
+    const botGame = unsafeFixture<BotGamePort & BotCloneGamePort & AiLiveGamePort>(game,
+      "Concrete Game supplies the attached planning methods for both perspective seats");
+    bot.hand.push(new Card(cardDefinition(276), actor), new Card(cardDefinition(268), actor), new Card(cardDefinition(251), actor));
+    const strategy = new DragonStrategy(bot);
+    const state = bot.cloneGameState(botGame), sibling = bot.cloneGameState(botGame);
+    const spell: AIAction = { type: "spell", index: 0, cardId: 276,
+      activationContext: { decisions: { selections: { estrelas_convergentes_discard: [required(state.bot.hand[1]?.instanceId)] } } } };
+    strategy.simulateMainPhaseAction(state, spell);
+    assert.equal(state.bot.field.length, 0); assert.equal(state.bot.summonCount, 0);
+    const summon = required(strategy.generateMainPhaseActions(state).find(action => action.type === "summon" && action.cardId === 251));
+    strategy.simulateMainPhaseAction(state, summon);
+    assert.equal(state.bot.field[0]?.id, 251); assert.equal(state.bot.summonCount, 1);
+    cleanupSimulatedEndTurn(state);
+    assert.equal(state.bot.field[0]?.level, 5);
+    assert.equal(bot.hand.length, 3); assert.equal(bot.hand[2]?.level, 5);
+    assert.equal(sibling.bot.hand.length, 3); assert.equal(sibling.bot.hand[2]?.level, 5);
+    assert.equal(sibling.bot.field.length, 0);
+  });
+}
+
+for (const id of [276, 277]) for (const actor of ["bot", "player"] as const) {
+  test(`Dragon simulation matches live ${id} activation with exact decisions (${actor})`, async t => {
+    const game = createRuntimeGame({ captureReplay: false, laboratoryMode: true, disableChains: true });
+    t.after(() => game.dispose());
+    game.player.controllerType = game.bot.controllerType = "ai";
+    game.turn = actor; game.phase = "main1"; game.turnCounter = 4;
+    game.disablePresentationDelays = true;
+    const owner = actor === "bot" ? game.bot : game.player;
+    const source = new Card(cardDefinition(id), actor), cost = new Card(cardDefinition(268), actor), monster = new Card(cardDefinition(258), actor);
+    owner.hand.push(source);
+    if (id === 276) owner.hand.push(cost, monster);
+    else owner.deck.push(new Card(cardDefinition(270), actor));
+    const copy = createPlanningCopy();
+    const state = simulationState({ turn: actor, phase: "main1", turnCounter: 4, _isPerspectiveState: true,
+      bot: { id: actor, hand: owner.hand.map(copy.cloneCardForSim), deck: owner.deck.map(copy.cloneCardForSim) },
+      player: { id: actor === "bot" ? "player" : "bot" } });
+    simulateMainPhaseAction(state, { type: "spell", index: 0, cardId: id,
+      ...(id === 276 ? { activationContext: { decisions: { selections: { estrelas_convergentes_discard: [cost.instanceId] } } } } : {}) });
+    const result = await game.tryActivateSpell(source, 0, id === 276 ? { estrelas_convergentes_discard: [cost] } : null, { owner });
+    assert.equal(result.success, true);
+    const view = (player: {
+      hand: Iterable<{ id?: number | undefined; level?: number | undefined; originalLevel?: number | null | undefined }>;
+      deck: Iterable<{ id?: number | undefined }>; field: Iterable<{ id?: number | undefined }>;
+      graveyard: Iterable<{ id?: number | undefined }>; banished: Iterable<{ id?: number | undefined }>;
+      spellTrap: Iterable<{ id?: number | undefined; isFacedown?: boolean | undefined }>; summonCount: number;
+    }) => ({
+      hand: Array.from(player.hand).map(card => ({ id: card.id, level: card.level, originalLevel: card.originalLevel ?? null })),
+      deck: Array.from(player.deck).map(card => card.id), field: Array.from(player.field).map(card => card.id),
+      graveyard: Array.from(player.graveyard).map(card => card.id), banished: Array.from(player.banished).map(card => card.id),
+      spellTrap: Array.from(player.spellTrap).map(card => ({ id: card.id, isFacedown: card.isFacedown })), summonCount: player.summonCount,
+    });
+    assert.deepEqual(view(state.bot), view(owner));
+    assert.equal(state._simUnsupportedActions, undefined);
+  });
 }

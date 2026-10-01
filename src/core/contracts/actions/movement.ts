@@ -13,7 +13,7 @@ export interface MovementActionMap {
   return_to_hand: DefineAction<
     "return_to_hand",
     "targetRef",
-    "fromZone" | "contextLabel" | "haltOnFailure" | "stopOnFailure"
+    "fromZone" | "contextLabel" | "haltOnFailure" | "stopOnFailure" | "storeResultAs" | "requireDestination"
   >;
   take_control: DefineAction<
     "take_control",

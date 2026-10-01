@@ -1235,7 +1235,7 @@ export const dragonCards = [
     subtype: "normal",
     speed: 2,
     description:
-      "When a Dragon monster you control is targeted by an opponent's attack or card effect: return that monster to the hand; then Special Summon 1 Dragon monster from your hand with Level less than or equal to the returned monster.\n\nYou can only activate 1 \"Dragon Spirit Sanctuary\" per turn.",
+      "When a Dragon monster you control is targeted by an opponent's attack or card effect: return that monster to the hand, then Special Summon 1 Dragon monster from your hand with a Level less than or equal to that monster's Level in the hand.\n\nYou can only activate 1 \"Dragon Spirit Sanctuary\" per turn.",
     image: "assets/Dragon Spirit Sanctuary.png",
     effects: [
       {
@@ -1253,23 +1253,13 @@ export const dragonCards = [
         targets: [
           {
             id: "returning",
+            intent: "reference",
             targetFromContext: "defender",
-            cardKind: "monster",
-            type: "Dragon",
-            count: { min: 1, max: 1 },
-          },
-          {
-            id: "replacement",
             owner: "self",
-            zone: "hand",
+            zone: "field",
             cardKind: "monster",
             type: "Dragon",
             count: { min: 1, max: 1 },
-            compareAttribute: {
-              attr: "level",
-              ref: "returning",
-              op: "lte",
-            },
           },
         ],
         actions: [
@@ -1277,11 +1267,16 @@ export const dragonCards = [
             type: "return_to_hand",
             targetRef: "returning",
             fromZone: "field",
+            requireDestination: true,
+            storeResultAs: "returned_dragon",
           },
           {
             type: "special_summon_from_zone",
-            targetRef: "replacement",
+            selectionId: "replacement",
             zone: "hand",
+            filters: { cardKind: "monster", type: "Dragon" },
+            maxLevelFromContext: { key: "_actionTargets.returned_dragon.0.level" },
+            fieldSlotsFreedBeforeSummon: 1,
             position: "choice",
           },
         ],
@@ -1299,23 +1294,13 @@ export const dragonCards = [
         targets: [
           {
             id: "returning",
+            intent: "reference",
             targetFromContext: "target",
-            cardKind: "monster",
-            type: "Dragon",
-            count: { min: 1, max: 1 },
-          },
-          {
-            id: "replacement",
             owner: "self",
-            zone: "hand",
+            zone: "field",
             cardKind: "monster",
             type: "Dragon",
             count: { min: 1, max: 1 },
-            compareAttribute: {
-              attr: "level",
-              ref: "returning",
-              op: "lte",
-            },
           },
         ],
         actions: [
@@ -1323,11 +1308,16 @@ export const dragonCards = [
             type: "return_to_hand",
             targetRef: "returning",
             fromZone: "field",
+            requireDestination: true,
+            storeResultAs: "returned_dragon",
           },
           {
             type: "special_summon_from_zone",
-            targetRef: "replacement",
+            selectionId: "replacement",
             zone: "hand",
+            filters: { cardKind: "monster", type: "Dragon" },
+            maxLevelFromContext: { key: "_actionTargets.returned_dragon.0.level" },
+            fieldSlotsFreedBeforeSummon: 1,
             position: "choice",
           },
         ],
@@ -1866,6 +1856,7 @@ export const dragonCards = [
         requireFaceup: true,
         oncePerTurn: true,
         oncePerTurnName: "supreme_bahamut_dragon_negate",
+        oncePerTurnScope: "card",
         canRespondTo: [
           "summon_attempt",
           "card_activation",

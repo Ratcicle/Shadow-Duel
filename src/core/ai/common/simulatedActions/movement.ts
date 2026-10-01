@@ -181,7 +181,16 @@ export function applyBanish(
 
 export function applyReturnToHand(
   ctx: SimulatedActionHandlerContext<"return_to_hand">,
-): void {
+): void | typeof STOP_SIMULATION {
+  if (ctx.action.storeResultAs || ctx.action.requireDestination) {
+    return applyMove({ ...ctx, action: {
+      type: "move", to: "hand", targetRef: ctx.action.targetRef,
+      contextLabel: ctx.action.contextLabel || "return_to_hand",
+      ...(ctx.action.fromZone ? { fromZone: ctx.action.fromZone } : {}),
+      ...(ctx.action.storeResultAs ? { storeResultAs: ctx.action.storeResultAs } : {}),
+      ...(ctx.action.requireDestination ? { requireDestination: true, requireAll: true } : {}),
+    } });
+  }
   const {
     action,
     targets,

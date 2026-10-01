@@ -19,7 +19,7 @@ import type {
 
 export const CANONICAL_REPLAY_FORMAT = "shadow-duel-canonical-replay" as const;
 export const CANONICAL_REPLAY_SCHEMA_VERSION = 2 as const;
-export const CANONICAL_REPLAY_ENGINE_VERSION = "dragon-rules-v5" as const;
+export const CANONICAL_REPLAY_ENGINE_VERSION = "dragon-rules-v6" as const;
 
 export type SerializablePrimitive = string | number | boolean | null;
 

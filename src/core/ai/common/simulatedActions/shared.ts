@@ -833,7 +833,8 @@ function resolveNumberFromContext(
     options.activationContext?.actionContext ||
     options.activationContext ||
     {};
-  const rawValue = getContextPathValue(context, key);
+  const rawValue = getContextPathValue(options.actionResults
+    ? { ...context, _actionTargets: options.actionResults } : context, key);
   const value = rawValue === undefined ? fallback : rawValue;
   const numeric = Number(value);
   return Number.isFinite(numeric) ? Math.floor(numeric) : null;

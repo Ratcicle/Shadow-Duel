@@ -975,7 +975,7 @@
     },
     "268": {
       "name": "Santuário do Espírito do Dragão",
-      "description": "Quando um monstro Dragão que você controla for alvo de um ataque ou efeito de card do oponente: devolva esse monstro para a mão; então Invoque por Invocação-Especial 1 monstro Dragão da sua mão com Nível menor ou igual ao do monstro devolvido.\n\nVocê só pode ativar 1 \"Santuário do Espírito do Dragão\" por turno."
+      "description": "Quando um monstro Dragão que você controla for alvo de um ataque ou efeito de card do oponente: devolva esse monstro para a mão, então Invoque por Invocação-Especial 1 monstro Dragão da sua mão com Nível menor ou igual ao Nível desse monstro na mão.\n\nVocê só pode ativar 1 \"Santuário do Espírito do Dragão\" por turno."
     },
     "269": {
       "name": "Dragão da Chama Óssea",

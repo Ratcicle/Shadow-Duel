@@ -572,6 +572,22 @@ handler especifico de carta:
 ]
 ```
 
+`return_to_hand` também aceita `storeResultAs`, com as cartas devolvidas em
+`ctx._actionTargets`. Declare `requireDestination: true` quando a continuação
+depender de a carta chegar à mão: redirecionamento para banimento ou Extra Deck
+não satisfaz essa exigência. A action seguinte pode consultar, por exemplo,
+`maxLevelFromContext: { key: "_actionTargets.returned_card.0.level" }`.
+Esse valor reflete o Nível depois da devolução e da limpeza dos efeitos de campo.
+O preview projeta a mão do dono original, o Nível restaurado e a vaga liberada;
+a simulação usa os mesmos resultados dos movimentos. Use `intent: "reference"`
+para vincular a presença da carta indicada pelo evento sem declarar outro alvo.
+Uma escolha posterior de Invocação pertence à resolução e passa pelo broker.
+
+`schedule_return_from_banished` exige que a carta esteja banida ao agendar.
+O registro guarda o dono da zona que a recebeu, `expectedLocationVersion` e
+`summonMethod: "special"`. A resolução e os clones exigem a mesma presença,
+inclusive após escolher a posição. Sair e voltar ao banimento invalida o retorno.
+
 `applyActions` filtra alvos imunes antes do handler. Por padrão usa
 `immunityMode: "skip_targets"`; use `immunityMode: "skip_action"` se qualquer
 alvo imune deve cancelar a action inteira.
