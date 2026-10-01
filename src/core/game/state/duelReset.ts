@@ -19,6 +19,7 @@ interface DuelResetOptions {
 }
 
 type DuelResetHost = FullGameHost & {
+  forceClearTargetSelection(reason?: string): void;
   resetPlayerDuelState?(player: GamePlayer, options?: DuelResetOptions): void;
   cleanupDamageStepTransaction?(reason: string): void;
   cleanupSummonTransaction?(reason: string): void;
@@ -81,6 +82,7 @@ export function resetDuelState(
   reason = "reset",
   options: DuelResetOptions = {},
 ) {
+  this.forceClearTargetSelection(reason);
   this.fieldPlacementGeneration++;
   this.fieldPlacementAbort?.abort();
   this.fieldPlacementAbort = null;

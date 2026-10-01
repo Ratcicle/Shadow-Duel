@@ -1,3 +1,4 @@
+import { addEffectNegation, clearEffectNegation, normalizeNegationDuration, synchronizeEffectNegation } from "./effects/negation.js";
 import type {
   AlternateTributeDefinition,
   AscensionDefinition,
@@ -157,7 +158,13 @@ export function applyStatusesOnSummon(
         Reflect.set(fieldExitStatuses, status, Reflect.get(card, status));
       }
     }
-    Reflect.set(card, status, value);
+    if (status === "effectsNegated") {
+      const state: import("./effects/negation.js").NegationState = card;
+      if (value === true) {
+        const duration = readProperty(entry, "duration");
+        addEffectNegation(state, normalizeNegationDuration(typeof duration === "string" ? { duration } : {}));
+      } else clearEffectNegation(state);
+    } else Reflect.set(card, status, value);
     applied = true;
   }
   return applied;
@@ -169,6 +176,8 @@ function restoreStatusRegistry(card: unknown, registryKey: string): boolean {
   if (!isObjectValue(registry)) return false;
   const statuses = Object.keys(registry);
   for (const status of statuses) {
+    // Negation contributions, unlike ordinary statuses, expire independently.
+    if (status === "effectsNegated" && Array.isArray(readProperty(card, "effectsNegationContributions"))) continue;
     const previousValue = Reflect.get(registry, status);
     if (previousValue === undefined) {
       Reflect.deleteProperty(card, status);
@@ -392,6 +401,7 @@ export default class Card implements GameCard {
   declare fieldPresenceSummons: FieldPresenceSummonRecord[];
   declare effectsNegated: boolean;
   declare effectsNegatedDuration: string | number | null;
+  declare effectsNegationContributions: import("./contracts/cards.js").EffectNegationContribution[];
   declare originalAtk: number | null;
   declare originalDef: number | null;
   declare counters: Map<string, number>;
@@ -594,6 +604,8 @@ export default class Card implements GameCard {
     // Effect negation tracking
     this.effectsNegated = data.effectsNegated === true;
     this.effectsNegatedDuration = data.effectsNegatedDuration || null;
+    this.effectsNegationContributions = (data.effectsNegationContributions || []).map(entry => ({ ...entry }));
+    if (this.effectsNegationContributions.length > 0) synchronizeEffectNegation(this);
     this.originalAtk = null; // Store original ATK when set to 0
     this.originalDef = null; // Store original DEF when set to 0
 

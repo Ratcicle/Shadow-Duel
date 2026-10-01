@@ -16,6 +16,39 @@ import { canUseSimulatedEffectUsage, markSimulatedEffectUsage } from "../../src/
 import { moveCardToZone } from "../../src/core/ai/common/zones.js";
 import { cardDefinition } from "../helpers/fixtures.js";
 
+for (const seat of ["player", "bot"] as const) for (const alreadyNegated of [false, true]) {
+  test(`prepared negation Spell validates targets before paying once: ${seat}, negated=${alreadyNegated}`, () => {
+    const state = simulationState({ turn: seat, phase: "main1", turnCounter: 4 });
+    const owner = state[seat], opponent = state[seat === "player" ? "bot" : "player"];
+    const spell = simulationCard({ id: 9004, instanceId: "prepared-negation", cardKind: "spell", owner: seat,
+      effects: [{ id: "prepared-negation-effect", timing: "on_play", targets: [
+        { id: "cost", intent: "cost", owner: "self", zone: "hand", excludeSelf: true, count: { min: 1, max: 1 } },
+        { id: "victim", owner: "opponent", zone: "field", cardKind: "monster", requireFaceup: true, count: { min: 1, max: 1 } },
+      ], activationCosts: [{ type: "move", targetRef: "cost", fromZone: "hand", to: "graveyard",
+        requireDestination: true, contextLabel: "discard" }],
+      actions: [{ type: "add_status", targetRef: "victim", status: "effectsNegated", duration: "until_end_turn" }] }] });
+    const cost = simulationCard({ instanceId: "negation-cost", cardKind: "monster", owner: seat });
+    const victim = simulationCard({ instanceId: "negation-victim", cardKind: "monster", owner: opponent.id,
+      isFacedown: false, effectsNegated: alreadyNegated });
+    owner.hand.push(spell, cost); opponent.field.push(victim);
+    const prepared = prepareSimulatedSpellEffect(state, spell, { selfId: seat,
+      activationContext: { decisions: { selections: { cost: ["negation-cost"], victim: ["negation-victim"] } } } });
+    assert.deepEqual(owner.hand, [spell, cost]);
+    assert.equal(owner.graveyard.length, 0);
+    if (alreadyNegated) {
+      assert.equal(prepared, null, "an illegal negation cannot consume the discard");
+      return;
+    }
+    assert.ok(prepared);
+    simulateGenericSpellEffect(state, spell, {}, prepared);
+    simulateGenericSpellEffect(state, spell, {}, prepared);
+    assert.deepEqual(owner.hand, [spell]);
+    assert.deepEqual(owner.graveyard, [cost]);
+    assert.equal(victim.effectsNegated, true);
+    assert.equal(victim.effectsNegationContributions?.length, 1, "prepared resolution is consumed once");
+  });
+}
+
 for (const seat of ["bot", "player"] as const) for (const active of ["self", "opponent"] as const) {
   test(`shared Forest standby counts public quantities during ${active} phase (${seat})`, () => {
     const source = simulationCard({ ...cardDefinition(274), instanceId: `forest-${seat}`, owner: seat, controller: seat });

@@ -262,6 +262,12 @@ function validateCommandPayload(
       requireFiniteNumber(read(payload, "lp"), `${path}.lp`);
       return;
     case "phase_intent":
+      if (
+        hasOwn(payload, "mode") &&
+        read(payload, "mode") !== "next" && read(payload, "mode") !== "skip"
+      ) {
+        invalid(`${path}.mode`, "next or skip");
+      }
       if (hasOwn(payload, "fromPhase")) {
         requirePhase(read(payload, "fromPhase"), `${path}.fromPhase`);
       }
@@ -661,6 +667,15 @@ function validateCardSnapshot(value: unknown, path: string, onField = false): vo
   if (!hasOwn(statuses, "effectsNegatedDuration")) {
     invalid(`${path}.statuses.effectsNegatedDuration`, "a serialized value");
   }
+  requireArray(read(statuses, "effectsNegationContributions"), `${path}.statuses.effectsNegationContributions`).forEach((value, index) => {
+    const entryPath = `${path}.statuses.effectsNegationContributions[${index}]`;
+    const entry = requireObject(value, entryPath);
+    const duration = read(entry, "duration");
+    if (duration !== "while_faceup" && duration !== "until_end_turn") invalid(`${entryPath}.duration`, "a supported negation duration");
+    const sourceId = read(entry, "sourceDuelCardId");
+    if (sourceId !== null) requireInteger(sourceId, `${entryPath}.sourceDuelCardId`, 1);
+    requireNullableString(read(entry, "sourceEffectId"), `${entryPath}.sourceEffectId`);
+  });
   for (const key of [
     "effectsNegated",
     "cannotAttackThisTurn",

@@ -15,37 +15,24 @@ import { botLogger } from "../../BotLogger.js";
 import type { FullGameHost, GamePlayer } from "../../contracts/gameRuntime.js";
 import type { DrawCardsResult } from "../deck/draw.js";
 import type { ActionGuardResult } from "../actions/guard.js";
-import type { PlayerId } from "../../contracts/primitives.js";
+import {
+  enterPhase,
+  leaveCurrentPhase,
+  phaseWorkIsPending,
+  type PhaseTransitionHost,
+} from "./transitions.js";
 
 interface AiMoveCapability {
   makeMove(game: LifecycleHost): unknown;
-}
-
-interface PhaseTimingResult {
-  phaseTransitionAllowed?: boolean;
-  phaseTransitionInterrupted?: boolean;
-  needsSelection?: boolean;
-  deferred?: boolean;
 }
 
 interface LifecycleProgressTracker {
   recordProgress?(label: string, game: LifecycleHost, detail?: unknown): void;
 }
 
-type LifecycleHost = Pick<
-  FullGameHost,
-  | "player"
-  | "bot"
-  | "turn"
-  | "phase"
-  | "turnCounter"
-  | "gameOver"
-  | "battleStep"
-  | "phaseDelayMs"
-  | "effectEngine"
-> & {
+type LifecycleHost = PhaseTransitionHost &
+  Pick<FullGameHost, "phaseDelayMs" | "effectEngine"> & {
   _arenaTracker?: LifecycleProgressTracker | null;
-  isDisposed?(): boolean;
   devLog?(code: string, detail?: unknown): void;
   resetOncePerTurnUsage(reason?: string): void;
   cleanupExpiredBuffs(): void;
@@ -55,25 +42,16 @@ type LifecycleHost = Pick<
   cleanupExpiredTemporaryEventEffects?(): void;
   cleanupExpiredSpecialSummonRestrictions?(): void;
   cleanupExpiredEffectActivationRestrictions?(): void;
-  updateBoard(): unknown;
-  checkAndOfferTraps(
-    event: string,
-    context: unknown,
-  ): Promise<PhaseTimingResult | null>;
   drawCards(player: GamePlayer, count?: number): DrawCardsResult;
   waitForPhaseDelay(): Promise<void>;
-  processDelayedActions(phase: string, activePlayer: PlayerId): Promise<void>;
-  emit(event: string, payload: unknown): Promise<unknown>;
   guardActionStart(
     options: { actor: GamePlayer; kind: "phase_change" },
     logToRenderer?: boolean,
   ): ActionGuardResult;
-  getOpponent?(player: GamePlayer): GamePlayer | null;
   processTemporaryControlEffects?(): Promise<unknown>;
   cleanupTempBoosts(player: GamePlayer): void;
-  clearAttackResolutionIndicators(): void;
-  clearAttackReadyIndicators(): void;
   startTurn(): Promise<unknown>;
+  skipToPhase(phase: "end"): Promise<unknown>;
 };
 
 function hasAiMove(actor: GamePlayer): actor is GamePlayer & AiMoveCapability {
@@ -151,30 +129,6 @@ function scheduleAiMoveAfterPaint(game: LifecycleHost, actor: GamePlayer) {
   setTimeout(runMove, 0);
 }
 
-async function negotiateAutomaticPhaseEnd(
-  game: LifecycleHost,
-  eventData: unknown,
-) {
-  while (!game.gameOver && !game.isDisposed?.()) {
-    const currentPhase = game.phase;
-    const timingResult = await game.checkAndOfferTraps("phase_end", eventData);
-    if (!timingResult || timingResult.phaseTransitionAllowed === true) {
-      return { ok: true, timingResult: timingResult || null };
-    }
-    if (
-      timingResult.needsSelection === true ||
-      timingResult.deferred === true ||
-      timingResult.phaseTransitionInterrupted !== true ||
-      game.phase !== currentPhase
-    ) {
-      return { ok: false, timingResult };
-    }
-    // Automatic Draw/Standby phases renew their phase-transition intent after
-    // a Chain and the mandatory post-Chain timing round have both completed.
-  }
-  return { ok: false, reason: "duel_stopped" };
-}
-
 /**
  * Starts a new turn for the active player.
  * Handles draw phase, standby phase, and transitions to main1.
@@ -215,11 +169,7 @@ export async function startTurn(this: LifecycleHost) {
     this.effectEngine.clearTargetingCache();
   }
 
-  this.phase = "draw";
-  this.battleStep = null;
-
   const activePlayer = this.turn === "player" ? this.player : this.bot;
-  const opponent = activePlayer === this.player ? this.bot : this.player;
   activePlayer.forbidDirectAttacksThisTurn = false;
   activePlayer.field.forEach((card) => {
     card.hasAttacked = false;
@@ -250,17 +200,8 @@ export async function startTurn(this: LifecycleHost) {
     player.normalSummonsThisTurn = [];
   }
 
-  this.updateBoard();
-  await this.checkAndOfferTraps("phase_start", {
-    currentPhase: "draw",
-    previousPhase: null,
-    fromPhase: null,
-    toPhase: "draw",
-    player: activePlayer,
-    battleStep: null,
-    damageStepTiming: null,
-  });
-  if (this.gameOver || this.isDisposed?.()) return;
+  const drawEntry = await enterPhase(this, "draw", null);
+  if (!drawEntry.ok) return drawEntry;
   this._arenaTracker?.recordProgress?.("turn_draw_before", this, {
     actor: activePlayer?.id || this.turn,
     deckSize: activePlayer?.deck?.length || 0,
@@ -289,72 +230,28 @@ export async function startTurn(this: LifecycleHost) {
     currentPhase: "draw",
     phase: "draw",
   });
-  if (drawTiming?.needsSelection || this.gameOver || this.isDisposed?.())
+  if (phaseWorkIsPending(this, drawTiming) || this.gameOver || this.isDisposed?.())
     return;
-  const drawPhaseEnd = await negotiateAutomaticPhaseEnd(this, {
-    currentPhase: "draw",
-    nextPhase: "standby",
-    fromPhase: "draw",
-    toPhase: "standby",
-    battleStep: null,
-    damageStepTiming: null,
+  const drawPhaseEnd = await leaveCurrentPhase(this, {
+    nextPhase: "standby", renewAfterChain: true,
   });
   if (!drawPhaseEnd.ok) return drawPhaseEnd;
   if (this.gameOver || this.isDisposed?.()) return;
-  if (this.phase !== "draw") return;
   await this.waitForPhaseDelay();
-  if (this.gameOver || this.isDisposed?.()) return;
+  if (this.gameOver || this.isDisposed?.() || phaseWorkIsPending(this)) return;
 
-  this.phase = "standby";
-  this.battleStep = null;
-
-  this.updateBoard();
-  await this.checkAndOfferTraps("phase_start", {
-    currentPhase: "standby",
-    previousPhase: "draw",
-    fromPhase: "draw",
-    toPhase: "standby",
-    player: activePlayer,
-    battleStep: null,
-    damageStepTiming: null,
-  });
-  if (this.gameOver || this.isDisposed?.()) return;
-
-  // Process delayed actions in standby phase BEFORE emitting the event
-  await this.processDelayedActions("standby", activePlayer.id || this.turn);
-  if (this.gameOver || this.isDisposed?.()) return;
-
-  this.updateBoard();
-  await this.emit("standby_phase", { player: activePlayer, opponent });
-  if (this.gameOver || this.isDisposed?.()) return;
-  if (this.phase !== "standby") return;
+  const standbyEntry = await enterPhase(this, "standby", "draw");
+  if (!standbyEntry.ok) return standbyEntry;
   await this.waitForPhaseDelay();
-  if (this.gameOver || this.isDisposed?.()) return;
-  const standbyPhaseEnd = await negotiateAutomaticPhaseEnd(this, {
-    currentPhase: "standby",
-    nextPhase: "main1",
-    fromPhase: "standby",
-    toPhase: "main1",
-    battleStep: null,
-    damageStepTiming: null,
+  if (this.gameOver || this.isDisposed?.() || phaseWorkIsPending(this)) return;
+  const standbyPhaseEnd = await leaveCurrentPhase(this, {
+    nextPhase: "main1", renewAfterChain: true,
   });
   if (!standbyPhaseEnd.ok) return standbyPhaseEnd;
   if (this.gameOver || this.isDisposed?.()) return;
-  if (this.phase !== "standby") return;
 
-  this.phase = "main1";
-  this.battleStep = null;
-  this.updateBoard();
-  await this.checkAndOfferTraps("phase_start", {
-    currentPhase: "main1",
-    previousPhase: "standby",
-    fromPhase: "standby",
-    toPhase: "main1",
-    player: activePlayer,
-    battleStep: null,
-    damageStepTiming: null,
-  });
-  if (this.gameOver || this.isDisposed?.() || this.phase !== "main1") return;
+  const mainEntry = await enterPhase(this, "main1", "standby");
+  if (!mainEntry.ok) return mainEntry;
   this._arenaTracker?.recordProgress?.("main1_ready", this, {
     actor: activePlayer?.id || this.turn,
   });
@@ -387,20 +284,23 @@ export async function endTurn(this: LifecycleHost) {
   );
   if (!guard.ok) return guard;
 
-  // Resolve any actions scheduled for the end phase of the current turn
-  // (e.g. Galaxy Extreme Dragon returning from the banished zone).
-  const opponent = this.getOpponent?.(actor) || null;
-  await this.emit("end_phase", { player: actor, opponent });
-  if (this.gameOver || this.isDisposed?.()) return;
+  if (this.phase !== "end") return await this.skipToPhase("end");
+  const leaveResult = await leaveCurrentPhase(this, { nextPhase: null });
+  if (!leaveResult.ok) {
+    if (leaveResult.reason === "phase_transition_interrupted") {
+      scheduleAiMoveAfterPaint(this, actor);
+    }
+    return leaveResult;
+  }
 
   // Control-change effects expire after End Phase triggers finish. This keeps
   // the returned monster in the same field zone and does not fabricate a
   // movement or summon event.
   await this.processTemporaryControlEffects?.();
-  if (this.gameOver || this.isDisposed?.()) return;
+  if (this.gameOver || this.isDisposed?.() || phaseWorkIsPending(this)) return;
 
   await this.processDelayedActions("end", this.turn);
-  if (this.gameOver || this.isDisposed?.()) return;
+  if (this.gameOver || this.isDisposed?.() || phaseWorkIsPending(this)) return;
 
   this.cleanupTempBoosts(this.player);
   this.cleanupTempBoosts(this.bot);

@@ -1,3 +1,4 @@
+import { requiresUnnegatedTarget } from "../negation.js";
 /**
  * Targeting Resolution Module
  * Extracted from EffectEngine.js - main target resolution logic
@@ -377,6 +378,8 @@ function contextTargetMatchesDef(
   ) {
     return false;
   }
+  if (ctx.activationContext?.timing !== "resolution" && card.cardKind === "monster" &&
+      card.effectsNegated === true && requiresUnnegatedTarget(ctx.effect, def)) return false;
   const filters = buildContextTargetFilters(def);
   if (
     Object.keys(filters).length > 0 &&

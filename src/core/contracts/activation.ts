@@ -172,6 +172,8 @@ export interface ActivationPipelineConfig {
   ): MaybePromise<void>;
   onSelectionStart?(): void;
   onCancel?: (() => void) | null;
+  /** System teardown must settle waiters without running player cancellation/finalization. */
+  onAbort?: (reason: string) => void;
   onFailure?(
     result: ActivationPipelineResult,
     context: ActivationPipelineContext,

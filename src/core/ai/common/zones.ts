@@ -1,3 +1,4 @@
+import { clearEffectNegation } from "../../effects/negation.js";
 import { restoreFieldExitStatuses, restoreTemporaryStatuses } from "../../Card.js";
 import { cardMatchesFilter } from "./cardFilters.js";
 import { clearPermanentStatBuffs, expireFaceupStatBuffs, removeTrackedStatChange } from "../../effects/actions/stats.js";
@@ -448,14 +449,12 @@ export function moveCardToZone(
       }
       card.turnBasedBuffs = [];
       clearPermanentStatBuffs(card);
-      card.effectsNegated = false;
-      card.effectsNegatedDuration = null;
+      clearEffectNegation(card);
     }
   }
   if ((fromZone === "spellTrap" || fromZone === "fieldSpell") &&
       toZone !== "field" && toZone !== "spellTrap" && toZone !== "fieldSpell") {
-    card.effectsNegated = false;
-    card.effectsNegatedDuration = null;
+    clearEffectNegation(card);
   }
   if (
     card.cardKind === "monster" &&

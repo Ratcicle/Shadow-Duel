@@ -1,3 +1,4 @@
+import { getNegationContributions } from "../../effects/negation.js";
 /**
  * serialization.js
  *
@@ -102,6 +103,7 @@ export function getPublicState(
           battlePositionLocked: hidden ? null : !!card.battlePositionLocked,
           effectsNegated: hidden ? null : !!card.effectsNegated,
           effectsNegatedDuration: hidden ? null : card.effectsNegatedDuration || null,
+          effectsNegationContributions: hidden ? null : getNegationContributions(card).map(entry => ({ ...entry })),
           canAttackAll: hidden ? null : !!card.canAttackAllOpponentMonstersThisTurn,
         },
       };
@@ -138,6 +140,7 @@ export function getPublicState(
         subtype: hidden ? null : card.subtype,
         effectsNegated: hidden ? null : card.effectsNegated === true,
         effectsNegatedDuration: hidden ? null : card.effectsNegatedDuration || null,
+        effectsNegationContributions: hidden ? null : getNegationContributions(card).map(entry => ({ ...entry })),
       };
     });
 
@@ -219,6 +222,7 @@ export function getPublicState(
           effectsNegated: owner.fieldSpell.effectsNegated === true,
           effectsNegatedDuration:
             owner.fieldSpell.effectsNegatedDuration || null,
+          effectsNegationContributions: getNegationContributions(owner.fieldSpell).map(entry => ({ ...entry })),
         }
       : null,
     graveyardCount: (owner.graveyard || []).length,

@@ -1,8 +1,9 @@
+import { requiresUnnegatedTarget } from "../../effects/negation.js";
 import { appendSimulatedZoneCard, clearSimulatedFieldPosition } from "../common/zones.js";
 import { appendSimulatedFieldCard } from "../common/zones.js";
 import { canMoveCardToZone, moveCardToZone } from "../common/zones.js";
 import { canUseSimulatedEffectUsage, markSimulatedEffectUsage } from "../common/simStateUtils.js";
-import { prepareSimulatedSpellEffect, simulateGenericSpellEffect } from "../common/simulation.js";
+import { applyGenericSimulatedMainPhaseAction, prepareSimulatedSpellEffect, simulateGenericSpellEffect } from "../common/simulation.js";
 import type { PreparedSimulatedSpellEffect } from "../common/simulation.js";
 import { getAvailableFieldSlots } from "../../game/zones/placement.js";
 import { recordCompletedSimulatedSummon } from "../common/simulatedActions/shared.js";
@@ -2036,6 +2037,18 @@ function simulateDragonFieldMonsterEffect(
 
   const effect = (card.effects || []).find(entry => entry.timing === "ignition" &&
     entry.activationZones?.includes("field") && (!action.effectId || entry.id === action.effectId));
+  if (effect?.targets?.some(target => requiresUnnegatedTarget(effect, target))) {
+    const { opponent: _opponent, _gameRef: _gameRef, game: _game,
+      _dragonSimOnce: _dragonOnce, _simMaterialEffectActivationsByMaterialId: _materialActivations,
+      ...sharedFields } = state;
+    const sharedState = { ...sharedFields, bot: sharedSimulationPlayer(player), player: sharedSimulationPlayer(opponent) };
+    applyGenericSimulatedMainPhaseAction(sharedState, {
+      type: "monsterEffect", fieldIndex, cardId: card.id,
+      ...(effect.id ? { effectId: effect.id } : {}),
+    });
+    Object.assign(state, sharedState);
+    return;
+  }
   const scopedEffect = effect?.oncePerTurnScope === "card" ? effect : null;
   if (scopedEffect && !canUseSimulatedEffectUsage(state, scopedEffect, card, player.id, true)) return;
   const usageSourceAtActivation = { ...card };
@@ -2067,23 +2080,6 @@ function simulateDragonFieldMonsterEffect(
         actionType: "delayed_summon", triggerCondition: { phase: "standby", player: opponent.id },
         payload: { summons }, scheduledTurn: state.turnCounter || 0, priority: 1 });
     }
-    recordSimulatedMaterialEffectActivation(state, player, card);
-    return;
-  }
-
-  if (card.name === "Darkness Dragon") {
-    const target = rankSimThreats(opponent.field || [])[0];
-    if (!target || player.hand.length === 0) return;
-    if ((player.hand || []).length > 0) {
-      const discardIdx = pickWorstDiscard(player.hand, {
-        state,
-        player,
-        source: card,
-      });
-      discardHandCardToGraveyard(state, player, discardIdx);
-    }
-    if (scopedEffect) markSimulatedEffectUsage(state, scopedEffect, usageSourceAtActivation, player.id, true);
-    if (card.effectsNegated !== true) target.effectsNegated = true;
     recordSimulatedMaterialEffectActivation(state, player, card);
     return;
   }

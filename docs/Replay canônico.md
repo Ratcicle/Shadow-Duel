@@ -1,7 +1,7 @@
 # Replay canônico
 
 O replay executável usa o formato `shadow-duel-canonical-replay`, schema `2` e
-`engineVersion: "dragon-rules-v6"`. Ele é independente do relatório
+`engineVersion: "engine-rules-v7"`. Ele é independente do relatório
 estratégico. O importador aceita somente o schema `2`: relatórios v4 e replays
 de schemas anteriores não são partidas executáveis nesta versão.
 
@@ -45,7 +45,8 @@ decisões e a normalização dos hashes de estado permanecem os mesmos.
 Mudanças futuras no payload da assinatura exigem nova análise de
 compatibilidade.
 
-A versão `dragon-rules-v6` corrige o agendamento do retorno do banimento:
+A versão `dragon-rules-v6` introduziu a correção do retorno do banimento,
+preservada em `engine-rules-v7`:
 o produtor registra o dono da zona, a versão da localização e o método de
 Invocação. A resolução exige a mesma presença antes e depois da escolha de
 posição; os clones usam os mesmos dados. Gravações de versões anteriores
@@ -102,7 +103,7 @@ compatibilidade histórica (`trigger_opportunity`, `trigger_ordered`, `activatio
 
 ## Efeitos temporários e escolhas durante a resolução
 
-O lote Dragon usa a engine `dragon-rules-v6` com os mesmos comandos e kinds de
+O lote Dragon integra a engine `engine-rules-v7` com os mesmos comandos e kinds de
 decisão do schema `2`. Snapshots incluem `fieldPresenceSummons` por fonte,
 proteções concedidas e `namedOncePerTurnUsage`, incluindo o limite dos
 procedimentos da mão. O histórico de Invocações guarda a presença do monstro,
@@ -180,7 +181,7 @@ caracteres do replay, usado para detectar divergências na reprodução.
 `validateCanonicalReplay(input)` recebe `unknown`, não muta a entrada e retorna
 a mesma referência somente depois de validar o documento. `setup`, `commands` e
 `decisions` e `engineVersion` são obrigatórios. A versão da engine deve ser
-`"dragon-rules-v6"`; gravações sem essa versão são rejeitadas antes da validação
+`"engine-rules-v7"`; gravações sem essa versão são rejeitadas antes da validação
 profunda e da reprodução. `events`, `result` e `finalized` continuam opcionais
 na importação de arquivos do schema `2`; quando presentes, são validados
 profundamente. Os comandos e kinds de decisão permanecem os mesmos.
@@ -305,3 +306,42 @@ de Fusão da mão, Purificação com custo, Fúria após ataque direto e Ascens�
 do Perseguidor contra um monstro Invocado por Sincro. Humanos e bots nos
 dois assentos gravam em EN e reproduzem em PT-BR, em outra instância sem UI,
 com todas as decisões consumidas e hashes iguais.
+
+
+## Compatibilidade de negação e transições de fase
+
+A versão de execução `engine-rules-v7` mantém `schemaVersion: 2` e o envelope
+canônico existente. A negação agora serializa cada contribuição independente
+(duração, `sourceDuelCardId` e `sourceEffectId`), inclusive quando duas
+contribuições produzem a mesma projeção visual. O hash cobre esses registros;
+identificadores de instância globais ao processo não são persistidos como fonte.
+A intenção de fase também distingue avanço ordinário de atalho, pois ambos
+podem chegar à mesma fase por sequências de eventos diferentes.
+
+Essas mudanças alteram legalidade, expiração e hashes de execução. Gravações
+anteriores, incluindo `dragon-rules-v3`, são rejeitadas explicitamente por
+`engineVersion` antes da reprodução, em vez de serem executadas sob regras
+incompatíveis. Não há migração automática nem remoção de arquivos de replay.
+As novas gravações são verificadas por reprodução em outra instância de Game,
+consumindo as decisões gravadas sem consultar UI ou recalcular escolhas da IA.
+
+
+O payload de `phase_intent` das novas gravações inclui `mode: "next" | "skip"`
+para preservar o método chamado. Uma gravação da mesma versão sem esse campo
+mantém a interpretação histórica: `toPhase` preenchido chama o atalho; ausente
+ou nulo chama o avanço ordinário. Isso não permite executar uma versão antiga
+da engine. O evento `end_phase` ocorre uma vez na entrada da End Phase, antes
+da negociação de prioridade para sair dela; seleções e Chains pendentes
+interrompem a saída até que sejam concluídas.
+
+
+### Integração das regras Dragon e da End Phase
+
+A engine `engine-rules-v7` combina as contribuições independentes de negação e
+o fluxo canônico de fases com `fieldPresenceState` e `lpGainedThisTurn` do lote
+Dragon, além das correções de Santuário, Galáxia, Bahamut e da simulação de
+276/277. A preparação das Magias mantém o pagamento único dos custos e aplica
+o filtro de alvos de negação antes de mover recursos. Schema 2 é preservado.
+Gravações de `engine-rules-v6`, `dragon-rules-v6` e versões anteriores são
+recusadas antes da reprodução: nenhuma dessas engines isoladas produzia o
+mesmo estado/fluxo combinado. Nenhum arquivo histórico é removido ou migrado.

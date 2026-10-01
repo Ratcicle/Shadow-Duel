@@ -1,3 +1,4 @@
+import { addEffectNegation } from "../../effects/negation.js";
 import { isAI } from "../../Player.js";
 import { applyPaidCostSummonMarkers } from "../../effects/costs/summonMarkers.js";
 import { checkSpecialSummonEligibility } from "../../game/summon/eligibility.js";
@@ -981,10 +982,11 @@ async function summonCards(
     let usedMoveCard = false;
     const previousEffectsNegated = card.effectsNegated;
     const previousEffectsNegatedDuration = card.effectsNegatedDuration;
+    const previousContributions = (card.effectsNegationContributions || []).map(entry => ({ ...entry }));
     const negateEffectsDuration = normalizeNegateEffectsDuration(action);
     if (action.negateEffects) {
-      card.effectsNegated = true;
-      card.effectsNegatedDuration = negateEffectsDuration;
+      if (ctx?.source) game.ensureDuelCardId?.(ctx.source);
+      addEffectNegation(card, negateEffectsDuration, ctx?.source, ctx?.effect);
     }
 
     if (canUseMoveCard) {
@@ -1007,6 +1009,7 @@ async function summonCards(
       ) {
         card.effectsNegated = previousEffectsNegated;
         card.effectsNegatedDuration = previousEffectsNegatedDuration;
+        card.effectsNegationContributions = previousContributions;
         continue;
       }
 
@@ -1049,13 +1052,6 @@ async function summonCards(
     }
 
     card.cannotAttackThisTurn = action.cannotAttackThisTurn || false;
-
-    card.effectsNegated = action.negateEffects
-      ? true
-      : previousEffectsNegated || false;
-    card.effectsNegatedDuration = action.negateEffects
-      ? negateEffectsDuration
-      : previousEffectsNegatedDuration || null;
 
     if (setAtkToZero) {
       if (card.originalAtk == null) {

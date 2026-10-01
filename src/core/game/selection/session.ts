@@ -73,9 +73,11 @@ interface SelectionSessionHost {
   targetSelection: ActiveSelectionSession | null;
   graveyardSelection: object | null;
   selectionState: SelectionSessionState;
+  selectionAbortGeneration: number;
   selectionSessionCounter: number;
   lastSelectionSessionId: number;
   decisionBroker?: SelectionDecisionBrokerState | null;
+  chainSystem?: { cancelChain?(): void } | null;
   pendingReplayDecisionPromise?: Promise<void> | null;
   _activeDeferredReplayCommandDescriptor?: object | null;
   ui: SelectionSessionUiPort;
@@ -260,20 +262,28 @@ export function forceClearTargetSelection(
   this: SelectionSessionHost,
   reason = "invariant_cleanup",
 ): void {
-  if (!this.targetSelection) return;
+  const selection = this.targetSelection;
+  if (!selection) return;
+  this.selectionAbortGeneration++;
+  // Retire ownership before invoking presentation or consumer callbacks.
+  this.targetSelection = null;
+  this.graveyardSelection = null;
+  this.pendingReplayDecisionPromise = null;
+  this.setSelectionState("idle");
+  this.chainSystem?.cancelChain?.();
   this.devLog("SELECTION_FORCE_CLEAR", {
     summary: `Selection cleared (${reason})`,
   });
   this.clearTargetHighlights();
   this.setSelectionDimming(false);
-  if (this.ui && typeof this.ui.hideFieldTargetingControls === "function") {
-    this.ui.hideFieldTargetingControls();
+  this.ui.hideFieldTargetingControls?.();
+  selection.closeModal?.();
+  if (selection.onAbort) {
+    selection.onAbort(reason);
+  } else {
+    // Legacy custom selections expose their completion resolver directly.
+    selection.resolve?.([]);
   }
-  if (this.targetSelection?.closeModal) {
-    this.targetSelection.closeModal();
-  }
-  this.targetSelection = null;
-  this.setSelectionState("idle");
 }
 
 /**
@@ -338,6 +348,7 @@ export function startTargetSelectionSession(
         : !usingFieldTargeting,
   };
   this.setSelectionState("selecting");
+  const activeSelection = this.targetSelection;
 
   if (this.decisionBroker?.mode === "replay") {
     const replaySelection = this.targetSelection;
@@ -353,11 +364,7 @@ export function startTargetSelectionSession(
       deserializeReplayValue: (value) =>
         deserializeSelectionValue(this, replaySelection, value),
     }).then(async (selections) => {
-      if (this.targetSelection?.sessionId !== replaySelection.sessionId) {
-        throw new Error(
-          "Replay selection session changed before its decision was applied.",
-        );
-      }
+      if (this.targetSelection !== replaySelection) return;
       this.targetSelection.selections = selections || {};
       this.targetSelection.currentRequirement =
         this.targetSelection.requirements.length;
@@ -403,8 +410,12 @@ export function startTargetSelectionSession(
         this.targetSelection.allowCancel !== false &&
         !this.targetSelection.preventCancel;
       const controlsHandle = this.ui.showFieldTargetingControls(
-        () => this.advanceTargetSelection(),
-        allowCancel ? () => this.cancelTargetSelection() : null,
+        () => {
+          if (this.targetSelection === activeSelection) this.advanceTargetSelection();
+        },
+        allowCancel ? () => {
+          if (this.targetSelection === activeSelection) this.cancelTargetSelection();
+        } : null,
         {
           allowCancel,
           message: selectionContract.message || session.message || null,
@@ -427,14 +438,16 @@ export function startTargetSelectionSession(
     const modalHandle = this.ui.showTargetSelection(
       selectionContract,
       (chosenMap: SelectionResult) => {
-        if (!this.targetSelection) return;
+        if (this.targetSelection !== activeSelection) return;
         this.setSelectionState("confirming");
         this.targetSelection.selections = chosenMap || {};
         this.targetSelection.currentRequirement =
           this.targetSelection.requirements.length;
         this.finishTargetSelection();
       },
-      allowCancel ? () => this.cancelTargetSelection() : null,
+      allowCancel ? () => {
+        if (this.targetSelection === activeSelection) this.cancelTargetSelection();
+      } : null,
       {
         allowCancel,
         allowEmpty: this.targetSelection.allowEmpty === true,
@@ -630,7 +643,7 @@ export async function finishTargetSelection(
  */
 export function cancelTargetSelection(this: SelectionSessionHost): void {
   if (!this.targetSelection) return;
-  if (this.targetSelection.preventCancel) {
+  if (this.targetSelection.allowCancel === false || this.targetSelection.preventCancel) {
     return;
   }
   const selection = this.targetSelection;
@@ -640,12 +653,8 @@ export function cancelTargetSelection(this: SelectionSessionHost): void {
     void this.finishTargetSelection();
     return;
   }
-  if (typeof selection.onCancel === "function") {
-    selection.onCancel();
-  }
-  if (selection?.resolve) {
-    selection.resolve([]);
-  }
+  this.targetSelection = null;
+  this.setSelectionState("idle");
   this.clearTargetHighlights();
   this.setSelectionDimming(false);
   if (this.ui && typeof this.ui.hideFieldTargetingControls === "function") {
@@ -654,6 +663,10 @@ export function cancelTargetSelection(this: SelectionSessionHost): void {
   if (selection?.closeModal) {
     selection.closeModal();
   }
-  this.targetSelection = null;
-  this.setSelectionState("idle");
+  if (typeof selection.onCancel === "function") {
+    selection.onCancel();
+  }
+  if (selection?.resolve) {
+    selection.resolve([]);
+  }
 }

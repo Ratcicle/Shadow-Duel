@@ -11,6 +11,7 @@ import { prepareLuminarchSimulatedBattle, applyLuminarchSimulatedBattleRewards }
 import { cardDefinition, required, unsafeFixture } from "../helpers/fixtures.js";
 import type { AIStrategyBotPort } from "../../src/core/contracts/ai.js";
 import { simulationState } from "../helpers/simulation.js";
+import { resolveSimulatedEndPhase } from "../../src/core/ai/common/simulation.js";
 import { applySimulatedActions } from "../../src/core/ai/common/simulatedActions/index.js";
 import { applyPassiveBuffValue } from "../../src/core/effects/passives/passiveBuffs.js";
 import { appendSimulatedZoneCard, clearSimulatedFieldPosition, refreshSimulatedFieldPresenceTypeSummonBuffs } from "../../src/core/ai/common/zones.js";
@@ -222,3 +223,31 @@ test("the generic stat-negation action suppresses the presence-count bonus and r
   refreshSimulatedFieldPresenceTypeSummonBuffs(state);
   assert.equal(metal.atk, 2100);
 });
+
+for (const persistent of [false, true]) {
+  test(`End cleanup reconciles Metal's presence bonus after negation expiry (persistent: ${persistent})`, () => {
+    const metal = make("Metal Armored Dragon");
+    metal.fieldPresenceId = "metal-presence";
+    metal.fieldPresenceState = { summon_count_Dragon: 2 };
+    applyPassiveBuffValue(metal, "unrelated", 500, ["atk"]);
+    const state = simulationState({ turn: "bot", turnCounter: 3, bot: { field: [metal] } });
+    refreshSimulatedFieldPresenceTypeSummonBuffs(state);
+    assert.equal(metal.atk, 2300);
+    applySimulatedActions({ state, selections: { target: [metal] },
+      actions: [{ type: "add_status", targetRef: "target", status: "effectsNegated", duration: "until_end_turn" }] });
+    if (persistent) {
+      applySimulatedActions({ state, selections: { target: [metal] },
+        actions: [{ type: "add_status", targetRef: "target", status: "effectsNegated", duration: "while_faceup" }] });
+    }
+    assert.equal(metal.atk, 2100);
+    resolveSimulatedEndPhase(state);
+    assert.equal(metal.effectsNegated, persistent);
+    assert.equal(metal.fieldPresenceState.summon_count_Dragon, 2);
+    assert.equal(metal.dynamicBuffs?.unrelated?.value, 500);
+    assert.equal(metal.atk, persistent ? 2100 : 2300);
+    assert.equal(metal.def, persistent ? 2000 : 2200);
+    assert.deepEqual(metal.effectsNegationContributions?.map(entry => entry.duration), persistent ? ["while_faceup"] : []);
+    resolveSimulatedEndPhase(state);
+    assert.equal(metal.atk, persistent ? 2100 : 2300, "repeated cleanup must not duplicate the passive bonus");
+  });
+}

@@ -1,3 +1,4 @@
+import { expireEffectNegation } from "../../effects/negation.js";
 // ─────────────────────────────────────────────────────────────────────────────
 // src/core/game/spellTrap/finalization.js
 // Spell/Trap finalization methods for Game class — B.9 extraction
@@ -281,6 +282,7 @@ export function applySpellTrapFinalizationOverride(
   if (override.type === "default") return false;
 
   card.isFacedown = true;
+  expireEffectNegation(card, "while_faceup");
   card.fieldPresenceSummons = [];
   const setTurn = Number.isFinite(override.setTurn)
     ? override.setTurn!

@@ -1,10 +1,11 @@
+import { expireEffectNegation } from "../../../effects/negation.js";
 import { removeTrackedStatChange } from "../../../effects/actions/stats.js";
 import { restoreTemporaryStatuses } from "../../../Card.js";
 import { SUMMON_METHODS } from "../../../contracts/summon.js";
 import { normalizeZoneInput } from "../../../contracts/zones.js";
 import { establishProperSummon } from "../../../game/summon/eligibility.js";
 import { canSimulatedProcedureEnterField, canSimulatedSpecialSummon } from "../simulation.js";
-import { getZoneCards, moveCardToZone } from "../zones.js";
+import { getZoneCards, moveCardToZone, refreshSimulatedFieldPresenceTypeSummonBuffs } from "../zones.js";
 import { applySummonState, recordCompletedSimulatedSummon } from "./shared.js";
 import { destroySimulatedCard } from "./destruction.js";
 import type { SimulatedCardState } from "../../../contracts/aiState.js";
@@ -82,6 +83,7 @@ export function cleanupSimulatedEndTurn(state: SimulatedRuntimeState): void {
   for (const player of [state.bot, state.player]) {
     for (const card of [...player.field, ...player.spellTrap, ...(player.fieldSpell ? [player.fieldSpell] : [])]) {
       card.fieldPresenceSummons = [];
+      expireEffectNegation(card, "until_end_turn");
     }
     for (const card of player.field) {
       if (card.tempAtkBoost) { removeTrackedStatChange(card, "atk", card.tempAtkBoost); card.tempAtkBoost = 0; }
@@ -90,10 +92,7 @@ export function cleanupSimulatedEndTurn(state: SimulatedRuntimeState): void {
       if (card.originalAtk != null) { card.atk = card.originalAtk; card.originalAtk = null; }
       if (card.originalDef != null) { card.def = card.originalDef; card.originalDef = null; }
       if (card.originalLevel != null) { card.level = card.originalLevel; card.originalLevel = null; }
-      if (card.effectsNegated && card.effectsNegatedDuration !== "while_faceup") {
-        card.effectsNegated = false;
-        card.effectsNegatedDuration = null;
-      }
+
       card.tempBattleIndestructible = false;
       card.battleDamageHealsControllerThisTurn = false;
       card.canAttackDirectlyThisTurn = false;
@@ -111,6 +110,7 @@ export function cleanupSimulatedEndTurn(state: SimulatedRuntimeState): void {
     player.forbidDirectAttacksThisTurn = false;
     player.directAttacksDeclaredThisTurn = 0;
   }
+  refreshSimulatedFieldPresenceTypeSummonBuffs(state);
 }
 
 /** Same inclusive expiry boundary as runtime startTurn's cleanup passes. */

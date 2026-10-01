@@ -1,4 +1,4 @@
-import { placeFieldCards } from "./helpers/game.js";
+import { completeTestSelections, placeFieldCards } from "./helpers/game.js";
 import assert from "node:assert/strict";
 import type { TestContext } from "node:test";
 import test from "node:test";
@@ -67,6 +67,46 @@ async function selectCard(
   );
   game.advanceTargetSelection();
 }
+
+test("Escape preserves Shadow-Heart Grave's mandatory summon during real Chain resolution", async t => {
+  const game = createGame(t);
+  game.turn = "bot";
+  game.turnCounter = 4;
+  const grave = createCard(cardDatabaseByName.get("Shadow-Heart Grave"), game.player);
+  const monster = createCard(cardDatabaseByName.get("Shadow-Heart Imp"), game.player);
+  grave.isFacedown = true;
+  grave.setTurn = 2;
+  placeFieldCards(game.player.spellTrap, grave);
+  game.player.hand.push(monster);
+  let dispatchKey: ((event: KeyboardEvent) => void) | undefined;
+  game.ui.bindGlobalKeydown = callback => { dispatchKey = callback; };
+  game.bindCardInteractions();
+  const context = { type: "phase_change" as const, player: game.bot,
+    fromPhase: "main1" as const, toPhase: "battle" as const };
+  const candidate = required(game.chainSystem.getActivatableCardsInChain(game.player, context)
+    .find(entry => entry.card === grave));
+  const prepared = await game.chainSystem.prepareChainResponse(candidate, game.player, context);
+  assert.equal(prepared.success, true);
+  game.chainSystem.addToChain(required(prepared.preparedActivation));
+  const pending = Promise.resolve(game.chainSystem.resolveChain());
+  await waitUntil(() => game.targetSelection, "Expected Grave's mandatory monster choice");
+  const session = required(game.targetSelection);
+  assert.equal(session.allowCancel, false);
+  assert.equal(session.preventCancel, false, "Reproduce the allowCancel-only contract");
+  required(dispatchKey)(unsafeFixture<KeyboardEvent>({ key: "Escape" }, "Global shortcut only reads the key"));
+  assert.equal(game.targetSelection, session, "Escape must retain the mandatory session");
+  assert.equal(game.selectionState, "selecting");
+  assert.ok(game.player.hand.includes(monster));
+  assert.ok(game.player.spellTrap.includes(grave), "Chain cleanup must wait for the summon");
+  assert.equal(game.player.summonCount, 0);
+  await completeTestSelections(game, pending);
+  assert.ok(game.player.field.includes(monster));
+  assert.equal(game.player.hand.includes(monster), false);
+  assert.equal(game.player.summonCount, 1);
+  assert.equal(game.lastSummonTransaction?.summonOrigin, "effect_resolution");
+  assert.ok(game.player.graveyard.includes(grave));
+  assert.equal(game.player.spellTrap.includes(grave), false);
+});
 
 test("seleção humana do Behemoth sobrevive à revalidação canônica", async (t) => {
   const game = createGame(t);
@@ -302,3 +342,44 @@ test("falha de Trigger no fim do Damage Step recupera o Fast Effect Timing", asy
   );
   assert.equal(game.phase, "main2");
 });
+
+test("system abort settles the legacy activation waiter without player-cancellation or result callbacks", async t => {
+  const game = createRuntimeGame({ disableChains: true, captureReplay: false });
+  t.after(() => game.dispose());
+  const card = new Card({ name: "Selection source", cardKind: "spell", subtype: "normal", effects: [] }, "player");
+  game.player.hand.push(card);
+  let settled = false;
+  const pending = game.runActivationPipelineWait({ card, owner: game.player, activationZone: "hand",
+    prepareForExistingChain: true, openActivationWindow: false,
+    onCancel: () => assert.fail("System abort must not call player cancellation"),
+    onFailure: () => assert.fail("System abort must not finalize an old activation"),
+    activate: () => ({ success: false, needsSelection: true,
+      selectionContract: { requirements: [{ id: "chosen", min: 1, max: 1, zone: "choice", candidates: [{ key: "yes", zone: "choice" }] }] } }),
+  }).then(value => { settled = true; return value; });
+  await waitUntil(() => game.targetSelection, "activation must open its choice");
+  game.applyScenarioSetup({ player: { lp: 6000 } });
+  await new Promise<void>(resolve => setImmediate(resolve));
+  assert.equal(settled, true);
+  assert.equal((await pending).code, "SELECTION_ABORTED");
+});
+
+for (const nested of [false, true]) {
+  test(`system abort stops the old optional action sequence after scenario replacement (nested=${nested})`, async t => {
+    const game = createRuntimeGame({ disableChains: true, captureReplay: false });
+    t.after(() => game.dispose());
+    game.applyScenarioSetup({ player: { hand: [{ id: 1 }] } });
+    const optional = { type: "optional_target_actions" as const, optional: true, allowCancel: false,
+      targets: [{ id: "pick", owner: "self" as const, zone: "hand" as const, cardKind: "monster" as const, count: { min: 1, max: 1 } }],
+      actions: [{ type: "draw" as const, amount: 1 }] };
+    const actions = [nested ? { type: "optional_target_actions" as const, optional: false, targets: [], actions: [optional, { type: "draw" as const, amount: 1 }] } : optional,
+      { type: "draw" as const, amount: 1 }];
+    const pending = game.effectEngine.applyActions(actions,
+      { player: game.player, opponent: game.bot, source: required(game.player.hand[0]), activationContext: { timing: "resolution" } }, {});
+    await waitUntil(() => game.targetSelection, "optional action must open selection");
+    game.applyScenarioSetup({ player: { hand: [], deck: [{ id: 3 }, { id: 4 }] } });
+    const result = await pending;
+    assert.equal(result.success, false);
+    assert.deepEqual(game.player.hand, []);
+    assert.deepEqual(game.player.deck.map(card => card.id), [3, 4]);
+  });
+}

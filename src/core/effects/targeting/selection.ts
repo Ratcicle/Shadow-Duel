@@ -1,3 +1,4 @@
+import { requiresUnnegatedTarget } from "../negation.js";
 /**
  * Targeting Selection Module
  * Extracted from EffectEngine.js - candidate selection and key building
@@ -191,6 +192,7 @@ interface RuntimeEffectTarget extends TargetingCardFilter {
 }
 
 interface TargetingActivationContext {
+  timing?: string | undefined;
   logTargets?: boolean;
   excludedDamageStepTargets?: TargetingCard[];
 }
@@ -819,7 +821,8 @@ export function selectCandidates(
   )
     ? ctx.activationContext.excludedDamageStepTargets
     : [];
-  const bypassCache = excludedDamageStepTargets.length > 0;
+  const requireUnnegated = ctx.activationContext?.timing !== "resolution" && requiresUnnegatedTarget(ctx.effect, def);
+  const bypassCache = excludedDamageStepTargets.length > 0 || requireUnnegated;
 
   // ✅ CACHE: Gerar chave única baseada na definição do target
   const cacheKey = buildTargetingCacheKey(def, ctx);
@@ -999,6 +1002,7 @@ export function selectCandidates(
         }`
       );
       for (const card of zone) {
+        if (requireUnnegated && card.cardKind === "monster" && card.effectsNegated === true) continue;
         log(
           `[selectCandidates] Evaluating card: ${card.name} (archetype: ${card.archetype}, owner: ${owner.id})`
         );

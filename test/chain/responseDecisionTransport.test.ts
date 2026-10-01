@@ -2,10 +2,57 @@ import assert from "node:assert/strict";
 import test, { type TestContext } from "node:test";
 import Bot from "../../src/core/Bot.js";
 import Card from "../../src/core/Card.js";
-import type { FastEffectContextInput } from "../../src/core/contracts/chainRuntime.js";
+import type { ChainEffectTarget, FastEffectContextInput } from "../../src/core/contracts/chainRuntime.js";
 import type { ReplayDecisionInput } from "../../src/core/contracts/decisions.js";
 import { cardDefinition, required, unsafeFixture } from "../helpers/fixtures.js";
 import { createRuntimeGame, placeFieldCards } from "../helpers/game.js";
+
+for (const seat of ["player", "bot"] as const) {
+  for (const purpose of ["cost", "target"] as const) {
+    test(`off-turn human Chain ${purpose} records and replays the selecting actor (${seat})`, async t => {
+      const setup = () => {
+        const game = createRuntimeGame({ captureReplay: false, laboratoryMode: true });
+        t.after(() => game.dispose());
+        game.turn = seat === "player" ? "bot" : "player";
+        const actor = game[seat];
+        actor.controllerType = "human";
+        const source = new Card({ name: "Selection source", cardKind: "trap" }, actor.id);
+        const target = new Card({ name: "Selection target", cardKind: "monster" }, actor.id);
+        actor.hand.push(target);
+        game.ensureDuelCardId(target);
+        const definitions: ChainEffectTarget[] = [{ id: "chosen", owner: "self", zone: "hand",
+          cardKind: "monster", count: { min: 1, max: 1 } }];
+        const choose = () => game.chainSystem.getPlayerSelectionsForDefinitions(
+          source, definitions, actor, null, { purpose });
+        return { game, target, choose };
+      };
+      const live = setup();
+      const decisions: ReplayDecisionInput[] = [];
+      live.game.on("decision_made", decision => { decisions.push(structuredClone(decision)); });
+      const pending = live.choose();
+      const session = required(live.game.targetSelection);
+      const requirement = required(session.requirements[0]);
+      session.selections.chosen = [required(requirement.candidates[0]).key];
+      await live.game.finishTargetSelection();
+      assert.deepEqual(await pending, { chosen: [live.target] });
+      assert.equal(decisions.length, 1);
+      assert.equal(required(decisions[0]).actorId, seat);
+      assert.equal(required(decisions[0]).kind, purpose);
+
+      const playback = setup();
+      assert.notEqual(playback.target.instanceId, live.target.instanceId);
+      playback.game.decisionBroker.loadReplayDecisions(JSON.parse(JSON.stringify(decisions)));
+      playback.game.ui.showTargetSelection = () => assert.fail("Replay must not open human UI");
+      const replayedActors: unknown[] = [];
+      playback.game.on("decision_made", decision => { replayedActors.push(decision.actorId); });
+      assert.deepEqual(await playback.choose(), { chosen: [playback.target] });
+      await playback.game.pendingReplayDecisionPromise;
+      assert.deepEqual(replayedActors, [seat]);
+      assert.equal(playback.game.decisionBroker.replayCursor, 1);
+      assert.equal(playback.game.targetSelection, null);
+    });
+  }
+}
 
 function scenario(t: TestContext, seat: "player" | "bot") {
   const first = new Bot("techzero"); first.id = "player";
@@ -124,3 +171,29 @@ test("Chain transport records every choice channel with duel-local identities", 
       materialInstanceIds: [playback.core.instanceId, playback.prism.instanceId], position: "defense" } },
   });
 });
+
+for (const reset of ["scenario", "duel", "dispose"] as const) {
+  test(`mandatory human Chain decision settles on ${reset} teardown without a recorded choice`, async t => {
+    const game = createRuntimeGame({ captureReplay: false, laboratoryMode: true });
+    t.after(() => game.dispose());
+    const source = new Card({ name: "Abort source", cardKind: "trap" }, "player");
+    game.applyScenarioSetup({ phase: "main1", player: { hand: [{ id: 1 }] } });
+    const decisions: unknown[] = [];
+    game.on("decision_made", decision => { decisions.push(decision); });
+    let settled = false;
+    const pending = Promise.resolve(game.chainSystem.getPlayerSelectionsForDefinitions(source,
+      [{ id: "chosen", owner: "self", zone: "hand", cardKind: "monster", count: { min: 1, max: 1 } }],
+      game.player, null, { purpose: "target", allowCancel: false })).then(value => { settled = true; return value; });
+    assert.ok(game.targetSelection);
+    game.cancelTargetSelection();
+    assert.ok(game.targetSelection, "player cannot abandon the mandatory decision");
+    if (reset === "scenario") game.applyScenarioSetup({ phase: "main1", player: { hand: [{ id: 3 }] } });
+    else if (reset === "duel") game.resetDuelState();
+    else game.dispose();
+    await new Promise<void>(resolve => setImmediate(resolve));
+    assert.equal(settled, true, "teardown must settle the decision consumer");
+    assert.equal(await pending, null);
+    assert.deepEqual(decisions, []);
+    assert.equal(game.targetSelection, null);
+  });
+}

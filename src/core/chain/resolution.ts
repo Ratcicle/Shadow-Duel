@@ -39,6 +39,11 @@ import type {
   FullChainHost,
 } from "../contracts/chainRuntime.js";
 
+function selectionAbortResult(): ChainOperationResult {
+  return { success: false, needsSelection: false, code: "SELECTION_ABORTED",
+    reason: "Selection was aborted by system teardown." };
+}
+
 function caughtErrorMessage(error: unknown): string | null {
   if (error instanceof Error) return error.message;
   if (typeof error !== "object" || error === null) return null;
@@ -139,6 +144,7 @@ export async function resolveChain(
     return { success: true, needsSelection: false };
   }
 
+  const selectionGeneration = this.game?.selectionAbortGeneration ?? 0;
   this.isResolving = true;
   this.log(`Resolving chain with ${this.chainStack.length} links`);
 
@@ -177,6 +183,7 @@ export async function resolveChain(
 
       try {
         result = await this.resolveChainLink(link);
+        if ((this.game?.selectionAbortGeneration ?? 0) !== selectionGeneration) return selectionAbortResult();
         if (result?.needsSelection) {
           this.pendingChainSelection = {
             link,
@@ -229,7 +236,7 @@ export async function resolveChain(
     }
     finalizationResult = await this.finalizeWholeChain?.({ chainId });
   } finally {
-    this.isResolving = false;
+    if ((this.game?.selectionAbortGeneration ?? 0) === selectionGeneration) this.isResolving = false;
   }
 
   this.log("Chain resolution complete");
@@ -255,6 +262,7 @@ export async function resolveChainLink(
     return;
   }
 
+  const selectionGeneration = this.game?.selectionAbortGeneration ?? 0;
   const previousResolvingLink = this.currentResolvingLink;
   this.currentResolvingLink = link;
   this.setChainLinkResolutionStatus?.(link, "resolving");
@@ -292,7 +300,9 @@ export async function resolveChainLink(
       activationZone === "spellTrap" &&
       card.isFacedown === true &&
       (card.cardKind === "spell" || card.cardKind === "trap");
-    if (!(await prepareForResolution(this, link, activationZone))) {
+    const prepared = await prepareForResolution(this, link, activationZone);
+    if ((this.game?.selectionAbortGeneration ?? 0) !== selectionGeneration) return selectionAbortResult();
+    if (!prepared) {
       const fizzledResult = {
         success: false,
         needsSelection: false,
@@ -315,6 +325,7 @@ export async function resolveChainLink(
         activationZone,
       );
     }
+    if ((this.game?.selectionAbortGeneration ?? 0) !== selectionGeneration) return selectionAbortResult();
     const negationState = getChainLinkEffectNegation(
       this,
       link,
@@ -337,6 +348,7 @@ export async function resolveChainLink(
     } else {
       applyResult = await applyChainEffect(this, link, activationZone);
     }
+    if ((this.game?.selectionAbortGeneration ?? 0) !== selectionGeneration) return selectionAbortResult();
     if (applyResult?.needsSelection) {
       return {
         ...applyResult,
@@ -381,9 +393,11 @@ export async function resolveChainLink(
     });
     throw error;
   } finally {
-    this.settleUsageForChainLink?.(link);
-    this.cardsBeingResolved.delete(card);
-    this.currentResolvingLink = previousResolvingLink;
+    if ((this.game?.selectionAbortGeneration ?? 0) === selectionGeneration) {
+      this.settleUsageForChainLink?.(link);
+      this.cardsBeingResolved.delete(card);
+      this.currentResolvingLink = previousResolvingLink;
+    }
   }
 }
 
@@ -466,6 +480,10 @@ export function startPendingChainSelection(
         finishOnce(nextResult);
       },
       onCancel: null,
+      onAbort: () => {
+        this.cancelChain();
+        finishOnce(selectionAbortResult());
+      },
     });
   });
 }
@@ -483,6 +501,7 @@ export async function resumePendingChainSelection(
     };
   }
 
+  const selectionGeneration = this.game?.selectionAbortGeneration ?? 0;
   this.pendingChainSelection = null;
   const link = pending.link;
   const wasResolving = this.isResolving === true;
@@ -496,6 +515,7 @@ export async function resumePendingChainSelection(
     ) {
       const eventResult =
         await this.game.resumePendingEventSelection(selections);
+      if ((this.game?.selectionAbortGeneration ?? 0) !== selectionGeneration) return selectionAbortResult();
       if (eventResult?.needsSelection) {
         this.pendingChainSelection = {
           link,
@@ -525,6 +545,7 @@ export async function resumePendingChainSelection(
     }
 
     const linkResult = await this.resolveChainLink(link);
+    if ((this.game?.selectionAbortGeneration ?? 0) !== selectionGeneration) return selectionAbortResult();
     if (linkResult?.needsSelection) {
       this.pendingChainSelection = {
         link,
@@ -552,6 +573,7 @@ export async function resumePendingChainSelection(
               chainId: link.chainId,
             }),
           };
+    if ((this.game?.selectionAbortGeneration ?? 0) !== selectionGeneration) return selectionAbortResult();
     if (remainingResult && remainingResult.needsSelection) {
       return remainingResult;
     }
@@ -568,7 +590,7 @@ export async function resumePendingChainSelection(
     this.log("Chain resolution complete after selection");
     return remainingResult;
   } finally {
-    this.isResolving = wasResolving;
+    if ((this.game?.selectionAbortGeneration ?? 0) === selectionGeneration) this.isResolving = wasResolving;
   }
 }
 

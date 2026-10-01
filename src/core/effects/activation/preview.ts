@@ -229,6 +229,7 @@ export function canActivateSpellFromHandPreview(
   };
   const ctx: ActivationEffectContext = {
     source: card,
+    effect,
     player,
     opponent: this.game?.getOpponent?.(player),
     activationZone: "hand",
@@ -395,6 +396,7 @@ export function canActivateMonsterEffectPreview(
   };
   const ctx: ActivationEffectContext = {
     source: card,
+    effect,
     player,
     opponent: this.game.getOpponent(player),
     activationZone,
@@ -628,6 +630,7 @@ export function canActivateSpellTrapEffectPreview(
   };
   const ctx: ActivationEffectContext = {
     source: card,
+    effect,
     player,
     opponent: this.game?.getOpponent?.(player),
     activationZone,
@@ -750,6 +753,7 @@ export function canActivateFieldSpellEffectPreview(
   };
   const ctx: ActivationEffectContext = {
     source: card,
+    effect,
     player,
     opponent: this.game?.getOpponent?.(player),
     activationZone: "fieldSpell",

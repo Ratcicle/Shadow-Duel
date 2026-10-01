@@ -160,9 +160,11 @@ interface ActivationSelectionSessionInput {
   execute(selections: SelectionResult): MaybePromise<unknown>;
   onResult(result: unknown): MaybePromise<unknown>;
   onCancel?: (() => void) | null | undefined;
+  onAbort?: ((reason: string) => void) | undefined;
 }
 
 interface ActivationPipelineHost {
+  selectionAbortGeneration?: number;
   materialDuelStats?: MaterialDuelStats;
   player: GamePlayer;
   turnCounter: number;
@@ -657,10 +659,17 @@ export async function runActivationPipeline(
     return { success: true };
   };
 
+  const selectionGeneration = this.selectionAbortGeneration ?? 0;
+  const abortedResult = (): ActivationPipelineResult => ({
+    success: false, ok: false, needsSelection: false,
+    code: "SELECTION_ABORTED", reason: "Selection was aborted by system teardown.",
+  });
+
   const handleResult = async (
     result: unknown,
     fromSelection = false,
   ): Promise<ActivationPipelineResult> => {
+    if ((this.selectionAbortGeneration ?? 0) !== selectionGeneration) return abortedResult();
     const normalized = this.normalizeActivationResult(result);
     normalized.commitInfo =
       normalized.commitInfo || activationContext.commitInfo || commitInfo;
@@ -797,6 +806,7 @@ export async function runActivationPipeline(
           execute: (selections) => safeActivate(selections),
           onResult: (nextResult) => handleResult(nextResult, true),
           onCancel: allowCancel ? config.onCancel : null,
+          onAbort: config.onAbort,
         });
       } catch (err) {
         console.error("[Game] Failed to start target selection:", err);
@@ -1762,6 +1772,13 @@ export async function runActivationPipelineWait(
         await config.onFailure(result, ctx);
       }
       finishOnce(result);
+    },
+    onAbort: (reason) => {
+      finishOnce({
+        success: false, ok: false, needsSelection: false,
+        reason, code: "SELECTION_ABORTED",
+      });
+      config.onAbort?.(reason);
     },
     onCancel: () => {
       if (typeof config.onCancel === "function") {

@@ -1,3 +1,4 @@
+import { addEffectNegation } from "../../../effects/negation.js";
 import { canUseSimulatedEffectUsage, markSimulatedEffectUsage } from "../simStateUtils.js";
 import {
   asArray,
@@ -1039,8 +1040,7 @@ export function applySummonState(
       options?.sourceCard?.name || null;
   }
   if (action.negateEffects) {
-    card.effectsNegated = true;
-    card.effectsNegatedDuration = normalizeNegateEffectsDuration(action);
+    addEffectNegation(card, normalizeNegateEffectsDuration(action), options.sourceCard, options.effect);
   }
   if (action.setAtkToZeroAfterSummon) card.atk = 0;
   if (action.setDefToZeroAfterSummon) card.def = 0;

@@ -623,6 +623,7 @@ export async function applyActions(
   }
 
   const game = this.game;
+  const selectionGeneration = game?.selectionAbortGeneration ?? 0;
   const devLog = game?.devLog;
   const logDev =
     devLog &&
@@ -717,6 +718,15 @@ export async function applyActions(
           undefined,
           [action, ctx, filteredTargets, this],
         );
+
+        // An aborted decision ends this whole action sequence, including optional
+        // and nested actions. It is not a player's ordinary decline/no-op.
+        if ((game?.selectionAbortGeneration ?? 0) !== selectionGeneration) {
+          return createActionResult({
+            success: false, executed, skippedCount,
+            reason: "Selection was aborted by system teardown.",
+          });
+        }
 
         // INVARIANTE B1: Se handler retornou needsSelection, propagar para cima
         if (result && typeof result === "object" && result.needsSelection) {

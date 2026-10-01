@@ -762,6 +762,8 @@ export interface GameRuntimeState {
     | null;
   selectionState: SelectionSessionState;
   graveyardSelection: unknown;
+  /** Monotonic runtime-only invalidation of action continuations awaiting a selection. */
+  selectionAbortGeneration: number;
   selectionSessionCounter: number;
   lastSelectionSessionId: number;
   eventListeners: Record<

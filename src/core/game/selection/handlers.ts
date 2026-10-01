@@ -301,6 +301,7 @@ export function askPlayerToSelectCards(
       kind: "custom",
       selectionContract,
       resolve: resolve as SelectionSessionResolver,
+      onAbort: () => resolve([]),
       execute: (selections: SelectionResult) => {
         const chosenKeys = selections[requirement.id] || [];
         const chosen = chosenKeys

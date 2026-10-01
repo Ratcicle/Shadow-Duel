@@ -990,6 +990,7 @@ export interface TriggerOrderSelectionContract {
 export interface ChainSelectionSessionInput {
   kind?: SelectionKind | "trigger_order";
   selectionContract: ChainSelectionContract;
+  /** Decision actor, independent of the turn player and selected cards' owners. */
   owner?: ChainPlayer | null;
   player?: ChainPlayer | null;
   controller?: ChainPlayer | null;
@@ -1010,6 +1011,7 @@ export interface ChainSelectionSessionInput {
   rollback?(): void;
   onResult?(result: ChainOperationResult): unknown;
   onCancel?: (() => void) | null;
+  onAbort?: (reason: string) => void;
 }
 
 /** Descriptor is forwarded untouched to the canonical replay recorder. */
@@ -1050,6 +1052,8 @@ export interface ChainTriggerEntry {
   config?: ChainTriggerEntryConfig;
   pipeline?: ChainTriggerEntryConfig;
   summary?: string | null;
+  /** Complete captured event entries at their legal activation opportunity. */
+  materialize?: () => ChainTriggerEntry | null;
 }
 
 export type ChainTriggerCompletion = () => ChainMaybePromise<unknown>;
@@ -1400,6 +1404,7 @@ export interface ChainMoveCardOptions {
 
 /** Minimal Game surface consumed by Chain modules. */
 export interface ChainGamePort {
+  readonly selectionAbortGeneration?: number;
   materialDuelStats?: MaterialDuelStats;
   player: ChainPlayer;
   bot: ChainPlayer;

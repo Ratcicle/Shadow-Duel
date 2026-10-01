@@ -245,14 +245,14 @@ test("replay canônico headless termina com o mesmo hash", async () => {
   assert.equal(replay.format, "shadow-duel-canonical-replay");
   assert.equal(replay.schemaVersion, 2);
   assert.equal(replay.cardDatabaseSignature, getCardDatabaseSignature());
-  // Golden state includes presence counters and LP-gain history under Dragon rules v5.
+  // Combined rules hash presence counters, LP-gain history and independent negation contributions.
   assert.deepEqual(
     replay.commands.map((command: { stateHash: string }) => command.stateHash),
-    ["c2170f78", "f1c407c8"],
+    ["a897fa58", "297e0fe8"],
   );
-  assert.equal(replay.result.finalStateHash, "f1c407c8");
-  assert.equal(hashCanonicalValue(replay), "728ec6f1");
-  assert.equal(JSON.stringify(replay).length, 10083);
+  assert.equal(replay.result.finalStateHash, "297e0fe8");
+  assert.equal(hashCanonicalValue(replay), "082683ba");
+  assert.equal(JSON.stringify(replay).length, 10491);
 
   const result = await replayCanonicalDuel(replay);
   assert.equal(result.ok, true);

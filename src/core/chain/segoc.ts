@@ -554,6 +554,11 @@ export async function collectTriggerCandidates(
         });
         continue;
       }
+      if (entry.materialize) {
+        const materialized = entry.materialize();
+        if (!materialized) continue;
+        candidate.config = materialized.config || materialized.pipeline || materialized;
+      }
       candidate.eligibilityStatus = "eligible";
       const segocGroup = candidateGroup(candidate, opportunity.turnPlayer);
       candidate.segocGroup = segocGroup;

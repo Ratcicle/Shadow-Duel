@@ -39,7 +39,10 @@ function replay(overrides: MutableReplay = {}): MutableReplay {
 }
 
 test("engine version is required and rejects recordings with previous semantics", () => {
-  assert.equal(CANONICAL_REPLAY_ENGINE_VERSION, "dragon-rules-v6");
+  assert.equal(CANONICAL_REPLAY_ENGINE_VERSION, "engine-rules-v7");
+  assert.throws(() => validateCanonicalReplay(replay({ engineVersion: "engine-rules-v6" })), /engineVersion/);
+  assert.throws(() => validateCanonicalReplay(replay({ engineVersion: "dragon-rules-v6" })), /engineVersion/);
+  assert.throws(() => validateCanonicalReplay(replay({ engineVersion: "engine-rules-v4" })), /engineVersion/);
   assert.throws(() => validateCanonicalReplay(replay({ engineVersion: "dragon-rules-v5" })), /engineVersion/);
   assert.throws(() => validateCanonicalReplay(replay({ engineVersion: "dragon-rules-v4" })), /engineVersion/);
   assert.throws(() => validateCanonicalReplay(replay({ engineVersion: "dragon-rules-v3" })), /engineVersion/);
@@ -453,4 +456,17 @@ test("rejeita versões incompatíveis antes de assinatura ou conteúdo", () => {
     }),
     /missing setup, commands, or decisions/,
   );
+});
+
+test("phase-intent mode accepts canonical next/skip and preserves absent-mode records", () => {
+  const withPayload = (payload: Record<string, unknown>) => replay({ commands: [
+    { sequence: 1, type: "phase_intent", actorId: "player", payload },
+  ] });
+  for (const mode of ["next", "skip"]) {
+    assert.doesNotThrow(() => validateCanonicalReplay(withPayload({ mode, fromPhase: "main2", toPhase: "end" })));
+  }
+  assert.doesNotThrow(() => validateCanonicalReplay(withPayload({ fromPhase: "main2", toPhase: "end" })));
+  for (const mode of [null, false, 1, "advance", {}]) {
+    assert.throws(() => validateCanonicalReplay(withPayload({ mode, fromPhase: "main2", toPhase: "end" })), /payload.mode/);
+  }
 });

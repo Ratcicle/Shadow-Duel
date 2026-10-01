@@ -100,6 +100,7 @@ export interface ActionRuntimeCard {
   effects?: readonly EffectDefinition[];
   effectsNegated?: boolean | undefined;
   effectsNegatedDuration?: (string | number | null) | undefined;
+  effectsNegationContributions?: import("./cards.js").EffectNegationContribution[] | undefined;
   ascensionMaterials?: ActionRuntimeCard[] | AscensionMaterialRecord[];
   declaredValues?:
     | CardDeclaredValueMap
@@ -363,6 +364,7 @@ export interface ActionNegationContext {
  * class.
  */
 export interface ActionRuntimeGamePort {
+  readonly selectionAbortGeneration?: number;
   requestDecision?: DecisionBrokerPort["requestDecision"];
   player: ActionRuntimePlayer;
   bot: ActionRuntimePlayer;
@@ -514,6 +516,7 @@ export interface ActionRuntimeGamePort {
 }
 
 interface ActionContextState extends ActionNegationContext {
+  timing?: string | undefined;
   autoSelectTargets?: boolean | undefined;
   autoSelectSingleTarget?: boolean | undefined;
   resolvedTargets?: ResolvedTargetMap | null | undefined;

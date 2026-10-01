@@ -42,7 +42,7 @@ export function snapshotCardState(
   card: GameCard | null | undefined,
 ): CardStateSnapshot | null {
   if (!card) return null;
-  const snapshot = { ...card };
+  const snapshot = { ...card, effectsNegationContributions: (card.effectsNegationContributions || []).map(entry => ({ ...entry })) };
   // Capture the initial epoch too, so the first rolled-back departure cannot reset soft OPT.
   snapshot.oncePerTurnResetVersion = card.oncePerTurnResetVersion || 0;
   snapshot.fieldPresenceState = card.fieldPresenceState ? { ...card.fieldPresenceState } : null;
@@ -221,6 +221,10 @@ export function restoreZoneSnapshot(
         }
         if (key === "equips" && Array.isArray(state.equips)) {
           card.equips = [...state.equips];
+          return;
+        }
+        if (key === "effectsNegationContributions") {
+          card.effectsNegationContributions = (state.effectsNegationContributions || []).map(entry => ({ ...entry }));
           return;
         }
         Reflect.set(card, key, Reflect.get(state, key));

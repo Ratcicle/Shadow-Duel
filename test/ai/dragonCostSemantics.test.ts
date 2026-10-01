@@ -78,8 +78,10 @@ for (const planner of ["common", "dragon"] as const) {
     test(`${planner} planner gives each ${effectId} copy one use per presence`, () => {
       const first = make(id), second = { ...make(id), instanceId: "second-copy" };
       const target = { ...make(252), owner: "player", controller: "player", position: "attack" as const };
+      const freshTarget = { ...target, instanceId: "second-target" };
       const state = simulationState({ turn: "bot", phase: "main1", turnCounter: 4, _isPerspectiveState: true,
-        bot: { field: [first, second], hand: [make(254), make(251), make(256)] }, player: { field: [target] } });
+        bot: { field: [first, second], hand: [make(254), make(251), make(256)] },
+        player: { field: id === 258 ? [target, freshTarget] : [target] } });
       const effect = required(first.effects?.find(entry => entry.id === effectId));
       simulate(state, { type: "monsterEffect", fieldIndex: 0, cardId: id, effectId });
       assert.equal(canUseSimulatedEffectUsage(state, effect, first), false);
@@ -87,8 +89,16 @@ for (const planner of ["common", "dragon"] as const) {
       const position = target.position, remaining = state.bot.hand.length;
       simulate(state, { type: "monsterEffect", fieldIndex: 0, cardId: id, effectId });
       assert.equal(target.position, position); assert.equal(state.bot.hand.length, remaining);
+      if (id === 258) {
+        assert.equal(target.effectsNegated, true);
+        assert.notEqual(freshTarget.effectsNegated, true, "a legal target remains, so usage alone blocks the first copy");
+      }
       simulate(state, { type: "monsterEffect", fieldIndex: 1, cardId: id, effectId });
       assert.equal(canUseSimulatedEffectUsage(state, effect, second), false);
+      if (id === 258) {
+        assert.equal(freshTarget.effectsNegated, true, "the second copy negates its own legal target");
+        assert.equal(state.bot.hand.length, remaining - 1);
+      }
       state.turnCounter++;
       assert.equal(canUseSimulatedEffectUsage(state, effect, first), true);
       moveCardToZone(state.bot, first, "graveyard", state.bot, { state });

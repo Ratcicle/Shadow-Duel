@@ -18,6 +18,7 @@ import {
 import type { FullGameHost, GamePlayer } from "../../contracts/gameRuntime.js";
 import type { GamePhase } from "../../contracts/game.js";
 import type { ActionGuardResult } from "../actions/guard.js";
+import type { PlayerId } from "../../contracts/primitives.js";
 
 interface AiMoveCapability {
   makeMove(game: TransitionHost): unknown;
@@ -27,9 +28,10 @@ interface PhaseTimingResult {
   phaseTransitionAllowed?: boolean;
   phaseTransitionInterrupted?: boolean;
   needsSelection?: boolean;
+  deferred?: boolean;
 }
 
-type TransitionHost = Pick<
+export type PhaseTransitionHost = Pick<
   FullGameHost,
   | "player"
   | "bot"
@@ -44,19 +46,23 @@ type TransitionHost = Pick<
   | "eventResolutionDepth"
   | "pendingTributeSummonSelection"
   | "chainSystem"
-  | "ui"
-  | "aiActionDelayMs"
 > & {
   pendingTributeSummonSelection: { active?: boolean } | null;
   isDisposed?(): boolean;
   getNextPhase?(phase: GamePhase): GamePhase | null;
   checkAndOfferTraps(
-    event: "phase_end" | "phase_start",
+    event: string,
     context: unknown,
   ): Promise<PhaseTimingResult | null>;
   clearAttackResolutionIndicators(): void;
   clearAttackReadyIndicators(): void;
   updateBoard(): unknown;
+  processDelayedActions(phase: string, activePlayer: PlayerId): Promise<void>;
+  emit(event: string, payload: unknown): Promise<unknown>;
+};
+
+type TransitionHost = PhaseTransitionHost &
+  Pick<FullGameHost, "ui" | "aiActionDelayMs"> & {
   guardActionStart(
     options: { actor: GamePlayer; kind: "phase_change" },
     logToRenderer?: boolean,
@@ -118,7 +124,7 @@ function scheduleAiMoveAfterPaint(game: TransitionHost, actor: GamePlayer) {
   setTimeout(runMove, 0);
 }
 
-function hasPendingPhaseInterruption(game: TransitionHost) {
+function hasPendingPhaseInterruption(game: PhaseTransitionHost) {
   const selectionState = game.selectionState || "idle";
   return (
     !!game.targetSelection ||
@@ -133,7 +139,7 @@ function hasPendingPhaseInterruption(game: TransitionHost) {
   );
 }
 
-function setBattleOpenStateForPhase(game: TransitionHost, phase: GamePhase) {
+function setBattleOpenStateForPhase(game: PhaseTransitionHost, phase: GamePhase) {
   if (phase === "battle") {
     game.battleStep = "start";
     return;
@@ -141,11 +147,12 @@ function setBattleOpenStateForPhase(game: TransitionHost, phase: GamePhase) {
   game.battleStep = null;
 }
 
-async function leaveCurrentPhase(
-  game: TransitionHost,
+async function negotiatePhaseExit(
+  game: PhaseTransitionHost,
   options: { nextPhase?: GamePhase | null } = {},
 ): Promise<PhaseLeaveResult> {
   const currentPhase = game.phase;
+  const currentTurn = game.turn;
   const previousBattleStep = game.battleStep ?? null;
   const nextPhase =
     options.nextPhase ??
@@ -168,12 +175,16 @@ async function leaveCurrentPhase(
     return { ok: false, reason: "duel_stopped" };
   }
 
-  if (game.phase !== currentPhase) {
+  if (game.phase !== currentPhase || game.turn !== currentTurn) {
     return {
       ok: false,
       reason: "phase_changed_during_phase_end",
       currentPhase: game.phase,
     };
+  }
+
+  if (phaseWorkIsPending(game, timingResult)) {
+    return { ok: false, reason: "phase_window_pending", currentPhase };
   }
 
   if (
@@ -186,16 +197,10 @@ async function leaveCurrentPhase(
     }
     return {
       ok: false,
-      reason: timingResult.needsSelection
-        ? "phase_window_pending"
-        : "phase_transition_interrupted",
+      reason: "phase_transition_interrupted",
       timingResult,
       currentPhase,
     };
-  }
-
-  if (hasPendingPhaseInterruption(game)) {
-    return { ok: false, reason: "phase_window_pending" };
   }
 
   if (currentPhase === "battle") {
@@ -206,54 +211,115 @@ async function leaveCurrentPhase(
   return { ok: true, currentPhase, nextPhase };
 }
 
-async function enterPhase(
-  game: TransitionHost,
-  nextPhase: GamePhase | null,
-  previousPhase: GamePhase,
-) {
-  if (!nextPhase) return { ok: true };
+/** Returned pending work matters even when its selection has not been installed yet. */
+export function phaseWorkIsPending(
+  game: PhaseTransitionHost,
+  result?: unknown,
+): boolean {
+  return (
+    hasPendingPhaseInterruption(game) ||
+    (typeof result === "object" && result !== null &&
+      (Reflect.get(result, "needsSelection") === true ||
+        Reflect.get(result, "deferred") === true))
+  );
+}
 
+/** All phase exits share timing, live-work checks and Battle Step cleanup. */
+export async function leaveCurrentPhase(
+  game: PhaseTransitionHost,
+  options: { nextPhase?: GamePhase | null; renewAfterChain?: boolean } = {},
+): Promise<PhaseLeaveResult> {
+  while (true) {
+    if (phaseWorkIsPending(game)) {
+      return { ok: false, reason: "phase_window_pending" };
+    }
+    const result = await negotiatePhaseExit(game, options);
+    if (
+      result.ok ||
+      options.renewAfterChain !== true ||
+      result.reason !== "phase_transition_interrupted" ||
+      result.timingResult?.phaseTransitionInterrupted !== true
+    ) {
+      return result;
+    }
+    // Automatic Draw/Standby progression renews only a settled Chain's intent.
+    // Human and AI action commands instead return to their ordinary open state.
+  }
+}
+
+/** Phase-specific entry work belongs here so shortcuts cannot omit its events. */
+export async function enterPhase(
+  game: PhaseTransitionHost,
+  nextPhase: GamePhase,
+  previousPhase: GamePhase | null,
+) {
+  const currentTurn = game.turn;
+  const player = currentTurn === "player" ? game.player : game.bot;
+  const opponent = player === game.player ? game.bot : game.player;
   game.phase = nextPhase;
   setBattleOpenStateForPhase(game, nextPhase);
   game.updateBoard();
 
-  await game.checkAndOfferTraps("phase_start", {
+  const result = await game.checkAndOfferTraps("phase_start", {
     currentPhase: nextPhase,
     previousPhase,
     fromPhase: previousPhase,
     toPhase: nextPhase,
+    player,
     battleStep: game.battleStep ?? null,
     damageStepTiming: null,
   });
 
-  if (game.gameOver || game.isDisposed?.()) {
-    return { ok: false, reason: "duel_stopped" };
-  }
+  const stopped = (outcome?: unknown): PhaseLeaveFailure | null => {
+    if (game.gameOver || game.isDisposed?.()) {
+      return { ok: false, reason: "duel_stopped" };
+    }
+    if (game.phase !== nextPhase || game.turn !== currentTurn) {
+      return {
+        ok: false,
+        reason: "phase_changed_during_phase_start",
+        currentPhase: game.phase,
+      };
+    }
+    if (phaseWorkIsPending(game, outcome)) {
+      return { ok: false, reason: "phase_window_pending" };
+    }
+    return null;
+  };
+  const startFailure = stopped(result);
+  if (startFailure) return startFailure;
 
-  if (game.phase !== nextPhase) {
-    return {
-      ok: false,
-      reason: "phase_changed_during_phase_start",
-      currentPhase: game.phase,
-    };
+  if (nextPhase === "standby") {
+    await game.processDelayedActions("standby", currentTurn);
+    const delayedFailure = stopped();
+    if (delayedFailure) return delayedFailure;
+    game.updateBoard();
   }
-
-  if (hasPendingPhaseInterruption(game)) {
-    return { ok: false, reason: "phase_window_pending" };
+  if (nextPhase === "standby" || nextPhase === "end") {
+    // The phase has already changed: renewed exit intent cannot repeat entry
+    // triggers, including when their human selection interrupted progression.
+    const eventResult = await game.emit(
+      nextPhase === "end" ? "end_phase" : "standby_phase",
+      { player, opponent },
+    );
+    const eventFailure = stopped(eventResult);
+    if (eventFailure) return eventFailure;
   }
 
   if (nextPhase === "battle" && game.battleStep === "start") {
     game.battleStep = "battle";
   }
-
-  return { ok: true };
+  return { ok: true as const };
 }
 
 /**
  * Advances to the next phase in the turn order.
  * Phase order: draw → standby → main1 → battle → main2 → end
  */
-export async function nextPhase(this: TransitionHost, options: { retryOnBlocked?: boolean } = {}) {
+export async function nextPhase(
+  this: TransitionHost,
+  options: { retryOnBlocked?: boolean } = {},
+) {
   if (this.gameOver || this.isDisposed?.()) return;
   const actor = this.turn === "player" ? this.player : this.bot;
   const guard = this.guardActionStart(
@@ -278,7 +344,8 @@ export async function nextPhase(this: TransitionHost, options: { retryOnBlocked?
     return guard;
   }
 
-  const next = this.getNextPhase?.(this.phase) ?? null;
+  const next = this.getNextPhase?.(this.phase) ?? getNextPhase(this.phase, this);
+  if (!next) return await this.endTurn();
   const leaveResult = await leaveCurrentPhase(this, { nextPhase: next });
   if (!leaveResult.ok) {
     if (leaveResult.reason === "phase_transition_interrupted" && isAI(actor)) {
@@ -287,9 +354,6 @@ export async function nextPhase(this: TransitionHost, options: { retryOnBlocked?
     return leaveResult;
   }
 
-  if (!next) {
-    return await this.endTurn();
-  }
   const enterResult = await enterPhase(this, next, leaveResult.currentPhase);
   if (!enterResult.ok) return enterResult;
 
@@ -318,7 +382,10 @@ export async function skipToPhase(
   const currentIdx = PHASE_ORDER.indexOf(this.phase);
   const targetIdx = PHASE_ORDER.indexOf(finalTargetPhase as GamePhase);
   if (currentIdx === -1 || targetIdx === -1) return;
-  if (targetIdx <= currentIdx) return;
+  if (targetIdx < currentIdx) return;
+  if (targetIdx === currentIdx) {
+    return finalTargetPhase === "end" ? await this.endTurn() : undefined;
+  }
 
   const fromPhase = this.phase;
 

@@ -395,6 +395,7 @@ export async function applyPolymerizationFusion(
       kind: "fusion_select",
       selectionContract,
       onCancel: () => resolve(null),
+      onAbort: () => resolve(null),
       execute: (selections) => {
         const choice = selections.fusion_choice?.[0];
         resolve(
@@ -469,6 +470,7 @@ export async function applyPolymerizationFusion(
             kind: "fusion_materials",
             selectionContract,
             onCancel: () => resolve(null),
+            onAbort: () => resolve(null),
             execute: (selections) => {
               const keys = selections.materials || [];
               const mats = keys

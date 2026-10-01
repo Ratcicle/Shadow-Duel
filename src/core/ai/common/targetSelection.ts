@@ -1,3 +1,4 @@
+import { requiresUnnegatedTarget } from "../../effects/negation.js";
 import {
   getBattleStatForAttackTarget,
   getEffectiveAtk,
@@ -182,6 +183,7 @@ interface RecursionPreference {
 }
 
 interface SelectSimulatedTargetsInput {
+  effect?: import("../../contracts/effects.js").EffectDefinition | undefined;
   targets: readonly AiTargetFilter[] | null | undefined;
   actions?: readonly (CardAction & ActionIntentView)[] | null | undefined;
   state: Pick<AiStateShape, "bot" | "player" | "_simUnsupportedActions">;
@@ -661,6 +663,7 @@ export function estimateTemporaryCombatDebuffTargetValue(
 }
 
 export function selectSimulatedTargets({
+  effect,
   targets,
   actions,
   state,
@@ -760,6 +763,8 @@ export function selectSimulatedTargets({
 
   targets.forEach((target) => {
     if (!target || !target.id) return;
+    const requireUnnegated = requiresUnnegatedTarget(effect, target);
+    const negationEligible = (card: SimulatedCardState) => !requireUnnegated || card.cardKind !== "monster" || card.effectsNegated !== true;
     if (target.targetFromContext) {
       const contextValue =
         (options as Partial<Record<string, unknown>> | null)?.[target.targetFromContext] ||
@@ -783,7 +788,7 @@ export function selectSimulatedTargets({
           owner === self ? "self" : owner === opponent ? "opponent" : null;
         const zone = owner ? findCardZone(owner, card) : null;
         return (
-          matchesTargetFilters(card, target, sourceCard, ownerRole) &&
+          negationEligible(card) && matchesTargetFilters(card, target, sourceCard, ownerRole) &&
           (requiredZones.length === 0 ||
             requiredZones.includes("any") ||
             requiredZones.includes(zone!))
@@ -865,7 +870,7 @@ export function selectSimulatedTargets({
     });
     const filtered = candidates
       .filter(({ card, role }) => {
-        if (!matchesTargetFilters(card, effectiveTarget, sourceCard, role)) {
+        if (!negationEligible(card) || !matchesTargetFilters(card, effectiveTarget, sourceCard, role)) {
           return false;
         }
         if (

@@ -68,6 +68,7 @@ export interface EventCard {
   lastSummonProcedure?: string | null;
   effectsNegated?: boolean | undefined;
   effectsNegatedDuration?: (string | number | null) | undefined;
+  effectsNegationContributions?: import("./cards.js").EffectNegationContribution[] | undefined;
 }
 
 export interface EventPlayer {
@@ -182,6 +183,8 @@ export interface AfterSummonEventPayload extends EventPayloadBase {
   summonOrigin?: SummonOrigin | null;
   tributes?: EventCard[];
   position?: BattlePosition;
+  /** Internal collection hint; activation availability is checked at SEGOC. */
+  deferActivationChecks?: boolean;
 }
 
 export interface AttackDeclaredEventPayload extends EventPayloadBase {

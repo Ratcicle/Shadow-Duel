@@ -602,6 +602,7 @@ export interface PublicFieldCardState {
     battlePositionLocked: boolean | null;
     effectsNegated: boolean | null;
     effectsNegatedDuration: string | number | null;
+    effectsNegationContributions: import("./cards.js").EffectNegationContribution[] | null;
     canAttackAll: boolean | null;
   };
 }
@@ -630,6 +631,7 @@ export interface PublicSpellTrapCardState {
   subtype: GameCard["subtype"];
   effectsNegated: boolean | null;
   effectsNegatedDuration: string | number | null;
+  effectsNegationContributions: import("./cards.js").EffectNegationContribution[] | null;
 }
 
 export interface PublicGraveyardCardState {
@@ -683,6 +685,7 @@ export interface PublicPlayerState {
     faceDown: boolean;
     effectsNegated: boolean;
     effectsNegatedDuration: string | number | null;
+    effectsNegationContributions: import("./cards.js").EffectNegationContribution[] | null;
   } | null;
   graveyardCount: number;
   graveyard: PublicGraveyardCardState[];

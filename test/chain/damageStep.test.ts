@@ -619,6 +619,8 @@ test("reset limpa Damage Step e seleção sem reutilizar ID", () => {
   game.targetSelection = { active: true };
   game.selectionState = "selecting";
 
+  let selectionTeardowns = 0;
+  Object.assign(game, { forceClearTargetSelection() { selectionTeardowns++; } });
   resetDuelState.call(
     unsafeFixture<ThisParameterType<typeof resetDuelState>>(
       game,
@@ -636,6 +638,7 @@ test("reset limpa Damage Step e seleção sem reutilizar ID", () => {
     defenderOwner: bot,
   });
 
+  assert.equal(selectionTeardowns, 1, "reset delegates selection teardown; real sessions are covered by selectionSession tests");
   assert.equal(first.status, "cancelled");
   assert.equal(game.targetSelection, null);
   assert.equal(game.selectionState, "idle");
