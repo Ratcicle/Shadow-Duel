@@ -990,6 +990,7 @@ export interface TriggerOrderSelectionContract {
 export interface ChainSelectionSessionInput {
   kind?: SelectionKind | "trigger_order";
   selectionContract: ChainSelectionContract;
+  /** Decision actor, independent of the turn player and selected cards' owners. */
   owner?: ChainPlayer | null;
   player?: ChainPlayer | null;
   controller?: ChainPlayer | null;

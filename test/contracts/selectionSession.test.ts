@@ -6,7 +6,81 @@ import Game from "../../src/core/Game.js";
 import type {
   SelectionCardReference,
   SelectionResult,
+  RawSelectionUIConfig,
 } from "../../src/core/contracts/selection.js";
+
+for (const ui of [
+  { allowCancel: false },
+  { allowCancel: true, preventCancel: true },
+] satisfies RawSelectionUIConfig[]) {
+  test(`mandatory cancellation is inert for ${JSON.stringify(ui)}`, async t => {
+    const game = new Game({ captureReplay: false, disableChains: true });
+    t.after(() => game.dispose());
+    const callbacks: string[] = [];
+    game.ui.showTargetSelection = () => ({ close: () => { callbacks.push("close"); } });
+    game.startTargetSelectionSession({
+      kind: "choice", owner: game.player,
+      selectionContract: { kind: "choice", ui: { ...ui, useFieldTargeting: false },
+        requirements: [{ id: "chosen", min: 1, max: 1, zone: "choice",
+          candidates: [{ key: "yes", zone: "choice" }] }] },
+      onCancel: () => { callbacks.push("cancel"); },
+      resolve: () => { callbacks.push("resolve"); },
+      execute: () => { callbacks.push("execute"); return true; },
+    });
+    const session = required(game.targetSelection);
+    const key = required(required(session.requirements[0]).candidates[0]).key;
+    session.selections.chosen = [key];
+    game.cancelTargetSelection();
+    assert.equal(game.targetSelection, session);
+    assert.equal(game.selectionState, "selecting");
+    assert.deepEqual(session.selections, { chosen: [key] });
+    assert.deepEqual(callbacks, []);
+    await game.finishTargetSelection();
+    assert.equal(game.targetSelection, null);
+    assert.deepEqual(callbacks, ["close", "execute"]);
+  });
+}
+
+test("optional resolution cancellation still records an empty choice", async t => {
+  const game = new Game({ captureReplay: false, disableChains: true });
+  t.after(() => game.dispose());
+  const decisions: unknown[] = [];
+  game.on("decision_made", decision => { decisions.push(decision.value); });
+  let selected: SelectionResult | null = null;
+  game.startTargetSelectionSession({
+    owner: game.player, allowCancel: true, allowEmpty: true, cancelAsEmptySelection: true,
+    selectionContract: { kind: "choice", requirements: [{ id: "chosen", min: 0, max: 1,
+      zone: "choice", candidates: [{ key: "yes", zone: "choice" }] }] },
+    execute: selections => { selected = selections; return true; },
+    onCancel: () => assert.fail("Optional resolution must complete with an empty choice"),
+  });
+  game.cancelTargetSelection();
+  assert.equal(game.targetSelection, null);
+  assert.deepEqual(selected, { chosen: [] });
+  assert.deepEqual(decisions, [{ selections: { chosen: [] } }]);
+});
+
+test("forced cleanup can clear a mandatory field selection without cancelling its effect", t => {
+  const game = new Game({ captureReplay: false, disableChains: true });
+  t.after(() => game.dispose());
+  const card = new Card({ name: "Field choice", cardKind: "monster" }, "player");
+  let controlsHidden = 0;
+  game.ui.hideFieldTargetingControls = () => { controlsHidden++; };
+  game.startTargetSelectionSession({
+    owner: game.player, allowCancel: false, useFieldTargeting: true,
+    selectionContract: { requirements: [{ id: "chosen", min: 1, max: 1, zone: "field",
+      candidates: [{ cardRef: card, zone: "field", controller: "player" }] }] },
+    onCancel: () => assert.fail("Mandatory cleanup must not cancel the effect"),
+  });
+  const session = required(game.targetSelection);
+  game.cancelTargetSelection();
+  assert.equal(game.targetSelection, session);
+  assert.equal(controlsHidden, 0);
+  game.forceClearTargetSelection();
+  assert.equal(game.targetSelection, null);
+  assert.equal(game.selectionState, "idle");
+  assert.equal(controlsHidden, 1);
+});
 
 test("mandatory selection cannot finish with empty, repeated, or excessive choices", async t => {
   const game = new Game({ captureReplay: false, disableChains: true });

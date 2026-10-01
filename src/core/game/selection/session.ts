@@ -621,7 +621,7 @@ export async function finishTargetSelection(
  */
 export function cancelTargetSelection(this: SelectionSessionHost): void {
   if (!this.targetSelection) return;
-  if (this.targetSelection.preventCancel) {
+  if (this.targetSelection.allowCancel === false || this.targetSelection.preventCancel) {
     return;
   }
   const selection = this.targetSelection;

@@ -309,6 +309,7 @@ export async function getPlayerSelectionsForDefinitions(
   if (!startTargetSelectionSession) return null;
   return new Promise<ChainSelectionMap | null>((resolve) => {
     startTargetSelectionSession({
+      owner: player,
       selectionContract: contract,
       message:
         contract.message ||
