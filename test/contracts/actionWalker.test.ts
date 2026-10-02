@@ -14,6 +14,46 @@ function actionAt(result: ReturnType<typeof walkEffectActions>, path: string) {
   return visit;
 }
 
+test("activation case costs and nested actions retain independent target and result scopes", () => {
+  const result = walkEffectActions({
+    targets: [{ id: "shared" }],
+    activationCases: [
+      {
+        id: "first",
+        targets: [{ id: "discard", intent: "cost" }],
+        activationCosts: [{ type: "move", targetRef: "discard", resultRef: "paid" }],
+        actions: [{ type: "conditional_actions", actions: [{ type: "destroy", targetRef: "paid" }] }],
+      },
+      { id: "second", actions: [{ type: "draw", amount: 1 }] },
+    ],
+  }, { path: ["effects", 0] });
+  assert.deepEqual(result.diagnostics, []);
+  const cost = actionAt(result, "effects[0].activationCases[0].activationCosts[0]");
+  assert.equal(cost.stage, "cost");
+  assert.ok(cost.targetIds.has("discard"));
+  assert.ok(cost.targetIds.has("shared"));
+  const nested = actionAt(result, "effects[0].activationCases[0].actions[0].actions[0]");
+  assert.equal(nested.stage, "resolution");
+  assert.ok(nested.availableRefs.has("paid"));
+  const other = actionAt(result, "effects[0].activationCases[1].actions[0]");
+  assert.equal(other.targetIds.has("discard"), false);
+  assert.equal(other.availableRefs.has("paid"), false);
+  assert.equal(result.refsAfter.has("paid"), false);
+});
+
+test("activation case costs cannot reference results produced later by parent resolution", () => {
+  const result = walkEffectActions({
+    activationCosts: [{ type: "move", targetRef: "self", resultRef: "common_cost" }],
+    actions: [{ type: "draw", amount: 1, resultRef: "common_resolution" }],
+    activationCases: [{ id: "branch", activationCosts: [{ type: "pay_lp", amount: 100 }], actions: [{ type: "draw", amount: 1 }] }],
+  });
+  const cost = actionAt(result, "activationCases[0].activationCosts[0]");
+  assert.ok(cost.availableRefs.has("common_cost"));
+  assert.equal(cost.availableRefs.has("common_resolution"), false);
+  const resolution = actionAt(result, "activationCases[0].actions[0]");
+  assert.ok(resolution.availableRefs.has("common_resolution"));
+});
+
 test("walker preserves root order, stages, flows, paths and lexical scopes", () => {
   const effect = {
     targets: [
@@ -247,6 +287,6 @@ test("walker inventories every declarative action in the live database", () => {
   }
 
   assert.deepEqual(diagnostics, []);
-  assert.equal(actionCount, 590); // Includes declarative activation costs and four added Dragon actions.
+  assert.equal(actionCount, 586); // Activation cases expose their costs and actions without choice wrappers.
   assert.equal(types.size, 97);
 });

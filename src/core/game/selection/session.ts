@@ -160,7 +160,7 @@ function serializeSelectionCandidate(
   candidate: SelectionCandidate,
 ): SerializedSelectionCandidateIdentity {
   const card = candidate.cardRef || candidate.card || null;
-  const duelCardId = card ? (game.ensureDuelCardId?.(card) ?? null) : null;
+  const duelCardId = card && candidate.zone !== "choice" ? (game.ensureDuelCardId?.(card) ?? null) : null;
   return {
     duelCardId,
     cardId: card?.id ?? null,
@@ -193,9 +193,10 @@ function deserializeSelectionValue(
   game: SelectionSessionHost,
   selection: ActiveSelectionSession,
   value: unknown = {},
-): SelectionResult {
+): SelectionResult | null {
   const output: SelectionResult = {};
   const valueObject = isObject(value) ? value : {};
+  if (readValue(valueObject, "pass") === true) return null;
   const recordedSelections = readValue(valueObject, "selections");
   for (const requirement of selection.requirements || []) {
     const recorded = isObject(recordedSelections)
@@ -365,6 +366,13 @@ export function startTargetSelectionSession(
         deserializeSelectionValue(this, replaySelection, value),
     }).then(async (selections) => {
       if (this.targetSelection !== replaySelection) return;
+      if (selections === null) {
+        if (replaySelection.allowCancel === false || replaySelection.preventCancel) {
+          throw new Error("Replay cannot cancel a mandatory selection.");
+        }
+        this.cancelTargetSelection();
+        return;
+      }
       this.targetSelection.selections = selections || {};
       this.targetSelection.currentRequirement =
         this.targetSelection.requirements.length;
@@ -652,6 +660,15 @@ export function cancelTargetSelection(this: SelectionSessionHost): void {
     selection.selections = Object.fromEntries(selection.requirements.map(requirement => [requirement.id, []]));
     void this.finishTargetSelection();
     return;
+  }
+  // Only callers retaining the pending command need a refusal for playback.
+  if (selection.replayCommandHandledByCaller === true && this.decisionBroker?.mode !== "replay") {
+    this.recordDecision?.({
+      kind: getSelectionDecisionKind(selection),
+      actor: getSelectionActor(this, selection),
+      candidates: selection.requirements.flatMap(requirement => requirement.candidates),
+      requireCandidate: false,
+    }, null);
   }
   this.targetSelection = null;
   this.setSelectionState("idle");

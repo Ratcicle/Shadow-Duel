@@ -104,21 +104,6 @@ type LegacyProtectedCard = SimulatedCardState & {
   };
   hasChangedPosition?: boolean;
 };
-interface LegacyReplacementEffect extends SimulatedReplacementEffect {
-  _sim: boolean;
-  uniqueKey: string;
-  playerId: string;
-  sourceName: string | null;
-  duration: string;
-  targetRef: string | null;
-  targetInstanceIds: Array<string | number | null>;
-  uses: number | null;
-  usesPerTarget: boolean | null;
-  replacementEffect: object | null;
-}
-type LegacyReplacementState = {
-  _simReplacementEffects?: LegacyReplacementEffect[];
-} & SimulatedRuntimeState;
 
 function normalizeNegateEffectsDuration(
   action: NegateDurationShape = {},
@@ -716,37 +701,18 @@ export function applyRegisterReplacementEffect(
     opponent,
     applySimulatedActions,
   } = ctx;
-  if (!Array.isArray((state as LegacyReplacementState)._simReplacementEffects)) {
-    (state as LegacyReplacementState)._simReplacementEffects = [];
-  }
-  const targetIds = targets.map(getCardInstanceId).filter((id) => id !== null);
-  const uniqueKey =
-    action.uniqueKey ||
-    `${options.sourceCard?.name || "source"}:${action.replacementEffect?.type || "replacement"}`;
-  (state as LegacyReplacementState)._simReplacementEffects =
-    (state as LegacyReplacementState)._simReplacementEffects!.filter(
-    (entry) =>
-      entry.uniqueKey !== uniqueKey || entry.playerId !== self.id,
-  );
-  (state as LegacyReplacementState)._simReplacementEffects!.push({
-    _sim: true,
-    uniqueKey,
-    playerId: self.id,
-    sourceName: action.sourceName || options.sourceCard?.name || null,
-    duration: action.duration || "temporary",
-    targetRef: action.targetRef || null,
-    targetInstanceIds: targetIds,
-    uses: action.uses || null,
-    usesPerTarget: action.usesPerTarget || null,
+  state._simReplacementEffects ??= [];
+  const uniqueKey = action.uniqueKey;
+  if (uniqueKey) state._simReplacementEffects = state._simReplacementEffects.filter(entry =>
+    entry.uniqueKey !== uniqueKey || entry.sourcePlayerId !== self.id);
+  state._simReplacementEffects.push({
+    ...(uniqueKey ? { uniqueKey } : {}), sourcePlayerId: self.id, sourceCard: options.sourceCard || null,
+    duration: action.duration || null,
+    expiresOnTurn: action.duration === "end_of_turn" ? (state.turnCounter || 0) :
+      action.duration === "end_of_next_turn" ? (state.turnCounter || 0) + 1 : null,
+    usesRemaining: action.uses ?? null,
+    targetPresences: targets.map(card => ({ instanceId: getCardInstanceId(card), locationVersion: card.locationVersion || 0, fieldPresenceId: card.fieldPresenceId || null })),
     replacementEffect: action.replacementEffect || null,
-  });
-  targets.forEach((card) => {
-    if (!card) return;
-    (card as LegacyProtectedCard)._simReplacementProtection = {
-      uniqueKey,
-      duration: action.duration || "temporary",
-      replacementEffect: action.replacementEffect || null,
-    };
   });
   return;
 }
@@ -894,6 +860,12 @@ export function applyAddStatus(
     if (!card) return;
     const status = action.status;
     if (status) {
+      if (action.untilEndOfTurn && status !== "effectsNegated" && action.remove !== true) {
+        card.tempStatuses ??= {};
+        if (!Object.prototype.hasOwnProperty.call(card.tempStatuses, status)) {
+          Reflect.set(card.tempStatuses, status, Reflect.get(card, status));
+        }
+      }
       if (action.remove === true) {
         delete (card as DynamicSimulatedCard)[status];
         if (status === "effectsNegated") {
@@ -917,12 +889,10 @@ export function applyAddStatus(
           const passiveType = "passive" in effect ? effect.passive?.type : undefined;
           if (passiveType === "field_presence_type_summon_count_buff") return;
           // These rules read negation directly at attack/movement time.
-          if (passiveType === "restrict_opponent_summon_turn_attack" || passiveType === "send_to_grave_replacement") return;
-          if (card.effectsNegated !== true || passiveType !== "field_archetype_aura_buff") {
-            state._simUnsupportedActions ??= [];
-            state._simUnsupportedActions.push(`add_status:passive_recalculation:${passiveType || "unknown"}`);
-            return;
-          }
+          if (passiveType === "restrict_opponent_summon_turn_attack" || passiveType === "send_to_grave_replacement" ||
+              passiveType === "conditional_protection" || passiveType === "field_archetype_aura_buff") return;
+          state._simUnsupportedActions ??= [];
+          state._simUnsupportedActions.push(`add_status:passive_recalculation:${passiveType || "unknown"}`);
         });
       }
     }

@@ -726,7 +726,7 @@ function evaluateIceBarrierPlan(analysis: Analysis = {}) {
 
   const equippedHosts = hosts.filter(hasArcanistEquip);
   const amplified = equippedHosts.length > 0;
-  if (!hasPlausibleIceBarrierThreat(analysis, { amplified })) {
+  if (!amplified && !hasPlausibleIceBarrierThreat(analysis, { amplified: true })) {
     return {
       ok: false as const,
       reason: amplified
@@ -762,8 +762,8 @@ function evaluateIceBarrierPlan(analysis: Analysis = {}) {
     targetInstanceId: getCardInstanceId(target),
     priority: Math.min(11, priority),
     reason: amplified
-      ? "amplified Ice Barrier protects Arcanist board"
-      : "battle guard for vulnerable Arcanist",
+      ? "Ice Barrier protects its equipped target and draws two"
+      : "destruction guard for vulnerable Arcanist",
   };
 }
 
@@ -1472,6 +1472,12 @@ export function shouldActivateMonsterEffect(card: StrategyCard, analysis: Analys
       priority: 7,
       reason: "bounce opposing face-up spell and gain LP",
     };
+  }
+
+  if (card.name === ARCANIST_NAMES.ELEMENTALIST) {
+    return { yes: hasArcanistEquip(card) && (analysis.oppField || []).some(target =>
+      target.cardKind === "monster" && !target.isFacedown),
+    priority: 7, reason: "destroy an opposing monster while equipped" };
   }
 
   return { yes: false, reason: "no proactive monster effect" };

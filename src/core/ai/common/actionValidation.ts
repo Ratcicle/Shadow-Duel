@@ -371,6 +371,17 @@ export function hasActionZoneCandidates(
 ): boolean {
   if (!player || !action) return true;
 
+  if (action.type === "search_any") {
+    return getPlayerZoneCards(player, action.zone || "deck").filter(card => cardMatchesFilter(card, {
+      ...(action.filters || {}),
+      ...(action.cardKind ? { cardKind: action.cardKind } : {}),
+      ...(action.archetype ? { archetype: action.archetype } : {}),
+      ...(action.cardName ? { name: action.cardName } : {}),
+      ...(action.maxLevel !== undefined ? { maxLevel: action.maxLevel } : {}),
+      ...(action.minLevel !== undefined ? { minLevel: action.minLevel } : {}),
+    })).length >= (action.count?.min ?? 1);
+  }
+
   if (action.type === "add_from_zone_to_hand") {
     const zones = action.zone ? (Array.isArray(action.zone) ? action.zone : [action.zone]) : ["graveyard"];
     return zones.flatMap(zone => getPlayerZoneCards(player, zone)).filter(card => cardMatchesFilter(card, action.filters || {})).length >= (action.count?.min ?? 1);

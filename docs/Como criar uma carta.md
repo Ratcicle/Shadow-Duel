@@ -830,10 +830,10 @@ com IDs de efeitos ativos daquele material.
 
 ## Procedimento próprio de Invocação da mão
 
-Para um monstro que se Invoca da mão pagando materiais do próprio campo ou
-Cemitério, declare `handSummonProcedure` no card. `id` identifica o
-procedimento no runtime; `cost` define quantidade, zonas de origem, filtros e
-destino de cada material:
+Para um monstro com procedimento próprio de Invocação da mão, declare
+`handSummonProcedure` no card. `id` identifica o procedimento no runtime;
+`conditions` aceita condições declarativas de legalidade. O campo opcional
+`cost` define quantidade, zonas de origem, filtros e destino de cada material:
 
 ```js
 handSummonProcedure: {
@@ -847,8 +847,12 @@ handSummonProcedure: {
 }
 ```
 
-O procedimento abre seleção de custo para o jogador humano e executa os
-movimentos dos materiais pela transação de Invocação.
+Quando há `cost`, o procedimento abre seleção de custo para o jogador humano
+e executa os movimentos dos materiais pela transação de Invocação. Sem `cost`,
+não abre seleção de materiais nem produz pagamentos. As condições e a presença
+da fonte na mão são verificadas no preview e novamente após as escolhas, antes
+do compromisso. Albus (307) usa essa forma sem custo, condicionada ao controle
+de um monstro Arcanista com a face para cima.
 
 Para limitar o procedimento por nome, acrescente `oncePerTurn: true` e uma
 chave estável em `oncePerTurnName`. O preview e a validação após as escolhas
@@ -860,6 +864,27 @@ o procedimento continua sem limite próprio.
 Procedimentos não são ativações de efeito, não criam links de Chain e não
 incrementam contadores de ativações do material. As janelas normais de tentativa
 e conclusão de Invocação continuam disponíveis.
+
+## Efeito armazenado e reproduzido
+
+O armazenamento de um único blueprint pode projetar o efeito armazenado na
+ativação da fonte: condições, custos e alvos são preparados antes das respostas;
+as ações usam a mesma seleção e a mesma presença dos alvos na resolução.
+`allowSelf: true` no alvo permite selecionar a própria fonte quando o custo
+copiado admite essa carta. Pagamentos não são repetidos na resolução, e condições
+de ativação já validadas não são reavaliadas depois de o custo consumir recursos.
+
+O Grimório (301) mantém seu próprio OPT por cópia. Reproduzir o blueprint não
+ativa novamente a Magia original nem consulta seu limite de uso. O efeito
+preparado fica no contexto da transação, mesmo se o custo limpar o armazenamento.
+Isso não remove a exigência de permanência de uma Magia de Equipamento: se o
+Grimório pagar o custo enviando a si mesmo ao Cemitério, o custo e o uso ficam
+consumidos, mas o efeito não resolve.
+
+Guardar ou substituir o efeito passa pelo DecisionBroker. O helper legado de
+execução direta recusa blueprints com custos, ações de compromisso ou alvos que
+não passaram por essa preparação; ele não oferece um caminho de pagamento
+gratuito ou de declaração tardia de alvos.
 
 ## Exemplos
 
@@ -1126,6 +1151,29 @@ Na resolução, consulta novamente a mão, move cada descarte individualmente e
 só então consulta o Cemitério. A perda posterior de candidatos não desfaz os
 descartes. Descarte de efeito não deve ser declarado como custo de ativação.
 
+
+### Modos escolhidos na ativação
+
+Use `activationCases` quando o jogador precisar definir o modo antes das
+respostas. Cada caso exige `id` estável e `actions`; pode declarar `label`,
+`description`, `conditions`, `targets` e `activationCosts`. Os campos do caso
+são combinados com os do efeito principal, na ordem pai → caso. O ID do
+efeito, OPT e `usagePolicy` continuam pertencendo ao pai e são compartilhados
+por todos os modos. Não crie efeitos independentes para separar esses modos.
+
+O preview verifica condições, recursos, destinos e benefício, sem decidir ou
+alterar estado. A escolha passa pelo DecisionBroker como `choice`; intenções
+da IA usam `decisions.cases[effect.id]`. O caso escolhido é projetado em
+`preparedEffect` com `activationCaseId`, antes de custos e alvos declarados.
+A fonte e os custos são revalidados antes do compromisso. Cancelamento nessa
+etapa preserva recursos e uso; depois do compromisso, custos pagos permanecem
+pagos mesmo se a ativação ou o efeito forem negados.
+
+Condições de ativação não são reavaliadas depois do pagamento. Buscas e
+Invocações sem alvo declarado consultam candidatos e posição na resolução,
+sem trocar de modo. `choose_action_case` continua escolhendo durante a
+resolução. Os textos de apresentação existentes em
+`effectChoices.<effectId>.cases.<caseId>` também identificam o modo na Chain.
 
 ### Custos de movimento e marcadores de Invocação
 

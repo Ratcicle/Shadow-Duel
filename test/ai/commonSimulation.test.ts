@@ -15,6 +15,17 @@ import { simulationCard, simulationState } from "../helpers/simulation.js";
 import { canUseSimulatedEffectUsage, markSimulatedEffectUsage } from "../../src/core/ai/common/simStateUtils.js";
 import { moveCardToZone } from "../../src/core/ai/common/zones.js";
 import { cardDefinition } from "../helpers/fixtures.js";
+import { destroySimulatedCard } from "../../src/core/ai/common/simulatedActions/destruction.js";
+
+for (const properProcedure of [false, true]) for (const opponentSource of [false, true]) {
+  test(`Hyperion protection requires its procedure and an opponent effect: procedure=${properProcedure}, opponent=${opponentSource}`, () => {
+    const hyperion = simulationCard({ ...cardDefinition(24), instanceId: "protected-hyperion", owner: "bot",
+      lastSummonProcedure: properProcedure ? "luminous_god_hyperion_special_summon" : null });
+    const state = simulationState({ bot: { field: [hyperion] } });
+    assert.equal(destroySimulatedCard(hyperion, state.bot, opponentSource ? state.player : state.bot, state, {}),
+      !(properProcedure && opponentSource));
+  });
+}
 
 for (const seat of ["player", "bot"] as const) for (const alreadyNegated of [false, true]) {
   test(`prepared negation Spell validates targets before paying once: ${seat}, negated=${alreadyNegated}`, () => {

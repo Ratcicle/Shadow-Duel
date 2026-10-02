@@ -5,7 +5,7 @@ import { SUMMON_METHODS } from "../../../contracts/summon.js";
 import { normalizeZoneInput } from "../../../contracts/zones.js";
 import { establishProperSummon } from "../../../game/summon/eligibility.js";
 import { canSimulatedProcedureEnterField, canSimulatedSpecialSummon } from "../simulation.js";
-import { getZoneCards, moveCardToZone, refreshSimulatedFieldPresenceTypeSummonBuffs } from "../zones.js";
+import { getZoneCards, moveCardToZone, refreshSimulatedFieldAuras, refreshSimulatedFieldPresenceTypeSummonBuffs } from "../zones.js";
 import { applySummonState, recordCompletedSimulatedSummon } from "./shared.js";
 import { destroySimulatedCard } from "./destruction.js";
 import type { SimulatedCardState } from "../../../contracts/aiState.js";
@@ -111,6 +111,7 @@ export function cleanupSimulatedEndTurn(state: SimulatedRuntimeState): void {
     player.directAttacksDeclaredThisTurn = 0;
   }
   refreshSimulatedFieldPresenceTypeSummonBuffs(state);
+  refreshSimulatedFieldAuras(state);
 }
 
 /** Same inclusive expiry boundary as runtime startTurn's cleanup passes. */

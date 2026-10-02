@@ -28,6 +28,8 @@ export interface ActivationCommitInfo {
 }
 
 export interface ActivationPipelineContext {
+  /** Frozen rules for this activation, captured before any cost can change its source. */
+  preparedEffect?: EffectDefinition;
   decisions?: import("./ai.js").AIDecisionPlan;
   fromHand?: boolean;
   activationZone?: ActivationZone | undefined;

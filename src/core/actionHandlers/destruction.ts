@@ -6,6 +6,7 @@
 
 import { isAI } from "../Player.js";
 import { resolveExactInstanceSelection } from "../AutoSelector.js";
+import { getCardLocationVersion } from "../Card.js";
 import type {
   ActionOf,
   DestroyDamageEntry,
@@ -20,6 +21,7 @@ import type {
   EffectContext,
   NeedsSelectionResult,
   ResolvedTargetMap,
+  ReplacementTargetPresence,
 } from "../contracts/actionRuntime.js";
 import type { RawSelectionContract } from "../contracts/selection.js";
 import type { ZoneInput } from "../contracts/zones.js";
@@ -232,8 +234,9 @@ function resolveDamagePlayerKey(
     return damagePlayer;
   }
   if (damagePlayer === "owner" || damagePlayer === "target_owner") {
-    if (card?.owner === player?.id) return "self";
-    if (card?.owner === opponent?.id) return "opponent";
+    const controller = card.controller || card.owner;
+    if (controller === player.id) return "self";
+    if (controller === opponent.id) return "opponent";
   }
   return "opponent";
 }
@@ -326,6 +329,10 @@ export async function handleDestroyAndDamageByTargetAtk(
     });
 
     for (const card of allowed) {
+      // Destruction removes stat modifiers and returns controlled cards to their
+      // original owner. Capture each target immediately before its own move.
+      const damageKey = resolveDamagePlayerKey(entry, card, player, opponent);
+      const amount = resolveDamageAmount(entry, card);
       const result = await game.destroyCard(card, {
         cause: "effect",
         sourceCard: source || null,
@@ -335,8 +342,6 @@ export async function handleDestroyAndDamageByTargetAtk(
       if (!result?.destroyed) continue;
 
       destroyedAny = true;
-      const damageKey = resolveDamagePlayerKey(entry, card, player, opponent);
-      const amount = resolveDamageAmount(entry, card);
       if (amount > 0 && damageKey in damageTotals) {
         damageTotals[damageKey] += amount;
       }
@@ -458,12 +463,21 @@ export async function handleRegisterReplacementEffect(
     const targetInstanceIds = scopedTargets
       .map(getReplacementTargetKey)
       .filter(Boolean);
+    const targetPresences: ReplacementTargetPresence[] = scopedTargets.map(
+      (card) => ({
+        duelCardId: card.duelCardId ?? game.ensureDuelCardId?.(card) ?? null,
+        instanceId: card.instanceId ?? null,
+        locationVersion: getCardLocationVersion(card),
+        fieldPresenceId: card.fieldPresenceId ?? null,
+      }),
+    );
     const runtimeReplacementEffect =
       scopedTargets.length > 0
         ? {
             ...replacementEffect,
             targetInstanceIds,
             targetCards: scopedTargets,
+            targetPresences,
           }
         : replacementEffect;
 
@@ -488,7 +502,9 @@ export async function handleRegisterReplacementEffect(
       }
 
       const entry = {
-        id: entryInput?.id || `${sourceName}:${Date.now()}`,
+        id: entryInput?.id ||
+          game.createDeterministicId?.("temporary_replacement") ||
+          `${sourceName}:${game.turnCounter || 0}:${game.temporaryReplacementEffects.length + 1}`,
         uniqueKey,
         ownerId,
         sourceName: entryInput?.sourceName || sourceName,

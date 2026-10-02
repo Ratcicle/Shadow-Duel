@@ -76,12 +76,18 @@ function checkHandProcedure(
   if (!guard.ok) return unavailable(guard.reason || "summon_unavailable");
   const eligibility = checkSpecialSummonEligibility(card, { summonProcedure: procedure.id, fromZone: "hand" });
   if (!eligibility.ok) return unavailable(eligibility.reason || "special_summon_restriction");
-  if (!Number.isInteger(procedure.cost.count) || procedure.cost.count < 1) return unavailable("invalid_cost_count");
-  const candidates = [...new Set(procedure.cost.zones.flatMap((zone) => player[zone]))]
-    .filter((candidate) => this.effectEngine.cardMatchesFilters(candidate, procedure.cost.filters));
-  if (candidates.length < procedure.cost.count) return unavailable("insufficient_materials");
+  const conditions = this.effectEngine.evaluateConditions(procedure.conditions, {
+    source: card, player, activationZone: "hand", sourceZone: "hand",
+  });
+  if (!conditions.ok) return unavailable(conditions.reason || "hand_procedure_condition");
+  const cost = procedure.cost;
+  if (cost && (!Number.isInteger(cost.count) || cost.count < 1)) return unavailable("invalid_cost_count");
+  const candidates = cost ? [...new Set(cost.zones.flatMap((zone) => player[zone]))]
+    .filter((candidate) => this.effectEngine.cardMatchesFilters(candidate, cost.filters)) : [];
+  const costCount = cost?.count ?? 0;
+  if (candidates.length < costCount) return unavailable("insufficient_materials");
   if (player.field.length >= 5 && !candidates.some((candidate) => player.field.includes(candidate))) return unavailable("field_full");
-  const suggestedMaterials = findLegalCostSelection(this, card, player, candidates, procedure.cost.count);
+  const suggestedMaterials = findLegalCostSelection(this, card, player, candidates, costCount);
   if (!suggestedMaterials) return unavailable("field_unavailable");
   return { ok: true, candidates, suggestedMaterials };
 }
@@ -105,7 +111,9 @@ async function executeHandProcedure(
   const check = checkHandProcedure.call(this, card, player, completingSelection);
   const procedure = card.handSummonProcedure;
   if (!check.ok || !procedure) return { success: false, reason: check.reason || "missing_hand_procedure" };
-  let materials = options.materials;
+  const cost = procedure.cost;
+  const costCount = cost?.count ?? 0;
+  let materials = options.materials ?? (cost ? undefined : []);
   if (!materials) {
     const candidates = check.candidates.map((material) => ({
       key: `hand_summon_cost:${this.ensureDuelCardId(material)}` as SelectionCandidateKey,
@@ -116,7 +124,7 @@ async function executeHandProcedure(
     }));
     const contract: RawSelectionContract = {
       kind: "cost",
-      requirements: [{ id: "hand_summon_cost", candidates, min: procedure.cost.count, max: procedure.cost.count, intent: "cost", distinct: true }],
+      requirements: [{ id: "hand_summon_cost", candidates, min: costCount, max: costCount, intent: "cost", distinct: true }],
       ui: { allowCancel: true, message: card.description || card.name },
     };
     const selectedCards = (keys: readonly string[]) => keys.flatMap((key) => {
@@ -129,7 +137,7 @@ async function executeHandProcedure(
         resolveAI: () => {
           const automatic = this.autoSelector.select(contract, { owner: player, selectionKind: "cost", selectionContract: contract });
           let chosen = selectedCards(automatic?.ok ? automatic.selections.hand_summon_cost || [] : []);
-          if (chosen.length !== procedure.cost.count ||
+          if (chosen.length !== costCount ||
               player.field.filter(fieldCard => !chosen.includes(fieldCard)).length >= 5 ||
               !this.canPlaceCardOnField(card, player, { isFacedown: false, summonMethod: "special", silent: true, excludeCards: chosen }).ok) {
             chosen = check.suggestedMaterials;
@@ -166,7 +174,7 @@ async function executeHandProcedure(
       return { success: false, needsSelection: true, selectionContract: contract };
     }
   }
-  if (materials.length !== procedure.cost.count || new Set(materials).size !== materials.length ||
+  if (materials.length !== costCount || new Set(materials).size !== materials.length ||
       materials.some((material) => !check.candidates.includes(material))) {
     return { success: false, reason: "invalid_materials" };
   }
@@ -188,12 +196,12 @@ async function executeHandProcedure(
     card, controller: player, sourceZone: "hand",
     summonOrigin: SUMMON_ORIGINS.PROCEDURE, summonMode: "summon",
     summonMethod: "special", summonProcedure: procedure.id, position,
-    costPayments: materials.map((material) => ({
+    costPayments: cost ? materials.map((material) => ({
       card: material, owner: player,
       fromZone: player.field.includes(material) ? "field" : "graveyard",
-      toZone: procedure.cost.destination, kind: "hand_summon_cost",
+      toZone: cost.destination, kind: "hand_summon_cost",
       options: { movedByEffect: false },
-    })),
+    })) : [],
     commit: () => {
       if (!this.canUseOncePerTurn(card, player, procedure).ok) return { success: false, reason: "hand_procedure_used_this_turn" };
       this.markOncePerTurnUsed(card, player, procedure);

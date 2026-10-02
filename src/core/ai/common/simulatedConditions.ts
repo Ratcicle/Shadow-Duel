@@ -9,6 +9,7 @@ import {
 import { mergeCanonicalSelections } from "../../game/selection/contract.js";
 import { walkActionList } from "../../actionHandlers/actionWalker.js";
 import { evaluateActivationPreviewConditions } from "../../effects/conditions/runtime.js";
+import { isActiveEquipInZone } from "../../effects/passives/passiveBuffs.js";
 import type {
   AiStateShape,
   SimulatedCardState,
@@ -1329,6 +1330,11 @@ export function evaluateSimulatedConditions(
             ) {
               return false;
             }
+            const equippedFilters: unknown = Reflect.get(filters, "equippedWithFilters");
+            if (equippedFilters && typeof equippedFilters === "object" &&
+                !(card.equips || []).some(equip =>
+                  isActiveEquipInZone(equip, card, [...self.spellTrap, ...opponent.spellTrap]) &&
+                  matchesTargetFilters(equip, equippedFilters, null))) return false;
             return matchesTargetFilters(card, filters, null);
           }).length,
         0,

@@ -297,6 +297,14 @@ export interface ActionRuntimeRegistration {
   sourceCard?: ActionRuntimeCard | null;
 }
 
+/** The selected presence to which a temporary destruction replacement applies. */
+export interface ReplacementTargetPresence {
+  readonly duelCardId: number | null;
+  readonly instanceId: number | null;
+  readonly locationVersion: number;
+  readonly fieldPresenceId: string | number | null;
+}
+
 export interface CompletedActionMoveResult {
   success?: boolean;
   toZone?: CanonicalZone | null;

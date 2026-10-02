@@ -39,7 +39,8 @@ function replay(overrides: MutableReplay = {}): MutableReplay {
 }
 
 test("engine version is required and rejects recordings with previous semantics", () => {
-  assert.equal(CANONICAL_REPLAY_ENGINE_VERSION, "engine-rules-v8");
+  assert.equal(CANONICAL_REPLAY_ENGINE_VERSION, "engine-rules-v9");
+  assert.throws(() => validateCanonicalReplay(replay({ engineVersion: "engine-rules-v8" })), /engineVersion/);
   assert.throws(() => validateCanonicalReplay(replay({ engineVersion: "engine-rules-v7" })), /engineVersion/);
   assert.throws(() => validateCanonicalReplay(replay({ engineVersion: "engine-rules-v6" })), /engineVersion/);
   assert.throws(() => validateCanonicalReplay(replay({ engineVersion: "dragon-rules-v6" })), /engineVersion/);

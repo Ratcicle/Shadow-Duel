@@ -11,7 +11,7 @@ import { prepareLuminarchSimulatedBattle, applyLuminarchSimulatedBattleRewards }
 import { cardDefinition, required, unsafeFixture } from "../helpers/fixtures.js";
 import type { AIStrategyBotPort } from "../../src/core/contracts/ai.js";
 import { simulationState } from "../helpers/simulation.js";
-import { resolveSimulatedEndPhase } from "../../src/core/ai/common/simulation.js";
+import { emitSimulatedSpellActivation, resolveSimulatedEndPhase } from "../../src/core/ai/common/simulation.js";
 import { applySimulatedActions } from "../../src/core/ai/common/simulatedActions/index.js";
 import { applyPassiveBuffValue } from "../../src/core/effects/passives/passiveBuffs.js";
 import { appendSimulatedZoneCard, clearSimulatedFieldPosition, refreshSimulatedFieldPresenceTypeSummonBuffs } from "../../src/core/ai/common/zones.js";
@@ -31,15 +31,15 @@ test("Arcanist simulated boosts update canonical totals and passive refresh stay
     activationContext: { actionContext: { targetPreferences: { lightning_magic_lance_target: { preferredNames: [elementalist.name] } } } } });
   assert.equal(elementalist.atk, required(elementalist.baseAtk) + 500);
   assert.equal(getEffectiveAtk(elementalist), elementalist.atk);
-  state._simArcanistSpellActivations = 1;
+  emitSimulatedSpellActivation(state, make("Arcanist Ice Barrier"));
   strategy.applySimulatedArcanistPassiveStats(state);
   strategy.applySimulatedArcanistPassiveStats(state);
   assert.equal(elementalist.atk, required(elementalist.baseAtk) + 600);
   assert.equal(target.atk, 0);
   assert.equal(target.def, 0);
-  state._simArcanistSpellActivations = 0;
+  resolveSimulatedEndPhase(state);
   strategy.applySimulatedArcanistPassiveStats(state);
-  assert.equal(elementalist.atk, required(elementalist.baseAtk) + 500);
+  assert.equal(elementalist.atk, elementalist.baseAtk);
   assert.equal(target.atk, 50);
   assert.equal(target.def, 50);
 });

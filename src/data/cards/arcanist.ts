@@ -8,7 +8,7 @@ export const arcanistCards = [
     subtype: "equip",
     archetype: "Arcanist",
     description:
-      "Equip only to an \"Arcanist\" monster you control.\n\nOnce per turn: you can activate 1 of the effects stored in this card.\n\nIf an \"Arcanist\" Spell you activated resolves: you can store that Spell's effect in this card (max. 1). If this card already has 1 stored effect, you can store the new effect instead.\n\nYou can only control 1 \"Grimoire of the Apprentice Arcanist\".",
+      "Equip only to an \"Arcanist\" monster you control. You can only control 1 \"Grimoire of the Apprentice Arcanist\".\n\nIf an \"Arcanist\" Spell you activated resolves: you can store that Spell's effect in this card (max. 1). If this card already has a stored effect, you can replace it with the new effect.\n\nOnce per turn: you can activate the effect stored in this card.",
     image: "assets/Grimoire of the Apprentice Arcanist.png",
     blueprintStorage: {
       maxSlots: 1,
@@ -63,6 +63,7 @@ export const arcanistCards = [
         timing: "ignition",
         oncePerTurn: true,
         oncePerTurnName: "arcanist_grimoire_activate_stored",
+        oncePerTurnScope: "card",
         conditions: [{ type: "has_stored_blueprint" }],
         actions: [{ type: "activate_stored_blueprint" }],
       },
@@ -79,7 +80,7 @@ export const arcanistCards = [
     attribute: "Light",
     archetype: "Arcanist",
     description:
-      "If this card is Normal Summoned: You can add 1 \"Arcanist\" Spell from your Deck to your hand.\n\nIf this card is equipped with an \"Arcanist\" Equip Spell: All \"Arcanist\" monsters you control gain 300 ATK while this card is face-up on the field.\n\nYou can only activate each effect of \"Arcanist Apprentice\" once per turn.",
+      "If this card is Normal Summoned: You can add 1 \"Arcanist\" Spell from your Deck to your hand. You can only activate this effect of \"Arcanist Apprentice\" once per turn.\n\nWhile this face-up card is equipped with an \"Arcanist\" Equip Spell, all \"Arcanist\" monsters you control gain 300 ATK.",
     image: "assets/Arcanist Apprentice.png",
     effects: [
       {
@@ -132,7 +133,7 @@ export const arcanistCards = [
     subtype: "normal",
     archetype: "Arcanist",
     description:
-      'Target 1 "Arcanist" monster you control and 1 monster your opponent controls; destroy those targets, and if you do, each player takes damage equal to half the ATK of the monster they controlled that was destroyed. If you control an "Arcanist" Equip Spell, you take no damage from this effect.',
+      'Target 1 "Arcanist" monster you control and 1 monster your opponent controls; destroy those targets, and if you do, each player takes damage equal to half the ATK their destroyed monster had immediately before it was destroyed. If you control an "Arcanist" Equip Spell, you take no damage from this effect.',
     image: "assets/Arcanist Crimson Explosion.png",
     effects: [
       {
@@ -199,7 +200,7 @@ export const arcanistCards = [
     subtype: "normal",
     archetype: "Arcanist",
     description:
-      "Target 1 face-up monster on the field; apply the appropriate effect depending on who controls that target. If it is an \"Arcanist\" monster you control: it gains 500 ATK and if it battles a Defense Position monster this turn, inflict piercing battle damage to your opponent. If it is a monster your opponent controls: it cannot declare an attack until the end of your opponent's next turn.\n\nYou can only activate 1 \"Arcanist Lightning Lance\" per turn.",
+      "Target 1 face-up monster on the field; apply the appropriate effect depending on who controls that target. If it is an \"Arcanist\" monster you control: it gains 500 ATK until the end of this turn, and if it battles a Defense Position monster this turn, inflict piercing battle damage to your opponent. If it is a monster your opponent controls: it cannot declare an attack until the end of your opponent's next turn.\n\nYou can only activate 1 \"Arcanist Lightning Lance\" per turn.",
     image: "assets/Lightning Magic Lance.png",
     effects: [
       {
@@ -436,41 +437,25 @@ export const arcanistCards = [
     attribute: "Water",
     archetype: "Arcanist",
     description:
-      "If you control an \"Arcanist\" monster, you can Special Summon this card from your hand.\n\nIf this card is equipped with an \"Arcanist\" Equip Spell: target 1 \"Arcanist\" monster in your GY; add it to your hand.\n\nYou can only activate each effect of \"Albus, Arcanist of Ice\" once per turn.",
+      "If you control a face-up \"Arcanist\" monster, you can Special Summon this card from your hand. You can only Special Summon \"Albus, Arcanist of Ice\" once per turn this way.\n\nIf this card is equipped with an \"Arcanist\" Equip Spell: target 1 \"Arcanist\" monster in your GY; add it to your hand. You can only activate this effect of \"Albus, Arcanist of Ice\" once per turn.",
     image: "assets/Albus, Arcanist of Ice.png",
+    handSummonProcedure: {
+      id: "albus_arcanist_ice_special_summon",
+      oncePerTurn: true,
+      oncePerTurnName: "albus_arcanist_ice_special_summon",
+      conditions: [
+        {
+          type: "control_card_filters",
+          owner: "self",
+          zone: "field",
+          cardKind: "monster",
+          archetype: "Arcanist",
+          requireFaceup: true,
+          min: 1,
+        },
+      ],
+    },
     effects: [
-      {
-
-        activationZones: ["hand"],
-
-        usagePolicy: "activate",
-        id: "albus_arcanist_ice_special_summon",
-        timing: "ignition",
-        requirePhase: ["main1", "main2"],
-        oncePerTurn: true,
-        oncePerTurnName: "albus_arcanist_ice_special_summon",
-        conditions: [
-          {
-            type: "control_card_filters",
-            owner: "self",
-            zone: "field",
-            cardKind: "monster",
-            archetype: "Arcanist",
-            min: 1,
-          },
-        ],
-        actions: [
-          {
-            type: "special_summon_from_zone",
-            zone: "hand",
-            filters: { name: "Albus, Arcanist of Ice" },
-            count: { min: 0, max: 1 },
-            position: "choice",
-            promptPlayer: true,
-            oncePerTurnName: "albus_arcanist_ice_special_summon",
-          },
-        ],
-      },
       {
 
         usagePolicy: "activate",
@@ -624,6 +609,7 @@ export const arcanistCards = [
         requireFaceup: true,
         oncePerTurn: true,
         oncePerTurnName: "meeting_arcanists_spell_guard",
+        oncePerTurnScope: "card",
         replacementEffect: {
           type: "destruction",
           reason: "any",
@@ -669,73 +655,79 @@ export const arcanistCards = [
             ],
           },
         ],
-        actions: [
+        activationCases: [
           {
-            type: "choose_action_case",
-            selectionMessage: "Choose an effect to apply.",
-            cases: [
+            id: "meeting_arcanists_discard_monsters",
+            label: 'Discard 2 "Arcanist" monsters',
+            description:
+              'Discard 2 "Arcanist" monsters; add 1 "Arcanist" Spell from your Deck to your hand.',
+            targets: [
               {
                 id: "meeting_arcanists_discard_monsters",
-                label: 'Discard 2 "Arcanist" monsters',
-                description:
-                  'Discard 2 "Arcanist" monsters; add 1 "Arcanist" Spell from your Deck to your hand.',
-                targets: [
-                  {
-                    id: "meeting_arcanists_discard_monsters",
-                    owner: "self",
-                    zone: "hand",
-                    cardKind: "monster",
-                    archetype: "Arcanist",
-                    count: { min: 2, max: 2 },
-                  },
-                ],
-                actions: [
-                  {
-                    type: "move",
-                    targetRef: "meeting_arcanists_discard_monsters",
-                    player: "self",
-                    to: "graveyard",
-                    contextLabel: "discard",
-                  },
-                  {
-                    type: "search_any",
-                    player: "self",
-                    archetype: "Arcanist",
-                    cardKind: "spell",
-                  },
-                ],
+                owner: "self",
+                zone: "hand",
+                cardKind: "monster",
+                archetype: "Arcanist",
+                count: { min: 2, max: 2 },
+                intent: "cost",
               },
+            ],
+            activationCosts: [
+              {
+                type: "move",
+                targetRef: "meeting_arcanists_discard_monsters",
+                player: "self",
+                fromZone: "hand",
+                to: "graveyard",
+                contextLabel: "discard",
+                requireAll: true,
+                requireDestination: true,
+              },
+            ],
+            actions: [
+              {
+                type: "search_any",
+                player: "self",
+                archetype: "Arcanist",
+                cardKind: "spell",
+              },
+            ],
+          },
+          {
+            id: "meeting_arcanists_discard_spells",
+            label: 'Discard 2 "Arcanist" Spells',
+            description:
+              'Discard 2 "Arcanist" Spells; add 1 Level 4 or lower "Arcanist" monster from your Deck to your hand.',
+            targets: [
               {
                 id: "meeting_arcanists_discard_spells",
-                label: 'Discard 2 "Arcanist" Spells',
-                description:
-                  'Discard 2 "Arcanist" Spells; add 1 Level 4 or lower "Arcanist" monster from your Deck to your hand.',
-                targets: [
-                  {
-                    id: "meeting_arcanists_discard_spells",
-                    owner: "self",
-                    zone: "hand",
-                    cardKind: "spell",
-                    archetype: "Arcanist",
-                    count: { min: 2, max: 2 },
-                  },
-                ],
-                actions: [
-                  {
-                    type: "move",
-                    targetRef: "meeting_arcanists_discard_spells",
-                    player: "self",
-                    to: "graveyard",
-                    contextLabel: "discard",
-                  },
-                  {
-                    type: "search_any",
-                    player: "self",
-                    archetype: "Arcanist",
-                    cardKind: "monster",
-                    maxLevel: 4,
-                  },
-                ],
+                owner: "self",
+                zone: "hand",
+                cardKind: "spell",
+                archetype: "Arcanist",
+                count: { min: 2, max: 2 },
+                intent: "cost",
+              },
+            ],
+            activationCosts: [
+              {
+                type: "move",
+                targetRef: "meeting_arcanists_discard_spells",
+                player: "self",
+                fromZone: "hand",
+                to: "graveyard",
+                contextLabel: "discard",
+                requireAll: true,
+                requireDestination: true,
+              },
+            ],
+            actions: [
+              {
+                type: "search_any",
+                player: "self",
+                archetype: "Arcanist",
+                cardKind: "monster",
+                maxLevel: 4,
               },
             ],
           },
@@ -750,7 +742,7 @@ export const arcanistCards = [
     subtype: "normal",
     archetype: "Arcanist",
     description:
-      "Target 1 \"Arcanist\" monster you control; until the end of the next turn, the first time that monster would be destroyed by battle, it is not destroyed. If that monster is equipped with an \"Arcanist\" Equip Spell when this effect resolves, instead, until the end of the next turn, the first time each \"Arcanist\" monster you control would be destroyed by battle or card effect, it is not destroyed.\n\nYou can only activate 1 \"Arcanist Ice Barrier\" per turn.",
+      "Target 1 \"Arcanist\" monster you control; until the end of the next turn, the first time that monster would be destroyed by battle or card effect, it is not destroyed.\n\nIf that monster is equipped with an \"Arcanist\" Equip Spell: draw 2 cards.\n\nYou can only activate 1 \"Arcanist Ice Barrier\" per turn.",
     image: "assets/Arcanist Ice Barrier.png",
     effects: [
       {
@@ -761,7 +753,6 @@ export const arcanistCards = [
         speed: 1,
         oncePerTurn: true,
         oncePerTurnName: "arcanist_ice_barrier_guard",
-        respectStoredEffectUsageLimits: true,
         storableByGrimoire: true,
         targets: [
           {
@@ -776,8 +767,24 @@ export const arcanistCards = [
         ],
         actions: [
           {
+            type: "register_replacement_effect",
+            targetRef: "arcanist_ice_barrier_target",
+            duration: "end_of_next_turn",
+            uses: 1,
+            sourceName: "Arcanist Ice Barrier",
+            replacementEffect: {
+              type: "destruction",
+              reason: "any",
+              targetOwner: "any",
+              targetZones: ["field"],
+              auto: true,
+              logMessage: "{target} avoided destruction due to {source}.",
+            },
+          },
+          {
             type: "conditional_target_actions",
             targetRef: "arcanist_ice_barrier_target",
+            defaultActions: [],
             cases: [
               {
                 filters: {
@@ -790,47 +797,11 @@ export const arcanistCards = [
                 },
                 actions: [
                   {
-                    type: "register_replacement_effect",
-                    duration: "end_of_next_turn",
-                    sourceName: "Arcanist Ice Barrier",
-                    uniqueKey: "arcanist_ice_barrier_guard",
-                    usesPerTarget: true,
-                    replacementEffect: {
-                      type: "destruction",
-                      reason: "any",
-                      targetOwner: "self",
-                      targetZones: ["field"],
-                      targetFilters: {
-                        cardKind: "monster",
-                        archetype: "Arcanist",
-                      },
-                      targetRequireFaceup: true,
-                      auto: true,
-                      logMessage:
-                        "{target} avoided destruction due to {source}.",
-                    },
+                    type: "draw",
+                    player: "self",
+                    amount: 2,
                   },
                 ],
-              },
-            ],
-            defaultActions: [
-              {
-                type: "register_replacement_effect",
-                targetRef: "arcanist_ice_barrier_target",
-                duration: "end_of_next_turn",
-                uses: 1,
-                sourceName: "Arcanist Ice Barrier",
-                uniqueKey: "arcanist_ice_barrier_guard",
-                replacementEffect: {
-                  type: "destruction",
-                  reason: "battle",
-                  targetOwner: "self",
-                  targetZones: ["field"],
-                  targetRequireFaceup: true,
-                  auto: true,
-                  logMessage:
-                    "{target} avoided battle destruction due to {source}.",
-                },
               },
             ],
           },
@@ -926,13 +897,15 @@ export const arcanistCards = [
             min: 2,
           },
         ],
-        actions: [
+        activationCosts: [
           {
             type: "remove_counter",
             targetRef: "self",
             counterType: "ink",
             amount: 2,
           },
+        ],
+        actions: [
           {
             type: "add_from_zone_to_hand",
             zone: "graveyard",
@@ -964,75 +937,71 @@ export const arcanistCards = [
         requirePhase: ["main1", "main2"],
         oncePerTurn: true,
         oncePerTurnName: "arcanist_grand_library_ignition",
-        actions: [
+        activationCases: [
           {
-            type: "choose_action_case",
-            selectionMessage: "Choose an Arcanist Grand Library effect.",
-            cases: [
+            id: "arcanist_grand_library_summon",
+            label: "Pay 2000 LP; Special Summon an Arcanist monster",
+            description:
+              'If you control no monsters: pay 2000 LP; Special Summon 1 Level 4 or lower "Arcanist" monster from your Deck.',
+            conditions: [
               {
-                id: "arcanist_grand_library_summon",
-                label: "Pay 2000 LP; Special Summon an Arcanist monster",
-                description:
-                  'If you control no monsters: pay 2000 LP; Special Summon 1 Level 4 or lower "Arcanist" monster from your Deck.',
-                conditions: [
-                  {
-                    type: "control_card_filters",
-                    owner: "self",
-                    zone: "field",
-                    cardKind: "monster",
-                    includeFacedown: true,
-                    max: 0,
-                  },
-                ],
-                actions: [
-                  {
-                    type: "pay_lp",
-                    amount: 2000,
-                  },
-                  {
-                    type: "special_summon_from_zone",
-                    zone: "deck",
-                    filters: {
-                      cardKind: "monster",
-                      archetype: "Arcanist",
-                      level: 4,
-                      levelOp: "lte",
-                    },
-                    count: { min: 1, max: 1 },
-                    position: "choice",
-                    promptPlayer: true,
-                  },
-                ],
+                type: "control_card_filters",
+                owner: "self",
+                zone: "field",
+                cardKind: "monster",
+                includeFacedown: true,
+                max: 0,
               },
+            ],
+            activationCosts: [
               {
-                id: "arcanist_grand_library_search_equip",
-                label: 'Add an "Arcanist" Equip Spell',
-                description:
-                  'If you control an "Arcanist" monster: add 1 "Arcanist" Equip Spell from your Deck to your hand.',
-                conditions: [
-                  {
-                    type: "control_card_filters",
-                    owner: "self",
-                    zone: "field",
-                    cardKind: "monster",
-                    archetype: "Arcanist",
-                    requireFaceup: true,
-                  },
-                ],
-                actions: [
-                  {
-                    type: "search_any",
-                    player: "self",
-                    zone: "deck",
-                    filters: {
-                      cardKind: "spell",
-                      subtype: "equip",
-                      archetype: "Arcanist",
-                    },
-                    count: { min: 1, max: 1 },
-                    promptPlayer: true,
-                  },
-                ],
+                type: "pay_lp",
+                amount: 2000,
+              },
+            ],
+            actions: [
+              {
+                type: "special_summon_from_zone",
+                zone: "deck",
+                filters: {
+                  cardKind: "monster",
+                  archetype: "Arcanist",
+                  level: 4,
+                  levelOp: "lte",
+                },
+                count: { min: 1, max: 1 },
+                position: "choice",
+                promptPlayer: true,
+              },
+            ],
+          },
+          {
+            id: "arcanist_grand_library_search_equip",
+            label: 'Add an "Arcanist" Equip Spell',
+            description:
+              'If you control an "Arcanist" monster: add 1 "Arcanist" Equip Spell from your Deck to your hand.',
+            conditions: [
+              {
+                type: "control_card_filters",
+                owner: "self",
+                zone: "field",
+                cardKind: "monster",
+                archetype: "Arcanist",
+                requireFaceup: true,
+              },
+            ],
+            actions: [
+              {
+                type: "search_any",
+                player: "self",
+                zone: "deck",
+                filters: {
+                  cardKind: "spell",
+                  subtype: "equip",
+                  archetype: "Arcanist",
+                },
+                count: { min: 1, max: 1 },
+                promptPlayer: true,
               },
             ],
           },
@@ -1085,21 +1054,13 @@ export const arcanistCards = [
     effects: [
       {
         id: "elementalist_master_protection",
-        timing: "on_event",
-        triggerRequirement: "mandatory",
-        triggerTiming: "if",
-        event: "after_summon",
-        requireSelfAsSummoned: true,
+        timing: "passive",
+        requireZone: "field",
         requireFaceup: true,
-        promptUser: false,
-        actions: [
-          {
-            type: "grant_protection",
-            targetRef: "self",
-            protectionType: "effect_destruction",
-            duration: "while_faceup",
-          },
-        ],
+        passive: {
+          type: "conditional_protection",
+          protectionType: "effect_destruction",
+        },
       },
       {
         id: "elementalist_master_spell_buff",
@@ -1126,20 +1087,24 @@ export const arcanistCards = [
 
         usagePolicy: "activate",
         id: "elementalist_master_destroy",
-        timing: "on_event",
-        triggerRequirement: "optional",
-        triggerTiming: "if",
-        event: "card_equipped",
+        timing: "ignition",
+        activationZones: ["field"],
+        requirePhase: ["main1", "main2"],
+        requireFaceup: true,
         oncePerTurn: true,
         oncePerTurnName: "elementalist_master_destroy",
-        requireEquipCardFilters: {
-          cardKind: "spell",
-          subtype: "equip",
-          archetype: "Arcanist",
-        },
-        promptUser: true,
-        promptMessage:
-          "Ativar Elementalist Master Arcanist para destruir 1 monstro do oponente?",
+        oncePerTurnScope: "card",
+        conditions: [
+          {
+            type: "equipped_with_filters",
+            min: 1,
+            filters: {
+              cardKind: "spell",
+              subtype: "equip",
+              archetype: "Arcanist",
+            },
+          },
+        ],
         targets: [
           {
             id: "elementalist_destroy_target",
@@ -1170,7 +1135,7 @@ export const arcanistCards = [
     attribute: "Dark",
     archetype: "Arcanist",
     description:
-      "Monsters your opponent controls lose 100 ATK/DEF for each \"Arcanist\" Spell you activated until the end of this turn.\n\nIf this card is equipped with an \"Arcanist\" Equip Spell: target 1 monster your opponent controls; halve its ATK/DEF until the end of this turn.\n\nYou can only use this effect of \"Azrath, Corrupted Arcanist\" once per turn.",
+      "Each time you activate an \"Arcanist\" Spell while this card is face-up on the field: all monsters your opponent currently controls lose 100 ATK/DEF until the end of this turn.\n\nIf this card is equipped with an \"Arcanist\" Equip Spell: target 1 monster your opponent controls; halve its ATK/DEF until the end of this turn.\n\nYou can only use this effect of \"Azrath, Corrupted Arcanist\" once per turn.",
     image: "assets/Azrath, Corrupted Arcanist.png",
     effects: [
       {
@@ -1261,17 +1226,14 @@ export const arcanistCards = [
             cardKind: "monster",
             archetype: "Arcanist",
             requireFaceup: true,
-            reason: 'You must control an "Arcanist" monster.',
-          },
-          {
-            type: "control_card_filters",
-            owner: "self",
-            zone: "spellTrap",
-            cardKind: "spell",
-            subtype: "equip",
-            archetype: "Arcanist",
-            requireFaceup: true,
-            reason: 'You must control an "Arcanist" Equip Spell.',
+            equippedWithFilters: {
+              cardKind: "spell",
+              subtype: "equip",
+              archetype: "Arcanist",
+              requireFaceup: true,
+            },
+            reason:
+              'You must control an "Arcanist" monster equipped with an "Arcanist" Equip Spell.',
           },
         ],
         targets: [
@@ -1331,6 +1293,7 @@ export const arcanistCards = [
         targets: [
           {
             id: "seismic_impact_equip_cost",
+            allowSelf: true,
             owner: "self",
             zone: "spellTrap",
             cardKind: "spell",

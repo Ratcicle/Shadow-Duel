@@ -14,6 +14,8 @@ import { getCanonicalEffectActivationZones } from "../../chain/legality.js";
 import type { CanonicalSelectionMap } from "../../contracts/selection.js";
 import type { ActivationZone } from "../../contracts/activation.js";
 import type { EffectDefinition } from "../../contracts/effects.js";
+import { getAvailableActivationCases } from "./cases.js";
+import type { ChainActionContext } from "../../contracts/chainRuntime.js";
 import { asQuickSpellWindowContext } from "./runtime.js";
 import type {
   ActivationActionPreviewContext,
@@ -27,6 +29,14 @@ import type {
   ActivationTargetResolutionContext,
   ActivationTargetResult,
 } from "./runtime.js";
+
+function getPreviewActivationCases(engine: ActivationEngineHost, effect: EffectDefinition, ctx: ActivationEffectContext) {
+  return getAvailableActivationCases({
+    evaluateConditions: (conditions, context) => engine.evaluateConditions(conditions, context as ActivationConditionContext),
+    resolveTargets: (definitions, context) => engine.resolveTargets(definitions, context as ActivationTargetResolutionContext, null),
+    checkActionPreviewRequirements: (actions, context) => engine.checkActionPreviewRequirements(actions, context as ActivationActionPreviewContext),
+  }, effect, ctx as ChainActionContext);
+}
 
 function checkActivationCosts(
   engine: ActivationEngineHost,
@@ -252,6 +262,12 @@ export function canActivateSpellFromHandPreview(
     return { ok: false, reason: "You must control no monsters." };
   }
 
+  if (effect.activationCases?.length) {
+    return getPreviewActivationCases(this, effect, ctx).length > 0
+      ? { ok: true, needsSelection: true }
+      : { ok: false, reason: "No activation mode has legal costs and benefits." };
+  }
+
   const costCheck = checkActivationCosts(this, effect, ctx);
   if (!costCheck.ok) return costCheck;
 
@@ -425,6 +441,12 @@ export function canActivateMonsterEffectPreview(
 
   if (effect.requireEmptyField && (player.field?.length || 0) > 0) {
     return { ok: false, reason: "You must control no monsters." };
+  }
+
+  if (effect.activationCases?.length) {
+    return getPreviewActivationCases(this, effect, ctx).length > 0
+      ? { ok: true, needsSelection: true }
+      : { ok: false, reason: "No activation mode has legal costs and benefits." };
   }
 
   const costCheck = checkActivationCosts(this, effect, ctx, selections);
@@ -666,6 +688,12 @@ export function canActivateSpellTrapEffectPreview(
     return { ok: false, reason: "You must control no monsters." };
   }
 
+  if (effect.activationCases?.length) {
+    return getPreviewActivationCases(this, effect, ctx).length > 0
+      ? { ok: true, needsSelection: true }
+      : { ok: false, reason: "No activation mode has legal costs and benefits." };
+  }
+
   const costCheck = checkActivationCosts(this, effect, ctx, selections);
   if (!costCheck.ok) return costCheck;
 
@@ -772,6 +800,12 @@ export function canActivateFieldSpellEffectPreview(
 
   if (effect.requireEmptyField && (player.field?.length || 0) > 0) {
     return { ok: false, reason: "You must control no monsters." };
+  }
+
+  if (effect.activationCases?.length) {
+    return getPreviewActivationCases(this, effect, ctx).length > 0
+      ? { ok: true, needsSelection: true }
+      : { ok: false, reason: "No activation mode has legal costs and benefits." };
   }
 
   const costCheck = checkActivationCosts(this, effect, ctx, selections);

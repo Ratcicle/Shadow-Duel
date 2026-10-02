@@ -1,5 +1,10 @@
 import { expireEffectNegation } from "../../effects/negation.js";
+import { projectStoredBlueprintActivation } from "../../effects/blueprints/index.js";
+import { projectEffectActivationCase } from "../../effects/activation/cases.js";
 import { hasActionZoneCandidates } from "./actionValidation.js";
+import { getCounterValue } from "./counters.js";
+import { getBaseLpCost } from "../../effects/costs/lpCost.js";
+import { resolveActionPlayer, resolveSimulatedLpCost } from "./simulatedActions/shared.js";
 import { resolveTargetsForAction, captureSimulatedReferences, recordCompletedSimulatedSummon } from "./simulatedActions/shared.js";
 import { appendSimulatedZoneCard } from "./zones.js";
 import { appendSimulatedFieldCard } from "./zones.js";
@@ -852,7 +857,7 @@ function collectSimulatedEventSources(
     for (const player of standbyPlayers) {
       addPlayerZoneSources(entries, seen, state, player, ["field", "spellTrap", "fieldSpell"]);
     }
-  } else if (eventName === "position_change" || eventName === "end_phase") {
+  } else if (eventName === "position_change" || eventName === "end_phase" || eventName === "spell_activated") {
     for (const player of players) {
       addPlayerZoneSources(entries, seen, state, player, [
         "field",
@@ -1105,6 +1110,13 @@ function matchesSimulatedEventEffect(
     }
   }
 
+  if (eventName === "spell_activated") {
+    if (effect.triggerPlayer === "self" && eventRole !== "self") return false;
+    if (effect.triggerPlayer === "opponent" && eventRole !== "opponent") return false;
+    if (effect.excludeActivatedSelf && eventCard === sourceCard) return false;
+    if (effect.activatedCardFilters && !matchesTargetFilters(eventCard, effect.activatedCardFilters, sourceCard, eventRole)) return false;
+  }
+
   if (eventName === "position_change") {
     const changedOwner = payload.player || findCardOwner(state, eventCard);
     const changedRole = ownerRoleFor(sourceEntry.player, changedOwner);
@@ -1158,17 +1170,45 @@ function matchesSimulatedEventEffect(
   });
 }
 
-function canPaySimulatedMoveCosts(
+function canPaySimulatedActivationCosts(
   effect: EffectDefinition,
   selections: ReturnType<typeof selectSimulatedTargets>,
   source: SimulatedCardState,
   player: SimulatedPlayerState,
   state: SimulatedRuntimeState,
+  options: SimulatedActionOptions = {},
 ): boolean {
+  const opponent = state.player === player ? state.bot : state.player;
+  const remainingLp = new Map<SimulatedPlayerState, number>();
+  const remainingCounters = new Map<SimulatedCardState, Map<string, number>>();
   return (effect.activationCosts || []).every(cost => {
+    if (cost.type === "pay_lp") {
+      const targetPlayer = resolveActionPlayer(cost, player, opponent);
+      const lp = remainingLp.get(targetPlayer) ?? targetPlayer.lp;
+      const baseAmount = getBaseLpCost(cost, lp);
+      const amount = resolveSimulatedLpCost({ action: cost, targetPlayer, self: player, opponent, state,
+        options: { ...options, sourceCard: source }, baseAmount }).finalAmount;
+      if (baseAmount <= 0 || lp < amount) return false;
+      remainingLp.set(targetPlayer, lp - amount);
+      return true;
+    }
+    if (cost.type === "remove_counter") {
+      const cards = resolveTargetsForAction(cost, selections, { ...options, sourceCard: source, self: player, selfId: player.id }, opponent);
+      const counterType = cost.counterType || "counter";
+      const amount = cost.amount ?? 1;
+      if (!cards.length || amount <= 0) return false;
+      return cards.every(card => {
+        const counters = remainingCounters.get(card) ?? new Map<string, number>();
+        const remaining = counters.get(counterType) ?? getCounterValue(card, counterType);
+        if (remaining < amount) return false;
+        counters.set(counterType, remaining - amount);
+        remainingCounters.set(card, counters);
+        return true;
+      });
+    }
     if (cost.type !== "move" || !cost.targetRef) return true;
     const cards = resolveTargetsForAction(cost, selections, { sourceCard: source, self: player, selfId: player.id },
-      state.player === player ? state.bot : state.player);
+      opponent);
     if (!cards.length || new Set(cards).size !== cards.length) return false;
     return cards.every(card => {
       const owner = findCardOwner(state, card);
@@ -1617,25 +1657,53 @@ export interface PreparedSimulatedSpellEffect {
   consumed: boolean;
 }
 
+/** Select a payable activation mode once, retaining its parent's usage identity. */
+export function prepareSimulatedEffectActivation(
+  state: SimulatedRuntimeState,
+  card: SimulatedCardState,
+  parentEffect: EffectDefinition,
+  options: SimulatedActionOptions = {},
+): { effect: EffectDefinition; selections: ReturnType<typeof selectSimulatedTargets> } | null {
+  const selfId = options.selfId || "bot";
+  const player = selfId === "player" ? state.player : state.bot;
+  if (!canUseSimulatedEffect(state, parentEffect, card, selfId)) return null;
+  const prepare = (effect: EffectDefinition) => {
+    if (!effectConditionsPass(state, effect, card, options)) return null;
+    const selections = selectSimulatedTargets({ targets: effect.targets || [], effect,
+      actions: effectExecutionActions(effect), state, sourceCard: card, selfId, options });
+    if (!hasRequiredSimSelections(effect.targets || [], selections)) return null;
+    if (!canPaySimulatedActivationCosts(effect, selections, card, player, state, options)) return null;
+    if ((parentEffect.activationCases?.length || effect.activationCosts?.length) &&
+        !(effect.actions || []).every(action => hasActionZoneCandidates(player, action, card, options.activationContext))) return null;
+    return { effect, selections };
+  };
+  if (!parentEffect.activationCases?.length) return prepare(parentEffect);
+  const exactId = options.activationContext?.decisions?.cases?.[parentEffect.id];
+  const legal = parentEffect.activationCases.flatMap(activationCase => {
+    if (exactId !== undefined && activationCase.id !== exactId) return [];
+    const prepared = prepare(projectEffectActivationCase(parentEffect, activationCase));
+    return prepared ? [{ activationCase, prepared }] : [];
+  });
+  const chooser = options.chooseActionCase || options.strategy?.chooseActionCase?.bind(options.strategy);
+  const chosen = exactId === undefined && chooser
+    ? chooser(legal.map(entry => entry.activationCase), { state, source: card, effect: parentEffect, activationContext: options.activationContext })
+    : null;
+  const chosenId = typeof chosen === "string" ? chosen : chosen && typeof chosen === "object" ? Reflect.get(chosen, "id") : null;
+  return (legal.find(entry => entry.activationCase.id === chosenId) || legal[0])?.prepared || null;
+}
+
 export function prepareSimulatedSpellEffect<State extends SimulatedMainPhaseState>(
   state: State,
   card: SimulatedCardState | null | undefined,
   options: SimulatedEventDispatchOptions = {},
 ): PreparedSimulatedSpellEffect | null {
-  const effect = card?.effects?.find(entry => entry.timing === "on_play");
-  if (!card || !effect) return null;
+  const parentEffect = card?.effects?.find(entry => entry.timing === "on_play");
+  if (!card || !parentEffect) return null;
   const selfId = options.selfId || "bot";
-  if (!effectConditionsPass(state, effect, card, options)) return null;
-  if (!canUseSimulatedEffect(state, effect, card, selfId)) return null;
   const selectionOptions = buildSelectionOptions(options);
-  const selections = selectSimulatedTargets({
-    targets: effect.targets || [], actions: effectExecutionActions(effect),
-    effect,
-    state, sourceCard: card, selfId, options: selectionOptions,
-  });
-  if (!hasRequiredSimSelections(effect.targets || [], selections)) return null;
-  const player = selfId === "player" ? state.player : state.bot;
-  if (!canPaySimulatedMoveCosts(effect, selections, card, player, state)) return null;
+  const prepared = prepareSimulatedEffectActivation(state, card, parentEffect, { ...selectionOptions, selfId });
+  if (!prepared) return null;
+  const { effect, selections } = prepared;
   return { effect, selections, selfId, options: selectionOptions, consumed: false };
 }
 
@@ -1660,11 +1728,24 @@ export function simulateGenericSpellEffect<State extends SimulatedMainPhaseState
   const usageSourceAtActivation = { ...card };
   if (!applySimulatedActions({ actions: effect.activationCosts || [], selections, state,
     selfId, options: resolutionOptions })) return;
+  emitSimulatedSpellActivation(state, card, selfId, selectionOptions);
   applySimulatedActions({
     actions: [...(effect.activationCommitActions || []), ...(effect.actions || [])],
     selections, state, selfId, options: resolutionOptions,
   });
   markSimulatedEffectUsed(state, effect, usageSourceAtActivation, selfId);
+}
+
+/** A card activation is distinct from an ignition effect of a face-up Spell. */
+export function emitSimulatedSpellActivation(
+  state: SimulatedRuntimeState,
+  card: SimulatedCardState,
+  selfId = "bot",
+  options: SimulatedEventDispatchOptions = {},
+): void {
+  if (card.cardKind !== "spell") return;
+  const player = selfId === "player" ? state.player : state.bot;
+  dispatchSimulatedEvent(state, "spell_activated", { card, player }, { ...options, enableSimulatedEvents: true });
 }
 
 function resolvesToGraveyardAfterActivation(
@@ -1776,13 +1857,16 @@ export function applyGenericSimulatedMainPhaseAction<
       if (!card || !procedure || card.cardKind !== "monster") break;
       if (!canUseSimulatedEffectUsage(state, procedure, card, player.id, true)) break;
       if (!canSimulatedSpecialSummon(card, player, procedure.id, "hand")) break;
-      if (!Number.isInteger(procedure.cost.count) || procedure.cost.count < 1) break;
-      if (action.materials.length !== procedure.cost.count) break;
-      const candidates = [...new Set(procedure.cost.zones.flatMap((zone) => player[zone]))]
-        .filter((candidate) => matchesTargetFilters(candidate, procedure.cost.filters));
+      if (state.phase !== "main1" && state.phase !== "main2") break;
+      if (procedure.conditions && !evaluateSimulatedConditions(procedure.conditions, { state, selfId: "bot", sourceCard: card })) break;
+      const cost = procedure.cost;
+      if (cost && (!Number.isInteger(cost.count) || cost.count < 1)) break;
+      if (action.materials.length !== (cost?.count || 0)) break;
+      const candidates = cost ? [...new Set(cost.zones.flatMap((zone) => player[zone]))]
+        .filter((candidate) => matchesTargetFilters(candidate, cost.filters)) : [];
       const materials: SimulatedCardState[] = [];
       for (const hint of action.materials) {
-        if (!procedure.cost.zones.includes(hint.zone)) break;
+        if (!cost?.zones.includes(hint.zone)) break;
         const zone = player[hint.zone];
         const match = (entry: SimulatedCardState) =>
           entry.id === hint.cardId && entry.instanceId === hint.instanceId;
@@ -1791,10 +1875,10 @@ export function applyGenericSimulatedMainPhaseAction<
         if (!material || !candidates.includes(material) || materials.includes(material)) break;
         materials.push(material);
       }
-      if (materials.length !== procedure.cost.count) break;
+      if (materials.length !== (cost?.count || 0)) break;
       if (!canSimulatedProcedureEnterField(card, player, state.player, materials)) break;
       markSimulatedEffectUsage(state, procedure, card, player.id, true);
-      const destination = procedure.cost.destination;
+      const destination = cost?.destination || "graveyard";
       let costComplete = true;
       for (const material of materials) {
         const fromZone = player.field.includes(material) ? "field" : "graveyard";
@@ -1977,7 +2061,8 @@ export function applyGenericSimulatedMainPhaseAction<
           );
       const card = player.field?.[fieldIndex];
       if (!card || card.cardKind !== "monster" || card.isFacedown) break;
-      const effect = resolveEffectForAction(card, action, ["ignition"]);
+      const parentEffect = resolveEffectForAction(card, action, ["ignition"]);
+      const effect = parentEffect ? prepareSimulatedEffectActivation(state, card, parentEffect, selectionOptions)?.effect : null;
       if (!effect || (effect.activationZones && !effect.activationZones.includes("field"))) break;
       if (!effectConditionsPass(state, effect, card, selectionOptions)) {
         break;
@@ -2014,7 +2099,7 @@ export function applyGenericSimulatedMainPhaseAction<
         options: selectionOptions,
       });
       if (!hasRequiredSimSelections(effect.targets || [], selections)) break;
-      if (!canPaySimulatedMoveCosts(effect, selections, card, player, state)) break;
+      if (!canPaySimulatedActivationCosts(effect, selections, card, player, state, selectionOptions)) break;
       if (effect.activationCosts?.length && !effect.actions?.every(
         candidate => hasActionZoneCandidates(player, candidate, card),
       )) break;
@@ -2054,7 +2139,8 @@ export function applyGenericSimulatedMainPhaseAction<
       const handIndex = resolveSimulatedHandIndex(player, action, "monster");
       const card = player.hand?.[handIndex];
       if (!card || card.cardKind !== "monster") break;
-      const effect = resolveEffectForAction(card, action, ["ignition"]);
+      const parentEffect = resolveEffectForAction(card, action, ["ignition"]);
+      const effect = parentEffect ? prepareSimulatedEffectActivation(state, card, parentEffect, selectionOptions)?.effect : null;
       if (!effect || !effect.activationZones?.includes("hand")) break;
       if (!effectConditionsPass(state, effect, card, selectionOptions)) {
         break;
@@ -2079,7 +2165,7 @@ export function applyGenericSimulatedMainPhaseAction<
         options: selectionOptions,
       });
       if (!hasRequiredSimSelections(effect.targets || [], selections)) break;
-      if (!canPaySimulatedMoveCosts(effect, selections, card, player, state)) break;
+      if (!canPaySimulatedActivationCosts(effect, selections, card, player, state, selectionOptions)) break;
       if (effect.activationCosts?.length && !effect.actions?.every(
         candidate => hasActionZoneCandidates(player, candidate, card),
       )) break;
@@ -2140,6 +2226,7 @@ export function applyGenericSimulatedMainPhaseAction<
       player.hand.splice(handIndex, 1);
       const placedCard = { ...card };
       if (placedCard.subtype !== "field") appendSimulatedFieldCard(player.spellTrap, placedCard);
+      if (!onPlayEffect) emitSimulatedSpellActivation(state, placedCard, options.selfId || "bot", selectionOptions);
       simulateGenericSpellEffect(state, placedCard, selectionOptions);
       if (placedCard.subtype !== "field" && !player.spellTrap.includes(placedCard)) break;
       if (placedCard.__simSetAfterResolution) {
@@ -2199,12 +2286,13 @@ export function applyGenericSimulatedMainPhaseAction<
         : action.index;
       const card = player.spellTrap?.[zoneIndex!];
       if (!card) break;
+      const wasSet = card.isFacedown === true;
       card.isFacedown = false;
 
-      const effect = resolveEffectForAction(card, action, [
-        "ignition",
-        "on_play",
-      ]);
+      const rawEffect = resolveEffectForAction(card, action, wasSet ? ["on_play"] : ["ignition"]);
+      const projectedEffect = rawEffect ? projectStoredBlueprintActivation(card, rawEffect) : null;
+      const effect = projectedEffect ? prepareSimulatedEffectActivation(state, card, projectedEffect, selectionOptions)?.effect : null;
+      if (projectedEffect && !effect) break;
       if (effect) {
         if (
           !effectConditionsPass(state, effect, card, selectionOptions)
@@ -2230,17 +2318,26 @@ export function applyGenericSimulatedMainPhaseAction<
           selfId: options.selfId || "bot",
           options: selectionOptions,
         });
-        applySimulatedActions({
-          actions: effectExecutionActions(effect),
-          selections,
-          state,
-          selfId: options.selfId || "bot",
-          options: { ...selectionOptions, sourceCard: card, effect },
+        if (!hasRequiredSimSelections(effect.targets || [], selections)) break;
+        if (!canPaySimulatedActivationCosts(effect, selections, card, player, state, selectionOptions)) break;
+        const usageSourceAtActivation = { ...card };
+        const resolutionOptions: SimulatedActionOptions = { ...selectionOptions, sourceCard: card, effect,
+          referenceSnapshots: captureSimulatedReferences(effect, selections, player, state.player),
+          actionContext: selectionOptions.actionContext || {},
+          costPayment: { status: "paid", actions: [], summonMarkers: [] } };
+        if (!applySimulatedActions({ actions: effect.activationCosts || [], selections, state,
+          selfId: options.selfId || "bot", options: resolutionOptions })) break;
+        if (wasSet) emitSimulatedSpellActivation(state, card, options.selfId || "bot", selectionOptions);
+        const persistent = card.cardKind === "spell" && ["equip", "continuous", "field"].includes(card.subtype || "");
+        const sourcePresent = player.spellTrap.includes(card) && !card.isFacedown && !card.effectsNegated;
+        if (!persistent || sourcePresent) applySimulatedActions({
+          actions: [...(effect.activationCommitActions || []), ...(effect.actions || [])],
+          selections, state, selfId: options.selfId || "bot", options: resolutionOptions,
         });
         markSimulatedEffectUsed(
           state,
           effect,
-          card,
+          usageSourceAtActivation,
           options.selfId || "bot",
         );
         options.onEffectActivated?.({
@@ -2252,6 +2349,8 @@ export function applyGenericSimulatedMainPhaseAction<
           zone: "spellTrap",
           options,
         });
+      } else if (wasSet) {
+        emitSimulatedSpellActivation(state, card, options.selfId || "bot", selectionOptions);
       }
 
       if (resolvesToGraveyardAfterActivation(card)) {
@@ -2271,7 +2370,7 @@ export function applyGenericSimulatedMainPhaseAction<
       const player = state.bot;
       const fieldSpell = player.fieldSpell;
       if (!fieldSpell) break;
-      const effect =
+      const parentEffect =
         resolveEffectForAction(fieldSpell, action, ["on_field_activate"]) ||
         (fieldSpell.effects || []).find(
           (entry) =>
@@ -2279,6 +2378,7 @@ export function applyGenericSimulatedMainPhaseAction<
             entry.timing === "ignition" &&
             entry.activationZones?.includes("fieldSpell"),
         );
+      const effect = parentEffect ? prepareSimulatedEffectActivation(state, fieldSpell, parentEffect, selectionOptions)?.effect : null;
       if (!effect) break;
       if (
         !effectConditionsPass(
@@ -2324,18 +2424,23 @@ export function applyGenericSimulatedMainPhaseAction<
           opponentLp: state.player?.lp || 0,
         },
       });
+      if (!hasRequiredSimSelections(effect.targets || [], selections)) break;
+      if (!canPaySimulatedActivationCosts(effect, selections, fieldSpell, player, state, selectionOptions)) break;
       const usageSourceAtActivation = { ...fieldSpell };
-      applySimulatedActions({
-        actions: effectExecutionActions(effect),
+      const resolutionOptions: SimulatedActionOptions = {
+        ...selectionOptions, sourceCard: fieldSpell, effect, targetPreference,
+        referenceSnapshots: captureSimulatedReferences(effect, selections, player, state.player),
+        actionContext: selectionOptions.actionContext || {},
+        costPayment: { status: "paid", actions: [], summonMarkers: [] },
+      };
+      if (!applySimulatedActions({ actions: effect.activationCosts || [], selections, state,
+        selfId: options.selfId || "bot", options: resolutionOptions })) break;
+      if (player.fieldSpell === fieldSpell && !fieldSpell.isFacedown && !fieldSpell.effectsNegated) applySimulatedActions({
+        actions: [...(effect.activationCommitActions || []), ...(effect.actions || [])],
         selections,
         state,
         selfId: options.selfId || "bot",
-        options: {
-          ...selectionOptions,
-          sourceCard: fieldSpell,
-          effect,
-          targetPreference,
-        },
+        options: resolutionOptions,
       });
       markSimulatedEffectUsed(
         state,
@@ -2369,7 +2474,8 @@ export function applyGenericSimulatedMainPhaseAction<
           );
       const card = player.graveyard?.[graveyardIndex!];
       if (!card || (action.type === "graveyardMonsterEffect" ? card.cardKind !== "monster" : card.cardKind !== "spell" && card.cardKind !== "trap")) break;
-      const effect = resolveEffectForAction(card, action, ["ignition"]);
+      const parentEffect = resolveEffectForAction(card, action, ["ignition"]);
+      const effect = parentEffect ? prepareSimulatedEffectActivation(state, card, parentEffect, selectionOptions)?.effect : null;
       if (!effect || !effect.activationZones?.includes("graveyard")) break;
       if (!effectConditionsPass(state, effect, card, selectionOptions)) {
         break;

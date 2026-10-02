@@ -2,7 +2,7 @@ import { clearEffectNegation } from "../../effects/negation.js";
 import { restoreFieldExitStatuses, restoreTemporaryStatuses } from "../../Card.js";
 import { cardMatchesFilter } from "./cardFilters.js";
 import { clearPermanentStatBuffs, expireFaceupStatBuffs, removeTrackedStatChange } from "../../effects/actions/stats.js";
-import { applyPassiveBuffValue, getSendToGraveReplacementDestination, refreshEquipExtraAttackBonus, removeFieldAuraBuffContributions } from "../../effects/passives/passiveBuffs.js";
+import { applyPassiveBuffValue, getFieldAuraBuffKey, getSendToGraveReplacementDestination, refreshEquipExtraAttackBonus, removeFieldAuraBuffContributions } from "../../effects/passives/passiveBuffs.js";
 import {
   assignAutomaticFieldSlot,
   clearFieldSlot,
@@ -113,6 +113,38 @@ export function refreshSimulatedFieldPresenceTypeSummonBuffs(state: SimulatedFie
   for (const player of [state.player, state.bot]) {
     for (const card of player?.field || []) {
       refreshSimulatedFieldPresenceTypeSummonBuffForCard(card);
+    }
+  }
+}
+
+/** Continuous archetype auras use the same contribution keys as a live clone. */
+export function refreshSimulatedFieldAuras(state: Pick<AiStateShape, "bot" | "player">): void {
+  const field = [...state.player.field, ...state.bot.field];
+  for (const owner of [state.player, state.bot]) {
+    for (const source of [...owner.field, ...owner.spellTrap, ...(owner.fieldSpell ? [owner.fieldSpell] : [])]) {
+      source.effects?.forEach((effect, effectIndex) => {
+        if (effect.timing !== "passive" || !("passive" in effect) || effect.passive?.type !== "field_archetype_aura_buff") return;
+        const passive = effect.passive;
+        const active = !source.isFacedown && !source.effectsNegated &&
+          (!passive.sourceFilters || cardMatchesFilter(source, passive.sourceFilters)) &&
+          (!passive.equippedWithFilters || cardMatchesFilter(source, { equippedWithFilters: passive.equippedWithFilters }));
+        for (const targetOwner of [state.player, state.bot]) {
+          for (const target of targetOwner.field) {
+            const eligible = active &&
+              (passive.includeSelf !== false || target !== source) &&
+              (!passive.targetRequireFaceup || !target.isFacedown) &&
+              (passive.targetOwners || ["self"]).includes(owner === targetOwner ? "self" : "opponent") &&
+              (passive.targetCardKinds || ["monster"]).includes(target.cardKind || "monster") &&
+              cardMatchesFilter(target, { ...(passive.targetFilters || {}), ...(passive.archetype ? { archetype: passive.archetype } : {}) });
+            for (const stat of ["atk", "def"] as const) {
+              const amount = stat === "atk" ? passive.atkBoost : undefined;
+              const value = amount ?? ((passive.stats || ["atk", "def"]).includes(stat) ? passive.amount || 0 : 0);
+              const key = getFieldAuraBuffKey(source, effect.id, effectIndex, field.indexOf(source), stat);
+              applyPassiveBuffValue(target, key, eligible ? value : 0, [stat]);
+            }
+          }
+        }
+      });
     }
   }
 }
@@ -418,6 +450,7 @@ export function moveCardToZone(
       toZone !== "field" && toZone !== "spellTrap" && toZone !== "fieldSpell") {
     const field = options.state ? [...options.state.player.field, ...options.state.bot.field] : sourcePlayer.field;
     removeFieldAuraBuffContributions(card, field, field.indexOf(card));
+    if (card.state?.blueprintStorage) delete card.state.blueprintStorage;
     delete card.oncePerTurnUsageByName;
     card.oncePerTurnResetVersion = (card.oncePerTurnResetVersion || 0) + 1;
   }
@@ -475,7 +508,10 @@ export function moveCardToZone(
   removeCardFromZones(sourcePlayer, card);
   if (toZone !== "field" && toZone !== "spellTrap") card.locationVersion = (card.locationVersion || 0) + 1;
   card.location = toZone === "removed" ? null : toZone;
-  if (toZone === "removed") return true;
+  if (toZone === "removed") {
+    if (options.state) refreshSimulatedFieldAuras(options.state);
+    return true;
+  }
   if (toZone === "graveyard" || toZone === "banished") card.isFacedown = false;
   if (toZone === "extraDeck") {
     card.properSummonEstablished = false;
@@ -483,12 +519,15 @@ export function moveCardToZone(
   }
   if (toZone === "fieldSpell") {
     player.fieldSpell = card;
+    if (options.state) refreshSimulatedFieldAuras(options.state);
     return true;
   }
   player[toZone] ||= [];
-  if (toZone === "field" || toZone === "spellTrap") return appendSimulatedFieldCard(player[toZone], card);
-  appendSimulatedZoneCard(player[toZone], card);
-  return true;
+  const moved = toZone === "field" || toZone === "spellTrap"
+    ? appendSimulatedFieldCard(player[toZone], card)
+    : (appendSimulatedZoneCard(player[toZone], card), true);
+  if (options.state) refreshSimulatedFieldAuras(options.state);
+  return moved;
 }
 
 export function findCardOwner(

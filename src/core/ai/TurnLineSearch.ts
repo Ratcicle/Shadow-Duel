@@ -1,5 +1,5 @@
 import { appendSimulatedZoneCard } from "./common/zones.js";
-import { createPlanningCopy, hasPendingPassiveRestoration, projectRuntimeEffectUsage } from "./common/planningCopy.js";
+import { createPlanningCopy, hasPendingPassiveRestoration, projectRuntimeEffectUsage, projectRuntimeReplacementEffects } from "./common/planningCopy.js";
 import { PLANNING_PLAYER_FIELDS, PLANNING_STATE_FIELDS, PLANNING_ZONES } from "./common/stateFingerprint.js";
 import { isSimulatedMainPhaseActionSupported } from "./common/simulation.js";
 import { hasSimulatedProtection } from "./common/simulatedActions/lifecycle.js";
@@ -564,6 +564,7 @@ function clonePlanningState(
     "_simUnsupportedActions", "_simLuminarch", "_gameTreeActors",
   ]);
   projectRuntimeEffectUsage(game, state);
+  projectRuntimeReplacementEffects(game, state);
   return state;
 }
 

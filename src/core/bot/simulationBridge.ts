@@ -12,7 +12,7 @@ import type {
   SimulationGameState,
   SimulatedTemporaryControlEffect,
 } from "../contracts/aiState.js";
-import { createPlanningCopy, projectRuntimeEffectUsage } from "../ai/common/planningCopy.js";
+import { createPlanningCopy, projectRuntimeEffectUsage, projectRuntimeReplacementEffects } from "../ai/common/planningCopy.js";
 import { PLANNING_PLAYER_FIELDS, PLANNING_STATE_FIELDS } from "../ai/common/stateFingerprint.js";
 
 interface SimulationBotPort extends AIStrategyBotPort {
@@ -95,5 +95,6 @@ export function cloneBotGameState(
     "_simUnsupportedActions",
   ]);
   projectRuntimeEffectUsage(game, state);
+  projectRuntimeReplacementEffects(game, state);
   return state;
 }

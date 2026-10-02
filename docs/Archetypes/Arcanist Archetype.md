@@ -74,11 +74,9 @@ O arquétipo não possui monstros de Extra Deck cadastrados.
 
 Nível 3, Spellcaster, Light, 1500/1000.
 
-> Se esse card for invocado por invocação-Normal: você pode adicionar 1 Magia "Arcanista" do seu Deck à sua mão.
+> Se este card for Invocado por Invocação-Normal: você pode adicionar 1 Magia "Arcanista" do seu Deck à sua mão. Você só pode ativar este efeito de "Aprendiz Arcanista" uma vez por turno.
 >
-> Se esse card for equipado com uma Magia de Equipamento "Arcanista": todos os monstros "Arcanista" que você controla recebem 300 de ATK enquanto este card estiver com a face para cima no campo.
->
-> Você só pode ativar cada efeito de "Aprendiz Arcanista" uma vez por turno.
+> Enquanto este card com a face para cima estiver equipado com uma Magia de Equipamento "Arcanista", todos os monstros "Arcanista" que você controla ganham 300 de ATK.
 
 **305 — Viridis, Arcanista da Vida / Viridis, Arcanist of Life**
 
@@ -102,11 +100,9 @@ Nível 4, Spellcaster, Earth, 1500/1800.
 
 Nível 4, Spellcaster, Water, 1500/1200.
 
-> Se você controlar um monstro "Arcanista", você pode Invocar este card por Invocação-Especial da sua mão.
+> Se você controlar um monstro "Arcanista" com a face para cima, você pode Invocar este card por Invocação-Especial da sua mão. Você só pode Invocar "Albus, Arcanista do Gelo" por Invocação-Especial uma vez por turno desta forma.
 >
-> Se esse card for equipado com uma Magia de Equipamento "Arcanista": escolha 1 monstro "Arcanista" no seu Cemitério; adicione-o à sua mão.
->
-> Você só pode ativar cada efeito de "Albus, Arcanista do Gelo" uma vez por turno.
+> Se este card for equipado com uma Magia de Equipamento "Arcanista": escolha 1 monstro "Arcanista" no seu Cemitério; adicione-o à sua mão. Você só pode ativar este efeito de "Albus, Arcanista do Gelo" uma vez por turno.
 
 **308 — Mestre dos Espelhos Arcanista / Master of Mirrors Arcanist**
 
@@ -132,7 +128,7 @@ Nível 9, Spellcaster, Light, 2500/2400.
 
 Nível 4, Spellcaster, Dark, 1700/1400.
 
-> Monstros que seu oponente controla perdem 100 de ATK/DEF para cada Magia "Arcanista" que você ativou até o final do turno.
+> Cada vez que você ativar uma Magia "Arcanista" enquanto este card estiver com a face para cima no campo: todos os monstros que seu oponente controla nesse momento perdem 100 de ATK/DEF até o final deste turno.
 >
 > Se este card for equipado com uma Magia de Equipamento "Arcanista": escolha 1 monstro que seu oponente controla; reduza o ATK/DEF dele pela metade até o final do turno.
 >
@@ -144,25 +140,23 @@ Nível 4, Spellcaster, Dark, 1700/1400.
 
 Magia de Equipamento.
 
-> Equipe apenas a um monstro "Arcanista" que você controla.
+> Equipe apenas a um monstro "Arcanista" que você controla. Você só pode controlar 1 "Grimório do Arcanista Aprendiz".
 >
-> Uma vez por turno: você pode ativar 1 dos efeitos armazenados neste card.
+> Se uma Magia "Arcanista" que você ativou resolver: você pode armazenar o efeito dessa Magia neste card (máximo 1). Se este card já tiver um efeito armazenado, você pode substituí-lo pelo novo efeito.
 >
-> Se uma Magia "Arcanist" que você ativou resolver: você pode armazenar o efeito dessa Magia neste card (máximo 1). Se este card já tiver 1 efeito armazenado, você pode armazenar o novo efeito em vez disso.
->
-> Você só pode controlar 1 "Grimório do Arcanista Aprendiz".
+> Uma vez por turno: você pode ativar o efeito armazenado neste card.
 
 **303 — Explosão Carmesim Arcanista / Arcanist Crimson Explosion**
 
 Magia Normal.
 
-> Escolha 1 monstro "Arcanista" que você controla e 1 monstro que seu oponente controla: destrua os alvos e, se isso acontecer, cada jogador sofre dano igual a metade do ATK do monstro que ele controlava que foi destruído. Se você controlar uma Magia de Equipamento "Arcanista", você não sofre dano desse efeito.
+> Escolha 1 monstro "Arcanista" que você controla e 1 monstro que seu oponente controla; destrua os alvos e, se isso acontecer, cada jogador sofre dano igual à metade do ATK que seu monstro destruído tinha imediatamente antes de ser destruído. Se você controlar uma Magia de Equipamento "Arcanista", você não sofre dano desse efeito.
 
 **304 — Lança Relâmpago Arcanista / Arcanist Lightning Lance**
 
 Magia Normal.
 
-> Escolha 1 monstro com a face para cima no campo; aplique o efeito apropriado, dependendo de quem controla esse alvo. Se for um monstro "Arcanista" que você controla: ele ganha 500 de ATK e, se ele batalhar um monstro em Posição de Defesa neste turno, cause dano perfurante ao seu oponente. Se for um monstro que seu oponente controla: ele não pode declarar um ataque até o final do próximo turno do seu oponente.
+> Escolha 1 monstro com a face para cima no campo; aplique o efeito apropriado, dependendo de quem controla esse alvo. Se for um monstro "Arcanista" que você controla: ele ganha 500 de ATK até o final deste turno e, se ele batalhar um monstro em Posição de Defesa neste turno, cause dano perfurante ao seu oponente. Se for um monstro que seu oponente controla: ele não pode declarar um ataque até o final do próximo turno do seu oponente.
 >
 > Você só pode ativar 1 "Lança Relâmpago Arcanista" por turno.
 
@@ -180,7 +174,9 @@ Magia Contínua.
 
 Magia Normal.
 
-> Escolha 1 monstro "Arcanista" que você controla; até o final do próximo turno, a primeira vez que esse monstro seria destruído em batalha, ele não é destruído. Se esse monstro estiver equipado com uma Magia de Equipamento "Arcanista" quando este efeito resolver, em vez disso, até o final do próximo turno, a primeira vez que cada monstro "Arcanista" que você controla seria destruído em batalha ou por efeito de card, ele não é destruído.
+> Escolha 1 monstro "Arcanista" que você controla; até o final do próximo turno, a primeira vez que esse monstro seria destruído em batalha ou por efeito de card, ele não é destruído.
+>
+> Se esse monstro estiver equipado com uma Magia de Equipamento "Arcanista": compre 2 cards.
 >
 > Você só pode ativar 1 "Barreira de Gelo Arcanista" por turno.
 

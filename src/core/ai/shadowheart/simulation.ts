@@ -1,6 +1,6 @@
 import { canSimSpecialSummon } from "../common/simulatedActions/summon.js";
 import { appendSimulatedZoneCard, clearSimulatedFieldPosition } from "../common/zones.js";
-import { appendSimulatedFieldCard } from "../common/zones.js";
+import { appendSimulatedFieldCard, refreshSimulatedFieldAuras } from "../common/zones.js";
 // ---------------------------------------------------------------------------
 // src/core/ai/shadowheart/simulation.js
 // Shadow-Heart simulation layer for lookahead/beam/planner clones.
@@ -342,28 +342,6 @@ function moveToZone(
   return true;
 }
 
-function applyDarknessValleyBuffToCard(
-  card: SimulatedCardState | null | undefined,
-  player: SimulatedPlayerState | null = null,
-): void {
-  if (player && player.fieldSpell?.name !== SH.valley) return;
-  if (!card || card.cardKind !== "monster" || card.isFacedown) return;
-  if (!isShadowHeart(card)) return;
-  if (card._simDarknessValleyBuff) return;
-  card.tempAtkBoost = (card.tempAtkBoost || 0) + 300;
-  card.atk = (card.atk || 0) + 300;
-  card._simDarknessValleyBuff = true;
-}
-
-function applyDarknessValleyBuffs(
-  player: SimulatedPlayerState | null | undefined,
-): void {
-  if (player?.fieldSpell?.name !== SH.valley) return;
-  (player.field || []).forEach((card) =>
-    applyDarknessValleyBuffToCard(card, player)
-  );
-}
-
 function defaultPlaceSpellCard(
   state: MutableShadowState,
   card: SimulatedCardState,
@@ -388,9 +366,7 @@ function placeShadowHeartSpellCard(
 ): ShadowPlaceResult {
   const placeSpellCard = options.placeSpellCard || defaultPlaceSpellCard;
   const result = placeSpellCard(state, card);
-  if (card?.name === SH.valley) {
-    applyDarknessValleyBuffs(state.bot);
-  }
+  refreshSimulatedFieldAuras(state);
   return result;
 }
 
@@ -627,7 +603,7 @@ function handleAfterSummon({
   options = {},
 }: AfterSummonInput): void {
   if (!card || card.isFacedown) return;
-  applyDarknessValleyBuffToCard(card, player);
+  refreshSimulatedFieldAuras(state);
 
   if (
     card.name === SH.arctroth &&
@@ -903,7 +879,7 @@ export function buildShadowHeartSimulationOptions(
         simulateCathedralEffect(simState, simAction, simOptions),
       fieldEffect: ({ state: simState }: ShadowOverrideInput) => {
         if (simState.bot?.fieldSpell?.name !== SH.valley) return false;
-        applyDarknessValleyBuffs(simState.bot);
+        refreshSimulatedFieldAuras(simState);
         return true;
       },
     },
@@ -933,7 +909,7 @@ export function buildShadowHeartSimulationOptions(
       state: simState,
       fusionCard,
     }: ShadowFusionHookInput) => {
-      applyDarknessValleyBuffToCard(fusionCard, simState.bot);
+      refreshSimulatedFieldAuras(simState);
       if (fusionCard?.name === SH.demonDragon) {
         destroyBestOpponentCard(simState);
       }

@@ -215,6 +215,7 @@ function installReplayCommandCapture(
     // before awaiting so confirmation records once and cancellation records nothing.
     const deferredToSelection = Boolean(
       descriptor && openedSelection && openedSelection !== previousSelection &&
+      openedSelection.replayCommandHandledByCaller !== true &&
       generation === this.fieldPlacementGeneration && recording === this._canonicalReplay &&
       this.captureReplayEnabled && this.replayMode !== "playback" &&
       !this._activeDeferredReplayCommandDescriptor,

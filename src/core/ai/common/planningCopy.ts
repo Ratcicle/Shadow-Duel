@@ -11,7 +11,48 @@ import {
   PLANNING_ZONES,
 } from "./stateFingerprint.js";
 import type { EffectUsageMap } from "../../contracts/cards.js";
+import type { ActionReplacementEffect } from "../../contracts/actions/shared.js";
 type SearchCardInput = AiCardInput;
+
+/** Copy public, already-resolved destruction registrations into the planner. */
+export function projectRuntimeReplacementEffects(input: AiStateInput, state: AiStateShape): void {
+  const registrations: unknown = Reflect.get(input, "temporaryReplacementEffects");
+  if (!Array.isArray(registrations)) return;
+  const read = (value: unknown, key: string): unknown =>
+    value !== null && typeof value === "object" ? Reflect.get(value, key) : undefined;
+  state._simReplacementEffects = [];
+  for (const entry of registrations as readonly unknown[]) {
+    const raw = read(entry, "replacementEffect");
+    const ownerId = read(entry, "ownerId");
+    if (!raw || typeof raw !== "object" || read(raw, "type") !== "destruction" || typeof ownerId !== "string") continue;
+    // The owned runtime producer supplies ActionReplacementEffect; retain only
+    // its declarative fields, excluding targetCards and other live references.
+    const behavior = raw as ActionReplacementEffect;
+    const replacementEffect: ActionReplacementEffect = {
+      type: "destruction",
+      ...(behavior.reason ? { reason: behavior.reason } : {}),
+      ...(behavior.targetOwner ? { targetOwner: behavior.targetOwner } : {}),
+      ...(behavior.targetZones ? { targetZones: [...behavior.targetZones] } : {}),
+      ...(behavior.targetRequireFaceup !== undefined ? { targetRequireFaceup: behavior.targetRequireFaceup } : {}),
+      ...(behavior.targetFilters ? { targetFilters: structuredClone(behavior.targetFilters) } : {}),
+      ...(behavior.costActions ? { costActions: structuredClone(behavior.costActions) } : {}),
+      ...(behavior.costCount !== undefined ? { costCount: behavior.costCount } : {}),
+    };
+    const presences = read(raw, "targetPresences");
+    const targetPresences = Array.isArray(presences) ? (presences as readonly unknown[]).flatMap(presence => {
+      const instanceId = read(presence, "instanceId"); const locationVersion = read(presence, "locationVersion");
+      const fieldPresenceId = read(presence, "fieldPresenceId");
+      if ((typeof instanceId !== "string" && typeof instanceId !== "number") || typeof locationVersion !== "number") return [];
+      return [{ instanceId, locationVersion, fieldPresenceId: typeof fieldPresenceId === "string" || typeof fieldPresenceId === "number" ? fieldPresenceId : null }];
+    }) : [];
+    const uniqueKey = read(entry, "uniqueKey"); const uses = read(entry, "usesRemaining"); const expiry = read(entry, "expiresOnTurn");
+    state._simReplacementEffects.push({ sourcePlayerId: ownerId, replacementEffect, targetPresences,
+      ...(typeof uniqueKey === "string" ? { uniqueKey } : {}),
+      usesRemaining: typeof uses === "number" && Number.isFinite(uses) ? uses : null,
+      expiresOnTurn: typeof expiry === "number" ? expiry : null,
+    });
+  }
+}
 
 /** Passive restoration is not modeled, including suppression inherited from a live duel. */
 export function hasPendingPassiveRestoration(state: Pick<AiStateInput, "bot" | "player">): boolean {

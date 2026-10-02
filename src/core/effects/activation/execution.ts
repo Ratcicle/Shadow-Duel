@@ -206,7 +206,7 @@ export async function activateMonsterFromGraveyard(
   }
 
   const requestedEffectId = activationContext?.effectId || null;
-  const effect = this.getMonsterIgnitionEffect
+  const effect = activationContext.preparedEffect || (this.getMonsterIgnitionEffect
     ? this.getMonsterIgnitionEffect(card, "graveyard", {
         effectId: requestedEffectId,
       })
@@ -215,7 +215,7 @@ export async function activateMonsterFromGraveyard(
           e.timing === "ignition" &&
           getCanonicalEffectActivationZones(card, e).includes("graveyard") &&
           (!requestedEffectId || e.id === requestedEffectId),
-      );
+      ));
 
   if (!effect) {
     return {
@@ -296,6 +296,7 @@ export async function activateMonsterFromGraveyard(
       success: false,
       needsSelection: true,
       selectionContract: targetResult.selectionContract,
+      effect,
     };
   }
 
@@ -371,7 +372,7 @@ export async function activateFieldSpell(
   }
 
   // Look for on_field_activate or an ignition effect declared for Field Zone.
-  const effect = (card.effects || []).find(
+  const effect = activationContext.preparedEffect || (card.effects || []).find(
     (e) =>
       e &&
       (e.timing === "on_field_activate" ||
@@ -443,6 +444,7 @@ export async function activateFieldSpell(
       success: false,
       needsSelection: true,
       selectionContract: targetResult.selectionContract,
+      effect,
     };
   }
 
@@ -723,6 +725,7 @@ export async function activateSpellTrapEffect(
     }
   }
 
+  effect = activationContext.preparedEffect || effect;
   if (!effect) {
     return fail("No activation effect defined.");
   }
@@ -769,10 +772,11 @@ export async function activateSpellTrapEffect(
     targetSelections: normalizedActivationContext.targetSelections,
   };
 
-  const condCheck = this.evaluateConditions(
-    effect.conditions,
-    ctx as ActivationConditionContext,
-  );
+  // Activation conditions were validated before the committed payment. Paying
+  // a cost may remove the equipment or stored effect that made activation legal.
+  const condCheck = normalizedActivationContext.committed && normalizedActivationContext.costsPaid
+    ? { ok: true }
+    : this.evaluateConditions(effect.conditions, ctx as ActivationConditionContext);
   if (!condCheck.ok) {
     return fail(condCheck.reason);
   }
@@ -796,6 +800,7 @@ export async function activateSpellTrapEffect(
       success: false,
       needsSelection: true,
       selectionContract: targetResult.selectionContract,
+      effect,
     };
   }
 
@@ -974,7 +979,7 @@ export async function activateMonsterEffect(
   }
 
   const requestedEffectId = activationContext?.effectId || null;
-  const effect = this.getMonsterIgnitionEffect
+  const effect = activationContext.preparedEffect || (this.getMonsterIgnitionEffect
     ? this.getMonsterIgnitionEffect(card, activationZone, {
         effectId: requestedEffectId,
       })
@@ -986,7 +991,7 @@ export async function activateMonsterEffect(
             ? getCanonicalEffectActivationZones(card, e).includes("hand")
             : getCanonicalEffectActivationZones(card, e).includes("field")) &&
           (!requestedEffectId || e.id === requestedEffectId),
-      );
+      ));
 
   if (!effect) {
     return {
@@ -1099,6 +1104,7 @@ export async function activateMonsterEffect(
       success: false,
       needsSelection: true,
       selectionContract: targetResult.selectionContract,
+      effect,
     };
   }
 
