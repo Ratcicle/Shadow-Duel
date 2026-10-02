@@ -251,7 +251,8 @@ test("replay canônico headless termina com o mesmo hash", async () => {
     ["a897fa58", "297e0fe8"],
   );
   assert.equal(replay.result.finalStateHash, "297e0fe8");
-  assert.equal(hashCanonicalValue(replay), "bb7d5813");
+  // The recording hash includes engine v11 and the False Horizon definition signature.
+  assert.equal(hashCanonicalValue(replay), "dc6cc105");
   assert.equal(JSON.stringify(replay).length, 10492);
 
   const result = await replayCanonicalDuel(replay);
