@@ -1,7 +1,7 @@
 # Replay canônico
 
 O replay executável usa o formato `shadow-duel-canonical-replay`, schema `2` e
-`engineVersion: "engine-rules-v7"`. Ele é independente do relatório
+`engineVersion: "engine-rules-v8"`. Ele é independente do relatório
 estratégico. O importador aceita somente o schema `2`: relatórios v4 e replays
 de schemas anteriores não são partidas executáveis nesta versão.
 
@@ -181,7 +181,7 @@ caracteres do replay, usado para detectar divergências na reprodução.
 `validateCanonicalReplay(input)` recebe `unknown`, não muta a entrada e retorna
 a mesma referência somente depois de validar o documento. `setup`, `commands` e
 `decisions` e `engineVersion` são obrigatórios. A versão da engine deve ser
-`"engine-rules-v7"`; gravações sem essa versão são rejeitadas antes da validação
+`"engine-rules-v8"`; gravações sem essa versão são rejeitadas antes da validação
 profunda e da reprodução. `events`, `result` e `finalized` continuam opcionais
 na importação de arquivos do schema `2`; quando presentes, são validados
 profundamente. Os comandos e kinds de decisão permanecem os mesmos.
@@ -345,3 +345,21 @@ o filtro de alvos de negação antes de mover recursos. Schema 2 é preservado.
 Gravações de `engine-rules-v6`, `dragon-rules-v6` e versões anteriores são
 recusadas antes da reprodução: nenhuma dessas engines isoladas produzia o
 mesmo estado/fluxo combinado. Nenhum arquivo histórico é removido ou migrado.
+
+### Substituição de destruição
+
+A engine atual `engine-rules-v8` preserva o schema 2 e as regras integradas em
+v7. Fontes com efeitos negados não podem aplicar substituições de destruição;
+efeitos temporários já registrados continuam independentes da fonte original.
+Custos de movimento só substituem a destruição quando chegam ao destino
+exigido. Redirecionamento ou remoção de Token não satisfazem um envio ao
+Cemitério, e os movimentos já realizados não são revertidos.
+
+Essas correções mudam decisões e estados de combate. Gravações de
+`engine-rules-v7` e anteriores são rejeitadas antes da reprodução, sem remoção
+de arquivos nem migração automática. Os testes de
+`test/replay/destructionReplacementReplay.test.ts` cobrem fonte negada,
+redirecionamento e substituição válida nos dois assentos, com humano e IA,
+reprodução em outra instância e consumo das decisões gravadas sem nova UI.
+A escolha automática dos custos da IA mantém a ordenação determinística
+existente; esse ramo não usa `AutoSelector` nem grava uma escolha separada.
