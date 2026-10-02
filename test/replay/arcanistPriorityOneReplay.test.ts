@@ -151,7 +151,7 @@ async function setup(t: TestContext, seat: PlayerId, controller: Controller, sce
   const replay = async (commandCount = 1) => {
     const saved = validateCanonicalReplay(JSON.parse(JSON.stringify(live.finalizeReplay({ reason: "arcanist-p1" }))));
     assert.equal(saved.schemaVersion, 2);
-    assert.equal(saved.engineVersion, "engine-rules-v12");
+    assert.equal(saved.engineVersion, "engine-rules-v13");
     assert.equal(saved.commands.length, commandCount);
     assert.equal(saved.commands[0]?.type, scenario === "tornado" ? "activate_card" : "activate_effect");
     const result = await replayCanonicalDuel(saved, { game: unsafeFixture<ReplayDriverGamePort>(playback,

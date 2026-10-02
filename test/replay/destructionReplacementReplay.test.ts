@@ -74,7 +74,7 @@ for (const scenario of ["negated", "redirected", "normal"] as const) {
         assert.equal(owner.field.includes(fodder), scenario === "negated");
         assert.equal(owner.banished.includes(fodder), scenario === "redirected");
         const replay = validateCanonicalReplay(JSON.parse(JSON.stringify(live.finalizeReplay({ reason: "destruction-replacement" }))));
-        assert.equal(replay.engineVersion, "engine-rules-v12");
+        assert.equal(replay.engineVersion, "engine-rules-v13");
         assert.equal(replay.schemaVersion, 2);
         assert.throws(() => validateCanonicalReplay({ ...replay, engineVersion: "engine-rules-v7" }), /engineVersion/);
         const played = await replayCanonicalDuel(replay, {

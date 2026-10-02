@@ -107,15 +107,31 @@ export function getCurrentChainActivationContext(
   const controller = lastLink?.controller || null;
   if (!lastLink?.card || !controller || !lastLink?.effect) return null;
   const responseContextType = lastLink.responseContextType;
+  // Declared targets exclude costs and contextual references. Keep the existing
+  // first-target contract and ordered list used when the initial link opens.
+  const targets = [...new Set(lastLink.declaredTargets.flatMap(entry => entry.cards))];
+  const target = targets[0] || null;
+  const targetControllerId = target
+    ? lastLink.declaredTargetSnapshots.flatMap(entry => entry.cards)
+        .find(snapshot => snapshot.card === target)?.controllerId ?? target.controller ?? target.owner
+    : null;
+  const targetOwner = [this.game?.player, this.game?.bot]
+    .find(player => player && player.id === targetControllerId) || null;
+  const originalContext = context?.originalContext !== undefined
+    ? context.originalContext
+    : context || null;
   return {
     ...(context || {}),
-    originalContext: context || null,
+    originalContext,
     type: responseContextType,
     event: responseContextType,
     card: lastLink.card,
     player: controller,
     controller,
     triggerPlayer: controller,
+    target,
+    targetOwner,
+    targets,
     effect: lastLink.effect,
     activationZone: lastLink.activationZone || null,
     activationAttempt: {
@@ -146,21 +162,32 @@ export function getEffectChainResponseContext(
   const responseContext = this.getCurrentChainActivationContext?.(context);
   if (!responseContext) return context || null;
 
-  if (this.effectCanRespondToContext?.(effect, responseContext.type)) {
+  if (
+    effect.event === responseContext.event ||
+    this.effectCanRespondToContext?.(effect, responseContext.type)
+  ) {
     return responseContext;
   }
 
-  const originalExpectedEvent = getExpectedEventForContext(context);
+  if (
+    effect.event === "effect_targeted" ||
+    this.effectCanRespondToContext?.(effect, "effect_targeted")
+  ) {
+    return responseContext.targets?.length
+      ? { ...responseContext, type: "effect_targeted", event: "effect_targeted" }
+      : responseContext;
+  }
 
-  const matchesOriginal =
-    effect?.event === originalExpectedEvent ||
-    this.effectCanRespondToContext?.(effect, context?.type);
-  if (matchesOriginal) return context || null;
-
-  const matchesLastActivation =
-    effect?.event === responseContext.event ||
-    this.effectCanRespondToContext?.(effect, responseContext.type);
-  return matchesLastActivation ? responseContext : context || null;
+  // Attack, summon and other explicit occurrences remain available throughout
+  // their window. Activation/targeting occurrences instead belong to a link:
+  // returning the root here would revive an older activation or its targets.
+  const original = responseContext.originalContext;
+  const originalEvent = getExpectedEventForContext(original);
+  if (
+    original && originalEvent !== "effect_targeted" &&
+    originalEvent !== "card_activation" && originalEvent !== "effect_activation"
+  ) return original;
+  return responseContext;
 }
 
 export function effectHasAction(
@@ -333,20 +360,6 @@ export function findActivatableEffect(
 ): ChainEffect | null {
   if (!card?.effects || !Array.isArray(card.effects)) return null;
 
-  // Map context type back to event name
-  const contextToEvent = {
-    attack_declaration: "attack_declared",
-    battle_step_open: "battle_step_open",
-    summon: "after_summon",
-    phase_change: "phase_end",
-    card_activation: "card_activation",
-    effect_activation: "effect_activation",
-    effect_targeted: "effect_targeted",
-    battle_damage: "battle_damage",
-    battle_destroy: "battle_destroy",
-  };
-  const expectedEvent = getExpectedEventForContext(context);
-
   for (const effect of card.effects) {
     if (!effect) continue;
     if (effectFilter && effect !== effectFilter) continue;
@@ -360,7 +373,6 @@ export function findActivatableEffect(
         const activeExpectedEvent = getExpectedEventForContext(activeContext);
         // Match the effect's event with the context
         if (
-          effect.event === expectedEvent ||
           effect.event === activeExpectedEvent ||
           this.effectCanRespondToContext?.(effect, activeContext?.type)
         ) {

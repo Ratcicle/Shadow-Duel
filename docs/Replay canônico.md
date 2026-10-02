@@ -1,7 +1,7 @@
 # Replay canônico
 
 O replay executável usa o formato `shadow-duel-canonical-replay`, schema `2` e
-`engineVersion: "engine-rules-v12"`. Ele é independente do relatório
+`engineVersion: "engine-rules-v13"`. Ele é independente do relatório
 estratégico. O importador aceita somente o schema `2`: relatórios v4 e replays
 de schemas anteriores não são partidas executáveis nesta versão.
 
@@ -181,7 +181,7 @@ caracteres do replay, usado para detectar divergências na reprodução.
 `validateCanonicalReplay(input)` recebe `unknown`, não muta a entrada e retorna
 a mesma referência somente depois de validar o documento. `setup`, `commands` e
 `decisions` e `engineVersion` são obrigatórios. A versão da engine deve ser
-`"engine-rules-v12"`; gravações sem essa versão são rejeitadas antes da validação
+`"engine-rules-v13"`; gravações sem essa versão são rejeitadas antes da validação
 profunda e da reprodução. `events`, `result` e `finalized` continuam opcionais
 na importação de arquivos do schema `2`; quando presentes, são validados
 profundamente. Os comandos e kinds de decisão permanecem os mesmos.
@@ -486,7 +486,7 @@ ou ao snapshot canônico. As seções v9 acima registram os lotes anteriores.
 
 ### Integração Arcanist, movimentos e continuação — engine-rules-v12
 
-A versão atual é `engine-rules-v12`, schema `2`. Ela reúne a main v10
+A versão integrada anterior é `engine-rules-v12`, schema `2`. Ela reúne a main v10
 (histórico de ativações, Magias Baixadas e passivas modeladas) e a branch
 compartilhada v11 (guardas completos de substituição de Campo, fronteira de
 compra desconhecida e continuação declarativa). Os rótulos v10 usados pelas
@@ -502,3 +502,26 @@ a prova privada de passivas continua fora do envelope serializado.
 O golden genérico tem hash completo `6b278c1f`; seus hashes de estado continuam
 `a897fa58` e `297e0fe8`. As regressões de Arcanist, movimento, substituição e
 continuação reproduzem decisões gravadas sem UI ou política de IA ao vivo.
+
+### Respostas aos alvos do último elo — engine-rules-v13
+
+A versão atual é `engine-rules-v13`, schema `2`. A descoberta de respostas usa
+os alvos declarados pelo último Chain Link, excluindo custos e referências ao
+evento. Um elo posterior sem alvos não reutiliza o alvo nem a ativação do elo
+inicial. Respostas a ativações continuam recebendo a identidade da ativação
+atual; ocorrências explícitas de ataque, Invocação e fase são preservadas na
+janela original.
+
+Isso altera as opções legais de resposta e suas decisões gravadas. Replays v12
+e anteriores são rejeitados pela versão antes da reprodução, sem migração ou
+remoção de arquivos. O schema, os kinds de decisão e a assinatura do banco
+`7bbe98b0` permanecem iguais. O golden completo passa a `01535368`; os hashes
+de estado do cenário genérico continuam `a897fa58` e `297e0fe8`.
+
+As regressões de Sanctuary cobrem primeiro e segundo elo, aceitação/recusa,
+ambos os assentos, custos, saída/retorno da mesma carta, um terceiro elo sem
+alvos e reprodução em outro Game sem consultas à UI ou à política de IA.
+Preserva-se o contrato existente de `target` como primeiro alvo e `targets`
+como lista ordenada completa. Escolher entre várias ocorrências elegíveis de
+alvo permanece uma limitação anterior; esta versão não cria outra decisão
+nem escolhe automaticamente uma ocorrência diferente.
