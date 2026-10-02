@@ -1,4 +1,5 @@
 import { refreshSimulatedFieldAuras } from "../zones.js";
+import { shouldContinueAfterActionFailure } from "../../../actionHandlers/shared.js";
 import { getPerspectivePlayers } from "../perspective.js";
 import { resolveTargetsForAction, captureSimulatedReferences, STOP_SIMULATION } from "./shared.js";
 import type { ActionOf, ActionType } from "../../../contracts/actions.js";
@@ -239,6 +240,7 @@ export function applySimulatedActions({
     });
     refreshSimulatedFieldAuras(state);
     if (result === STOP_SIMULATION) return false;
+    if (result === false && !shouldContinueAfterActionFailure(action)) return false;
   }
   return true;
 }

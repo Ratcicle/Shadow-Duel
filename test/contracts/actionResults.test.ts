@@ -79,6 +79,52 @@ function createHost(
   };
 }
 
+for (const flags of [
+  {}, { haltOnFailure: true }, { stopOnFailure: true },
+  { haltOnFailure: false }, { stopOnFailure: false },
+  { haltOnFailure: false, stopOnFailure: true },
+  { haltOnFailure: true, stopOnFailure: false },
+] as const) {
+  for (const failure of [false, { success: false, reason: "locked" }] as const) {
+    test(`action failure continuation ${JSON.stringify(flags)}/${JSON.stringify(failure)}`, async () => {
+      const actionHandlers = new ActionHandlerRegistry();
+      let continued = 0;
+      actionHandlers.register("switch_position", () => failure);
+      actionHandlers.register("draw", () => { continued++; return true; });
+      const action: ActionOf<"switch_position"> = { type: "switch_position", ...flags };
+      const shouldContinue = !(action.haltOnFailure === true || action.stopOnFailure === true)
+        && (action.haltOnFailure === false || action.stopOnFailure === false);
+      const result = asResultRecord(await invokeApplyActions({ ...createHost(undefined), actionHandlers }, [action, DRAW_ACTION]));
+      assert.equal(continued, shouldContinue ? 1 : 0);
+      assert.equal(resultValue(result, "success"), shouldContinue);
+      assert.equal(resultValue(result, "executed"), shouldContinue);
+      if (shouldContinue) assert.equal(resultValue(result, "skippedCount"), 1);
+      else assert.equal(resultValue(result, "failedAction"), "switch_position");
+    });
+  }
+}
+
+for (const boundary of ["selection", "abort", "exception"] as const) {
+  test(`explicit failure continuation preserves ${boundary} boundary`, async () => {
+    const game = { selectionAbortGeneration: 0 };
+    const actionHandlers = new ActionHandlerRegistry();
+    let continued = false;
+    actionHandlers.register("switch_position", () => {
+      if (boundary === "selection") return { needsSelection: true, selectionContract: {} };
+      if (boundary === "exception") throw new Error("handler failed unexpectedly");
+      game.selectionAbortGeneration++;
+      return false;
+    });
+    actionHandlers.register("draw", () => { continued = true; return true; });
+    const result = asResultRecord(await invokeApplyActions({ ...createHost(undefined), actionHandlers, game }, [
+      { type: "switch_position", haltOnFailure: false }, DRAW_ACTION,
+    ]));
+    assert.equal(continued, false);
+    assert.equal(resultValue(result, "success"), false);
+    assert.equal(resultValue(result, "needsSelection"), boundary === "selection");
+  });
+}
+
 test("actionResultSucceeded preserves the legacy nullish semantics", () => {
   assert.equal(actionResultSucceeded(true), true);
   assert.equal(actionResultSucceeded(false), false);

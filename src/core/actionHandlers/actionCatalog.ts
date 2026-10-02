@@ -2929,6 +2929,7 @@ export const ACTION_CATALOG = {
     mutates: ["position", "stats"],
     emits: ["position_change"],
     examples: [{ type: "switch_position", targetRef: "tera_arcanist_earth_targets" }],
+    notes: ["Succeeds if at least one monster changes position. Ordinary failure stops subsequent actions by default. Explicit haltOnFailure:false or stopOnFailure:false permits independent continuation; true takes precedence if aliases conflict. Selection, abort and simulation knowledge boundaries cannot be bypassed."],
   }),
   transmutate: action({
     category: "summon",

@@ -1,7 +1,7 @@
 # Replay canônico
 
 O replay executável usa o formato `shadow-duel-canonical-replay`, schema `2` e
-`engineVersion: "engine-rules-v10"`. Ele é independente do relatório
+`engineVersion: "engine-rules-v11"`. Ele é independente do relatório
 estratégico. O importador aceita somente o schema `2`: relatórios v4 e replays
 de schemas anteriores não são partidas executáveis nesta versão.
 
@@ -181,7 +181,7 @@ caracteres do replay, usado para detectar divergências na reprodução.
 `validateCanonicalReplay(input)` recebe `unknown`, não muta a entrada e retorna
 a mesma referência somente depois de validar o documento. `setup`, `commands` e
 `decisions` e `engineVersion` são obrigatórios. A versão da engine deve ser
-`"engine-rules-v10"`; gravações sem essa versão são rejeitadas antes da validação
+`"engine-rules-v11"`; gravações sem essa versão são rejeitadas antes da validação
 profunda e da reprodução. `events`, `result` e `finalized` continuam opcionais
 na importação de arquivos do schema `2`; quando presentes, são validados
 profundamente. Os comandos e kinds de decisão permanecem os mesmos.
@@ -406,7 +406,7 @@ correto e são reproduzidos sem UI ou nova consulta à política da IA.
 
 ### Integração de movimentos e modos — engine-rules-v10
 
-A versão atual reúne os modos de ativação da main v9 e as correções de
+A versão v10 reuniu os modos de ativação da main v9 e as correções de
 substituição de destruição da branch compartilhada v8, preservando o schema 2.
 As duas branches tinham histórias distintas de v8; esse rótulo não identificava
 o mesmo conjunto de regras. Gravações de v9 e anteriores são rejeitadas antes
@@ -424,3 +424,21 @@ nos dois assentos, comparando snapshots, hashes e consumo de decisões. Os teste
 de substituição e de modos de ativação continuam cobrindo a integração das
 branches. A mudança de foco da confirmação é de apresentação e não adiciona
 tipos de decisão ou campos ao replay.
+
+
+### Continuação declarativa de actions — engine-rules-v11
+
+A versão atual preserva o schema 2 e rejeita replays v10 e anteriores. False
+Horizon agora resolve o retorno opcional mesmo quando a troca de posição falha,
+conforme `haltOnFailure: false`. Sem declaração explícita, falhas obrigatórias
+continuam interrompendo a sequência; `true` prevalece sobre o alias conflitante.
+Seleção pendente, cancelamento sistêmico e exceções continuam interrompendo a
+resolução. O marcador `STOP_SIMULATION` preserva a fronteira de informação
+desconhecida, independentemente da política de falha comum.
+
+`actionContinuationReplay.test.ts` cobre Sand Priestess e False Horizon nos dois
+assentos, incluindo o bloqueio real de Leviathan, retorno aceito/recusado pelo
+jogador, cleanup da Armadilha e reprodução sem UI nem nova seleção pela IA.
+Snapshots, hash final, RNG e consumo integral das decisões devem coincidir.
+Vanishing Step continua após um retorno redirecionado para banimento, mas seu
+debuff exige uma troca de posição bem-sucedida.

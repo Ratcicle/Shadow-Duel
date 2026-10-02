@@ -496,7 +496,7 @@ export type SimulatedActionHandlerContext<Type extends ActionType> = Omit<
 
 export type SimulatedActionHandler<Type extends ActionType> = (
   context: SimulatedActionHandlerContext<Type>,
-) => void | typeof STOP_SIMULATION;
+) => void | boolean | typeof STOP_SIMULATION;
 
 export type SimulatedActionHandlerManifest<Type extends ActionType> = {
   [Key in Type]: SimulatedActionHandler<Key>;

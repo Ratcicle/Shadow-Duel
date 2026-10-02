@@ -170,13 +170,14 @@ function getTargetScopeCards(
 
 export function applySwitchPosition(
   ctx: SimulatedActionHandlerContext<"switch_position">,
-): void {
+): boolean {
   const { action, targets, state, options, self, opponent } = ctx;
   const targetCards =
     Array.isArray(targets) && targets.length > 0
       ? targets
       : getTargetScopeCards(action.targetScope as LegacyTargetScope, self, opponent);
 
+  let switched = false;
   targetCards.forEach((card) => {
     if (!card || card.cardKind !== "monster") return;
     if (card.battlePositionLocked === true) return;
@@ -190,6 +191,7 @@ export function applySwitchPosition(
         : "attack";
 
     card.position = nextPosition;
+    switched = true;
     if (wasFacedown) {
       card.isFacedown = false;
     }
@@ -228,6 +230,7 @@ export function applySwitchPosition(
       actionContext: options.actionContext,
     });
   });
+  return switched;
 }
 
 export function applySetFacedownDefense(
