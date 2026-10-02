@@ -1,15 +1,20 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import Card from "../../src/core/Card.js";
+import Bot from "../../src/core/Bot.js";
 import Player from "../../src/core/Player.js";
 import ArcanistStrategy from "../../src/core/ai/ArcanistStrategy.js";
+import { turnLineSearch } from "../../src/core/ai/TurnLineSearch.js";
+import type { BotCloneGamePort } from "../../src/core/bot/simulationBridge.js";
+import { createCanonicalStateSnapshot } from "../../src/core/game/replay/canonical.js";
 import { createPlanningCopy } from "../../src/core/ai/common/planningCopy.js";
 import { applySimulatedActions } from "../../src/core/ai/common/simulatedActions/index.js";
 import { destroySimulatedCard, replaceSimulatedBattleDestruction } from "../../src/core/ai/common/simulatedActions/destruction.js";
 import { applyGenericSimulatedMainPhaseAction, emitSimulatedSpellActivation, resolveSimulatedEndPhase } from "../../src/core/ai/common/simulation.js";
 import { canUseSimulatedEffectUsage, markSimulatedEffectUsage } from "../../src/core/ai/common/simStateUtils.js";
 import { moveCardToZone, appendSimulatedFieldCard } from "../../src/core/ai/common/zones.js";
-import { cardDefinition, required } from "../helpers/fixtures.js";
+import { cardDefinition, required, unsafeFixture } from "../helpers/fixtures.js";
+import { createRuntimeGame, placeFieldCards } from "../helpers/game.js";
 import { simulationState } from "../helpers/simulation.js";
 
 const make = (id: number, owner = "bot") => createPlanningCopy().cloneCardForSim(new Card(cardDefinition(id), owner));
@@ -251,4 +256,139 @@ test("310 protection follows the same field presence after control changes", () 
   assert.ok(state.player.field.includes(host));
   assert.equal(destroySimulatedCard(host, state.player, state.bot, state, {}), false);
   assert.equal(destroySimulatedCard(host, state.player, state.bot, state, {}), true);
+});
+
+function masterPlanningFixture(seed: number, deckIds = [303, 4], graveIds = [301, 301, 304], actor: "player" | "bot" = "bot", opponentDeck = [4]) {
+  const bot = new Bot();
+  bot.id = actor;
+  const game = createRuntimeGame({ ...(actor === "bot" ? { opponentOverride: bot } : {}), laboratoryMode: true,
+    captureReplay: false, randomSeed: seed, chainResponseTimeoutMs: 0 });
+  if (actor === "player") game.player = unsafeFixture<typeof game.player>(bot,
+    "Concrete Bot implements Player; this fixture exercises the inverted physical seat.");
+  game.turn = actor; game.phase = "main1"; game.turnCounter = 4;
+  const card = (id: number, owner = bot.id) => new Card(cardDefinition(id), owner);
+  bot.hand.push(card(308));
+  bot.deck.push(...deckIds.map(id => card(id)));
+  bot.graveyard.push(...graveIds.map(id => card(id)));
+  placeFieldCards(bot.field, card(1));
+  const opponent = game[actor === "bot" ? "player" : "bot"];
+  placeFieldCards(opponent.field, card(1, opponent.id));
+  opponent.deck.push(...opponentDeck.map(id => card(id, opponent.id)));
+  const arcanist = new ArcanistStrategy(bot);
+  bot.strategy = arcanist;
+  const state = bot.cloneGameState(unsafeFixture<BotCloneGamePort>(game,
+    "Concrete Game supplies the live cards and planning fields consumed by the Bot clone bridge."));
+  const action = required(arcanist.generateMainPhaseActions(state)
+    .find(candidate => candidate.type === "summon" && candidate.cardId === 308));
+  return { game, bot, arcanist, state, action };
+}
+
+for (const actor of ["player", "bot"] as const) for (const seed of [42, 601]) {
+  test(`308 projects an unknown draw after recycling distinct copies (${actor}, seed ${seed})`, t => {
+    const { game, arcanist, state, action } = masterPlanningFixture(seed, [303, 4], [301, 301, 304], actor);
+    t.after(() => game.dispose());
+    const before = createCanonicalStateSnapshot(game);
+    const rngBefore = game.getRandomState();
+    const recycled = state.bot.graveyard.slice();
+    const tribute = required(state.bot.field[0]);
+    const master = required(state.bot.hand[0]);
+    const resources = [...state.bot.deck, ...recycled];
+    const opponentDeck = state.player.deck.slice();
+    const opponentHand = state.player.hand.slice();
+    assert.notEqual(recycled[0]?.instanceId, recycled[1]?.instanceId);
+
+    arcanist.simulateMainPhaseAction(state, action);
+
+    assert.deepEqual(createCanonicalStateSnapshot(game), before, "planning cannot mutate the live game");
+    assert.deepEqual(game.getRandomState(), rngBefore, "planning cannot consume runtime shuffle RNG");
+    assert.deepEqual(state.player.deck, opponentDeck, "the opponent must not pay for the draw");
+    assert.deepEqual(state.player.hand, opponentHand, "the opponent must not receive the draw");
+    assert.equal(state.bot.field[0]?.instanceId, master.instanceId);
+    assert.deepEqual(state.bot.graveyard, [tribute], "only the tribute remains after all three returns");
+    assert.equal(state.bot.deck.length, resources.length - 1);
+    assert.equal(state.bot.hand.length, 1);
+    const drawn = required(state.bot.hand[0]);
+    assert.equal(drawn._simUnknownDraw, true);
+    assert.equal(drawn.id, undefined);
+    assert.equal(drawn.name, undefined);
+    assert.equal(drawn.cardKind, undefined);
+    assert.equal(state._simRequiresReplan, true);
+    assert.equal(state._simUnknownDrawCount, 1);
+    const projectedResources = [...state.bot.deck, drawn];
+    assert.equal(projectedResources.length, resources.length, "draw transfers exactly one resource");
+    assert.equal(new Set(projectedResources.map(card => card.instanceId)).size, resources.length);
+    assert.ok(state.bot.deck.every(card => resources.includes(card)), "surviving deck copies retain identity");
+    assert.ok(!resources.some(card => card.instanceId === drawn.instanceId), "unknown resource cannot impersonate a known copy");
+  });
+}
+
+test("308's projected hand is invariant under hidden Deck identities and order", t => {
+  const hands = [];
+  for (const deck of [[303, 4], [4, 303], [1, 302]]) {
+    const { game, arcanist, state, action } = masterPlanningFixture(42, deck);
+    t.after(() => game.dispose());
+    arcanist.simulateMainPhaseAction(state, action);
+    hands.push(state.bot.hand);
+  }
+  assert.deepEqual(hands[0], hands[1]);
+  assert.deepEqual(hands[0], hands[2]);
+});
+
+test("308 can project its draw when the Deck was empty before recycling", t => {
+  const { game, arcanist, state, action } = masterPlanningFixture(42, [], [301]);
+  t.after(() => game.dispose());
+  arcanist.simulateMainPhaseAction(state, action);
+  assert.equal(state.bot.deck.length, 0);
+  assert.equal(state.bot.hand.length, 1);
+  assert.equal(state.bot.hand[0]?._simUnknownDraw, true);
+  assert.equal(state._simRequiresReplan, true);
+  assert.equal(state._simUnknownDrawCount, 1);
+});
+
+test("308 in the inverted seat draws even when the opponent's Deck is empty", t => {
+  const { game, arcanist, state, action } = masterPlanningFixture(42, [303, 4], [301], "player", []);
+  t.after(() => game.dispose());
+  arcanist.simulateMainPhaseAction(state, action);
+  assert.equal(state.bot.hand.length, 1);
+  assert.equal(state.bot.hand[0]?._simUnknownDraw, true);
+  assert.equal(state.bot.hand[0]?.owner, "player");
+  assert.equal(state._simRequiresReplan, true);
+  assert.equal(state.player.hand.length, 0);
+});
+
+test("308 without an eligible Spell neither draws nor adds a replan boundary", t => {
+  const { game, arcanist, state, action } = masterPlanningFixture(42, [303, 4], [302]);
+  t.after(() => game.dispose());
+  const deck = state.bot.deck.slice();
+  const nonSpell = required(state.bot.graveyard[0]);
+  arcanist.simulateMainPhaseAction(state, action);
+  assert.deepEqual(state.bot.deck, deck);
+  assert.equal(state.bot.hand.length, 0);
+  assert.ok(state.bot.graveyard.includes(nonSpell));
+  assert.notEqual(state._simRequiresReplan, true);
+  assert.equal(state._simUnknownDrawCount ?? 0, 0);
+});
+
+for (const actor of ["player", "bot"] as const) test(`308 ends its actual turn-line simulation at the unknown draw (${actor})`, async t => {
+  const { game, bot, arcanist, state } = masterPlanningFixture(42, [303, 4], [301, 301, 304], actor);
+  t.after(() => game.dispose());
+  let generations = 0;
+  const result = await turnLineSearch(state, {
+    bot,
+    generateMainPhaseActions(current) {
+      generations++;
+      // Isolate this legal candidate while keeping its real generation and simulation.
+      return arcanist.generateMainPhaseActions(current)
+        .filter(candidate => candidate.type === "summon" && candidate.cardId === 308);
+    },
+    simulateMainPhaseAction: arcanist.simulateMainPhaseAction.bind(arcanist),
+    evaluateBoardV2: arcanist.evaluateBoardV2.bind(arcanist),
+  }, { maxDepth: 4 });
+  assert.ok(result);
+  assert.equal(result.completion.terminationReason, "requires_replan");
+  assert.equal(result.sequence.length, 1);
+  const firstAction = required(result.sequence[0]);
+  assert.ok("cardId" in firstAction);
+  assert.equal(firstAction.cardId, 308);
+  assert.equal(generations, 1, "no continuation is generated using the unresolved draw");
 });

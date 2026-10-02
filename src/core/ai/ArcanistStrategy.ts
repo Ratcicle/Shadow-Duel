@@ -25,6 +25,8 @@ type ChoiceContext = { source?: StrategyCard; activationContext?: AIActivationCo
 
 import BaseStrategy from "./BaseStrategy.js";
 import { sequenceActionsByPriority } from "./common/actionSequencing.js";
+import { applySimulatedActions } from "./common/simulatedActions/index.js";
+import type { SimulatedRuntimeState } from "./common/simulatedActions/shared.js";
 import {
   getGenericHandSpellActions,
   getGenericIgnitionEffectActions,
@@ -707,7 +709,7 @@ export default class ArcanistStrategy extends BaseStrategy {
     };
   }
 
-  simulateArcanistAfterSummon({ state, action, player, newCard }: { state: AiStateShape; action: AIAction; player: SimulatedPlayerState; newCard: SimulatedCardState }) {
+  simulateArcanistAfterSummon({ state, action, player, newCard }: { state: SimulatedRuntimeState; action: AIAction; player: SimulatedPlayerState; newCard: SimulatedCardState }) {
     if (action?.type !== "summon") return;
     if (newCard.isFacedown) return;
 
@@ -745,7 +747,7 @@ export default class ArcanistStrategy extends BaseStrategy {
 
   }
 
-  simulateMasterOfMirrorsNormalSummon(state: AiStateShape, player: SimulatedPlayerState, source: SimulatedCardState, action: AIAction) {
+  simulateMasterOfMirrorsNormalSummon(state: SimulatedRuntimeState, player: SimulatedPlayerState, source: SimulatedCardState, action: AIAction) {
     if (!useSimOpt(state, "master_mirrors_arcanist_shuffle_draw")) return;
     const candidates = (player.graveyard || []).filter(isArcanistSpell);
     if (candidates.length === 0) return;
@@ -773,8 +775,17 @@ export default class ArcanistStrategy extends BaseStrategy {
       removeFromZone(player, "graveyard", card);
       pushToZone(player, "deck", card);
     }
-    const drawn = player.deck?.shift?.();
-    if (drawn) pushToZone(player, "hand", drawn);
+    // The shuffle result is hidden; shared draw accounting stops planning
+    // until the real effect reveals the card instead of predicting its identity.
+    applySimulatedActions({
+      state,
+      selfId: player === state.player ? "player" : "bot",
+      actions: [
+        { type: "shuffle_deck", player: "self" },
+        { type: "draw", player: "self", amount: 1 },
+      ],
+      options: { sourceCard: source },
+    });
     source._simMasterMirrorsShuffleDraw = true;
   }
 
