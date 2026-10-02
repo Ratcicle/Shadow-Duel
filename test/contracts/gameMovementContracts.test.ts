@@ -15,7 +15,7 @@ function createGame(t: TestContext): Game {
   return game;
 }
 
-function createSpell(name: string): Card {
+function createSpell(name: string, owner: "player" | "bot" = "player"): Card {
   return new Card(
     {
       id: 9_920,
@@ -24,7 +24,7 @@ function createSpell(name: string): Card {
       subtype: "normal",
       effects: [],
     },
-    "player",
+    owner,
   );
 }
 
@@ -66,6 +66,33 @@ test("regular movement resolves asynchronously and normalizes the legacy banish 
   assert.deepEqual(game.player.banished, [card]);
   assert.deepEqual(game.player.graveyard, []);
 });
+
+for (const seat of ["player", "bot"] as const) {
+  test(`Field Spell replacement completes the old departure before entry (${seat})`, async (t) => {
+    const game = createGame(t), owner = game[seat];
+    const previous = createSpell("Previous Field Spell", seat), next = createSpell("Next Field Spell", seat);
+    previous.subtype = next.subtype = "field";
+    owner.fieldSpell = previous; owner.hand = [next];
+    const movements: string[] = [];
+    game.on("card_moved", event => {
+      if (event.card === previous) {
+        assert.ok(owner.graveyard.includes(previous));
+        assert.equal(owner.fieldSpell, null);
+        movements.push(`previous:${event.toZone}`);
+      } else if (event.card === next) {
+        assert.ok(owner.graveyard.includes(previous));
+        assert.equal(owner.fieldSpell, next);
+        movements.push(`next:${event.toZone}`);
+      }
+    });
+    const result = await game.moveCard(next, owner, "fieldSpell", { fromZone: "hand" });
+    assert.equal(result.success, true);
+    assert.deepEqual(movements, ["previous:graveyard", "next:fieldSpell"]);
+    assert.deepEqual(owner.graveyard, [previous]);
+    assert.deepEqual(owner.hand, []);
+    assert.equal(game.zoneOpDepth, 0);
+  });
+}
 
 test("entry into the monster field requires an explicit summon origin", (t) => {
   const game = createGame(t);

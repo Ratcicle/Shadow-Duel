@@ -1,7 +1,7 @@
 # Replay canônico
 
 O replay executável usa o formato `shadow-duel-canonical-replay`, schema `2` e
-`engineVersion: "engine-rules-v11"`. Ele é independente do relatório
+`engineVersion: "engine-rules-v12"`. Ele é independente do relatório
 estratégico. O importador aceita somente o schema `2`: relatórios v4 e replays
 de schemas anteriores não são partidas executáveis nesta versão.
 
@@ -181,7 +181,7 @@ caracteres do replay, usado para detectar divergências na reprodução.
 `validateCanonicalReplay(input)` recebe `unknown`, não muta a entrada e retorna
 a mesma referência somente depois de validar o documento. `setup`, `commands` e
 `decisions` e `engineVersion` são obrigatórios. A versão da engine deve ser
-`"engine-rules-v11"`; gravações sem essa versão são rejeitadas antes da validação
+`"engine-rules-v12"`; gravações sem essa versão são rejeitadas antes da validação
 profunda e da reprodução. `events`, `result` e `finalized` continuam opcionais
 na importação de arquivos do schema `2`; quando presentes, são validados
 profundamente. Os comandos e kinds de decisão permanecem os mesmos.
@@ -428,7 +428,7 @@ tipos de decisão ou campos ao replay.
 
 ### Continuação declarativa de actions — engine-rules-v11
 
-A versão atual preserva o schema 2 e rejeita replays v10 e anteriores. False
+A versão v11 da branch compartilhada preservava o schema 2 e rejeitava replays v10 e anteriores. False
 Horizon agora resolve o retorno opcional mesmo quando a troca de posição falha,
 conforme `haltOnFailure: false`. Sem declaração explícita, falhas obrigatórias
 continuam interrompendo a sequência; `true` prevalece sobre o alias conflitante.
@@ -442,3 +442,63 @@ jogador, cleanup da Armadilha e reprodução sem UI nem nova seleção pela IA.
 Snapshots, hash final, RNG e consumo integral das decisões devem coincidir.
 Vanishing Step continua após um retorno redirecionado para banimento, mas seu
 debuff exige uma troca de posição bem-sucedida.
+
+### Histórico de ativações de cards no turno
+
+O passivo `activated_card_count_buff` consulta `cardActivationHistory`. O Event
+Bus registra as publicações de `spell_activated`/`trap_activated` antes dos
+listeners, com snapshots públicos do card e do ativador. A identidade
+Chain/link evita duplicação. `markChainLinkActivationNegated` retira uma
+ativação no momento da negação e atualiza os passivos antes das próximas
+ações; `chain_link_resolution` preserva a limpeza idempotente. Negação somente
+do efeito mantém a ocorrência. Ignition de Magia
+face-up e efeitos copiados emitem ativação de efeito, sem aumentar a contagem.
+
+O histórico é reiniciado no próximo turno e em um novo duelo. Os quatro
+perfis de clone preservam cópias isoladas, e os hashes canônicos incluem as
+ocorrências do turno mesmo antes de existir um beneficiário no campo. Um
+histórico vazio ou de turno anterior não acrescenta campo ao snapshot
+canônico; os hashes dos cenários genéricos existentes permanecem iguais.
+
+Esse lote histórico manteve schema `2`, `engine-rules-v9`, comandos e tipos de decisão.
+A assinatura completa do banco muda com o passivo de Elementalista e com os
+triggers obrigatórios de Albus/Azrath; gravações dos bancos anteriores são
+rejeitadas pela verificação de assinatura antes da reprodução. O histórico
+é reconstruído pelos eventos gravados, sem migração nem escolhas ao vivo.
+
+### Magias Baixadas — engine-rules-v10
+
+A versão v10 da main usava schema `2`. Uma Magia Baixada na
+linha de Magias/Armadilhas prepara seu `on_play`; virar a fonte no compromisso
+não troca esse efeito por um Ignition. Os comandos e tipos de decisão são os
+mesmos. O Grimório Baixado pode equipar sem ter um efeito armazenado, usando
+as escolhas de alvo e as respostas de Chain existentes.
+
+Essa correção muda o resultado de comandos que v9 rejeitava. Replays v9 e
+anteriores são rejeitados pela versão da engine antes da reprodução, sem
+migração. Nesse lote da main, a assinatura do banco era `726d0a77`; o hash do replay
+completo muda com a versão, enquanto os hashes de estado dos cenários
+genéricos permanecem iguais.
+
+A prova de origem usada pela simulação para restaurar contribuições
+dinâmicas fica em um `WeakMap` interno. Ela não acrescenta campos ao replay
+ou ao snapshot canônico. As seções v9 acima registram os lotes anteriores.
+
+### Integração Arcanist, movimentos e continuação — engine-rules-v12
+
+A versão atual é `engine-rules-v12`, schema `2`. Ela reúne a main v10
+(histórico de ativações, Magias Baixadas e passivas modeladas) e a branch
+compartilhada v11 (guardas completos de substituição de Campo, fronteira de
+compra desconhecida e continuação declarativa). Os rótulos v10 usados pelas
+duas branches tinham histórias diferentes; nenhum deles representa esta união.
+
+Gravações v11, v10 e anteriores são rejeitadas pela versão antes de executar
+comandos, sem migração ou remoção dos arquivos históricos. A assinatura do
+banco integrado é `7bbe98b0`, incluindo a passiva de Elementalista e a
+continuação de False Horizon. Comandos, kinds de decisão e schema não mudam.
+O estado canônico mantém o histórico de ativações introduzido na main;
+a prova privada de passivas continua fora do envelope serializado.
+
+O golden genérico tem hash completo `6b278c1f`; seus hashes de estado continuam
+`a897fa58` e `297e0fe8`. As regressões de Arcanist, movimento, substituição e
+continuação reproduzem decisões gravadas sem UI ou política de IA ao vivo.

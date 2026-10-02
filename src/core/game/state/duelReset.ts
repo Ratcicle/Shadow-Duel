@@ -104,6 +104,7 @@ export function resetDuelState(
   this.turn = turn;
   this.phase = phase;
   this.turnCounter = turnCounter;
+  this.cardActivationHistory = { turnCounter, entries: [] };
   this.nextDuelCardId = 1;
   this.generatedIdCounters?.clear?.();
   this.gameOver = false;

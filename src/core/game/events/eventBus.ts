@@ -3,6 +3,8 @@
  * Handles: on, emit, notify
  */
 
+import { recordTurnCardActivation, removeNegatedTurnCardActivation } from "./activationHistory.js";
+
 import type {
   ActivationEventInput,
   ActivationEventPayload,
@@ -59,6 +61,10 @@ export async function emit<Name extends ResolvableEventName>(
   options: EmitOptions = {},
 ): Promise<EventResolutionResult> {
   if (this.isDisposed?.()) return null;
+  if ((eventName === "spell_activated" || eventName === "trap_activated") &&
+    recordTurnCardActivation(this, payload as DuelEventMap["spell_activated"])) {
+    this.effectEngine?.updatePassiveBuffs?.();
+  }
   this.recordReplayEvent?.(eventName, payload);
   this._arenaTracker?.recordEvent?.(eventName, payload, {
     turn: this.turnCounter,
@@ -87,6 +93,10 @@ export function notify<Name extends InformationalEventName>(
   payload: InformationalEventMap[Name],
 ): void {
   if (this.isDisposed?.()) return;
+  if (eventName === "chain_link_resolution" &&
+    removeNegatedTurnCardActivation(this, payload as InformationalEventMap["chain_link_resolution"])) {
+    this.effectEngine?.updatePassiveBuffs?.();
+  }
   this.recordReplayEvent?.(eventName, payload);
   this._arenaTracker?.recordEvent?.(eventName, payload, {
     turn: this.turnCounter,

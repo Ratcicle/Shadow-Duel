@@ -17,7 +17,7 @@ const cases = {
   library_search: "arcanist_grand_library_search_equip",
 } as const;
 
-function installFixture(game: RuntimeGame, seat: PlayerId, controller: Controller, scenario: Scenario) {
+function installFixture(game: RuntimeGame, seat: PlayerId, controller: Controller, scenario: Scenario, withSecondCopy: boolean) {
   const start = game.startWithDecks.bind(game);
   game.startWithDecks = async options => {
     await start(options);
@@ -38,9 +38,11 @@ function installFixture(game: RuntimeGame, seat: PlayerId, controller: Controlle
     };
     if (scenario.startsWith("meeting")) {
       placeFieldCards(owner.spellTrap, take(309));
+      if (withSecondCopy) placeFieldCards(owner.spellTrap, take(309));
       owner.hand.push(take(306), take(307), take(304), take(310));
     } else if (scenario.startsWith("library")) {
       owner.fieldSpell = take(312);
+      if (withSecondCopy) owner.hand.push(take(312));
       if (scenario === "library_search") placeFieldCards(owner.field, take(306));
     } else if (scenario === "ink") {
       const river = take(311);
@@ -108,7 +110,7 @@ async function finishSelections(
   if (cancel) assert.equal(cancelled, true, `expected a cancellable ${cancel} decision`);
 }
 
-async function setup(t: TestContext, seat: PlayerId, controller: Controller, scenario: Scenario) {
+async function setup(t: TestContext, seat: PlayerId, controller: Controller, scenario: Scenario, withSecondCopy = false) {
   const live = createRuntimeGame({ captureReplay: true, randomSeed: 731, laboratoryMode: true,
     laboratoryUseBot: false, chainResponseTimeoutMs: 0, getFieldPlacementMode: () => "manual",
     fieldPlacementProvider: async () => ({ outcome: "chosen", slot: 4 }) });
@@ -117,7 +119,7 @@ async function setup(t: TestContext, seat: PlayerId, controller: Controller, sce
     getFieldPlacementMode: () => assert.fail("Playback must not consult placement preferences."),
     fieldPlacementProvider: async () => assert.fail("Playback must not request placement.") });
   t.after(() => { live.dispose(); playback.dispose(); });
-  for (const game of [live, playback]) installFixture(game, seat, controller, scenario);
+  for (const game of [live, playback]) installFixture(game, seat, controller, scenario, withSecondCopy);
   live.ui.showSpecialSummonPositionModal = (_card, choose) => choose("defense");
   live.ui.showChainResponseModal = async () => null;
   playback.ui.showConfirmPrompt = async () => assert.fail("Playback must not ask for confirmation.");
@@ -125,7 +127,8 @@ async function setup(t: TestContext, seat: PlayerId, controller: Controller, sce
   playback.ui.showSpecialSummonPositionModal = () => assert.fail("Playback must not ask for position.");
   playback.ui.showTargetSelection = () => assert.fail("Playback must not ask for targets or an activation case.");
   playback.autoSelector.select = () => assert.fail("Playback must consume recorded choices without rerunning policy.");
-  const deck = [309, 312, 311, 315, 306, 307, 304, 310, 301, 302, 303, 305, ...Array<number>(8).fill(3)];
+  const extraCopies = withSecondCopy ? scenario.startsWith("meeting") ? [309] : [312, 301] : [];
+  const deck = [309, 312, 311, 315, 306, 307, 304, 310, 301, 302, 303, 305, ...extraCopies, ...Array<number>(8).fill(3)];
   await live.startWithDecks({ exactDecks: true, preserveDeckOrder: true, initializeOnly: true,
     startAtDrawPhase: true, startingPlayer: seat, announceStartingPlayer: false,
     playerDeck: deck, botDeck: deck, playerExtraDeck: [], botExtraDeck: [] });
@@ -139,16 +142,17 @@ async function setup(t: TestContext, seat: PlayerId, controller: Controller, sce
       activationContext: { ...context?.activationContext,
         decisions: { ...context?.activationContext?.decisions, cases: {
           [scenario.startsWith("meeting") ? "meeting_arcanists_choose_effect" : "arcanist_grand_library_ignition"]: caseId,
+          ...context?.activationContext?.decisions?.cases,
         } } } });
   }
   const activate = () => scenario.startsWith("library") ? Promise.resolve(live.activateFieldSpellEffect(source))
     : scenario === "tornado" ? live.tryActivateSpell(source, 0, null, { owner })
     : live.tryActivateSpellTrapEffect(source, null, { owner });
-  const replay = async () => {
+  const replay = async (commandCount = 1) => {
     const saved = validateCanonicalReplay(JSON.parse(JSON.stringify(live.finalizeReplay({ reason: "arcanist-p1" }))));
     assert.equal(saved.schemaVersion, 2);
-    assert.equal(saved.engineVersion, "engine-rules-v11");
-    assert.equal(saved.commands.length, 1);
+    assert.equal(saved.engineVersion, "engine-rules-v12");
+    assert.equal(saved.commands.length, commandCount);
     assert.equal(saved.commands[0]?.type, scenario === "tornado" ? "activate_card" : "activate_effect");
     const result = await replayCanonicalDuel(saved, { game: unsafeFixture<ReplayDriverGamePort>(playback,
       "Both real Games install the same deterministic fixture before the canonical command runs.") });
@@ -161,6 +165,48 @@ async function setup(t: TestContext, seat: PlayerId, controller: Controller, sce
 }
 
 for (const seat of ["player", "bot"] as const) {
+  for (const scenario of ["meeting_monsters", "library_search"] as const) {
+    for (const controller of ["human", "ai"] as const) {
+      test(`P2 per-copy ignition replay preserves two independent copies (${scenario}, ${seat}, ${controller})`, async t => {
+        const { live, owner, source, caseId, activate, replay } = await setup(t, seat, controller, scenario, true);
+        const second = required(scenario === "meeting_monsters"
+          ? owner.spellTrap.find(card => card.id === 309 && card !== source)
+          : owner.hand.find(card => card.id === 312));
+        const firstAction = activate();
+        await finishSelections(live, firstAction, caseId);
+        assert.equal((await firstAction).success, true);
+        const effect = required(source.effects.find(entry => entry.timing === "ignition"));
+        assert.equal(live.canUseOncePerTurn(source, owner, effect).ok, false);
+        assert.equal(live.canUseOncePerTurn(second, owner, effect).ok, true);
+        if (scenario === "library_search") {
+          const replacement = live.tryActivateSpell(second, owner.hand.indexOf(second), null, { owner });
+          await finishSelections(live, replacement, null);
+          assert.equal((await replacement).success, true);
+          assert.ok(owner.graveyard.includes(source)); assert.equal(owner.fieldSpell, second);
+        }
+        const secondCase = scenario === "meeting_monsters" ? "meeting_arcanists_discard_spells" : caseId;
+        const secondAction = scenario === "meeting_monsters"
+          ? live.tryActivateSpellTrapEffect(second, null, { owner,
+            activationContext: { decisions: { cases: { meeting_arcanists_choose_effect: required(secondCase) } } } })
+          : Promise.resolve(live.activateFieldSpellEffect(second));
+        await finishSelections(live, secondAction, secondCase);
+        assert.equal((await secondAction).success, true);
+        assert.equal(live.canUseOncePerTurn(second, owner, effect).ok, false);
+        assert.equal(owner.hand.length, 2);
+        if (scenario === "meeting_monsters") assert.equal(owner.graveyard.length, 4);
+        else assert.equal(owner.lp, 8000);
+        const saved = await replay(scenario === "meeting_monsters" ? 2 : 3);
+        const activations = saved.commands.filter(command => command.type === "activate_effect");
+        assert.deepEqual(activations.map(command => record(command.payload).duelCardId), [source.duelCardId, second.duelCardId]);
+        assert.notEqual(source.duelCardId, second.duelCardId);
+        const choices = saved.decisions.filter(decision => decision.kind === "choice");
+        assert.equal(choices.length, 2);
+        assert.ok(JSON.stringify(choices[0]?.value).includes(required(caseId)));
+        assert.ok(JSON.stringify(choices[1]?.value).includes(required(secondCase)));
+      });
+    }
+  }
+
   for (const controller of ["human", "ai"] as const) {
     for (const scenario of ["meeting_monsters", "meeting_spells", "library_summon", "library_search", "ink", "tornado"] as const) {
       test(`P1 replay preserves ${scenario}, declared costs and resolution (${seat}, ${controller})`, async t => {

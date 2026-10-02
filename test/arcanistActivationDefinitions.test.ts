@@ -9,7 +9,10 @@ test("Meeting declares each discard as its selected activation case cost", () =>
   const effect = required(cardDefinition(309).effects?.find(entry => entry.id === "meeting_arcanists_choose_effect"));
   const cases = required(effect.activationCases);
   assert.equal(effect.id, "meeting_arcanists_choose_effect");
-  assert.equal(effect.oncePerTurnScope, undefined);
+  assert.equal(effect.oncePerTurnScope, "card");
+  assert.equal(effect.oncePerTurn, true);
+  assert.equal(effect.oncePerTurnName, "meeting_arcanists_choose_effect");
+  assert.equal(effect.usagePolicy, "activate");
   assert.equal(effect.actions?.some(action => action.type === "choose_action_case") ?? false, false);
   assert.equal(cases.length, 2);
   for (const [index, activationCase] of cases.entries()) {
@@ -35,7 +38,10 @@ test("Grand Library and Ink River separate their activation costs from resolutio
   assert.deepEqual(summon.actions.map(action => action.type), ["special_summon_from_zone"]);
   assert.equal(search.activationCosts, undefined);
   assert.deepEqual(search.actions.map(action => action.type), ["search_any"]);
-  assert.equal(library.oncePerTurnScope, undefined);
+  assert.equal(library.oncePerTurnScope, "card");
+  assert.equal(library.oncePerTurn, true);
+  assert.equal(library.oncePerTurnName, "arcanist_grand_library_ignition");
+  assert.equal(library.usagePolicy, "activate");
   const recover = required(cardDefinition(311).effects?.find(effect => effect.id === "arcanist_ink_river_recover"));
   assert.deepEqual(recover.activationCosts, [{ type: "remove_counter", targetRef: "self", counterType: "ink", amount: 2 }]);
   assert.deepEqual(recover.actions?.map(action => action.type), ["add_from_zone_to_hand"]);
@@ -69,5 +75,5 @@ test("Tornado requires the face-up Arcanist monster itself to carry a face-up Ar
 
 test("Arcanist activation definitions pass the card database validator", () => {
   const { errors } = validateCardDatabase();
-  assert.deepEqual(errors.filter(issue => issue.cardId !== null && [309, 311, 312, 315].includes(issue.cardId)), []);
+  assert.deepEqual(errors.filter(issue => issue.cardId !== null && [307, 309, 311, 312, 313, 314, 315].includes(issue.cardId)), []);
 });

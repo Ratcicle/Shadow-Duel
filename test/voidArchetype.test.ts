@@ -190,12 +190,24 @@ for (const removeAura of [false, true]) {
     assert.deepEqual([aberration.atk, aberration.def], [2800, 2300]);
     const simulated = clone();
     applySimulatedActions({ state: simulated.state, actions: [zero], selections: { void_monster_target: [simulated.card] } });
-    assert.ok(simulated.state._simUnsupportedActions?.includes("modify_stats_temp:passive_recalculation"));
+    assert.deepEqual(simulated.state._simUnsupportedActions || [], [], "proven field aura is now modeled");
     const activation = await activate();
     assert.equal(activation.success, true, activation.reason ?? undefined);
-    if (removeAura) await game.moveCard(aura, game.player, "graveyard", { fromZone: "fieldSpell" });
+    const afterSuppression = clone();
+    assert.deepEqual(afterSuppression.state._simUnsupportedActions || [], []);
+    if (removeAura) {
+      await game.moveCard(aura, game.player, "graveyard", { fromZone: "fieldSpell" });
+      for (const entry of [simulated, afterSuppression]) moveCardToZone(entry.state.bot, required(entry.state.bot.fieldSpell), "graveyard", entry.state.bot, { state: entry.state });
+    }
     game.effectEngine.updatePassiveBuffs();
     assert.deepEqual([aberration.atk, aberration.def], [0, 0]);
+    for (const entry of [simulated, afterSuppression]) {
+      assert.deepEqual([entry.card.atk, entry.card.def], [0,0]);
+      cleanupSimulatedEndTurn(entry.state);
+      assert.deepEqual([entry.card.atk, entry.card.def], removeAura ? [2400,1900] : [2700,2200]);
+      cleanupSimulatedEndTurn(entry.state);
+      assert.deepEqual([entry.card.atk, entry.card.def], removeAura ? [2400,1900] : [2700,2200]);
+    }
     cleanupTempBoosts(game.player);
     game.effectEngine.updatePassiveBuffs();
     assert.deepEqual([aberration.atk, aberration.def], removeAura ? [2400, 1900] : [2700, 2200]);
@@ -203,6 +215,7 @@ for (const removeAura of [false, true]) {
     assert.deepEqual([aberration.atk, aberration.def], removeAura ? [2400, 1900] : [2700, 2200]);
   });
 }
+
 
 const perCopyVoidEffects = [
   { cardId: 202, effectId: "void_walker_bounce_summon", zone: "field" },

@@ -2,6 +2,14 @@
 
 Data: 01/10/2026. Checkout: `0d93746c4ec08cf2e8fbcfce7a6fe05f1db201f9`, `main`.
 
+**Estado atualizado em 02/10/2026:** os **25 achados originais estão corrigidos
+e encerrados, sem pendências entre esses achados**. O lote adicional B26/B27
+corrige a entrada pública do Grimório Baixado e a restauração de três famílias
+de contribuições dinâmicas na simulação. Os diagnósticos e as filas anteriores
+abaixo preservam o histórico; o encerramento e o alcance dos adicionais estão
+na última seção. Outras famílias e estados sem prova de origem conservam o
+bloqueio dos planejadores.
+
 ## Resultado da auditoria inicial e escopo
 
 **16 cartas e 29 efeitos declarativos auditados**, além do armazenamento do Grimório. Nenhum ficou apenas inventariado. A profundidade varia; a matriz e as limitações abaixo delimitam a cobertura.
@@ -216,6 +224,10 @@ As reproduções abaixo são um registro histórico do checkout inicial. Referê
 
 ### B06 — 303: não aceita monstro adversário Baixado
 
+**Encerrado no lote de alvos Baixados (02/10/2026)** descrito ao final. A
+reprodução abaixo registra o defeito anterior; o alvo próprio continua
+exigindo um monstro Arcanista com a face para cima.
+
 **Código:** alvo adversário possui `requireFaceup:true`. **EN/PT:** pedem 1 monstro adversário, sem restrição de face.
 
 **Reprodução:** Viridis próprio face para cima, Tera adversário Baixado, Explosão na mão. `tryActivateSpell` rejeita por falta de alvo e mantém a Magia na mão. **Caminho:** `arcanist.ts:154–159`, preview/targeting. Teste: `303 diagnostic face-down opponent legality`. Não foi testado virar o alvo para baixo em resposta.
@@ -230,11 +242,19 @@ As reproduções abaixo são um registro histórico do checkout inicial. Referê
 
 ### B08 — 307: recuperação escrita como obrigatória pode ser recusada
 
+**Encerrado no lote B08/B17/B19 (02/10/2026)** descrito ao final. A
+reprodução abaixo preserva o defeito anterior; a recuperação segue obrigatória
+conforme os textos existentes, com escolha normal do alvo.
+
 **Código:** trigger opcional e confirmação humana. **EN:** “target ...; add”, sem “you can”. **PT:** “escolha ...; adicione”, sem “você pode”.
 
 **Reprodução:** Albus em campo, Tera no Cemitério, equipar Grimório pela entrada pública. Humano responde não; Tera continua no Cemitério. **Caminho:** `arcanist.ts:477–494`; `triggers/collectors/cardEquipped.ts`; `chain/segoc.ts:624–722`. Teste: `Albus equip recovery is optional for a human`. Tornar o texto opcional é uma possível decisão posterior; a divergência atual está comprovada.
 
 ### B09 — 309: segunda Reunião não pode usar seu próprio efeito
+
+**Encerrado no lote de OPT por cópia (02/10/2026)** descrito ao final. A
+reprodução abaixo registra o defeito anterior; a prevenção passiva permanece
+independente do Ignition.
 
 **Código:** ignition usa limite compartilhado por nome. **EN/PT:** “Once per turn” / “Uma vez por turno”, sem cláusula final por nome.
 
@@ -282,6 +302,11 @@ O descarte tardio fundamenta o bug. A escolha tardia do modo descreve o caminho 
 
 ### B14 — 312/313: Biblioteca e Elementalista compartilham limite entre cópias
 
+**Encerrado integralmente.** A parcela de 313 foi corrigida no lote de design;
+a parcela de 312 foi corrigida no lote de OPT por cópia (02/10/2026). A
+reprodução abaixo registra os defeitos anteriores. A compra por batalha de
+312 continua fora deste achado.
+
 **Código:** ignition da Biblioteca e destruição do Elementalista têm `oncePerTurnName` sem escopo por carta. **EN/PT:** ambos começam com “Once per turn” / “Uma vez por turno”.
 
 **Reprodução Biblioteca:** usar busca, mover a fonte ao Cemitério, colocar segunda cópia; segunda falha por OPT. **Elementalista:** equipar o primeiro destrói um alvo; remover o Grimório e equipar o segundo deixa o segundo alvo intacto, com uma única ativação de destruição registrada.
@@ -298,6 +323,11 @@ O descarte tardio fundamenta o bug. A escolha tardia do modo descreve o caminho 
 
 ### B16 — 313/314: filtro de face para cima não aparece nos textos
 
+**Toda B16 encerrada no lote de alvos Baixados (02/10/2026)** descrito ao
+final. Conforme a decisão aprovada “Restringir só Azrath”, 313 aceita
+Baixados, enquanto 314 mantém a restrição e passa a explicitá-la em EN/PT.
+A reprodução e a lacuna de resposta abaixo registram o diagnóstico anterior.
+
 **Código:** ambos os alvos exigem `requireFaceup:true`; `modify_stats_temp` também ignora Baixados. **EN/PT:** dizem apenas 1 monstro adversário.
 
 **Reprodução:** equipar 313/314 quando só há um adversário Baixado não oferece destruir/reduzir. Controles idênticos face para cima disparam e resolvem. **Caminho:** `arcanist.ts:1144–1151`, `:1221–1228`; `effects/actions/stats.ts:205`. Teste: `313 equipped monster only exposes trigger, hidden enemy cannot be chosen; 314 same target restriction`.
@@ -305,6 +335,10 @@ O descarte tardio fundamenta o bug. A escolha tardia do modo descreve o caminho 
 É divergência confirmada entre o filtro e os textos, não autorização para ampliar a engine a atributos ocultos. Pode ser resolvida por texto ou mudança de regra após aprovação. Virar o alvo para baixo em resposta não foi testado.
 
 ### B17 — 313: bônus não conta Magias anteriores à entrada no campo
+
+**Encerrado no lote B08/B17/B19 (02/10/2026)** descrito ao final. O diagnóstico
+abaixo é histórico; o passivo atual consulta as ativações do turno, inclusive
+anteriores à entrada e de ambos os jogadores.
 
 **Código:** +100 apenas por `spell_activated` visto enquanto a fonte já está no campo. **EN/PT:** contam cada Magia Arcanista ativada “neste turno”, sem limitar às posteriores à entrada.
 
@@ -324,6 +358,11 @@ O descarte tardio fundamenta o bug. A escolha tardia do modo descreve o caminho 
 
 ### B19 — 314: jogador pode recusar a redução escrita como obrigatória
 
+**Encerrado no lote B08/B17/B19 (02/10/2026)** descrito ao final. A reprodução
+abaixo é histórica; a seleção obrigatória conserva o filtro face-up de B16,
+o hard OPT e a política `use`. A expiração simulada de B25 ficou pendente
+naquele lote e foi encerrada no lote final descrito abaixo.
+
 **Código:** trigger opcional e pergunta no broker. **EN/PT:** “target ...; halve” / “escolha ...; reduza”, sem “você pode”.
 
 **Reprodução adicional do coordenador:** Azrath próprio, Azrath adversário 1700/1400, equipar Grimório e responder não. Há prompt de Azrath, mas nenhum `azrath_equip_halve` publicado. O alvo termina 1600/1300, apenas com o debuff de 100; não é reduzido à metade.
@@ -336,12 +375,12 @@ Classificação: `SIMULATION_DIVERGENCE`. Definições reais clonadas, Main1/tur
 
 | Achado | Código observado | Inglês → português / esperado | Reprodução e alcance |
 |---|---|---|---|
-| **B20 — 301** | Override equipa a segunda cópia sem `control_card_max`. `ArcanistStrategy.ts:1130–1156`. | Só controlar 1 Grimório em EN/PT. | Grimório já equipado em Viridis + segundo na mão: ficam 2 no campo. **Ação injetada:** a geração normal em `priorities.ts:1241–1252` a bloqueia. Controle de uma única cópia funciona. |
-| **B21 — 305** | Recuperação usa `filter:isArcanistSpell`, `:974–980`. | EN “1 Spell”; PT “1 Magia”, de qualquer arquétipo. | Equipar Viridis tendo somente 276 no Cemitério não recupera; controle com 310 recupera. Runtime real recuperou 276. Sequência válida. |
+| **B20 — 301 — encerrado** | Override equipa a segunda cópia sem `control_card_max`. `ArcanistStrategy.ts:1130–1156`. | Só controlar 1 Grimório em EN/PT. | Grimório já equipado em Viridis + segundo na mão: ficam 2 no campo. **Ação injetada:** a geração normal em `priorities.ts:1241–1252` a bloqueia. Controle de uma única cópia funciona. **Correção e evidências:** lote final B25/B21/B20 abaixo. |
+| **B21 — 305 — encerrado** | Recuperação usa `filter:isArcanistSpell`, `:974–980`. | EN “1 Spell”; PT “1 Magia”, de qualquer arquétipo. | Equipar Viridis tendo somente 276 no Cemitério não recupera; controle com 310 recupera. Runtime real recuperou 276. Sequência válida. **Correção e evidências:** lote final B25/B21/B20 abaixo. |
 | **B22 — 307** | `some(isArcanistMonster)` admite Baixado, `:1111–1127`. | Condição pública exige Arcanista identificável face-up pelo padrão de `evaluateConditions.ts:2142–2157`. | Aprendiz Baixado como único monstro permite Invocar Albus. **Ação injetada:** `shouldActivateHandIgnition` bloqueia sua geração normal. Não há `requireFaceup:true` explícito na carta; é o padrão do avaliador. |
 | **B23 — 312** | Confunde nenhum monstro com nenhum Arcanista; exige PV>2200 e consome OPT antes de validar, `:1210–1247`. | EN/PT: nenhum monstro; pagar 2000 PV. | Com Dragão Cinzento em campo paga/Invoca indevidamente. Com campo vazio/2100 PV não Invoca e consome OPT. Controle vazio/8000 paga/Invoca. A política também filtra PV≤2200; o defeito é simular incorretamente uma ação fornecida, não deixar de escolher gastar PV. |
 | **B24 — 302/312** | Aura e Biblioteca ignoram negação em seus caminhos próprios, `:1048–1071`, `:1210–1259`. | Nenhuma exceção de negação em EN/PT. | Aprendiz negado continua dando +300; Biblioteca com efeitos negados ainda Invoca. Runtime retirou/restaurou aura do Aprendiz conforme negação. Não se trata de negação da ativação. |
-| **B25 — 314** | Divide atributos sem registrar duração/restauração, `:894–927`. | Metade até o fim deste turno, em EN/PT. | Equipar Azrath diante de Mestre 2200/2200, resolver Fase Final simulada: permanece **1100/1100**, em vez de 2200/2200. O debuff de 100 é limpo, a metade não. |
+| **B25 — 314 — encerrado** | Divide atributos sem registrar duração/restauração, `:894–927`. | Metade até o fim deste turno, em EN/PT. | Equipar Azrath diante de Mestre 2200/2200, resolver Fase Final simulada: permanece **1100/1100**, em vez de 2200/2200. O debuff de 100 é limpo, a metade não. **Correção e evidências:** lote final B25/B21/B20 abaixo. |
 
 Arquivo: `.cache/arcanist-audit/simulation.test.ts`, **10/10**: oito cenários diagnósticos e dois controles positivos. O handler de LP runtime (`actionHandlers/resources.ts:613–620`) aceita pagar 2000 com 2100 PV. A reprodução B25 chama `resolveSimulatedEndPhase`; não usa uma transição inteira de duelo real.
 
@@ -508,7 +547,7 @@ duelos sem erros, warnings, ações bloqueadas ou falhas de execução. Houve um
 paridade global. Relatório: `.cache/arcanist-p1-smoke.json`. Sem mudança de
 pesos/presets, suíte global, `npm test` ou `npm run check`.
 
-### Fila atual: 10 achados pendentes
+### Fila após o lote P1: 10 achados pendentes (histórico)
 
 1. P2 — B09/309: OPT do Ignition por cópia.
 2. P2 — B14/312: OPT do Ignition por cópia; parcela de 313 já corrigida.
@@ -520,3 +559,547 @@ pesos/presets, suíte global, `npm test` ou `npm run check`.
 8. P2 — B25/314: expiração da redução pela metade na simulação.
 9. P2 — B21/305: recuperar Magias de outros arquétipos na simulação.
 10. P3 — B20/301: bloquear segunda cópia na execução simulada injetada.
+
+## Implementação do lote de OPT por cópia — 02/10/2026
+
+Base de execução: `15e0ccf63671b90c86dcac8dd1cbe4172f213fe8`, `main`, checkout
+inicialmente limpo. **Encerrados B09/309 e B14/312**, completando toda B14.
+Situação dos 25 achados originais: **17 encerrados e 8 pendentes**.
+
+Os efeitos `meeting_arcanists_choose_effect` e
+`arcanist_grand_library_ignition` receberam `oncePerTurnScope: "card"` em
+`src/data/cards/arcanist.ts`. Ambos são `DECLARATIVE_EXISTING`: preservam
+`oncePerTurn: true`, a chave `oncePerTurnName`, `usagePolicy: "activate"` e os
+textos EN/PT. Os dois modos compartilham um uso por cópia. Turno seguinte e
+saída/retorno usam o reset genérico existente, sem alteração de APIs, tipos
+públicos, handlers ou política estratégica da IA.
+
+| Achado/caminho | Evidência permanente |
+|---|---|
+| B09 / 309 | Duas cópias ativam no mesmo turno, usando os dois modos. Repetir a primeira com outro modo falha sem novo descarte. Runtime nos dois assentos em `test/arcanistActivationModes.test.ts`; geração e execução simuladas em `test/ai/arcanistActivationCosts.test.ts`. |
+| B14 / 312 | A primeira usa busca; mudar para recrutamento na mesma presença não libera uso nem cobra PV. A segunda entra por `tryActivateSpell`, substitui a primeira e pode recrutar pagando 2000 PV. Mesmos arquivos de runtime/simulação. O controle filtrado de `test/arcanistDesignDecisions.test.ts` confirma o Ignition por cópia já corrigido de 313. |
+| Cancelamento/negação/lifecycle | Cancelamento anterior ao compromisso preserva recursos e uso. Negação da ativação permite nova tentativa; negação somente do efeito mantém o limite consumido. Custos pagos permanecem pagos. Runtime cobre saída/retorno; runtime e simulação cobrem turno seguinte. A asserção simulada de fonte retirada distingue uso da presença antiga e reset da nova. |
+| Clones | Importação do uso canônico passa nos quatro perfis — Bot, Beam/Greedy, GameTree e TurnLine — nos dois assentos, nos controles filtrados de `test/ai/cloneProfiles.test.ts`. |
+| Replay | Duas ativações com `duelCardId` distintos, modos e decisões gravados, playback em outra instância nos dois assentos com humano/IA, todas as decisões consumidas e hashes/snapshots iguais, sem escolhas ao vivo. `test/replay/arcanistPriorityOneReplay.test.ts`. |
+
+### Dependência da substituição pública de Magia de Campo
+
+A regressão de Biblioteca revelou uma falha genérica preexistente: o ramo
+`fieldSpell` de `moveCardInternal` iniciava a retirada da carta antiga sem
+aguardar, sobrescrevia sua zona e a remoção terminava em `card_not_found`.
+Uma sondagem independente sem usar Ignition reproduziu a perda em
+`.cache/arcanist-p2/field-replacement-probe.log`.
+
+Foi necessário aguardar esse `moveCard` com `duringCurrentDuel` em
+`src/core/game/zones/movement.ts`, antes da entrada da nova carta. Cada
+movimento mantém identidade, eventos e cleanup próprios. A simulação já
+realizava a substituição sequencialmente. O controle genérico dos dois
+assentos em `test/contracts/gameMovementContracts.test.ts`, a ordem dos
+eventos no runtime da Biblioteca e os replays comprovam a correção. Esse
+ajuste é uma dependência da regressão e não altera a contagem dos 25 achados
+originais.
+
+### Validação e compatibilidade
+
+Antes dos campos declarativos, as novas regressões registraram RED:
+24 controles, 22 falhas e 2 passagens; a segunda cópia estava bloqueada na
+geração simulada e no replay, e a Reunião também na ativação pública. A
+Biblioteca pública revelou adicionalmente a falha de substituição acima.
+Log: `.cache/arcanist-p2/red-final.log`.
+
+- **128/128** nos seis arquivos previstos: definições, modos, custos
+  simulados, replay Arcanist, recorder e replay canônico.
+  Log: `.cache/arcanist-p2/green-planned.log`.
+- **10/10** controles filtrados da prevenção independente de Reunião,
+  Ignition por cópia de Elementalista e importação de uso nos quatro clones.
+  Log: `.cache/arcanist-p2/filtered-controls.log`.
+- **51/51** nos consumidores diretos do movimento alterado:
+  `test/contracts/gameMovementContracts.test.ts`,
+  `test/chain/negation.test.ts` e `test/chain/nullChainSystem.test.ts`.
+  Log: `.cache/arcanist-p2/movement-consumers.log`.
+- `npm run typecheck`: TS7 da aplicação e Node sem erros.
+  Log: `.cache/arcanist-p2/typecheck-final.log`.
+- `npm run validate:actions`: 110 entradas, bindings e actions compatíveis;
+  97 tipos usados pelo banco. Log: `.cache/arcanist-p2/validate-actions.log`.
+- `npm run audit:chain`: 228 cartas, 422 efeitos, zero erros, avisos ou
+  ambiguidades. Log: `.cache/arcanist-p2/audit-chain.log`.
+
+Todos os testes usam o Node com `--import=tsx`,
+`--import=./scripts/register_node_asset_loader.ts`, `--test` e
+`--test-concurrency=1`; os controles usam `--test-name-pattern`. Não foi
+executada suíte global. A ampliação para os três arquivos de consumidores
+decorre somente da correção necessária no movimento de Magia de Campo.
+
+A assinatura do banco passou de `98009b78` para `85aff7a6`; o hash completo
+do replay genérico passou de `e0ed191d` para `75a0acfe`. Foram atualizadas
+somente essas duas expectativas. Seu hash de estado permanece `297e0fe8`,
+assim como schema 2 e `engine-rules-v9`. Bancos anteriores continuam sendo
+rejeitados pela assinatura. Entrega local, sem branch, commit ou push.
+
+Revisão final independente do diff, da substituição transacional, dos testes
+e dos logs: sem bloqueadores ou problemas importantes. `git diff --check`
+passou. A revisão foi por código/headless; não houve playtest visual nem
+validação dos oito achados fora deste lote.
+
+### Fila após o lote de OPT por cópia: 8 achados pendentes (histórico)
+
+1. P2 — B06/303: filtro de alvo Baixado.
+2. P2 — B16/313–314: restrição adicional de face para cima e contrato de atributos ocultos.
+3. P2 — B17/313: contar Magias anteriores à entrada em campo no mesmo turno.
+4. P2 — B08/307: recuperação obrigatória.
+5. P2 — B19/314: redução obrigatória.
+6. P2 — B25/314: expiração da redução pela metade na simulação.
+7. P2 — B21/305: recuperar Magias de outros arquétipos na simulação.
+8. P3 — B20/301: bloquear segunda cópia na execução simulada injetada.
+
+## Lote B06/B16 — alvos Baixados (02/10/2026)
+
+Executado no checkout `main`, HEAD `15e0ccf63671b90c86dcac8dd1cbe4172f213fe8`,
+preservando as alterações locais do lote de OPT por cópia acima. **Encerrados
+B06 e toda B16: 19 achados encerrados e 6 pendentes** entre os 25 originais.
+
+### Decisão aprovada e implementação
+
+A escolha **“Restringir só Azrath”** define que a destruição de 303/313 pode
+escolher um adversário Baixado. A redução de atributos de 314 permanece
+limitada a um monstro adversário com a face para cima, inclusive na resolução.
+Os três efeitos usam capacidades `DECLARATIVE_EXISTING`.
+
+- `src/data/cards/arcanist.ts`: removido `requireFaceup` somente de
+  `crimson_magic_opponent_target` e `elementalist_destroy_target`. Preservados
+  o alvo próprio de 303 e os requisitos de fonte, equipagem e OPT por cópia
+  de 313.
+- A cláusula de alvo de Azrath passa a ser `target 1 face-up monster your
+  opponent controls` em EN e `escolha 1 monstro com a face para cima que seu
+  oponente controla` em PT. Redação aplicada em
+  `public/locales/pt-br.json` e `docs/Archetypes/Arcanist Archetype.md`.
+  Duração, OPT, timing e opcionalidade existentes foram preservados.
+- APIs, tipos públicos, handlers e política estratégica da IA permanecem
+  os existentes. A legalidade e a execução simuladas aceitam o novo alvo;
+  as preferências estratégicas atuais por ameaças face-up e trocas vantajosas
+  continuam distintas da legalidade.
+
+### Evidências e regressões
+
+Antes da alteração dos filtros, as 38 regressões iniciais produziram **28
+falhas semânticas e 10 controles passando**. Após separar a geração genérica
+de ações da política estratégica, os quatro casos de IA também foram
+executados com os filtros anteriores e ficaram **RED 4/4**. As regressões
+finais, incluindo quatro controles adicionais do alvo próprio de 303,
+passaram **42/42**.
+
+| Caminho | Evidência atual |
+| --- | --- |
+| 303 direto | `test/arcanistDestructionDecisions.test.ts`: ativação pública com Chain real nos dois assentos, tanto humano quanto IA. Destrói o adversário Baixado após o próprio alvo, calculando metade do ATK atual imediatamente antes de cada destruição. Mantém a restrição do alvo próprio e os controles existentes de destruição parcial/dano. |
+| 303 pelo Grimório | `test/arcanistBlueprint.test.ts`: preview e ativação pública da cópia aceitam o Baixado nos dois assentos/controladores. Destruir outro Arcanista preserva o host e o Equipamento, mantendo a isenção de dano própria conforme a condição existente. |
+| 313 e presença | `test/arcanistDesignDecisions.test.ts`: equipado destrói Baixado nos dois assentos/controladores; sem Equipamento ou com fonte Baixada continua bloqueado. Virar o alvo de 303/313 para baixo na resposta preserva a validade da mesma presença; saída/retorno invalida a seleção e não escolhe outro candidato. |
+| Azrath | Mesmo arquivo: Baixado não pode ser declarado; um alvo inicialmente face-up que vira para baixo na resposta não recebe a redução pela metade. Os atributos são comparados ao estado anterior à resolução, após o debuff independente de 100. |
+| IA/simulação | `test/ai/arcanistDesignDecisions.test.ts`: geração genérica usa `prepareSimulatedEffectActivation` e permite 303/313 com somente o adversário Baixado. Execução pela simulação Arcanist destrói o alvo, preserva dano/uso e não registra action sem suporte. Projeções públicas mantêm a identidade/atributos ocultos mascarados durante a descoberta. |
+| Replay | `test/replay/arcanistDesignReplay.test.ts`: oito casos novos, 303/313 × dois assentos × humano/IA, reproduzidos em outra instância com Chain real. Alvo gravado por `duelCardId`, decisões integralmente consumidas, snapshots e hashes iguais; UI/AutoSelector de playback falham se houver escolha ao vivo. |
+
+### Validação e compatibilidade
+
+Runner do `AGENTS.md`: `node --import=tsx
+--import=./scripts/register_node_asset_loader.ts --test --test-concurrency=1`.
+**136/136 testes passaram** nos cinco arquivos de regressão acima, mais
+`test/cardDescriptionFormatting.test.ts`, `test/replay/canonicalRecorder.test.ts`
+e `test/replay/canonicalReplay.test.ts`. Após ajustar o narrowing tipado da
+fixture de Chain, o arquivo de destruição foi reexecutado: **18/18**.
+
+Controles filtrados de `test/chain/costsTargetsAndCleanup.test.ts`: **5/5**, com
+custo antes de alvos, separação de seleções canônicas, proibição de seleção
+durante a resolução e revalidação sem substituição/reembolso. O alcance
+cobre os consumidores diretos dos filtros e dos textos; não houve suíte global.
+
+- `npm run typecheck`: passou com o CLI oficial TS7 para app e Node.
+- `npm run validate:actions`: passou; 110 entradas/bindings/actions, 97 tipos
+  usados pelo banco.
+- `npm run audit:chain`: passou; 228 cartas, 422 efeitos, nenhuma ambiguidade,
+  erro ou warning.
+- `git diff --check`: passou.
+
+A assinatura do banco mudou de `85aff7a6` para **`ffedcf35`**. Somente sua
+expectativa e o hash completo do replay genérico, de `75a0acfe` para
+**`c655023a`**, foram atualizados. Os hashes de estado `a897fa58`/`297e0fe8`,
+schema 2 e `engine-rules-v9` foram preservados. O teste de banco incompatível
+continua passando. Logs RED/GREEN, baseline e ledger estão em
+`.cache/arcanist-targets/`; entrega local, sem branch, commit ou push.
+
+**Revisão final independente:** aprovada, sem achados Critical, Important ou
+Minor. Conferidos escopo, EN/PT, presença/face, replay, evidências de validação
+e preservação do baseline anterior. A revisão foi por código e evidências
+headless; as seis pendências abaixo e as preferências estratégicas da IA
+continuam fora deste lote. Não houve playtest visual.
+
+### Fila após o lote de alvos Baixados: 6 achados pendentes (histórico)
+
+1. P2 — B17/313: contar Magias anteriores à entrada em campo no mesmo turno.
+2. P2 — B08/307: recuperação obrigatória.
+3. P2 — B19/314: redução obrigatória.
+4. P2 — B25/314: expiração da redução pela metade na simulação.
+5. P2 — B21/305: recuperar Magias de outros arquétipos na simulação.
+6. P3 — B20/301: bloquear segunda cópia na execução simulada injetada.
+
+## Lote de correção B08/B17/B19 — histórico de ativações e triggers obrigatórios (02/10/2026)
+
+Executado no checkout `main`, HEAD `15e0ccf63671b90c86dcac8dd1cbe4172f213fe8`,
+preservando as alterações locais dos dois lotes anteriores. **Encerrados B08,
+B17 e B19: 22 achados encerrados e 3 pendentes** entre os 25 originais.
+
+### Regra, classificação e implementação
+
+- **B08/Albus e B19/Azrath — `DECLARATIVE_EXISTING`:** os imperativos de EN/PT
+  foram preservados. `triggerRequirement: "mandatory"`, `promptUser: false`
+  e remoção de `promptMessage` eliminam a recusa humana. A seleção de alvo
+  continua no broker/Chain, sem AutoSelector para humanos. Sem alvo válido,
+  não há publicação nem consumo. Fonte, equipagem, filtros e hard OPT continuam
+  iguais; Albus mantém `usagePolicy: "activate"` e Azrath mantém `"use"`.
+- **B17/Elementalista — `ENGINE_CAPABILITY_REQUIRED`:** a engine não tinha
+  histórico das ativações anteriores à presença. O efeito passa a usar o
+  passivo genérico `activated_card_count_buff`, com filtro de Magia Arcanist,
+  `countOwner: "any"`, +100 ATK por ocorrência. É uma mudança de modelo de
+  estado, contratos/projeções e hash; não cria action ou handler específico
+  da carta nem altera a política estratégica da IA.
+
+O histórico do turno guarda snapshots públicos separados dos cards vivos e
+do ativador. Publicação de Magia/Armadilha entra antes dos listeners; Chain/link
+evitam duplicação. Negação da própria ativação remove a ocorrência; negação
+somente do efeito mantém a contagem. Ignition de Magia face-up e cópia do
+Grimório são ativações de efeito e não aumentam o total de cards ativados.
+`chain/link.ts` remove a ocorrência assim que a negação é confirmada e
+atualiza os passivos antes da próxima ação do negador. A limpeza na resolução
+do elo original continua idempotente.
+
+O passivo consulta todas as ativações elegíveis de ambos os jogadores enquanto
+a fonte está face-up e com efeitos válidos. Negação, face-down e saída limpam
+sua contribuição; restauração/retorno recalculam sem duplicação. Novo turno e
+novo duelo limpam o histórico. A simulação compartilha a mesma contagem e
+limpa sua contribuição na saída; os quatro perfis de clone copiam o histórico
+sem referências vivas. Projeção pública e snapshot canônico incluem a informação
+latente necessária a um monstro que ainda não entrou no campo.
+
+Produtores: `game/events/eventBus.ts`, `chain/link.ts` e
+`ai/common/simulation.ts`. Contrato e
+consultas: `contracts/events.ts` e `game/events/activationHistory.ts`.
+Consumidores: passivos runtime/simulados, `game/state/serialization.ts`,
+`game/replay/canonical.ts` e `ai/common/stateFingerprint.ts`/clones. Cleanup:
+`Game.ts`, `game/state/duelReset.ts`, `game/turn/lifecycle.ts` e lifecycle
+simulado. A UI usa a atualização existente de atributos; os textos EN/PT e
+o catálogo do arquétipo já expressavam as regras deste lote.
+
+### Evidências e validação
+
+Antes das correções, 14 regressões runtime deram **6 falhas semânticas e 8
+controles passando**: humanos recusavam Albus/Azrath, e Elementalista entrava
+com 2500 em vez de 2700 após duas Magias anteriores. A simulação confirmou
+o mesmo defeito em **2/2 casos RED**. As 58 novas regressões finais cobrem:
+
+| Caminho | Evidência |
+| --- | --- |
+| Runtime | `test/arcanistDesignDecisions.test.ts`: ambos os assentos/controladores, alvos humanos pelo broker, ausência de alvo sem uso, políticas `activate`/`use` sob negação, histórico de ambos os jogadores, entrada/retorno, face e negação. |
+| Simulação e cópia | `test/ai/arcanistDesignDecisions.test.ts` e `test/arcanistBlueprint.test.ts`: contagem anterior à entrada, filtro de arquétipo, restauração sem duplicação, saída sem bônus, End Phase e Grimório sem nova ativação de card. |
+| Histórico e lifecycle | `test/contracts/events.test.ts` e `test/phaseLifecycle.test.ts`: publicação idempotente antes dos listeners, snapshots separados, filtros/ativador, Magia/Armadilha versus efeito, negação por identidade, hash latente e reset real de turno/duelo. |
+| Clones | `test/ai/cloneProfiles.test.ts`: Bot, Beam/Greedy, GameTree e TurnLine nos dois assentos; cópia profunda, fingerprint, futuro beneficiário e isolamento da alteração em uma branch de busca. |
+| Replay | `test/replay/arcanistDesignReplay.test.ts`: 12 novos casos, três cartas × dois assentos × humano/IA. Albus/Azrath sem confirmação opcional; duas Magias antes da Invocação-Normal de Elementalista e outra após. Outra instância consome todas as decisões, sem escolhas ao vivo, com snapshots/hashes iguais. |
+
+Runner focado do `AGENTS.md`: `node --import=tsx
+--import=./scripts/register_node_asset_loader.ts --test --test-concurrency=1`.
+**399/399 testes passaram** nos arquivos acima, mais
+`test/arcanistActivationDefinitions.test.ts`, `test/ai/stateFingerprint.test.ts`,
+`test/fieldPresencePassives.test.ts`, `test/cardDescriptionFormatting.test.ts`,
+`test/replay/canonicalNormalization.test.ts`, `test/replay/canonicalRecorder.test.ts`
+e `test/replay/canonicalReplay.test.ts`.
+
+**61/61 controles de Chain passaram** em `test/chain/segoc.test.ts`,
+`test/chain/negation.test.ts` e `test/chain/selectionLifecycle.test.ts`.
+Após o ajuste de timing da negação identificado na revisão final, os oito
+arquivos de consumidores diretamente afetados (runtime, eventos, replay e
+os três de Chain) foram reexecutados: **181/181**. A fixture do contexto real
+da negação foi alinhada ao contrato strict e o runtime Arcanist passou novamente
+**53/53**, junto de novo typecheck TS7.
+Alcance: produtores de eventos, passivos compartilhados, lifecycle/projeções,
+decisões obrigatórias, negação, cópias, clones e consumidores diretos de replay.
+Não houve suíte global ou playtest visual.
+
+- `npm run typecheck`: passou com TS7 oficial para app e Node.
+- `npm run validate:actions`: passou; 110 entradas/bindings/actions, 97 tipos
+  usados pelo banco.
+- `npm run audit:chain`: passou; 228 cartas, 422 efeitos, nenhuma ambiguidade,
+  erro ou warning.
+- `git diff --check`: passou.
+
+### Compatibilidade e fila após B08/B17/B19 (histórico)
+
+Assinatura do banco: `ffedcf35` → **`726d0a77`**. Hash completo do replay
+genérico: `c655023a` → **`326a3f84`**. Somente essas expectativas mudaram;
+hashes de estado `a897fa58`/`297e0fe8`, schema `2` e `engine-rules-v9`
+permanecem iguais. O histórico não vazio entra no hash dos cenários afetados;
+o envelope serializado continua igual e o histórico é reconstruído pelos
+eventos. Bancos anteriores são rejeitados pela assinatura, conforme o controle
+canônico de incompatibilidade. Não há migração. Logs RED/GREEN, baseline,
+ledger e pacote de revisão estão em `.cache/arcanist-history/`.
+
+**Revisão final independente:** identificou uma falha Important no timing
+da negação: Elementalista conservava 2600 em vez de 2500 imediatamente após
+o handler negar a ativação, antes da resolução do elo original. As regressões
+com os handlers reais reproduziram **2 falhas e 2 controles passando**; após
+a correção do produtor, passaram **4/4**. A revisão do ajuste foi aprovada,
+sem achados Critical, Important ou Minor restantes. Os consumidores e checks
+pendentes desse recheck foram confirmados pelo executor conforme os números
+acima. Não se alegou revisão completa dos lotes históricos nem playtest visual.
+
+Entrega local, sem branch, commit ou push. Fila após aquele lote: **3 achados pendentes**:
+
+1. P2 — B25/314: expiração da redução pela metade na simulação.
+2. P2 — B21/305: recuperar Magias de outros arquétipos na simulação.
+3. P3 — B20/301: bloquear segunda cópia na execução simulada injetada.
+
+## Encerramento B25/B21/B20 — simulação da equipagem (02/10/2026)
+
+Executado no mesmo checkout `main`, HEAD
+`15e0ccf63671b90c86dcac8dd1cbe4172f213fe8`, preservando os lotes anteriores.
+**B25, B21 e B20 encerrados: 25 achados originais corrigidos e nenhuma
+pendência entre eles.** Classificação: `SIMULATION_DIVERGENCE`, corrigida por
+`DECLARATIVE_COMPOSITION` das capacidades existentes. A única alteração de
+produção deste lote está em `src/core/ai/ArcanistStrategy.ts`.
+
+### Implementação e contrato preservado
+
+- **B25/Azrath:** a equipagem prepara e executa `azrath_equip_halve`, incluindo
+  sua action `modify_stats_temp`. A metade passa a compor os modificadores
+  temporários e expira pelo cleanup existente. Sequência comprovada:
+  `1500/1800 → 1400/1700 → 700/850 → 1500/1800`.
+- **B21/Viridis:** `viridis_arcanist_life_recover` usa os alvos declarativos:
+  qualquer Magia elegível do próprio Cemitério. Escolhas por identidade e
+  preferências continuam no mecanismo existente; monstros e Armadilhas são
+  excluídos. A preparação sem alvo válido preserva o uso disponível.
+- **Triggers de equipagem:** a rotina prepara os efeitos `card_equipped` do
+  monstro realmente equipado, valida fonte, Equipamento, vínculo e alvos,
+  registra o uso pela chave canônica e executa suas actions. Viridis, Albus,
+  Mestre dos Espelhos e Azrath compartilham esse caminho. Os atalhos de
+  recuperação, Invocação e divisão direta substituídos foram removidos.
+- **B20/Grimório:** o `on_play` é preparado antes de mudar zonas, face, vínculos
+  ou histórico. A cópia face-up própria bloqueia a ativação mesmo negada;
+  cópias Baixadas/adversárias seguem `control_card_max`. A mão usa o alvo
+  preparado; a ativação simulada Baixada valida antes da virada e dispara a
+  equipagem uma vez após estabelecer o vínculo. Uma carta já Baixada pode
+  ativar em uma linha de Magias/Armadilhas cheia, pois não ocupa outro espaço.
+
+Limites por nome, políticas de uso, opcionalidade, EN/PT, duelo real e pesos
+estratégicos permanecem iguais. Nenhuma action, handler ou contrato público
+foi criado. O fallback conservador existente de `modify_stats_temp` para
+recalcular auras positivas dinâmicas continua sinalizando o ramo como não
+suportado; este lote não amplia essa capacidade compartilhada.
+
+### RED, GREEN e cobertura
+
+Antes da correção, as regressões permanentes da simulação deram **70 casos,
+54 falhas semânticas e 16 controles passando, exit1**. Confirmaram duração
+incorreta da metade, exclusão da Magia 276, consumo/chaves de uso divergentes
+e mutações indevidas do segundo Grimório ou de sua face. Depois da correção,
+os **118 novos casos finais passaram**, nos dois assentos:
+
+| Caminho | Evidência permanente |
+| --- | --- |
+| Simulação, 94 casos | `test/ai/arcanistDesignDecisions.test.ts`: mão/Baixado, sequência de Azrath, arredondamento, modificadores anteriores/posteriores, cleanup repetido, saída/retorno do alvo, saída da fonte, Magia 276 escolhida entre várias, filtros de recuperação, ausência de alvo, hard OPT e renovação no próximo turno. Rejeição do Grimório preserva fingerprint, zonas, face, vínculos, contadores de Tinta e histórico; controles de primeira cópia, negada, Baixada, adversária, ausência de host e capacidade da linha. Preferências sem decisões exatas cobrem as formas direta/aninhada, sua precedência e preservação das calculadas; metadados anteriores ao clone não contornam a validação do índice de zona. Albus e Mestre dos Espelhos exercitam o intérprete compartilhado. |
+| Clones, 8 casos | `test/ai/cloneProfiles.test.ts`: Bot, Beam/Greedy, GameTree e TurnLine importam a metade temporária e o uso real canônico. Cleanup e novo uso no clone preservam o duelo vivo; o fingerprint distingue contribuições temporárias com atributos atuais iguais. |
+| Paridade/replay, 12 casos | `test/replay/arcanistDesignReplay.test.ts`: B25/B21/B20 × dois assentos × humano/IA pela ativação pública da mão com Chain real. Azrath expira por transições reais; Viridis recupera 276; a segunda cópia é rejeitada. Outra instância consome todas as decisões, sem escolhas ao vivo, com snapshots/hashes iguais. |
+| Controle do runtime preservado, 4 casos | No mesmo arquivo de replay, a entrada pública do Grimório Baixado mantém a rejeição anterior sem mudar o snapshot. O replay reproduz essa rejeição sem decisões de alvo ao vivo. A limitação está descrita abaixo. |
+
+Runner do `AGENTS.md`, sem suíte global:
+
+```powershell
+node --import=tsx --import=./scripts/register_node_asset_loader.ts --test --test-concurrency=1 test/ai/arcanistDesignDecisions.test.ts test/ai/arcanistActivationCosts.test.ts test/ai/canonicalStatsSimulation.test.ts test/ai/cloneProfiles.test.ts test/ai/stateFingerprint.test.ts test/arcanistDesignDecisions.test.ts test/arcanistBlueprint.test.ts test/replay/arcanistDesignReplay.test.ts test/replay/canonicalRecorder.test.ts test/replay/canonicalReplay.test.ts
+```
+
+**444/444 testes passaram, exit0, após os ajustes finais da revisão.** Alcance: implementação Arcanist, custos e
+stats canônicos reutilizados, clones/fingerprint, consumidores de equipagem,
+blueprints, decisões e replay/recorder canônicos. Não houve playtest visual
+nem avaliação de win rate ou alteração de política estratégica.
+
+- `npm run typecheck`: passou com TS7 oficial para app e Node.
+- `npm run validate:actions`: passou; 110 entradas/bindings/actions, 97 tipos
+  usados pelo banco.
+- `npm run audit:chain`: passou; 228 cartas, 422 efeitos, zero ambiguidades,
+  erros ou warnings.
+- `git diff --check`: passou.
+
+**Revisão final independente:** encontrou uma falha Important nas preferências
+diretas `activationContext.targetPreferences`, anteriormente aceitas e
+ignoradas pela nova fronteira de normalização. As regressões sem decisões
+exatas reproduziram **8 falhas e 8 controles passando**; o ajuste local mantém
+as formas direta/aninhada, a precedência anterior e as preferências calculadas
+para alvos que o chamador não sobrescreveu. Quatro controles adicionais
+comprovam essa preservação. Na inspeção final, quatro regressões também
+falharam quando `action.card` apontava para uma referência anterior ao clone;
+a validação Baixada passou a consultar `zoneIndex`/`index`, como a execução
+genérica. Os **24 casos adicionais passaram**, seguidos de novo typecheck TS7
+e da bateria focada de 444 testes. A revisão confirmou 22 sondagens negativas
+de fonte, Equipamento, vínculo e alvo, além do descarte conservador dos ramos
+de aura dinâmica. Nenhum Critical ou Minor foi relatado; a correção da
+referência anterior ao clone e o ajuste pós-revisão foram verificados pelo
+executor, sem uma segunda revisão independente.
+
+### Compatibilidade, limite de paridade e entrega
+
+Assinatura **`726d0a77`**, hash completo do replay genérico **`326a3f84`**,
+hashes de estado **`a897fa58`/`297e0fe8`**, schema **`2`** e
+**`engine-rules-v9`** preservados. Nenhuma expectativa de assinatura/hash foi
+alterada neste lote. Os diagnósticos e as filas históricas permanecem no
+documento; logs RED/GREEN, baseline e ledger ficam em `.cache/arcanist-final/`.
+
+**Limitação adicional, fora dos 25 achados originais:** a entrada pública
+`tryActivateSpellTrapEffect` consulta `getSpellTrapActivationEffect`, que
+prioriza o Ignition `arcanist_grimoire_activate_stored` mesmo para o Grimório
+Baixado. Sem blueprint armazenado, a ativação é rejeitada antes da equipagem.
+O plano exige preservar o duelo real; esse getter e o driver permanecem
+intactos. Por isso, a equipagem Baixada foi validada na simulação, e a paridade
+pública bem-sucedida/replays de referência usam a mão. Os quatro controles
+adicionais registram a rejeição real existente nos dois assentos/controladores;
+esta auditoria encerrada não comprova equipagem Baixada pela interface.
+
+Entrega local, sem branch, commit ou push. **Fila dos 25 achados originais:
+0 pendências.**
+
+## Lote adicional — Grimório Baixado e auras na simulação (B26/B27)
+
+Este lote foi autorizado após o encerramento dos 25 achados originais. As
+seções anteriores registram o comportamento e os resultados dos respectivos
+checkouts: a rejeição Baixada e `engine-rules-v9` descritas no lote anterior
+são históricas e foram substituídas neste lote. Não houve alteração de textos,
+banco de cartas, prioridades estratégicas, actions ou handlers.
+
+### B26 — entrada pública do Grimório Baixado
+
+**BUG CONFIRMADO:** o getter genérico selecionava o Ignition de uma Magia
+Baixada em `spellTrap`, rejeitando Grimório sem blueprint antes da equipagem.
+Além disso, a execução podia retornar por placement ou selecionar outro efeito
+antes de respeitar o `preparedEffect` preservado pela ativação.
+
+**Correção:** Magias Baixadas consultam `on_play`; quando ele não existe,
+retornam ao placement existente, sem selecionar Ignition. A execução prioriza
+o efeito preparado antes de qualquer nova seleção ou retorno. A geração
+Arcanist usa `effectId`, preview público e `shouldPlaySpell` para essas Magias,
+preservando a política vigente dos Ignitions face para cima.
+
+A simulação prepara a Magia Baixada com `on_play` antes de virar a fonte.
+Armazenamento de blueprint, contadores de Tinta e histórico usam a fonte exata
+capturada antes do movimento e a confirmação do callback existente, uma vez.
+O custo inviável rejeita sem virar a carta ou alterar o fingerprint. A Reunião
+Baixada sem `on_play` continua sendo apenas colocada face para cima, sem pagar
+custo ou consumir o Ignition. Timing, turno da Baixada, negações, compromisso e
+seleção humana obrigatória seguem o pipeline existente.
+
+### B27 — supressão e restauração de contribuições dinâmicas
+
+**BUG CONFIRMADO:** a simulação não completava a restauração já modelada após
+`modify_stats_temp`; os planejadores bloqueavam também famílias suportadas.
+Na sequência de Azrath, a redução temporária aditiva de 100 anterior à metade
+também podia divergir: o runtime suprimia a contribuição positiva antes do
+cálculo, enquanto a simulação calculava sobre o total anterior.
+
+**Correção limitada às três famílias:**
+
+- `field_archetype_aura_buff`;
+- `activated_card_count_buff`;
+- `field_presence_type_summon_count_buff`.
+
+Os produtores runtime e simulados registram a família por chave canônica em
+um `WeakMap` interno por destinatário antes de aplicar a contribuição. A prova
+é mantida enquanto houver contribuição ou supressão temporária, inclusive
+após a saída da fonte. O marcador da action e a admissão dos planejadores
+exigem prova para todas as supressões relevantes. Não se infere suporte apenas
+do nome de uma chave ou da presença de valores em um snapshot.
+
+O registro central também recusa uma supressão ATK/DEF preexistente sem prova
+para aquela chave. Um refresh da fonte, ativa ou negada, não pode certificar
+retroativamente a origem de um snapshot. Uma prova legítima, registrada antes
+da supressão, permanece válida enquanto a supressão durar.
+
+Os quatro perfis de clone copiam a prova profundamente, filtrando-a pelas
+contribuições preservadas na projeção pública. O fingerprint inclui os pares
+ordenados chave/família. Não há campo novo em contratos públicos, banco ou
+snapshots serializados. Face, negação, controle, movimento e cleanup reconciliam
+as contribuições antes dos eventos correspondentes. A saída do destinatário
+limpa contribuições, supressões e prova; seu retorno começa outra presença.
+
+O precursor `buff_stats_temp` negativo temporário passa a seguir os mesmos
+guardas e a ordem de supressão do runtime. Isso é uma correção da simulação;
+as regras numéricas do duelo real permanecem preservadas.
+
+### Evidência RED/GREEN e cobertura
+
+Evidências locais em `.cache/arcanist-b26-b27/`, com baseline do checkout sujo,
+manifest de hashes, diffs exclusivos deste lote, relatórios e logs:
+
+| Etapa | Evidência |
+| --- | --- |
+| B26 RED inicial | 205 testes: 159 passam e 46 falham; getters, efeito preparado, entrada pública e geração/execução/simulação. |
+| Entrada pública/replay RED | 12 cenários Baixados B20/B21/B25 falham sem blueprint; mais uma expectativa de versão demonstra a fronteira v9/v10. |
+| B27 RED inicial | 23 testes: 11 passam e 12 falham; admissão, restauração e saída do alvo. |
+| B27 paridade RED | 8 cenários de Azrath com aura positiva falham; trace das actions comprova a divergência no precursor de 100. |
+| B26 revisão RED/GREEN | Dois casos de Reunião e dois de armazenamento falham, seguidos de dois controles de custo e dois de Tinta; após os ajustes, 271/271 passam. |
+| B27 GREEN inicial | 240/240 passam; uma regressão adicional de chave fallback passa junto aos 42 casos de stats canônicos. |
+| B27 revisão RED/GREEN | Quatro casos de zona exigida e oito de negação de activation-count falham antes dos ajustes. O produtor passa a respeitar `requireZone` antes de conceder prova; negação da família suportada deixa de marcar o ramo como desconhecido. Os 96 controles diretos e dois controles de fonte inativa passam. |
+| Revisão independente do lote | Reproduz a admissão indevida de um snapshot sem prova após refresh. As 12 regressões das três famílias × fonte ativa/negada × dois assentos falham antes da guarda central; depois, os 161 casos diretos passam. |
+| Paridade e compatibilidade GREEN | 164/164 passam com Chain real, outra instância, decisões consumidas, snapshots/hashes iguais e nenhuma escolha ao vivo. |
+
+Os testes permanentes cobrem ambos os assentos, humano/IA, preview/executor
+real/simulação, duplicatas face para cima inclusive negadas, outra cópia
+Baixada ou adversária, falta de host, turno da Baixada, linha cheia e efeitos/
+eventos únicos. Controles genéricos cobrem Contínuas com e sem `on_play`,
+Ignition face para cima, Armadilhas e Magias Rápidas.
+
+Para as auras: fatores 0, 0,05 e 0,5, arredondamento, outros modificadores,
+mudanças da fonte, cleanup repetido, saída/retorno do alvo, clones após saída
+da fonte e perda de sua identidade, isolamento dos quatro perfis e fingerprint.
+Os replays de Azrath cobrem as sequências `500/1000 → 400/900 → 200/450` e
+`400/1000 → 0/900 → 0/450`, ambas restaurando `1800/1000` no fim do turno.
+
+**Validação integrada final: 835/835 testes passaram**, zero falhas, cancelamentos
+ou casos ignorados, pelo runner Node focado do `AGENTS.md`, com concorrência 1
+e 25 arquivos diretamente relacionados. O comando completo está em
+`.cache/arcanist-b26-b27/final-command.txt`; resultado após o último ajuste em
+`post-review-focused.log`. O primeiro GREEN integrado de 823 casos permanece
+registrado em `final-focused.log`.
+Alcance: getters e pipeline humano, legalidade/semântica/descoberta/timing da
+Chain, definições e modos Arcanist, custos e decisões da simulação, blueprints,
+stats/auras, clones, fingerprint, posições e replay/recorder/driver canônicos.
+
+- `npm run typecheck`: passou com TS7 oficial nos projetos app e Node.
+- `npm run validate:actions`: passou; 110 entradas, bindings e actions,
+  97 tipos usados pelo banco.
+- `npm run audit:chain`: passou; 228 cartas, 422 efeitos, zero ambiguidades,
+  erros ou warnings.
+- `git diff --check`: passou.
+
+Não foi executada suíte global. As duas revisões por tarefa confirmaram o
+encerramento dos respectivos achados de revisão após os ajustes.
+
+**Revisão independente do lote encerrada:** a guarda central foi reavaliada
+com os 12 controles do Greedy antes/depois do refresh e oito controles de
+clones legítimos após a saída da fonte (quatro perfis × dois assentos), todos
+passando. Os fixtures de fingerprint registram a origem antes da supressão,
+preservando as assertivas de JSON igual, fingerprint diferente e máscara
+pública. Nenhum achado Critical, Important ou Minor ficou em aberto no escopo
+examinado. Relatórios de tarefa e revisão em `.cache/arcanist-b26-b27/`.
+
+### Compatibilidade e limites
+
+Replay **`engine-rules-v10`**, schema **`2`**, assinatura do banco
+**`726d0a77`**. Há rejeição explícita de replay v9, sem migração silenciosa.
+A expectativa do hash completo muda de `326a3f84` para **`bf41bda0`**, com
+10492 bytes; os hashes genéricos de estado **`a897fa58`/`297e0fe8`** permanecem
+preservados. A prova privada não é serializada no replay.
+
+**Limite conservador preservado:** outras famílias, misturas com contribuições
+desconhecidas e snapshots sem prova continuam fora da admissão. Boneflame
+Dragon é o controle permanente de família não suportada. Este encerramento
+não afirma suporte universal a passivas, playtest visual ou melhoria de win
+rate. O histórico dos 25 achados originais e o OPT por cópia de B09/B14 ficam
+preservados. Entrega no checkout atual, sem branch, commit ou push.
+
+**Encerramento:** B26 e B27 encerrados no alcance acima. São **25 achados
+originais + 2 adicionais corrigidos**, com **0 pendências nessa fila**. O
+bloqueio conservador das famílias não suportadas e dos snapshots sem prova é
+parte do contrato preservado, não uma promessa de paridade universal.

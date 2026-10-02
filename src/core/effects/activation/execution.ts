@@ -629,7 +629,8 @@ export async function activateSpellTrapEffect(
     costPayment: activationContext?.costPayment || null,
     prepareOnly: activationContext?.prepareOnly === true,
   };
-  let effect: EffectDefinition | null = null;
+  // Preparation fixes the effect before commitment can flip the Set source.
+  let effect: EffectDefinition | null = activationContext.preparedEffect || null;
 
   logDev?.("SPELL_TRAP_ACTIVATION_ATTEMPT", {
     card: card.name,
@@ -651,7 +652,7 @@ export async function activateSpellTrapEffect(
     };
   }
 
-  if (card.cardKind === "trap") {
+  if (!effect && card.cardKind === "trap") {
     effect = this.getSpellTrapActivationEffect(card, {
       fromHand: false,
       activationZone,
@@ -681,7 +682,7 @@ export async function activateSpellTrapEffect(
       }
       return fail("No trap activation effect defined.");
     }
-  } else if (card.cardKind === "spell") {
+  } else if (!effect && card.cardKind === "spell") {
     if (fromHand) {
       effect = this.getHandActivationEffect(card);
       const placementOnly =
@@ -725,7 +726,6 @@ export async function activateSpellTrapEffect(
     }
   }
 
-  effect = activationContext.preparedEffect || effect;
   if (!effect) {
     return fail("No activation effect defined.");
   }

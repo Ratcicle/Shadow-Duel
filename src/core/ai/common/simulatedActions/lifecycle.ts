@@ -1,3 +1,4 @@
+import { pruneModeledPassiveContributions } from "../../../effects/passives/passiveBuffs.js";
 import { expireEffectNegation } from "../../../effects/negation.js";
 import { removeTrackedStatChange } from "../../../effects/actions/stats.js";
 import { restoreTemporaryStatuses } from "../../../Card.js";
@@ -80,6 +81,7 @@ export function processSimulatedDelayedActions(
 
 /** End Phase cleanup does not advance turnCounter or remove next-turn effects. */
 export function cleanupSimulatedEndTurn(state: SimulatedRuntimeState): void {
+  state.cardActivationHistory = { turnCounter: state.turnCounter, entries: [] };
   for (const player of [state.bot, state.player]) {
     for (const card of [...player.field, ...player.spellTrap, ...(player.fieldSpell ? [player.fieldSpell] : [])]) {
       card.fieldPresenceSummons = [];
@@ -89,6 +91,7 @@ export function cleanupSimulatedEndTurn(state: SimulatedRuntimeState): void {
       if (card.tempAtkBoost) { removeTrackedStatChange(card, "atk", card.tempAtkBoost); card.tempAtkBoost = 0; }
       if (card.tempDefBoost) { removeTrackedStatChange(card, "def", card.tempDefBoost); card.tempDefBoost = 0; }
       delete card.temporarySuppressedDynamicBuffStatsByKey;
+      pruneModeledPassiveContributions(card);
       if (card.originalAtk != null) { card.atk = card.originalAtk; card.originalAtk = null; }
       if (card.originalDef != null) { card.def = card.originalDef; card.originalDef = null; }
       if (card.originalLevel != null) { card.level = card.originalLevel; card.originalLevel = null; }

@@ -130,7 +130,7 @@ Nível 4, Spellcaster, Dark, 1700/1400.
 
 > Cada vez que você ativar uma Magia "Arcanista" enquanto este card estiver com a face para cima no campo: todos os monstros que seu oponente controla nesse momento perdem 100 de ATK/DEF até o final deste turno.
 >
-> Se este card for equipado com uma Magia de Equipamento "Arcanista": escolha 1 monstro que seu oponente controla; reduza o ATK/DEF dele pela metade até o final do turno.
+> Se este card for equipado com uma Magia de Equipamento "Arcanista": escolha 1 monstro com a face para cima que seu oponente controla; reduza o ATK/DEF dele pela metade até o final do turno.
 >
 > Você só pode usar este efeito de "Azrath, Arcanista Corrompido" uma vez por turno.
 
