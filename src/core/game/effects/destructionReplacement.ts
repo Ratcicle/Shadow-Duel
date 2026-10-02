@@ -64,6 +64,7 @@ interface ReplacementSourceCard {
   name: string;
   owner: string;
   isFacedown: boolean;
+  effectsNegated?: boolean;
   instanceId?: number | string | null;
   fieldPresenceId?: number | string | null;
   equippedTo?: GameCard | null;
@@ -731,7 +732,9 @@ async function moveReplacementCostCards({
     }
     if (
       moveResult === false ||
-      (isReplacementActionResult(moveResult) && moveResult.success === false)
+      (isReplacementActionResult(moveResult) &&
+        (moveResult.success === false ||
+          ("toZone" in moveResult && moveResult.toZone !== normalizedDestination)))
     ) {
       return { success: false };
     }
@@ -847,6 +850,12 @@ async function tryReplacement(
   const { card, cause, fromZone, ownerPlayer } = ctx;
 
   if (!sourceCard || !effect?.replacementEffect) {
+    return { replaced: false };
+  }
+
+  // Registered temporary effects have their own source and remain independent
+  // of later negation of the card that originally registered them.
+  if (sourceCard.effectsNegated === true) {
     return { replaced: false };
   }
 

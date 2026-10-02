@@ -141,21 +141,6 @@ export async function handleReturnToHand(
       ) {
         game.registerAttackNegated(ctx.attacker);
       }
-    } else if (!action.requireDestination) {
-      // Fallback for older moveCard implementations
-      const sourceZone: unknown = Reflect.get(cardOwner, fromZone);
-      if (Array.isArray(sourceZone)) {
-        const idx = sourceZone.indexOf(card);
-        if (idx !== -1) {
-          sourceZone.splice(idx, 1);
-          clearFieldSlot(card);
-          cardOwner.hand = cardOwner.hand || [];
-          cardOwner.hand.push(card);
-          returnedCount++;
-          returnedCards.push(card);
-          getUI(game)?.log(`${card.name} returned to hand.`);
-        }
-      }
     }
   }
 

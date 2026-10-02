@@ -287,6 +287,6 @@ test("walker inventories every declarative action in the live database", () => {
   }
 
   assert.deepEqual(diagnostics, []);
-  assert.equal(actionCount, 586); // Activation cases expose their costs and actions without choice wrappers.
+  assert.equal(actionCount, 585); // Elementalist activation-count support is passive; it no longer contributes a buff action.
   assert.equal(types.size, 97);
 });

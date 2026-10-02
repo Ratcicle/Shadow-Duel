@@ -1174,7 +1174,7 @@ export function applyPolymerizationFusionSummon(
     applySimulatedActions,
   } = ctx;
   const targetPlayer = resolveActionPlayer(action, self, opponent);
-  if (!hasOpenMonsterZone(targetPlayer)) return;
+  const otherPlayer = targetPlayer === self ? opponent : self;
   const materialPool = rankCandidates([
     ...(targetPlayer.field || []),
     ...(targetPlayer.hand || []),
@@ -1193,22 +1193,46 @@ export function applyPolymerizationFusionSummon(
   const canPayMaterials = (
     fusionCard: SimulatedCardState,
   ): SimulatedCardState[] | null => {
-    const remaining = materialPool.slice();
+    const requirements = fusionCard.fusionMaterials || [];
+    if (requirements.length === 0 || fusionCard.extraDeckSummonProcedure) return null;
+    const slots = requirements.flatMap(requirement =>
+      Array.from({ length: requirement.count || 1 }, () => requirement));
+    if (slots.length === 0 || slots.length > materialPool.length) return null;
+    const candidatesBySlot = slots.map(requirement => materialPool.filter(candidate => {
+      const zone = findCardZone(targetPlayer, candidate);
+      return (zone === "hand" || zone === "field") &&
+        (!requirement.allowedZones || requirement.allowedZones.includes(zone)) &&
+        matchesTargetFilters(candidate, requirement, fusionCard, "self") &&
+        canMoveCardToZone(targetPlayer, candidate, "graveyard", targetPlayer, { state });
+    }));
+    if (candidatesBySlot.some(candidates => candidates.length === 0)) return null;
+    // Even removing every eligible material must leave a legal destination.
+    if (!canSimulatedProcedureEnterField(fusionCard, targetPlayer, otherPlayer,
+      candidatesBySlot.flat())) return null;
     const picked: SimulatedCardState[] = [];
-    for (const requirement of fusionCard.fusionMaterials || []) {
-      const count = Number(requirement.count || 1);
-      for (let i = 0; i < count; i += 1) {
-        const index = remaining.findIndex((candidate) =>
-          matchesTargetFilters(candidate, requirement, fusionCard, "self"),
-        );
-        if (index < 0) return null;
-        const material = remaining[index];
-        if (!material) return null;
-        picked.push(material);
-        remaining.splice(index, 1);
+    // Preserve cost ranking, but backtrack until every requirement and the
+    // destination are legal together (a cheap hand-only combo may leave no room).
+    const search = (index: number): SimulatedCardState[] | null => {
+      const requirement = slots[index];
+      if (!requirement) {
+        return canSimulatedProcedureEnterField(fusionCard, targetPlayer, otherPlayer, picked)
+          ? [...picked] : null;
       }
-    }
-    return picked;
+      const candidates = candidatesBySlot[index] || [];
+      const previous = picked[index - 1];
+      // Slots expanded from one count requirement are interchangeable.
+      const start = previous && slots[index - 1] === requirement
+        ? candidates.indexOf(previous) + 1 : 0;
+      for (const candidate of candidates.slice(start)) {
+        if (picked.includes(candidate)) continue;
+        picked.push(candidate);
+        const combo = search(index + 1);
+        if (combo) return combo;
+        picked.pop();
+      }
+      return null;
+    };
+    return search(0);
   };
   const fusionEntries = (targetPlayer.extraDeck || [])
     .filter((card) => card?.monsterType === "fusion")
@@ -1236,9 +1260,11 @@ export function applyPolymerizationFusionSummon(
   const fusionEntry = fusionEntries[0];
   if (!fusionEntry) return;
   const { fusionCard, materials } = fusionEntry;
-  materials.forEach((material) => {
-    const fromZone = findCardZone(targetPlayer, material) || "field";
-    if (moveCardToZone(targetPlayer, material, "graveyard")) {
+  for (const material of materials) {
+    const fromZone = findCardZone(targetPlayer, material);
+    if (fromZone !== "hand" && fromZone !== "field") return;
+    if (!moveCardToZone(targetPlayer, material, "graveyard", targetPlayer, { state })) return;
+    if (targetPlayer.graveyard.includes(material)) {
       updateSimulatedSentToGraveMaterialMarker({
         card: material,
         state,
@@ -1247,7 +1273,10 @@ export function applyPolymerizationFusionSummon(
         contextLabel: "fusion_material",
       });
     }
-  });
+  }
+  if (!canSimSpecialSummon(fusionCard, targetPlayer, "fusion") ||
+      !canSimulatedProcedureEnterField(fusionCard, targetPlayer, otherPlayer, []) ||
+      !canMoveCardToZone(targetPlayer, fusionCard, "field", targetPlayer, { state })) return;
   removeCardFromZones(targetPlayer, fusionCard);
   applySummonState(
     fusionCard,
@@ -1260,7 +1289,7 @@ export function applyPolymerizationFusionSummon(
     options,
   );
   (fusionCard as MutableSummonedCard).summonMethod = "fusion";
-  appendSimulatedFieldCard(targetPlayer.field, fusionCard);
+  if (!appendSimulatedFieldCard(targetPlayer.field, fusionCard)) return;
   recordCompletedSimulatedSummon(state, { card: fusionCard, player: targetPlayer, method: "fusion" });
   options.onFusionSummon?.({
     state,

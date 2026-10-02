@@ -1,7 +1,7 @@
 # Replay canônico
 
 O replay executável usa o formato `shadow-duel-canonical-replay`, schema `2` e
-`engineVersion: "engine-rules-v10"`. Ele é independente do relatório
+`engineVersion: "engine-rules-v12"`. Ele é independente do relatório
 estratégico. O importador aceita somente o schema `2`: relatórios v4 e replays
 de schemas anteriores não são partidas executáveis nesta versão.
 
@@ -181,7 +181,7 @@ caracteres do replay, usado para detectar divergências na reprodução.
 `validateCanonicalReplay(input)` recebe `unknown`, não muta a entrada e retorna
 a mesma referência somente depois de validar o documento. `setup`, `commands` e
 `decisions` e `engineVersion` são obrigatórios. A versão da engine deve ser
-`"engine-rules-v10"`; gravações sem essa versão são rejeitadas antes da validação
+`"engine-rules-v12"`; gravações sem essa versão são rejeitadas antes da validação
 profunda e da reprodução. `events`, `result` e `finalized` continuam opcionais
 na importação de arquivos do schema `2`; quando presentes, são validados
 profundamente. Os comandos e kinds de decisão permanecem os mesmos.
@@ -346,6 +346,24 @@ Gravações de `engine-rules-v6`, `dragon-rules-v6` e versões anteriores são
 recusadas antes da reprodução: nenhuma dessas engines isoladas produzia o
 mesmo estado/fluxo combinado. Nenhum arquivo histórico é removido ou migrado.
 
+### Substituição de destruição
+
+A versão `engine-rules-v8` da branch de substituição preservava o schema 2 e as regras integradas em
+v7. Fontes com efeitos negados não podem aplicar substituições de destruição;
+efeitos temporários já registrados continuam independentes da fonte original.
+Custos de movimento só substituem a destruição quando chegam ao destino
+exigido. Redirecionamento ou remoção de Token não satisfazem um envio ao
+Cemitério, e os movimentos já realizados não são revertidos.
+
+Essas correções mudam decisões e estados de combate. Gravações de
+`engine-rules-v7` e anteriores são rejeitadas antes da reprodução, sem remoção
+de arquivos nem migração automática. Os testes de
+`test/replay/destructionReplacementReplay.test.ts` cobrem fonte negada,
+redirecionamento e substituição válida nos dois assentos, com humano e IA,
+reprodução em outra instância e consumo das decisões gravadas sem nova UI.
+A escolha automática dos custos da IA mantém a ordenação determinística
+existente; esse ramo não usa `AutoSelector` nem grava uma escolha separada.
+
 ### Efeitos armazenados e proteções temporárias Arcanistas
 
 A engine `engine-rules-v8` preserva schema `2`, comandos e tipos de decisão.
@@ -385,6 +403,46 @@ com o chamador que aguarda a ativação completa; o hash não é capturado entre
 a escolha e o pagamento. Cancelamentos dessas sessões gravam `pass` com o ator
 correto e são reproduzidos sem UI ou nova consulta à política da IA.
 
+
+### Integração de movimentos e modos — engine-rules-v10
+
+A versão v10 reuniu os modos de ativação da main v9 e as correções de
+substituição de destruição da branch compartilhada v8, preservando o schema 2.
+As duas branches tinham histórias distintas de v8; esse rótulo não identificava
+o mesmo conjunto de regras. Gravações de v9 e anteriores são rejeitadas antes
+da reprodução, sem migrar ou apagar arquivos históricos.
+
+A troca de Magia de Campo aguarda o movimento e os eventos da carta anterior
+antes de ocupar o slot. Se a saída for recusada, a carta nova permanece na
+origem. O slot e a presença da carta nova são revalidados após os eventos.
+Um retorno à mão recusado pelo movimento canônico não pode remover a carta
+diretamente de sua zona. Movimentos anteriores já resolvidos não são desfeitos,
+e o contrato `requireDestination` permanece inalterado para redirecionamentos.
+
+`movementContractsReplay.test.ts` reproduz troca de Campo e retorno recusado
+nos dois assentos, comparando snapshots, hashes e consumo de decisões. Os testes
+de substituição e de modos de ativação continuam cobrindo a integração das
+branches. A mudança de foco da confirmação é de apresentação e não adiciona
+tipos de decisão ou campos ao replay.
+
+
+### Continuação declarativa de actions — engine-rules-v11
+
+A versão v11 da branch compartilhada preservava o schema 2 e rejeitava replays v10 e anteriores. False
+Horizon agora resolve o retorno opcional mesmo quando a troca de posição falha,
+conforme `haltOnFailure: false`. Sem declaração explícita, falhas obrigatórias
+continuam interrompendo a sequência; `true` prevalece sobre o alias conflitante.
+Seleção pendente, cancelamento sistêmico e exceções continuam interrompendo a
+resolução. O marcador `STOP_SIMULATION` preserva a fronteira de informação
+desconhecida, independentemente da política de falha comum.
+
+`actionContinuationReplay.test.ts` cobre Sand Priestess e False Horizon nos dois
+assentos, incluindo o bloqueio real de Leviathan, retorno aceito/recusado pelo
+jogador, cleanup da Armadilha e reprodução sem UI nem nova seleção pela IA.
+Snapshots, hash final, RNG e consumo integral das decisões devem coincidir.
+Vanishing Step continua após um retorno redirecionado para banimento, mas seu
+debuff exige uma troca de posição bem-sucedida.
+
 ### Histórico de ativações de cards no turno
 
 O passivo `activated_card_count_buff` consulta `cardActivationHistory`. O Event
@@ -402,7 +460,7 @@ ocorrências do turno mesmo antes de existir um beneficiário no campo. Um
 histórico vazio ou de turno anterior não acrescenta campo ao snapshot
 canônico; os hashes dos cenários genéricos existentes permanecem iguais.
 
-Este lote mantém schema `2`, `engine-rules-v9`, comandos e tipos de decisão.
+Esse lote histórico manteve schema `2`, `engine-rules-v9`, comandos e tipos de decisão.
 A assinatura completa do banco muda com o passivo de Elementalista e com os
 triggers obrigatórios de Albus/Azrath; gravações dos bancos anteriores são
 rejeitadas pela verificação de assinatura antes da reprodução. O histórico
@@ -410,7 +468,7 @@ rejeitadas pela verificação de assinatura antes da reprodução. O histórico
 
 ### Magias Baixadas — engine-rules-v10
 
-A versão atual é `engine-rules-v10`, com schema `2`. Uma Magia Baixada na
+A versão v10 da main usava schema `2`. Uma Magia Baixada na
 linha de Magias/Armadilhas prepara seu `on_play`; virar a fonte no compromisso
 não troca esse efeito por um Ignition. Os comandos e tipos de decisão são os
 mesmos. O Grimório Baixado pode equipar sem ter um efeito armazenado, usando
@@ -418,10 +476,29 @@ as escolhas de alvo e as respostas de Chain existentes.
 
 Essa correção muda o resultado de comandos que v9 rejeitava. Replays v9 e
 anteriores são rejeitados pela versão da engine antes da reprodução, sem
-migração. A assinatura do banco permanece `726d0a77`; o hash do replay
+migração. Nesse lote da main, a assinatura do banco era `726d0a77`; o hash do replay
 completo muda com a versão, enquanto os hashes de estado dos cenários
 genéricos permanecem iguais.
 
 A prova de origem usada pela simulação para restaurar contribuições
 dinâmicas fica em um `WeakMap` interno. Ela não acrescenta campos ao replay
 ou ao snapshot canônico. As seções v9 acima registram os lotes anteriores.
+
+### Integração Arcanist, movimentos e continuação — engine-rules-v12
+
+A versão atual é `engine-rules-v12`, schema `2`. Ela reúne a main v10
+(histórico de ativações, Magias Baixadas e passivas modeladas) e a branch
+compartilhada v11 (guardas completos de substituição de Campo, fronteira de
+compra desconhecida e continuação declarativa). Os rótulos v10 usados pelas
+duas branches tinham histórias diferentes; nenhum deles representa esta união.
+
+Gravações v11, v10 e anteriores são rejeitadas pela versão antes de executar
+comandos, sem migração ou remoção dos arquivos históricos. A assinatura do
+banco integrado é `7bbe98b0`, incluindo a passiva de Elementalista e a
+continuação de False Horizon. Comandos, kinds de decisão e schema não mudam.
+O estado canônico mantém o histórico de ativações introduzido na main;
+a prova privada de passivas continua fora do envelope serializado.
+
+O golden genérico tem hash completo `6b278c1f`; seus hashes de estado continuam
+`a897fa58` e `297e0fe8`. As regressões de Arcanist, movimento, substituição e
+continuação reproduzem decisões gravadas sem UI ou política de IA ao vivo.

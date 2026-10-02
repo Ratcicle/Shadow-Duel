@@ -820,6 +820,7 @@ export const mirageboundCards = [
           {
             type: "switch_position",
             targetRef: "miragebound_false_horizon_position_target",
+            haltOnFailure: false,
           },
           {
             type: "return_to_hand",
