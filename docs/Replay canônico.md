@@ -1,7 +1,7 @@
 # Replay canônico
 
 O replay executável usa o formato `shadow-duel-canonical-replay`, schema `2` e
-`engineVersion: "engine-rules-v9"`. Ele é independente do relatório
+`engineVersion: "engine-rules-v10"`. Ele é independente do relatório
 estratégico. O importador aceita somente o schema `2`: relatórios v4 e replays
 de schemas anteriores não são partidas executáveis nesta versão.
 
@@ -181,7 +181,7 @@ caracteres do replay, usado para detectar divergências na reprodução.
 `validateCanonicalReplay(input)` recebe `unknown`, não muta a entrada e retorna
 a mesma referência somente depois de validar o documento. `setup`, `commands` e
 `decisions` e `engineVersion` são obrigatórios. A versão da engine deve ser
-`"engine-rules-v9"`; gravações sem essa versão são rejeitadas antes da validação
+`"engine-rules-v10"`; gravações sem essa versão são rejeitadas antes da validação
 profunda e da reprodução. `events`, `result` e `finalized` continuam opcionais
 na importação de arquivos do schema `2`; quando presentes, são validados
 profundamente. Os comandos e kinds de decisão permanecem os mesmos.
@@ -348,7 +348,7 @@ mesmo estado/fluxo combinado. Nenhum arquivo histórico é removido ou migrado.
 
 ### Substituição de destruição
 
-A engine atual `engine-rules-v8` preserva o schema 2 e as regras integradas em
+A versão `engine-rules-v8` da branch de substituição preservava o schema 2 e as regras integradas em
 v7. Fontes com efeitos negados não podem aplicar substituições de destruição;
 efeitos temporários já registrados continuam independentes da fonte original.
 Custos de movimento só substituem a destruição quando chegam ao destino
@@ -402,3 +402,25 @@ intermediária marcada `replayCommandHandledByCaller` deixa a captura do comando
 com o chamador que aguarda a ativação completa; o hash não é capturado entre
 a escolha e o pagamento. Cancelamentos dessas sessões gravam `pass` com o ator
 correto e são reproduzidos sem UI ou nova consulta à política da IA.
+
+
+### Integração de movimentos e modos — engine-rules-v10
+
+A versão atual reúne os modos de ativação da main v9 e as correções de
+substituição de destruição da branch compartilhada v8, preservando o schema 2.
+As duas branches tinham histórias distintas de v8; esse rótulo não identificava
+o mesmo conjunto de regras. Gravações de v9 e anteriores são rejeitadas antes
+da reprodução, sem migrar ou apagar arquivos históricos.
+
+A troca de Magia de Campo aguarda o movimento e os eventos da carta anterior
+antes de ocupar o slot. Se a saída for recusada, a carta nova permanece na
+origem. O slot e a presença da carta nova são revalidados após os eventos.
+Um retorno à mão recusado pelo movimento canônico não pode remover a carta
+diretamente de sua zona. Movimentos anteriores já resolvidos não são desfeitos,
+e o contrato `requireDestination` permanece inalterado para redirecionamentos.
+
+`movementContractsReplay.test.ts` reproduz troca de Campo e retorno recusado
+nos dois assentos, comparando snapshots, hashes e consumo de decisões. Os testes
+de substituição e de modos de ativação continuam cobrindo a integração das
+branches. A mudança de foco da confirmação é de apresentação e não adiciona
+tipos de decisão ou campos ao replay.

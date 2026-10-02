@@ -2435,7 +2435,10 @@ export function applyGenericSimulatedMainPhaseAction<
       };
       if (!applySimulatedActions({ actions: effect.activationCosts || [], selections, state,
         selfId: options.selfId || "bot", options: resolutionOptions })) break;
-      if (player.fieldSpell === fieldSpell && !fieldSpell.isFacedown && !fieldSpell.effectsNegated) applySimulatedActions({
+      const sourcePresent = player.fieldSpell === fieldSpell && !fieldSpell.isFacedown &&
+        (fieldSpell.locationVersion ?? 0) === (usageSourceAtActivation.locationVersion ?? 0);
+      const sourceNegated = sourcePresent && fieldSpell.effectsNegated;
+      if (!sourceNegated && (effect.requiresSourceAtResolution === false || sourcePresent)) applySimulatedActions({
         actions: [...(effect.activationCommitActions || []), ...(effect.actions || [])],
         selections,
         state,

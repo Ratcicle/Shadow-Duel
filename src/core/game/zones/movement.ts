@@ -2347,6 +2347,21 @@ export async function moveCardInternal(
     }
   }
 
+  // Complete the incumbent's departure while the incoming card still occupies
+  // its source zone. A refusal must not remove either card or overwrite the slot.
+  if (toZone === "fieldSpell" && destPlayer.fieldSpell && destPlayer.fieldSpell !== card) {
+    if (!initialLocation) return { success: false, reason: "card_not_found" };
+    const sourceVersion = card.locationVersion;
+    const departure = await duringCurrentDuel(this.moveCard(destPlayer.fieldSpell, destPlayer, "graveyard", {
+      fromZone: "fieldSpell",
+      awaitCardToGraveEvent: true,
+      awaitCardMovedEvent: true,
+    }));
+    if (!departure.success) return departure;
+    if (destPlayer.fieldSpell) return { success: false, reason: "field_spell_slot_occupied" };
+    if (card.locationVersion !== sourceVersion) return { success: false, reason: "field_spell_source_changed" };
+  }
+
   const zones: readonly CanonicalZone[] = [
     "field",
     "hand",
@@ -2892,12 +2907,6 @@ export async function moveCardInternal(
   }
 
   if (toZone === "fieldSpell") {
-    if (destPlayer.fieldSpell) {
-      this.moveCard(destPlayer.fieldSpell, destPlayer, "graveyard", {
-        fromZone: "fieldSpell",
-      });
-    }
-
     if (options.position) {
       card.position = options.position;
     }

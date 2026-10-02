@@ -46,7 +46,7 @@ for (const seat of ["player", "bot"] as const) for (const controller of ["human"
     assert.equal(result.success, true);
     assert.deepEqual(target.effectsNegationContributions, [{ duration: "until_end_turn", sourceDuelCardId: source.duelCardId, sourceEffectId: "darkness_dragon_negate" }]);
     const replay = validateCanonicalReplay(JSON.parse(JSON.stringify(live.finalizeReplay({ reason: "negation" }))));
-    assert.equal(replay.engineVersion, "engine-rules-v9");
+    assert.equal(replay.engineVersion, "engine-rules-v10");
     assert.equal(replay.schemaVersion, 2);
     for (const engineVersion of ["dragon-rules-v3", "engine-rules-v4", "dragon-rules-v5", "dragon-rules-v6", "engine-rules-v6", "engine-rules-v7"]) {
       assert.throws(() => validateCanonicalReplay({ ...replay, engineVersion }), /engineVersion/);

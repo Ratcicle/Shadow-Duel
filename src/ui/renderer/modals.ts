@@ -177,6 +177,7 @@ export function showConfirmPrompt(
   const detailText = String(message);
 
   return new Promise<boolean>((resolve) => {
+    const previousFocus = document.activeElement;
     const overlay = document.createElement("div");
     overlay.className = "modal confirm-modal";
 
@@ -229,12 +230,15 @@ export function showConfirmPrompt(
       if (overlay.parentNode) {
         overlay.parentNode.removeChild(overlay);
       }
+      if (previousFocus?.isConnected && "focus" in previousFocus && typeof previousFocus.focus === "function") {
+        previousFocus.focus();
+      }
     };
 
     const finish = (value: boolean) => {
       if (resolved) return;
       resolved = true;
-      document.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("keydown", onKeyDown, true);
       cleanup();
       if (activeConfirmPrompt && activeConfirmPrompt.overlay === overlay) {
         activeConfirmPrompt = null;
@@ -243,13 +247,20 @@ export function showConfirmPrompt(
     };
 
     const onKeyDown = (event: KeyboardEvent) => {
+      if (!["Escape", "Enter", "Tab"].includes(event.key)) return;
+      event.preventDefault();
+      event.stopPropagation();
       if (event.key === "Escape") {
-        event.preventDefault();
         finish(false);
-      }
-      if (event.key === "Enter") {
-        event.preventDefault();
-        finish(event.target !== cancelBtn && event.target !== closeBtn);
+      } else if (event.key === "Enter") {
+        if (event.target === confirmBtn) finish(true);
+        else if (event.target === cancelBtn || event.target === closeBtn) finish(false);
+      } else {
+        const controls = [closeBtn, confirmBtn, cancelBtn];
+        const index = controls.findIndex(control => control === document.activeElement);
+        const next = index < 0 ? (event.shiftKey ? controls.length - 1 : 0)
+          : (index + (event.shiftKey ? -1 : 1) + controls.length) % controls.length;
+        controls[next]?.focus();
       }
     };
 
@@ -268,7 +279,7 @@ export function showConfirmPrompt(
     cancelBtn.addEventListener("click", () => finish(false));
     confirmBtn.addEventListener("click", () => finish(true));
     closeBtn.addEventListener("click", () => finish(false));
-    document.addEventListener("keydown", onKeyDown);
+    document.addEventListener("keydown", onKeyDown, true);
     confirmBtn.focus();
   });
 }
