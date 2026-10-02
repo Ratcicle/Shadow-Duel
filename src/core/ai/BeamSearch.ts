@@ -1,6 +1,6 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // src/core/ai/BeamSearch.js
-import { createPlanningCopy, hasPendingPassiveRestoration, projectRuntimeEffectUsage } from "./common/planningCopy.js";
+import { createPlanningCopy, hasPendingPassiveRestoration, projectRuntimeEffectUsage, projectRuntimeReplacementEffects } from "./common/planningCopy.js";
 import { isSimulatedMainPhaseActionSupported } from "./common/simulation.js";
 import { resolvePerspectivePlayers } from "./StrategyUtils.js";
 import { filterAiActionsForCurrentPhase } from "./common/phaseTiming.js";
@@ -201,6 +201,7 @@ export async function beamSearchTurn(
     copyFields(gameState, clone, PLANNING_STATE_FIELDS.filter(key => key !== "_isPerspectiveState"));
     copyFields(gameState, clone, ["_simLuminarch", "_simUnsupportedActions"]);
     projectRuntimeEffectUsage(gameState, clone);
+    projectRuntimeReplacementEffects(gameState, clone);
     return clone;
   }
 
@@ -456,6 +457,7 @@ export async function greedySearchWithEvalV2(
     copyFields(gameState, clone, PLANNING_STATE_FIELDS.filter(key => key !== "_isPerspectiveState"));
     copyFields(gameState, clone, ["_simLuminarch", "_simUnsupportedActions"]);
     projectRuntimeEffectUsage(gameState, clone);
+    projectRuntimeReplacementEffects(gameState, clone);
     return clone;
   }
 

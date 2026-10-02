@@ -60,6 +60,27 @@ test("optional resolution cancellation still records an empty choice", async t =
   assert.deepEqual(decisions, [{ selections: { chosen: [] } }]);
 });
 
+for (const seat of ["player", "bot"] as const) {
+  test(`cancelling a standalone selection does not record an orphan replay decision (${seat})`, t => {
+    const game = new Game({ captureReplay: false, disableChains: true });
+    t.after(() => game.dispose());
+    const decisions: unknown[] = [];
+    let cancelled = 0;
+    game.on("decision_made", decision => { decisions.push(decision); });
+    game.startTargetSelectionSession({
+      kind: "choice", owner: game[seat], allowCancel: true,
+      selectionContract: { kind: "choice", requirements: [{ id: "standalone", min: 1, max: 1,
+        zone: "choice", candidates: [{ key: "yes", zone: "choice" }] }] },
+      onCancel: () => { cancelled++; },
+      execute: () => assert.fail("Cancellation must not execute the selection"),
+    });
+    game.cancelTargetSelection();
+    assert.equal(cancelled, 1);
+    assert.equal(game.targetSelection, null);
+    assert.deepEqual(decisions, [], "Only a caller awaiting a replay command records its cancelled choice");
+  });
+}
+
 test("forced cleanup can clear a mandatory field selection without cancelling its effect", t => {
   const game = new Game({ captureReplay: false, disableChains: true });
   t.after(() => game.dispose());

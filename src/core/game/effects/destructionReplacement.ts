@@ -18,6 +18,9 @@ import {
 import { getCardDisplayName, getUIText } from "../../i18n.js";
 import { requestOptionalConfirmation } from "../../actionHandlers/shared.js";
 import type { DecisionBrokerPort } from "../../contracts/decisions.js";
+import { getCardLocationVersion } from "../../Card.js";
+import type { ReplacementTargetPresence } from "../../contracts/actionRuntime.js";
+import type { OncePerTurnDefinition } from "../../contracts/cards.js";
 import type {
   ActionReplacementEffect,
   CardAction,
@@ -53,6 +56,7 @@ interface RuntimeReplacementEffect extends ActionReplacementEffect {
   readonly sourceOwner?: ReplacementOwnerRule;
   readonly targetCards?: readonly GameCard[];
   readonly targetInstanceIds?: readonly string[];
+  readonly targetPresences?: readonly ReplacementTargetPresence[];
   readonly targetZone?: CanonicalZone;
 }
 
@@ -66,14 +70,13 @@ interface ReplacementSourceCard {
   equipTarget?: GameCard | number | string | null;
 }
 
-interface RuntimeReplacementEffectDefinition {
+interface RuntimeReplacementEffectDefinition
+  extends Partial<OncePerTurnDefinition> {
   readonly id?: string;
   readonly actions?: readonly CardAction[];
   readonly targets?: readonly EffectTarget[];
   readonly requireFaceup?: boolean;
   readonly requireZone?: CanonicalZone;
-  readonly oncePerTurn?: boolean;
-  readonly oncePerTurnName?: string;
   readonly oncePerDuel?: boolean;
   readonly oncePerDuelLimit?: number;
   readonly oncePerDuelName?: string;
@@ -925,6 +928,21 @@ async function tryReplacement(
   const scopedTargetCards = Array.isArray(replacement.targetCards)
     ? replacement.targetCards
     : [];
+  if (
+    replacement.targetPresences &&
+    !replacement.targetPresences.some((presence, index) => {
+      const sameCard = presence.duelCardId !== null
+        ? card.duelCardId === presence.duelCardId
+        : presence.instanceId !== null
+          ? card.instanceId === presence.instanceId
+          : scopedTargetCards[index] === card;
+      return sameCard &&
+        getCardLocationVersion(card) === presence.locationVersion &&
+        (card.fieldPresenceId ?? null) === presence.fieldPresenceId;
+    })
+  ) {
+    return { replaced: false };
+  }
   if (scopedTargetIds.length > 0 || scopedTargetCards.length > 0) {
     const targetKey = getReplacementTargetKey(card);
     const matchesScopedId = targetKey && scopedTargetIds.includes(targetKey);

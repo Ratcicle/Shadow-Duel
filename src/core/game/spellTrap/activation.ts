@@ -16,6 +16,7 @@ import type { GameCard } from "../../contracts/cards.js";
 import type { EffectDefinition } from "../../contracts/effects.js";
 import type { GamePlayer } from "../../contracts/player.js";
 import type { CanonicalSelectionMap } from "../../contracts/selection.js";
+import type { AIDecisionPlan } from "../../contracts/ai.js";
 
 type SpellTrapActivationZone = "hand" | "spellTrap" | "fieldSpell" | "graveyard";
 
@@ -38,6 +39,7 @@ interface ActivationCommitInfo {
 }
 
 interface SpellTrapActivationContext {
+  decisions?: AIDecisionPlan;
   fromHand?: boolean;
   activationZone?: (SpellTrapActivationZone | null) | undefined;
   sourceZone?: SpellTrapActivationZone;
@@ -464,6 +466,7 @@ export async function tryActivateSpellTrapEffect(
   }
 
   const activationContext: SpellTrapActivationContext = {
+    ...options.activationContext,
     fromHand: false,
     activationZone: "spellTrap",
     sourceZone: "spellTrap",

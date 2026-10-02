@@ -1,5 +1,5 @@
 import { resolvePerspectivePlayers } from "./perspective.js";
-import { createPlanningCopy, projectRuntimeEffectUsage } from "./planningCopy.js";
+import { createPlanningCopy, projectRuntimeEffectUsage, projectRuntimeReplacementEffects } from "./planningCopy.js";
 import {
   PLANNING_PLAYER_FIELDS,
   PLANNING_STATE_FIELDS,
@@ -90,6 +90,7 @@ export function createGameTreeCopy(
     if (key in active) Reflect.set(state, key, active[key]);
   }
   projectRuntimeEffectUsage(input, state);
+  projectRuntimeReplacementEffects(input, state);
   return { state, copyAction: copy.copyValue };
 }
 

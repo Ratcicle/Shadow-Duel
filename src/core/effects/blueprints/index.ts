@@ -22,8 +22,11 @@ import type {
   NormalizedSelectionContract,
 } from "../../contracts/selection.js";
 import type { GameUI } from "../../contracts/ui.js";
+import type { DecisionBrokerPort } from "../../contracts/decisions.js";
+import { requestOptionalConfirmation } from "../../actionHandlers/shared.js";
 
 type BlueprintEffect = EffectDefinition & {
+  readonly activatedBlueprint?: StoredEffectBlueprint;
   readonly blueprintId?: string;
   readonly blueprintKey?: string;
   readonly blueprintDisplayName?: string;
@@ -113,6 +116,7 @@ interface BlueprintHost {
     "log" | "showConfirmPrompt" | "showCardGridSelectionModal"
   > | null;
   game?: {
+    requestDecision?: DecisionBrokerPort["requestDecision"];
     gameOver?: boolean;
     getOpponent?(
       player: Omit<ActionRuntimePlayer, "strategy">,
@@ -398,6 +402,33 @@ export function resolveEffectBlueprint(
   return null;
 }
 
+/** Expand a single stored effect before activation, retaining the storage effect's identity and usage. */
+export function projectStoredBlueprintActivation(
+  card: Pick<BlueprintCard, "state">,
+  effect: EffectDefinition,
+): EffectDefinition {
+  if (!effect.actions?.some(action => action.type === "activate_stored_blueprint")) return effect;
+  const stored = card.state?.blueprintStorage?.storedBlueprints || [];
+  // A multi-slot storage needs an explicit choice before it can be expanded.
+  if (stored.length !== 1) return effect;
+  const blueprint = stored[0];
+  if (!blueprint?.effectSnapshot) return effect;
+  if (blueprint.respectUsageLimits) return effect;
+  const snapshot = structuredClone(blueprint.effectSnapshot);
+  const projected: BlueprintEffect = {
+    ...effect,
+    conditions: [...(effect.conditions || []), ...(snapshot.conditions || [])],
+    targets: snapshot.targets || [],
+    activationCosts: snapshot.activationCosts || [],
+    activationCommitActions: snapshot.activationCommitActions || [],
+    actions: snapshot.actions || [],
+    ...(snapshot.requireEmptyField !== undefined ? { requireEmptyField: snapshot.requireEmptyField } : {}),
+    ...(snapshot.requirePhase !== undefined ? { requirePhase: snapshot.requirePhase } : {}),
+    activatedBlueprint: structuredClone(blueprint),
+  };
+  return projected;
+}
+
 export async function executeEffectBlueprint(
   this: BlueprintHost,
   blueprint: StoredEffectBlueprint | null | undefined,
@@ -419,6 +450,15 @@ export async function executeEffectBlueprint(
       success: false,
       needsSelection: false,
       reason: "Stored effect not available.",
+    };
+  }
+  // Requirements belong to the activation transaction. Legacy direct callers
+  // must never pay late, select new targets during resolution, or copy for free.
+  if (effect.activationCosts?.length || effect.activationCommitActions?.length || effect.targets?.length) {
+    return {
+      success: false,
+      needsSelection: false,
+      reason: "Stored effect requirements must be prepared before activation.",
     };
   }
 
@@ -635,6 +675,14 @@ export async function handleBlueprintStorageAfterResolution(
   effect: BlueprintEffect | null | undefined,
   ctx: BlueprintContext,
 ) {
+  if (effect?.activatedBlueprint && ctx.source && ctx.player) {
+    this.game?.notify?.("grimoire_blueprint_activated", {
+      player: ctx.player,
+      storageCard: ctx.source,
+      blueprint: effect.activatedBlueprint,
+    });
+    return false;
+  }
   if (!sourceCard || !effect || sourceCard.cardKind !== "spell") return false;
   const player = ctx?.player;
   if (!player || !this.game) return false;
@@ -651,6 +699,7 @@ export async function handleBlueprintStorageAfterResolution(
 
   if (config.requireFaceup && storageCard.isFacedown) return false;
   if (config.requireEquipped && !storageCard.equippedTo) return false;
+  if (storageCard.effectsNegated) return false;
 
   if (config.allowedCardKinds?.length) {
     if (!config.allowedCardKinds.includes(sourceCard.cardKind)) {
@@ -677,8 +726,7 @@ export async function handleBlueprintStorageAfterResolution(
   const blueprint = this.buildEffectBlueprint(sourceCard, effect);
   if (!blueprint) return false;
   blueprint.respectUsageLimits =
-    config.respectStoredEffectUsageLimits === true ||
-    effect.respectStoredEffectUsageLimits === true;
+    config.respectStoredEffectUsageLimits === true;
 
   const storageState = this.getBlueprintStorageState(storageCard, true);
   const storedBlueprints = storageState?.storedBlueprints || [];
@@ -693,13 +741,16 @@ export async function handleBlueprintStorageAfterResolution(
       return false;
     }
 
-    if (!isAI(player) && config.promptOnStore) {
+    if (config.promptOnStore) {
       const existingName =
         storedBlueprints[0]?.displayName || "efeito armazenado";
-      const prompt = this.ui?.showConfirmPrompt?.(
-        `Substituir o efeito armazenado (${existingName}) por ${blueprint.displayName}?`,
+      shouldStore = await requestOptionalConfirmation(
+        this.game, player,
+        () => resolvePromptResult(this.ui?.showConfirmPrompt?.(
+          `Substituir o efeito armazenado (${existingName}) por ${blueprint.displayName}?`,
+        )),
+        () => config.autoStoreForAI,
       );
-      shouldStore = await resolvePromptResult(prompt);
     } else if (isAI(player) && !config.autoStoreForAI) {
       shouldStore = false;
     }
@@ -736,11 +787,12 @@ export async function handleBlueprintStorageAfterResolution(
     if (replaceIndex == null || replaceIndex < 0) {
       replaceIndex = 0;
     }
-  } else if (!isAI(player) && config.promptOnStore) {
-    const prompt = this.ui?.showConfirmPrompt?.(
-      `Salvar o efeito desta magia no Grimorio?`,
+  } else if (config.promptOnStore) {
+    shouldStore = await requestOptionalConfirmation(
+      this.game, player,
+      () => resolvePromptResult(this.ui?.showConfirmPrompt?.("Salvar o efeito desta magia no Grimorio?")),
+      () => config.autoStoreForAI,
     );
-    shouldStore = await resolvePromptResult(prompt);
   } else if (isAI(player) && !config.autoStoreForAI) {
     shouldStore = false;
   }

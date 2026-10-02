@@ -1,7 +1,7 @@
 # Replay canônico
 
 O replay executável usa o formato `shadow-duel-canonical-replay`, schema `2` e
-`engineVersion: "engine-rules-v7"`. Ele é independente do relatório
+`engineVersion: "engine-rules-v9"`. Ele é independente do relatório
 estratégico. O importador aceita somente o schema `2`: relatórios v4 e replays
 de schemas anteriores não são partidas executáveis nesta versão.
 
@@ -181,7 +181,7 @@ caracteres do replay, usado para detectar divergências na reprodução.
 `validateCanonicalReplay(input)` recebe `unknown`, não muta a entrada e retorna
 a mesma referência somente depois de validar o documento. `setup`, `commands` e
 `decisions` e `engineVersion` são obrigatórios. A versão da engine deve ser
-`"engine-rules-v7"`; gravações sem essa versão são rejeitadas antes da validação
+`"engine-rules-v9"`; gravações sem essa versão são rejeitadas antes da validação
 profunda e da reprodução. `events`, `result` e `finalized` continuam opcionais
 na importação de arquivos do schema `2`; quando presentes, são validados
 profundamente. Os comandos e kinds de decisão permanecem os mesmos.
@@ -345,3 +345,42 @@ o filtro de alvos de negação antes de mover recursos. Schema 2 é preservado.
 Gravações de `engine-rules-v6`, `dragon-rules-v6` e versões anteriores são
 recusadas antes da reprodução: nenhuma dessas engines isoladas produzia o
 mesmo estado/fluxo combinado. Nenhum arquivo histórico é removido ou migrado.
+
+### Efeitos armazenados e proteções temporárias Arcanistas
+
+A engine `engine-rules-v8` preserva schema `2`, comandos e tipos de decisão.
+Ela incorpora as regras Arcanistas de custos e alvos copiados, procedimentos
+condicionais sem custo e proteções individuais. Gravações da v7 e anteriores
+são rejeitadas pela validação de versão existente.
+
+O estado canônico inclui `blueprintStorage` quando há um efeito armazenado,
+inclusive seu snapshot declarativo, custos e identidade de origem. Confirmações
+de guardar e substituir usam decisões `choice` já existentes; o playback consome
+as respostas gravadas sem consultar UI ou política novamente.
+
+Inscrições temporárias de substituição incluem uso restante, expiração e
+`targetPresences`. Cada presença serializa `duelCardId`, `locationVersion` e
+`fieldPresenceId`, sem referências vivas nem `instanceId` global ao processo.
+Os IDs das inscrições vêm do gerador determinístico da partida; seu contador
+também contribui para o hash mesmo depois de uma proteção ser consumida.
+Aplicações distintas da Barreira permanecem independentes. Uma proteção não
+acompanha o alvo que sai do campo e retorna.
+
+Os testes `arcanistDesignReplay.test.ts` cobrem ambos os assentos, aceitação e
+recusa de armazenamento/substituição, efeitos copiados, compra e procedimento
+de Albus. Os hashes são comparados em outra instância sem decisões ao vivo.
+
+
+### Modos de ativação — engine-rules-v9
+
+`activationCases` escolhe um modo antes do compromisso e dos custos. O schema
+continua em `2`, com os mesmos comandos e tipos de decisão. Replays de v8 e
+anteriores são rejeitados pelo controle existente de versão da engine.
+
+A decisão `choice` grava a chave estável do caso, sem atribuir `duelCardId` ao
+objeto de apresentação. O link serializa `activationCaseId` junto ao ID do
+efeito pai, permitindo que o estado canônico distinga os modos. Uma sessão
+intermediária marcada `replayCommandHandledByCaller` deixa a captura do comando
+com o chamador que aguarda a ativação completa; o hash não é capturado entre
+a escolha e o pagamento. Cancelamentos dessas sessões gravam `pass` com o ator
+correto e são reproduzidos sem UI ou nova consulta à política da IA.

@@ -47,6 +47,7 @@ import type {
   SimulatedPlayerState,
 } from "../../../contracts/aiState.js";
 import type { CardFilter, EffectCondition } from "../../../contracts/effects.js";
+import type { ActionReplacementEffect } from "../../../contracts/actions/shared.js";
 import type { SimulatedActionHandlerContext } from "./shared.js";
 import type { SimulatedActionOptions, SimulatedRuntimeState } from "./shared.js";
 import { hasSimulatedProtection } from "./lifecycle.js";
@@ -57,22 +58,53 @@ export function replaceSimulatedBattleDestruction(
   state: SimulatedRuntimeState,
   target: SimulatedCardState,
 ): SimulatedCardState | null {
-  const targetOwner = [state.bot, state.player].find(owner => owner.field.includes(target));
+  return replaceSimulatedDestruction(state, target, "battle");
+}
+
+function replaceSimulatedDestruction(
+  state: SimulatedRuntimeState,
+  target: SimulatedCardState,
+  reason: "battle" | "effect",
+): SimulatedCardState | null {
+  const targetOwner = findCardOwner(state, target);
   if (!targetOwner) return null;
+  const zone = findCardZone(targetOwner, target);
+  const matches = (replacement: ActionReplacementEffect, owner: SimulatedPlayerState, source?: SimulatedCardState | null) =>
+    replacement.type === "destruction" && (!replacement.reason || replacement.reason === "any" || replacement.reason === reason) &&
+    (!replacement.targetRequireFaceup || !target.isFacedown) &&
+    (!replacement.targetZones || (zone !== null && replacement.targetZones.includes(zone))) &&
+    (replacement.targetOwner !== "self" || owner === targetOwner) &&
+    (replacement.targetOwner !== "opponent" || owner !== targetOwner) &&
+    (!replacement.targetMustBeSource || target === source) &&
+    (!replacement.targetMustNotBeSource || target !== source) &&
+    (!replacement.targetMustBeEquippedToSource || (source?.equippedTo || source?.equipTarget) === target) &&
+    (!replacement.targetFilters || matchesTargetFilters(target, replacement.targetFilters));
+  for (const entry of state._simReplacementEffects || []) {
+    const owner = [state.bot, state.player].find(player => player.id === entry.sourcePlayerId);
+    if (!owner || !entry.replacementEffect || entry.usesRemaining === 0 ||
+        (typeof entry.expiresOnTurn === "number" && (state.turnCounter || 0) > entry.expiresOnTurn)) continue;
+    if (entry.targetPresences?.length && !entry.targetPresences.some(presence =>
+      presence.instanceId === getCardInstanceId(target) && presence.locationVersion === (target.locationVersion || 0) &&
+      (presence.fieldPresenceId == null || presence.fieldPresenceId === target.fieldPresenceId))) continue;
+    if (!matches(entry.replacementEffect, owner, entry.sourceCard)) continue;
+    if (entry.replacementEffect.costActions?.length || entry.replacementEffect.costCount) continue;
+    if (entry.usesRemaining != null) entry.usesRemaining -= 1;
+    return entry.sourceCard || target;
+  }
   for (const owner of [state.bot, state.player]) {
-    for (const source of [...owner.spellTrap]) {
-      if (source.isFacedown || source.effectsNegated || (source.equippedTo || source.equipTarget) !== target) continue;
+    for (const source of [...owner.field, ...owner.spellTrap, ...(owner.fieldSpell ? [owner.fieldSpell] : [])]) {
+      if (source.isFacedown || source.effectsNegated) continue;
       for (const effect of source.effects || []) {
         if (effect.timing !== "passive" || !("replacementEffect" in effect)) continue;
         const replacement = effect.replacementEffect;
-        if (!replacement || replacement.type !== "destruction" || replacement.reason !== "battle" ||
-            !replacement.targetMustBeEquippedToSource ||
-            (replacement.targetRequireFaceup && target.isFacedown) ||
-            (replacement.targetOwner === "self" && owner !== targetOwner) ||
-            (replacement.targetOwner === "opponent" && owner === targetOwner) ||
-            (replacement.targetFilters && !matchesTargetFilters(target, replacement.targetFilters)) ||
+        if (!replacement || !matches(replacement, owner, source) ||
+            !evaluateSimulatedConditions(effect.conditions || [], { state, selfId: owner === state.bot ? "bot" : "player", sourceCard: source }) ||
             !canUseSimulatedEffectUsage(state, effect, source, owner.id, true)) continue;
         const costs = replacement.costActions;
+        if (!costs?.length && !replacement.costCount) {
+          markSimulatedEffectUsage(state, effect, source, owner.id, true);
+          return source;
+        }
         // Leave unsupported cost sequences to the full runtime.
         if (costs?.length !== 1) continue;
         const costAction = costs[0];
@@ -113,6 +145,15 @@ export function destroySimulatedCard(
   const protectedFromSource = hasSimulatedProtection(card, "effect_destruction", state.turnCounter || 0,
     { ownerId: owner.id, sourceOwnerId: sourcePlayer.id });
   if (fromZone === "field" && protectedFromSource) return false;
+  if (fromZone === "field" && !card.isFacedown && !card.effectsNegated && card.effects?.some(effect =>
+    effect.timing === "passive" && "passive" in effect && effect.passive?.type === "conditional_protection" &&
+    effect.passive.protectionType === "effect_destruction" &&
+    (!effect.requireZone || effect.requireZone === fromZone) &&
+    (!effect.passive.requireSummonProcedure || card.lastSummonProcedure === effect.passive.requireSummonProcedure) &&
+    (effect.passive.sourceOwner !== "self" || sourcePlayer.id === owner.id) &&
+    (effect.passive.sourceOwner !== "opponent" || sourcePlayer.id !== owner.id) &&
+    evaluateSimulatedConditions(effect.conditions || [], { state, selfId: owner === state.bot ? "bot" : "player", sourceCard: card }))) return false;
+  if (replaceSimulatedDestruction(state, card, "effect")) return false;
   const wasFaceupBeforeMove = card.isFacedown !== true;
   const effectsNegatedAtFieldExit = card.effectsNegated === true;
   if (!moveCardToZone(owner, card, "graveyard", owner, {
@@ -204,23 +245,22 @@ export function applyDestroyAndDamageByTargetAtk(
   } = ctx;
   const entries = (Array.isArray(action.entries) ? action.entries : []) as
     readonly DestroyDamageEntry[];
-  const destroyed = entries.flatMap((entry) => {
+  const successful: Array<{ owner: SimulatedPlayerState; damagePlayer: string; multiplier: number; atk: number }> = [];
+  for (const entry of entries) {
     const entryTargets = resolveTargetsForAction(
       entry,
       selections,
       options,
       opponent,
     );
-    return entryTargets.map((card) => ({
-      card,
-      owner: findCardOwner(state, card),
-      damagePlayer: entry.damagePlayer || "owner",
-      multiplier: Number.isFinite(entry.multiplier) ? entry.multiplier : 1,
-      atk: getEffectiveAtk(card),
-    }));
-  });
-  const successful = destroyed.filter(({ card, owner }) =>
-    owner && destroySimulatedCard(card, owner, self, state, options));
+    for (const card of entryTargets) {
+      const owner = findCardOwner(state, card);
+      if (!owner) continue;
+      const atk = getEffectiveAtk(card);
+      if (destroySimulatedCard(card, owner, self, state, options)) successful.push({ owner,
+        damagePlayer: entry.damagePlayer || "owner", multiplier: entry.multiplier ?? 1, atk });
+    }
+  }
   const skipDamage = (playerKey: "self" | "opponent"): boolean => {
     const conditions = action.skipDamageIf?.[playerKey];
     if (!conditions) return false;

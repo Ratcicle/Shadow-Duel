@@ -120,7 +120,7 @@ export function collectHandSummonProcedureActions(
     const check = game.canSummonFromHandByProcedure(card, bot);
     if (!check.ok) return [];
     const chosen = check.suggestedMaterials;
-    if (chosen.length !== procedure.cost.count) return [];
+    if (chosen.length !== (procedure.cost?.count || 0)) return [];
     const materials: HandProcedureMaterialHint[] = chosen.map((material) => {
       const zone = bot.field.includes(material) ? "field" as const : "graveyard" as const;
       return { zone, index: bot[zone].indexOf(material), cardId: material.id, instanceId: material.instanceId };
@@ -142,7 +142,7 @@ export function canResolveHandSummonProcedureActionForCurrentState(
   const card = bot.hand[index];
   if (!card?.handSummonProcedure) return false;
   const check = game.canSummonFromHandByProcedure(card, bot);
-  if (!check.ok || action.materials.length !== card.handSummonProcedure.cost.count) return false;
+  if (!check.ok || action.materials.length !== (card.handSummonProcedure.cost?.count || 0)) return false;
   const materials = resolveHandProcedureMaterials(bot, action.materials);
   if (!materials || materials.some((material) => !check.candidates.includes(material))) return false;
   if (bot.field.length - materials.filter((material) => bot.field.includes(material)).length >= 5) return false;

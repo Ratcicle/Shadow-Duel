@@ -19,7 +19,7 @@ import type {
 
 export const CANONICAL_REPLAY_FORMAT = "shadow-duel-canonical-replay" as const;
 export const CANONICAL_REPLAY_SCHEMA_VERSION = 2 as const;
-export const CANONICAL_REPLAY_ENGINE_VERSION = "engine-rules-v7" as const;
+export const CANONICAL_REPLAY_ENGINE_VERSION = "engine-rules-v9" as const;
 
 export type SerializablePrimitive = string | number | boolean | null;
 
@@ -368,6 +368,7 @@ export interface CanonicalCardStateSnapshot {
   fieldPresenceState: Record<string, number>;
   fieldPresenceSummons: FieldPresenceSummonRecord[];
   protectionEffects: CardProtectionEffect[];
+  blueprintStorage?: SerializableValue;
   facedown: boolean;
   atk: number;
   def: number;
@@ -433,6 +434,8 @@ export interface CanonicalGameStateSnapshot {
   delayedActions: SerializableValue;
   temporaryEventEffects: SerializableValue;
   temporaryControlEffects: SerializableValue;
+  temporaryReplacementEffects?: SerializableValue;
+  temporaryReplacementSequence?: number;
   chain: CanonicalChainStateSnapshot;
   summon: CanonicalSummonStateSnapshot | null;
   combat: CanonicalCombatStateSnapshot | null;
@@ -481,6 +484,7 @@ export interface ReplayRuntimeCard {
   fieldPresenceState?: Readonly<Record<string, number>> | null;
   fieldPresenceSummons?: readonly FieldPresenceSummonRecord[];
   protectionEffects?: readonly CardProtectionEffect[];
+  state?: { blueprintStorage?: { storedBlueprints: readonly object[] } | null } | null;
   isFacedown?: boolean | undefined;
   atk?: number | undefined;
   def?: number | undefined;
@@ -542,6 +546,7 @@ export interface CanonicalReplayGamePort {
   delayedActions?: unknown[];
   temporaryEventEffects?: unknown[];
   temporaryControlEffects?: unknown[];
+  temporaryReplacementEffects?: unknown[];
   chainSystem?: CanonicalReplayChainPort | null;
   ensureDuelCardId?(card: ReplayRuntimeCard): DuelCardId | number | null;
   getRandomState?(): ReplayRandomState | null;

@@ -14,7 +14,9 @@ import { cloneBotGameState } from "../../src/core/bot/simulationBridge.js";
 import { fingerprintPlanningState } from "../../src/core/ai/common/stateFingerprint.js";
 import { processSimulatedDelayedActions } from "../../src/core/ai/common/simulatedActions/lifecycle.js";
 import { detachSimulatedEquip } from "../../src/core/ai/common/zones.js";
+import { destroySimulatedCard, replaceSimulatedBattleDestruction } from "../../src/core/ai/common/simulatedActions/destruction.js";
 import { placeFieldCards } from "../helpers/game.js";
+import { applyGenericSimulatedMainPhaseAction } from "../../src/core/ai/common/simulation.js";
 
 type BotCloneCard = Parameters<typeof cloneBotGameState>[0]["hand"][number];
 
@@ -359,6 +361,87 @@ test("TurnLine clone deep-isolates planning cards and copied simulation metadata
 });
 
 const CLONE_PROFILES = ["bot", "beamGreedy", "gameTree", "turnLine"] as const;
+for (const profile of CLONE_PROFILES) {
+  for (const actor of ["bot", "player"] as const) {
+    test(`${profile} preserves activation cases and isolates their LP cost and parent usage (${actor})`, async t => {
+      const game = createRuntimeGame({ laboratoryMode: true, captureReplay: false });
+      t.after(() => game.dispose("activation_case_clone_test"));
+      game.turn = actor; game.phase = "main1"; game.turnCounter = 3;
+      const self = game[actor]; const opponent = game[actor === "bot" ? "player" : "bot"];
+      const source = new Card(cardDefinition(312), actor); const recruit = new Card(cardDefinition(307), actor);
+      self.fieldSpell = source; self.deck.push(recruit);
+      let captured: unknown;
+      const strategy = {
+        bot: self,
+        generateMainPhaseActions(state: unknown) { if (profile === "gameTree") captured ??= state; return [CLONE_PROBE_ACTION]; },
+        simulateMainPhaseAction(state: unknown) { captured ??= state; requireCloneState(state).bot.lp += 1; },
+        simulateSpellEffect: () => undefined,
+        evaluateBoardV2: (state: unknown) => requireCloneState(state).bot.lp,
+        evaluateBoard: (state: unknown) => requireCloneState(state).bot.lp,
+      };
+      if (profile === "bot") {
+        captured = cloneBotGameState(unsafeFixture<Parameters<typeof cloneBotGameState>[0]>(
+          { ...self, strategy, resolveOpponent: () => opponent }, "Minimal Bot clone actor with live activation-mode source"),
+        unsafeFixture<Parameters<typeof cloneBotGameState>[1]>(game, "Live Game exposes canonical activation data"));
+      } else if (profile === "beamGreedy") await greedySearchWithEvalV2(game, strategy, { preGeneratedActions: [CLONE_PROBE_ACTION] });
+      else if (profile === "gameTree") gameTreeSearch(game, { ...strategy, bot: { debug: false } }, self, 1);
+      else await turnLineSearch(unsafeFixture<Parameters<typeof turnLineSearch>[0]>(game, "Live Game provides this profile's fields"),
+        strategy, { maxDepth: 1, beamWidth: 1, nodeBudget: 2 });
+      const state = unsafeFixture<Parameters<typeof applyGenericSimulatedMainPhaseAction>[0]>(required(captured), "Captured planner clone has the simulation brand");
+      const clonedSource = required(state.bot.fieldSpell);
+      const effect = required(clonedSource.effects?.find(entry => entry.id === "arcanist_grand_library_ignition"));
+      assert.deepEqual(effect.activationCases, source.effects.find(entry => entry.id === effect.id)?.activationCases);
+      const beforeLp = state.bot.lp;
+      applyGenericSimulatedMainPhaseAction(state, { type: "fieldEffect", cardId: 312,
+        activationContext: { decisions: { cases: { [effect.id]: "arcanist_grand_library_summon" } } } });
+      assert.equal(state.bot.lp, beforeLp - 2000);
+      assert.equal(state.bot.field[0]?.instanceId, recruit.instanceId);
+      assert.equal(canUseSimulatedEffectUsage(state, effect, clonedSource), false);
+      assert.equal(self.lp, 8000);
+      assert.deepEqual(self.deck, [recruit]);
+      assert.equal(game.canUseOncePerTurn(source, self, effect).ok, true);
+    });
+  }
+}
+for (const profile of CLONE_PROFILES) {
+  test(`${profile} copies a live bound protection with isolated consumption and presence`, async t => {
+    const game = createRuntimeGame({ laboratoryMode: true, captureReplay: false });
+    t.after(() => game.dispose("replacement_clone_test"));
+    game.turn = "bot"; game.phase = "main1"; game.turnCounter = 3;
+    const host = new Card(cardDefinition(302), "bot"); const source = new Card(cardDefinition(310), "bot");
+    placeFieldCards(game.bot.field, host);
+    await game.effectEngine.applyActions([{ type: "register_replacement_effect", targetRef: "host", uses: 1,
+      duration: "end_of_next_turn", replacementEffect: { type: "destruction", reason: "any", targetOwner: "self", targetZones: ["field"] } }],
+    { source, player: game.bot, opponent: game.player }, { host: [host] });
+    let captured: unknown;
+    const strategy = {
+      bot: game.bot,
+      generateMainPhaseActions(state: unknown) { if (profile === "gameTree") captured ??= state; return [CLONE_PROBE_ACTION]; },
+      simulateMainPhaseAction(state: unknown) { captured ??= state; requireCloneState(state).bot.lp += 1; },
+      simulateSpellEffect: () => undefined,
+      evaluateBoardV2: (state: unknown) => requireCloneState(state).bot.lp,
+      evaluateBoard: (state: unknown) => requireCloneState(state).bot.lp,
+    };
+    if (profile === "bot") {
+      captured = cloneBotGameState(unsafeFixture<Parameters<typeof cloneBotGameState>[0]>(
+        { ...game.bot, strategy, resolveOpponent: () => game.player }, "Minimal Bot clone actor with live card zones"),
+      unsafeFixture<Parameters<typeof cloneBotGameState>[1]>(game, "Live Game supplies the registered replacement"));
+    } else if (profile === "beamGreedy") await greedySearchWithEvalV2(game, strategy, { preGeneratedActions: [CLONE_PROBE_ACTION] });
+    else if (profile === "gameTree") gameTreeSearch(game, { ...strategy, bot: { debug: false } }, game.bot, 1);
+    else await turnLineSearch(unsafeFixture<Parameters<typeof turnLineSearch>[0]>(game, "Live Game supplies public replacement metadata"),
+      strategy, { maxDepth: 1, beamWidth: 1, nodeBudget: 2 });
+    const state = unsafeFixture<Parameters<typeof destroySimulatedCard>[3]>(required(captured), "Captured planner clone has the simulation brand");
+    const clonedHost = required(state.bot.field[0]); const registration = required(state._simReplacementEffects?.[0]);
+    assert.equal(registration.usesRemaining, 1); assert.equal(registration.expiresOnTurn, 4);
+    const before = fingerprintPlanningState(state);
+    assert.ok(replaceSimulatedBattleDestruction(state, clonedHost));
+    assert.notEqual(fingerprintPlanningState(state), before);
+    assert.equal(destroySimulatedCard(clonedHost, state.bot, state.player, state, {}), true);
+    assert.ok(game.bot.field.includes(host));
+    const liveRegistration = required(game.temporaryReplacementEffects[0]);
+    assert.equal(Reflect.get(liveRegistration, "usesRemaining"), 1);
+  });
+}
 for (const profile of CLONE_PROFILES) {
   test(`${profile} preserves the inactive equip contribution without subtracting other attacks`, async t => {
     const game = createRuntimeGame({ laboratoryMode: true, captureReplay: false });

@@ -74,6 +74,7 @@ export type ChainPhase =
  * the declarative authoring schema. They stay confined to this projection.
  */
 export interface ChainEffect {
+  readonly activationCaseId?: string;
   readonly id?: string;
   readonly timing?: EffectTiming;
   readonly event?: DuelEventName | string;
@@ -806,6 +807,7 @@ export interface SerializedChainCard {
 }
 
 export interface SerializedChainLink {
+  activationCaseId?: string;
   chainId: ChainId | null;
   linkId: ChainLinkId | null;
   chainLevel: number | null;
@@ -1004,6 +1006,7 @@ export interface ChainSelectionSessionInput {
   autoAdvanceOnMax?: boolean;
   activationContext?: PreparedActivationContext | null;
   replayCommandDescriptor?: ChainReplayCommandDescriptor | null;
+  replayCommandHandledByCaller?: boolean;
   resolve?(value: SelectionResult | ChainCard[] | null): void;
   execute?(
     selections: SelectionResult,

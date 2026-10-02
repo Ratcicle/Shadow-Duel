@@ -628,6 +628,7 @@ export function serializeChainLink(
     cardInstanceId: cardInstanceId(link.card),
     cardName: link.card?.name || "Unknown",
     effectId: link.effectId || link.effect?.id || null,
+    ...(link.effect?.activationCaseId ? { activationCaseId: link.effect.activationCaseId } : {}),
     spellSpeed: link.spellSpeed ?? null,
     activationZone: link.activationZone || null,
     activationKind: link.activationKind || null,

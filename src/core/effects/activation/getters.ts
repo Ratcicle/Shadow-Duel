@@ -5,6 +5,7 @@
  */
 
 import { getCanonicalEffectActivationZones } from "../../chain/legality.js";
+import { getBlueprintStorageState, projectStoredBlueprintActivation } from "../blueprints/index.js";
 import type { EffectDefinition } from "../../contracts/effects.js";
 import type { ActivationZone } from "../../contracts/activation.js";
 import type {
@@ -92,7 +93,9 @@ export function getSpellTrapActivationEffect(
     const ignition = card.effects.find((e) =>
       ignitionMatchesActivationZone(e, activationZone),
     );
-    if (ignition) return ignition;
+    if (ignition) return projectStoredBlueprintActivation(
+      { state: { blueprintStorage: getBlueprintStorageState(card) } }, ignition,
+    );
     if (card.subtype === "continuous" || card.subtype === "field") {
       return null;
     }

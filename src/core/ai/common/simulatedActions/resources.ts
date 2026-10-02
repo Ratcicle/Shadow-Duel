@@ -79,7 +79,6 @@ interface LegacySimNumberConfig {
 
 type LegacyPayLpAction = ActionOf<"pay_lp"> & {
   readonly lp?: number;
-  readonly allowSelfKO?: boolean;
 };
 
 type SimNameEntry = string | { readonly name?: string } | null | undefined;
@@ -313,8 +312,7 @@ export function applyPayLp(
   const finalAmount = cost.finalAmount;
   if (
     finalAmount > 0 &&
-    (targetPlayer.lp || 0) <= finalAmount &&
-    (action as LegacyPayLpAction).allowSelfKO !== true
+    (targetPlayer.lp || 0) < finalAmount
   ) {
     return STOP_SIMULATION;
   }

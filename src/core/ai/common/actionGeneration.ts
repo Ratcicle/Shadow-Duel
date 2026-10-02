@@ -31,6 +31,23 @@ import { canMoveCardToZone } from "./zones.js";
 import { hasActionZoneCandidates } from "./actionValidation.js";
 import { canActivateSpellTrapEffect } from "./previewGuards.js";
 import { canUseSimulatedEffectUsage } from "./simStateUtils.js";
+import { evaluateSimulatedConditions } from "./simulatedConditions.js";
+
+/** Costless procedures keep the same placement/usage gates in projected nodes. */
+export function getGenericCostlessHandSummonActions(game: AIState): AIActionOf<"handSummonProcedure">[] {
+  if (!game._isPerspectiveState || (game.phase !== "main1" && game.phase !== "main2")) return [];
+  const player = game.bot;
+  if (!player || game.turn !== player.id) return [];
+  return (player.hand || []).flatMap((card, index) => {
+    const procedure = card.handSummonProcedure;
+    if (!procedure || procedure.cost || card.cardKind !== "monster") return [];
+    if (!canUseSimulatedEffectUsage(game, procedure, card, player.id, true) ||
+        !canSimulatedSpecialSummon(card, player, procedure.id, "hand") ||
+        !canSimulatedProcedureEnterField(card, player, game.player, []) ||
+        !evaluateSimulatedConditions(procedure.conditions || [], { state: game, sourceCard: card, selfId: "bot" })) return [];
+    return [{ type: "handSummonProcedure", cardId: card.id, cardName: card.name, index, materials: [] }];
+  });
+}
 
 /** GY ignition candidates shared by strategies; the legacy action name also covers Traps. */
 export function getGenericGraveyardSpellTrapActions(game: AIState, player: AIStrategyBotPort): AIActionOf<"graveyardSpellEffect">[] {

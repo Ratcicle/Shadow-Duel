@@ -310,6 +310,7 @@ export async function getPlayerSelectionsForDefinitions(
   return new Promise<ChainSelectionMap | null>((resolve) => {
     startTargetSelectionSession({
       owner: player,
+      replayCommandHandledByCaller: true,
       selectionContract: contract,
       message:
         contract.message ||

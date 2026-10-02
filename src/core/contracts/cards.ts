@@ -4,7 +4,7 @@ import type {
   PlayerId,
   RawCardDefinitionId,
 } from "./primitives.js";
-import type { CardFilter, EffectDefinition } from "./effects.js";
+import type { CardFilter, EffectCondition, EffectDefinition } from "./effects.js";
 import type { SummonMethod } from "./summon.js";
 import type { CanonicalZone } from "./zones.js";
 
@@ -307,7 +307,8 @@ export type OncePerTurnDefinition = Pick<EffectDefinition,
 
 export interface HandSummonProcedure extends Pick<OncePerTurnDefinition, "oncePerTurn" | "oncePerTurnName"> {
   readonly id: string;
-  readonly cost: {
+  readonly conditions?: readonly EffectCondition[];
+  readonly cost?: {
     readonly count: number;
     readonly zones: readonly ("field" | "graveyard")[];
     readonly filters: CardFilter;

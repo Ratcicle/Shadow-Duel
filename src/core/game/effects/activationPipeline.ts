@@ -18,6 +18,7 @@
  */
 
 import { isAI } from "../../Player.js";
+import { isActivationSourcePresent, selectActivationCase } from "./activationModes.js";
 import { recordMaterialEffectIdentity } from "../summon/materialStats.js";
 import {
   capCostDefinitionsByLinkedTargetCapacity,
@@ -43,7 +44,7 @@ import type {
   PreparedActivationInput,
   PreparedActivationContext,
 } from "../../contracts/chainRuntime.js";
-import type { MaybePromise } from "../../contracts/decisions.js";
+import type { MaybePromise, DecisionBrokerPort } from "../../contracts/decisions.js";
 import type { EffectDefinition } from "../../contracts/effects.js";
 import type { GamePhase } from "../../contracts/game.js";
 import type { GamePlayer } from "../../contracts/player.js";
@@ -148,6 +149,7 @@ interface ActivationAutoSelectorPort {
 }
 
 interface ActivationSelectionSessionInput {
+  replayCommandHandledByCaller?: boolean;
   kind: SelectionKind;
   card: GameCard;
   owner: GamePlayer;
@@ -163,7 +165,8 @@ interface ActivationSelectionSessionInput {
   onAbort?: ((reason: string) => void) | undefined;
 }
 
-interface ActivationPipelineHost {
+export interface ActivationPipelineHost {
+  requestDecision: DecisionBrokerPort["requestDecision"];
   selectionAbortGeneration?: number;
   materialDuelStats?: MaterialDuelStats;
   player: GamePlayer;
@@ -360,6 +363,7 @@ export async function runActivationPipeline(
     });
   }
   let resolvedCard: GameCard = requestedCard;
+  const preparationSourceVersion = Number(requestedCard.locationVersion ?? 0);
 
   const selectionKind = config.selectionKind || "activation";
   let resolvedZone =
@@ -561,7 +565,7 @@ export async function runActivationPipeline(
     typeof config.activationContext?.autoSelectTargets === "boolean"
       ? config.activationContext.autoSelectTargets
       : isAI(owner);
-  const activationContext = {
+  const activationContext: ActivationPipelineContext = {
     ...(config.activationContext || {}),
     fromHand,
     activationZone: resolvedActivationZone,
@@ -755,7 +759,7 @@ export async function runActivationPipeline(
 
       logPipeline("PIPELINE_SELECTION_START", {
         mode: usingFieldTargeting ? "field" : "modal",
-        committed: activationContext.committed,
+        committed: activationContext.committed === true,
         requirementCount: contract.requirements.length,
       });
 
@@ -1359,6 +1363,7 @@ export async function runActivationPipeline(
     if (!effect || !chainSystem) {
       return { result: initialResult, fromSelection: false };
     }
+    activationContext.preparedEffect = effect;
     const resolutionContext =
       normalizedInitial.resolutionContext &&
       typeof normalizedInitial.resolutionContext === "object"
@@ -1413,6 +1418,7 @@ export async function runActivationPipeline(
     );
     const costs = chainSystem.getEffectActivationCosts?.(effect) || [];
     const hasCanonicalWork =
+      !!effect.activationCaseId ||
       costDefinitions.length > 0 ||
       targetDefinitions.length > 0 ||
       costs.length > 0;
@@ -1495,6 +1501,25 @@ export async function runActivationPipeline(
       };
     }
 
+    // Selections may have taken time. Revalidate all costs and activation
+    // conditions before committing the source or consuming its usage.
+    const prepaymentContext = buildCanonicalContext({ preview: true, costSelections });
+    if (effect.activationCaseId && !isActivationSourcePresent(resolvedCard, owner,
+      activationContext.sourceZone || resolvedActivationZone, preparationSourceVersion)) {
+      return { result: this.createActionResult({ reason: "Activation source moved before commitment.",
+        code: "ACTIVATION_SOURCE_MOVED" }), fromSelection: false };
+    }
+    const conditionCheck = this.effectEngine.evaluateConditions?.(
+      effect.conditions || [], toChainActionContext(prepaymentContext));
+    const costCheck = this.effectEngine.checkActionPreviewRequirements?.(costs, {
+      ...prepaymentContext, _actionTargets: costSelections,
+    });
+    if (conditionCheck?.ok === false || costCheck?.ok === false) {
+      return { result: this.createActionResult({
+        reason: conditionCheck?.reason || costCheck?.reason || "Activation cost is unavailable.",
+        code: "ACTIVATION_COST_UNAVAILABLE",
+      }), fromSelection: false };
+    }
     const commitResult = await commitPreparedSource();
     if (commitResult?.success === false) {
       return { result: commitResult, fromSelection: false };
@@ -1719,6 +1744,15 @@ export async function runActivationPipeline(
     return { result: nextResult, fromSelection: true };
   };
 
+  if (activationEffect?.activationCases?.length) {
+    const selected = await selectActivationCase(this, resolvedCard, owner, activationEffect,
+      resolvedActivationZone, activationContext);
+    if (!selected) return handleResult(this.createActionResult({
+      cancelled: true, reason: "Activation mode selection cancelled or unavailable.",
+      code: "ACTIVATION_CASE_UNAVAILABLE",
+    }));
+    activationContext.preparedEffect = selected;
+  }
   const initialResult = await safeActivate(config.selections || null);
   const transaction = await runCanonicalActivationTransaction(initialResult);
   return handleResult(transaction.result, transaction.fromSelection);

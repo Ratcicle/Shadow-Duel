@@ -13,8 +13,26 @@ import { createRuntimeGame } from "./helpers/game.js";
 
 import Card from "../src/core/Card.js";
 import type Renderer from "../src/ui/Renderer.js";
-import { showChainResponseModal } from "../src/ui/renderer/trapModals.js";
+import { _getContextDescription, showChainResponseModal, type TrapModalOptions } from "../src/ui/renderer/trapModals.js";
 import { cardDatabaseByName } from "./helpers/fixtures.js";
+import { getUIText } from "../src/core/i18n.js";
+
+test("Chain response displays the activation mode before the opponent chooses", async () => {
+  const label = getUIText("effectChoices.meeting_arcanists_choose_effect.cases.meeting_arcanists_discard_monsters.label");
+  let displayed = false;
+  const renderer = unsafeFixture<Renderer>({
+    showUnifiedTrapModal: async (options: TrapModalOptions) => {
+      assert.equal(options.context?.activationCaseLabel, label);
+      assert.ok(_getContextDescription.call(renderer, options.context || null).includes(label));
+      displayed = true;
+      return null;
+    },
+  }, "Presentation unit test supplies only the modal delegate, without DOM rendering.");
+  await showChainResponseModal.call(renderer, [], { type: "effect_activation" }, [
+    { effectId: "meeting_arcanists_choose_effect", activationCaseId: "meeting_arcanists_discard_monsters" },
+  ]);
+  assert.ok(displayed);
+});
 
 function createCard(data: CardConstructorData | undefined, player: GamePlayer) {
   assert.ok(data, "Card fixture must exist.");

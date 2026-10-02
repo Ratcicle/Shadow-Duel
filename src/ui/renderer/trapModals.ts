@@ -6,6 +6,7 @@ export interface TrapCandidate extends UiCard {
   zone?: string;
 }
 export interface ChainDisplayContext {
+  activationCaseLabel?: string;
   type?: string;
   event?: string;
   attacker?: UiCard | null;
@@ -302,6 +303,15 @@ export function showChainResponseModal<T extends TrapCandidate>(
   chainStack: readonly unknown[] = [],
   options: { signal?: AbortSignal | null } = {},
 ): Promise<T | null> {
+  const lastLink = chainStack.at(-1);
+  if (lastLink && typeof lastLink === "object") {
+    const effectId: unknown = Reflect.get(lastLink, "effectId");
+    const caseId: unknown = Reflect.get(lastLink, "activationCaseId");
+    if (typeof effectId === "string" && typeof caseId === "string") {
+      context = { ...context, activationCaseLabel:
+        getUIText(`effectChoices.${effectId}.cases.${caseId}.label`, {}, caseId) };
+    }
+  }
   return this.showUnifiedTrapModal({
     cards: activatable,
     context,
@@ -332,6 +342,9 @@ export function _getContextDescription(
   context: ChainDisplayContext | null,
 ): string {
   if (!context) return getUIText("ui.trap.responseDefault");
+  if (context.activationCaseLabel) {
+    return `${getUIText("ui.trap.effectActivation")} — ${context.activationCaseLabel}`;
+  }
 
   switch (context.type) {
     case "attack_declaration": {

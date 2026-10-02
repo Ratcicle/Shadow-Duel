@@ -1,3 +1,4 @@
+import { refreshSimulatedFieldAuras } from "../zones.js";
 import { getPerspectivePlayers } from "../perspective.js";
 import { resolveTargetsForAction, captureSimulatedReferences, STOP_SIMULATION } from "./shared.js";
 import type { ActionOf, ActionType } from "../../../contracts/actions.js";
@@ -236,6 +237,7 @@ export function applySimulatedActions({
       opponent,
       applySimulatedActions,
     });
+    refreshSimulatedFieldAuras(state);
     if (result === STOP_SIMULATION) return false;
   }
   return true;

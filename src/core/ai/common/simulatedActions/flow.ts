@@ -432,7 +432,12 @@ export function applyActivateStoredBlueprint(
     applySimulatedActions,
   } = ctx;
   const sourceCard = options.sourceCard;
-  const blueprint = getStoredBlueprints(sourceCard)[0];
+  const stored = getStoredBlueprints(sourceCard);
+  if (stored.length > 1) {
+    (state._simUnsupportedActions ??= []).push("stored_blueprint_choice");
+    return;
+  }
+  const blueprint = stored[0];
   if (!blueprint) return;
   const effect = blueprint?.effectSnapshot || blueprint?.effect || null;
   if (!effect) return;
@@ -449,7 +454,7 @@ export function applyActivateStoredBlueprint(
   }
   const blueprintSelections = selectSimulatedTargets({
     targets: effect.targets || [],
-    actions: effect.actions || [],
+    actions: [...(effect.activationCosts || []), ...(effect.activationCommitActions || []), ...(effect.actions || [])],
     state,
     sourceCard,
     selfId,
@@ -458,8 +463,12 @@ export function applyActivateStoredBlueprint(
   if (!hasRequiredSelections(effect.targets || [], blueprintSelections)) {
     return;
   }
+  applySimulatedActions({ actions: effect.activationCosts || [], selections: blueprintSelections,
+    state, selfId, options: { ...options, sourceCard, effect } });
+  if (sourceCard?.cardKind === "spell" && ["equip", "continuous", "field"].includes(sourceCard.subtype || "") &&
+      (!self.spellTrap.includes(sourceCard) && self.fieldSpell !== sourceCard)) return;
   applySimulatedActions({
-    actions: effect.actions || [],
+    actions: [...(effect.activationCommitActions || []), ...(effect.actions || [])],
     selections: blueprintSelections,
     state,
     selfId,

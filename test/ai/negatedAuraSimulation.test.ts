@@ -4,6 +4,7 @@ import Card from "../../src/core/Card.js";
 import { createPlanningCopy } from "../../src/core/ai/common/planningCopy.js";
 import { applySimulatedActions } from "../../src/core/ai/common/simulatedActions/index.js";
 import { moveCardToZone } from "../../src/core/ai/common/zones.js";
+import { simulateMainPhaseAction } from "../../src/core/ai/shadowheart/simulation.js";
 import type { ActionOf } from "../../src/core/contracts/actions.js";
 import { cardDefinition, required } from "../helpers/fixtures.js";
 import { createRuntimeGame, placeFieldCards } from "../helpers/game.js";
@@ -97,13 +98,29 @@ for (const ownerId of ["player", "bot"] as const) {
   });
 }
 
-test("removing aura negation reports unsupported recalculation instead of accepting stale stats", () => {
+test("Shadow-Heart placement and later actions share one negatable aura contribution", () => {
+  const copy = createPlanningCopy();
+  const valley = copy.cloneCardForSim(new Card(cardDefinition("Darkness Valley"), "bot"));
+  const mage = copy.cloneCardForSim(new Card(cardDefinition("Shadow-Heart Void Mage"), "bot"));
+  const state = simulationState({ _isPerspectiveState: true, bot: { hand: [valley], field: [mage] } });
+  simulateMainPhaseAction(state, { type: "spell", cardId: valley.id, cardName: valley.name, index: 0 });
+  assert.equal(mage.atk, required(mage.baseAtk) + 300);
+  applySimulatedActions({ state, actions: [{ type: "draw", amount: 0 }] });
+  assert.equal(mage.atk, required(mage.baseAtk) + 300);
+  applySimulatedActions({ state, actions: [{ type: "add_status", targetRef: "aura", status: "effectsNegated" }],
+    selections: { aura: [required(state.bot.fieldSpell)] } });
+  assert.equal(mage.atk, mage.baseAtk);
+});
+
+test("removing aura negation restores the continuous contribution", () => {
   const aura = createPlanningCopy().cloneCardForSim(new Card(cardDefinition("Darkness Valley"), "player"));
   aura.effectsNegated = true;
-  const state = simulationState({ player: { fieldSpell: aura } });
+  const target = createPlanningCopy().cloneCardForSim(new Card(cardDefinition("Shadow-Heart Void Mage"), "player"));
+  const state = simulationState({ player: { fieldSpell: aura, field: [target] } });
   applySimulatedActions({ state, actions: [{ type: "add_status", targetRef: "aura", status: "effectsNegated", remove: true }],
     selections: { aura: [aura] } });
-  assert.deepEqual(state._simUnsupportedActions, ["add_status:passive_recalculation:field_archetype_aura_buff"]);
+  assert.equal(target.atk, required(target.baseAtk) + 300);
+  assert.deepEqual(state._simUnsupportedActions || [], []);
 });
 
 test("negating passives without a supported contribution map reports an explicit limit", () => {

@@ -646,6 +646,15 @@ export interface VisualFeedback {
 export type GameUiPort = import("./ui.js").GameUI;
 
 export interface EffectEngineRuntimePort {
+  evaluateConditions(
+    conditions: readonly import("./effects.js").EffectCondition[] | undefined,
+    context: {
+      source: GameCard;
+      player: GamePlayer;
+      activationZone: CanonicalZone;
+      sourceZone: CanonicalZone;
+    },
+  ): { ok: boolean; reason?: string };
   cardMatchesFilters(card: GameCard, filters: import("./effects.js").CardFilter): boolean;
   clearTargetingCache?(): void;
   updatePassiveBuffs?(): MaybePromise<unknown>;

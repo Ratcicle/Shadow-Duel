@@ -92,6 +92,11 @@ export interface SimulatedReplacementEffect {
   sourcePlayerId?: PlayerId | string | null;
   targetCard?: SimulatedCardState | null;
   duration?: string | number | null;
+  uniqueKey?: string;
+  replacementEffect?: import("./actions/shared.js").ActionReplacementEffect | null;
+  expiresOnTurn?: number | null;
+  usesRemaining?: number | null;
+  targetPresences?: Array<{ instanceId: string | number | null; locationVersion: number; fieldPresenceId?: string | number | null }>;
 }
 
 /** Planning may start from a minimal projection without live replay IDs. */
@@ -136,9 +141,9 @@ export interface SimulatedCardShape extends SimulatedCardCore {
   cannotBeDestroyedByBattle?: boolean | undefined;
   cannotBeDestroyedByCardEffects?: boolean;
   state?: { blueprintStorage?: { storedBlueprints: Array<{
-    blueprintId: string; sourceCardId?: GameCard["id"]; sourceCardName?: string | undefined;
+    blueprintId: string; sourceCardId?: GameCard["id"]; sourceCardName?: string;
     sourceCardKind?: CardKind | undefined; sourceCardSubtype?: GameCard["subtype"] | undefined;
-    displayName?: string | undefined; shortRulesText: string; effectSnapshot: EffectDefinition;
+    displayName?: string; shortRulesText: string; effectSnapshot: EffectDefinition;
     _simStoredByGrimoire: boolean;
   }> } };
   fieldAgeTurns?: number;

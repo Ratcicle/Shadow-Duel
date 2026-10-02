@@ -583,6 +583,7 @@ export function walkEffectActions(
     [...basePath, "targets"],
   );
   let activationRefs = new Set<string>();
+  let activationCostRefs = new Set<string>();
   const activationRoots = [
     ["activationCosts", "cost"],
     ["activationCommitActions", "commit"],
@@ -602,6 +603,43 @@ export function walkEffectActions(
       depth: 0,
       container: root,
     });
+    if (stage === "cost") activationCostRefs = cloneSet(activationRefs);
+  }
+
+  const activationCases = effect.activationCases;
+  const casesPath = [...basePath, "activationCases"];
+  if (activationCases !== undefined && !Array.isArray(activationCases)) {
+    addDiagnostic(context, "invalid-container", casesPath, "Activation cases must be an array.");
+  } else if (Array.isArray(activationCases)) {
+    for (const [caseIndex, activationCase] of activationCases.entries()) {
+      const casePath = [...casesPath, caseIndex];
+      if (!isRecord(activationCase)) {
+        addDiagnostic(context, "invalid-container", casePath, "Activation case must be an object.");
+        continue;
+      }
+      const caseTargetIds = collectTargetIds(
+        activationCase.targets, effectTargetIds, context, [...casePath, "targets"],
+      );
+      let caseRefs = cloneSet(activationCostRefs);
+      for (const [root, stage] of [
+        ["activationCosts", "cost"], ["actions", "resolution"],
+      ] as const) {
+        if (activationCase[root] === undefined) continue;
+        if (stage === "resolution") {
+          for (const ref of activationRefs) caseRefs.add(ref);
+        }
+        caseRefs = walkList(activationCase[root], context, {
+          stage,
+          flow: "activation",
+          root,
+          path: [...casePath, root],
+          targetIds: caseTargetIds,
+          availableRefs: caseRefs,
+          depth: 0,
+          container: `activationCases[].${root}`,
+        });
+      }
+    }
   }
 
   const replacementEffect = effect.replacementEffect;

@@ -390,6 +390,8 @@ export interface SelectionSessionInput {
   autoAdvanceOnMax?: boolean;
   activationContext?: SelectionActivationContext | null;
   replayCommandDescriptor?: object | null;
+  /** Intermediate choice whose caller awaits the complete command, including later decisions. */
+  replayCommandHandledByCaller?: boolean;
   resolve?: SelectionSessionResolver;
   execute?: (
     selections: SelectionResult,

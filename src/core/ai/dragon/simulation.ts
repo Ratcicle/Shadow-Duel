@@ -415,7 +415,7 @@ export function simulateMainPhaseAction<State extends DragonSimulationState>(
         (action.card?.instanceId === undefined || entry.instanceId === action.card.instanceId);
       const card = direct && matchesSource(direct) ? direct : player.hand.find(matchesSource);
       const procedure = card?.handSummonProcedure;
-      if (!card || !procedure || card.cardKind !== "monster") break;
+      if (!card || !procedure || !procedure.cost || card.cardKind !== "monster") break;
       if (!canUseSimulatedEffectUsage(state, procedure, card, player.id, true)) break;
       if (!checkSpecialSummonEligibility(card, { summonProcedure: procedure.id, fromZone: "hand" }).ok) break;
       if (player.specialSummonRestrictions?.some((restriction) =>

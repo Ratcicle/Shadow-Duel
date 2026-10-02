@@ -200,6 +200,9 @@ function cardState(
     fieldPresenceState: { ...(card.fieldPresenceState || {}) },
     fieldPresenceSummons: (card.fieldPresenceSummons || []).map(entry => ({ ...entry })),
     protectionEffects: (card.protectionEffects || []).map(entry => ({ ...entry })),
+    ...(card.state?.blueprintStorage?.storedBlueprints.length
+      ? { blueprintStorage: stableValue(card.state.blueprintStorage.storedBlueprints) ?? [] }
+      : {}),
     facedown: card.isFacedown === true,
     atk: numericValue(card.atk),
     def: numericValue(card.def),
@@ -326,6 +329,30 @@ export function createCanonicalStateSnapshot(
     }
     return record;
   });
+  const canonicalReplacements = normalizeValue(game.temporaryReplacementEffects || [], new WeakSet(), entry => {
+    if (Object.hasOwn(entry, "targetPresences")) {
+      const record: SerializableObject = {};
+      for (const key of Object.keys(entry)) {
+        if (key === "targetCards" || key === "targetInstanceIds") continue;
+        if (key === "targetPresences") {
+          record[key] = normalizeValue(readProperty(entry, key), new WeakSet(), presence => {
+            if (Array.isArray(presence)) return undefined;
+            return {
+              duelCardId: stableValue(readProperty(presence, "duelCardId")) ?? null,
+              locationVersion: Number(readProperty(presence, "locationVersion") ?? 0),
+              fieldPresenceId: stableValue(readProperty(presence, "fieldPresenceId")) ?? null,
+            };
+          }) ?? [];
+        } else {
+          const value = stableValue(readProperty(entry, key));
+          if (value !== undefined) record[key] = value;
+        }
+      }
+      return record;
+    }
+    return undefined;
+  });
+  const replacementSequence = game.generatedIdCounters?.get("temporary_replacement") || 0;
   return {
     fieldPlacementSequence: game.generatedIdCounters?.get("field_placement") || 0,
     turn: game.turn ?? null,
@@ -345,6 +372,8 @@ export function createCanonicalStateSnapshot(
     delayedActions: serializeReplayEventPayload(game, game.delayedActions || []) ?? [],
     temporaryEventEffects: canonicalEventEffects ?? [],
     temporaryControlEffects: canonicalControl ?? [],
+    ...(game.temporaryReplacementEffects?.length ? { temporaryReplacementEffects: canonicalReplacements ?? [] } : {}),
+    ...(replacementSequence ? { temporaryReplacementSequence: replacementSequence } : {}),
     chain: {
       links: stableValue(game.chainSystem?.getChainSummary?.() || []) ?? [],
       state: stableValue(game.chainSystem?.getPublicState?.() || null) ?? null,

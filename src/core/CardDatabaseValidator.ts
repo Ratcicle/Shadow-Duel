@@ -4,6 +4,7 @@ import type {
 } from "./contracts/cards.js";
 import type {
   EffectDefinition,
+  EffectActivationCase,
   EffectTarget,
   CardFilter,
 } from "./contracts/effects.js";
@@ -174,6 +175,93 @@ function rootActionIndexForPath(
   return null;
 }
 
+function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function targetDefinitions(value: unknown): readonly Readonly<Record<string, unknown>>[] {
+  return Array.isArray(value) ? value.filter(isRecord) : [];
+}
+
+function validateActivationCases(effect: unknown): ActionValidationIssue[] {
+  if (!isRecord(effect) || effect.activationCases === undefined) return [];
+  const errors: ActionValidationIssue[] = [];
+  const report = (path: string, message: string) => {
+    errors.push({ message: `[${path}] ${message}`, actionIndex: null });
+  };
+  const cases = effect.activationCases;
+  if (!Array.isArray(cases) || cases.length === 0) {
+    report("activationCases", "Activation cases must be a non-empty array.");
+    return errors;
+  }
+  const allowedFields: ReadonlySet<string> = new Set([
+    "id", "label", "description", "conditions", "targets", "activationCosts", "actions",
+  ] satisfies readonly (keyof EffectActivationCase)[]);
+  const caseIds = new Set<string>();
+  const inheritedTargets = targetDefinitions(effect.targets);
+  for (const [index, activationCase] of cases.entries()) {
+    const path = `activationCases[${index}]`;
+    if (!isRecord(activationCase)) continue; // The walker reports malformed case objects.
+    if (typeof activationCase.id !== "string" || activationCase.id.trim() === "") {
+      report(`${path}.id`, "Activation case id must be a non-empty string.");
+    } else if (caseIds.has(activationCase.id)) {
+      report(`${path}.id`, `Activation case id "${activationCase.id}" is duplicate.`);
+    } else {
+      caseIds.add(activationCase.id);
+    }
+    for (const field of Object.keys(activationCase)) {
+      if (!allowedFields.has(field)) report(`${path}.${field}`, `Unknown activation case field "${field}".`);
+    }
+    for (const field of ["label", "description"] as const) {
+      if (activationCase[field] !== undefined && typeof activationCase[field] !== "string") {
+        report(`${path}.${field}`, `Activation case ${field} must be a string.`);
+      }
+    }
+    if (!Array.isArray(activationCase.actions)) {
+      report(`${path}.actions`, "Activation case actions must be an array.");
+    }
+    const conditions = activationCase.conditions;
+    if (conditions !== undefined) {
+      if (!Array.isArray(conditions)) {
+        report(`${path}.conditions`, "Activation case conditions must be an array.");
+      } else {
+        for (const [conditionIndex, condition] of conditions.entries()) {
+          if (!isRecord(condition) ||
+            !((typeof condition.type === "string" && condition.type.length > 0) || condition.requires === "self_in_hand")) {
+            report(`${path}.conditions[${conditionIndex}]`, "Activation case condition must declare a condition type.");
+          }
+        }
+      }
+    }
+    const targets = targetDefinitions(activationCase.targets);
+    const targetIds = new Set(inheritedTargets.map(target => target.id));
+    const costTargetIds = new Set([...inheritedTargets, ...targets]
+      .filter(target => target.intent === "cost").map(target => target.id));
+    for (const [targetIndex, target] of targets.entries()) {
+      const targetPath = `${path}.targets[${targetIndex}]`;
+      if (typeof target.id !== "string" || target.id.trim() === "") {
+        report(targetPath, "Activation case target id must be a non-empty string.");
+      } else if (targetIds.has(target.id)) {
+        report(targetPath, `Activation case target id "${target.id}" is duplicate.`);
+      }
+      targetIds.add(target.id);
+      if (target.intent !== undefined && !["cost", "reference", "target"].includes(String(target.intent))) {
+        report(targetPath, `Invalid target intent "${String(target.intent)}".`);
+      }
+      if (target.intent === "reference" && !target.targetFromContext) {
+        report(targetPath, "Reference selection requires targetFromContext.");
+      }
+      if (target.countFromSelectionRef !== undefined && !costTargetIds.has(target.countFromSelectionRef)) {
+        report(targetPath, 'Target "countFromSelectionRef" must reference a cost target from the same activation case.');
+      }
+      if (target.minAtResolution !== undefined && (!Number.isFinite(Number(target.minAtResolution)) || Number(target.minAtResolution) < 0)) {
+        report(targetPath, 'Target "minAtResolution" must be a non-negative number.');
+      }
+    }
+  }
+  return errors;
+}
+
 /**
  * Pure validation seam for declarative action trees. Card-level formatting is
  * intentionally kept by validateCardDatabase so its public issue shape stays
@@ -186,29 +274,10 @@ export function validateEffectActionTree(
     actionWalk = walkEffectActions(effect),
   }: ActionTreeValidationOptions = {},
 ) {
-  const errors: ActionValidationIssue[] = [];
+  const errors: ActionValidationIssue[] = validateActivationCases(effect);
   const warnings: ActionValidationIssue[] = [];
   // This validator reads untrusted metadata, including null and legacy shapes.
-  const targetSource = effect as
-    | { readonly targets?: unknown }
-    | null
-    | undefined;
-  const effectTargets: readonly {
-    readonly id?: unknown;
-    readonly intent?: unknown;
-  }[] = Array.isArray(targetSource?.targets) ? targetSource.targets : [];
-  const targetIds = new Set<unknown>(
-    effectTargets
-      .filter((target) => target && typeof target.id === "string")
-      .map((target) => target.id),
-  );
-  const costTargetIds = new Set<unknown>(
-    effectTargets
-      .filter(
-        (target) => target?.intent === "cost" && typeof target.id === "string",
-      )
-      .map((target) => target.id),
-  );
+  const effectTargets = targetDefinitions(isRecord(effect) ? effect.targets : undefined);
   const push = (
     collection: ActionValidationIssue[],
     message: string,
@@ -233,6 +302,13 @@ export function validateEffectActionTree(
 
   for (const visit of actionWalk.visits) {
     const { action: candidate, actionIndex, stage, flow, pathText } = visit;
+    const casePathIndex = visit.path.indexOf("activationCases");
+    const caseIndex = casePathIndex >= 0 ? visit.path[casePathIndex + 1] : undefined;
+    const cases = isRecord(effect) ? effect.activationCases : undefined;
+    const activationCase: unknown = Array.isArray(cases) && typeof caseIndex === "number" ? cases[caseIndex] : undefined;
+    const targets = [...effectTargets, ...targetDefinitions(isRecord(activationCase) ? activationCase.targets : undefined)];
+    const targetIds = new Set(targets.map(target => target.id));
+    const costTargetIds = new Set(targets.filter(target => target.intent === "cost").map(target => target.id));
     if (!candidate || typeof candidate !== "object") {
       push(errors, "Action must be an object.", actionIndex, pathText);
       continue;
@@ -317,7 +393,10 @@ export function validateEffectActionTree(
     if (
       flow === "activation" &&
       stage === "resolution" &&
-      visit.depth === 0 &&
+      // Legacy resolution wrappers may select a benefit before consuming a
+      // deferred cost. Activation cases explicitly separate payment from
+      // resolution, so their cost targets stay protected at every depth.
+      (visit.depth === 0 || isRecord(activationCase)) &&
       typeof action.targetRef === "string" &&
       costTargetIds.has(action.targetRef)
     ) {
@@ -493,13 +572,15 @@ export function validateCardDatabase() {
       const procedure = card.handSummonProcedure;
       if (
         card.cardKind !== "monster" || !procedure.id.trim() ||
-        !Number.isInteger(procedure.cost.count) || procedure.cost.count < 1 ||
-        procedure.cost.zones.length === 0 ||
-        procedure.cost.zones.some((zone) => zone !== "field" && zone !== "graveyard") ||
-        !["banished", "graveyard"].includes(procedure.cost.destination) ||
+        (procedure.cost !== undefined && (
+          !Number.isInteger(procedure.cost.count) || procedure.cost.count < 1 ||
+          procedure.cost.zones.length === 0 ||
+          procedure.cost.zones.some((zone) => zone !== "field" && zone !== "graveyard") ||
+          !["banished", "graveyard"].includes(procedure.cost.destination)
+        )) ||
         (procedure.oncePerTurn === true && !procedure.oncePerTurnName?.trim())
       ) {
-        errors.push(formatIssue(card, "Hand summon procedures require an id, a positive card cost from supported zones, and a name key for any turn limit."));
+        errors.push(formatIssue(card, "Hand summon procedures require an id, a positive card cost from supported zones when a cost is present, and a name key for any turn limit."));
       }
     }
     // Basic monster type checks for Extra Deck categories

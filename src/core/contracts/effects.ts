@@ -215,6 +215,8 @@ export type ContextTargetName =
 
 /** A target declaration is closed while retaining the combinations in data. */
 export interface EffectTarget {
+  /** Permit this activation's source among cost candidates. */
+  readonly allowSelf?: boolean;
   readonly id: string;
   readonly anyOf?: readonly TargetAlternative[];
   readonly archetype?: string;
@@ -502,6 +504,17 @@ export interface NegationCostDefinition {
   readonly amount: number;
 }
 
+/** A mode selected before commitment; usage and identity belong to its parent effect. */
+export interface EffectActivationCase {
+  readonly id: string;
+  readonly label?: string;
+  readonly description?: string;
+  readonly conditions?: readonly EffectCondition[];
+  readonly targets?: readonly EffectTarget[];
+  readonly activationCosts?: readonly CardAction[];
+  readonly actions: readonly CardAction[];
+}
+
 interface EffectCapabilities {
   readonly id: string;
   readonly speed?: 1 | 2 | 3;
@@ -511,6 +524,9 @@ interface EffectCapabilities {
   readonly triggerTiming?: TriggerTiming;
   readonly activationZones?: readonly CanonicalZone[];
   readonly activationCosts?: readonly CardAction[];
+  readonly activationCases?: readonly EffectActivationCase[];
+  /** Stable mode identity on a prepared projection, never a separate effect ID. */
+  readonly activationCaseId?: string;
   readonly activationCommitActions?: readonly CardAction[];
   readonly actions?: readonly CardAction[];
   readonly targets?: readonly EffectTarget[];

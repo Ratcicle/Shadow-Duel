@@ -1,4 +1,4 @@
-import { appendSimulatedFieldCard } from "./common/zones.js";
+import { appendSimulatedFieldCard, refreshSimulatedFieldAuras } from "./common/zones.js";
 import { getAvailableFieldSlots } from "../game/zones/placement.js";
 import type { AIAction, AIPlannedAction, AIPlanningContext, AIPlanningProfile, AIState, AIStrategyBotPort, AIActivationContext, StrategyRuntimePort } from "../contracts/ai.js";
 import type { AiStateShape, SimulatedCardState, SimulatedPlayerState } from "../contracts/aiState.js";
@@ -29,6 +29,7 @@ import {
   getGenericHandSpellActions,
   getGenericIgnitionEffectActions,
   getGenericNormalSummonActions,
+  getGenericCostlessHandSummonActions,
 } from "./common/actionGeneration.js";
 import { getGenericSetBackrowActions } from "./common/backrowPlanning.js";
 import { buildStrategyAnalysis } from "./common/analysis.js";
@@ -41,6 +42,8 @@ import {
 import {
   applyGenericSimulatedMainPhaseAction,
   resolveSimulatedHandIndex,
+  emitSimulatedSpellActivation,
+  prepareSimulatedEffectActivation,
 } from "./common/simulation.js";
 import {
   getCardInstanceId,
@@ -174,39 +177,6 @@ function addInkCounterToFaceUpRivers(player: SimulatedPlayerState, amount = 1) {
   for (const card of player?.spellTrap || []) {
     if (!isFaceUpInkRiver(card)) continue;
     setInkCounters(card, getInkCounters(card) + amount);
-  }
-}
-
-function clearSimulatedArcanistPassiveStats(player: SimulatedPlayerState) {
-  for (const card of player?.field || []) {
-    if (!card) continue;
-    const aura = card._simArcanistApprenticeAuraAtk || 0;
-    if (aura) {
-      card.tempAtkBoost = (card.tempAtkBoost || 0) - aura;
-      card.atk = Math.max(0, (card.atk || 0) - aura);
-      delete card._simArcanistApprenticeAuraAtk;
-    }
-
-    const debuffAtk = card._simArcanistAzrathSpellDebuffAtk || 0;
-    if (debuffAtk) {
-      card.tempAtkBoost = (card.tempAtkBoost || 0) - debuffAtk;
-      card.atk = Math.max(0, (card.atk || 0) - debuffAtk);
-      delete card._simArcanistAzrathSpellDebuffAtk;
-    }
-
-    const debuffDef = card._simArcanistAzrathSpellDebuffDef || 0;
-    if (debuffDef) {
-      card.tempDefBoost = (card.tempDefBoost || 0) - debuffDef;
-      card.def = Math.max(0, (card.def || 0) - debuffDef);
-      delete card._simArcanistAzrathSpellDebuffDef;
-    }
-
-    const elementalistBuff = card._simArcanistElementalistSpellBuffAtk || 0;
-    if (elementalistBuff) {
-      card.tempAtkBoost = (card.tempAtkBoost || 0) - elementalistBuff;
-      card.atk = Math.max(0, (card.atk || 0) - elementalistBuff);
-      delete card._simArcanistElementalistSpellBuffAtk;
-    }
   }
 }
 
@@ -391,7 +361,22 @@ export default class ArcanistStrategy extends BaseStrategy {
   buildActivationContextForEffect({ sourceCard, player, game }: { sourceCard?: StrategyCard; player?: AIStrategyBotPort; game?: AIState } = {}) {
     if (!sourceCard || !player || !game) return null;
     const analysis = this.analyzeGameState(game);
-    return buildArcanistActivationContext(sourceCard, analysis);
+    return this.buildActivationContext(sourceCard, analysis);
+  }
+
+  buildActivationContext(card: StrategyCard, analysis: Analysis): AIActivationContext {
+    const activationContext = buildArcanistActivationContext(card, analysis);
+    const effect = card.effects?.find(candidate => candidate.activationCases?.length);
+    if (!effect || !analysis.game || !analysis.opponent) return activationContext;
+    // Only the actor's public simulation projection is consulted. The mode is
+    // carried by stable ID so runtime cannot reinterpret translated labels.
+    const state = { ...analysis.game, bot: analysis.player, player: analysis.opponent } as Parameters<typeof prepareSimulatedEffectActivation>[0];
+    const prepared = prepareSimulatedEffectActivation(state, card as SimulatedCardState, effect, {
+      activationContext,
+      chooseActionCase: (cases, context) => this.chooseActionCase(cases, context),
+    });
+    const caseId = prepared?.effect.activationCaseId;
+    return caseId ? { ...activationContext, decisions: { cases: { [effect.id]: caseId } } } : activationContext;
   }
 
   canUsePreview(game: AIState, previewFn: Parameters<typeof canUsePreviewGuard>[1]) {
@@ -477,7 +462,9 @@ export default class ArcanistStrategy extends BaseStrategy {
       if (hasActiveGrimoire || !hasDeckGrimoire) return [];
     }
 
-    const activationContext = buildArcanistActivationContext(card, analysis);
+    const activationContext = this.buildActivationContext(card, analysis);
+    const effect = findIgnitionEffect(card, "fieldSpell");
+    if (effect?.activationCases?.length && !activationContext.decisions?.cases?.[effect.id]) return [];
     const canActivate = this.canUsePreview(game, (actualGame) =>
       actualGame.effectEngine!.canActivateFieldSpellEffectPreview!(
         card,
@@ -511,9 +498,9 @@ export default class ArcanistStrategy extends BaseStrategy {
       indexFields: ["index", "zoneIndex"],
       findEffect: (card) => findIgnitionEffect(card, "spellTrap"),
       shouldActivate: shouldActivateSpellTrapEffect,
-      buildActivationContext: buildArcanistActivationContext,
-      canActivate: ({ card, player, activationContext }) =>
-        this.canUsePreview(game, (actualGame) =>
+      buildActivationContext: card => this.buildActivationContext(card, analysis),
+      canActivate: ({ card, player, effect, activationContext }) =>
+        (!effect.activationCases?.length || !!activationContext?.decisions?.cases?.[effect.id]) && this.canUsePreview(game, (actualGame) =>
           actualGame.effectEngine!.canActivateSpellTrapEffectPreview!(
             card,
             player,
@@ -554,6 +541,7 @@ export default class ArcanistStrategy extends BaseStrategy {
     const analysis = this.analyzeGameState(game);
     const bot = analysis.player;
     const actions = [
+      ...getGenericCostlessHandSummonActions(game).map(action => ({ ...action, priority: 10, reason: "free Arcanist body from hand" })),
       ...this.getHandIgnitionActions(game, bot, analysis),
       ...this.getFieldEffectActions(game, bot, analysis),
       ...this.getSpellTrapEffectActions(game, bot, analysis),
@@ -580,6 +568,7 @@ export default class ArcanistStrategy extends BaseStrategy {
 
   override sequenceActions(actions: AIAction[] = []) {
     const typeOrder = {
+      handSummonProcedure: 0,
       handIgnition: 0,
       fieldEffect: 1,
       spellTrapEffect: 2,
@@ -646,7 +635,7 @@ export default class ArcanistStrategy extends BaseStrategy {
     return "attack";
   }
 
-  chooseActionCase<Case extends ChoiceCase>(cases: Case[] = [], context: ChoiceContext = {}) {
+  chooseActionCase<Case extends ChoiceCase>(cases: readonly Case[] = [], context: ChoiceContext = {}) {
     if (!Array.isArray(cases) || cases.length === 0) return null;
     const source = context.source;
     const preferences =
@@ -712,12 +701,8 @@ export default class ArcanistStrategy extends BaseStrategy {
       placeSpellCard: this.placeSpellCard.bind(this),
       onAfterSummon: this.simulateArcanistAfterSummon.bind(this),
       actionOverrides: {
-        handIgnition: ({ state: simState, action: simAction }) =>
-          this.simulateHandIgnition(simState, simAction),
         spell: ({ state: simState, action: simAction }) =>
           this.simulateArcanistSpell(simState, simAction),
-        fieldEffect: ({ state: simState }) =>
-          this.simulateGrandLibraryEffect(simState),
       },
     };
   }
@@ -758,10 +743,6 @@ export default class ArcanistStrategy extends BaseStrategy {
       return;
     }
 
-    if (newCard?.name === ARCANIST_NAMES.ELEMENTALIST) {
-      newCard.cannotBeDestroyedByCardEffects = true;
-      newCard._simEffectDestructionProtected = true;
-    }
   }
 
   simulateMasterOfMirrorsNormalSummon(state: AiStateShape, player: SimulatedPlayerState, source: SimulatedCardState, action: AIAction) {
@@ -809,10 +790,6 @@ export default class ArcanistStrategy extends BaseStrategy {
 
     if (changed && action?.type === "spell" && source?.cardKind === "spell") {
       this.simulateArcanistBlueprintStorage(state, source);
-    }
-
-    if (changed && source?.name === ARCANIST_NAMES.GRIMOIRE) {
-      this.applySimulatedAzrathEquipTrigger(state, action);
     }
 
     this.applySimulatedArcanistPassiveStats(state);
@@ -938,6 +915,7 @@ export default class ArcanistStrategy extends BaseStrategy {
       (card) =>
         card?.name === ARCANIST_NAMES.GRIMOIRE &&
         !card.isFacedown &&
+        !card.effectsNegated &&
         card.equippedTo,
     );
     if (!grimoire) return;
@@ -948,10 +926,10 @@ export default class ArcanistStrategy extends BaseStrategy {
     const blueprint = {
       blueprintId: `${source.id || source.name}:${effect.id || "effect"}`,
       sourceCardId: source.id,
-      sourceCardName: source.name,
+      sourceCardName: source.name || "",
       sourceCardKind: source.cardKind,
       sourceCardSubtype: source.subtype,
-      displayName: source.name,
+      displayName: source.name || "",
       shortRulesText: source.description || "",
       effectSnapshot: JSON.parse(JSON.stringify(effect)) as typeof effect,
       _simStoredByGrimoire: true,
@@ -964,10 +942,6 @@ export default class ArcanistStrategy extends BaseStrategy {
     if (!host || !equip || !isFaceUpArcanistMonster(host)) return;
     if (host.name === ARCANIST_NAMES.AZRATH) {
       this.applySimulatedAzrathEquipTrigger(state, action);
-      return;
-    }
-    if (host.name === ARCANIST_NAMES.ELEMENTALIST) {
-      this.simulateElementalistEquipTrigger(state, host, action);
       return;
     }
     if (host.name === ARCANIST_NAMES.VIRIDIS) {
@@ -991,18 +965,6 @@ export default class ArcanistStrategy extends BaseStrategy {
     if (host.name === ARCANIST_NAMES.MASTER_OF_MIRRORS) {
       this.simulateMasterOfMirrorsEquipTrigger(state, host, action);
     }
-  }
-
-  simulateElementalistEquipTrigger(state: AiStateShape, host: SimulatedCardState, action: AIAction) {
-    if (!useSimOpt(state, "elementalist_master_destroy")) return;
-    const preference = getTargetPreferenceFor(action, "elementalist_destroy_target");
-    const candidates = (state.player?.field || []).filter(
-      (card) => card?.cardKind === "monster" && !card.isFacedown,
-    );
-    const target = bestPreferredCard(candidates, preference);
-    if (!target) return;
-    removeOpponentCard(state, target, "graveyard");
-    host._simElementalistDestroyedOnEquip = target.name;
   }
 
   simulateRecoverFromGraveyard(state: AiStateShape, host: SimulatedCardState, action: AIAction, config: { optKey: string; targetId: string; filter: (card: SimulatedCardState) => boolean; zone?: "hand" }) {
@@ -1046,88 +1008,10 @@ export default class ArcanistStrategy extends BaseStrategy {
   }
 
   applySimulatedArcanistPassiveStats(state: AiStateShape) {
-    clearSimulatedArcanistPassiveStats(state.bot);
-    clearSimulatedArcanistPassiveStats(state.player);
-
-    const apprenticeAuras = (state.bot?.field || []).filter(
-      (card) =>
-        card?.name === ARCANIST_NAMES.APPRENTICE &&
-        isFaceUpArcanistMonster(card) &&
-        hasArcanistEquip(card),
-    ).length;
-    if (apprenticeAuras > 0) {
-      const amount = apprenticeAuras * 300;
-      for (const card of state.bot?.field || []) {
-        if (!isFaceUpArcanistMonster(card)) continue;
-        const baseAtk = Number.isFinite(card.baseAtk) ? card.baseAtk : null;
-        const rawAuraAlreadyPresent =
-          baseAtk !== null &&
-          (card.atk || 0) >= baseAtk! + amount &&
-          !card._simArcanistApprenticeAuraAtk;
-        if (rawAuraAlreadyPresent) continue;
-        card.tempAtkBoost = (card.tempAtkBoost || 0) + amount;
-        card.atk = (card.atk || 0) + amount;
-        card._simArcanistApprenticeAuraAtk = amount;
-      }
-    }
-
-    const spellActivations = state._simArcanistSpellActivations || 0;
-    if (spellActivations > 0) {
-      const amount = spellActivations * 100;
-      for (const card of state.bot?.field || []) {
-        if (
-          card?.name !== ARCANIST_NAMES.ELEMENTALIST ||
-          !isFaceUpArcanistMonster(card)
-        ) {
-          continue;
-        }
-        card.tempAtkBoost = (card.tempAtkBoost || 0) + amount;
-        card.atk = (card.atk || 0) + amount;
-        card._simArcanistElementalistSpellBuffAtk = amount;
-      }
-    }
-
-    const azrathCount = (state.bot?.field || []).filter(
-      (card) =>
-        card?.name === ARCANIST_NAMES.AZRATH &&
-        isFaceUpArcanistMonster(card),
-    ).length;
-    const debuff = spellActivations * azrathCount * -100;
-    if (debuff) {
-      for (const card of state.player?.field || []) {
-        if (!card || card.cardKind !== "monster" || card.isFacedown) continue;
-        const atkDelta = Math.max(0, (card.atk || 0) + debuff) - (card.atk || 0);
-        const defDelta = Math.max(0, (card.def || 0) + debuff) - (card.def || 0);
-        card.atk = (card.atk || 0) + atkDelta;
-        card.def = (card.def || 0) + defDelta;
-        card.tempAtkBoost = (card.tempAtkBoost || 0) + atkDelta;
-        card.tempDefBoost = (card.tempDefBoost || 0) + defDelta;
-        card._simArcanistAzrathSpellDebuffAtk = atkDelta;
-        card._simArcanistAzrathSpellDebuffDef = defDelta;
-      }
-    }
+    refreshSimulatedFieldAuras(state);
   }
 
-  simulateHandIgnition(state: AiStateShape, action: AIAction) {
-    const player = state.bot;
-    const handIndex = resolveSimulatedHandIndex(player, action, "monster");
-    const card = player.hand?.[handIndex];
-    if (!card || card.name !== ARCANIST_NAMES.ALBUS) return false;
-    if (!player.field?.some(isArcanistMonster)) return true;
-    if ((player.field || []).length >= 5) return true;
-    if (!useSimOpt(state, "albus_arcanist_ice_special_summon")) return true;
-    player.hand.splice(handIndex, 1);
-    appendSimulatedFieldCard(player.field, {
-      ...card,
-      position: "attack",
-      isFacedown: false,
-      hasAttacked: false,
-      attacksUsedThisTurn: 0,
-    });
-    return true;
-  }
-
-  simulateArcanistSpell(state: AiStateShape, action: AIAction) {
+  simulateArcanistSpell(state: Parameters<typeof applyGenericSimulatedMainPhaseAction>[0], action: AIAction) {
     const player = state.bot;
     const handIndex = resolveSimulatedHandIndex(player, action, "spell");
     const card = player.hand?.[handIndex];
@@ -1149,6 +1033,7 @@ export default class ArcanistStrategy extends BaseStrategy {
       if (!host) return true;
       appendSimulatedFieldCard(player.spellTrap, card);
       player.hand.splice(handIndex, 1);
+      emitSimulatedSpellActivation(state, card, "bot", this.getPlanningSimulationOptions(state));
       card.equippedTo = host;
       if (!Array.isArray(host.equips)) host.equips = [];
       host.equips.push(card);
@@ -1198,6 +1083,7 @@ export default class ArcanistStrategy extends BaseStrategy {
       }
       removeEquipRelation(equipCost);
       pushToZone(player, "graveyard", equipCost);
+      emitSimulatedSpellActivation(state, card, "bot", this.getPlanningSimulationOptions(state));
       removeOpponentCard(state, target, "banished");
       removeFromZone(player, "spellTrap", card);
       pushToZone(player, "graveyard", card);
@@ -1207,52 +1093,4 @@ export default class ArcanistStrategy extends BaseStrategy {
     return false;
   }
 
-  simulateGrandLibraryEffect(state: AiStateShape) {
-    const player = state.bot;
-    const library = player.fieldSpell;
-    if (!library || library.name !== ARCANIST_NAMES.GRAND_LIBRARY) {
-      return false;
-    }
-    if (!useSimOpt(state, "arcanist_grand_library_ignition")) return true;
-
-    const hasMonster = (player.field || []).some(isArcanistMonster);
-    if (!hasMonster) {
-      if ((player.lp || 0) <= 2200 || (player.field || []).length >= 5) {
-        return true;
-      }
-      const analysis = this.analyzeGameState(state);
-      const candidates = (player.deck || []).filter(
-        (card) =>
-          isArcanistMonster(card) &&
-          (card.level || 0) <= 4 &&
-          card.cardKind === "monster",
-      );
-      const recruit = this.evaluateRecruitCandidate(candidates, {
-        game: state,
-        player,
-        source: library,
-        analysis,
-      }).best;
-      if (!recruit) return true;
-      removeFromZone(player, "deck", recruit);
-      player.lp = Math.max(0, (player.lp || 0) - 2000);
-      appendSimulatedFieldCard(player.field, {
-        ...recruit,
-        position: "attack",
-        isFacedown: false,
-        hasAttacked: false,
-        attacksUsedThisTurn: 0,
-      });
-      return true;
-    }
-
-    const grimoire = (player.deck || []).find(
-      (card) => card.name === ARCANIST_NAMES.GRIMOIRE,
-    );
-    if (grimoire) {
-      removeFromZone(player, "deck", grimoire);
-      pushToZone(player, "hand", grimoire);
-    }
-    return true;
-  }
 }
