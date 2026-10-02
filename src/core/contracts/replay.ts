@@ -9,7 +9,7 @@ import type {
   RecordedDecision,
   SegocOrderDecisionContext,
 } from "./decisions.js";
-import type { EventPhase, RuntimeEventName } from "./events.js";
+import type { EventPhase, RuntimeEventName, TurnCardActivationHistory } from "./events.js";
 import type {
   DecisionId,
   DuelCardId,
@@ -19,7 +19,7 @@ import type {
 
 export const CANONICAL_REPLAY_FORMAT = "shadow-duel-canonical-replay" as const;
 export const CANONICAL_REPLAY_SCHEMA_VERSION = 2 as const;
-export const CANONICAL_REPLAY_ENGINE_VERSION = "engine-rules-v9" as const;
+export const CANONICAL_REPLAY_ENGINE_VERSION = "engine-rules-v10" as const;
 
 export type SerializablePrimitive = string | number | boolean | null;
 
@@ -424,6 +424,7 @@ export interface CanonicalGameStateSnapshot {
   turn: PlayerId | string | null;
   phase: EventPhase | string | null;
   turnCounter: number;
+  cardActivationHistory?: SerializableValue;
   random: ReplayRandomState | null;
   players: {
     player: CanonicalPlayerStateSnapshot;
@@ -541,6 +542,7 @@ export interface CanonicalReplayGamePort {
   turn?: PlayerId | string | null;
   phase?: EventPhase | string | null;
   turnCounter?: number;
+  cardActivationHistory?: TurnCardActivationHistory;
   player?: ReplayRuntimePlayer;
   bot?: ReplayRuntimePlayer;
   delayedActions?: unknown[];

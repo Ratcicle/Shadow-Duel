@@ -1,9 +1,11 @@
+import { cleanupSimulatedEndTurn } from "../../src/core/ai/common/simulatedActions/lifecycle.js";
+import { hasPendingPassiveRestoration } from "../../src/core/ai/common/planningCopy.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 import Card from "../../src/core/Card.js";
 import { createPlanningCopy } from "../../src/core/ai/common/planningCopy.js";
 import { applySimulatedActions } from "../../src/core/ai/common/simulatedActions/index.js";
-import { moveCardToZone } from "../../src/core/ai/common/zones.js";
+import { refreshSimulatedFieldAuras, moveCardToZone } from "../../src/core/ai/common/zones.js";
 import { simulateMainPhaseAction } from "../../src/core/ai/shadowheart/simulation.js";
 import type { ActionOf } from "../../src/core/contracts/actions.js";
 import { cardDefinition, required } from "../helpers/fixtures.js";
@@ -131,4 +133,72 @@ test("negating passives without a supported contribution map reports an explicit
   applySimulatedActions({ state, actions: [{ type: "add_status", targetRef: "aura", status: "effectsNegated" }],
     selections: { aura: [aura] } });
   assert.deepEqual(state._simUnsupportedActions, ["add_status:passive_recalculation:conditional_status"]);
+});
+
+for (const seat of ["bot", "player"] as const) {
+  for (const change of ["face", "negation", "control"] as const) {
+    test(`B27 suppressed aura reconciles ${change} before callbacks (${seat})`, () => {
+      const copy = createPlanningCopy();
+      const source = copy.cloneCardForSim(new Card({ ...cardDefinition("Shadow-Heart Void Mage"), effects: [{
+        id: "b27_visible_aura", timing: "passive", requireZone: "field", passive: {
+          type: "field_archetype_aura_buff", archetype: "Shadow-Heart", amount: 300, stats: ["atk"], targetOwners: ["self"],
+        },
+      }] }, seat));
+      const target = copy.cloneCardForSim(new Card(cardDefinition("Shadow-Heart Scale Dragon"), seat));
+      const witness = copy.cloneCardForSim(new Card(cardDefinition("Shadow-Heart Scale Dragon"), seat));
+      const state = simulationState({ [seat]: { field: [source, target, witness] } });
+      refreshSimulatedFieldAuras(state);
+      applySimulatedActions({ state, selfId: seat, selections: { target: [target] },
+        actions: [{ type: "modify_stats_temp", targetRef: "target", atkFactor: 0 }] });
+      assert.equal(target.atk, 0);
+      assert.equal(witness.atk, 3300);
+      const action: ActionOf<"set_facedown_defense"> | ActionOf<"add_status"> | ActionOf<"take_control"> = change === "face"
+        ? { type: "set_facedown_defense", targetRef: "source" } : change === "negation"
+          ? { type: "add_status", targetRef: "source", status: "effectsNegated" }
+          : { type: "take_control", targetRef: "source" };
+      const events: string[] = [];
+      applySimulatedActions({ state, selfId: seat === "bot" ? "player" : "bot", actions: [action], selections: { source: [source] },
+        options: { emitSimulatedEvent(event) {
+          events.push(event);
+          assert.equal(witness.atk, 3000, "callbacks see the reconciled aura");
+          assert.equal(target.atk, 0);
+        } } });
+      assert.equal(witness.atk, 3000);
+      assert.equal(hasPendingPassiveRestoration(state), false);
+      assert.deepEqual(state._simUnsupportedActions || [], []);
+      if (change !== "negation") assert.equal(events.length, 1);
+      cleanupSimulatedEndTurn(state);
+      assert.equal(target.atk, change === "negation" ? 3300 : 3000);
+    });
+  }
+}
+
+test("B27 removes a proven stale contribution after its source identity was cleared", () => {
+  const copy = createPlanningCopy();
+  const source = copy.cloneCardForSim(new Card(cardDefinition("Darkness Valley"), "bot"));
+  source.fieldPresenceId = "prior-presence";
+  const target = copy.cloneCardForSim(new Card(cardDefinition("Shadow-Heart Scale Dragon"), "bot"));
+  const state = simulationState({ bot: { field: [target], fieldSpell: source } });
+  refreshSimulatedFieldAuras(state);
+  assert.equal(target.atk, 3300);
+  source.fieldPresenceId = null;
+  state.bot.fieldSpell = null;
+  state.bot.graveyard.push(source);
+  refreshSimulatedFieldAuras(state);
+  refreshSimulatedFieldAuras(state);
+  assert.equal(target.atk, 3000);
+  assert.equal(target.dynamicBuffs, null);
+});
+
+test("B27 a source outside its declared passive zone cannot reapply the aura", () => {
+  const copy = createPlanningCopy();
+  const source = copy.cloneCardForSim(new Card(cardDefinition("Darkness Valley"), "bot"));
+  const target = copy.cloneCardForSim(new Card(cardDefinition("Shadow-Heart Scale Dragon"), "bot"));
+  const state = simulationState({ bot: { field: [target], fieldSpell: source } });
+  refreshSimulatedFieldAuras(state);
+  assert.equal(target.atk, 3300);
+  assert.equal(moveCardToZone(state.bot, source, "spellTrap", state.bot, { state }), true);
+  assert.equal(target.atk, 3000);
+  refreshSimulatedFieldAuras(state);
+  assert.equal(target.atk, 3000);
 });

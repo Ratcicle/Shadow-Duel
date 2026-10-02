@@ -22,6 +22,7 @@ import type {
   ReplayMode,
 } from "./game.js";
 import type { GamePlayer } from "./player.js";
+import type { TurnCardActivationHistory } from "./events.js";
 import type {
   DamageStepId,
   DuelCardId,
@@ -764,6 +765,7 @@ export interface GameRuntimeState {
   phase: GamePhase;
   turnCounter: number;
   disposed: boolean;
+  cardActivationHistory?: TurnCardActivationHistory;
   gameOver: boolean;
   winner: PlayerId | "draw" | null;
   targetSelection:

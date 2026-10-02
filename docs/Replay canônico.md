@@ -1,7 +1,7 @@
 # Replay canônico
 
 O replay executável usa o formato `shadow-duel-canonical-replay`, schema `2` e
-`engineVersion: "engine-rules-v9"`. Ele é independente do relatório
+`engineVersion: "engine-rules-v10"`. Ele é independente do relatório
 estratégico. O importador aceita somente o schema `2`: relatórios v4 e replays
 de schemas anteriores não são partidas executáveis nesta versão.
 
@@ -181,7 +181,7 @@ caracteres do replay, usado para detectar divergências na reprodução.
 `validateCanonicalReplay(input)` recebe `unknown`, não muta a entrada e retorna
 a mesma referência somente depois de validar o documento. `setup`, `commands` e
 `decisions` e `engineVersion` são obrigatórios. A versão da engine deve ser
-`"engine-rules-v9"`; gravações sem essa versão são rejeitadas antes da validação
+`"engine-rules-v10"`; gravações sem essa versão são rejeitadas antes da validação
 profunda e da reprodução. `events`, `result` e `finalized` continuam opcionais
 na importação de arquivos do schema `2`; quando presentes, são validados
 profundamente. Os comandos e kinds de decisão permanecem os mesmos.
@@ -384,3 +384,44 @@ intermediária marcada `replayCommandHandledByCaller` deixa a captura do comando
 com o chamador que aguarda a ativação completa; o hash não é capturado entre
 a escolha e o pagamento. Cancelamentos dessas sessões gravam `pass` com o ator
 correto e são reproduzidos sem UI ou nova consulta à política da IA.
+
+### Histórico de ativações de cards no turno
+
+O passivo `activated_card_count_buff` consulta `cardActivationHistory`. O Event
+Bus registra as publicações de `spell_activated`/`trap_activated` antes dos
+listeners, com snapshots públicos do card e do ativador. A identidade
+Chain/link evita duplicação. `markChainLinkActivationNegated` retira uma
+ativação no momento da negação e atualiza os passivos antes das próximas
+ações; `chain_link_resolution` preserva a limpeza idempotente. Negação somente
+do efeito mantém a ocorrência. Ignition de Magia
+face-up e efeitos copiados emitem ativação de efeito, sem aumentar a contagem.
+
+O histórico é reiniciado no próximo turno e em um novo duelo. Os quatro
+perfis de clone preservam cópias isoladas, e os hashes canônicos incluem as
+ocorrências do turno mesmo antes de existir um beneficiário no campo. Um
+histórico vazio ou de turno anterior não acrescenta campo ao snapshot
+canônico; os hashes dos cenários genéricos existentes permanecem iguais.
+
+Este lote mantém schema `2`, `engine-rules-v9`, comandos e tipos de decisão.
+A assinatura completa do banco muda com o passivo de Elementalista e com os
+triggers obrigatórios de Albus/Azrath; gravações dos bancos anteriores são
+rejeitadas pela verificação de assinatura antes da reprodução. O histórico
+é reconstruído pelos eventos gravados, sem migração nem escolhas ao vivo.
+
+### Magias Baixadas — engine-rules-v10
+
+A versão atual é `engine-rules-v10`, com schema `2`. Uma Magia Baixada na
+linha de Magias/Armadilhas prepara seu `on_play`; virar a fonte no compromisso
+não troca esse efeito por um Ignition. Os comandos e tipos de decisão são os
+mesmos. O Grimório Baixado pode equipar sem ter um efeito armazenado, usando
+as escolhas de alvo e as respostas de Chain existentes.
+
+Essa correção muda o resultado de comandos que v9 rejeitava. Replays v9 e
+anteriores são rejeitados pela versão da engine antes da reprodução, sem
+migração. A assinatura do banco permanece `726d0a77`; o hash do replay
+completo muda com a versão, enquanto os hashes de estado dos cenários
+genéricos permanecem iguais.
+
+A prova de origem usada pela simulação para restaurar contribuições
+dinâmicas fica em um `WeakMap` interno. Ela não acrescenta campos ao replay
+ou ao snapshot canônico. As seções v9 acima registram os lotes anteriores.

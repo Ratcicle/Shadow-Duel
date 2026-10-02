@@ -251,8 +251,8 @@ test("replay canônico headless termina com o mesmo hash", async () => {
     ["a897fa58", "297e0fe8"],
   );
   assert.equal(replay.result.finalStateHash, "297e0fe8");
-  assert.equal(hashCanonicalValue(replay), "e0ed191d");
-  assert.equal(JSON.stringify(replay).length, 10491);
+  assert.equal(hashCanonicalValue(replay), "bf41bda0");
+  assert.equal(JSON.stringify(replay).length, 10492);
 
   const result = await replayCanonicalDuel(replay);
   assert.equal(result.ok, true);

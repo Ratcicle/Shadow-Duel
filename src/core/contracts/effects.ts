@@ -363,6 +363,7 @@ export type EffectCondition = StructuredEffectCondition | LegacyTriggerGate;
 
 export type PassiveRuleType =
   | "activation_negation_protection"
+  | "activated_card_count_buff"
   | "additional_normal_summon"
   | "archetype_count_buff"
   | "banish_protection"

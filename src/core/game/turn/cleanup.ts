@@ -1,3 +1,4 @@
+import { pruneModeledPassiveContributions } from "../../effects/passives/passiveBuffs.js";
 import { expireEffectNegation } from "../../effects/negation.js";
 /**
  * cleanup.js
@@ -298,6 +299,7 @@ export function cleanupTempBoosts(
       card.tempDefBoost = 0;
     }
     delete card.temporarySuppressedDynamicBuffStatsByKey;
+    pruneModeledPassiveContributions(card);
 
     // Restore stats if they were set to zero
     if (card.originalAtk != null) {

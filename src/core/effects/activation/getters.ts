@@ -62,7 +62,8 @@ function ignitionMatchesActivationZone(
 /**
  * Get the activation effect for a Spell/Trap card.
  * For traps: on_activate or ignition timing
- * For spells: ignition timing (or on_play if fromHand)
+ * For spells: on_play when played from hand or activated from Set;
+ * otherwise use the current zone's ignition effect.
  */
 export function getSpellTrapActivationEffect(
   this: Pick<ActivationEngineHost, "getHandActivationEffect">,
@@ -88,6 +89,9 @@ export function getSpellTrapActivationEffect(
   if (card.cardKind === "spell") {
     const fromHand = options.fromHand === true;
     if (fromHand) {
+      return this.getHandActivationEffect(card);
+    }
+    if (card.isFacedown === true && activationZone === "spellTrap") {
       return this.getHandActivationEffect(card);
     }
     const ignition = card.effects.find((e) =>

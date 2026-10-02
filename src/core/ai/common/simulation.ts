@@ -1,4 +1,5 @@
 import { expireEffectNegation } from "../../effects/negation.js";
+import { recordTurnCardActivation } from "../../game/events/activationHistory.js";
 import { projectStoredBlueprintActivation } from "../../effects/blueprints/index.js";
 import { projectEffectActivationCase } from "../../effects/activation/cases.js";
 import { hasActionZoneCandidates } from "./actionValidation.js";
@@ -7,7 +8,7 @@ import { getBaseLpCost } from "../../effects/costs/lpCost.js";
 import { resolveActionPlayer, resolveSimulatedLpCost } from "./simulatedActions/shared.js";
 import { resolveTargetsForAction, captureSimulatedReferences, recordCompletedSimulatedSummon } from "./simulatedActions/shared.js";
 import { appendSimulatedZoneCard } from "./zones.js";
-import { appendSimulatedFieldCard } from "./zones.js";
+import { appendSimulatedFieldCard, refreshSimulatedFieldAuras } from "./zones.js";
 import {
   applySimulatedActions,
   evaluateSimulatedConditions,
@@ -1745,6 +1746,8 @@ export function emitSimulatedSpellActivation(
 ): void {
   if (card.cardKind !== "spell") return;
   const player = selfId === "player" ? state.player : state.bot;
+  recordTurnCardActivation(state, { card, player });
+  refreshSimulatedFieldAuras(state);
   dispatchSimulatedEvent(state, "spell_activated", { card, player }, { ...options, enableSimulatedEvents: true });
 }
 

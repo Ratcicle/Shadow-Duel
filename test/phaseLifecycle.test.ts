@@ -4,6 +4,7 @@ import Card from "../src/core/Card.js";
 import type { CardConstructorData } from "../src/core/contracts/cards.js";
 import { cardDefinition, required } from "./helpers/fixtures.js";
 import { completeTestSelections, createRuntimeGame, placeFieldCards } from "./helpers/game.js";
+import { getTurnCardActivations } from "../src/core/game/events/activationHistory.js";
 
 function setup(t: TestContext, turn: "player" | "bot" = "player") {
   const game = createRuntimeGame({ laboratoryMode: true, laboratoryUseBot: false, captureReplay: false, randomSeed: 73 });
@@ -18,6 +19,27 @@ function setup(t: TestContext, turn: "player" | "bot" = "player") {
     owner.deck.push(...Array.from({ length: 8 }, () => new Card(cardDefinition(1), owner.id)));
   }
   return game;
+}
+
+for (const seat of ["player", "bot"] as const) {
+  test(`B17 continuous activation count clears for both players at the next turn and on duel reset (${seat})`, async t => {
+    const game = setup(t, seat), owner = game[seat], source = new Card(cardDefinition(313), seat);
+    placeFieldCards(owner.field, source);
+    game.ui.showChainResponseModal = async () => null;
+    for (const actor of [game.player, game.bot]) {
+      await game.emit("spell_activated", { card: new Card(cardDefinition(310), actor.id), player: actor });
+    }
+    assert.equal(source.atk, source.baseAtk + 200);
+    await completeTestSelections(game, Promise.resolve(game.endTurn()));
+    assert.equal(game.turnCounter, 3);
+    assert.equal(getTurnCardActivations(game).length, 0);
+    assert.equal(source.atk, source.baseAtk);
+    await game.emit("spell_activated", { card: new Card(cardDefinition(301), seat), player: owner });
+    assert.equal(getTurnCardActivations(game).length, 1);
+    game.resetDuelState();
+    assert.equal(getTurnCardActivations(game).length, 0);
+    assert.deepEqual(game.cardActivationHistory, { turnCounter: 0, entries: [] });
+  });
 }
 
 const fastDefinitions: Record<"quick" | "quick-play", CardConstructorData> = {

@@ -31,7 +31,7 @@ interface LifecycleProgressTracker {
 }
 
 type LifecycleHost = PhaseTransitionHost &
-  Pick<FullGameHost, "phaseDelayMs" | "effectEngine"> & {
+  Pick<FullGameHost, "phaseDelayMs" | "effectEngine" | "cardActivationHistory"> & {
   _arenaTracker?: LifecycleProgressTracker | null;
   devLog?(code: string, detail?: unknown): void;
   resetOncePerTurnUsage(reason?: string): void;
@@ -136,6 +136,7 @@ function scheduleAiMoveAfterPaint(game: LifecycleHost, actor: GamePlayer) {
 export async function startTurn(this: LifecycleHost) {
   if (this.gameOver || this.isDisposed?.()) return;
   this.turnCounter += 1;
+  this.cardActivationHistory = { turnCounter: this.turnCounter, entries: [] };
   this._arenaTracker?.recordProgress?.("turn_start", this);
 
   const activePlayerName =

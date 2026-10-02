@@ -1,3 +1,5 @@
+import { getModeledPassiveContributions } from "../../src/core/effects/passives/passiveBuffs.js";
+import { hasPendingPassiveRestoration } from "../../src/core/ai/common/planningCopy.js";
 import { cardDefinition, required, unsafeFixture } from "../helpers/fixtures.js";
 import Card from "../../src/core/Card.js";
 import { createRuntimeGame } from "../helpers/game.js";
@@ -13,12 +15,121 @@ import { turnLineSearch } from "../../src/core/ai/TurnLineSearch.js";
 import { cloneBotGameState } from "../../src/core/bot/simulationBridge.js";
 import { fingerprintPlanningState } from "../../src/core/ai/common/stateFingerprint.js";
 import { processSimulatedDelayedActions } from "../../src/core/ai/common/simulatedActions/lifecycle.js";
-import { detachSimulatedEquip } from "../../src/core/ai/common/zones.js";
+import { detachSimulatedEquip, moveCardToZone, refreshSimulatedFieldAuras } from "../../src/core/ai/common/zones.js";
+import { getTurnCardActivations, recordTurnCardActivation } from "../../src/core/game/events/activationHistory.js";
 import { destroySimulatedCard, replaceSimulatedBattleDestruction } from "../../src/core/ai/common/simulatedActions/destruction.js";
 import { placeFieldCards } from "../helpers/game.js";
 import { applyGenericSimulatedMainPhaseAction } from "../../src/core/ai/common/simulation.js";
+import { resolveSimulatedEndPhase } from "../../src/core/ai/common/simulation.js";
+import ArcanistStrategy from "../../src/core/ai/ArcanistStrategy.js";
 
 type BotCloneCard = Parameters<typeof cloneBotGameState>[0]["hand"][number];
+
+for (const profile of ["bot", "beamGreedy", "gameTree", "turnLine"] as const) {
+  for (const actor of ["player", "bot"] as const) {
+    test(`final equip clone ${profile} preserves temporary half and canonical usage (${actor})`, async t => {
+      const game = createRuntimeGame({ laboratoryMode: true, captureReplay: false, chainResponseTimeoutMs: 0 });
+      t.after(() => game.dispose("final_equip_clone"));
+      game.turn = actor; game.phase = "main1"; game.turnCounter = 3; game.disablePresentationDelays = true;
+      game.player.controllerType = game.bot.controllerType = "ai";
+      game.ui.showChainResponseModal = async () => null;
+      const self = game[actor], opponent = game.getOpponent(self);
+      const host = new Card(cardDefinition(314), actor), equip = new Card(cardDefinition(301), actor);
+      const target = new Card(cardDefinition(306), opponent.id);
+      placeFieldCards(self.field, host); placeFieldCards(opponent.field, target); self.hand.push(equip);
+      assert.equal((await game.tryActivateSpell(equip, 0, null, { owner: self })).success, true);
+      assert.deepEqual([target.atk, target.def], [700, 850]);
+      let captured: unknown;
+      const probe = {
+        bot: self,
+        generateMainPhaseActions(state: unknown) { if (profile === "gameTree") captured ??= state; return [CLONE_PROBE_ACTION]; },
+        simulateMainPhaseAction(state: unknown) { captured ??= state; requireCloneState(state).bot.lp += 1; },
+        simulateSpellEffect: () => undefined,
+        evaluateBoardV2: (state: unknown) => requireCloneState(state).bot.lp,
+        evaluateBoard: (state: unknown) => requireCloneState(state).bot.lp,
+      };
+      if (profile === "bot") captured = cloneBotGameState(unsafeFixture<Parameters<typeof cloneBotGameState>[0]>(
+        { ...self, strategy: probe, resolveOpponent: () => opponent }, "Minimal Bot clone actor supplies the live equip effect and usage"),
+        unsafeFixture<Parameters<typeof cloneBotGameState>[1]>(game, "Live Game supplies the modifier and canonical usage projection"));
+      else if (profile === "beamGreedy") await greedySearchWithEvalV2(game, probe, { preGeneratedActions: [CLONE_PROBE_ACTION] });
+      else if (profile === "gameTree") gameTreeSearch(game, { ...probe, bot: { debug: false } }, self, 1);
+      else await turnLineSearch(unsafeFixture<Parameters<typeof turnLineSearch>[0]>(game, "Live Game supplies this clone profile's fields"),
+        probe, { maxDepth: 1, beamWidth: 1, nodeBudget: 2 });
+      const state = unsafeFixture<Parameters<typeof applyGenericSimulatedMainPhaseAction>[0]>(required(captured), "Captured clone has a canonical simulation brand");
+      const clonedHost = required(state.bot.field.find(card => card.id === 314));
+      const clonedTarget = required(state.player.field.find(card => card.id === 306));
+      const clonedEquip = required(state.bot.spellTrap.find(card => card.id === 301));
+      const effect = required(clonedHost.effects?.find(effect => effect.id === "azrath_equip_halve"));
+      assert.equal(clonedEquip.equippedTo, clonedHost);
+      assert.equal(canUseSimulatedEffectUsage(state, effect, clonedHost, actor, true), false);
+      const before = fingerprintPlanningState(state), modifier = clonedTarget.tempAtkBoost;
+      clonedTarget.tempAtkBoost = 0;
+      assert.notEqual(fingerprintPlanningState(state), before, "expiry contributions must distinguish equal current totals");
+      clonedTarget.tempAtkBoost = required(modifier);
+      resolveSimulatedEndPhase(state);
+      assert.deepEqual([clonedTarget.atk, clonedTarget.def], [1500, 1800]);
+      assert.deepEqual([target.atk, target.def], [700, 850], "cleanup in a search branch cannot change the live duel");
+      state.turnCounter++;
+      new ArcanistStrategy(self).simulateArcanistOnEquipTriggers(state, clonedHost, clonedEquip, { type: "spell", index: 0, cardId: 301 });
+      assert.deepEqual([clonedTarget.atk, clonedTarget.def], [750, 900]);
+      assert.equal(canUseSimulatedEffectUsage(state, effect, clonedHost, actor, true), false);
+      assert.deepEqual([target.atk, target.def], [700, 850]);
+      assert.deepEqual(state._simUnsupportedActions || [], []);
+    });
+  }
+}
+
+for (const profile of ["bot", "beamGreedy", "gameTree", "turnLine"] as const) {
+  for (const actor of ["bot", "player"] as const) {
+    test(`${profile} preserves public turn card activation history and isolates future stat beneficiaries (${actor})`, async t => {
+      const game = createRuntimeGame({ laboratoryMode: true, captureReplay: false });
+      t.after(() => game.dispose("activation_history_clone_test"));
+      game.turn = actor; game.phase = "main1"; game.turnCounter = 3;
+      const self = game[actor], opponent = game[actor === "bot" ? "player" : "bot"];
+      const source = new Card(cardDefinition(313), actor);
+      self.hand.push(source);
+      recordTurnCardActivation(game, { card: new Card(cardDefinition(310), actor), player: self, chainId: 1, linkId: 1 });
+      recordTurnCardActivation(game, { card: new Card(cardDefinition(304), opponent.id), player: opponent, chainId: 2, linkId: 1 });
+      let captured: unknown;
+      const strategy = {
+        bot: self,
+        generateMainPhaseActions(state: unknown) { if (profile === "gameTree") captured ??= state; return [CLONE_PROBE_ACTION]; },
+        simulateMainPhaseAction(state: unknown) { captured ??= state; requireCloneState(state).bot.lp += 1; },
+        simulateSpellEffect: () => undefined,
+        evaluateBoardV2: (state: unknown) => requireCloneState(state).bot.lp,
+        evaluateBoard: (state: unknown) => requireCloneState(state).bot.lp,
+      };
+      if (profile === "bot") {
+        captured = cloneBotGameState(unsafeFixture<Parameters<typeof cloneBotGameState>[0]>(
+          { ...self, strategy, resolveOpponent: () => opponent }, "Minimal Bot actor for the public activation history projection"),
+        unsafeFixture<Parameters<typeof cloneBotGameState>[1]>(game, "Live Game supplies turn activation history"));
+      } else if (profile === "beamGreedy") await greedySearchWithEvalV2(game, strategy, { preGeneratedActions: [CLONE_PROBE_ACTION] });
+      else if (profile === "gameTree") gameTreeSearch(game, { ...strategy, bot: { debug: false } }, self, 1);
+      else await turnLineSearch(unsafeFixture<Parameters<typeof turnLineSearch>[0]>(game, "Live Game supplies this profile's public metadata"),
+        strategy, { maxDepth: 1, beamWidth: 1, nodeBudget: 2 });
+      const state = unsafeFixture<AiStateShape>(required(captured), "The selected planner profile captured a canonical simulation state");
+      assert.deepEqual(state.cardActivationHistory, game.cardActivationHistory);
+      assert.notEqual(state.cardActivationHistory, game.cardActivationHistory);
+      const clonedEntry = required(getTurnCardActivations(state)[0]), liveEntry = required(getTurnCardActivations(game)[0]);
+      assert.notEqual(clonedEntry, liveEntry);
+      assert.notEqual(clonedEntry.card, liveEntry.card);
+      assert.notEqual(clonedEntry.card.archetypes, liveEntry.card.archetypes);
+      const before = fingerprintPlanningState(state);
+      recordTurnCardActivation(state, { card: new Card(cardDefinition(301), actor), player: state.bot });
+      assert.notEqual(fingerprintPlanningState(state), before);
+      assert.equal(getTurnCardActivations(game).length, 2);
+      const clonedSource = required(state.bot.hand.find(card => card.id === 313));
+      moveCardToZone(state.bot, clonedSource, "field", state.bot, { state });
+      refreshSimulatedFieldAuras(state);
+      assert.equal(clonedSource.atk, source.baseAtk + 300);
+      assert.equal(source.atk, source.baseAtk);
+      assert.ok(self.hand.includes(source));
+      state.turnCounter++;
+      refreshSimulatedFieldAuras(state);
+      assert.equal(clonedSource.atk, source.baseAtk);
+    });
+  }
+}
 
 function makePlayer(id: "player" | "bot") {
   const nested = { stats: ["atk"] };
@@ -744,6 +855,58 @@ for (const profile of CLONE_PROFILES) {
       state.turnCounter += 1;
       assert.equal(canUseSimulatedEffectUsage(state, shared, card, "bot"), true);
       assert.equal(game.canUseOncePerTurn(source, self, shared).ok, false, "planning did not mutate live ledger");
+    });
+  }
+}
+
+for (const profile of ["bot", "beamGreedy", "gameTree", "turnLine"] as const) {
+  for (const actor of ["player", "bot"] as const) {
+    test(`B27 ${profile} clones origin after aura source departure (${actor})`, async t => {
+      const game = createRuntimeGame({ laboratoryMode: true, captureReplay: false });
+      t.after(() => game.dispose("b27_clone"));
+      game.turn = actor; game.phase = "main1"; game.turnCounter = 3;
+      const self = game[actor], opponent = game[actor === "bot" ? "player" : "bot"];
+      const target = new Card(cardDefinition("Shadow-Heart Scale Dragon"), actor);
+      const aura = new Card({ ...cardDefinition("Shadow-Heart Void Mage"), effects: [{
+        id: "b27_departing_source", timing: "passive", requireZone: "field", passive: {
+          type: "field_archetype_aura_buff", archetype: "Shadow-Heart", amount: 300, stats: ["atk"],
+        },
+      }] }, actor);
+      placeFieldCards(self.field, target, aura);
+      aura.fieldPresenceId = "departed-aura-presence";
+      game.effectEngine.updatePassiveBuffs();
+      await game.effectEngine.applyActions([{ type: "modify_stats_temp", targetRef: "target", atkFactor: 0 }],
+        { player: self, opponent, source: aura }, { target: [target] });
+      await game.moveCard(aura, self, "graveyard", { fromZone: "field" });
+      game.effectEngine.updatePassiveBuffs();
+      assert.equal(aura.fieldPresenceId == null, true);
+      assert.equal(getModeledPassiveContributions(target).length, 1);
+      let captured: unknown;
+      const probe = {
+        bot: self,
+        generateMainPhaseActions(state: unknown) { if (profile === "gameTree") captured ??= state; return [CLONE_PROBE_ACTION]; },
+        simulateMainPhaseAction(state: unknown) { captured ??= state; requireCloneState(state).bot.lp += 1; },
+        simulateSpellEffect: () => undefined,
+        evaluateBoardV2: (state: unknown) => requireCloneState(state).bot.lp,
+        evaluateBoard: (state: unknown) => requireCloneState(state).bot.lp,
+      };
+      if (profile === "bot") captured = cloneBotGameState(unsafeFixture<Parameters<typeof cloneBotGameState>[0]>(
+        { ...self, strategy: probe, resolveOpponent: () => opponent }, "Minimal actor uses the canonical Bot clone"),
+        unsafeFixture<Parameters<typeof cloneBotGameState>[1]>(game, "Live game supplies proven passive origin"));
+      else if (profile === "beamGreedy") await greedySearchWithEvalV2(game, probe, { preGeneratedActions: [CLONE_PROBE_ACTION] });
+      else if (profile === "gameTree") gameTreeSearch(game, { ...probe, bot: { debug: false } }, self, 1);
+      else await turnLineSearch(unsafeFixture<Parameters<typeof turnLineSearch>[0]>(game, "Live game clone profile"),
+        probe, { maxDepth: 1, beamWidth: 1, nodeBudget: 2 });
+      const state = unsafeFixture<Parameters<typeof resolveSimulatedEndPhase>[0]>(required(captured), "Captured canonical profile");
+      const cloned = required(state.bot.field[0]);
+      assert.equal(hasPendingPassiveRestoration(state), false);
+      assert.deepEqual(getModeledPassiveContributions(cloned), getModeledPassiveContributions(target));
+      resolveSimulatedEndPhase(state);
+      resolveSimulatedEndPhase(state);
+      assert.equal(cloned.atk, 3000);
+      assert.deepEqual(getModeledPassiveContributions(cloned), []);
+      assert.equal(target.atk, 0);
+      assert.equal(getModeledPassiveContributions(target).length, 1);
     });
   }
 }

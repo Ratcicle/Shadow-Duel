@@ -1,4 +1,5 @@
 import { getNegationContributions } from "../../effects/negation.js";
+import { getTurnCardActivations } from "../events/activationHistory.js";
 import { cardDatabase } from "../../../data/cards.js";
 import type { RawCardDefinition } from "../../contracts/cards.js";
 import {
@@ -358,6 +359,9 @@ export function createCanonicalStateSnapshot(
     turn: game.turn ?? null,
     phase: game.phase ?? null,
     turnCounter: Number(game.turnCounter || 0),
+    ...(getTurnCardActivations(game).length ? {
+      cardActivationHistory: stableValue(getTurnCardActivations(game)) ?? [],
+    } : {}),
     random: game.getRandomState?.() || null,
     players: {
       player: playerState(game, game.player),

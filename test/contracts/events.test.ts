@@ -35,6 +35,8 @@ import {
   resolveEvent,
   resolveEventEntries,
 } from "../../src/core/game/events/eventResolver.js";
+import { countTurnCardActivations, getTurnCardActivations, recordTurnCardActivation } from "../../src/core/game/events/activationHistory.js";
+import { hashCanonicalGameState } from "../../src/core/game/replay/canonical.js";
 
 interface TestBusHost extends EventBusHost {
   trace: string[];
@@ -104,6 +106,61 @@ function createBusHost(): TestBusHost {
   } satisfies TestBusHost;
   return host;
 }
+
+test("turn card activations are public snapshots, idempotent before listeners and distinct from effect activations", async () => {
+  const host: TestBusHost = createBusHost();
+  const card = { id: 301, name: "Activated Equip", cardKind: "spell" as const, archetype: "Arcanist", archetypes: ["Arcanist"] };
+  const player = createPlayer("player");
+  let refreshes = 0;
+  host.effectEngine = { updatePassiveBuffs: () => { refreshes++; } };
+  host.on("spell_activated", () => assert.equal(countTurnCardActivations(host, { archetype: "Arcanist" }), 1));
+  const payload = { card, player, chainId: 5, linkId: "link_1" };
+  await host.emit("spell_activated", payload);
+  await host.emit("spell_activated", payload);
+  assert.equal(refreshes, 1);
+  await host.emit("effect_activated", { ...payload, effectId: "faceup_ignition" });
+  assert.equal(getTurnCardActivations(host).length, 1);
+  card.name = "Changed later";
+  card.archetypes.push("Other");
+  const entry = getTurnCardActivations(host)[0];
+  assert.equal(entry?.card.name, "Activated Equip");
+  assert.deepEqual(entry?.card.archetypes, ["Arcanist"]);
+  assert.equal(entry?.playerId, "player");
+  assert.notEqual(entry?.card, card);
+  assert.notEqual(entry?.card.archetypes, card.archetypes);
+  assert.equal(countTurnCardActivations(host, { cardKind: "spell" }, "bot"), 0);
+  await host.emit("trap_activated", { card: { id: 99, name: "Public Trap", cardKind: "trap" },
+    player: createPlayer("bot"), chainId: 6, linkId: "link_2" });
+  assert.equal(countTurnCardActivations(host, { cardKind: "trap" }, "bot"), 1);
+  assert.equal(refreshes, 2);
+});
+
+test("only activation negation removes the matching published card, including latent canonical state", async () => {
+  const host: TestBusHost = createBusHost();
+  const before = hashCanonicalGameState(host);
+  const card = { id: 301, name: "Activated Equip", cardKind: "spell" as const, archetype: "Arcanist" };
+  const payload = { card, player: createPlayer("player"), chainId: 5, linkId: 1 };
+  await host.emit("spell_activated", payload);
+  assert.notEqual(hashCanonicalGameState(host), before, "history matters even with no beneficiary on field yet");
+  const outcome = { stage: "completed" as const, chainId: 5, linkId: 1,
+    chainLevel: 1, controllerId: "player", effectId: "equip" };
+  host.notify("chain_link_resolution", { ...outcome, activationNegated: false, effectNegated: true });
+  assert.equal(getTurnCardActivations(host).length, 1);
+  host.notify("chain_link_resolution", { ...outcome, linkId: 2, activationNegated: true });
+  assert.equal(getTurnCardActivations(host).length, 1);
+  host.notify("chain_link_resolution", { ...outcome, activationNegated: true });
+  assert.equal(getTurnCardActivations(host).length, 0);
+  assert.equal(hashCanonicalGameState(host), before);
+  recordTurnCardActivation(host, payload);
+  host.turnCounter = 8;
+  assert.equal(countTurnCardActivations(host), 0, "advancing a headless counter must invalidate old history");
+  const staleHash = hashCanonicalGameState(host);
+  delete host.cardActivationHistory;
+  assert.equal(hashCanonicalGameState(host), staleHash);
+  host.disposed = true;
+  await host.emit("spell_activated", payload);
+  assert.equal(getTurnCardActivations(host).length, 0);
+});
 
 test("event name manifests keep the three runtime domains exact and frozen", () => {
   assert.equal(DUEL_EVENT_NAMES.length, 23);

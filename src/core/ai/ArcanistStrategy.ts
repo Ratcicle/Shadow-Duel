@@ -1,4 +1,6 @@
-import { appendSimulatedFieldCard, refreshSimulatedFieldAuras } from "./common/zones.js";
+import { appendSimulatedFieldCard, attachSimulatedEquip, refreshSimulatedFieldAuras } from "./common/zones.js";
+import { applySimulatedActions } from "./common/simulatedActions/index.js";
+import { matchesTargetFilters } from "./common/targetSelection.js";
 import { getAvailableFieldSlots } from "../game/zones/placement.js";
 import type { AIAction, AIPlannedAction, AIPlanningContext, AIPlanningProfile, AIState, AIStrategyBotPort, AIActivationContext, StrategyRuntimePort } from "../contracts/ai.js";
 import type { AiStateShape, SimulatedCardState, SimulatedPlayerState } from "../contracts/aiState.js";
@@ -44,6 +46,7 @@ import {
   resolveSimulatedHandIndex,
   emitSimulatedSpellActivation,
   prepareSimulatedEffectActivation,
+  normalizePlanningOwnerPolicy,
 } from "./common/simulation.js";
 import {
   getCardInstanceId,
@@ -51,6 +54,7 @@ import {
   pushToZone,
   removeFromZone,
   useSimOpt as useSimOptBucket,
+  markSimulatedEffectUsage,
 } from "./common/simStateUtils.js";
 import {
   ARCANIST_NAMES,
@@ -73,7 +77,6 @@ import {
 import {
   buildArcanistActivationContext,
   evaluateRecruitCandidate as evaluateArcanistRecruitCandidate,
-  getBestGrimoireHostNames,
   getTributeRequirementFor as getArcanistTributeRequirementFor,
   rankSearchCandidates as rankArcanistSearchCandidates,
   selectBestTributes as selectBestArcanistTributes,
@@ -496,9 +499,18 @@ export default class ArcanistStrategy extends BaseStrategy {
       type: "spellTrapEffect",
       sourceZone: "spellTrap",
       indexFields: ["index", "zoneIndex"],
-      findEffect: (card) => findIgnitionEffect(card, "spellTrap"),
-      shouldActivate: shouldActivateSpellTrapEffect,
-      buildActivationContext: card => this.buildActivationContext(card, analysis),
+      cardFilter: card => card.cardKind === "spell" && (!card.isFacedown ||
+        (card.setTurn ?? card.turnSetOn ?? Number.POSITIVE_INFINITY) < (game.turnCounter ?? 0)),
+      findEffect: card => card.isFacedown
+        ? card.effects?.find(effect => effect.timing === "on_play") || null
+        : findIgnitionEffect(card, "spellTrap"),
+      shouldActivate: (card, currentAnalysis) => card.isFacedown
+        ? shouldPlaySpell(card, currentAnalysis)
+        : shouldActivateSpellTrapEffect(card, currentAnalysis),
+      buildActivationContext: (card, _currentAnalysis, { effect }) => ({
+        ...this.buildActivationContext(card, analysis), effectId: effect.id,
+      }),
+      includeEffectId: true,
       canActivate: ({ card, player, effect, activationContext }) =>
         (!effect.activationCases?.length || !!activationContext?.decisions?.cases?.[effect.id]) && this.canUsePreview(game, (actualGame) =>
           actualGame.effectEngine!.canActivateSpellTrapEffectPreview!(
@@ -678,13 +690,48 @@ export default class ArcanistStrategy extends BaseStrategy {
   }
 
   override simulateMainPhaseAction(state: Parameters<StrategyRuntimePort["simulateMainPhaseAction"]>[0], action: AIPlannedAction): ReturnType<StrategyRuntimePort["simulateMainPhaseAction"]> {
+    const targetPreferences = getActivationTargetPreferences(action as AIAction);
+    const preferenceOptions = Object.keys(targetPreferences).length ? { targetPreferences } : {};
+    const spellTrapIndex = action.type === "spellTrapEffect"
+      ? Number.isInteger(action.zoneIndex) ? action.zoneIndex : action.index : undefined;
+    const setEquip = spellTrapIndex === undefined ? null : state.bot.spellTrap[spellTrapIndex];
+    const activatingSetSpell = setEquip?.cardKind === "spell" && setEquip.isFacedown ? setEquip : null;
+    const setSpellEffect = activatingSetSpell?.effects?.find(effect => effect.timing === "on_play");
+    let setSpellResolved = false;
+    const activatingSetGrimoire = setEquip?.name === ARCANIST_NAMES.GRIMOIRE && setEquip.isFacedown ? setEquip : null;
+    if (activatingSetSpell && (setSpellEffect || activatingSetGrimoire)) {
+      if (!setSpellEffect || !prepareSimulatedEffectActivation(state, activatingSetSpell, setSpellEffect, normalizePlanningOwnerPolicy({
+        ...this.getPlanningSimulationOptions(state), ...preferenceOptions, activationContext: (action as AIAction).activationContext,
+      }))) return state;
+    }
     const beforeSignature = getArcanistSimStateSignature(state as AiStateShape);
+    const simulationOptions = this.getPlanningSimulationOptions(state);
     const result = applyGenericSimulatedMainPhaseAction(state as Parameters<typeof applyGenericSimulatedMainPhaseAction>[0], action as AIAction, {
-      ...this.getPlanningSimulationOptions(state),
+      ...simulationOptions,
+      ...preferenceOptions,
       activationContext: (action as AIAction).activationContext,
+      onEffectActivated: activation => {
+        simulationOptions.onEffectActivated?.(activation);
+        if (activatingSetSpell && setSpellEffect && "card" in activation && activation.card === activatingSetSpell &&
+            "effect" in activation && activation.effect && typeof activation.effect === "object" &&
+            "id" in activation.effect && activation.effect.id === setSpellEffect.id) {
+          const persistent = ["equip", "continuous", "field"].includes(activatingSetSpell.subtype || "");
+          setSpellResolved = !activatingSetSpell.effectsNegated && (!persistent ||
+            (state.bot.spellTrap.includes(activatingSetSpell) && !activatingSetSpell.isFacedown));
+        }
+      },
     });
+    const equippedHost = activatingSetGrimoire?.equippedTo;
+    if (activatingSetGrimoire && equippedHost && typeof equippedHost === "object" &&
+        !activatingSetGrimoire.isFacedown && state.bot.spellTrap.includes(activatingSetGrimoire) &&
+        state.bot.field.includes(equippedHost)) {
+      this.simulateArcanistOnEquipTriggers(state, equippedHost, activatingSetGrimoire, action as AIAction);
+    }
     const changed = getArcanistSimStateSignature(state as AiStateShape) !== beforeSignature;
-    this.applyArcanistSimulationPostProcess(state as AiStateShape, action as AIAction, { changed });
+    if (setSpellResolved && activatingSetSpell) this.simulateArcanistBlueprintStorage(state, activatingSetSpell);
+    this.applyArcanistSimulationPostProcess(state as AiStateShape, action as AIAction, {
+      changed, activatedFromSet: setSpellResolved, ...(activatingSetSpell ? { source: activatingSetSpell } : {}),
+    });
     return result;
   }
 
@@ -778,12 +825,16 @@ export default class ArcanistStrategy extends BaseStrategy {
     source._simMasterMirrorsShuffleDraw = true;
   }
 
-  applyArcanistSimulationPostProcess(state: AiStateShape, action: AIAction, { changed = false } = {}) {
-    const source = this.resolveSimulatedActionSource(state, action);
-    if (changed && this.shouldCountSimulatedInkCounter(action, source)) {
+  applyArcanistSimulationPostProcess(state: AiStateShape, action: AIAction, {
+    changed = false, activatedFromSet = false, source = this.resolveSimulatedActionSource(state, action),
+  }: { changed?: boolean; activatedFromSet?: boolean; source?: StrategyCard | null } = {}) {
+    const countInk = activatedFromSet
+      ? source?.subtype === "normal" && isArcanistSpell(source)
+      : this.shouldCountSimulatedInkCounter(action, source);
+    if (changed && countInk) {
       addInkCounterToFaceUpRivers(state.bot, 1);
     }
-    if (changed && this.shouldCountSimulatedArcanistSpellActivation(action, source)) {
+    if (changed && ((activatedFromSet && isArcanistSpell(source)) || this.shouldCountSimulatedArcanistSpellActivation(action, source))) {
       state._simArcanistSpellActivations =
         (state._simArcanistSpellActivations || 0) + 1;
     }
@@ -868,42 +919,6 @@ export default class ArcanistStrategy extends BaseStrategy {
     target._simArcanistLightningAttackLock = true;
   }
 
-  applySimulatedAzrathEquipTrigger(state: AiStateShape, action: AIAction) {
-    const preferences = getActivationTargetPreferences(action);
-    const hostPreference = preferences.grimoire_equip_target || {};
-    const hosts = (state.bot?.field || []).filter(isFaceUpArcanistMonster);
-    const equippedAzrath = hosts.find(
-      (card) =>
-        card?.name === ARCANIST_NAMES.AZRATH &&
-        hasArcanistEquip(card) &&
-        !card._simArcanistAzrathEquipHalveUsed,
-    );
-    if (!equippedAzrath) return;
-
-    const hostWasPreferred =
-      (hostPreference.preferredNames || []).includes(ARCANIST_NAMES.AZRATH) ||
-      (hostPreference.preferredInstanceIds || []).includes(
-        getCardInstanceId(equippedAzrath),
-      );
-    if (!hostWasPreferred && action?.cardName === ARCANIST_NAMES.GRIMOIRE) {
-      const bestHost = bestPreferredCard(hosts, hostPreference);
-      if (bestHost && bestHost !== equippedAzrath) return;
-    }
-
-    const target = (state.player?.field || [])
-      .filter((card) => card?.cardKind === "monster" && !card.isFacedown)
-      .sort(
-        (a, b) =>
-          Math.max(getEffectiveAtk(b), getEffectiveDef(b)) -
-          Math.max(getEffectiveAtk(a), getEffectiveDef(a)),
-      )[0];
-    if (!target) return;
-    target.atk = Math.floor((target.atk || 0) * 0.5);
-    target.def = Math.floor((target.def || 0) * 0.5);
-    target._simArcanistAzrathHalvedByEquip = true;
-    equippedAzrath._simArcanistAzrathEquipHalveUsed = true;
-  }
-
   simulateArcanistBlueprintStorage(state: AiStateShape, source: StrategyCard) {
     if (!source || source.name === ARCANIST_NAMES.GRIMOIRE) return;
     if (!isArcanistSpell(source)) return;
@@ -938,73 +953,28 @@ export default class ArcanistStrategy extends BaseStrategy {
     grimoire._simStoredBlueprintSource = source.name;
   }
 
-  simulateArcanistOnEquipTriggers(state: AiStateShape, host: SimulatedCardState, equip: SimulatedCardState, action: AIAction) {
-    if (!host || !equip || !isFaceUpArcanistMonster(host)) return;
-    if (host.name === ARCANIST_NAMES.AZRATH) {
-      this.applySimulatedAzrathEquipTrigger(state, action);
-      return;
+  simulateArcanistOnEquipTriggers(state: Parameters<typeof applyGenericSimulatedMainPhaseAction>[0], host: SimulatedCardState, equip: SimulatedCardState, action: AIAction) {
+    if (!isFaceUpArcanistMonster(host) || host.effectsNegated || !state.bot.field.includes(host) ||
+        equip.isFacedown || !state.bot.spellTrap.includes(equip) || equip.equippedTo !== host ||
+        !host.equips?.includes(equip)) return;
+    const hostContext = this.buildActivationContextForEffect({ sourceCard: host, player: state.bot, game: state }) || {};
+    const hostOptions = normalizePlanningOwnerPolicy({ ...this.getPlanningSimulationOptions(state), activationContext: hostContext });
+    const actionOptions = normalizePlanningOwnerPolicy({ ...this.getPlanningSimulationOptions(state), activationContext: action.activationContext });
+    const targetPreferences = { ...getActivationTargetPreferences({ activationContext: hostContext }),
+      ...getActivationTargetPreferences(action) };
+    const actionContext = { ...hostOptions.actionContext, ...actionOptions.actionContext, targetPreferences };
+    const activationContext = { ...hostOptions.activationContext, ...actionOptions.activationContext, actionContext };
+    for (const effect of host.effects || []) {
+      if (effect.timing !== "on_event" || effect.event !== "card_equipped" ||
+          (effect.requireZone && effect.requireZone !== "field") ||
+          (effect.requireEquipCardFilters && !matchesTargetFilters(equip, effect.requireEquipCardFilters, host, "self"))) continue;
+      const options = { ...hostOptions, ...actionOptions, actionContext, activationContext, sourceCard: host, effect };
+      const prepared = prepareSimulatedEffectActivation(state, host, effect, options);
+      if (!prepared) continue;
+      markSimulatedEffectUsage(state, prepared.effect, host, state.bot.id, true);
+      applySimulatedActions({ state, actions: prepared.effect.actions || [], selections: prepared.selections,
+        options: { ...options, effect: prepared.effect } });
     }
-    if (host.name === ARCANIST_NAMES.VIRIDIS) {
-      this.simulateRecoverFromGraveyard(state, host, action, {
-        optKey: "viridis_arcanist_life_recover_spell",
-        targetId: "viridis_recover_target",
-        filter: isArcanistSpell,
-        zone: "hand",
-      });
-      return;
-    }
-    if (host.name === ARCANIST_NAMES.ALBUS) {
-      this.simulateRecoverFromGraveyard(state, host, action, {
-        optKey: "albus_arcanist_ice_recover_monster",
-        targetId: "albus_arcanist_ice_recover_target",
-        filter: isArcanistMonster,
-        zone: "hand",
-      });
-      return;
-    }
-    if (host.name === ARCANIST_NAMES.MASTER_OF_MIRRORS) {
-      this.simulateMasterOfMirrorsEquipTrigger(state, host, action);
-    }
-  }
-
-  simulateRecoverFromGraveyard(state: AiStateShape, host: SimulatedCardState, action: AIAction, config: { optKey: string; targetId: string; filter: (card: SimulatedCardState) => boolean; zone?: "hand" }) {
-    if (!useSimOpt(state, config.optKey)) return;
-    const candidates = (state.bot?.graveyard || []).filter(config.filter);
-    const target = bestPreferredCard(
-      candidates,
-      getTargetPreferenceFor(action, config.targetId),
-    );
-    if (!target) return;
-    removeFromZone(state.bot, "graveyard", target);
-    pushToZone(state.bot, config.zone || "hand", target);
-    host._simRecoveredOnEquip = target.name;
-  }
-
-  simulateMasterOfMirrorsEquipTrigger(state: AiStateShape, host: SimulatedCardState, action: AIAction) {
-    if (!useSimOpt(state, "master_mirrors_arcanist_revive")) return;
-    if ((state.bot?.field || []).length >= 5) return;
-    const preference = getTargetPreferenceFor(
-      action,
-      "master_mirrors_arcanist_revive_target",
-    );
-    const candidates = (state.bot?.graveyard || []).filter(
-      (card) => isArcanistMonster(card) && (card.level || 0) <= 4,
-    );
-    const target = bestPreferredCard(candidates, preference);
-    if (!target) return;
-    removeFromZone(state.bot, "graveyard", target);
-    target.position = this.chooseSpecialSummonPosition(target, {
-      game: state,
-      player: state.bot,
-      source: host,
-      action,
-      activationContext: action.activationContext,
-    });
-    target.isFacedown = false;
-    target.hasAttacked = false;
-    target.attacksUsedThisTurn = 0;
-    pushToZone(state.bot, "field", target);
-    host._simMasterRevivedOnEquip = target.name;
   }
 
   applySimulatedArcanistPassiveStats(state: AiStateShape) {
@@ -1019,24 +989,19 @@ export default class ArcanistStrategy extends BaseStrategy {
     if (card.subtype !== "field" && getAvailableFieldSlots(player.spellTrap).length === 0) return true;
 
     if (card.name === ARCANIST_NAMES.GRIMOIRE) {
-      const analysis = this.analyzeGameState(state);
-      const hostPreference = getTargetPreferenceFor(action, "grimoire_equip_target");
-      const hosts = (player.field || []).filter(
-        (candidate) => isArcanistMonster(candidate) && !candidate.isFacedown,
-      );
-      const hostByPreference = bestPreferredCard(hosts, hostPreference);
-      const hostName = getBestGrimoireHostNames(analysis)[0];
-      const host =
-        hostByPreference ||
-        hosts.find((candidate) => candidate.name === hostName) ||
-        hosts[0];
+      const targetPreferences = getActivationTargetPreferences(action);
+      const effect = card.effects?.find(effect => effect.timing === "on_play");
+      const prepared = effect ? prepareSimulatedEffectActivation(state, card, effect, normalizePlanningOwnerPolicy({
+        ...this.getPlanningSimulationOptions(state), activationContext: action.activationContext,
+        ...(Object.keys(targetPreferences).length ? { targetPreferences } : {}),
+      })) : null;
+      const selected = prepared?.selections.grimoire_equip_target;
+      const host = player.field.find(candidate => Array.isArray(selected) && selected.some(card => card === candidate));
       if (!host) return true;
       appendSimulatedFieldCard(player.spellTrap, card);
       player.hand.splice(handIndex, 1);
       emitSimulatedSpellActivation(state, card, "bot", this.getPlanningSimulationOptions(state));
-      card.equippedTo = host;
-      if (!Array.isArray(host.equips)) host.equips = [];
-      host.equips.push(card);
+      attachSimulatedEquip(card, host, effect?.actions?.find(action => action.type === "equip"));
       this.simulateArcanistOnEquipTriggers(state, host, card, action);
       return true;
     }

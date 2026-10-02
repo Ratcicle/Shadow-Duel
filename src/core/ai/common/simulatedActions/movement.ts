@@ -1,3 +1,4 @@
+import { refreshSimulatedFieldAuras } from "../zones.js";
 import { captureCostMarkerEvidence } from "../../../effects/costs/summonMarkers.js";
 import { clearFieldPresenceSummonTarget } from "../../../effects/triggers/counters.js";
 import { appendSimulatedFieldCard } from "../zones.js";
@@ -442,6 +443,7 @@ export function applyTakeControl(
       });
     }
 
+    refreshSimulatedFieldAuras(state);
     options.emitSimulatedEvent?.("control_changed", {
       card,
       fromPlayer: previousController,
@@ -487,6 +489,7 @@ export function resolveSimulatedTemporaryControlEffects(
       appendSimulatedFieldCard(destination.field, card, true);
       setSimulatedController(card, destination);
       clearFieldPresenceSummonTarget(state, card);
+      refreshSimulatedFieldAuras(state);
       options.emitSimulatedEvent?.("control_changed", {
         card, fromPlayer: holder, toPlayer: destination,
         previousControllerId: holder.id, controllerId: destination.id,

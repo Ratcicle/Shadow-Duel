@@ -1,3 +1,4 @@
+import { copyModeledPassiveContributions, hasUnmodeledTemporaryPassiveSuppression } from "../../effects/passives/passiveBuffs.js";
 import type {
   AiCardInput,
   AiStateInput,
@@ -54,11 +55,10 @@ export function projectRuntimeReplacementEffects(input: AiStateInput, state: AiS
   }
 }
 
-/** Passive restoration is not modeled, including suppression inherited from a live duel. */
+/** Admit restoration only for contributions proven to have a modeled producer. */
 export function hasPendingPassiveRestoration(state: Pick<AiStateInput, "bot" | "player">): boolean {
   return [state.bot, state.player].some(player => player?.field?.some(card =>
-    Object.values(card.temporarySuppressedDynamicBuffStatsByKey || {})
-      .some(stats => stats.atk === true || stats.def === true),
+    hasUnmodeledTemporaryPassiveSuppression(card),
   ));
 }
 
@@ -122,7 +122,9 @@ export function createPlanningCopy(planningCardsOnly = false) {
   }
 
   function registerCardProjection(source: SearchCardInput, projection: SearchCardInput): void {
-    copies.set(source, cloneCardForSim(projection));
+    const clone = cloneCardForSim(projection);
+    copyModeledPassiveContributions(source, clone);
+    copies.set(source, clone);
   }
 
   function registerPlanningCard(card: object): void {
@@ -173,6 +175,7 @@ export function createPlanningCopy(planningCardsOnly = false) {
       if (typeof entry !== "function")
         Reflect.set(result, key, copyValue(entry));
     }
+    copyModeledPassiveContributions(value, result);
     return result;
   }
 
@@ -201,6 +204,7 @@ export function createPlanningCopy(planningCardsOnly = false) {
       "equips",
       "state",
     ]);
+    copyModeledPassiveContributions(card, clone);
     return clone as SimulatedCardState;
   }
 

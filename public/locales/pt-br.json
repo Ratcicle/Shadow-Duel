@@ -1079,7 +1079,7 @@
     },
     "314": {
       "name": "Azrath, Arcanista Corrompido",
-      "description": "Cada vez que você ativar uma Magia \"Arcanista\" enquanto este card estiver com a face para cima no campo: todos os monstros que seu oponente controla nesse momento perdem 100 de ATK/DEF até o final deste turno.\n\nSe este card for equipado com uma Magia de Equipamento \"Arcanista\": escolha 1 monstro que seu oponente controla; reduza o ATK/DEF dele pela metade até o final do turno.\n\nVocê só pode usar este efeito de \"Azrath, Arcanista Corrompido\" uma vez por turno."
+      "description": "Cada vez que você ativar uma Magia \"Arcanista\" enquanto este card estiver com a face para cima no campo: todos os monstros que seu oponente controla nesse momento perdem 100 de ATK/DEF até o final deste turno.\n\nSe este card for equipado com uma Magia de Equipamento \"Arcanista\": escolha 1 monstro com a face para cima que seu oponente controla; reduza o ATK/DEF dele pela metade até o final do turno.\n\nVocê só pode usar este efeito de \"Azrath, Arcanista Corrompido\" uma vez por turno."
     },
     "315": {
       "name": "Tornado Destruidor de Glifos",

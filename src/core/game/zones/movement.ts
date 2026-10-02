@@ -2893,9 +2893,9 @@ export async function moveCardInternal(
 
   if (toZone === "fieldSpell") {
     if (destPlayer.fieldSpell) {
-      this.moveCard(destPlayer.fieldSpell, destPlayer, "graveyard", {
+      await duringCurrentDuel(this.moveCard(destPlayer.fieldSpell, destPlayer, "graveyard", {
         fromZone: "fieldSpell",
-      });
+      }));
     }
 
     if (options.position) {

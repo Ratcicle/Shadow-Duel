@@ -216,6 +216,7 @@ class Game {
     this.turn = "player";
     this.phase = "draw";
     this.turnCounter = 0;
+    this.cardActivationHistory = { turnCounter: 0, entries: [] };
     this.disposed = false;
     this.gameOver = false;
     this.winner = null; // Will be set by checkWinCondition()

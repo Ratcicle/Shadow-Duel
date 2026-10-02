@@ -1,3 +1,5 @@
+import { registerModeledPassiveContribution, getModeledPassiveContributions, pruneModeledPassiveContributions } from "../../src/core/effects/passives/passiveBuffs.js";
+import { createPlanningCopy } from "../../src/core/ai/common/planningCopy.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { fingerprintPlanningState as fingerprint } from "../../src/core/ai/common/stateFingerprint.js";
@@ -266,4 +268,40 @@ test("fingerprinting is non-mutating and never reads _gameRef or diagnostic/UI g
   Object.freeze(state.bot);
   Object.freeze(state);
   assert.equal(fingerprint(state), before);
+});
+
+test("passive origin proof distinguishes equal serialized planning states and prunes expired keys", () => {
+  const state = fixture(), host = required(state.bot.field[0]);
+  registerModeledPassiveContribution(host, "known", "field_archetype_aura_buff");
+  host.temporarySuppressedDynamicBuffStatsByKey = { known: { atk: true } };
+  const serialized = JSON.stringify(state), withProof = fingerprint(state);
+  state.bot.field[0] = { ...host };
+  assert.equal(JSON.stringify(state), serialized);
+  assert.notEqual(fingerprint(state), withProof);
+  state.bot.field[0] = host;
+  const copy = createPlanningCopy().cloneCardForSim(host);
+  assert.deepEqual(getModeledPassiveContributions(copy), [["known", "field_archetype_aura_buff"]]);
+  delete copy.temporarySuppressedDynamicBuffStatsByKey;
+  pruneModeledPassiveContributions(copy);
+  assert.deepEqual(getModeledPassiveContributions(copy), []);
+  assert.equal(getModeledPassiveContributions(host).length, 1);
+  delete host.temporarySuppressedDynamicBuffStatsByKey;
+  pruneModeledPassiveContributions(host);
+  assert.deepEqual(getModeledPassiveContributions(host), []);
+});
+
+test("opaque card projections cannot carry hidden passive proof", () => {
+  const host = card(1000);
+  host.dynamicBuffs = { hidden: { value: 200, stats: ["atk"] } };
+  registerModeledPassiveContribution(host, "hidden", "field_archetype_aura_buff");
+  host.temporarySuppressedDynamicBuffStatsByKey = { hidden: { atk: true } };
+  const copy = createPlanningCopy(true);
+  copy.registerCardProjection(host, { instanceId: required(host.instanceId), isFacedown: true });
+  const masked = copy.cloneCardForSim(host);
+  assert.deepEqual(getModeledPassiveContributions(masked), []);
+  assert.equal(masked.dynamicBuffs, undefined);
+  assert.equal(masked.temporarySuppressedDynamicBuffStatsByKey, undefined);
+  const visible = createPlanningCopy(true);
+  visible.registerCardProjection(host, { dynamicBuffs: { hidden: { value: 200 } } });
+  assert.deepEqual(getModeledPassiveContributions(visible.cloneCardForSim(host)), [["hidden", "field_archetype_aura_buff"]]);
 });
