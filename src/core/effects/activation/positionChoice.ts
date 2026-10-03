@@ -55,6 +55,8 @@ interface PositionChoiceHost {
 
 export interface SpecialSummonPositionOptions {
   position?: (BattlePositionInput | null) | undefined;
+  /** AI preference for a free choice; never overrides a forced declaration. */
+  preferredPosition?: BattlePositionInput | null | undefined;
 }
 
 /**
@@ -112,6 +114,9 @@ export async function chooseSpecialSummonPosition(
   if (isAI(player)) {
     const strategy = player?.strategy;
     const resolveAI = (): BattlePosition => {
+      if (options.preferredPosition === "attack" || options.preferredPosition === "defense") {
+        return options.preferredPosition;
+      }
       if (typeof strategy?.chooseSpecialSummonPosition === "function") {
         const fromStrategy = strategy.chooseSpecialSummonPosition(card, {
           game: this.game,

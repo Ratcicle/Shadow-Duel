@@ -1,7 +1,7 @@
 # Replay canônico
 
 O replay executável usa o formato `shadow-duel-canonical-replay`, schema `2` e
-`engineVersion: "engine-rules-v12"`. Ele é independente do relatório
+`engineVersion: "engine-rules-v14"`. Ele é independente do relatório
 estratégico. O importador aceita somente o schema `2`: relatórios v4 e replays
 de schemas anteriores não são partidas executáveis nesta versão.
 
@@ -182,7 +182,7 @@ caracteres do replay, usado para detectar divergências na reprodução.
 `validateCanonicalReplay(input)` recebe `unknown`, não muta a entrada e retorna
 a mesma referência somente depois de validar o documento. `setup`, `commands` e
 `decisions` e `engineVersion` são obrigatórios. A versão da engine deve ser
-`"engine-rules-v12"`; gravações sem essa versão são rejeitadas antes da validação
+`"engine-rules-v14"`; gravações sem essa versão são rejeitadas antes da validação
 profunda e da reprodução. `events`, `result` e `finalized` continuam opcionais
 na importação de arquivos do schema `2`; quando presentes, são validados
 profundamente. Os comandos e kinds de decisão permanecem os mesmos.
@@ -548,15 +548,82 @@ continuação reproduzem decisões gravadas sem UI ou política de IA ao vivo.
 
 ### Integração Miragebound e correções remotas — 03/10/2026
 
-A atualização da main preserva schema `2` e `engine-rules-v12` e combina
+No primeiro merge deste trabalho, a main preservou schema `2` e usou `engine-rules-v12`, combinando
 histórico de ativações, continuação declarativa, validação de movimentos e
 Fusão com os estados de usos por cópia/perfuração e guards S02 de Miragebound.
-Os textos e dados aprovados de Miragebound permanecem iguais. A assinatura
-completa combinada é `a2cd2bdb`; assinaturas isoladas `cdcd7e32` e `7bbe98b0`
+Os textos e dados aprovados de Miragebound foram preservados. A assinatura
+completa combinada nesse merge foi `a2cd2bdb`; assinaturas isoladas `cdcd7e32` e `7bbe98b0`
 são rejeitadas, assim como `37f6c19a`, sem migração.
 
-O golden combinado tem hashes de estado `5a03f26c` e `c2ec633c`, hash completo
+O golden desse primeiro merge tem hashes de estado `5a03f26c` e `c2ec633c`, hash completo
 `c418b563` e 12100 caracteres. A ampliação deriva dos campos OPT/perfuração
 integrados ao estado canônico; os valores da seção anterior registram o lote
 upstream isolado. False Horizon mantém a condição aprovada de sucesso da
 mudança antes da escolha opcional na resolução.
+### Respostas aos alvos do último elo — engine-rules-v13
+
+A versão anterior é `engine-rules-v13`, schema `2`. A descoberta de respostas usa
+os alvos declarados pelo último Chain Link, excluindo custos e referências ao
+evento. Um elo posterior sem alvos não reutiliza o alvo nem a ativação do elo
+inicial. Respostas a ativações continuam recebendo a identidade da ativação
+atual; ocorrências explícitas de ataque, Invocação e fase são preservadas na
+janela original.
+
+Isso altera as opções legais de resposta e suas decisões gravadas. Replays v12
+e anteriores são rejeitados pela versão antes da reprodução, sem migração ou
+remoção de arquivos. O schema, os kinds de decisão e a assinatura do banco
+`7bbe98b0` permanecem iguais. O golden completo passa a `01535368`; os hashes
+de estado do cenário genérico continuam `a897fa58` e `297e0fe8`.
+
+As regressões de Sanctuary cobrem primeiro e segundo elo, aceitação/recusa,
+ambos os assentos, custos, saída/retorno da mesma carta, um terceiro elo sem
+alvos e reprodução em outro Game sem consultas à UI ou à política de IA.
+Preserva-se o contrato existente de `target` como primeiro alvo e `targets`
+como lista ordenada completa. Escolher entre várias ocorrências elegíveis de
+alvo permanece uma limitação anterior; esta versão não cria outra decisão
+nem escolhe automaticamente uma ocorrência diferente.
+
+### Ativações da IA e escolhas de Fusão — engine-rules-v14
+
+Na branch de follow-ups, a versão passou a `engine-rules-v14`, com schema `2`. A execução de uma Magia
+pela IA usa a entrada pública capturada, de modo que a ativação externa gera
+um único comando `activate_card`. O contexto estratégico orienta a escolha
+ao vivo; o replay preserva o resultado da escolha, sem precisar serializar ou
+reexecutar as heurísticas que a produziram.
+
+As escolhas de monstro de Fusão, materiais físicos e posição passam pelo
+broker canônico. O playback consome as decisões gravadas e revalida suas
+identidades de duelo e candidatos, sem consultar UI ou política de IA. Os
+kinds existentes de decisão continuam suficientes; não há novo envelope ou
+campo de estado canônico.
+
+O executor da ação de IA que representa uma ativação de monstro na mão
+também passa pela ativação pública: custo, publicação, resposta adversária e
+resolução mantêm a ordem canônica. Posições escolhidas pela IA na Invocação
+Especial são registradas pelo mesmo broker usado para escolhas humanas.
+Além disso, a prévia de descarte deixa de considerar como recurso no
+cemitério uma carta cujo destino efetivo é banimento; a simulação aplica o
+mesmo redirecionamento pelo movimento simulado existente.
+
+Essas mudanças alteram os comandos, as decisões e a legalidade observável.
+Gravações `engine-rules-v13` e anteriores são rejeitadas antes da reprodução,
+sem migração automática, edição ou exclusão dos arquivos antigos. Reproduzi-las
+exige a versão da engine que as gravou. A assinatura declarativa do banco
+permanece `7bbe98b0`; os textos e regras das cartas não mudam neste lote.
+
+O golden da branch isolada tinha hash completo `592d2e85`. Seus hashes de estado eram
+`a897fa58` e `297e0fe8`; restaurar apenas o marcador v13 no envelope desse
+cenário produz o golden anterior `01535368`. Isso verifica que a atualização
+desse golden decorre exclusivamente da versão, sem remover estado do hash.
+
+### Estado após merge das branches dot — 03/10/2026
+
+A main combinada usa **schema `2` / `engine-rules-v14`**, com assinatura
+**`a2cd2bdb`**. Mantém os estados OPT/perfuração e a presença S02 de Miragebound
+junto do histórico de ativações e das correções de Chain, movimentos e Fusão.
+As assinaturas e versões isoladas anteriores continuam rejeitadas sem migração.
+
+O golden atual tem hashes de estado `5a03f26c` e `c2ec633c`, hash completo
+**`69ee977d`** e 12100 caracteres. Repor somente o marcador v12 nesse envelope
+produz `c418b563`, preservando os estados integrados. Os goldens `592d2e85` e
+`01535368` acima descrevem a branch isolada, antes de incorporar Miragebound.

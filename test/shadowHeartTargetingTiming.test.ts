@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test, { type TestContext } from "node:test";
 import Card from "../src/core/Card.js";
+import type { DecisionMadeEventPayload } from "../src/core/contracts/events.js";
 import { createRuntimeGame, placeFieldCards } from "./helpers/game.js";
 import { cardDefinition, required, chainSelections } from "./helpers/fixtures.js";
 
@@ -16,6 +17,23 @@ function setup(t: TestContext, seat: "player" | "bot" = "player") {
   const owner = game[seat], opponent = seat === "player" ? game.bot : game.player;
   const make = (id: number) => new Card(cardDefinition(id), owner.id);
   return { game, owner, opponent, make };
+}
+
+function assertRecordedSummonChoices(
+  choices: readonly DecisionMadeEventPayload[], actorId: string, selectionId: string, selected: Card,
+) {
+  assert.equal(choices.length, 2, "record one card selection followed by one position choice");
+  const cardChoice = required(choices[0]), positionChoice = required(choices[1]);
+  assert.equal(cardChoice.actorId, actorId);
+  assert.deepEqual(cardChoice.value, { selections: { [selectionId]: [{
+    duelCardId: required(selected.duelCardId), cardId: selected.id,
+    effectId: null, candidateKey: null, key: null,
+  }] } }, "the resolution choice records the exact physical card");
+  assert.equal(positionChoice.actorId, actorId);
+  assert.ok(selected.position === "attack" || selected.position === "defense");
+  assert.deepEqual(positionChoice.value, {
+    pass: false, candidateKey: selected.position, effectId: null,
+  }, "the distinct position choice records the position applied to that summon");
 }
 
 for (const seat of ["player", "bot"] as const) {
@@ -51,11 +69,12 @@ for (const seat of ["player", "bot"] as const) {
       required(game.chainSystem.addToChain(prepared));
       await game.moveCard(old, owner, "banished", { fromZone: zone });
       owner[zone].push(replacement);
-      let choices = 0;
-      game.on("decision_made", event => { if (event.kind === "choice") choices++; });
+      const choices: DecisionMadeEventPayload[] = [];
+      game.on("decision_made", event => { if (event.kind === "choice") choices.push(event); });
       await game.chainSystem.resolveChain();
       assert.ok(owner.field.includes(replacement));
-      assert.equal(choices, 1);
+      assertRecordedSummonChoices(choices, owner.id,
+        id === 107 ? "imp_special_from_hand" : "warlord_revive_target", replacement);
       assert.equal(id === 122 ? replacement.cannotAttackThisTurn : false, id === 122);
     });
   }
@@ -253,15 +272,15 @@ test("planned AI summon still records its exact instance through the broker", as
   const { game, owner, opponent, make } = setup(t);
   const source = make(107), first = make(102), second = make(102);
   placeFieldCards(owner.field, source); owner.hand.push(first, second);
-  let choices = 0;
-  game.on("decision_made", event => { if (event.kind === "choice") choices++; });
+  const choices: DecisionMadeEventPayload[] = [];
+  game.on("decision_made", event => { if (event.kind === "choice") choices.push(event); });
   const effect = required(source.effects[0]);
   await game.effectEngine.applyActions(effect.actions || [], { source, player: owner, opponent, effect,
     activationContext: { decisions: { specialSummons: { [effect.id]: [second.instanceId] } } },
   }, {});
   assert.ok(owner.field.includes(second));
   assert.ok(owner.hand.includes(first));
-  assert.equal(choices, 1);
+  assertRecordedSummonChoices(choices, owner.id, "imp_special_from_hand", second);
 });
 
 test("Cova resolves above Hymn and its Normal Summon receives the temporary buff", async t => {

@@ -251,8 +251,9 @@ test("replay canônico headless termina com o mesmo hash", async () => {
     ["5a03f26c", "c2ec633c"],
   );
   assert.equal(replay.result.finalStateHash, "c2ec633c");
-  // The recording hash includes engine v12 and the integrated Arcanist/Miragebound definition signature.
-  assert.equal(hashCanonicalValue(replay), "c418b563");
+  // Version changes preserve the integrated per-copy/piercing state and database.
+  assert.equal(hashCanonicalValue({ ...replay, engineVersion: "engine-rules-v12" }), "c418b563");
+  assert.equal(hashCanonicalValue(replay), "69ee977d");
   assert.equal(JSON.stringify(replay).length, 12100);
 
   const result = await replayCanonicalDuel(replay);

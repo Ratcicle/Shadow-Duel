@@ -47,7 +47,7 @@ O lote **P3** alinhou os textos de Jackal/Vanishing Step aos alvos prévios, a r
 Em **03/10/2026**, **S01** foi encerrada como sem divergência encontrada nos ingressos legais atuais: as ativações respeitam o limite de uma Mirror Path face-up. A API de movimento direto continua permitindo duplicatas artificiais, sem ampliação da engine. **S02** foi corrigida para Jackal/Rebel pelo contrato de presença acima, com validação de runtime, simulação e replay. Os textos EN/PT foram preservados; replay mantém schema 2 / engine-rules-v10. A [auditoria](../Auditoria%20cartas%20Miragebound%20351-364.md) registra os resultados, a correção da evidência histórica de Viper e os limites da validação.
 
 A integração posterior com as correções remotas mantém schema 2 e usa
-engine-rules-v12. O contrato de Miragebound e seus textos aprovados permanecem
+engine-rules-v14 após os follow-ups de Chain/IA/Fusão. O contrato de Miragebound e seus textos aprovados permanecem
 iguais; a correção upstream também resolveu o controle preexistente de DragonPeak.
 
 ---

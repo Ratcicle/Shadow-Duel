@@ -39,7 +39,9 @@ function replay(overrides: MutableReplay = {}): MutableReplay {
 }
 
 test("engine version is required and rejects recordings with previous semantics", () => {
-  assert.equal(CANONICAL_REPLAY_ENGINE_VERSION, "engine-rules-v12");
+  assert.equal(CANONICAL_REPLAY_ENGINE_VERSION, "engine-rules-v14");
+  assert.throws(() => validateCanonicalReplay(replay({ engineVersion: "engine-rules-v13" })), /engineVersion/);
+  assert.throws(() => validateCanonicalReplay(replay({ engineVersion: "engine-rules-v12" })), /engineVersion/);
   assert.throws(() => validateCanonicalReplay(replay({ engineVersion: "engine-rules-v11" })), /engineVersion/);
   assert.throws(() => validateCanonicalReplay(replay({ engineVersion: "engine-rules-v10" })), /engineVersion/);
   assert.throws(() => validateCanonicalReplay(replay({ engineVersion: "engine-rules-v9" })), /engineVersion/);
@@ -97,8 +99,8 @@ test("replays com a assinatura parcial antiga são rejeitados antes da reproduç
   assert.doesNotThrow(() => validateCanonicalReplay(replay()));
 });
 
-test("Miragebound S02 integration rejects previous full signatures and uses schema 2 with engine v12", () => {
-  assert.equal(CANONICAL_REPLAY_ENGINE_VERSION, "engine-rules-v12");
+test("Miragebound S02 integration rejects previous full signatures and uses schema 2 with engine v14", () => {
+  assert.equal(CANONICAL_REPLAY_ENGINE_VERSION, "engine-rules-v14");
   assert.throws(
     () => validateCanonicalReplay(replay({ cardDatabaseSignature: "98009b78" })),
     /card database signature does not match/,

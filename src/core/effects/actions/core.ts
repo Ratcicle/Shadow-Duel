@@ -1397,7 +1397,17 @@ function recordPreviewMoveCandidates(
     if (!owner) return;
     const cards = owner.hand.filter(card => matchesPreviewFilters(engine, card, action.filters || {}, ctx));
     const count = typeof action.count === "number" ? { min: action.count, max: action.count } : action.count || { min: 1, max: 1 };
-    if (cards.length >= (count.min ?? 1)) previewMoves.push({ owner, zone: "graveyard", cards, maxCount: count.max ?? 1 });
+    if (cards.length < (count.min ?? 1)) return;
+    const destinations = new Map<PreviewZone, PreviewCard[]>();
+    for (const card of cards) {
+      const zone = getSendToGraveReplacementDestination(card, owner, [engine.game.player, engine.game.bot]) || "graveyard";
+      const candidates = destinations.get(zone) || [];
+      candidates.push(card);
+      destinations.set(zone, candidates);
+    }
+    for (const [zone, candidates] of destinations) {
+      previewMoves.push({ owner, zone, cards: candidates, maxCount: count.max ?? 1 });
+    }
     return;
   }
   if (action.type !== "move" && action.type !== "return_to_hand") return;

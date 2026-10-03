@@ -1,12 +1,5 @@
 import type { BotRuntimePort, BotGamePort } from "../../contracts/bot.js";
-import type {
-  AIActionOf,
-  ExtraDeckMaterialHint,
-  AIActivationContext,
-} from "../../contracts/ai.js";
-import type { GameCard } from "../../contracts/cards.js";
-import { SUMMON_MODES } from "../../game/summon/transaction.js";
-import { SUMMON_ORIGINS } from "../../contracts/summon.js";
+import type { AIActionOf } from "../../contracts/ai.js";
 import { canResolveHandSummonProcedureActionForCurrentState, resolveHandProcedureMaterials } from "../actionValidation.js";
 import { selectPayableTributes } from "../../ai/common/tributePolicy.js";
 
@@ -70,55 +63,29 @@ export async function executeSpecialSummonSanctumProtectorAction(
     return false;
   }
 
-  const position = action.position === "attack" ? "attack" : "defense";
-  const prepared = game.createPreparedSummon({
-    card,
-    controller: bot,
-    sourceZone: "hand",
-    summonOrigin: SUMMON_ORIGINS.EFFECT_RESOLUTION,
-    summonMode: SUMMON_MODES.SUMMON,
-    summonMethod: "special",
-    summonProcedure: "card_effect",
-    position,
-    costPayments: [
-      {
-        card: material,
-        owner: bot,
-        fromZone: "field",
-        toZone: "graveyard",
-        kind: "effect_cost",
-        contextLabel: "sanctum_protector_cost",
-      },
-    ],
-    perform: async (transaction) =>
-      await game.moveCard(card, bot, "field", {
-        fromZone: "hand",
-        position,
-        isFacedown: false,
-        resetAttackFlags: true,
-        summonOrigin: SUMMON_ORIGINS.EFFECT_RESOLUTION,
-        summonMethodOverride: "special",
-        summonProcedure: "card_effect",
-        summonTransaction: transaction,
-        sourceCard: card,
-        effectId: "luminarch_sanctum_protector_special_summon_hand",
-        contextLabel: "sanctum_protector_special",
-      }),
-  });
-  const summonResult = await game.executeSummonTransaction(prepared);
-  if (summonResult?.success !== true) {
-    console.log(
-      `[Bot.executeMainPhaseAction] Sanctum Protector summon failed:`,
-      summonResult?.reason,
-    );
-    return false;
-  }
+  const effect = game.effectEngine.getMonsterIgnitionEffect?.(card, "hand");
+  const costTarget = effect?.targets?.find(target => target.intent === "cost");
+  if (!effect || !costTarget) return false;
 
-  game.ui?.log(
-    `Bot special summoned ${card.name} by sending ${material.name} to the GY.`,
+  // This action chooses the cost; the public effect owns payment, responses,
+  // resolution and replay capture, including cases where no summon resolves.
+  const result = await game.tryActivateMonsterEffect(
+    card,
+    { [costTarget.id]: [material] },
+    "hand",
+    bot,
+    {
+      effectId: effect.id,
+      activationContext: {
+        actionContext: {
+          specialSummonPositions: {
+            byName: { [card.name]: action.position === "attack" ? "attack" : "defense" },
+          },
+        },
+      },
+    },
   );
-  game.updateBoard();
-  return true;
+  return result.success === true;
 }
 
 export async function executeSummonAction(
