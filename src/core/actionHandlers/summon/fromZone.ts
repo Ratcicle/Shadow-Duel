@@ -1,4 +1,5 @@
 import { addEffectNegation } from "../../effects/negation.js";
+import { resolveContextualSummonPosition } from "./position.js";
 import { isAI } from "../../Player.js";
 import { applyPaidCostSummonMarkers } from "../../effects/costs/summonMarkers.js";
 import { checkSpecialSummonEligibility } from "../../game/summon/eligibility.js";
@@ -974,7 +975,10 @@ async function summonCards(
     const position = await Reflect.apply(
       engine.chooseSpecialSummonPosition!,
       engine,
-      [card, player, { position: action.position }],
+      [card, player, {
+        position: action.position,
+        preferredPosition: ctx ? resolveContextualSummonPosition(action, ctx, card) : undefined,
+      }],
     );
 
     if (!sourceEntry.list.includes(card) || !isLegalZoneSummon(card, summonPlayer, sourceEntry.name, game)) continue;

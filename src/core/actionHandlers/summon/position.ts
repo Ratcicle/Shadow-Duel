@@ -5,7 +5,7 @@ import type {
 } from "../../contracts/actionRuntime.js";
 
 export function resolveContextualSummonPosition(
-  action: ActionOf<"conditional_summon_from_hand">,
+  action: Pick<ActionOf<"conditional_summon_from_hand">, "targetRef" | "position">,
   ctx: EffectContext,
   card: ActionRuntimeCard,
 ) {

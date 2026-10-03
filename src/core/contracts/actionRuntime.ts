@@ -752,7 +752,7 @@ export interface ActionHandlerEnginePort {
   chooseSpecialSummonPosition?(
     card: ActionRuntimeCard,
     player: ActionRuntimePlayer,
-    options?: { position?: BattlePositionInput | undefined },
+    options?: { position?: BattlePositionInput | undefined; preferredPosition?: BattlePositionInput | null | undefined },
   ): MaybePromise<BattlePosition>;
   findCardZone?(
     player: ActionRuntimePlayer,

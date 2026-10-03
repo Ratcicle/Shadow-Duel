@@ -55,6 +55,8 @@ interface PositionChoiceHost {
 
 export interface SpecialSummonPositionOptions {
   position?: (BattlePositionInput | null) | undefined;
+  /** AI preference for a free choice; never overrides a forced declaration. */
+  preferredPosition?: BattlePositionInput | null | undefined;
 }
 
 /**
@@ -111,19 +113,39 @@ export async function chooseSpecialSummonPosition(
   // policy; this method must not impose a global heuristic.
   if (isAI(player)) {
     const strategy = player?.strategy;
-    let chosen: BattlePosition = "attack";
-    if (
-      strategy &&
-      typeof strategy.chooseSpecialSummonPosition === "function"
-    ) {
-      const fromStrategy = strategy.chooseSpecialSummonPosition(card, {
-        game: this.game,
-        player,
-        actionPosition,
-      });
-      if (fromStrategy === "attack" || fromStrategy === "defense") {
-        chosen = fromStrategy;
+    const resolveAI = (): BattlePosition => {
+      if (options.preferredPosition === "attack" || options.preferredPosition === "defense") {
+        return options.preferredPosition;
       }
+      if (strategy && typeof strategy.chooseSpecialSummonPosition === "function") {
+        const fromStrategy = strategy.chooseSpecialSummonPosition(card, {
+          game: this.game,
+          player,
+          actionPosition,
+        });
+        if (fromStrategy === "attack" || fromStrategy === "defense") return fromStrategy;
+      }
+      return "attack";
+    };
+    let chosen: BattlePosition;
+    if (this.game.requestDecision) {
+      const result = await this.game.requestDecision({
+        kind: "choice",
+        actor: player,
+        candidates: [],
+        requireCandidate: false,
+        resolveAI: () => ({ [resolveAI()]: [] }),
+        serializeResult: value => ({
+          pass: false, candidateKey: value && "defense" in value ? "defense" : "attack", effectId: null,
+        }),
+        deserializeReplayValue: value => "candidateKey" in value &&
+          (value.candidateKey === "attack" || value.candidateKey === "defense")
+          ? { [value.candidateKey]: [] } : null,
+      });
+      if (!result) throw new Error("Special Summon position decision is missing.");
+      chosen = "defense" in result ? "defense" : "attack";
+    } else {
+      chosen = resolveAI();
     }
     this.game?.devLog?.("SS_POSITION", {
       summary: `Bot chose ${chosen} for ${card?.name || "unknown"}`,
