@@ -1092,8 +1092,6 @@ export const mirageboundCards = [
         ],
       },
       {
-
-        usagePolicy: "use",
         id: "miragebound_rebel_end_phase_return",
         timing: "on_event",
         triggerRequirement: "mandatory",

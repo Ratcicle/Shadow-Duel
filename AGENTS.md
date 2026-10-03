@@ -17,7 +17,7 @@ por TS6. Configuração: [package.json](package.json) e
 
 ### Guardrails de design e implementação
 
-- Prefira sempre efeitos declarativos em `src/data/cards.ts`.
+- Prefira sempre efeitos declarativos na coleção correspondente em `src/data/cards/`; `src/data/cards.ts` agrega e indexa essas coleções.
 - Só crie handler novo quando não houver action genérica equivalente.
 - Handlers devem ser genéricos, reutilizáveis e nunca hardcoded por nome de carta.
 - Evite automatizar escolhas do jogador. A resolução deve permanecer manual e clara sempre que envolver seleção humana.
@@ -38,7 +38,7 @@ Exemplos:
 
 - Se um efeito Invocar 2 ou mais monstros, cada monstro deve ser Invocado individualmente, com evento, log, animação e atualização de estado próprios.
 - Se uma Magia descarta 1 carta para destruir 1 monstro, a sequência deve ser: ativar a Magia → descartar/pagar o custo → destruir o monstro → enviar a Magia ao Cemitério.
-- Se um efeito move várias cartas, cada movimento relevante deve passar pelo fluxo normal de `moveCard`, eventos, logs e atualização visual.
+- Se um efeito move várias cartas, cada movimento relevante deve passar pelo fluxo normal de `moveCard`, eventos, logs e atualização visual. Aguarde `await game.moveCard(...)` e trate seu resultado antes da próxima ação.
 
 Evite "batch mutations" silenciosas. Loops são permitidos, mas cada iteração deve resolver uma ação completa e observável antes da próxima. A prioridade é manter o duelo claro para o jogador, para o sistema de replays e para futuras análises da IA.
 
@@ -48,14 +48,15 @@ Evite "batch mutations" silenciosas. Loops são permitidos, mas cada iteração 
 
 ```
 src/main.ts                   # UI do deck builder e inicialização
-src/core/Game.ts              # Fachada de turnos/fases/event bus (~945 linhas)
+src/core/Game.ts              # Fachada de turnos/fases/event bus
 src/core/EffectEngine.ts      # Fachada da resolução de efeitos
 src/core/ChainSystem.ts       # Fachada de chain windows + Spell Speed
 src/core/chain/               # Implementação modular do ChainSystem (ver tabela abaixo)
 src/core/effects/             # Implementação modular dos efeitos (ver tabela abaixo)
 src/core/actionHandlers/      # Handlers genéricos por categoria + catálogo
 src/core/game/                # Lógica modular do Game (19 subpastas por domínio)
-src/data/cards.ts             # Banco de cartas 100% declarativo (~5700 linhas)
+src/data/cards.ts             # Agregador e índices do banco declarativo
+src/data/cards/               # 11 coleções declarativas + governança de IDs
 ```
 
 **Fluxo de dados:** `Game.ts` emite eventos → `EffectEngine` (delegando para `src/core/effects/`) avalia triggers → handlers registrados em `actionHandlers/` executam actions.
@@ -79,7 +80,7 @@ src/data/cards.ts             # Banco de cartas 100% declarativo (~5700 linhas)
 **Apresentação e contrato da UI:**
 
 - [GameUI](src/core/contracts/ui.ts) define a superfície pública de apresentação. `Renderer`, o adapter normal e o adapter descartado satisfazem o mesmo contrato fechado.
-- [src/ui/renderer/attachments.ts](src/ui/renderer/attachments.ts) instala os 111 métodos anexados, preservando referências e ordem. A fachada usa declaration merging sem emitir class fields para esses métodos.
+- [src/ui/renderer/attachments.ts](src/ui/renderer/attachments.ts) instala os 114 métodos anexados, preservando referências e ordem. A fachada usa declaration merging sem emitir class fields para esses métodos.
 - [src/ui/renderer/types.ts](src/ui/renderer/types.ts) concentra projeções de cartas, estado de LP e elementos DOM; tipos internos do Pixi ficam em [PixiVfxLayer.ts](src/ui/pixi/PixiVfxLayer.ts).
 - Os módulos de `src/ui/main/`, `src/ui/renderer/`, ícones, Pixi e i18n são TypeScript físico. Consumidores continuam usando specifiers `.js`.
 - Fallbacks do adapter retornam valores inertes compatíveis e não executam escolhas humanas. Substituições como as do Bot Arena pertencem à instância do adapter.
@@ -92,7 +93,7 @@ src/data/cards.ts             # Banco de cartas 100% declarativo (~5700 linhas)
 | `decisions/` | Broker canônico compartilhado por humano, IA e replay                      |
 | `zones/`     | Ownership, movement, snapshot, invariants, destruction (orquestração)       |
 | `combat/`    | Damage, targeting, resolution, availability                                 |
-| `summon/`    | Execution, tracking, ascension, position changes, material stats            |
+| `summon/`    | Execution, tracking, ascension, synchro, procedimentos/transações, position changes, material stats |
 | `turn/`      | Lifecycle, transitions, cleanup (+ turn-based buffs), scheduling, oncePerTurn |
 | `spellTrap/` | Activation, set, finalization, verification                                 |
 | `selection/` | Handlers, session, highlighting, contract                                   |
@@ -108,7 +109,7 @@ src/data/cards.ts             # Banco de cartas 100% declarativo (~5700 linhas)
 | `state/`     | Serialization (snapshot público para replays e IA)                          |
 | `helpers/`   | Helpers de player/card resolution                                           |
 
-Módulos expõem funções puras; `Game.ts` importa e chama com `this` context. Os arquivos físicos em `src/core/game/` são TypeScript, mas consumidores preservam specifiers relativos terminados em `.js`. O manifest de [attachments.ts](src/core/game/attachments.ts) instala os 219 métodos anexados; [capture.ts](src/core/game/replay/capture.ts) aplica separadamente os 13 wrappers de replay.
+Módulos exportam funções com contexto `this` tipado, anexadas à fachada `Game.ts`; essas funções podem alterar estado, emitir eventos e atualizar a apresentação. Os arquivos físicos em `src/core/game/` são TypeScript, mas consumidores preservam specifiers relativos terminados em `.js`. O manifest de [attachments.ts](src/core/game/attachments.ts) instala os 222 métodos anexados; [capture.ts](src/core/game/replay/capture.ts) aplica separadamente os 16 wrappers de replay.
 
 **Estrutura modular de [src/core/chain/](src/core/chain/):**
 
@@ -141,7 +142,7 @@ Os métodos anexados são expostos no tipo da fachada por declaration merging, s
 
 **Estrutura modular de [src/core/effects/](src/core/effects/):**
 
-`EffectEngine.ts` é a fachada — a lógica real fica nas subpastas, agregadas via [src/core/effects/index.ts](src/core/effects/index.ts). Consumidores preservam o specifier `.js`.
+`EffectEngine.ts` é a fachada — a lógica real fica nas subpastas, cujos métodos são instalados por [src/core/effects/attachModules.ts](src/core/effects/attachModules.ts). [src/core/effects/index.ts](src/core/effects/index.ts) é o barrel de exportação. Consumidores preservam o specifier `.js`.
 
 | Pasta          | Responsabilidade                                                                                |
 | -------------- | ----------------------------------------------------------------------------------------------- |
@@ -197,13 +198,16 @@ imediatamente anterior.
 - Gera analytics: win rate, tempo de decisão, opening book (ver [ArenaAnalytics.ts](src/core/ai/ArenaAnalytics.ts))
 - Presets disponíveis: `shadowheart`, `luminarch`, `void`, `dragon`, `arcanist`, `miragebound`, `bloomrot`, `burningwest`, `techzero` (busca de linhas, avaliação sequencial de combate e política de respostas de Chain)
 
-**Flags de dev** (via `localStorage.setItem(key, "true")`):
+**Preferências de diagnóstico e Bot** (via `localStorage.setItem(key, valor)`):
 
-| Flag                       | Efeito                                             |
-| -------------------------- | -------------------------------------------------- |
-| `shadow_duel_dev_mode`     | Painel dev + logs detalhados                       |
-| `shadow_duel_test_mode`    | Guardas extras de runtime                          |
-| `shadow_duel_bot_preset`   | Define um dos nove presets disponíveis no catálogo do Bot |
+| Chave | Valor | Efeito |
+| --- | --- | --- |
+| `shadow_duel_dev_mode` | `"true"` | Logs de diagnóstico de Chain, Bot Arena e analytics |
+| `shadow_duel_bot_preset` | ID de preset, como `"techzero"` | Define um dos nove presets disponíveis no catálogo do Bot |
+
+Os recursos e guardas de desenvolvimento de `Game` usam a opção `devMode`
+do construtor ou `game.setDevMode(true)`. Os launchers atuais passam
+`devMode: false`; a preferência de logs acima não ativa esses recursos.
 
 **Sistema de Replays** — Captura e reprodução canônica:
 
@@ -223,19 +227,31 @@ Os scripts e testes são TypeScript físico, executados por `tsx` e verificados
 por `tsconfig.node.json`. Helpers em `test/helpers/` e o harness de Chain
 derivam fixtures dos contratos canônicos; entradas inválidas ou hosts
 deliberadamente parciais exigem `unsafeFixture<T>(valor, motivo)` explícito.
-Os testes de resolução de módulos cobrem os specifiers `.js` e o carregamento
-de SVG no Node e no build Vite.
+Os testes de resolução de módulos cobrem os specifiers `.js` no Node e no
+build Vite, além do carregamento de SVG no Node.
+
+**Skills complementares em [`.agents/skills/`](.agents/skills/):**
+
+- [property-based-testing](.agents/skills/property-based-testing/SKILL.md) — use ao escrever ou revisar propriedades de serialização, canonicalização, hashes e invariantes de estado, ou comparar runtime e simulação. Gere entradas válidas e asserções que possam revelar divergências; apresente a propriedade concreta antes de propor uma nova dependência de testes.
+- [pixijs-performance](.agents/skills/pixijs-performance/SKILL.md) — use para profiling e otimização de FPS, draw calls e memória de GPU na camada Pixi v8. Meça o gargalo antes de aplicar pooling, batching, cache, culling ou cleanup; preserve a composição visual e a responsabilidade das regras no Core.
+
+A aplicação dessas skills deve preservar o toolchain, os contratos strict e
+o alcance de validação definido neste arquivo.
 
 ---
 
 ### Cartas: 100% Declarativas
 
-**Arquivo:** [src/data/cards.ts](src/data/cards.ts)
+**Definições:** coleções em [src/data/cards/](src/data/cards/).
+**Agregador público:** [src/data/cards.ts](src/data/cards.ts).
 
 As 11 coleções em `src/data/cards/` usam `satisfies readonly RawCardDefinition[]`.
 O agregador, ranges e banlist também são TypeScript físico;
 os imports relativos continuam terminando em `.js`. Preserve IDs, ordem,
 dados declarativos ao alterar os contratos ou a infraestrutura.
+
+Exemplo abreviado; complete os dados obrigatórios de cada tipo de carta e
+use um ID da faixa correspondente antes de adicioná-lo à coleção.
 
 ```js
 {
@@ -248,8 +264,6 @@ dados declarativos ao alterar os contratos ou a infraestrutura.
   effects: [{
     id: "effect_id",
     timing: "on_play",             // ver timings abaixo
-    event: "battle_destroy",       // só para timing: "on_event"
-    targets: [{ id: "t1", owner: "self", zone: "field", cardKind: "monster" }],
     actions: [{ type: "draw", amount: 2, player: "self" }],
     oncePerTurn: true,
     oncePerTurnName: "unique_name"
@@ -257,17 +271,17 @@ dados declarativos ao alterar os contratos ou a infraestrutura.
 }
 ```
 
-**Timings:** `on_play`, `on_event`, `ignition`, `passive`, `on_activate`, `on_field_activate`
+**Timings:** `on_play`, `on_event`, `ignition`, `passive`, `on_activate`, `on_field_activate`, `manual`. A lista canônica é `EFFECT_TIMINGS` em [src/core/contracts/effects.ts](src/core/contracts/effects.ts).
 
-**Eventos:** `after_summon`, `battle_destroy`, `card_to_grave`, `standby_phase`, `attack_declared`, `opponent_damage`, `before_destroy`, `effect_targeted`, `card_equipped`, `spell_activated`
+**Eventos:** efeitos declarativos aceitam os nomes de `DUEL_EVENT_NAMES` em [src/core/contracts/effects.ts](src/core/contracts/effects.ts). Exemplos: `after_summon`, `battle_destroy`, `card_to_grave`, `card_moved`, `standby_phase`, `attack_declared`, `damage_step`, `effect_activated`, `counter_removed`, `lp_change` e `position_change`. Eventos informativos do Event Bus não pertencem automaticamente a esse contrato. Para declarar um trigger por evento, use `timing: "on_event"` e `event`.
 
 **Filtros de summon (para `after_summon`):**
 
-- `summonMethods`: `["normal", "special"]`
-- `summonFrom`: `"hand"` | `"deck"` | `"graveyard"`
+- `summonMethods`: array de métodos de [src/core/contracts/summon.ts](src/core/contracts/summon.ts): `normal`, `tribute`, `flip`, `special`, `fusion`, `synchro`, `ascension`.
+- `summonFrom`: zona de origem canônica de [src/core/contracts/zones.ts](src/core/contracts/zones.ts); exemplos: `hand`, `deck`, `graveyard`, `extraDeck`, `banished`.
 - `requireSelfAsSummoned`, `requireOpponentSummon`
 
-**Extra Deck:** `monsterType: "fusion"` ou `monsterType: "ascension"` + objeto `ascension: { materialId, requirements }`
+**Extra Deck:** `monsterType: "fusion"`, `"synchro"` ou `"ascension"`. Fusões exigem metadados `fusionMaterials` ou `extraDeckSummonProcedure`; Sincro exige `synchro`; Ascensão exige `ascension` com `materialId` ou `materialFilters` e pode declarar `requirements`. Consulte [src/core/contracts/cards.ts](src/core/contracts/cards.ts) para os contratos completos.
 
 ---
 
@@ -308,9 +322,14 @@ Além dos handlers customizados, várias actions usam `proxyEngineMethod(...)` p
 
 Antes do handler, declare a variante no mapa de domínio apropriado em
 `src/core/contracts/actions/`; `ActionByType` é composto desses mapas.
+O exemplo didático abaixo pressupõe a variante `my_action_type` com
+`targetRef` obrigatório e move um alvo próprio do campo para o Cemitério.
+Esse movimento já é coberto pela action genérica `move`; um handler novo
+só se justifica quando nenhuma action existente resolver o comportamento.
 
 ```ts
 import type { ActionHandler } from "../contracts/actionRuntime.js";
+import { resolveTargetCards } from "./shared.js";
 
 export const handleMyAction: ActionHandler<"my_action_type"> = async (
   action,
@@ -318,13 +337,21 @@ export const handleMyAction: ActionHandler<"my_action_type"> = async (
   targets,
   engine,
 ) => {
-  const { player, opponent, source } = ctx;
-  const game = engine.game;
+  const player = ctx.player;
+  const [card] = resolveTargetCards(action, ctx, targets);
+  if (!player || !card || !player.field.includes(card)) return false;
 
-  // Lógica aqui — sem UI, seleções vêm via targets
-  game.moveCard(card, player, "graveyard", { fromZone: "field" });
-  game.updateBoard();
-  return true; // sucesso
+  const result = await engine.game.moveCard(card, player, "graveyard", {
+    fromZone: "field",
+    sourceCard: ctx.source ?? null,
+    awaitCardMovedEvent: true,
+  });
+  if (typeof result === "object" && result?.needsSelection) return result;
+
+  const success =
+    typeof result === "boolean" ? result : result?.success === true;
+  if (success) engine.game.updateBoard();
+  return success;
 };
 ```
 
@@ -346,7 +373,7 @@ handler/action e aos consumidores afetados, conforme a política acima.
 
 ### Padrões Críticos
 
-**Mover cartas:** `game.moveCard(card, player, zone, { fromZone })` — sempre passe pelo fluxo normal para que eventos, logs e UI sejam atualizados (ver "Resolução sequencial e legível").
+**Mover cartas:** `await game.moveCard(card, player, zone, { fromZone })` — sempre aguarde o fluxo normal e trate seu resultado para que eventos, logs e UI sejam atualizados sequencialmente (ver "Resolução sequencial e legível").
 
 **Posição de Special Summon:**
 
@@ -454,14 +481,19 @@ Toda nova carta exige nome/descrição em inglês e tradução para português.
 ### Regras de Deck
 
 - **Main Deck:** 20–30 cartas (máx 3 cópias por id)
-- **Extra Deck:** até 10 cartas (fusão/ascensão, 1 cópia por id)
+- **Extra Deck:** até 10 cartas (fusão/Sincro/ascensão, 1 cópia por id)
+
+A banlist pode reduzir o limite de cópias de um ID.
 
 O deck builder persiste oito slots em `shadow_duel_deck_presets`, no formato
 `{ idSchemaVersion: 3, presets: [{ name, deck, extraDeck }] }`. O campo
 `idSchemaVersion` identifica o único formato aceito; não há conversão de IDs.
-O slot ativo usa `shadow_duel_active_deck_slot`. Dados incompatíveis ou inválidos
-usam os defaults; decks atuais válidos continuam salvos. Não leia ou grave
-chaves históricas de decks nem limpe preferências de outros domínios.
+O slot ativo usa `shadow_duel_active_deck_slot`. Formatos incompatíveis e slots
+com estrutura inválida usam os defaults. Slots estruturalmente válidos são
+saneados quanto a IDs, cópias e limites; decks incompletos podem persistir e são
+validados antes de iniciar o duelo. Decks atuais válidos continuam salvos.
+Não leia ou grave chaves históricas de decks nem limpe preferências de outros
+domínios.
 
 ---
 

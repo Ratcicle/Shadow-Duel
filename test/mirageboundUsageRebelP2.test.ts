@@ -1,8 +1,26 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import Card from "../src/core/Card.js";
+import { validateCardDatabase } from "../src/core/CardDatabaseValidator.js";
 import { cardDefinition, required } from "./helpers/fixtures.js";
 import { createRuntimeGame, placeFieldCards, completeTestSelections } from "./helpers/game.js";
+
+test("P2 Rebel usage declarations pass startup validation with only the hand summon limited", () => {
+  const validation = validateCardDatabase();
+  assert.deepEqual(validation.errors.filter(issue => issue.cardId === 364), []);
+  const rebel = new Card(cardDefinition(364), "player");
+  const summon = required(rebel.effects.find(effect => effect.id === "miragebound_rebel_hand_summon_on_position_change"));
+  const endPhaseReturn = required(rebel.effects.find(effect => effect.id === "miragebound_rebel_end_phase_return"));
+  assert.equal(summon.oncePerTurn, true);
+  assert.equal(summon.oncePerTurnName, summon.id);
+  assert.equal(summon.oncePerTurnScope, undefined);
+  assert.equal(summon.usagePolicy, "use");
+  assert.equal(endPhaseReturn.triggerRequirement, "mandatory");
+  assert.equal(endPhaseReturn.oncePerTurn, undefined);
+  assert.equal(endPhaseReturn.oncePerDuel, undefined);
+  assert.equal(endPhaseReturn.oncePerTurnName, undefined);
+  assert.equal(endPhaseReturn.usagePolicy, undefined);
+});
 
 for (const seat of ["player", "bot"] as const) {
   for (const [id, effectId] of [[354, "miragebound_oasis_ignition"], [355, "miragebound_glass_sovereign_bounce"], [359, "miragebound_mirror_path_destroy_spell_trap"]] as const) {

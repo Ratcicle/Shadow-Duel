@@ -126,7 +126,7 @@ for (const seat of ["player", "bot"] as const) {
             assert.deepEqual(simulated._simUnsupportedActions || [], []);
             const saved = validateCanonicalReplay(JSON.parse(JSON.stringify(live.finalizeReplay({ reason: "arcanist-final" }))));
             assert.equal(saved.schemaVersion, 2); assert.equal(saved.engineVersion, "engine-rules-v14");
-            assert.equal(saved.cardDatabaseSignature, "a2cd2bdb");
+            assert.equal(saved.cardDatabaseSignature, "db5833d7");
             assert.ok(saved.decisions.some(decision => decision.kind === "target"));
             assert.equal(saved.commands[0]?.type, wasSet ? "activate_effect" : "activate_card");
             const result = await replayCanonicalDuel(saved, { game: unsafeFixture<ReplayDriverGamePort>(playback,

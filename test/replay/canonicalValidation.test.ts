@@ -111,6 +111,7 @@ test("Miragebound S02 integration rejects previous full signatures and uses sche
   assert.throws(() => validateCanonicalReplay(replay({ cardDatabaseSignature: "37f6c19a" })), /card database signature does not match/);
   assert.throws(() => validateCanonicalReplay(replay({ cardDatabaseSignature: "cdcd7e32" })), /card database signature does not match/);
   assert.throws(() => validateCanonicalReplay(replay({ cardDatabaseSignature: "7bbe98b0" })), /card database signature does not match/);
+  assert.throws(() => validateCanonicalReplay(replay({ cardDatabaseSignature: "a2cd2bdb" })), /card database signature does not match/);
 });
 
 test("P2 snapshots require typed copy usage and piercing provenance", t => {

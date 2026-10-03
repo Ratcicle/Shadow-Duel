@@ -618,12 +618,26 @@ desse golden decorre exclusivamente da versão, sem remover estado do hash.
 
 ### Estado após merge das branches dot — 03/10/2026
 
-A main combinada usa **schema `2` / `engine-rules-v14`**, com assinatura
+A integração inicial da main combinada usava **schema `2` / `engine-rules-v14`**, com assinatura
 **`a2cd2bdb`**. Mantém os estados OPT/perfuração e a presença S02 de Miragebound
 junto do histórico de ativações e das correções de Chain, movimentos e Fusão.
 As assinaturas e versões isoladas anteriores continuam rejeitadas sem migração.
 
-O golden atual tem hashes de estado `5a03f26c` e `c2ec633c`, hash completo
+O golden dessa integração tem hashes de estado `5a03f26c` e `c2ec633c`, hash completo
 **`69ee977d`** e 12100 caracteres. Repor somente o marcador v12 nesse envelope
 produz `c418b563`, preservando os estados integrados. Os goldens `592d2e85` e
 `01535368` acima descrevem a branch isolada, antes de incorporar Miragebound.
+
+### Validação do retorno obrigatório de Rebel — 03/10/2026
+
+O retorno na Fase Final de Rebel (364) mantinha `usagePolicy: "use"` depois da
+remoção de seu OPT no lote P2. Essa política sem limite era rejeitada pelo
+validador do banco na tela inicial. A correção remove somente a política
+residual, preservando o retorno obrigatório por cópia e o HOPT da Invocação da mão.
+
+A assinatura completa passa a **`db5833d7`**, mantendo **schema `2` /
+`engine-rules-v14`**. Gravações com `a2cd2bdb` são rejeitadas sem migração.
+O golden tem hash completo **`bc1e3cb7`**, com os mesmos hashes de estado
+`5a03f26c` e `c2ec633c` e 12100 caracteres. Restaurar somente a assinatura
+anterior no envelope reproduz `69ee977d`; também restaurar o marcador v12
+reproduz `c418b563`, confirmando que a diferença está na assinatura do banco.

@@ -251,9 +251,10 @@ test("replay canônico headless termina com o mesmo hash", async () => {
     ["5a03f26c", "c2ec633c"],
   );
   assert.equal(replay.result.finalStateHash, "c2ec633c");
-  // Version changes preserve the integrated per-copy/piercing state and database.
-  assert.equal(hashCanonicalValue({ ...replay, engineVersion: "engine-rules-v12" }), "c418b563");
-  assert.equal(hashCanonicalValue(replay), "69ee977d");
+  // Removing Rebel's unused policy changes only the database signature in this envelope.
+  assert.equal(hashCanonicalValue({ ...replay, cardDatabaseSignature: "a2cd2bdb", engineVersion: "engine-rules-v12" }), "c418b563");
+  assert.equal(hashCanonicalValue({ ...replay, cardDatabaseSignature: "a2cd2bdb" }), "69ee977d");
+  assert.equal(hashCanonicalValue(replay), "bc1e3cb7");
   assert.equal(JSON.stringify(replay).length, 12100);
 
   const result = await replayCanonicalDuel(replay);
