@@ -1,6 +1,6 @@
 import type { CardAction } from "./actions.js";
 import type { DeferredCardToGraveTriggerPackage, MaterialDuelStats } from "./gameRuntime.js";
-import type { EventTriggerOccurrence } from "./events.js";
+import type { EventTriggerOccurrence, TurnCardActivationHistory } from "./events.js";
 import type {
   BattlePosition,
   CardKind,
@@ -1354,6 +1354,7 @@ export interface ChainTargetResolution {
 }
 
 export interface ChainEffectEnginePort {
+  updatePassiveBuffs?(): unknown;
   applyActions(
     actions: readonly CardAction[],
     context: ChainActionContext,
@@ -1416,6 +1417,7 @@ export interface ChainGamePort {
   turn?: PlayerId | string;
   phase?: ChainPhase | string;
   turnCounter?: number;
+  cardActivationHistory?: TurnCardActivationHistory;
   eventResolutionCounter?: number;
   pendingEventSelection?: ChainPendingEventSelection | null;
   _flushingPendingTriggerOccurrences?: boolean;

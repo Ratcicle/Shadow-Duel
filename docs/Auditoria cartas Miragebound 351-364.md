@@ -429,7 +429,9 @@ Replay mantém **schema 2 / engine-rules-v10**, sem campos persistidos, comandos
 
 ## Bugs pendentes por prioridade
 
-Fila atualizada em 03/10/2026 após o fechamento de P1/P2/P3 e S01/S02. Não há bug confirmado nem suspeita aberta restante no escopo desta auditoria Miragebound. As limitações acima permanecem registradas, incluindo o controle preexistente de DragonPeak fora do lote.
+Fila atualizada em 03/10/2026 após o fechamento de P1/P2/P3 e S01/S02. Não há bug confirmado nem suspeita aberta restante no escopo desta auditoria Miragebound. As limitações acima permanecem registradas como evidência histórica do lote.
+
+**Atualização da integração remota, em 03/10/2026:** o controle de DragonPeak anteriormente falho passou após integrar a correção upstream de resolução de Magia de Campo independente da fonte. O histórico da falha/baseline acima foi preservado. A união mantém os dados/textos Miragebound e a regra aprovada de False Horizon, conserva schema 2 e usa engine-rules-v12 com assinatura `a2cd2bdb`. Os valores v10/`cdcd7e32` da seção S02 descrevem sua entrega isolada, anterior a esta integração.
 
 ### Dependências e itens fora da fila de correção
 

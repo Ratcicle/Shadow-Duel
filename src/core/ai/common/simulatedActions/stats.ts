@@ -3,7 +3,7 @@ import { applyNamedStatChange } from "../../../effects/actions/stats.js";
 import { getCardEffectImmunity } from "../../../effects/targeting/filters.js";
 import { getEffectiveAtk } from "../cardStats.js";
 import { expireFaceupStatBuffs } from "../../../effects/actions/stats.js";
-import { refreshEquipExtraAttackBonus, removeFieldAuraBuffContributions, suppressTemporaryDynamicStatIncreasesForDebuff } from "../../../effects/passives/passiveBuffs.js";
+import { hasUnmodeledTemporaryPassiveSuppression, refreshEquipExtraAttackBonus, removeFieldAuraBuffContributions, suppressTemporaryDynamicStatIncreasesForDebuff } from "../../../effects/passives/passiveBuffs.js";
 import { getCounterValue, setCounterValue } from "../counters.js";
 import { estimateMonsterValue, hasArchetype } from "../cardValue.js";
 import {
@@ -26,6 +26,7 @@ import {
   getZoneCards,
   moveCardToZone,
   refreshSimulatedFieldPresenceTypeSummonBuffForCard,
+  refreshSimulatedFieldAuras,
   removeCardFromZones,
 } from "../zones.js";
 import {
@@ -170,7 +171,7 @@ function getTargetScopeCards(
 
 export function applySwitchPosition(
   ctx: SimulatedActionHandlerContext<"switch_position">,
-): void | typeof STOP_SIMULATION {
+): boolean {
   const { action, targets, state, options, self, opponent } = ctx;
   const targetCards =
     Array.isArray(targets) && targets.length > 0
@@ -221,6 +222,7 @@ export function applySwitchPosition(
         );
     }
     refreshSimulatedFieldPresenceTypeSummonBuffForCard(card);
+    refreshSimulatedFieldAuras(state);
     options.emitSimulatedEvent?.("position_change", {
       card,
       player: owner,
@@ -233,7 +235,7 @@ export function applySwitchPosition(
       actionContext: options.actionContext,
     });
   });
-  if (!changed && action.haltOnFailure) return STOP_SIMULATION;
+  return changed;
 }
 
 export function applySetFacedownDefense(
@@ -263,6 +265,7 @@ export function applySetFacedownDefense(
       card.battlePositionLocked = true;
     }
     refreshSimulatedFieldPresenceTypeSummonBuffForCard(card);
+    refreshSimulatedFieldAuras(state);
     options.emitSimulatedEvent?.("position_change", {
       card,
       player: owner,
@@ -403,6 +406,12 @@ export function applyBuffStatsTemp(
     } }, card, self, { sourceCard: options.sourceCard || null }).immune) return;
     let changed = false;
     for (const [stat, boost] of [["atk", atkBoost], ["def", defBoost]] as const) {
+      if (boost < 0 && !action.permanent && expiresOnTurn === null) {
+        const suppressed = suppressTemporaryDynamicStatIncreasesForDebuff(card, stat, boost);
+        if (suppressed > 0 && hasUnmodeledTemporaryPassiveSuppression(card)) {
+          (state._simUnsupportedActions ??= []).push("buff_stats_temp:passive_recalculation");
+        }
+      }
       const current = Number(card[stat] || 0);
       const next = Math.max(0, current + boost);
       const applied = next - current;
@@ -744,7 +753,7 @@ export function applyModifyStatsTemp(
       const previousAtk = card.atk || 0;
       const newAtk = Math.floor(previousAtk * (action.atkFactor as number));
       if (suppressTemporaryDynamicStatIncreasesForDebuff(card, "atk", newAtk - previousAtk) > 0) {
-        requiresPassiveRecalculation = true;
+        requiresPassiveRecalculation ||= hasUnmodeledTemporaryPassiveSuppression(card);
       }
       const deltaAtk = newAtk - (card.atk || 0);
       card.atk = newAtk;
@@ -755,16 +764,16 @@ export function applyModifyStatsTemp(
       const previousDef = card.def || 0;
       const newDef = Math.floor(previousDef * (action.defFactor as number));
       if (suppressTemporaryDynamicStatIncreasesForDebuff(card, "def", newDef - previousDef) > 0) {
-        requiresPassiveRecalculation = true;
+        requiresPassiveRecalculation ||= hasUnmodeledTemporaryPassiveSuppression(card);
       }
       const deltaDef = newDef - (card.def || 0);
       card.def = newDef;
       card.tempDefBoost =
         (card.tempDefBoost || 0) + deltaDef;
     }
+    requiresPassiveRecalculation ||= hasUnmodeledTemporaryPassiveSuppression(card);
   });
-  // Immediate stats are known, but restoring suppressed auras after a move or
-  // at turn end needs the runtime's passive refresh. Reject this search branch.
+  // Unknown origin cannot promise correct restoration after moves or End Phase.
   if (requiresPassiveRecalculation) {
     (state._simUnsupportedActions ??= []).push("modify_stats_temp:passive_recalculation");
   }
@@ -902,7 +911,8 @@ export function applyAddStatus(
         card.effects?.forEach((effect) => {
           if (effect.timing !== "passive") return;
           const passiveType = "passive" in effect ? effect.passive?.type : undefined;
-          if (passiveType === "field_presence_type_summon_count_buff") return;
+          // Both count-based families are reconciled by their declared producers.
+          if (passiveType === "field_presence_type_summon_count_buff" || passiveType === "activated_card_count_buff") return;
           // These rules read negation directly at attack/movement time.
           if (passiveType === "restrict_opponent_summon_turn_attack" || passiveType === "send_to_grave_replacement" ||
               passiveType === "conditional_protection" || passiveType === "field_archetype_aura_buff" || passiveType === "event_actions") return;

@@ -1,4 +1,5 @@
 import { isLegalZoneSummon } from "../../actionHandlers/summon/fromZone.js";
+import { isActionOptionalNoop, shouldContinueAfterActionFailure } from "../../actionHandlers/shared.js";
 import { getCounterLimitSummonOptions } from "../../actionHandlers/summon/counterLimit.js";
 import { getNormalSummonEntries } from "../../actionHandlers/summon/normalFromHand.js";
 import { cardMatchesKind, getCardComparableAttribute } from "../../Card.js";
@@ -441,17 +442,6 @@ function isActionResultFailure(
   );
 }
 
-function isActionOptionalNoop(
-  action: PreviewAction | null | undefined,
-): boolean {
-  if (!action) return false;
-  if (action.optional === true) return true;
-  const min = Number(
-    typeof action.count === "object" ? action.count?.min : undefined,
-  );
-  return Number.isFinite(min) && min <= 0;
-}
-
 function createActionResult({
   success,
   executed = false,
@@ -755,13 +745,15 @@ export async function applyActions(
 
         if (isActionResultFailure(result)) {
           const isOptional = isActionOptionalNoop(action);
+          const continueOnFailure = shouldContinueAfterActionFailure(action);
           logDev?.("ACTION_HANDLER_FAILED", {
             ...actionInfo,
             optional: isOptional,
+            continueOnFailure,
             reason: result && typeof result === "object" ? result.reason : null,
           });
 
-          if (isOptional) {
+          if (continueOnFailure) {
             skippedCount += 1;
             continue;
           }

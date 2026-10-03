@@ -2993,7 +2993,7 @@ Switches target battle position.
 
 **Notas**
 
-_Sem notas._
+- Succeeds if at least one monster changes position. Ordinary failure stops subsequent actions by default. Explicit haltOnFailure:false or stopOnFailure:false permits independent continuation; true takes precedence if aliases conflict. Selection, abort and simulation knowledge boundaries cannot be bypassed.
 
 ## Combate
 

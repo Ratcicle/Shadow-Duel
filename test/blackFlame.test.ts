@@ -16,6 +16,7 @@ import { validateCardDatabase } from "../src/core/CardDatabaseValidator.js";
 import { ACTION_CATALOG } from "../src/core/actionHandlers/actionCatalog.js";
 import { applySimulatedActions } from "../src/core/ai/common/simulatedActions/index.js";
 import { simulateGenericSpellEffect, attachSimulatedEventEmitter } from "../src/core/ai/common/simulation.js";
+import { scoreDragonLineTerminal } from "../src/core/ai/dragon/linePlanning.js";
 import { createCanonicalStateSnapshot } from "../src/core/game/replay/canonical.js";
 import { cardDatabaseById } from "./helpers/fixtures.js";
 
@@ -413,7 +414,7 @@ test("a simulação registra o efeito persistente e aplica o mesmo dano", () => 
   assert.equal(state.player.lp, 7700);
 });
 
-test("o bot evita pagar seus últimos 1000 PV sem endurecer o runtime", async (t) => {
+test("Black Flame simulation preserves the runtime's legal payment of the last 1000 LP", async (t) => {
   const game = createGame(t);
   const source = createRuntimeCard(game);
   game.player.lp = 1000;
@@ -443,8 +444,22 @@ test("o bot evita pagar seus últimos 1000 PV sem endurecer o runtime", async (t
     },
   });
   simulateGenericSpellEffect(state, simulatedSource, { selfId: "bot" });
-  assert.equal(state.bot.lp, 1000);
-  assert.deepEqual(state.temporaryEventEffects || [], []);
+  assert.equal(state.bot.lp, 0);
+  assert.equal(state.temporaryEventEffects?.length, 1);
+});
+
+test("Dragon terminal evaluation penalizes Black Flame self-defeat independently of payment legality", () => {
+  const source = simulationCard({ ...getBlackFlame(), instanceId: "terminal-black-flame", owner: "bot", controller: "bot" });
+  const initialState = simulationState({ turn: "bot", phase: "main1", turnCounter: 1,
+    bot: { lp: 1000, hand: [source] } });
+  const finalState = structuredClone(initialState);
+  simulateGenericSpellEffect(finalState, required(finalState.bot.hand[0]), { selfId: "bot" });
+  const losingScore = scoreDragonLineTerminal({ initialState, finalState, baseScore: 1000 });
+  const preservedScore = scoreDragonLineTerminal({ initialState, finalState: initialState });
+  assert.equal(finalState.bot.lp, 0);
+  assert.equal(losingScore, -10000, "terminal defeat overrides a favorable intermediate score");
+  assert.ok(losingScore < preservedScore);
+  assert.equal(initialState.bot.lp, 1000);
 });
 
 function requiredReservation(

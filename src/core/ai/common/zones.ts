@@ -1,8 +1,9 @@
 import { clearEffectNegation } from "../../effects/negation.js";
 import { restoreFieldExitStatuses, restoreTemporaryStatuses } from "../../Card.js";
 import { cardMatchesFilter } from "./cardFilters.js";
+import { countTurnCardActivations } from "../../game/events/activationHistory.js";
 import { clearPermanentStatBuffs, expireFaceupStatBuffs, removeTrackedStatChange } from "../../effects/actions/stats.js";
-import { applyPassiveBuffValue, getFieldAuraBuffKey, getSendToGraveReplacementDestination, refreshEquipExtraAttackBonus, removeFieldAuraBuffContributions } from "../../effects/passives/passiveBuffs.js";
+import { clearPassiveBuffsForCard, getModeledPassiveContributions, pruneModeledPassiveContributions, registerModeledPassiveContribution, applyPassiveBuffValue, getFieldAuraBuffKey, getSendToGraveReplacementDestination, refreshEquipExtraAttackBonus, removeFieldAuraBuffContributions } from "../../effects/passives/passiveBuffs.js";
 import {
   assignAutomaticFieldSlot,
   clearFieldSlot,
@@ -33,6 +34,7 @@ type SimulatedZone = SimulatedArrayZone | "fieldSpell";
 type FieldPresenceBuffCard = Pick<SimulatedCardShape,
   "atk" | "def" | "dynamicBuffs" | "suppressedDynamicBuffStatsByKey" |
   "temporarySuppressedDynamicBuffStatsByKey"> & {
+  readonly id?: number | undefined;
   readonly cardKind?: string | null | undefined;
   readonly isFacedown?: boolean | undefined;
   readonly effectsNegated?: boolean | undefined;
@@ -41,6 +43,7 @@ type FieldPresenceBuffCard = Pick<SimulatedCardShape,
   readonly effects?: readonly {
     readonly id?: string | undefined;
     readonly timing?: string | undefined;
+    readonly requireZone?: string | undefined;
     readonly passive?: {
       readonly type?: string | undefined;
       readonly typeName?: string | undefined;
@@ -96,15 +99,24 @@ export interface SimulatedFieldPresenceBuffState {
 }
 
 export function refreshSimulatedFieldPresenceTypeSummonBuffForCard(card: FieldPresenceBuffCard): void {
-  for (const effect of card.effects || []) {
-    if (effect.timing !== "passive" || !effect.id || effect.passive?.type !== "field_presence_type_summon_count_buff") continue;
+  for (const [index, effect] of (card.effects || []).entries()) {
+    if (effect.timing !== "passive" || effect.passive?.type !== "field_presence_type_summon_count_buff") continue;
     const passive = effect.passive;
     const typeName = passive.typeName || passive.monsterType;
     if (!typeName) continue;
+    const key = effect.id || `passive_${card.id}_${index}_field_presence_type`;
+    // This producer reconciles monsters in the field (and clears departed
+    // presences). A rule restricted to another zone cannot contribute here.
+    if (effect.requireZone && effect.requireZone !== "field") {
+      applyPassiveBuffValue(card, key, 0);
+      pruneModeledPassiveContributions(card);
+      continue;
+    }
     const active = card.cardKind === "monster" && !card.isFacedown &&
       !card.effectsNegated && card.fieldPresenceId != null;
     const count = active ? card.fieldPresenceState?.[`summon_count_${typeName}`] || 0 : 0;
-    applyPassiveBuffValue(card, effect.id, count * (passive.amountPerCard || 0), passive.stats || ["atk", "def"]);
+    registerModeledPassiveContribution(card, key, "field_presence_type_summon_count_buff");
+    applyPassiveBuffValue(card, key, count * (passive.amountPerCard || 0), passive.stats || ["atk", "def"]);
   }
 }
 
@@ -118,14 +130,40 @@ export function refreshSimulatedFieldPresenceTypeSummonBuffs(state: SimulatedFie
 }
 
 /** Continuous archetype auras use the same contribution keys as a live clone. */
-export function refreshSimulatedFieldAuras(state: Pick<AiStateShape, "bot" | "player">): void {
+export function refreshSimulatedFieldAuras(state: Pick<AiStateShape, "bot" | "player"> &
+  Partial<Pick<AiStateShape, "turnCounter" | "cardActivationHistory">>): void {
   const field = [...state.player.field, ...state.bot.field];
+  const cards = [...field, ...state.player.spellTrap, ...state.bot.spellTrap,
+    ...(state.player.fieldSpell ? [state.player.fieldSpell] : []), ...(state.bot.fieldSpell ? [state.bot.fieldSpell] : [])];
+  const stale = new Map<object, Set<string>>(cards.map(card => [card, new Set(getModeledPassiveContributions(card)
+    .filter(([, family]) => family !== "field_presence_type_summon_count_buff").map(([key]) => key))]));
+  const refresh: typeof applyPassiveBuffValue = (card, key, amount, stats) => {
+    if (card) stale.get(card)?.delete(key);
+    return applyPassiveBuffValue(card, key, amount, stats);
+  };
+  refreshSimulatedFieldPresenceTypeSummonBuffs(state);
   for (const owner of [state.player, state.bot]) {
     for (const source of [...owner.field, ...owner.spellTrap, ...(owner.fieldSpell ? [owner.fieldSpell] : [])]) {
       source.effects?.forEach((effect, effectIndex) => {
-        if (effect.timing !== "passive" || !("passive" in effect) || effect.passive?.type !== "field_archetype_aura_buff") return;
+        if (effect.timing !== "passive" || !("passive" in effect) || !effect.passive) return;
+        if (effect.passive.type === "activated_card_count_buff") {
+          const passive = effect.passive;
+          const countOwner = passive.countOwner || "any";
+          const opponent = owner === state.bot ? state.player : state.bot;
+          const playerId = countOwner === "self" ? owner.id : countOwner === "opponent" ? opponent.id : undefined;
+          const active = !source.isFacedown && !source.effectsNegated &&
+            (!effect.requireZone || findCardZone(owner, source) === effect.requireZone);
+          const key = effect.id || `passive_${source.id}_${effectIndex}_activations`;
+          registerModeledPassiveContribution(source, key, "activated_card_count_buff");
+          refresh(source, key,
+            active ? countTurnCardActivations(state, passive.filters || {}, playerId) * (passive.amountPerCard ?? 0) : 0,
+            passive.stats || ["atk", "def"]);
+          return;
+        }
+        if (effect.passive.type !== "field_archetype_aura_buff") return;
         const passive = effect.passive;
         const active = !source.isFacedown && !source.effectsNegated &&
+          (!effect.requireZone || findCardZone(owner, source) === effect.requireZone) &&
           (!passive.sourceFilters || cardMatchesFilter(source, passive.sourceFilters)) &&
           (!passive.equippedWithFilters || cardMatchesFilter(source, { equippedWithFilters: passive.equippedWithFilters }));
         for (const targetOwner of [state.player, state.bot]) {
@@ -140,12 +178,17 @@ export function refreshSimulatedFieldAuras(state: Pick<AiStateShape, "bot" | "pl
               const amount = stat === "atk" ? passive.atkBoost : undefined;
               const value = amount ?? ((passive.stats || ["atk", "def"]).includes(stat) ? passive.amount || 0 : 0);
               const key = getFieldAuraBuffKey(source, effect.id, effectIndex, field.indexOf(source), stat);
-              applyPassiveBuffValue(target, key, eligible ? value : 0, [stat]);
+              registerModeledPassiveContribution(target, key, "field_archetype_aura_buff");
+              refresh(target, key, eligible ? value : 0, [stat]);
             }
           }
         }
       });
     }
+  }
+  for (const card of cards) {
+    for (const key of stale.get(card) || []) applyPassiveBuffValue(card, key, 0);
+    pruneModeledPassiveContributions(card);
   }
 }
 
@@ -484,6 +527,7 @@ export function moveCardToZone(
       clearPermanentStatBuffs(card);
       clearEffectNegation(card);
     }
+    clearPassiveBuffsForCard(card);
   }
   if ((fromZone === "spellTrap" || fromZone === "fieldSpell") &&
       toZone !== "field" && toZone !== "spellTrap" && toZone !== "fieldSpell") {

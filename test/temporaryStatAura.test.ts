@@ -3,7 +3,9 @@ import test, { type TestContext } from "node:test";
 import Card from "../src/core/Card.js";
 import { cleanupTempBoosts } from "../src/core/game/turn/cleanup.js";
 import { applyPassiveBuffValue } from "../src/core/effects/passives/passiveBuffs.js";
-import { createPlanningCopy } from "../src/core/ai/common/planningCopy.js";
+import { cleanupSimulatedEndTurn } from "../src/core/ai/common/simulatedActions/lifecycle.js";
+import { moveCardToZone } from "../src/core/ai/common/zones.js";
+import { hasPendingPassiveRestoration, createPlanningCopy } from "../src/core/ai/common/planningCopy.js";
 import { applySimulatedActions } from "../src/core/ai/common/simulatedActions/index.js";
 import { beamSearchTurn, greedySearchWithEvalV2 } from "../src/core/ai/BeamSearch.js";
 import { turnLineSearch } from "../src/core/ai/TurnLineSearch.js";
@@ -57,7 +59,7 @@ for (const { factor, expected } of [
     game.effectEngine.updatePassiveBuffs();
     const copy = createPlanningCopy();
     const simulated = copy.cloneCardForSim(dragon);
-    const state = simulationState({ player: { field: [simulated] } });
+    const state = simulationState({ player: { field: [simulated], fieldSpell: copy.cloneCardForSim(owner.fieldSpell) } });
     const action: ActionOf<"modify_stats_temp"> = {
       type: "modify_stats_temp", targetRef: "target", atkFactor: factor, defFactor: factor,
     };
@@ -70,8 +72,7 @@ for (const { factor, expected } of [
     assert.deepEqual([dragon.atk, dragon.def], expected);
     assert.deepEqual([simulated.atk, simulated.def], expected);
     assert.deepEqual([simulated.tempAtkBoost, simulated.tempDefBoost], [dragon.tempAtkBoost, dragon.tempDefBoost]);
-    assert.deepEqual(state._simUnsupportedActions || [], factor < 0.5
-      ? ["modify_stats_temp:passive_recalculation"] : []);
+    assert.deepEqual(state._simUnsupportedActions || [], []);
     cleanupTempBoosts(owner);
     game.effectEngine.updatePassiveBuffs();
     assert.deepEqual([dragon.atk, dragon.def], [3300, 2800]);
@@ -80,7 +81,7 @@ for (const { factor, expected } of [
 
 for (const ownerId of ["player", "bot"] as const) {
   for (const search of ["beam", "greedy", "gameTree", "turnLine"] as const) {
-    test(`${search} rejects a snapshot with an aura suppressed by the real Spear (${ownerId})`, async t => {
+    test(`${search} admits a proven aura suppressed by the real Spear (${ownerId})`, async t => {
       const { owner, dragon, valley, attacker, activateSpear } = scenario(t, ownerId);
       assert.equal((await activateSpear()).success, true);
       const copy = createPlanningCopy();
@@ -96,14 +97,15 @@ for (const ownerId of ["player", "bot"] as const) {
         generateMainPhaseActions: (): AIAction[] => [{ type: "position_change", fieldIndex: 0, toPosition: "defense" }],
         simulateMainPhaseAction() { simulations++; },
         evaluateBoard(_snapshot: AIState) { evaluations++; return 0; },
+        evaluateBoardV2(_snapshot: AIState) { evaluations++; return 0; },
       };
       const result = search === "beam" ? await beamSearchTurn(state, policy)
         : search === "greedy" ? await greedySearchWithEvalV2(state, policy)
           : search === "gameTree" ? fixtureGameTreeSearch(state, policy, state.bot, 2)
             : await turnLineSearch(state, policy);
-      assert.equal(result?.action || null, null);
-      assert.equal(simulations, 0);
-      assert.equal(evaluations, 0);
+      void result;
+      assert.ok(simulations > 0);
+      if (search !== "gameTree") assert.ok(evaluations > 0);
       assert.equal(dragon.atk, 0);
       assert.ok(owner.field.includes(dragon));
     });
@@ -148,3 +150,65 @@ for (const ownerId of ["player", "bot"] as const) {
     });
   }
 }
+
+for (const ownerId of ["player", "bot"] as const) {
+  for (const departure of ["source", "target", "none"] as const) {
+    test(`B27 supported suppression survives ${departure} departure and End (${ownerId})`, async t => {
+      const { game, dragon, valley, activateSpear } = scenario(t, ownerId);
+      await activateSpear();
+      const copy = createPlanningCopy();
+      const target = copy.cloneCardForSim(dragon), aura = copy.cloneCardForSim(valley);
+      const state = simulationState({ [ownerId]: { field: [target], fieldSpell: aura } });
+      const owner = state[ownerId];
+      if (departure !== "none") {
+        assert.equal(moveCardToZone(owner, departure === "source" ? aura : target, "graveyard", owner, { state }), true);
+      }
+      if (departure === "target") {
+        assert.deepEqual([target.atk, target.def], [3000, 2500]);
+        assert.equal(target.temporarySuppressedDynamicBuffStatsByKey, undefined);
+        assert.equal(moveCardToZone(owner, target, "field", owner, { state }), true);
+      }
+      cleanupSimulatedEndTurn(state);
+      cleanupSimulatedEndTurn(state);
+      assert.deepEqual([target.atk, target.def], [departure === "source" ? 3000 : 3300, 2500]);
+      assert.deepEqual([dragon.atk, dragon.def], [0, 0], "branch cleanup is isolated from runtime");
+      assert.equal(game[ownerId].field.includes(dragon), true);
+    });
+  }
+}
+
+test("B27 snapshots without origin proof and mixed unknown contributions remain conservative", async t => {
+  const { dragon, activateSpear } = scenario(t, "player");
+  await activateSpear();
+  const copy = createPlanningCopy().cloneCardForSim(dragon);
+  const snapshot = { ...copy };
+  assert.equal(hasPendingPassiveRestoration(simulationState({ player: { field: [snapshot] } })), true);
+  copy.temporarySuppressedDynamicBuffStatsByKey = {
+    ...copy.temporarySuppressedDynamicBuffStatsByKey, unknown: { atk: true },
+  };
+  assert.equal(hasPendingPassiveRestoration(simulationState({ player: { field: [copy] } })), true);
+});
+
+test("B27 Boneflame graveyard aura stays unsupported after temporary half", async t => {
+  const { game, owner, opponent, spear } = scenario(t, "player");
+  const boneflame = new Card(cardDefinition(269), "player");
+  owner.field = []; owner.fieldSpell = null;
+  placeFieldCards(owner.field, boneflame);
+  owner.graveyard.push(new Card(cardDefinition("Grey Dragon"), "player"), new Card(cardDefinition("Grey Dragon"), "player"));
+  game.effectEngine.updatePassiveBuffs();
+  assert.equal(boneflame.atk, 800);
+  const target = createPlanningCopy().cloneCardForSim(boneflame);
+  const state = simulationState({ player: { field: [target] } });
+  const action: ActionOf<"modify_stats_temp"> = { type: "modify_stats_temp", targetRef: "target", atkFactor: 0.5 };
+  await game.effectEngine.applyActions([action], { player: opponent, opponent: owner, source: spear }, { target: [boneflame] });
+  applySimulatedActions({ state, selfId: "bot", actions: [action], selections: { target: [target] } });
+  assert.equal(boneflame.atk, 400);
+  assert.equal(target.atk, 400);
+  assert.deepEqual(state._simUnsupportedActions, ["modify_stats_temp:passive_recalculation"]);
+  assert.equal(hasPendingPassiveRestoration(state), true);
+  game.effectEngine.updatePassiveBuffs();
+  cleanupTempBoosts(owner); game.effectEngine.updatePassiveBuffs();
+  cleanupSimulatedEndTurn(state);
+  assert.equal(boneflame.atk, 800);
+  assert.equal(target.atk, 0, "unsupported graveyard family remains deliberately unmodeled");
+});

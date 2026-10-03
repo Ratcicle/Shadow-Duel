@@ -245,14 +245,15 @@ test("replay canônico headless termina com o mesmo hash", async () => {
   assert.equal(replay.format, "shadow-duel-canonical-replay");
   assert.equal(replay.schemaVersion, 2);
   assert.equal(replay.cardDatabaseSignature, getCardDatabaseSignature());
-  // Combined rules hash presence counters, LP-gain history and independent negation contributions.
+  // Combined rules also hash per-copy usage and piercing provenance.
   assert.deepEqual(
     replay.commands.map((command: { stateHash: string }) => command.stateHash),
-    ["a897fa58", "297e0fe8"],
+    ["5a03f26c", "c2ec633c"],
   );
-  assert.equal(replay.result.finalStateHash, "297e0fe8");
-  assert.equal(hashCanonicalValue(replay), "e0ed191d");
-  assert.equal(JSON.stringify(replay).length, 10491);
+  assert.equal(replay.result.finalStateHash, "c2ec633c");
+  // The recording hash includes engine v12 and the integrated Arcanist/Miragebound definition signature.
+  assert.equal(hashCanonicalValue(replay), "c418b563");
+  assert.equal(JSON.stringify(replay).length, 12100);
 
   const result = await replayCanonicalDuel(replay);
   assert.equal(result.ok, true);

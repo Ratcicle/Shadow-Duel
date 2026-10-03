@@ -17,6 +17,60 @@ const make = (id: number, owner = "bot") => createPlanningCopy().cloneCardForSim
 const strategy = () => new ArcanistStrategy(new Player("bot", "Bot"));
 const activeState = () => ({ turn: "bot", phase: "main1", turnCounter: 3, _isPerspectiveState: true as const });
 
+for (const actor of ["bot", "player"] as const) {
+  test(`309 per-copy ignition stays independent in generation and simulation (${actor})`, () => {
+    const first = make(309, actor), second = make(309, actor);
+    const state = simulationState({ ...activeState(), bot: { id: actor, spellTrap: [first, second],
+      hand: [make(306, actor), make(307, actor), make(306, actor), make(307, actor), make(304, actor), make(311, actor)],
+      deck: [make(310, actor), make(302, actor), make(301, actor)] }, player: { id: actor === "bot" ? "player" : "bot" } });
+    const ai = strategy();
+    const activate = (index: number, mode: "monsters" | "spells") => ai.simulateMainPhaseAction(state,
+      { type: "spellTrapEffect", cardId: 309, zoneIndex: index,
+        activationContext: { decisions: { cases: { meeting_arcanists_choose_effect: `meeting_arcanists_discard_${mode}` } } } });
+    activate(0, "monsters"); assert.equal(state.bot.graveyard.length, 2);
+    const beforeRepeat = state.bot.hand.slice();
+    activate(0, "spells"); assert.deepEqual(state.bot.hand, beforeRepeat);
+    const afterFirst = ai.generateMainPhaseActions(state).filter(action => action.type === "spellTrapEffect").filter(action => action.cardId === 309);
+    assert.equal(afterFirst.some(action => action.zoneIndex === 0), false);
+    assert.equal(afterFirst.some(action => action.zoneIndex === 1), true,
+      "using the first copy must leave an actionable second copy");
+    activate(1, "spells"); assert.equal(state.bot.graveyard.length, 4);
+    const effect = required(first.effects?.find(entry => entry.timing === "ignition"));
+    assert.equal(canUseSimulatedEffectUsage(state, effect, first), false);
+    assert.equal(canUseSimulatedEffectUsage(state, effect, second), false);
+    state.turnCounter++;
+    const nextTurn = ai.generateMainPhaseActions(state).filter(action => action.type === "spellTrapEffect").filter(action => action.cardId === 309);
+    assert.ok(nextTurn.some(action => action.zoneIndex === 0)); assert.ok(nextTurn.some(action => action.zoneIndex === 1));
+  });
+
+  test(`312 per-copy ignition survives public simulated replacement and shares modes (${actor})`, () => {
+    const first = make(312, actor), second = make(312, actor), host = make(306, actor);
+    const state = simulationState({ ...activeState(), bot: { id: actor, fieldSpell: first, field: [host],
+      hand: [second], deck: [make(301, actor), make(301, actor), make(302, actor)] }, player: { id: actor === "bot" ? "player" : "bot" } });
+    const ai = strategy();
+    ai.simulateMainPhaseAction(state, { type: "fieldEffect", cardId: 312,
+      activationContext: { decisions: { cases: { arcanist_grand_library_ignition: "arcanist_grand_library_search_equip" } } } });
+    assert.ok(state.bot.hand.some(card => card.id === 301));
+    assert.equal(moveCardToZone(state.bot, host, "hand", state.bot, { state }), true);
+    assert.equal(ai.generateMainPhaseActions(state).some(action => action.type === "fieldEffect" && action.cardId === 312), false);
+    const recruit = { type: "fieldEffect", cardId: 312,
+      activationContext: { decisions: { cases: { arcanist_grand_library_ignition: "arcanist_grand_library_summon" } } } } as const;
+    ai.simulateMainPhaseAction(state, recruit); assert.equal(state.bot.lp, 8000); assert.equal(state.bot.field.length, 0);
+    ai.simulateMainPhaseAction(state, { type: "spell", cardId: 312, cardName: second.name, index: state.bot.hand.indexOf(second) });
+    const activeLibrary = required(state.bot.fieldSpell);
+    assert.equal(activeLibrary.instanceId, second.instanceId);
+    assert.ok(state.bot.graveyard.some(card => card.instanceId === first.instanceId));
+    assert.ok(ai.generateMainPhaseActions(state).some(action => action.type === "fieldEffect" && action.cardId === 312));
+    ai.simulateMainPhaseAction(state, recruit); assert.equal(state.bot.lp, 6000); assert.equal(state.bot.field[0]?.id, 302);
+    const effect = required(activeLibrary.effects?.find(entry => entry.timing === "ignition"));
+    assert.equal(canUseSimulatedEffectUsage(state, effect, activeLibrary), false);
+    assert.equal(ai.generateMainPhaseActions(state).some(action => action.type === "fieldEffect" && action.cardId === 312), false);
+    state.turnCounter++;
+    assert.equal(canUseSimulatedEffectUsage(state, effect, activeLibrary), true);
+    assert.ok(ai.generateMainPhaseActions(state).some(action => action.type === "fieldEffect" && action.cardId === 312));
+  });
+}
+
 test("312 simulation accepts a legal 2100 LP activation while strategy preserves its 2200 reserve", () => {
   const library = make(312); const recruit = make(302);
   const state = simulationState({ ...activeState(), bot: { fieldSpell: library, deck: [recruit], lp: 2100 } });
@@ -181,6 +235,7 @@ for (const actor of ["bot", "player"] as const) {
 for (const unavailable of ["negated", "departed"] as const) {
   test(`309 keeps discarded costs when its continuous source becomes ${unavailable}`, () => {
     const source = make(309); const first = make(302); const second = make(307); const reward = make(304);
+    const activationPresence = { ...source, oncePerTurnResetVersion: source.oncePerTurnResetVersion || 0 };
     const state = simulationState({ ...activeState(), bot: { spellTrap: [source], hand: [first, second], deck: [reward] } });
     applyGenericSimulatedMainPhaseAction(state, { type: "spellTrapEffect", zoneIndex: 0, cardId: 309,
       activationContext: { decisions: { cases: { meeting_arcanists_choose_effect: "meeting_arcanists_discard_monsters" } } } }, {
@@ -194,7 +249,10 @@ for (const unavailable of ["negated", "departed"] as const) {
     assert.ok(state.bot.graveyard.includes(first));
     assert.ok(state.bot.graveyard.includes(second));
     assert.ok(state.bot.deck.includes(reward));
-    assert.equal(canUseSimulatedEffectUsage(state, required(source.effects?.find(effect => effect.timing === "ignition")), source), false);
+    const effect = required(source.effects?.find(entry => entry.timing === "ignition"));
+    assert.equal(canUseSimulatedEffectUsage(state, effect, activationPresence), false);
+    assert.equal(canUseSimulatedEffectUsage(state, effect, source), unavailable === "departed",
+      "leaving the field resets the per-copy presence without restoring paid costs");
   });
 }
 

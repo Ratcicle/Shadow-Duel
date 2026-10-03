@@ -1,4 +1,5 @@
 import { getNegationContributions } from "../../effects/negation.js";
+import { getTurnCardActivations } from "../events/activationHistory.js";
 /**
  * serialization.js
  *
@@ -235,6 +236,12 @@ export function getPublicState(
     turn: this.turn,
     phase: this.phase,
     turnCounter: this.turnCounter,
+    cardActivationHistory: {
+      turnCounter: this.turnCounter,
+      entries: getTurnCardActivations(this).map(entry => ({
+        ...entry, card: { ...entry.card, archetypes: [...entry.card.archetypes] },
+      })),
+    },
     currentPlayer: this.turn === "player" ? this.player.id : this.bot.id,
     chain: {
       chainId: this.chainSystem?.activeChainId ?? null,

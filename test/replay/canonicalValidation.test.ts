@@ -39,7 +39,9 @@ function replay(overrides: MutableReplay = {}): MutableReplay {
 }
 
 test("engine version is required and rejects recordings with previous semantics", () => {
-  assert.equal(CANONICAL_REPLAY_ENGINE_VERSION, "engine-rules-v10");
+  assert.equal(CANONICAL_REPLAY_ENGINE_VERSION, "engine-rules-v12");
+  assert.throws(() => validateCanonicalReplay(replay({ engineVersion: "engine-rules-v11" })), /engineVersion/);
+  assert.throws(() => validateCanonicalReplay(replay({ engineVersion: "engine-rules-v10" })), /engineVersion/);
   assert.throws(() => validateCanonicalReplay(replay({ engineVersion: "engine-rules-v9" })), /engineVersion/);
   assert.throws(() => validateCanonicalReplay(replay({ engineVersion: "engine-rules-v8" })), /engineVersion/);
   assert.throws(() => validateCanonicalReplay(replay({ engineVersion: "engine-rules-v7" })), /engineVersion/);
@@ -95,8 +97,8 @@ test("replays com a assinatura parcial antiga são rejeitados antes da reproduç
   assert.doesNotThrow(() => validateCanonicalReplay(replay()));
 });
 
-test("Miragebound S02 rejects previous full signatures and uses schema 2 with engine v10", () => {
-  assert.equal(CANONICAL_REPLAY_ENGINE_VERSION, "engine-rules-v10");
+test("Miragebound S02 integration rejects previous full signatures and uses schema 2 with engine v12", () => {
+  assert.equal(CANONICAL_REPLAY_ENGINE_VERSION, "engine-rules-v12");
   assert.throws(
     () => validateCanonicalReplay(replay({ cardDatabaseSignature: "98009b78" })),
     /card database signature does not match/,
@@ -105,6 +107,8 @@ test("Miragebound S02 rejects previous full signatures and uses schema 2 with en
   assert.throws(() => validateCanonicalReplay(replay({ cardDatabaseSignature: "d0615be5" })), /card database signature does not match/);
   assert.throws(() => validateCanonicalReplay(replay({ cardDatabaseSignature: "c2d58ded" })), /card database signature does not match/);
   assert.throws(() => validateCanonicalReplay(replay({ cardDatabaseSignature: "37f6c19a" })), /card database signature does not match/);
+  assert.throws(() => validateCanonicalReplay(replay({ cardDatabaseSignature: "cdcd7e32" })), /card database signature does not match/);
+  assert.throws(() => validateCanonicalReplay(replay({ cardDatabaseSignature: "7bbe98b0" })), /card database signature does not match/);
 });
 
 test("P2 snapshots require typed copy usage and piercing provenance", t => {

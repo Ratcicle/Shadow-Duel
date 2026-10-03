@@ -14,6 +14,7 @@ Este documento registra a direção geral de desenvolvimento do **Shadow Duel** 
 | Relíquias Arcanistas | Design consolidado, ainda não implementado nem testado. Os espaços individuais do campo já existem. |
 | Online | Planejado, ainda não implementado. |
 | Renderer Three.js | Planejado; a apresentação atual usa DOM e Pixi. |
+| Indicadores visuais de estado dos efeitos | Planejado para depois do Three.js; aproveitará os parágrafos separados das descrições e o estado real da engine. |
 
 ## Princípio geral
 
@@ -214,6 +215,31 @@ Implementação futura por etapas:
 
 Cada etapa deve ser revisada visualmente antes da seguinte.
 
+## 9. Indicadores visuais de estado dos efeitos
+
+**Objetivo:** usar os parágrafos separados das descrições das cartas para indicar visualmente o estado atual de cada efeito durante o duelo.
+
+Comportamento planejado:
+
+- **texto normal:** efeito disponível;
+- **amarelo:** efeito atualmente em resolução;
+- **vermelho:** efeito atualmente negado/inativo por uma negação vigente;
+- **verde:** efeito com seu uso consumido e ainda indisponível pela própria regra de uso; volta automaticamente ao normal quando a engine considerar o efeito disponível novamente.
+
+Princípios:
+
+- a indicação deve ser **sincronizada diretamente com o estado real da engine**, sem manter um estado visual paralelo;
+- a precedência visual é **negado > em resolução > uso consumido > disponível**;
+- uma ativação negada no passado não mantém o texto vermelho depois que a negação deixa de estar vigente;
+- efeitos sem limite de uso voltam ao estado normal após terminar sua resolução;
+- indisponibilidade circunstancial por fase, falta de alvo, custo ou janela de ativação não deve deixar o texto verde;
+- `description` pode continuar em uma única linha física no código, usando `\n\n` para separar os parágrafos;
+- cada definição de efeito deverá poder indicar qual parágrafo da descrição representa, preferencialmente por metadado associado ao `effect.id`;
+- vários efeitos internos podem apontar para o mesmo parágrafo quando um único efeito textual for implementado por mais de uma definição;
+- parágrafos puramente editoriais ou de restrição podem permanecer sem vínculo visual quando não representarem um efeito individual.
+
+A implementação deve ser feita **depois do Renderer Three.js**, para que esse feedback seja integrado diretamente à apresentação visual definitiva em vez de ser construído duas vezes.
+
 ---
 
 ## Ordem resumida
@@ -226,6 +252,7 @@ Cada etapa deve ser revisada visualmente antes da seguinte.
 6. **Relíquias Arcanistas**
 7. **Modo Online**
 8. **Three.js definitivo**
+9. **Indicadores visuais de estado dos efeitos**
 
 ---
 

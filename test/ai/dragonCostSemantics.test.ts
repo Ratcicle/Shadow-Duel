@@ -13,12 +13,26 @@ import { canUseSimulatedEffectUsage, markSimulatedEffectUsage } from "../../src/
 import { createPlanningCopy } from "../../src/core/ai/common/planningCopy.js";
 import { cleanupSimulatedEndTurn } from "../../src/core/ai/common/simulatedActions/lifecycle.js";
 import { moveCardToZone } from "../../src/core/ai/common/zones.js";
+import type { EffectDefinition } from "../../src/core/contracts/effects.js";
 import type { AIAction } from "../../src/core/contracts/ai.js";
 import type { BotCloneGamePort } from "../../src/core/bot/simulationBridge.js";
 import type { AiLiveGamePort } from "../../src/core/contracts/aiState.js";
 import type { BotGamePort } from "../../src/core/contracts/bot.js";
 
 const make = (id: number) => simulationCard({ ...cardDefinition(id), owner: "bot", controller: "bot", instanceId: `cost-${id}` });
+
+test("Common planner keeps the resolution guard for a source-required Field effect", () => {
+  const source = make(262), recruit = make(255);
+  source.effects = source.effects?.map(effect => effect.id === "dragon_peak_ignite_summon"
+    ? { ...effect, requiresSourceAtResolution: true } : effect) || [];
+  source.counters = new Map([["dragon_peak", 7]]);
+  const state = simulationState({ turn: "bot", phase: "main1", turnCounter: 4, _isPerspectiveState: true,
+    bot: { graveyard: [recruit], fieldSpell: source } });
+  applyGenericSimulatedMainPhaseAction(state, { type: "fieldEffect", cardId: 262, effectId: "dragon_peak_ignite_summon" });
+  assert.ok(state.bot.graveyard.includes(source), "valid activation cost remains paid");
+  assert.ok(state.bot.graveyard.includes(recruit), "requiring the departed source prevents resolution");
+  assert.equal(state.bot.field.length, 0);
+});
 
 for (const eligible of [false, true]) for (const chosen of ["none", "backrow", "fieldSpell"] as const) {
   test(`Dragon Roar delegates the explicit ${chosen} choice with an eligible Dragon ${eligible}`, () => {
@@ -453,3 +467,65 @@ for (const id of [276, 277]) for (const actor of ["bot", "player"] as const) {
     assert.equal(state._simUnsupportedActions, undefined);
   });
 }
+
+
+for (const negated of [false, true]) {
+  test(`source-independent Field effect preserves live negation while present (${negated})`, async t => {
+    const effect: EffectDefinition = {
+      id: "source_independent_field_control", timing: "ignition", activationZones: ["fieldSpell"],
+      requiresSourceAtResolution: false, requirePhase: ["main1", "main2"],
+      activationCosts: [{ type: "damage", amount: 100, player: "self" }],
+      actions: [{ type: "damage", amount: 700, player: "opponent" }],
+    };
+    const game = createRuntimeGame({ laboratoryMode: true, laboratoryUseBot: false, captureReplay: false, randomSeed: 72 });
+    t.after(() => game.dispose());
+    game.turn = "bot"; game.phase = "main1"; game.turnCounter = 4;
+    game.player.controllerType = game.bot.controllerType = "human";
+    game.disablePresentationDelays = true;
+    game.ui.showChainResponseModal = async () => null;
+    const card = new Card({ ...cardDefinition(262), effects: [effect] }, "bot");
+    card.isFacedown = false;
+    game.bot.fieldSpell = card;
+    if (negated) await game.effectEngine.applyActions([
+      { type: "add_status", targetRef: "source", status: "effectsNegated", value: true, duration: "while_faceup" },
+    ], { source: card, player: game.bot, opponent: game.player }, { source: [card] });
+    await game.activateFieldSpellEffect(card);
+    assert.equal(game.bot.lp, 7900, "valid cost is paid in either case");
+    assert.equal(game.player.lp, negated ? 8000 : 7300);
+    const source = simulationCard({ ...cardDefinition(262), effects: [effect], owner: "bot", controller: "bot",
+      isFacedown: false, effectsNegated: negated, instanceId: "source-independent-control" });
+    const state = simulationState({ turn: "bot", phase: "main1", turnCounter: 4, _isPerspectiveState: true,
+      bot: { fieldSpell: source } });
+    applyGenericSimulatedMainPhaseAction(state, { type: "fieldEffect", cardId: 262, effectId: effect.id });
+    assert.equal(state.bot.lp, game.bot.lp);
+    assert.equal(state.player.lp, game.player.lp);
+  });
+}
+
+test('negated Dragon Peak still resolves after it pays its own field departure', async t => {
+  const game = createRuntimeGame({ laboratoryMode: true, captureReplay: false, randomSeed: 72, chainResponseTimeoutMs: 0 });
+  t.after(() => game.dispose());
+  game.turn = 'bot'; game.phase = 'main1'; game.turnCounter = 4;
+  game.player.controllerType = game.bot.controllerType = 'ai';
+  game.disablePresentationDelays = true;
+  game.waitForBoardPresentation = game.waitForPresentationDelay = game.waitForAiPresentationStep = async () => {};
+  game.chainSystem.botChooseChainResponse = async () => null;
+  const source = new Card(cardDefinition(262), 'bot');
+  const recruit = new Card(cardDefinition(255), 'bot');
+  source.isFacedown = false;
+  source.addCounter('dragon_peak', 7);
+  game.bot.fieldSpell = source;
+  game.bot.graveyard.push(recruit);
+  await game.effectEngine.applyActions([{ type: 'add_status', targetRef: 'source', status: 'effectsNegated', value: true, duration: 'while_faceup' }],
+    { source, player: game.bot, opponent: game.player }, { source: [source] });
+  assert.equal(source.effectsNegated, true);
+  await game.activateFieldSpellEffect(source);
+  assert.ok(game.bot.graveyard.includes(source));
+  assert.ok(game.bot.field.includes(recruit));
+  const simSource = simulationCard({ ...cardDefinition(262), owner: 'bot', controller: 'bot', isFacedown: false, effectsNegated: true, counters: new Map([['dragon_peak', 7]]), instanceId: 'review-peak' });
+  const simRecruit = simulationCard({ ...cardDefinition(255), owner: 'bot', controller: 'bot', instanceId: 'review-recruit' });
+  const state = simulationState({ turn: 'bot', phase: 'main1', turnCounter: 4, _isPerspectiveState: true, bot: { fieldSpell: simSource, graveyard: [simRecruit] } });
+  applyGenericSimulatedMainPhaseAction(state, { type: 'fieldEffect', cardId: 262, effectId: 'dragon_peak_ignite_summon' });
+  assert.ok(state.bot.graveyard.includes(simSource));
+  assert.ok(state.bot.field.includes(simRecruit));
+});

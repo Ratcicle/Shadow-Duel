@@ -629,6 +629,12 @@ Tipos suportados atualmente:
 - `graveyard_archetype_count_buff`: buff por quantidade de um arquétipo no Cemitério.
 - `field_presence_type_summon_count_buff`: buff por invocações de tipo feitas
   enquanto a fonte esteve face-up no campo.
+- `activated_card_count_buff`: buff contínuo por ativações de cards neste turno,
+  inclusive anteriores à entrada da fonte. Usa `filters` sobre snapshots públicos
+  do card ativado, `countOwner` (`self`, `opponent` ou `any`), `amountPerCard` e
+  `stats`. Ignition de Magia face-up e efeitos copiados não são novas ativações
+  de card. Negação da ativação remove a ocorrência; negação só do efeito mantém
+  a contagem. O histórico termina com o turno e é preservado nos clones e hashes.
 - `additional_normal_summon`: concede uma Normal Summon adicional enquanto a
   fonte estiver ativa para seu controlador; aceita `count`, `filters`,
   `archetype` e `cardKind`. Se o efeito tiver `oncePerTurnName`, multiplas

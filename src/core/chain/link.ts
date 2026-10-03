@@ -10,6 +10,7 @@ import {
   CHAIN_EFFECT_KINDS,
   CHAIN_RESPONSE_CONTEXTS,
 } from "../contracts/chain.js";
+import { removeNegatedTurnCardActivation } from "../game/events/activationHistory.js";
 import type {
   ChainActivationKind,
   ChainEffectKind,
@@ -535,6 +536,11 @@ export function markChainLinkActivationNegated(
   link.activationNegated = true;
   link.negatedBy = details.negatedBy || link.negatedBy || null;
   link.activationAttempt.activationNegated = true;
+  // Subsequent actions of the negator must see continuous stats immediately.
+  const game = this.game;
+  if (game && removeNegatedTurnCardActivation(game, link)) {
+    game.effectEngine?.updatePassiveBuffs?.();
+  }
   return link;
 }
 

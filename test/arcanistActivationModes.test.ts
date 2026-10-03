@@ -17,6 +17,124 @@ function setup(t: TestContext) {
 }
 const passes = () => ({ offers: 1, activations: 0, consecutivePasses: 2, lastActivator: null, chainBuilt: false });
 
+function activateMeeting(game: ReturnType<typeof setup>, source: Card, mode: "monsters" | "spells") {
+  const owner = source.owner === game.player.id ? game.player : game.bot;
+  assert.equal(owner.id, source.owner);
+  return game.tryActivateSpellTrapEffect(source, null, { owner,
+    activationContext: { decisions: { cases: {
+      meeting_arcanists_choose_effect: `meeting_arcanists_discard_${mode}`,
+    } } } });
+}
+
+for (const seat of ["player", "bot"] as const) {
+  test(`Meeting ignition has an independent per-copy limit shared by both modes (${seat})`, async t => {
+    const game = setup(t), owner = game[seat], first = make(309, seat), second = make(309, seat);
+    game.turn = seat;
+    game.chainSystem.offerChainResponses = async () => passes();
+    placeFieldCards(owner.spellTrap, first, second);
+    owner.hand = [make(306, seat), make(307, seat), make(306, seat), make(307, seat), make(304, seat), make(311, seat)];
+    owner.deck = [make(310, seat), make(302, seat), make(301, seat)];
+    assert.equal((await activateMeeting(game, first, "monsters")).success, true);
+    assert.equal(owner.graveyard.length, 2);
+    const beforeRepeat = owner.hand.slice();
+    assert.equal((await activateMeeting(game, first, "spells")).success, false);
+    assert.deepEqual(owner.hand, beforeRepeat);
+    assert.equal(owner.graveyard.length, 2);
+    assert.equal((await activateMeeting(game, second, "spells")).success, true,
+      "the first copy must not consume the second copy's ignition");
+    assert.equal(owner.graveyard.length, 4);
+    const effect = required(first.effects.find(entry => entry.timing === "ignition"));
+    assert.equal(game.canUseOncePerTurn(first, owner, effect).ok, false);
+    assert.equal(game.canUseOncePerTurn(second, owner, effect).ok, false);
+    game.turnCounter++;
+    assert.equal(game.effectEngine.canActivateSpellTrapEffectPreview(first, owner, "spellTrap").ok, true);
+    assert.equal(game.effectEngine.canActivateSpellTrapEffectPreview(second, owner, "spellTrap").ok, true);
+  });
+
+  test(`Library ignition has an independent per-copy limit after public replacement (${seat})`, async t => {
+    const game = setup(t), owner = game[seat], first = make(312, seat), second = make(312, seat), host = make(306, seat);
+    game.turn = seat;
+    game.chainSystem.offerChainResponses = async () => passes();
+    owner.fieldSpell = first; owner.hand = [second]; owner.deck = [make(301, seat), make(302, seat)];
+    placeFieldCards(owner.field, host);
+    assert.equal((await game.activateFieldSpellEffect(first)).success, true);
+    assert.equal(owner.hand.some(card => card.id === 301), true);
+    await game.moveCard(host, owner, "hand", { fromZone: "field" });
+    assert.equal((await game.activateFieldSpellEffect(first)).success, false,
+      "changing from search to recruitment cannot grant another use to the same copy");
+    assert.equal(owner.lp, 8000);
+    const replacementMoves: string[] = [];
+    game.on("card_moved", event => {
+      if (event.card === first) replacementMoves.push(`old:${event.toZone}`);
+      if (event.card === second) {
+        assert.ok(owner.graveyard.includes(first), "the old Field Spell must finish leaving before the new one enters");
+        replacementMoves.push(`new:${event.toZone}`);
+      }
+    });
+    assert.equal((await game.tryActivateSpell(second, owner.hand.indexOf(second), null, { owner })).success, true);
+    assert.equal(owner.fieldSpell, second); assert.ok(owner.graveyard.includes(first));
+    assert.deepEqual(replacementMoves, ["old:graveyard", "new:fieldSpell"]);
+    assert.equal((await game.activateFieldSpellEffect(second)).success, true,
+      "replacing the Field Spell must preserve the new copy's own ignition");
+    assert.equal(owner.lp, 6000); assert.equal(owner.field[0]?.id, 302);
+    const effect = required(second.effects.find(entry => entry.timing === "ignition"));
+    assert.equal(game.canUseOncePerTurn(second, owner, effect).ok, false);
+    game.turnCounter++;
+    assert.equal(game.canUseOncePerTurn(second, owner, effect).ok, true);
+  });
+}
+
+for (const id of [309, 312]) {
+  for (const negation of ["activation", "effect"] as const) {
+    test(`per-copy ignition preserves costs and activate policy after ${negation} negation (${id})`, async t => {
+      const game = setup(t), source = make(id), other = make(id), owner = game.player;
+      if (id === 309) {
+        placeFieldCards(owner.spellTrap, source, other);
+        owner.hand = [make(306), make(307), make(306), make(307)];
+        owner.deck = [make(310), make(304)];
+      } else {
+        owner.fieldSpell = source; owner.hand = [other]; owner.deck = [make(306), make(307)];
+      }
+      let responses = 0;
+      game.chainSystem.offerChainResponses = async () => {
+        const link = game.chainSystem.chainStack.find(entry => entry.card === source);
+        if (link && responses++ === 0) {
+          if (id === 309) assert.equal(owner.graveyard.length, 2);
+          else assert.equal(owner.lp, 6000);
+          if (negation === "activation") link.activationNegated = true;
+          else link.effectNegated = true;
+        }
+        return passes();
+      };
+      const activate = () => id === 309 ? activateMeeting(game, source, "monsters") : game.activateFieldSpellEffect(source);
+      await activate();
+      const effect = required(source.effects.find(entry => entry.timing === "ignition"));
+      assert.equal(game.canUseOncePerTurn(source, owner, effect).ok, negation === "activation");
+      assert.equal(game.canUseOncePerTurn(other, owner, effect).ok, true);
+      const retry = await activate();
+      assert.equal(retry.success, negation === "activation");
+      assert.equal(id === 309 ? owner.graveyard.length : owner.lp,
+        id === 309 ? negation === "activation" ? 4 : 2 : negation === "activation" ? 4000 : 6000);
+    });
+  }
+
+  test(`per-copy ignition follows the existing leave-and-return reset (${id})`, async t => {
+    const game = setup(t), source = make(id), owner = game.player;
+    game.chainSystem.offerChainResponses = async () => passes();
+    if (id === 309) {
+      placeFieldCards(owner.spellTrap, source);
+      owner.hand = [make(306), make(307), make(306), make(307)]; owner.deck = [make(310), make(304)];
+    } else {
+      owner.fieldSpell = source; placeFieldCards(owner.field, make(306)); owner.deck = [make(301), make(301)];
+    }
+    const activate = () => id === 309 ? activateMeeting(game, source, "monsters") : game.activateFieldSpellEffect(source);
+    assert.equal((await activate()).success, true);
+    await game.moveCard(source, owner, "hand", { fromZone: id === 309 ? "spellTrap" : "fieldSpell" });
+    assert.equal((await game.tryActivateSpell(source, owner.hand.indexOf(source), null, { owner })).success, true);
+    assert.equal((await activate()).success, true);
+  });
+}
+
 for (const change of ["negate", "fill_field", "change_candidates", "leave"] as const) {
   test(`Library pays at 2100 LP and keeps its activation mode: ${change}`, async t => {
     const game = setup(t), library = make(312), initial = make(306), replacement = make(307);

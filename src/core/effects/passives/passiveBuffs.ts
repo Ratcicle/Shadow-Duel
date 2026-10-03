@@ -1,7 +1,8 @@
 import { removeTrackedStatChange } from "../actions/stats.js";
-import type { DuelEventMap, ResolvableEventName } from "../../contracts/events.js";
+import type { DuelEventMap, ResolvableEventName, TurnCardActivationHistory } from "../../contracts/events.js";
 import { matchesPositionChangeEvent } from "../triggers/collectors/positionChange.js";
 import { cardMatchesEventFilters, matchesZoneFilter } from "../triggers/collectors/shared.js";
+import { countTurnCardActivations } from "../../game/events/activationHistory.js";
 import type {
   ActionRuntimeCard,
   ActionRuntimePlayer,
@@ -27,6 +28,47 @@ type PassiveStatCard = {
   [Key in "atk" | "def" | "dynamicBuffs" | "suppressedDynamicBuffStatsByKey" |
     "temporarySuppressedDynamicBuffStatsByKey" | "permanentBuffsBySource"]?: ActionRuntimeCard[Key] | undefined;
 };
+/** Proven origin is private planner capability metadata, never serialized card data. */
+type ModeledPassiveFamily = "field_archetype_aura_buff" | "activated_card_count_buff" |
+  "field_presence_type_summon_count_buff";
+const modeledPassiveContributions = new WeakMap<object, Map<string, ModeledPassiveFamily>>();
+type PassiveProofCard = Pick<PassiveStatCard, "dynamicBuffs" | "temporarySuppressedDynamicBuffStatsByKey">;
+
+export function registerModeledPassiveContribution(card: PassiveProofCard, key: string, family: ModeledPassiveFamily): void {
+  let contributions = modeledPassiveContributions.get(card);
+  const suppression = card.temporarySuppressedDynamicBuffStatsByKey?.[key];
+  // A refresh observes today's declaration, not the origin of an inherited
+  // suppression. Only proof recorded before that suppression may survive it.
+  if ((suppression?.atk === true || suppression?.def === true) && !contributions?.has(key)) return;
+  if (!contributions) modeledPassiveContributions.set(card, contributions = new Map());
+  contributions.set(key, family);
+}
+
+export function getModeledPassiveContributions(card: PassiveProofCard): Array<[string, ModeledPassiveFamily]> {
+  return [...(modeledPassiveContributions.get(card) || [])]
+    .filter(([key]) => card.dynamicBuffs?.[key] !== undefined || card.temporarySuppressedDynamicBuffStatsByKey?.[key] !== undefined)
+    .sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0);
+}
+
+export function pruneModeledPassiveContributions(card: PassiveProofCard): void {
+  const entries = getModeledPassiveContributions(card);
+  if (entries.length) modeledPassiveContributions.set(card, new Map(entries));
+  else modeledPassiveContributions.delete(card);
+}
+
+export function copyModeledPassiveContributions(source: PassiveProofCard, target: PassiveProofCard): void {
+  const entries = getModeledPassiveContributions(source).filter(([key]) =>
+    target.dynamicBuffs?.[key] !== undefined || target.temporarySuppressedDynamicBuffStatsByKey?.[key] !== undefined);
+  if (entries.length) modeledPassiveContributions.set(target, new Map(entries));
+  else modeledPassiveContributions.delete(target);
+}
+
+export function hasUnmodeledTemporaryPassiveSuppression(card: PassiveProofCard): boolean {
+  const proof = modeledPassiveContributions.get(card);
+  return Object.entries(card.temporarySuppressedDynamicBuffStatsByKey || {})
+    .some(([key, stats]) => (stats.atk === true || stats.def === true) && !proof?.has(key));
+}
+
 type PassiveCard = ActionRuntimeCard & {
   extraAttacks?: number;
   equipExtraAttacks?: number;
@@ -94,6 +136,8 @@ interface EquipHost {
 }
 interface PassiveHost {
   game?: {
+    turnCounter?: number;
+    cardActivationHistory?: TurnCardActivationHistory;
     player?: PassivePlayer;
     bot?: PassivePlayer;
     getOpponent?(player: PassivePlayer | null): PassivePlayer | null;
@@ -584,15 +628,20 @@ export function getFieldAuraBuffKey(
   return `${effectId || `passive_${card.id}_${effectIndex}_field_aura`}_${sourceKey}_${stat}`;
 }
 
-/** Remove one source's existing aura before its field identity is cleared. */
+/** Remove this source's continuous contributions before its field identity is cleared. */
 export function removeFieldAuraBuffContributions(
-  source: Parameters<typeof getFieldAuraBuffKey>[0] & { effects?: readonly EffectDefinition[] | undefined },
+  source: Parameters<typeof getFieldAuraBuffKey>[0] & PassiveStatCard & { effects?: readonly EffectDefinition[] | undefined },
   recipients: readonly PassiveStatCard[],
   sourceFieldIndex: number,
 ): void {
   source.effects?.forEach((effect, index) => {
-    if (effect.timing !== "passive" || !("passive" in effect) ||
-        effect.passive?.type !== "field_archetype_aura_buff") return;
+    if (effect.timing !== "passive" || !("passive" in effect)) return;
+    if (effect.passive?.type === "activated_card_count_buff") {
+      applyPassiveBuffValue(source, effect.id || `passive_${source.id}_${index}_activations`, 0,
+        effect.passive.stats || ["atk", "def"]);
+      return;
+    }
+    if (effect.passive?.type !== "field_archetype_aura_buff") return;
     for (const stat of ["atk", "def"] as const) {
       const key = getFieldAuraBuffKey(source, effect.id, index, sourceFieldIndex, stat);
       for (const recipient of recipients) {
@@ -602,7 +651,9 @@ export function removeFieldAuraBuffContributions(
   });
 }
 
-export function clearPassiveBuffsForCard(card: PassiveCard | null | undefined) {
+type PassiveCleanupCard = PassiveStatCard & Pick<PassiveCard, "passiveExtraAttackBonuses" | "passiveExtraAttackTargetRestriction" | "extraAttacks">;
+
+export function clearPassiveBuffsForCard(card: PassiveCleanupCard | null | undefined) {
   if (!card) return;
   clearPassiveExtraAttacksForCard(card);
   if (card.dynamicBuffs) {
@@ -613,9 +664,10 @@ export function clearPassiveBuffsForCard(card: PassiveCard | null | undefined) {
   }
   delete card.suppressedDynamicBuffStatsByKey;
   delete card.temporarySuppressedDynamicBuffStatsByKey;
+  modeledPassiveContributions.delete(card);
 }
 
-function clearPassiveExtraAttacksForCard(card: PassiveCard | null | undefined) {
+function clearPassiveExtraAttacksForCard(card: PassiveCleanupCard | null | undefined) {
   if (!card?.passiveExtraAttackBonuses) {
     if (card) delete card.passiveExtraAttackTargetRestriction;
     return false;
@@ -888,6 +940,20 @@ export function updatePassiveBuffs(this: PassiveHost) {
         return;
       }
 
+      if (passive.type === "activated_card_count_buff") {
+        const owner = this.getOwnerByCard(card);
+        const countOwner = passive.countOwner || "any";
+        const playerId = countOwner === "self" ? owner?.id
+          : countOwner === "opponent" ? this.game?.getOpponent?.(owner)?.id : undefined;
+        const count = this.game && ((countOwner !== "self" && countOwner !== "opponent") || playerId)
+          ? countTurnCardActivations(this.game, passive.filters || {}, playerId) : 0;
+        const key = effect.id || `passive_${card.id}_${index}_activations`;
+        registerModeledPassiveContribution(card, key, passive.type);
+        if (refreshBuff(card, key,
+          count * (passive.amountPerCard ?? 0), passive.stats || ["atk", "def"])) updated = true;
+        return;
+      }
+
       if (passive.type === "conditional_extra_attacks") {
         if (card.cardKind !== "monster") return;
         const requireSourceFaceup =
@@ -1126,6 +1192,7 @@ export function updatePassiveBuffs(this: PassiveHost) {
         const stats: readonly PassiveStat[] = passive.stats || ["atk", "def"];
         const buffKey =
           effect.id || `passive_${card.id}_${index}_field_presence_type`;
+        registerModeledPassiveContribution(card, buffKey, passive.type);
         const applied = refreshBuff(
           card,
           buffKey,
@@ -1405,9 +1472,11 @@ export function updatePassiveBuffs(this: PassiveHost) {
           }
 
           for (const boost of statBoosts) {
+            const key = getFieldAuraBuffKey(card, effect.id, index, fieldCards.indexOf(card), boost.stat);
+            registerModeledPassiveContribution(target, key, passive.type);
             const applied = refreshBuff(
               target,
-              getFieldAuraBuffKey(card, effect.id, index, fieldCards.indexOf(card), boost.stat),
+              key,
               boost.amount,
               [boost.stat],
             );
@@ -1493,5 +1562,6 @@ export function updatePassiveBuffs(this: PassiveHost) {
     }
   }
 
+  for (const card of passiveSources) pruneModeledPassiveContributions(card);
   return updated;
 }

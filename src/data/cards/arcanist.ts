@@ -156,7 +156,6 @@ export const arcanistCards = [
             owner: "opponent",
             zone: "field",
             cardKind: "monster",
-            requireFaceup: true,
             count: { min: 1, max: 1 },
           },
         ],
@@ -461,7 +460,7 @@ export const arcanistCards = [
         usagePolicy: "activate",
         id: "albus_arcanist_ice_recover",
         timing: "on_event",
-        triggerRequirement: "optional",
+        triggerRequirement: "mandatory",
         triggerTiming: "if",
         event: "card_equipped",
         requireZone: "field",
@@ -473,9 +472,7 @@ export const arcanistCards = [
           subtype: "equip",
           archetype: "Arcanist",
         },
-        promptUser: true,
-        promptMessage:
-          'Activate "Albus, Arcanist of Ice" to add 1 "Arcanist" monster from your GY to your hand?',
+        promptUser: false,
         targets: [
           {
             id: "albus_arcanist_ice_recover_target",
@@ -634,6 +631,7 @@ export const arcanistCards = [
         timing: "ignition",
         oncePerTurn: true,
         oncePerTurnName: "meeting_arcanists_choose_effect",
+        oncePerTurnScope: "card",
         conditions: [
           {
             type: "any_of",
@@ -937,6 +935,7 @@ export const arcanistCards = [
         requirePhase: ["main1", "main2"],
         oncePerTurn: true,
         oncePerTurnName: "arcanist_grand_library_ignition",
+        oncePerTurnScope: "card",
         activationCases: [
           {
             id: "arcanist_grand_library_summon",
@@ -1064,24 +1063,16 @@ export const arcanistCards = [
       },
       {
         id: "elementalist_master_spell_buff",
-        timing: "on_event",
-        triggerRequirement: "mandatory",
-        triggerTiming: "if",
-        event: "spell_activated",
+        timing: "passive",
         requireZone: "field",
         requireFaceup: true,
-        promptUser: false,
-        activatedCardFilters: {
-          cardKind: "spell",
-          archetype: "Arcanist",
+        passive: {
+          type: "activated_card_count_buff",
+          countOwner: "any",
+          filters: { cardKind: "spell", archetype: "Arcanist" },
+          amountPerCard: 100,
+          stats: ["atk"],
         },
-        actions: [
-          {
-            type: "buff_stats_temp",
-            targetRef: "self",
-            atkBoost: 100,
-          },
-        ],
       },
       {
 
@@ -1111,7 +1102,6 @@ export const arcanistCards = [
             owner: "opponent",
             zone: "field",
             cardKind: "monster",
-            requireFaceup: true,
             count: { min: 1, max: 1 },
           },
         ],
@@ -1135,7 +1125,7 @@ export const arcanistCards = [
     attribute: "Dark",
     archetype: "Arcanist",
     description:
-      "Each time you activate an \"Arcanist\" Spell while this card is face-up on the field: all monsters your opponent currently controls lose 100 ATK/DEF until the end of this turn.\n\nIf this card is equipped with an \"Arcanist\" Equip Spell: target 1 monster your opponent controls; halve its ATK/DEF until the end of this turn.\n\nYou can only use this effect of \"Azrath, Corrupted Arcanist\" once per turn.",
+      "Each time you activate an \"Arcanist\" Spell while this card is face-up on the field: all monsters your opponent currently controls lose 100 ATK/DEF until the end of this turn.\n\nIf this card is equipped with an \"Arcanist\" Equip Spell: target 1 face-up monster your opponent controls; halve its ATK/DEF until the end of this turn.\n\nYou can only use this effect of \"Azrath, Corrupted Arcanist\" once per turn.",
     image: "assets/Azrath, Corrupted Arcanist.png",
     effects: [
       {
@@ -1167,7 +1157,7 @@ export const arcanistCards = [
         usagePolicy: "use",
         id: "azrath_equip_halve",
         timing: "on_event",
-        triggerRequirement: "optional",
+        triggerRequirement: "mandatory",
         triggerTiming: "if",
         event: "card_equipped",
         oncePerTurn: true,
@@ -1179,9 +1169,7 @@ export const arcanistCards = [
           subtype: "equip",
           archetype: "Arcanist",
         },
-        promptUser: true,
-        promptMessage:
-          'Activate "Azrath, Corrupted Arcanist" to halve 1 opponent monster\'s ATK/DEF?',
+        promptUser: false,
         targets: [
           {
             id: "azrath_halve_target",

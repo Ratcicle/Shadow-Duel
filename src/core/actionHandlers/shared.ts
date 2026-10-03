@@ -9,7 +9,7 @@ import { isAI } from "../Player.js";
 import { assignAutomaticFieldSlot, clearFieldSlot } from "../game/zones/placement.js";
 import { cardMatchesKind } from "../Card.js";
 import type { CardFilter } from "../contracts/effects.js";
-import type { ContextNumberSource } from "../contracts/actions.js";
+import type { CardAction, ContextNumberSource, SelectionCount } from "../contracts/actions.js";
 import type {
   ActionHandlerEnginePort,
   ActionRuntimeCard,
@@ -32,6 +32,28 @@ import type { DecisionActor } from "../contracts/decisions.js";
 import type { SelectionCandidateKey } from "../contracts/primitives.js";
 
 type RuntimeCardId = number | string | null;
+
+/** Optional no-ops are shared by runtime previews and action resolution. */
+export function isActionOptionalNoop(action: {
+  readonly type: string;
+  readonly optional?: boolean;
+  readonly count?: number | SelectionCount;
+} | null | undefined): boolean {
+  if (!action) return false;
+  if (action.optional === true) return true;
+  const min = Number(typeof action.count === "object" ? action.count?.min : undefined);
+  return Number.isFinite(min) && min <= 0;
+}
+
+/** Applies only to ordinary handler failure, never selection/abort/knowledge boundaries. */
+export function shouldContinueAfterActionFailure(action: CardAction): boolean {
+  const halt = "haltOnFailure" in action ? action.haltOnFailure : undefined;
+  const stop = "stopOnFailure" in action ? action.stopOnFailure : undefined;
+  // Explicit prerequisites take precedence if aliases conflict.
+  if (halt === true || stop === true) return false;
+  if (halt === false || stop === false) return true;
+  return isActionOptionalNoop(action);
+}
 
 /** Keep optional confirmations in the same decision stream as target choices. */
 export async function requestOptionalConfirmation(

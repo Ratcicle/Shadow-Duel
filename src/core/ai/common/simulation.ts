@@ -2,6 +2,7 @@ import { expireEffectNegation } from "../../effects/negation.js";
 import { getImmediateEventEffectValidationError, isActiveEquipInZone } from "../../effects/passives/passiveBuffs.js";
 import { matchesCardFilter, type RuntimeCardFilter } from "../../effects/filters/cardFilters.js";
 import { getPositionChangeProvenance, matchesPositionChangeEvent } from "../../effects/triggers/collectors/positionChange.js";
+import { recordTurnCardActivation } from "../../game/events/activationHistory.js";
 import { projectStoredBlueprintActivation } from "../../effects/blueprints/index.js";
 import { projectEffectActivationCase } from "../../effects/activation/cases.js";
 import { hasActionZoneCandidates } from "./actionValidation.js";
@@ -10,7 +11,7 @@ import { getBaseLpCost } from "../../effects/costs/lpCost.js";
 import { resolveActionPlayer, resolveSimulatedLpCost } from "./simulatedActions/shared.js";
 import { resolveTargetsForAction, captureSimulatedReferences, isSimulatedSourcePresenceValid, recordCompletedSimulatedSummon } from "./simulatedActions/shared.js";
 import { appendSimulatedZoneCard } from "./zones.js";
-import { appendSimulatedFieldCard } from "./zones.js";
+import { appendSimulatedFieldCard, refreshSimulatedFieldAuras } from "./zones.js";
 import {
   applySimulatedActions,
   evaluateSimulatedConditions,
@@ -1788,6 +1789,8 @@ export function emitSimulatedSpellActivation(
 ): void {
   if (card.cardKind !== "spell") return;
   const player = selfId === "player" ? state.player : state.bot;
+  recordTurnCardActivation(state, { card, player });
+  refreshSimulatedFieldAuras(state);
   dispatchSimulatedEvent(state, "spell_activated", { card, player }, { ...options, enableSimulatedEvents: true });
 }
 
@@ -2519,7 +2522,10 @@ export function applyGenericSimulatedMainPhaseAction<
       };
       if (!applySimulatedActions({ actions: effect.activationCosts || [], selections, state,
         selfId: options.selfId || "bot", options: resolutionOptions })) break;
-      if (player.fieldSpell === fieldSpell && !fieldSpell.isFacedown && !fieldSpell.effectsNegated) applySimulatedActions({
+      const sourcePresent = player.fieldSpell === fieldSpell && !fieldSpell.isFacedown &&
+        (fieldSpell.locationVersion ?? 0) === (usageSourceAtActivation.locationVersion ?? 0);
+      const sourceNegated = sourcePresent && fieldSpell.effectsNegated;
+      if (!sourceNegated && (effect.requiresSourceAtResolution === false || sourcePresent)) applySimulatedActions({
         actions: [...(effect.activationCommitActions || []), ...(effect.actions || [])],
         selections,
         state,

@@ -1,3 +1,4 @@
+import { getModeledPassiveContributions } from "../../effects/passives/passiveBuffs.js";
 import type {
   AiStateInput,
   AiStateShape,
@@ -32,6 +33,7 @@ export const PLANNING_PLAYER_FIELDS = [
 // simulation.ts event dispatch and simulatedConditions.ts duration checks.
 export const PLANNING_STATE_FIELDS = [
   "turn", "phase", "turnCounter", "_isPerspectiveState", "gameOver", "winner",
+  "cardActivationHistory",
   "usedThisTurn", "_simOncePerTurn", "_dragonSimOnce", "_simOptUsed",
   "_simOncePerTurnTurn",
   "_simArcanistOptUsed", "_simPassiveOncePerTurn", "_simReplacementEffects",
@@ -268,6 +270,7 @@ export function fingerprintPlanningState(state: AiStateInput): string {
     cardData.push([identity, [
       project(card, [...PLANNING_CARD_FIELDS, ...PLANNING_LEGACY_CARD_FIELDS], identity),
       links,
+      normalize(getModeledPassiveContributions(card), identity),
       project(isObject(storage) ? storage : {}, ["blueprintStorage"], identity),
     ]]);
   }

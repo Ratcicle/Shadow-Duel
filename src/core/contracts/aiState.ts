@@ -11,6 +11,7 @@ import type {
   SerializedChainLink,
 } from "./chainRuntime.js";
 import type { EffectDefinition, UsagePolicy } from "./effects.js";
+import type { TurnCardActivationHistory } from "./events.js";
 import type { GamePhase } from "./game.js";
 import type {
   DamageStepState,
@@ -428,6 +429,7 @@ export interface AiLiveGamePort {
   turn?: PlayerId | string | null | undefined;
   phase?: GamePhase | string | null | undefined;
   turnCounter?: number;
+  cardActivationHistory?: TurnCardActivationHistory;
   effectEngine?: {
     usedThisTurn?: ReadonlyMap<string, number>;
   } | null;
@@ -445,6 +447,7 @@ export interface AiStateInput {
   turn?: PlayerId | string | null | undefined;
   phase?: GamePhase | string | null | undefined;
   turnCounter?: number;
+  cardActivationHistory?: TurnCardActivationHistory;
   temporaryControlEffects?: readonly SimulatedTemporaryControlEffect[];
   _isPerspectiveState?: boolean;
   _gameRef?: AiLiveGamePort;
@@ -743,6 +746,7 @@ export interface PublicGameState {
   turn: PlayerId;
   phase: GamePhase;
   turnCounter: number;
+  cardActivationHistory?: TurnCardActivationHistory;
   currentPlayer: PlayerId;
   chain: {
     chainId: number | null;

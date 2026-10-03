@@ -12,6 +12,35 @@ import type { CanonicalZone, LegacyZoneAlias } from "./zones.js";
 
 export type MaybeEventPromise<Value> = Value | PromiseLike<Value>;
 export type EventEntityId = number | string;
+
+/** Public filter data captured when a Spell/Trap card activation is published. */
+export interface CardActivationSnapshot {
+  readonly id: number | null;
+  readonly name: string | null;
+  readonly cardKind: "spell" | "trap";
+  readonly originalCardKind: string | null;
+  readonly subtype: string | null;
+  readonly type: string | null;
+  readonly monsterType: string | null;
+  readonly attribute: string | null;
+  readonly archetype: string | null;
+  readonly archetypes: readonly string[];
+  readonly level?: number;
+  readonly atk?: number;
+  readonly def?: number;
+}
+
+export interface TurnCardActivationEntry {
+  readonly chainId: EventEntityId | null;
+  readonly linkId: EventEntityId | null;
+  readonly playerId: string;
+  readonly card: CardActivationSnapshot;
+}
+
+export interface TurnCardActivationHistory {
+  readonly turnCounter: number;
+  readonly entries: readonly TurnCardActivationEntry[];
+}
 export type EventZone = CanonicalZone | LegacyZoneAlias | "temporary" | "token";
 export type EventPhase =
   | "draw"
@@ -1103,6 +1132,8 @@ export interface DuelEventPort {
 export interface EventBusHost extends DuelEventPort {
   eventListeners: EventListenerRegistry;
   turnCounter?: number;
+  cardActivationHistory?: TurnCardActivationHistory;
+  effectEngine?: { updatePassiveBuffs?(): unknown } | null;
   phase?: string | null;
   isDisposed?(): boolean;
   recordReplayEvent?: RuntimeEventRecorder;
@@ -1123,6 +1154,7 @@ export interface EventEffectEnginePort {
     eventName: Name,
     payload: DuelEventMap[Name],
   ): MaybeEventPromise<void>;
+  updatePassiveBuffs?(): unknown;
   collectEventTriggers?<Name extends ResolvableEventName>(
     eventName: Name,
     payload: DuelEventMap[Name],
