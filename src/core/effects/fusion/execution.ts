@@ -5,6 +5,8 @@
  * All functions assume `this` = EffectEngine instance
  */
 
+import type { SelectionCandidateKey } from "../../contracts/primitives.js";
+import type { DecisionBrokerPort } from "../../contracts/decisions.js";
 import { isAI } from "../../Player.js";
 import { getCardDisplayName, getUIText } from "../../i18n.js";
 import type {
@@ -18,6 +20,8 @@ import type { BattlePosition } from "../../contracts/cards.js";
 import type {
   RawSelectionContract,
   SelectionSessionInput,
+  SelectionResult,
+  SelectionZone,
 } from "../../contracts/selection.js";
 
 interface FusionRuntimeCard extends ActionRuntimeCard {
@@ -48,6 +52,9 @@ interface FusionMaterialGroups {
 
 interface FusionExecutionHost {
   readonly game: {
+    readonly decisionBroker: Pick<DecisionBrokerPort, "mode">;
+    requestDecision: DecisionBrokerPort["requestDecision"];
+    ensureDuelCardId(card: FusionRuntimeCard): number;
     startTargetSelectionSession(session: SelectionSessionInput): void;
     performFusionSummon(
       materials: FusionRuntimeCard[],
@@ -233,61 +240,164 @@ function resolveBotFusionPosition(
   return fusion?.fusionPosition || fusion?.position || "attack";
 }
 
-/**
- * Perform bot fusion summon
- */
+/** Resolve the same serialized card choices for live AI and playback. Humans
+ * keep the existing selection session, which records this exact value shape. */
+async function selectFusionCards(
+  host: FusionExecutionHost,
+  player: FusionRuntimePlayer,
+  kind: "fusion_select" | "fusion_materials",
+  requirementId: string,
+  cards: FusionRuntimeCard[],
+  zones: SelectionZone[],
+  count: number,
+  label: string,
+  message: string,
+  resolveAI: () => FusionRuntimeCard[],
+): Promise<FusionRuntimeCard[] | null> {
+  const candidates = cards.map((card, index) => ({
+    key: `fusion_${host.game.ensureDuelCardId(card)}` as SelectionCandidateKey,
+    cardRef: card,
+    name: card.name,
+    image: card.image,
+    atk: card.atk,
+    def: card.def,
+    zone: zones[index] || "hand",
+    owner: player.id,
+  }));
+  const resolveCards = (selections: SelectionResult): FusionRuntimeCard[] =>
+    (selections[requirementId] || []).map(key => {
+      const candidate = candidates.find(entry => entry.key === key);
+      if (!candidate) throw new Error("Fusion selection identity is no longer available.");
+      return candidate.cardRef;
+    });
+  if (!isAI(player) && host.game.decisionBroker.mode !== "replay") {
+    return new Promise(resolve => {
+      const selectionContract: RawSelectionContract = {
+        requirements: [{ id: requirementId, candidates, min: count, max: count, label }],
+        ui: { allowCancel: true, message },
+      };
+      host.game.startTargetSelectionSession({
+        kind, owner: player, selectionContract,
+        // The spell activation already committed and awaits this resolution.
+        replayCommandHandledByCaller: true,
+        onCancel: () => resolve(null),
+        onAbort: () => resolve(null),
+        execute: selections => {
+          resolve(resolveCards(selections));
+          return { success: true, needsSelection: false };
+        },
+      });
+    });
+  }
+  const result = await host.game.requestDecision({
+    kind, actor: player, candidates, requireCandidate: false,
+    resolveAI: () => ({ [requirementId]: resolveAI().map(card => {
+      const candidate = candidates.find(entry => entry.cardRef === card);
+      if (!candidate) throw new Error("Fusion policy chose an unavailable card.");
+      return candidate.key;
+    }) }),
+    serializeResult: selections => selections === null ? { pass: true } : {
+      selections: { [requirementId]: resolveCards(selections).map(card => ({
+        duelCardId: host.game.ensureDuelCardId(card), cardId: card.id ?? null,
+        effectId: null, candidateKey: null, key: null,
+      })) },
+    },
+    deserializeReplayValue: value => {
+      if ("pass" in value && value.pass === true) return null;
+      const identities = "selections" in value ? value.selections[requirementId] : undefined;
+      if (!Array.isArray(identities) || identities.length !== count) {
+        throw new Error("Replay fusion selection has an invalid card count.");
+      }
+      const keys = identities.map(identity => {
+        const candidate = candidates.find(entry => "duelCardId" in identity && identity.duelCardId != null &&
+          host.game.ensureDuelCardId(entry.cardRef) === identity.duelCardId &&
+          (identity.cardId == null || entry.cardRef.id === identity.cardId));
+        if (!candidate) throw new Error("Replay fusion selection identity is no longer available.");
+        return candidate.key;
+      });
+      if (new Set(keys).size !== keys.length) throw new Error("Replay fusion selection repeats a card identity.");
+      return { [requirementId]: keys };
+    },
+  });
+  return result === null ? null : resolveCards(result);
+}
+
+async function chooseFusionAndSummon(
+  host: FusionExecutionHost,
+  ctx: EffectContext,
+  availableFusions: FusionOption[],
+  available: FusionMaterialGroups,
+): Promise<boolean> {
+  const player = ctx.player as FusionRuntimePlayer;
+  const fusionCards = availableFusions.map(option => option.fusion);
+  const fusionSelection = (await selectFusionCards(host, player, "fusion_select", "fusion_choice",
+    fusionCards, fusionCards.map(() => "extra"), 1,
+    getUIText("ui.fusion.selectMonsterLabel"), getUIText("ui.fusion.selectMonsterMessage"), () => {
+      const sorted = [...fusionCards].sort((a, b) =>
+        getFusionPreferenceScore(b, ctx) - getFusionPreferenceScore(a, ctx) || (b.atk || 0) - (a.atk || 0));
+      return sorted.slice(0, 1);
+    }))?.[0];
+  if (!fusionSelection) return false;
+  const materialCombos = availableFusions.find(option => option.fusion === fusionSelection)?.materialCombos || [];
+  if (materialCombos.length === 0) return false;
+  const availableMaterials = [...available.field, ...available.hand];
+  const zones: SelectionZone[] = [...available.field.map(() => "field" as const), ...available.hand.map(() => "hand" as const)];
+  let selectedMaterials: FusionRuntimeCard[];
+  if (materialCombos.length === 1) {
+    selectedMaterials = materialCombos[0]!;
+  } else {
+    const requiredCount = host.getRequiredMaterialCount(fusionSelection);
+    while (true) {
+      const selection = await selectFusionCards(host, player, "fusion_materials", "materials",
+        availableMaterials, zones, requiredCount,
+        getUIText("ui.fusion.selectMaterialsLabel", { count: requiredCount }),
+        getUIText("ui.fusion.selectMaterialsFor", { cardName: getCardDisplayName(fusionSelection) || fusionSelection.name }),
+        () => selectBestMaterialCombo(materialCombos, ctx) || []);
+      if (!selection) return false;
+      const materialInfo = selection.map(material => ({ zone: player.field.includes(material) ? "field" as const : "hand" as const }));
+      const validation = host.evaluateFusionSelection(fusionSelection, selection, { materialInfo });
+      const legal = selection.every(material => player.field.includes(material) || player.hand.includes(material)) &&
+        host.getAvailableFusions([fusionSelection], selection, player, { materialInfo }).length > 0;
+      if (!validation.valid || !legal) {
+        if (host.game.decisionBroker.mode !== "replay") {
+          if (isAI(player)) throw new Error("Fusion decision contains illegal materials.");
+          host.ui?.showMessage?.(validation.reason || getUIText("ui.fusion.invalidMaterials"));
+        }
+        // Human attempts are recorded before recipe validation. Replay must
+        // consume their next correction, even when this seat defaults to AI.
+        continue;
+      }
+      selectedMaterials = selection;
+      break;
+    }
+  }
+  const fusionIndex = player.extraDeck.indexOf(fusionSelection);
+  if (fusionIndex === -1) return false;
+  let position: BattlePosition;
+  if (isAI(player) || host.game.decisionBroker.mode === "replay") {
+    const choice = await host.game.requestDecision({
+      kind: "choice", actor: player, candidates: [], requireCandidate: false,
+      resolveAI: () => ({ [resolveBotFusionPosition(fusionSelection, ctx)]: [] }),
+      serializeResult: value => ({ pass: false, candidateKey: value && "defense" in value ? "defense" : "attack", effectId: null }),
+      deserializeReplayValue: value => "candidateKey" in value && (value.candidateKey === "attack" || value.candidateKey === "defense")
+        ? { [value.candidateKey]: [] } : null,
+    });
+    if (!choice) throw new Error("Fusion position decision is missing.");
+    position = "defense" in choice ? "defense" : "attack";
+  } else {
+    position = await host.chooseSpecialSummonPosition(fusionSelection, player);
+  }
+  return host.game.performFusionSummon(selectedMaterials, fusionIndex, position, selectedMaterials, player);
+}
+
+/** Live policy entrypoint. Playback consumes decisions without entering it. */
 export async function performBotFusion(
   this: FusionExecutionHost,
   ctx: EffectContext,
   summonableFusions: FusionOption[],
   availableMaterials: FusionMaterialGroups,
 ): Promise<boolean> {
-  const player = ctx.player as FusionRuntimePlayer;
-  // Bot AI: choose best fusion
-  // Prefer strategy-provided generic fusion preferences, then fall back to ATK.
-  const sorted = [...summonableFusions].sort((a, b) => {
-    const prefA = getFusionPreferenceScore(a.fusion, ctx);
-    const prefB = getFusionPreferenceScore(b.fusion, ctx);
-    if (prefA !== prefB) return prefB - prefA;
-    const atkA = a.fusion.atk || 0;
-    const atkB = b.fusion.atk || 0;
-    return atkB - atkA;
-  });
-
-  const chosen = sorted[0];
-  if (!chosen) return false;
-
-  const { fusion, materialCombos } = chosen;
-
-  // Select the best material combo (prioritize sacrificing weak monsters)
-  const materials = selectBestMaterialCombo(
-    materialCombos,
-    ctx,
-  ) as FusionRuntimeCard[];
-
-  // Log bot fusion decision
-  console.log(
-    `[Bot] Fusion summoning ${fusion.name} using materials:`,
-    materials.map((m) => m.name).join(", "),
-  );
-
-  // Get fusion monster index in extra deck
-  const fusionIndex = player.extraDeck.indexOf(fusion);
-  if (fusionIndex === -1) {
-    console.log("[Bot] Fusion monster not found in Extra Deck");
-    return false;
-  }
-
-  // Use game.performFusionSummon to handle the actual fusion summon
-  const success = await this.game.performFusionSummon(
-    materials,
-    fusionIndex,
-    resolveBotFusionPosition(fusion, ctx),
-    materials,
-    player,
-  );
-
-  return success;
+  return chooseFusionAndSummon(this, ctx, summonableFusions, availableMaterials);
 }
 
 /**
@@ -346,201 +456,9 @@ export async function applyPolymerizationFusion(
     return false;
   }
 
-  // For bot/AI, use AI selection
-  if (isAI(player)) {
-    return await this.performBotFusion(ctx, availableFusions, {
-      field: fieldMonsters,
-      hand: handMonsters,
-    });
+  const materialGroups = { field: fieldMonsters, hand: handMonsters };
+  if (isAI(player) && this.game.decisionBroker.mode !== "replay") {
+    return this.performBotFusion(ctx, availableFusions, materialGroups);
   }
-
-  // For human player, use step-by-step selection
-  // Step 1: Select which fusion to summon
-  const fusionCards = availableFusions.map((f) => f.fusion);
-
-  console.log("[Polymerization] Showing fusion selection for human player");
-
-  // Use game's card selection system
-  const fusionSelection = await new Promise<
-    FusionRuntimeCard | null | undefined
-  >((resolve) => {
-    // Build a selection contract for choosing the fusion
-    // Include all necessary card properties for the selection modal to display correctly
-    const selectionContract: RawSelectionContract = {
-      requirements: [
-        {
-          id: "fusion_choice",
-          candidates: fusionCards.map((f) => ({
-            key: `extra_${f.id}`,
-            cardRef: f,
-            name: f.name,
-            image: f.image,
-            atk: f.atk,
-            def: f.def,
-            zone: "extra",
-            owner: "player",
-          })),
-          min: 1,
-          max: 1,
-          label: getUIText("ui.fusion.selectMonsterLabel"),
-        },
-      ],
-      ui: {
-        allowCancel: true,
-        message: getUIText("ui.fusion.selectMonsterMessage"),
-      },
-    };
-
-    this.game.startTargetSelectionSession({
-      kind: "fusion_select",
-      selectionContract,
-      onCancel: () => resolve(null),
-      onAbort: () => resolve(null),
-      execute: (selections) => {
-        const choice = selections.fusion_choice?.[0];
-        resolve(
-          choice ? fusionCards.find((f) => `extra_${f.id}` === choice) : null,
-        );
-        return { success: true, needsSelection: false };
-      },
-    });
-  });
-
-  if (!fusionSelection) {
-    console.log("[Polymerization] Fusion selection cancelled");
-    return false;
-  }
-
-  console.log("[Polymerization] Selected fusion:", fusionSelection.name);
-
-  // Find the material combos for selected fusion
-  const selectedFusionData = availableFusions.find(
-    (f) => f.fusion.id === fusionSelection.id,
-  );
-  const materialCombos = selectedFusionData?.materialCombos || [];
-
-  if (materialCombos.length === 0) {
-    this.ui?.showMessage?.(getUIText("ui.fusion.noValidMaterials"));
-    return false;
-  }
-
-  // If only one combo, use it directly
-  let selectedMaterials: FusionRuntimeCard[];
-  if (materialCombos.length === 1) {
-    selectedMaterials = materialCombos[0]!;
-  } else {
-    // Step 2: Let player select which materials to use
-    const requiredCount = this.getRequiredMaterialCount(fusionSelection);
-    const materialCandidates = availableMaterials.map((m, idx) => ({
-      key: `mat_${m.instanceId || m.id}_${idx}`,
-      cardRef: m,
-      name: m.name,
-      image: m.image,
-      atk: m.atk,
-      def: m.def,
-      zone: materialInfo[idx]?.zone || "field",
-      owner: player.id,
-    }));
-
-    while (true) {
-      const materialSelection = await new Promise<FusionRuntimeCard[] | null>(
-        (resolve) => {
-          const selectionContract: RawSelectionContract = {
-            requirements: [
-              {
-                id: "materials",
-                candidates: materialCandidates,
-                min: requiredCount,
-                max: requiredCount,
-                label: getUIText("ui.fusion.selectMaterialsLabel", {
-                  count: requiredCount,
-                }),
-              },
-            ],
-            ui: {
-              allowCancel: true,
-              message: getUIText("ui.fusion.selectMaterialsFor", {
-                cardName:
-                  getCardDisplayName(fusionSelection) || fusionSelection.name,
-              }),
-            },
-          };
-
-          this.game.startTargetSelectionSession({
-            kind: "fusion_materials",
-            selectionContract,
-            onCancel: () => resolve(null),
-            onAbort: () => resolve(null),
-            execute: (selections) => {
-              const keys = selections.materials || [];
-              const mats = keys
-                .map((k) => materialCandidates.find((c) => c.key === k)?.cardRef)
-                .filter((material): material is FusionRuntimeCard =>
-                  Boolean(material),
-                );
-              resolve(mats);
-              return { success: true, needsSelection: false };
-            },
-          });
-        },
-      );
-
-      if (!materialSelection) {
-        console.log("[Polymerization] Material selection cancelled");
-        return false;
-      }
-
-      // Validate the selection
-      const selectedMaterialInfo = materialSelection.map((material) => ({
-        zone: player.field.includes(material) ? "field" as const : "hand" as const,
-      }));
-      const validation = this.evaluateFusionSelection(
-        fusionSelection,
-        materialSelection,
-        { materialInfo: selectedMaterialInfo },
-      );
-      const materialsStillAvailable = materialSelection.every((material) =>
-        player.field.includes(material) || player.hand.includes(material));
-      const legalSelection = materialsStillAvailable && this.getAvailableFusions(
-        [fusionSelection], materialSelection, player, { materialInfo: selectedMaterialInfo },
-      ).length > 0;
-      if (!validation.valid || !legalSelection) {
-        this.ui?.showMessage?.(
-          validation.reason || getUIText("ui.fusion.invalidMaterials"),
-        );
-        continue;
-      }
-
-      selectedMaterials = materialSelection;
-      break;
-    }
-  }
-
-  console.log(
-    "[Polymerization] Selected materials:",
-    selectedMaterials.map((m) => m.name),
-  );
-
-  // Get fusion monster index in extra deck
-  const fusionIndex = player.extraDeck.indexOf(fusionSelection);
-  if (fusionIndex === -1) {
-    this.ui?.showMessage?.(getUIText("ui.fusion.notFound"));
-    return false;
-  }
-
-  // Choose position for the fusion monster
-  const position =
-    (await this.chooseSpecialSummonPosition(fusionSelection, player)) ||
-    "attack";
-
-  // Use game.performFusionSummon to handle the actual fusion summon
-  const success = await this.game.performFusionSummon(
-    selectedMaterials,
-    fusionIndex,
-    position,
-    selectedMaterials,
-    player,
-  );
-
-  return success;
+  return chooseFusionAndSummon(this, ctx, availableFusions, materialGroups);
 }

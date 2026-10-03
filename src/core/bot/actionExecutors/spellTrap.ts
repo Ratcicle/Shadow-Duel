@@ -58,56 +58,10 @@ export async function executeSpellAction(
     }
   }
 
-  const activationEffect = game.effectEngine?.getSpellTrapActivationEffect?.(
-    card,
-    {
-      fromHand: true,
-    },
-  );
-
-  const pipelineResult = await game.runActivationPipeline({
-    card,
+  const pipelineResult = await game.tryActivateSpell(card, resolvedIndex, null, {
     owner: bot,
-    selectionKind: "spellTrapEffect",
-    selectionMessage: "Select target(s) for the spell effect.",
-    guardKind: "bot_spell_from_hand",
-    phaseReq: ["main1", "main2"],
-    preview: () =>
-      game.effectEngine?.canActivateSpellFromHandPreview?.(card, bot, {
-        activationContext: actionActivationContext,
-      }),
-    commit: () => game.commitCardActivationFromHand(bot, resolvedIndex),
-    activationContext: {
-      ...actionActivationContext,
-      fromHand: true,
-      sourceZone: "hand",
-    },
-    oncePerTurn: {
-      card,
-      player: bot,
-      effect: activationEffect,
-    },
-    activate: (chosen, ctx, zone, resolvedCard) =>
-      game.effectEngine.activateSpellTrapEffect(
-        resolvedCard,
-        bot,
-        chosen,
-        zone,
-        ctx,
-      ),
-    finalize: async (result, info) => {
-      await game.finalizeSpellCardActivation(
-        result as Parameters<BotGamePort["finalizeSpellCardActivation"]>[0],
-        info as Parameters<BotGamePort["finalizeSpellCardActivation"]>[1],
-        {
-          owner: bot,
-          fromHand: true,
-          effect: activationEffect,
-          placementLog: `Bot places ${info.card.name}.`,
-          activationLog: `Bot activates ${info.card.name}`,
-        },
-      );
-    },
+    activationContext: { ...actionActivationContext, activationZone: "hand", sourceZone: "hand" },
+    actionContext: actionActivationContext.actionContext,
   });
   // Pipeline retorna false, null, ou {success: false} quando falha
   const success =

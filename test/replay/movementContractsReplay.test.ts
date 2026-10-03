@@ -74,7 +74,7 @@ for (const scenario of ["field-replacement", "refused-bounce"] as const) {
         assert.equal(opponent.hand.includes(target), false);
       }
       const replay = validateCanonicalReplay(JSON.parse(JSON.stringify(live.finalizeReplay({ reason: scenario }))));
-      assert.equal(replay.engineVersion, "engine-rules-v13");
+      assert.equal(replay.engineVersion, "engine-rules-v14");
       assert.equal(replay.schemaVersion, 2);
       assert.ok(replay.commands.length > 0);
       const result = await replayCanonicalDuel(replay, {

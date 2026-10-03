@@ -251,8 +251,9 @@ test("replay canônico headless termina com o mesmo hash", async () => {
     ["a897fa58", "297e0fe8"],
   );
   assert.equal(replay.result.finalStateHash, "297e0fe8");
-  // The recording hash includes engine v13 and the combined Arcanist/False Horizon definition signature.
-  assert.equal(hashCanonicalValue(replay), "01535368");
+  // Only the engine marker changes this generic golden; state, decisions and events are unchanged.
+  assert.equal(hashCanonicalValue({ ...replay, engineVersion: "engine-rules-v13" }), "01535368");
+  assert.equal(hashCanonicalValue(replay), "592d2e85");
   assert.equal(JSON.stringify(replay).length, 10492);
 
   const result = await replayCanonicalDuel(replay);

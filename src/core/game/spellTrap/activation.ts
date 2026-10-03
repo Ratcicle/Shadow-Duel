@@ -636,7 +636,7 @@ export async function tryActivateSpell(
     });
   }
   const resume = options.resume || null;
-  const actionContext = options.actionContext || null;
+  const actionContext = options.actionContext ?? options.activationContext?.actionContext ?? null;
   const activationEffect = this.effectEngine?.getSpellTrapActivationEffect?.(
     card,
     { fromHand: true },
@@ -654,6 +654,7 @@ export async function tryActivateSpell(
   const resolvedActivationZone =
     resume?.activationZone || resumeCommitInfo?.activationZone || null;
   const baseActivationContext = resume?.activationContext || {
+    ...options.activationContext,
     fromHand: true,
     activationZone: resolvedActivationZone,
     sourceZone: "hand",
@@ -709,7 +710,7 @@ export async function tryActivateSpell(
           this.effectEngine?.canActivateSpellFromHandPreview?.(
             card,
             owner,
-            quickSpellContext ? { quickSpellContext } : undefined,
+            { activationContext: baseActivationContext, ...(quickSpellContext ? { quickSpellContext } : {}) },
           ),
     commit: resume
       ? () =>

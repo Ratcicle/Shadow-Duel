@@ -1,7 +1,7 @@
 # Replay canônico
 
 O replay executável usa o formato `shadow-duel-canonical-replay`, schema `2` e
-`engineVersion: "engine-rules-v13"`. Ele é independente do relatório
+`engineVersion: "engine-rules-v14"`. Ele é independente do relatório
 estratégico. O importador aceita somente o schema `2`: relatórios v4 e replays
 de schemas anteriores não são partidas executáveis nesta versão.
 
@@ -181,7 +181,7 @@ caracteres do replay, usado para detectar divergências na reprodução.
 `validateCanonicalReplay(input)` recebe `unknown`, não muta a entrada e retorna
 a mesma referência somente depois de validar o documento. `setup`, `commands` e
 `decisions` e `engineVersion` são obrigatórios. A versão da engine deve ser
-`"engine-rules-v13"`; gravações sem essa versão são rejeitadas antes da validação
+`"engine-rules-v14"`; gravações sem essa versão são rejeitadas antes da validação
 profunda e da reprodução. `events`, `result` e `finalized` continuam opcionais
 na importação de arquivos do schema `2`; quando presentes, são validados
 profundamente. Os comandos e kinds de decisão permanecem os mesmos.
@@ -505,7 +505,7 @@ continuação reproduzem decisões gravadas sem UI ou política de IA ao vivo.
 
 ### Respostas aos alvos do último elo — engine-rules-v13
 
-A versão atual é `engine-rules-v13`, schema `2`. A descoberta de respostas usa
+A versão anterior é `engine-rules-v13`, schema `2`. A descoberta de respostas usa
 os alvos declarados pelo último Chain Link, excluindo custos e referências ao
 evento. Um elo posterior sem alvos não reutiliza o alvo nem a ativação do elo
 inicial. Respostas a ativações continuam recebendo a identidade da ativação
@@ -525,3 +525,36 @@ Preserva-se o contrato existente de `target` como primeiro alvo e `targets`
 como lista ordenada completa. Escolher entre várias ocorrências elegíveis de
 alvo permanece uma limitação anterior; esta versão não cria outra decisão
 nem escolhe automaticamente uma ocorrência diferente.
+
+### Ativações da IA e escolhas de Fusão — engine-rules-v14
+
+A versão atual é `engine-rules-v14`, com schema `2`. A execução de uma Magia
+pela IA usa a entrada pública capturada, de modo que a ativação externa gera
+um único comando `activate_card`. O contexto estratégico orienta a escolha
+ao vivo; o replay preserva o resultado da escolha, sem precisar serializar ou
+reexecutar as heurísticas que a produziram.
+
+As escolhas de monstro de Fusão, materiais físicos e posição passam pelo
+broker canônico. O playback consome as decisões gravadas e revalida suas
+identidades de duelo e candidatos, sem consultar UI ou política de IA. Os
+kinds existentes de decisão continuam suficientes; não há novo envelope ou
+campo de estado canônico.
+
+O executor da ação de IA que representa uma ativação de monstro na mão
+também passa pela ativação pública: custo, publicação, resposta adversária e
+resolução mantêm a ordem canônica. Posições escolhidas pela IA na Invocação
+Especial são registradas pelo mesmo broker usado para escolhas humanas.
+Além disso, a prévia de descarte deixa de considerar como recurso no
+cemitério uma carta cujo destino efetivo é banimento; a simulação aplica o
+mesmo redirecionamento pelo movimento simulado existente.
+
+Essas mudanças alteram os comandos, as decisões e a legalidade observável.
+Gravações `engine-rules-v13` e anteriores são rejeitadas antes da reprodução,
+sem migração automática, edição ou exclusão dos arquivos antigos. Reproduzi-las
+exige a versão da engine que as gravou. A assinatura declarativa do banco
+permanece `7bbe98b0`; os textos e regras das cartas não mudam neste lote.
+
+O golden genérico tem hash completo `592d2e85`. Seus hashes de estado continuam
+`a897fa58` e `297e0fe8`; restaurar apenas o marcador v13 no envelope desse
+cenário produz o golden anterior `01535368`. Isso verifica que a atualização
+desse golden decorre exclusivamente da versão, sem remover estado do hash.
