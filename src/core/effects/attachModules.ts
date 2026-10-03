@@ -32,6 +32,7 @@ export const CONDITION_EFFECT_METHODS = defineEffectMethods({
 });
 
 export const PASSIVE_EFFECT_METHODS = defineEffectMethods({
+  applyImmediateEventEffects: passives.applyImmediateEventEffects,
   cardHasArchetype: passives.cardHasArchetype,
   isSameCardReference: passives.isSameCardReference,
   isActiveEquipForCard: passives.isActiveEquipForCard,

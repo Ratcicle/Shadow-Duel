@@ -372,6 +372,7 @@ export default class Card implements GameCard {
   declare mustBeAttacked: boolean;
   declare piercing: boolean;
   declare piercingDamageMultiplier: number;
+  declare piercingGrantedByEffect?: boolean;
   declare canMakeSecondAttackThisTurn: boolean;
   declare secondAttackUsedThisTurn: boolean;
   declare dynamicBuffs: CardDynamicBuffMap | null;
@@ -432,6 +433,7 @@ export default class Card implements GameCard {
   declare requiredTributes?: number;
   declare declaredValues?: CardDeclaredValueMap;
   declare oncePerTurnUsageByName?: EffectUsageMap;
+  declare oncePerTurnResetVersion?: number;
   declare effectMarkers?: CardEffectMarkerMap;
   declare protectionEffects?: CardProtectionEffect[];
   declare permanentBuffsBySource?: CardPermanentBuffMap;

@@ -3,6 +3,7 @@ import Card from "../../src/core/Card.js";
 import { createRuntimeGame } from "../helpers/game.js";
 import type { EffectDefinition } from "../../src/core/contracts/effects.js";
 import { canUseSimulatedEffectUsage } from "../../src/core/ai/common/simStateUtils.js";
+import { getPiercingDamage } from "../../src/core/ai/common/cardStats.js";
 import type { AiStateShape } from "../../src/core/contracts/aiState.js";
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -702,6 +703,9 @@ for (const profile of CLONE_PROFILES) {
       const source = new Card(cardDefinition(503), actor);
       const second = new Card(cardDefinition(503), actor);
       self.hand.push(source, second);
+      source.piercing = true;
+      source.effectsNegated = true;
+      source.piercingGrantedByEffect = true;
       const shared: EffectDefinition = { id: "shared-test", timing: "ignition", activationZones: ["field"], oncePerTurn: true, usagePolicy: "use", actions: [] };
       const perCard: EffectDefinition = { ...shared, id: "instance-test", oncePerTurnScope: "card", usagePolicy: "activate" };
       game.markOncePerTurnUsed(source, self, shared);
@@ -737,6 +741,10 @@ for (const profile of CLONE_PROFILES) {
       const state = unsafeFixture<AiStateShape>(captured, "Captured clone profile establishes simulated state/card brands");
       const card = required(state.bot.hand.find(entry => entry.instanceId === source.instanceId));
       const copy = required(state.bot.hand.find(entry => entry.instanceId === second.instanceId));
+      assert.equal(getPiercingDamage(card, 2000, 500), 1500, "external grant remains active when a clone has negated own effects");
+      card.piercingGrantedByEffect = false;
+      assert.equal(getPiercingDamage(card, 2000, 500), 0);
+      assert.equal(source.piercingGrantedByEffect, true, "planning never changes the runtime grant provenance");
       assert.equal(canUseSimulatedEffectUsage(state, shared, card, "bot"), false);
       assert.equal(canUseSimulatedEffectUsage(state, shared, copy, "bot"), false);
       assert.equal(canUseSimulatedEffectUsage(state, perCard, card, "bot"), false);

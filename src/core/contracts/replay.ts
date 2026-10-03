@@ -19,7 +19,7 @@ import type {
 
 export const CANONICAL_REPLAY_FORMAT = "shadow-duel-canonical-replay" as const;
 export const CANONICAL_REPLAY_SCHEMA_VERSION = 2 as const;
-export const CANONICAL_REPLAY_ENGINE_VERSION = "engine-rules-v9" as const;
+export const CANONICAL_REPLAY_ENGINE_VERSION = "engine-rules-v10" as const;
 
 export type SerializablePrimitive = string | number | boolean | null;
 
@@ -349,6 +349,9 @@ export interface CanonicalCardStatusSnapshot {
   cannotAttackThisTurn: boolean;
   battlePositionLocked: boolean;
   banishWhenLeavesField: boolean;
+  piercing: boolean;
+  piercingDamageMultiplier: number;
+  piercingGrantedByEffect: boolean;
 }
 
 export interface CanonicalCardStateSnapshot {
@@ -358,6 +361,8 @@ export interface CanonicalCardStateSnapshot {
   controller: string | null;
   originalOwner: string | null;
   locationVersion: number;
+  oncePerTurnResetVersion: number;
+  oncePerTurnUsageByName: import("./cards.js").EffectUsageMap;
   lastSummonMethod: string | null;
   lastSummonedFromZone: string | null;
   properSummonEstablished: boolean;
@@ -474,6 +479,10 @@ export interface ReplayRuntimeCard {
   controller?: string | null;
   originalOwner?: string | null;
   locationVersion?: number;
+  oncePerTurnResetVersion?: number;
+  piercing?: boolean;
+  piercingDamageMultiplier?: number;
+  piercingGrantedByEffect?: boolean;
   lastSummonMethod?: string | null;
   lastSummonedFromZone?: string | null;
   properSummonEstablished?: boolean;
@@ -536,7 +545,7 @@ export type CanonicalReplayChainPort = Partial<
 
 export interface CanonicalReplayGamePort {
   oncePerTurnTurnCounter?: number;
-  oncePerTurnUsage?: { player: ReadonlyMap<string, unknown>; bot: ReadonlyMap<string, unknown> };
+  oncePerTurnUsage?: { player: ReadonlyMap<string, unknown>; bot: ReadonlyMap<string, unknown>; card?: { get(card: ReplayRuntimeCard): unknown } };
   generatedIdCounters?: ReadonlyMap<string, number>;
   turn?: PlayerId | string | null;
   phase?: EventPhase | string | null;

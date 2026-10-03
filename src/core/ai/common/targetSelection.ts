@@ -1,4 +1,5 @@
 import { requiresUnnegatedTarget } from "../../effects/negation.js";
+import { hasActivePiercing } from "../../game/combat/availability.js";
 import {
   getBattleStatForAttackTarget,
   getEffectiveAtk,
@@ -529,7 +530,7 @@ export function estimateRecursionTargetValue(
     if (offensiveNames.includes(card.name as string) && def < 2000) score -= 1;
   } else if (purpose === "pressure" || purpose === "offense") {
     score += atk / 450;
-    if (atk >= 2000 || card.piercing) score += 2;
+    if (atk >= 2000 || hasActivePiercing(card)) score += 2;
     if (offensiveNames.includes(card.name as string)) score += 2;
     if (defensiveNames.includes(card.name as string) && atk < 1800) score -= 3;
   } else {

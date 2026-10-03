@@ -29,6 +29,7 @@ import type { ResolvedTargetMap } from "../../contracts/actionRuntime.js";
 import type { GameCard } from "../../contracts/cards.js";
 import type {
   CardFilter,
+  EffectCondition,
   EffectDefinition,
   EffectTarget,
 } from "../../contracts/effects.js";
@@ -47,6 +48,7 @@ import type { CanonicalZone, ZoneInput } from "../../contracts/zones.js";
 type ReplacementOwnerRule = "self" | "opponent" | "any" | "both" | "either";
 
 interface RuntimeReplacementEffect extends ActionReplacementEffect {
+  readonly consumeOnFirstOpportunity?: boolean;
   readonly allowFacedown?: boolean;
   readonly appliesTo?: ReplacementOwnerRule;
   readonly causedByOwner?: ReplacementOwnerRule;
@@ -75,6 +77,7 @@ interface RuntimeReplacementEffectDefinition
   readonly id?: string;
   readonly actions?: readonly CardAction[];
   readonly targets?: readonly EffectTarget[];
+  readonly conditions?: readonly EffectCondition[];
   readonly requireFaceup?: boolean;
   readonly requireZone?: CanonicalZone;
   readonly oncePerDuel?: boolean;
@@ -98,6 +101,11 @@ type ReplacementActionExecutionResult =
   | ReplacementActionResult;
 
 interface ReplacementEffectEnginePort {
+  isCardEffectNegated?(card: GameCard): boolean;
+  evaluateConditions?(
+    conditions: readonly EffectCondition[],
+    context: unknown,
+  ): { ok: boolean };
   applyActions(
     actions: readonly CardAction[],
     context: unknown,
@@ -235,6 +243,26 @@ interface ReplacementContext {
   ownerPlayer: GamePlayer;
   sourceCard: GameCard | null;
   sourcePlayer: GamePlayer | null;
+  targetPresence: ReplacementPresence;
+}
+
+interface ReplacementPresence {
+  readonly card: GameCard;
+  readonly owner: GamePlayer;
+  readonly zone: CanonicalZone | null;
+  readonly controller: string | null;
+  readonly instanceId: GameCard["instanceId"];
+  readonly duelCardId: GameCard["duelCardId"];
+  readonly locationVersion: number;
+  readonly fieldPresenceId: GameCard["fieldPresenceId"];
+}
+
+interface LiveReplacementEntry {
+  readonly sourceCard: GameCard;
+  readonly sourceOwner: GamePlayer;
+  readonly sourcePresence: ReplacementPresence;
+  readonly effect: RuntimeReplacementEffectDefinition;
+  firstOpportunityConsumed: boolean;
 }
 
 interface ReplacementDecisionInput {
@@ -292,6 +320,7 @@ interface HumanReplacementSelectionInput {
 }
 
 interface ReplacementActionContextExtra {
+  validateCostPayment?: () => boolean;
   preview?: boolean;
   isPreview?: boolean;
   activationContext?: {
@@ -827,49 +856,73 @@ function askHumanToSelectReplacementTargets({
   });
 }
 
-/**
- * Attempt to apply a replacement effect from a source card to prevent
- * destruction of `ctx.card`. Returns `{ replaced: boolean }`.
- *
- * @param {Game} game
- * @param sourceCard
- * @param sourceOwner
- * @param effect — must have `replacementEffect` payload
- * @param {{ card, cause, fromZone, ownerPlayer, sourceCard, sourcePlayer }} ctx
- */
-async function tryReplacement(
+function findReplacementZone(owner: GamePlayer, card: GameCard): CanonicalZone | null {
+  if (owner.fieldSpell === card) return "fieldSpell";
+  const zones = ["field", "spellTrap", "hand", "graveyard", "deck", "extraDeck", "banished"] as const;
+  return zones.find(zone => getPlayerZone(owner, zone)?.includes(card)) || null;
+}
+
+function captureReplacementPresence(card: GameCard, owner: GamePlayer): ReplacementPresence {
+  return { card, owner, zone: findReplacementZone(owner, card),
+    controller: card.controller ?? owner.id, instanceId: card.instanceId, duelCardId: card.duelCardId,
+    locationVersion: getCardLocationVersion(card), fieldPresenceId: card.fieldPresenceId };
+}
+
+function replacementPresenceIsCurrent(presence: ReplacementPresence): boolean {
+  const { card, owner } = presence;
+  // Ownership normalization and lazy replay IDs may fill absent fields without
+  // moving a card. The captured object/instance and presence still identify it.
+  return findReplacementZone(owner, card) === presence.zone && presence.zone !== null &&
+    (card.controller ?? owner.id) === presence.controller &&
+    card.instanceId === presence.instanceId &&
+    (presence.duelCardId == null || card.duelCardId === presence.duelCardId) &&
+    getCardLocationVersion(card) === presence.locationVersion &&
+    card.fieldPresenceId === presence.fieldPresenceId;
+}
+
+function replacementIsEligible(
   game: DestructionReplacementHost,
   sourceCard: ReplacementSourceCard,
   sourceOwner: GamePlayer,
   effect: RuntimeReplacementEffectDefinition,
   ctx: ReplacementContext,
-): Promise<ReplacementResolutionResult> {
+  realSource: GameCard | null,
+  skipUsage = false,
+): boolean {
   const { card, cause, fromZone, ownerPlayer } = ctx;
 
   if (!sourceCard || !effect?.replacementEffect) {
-    return { replaced: false };
+    return false;
+  }
+
+  if (realSource) {
+    const sourceZone = findReplacementZone(sourceOwner, realSource);
+    if (!sourceZone ||
+        (effect.requireZone ? sourceZone !== effect.requireZone
+          : !["field", "spellTrap", "fieldSpell"].includes(sourceZone)) ||
+        realSource.effectsNegated || game.effectEngine?.isCardEffectNegated?.(realSource)) return false;
   }
 
   const replacement = effect.replacementEffect;
   if (replacement.type && replacement.type !== "destruction") {
-    return { replaced: false };
+    return false;
   }
 
   const sourceRequireFaceup = effect.requireFaceup !== false;
   if (sourceRequireFaceup && sourceCard.isFacedown) {
-    return { replaced: false };
+    return false;
   }
 
   if (effect.requireZone) {
     const sourceZone =
       game.effectEngine?.findCardZone?.(sourceOwner, sourceCard) || null;
     if (sourceZone !== effect.requireZone) {
-      return { replaced: false };
+      return false;
     }
   }
 
   if (replacement.targetMustBeSource === true && card !== sourceCard) {
-    return { replaced: false };
+    return false;
   }
 
   if (replacement.targetMustBeEquippedToSource === true) {
@@ -879,7 +932,7 @@ async function tryReplacement(
       sourceCard.equipTarget === card ||
       targetEquips.some((equip) => valuesAreStrictlyEqual(equip, sourceCard));
     if (!sourceEquipsTarget) {
-      return { replaced: false };
+      return false;
     }
   }
 
@@ -888,14 +941,14 @@ async function tryReplacement(
     replacement.appliesTo ||
     (sourceCard === card ? "self" : null);
   if (!targetOwnerKey) {
-    return { replaced: false };
+    return false;
   }
 
   if (targetOwnerKey !== "any") {
     const expectedOwner =
       targetOwnerKey === "self" ? sourceOwner : game.getOpponent(sourceOwner);
     if (expectedOwner !== ownerPlayer) {
-      return { replaced: false };
+      return false;
     }
   }
 
@@ -906,7 +959,7 @@ async function tryReplacement(
       : null;
   if (targetZones && targetZones.length > 0) {
     if (!fromZone || !targetZones.includes(fromZone)) {
-      return { replaced: false };
+      return false;
     }
   }
 
@@ -914,12 +967,12 @@ async function tryReplacement(
   const targetRequireFaceup =
     replacement.targetRequireFaceup !== false && !allowFacedown;
   if (targetRequireFaceup && card.isFacedown) {
-    return { replaced: false };
+    return false;
   }
 
   const targetFilters = replacement.targetFilters || null;
   if (targetFilters && !matchesTargetFilters(game, card, targetFilters)) {
-    return { replaced: false };
+    return false;
   }
 
   const scopedTargetIds = Array.isArray(replacement.targetInstanceIds)
@@ -941,14 +994,14 @@ async function tryReplacement(
         (card.fieldPresenceId ?? null) === presence.fieldPresenceId;
     })
   ) {
-    return { replaced: false };
+    return false;
   }
   if (scopedTargetIds.length > 0 || scopedTargetCards.length > 0) {
     const targetKey = getReplacementTargetKey(card);
     const matchesScopedId = targetKey && scopedTargetIds.includes(targetKey);
     const matchesScopedRef = scopedTargetCards.includes(card);
     if (!matchesScopedId && !matchesScopedRef) {
-      return { replaced: false };
+      return false;
     }
   }
 
@@ -962,18 +1015,18 @@ async function tryReplacement(
       fromZone,
     })
   ) {
-    return { replaced: false };
+    return false;
   }
 
   const onceCheck = game.canUseOncePerTurn(sourceCard, sourceOwner, effect);
-  if (!onceCheck.ok) {
-    return { replaced: false };
+  if (!skipUsage && !onceCheck.ok) {
+    return false;
   }
 
   // Once-per-Duel usage persists across turns and can allow a fixed number of uses.
   const duelCheck = canUseOncePerDuelEffect(sourceCard, sourceOwner, effect);
-  if (!duelCheck.ok) {
-    return { replaced: false };
+  if (!skipUsage && !duelCheck.ok) {
+    return false;
   }
 
   if (
@@ -981,12 +1034,38 @@ async function tryReplacement(
     replacement.reason !== "any" &&
     replacement.reason !== cause
   ) {
-    return { replaced: false };
+    return false;
   }
 
   if (!matchesReplacementSourceOwner(game, replacement, sourceOwner, ctx)) {
-    return { replaced: false };
+    return false;
   }
+
+  if (replacement.targetMustNotBeSource === true && card === sourceCard) return false;
+  if (effect.conditions?.length && game.effectEngine?.evaluateConditions &&
+      !game.effectEngine.evaluateConditions(effect.conditions, {
+        source: sourceCard, player: sourceOwner, opponent: game.getOpponent(sourceOwner),
+        destroyed: card, destroyedOwner: ownerPlayer, cause,
+      }).ok) return false;
+  return true;
+}
+
+/** Resolve one replacement after checking its current source and protected presence. */
+async function tryReplacement(
+  game: DestructionReplacementHost,
+  sourceCard: ReplacementSourceCard,
+  sourceOwner: GamePlayer,
+  effect: RuntimeReplacementEffectDefinition,
+  ctx: ReplacementContext,
+  entry: LiveReplacementEntry | null = null,
+): Promise<ReplacementResolutionResult> {
+  const { card, cause, fromZone, ownerPlayer } = ctx;
+  const replacement = effect.replacementEffect;
+  const revalidate = () => replacementPresenceIsCurrent(ctx.targetPresence) &&
+    (!entry || replacementPresenceIsCurrent(entry.sourcePresence)) &&
+    replacementIsEligible(game, sourceCard, sourceOwner, effect, ctx,
+      entry?.sourceCard || null, entry?.firstOpportunityConsumed === true);
+  if (!revalidate()) return { replaced: false };
 
   const confirmReplacement = async (message?: string): Promise<boolean> => {
     if (replacement.auto === true) return true;
@@ -1008,7 +1087,9 @@ async function tryReplacement(
     );
   };
 
-  const markOncePerDuelUsedIfNeeded = () => {
+  const markReplacementUsageIfNeeded = () => {
+    if (entry?.firstOpportunityConsumed) return;
+    game.markOncePerTurnUsed(sourceCard, sourceOwner, effect);
     markOncePerDuelEffectUsed(sourceCard, sourceOwner, effect);
   };
 
@@ -1062,9 +1143,9 @@ async function tryReplacement(
         return false;
       }
 
-      if (!await confirmReplacement()) return false;
+      if (!await confirmReplacement() || !revalidate()) return false;
 
-      const costCtx = buildActionCostCtx();
+      const costCtx = buildActionCostCtx({ validateCostPayment: revalidate });
       const costResult = await engine.applyActions(costActions, costCtx, {});
       if (isReplacementActionResult(costResult) && costResult.needsSelection) {
         return { ...costResult, success: false };
@@ -1199,8 +1280,7 @@ async function tryReplacement(
       return { replaced: false };
     }
 
-    game.markOncePerTurnUsed(sourceCard, sourceOwner, effect);
-    markOncePerDuelUsedIfNeeded();
+    markReplacementUsageIfNeeded();
     const logMessage = formatReplacementText(
       replacement.logMessage,
       card.name,
@@ -1218,9 +1298,8 @@ async function tryReplacement(
   }
 
   if (replacement.auto === true || costCount === 0) {
-    if (!await confirmReplacement()) return { replaced: false };
-    game.markOncePerTurnUsed(sourceCard, sourceOwner, effect);
-    markOncePerDuelUsedIfNeeded();
+    if (!await confirmReplacement() || !revalidate()) return { replaced: false };
+    markReplacementUsageIfNeeded();
     const logMessage = formatReplacementText(
       replacement.logMessage,
       card.name,
@@ -1274,6 +1353,14 @@ async function tryReplacement(
     filterCandidates,
   );
   const candidates = candidateEntries.map((entry) => entry.card);
+  const costPresences = new Map(candidates.map(candidate =>
+    [candidate, captureReplacementPresence(candidate, costOwner)]));
+  const selectedCostsAreCurrent = (selected: readonly GameCard[]) =>
+    selected.length === costCount && new Set(selected).size === costCount &&
+    selected.every(candidate => {
+      const presence = costPresences.get(candidate);
+      return presence && replacementPresenceIsCurrent(presence) && filterCandidates(candidate);
+    });
 
   if (candidates.length < costCount) {
     return { replaced: false };
@@ -1296,7 +1383,7 @@ async function tryReplacement(
       suffix: costActionText.suffix,
       cardName: targetName,
     });
-  if (!await confirmReplacement(prompt)) return { replaced: false };
+  if (!await confirmReplacement(prompt) || !revalidate()) return { replaced: false };
 
   // AI auto-selection (lowest ATK for cost). Bot Arena can place an AI in the
   // "player" seat, so controllerType is the reliable human/AI boundary.
@@ -1305,6 +1392,7 @@ async function tryReplacement(
       .sort((a, b) => (a.atk || 0) - (b.atk || 0))
       .slice(0, costCount);
 
+    if (!revalidate() || !selectedCostsAreCurrent(chosen)) return { replaced: false };
     const costMoveResult = await moveReplacementCostCards({
       game,
       cards: chosen,
@@ -1325,8 +1413,7 @@ async function tryReplacement(
       return { replaced: false };
     }
 
-    game.markOncePerTurnUsed(sourceCard, sourceOwner, effect);
-    markOncePerDuelUsedIfNeeded();
+    markReplacementUsageIfNeeded();
 
     const costNames = chosen.map((c) => c.name).join(", ");
     const logMessage = formatReplacementText(
@@ -1395,6 +1482,7 @@ async function tryReplacement(
     return { replaced: false };
   }
 
+  if (!revalidate() || !selectedCostsAreCurrent(selections)) return { replaced: false };
   const costMoveResult = await moveReplacementCostCards({
     game,
     cards: selections,
@@ -1415,8 +1503,7 @@ async function tryReplacement(
     return { replaced: false };
   }
 
-  game.markOncePerTurnUsed(sourceCard, sourceOwner, effect);
-  markOncePerDuelUsedIfNeeded();
+  markReplacementUsageIfNeeded();
 
   const costNames = selections.map((c) => c.name).join(", ");
   const logMessage = formatReplacementText(
@@ -1460,7 +1547,7 @@ export async function resolveDestructionWithReplacement(
     return { replaced: false };
   }
 
-  const ownerPlayer = card.owner === "player" ? this.player : this.bot;
+  const ownerPlayer = [this.player, this.bot].find(player => findReplacementZone(player, card)) || null;
   if (!ownerPlayer) {
     return { replaced: false };
   }
@@ -1486,12 +1573,34 @@ export async function resolveDestructionWithReplacement(
     ownerPlayer,
     sourceCard: destructionSourceCard,
     sourcePlayer: destructionSourcePlayer,
+    targetPresence: captureReplacementPresence(card, ownerPlayer),
   };
 
-  const sourcePool: GameCard[] = [
-    ...collectSources(ownerPlayer),
-    ...collectSources(this.getOpponent(ownerPlayer)),
-  ];
+  const sourcePool: LiveReplacementEntry[] = [];
+  for (const sourceOwner of [ownerPlayer, this.getOpponent(ownerPlayer)]) {
+    if (!sourceOwner) continue;
+    for (const sourceCard of collectSources(sourceOwner)) {
+      for (const effect of sourceCard.effects || []) {
+        if (!hasRuntimeReplacementEffect(effect)) continue;
+        sourcePool.push({ sourceCard, sourceOwner, effect,
+          sourcePresence: captureReplacementPresence(sourceCard, sourceOwner), firstOpportunityConsumed: false });
+      }
+    }
+  }
+  // Every eligible first-occurrence effect observes this occurrence even if an
+  // earlier replacement is selected. Its token authorizes only this attempt.
+  const firstOpportunityEntries = sourcePool.filter(entry =>
+    entry.effect.replacementEffect.consumeOnFirstOpportunity &&
+    replacementIsEligible(this, entry.sourceCard, entry.sourceOwner, entry.effect, ctx, entry.sourceCard));
+  for (const entry of firstOpportunityEntries) {
+    if (this.canUseOncePerTurn(entry.sourceCard, entry.sourceOwner, entry.effect).ok) {
+      this.markOncePerTurnUsed(entry.sourceCard, entry.sourceOwner, entry.effect);
+    }
+    if (canUseOncePerDuelEffect(entry.sourceCard, entry.sourceOwner, entry.effect).ok) {
+      markOncePerDuelEffectUsed(entry.sourceCard, entry.sourceOwner, entry.effect);
+    }
+    entry.firstOpportunityConsumed = true;
+  }
 
   const currentTurn = this.turnCounter;
   if (Array.isArray(this.temporaryReplacementEffects)) {
@@ -1569,23 +1678,11 @@ export async function resolveDestructionWithReplacement(
     }
   }
 
-  for (const sourceCard of sourcePool) {
-    const sourceOwner = sourceCard.owner === "player" ? this.player : this.bot;
-    if (!sourceOwner) continue;
-    const effects = sourceCard.effects || [];
-    for (const effect of effects) {
-      if (!hasRuntimeReplacementEffect(effect)) continue;
-      const result = await tryReplacement(
-        this,
-        sourceCard,
-        sourceOwner,
-        effect,
-        ctx,
-      );
-      if (result?.replaced) {
-        return result;
-      }
-    }
+  for (const entry of sourcePool) {
+    const result = await tryReplacement(
+      this, entry.sourceCard, entry.sourceOwner, entry.effect, ctx, entry,
+    );
+    if (result?.replaced) return result;
   }
 
   return { replaced: false };

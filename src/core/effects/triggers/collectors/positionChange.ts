@@ -4,6 +4,7 @@ import type {
   TriggerCardFilter,
   TriggerCollectorHost,
   TriggerEffect,
+  TriggerEffectLike,
   TriggerEntry,
   TriggerGamePort,
   TriggerPackage,
@@ -73,7 +74,7 @@ function sourceAlreadyListed(
 }
 
 function matchesPositionFilter(
-  actual: BattlePosition,
+  actual: string,
   filterValue:
     | BattlePosition
     | readonly BattlePosition[]
@@ -83,7 +84,60 @@ function matchesPositionFilter(
 ): boolean {
   if (!filterValue || filterValue === "any") return true;
   const allowed = Array.isArray(filterValue) ? filterValue : [filterValue];
-  return allowed.includes(actual);
+  return allowed.some(position => position === actual);
+}
+
+/** Preserve explicit manual provenance instead of inheriting a caller's source. */
+export function getPositionChangeProvenance<Card>(payload: {
+  readonly sourceCard?: Card | null | undefined;
+  readonly source?: Card | null | undefined;
+  readonly positionChangedByEffect?: boolean | undefined;
+}) {
+  const positionChangeSourceCard = payload.positionChangedByEffect === false
+    ? null : payload.sourceCard === undefined ? payload.source || null : payload.sourceCard;
+  return { positionChangeSourceCard, positionChangedByEffect: positionChangeSourceCard !== null };
+}
+
+/** The event gate is shared by queued triggers and immediate passive observers. */
+export function matchesPositionChangeEvent<Card>(
+  effect: Pick<TriggerEffectLike, "requireSelfAsChanged" | "fromPosition" | "positionFrom" | "toPosition" |
+    "positionTo" | "changedCardOwner" | "eventCardOwner" | "changedCardRequireFaceup" |
+    "changedCardRequireFaceupBeforeChange" | "eventCardFilters" | "positionChangedByEffect" |
+    "requirePositionChangedByEffect" | "positionChangeSourceFilters" | "positionChangeSourceCardFilters">,
+  source: Card,
+  changed: Card,
+  payload: {
+    readonly fromPosition?: string | undefined;
+    readonly toPosition?: string | undefined;
+    readonly wasFlipped?: boolean | undefined;
+    readonly wasFaceupBeforeChange?: boolean | undefined;
+    readonly sourceCard?: Card | null | undefined;
+    readonly source?: Card | null | undefined;
+    readonly positionChangedByEffect?: boolean | undefined;
+  },
+  context: {
+    readonly sourceOwnerId: string;
+    readonly changedOwnerId: string;
+    readonly changedIsFacedown: boolean;
+    readonly matchesEventFilters: (filters: TriggerCardFilter) => boolean;
+    readonly matchesSourceFilters: (card: Card | null, filters: TriggerCardFilter) => boolean;
+  },
+): boolean {
+  const { fromPosition, toPosition } = payload;
+  if (!fromPosition || !toPosition || fromPosition === toPosition) return false;
+  if (effect.requireSelfAsChanged === true && source !== changed) return false;
+  if (!matchesPositionFilter(fromPosition, effect.fromPosition || effect.positionFrom)) return false;
+  if (!matchesPositionFilter(toPosition, effect.toPosition || effect.positionTo)) return false;
+  const owner = effect.changedCardOwner || effect.eventCardOwner;
+  if (!matchesOwnerFilter(owner, context.sourceOwnerId, context.changedOwnerId)) return false;
+  if (effect.changedCardRequireFaceup === true && context.changedIsFacedown) return false;
+  if (effect.changedCardRequireFaceupBeforeChange === true &&
+      (payload.wasFaceupBeforeChange === false || payload.wasFlipped === true)) return false;
+  if (effect.eventCardFilters && !context.matchesEventFilters(effect.eventCardFilters)) return false;
+  const { positionChangeSourceCard } = getPositionChangeProvenance(payload);
+  if ((effect.positionChangedByEffect === true || effect.requirePositionChangedByEffect === true) && !positionChangeSourceCard) return false;
+  const filters = effect.positionChangeSourceFilters || effect.positionChangeSourceCardFilters;
+  return !filters || context.matchesSourceFilters(positionChangeSourceCard, filters);
 }
 
 function matchesCardFilters(
@@ -112,8 +166,11 @@ function matchesCardFilters(
 
 function getCardLockIdentity(
   card: TriggerRuntimeCard | null | undefined,
+  game: TriggerGamePort,
 ): string | number {
   return (
+    card?.duelCardId ??
+    (card ? game.ensureDuelCardId?.(card) : null) ??
     card?.instanceId ??
     card?._instanceId ??
     card?.uuid ??
@@ -127,10 +184,11 @@ function getCardLockIdentity(
 function buildPerEventCardEffect(
   effect: TriggerEffect,
   eventCard: TriggerRuntimeCard,
+  game: TriggerGamePort,
 ): TriggerEffect {
   if (!effect?.oncePerTurnPerEventCard) return effect;
   const baseName = effect.oncePerTurnName || effect.id || "position_change";
-  const eventCardKey = getCardLockIdentity(eventCard);
+  const eventCardKey = getCardLockIdentity(eventCard, game);
   return {
     ...effect,
     oncePerTurn: true,
@@ -161,7 +219,6 @@ export async function collectPositionChangeTriggers(
   const changedOpponent =
     payload.opponent || this.game?.getOpponent?.(changedOwner) || null;
   const actionContext = payload?.actionContext || null;
-  const positionChangeSourceCard = payload.sourceCard || payload.source || null;
 
   const observerSides = [
     { owner: changedOwner, other: changedOpponent },
@@ -198,82 +255,24 @@ export async function collectPositionChangeTriggers(
       return;
     }
 
-    if (effect.requireSelfAsChanged === true && sourceCard !== card) {
-      return;
-    }
-
-    const positionFrom = effect.fromPosition || effect.positionFrom;
-    const positionTo = effect.toPosition || effect.positionTo;
-    if (!matchesPositionFilter(fromPosition, positionFrom)) return;
-    if (!matchesPositionFilter(toPosition, positionTo)) return;
-
-    const changedCardOwner =
-      effect.changedCardOwner || effect.eventCardOwner || null;
-    if (
-      changedCardOwner &&
-      !matchesOwnerFilter(changedCardOwner, owner, changedOwner)
-    ) {
-      return;
-    }
-
-    if (effect.changedCardRequireFaceup === true && card.isFacedown === true) {
-      return;
-    }
-
-    if (
-      effect.changedCardRequireFaceupBeforeChange === true &&
-      payload.wasFlipped === true
-    ) {
-      return;
-    }
-
-    if (
-      effect.eventCardFilters &&
-      !cardMatchesEventFilters(this, card, effect.eventCardFilters, {
-        sourceOwner: owner,
-        eventOwner: changedOwner,
-        fromZone: "field",
-        toZone: "field",
-      })
-    ) {
-      return;
-    }
-
-    const sourceFilters =
-      effect.positionChangeSourceFilters ||
-      effect.positionChangeSourceCardFilters ||
-      null;
-    const requiresEffectPositionChange =
-      effect.positionChangedByEffect === true ||
-      effect.requirePositionChangedByEffect === true;
-    if (requiresEffectPositionChange && !positionChangeSourceCard) {
-      return;
-    }
-    if (
-      sourceFilters &&
-      !matchesCardFilters(this, positionChangeSourceCard, sourceFilters)
-    ) {
-      return;
-    }
+    if (!matchesPositionChangeEvent(effect, sourceCard, card, payload, {
+      sourceOwnerId: owner.id, changedOwnerId: changedOwner.id,
+      changedIsFacedown: card.isFacedown === true,
+      matchesEventFilters: filters => cardMatchesEventFilters(this, card, filters, {
+        sourceOwner: owner, eventOwner: changedOwner, fromZone: "field", toZone: "field",
+      }),
+      matchesSourceFilters: (source, filters) => matchesCardFilters(this, source, filters),
+    })) return;
 
     const ctx = {
-      source: sourceCard,
-      player: owner,
-      opponent: other,
-      eventCard: card,
-      changedCard: card,
-      eventPlayer: changedOwner,
-      eventOpponent: changedOpponent,
-      fromPosition,
-      toPosition,
+      source: sourceCard, player: owner, opponent: other,
+      eventCard: card, changedCard: card, eventPlayer: changedOwner,
+      eventOpponent: changedOpponent, fromPosition, toPosition,
       wasFlipped: payload.wasFlipped === true,
-      positionChangeSourceCard,
-      positionChangedByEffect: !!positionChangeSourceCard,
-      effectId: payload.effectId || null,
-      actionContext,
+      ...getPositionChangeProvenance(payload),
+      effectId: payload.effectId || null, actionContext,
     };
-
-    const effectiveEffect = buildPerEventCardEffect(effect, card);
+    const effectiveEffect = buildPerEventCardEffect(effect, card, this.game);
 
     const optCheck = this.checkOncePerTurn(sourceCard, owner, effectiveEffect);
     if (!optCheck.ok) return;

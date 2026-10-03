@@ -83,6 +83,7 @@ export interface ZoneOpFailure {
 
 export interface MoveCardResult {
   success?: boolean;
+  cancelled?: boolean;
   ok?: boolean;
   card?: GameCard | null;
   reason?: string | null;
@@ -138,6 +139,8 @@ export interface SynchroMaterialFollowup {
 }
 
 export interface MoveCardOptions {
+  /** Runtime continuation check after internal choices, before the first zone mutation. */
+  validateBeforeMove?: () => boolean;
   fieldPlacement?: import("./placement.js").FieldPlacementIntent | null;
   placementActor?: GamePlayer | null;
   allowPlacementCancel?: boolean;

@@ -170,15 +170,20 @@ function getTargetScopeCards(
 
 export function applySwitchPosition(
   ctx: SimulatedActionHandlerContext<"switch_position">,
-): void {
+): void | typeof STOP_SIMULATION {
   const { action, targets, state, options, self, opponent } = ctx;
   const targetCards =
     Array.isArray(targets) && targets.length > 0
       ? targets
       : getTargetScopeCards(action.targetScope as LegacyTargetScope, self, opponent);
 
+  let changed = false;
   targetCards.forEach((card) => {
     if (!card || card.cardKind !== "monster") return;
+    const owner = findCardOwner(state, card);
+    if (!owner?.field.includes(card)) return;
+    if (getCardEffectImmunity({ game: { player: state.player, bot: state.bot, turnCounter: state.turnCounter || 0 } }, card, self,
+      { sourceCard: options.sourceCard || null }).immune) return;
     if (card.battlePositionLocked === true) return;
     const wasFacedown = card.isFacedown === true;
     const wasFaceupBeforeChange = !wasFacedown;
@@ -190,6 +195,7 @@ export function applySwitchPosition(
         : "attack";
 
     card.position = nextPosition;
+    changed = true;
     if (wasFacedown) {
       card.isFacedown = false;
     }
@@ -215,7 +221,6 @@ export function applySwitchPosition(
         );
     }
     refreshSimulatedFieldPresenceTypeSummonBuffForCard(card);
-    const owner = findCardOwner(state, card);
     options.emitSimulatedEvent?.("position_change", {
       card,
       player: owner,
@@ -228,6 +233,7 @@ export function applySwitchPosition(
       actionContext: options.actionContext,
     });
   });
+  if (!changed && action.haltOnFailure) return STOP_SIMULATION;
 }
 
 export function applySetFacedownDefense(
@@ -860,10 +866,13 @@ export function applyAddStatus(
     if (!card) return;
     const status = action.status;
     if (status) {
-      if (action.untilEndOfTurn && status !== "effectsNegated" && action.remove !== true) {
+      if ((action.untilEndOfTurn || action.duration === "until_end_turn") && status !== "effectsNegated" && action.remove !== true) {
         card.tempStatuses ??= {};
         if (!Object.prototype.hasOwnProperty.call(card.tempStatuses, status)) {
           Reflect.set(card.tempStatuses, status, Reflect.get(card, status));
+        }
+        if (status === "piercing" && !Object.hasOwn(card.tempStatuses, "piercingGrantedByEffect")) {
+          card.tempStatuses.piercingGrantedByEffect = card.piercingGrantedByEffect;
         }
       }
       if (action.remove === true) {
@@ -871,11 +880,17 @@ export function applyAddStatus(
         if (status === "effectsNegated") {
           clearEffectNegation(card);
         }
+        if (card.tempStatuses) Reflect.deleteProperty(card.tempStatuses, status);
+        if (status === "piercing") {
+          delete card.piercingGrantedByEffect;
+          if (card.tempStatuses) delete card.tempStatuses.piercingGrantedByEffect;
+        }
       } else {
         if (status === "effectsNegated") {
           if (action.value === undefined || action.value === true) addEffectNegation(card, normalizeNegateEffectsDuration(action), options.sourceCard, options.effect);
           else clearEffectNegation(card);
         } else (card as DynamicSimulatedCard)[status] = action.value ?? true;
+        if (status === "piercing") card.piercingGrantedByEffect = (action.value ?? true) === true;
       }
       if (status === "effectsNegated") {
         refreshSimulatedFieldPresenceTypeSummonBuffForCard(card);
@@ -890,7 +905,7 @@ export function applyAddStatus(
           if (passiveType === "field_presence_type_summon_count_buff") return;
           // These rules read negation directly at attack/movement time.
           if (passiveType === "restrict_opponent_summon_turn_attack" || passiveType === "send_to_grave_replacement" ||
-              passiveType === "conditional_protection" || passiveType === "field_archetype_aura_buff") return;
+              passiveType === "conditional_protection" || passiveType === "field_archetype_aura_buff" || passiveType === "event_actions") return;
           state._simUnsupportedActions ??= [];
           state._simUnsupportedActions.push(`add_status:passive_recalculation:${passiveType || "unknown"}`);
         });

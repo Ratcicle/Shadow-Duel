@@ -855,6 +855,12 @@ export default class ArcanistStrategy extends BaseStrategy {
         target.atk = (target.atk || 0) + 500;
         target._simArcanistLightningAtkBoost = 500;
       }
+      target.tempStatuses ??= {};
+      if (!Object.hasOwn(target.tempStatuses, "piercing")) Reflect.set(target.tempStatuses, "piercing", target.piercing);
+      if (!Object.hasOwn(target.tempStatuses, "piercingGrantedByEffect")) {
+        target.tempStatuses.piercingGrantedByEffect = target.piercingGrantedByEffect;
+      }
+      target.piercingGrantedByEffect = true;
       target.piercing = true;
       target._simArcanistLightningPiercing = true;
       return;

@@ -602,6 +602,18 @@ function validateCardSnapshot(value: unknown, path: string, onField = false): vo
     invalid(`${path}.fieldPresenceId`, "a field presence identity or null");
   }
   const fieldSlot = read(card, "fieldSlot");
+  requireInteger(read(card, "oncePerTurnResetVersion"), `${path}.oncePerTurnResetVersion`, 0);
+  const cardUsage = requireObject(read(card, "oncePerTurnUsageByName"), `${path}.oncePerTurnUsageByName`);
+  for (const name of Object.keys(cardUsage)) {
+    const entryPath = `${path}.oncePerTurnUsageByName.${name}`;
+    const value = read(cardUsage, name);
+    if (typeof value === "number") requireInteger(value, entryPath, 0);
+    else {
+      const entry = requireObject(value, entryPath);
+      requireInteger(read(entry, "turn"), `${entryPath}.turn`, 0);
+      requireInteger(read(entry, "count"), `${entryPath}.count`, 0);
+    }
+  }
   const presenceState = requireObject(read(card, "fieldPresenceState"), `${path}.fieldPresenceState`);
   for (const key of Object.keys(presenceState)) {
     requireFiniteNumber(read(presenceState, key), `${path}.fieldPresenceState.${key}`);
@@ -681,8 +693,13 @@ function validateCardSnapshot(value: unknown, path: string, onField = false): vo
     "cannotAttackThisTurn",
     "battlePositionLocked",
     "banishWhenLeavesField",
+    "piercing",
+    "piercingGrantedByEffect",
   ]) {
     requireBoolean(read(statuses, key), `${path}.statuses.${key}`);
+  }
+  if (requireFiniteNumber(read(statuses, "piercingDamageMultiplier"), `${path}.statuses.piercingDamageMultiplier`) <= 0) {
+    invalid(`${path}.statuses.piercingDamageMultiplier`, "a positive multiplier");
   }
 }
 

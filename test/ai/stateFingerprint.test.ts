@@ -63,6 +63,7 @@ const changes: Array<[string, (state: AiStateShape, host: SimulatedCardState) =>
   ["Dragon usage", s => { s._dragonSimOnce = { bot: { effect: true } }; }],
   ["usage snapshot", s => { s.usedThisTurn = new Map([["effect", 3]]); }],
   ["effect negation", (_, c) => { c.effectsNegated = true; }],
+  ["external piercing", (_, c) => { c.piercingGrantedByEffect = true; }],
   ["negation contributions", (_, c) => { c.effectsNegationContributions = [{ duration: "while_faceup", sourceDuelCardId: 2, sourceEffectId: "test" }]; }],
   ["negation duration", (_, c) => { c.effectsNegatedDuration = "until_end_turn"; }],
   ["protection", (_, c) => { c.protectionEffects = [{ type: "effect_destruction", duration: "turn", expiresOnTurn: 4 }]; }],

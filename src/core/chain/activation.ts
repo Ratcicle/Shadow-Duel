@@ -147,7 +147,7 @@ function captureReferenceSnapshots(input: PreparedActivationInput): ChainDeclare
     const values: unknown[] = Array.isArray(value) ? value : value ? [value] : [];
     const cards = values.filter((card): card is ChainCard => !!card && typeof card === "object" && typeof Reflect.get(card, "name") === "string");
     return { targetId: def.id, cards: cards.map(card => {
-      const owners = [input.controller, input.opponent].filter((owner): owner is ChainPlayer => !!owner);
+      const owners = [input.controller, input.opponent || input.context?.opponent].filter((owner): owner is ChainPlayer => !!owner);
       let zone: CanonicalZone | null = null;
       let controllerId = card.controller ?? card.owner ?? null;
       for (const owner of owners) {

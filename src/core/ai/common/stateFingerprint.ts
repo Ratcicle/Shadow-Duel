@@ -71,7 +71,7 @@ export const PLANNING_CARD_FIELDS = [
   "battleDamageHealsControllerThisTurn", "preventsBattleDamageToController",
   "battleIndestructibleOncePerTurn", "battleIndestructibleOncePerTurnUsed",
   "battleIndestructibleOncePerTurnLastUsedTurn", "mustBeAttacked", "piercing",
-  "piercingDamageMultiplier", "canMakeSecondAttackThisTurn", "secondAttackUsedThisTurn",
+  "piercingDamageMultiplier", "piercingGrantedByEffect", "canMakeSecondAttackThisTurn", "secondAttackUsedThisTurn",
   "dynamicBuffs", "suppressedDynamicBuffStatsByKey",
   "temporarySuppressedDynamicBuffStatsByKey", "passiveExtraAttackBonuses",
   "passiveExtraAttackTargetRestriction", "cannotBeSpecialSummoned",

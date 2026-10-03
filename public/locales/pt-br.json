@@ -1091,7 +1091,7 @@
     },
     "351": {
       "name": "Explorador dos Vinculados à Miragem",
-      "description": "Se este card for Invocado por Invocação-Normal: adicione 1 Magia/Armadilha \"Vinculados à Miragem\" do seu Deck à sua mão.\n\nUma vez por turno: você pode escolher 1 monstro com a face para cima que seu oponente controla; mude a posição de batalha dele.\n\nVocê só pode usar cada efeito de \"Explorador dos Vinculados à Miragem\" uma vez por turno."
+      "description": "Se este card for Invocado por Invocação-Normal: você pode adicionar 1 Magia/Armadilha \"Vinculados à Miragem\" do seu Deck à sua mão.\n\nUma vez por turno: você pode escolher 1 monstro com a face para cima que seu oponente controla; mude a posição de batalha dele.\n\nVocê só pode usar cada efeito de \"Explorador dos Vinculados à Miragem\" uma vez por turno."
     },
     "352": {
       "name": "Dançarina dos Vinculados à Miragem",
@@ -1099,15 +1099,15 @@
     },
     "353": {
       "name": "Chacal dos Vinculados à Miragem",
-      "description": "Se um monstro que você controla for devolvido do campo para a sua mão (Efeito Rápido): você pode Invocar este card por Invocação-Especial da sua mão e, se isso acontecer, escolha 1 monstro que seu oponente controla; mude a posição de batalha dele.\n\nVocê só pode usar este efeito de \"Chacal dos Vinculados à Miragem\" uma vez por turno."
+      "description": "Se um monstro que você controla for devolvido do campo para a sua mão (Efeito Rápido): você pode escolher 1 monstro que seu oponente controla; Invoque este card por Invocação-Especial da sua mão e, se isso acontecer, mude a posição de batalha desse alvo.\n\nVocê só pode usar este efeito de \"Chacal dos Vinculados à Miragem\" uma vez por turno."
     },
     "354": {
       "name": "Oásis dos Vinculados à Miragem",
-      "description": "A primeira vez que cada monstro com a face para cima que seu oponente controla mudar sua Posição de Batalha: ele perde 400 de ATK/DEF até o final do próximo turno.\n\nUma vez por turno: você pode escolher 1 destes efeitos.\n● Devolva 1 monstro \"Vinculados à Miragem\" que você controla para a mão e, se isso acontecer, escolha 1 monstro que seu oponente controla; ele perde 400 de ATK/DEF até o final do turno.\n● Escolha 1 monstro com a face para cima que seu oponente controla; mude sua Posição de Batalha."
+      "description": "A primeira vez a cada turno que cada monstro com a face para cima que seu oponente controla mudar sua Posição de Batalha: ele perde 400 de ATK/DEF até o final do próximo turno.\n\nUma vez por turno: você pode escolher 1 destes efeitos.\n● Escolha 1 monstro \"Vinculados à Miragem\" que você controla e 1 monstro que seu oponente controla; devolva o primeiro alvo para a mão e, se isso acontecer, o segundo alvo perde 400 de ATK/DEF até o final do turno.\n● Escolha 1 monstro com a face para cima que seu oponente controla; mude sua Posição de Batalha."
     },
     "355": {
       "name": "Soberano de Vidro dos Vinculados à Miragem",
-      "description": "\"Explorador dos Vinculados à Miragem\"\n\nRequisito: o material deve ter ativado seus efeitos 2 vezes neste Duelo.\n\nSe este card for Invocado por Invocação-Ascensão: escolha até 2 monstros com a face para cima que seu oponente controla; mude as posições de batalha deles.\n\nUma vez por turno: escolha 1 outro monstro \"Vinculados à Miragem\" que você controla e 1 card que seu oponente controla; devolva os alvos à mão.\n\nSe este card atacar um monstro em Posição de Defesa, cause dano perfurante."
+      "description": "\"Explorador dos Vinculados à Miragem\"\n\nRequisito: o material deve ter ativado seus efeitos 2 vezes neste Duelo.\n\nSe este card for Invocado por Invocação-Ascensão: você pode escolher até 2 monstros com a face para cima que seu oponente controla; mude as posições de batalha deles.\n\nUma vez por turno: escolha 1 outro monstro \"Vinculados à Miragem\" que você controla e 1 card que seu oponente controla; devolva os alvos à mão.\n\nSe este card atacar um monstro em Posição de Defesa, cause dano perfurante."
     },
     "356": {
       "name": "Víbora de Vidro dos Vinculados à Miragem",
@@ -1119,7 +1119,7 @@
     },
     "358": {
       "name": "Falso Rei dos Vinculados à Miragem",
-      "description": "Você pode Invocar este card por Invocação-Especial da sua mão ao devolver 1 monstro \"Vinculados à Miragem\" que você controla para a mão.\n\nVocê pode escolher 1 monstro que seu oponente controla; mude a posição de batalha dele.\n\nVocê só pode usar cada efeito de \"Falso Rei dos Vinculados à Miragem\" uma vez por turno."
+      "description": "Você pode Invocar este card por Invocação-Especial da sua mão ao devolver 1 monstro \"Vinculados à Miragem\" que você controla para a mão. Você só pode tentar Invocar \"Falso Rei dos Vinculados à Miragem\" por Invocação-Especial uma vez por turno dessa forma, mesmo que a Invocação seja negada.\n\nVocê pode escolher 1 monstro que seu oponente controla; mude a posição de batalha dele. Você só pode usar este efeito de \"Falso Rei dos Vinculados à Miragem\" uma vez por turno."
     },
     "359": {
       "name": "Caminho Espelhado dos Vinculados à Miragem",
@@ -1131,11 +1131,11 @@
     },
     "361": {
       "name": "Passo Evanescente dos Vinculados à Miragem",
-      "description": "Escolha 1 monstro \"Vinculados à Miragem\" que você controla; devolva-o para a mão e, depois, escolha 1 monstro que seu oponente controla; mude a posição de batalha dele e, se isso acontecer, ele perde 500 de ATK/DEF até o final deste turno.\n\nVocê só pode ativar 1 \"Passo Evanescente dos Vinculados à Miragem\" por turno."
+      "description": "Escolha 1 monstro \"Vinculados à Miragem\" que você controla e 1 monstro que seu oponente controla; devolva o primeiro alvo para a mão e, depois, mude a posição de batalha do segundo alvo e, se isso acontecer, ele perde 500 de ATK/DEF até o final deste turno.\n\nVocê só pode ativar 1 \"Passo Evanescente dos Vinculados à Miragem\" por turno."
     },
     "362": {
       "name": "Névoa de Calor dos Vinculados à Miragem",
-      "description": "Se você controlar um monstro \"Vinculados à Miragem\": escolha 1 monstro que seu oponente controla; mude a posição de batalha dele. Depois, se esse monstro estiver em Posição de Defesa, você pode escolher 1 monstro \"Vinculados à Miragem\" no seu Cemitério; adicione-o à sua mão.\n\nVocê só pode ativar 1 \"Névoa de Calor dos Vinculados à Miragem\" por turno."
+      "description": "Se você controlar um monstro \"Vinculados à Miragem\": escolha 1 monstro que seu oponente controla; mude a posição de batalha dele. Depois, se esse monstro estiver em Posição de Defesa, você pode adicionar 1 monstro \"Vinculados à Miragem\" do seu Cemitério à sua mão.\n\nVocê só pode ativar 1 \"Névoa de Calor dos Vinculados à Miragem\" por turno."
     },
     "363": {
       "name": "Leviatã do Deserto dos Vinculados à Miragem",
@@ -1143,7 +1143,7 @@
     },
     "364": {
       "name": "Rebelde dos Vinculados à Miragem",
-      "description": "Se a posição de batalha de um monstro for alterada por um efeito de card (Efeito Rápido): você pode Invocar este card por Invocação-Especial da sua mão.\n\nSe este card atacar um monstro em Posição de Defesa, cause dano de batalha perfurante.\n\nDurante a Fase Final: devolva este card do campo para a mão.\n\nVocê só pode usar cada efeito de \"Rebelde dos Vinculados à Miragem\" uma vez por turno."
+      "description": "Se a posição de batalha de um monstro for alterada por um efeito de card (Efeito Rápido): você pode Invocar este card por Invocação-Especial da sua mão. Você só pode usar este efeito de \"Rebelde dos Vinculados à Miragem\" uma vez por turno.\n\nSe este card atacar um monstro em Posição de Defesa, cause dano de batalha perfurante.\n\nDurante a Fase Final: devolva este card para a mão."
     },
     "401": {
       "name": "Podriflora Esporófito",

@@ -1,4 +1,5 @@
 import type { SimulatedCardState } from "../../contracts/aiState.js";
+import { hasActivePiercing } from "../../game/combat/availability.js";
 import type { LuminarchAnalysis } from "./contracts.js";
 // Moonlit Blessing target and revive planning.
 
@@ -230,7 +231,7 @@ export function evaluateMoonlitReviveCandidate(card: SimulatedCardState, analysi
       purpose = "pressure";
       position = "attack";
       score += atk / 450;
-      if (atk >= 2000 || card.piercing) score += 2;
+      if (atk >= 2000 || hasActivePiercing(card)) score += 2;
     } else if (defensive) {
       position = "defense";
       score += 1.2;

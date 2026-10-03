@@ -1,7 +1,7 @@
 # Replay canônico
 
 O replay executável usa o formato `shadow-duel-canonical-replay`, schema `2` e
-`engineVersion: "engine-rules-v9"`. Ele é independente do relatório
+`engineVersion: "engine-rules-v10"`. Ele é independente do relatório
 estratégico. O importador aceita somente o schema `2`: relatórios v4 e replays
 de schemas anteriores não são partidas executáveis nesta versão.
 
@@ -145,10 +145,11 @@ Cada registro mantém identidade própria, inclusive quando uma mesma cópia
 cria o efeito em turnos diferentes. `uniqueKey` continua substituindo apenas
 o registro com a mesma chave e dono.
 
-Confirmações opcionais e escolhas humanas de posição durante uma
-Invocação-Especial são decisões `choice` do broker. A reprodução consome a
-decisão gravada sem consultar a UI; o evento de apresentação da posição
-continua sendo emitido.
+Confirmações opcionais e escolhas de posição durante uma Invocação-Especial,
+tanto humanas quanto da IA, são decisões `choice` do broker. A reprodução
+consome a decisão gravada sem consultar a UI ou a estratégia; o evento de
+apresentação da posição continua sendo emitido. Posições forçadas não geram
+uma escolha.
 
 As correções A10/A6 preservam o schema `2` e o envelope dos comandos. Replays
 antigos que contenham registros com IDs de instância nos hashes, ou que não
@@ -181,7 +182,7 @@ caracteres do replay, usado para detectar divergências na reprodução.
 `validateCanonicalReplay(input)` recebe `unknown`, não muta a entrada e retorna
 a mesma referência somente depois de validar o documento. `setup`, `commands` e
 `decisions` e `engineVersion` são obrigatórios. A versão da engine deve ser
-`"engine-rules-v9"`; gravações sem essa versão são rejeitadas antes da validação
+`"engine-rules-v10"`; gravações sem essa versão são rejeitadas antes da validação
 profunda e da reprodução. `events`, `result` e `finalized` continuam opcionais
 na importação de arquivos do schema `2`; quando presentes, são validados
 profundamente. Os comandos e kinds de decisão permanecem os mesmos.
@@ -252,14 +253,12 @@ ao broker consomem as decisões gravadas sem avaliar a estratégia da IA. O
 driver interrompe na primeira divergência; uma assinatura de banco diferente
 encerra a validação antes da partida.
 
-**Limitação conhecida — posição de Invocação-Especial:**
-`chooseSpecialSummonPosition` ainda consulta `isAI` antes do broker. Se uma
-escolha humana de posição for reproduzida em um assento configurado como IA,
-esse caminho pode recalcular a posição e deixar a decisão gravada sem consumo.
-O caso foi reproduzido com Ascensão em Defesa por humano no assento `bot` e
-playback com o controlador padrão desse assento. A seleção de material/destino
-da Ascensão já segue a decisão gravada; a correção geral da escolha de posição
-permanece pendente.
+**Posição de Invocação-Especial:** a política da IA é consultada somente pelo
+resolver ao vivo da decisão `choice`; o playback desserializa a posição gravada.
+As regressões Miragebound P1 cobrem posição Defesa escolhida pela IA e reprodução
+de uma escolha humana em assento configurado como IA, nos dois assentos, sem UI
+ou nova consulta à estratégia. Posições forçadas e o fallback offline sem broker
+mantêm seus comportamentos anteriores.
 
 ## Aleatoriedade
 
@@ -384,3 +383,47 @@ intermediária marcada `replayCommandHandledByCaller` deixa a captura do comando
 com o chamador que aguarda a ativação completa; o hash não é capturado entre
 a escolha e o pagamento. Cancelamentos dessas sessões gravam `pass` com o ator
 correto e são reproduzidos sem UI ou nova consulta à política da IA.
+
+### Miragebound P2 — engine-rules-v10
+
+A versão v10 mantém schema `2`, comandos e kinds de decisão. O hash de cada
+carta inclui `oncePerTurnResetVersion`, os usos por cópia da presença atual
+(`oncePerTurnUsageByName`) e os estados `piercing`, `piercingDamageMultiplier`
+e `piercingGrantedByEffect`. A projeção dos usos deriva do ledger canônico;
+os snapshots não guardam referências ao `WeakMap` runtime.
+
+False King usa o comando existente `hand_summon_procedure`: a devolução é custo
+do procedimento, sem ativação de efeito ou Chain. False Horizon registra a
+escolha opcional própria na resolução. A primeira oportunidade de Mirror Path
+consome o limite mesmo quando recusada; Leviathan aplica seu debuff imediato
+antes da coleta de triggers, sem criar uma ativação.
+
+Replays v9 e anteriores são rejeitados, sem migração. As definições P2 também
+atualizam a assinatura completa do banco; gravar a versão v10 em um arquivo
+antigo não torna sua assinatura compatível.
+
+### Miragebound P3 — assinatura das descrições
+
+P3 alinha as descrições EN/PT ao design aprovado, sem alterar as definições
+dos efeitos ou os contratos do replay. Schema `2` e `engine-rules-v10`
+permanecem iguais. Como as descrições EN integram a assinatura completa do
+banco, o lote textual produz uma nova assinatura; gravações com a assinatura
+anterior, inclusive a de P2, são rejeitadas sem migração. A tradução PT e o
+catálogo não entram nesse cálculo.
+
+### Miragebound S02 — presença da fonte
+
+Jackal (353) e Rebel (364) exigem a mesma presença da mão desde a ativação
+até o compromisso da própria Invocação. A Chain e o handler reutilizam
+`sourceAtActivation`; a simulação usa a referência `self` já existente.
+Saída/retorno invalida a Invocação, inclusive durante a escolha de posição
+ou espaço. O uso comprometido permanece consumido, e o Jackal não executa
+a mudança de posição quando a Invocação falha.
+
+Schema `2`, `engine-rules-v10`, comandos e decisões permanecem iguais;
+não foram acrescentados campos ao estado canônico. As duas definições
+atualizam a assinatura completa do banco, e gravações com a assinatura
+P3 anterior são rejeitadas sem migração. Respostas legais, custos, posição
+e espaço continuam registrados pelo broker. Sondagens que alteram cartas
+por hooks fora dos comandos do replay são testes de identidade e não
+representam partidas canônicas reproduzíveis.

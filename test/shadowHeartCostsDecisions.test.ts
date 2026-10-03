@@ -148,11 +148,17 @@ test(`generic monster preview accounts for a field slot freed by activation cost
 
 test(`generic preview preserves full-field summons with legacy action costs (keys=${useKeys})`, async t => {
   const { game, owner, make } = setup(t);
-  const source = make(358);
+  const source = new Card({
+    name: "Legacy return-cost summon fixture", cardKind: "monster", atk: 2000, level: 5,
+    effects: [{ id: "legacy_return_cost_summon", timing: "ignition", activationZones: ["hand"],
+      targets: [{ id: "legacy_return_cost", intent: "cost", owner: "self", zone: "field", cardKind: "monster", archetype: "Miragebound", requireFaceup: true }],
+      actions: [{ type: "special_summon_from_hand_with_cost", costTargetRef: "legacy_return_cost", costDestination: "hand", costMovedByEffect: true, position: "attack" }],
+    }],
+  }, owner.id);
   const cost = make(351);
   owner.hand.push(source); placeFieldCards(owner.field, cost, ...Array.from({ length: 4 }, () => make(101)));
   const chosen = useKeys ? [game.buildSelectionCandidateKey({ controller: owner.id, zone: "field", zoneIndex: 0, cardRef: cost })] : [cost];
-  const result = await game.tryActivateMonsterEffect(source, { miragebound_false_king_return_cost: chosen }, "hand", owner);
+  const result = await game.tryActivateMonsterEffect(source, { legacy_return_cost: chosen }, "hand", owner);
   assert.equal(result.success, true, result.reason || undefined);
   assert.ok(owner.field.includes(source));
   assert.ok(owner.hand.includes(cost));

@@ -5,6 +5,7 @@ import {
   estimateOffensiveTemporaryBuffValue,
 } from "./ai/StrategyUtils.js";
 import { getEffectiveAtk, getEffectiveDef } from "./ai/common/cardStats.js";
+import { hasActivePiercing } from "./game/combat/availability.js";
 import type {
   ActionRuntimeCard,
   ActionRuntimePlayer,
@@ -55,6 +56,8 @@ interface AutoSelectorScorableCard {
   tempDefBoost?: number | undefined;
   equipDefBonus?: number | undefined;
   piercing?: boolean;
+  piercingGrantedByEffect?: boolean | undefined;
+  effectsNegated?: boolean | undefined;
   isFacedown?: boolean;
 }
 
@@ -985,7 +988,7 @@ function getRecursionTargetScore(
       score -= 1;
   } else if (purpose === "pressure" || purpose === "offense") {
     score += atk / 450;
-    if (atk >= 2000 || card.piercing) score += 2;
+    if (atk >= 2000 || hasActivePiercing(card)) score += 2;
     if (card.name && offensiveNames.includes(card.name)) score += 2;
     if (card.name && defensiveNames.includes(card.name) && atk < 1800)
       score -= 3;

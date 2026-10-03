@@ -210,6 +210,24 @@ function toSelectionCount(
     : { min: 1, max: 1 };
 }
 
+/** Opt-in self summons stay bound to the source's committed zone presence. */
+function isOriginalSourcePresenceValid(
+  action: SpecialSummonFromZoneInput,
+  ctx: EffectContext | null,
+  card: ActionRuntimeCard,
+  sourceEntry: SourceZoneEntry | null,
+): boolean {
+  if (action.requireSource !== true || ctx?.effect?.requiresSourceAtResolution !== true) return true;
+  const snapshot = ctx.activationContext?.sourceAtActivation;
+  const instanceId = card.instanceId ?? card._instanceId ?? card.uuid ?? card.simInstanceId ?? null;
+  const controllerId = card.controller ?? card.owner ?? sourceEntry?.owner.id;
+  return Boolean(snapshot && sourceEntry && card === ctx.source && instanceId !== null &&
+    snapshot.cardInstanceId === instanceId && snapshot.controllerId === ctx.player?.id &&
+    controllerId === snapshot.controllerId && sourceEntry.owner.id === snapshot.controllerId &&
+    sourceEntry.name === snapshot.zone && sourceEntry.list.includes(card) &&
+    Number(card.locationVersion ?? 0) === snapshot.locationVersion);
+}
+
 /**
  * Generic handler for special summoning from any zone with filters
  * UNIFIED HANDLER - Replaces both single and multi-card summon patterns
@@ -534,11 +552,9 @@ export async function handleSpecialSummonFromZone(
   if (action.requireSource) {
     // Summon the source/destroyed card itself
     const card = source || destroyed;
-    const inAnyZone = Boolean(
-      card && zoneEntries.some((entry) => entry.list.includes(card)),
-    );
+    const sourceEntry = card ? findSourceEntryForCard(zoneEntries, card) : null;
 
-    if (!card || !inAnyZone) {
+    if (!card || !sourceEntry || !isOriginalSourcePresenceValid(action, ctx, card, sourceEntry)) {
       getUI(game)?.log("Card not in specified zone.");
       return false;
     }
@@ -934,7 +950,8 @@ async function summonCards(
   for (const card of cards) {
     if (!card || !summonPlayer || summonPlayer.field.length >= 5) break;
     const sourceEntry = findSourceEntryForCard(sourceZoneEntries, card);
-    if (!sourceEntry || !isLegalZoneSummon(card, summonPlayer, sourceEntry.name, game)) continue;
+    if (!sourceEntry || !isOriginalSourcePresenceValid(action, ctx, card, sourceEntry) ||
+        !isLegalZoneSummon(card, summonPlayer, sourceEntry.name, game)) continue;
 
     // 🚨 CRITICAL VALIDATION: Only monsters can be special summoned to field
     if (card.cardKind !== "monster") {
@@ -977,7 +994,9 @@ async function summonCards(
       [card, player, { position: action.position }],
     );
 
-    if (!sourceEntry.list.includes(card) || !isLegalZoneSummon(card, summonPlayer, sourceEntry.name, game)) continue;
+    if (!isOriginalSourcePresenceValid(action, ctx, card, sourceEntry) ||
+        !sourceEntry.list.includes(card) || !isLegalZoneSummon(card, summonPlayer, sourceEntry.name, game)) continue;
+    if (ctx?.validateCostPayment?.() === false) return false;
 
     let usedMoveCard = false;
     const previousEffectsNegated = card.effectsNegated;
@@ -990,7 +1009,12 @@ async function summonCards(
     }
 
     if (canUseMoveCard) {
+      const needsSourceGuard = action.requireSource === true && ctx?.effect?.requiresSourceAtResolution === true;
+      const validateBeforeMove = ctx?.validateCostPayment || needsSourceGuard
+        ? () => ctx?.validateCostPayment?.() !== false && isOriginalSourcePresenceValid(action, ctx, card, sourceEntry)
+        : null;
       const moveResult = await game.moveCard(card, summonPlayer, "field", {
+        ...(validateBeforeMove ? { validateBeforeMove } : {}),
         placementActor: ctx?.player || player,
         fromZone: resolvedFromZone || undefined,
         position,
@@ -1007,9 +1031,11 @@ async function summonCards(
         typeof moveResult === "object" &&
         (moveResult.success === false || moveResult.negated === true))
       ) {
-        card.effectsNegated = previousEffectsNegated;
-        card.effectsNegatedDuration = previousEffectsNegatedDuration;
-        card.effectsNegationContributions = previousContributions;
+        if (action.negateEffects) {
+          card.effectsNegated = previousEffectsNegated;
+          card.effectsNegatedDuration = previousEffectsNegatedDuration;
+          card.effectsNegationContributions = previousContributions;
+        }
         continue;
       }
 

@@ -1,11 +1,14 @@
 import { expireEffectNegation } from "../../effects/negation.js";
+import { getImmediateEventEffectValidationError, isActiveEquipInZone } from "../../effects/passives/passiveBuffs.js";
+import { matchesCardFilter, type RuntimeCardFilter } from "../../effects/filters/cardFilters.js";
+import { getPositionChangeProvenance, matchesPositionChangeEvent } from "../../effects/triggers/collectors/positionChange.js";
 import { projectStoredBlueprintActivation } from "../../effects/blueprints/index.js";
 import { projectEffectActivationCase } from "../../effects/activation/cases.js";
 import { hasActionZoneCandidates } from "./actionValidation.js";
 import { getCounterValue } from "./counters.js";
 import { getBaseLpCost } from "../../effects/costs/lpCost.js";
 import { resolveActionPlayer, resolveSimulatedLpCost } from "./simulatedActions/shared.js";
-import { resolveTargetsForAction, captureSimulatedReferences, recordCompletedSimulatedSummon } from "./simulatedActions/shared.js";
+import { resolveTargetsForAction, captureSimulatedReferences, isSimulatedSourcePresenceValid, recordCompletedSimulatedSummon } from "./simulatedActions/shared.js";
 import { appendSimulatedZoneCard } from "./zones.js";
 import { appendSimulatedFieldCard } from "./zones.js";
 import {
@@ -25,7 +28,7 @@ import {
   matchesTargetFilters,
 } from "./targetSelection.js";
 import { updateSimulatedSentToGraveMaterialMarker } from "./simulatedActions/shared.js";
-import { emitSimulatedMove, resolveSimulatedTemporaryControlEffects } from "./simulatedActions/movement.js";
+import { emitSimulatedMove, getOriginalOwner, setSimulatedController, resolveSimulatedTemporaryControlEffects } from "./simulatedActions/movement.js";
 import { simulateSynchroSummon } from "./simulatedActions/summon.js";
 import { selectPayableTributes } from "./tributePolicy.js";
 import { processSimulatedDelayedActions, cleanupSimulatedEndTurn, cleanupExpiredSimulatedTurnEffects } from "./simulatedActions/lifecycle.js";
@@ -146,6 +149,11 @@ interface SimulatedSelectionOptionsInput
 }
 
 interface SimulatedEventPayloadView {
+  fromPosition?: string;
+  toPosition?: string;
+  wasFlipped?: boolean;
+  positionChangedByEffect?: boolean;
+  effectId?: string | null;
   actionContext?: SimulatedActionContextData;
   effectsNegatedAtFieldExit?: boolean;
   card?: SimulatedCardState | null;
@@ -976,11 +984,12 @@ function simEffectForEventCard(
   if (!effect?.oncePerTurnPerEventCard) return effect;
   const eventCard = payload.card || payload.eventCard || payload.changedCard || null;
   const eventCardKey =
-    getCardInstanceId(eventCard) ||
-    eventCard?.fieldPresenceId ||
-    eventCard?.id ||
-    eventCard?.name ||
-    "event_card";
+    eventCard?.duelCardId ??
+    (getCardInstanceId(eventCard) ||
+      eventCard?.fieldPresenceId ||
+      eventCard?.id ||
+      eventCard?.name ||
+      "event_card");
   const baseName = effect.oncePerTurnName || effect.id || "sim_event";
   return {
     ...effect,
@@ -1119,37 +1128,12 @@ function matchesSimulatedEventEffect(
 
   if (eventName === "position_change") {
     const changedOwner = payload.player || findCardOwner(state, eventCard);
-    const changedRole = ownerRoleFor(sourceEntry.player, changedOwner);
-    const positionChangeSourceCard =
-      payload.sourceCard || payload.source || options.sourceCard || null;
-    const changedCardOwner =
-      effect.changedCardOwner || effect.eventCardOwner || null;
-    if (changedCardOwner && changedRole !== changedCardOwner) return false;
-    if (effect.changedCardRequireFaceup === true && eventCard?.isFacedown === true) {
-      return false;
-    }
-    if (
-      effect.changedCardRequireFaceupBeforeChange === true &&
-      payload.wasFaceupBeforeChange !== true
-    ) {
-      return false;
-    }
-    const requiresEffectPositionChange =
-      effect.positionChangedByEffect === true ||
-      effect.requirePositionChangedByEffect === true;
-    if (requiresEffectPositionChange && !positionChangeSourceCard) {
-      return false;
-    }
-    if (
-      effect.positionChangeSourceFilters &&
-      !matchesTargetFilters(
-        positionChangeSourceCard,
-        effect.positionChangeSourceFilters,
-        sourceCard,
-      )
-    ) {
-      return false;
-    }
+    if (!eventCard || !changedOwner || !matchesPositionChangeEvent(effect, sourceCard, eventCard, payload, {
+      sourceOwnerId: sourceEntry.player.id, changedOwnerId: changedOwner.id,
+      changedIsFacedown: eventCard.isFacedown === true,
+      matchesEventFilters: filters => matchesTargetFilters(eventCard, filters, sourceCard, eventRole),
+      matchesSourceFilters: (card, filters) => !!card && matchesTargetFilters(card, filters, sourceCard),
+    })) return false;
   }
 
   if (
@@ -1264,7 +1248,7 @@ function buildSimEventActionContext(
     wasFaceupBeforeMove: payload.wasFaceupBeforeMove === true,
     wasFaceupBeforeChange: payload.wasFaceupBeforeChange === true,
     movementSourceCard: payload.sourceCard || null,
-    positionChangeSourceCard: payload.sourceCard || payload.source || null,
+    ...getPositionChangeProvenance(payload),
   };
 }
 
@@ -1342,6 +1326,52 @@ function dispatchSimulatedEvent(
   }
 
   const sourceEntries = collectSimulatedEventSources(state, eventName, payload);
+  // Immediate observers finish before any ordinary trigger is collected.
+  const immediateEventCard = payload.card || payload.changedCard || payload.eventCard;
+  const immediateOwner = findCardOwner(state, immediateEventCard) || payload.player || null;
+  const immediatePayload = { ...payload, player: immediateOwner };
+  const immediateSources = sourceEntries.filter(entry =>
+    entry.zone === "field" || entry.zone === "spellTrap" || entry.zone === "fieldSpell");
+  // Match the runtime's changed-owner -> opponent, field -> spell/trap ->
+  // field-spell order. Ordinary trigger collection retains its existing order.
+  immediateSources.sort((left, right) => {
+    const ownerOrder = Number(right.player === immediateOwner) - Number(left.player === immediateOwner);
+    if (ownerOrder) return ownerOrder;
+    const leftZone = left.zone === "field" ? 0 : left.zone === "spellTrap" ? 1 : 2;
+    const rightZone = right.zone === "field" ? 0 : right.zone === "spellTrap" ? 1 : 2;
+    return leftZone - rightZone;
+  });
+  for (const sourceEntry of immediateSources) {
+    if (!["field", "spellTrap", "fieldSpell"].includes(sourceEntry.zone) ||
+        sourceEntry.card.isFacedown || sourceEntry.card.effectsNegated) continue;
+    const selfId = resolvePerspectiveSlotForPlayer(state, sourceEntry.player);
+    if (selfId === null) continue;
+    for (const effect of sourceEntry.card.effects || []) {
+      if (effect.timing !== "passive" || !("passive" in effect) || effect.passive?.type !== "event_actions" ||
+          effect.event !== eventName || getImmediateEventEffectValidationError(effect)) continue;
+      // Immediate card predicates use the same canonical reader as runtime.
+      // The ordinary trigger projection below handles the remaining event gates.
+      const { eventCardFilters, positionChangeSourceFilters, ...eventGates } = effect;
+      const filterContext = { turnCounter: state.turnCounter,
+        getCounter: (card: SimulatedCardState, type: string) => getCounterValue(card, type) };
+      if (eventCardFilters && !matchesCardFilter(immediateEventCard, eventCardFilters, filterContext)) continue;
+      if (positionChangeSourceFilters && !matchesCardFilter(
+        getPositionChangeProvenance(immediatePayload).positionChangeSourceCard,
+        positionChangeSourceFilters, filterContext)) continue;
+      const matchingEffect: EffectDefinition = { ...eventGates, timing: "on_event", triggerRequirement: "mandatory", triggerTiming: "if" };
+      if (!matchesSimulatedEventEffect(state, eventName, immediatePayload, sourceEntry, matchingEffect, options)) continue;
+      const eventCard = payload.card || payload.eventCard || payload.changedCard || null;
+      const actionContext = buildSimEventActionContext(eventName, immediatePayload, {
+        player: sourceEntry.player, opponent: sourceEntry.opponent,
+      });
+      const immediateOptions = attachSimulatedEventEmitter(state, { ...options, selfId,
+        sourceCard: sourceEntry.card, effect, actionContext, _simEventDepth: depth + 1 });
+      applySimulatedActions({ actions: effect.actions || [], state, selfId,
+        selections: { self: [sourceEntry.card], eventCard: eventCard ? [eventCard] : [], changedCard: eventCard ? [eventCard] : [] },
+        options: immediateOptions });
+    }
+  }
+  const pendingTriggers = queue || [];
   for (const sourceEntry of sourceEntries) {
     const sourceCard = sourceEntry.card;
     // Usage persists by physical ID; conditions/actions execute in a slot.
@@ -1413,6 +1443,9 @@ function dispatchSimulatedEvent(
         actionContext,
         _simEventDepth: depth + 1,
       }));
+      const sourceReferences = effect.requiresSourceAtResolution === true
+        ? captureSimulatedReferences(null, undefined, sourceEntry.player, sourceEntry.opponent, { self: [sourceCard] })
+        : {};
       const selections = selectSimulatedTargets({
         targets: effect.targets || [],
         effect,
@@ -1427,20 +1460,24 @@ function dispatchSimulatedEvent(
       }
       const bindsSourceStats = effect.actions?.some(action =>
         action.type === "permanent_buff_named" && (action.targetRef || "self") === "self" && !action.applyToAllField);
-      triggerOptions.referenceSnapshots = captureSimulatedReferences(effect, selections, sourceEntry.player, sourceEntry.opponent,
-        bindsSourceStats ? { self: [sourceCard] } : {});
+      triggerOptions.referenceSnapshots = {
+        ...captureSimulatedReferences(effect, selections, sourceEntry.player, sourceEntry.opponent,
+          bindsSourceStats ? { self: [sourceCard] } : {}),
+        ...sourceReferences,
+      };
       markSimulatedEffectUsed(state, effect, sourceCard, sourceEntry.player?.id || "bot", true);
       const resolve = () => {
-        applySimulatedActions({
+        if (!isSimulatedSourcePresenceValid(triggerOptions, sourceEntry.player)) return;
+        const success = applySimulatedActions({
           actions: effectExecutionActions(effect), selections, state, selfId, options: triggerOptions,
         });
+        if (!success) return;
         ownerOptions.onEffectActivated?.({
           state, action: null, player: sourceEntry.player, card: sourceCard,
           effect, zone: sourceEntry.zone, options: triggerOptions,
         });
       };
-      if (queue) queue.push({ ownerId: sourceEntry.player.id, optional: effect.triggerRequirement === "optional", resolve });
-      else resolve();
+      pendingTriggers.push({ ownerId: sourceEntry.player.id, optional: effect.triggerRequirement === "optional", resolve });
     }
   }
 
@@ -1521,6 +1558,9 @@ function dispatchSimulatedEvent(
         ...(strategyContext.decisions ? { decisions: strategyContext.decisions } : {}), actionContext },
       _simEventDepth: depth + 1,
     }));
+    const sourceReferences = effect.requiresSourceAtResolution === true
+      ? captureSimulatedReferences(null, undefined, owner, getOtherSimPlayer(state, owner), { self: [sourceCard] })
+      : {};
     const selections = selectSimulatedTargets({
       targets: effect.targets || [],
       effect,
@@ -1531,20 +1571,23 @@ function dispatchSimulatedEvent(
       options: triggerOptions,
     });
     if (!hasRequiredSimSelections(effect.targets || [], selections)) continue;
+    if (effect.requiresSourceAtResolution === true) triggerOptions.referenceSnapshots = sourceReferences;
 
     if (!consumeOnMatch && Number.isFinite(entry.usesRemaining)) entry.usesRemaining! -= 1;
     const resolve = () => {
-      applySimulatedActions({
+      if (!isSimulatedSourcePresenceValid(triggerOptions, owner)) return;
+      const success = applySimulatedActions({
         actions: effectExecutionActions(effect), selections, state, selfId, options: triggerOptions,
       });
+      if (!success) return;
       ownerOptions.onEffectActivated?.({
         state, action: null, player: owner, card: sourceCard,
         effect, zone: sourceZone, options: triggerOptions,
       });
     };
-    if (queue) queue.push({ ownerId: owner.id, optional: effect.triggerRequirement === "optional", resolve });
-    else resolve();
+    pendingTriggers.push({ ownerId: owner.id, optional: effect.triggerRequirement === "optional", resolve });
   }
+  if (!queue) for (const trigger of pendingTriggers) trigger.resolve();
   cleanupSimulatedTemporaryEventEffects(state);
 }
 
@@ -1855,15 +1898,28 @@ export function applyGenericSimulatedMainPhaseAction<
       const card = player.hand[handIndex];
       const procedure = card?.handSummonProcedure;
       if (!card || !procedure || card.cardKind !== "monster") break;
+      const cardMatchesFilters = (candidate: AiCardInput, filters: RuntimeCardFilter): boolean =>
+        matchesCardFilter(candidate, filters, {
+          turnCounter: state.turnCounter,
+          getCounter: (entry, type) => entry.counters?.get(type) || 0,
+          hasMatchingEquip: (entry, equipFilters, requireFaceup) => (entry.equips || []).some(equip => {
+            const owner = [state.player, state.bot].find(candidateOwner => candidateOwner.id === equip.owner);
+            return isActiveEquipInZone(equip, entry, owner?.spellTrap || []) &&
+              (!requireFaceup || !equip.isFacedown) && cardMatchesFilters(equip, equipFilters);
+          }),
+        });
       if (!canUseSimulatedEffectUsage(state, procedure, card, player.id, true)) break;
-      if (!canSimulatedSpecialSummon(card, player, procedure.id, "hand")) break;
+      if (!canSimulatedSpecialSummon(card, player, procedure.id, "hand", cardMatchesFilters)) break;
       if (state.phase !== "main1" && state.phase !== "main2") break;
       if (procedure.conditions && !evaluateSimulatedConditions(procedure.conditions, { state, selfId: "bot", sourceCard: card })) break;
       const cost = procedure.cost;
       if (cost && (!Number.isInteger(cost.count) || cost.count < 1)) break;
       if (action.materials.length !== (cost?.count || 0)) break;
+      const costDestinationPlayer = (material: SimulatedCardState) => player.field.includes(material)
+        ? getOriginalOwner(state, material, player) : player;
       const candidates = cost ? [...new Set(cost.zones.flatMap((zone) => player[zone]))]
-        .filter((candidate) => matchesTargetFilters(candidate, cost.filters)) : [];
+        .filter(candidate => cardMatchesFilters(candidate, cost.filters) &&
+          canMoveCardToZone(costDestinationPlayer(candidate), candidate, cost.destination, player, { state })) : [];
       const materials: SimulatedCardState[] = [];
       for (const hint of action.materials) {
         if (!cost?.zones.includes(hint.zone)) break;
@@ -1876,25 +1932,38 @@ export function applyGenericSimulatedMainPhaseAction<
         materials.push(material);
       }
       if (materials.length !== (cost?.count || 0)) break;
-      if (!canSimulatedProcedureEnterField(card, player, state.player, materials)) break;
+      if (!canSimulatedProcedureEnterField(card, player, state.player, materials, cardMatchesFilters)) break;
       markSimulatedEffectUsage(state, procedure, card, player.id, true);
       const destination = cost?.destination || "graveyard";
+      const deferredProcedureEvents: SimulatedEventOccurrence[] = [];
+      const resolveDeferredEvents = () => {
+        if (selectionOptions.emitSimulatedEvents) selectionOptions.emitSimulatedEvents(deferredProcedureEvents);
+        else for (const entry of deferredProcedureEvents) selectionOptions.emitSimulatedEvent?.(entry.event, entry.payload);
+      };
       let costComplete = true;
       for (const material of materials) {
         const fromZone = player.field.includes(material) ? "field" : "graveyard";
+        const destinationPlayer = costDestinationPlayer(material);
         const wasFaceupBeforeMove = material.isFacedown !== true;
-        if (!moveCardToZone(player, material, destination)) {
+        if (!moveCardToZone(destinationPlayer, material, destination, player, { state })) {
           costComplete = false;
           break;
         }
-        selectionOptions.emitSimulatedEvent?.("card_moved", {
-          card: material, player, fromZone, toZone: destination,
+        setSimulatedController(material, destinationPlayer);
+        const costEvent: SimulatedEventOccurrence = { event: "card_moved", observed: true, payload: {
+          card: material, player: destinationPlayer, fromPlayer: player, toPlayer: destinationPlayer,
+          fromZone, toZone: destination,
           movedByEffect: false, wasFaceupBeforeMove,
           sourceCard: card, actionContext: selectionOptions.actionContext,
-        });
+        } };
+        // Each cost moves now; runtime holds its triggers until the summon ends.
+        selectionOptions.onSimulatedEvent?.(costEvent.event, costEvent.payload);
+        deferredProcedureEvents.push(costEvent);
       }
-      if (!costComplete || !player.hand.includes(card)) break;
-      player.hand.splice(handIndex, 1);
+      if (!costComplete || !player.hand.includes(card)) {
+        resolveDeferredEvents();
+        break;
+      }
       const summoned = {
         ...card, position: action.position === "defense" ? "defense" as const : "attack" as const, isFacedown: false,
         hasAttacked: false, attacksUsedThisTurn: 0,
@@ -1903,14 +1972,22 @@ export function applyGenericSimulatedMainPhaseAction<
         lastSummonProcedure: procedure.id,
       };
       establishProperSummon(summoned, { summonProcedure: procedure.id, sourceZone: "hand" });
-      appendSimulatedFieldCard(player.field, summoned);
+      if (!appendSimulatedFieldCard(player.field, summoned)) {
+        resolveDeferredEvents();
+        break;
+      }
+      player.hand.splice(handIndex, 1);
       recordCompletedSimulatedSummon(state, { card: summoned, player, method: "special" });
       options.onAfterSummon?.({ state, action, player, card, newCard: summoned, options });
       options.onAfterSpecialSummon?.({ state, action, player, card: summoned, fromZone: "hand", options });
-      selectionOptions.emitSimulatedEvent?.("after_summon", {
+      const summonEvent: SimulatedEventOccurrence = { event: "after_summon", observed: true, payload: {
         card: summoned, player, method: "special", fromZone: "hand",
         sourceCard: summoned, actionContext: selectionOptions.actionContext,
-      });
+      } };
+      selectionOptions.onSimulatedEvent?.(summonEvent.event, summonEvent.payload);
+      // Costs and the completed summon share runtime's post-procedure SEGOC window.
+      deferredProcedureEvents.push(summonEvent);
+      resolveDeferredEvents();
       break;
     }
     case "summon": {
@@ -2024,7 +2101,7 @@ export function applyGenericSimulatedMainPhaseAction<
 
     case "position_change": {
       const player = state.bot;
-      const target = (player.field || []).find(
+      const target = Number.isInteger(action.fieldIndex) ? player.field[action.fieldIndex!] : (player.field || []).find(
         (card) =>
           card &&
           (card.id === action.cardId ||
@@ -2034,6 +2111,7 @@ export function applyGenericSimulatedMainPhaseAction<
       if (target.battlePositionLocked) break;
       if (target.positionChangedThisTurn) break;
       if (target.hasAttacked) break;
+      const previousPosition = target.position || "attack";
       if (target.isFacedown) {
         target.isFacedown = false;
         target.position = "attack";
@@ -2046,6 +2124,12 @@ export function applyGenericSimulatedMainPhaseAction<
       if (target.position === newPosition) break;
       target.position = newPosition;
       target.positionChangedThisTurn = true;
+      selectionOptions.emitSimulatedEvent?.("position_change", {
+        card: target, player, opponent: state.player, fromPosition: previousPosition,
+        toPosition: newPosition, wasFlipped: false, wasFaceupBeforeChange: true,
+        sourceCard: null, effectId: null, positionChangedByEffect: false,
+        actionContext: selectionOptions.actionContext,
+      });
       break;
     }
 
@@ -2330,7 +2414,7 @@ export function applyGenericSimulatedMainPhaseAction<
         if (wasSet) emitSimulatedSpellActivation(state, card, options.selfId || "bot", selectionOptions);
         const persistent = card.cardKind === "spell" && ["equip", "continuous", "field"].includes(card.subtype || "");
         const sourcePresent = player.spellTrap.includes(card) && !card.isFacedown && !card.effectsNegated;
-        if (!persistent || sourcePresent) applySimulatedActions({
+        if (!persistent || effect.requiresSourceAtResolution === false || sourcePresent) applySimulatedActions({
           actions: [...(effect.activationCommitActions || []), ...(effect.actions || [])],
           selections, state, selfId: options.selfId || "bot", options: resolutionOptions,
         });

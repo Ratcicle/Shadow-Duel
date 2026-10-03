@@ -1119,6 +1119,10 @@ export interface EventUiPort {
 }
 
 export interface EventEffectEnginePort {
+  applyImmediateEventEffects?<Name extends ResolvableEventName>(
+    eventName: Name,
+    payload: DuelEventMap[Name],
+  ): MaybeEventPromise<void>;
   collectEventTriggers?<Name extends ResolvableEventName>(
     eventName: Name,
     payload: DuelEventMap[Name],

@@ -181,6 +181,21 @@ export function captureSimulatedReferences(effect: EffectDefinition | null | und
   return snapshots;
 }
 
+/** Only explicitly source-bound effects require their original activation presence. */
+export function isSimulatedSourcePresenceValid(
+  options: SimulatedActionOptions,
+  owner: SimulatedPlayerState,
+): boolean {
+  if (options.effect?.requiresSourceAtResolution !== true) return true;
+  const source = options.sourceCard;
+  if (!source) return false;
+  return options.referenceSnapshots?.self?.some(snapshot =>
+    snapshot.card === source && snapshot.owner === owner &&
+    (source.controller ?? source.owner ?? owner.id) === owner.id &&
+    findCardZone(owner, source) === snapshot.zone &&
+    (source.locationVersion || 0) === snapshot.locationVersion) === true;
+}
+
 export interface SimulatedActionOptions {
   costPayment?: import("../../../contracts/chainRuntime.js").ChainCostPayment;
   referenceSnapshots?: Record<string, SimulatedReferenceSnapshot[]>;

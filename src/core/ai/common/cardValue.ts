@@ -1,4 +1,5 @@
 import { getEffectiveAtk } from "./cardStats.js";
+import { getActivePiercingMultiplier } from "../../game/combat/availability.js";
 import type { CardAction } from "../../contracts/actions.js";
 
 interface MultiAttackCardView {
@@ -34,6 +35,8 @@ interface CardValueCardView extends MultiAttackCardView {
   hasAttacked?: boolean | undefined;
   piercing?: boolean;
   piercingDamageMultiplier?: number | null;
+  piercingGrantedByEffect?: boolean | undefined;
+  effectsNegated?: boolean | undefined;
   battleIndestructibleOncePerTurn?: boolean;
   mustBeAttacked?: boolean | undefined;
   tempAtkBoost?: number | undefined;
@@ -107,12 +110,7 @@ export function estimateMonsterValue(
   if (monster.isFacedown) value *= 0.7;
   if (monster.cannotAttackThisTurn) value -= 0.2;
   if (monster.hasAttacked) value -= 0.1;
-  if (monster.piercing) {
-    const multiplier = Number(monster.piercingDamageMultiplier ?? 1);
-    const safeMultiplier =
-      Number.isFinite(multiplier) && multiplier > 0 ? multiplier : 1;
-    value += 0.2 * safeMultiplier;
-  }
+  value += 0.2 * getActivePiercingMultiplier(monster);
   const bonusAttacks = getMaxAttacks(monster, options.owner || null) - 1;
   if (bonusAttacks > 0) value += 0.2 * bonusAttacks;
   if (monster.battleIndestructibleOncePerTurn) value += 0.25;

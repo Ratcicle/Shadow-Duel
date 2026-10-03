@@ -1,3 +1,5 @@
+import { getActivePiercingMultiplier } from "../../game/combat/availability.js";
+
 type StatName = "atk" | "def";
 type FacedownValue = number | "printed";
 
@@ -13,10 +15,12 @@ interface StatCardBase {
   isFacedown?: boolean | undefined;
   piercing?: boolean;
   piercingDamageMultiplier?: number | null;
+  piercingGrantedByEffect?: boolean | undefined;
+  effectsNegated?: boolean | undefined;
 }
 
 type StatCard = StatCardBase & {
-  status?: { piercingDamage?: boolean };
+  status?: { piercingDamage?: boolean; effectsNegated?: boolean };
 };
 
 interface StatOptions {
@@ -76,10 +80,7 @@ export function getPiercingDamage(
   attackStat: number,
   targetStat: number,
 ): number {
-  if (!attacker?.piercing && !attacker?.status?.piercingDamage) return 0;
-  const multiplier = Number(attacker?.piercingDamageMultiplier ?? 1);
-  const safeMultiplier =
-    Number.isFinite(multiplier) && multiplier > 0 ? multiplier : 1;
+  const safeMultiplier = getActivePiercingMultiplier(attacker);
   const excess = Math.max(0, Number(attackStat || 0) - Number(targetStat || 0));
   return excess > 0 ? Math.floor(excess * safeMultiplier) : 0;
 }

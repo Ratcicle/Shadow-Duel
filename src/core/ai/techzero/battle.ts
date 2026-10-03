@@ -84,7 +84,7 @@ function uncertaintyReasons(self: TechZeroBattlePlayer, opponent: TechZeroBattle
         }
         if (interaction === "base" && owner === opponent && effect.timing === "manual") reasons.add("visible_responses");
         if (interaction === "base" && !owner.graveyard.includes(card) && effect.timing === "passive" && "passive" in effect && effect.passive &&
-          !["stat_boost", "modify_stats", "extra_attacks", "restrict_opponent_summon_turn_attack"].includes(effect.passive.type)) {
+          !["stat_boost", "modify_stats", "extra_attacks", "restrict_opponent_summon_turn_attack", "event_actions"].includes(effect.passive.type)) {
           reasons.add("unprojected_passive");
         }
       }

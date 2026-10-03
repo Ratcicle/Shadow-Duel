@@ -39,7 +39,8 @@ function replay(overrides: MutableReplay = {}): MutableReplay {
 }
 
 test("engine version is required and rejects recordings with previous semantics", () => {
-  assert.equal(CANONICAL_REPLAY_ENGINE_VERSION, "engine-rules-v9");
+  assert.equal(CANONICAL_REPLAY_ENGINE_VERSION, "engine-rules-v10");
+  assert.throws(() => validateCanonicalReplay(replay({ engineVersion: "engine-rules-v9" })), /engineVersion/);
   assert.throws(() => validateCanonicalReplay(replay({ engineVersion: "engine-rules-v8" })), /engineVersion/);
   assert.throws(() => validateCanonicalReplay(replay({ engineVersion: "engine-rules-v7" })), /engineVersion/);
   assert.throws(() => validateCanonicalReplay(replay({ engineVersion: "engine-rules-v6" })), /engineVersion/);
@@ -92,6 +93,34 @@ test("replays com a assinatura parcial antiga são rejeitados antes da reproduç
     /card database signature does not match/,
   );
   assert.doesNotThrow(() => validateCanonicalReplay(replay()));
+});
+
+test("Miragebound S02 rejects previous full signatures and uses schema 2 with engine v10", () => {
+  assert.equal(CANONICAL_REPLAY_ENGINE_VERSION, "engine-rules-v10");
+  assert.throws(
+    () => validateCanonicalReplay(replay({ cardDatabaseSignature: "98009b78" })),
+    /card database signature does not match/,
+  );
+  assert.equal(validateCanonicalReplay(replay()).schemaVersion, 2);
+  assert.throws(() => validateCanonicalReplay(replay({ cardDatabaseSignature: "d0615be5" })), /card database signature does not match/);
+  assert.throws(() => validateCanonicalReplay(replay({ cardDatabaseSignature: "c2d58ded" })), /card database signature does not match/);
+  assert.throws(() => validateCanonicalReplay(replay({ cardDatabaseSignature: "37f6c19a" })), /card database signature does not match/);
+});
+
+test("P2 snapshots require typed copy usage and piercing provenance", t => {
+  const game = createRuntimeGame({ captureReplay: false }); t.after(() => game.dispose());
+  placeFieldCards(game.player.field, new Card(cardDefinition(355), "player"));
+  const snapshot = createCanonicalStateSnapshot(game);
+  for (const [field, value] of [["oncePerTurnResetVersion", -1], ["oncePerTurnUsageByName", null], ["oncePerTurnUsageByName", { bounce: { turn: 1, count: "1" } }]] as const) {
+    const invalid = structuredClone(snapshot);
+    Reflect.set(required(invalid.players.player.zones.field[0]), field, value);
+    assert.throws(() => validateCanonicalReplay(replay({ result: { finalState: invalid } })), /oncePerTurn/);
+  }
+  for (const [field, value] of [["piercingGrantedByEffect", "true"], ["piercingDamageMultiplier", 0]] as const) {
+    const invalid = structuredClone(snapshot);
+    Reflect.set(required(invalid.players.player.zones.field[0]).statuses, field, value);
+    assert.throws(() => validateCanonicalReplay(replay({ result: { finalState: invalid } })), /piercing/);
+  }
 });
 
 test("field placement replay decisions validate actor, destination, candidates and cancellation", () => {

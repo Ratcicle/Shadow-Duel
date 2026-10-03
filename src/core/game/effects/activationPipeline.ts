@@ -1223,7 +1223,8 @@ export async function runActivationPipeline(
           const shouldCountMaterialActivation =
             resolvedCard?.cardKind === "monster" &&
             (selectionKind === "monsterEffect" ||
-              selectionKind === "graveyardEffect");
+              selectionKind === "graveyardEffect" ||
+              selectionKind === "triggered");
           if (shouldCountMaterialActivation) {
             this.recordMaterialEffectActivation(owner, resolvedCard, {
               contextLabel: selectionKind,

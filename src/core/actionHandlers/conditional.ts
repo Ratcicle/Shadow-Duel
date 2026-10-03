@@ -420,6 +420,7 @@ function runOptionalTargetSelection(
       kind: "choice",
       owner: player,
       selectionContract,
+      replayCommandHandledByCaller: true,
       card: ctx?.source || null,
       message: selectionContract?.message || action?.selectionMessage || null,
       allowCancel: action?.allowCancel !== false,

@@ -22,7 +22,28 @@ import type {
   GameCard,
   GamePlayer,
 } from "../../contracts/gameRuntime.js";
-import type { OncePerTurnDefinition } from "../../contracts/cards.js";
+import type { EffectUsageMap, OncePerTurnDefinition } from "../../contracts/cards.js";
+
+/** Detach the canonical ledger entries for a player or one card presence. */
+export function projectOncePerTurnUsage(inputEntries: unknown, suffix = "", currentTurn?: number): EffectUsageMap {
+  const result: EffectUsageMap = {};
+  if (!(inputEntries instanceof Map)) return result;
+  const entries: ReadonlyMap<unknown, unknown> = inputEntries;
+  for (const [key, value] of entries) {
+    if (typeof key !== "string" || !key.startsWith("once_per_turn:") || (suffix && !key.endsWith(suffix))) continue;
+    const bare = key.slice("once_per_turn:".length, suffix ? -suffix.length : undefined);
+    if (typeof value === "number") {
+      if (currentTurn === undefined || value === currentTurn) result[bare] = value;
+    } else if (value && typeof value === "object") {
+      const turn: unknown = Reflect.get(value, "turn");
+      const count: unknown = Reflect.get(value, "count");
+      if (typeof turn === "number" && typeof count === "number" && (currentTurn === undefined || turn === currentTurn)) {
+        result[bare] = { turn, count };
+      }
+    }
+  }
+  return result;
+}
 
 interface OncePerTurnOptions {
   lockKey?: string;

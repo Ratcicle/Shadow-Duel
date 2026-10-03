@@ -92,6 +92,7 @@ export function getPublicState(
         level: hidden ? null : card.level,
         baseLevel: hidden ? null : card.baseLevel,
         piercing: hidden ? null : !!card.piercing,
+        piercingGrantedByEffect: hidden ? null : card.piercingGrantedByEffect === true,
         piercingDamageMultiplier: hidden
           ? null
           : Number(card.piercingDamageMultiplier || 1),

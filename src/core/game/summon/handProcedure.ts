@@ -11,7 +11,7 @@ type HandProcedureHost = Pick<Game,
   "player" | "canStartAction" | "canPlaceCardOnField" | "effectEngine" |
   "startTargetSelectionSession" | "autoSelector" | "createPreparedSummon" |
   "executeSummonTransaction" | "moveCard" | "updateBoard" |
-  "canUseOncePerTurn" | "markOncePerTurnUsed" | "requestDecision" | "ensureDuelCardId"
+  "canUseOncePerTurn" | "markOncePerTurnUsed" | "requestDecision" | "ensureDuelCardId" | "prepareFieldPlacement"
 >;
 
 export interface HandSummonProcedureOptions {
@@ -184,6 +184,7 @@ async function executeHandProcedure(
   if (!placement.ok) return { success: false, reason: placement.reason || "field_unavailable" };
   if (player.field.filter((fieldCard) => !materials.includes(fieldCard)).length >= 5) return { success: false, reason: "field_full" };
   const sourceVersion = card.locationVersion;
+  const materialVersions = materials.map(material => material.locationVersion);
   const position = await this.effectEngine.chooseSpecialSummonPosition(card, player, options);
   if (!player.hand.includes(card) || card.locationVersion !== sourceVersion) return { success: false, reason: "source_moved" };
   const recheck = checkHandProcedure.call(this, card, player, completingSelection);
@@ -192,6 +193,20 @@ async function executeHandProcedure(
     isFacedown: false, summonMethod: "special", excludeCards: materials,
   });
   if (!finalPlacement.ok || player.field.filter((fieldCard) => !materials.includes(fieldCard)).length >= 5) return { success: false, reason: "field_unavailable" };
+  const fieldPlacement = cost ? await this.prepareFieldPlacement(card, player, "field", {
+    actor: player, allowCancel: true, excludeCards: materials,
+  }) : null;
+  if (fieldPlacement && fieldPlacement.outcome !== "chosen") {
+    return { success: false, cancelled: fieldPlacement.outcome === "cancelled", reason: fieldPlacement.outcome === "cancelled" ? "placement_cancelled" : "field_full" };
+  }
+  const commitCheck = checkHandProcedure.call(this, card, player, completingSelection);
+  if (!player.hand.includes(card) || card.locationVersion !== sourceVersion || !commitCheck.ok ||
+      materials.some((material, index) => !commitCheck.candidates.includes(material) || material.locationVersion !== materialVersions[index])) {
+    return { success: false, reason: "summon_unavailable" };
+  }
+  if (!this.canPlaceCardOnField(card, player, { isFacedown: false, summonMethod: "special", silent: true, excludeCards: materials }).ok) {
+    return { success: false, reason: "field_unavailable" };
+  }
   const prepared = this.createPreparedSummon({
     card, controller: player, sourceZone: "hand",
     summonOrigin: SUMMON_ORIGINS.PROCEDURE, summonMode: "summon",
@@ -217,6 +232,7 @@ async function executeHandProcedure(
       });
     },
   });
+  if (fieldPlacement?.outcome === "chosen") prepared.fieldPlacement = fieldPlacement.intent;
   const result = await this.executeSummonTransaction(prepared);
   this.updateBoard();
   return result;

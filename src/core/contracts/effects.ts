@@ -376,6 +376,7 @@ export type PassiveRuleType =
   | "counter_attack_lock"
   | "equipped_counter_buff"
   | "equipped_field_counter_buff"
+  | "event_actions"
   | "field_archetype_aura_buff"
   | "field_counter_stat_aura"
   | "field_presence_type_summon_count_buff"
@@ -460,6 +461,8 @@ export interface PassiveRuleDefinition {
 export interface ReplacementEffectBehavior {
   readonly type: "destruction" | "send_to_grave";
   readonly auto?: boolean;
+  /** Consume the declared usage limit on the first matching occurrence, before decisions or costs. */
+  readonly consumeOnFirstOpportunity?: boolean;
   readonly costActions?: readonly CardAction[];
   readonly costCount?: number;
   readonly costDestination?: CanonicalZone;

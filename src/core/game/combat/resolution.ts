@@ -6,6 +6,8 @@
 import {
   getMonsterAttackLimit,
   hasExplicitAttackLimitThisTurn,
+  getActivePiercingMultiplier,
+  hasActivePiercing,
 } from "./availability.js";
 
 import type { GameCard } from "../../contracts/cards.js";
@@ -228,9 +230,7 @@ function getActualLpLoss(
 function getPiercingDamageMultiplier(
   card: CombatCard | null | undefined,
 ): number {
-  if (!card?.piercing) return 0;
-  const multiplier = Number(card.piercingDamageMultiplier ?? 1);
-  return Number.isFinite(multiplier) && multiplier > 0 ? multiplier : 1;
+  return getActivePiercingMultiplier(card);
 }
 
 function calculatePiercingDamage(
@@ -442,7 +442,7 @@ function resolveBattleLpLossPreview(
       amount = targetAtk - attackerAtk;
       shouldHeal = !!attacker.battleDamageHealsControllerThisTurn;
     }
-  } else if (attackerAtk > targetDef && attacker.piercing) {
+  } else if (attackerAtk > targetDef && hasActivePiercing(attacker)) {
     const piercingDamage = calculatePiercingDamage(
       attacker,
       attackerAtk,

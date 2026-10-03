@@ -685,6 +685,7 @@ export async function executeSummonTransaction(
 
   if (
     resultFailed(resultObject) &&
+    resultObject.cancelled !== true &&
     transaction.status !== SUMMON_STATUSES.NEGATED
   ) {
     await finalizeFailedCommittedCard(this, transaction);

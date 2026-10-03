@@ -7,11 +7,13 @@ import {
   getGenericHandSpellActions,
   getGenericIgnitionEffectActions,
   getGenericNormalSummonActions,
+  getGenericHandSummonProcedureActions,
 } from "./common/actionGeneration.js";
 import { getGenericSetBackrowActions } from "./common/backrowPlanning.js";
 import { sequenceActionsByPriority } from "./common/actionSequencing.js";
 import { findIgnitionEffect } from "./common/effectDiscovery.js";
 import { getPiercingDamage } from "./common/cardStats.js";
+import { hasActivePiercing } from "../game/combat/availability.js";
 import {
   buildAutoActivationContext,
 } from "./common/preferencePolicy.js";
@@ -163,10 +165,6 @@ function getOpponentCards(analysis: Pick<MirageboundAnalysis,"oppField"|"oppSpel
     ...(analysis.oppSpellTrap || []),
     ...(analysis.oppFieldSpell ? [analysis.oppFieldSpell] : []),
   ].filter(Boolean);
-}
-
-function hasOpenMonsterZoneAfterBounce(analysis: MirageboundAnalysis) {
-  return analysis.fieldCapacity > 0 || analysis.faceUpMiragebounds.length > 0;
 }
 
 function getCardInstanceIds(card: MirageboundCard | null | undefined) {
@@ -653,7 +651,7 @@ function buildMirageboundTargetPreferences(sourceCard: MirageboundCard, analysis
   };
 
   const targetPreferences: Record<string, MirageboundPreference> = {
-    action_case_choice: {
+    miragebound_oasis_ignition: {
       intent: "benefit",
       role: "named_preference",
       preferredNames: analysis.hasMeaningfulBounce
@@ -924,22 +922,6 @@ function shouldActivateHandIgnition(card: MirageboundCard, analysis: Miragebound
       yes: true,
       priority: analysis.hasMeaningfulBounce ? 9 : 7,
       reason: "special summon Dancer as extender",
-    };
-  }
-
-  if (card?.name === MB.FALSE_KING) {
-    if (analysis.faceUpMiragebounds.length === 0) return { yes: false };
-    const rebelPayoff = analysis.hasRebelFalseKingTriggerWindow;
-    if (!analysis.hasMeaningfulBounce && !rebelPayoff) return { yes: false };
-    if (!hasOpenMonsterZoneAfterBounce(analysis)) return { yes: false };
-    return {
-      yes: true,
-      priority:
-        (analysis.hasJackalInHand ? 10.5 : 9.5) +
-        (rebelPayoff ? 1.5 : 0),
-      reason: rebelPayoff
-        ? "special summon False King to trigger Rebel extender"
-        : "special summon False King with bounce payoff",
     };
   }
 
@@ -1367,7 +1349,7 @@ export default class MirageboundStrategy extends BaseStrategy {
       hasRebelVanishingStepWindow ||
       hasRebelFalseKingTriggerWindow;
     const hasRebelPiercingPressure =
-      (hasRebelInHand || hasRebelInField) &&
+      (hasRebelInHand || faceUpMiragebounds.some(card => card.id === 364 && hasActivePiercing(card))) &&
       (opponentDefensePositionMonsters.length > 0 ||
         (hasRebelPositionTriggerWindow &&
           opponentAttackPositionMonsters.length > 0));
@@ -1955,6 +1937,7 @@ export default class MirageboundStrategy extends BaseStrategy {
     const actions = [
       ...this.getSpellActions(game, bot, analysis),
       ...this.getHandIgnitionActions(game, bot, analysis),
+      ...getGenericHandSummonProcedureActions(game),
       ...this.getFieldEffectActions(game, bot, analysis),
       ...this.getSpellTrapEffectActions(game, bot, analysis),
       ...this.getMonsterEffectActions(game, bot, analysis),
@@ -1975,6 +1958,7 @@ export default class MirageboundStrategy extends BaseStrategy {
       typeOrder: {
         spell: 0,
         handIgnition: 1,
+        handSummonProcedure: 1,
         fieldEffect: 2,
         spellTrapEffect: 3,
         monsterEffect: 4,
@@ -2059,7 +2043,7 @@ export default class MirageboundStrategy extends BaseStrategy {
       (context as MirageboundContext).activationContext?.actionContext?.targetPreferences ||
       (context as MirageboundContext).activationContext?.targetPreferences ||
       {};
-    const preferredLabels = preferences.action_case_choice?.preferredNames || [];
+    const preferredLabels = preferences.miragebound_oasis_ignition?.preferredNames || [];
     const preferredCase = (cases as readonly Case[]).find((choiceCase) =>
       preferredLabels.some(
         (label) =>

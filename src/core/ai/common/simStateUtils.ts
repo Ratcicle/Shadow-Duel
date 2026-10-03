@@ -76,6 +76,7 @@ function summarizePlayer(
       tempDef: card?.tempDefBoost || 0,
       cannotAttack: !!card?.cannotAttackThisTurn,
       piercing: !!card?.piercing,
+      piercingGrantedByEffect: card?.piercingGrantedByEffect === true,
       piercingDamageMultiplier: Number(card?.piercingDamageMultiplier || 1),
       equips: (card?.equips || []).map((equip) => equip?.name || "?"),
     })),
@@ -186,6 +187,7 @@ interface SimSummaryCard extends AiCardInput {
   cannotAttackThisTurn?: boolean;
   piercing?: boolean;
   piercingDamageMultiplier?: number;
+  piercingGrantedByEffect?: boolean;
 }
 
 type SimPlayerSummaryInput = Omit<AiPlayerInput, "field" | "spellTrap"> & {

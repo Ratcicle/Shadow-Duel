@@ -312,7 +312,7 @@ export interface HandSummonProcedure extends Pick<OncePerTurnDefinition, "oncePe
     readonly count: number;
     readonly zones: readonly ("field" | "graveyard")[];
     readonly filters: CardFilter;
-    readonly destination: "banished" | "graveyard";
+    readonly destination: "banished" | "graveyard" | "hand";
   };
 }
 
@@ -626,6 +626,7 @@ export interface CardStatusValueMap {
   effectsNegated: boolean;
   battleIndestructible: boolean;
   piercing: boolean;
+  piercingGrantedByEffect: boolean | undefined;
   tempBattleIndestructible: boolean;
   battleDamageHealsControllerThisTurn: boolean;
   banishWhenLeavesField: boolean;
@@ -752,6 +753,7 @@ export interface GameCard {
   mustBeAttacked: boolean;
   piercing: boolean;
   piercingDamageMultiplier: number;
+  piercingGrantedByEffect?: boolean;
   canMakeSecondAttackThisTurn: boolean;
   secondAttackUsedThisTurn: boolean;
   dynamicBuffs: CardDynamicBuffMap | null;

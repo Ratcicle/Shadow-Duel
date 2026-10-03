@@ -1,4 +1,6 @@
 export {
+  applyImmediateEventEffects,
+  getImmediateEventEffectValidationError,
   applyPassiveBuffValue,
   cardHasArchetype,
   clearPassiveBuffsForCard,

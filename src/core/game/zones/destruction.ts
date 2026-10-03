@@ -10,6 +10,7 @@
  *  - destroyCard
  */
 
+import { getCardLocationVersion } from "../../Card.js";
 import type { CardProtectionEffect, GameCard } from "../../contracts/cards.js";
 import type {
   CardFilter,
@@ -602,6 +603,21 @@ export async function destroyCard(
         return { destroyed: false, reason: "not_in_zone" };
       }
 
+      // Destruction belongs to this presence. Decisions may move the same
+      // object away and back; its new presence cannot inherit this operation.
+      const pendingPresence = {
+        instanceId: card.instanceId, duelCardId: card.duelCardId,
+        controller: card.controller ?? owner.id, locationVersion: getCardLocationVersion(card),
+        fieldPresenceId: card.fieldPresenceId,
+      };
+      const pendingPresenceIsCurrent = () =>
+        this.effectEngine?.findCardZone?.(owner, card) === fromZone &&
+        card.instanceId === pendingPresence.instanceId &&
+        (pendingPresence.duelCardId == null || card.duelCardId === pendingPresence.duelCardId) &&
+        (card.controller ?? owner.id) === pendingPresence.controller &&
+        getCardLocationVersion(card) === pendingPresence.locationVersion &&
+        card.fieldPresenceId === pendingPresence.fieldPresenceId;
+
       const battleDestructionPreventionNegated =
         cause === "battle" &&
         typeof this.isBattleDestructionPreventionNegated === "function" &&
@@ -748,6 +764,8 @@ export async function destroyCard(
         }
       }
 
+      if (!pendingPresenceIsCurrent()) return { destroyed: false, reason: "stale_destruction" };
+
       const { replaced } = (!ruleDestruction && await this.resolveDestructionWithReplacement(card, {
         cause,
         sourceCard,
@@ -758,6 +776,8 @@ export async function destroyCard(
       if (replaced) {
         return { destroyed: false, replaced: true };
       }
+
+      if (!pendingPresenceIsCurrent()) return { destroyed: false, reason: "stale_destruction" };
 
       const destroyVisualSource = this.ui?.captureCardAnimationSource?.(card, {
         ownerId: owner.id,

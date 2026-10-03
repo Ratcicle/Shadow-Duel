@@ -4,7 +4,7 @@ import {
   resolveFieldScopeCards as resolveSharedFieldScopeCards,
   selectCards as selectSharedCards,
 } from "../../actionHandlers/shared.js";
-import { cardMatchesKind } from "../../Card.js";
+import { cardMatchesKind, getCardLocationVersion } from "../../Card.js";
 import { isAI } from "../../Player.js";
 import { getCounterDisplayLabel, getUIText } from "../../i18n.js";
 import type {
@@ -983,6 +983,29 @@ export async function applyRemoveCountersFromField(
   const game = this?.game;
   const counterType = action.counterType || "default";
   const entries = collectCounterFieldEntries(this, action, ctx);
+  const paymentPresences = ctx.validateCostPayment
+    ? new Map(entries.map(entry => [entry, {
+        instanceId: entry.card.instanceId, duelCardId: entry.card.duelCardId,
+        controller: entry.card.controller ?? entry.owner.id,
+        locationVersion: getCardLocationVersion(entry.card),
+        fieldPresenceId: entry.card.fieldPresenceId ?? null,
+      }])) : null;
+  const paymentIsCurrent = (selected: readonly CounterEntry[]) => {
+    if (ctx.validateCostPayment?.() === false) return false;
+    if (!paymentPresences) return true;
+    return selected.every(entry => {
+      const presence = paymentPresences.get(entry);
+      const card = entry.card;
+      return presence && getZoneCards(entry.owner, entry.zone).includes(card) &&
+        card.instanceId === presence.instanceId &&
+        (presence.duelCardId == null || card.duelCardId === presence.duelCardId) &&
+        (card.controller ?? entry.owner.id) === presence.controller &&
+        getCardLocationVersion(card) === presence.locationVersion &&
+        (card.fieldPresenceId ?? null) === presence.fieldPresenceId &&
+        (!action.requireFaceup || !card.isFacedown) &&
+        (!action.filters || this.cardMatchesFilters(card, action.filters));
+    });
+  };
   const totalAvailable = entries.reduce(
     (sum, entry) => sum + entry.counterCount,
     0,
@@ -1026,8 +1049,9 @@ export async function applyRemoveCountersFromField(
   const selectedEntries = selectedCards
     .map((card) => entries.find((entry) => entry.card === card))
     .filter((entry): entry is CounterEntry => entry !== undefined);
+  if (!paymentIsCurrent(selectedEntries)) return false;
   const selectedTotal = selectedEntries.reduce(
-    (sum, entry) => sum + entry.counterCount,
+    (sum, entry) => sum + (paymentPresences ? getCounterValue(entry.card, counterType) : entry.counterCount),
     0,
   );
 
@@ -1052,6 +1076,7 @@ export async function applyRemoveCountersFromField(
 
     for (const entry of selectedEntries) {
       if (remaining <= 0) break;
+      if (!paymentIsCurrent(selectedEntries)) return false;
       const card = entry.card;
       const current = getCounterValue(card, counterType);
       if (current <= 0 || typeof card.removeCounter !== "function") continue;

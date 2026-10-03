@@ -8,7 +8,8 @@ import type {
   ResolvedTargetMap,
 } from "../../contracts/actionRuntime.js";
 import type { CardAction } from "../../contracts/actions.js";
-import type { BattlePosition, CardKind, FieldPresenceSummonRecord } from "../../contracts/cards.js";
+import type { BattlePosition, CardKind, DuelCardIdentityCarrier, FieldPresenceSummonRecord } from "../../contracts/cards.js";
+import type { DuelCardId } from "../../contracts/primitives.js";
 import type { EventCard, EventPlayer } from "../../contracts/events.js";
 import type {
   CardFilter,
@@ -467,6 +468,7 @@ export interface TriggerGamePort {
     player: TriggerRuntimePlayer | null | undefined,
   ): TriggerRuntimePlayer | null;
   createDeterministicId?(prefix: string): string;
+  ensureDuelCardId?(card: DuelCardIdentityCarrier): DuelCardId;
   canStartAction?(options: object): TriggerUsageCheck;
   canActivateCardEffectUnderRestrictions?(
     card: TriggerRuntimeCard,

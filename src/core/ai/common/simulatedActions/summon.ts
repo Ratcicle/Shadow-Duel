@@ -39,6 +39,7 @@ import {
 } from "../zones.js";
 import {
   applySummonState,
+  chooseSpecialSummonPosition,
   recordCompletedSimulatedSummon,
   chooseRankedCards,
   getActionCandidates,
@@ -49,6 +50,7 @@ import {
   resolveActionPlayer,
   resolveSimulatedLpCost,
   resolveTargetsForAction,
+  isSimulatedSourcePresenceValid,
   STOP_SIMULATION,
   storeSimActionResult,
   updateSimulatedSentToGraveMaterialMarker,
@@ -373,14 +375,25 @@ export function applySpecialSummonFromZone(
       : resolveActionPlayer(action, self, opponent);
   const decisionKey = ("contextLabel" in action && typeof action.contextLabel === "string" && action.contextLabel) || options.effect?.id || action.type;
   const exactIds = options.activationContext?.decisions?.specialSummons?.[decisionKey];
-  if (!hasOpenMonsterZone(targetPlayer) && exactIds === undefined) return;
+  const minimum = normalizeCount(action.count, 1).min;
+  const fail = () => minimum > 0 && (action.haltOnFailure || action.stopOnFailure) ? STOP_SIMULATION : undefined;
+  const sourceScope = action.sourceOwner || action.scope || "self";
+  const sourceOwners = sourceScope === "opponent" ? [opponent]
+    : sourceScope === "both" || sourceScope === "any" ? [self, opponent] : [self];
+  const sourceZone = action.zone || action.sourceZone || "deck";
+  const sourceZones = Array.isArray(sourceZone) ? sourceZone : [sourceZone];
+  const sourceInConfiguredZone = (card: SimulatedCardState) => sourceOwners.some(owner =>
+    sourceZones.some(zone => getZoneCards(owner, zone).includes(card)));
+  if (action.requireSource && (!options.sourceCard ||
+      !sourceInConfiguredZone(options.sourceCard) || !isSimulatedSourcePresenceValid(options, self))) return fail();
+  if (!hasOpenMonsterZone(targetPlayer) && exactIds === undefined) return fail();
   let candidates = action.requireSource && options.sourceCard
     ? [options.sourceCard]
     : action.targetRef
       ? targets
       : null;
   if (!candidates || candidates.length === 0) {
-    if (action.targetRef) return;
+    if (action.targetRef) return fail();
     const candidateAction = { ...action };
     delete candidateAction.position;
     candidates = getActionCandidates(
@@ -431,7 +444,7 @@ export function applySpecialSummonFromZone(
     (state._simUnsupportedActions ??= []).push(`exact_special_summon:${decisionKey}`);
     return STOP_SIMULATION;
   }
-  if (preferred === null) return;
+  if (preferred === null) return fail();
   const chosen: SimulatedCardState[] = [];
   for (const card of preferred ?? ranked) {
     if (chosen.length >= max) break;
@@ -439,7 +452,9 @@ export function applySpecialSummonFromZone(
     if (action.distinctNames && chosen.some(other => other.name === card.name)) continue;
     chosen.push(card);
   }
-  if (chosen.length === 0) return;
+  if (chosen.length === 0) return fail();
+  if (action.requireSource && (!options.sourceCard ||
+      !sourceInConfiguredZone(options.sourceCard) || !isSimulatedSourcePresenceValid(options, self))) return fail();
   if (action.banishCost && options.sourceCard) {
     const sourceOwner = findCardOwner(state, options.sourceCard) || targetPlayer;
     moveCardToZone(sourceOwner, options.sourceCard, "banished");
@@ -451,12 +466,18 @@ export function applySpecialSummonFromZone(
     const fromZone = findCardZone(sourceOwner, card);
     if (!fromZone || !canSimSpecialSummon(card, targetPlayer) ||
         !canSimulatedProcedureEnterField(card, targetPlayer, otherPlayer, [])) return;
+    const position = chooseSpecialSummonPosition(card, {
+      ...action, position: action.position === "any" ? "choice" : action.position || "choice",
+    }, state, targetPlayer, options);
+    if (findCardZone(sourceOwner, card) !== fromZone ||
+        !canSimSpecialSummon(card, targetPlayer) || !canSimulatedProcedureEnterField(card, targetPlayer, otherPlayer, []) ||
+        (action.requireSource && (!sourceInConfiguredZone(card) || !isSimulatedSourcePresenceValid(options, self)))) return;
     removeCardFromZones(sourceOwner, card);
     card.owner = targetPlayer.id;
     card.controller = targetPlayer.id;
     applySummonState(
       card,
-      action as SimulatedSummonStateAction,
+      { ...action, position },
       state,
       targetPlayer,
       options,
@@ -499,6 +520,7 @@ export function applySpecialSummonFromZone(
     }
     storeSimActionResult(action, selections, options, summoned);
   }
+  if (summoned.length === 0) return fail();
   return;
 }
 

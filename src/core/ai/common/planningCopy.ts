@@ -10,7 +10,7 @@ import {
   PLANNING_LEGACY_CARD_FIELDS,
   PLANNING_ZONES,
 } from "./stateFingerprint.js";
-import type { EffectUsageMap } from "../../contracts/cards.js";
+import { projectOncePerTurnUsage } from "../../game/turn/oncePerTurn.js";
 import type { ActionReplacementEffect } from "../../contracts/actions/shared.js";
 type SearchCardInput = AiCardInput;
 
@@ -67,34 +67,17 @@ export function projectRuntimeEffectUsage(input: AiStateInput, state: AiStateSha
   const runtime = input.oncePerTurnUsage;
   if (!runtime || (input.oncePerTurnTurnCounter !== undefined &&
     input.oncePerTurnTurnCounter !== input.turnCounter)) return;
-  const copyEntries = (inputEntries: unknown, suffix = ""): EffectUsageMap => {
-    const result: EffectUsageMap = {};
-    if (!(inputEntries instanceof Map)) return result;
-    const entries: ReadonlyMap<unknown, unknown> = inputEntries;
-    for (const [key, value] of entries) {
-      if (typeof key !== "string") continue;
-      if (!key.startsWith("once_per_turn:") || (suffix && !key.endsWith(suffix))) continue;
-      const bare = key.slice("once_per_turn:".length, suffix ? -suffix.length : undefined);
-      if (typeof value === "number") result[bare] = value;
-      else if (value && typeof value === "object") {
-        const turn: unknown = Reflect.get(value, "turn");
-        const count: unknown = Reflect.get(value, "count");
-        if (typeof turn === "number" && typeof count === "number") result[bare] = { turn, count };
-      }
-    }
-    return result;
-  };
   for (const original of [input.bot, input.player]) {
     if (!original?.id) continue;
     const cloned = state.bot.id === original.id ? state.bot : state.player.id === original.id ? state.player : null;
     if (!cloned) continue;
     const entries = original.id === "bot" ? runtime.bot : original.id === "player" ? runtime.player : undefined;
-    cloned.oncePerTurnUsageByName = { ...cloned.oncePerTurnUsageByName, ...copyEntries(entries) };
+    cloned.oncePerTurnUsageByName = { ...cloned.oncePerTurnUsageByName, ...projectOncePerTurnUsage(entries) };
     const copyCard = (card: AiCardInput | null | undefined, target: SimulatedCardState | null | undefined) => {
       if (!card || !target) return;
       const id: unknown = Reflect.get(card, "duelCardId") ?? card.instanceId;
       const presence: unknown = Reflect.get(card, "oncePerTurnResetVersion") || 0;
-      const usage = copyEntries(runtime.card?.get(card), `:card:${String(id)}:presence:${String(presence)}`);
+      const usage = projectOncePerTurnUsage(runtime.card?.get(card), `:card:${String(id)}:presence:${String(presence)}`);
       if (Object.keys(usage).length > 0) target.oncePerTurnUsageByName = { ...target.oncePerTurnUsageByName, ...usage };
     };
     for (const zone of PLANNING_ZONES) {

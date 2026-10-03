@@ -2377,6 +2377,9 @@ export async function moveCardInternal(
     if (options.summonTransaction) options.summonTransaction.fieldPlacement = fieldPlacement;
   }
   if (sameFieldRow && !isFieldSlot(card.fieldSlot)) throw new Error("Existing field card has no canonical position.");
+  if (options.validateBeforeMove?.() === false) {
+    return { success: false, cancelled: true, reason: "move_context_stale" };
+  }
 
   const removeFromZone = (
     owner: GamePlayer | null | undefined,

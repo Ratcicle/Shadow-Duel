@@ -167,6 +167,8 @@ export interface ChainCard {
   atk?: number;
   def?: number;
   piercing?: boolean;
+  piercingGrantedByEffect?: boolean | undefined;
+  effectsNegated?: boolean | undefined;
   setTurn?: (number | null) | undefined;
   turnSetOn?: (number | null) | undefined;
   zone?: CanonicalZone | null;

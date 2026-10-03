@@ -600,6 +600,7 @@ export interface PublicFieldCardState {
   baseLevel: number | null;
   piercing: boolean | null;
   piercingDamageMultiplier: number | null;
+  piercingGrantedByEffect: boolean | null;
   isTuner: boolean | null;
   faceDown: boolean;
   status: {

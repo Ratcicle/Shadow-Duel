@@ -656,6 +656,12 @@ export async function applyActions(
 
   try {
     for (const action of actions) {
+      if (ctx.validateCostPayment?.() === false) {
+        return createActionResult({
+          success: false, executed, skippedCount, failedAction: action.type,
+          reason: "Cost payment context is stale.",
+        });
+      }
       const actionInfo = {
         type: action?.type || "unknown",
         source: ctx?.source?.name || null,

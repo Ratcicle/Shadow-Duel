@@ -1,4 +1,5 @@
 import { isQuickSpell } from "../game/spellTrap/quickSpellRules.js";
+import { hasActivePiercing } from "../game/combat/availability.js";
 import { normalizeChainResponseCandidate } from "../game/decisions/chainResponse.js";
 import type {
   ChainActivationCandidate,
@@ -141,7 +142,7 @@ export async function botChooseChainResponse(
       if (atk > defStat) {
         return {
           loseMonster: true,
-          takeDamage: !!attacker.piercing,
+          takeDamage: hasActivePiercing(attacker),
         };
       }
       return { loseMonster: false, takeDamage: false };

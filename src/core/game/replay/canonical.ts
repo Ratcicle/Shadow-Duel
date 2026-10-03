@@ -1,4 +1,5 @@
 import { getNegationContributions } from "../../effects/negation.js";
+import { projectOncePerTurnUsage } from "../turn/oncePerTurn.js";
 import { cardDatabase } from "../../../data/cards.js";
 import type { RawCardDefinition } from "../../contracts/cards.js";
 import {
@@ -190,6 +191,11 @@ function cardState(
     controller: card.controller ?? card.owner ?? null,
     originalOwner: card.originalOwner ?? null,
     locationVersion: numericValue(card.locationVersion),
+    oncePerTurnResetVersion: numericValue(card.oncePerTurnResetVersion),
+    oncePerTurnUsageByName: game.oncePerTurnTurnCounter === undefined || game.oncePerTurnTurnCounter === game.turnCounter
+      ? projectOncePerTurnUsage(game.oncePerTurnUsage?.card?.get(card),
+        `:card:${String(card.duelCardId)}:presence:${String(card.oncePerTurnResetVersion || 0)}`, game.turnCounter)
+      : {},
     lastSummonMethod: card.lastSummonMethod || null,
     lastSummonedFromZone: card.lastSummonedFromZone || null,
     properSummonEstablished: card.properSummonEstablished === true,
@@ -219,6 +225,9 @@ function cardState(
       cannotAttackThisTurn: card.cannotAttackThisTurn === true,
       battlePositionLocked: card.battlePositionLocked === true,
       banishWhenLeavesField: card.banishWhenLeavesField === true,
+      piercing: card.piercing === true,
+      piercingDamageMultiplier: Number(card.piercingDamageMultiplier ?? 1),
+      piercingGrantedByEffect: card.piercingGrantedByEffect === true,
     },
   };
 }

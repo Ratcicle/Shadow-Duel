@@ -74,7 +74,8 @@ export async function prepareFieldPlacement(
   if (this.isDisposed() || (options.intent && options.intent.generation !== generation)) {
     throw new Error("Field placement belongs to an ended duel.");
   }
-  const slots = getAvailableFieldSlots(getFieldOccupants(this, destination, row).filter(occupant => occupant !== card));
+  const slots = getAvailableFieldSlots(getFieldOccupants(this, destination, row)
+    .filter(occupant => occupant !== card && !options.excludeCards?.includes(occupant)));
   if (slots.length === 0) return { outcome: "unavailable" };
   const duelCardId = this.ensureDuelCardId(card);
   const previous = options.intent;

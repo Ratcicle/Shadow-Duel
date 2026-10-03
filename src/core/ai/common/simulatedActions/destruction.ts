@@ -1,6 +1,8 @@
 import { appendSimulatedZoneCard } from "../zones.js";
+import { applySimulatedActions } from "./index.js";
 import { resolveExactInstanceSelection } from "../../../AutoSelector.js";
 import { getEffectiveAtk } from "../cardStats.js";
+import { getCardEffectImmunity } from "../../../effects/targeting/filters.js";
 import { getCounterValue, setCounterValue } from "../counters.js";
 import { estimateMonsterValue, hasArchetype } from "../cardValue.js";
 import {
@@ -46,7 +48,7 @@ import type {
   SimulatedCardState,
   SimulatedPlayerState,
 } from "../../../contracts/aiState.js";
-import type { CardFilter, EffectCondition } from "../../../contracts/effects.js";
+import type { CardFilter, EffectCondition, ReplacementEffectDefinition } from "../../../contracts/effects.js";
 import type { ActionReplacementEffect } from "../../../contracts/actions/shared.js";
 import type { SimulatedActionHandlerContext } from "./shared.js";
 import type { SimulatedActionOptions, SimulatedRuntimeState } from "./shared.js";
@@ -57,14 +59,16 @@ import { canUseSimulatedEffectUsage, markSimulatedEffectUsage } from "../simStat
 export function replaceSimulatedBattleDestruction(
   state: SimulatedRuntimeState,
   target: SimulatedCardState,
+  options: SimulatedActionOptions = {},
 ): SimulatedCardState | null {
-  return replaceSimulatedDestruction(state, target, "battle");
+  return replaceSimulatedDestruction(state, target, "battle", options);
 }
 
 function replaceSimulatedDestruction(
   state: SimulatedRuntimeState,
   target: SimulatedCardState,
   reason: "battle" | "effect",
+  options: SimulatedActionOptions = {},
 ): SimulatedCardState | null {
   const targetOwner = findCardOwner(state, target);
   if (!targetOwner) return null;
@@ -79,6 +83,35 @@ function replaceSimulatedDestruction(
     (!replacement.targetMustNotBeSource || target !== source) &&
     (!replacement.targetMustBeEquippedToSource || (source?.equippedTo || source?.equipTarget) === target) &&
     (!replacement.targetFilters || matchesTargetFilters(target, replacement.targetFilters));
+  const entries: Array<{ owner: SimulatedPlayerState; source: SimulatedCardState;
+    effect: ReplacementEffectDefinition; firstOpportunityConsumed: boolean }> = [];
+  for (const owner of [state.bot, state.player]) {
+    for (const source of [...owner.field, ...owner.spellTrap, ...(owner.fieldSpell ? [owner.fieldSpell] : [])]) {
+      for (const effect of source.effects || []) {
+        if (effect.timing !== "passive" || !("replacementEffect" in effect)) continue;
+        entries.push({ owner, source, effect, firstOpportunityConsumed: false });
+      }
+    }
+  }
+  const isEligible = (entry: (typeof entries)[number], skipUsage = false) => {
+    const { owner, source, effect } = entry;
+    const sourceZone = findCardZone(owner, source);
+    return !source.isFacedown && !source.effectsNegated && sourceZone !== null &&
+      (!effect.requireZone || effect.requireZone === sourceZone) &&
+      matches(effect.replacementEffect, owner, source) &&
+      evaluateSimulatedConditions(effect.conditions || [], {
+        state, selfId: owner === state.bot ? "bot" : "player", sourceCard: source,
+      }) && (skipUsage || canUseSimulatedEffectUsage(state, effect, source, owner.id, true));
+  };
+  // First-opportunity usage is consumed before selecting any replacement.
+  const firstOpportunityEntries = entries.filter(entry =>
+    entry.effect.replacementEffect.consumeOnFirstOpportunity && isEligible(entry));
+  for (const entry of firstOpportunityEntries) {
+    if (canUseSimulatedEffectUsage(state, entry.effect, entry.source, entry.owner.id, true)) {
+      markSimulatedEffectUsage(state, entry.effect, entry.source, entry.owner.id, true);
+    }
+    entry.firstOpportunityConsumed = true;
+  }
   for (const entry of state._simReplacementEffects || []) {
     const owner = [state.bot, state.player].find(player => player.id === entry.sourcePlayerId);
     if (!owner || !entry.replacementEffect || entry.usesRemaining === 0 ||
@@ -91,39 +124,42 @@ function replaceSimulatedDestruction(
     if (entry.usesRemaining != null) entry.usesRemaining -= 1;
     return entry.sourceCard || target;
   }
-  for (const owner of [state.bot, state.player]) {
-    for (const source of [...owner.field, ...owner.spellTrap, ...(owner.fieldSpell ? [owner.fieldSpell] : [])]) {
-      if (source.isFacedown || source.effectsNegated) continue;
-      for (const effect of source.effects || []) {
-        if (effect.timing !== "passive" || !("replacementEffect" in effect)) continue;
-        const replacement = effect.replacementEffect;
-        if (!replacement || !matches(replacement, owner, source) ||
-            !evaluateSimulatedConditions(effect.conditions || [], { state, selfId: owner === state.bot ? "bot" : "player", sourceCard: source }) ||
-            !canUseSimulatedEffectUsage(state, effect, source, owner.id, true)) continue;
-        const costs = replacement.costActions;
-        if (!costs?.length && !replacement.costCount) {
-          markSimulatedEffectUsage(state, effect, source, owner.id, true);
-          return source;
-        }
-        // Leave unsupported cost sequences to the full runtime.
-        if (costs?.length !== 1) continue;
-        const costAction = costs[0];
-        if (!costAction) continue;
-        if (costAction.type === "move" && costAction.targetRef === "self" && costAction.to === "graveyard") {
-          if (!moveCardToZone(owner, source, "graveyard", owner, { state })) continue;
-          if (!owner.graveyard.includes(source)) continue;
-        } else if (costAction.type === "pay_lp") {
-          const opponent = owner === state.bot ? state.player : state.bot;
-          const cost = resolveSimulatedLpCost({ action: costAction, targetPlayer: owner, self: owner,
-            opponent, state, options: { sourceCard: source }, baseAmount: costAction.amount || 0 });
-          if (owner.lp <= cost.finalAmount) continue;
-          owner.lp -= cost.finalAmount;
-          for (const reducer of cost.appliedReducers) markSimulatedPassiveUsed(state, reducer.board, reducer.card, reducer.effect);
-        } else continue;
-        markSimulatedEffectUsage(state, effect, source, owner.id, true);
-        return source;
-      }
+  for (const entry of entries) {
+    const { owner, source, effect, firstOpportunityConsumed } = entry;
+    const replacement = effect.replacementEffect;
+    if (!isEligible(entry, firstOpportunityConsumed)) continue;
+    const markUsage = () => {
+      if (!firstOpportunityConsumed) markSimulatedEffectUsage(state, effect, source, owner.id, true);
+    };
+    const costs = replacement.costActions;
+    if (!costs?.length && !replacement.costCount) {
+      markUsage();
+      return source;
     }
+    // Leave unsupported cost sequences to the full runtime.
+    if (costs?.length !== 1) continue;
+    const costAction = costs[0];
+    if (!costAction) continue;
+    if ((costAction.type === "return_to_hand" && costAction.targetRef === "destroyed") ||
+        (costAction.type === "move" && costAction.targetRef === "destroyed" && costAction.to === "extraDeck")) {
+      const locationVersion = target.locationVersion || 0;
+      const moved = applySimulatedActions({ state, selfId: owner === state.bot ? "bot" : "player",
+        actions: [costAction], selections: { destroyed: [target] },
+        options: { ...options, sourceCard: source, effect } });
+      if (!moved || (target.locationVersion || 0) === locationVersion) continue;
+    } else if (costAction.type === "move" && costAction.targetRef === "self" && costAction.to === "graveyard") {
+      if (!moveCardToZone(owner, source, "graveyard", owner, { state })) continue;
+      if (!owner.graveyard.includes(source)) continue;
+    } else if (costAction.type === "pay_lp") {
+      const opponent = owner === state.bot ? state.player : state.bot;
+      const cost = resolveSimulatedLpCost({ action: costAction, targetPlayer: owner, self: owner,
+        opponent, state, options: { sourceCard: source }, baseAmount: costAction.amount || 0 });
+      if (owner.lp <= cost.finalAmount) continue;
+      owner.lp -= cost.finalAmount;
+      for (const reducer of cost.appliedReducers) markSimulatedPassiveUsed(state, reducer.board, reducer.card, reducer.effect);
+    } else continue;
+    markUsage();
+    return source;
   }
   return null;
 }
@@ -142,10 +178,16 @@ export function destroySimulatedCard(
 ): boolean {
   const fromZone = findCardZone(owner, card);
   if (!fromZone) return false;
+  if (options.sourceCard && getCardEffectImmunity({ game: {
+    player: state.player,
+    bot: state.bot,
+    turnCounter: state.turnCounter,
+  } }, card, sourcePlayer, { sourceCard: options.sourceCard, effectType: "destruction" }).immune) return false;
+  const inActiveZone = fromZone === "field" || fromZone === "spellTrap" || fromZone === "fieldSpell";
   const protectedFromSource = hasSimulatedProtection(card, "effect_destruction", state.turnCounter || 0,
     { ownerId: owner.id, sourceOwnerId: sourcePlayer.id });
-  if (fromZone === "field" && protectedFromSource) return false;
-  if (fromZone === "field" && !card.isFacedown && !card.effectsNegated && card.effects?.some(effect =>
+  if (inActiveZone && protectedFromSource) return false;
+  if (inActiveZone && !card.isFacedown && !card.effectsNegated && card.effects?.some(effect =>
     effect.timing === "passive" && "passive" in effect && effect.passive?.type === "conditional_protection" &&
     effect.passive.protectionType === "effect_destruction" &&
     (!effect.requireZone || effect.requireZone === fromZone) &&
@@ -153,7 +195,7 @@ export function destroySimulatedCard(
     (effect.passive.sourceOwner !== "self" || sourcePlayer.id === owner.id) &&
     (effect.passive.sourceOwner !== "opponent" || sourcePlayer.id !== owner.id) &&
     evaluateSimulatedConditions(effect.conditions || [], { state, selfId: owner === state.bot ? "bot" : "player", sourceCard: card }))) return false;
-  if (replaceSimulatedDestruction(state, card, "effect")) return false;
+  if (replaceSimulatedDestruction(state, card, "effect", options)) return false;
   const wasFaceupBeforeMove = card.isFacedown !== true;
   const effectsNegatedAtFieldExit = card.effectsNegated === true;
   if (!moveCardToZone(owner, card, "graveyard", owner, {

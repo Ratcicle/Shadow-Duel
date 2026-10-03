@@ -15,6 +15,30 @@ import type {
 import type { GamePlayer } from "../../contracts/player.js";
 import type { CanonicalZone } from "../../contracts/zones.js";
 
+/** Public/runtime projections of the two independent sources of piercing. */
+export interface PiercingCard {
+  readonly piercing?: boolean | null | undefined;
+  readonly piercingDamageMultiplier?: number | null | undefined;
+  readonly piercingGrantedByEffect?: boolean | null | undefined;
+  readonly effectsNegated?: boolean | null | undefined;
+  readonly isFacedown?: boolean | null | undefined;
+  readonly faceDown?: boolean | null | undefined;
+  readonly status?: { readonly effectsNegated?: boolean | null; readonly piercingDamage?: boolean | null } | undefined;
+}
+
+export function getActivePiercingMultiplier(card: PiercingCard | null | undefined): number {
+  if (!card || card.isFacedown || card.faceDown) return 0;
+  const granted = card.piercingGrantedByEffect === true || card.status?.piercingDamage === true;
+  if (!card.piercing && !granted) return 0;
+  if (card.effectsNegated === true || card.status?.effectsNegated === true) return granted ? 1 : 0;
+  const multiplier = Number(card.piercingDamageMultiplier ?? 1);
+  return Number.isFinite(multiplier) && multiplier > 0 ? multiplier : 1;
+}
+
+export function hasActivePiercing(card: PiercingCard | null | undefined): boolean {
+  return getActivePiercingMultiplier(card) > 0;
+}
+
 /**
  * Combat availability checks - attack validation and usage tracking.
  * Extracted from Game.js as part of B.5 modularization.

@@ -3,6 +3,7 @@ import type { SimulatedCardState, SimulatedPlayerState, SimulationGameState, Per
 import type { BattlePositionInput } from "../contracts/cards.js";
 import type { LuminarchGame, LuminarchContext, LuminarchAnalysis, LuminarchPlan, LuminarchActionGenerationContext, LuminarchPlayer } from "./luminarch/contracts.js";
 import BaseStrategy from "./BaseStrategy.js";
+import { hasActivePiercing } from "../game/combat/availability.js";
 import { sequenceActionsByPriority } from "./common/actionSequencing.js";
 import {
   estimateCardValue,
@@ -958,7 +959,7 @@ export default class LuminarchStrategy extends BaseStrategy {
     const atk = card.atk || 0;
     const def = card.def || 0;
     const isTaunt = !!card.mustBeAttacked;
-    const canPierce = !!card.piercing;
+    const canPierce = hasActivePiercing(card);
 
     if (opponentStrongest <= 0) return "attack";
     if (isTaunt && def >= atk) return "defense";

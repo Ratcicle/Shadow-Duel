@@ -3,6 +3,7 @@
 // Threat scoring system — avalia ameaças contextuais sem hardcoding
 // ─────────────────────────────────────────────────────────────────────────────
 
+import { getActivePiercingMultiplier, hasActivePiercing } from "../game/combat/availability.js";
 import {
   inferRole,
   calculateEffectUrgency,
@@ -96,14 +97,7 @@ export function calculateThreatScore(
   }
 
   // 5. COMBAT MECHANICS
-  if (card.piercing && context.hasDefenses) {
-    const piercingMultiplier = Number(card.piercingDamageMultiplier ?? 1);
-    const safePiercingMultiplier =
-      Number.isFinite(piercingMultiplier) && piercingMultiplier > 0
-        ? piercingMultiplier
-        : 1;
-    score += 0.4 * safePiercingMultiplier; // Ignora minhas defesas
-  }
+  if (context.hasDefenses) score += 0.4 * getActivePiercingMultiplier(card);
   if (card.mustBeAttacked) {
     score -= 0.5; // Taunt = pode ser contornado (menos perigoso)
   }
@@ -131,7 +125,7 @@ export function calculateThreatScore(
   if (card.isFacedown) {
     score *= 0.7; // Desconhecido = incerto, mas potencialmente perigoso
   }
-  if (card.position === "defense" && !card.piercing) {
+  if (card.position === "defense" && !hasActivePiercing(card)) {
     score *= 0.8; // Em defesa = menos ofensivo
   }
 

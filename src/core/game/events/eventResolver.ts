@@ -122,20 +122,22 @@ export async function resolveEvent<Name extends ResolvableEventName>(
     );
   }
 
-  const occurrence = this.chainSystem?.createTriggerOccurrence?.(
-    eventName,
-    payload,
-    {
-      atomicGroupId: options.atomicGroupId ?? payload?.atomicGroupId ?? null,
-      sequence: eventCounter,
-    },
-  );
   let entries: EventTriggerEntry[] = [];
   let orderRule: string | null = null;
   let onComplete: EventTriggerCompletion | null = null;
 
   let resolutionResult: EventResolutionOutcome | null = null;
   try {
+    await this.effectEngine?.applyImmediateEventEffects?.(eventName, payload);
+    const occurrence = this.chainSystem?.createTriggerOccurrence?.(
+      eventName,
+      payload,
+      {
+        atomicGroupId: options.atomicGroupId ?? payload?.atomicGroupId ?? null,
+        sequence: eventCounter,
+      },
+    );
+
     if (collectTriggersOnly) {
       let triggerPackage: EventTriggerPackage | EventTriggerEntry[] | null =
         null;

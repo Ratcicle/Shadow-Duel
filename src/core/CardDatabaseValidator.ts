@@ -7,6 +7,7 @@ import type {
   EffectActivationCase,
   EffectTarget,
   CardFilter,
+  PassiveRuleDefinition,
 } from "./contracts/effects.js";
 import type {
   ActionWalkResult,
@@ -17,6 +18,7 @@ interface ValidatorTarget extends Omit<EffectTarget, "intent"> {
   readonly intent?: string;
 }
 type ValidatorEffect = Omit<EffectDefinition, "targets"> & {
+  readonly passive?: PassiveRuleDefinition;
   readonly targets?: readonly ValidatorTarget[];
   readonly allowDamageStepActivation?: unknown;
   readonly manualActivationOnly?: unknown;
@@ -77,6 +79,7 @@ import {
   USAGE_POLICIES,
 } from "./contracts/effects.js";
 import { validateBanlistDefinition } from "./game/deck/banlist.js";
+import { getImmediateEventEffectValidationError } from "./effects/passives/passiveBuffs.js";
 
 const VALID_TIMINGS = new Set<unknown>(EFFECT_TIMINGS);
 
@@ -576,7 +579,7 @@ export function validateCardDatabase() {
           !Number.isInteger(procedure.cost.count) || procedure.cost.count < 1 ||
           procedure.cost.zones.length === 0 ||
           procedure.cost.zones.some((zone) => zone !== "field" && zone !== "graveyard") ||
-          !["banished", "graveyard"].includes(procedure.cost.destination)
+          !["banished", "graveyard", "hand"].includes(procedure.cost.destination)
         )) ||
         (procedure.oncePerTurn === true && !procedure.oncePerTurnName?.trim())
       ) {
@@ -758,6 +761,11 @@ export function validateCardDatabase() {
         );
       }
 
+      if (effect.timing === "passive" && "passive" in effect && effect.passive?.type === "event_actions") {
+        const message = getImmediateEventEffectValidationError(effect);
+        if (message) errors.push(formatIssue(card, message, effectIndex, null));
+      }
+
       if (effect.timing === "on_event" && !effect.event) {
         errors.push(
           formatIssue(
@@ -808,7 +816,8 @@ export function validateCardDatabase() {
               null,
             ),
           );
-        } else if (!EVENT_COMPATIBLE_TIMINGS.has(effect.timing)) {
+        } else if (!EVENT_COMPATIBLE_TIMINGS.has(effect.timing) &&
+          !(effect.timing === "passive" && "passive" in effect && effect.passive?.type === "event_actions")) {
           warnings.push(
             formatIssue(
               card,

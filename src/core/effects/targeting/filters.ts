@@ -17,6 +17,15 @@ import type { CanonicalZone } from "../../contracts/zones.js";
 
 type TargetingEffectType = "destruction" | "banish" | "target" | "negate";
 
+/** Context references and passive observations do not declare an activation target. */
+export function isNonTargetingEffectReference(
+  effect: EffectDefinition | null | undefined,
+  reference: string | null | undefined,
+): boolean {
+  return effect?.timing === "passive" ||
+    effect?.targets?.some(target => target.id === reference && target.intent === "reference") === true;
+}
+
 interface TargetingCard extends ActionRuntimeCard {
   immuneToOpponentEffectsUntilTurn?: number | null;
   immuneToOpponentEffects?: boolean;
@@ -575,7 +584,8 @@ export function filterTargetsByImmunity(
   }
 
   // Determine effect type from action for more specific immunity checks
-  const effectType = action.effectType || this.inferEffectType(action.type);
+  const effectType = isNonTargetingEffectReference(ctx.effect, action.targetRef)
+    ? null : action.effectType || this.inferEffectType(action.type);
 
   const { allowed, skipped, skippedReasons } = this.filterCardsListByImmunity(
     targetCards,

@@ -72,7 +72,7 @@ type MutableScopeFilters = {
 };
 type LegacyActionTargetScope = ActionTargetScope & MutableScopeFilters;
 
-function getOriginalOwner(
+export function getOriginalOwner(
   state: SimulatedRuntimeState,
   card: SimulatedCardState,
   fallback: SimulatedPlayerState,
@@ -83,7 +83,7 @@ function getOriginalOwner(
   return fallback || null;
 }
 
-function setSimulatedController(
+export function setSimulatedController(
   card: SimulatedCardState,
   player: SimulatedPlayerState,
 ): void {

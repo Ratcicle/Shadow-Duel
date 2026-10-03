@@ -6,6 +6,7 @@ import { addEffectNegation, clearEffectNegation, expireEffectNegation } from "..
  */
 
 import { isAI } from "../Player.js";
+import { isNonTargetingEffectReference } from "../effects/targeting/filters.js";
 import { applyNamedStatChange, expireFaceupStatBuffs, removeTrackedStatChange } from "../effects/actions/stats.js";
 import { suppressTemporaryDynamicStatIncreasesForDebuff } from "../effects/passives/passiveBuffs.js";
 import type { ActionOf } from "../contracts/actions.js";
@@ -809,7 +810,8 @@ export async function handleBuffStatsTemp(
     targetCards = engine.filterCardsListByImmunity(targetCards, ctx.player, {
       actionType: action.type,
       effectType:
-        statsAction.effectType || engine.inferEffectType?.(action.type),
+        isNonTargetingEffectReference(ctx.effect, action.targetRef)
+          ? null : statsAction.effectType || engine.inferEffectType?.(action.type),
       sourceCard: ctx?.source || null,
     }).allowed;
   }
@@ -1722,6 +1724,9 @@ export async function handleAddStatus(
       if (!Object.prototype.hasOwnProperty.call(card.tempStatuses, status)) {
         Reflect.set(card.tempStatuses, status, readCardProperty(card, status));
       }
+      if (status === "piercing" && !Object.hasOwn(card.tempStatuses, "piercingGrantedByEffect")) {
+        Reflect.set(card.tempStatuses, "piercingGrantedByEffect", card.piercingGrantedByEffect);
+      }
     }
 
     if (remove) {
@@ -1761,6 +1766,10 @@ export async function handleAddStatus(
       if (status === "effectsNegated") {
         clearEffectNegation(card);
       }
+      if (status === "piercing") {
+        delete card.piercingGrantedByEffect;
+        if (card.tempStatuses) Reflect.deleteProperty(card.tempStatuses, "piercingGrantedByEffect");
+      }
     } else {
       // For additive status, sum values instead of replacing
       if (ADDITIVE_STATUS.includes(status) && typeof value === "number") {
@@ -1778,6 +1787,7 @@ export async function handleAddStatus(
           addEffectNegation(card, normalizeNegateEffectsDuration(action), ctx.source, ctx.effect);
         } else clearEffectNegation(card);
       }
+      if (status === "piercing") card.piercingGrantedByEffect = value === true;
 
       modified = true;
 
@@ -2257,6 +2267,9 @@ export async function handleSwitchPosition(
 
   for (const card of targetCards) {
     if (!card || card.cardKind !== "monster") continue;
+    const cardPlayer = findCardOwner(game, player, card);
+    if (!cardPlayer?.field?.includes(card)) continue;
+    if (engine.checkImmunity?.(card, player, { sourceCard: ctx.source || null }).immune) continue;
     if (card.battlePositionLocked === true) {
       getUI(game)?.log(`${card.name} cannot change its battle position.`);
       continue;
@@ -2300,7 +2313,6 @@ export async function handleSwitchPosition(
       card.def = (card.def || 0) + switchAction.defBoost;
     }
 
-    const cardPlayer = card.owner === "player" ? game.player : game.bot;
     await game.emit?.("position_change", {
       card,
       player: cardPlayer || player,

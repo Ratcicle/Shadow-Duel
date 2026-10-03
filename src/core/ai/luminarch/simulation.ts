@@ -1,6 +1,7 @@
 import { appendSimulatedZoneCard } from "../common/zones.js";
 import { appendSimulatedFieldCard } from "../common/zones.js";
 import { estimateCardValue } from "../StrategyUtils.js";
+import { hasActivePiercing } from "../../game/combat/availability.js";
 import { buildStrategyAnalysis } from "../common/analysis.js";
 import { canUseSimulatedEffectUsage, markSimulatedEffectUsage } from "../common/simStateUtils.js";
 import {
@@ -1347,7 +1348,7 @@ function analyzeMagicSickleBattleImpact(
       ? getPiercingDamage(attacker, boostedAtk, targetStat)
       : Math.max(0, boostedAtk - targetStat);
   const createsPiercingDamage =
-    attacker.piercing &&
+    hasActivePiercing(attacker) &&
     target.position === "defense" &&
     damageAfter >= 1000;
   return {
@@ -1809,7 +1810,7 @@ export function simulateLuminarchSpellEffect(
   return simulateGenericSpellEffect(state, card, buildLuminarchSimulationOptions(state, null, options));
 }
 
-type LuminarchBattleReadCard = Pick<import("../../contracts/aiState.js").SimulatedCardShape,"name"|"archetype"|"archetypes"|"cardKind"|"atk"|"def"|"level"|"position"|"isFacedown"|"tempAtkBoost"|"tempDefBoost"|"equipAtkBonus"|"equipDefBonus"|"piercing"|"piercingDamageMultiplier"|"mustBeAttacked"|"instanceId">;
+type LuminarchBattleReadCard = Pick<import("../../contracts/aiState.js").SimulatedCardShape,"name"|"archetype"|"archetypes"|"cardKind"|"atk"|"def"|"level"|"position"|"isFacedown"|"tempAtkBoost"|"tempDefBoost"|"equipAtkBonus"|"equipDefBonus"|"piercing"|"piercingDamageMultiplier"|"piercingGrantedByEffect"|"effectsNegated"|"mustBeAttacked"|"instanceId">;
 interface LuminarchBattleReadPlayer {field?: LuminarchBattleReadCard[];lp?:number}
 interface LuminarchBattleReadState {bot?:LuminarchBattleReadPlayer|null;player?:LuminarchBattleReadPlayer|null;_simLuminarch?:{battleEvents?:Array<{tag?:string}>}}
 interface LuminarchBattleReadSummary {rewardNames?:unknown[];damage?:number;lpGains?:Array<{amount?:number}>}

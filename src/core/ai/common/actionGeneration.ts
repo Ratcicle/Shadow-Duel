@@ -13,6 +13,7 @@ import type {
   AIActivationContext,
   AIStrategyBotPort,
   AIState,
+  HandProcedureMaterialHint,
   SynchroAIAction,
 } from "../../contracts/ai.js";
 import type {
@@ -33,20 +34,66 @@ import { canActivateSpellTrapEffect } from "./previewGuards.js";
 import { canUseSimulatedEffectUsage } from "./simStateUtils.js";
 import { evaluateSimulatedConditions } from "./simulatedConditions.js";
 
-/** Costless procedures keep the same placement/usage gates in projected nodes. */
-export function getGenericCostlessHandSummonActions(game: AIState): AIActionOf<"handSummonProcedure">[] {
+/** Declarative hand procedures use only projected costs, conditions and placement. */
+export function getGenericHandSummonProcedureActions(game: AIState): AIActionOf<"handSummonProcedure">[] {
   if (!game._isPerspectiveState || (game.phase !== "main1" && game.phase !== "main2")) return [];
   const player = game.bot;
   if (!player || game.turn !== player.id) return [];
+  const field: readonly AiCardInput[] = player.field || [];
+  const graveyard: readonly AiCardInput[] = player.graveyard || [];
+  const cardMatchesFilters = (candidate: AiCardInput, filters: RuntimeCardFilter): boolean =>
+    matchesCardFilter(candidate, filters, {
+      turnCounter: game.turnCounter,
+      getCounter: (entry, type) => entry.counters?.get(type) || 0,
+      hasMatchingEquip: (entry, equipFilters, requireFaceup) => (entry.equips || []).some(equip => {
+        const owner = [game.player, game.bot].find(candidateOwner => candidateOwner?.id === equip.owner);
+        return isActiveEquipInZone(equip, entry, owner?.spellTrap || []) &&
+          (!requireFaceup || !equip.isFacedown) && cardMatchesFilters(equip, equipFilters);
+      }),
+    });
   return (player.hand || []).flatMap((card, index) => {
     const procedure = card.handSummonProcedure;
-    if (!procedure || procedure.cost || card.cardKind !== "monster") return [];
+    if (!procedure || card.cardKind !== "monster") return [];
     if (!canUseSimulatedEffectUsage(game, procedure, card, player.id, true) ||
-        !canSimulatedSpecialSummon(card, player, procedure.id, "hand") ||
-        !canSimulatedProcedureEnterField(card, player, game.player, []) ||
+        !canSimulatedSpecialSummon(card, player, procedure.id, "hand", cardMatchesFilters) ||
         !evaluateSimulatedConditions(procedure.conditions || [], { state: game, sourceCard: card, selfId: "bot" })) return [];
-    return [{ type: "handSummonProcedure", cardId: card.id, cardName: card.name, index, materials: [] }];
+    const cost = procedure.cost;
+    if (cost && (!Number.isInteger(cost.count) || cost.count < 1)) return [];
+    const count = cost?.count ?? 0;
+    const candidates = cost ? [...new Set(cost.zones.flatMap(zone => player[zone] || []))].filter(candidate =>
+      cardMatchesFilters(candidate, cost.filters) &&
+      canMoveCardToZone(player, candidate, cost.destination, player, { state: game })) : [];
+    const fieldCandidates = candidates.filter(candidate => field.includes(candidate));
+    const graveCandidates = candidates.filter(candidate => graveyard.includes(candidate));
+    const search = (fieldIndex: number, selected: AiCardInput[]): AiCardInput[] | null => {
+      if (selected.length > count) return null;
+      if (fieldIndex === fieldCandidates.length) {
+        if (selected.length + graveCandidates.length < count ||
+            !canSimulatedProcedureEnterField(card, player, game.player, selected, cardMatchesFilters)) return null;
+        return [...selected, ...graveCandidates.slice(0, count - selected.length)];
+      }
+      const without = search(fieldIndex + 1, selected);
+      if (without) return without;
+      const candidate = fieldCandidates[fieldIndex];
+      return candidate ? search(fieldIndex + 1, [...selected, candidate]) : null;
+    };
+    const selected = search(0, []);
+    if (!selected) return [];
+    const materials: HandProcedureMaterialHint[] = [];
+    for (const material of selected) {
+      if (typeof material.instanceId !== "number") return [];
+      const zone = field.includes(material) ? "field" as const : "graveyard" as const;
+      const index = (zone === "field" ? field : graveyard).indexOf(material);
+      materials.push({ zone, index, cardId: material.id, instanceId: material.instanceId });
+    }
+    return [{ type: "handSummonProcedure", cardId: card.id, cardName: card.name, index, materials }];
   });
+}
+
+/** Preserve callers whose policy deliberately considers only free bodies. */
+export function getGenericCostlessHandSummonActions(game: AIState): AIActionOf<"handSummonProcedure">[] {
+  return getGenericHandSummonProcedureActions(game)
+    .filter(action => action.index !== undefined && !game.bot?.hand?.[action.index]?.handSummonProcedure?.cost);
 }
 
 /** GY ignition candidates shared by strategies; the legacy action name also covers Traps. */

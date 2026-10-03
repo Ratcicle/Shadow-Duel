@@ -149,7 +149,7 @@ Campos frequentes:
 - `triggerTiming`: obrigatório em `on_event`; use `"if"` ou `"when"` conforme a
   regra de perda de timing.
 - `speed`: Spell Speed explícita. Se omitida, o `ChainSystem` infere por tipo/subtipo.
-- `targets`: seleções resolvidas antes das actions.
+- `targets`: seleções preparadas na ativação; alvos são declarados antes das respostas.
 - `conditions`: lista genérica avaliada por `EffectEngine.evaluateConditions`.
 - `condition`: condição legada usada por alguns triggers específicos.
 - `actions`: lista sequencial de actions. Obrigatória para efeitos ativos; `passive`
@@ -237,9 +237,10 @@ sempre exige declaração explícita.
 Uma ativação segue a ordem: validar, selecionar o custo, comprometer a fonte,
 pagar o custo, executar `activationCommitActions`, declarar os alvos e criar o
 Chain Link. Targets com
-`intent: "cost"` alimentam somente `activationCosts`; os demais são alvos
-declarados. Escolhas não-targeting durante a resolução pertencem ao contrato da
-action, não a `effects[].targets`.
+`intent: "cost"` alimentam somente `activationCosts`; `intent: "reference"`
+vincula a carta do contexto sem declarar alvo. Os demais são alvos declarados
+na ativação, antes das respostas. Escolhas sem alvo durante a resolução
+pertencem ao contrato da action, não a `effects[].targets`.
 
 ## Timings suportados
 
@@ -357,8 +358,9 @@ a versão impede afetar uma carta que saiu do campo e retornou.
 
 ## Targets
 
-Targets resolvem seleções antes das actions. Cada target gera uma entrada em
-`targets[targetId]`, consumida por `action.targetRef`.
+Os alvos de efeito em `targets` são declarados na ativação, antes das respostas.
+Cada seleção gera uma entrada em `targets[targetId]`, consumida por
+`action.targetRef`.
 
 ```js
 {
@@ -439,6 +441,14 @@ Filtros usados por conditions e actions geralmente passam por `cardMatchesFilter
 `cardId`, `name`, `cardName`, `cardKind`, `subtype`,
 `monsterType`, `type`, `attribute`, `archetype`, `level`, `levelOp` (`eq`, `lte`, `gte`,
 `lt`, `gt`), `isTuner` e `equippedWithFilters`.
+
+Controlar uma carta inclui cartas com a face para cima e cartas Baixadas.
+As características ocultas de uma carta Baixada não podem ser verificadas para
+satisfazer condições, custos ou filtros de alvos e outras seleções. Um monstro
+Baixado não pode satisfazer uma exigência de monstro do arquétipo "Miragebound"; uma exigência
+de apenas "1 monstro que você controla" admite um monstro Baixado. Essa regra
+vale para qualquer característica oculta e dispensa acrescentar "com a face
+para cima" a todos os textos que mencionam arquétipos.
 
 `condition` singular é legado, ainda usado em alguns triggers:
 
@@ -638,6 +648,15 @@ Tipos suportados atualmente:
   contra destruição enquanto as condições da fonte passarem.
 - `conditional_unaffected_by_effects`: torna a fonte não afetada pelo escopo de
   efeitos declarado enquanto as condições passarem.
+- `event_actions`: aplicação passiva imediata antes da coleta de triggers,
+  inclusive dentro de uma Chain. A capacidade inicial aceita somente
+  `event: "position_change"`, actions `buff_stats_temp` com valores numéricos,
+  duração `end_of_turn` e referências `self`, `eventCard` ou `changedCard`.
+  `requirePhase` aceita `main1` e `main2`; restrições de evento/ativação que
+  esta capacidade ainda não interpreta são rejeitadas pela validação.
+  Não aceita alvos selecionáveis, custos, OPT ou escolhas. Exige fonte ativa
+  na zona declarada, com a face para cima e sem negação; não cria Chain,
+  targeting ou ativação de efeito. Leviathan (363) usa essa forma.
 - `battle_indestructible_if_stat_match`: impede destruição em batalha quando a
   comparação de stats declarada for satisfeita.
 - `activation_negation_protection`: impede que ativações cobertas pelo escopo
@@ -835,6 +854,11 @@ Para um monstro com procedimento próprio de Invocação da mão, declare
 `conditions` aceita condições declarativas de legalidade. O campo opcional
 `cost` define quantidade, zonas de origem, filtros e destino de cada material:
 
+Os destinos aceitos são `"banished"`, `"graveyard"` e `"hand"`. Devolver um
+material à mão como custo do procedimento não é movimento causado por efeito
+de card. A posição e o espaço são escolhidos antes do compromisso; materiais
+selecionados no campo podem liberar um espaço para a Invocação.
+
 ```js
 handSummonProcedure: {
   id: "example_hand_procedure",
@@ -864,6 +888,31 @@ o procedimento continua sem limite próprio.
 Procedimentos não são ativações de efeito, não criam links de Chain e não
 incrementam contadores de ativações do material. As janelas normais de tentativa
 e conclusão de Invocação continuam disponíveis.
+
+### Substituição e primeira oportunidade
+
+`replacementEffect.consumeOnFirstOpportunity: true` consome o limite declarado
+na primeira ocorrência correspondente aos filtros, antes da escolha ou da
+verificação de pagamento. Recusa, falha posterior e aplicação de outra
+substituição não recuperam essa oportunidade. Sem esse campo, preserva-se o
+consumo após sucesso. Mirror Path (359) usa a primeira ocorrência.
+
+Fontes reais de substituição precisam continuar ativas; confirmações e
+seleções revalidam fonte, monstro protegido e materiais antes dos movimentos.
+Registros temporários já resolvidos conservam seu vínculo próprio de presença.
+O contexto de pagamento pode fornecer `validateCostPayment`: handlers que
+abrem escolhas internas devem consultá-lo depois da escolha, antes de pagar.
+No movimento que ainda pode solicitar espaço no campo, `validateBeforeMove`
+faz essa verificação após a escolha de espaço e antes da primeira mutação.
+Esses callbacks pertencem ao runtime e não são serializados no replay.
+
+### Perfuração e efeitos concedidos
+
+A perfuração declarada no monstro é suspensa sob negação dos efeitos próprios.
+Uma action `add_status` que concede `piercing` registra sua procedência em
+`piercingGrantedByEffect`; ela permanece ativa sob essa negação. Uma concessão
+simples não preserva um multiplicador inerente negado. Efeitos temporários
+restauram o flag e a procedência anteriores pelos mesmos registros de cleanup.
 
 ## Efeito armazenado e reproduzido
 
@@ -1122,10 +1171,14 @@ Para efeitos de Magia/Armadilha no Cemitério, declare `activationZones: ["grave
 
 ## Escolhas durante a resolução e referências de evento
 
-`targets` declara alvos antes das respostas. Use-o somente quando o texto pede
-um alvo. Para escolher durante a resolução, configure os filtros e a quantidade
-da action `special_summon_from_zone` ou `discard_from_hand`. `selectionId`
-identifica a escolha; `selectionMessage` permite personalizar a apresentação.
+Todo alvo de efeito é declarado na ativação, antes de qualquer resposta da
+Chain. Não existe declaração de novos alvos durante a resolução: escolhas
+posteriores são sem alvo e não publicam `effect_targeted`. Use `targets` para
+declarar alvos; as entradas com `intent: "cost"` ou `intent: "reference"` mantêm
+suas funções de custo ou vínculo de evento. Para escolher durante a resolução,
+configure os filtros e a quantidade da action `special_summon_from_zone` ou
+`discard_from_hand`. `selectionId` identifica a escolha; `selectionMessage`
+permite personalizar a apresentação.
 As decisões usam instâncias, inclusive para distinguir cópias de mesmo nome,
 e passam pelo broker para humanos e IA. Uma escolha com mínimo positivo não
 oferece cancelamento após o compromisso; mínimo zero preserva a recusa.
@@ -1193,6 +1246,30 @@ das respostas e mantém a identidade daquela presença até a resolução.
 `move.requireAll: true` valida todas as cartas selecionadas antes de movimentá-las e exige sucesso em cada movimento. Combine com `requireDestination: true` quando todos os materiais precisam chegar ao destino declarado. Um pagamento incompleto interrompe a ativação; movimentos já concluídos permanecem pagos. Movimentos, eventos e apresentação continuam sequenciais. Actions que omitem `requireAll` preservam o comportamento existente.
 
 Mantenha as escolhas de Invocação em `special_summon_from_zone`, durante a resolução. `fieldSlotsFreedBeforeSummon` considera as vagas liberadas pelo pagamento na validação prévia; `requireSource: true` Invoca a fonte original. `costTargetRef` e `conditionalMarkersOnSummon` consultam evidências tipadas capturadas durante o pagamento bem-sucedido: mudanças posteriores no nome ou na zona do material não alteram essas evidências. Os marcadores são aplicados somente após a Invocação bem-sucedida. Use `bindToFieldPresence: true` para limitá-los àquela permanência no campo; outra Invocação ou outra cópia não herda o bônus.
+
+Quando a Invocação da própria fonte precisar manter a presença da ativação,
+combine `special_summon_from_zone.requireSource: true` com
+`requiresSourceAtResolution: true` no efeito. O snapshot `sourceAtActivation`
+deve existir: a mesma cópia, controlador, zona e `locationVersion` são
+conferidos antes e depois da escolha de posição e antes do compromisso do
+movimento. Sair e retornar à mesma zona não recupera a presença original.
+As escolhas continuam no broker; uma fonte inválida faz a Invocação falhar,
+e `haltOnFailure: true` interrompe as actions seguintes. Um uso já comprometido
+com `usagePolicy: "use"` continua consumido. A verificação termina com a
+Invocação bem-sucedida, permitindo as actions posteriores da sequência.
+
+Jackal (353) e Rebel (364) usam esse contrato por decisão aprovada em
+03/10/2026. `requireSource` sozinho não impõe permanência desde a ativação;
+efeitos sem esse opt-in conservam sua política. A simulação vincula a fonte
+pelo snapshot de referência `self`, respeita a zona configurada e trata a
+falha como resultado legal, sem marcador de action não suportada.
+
+Uma condição `control_card_max` em `on_play` valida o ingresso pela ativação;
+ela não cria uma regra de permanência para toda chamada direta de `moveCard`.
+Mirror Path (359), investigação S01 encerrada em 03/10/2026, respeita o limite
+nos ingressos legais atuais humanos/IA. Movimentos diretos da API podem
+produzir duplicatas face-up. Uma nova capacidade que coloque ou transfira
+Magias/Armadilhas face-up sem ativação deve revisar esse contrato genérico.
 
 ### Histórico de ataques e modificadores persistentes
 

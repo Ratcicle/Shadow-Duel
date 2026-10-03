@@ -1,8 +1,12 @@
 import { removeTrackedStatChange } from "../actions/stats.js";
+import type { DuelEventMap, ResolvableEventName } from "../../contracts/events.js";
+import { matchesPositionChangeEvent } from "../triggers/collectors/positionChange.js";
+import { cardMatchesEventFilters, matchesZoneFilter } from "../triggers/collectors/shared.js";
 import type {
   ActionRuntimeCard,
   ActionRuntimePlayer,
   ActionConditionResult,
+  ActionHandlerEnginePort,
 } from "../../contracts/actionRuntime.js";
 import type { ConditionContext } from "../conditions/runtime.js";
 import type {
@@ -116,6 +120,128 @@ interface PassiveHost {
 }
 
 import { cardMatchesKind } from "../../Card.js";
+
+const IMMEDIATE_EVENT_EFFECT_FIELDS: ReadonlySet<string> = new Set([
+  "id", "timing", "passive", "event", "actions", "description", "conditions",
+  "requireZone", "requireFaceup", "requirePhase", "changedCardOwner",
+  "changedCardRequireFaceup", "changedCardRequireFaceupBeforeChange",
+  "eventCardFilters", "positionChangedByEffect", "positionChangeSourceFilters",
+]);
+const IMMEDIATE_EVENT_ACTION_FIELDS: ReadonlySet<string> = new Set([
+  "type", "targetRef", "atkBoost", "defBoost", "duration", "sourceName", "allowEmpty",
+]);
+// Relationship and zone gates belong to the position event matcher, rather
+// than the shared stat-card filter consumed with different runtime contexts.
+const IMMEDIATE_EVENT_CARD_FILTER_FIELDS: ReadonlySet<string> = new Set([
+  "archetype", "cardId", "cardKind", "cardName", "name", "type", "attribute",
+  "requireFaceup", "facedown", "level", "levelOp", "minLevel", "maxLevel",
+  "minAtk", "maxAtk", "minDef", "maxDef", "monsterType", "subtype",
+  "isToken", "isTuner", "minCounters", "counterType", "excludeCardName",
+  "excludeCardNames", "excludeMonsterTypes", "textIncludes",
+]);
+
+function unsupportedImmediateFields(value: object, allowed: ReadonlySet<string>): string[] {
+  return Object.keys(value).filter(key => Reflect.get(value, key) !== undefined && !allowed.has(key));
+}
+
+/** Immediate observers deliberately expose no activation or decision surface. */
+export function getImmediateEventEffectValidationError(effect: Omit<EffectDefinition, "targets"> & {
+  readonly targets?: readonly object[];
+  readonly passive?: PassiveRuleDefinition;
+}): string | null {
+  const unsupportedFields = unsupportedImmediateFields(effect, IMMEDIATE_EVENT_EFFECT_FIELDS);
+  if (unsupportedFields.length) return `event_actions does not support effect fields: ${unsupportedFields.join(", ")}.`;
+  if (effect.timing !== "passive" || effect.passive?.type !== "event_actions" ||
+      Object.keys(effect.passive).some(key => key !== "type")) {
+    return "event_actions requires passive: { type: 'event_actions' } without additional passive-rule fields.";
+  }
+  if (effect.requirePhase && (!Array.isArray(effect.requirePhase) || effect.requirePhase.length === 0 ||
+      effect.requirePhase.some(phase => phase !== "main1" && phase !== "main2"))) {
+    return "event_actions requirePhase must contain supported main phases: main1 or main2.";
+  }
+  if (effect.requireZone && !["field", "spellTrap", "fieldSpell"].includes(effect.requireZone)) {
+    return "event_actions observers are only supported in field, spellTrap or fieldSpell.";
+  }
+  if (effect.changedCardOwner === "both") return "event_actions changedCardOwner supports self, opponent or any.";
+  for (const filters of [effect.eventCardFilters, effect.positionChangeSourceFilters]) {
+    if (!filters) continue;
+    const unsupportedFilters = unsupportedImmediateFields(filters, IMMEDIATE_EVENT_CARD_FILTER_FIELDS);
+    if (unsupportedFilters.length) return `event_actions does not support card filter fields: ${unsupportedFilters.join(", ")}.`;
+  }
+  if (effect.event !== "position_change" || !effect.actions?.length || effect.targets?.length ||
+      effect.activationCosts?.length || effect.activationCommitActions?.length || effect.activationCases?.length ||
+      effect.triggerRequirement || effect.triggerTiming || effect.oncePerTurn || effect.oncePerDuel ||
+      effect.oncePerTurnName || effect.oncePerDuelName || effect.usagePolicy || effect.promptUser) {
+    return "event_actions requires position_change and direct actions without targets, costs, activation, choices or usage limits.";
+  }
+  for (const action of effect.actions) {
+    const unsupportedActionFields = unsupportedImmediateFields(action, IMMEDIATE_EVENT_ACTION_FIELDS);
+    if (unsupportedActionFields.length) return `event_actions does not support action fields: ${unsupportedActionFields.join(", ")}.`;
+    if (action.type !== "buff_stats_temp" || !action.targetRef ||
+        !["self", "eventCard", "changedCard"].includes(action.targetRef) || action.targetScope ||
+        action.atkBoostFromContext || action.atkBoostFromTarget || action.defBoostFromContext ||
+        action.storeAs || action.permanent || action.durationTurns !== undefined || action.expiresOnTurn !== undefined ||
+        (action.duration !== undefined && action.duration !== "end_of_turn") ||
+        (action.atkBoost !== undefined && !Number.isFinite(action.atkBoost)) ||
+        (action.defBoost !== undefined && !Number.isFinite(action.defBoost))) {
+      return "event_actions only supports direct buff_stats_temp on self/eventCard/changedCard with numeric stats and end_of_turn duration.";
+    }
+  }
+  return null;
+}
+
+/** Applied at the occurrence, before any trigger is captured or queued. */
+interface ImmediateEventHost extends Pick<ActionHandlerEnginePort, "game" | "applyActions"> {
+  isEffectNegated(card: ActionRuntimeCard): boolean | null | undefined;
+  cardMatchesFilters(card: ActionRuntimeCard, filters: object): boolean;
+  evaluateConditions(conditions: readonly EffectCondition[], context: import("../../contracts/actionRuntime.js").EffectContext): ActionConditionResult;
+}
+
+export async function applyImmediateEventEffects(
+  this: ImmediateEventHost,
+  eventName: ResolvableEventName,
+  payload: DuelEventMap[ResolvableEventName],
+): Promise<void> {
+  if (eventName !== "position_change" || !("fromPosition" in payload)) return;
+  const changedCard = [...this.game.player.field, ...this.game.bot.field].find(card => card === payload.card);
+  if (!changedCard) return;
+  const changedOwner = this.game.player.field.includes(changedCard) ? this.game.player : this.game.bot;
+  const changedOpponent = changedOwner === this.game.player ? this.game.bot : this.game.player;
+  const sourceReference = payload.sourceCard === undefined ? payload.source : payload.sourceCard;
+  const positionSource = [this.game.player, this.game.bot].flatMap(owner => [
+    ...owner.field, ...owner.spellTrap, ...owner.hand, ...owner.deck,
+    ...owner.graveyard, ...owner.banished, ...owner.extraDeck,
+    ...(owner.fieldSpell ? [owner.fieldSpell] : []),
+  ])
+    .find(card => card === sourceReference) || null;
+  // Snapshot observer order, then revalidate each current source before applying it.
+  for (const owner of [changedOwner, changedOpponent]) {
+    const opponent = owner === this.game.player ? this.game.bot : this.game.player;
+    const sources = [...owner.field, ...owner.spellTrap, ...(owner.fieldSpell ? [owner.fieldSpell] : [])];
+    for (const source of sources) {
+      const zone = owner.field.includes(source) ? "field" : owner.spellTrap.includes(source) ? "spellTrap" : owner.fieldSpell === source ? "fieldSpell" : null;
+      if (!zone || !["field", "spellTrap", "fieldSpell"].includes(zone) || source.isFacedown || this.isEffectNegated(source)) continue;
+      for (const effect of source.effects || []) {
+        if (!(owner.field.includes(source) || owner.spellTrap.includes(source) || owner.fieldSpell === source) || source.isFacedown || this.isEffectNegated(source)) break;
+        if (effect.timing !== "passive" || !("passive" in effect) || effect.passive?.type !== "event_actions" || effect.event !== eventName) continue;
+        if (getImmediateEventEffectValidationError(effect) || (effect.requireZone && !matchesZoneFilter(zone, effect.requireZone))) continue;
+        if (effect.requirePhase && !effect.requirePhase.some(phase => phase === (this.game.phase || "main1"))) continue;
+        if (!matchesPositionChangeEvent(effect, source, changedCard, { ...payload, sourceCard: positionSource, source: positionSource }, {
+          sourceOwnerId: owner.id, changedOwnerId: changedOwner.id, changedIsFacedown: changedCard.isFacedown === true,
+          matchesEventFilters: filters => cardMatchesEventFilters({
+            cardMatchesFilters: (_card, cardFilters) => this.cardMatchesFilters(changedCard, cardFilters || {}),
+          }, changedCard, filters, { sourceOwner: { id: owner.id }, eventOwner: { id: changedOwner.id },
+            sourceCard: source, fromZone: "field", toZone: "field" }),
+          matchesSourceFilters: (card, filters) => !!card && this.cardMatchesFilters(card, filters),
+        })) continue;
+        const ctx = { source, player: owner, opponent, effect, eventCard: changedCard, changedCard,
+          eventPlayer: changedOwner, eventOpponent: changedOpponent, effectId: effect.id };
+        if (effect.conditions && !this.evaluateConditions(effect.conditions, ctx).ok) continue;
+        await this.applyActions(effect.actions || [], ctx, { self: [source], eventCard: [changedCard], changedCard: [changedCard] });
+      }
+    }
+  }
+}
 
 export function cardHasArchetype(
   card: ActionRuntimeCard | null | undefined,

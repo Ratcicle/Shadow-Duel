@@ -1,4 +1,5 @@
 import { DAMAGE_STEP_ACTIVATION_CATEGORIES } from "../spellTrap/quickSpellRules.js";
+import { getActivePiercingMultiplier, hasActivePiercing } from "./availability.js";
 import { DAMAGE_STEP_TIMINGS } from "../../contracts/effects.js";
 import type {
   ChainOperationResult,
@@ -595,11 +596,8 @@ function calculatePiercingDamage(
   attackerAtk: number,
   targetDef: number,
 ): number {
-  if (!attacker?.piercing) return 0;
-  const multiplier = Number(attacker.piercingDamageMultiplier ?? 1);
-  const normalized =
-    Number.isFinite(multiplier) && multiplier > 0 ? multiplier : 1;
-  return Math.floor(Math.max(0, attackerAtk - targetDef) * normalized);
+  const multiplier = getActivePiercingMultiplier(attacker);
+  return Math.floor(Math.max(0, attackerAtk - targetDef) * multiplier);
 }
 
 async function applyBattleLpChange(
@@ -792,7 +790,7 @@ async function calculateBattleOutcome(
       }
     }
   } else if (attackerAtk > defenderDef) {
-    if (attacker.piercing) {
+    if (hasActivePiercing(attacker)) {
       await applyBattleLpChange(
         game,
         transaction,

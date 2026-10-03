@@ -37,6 +37,8 @@ export interface PrepareFieldPlacementOptions {
   actor?: import("./player.js").GamePlayer | null;
   allowCancel?: boolean;
   intent?: FieldPlacementIntent | null;
+  /** Cards selected as procedure costs vacate these slots after commitment. */
+  excludeCards?: readonly import("./cards.js").GameCard[];
 }
 
 export type FieldPlacementPreparation =

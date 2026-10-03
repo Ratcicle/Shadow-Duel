@@ -99,6 +99,7 @@ export interface ActionRuntimeCard {
   isTuner?: boolean;
   effects?: readonly EffectDefinition[];
   effectsNegated?: boolean | undefined;
+  piercingGrantedByEffect?: boolean | undefined;
   effectsNegatedDuration?: (string | number | null) | undefined;
   effectsNegationContributions?: import("./cards.js").EffectNegationContribution[] | undefined;
   ascensionMaterials?: ActionRuntimeCard[] | AscensionMaterialRecord[];
@@ -550,6 +551,8 @@ interface ActionContextState extends ActionNegationContext {
 
 /** Known fields on the context shared across an action sequence. */
 export interface EffectContext {
+  /** Runtime-only cost continuation guard; internal choices recheck it before payment. */
+  validateCostPayment?: () => boolean;
   player?: (ActionRuntimePlayer | null) | undefined;
   opponent?: (ActionRuntimePlayer | null) | undefined;
   source?: ActionRuntimeCard | null;
@@ -775,6 +778,7 @@ export interface ActionHandlerEnginePort {
   checkImmunity(
     card: ActionRuntimeCard,
     sourcePlayer: ActionRuntimePlayer | null | undefined,
+    options?: { sourceCard?: ActionRuntimeCard | null },
   ): { immune: boolean; reason: string | null };
   clearTargetingCache(): void;
   resolveLpCost?(
