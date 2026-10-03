@@ -1604,6 +1604,74 @@ body {
   position: relative;
 }
 
+/* Zone consultations share the viewport with the existing inspection panel.
+   Use its actual width (including user resizing), leaving both scroll surfaces
+   reachable. These rules do not change the saved preview layout. */
+body:has(:is(#gy-modal, #extradeck-modal):not(.hidden)) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  grid-template-rows: minmax(0, 1fr);
+}
+
+body:has(:is(#gy-modal, #extradeck-modal):not(.hidden)) #game-container {
+  grid-area: 1 / 1;
+}
+
+body:has(:is(#gy-modal, #extradeck-modal):not(.hidden)) #sidebar {
+  grid-area: 1 / 2;
+}
+
+:is(#gy-modal, #extradeck-modal) {
+  position: relative;
+  grid-area: 1 / 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+:is(#gy-modal, #extradeck-modal) > .modal-content {
+  width: calc(100% - 24px);
+  max-height: calc(100dvh - 24px);
+  padding: 12px;
+  overscroll-behavior: contain;
+}
+
+:is(#gy-modal, #extradeck-modal) .gy-grid {
+  gap: 8px;
+}
+
+body:has(:is(#gy-modal, #extradeck-modal):not(.hidden)):has(#sidebar[data-preview-mode="docked-left"]) {
+  grid-template-columns: max-content minmax(0, 1fr);
+}
+
+body:has(:is(#gy-modal, #extradeck-modal):not(.hidden)) #sidebar[data-preview-mode="docked-left"] {
+  grid-area: 1 / 1;
+}
+
+body:has(#sidebar[data-preview-mode="docked-left"]):has(:is(#gy-modal, #extradeck-modal):not(.hidden)) :is(#game-container, #gy-modal, #extradeck-modal) {
+  grid-area: 1 / 2;
+}
+
+/* A floating preview temporarily joins the consultation beside the list;
+   its position and dimensions resume unchanged as soon as the dialog closes. */
+body:has(:is(#gy-modal, #extradeck-modal):not(.hidden)) #sidebar[data-preview-mode="floating"] {
+  position: relative;
+  inset: auto;
+}
+
+/* Keep the consultation focused on inspection. Retain the controls' measured
+   height because the preview controller uses it for its saved size limits. */
+body:has(:is(#gy-modal, #extradeck-modal):not(.hidden)) #laboratory-duel-controls {
+  position: absolute;
+  inset-inline: var(--sidebar-pad);
+  visibility: hidden;
+}
+
+@media (max-height: 480px) {
+  body:has(:is(#gy-modal, #extradeck-modal):not(.hidden)) #preview-image {
+    width: min(100%, calc(25cqh * 3 / 4));
+  }
+}
+
 .modal-content button {
   display: block;
   width: 100%;
