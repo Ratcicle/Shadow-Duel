@@ -635,10 +635,11 @@ export function applyDiscardFromHand(
   ).slice(0, Math.min(count.max, candidates.length));
   if (chosen.length < count.min) return STOP_SIMULATION;
 
-  chosen.forEach((card) => {
-    removeCardFromZones(targetPlayer, card);
-    appendSimulatedZoneCard(targetPlayer.graveyard, card);
-  });
+  for (const card of chosen) {
+    if (!moveCardToZone(targetPlayer, card, "graveyard", targetPlayer, {
+      state, movedByEffect: true, sourceCard: options.sourceCard || null, sourcePlayer: self,
+    })) return STOP_SIMULATION;
+  }
   return;
 }
 
