@@ -230,30 +230,9 @@ export async function executeHandIgnitionAction(
     autoSelectTargets: actionActivationContext.autoSelectTargets !== false,
   };
 
-  const pipelineResult = await game.runActivationPipeline({
-    card,
-    owner: bot,
-    activationZone: "hand",
+  const pipelineResult = await game.tryActivateMonsterEffect(card, null, "hand", bot, {
+    effectId: activationContext.effectId ?? null,
     activationContext,
-    selectionKind: "monsterEffect",
-    selectionMessage: "Select target(s) for the monster effect.",
-    guardKind: "bot_hand_ignition",
-    phaseReq: ["main1", "main2"],
-    preview: () =>
-      game.effectEngine?.canActivateMonsterEffectPreview?.(
-        card, bot, "hand", null, { activationContext },
-      ),
-    oncePerTurn: {
-      card,
-      player: bot,
-      effect: handIgnitionEffect,
-    },
-    activate: (chosen, ctx, zone) =>
-      game.effectEngine.activateMonsterEffect(card, bot, chosen, "hand", ctx),
-    finalize: () => {
-      game.ui?.log?.(`Bot activates ${card.name}'s effect from hand`);
-      game.updateBoard();
-    },
   });
   // Pipeline retorna false, null, ou {success: false} quando falha
   return (
