@@ -370,6 +370,8 @@ export function renderGraveyardModal(
 ): void {
   const grid = document.getElementById("gy-grid");
   const hintEl = document.getElementById("gy-hint");
+  const title = document.querySelector("#gy-modal h2");
+  if (title) title.textContent = getUIText("ui.icons.graveyard");
 
   if (!grid) {
     console.warn("#gy-grid not found");
@@ -385,7 +387,9 @@ export function renderGraveyardModal(
   grid.innerHTML = "";
 
   if (!cards || cards.length === 0) {
-    grid.innerHTML = "<p>Graveyard is empty.</p>";
+    const empty = document.createElement("p");
+    empty.textContent = getUIText("ui.graveyard.empty");
+    grid.appendChild(empty);
     return;
   }
 
@@ -438,6 +442,8 @@ export function renderExtraDeckModal(
   options: ExtraDeckRenderOptions = {},
 ): void {
   const grid = document.getElementById("extradeck-modal-grid");
+  const title = document.querySelector("#extradeck-modal h2");
+  if (title) title.textContent = getUIText("ui.icons.extraDeck");
 
   if (!grid) {
     console.warn("#extradeck-modal-grid not found");
@@ -447,7 +453,9 @@ export function renderExtraDeckModal(
   grid.innerHTML = "";
 
   if (!cards || cards.length === 0) {
-    grid.innerHTML = "<p>Extra Deck is empty.</p>";
+    const empty = document.createElement("p");
+    empty.textContent = getUIText("ui.extraDeck.empty");
+    grid.appendChild(empty);
     return;
   }
 

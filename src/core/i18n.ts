@@ -233,6 +233,10 @@ const DEFAULT_LOCALE_TEXTS = {
     },
     graveyard: {
       selection: "Select target(s) for the graveyard effect.",
+      empty: "Graveyard is empty.",
+    },
+    extraDeck: {
+      empty: "Extra Deck is empty.",
     },
     optionalSummon: {
       prompt: "Special Summon {cardName} from your hand?",

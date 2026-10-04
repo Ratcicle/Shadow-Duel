@@ -188,7 +188,11 @@
       "thisCard": "este card"
     },
     "graveyard": {
-      "selection": "Selecione alvo(s) para o efeito no Cemitério."
+      "selection": "Selecione alvo(s) para o efeito no Cemitério.",
+      "empty": "O Cemitério está vazio."
+    },
+    "extraDeck": {
+      "empty": "O Deck Extra está vazio."
     },
     "optionalSummon": {
       "prompt": "Invocar {cardName} por Invocação-Especial da sua mão?",
