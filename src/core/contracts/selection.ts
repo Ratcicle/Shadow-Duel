@@ -185,6 +185,8 @@ export interface RawSelectionRequirement {
   intent?: SelectionIntent | null;
   allowSelf?: boolean;
   distinct?: boolean;
+  /** Physical cards selected by these groups are excluded from this group. */
+  excludeTargetRefs?: readonly string[];
   candidates?: RawSelectionCandidate[];
 }
 
@@ -198,6 +200,7 @@ export interface SelectionRequirement {
   filters: SelectionFilter;
   allowSelf: boolean;
   distinct: boolean;
+  excludeTargetRefs?: readonly string[];
   candidates: SelectionCandidate[];
 }
 

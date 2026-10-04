@@ -1,3 +1,4 @@
+import { hasFeasibleSelection, findFeasibleSelection } from "../../game/selection/contract.js";
 import { requiresUnnegatedTarget } from "../negation.js";
 import { captureReferencePresence, matchesFrozenReferencePresence, getEventEffectOrigin } from "./references.js";
 /**
@@ -868,11 +869,13 @@ export function resolveTargets(
           ? false
           : def.allowSelf !== false || def.requireThisCard === true,
       distinct: def.distinct !== false,
+      ...(excludeTargetRefs.length ? { excludeTargetRefs } : {}),
       candidates: decoratedCandidates,
     });
   }
 
   if (needsSelection) {
+    if (!hasFeasibleSelection(requirements)) return { ok: false, reason: "No valid combination of dependent targets." };
     const selectionContract: TargetSelectionContract = {
       kind: (activationContext.purpose ||
         "target") as RawSelectionContract["kind"],
@@ -913,6 +916,8 @@ export function resolveTargets(
         }
 
         const fallbackSelections: SelectionResult = {};
+        const hasDependencies = selectionContract.requirements.some(requirement => requirement.excludeTargetRefs?.length);
+        const feasible = hasDependencies ? findFeasibleSelection(selectionContract.requirements) : null;
         for (const req of selectionContract.requirements || []) {
           const min = Number(req.min ?? 0);
           const max = Number(req.max ?? min);
@@ -920,8 +925,9 @@ export function resolveTargets(
             ? req.candidates
             : [];
           const pickCount = min > 0 ? Math.min(min, candidates.length) : 0;
-          fallbackSelections[req.id] = candidates
-            .slice(0, Math.min(pickCount, max, candidates.length))
+          fallbackSelections[req.id] = (hasDependencies
+            ? candidates.filter(candidate => feasible?.[req.id]?.includes(candidate.key))
+            : candidates.slice(0, Math.min(pickCount, max, candidates.length)))
             .map((cand) => cand.key)
             .filter(Boolean);
         }

@@ -1,3 +1,4 @@
+import { findFeasibleSelection } from "./game/selection/contract.js";
 import {
   estimateCardValue,
   estimateTemporaryCombatDebuffTargetValue,
@@ -285,15 +286,15 @@ export default class AutoSelector {
     }
 
     const selections: SelectionResult = {};
+    const dependentPools = new Map<string, AutoSelectionCandidate[]>();
+    const fixedDependentCounts = new Set<string>();
     const contextWithContract: AutoSelectorContext = {
       ...context,
       selectionContract,
     };
 
     for (const requirement of selectionContract.requirements) {
-      const candidates = Array.isArray(requirement.candidates)
-        ? requirement.candidates
-        : [];
+      const candidates: AutoSelectionCandidate[] = [...(requirement.candidates || [])];
       const min = Number(requirement.min ?? 0);
       const max = Number(requirement.max ?? min);
       const id = requirement.id ?? "undefined";
@@ -318,6 +319,8 @@ export default class AutoSelector {
         if (exactCase !== undefined && chosen.length !== 1) {
           return { ok: false, reason: `Planned case is no longer valid for ${id}.` };
         }
+        dependentPools.set(id, chosen);
+        fixedDependentCounts.add(id);
         selections[id] = chosen.filter(hasCanonicalCandidateKey).map(candidate => candidate.key);
         continue;
       }
@@ -333,6 +336,7 @@ export default class AutoSelector {
         candidates,
         contextWithContract,
       );
+      dependentPools.set(id, ordered);
       const desiredCount = this.getDesiredCount(
         requirement,
         ordered,
@@ -352,12 +356,28 @@ export default class AutoSelector {
           if (chosen.length >= min && available >= required) break;
         }
         if (available < required) return { ok: false, reason: `Not enough selected counters for ${id}.` };
+        dependentPools.set(id, chosen);
+        fixedDependentCounts.add(id);
       }
       selections[requirement.id ?? "undefined"] = chosen
         .filter(hasCanonicalCandidateKey)
         .map((candidate) => candidate.key);
     }
 
+    if (selectionContract.requirements.some(requirement => requirement.excludeTargetRefs?.length)) {
+      const dependent = findFeasibleSelection(selectionContract.requirements.map(requirement => {
+        const id = requirement.id ?? "undefined";
+        const count = selections[id]?.length ?? 0;
+        return { ...requirement, id, min: fixedDependentCounts.has(id) ? count : Number(requirement.min ?? 0), max: count, preferredCount: count, candidates: dependentPools.get(id) || [] };
+      }));
+      if (!dependent) return { ok: false, reason: "No valid combination of dependent targets." };
+      // Keys come from the same canonical candidate guard used above.
+      for (const requirement of selectionContract.requirements) {
+        const id = requirement.id ?? "undefined";
+        selections[id] = (dependentPools.get(id) || []).filter(hasCanonicalCandidateKey)
+          .filter(candidate => dependent[id]?.includes(candidate.key)).map(candidate => candidate.key);
+      }
+    }
     return { ok: true, selections };
   }
 

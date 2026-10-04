@@ -1,3 +1,4 @@
+import { getEligibleSelectionCandidates } from "./contract.js";
 /**
  * Selection session management - start, advance, finish, cancel sessions.
  * Extracted from Game.js as part of B.3 modularization.
@@ -520,7 +521,8 @@ export async function finishTargetSelection(
     const chosen = selection.selections[requirement.id] || [];
     return chosen.length < requirement.min || chosen.length > requirement.max ||
       (requirement.distinct && new Set(chosen).size !== chosen.length) ||
-      chosen.some(key => !requirement.candidates.some(candidate => candidate.key === key));
+      chosen.some(key => !getEligibleSelectionCandidates(requirement, selection.requirements, selection.selections)
+        .some(candidate => candidate.key === key));
   });
   if (invalidRequirement >= 0) {
     if (this.decisionBroker?.mode === "replay") {

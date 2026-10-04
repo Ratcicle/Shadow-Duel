@@ -1,3 +1,4 @@
+import { getEligibleSelectionCandidates } from "./contract.js";
 /**
  * Selection highlighting - visual feedback for target selection.
  * Extracted from Game.js as part of B.3 modularization.
@@ -144,7 +145,7 @@ export function highlightTargetCandidates(this: SelectionHighlightHost): void {
     null;
   const isAttackSelection = this.targetSelection.kind === "attack";
   const highlightTargets: SelectionHighlightTarget[] =
-    requirement.candidates.map((cand) => ({
+    getEligibleSelectionCandidates(requirement, this.targetSelection.requirements, this.targetSelection.selections).map((cand) => ({
       key: cand.key,
       zone: cand.zone,
       controller: cand.controller,

@@ -1,3 +1,4 @@
+import { getEligibleSelectionCandidates, pruneExcludedSelections } from "../../core/game/selection/contract.js";
 import type Renderer from "../Renderer.js";
 import type { UiCard, UiCardElement, EffectDisplay } from "./types.js";
 import type { SupportedLocale } from "../../core/i18n.js";
@@ -644,11 +645,18 @@ export function showTargetSelection(
 
   const selectionState: Record<string, string[]> = {};
   const counterById = new Map<string, HTMLElement>();
+  const candidateButtons = new Map<string, Map<string, HTMLButtonElement>>();
 
   const updateConfirmState = () => {
+    pruneExcludedSelections(requirements, selectionState);
     let ready = true;
     requirements.forEach((req) => {
       const selected = selectionState[req.id] || [];
+      const eligible = new Set<string>(getEligibleSelectionCandidates(req, requirements, selectionState).map(candidate => candidate.key));
+      for (const [key, button] of candidateButtons.get(req.id) || []) {
+        button.disabled = !eligible.has(key);
+        button.classList.toggle("selected", selected.includes(key));
+      }
       const min = Number(req.min ?? 0);
       const max = Number(req.max ?? min);
       const requiredMin = allowEmpty ? 0 : min;
@@ -693,12 +701,15 @@ export function showTargetSelection(
       ? "target-list target-list-choice"
       : "target-list";
 
+    const buttons = new Map<string, HTMLButtonElement>();
+    candidateButtons.set(req.id, buttons);
     req.candidates.forEach((cand, candIndex) => {
       const btn = document.createElement("button");
       btn.className = "target-btn";
       btn.dataset.targetId = req.id;
       const selectionKey = cand.key || `${req.id}_${candIndex}`;
       btn.dataset.key = selectionKey;
+      buttons.set(selectionKey, btn);
       const isChoiceCandidate = cand.zone === "choice";
       if (isChoiceCandidate) {
         btn.classList.add("target-btn-choice");
@@ -735,6 +746,7 @@ export function showTargetSelection(
       }
 
       btn.addEventListener("click", () => {
+        if (!getEligibleSelectionCandidates(req, requirements, selectionState).some(candidate => candidate.key === selectionKey)) return;
         const arr = selectionState[req.id] || [];
         const already = arr.indexOf(selectionKey);
         if (already > -1) {
@@ -796,6 +808,8 @@ export function showTargetSelection(
   }
 
   confirmBtn.addEventListener("click", () => {
+    updateConfirmState();
+    if (confirmBtn.disabled) return;
     // validate
     for (const req of requirements) {
       const selected = selectionState[req.id] || [];

@@ -173,6 +173,12 @@ export function normalizeSelectionContract(
       candidates,
     };
 
+    const excludedRefs = readObjectValue(req, "excludeTargetRefs");
+    if (Array.isArray(excludedRefs)) {
+      const refs = excludedRefs.filter((ref): ref is string => typeof ref === "string");
+      if (refs.length) normalized.excludeTargetRefs = [...new Set(refs)];
+    }
+
     normalizedRequirements.push(normalized);
   }
 
@@ -267,4 +273,95 @@ export function mergeCanonicalSelections(
     ...(selectionState.targetSelections || {}),
     ...(selectionState.resolutionSelections || {}),
   } as CanonicalSelectionMap;
+}
+
+interface DependentRequirement<Candidate extends RawSelectionCandidate = RawSelectionCandidate> {
+  id?: string;
+  min?: number;
+  max?: number;
+  preferredCount?: number;
+  excludeTargetRefs?: readonly string[];
+  candidates?: readonly Candidate[];
+}
+type SelectionKeys = Readonly<Record<string, readonly string[]>>;
+
+function sameSelectionInstance(left: RawSelectionCandidate, right: RawSelectionCandidate): boolean {
+  const a = left.cardRef || left.card, b = right.cardRef || right.card;
+  if (a && b) {
+    if (a === b) return true;
+    if (a.duelCardId != null && b.duelCardId != null) return a.duelCardId === b.duelCardId;
+    return a.instanceId != null && a.instanceId === b.instanceId;
+  }
+  return !a && !b && left.key != null && left.key === right.key;
+}
+
+/** Retain the immutable pool; each consumer derives eligibility from current choices. */
+export function getEligibleSelectionCandidates<Candidate extends RawSelectionCandidate>(
+  requirement: DependentRequirement<Candidate>,
+  requirements: readonly DependentRequirement[],
+  selections: SelectionKeys,
+): Candidate[] {
+  const excluded = (requirement.excludeTargetRefs || []).flatMap(ref => {
+    const keys = selections[ref] || [];
+    return (requirements.find(other => other.id === ref)?.candidates || [])
+      .filter(candidate => candidate.key != null && keys.includes(candidate.key));
+  });
+  return (requirement.candidates || []).filter(candidate =>
+    !excluded.some(other => sameSelectionInstance(candidate, other)));
+}
+
+/** Upstream edits invalidate dependent choices without changing their source pools. */
+export function pruneExcludedSelections<Key extends string>(requirements: readonly DependentRequirement[], selections: Record<string, Key[]>): void {
+  for (let pass = 0; pass < requirements.length; pass++) {
+    let changed = false;
+    for (const requirement of requirements) {
+      if (!requirement.id || !requirement.excludeTargetRefs?.length) continue;
+      const allowed = new Set(getEligibleSelectionCandidates(requirement, requirements, selections).map(candidate => candidate.key));
+      const previous = selections[requirement.id] || [];
+      const next = previous.filter(key => allowed.has(key));
+      if (next.length !== previous.length) { selections[requirement.id] = next; changed = true; }
+    }
+    if (!changed) break;
+  }
+}
+
+/** Exclusions only remove candidates, so a feasible minimum-size assignment suffices. */
+export function findFeasibleSelection(requirements: readonly DependentRequirement[]): Record<string, string[]> | null {
+  const selected: Record<string, string[]> = {};
+  const ordered = [...requirements].sort((a, b) => (a.candidates?.length || 0) - (b.candidates?.length || 0));
+  const consistent = () => requirements.every(requirement => !requirement.id ||
+    (selected[requirement.id] || []).every(key => getEligibleSelectionCandidates(requirement, requirements, selected)
+      .some(candidate => candidate.key === key)));
+  const assign = (index: number): boolean => {
+    if (index === ordered.length) return true;
+    const requirement = ordered[index]!;
+    const id = requirement.id;
+    if (!id) return false;
+    const keys = [...new Set(getEligibleSelectionCandidates(requirement, requirements, selected)
+      .flatMap(candidate => typeof candidate.key === "string" ? [candidate.key] : []))];
+    const min = Math.max(0, requirement.min ?? 0);
+    const preferred = Math.min(requirement.preferredCount ?? min, requirement.max ?? min, keys.length);
+    const choose = (start: number, chosen: string[], count: number): boolean => {
+      if (chosen.length === count) {
+        selected[id] = chosen;
+        if (consistent() && assign(index + 1)) return true;
+        delete selected[id];
+        return false;
+      }
+      const remaining = count - chosen.length;
+      for (let next = start; next <= keys.length - remaining; next++) {
+        if (choose(next + 1, [...chosen, keys[next]!], count)) return true;
+      }
+      return false;
+    };
+    for (let count = preferred; count >= min; count--) {
+      if (choose(0, [], count)) return true;
+    }
+    return false;
+  };
+  return assign(0) ? selected : null;
+}
+
+export function hasFeasibleSelection(requirements: readonly DependentRequirement[]): boolean {
+  return !requirements.some(requirement => requirement.excludeTargetRefs?.length) || findFeasibleSelection(requirements) !== null;
 }

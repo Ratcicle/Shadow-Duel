@@ -157,7 +157,7 @@ async function setup(t: TestContext, seat: PlayerId, controller: Controller, sce
   };
   const replay = async () => {
     const saved = validateCanonicalReplay(JSON.parse(JSON.stringify(live.finalizeReplay({ reason: "miragebound-p2" }))));
-    assert.equal(saved.schemaVersion, 2); assert.equal(saved.engineVersion, "engine-rules-v17");
+    assert.equal(saved.schemaVersion, 2); assert.equal(saved.engineVersion, "engine-rules-v18");
     const result = await replayCanonicalDuel(saved, { game: unsafeFixture<ReplayDriverGamePort>(playback,
       "Both real Game instances bootstrap the same deterministic fixture before canonical commands execute") });
     assert.equal(result.finalStateHash, saved.result?.finalStateHash);

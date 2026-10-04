@@ -1,3 +1,4 @@
+import { getEligibleSelectionCandidates, pruneExcludedSelections } from "./contract.js";
 /**
  * Selection handlers - click handling and high-level selection API.
  * Extracted from Game.js as part of B.3 modularization.
@@ -131,9 +132,8 @@ export function handleTargetSelectionClick(
   // NOTE: We use cardRef identity match instead of zoneIndex because
   // zoneIndex can become stale if the board is re-rendered between
   // when decoratedCandidates were created and when the click occurs
-  const candidate = requirement.candidates.find(
-    (candidate) => candidate.cardRef === card,
-  );
+  const candidate = getEligibleSelectionCandidates(requirement, this.targetSelection.requirements, this.targetSelection.selections)
+    .find(candidate => candidate.cardRef === card);
 
   if (!candidate) {
     console.log("[Game] Candidate not found. Checking references:");
@@ -172,6 +172,7 @@ export function handleTargetSelectionClick(
         selections.splice(0, selections.length, candidate.key);
         console.log("[Game] Replaced selected target");
         this.targetSelection.selections[requirement.id] = selections;
+        pruneExcludedSelections(this.targetSelection.requirements, this.targetSelection.selections);
         this.highlightTargetCandidates();
         this.updateFieldTargetingProgress();
         return true;
@@ -188,6 +189,7 @@ export function handleTargetSelectionClick(
     );
   }
   this.targetSelection.selections[requirement.id] = selections;
+  pruneExcludedSelections(this.targetSelection.requirements, this.targetSelection.selections);
 
   const shouldAutoAdvance = this.targetSelection.autoAdvanceOnMax !== false;
 

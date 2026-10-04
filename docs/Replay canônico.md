@@ -1,7 +1,7 @@
 # Replay canônico
 
 O replay executável usa o formato `shadow-duel-canonical-replay`, schema `2` e
-`engineVersion: "engine-rules-v17"`. Ele é independente do relatório
+`engineVersion: "engine-rules-v18"`. Ele é independente do relatório
 estratégico. O importador aceita somente o schema `2`: relatórios v4 e replays
 de schemas anteriores não são partidas executáveis nesta versão.
 
@@ -182,7 +182,7 @@ caracteres do replay, usado para detectar divergências na reprodução.
 `validateCanonicalReplay(input)` recebe `unknown`, não muta a entrada e retorna
 a mesma referência somente depois de validar o documento. `setup`, `commands` e
 `decisions` e `engineVersion` são obrigatórios. A versão da engine deve ser
-`"engine-rules-v17"`; gravações sem essa versão são rejeitadas antes da validação
+`"engine-rules-v18"`; gravações sem essa versão são rejeitadas antes da validação
 profunda e da reprodução. `events`, `result` e `finalized` continuam opcionais
 na importação de arquivos do schema `2`; quando presentes, são validados
 profundamente. Os comandos e kinds de decisão permanecem os mesmos.
@@ -731,7 +731,7 @@ uso; o playback não transforma uma simulação não suportada em regra do jogo.
 
 ### Bloomrot T01 — escolhas de Esporos na resolução
 
-O formato atual permanece **schema 2**, com **`engine-rules-v17`** e assinatura
+Na entrega Bloomrot T01, o formato permaneceu **schema 2**, com **`engine-rules-v17`** e assinatura
 declarativa **`c30857b8`**. Os cinco efeitos aprovados de 405/407/408/413
 passaram de alvos de ativação para escolhas locais na resolução. Isso muda o
 momento das decisões e o banco declarativo; v16 é rejeitada antes de alterar o
@@ -744,8 +744,26 @@ conserva sua seleção normal. A reprodução consome as decisões gravadas sem 
 ou AutoSelector. Os 20 controles públicos novos cobrem os cinco efeitos, dois
 assentos e humano/IA, com decisões consumidas e snapshots/hashes iguais.
 
-O golden completo atual é **`accbf7e6`**; estados **`5a03f26c`/`c2ec633c`** e
+O golden completo da entrega T01 é **`accbf7e6`**; estados **`5a03f26c`/`c2ec633c`** e
 **12100 caracteres** permanecem iguais. Repor o envelope histórico
 v16/`e1469707` produz `e161e690`, preservado como regressão de serialização,
 mas esse envelope não é aceito pelo driver atual. A alteração exata do nome
 citado em PT na 419 não participa da assinatura EN/declarativa.
+
+
+### Dependências físicas entre grupos de alvos (v18)
+
+A seleção mantém as exclusões `excludeTargetRefs` no contrato normalizado.
+Cópias físicas distintas da mesma carta continuam legais. Uma combinação sem
+solução é rejeitada antes de abrir a seleção; uma escolha manual incompatível
+permanece editável e não publica decisão. A IA preserva suas preferências entre
+combinações que satisfazem todos os grupos.
+
+Isso altera o fluxo de decisões de tentativas antigas de Development Lab que
+selecionavam a mesma instância em dois grupos e só falhavam na execução. Por
+isso, gravações v17 são rejeitadas pela validação de versão, sem tentar migrar
+decisões incompatíveis. O schema permanece 2.
+
+Na v18, o golden completo passa a `1133b3cb`; os estados e o tamanho do
+envelope permanecem iguais. O golden v17 `accbf7e6` continua testado como
+envelope histórico, rejeitado para execução.
