@@ -1,5 +1,6 @@
 import { getUI } from "../shared.js";
 import { assignAutomaticFieldSlot } from "../../game/zones/placement.js";
+import type { BattlePositionInput } from "../../contracts/cards.js";
 import type { ActionOf } from "../../contracts/actions.js";
 import type {
   ActionHandlerEnginePort,
@@ -21,6 +22,7 @@ export async function performSummonFromHand(
   player: ActionRuntimePlayer,
   action: SummonFromHandAction,
   engine: ActionHandlerEnginePort,
+  preferredPosition?: BattlePositionInput | null,
 ): Promise<LegacyActionHandlerResult> {
   const game = engine.game;
 
@@ -43,7 +45,7 @@ export async function performSummonFromHand(
   const position = await Reflect.apply(
     engine.chooseSpecialSummonPosition!,
     engine,
-    [card, player, { position: action.position }],
+    [card, player, { position: action.position, preferredPosition }],
   );
 
   const moveResult =

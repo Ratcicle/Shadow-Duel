@@ -1,4 +1,3 @@
-import { isAI } from "../../Player.js";
 import type { ActionOf } from "../../contracts/actions.js";
 import type {
   ActionHandlerEnginePort,
@@ -208,25 +207,12 @@ export async function handleConditionalSummonFromHand(
     }
   }
 
-  if (isAI(player)) {
-    const summonAction = {
-      ...action,
-      position: resolveContextualSummonPosition(action, ctx, handCard),
-    };
-    return await performSummonFromHand(
-      handCard,
-      handIndex,
-      player,
-      summonAction,
-      engine,
-    );
-  }
-
   return await performSummonFromHand(
     handCard,
     handIndex,
     player,
     action,
     engine,
+    resolveContextualSummonPosition(action, ctx, handCard),
   );
 }
