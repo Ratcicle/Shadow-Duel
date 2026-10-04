@@ -1,9 +1,9 @@
 import type { AiCardInput, AiPlayerInput, AiStateInput } from "../../contracts/aiState.js";
 import type { AIActivationContext, AIDecisionPlan } from "../../contracts/ai.js";
-import type { EffectDefinition, EffectTarget } from "../../contracts/effects.js";
+import type { EffectDefinition, EffectTarget, EffectOwner, EffectZone } from "../../contracts/effects.js";
 import type { CanonicalZone } from "../../contracts/zones.js";
 import { enumerateSynchroMaterialCombos } from "../../game/summon/synchro.js";
-import { matchesTargetFilters, normalizeCount } from "../common/targetSelection.js";
+import { matchesTargetFilters, matchesTargetAttributeComparison, normalizeCount } from "../common/targetSelection.js";
 import { resolvePerspectivePlayers } from "../common/perspective.js";
 import { evaluateTechZeroVisibleBattle } from "./battle.js";
 import { TECH_ZERO_IDS as TZ, isTechZero } from "./knowledge.js";
@@ -281,16 +281,34 @@ function zoneCards(player: AiPlayerInput | undefined, zone: CanonicalZone): read
 
 function targetCandidates(target: EffectTarget, source: AiCardInput, ctx: TechZeroPolicyContext,
   selections: Readonly<Record<string, readonly (number | string)[]>>): AiCardInput[] {
-  const roles = target.owner === "opponent" ? ["opponent"] as const :
-    target.owner === "any" ? ["self", "opponent"] as const : ["self"] as const;
-  const zones = target.zones || [target.zone || "field"];
+  const allZones: readonly CanonicalZone[] = ["field", "hand", "deck", "graveyard", "banished", "extraDeck", "spellTrap", "fieldSpell"];
+  const fromZones = (spec: { owner?: EffectOwner; zone?: EffectZone; zones?: readonly EffectZone[] }) => {
+    const roles = spec.owner === "opponent" ? ["opponent"] as const :
+      spec.owner === "any" ? ["self", "opponent"] as const : ["self"] as const;
+    const zones = (spec.zones || [spec.zone || "field"]).flatMap<CanonicalZone>(zone =>
+      zone === "any" ? allZones : [zone === "removed" ? "banished" : zone]);
+    return roles.flatMap(role => zones.flatMap(zone =>
+      zoneCards(role === "self" ? ctx.player : ctx.opponent, zone).map(card => ({ card, role }))));
+  };
+  const references = (ref: string | undefined): AiCardInput[] => {
+    if (!ref) return [];
+    const ids = selections[ref] || [];
+    return fromZones({ owner: "any", zones: allZones })
+      .map(entry => entry.card).filter(card => card.instanceId != null && ids.includes(card.instanceId));
+  };
   const excluded = target.excludeTargetRef ? selections[target.excludeTargetRef] || [] : [];
+  const excludedNames = references(target.excludeNameRef).map(card => card.name);
+  const pair = target.pairedTarget;
   const result: AiCardInput[] = [];
-  for (const role of roles) for (const zone of zones) {
-    for (const card of zoneCards(role === "self" ? ctx.player : ctx.opponent, zone)) {
-      if (card.instanceId == null || excluded.includes(card.instanceId) || result.some(other => sameInstance(card, other))) continue;
-      if (matchesTargetFilters(card, target, source, role)) result.push(card);
-    }
+  for (const { card, role } of fromZones(target)) {
+    if (card.instanceId == null || excluded.includes(card.instanceId) || result.some(other => sameInstance(card, other))) continue;
+    if (excludedNames.includes(card.name) || !matchesTargetFilters(card, target, source, role)) continue;
+    if (target.compareAttribute && !matchesTargetAttributeComparison(card, references(target.compareAttribute.ref)[0], target.compareAttribute)) continue;
+    if (pair && !fromZones(pair).some(({ card: paired, role: pairedRole }) =>
+      !sameInstance(card, paired) && !(pair.excludeSameName && paired.name === card.name) &&
+      matchesTargetFilters(paired, pair, card, pairedRole) &&
+      (!pair.compareAttribute || matchesTargetAttributeComparison(paired, card, pair.compareAttribute)))) continue;
+    result.push(card);
   }
   return result;
 }

@@ -121,6 +121,35 @@ interface AttributeComparison {
   op?: ComparisonOperator;
 }
 
+export function matchesTargetAttributeComparison(
+  candidate: TargetableCard | null | undefined,
+  reference: TargetableCard | null | undefined,
+  comparison: AttributeComparison = {},
+): boolean {
+  if (!candidate || !reference) return false;
+  const attr = comparison.attr || comparison.attribute;
+  const candidateAttr =
+    comparison.targetAttr || comparison.pairedAttr || attr;
+  const referenceAttr =
+    comparison.refAttr || comparison.sourceAttr || attr;
+  if (!candidateAttr || !referenceAttr) return false;
+  const left = getCardComparableAttribute(candidate, candidateAttr);
+  const right = getCardComparableAttribute(reference, referenceAttr);
+  const op = comparison.op || "eq";
+  if (op === "eq" || op === "==" || op === "===") return left === right;
+  if (op === "neq" || op === "!=" || op === "!==") return left !== right;
+  const leftNumber = Number(left);
+  const rightNumber = Number(right);
+  if (!Number.isFinite(leftNumber) || !Number.isFinite(rightNumber)) {
+    return false;
+  }
+  if (op === "lte" || op === "<=") return leftNumber <= rightNumber;
+  if (op === "lt" || op === "<") return leftNumber < rightNumber;
+  if (op === "gte" || op === ">=") return leftNumber >= rightNumber;
+  if (op === "gt" || op === ">") return leftNumber > rightNumber;
+  return false;
+}
+
 type AiTargetFilter = Omit<
   AiCardFilter,
   "excludeCards" | "owner" | "zone" | "zones"
@@ -687,34 +716,6 @@ export function selectSimulatedTargets({
     if (selected === null) (state._simUnsupportedActions ??= []).push(`exact_selection:${id}`);
     return selected || [];
   };
-  const comparisonPasses = (
-    candidate: SimulatedCardState | null | undefined,
-    reference: SimulatedCardState | null | undefined,
-    comparison: AttributeComparison = {},
-  ): boolean => {
-    if (!candidate || !reference) return false;
-    const attr = comparison.attr || comparison.attribute;
-    const candidateAttr =
-      comparison.targetAttr || comparison.pairedAttr || attr;
-    const referenceAttr =
-      comparison.refAttr || comparison.sourceAttr || attr;
-    if (!candidateAttr || !referenceAttr) return false;
-    const left = getCardComparableAttribute(candidate, candidateAttr);
-    const right = getCardComparableAttribute(reference, referenceAttr);
-    const op = comparison.op || "eq";
-    if (op === "eq" || op === "==" || op === "===") return left === right;
-    if (op === "neq" || op === "!=" || op === "!==") return left !== right;
-    const leftNumber = Number(left);
-    const rightNumber = Number(right);
-    if (!Number.isFinite(leftNumber) || !Number.isFinite(rightNumber)) {
-      return false;
-    }
-    if (op === "lte" || op === "<=") return leftNumber <= rightNumber;
-    if (op === "lt" || op === "<") return leftNumber < rightNumber;
-    if (op === "gte" || op === ">=") return leftNumber >= rightNumber;
-    if (op === "gt" || op === ">") return leftNumber > rightNumber;
-    return false;
-  };
   const hasPairedCandidate = (
     sourceCandidate: SimulatedCardState,
     pairSpec: AiPairedTarget | null | undefined,
@@ -758,7 +759,7 @@ export function selectSimulatedTargets({
             return false;
           }
           return comparisons.every((comparison) =>
-            comparisonPasses(candidate, sourceCandidate, comparison),
+            matchesTargetAttributeComparison(candidate, sourceCandidate, comparison),
           );
         }),
       ),
@@ -892,7 +893,7 @@ export function selectSimulatedTargets({
         const comparison = effectiveTarget.compareAttribute;
         if (comparison?.ref) {
           const reference = asArray(result[comparison.ref])[0] as SimulatedCardState;
-          if (!comparisonPasses(card, reference, comparison)) return false;
+          if (!matchesTargetAttributeComparison(card, reference, comparison)) return false;
         }
         return true;
       })
