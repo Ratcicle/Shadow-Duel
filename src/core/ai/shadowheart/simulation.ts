@@ -1,5 +1,5 @@
 import { canSimSpecialSummon } from "../common/simulatedActions/summon.js";
-import { appendSimulatedZoneCard, clearSimulatedFieldPosition } from "../common/zones.js";
+import { appendSimulatedZoneCard, clearSimulatedFieldPosition, moveCardToZone } from "../common/zones.js";
 import { appendSimulatedFieldCard, refreshSimulatedFieldAuras } from "../common/zones.js";
 // ---------------------------------------------------------------------------
 // src/core/ai/shadowheart/simulation.js
@@ -803,8 +803,7 @@ function simulateCathedralEffect(
   if (!chosen) return true;
 
   markSimulatedEffectUsage(state, effect, card, "bot");
-  player.spellTrap.splice(zoneIndex, 1);
-  appendSimulatedZoneCard(player.graveyard, card);
+  if (!moveCardToZone(player, card, "graveyard", player, { state })) return true;
 
   removeFromZone(player.deck, chosen);
   applySummonState(chosen, { ...action, position: "choice" }, state, options);

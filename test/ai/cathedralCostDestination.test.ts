@@ -1,0 +1,71 @@
+import assert from 'node:assert/strict';
+import Bot from '../../src/core/Bot.js';
+import ShadowHeartStrategy from '../../src/core/ai/ShadowHeartStrategy.js';
+import type {AiLiveGamePort} from '../../src/core/contracts/aiState.js';
+import type {BotGamePort} from '../../src/core/contracts/bot.js';
+import type {BotCloneGamePort} from '../../src/core/bot/simulationBridge.js';
+import test, {type TestContext} from 'node:test';
+import {MainPhaseSession} from '../../src/core/bot/mainPhaseSession.js';
+import {createCanonicalStateSnapshot} from '../../src/core/game/replay/canonical.js';
+import {getCounterCount} from '../../src/core/ai/common/counters.js';
+import {moveCardToZone} from '../../src/core/ai/common/zones.js';
+import {required,unsafeFixture} from '../helpers/fixtures.js';
+import {createRuntimeGame,placeFieldCards} from '../helpers/game.js';
+export type Seat='player'|'bot';
+export type Mode='plain'|'galaxy-active'|'galaxy-facedown';
+export const effectId='shadow_heart_cathedral_summon_effect';
+export async function runCase(t:TestContext,seat:Seat,mode:Mode){
+ const first=new Bot('shadowheart');first.id='player';const second=new Bot('shadowheart');
+ const game=createRuntimeGame({opponentOverride:second,laboratoryMode:true,laboratoryUseBot:false,captureReplay:false,randomSeed:8851,chainResponseTimeoutMs:0});
+ game.player=unsafeFixture<typeof game.player>(first,'Concrete Bot is a Player in either mirrored seat.');
+ const live=unsafeFixture<BotGamePort&BotCloneGamePort&AiLiveGamePort>(game,'Concrete Game supports production bot generation, cloning and execution.');first.game=second.game=live;t.after(()=>game.dispose());
+ const actor=seat==='player'?first:second,opponent=seat==='player'?second:first;
+ const deck=[119,119,101,273,1,1,1,3,3,3,4,4,4,7,7,7,9,9,9,8];
+ await game.startWithDecks({exactDecks:true,preserveDeckOrder:true,initializeOnly:true,startAtDrawPhase:true,startingPlayer:seat,announceStartingPlayer:false,playerDeck:deck,botDeck:deck,playerExtraDeck:[],botExtraDeck:[]});
+ game.turn=seat;game.phase='main1';game.turnCounter=4;game.phaseDelayMs=0;game.disablePresentationDelays=true;game.waitForBoardPresentation=game.waitForPresentationDelay=game.waitForAiPresentationStep=async()=>{};
+ actor.controllerType='ai';opponent.controllerType='human';for(const p of [actor,opponent])p.deck.push(...p.hand.splice(0));
+ const take=(p:typeof actor,id:number)=>{const c=required(p.deck.find(c=>c.id===id));p.deck.splice(p.deck.indexOf(c),1);c.isFacedown=false;c.position='attack';c.summonedTurn=0;return c;};
+ const source=take(actor,119),twin=take(actor,119),recruit=required(actor.deck.find(c=>c.id===101));source.addCounter('judgment_marker',4);placeFieldCards(actor.spellTrap,source,twin);
+ const pressure=take(opponent,mode==='plain'?1:273);pressure.isFacedown=mode==='galaxy-facedown';if(pressure.isFacedown)pressure.position='defense';placeFieldCards(opponent.field,pressure);
+ for(const c of [...actor.spellTrap,...opponent.field])game.effectEngine.assignFieldPresenceId(c);
+ const zones=['hand','deck','field','spellTrap','graveyard','banished','extraDeck']as const;const inventory=()=>[actor,opponent].flatMap(p=>zones.flatMap(z=>p[z]));const all=inventory();assert.equal(all.length,40);const instanceIds=all.map(c=>c.instanceId);
+ const assertInventory=()=>{const cards=inventory();assert.equal(cards.length,40);all.forEach((c,i)=>{assert.equal(cards.filter(x=>x===c).length,1);assert.equal(c.instanceId,instanceIds[i]);});};assertInventory();
+ assert.ok(actor.strategy instanceof ShadowHeartStrategy);
+ const preview=game.effectEngine.canActivateSpellTrapEffectPreview(source,actor,'spellTrap');assert.equal(preview.ok,true);const baseline=createCanonicalStateSnapshot(game);
+ const candidates=actor.generateMainPhaseActions(live);const action=required(candidates.find(a=>a.type==='spellTrapEffect'&&a.cardId===119&&a.zoneIndex===actor.spellTrap.indexOf(source)));assert.equal(action.type,'spellTrapEffect');assert.equal(action.effectId,effectId);assert.equal(actor.filterValidActionsForCurrentState([action],live).length,1);
+ assert.deepEqual(createCanonicalStateSnapshot(game),baseline,'generation and preflight do not mutate runtime');
+ const state=actor.cloneGameState(live);const simSource=required(state.bot.spellTrap.find(c=>c.instanceId===source.instanceId)),simRecruit=required(state.bot.deck.find(c=>c.instanceId===recruit.instanceId));assert.notEqual(simSource,source);assert.equal(getCounterCount(simSource),4);
+ const control=actor.cloneGameState(live),controlSource=required(control.bot.spellTrap.find(c=>c.instanceId===source.instanceId));assert.equal(moveCardToZone(control.bot,controlSource,'graveyard',control.bot,{state:control}),true);
+ const findZone=(p:typeof state.bot,c:typeof simSource)=>zones.find(z=>p[z].includes(c))??'missing';
+ const movementControl={sourceZone:findZone(control.bot,controlSource),counters:getCounterCount(controlSource),locationVersion:controlSource.locationVersion};
+ actor.strategy.simulateMainPhaseAction(state,action);const simCards=[state.bot,state.player].flatMap(p=>zones.flatMap(z=>p[z]));assert.equal(simCards.length,40);assert.equal(new Set(simCards.map(c=>c.instanceId)).size,40);assert.ok(state.bot.spellTrap.some(c=>c.instanceId===twin.instanceId));assert.deepEqual(createCanonicalStateSnapshot(game),baseline,'projection cannot mutate Game');
+ const simulated={sourceZone:findZone(state.bot,simSource),sourceCounters:getCounterCount(simSource),sourceVersion:simSource.locationVersion,recruitZone:findZone(state.bot,simRecruit),recruitPosition:simRecruit.position,recruitId:simRecruit.instanceId,field:state.bot.field.map(c=>c.instanceId),graveyard:state.bot.graveyard.map(c=>c.instanceId),banished:state.bot.banished.map(c=>c.instanceId),unsupported:state._simUnsupportedActions||[]};
+ const events:unknown[]=[],usage:unknown[]=[],windows:unknown[]=[],observerErrors:unknown[]=[];let inventoryChecks=0;
+ const initialSourceVersion=source.locationVersion;
+ game.on('card_moved',e=>{try{assertInventory();inventoryChecks++;}catch(error){observerErrors.push(error);}events.push({event:'move',cardId:e.card.id,instance:e.card.instanceId,from:e.fromZone,to:e.toZone,context:e.contextLabel??null,counters:e.card===source?source.getCounter('judgment_marker'):null});});
+ game.on('effect_usage',e=>{if(e.effectId===effectId)usage.push({status:e.status,playerId:e.playerId,policy:e.policy});});
+ game.on('effect_activated',e=>{if(e.effectId===effectId)events.push({event:'activate',sourceInGY:actor.graveyard.includes(source),sourceBanished:actor.banished.includes(source),sourceCounters:source.getCounter('judgment_marker')});});
+ game.on('after_summon',e=>{if(e.card===recruit)events.push({event:'summon',instance:e.card.instanceId,from:e.fromZone,method:e.method});});
+ const saved=game.chainSystem.addToChain.bind(game.chainSystem);game.chainSystem.addToChain=(...args)=>{const link=saved(...args);assert.ok(link !== false, 'valid prepared Cathedral activation');if(link?.effectId===effectId)windows.push({stage:'published',paid:link.costPayment?.status,sourceInGY:actor.graveyard.includes(source),sourceBanished:actor.banished.includes(source),sourceCounters:source.getCounter('judgment_marker'),snapshotCounters:link.activationContext?.sourceAtActivation?.counters});return link;};
+ game.ui.showChainResponseModal=async()=>null;game.ui.showConfirmPrompt=async()=>false;game.ui.showSpecialSummonPositionModal=(_c,choose)=>choose('defense');
+ const session=new MainPhaseSession(actor,live,async()=>{});const success=await session.execute(action,session.capture());
+ const runtime={success,sourceZone:zones.find(z=>actor[z].includes(source))??'missing',sourceCounters:source.getCounter('judgment_marker'),sourceVersion:source.locationVersion,recruitZone:zones.find(z=>actor[z].includes(recruit))??'missing',recruitPosition:recruit.position,recruitId:recruit.instanceId,field:actor.field.map(c=>c.instanceId),graveyard:actor.graveyard.map(c=>c.instanceId),banished:actor.banished.map(c=>c.instanceId),usageAvailable:game.chainSystem.checkActivationUsage(source,actor,required(source.effects.find(e=>e.id===effectId))).ok};
+ assert.equal(success,true);assert.equal(runtime.sourceZone,mode==='galaxy-active'?'banished':'graveyard');assert.equal(runtime.sourceVersion,initialSourceVersion+1);assert.equal(runtime.recruitZone,'field');assert.equal(runtime.usageAvailable,false);assert.equal(movementControl.sourceZone,runtime.sourceZone);assert.equal(movementControl.locationVersion,runtime.sourceVersion);assert.equal(windows.length,1);assert.deepEqual(Reflect.get(Object(windows[0]),'snapshotCounters'),{judgment_marker:4});assert.equal(Reflect.get(Object(windows[0]),'paid'),'paid');assert.equal(usage.length,1);assert.equal(Reflect.get(Object(usage[0]),'status'),'consumed');assert.equal(session.counts.executions,1);assert.ok(actor.spellTrap.includes(twin));assert.equal(twin.getCounter('judgment_marker'),0);assertInventory();assert.deepEqual(observerErrors,[]);assert.equal(game.chainSystem.chainStack.length,0);assert.equal(game.targetSelection,null);assert.equal(game.effectUsageReservations.size,0);
+ return {seat,mode,action,preview,simulated,movementControl,runtime,events,windows,usage,executions:session.counts.executions,inventoryChecks,inventoryCount:40};
+}
+
+for (const seat of ['player', 'bot'] as const) for (const mode of ['plain', 'galaxy-active', 'galaxy-facedown'] as const) {
+ test(`Cathedral cost follows runtime destination (${seat}/${mode})`, {timeout: 20000}, async t => {
+  const result = await runCase(t, seat, mode);
+  assert.equal(result.simulated.recruitId, result.runtime.recruitId);
+  assert.equal(result.simulated.recruitZone, result.runtime.recruitZone);
+  assert.equal(result.simulated.recruitPosition, result.runtime.recruitPosition);
+  assert.equal(result.simulated.sourceZone, result.runtime.sourceZone);
+  assert.equal(result.simulated.sourceCounters, result.runtime.sourceCounters);
+  assert.equal(result.simulated.sourceVersion, result.runtime.sourceVersion);
+  assert.deepEqual(result.simulated.unsupported, []);
+  assert.deepEqual(result.simulated.field, result.runtime.field);
+  assert.deepEqual(result.simulated.graveyard, result.runtime.graveyard);
+  assert.deepEqual(result.simulated.banished, result.runtime.banished);
+ });
+}
