@@ -32,7 +32,7 @@ interface LifecycleProgressTracker {
 }
 
 type LifecycleHost = PhaseTransitionHost &
-  Pick<FullGameHost, "phaseDelayMs" | "effectEngine" | "cardActivationHistory"> & {
+  Pick<FullGameHost, "phaseDelayMs" | "effectEngine" | "cardActivationHistory" | "replayMode"> & {
   _arenaTracker?: LifecycleProgressTracker | null;
   devLog?(code: string, detail?: unknown): void;
   resetOncePerTurnUsage(reason?: string): void;
@@ -73,6 +73,7 @@ function getErrorMessage(error: unknown): string {
 function scheduleAiMoveAfterPaint(game: LifecycleHost, actor: GamePlayer) {
   if (
     !isAI(actor) ||
+    game.replayMode === "playback" ||
     game.gameOver ||
     game.isDisposed?.() ||
     !hasAiMove(actor)
@@ -88,6 +89,7 @@ function scheduleAiMoveAfterPaint(game: LifecycleHost, actor: GamePlayer) {
   const runMove = () => {
     if (
       game.isDisposed?.() ||
+      game.replayMode === "playback" ||
       game.gameOver ||
       game.turn !== expectedTurn ||
       game.phase !== expectedPhase

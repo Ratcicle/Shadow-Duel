@@ -62,7 +62,7 @@ export type PhaseTransitionHost = Pick<
 };
 
 type TransitionHost = PhaseTransitionHost &
-  Pick<FullGameHost, "ui" | "aiActionDelayMs"> & {
+  Pick<FullGameHost, "ui" | "aiActionDelayMs" | "replayMode"> & {
   guardActionStart(
     options: { actor: GamePlayer; kind: "phase_change" },
     logToRenderer?: boolean,
@@ -121,6 +121,7 @@ function hasAiMove(actor: GamePlayer): actor is GamePlayer & AiMoveCapability {
 function scheduleAiMoveAfterPaint(game: TransitionHost, actor: GamePlayer) {
   if (
     !isAI(actor) ||
+    game.replayMode === "playback" ||
     game.gameOver ||
     game.isDisposed?.() ||
     !hasAiMove(actor)
@@ -133,6 +134,7 @@ function scheduleAiMoveAfterPaint(game: TransitionHost, actor: GamePlayer) {
   const runMove = () => {
     if (
       game.isDisposed?.() ||
+      game.replayMode === "playback" ||
       game.gameOver ||
       game.turn !== expectedTurn ||
       game.phase !== expectedPhase
