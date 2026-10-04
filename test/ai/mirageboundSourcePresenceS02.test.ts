@@ -56,15 +56,15 @@ function relocate(fixture: ReturnType<typeof scenario>, mode: "removed" | "retur
 
 for (const id of [353, 364] as const) for (const seat of seats) for (const swapped of [false, true]) {
   for (const mutation of ["intact", "removed", "returned", "other_copy", "foreign_owner"] as const) {
-    test(`S02 queued hand trigger keeps its source presence (${id}, ${seat}, swapped=${swapped}, ${mutation})`, () => {
+    test(`S02 diagnoses source movement before queued publication (${id}, ${seat}, swapped=${swapped}, ${mutation})`, () => {
       const f = scenario(id, seat, swapped);
       let completed = 0, summons = 0;
       const events = attachSimulatedEventEmitter(f.state, { enableSimulatedEvents: true,
         onSimulatedEvent: event => { if (event === "spell_activated" && mutation !== "intact") relocate(f, mutation); },
         onEffectActivated: () => { completed++; }, onAfterSpecialSummon: () => { summons++; },
         chooseSpecialSummonPosition: () => "defense" });
-      // The second observation changes real simulated zones after the first
-      // trigger was collected, before the shared queue resolves it.
+      // Observation hooks run before the queue prepares its activations.
+      // This is the documented deferred-source projection boundary.
       events.emitSimulatedEvents?.([f.occurrence, { event: "spell_activated", payload: {} }]);
       const succeeds = mutation === "intact";
       assert.equal(f.owner.field.includes(f.source), succeeds);
@@ -72,9 +72,10 @@ for (const id of [353, 364] as const) for (const seat of seats) for (const swapp
       assert.equal(completed, succeeds ? 1 : 0);
       assert.equal(f.target.position, succeeds && id === 353 ? "attack" : "defense");
       if (succeeds) assert.equal(f.source.position, "defense");
-      assert.equal(canUseSimulatedEffectUsage(f.state, f.effect, f.source, f.owner.id, true), false,
-        "the committed named use remains consumed after a fizzle");
-      assert.deepEqual(f.state._simUnsupportedActions || [], []);
+      assert.equal(canUseSimulatedEffectUsage(f.state, f.effect, f.source, f.owner.id, true), !succeeds,
+        "an unsupported pre-publication branch must not consume the named use");
+      assert.deepEqual(f.state._simUnsupportedActions || [], succeeds ? [] : ["deferred_trigger_source_presence"]);
+      if (!succeeds) return; // Unsupported projections cannot establish later state parity.
       const lateCopy = clone(new Card(cardDefinition(id), f.owner.id));
       f.owner.hand.push(lateCopy);
       events.emitSimulatedEvent?.(f.occurrence.event, f.occurrence.payload);
@@ -109,6 +110,64 @@ for (const id of [353, 364] as const) for (const seat of seats) for (const swapp
       assert.deepEqual(f.state._simUnsupportedActions || [], []);
     });
   }
+}
+
+// A second optional trigger from the non-turn player is published in the same
+// queue and resolves first. Its completion callback probes the post-prepare
+// boundary without bypassing dispatcher ordering or usage commitment.
+function publishThenRelocate(f: ReturnType<typeof scenario>, mode: Parameters<typeof relocate>[1]) {
+  const blocker = clone(new Card(cardDefinition(1), f.opponent.id));
+  blocker.effects = [{ id: "s02_publication_order_control", timing: "on_event", event: "spell_activated",
+    triggerRequirement: "optional", triggerTiming: "if", activationZones: ["field"],
+    actions: [{ type: "heal", amount: 1, player: "self" }] }];
+  placeSimulationCards(f.opponent.field, blocker);
+  let moved = 0, completed = 0;
+  const events = attachSimulatedEventEmitter(f.state, { enableSimulatedEvents: true,
+    chooseSpecialSummonPosition: () => "defense",
+    onEffectActivated: payload => {
+      if (Reflect.get(payload, "card") === blocker) {
+        assert.equal(canUseSimulatedEffectUsage(f.state, f.effect, f.source, f.owner.id, true), false,
+          "the source activation must already be committed before the earlier link moves it");
+        relocate(f, mode);
+        moved++;
+      } else if (Reflect.get(payload, "card") === f.source) completed++;
+    } });
+  events.emitSimulatedEvents?.([f.occurrence, { event: "spell_activated", payload: {} }]);
+  assert.equal(moved, 1);
+  return { events, completed };
+}
+
+for (const id of [353, 364] as const) for (const seat of seats) for (const swapped of [false, true]) {
+  for (const mutation of ["removed", "returned", "other_copy", "foreign_owner"] as const) {
+    test(`S02 published bound trigger fizzles after source movement (${id}, ${seat}, swapped=${swapped}, ${mutation})`, () => {
+      const f = scenario(id, seat, swapped);
+      const { events, completed } = publishThenRelocate(f, mutation);
+      assert.equal(f.owner.field.includes(f.source), false);
+      assert.equal(f.target.position, "defense", "a failed self summon must not continue to change position");
+      assert.equal(completed, 0);
+      assert.equal(canUseSimulatedEffectUsage(f.state, f.effect, f.source, f.owner.id, true), false);
+      assert.deepEqual(f.state._simUnsupportedActions || [], []);
+      const lateCopy = clone(new Card(cardDefinition(id), f.owner.id));
+      f.owner.hand.push(lateCopy);
+      events.emitSimulatedEvent?.(f.occurrence.event, f.occurrence.payload);
+      assert.equal(f.owner.field.includes(lateCopy), false, "a later copy cannot reuse the committed named activation");
+      assert.deepEqual(f.state._simUnsupportedActions || [], []);
+    });
+  }
+}
+
+for (const seat of seats) for (const swapped of [false, true]) for (const policy of ["absent", false] as const) {
+  test(`S02 published unbound trigger survives a source round trip (${seat}, swapped=${swapped}, ${policy})`, () => {
+    const f = scenario(364, seat, swapped);
+    const { requiresSourceAtResolution: _boundPolicy, ...unboundEffect } = f.effect;
+    f.source.effects = [{ ...unboundEffect, ...(policy === "absent" ? {} : { requiresSourceAtResolution: false }) }];
+    const { completed } = publishThenRelocate(f, "returned");
+    assert.equal(completed, 1);
+    assert.ok(f.owner.field.includes(f.source));
+    assert.equal(f.source.position, "defense");
+    assert.equal(canUseSimulatedEffectUsage(f.state, f.effect, f.source, f.owner.id, true), false);
+    assert.deepEqual(f.state._simUnsupportedActions || [], []);
+  });
 }
 
 for (const seat of seats) for (const swapped of [false, true]) {
@@ -156,7 +215,7 @@ for (const id of [353, 364] as const) for (const seat of seats) {
 }
 
 for (const seat of seats) for (const policy of ["absent", false] as const) {
-  for (const swapped of [false, true]) test(`S02 keeps an unbound queued self summon after source movement (${seat}, ${policy}, swapped=${swapped})`, () => {
+  for (const swapped of [false, true]) test(`S02 diagnoses pre-publication movement even for an unbound queued self summon (${seat}, ${policy}, swapped=${swapped})`, () => {
     const f = scenario(364, seat, swapped);
     const { requiresSourceAtResolution: _boundPolicy, ...unboundEffect } = f.effect;
     f.source.effects = [{ ...unboundEffect, ...(policy === "absent" ? {} : { requiresSourceAtResolution: false }) }];
@@ -164,8 +223,9 @@ for (const seat of seats) for (const policy of ["absent", false] as const) {
       onSimulatedEvent: event => { if (event === "spell_activated") relocate(f, "returned"); },
       chooseSpecialSummonPosition: () => "defense" });
     events.emitSimulatedEvents?.([f.occurrence, { event: "spell_activated", payload: {} }]);
-    assert.ok(f.owner.field.includes(f.source)); assert.equal(f.source.position, "defense");
-    assert.deepEqual(f.state._simUnsupportedActions || [], []);
+    assert.equal(f.owner.field.includes(f.source), false);
+    assert.equal(canUseSimulatedEffectUsage(f.state, f.effect, f.source, f.owner.id, true), true);
+    assert.deepEqual(f.state._simUnsupportedActions || [], ["deferred_trigger_source_presence"]);
   });
 
   test(`S02 keeps source summons that move the source as a cost (${seat}, ${policy})`, () => {
