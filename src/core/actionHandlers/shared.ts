@@ -1057,6 +1057,7 @@ export async function selectCardsFromZone({
       selectionContract: selectionData.selectionContract,
       requirementId: selectionData.requirementId,
       kind: selectionData.kind || selectionData.selectionContract.kind,
+      cancelAsEmptySelection: resolvedMin === 0,
       autoSelectorOptions: selectionData.autoSelectorOptions,
     });
 
