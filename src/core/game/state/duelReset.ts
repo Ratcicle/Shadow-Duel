@@ -4,6 +4,7 @@
  * Central duel-state reset helpers for reusing a Game instance safely.
  */
 
+import { cancelPendingPhaseRetry } from "../turn/transitions.js";
 import type {
   FullGameHost,
   GamePlayer,
@@ -82,6 +83,7 @@ export function resetDuelState(
   reason = "reset",
   options: DuelResetOptions = {},
 ) {
+  cancelPendingPhaseRetry(this);
   this.forceClearTargetSelection(reason);
   this.fieldPlacementGeneration++;
   this.fieldPlacementAbort?.abort();

@@ -16,6 +16,7 @@ import type { FullGameHost, GamePlayer } from "../../contracts/gameRuntime.js";
 import type { DrawCardsResult } from "../deck/draw.js";
 import type { ActionGuardResult } from "../actions/guard.js";
 import {
+  cancelPendingPhaseRetry,
   enterPhase,
   leaveCurrentPhase,
   phaseWorkIsPending,
@@ -284,6 +285,7 @@ export async function endTurn(this: LifecycleHost) {
     actor === this.player,
   );
   if (!guard.ok) return guard;
+  cancelPendingPhaseRetry(this);
 
   if (this.phase !== "end") return await this.skipToPhase("end");
   const leaveResult = await leaveCurrentPhase(this, { nextPhase: null });

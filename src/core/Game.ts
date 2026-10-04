@@ -1,3 +1,4 @@
+import { cancelPendingPhaseRetry } from "./game/turn/transitions.js";
 import Player from "./Player.js";
 import Bot from "./Bot.js";
 import EffectEngine from "./EffectEngine.js";
@@ -389,6 +390,7 @@ class Game {
 
   dispose(reason: string = "dispose"): void {
     if (this.disposed) return;
+    cancelPendingPhaseRetry(this);
     this.forceClearTargetSelection(reason);
     this.fieldPlacementGeneration++;
     this.fieldPlacementAbort?.abort();

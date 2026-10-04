@@ -72,6 +72,33 @@ type TransitionHost = PhaseTransitionHost &
   notify(event: "phase_skip", payload: unknown): unknown;
 };
 
+// A blocked request owns one retry, scoped to its actor and phase occurrence.
+// Reset/dispose cancel it explicitly, including restarts with identical counters.
+const phaseRetries = new WeakMap<object, { timer: ReturnType<typeof setTimeout>; isCurrent(): boolean }>();
+
+export function cancelPendingPhaseRetry(game: object): void {
+  const pending = phaseRetries.get(game);
+  if (pending) clearTimeout(pending.timer);
+  phaseRetries.delete(game);
+}
+
+function schedulePhaseRetry(game: TransitionHost, actor: GamePlayer): void {
+  if (phaseRetries.get(game)?.isCurrent()) return;
+  cancelPendingPhaseRetry(game);
+  const turn = game.turn, phase = game.phase, counter = game.turnCounter;
+  const isCurrent = () => !game.isDisposed?.() && !game.gameOver && isAI(actor) &&
+    game.turn === turn && game.phase === phase && game.turnCounter === counter &&
+    (game.turn === "player" ? game.player : game.bot) === actor;
+  const delay = typeof game.aiActionDelayMs === "number" && Number.isFinite(game.aiActionDelayMs)
+    ? game.aiActionDelayMs : 250;
+  const pending = { isCurrent, timer: setTimeout(() => {
+    if (phaseRetries.get(game) !== pending) return;
+    phaseRetries.delete(game);
+    if (isCurrent()) void game.nextPhase();
+  }, delay) };
+  phaseRetries.set(game, pending);
+}
+
 interface PhaseLeaveSuccess {
   ok: true;
   currentPhase: GamePhase;
@@ -253,6 +280,7 @@ export async function enterPhase(
   nextPhase: GamePhase,
   previousPhase: GamePhase | null,
 ) {
+  cancelPendingPhaseRetry(game);
   const currentTurn = game.turn;
   const player = currentTurn === "player" ? game.player : game.bot;
   const opponent = player === game.player ? game.bot : game.player;
@@ -332,18 +360,12 @@ export async function nextPhase(
       (guard.code === "BLOCKED_RESOLVING" ||
         guard.code === "BLOCKED_SELECTION_ACTIVE")
     ) {
-      const retryDelayMs =
-        typeof this.aiActionDelayMs === "number" &&
-        Number.isFinite(this.aiActionDelayMs)
-          ? this.aiActionDelayMs
-          : 250;
-      setTimeout(() => {
-        if (!this.isDisposed?.()) this.nextPhase();
-      }, retryDelayMs);
+      schedulePhaseRetry(this, actor);
     }
     return guard;
   }
 
+  cancelPendingPhaseRetry(this);
   const next = this.getNextPhase?.(this.phase) ?? getNextPhase(this.phase, this);
   if (!next) return await this.endTurn();
   const leaveResult = await leaveCurrentPhase(this, { nextPhase: next });
@@ -382,7 +404,8 @@ export async function skipToPhase(
   const currentIdx = PHASE_ORDER.indexOf(this.phase);
   const targetIdx = PHASE_ORDER.indexOf(finalTargetPhase as GamePhase);
   if (currentIdx === -1 || targetIdx === -1) return;
-  if (targetIdx < currentIdx) return;
+  if (targetIdx < currentIdx || (targetIdx === currentIdx && finalTargetPhase !== "end")) return;
+  cancelPendingPhaseRetry(this);
   if (targetIdx === currentIdx) {
     return finalTargetPhase === "end" ? await this.endTurn() : undefined;
   }
