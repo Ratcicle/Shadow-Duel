@@ -563,7 +563,8 @@ export function applyDeSynchro(
     materials.length <= freeZones &&
     materials.every((card) => canSimSpecialSummon(card, player, "special"));
 
-  moveCardToZone(owner, synchroCard, "extraDeck");
+  const destination = getOriginalOwner(state, synchroCard, owner);
+  if (!moveCardToZone(destination, synchroCard, "extraDeck", owner, { state })) return;
   if (!canReviveAll) return;
 
   (materials as SimulatedCardState[]).forEach((material) => {
