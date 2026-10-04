@@ -377,13 +377,6 @@ function sameCardSet(
   return remaining.length === 0;
 }
 
-function selectionMatchesCombo(
-  materials: readonly GameCard[] = [],
-  combos: readonly (readonly GameCard[])[] = [],
-): boolean {
-  return combos.some((combo) => sameCardSet(materials, combo));
-}
-
 function getSynchroConfig(
   card: SynchroCardView | null | undefined,
 ): RuntimeSynchroConfig {
@@ -591,17 +584,27 @@ function buildCombinations<Value>(
   return result;
 }
 
+/** The accepted enumerator combo is ordered by role, independently of click order. */
+export function getAcceptedSynchroMaterialRoles<Card extends SynchroCardView>(
+  acceptedCombo: readonly Card[],
+  synchroCard: SynchroCardView,
+): ReadonlyMap<Card, "tuner" | "nonTuner"> {
+  const tunerCount = getSynchroConfig(synchroCard).tunerCount;
+  return new Map(acceptedCombo.map((card, index) => [card, index < tunerCount ? "tuner" : "nonTuner"]));
+}
+
 function captureSynchroMaterialMetadata(
   card: GameCard,
   player: GamePlayer,
   game: SynchroHost,
+  usedAsTuner: boolean,
 ): SynchroMaterialMetadata {
   return {
     instanceId: getCardInstanceId(card),
     cardId: card?.id ?? null,
     name: card?.name || null,
     level: getCardLevel(card),
-    isTuner: isTuner(card),
+    isTuner: usedAsTuner,
     ownerId: card?.owner || player?.id || null,
     controllerId: player?.id || card?.controller || card?.owner || null,
     usedOnTurn: Number.isFinite(Number(game?.turnCounter))
@@ -1095,7 +1098,8 @@ export async function performSynchroSummon(
     this.ui?.log?.(check.reason || "Cannot Synchro Summon this card.");
     return { success: false, reason: check.reason || "synchro_unavailable" };
   }
-  if (!selectionMatchesCombo(materials, check.materialCombos)) {
+  const acceptedCombo = check.materialCombos.find(combo => sameCardSet(materials, combo));
+  if (!acceptedCombo) {
     this.ui?.log?.("Invalid Synchro materials.");
     return { success: false, reason: "invalid_synchro_materials" };
   }
@@ -1111,8 +1115,9 @@ export async function performSynchroSummon(
         ? "defense"
         : "attack";
 
+  const materialRoles = getAcceptedSynchroMaterialRoles(acceptedCombo, synchroCard);
   const materialMetadata = materials.map((card) =>
-    captureSynchroMaterialMetadata(card, player, this),
+    captureSynchroMaterialMetadata(card, player, this, materialRoles.get(card) === "tuner"),
   );
   const synchroSummonContextId =
     options.synchroSummonContextId || nextSynchroSummonContextId(this);

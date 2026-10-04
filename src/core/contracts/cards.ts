@@ -187,6 +187,7 @@ export interface SynchroMaterialRecord {
   cardId: RawCardDefinitionId | CardDefinitionId | null;
   name: string | null;
   level: number;
+  /** Role used by the accepted material allocation; independent of printed card.isTuner. */
   isTuner: boolean;
   ownerId: PlayerId | string | null;
   controllerId: PlayerId | string | null;

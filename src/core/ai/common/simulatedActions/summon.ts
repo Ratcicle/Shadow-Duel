@@ -1,3 +1,4 @@
+import { getAcceptedSynchroMaterialRoles } from "../../../game/summon/synchro.js";
 import { applyCostSummonMarker, applyPaidCostSummonMarkers } from "../../../effects/costs/summonMarkers.js";
 import { appendSimulatedZoneCard } from "../zones.js";
 import { getNormalSummonTributeOptions } from "../../../game/summon/tributeValue.js";
@@ -259,13 +260,14 @@ function captureSimSynchroMaterialMetadata(
   card: SimulatedCardState,
   player: SimulatedPlayerState,
   state: SimulatedRuntimeState,
+  usedAsTuner: boolean,
 ): SynchroMaterialRecord {
   return {
     instanceId: getSimCardInstanceId(card),
     cardId: card?.id ?? null,
     name: card?.name || null,
     level: Number(card?.level || 0),
-    isTuner: card?.isTuner === true,
+    isTuner: usedAsTuner,
     ownerId: card?.owner || player?.id || null,
     controllerId: player?.id || card?.controller || card?.owner || null,
     usedOnTurn: Number.isFinite(Number(state?.turnCounter))
@@ -629,7 +631,7 @@ export function simulateSynchroSummon(
   const ids = choice.materialInstanceIds;
   if (new Set(ids).size !== ids.length) return false;
   const legal = getGenericSynchroActions({ bot: player, player: opponent, turn: state.turn, turnCounter: state.turnCounter, phase: "main1", _isPerspectiveState: true })
-    .some(action => action.synchroInstanceId === choice.synchroInstanceId && action.position === position &&
+    .find(action => action.synchroInstanceId === choice.synchroInstanceId && action.position === position &&
       action.materialInstanceIds.length === ids.length && action.materialInstanceIds.every(id => ids.includes(id)));
   if (!legal) return false;
   const synchroCard = player.extraDeck.find(card => card.instanceId === choice.synchroInstanceId);
@@ -637,7 +639,10 @@ export function simulateSynchroSummon(
     .filter((card): card is SimulatedCardState => !!card);
   if (!synchroCard || materials.length !== ids.length) return false;
   if (!materials.every(material => canMoveCardToZone(player, material, "graveyard", player, { state }))) return false;
-  const metadata = materials.map(card => captureSimSynchroMaterialMetadata(card, player, state));
+  const acceptedCombo = legal.materialInstanceIds.map(id => materials.find(card => card.instanceId === id))
+    .filter((card): card is SimulatedCardState => !!card);
+  const materialRoles = getAcceptedSynchroMaterialRoles(acceptedCombo, synchroCard);
+  const metadata = materials.map(card => captureSimSynchroMaterialMetadata(card, player, state, materialRoles.get(card) === "tuner"));
   const contextId = `sim:synchro:${state._simGeneratedInstanceCounter = (state._simGeneratedInstanceCounter || 0) + 1}`;
   const actionContext = { ...options.actionContext, synchroSummonContextId: contextId };
   const deferred: SimulatedEventOccurrence[] = [];

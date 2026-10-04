@@ -767,3 +767,20 @@ decisões incompatíveis. O schema permanece 2.
 Na v18, o golden completo passa a `1133b3cb`; os estados e o tamanho do
 envelope permanecem iguais. O golden v17 `accbf7e6` continua testado como
 envelope histórico, rejeitado para execução.
+
+### Papel aceito dos materiais Synchro
+
+`synchroMaterials[].isTuner` descreve o papel utilizado pela combinação aceita,
+não o tipo impresso da carta. A combinação canônica conserva primeiro os Tuners
+e depois os não-Tuners; a ordem manual continua determinando o movimento dos
+materiais. O registro captura os papéis antes de enviar qualquer material.
+
+Isoladamente, essa correção de metadados derivados manteve schema 2 /
+engine-rules-v17 na comparação com a base c21. A integração preserva a versão
+engine-rules-v18 exigida pelas dependências entre grupos de alvos; gravações v17
+continuam rejeitadas. O snapshot canônico e os comandos não serializam esse campo, e os consumidores
+de De-Synchro continuam usando a identidade física dos materiais. A comparação
+com gravações da base c21 nos dois assentos manteve o envelope, hashes e decisões
+idênticos; a reprodução reconstrói o papel corrigido. A impressão digital usada
+pela busca da IA inclui os metadados e muda conforme o estado corrigido; playback
+consome as decisões gravadas sem recalcular a busca.
