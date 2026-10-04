@@ -3,7 +3,7 @@ import { isAI } from "../../Player.js";
 import { recordMaterialEffectIdentity } from "../../game/summon/materialStats.js";
 import { captureSourceSnapshot } from "../../chain/link.js";
 import { walkActionList } from "../../actionHandlers/actionWalker.js";
-import { isTriggerSourceLegal } from "./collectors/shared.js";
+import { findTriggerSourceLocation, isTriggerSourceLegal, matchesEquipHostExitSourcePresence } from "./collectors/shared.js";
 import type { CardAction } from "../../contracts/actions.js";
 import type { RawSelectionRequirement } from "../../contracts/selection.js";
 import type {
@@ -392,10 +392,11 @@ export function buildTriggerActivationContext(
 ): TriggerActivationContext {
   const activationZone =
     zoneOverride || this.findCardZone(player, sourceCard) || "field";
+  const physicalSource = findTriggerSourceLocation(this, sourceCard, player);
   const sourceAtTrigger: object | null = Reflect.apply(
     captureSourceSnapshot,
     undefined,
-    [sourceCard, player, activationZone],
+    [sourceCard, physicalSource.player, physicalSource.zone || activationZone],
   );
   return {
     fromHand: activationZone === "hand",
@@ -473,7 +474,12 @@ export function buildTriggerEntry(
 
   const sourceZone = options.activationContext?.activationZone ||
     options.activationZone || this.findCardZone(owner, sourceCard);
-  if (!isTriggerSourceLegal(sourceCard, effect, sourceZone)) return null;
+  const equipHostExitBinding = options.activationContext?.equipHostExitBinding;
+  if (equipHostExitBinding) {
+    const physical = findTriggerSourceLocation(this, sourceCard, owner);
+    if (!matchesEquipHostExitSourcePresence(sourceCard, effect, equipHostExitBinding, physical.player.id, physical.zone)) return null;
+  }
+  if (!isTriggerSourceLegal(sourceCard, effect, sourceZone, equipHostExitBinding)) return null;
 
   if (
     !deferActivationChecks && isAI(owner) && effect.triggerRequirement === "optional" &&
@@ -507,7 +513,7 @@ export function buildTriggerEntry(
       activationContext.sourceAtTrigger ||
       Reflect.apply(captureSourceSnapshot, undefined, [
         sourceCard,
-        owner,
+        findTriggerSourceLocation(this, sourceCard, owner).player,
         activationContext.activationZone || options.activationZone || null,
       ]),
     selectionKind: "triggered",
@@ -621,8 +627,11 @@ export function buildTriggerEntry(
       if (activationCtx.committed !== true) {
         const liveSourceZone = activationCtx.activationZone === "temporary"
           ? "temporary"
-          : this.findCardZone(owner, sourceCard) || activationCtx.activationZone || null;
-        if (!isTriggerSourceLegal(sourceCard, effect, liveSourceZone)) {
+          : findTriggerSourceLocation(this, sourceCard, owner).zone || activationCtx.activationZone || null;
+        const physical = findTriggerSourceLocation(this, sourceCard, owner);
+        if ((activationCtx.equipHostExitBinding && !matchesEquipHostExitSourcePresence(sourceCard, effect,
+          activationCtx.equipHostExitBinding, physical.player.id, physical.zone)) ||
+            !isTriggerSourceLegal(sourceCard, effect, liveSourceZone, activationCtx.equipHostExitBinding)) {
           return { success: false, needsSelection: false, activationSkipped: true, reason: "Trigger source is no longer legal." };
         }
       }

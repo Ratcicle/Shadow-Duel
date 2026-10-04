@@ -25,6 +25,7 @@ import type {
   DuelEventMap,
   EmitOptions,
   EventPayloadBase,
+  EventTriggerReferenceSnapshots,
   EventResolutionResult,
   InformationalEventMap,
   InformationalEventName,
@@ -525,6 +526,7 @@ export interface ActionRuntimeGamePort {
 }
 
 interface ActionContextState extends ActionNegationContext {
+  eventReferenceSnapshots?: EventTriggerReferenceSnapshots[];
   timing?: string | undefined;
   autoSelectTargets?: boolean | undefined;
   autoSelectSingleTarget?: boolean | undefined;

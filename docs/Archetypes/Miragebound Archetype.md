@@ -42,7 +42,7 @@ O lote P1 corrige a Invocação de Dancer, a contagem do trigger de Scout para A
 
 O lote P2 implementa o procedimento de False King, as referências de Oasis e o debuff imediato de Leviathan, a primeira oportunidade e revalidação das substituições, os OPT por cópia, o retorno obrigatório de cada Rebel, a perfuração sob negação e a escolha resolutiva de False Horizon. A descrição aprovada do Rebel (364) foi preservada. As regressões P2 e P1 passaram; replay usa schema 2 / engine-rules-v10.
 
-**Complemento da validação P2 — 03/10/2026:** foi removido o `usagePolicy` residual do retorno obrigatório de Rebel, que não possui OPT e bloqueava a inicialização no validador do banco. O HOPT da Invocação da mão e o retorno de cada cópia foram preservados. A regressão inclui a validação da definição e o retorno de duas cópias nos dois assentos, com humano/IA e replay. A main integrada mantém schema 2 / engine-rules-v14, com assinatura `db5833d7`.
+**Complemento da validação P2 — 03/10/2026:** foi removido o `usagePolicy` residual do retorno obrigatório de Rebel, que não possui OPT e bloqueava a inicialização no validador do banco. O HOPT da Invocação da mão e o retorno de cada cópia foram preservados. A regressão inclui a validação da definição e o retorno de duas cópias nos dois assentos, com humano/IA e replay. Na validação desse complemento, a main integrada usava schema 2 / engine-rules-v14, com assinatura `db5833d7`.
 
 O lote **P3** alinhou os textos de Jackal/Vanishing Step aos alvos prévios, a recuperação de Heat Haze à escolha sem alvo e o trigger de Sovereign à opcionalidade aprovada. O PT do primeiro efeito de Oasis agora explicita "a cada turno". As definições dos efeitos foram preservadas nessa etapa; EN/PT e este catálogo estão sincronizados.
 
@@ -172,8 +172,7 @@ Nível 4, Spellcaster, Earth, 1300/1800.
 
 Nível 6, Fiend, Earth, 2200/1800.
 
-> Você pode Invocar este card por Invocação-Especial da sua mão ao devolver 1 monstro "Vinculados à Miragem" que você controla para a mão. Você só pode tentar Invocar "Falso Rei dos Vinculados à Miragem" por Invocação-Especial uma vez por turno dessa forma, mesmo que a Invocação seja negada.
->
+> Você pode Invocar este card por Invocação-Especial da sua mão ao devolver 1 monstro "Vinculados à Miragem" que você controla para a mão. Você só pode Invocar por Invocação-Especial "Falso Rei dos Vinculados à Miragem" uma vez por turno desta forma.
 > Você pode escolher 1 monstro que seu oponente controla; mude a posição de batalha dele. Você só pode usar este efeito de "Falso Rei dos Vinculados à Miragem" uma vez por turno.
 
 **364 — Rebelde dos Vinculados à Miragem / Miragebound Rebel**

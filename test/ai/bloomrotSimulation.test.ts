@@ -42,12 +42,12 @@ test("registered Bloomrot simulation summons Myco-Weaver and resolves its token 
   assert.equal(fixture.bot.field.length, 0);
 });
 
-test("registered Bloomrot simulation follows its summon with Rootling hand ignition", () => {
+test("registered Bloomrot simulation follows its summon with Rootling hand procedure", () => {
   const fixture = scenario(["Bloomrot Myco-Weaver", "Bloomrot Rootling"]);
   const state = fixture.clone();
   fixture.strategy.simulateMainPhaseAction(state, { type: "summon", index: 0, cardName: "Bloomrot Myco-Weaver" });
   fixture.strategy.simulateMainPhaseAction(state, {
-    type: "handIgnition", index: 0, cardName: "Bloomrot Rootling", effectId: "bloomrot_rootling_special_summon_hand",
+    type: "handSummonProcedure", index: 0, cardId: 402, cardName: "Bloomrot Rootling", materials: [],
   });
 
   assert.deepEqual(state.bot.field.map(card => card.name), ["Bloomrot Myco-Weaver", "Bloomrot Token", "Bloomrot Rootling"]);

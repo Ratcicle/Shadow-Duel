@@ -5,8 +5,10 @@ import { recordNormalSummonForTurn } from "../../../Player.js";
 import { resolveExactInstanceSelection } from "../../../AutoSelector.js";
 import { appendSimulatedFieldCard } from "../zones.js";
 import { getEffectiveAtk } from "../cardStats.js";
+import { emitSimulatedMove, getOriginalOwner } from "./movement.js";
+import type { SimulatedMoveReceipt } from "../zones.js";
 import { getGenericSynchroActions } from "../actionGeneration.js";
-import { attachSimulatedEventEmitter, canSimulatedProcedureEnterField } from "../simulation.js";
+import { attachSimulatedEventEmitter, canSimulatedProcedureEnterField, createDeferredSimulatedEventFrame } from "../simulation.js";
 import {
   checkSpecialSummonEligibility,
   establishProperSummon,
@@ -319,6 +321,8 @@ function emitSimulatedCardToGrave({
   options.emitSimulatedEvent?.("card_moved", {
     card,
     player,
+    fromPlayer: player,
+    toPlayer: player,
     fromZone,
     toZone: "graveyard",
     movedByEffect: false,
@@ -641,7 +645,8 @@ export function simulateSynchroSummon(
     const effectsNegatedAtFieldExit = material.effectsNegated === true;
     if (!moveCardToZone(player, material, "graveyard", player, { state })) return false;
     const toZone = findCardZone(player, material) || "removed";
-    const payload = { card: material, player, fromZone: "field", toZone,
+    const payload = { card: material, player, fromPlayer: player, toPlayer: toZone === "removed" ? null : player,
+      fromZone: "field", toZone,
       wasFaceupBeforeMove, effectsNegatedAtFieldExit, movedByEffect: false,
       contextLabel: "synchro_material", sourceCard: synchroCard, actionContext };
     if (toZone === "graveyard") {
@@ -813,6 +818,8 @@ export function applySpecialSummonFromHandWithCost(
       options.emitSimulatedEvent?.("card_moved", {
         card,
         player: owner,
+        fromPlayer: owner,
+        toPlayer: owner,
         fromZone,
         toZone: costDestination,
         movedByEffect: action.costMovedByEffect === true,
@@ -989,6 +996,8 @@ export function applyBounceAndSummon(
     options.emitSimulatedEvent?.("card_moved", {
       card: sourceCard,
       player: targetPlayer,
+      fromPlayer: targetPlayer,
+      toPlayer: targetPlayer,
       fromZone: "field",
       toZone: findCardZone(targetPlayer, sourceCard) || "removed",
       movedByEffect: true,
@@ -1054,7 +1063,8 @@ export function applyNormalSummonFromHand(ctx: SimulatedActionHandlerContext<"no
   const events: SimulatedEventOccurrence[] = [];
   for (const tribute of tributes) {
     if (!moveCardToZone(player, tribute, "graveyard", player, { state })) return;
-    events.push({ event: "card_to_grave", payload: { card: tribute, player, fromZone: "field", wasTributed: true, context: "tribute_summon_cost" } });
+    events.push({ event: "card_to_grave", payload: { card: tribute, player, fromPlayer: player, toPlayer: player,
+      fromZone: "field", wasTributed: true, context: "tribute_summon_cost" } });
   }
   const card = entry.card;
   if (!moveCardToZone(player, card, "field", player, { state })) return;
@@ -1190,11 +1200,12 @@ export function applyPolymerizationFusionSummon(
     selections,
     state,
     selfId,
-    options,
+    options: suppliedOptions,
     self,
     opponent,
     applySimulatedActions,
   } = ctx;
+  const options = attachSimulatedEventEmitter(state, { ...suppliedOptions, enableSimulatedEvents: true });
   const targetPlayer = resolveActionPlayer(action, self, opponent);
   const otherPlayer = targetPlayer === self ? opponent : self;
   const materialPool = rankCandidates([
@@ -1282,37 +1293,59 @@ export function applyPolymerizationFusionSummon(
   const fusionEntry = fusionEntries[0];
   if (!fusionEntry) return;
   const { fusionCard, materials } = fusionEntry;
-  for (const material of materials) {
+  const frame = createDeferredSimulatedEventFrame(state, { ...options, enableSimulatedEvents: true });
+  const eventOptions = frame.options;
+  const materialOptions: SimulatedActionOptions = { ...eventOptions, sourceCard: null };
+  try {
+  const hasFieldToGraveTrigger = (card: SimulatedCardState) => targetPlayer.field.includes(card) &&
+    card.effects?.some(effect => effect.timing === "on_event" && effect.event === "card_to_grave" &&
+      (!effect.fromZone || effect.fromZone === "any" || effect.fromZone === "field")) === true;
+  const materialSendOrder = [...materials].sort((a, b) => Number(hasFieldToGraveTrigger(a)) - Number(hasFieldToGraveTrigger(b)));
+  for (const material of materialSendOrder) {
     const fromZone = findCardZone(targetPlayer, material);
     if (fromZone !== "hand" && fromZone !== "field") return;
-    if (!moveCardToZone(targetPlayer, material, "graveyard", targetPlayer, { state })) return;
-    if (targetPlayer.graveyard.includes(material)) {
-      updateSimulatedSentToGraveMaterialMarker({
-        card: material,
-        state,
-        player: targetPlayer,
-        fromZone,
-        contextLabel: "fusion_material",
-      });
-    }
+    const wasFaceupBeforeMove = material.isFacedown !== true;
+    const effectsNegatedAtFieldExit = fromZone === "field" && material.effectsNegated === true;
+    const destination = fromZone === "field" ? getOriginalOwner(state, material, targetPlayer) : targetPlayer;
+    const receipt: { value: SimulatedMoveReceipt | null } = { value: null };
+    if (!moveCardToZone(destination, material, "graveyard", targetPlayer, { state,
+      ...(eventOptions.emitSimulatedEvent ? { emitSimulatedEvent: eventOptions.emitSimulatedEvent } : {}),
+      onMoveCommitted: result => { receipt.value = result; } })) return;
+    emitSimulatedMove(material, state, targetPlayer, destination, fromZone, wasFaceupBeforeMove,
+      effectsNegatedAtFieldExit, materialOptions, "fusion_material", false, receipt.value);
   }
   if (!canSimSpecialSummon(fusionCard, targetPlayer, "fusion") ||
       !canSimulatedProcedureEnterField(fusionCard, targetPlayer, otherPlayer, []) ||
       !canMoveCardToZone(targetPlayer, fusionCard, "field", targetPlayer, { state })) return;
-  removeCardFromZones(targetPlayer, fusionCard);
+  const receipt: { value: SimulatedMoveReceipt | null } = { value: null };
+  if (!moveCardToZone(targetPlayer, fusionCard, "field", targetPlayer, { state,
+    onMoveCommitted: result => { receipt.value = result; } })) return;
   applySummonState(
     fusionCard,
     {
       ...action,
-      position: (action as LegacyPolymerizationAction).position || "attack",
+      position: (action as LegacyPolymerizationAction).position || "choice",
     },
     state,
     targetPlayer,
     options,
   );
   (fusionCard as MutableSummonedCard).summonMethod = "fusion";
-  if (!appendSimulatedFieldCard(targetPlayer.field, fusionCard)) return;
+  fusionCard.lastSummonMethod = "fusion";
+  fusionCard.lastSummonedFromZone = "extraDeck";
+  (fusionCard as MutableSummonedCard).summonProcedure = "fusion";
+  establishProperSummon(fusionCard, { summonProcedure: "fusion", sourceZone: "extraDeck" });
   recordCompletedSimulatedSummon(state, { card: fusionCard, player: targetPlayer, method: "fusion" });
+  eventOptions.emitSimulatedEvent?.("after_summon", {
+    card: fusionCard, player: targetPlayer, opponent: otherPlayer,
+    method: "fusion", summonProcedure: "fusion", fromZone: "extraDeck", position: fusionCard.position,
+    sourceCard: null, source: null, actionContext: options.actionContext,
+  });
+  emitSimulatedMove(fusionCard, state, targetPlayer, targetPlayer, "extraDeck", true, false,
+    { ...eventOptions, sourceCard: null }, "fusion_summon", false, receipt.value);
+  // Fusion is an effect resolution. Its observed occurrences enter one SEGOC
+  // group after placement, preserving the dispatcher's mandatory/optional LIFO.
+  frame.finishResolution();
   options.onFusionSummon?.({
     state,
     player: targetPlayer,
@@ -1322,4 +1355,7 @@ export function applyPolymerizationFusionSummon(
     sourceCard: options.sourceCard,
   });
   return;
+  } finally {
+    frame.finishResolution();
+  }
 }

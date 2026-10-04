@@ -1,4 +1,6 @@
 import { appendSimulatedZoneCard } from "../zones.js";
+import type { SimulatedMoveReceipt } from "../zones.js";
+import { getOriginalOwner, setSimulatedController } from "./movement.js";
 import { applySimulatedActions } from "./index.js";
 import { resolveExactInstanceSelection } from "../../../AutoSelector.js";
 import { getEffectiveAtk } from "../cardStats.js";
@@ -54,6 +56,19 @@ import type { SimulatedActionHandlerContext } from "./shared.js";
 import type { SimulatedActionOptions, SimulatedRuntimeState } from "./shared.js";
 import { hasSimulatedProtection } from "./lifecycle.js";
 import { canUseSimulatedEffectUsage, markSimulatedEffectUsage } from "../simStateUtils.js";
+
+/** The modeled replacement path supports only free or single-action costs. */
+export function isSupportedSimulatedDestructionReplacement(replacement: ActionReplacementEffect): boolean {
+  if (replacement.type !== "destruction" || (replacement.reason && !["any", "battle", "effect"].includes(replacement.reason)) ||
+    replacement.costCount || replacement.costFilters || replacement.costZone || replacement.costOwner || replacement.costDestination) return false;
+  if (!replacement.costActions?.length) return true;
+  if (replacement.costActions.length !== 1) return false;
+  const cost = replacement.costActions[0];
+  return !!cost && ((cost.type === "move" && ((cost.targetRef === "self" && cost.to === "graveyard") ||
+    (cost.targetRef === "destroyed" && cost.to === "extraDeck"))) ||
+    (cost.type === "return_to_hand" && cost.targetRef === "destroyed") || cost.type === "pay_lp" ||
+    (cost.type === "remove_counters_from_field" && !cost.targetRef));
+}
 
 /** Resolve supported equipment costs after battle damage has been calculated. */
 export function replaceSimulatedBattleDestruction(
@@ -127,6 +142,7 @@ function replaceSimulatedDestruction(
   for (const entry of entries) {
     const { owner, source, effect, firstOpportunityConsumed } = entry;
     const replacement = effect.replacementEffect;
+    if (!isSupportedSimulatedDestructionReplacement(replacement)) continue;
     if (!isEligible(entry, firstOpportunityConsumed)) continue;
     const markUsage = () => {
       if (!firstOpportunityConsumed) markSimulatedEffectUsage(state, effect, source, owner.id, true);
@@ -157,6 +173,10 @@ function replaceSimulatedDestruction(
       if (owner.lp <= cost.finalAmount) continue;
       owner.lp -= cost.finalAmount;
       for (const reducer of cost.appliedReducers) markSimulatedPassiveUsed(state, reducer.board, reducer.card, reducer.effect);
+    } else if (costAction.type === "remove_counters_from_field") {
+      const paid = applySimulatedActions({ state, selfId: owner === state.bot ? "bot" : "player", actions: [costAction],
+        selections: { self: [source], destroyed: [target] }, options: { ...options, sourceCard: source, effect } });
+      if (!paid) continue;
     } else continue;
     markUsage();
     return source;
@@ -198,11 +218,22 @@ export function destroySimulatedCard(
   if (replaceSimulatedDestruction(state, card, "effect", options)) return false;
   const wasFaceupBeforeMove = card.isFacedown !== true;
   const effectsNegatedAtFieldExit = card.effectsNegated === true;
-  if (!moveCardToZone(owner, card, "graveyard", owner, {
+  const destination = inActiveZone ? getOriginalOwner(state, card, owner) : owner;
+  const receipt: { value: SimulatedMoveReceipt | null } = { value: null };
+  if (!moveCardToZone(destination, card, "graveyard", owner, {
     state, movedByEffect: true, sourceCard: options.sourceCard || null, sourcePlayer,
+    ...(options.emitSimulatedEvent ? { emitSimulatedEvent: options.emitSimulatedEvent } : {}),
+    onMoveCommitted: result => { receipt.value = result; },
   })) return false;
-  const toZone = findCardZone(owner, card) || "removed";
-  const payload = { card, player: owner, fromZone, toZone, wasFaceupBeforeMove,
+  const toZone = receipt.value?.destinationPresence.zone ?? findCardZone(destination, card) ?? "removed";
+  const toPlayer = toZone === "removed" ? null : receipt.value
+    ? [state.player, state.bot].find(player => player.id === receipt.value?.destinationPresence.controllerId) ?? null
+    : destination;
+  const payload = { card, player: toPlayer,
+    fromPlayer: owner, toPlayer,
+    fromZone, toZone, wasFaceupBeforeMove,
+    locationVersion: receipt.value?.destinationPresence.locationVersion ?? card.locationVersion ?? 0,
+    ...(receipt.value?.equipBindingsAtFieldExit.length ? { equipBindingsAtFieldExit: receipt.value.equipBindingsAtFieldExit } : {}),
     effectsNegatedAtFieldExit, wasDestroyed: true, destroyCause: "effect",
     destroySource: options.sourceCard || null, sourceCard: options.sourceCard || null,
     movedByEffect: true, actionContext: options.actionContext };
@@ -332,18 +363,31 @@ export function applyDestroyAndDamageByTargetAtk(
 
 export function applyDestroyTargetedCards(
   ctx: SimulatedActionHandlerContext<"destroy_targeted_cards">,
-): void | typeof STOP_SIMULATION {
+): boolean | void | typeof STOP_SIMULATION {
   const { action, opponent, self, state, options } = ctx;
-  if (action.targetRef || action.targetCountFromContext || action.minTargets !== 0) return applyDestroy(ctx);
+  if (action.targetRef || (action.minTargets !== 0 && !action.targetCountFromContext)) return applyDestroy(ctx);
   const zones = (action.zones || ["field", "spellTrap", "fieldSpell"])
     .filter(zone => zone === "field" || zone === "spellTrap" || zone === "fieldSpell");
   const candidates = getActionCandidates(opponent, {
     ...action, zones,
   }, "field", options);
-  const max = Math.max(0, Math.floor(action.maxTargets || 1));
-  const exact = options.activationContext?.decisions?.selections?.destroy_targets;
+  let count = action.maxTargets ?? 1;
+  if (action.targetCountFromContext) {
+    const spec = action.targetCountFromContext;
+    let value = Number(options.actionContext && Reflect.get(options.actionContext, spec.key) || 0);
+    if (!Number.isFinite(value)) value = 0;
+    const divisor = Number(spec.divideBy ?? 0), multiplier = Number(spec.multiplier ?? 1);
+    if (Number.isFinite(divisor) && divisor !== 0) value /= divisor;
+    if (Number.isFinite(multiplier)) value *= multiplier;
+    count = spec.round === "ceil" ? Math.ceil(value) : spec.round === "round" ? Math.round(value) : Math.floor(value);
+  }
+  const optional = action.minTargets === 0;
+  const requestedMax = Math.max(0, Math.floor(count));
+  const max = Math.min(requestedMax, candidates.length);
+  const min = Math.min(max, Math.max(0, optional ? 0 : action.targetCountFromContext ? requestedMax : action.minTargets ?? max));
+  const exact = optional ? options.activationContext?.decisions?.selections?.destroy_targets : undefined;
   const selected = exact !== undefined
-    ? resolveExactInstanceSelection(candidates, exact, { min: 0, max })
+    ? resolveExactInstanceSelection(candidates, exact, { min, max: requestedMax })
     : rankCandidates(candidates, "harm", {
         ...options, targetPreference: getTargetPreference(options, "destroy_targets"),
       }).slice(0, max);
@@ -351,7 +395,19 @@ export function applyDestroyTargetedCards(
     (state._simUnsupportedActions ??= []).push("exact_selection:destroy_targets");
     return STOP_SIMULATION;
   }
-  for (const card of selected) destroySimulatedCard(card, opponent, self, state, options);
+  if (!optional && (requestedMax <= 0 || candidates.length === 0)) return STOP_SIMULATION;
+  const presences = selected.map(card => ({ card, owner: findCardOwner(state, card),
+    zone: findCardZone(opponent, card), version: card.locationVersion || 0, controller: card.controller ?? opponent.id }));
+  let nonImmune = 0;
+  for (const entry of presences) {
+    if (optional && (findCardOwner(state, entry.card) !== entry.owner || findCardZone(opponent, entry.card) !== entry.zone ||
+      (entry.card.locationVersion || 0) !== entry.version || (entry.card.controller ?? opponent.id) !== entry.controller)) continue;
+    if (getCardEffectImmunity({ game: { player: state.player, bot: state.bot, turnCounter: state.turnCounter } },
+      entry.card, self, { sourceCard: options.sourceCard || null }).immune) continue;
+    nonImmune++;
+    destroySimulatedCard(entry.card, opponent, self, state, options);
+  }
+  return optional || nonImmune > 0;
 }
 
 function resolveScopeOwners(

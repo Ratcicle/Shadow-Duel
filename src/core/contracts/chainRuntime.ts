@@ -1,6 +1,6 @@
 import type { CardAction } from "./actions.js";
 import type { DeferredCardToGraveTriggerPackage, MaterialDuelStats } from "./gameRuntime.js";
-import type { EventTriggerOccurrence, TurnCardActivationHistory } from "./events.js";
+import type { EventEquipHostExitBinding, EventTriggerOccurrence, TurnCardActivationHistory } from "./events.js";
 import type {
   BattlePosition,
   CardKind,
@@ -21,6 +21,7 @@ import type {
   SegocGroup,
   SpellSpeed,
   TriggerEligibilityStatus,
+  TriggerOccurrenceReferenceSnapshots,
 } from "./chain.js";
 import type {
   DamageStepTiming,
@@ -107,6 +108,7 @@ export interface ChainEffect {
   readonly requireDefenderType?: string | readonly string[];
   readonly requirePhase?: readonly ChainPhase[] | ChainPhase;
   readonly requireZone?: CanonicalZone;
+  readonly movementTriggerOwnership?: "destination" | "field_exit_controller";
   readonly summonMethod?: SummonMethod;
   readonly summonMethods?: readonly SummonMethod[];
   readonly requiresSourceAtResolution?: boolean;
@@ -244,6 +246,13 @@ export interface ChainDeclaredTargetSnapshot {
   cards: ChainTargetSnapshot[];
 }
 
+export type ChainTriggerReferenceSnapshots = TriggerOccurrenceReferenceSnapshots<
+  ChainCard,
+  ChainEffect,
+  ChainDeclaredTargetSnapshot,
+  ChainTargetSnapshot | null
+>;
+
 /**
  * Selection references are data-defined, so Chain treats each channel as an
  * opaque record and uses Reflect at the few points which read or write keys.
@@ -370,6 +379,8 @@ export interface ChainActivationAttempt {
 }
 
 export interface PreparedActivationContext {
+  equipHostExitBinding?: EventEquipHostExitBinding;
+  referenceSnapshots?: ChainDeclaredTargetSnapshot[];
   costPayment?: ChainCostPayment | null;
   decisions?: import("./ai.js").AIDecisionPlan;
   activationZone?: ChainActivationZone;
@@ -401,6 +412,8 @@ export interface PreparedActivationContext {
 }
 
 export interface ChainContextPayload {
+  /** Frozen event bindings for responses offered after the event's trigger check. */
+  eventReferenceSnapshots?: ChainTriggerReferenceSnapshots[];
   event?: string | null;
   card?: ChainCard | null;
   effect?: ChainEffect | null;
@@ -1078,6 +1091,7 @@ export interface ChainTriggerCollectionResult {
 }
 
 export interface ChainTriggerOccurrenceOptions {
+  referenceSnapshots?: ChainTriggerReferenceSnapshots[];
   entries?: ChainTriggerEntry[];
   entriesProvided?: boolean;
   onComplete?: ChainTriggerCompletion | null;
@@ -1091,6 +1105,7 @@ export interface ChainEventPayload extends ChainContextPayload {
 }
 
 export interface ChainTriggerOccurrence {
+  referenceSnapshots?: ChainTriggerReferenceSnapshots[];
   occurrenceId: number;
   atomicGroupId: number;
   eventName: string;
@@ -1109,6 +1124,7 @@ export interface ChainTriggerOccurrence {
 
 /** Reduced occurrence emitted by NullChainSystem while Chains are disabled. */
 export interface DisabledChainTriggerOccurrence {
+  referenceSnapshots?: ChainTriggerReferenceSnapshots[];
   occurrenceId: number;
   atomicGroupId: number;
   eventName: string;
@@ -1293,6 +1309,7 @@ export interface ChainAutoSelectionOptions {
   selectionContract: ChainSelectionContract;
   selectionKind: "cost" | "target";
   activationContext?: Pick<PreparedActivationContext, "decisions">;
+  effect?: ChainEffect | null;
 }
 
 export interface ChainTriggerOrderModalOptions {

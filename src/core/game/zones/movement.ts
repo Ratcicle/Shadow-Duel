@@ -55,6 +55,8 @@ import {
 import type { SummonMethod, SummonOrigin } from "../../contracts/summon.js";
 import type { ChainSourceZone } from "../../contracts/chainRuntime.js";
 import type { ActionRuntimeCard } from "../../contracts/actionRuntime.js";
+import type { EventCardPresenceSnapshot, EventEquipHostExitBinding } from "../../contracts/events.js";
+import { captureEventCardPresence } from "./ownership.js";
 import type { CardAction } from "../../contracts/actions.js";
 import type {
   CardFilter,
@@ -74,7 +76,14 @@ interface MovementOptions
   skipAnimation?: boolean;
   skipSendToGraveActionReplacement?: boolean;
   skipSendToGraveReplacement?: boolean;
+  equipBindingsAtFieldExit?: readonly EventEquipHostExitBinding[];
 }
+
+type MutableEquipHostExitBinding = Omit<EventEquipHostExitBinding, "equip" | "equipController" | "equipAfterCleanup"> & {
+  equip: GameCard;
+  equipController: GamePlayer;
+  equipAfterCleanup: EventCardPresenceSnapshot | null;
+};
 
 type MovementInputOptions = Omit<MovementOptions, "fromZone"> & {
   fromZone?: MovementSourceZone | LegacyZoneAlias;
@@ -174,7 +183,7 @@ type MovementHost = Omit<
   waitForBoardPresentation?(): Promise<unknown>;
   waitForPresentationDelay?(delayMs: number): Promise<unknown>;
   queueCardAnimation?(intent: ZoneMoveAnimationIntent): void;
-  cleanupTokenReferences(card: GameCard, owner: GamePlayer): Promise<void>;
+  cleanupTokenReferences(card: GameCard, owner: GamePlayer, bindings?: MutableEquipHostExitBinding[]): Promise<void>;
   finishSummonTransaction?(
     transaction: SummonTransaction,
     result?: SummonExecutionResult,
@@ -350,6 +359,7 @@ export async function cleanupTokenReferences(
   this: MovementHost,
   token: GameCard | null | undefined,
   tokenOwner: GamePlayer,
+  bindings: MutableEquipHostExitBinding[] = [],
 ) {
   if (!token) return;
   this.effectEngine.clearFieldPresenceId?.(token);
@@ -380,9 +390,12 @@ export async function cleanupTokenReferences(
     equip.grantsCrescentShieldGuard = false;
 
     // Move equip to graveyard - refs already cleared, so equip's cleanup block will be skipped
-    await this.moveCard(equip, owner, "graveyard", {
+    const result = await this.moveCard(equip, owner, "graveyard", {
       fromZone: "spellTrap",
+      contextLabel: "equipped_host_left_field",
     });
+    const binding = bindings.find(entry => entry.equip === equip);
+    if (binding) binding.equipAfterCleanup = result.destinationPresence || null;
   }
 
   // Clear the token's equips array
@@ -507,7 +520,7 @@ function resolveOriginalOwnerDestination(
 ): GamePlayer | null {
   if (
     !card ||
-    fromZone !== "field" ||
+    (fromZone !== "field" && !(fromZone === "spellTrap" && card.cardKind === "spell" && card.subtype === "equip")) ||
     toZone === "field" ||
     !OWNER_RETURN_ZONES.has(toZone)
   ) {
@@ -749,8 +762,7 @@ async function emitCardMovedEvent(
 
   game.updateBoard?.();
 
-  const currentOwner = card.owner === "player" ? game.player : game.bot;
-  const eventPlayer = currentOwner || destPlayer || fromOwner || null;
+  const eventPlayer = destPlayer;
   const eventOpponent = eventPlayer
     ? game.getOpponent?.(eventPlayer) || null
     : null;
@@ -763,6 +775,10 @@ async function emitCardMovedEvent(
     options.atomicGroupId ||
     game.chainSystem?.allocateAtomicEventGroupId?.() ||
     null;
+
+  const equipBindingsAtFieldExit = options.equipBindingsAtFieldExit?.length
+    ? Object.freeze(options.equipBindingsAtFieldExit.map(binding => Object.freeze({ ...binding })))
+    : null;
 
   const eventResult = game.emit?.("card_moved", {
     card,
@@ -785,6 +801,8 @@ async function emitCardMovedEvent(
     summonProcedure: options.summonProcedure || null,
     contextLabel: options.contextLabel || null,
     wasDestroyed: options.wasDestroyed === true,
+    effectsNegatedAtFieldExit: options.effectsNegatedAtFieldExit === true,
+    ...(equipBindingsAtFieldExit ? { equipBindingsAtFieldExit } : {}),
     destroyCause: options.destroyCause || null,
     movedByEffect,
     wasFaceupBeforeMove:
@@ -2608,6 +2626,22 @@ export async function moveCardInternal(
     wasFaceupBeforeMove &&
     card.effectsNegated !== true &&
     this.effectEngine?.isEffectNegated?.(card) !== true;
+  const equipBindingsAtFieldExit: MutableEquipHostExitBinding[] = [];
+  if (fromZone === "field" && toZone !== "field") {
+    this.ensureDuelCardId?.(card);
+    const hostBeforeExit = captureEventCardPresence(card, fromOwner.id, fromZone);
+    for (const equipController of [this.player, this.bot]) {
+      for (const equip of equipController.spellTrap) {
+        if (equip.cardKind !== "spell" || equip.subtype !== "equip" ||
+            (equip.equippedTo !== card && equip.equipTarget !== card)) continue;
+        this.ensureDuelCardId?.(equip);
+        equipBindingsAtFieldExit.push({ equip, equipController, hostBeforeExit,
+          equipBeforeExit: captureEventCardPresence(equip, equipController.id, "spellTrap"),
+          equipAfterCleanup: null,
+          equipEffectsNegatedAtHostExit: equip.effectsNegated === true || this.effectEngine.isEffectNegated?.(equip) === true });
+      }
+    }
+  }
   const pendingBoundDestruction: Array<{
     target: GameCard;
     source: GameCard;
@@ -2645,10 +2679,12 @@ export async function moveCardInternal(
       try {
         const equipZone = this.getZone(equipOwner, "spellTrap") || [];
         if (equipZone.includes(equip)) {
-          await duringCurrentDuel(this.moveCard(equip, equipOwner, "graveyard", {
+          const result = await duringCurrentDuel(this.moveCard(equip, equipOwner, "graveyard", {
             fromZone: "spellTrap",
             contextLabel: "equipped_host_left_field",
           }));
+          const binding = equipBindingsAtFieldExit.find(entry => entry.equip === equip);
+          if (binding) binding.equipAfterCleanup = result.destinationPresence || null;
         }
       } finally {
         if (Reflect.get(equip, "lastEquippedCardLeftField") === card) {
@@ -2668,15 +2704,19 @@ export async function moveCardInternal(
   // This handles: destruction, bounce to hand, banish, shuffle to deck, tribute, etc.
   if (card.isToken === true && fromZone === "field" && toZone !== "field") {
     queueZoneMoveAnimation(this, cardAnimationIntent, toZone);
+    const locationVersion = recordCardLocationChange(this, card, fromOwner, null, fromZone, "removed", options);
+    const destinationPresence = captureEventCardPresence(card, null, "removed");
 
     // Clean up any references that might point to this token
-    await duringCurrentDuel(this.cleanupTokenReferences(card, fromOwner));
+    await duringCurrentDuel(this.cleanupTokenReferences(card, fromOwner, equipBindingsAtFieldExit));
 
     // Log the removal
     this.ui.log(`${card.name} (Token) was removed from the game.`);
 
     await duringCurrentDuel(emitCardMovedEvent(this, card, fromOwner, null, fromZone, "removed", {
       ...options,
+      locationVersion,
+      equipBindingsAtFieldExit,
       wasFaceupBeforeMove,
       contextLabel: options.contextLabel || "token_removed",
     }));
@@ -2685,7 +2725,7 @@ export async function moveCardInternal(
     this.updateBoard();
 
     // Return success with tokenRemoved flag - token is NOT added to any zone
-    return { success: true, tokenRemoved: true, fromZone, toZone: null };
+    return { success: true, tokenRemoved: true, fromZone, toZone: null, destinationPresence };
   }
 
   if (card.owner !== fromOwner.id) {
@@ -2935,6 +2975,7 @@ export async function moveCardInternal(
       {
         ...options,
         wasFaceupBeforeMove,
+        effectsNegatedAtFieldExit,
       },
     ));
     return { success: true, fromZone, toZone };
@@ -3108,6 +3149,7 @@ export async function moveCardInternal(
         {
           ...options,
           wasFaceupBeforeMove,
+          effectsNegatedAtFieldExit,
         },
       ));
       await duringCurrentDuel(flushPendingBoundDestruction());
@@ -3248,6 +3290,7 @@ export async function moveCardInternal(
     toZone,
     options,
   );
+  const destinationPresence = captureEventCardPresence(card, destPlayer.id, toZone);
   const atomicGroupId =
     options.atomicGroupId ||
     this.chainSystem?.allocateAtomicEventGroupId?.() ||
@@ -3431,6 +3474,8 @@ export async function moveCardInternal(
         fromZone: fromZone || options.fromZone || null,
         toZone: "graveyard",
         player: ownerPlayer,
+        fromPlayer: fromOwner,
+        toPlayer: ownerPlayer,
         opponent: otherPlayer,
         wasDestroyed: options.wasDestroyed || false,
         destroyCause: options.destroyCause || null,
@@ -3495,6 +3540,8 @@ export async function moveCardInternal(
       ...options,
       locationVersion,
       wasFaceupBeforeMove,
+      effectsNegatedAtFieldExit,
+      equipBindingsAtFieldExit,
       atomicGroupId,
     },
   ));
@@ -3511,6 +3558,7 @@ export async function moveCardInternal(
     reason: summonNegated ? "summon_negated" : null,
     fromZone,
     toZone,
+    destinationPresence,
     summonId:
       options.summonTransaction?.summonId ??
       summonAttemptResult?.transaction?.summonId ??

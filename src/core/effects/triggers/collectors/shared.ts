@@ -7,30 +7,98 @@ import type {
   TriggerEffectLike,
   TriggerZone,
 } from "../runtime.js";
+import type { EventEquipHostExitBinding } from "../../../contracts/events.js";
+import { matchesEventCardPresence, type PresenceCard } from "../../../game/zones/ownership.js";
+
+/** Only the explicit host-bound observer operator can use exit eligibility. */
+interface EquipHostExitEffect {
+  readonly event?: string;
+  readonly eventCardFilters?: { readonly eventCardIsEquippedToSource?: boolean };
+}
+export function hasEquipHostExitProof(
+  card: PresenceCard,
+  effect: EquipHostExitEffect,
+  binding: EventEquipHostExitBinding<PresenceCard, { readonly id: string }> | null | undefined,
+): boolean {
+  if (!binding || effect.event !== "card_moved" ||
+      effect.eventCardFilters?.eventCardIsEquippedToSource !== true || binding.equip !== card ||
+      !binding.equipAfterCleanup || binding.hostBeforeExit.zone !== "field" ||
+      binding.equipBeforeExit.zone !== "spellTrap" ||
+      binding.equipBeforeExit.controllerId !== binding.equipController.id) return false;
+  const before = binding.equipBeforeExit, after = binding.equipAfterCleanup;
+  return before.instanceId != null && before.instanceId === after.instanceId &&
+    before.cardId === after.cardId && before.duelCardId === after.duelCardId &&
+    before.locationVersion + 1 === after.locationVersion &&
+    (after.zone === "graveyard" || after.zone === "banished") &&
+    (card.instanceId ?? card._instanceId ?? null) === before.instanceId &&
+    (card.id ?? null) === before.cardId && (card.duelCardId ?? null) === before.duelCardId;
+}
+
+export function matchesEquipHostExitSourcePresence(
+  card: PresenceCard,
+  effect: EquipHostExitEffect,
+  binding: EventEquipHostExitBinding<PresenceCard, { readonly id: string }> | null | undefined,
+  physicalControllerId: string | null,
+  physicalZone: string | null,
+): boolean {
+  return !!binding?.equipAfterCleanup && hasEquipHostExitProof(card, effect, binding) &&
+    matchesEventCardPresence(card, binding.equipAfterCleanup, physicalControllerId, physicalZone);
+}
+
+/** Event ownership is opt-in; the destination remains the default. */
+export function resolveMovementEventOwner(
+  effect: TriggerEffectLike,
+  fromZone: string | null | undefined,
+  fromPlayer: TriggerRuntimePlayer | null | undefined,
+  destination: TriggerRuntimePlayer | null | undefined,
+): TriggerRuntimePlayer | null {
+  return effect.movementTriggerOwnership === "field_exit_controller" &&
+    (fromZone === "field" || fromZone === "spellTrap" || fromZone === "fieldSpell")
+    ? fromPlayer || null
+    : destination || null;
+}
+
+/** Locate the physical source independently of the player activating its trigger. */
+export function findTriggerSourceLocation(
+  host: Pick<TriggerCollectorHost, "game" | "findCardZone">,
+  card: TriggerRuntimeCard,
+  fallback: TriggerRuntimePlayer,
+): { player: TriggerRuntimePlayer; zone: TriggerZone } {
+  for (const player of [host.game?.player, host.game?.bot]) {
+    if (!player) continue;
+    const zone = host.findCardZone(player, card);
+    if (zone) return { player, zone };
+  }
+  return { player: fallback, zone: null };
+}
 
 /** Source legality at trigger discovery and before activation commitment. */
 export function isTriggerSourceLegal(
   card: TriggerRuntimeCard,
   effect: TriggerEffectLike,
   sourceZone: TriggerZone,
+  binding?: EventEquipHostExitBinding | null,
 ): boolean {
   if (sourceZone === "temporary") return true;
-  if (effect.requireZone && !matchesZoneFilter(sourceZone, effect.requireZone)) {
+  const sourcePresence = binding && hasEquipHostExitProof(card, effect, binding) ? binding.equipBeforeExit : null;
+  const eligibilityZone = sourcePresence?.zone || sourceZone;
+  const faceUp = sourcePresence ? sourcePresence.faceUp : card.isFacedown !== true;
+  if (effect.requireZone && !matchesZoneFilter(eligibilityZone, effect.requireZone)) {
     return false;
   }
   if (
     Array.isArray(effect.activationZones) &&
-    (sourceZone === null || !effect.activationZones.includes(sourceZone))
+    (eligibilityZone === null || !effect.activationZones.includes(eligibilityZone))
   ) {
     return false;
   }
   if (
-    (sourceZone === "field" || sourceZone === "fieldSpell" || sourceZone === "spellTrap") &&
-    card.isFacedown === true
+    (eligibilityZone === "field" || eligibilityZone === "fieldSpell" || eligibilityZone === "spellTrap") &&
+    !faceUp
   ) {
     return false;
   }
-  return effect.requireFaceup !== true || card.isFacedown !== true;
+  return effect.requireFaceup !== true || faceUp;
 }
 
 export function getCardControllerId(
@@ -117,6 +185,7 @@ export function cardMatchesEventFilters(
     readonly toZone?: string | null | undefined;
     readonly sourceCard?: TriggerRuntimeCard | null;
     readonly contextLabel?: string | null;
+    readonly equipHostExitBinding?: EventEquipHostExitBinding | null;
   } = {},
 ): boolean {
   if (!filters || typeof filters !== "object") return true;
@@ -136,6 +205,11 @@ export function cardMatchesEventFilters(
   if (
     filters.eventCardIsEquippedToSource === true &&
     !(
+      (context.equipHostExitBinding != null && context.equipHostExitBinding.equip === context.sourceCard &&
+        context.equipHostExitBinding.hostBeforeExit.instanceId != null &&
+        context.equipHostExitBinding.hostBeforeExit.instanceId === (eventCard.instanceId ?? eventCard._instanceId ?? null) &&
+        context.equipHostExitBinding.hostBeforeExit.cardId === (eventCard.id ?? null) &&
+        context.equipHostExitBinding.hostBeforeExit.duelCardId === (eventCard.duelCardId ?? null)) ||
       isSameCardReference(context.sourceCard?.equippedTo, eventCard) ||
       isSameCardReference(context.sourceCard?.equipTarget, eventCard) ||
       isSameCardReference(

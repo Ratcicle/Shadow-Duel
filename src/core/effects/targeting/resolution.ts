@@ -1,4 +1,5 @@
 import { requiresUnnegatedTarget } from "../negation.js";
+import { captureReferencePresence, matchesFrozenReferencePresence, getEventEffectOrigin } from "./references.js";
 /**
  * Targeting Resolution Module
  * Extracted from EffectEngine.js - main target resolution logic
@@ -24,6 +25,8 @@ import type {
   NumericComparisonOperator,
 } from "../../contracts/effects.js";
 import type { BattlePosition } from "../../contracts/cards.js";
+import type { ChainDeclaredTargetSnapshot, ChainTargetSnapshot } from "../../contracts/chainRuntime.js";
+import type { EventReferenceCardSnapshot } from "../../contracts/events.js";
 import type { SelectionCandidateKey } from "../../contracts/primitives.js";
 import type {
   CanonicalSelectionMap,
@@ -40,6 +43,9 @@ type RuntimeCard = ActionRuntimeCard;
 type RuntimePlayer = ActionRuntimePlayer & { debug?: boolean };
 
 interface TargetActivationContext {
+  committed?: boolean;
+  costsPaid?: boolean;
+  referenceSnapshots?: ChainDeclaredTargetSnapshot[];
   decisions?: import("../../contracts/ai.js").AIDecisionPlan;
   preview?: boolean;
   isPreview?: boolean;
@@ -432,6 +438,17 @@ function contextTargetMatchesDef(
   return true;
 }
 
+function frozenReferenceStillPresent(engine: TargetResolutionHost, snapshot: ChainTargetSnapshot | EventReferenceCardSnapshot): boolean {
+  const card = snapshot.card as RuntimeCard;
+  const owner = [engine.game.player, engine.game.bot].find(player =>
+    engine.findCardZone(player, card) != null);
+  return owner != null && snapshot.controllerId === owner.id &&
+    snapshot.cardInstanceId === (card.instanceId ?? card._instanceId ?? card.id ?? null) &&
+    snapshot.zone === engine.findCardZone(owner, card) &&
+    snapshot.faceUp === (card.isFacedown !== true) &&
+    snapshot.locationVersion === Number(card.locationVersion ?? 0);
+}
+
 /**
  * Resolve targets for an effect based on target definitions
  * @param {Array} targetDefs - Array of target definition objects
@@ -469,6 +486,20 @@ export function resolveTargets(
     this.game?.devModeEnabled === true ||
     ctx?.player?.debug === true;
   const resolvedTargets = activationContext.resolvedTargets || null;
+  const contextEffect = ctx.effect || ctx.source?.effects?.find(effect => effect.targets === targetDefs);
+  const occurrenceReference = ctx.actionContext?.eventReferenceSnapshots?.find(entry =>
+    entry.source === ctx.source && contextEffect && entry.effect === getEventEffectOrigin(contextEffect));
+  if (isPreview && activationContext.committed !== true && activationContext.costsPaid !== true &&
+      ctx.source && ctx.actionContext?.eventReferenceSnapshots !== undefined &&
+      targetDefs.some(raw => { const def = asRuntimeTargetDefinition(raw); return def.intent === "reference" && !!def.targetFromContext; }) &&
+      !matchesFrozenReferencePresence(occurrenceReference?.sourcePresence,
+        captureReferencePresence(ctx.source, [this.game.player, this.game.bot]))) {
+    return { ok: false, reason: "Contextual reference source changed after the event." };
+  }
+  const referenceSnapshots = activationContext.referenceSnapshots ??
+    (ctx.actionContext?.eventReferenceSnapshots !== undefined
+      ? occurrenceReference?.references || []
+      : undefined);
 
   // ✅ DRAGON SPIRIT SANCTUARY: Inject targetMap into context for compareAttribute support
   const enhancedCtx = {
@@ -478,6 +509,16 @@ export function resolveTargets(
 
   for (const rawDefinition of targetDefs) {
     const def = asRuntimeTargetDefinition(rawDefinition);
+    if (def.intent === "reference" && def.targetFromContext && referenceSnapshots !== undefined) {
+      const snapshot = referenceSnapshots.find(entry => entry.targetId === def.id);
+      const validCards = (snapshot?.cards || []).filter(entry => frozenReferenceStillPresent(this, entry))
+        .map(entry => entry.card as RuntimeCard).filter(card => contextTargetMatchesDef(this, card, def, ctx));
+      if (validCards.length < Number(def.count?.min ?? (def.optional ? 0 : 1))) {
+        return { ok: false, reason: `Frozen reference "${def.id}" is no longer available.` };
+      }
+      targetMap[def.id] = validCards;
+      continue;
+    }
     // Support for targetFromContext: get target directly from event context
     if (def.targetFromContext) {
       const contextKey = def.targetFromContext;

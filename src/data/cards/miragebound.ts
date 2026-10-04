@@ -607,7 +607,7 @@ export const mirageboundCards = [
     type: "Fiend",
     archetype: "Miragebound",
     description:
-      "You can Special Summon this card from your hand by returning 1 \"Miragebound\" monster you control to the hand. You can only attempt to Special Summon \"Miragebound False King\" once per turn this way, even if the Summon is negated.\n\nYou can target 1 monster your opponent controls; change its battle position. You can only use this effect of \"Miragebound False King\" once per turn.",
+      "You can Special Summon this card from your hand by returning 1 \"Miragebound\" monster you control to the hand. You can only Special Summon \"Miragebound False King\" once per turn this way.\n\nYou can target 1 monster your opponent controls; change its battle position.\n\nYou can only use this effect of \"Miragebound False King\" once per turn.",
     image: "assets/Miragebound False King.png",
     handSummonProcedure: {
       id: "miragebound_false_king_special_summon",

@@ -251,10 +251,14 @@ test("replay canônico headless termina com o mesmo hash", async () => {
     ["5a03f26c", "c2ec633c"],
   );
   assert.equal(replay.result.finalStateHash, "c2ec633c");
-  // Removing Rebel's unused policy changes only the database signature in this envelope.
+  // Historical envelopes retain their exact version and declaration signature.
   assert.equal(hashCanonicalValue({ ...replay, cardDatabaseSignature: "a2cd2bdb", engineVersion: "engine-rules-v12" }), "c418b563");
-  assert.equal(hashCanonicalValue({ ...replay, cardDatabaseSignature: "a2cd2bdb" }), "69ee977d");
-  assert.equal(hashCanonicalValue(replay), "bc1e3cb7");
+  assert.equal(hashCanonicalValue({ ...replay, cardDatabaseSignature: "a2cd2bdb", engineVersion: "engine-rules-v14" }), "69ee977d");
+  assert.equal(hashCanonicalValue({ ...replay, cardDatabaseSignature: "db5833d7", engineVersion: "engine-rules-v14" }), "bc1e3cb7");
+  assert.equal(hashCanonicalValue({ ...replay, cardDatabaseSignature: "0f23140c", engineVersion: "engine-rules-v14" }), "76f5c866");
+  assert.equal(hashCanonicalValue({ ...replay, cardDatabaseSignature: "0f2a7a85", engineVersion: "engine-rules-v15" }), "a4af185c");
+  assert.equal(hashCanonicalValue({ ...replay, cardDatabaseSignature: "e1469707", engineVersion: "engine-rules-v16" }), "e161e690");
+  assert.equal(hashCanonicalValue(replay), "accbf7e6");
   assert.equal(JSON.stringify(replay).length, 12100);
 
   const result = await replayCanonicalDuel(replay);

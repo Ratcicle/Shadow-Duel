@@ -124,7 +124,7 @@ Nível 3, Plant, Earth, 1400/1700.
 
 Nível 5, Plant, Earth, 2000/1900.
 
-> Você pode Invocar este card por Invocação-Especial da sua mão ao remover 2 Marcadores de Esporo do campo.
+> Você pode Invocar este card por Invocação-Especial da sua mão ao remover 2 Marcadores de Esporo do campo. Você só pode Invocar por Invocação-Especial "Podriflora Cervo-Pútrido" uma vez por turno desta forma.
 >
 > Se este card for Invocado por Invocação-Especial: escolha 1 card com a face para cima que seu oponente controla; coloque 1 Marcador de Esporo nele.
 >
@@ -154,7 +154,7 @@ Nível 2, Plant, Earth, 500/2000.
 
 Nível 6, Plant, Earth, 2100/2100.
 
-> Você pode Invocar este card por Invocação-Especial da sua mão removendo 3 Marcadores de Esporo do campo.
+> Você pode Invocar este card por Invocação-Especial da sua mão removendo 3 Marcadores de Esporo do campo. Você só pode Invocar por Invocação-Especial "Podriflora Viúva-Cogutumba" uma vez por turno desta forma.
 >
 > Se este card for Invocado: escolha 1 monstro com Marcador de Esporo que seu oponente controla; destrua-o.
 >
@@ -166,7 +166,7 @@ Nível 6, Plant, Earth, 2100/2100.
 
 Nível 7, Plant, Earth, 2200/2600.
 
-> Você pode Invocar este card por Invocação-Especial da sua mão removendo 4 Marcadores de Esporo do campo.
+> Você pode Invocar este card por Invocação-Especial da sua mão removendo 4 Marcadores de Esporo do campo. Você só pode Invocar por Invocação-Especial "Podriflora Casca Ancestral" uma vez por turno desta forma.
 >
 > Uma vez por turno: coloque 1 Marcador de Esporo em até 2 monstros com a face para cima que seu oponente controla.
 >
@@ -230,7 +230,7 @@ Magia de Equipamento.
 
 Magia Normal.
 
-> Remova todos os Marcadores de Esporo do campo e, depois, escolha 1 card que seu oponente controla para cada 4 Marcadores de Esporo removidos; destrua-os. Monstros "Podriflora" que você controla ganham 100 de ATK/DEF até o final deste turno para cada Marcador de Esporo removido.
+> Remova todos os Marcadores de Esporo do campo e, depois, você pode escolher 1 card que seu oponente controla para cada 4 Marcadores removidos; destrua os cards escolhidos. Depois, monstros "Podriflora" que você controla ganham 100 de ATK/DEF até o final deste turno para cada Marcador removido por este efeito.
 >
 > Você só pode ativar 1 "Colheita Podriflora" por turno.
 
@@ -292,7 +292,7 @@ Ascensão, Nível 8, Plant, Earth, 2500/3000.
 >
 > Se este card deixar o campo: coloque 1 Marcador de Esporo em cada card com a face para cima que seu oponente controla.
 >
-> Você só pode usar cada efeito de "Podriflora Rainha do Bosque Oco — Ascensão" uma vez por turno.
+> Você só pode usar cada efeito de "Podriflora Rainha do Bosque Oco" uma vez por turno.
 
 **420 — Podriflora Devorador de Raízes Mortas / Bloomrot Devourer of Dead Roots**
 
@@ -314,3 +314,35 @@ Fusão, Nível 11, Plant, Dark, 0/3000.
 - O Main Deck contém 8 monstros, 7 Magias e 2 Armadilhas.
 - O Extra Deck contém 1 de Fusão, 2 de Ascensão.
 - As Fichas geradas não são cartas adicionais para montagem do deck.
+
+### Correções funcionais P2 — 03/10/2026
+
+Os nomes e textos acima permanecem definidos pelo diretor criativo. O lote P2
+corrigiu o escopo por cópia de sete efeitos (402/410/412/413/417/418/420), seis
+referências contextuais de evento, a contribuição independente de cada Armor
+e a observação de destruição do host da Overgrowth para qualquer destino,
+incluindo remoção de Ficha. Negação, presença e controlador histórico são
+revalidados nos caminhos de runtime, Chain e simulação; referências não
+produzem targeting ou escolhas humanas adicionais.
+
+O replay usa schema 2 / engine-rules-v16 e rejeita versões anteriores antes
+de alterar o jogo. Os 52 replays P2 usam cartas reais/comandos públicos,
+ambos os assentos e humano/IA, com reprodução sem UI/AutoSelector.
+O registro completo está na [auditoria dos IDs 401–420](../Auditoria%20cartas%20Bloomrot%20401-420.md).
+P3 (B12/B14), decisões editoriais e o custo legado da proteção da Armor na
+simulação (L01) continuam fora desse lote.
+
+### Decisões T01/T02/S01 — 04/10/2026
+
+Por decisão do diretor criativo, os textos de 405/407/408/413 permanecem
+intactos. Seus cinco efeitos que apenas colocam Esporos escolhem os cards na
+resolução, sem targeting; proteções contra alvos não os impedem, mas imunidade
+a efeitos permanece. Os limites atuais de escolha e de uso foram preservados.
+Somente a referência ao nome da 419 na restrição PT acima foi corrigida para
+"Podriflora Rainha do Bosque Oco", sem mudança mecânica.
+
+Compost Ritual (411) permanece intacta: a semântica textual coloca o primeiro
+Marcador e depois calcula os adicionais, mas a suspeita exige uma interação
+legal reproduzida que altere a quantidade de Podriflora entre as etapas.
+O replay atual usa schema 2 / engine-rules-v17; a auditoria registra provas,
+compatibilidade e limitações dos lotes anteriores e deste fechamento.

@@ -26,6 +26,12 @@ interface ExtraDeckCaptureOptions {
   materials?: GameCard[];
 }
 
+interface HandProcedureCaptureOptions {
+  position?: BattlePosition;
+  materials?: GameCard[];
+  counterSources?: GameCard[];
+}
+
 interface SpellActivationCaptureOptions {
   owner?: GamePlayer | null;
   activationZone?: ReplayCardZone | null;
@@ -63,7 +69,7 @@ interface CapturedGameMethods {
   performHandSummonProcedure(
     card: GameCard,
     player?: GamePlayer,
-    options?: ExtraDeckCaptureOptions,
+    options?: HandProcedureCaptureOptions,
   ): Promise<unknown>;
   setSpellOrTrap(
     card: GameCard,
@@ -358,6 +364,9 @@ export const REPLAY_CAPTURE_BINDINGS = Object.freeze([
         position: options.position || null,
         ...(options.materials ? {
           materialIds: options.materials.map(material => this.ensureDuelCardId(material)),
+        } : {}),
+        ...(options.counterSources ? {
+          counterSourceIds: options.counterSources.map(source => this.ensureDuelCardId(source)),
         } : {}),
       }),
     };

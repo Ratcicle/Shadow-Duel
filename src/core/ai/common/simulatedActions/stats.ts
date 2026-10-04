@@ -1,4 +1,5 @@
 import { addEffectNegation, clearEffectNegation, expireEffectNegation } from "../../../effects/negation.js";
+import { isSupportedSimulatedDestructionReplacement } from "./destruction.js";
 import { applyNamedStatChange } from "../../../effects/actions/stats.js";
 import { getCardEffectImmunity } from "../../../effects/targeting/filters.js";
 import { getEffectiveAtk } from "../cardStats.js";
@@ -284,6 +285,7 @@ export function applySetFacedownDefense(
 function resolveStatBoostFromContext(
   spec: ContextNumberSource | undefined,
   options: SimulatedActionOptions,
+  context: { readonly self: SimulatedPlayerState; readonly opponent: SimulatedPlayerState },
 ): number {
   if (!spec) return 0;
   const readPath = (root: unknown): unknown => {
@@ -294,7 +296,7 @@ function resolveStatBoostFromContext(
     }
     return value;
   };
-  const raw = readPath(options) ?? readPath(options.actionContext) ??
+  const raw = readPath({ ...options, source: options.sourceCard, player: context.self, opponent: context.opponent }) ?? readPath(options.actionContext) ??
     readPath(options.activationContext) ?? readPath(options.activationContext?.actionContext);
   let value = Number(raw ?? 0);
   if (!Number.isFinite(value)) value = 0;
@@ -306,6 +308,43 @@ function resolveStatBoostFromContext(
   if (spec.round === "ceil") return Math.ceil(value);
   if (spec.round === "round") return Math.round(value);
   return value;
+}
+
+export function applySetOriginalStats(
+  ctx: SimulatedActionHandlerContext<"set_original_stats">,
+): boolean {
+  const { action, options, opponent } = ctx;
+  const setAtk = action.atk !== undefined || action.atkFromContext !== undefined || action.baseAtk !== undefined;
+  const setDef = action.def !== undefined || action.defFromContext !== undefined || action.baseDef !== undefined;
+  if (!setAtk && !setDef) return false;
+  const targets = action.targetRef ? ctx.targets
+    : resolveTargetsForAction({ targetRef: "self" }, ctx.selections, options, opponent);
+  let changed = false;
+  for (const card of targets) {
+    if (card.cardKind !== "monster") continue;
+    card.originalStatsOverride ??= { baseAtk: Number(card.baseAtk || 0), baseDef: Number(card.baseDef || 0) };
+    const previousAtk = Number(card.atk || 0), previousDef = Number(card.def || 0);
+    const previousBaseAtk = Number(card.baseAtk || 0), previousBaseDef = Number(card.baseDef || 0);
+    if (setAtk) {
+      const raw = action.atkFromContext !== undefined ? resolveStatBoostFromContext(action.atkFromContext, options, ctx)
+        : action.atk ?? action.baseAtk;
+      card.baseAtk = Math.max(0, Math.floor(Number(raw) || 0));
+      if (action.updateCurrentStats !== false) card.atk = card.baseAtk;
+    }
+    if (setDef) {
+      const raw = action.defFromContext !== undefined ? resolveStatBoostFromContext(action.defFromContext, options, ctx)
+        : action.def ?? action.baseDef;
+      card.baseDef = Math.max(0, Math.floor(Number(raw) || 0));
+      if (action.updateCurrentStats !== false) card.def = card.baseDef;
+    }
+    changed = true;
+    options.emitSimulatedEvent?.("original_stats_changed", {
+      card, previousAtk, previousDef, previousBaseAtk, previousBaseDef,
+      newAtk: card.atk, newDef: card.def, newBaseAtk: card.baseAtk, newBaseDef: card.baseDef,
+      sourceCard: options.sourceCard || null, player: ctx.self,
+    });
+  }
+  return changed;
 }
 
 export function applyPermanentBuffNamed(
@@ -365,7 +404,7 @@ export function applyBuffStatsTemp(
     return;
   }
   let atkBoost = (Number.isFinite(action.atkBoost) ? action.atkBoost! : 0) +
-    resolveStatBoostFromContext(action.atkBoostFromContext, options);
+    resolveStatBoostFromContext(action.atkBoostFromContext, options, ctx);
   if (action.atkBoostFromTarget) {
     const spec = action.atkBoostFromTarget;
     const stat = ["baseAtk", "baseDef", "atk", "def"].includes(spec?.stat)
@@ -385,7 +424,7 @@ export function applyBuffStatsTemp(
     atkBoost += value;
   }
   const defBoost = (Number.isFinite(action.defBoost) ? action.defBoost! : 0) +
-    resolveStatBoostFromContext(action.defBoostFromContext, options);
+    resolveStatBoostFromContext(action.defBoostFromContext, options, ctx);
   let expiresOnTurn: number | null = null;
   if (!action.permanent) {
     if (duration === "end_of_next_turn") expiresOnTurn = state.turnCounter + 1;
@@ -910,11 +949,13 @@ export function applyAddStatus(
         if (card.effectsNegated === true) removeFieldAuraBuffContributions(card, field, field.indexOf(card));
         card.effects?.forEach((effect) => {
           if (effect.timing !== "passive") return;
+          if ("replacementEffect" in effect && isSupportedSimulatedDestructionReplacement(effect.replacementEffect)) return;
           const passiveType = "passive" in effect ? effect.passive?.type : undefined;
-          // Both count-based families are reconciled by their declared producers.
-          if (passiveType === "field_presence_type_summon_count_buff" || passiveType === "activated_card_count_buff") return;
+          // These stat families are reconciled by their declared producers.
+          if (passiveType === "field_presence_type_summon_count_buff" || passiveType === "activated_card_count_buff" ||
+              passiveType === "equipped_field_counter_buff" || passiveType === "field_counter_stat_aura") return;
           // These rules read negation directly at attack/movement time.
-          if (passiveType === "restrict_opponent_summon_turn_attack" || passiveType === "send_to_grave_replacement" ||
+          if (passiveType === "restrict_opponent_summon_turn_attack" || passiveType === "counter_attack_lock" || passiveType === "send_to_grave_replacement" ||
               passiveType === "conditional_protection" || passiveType === "field_archetype_aura_buff" || passiveType === "event_actions") return;
           state._simUnsupportedActions ??= [];
           state._simUnsupportedActions.push(`add_status:passive_recalculation:${passiveType || "unknown"}`);

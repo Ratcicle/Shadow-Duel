@@ -7,6 +7,7 @@ import type {
 } from "../../contracts/effects.js";
 import type { SummonMethod } from "../../contracts/summon.js";
 import { markPlanningUnknownCardRead } from "./planningExecution.js";
+import { getCounterValue } from "./counters.js";
 
 type LiveFilterableCard = Partial<Omit<GameCard, "equips">> & {
   _instanceId?: number | string | null;
@@ -210,6 +211,8 @@ export function cardMatchesFilter(
   for (const current of checks) {
     if (!current) continue;
     if (current.requireFaceup && card.isFacedown) return false;
+    if (current.minCounters !== undefined &&
+        getCounterValue(card, current.counterType || "default") < current.minCounters) return false;
     if (current.facedown === true && card.isFacedown !== true) return false;
     if (current.position && current.position !== "any" && card.position !== current.position) return false;
     if ("_simUnknownCard" in card && card._simUnknownCard &&

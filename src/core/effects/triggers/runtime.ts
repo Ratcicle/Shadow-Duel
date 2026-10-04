@@ -10,7 +10,7 @@ import type {
 import type { CardAction } from "../../contracts/actions.js";
 import type { BattlePosition, CardKind, DuelCardIdentityCarrier, FieldPresenceSummonRecord } from "../../contracts/cards.js";
 import type { DuelCardId } from "../../contracts/primitives.js";
-import type { EventCard, EventPlayer } from "../../contracts/events.js";
+import type { EventCard, EventEquipHostExitBinding, EventPlayer } from "../../contracts/events.js";
 import type {
   CardFilter,
   DamageStepTiming,
@@ -87,7 +87,7 @@ export type TriggerRuntimePlayer = Omit<
 };
 
 export type TriggerPlayerReference = TriggerRuntimePlayer | string | null;
-export type TriggerZone = ZoneInput | "temporary" | "token" | null;
+export type TriggerZone = ZoneInput | "temporary" | "token" | "removed" | null;
 
 export interface TriggerPassiveDefinition {
   readonly type: string;
@@ -154,6 +154,7 @@ export interface TriggerEffectLike {
   readonly requireSelfAsBattleDestroyer?: boolean;
   readonly requireSelfAsDestroyed?: boolean;
   readonly requireSelfAsMoved?: boolean;
+  readonly movementTriggerOwnership?: "destination" | "field_exit_controller";
   readonly requireSelfAsChanged?: boolean;
   readonly requireSelfAsFlipped?: boolean;
   readonly requireSelfBattled?: boolean;
@@ -254,6 +255,7 @@ export interface TriggerActionContext {
 }
 
 export interface TriggerActivationContext {
+  equipHostExitBinding?: EventEquipHostExitBinding;
   decisions?: import("../../contracts/ai.js").AIDecisionPlan;
   fromHand?: boolean;
   activationZone?: TriggerZone | undefined;

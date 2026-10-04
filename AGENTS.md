@@ -24,6 +24,7 @@ por TS6. Configuração: [package.json](package.json) e
 - `AutoSelector` deve ser usado para bot/IA, não para pular decisões do jogador humano.
 - Não adicione efeitos de negar, hand traps ou interrupções similares sem pedido explícito do diretor criativo.
 - Para novas cartas, verifique também descrição, i18n e compatibilidade com os handlers existentes.
+- Textos de cartas em EN/PT são definidos pelo diretor criativo. Não altere, reescreva ou reformate esses textos sem autorização explícita do usuário. Corrigir efeitos ou a engine não autoriza mudanças na redação das cartas: informe divergências e aguarde o novo texto fornecido ou aprovado pelo usuário.
 - Modularize por domínio de jogo/responsabilidade, não por microfunções arbitrárias.
 - Evite criar arquivos novos quando a lógica pertence claramente a um módulo existente.
 - Fachadas como `Game.ts`, `EffectEngine.ts` e `ChainSystem.ts` devem orquestrar e delegar; evite concentrar nova lógica complexa nelas.

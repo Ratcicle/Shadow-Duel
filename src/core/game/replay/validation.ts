@@ -320,6 +320,10 @@ function validateCommandPayload(
           1,
         );
       }
+      if (hasOwn(payload, "counterSourceIds")) {
+        if (type !== "hand_summon_procedure") invalid(`${path}.counterSourceIds`, "a hand procedure counter cost");
+        validateNumberArray(read(payload, "counterSourceIds"), `${path}.counterSourceIds`, 1);
+      }
       return;
     }
     case "activate_effect":

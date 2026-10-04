@@ -572,28 +572,6 @@ function applySummonState(
   else card.cannotAttackThisTurn = false;
 }
 
-function destroyBestOpponentCard(
-  state: MutableShadowState,
-): SimulatedCardState | null {
-  const opponent = ensureZones(state.player || {});
-  const candidates = ([
-    ...(opponent.field || []),
-    opponent.fieldSpell,
-    ...(opponent.spellTrap || []),
-  ].filter(Boolean) as SimulatedCardState[]);
-  if (candidates.length === 0) return null;
-  candidates.sort((a, b) => {
-    const aMonster = a.cardKind === "monster" ? 1 : 0;
-    const bMonster = b.cardKind === "monster" ? 1 : 0;
-    if (aMonster !== bMonster) return bMonster - aMonster;
-    return (b.atk || 0) - (a.atk || 0);
-  });
-  const target = candidates[0];
-  if (!target) return null;
-  moveToZone(opponent, target, "graveyard");
-  return target;
-}
-
 function handleAfterSummon({
   state,
   player,
@@ -907,12 +885,8 @@ export function buildShadowHeartSimulationOptions(
     },
     onFusionSummon: ({
       state: simState,
-      fusionCard,
     }: ShadowFusionHookInput) => {
       refreshSimulatedFieldAuras(simState);
-      if (fusionCard?.name === SH.demonDragon) {
-        destroyBestOpponentCard(simState);
-      }
     },
   };
 

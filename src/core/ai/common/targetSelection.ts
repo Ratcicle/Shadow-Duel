@@ -8,6 +8,7 @@ import {
 } from "./cardStats.js";
 import { getCardComparableAttribute } from "../../Card.js";
 import { resolveExactInstanceSelection } from "../../AutoSelector.js";
+import { getCounterValue } from "./counters.js";
 import type { AIDecisionPlan } from "../../contracts/ai.js";
 import { cardMatchesFilter } from "./cardFilters.js";
 import {
@@ -17,6 +18,7 @@ import {
 } from "./cardValue.js";
 import { getPerspectivePlayers } from "./perspective.js";
 import { findCardOwner, findCardZone, getZoneCards } from "./zones.js";
+import { isSimulatedReferencePresenceValid, type SimulatedReferenceSnapshot } from "./simulatedActions/shared.js";
 import type { CardAction } from "../../contracts/actions.js";
 import type {
   AiStateShape,
@@ -70,6 +72,7 @@ interface ActionPreferenceContext {
 }
 
 interface TargetSelectionOptions {
+  referenceSnapshots?: Record<string, SimulatedReferenceSnapshot[]>;
   targetPreferences?: TargetPreferenceMap | null;
   targetPreference?: TargetPreference | null;
   costPreferences?: TargetPreference | null;
@@ -768,6 +771,9 @@ export function selectSimulatedTargets({
     const negationEligible = (card: SimulatedCardState) => !requireUnnegated || card.cardKind !== "monster" || card.effectsNegated !== true;
     if (target.targetFromContext) {
       const contextValue =
+        target.intent === "reference" && options.referenceSnapshots !== undefined
+        ? (options.referenceSnapshots[target.id] || []).filter(isSimulatedReferencePresenceValid).map(snapshot => snapshot.card)
+        :
         (options as Partial<Record<string, unknown>> | null)?.[target.targetFromContext] ||
         (options?.actionContext as Partial<Record<string, unknown>> | null | undefined)?.[
           target.targetFromContext
@@ -927,7 +933,20 @@ export function selectSimulatedTargets({
     if (min === 0 && intent !== "cost") {
       pickCount = 0;
     }
-    result[target.id] = exactSelection(target.id, filtered, count) ?? ordered.slice(0, Math.min(pickCount, ordered.length));
+    const exact = exactSelection(target.id, filtered, count);
+    const pooledCost = intent === "cost" ? effect?.activationCosts?.find(action =>
+      action.type === "remove_counters_from_field" && action.targetRef === target.id) : undefined;
+    if (exact === undefined && pooledCost?.type === "remove_counters_from_field") {
+      let total = 0;
+      pickCount = 0;
+      while (pickCount < Math.min(max, ordered.length) && total < (pooledCost.amount ?? 1)) {
+        const card = ordered[pickCount];
+        if (!card) break;
+        total += getCounterValue(card, pooledCost.counterType || "default");
+        pickCount++;
+      }
+    }
+    result[target.id] = exact ?? ordered.slice(0, Math.min(pickCount, ordered.length));
   });
 
   return result;

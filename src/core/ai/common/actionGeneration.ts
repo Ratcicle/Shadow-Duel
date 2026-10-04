@@ -33,12 +33,14 @@ import { hasActionZoneCandidates } from "./actionValidation.js";
 import { canActivateSpellTrapEffect } from "./previewGuards.js";
 import { canUseSimulatedEffectUsage } from "./simStateUtils.js";
 import { evaluateSimulatedConditions } from "./simulatedConditions.js";
+import { collectProcedureCounterSources, getCounterValue } from "./counters.js";
 
 /** Declarative hand procedures use only projected costs, conditions and placement. */
 export function getGenericHandSummonProcedureActions(game: AIState): AIActionOf<"handSummonProcedure">[] {
   if (!game._isPerspectiveState || (game.phase !== "main1" && game.phase !== "main2")) return [];
   const player = game.bot;
-  if (!player || game.turn !== player.id) return [];
+  const opponent = game.player;
+  if (!player || !opponent || game.turn !== player.id) return [];
   const field: readonly AiCardInput[] = player.field || [];
   const graveyard: readonly AiCardInput[] = player.graveyard || [];
   const cardMatchesFilters = (candidate: AiCardInput, filters: RuntimeCardFilter): boolean =>
@@ -58,6 +60,10 @@ export function getGenericHandSummonProcedureActions(game: AIState): AIActionOf<
         !canSimulatedSpecialSummon(card, player, procedure.id, "hand", cardMatchesFilters) ||
         !evaluateSimulatedConditions(procedure.conditions || [], { state: game, sourceCard: card, selfId: "bot" })) return [];
     const cost = procedure.cost;
+    const counterCost = procedure.counterCost;
+    if (counterCost && (!Number.isInteger(counterCost.amount) || counterCost.amount < 1 ||
+        collectProcedureCounterSources(player, opponent, counterCost, game.turnCounter || 0)
+          .reduce((total, source) => total + getCounterValue(source, counterCost.counterType), 0) < counterCost.amount)) return [];
     if (cost && (!Number.isInteger(cost.count) || cost.count < 1)) return [];
     const count = cost?.count ?? 0;
     const candidates = cost ? [...new Set(cost.zones.flatMap(zone => player[zone] || []))].filter(candidate =>
@@ -93,7 +99,10 @@ export function getGenericHandSummonProcedureActions(game: AIState): AIActionOf<
 /** Preserve callers whose policy deliberately considers only free bodies. */
 export function getGenericCostlessHandSummonActions(game: AIState): AIActionOf<"handSummonProcedure">[] {
   return getGenericHandSummonProcedureActions(game)
-    .filter(action => action.index !== undefined && !game.bot?.hand?.[action.index]?.handSummonProcedure?.cost);
+    .filter(action => {
+      const procedure = action.index === undefined ? null : game.bot?.hand?.[action.index]?.handSummonProcedure;
+      return !!procedure && !procedure.cost && !procedure.counterCost;
+    });
 }
 
 /** GY ignition candidates shared by strategies; the legacy action name also covers Traps. */

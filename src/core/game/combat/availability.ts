@@ -199,6 +199,58 @@ export function isFieldPresenceSummonAttackRestricted(
       record.summoningPlayerId === controllerId && record.targetFieldPresenceId === attacker.fieldPresenceId));
 }
 
+interface CounterAttackLockCard {
+  readonly name?: string | null | undefined;
+  readonly isFacedown?: boolean | undefined;
+  readonly effectsNegated?: boolean | undefined;
+  readonly effects?: readonly EffectDefinition[] | undefined;
+  readonly counters?: { get(type: string): number | undefined } | undefined;
+  getCounter?(type: string): number;
+}
+
+interface CounterAttackLockPlayer<Card extends CounterAttackLockCard> {
+  readonly id: string;
+  readonly field: readonly Card[];
+  readonly spellTrap: readonly Card[];
+  readonly fieldSpell?: Card | null | undefined;
+}
+
+/** Read current sources and physical controllers without mutating the attacker. */
+export function getCounterAttackLockReason<Card extends CounterAttackLockCard>(
+  attacker: Card,
+  sourceOwners: readonly CounterAttackLockPlayer<Card>[],
+  attackerControllerId: string,
+  matchesTargetFilters: (card: Card, filters: CardFilter) => boolean,
+): string | null {
+  for (const sourceOwner of sourceOwners) {
+    const sources: Array<{ card: Card; zone: CanonicalZone }> = [
+      ...sourceOwner.field.map(card => ({ card, zone: "field" as const })),
+      ...sourceOwner.spellTrap.map(card => ({ card, zone: "spellTrap" as const })),
+      ...(sourceOwner.fieldSpell ? [{ card: sourceOwner.fieldSpell, zone: "fieldSpell" as const }] : []),
+    ];
+    for (const { card: sourceCard, zone } of sources) {
+      if (!isPassiveSourceActive(sourceCard)) continue;
+      for (const effect of sourceCard.effects || []) {
+        if (effect.timing !== "passive") continue;
+        const passive = getAttackPassive(effect);
+        if (passive.type !== "counter_attack_lock") continue;
+        if (effect.requireZone && zone !== effect.requireZone) continue;
+        if (passive.requireZone && zone !== passive.requireZone) continue;
+        const targetOwners = normalizePassiveList(passive.targetOwners || passive.owners, ["opponent"]);
+        const relation = attackerControllerId === sourceOwner.id ? "self" : "opponent";
+        if (!targetOwners.includes("any") && !targetOwners.includes(relation)) continue;
+        if (!matchesTargetFilters(attacker, passive.targetFilters || { cardKind: "monster" })) continue;
+        const counterType = passive.counterType || "default";
+        const minCounters = Math.max(1, Number(passive.minCounters ?? 1));
+        if (getCounterValue(attacker, counterType) < minCounters) continue;
+        return passive.reason ||
+          `${attacker.name || "Monster"} cannot attack while it has ${minCounters} or more ${counterType} counter(s).`;
+      }
+    }
+  }
+  return null;
+}
+
 export function isActiveAttackPriorityTarget(
   this: AttackAvailabilityHost,
   card: GameCard | null | undefined,
@@ -272,7 +324,7 @@ function findAttackPassiveSourceZone(
 }
 
 function getCounterValue(
-  card: GameCard | null | undefined,
+  card: CounterAttackLockCard | null | undefined,
   counterType: string | null | undefined,
 ): number {
   if (!card || !counterType) return 0;
@@ -721,73 +773,15 @@ function battleIndestructibleFlagApplies(
   return !hasKnownBattleIndestructibleSource(card);
 }
 
-function getCounterAttackLockReason(
+function getLiveCounterAttackLockReason(
   game: AttackAvailabilityHost | null | undefined,
   attacker: GameCard | null | undefined,
 ): string | null {
-  if (!attacker) return null;
-  const attackerOwner = getPlayerByCardOwner(game, attacker);
-  const opponentOfAttacker =
-    attackerOwner && typeof game?.getOpponent === "function"
-      ? game.getOpponent(attackerOwner)
-      : attacker?.owner === "player"
-        ? game?.bot
-        : game?.player;
-  if (!attackerOwner || !opponentOfAttacker) return null;
-
-  const sourceOwners = Array.from(
-    new Set([attackerOwner, opponentOfAttacker].filter(Boolean)),
-  );
-
-  for (const sourceOwner of sourceOwners) {
-    for (const sourceCard of getAttackPassiveSources(sourceOwner)) {
-      if (!sourceCard || sourceCard.isFacedown) continue;
-
-      for (const effect of sourceCard.effects || []) {
-        if (effect?.timing !== "passive") continue;
-        const passive = getAttackPassive(effect);
-        if (!passive || passive.type !== "counter_attack_lock") continue;
-
-        const sourceZone = findAttackPassiveSourceZone(
-          game,
-          sourceOwner,
-          sourceCard,
-        );
-        if (effect.requireZone && sourceZone !== effect.requireZone) continue;
-        if (passive.requireZone && sourceZone !== passive.requireZone) continue;
-        if (effect.requireFaceup === true && sourceCard.isFacedown) continue;
-
-        const targetOwnersRaw = passive.targetOwners ||
-          passive.owners || ["opponent"];
-        const targetOwners = Array.isArray(targetOwnersRaw)
-          ? targetOwnersRaw
-          : [targetOwnersRaw];
-        const ownerType = attackerOwner === sourceOwner ? "self" : "opponent";
-        if (
-          !targetOwners.includes("any") &&
-          !targetOwners.includes(ownerType)
-        ) {
-          continue;
-        }
-
-        const targetFilters = passive.targetFilters || { cardKind: "monster" };
-        if (!cardMatchesAttackPassiveFilters(game, attacker, targetFilters)) {
-          continue;
-        }
-
-        const counterType = passive.counterType || "default";
-        const minCounters = Math.max(1, Number(passive.minCounters ?? 1));
-        if (getCounterValue(attacker, counterType) < minCounters) continue;
-
-        return (
-          passive.reason ||
-          `${attacker.name} cannot attack while it has ${minCounters} or more ${counterType} counter(s).`
-        );
-      }
-    }
-  }
-
-  return null;
+  if (!game || !attacker) return null;
+  const attackerOwner = getOwnerByCard(game, attacker);
+  if (!attackerOwner) return null;
+  return getCounterAttackLockReason(attacker, [game.player, game.bot], attackerOwner.id,
+    (card, filters) => cardMatchesAttackPassiveFilters(game, card, filters));
 }
 
 /**
@@ -815,7 +809,7 @@ export function getAttackAvailability(
     };
   }
 
-  const counterAttackLockReason = getCounterAttackLockReason(this, attacker);
+  const counterAttackLockReason = getLiveCounterAttackLockReason(this, attacker);
   if (counterAttackLockReason) {
     return {
       ok: false,

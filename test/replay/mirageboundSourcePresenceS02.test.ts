@@ -139,7 +139,7 @@ async function setup(t: TestContext, seat: PlayerId, controller: Controller,
     { effectId: "miragebound_dancer_special_summon" }));
   const replay = async () => {
     const saved = validateCanonicalReplay(JSON.parse(JSON.stringify(live.finalizeReplay({ reason: "miragebound-s02" }))));
-    assert.equal(saved.schemaVersion, 2); assert.equal(saved.engineVersion, "engine-rules-v14");
+    assert.equal(saved.schemaVersion, 2); assert.equal(saved.engineVersion, "engine-rules-v17");
     assert.ok(saved.commands.every(command => typeof command.stateHash === "string"));
     setLocale("pt-br");
     const result = await replayCanonicalDuel(saved, { game: unsafeFixture<ReplayDriverGamePort>(playback,

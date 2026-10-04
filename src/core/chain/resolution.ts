@@ -888,7 +888,10 @@ function revalidateDeclaredTargets(
       const sameLocation =
         !!snapshot &&
         current.zone === snapshot.zone &&
-        current.locationVersion === Number(snapshot.locationVersion ?? 0);
+        current.locationVersion === Number(snapshot.locationVersion ?? 0) &&
+        (!reference || (snapshot.card === card &&
+          snapshot.cardInstanceId === (card.instanceId ?? card._instanceId ?? card.id ?? null) &&
+          snapshot.controllerId === current.player?.id && snapshot.faceUp === current.faceUp));
       const zoneValid =
         allowedZones.length === 0 ||
         (current.zone !== "unknown" && allowedZones.includes(current.zone));

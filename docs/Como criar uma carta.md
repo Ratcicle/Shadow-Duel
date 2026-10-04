@@ -535,6 +535,16 @@ quando a action declara propositalmente uma `uniqueKey`.
 `filters`, `zone`, `count` e `promptPlayer` para fazer seleção própria; confira
 o catálogo e o handler antes de reutilizar uma action complexa.
 
+Em `destroy_targeted_cards` sem `targetRef`, `minTargets: 0` declara uma escolha
+opcional na resolução. Esse mínimo também vale quando `targetCountFromContext`
+calcula o máximo a partir de um valor produzido por uma action anterior, como
+os marcadores removidos. A escolha passa pelo broker como `choice`, sem declarar
+alvos na ativação; humanos escolhem manualmente e a IA pode fornecer uma seleção
+exata. Máximo zero, ausência de candidatos, recusa ou uma tentativa sem destruição
+por imunidade ou perda da presença escolhida permitem continuar para a próxima
+action. Planos exatos inválidos continuam sendo rejeitados, sem escolher outra
+carta em seu lugar.
+
 `add_status` aceita `targetRef` para alvos resolvidos ou `targetScope` para
 aplicar um status em massa a cards em zonas ativas. Use `targetScope` para
 efeitos como "negue todos os cards com a face para cima que o oponente
@@ -643,7 +653,11 @@ Tipos suportados atualmente:
 - `equipped_counter_buff`: buff baseado nos counters dos equipamentos vinculados
   à fonte.
 - `equipped_field_counter_buff`: buff do monstro equipado baseado em counters
-  presentes no campo.
+  presentes no campo. Seu campo opcional `passive.fixedDefBonus` concede também
+  DEF fixa, independente da quantidade de counters e de `stats`. Esse bônus fixo
+  mantém uma contribuição contínua própria por Equipamento, enquanto a fonte
+  estiver ativa e vinculada ao monstro. Negar os efeitos da fonte ou encerrar o
+  vínculo remove essa contribuição; não use um buff de ativação para substituí-la.
 - `field_counter_stat_aura`: aura de stats calculada pela quantidade de counters
   no campo.
 - `field_archetype_aura_buff`: aura de stats para cards de um arquétipo no campo.
@@ -878,18 +892,50 @@ handSummonProcedure: {
 ```
 
 Quando há `cost`, o procedimento abre seleção de custo para o jogador humano
-e executa os movimentos dos materiais pela transação de Invocação. Sem `cost`,
-não abre seleção de materiais nem produz pagamentos. As condições e a presença
-da fonte na mão são verificadas no preview e novamente após as escolhas, antes
-do compromisso. Albus (307) usa essa forma sem custo, condicionada ao controle
-de um monstro Arcanista com a face para cima.
+e executa os movimentos dos materiais pela transação de Invocação.
+
+Para remover marcadores como custo, use `handSummonProcedure.counterCost`.
+`counterType` identifica o marcador e `amount` exige uma quantidade inteira
+positiva. `owner` restringe o controlador das fontes (`"self"` por padrão);
+`zones` aceita `"field"`, `"spellTrap"` e `"fieldSpell"` (`["field"]` por padrão).
+`requireFaceup` e `filters` restringem as cartas de onde os marcadores podem ser
+removidos. O jogador humano escolhe as fontes pelo broker; a quantidade total
+disponível nas fontes escolhidas deve cobrir o custo.
+
+```js
+handSummonProcedure: {
+  id: "example_counter_procedure",
+  oncePerTurn: true,
+  oncePerTurnName: "example_counter_procedure",
+  oncePerTurnConsumeOn: "success",
+  counterCost: {
+    counterType: "spore",
+    amount: 2,
+    owner: "any",
+    zones: ["field", "spellTrap", "fieldSpell"],
+    requireFaceup: true
+  }
+}
+```
+
+As fontes escolhidas preservam sua identidade e presença. Posição, espaço,
+legalidade e quantidade de marcadores são revalidados antes do compromisso;
+cada marcador é removido sequencialmente pela transação, antes da tentativa de
+Invocação. Esses pagamentos são custos do procedimento, não efeitos de card.
+Sem `cost` nem `counterCost`, não há seleção de recursos nem pagamentos. As
+condições e a presença da fonte na mão são verificadas no preview e novamente
+após as escolhas, antes do compromisso. Albus (307) usa essa forma sem custo,
+condicionada ao controle de um monstro Arcanista com a face para cima.
 
 Para limitar o procedimento por nome, acrescente `oncePerTurn: true` e uma
 chave estável em `oncePerTurnName`. O preview e a validação após as escolhas
-consultam o limite existente. O uso é consumido no compromisso da tentativa,
-antes do primeiro pagamento, e permanece consumido se a Invocação for negada.
-Cancelar antes desse compromisso preserva materiais e uso. Sem esses campos,
-o procedimento continua sem limite próprio.
+consultam o limite existente. `oncePerTurnConsumeOn: "commit"` é o padrão:
+consome o uso no compromisso da tentativa, antes do primeiro pagamento, e o
+mantém consumido se a Invocação for negada. `oncePerTurnConsumeOn: "success"`
+consome o limite somente após uma Invocação bem-sucedida; uma Invocação negada
+ou um pagamento interrompido não o consome, mas custos já pagos não são
+devolvidos. Cancelar antes do compromisso preserva recursos e uso. Sem os
+campos de limite, o procedimento continua sem limite próprio.
 
 Procedimentos não são ativações de efeito, não criam links de Chain e não
 incrementam contadores de ativações do material. As janelas normais de tentativa
@@ -1197,11 +1243,35 @@ Para um efeito coletivo, `buff_stats_temp.targetScope` consulta o campo na
 resolução. Declare uma condição de ativação separada quando for necessário
 controlar ao menos um monstro elegível antes de ativar.
 
-Uma seleção com `intent: "reference"` exige `targetFromContext`. Ela vincula
-a instância do evento, sem seleção humana nem `effect_targeted`. A preparação
-captura sua zona, controlador e versão de localização em `referenceSnapshots`,
-separadamente dos alvos. Sair da zona e retornar invalida o vínculo; outra cópia
-não o substitui. O custo já pago permanece pago.
+Uma referência contextual usa `intent: "reference"` e `targetFromContext`. Ela
+vincula a instância do evento, sem seleção humana nem `effect_targeted`. O ingresso
+do evento captura identidade, zona, controlador, face e versão de localização
+da fonte e das referências antes do primeiro `await`. A ocorrência conserva esses snapshots por fonte
+física/efeito e os encaminha para `PreparedActivation.referenceSnapshots`,
+inclusive na coleta diferida de SEGOC. Snapshots fornecidos são autoritativos:
+ausência ou perda da referência não permite uma nova consulta tardia ao contexto.
+Os aliases seguem o contexto canônico de cada evento, compartilhado com a
+simulação. Projeções de efeito para OPT por card do evento registram a origem
+exata em um `WeakMap`, sem substituir identidade por uma correspondência de ID.
+A ocorrência é publicada após os efeitos imediatos; sua captura de referências
+continua anterior ao primeiro `await`.
+Sair da zona e retornar invalida o vínculo; outra cópia não o substitui. A
+imunidade a efeitos continua aplicável; proteção exclusiva contra alvos não
+transforma uma referência em alvo. O custo já pago permanece pago. Referências
+genéricas sem `targetFromContext` conservam seus snapshots e regras existentes;
+não recebem o vazio autoritativo da captura contextual.
+A presença da fonte na ocorrência é validada antes do compromisso. Um custo
+legítimo que mova a própria fonte depois desse limite não cria uma exigência
+nova de permanência na resolução; use o opt-in explícito descrito abaixo.
+A simulação valida os mínimos e filtros das referências obrigatórias antes
+das actions do efeito; perder um vínculo impede também as actions posteriores
+que não usam diretamente seu `targetRef`. Continuação do mesmo efeito conserva
+esse ingresso, sem criar uma nova regra de interrupção no meio da resolução.
+
+Na referência `host`, conserve o host capturado no evento. Reequipagem sem saída
+da fonte não substitui esse host nem acrescenta uma condição de vínculo vivo.
+Filtros como `counterType`/`minCounters` pertencem a `filters` para participar
+da validação contextual e da revalidação na resolução.
 
 O preview sequencial considera as cartas que `discard_from_hand` pode colocar
 no Cemitério. Ele exige o mínimo completo, exclui a fonte quando configurada
@@ -1244,10 +1314,21 @@ materiais não conta como descarte. O marcador descreve a natureza do movimento;
 `activationCosts` e `intent: "cost"` determinam o momento do pagamento.
 
 Escolhas de `optional_target_actions` são locais à resolução e passam pelo
-DecisionBroker sem publicar `effect_targeted`. `optional: true` permite
-prosseguir sem candidatos; `allowCancel: false` exige a escolha quando houver
-candidatos válidos. Um alvo declarado no efeito continua sendo escolhido antes
-das respostas e mantém a identidade daquela presença até a resolução.
+DecisionBroker com `purpose: "choice"` e `timing: "resolution"`. Quando a escolha
+não alveja, declare `intent: "reference"` em `action.targets`, sem
+`targetFromContext`: os candidatos são consultados naquele momento, sem
+`effect_targeted` nem proteção contra targeting; imunidade a efeitos permanece.
+Os descritores locais são projetados nas actions aninhadas sem alterar os alvos
+do efeito pai. Isso difere de uma referência contextual de evento, cuja presença
+é congelada antes da coleta.
+
+`optional: true` permite prosseguir sem candidatos; `optional: false` com
+`allowCancel: false` conserva a escolha obrigatória e o preview de disponibilidade.
+Um alvo declarado no efeito continua sendo escolhido antes das respostas e
+mantém a identidade daquela presença até a resolução. Runtime e simulação
+propagam falhas da sequência aninhada, inclusive quando todos os escolhidos são
+imunes. A IA usa o mínimo obrigatório por padrão e conserva planos exatos
+válidos para uma seleção maior dentro do limite.
 
 `move.requireAll: true` valida todas as cartas selecionadas antes de movimentá-las e exige sucesso em cada movimento. Combine com `requireDestination: true` quando todos os materiais precisam chegar ao destino declarado. Um pagamento incompleto interrompe a ativação; movimentos já concluídos permanecem pagos. Movimentos, eventos e apresentação continuam sequenciais. Actions que omitem `requireAll` preservam o comportamento existente.
 
@@ -1321,3 +1402,130 @@ válida, com a face para cima no campo, durante a resolução.
 
 `card_to_grave` com `fromZone: "hand"` abrange qualquer envio efetivo da mão
 ao Cemitério, incluindo custos e materiais. Não o use como sinônimo de descarte.
+
+### Custos preparados de contadores e controlador de saída
+
+Para um pagamento fixo de contadores distribuídos pelo campo, declare
+`remove_counters_from_field` em `activationCosts`, com `amount` inteiro positivo
+e `targetRef` apontando para uma definição `intent: "cost"`. Declare nessa
+definição os jogadores, zonas, face e saldo elegíveis; `count` limita o número
+de fontes, enquanto `amount` determina o total a pagar. Modos com pagamentos
+diferentes pertencem a `activationCases`, mantendo a identidade e a política
+de uso do efeito pai. Não misture esse custo preparado com quantidades
+variáveis, `minAmount`, `maxAmount` ou `defaultAmount`.
+
+O broker registra as fontes antes das respostas. O pagamento usa exclusivamente
+essas referências, em sua ordem, validando identidade, versão, presença,
+controle, face e saldo. A remoção é sequencial, com invalidação de cache e um
+`counter_removed` agregado do total efetivamente pago. Falha interrompe o efeito
+e preserva o que já foi removido; negação posterior também não reembolsa.
+A imunidade é ignorada somente para referências de custo durante
+`payingActivationCosts`. Alvos e referências de efeito conservam seus filtros.
+Consumidores sem `targetRef` mantêm o fluxo existente.
+
+Em triggers de movimento, o padrão de `movementTriggerOwnership` é
+`"destination"`. Use `"field_exit_controller"` quando o controlador que perdeu
+a carta do campo deva receber o efeito: a identidade histórica vem de
+`fromPlayer`, sem alterar `payload.player`, que continua indicando o destino.
+Movimentos fora do campo mantêm a interpretação padrão. Uma fonte observadora
+usa seu controlador atual para comparar lados; a própria fonte de saída usa
+o ator histórico para escolhas, recursos e uso. A preparação e o SEGOC
+localizam a fonte fisicamente nos dois jogadores e preservam seu ocupante,
+zona e `locationVersion`, evitando ativação após saída e retorno da carta.
+Payloads incompletos não podem deduzir essa procedência de um dono já alterado.
+
+Para observar destruição sem restringir o destino ao Cemitério, use
+`card_moved` com os predicados de destruição apropriados. Destruição para
+banimento e remoção de Ficha conservam causa e origem; devolução à mão,
+banimento direto, Tributo e troca de controle não equivalem a destruição.
+Na simulação, triggers de saída de fontes negadas cuja semântica diverge do
+runtime continuam explicitamente não suportados, somente quando elegíveis.
+
+Um observador com `eventCardFilters.eventCardIsEquippedToSource: true` pode
+reconhecer o host destruído depois do cleanup da Equip pelo binding tipado
+`card_moved.equipBindingsAtFieldExit`. O produtor captura fonte, host,
+controlador e negação antes de limpar o vínculo. O movimento automático da
+Equip fornece `MoveCardResult.destinationPresence`, fixado no compromisso de
+entrada no destino antes dos callbacks; o binding conserva esse recibo como
+`equipAfterCleanup`. Não consulte a localização novamente depois do `await`.
+Na simulação, controlador e destino também são fixados no compromisso; um
+movimento ocorrido em callback publica outro evento e não reescreve a
+procedência do movimento anterior ou o controlador atual.
+Somente o binding exato e a presença física correspondente ao recibo habilitam
+o ingresso histórico. Movimento adicional, inclusive saída/retorno antes do
+SEGOC, invalida a fonte. O ator é o controlador da Equip na saída do host; a
+zona física pode pertencer ao proprietário original, independentemente do ator.
+A negação capturada nesse binding usa os marcadores existentes da Chain;
+não amplia a legalidade de fontes comuns ou a regra dos triggers de saída.
+
+Contribuições de `equipped_field_counter_buff` usam chaves independentes por
+fonte física/presença e índice do efeito. Runtime e simulação compartilham
+`getEquippedFieldCounterBuffKeys`: refresh aplica deltas, e negação/saída de
+uma Equip remove somente sua contribuição. A fórmula da chave de DEF fixa é
+preservada; a chave de contadores inclui a fonte e o índice mesmo com `effect.id`.
+
+### Projeção de contadores, atributos e Fusão na IA
+
+`field_counter_stat_aura` é projetada pelo refresh compartilhado da simulação.
+A contagem pertence a cada destinatário, respeitando fonte ativa, zona, lados,
+face e filtros. Runtime e simulação usam `getFieldCounterStatAuraBuffKey` com
+a mesma fórmula anterior de identidade da contribuição. Refresh aplica deltas
+e remove somente chaves obsoletas. A ordem das fontes acompanha o runtime:
+os dois campos de monstros precedem as fontes de Spell/Trap e Field Spell.
+Essa ordem importa quando contribuições sobrepostas atingem o piso zero.
+A prova interna de contribuições modeladas é copiada pelos perfis de clone;
+não acrescente identificadores locais ao replay ou ao estado canônico.
+
+As actions `remove_counters_from_field`, `remove_all_counters_from_field` e
+`buff_stats_by_counter` possuem projeções genéricas. Sem `targetRef`, a remoção
+legada reproduz a seleção atual da IA no runtime: fontes do ator antes das do
+oponente, conjunto guloso suficiente, teto da quantidade variável e remoção
+de uma unidade por fonte selecionada em cada percurso. Isso não substitui o
+broker humano nem muda custos preparados. Uma escolha exata legada
+`counter_payment` que o runtime não consome é sinalizada como não suportada;
+não simule um pagamento diferente do que a execução fará.
+
+A remoção escreve a quantidade efetivamente paga no contexto e publica um
+`counter_removed` agregado. O pagamento de substituição da Armor usa a mesma
+capacidade, conservando o ponto de compromisso e o uso por cópia. Uma mudança
+da fonte depois do recibo completo não desfaz um pagamento concluído. Em
+`destroy_targeted_cards` com `targetCountFromContext`, a quantidade é limitada
+aos candidatos legais; `minTargets: 0` conserva a recusa opcional e permite
+continuar o efeito. Proteção/substituição que impede a destruição de uma carta
+selecionada válida não transforma automaticamente a action em falha. Bônus
+válidos por contador também podem concluir mesmo quando o piso zero absorve
+a redução de atributos.
+
+No ingresso público de Spell, triggers de remoção de contadores são coletados
+durante a resolução e publicados após a finalização do efeito pai. Assim,
+uma Ficha criada pela Colônia depois da Harvest não recebe retroativamente
+seu bônus. `createDeferredSimulatedEventFrame` captura referências e presença
+da fonte no ingresso de cada ocorrência, antes do callback observacional, e
+conserva a fila até a conclusão do procedimento. O frame não assume que um
+emitter externo seja apenas um observador: a delegação preserva o callback e
+sinaliza a projeção que não controla sua fila; o modo explícito `observer`
+habilita a coleta interna sem executar os triggers duas vezes.
+
+`polymerization_fusion_summon` move os materiais individualmente, preserva
+causa, controlador e recibo de destino, coloca o monstro e publica a Invocação
+por Fusão. Os triggers coletados são resolvidos em grupo após a colocação,
+com a ordem obrigatórios/opcionais já usada na projeção de SEGOC. Uso/OPT é
+preparado na ordem de publicação antes de resolver os links em LIFO; duas
+cópias que compartilham um limite por nome não podem trocar de beneficiário
+apenas porque a resolução ocorre ao contrário.
+Referências contextuais congeladas não são substituídas após saída/retorno.
+O runtime conserva coleta tardia para certos triggers comuns sem referências;
+se um callback ou movimento adicional alterar a presença dessa fonte antes
+da coleta, a projeção sinaliza a divergência e o planejador descarta o ramo.
+Isso não acrescenta uma regra de invalidação ao duelo. Callbacks de arquétipo
+devem manter somente comportamentos que ainda não sejam executados pelo
+dispatcher declarativo.
+
+`set_original_stats` projeta os atributos originais e o evento correspondente,
+conservando o override anterior para cleanup na saída do campo. Os valores
+contextuais usam as raízes canônicas do efeito (`source`, `player`, `opponent`)
+e o contexto de actions. Não recompute atributos impressos para simular um
+override nem introduza um campo paralelo de identidade/atributos nos clones.
+Famílias desconhecidas, excesso da profundidade de eventos e os caminhos de
+combate ainda não suportados continuam sinalizados; suporte a essas actions
+não significa suporte universal a todos os efeitos de um arquétipo.

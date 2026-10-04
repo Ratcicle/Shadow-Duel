@@ -412,7 +412,11 @@ export function serializeReplayEventPayload(
     const duelCardId = readProperty(value, "duelCardId");
     const cardKind = readProperty(value, "cardKind");
     const name = readProperty(value, "name");
-    if (duelCardId != null || (cardKind && name)) {
+    // Declarative filters and Token templates also carry a name and kind.
+    // Only physical runtime instances may receive a new duel identity.
+    const runtimeInstance = typeof readProperty(value, "instanceId") === "number" &&
+      typeof cardKind === "string" && typeof name === "string";
+    if (duelCardId != null || runtimeInstance) {
       game.ensureDuelCardId?.(value);
       const projection: SerializableObject = {
         duelCardId: stableValue(readProperty(value, "duelCardId")) ?? null,

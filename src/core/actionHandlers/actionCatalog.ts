@@ -944,7 +944,7 @@ export const ACTION_CATALOG = {
   optional_target_actions: action({
     category: "conditional",
     summary:
-      "Optionally resolves its own targets and executes nested actions when conditions and targets are available.",
+      "Chooses cards during resolution and executes nested actions; reference intent preserves effect immunity without applying targeting protection.",
     handler: "handleOptionalTargetActions",
     required: ["targets", "actions"],
     optional: [
@@ -969,7 +969,7 @@ export const ACTION_CATALOG = {
       "cancelLabelKey",
     ],
     fields: {
-      targets: { type: "array" },
+      targets: { type: "array", description: "Resolution-local descriptors. Use intent: reference without targetFromContext for a fresh non-targeting choice." },
       actions: { type: "array" },
       conditions: { type: "array" },
       selectionMessage: { type: "string" },
@@ -1375,6 +1375,11 @@ export const ACTION_CATALOG = {
     emits: ["before_destroy", "card_to_grave", "cards_added_to_hand"],
     preview: "missing",
     examples: [{ type: "destroy_targeted_cards", zones: ["field"], maxTargets: 2 }],
+    notes: [
+      "minTargets: 0 requests an optional resolution choice, including when targetCountFromContext supplies its maximum.",
+      "An optional choice succeeds without destruction when the maximum is zero, candidates are absent, the player declines, or selected cards are immune or no longer have the same field presence.",
+      "Exact AI choices still reject unavailable, duplicate, or excessive identities instead of replacing them.",
+    ],
   }),
   destroy_cards_by_scope: action({
     category: "destruction",
@@ -2177,6 +2182,7 @@ export const ACTION_CATALOG = {
     handler: "proxy:applyRemoveCountersFromField",
     required: ["counterType"],
     optional: [
+      "targetRef",
       "amount",
       "count",
       "minAmount",
@@ -2198,6 +2204,7 @@ export const ACTION_CATALOG = {
       "stopOnFailure",
     ],
     fields: {
+      targetRef: field("targetRef"),
       counterType: { type: "string" },
       amount: field("amount"),
       count: { type: "number" },
@@ -2219,8 +2226,10 @@ export const ACTION_CATALOG = {
       haltOnFailure: { type: "boolean" },
       stopOnFailure: { type: "boolean" },
     },
+    targetRef: "optional",
     selection: "dynamic",
     mutates: ["counters"],
+    emits: ["counter_removed"],
     examples: [
       {
         type: "remove_counters_from_field",
@@ -2307,6 +2316,7 @@ export const ACTION_CATALOG = {
     },
     selection: "none",
     mutates: ["counters"],
+    emits: ["counter_removed"],
     examples: [
       {
         type: "remove_all_counters_from_field",

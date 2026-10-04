@@ -19,7 +19,7 @@ function scenario(actor: "player" | "bot" = "bot") {
     turn: actor, phase: "main1", turnCounter: 4, _isPerspectiveState: true,
   }, "Minimal planning graph retains physical owners in perspective slots");
   const copy = createPlanningCopy();
-  const make = (id: number) => copy.cloneCardForSim(new Card(cardDefinition(id), actor));
+  const make = (id: number, owner: string = actor) => copy.cloneCardForSim(new Card(cardDefinition(id), owner));
   return { state, make };
 }
 
@@ -31,7 +31,7 @@ const optionalBackrowDestruction = {
 for (const count of [0, 1]) for (const fieldSpell of [false, true]) {
   test(`optional destruction simulates ${count} exact choices (field spell ${fieldSpell})`, () => {
     const { state, make } = scenario();
-    const source = make(261), first = make(262), chosen = make(262);
+    const source = make(261), first = make(262, state.player.id), chosen = make(262, state.player.id);
     state.player.spellTrap.push(first);
     if (fieldSpell) state.player.fieldSpell = chosen;
     else state.player.spellTrap.push(chosen);
@@ -46,7 +46,8 @@ for (const count of [0, 1]) for (const fieldSpell of [false, true]) {
 for (const invalid of ["stale", "duplicate", "too_many", "wrong_zone", "wrong_kind"] as const) {
   test(`optional destruction simulation rejects ${invalid} exact choices without fallback`, () => {
     const { state, make } = scenario();
-    const source = make(261), first = make(262), chosen = make(invalid === "wrong_kind" ? 260 : 262);
+    const source = make(261), first = make(262, state.player.id),
+      chosen = make(invalid === "wrong_kind" ? 260 : 262, state.player.id);
     state.player.spellTrap.push(first);
     if (invalid === "wrong_zone") state.player.hand.push(chosen);
     else state.player.spellTrap.push(chosen);
@@ -63,7 +64,8 @@ for (const invalid of ["stale", "duplicate", "too_many", "wrong_zone", "wrong_ki
 
 test("optional destruction without an exact plan removes at most one filtered opponent card", () => {
   const { state, make } = scenario();
-  const source = make(261), first = make(262), second = make(262), monster = make(260);
+  const source = make(261), first = make(262, state.player.id), second = make(262, state.player.id),
+    monster = make(260, state.player.id);
   state.player.spellTrap.push(first, second);
   state.player.field.push(monster);
   applySimulatedActions({ state, actions: [optionalBackrowDestruction], options: { sourceCard: source } });
@@ -74,12 +76,43 @@ test("optional destruction without an exact plan removes at most one filtered op
 
 test("optional destruction simulation ignores zones outside the runtime field rows", () => {
   const { state, make } = scenario();
-  const target = make(262);
+  const target = make(262, state.player.id);
   state.player.hand.push(target);
   applySimulatedActions({ state, actions: [{ ...optionalBackrowDestruction, zones: ["hand"] }] });
   assert.deepEqual(state.player.hand, [target]);
   assert.equal(state.player.graveyard.length, 0);
 });
+
+for (const actor of ["player", "bot"] as const) for (const fieldSpell of [false, true]) {
+  test(`optional destruction returns a borrowed target to its original owner (${actor}, field spell ${fieldSpell})`, () => {
+    const { state, make } = scenario(actor);
+    const source = make(261), target = make(262);
+    target.owner = target.controller = state.player.id;
+    if (fieldSpell) state.player.fieldSpell = target;
+    else state.player.spellTrap.push(target);
+    let movements = 0;
+    applySimulatedActions({ state, actions: [optionalBackrowDestruction], options: { sourceCard: source,
+      activationContext: { decisions: { selections: { destroy_targets: [required(target.instanceId)] } } },
+      emitSimulatedEvent: (event, payload) => {
+        if (event !== "card_moved") return;
+        movements += 1;
+        assert.equal(Reflect.get(payload, "card"), target);
+        assert.equal(Reflect.get(payload, "fromPlayer"), state.player);
+        assert.equal(Reflect.get(payload, "player"), state.bot);
+        assert.equal(Reflect.get(payload, "toPlayer"), state.bot);
+        assert.equal(Reflect.get(payload, "fromZone"), fieldSpell ? "fieldSpell" : "spellTrap");
+        assert.equal(Reflect.get(payload, "toZone"), "graveyard");
+        assert.equal(Reflect.get(payload, "wasDestroyed"), true);
+      },
+    } });
+    assert.equal(movements, 1);
+    assert.deepEqual(state.bot.graveyard, [target]);
+    assert.deepEqual(state.player.graveyard, []);
+    assert.equal(target.owner, actor);
+    assert.equal(target.controller, actor);
+    assert.deepEqual(state._simUnsupportedActions ?? [], []);
+  });
+}
 
 for (const eligible of [false, true]) {
   test(`Roar's simulated Dragon condition requires a face-up Level 7 Dragon (${eligible})`, () => {

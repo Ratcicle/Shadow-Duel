@@ -7,6 +7,35 @@ import type { GameCard } from "../../contracts/cards.js";
 import type { GameCoreHost } from "../../contracts/gameRuntime.js";
 import type { GamePlayer } from "../../contracts/player.js";
 import type { CanonicalZone } from "../../contracts/zones.js";
+import type { EventCard, EventCardPresenceSnapshot, EventZone } from "../../contracts/events.js";
+
+type PresenceFields = Pick<EventCard, "id" | "duelCardId" | "instanceId" | "_instanceId" | "isFacedown" | "locationVersion">;
+export type PresenceCard = { readonly [Key in keyof PresenceFields]?: PresenceFields[Key] | undefined };
+
+export function captureEventCardPresence(
+  card: PresenceCard,
+  controllerId: string | null,
+  zone: EventZone,
+): EventCardPresenceSnapshot {
+  return Object.freeze({ cardId: card.id ?? null, duelCardId: card.duelCardId ?? null,
+    instanceId: card.instanceId ?? card._instanceId ?? null, controllerId, zone,
+    faceUp: card.isFacedown !== true, locationVersion: Number(card.locationVersion || 0) });
+}
+
+export function matchesEventCardPresence(
+  card: PresenceCard,
+  snapshot: EventCardPresenceSnapshot,
+  controllerId: string | null,
+  zone: string | null,
+): boolean {
+  return snapshot.instanceId != null &&
+    (card.instanceId ?? card._instanceId ?? null) === snapshot.instanceId &&
+    (card.id ?? null) === snapshot.cardId &&
+    (card.duelCardId ?? null) === snapshot.duelCardId &&
+    controllerId === snapshot.controllerId && zone === snapshot.zone &&
+    (card.isFacedown !== true) === snapshot.faceUp &&
+    Number(card.locationVersion || 0) === snapshot.locationVersion;
+}
 
 type RelativePlayerId = string | null | undefined;
 

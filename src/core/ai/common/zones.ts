@@ -1,9 +1,12 @@
 import { clearEffectNegation } from "../../effects/negation.js";
+import { captureEventCardPresence } from "../../game/zones/ownership.js";
+import type { EventCardPresenceSnapshot, EventEquipHostExitBinding } from "../../contracts/events.js";
 import { restoreFieldExitStatuses, restoreTemporaryStatuses } from "../../Card.js";
 import { cardMatchesFilter } from "./cardFilters.js";
 import { countTurnCardActivations } from "../../game/events/activationHistory.js";
+import { getCounterValue } from "./counters.js";
 import { clearPermanentStatBuffs, expireFaceupStatBuffs, removeTrackedStatChange } from "../../effects/actions/stats.js";
-import { clearPassiveBuffsForCard, getModeledPassiveContributions, pruneModeledPassiveContributions, registerModeledPassiveContribution, applyPassiveBuffValue, getFieldAuraBuffKey, getSendToGraveReplacementDestination, refreshEquipExtraAttackBonus, removeFieldAuraBuffContributions } from "../../effects/passives/passiveBuffs.js";
+import { clearPassiveBuffsForCard, getModeledPassiveContributions, pruneModeledPassiveContributions, registerModeledPassiveContribution, applyPassiveBuffValue, getFieldAuraBuffKey, getFieldCounterStatAuraBuffKey, getEquippedFieldCounterBuffKeys, getSendToGraveReplacementDestination, refreshEquipExtraAttackBonus, removeFieldAuraBuffContributions, isActiveEquipInZone } from "../../effects/passives/passiveBuffs.js";
 import {
   assignAutomaticFieldSlot,
   clearFieldSlot,
@@ -129,12 +132,13 @@ export function refreshSimulatedFieldPresenceTypeSummonBuffs(state: SimulatedFie
   }
 }
 
-/** Continuous archetype auras use the same contribution keys as a live clone. */
+/** Continuous stat producers reconcile the same contributions as a live clone. */
 export function refreshSimulatedFieldAuras(state: Pick<AiStateShape, "bot" | "player"> &
   Partial<Pick<AiStateShape, "turnCounter" | "cardActivationHistory">>): void {
   const field = [...state.player.field, ...state.bot.field];
-  const cards = [...field, ...state.player.spellTrap, ...state.bot.spellTrap,
-    ...(state.player.fieldSpell ? [state.player.fieldSpell] : []), ...(state.bot.fieldSpell ? [state.bot.fieldSpell] : [])];
+  const cards = [...field, ...state.player.spellTrap,
+    ...(state.player.fieldSpell ? [state.player.fieldSpell] : []), ...state.bot.spellTrap,
+    ...(state.bot.fieldSpell ? [state.bot.fieldSpell] : [])];
   const stale = new Map<object, Set<string>>(cards.map(card => [card, new Set(getModeledPassiveContributions(card)
     .filter(([, family]) => family !== "field_presence_type_summon_count_buff").map(([key]) => key))]));
   const refresh: typeof applyPassiveBuffValue = (card, key, amount, stats) => {
@@ -142,49 +146,103 @@ export function refreshSimulatedFieldAuras(state: Pick<AiStateShape, "bot" | "pl
     return applyPassiveBuffValue(card, key, amount, stats);
   };
   refreshSimulatedFieldPresenceTypeSummonBuffs(state);
-  for (const owner of [state.player, state.bot]) {
-    for (const source of [...owner.field, ...owner.spellTrap, ...(owner.fieldSpell ? [owner.fieldSpell] : [])]) {
-      source.effects?.forEach((effect, effectIndex) => {
-        if (effect.timing !== "passive" || !("passive" in effect) || !effect.passive) return;
-        if (effect.passive.type === "activated_card_count_buff") {
-          const passive = effect.passive;
-          const countOwner = passive.countOwner || "any";
-          const opponent = owner === state.bot ? state.player : state.bot;
-          const playerId = countOwner === "self" ? owner.id : countOwner === "opponent" ? opponent.id : undefined;
-          const active = !source.isFacedown && !source.effectsNegated &&
-            (!effect.requireZone || findCardZone(owner, source) === effect.requireZone);
-          const key = effect.id || `passive_${source.id}_${effectIndex}_activations`;
-          registerModeledPassiveContribution(source, key, "activated_card_count_buff");
-          refresh(source, key,
-            active ? countTurnCardActivations(state, passive.filters || {}, playerId) * (passive.amountPerCard ?? 0) : 0,
-            passive.stats || ["atk", "def"]);
-          return;
-        }
-        if (effect.passive.type !== "field_archetype_aura_buff") return;
+  // Zero-floor contributions depend on producer order: runtime visits both
+  // monster fields before Spell/Trap and Field Spell sources.
+  for (const source of cards) {
+    const owner = state.player.field.includes(source) || state.player.spellTrap.includes(source) ||
+      state.player.fieldSpell === source ? state.player : state.bot;
+    source.effects?.forEach((effect, effectIndex) => {
+      if (effect.timing !== "passive" || !("passive" in effect) || !effect.passive) return;
+      if (effect.passive.type === "field_counter_stat_aura") {
         const passive = effect.passive;
         const active = !source.isFacedown && !source.effectsNegated &&
           (!effect.requireZone || findCardZone(owner, source) === effect.requireZone) &&
-          (!passive.sourceFilters || cardMatchesFilter(source, passive.sourceFilters)) &&
-          (!passive.equippedWithFilters || cardMatchesFilter(source, { equippedWithFilters: passive.equippedWithFilters }));
-        for (const targetOwner of [state.player, state.bot]) {
-          for (const target of targetOwner.field) {
-            const eligible = active &&
-              (passive.includeSelf !== false || target !== source) &&
-              (!passive.targetRequireFaceup || !target.isFacedown) &&
-              (passive.targetOwners || ["self"]).includes(owner === targetOwner ? "self" : "opponent") &&
-              (passive.targetCardKinds || ["monster"]).includes(target.cardKind || "monster") &&
-              cardMatchesFilter(target, { ...(passive.targetFilters || {}), ...(passive.archetype ? { archetype: passive.archetype } : {}) });
-            for (const stat of ["atk", "def"] as const) {
-              const amount = stat === "atk" ? passive.atkBoost : undefined;
-              const value = amount ?? ((passive.stats || ["atk", "def"]).includes(stat) ? passive.amount || 0 : 0);
-              const key = getFieldAuraBuffKey(source, effect.id, effectIndex, field.indexOf(source), stat);
-              registerModeledPassiveContribution(target, key, "field_archetype_aura_buff");
-              refresh(target, key, eligible ? value : 0, [stat]);
+          (!passive.sourceFilters || cardMatchesFilter(source, passive.sourceFilters));
+        const amountPerCounter = passive.amountPerCounter ?? passive.amount ?? 0;
+        if (!active || amountPerCounter === 0) return;
+        const counterType = passive.counterType || "default";
+        const key = getFieldCounterStatAuraBuffKey(source, effect.id, effectIndex, cards.indexOf(source), counterType);
+        for (const target of field) {
+          if ((passive.includeSelf === false && target === source) ||
+              !(passive.targetCardKinds || passive.cardKinds || ["monster"]).includes(target.cardKind || "monster") ||
+              (passive.targetRequireFaceup === true && target.isFacedown) ||
+              !(passive.targetOwners || ["self"]).includes(target.owner === source.owner ? "self" : "opponent") ||
+              (passive.targetFilters && !cardMatchesFilter(target, passive.targetFilters))) continue;
+          registerModeledPassiveContribution(target, key, "field_counter_stat_aura");
+          refresh(target, key, Math.max(0, getCounterValue(target, counterType)) * amountPerCounter,
+            passive.stats || ["atk", "def"]);
+        }
+        return;
+      }
+      if (effect.passive.type === "equipped_field_counter_buff") {
+        const passive = effect.passive;
+        const target = source.equippedTo || source.equipTarget;
+        if (!target || typeof target !== "object" || !field.includes(target) || target.cardKind !== "monster") return;
+        const active = !source.isFacedown && !source.effectsNegated &&
+          (!effect.requireZone || findCardZone(owner, source) === effect.requireZone) &&
+          isActiveEquipInZone(source, target, owner.spellTrap) &&
+          (passive.targetRequireFaceup === false || !target.isFacedown) &&
+          (!passive.targetFilters || cardMatchesFilter(target, passive.targetFilters));
+        if (!active) return;
+        const ownerRules = passive.counterOwners || ["self"];
+        let count = 0;
+        for (const counterOwner of [state.player, state.bot]) {
+          if (!ownerRules.includes("any") && !ownerRules.includes("both") &&
+              !ownerRules.includes(owner === counterOwner ? "self" : "opponent")) continue;
+          for (const zone of passive.counterZones || ["field"]) {
+            for (const card of getZoneCards(counterOwner, zone)) {
+              if (!cardMatchesFilter(card, passive.counterFilters || {})) continue;
+              count += Math.max(0, getCounterValue(card, passive.counterType || "default"));
             }
           }
         }
-      });
-    }
+        const { counterKey, fixedDefKey } = getEquippedFieldCounterBuffKeys(
+          source, effect.id, effectIndex, cards.indexOf(source),
+        );
+        registerModeledPassiveContribution(target, counterKey, "equipped_field_counter_buff");
+        registerModeledPassiveContribution(target, fixedDefKey, "equipped_field_counter_buff");
+        refresh(target, counterKey, count * (passive.amountPerCounter ?? passive.amount ?? 0), passive.stats || ["atk", "def"]);
+        refresh(target, fixedDefKey, passive.fixedDefBonus ?? 0, ["def"]);
+        return;
+      }
+      if (effect.passive.type === "activated_card_count_buff") {
+        const passive = effect.passive;
+        const countOwner = passive.countOwner || "any";
+        const opponent = owner === state.bot ? state.player : state.bot;
+        const playerId = countOwner === "self" ? owner.id : countOwner === "opponent" ? opponent.id : undefined;
+        const active = !source.isFacedown && !source.effectsNegated &&
+          (!effect.requireZone || findCardZone(owner, source) === effect.requireZone);
+        const key = effect.id || `passive_${source.id}_${effectIndex}_activations`;
+        registerModeledPassiveContribution(source, key, "activated_card_count_buff");
+        refresh(source, key,
+          active ? countTurnCardActivations(state, passive.filters || {}, playerId) * (passive.amountPerCard ?? 0) : 0,
+          passive.stats || ["atk", "def"]);
+        return;
+      }
+      if (effect.passive.type !== "field_archetype_aura_buff") return;
+      const passive = effect.passive;
+      const active = !source.isFacedown && !source.effectsNegated &&
+        (!effect.requireZone || findCardZone(owner, source) === effect.requireZone) &&
+        (!passive.sourceFilters || cardMatchesFilter(source, passive.sourceFilters)) &&
+        (!passive.equippedWithFilters || cardMatchesFilter(source, { equippedWithFilters: passive.equippedWithFilters }));
+      for (const targetOwner of [state.player, state.bot]) {
+        for (const target of targetOwner.field) {
+          const eligible = active &&
+            (passive.includeSelf !== false || target !== source) &&
+            (!passive.targetRequireFaceup || !target.isFacedown) &&
+            (passive.targetOwners || ["self"]).includes(owner === targetOwner ? "self" : "opponent") &&
+            (passive.targetCardKinds || ["monster"]).includes(target.cardKind || "monster") &&
+            cardMatchesFilter(target, { ...(passive.targetFilters || {}), ...(passive.archetype ? { archetype: passive.archetype } : {}) });
+          for (const stat of ["atk", "def"] as const) {
+            const amount = stat === "atk" ? passive.atkBoost : undefined;
+            const value = amount ?? ((passive.stats || ["atk", "def"]).includes(stat) ? passive.amount || 0 : 0);
+            const key = getFieldAuraBuffKey(source, effect.id, effectIndex, field.indexOf(source), stat);
+            registerModeledPassiveContribution(target, key, "field_archetype_aura_buff");
+            refresh(target, key, eligible ? value : 0, [stat]);
+          }
+        }
+      }
+    });
   }
   for (const card of cards) {
     for (const key of stale.get(card) || []) applyPassiveBuffValue(card, key, 0);
@@ -375,6 +433,8 @@ export function attachSimulatedEquip(
 }
 
 export interface SimulatedMoveOptions {
+  onMoveCommitted?: (receipt: SimulatedMoveReceipt) => void;
+  emitSimulatedEvent?: (event: string, payload: object) => void;
   requireDestination?: boolean;
   state?: Pick<AiStateShape, "bot" | "player">;
   movedByEffect?: boolean;
@@ -382,6 +442,12 @@ export interface SimulatedMoveOptions {
   sourcePlayer?: SimulatedPlayerState | null;
   allowExtraDeckMonsterToHand?: boolean;
 }
+
+export interface SimulatedMoveReceipt {
+  readonly destinationPresence: EventCardPresenceSnapshot;
+  readonly equipBindingsAtFieldExit: readonly SimulatedEquipHostExitBinding[];
+}
+export type SimulatedEquipHostExitBinding = EventEquipHostExitBinding<SimulatedCardState, SimulatedPlayerState>;
 
 interface ReadMoveOptions {
   requireDestination?: boolean;
@@ -489,6 +555,23 @@ export function moveCardToZone(
   if (!move) return false;
   const { fromZone, toZone } = move;
   if (toZone === fromZone && player === sourcePlayer) return true;
+  const equipBindings: Array<Omit<SimulatedEquipHostExitBinding, "equipAfterCleanup"> & {
+    equipAfterCleanup: EventCardPresenceSnapshot | null;
+  }> = [];
+  const attachedEquips: Array<{ equip: SimulatedCardState; holder: SimulatedPlayerState }> = [];
+  if (fromZone === "field" && toZone !== "field") {
+    const hostBeforeExit = captureEventCardPresence(card, sourcePlayer.id, fromZone);
+    for (const holder of options.state ? [options.state.player, options.state.bot] : [sourcePlayer, player]) {
+      for (const equip of holder.spellTrap || []) {
+        if (attachedEquips.some(entry => entry.equip === equip) || equip.cardKind !== "spell" || equip.subtype !== "equip" ||
+            (equip.equippedTo !== card && equip.equipTarget !== card)) continue;
+        attachedEquips.push({ equip, holder });
+        equipBindings.push({ equip, equipController: holder, hostBeforeExit,
+          equipBeforeExit: captureEventCardPresence(equip, holder.id, "spellTrap"), equipAfterCleanup: null,
+          equipEffectsNegatedAtHostExit: equip.effectsNegated === true });
+      }
+    }
+  }
   if ((fromZone === "field" || fromZone === "spellTrap" || fromZone === "fieldSpell") &&
       toZone !== "field" && toZone !== "spellTrap" && toZone !== "fieldSpell") {
     const field = options.state ? [...options.state.player.field, ...options.state.bot.field] : sourcePlayer.field;
@@ -525,6 +608,18 @@ export function moveCardToZone(
       }
       card.turnBasedBuffs = [];
       clearPermanentStatBuffs(card);
+      if (card.originalStatsOverride) {
+        const original = card.originalStatsOverride;
+        if (Number.isFinite(Number(original.baseAtk))) {
+          card.baseAtk = Number(original.baseAtk);
+          card.atk = card.baseAtk;
+        }
+        if (Number.isFinite(Number(original.baseDef))) {
+          card.baseDef = Number(original.baseDef);
+          card.def = card.baseDef;
+        }
+        delete card.originalStatsOverride;
+      }
       clearEffectNegation(card);
     }
     clearPassiveBuffsForCard(card);
@@ -533,27 +628,39 @@ export function moveCardToZone(
       toZone !== "field" && toZone !== "spellTrap" && toZone !== "fieldSpell") {
     clearEffectNegation(card);
   }
-  if (
-    card.cardKind === "monster" &&
-    Array.isArray(card.equips) &&
-    card.equips.length > 0 &&
-    toZone !== "field"
-  ) {
-    const attachedEquips = card.equips.slice();
-    card.equips = [];
-    attachedEquips.forEach((equip) => {
-      if (!equip) return;
-      detachSimulatedEquip(equip);
-      removeCardFromZones(sourcePlayer, equip);
-      if (!Array.isArray(player.graveyard)) player.graveyard = [];
-      appendSimulatedZoneCard(player.graveyard, equip);
-    });
-  }
+  for (const { equip } of attachedEquips) detachSimulatedEquip(equip);
   removeCardFromZones(sourcePlayer, card);
   if (toZone !== "field" && toZone !== "spellTrap") card.locationVersion = (card.locationVersion || 0) + 1;
   card.location = toZone === "removed" ? null : toZone;
-  if (toZone === "removed") {
+  const finishCommittedMove = () => {
+    if (toZone !== "removed") card.owner = card.controller = player.id;
+    const receipt = { destinationPresence: captureEventCardPresence(card, toZone === "removed" ? null : player.id, toZone),
+      equipBindingsAtFieldExit: equipBindings };
+    options.onMoveCommitted?.(receipt);
+    for (const { equip, holder } of attachedEquips) {
+      const destination = options.state ? [options.state.player, options.state.bot].find(owner => owner.id === equip.originalOwner) || holder : holder;
+      const cleanupReceipt: { value: SimulatedMoveReceipt | null } = { value: null };
+      const moved = moveCardToZone(destination, equip, "graveyard", holder, { ...options,
+        movedByEffect: false, sourceCard: null, sourcePlayer: null,
+        onMoveCommitted: result => { cleanupReceipt.value = result;
+          const binding = equipBindings.find(entry => entry.equip === equip);
+          if (binding) binding.equipAfterCleanup = result.destinationPresence;
+        } });
+      if (!moved || !cleanupReceipt.value) continue;
+      const presence = cleanupReceipt.value.destinationPresence;
+      const payload = { card: equip, player: destination, fromPlayer: holder, toPlayer: destination,
+        fromZone: "spellTrap", toZone: presence.zone, locationVersion: presence.locationVersion,
+        wasFaceupBeforeMove: equipBindings.find(entry => entry.equip === equip)?.equipBeforeExit.faceUp === true,
+        contextLabel: "equipped_host_left_field", movedByEffect: false };
+      if (presence.zone === "graveyard") options.emitSimulatedEvent?.("card_to_grave", payload);
+      options.emitSimulatedEvent?.("card_moved", payload);
+    }
+    for (const binding of equipBindings) Object.freeze(binding);
+    Object.freeze(equipBindings);
     if (options.state) refreshSimulatedFieldAuras(options.state);
+  };
+  if (toZone === "removed") {
+    finishCommittedMove();
     return true;
   }
   if (toZone === "graveyard" || toZone === "banished") card.isFacedown = false;
@@ -563,14 +670,14 @@ export function moveCardToZone(
   }
   if (toZone === "fieldSpell") {
     player.fieldSpell = card;
-    if (options.state) refreshSimulatedFieldAuras(options.state);
+    finishCommittedMove();
     return true;
   }
   player[toZone] ||= [];
   const moved = toZone === "field" || toZone === "spellTrap"
     ? appendSimulatedFieldCard(player[toZone], card)
     : (appendSimulatedZoneCard(player[toZone], card), true);
-  if (options.state) refreshSimulatedFieldAuras(options.state);
+  finishCommittedMove();
   return moved;
 }
 

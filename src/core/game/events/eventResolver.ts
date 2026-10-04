@@ -16,6 +16,7 @@ import type {
   EventTriggerPackage,
   ResolvableEventName,
 } from "../../contracts/events.js";
+import { captureEventReferenceSnapshots } from "../../effects/targeting/references.js";
 
 /**
  * Resolve an event by collecting and executing triggers
@@ -128,13 +129,19 @@ export async function resolveEvent<Name extends ResolvableEventName>(
 
   let resolutionResult: EventResolutionOutcome | null = null;
   try {
+    // This must precede the first await: immediate effects and presentation can
+    // move a referenced card or replace an Equip's current host.
+    const referenceSnapshots = captureEventReferenceSnapshots(this, eventName, payload);
+    const triggerPayload = { ...payload, eventReferenceSnapshots: referenceSnapshots,
+      actionContext: { ...(payload.actionContext || {}), eventReferenceSnapshots: referenceSnapshots } };
     await this.effectEngine?.applyImmediateEventEffects?.(eventName, payload);
     const occurrence = this.chainSystem?.createTriggerOccurrence?.(
       eventName,
-      payload,
+      triggerPayload,
       {
         atomicGroupId: options.atomicGroupId ?? payload?.atomicGroupId ?? null,
         sequence: eventCounter,
+        referenceSnapshots,
       },
     );
 
@@ -145,7 +152,7 @@ export async function resolveEvent<Name extends ResolvableEventName>(
         triggerPackage =
           (await this.effectEngine?.collectEventTriggers?.(
             eventName,
-            payload,
+            triggerPayload,
           )) ?? null;
       } catch (err) {
         console.error(
@@ -202,7 +209,7 @@ export async function resolveEvent<Name extends ResolvableEventName>(
         try {
           const triggerPackage =
             (await this.effectEngine?.collectEventTriggers?.(eventName,
-              eventName === "after_summon" ? { ...payload, deferActivationChecks: true } : payload,
+              eventName === "after_summon" ? { ...triggerPayload, deferActivationChecks: true } : triggerPayload,
             )) ?? null;
           const metadata = getTriggerPackageMetadata(triggerPackage);
           entries = Array.isArray(triggerPackage)
@@ -371,19 +378,23 @@ async function offerPostEventFastWindow(
   game: EventResolverHost,
   eventName: ResolvableEventName,
   payload: EventPayloadBase,
+  occurrence?: EventTriggerOccurrence | null,
 ): Promise<EventResolutionOutcome | null> {
+  const fastPayload = occurrence?.referenceSnapshots !== undefined
+    ? { ...payload, eventReferenceSnapshots: occurrence.referenceSnapshots }
+    : payload;
   if (eventName === "after_summon" && payload?.player) {
-    return await game.checkAndOfferTraps(eventName, { ...payload });
+    return await game.checkAndOfferTraps(eventName, { ...fastPayload });
   }
   if (eventName === "position_change" && payload?.player) {
-    return await game.checkAndOfferTraps(eventName, { ...payload });
+    return await game.checkAndOfferTraps(eventName, { ...fastPayload });
   }
   if (eventName === "attack_declared") {
     const defenderOwner = payload?.defenderOwner || null;
     const attackerOwnerId = payload?.attackerOwner?.id || null;
     const defenderOwnerId = defenderOwner?.id || null;
     const trapEventData = {
-      ...payload,
+      ...fastPayload,
       isOpponentAttack:
         !!attackerOwnerId &&
         !!defenderOwnerId &&
@@ -406,7 +417,7 @@ async function offerPostEventFastWindow(
       payload?.defenderOwner || payload?.targetOwner || null;
     if (payload?.attackerOwner && defenderOwner) {
       return await game.checkAndOfferTraps(eventName, {
-        ...payload,
+        ...fastPayload,
         defenderOwner,
         targetOwner: payload?.targetOwner || defenderOwner,
         isOpponentAttack: payload.attackerOwner.id !== defenderOwner.id,
@@ -415,7 +426,7 @@ async function offerPostEventFastWindow(
   }
   if (eventName === "battle_destroy") {
     return await game.checkAndOfferTraps(eventName, {
-      ...payload,
+      ...fastPayload,
       target: payload?.destroyed || payload?.target || null,
       targetOwner:
         payload?.destroyedOwner ||
@@ -488,7 +499,7 @@ export async function resolveEventEntries(
 
   let timing: EventResolutionOutcome | null = null;
   if (!result.needsSelection && result.chainBuilt !== true) {
-    timing = await offerPostEventFastWindow(this, eventName, payload || {});
+    timing = await offerPostEventFastWindow(this, eventName, payload || {}, triggerOccurrence);
   }
 
   if (eventName === "battle_damage") {

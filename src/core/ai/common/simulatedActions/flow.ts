@@ -42,7 +42,7 @@ import type {
 import type {
   CanonicalSelectionMap,
 } from "../../../contracts/selection.js";
-import type { SimulatedActionHandlerContext } from "./shared.js";
+import type { SimulatedActionHandlerContext, SimulatedActionOptions } from "./shared.js";
 
 interface SimulatedCaseEntry {
   choiceCase: ActionCase;
@@ -289,7 +289,7 @@ export function applyConditionalActions(
 
 export function applyOptionalTargetActions(
   ctx: SimulatedActionHandlerContext<"optional_target_actions">,
-): void {
+): boolean | typeof STOP_SIMULATION {
   const {
     action,
     selections,
@@ -308,26 +308,55 @@ export function applyOptionalTargetActions(
       ...options.actionContext,
     })
   ) {
-    return;
+    return false;
   }
 
   const nestedActions = Array.isArray(action.actions) ? action.actions : [];
-  if (nestedActions.length === 0) return;
+  if (nestedActions.length === 0) return false;
 
   let nestedSelections = selections || {};
   const targetDefs = Array.isArray(action.targets) ? action.targets : [];
+  // Resolution choices shadow only their local ids. They do not inherit an
+  // activation reference's presence binding or create a new one of their own.
+  const localChoiceIds = new Set(targetDefs.filter(definition => !definition.targetFromContext).map(definition => definition.id));
+  const localEffect = options.effect ? {
+    ...options.effect,
+    targets: [...(options.effect?.targets || []).filter(definition => !targetDefs.some(local => local.id === definition.id)), ...targetDefs],
+  } : undefined;
+  const localOptions: SimulatedActionOptions = { ...options, ...(localEffect ? { effect: localEffect } : {}), referenceSnapshots: Object.fromEntries(
+    Object.entries(options.referenceSnapshots || {}).filter(([id]) => !localChoiceIds.has(id)),
+  ) };
+  // Projecting the same running effect must not recheck its already accepted
+  // contextual references halfway through the enclosing action batch.
+  if (targetDefs.every(definition => !definition.targetFromContext) &&
+      options._contextualReferencePreflight?.effect === options.effect &&
+      options._contextualReferencePreflight?.source === options.sourceCard) {
+    localOptions._contextualReferencePreflight = { effect: localEffect, source: options.sourceCard };
+  }
   if (targetDefs.length > 0) {
+    const unsupportedBefore = state._simUnsupportedActions?.length || 0;
     const selectedTargets = selectSimulatedTargets({
+      effect: localEffect,
       targets: targetDefs,
       actions: nestedActions,
       selections: nestedSelections,
       state,
       sourceCard: options.sourceCard,
       selfId,
-      options,
+      options: localOptions,
     });
+    if ((state._simUnsupportedActions || []).slice(unsupportedBefore).some(reason => reason.startsWith("exact_selection:"))) return false;
     if (!hasRequiredSelections(targetDefs, selectedTargets)) {
-      return;
+      return action.optional !== false;
+    }
+    // AutoSelector selects the required minimum by default. Explicit plans
+    // keep their full legal selection, including a larger allowed group.
+    for (const definition of targetDefs) {
+      const chosen = selectedTargets[definition.id];
+      if (Array.isArray(chosen) && !definition.targetFromContext &&
+          options.activationContext?.decisions?.selections?.[definition.id] === undefined) {
+        selectedTargets[definition.id] = chosen.slice(0, normalizeCount(definition.count, 1).min);
+      }
     }
     nestedSelections = {
       ...nestedSelections,
@@ -335,13 +364,20 @@ export function applyOptionalTargetActions(
     };
   }
 
-  applySimulatedActions({
+  const requiredReplanBefore = state._simRequiresReplan === true;
+  const unknownDrawCountBefore = state._simUnknownDrawCount || 0;
+  const result: unknown = applySimulatedActions({
     actions: nestedActions,
     selections: nestedSelections,
     state,
     selfId,
-    options,
+    options: localOptions,
   });
+  if (result === false && state._simRequiresReplan === true &&
+      (!requiredReplanBefore || (state._simUnknownDrawCount || 0) > unknownDrawCountBefore)) {
+    return STOP_SIMULATION;
+  }
+  return result !== false;
 }
 
 export function applyRegisterTemporaryEventEffect(

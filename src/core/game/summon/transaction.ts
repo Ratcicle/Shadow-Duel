@@ -180,6 +180,8 @@ function serializeCost(
     toZone: cost.toZone || null,
     kind: cost.kind || "material",
     paid: cost.paid === true,
+    ...(cost.counterType !== undefined ? { counterType: cost.counterType } : {}),
+    ...(cost.amount !== undefined ? { amount: cost.amount } : {}),
   };
 }
 
@@ -281,6 +283,7 @@ export function createPreparedSummon(
     commit: typeof input.commit === "function" ? input.commit : null,
     perform: typeof input.perform === "function" ? input.perform : null,
     onFailure: typeof input.onFailure === "function" ? input.onFailure : null,
+    onSuccess: typeof input.onSuccess === "function" ? input.onSuccess : null,
     finalContext: input.finalContext || null,
     skipFinalTiming: input.skipFinalTiming === true,
   };
@@ -703,6 +706,7 @@ export async function executeSummonTransaction(
   };
   if (finalResult.success === true) {
     establishProperSummon(transaction.card, transaction);
+    transaction.onSuccess?.(transaction);
   }
   const snapshot = this.finishSummonTransaction(transaction, finalResult);
   finalResult.transaction = snapshot;

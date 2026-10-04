@@ -57,6 +57,7 @@ export interface SimulatedActionContextData {
   target?: SimulatedCardState | null;
   source?: SimulatedCardState | null;
   eventCard?: SimulatedCardState | null;
+  eventPlayer?: SimulatedPlayerState | null;
   movedCard?: SimulatedCardState | null;
   summonedCard?: SimulatedCardState | null;
   destroyed?: SimulatedCardState | SimulatedCardState[] | null;
@@ -84,6 +85,8 @@ export interface SimulatedActionContextData {
   declaredValues?: object;
   lastAddedCounterCount?: number;
   addedCounterCounts?: object;
+  lastRemovedCounterCount?: number;
+  removedCounterCounts?: Record<string, number>;
   lastFieldCounterCount?: number;
   fieldCounterCounts?: object;
   destroyedOwner?: SimulatedPlayerState | PlayerId | string | null;
@@ -152,6 +155,9 @@ export interface SimulatedReferenceSnapshot {
   owner: SimulatedPlayerState;
   zone: ZoneInput;
   locationVersion: number;
+  cardInstanceId: string | number | null;
+  controllerId: string;
+  faceUp: boolean;
 }
 
 export function captureSimulatedReferences(effect: EffectDefinition | null | undefined, selections: CanonicalSelectionMap | undefined,
@@ -173,12 +179,48 @@ export function captureSimulatedReferences(effect: EffectDefinition | null | und
         for (const card of getZoneCards(owner, zone)) {
           if (Array.isArray(selected) && selected.some(entry => entry === card)) snapshots[id]!.push({
             card, owner, zone, locationVersion: card.locationVersion || 0,
+            cardInstanceId: getSimCardInstanceId(card) ?? null,
+            controllerId: owner.id,
+            faceUp: card.isFacedown !== true,
           });
         }
       }
     }
   }
+  for (const entries of Object.values(snapshots)) {
+    entries.forEach(entry => Object.freeze(entry));
+    Object.freeze(entries);
+  }
+  Object.freeze(snapshots);
   return snapshots;
+}
+
+export function isSimulatedReferencePresenceValid(snapshot: SimulatedReferenceSnapshot): boolean {
+  return findCardZone(snapshot.owner, snapshot.card) === snapshot.zone &&
+    (snapshot.card.locationVersion || 0) === snapshot.locationVersion &&
+    (getSimCardInstanceId(snapshot.card) ?? null) === snapshot.cardInstanceId &&
+    (snapshot.card.controller ?? snapshot.owner.id) === snapshot.controllerId &&
+    (snapshot.card.isFacedown !== true) === snapshot.faceUp;
+}
+
+/** Required contextual references are validated once before an action batch starts. */
+export function areRequiredContextualReferencesValid(
+  options: SimulatedActionOptions,
+  self: SimulatedPlayerState,
+  opponent: SimulatedPlayerState,
+): boolean {
+  for (const definition of options.effect?.targets || []) {
+    if (definition.intent !== "reference" || !definition.targetFromContext) continue;
+    const zones = definition.zones || (definition.zone ? [definition.zone] : []);
+    const valid = (options.referenceSnapshots?.[definition.id] || []).filter(snapshot => {
+      const role = snapshot.owner === self ? "self" : snapshot.owner === opponent ? "opponent" : null;
+      return role != null && isSimulatedReferencePresenceValid(snapshot) &&
+        matchesTargetFilters(snapshot.card, { ...definition.filters, ...definition }, options.sourceCard, role) &&
+        (zones.length === 0 || zones.some(zone => zone === snapshot.zone));
+    });
+    if (valid.length < Number(definition.minAtResolution ?? definition.count?.min ?? (definition.optional ? 0 : 1))) return false;
+  }
+  return true;
 }
 
 /** Only explicitly source-bound effects require their original activation presence. */
@@ -197,6 +239,11 @@ export function isSimulatedSourcePresenceValid(
 }
 
 export interface SimulatedActionOptions {
+  /** Nested continuation batches share the already completed preflight. */
+  _contextualReferencePreflight?: {
+    readonly effect: EffectDefinition | null | undefined;
+    readonly source: SimulatedCardState | null | undefined;
+  };
   costPayment?: import("../../../contracts/chainRuntime.js").ChainCostPayment;
   referenceSnapshots?: Record<string, SimulatedReferenceSnapshot[]>;
   sourceCard?: SimulatedCardState | null | undefined;
@@ -674,6 +721,11 @@ export function resolveTargetsForAction(
 ): SimulatedCardState[] {
   if (!action?.targetRef) return [];
   const bound = options.referenceSnapshots?.[action.targetRef];
+  const contextualReference = options.effect?.targets?.some(definition =>
+    definition.id === action.targetRef && definition.intent === "reference" && !!definition.targetFromContext) === true;
+  if (contextualReference && options.referenceSnapshots !== undefined) {
+    return (bound || []).filter(isSimulatedReferencePresenceValid).map(snapshot => snapshot.card);
+  }
   if (bound) return bound.filter(snapshot => findCardZone(snapshot.owner, snapshot.card) === snapshot.zone &&
     (snapshot.card.locationVersion || 0) === snapshot.locationVersion).map(snapshot => snapshot.card);
   if (action.targetRef === "self") {

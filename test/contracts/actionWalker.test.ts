@@ -287,6 +287,6 @@ test("walker inventories every declarative action in the live database", () => {
   }
 
   assert.deepEqual(diagnostics, []);
-  assert.equal(actionCount, 585); // Elementalist activation-count support is passive; it no longer contributes a buff action.
-  assert.equal(types.size, 97);
+  assert.equal(actionCount, 585); // T01 adds five resolution-choice wrappers to the current 580-action baseline.
+  assert.equal(types.size, 96);
 });

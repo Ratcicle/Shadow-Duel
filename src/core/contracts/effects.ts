@@ -425,6 +425,8 @@ export interface PassiveRuleDefinition {
   readonly countOwners?: readonly EffectOwner[];
   readonly equippedWithFilters?: EquippedCardFilter;
   readonly exceptSourceArchetypes?: readonly string[];
+  /** Continuous DEF on the host of equipped_field_counter_buff, independent of counters. */
+  readonly fixedDefBonus?: number;
   readonly filters?: CardFilter;
   readonly includeSelf?: boolean;
   readonly minCounters?: number;
@@ -595,6 +597,7 @@ interface EffectCapabilities {
   readonly requireSelfAsDefender?: boolean;
   readonly requireSelfAsDestroyed?: boolean;
   readonly requireSelfAsMoved?: boolean;
+  readonly movementTriggerOwnership?: "destination" | "field_exit_controller";
   readonly requireSelfAsSummoned?: boolean;
   readonly requireSelfBattled?: boolean;
   readonly requireSelfDestroyedByBattle?: boolean;

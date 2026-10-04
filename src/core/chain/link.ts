@@ -11,6 +11,7 @@ import {
   CHAIN_RESPONSE_CONTEXTS,
 } from "../contracts/chain.js";
 import { removeNegatedTurnCardActivation } from "../game/events/activationHistory.js";
+import { hasEquipHostExitProof } from "../effects/triggers/collectors/shared.js";
 import type {
   ChainActivationKind,
   ChainEffectKind,
@@ -235,7 +236,7 @@ export function collectDeclaredTargets(
   return declared;
 }
 
-function resolveTargetController(
+export function resolvePhysicalSourceLocation(
   chainSystem: FullChainHost,
   card: ChainCard,
 ): { player: ChainPlayer | null; zone: ChainSourceZone | null } {
@@ -254,7 +255,7 @@ function captureDeclaredTargetSnapshots(
   return (declaredTargets || []).map((entry) => ({
     targetId: entry.targetId || null,
     cards: (entry.cards || []).map((card) => {
-      const { player, zone } = resolveTargetController(chainSystem, card);
+      const { player, zone } = resolvePhysicalSourceLocation(chainSystem, card);
       return {
         card,
         cardInstanceId: cardInstanceId(card),
@@ -380,14 +381,18 @@ export function createChainLink(
     preparedInput.sourceAtTrigger ||
     activationContext.sourceAtTrigger ||
     null;
+  const physicalSource = card && (effect?.movementTriggerOwnership === "field_exit_controller" ||
+    (effect && hasEquipHostExitProof(card, effect, activationContext.equipHostExitBinding)))
+    ? resolvePhysicalSourceLocation(this, card)
+    : { player: controller, zone: this.determineCardZone?.(card, controller) || null };
   const sourceAtActivation =
     preparedInput.sourceAtActivation ||
     activationContext.sourceAtActivation ||
-    captureSourceSnapshot(card, controller, activationZone);
-  const currentSourceZone = this.determineCardZone?.(card, controller) || null;
+    captureSourceSnapshot(card, physicalSource.player, physicalSource.zone || activationZone);
+  const currentSourceZone = physicalSource.zone;
   const currentSourceSnapshot = captureSourceSnapshot(
     card,
-    controller,
+    physicalSource.player,
     currentSourceZone,
   );
   const sourceMovedBeforeLink =

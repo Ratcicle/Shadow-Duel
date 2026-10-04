@@ -3,6 +3,7 @@ import type {
   ChainActivationKind,
   ChainEffectKind,
   ChainResponseContextType,
+  TriggerOccurrenceReferenceSnapshots,
 } from "./chain.js";
 import type { ChainRuntimePort } from "./chainRuntime.js";
 import type { DamageStepTiming, EffectDefinition } from "./effects.js";
@@ -41,7 +42,7 @@ export interface TurnCardActivationHistory {
   readonly turnCounter: number;
   readonly entries: readonly TurnCardActivationEntry[];
 }
-export type EventZone = CanonicalZone | LegacyZoneAlias | "temporary" | "token";
+export type EventZone = CanonicalZone | LegacyZoneAlias | "temporary" | "token" | "removed";
 export type EventPhase =
   | "draw"
   | "standby"
@@ -115,10 +116,32 @@ export interface EventPlayer {
   fieldSpell?: EventCard | null;
 }
 
+export interface EventReferenceCardSnapshot {
+  card: EventCard;
+  cardInstanceId: EventEntityId | null;
+  controllerId: string | null;
+  zone: CanonicalZone | null;
+  faceUp: boolean;
+  locationVersion: number;
+}
+
+export interface EventReferenceSnapshot {
+  targetId: string | null;
+  cards: EventReferenceCardSnapshot[];
+}
+
+export type EventTriggerReferenceSnapshots = TriggerOccurrenceReferenceSnapshots<
+  EventCard,
+  EffectDefinition,
+  EventReferenceSnapshot,
+  EventReferenceCardSnapshot | null
+>;
+
 /** Legacy counter producers may expose the duel seat before resolving it. */
 export type EventPlayerReference = EventPlayer | "player" | "bot";
 
 export interface EventActionContext {
+  eventReferenceSnapshots?: EventTriggerReferenceSnapshots[];
   type?: string | null;
   event?: string | null;
   effectId?: string | null;
@@ -142,6 +165,8 @@ export interface AttackRedirect {
 
 /** Shared mutable capabilities present across the established event payloads. */
 export interface EventPayloadBase {
+  /** Runtime-only occurrence references, carried to the post-event response window. */
+  eventReferenceSnapshots?: EventTriggerReferenceSnapshots[];
   type?: string | null;
   reason?: string | null;
   event?: string | null;
@@ -262,6 +287,27 @@ export interface BattleDestroyEventPayload extends DamageStepEventPayload {
   destroyedPosition?: BattlePosition | null;
 }
 
+/** Immutable identity and physical presence captured at a movement commitment. */
+export interface EventCardPresenceSnapshot {
+  readonly cardId: number | null;
+  readonly duelCardId: number | null;
+  readonly instanceId: EventEntityId | null;
+  readonly controllerId: string | null;
+  readonly zone: EventZone;
+  readonly faceUp: boolean;
+  readonly locationVersion: number;
+}
+
+/** An Equip observer bound to this host exit, before linked cleanup clears it. */
+export interface EventEquipHostExitBinding<Card = EventCard, Player = EventPlayer> {
+  readonly equip: Card;
+  readonly equipController: Player;
+  readonly hostBeforeExit: EventCardPresenceSnapshot;
+  readonly equipBeforeExit: EventCardPresenceSnapshot;
+  readonly equipAfterCleanup: EventCardPresenceSnapshot | null;
+  readonly equipEffectsNegatedAtHostExit: boolean;
+}
+
 export interface CardMovedEventPayload extends EventPayloadBase {
   card: EventCard;
   fromZone: EventZone;
@@ -269,13 +315,15 @@ export interface CardMovedEventPayload extends EventPayloadBase {
   locationVersion?: number;
   player: EventPlayer | null;
   opponent?: EventPlayer | null;
-  fromPlayer: EventPlayer;
-  toPlayer: EventPlayer;
+  fromPlayer: EventPlayer | null;
+  toPlayer: EventPlayer | null;
   contextLabel?: string | null;
   wasDestroyed?: boolean;
   destroyCause?: string | null;
   movedByEffect?: boolean;
   wasFaceupBeforeMove?: boolean;
+  effectsNegatedAtFieldExit?: boolean;
+  equipBindingsAtFieldExit?: readonly EventEquipHostExitBinding[];
 }
 
 export interface CardToGraveEventPayload extends EventPayloadBase {
@@ -283,6 +331,8 @@ export interface CardToGraveEventPayload extends EventPayloadBase {
   fromZone: EventZone;
   toZone?: "graveyard";
   player: EventPlayer;
+  fromPlayer?: EventPlayer | null;
+  toPlayer?: EventPlayer | null;
   opponent?: EventPlayer | null;
   wasDestroyed?: boolean;
   destroyCause?: string | null;
@@ -1013,6 +1063,7 @@ export type TriggerCollector<Name extends CollectedTriggerEventName, Host> = (
 ) => MaybeEventPromise<EventTriggerPackage>;
 
 export interface EventTriggerOccurrence {
+  referenceSnapshots?: EventTriggerReferenceSnapshots[];
   occurrenceId?: EventEntityId;
   eventName?: ResolvableEventName | string;
   payload?: EventPayloadBase;
@@ -1173,6 +1224,7 @@ export interface EventChainPort
     eventName: ResolvableEventName,
     payload: EventPayloadBase,
     options?: {
+      referenceSnapshots?: EventTriggerReferenceSnapshots[];
       entries?: EventTriggerEntry[];
       entriesProvided?: boolean;
       onComplete?: EventTriggerCompletion | null;

@@ -17,6 +17,7 @@ import {
   getGenericHandSpellActions,
   getGenericIgnitionEffectActions,
   getGenericNormalSummonActions,
+  getGenericHandSummonProcedureActions,
 } from "./common/actionGeneration.js";
 import { getGenericSetBackrowActions } from "./common/backrowPlanning.js";
 import { sequenceActionsByPriority } from "./common/actionSequencing.js";
@@ -502,6 +503,7 @@ export default class BloomrotStrategy extends BaseStrategy {
     const actions = [
       ...this.getSpellActions(game, bot, analysis),
       ...this.getHandIgnitionActions(game, bot, analysis),
+      ...getGenericHandSummonProcedureActions(game),
       ...this.getFieldEffectActions(game, bot, analysis),
       ...this.getSpellTrapEffectActions(game, bot, analysis),
       ...this.getMonsterEffectActions(game, bot, analysis),
@@ -519,6 +521,7 @@ export default class BloomrotStrategy extends BaseStrategy {
       typeOrder: {
         spell: 0,
         handIgnition: 1,
+        handSummonProcedure: 1,
         fieldEffect: 2,
         spellTrapEffect: 3,
         monsterEffect: 4,

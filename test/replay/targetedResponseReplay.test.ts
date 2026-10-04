@@ -124,9 +124,9 @@ for (const seat of ["player", "bot"] as const) for (const scenario of ["first-li
     playback.ui.showSpecialSummonPositionModal = () => assert.fail("playback must not ask position");
     playback.autoSelector.select = () => assert.fail("playback must not rerun AI");
     const replay = validateCanonicalReplay(JSON.parse(JSON.stringify(game.finalizeReplay({ reason: "targeted-response-context" }))));
-    assert.equal(replay.engineVersion, "engine-rules-v14");
+    assert.equal(replay.engineVersion, "engine-rules-v17");
     assert.equal(replay.schemaVersion, 2);
-    assert.equal(replay.cardDatabaseSignature, "db5833d7");
+    assert.equal(replay.cardDatabaseSignature, "c30857b8");
     const result = await replayCanonicalDuel(replay, { game: unsafeFixture<ReplayDriverGamePort>(playback,
       "Concrete Game with identical deterministic setup provides canonical playback.") });
     assert.equal(result.ok, true); assert.equal(result.finalStateHash, replay.result?.finalStateHash);

@@ -1063,15 +1063,17 @@ export async function activateMonsterEffect(
     source: card,
     player,
     opponent: this.game.getOpponent(player),
+    effect,
+    effectId: effect.id,
     activationZone,
     activationContext: normalizedActivationContext,
     actionContext: normalizedActivationContext.actionContext || null,
   };
 
-  const condCheck = this.evaluateConditions(
-    effect.conditions,
-    ctx as ActivationConditionContext,
-  );
+  // The committed payment may consume the resource that made activation legal.
+  const condCheck = normalizedActivationContext.committed && normalizedActivationContext.costsPaid
+    ? { ok: true }
+    : this.evaluateConditions(effect.conditions, ctx as ActivationConditionContext);
   if (!condCheck.ok) {
     return {
       success: false,

@@ -1,4 +1,5 @@
 import { refreshSimulatedFieldAuras } from "../zones.js";
+import type { SimulatedMoveReceipt } from "../zones.js";
 import { captureCostMarkerEvidence } from "../../../effects/costs/summonMarkers.js";
 import { clearFieldPresenceSummonTarget } from "../../../effects/triggers/counters.js";
 import { appendSimulatedFieldCard } from "../zones.js";
@@ -131,19 +132,25 @@ export function emitSimulatedMove(
   options: SimulatedActionOptions,
   contextLabel: string | null = null,
   movedByEffect = true,
+  receipt?: SimulatedMoveReceipt | null,
 ): void {
-  const toZone = findCardZone(destination, card) || "removed";
+  const toZone = receipt?.destinationPresence.zone ?? findCardZone(destination, card) ?? "removed";
+  const toPlayer = toZone === "removed" ? null : receipt
+    ? [state.player, state.bot].find(player => player.id === receipt.destinationPresence.controllerId) ?? null
+    : destination;
   const payload = {
-    card, player: destination, fromPlayer: owner,
-    toPlayer: toZone === "removed" ? null : destination,
+    card, player: toPlayer, fromPlayer: owner,
+    toPlayer,
     fromZone, toZone, movedByEffect, wasFaceupBeforeMove,
+    locationVersion: receipt?.destinationPresence.locationVersion ?? card.locationVersion ?? 0,
+    ...(receipt?.equipBindingsAtFieldExit.length ? { equipBindingsAtFieldExit: receipt.equipBindingsAtFieldExit } : {}),
     effectsNegatedAtFieldExit, contextLabel,
     sourceCard: options.sourceCard || null,
     effectId: options.effect?.id || null,
     actionContext: options.actionContext,
   };
   if (toZone === "graveyard" && fromZone !== "graveyard") {
-    updateSimulatedSentToGraveMaterialMarker({ card, state, player: destination, fromZone, contextLabel });
+    if (toPlayer) updateSimulatedSentToGraveMaterialMarker({ card, state, player: toPlayer, fromZone, contextLabel });
     options.emitSimulatedEvent?.("card_to_grave", payload);
   }
   options.emitSimulatedEvent?.("card_moved", payload);
@@ -171,10 +178,11 @@ export function applyBanish(
       fromZone === "field" ? getOriginalOwner(state, card, owner) : owner;
     const wasFaceupBeforeMove = card.isFacedown !== true;
     const effectsNegatedAtFieldExit = fromZone === "field" && card.effectsNegated === true;
-    if (moveCardToZone(destination, card, "banished", owner, { state, movedByEffect: true, sourceCard: options.sourceCard || null, sourcePlayer: self })) {
+    const receipt: { value: SimulatedMoveReceipt | null } = { value: null };
+    if (moveCardToZone(destination, card, "banished", owner, { state, movedByEffect: true, sourceCard: options.sourceCard || null, sourcePlayer: self,
+      ...(options.emitSimulatedEvent ? { emitSimulatedEvent: options.emitSimulatedEvent } : {}), onMoveCommitted: result => { receipt.value = result; } })) {
       if (fromZone === "field") clearSimulatedTemporaryControl(state, card);
-      setSimulatedController(card, destination);
-      emitSimulatedMove(card, state, owner, destination, fromZone, wasFaceupBeforeMove, effectsNegatedAtFieldExit, options);
+      emitSimulatedMove(card, state, owner, destination, fromZone, wasFaceupBeforeMove, effectsNegatedAtFieldExit, options, null, true, receipt.value);
     }
   });
   return;
@@ -211,10 +219,11 @@ export function applyReturnToHand(
     const effectsNegatedAtFieldExit = fromZone === "field" && card.effectsNegated === true;
     const destination =
       fromZone === "field" ? getOriginalOwner(state, card, owner) : owner;
-    if (moveCardToZone(destination, card, "hand", owner, { state, movedByEffect: true, sourceCard: options.sourceCard || null, sourcePlayer: self })) {
+    const receipt: { value: SimulatedMoveReceipt | null } = { value: null };
+    if (moveCardToZone(destination, card, "hand", owner, { state, movedByEffect: true, sourceCard: options.sourceCard || null, sourcePlayer: self,
+      ...(options.emitSimulatedEvent ? { emitSimulatedEvent: options.emitSimulatedEvent } : {}), onMoveCommitted: result => { receipt.value = result; } })) {
       if (fromZone === "field") clearSimulatedTemporaryControl(state, card);
-      setSimulatedController(card, destination);
-      emitSimulatedMove(card, state, owner, destination, fromZone, wasFaceupBeforeMove, effectsNegatedAtFieldExit, options);
+      emitSimulatedMove(card, state, owner, destination, fromZone, wasFaceupBeforeMove, effectsNegatedAtFieldExit, options, null, true, receipt.value);
     }
   });
   return;
@@ -351,11 +360,12 @@ export function applyMove(
     const wasFaceupBeforeMove = card.isFacedown !== true;
     const effectsNegatedAtFieldExit = fromZone === "field" && card.effectsNegated === true;
     const levelBeforeMove = Number(card.level || 0);
+    const receipt: { value: SimulatedMoveReceipt | null } = { value: null };
     if (moveCardToZone(destPlayer || owner, card, to, owner, { state, movedByEffect: true, sourceCard: options.sourceCard || null, sourcePlayer: self,
+      ...(options.emitSimulatedEvent ? { emitSimulatedEvent: options.emitSimulatedEvent } : {}), onMoveCommitted: result => { receipt.value = result; },
       allowExtraDeckMonsterToHand: action.allowExtraDeckMonsterToHand === true,
       requireDestination: payingCost && action.requireDestination === true })) {
       if (fromZone === "field" && to !== "field") clearSimulatedTemporaryControl(state, card);
-      setSimulatedController(card, destPlayer || owner);
       if (action.resetAttackFlags) {
         card.hasAttacked = false;
         card.cannotAttackThisTurn = false;
@@ -364,7 +374,7 @@ export function applyMove(
         card.secondAttackUsedThisTurn = false;
       }
       const reachedDestination = findCardZone(destPlayer || owner, card) === to;
-      emitSimulatedMove(card, state, owner, destPlayer || owner, fromZone, wasFaceupBeforeMove, effectsNegatedAtFieldExit, options, action.contextLabel || null);
+      emitSimulatedMove(card, state, owner, destPlayer || owner, fromZone, wasFaceupBeforeMove, effectsNegatedAtFieldExit, options, action.contextLabel || null, true, receipt.value);
       if (action.requireDestination === true && !reachedDestination) {
         if (action.requireAll) return STOP_SIMULATION;
         continue;

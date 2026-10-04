@@ -1144,27 +1144,11 @@ function handleLuminarchMonsterEffect({
   return true;
 }
 
-function simulatePureKnightSearch(
-  player: SimulatedPlayerState,
-  pureKnight: SimulatedCardState,
-): boolean {
-  const citadelIndex = (player.deck || []).findIndex(
-    (card) => card?.name === CITADEL_NAME,
-  );
-  if (citadelIndex < 0) return false;
-  const [citadel] = player.deck.splice(citadelIndex, 1);
-  if (!citadel) return false;
-  appendSimulatedZoneCard(player.hand, citadel);
-  pureKnight._simulatedCitadelSearch = true;
-  return true;
-}
-
 function handleLuminarchFusionSummon({
   state,
   player,
   fusionCard,
   materials,
-  options,
 }: {
   state: LuminarchState;
   player: SimulatedPlayerState;
@@ -1175,19 +1159,8 @@ function handleLuminarchFusionSummon({
   if (!fusionCard || !player) return;
 
   const meta = ensureLuminarchSimMeta(state);
-  const position = chooseLuminarchSpecialSummonPosition(fusionCard, {
-    state,
-    game: state,
-    action: options?.sourceAction,
-    sourceAction: options?.sourceAction,
-    options,
-    activationContext: options?.activationContext,
-  });
-  fusionCard.position = position;
-  fusionCard.isFacedown = false;
-
   if (fusionCard.name === PURE_KNIGHT_NAME) {
-    const searchedCitadel = simulatePureKnightSearch(player, fusionCard);
+    const searchedCitadel = fusionCard._simulatedCitadelSearch === true;
     fusionCard._simulatedRole = "citadel_access";
     fusionCard._simulatedLpCostReductionAvailable = true;
     fusionCard._simulatedMaterialsUsed = (materials || []).map(
@@ -1252,6 +1225,9 @@ function handleLuminarchEffectActivated({
   effect: EffectDefinition;
 }): void {
   if (!card || !effect || !player) return;
+  if (card.name === PURE_KNIGHT_NAME && effect.id === "luminarch_pure_knight_fusion_search") {
+    card._simulatedCitadelSearch = player.hand.some(candidate => candidate.name === CITADEL_NAME);
+  }
   if (card.name === MAGIC_SICKLE_NAME) {
     ensureLuminarchSimMeta(state).milestones.push("sickle_spell_recovery");
   }

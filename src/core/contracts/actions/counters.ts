@@ -19,7 +19,7 @@ export interface CountersActionMap {
     | "variableAmount" | "owner" | "player" | "zone" | "zones"
     | "filters" | "requireFaceup" | "contextKey" | "storeAs"
     | "resultKey" | "selectionMessage" | "amountPrompt" | "haltOnFailure"
-    | "stopOnFailure"
+    | "stopOnFailure" | "targetRef"
   >;
   count_field_counters: DefineAction<
     "count_field_counters",

@@ -22,7 +22,7 @@ import type {
   ReplayMode,
 } from "./game.js";
 import type { GamePlayer } from "./player.js";
-import type { TurnCardActivationHistory } from "./events.js";
+import type { EventCardPresenceSnapshot, TurnCardActivationHistory } from "./events.js";
 import type {
   DamageStepId,
   DuelCardId,
@@ -104,6 +104,7 @@ export interface MoveCardResult {
   selectionContract?: unknown;
   deferredCardToGraveTriggerPackage?: DeferredCardToGraveTriggerPackage;
   deferredCardToGraveEntries?: readonly unknown[];
+  destinationPresence?: EventCardPresenceSnapshot;
 }
 
 export interface DeferredCardToGraveTriggerPackage {
@@ -180,6 +181,7 @@ export interface MoveCardOptions {
   movedByEffect?: boolean;
   wasDestroyed?: boolean;
   wasFaceupBeforeMove?: boolean;
+  effectsNegatedAtFieldExit?: boolean;
   skipSummonAttempt?: boolean;
   animateCards?: boolean;
   skipAnimation?: boolean;
@@ -303,6 +305,8 @@ export interface SummonCostPayment {
   toZone?: CanonicalZone;
   kind?: string;
   paid?: boolean;
+  counterType?: string;
+  amount?: number;
   contextLabel?: string;
   options?: MoveCardOptions;
   pay?: (
@@ -331,6 +335,8 @@ export interface SummonCostSnapshot extends SummonCardIdentitySnapshot {
   toZone: CanonicalZone | null;
   kind: string;
   paid: boolean;
+  counterType?: string;
+  amount?: number;
 }
 
 export interface SummonNegationSnapshot {
@@ -392,6 +398,8 @@ export interface PreparedSummonInput {
     transaction: SummonTransaction,
     error: unknown,
   ) => MaybePromise<unknown>;
+  /** Runs before the transaction unlocks and before post-summon trigger timing. */
+  onSuccess?: (transaction: SummonTransaction) => void;
   finalContext?: unknown;
   skipFinalTiming?: boolean;
 }
@@ -420,6 +428,7 @@ export interface PreparedSummon {
   commit: PreparedSummonInput["commit"] | null;
   perform: PreparedSummonInput["perform"] | null;
   onFailure: PreparedSummonInput["onFailure"] | null;
+  onSuccess: PreparedSummonInput["onSuccess"] | null;
   finalContext: unknown;
   skipFinalTiming: boolean;
 }

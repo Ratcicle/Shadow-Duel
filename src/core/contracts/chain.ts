@@ -156,3 +156,11 @@ export const CHAIN_FINALIZATION_STATUSES = Object.freeze([
 
 export type ChainFinalizationStatus =
   (typeof CHAIN_FINALIZATION_STATUSES)[number];
+
+/** Runtime-only bindings captured at event entry, keyed by physical source and effect. */
+export interface TriggerOccurrenceReferenceSnapshots<Card, Effect, Snapshot, Presence> {
+  readonly source: Card;
+  readonly effect: Effect;
+  readonly sourcePresence: Presence;
+  readonly references: Snapshot[];
+}

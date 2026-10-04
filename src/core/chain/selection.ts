@@ -165,6 +165,9 @@ export async function getPlayerSelectionsForDefinitions(
   const effectEngine = this.game?.effectEngine;
   if (!effectEngine) return null;
   const purpose = options.purpose === "cost" ? "cost" : "target";
+  const pooledCostRefs = new Set((context?.effect?.activationCosts || [])
+    .filter(action => action.type === "remove_counters_from_field" && action.targetRef)
+    .map(action => action.type === "remove_counters_from_field" ? action.targetRef : undefined));
   const allowCancel = options.allowCancel !== false;
   const ctx: ChainActionContext = {
     ...context,
@@ -185,7 +188,8 @@ export async function getPlayerSelectionsForDefinitions(
       ...(context?.activationContext || {}),
       timing: "activation",
       purpose,
-      autoSelectSingleTarget: isAI(player),
+      autoSelectSingleTarget: isAI(player) &&
+        !(purpose === "cost" && definitions.some(definition => pooledCostRefs.has(definition.id))),
       autoSelectTargets: false,
     },
   };
@@ -215,6 +219,50 @@ export async function getPlayerSelectionsForDefinitions(
   };
 
   const requirements = contract.requirements || [];
+  const costPresence = new Map<ChainCard, {
+    owner: ChainPlayer; zone: CanonicalZone; instanceId: ChainCard["instanceId"];
+    duelCardId: ChainCard["duelCardId"]; controller: ChainCard["controller"];
+    locationVersion: number;
+  }>();
+  const zoneCards = (owner: ChainPlayer, zone: CanonicalZone): readonly ChainCard[] => {
+    if (zone === "fieldSpell") return owner.fieldSpell ? [owner.fieldSpell] : [];
+    const cards: unknown = Reflect.get(owner, zone);
+    return Array.isArray(cards) ? cards : [];
+  };
+  if (purpose === "cost") {
+    for (const requirement of requirements) {
+      if (!pooledCostRefs.has(requirement.id)) continue;
+      for (const candidate of requirement.candidates || []) {
+        const card = candidate.cardRef;
+        if (!card) continue;
+        for (const owner of [this.game?.player, this.game?.bot]) {
+          if (!owner) continue;
+          for (const zone of ["field", "spellTrap", "fieldSpell"] as const) {
+            if (!zoneCards(owner, zone).includes(card)) continue;
+            costPresence.set(card, { owner, zone, instanceId: card.instanceId,
+              duelCardId: card.duelCardId, controller: card.controller ?? owner.id,
+              locationVersion: Number(card.locationVersion ?? 0) });
+          }
+        }
+      }
+    }
+  }
+  const validateSelectedCostPresence = (selected: ChainSelectionMap): ChainSelectionMap | null => {
+    for (const ref of pooledCostRefs) {
+      if (!ref || !(ref in selected)) continue;
+      for (const card of selectionCards(Reflect.get(selected, ref))) {
+        const presence = Array.from(costPresence.entries()).find(([candidate]) => candidate === card);
+        if (!presence) return null;
+        const [candidate, snapshot] = presence;
+        if (!zoneCards(snapshot.owner, snapshot.zone).includes(candidate) ||
+            candidate.instanceId !== snapshot.instanceId ||
+            (snapshot.duelCardId != null && candidate.duelCardId !== snapshot.duelCardId) ||
+            (candidate.controller ?? snapshot.owner.id) !== snapshot.controller ||
+            Number(candidate.locationVersion ?? 0) !== snapshot.locationVersion) return null;
+      }
+    }
+    return selected;
+  };
   const hasCompleteProvidedSelection = requirements.every(requirement =>
     options.selections && Object.prototype.hasOwnProperty.call(options.selections, requirement.id));
   if (this.game && ((isAI(player) && this.game.autoSelector) || hasCompleteProvidedSelection)) {
@@ -247,6 +295,8 @@ export async function getPlayerSelectionsForDefinitions(
       for (const requirement of requirements) {
         if (!providedDefinitions.some(definition => definition.id === requirement.id)) continue;
         const cards = selectionCards(resolved.targets && Reflect.get(resolved.targets, requirement.id));
+        if (purpose === "cost" && pooledCostRefs.has(requirement.id) &&
+            cards.length !== selectionCards(options.selections && Reflect.get(options.selections, requirement.id)).length) return null;
         const keys = cards.flatMap(card => {
           const candidate = requirement.candidates?.find(candidate => candidate.cardRef === card);
           return candidate?.key ? [candidate.key] : [];
@@ -265,6 +315,7 @@ export async function getPlayerSelectionsForDefinitions(
       const result = game.autoSelector?.select(remainingContract, {
         owner: player, selectionContract: remainingContract, selectionKind: purpose,
         activationContext: context?.activationContext || {},
+        effect: context?.effect || null,
       });
       return result?.ok ? normalizeSelections({ ...provided, ...result.selections }) : null;
     };
@@ -293,7 +344,7 @@ export async function getPlayerSelectionsForDefinitions(
       },
     })) : isAI(player) ? resolveAI() : normalizeSelections(resolveProvided());
     if (!selections) return null;
-    return {
+    return validateSelectedCostPresence({
       ...baseTargets,
       ...resolveSelectionCards(
         this,
@@ -301,7 +352,7 @@ export async function getPlayerSelectionsForDefinitions(
         requirements,
         player,
       ),
-    };
+    });
   }
 
   const startTargetSelectionSession =
@@ -321,7 +372,7 @@ export async function getPlayerSelectionsForDefinitions(
       allowCancel,
       preventCancel: !allowCancel,
       execute: (selections) => {
-        resolve({
+        resolve(validateSelectedCostPresence({
           ...baseTargets,
           ...resolveSelectionCards(
             this,
@@ -329,7 +380,7 @@ export async function getPlayerSelectionsForDefinitions(
             contract.requirements || [],
             player,
           ),
-        });
+        }));
         return { success: true, needsSelection: false };
       },
       onCancel: allowCancel ? () => resolve(null) : null,

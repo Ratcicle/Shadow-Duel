@@ -1119,7 +1119,7 @@
     },
     "358": {
       "name": "Falso Rei dos Vinculados à Miragem",
-      "description": "Você pode Invocar este card por Invocação-Especial da sua mão ao devolver 1 monstro \"Vinculados à Miragem\" que você controla para a mão. Você só pode tentar Invocar \"Falso Rei dos Vinculados à Miragem\" por Invocação-Especial uma vez por turno dessa forma, mesmo que a Invocação seja negada.\n\nVocê pode escolher 1 monstro que seu oponente controla; mude a posição de batalha dele. Você só pode usar este efeito de \"Falso Rei dos Vinculados à Miragem\" uma vez por turno."
+      "description": "Você pode Invocar este card por Invocação-Especial da sua mão ao devolver 1 monstro \"Vinculados à Miragem\" que você controla para a mão. Você só pode Invocar por Invocação-Especial \"Falso Rei dos Vinculados à Miragem\" uma vez por turno desta forma.\nVocê pode escolher 1 monstro que seu oponente controla; mude a posição de batalha dele. Você só pode usar este efeito de \"Falso Rei dos Vinculados à Miragem\" uma vez por turno."
     },
     "359": {
       "name": "Caminho Espelhado dos Vinculados à Miragem",
@@ -1159,7 +1159,7 @@
     },
     "404": {
       "name": "Podriflora Cervo-Pútrido",
-      "description": "Você pode Invocar este card por Invocação-Especial da sua mão ao remover 2 Marcadores de Esporo do campo.\n\nSe este card for Invocado por Invocação-Especial: escolha 1 card com a face para cima que seu oponente controla; coloque 1 Marcador de Esporo nele.\n\nSe este card batalhar um monstro com Marcador de Esporo, este card ganha 500 de ATK durante o cálculo de dano.\n\nVocê só pode usar cada efeito de \"Podriflora Cervo-Pútrido\" uma vez por turno."
+      "description": "Você pode Invocar este card por Invocação-Especial da sua mão ao remover 2 Marcadores de Esporo do campo. Você só pode Invocar por Invocação-Especial \"Podriflora Cervo-Pútrido\" uma vez por turno desta forma.\n\nSe este card for Invocado por Invocação-Especial: escolha 1 card com a face para cima que seu oponente controla; coloque 1 Marcador de Esporo nele.\n\nSe este card batalhar um monstro com Marcador de Esporo, este card ganha 500 de ATK durante o cálculo de dano.\n\nVocê só pode usar cada efeito de \"Podriflora Cervo-Pútrido\" uma vez por turno."
     },
     "405": {
       "name": "Podriflora Chapéu-Carniceiro",
@@ -1171,11 +1171,11 @@
     },
     "407": {
       "name": "Podriflora Viúva-Cogutumba",
-      "description": "Você pode Invocar este card por Invocação-Especial da sua mão removendo 3 Marcadores de Esporo do campo.\n\nSe este card for Invocado: escolha 1 monstro com Marcador de Esporo que seu oponente controla; destrua-o.\n\nUma vez por turno, se um monstro com Marcador de Esporo que seu oponente controla for destruído: coloque 1 Marcador de Esporo em 1 card com a face para cima que seu oponente controla.\n\nVocê só pode usar cada efeito de \"Podriflora Viúva-Cogutumba\" uma vez por turno."
+      "description": "Você pode Invocar este card por Invocação-Especial da sua mão removendo 3 Marcadores de Esporo do campo. Você só pode Invocar por Invocação-Especial \"Podriflora Viúva-Cogutumba\" uma vez por turno desta forma.\n\nSe este card for Invocado: escolha 1 monstro com Marcador de Esporo que seu oponente controla; destrua-o.\n\nUma vez por turno, se um monstro com Marcador de Esporo que seu oponente controla for destruído: coloque 1 Marcador de Esporo em 1 card com a face para cima que seu oponente controla.\n\nVocê só pode usar cada efeito de \"Podriflora Viúva-Cogutumba\" uma vez por turno."
     },
     "408": {
       "name": "Podriflora Casca Ancestral",
-      "description": "Você pode Invocar este card por Invocação-Especial da sua mão removendo 4 Marcadores de Esporo do campo.\n\nUma vez por turno: coloque 1 Marcador de Esporo em até 2 monstros com a face para cima que seu oponente controla.\n\nSe um monstro com Marcador de Esporo for destruído: coloque 1 Marcador de Esporo em até 2 monstros com a face para cima que seu oponente controla.\n\nVocê só pode usar cada efeito de \"Podriflora Casca Ancestral\" uma vez por turno."
+      "description": "Você pode Invocar este card por Invocação-Especial da sua mão removendo 4 Marcadores de Esporo do campo. Você só pode Invocar por Invocação-Especial \"Podriflora Casca Ancestral\" uma vez por turno desta forma.\n\nUma vez por turno: coloque 1 Marcador de Esporo em até 2 monstros com a face para cima que seu oponente controla.\n\nSe um monstro com Marcador de Esporo for destruído: coloque 1 Marcador de Esporo em até 2 monstros com a face para cima que seu oponente controla.\n\nVocê só pode usar cada efeito de \"Podriflora Casca Ancestral\" uma vez por turno."
     },
     "409": {
       "name": "Podriflora Nuvem de Esporos",
@@ -1199,7 +1199,7 @@
     },
     "414": {
       "name": "Colheita Podriflora",
-      "description": "Remova todos os Marcadores de Esporo do campo e, depois, escolha 1 card que seu oponente controla para cada 4 Marcadores de Esporo removidos; destrua-os. Monstros \"Podriflora\" que você controla ganham 100 de ATK/DEF até o final deste turno para cada Marcador de Esporo removido.\n\nVocê só pode ativar 1 \"Colheita Podriflora\" por turno."
+      "description": "Remova todos os Marcadores de Esporo do campo e, depois, você pode escolher 1 card que seu oponente controla para cada 4 Marcadores removidos; destrua os cards escolhidos. Depois, monstros \"Podriflora\" que você controla ganham 100 de ATK/DEF até o final deste turno para cada Marcador removido por este efeito.\n\nVocê só pode ativar 1 \"Colheita Podriflora\" por turno."
     },
     "415": {
       "name": "Podriflora Supercrescimento",
@@ -1219,7 +1219,7 @@
     },
     "419": {
       "name": "Podriflora Rainha do Bosque Oco",
-      "description": "1 monstro \"Podriflora\" de Nível 5 ou maior\n\nRequisito: deve haver pelo menos 8 Marcadores de Esporo no campo.\n\nSe este card for Invocado por Invocação-Ascensão: monstros que seu oponente controla perdem 100 de ATK/DEF para cada Marcador de Esporo no campo.\n\nVocê pode remover até 3 Marcadores de Esporo do campo; ganhe 500 PV para cada marcador removido.\n\nSe este card deixar o campo: coloque 1 Marcador de Esporo em cada card com a face para cima que seu oponente controla.\n\nVocê só pode usar cada efeito de \"Podriflora Rainha do Bosque Oco — Ascensão\" uma vez por turno."
+      "description": "1 monstro \"Podriflora\" de Nível 5 ou maior\n\nRequisito: deve haver pelo menos 8 Marcadores de Esporo no campo.\n\nSe este card for Invocado por Invocação-Ascensão: monstros que seu oponente controla perdem 100 de ATK/DEF para cada Marcador de Esporo no campo.\n\nVocê pode remover até 3 Marcadores de Esporo do campo; ganhe 500 PV para cada marcador removido.\n\nSe este card deixar o campo: coloque 1 Marcador de Esporo em cada card com a face para cima que seu oponente controla.\n\nVocê só pode usar cada efeito de \"Podriflora Rainha do Bosque Oco\" uma vez por turno."
     },
     "451": {
       "name": "Pistoleiro do Oeste Ardente",

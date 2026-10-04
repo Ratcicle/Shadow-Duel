@@ -1041,6 +1041,8 @@ export async function runActivationPipeline(
             activationCommitment:
               activationContext.activationCommitment || null,
             sourceAtActivation: activationContext.sourceAtActivation || null,
+            ...(activationContext.referenceSnapshots !== undefined
+              ? { referenceSnapshots: activationContext.referenceSnapshots } : {}),
             sourceMoved: activationContext.sourceMoved === true,
             latestSourceLocation:
               activationContext.latestSourceLocation || null,
@@ -1505,8 +1507,10 @@ export async function runActivationPipeline(
     // Selections may have taken time. Revalidate all costs and activation
     // conditions before committing the source or consuming its usage.
     const prepaymentContext = buildCanonicalContext({ preview: true, costSelections });
-    if (effect.activationCaseId && !isActivationSourcePresent(resolvedCard, owner,
-      activationContext.sourceZone || resolvedActivationZone, preparationSourceVersion)) {
+    if ((effect.activationCaseId || costDefinitions.length > 0) &&
+      (!isActivationSourcePresent(resolvedCard, owner,
+        activationContext.sourceZone || resolvedActivationZone, preparationSourceVersion) ||
+        (effect.requireFaceup === true && resolvedCard.isFacedown))) {
       return { result: this.createActionResult({ reason: "Activation source moved before commitment.",
         code: "ACTIVATION_SOURCE_MOVED" }), fromSelection: false };
     }
@@ -1539,6 +1543,8 @@ export async function runActivationPipeline(
         costSelections: costSelections || {},
       }),
       committed: true,
+      ...(activationContext.referenceSnapshots !== undefined
+        ? { referenceSnapshots: activationContext.referenceSnapshots } : {}),
     });
     activationContext.sourceAtActivation = draft.sourceAtActivation;
     activationContext.costSelections = costSelections || {};

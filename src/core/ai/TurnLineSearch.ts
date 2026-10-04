@@ -30,7 +30,8 @@ import { createPlanningOwnerPolicy } from "./common/planningOwner.js";
 import { withoutLiveGameReference } from "./common/gameTreeSimulation.js";
 import type { GameTreeModels, PlanningModel } from "../contracts/aiPlanning.js";
 
-import { isFieldPresenceSummonAttackRestricted } from "../game/combat/availability.js";
+import { getCounterAttackLockReason, isFieldPresenceSummonAttackRestricted } from "../game/combat/availability.js";
+import { cardMatchesFilter } from "./common/cardFilters.js";
 import type {
   AIAction,
   AIActionType,
@@ -916,6 +917,7 @@ function canPlannerAttackerStillAttack(
   state: PlanningState,
 ): boolean {
   if (!isBattleReadyPlannerAttacker(card)) return false;
+  if (getCounterAttackLockReason(card, [state.bot, state.player], state.bot.id, cardMatchesFilter)) return false;
   const opponent = state.player;
   if (isFieldPresenceSummonAttackRestricted(card,
     [...opponent.field, ...opponent.spellTrap, ...(opponent.fieldSpell ? [opponent.fieldSpell] : [])], state.turnCounter, state.bot.id)) return false;

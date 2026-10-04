@@ -175,9 +175,17 @@ async function executeCommand(
         if (!material) throw new Error("Replay hand procedure cost is missing.");
         return material.card;
       });
+      const counterSources = command.payload.counterSourceIds?.map(duelCardId => {
+        const entry = findCard(game, game.player, { duelCardId }) || findCard(game, game.bot, { duelCardId });
+        if (!entry || (entry.zone !== "field" && entry.zone !== "spellTrap" && entry.zone !== "fieldSpell")) {
+          throw new Error("Replay hand procedure counter source is missing from the field.");
+        }
+        return entry.card;
+      });
       return game.performHandSummonProcedure(source.card, actor, {
         ...(command.payload.position ? { position: command.payload.position } : {}),
         ...(materials ? { materials } : {}),
+        ...(counterSources ? { counterSources } : {}),
       });
     }
     case "activate_effect":

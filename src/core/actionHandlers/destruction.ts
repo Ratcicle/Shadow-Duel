@@ -1504,21 +1504,10 @@ export async function handleDestroyTargetedCards(
     });
   }
 
-  const optionalSelection = action.minTargets === 0 && !action.targetCountFromContext;
-  const exactSelection = optionalSelection ? ctx.activationContext?.decisions?.selections?.destroy_targets : undefined;
-  if (optionalSelection && exactSelection !== undefined &&
-    resolveExactInstanceSelection(opponentCards, exactSelection, { min: 0, max: action.maxTargets || 1 }) === null) {
-    return false;
-  }
-  if (opponentCards.length === 0) {
-    getUI(game)?.log("Opponent has no cards to destroy.");
-
-    return optionalSelection;
-  }
-
   // action.maxTargets: maximum cards to target (default 1)
   // action.minTargets: minimum required targets (default maxTargets)
-
+  // A context-derived count limits an optional resolution choice as well.
+  const optionalSelection = action.minTargets === 0;
   const contextTargetCount = action.targetCountFromContext
     ? Math.max(
         0,
@@ -1530,20 +1519,31 @@ export async function handleDestroyTargetedCards(
       )
     : null;
 
-  if (contextTargetCount !== null && contextTargetCount <= 0) {
-    getUI(game)?.log(`${source.name} removed too few counters to destroy a card.`);
-    return false;
-  }
-
   const requestedMaxTargets =
     contextTargetCount !== null ? contextTargetCount : action.maxTargets || 1;
+  const exactSelection = optionalSelection ? ctx.activationContext?.decisions?.selections?.destroy_targets : undefined;
+  if (optionalSelection && exactSelection !== undefined &&
+    resolveExactInstanceSelection(opponentCards, exactSelection, { min: 0, max: requestedMaxTargets }) === null) {
+    return false;
+  }
+  if (opponentCards.length === 0) {
+    getUI(game)?.log("Opponent has no cards to destroy.");
+    return optionalSelection;
+  }
+  if (contextTargetCount !== null && contextTargetCount <= 0) {
+    getUI(game)?.log(`${source.name} removed too few counters to destroy a card.`);
+    return optionalSelection;
+  }
+
   const requestedMinTargets =
-    contextTargetCount !== null
-      ? requestedMaxTargets
-      : typeof action.minTargets === "number" &&
-          Number.isFinite(action.minTargets)
-        ? action.minTargets
-        : Math.min(requestedMaxTargets, opponentCards.length);
+    optionalSelection
+      ? 0
+      : contextTargetCount !== null
+        ? requestedMaxTargets
+        : typeof action.minTargets === "number" &&
+            Number.isFinite(action.minTargets)
+          ? action.minTargets
+          : Math.min(requestedMaxTargets, opponentCards.length);
 
   if (contextTargetCount === null && opponentCards.length < requestedMinTargets) {
     getUI(game)?.log(
@@ -1602,6 +1602,10 @@ export async function handleDestroyTargetedCards(
   };
 
   let targetCards: ActionRuntimeCard[];
+  const resolutionPresence = optionalSelection ? new Map(opponentCards.map(card => [card, {
+    locationVersion: getCardLocationVersion(card), controller: card.controller ?? opponent.id,
+    zone: opponent.field?.includes(card) ? "field" : opponent.spellTrap?.includes(card) ? "spellTrap" : "fieldSpell",
+  }])) : null;
   if (optionalSelection) {
     const selected = await selectResolutionCards({
       game, player, cards: opponentCards, requirementId: "destroy_targets", min: 0, max: maxTargets,
@@ -1675,10 +1679,18 @@ export async function handleDestroyTargetedCards(
   if (nonImmuneTargets.length === 0) {
     getUI(game)?.log("All selected targets are immune to effects.");
 
-    return false;
+    return optionalSelection;
   }
 
   for (const card of nonImmuneTargets) {
+    const presence = resolutionPresence?.get(card);
+    if (resolutionPresence && (!presence ||
+      getCardLocationVersion(card) !== presence.locationVersion ||
+      (card.controller ?? opponent.id) !== presence.controller ||
+      (presence.zone === "fieldSpell" ? opponent.fieldSpell !== card
+        : presence.zone === "field" ? !opponent.field.includes(card) : !opponent.spellTrap.includes(card)))) {
+      continue;
+    }
     const result = await game.destroyCard(card, {
       cause: "effect",
 

@@ -578,6 +578,12 @@ export function filterTargetsByImmunity(
     return result;
   }
 
+  // Paying a declared cost is not applying the effect to its payment source.
+  if (ctx.activationContext?.payingActivationCosts === true &&
+      ctx.effect?.targets?.some(target => target.id === action.targetRef && target.intent === "cost")) {
+    return result;
+  }
+
   const targetCards = targets[action.targetRef];
   if (!Array.isArray(targetCards) || targetCards.length === 0) {
     return result;

@@ -2074,7 +2074,9 @@ Destroys selected cards from one or more zones.
 
 **Notas**
 
-_Sem notas._
+- minTargets: 0 requests an optional resolution choice, including when targetCountFromContext supplies its maximum.
+- An optional choice succeeds without destruction when the maximum is zero, candidates are absent, the player declines, or selected cards are immune or no longer have the same field presence.
+- Exact AI choices still reject unavailable, duplicate, or excessive identities instead of replacing them.
 
 ### `mirror_force_destroy_all`
 
@@ -3562,7 +3564,7 @@ Removes every matching counter from the field and stores the removed count in co
 - Target: `none`
 - Selecao: `none`
 - Mutacoes: counters
-- Eventos emitidos: nenhum
+- Eventos emitidos: counter_removed
 - Atualiza board: sim
 - Preview: `notNeeded`
 
@@ -3641,16 +3643,17 @@ _Sem notas._
 Removes counters from a field-wide pool, with player selection when multiple cards can pay.
 
 - Handler: `proxy:applyRemoveCountersFromField`
-- Target: `none`
+- Target: `optional`
 - Selecao: `dynamic`
 - Mutacoes: counters
-- Eventos emitidos: nenhum
+- Eventos emitidos: counter_removed
 - Atualiza board: sim
 - Preview: `notNeeded`
 
 | Campo | Obrigatorio | Contrato | Descricao |
 | --- | --- | --- | --- |
 | `counterType` | sim | string |  |
+| `targetRef` | nao | string | References an effect target id or a context target such as self. |
 | `amount` | nao | number; min: 0 | Numeric amount. |
 | `count` | nao | number |  |
 | `minAmount` | nao | number |  |
@@ -3847,7 +3850,7 @@ _Sem notas._
 
 ### `optional_target_actions`
 
-Optionally resolves its own targets and executes nested actions when conditions and targets are available.
+Chooses cards during resolution and executes nested actions; reference intent preserves effect immunity without applying targeting protection.
 
 - Handler: `handleOptionalTargetActions`
 - Target: `none`
@@ -3859,7 +3862,7 @@ Optionally resolves its own targets and executes nested actions when conditions 
 
 | Campo | Obrigatorio | Contrato | Descricao |
 | --- | --- | --- | --- |
-| `targets` | sim | array |  |
+| `targets` | sim | array | Resolution-local descriptors. Use intent: reference without targetFromContext for a fresh non-targeting choice. |
 | `actions` | sim | array |  |
 | `conditions` | nao | array |  |
 | `selectionMessage` | nao | string |  |

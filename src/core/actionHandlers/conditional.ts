@@ -345,12 +345,22 @@ function resolveOptionalAutoSelection(
     return autoResult.selections;
   }
 
-  const fallback: SelectionResult = {};
   const requirements = Array.isArray(selectionContract.requirements)
     ? selectionContract.requirements
     : selectionContract.requirements
       ? [selectionContract.requirements]
       : [];
+  const decisions = ctx.activationContext?.decisions;
+  if (requirements.some(req => req.id && (
+    decisions?.selections?.[req.id] !== undefined ||
+    decisions?.cases?.[req.id] !== undefined
+  ))) {
+    // A rejected exact plan is a failed choice, never permission to replace
+    // the selected cards with a different available group.
+    return null;
+  }
+
+  const fallback: SelectionResult = {};
   for (const req of requirements) {
     const min = Number(req?.min ?? 0);
     const max = Number(req?.max ?? min);
@@ -782,7 +792,27 @@ export async function handleOptionalTargetActions(
   const actions = Array.isArray(action?.actions) ? action.actions : [];
   if (actions.length === 0) return false;
 
-  const result = await engine.applyActions(actions, ctx, resolvedTargets);
+  // Local declarations describe how the chosen cards are affected. Preserve
+  // reference intent for immunity and targeting publication without promoting
+  // these resolution choices into the enclosing activation's targets.
+  const localIds = new Set(action.targets.map(def => def.id));
+  const nestedCtx: EffectContext = ctx.effect ? {
+    ...ctx,
+    effect: {
+      ...ctx.effect,
+      targets: [
+        ...(ctx.effect.targets || []).filter(def => !localIds.has(def.id)),
+        ...action.targets,
+      ],
+    },
+  } : ctx;
+  const result = await engine.applyActions(actions, nestedCtx, resolvedTargets);
+  if (nestedCtx !== ctx) {
+    // Nested actions still produce the parent's normal resolution state. Only
+    // the effect declaration projection is local to this application.
+    const { effect: _localEffect, ...resolutionState } = nestedCtx;
+    Object.assign(ctx, resolutionState);
+  }
   if (result && typeof result === "object" && result.needsSelection) {
     return result;
   }

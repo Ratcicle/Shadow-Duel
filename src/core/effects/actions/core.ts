@@ -1680,11 +1680,24 @@ function countPreviewFieldCounters(
     filters.requireFaceup = true;
   }
 
+  const ref = action.targetRef;
+  const selected = ref
+    ? ctx._actionTargets?.[ref] ?? ctx.activationContext?.costSelections?.[ref]
+    : undefined;
+  const selectedCards = selected === undefined || !ref
+    ? null : getPreviewSelectedCostCards(engine, ctx, ref, selected);
+  const selectedCount = selected === undefined ? null : Array.isArray(selected) ? selected.length : 1;
+  if (selectedCards && (selectedCards.length !== selectedCount || selectedCards.length === 0 ||
+      new Set(selectedCards).size !== selectedCards.length)) return 0;
+
   let total = 0;
+  const seen = new Set<PreviewCard>();
   for (const owner of getPreviewCounterOwners(action, ctx, player)) {
     for (const zone of zones) {
       for (const card of getPreviewZoneCards(owner, zone)) {
+        if (seen.has(card) || (selectedCards && !selectedCards.includes(card))) continue;
         if (!matchesCounterPreviewFilters(engine, card, filters)) continue;
+        seen.add(card);
         total +=
           typeof card.getCounter === "function"
             ? Math.max(0, Number(card.getCounter(counterType) || 0))
@@ -1692,6 +1705,7 @@ function countPreviewFieldCounters(
       }
     }
   }
+  if (selectedCards && selectedCards.some(card => !seen.has(card))) return 0;
   return total;
 }
 

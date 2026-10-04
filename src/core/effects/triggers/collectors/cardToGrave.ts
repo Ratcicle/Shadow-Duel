@@ -14,6 +14,7 @@ import {
   getCardControllerId,
   matchesLastSummonMethod,
   matchesLastSummonProcedure,
+  resolveMovementEventOwner,
 } from "./shared.js";
 
 /**
@@ -72,6 +73,13 @@ export async function collectCardToGraveTriggers(
       }
       return;
     }
+    const eventOwner = resolveMovementEventOwner(effect, fromZone, payload.fromPlayer, player);
+    if (!eventOwner) return;
+    if (sourceCard === card) {
+      owner = eventOwner;
+      other = this.game?.getOpponent?.(owner) || null;
+    }
+    const eventOpponent = this.game?.getOpponent?.(eventOwner) || null;
 
     const allowedContextLabels = [
       ...(effect.contextLabel ? [effect.contextLabel] : []),
@@ -109,7 +117,7 @@ export async function collectCardToGraveTriggers(
       !cardMatchesEventFilters(this, card, effect.eventCardFilters, {
         sourceCard,
         sourceOwner: owner,
-        eventOwner: player,
+        eventOwner,
         fromZone,
         toZone,
         contextLabel,
@@ -222,8 +230,8 @@ export async function collectCardToGraveTriggers(
       opponent: other,
       eventCard: card,
       movedCard: card,
-      eventPlayer: player,
-      eventOpponent: resolvedOpponent,
+      eventPlayer: eventOwner,
+      eventOpponent,
       discardedCard: fromZone === "hand" ? card : null,
       fromZone,
       toZone,

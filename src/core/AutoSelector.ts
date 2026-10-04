@@ -23,6 +23,7 @@ import type {
 } from "./contracts/selection.js";
 import type { SelectionCandidateKey } from "./contracts/primitives.js";
 import type { AIDecisionPlan } from "./contracts/ai.js";
+import type { CardAction } from "./contracts/actions.js";
 
 interface AutoSelectorCard extends ActionRuntimeCard {
   fieldPresenceId?: string | number | null;
@@ -171,6 +172,7 @@ interface AutoSelectorContext {
   owner?: AutoSelectorPlayer | null;
   player?: AutoSelectorPlayer | null;
   activationContext?: AutoSelectorActivationContext | null;
+  effect?: { readonly activationCosts?: readonly CardAction[] } | null;
 }
 
 interface AutoSelectorLimits {
@@ -338,6 +340,19 @@ export default class AutoSelector {
         contextWithContract,
       );
       const chosen = ordered.slice(0, desiredCount);
+      const counterCost = context.effect?.activationCosts?.find(action =>
+        action.type === "remove_counters_from_field" && action.targetRef === id);
+      if (counterCost?.type === "remove_counters_from_field") {
+        const required = Math.max(1, Number(counterCost.amount ?? counterCost.count ?? 1));
+        let available = 0;
+        chosen.splice(0, chosen.length);
+        for (const candidate of ordered.slice(0, max)) {
+          chosen.push(candidate);
+          available += Math.max(0, candidate.cardRef?.getCounter?.(counterCost.counterType) ?? 0);
+          if (chosen.length >= min && available >= required) break;
+        }
+        if (available < required) return { ok: false, reason: `Not enough selected counters for ${id}.` };
+      }
       selections[requirement.id ?? "undefined"] = chosen
         .filter(hasCanonicalCandidateKey)
         .map((candidate) => candidate.key);

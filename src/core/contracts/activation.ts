@@ -2,6 +2,7 @@ import type { GameCard } from "./cards.js";
 import type {
   ChainActivationCommitment,
   ChainCostPayment,
+  ChainDeclaredTargetSnapshot,
   ChainSourceSnapshot,
   PreparedActivation,
 } from "./chainRuntime.js";
@@ -9,6 +10,7 @@ import type { MaybePromise } from "./decisions.js";
 import type { EffectDefinition } from "./effects.js";
 import type { GamePhase } from "./game.js";
 import type { GamePlayer } from "./player.js";
+import type { EventEquipHostExitBinding } from "./events.js";
 import type {
   CanonicalSelectionMap,
   NormalizedSelectionContract,
@@ -28,8 +30,11 @@ export interface ActivationCommitInfo {
 }
 
 export interface ActivationPipelineContext {
+  equipHostExitBinding?: EventEquipHostExitBinding;
   /** Frozen rules for this activation, captured before any cost can change its source. */
   preparedEffect?: EffectDefinition;
+  /** Supplied occurrence bindings are authoritative, including empty bindings. */
+  referenceSnapshots?: ChainDeclaredTargetSnapshot[];
   decisions?: import("./ai.js").AIDecisionPlan;
   fromHand?: boolean;
   activationZone?: ActivationZone | undefined;

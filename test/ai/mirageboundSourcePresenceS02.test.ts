@@ -129,7 +129,8 @@ for (const id of [353, 364] as const) for (const seat of seats) {
   for (const snapshot of ["missing", "empty", "other_card", "wrong_owner", "wrong_zone"] as const) {
     test(`S02 direct self summon rejects a missing or mismatched activation reference (${id}, ${seat}, ${snapshot})`, () => {
       const f = scenario(id, seat);
-      const references = f.bound();
+      // Deliberately invalid fixtures must not mutate captured immutable bindings.
+      const references = { ...f.bound() };
       const original = required(references.self?.[0]);
       if (snapshot === "empty") references.self = [];
       if (snapshot === "other_card") references.self = [{ ...original, card: f.returned }];

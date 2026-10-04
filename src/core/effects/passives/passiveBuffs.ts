@@ -30,7 +30,7 @@ type PassiveStatCard = {
 };
 /** Proven origin is private planner capability metadata, never serialized card data. */
 type ModeledPassiveFamily = "field_archetype_aura_buff" | "activated_card_count_buff" |
-  "field_presence_type_summon_count_buff";
+  "field_presence_type_summon_count_buff" | "equipped_field_counter_buff" | "field_counter_stat_aura";
 const modeledPassiveContributions = new WeakMap<object, Map<string, ModeledPassiveFamily>>();
 type PassiveProofCard = Pick<PassiveStatCard, "dynamicBuffs" | "temporarySuppressedDynamicBuffStatsByKey">;
 
@@ -628,6 +628,33 @@ export function getFieldAuraBuffKey(
   return `${effectId || `passive_${card.id}_${effectIndex}_field_aura`}_${sourceKey}_${stat}`;
 }
 
+/** Each recipient's counter total has one contribution per source presence. */
+export function getFieldCounterStatAuraBuffKey(
+  source: Parameters<typeof getFieldAuraBuffKey>[0],
+  effectId: string | undefined,
+  effectIndex: number,
+  sourceIndex: number,
+  counterType: string,
+): string {
+  const sourceKey = source.fieldPresenceId || source.instanceId || `${source.id}_${sourceIndex}`;
+  return `${effectId || `passive_${source.id}_${effectIndex}_field_counter_aura`}_${sourceKey}_${counterType}`;
+}
+
+/** Equip counter and fixed components reconcile independently for each source. */
+export function getEquippedFieldCounterBuffKeys(
+  source: Parameters<typeof getFieldAuraBuffKey>[0],
+  effectId: string | undefined,
+  effectIndex: number,
+  sourceIndex: number,
+): { counterKey: string; fixedDefKey: string } {
+  const sourceKey = source.fieldPresenceId || source.instanceId || `${source.id}_${sourceIndex}`;
+  const baseKey = effectId || `passive_${source.id}_${effectIndex}_${sourceKey}_field_counter_equip`;
+  return {
+    counterKey: `${baseKey}_${sourceKey}_${effectIndex}_counter`,
+    fixedDefKey: `${baseKey}_${sourceKey}_fixed_def`,
+  };
+}
+
 /** Remove this source's continuous contributions before its field identity is cleared. */
 export function removeFieldAuraBuffContributions(
   source: Parameters<typeof getFieldAuraBuffKey>[0] & PassiveStatCard & { effects?: readonly EffectDefinition[] | undefined },
@@ -639,6 +666,14 @@ export function removeFieldAuraBuffContributions(
     if (effect.passive?.type === "activated_card_count_buff") {
       applyPassiveBuffValue(source, effect.id || `passive_${source.id}_${index}_activations`, 0,
         effect.passive.stats || ["atk", "def"]);
+      return;
+    }
+    if (effect.passive?.type === "field_counter_stat_aura") {
+      const key = getFieldCounterStatAuraBuffKey(source, effect.id, index, sourceFieldIndex,
+        effect.passive.counterType || "default");
+      for (const recipient of recipients) {
+        applyPassiveBuffValue(recipient, key, 0, effect.passive.stats || ["atk", "def"]);
+      }
       return;
     }
     if (effect.passive?.type !== "field_archetype_aura_buff") return;
@@ -1292,8 +1327,6 @@ export function updatePassiveBuffs(this: PassiveHost) {
           passive.buffPerCounter ??
           passive.amount ??
           0;
-        if (amountPerCounter === 0) return;
-
         const sourceOwner = this.getOwnerByCard(card);
         const counterCount = countPassiveFieldCounters(
           this,
@@ -1301,20 +1334,19 @@ export function updatePassiveBuffs(this: PassiveHost) {
           passive,
         );
         const stats: readonly PassiveStat[] = passive.stats || ["atk", "def"];
-        const sourceKey =
-          card.fieldPresenceId ||
-          card.instanceId ||
-          `${card.id}_${passiveSources.indexOf(card)}`;
-        const buffKey =
-          effect.id ||
-          `passive_${card.id}_${index}_${sourceKey}_field_counter_equip`;
+        const { counterKey, fixedDefKey } = getEquippedFieldCounterBuffKeys(
+          card, effect.id, index, passiveSources.indexOf(card),
+        );
+        registerModeledPassiveContribution(target, counterKey, passive.type);
+        registerModeledPassiveContribution(target, fixedDefKey, passive.type);
         const applied = refreshBuff(
           target,
-          buffKey,
+          counterKey,
           counterCount * amountPerCounter,
           stats,
         );
         if (applied) updated = true;
+        if (refreshBuff(target, fixedDefKey, passive.fixedDefBonus ?? 0, ["def"])) updated = true;
         return;
       }
 
@@ -1357,12 +1389,8 @@ export function updatePassiveBuffs(this: PassiveHost) {
         const includeSelf = passive.includeSelf !== false;
         const targetFilters = passive.targetFilters || null;
         const stats: readonly PassiveStat[] = passive.stats || ["atk", "def"];
-        const sourceKey =
-          card.fieldPresenceId ||
-          card.instanceId ||
-          `${card.id}_${passiveSources.indexOf(card)}`;
-        const baseBuffKey =
-          effect.id || `passive_${card.id}_${index}_field_counter_aura`;
+        const buffKey = getFieldCounterStatAuraBuffKey(card, effect.id, index,
+          passiveSources.indexOf(card), counterType);
 
         for (const target of fieldCards) {
           if (!target) continue;
@@ -1382,9 +1410,10 @@ export function updatePassiveBuffs(this: PassiveHost) {
             typeof target.getCounter === "function"
               ? Math.max(0, Number(target.getCounter(counterType) || 0))
               : 0;
+          registerModeledPassiveContribution(target, buffKey, "field_counter_stat_aura");
           const applied = refreshBuff(
             target,
-            `${baseBuffKey}_${sourceKey}_${counterType}`,
+            buffKey,
             counterCount * amountPerCounter,
             stats,
           );

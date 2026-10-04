@@ -34,6 +34,9 @@ import type {
 } from "../contracts/chainRuntime.js";
 import type { SegocGroup } from "../contracts/chain.js";
 import { getCardDisplayName, getUIText } from "../i18n.js";
+import { resolvePhysicalSourceLocation } from "./link.js";
+import { hasEquipHostExitProof, matchesEquipHostExitSourcePresence } from "../effects/triggers/collectors/shared.js";
+import { captureReferencePresence, matchesFrozenReferencePresence, getEventEffectOrigin } from "../effects/targeting/references.js";
 
 const SEGOC_GROUP_ORDER = Object.freeze([
   SEGOC_GROUPS.TURN_MANDATORY,
@@ -172,6 +175,13 @@ function compactSerializable(
   }
   const cardKind = Reflect.get(value, "cardKind");
   const instanceId = Reflect.get(value, "instanceId");
+  if (Object.hasOwn(value, "cardId") && Object.hasOwn(value, "duelCardId") &&
+      Object.hasOwn(value, "zone") && Object.hasOwn(value, "faceUp")) {
+    return { cardId: Reflect.get(value, "cardId"), duelCardId: Reflect.get(value, "duelCardId"),
+      instanceId: typeof instanceId === "string" || typeof instanceId === "number" ? instanceId : null,
+      controllerId: Reflect.get(value, "controllerId"), zone: Reflect.get(value, "zone"),
+      faceUp: Reflect.get(value, "faceUp"), locationVersion: Number(Reflect.get(value, "locationVersion") || 0) };
+  }
   const name = Reflect.get(value, "name");
   const owner = Reflect.get(value, "owner");
   const looksLikeCard =
@@ -197,6 +207,7 @@ function compactSerializable(
   seen.add(value);
   const output: CompactSerializableObject = {};
   for (const [key, entry] of Object.entries(value)) {
+    if (key === "eventReferenceSnapshots" || key === "referenceSnapshots") continue;
     const compact = compactSerializable(entry, seen, depth + 1);
     if (compact !== undefined) output[key] = compact;
   }
@@ -303,6 +314,7 @@ export function createTriggerOccurrence(
     resolvingLinkId: this.currentResolvingLink?.linkId ?? null,
     payload: payload || {},
     snapshot: compactSerializable(payload || {}) as object,
+    ...(options.referenceSnapshots !== undefined ? { referenceSnapshots: options.referenceSnapshots } : {}),
     entries: Array.isArray(options.entries) ? options.entries : null,
     entriesProvided: options.entriesProvided === true,
     orderRule: options.orderRule || null,
@@ -405,7 +417,10 @@ function currentSourceZone(
   chainSystem: FullChainHost,
   candidate: ChainTriggerCandidate,
 ) {
-  return chainSystem.determineCardZone?.(candidate.card, candidate.controller) || null;
+  return candidate.effect.movementTriggerOwnership === "field_exit_controller" ||
+    hasEquipHostExitProof(candidate.card, candidate.effect, candidate.config.activationContext?.equipHostExitBinding)
+    ? resolvePhysicalSourceLocation(chainSystem, candidate.card).zone
+    : chainSystem.determineCardZone?.(candidate.card, candidate.controller) || null;
 }
 
 export function revalidateTriggerCandidate(
@@ -431,6 +446,22 @@ export function revalidateTriggerCandidate(
   }
 
   const snapshot = candidate.sourceAtTrigger;
+  const occurrence = opportunity.occurrences.find(entry => entry.occurrenceId === candidate.occurrenceId);
+  if (occurrence?.referenceSnapshots !== undefined && candidate.effect.targets?.some(def =>
+    def.intent === "reference" && !!def.targetFromContext)) {
+    const reference = occurrence.referenceSnapshots.find(entry => entry.source === candidate.card && entry.effect === getEventEffectOrigin(candidate.effect));
+    if (!matchesFrozenReferencePresence(reference?.sourcePresence,
+      captureReferencePresence(candidate.card, [this.game?.player, this.game?.bot]))) {
+      return { ok: false, reason: "contextual_reference_source_changed" };
+    }
+  }
+  const binding = candidate.config.activationContext?.equipHostExitBinding;
+  if (binding) {
+    const physical = resolvePhysicalSourceLocation(this, candidate.card);
+    if (!matchesEquipHostExitSourcePresence(candidate.card, candidate.effect, binding, physical.player?.id || null, physical.zone)) {
+      return { ok: false, reason: "equip_host_exit_source_changed" };
+    }
+  }
   if (snapshot && snapshot.zone !== "temporary") {
     const currentVersion = Number(candidate.card?.locationVersion || 0);
     if (currentVersion !== Number(snapshot.locationVersion || 0)) {
@@ -443,8 +474,9 @@ export function revalidateTriggerCandidate(
     if (snapshot.faceUp === true && candidate.card?.isFacedown === true) {
       return { ok: false, reason: "source_no_longer_face_up" };
     }
-    const currentControllerId =
-      candidate.card?.controller ?? candidate.card?.owner ?? candidate.controller?.id;
+    const currentControllerId = candidate.effect.movementTriggerOwnership === "field_exit_controller" || binding
+      ? resolvePhysicalSourceLocation(this, candidate.card).player?.id ?? candidate.card.controller ?? candidate.card.owner ?? null
+      : candidate.card?.controller ?? candidate.card?.owner ?? candidate.controller?.id;
     if (
       snapshot.controllerId != null &&
       currentControllerId != null &&
@@ -511,6 +543,11 @@ export async function collectTriggerCandidates(
       const effect = entry?.effect || entry?.config?.effect || null;
       const controller = entry?.owner || entry?.config?.owner || null;
       if (!card || !effect || !controller) continue;
+      const config = entry?.config || entry?.pipeline;
+      if (config && occurrence.referenceSnapshots !== undefined) {
+        config.activationContext = { ...(config.activationContext || {}),
+          referenceSnapshots: occurrence.referenceSnapshots.find(reference => reference.source === card && reference.effect === getEventEffectOrigin(effect))?.references || [] };
+      }
       const triggerRequirement = effect.triggerRequirement;
       const triggerTiming = effect.triggerTiming;
       const key = [
@@ -538,7 +575,7 @@ export async function collectTriggerCandidates(
         collectorOrder: collectorOrder++,
         sourceOrder: effectOrder,
         effectOrder,
-        config: entry?.config || entry?.pipeline || entry,
+        config: config || entry,
         summary: entry?.summary || `${controller.id}:${card.name}:${effect.id}`,
         eligibilityStatus: "pending",
         rejectionReason: null,
@@ -558,6 +595,10 @@ export async function collectTriggerCandidates(
         const materialized = entry.materialize();
         if (!materialized) continue;
         candidate.config = materialized.config || materialized.pipeline || materialized;
+        if (occurrence.referenceSnapshots !== undefined) {
+          candidate.config.activationContext = { ...(candidate.config.activationContext || {}),
+            referenceSnapshots: occurrence.referenceSnapshots.find(reference => reference.source === card && reference.effect === getEventEffectOrigin(effect))?.references || [] };
+        }
       }
       candidate.eligibilityStatus = "eligible";
       const segocGroup = candidateGroup(candidate, opportunity.turnPlayer);

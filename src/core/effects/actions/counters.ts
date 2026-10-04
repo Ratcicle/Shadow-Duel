@@ -2,6 +2,7 @@ import {
   buildFieldSelectionCandidates as buildSharedFieldSelectionCandidates,
   getUI as getSharedUI,
   resolveFieldScopeCards as resolveSharedFieldScopeCards,
+  resolveTargetCards,
   selectCards as selectSharedCards,
 } from "../../actionHandlers/shared.js";
 import { cardMatchesKind, getCardLocationVersion } from "../../Card.js";
@@ -132,6 +133,7 @@ interface CounterActionHost {
     options: object,
   ): { allowed: ActionRuntimeCard[] };
   inferEffectType?(actionType: string): string;
+  clearTargetingCache?(): void;
   cardMatchesFilters(card: ActionRuntimeCard, filters: object): boolean;
 }
 
@@ -979,11 +981,12 @@ export async function applyRemoveCountersFromField(
   this: CounterActionHost,
   action: ActionOf<"remove_counters_from_field"> & CounterAction,
   ctx: CounterContext,
+  targets: ResolvedTargetMap = {},
 ): Promise<boolean> {
   const game = this?.game;
   const counterType = action.counterType || "default";
   const entries = collectCounterFieldEntries(this, action, ctx);
-  const paymentPresences = ctx.validateCostPayment
+  const paymentPresences = action.targetRef || ctx.validateCostPayment
     ? new Map(entries.map(entry => [entry, {
         instanceId: entry.card.instanceId, duelCardId: entry.card.duelCardId,
         controller: entry.card.controller ?? entry.owner.id,
@@ -1015,12 +1018,10 @@ export async function applyRemoveCountersFromField(
     writeCounterContext(ctx, counterType, contextKey, 0);
   }
 
-  const amount = await resolveCounterRemovalAmount(
-    this,
-    action,
-    ctx,
-    totalAvailable,
-  );
+  // Referenced payments are fixed and fully chosen before source commitment.
+  const amount = action.targetRef
+    ? Math.max(1, Number(action.amount ?? action.count ?? 1))
+    : await resolveCounterRemovalAmount(this, action, ctx, totalAvailable);
   if (amount === null) {
     getUI(game)?.log(getUIText("ui.counters.paymentCancelled"));
     return false;
@@ -1039,16 +1040,18 @@ export async function applyRemoveCountersFromField(
     return false;
   }
 
-  const selectedCards = await selectCounterPaymentCards(
-    this,
-    action,
-    ctx,
-    entries,
-    amount,
-  );
+  const selectedCards = action.targetRef
+    ? resolveTargetCards(action, {
+        ...ctx,
+        _actionTargets: Object.prototype.hasOwnProperty.call(targets, action.targetRef)
+          ? targets : ctx._actionTargets || {},
+      }, targets, { requireArray: true })
+    : await selectCounterPaymentCards(this, action, ctx, entries, amount);
+  if (new Set(selectedCards).size !== selectedCards.length) return false;
   const selectedEntries = selectedCards
     .map((card) => entries.find((entry) => entry.card === card))
     .filter((entry): entry is CounterEntry => entry !== undefined);
+  if (selectedEntries.length !== selectedCards.length || selectedEntries.length === 0) return false;
   if (!paymentIsCurrent(selectedEntries)) return false;
   const selectedTotal = selectedEntries.reduce(
     (sum, entry) => sum + (paymentPresences ? getCounterValue(entry.card, counterType) : entry.counterCount),
@@ -1071,17 +1074,20 @@ export async function applyRemoveCountersFromField(
   const removedCards: ActionRuntimeCard[] = [];
   const removedZones: CounterZone[] = [];
 
-  while (remaining > 0) {
+  payment: while (remaining > 0) {
     let progressed = false;
 
     for (const entry of selectedEntries) {
       if (remaining <= 0) break;
-      if (!paymentIsCurrent(selectedEntries)) return false;
+      if (!paymentIsCurrent(selectedEntries) || (action.targetRef && selectedEntries.reduce(
+        (sum, selected) => sum + getCounterValue(selected.card, counterType), 0,
+      ) < remaining)) break payment;
       const card = entry.card;
       const current = getCounterValue(card, counterType);
       if (current <= 0 || typeof card.removeCounter !== "function") continue;
 
       card.removeCounter(counterType, 1);
+      this.clearTargetingCache?.();
       remaining -= 1;
       progressed = true;
       removed = true;
@@ -1107,8 +1113,6 @@ export async function applyRemoveCountersFromField(
     if (!progressed) break;
   }
 
-  if (remaining > 0) return false;
-
   if (ctx && contextKey) {
     writeCounterContext(ctx, counterType, contextKey, removedAmount);
   }
@@ -1124,7 +1128,7 @@ export async function applyRemoveCountersFromField(
     });
   }
 
-  return removed;
+  return remaining === 0 && removed;
 }
 
 /**

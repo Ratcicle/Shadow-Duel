@@ -1,5 +1,6 @@
 import type { CollectedTriggerEventMap } from "../../../contracts/events.js";
 import type { BattlePosition } from "../../../contracts/cards.js";
+import { registerEventEffectProjection } from "../../targeting/references.js";
 import type {
   TriggerCardFilter,
   TriggerCollectorHost,
@@ -189,11 +190,13 @@ function buildPerEventCardEffect(
   if (!effect?.oncePerTurnPerEventCard) return effect;
   const baseName = effect.oncePerTurnName || effect.id || "position_change";
   const eventCardKey = getCardLockIdentity(eventCard, game);
-  return {
+  const projection = {
     ...effect,
     oncePerTurn: true,
     oncePerTurnName: `${baseName}:event_card:${eventCardKey}`,
   };
+  registerEventEffectProjection(effect, projection);
+  return projection;
 }
 
 /**

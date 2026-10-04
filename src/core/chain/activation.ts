@@ -1,4 +1,5 @@
 import { isQuickSpell } from "../game/spellTrap/quickSpellRules.js";
+import { captureReferencePresence, matchesFrozenReferencePresence, getEventEffectOrigin } from "../effects/targeting/references.js";
 import type { CardAction } from "../contracts/actions.js";
 import type {
   ChainActionContext,
@@ -31,6 +32,7 @@ import {
   classifyActivationKind,
   classifyEffectKind,
   getResponseContextType,
+  resolvePhysicalSourceLocation,
 } from "./link.js";
 import {
   CHAIN_ACTIVATION_KINDS,
@@ -40,6 +42,7 @@ import {
   capCostDefinitionsByLinkedTargetCapacity,
   resolveCountFromSelectionDefinitions,
 } from "./selection.js";
+import { hasEquipHostExitProof, matchesEquipHostExitSourcePresence } from "../effects/triggers/collectors/shared.js";
 
 const PERSISTENT_SPELL_TRAP_SUBTYPES = new Set([
   "continuous",
@@ -216,7 +219,8 @@ export function createPreparedActivation(
   const sourceAtActivation =
     input.sourceAtActivation ||
     activationContext.sourceAtActivation ||
-    captureRuntimeSourceSnapshot(card, controller, activationZone);
+    captureRuntimeSourceSnapshot(card, effect?.movementTriggerOwnership === "field_exit_controller" ||
+      (card && effect && hasEquipHostExitProof(card, effect, activationContext.equipHostExitBinding)) ? null : controller, activationZone);
   const activationKind = classifyActivationKind({
     ...input,
     card,
@@ -248,6 +252,9 @@ export function createPreparedActivation(
   const referenceIds = new Set((effect?.targets || []).filter(def => def.intent === "reference").map(def => def.id));
   const targetSelections = Object.fromEntries(Object.entries(input.targetSelections || {}).filter(([id]) => !referenceIds.has(id)));
   const resolutionSelections = input.resolutionSelections || {};
+  const historicalEffectNegated = !!(card && effect &&
+    hasEquipHostExitProof(card, effect, activationContext.equipHostExitBinding) &&
+    activationContext.equipHostExitBinding?.equipEffectsNegatedAtHostExit);
 
   const prepared: PreparedActivation = {
     ...input,
@@ -258,7 +265,10 @@ export function createPreparedActivation(
     costSelections,
     targetSelections,
     resolutionSelections,
-    referenceSnapshots: input.referenceSnapshots || captureReferenceSnapshots(input),
+    referenceSnapshots: input.referenceSnapshots ?? activationContext.referenceSnapshots ??
+      (input.context?.eventReferenceSnapshots ? input.context.eventReferenceSnapshots.find(entry =>
+        entry.source === card && effect && entry.effect === getEventEffectOrigin(effect))?.references || [] : captureReferenceSnapshots(input)),
+    ...(historicalEffectNegated ? { effectNegated: true } : {}),
     costPayment: input.costPayment || null,
     activationCommitment:
       input.activationCommitment ||
@@ -301,7 +311,8 @@ export function refreshPreparedActivationSourceSnapshot(
   const activationZone = prepared.activationZone || null;
   prepared.sourceAtActivation = captureRuntimeSourceSnapshot(
     prepared.card,
-    controller,
+    prepared.effect?.movementTriggerOwnership === "field_exit_controller" ||
+      (prepared.effect && hasEquipHostExitProof(prepared.card, prepared.effect, prepared.activationContext.equipHostExitBinding)) ? null : controller,
     activationZone,
   );
   prepared.activationKind = classifyActivationKind(prepared);
@@ -822,6 +833,16 @@ export async function prepareChainResponse(
 
   const sourceZone =
     candidate.sourceZone || this.determineCardZone(candidate.card, player);
+  const occurrenceReferences = (candidate.context || context)?.eventReferenceSnapshots;
+  if (occurrenceReferences !== undefined && candidate.effect.targets?.some(def =>
+    def.intent === "reference" && !!def.targetFromContext)) {
+    const reference = occurrenceReferences.find(entry => entry.source === candidate.card && entry.effect === getEventEffectOrigin(candidate.effect));
+    if (!matchesFrozenReferencePresence(reference?.sourcePresence,
+      captureReferencePresence(candidate.card, [this.game?.player, this.game?.bot]))) {
+      return { success: false, code: "CONTEXTUAL_REFERENCE_SOURCE_CHANGED",
+        reason: "Contextual reference source changed after the event." };
+    }
+  }
   const prepared = createPreparedActivation({
     card: candidate.card,
     controller: player,
@@ -960,7 +981,7 @@ export async function prepareChainResponse(
       preparedCard,
       costSelectionDefinitions,
       player,
-      responseContext,
+      { ...responseContext, effect: preparedEffect },
       { purpose: "cost", allowCancel: true, activationZone: sourceZone },
     );
     if (costSelections == null) {
@@ -1049,12 +1070,13 @@ export async function prepareChainResponse(
 
   // Selection can keep a human prompt open. Revalidate the transaction at the
   // last cancellable boundary so state changes cannot commit a stale offer.
-  const sourceZoneBeforeCommit = this.determineCardZone?.(
-    preparedCard,
-    player,
-  );
+  const equipBinding = prepared.activationContext.equipHostExitBinding;
+  const physicalBeforeCommit = equipBinding ? resolvePhysicalSourceLocation(this, preparedCard) : null;
+  const sourceZoneBeforeCommit = physicalBeforeCommit?.zone || this.determineCardZone?.(preparedCard, player);
   if (
-    sourceZoneBeforeCommit !== sourceZone ||
+    (equipBinding && !matchesEquipHostExitSourcePresence(preparedCard, preparedEffect, equipBinding,
+      physicalBeforeCommit?.player?.id || null, physicalBeforeCommit?.zone || null)) || sourceZoneBeforeCommit !== sourceZone ||
+    (preparedEffect.requireFaceup === true && preparedCard.isFacedown) ||
     Number(preparedCard.locationVersion ?? 0) !==
       Number(candidate.sourceLocationVersion ?? prepared.sourceAtActivation?.locationVersion ?? 0)
   ) {

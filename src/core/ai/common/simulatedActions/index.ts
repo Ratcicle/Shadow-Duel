@@ -1,7 +1,7 @@
 import { refreshSimulatedFieldAuras } from "../zones.js";
 import { shouldContinueAfterActionFailure } from "../../../actionHandlers/shared.js";
 import { getPerspectivePlayers } from "../perspective.js";
-import { resolveTargetsForAction, captureSimulatedReferences, STOP_SIMULATION } from "./shared.js";
+import { resolveTargetsForAction, captureSimulatedReferences, areRequiredContextualReferencesValid, STOP_SIMULATION } from "./shared.js";
 import type { ActionOf, ActionType } from "../../../contracts/actions.js";
 import type {
   SimulatedActionBatchInput,
@@ -58,6 +58,9 @@ import {
   applyAddCounter,
   applyCountFieldCounters,
   applyRemoveCounter,
+  applyRemoveCountersFromField,
+  applyRemoveAllCountersFromField,
+  applyBuffStatsByCounter,
 } from "./counters.js";
 import {
   applyModifyLevel,
@@ -65,6 +68,7 @@ import {
   applyPermanentBuffNamed,
   applyBuffStatsTemp,
   applyBuffAtkTemp,
+  applySetOriginalStats,
   applySetAttackLimitFromZoneCount,
   applyRemoveStatIncreases,
   applyHalveTargetStatsAndGainRemoved,
@@ -146,9 +150,13 @@ export const SIMULATED_ACTION_HANDLERS = {
   "add_counter": applyAddCounter,
   "count_field_counters": applyCountFieldCounters,
   "remove_counter": applyRemoveCounter,
+  "remove_counters_from_field": applyRemoveCountersFromField,
+  "remove_all_counters_from_field": applyRemoveAllCountersFromField,
+  "buff_stats_by_counter": applyBuffStatsByCounter,
   "buff_stats_temp": applyBuffStatsTemp,
   "buff_stats_temp_with_second_attack": applyBuffStatsTemp,
   "buff_atk_temp": applyBuffAtkTemp,
+  "set_original_stats": applySetOriginalStats,
   "set_attack_limit_from_zone_count": applySetAttackLimitFromZoneCount,
   "remove_stat_increases": applyRemoveStatIncreases,
   "halve_target_stats_and_gain_removed": applyHalveTargetStatsAndGainRemoved,
@@ -200,9 +208,13 @@ export function applySimulatedActions({
       return [ref, cards];
     }));
   options = { ...options, referenceSnapshots: {
-    ...captureSimulatedReferences(options.effect, selections, self, opponent, statReferences),
+    ...captureSimulatedReferences(options.referenceSnapshots === undefined ? options.effect : null, selections, self, opponent, statReferences),
     ...options.referenceSnapshots,
   } };
+  if ((options._contextualReferencePreflight?.effect !== options.effect ||
+      options._contextualReferencePreflight?.source !== options.sourceCard) &&
+      !areRequiredContextualReferencesValid(options, self, opponent)) return false;
+  options._contextualReferencePreflight = { effect: options.effect, source: options.sourceCard };
 
   for (const action of actions) {
     if (!action || !action.type) continue;

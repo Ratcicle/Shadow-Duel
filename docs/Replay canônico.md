@@ -1,7 +1,7 @@
 # Replay canônico
 
 O replay executável usa o formato `shadow-duel-canonical-replay`, schema `2` e
-`engineVersion: "engine-rules-v14"`. Ele é independente do relatório
+`engineVersion: "engine-rules-v17"`. Ele é independente do relatório
 estratégico. O importador aceita somente o schema `2`: relatórios v4 e replays
 de schemas anteriores não são partidas executáveis nesta versão.
 
@@ -182,7 +182,7 @@ caracteres do replay, usado para detectar divergências na reprodução.
 `validateCanonicalReplay(input)` recebe `unknown`, não muta a entrada e retorna
 a mesma referência somente depois de validar o documento. `setup`, `commands` e
 `decisions` e `engineVersion` são obrigatórios. A versão da engine deve ser
-`"engine-rules-v14"`; gravações sem essa versão são rejeitadas antes da validação
+`"engine-rules-v17"`; gravações sem essa versão são rejeitadas antes da validação
 profunda e da reprodução. `events`, `result` e `finalized` continuam opcionais
 na importação de arquivos do schema `2`; quando presentes, são validados
 profundamente. Os comandos e kinds de decisão permanecem os mesmos.
@@ -635,9 +635,117 @@ remoção de seu OPT no lote P2. Essa política sem limite era rejeitada pelo
 validador do banco na tela inicial. A correção remove somente a política
 residual, preservando o retorno obrigatório por cópia e o HOPT da Invocação da mão.
 
-A assinatura completa passa a **`db5833d7`**, mantendo **schema `2` /
+Com essa correção, a assinatura completa passou a **`db5833d7`**, mantendo **schema `2` /
 `engine-rules-v14`**. Gravações com `a2cd2bdb` são rejeitadas sem migração.
-O golden tem hash completo **`bc1e3cb7`**, com os mesmos hashes de estado
+O golden dessa correção tem hash completo **`bc1e3cb7`**, com os mesmos hashes de estado
 `5a03f26c` e `c2ec633c` e 12100 caracteres. Restaurar somente a assinatura
 anterior no envelope reproduz `69ee977d`; também restaurar o marcador v12
 reproduz `c418b563`, confirmando que a diferença está na assinatura do banco.
+
+### Redação do Falso Rei — 03/10/2026
+
+O texto EN de False King (358) passou a usar a formulação simples do limite
+de Invocação, com o último HOPT em parágrafo separado. A versão PT definida
+pelo usuário mantém o HOPT junto do segundo efeito, com uma quebra simples
+entre os dois blocos. A mecânica permanece igual.
+Como a assinatura inclui o texto EN, o banco passa a **`0f23140c`**, sem mudar
+schema `2` / `engine-rules-v14`. Gravações com `db5833d7` são rejeitadas sem migração.
+O golden completo passa a **`76f5c866`**; os hashes de estado e o comprimento
+permanecem iguais. Restaurar só a assinatura `db5833d7` reproduz `bc1e3cb7`.
+
+### Bloomrot P1 — custos preparados e controlador da saída — 03/10/2026
+
+Na entrega P1, o formato manteve **schema `2`** e avançou para **`engine-rules-v15`**.
+O driver rejeita versões anteriores antes de aplicar setup, comandos ou decisões
+ao jogo. A assinatura declarativa desse lote foi **`0f2a7a85`**; a incompatibilidade de
+versão e a incompatibilidade de assinatura possuem testes separados. Gravações
+v14 continuam dependentes da engine que as produziu, sem migração automática.
+
+Os casos de ativação da 412/419, as fontes de Esporos e o alvo da 418 são
+decisões preparadas antes das respostas. O replay consome essas decisões na
+mesma ordem e preserva o pagamento após negação. Os triggers com
+`movementTriggerOwnership: "field_exit_controller"` usam a procedência física
+do evento para atribuir benefício, escolhas e uso ao controlador anterior;
+a presença atual da fonte continua sendo revalidada na preparação e no SEGOC.
+
+Os testes `bloomrotPriorityOneReplay`, `bloomrotPriorityOneTriggersReplay` e
+`bloomrotPriorityOneAttackLockReplay` cobrem **52 reproduções** com cartas reais,
+ambos os assentos e humano/IA, mais **1 teste de rejeição de versão**. A captura em EN e a reprodução em PT-BR usam
+instâncias distintas de `Game`, consomem todas as decisões e comparam snapshots
+e hashes. As entradas públicas cobrem busca/recuperação, destruição declarada,
+os três pagamentos de cura, saídas sob controle invertido e negação/restauração
+do bloqueio de ataque. UI e AutoSelector são proibidos durante o playback.
+
+O golden P1 tem hash completo **`a4af185c`**, os mesmos hashes de estado
+`5a03f26c` e `c2ec633c`, e 12100 caracteres. Restaurar apenas versão v14 e
+assinatura `0f23140c` no envelope reproduz `76f5c866`. Os testes mantêm os
+goldens históricos acima e verificam que a atualização não remove estado do hash.
+
+### Bloomrot P2 — referências, Equip e OPT por cópia — 03/10/2026
+
+O formato atual é **schema `2` / `engine-rules-v16`**, com assinatura
+declarativa **`e1469707`**. A rejeição de v15 acontece antes de aplicar qualquer
+setup, comando ou decisão. A assinatura v15 `0f2a7a85` é rejeitada separadamente
+com a versão atual, sem migração silenciosa.
+
+As referências de evento são congeladas antes do primeiro `await`, conservadas
+pela ocorrência e encaminhadas à preparação/SEGOC sem recaptura de uma presença
+posterior. Os bindings de Equip capturam o controlador histórico e o recibo
+físico de cleanup; movimentos adicionais antes do compromisso invalidam a fonte.
+Snapshots de presença usam `cardId`/`duelCardId` e versões/controladores. O
+serializador remove `instanceId` local do processo e só atribui identidade a
+cartas físicas; filtros declarativos com `name`/`cardKind` permanecem imutáveis.
+
+`bloomrotPriorityTwoReplay` executa **52 reproduções**, com cartas reais,
+comandos públicos, humano/IA e ambos os assentos, captura em EN e playback
+em PT-BR sem UI/AutoSelector. Cobertura: duas Rootlings, dois modos em Networks
+independentes, duas Armaduras, seis referências contextuais, Ficha gerada pela
+Germination, destruição de host banido, Equip sob controle invertido e negação
+histórica da Overgrowth. Todas as decisões são consumidas, com snapshots e
+hashes iguais. A matriz completa de causas/destinos e fontes perdidas é testada
+separadamente no runtime e na simulação.
+
+O golden completo atual é **`e161e690`**, com estados **`5a03f26c`/`c2ec633c`**
+e **12100 caracteres** preservados. Restaurar o envelope v15/`0f2a7a85`
+reproduz `a4af185c`. Testes próprios verificam incompatibilidade e a ausência
+de mutação de filtros durante a serialização de eventos.
+
+### Bloomrot P3 — preservação do runtime — 04/10/2026
+
+O fechamento de B12/B14/L01 e dos metadados T03 mantém **schema `2` /
+`engine-rules-v16` / assinatura `e1469707`**. Foram corrigidas projeções da IA;
+o helper compartilhado de aura conserva a fórmula runtime anterior e sua
+prova é privada, sem dados novos no replay. Coleções, agregador e contratos
+de versão/captura/validação/driver permanecem idênticos ao baseline do lote.
+As regressões confirmam o golden completo `e161e690`, estados
+`5a03f26c`/`c2ec633c` e 12100 caracteres. A rejeição anterior de v15 e de sua
+assinatura continua testada separadamente.
+
+`bloomrotRemainingReplay` acrescenta **16 reproduções**, com cartas reais e
+comandos públicos, nos dois assentos e humano/IA. Colônia, Carrioncap, Harvest
+e Fusão são capturadas em EN e reproduzidas em PT-BR sem UI/AutoSelector;
+todas as decisões são consumidas e snapshots/hashes coincidem. Essa cobertura
+verifica preservação do duelo. Os bugs da projeção são comparados separadamente
+com o runtime como oráculo, incluindo eventos, custos, atributos e limites de
+uso; o playback não transforma uma simulação não suportada em regra do jogo.
+
+### Bloomrot T01 — escolhas de Esporos na resolução
+
+O formato atual permanece **schema 2**, com **`engine-rules-v17`** e assinatura
+declarativa **`c30857b8`**. Os cinco efeitos aprovados de 405/407/408/413
+passaram de alvos de ativação para escolhas locais na resolução. Isso muda o
+momento das decisões e o banco declarativo; v16 é rejeitada antes de alterar o
+jogo. A rejeição da assinatura anterior `e1469707` é testada separadamente,
+com a versão atual. Não há campos novos no envelope ou nos snapshots.
+
+As escolhas usam o DecisionBroker existente com kind `choice`. Planos exatos
+inválidos não são substituídos por outras cartas; sem plano explícito, a IA
+conserva sua seleção normal. A reprodução consome as decisões gravadas sem UI
+ou AutoSelector. Os 20 controles públicos novos cobrem os cinco efeitos, dois
+assentos e humano/IA, com decisões consumidas e snapshots/hashes iguais.
+
+O golden completo atual é **`accbf7e6`**; estados **`5a03f26c`/`c2ec633c`** e
+**12100 caracteres** permanecem iguais. Repor o envelope histórico
+v16/`e1469707` produz `e161e690`, preservado como regressão de serialização,
+mas esse envelope não é aceito pelo driver atual. A alteração exata do nome
+citado em PT na 419 não participa da assinatura EN/declarativa.

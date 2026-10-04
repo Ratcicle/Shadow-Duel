@@ -2991,47 +2991,6 @@ export default class VoidStrategy extends BaseStrategy {
       }
     }
 
-    if (fusionCard.id === VOID_IDS.SHADOW_CRAWLER) {
-      const deck = player.deck || [];
-      const preferredSendIds = [
-        VOID_IDS.HOLLOW,
-        VOID_IDS.CONJURER,
-        VOID_IDS.HAUNTER,
-        VOID_IDS.TENEBRIS_HORN,
-        VOID_IDS.FORGOTTEN_KNIGHT,
-      ];
-      let deckIndex = preferredSendIds
-        .map((id) =>
-          deck.findIndex(
-            (card) => card?.id === id && card.cardKind === "monster",
-          ),
-        )
-        .find((index) => index >= 0);
-      if (deckIndex == null || deckIndex < 0) {
-        deckIndex = deck.findIndex(
-          (card) => isVoid(card) && card?.cardKind === "monster",
-        );
-      }
-      if (deckIndex >= 0) {
-        const milled = deck.splice(deckIndex, 1)[0];
-        if (milled) appendSimulatedZoneCard(player.graveyard, milled);
-      }
-    }
-
-    if (fusionCard.id !== VOID_IDS.HYDRA_TITAN) return;
-    const destroyed: SimulatedCardState[] = [];
-    player.field = (player.field || []).filter((card) => {
-      if (!card || card === fusionCard || card.cardKind !== "monster") {
-        return true;
-      }
-      destroyed.push(card);
-      return false;
-    });
-    destroyed.forEach((card) => appendSimulatedZoneCard(player.graveyard, card));
-    destroyed.forEach(() => {
-      const drawn = player.deck?.shift?.();
-      if (drawn) appendSimulatedZoneCard(player.hand, drawn);
-    });
   }
 
   buildVoidSimulationOptions(action?: AIAction) {

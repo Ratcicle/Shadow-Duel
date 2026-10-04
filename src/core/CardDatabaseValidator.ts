@@ -370,7 +370,12 @@ export function validateEffectActionTree(
     if (
       flow === "activation" &&
       stage === "cost" &&
-      catalogEntry.selection === "dynamic"
+      catalogEntry.selection === "dynamic" &&
+      !(action.type === "remove_counters_from_field" &&
+        typeof action.targetRef === "string" && costTargetIds.has(action.targetRef) &&
+        typeof action.amount === "number" && Number.isInteger(action.amount) && action.amount > 0 &&
+        action.minAmount === undefined && action.maxAmount === undefined &&
+        action.defaultAmount === undefined && action.variableAmount !== true)
     ) {
       push(
         errors,
@@ -581,9 +586,17 @@ export function validateCardDatabase() {
           procedure.cost.zones.some((zone) => zone !== "field" && zone !== "graveyard") ||
           !["banished", "graveyard", "hand"].includes(procedure.cost.destination)
         )) ||
+        (procedure.counterCost !== undefined && (
+          !procedure.counterCost.counterType.trim() ||
+          !Number.isInteger(procedure.counterCost.amount) || procedure.counterCost.amount < 1 ||
+          (procedure.counterCost.zones !== undefined && (procedure.counterCost.zones.length === 0 ||
+            procedure.counterCost.zones.some(zone => !["field", "spellTrap", "fieldSpell"].includes(zone)))) ||
+          (procedure.counterCost.owner !== undefined && !["self", "opponent", "any", "both"].includes(procedure.counterCost.owner))
+        )) ||
+        (procedure.oncePerTurnConsumeOn !== undefined && !["commit", "success"].includes(procedure.oncePerTurnConsumeOn)) ||
         (procedure.oncePerTurn === true && !procedure.oncePerTurnName?.trim())
       ) {
-        errors.push(formatIssue(card, "Hand summon procedures require an id, a positive card cost from supported zones when a cost is present, and a name key for any turn limit."));
+        errors.push(formatIssue(card, "Hand summon procedures require an id, positive costs from supported zones, a supported turn-limit consumption policy, and a name key for any turn limit."));
       }
     }
     // Basic monster type checks for Extra Deck categories

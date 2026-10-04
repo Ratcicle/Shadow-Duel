@@ -1,4 +1,4 @@
-import type { CollectedTriggerEventMap } from "../../../contracts/events.js";
+import type { CollectedTriggerEventMap, EventEquipHostExitBinding } from "../../../contracts/events.js";
 import type {
   TriggerCollectorHost,
   TriggerEffect,
@@ -14,6 +14,11 @@ import {
   cardMatchesEventFilters,
   debugTriggerLog,
   matchesZoneFilter,
+  resolveMovementEventOwner,
+  findTriggerSourceLocation,
+  hasEquipHostExitProof,
+  isTriggerSourceLegal,
+  matchesEquipHostExitSourcePresence,
 } from "./shared.js";
 
 function resolvePlayerForCard(
@@ -25,10 +30,6 @@ function resolvePlayerForCard(
   if (card.owner === "player") return game.player || fallback;
   if (card.owner === "bot") return game.bot || fallback;
   return fallback;
-}
-
-function isBoardZone(zone: string | null | undefined): boolean {
-  return zone === "field" || zone === "spellTrap" || zone === "fieldSpell";
 }
 
 function collectBoardSources(
@@ -67,6 +68,7 @@ interface CardMovedSource {
   readonly owner: TriggerRuntimePlayer;
   readonly other: TriggerRuntimePlayer | null;
   readonly zone: TriggerZone;
+  readonly binding?: EventEquipHostExitBinding;
 }
 
 function sourceAlreadyListed(
@@ -142,6 +144,19 @@ export async function collectCardMovedTriggers(
       zone: toZone,
     },
   ];
+  for (const binding of payload.equipBindingsAtFieldExit || []) {
+    const before = binding.hostBeforeExit;
+    if (before.zone !== fromZone || before.instanceId == null ||
+        before.instanceId !== (card.instanceId ?? card._instanceId ?? null) ||
+        before.cardId !== (card.id ?? null) || before.duelCardId !== (card.duelCardId ?? null) ||
+        before.controllerId !== payload.fromPlayer?.id ||
+        before.locationVersion + 1 !== payload.locationVersion || toZone === "field") continue;
+    const owner = [this.game.player, this.game.bot].find(player => player?.id === binding.equipController.id);
+    if (!owner || sourceAlreadyListed(sourceEntries, binding.equip)) continue;
+    const physical = findTriggerSourceLocation(this, binding.equip, owner);
+    sourceEntries.push({ card: binding.equip, owner, other: this.game.getOpponent?.(owner) || null,
+      zone: physical.zone, binding });
+  }
 
   const observerSides = [
     { owner: movedOwner, other: movedOpponent },
@@ -182,19 +197,24 @@ export async function collectCardMovedTriggers(
     other: TriggerRuntimePlayer | null,
     sourceZone: TriggerZone,
     effect: TriggerEffect,
+    binding?: EventEquipHostExitBinding,
   ): void => {
     if (!effect || effect.timing !== "on_event") return;
     if (effect.event !== "card_moved") return;
-
-    if (isBoardZone(sourceZone) && sourceCard.isFacedown === true) return;
-
-    if (effect.requireFaceup === true && sourceCard.isFacedown === true) {
-      return;
+    const eventOwner = resolveMovementEventOwner(effect, fromZone, payload.fromPlayer, movedOwner);
+    if (!eventOwner) return;
+    if (sourceCard === card) {
+      owner = eventOwner;
+      other = this.game?.getOpponent?.(owner) || null;
     }
+    const eventOpponent = this.game?.getOpponent?.(eventOwner) || null;
 
-    if (effect.requireZone && !matchesZoneFilter(sourceZone, effect.requireZone)) {
-      return;
+    if (binding) {
+      const physical = findTriggerSourceLocation(this, sourceCard, owner);
+      if (!hasEquipHostExitProof(sourceCard, effect, binding) ||
+          !matchesEquipHostExitSourcePresence(sourceCard, effect, binding, physical.player.id, physical.zone)) return;
     }
+    if (!isTriggerSourceLegal(sourceCard, effect, sourceZone, binding)) return;
 
     if (effect.requireSelfAsMoved === true && sourceCard !== card) {
       return;
@@ -259,9 +279,11 @@ export async function collectCardMovedTriggers(
       effect.eventCardFilters &&
       !cardMatchesEventFilters(this, card, effect.eventCardFilters, {
         sourceOwner: owner,
-        eventOwner: movedOwner,
+        eventOwner,
         fromZone,
         toZone,
+        sourceCard,
+        ...(binding ? { equipHostExitBinding: binding } : {}),
       })
     ) {
       return;
@@ -273,8 +295,8 @@ export async function collectCardMovedTriggers(
       opponent: other,
       eventCard: card,
       movedCard: card,
-      eventPlayer: movedOwner,
-      eventOpponent: movedOpponent,
+      eventPlayer: eventOwner,
+      eventOpponent,
       fromZone,
       toZone,
       movedByEffect: payload.movedByEffect === true,
@@ -322,6 +344,7 @@ export async function collectCardMovedTriggers(
       owner,
       sourceZone || this.findCardZone(owner, sourceCard) || toZone,
     );
+    if (binding) activationContext.equipHostExitBinding = binding;
 
     const entry = this.buildTriggerEntry({
       sourceCard,
@@ -349,6 +372,7 @@ export async function collectCardMovedTriggers(
         sourceEntry.other,
         sourceEntry.zone,
         effect,
+        sourceEntry.binding,
       );
     }
   }
