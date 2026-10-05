@@ -255,6 +255,7 @@ async function runMainPhase(bot: BotRuntimePort, game: BotGamePort, session: Mai
         beamWidth,
         maxDepth,
         nodeBudget,
+        allowEarlyStop: planningProfile.allowEarlyStop === true,
         useV2Evaluation,
         preGeneratedActions: actions, // BUGFIX: Pass pre-generated actions as fallback
       });
@@ -274,6 +275,7 @@ async function runMainPhase(bot: BotRuntimePort, game: BotGamePort, session: Mai
     if (!bestAction) {
       console.log(`[Bot.playMainPhase] Running greedy search...`);
       const greedyResult = await greedySearchWithEvalV2(game, bot, {
+        allowEarlyStop: planningProfile.allowEarlyStop === true,
         useV2Evaluation,
         preGeneratedActions: actions, // BUGFIX: Pass pre-generated actions as fallback
       });

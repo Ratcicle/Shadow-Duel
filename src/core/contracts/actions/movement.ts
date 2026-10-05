@@ -8,7 +8,7 @@ export interface MovementActionMap {
     | "resetAttackFlags" | "preservePosition" | "allowEmpty"
     | "allowExtraDeckMonsterToHand" | "allowExtraDeckMonsterToHandIf"
     | "skipSendToGraveReplacement" | "skipSendToGraveActionReplacement"
-    | "contextLabel" | "storeResultAs" | "storeLevelSumAs" | "requireDestination" | "requireAll"
+    | "contextLabel" | "storeResultAs" | "storeLevelSumAs" | "requireDestination" | "requireAll" | "capturePaidReference"
   >;
   return_to_hand: DefineAction<
     "return_to_hand",

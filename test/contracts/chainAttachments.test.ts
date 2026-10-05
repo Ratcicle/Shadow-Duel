@@ -18,6 +18,7 @@ import * as finalization from "../../src/core/chain/finalization.js";
 import * as link from "../../src/core/chain/link.js";
 import * as playerResponse from "../../src/core/chain/playerResponse.js";
 import * as resolution from "../../src/core/chain/resolution.js";
+import * as afterResolution from "../../src/core/chain/afterResolution.js";
 import * as responseWindow from "../../src/core/chain/responseWindow.js";
 import * as segoc from "../../src/core/chain/segoc.js";
 import * as selection from "../../src/core/chain/selection.js";
@@ -42,6 +43,7 @@ const EXPECTED_GROUP_IDS = [
   "selection",
   "stack",
   "resolution",
+  "afterResolution",
 ] as const;
 
 const EXPECTED_MODULE_BY_GROUP = {
@@ -60,6 +62,7 @@ const EXPECTED_MODULE_BY_GROUP = {
   selection,
   stack,
   resolution,
+  afterResolution,
 } as const;
 
 test("attachment groups install their module references in manifest order", () => {

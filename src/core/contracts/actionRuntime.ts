@@ -87,6 +87,7 @@ export interface ActionRuntimeCard {
   level?: number;
   baseLevel?: number;
   originalLevel?: (number | null) | undefined;
+  levelModificationContributions?: import("./cards.js").LevelModificationContribution[];
   atk?: number;
   def?: number;
   baseAtk?: number;
@@ -126,6 +127,7 @@ export interface ActionRuntimeCard {
   altTribute?: AlternateTributeDefinition | null;
   tributeValue?: TributeValueDefinition | readonly TributeValueDefinition[] | null;
   cannotAttackThisTurn?: boolean;
+  unaffectedByOpponentCardEffects?: boolean;
   hasAttacked?: boolean;
   canMakeSecondAttackThisTurn?: boolean;
   secondAttackUsedThisTurn?: boolean;
@@ -144,6 +146,7 @@ export interface ActionRuntimeCard {
   attackedMonstersThisTurn?: Set<number | string>;
   multiAttackLimit?: number;
   tempStatuses?: CardStatusRegistry | object;
+  faceupStatuses?: CardStatusRegistry;
   protectionEffects?: ActionRuntimeProtectionEffect[];
   hasChangedPosition?: boolean;
   positionChangedThisTurn?: boolean;
@@ -375,6 +378,7 @@ export interface ActionNegationContext {
  */
 export interface ActionRuntimeGamePort {
   readonly selectionAbortGeneration?: number;
+  afterResolutionActivation?: import("./activation.js").ActivationAfterResolutionState | null;
   requestDecision?: DecisionBrokerPort["requestDecision"];
   player: ActionRuntimePlayer;
   bot: ActionRuntimePlayer;
@@ -526,6 +530,7 @@ export interface ActionRuntimeGamePort {
 }
 
 interface ActionContextState extends ActionNegationContext {
+  afterEffectResolution?: { chainLevel: number; actionIndex: number };
   eventReferenceSnapshots?: EventTriggerReferenceSnapshots[];
   timing?: string | undefined;
   autoSelectTargets?: boolean | undefined;
@@ -553,6 +558,7 @@ interface ActionContextState extends ActionNegationContext {
 
 /** Known fields on the context shared across an action sequence. */
 export interface EffectContext {
+  afterEffectResolution?: { chainLevel: number; actionIndex: number };
   /** Runtime-only cost continuation guard; internal choices recheck it before payment. */
   validateCostPayment?: () => boolean;
   player?: (ActionRuntimePlayer | null) | undefined;

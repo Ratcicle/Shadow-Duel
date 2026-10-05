@@ -119,6 +119,7 @@ export async function beamSearchTurn(
     beamWidth = 2,
     maxDepth = 2,
     nodeBudget = 100,
+    allowEarlyStop = false,
     useV2Evaluation = true,
     preGeneratedActions = null, // BUGFIX: Fallback actions from caller
   } = options;
@@ -347,6 +348,13 @@ export async function beamSearchTurn(
     if (!bestBranch) {
       return { sequence: currentSequence, score: evaluateState(currentState, currentState.bot), finalState: currentState };
     }
+    // Compare complete continuations so a losing preparation can still pay off.
+    if (allowEarlyStop) {
+      const currentScore = evaluateState(currentState, currentState.bot);
+      if (currentScore > bestBranch.score) {
+        return { sequence: currentSequence, score: currentScore, finalState: currentState };
+      }
+    }
     return bestBranch;
   }
 
@@ -361,8 +369,7 @@ export async function beamSearchTurn(
     return null;
   }
 
-  // BUGFIX: Sempre retornar melhor ação encontrada, mesmo se score não melhorou muito
-  // Isso evita bots ficarem presos sem ação quando BeamSearch explora mas não encontra melhoria significativa
+  // Legacy profiles retain the best complete action even without improvement.
   if (!result.sequence[0]) return null;
   return {
     action: result.sequence[0], // Primeira ação da sequência
@@ -387,7 +394,7 @@ export async function greedySearchWithEvalV2(
 ): Promise<GreedySearchResult | null> {
   if (hasPendingPassiveRestoration(game) || ("_simUnsupportedActions" in game && game._simUnsupportedActions?.length) ||
       ("_simRequiresReplan" in game && game._simRequiresReplan)) return null;
-  const { useV2Evaluation = true, preGeneratedActions = null } = options;
+  const { useV2Evaluation = true, preGeneratedActions = null, allowEarlyStop = false } = options;
   const perspectiveBot = strategy?.bot || (strategy?.id ? strategy : null);
   const resolveOpponent = (state: AIState): SimulatedPlayerState | null => {
     return resolvePerspectivePlayers(state, perspectiveBot || state?.bot)
@@ -505,9 +512,8 @@ export async function greedySearchWithEvalV2(
     }
   }
 
-  // BUGFIX: Sempre retornar melhor ação (mesmo que não melhore score)
-  // Isso garante que o bot não fique preso
-  if (!bestAction) return null;
+  // Conservation is opt-in; ties and complete no-op fallbacks remain valid.
+  if (!bestAction || (allowEarlyStop && bestScore < baseScore)) return null;
   return {
     action: bestAction,
     score: bestScore,

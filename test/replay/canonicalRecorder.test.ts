@@ -202,9 +202,9 @@ test("recorder preserva key order, defaults e assinatura do formato", () => {
   ]);
   assert.equal(recording.format, "shadow-duel-canonical-replay");
   assert.equal(recording.schemaVersion, 2);
-  assert.equal(recording.engineVersion, "engine-rules-v18");
+  assert.equal(recording.engineVersion, "engine-rules-v22");
   assert.equal(recording.cardDatabaseSignature, getCardDatabaseSignature());
-  assert.equal(recording.cardDatabaseSignature, "c30857b8");
+  assert.equal(recording.cardDatabaseSignature, "d90a7477");
   assert.deepEqual(Object.keys(recording.setup), [
     "seed",
     "randomState",

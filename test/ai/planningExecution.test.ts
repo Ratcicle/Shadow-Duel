@@ -304,6 +304,27 @@ test("controller honors a planned stop without executing a worse fallback", asyn
   assert.equal(progress.filter(entry => entry.kind === "ai_main_phase_exit").at(-1)?.details.reason, "planned_stop");
 });
 
+for (const candidates of [1, 2]) {
+  test(`controller propagates conservation to ${candidates === 1 ? "Greedy" : "Beam and Greedy"} when the deep planner is off`, async t => {
+    const { game, bot, progress } = plannerControllerScenario(t);
+    bot.strategy.getPlanningProfile = () => ({
+      enabled: false, mode: "off", turnMode: "mainOnly", beamWidth: 2,
+      maxDepth: 3, nodeBudget: 20, candidateLimit: 3, allowEarlyStop: true,
+    });
+    const actions: AIAction[] = Array.from({ length: candidates }, (_, fieldIndex) => ({ type: "monsterEffect", fieldIndex, effectId: `worse-${fieldIndex}` }));
+    bot.generateMainPhaseActions = () => actions;
+    bot.strategy.generateMainPhaseActions = () => actions;
+    bot.strategy.evaluateBoardV2 = state => state.bot?.lp || 0;
+    bot.strategy.simulateMainPhaseAction = state => { state.bot.lp -= 100; return state; };
+    let executions = 0;
+    bot.executeMainPhaseAction = async () => { executions++; return false; };
+    await playBotMainPhase(bot, game);
+    assert.equal(executions, 0, "a null search result must not authorize a raw-priority action");
+    assert.equal(progress.filter(entry => entry.kind === "ai_main_phase_exit").at(-1)?.details.reason, "alternatives_exhausted");
+    assert.equal(bot.lp, 8000);
+  });
+}
+
 for (const changed of ["draw", "chain_result", "removed_material"] as const) {
   test(`controller searches the new snapshot after ${changed} and discards the old continuation`, async t => {
     const { game, bot, progress } = plannerControllerScenario(t);

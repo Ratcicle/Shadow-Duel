@@ -3,9 +3,10 @@
  * Extracted from Game.js as part of B.4 modularization.
  */
 
-import type { GameCard } from "../../contracts/cards.js";
+import type { CardDeclaredValueMap, GameCard } from "../../contracts/cards.js";
 import type {
   CardStateSnapshot,
+  DamageStepBuff,
   GameZonesHost,
   ZonePlayerSnapshot,
   ZoneSnapshot,
@@ -14,12 +15,33 @@ import type {
 } from "../../contracts/gameRuntime.js";
 import type { GamePlayer } from "../../contracts/player.js";
 
-interface ZoneSnapshotHost extends GameZonesHost {
+interface DamageStepBuffQueues {
+  damageCalculationTempBuffs?: DamageStepBuff[];
+  endOfDamageStepTempBuffs?: DamageStepBuff[];
+}
+
+interface ZoneSnapshotHost extends GameZonesHost, DamageStepBuffQueues {
   temporaryControlEffects?: TemporaryControlEffect[];
   normalizeZoneCardOwnership(
     contextLabel?: string,
     options?: { enforceZoneOwner?: boolean },
   ): void;
+}
+
+function copyDamageStepBuffs(buffs: readonly DamageStepBuff[] | undefined): DamageStepBuff[] {
+  return (buffs || []).map(entry => ({ ...entry }));
+}
+
+function copyDeclaredValues(values: CardDeclaredValueMap): CardDeclaredValueMap {
+  return Object.fromEntries(Object.entries(values).map(([key, value]) =>
+    [key, typeof value === "object" ? { ...value } : value],
+  ));
+}
+
+function copyPermanentStatBuffs(
+  buffs: NonNullable<GameCard["permanentBuffsBySource"]>,
+): NonNullable<GameCard["permanentBuffsBySource"]> {
+  return Object.fromEntries(Object.entries(buffs).map(([key, entry]) => [key, { ...entry }]));
 }
 
 function copyDynamicBuffs(
@@ -46,7 +68,15 @@ export function snapshotCardState(
   // Capture the initial epoch too, so the first rolled-back departure cannot reset soft OPT.
   snapshot.oncePerTurnResetVersion = card.oncePerTurnResetVersion || 0;
   snapshot.fieldPresenceState = card.fieldPresenceState ? { ...card.fieldPresenceState } : null;
+  snapshot.faceupStatuses = { ...card.faceupStatuses };
+  snapshot.tempStatuses = { ...card.tempStatuses };
+  snapshot.fieldExitStatuses = { ...card.fieldExitStatuses };
+  if (card.permanentBuffsBySource) {
+    snapshot.permanentBuffsBySource = copyPermanentStatBuffs(card.permanentBuffsBySource);
+  }
   snapshot.dynamicBuffs = copyDynamicBuffs(card.dynamicBuffs);
+  snapshot.levelModificationContributions = (card.levelModificationContributions || []).map(entry => ({ ...entry }));
+  if (card.declaredValues) snapshot.declaredValues = copyDeclaredValues(card.declaredValues);
   if (card.counters instanceof Map) {
     snapshot.counters = new Map(card.counters);
   }
@@ -94,12 +124,14 @@ export function collectAllZoneCards(this: GameZonesHost & { activeSummonTransact
  * @returns Snapshot object
  */
 export function captureZoneSnapshot(
-  this: GameZonesHost & { temporaryControlEffects?: TemporaryControlEffect[] },
+  this: GameZonesHost & DamageStepBuffQueues & { temporaryControlEffects?: TemporaryControlEffect[] },
   contextLabel = "zone_op",
 ): ZoneSnapshot {
   const snapshot: ZoneSnapshot = {
     contextLabel,
     temporaryControlEffects: (this.temporaryControlEffects || []).map((record) => ({ ...record })),
+    damageCalculationTempBuffs: copyDamageStepBuffs(this.damageCalculationTempBuffs),
+    endOfDamageStepTempBuffs: copyDamageStepBuffs(this.endOfDamageStepTempBuffs),
     players: {
       player: {
         hand: [...(this.player?.hand || [])],
@@ -180,6 +212,10 @@ export function restoreZoneSnapshot(
 ) {
   if (!snapshot) return;
   this.temporaryControlEffects = snapshot.temporaryControlEffects.map((record) => ({ ...record }));
+  this.damageCalculationTempBuffs ??= [];
+  this.endOfDamageStepTempBuffs ??= [];
+  this.damageCalculationTempBuffs.splice(0, this.damageCalculationTempBuffs.length, ...copyDamageStepBuffs(snapshot.damageCalculationTempBuffs));
+  this.endOfDamageStepTempBuffs.splice(0, this.endOfDamageStepTempBuffs.length, ...copyDamageStepBuffs(snapshot.endOfDamageStepTempBuffs));
   // Newly created cards (including Tokens) may outlive references held by an
   // interrupted procedure; they must not retain an abandoned occupied slot.
   for (const card of this.collectAllZoneCards()) {
@@ -206,7 +242,28 @@ export function restoreZoneSnapshot(
   if (snapshot.cardState) {
     snapshot.cardState.forEach((state, card) => {
       if (!card || !state) return;
+      if (state.declaredValues) card.declaredValues = copyDeclaredValues(state.declaredValues);
+      else delete card.declaredValues;
+      if (state.permanentBuffsBySource) {
+        card.permanentBuffsBySource = copyPermanentStatBuffs(state.permanentBuffsBySource);
+      } else {
+        delete card.permanentBuffsBySource;
+      }
       Object.keys(state).forEach((key) => {
+        if (key === "declaredValues") return;
+        if (key === "permanentBuffsBySource") return;
+        if (key === "faceupStatuses") {
+          card.faceupStatuses = { ...state.faceupStatuses };
+          return;
+        }
+        if (key === "tempStatuses") {
+          card.tempStatuses = { ...state.tempStatuses };
+          return;
+        }
+        if (key === "fieldExitStatuses") {
+          card.fieldExitStatuses = { ...state.fieldExitStatuses };
+          return;
+        }
         if (key === "fieldPresenceState") {
           card.fieldPresenceState = state.fieldPresenceState ? { ...state.fieldPresenceState } : null;
           return;
@@ -225,6 +282,10 @@ export function restoreZoneSnapshot(
         }
         if (key === "effectsNegationContributions") {
           card.effectsNegationContributions = (state.effectsNegationContributions || []).map(entry => ({ ...entry }));
+          return;
+        }
+        if (key === "levelModificationContributions") {
+          card.levelModificationContributions = (state.levelModificationContributions || []).map(entry => ({ ...entry }));
           return;
         }
         Reflect.set(card, key, Reflect.get(state, key));

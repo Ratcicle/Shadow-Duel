@@ -166,6 +166,9 @@ interface ActivationSelectionSessionInput {
 }
 
 export interface ActivationPipelineHost {
+  isDisposed?(): boolean;
+  afterResolutionActivation?: import("../../contracts/activation.js").ActivationAfterResolutionState | null;
+  flushPendingTriggerOccurrences?(options?: { reason?: string | null }): Promise<import("../../contracts/events.js").EventResolutionOutcome>;
   requestDecision: DecisionBrokerPort["requestDecision"];
   selectionAbortGeneration?: number;
   materialDuelStats?: MaterialDuelStats;
@@ -588,6 +591,10 @@ export async function runActivationPipeline(
     selections: CanonicalSelectionMap | null,
   ): Promise<unknown> => {
     try {
+      if (activationContext.afterResolution) {
+        return await config.activate!(selections, { ...activationContext, prepareOnly: false },
+          resolvedActivationZone, resolvedCard, owner);
+      }
       const preparationContext = { ...activationContext, prepareOnly: true, autoSelectTargets: false };
       delete preparationContext.decisions;
       Reflect.deleteProperty(preparationContext, "resolvedTargets");
@@ -664,6 +671,11 @@ export async function runActivationPipeline(
   };
 
   const selectionGeneration = this.selectionAbortGeneration ?? 0;
+  const finishDirectAfterResolution = async (): Promise<void> => {
+    if (!activationContext.afterResolution) return;
+    if (this.afterResolutionActivation === activationContext.afterResolution) this.afterResolutionActivation = null;
+    await this.flushPendingTriggerOccurrences?.({ reason: "direct_effect_finalized" });
+  };
   const abortedResult = (): ActivationPipelineResult => ({
     success: false, ok: false, needsSelection: false,
     code: "SELECTION_ABORTED", reason: "Selection was aborted by system teardown.",
@@ -684,6 +696,9 @@ export async function runActivationPipeline(
       null;
     normalized.activationContext =
       normalized.activationContext || activationContext;
+    if (normalized.activationContext.afterResolution) {
+      activationContext.afterResolution = normalized.activationContext.afterResolution;
+    }
     normalized.cardRef = normalized.cardRef || resolvedCard;
 
     if (fromSelection) {
@@ -840,6 +855,13 @@ export async function runActivationPipeline(
     }
 
     if (!normalized.success) {
+      if (activationContext.afterResolution) {
+        if (typeof config.finalize === "function" && activationContext.chainFinalizationHandled !== true) {
+          await config.finalize(normalized, { card: resolvedCard, owner, activationZone: resolvedActivationZone, activationContext });
+        }
+        await finishDirectAfterResolution();
+        normalized.noRollback = true;
+      }
       const skipFailureTracking =
         normalized.activationSkipped === true ||
         normalized.skipActivationTracking === true;
@@ -876,8 +898,9 @@ export async function runActivationPipeline(
       config.effect;
     const preparedSelections =
       normalized.targets || normalized.selections || config.selections || {};
+    const resumedAfterResolution = activationContext.afterResolution?.completed === true;
 
-    if (fromSelection) {
+    if (fromSelection && !resumedAfterResolution) {
       const shouldRunPreCommitChecks = activationContext.committed !== true;
       const gateResult =
         shouldRunPreCommitChecks && typeof config.gate === "function"
@@ -1013,7 +1036,7 @@ export async function runActivationPipeline(
       this.chainSystem?.chainsDisabled !== true &&
       typeof this.chainSystem?.openActivationChain === "function";
 
-    if (normalized.placementOnly !== true && preparedEffect) {
+    if (normalized.placementOnly !== true && preparedEffect && !resumedAfterResolution) {
       const preparedActivationContext: ActivationPipelineContext = {
         ...activationContext,
         ...(normalized.activationContext || {}),
@@ -1265,6 +1288,7 @@ export async function runActivationPipeline(
           {
             ...activationContext,
             prepareOnly: false,
+            deferAfterResolutionCleanup: true,
             committed: activationContext.committed === true,
             targetSelections: preparedSelections,
           },
@@ -1275,6 +1299,7 @@ export async function runActivationPipeline(
         resolutionResult = this.normalizeActivationResult(rawResolutionResult);
       }
 
+      if ((this.selectionAbortGeneration ?? 0) !== selectionGeneration || this.isDisposed?.() === true) return abortedResult();
       if (resolutionResult?.activationNegated === true) {
         const negatedResult = {
           success: false,
@@ -1292,6 +1317,10 @@ export async function runActivationPipeline(
       }
 
       resolutionResult = this.normalizeActivationResult(resolutionResult);
+      if (resolutionResult.needsSelection && resolutionResult.activationContext?.afterResolution) {
+        activationContext.afterResolution = resolutionResult.activationContext.afterResolution;
+        return handleResult(resolutionResult, true);
+      }
       if (!resolutionResult.success) {
         if (
           typeof config.finalize === "function" &&
@@ -1307,6 +1336,8 @@ export async function runActivationPipeline(
         if (typeof config.onFailure === "function") {
           await config.onFailure(resolutionResult, activationContext);
         }
+        if (resolutionResult.activationContext?.afterResolution) activationContext.afterResolution = resolutionResult.activationContext.afterResolution;
+        await finishDirectAfterResolution();
         trackActivationAttempt(resolutionResult);
         return resolutionResult;
       }
@@ -1333,6 +1364,8 @@ export async function runActivationPipeline(
         activationContext,
       });
     }
+    if (resolutionResult.activationContext?.afterResolution) activationContext.afterResolution = resolutionResult.activationContext.afterResolution;
+    await finishDirectAfterResolution();
 
     const shouldCountMaterialActivation =
       resolvedCard?.cardKind === "monster" &&
@@ -1514,8 +1547,9 @@ export async function runActivationPipeline(
       return { result: this.createActionResult({ reason: "Activation source moved before commitment.",
         code: "ACTIVATION_SOURCE_MOVED" }), fromSelection: false };
     }
-    const conditionCheck = this.effectEngine.evaluateConditions?.(
-      effect.conditions || [], toChainActionContext(prepaymentContext));
+    const conditionCheck = config.activationConditionCheck
+      ? config.activationConditionCheck()
+      : this.effectEngine.evaluateConditions?.(effect.conditions || [], toChainActionContext(prepaymentContext));
     const costCheck = this.effectEngine.checkActionPreviewRequirements?.(costs, {
       ...prepaymentContext, _actionTargets: costSelections,
     });

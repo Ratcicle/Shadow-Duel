@@ -507,7 +507,7 @@ export const voidCards = [
           },
         ],
         actions: [
-          { type: "buff_stats_temp", atkBoost: 1000, defBoost: 0 },
+          { type: "buff_stats_temp", atkBoost: 1000, defBoost: 0, duration: "end_of_turn" },
         ],
       },
     ],
@@ -1880,6 +1880,7 @@ export const voidCards = [
             targetRef: "self",
             atkBoost: 100,
             defBoost: 100,
+            duration: "end_of_turn",
           },
         ],
       },

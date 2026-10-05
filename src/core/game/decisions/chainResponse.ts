@@ -85,6 +85,36 @@ export function readChainResponseDecisions(
   }
 }
 
+/** Shared canonical plan projection; physical identities are supplied by its runtime owner. */
+export function serializeChainResponseDecisions(decisions: AIDecisionPlan,
+  resolveIdentity: (id: number | string) => number | string | null): SerializedChainResponseDecisions | null {
+  const mapped = readChainResponseDecisions(decisions, resolveIdentity);
+  if (!mapped) return null;
+  const serialized: SerializedChainResponseDecisions = {};
+  for (const key of ["selections", "specialSummons"] as const) {
+    if (mapped[key]) serialized[key] = Object.fromEntries(Object.entries(mapped[key]).map(([id, ids]) => [id, ids.map(Number)]));
+  }
+  if (mapped.cases) serialized.cases = { ...mapped.cases };
+  if (mapped.specialSummonRevalidation) serialized.specialSummonRevalidation = { ...mapped.specialSummonRevalidation };
+  if (mapped.synchroSummons) serialized.synchroSummons = Object.fromEntries(Object.entries(mapped.synchroSummons).map(([id, summon]) => [id, {
+    synchroDuelCardId: Number(summon.synchroInstanceId), materialDuelCardIds: summon.materialInstanceIds.map(Number), position: summon.position,
+  }]));
+  return serialized;
+}
+
+/** Retain only physical planned cards, including Tokens that can leave all zones. */
+export function captureChainResponseDecisionCards<Card extends { instanceId?: number | string | null }>(
+  decisions: AIDecisionPlan, cards: readonly Card[]): Card[] {
+  const bound = new Set<Card>();
+  readChainResponseDecisions(decisions, id => {
+    const card = cards.find(card => String(card.instanceId) === String(id));
+    if (!card) return null;
+    bound.add(card);
+    return id;
+  });
+  return [...bound];
+}
+
 function gameCards(game: ChainGamePort | null): ChainCard[] {
   return game ? [game.player, game.bot].flatMap(player => [
     ...player.deck, ...player.extraDeck, ...player.hand, ...player.field,
@@ -167,27 +197,8 @@ export function createChainResponseDecisionAdapter(
       };
       const decisions = candidate.context.activationContext?.decisions;
       if (decisions) {
-        const mapped = readChainResponseDecisions(decisions, id => mapIdentity(id, false));
-        if (!mapped) throw new Error("Cannot record unavailable Chain response choices.");
-        const serialized: SerializedChainResponseDecisions = {};
-        for (const key of ["selections", "specialSummons"] as const) {
-          if (mapped[key]) {
-            serialized[key] = Object.fromEntries(
-              Object.entries(mapped[key]).map(([id, ids]) => [id, ids.map(Number)]),
-            );
-          }
-        }
-        if (mapped.cases) serialized.cases = mapped.cases;
-        if (mapped.specialSummonRevalidation) serialized.specialSummonRevalidation = mapped.specialSummonRevalidation;
-        if (mapped.synchroSummons) {
-          serialized.synchroSummons = Object.fromEntries(
-            Object.entries(mapped.synchroSummons).map(([id, summon]) => [id, {
-              synchroDuelCardId: Number(summon.synchroInstanceId),
-              materialDuelCardIds: summon.materialInstanceIds.map(Number),
-              position: summon.position,
-            }]),
-          );
-        }
+        const serialized = serializeChainResponseDecisions(decisions, id => mapIdentity(id, false));
+        if (!serialized) throw new Error("Cannot record unavailable Chain response choices.");
         value.decisions = serialized;
       }
       return value;

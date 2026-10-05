@@ -17,6 +17,7 @@ import type {
 } from "../../contracts/actionRuntime.js";
 import type { ActionOf } from "../../contracts/actions.js";
 import type { BattlePosition } from "../../contracts/cards.js";
+import { compareMaterialCombinations, valueMaterialCombination, type CardValuePreference } from "../../ai/common/cardValue.js";
 import type {
   RawSelectionContract,
   SelectionSessionInput,
@@ -163,54 +164,34 @@ function selectBestMaterialCombo(
     return materialCombos[0]!;
   }
 
-  // Define material value priorities
-  // Higher value = more important to preserve, lower value = better tribute candidate
-  const getMaterialValue = (monster: FusionRuntimeCard): number => {
-    const name = monster.name || "";
-    const costPreferences = readObject(
-      getActionContext(ctx),
-      "costPreferences",
-    );
-    const preserveNames = readArray(costPreferences, "preserveNames");
-    const preferNames = readArray(costPreferences, "preferNames");
-    const payoffNames = readArray(costPreferences, "offensivePayoffNames");
-
-    if (preserveNames.includes(name)) return 120;
-    if (payoffNames.includes(name)) return 80;
-    if (preferNames.includes(name)) return -10;
-
-    // Protect boss monsters and extra deck materials
-    if (name.includes("Demon Dragon")) return 100; // Never sacrifice unless emergency
-    if (name.includes("Demon Arctroth")) return 90; // Extra deck material
-    if (name.includes("Death Wyrm")) return 70;
-    if (name.includes("Leviathan")) return 60;
-
-    // Scale Dragon can be used for fusion (it's the intended fusion material)
-    if (name.includes("Scale Dragon")) return 40;
-
-    // Lower-tier monsters are good fusion materials
-    if (name.includes("Specter")) return 20;
-    if (name.includes("Griffin")) return 10;
-    if (name.includes("Gecko")) return 5;
-
-    // Default: base on ATK
-    return (monster.atk || 0) / 100;
+  const costPreferences = readObject(getActionContext(ctx), "costPreferences");
+  const preferenceList = (key: string): readonly unknown[] => {
+    const value: unknown = costPreferences ? Reflect.get(costPreferences, key) : undefined;
+    return value === undefined || value === null ? [] : Array.isArray(value) ? value : [value];
   };
-
-  // Evaluate each combo by total material value (lower = better)
+  const names = (key: string) => preferenceList(key).filter((value): value is string => typeof value === "string");
+  const identities = (key: string) => preferenceList(key).filter((value): value is number | string =>
+    typeof value === "string" || typeof value === "number");
+  const preference: CardValuePreference = {
+    forceNames: names("forceNames"), preferNames: names("preferNames"), preserveNames: names("preserveNames"),
+    preferredNames: names("preferredNames"), avoidNames: names("avoidNames"),
+    preferredInstanceIds: identities("preferredInstanceIds"), avoidInstanceIds: identities("avoidInstanceIds"),
+  };
+  const archetype: unknown = costPreferences ? Reflect.get(costPreferences, "archetype") : undefined;
+  const player = ctx.player as FusionRuntimePlayer;
+  const options = { preference, fieldSpell: player.fieldSpell,
+    archetype: typeof archetype === "string" ? archetype : null };
   const evaluatedCombos = materialCombos.map((combo) => ({
     combo,
-    totalValue: combo.reduce((sum, mat) => sum + getMaterialValue(mat), 0),
+    value: valueMaterialCombination(combo, player.field, options),
   }));
-
-  // Sort by total value (ascending - sacrifice weakest monsters first)
-  evaluatedCombos.sort((a, b) => a.totalValue - b.totalValue);
+  evaluatedCombos.sort((a, b) => compareMaterialCombinations(a.value, b.value));
 
   console.log(
     "[Bot Fusion] Evaluating material combos:",
     evaluatedCombos.map((ec) => ({
       materials: ec.combo.map((m) => m.name),
-      totalValue: ec.totalValue,
+      totalValue: ec.value.cost,
     })),
   );
 

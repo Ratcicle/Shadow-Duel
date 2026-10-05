@@ -9,9 +9,51 @@ import { cardDefinition, unsafeFixture } from "../helpers/fixtures.js";
 import { simulationCard, simulationState } from "../helpers/simulation.js";
 import { createRuntimeGame, placeFieldCards } from "../helpers/game.js";
 import type { AIStrategyBotPort } from "../../src/core/contracts/ai.js";
+import { buildShadowHeartCostPreferences } from "../../src/core/ai/shadowheart/priorities.js";
 
 const material = (name: string) => simulationCard(new Card({ ...cardDefinition(name), effects: [] }, "bot"));
 const make = (name: string, owner: "bot" | "player" = "bot") => simulationCard(new Card(cardDefinition(name), owner));
+
+for (const seat of ["player", "bot"] as const) {
+  for (const alternative of ["Shadow-Heart Death Wyrm", "Shadow-Heart Griffin"] as const) {
+    test(`public Polymerization preserves Devastation with ${alternative} and shares material identities with simulation (${seat})`, async t => {
+      const game = createRuntimeGame({ laboratoryMode: true, chainResponseTimeoutMs: 0, randomSeed: 42 });
+      t.after(() => game.dispose());
+      game.turn = seat; game.phase = "main1"; game.turnCounter = 3;
+      game.player.controllerType = game.bot.controllerType = "ai";
+      game.disablePresentationDelays = true;
+      game.waitForBoardPresentation = game.waitForPresentationDelay = game.waitForAiPresentationStep = async () => {};
+      const owner = game[seat];
+      let nextId = 100;
+      const actual = (name: string) => {
+        const card = new Card({ ...cardDefinition(name), effects: [] }, seat);
+        card.instanceId = nextId++; game.ensureDuelCardId(card);
+        card.position = "attack"; card.isFacedown = false;
+        return card;
+      };
+      const devastation = actual("Shadow-Heart Devastation Dragon"), other = actual(alternative), gecko = actual("Shadow-Heart Gecko");
+      const fusion = new Card(cardDefinition("Shadow-Heart Warlord"), seat), spell = new Card(cardDefinition("Polymerization"), seat);
+      placeFieldCards(owner.field, devastation, other); owner.hand.push(spell, gecko); owner.extraDeck.push(fusion);
+      const preferences = buildShadowHeartCostPreferences({ field: owner.field, hand: owner.hand,
+        graveyard: [], oppField: [], lp: 8000, oppLp: 8000, phase: "main1", canNormalSummon: false });
+      const clone = (card: Card) => simulationCard({ ...cardDefinition(card.name), effects: [], instanceId: card.instanceId,
+        atk: card.atk, def: card.def, position: card.position, isFacedown: card.isFacedown });
+      const state = simulationState({ _isPerspectiveState: true, turn: seat, phase: "main1", turnCounter: 3,
+        [seat]: { field: [clone(devastation), clone(other)], hand: [clone(gecko)], extraDeck: [simulationCard(fusion)] } });
+      const activationContext = { actionContext: { costPreferences: preferences } };
+      assert.equal((await game.tryActivateSpell(spell, 0, null, { owner, activationContext })).success, true);
+      applySimulatedActions({ state, selfId: seat, actions: [{ type: "polymerization_fusion_summon" }], options: { actionContext: activationContext.actionContext } });
+      const materialIds = (cards: readonly { instanceId?: number | string | null }[]) => cards
+        .filter(card => card.instanceId === devastation.instanceId || card.instanceId === other.instanceId || card.instanceId === gecko.instanceId)
+        .map(card => card.instanceId).sort((a, b) => Number(a) - Number(b));
+      assert.deepEqual(materialIds(owner.graveyard), [other.instanceId, gecko.instanceId]);
+      assert.deepEqual(materialIds(state[seat].graveyard), materialIds(owner.graveyard));
+      assert.ok(owner.field.includes(devastation));
+      assert.ok(state[seat].field.some(card => card.instanceId === devastation.instanceId));
+      assert.deepEqual(state._simUnsupportedActions ?? [], []);
+    });
+  }
+}
 
 for (const scenario of ["demon", "pure", "crawler", "hydra"] as const) {
   test(`Fusion dispatcher preserves the ${scenario} consumer without repeating its declarative reward`, async t => {

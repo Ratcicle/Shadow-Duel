@@ -15,7 +15,7 @@ import { expireEffectNegation } from "../../effects/negation.js";
  */
 
 import { restoreTemporaryStatuses } from "../../Card.js";
-import { removeTrackedStatChange } from "../../effects/actions/stats.js";
+import { expireLevelModifications, removeTrackedStatChange } from "../../effects/actions/stats.js";
 import type {
   FullGameHost,
   GameCard,
@@ -310,16 +310,15 @@ export function cleanupTempBoosts(
       card.def = card.originalDef;
       card.originalDef = null;
     }
-    if (card.originalLevel != null) {
-      card.level = card.originalLevel;
-      card.originalLevel = null;
-    }
+    expireLevelModifications(card, "until_end_turn");
 
     card.tempBattleIndestructible = false;
     card.battleDamageHealsControllerThisTurn = false;
     card.canAttackDirectlyThisTurn = false;
-    delete card.attackLimitThisTurn;
-    delete card.attackLimitDuration;
+    if (card.attackLimitDuration !== "while_faceup") {
+      delete card.attackLimitThisTurn;
+      delete card.attackLimitDuration;
+    }
     card.extraAttackTargetRestriction =
       card.baseExtraAttackTargetRestriction || null;
     delete card.passiveExtraAttackTargetRestriction;
@@ -334,9 +333,6 @@ export function cleanupTempBoosts(
   // Restore temporarily reduced levels for hand monsters
   player.hand.forEach((card: GameCard) => {
     if (!card) return;
-    if (card.originalLevel != null) {
-      card.level = card.originalLevel;
-      card.originalLevel = null;
-    }
+    expireLevelModifications(card, "until_end_turn");
   });
 }

@@ -1,5 +1,6 @@
+import { expireFaceupDeclaredValues, restoreFaceupStatuses } from "../../Card.js";
 import { clearEffectNegation, expireEffectNegation } from "../../effects/negation.js";
-import { clearPermanentStatBuffs, removeTrackedStatChange } from "../../effects/actions/stats.js";
+import { clearLevelModifications, expireLevelModifications, expireFaceupStatBuffs, clearPermanentStatBuffs, removeTrackedStatChange } from "../../effects/actions/stats.js";
 import {
   applyStatusesOnSummon,
   bumpCardLocationVersion,
@@ -8,6 +9,7 @@ import {
   restoreTrapMonsterOriginalState,
 } from "../../Card.js";
 import { SUMMON_MODES } from "../summon/transaction.js";
+import { retireDamageStepBuffsForCard } from "../combat/damageStep.js";
 import { getSendToGraveReplacementDestination, refreshEquipExtraAttackBonus } from "../../effects/passives/passiveBuffs.js";
 import { getAvailableFieldSlots, getFieldOccupants, isFieldSlot } from "./placement.js";
 import { checkpointZoneSnapshotAfterResponse } from "./snapshot.js";
@@ -444,6 +446,7 @@ export async function cleanupTokenReferences(
   this.effectEngine?.clearPassiveBuffsForCard(token);
 
   // Clear temporary stat modifiers
+  retireDamageStepBuffsForCard(this, token);
   token.tempAtkBoost = 0;
   token.tempDefBoost = 0;
   delete token.permanentBuffsBySource;
@@ -2739,7 +2742,13 @@ export async function moveCardInternal(
     card.cardKind === "monster" &&
     card.effectsNegated === true;
 
-  if (options.isFacedown === true) expireEffectNegation(card, "while_faceup");
+  if (options.isFacedown === true) {
+    expireEffectNegation(card, "while_faceup");
+    restoreFaceupStatuses(card);
+    expireFaceupDeclaredValues(card);
+    expireFaceupStatBuffs(card);
+  }
+  if (options.isFacedown === true) expireLevelModifications(card, "while_faceup");
 
   if (isCanonicalZone(fromZone)) {
     cleanupNamedBuffsWhenSourceLeavesField(
@@ -2765,6 +2774,8 @@ export async function moveCardInternal(
     (card.cardKind === "spell" || card.cardKind === "trap")
   ) {
     clearEffectNegation(card);
+    restoreFaceupStatuses(card);
+    restoreTemporaryStatuses(card);
   }
 
   if (fromZone === "field" && card.cardKind === "monster") {
@@ -2779,11 +2790,13 @@ export async function moveCardInternal(
 
     if (toZone !== "field") {
       restoreFieldExitStatuses(card);
+      restoreFaceupStatuses(card);
       restoreTemporaryStatuses(card);
       card.battlePositionLocked = false;
     }
 
     // Clean up temporary stat modifiers from effects (e.g., Shadow-Heart Coward debuff)
+    retireDamageStepBuffsForCard(this, card);
     if (card.tempAtkBoost) {
       removeTrackedStatChange(card, "atk", card.tempAtkBoost);
       card.tempAtkBoost = 0;
@@ -2800,10 +2813,7 @@ export async function moveCardInternal(
       card.def = card.originalDef;
       card.originalDef = null;
     }
-    if (toZone !== "field" && card.originalLevel != null) {
-      card.level = card.originalLevel;
-      card.originalLevel = null;
-    }
+    if (toZone !== "field") clearLevelModifications(card);
     if (Array.isArray(card.turnBasedBuffs) && card.turnBasedBuffs.length > 0) {
       for (const buff of card.turnBasedBuffs) {
         if (buff?.stat === "atk") {
@@ -3187,6 +3197,7 @@ export async function moveCardInternal(
     summonOrigin = options.summonOrigin || null;
     if (
       summonOrigin === SUMMON_ORIGINS.PROCEDURE &&
+      options.summonTransaction?.negationWindowPolicy !== "suppressed" &&
       options.summonMode !== SUMMON_MODES.SET &&
       typeof this.offerSummonAttempt === "function"
     ) {
@@ -3497,6 +3508,7 @@ export async function moveCardInternal(
         damageStepTiming: options.actionContext?.damageStepTiming ?? null,
         isDamageStep: options.actionContext?.isDamageStep === true,
         deferTargetPrecheck: deferCardToGraveTriggers,
+        deferActivationChecks: deferCardToGraveTriggers && this.summonProcedureDepth > 0,
         effectsNegatedAtFieldExit,
         atomicGroupId,
       };

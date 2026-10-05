@@ -5,6 +5,7 @@ import { walkActionList } from "../../actionHandlers/actionWalker.js";
 import { buildTechZeroActivationContext, type TechZeroPolicyContext } from "./priorities.js";
 import { TECH_ZERO_IDS as TZ } from "./knowledge.js";
 import type { AiCardInput } from "../../contracts/aiState.js";
+import { getSimulatedPendingEffectPlans } from "../common/simulation.js";
 
 export type TechZeroChainResponseInput = Parameters<NonNullable<ChainStrategyPort["chooseChainResponse"]>>[0];
 
@@ -12,9 +13,9 @@ export type TechZeroChainResponseInput = Parameters<NonNullable<ChainStrategyPor
 export function getTechZeroPendingResources(
   game: unknown, playerId: string | undefined, source?: AiCardInput, effectId?: string,
 ): { reservedInstanceIds: Array<number | string>; reservedMonsterZones: number } {
-  if (!game || typeof game !== "object" || !("chainSystem" in game) || !isFullChainHost(game.chainSystem))
+  if (!game || typeof game !== "object")
     return { reservedInstanceIds: [], reservedMonsterZones: 0 };
-  const chain = game.chainSystem;
+  const chain = "chainSystem" in game && isFullChainHost(game.chainSystem) ? game.chainSystem : null;
   const reserved = new Set<number | string>();
   const slotsByEffect = new Map<string, number>();
   const isCurrent = (card: { instanceId?: number | string | null | undefined }, id: string | undefined) =>
@@ -27,7 +28,7 @@ export function getTechZeroPendingResources(
       for (const id of decision.materialInstanceIds) reserved.add(id);
     }
     let slots = Object.values(plan?.specialSummons || {}).reduce((sum, ids) => sum + ids.length, 0);
-    for (const { action } of walkActionList(effect?.actions).visits) {
+    for (const { action } of walkActionList([...(effect?.actions || []), ...(effect?.afterResolutionActions || [])]).visits) {
       if (!action || typeof action !== "object" || Reflect.get(action, "type") !== "special_summon_from_zone") continue;
       const ref: unknown = Reflect.get(action, "targetRef");
       if (typeof ref === "string") slots += plan?.selections?.[ref]?.length || 0;
@@ -35,6 +36,13 @@ export function getTechZeroPendingResources(
     const key = `${typeof card.instanceId}:${card.instanceId}:${effect?.id}`;
     slotsByEffect.set(key, Math.max(slotsByEffect.get(key) || 0, slots));
   };
+  for (const pending of getSimulatedPendingEffectPlans(game)) {
+    const card = { instanceId: pending.sourceInstanceId };
+    if (pending.ownerId !== playerId || isCurrent(card, pending.effect.id)) continue;
+    addPlan(card, pending.effect, pending.decisions);
+  }
+  if (!chain) return { reservedInstanceIds: [...reserved],
+    reservedMonsterZones: [...slotsByEffect.values()].reduce((sum, count) => sum + count, 0) };
   for (const link of chain.chainStack) {
     if (link.controller.id !== playerId || link.activationNegated || link.effectNegated ||
         !["pending", "resolving"].includes(link.resolutionStatus) || isCurrent(link.card, link.effect.id)) continue;
@@ -69,7 +77,7 @@ function pendingRemovalCanHitNewMonster(input: TechZeroChainResponseInput): bool
   const links = isFullChainHost(input.chainSystem) ? input.chainSystem.chainStack : last ? [last] : [];
   return links.some(link => {
     if (link.controller.id === input.player.id || link.activationNegated || link.effectNegated) return false;
-    return walkActionList(link.effect.actions).visits.some(({ action }) => {
+    return walkActionList([...(link.effect.actions || []), ...(link.effect.afterResolutionActions || [])]).visits.some(({ action }) => {
       if (typeof action !== "object" || action === null) return false;
       const type: unknown = Reflect.get(action, "type");
       if (typeof type !== "string" || !["destroy", "destroy_targeted_cards", "destroy_cards_by_scope", "banish", "return_to_hand", "move", "mirror_force_destroy_all", "selective_field_destruction"].includes(type)) return false;

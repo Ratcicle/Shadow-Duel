@@ -1,4 +1,4 @@
-import { addEffectNegation } from "../../../effects/negation.js";
+import { addEffectNegation, normalizeNegationDuration as normalizeNegateEffectsDuration } from "../../../effects/negation.js";
 import { canUseSimulatedEffectUsage, markSimulatedEffectUsage } from "../simStateUtils.js";
 import {
   asArray,
@@ -245,6 +245,7 @@ export interface SimulatedActionOptions {
     readonly source: SimulatedCardState | null | undefined;
   };
   costPayment?: import("../../../contracts/chainRuntime.js").ChainCostPayment;
+  payingActivationCosts?: boolean;
   referenceSnapshots?: Record<string, SimulatedReferenceSnapshot[]>;
   sourceCard?: SimulatedCardState | null | undefined;
   sourceAction?: object | null;
@@ -1062,14 +1063,6 @@ export function chooseSpecialSummonPosition(
     if (choice === "attack" || choice === "defense") return choice;
   }
   return "attack";
-}
-
-function normalizeNegateEffectsDuration(
-  action: SimulatedSummonActionShape = {},
-): "while_faceup" | "until_end_turn" {
-  return action.negateEffectsDuration === "while_faceup"
-    ? "while_faceup"
-    : "until_end_turn";
 }
 
 function assignSimulatedFieldPresenceId(

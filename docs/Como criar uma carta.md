@@ -42,6 +42,45 @@ lógica exclusiva de uma carta no engine; prefira `effects`, `targets`,
 `conditions` e `actions` genéricas. Crie handler novo apenas quando a mecânica
 for reutilizável ou não existir action equivalente.
 
+## Duração de modificações e estados
+
+Uma aplicação de efeito a um card sem duração especificada não expira na
+passagem de turno. Ela permanece enquanto a presença afetada continuar válida;
+no campo, normalmente termina quando o card sai de sua zona ativa ou é virado
+com a face para baixo. A saída e o retorno iniciam uma nova presença. Trocar o
+controle preserva a aplicação. A permanência da fonte não é necessária para
+uma aplicação já resolvida, salvo vínculo explicitamente definido pelo efeito.
+
+Não acrescente prazo às descrições apenas para explicar esse padrão. Durações
+definidas pelo texto devem estar explícitas nos dados: `modify_level` e
+`add_status` usam `until_end_turn`; `buff_stats_temp` usa `end_of_turn`. Sem
+esses campos, as aplicações usam `while_faceup`. Quando o contrato da action
+define sua duração intrinsecamente, como `modify_stats_temp` ou uma capacidade
+restrita a "este turno", essa duração continua fazendo parte da operação.
+`permanent: true`, quando suportado, mantém a semântica declarada de duração
+até a saída do campo. Passivas e Equipamentos conservam seus próprios vínculos
+e condições de aplicação; esta regra não converte aplicações resolvidas em auras.
+
+`grant_void_fusion_immunity` segue o mesmo padrão de presença quando
+`durationTurns` é omitido. Uma duração explícita conserva a expiração por
+turno; `durationTurns: 1` permanece até o final do próximo turno.
+
+Declarações em `declare_card_property` sem prazo também acompanham a presença
+face-up. `expiresOnTurn` e `durationTurns` explícitos têm prioridade sobre o
+padrão. Marcadores de procedência em `markAddedCards` sem prazo usam
+`expiresOnTurn: null`: não expiram por turno e conservam seu vínculo durante
+o percurso previsto pelo efeito, como mão → campo. Eles continuam sujeitos
+ao consumo e à limpeza próprios desse vínculo.
+
+Registros virtuais de eventos e pares de batalha conservam os prazos de seus
+contratos; não são aplicações de estado a um card. Use o prazo explícito
+correspondente ao texto ao declarar esses registros.
+
+Uma aplicação em massa resolve sobre os cards presentes naquele momento.
+Cards que entrarem depois não recebem o estado automaticamente. Em particular,
+a negação de Reactor Dragon (515) e Final Singularity (517) termina pela
+presença do card afetado, e Final Singularity não mantém uma aura de negação.
+
 ## Formatação das descrições
 
 - Use aspas duplas para citar nomes de cartas e arquétipos em ambos os idiomas. Preserve apóstrofos gramaticais, como em `opponent's`.
@@ -170,6 +209,9 @@ Campos frequentes:
   `"activate"` quando negar a própria ativação liberar uma nova tentativa.
 - `activationCommitActions`: actions irreversíveis aplicadas depois dos custos
   e antes da declaração final de alvos e da criação do Chain Link.
+- `afterResolutionActions`: lista opcional de actions executada depois da
+  conclusão do efeito e antes do próximo elo mais antigo e da finalização.
+  Use resultados confirmados das actions primárias para condicionar essa fase.
 - `promptUser`, `promptMessage`: controle de confirmação
   para triggers opcionais.
 - `isQuickEffect`: marca efeito rápido de monstro; normalmente combine com
@@ -548,9 +590,11 @@ carta em seu lugar.
 `add_status` aceita `targetRef` para alvos resolvidos ou `targetScope` para
 aplicar um status em massa a cards em zonas ativas. Use `targetScope` para
 efeitos como "negue todos os cards com a face para cima que o oponente
-controla". Para negação vinculada à permanência face-up, declare
-`duration: "while_faceup"`; a troca de controle preserva o status, mas virar o
-card para baixo ou fazê-lo deixar sua zona ativa encerra a negação.
+controla". Sem duração, a negação permanece enquanto o card afetado estiver
+com a face para cima; `duration: "while_faceup"` explicita esse mesmo padrão.
+A troca de controle preserva o status, mas virar o card para baixo ou fazê-lo
+deixar sua zona ativa encerra a negação. Use `duration: "until_end_turn"` ou
+`untilEndOfTurn: true` quando o efeito definir esse prazo.
 
 `negate_activation` nega apenas a ativacao/efeito atual da corrente. Ela respeita
 passives de `activation_negation_protection` e, com `storeNegatedCardAs`, expoe
@@ -1198,6 +1242,15 @@ Para o Damage Step, declare somente os momentos oficiais necessários:
 damageStepTimings: ["start_of_damage_step", "before_damage_calculation"]
 ```
 
+Para `buff_stats_temp`, `damage_calculation` encerra o bônus após o cálculo;
+`end_of_damage_step` conserva o bônus até o cleanup final da Etapa de Dano.
+Se o movimento restaurar os stats temporários ao terminar a presença da carta,
+os registros dessa carta nas duas filas são retirados sem outra alteração de
+stats. Isso também vale para Tokens e para saldo temporário agregado zero.
+`remove_stat_increases` continua consumindo apenas os valores removidos dos
+registros. O snapshot interno de zonas conserva as filas para que um rollback
+restaure os stats e sua expiração juntos; isso não acrescenta campos ao replay.
+
 O campo `allowDamageStepActivation` não é aceito em cartas. Rode também:
 
 ```powershell
@@ -1331,6 +1384,46 @@ imunes. A IA usa o mínimo obrigatório por padrão e conserva planos exatos
 válidos para uma seleção maior dentro do limite.
 
 `move.requireAll: true` valida todas as cartas selecionadas antes de movimentá-las e exige sucesso em cada movimento. Combine com `requireDestination: true` quando todos os materiais precisam chegar ao destino declarado. Um pagamento incompleto interrompe a ativação; movimentos já concluídos permanecem pagos. Movimentos, eventos e apresentação continuam sequenciais. Actions que omitem `requireAll` preservam o comportamento existente.
+
+Quando a resolução precisar comparar o Nível ou excluir o nome de uma carta
+usada como custo, `move.capturePaidReference: true` conserva esses valores
+imediatamente antes do movimento. O opt-in exige um custo de ativação com
+`targetRef` explícito e não vazio; só um movimento pago com sucesso registra
+`costPayment.paidReferences`. Use `requireDestination: true` quando o custo
+exigir chegada a uma zona específica.
+
+`compareAttribute` com `attr: "level"` usa o Nível pago da primeira referência;
+`excludeNameRef` usa os nomes pagos de todas as referências, na ordem selecionada.
+Os valores atravessam a Chain, a simulação e o replay sem mudar quando o card
+perde o ajuste de Nível ou troca novamente de zona. Eles não substituem o card
+físico em verificações de presença, elegibilidade, movimento ou Invocação.
+
+### Actions posteriores à resolução do efeito
+
+Declare `afterResolutionActions` no efeito quando o texto determinar uma operação
+depois de sua resolução. A lista primária resolve primeiro e conserva os resultados
+em uma continuação tipada. A Chain real publica a conclusão do elo; o fluxo
+direto/Null registra a fronteira em `stage:"after_resolution"`. A lista posterior termina
+antes do elo mais antigo e da finalização da fonte. Retomada continua do progresso
+registrado; aborto invalida a continuação pela geração do duelo.
+
+Para condicionar essa fase a uma Invocação confirmada, use `storeResultAs` na
+action primária e uma condição sobre `_actionTargets.<referência>.length`.
+O preview considera como potencial somente resultados ainda ausentes de uma
+action primária reconhecida e viável; não fabrica resultados. Referências
+explicitamente vazias e condições independentes continuam sendo avaliadas.
+`previewPendingSummon` permite avaliar a combinação Sincro possível após o
+revival; a execução usa os materiais atualmente controlados e não exige o
+monstro revivido na composição.
+
+Na Sincro posterior, `summonOrigin` permanece `procedure`.
+`negationWindowPolicy: "auto"` é o padrão dos procedimentos. A decisão aprovada
+para esse limite abre `summon_attempt` em CL1 e usa `suppressed` em CL>1.
+A janela filha isola a Chain parental e mantém seus triggers sob barreira;
+`skipFinalTiming` deixa a finalização e a liberação dos triggers ao contexto pai.
+Não use essas opções para mudar a origem da Invocação ou antecipar seu cleanup.
+
+### Escolhas e presença na Invocação
 
 Mantenha as escolhas de Invocação em `special_summon_from_zone`, durante a resolução. `fieldSlotsFreedBeforeSummon` considera as vagas liberadas pelo pagamento na validação prévia; `requireSource: true` Invoca a fonte original. `costTargetRef` e `conditionalMarkersOnSummon` consultam evidências tipadas capturadas durante o pagamento bem-sucedido: mudanças posteriores no nome ou na zona do material não alteram essas evidências. Os marcadores são aplicados somente após a Invocação bem-sucedida. Use `bindToFieldPresence: true` para limitá-los àquela permanência no campo; outra Invocação ou outra cópia não herda o bônus.
 

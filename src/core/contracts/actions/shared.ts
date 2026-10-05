@@ -335,6 +335,7 @@ type BooleanActionProperty =
   | "battleIndestructible"
   | "bounceSource"
   | "cannotAttackThisTurn"
+  | "capturePaidReference"
   | "confirmOnly"
   | "costMovedByEffect"
   | "cumulative"

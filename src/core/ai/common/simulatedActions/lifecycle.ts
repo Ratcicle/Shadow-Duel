@@ -1,6 +1,6 @@
 import { pruneModeledPassiveContributions } from "../../../effects/passives/passiveBuffs.js";
 import { expireEffectNegation } from "../../../effects/negation.js";
-import { removeTrackedStatChange } from "../../../effects/actions/stats.js";
+import { expireLevelModifications, removeTrackedStatChange } from "../../../effects/actions/stats.js";
 import { restoreTemporaryStatuses } from "../../../Card.js";
 import { SUMMON_METHODS } from "../../../contracts/summon.js";
 import { normalizeZoneInput } from "../../../contracts/zones.js";
@@ -94,13 +94,15 @@ export function cleanupSimulatedEndTurn(state: SimulatedRuntimeState): void {
       pruneModeledPassiveContributions(card);
       if (card.originalAtk != null) { card.atk = card.originalAtk; card.originalAtk = null; }
       if (card.originalDef != null) { card.def = card.originalDef; card.originalDef = null; }
-      if (card.originalLevel != null) { card.level = card.originalLevel; card.originalLevel = null; }
+      expireLevelModifications(card, "until_end_turn");
 
       card.tempBattleIndestructible = false;
       card.battleDamageHealsControllerThisTurn = false;
       card.canAttackDirectlyThisTurn = false;
-      delete card.attackLimitThisTurn;
-      delete card.attackLimitDuration;
+      if (card.attackLimitDuration !== "while_faceup") {
+        delete card.attackLimitThisTurn;
+        delete card.attackLimitDuration;
+      }
       card.extraAttackTargetRestriction = card.baseExtraAttackTargetRestriction || null;
       delete card.passiveExtraAttackTargetRestriction;
       delete card.canAttackAllOpponentMonstersThisTurn;
@@ -108,7 +110,7 @@ export function cleanupSimulatedEndTurn(state: SimulatedRuntimeState): void {
       restoreTemporaryStatuses(card);
     }
     for (const card of player.hand) {
-      if (card.originalLevel != null) { card.level = card.originalLevel; card.originalLevel = null; }
+      expireLevelModifications(card, "until_end_turn");
     }
     player.forbidDirectAttacksThisTurn = false;
     player.directAttacksDeclaredThisTurn = 0;

@@ -139,8 +139,8 @@ for (const actor of ["player", "bot"] as const) {
         const chosen = id === "action_case_choice"
           ? candidates.find(candidate => candidate.key?.endsWith(":decrease")) ??
             candidates.find(candidate => candidate.key?.endsWith(":decrease_2"))
-          : id === "tech_zero_energy_core_level_down_target" ? candidates.find(candidate => candidate.cardRef === catapult)
-          : id === "tech_zero_multimodal_machine_level_down_2_target" ? candidates.find(candidate => candidate.cardRef === multimodal)
+          : id === "tech_zero_energy_core_level_target" ? candidates.find(candidate => candidate.cardRef === catapult)
+          : id === "tech_zero_multimodal_machine_level_target" ? candidates.find(candidate => candidate.cardRef === multimodal)
           : id === "tech_zero_electrocatapult_summon_target" || id === "tech_zero_electrocatapult_tuner_target"
             ? candidates.find(candidate => candidate.cardRef === core) : null;
         if (chosen) selections[id] = [selectionKey(required(chosen.key))];
@@ -154,8 +154,8 @@ for (const actor of ["player", "bot"] as const) {
       enableSimulatedEvents: true,
       chooseActionCase: cases => cases.find(entry => record(entry).id === "decrease") || cases.find(entry => record(entry).id === "decrease_2") || cases[0],
       targetPreferences: {
-        tech_zero_energy_core_level_down_target: { preferredInstanceIds: [catapult.instanceId] },
-        tech_zero_multimodal_machine_level_down_2_target: { preferredInstanceIds: [multimodal.instanceId] },
+        tech_zero_energy_core_level_target: { preferredInstanceIds: [catapult.instanceId] },
+        tech_zero_multimodal_machine_level_target: { preferredInstanceIds: [multimodal.instanceId] },
         tech_zero_electrocatapult_summon_target: { preferredInstanceIds: [core.instanceId] },
         tech_zero_electrocatapult_tuner_target: { preferredInstanceIds: [core.instanceId] },
       },

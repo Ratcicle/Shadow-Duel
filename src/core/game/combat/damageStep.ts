@@ -548,6 +548,19 @@ async function revealDefender(
   await game.waitForPresentationDelay?.(600);
 }
 
+/** A stat reset ends registrations for that physical card's departed presence. */
+export function retireDamageStepBuffsForCard(
+  game: Pick<DamageStepHost, "damageCalculationTempBuffs" | "endOfDamageStepTempBuffs">,
+  card: DamageStepCard,
+): void {
+  for (const buffs of [game.damageCalculationTempBuffs, game.endOfDamageStepTempBuffs]) {
+    if (!Array.isArray(buffs)) continue;
+    for (let index = buffs.length - 1; index >= 0; index -= 1) {
+      if (buffs[index]?.card === card) buffs.splice(index, 1);
+    }
+  }
+}
+
 function removeTrackedBuffs(
   game: DamageStepHost,
   key: "damageCalculationTempBuffs" | "endOfDamageStepTempBuffs",

@@ -1,4 +1,5 @@
 import type Game from "../../Game.js";
+import { trackFaceupStatus } from "../../Card.js";
 import type { ActionRuntimeCard, EffectContext } from "../../contracts/actionRuntime.js";
 import type { ActionOf } from "../../contracts/actions.js";
 
@@ -18,14 +19,14 @@ interface ImmunityActionHost {
 
 /**
  * Apply grant fusion immunity action to a Fusion Monster of a specified archetype.
- * Grants temporary immunity to opponent's effects.
+ * Grants immunity to opponent effects for the declared duration or face-up presence.
  * 
  * Note: Function name kept as applyGrantVoidFusionImmunity for backwards compatibility
  * with wiring.js, but the implementation is now generic and uses action.archetype.
  * 
  * @param {Object} action - Action configuration
  * @param {string} action.archetype - Required archetype filter (e.g., "Void")
- * @param {number} [action.durationTurns=1] - Duration of immunity in turns
+ * @param {number} [action.durationTurns] - Explicit turn duration; omitted lasts while face-up
  * @param {Object} ctx - Context object with summonedCard and player
  * @returns {boolean} Whether immunity was granted
  */
@@ -62,7 +63,13 @@ export function applyGrantVoidFusionImmunity(
     return false;
   }
 
-  const duration = Math.max(1, action.durationTurns ?? 1);
+  if (action.durationTurns === undefined) {
+    trackFaceupStatus(card, "unaffectedByOpponentCardEffects");
+    card.unaffectedByOpponentCardEffects = true;
+    this.ui?.log?.(`${card.name} is immune to the opponent's effects while face-up.`);
+    return true;
+  }
+  const duration = Math.max(1, action.durationTurns);
   const untilTurn = (this.game?.turnCounter ?? 0) + duration;
   card.immuneToOpponentEffectsUntilTurn = Math.max(
     card.immuneToOpponentEffectsUntilTurn ?? 0,
@@ -71,7 +78,7 @@ export function applyGrantVoidFusionImmunity(
 
   if (this.ui?.log) {
     this.ui.log(
-      `${card.name} está imune aos efeitos do oponente até o final do próximo turno.`
+      `${card.name} is immune to the opponent's effects until the end of turn ${untilTurn}.`
     );
   }
 

@@ -423,7 +423,7 @@ export const ACTION_CATALOG = {
   }),
   banish_and_buff: action({
     category: "stats",
-    summary: "Banishes a card and applies a buff based on the banished card.",
+    summary: "Banishes a card and applies a buff based on it; without a duration, the buff lasts while face-up.",
     handler: "handleBanishAndBuff",
     required: ["targetRef"],
     optional: ["buffMultiplier", "buffSource", "buffTarget", "buffType", "duration"],
@@ -439,6 +439,7 @@ export const ACTION_CATALOG = {
     selection: "usesTargets",
     mutates: ["banished", "stats"],
     examples: [{ type: "banish_and_buff", targetRef: "tech_void_banish_target" }],
+    notes: ["end_of_turn expires at turn cleanup; permanent lasts until the affected card leaves the field."],
   }),
   banish_card_from_graveyard: action({
     category: "destruction",
@@ -518,7 +519,7 @@ export const ACTION_CATALOG = {
   set_attack_limit_from_zone_count: action({
     category: "combat",
     summary:
-      "Sets a monster's total attack declarations this turn to the number of cards matching filters in a zone.",
+      "Sets a monster's total attack declarations to the number of matching cards in a zone; without a duration, it lasts while face-up.",
     handler: "handleSetAttackLimitFromZoneCount",
     optional: ["targetRef", "owner", "player", "zone", "filters", "duration", "minAttacks"],
     fields: {
@@ -541,12 +542,13 @@ export const ACTION_CATALOG = {
         owner: "self",
         zone: "graveyard",
         filters: { cardKind: "monster", archetype: "Tech-Zero", isTuner: true },
+        duration: "until_end_turn",
       },
     ],
   }),
   buff_stats_temp: action({
     category: "stats",
-    summary: "Modifies ATK/DEF temporarily, or until field exit with permanent: true.",
+    summary: "Modifies ATK/DEF for the declared duration, otherwise while face-up; permanent: true lasts until field exit.",
     handler: "handleBuffStatsTemp",
     optional: [
       "targetRef",
@@ -590,7 +592,7 @@ export const ACTION_CATALOG = {
     selection: "usesTargets",
     mutates: ["stats"],
     emits: ["stat_buff_applied"],
-    examples: [{ type: "buff_stats_temp", targetRef: "sanctum_citadel_target", atkBoost: 500, defBoost: 500 }],
+    examples: [{ type: "buff_stats_temp", targetRef: "sanctum_citadel_target", atkBoost: 500, defBoost: 500, duration: "end_of_turn" }],
     notes: [
       "storeAs exposes only cards whose ATK or DEF actually changed as an internal target reference.",
       "permanent records the actual applied delta on each affected card; source departure and turn cleanup do not remove it. Field exit removes the registered modifiers without overwriting base stats.",
@@ -855,7 +857,7 @@ export const ACTION_CATALOG = {
   }),
   declare_card_property: action({
     category: "conditional",
-    summary: "Stores a temporary declared card property value on the source card.",
+    summary: "Stores a declared card property on the source; omitted duration lasts while face-up, and explicit deadlines take precedence.",
     handler: "handleDeclareCardProperty",
     required: ["property", "stateKey"],
     optional: [
@@ -1608,7 +1610,7 @@ export const ACTION_CATALOG = {
   }),
   grant_void_fusion_immunity: action({
     category: "stats",
-    summary: "Grants temporary immunity to Void Fusion monsters.",
+    summary: "Grants opponent-effect immunity to a Fusion monster of the declared archetype; without durationTurns, it lasts while face-up.",
     handler: "proxy:applyGrantVoidFusionImmunity",
     optional: ["archetype", "durationTurns"],
     fields: {
@@ -1617,6 +1619,7 @@ export const ACTION_CATALOG = {
     },
     mutates: ["status"],
     examples: [{ type: "grant_void_fusion_immunity", archetype: "Void", durationTurns: 1 }],
+    notes: ["Explicit durationTurns preserves turn expiry; 1 lasts through the next turn. Source departure does not remove resolved immunity."],
   }),
   heal: action({
     category: "resources",
@@ -1777,6 +1780,7 @@ export const ACTION_CATALOG = {
       "contextLabel",
       "storeResultAs",
       "storeLevelSumAs",
+      "capturePaidReference",
       "requireDestination",
       "requireAll",
     ],
@@ -1808,6 +1812,10 @@ export const ACTION_CATALOG = {
         type: "string",
         description:
           "Stores the sum of the moved cards' Levels on the action context.",
+      },
+      capturePaidReference: {
+        type: "boolean",
+        description: "Activation costs only: preserves the card's name and current Level immediately before a successful move under its targetRef for later value comparisons.",
       },
       requireAll: { type: "boolean", description: "Requires every selected card to move successfully; stops the sequence on an incomplete move." },
       requireDestination: {

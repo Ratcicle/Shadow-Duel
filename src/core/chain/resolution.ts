@@ -15,11 +15,14 @@
 
 import { isAI } from "../Player.js";
 import { recordMaterialEffectIdentity } from "../game/summon/materialStats.js";
+import { resolveAfterResolutionActions } from "./afterResolution.js";
+import { captureChainResponseDecisionCards } from "../game/decisions/chainResponse.js";
 import { CHAIN_ACTIVATION_KINDS } from "../contracts/chain.js";
 import type { CanonicalZone } from "../contracts/zones.js";
 import type { ChainLinkResolutionOutcome } from "../contracts/events.js";
 import type {
   ChainActivationZone,
+  ChainActionContext,
   ChainCard,
   ChainEffectTarget,
   ChainFinalizationSnapshot,
@@ -182,7 +185,7 @@ export async function resolveChain(
       }
 
       try {
-        result = await this.resolveChainLink(link);
+        result = (await this.resolveChainLink(link)) || { success: true };
         if ((this.game?.selectionAbortGeneration ?? 0) !== selectionGeneration) return selectionAbortResult();
         if (result?.needsSelection) {
           this.pendingChainSelection = {
@@ -201,12 +204,18 @@ export async function resolveChain(
             pendingChainSelection: true,
           };
         }
+        notifyChainLinkOutcome(this, link, result);
+        if (link.afterResolution) result = await resolveAfterResolutionActions(this, link);
+        if (result.needsSelection) {
+          this.pendingChainSelection = { link, selectionContract: result.selectionContract || null,
+            selectionSource: "after_resolution", baseTargets: result.baseTargets || null, phase: "after_resolution" };
+          return { ...result, success: false, pendingChainSelection: true };
+        }
         linkResults.push({
           chainId: link.chainId,
           linkId: link.linkId,
           ...result,
         });
-        notifyChainLinkOutcome(this, link, result);
       } catch (error) {
         this.setChainLinkResolutionStatus?.(link, "failed", {
           finalizationStatus: "failed",
@@ -506,6 +515,7 @@ export async function resumePendingChainSelection(
   const link = pending.link;
   const wasResolving = this.isResolving === true;
   this.isResolving = true;
+  this.currentResolvingLink = link;
 
   try {
     if (
@@ -542,9 +552,15 @@ export async function resumePendingChainSelection(
         ...(link.resolutionSelections || {}),
         ...resolvedSelections,
       };
+      if (pending.phase === "after_resolution" && link.afterResolution) {
+        link.afterResolution.context.activationContext = { ...link.activationContext,
+          resolutionSelections: link.resolutionSelections };
+      }
     }
 
-    const linkResult = await this.resolveChainLink(link);
+    let linkResult = pending.phase === "after_resolution"
+      ? await resolveAfterResolutionActions(this, link)
+      : (await this.resolveChainLink(link)) || { success: true };
     if ((this.game?.selectionAbortGeneration ?? 0) !== selectionGeneration) return selectionAbortResult();
     if (linkResult?.needsSelection) {
       this.pendingChainSelection = {
@@ -552,6 +568,7 @@ export async function resumePendingChainSelection(
         selectionContract: linkResult.selectionContract || null,
         selectionSource: linkResult.selectionSource || "actions",
         baseTargets: linkResult.baseTargets || null,
+        ...(pending.phase ? { phase: pending.phase } : {}),
       };
       return {
         ...linkResult,
@@ -561,7 +578,13 @@ export async function resumePendingChainSelection(
       };
     }
 
-    notifyChainLinkOutcome(this, link, linkResult);
+    if (pending.phase !== "after_resolution") notifyChainLinkOutcome(this, link, linkResult);
+    if (pending.phase !== "after_resolution" && link.afterResolution) linkResult = await resolveAfterResolutionActions(this, link);
+    if (linkResult.needsSelection) {
+      this.pendingChainSelection = { link, selectionContract: linkResult.selectionContract || null,
+        selectionSource: "after_resolution", baseTargets: linkResult.baseTargets || null, phase: "after_resolution" };
+      return { ...linkResult, success: false, pendingChainSelection: true };
+    }
 
     const remainingResult =
       this.chainStack.length > 0
@@ -1176,7 +1199,21 @@ async function applyChainEffect(
 
   cs.game?.checkWinCondition?.();
 
-  return { success: true, executed, activationContext: ctx.activationContext };
+  const result = { success: true, executed, activationContext: ctx.activationContext };
+  if (effect.afterResolutionActions?.length) {
+    const afterContext: ChainActionContext = ctx;
+    const cards = cs.game ? [cs.game.player, cs.game.bot].flatMap(player => [
+      ...player.deck, ...player.extraDeck, ...player.hand, ...player.field, ...player.spellTrap,
+      ...player.graveyard, ...player.banished, ...(player.fieldSpell ? [player.fieldSpell] : []),
+    ]) : [];
+    const decisions = afterContext.activationContext?.decisions;
+    const decisionCards = decisions ? captureChainResponseDecisionCards(decisions, cards) : [];
+    for (const card of decisionCards) cs.game?.ensureDuelCardId?.(card);
+    link.afterResolution = { context: afterContext, targets: afterContext._actionTargets || resolvedSelections,
+      actionIndex: 0, primaryResult: result, completed: false,
+      ...(decisionCards.length ? { decisionCards } : {}) };
+  }
+  return result;
 }
 
 /**

@@ -1,3 +1,4 @@
+import { expireFaceupDeclaredValues, restoreFaceupStatuses } from "../../Card.js";
 import { expireEffectNegation } from "../../effects/negation.js";
 // ─────────────────────────────────────────────────────────────────────────────
 // src/core/game/spellTrap/finalization.js
@@ -283,6 +284,8 @@ export function applySpellTrapFinalizationOverride(
 
   card.isFacedown = true;
   expireEffectNegation(card, "while_faceup");
+  restoreFaceupStatuses(card);
+  expireFaceupDeclaredValues(card);
   card.fieldPresenceSummons = [];
   const setTurn = Number.isFinite(override.setTurn)
     ? override.setTurn!

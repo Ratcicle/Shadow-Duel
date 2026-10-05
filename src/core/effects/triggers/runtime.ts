@@ -363,6 +363,7 @@ export type TriggerActivationResult =
   | LegacyActionHandlerResult;
 
 export interface TriggerEntryConfig {
+  readonly activationConditionCheck?: () => ActionConditionResult;
   readonly card: TriggerRuntimeCard;
   readonly effect: TriggerEffectLike;
   readonly owner: TriggerRuntimePlayer;
@@ -408,6 +409,7 @@ export interface TriggerPackage {
 }
 
 export interface BuildTriggerEntryOptions {
+  readonly activationConditionCheck?: () => ActionConditionResult;
   readonly sourceCard?: TriggerRuntimeCard | null;
   readonly owner?: TriggerRuntimePlayer | null;
   readonly effect?: TriggerEffectLike | null;

@@ -540,6 +540,7 @@ export interface BeamSearchOptions {
   beamWidth?: number;
   maxDepth?: number;
   nodeBudget?: number;
+  allowEarlyStop?: boolean;
   useV2Evaluation?: boolean;
   preGeneratedActions?: AIAction[] | null;
 }
@@ -568,7 +569,6 @@ export interface GameTreeSearchResult {
 
 export interface TurnLineSearchOptions extends BeamSearchOptions {
   candidateLimit?: number;
-  allowEarlyStop?: boolean;
   onComplete?: (completion: TurnLineSearchCompletion) => void;
   turnMode?: AITurnPlanningMode;
   profile?: Partial<AIPlanningProfile> | undefined;

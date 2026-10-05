@@ -24,6 +24,7 @@ import type { GamePlayer } from "../../contracts/player.js";
 import type { CanonicalZone } from "../../contracts/zones.js";
 import { SUMMON_MODES, SUMMON_STATUSES } from "./transaction.js";
 import { SUMMON_ORIGINS } from "../../contracts/summon.js";
+import { hasChainPostEffectSummonCapability } from "../../contracts/chainRuntime.js";
 import { checkSpecialSummonEligibility } from "./eligibility.js";
 
 interface ExecutionEffectEnginePort {
@@ -362,7 +363,7 @@ export async function offerSummonAttempt(
     this.chainSystem.isChainResolving?.() ||
     this.chainSystem.isChainWindowOpen?.()
   ) {
-    return {
+    if (!hasChainPostEffectSummonCapability(this.chainSystem)) return {
       ok: false,
       reason: "summon_attempt_timing_busy",
       transaction,
@@ -381,7 +382,7 @@ export async function offerSummonAttempt(
     summonProcedure: transaction.summonProcedure,
     summonTransaction: transaction,
   };
-  const timing = await this.chainSystem.runFastEffectTiming({
+  const timingInput = {
     origin: FAST_EFFECT_ORIGINS.SUMMON_ATTEMPT,
     actionPlayer: player,
     context: {
@@ -390,7 +391,13 @@ export async function offerSummonAttempt(
       skipTriggerLink: true,
     },
     pauseAfterRootResolution: true,
-  });
+  } as const;
+  const timing = await (this.chainSystem.isChainResolving() && hasChainPostEffectSummonCapability(this.chainSystem)
+    ? this.chainSystem.runPostEffectSummonAttempt(timingInput)
+    : this.chainSystem.runFastEffectTiming(timingInput));
+  if (timing?.ok === false && timing.reason === "post_effect_summon_timing_unavailable") {
+    return { ok: false, reason: timing.reason, transaction, ownsTransaction };
+  }
   if (timing?.needsSelection) {
     return {
       ...timing,

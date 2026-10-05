@@ -1,7 +1,7 @@
 # Replay canônico
 
 O replay executável usa o formato `shadow-duel-canonical-replay`, schema `2` e
-`engineVersion: "engine-rules-v18"`. Ele é independente do relatório
+`engineVersion: "engine-rules-v22"`. Ele é independente do relatório
 estratégico. O importador aceita somente o schema `2`: relatórios v4 e replays
 de schemas anteriores não são partidas executáveis nesta versão.
 
@@ -182,7 +182,7 @@ caracteres do replay, usado para detectar divergências na reprodução.
 `validateCanonicalReplay(input)` recebe `unknown`, não muta a entrada e retorna
 a mesma referência somente depois de validar o documento. `setup`, `commands` e
 `decisions` e `engineVersion` são obrigatórios. A versão da engine deve ser
-`"engine-rules-v18"`; gravações sem essa versão são rejeitadas antes da validação
+`"engine-rules-v22"`; gravações sem essa versão são rejeitadas antes da validação
 profunda e da reprodução. `events`, `result` e `finalized` continuam opcionais
 na importação de arquivos do schema `2`; quando presentes, são validados
 profundamente. Os comandos e kinds de decisão permanecem os mesmos.
@@ -750,6 +750,115 @@ v16/`e1469707` produz `e161e690`, preservado como regressão de serialização,
 mas esse envelope não é aceito pelo driver atual. A alteração exata do nome
 citado em PT na 419 não participa da assinatura EN/declarativa.
 
+
+### Duração por presença e escolha posterior de Tech-Zero (v19)
+
+A engine `engine-rules-v19` mantém o schema 2 e rejeita gravações v18 antes
+de executar comandos. Modificações e negações sem duração permanecem na
+presença afetada, em vez de expirarem no fim do turno. O snapshot inclui o
+baseline e as contribuições de Nível e, quando houver, base e valor atual dos
+estados vinculados à presença face-up. Também inclui as contribuições de
+ATK/DEF com seus prazos, o limite de ataques e as declarações de propriedades
+quando esses registros existem. Declarações omitem o rótulo localizado da
+escolha; contribuições de ATK/DEF omitem chaves de instância e são ordenadas
+deterministicamente. Clones e rollback preservam registros independentes.
+
+Development Lab (518) registra somente o Sincro como alvo da ativação. A
+escolha do monstro restante no Cemitério ocorre na resolução, depois do
+retorno ao Deck Adicional, pelo broker como escolha sem targeting. As duas
+decisões são reproduzidas em seus momentos próprios, sem recalcular a
+política da IA nem abrir UI no playback. A assinatura do banco muda com as
+composições declarativas e os textos aprovados; não há migração automática
+das gravações anteriores.
+
+Na v19, a assinatura era `c6aef06c`. O golden completo era `30c6d3d0`, com estados
+`adfa2802`/`9f6adbc6` e 12784 caracteres. Os envelopes históricos continuam
+cobertos como regressões de serialização, sem autorização para executá-los
+no driver atual.
+
+### Custos e imunidade de Tech-Zero P1 (v20)
+
+A engine `engine-rules-v20` mantém o schema 2. Replays v19 com a assinatura
+atual são rejeitados por versão; replays v20 com a assinatura anterior são
+rejeitados pela assinatura do banco. Não há migração automática. A assinatura
+da v20 é `f68bdfd5`, e seu golden completo é `be73b885`, com os mesmos hashes de
+estado `adfa2802`/`9f6adbc6` e 12784 caracteres. O envelope v19 continua coberto
+como regressão histórica de serialização.
+
+Battle Mage (512) paga o envio ao Cemitério antes da publicação da ativação.
+Quando a action declara captura, o link conserva `costPayment.paidReferences`:
+um mapa por referência declarativa, com listas ordenadas de
+`{ cardDuelCardId, name, level }`. Nome canônico e Nível são os valores anteriores
+ao pagamento, independentes de reset ou mutação posterior da carta. O mapa é
+opcional e não aparece quando não há evidência paga. Cópias e serialização
+desvinculam seus registros; a validação profunda aplica-se a esse mapa nos links
+do snapshot da Chain. Esses valores participam do hash canônico sem identidades
+de instância do processo ou textos localizados.
+
+A escolha de reviver permanece posterior ao pagamento e usa o broker como
+referência de resolução. Reactor Dragon (515) exige que o custo chegue ao
+Cemitério. Os efeitos de negação de 515 e Final Singularity (517) respeitam
+imunidade no runtime e na simulação. Os quatro cenários possuem regressões com
+Chain real para humano e IA nos dois assentos, captura EN e reprodução PT-BR,
+sem UI nem recálculo de escolhas da IA no playback. Comparam decisões consumidas,
+eventos portáveis em ordem, RNG, snapshots e hashes; a comparação de eventos
+exclui apenas os campos de instância de processo ainda presentes nos payloads
+diagnósticos legados, sem alterar sua serialização.
+
+### Tech-Zero P2: fase posterior ao efeito (v21)
+
+A P2 avança uma única vez de `engine-rules-v20` para `engine-rules-v21`, mantendo
+schema 2. Na conclusão da P2, a assinatura era `c0327049` e o golden completo era `5894e47f`.
+Os hashes ordinários `adfa2802`/`9f6adbc6` e os 12784 caracteres permanecem; o
+envelope histórico v20 (`f68bdfd5`, `be73b885`) continua testado. Versão v20 e
+assinatura anterior são rejeitadas independentemente, sem migração automática.
+
+`afterResolutionActions` preserva contexto, resultados e índice da próxima
+action em uma continuação. A Chain real publica a conclusão do elo antes dessa
+fase; o fluxo direto/Null registra a fronteira em `stage:"after_resolution"`.
+Scrapyard confirma o revival antes de oferecer a Sincro, usando os materiais
+atualmente controlados. A Sincro termina antes de resolver o próximo elo.
+
+A origem da Sincro continua `procedure`. `negationWindowPolicy` tem padrão
+`auto`; na fase posterior, CL1 abre `summon_attempt` e CL>1 usa `suppressed`.
+A janela filha de CL1 suspende pilha, timing, seleções e finalizações parentais,
+conservando custos, OPT, RNG e contadores globais. Triggers permanecem ordenados
+sob a barreira parental, e `skipFinalTiming` deixa seu cleanup à Chain original.
+Movimentos de fontes também atualizam os elos suspensos; aborto invalida as
+continuações pela geração existente.
+
+Quando há continuação ou contexto suspenso, `chain.afterResolution` inclui
+fase, progresso, referências canônicas dos resultados, presença original da
+fonte, planos de decisões e projeções dos frames. Os planos usam `duelCardId`,
+inclusive para Tokens já consumidos como materiais; suas referências físicas
+são capturadas antes das actions posteriores e não entram no JSON.
+Estados ordinários omitem o campo. Os registros são copiados e profundamente
+validados; callbacks de condições adiadas não são serializados. Decisões de
+Prism/Scrapyard usam `specialSummons[effectId]`, preservando instâncias exatas;
+501/503 publicam o alvo antes das respostas e escolhem o modo na resolução.
+
+### Tech-Zero P3: lifecycle dos buffs de Etapa de Dano (v22)
+
+A P3 avança uma única vez de `engine-rules-v21` para `engine-rules-v22`, mantendo
+schema 2 e os campos do replay. A assinatura é `d90a7477` e o golden completo
+é `c45d3a15`. O envelope histórico v21 (`c0327049`, `5894e47f`) permanece
+testado; versão v21 e assinatura anterior são rejeitadas independentemente.
+Os estados ordinários `adfa2802`/`9f6adbc6` e os 12784 caracteres permanecem.
+
+Ghost Samurai usa referências contextuais ao adversário da batalha, sem
+seleção ou publicação de targeting. Seu +500 dura até o cleanup final da
+Etapa de Dano. Quando um movimento restaura os stats temporários, a engine
+retira os registros daquela carta das duas filas de duração sem descontar
+novamente o bônus. O snapshot interno de zonas copia esses registros por
+valor, conservando a carta física; rollback restaura as filas junto aos stats.
+Esse snapshot transacional não integra o envelope serializado do replay.
+
+A captura EN e reprodução PT usam o comando público `attack`, comparando
+decisões realmente consumidas pelo broker, eventos, RNG, snapshots e hashes.
+IDs de processo legados são normalizados; identidades `duelCardId` e operações
+continuam comparadas. A simulação valida referências, filtros e presença,
+mas buffs de duração de batalha continuam explicitamente não suportados.
+O avaliador de combate conserva sua classificação de incerteza.
 
 ### Dependências físicas entre grupos de alvos (v18)
 

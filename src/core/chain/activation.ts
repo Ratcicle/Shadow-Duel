@@ -31,6 +31,7 @@ import {
   captureSourceSnapshot,
   classifyActivationKind,
   classifyEffectKind,
+  copyCostPayment,
   getResponseContextType,
   resolvePhysicalSourceLocation,
 } from "./link.js";
@@ -269,7 +270,7 @@ export function createPreparedActivation(
       (input.context?.eventReferenceSnapshots ? input.context.eventReferenceSnapshots.find(entry =>
         entry.source === card && effect && entry.effect === getEventEffectOrigin(effect))?.references || [] : captureReferenceSnapshots(input)),
     ...(historicalEffectNegated ? { effectNegated: true } : {}),
-    costPayment: input.costPayment || null,
+    costPayment: input.costPayment ? copyCostPayment(input.costPayment) : null,
     activationCommitment:
       input.activationCommitment ||
       activationContext.activationCommitment ||
@@ -593,16 +594,18 @@ export async function payActivationCosts(
     return result;
   }
   prepared.costsPaid = true;
-  prepared.costPayment = {
+  prepared.costPayment = copyCostPayment({
     status: "paid",
     ...(ctx.activationContext.costPayment.summonMarkers?.length
       ? { summonMarkers: ctx.activationContext.costPayment.summonMarkers } : {}),
+    ...(ctx.activationContext.costPayment.paidReferences
+      ? { paidReferences: ctx.activationContext.costPayment.paidReferences } : {}),
     actions: costs.map((action, index) => ({
       index,
       type: action?.type || null,
       targetRef: actionTargetRef(action),
     })),
-  };
+  });
   prepared.activationContext.costPayment = prepared.costPayment;
   return { success: true, needsSelection: false };
 }

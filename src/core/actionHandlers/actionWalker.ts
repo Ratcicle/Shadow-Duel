@@ -1,6 +1,6 @@
 import type { ActionByType, ActionType } from "../contracts/actions.js";
 
-export type ActionStage = "cost" | "commit" | "resolution";
+export type ActionStage = "cost" | "commit" | "resolution" | "after_resolution";
 
 export type ActionFlow = "activation" | "replacement" | "negation";
 
@@ -8,6 +8,7 @@ export type ActionRoot =
   | "activationCosts"
   | "activationCommitActions"
   | "actions"
+  | "afterResolutionActions"
   | "replacementEffect.costActions"
   | "negationCost"
   | "actionList";
@@ -588,6 +589,7 @@ export function walkEffectActions(
     ["activationCosts", "cost"],
     ["activationCommitActions", "commit"],
     ["actions", "resolution"],
+    ["afterResolutionActions", "after_resolution"],
   ] as const;
 
   for (const [root, stage] of activationRoots) {

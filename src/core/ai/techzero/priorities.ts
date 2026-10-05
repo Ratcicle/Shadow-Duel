@@ -123,12 +123,11 @@ export function enumerateTechZeroLevelAdjustments(
       }
       if (bestScore > -Infinity) {
         const direction = amount < 0 ? "decrease" : "increase";
-        const refDirection = amount < 0 ? "down" : "up";
         choices.push({ score: bestScore, adjustment: {
           caseId: isCore ? direction : `${direction}_${Math.abs(amount)}`,
           targetInstanceId: candidate.instanceId,
-          targetRef: isCore ? `tech_zero_energy_core_level_${refDirection}_target` :
-            `tech_zero_multimodal_machine_level_${refDirection}_${Math.abs(amount)}_target`,
+          targetRef: isCore ? "tech_zero_energy_core_level_target" :
+            "tech_zero_multimodal_machine_level_target",
         } });
       }
     }
@@ -359,6 +358,10 @@ export function buildTechZeroActivationContext(
   }
   for (const target of effect.targets || []) {
     const candidates = targetCandidates(target, source, ctx, selections);
+    if (Object.hasOwn(selections, target.id)) {
+      selections[target.id] = selections[target.id]!.filter(id => candidates.some(card => card.instanceId === id));
+      continue;
+    }
     const count = normalizeCount(target.count, 1);
     let selected: readonly AiCardInput[];
     switch (source.id) {
@@ -403,6 +406,33 @@ export function buildTechZeroActivationContext(
         selected = rank(candidates, card => target.intent === "cost" ? -recoveryValue(card) : recoveryValue(card)).slice(0, count.max);
     }
     selections[target.id] = instanceIds(selected);
+  }
+  if (source.id === TZ.LAB) {
+    for (const action of effect.actions || []) {
+      if (action.type !== "optional_target_actions") continue;
+      for (const target of action.targets || []) {
+        const committed = new Set(Object.values(selections).flat());
+        const candidates = targetCandidates(target, source, ctx, selections)
+          .filter(card => card.instanceId != null && !committed.has(card.instanceId));
+        selections[target.id] = instanceIds(chooseTechZeroResourceTargets("lab", candidates, ctx, normalizeCount(target.count, 1).max));
+      }
+    }
+  }
+  if ((source.id === TZ.PRISM && effectId === "tech_zero_prism_activator_synchro_summon") || source.id === TZ.SCRAPYARD) {
+    const action = effect.actions?.find(entry => entry.type === "special_summon_from_zone" && !entry.targetRef);
+    if (action?.type === "special_summon_from_zone") {
+      const candidates = targetCandidates({ id: `${effectId}_resolution`, owner: "self",
+        zone: source.id === TZ.PRISM ? "hand" : "graveyard", excludeCannotBeSpecialSummoned: true }, source, ctx, selections)
+        .filter(card => matchesTargetFilters(card, action.filters || {}, source, "self"));
+      if (source.id === TZ.PRISM) {
+        const selected = rank(candidates, card => scoreTechZeroSummon({ ...card, effectsNegated: true }, ctx, "special"))[0];
+        specialSummons[effectId] = selected ? instanceIds([selected]) : [];
+      } else {
+        const plan = scrapyardChoice(candidates, ctx);
+        specialSummons[effectId] = plan ? instanceIds([plan.tuner]) : [];
+        if (plan) synchroSummons[effectId] = plan.decision;
+      }
+    }
   }
   if (source.id === TZ.PORTAL) {
     const action = effect.actions?.find(entry => entry.type === "special_summon_from_zone");

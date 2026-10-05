@@ -91,8 +91,8 @@ for (const scenario of ["colony", "carrioncap", "harvest", "fusion"] as const) {
       assert.equal(actor.graveyard.filter(card => card.cardKind === "monster").length, 3);
     }
     const saved = validateCanonicalReplay(JSON.parse(JSON.stringify(live.finalizeReplay({ reason: "bloomrot-remaining" }))));
-    assert.equal(saved.schemaVersion, 2); assert.equal(saved.engineVersion, "engine-rules-v18");
-    assert.equal(saved.cardDatabaseSignature, "c30857b8");
+    assert.equal(saved.schemaVersion, 2); assert.equal(saved.engineVersion, "engine-rules-v22");
+    assert.equal(saved.cardDatabaseSignature, "d90a7477");
     setLocale("pt-br");
     const result = await replayCanonicalDuel(saved, { game: unsafeFixture<ReplayDriverGamePort>(playback,
       "Concrete Game implements all replay driver ports.") });

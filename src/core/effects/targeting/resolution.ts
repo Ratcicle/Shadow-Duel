@@ -1,6 +1,6 @@
 import { hasFeasibleSelection, findFeasibleSelection } from "../../game/selection/contract.js";
 import { requiresUnnegatedTarget } from "../negation.js";
-import { captureReferencePresence, matchesFrozenReferencePresence, getEventEffectOrigin } from "./references.js";
+import { captureReferencePresence, matchesFrozenReferencePresence, getEventEffectOrigin, getPaidCostReferenceValues } from "./references.js";
 /**
  * Targeting Resolution Module
  * Extracted from EffectEngine.js - main target resolution logic
@@ -26,7 +26,7 @@ import type {
   NumericComparisonOperator,
 } from "../../contracts/effects.js";
 import type { BattlePosition } from "../../contracts/cards.js";
-import type { ChainDeclaredTargetSnapshot, ChainTargetSnapshot } from "../../contracts/chainRuntime.js";
+import type { ChainCostPayment, ChainDeclaredTargetSnapshot, ChainTargetSnapshot } from "../../contracts/chainRuntime.js";
 import type { EventReferenceCardSnapshot } from "../../contracts/events.js";
 import type { SelectionCandidateKey } from "../../contracts/primitives.js";
 import type {
@@ -44,6 +44,7 @@ type RuntimeCard = ActionRuntimeCard;
 type RuntimePlayer = ActionRuntimePlayer & { debug?: boolean };
 
 interface TargetActivationContext {
+  costPayment?: ChainCostPayment | null;
   committed?: boolean;
   costsPaid?: boolean;
   referenceSnapshots?: ChainDeclaredTargetSnapshot[];
@@ -566,9 +567,10 @@ export function resolveTargets(
     // Support reference-based exclusions from previously resolved targets.
     let effectiveDef = def;
     const effectiveUpdates: EffectiveTargetUpdates = {};
-    if (def.excludeNameRef && targetMap[def.excludeNameRef]) {
+    if (def.excludeNameRef) {
       const refTargets = getResolvedCards(targetMap, def.excludeNameRef);
-      const namesToExclude = refTargets.map((c) => c.name).filter(Boolean);
+      const paidValues = getPaidCostReferenceValues(ctx.activationContext?.costPayment, def.excludeNameRef);
+      const namesToExclude = (paidValues ? paidValues.map(entry => entry.name) : refTargets.map((c) => c.name)).filter(Boolean);
       if (namesToExclude.length > 0) {
         effectiveUpdates.excludeCardNames = namesToExclude;
         if (shouldLogTargets) {

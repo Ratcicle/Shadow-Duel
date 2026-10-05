@@ -1,5 +1,7 @@
-import { appendSimulatedZoneCard } from "./common/zones.js";
 import { appendSimulatedFieldCard } from "./common/zones.js";
+import { findCardZone, moveCardToZone, type SimulatedMoveReceipt } from "./common/zones.js";
+import { emitSimulatedMove } from "./common/simulatedActions/movement.js";
+import type { SimulatedActionOptions } from "./common/simulatedActions/shared.js";
 import {
   calculateThreatScore,
   rankOpponentThreats,
@@ -351,16 +353,35 @@ export default class BaseStrategy implements StrategyRuntimePort {
   // Hook to simulate a specific spell effect inside the cloned state
   simulateSpellEffect(_state: StrategySimulation, _card: SimulatedCardState) {}
 
-  placeSpellCard(state: StrategySimulation, card: SimulatedCardState): { placed: boolean; zone: "fieldSpell" | "spellTrap" | null } {
+  placeSpellCard(state: StrategySimulation, card: SimulatedCardState, options: SimulatedActionOptions = {}): { placed: boolean; zone: "fieldSpell" | "spellTrap" | null } {
     if (!state || !card) return { placed: false, zone: null };
     const player = state.bot;
     if (!player) return { placed: false, zone: null };
 
     if (card.subtype === "field") {
+      if (player.fieldSpell === card) return { placed: true, zone: "fieldSpell" };
+      const fromZone = findCardZone(player, card);
+      const version = card.locationVersion || 0;
+      const moveOptions = { state, movedByEffect: false, sourceCard: card, sourcePlayer: player,
+        ...(options.emitSimulatedEvent ? { emitSimulatedEvent: options.emitSimulatedEvent } : {}) };
       if (player.fieldSpell) {
-        appendSimulatedZoneCard(player.graveyard, player.fieldSpell);
+        const previous = player.fieldSpell;
+        const wasFaceup = previous.isFacedown !== true;
+        const negated = previous.effectsNegated === true;
+        const receipt: { value: SimulatedMoveReceipt | null } = { value: null };
+        if (!moveCardToZone(player, previous, "graveyard", player, { ...moveOptions,
+          onMoveCommitted: result => { receipt.value = result; } })) return { placed: false, zone: null };
+        emitSimulatedMove(previous, state, player, player, "fieldSpell", wasFaceup, negated,
+          options, null, false, receipt.value);
+        // Departure events may refill the slot or move the incoming source.
+        if (player.fieldSpell || (fromZone && (findCardZone(player, card) !== fromZone ||
+            (card.locationVersion || 0) !== version))) return { placed: false, zone: null };
       }
-      player.fieldSpell = card;
+      const receipt: { value: SimulatedMoveReceipt | null } = { value: null };
+      if (!moveCardToZone(player, card, "fieldSpell", player, { ...moveOptions,
+        onMoveCommitted: result => { receipt.value = result; } })) return { placed: false, zone: null };
+      card.isFacedown = false;
+      emitSimulatedMove(card, state, player, player, fromZone, true, false, options, null, false, receipt.value);
       return { placed: true, zone: "fieldSpell" };
     }
 

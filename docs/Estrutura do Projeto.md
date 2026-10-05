@@ -299,12 +299,13 @@ TypeScript; imports relativos continuam usando `.js`:
 
 | Arquivo | Responsabilidade |
 |---|---|
-| [attachments.ts](../src/core/chain/attachments.ts) | Manifest canônico de referências diretas e instalação validada dos 89 métodos do prototype. |
+| [attachments.ts](../src/core/chain/attachments.ts) | Manifest canônico de referências diretas e instalação validada dos 92 métodos do prototype. |
 | [contexts.ts](../src/core/chain/contexts.ts) | Definição dos contextos/janelas de Chain. |
 | [spellSpeed.ts](../src/core/chain/spellSpeed.ts) | Regras de Spell Speed e checagem de ativação em Chain. |
 | [stack.ts](../src/core/chain/stack.ts) | Pilha LIFO, links e consultas de estado da Chain. |
 | [link.ts](../src/core/chain/link.ts) | Factory, classificação, snapshots, IDs e serialização canônica de Chain Links. |
 | [resolution.ts](../src/core/chain/resolution.ts) | Preparação, resolução e cleanup de links. |
+| [afterResolution.ts](../src/core/chain/afterResolution.ts) | Continuação pós-efeito, janela filha CL1, barreira de triggers e projeções dos contextos suspensos. |
 | [activation.ts](../src/core/chain/activation.ts) | Transação de ativação: compromisso da fonte, custos, alvos e publicação. |
 | [activationDiscovery.ts](../src/core/chain/activationDiscovery.ts) | Descoberta de cartas/effects ativáveis em uma janela. |
 | [legality.ts](../src/core/chain/legality.ts) | Consulta compartilhada de legalidade para runtime, IA e simulação. |
@@ -318,7 +319,7 @@ TypeScript; imports relativos continuam usando `.js`:
 | [botResponsePolicy.ts](../src/core/chain/botResponsePolicy.ts) | Política de resposta para IA. |
 | [selection.ts](../src/core/chain/selection.ts) | Seleção de alvos/effects dentro da Chain. |
 
-O manifest mantém a ordem dos 15 grupos e as referências originais dos 89 attachments. O preflight rejeita referências ausentes, duplicatas e colisões incompatíveis; reaplicar a mesma referência é idempotente. A fachada usa declaration merging, sem emitir class fields, e preserva propriedades enumeráveis, graváveis e configuráveis no prototype.
+O manifest mantém a ordem dos 16 grupos e as referências originais dos 92 attachments. O preflight rejeita referências ausentes, duplicatas e colisões incompatíveis; reaplicar a mesma referência é idempotente. A fachada usa declaration merging, sem emitir class fields, e preserva propriedades enumeráveis, graváveis e configuráveis no prototype.
 
 Para mudanças nesta área, selecione somente testes de Chain e dos consumidores diretamente afetados, incluindo replay e política de respostas do bot conforme o impacto. Justifique o alcance e mantenha-o no encerramento; typecheck, auditorias e build pertinentes são separados. Quando a mudança afetar respostas do bot, escolha um smoke relacionado, por exemplo `npm run test:bot-smoke -- --duels 1 --matchup arcanist:shadowheart`, ajustando o matchup ao caso. Siga a política de testes do `AGENTS.md`.
 

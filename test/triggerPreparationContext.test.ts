@@ -136,7 +136,7 @@ for (const seat of ["player", "bot"] as const) {
           assert.deepEqual(resolvedStats, [[baseAtk + 500, baseDef]]);
           assert.equal(opponent.lp, 8000 - (baseAtk + 500 - 1000));
           assert.equal(owner.lp, 8000);
-          assert.deepEqual([source.atk, source.def], [baseAtk, baseDef], "the bonus expires after damage calculation");
+          assert.deepEqual([source.atk, source.def], [baseAtk, baseDef], "the battle bonus is cleared after combat");
           assert.ok(opponent.graveyard.includes(other));
           assert.ok(owner.field.includes(source));
           if (id === 404) {

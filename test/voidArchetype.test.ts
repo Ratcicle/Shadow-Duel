@@ -146,10 +146,10 @@ for (const disableChains of [false, true]) {
 }
 
 for (const settings of [
-  { label: "defaults", fields: {}, zeroAtk: true, zeroDef: true, negated: true },
-  { label: "atk", fields: { setDefToZero: false, negateEffects: false }, zeroAtk: true, zeroDef: false, negated: false },
-  { label: "def", fields: { setAtkToZero: false, negateEffects: false }, zeroAtk: false, zeroDef: true, negated: false },
-  { label: "faceup_negation", fields: { negateEffectsDuration: "while_faceup" as const }, zeroAtk: true, zeroDef: true, negated: true },
+  { label: "defaults", fields: {}, zeroAtk: true, zeroDef: true, negated: true, negatedAfterTurn: true },
+  { label: "atk", fields: { setDefToZero: false, negateEffects: false }, zeroAtk: true, zeroDef: false, negated: false, negatedAfterTurn: false },
+  { label: "def", fields: { setAtkToZero: false, negateEffects: false }, zeroAtk: false, zeroDef: true, negated: false, negatedAfterTurn: false },
+  { label: "faceup_negation", fields: { negateEffectsDuration: "while_faceup" as const }, zeroAtk: true, zeroDef: true, negated: true, negatedAfterTurn: true },
 ]) {
   test(`Lote6 modificacao temporaria preserva ajustes anteriores e reaplicacao (${settings.label})`, async t => {
     const { game, aberration, clone, context } = await sealingScenario(t, 2);
@@ -172,8 +172,8 @@ for (const settings of [
     cleanupTempBoosts(game.player); cleanupSimulatedEndTurn(simulated.state);
     assert.deepEqual([aberration.atk, aberration.def], [2700, 2100]);
     assert.deepEqual([simulated.card.atk, simulated.card.def], [2700, 2100]);
-    assert.equal(aberration.effectsNegated, settings.label === "faceup_negation");
-    assert.equal(simulated.card.effectsNegated, settings.label === "faceup_negation");
+    assert.equal(aberration.effectsNegated, settings.negatedAfterTurn);
+    assert.equal(simulated.card.effectsNegated, settings.negatedAfterTurn);
   });
 }
 

@@ -70,6 +70,7 @@ interface PreviewCard extends ActionRuntimeCard {
 }
 
 interface PreviewContext extends EffectContext {
+  checkingAfterResolution?: boolean;
   fieldCounterCounts?: Record<string, number>;
   activationContext?:
     | (NonNullable<EffectContext["activationContext"]> & {
@@ -1450,7 +1451,7 @@ function recordPreviewMoveCandidates(
     }
     group.cards.push(entry.card);
     const projected = toZone !== "field" && entry.card.originalLevel != null
-      ? { ...entry.card, level: entry.card.originalLevel, originalLevel: null } : entry.card;
+      ? { ...entry.card, level: entry.card.originalLevel, originalLevel: null, levelModificationContributions: [] } : entry.card;
     (group.projections ??= new Map()).set(entry.card, projected);
     results.push(projected);
   }
@@ -2092,6 +2093,9 @@ export function checkActionPreviewRequirements(
   ctx: PreviewContext,
 ): PreviewResult {
   if (!Array.isArray(actions) || actions.length === 0) {
+    if (!ctx.checkingAfterResolution && actions === ctx.effect?.actions && ctx.effect.afterResolutionActions?.length) {
+      return checkAfterResolutionPreview.call(this, ctx.effect.afterResolutionActions, ctx, actions);
+    }
     return { ok: true };
   }
 
@@ -2672,5 +2676,49 @@ export function checkActionPreviewRequirements(
     recordPreviewMoveCandidates(this, action, previewCtx, player, previewMoves);
   }
 
+  if (!ctx.checkingAfterResolution && actions === ctx.effect?.actions && ctx.effect.afterResolutionActions?.length) {
+    return checkAfterResolutionPreview.call(this, ctx.effect.afterResolutionActions, ctx, actions);
+  }
+  return { ok: true };
+}
+
+/** Potential branches keep result-dependent guards, without manufacturing paid/summoned results. */
+function checkAfterResolutionPreview(this: EffectEngine, actions: readonly CardAction[], ctx: PreviewContext,
+  primary: readonly CardAction[]): PreviewResult {
+  const previewCtx = { ...ctx, checkingAfterResolution: true };
+  for (const action of actions) {
+    if (action.type !== "conditional_actions") {
+      const check = checkActionPreviewRequirements.call(this, [action], previewCtx);
+      if (!check.ok) return check;
+      continue;
+    }
+    let possible = true;
+    for (const condition of action.conditions || []) {
+      if (Reflect.get(condition, "type") === "context_number_compare") {
+        const key: unknown = Reflect.get(condition, "key") || Reflect.get(condition, "path");
+        const match = typeof key === "string" ? /^_actionTargets\.([^.]+)\.length$/.exec(key) : null;
+        const ref = match?.[1];
+        const producer = ref ? primary.find(candidate => candidate.type === "special_summon_from_zone" && candidate.storeResultAs === ref) : undefined;
+        if (ref && producer?.type === "special_summon_from_zone" && ctx._actionTargets?.[ref] === undefined &&
+          Reflect.get(condition, "valueFromContext") === undefined) {
+          const minimum = typeof producer.count === "number" ? producer.count : producer.count?.min ?? 1;
+          const maximum = typeof producer.count === "number" ? producer.count : producer.count?.max ?? 1;
+          const expected = Number(Reflect.get(condition, "value") ?? Reflect.get(condition, "amount") ?? 0);
+          const operator: unknown = Reflect.get(condition, "op") || Reflect.get(condition, "operator") || "gt";
+          const compare = (value: number) => operator === "gt" ? value > expected : operator === "gte" ? value >= expected
+            : operator === "lt" ? value < expected : operator === "lte" ? value <= expected
+              : operator === "eq" ? value === expected : operator === "neq" ? value !== expected : false;
+          possible = Number.isFinite(expected) && Number.isInteger(minimum) && Number.isInteger(maximum) && minimum >= 0 && maximum >= minimum &&
+            Array.from({ length: Math.max(0, Math.min(maximum, 5) - minimum + 1) }, (_, index) => index + minimum).some(compare);
+          if (!possible) break;
+          continue;
+        }
+      }
+      if (!this.evaluateConditions([condition], previewCtx).ok) { possible = false; break; }
+    }
+    if (!possible) continue;
+    const check = checkAfterResolutionPreview.call(this, action.actions || [], previewCtx, primary);
+    if (!check.ok) return check;
+  }
   return { ok: true };
 }

@@ -535,6 +535,8 @@ interface EffectCapabilities {
   readonly activationCaseId?: string;
   readonly activationCommitActions?: readonly CardAction[];
   readonly actions?: readonly CardAction[];
+  /** Runs after this effect has completed, before the next older Chain link. */
+  readonly afterResolutionActions?: readonly CardAction[];
   readonly targets?: readonly EffectTarget[];
   readonly condition?: LegacyTriggerGate;
   readonly conditions?: readonly EffectCondition[];

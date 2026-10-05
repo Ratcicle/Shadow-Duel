@@ -22,6 +22,7 @@ import type { ActionOf } from "../../contracts/actions.js";
 import type { CardFilter, EffectCondition } from "../../contracts/effects.js";
 import type { BattlePosition } from "../../contracts/cards.js";
 import type { ZoneInput } from "../../contracts/zones.js";
+import type { PaidCostReferenceValues } from "../../contracts/chainRuntime.js";
 
 type MoveAction = ActionOf<"move"> & {
   readonly toZone?: ZoneInput;
@@ -36,7 +37,7 @@ interface MovementRuntimeCard extends ActionRuntimeCard {
 interface MovementGamePort
   extends Pick<
     ActionRuntimeGamePort,
-    "player" | "bot" | "updateBoard" | "checkWinCondition"
+    "player" | "bot" | "updateBoard" | "checkWinCondition" | "ensureDuelCardId"
   > {
   normalizeCardOwnership?(
     card: ActionRuntimeCard,
@@ -283,6 +284,10 @@ export async function applyMove(
       const contextLabel =
         action.contextLabel || (isCostMove ? "cost" : "applyMove");
 
+      const paidReference: PaidCostReferenceValues | null = payingCost && action.capturePaidReference === true && action.targetRef
+        ? { cardDuelCardId: this.game?.ensureDuelCardId?.(card) ?? card.duelCardId ?? null,
+            name: card.name, level: levelBeforeMove }
+        : null;
       if (this.game && typeof this.game.moveCard === "function") {
         const moveResult = await this.game.moveCard(card, destPlayer, toZone, {
           placementActor: ctx.player,
@@ -370,6 +375,12 @@ export async function applyMove(
         if (tokenLeavesField && action.requireDestination === true) return;
       }
       movedCards.push(card);
+      if (paidReference && action.targetRef && ctx.activationContext?.costPayment) {
+        const payment = ctx.activationContext.costPayment;
+        const previous = payment.paidReferences && Object.hasOwn(payment.paidReferences, action.targetRef)
+          ? payment.paidReferences[action.targetRef] || [] : [];
+        payment.paidReferences = { ...payment.paidReferences, [action.targetRef]: [...previous, paidReference] };
+      }
       if (markerEvidence.length && ctx.activationContext?.costPayment) {
         (ctx.activationContext.costPayment.summonMarkers ??= []).push(...markerEvidence);
       }

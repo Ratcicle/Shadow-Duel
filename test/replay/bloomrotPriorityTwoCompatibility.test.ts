@@ -7,7 +7,7 @@ import { unsafeFixture } from "../helpers/fixtures.js";
 import { createRuntimeGame } from "../helpers/game.js";
 
 test("P2 schema 2 rejects v15 and the old declaration signature independently before mutation", async t => {
-  assert.equal(CANONICAL_REPLAY_ENGINE_VERSION, "engine-rules-v18");
+  assert.equal(CANONICAL_REPLAY_ENGINE_VERSION, "engine-rules-v22");
   const live = createRuntimeGame({ captureReplay: true, laboratoryMode: true });
   const playback = createRuntimeGame({ replayMode: "playback", laboratoryMode: true });
   t.after(() => { live.dispose(); playback.dispose(); });

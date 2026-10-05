@@ -33,6 +33,17 @@ export const techZeroCards = [
           'Activate "Tech-Zero Energy Core" to adjust a "Tech-Zero" monster\'s Level?',
         oncePerTurn: true,
         oncePerTurnName: "tech_zero_energy_core_level_mod",
+        targets: [
+          {
+            id: "tech_zero_energy_core_level_target",
+            owner: "self",
+            zone: "field",
+            cardKind: "monster",
+            archetype: "Tech-Zero",
+            requireFaceup: true,
+            count: { min: 1, max: 1 },
+          },
+        ],
         actions: [
           {
             type: "choose_action_case",
@@ -42,21 +53,10 @@ export const techZeroCards = [
               {
                 id: "increase",
                 label: "Increase Level by 1",
-                targets: [
-                  {
-                    id: "tech_zero_energy_core_level_up_target",
-                    owner: "self",
-                    zone: "field",
-                    cardKind: "monster",
-                    archetype: "Tech-Zero",
-                    requireFaceup: true,
-                    count: { min: 1, max: 1 },
-                  },
-                ],
                 actions: [
                   {
                     type: "modify_level",
-                    targetRef: "tech_zero_energy_core_level_up_target",
+                    targetRef: "tech_zero_energy_core_level_target",
                     amount: 1,
                   },
                 ],
@@ -64,22 +64,17 @@ export const techZeroCards = [
               {
                 id: "decrease",
                 label: "Decrease Level by 1",
-                targets: [
+                conditions: [
                   {
-                    id: "tech_zero_energy_core_level_down_target",
-                    owner: "self",
-                    zone: "field",
-                    cardKind: "monster",
-                    archetype: "Tech-Zero",
-                    requireFaceup: true,
-                    minLevel: 2,
-                    count: { min: 1, max: 1 },
+                    type: "targetRefMatchesFilters",
+                    targetRef: "tech_zero_energy_core_level_target",
+                    filters: { minLevel: 2 },
                   },
                 ],
                 actions: [
                   {
                     type: "modify_level",
-                    targetRef: "tech_zero_energy_core_level_down_target",
+                    targetRef: "tech_zero_energy_core_level_target",
                     amount: -1,
                   },
                 ],
@@ -227,6 +222,16 @@ export const techZeroCards = [
         requirePhase: ["main1", "main2"],
         oncePerTurn: true,
         oncePerTurnName: "tech_zero_multimodal_machine_level_mod",
+        targets: [
+          {
+            id: "tech_zero_multimodal_machine_level_target",
+            owner: "self",
+            zone: "field",
+            cardKind: "monster",
+            requireFaceup: true,
+            count: { min: 1, max: 1 },
+          },
+        ],
         actions: [
           {
             type: "choose_action_case",
@@ -236,21 +241,11 @@ export const techZeroCards = [
               {
                 id: "increase_1",
                 label: "Increase Level by 1",
-                targets: [
-                  {
-                    id: "tech_zero_multimodal_machine_level_up_1_target",
-                    owner: "self",
-                    zone: "field",
-                    cardKind: "monster",
-                    requireFaceup: true,
-                    count: { min: 1, max: 1 },
-                  },
-                ],
                 actions: [
                   {
                     type: "modify_level",
                     targetRef:
-                      "tech_zero_multimodal_machine_level_up_1_target",
+                      "tech_zero_multimodal_machine_level_target",
                     amount: 1,
                   },
                 ],
@@ -258,21 +253,11 @@ export const techZeroCards = [
               {
                 id: "increase_2",
                 label: "Increase Level by 2",
-                targets: [
-                  {
-                    id: "tech_zero_multimodal_machine_level_up_2_target",
-                    owner: "self",
-                    zone: "field",
-                    cardKind: "monster",
-                    requireFaceup: true,
-                    count: { min: 1, max: 1 },
-                  },
-                ],
                 actions: [
                   {
                     type: "modify_level",
                     targetRef:
-                      "tech_zero_multimodal_machine_level_up_2_target",
+                      "tech_zero_multimodal_machine_level_target",
                     amount: 2,
                   },
                 ],
@@ -280,22 +265,18 @@ export const techZeroCards = [
               {
                 id: "decrease_1",
                 label: "Decrease Level by 1",
-                targets: [
+                conditions: [
                   {
-                    id: "tech_zero_multimodal_machine_level_down_1_target",
-                    owner: "self",
-                    zone: "field",
-                    cardKind: "monster",
-                    requireFaceup: true,
-                    minLevel: 2,
-                    count: { min: 1, max: 1 },
+                    type: "targetRefMatchesFilters",
+                    targetRef: "tech_zero_multimodal_machine_level_target",
+                    filters: { minLevel: 2 },
                   },
                 ],
                 actions: [
                   {
                     type: "modify_level",
                     targetRef:
-                      "tech_zero_multimodal_machine_level_down_1_target",
+                      "tech_zero_multimodal_machine_level_target",
                     amount: -1,
                   },
                 ],
@@ -303,22 +284,18 @@ export const techZeroCards = [
               {
                 id: "decrease_2",
                 label: "Decrease Level by 2",
-                targets: [
+                conditions: [
                   {
-                    id: "tech_zero_multimodal_machine_level_down_2_target",
-                    owner: "self",
-                    zone: "field",
-                    cardKind: "monster",
-                    requireFaceup: true,
-                    minLevel: 3,
-                    count: { min: 1, max: 1 },
+                    type: "targetRefMatchesFilters",
+                    targetRef: "tech_zero_multimodal_machine_level_target",
+                    filters: { minLevel: 3 },
                   },
                 ],
                 actions: [
                   {
                     type: "modify_level",
                     targetRef:
-                      "tech_zero_multimodal_machine_level_down_2_target",
+                      "tech_zero_multimodal_machine_level_target",
                     amount: -2,
                   },
                 ],
@@ -639,22 +616,13 @@ export const techZeroCards = [
           'Activate "Tech-Zero Prism Activator" to Special Summon 1 "Tech-Zero" monster from your hand?',
         oncePerTurn: true,
         oncePerTurnName: "tech_zero_prism_activator_synchro_summon",
-        targets: [
-          {
-            id: "tech_zero_prism_activator_hand_summon_target",
-            owner: "self",
-            zone: "hand",
-            cardKind: "monster",
-            archetype: "Tech-Zero",
-            excludeCannotBeSpecialSummoned: true,
-            count: { min: 1, max: 1 },
-          },
-        ],
         actions: [
           {
             type: "special_summon_from_zone",
             zone: "hand",
-            targetRef: "tech_zero_prism_activator_hand_summon_target",
+            filters: { cardKind: "monster", archetype: "Tech-Zero" },
+            count: { min: 1, max: 1 },
+            selectionId: "tech_zero_prism_activator_hand_summon_target",
             position: "choice",
             promptPlayer: true,
             negateEffects: true,
@@ -675,7 +643,7 @@ export const techZeroCards = [
     attribute: "Light",
     archetype: "Tech-Zero",
     description:
-      "If this card is face-up on the field: You can Normal Summon 1 \"Tech-Zero\" monster in addition to your Normal Summon/Set.\n\nIf this card is sent to the Graveyard as Synchro Material: You can target 1 \"Tech-Zero\" Spell/Trap in your Graveyard; add it to your hand.\n\nYou can only use each effect of \"Tech-Zero Connector Dragon\" once per turn.",
+      "If this card is face-up on the field: You can conduct 1 Normal Summon/Set of a \"Tech-Zero\" monster in addition to your Normal Summon/Set.\n\nIf this card is sent to the Graveyard as Synchro Material: You can target 1 \"Tech-Zero\" Spell/Trap in your Graveyard; add it to your hand.\n\nYou can only use each effect of \"Tech-Zero Connector Dragon\" once per turn.",
     image: "assets/Tech-Zero Connector Dragon.png",
     effects: [
       {
@@ -1051,6 +1019,8 @@ export const techZeroCards = [
         targets: [
           {
             id: "tech_zero_ghost_samurai_battle_target",
+            intent: "reference",
+            targetFromContext: "defender",
             owner: "opponent",
             zone: "field",
             cardKind: "monster",
@@ -1065,7 +1035,7 @@ export const techZeroCards = [
             type: "buff_stats_temp",
             targetRef: "self",
             atkBoost: 500,
-            duration: "damage_calculation",
+            duration: "end_of_damage_step",
           },
         ],
       },
@@ -1084,6 +1054,8 @@ export const techZeroCards = [
         targets: [
           {
             id: "tech_zero_ghost_samurai_battle_target",
+            intent: "reference",
+            targetFromContext: "attacker",
             owner: "opponent",
             zone: "field",
             cardKind: "monster",
@@ -1098,7 +1070,7 @@ export const techZeroCards = [
             type: "buff_stats_temp",
             targetRef: "self",
             atkBoost: 500,
-            duration: "damage_calculation",
+            duration: "end_of_damage_step",
           },
         ],
       },
@@ -1164,15 +1136,8 @@ export const techZeroCards = [
         requirePhase: ["main1", "main2"],
         oncePerTurn: true,
         oncePerTurnName: "tech_zero_battle_mage_recycle_revive",
+        oncePerTurnScope: "card",
         conditions: [
-          {
-            type: "field_card_count",
-            owner: "self",
-            zone: "field",
-            max: 4,
-            reason:
-              "You need an open Monster Zone to Special Summon from your Graveyard.",
-          },
           {
             type: "field_card_count",
             owner: "self",
@@ -1209,6 +1174,19 @@ export const techZeroCards = [
             intent: "cost",
           },
         ],
+        activationCosts: [
+          {
+            type: "move",
+            targetRef: "tech_zero_battle_mage_cost",
+            player: "self",
+            fromZone: "field",
+            to: "graveyard",
+            contextLabel: "cost",
+            skipSendToGraveActionReplacement: true,
+            requireDestination: true,
+            capturePaidReference: true,
+          },
+        ],
         actions: [
           {
             type: "optional_target_actions",
@@ -1234,15 +1212,6 @@ export const techZeroCards = [
               },
             ],
             actions: [
-              {
-                type: "move",
-                targetRef: "tech_zero_battle_mage_cost",
-                player: "self",
-                fromZone: "field",
-                to: "graveyard",
-                contextLabel: "cost",
-                skipSendToGraveActionReplacement: true,
-              },
               {
                 type: "special_summon_from_zone",
                 targetRef: "tech_zero_battle_mage_revive_target",
@@ -1570,6 +1539,7 @@ export const techZeroCards = [
             to: "graveyard",
             contextLabel: "cost",
             skipSendToGraveActionReplacement: true,
+            requireDestination: true,
           },
         ],
         actions: [
@@ -1771,7 +1741,7 @@ export const techZeroCards = [
     subtype: "field",
     archetype: "Tech-Zero",
     description:
-      'Once per turn: You can target 1 "Tech-Zero" Synchro Monster in your Graveyard; return it to the Extra Deck, and if you do, target 1 monster in your Graveyard; shuffle it into the Deck.',
+      'Once per turn: You can target 1 "Tech-Zero" Synchro Monster in your Graveyard; return it to the Extra Deck, and if you do, choose 1 monster in your Graveyard and shuffle it into the Deck.',
     image: "assets/Tech-Zero Development Lab.png",
     effects: [
       {
@@ -1785,6 +1755,7 @@ export const techZeroCards = [
         requirePhase: ["main1", "main2"],
         oncePerTurn: true,
         oncePerTurnName: "tech_zero_development_lab_recycle",
+        oncePerTurnScope: "card",
         targets: [
           {
             id: "tech_zero_development_lab_synchro_target",
@@ -1793,14 +1764,6 @@ export const techZeroCards = [
             cardKind: "monster",
             archetype: "Tech-Zero",
             monsterType: "synchro",
-            count: { min: 1, max: 1 },
-          },
-          {
-            id: "tech_zero_development_lab_shuffle_target",
-            owner: "self",
-            zone: "graveyard",
-            cardKind: "monster",
-            excludeTargetRef: "tech_zero_development_lab_synchro_target",
             count: { min: 1, max: 1 },
           },
         ],
@@ -1812,18 +1775,55 @@ export const techZeroCards = [
             fromZone: "graveyard",
             to: "extraDeck",
             contextLabel: "tech_zero_development_lab_return_synchro",
+            requireDestination: true,
+            storeResultAs: "tech_zero_development_lab_returned_synchro",
           },
           {
-            type: "move",
-            targetRef: "tech_zero_development_lab_shuffle_target",
-            player: "self",
-            fromZone: "graveyard",
-            to: "deck",
-            contextLabel: "tech_zero_development_lab_shuffle_monster",
-          },
-          {
-            type: "shuffle_deck",
-            player: "self",
+            type: "optional_target_actions",
+            conditions: [
+              {
+                type: "any_of",
+                conditions: [
+                  {
+                    type: "context_number_compare",
+                    key: "_actionTargets.tech_zero_development_lab_returned_synchro.length",
+                    op: "gt",
+                    value: 0,
+                  },
+                  {
+                    type: "context_number_compare",
+                    key: "actionResults.tech_zero_development_lab_returned_synchro.length",
+                    op: "gt",
+                    value: 0,
+                  },
+                ],
+              },
+            ],
+            allowCancel: false,
+            targets: [
+              {
+                id: "tech_zero_development_lab_shuffle_choice",
+                intent: "reference",
+                owner: "self",
+                zone: "graveyard",
+                cardKind: "monster",
+                count: { min: 1, max: 1 },
+              },
+            ],
+            actions: [
+              {
+                type: "move",
+                targetRef: "tech_zero_development_lab_shuffle_choice",
+                player: "self",
+                fromZone: "graveyard",
+                to: "deck",
+                contextLabel: "tech_zero_development_lab_shuffle_monster",
+              },
+              {
+                type: "shuffle_deck",
+                player: "self",
+              },
+            ],
           },
         ],
       },
@@ -1958,41 +1958,40 @@ export const techZeroCards = [
             reason: "You need an open Monster Zone.",
           },
         ],
-        targets: [
-          {
-            id: "tech_zero_scrapyard_tuner",
-            owner: "self",
-            zone: "graveyard",
-            cardKind: "monster",
-            archetype: "Tech-Zero",
-            isTuner: true,
-            excludeCannotBeSpecialSummoned: true,
-            count: { min: 1, max: 1 },
-          },
-        ],
         actions: [
           {
             type: "special_summon_from_zone",
-            targetRef: "tech_zero_scrapyard_tuner",
             zone: "graveyard",
+            filters: { cardKind: "monster", archetype: "Tech-Zero", isTuner: true },
+            count: { min: 1, max: 1 },
+            selectionId: "tech_zero_scrapyard_tuner",
             position: "choice",
             promptPlayer: true,
             storeResultAs: "tech_zero_scrapyard_revived_tuner",
           },
+        ],
+        afterResolutionActions: [
           {
-            type: "synchro_summon_from_extra_deck",
-            filters: {
-              cardKind: "monster",
-              monsterType: "synchro",
-            },
-            previewPendingSummon: {
-              zone: "graveyard",
-              filters: {
-                cardKind: "monster",
-                archetype: "Tech-Zero",
-                isTuner: true,
+            type: "conditional_actions",
+            conditions: [{ type: "context_number_compare",
+              key: "_actionTargets.tech_zero_scrapyard_revived_tuner.length", op: "gt", value: 0 }],
+            actions: [
+              {
+                type: "synchro_summon_from_extra_deck",
+                filters: {
+                  cardKind: "monster",
+                  monsterType: "synchro",
+                },
+                previewPendingSummon: {
+                  zone: "graveyard",
+                  filters: {
+                    cardKind: "monster",
+                    archetype: "Tech-Zero",
+                    isTuner: true,
+                  },
+                },
               },
-            },
+            ],
           },
         ],
       },

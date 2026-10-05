@@ -75,6 +75,7 @@ interface SelectionSessionHost {
   graveyardSelection: object | null;
   selectionState: SelectionSessionState;
   selectionAbortGeneration: number;
+  afterResolutionActivation?: import("../../contracts/activation.js").ActivationAfterResolutionState | null;
   selectionSessionCounter: number;
   lastSelectionSessionId: number;
   decisionBroker?: SelectionDecisionBrokerState | null;
@@ -267,6 +268,7 @@ export function forceClearTargetSelection(
   const selection = this.targetSelection;
   if (!selection) return;
   this.selectionAbortGeneration++;
+  this.afterResolutionActivation = null;
   // Retire ownership before invoking presentation or consumer callbacks.
   this.targetSelection = null;
   this.graveyardSelection = null;

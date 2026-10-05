@@ -472,6 +472,8 @@ export function buildTriggerEntry(
     return null;
   }
 
+  if (!deferActivationChecks && options.activationConditionCheck?.().ok === false) return null;
+
   const sourceZone = options.activationContext?.activationZone ||
     options.activationZone || this.findCardZone(owner, sourceCard);
   const equipHostExitBinding = options.activationContext?.equipHostExitBinding;
@@ -608,6 +610,7 @@ export function buildTriggerEntry(
       this.handleTriggeredEffect(sourceCard, effect, resolvedCtx, selections));
 
   const config: TriggerEntryConfig = {
+    ...(options.activationConditionCheck ? { activationConditionCheck: options.activationConditionCheck } : {}),
     card: sourceCard,
     effect,
     owner,
@@ -624,6 +627,11 @@ export function buildTriggerEntry(
       effect,
     },
     activate: async (selections, activationCtx) => {
+      if (activationCtx.committed !== true && options.activationConditionCheck) {
+        const conditionCheck = options.activationConditionCheck();
+        if (!conditionCheck.ok) return { success: false, needsSelection: false, activationSkipped: true,
+          ...(conditionCheck.reason ? { reason: conditionCheck.reason } : {}) };
+      }
       if (activationCtx.committed !== true) {
         const liveSourceZone = activationCtx.activationZone === "temporary"
           ? "temporary"
@@ -739,6 +747,12 @@ export function buildTriggerEntry(
             activationContext,
             deferActivationChecks: false,
           });
+          if (materializedEntry) {
+            // Occurrences and candidates share this configuration. Publish the
+            // completed plan to both before later candidates reserve resources.
+            Object.assign(config, materializedEntry.config);
+            materializedEntry = { ...materializedEntry, config };
+          }
         }
         return materializedEntry;
       },

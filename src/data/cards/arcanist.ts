@@ -238,6 +238,7 @@ export const arcanistCards = [
                     targetRef: "lightning_magic_lance_target",
                     atkBoost: 500,
                     defBoost: 0,
+                    duration: "end_of_turn",
                   },
                   {
                     type: "add_status",
@@ -1148,6 +1149,7 @@ export const arcanistCards = [
             targetRef: "opponent_field",
             atkBoost: -100,
             defBoost: -100,
+            duration: "end_of_turn",
             allowEmpty: true,
           },
         ],

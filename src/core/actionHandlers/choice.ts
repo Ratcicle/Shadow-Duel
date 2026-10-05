@@ -12,6 +12,7 @@ import type {
   ResolvedTargetMap,
 } from "../contracts/actionRuntime.js";
 import type { EffectCondition, EffectTarget } from "../contracts/effects.js";
+import type { SelectionCandidateKey } from "../contracts/primitives.js";
 import type {
   RawSelectionCandidate,
   RawSelectionContract,
@@ -231,7 +232,7 @@ function getDeclarationExpirationTurn(
   ) {
     return currentTurn + Math.max(0, action.durationTurns);
   }
-  if (action?.duration === "while_faceup" || action?.duration === "permanent") {
+  if (!action.duration || action.duration === "while_faceup" || action.duration === "permanent") {
     return null;
   }
   if (action?.duration === "end_of_next_turn") return currentTurn + 1;
@@ -431,6 +432,55 @@ function runSelectionContract(
   selectionContract: RawSelectionContract,
   options: SelectionRunOptions = {},
 ): Promise<SelectionResult | null> {
+  const player = options.player || options.context?.player || null;
+  if (isAIPlayer(player) && game.requestDecision) {
+    const requirements = Array.isArray(selectionContract.requirements)
+      ? selectionContract.requirements
+      : selectionContract.requirements ? [selectionContract.requirements] : [];
+    const candidates = requirements.flatMap(requirement =>
+      (requirement.candidates || []).flatMap(candidate =>
+        isChoiceCandidateKey(candidate.key) ? [{ ...candidate, key: candidate.key }] : [],
+      ),
+    );
+    return game.requestDecision({
+      kind: options.kind || selectionContract.kind || "choice",
+      actor: player,
+      candidates,
+      requireCandidate: false,
+      resolveAI: () => resolveAutoSelection(game, selectionContract, options).selections,
+      serializeResult: value => value ? { selections: Object.fromEntries(
+        Object.entries(value).map(([id, keys]) => [id, keys.map(key => {
+          const candidate = candidates.find(candidate => candidate.key === key);
+          const card = candidate?.zone === "choice" ? null : candidate?.cardRef;
+          return card?.duelCardId != null ? { duelCardId: card.duelCardId,
+            cardId: card.id ?? null, effectId: null, candidateKey: null, key: null } : { key };
+        })]),
+      ) } : { pass: true },
+      deserializeReplayValue: value => {
+        if (!("selections" in value)) return null;
+        const selections: SelectionResult = {};
+        for (const requirement of requirements) {
+          if (!requirement.id) return null;
+          const recorded = value.selections[requirement.id];
+          const min = requirement.min ?? requirement.count?.min ?? 1;
+          const max = requirement.max ?? requirement.count?.max ?? min;
+          if (!Array.isArray(recorded) || recorded.length < min || recorded.length > max) return null;
+          const selected: SelectionCandidateKey[] = [];
+          for (const identity of recorded) {
+            const candidate = requirement.candidates?.find(candidate =>
+              "duelCardId" in identity && identity.duelCardId != null
+                ? candidate.zone !== "choice" && candidate.cardRef?.duelCardId === identity.duelCardId
+                : candidate.key === identity.key,
+            );
+            if (!candidate || !isChoiceCandidateKey(candidate.key) || selected.includes(candidate.key)) return null;
+            selected.push(candidate.key);
+          }
+          selections[requirement.id] = selected;
+        }
+        return selections;
+      },
+    });
+  }
   return new Promise<SelectionResult | null>((resolve) => {
     let resolved = false;
     const finalize = (value: SelectionResult | null) => {
@@ -469,12 +519,20 @@ function runSelectionContract(
   });
 }
 
+function isChoiceCandidateKey(value: unknown): value is SelectionCandidateKey {
+  return typeof value === "string" && value.length > 0;
+}
+
 async function resolveTargetsWithPrompt(
   engine: ActionHandlerEnginePort,
   ctx: EffectContext,
   targetDefs: readonly EffectTarget[],
 ): Promise<TargetResolution> {
-  const firstResult: unknown = engine.resolveTargets?.(targetDefs, ctx, null);
+  const selectionCtx: EffectContext = {
+    ...ctx,
+    activationContext: { ...ctx.activationContext, autoSelectTargets: false },
+  };
+  const firstResult: unknown = engine.resolveTargets?.(targetDefs, selectionCtx, null);
   let targetResult: TargetResolution = isTargetResolution(firstResult)
     ? firstResult
     : {};
@@ -504,7 +562,7 @@ async function resolveTargetsWithPrompt(
 
   const resumedResult: unknown = engine.resolveTargets?.(
     targetDefs,
-    ctx,
+    selectionCtx,
     selections,
   );
   targetResult = isTargetResolution(resumedResult) ? resumedResult : {};
@@ -724,7 +782,7 @@ export async function handleDeclareCardProperty(
     valueLabel,
     declaredOnTurn: game.turnCounter || 0,
     expiresOnTurn: getDeclarationExpirationTurn(game, action),
-    duration: action.duration || null,
+    duration: action.duration || "while_faceup",
   });
 
   getUI(game)?.log(

@@ -180,7 +180,7 @@ Nível 2, Machine, Light, 800/900.
 
 Nível 5, Dragon, Light, 1900/1500.
 
-> Se este card estiver com a face para cima no campo: você pode Invocar por Invocação-Normal 1 monstro "Tech-Zero" em adição à sua Invocação-Normal/Baixar.
+> Se este card estiver com a face para cima no campo: você pode realizar 1 Invocação-Normal/Baixar de 1 monstro "Tech-Zero" em adição à sua Invocação-Normal/Baixar.
 >
 > Se este card for enviado para o Cemitério como Matéria Sincro: você pode escolher 1 Magia/Armadilha "Tech-Zero" no seu Cemitério; adicione-a à sua mão.
 >
@@ -202,7 +202,7 @@ Regulador, Nível 2, Warrior, Light, 700/500.
 
 Magia de Campo.
 
-> Uma vez por turno: você pode escolher 1 monstro Sincro "Tech-Zero" no seu Cemitério; devolva-o ao Deck Adicional e, se isso acontecer, escolha 1 monstro no seu Cemitério; embaralhe-o no Deck.
+> Uma vez por turno: você pode escolher 1 monstro Sincro "Tech-Zero" no seu Cemitério; devolva-o ao Deck Adicional e, se isso acontecer, escolha 1 monstro no seu Cemitério e embaralhe-o no Deck.
 
 **519 — Linha de Montagem Tech-Zero / Tech-Zero Assembly Line**
 

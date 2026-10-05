@@ -1,7 +1,8 @@
-import { addEffectNegation, clearEffectNegation, expireEffectNegation } from "../../../effects/negation.js";
+import { addEffectNegation, clearEffectNegation, expireEffectNegation, normalizeNegationDuration as normalizeNegateEffectsDuration } from "../../../effects/negation.js";
 import { isSupportedSimulatedDestructionReplacement } from "./destruction.js";
-import { applyNamedStatChange } from "../../../effects/actions/stats.js";
-import { getCardEffectImmunity } from "../../../effects/targeting/filters.js";
+import { expireFaceupDeclaredValues, restoreFaceupStatuses, trackFaceupStatus } from "../../../Card.js";
+import { applyLevelModification, expireLevelModifications, applyNamedStatChange } from "../../../effects/actions/stats.js";
+import { getCardEffectImmunity, isNonTargetingEffectReference } from "../../../effects/targeting/filters.js";
 import { getEffectiveAtk } from "../cardStats.js";
 import { expireFaceupStatBuffs } from "../../../effects/actions/stats.js";
 import { hasUnmodeledTemporaryPassiveSuppression, refreshEquipExtraAttackBonus, removeFieldAuraBuffContributions, suppressTemporaryDynamicStatIncreasesForDebuff } from "../../../effects/passives/passiveBuffs.js";
@@ -59,11 +60,6 @@ import type {
   SimulatedRuntimeState,
 } from "./shared.js";
 
-interface NegateDurationShape {
-  readonly negateEffectsDuration?: string;
-  readonly duration?: string;
-}
-
 type ScopeFilterKey =
   | "cardKind"
   | "archetype"
@@ -106,15 +102,6 @@ type LegacyProtectedCard = SimulatedCardState & {
   };
   hasChangedPosition?: boolean;
 };
-
-function normalizeNegateEffectsDuration(
-  action: NegateDurationShape = {},
-): "while_faceup" | "until_end_turn" {
-  return action.negateEffectsDuration === "while_faceup" ||
-    action.duration === "while_faceup"
-    ? "while_faceup"
-    : "until_end_turn";
-}
 
 function asArray<Type>(
   value: Type | readonly Type[] | null | undefined,
@@ -259,7 +246,14 @@ export function applySetFacedownDefense(
     card.isFacedown = true;
     card.fieldPresenceSummons = [];
     expireFaceupStatBuffs(card);
+    if (card.attackLimitDuration === "while_faceup") {
+      delete card.attackLimitThisTurn;
+      delete card.attackLimitDuration;
+    }
+    expireLevelModifications(card, "while_faceup");
     expireEffectNegation(card, "while_faceup");
+    restoreFaceupStatuses(card);
+    expireFaceupDeclaredValues(card);
     (card as LegacyProtectedCard).hasChangedPosition = true;
     card.positionChangedThisTurn = true;
     if (action.lockBattlePosition === true) {
@@ -397,7 +391,8 @@ export function applyBuffStatsTemp(
 ): void {
   const { targets, selections, state, options, self, opponent } = ctx;
   const action: SimulatedActionHandlerContext<"buff_stats_temp">["action"] = { ...ctx.action, type: "buff_stats_temp" };
-  const duration = action.duration || "end_of_turn";
+  const duration = action.duration ||
+    (ctx.action.type === "buff_stats_temp_with_second_attack" ? "end_of_turn" : "while_faceup");
   if (duration === "damage_calculation" || duration === "end_of_damage_step") {
     state._simUnsupportedActions ??= [];
     state._simUnsupportedActions.push(action.type);
@@ -432,6 +427,7 @@ export function applyBuffStatsTemp(
       expiresOnTurn = state.turnCounter + action.durationTurns!;
     } else if (Number.isFinite(action.expiresOnTurn)) expiresOnTurn = action.expiresOnTurn!;
   }
+  const isFaceupBuff = !action.permanent && expiresOnTurn === null && duration === "while_faceup";
   const recipients = action.targetScope
     ? getTargetScopeCards(action.targetScope as LegacyTargetScope, self, opponent)
     : targets;
@@ -445,7 +441,7 @@ export function applyBuffStatsTemp(
     } }, card, self, { sourceCard: options.sourceCard || null }).immune) return;
     let changed = false;
     for (const [stat, boost] of [["atk", atkBoost], ["def", defBoost]] as const) {
-      if (boost < 0 && !action.permanent && expiresOnTurn === null) {
+      if (boost < 0 && !action.permanent && !isFaceupBuff && expiresOnTurn === null) {
         const suppressed = suppressTemporaryDynamicStatIncreasesForDebuff(card, stat, boost);
         if (suppressed > 0 && hasUnmodeledTemporaryPassiveSuppression(card)) {
           (state._simUnsupportedActions ??= []).push("buff_stats_temp:passive_recalculation");
@@ -461,9 +457,12 @@ export function applyBuffStatsTemp(
         const id = [action.sourceName || options.sourceCard?.name || action.type,
           card.instanceId || card.id || "card", stat, state.turnCounter, card.turnBasedBuffs.length].join("_");
         card.turnBasedBuffs.push({ id, stat, value: applied, expiresOnTurn });
-      } else if (action.permanent) {
-        const name = action.sourceName || `${action.type}_${options.sourceCard?.instanceId ?? options.sourceCard?.id ?? "source"}`;
+      } else if (action.permanent || isFaceupBuff) {
+        const baseName = action.sourceName || `${action.type}_${options.sourceCard?.instanceId ?? options.sourceCard?.id ?? "source"}`;
+        const name = isFaceupBuff ? `${baseName}:while_faceup` : baseName;
         applyNamedStatChange(card, name, stat === "atk" ? applied : 0, stat === "def" ? applied : 0);
+        const buff = card.permanentBuffsBySource?.[name];
+        if (isFaceupBuff && buff) buff.duration = "while_faceup";
       } else {
         const temporaryStat = stat === "atk" ? "tempAtkBoost" : "tempDefBoost";
         card[temporaryStat] = (card[temporaryStat] || 0) + applied;
@@ -517,8 +516,7 @@ export function applyModifyLevel(
     let next = Math.max(minimum, current + amount);
     if (maximum !== null) next = Math.min(maximum, next);
     if (next === current) continue;
-    if (action.duration !== "permanent" && card.originalLevel == null) card.originalLevel = current;
-    card.level = next;
+    applyLevelModification(card, next, action.duration || "while_faceup");
   }
 }
 
@@ -588,7 +586,7 @@ export function applySetAttackLimitFromZoneCount(
   targets.forEach((card) => {
     if (!card || card.cardKind !== "monster") return;
     card.attackLimitThisTurn = attackLimit;
-    card.attackLimitDuration = action.duration || "until_end_turn";
+    card.attackLimitDuration = action.duration || "while_faceup";
   });
 }
 
@@ -905,15 +903,30 @@ export function applyAddStatus(
     opponent,
     applySimulatedActions,
   } = ctx;
-  const targetCards =
-    Array.isArray(targets) && targets.length > 0
-      ? targets
-      : getTargetScopeCards(action.targetScope as LegacyTargetScope, self, opponent);
+  const recipients = action.targetScope
+    ? getTargetScopeCards(action.targetScope as LegacyTargetScope, self, opponent)
+    : action.targetRef ? targets : options.sourceCard ? [options.sourceCard] : [];
+  const payingCosts = options.payingActivationCosts ?? options.effect?.activationCosts?.includes(action) === true;
+  const costReference = payingCosts && options.effect?.targets?.some(definition =>
+    definition.id === action.targetRef && definition.intent === "cost") === true;
+  const effectType = action.targetScope || !action.targetRef || isNonTargetingEffectReference(options.effect, action.targetRef)
+    ? null : "target";
+  const targetCards = costReference ? recipients : recipients.filter(card => !getCardEffectImmunity({ game: {
+    player: self.id === "player" ? self : opponent,
+    bot: self.id === "bot" ? self : opponent,
+    turnCounter: state.turnCounter,
+  } }, card, self, { sourceCard: options.sourceCard || null, effectType }).immune);
+  const immunityPolicy = action as typeof action & { readonly immunityMode?: "skip_targets" | "skip_action" };
+  if (immunityPolicy.immunityMode === "skip_action" && targetCards.length !== recipients.length) return;
 
   targetCards.forEach((card) => {
     if (!card) return;
     const status = action.status;
     if (status) {
+      if (!action.untilEndOfTurn && action.duration !== "until_end_turn" && status !== "effectsNegated" && action.remove !== true) {
+        trackFaceupStatus(card, status);
+        if (status === "piercing") trackFaceupStatus(card, "piercingGrantedByEffect");
+      }
       if ((action.untilEndOfTurn || action.duration === "until_end_turn") && status !== "effectsNegated" && action.remove !== true) {
         card.tempStatuses ??= {};
         if (!Object.prototype.hasOwnProperty.call(card.tempStatuses, status)) {
@@ -924,6 +937,7 @@ export function applyAddStatus(
         }
       }
       if (action.remove === true) {
+        if (card.faceupStatuses) Reflect.deleteProperty(card.faceupStatuses, status);
         delete (card as DynamicSimulatedCard)[status];
         if (status === "effectsNegated") {
           clearEffectNegation(card);
@@ -931,6 +945,7 @@ export function applyAddStatus(
         if (card.tempStatuses) Reflect.deleteProperty(card.tempStatuses, status);
         if (status === "piercing") {
           delete card.piercingGrantedByEffect;
+          if (card.faceupStatuses) delete card.faceupStatuses.piercingGrantedByEffect;
           if (card.tempStatuses) delete card.tempStatuses.piercingGrantedByEffect;
         }
       } else {

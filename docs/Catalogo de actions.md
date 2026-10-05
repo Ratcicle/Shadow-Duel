@@ -830,6 +830,7 @@ Moves target cards to another zone.
 | `contextLabel` | nao | string |  |
 | `storeResultAs` | nao | string | Stores successfully moved cards as an internal target reference. |
 | `storeLevelSumAs` | nao | string | Stores the sum of the moved cards' Levels on the action context. |
+| `capturePaidReference` | nao | boolean | Activation costs only: preserves the card's name and current Level immediately before a successful move under its targetRef for later value comparisons. |
 | `requireDestination` | nao | boolean | Only counts moves reaching the declared destination as successful; redirected moves and removed tokens do not satisfy dependent actions. |
 | `requireAll` | nao | boolean | Requires every selected card to move successfully; stops the sequence on an incomplete move. |
 
@@ -2227,7 +2228,7 @@ _Sem notas._
 
 ### `banish_and_buff`
 
-Banishes a card and applies a buff based on the banished card.
+Banishes a card and applies a buff based on it; without a duration, the buff lasts while face-up.
 
 - Handler: `handleBanishAndBuff`
 - Target: `required`
@@ -2257,7 +2258,7 @@ Banishes a card and applies a buff based on the banished card.
 
 **Notas**
 
-_Sem notas._
+- end_of_turn expires at turn cleanup; permanent lasts until the affected card leaves the field.
 
 ### `buff_atk_by_lp_gained_this_turn`
 
@@ -2365,7 +2366,7 @@ _Sem notas._
 
 ### `buff_stats_temp`
 
-Modifies ATK/DEF temporarily, or until field exit with permanent: true.
+Modifies ATK/DEF for the declared duration, otherwise while face-up; permanent: true lasts until field exit.
 
 - Handler: `handleBuffStatsTemp`
 - Target: `optional`
@@ -2399,7 +2400,8 @@ Modifies ATK/DEF temporarily, or until field exit with permanent: true.
   "type": "buff_stats_temp",
   "targetRef": "sanctum_citadel_target",
   "atkBoost": 500,
-  "defBoost": 500
+  "defBoost": 500,
+  "duration": "end_of_turn"
 }
 ```
 
@@ -2523,7 +2525,7 @@ _Sem notas._
 
 ### `grant_void_fusion_immunity`
 
-Grants temporary immunity to Void Fusion monsters.
+Grants opponent-effect immunity to a Fusion monster of the declared archetype; without durationTurns, it lasts while face-up.
 
 - Handler: `proxy:applyGrantVoidFusionImmunity`
 - Target: `none`
@@ -2550,7 +2552,7 @@ Grants temporary immunity to Void Fusion monsters.
 
 **Notas**
 
-_Sem notas._
+- Explicit durationTurns preserves turn expiry; 1 lasts through the next turn. Source departure does not remove resolved immunity.
 
 ### `halve_target_stats_and_gain_removed`
 
@@ -3389,7 +3391,7 @@ _Sem notas._
 
 ### `set_attack_limit_from_zone_count`
 
-Sets a monster's total attack declarations this turn to the number of cards matching filters in a zone.
+Sets a monster's total attack declarations to the number of matching cards in a zone; without a duration, it lasts while face-up.
 
 - Handler: `handleSetAttackLimitFromZoneCount`
 - Target: `optional`
@@ -3421,7 +3423,8 @@ Sets a monster's total attack declarations this turn to the number of cards matc
     "cardKind": "monster",
     "archetype": "Tech-Zero",
     "isTuner": true
-  }
+  },
+  "duration": "until_end_turn"
 }
 ```
 
@@ -3808,7 +3811,7 @@ _Sem notas._
 
 ### `declare_card_property`
 
-Stores a temporary declared card property value on the source card.
+Stores a declared card property on the source; omitted duration lasts while face-up, and explicit deadlines take precedence.
 
 - Handler: `handleDeclareCardProperty`
 - Target: `none`

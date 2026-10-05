@@ -3,6 +3,7 @@ import test from "node:test";
 import { simulateMainPhaseAction } from "../../src/core/ai/shadowheart/simulation.js";
 import { cardDefinition } from "../helpers/fixtures.js";
 import { simulationCard, simulationState } from "../helpers/simulation.js";
+import { buildShadowHeartCostPreferences } from "../../src/core/ai/shadowheart/priorities.js";
 
 const card = (id: number) => simulationCard({ ...cardDefinition(id) });
 
@@ -53,3 +54,16 @@ test("Cathedral simulation shares its hard OPT across copies", () => {
   assert.deepEqual(state.bot.spellTrap, [second]);
   assert.equal(state.bot.field.length, 1);
 });
+
+for (const seat of ["player", "bot"] as const) {
+  test(`Shadow-Heart material preferences preserve current Extra Deck bosses (${seat})`, () => {
+    const devastation = card(124), wyrm = simulationCard({ ...cardDefinition("Shadow-Heart Death Wyrm") }),
+      gecko = simulationCard({ ...cardDefinition("Shadow-Heart Gecko") });
+    const state = simulationState({ _isPerspectiveState: true, phase: "main1", turn: seat,
+      [seat]: { field: [devastation, wyrm], hand: [gecko] } });
+    const owner = state[seat];
+    const preferences = buildShadowHeartCostPreferences({ field: owner.field, hand: owner.hand,
+      graveyard: [], oppField: [], lp: 8000, oppLp: 8000, phase: "main1", canNormalSummon: false });
+    assert.ok(preferences.preserveNames.includes("Shadow-Heart Devastation Dragon"));
+  });
+}

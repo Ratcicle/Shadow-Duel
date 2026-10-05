@@ -492,7 +492,7 @@ export function applySearchAny(
 function resolveSimMarkerExpirationTurn(
   state: SimulatedRuntimeState,
   markerConfig: Partial<LegacyAddedCardMarker> = {},
-): number {
+): number | null {
   const currentTurn = Number(state?.turnCounter || 0);
   if (Number.isFinite(markerConfig.expiresOnTurn)) {
     return markerConfig.expiresOnTurn as number;
@@ -503,7 +503,8 @@ function resolveSimMarkerExpirationTurn(
   if (markerConfig.duration === "end_of_next_turn") {
     return currentTurn + 1;
   }
-  return currentTurn;
+  if (markerConfig.duration === "end_of_turn") return currentTurn;
+  return null;
 }
 
 function markSimAddedCards(
@@ -693,18 +694,22 @@ export function applyDeclareCardProperty(
   if (!sourceCard.declaredValues) sourceCard.declaredValues = {};
   const currentTurn = Number(state?.turnCounter || 0);
   const expiresOnTurn =
-    action.duration === "while_faceup" || action.duration === "permanent"
-      ? null
-      : action.duration === "end_of_next_turn"
-        ? currentTurn + 1
-        : currentTurn;
+    typeof action.expiresOnTurn === "number" && Number.isFinite(action.expiresOnTurn)
+      ? action.expiresOnTurn
+      : typeof action.durationTurns === "number" && Number.isFinite(action.durationTurns)
+        ? currentTurn + Math.max(0, action.durationTurns)
+        : !action.duration || action.duration === "while_faceup" || action.duration === "permanent"
+          ? null
+          : action.duration === "end_of_next_turn"
+            ? currentTurn + 1
+            : currentTurn;
   sourceCard.declaredValues[action.stateKey] = {
     property: action.property,
     value,
     declaredOnTurn: currentTurn,
     expiresOnTurn,
-    duration: action.duration || null,
-  } as CardDeclaredValue;
+    duration: action.duration || "while_faceup",
+  } satisfies CardDeclaredValue;
   return;
 }
 

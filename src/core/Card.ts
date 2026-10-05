@@ -75,6 +75,22 @@ export function bumpCardLocationVersion(card: unknown): number {
   return nextVersion;
 }
 
+/** Face-down ends presence declarations; explicit turn deadlines stay intact. */
+export function expireFaceupDeclaredValues(card: unknown): void {
+  const declarations = readProperty(card, "declaredValues");
+  if (!isObjectValue(card) || !isObjectValue(declarations)) return;
+  for (const [stateKey, declaration] of Object.entries(declarations)) {
+    if (!isObjectValue(declaration)) continue;
+    const duration = readProperty(declaration, "duration");
+    const expiresOnTurn = readProperty(declaration, "expiresOnTurn");
+    const hasDeadline = typeof expiresOnTurn === "number" && Number.isFinite(expiresOnTurn);
+    if (!hasDeadline && (duration === "while_faceup" || duration == null)) {
+      Reflect.deleteProperty(declarations, stateKey);
+    }
+  }
+  if (Object.keys(declarations).length === 0) Reflect.deleteProperty(card, "declaredValues");
+}
+
 export function getEffectiveCardKinds(card: unknown): string[] {
   if (!isObjectValue(card)) return [];
   const kinds = new Set<string>();
@@ -195,6 +211,43 @@ export function restoreTemporaryStatuses(card: unknown): boolean {
 
 export function restoreFieldExitStatuses(card: unknown): boolean {
   return restoreStatusRegistry(card, "fieldExitStatuses");
+}
+
+/** Save the baseline of a resolved status for this face-up presence. */
+export function trackFaceupStatus(card: unknown, status: string): void {
+  if (!isObjectValue(card)) return;
+  let registry = readProperty(card, "faceupStatuses");
+  if (!isObjectValue(registry)) {
+    registry = {};
+    Reflect.set(card, "faceupStatuses", registry);
+  }
+  if (!isObjectValue(registry)) return;
+  const temporary = readProperty(card, "tempStatuses");
+  if (!Object.hasOwn(registry, status)) {
+    const baseline = isObjectValue(temporary) && Object.hasOwn(temporary, status)
+      ? Reflect.get(temporary, status) : Reflect.get(card, status);
+    Reflect.set(registry, status, baseline);
+  }
+  // A later presence application supersedes the earlier turn application.
+  if (isObjectValue(temporary)) Reflect.deleteProperty(temporary, status);
+}
+
+export function restoreFaceupStatuses(card: unknown): boolean {
+  if (!isObjectValue(card)) return false;
+  const registry = readProperty(card, "faceupStatuses");
+  if (!isObjectValue(registry)) return false;
+  const temporary = readProperty(card, "tempStatuses");
+  const statuses = Object.keys(registry);
+  for (const status of statuses) {
+    const baseline = Reflect.get(registry, status);
+    // A newer explicitly temporary application remains until its own expiry.
+    if (isObjectValue(temporary) && Object.hasOwn(temporary, status)) {
+      Reflect.set(temporary, status, baseline);
+    } else if (baseline === undefined) Reflect.deleteProperty(card, status);
+    else Reflect.set(card, status, baseline);
+  }
+  Reflect.set(card, "faceupStatuses", {});
+  return statuses.length > 0;
 }
 
 export function captureTrapMonsterOriginalState(
@@ -321,6 +374,7 @@ export default class Card implements GameCard {
   declare level: number;
   declare baseLevel: number;
   declare originalLevel?: number | null;
+  declare levelModificationContributions?: import("./contracts/cards.js").LevelModificationContribution[];
   declare position: BattlePosition;
   declare fieldSlot: import("./contracts/placement.js").FieldSlot | null;
   declare previousPosition?: BattlePosition | null;
@@ -341,6 +395,7 @@ export default class Card implements GameCard {
   declare cannotAttackThisTurn: boolean;
   declare cannotAttackUntilTurn: number | null;
   declare immuneToOpponentEffectsUntilTurn: number | null;
+  declare unaffectedByOpponentCardEffects?: boolean;
   declare altTribute: AlternateTributeDefinition | null;
   declare tributeValue:
     | TributeValueDefinition
@@ -397,6 +452,7 @@ export default class Card implements GameCard {
   declare turnBasedBuffs: CardTurnBasedBuff[];
   declare tempStatuses: CardStatusRegistry;
   declare fieldExitStatuses: CardStatusRegistry;
+  declare faceupStatuses: CardStatusRegistry;
   declare fieldPresenceId: string | number | null;
   declare fieldPresenceState: Record<string, number> | null;
   declare fieldPresenceSummons: FieldPresenceSummonRecord[];
@@ -597,6 +653,7 @@ export default class Card implements GameCard {
     this.turnBasedBuffs = [];
     this.tempStatuses = {};
     this.fieldExitStatuses = {};
+    this.faceupStatuses = {};
 
     // Field presence tracking (for mechanics like "while this card is face-up on field")
     this.fieldPresenceId = null;

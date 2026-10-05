@@ -1,4 +1,6 @@
 import { getNegationContributions } from "../../effects/negation.js";
+import { hasChainPostEffectSummonCapability } from "../../contracts/chainRuntime.js";
+import { getDirectAfterResolutionSnapshot } from "../replay/canonical.js";
 import { getTurnCardActivations } from "../events/activationHistory.js";
 /**
  * serialization.js
@@ -92,6 +94,8 @@ export function getPublicState(
         def: hidden ? null : card.def,
         level: hidden ? null : card.level,
         baseLevel: hidden ? null : card.baseLevel,
+        originalLevel: hidden ? null : card.originalLevel ?? null,
+        levelModificationContributions: hidden ? null : (card.levelModificationContributions || []).map(entry => ({ ...entry })),
         piercing: hidden ? null : !!card.piercing,
         piercingGrantedByEffect: hidden ? null : card.piercingGrantedByEffect === true,
         piercingDamageMultiplier: hidden
@@ -100,6 +104,7 @@ export function getPublicState(
         isTuner: hidden ? null : card.isTuner === true,
         faceDown: !!card.isFacedown,
         status: {
+          faceupStatuses: hidden ? null : { ...card.faceupStatuses },
           cannotAttackThisTurn: hidden ? null : !!card.cannotAttackThisTurn || isFieldPresenceSummonAttackRestricted(card,
             opposingSources, this.turnCounter, owner.id),
           battlePositionLocked: hidden ? null : !!card.battlePositionLocked,
@@ -121,6 +126,8 @@ export function getPublicState(
           def: card.def,
           level: card.level,
           baseLevel: card.baseLevel,
+          originalLevel: card.originalLevel ?? null,
+          levelModificationContributions: (card.levelModificationContributions || []).map(entry => ({ ...entry })),
           isTuner: card.isTuner === true,
           cardKind: card.cardKind,
           properSummonEstablished: card.properSummonEstablished === true,
@@ -231,6 +238,8 @@ export function getPublicState(
     graveyard: serializeGraveyard(owner),
   });
 
+  const afterResolution = (hasChainPostEffectSummonCapability(this.chainSystem) ? this.chainSystem.getAfterResolutionState() : null)
+    || getDirectAfterResolutionSnapshot(this);
   return {
     schemaVersion: 2,
     turn: this.turn,
@@ -252,6 +261,7 @@ export function getPublicState(
       triggers: this.chainSystem?.getTriggerState?.() || null,
       finalization:
         this.chainSystem?.getChainFinalizationState?.() || null,
+      ...(afterResolution ? { afterResolution } : {}),
     },
     summon: this.getSummonState?.() || {
       active: false,
